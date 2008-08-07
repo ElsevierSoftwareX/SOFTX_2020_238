@@ -786,7 +786,7 @@ GType gstlal_framesrc_get_type(void)
 {
 	static GType type = 0;
 
-	if (!type) {
+	if(!type) {
 		static const GTypeInfo info = {
 			.class_size = sizeof(GSTLALFrameSrcClass),
 			.class_init = class_init,
@@ -796,5 +796,6 @@ GType gstlal_framesrc_get_type(void)
 		};
 		type = g_type_register_static(GST_TYPE_PUSH_SRC, "lal_framesrc", &info, 0);
 	}
+
 	return type;
 }
