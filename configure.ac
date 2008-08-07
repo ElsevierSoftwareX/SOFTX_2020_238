@@ -71,6 +71,14 @@ AC_SUBST([LAL_LIBS])
 
 
 #
+# Check for GSL
+#
+
+
+AX_PATH_GSL()
+
+
+#
 # Output configure information
 #
 

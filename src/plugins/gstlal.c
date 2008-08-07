@@ -33,6 +33,7 @@
 
 #include <gstlal.h>
 #include <gstlal_framesrc.h>
+#include <gstlal_templatebank.h>
 
 
 /*
@@ -119,6 +120,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		GType (*type)(void);
 	} *element, elements[] = {
 		{"lal_framesrc", gstlal_framesrc_get_type},
+		{"lal_templatebank", gstlal_templatebank_get_type},
 		{NULL, NULL},
 	};
 
