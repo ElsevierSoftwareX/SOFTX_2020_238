@@ -4,6 +4,7 @@
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
 #include <math.h>
+#include <gsl/gsl_linalg.h>
 
 /* FIXME: this is a place holder and needs to be implemented rigorously with  
  * lal functions */
@@ -24,6 +25,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
   double T = 0;
   int i = 0;
   int j = 0;
+  int svd_err_code = 0;
   int numsamps = floor((double) (t_end-t_start) * base_sample_rate 
                / down_samp_fac);
   double dt = (double) down_samp_fac/base_sample_rate;
@@ -66,16 +68,17 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
         * sin(-2.0/2.0/M_PI* pow((-T+dt*j)/(5.0*Mg),(5.0/8.0)));
       tmpltpower+=h*h;		 
       gsl_matrix_set(*U,j,i,h/norm);
-      if (verbose) fprintf(FP,"%e\n",h/norm);
+      /*if (verbose) fprintf(FP,"%e\n",h/norm);*/
       }
     gsl_vector_set(*chifacs,i,sqrt(tmpltpower));
     }
   /*gsl_matrix_fprintf(FP,*U,"%f");*/
   if (FP) fclose(FP);
-  if ( !gsl_linalg_SV_decomp(*U, *V, *S, work_space) ) 
+  svd_err_code = gsl_linalg_SV_decomp_jacobi(*U, *V, *S);
+  if ( svd_err_code ) 
     {
-    /* fprintf(stderr,"could not do SVD \n");*/
-    /* return 1;  */
+    fprintf(stderr,"could not do SVD \n");
+    return 1; 
     }
   trim_matrix(U,V,S,tolerance);
   if (verbose) fprintf(stderr,"sub template number = %d\n",(*U)->size2);
