@@ -67,7 +67,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
       h = 4.0*Mg*pow(5.0/256.0*(Mg/(-T+dt*j)),0.25)
         * sin(-2.0/2.0/M_PI* pow((-T+dt*j)/(5.0*Mg),(5.0/8.0)));
       tmpltpower+=h*h;		 
-      gsl_matrix_set(*U,j,i,h/norm);
+      gsl_matrix_set(*U,numsamps-1-j,i,h/norm);
       /*if (verbose) fprintf(FP,"%e\n",h/norm);*/
       }
     gsl_vector_set(*chifacs,i,sqrt(tmpltpower));
@@ -119,8 +119,9 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
 
   for (i = 0; i < (*S)->size; i++)
     {
-    cumsumb += gsl_vector_get(*S,i) / sumb;
-    if (cumsumb >= tolerance) break;
+    cumsumb += gsl_vector_get(*S,i);
+    if (cumsumb/sumb >= tolerance) break;
+    printf("cumsumb %f\n",cumsumb);
     }
   if ( (i < 5) && (10 < (*S)->size))
   maxb = 10;
@@ -134,15 +135,15 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
 /*FIXME this is terrible and needs to be made more efficient!!!!!!!*/
  int not_gsl_matrix_chop(gsl_matrix **M, size_t m, size_t n)
   {
-
+  FILE *FP = NULL;
   gsl_matrix *tmp = (*M);
   gsl_matrix *newM = NULL;
   int i = 0; 
   int j = 0;
-
+  
   if ( (*M)->size1 < m ) return 1;
   if ( (*M)->size2 < n ) return 1;
-  
+  FP = fopen("svd.dat","w");
   newM = gsl_matrix_calloc(m,n);
 
   for (i=0; i<m; i++)
@@ -150,6 +151,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
     for (j=0; j<n; j++)
       {
       gsl_matrix_set(newM,i,j,gsl_matrix_get(*M,i,j));
+      fprintf(FP,"%e\n",gsl_matrix_get(*M,i,j));
       }
     }
   *M = newM;
