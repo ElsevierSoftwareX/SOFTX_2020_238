@@ -79,10 +79,10 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
     }
   /*gsl_matrix_fprintf(FP,*U,"%f");*/
   if (FP) fclose(FP);
-  /*svd_err_code = gsl_linalg_SV_decomp_mod(*U, work_space_matrix, 
-                                             *V, *S, work_space);*/
+  svd_err_code = gsl_linalg_SV_decomp_mod(*U, work_space_matrix, 
+                                             *V, *S, work_space);
   /*svd_err_code = gsl_linalg_SV_decomp(*U,*V, *S, work_space);*/
-  svd_err_code = gsl_linalg_SV_decomp_jacobi(*U, *V, *S);
+  /*svd_err_code = gsl_linalg_SV_decomp_jacobi(*U, *V, *S);*/
   if ( svd_err_code ) 
     {
     fprintf(stderr,"could not do SVD \n");
@@ -134,7 +134,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
     }
   maxb = i;/* (*S)->size;*/
   if (not_gsl_matrix_chop(U,(*U)->size1,maxb)) return 1;
-  if (not_gsl_matrix_chop(V,maxb,(*V)->size1)) return 1;
+  if (not_gsl_matrix_chop(V,(*V)->size1,maxb)) return 1;
   if (not_gsl_vector_chop(S,maxb)) return 1;
   return;
   }
