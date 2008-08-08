@@ -42,7 +42,12 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
   *U = gsl_matrix_calloc(numsamps,numtemps);
   *S = gsl_vector_calloc(numtemps);
   *V = gsl_matrix_calloc(numtemps,numtemps);
+  gsl_matrix *UT=NULL;
+  /*gsl_matrix *VT=NULL;*/
+  gsl_matrix *Utmp = NULL;
+  /*gsl_matrix *Vtmp = NULL;*/
   *chifacs = gsl_vector_calloc(numtemps);
+
   if (verbose) printf("allocated matrices...\n");
   /* create the templates in the bank */
   for (i=0;i<numtemps;i++)
@@ -90,12 +95,45 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
     }
   trim_matrix(U,V,S,tolerance);
   if (verbose) fprintf(stderr,"sub template number = %d\n",(*U)->size2);
+  for (i = 0; i < (*S)->size; i++)
+    {
+    for (j = 0; j < (*V)->size1; j++)
+      {
+      gsl_matrix_set(*V,j,i,gsl_vector_get(*S,i)*gsl_matrix_get(*V,j,i));
+      }
+    }
+  printf("U %d,%d V %d,%d\n\n",(*U)->size1,(*U)->size2,(*V)->size1,(*V)->size2);
+  not_gsl_matrix_transpose(U,&UT);
+  /*not_gsl_matrix_transpose(V,&VT);*/
+  Utmp = *U;
+  /*Vtmp = *V;*/
+  *U = UT;
+  /**V = VT;*/
+  gsl_matrix_free(Utmp);
+  /*gsl_matrix_free(Vtmp);*/
   gsl_vector_free(work_space);
   gsl_matrix_free(work_space_matrix);
   return 0;
   }
 
- double normalize_template(double M, double ts, double duration,
+/* FIXME: this is a terrible idea! */
+int not_gsl_matrix_transpose(gsl_matrix **in, gsl_matrix **out)
+  {
+  int i = 0;
+  int j = 0;
+  printf("size1 %d, size2 %d\n\n",(*in)->size1,(*in)->size2);
+  *out = gsl_matrix_calloc((*in)->size2,(*in)->size1);
+  
+  for (i=0; i< (*in)->size1; i++)
+    {
+    for (j=0; j< (*in)->size2; j++)
+      {
+      gsl_matrix_set(*out,j,i,gsl_matrix_get(*in,i,j));
+      }
+    }
+  }
+
+double normalize_template(double M, double ts, double duration,
                                 int fsamp)
 
   {

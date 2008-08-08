@@ -18,3 +18,6 @@ int trim_matrix(gsl_matrix **U, gsl_matrix **V, gsl_vector **S,
 int not_gsl_matrix_chop(gsl_matrix **M, size_t m, size_t n);
 
 int not_gsl_vector_chop(gsl_vector **V, size_t m);
+
+int not_gsl_matrix_transpose(gsl_matrix **in, gsl_matrix **out);
+
