@@ -85,7 +85,7 @@
 #define DEFAULT_SNR_LENGTH 2048	/* samples */
 #define TEMPLATE_DURATION 64	/* seconds */
 #define CHIRPMASS_START 1.0	/* M_sun */
-#define TEMPLATE_SAMPLE_RATE 16384	/* Hertz */
+#define TEMPLATE_SAMPLE_RATE 2048	/* Hertz */
 #define NUM_TEMPLATES 50
 #define TOLERANCE 0.95
 
@@ -120,9 +120,9 @@ static void svd_destroy(GSTLALTemplateBank *element)
 }
 
 
-static void svd_create(GSTLALTemplateBank *element, int sample_rate)
+static int svd_create(GSTLALTemplateBank *element, int sample_rate)
 {
-	int verbose = 0;
+	int verbose = 1;
 
 	/* be sure we don't leak memory */
 
@@ -139,6 +139,10 @@ static void svd_create(GSTLALTemplateBank *element, int sample_rate)
 	/* generate orthogonal template bank */
 
 	generate_bank_svd(&element->U, &element->S, &element->V, &element->chifacs, CHIRPMASS_START, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / sample_rate, NUM_TEMPLATES, element->t_start, element->t_end, TEMPLATE_DURATION, TOLERANCE, verbose);
+
+	/* done */
+
+	return 0;
 }
 
 
@@ -291,12 +295,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Check for available data, clip the output length.
 		 */
 
-		output_length = gst_adapter_available(element->adapter) - element->U->size2;
+		output_length = (gst_adapter_available(element->adapter) / sizeof(*time_series.data)) - element->U->size2;
 		if(element->snr_length) {
-			if(output_length < element->snr_length)
+			if(output_length < (int) element->snr_length)
 				break;
 			output_length = element->snr_length;
-		} else if(!output_length)
+		} else if(output_length <= 0)
 			break;
 
 		/*
@@ -335,6 +339,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 			gsl_matrix_set_col(orthogonal_snr, i, orthogonal_snr_samples);
 		}
+
 		gsl_vector_free(orthogonal_snr_samples);
 
 		/*
@@ -349,6 +354,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		time_series.size = output_length;
+
 		for(padlist = element->srcpads, i = 0; padlist && (i < orthogonal_snr->size1); padlist = g_list_next(padlist), i++) {
 			GstPad *srcpad = GST_PAD(padlist->data);
 			GstBuffer *srcbuf;
@@ -357,7 +363,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			if(result != GST_FLOW_OK)
 				goto done;
 			GST_BUFFER_OFFSET_END(srcbuf) = element->next_sample + output_length - 1;
-			GST_BUFFER_TIMESTAMP(srcbuf) = (GstClockTime) element->next_sample * 1000000000 / sample_rate;
+			GST_BUFFER_TIMESTAMP(srcbuf) = (GstClockTime) element->next_sample * 1000000000 / sample_rate + element->t_start * 1000000000;
 			GST_BUFFER_DURATION(srcbuf) = (GstClockTime) output_length * 1000000000 / sample_rate;
 
 			time_series.data = (double *) GST_BUFFER_DATA(srcbuf);
@@ -368,6 +374,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			if(result != GST_FLOW_OK)
 				goto done;
 		}
+
+		gsl_matrix_free(orthogonal_snr);
 
 		/*
 		 * Advance the sample count.
