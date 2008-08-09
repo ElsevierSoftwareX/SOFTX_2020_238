@@ -94,7 +94,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
     return 1; 
     }
   trim_matrix(U,V,S,tolerance);
-  if (verbose) fprintf(stderr,"sub template number = %d\n",(*U)->size2);
+  if (verbose) fprintf(stderr,"sub template number = %d\n",(int) (*U)->size2);
   for (i = 0; i < (*S)->size; i++)
     {
     for (j = 0; j < (*V)->size1; j++)
@@ -102,7 +102,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
       gsl_matrix_set(*V,j,i,gsl_vector_get(*S,i)*gsl_matrix_get(*V,j,i));
       }
     }
-  printf("U %d,%d V %d,%d\n\n",(*U)->size1,(*U)->size2,(*V)->size1,(*V)->size2);
+  printf("U %d,%d V %d,%d\n\n",(int) (*U)->size1,(int) (*U)->size2,(int) (*V)->size1,(int) (*V)->size2);
   not_gsl_matrix_transpose(U,&UT);
   /*not_gsl_matrix_transpose(V,&VT);*/
   Utmp = *U;
@@ -117,11 +117,11 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
   }
 
 /* FIXME: this is a terrible idea! */
-int not_gsl_matrix_transpose(gsl_matrix **in, gsl_matrix **out)
+void not_gsl_matrix_transpose(gsl_matrix **in, gsl_matrix **out)
   {
   int i = 0;
   int j = 0;
-  printf("size1 %d, size2 %d\n\n",(*in)->size1,(*in)->size2);
+  printf("size1 %d, size2 %d\n\n",(int) (*in)->size1,(int) (*in)->size2);
   *out = gsl_matrix_calloc((*in)->size2,(*in)->size1);
   
   for (i=0; i< (*in)->size1; i++)
@@ -174,7 +174,7 @@ double normalize_template(double M, double ts, double duration,
   if (not_gsl_matrix_chop(U,(*U)->size1,maxb)) return 1;
   if (not_gsl_matrix_chop(V,(*V)->size1,maxb)) return 1;
   if (not_gsl_vector_chop(S,maxb)) return 1;
-  return;
+  return 0;
   }
 
 /*FIXME this is terrible and needs to be made more efficient!!!!!!!*/
