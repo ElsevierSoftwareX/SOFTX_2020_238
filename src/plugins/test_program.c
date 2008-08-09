@@ -47,7 +47,7 @@ int main()
   FP = fopen("reconstructed_bank.dat","w");
   for (j = 0; j < bank->size2; j++)
     {
-    fprintf(FP,"%e\n",gsl_matrix_get(bank,1,j));
+    fprintf(FP,"%e %e\n", j * down_samp_fac / (double) base_sample_rate, gsl_matrix_get(bank,1,j));
     }
   fclose(FP);
   return 0;
