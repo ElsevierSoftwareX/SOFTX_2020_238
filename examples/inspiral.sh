@@ -20,6 +20,8 @@ gst-launch \
 		lower-frequency=20 \
 		upper-frequency=1000 \
 		poles=8 \
+	! audioresample \
+	! audio/x-raw-float, rate=2048 \
 	! lal_templatebank \
 		name=orthosnr \
 		t-start=0 \
