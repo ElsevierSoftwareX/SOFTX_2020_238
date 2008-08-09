@@ -82,6 +82,7 @@
 
 #define DEFAULT_T_START 0
 #define DEFAULT_T_END G_MAXUINT
+#define DEFAULT_SNR_LENGTH 2048	/* samples */
 #define TEMPLATE_DURATION 64	/* seconds */
 #define CHIRPMASS_START 1.0	/* M_sun */
 #define TEMPLATE_SAMPLE_RATE 16384	/* Hertz */
@@ -169,7 +170,8 @@ static void srcpads_destroy(GSTLALTemplateBank *element)
 
 enum property {
 	ARG_T_START = 1,
-	ARG_T_END
+	ARG_T_END,
+	ARG_SNR_LENGTH
 };
 
 
@@ -184,6 +186,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	case ARG_T_END:
 		element->t_end = g_value_get_uint(value);
+		break;
+
+	case ARG_SNR_LENGTH:
+		element->snr_length = g_value_get_uint(value);
 		break;
 	}
 }
@@ -201,6 +207,9 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	case ARG_T_END:
 		g_value_set_uint(value, element->t_end);
 		break;
+
+	case ARG_SNR_LENGTH:
+		g_value_set_uint(value, element->snr_length);
 	}
 }
 
@@ -271,83 +280,108 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	gst_adapter_push(element->adapter, sinkbuf);
-	output_length = gst_adapter_available(element->adapter) - element->U->size2;
-	if(output_length <= 0) {
-		result = GST_FLOW_OK;
-		goto done;
-	}
 
 	/*
-	 * Assemble the orthogonal SNR time series as the rows of a matrix.
+	 * While there is enough data in the adapter to produce a buffer of
+	 * SNR.
 	 */
 
-	time_series.size = element->U->size2;
-	orthogonal_snr = gsl_matrix_alloc(element->U->size1, output_length);
-	orthogonal_snr_samples = gsl_vector_alloc(element->U->size1);
-	for(i = 0; i < output_length; i++) {
+	while(1) {
 		/*
-		 * Instead of shuffling the bytes around in memory, we play
-		 * games with the adapter and pointers.  We start by asking
-		 * for input_size samples.  In the next iteration, we want
-		 * to shift the samples by 1, but instead of flushing 1
-		 * sample from the adapter we ask for input_size+1 samples,
-		 * and add 1 to the address we are given.  Later we'll
-		 * use a single flush to discard all the samples we no
-		 * longer need.
+		 * Check for available data, clip the output length.
 		 */
 
-		time_series.data = ((double *) gst_adapter_peek(element->adapter, (time_series.size + i) * sizeof(*time_series.data))) + i;
+		output_length = gst_adapter_available(element->adapter) - element->U->size2;
+		if(element->snr_length) {
+			if(output_length < element->snr_length)
+				break;
+			output_length = element->snr_length;
+		} else if(!output_length)
+			break;
 
 		/*
-		 * Compute one vector of orthogonal SNR samples
+		 * Assemble the orthogonal SNR time series as the rows of a matrix.
 		 */
 
-		gsl_blas_dgemv(CblasNoTrans, 1.0, element->U, &time_series, 0.0, orthogonal_snr_samples);
+fprintf(stderr, "a\n");
+		time_series.size = element->U->size2;
+		orthogonal_snr = gsl_matrix_alloc(element->U->size1, output_length);
+		orthogonal_snr_samples = gsl_vector_alloc(element->U->size1);
+fprintf(stderr, "b\n");
+		for(i = 0; i < output_length; i++) {
+			/*
+			 * Instead of shuffling the bytes around in memory, we play
+			 * games with the adapter and pointers.  We start by asking
+			 * for input_size samples.  In the next iteration, we want
+			 * to shift the samples by 1, but instead of flushing 1
+			 * sample from the adapter we ask for input_size+1 samples,
+			 * and add 1 to the address we are given.  Later we'll
+			 * use a single flush to discard all the samples we no
+			 * longer need.
+			 */
+
+fprintf(stderr, "c\n");
+			time_series.data = ((double *) gst_adapter_peek(element->adapter, (time_series.size + i) * sizeof(*time_series.data))) + i;
+
+			/*
+			 * Compute one vector of orthogonal SNR samples
+			 */
+
+fprintf(stderr, "d\n");
+			gsl_blas_dgemv(CblasNoTrans, 1.0, element->U, &time_series, 0.0, orthogonal_snr_samples);
+
+			/*
+			 * Store in matrix of orthogonal SNR series.
+			 */
+
+fprintf(stderr, "e\n");
+			gsl_matrix_set_col(orthogonal_snr, i, orthogonal_snr_samples);
+		}
+fprintf(stderr, "f\n");
+		gsl_vector_free(orthogonal_snr_samples);
+fprintf(stderr, "g\n");
 
 		/*
-		 * Store in matrix of orthogonal SNR series.
+		 * Flush the data from the adapter that is no longer required.
 		 */
 
-		gsl_matrix_set_col(orthogonal_snr, i, orthogonal_snr_samples);
-	}
-	gsl_vector_free(orthogonal_snr_samples);
+		gst_adapter_flush(element->adapter, output_length);
 
-	/*
-	 * Flush the data from the adapter that is no longer required.
-	 */
+		/*
+		 * Push the orthogonal SNR time series out their pads
+		 */
 
-	gst_adapter_flush(element->adapter, output_length);
+		time_series.size = output_length;
+		for(padlist = element->srcpads, i = 0; padlist && (i < orthogonal_snr->size1); padlist = g_list_next(padlist), i++) {
+			GstPad *srcpad = GST_PAD(padlist->data);
+			GstBuffer *srcbuf;
 
-	/*
-	 * Push the orthogonal SNR time series out their pads
-	 */
+			result = gst_pad_alloc_buffer(srcpad, element->next_sample, output_length * sizeof(*time_series.data), GST_PAD_CAPS(srcpad), &srcbuf);
+			if(result != GST_FLOW_OK)
+				goto done;
+			GST_BUFFER_OFFSET_END(srcbuf) = element->next_sample + output_length - 1;
+			GST_BUFFER_TIMESTAMP(srcbuf) = (GstClockTime) element->next_sample * 1000000000 / sample_rate;
+			GST_BUFFER_DURATION(srcbuf) = (GstClockTime) output_length * 1000000000 / sample_rate;
 
-	time_series.size = output_length;
-	for(padlist = element->srcpads, i = 0; padlist && (i < orthogonal_snr->size1); padlist = g_list_next(padlist), i++) {
-		GstPad *srcpad = GST_PAD(padlist->data);
-		GstBuffer *srcbuf;
+			time_series.data = (double *) GST_BUFFER_DATA(srcbuf);
 
-		result = gst_pad_alloc_buffer(srcpad, element->next_sample, output_length * sizeof(*time_series.data), GST_PAD_CAPS(srcpad), &srcbuf);
-		if(result != GST_FLOW_OK)
-			goto done;
-		GST_BUFFER_OFFSET_END(srcbuf) = element->next_sample + output_length - 1;
-		GST_BUFFER_TIMESTAMP(srcbuf) = (GstClockTime) element->next_sample * 1000000000 / sample_rate;
-		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) output_length * 1000000000 / sample_rate;
+			gsl_matrix_get_row(&time_series, orthogonal_snr, i);
 
-		time_series.data = (double *) GST_BUFFER_DATA(srcbuf);
+			result = gst_pad_push(srcpad, srcbuf);
+			if(result != GST_FLOW_OK)
+				goto done;
+		}
 
-		gsl_matrix_get_row(&time_series, orthogonal_snr, i);
+		/*
+		 * Advance the sample count.
+		 */
 
-		result = gst_pad_push(srcpad, srcbuf);
-		if(result != GST_FLOW_OK)
-			goto done;
+		element->next_sample += output_length;
 	}
 
 	/*
 	 * Done
 	 */
-
-	element->next_sample += output_length;
 
 done:
 	gst_caps_unref(caps);
@@ -452,6 +486,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	g_object_class_install_property(gobject_class, ARG_T_START, g_param_spec_uint("t-start", "Start time", "Start time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXUINT, DEFAULT_T_START, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_T_END, g_param_spec_uint("t-end", "End time", "End time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXUINT, DEFAULT_T_END, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_SNR_LENGTH, g_param_spec_uint("snr-length", "SNR length", "Length, in samples, of the output SNR time series (0 = no limit)", 0, G_MAXUINT, DEFAULT_SNR_LENGTH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 
@@ -496,6 +531,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->adapter = gst_adapter_new();
 	element->t_start = DEFAULT_T_START;
 	element->t_end = DEFAULT_T_END;
+	element->snr_length = DEFAULT_SNR_LENGTH;
 
 	element->next_sample = 0;
 

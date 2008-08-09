@@ -60,6 +60,7 @@ typedef struct {
 
 	unsigned int t_start;
 	unsigned int t_end;
+	unsigned int snr_length;
 
 	long next_sample;
 
