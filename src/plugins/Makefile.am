@@ -10,3 +10,6 @@ libgstlal_la_LIBADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS}
 libgstlal_la_LDFLAGS = ${GSTREAMER_PLUGIN_LDFLAGS}
 
 noinst_HEADERS = gstlal.h
+
+test_program : test_program.c low_latency_inspiral_functions.h low_latency_inspiral_functions.c
+	gcc $(shell pkg-config --cflags --libs gsl) --output $@ $^
