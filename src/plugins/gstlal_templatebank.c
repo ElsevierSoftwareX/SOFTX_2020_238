@@ -300,49 +300,46 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			break;
 
 		/*
-		 * Assemble the orthogonal SNR time series as the rows of a matrix.
+		 * Assemble the orthogonal SNR time series as the rows of a
+		 * matrix.
 		 */
 
-fprintf(stderr, "a\n");
 		time_series.size = element->U->size2;
 		orthogonal_snr = gsl_matrix_alloc(element->U->size1, output_length);
 		orthogonal_snr_samples = gsl_vector_alloc(element->U->size1);
-fprintf(stderr, "b\n");
+
 		for(i = 0; i < output_length; i++) {
 			/*
-			 * Instead of shuffling the bytes around in memory, we play
-			 * games with the adapter and pointers.  We start by asking
-			 * for input_size samples.  In the next iteration, we want
-			 * to shift the samples by 1, but instead of flushing 1
-			 * sample from the adapter we ask for input_size+1 samples,
-			 * and add 1 to the address we are given.  Later we'll
-			 * use a single flush to discard all the samples we no
+			 * Instead of shuffling the bytes around in memory,
+			 * we play games with the adapter and pointers.  We
+			 * start by asking for input_size samples.  In the
+			 * next iteration, we want to shift the samples by
+			 * 1, but instead of flushing 1 sample from the
+			 * adapter we ask for input_size+1 samples, and add
+			 * 1 to the address we are given.  Later we'll use
+			 * a single flush to discard all the samples we no
 			 * longer need.
 			 */
 
-fprintf(stderr, "c\n");
 			time_series.data = ((double *) gst_adapter_peek(element->adapter, (time_series.size + i) * sizeof(*time_series.data))) + i;
 
 			/*
 			 * Compute one vector of orthogonal SNR samples
 			 */
 
-fprintf(stderr, "d\n");
 			gsl_blas_dgemv(CblasNoTrans, 1.0, element->U, &time_series, 0.0, orthogonal_snr_samples);
 
 			/*
 			 * Store in matrix of orthogonal SNR series.
 			 */
 
-fprintf(stderr, "e\n");
 			gsl_matrix_set_col(orthogonal_snr, i, orthogonal_snr_samples);
 		}
-fprintf(stderr, "f\n");
 		gsl_vector_free(orthogonal_snr_samples);
-fprintf(stderr, "g\n");
 
 		/*
-		 * Flush the data from the adapter that is no longer required.
+		 * Flush the data from the adapter that is no longer
+		 * required.
 		 */
 
 		gst_adapter_flush(element->adapter, output_length);
