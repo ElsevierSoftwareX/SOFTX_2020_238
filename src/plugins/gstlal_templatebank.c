@@ -84,9 +84,9 @@
 #define DEFAULT_T_END G_MAXUINT
 #define TEMPLATE_DURATION 64	/* seconds */
 #define CHIRPMASS_START 1.0	/* M_sun */
-#define TEMPLATE_SAMPLE_RATE 2048	/* Hertz */
-#define NUM_TEMPLATES 300
-#define TOLERANCE 0.99
+#define TEMPLATE_SAMPLE_RATE 16384	/* Hertz */
+#define NUM_TEMPLATES 50
+#define TOLERANCE 0.95
 
 
 /*
@@ -331,7 +331,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		if(result != GST_FLOW_OK)
 			goto done;
 		GST_BUFFER_OFFSET_END(srcbuf) = element->next_sample + output_length - 1;
-		GST_BUFFER_TIMESTAMP(srcbuf) = element->next_sample_time;
+		GST_BUFFER_TIMESTAMP(srcbuf) = (GstClockTime) element->next_sample * 1000000000 / sample_rate;
 		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) output_length * 1000000000 / sample_rate;
 
 		time_series.data = (double *) GST_BUFFER_DATA(srcbuf);
@@ -348,7 +348,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	element->next_sample += output_length;
-	element->next_sample_time += (GstClockTime) output_length * 1000000000 / sample_rate;
 
 done:
 	gst_caps_unref(caps);
@@ -406,7 +405,7 @@ static void base_init(gpointer class)
 		GST_PAD_ALWAYS,
 		gst_caps_new_simple(
 			"audio/x-raw-float",
-			"rate", GST_TYPE_INT_RANGE, 1, 1073741824,
+			"rate", GST_TYPE_INT_RANGE, 1, TEMPLATE_SAMPLE_RATE,
 			"channels", G_TYPE_INT, 1,
 			"endianness", G_TYPE_INT, G_BYTE_ORDER,
 			"width", G_TYPE_INT, 64,
@@ -419,7 +418,7 @@ static void base_init(gpointer class)
 		GST_PAD_SOMETIMES,
 		gst_caps_new_simple(
 			"audio/x-raw-float",
-			"rate", GST_TYPE_INT_RANGE, 1, 1073741824,
+			"rate", GST_TYPE_INT_RANGE, 1, TEMPLATE_SAMPLE_RATE,
 			"channels", G_TYPE_INT, 1,
 			"endianness", G_TYPE_INT, G_BYTE_ORDER,
 			"width", G_TYPE_INT, 64,
@@ -451,8 +450,8 @@ static void class_init(gpointer class, gpointer class_data)
 	gobject_class->get_property = get_property;
 	gobject_class->dispose = dispose;
 
-	g_object_class_install_property(gobject_class, ARG_T_START, g_param_spec_int("t-start", "Start time", "Start time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXUINT, DEFAULT_T_START, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_T_END, g_param_spec_int("t-end", "End time", "End time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXUINT, DEFAULT_T_END, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_T_START, g_param_spec_uint("t-start", "Start time", "Start time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXUINT, DEFAULT_T_START, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_T_END, g_param_spec_uint("t-end", "End time", "End time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXUINT, DEFAULT_T_END, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 
@@ -499,7 +498,6 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->t_end = DEFAULT_T_END;
 
 	element->next_sample = 0;
-	element->next_sample_time = 0;
 
 	element->U = NULL;
 	element->S = NULL;
