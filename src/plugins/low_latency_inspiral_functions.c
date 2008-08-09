@@ -42,17 +42,13 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
   *U = gsl_matrix_calloc(numsamps,numtemps);
   *S = gsl_vector_calloc(numtemps);
   *V = gsl_matrix_calloc(numtemps,numtemps);
-  gsl_matrix *UT=NULL;
-  /*gsl_matrix *VT=NULL;*/
-  gsl_matrix *Utmp = NULL;
-  /*gsl_matrix *Vtmp = NULL;*/
   *chifacs = gsl_vector_calloc(numtemps);
 
   if (verbose) printf("allocated matrices...\n");
   /* create the templates in the bank */
   for (i=0;i<numtemps;i++)
     {
-    if (verbose) printf("template number %d...\n",i);
+    if (verbose) printf("generating template number %d...\n",i);
     /* increment the mass */
     /* this coefficient should maybe be 0.0001 */
     M = chirp_mass_start + 0.0003*i*M/0.7;
@@ -62,7 +58,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
     /* FIXME We should check that the frequency at this time fits within the */
     /* downsampled rate!!! 						     */
     maxFreq = (1.0/(M_PI*Mg)) * (pow((5.0/256.0)*(Mg/(-T)),3.0/8.0));
-    if (verbose) printf("T %e nyfreq %e chirpm %e max freq %e\n",T,ny_freq,M,maxFreq);
+    if (verbose) printf("T=%e f_Nyquist=%e M_chirp=%e f_max=%e\n",T,ny_freq,M,maxFreq);
 
     if (maxFreq > ((double) (ny_freq/down_samp_fac+1.0/base_sample_rate)) )
       {
@@ -94,7 +90,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
     return 1; 
     }
   trim_matrix(U,V,S,tolerance);
-  if (verbose) fprintf(stderr,"sub template number = %d\n",(int) (*U)->size2);
+  if (verbose) fprintf(stderr,"number of orthogonal templates = %d\n",(int) (*U)->size2);
   for (i = 0; i < (*S)->size; i++)
     {
     for (j = 0; j < (*V)->size1; j++)
@@ -102,36 +98,20 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
       gsl_matrix_set(*V,j,i,gsl_vector_get(*S,i)*gsl_matrix_get(*V,j,i));
       }
     }
-  printf("U %d,%d V %d,%d\n\n",(int) (*U)->size1,(int) (*U)->size2,(int) (*V)->size1,(int) (*V)->size2);
-  not_gsl_matrix_transpose(U,&UT);
-  /*not_gsl_matrix_transpose(V,&VT);*/
-  Utmp = *U;
-  /*Vtmp = *V;*/
-  *U = UT;
-  /**V = VT;*/
-  gsl_matrix_free(Utmp);
-  /*gsl_matrix_free(Vtmp);*/
+  not_gsl_matrix_transpose(U);
+  printf("V is %dx%d, U is %dx%d\n\n",(int)(*V)->size1,(int)(*V)->size2,(int)(*U)->size1,(int)(*U)->size2);
   gsl_vector_free(work_space);
   gsl_matrix_free(work_space_matrix);
   return 0;
   }
 
-/* FIXME: this is a terrible idea! */
-void not_gsl_matrix_transpose(gsl_matrix **in, gsl_matrix **out)
-  {
-  int i = 0;
-  int j = 0;
-  printf("size1 %d, size2 %d\n\n",(int) (*in)->size1,(int) (*in)->size2);
-  *out = gsl_matrix_calloc((*in)->size2,(*in)->size1);
-  
-  for (i=0; i< (*in)->size1; i++)
-    {
-    for (j=0; j< (*in)->size2; j++)
-      {
-      gsl_matrix_set(*out,j,i,gsl_matrix_get(*in,i,j));
-      }
-    }
-  }
+void not_gsl_matrix_transpose(gsl_matrix **m)
+{
+  gsl_matrix *new = gsl_matrix_calloc((*m)->size2, (*m)->size1);
+  gsl_matrix_transpose_memcpy(new, *m);
+  gsl_matrix_free(*m);
+  *m = new;
+}
 
 double normalize_template(double M, double ts, double duration,
                                 int fsamp)
