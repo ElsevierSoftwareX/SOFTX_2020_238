@@ -27,6 +27,10 @@
 #include <gst/base/gstadapter.h>
 
 
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_matrix.h>
+
+
 G_BEGIN_DECLS
 
 
@@ -50,13 +54,20 @@ typedef struct {
 typedef struct {
 	GstElement element;
 
-	int n_srcpad;
-	GstPad **srcpad;
+	GList *srcpads;
 
 	GstAdapter *adapter;
 
-	int t_start;
-	int t_end;
+	unsigned int t_start;
+	unsigned int t_end;
+
+	long next_sample;
+	GstClockTime next_sample_time;
+
+	gsl_matrix *U;
+	gsl_vector *S;
+	gsl_matrix *V;
+	gsl_vector *chifacs;
 } GSTLALTemplateBank;
 
 

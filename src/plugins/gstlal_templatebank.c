@@ -51,6 +51,14 @@
  */
 
 
+/*
+ * stuff from GSL
+ */
+
+
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_blas.h>
 
 
 /*
@@ -60,6 +68,7 @@
 
 #include <gstlal.h>
 #include <gstlal_templatebank.h>
+#include <low_latency_inspiral_functions.h>
 
 
 /*
@@ -72,9 +81,12 @@
 
 
 #define DEFAULT_T_START 0
-#define DEFAULT_T_END G_MAXINT
-
-
+#define DEFAULT_T_END G_MAXUINT
+#define TEMPLATE_DURATION 64	/* seconds */
+#define CHIRPMASS_START 1.0	/* M_sun */
+#define TEMPLATE_SAMPLE_RATE 2048	/* Hertz */
+#define NUM_TEMPLATES 300
+#define TOLERANCE 0.99
 
 
 /*
@@ -86,6 +98,59 @@
  */
 
 
+static void svd_destroy(GSTLALTemplateBank *element)
+{
+	if(element->U) {
+		gsl_matrix_free(element->U);
+		element->U = NULL;
+	}
+	if(element->S) {
+		gsl_vector_free(element->S);
+		element->S = NULL;
+	}
+	if(element->V) {
+		gsl_matrix_free(element->V);
+		element->V = NULL;
+	}
+	if(element->chifacs) {
+		gsl_vector_free(element->chifacs);
+		element->chifacs = NULL;
+	}
+}
+
+
+static void svd_create(GSTLALTemplateBank *element, int sample_rate)
+{
+	int verbose = 0;
+
+	/* be sure we don't leak memory */
+
+	svd_destroy(element);
+
+	/* clip t_start and t_end to [0, TEMPLATE_DURATION] (both are
+	 * unsigned so can't be negative) */
+
+	if(element->t_start > TEMPLATE_DURATION)
+		element->t_start = TEMPLATE_DURATION;
+	if(element->t_end > TEMPLATE_DURATION)
+		element->t_end = TEMPLATE_DURATION;
+
+	/* generate orthogonal template bank */
+
+	generate_bank_svd(&element->U, &element->S, &element->V, &element->chifacs, CHIRPMASS_START, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / sample_rate, NUM_TEMPLATES, element->t_start, element->t_end, TEMPLATE_DURATION, TOLERANCE, verbose);
+}
+
+
+static void srcpads_destroy(GSTLALTemplateBank *element)
+{
+	GList *padlist;
+
+	for(padlist = element->srcpads; padlist; padlist = g_list_next(padlist))
+		gst_object_unref(GST_PAD(padlist->data));
+
+	g_list_free(element->srcpads);
+	element->srcpads = NULL;
+}
 
 
 /*
@@ -114,11 +179,11 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	switch(id) {
 	case ARG_T_START:
-		element->t_start = g_value_get_int(value);
+		element->t_start = g_value_get_uint(value);
 		break;
 
 	case ARG_T_END:
-		element->t_end = g_value_get_int(value);
+		element->t_end = g_value_get_uint(value);
 		break;
 	}
 }
@@ -130,11 +195,11 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	switch(id) {
 	case ARG_T_START:
-		g_value_set_int(value, element->t_start);
+		g_value_set_uint(value, element->t_start);
 		break;
 
 	case ARG_T_END:
-		g_value_set_int(value, element->t_end);
+		g_value_set_uint(value, element->t_end);
 		break;
 	}
 }
@@ -148,10 +213,146 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
-	gboolean result;
+	gboolean result = TRUE;
+	GList *padlist;
 
+	for(padlist = element->srcpads; padlist; padlist = g_list_next(padlist)) {
+		result = gst_pad_set_caps(GST_PAD(padlist->data), caps);
+		if(result != TRUE)
+			goto done;
+	}
+
+done:
 	gst_object_unref(element);
+	return result;
+}
 
+
+/*
+ * chain()
+ */
+
+
+static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
+{
+	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
+	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
+	GstFlowReturn result = GST_FLOW_OK;
+	gsl_vector time_series = {
+		.size = 0,
+		.stride = 1,
+		.data = NULL,
+		.block = NULL,
+		.owner = 0
+	};
+	gsl_vector *orthogonal_snr_samples;
+	gsl_matrix *orthogonal_snr;
+	int sample_rate;
+	int output_length;
+	GList *padlist;
+	int i;
+
+	/*
+	 * Extract the sample rate from the input buffer's caps
+	 */
+
+	sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
+
+	/*
+	 * Construct orthogonal template bank if required
+	 */
+
+	if(!element->U)
+		svd_create(element, sample_rate);
+
+	/*
+	 * Put buffer into adapter, and measure the length of the SNR time
+	 * series we can generate (we're done if this is <= 0).
+	 */
+
+	gst_adapter_push(element->adapter, sinkbuf);
+	output_length = gst_adapter_available(element->adapter) - element->U->size2;
+	if(output_length <= 0) {
+		result = GST_FLOW_OK;
+		goto done;
+	}
+
+	/*
+	 * Assemble the orthogonal SNR time series as the rows of a matrix.
+	 */
+
+	time_series.size = element->U->size2;
+	orthogonal_snr = gsl_matrix_alloc(element->U->size1, output_length);
+	orthogonal_snr_samples = gsl_vector_alloc(element->U->size1);
+	for(i = 0; i < output_length; i++) {
+		/*
+		 * Instead of shuffling the bytes around in memory, we play
+		 * games with the adapter and pointers.  We start by asking
+		 * for input_size samples.  In the next iteration, we want
+		 * to shift the samples by 1, but instead of flushing 1
+		 * sample from the adapter we ask for input_size+1 samples,
+		 * and add 1 to the address we are given.  Later we'll
+		 * use a single flush to discard all the samples we no
+		 * longer need.
+		 */
+
+		time_series.data = ((double *) gst_adapter_peek(element->adapter, (time_series.size + i) * sizeof(*time_series.data))) + i;
+
+		/*
+		 * Compute one vector of orthogonal SNR samples
+		 */
+
+		gsl_blas_dgemv(CblasNoTrans, 1.0, element->U, &time_series, 0.0, orthogonal_snr_samples);
+
+		/*
+		 * Store in matrix of orthogonal SNR series.
+		 */
+
+		gsl_matrix_set_col(orthogonal_snr, i, orthogonal_snr_samples);
+	}
+	gsl_vector_free(orthogonal_snr_samples);
+
+	/*
+	 * Flush the data from the adapter that is no longer required.
+	 */
+
+	gst_adapter_flush(element->adapter, output_length);
+
+	/*
+	 * Push the orthogonal SNR time series out their pads
+	 */
+
+	time_series.size = output_length;
+	for(padlist = element->srcpads, i = 0; padlist && (i < orthogonal_snr->size1); padlist = g_list_next(padlist), i++) {
+		GstPad *srcpad = GST_PAD(padlist->data);
+		GstBuffer *srcbuf;
+
+		result = gst_pad_alloc_buffer(srcpad, element->next_sample, output_length * sizeof(*time_series.data), GST_PAD_CAPS(srcpad), &srcbuf);
+		if(result != GST_FLOW_OK)
+			goto done;
+		GST_BUFFER_OFFSET_END(srcbuf) = element->next_sample + output_length - 1;
+		GST_BUFFER_TIMESTAMP(srcbuf) = element->next_sample_time;
+		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) output_length * 1000000000 / sample_rate;
+
+		time_series.data = (double *) GST_BUFFER_DATA(srcbuf);
+
+		gsl_matrix_get_row(&time_series, orthogonal_snr, i);
+
+		result = gst_pad_push(srcpad, srcbuf);
+		if(result != GST_FLOW_OK)
+			goto done;
+	}
+
+	/*
+	 * Done
+	 */
+
+	element->next_sample += output_length;
+	element->next_sample_time += (GstClockTime) output_length * 1000000000 / sample_rate;
+
+done:
+	gst_caps_unref(caps);
+	gst_object_unref(element);
 	return result;
 }
 
@@ -172,16 +373,12 @@ static GstElementClass *parent_class = NULL;
 static void dispose(GObject *object)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(object);
-	int i;
 
 	g_object_unref(element->adapter);
 	element->adapter = NULL;
-	for(i = 0; i < element->n_srcpad; i++) {
-		gst_object_unref(element->srcpad[i]);
-		element->srcpad[i] = NULL;
-	}
-	free(element->srcpad);
-	element->srcpad = NULL;
+	srcpads_destroy(element);
+
+	svd_destroy(element);
 
 	G_OBJECT_CLASS(parent_class)->dispose(object);
 }
@@ -217,7 +414,7 @@ static void base_init(gpointer class)
 		)
 	);
 	GstPadTemplate *srcpad_template = gst_pad_template_new(
-		"src",
+		"src%04d",
 		GST_PAD_SRC,
 		GST_PAD_SOMETIMES,
 		gst_caps_new_simple(
@@ -254,8 +451,8 @@ static void class_init(gpointer class, gpointer class_data)
 	gobject_class->get_property = get_property;
 	gobject_class->dispose = dispose;
 
-	g_object_class_install_property(gobject_class, ARG_T_START, g_param_spec_int("t-start", "Start time", "Start time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXINT, DEFAULT_T_START, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_T_END, g_param_spec_int("t-end", "End time", "End time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXINT, DEFAULT_T_END, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_T_START, g_param_spec_int("t-start", "Start time", "Start time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXUINT, DEFAULT_T_START, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_T_END, g_param_spec_int("t-end", "End time", "End time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXUINT, DEFAULT_T_END, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 
@@ -269,12 +466,45 @@ static void class_init(gpointer class, gpointer class_data)
 static void instance_init(GTypeInstance *object, gpointer class)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(object);
+	GstPad *pad;
 
-	element->n_srcpad = 0;
-	element->srcpad = NULL;
+	gst_element_create_all_pads(GST_ELEMENT(element));
+
+	/* configure sink pad */
+	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
+	gst_pad_set_setcaps_function(pad, setcaps);
+	gst_pad_set_chain_function(pad, chain);
+	gst_object_unref(pad);
+
+	/* src pads */
+	element->srcpads = NULL;
+	{
+	/* FIXME:  make the pads dynamic, based on the result of the SVD
+	 * decomposition. */
+	int i;
+	GstPadTemplate *template = gst_element_class_get_pad_template(class, "src%04d");
+	for(i = 0; i < 10; i++) {
+		gchar *padname = g_strdup_printf(template->name_template, i);
+		pad = gst_pad_new_from_template(template, padname);
+		g_free(padname);
+		gst_object_ref(pad);	/* for our linked list */
+		gst_element_add_pad(GST_ELEMENT(element), pad);
+		element->srcpads = g_list_append(element->srcpads, pad);
+	}
+	}
+
+	/* internal data */
 	element->adapter = gst_adapter_new();
 	element->t_start = DEFAULT_T_START;
 	element->t_end = DEFAULT_T_END;
+
+	element->next_sample = 0;
+	element->next_sample_time = 0;
+
+	element->U = NULL;
+	element->S = NULL;
+	element->V = NULL;
+	element->chifacs = NULL;
 }
 
 
