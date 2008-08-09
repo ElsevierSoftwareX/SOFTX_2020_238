@@ -14,7 +14,6 @@ gst-launch \
 		channel-name="${CHANNEL}" \
 		start-time-gps="${GPSSTART}" \
 		stop-time-gps="${GPSSTOP}" \
-	! queue \
 	! audioconvert \
 	! audio/x-raw-float, width=64 \
 	! audiochebband \
@@ -25,5 +24,8 @@ gst-launch \
 	! audio/x-raw-float, width=32 \
 	! audioamplify \
 		amplification=2e+17 \
+	! tee name=tee \
+	! queue \
 	! audioconvert \
-	! alsasink
+	! alsasink  \
+	tee. ! queue ! audioconvert ! monoscope ! ffmpegcolorspace ! ximagesink
