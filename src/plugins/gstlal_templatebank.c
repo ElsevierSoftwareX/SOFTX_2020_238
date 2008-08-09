@@ -363,6 +363,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			if(result != GST_FLOW_OK)
 				goto done;
 			GST_BUFFER_OFFSET_END(srcbuf) = element->next_sample + output_length - 1;
+			/* FIXME:  I'm pretty sure the time stamp is wrong,
+			 * I think it needs to be shifted by the length of
+			 * the template (+/- 1, maybe) in one direction or
+			 * another */
 			GST_BUFFER_TIMESTAMP(srcbuf) = (GstClockTime) element->next_sample * 1000000000 / sample_rate + element->t_start * 1000000000;
 			GST_BUFFER_DURATION(srcbuf) = (GstClockTime) output_length * 1000000000 / sample_rate;
 
