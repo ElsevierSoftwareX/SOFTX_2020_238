@@ -43,7 +43,7 @@ PKG_PROG_PKG_CONFIG()
 #
 
 
-AC_SUBST([AM_CFLAGS], [-Wall])
+AC_SUBST([AM_CFLAGS], [-Wall -Wextra -pedantic])
 
 
 #
