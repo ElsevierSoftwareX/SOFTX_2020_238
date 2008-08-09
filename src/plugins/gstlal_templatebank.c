@@ -452,7 +452,7 @@ static void base_init(gpointer class)
 		)
 	);
 	GstPadTemplate *srcpad_template = gst_pad_template_new(
-		"src%04d",
+		"orthosnr%04d",
 		GST_PAD_SRC,
 		GST_PAD_SOMETIMES,
 		gst_caps_new_simple(
@@ -521,7 +521,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	/* FIXME:  make the pads dynamic, based on the result of the SVD
 	 * decomposition. */
 	int i;
-	GstPadTemplate *template = gst_element_class_get_pad_template(class, "src%04d");
+	GstPadTemplate *template = gst_element_class_get_pad_template(class, "orthosnr%04d");
 	for(i = 0; i < 10; i++) {
 		gchar *padname = g_strdup_printf(template->name_template, i);
 		pad = gst_pad_new_from_template(template, padname);
