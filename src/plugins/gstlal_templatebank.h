@@ -62,7 +62,7 @@ typedef struct {
 	unsigned int t_end;
 	unsigned int snr_length;
 
-	long next_sample;
+	unsigned long next_sample;
 
 	gsl_matrix *U;
 	gsl_vector *S;
