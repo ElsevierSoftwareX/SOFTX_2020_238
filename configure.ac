@@ -32,7 +32,7 @@ AC_SUBST([pkgdocdir], [${docdir}/${PACKAGE_NAME}-${PACKAGE_VERSION}])
 #
 
 
-AC_PROG_CC
+AC_PROG_CC_STDC
 AC_PROG_INSTALL
 AC_PROG_LIBTOOL
 PKG_PROG_PKG_CONFIG()
@@ -43,7 +43,9 @@ PKG_PROG_PKG_CONFIG()
 #
 
 
-AC_SUBST([AM_CFLAGS], [-Wall -Wextra -pedantic])
+AX_CFLAGS_WARN_ALL([AM_CFLAGS])
+AM_CFLAGS="$AM_CFLAGS -Wextra -Wno-missing-field-initializers -Wno-unused-parameter"	# extra gcc-specific stuff
+AC_SUBST([AM_CFLAGS])
 
 
 #
