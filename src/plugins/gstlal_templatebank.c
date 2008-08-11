@@ -355,7 +355,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		time_series.size = output_length;
 
-		for(padlist = element->srcpads, i = 0; padlist && (i < orthogonal_snr->size1); padlist = g_list_next(padlist), i++) {
+		for(padlist = element->srcpads, i = 0; padlist && ((unsigned) i < orthogonal_snr->size1); padlist = g_list_next(padlist), i++) {
 			GstPad *srcpad = GST_PAD(padlist->data);
 			GstBuffer *srcbuf;
 

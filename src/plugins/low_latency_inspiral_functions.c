@@ -11,7 +11,7 @@
 int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
                            gsl_vector **chifacs,
                            double chirp_mass_start, int base_sample_rate,
-                           int down_samp_fac, int numtemps, double t_start,
+                           int down_samp_fac, unsigned numtemps, double t_start,
                            double t_end, double tmax, double tolerance,
 			   int verbose)
   {
@@ -26,10 +26,10 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
   double Mg = M*Msol*G/c/c/c;
   double ny_freq = 0.5*base_sample_rate;
   double T = 0;
-  int i = 0;
-  int j = 0;
+  size_t i = 0;
+  size_t j = 0;
   int svd_err_code = 0;
-  int numsamps = floor((double) (t_end-t_start) * base_sample_rate 
+  size_t numsamps = floor((double) (t_end-t_start) * base_sample_rate 
                / down_samp_fac);
   double dt = (double) down_samp_fac/base_sample_rate;
   double tmpltpower = 0;
@@ -48,7 +48,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
   /* create the templates in the bank */
   for (i=0;i<numtemps;i++)
     {
-    if (verbose) printf("generating template number %d...\n",i);
+    if (verbose) printf("generating template number %zu...\n",i);
     /* increment the mass */
     /* this coefficient should maybe be 0.0001 */
     M = chirp_mass_start + 0.0003*i*M/0.7;
@@ -68,7 +68,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
       }
     h = 0;
     norm = normalize_template(Mg, T, tmax, base_sample_rate);
-    for(j =numsamps-1; j>=0; j--)
+    for(j = 0; j < numsamps; j++)
       {
       h = 4.0*Mg*pow(5.0/256.0*(Mg/(-T+dt*j)),0.25)
         * sin(-2.0/2.0/M_PI* pow((-T+dt*j)/(5.0*Mg),(5.0/8.0)));
@@ -138,7 +138,7 @@ double normalize_template(double M, double ts, double duration,
   double sumb = 0;
   double cumsumb = 0;
   int maxb = 0;
-  int i = 0;
+  size_t i = 0;
   /*for (i = 0; i < (*S)->size; i++) 
     {
     sumb+= gsl_vector_get(*S,i);
@@ -163,8 +163,8 @@ double normalize_template(double M, double ts, double duration,
   /*FILE *FP = NULL;*/
   gsl_matrix *tmp = (*M);
   gsl_matrix *newM = NULL;
-  int i = 0; 
-  int j = 0;
+  size_t i = 0; 
+  size_t j = 0;
   
   if ( (*M)->size1 < m ) return 1;
   if ( (*M)->size2 < n ) return 1;
@@ -190,7 +190,7 @@ double normalize_template(double M, double ts, double duration,
 
   gsl_vector *tmp = (*V);
   gsl_vector *newV = NULL;
-  int i = 0;
+  size_t i = 0;
 
   if ( (*V)->size < m ) return 1;
   newV = gsl_vector_calloc(m);
