@@ -86,7 +86,7 @@
 #define TEMPLATE_DURATION 64	/* seconds */
 #define CHIRPMASS_START 1.0	/* M_sun */
 #define TEMPLATE_SAMPLE_RATE 2048	/* Hertz */
-#define NUM_TEMPLATES 200
+#define NUM_TEMPLATES 300
 #define TOLERANCE 0.97
 
 
@@ -290,6 +290,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * SNR.
 	 */
 
+	orthogonal_snr_samples = gsl_vector_alloc(element->U->size1);
+
 	while(1) {
 		/*
 		 * Check for available data, clip the output length.
@@ -305,28 +307,22 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		/*
 		 * Assemble the orthogonal SNR time series as the rows of a
-		 * matrix.
+		 * matrix.  Instead of shuffling the bytes around in
+		 * memory, we play games with the adapter and pointers.  We
+		 * start by asking for all the data we will need for the
+		 * convolution, and then shifting the pointer.  Later we'll
+		 * use a single flush to discard all the samples we no
+		 * longer need.  The adapter will keep the data valid until
+		 * another method is called, so we have to be careful not
+		 * to call any methods on the adapter until the loop is
+		 * finished.
 		 */
 
 		time_series.size = element->U->size2;
+		time_series.data = (double *) gst_adapter_peek(element->adapter, (time_series.size + output_length - 1) * sizeof(*time_series.data));
 		orthogonal_snr = gsl_matrix_alloc(element->U->size1, output_length);
-		orthogonal_snr_samples = gsl_vector_alloc(element->U->size1);
 
 		for(i = 0; i < output_length; i++) {
-			/*
-			 * Instead of shuffling the bytes around in memory,
-			 * we play games with the adapter and pointers.  We
-			 * start by asking for input_size samples.  In the
-			 * next iteration, we want to shift the samples by
-			 * 1, but instead of flushing 1 sample from the
-			 * adapter we ask for input_size+1 samples, and add
-			 * 1 to the address we are given.  Later we'll use
-			 * a single flush to discard all the samples we no
-			 * longer need.
-			 */
-
-			time_series.data = ((double *) gst_adapter_peek(element->adapter, (time_series.size + i) * sizeof(*time_series.data))) + i;
-
 			/*
 			 * Compute one vector of orthogonal SNR samples
 			 */
@@ -338,9 +334,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 */
 
 			gsl_matrix_set_col(orthogonal_snr, i, orthogonal_snr_samples);
-		}
 
-		gsl_vector_free(orthogonal_snr_samples);
+			/*
+			 * Advance the time_series pointer.
+			 */
+
+			time_series.data++;
+		}
 
 		/*
 		 * Flush the data from the adapter that is no longer
@@ -359,20 +359,37 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			GstPad *srcpad = GST_PAD(padlist->data);
 			GstBuffer *srcbuf;
 
+			/*
+			 * Get a buffer from the downstream peer
+			 */
+
 			result = gst_pad_alloc_buffer(srcpad, element->next_sample, output_length * sizeof(*time_series.data), GST_PAD_CAPS(srcpad), &srcbuf);
 			if(result != GST_FLOW_OK)
 				goto done;
-			GST_BUFFER_OFFSET_END(srcbuf) = element->next_sample + output_length - 1;
-			/* FIXME:  I'm pretty sure the time stamp is wrong,
+
+			/*
+			 * Set the metadata.
+			 *
+			 * FIXME:  I'm pretty sure the time stamp is wrong,
 			 * I think it needs to be shifted by the length of
 			 * the template (+/- 1, maybe) in one direction or
-			 * another */
+			 * another
+			 */
+
+			GST_BUFFER_OFFSET_END(srcbuf) = element->next_sample + output_length - 1;
 			GST_BUFFER_TIMESTAMP(srcbuf) = (GstClockTime) element->next_sample * 1000000000 / sample_rate + element->t_start * 1000000000;
 			GST_BUFFER_DURATION(srcbuf) = (GstClockTime) output_length * 1000000000 / sample_rate;
 
-			time_series.data = (double *) GST_BUFFER_DATA(srcbuf);
+			/*
+			 * Copy the SNR time series into it.
+			 */
 
+			time_series.data = (double *) GST_BUFFER_DATA(srcbuf);
 			gsl_matrix_get_row(&time_series, orthogonal_snr, i);
+
+			/*
+			 * Push the buffer downstream.
+			 */
 
 			result = gst_pad_push(srcpad, srcbuf);
 			if(result != GST_FLOW_OK)
@@ -393,6 +410,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 done:
+	gsl_vector_free(orthogonal_snr_samples);
 	gst_caps_unref(caps);
 	gst_object_unref(element);
 	return result;
