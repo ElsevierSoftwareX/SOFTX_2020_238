@@ -736,7 +736,7 @@ static void class_init(gpointer class, gpointer class_data)
 	g_object_class_install_property(gobject_class, ARG_SRC_INSTRUMENT, g_param_spec_string("instrument", "Instrument", "Instrument name (e.g., \"H1\").", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_CHANNEL_NAME, g_param_spec_string("channel-name", "Channel name", "Channel name (e.g., \"LSC-STRAIN\").", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	/* FIXME:  "string" is not the best type for these ... */
-	g_object_class_install_property(gobject_class, ARG_SRC_START_TIME_GPS, g_param_spec_string("start-time-gps", "Start time", "Start time in GPS secods.", "0.000000000", G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_SRC_START_TIME_GPS, g_param_spec_string("start-time-gps", "Start time", "Start time in GPS seconds.", "0.000000000", G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_STOP_TIME_GPS, g_param_spec_string("stop-time-gps", "Stop time", "Stop time in GPS seconds.", "0.000000000", G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
 	/*
