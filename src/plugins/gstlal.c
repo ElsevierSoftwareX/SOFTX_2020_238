@@ -34,6 +34,7 @@
 #include <gstlal.h>
 #include <gstlal_framesrc.h>
 #include <gstlal_templatebank.h>
+#include <gstlal_multiscope.h>
 
 
 /*
@@ -121,6 +122,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 	} *element, elements[] = {
 		{"lal_framesrc", gstlal_framesrc_get_type},
 		{"lal_templatebank", gstlal_templatebank_get_type},
+		{"lal_multiscope", gstlal_multiscope_get_type},
 		{NULL, NULL},
 	};
 
