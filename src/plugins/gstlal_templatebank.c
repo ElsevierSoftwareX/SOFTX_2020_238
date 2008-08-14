@@ -217,6 +217,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
 	gboolean result = TRUE;
 
+	/* FIXME:  the channels parameter is wrong */
 	result = gst_pad_set_caps(element->srcpad, caps);
 	if(result != TRUE)
 		goto done;
@@ -236,7 +237,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
-	GstBuffer *srcbuf;
 	GstFlowReturn result = GST_FLOW_OK;
 	gsl_vector time_series = {
 		.size = 0,
@@ -245,8 +245,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		.block = NULL,
 		.owner = 0
 	};
-	gsl_vector *orthogonal_snr_samples;
-	gsl_matrix *orthogonal_snr;
 	int sample_rate;
 	int output_length;
 	int i;
@@ -276,11 +274,19 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * SNR.
 	 */
 
-	orthogonal_snr_samples = gsl_vector_alloc(element->U->size1);
-
 	while(1) {
+		gsl_vector orthogonal_snr_samples = {
+			.size = element->U->size1,
+			.stride = 1,
+			.data = NULL,
+			.block = NULL,
+			.owner = 0
+		};
+		GstBuffer *srcbuf;
+
 		/*
-		 * Check for available data, clip the output length.
+		 * Check for available data, clip to the required output
+		 * length.
 		 */
 
 		output_length = (gst_adapter_available(element->adapter) / sizeof(*time_series.data)) - element->U->size2;
@@ -292,54 +298,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			break;
 
 		/*
-		 * Assemble the orthogonal SNR time series as the rows of a
-		 * matrix.  Instead of shuffling the bytes around in
-		 * memory, we play games with the adapter and pointers.  We
-		 * start by asking for all the data we will need for the
-		 * convolution, and then shifting the pointer.  Later we'll
-		 * use a single flush to discard all the samples we no
-		 * longer need.  The adapter will keep the data valid until
-		 * another method is called, so we have to be careful not
-		 * to call any methods on the adapter until the loop is
-		 * finished.
-		 */
-
-		time_series.size = element->U->size2;
-		time_series.data = (double *) gst_adapter_peek(element->adapter, (time_series.size + output_length - 1) * sizeof(*time_series.data));
-		orthogonal_snr = gsl_matrix_alloc(output_length, element->U->size1);
-
-		for(i = 0; i < output_length; i++) {
-			/*
-			 * Compute one vector of orthogonal SNR samples
-			 */
-
-			gsl_blas_dgemv(CblasNoTrans, 1.0, element->U, &time_series, 0.0, orthogonal_snr_samples);
-
-			/*
-			 * Store in matrix of orthogonal SNR series.
-			 */
-
-			gsl_matrix_set_row(orthogonal_snr, i, orthogonal_snr_samples);
-
-			/*
-			 * Advance the time_series pointer.
-			 */
-
-			time_series.data++;
-		}
-
-		/*
-		 * Flush the data from the adapter that is no longer
-		 * required.
-		 */
-
-		gst_adapter_flush(element->adapter, output_length);
-
-		/*
 		 * Get a buffer from the downstream peer
 		 */
 
-		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, orthogonal_snr->size1 * orthogonal_snr->size2 * sizeof(*orthogonal_snr->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
+		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, element->U->size1 * output_length * sizeof(*orthogonal_snr_samples.data), GST_PAD_CAPS(element->srcpad), &srcbuf);
 		if(result != GST_FLOW_OK)
 			goto done;
 
@@ -356,12 +318,42 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) output_length * 1000000000 / sample_rate;
 
 		/*
-		 * Copy the SNR time series into it.
+		 * Assemble the orthogonal SNR time series as the rows of a
+		 * matrix.  Instead of shuffling the bytes around in
+		 * memory, we play games with the adapter and pointers.  We
+		 * start by asking for all the data we will need for the
+		 * convolution, but only use part of it and then shift the
+		 * pointer and iterate.  Later we'll use a single flush to
+		 * discard all the samples we no longer need.  The adapter
+		 * will keep the data valid until another method is called,
+		 * so we have to be careful not to call any methods on the
+		 * adapter until the loop is finished.
 		 */
 
-		memcpy(GST_BUFFER_DATA(srcbuf), orthogonal_snr->data, orthogonal_snr->size1 * orthogonal_snr->size2 * sizeof(*orthogonal_snr->data));
+		orthogonal_snr_samples.data = (double *) GST_BUFFER_DATA(srcbuf);
+		time_series.size = element->U->size2;
+		time_series.data = (double *) gst_adapter_peek(element->adapter, (time_series.size + output_length - 1) * sizeof(*time_series.data));
+		for(i = 0; i < output_length; i++) {
+			/*
+			 * Compute one vector of orthogonal SNR samples
+			 */
 
-		gsl_matrix_free(orthogonal_snr);
+			gsl_blas_dgemv(CblasNoTrans, 1.0, element->U, &time_series, 0.0, &orthogonal_snr_samples);
+
+			/*
+			 * Advance the time_series pointer.
+			 */
+
+			time_series.data++;
+			orthogonal_snr_samples.data += orthogonal_snr_samples.size;
+		}
+
+		/*
+		 * Flush the data from the adapter that is no longer
+		 * required.
+		 */
+
+		gst_adapter_flush(element->adapter, output_length);
 
 		/*
 		 * Push the buffer downstream.
@@ -383,7 +375,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 done:
-	gsl_vector_free(orthogonal_snr_samples);
 	gst_caps_unref(caps);
 	gst_object_unref(element);
 	return result;
