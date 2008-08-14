@@ -91,9 +91,9 @@
 
 static uint32_t pixel_colour(int n_channels, int channel)
 {
-	uint32_t colour = 0x7f * (channel + 1) / (n_channels + 1);
+	uint32_t colour = 0x7f * (n_channels - channel) / n_channels;
 
-	return 0x1010ff | (colour << 8) | (colour << 16);
+	return 0x001010ff | (colour << 8) | (colour << 16);
 }
 
 
@@ -159,6 +159,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	caps = gst_pad_get_allowed_caps(element->srcpad);
+	gst_caps_do_simplify(caps);
 	result = gst_pad_set_caps(element->srcpad, caps);
 	gst_caps_unref(caps);
 
@@ -217,8 +218,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		for(i = 0; i < SCOPE_WIDTH * SCOPE_HEIGHT; i++)
-			/* white */
-			pixels[i] = 0xffffff;
+			/* white = red | green | blue */
+			pixels[i] = 0x00ff0000 | 0x0000ff00 | 0x000000ff;
 
 		/*
 		 * Update the trace mean and variance
@@ -337,9 +338,9 @@ static void base_init(gpointer class)
 			"framerate", GST_TYPE_FRACTION, 60, 1,
 			"bpp", G_TYPE_INT, 32,
 			"depth", G_TYPE_INT, 24,
-			"red_mask", G_TYPE_INT, 0xff0000,
-			"green_mask", G_TYPE_INT, 0x00ff00,
-			"blue_mask", G_TYPE_INT, 0x0000ff,
+			"red_mask", G_TYPE_INT, 0x0000ff00,
+			"green_mask", G_TYPE_INT, 0x00ff0000,
+			"blue_mask", G_TYPE_INT, 0xff000000,
 			"endianness", G_TYPE_INT, 4321,
 			NULL
 		)
