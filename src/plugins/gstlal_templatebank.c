@@ -217,11 +217,6 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
 	gboolean result = TRUE;
 
-	/* FIXME:  the channels parameter is wrong */
-	result = gst_pad_set_caps(element->srcpad, caps);
-	if(result != TRUE)
-		goto done;
-
 done:
 	gst_object_unref(element);
 	return result;
@@ -249,11 +244,33 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 
 	/*
-	 * Construct orthogonal template bank if required
+	 * Now that we know the sample rate, construct orthogonal basis for
+	 * the template bank if not already done.
 	 */
 
-	if(!element->U)
+	if(!element->U) {
+		GstCaps *srccaps = gst_caps_copy(caps);
+		gboolean success;
+
+		/*
+		 * Create the orthogonal basis.
+		 */
+
 		svd_create(element, sample_rate);
+
+		/*
+		 * Now that we know how many channels we'll produce, set
+		 * the srcpad's caps properly.
+		 */
+
+		gst_caps_set_simple(srccaps, "channels", G_TYPE_INT, element->U->size1, NULL);
+		success = gst_pad_set_caps(element->srcpad, srccaps);
+		gst_caps_unref(srccaps);
+		if(success != TRUE) {
+			result = GST_FLOW_NOT_NEGOTIATED;
+			goto done;
+		}
+	}
 
 	/*
 	 * Put buffer into adapter.
