@@ -86,8 +86,9 @@
 #define TEMPLATE_DURATION 64	/* seconds */
 #define CHIRPMASS_START 1.0	/* M_sun */
 #define TEMPLATE_SAMPLE_RATE 2048	/* Hertz */
-#define NUM_TEMPLATES 300
+#define NUM_TEMPLATES 200
 #define TOLERANCE 0.97
+#define MAX_ORTHOGONAL_SNR_CHANNELS 16384
 
 
 /*
@@ -143,18 +144,6 @@ static int svd_create(GSTLALTemplateBank *element, int sample_rate)
 	/* done */
 
 	return 0;
-}
-
-
-static void srcpads_destroy(GSTLALTemplateBank *element)
-{
-	GList *padlist;
-
-	for(padlist = element->srcpads; padlist; padlist = g_list_next(padlist))
-		gst_object_unref(GST_PAD(padlist->data));
-
-	g_list_free(element->srcpads);
-	element->srcpads = NULL;
 }
 
 
@@ -227,13 +216,10 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
 	gboolean result = TRUE;
-	GList *padlist;
 
-	for(padlist = element->srcpads; padlist; padlist = g_list_next(padlist)) {
-		result = gst_pad_set_caps(GST_PAD(padlist->data), caps);
-		if(result != TRUE)
-			goto done;
-	}
+	result = gst_pad_set_caps(element->srcpad, caps);
+	if(result != TRUE)
+		goto done;
 
 done:
 	gst_object_unref(element);
@@ -250,6 +236,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
+	GstBuffer *srcbuf;
 	GstFlowReturn result = GST_FLOW_OK;
 	gsl_vector time_series = {
 		.size = 0,
@@ -262,7 +249,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	gsl_matrix *orthogonal_snr;
 	int sample_rate;
 	int output_length;
-	GList *padlist;
 	int i;
 
 	/*
@@ -320,7 +306,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		time_series.size = element->U->size2;
 		time_series.data = (double *) gst_adapter_peek(element->adapter, (time_series.size + output_length - 1) * sizeof(*time_series.data));
-		orthogonal_snr = gsl_matrix_alloc(element->U->size1, output_length);
+		orthogonal_snr = gsl_matrix_alloc(output_length, element->U->size1);
 
 		for(i = 0; i < output_length; i++) {
 			/*
@@ -333,7 +319,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 * Store in matrix of orthogonal SNR series.
 			 */
 
-			gsl_matrix_set_col(orthogonal_snr, i, orthogonal_snr_samples);
+			gsl_matrix_set_row(orthogonal_snr, i, orthogonal_snr_samples);
 
 			/*
 			 * Advance the time_series pointer.
@@ -350,53 +336,40 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		gst_adapter_flush(element->adapter, output_length);
 
 		/*
-		 * Push the orthogonal SNR time series out their pads
+		 * Get a buffer from the downstream peer
 		 */
 
-		time_series.size = output_length;
+		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, orthogonal_snr->size1 * orthogonal_snr->size2 * sizeof(*orthogonal_snr->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
+		if(result != GST_FLOW_OK)
+			goto done;
 
-		for(padlist = element->srcpads, i = 0; padlist && ((unsigned) i < orthogonal_snr->size1); padlist = g_list_next(padlist), i++) {
-			GstPad *srcpad = GST_PAD(padlist->data);
-			GstBuffer *srcbuf;
+		/*
+		 * Set the metadata.
+		 *
+		 * FIXME:  I'm pretty sure the time stamp is wrong, I think
+		 * it needs to be shifted by the length of the template
+		 * (+/- 1 sample, maybe) in one direction or another
+		 */
 
-			/*
-			 * Get a buffer from the downstream peer
-			 */
+		GST_BUFFER_OFFSET_END(srcbuf) = element->next_sample + output_length - 1;
+		GST_BUFFER_TIMESTAMP(srcbuf) = (GstClockTime) GST_BUFFER_OFFSET(srcbuf) * 1000000000 / sample_rate + element->t_start * 1000000000;
+		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) output_length * 1000000000 / sample_rate;
 
-			result = gst_pad_alloc_buffer(srcpad, element->next_sample, output_length * sizeof(*time_series.data), GST_PAD_CAPS(srcpad), &srcbuf);
-			if(result != GST_FLOW_OK)
-				goto done;
+		/*
+		 * Copy the SNR time series into it.
+		 */
 
-			/*
-			 * Set the metadata.
-			 *
-			 * FIXME:  I'm pretty sure the time stamp is wrong,
-			 * I think it needs to be shifted by the length of
-			 * the template (+/- 1, maybe) in one direction or
-			 * another
-			 */
-
-			GST_BUFFER_OFFSET_END(srcbuf) = element->next_sample + output_length - 1;
-			GST_BUFFER_TIMESTAMP(srcbuf) = (GstClockTime) element->next_sample * 1000000000 / sample_rate + element->t_start * 1000000000;
-			GST_BUFFER_DURATION(srcbuf) = (GstClockTime) output_length * 1000000000 / sample_rate;
-
-			/*
-			 * Copy the SNR time series into it.
-			 */
-
-			time_series.data = (double *) GST_BUFFER_DATA(srcbuf);
-			gsl_matrix_get_row(&time_series, orthogonal_snr, i);
-
-			/*
-			 * Push the buffer downstream.
-			 */
-
-			result = gst_pad_push(srcpad, srcbuf);
-			if(result != GST_FLOW_OK)
-				goto done;
-		}
+		memcpy(GST_BUFFER_DATA(srcbuf), orthogonal_snr->data, orthogonal_snr->size1 * orthogonal_snr->size2 * sizeof(*orthogonal_snr->data));
 
 		gsl_matrix_free(orthogonal_snr);
+
+		/*
+		 * Push the buffer downstream.
+		 */
+
+		result = gst_pad_push(element->srcpad, srcbuf);
+		if(result != GST_FLOW_OK)
+			goto done;
 
 		/*
 		 * Advance the sample count.
@@ -434,9 +407,10 @@ static void dispose(GObject *object)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(object);
 
+	gst_object_unref(element->srcpad);
+	element->srcpad = NULL;
 	g_object_unref(element->adapter);
 	element->adapter = NULL;
-	srcpads_destroy(element);
 
 	svd_destroy(element);
 
@@ -474,13 +448,13 @@ static void base_init(gpointer class)
 		)
 	);
 	GstPadTemplate *srcpad_template = gst_pad_template_new(
-		"orthosnr%04d",
+		"orthogonal_snr",
 		GST_PAD_SRC,
-		GST_PAD_SOMETIMES,
+		GST_PAD_ALWAYS,
 		gst_caps_new_simple(
 			"audio/x-raw-float",
 			"rate", GST_TYPE_INT_RANGE, 1, TEMPLATE_SAMPLE_RATE,
-			"channels", G_TYPE_INT, 1,
+			"channels", GST_TYPE_INT_RANGE, 1, MAX_ORTHOGONAL_SNR_CHANNELS,
 			"endianness", G_TYPE_INT, G_BYTE_ORDER,
 			"width", G_TYPE_INT, 64,
 			NULL
@@ -537,22 +511,11 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	gst_pad_set_chain_function(pad, chain);
 	gst_object_unref(pad);
 
-	/* src pads */
-	element->srcpads = NULL;
-	{
-	/* FIXME:  make the pads dynamic, based on the result of the SVD
-	 * decomposition. */
-	int i;
-	GstPadTemplate *template = gst_element_class_get_pad_template(class, "orthosnr%04d");
-	for(i = 0; i < 10; i++) {
-		gchar *padname = g_strdup_printf(template->name_template, i);
-		pad = gst_pad_new_from_template(template, padname);
-		g_free(padname);
-		gst_object_ref(pad);	/* for our linked list */
-		gst_element_add_pad(GST_ELEMENT(element), pad);
-		element->srcpads = g_list_append(element->srcpads, pad);
-	}
-	}
+	/* src pad */
+	pad = gst_element_get_static_pad(GST_ELEMENT(element), "orthogonal_snr");
+
+	/* consider this to consume the reference */
+	element->srcpad = pad;
 
 	/* internal data */
 	element->adapter = gst_adapter_new();

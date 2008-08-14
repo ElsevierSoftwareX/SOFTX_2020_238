@@ -54,7 +54,7 @@ typedef struct {
 typedef struct {
 	GstElement element;
 
-	GList *srcpads;
+	GstPad *srcpad;
 
 	GstAdapter *adapter;
 
