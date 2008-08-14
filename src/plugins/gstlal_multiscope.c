@@ -178,10 +178,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GSTLALMultiScope *element = GSTLAL_MULTISCOPE(gst_pad_get_parent(pad));
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	GstFlowReturn result = GST_FLOW_OK;
-	int offset = GST_BUFFER_OFFSET(sinkbuf);
-	int offset_end = GST_BUFFER_OFFSET_END(sinkbuf);
-	GstClockTime timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);
-	GstClockTime duration = GST_BUFFER_DURATION(sinkbuf);
 	int samples = element->trace_duration * element->rate;
 	uint32_t *pixels;
 
@@ -206,14 +202,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Get a buffer from the downstream peer
 		 */
 
-		result = gst_pad_alloc_buffer(element->srcpad, offset, SCOPE_WIDTH * SCOPE_HEIGHT * sizeof(*pixels), GST_PAD_CAPS(element->srcpad), &srcbuf);
+		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, SCOPE_WIDTH * SCOPE_HEIGHT * sizeof(*pixels), GST_PAD_CAPS(element->srcpad), &srcbuf);
 		if(result != GST_FLOW_OK)
 			goto done;
 		pixels = (uint32_t *) GST_BUFFER_DATA(srcbuf);
 
-		GST_BUFFER_OFFSET_END(srcbuf) = offset_end;
-		GST_BUFFER_TIMESTAMP(srcbuf) = timestamp;
-		GST_BUFFER_DURATION(srcbuf) = duration;
+		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + samples - 1;
+		GST_BUFFER_TIMESTAMP(srcbuf) = (GstClockTime) GST_BUFFER_OFFSET(srcbuf) * 1000000000 / element->rate;
+		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) samples * 1000000000 / element->rate;
 
 		/*
 		 * Set the buffer to all white
@@ -262,6 +258,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		gst_adapter_flush(element->adapter, samples * element->channels * sizeof(*data));
+		element->next_sample += samples;
 	}
 
 	/*
@@ -404,6 +401,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->channels = 0;
 	element->rate = 0;
 	element->trace_duration = DEFAULT_TRACE_DURATION;
+	element->next_sample = 0;
 	element->mean = 0.0;
 	element->variance = 0.0;
 	element->average_length = DEFAULT_AVERAGE_LENGTH;

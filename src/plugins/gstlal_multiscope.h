@@ -62,6 +62,7 @@ typedef struct {
 	int rate;
 	double trace_duration;
 
+	unsigned long next_sample;
 	double mean;
 	double variance;
 	int average_length;
