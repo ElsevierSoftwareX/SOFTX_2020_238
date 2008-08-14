@@ -162,7 +162,6 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	result = gst_pad_set_caps(element->srcpad, caps);
 	gst_caps_unref(caps);
 
-done:
 	gst_object_unref(element);
 	return result;
 }
@@ -208,8 +207,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		pixels = (uint32_t *) GST_BUFFER_DATA(srcbuf);
 
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + samples - 1;
-		GST_BUFFER_TIMESTAMP(srcbuf) = (GstClockTime) GST_BUFFER_OFFSET(srcbuf) * 1000000000 / element->rate;
-		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) samples * 1000000000 / element->rate;
+		/*GST_BUFFER_TIMESTAMP(srcbuf) = (GstClockTime) GST_BUFFER_OFFSET(srcbuf) * 1000000000 / element->rate;
+		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) samples * 1000000000 / element->rate;*/
+		GST_BUFFER_TIMESTAMP(srcbuf) = GST_CLOCK_TIME_NONE;
+		GST_BUFFER_DURATION(srcbuf) = GST_CLOCK_TIME_NONE;
 
 		/*
 		 * Set the buffer to all white
