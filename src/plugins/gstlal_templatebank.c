@@ -238,13 +238,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	GstFlowReturn result = GST_FLOW_OK;
-	gsl_vector time_series = {
-		.size = 0,
-		.stride = 1,
-		.data = NULL,
-		.block = NULL,
-		.owner = 0
-	};
 	int sample_rate;
 	int output_length;
 	int i;
@@ -263,8 +256,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		svd_create(element, sample_rate);
 
 	/*
-	 * Put buffer into adapter, and measure the length of the SNR time
-	 * series we can generate (we're done if this is <= 0).
+	 * Put buffer into adapter.
 	 */
 
 	gst_adapter_push(element->adapter, sinkbuf);
@@ -277,6 +269,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	while(1) {
 		gsl_vector orthogonal_snr_samples = {
 			.size = element->U->size1,
+			.stride = 1,
+			.data = NULL,
+			.block = NULL,
+			.owner = 0
+		};
+		gsl_vector time_series = {
+			.size = element->U->size2,
 			.stride = 1,
 			.data = NULL,
 			.block = NULL,
@@ -331,7 +330,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		orthogonal_snr_samples.data = (double *) GST_BUFFER_DATA(srcbuf);
-		time_series.size = element->U->size2;
 		time_series.data = (double *) gst_adapter_peek(element->adapter, (time_series.size + output_length - 1) * sizeof(*time_series.data));
 		for(i = 0; i < output_length; i++) {
 			/*
@@ -341,19 +339,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			gsl_blas_dgemv(CblasNoTrans, 1.0, element->U, &time_series, 0.0, &orthogonal_snr_samples);
 
 			/*
-			 * Advance the time_series pointer.
+			 * Advance the pointers.
 			 */
 
-			time_series.data++;
 			orthogonal_snr_samples.data += orthogonal_snr_samples.size;
+			time_series.data++;
 		}
-
-		/*
-		 * Flush the data from the adapter that is no longer
-		 * required.
-		 */
-
-		gst_adapter_flush(element->adapter, output_length);
 
 		/*
 		 * Push the buffer downstream.
@@ -362,6 +353,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		result = gst_pad_push(element->srcpad, srcbuf);
 		if(result != GST_FLOW_OK)
 			goto done;
+
+		/*
+		 * Flush the data from the adapter that is no longer
+		 * required.
+		 */
+
+		gst_adapter_flush(element->adapter, output_length);
 
 		/*
 		 * Advance the sample count.
