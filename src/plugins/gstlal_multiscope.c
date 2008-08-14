@@ -219,22 +219,20 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Set the buffer to all white
 		 */
 
-		for(j = 0; j < SCOPE_HEIGHT; j++)
-			for(i = 0; i < SCOPE_WIDTH; i++)
-				/* white */
-				pixels[j * SCOPE_WIDTH + i] = 0xffffff;
+		for(i = 0; i < SCOPE_WIDTH * SCOPE_HEIGHT; i++)
+			/* white */
+			pixels[i] = 0xffffff;
 
 		/*
 		 * Update the trace mean and variance
 		 */
 
 		d = data;
-		for(i = 0; i < samples; i++)
-			for(j = 0; j < element->channels; j++) {
-				element->variance = (element->variance * (element->average_length - 1) + pow(*d - element->mean, 2)) / element->average_length;
-				element->mean = (element->mean * (element->average_length - 1) + *d) / element->average_length;
-				d++;
-			}
+		for(i = 0; i < samples * element->channels; i++) {
+			element->variance = (element->variance * (element->average_length - 1) + pow(*d - element->mean, 2)) / element->average_length;
+			element->mean = (element->mean * (element->average_length - 1) + *d) / element->average_length;
+			d++;
+		}
 
 		/*
 		 * Draw the traces
@@ -244,7 +242,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		for(i = 0; i < samples; i++) {
 			int x = i * SCOPE_WIDTH / samples;
 			for(j = 0; j < element->channels; j++) {
-				int y = PIXELS_PER_SIGMA * (*(d++) - element->mean) / sqrt(element->variance);
+				int y = PIXELS_PER_SIGMA * (*(d++) - element->mean) / sqrt(element->variance) + 0.5;
 				y = SCOPE_HEIGHT / 2 - y;
 				if(0 <= y && y < SCOPE_HEIGHT)
 					pixels[y * SCOPE_WIDTH + x] = pixel_colour(element->channels, j);
@@ -258,6 +256,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		result = gst_pad_push(element->srcpad, srcbuf);
 		if(result != GST_FLOW_OK)
 			goto done;
+
+		/*
+		 * Flush the data from the adapter.
+		 */
+
+		gst_adapter_flush(element->adapter, samples * element->channels * sizeof(*data));
 	}
 
 	/*
