@@ -88,7 +88,6 @@
 #define TEMPLATE_SAMPLE_RATE 2048	/* Hertz */
 #define NUM_TEMPLATES 200
 #define TOLERANCE 0.97
-#define MAX_ORTHOGONAL_SNR_CHANNELS 16384
 
 
 /*
@@ -129,12 +128,14 @@ static int svd_create(GSTLALTemplateBank *element, int sample_rate)
 
 	svd_destroy(element);
 
-	/* clip t_start and t_end to [0, TEMPLATE_DURATION] (both are
-	 * unsigned so can't be negative) */
+	/* clip t_start and t_end so that 0 <= t_start <= t_end <=
+	 * TEMPLATE_DURATION (both are unsigned so can't be negative) */
 
 	if(element->t_start > TEMPLATE_DURATION)
 		element->t_start = TEMPLATE_DURATION;
-	if(element->t_end > TEMPLATE_DURATION)
+	if(element->t_end < element->t_start)
+		element->t_end = element->t_start;
+	else if(element->t_end > TEMPLATE_DURATION)
 		element->t_end = TEMPLATE_DURATION;
 
 	/* generate orthogonal template bank */
@@ -329,13 +330,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * (+/- 1 sample, maybe) in one direction or another
 		 */
 
-		GST_BUFFER_OFFSET_END(srcbuf) = element->next_sample + output_length - 1;
-		GST_BUFFER_TIMESTAMP(srcbuf) = (GstClockTime) GST_BUFFER_OFFSET(srcbuf) * 1000000000 / sample_rate + element->t_start * 1000000000;
-		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) output_length * 1000000000 / sample_rate;
+		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + output_length - 1;
+		GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_OFFSET(srcbuf) * GST_SECOND / sample_rate + element->t_start * GST_SECOND;
+		GST_BUFFER_DURATION(srcbuf) = output_length * GST_SECOND / sample_rate;
 
 		/*
-		 * Assemble the orthogonal SNR time series as the rows of a
-		 * matrix.  Instead of shuffling the bytes around in
+		 * Assemble the orthogonal SNR time series as the columns
+		 * of a matrix.  Instead of shuffling the bytes around in
 		 * memory, we play games with the adapter and pointers.  We
 		 * start by asking for all the data we will need for the
 		 * convolution, but only use part of it and then shift the
@@ -437,7 +438,7 @@ static void base_init(gpointer class)
 		"Template Bank",
 		"Filter",
 		"A time-domain filter bank",
-		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chan Hanna <chann@ligo.caltech.edu>"
+		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chan Hanna <channa@ligo.caltech.edu>"
 	};
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
 	GstPadTemplate *sinkpad_template = gst_pad_template_new(
@@ -460,7 +461,7 @@ static void base_init(gpointer class)
 		gst_caps_new_simple(
 			"audio/x-raw-float",
 			"rate", GST_TYPE_INT_RANGE, 1, TEMPLATE_SAMPLE_RATE,
-			"channels", GST_TYPE_INT_RANGE, 1, MAX_ORTHOGONAL_SNR_CHANNELS,
+			"channels", GST_TYPE_INT_RANGE, 1, G_MAXINT,
 			"endianness", G_TYPE_INT, G_BYTE_ORDER,
 			"width", G_TYPE_INT, 64,
 			NULL
