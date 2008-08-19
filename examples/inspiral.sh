@@ -24,7 +24,7 @@ SRC="lal_framesrc \
 #	datarate=$((16384*8)) \
 #! audio/x-raw-float, width=64, channels=1, rate=16384, endianness=1234"
 
-SINK="lal_multiscope ! ffmpegcolorspace ! ximagesink"
+SINK="queue ! lal_multiscope trace-duration=0.25 ! ffmpegcolorspace ! ximagesink"
 #SINK="fakesink"
 
 gst-launch \
