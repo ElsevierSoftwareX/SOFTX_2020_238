@@ -61,11 +61,13 @@ typedef struct {
 	int channels;
 	int rate;
 	double trace_duration;
+	double vertical_scale_sigmas;
 
 	unsigned long next_sample;
 	double mean;
 	double variance;
-	int average_length;
+	double average_length;
+	gboolean do_timestamp;
 } GSTLALMultiScope;
 
 

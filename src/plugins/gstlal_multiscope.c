@@ -73,11 +73,12 @@
  */
 
 
-#define SCOPE_WIDTH 320
-#define SCOPE_HEIGHT 200
-#define PIXELS_PER_SIGMA 20
+#define DEFAULT_SCOPE_WIDTH 320
+#define DEFAULT_SCOPE_HEIGHT 200
+#define DEFAULT_VERTICAL_SCALE_SIGMAS 10
 #define DEFAULT_TRACE_DURATION 1.0
-#define DEFAULT_AVERAGE_LENGTH 1000
+#define DEFAULT_AVERAGE_LENGTH 1000.0
+#define DEFAULT_DO_TIMESTAMP TRUE
 
 
 /*
@@ -114,7 +115,10 @@ static uint32_t pixel_colour(int n_channels, int channel)
 enum property {
 	ARG_WIDTH = 1,
 	ARG_HEIGHT,
-	ARG_TRACE_DURATION
+	ARG_TRACE_DURATION,
+	ARG_VERTICAL_SCALE,
+	ARG_AVERAGE_LENGTH,
+	ARG_DO_TIMESTAMP
 };
 
 
@@ -123,6 +127,21 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GSTLALMultiScope *element = GSTLAL_MULTISCOPE(object);
 
 	switch(id) {
+	case ARG_TRACE_DURATION:
+		element->trace_duration = g_value_get_double(value);
+		break;
+
+	case ARG_VERTICAL_SCALE:
+		element->vertical_scale_sigmas = g_value_get_double(value);
+		break;
+
+	case ARG_AVERAGE_LENGTH:
+		element->average_length = g_value_get_double(value);
+		break;
+
+	case ARG_DO_TIMESTAMP:
+		element->do_timestamp = g_value_get_boolean(value);
+		break;
 	}
 }
 
@@ -132,6 +151,21 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	GSTLALMultiScope *element = GSTLAL_MULTISCOPE(object);
 
 	switch(id) {
+	case ARG_TRACE_DURATION:
+		g_value_set_double(value, element->trace_duration);
+		break;
+
+	case ARG_VERTICAL_SCALE:
+		g_value_set_double(value, element->vertical_scale_sigmas);
+		break;
+
+	case ARG_AVERAGE_LENGTH:
+		g_value_set_double(value, element->average_length);
+		break;
+
+	case ARG_DO_TIMESTAMP:
+		g_value_set_boolean(value, element->do_timestamp);
+		break;
 	}
 }
 
@@ -159,7 +193,9 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	caps = gst_pad_get_allowed_caps(element->srcpad);
+	caps = gst_caps_make_writable(caps);
 	gst_caps_do_simplify(caps);
+	gst_caps_set_simple(caps, "framerate", GST_TYPE_FRACTION, 1024, (int) (element->trace_duration * 1024), NULL);
 	result = gst_pad_set_caps(element->srcpad, caps);
 	gst_caps_unref(caps);
 
@@ -179,7 +215,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	GstFlowReturn result = GST_FLOW_OK;
 	int samples = element->trace_duration * element->rate;
-	uint32_t *pixels;
 
 	/*
 	 * Put buffer into adapter, and measure the length of the SNR time
@@ -195,6 +230,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	while(gst_adapter_available(element->adapter) >= samples * element->channels * sizeof(double)) {
 		double *data = (double *) gst_adapter_peek(element->adapter, samples * element->channels * sizeof(*data));
 		double *d;
+		uint32_t *pixels;
 		GstBuffer *srcbuf;
 		int i, j;
 
@@ -202,22 +238,29 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Get a buffer from the downstream peer
 		 */
 
-		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, SCOPE_WIDTH * SCOPE_HEIGHT * sizeof(*pixels), GST_PAD_CAPS(element->srcpad), &srcbuf);
+		result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET_NONE, DEFAULT_SCOPE_WIDTH * DEFAULT_SCOPE_HEIGHT * sizeof(*pixels), GST_PAD_CAPS(element->srcpad), &srcbuf);
 		if(result != GST_FLOW_OK)
 			goto done;
 		pixels = (uint32_t *) GST_BUFFER_DATA(srcbuf);
 
-		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + samples - 1;
-		/*GST_BUFFER_TIMESTAMP(srcbuf) = (GstClockTime) GST_BUFFER_OFFSET(srcbuf) * 1000000000 / element->rate;
-		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) samples * 1000000000 / element->rate;*/
-		GST_BUFFER_TIMESTAMP(srcbuf) = GST_CLOCK_TIME_NONE;
-		GST_BUFFER_DURATION(srcbuf) = GST_CLOCK_TIME_NONE;
+		/*
+		 * Set the metadata
+		 */
+
+		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf);
+		if(element->do_timestamp) {
+			GST_BUFFER_TIMESTAMP(srcbuf) = element->next_sample * GST_SECOND / element->rate;
+			GST_BUFFER_DURATION(srcbuf) = samples * GST_SECOND / element->rate;
+		} else {
+			GST_BUFFER_TIMESTAMP(srcbuf) = GST_CLOCK_TIME_NONE;
+			GST_BUFFER_DURATION(srcbuf) = GST_CLOCK_TIME_NONE;
+		}
 
 		/*
 		 * Set the buffer to all white
 		 */
 
-		for(i = 0; i < SCOPE_WIDTH * SCOPE_HEIGHT; i++)
+		for(i = 0; i < DEFAULT_SCOPE_WIDTH * DEFAULT_SCOPE_HEIGHT; i++)
 			/* white = red | green | blue */
 			pixels[i] = 0x00ff0000 | 0x0000ff00 | 0x000000ff;
 
@@ -238,12 +281,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		d = data;
 		for(i = 0; i < samples; i++) {
-			int x = i * SCOPE_WIDTH / samples;
+			int x = i * DEFAULT_SCOPE_WIDTH / samples;
 			for(j = 0; j < element->channels; j++) {
-				int y = PIXELS_PER_SIGMA * (*(d++) - element->mean) / sqrt(element->variance) + 0.5;
-				y = SCOPE_HEIGHT / 2 - y;
-				if(0 <= y && y < SCOPE_HEIGHT)
-					pixels[y * SCOPE_WIDTH + x] = pixel_colour(element->channels, j);
+				int y = DEFAULT_SCOPE_HEIGHT / element->vertical_scale_sigmas * (*(d++) - element->mean) / sqrt(element->variance) + 0.5;
+				y = DEFAULT_SCOPE_HEIGHT / 2 - y;
+				if(0 <= y && y < DEFAULT_SCOPE_HEIGHT)
+					pixels[y * DEFAULT_SCOPE_WIDTH + x] = pixel_colour(element->channels, j);
 			}
 		}
 
@@ -311,7 +354,7 @@ static void base_init(gpointer class)
 		"Multi-scope",
 		"Filter",
 		"A multi-channel scope",
-		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chan Hanna <chann@ligo.caltech.edu>"
+		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chan Hanna <channa@ligo.caltech.edu>"
 	};
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
 	GstPadTemplate *sinkpad_template = gst_pad_template_new(
@@ -333,9 +376,9 @@ static void base_init(gpointer class)
 		GST_PAD_ALWAYS,
 		gst_caps_new_simple(
 			"video/x-raw-rgb",
-			"width", G_TYPE_INT, SCOPE_WIDTH,
-			"height", G_TYPE_INT, SCOPE_HEIGHT,
-			"framerate", GST_TYPE_FRACTION, 60, 1,
+			"width", G_TYPE_INT, DEFAULT_SCOPE_WIDTH,
+			"height", G_TYPE_INT, DEFAULT_SCOPE_HEIGHT,
+			"framerate", GST_TYPE_FRACTION_RANGE, 0, 1, G_MAXINT, 1,
 			"bpp", G_TYPE_INT, 32,
 			"depth", G_TYPE_INT, 24,
 			"red_mask", G_TYPE_INT, 0x0000ff00,
@@ -369,6 +412,11 @@ static void class_init(gpointer class, gpointer class_data)
 	gobject_class->set_property = set_property;
 	gobject_class->get_property = get_property;
 	gobject_class->dispose = dispose;
+
+	g_object_class_install_property(gobject_class, ARG_TRACE_DURATION, g_param_spec_double("trace-duration", "Trace Duration", "Width of scope display in seconds.", 0, G_MAXDOUBLE, DEFAULT_TRACE_DURATION, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_VERTICAL_SCALE, g_param_spec_double("vertical-scale", "Vertical Scale", "Height of scope display in standard deviations of the time series", 0, G_MAXDOUBLE, DEFAULT_VERTICAL_SCALE_SIGMAS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_AVERAGE_LENGTH, g_param_spec_double("average-length", "Average Length", "Number of update intervals over which the trace mean and variance are averaged to set the display center and scale respectively", 1, G_MAXDOUBLE, DEFAULT_AVERAGE_LENGTH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_DO_TIMESTAMP, g_param_spec_boolean("do-timestamp", "Do Timestamp", "Set timestamps on frames.", DEFAULT_DO_TIMESTAMP, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 
@@ -403,10 +451,12 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->channels = 0;
 	element->rate = 0;
 	element->trace_duration = DEFAULT_TRACE_DURATION;
+	element->vertical_scale_sigmas = DEFAULT_VERTICAL_SCALE_SIGMAS;
 	element->next_sample = 0;
 	element->mean = 0.0;
 	element->variance = 0.0;
 	element->average_length = DEFAULT_AVERAGE_LENGTH;
+	element->do_timestamp = DEFAULT_DO_TIMESTAMP;
 }
 
 
