@@ -28,4 +28,4 @@ gst-launch \
 	! queue \
 	! audioconvert \
 	! alsasink  \
-	tee. ! queue ! audioconvert ! monoscope ! ffmpegcolorspace ! ximagesink
+	tee. ! queue ! audioconvert ! lal_multiscope ! ffmpegcolorspace ! ximagesink
