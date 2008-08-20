@@ -108,7 +108,8 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
 void not_gsl_matrix_transpose(gsl_matrix **m)
 {
   gsl_matrix *new = gsl_matrix_calloc((*m)->size2, (*m)->size1);
-  gsl_matrix_transpose_memcpy(new, *m);
+  if(new)
+    gsl_matrix_transpose_memcpy(new, *m);
   gsl_matrix_free(*m);
   *m = new;
 }
