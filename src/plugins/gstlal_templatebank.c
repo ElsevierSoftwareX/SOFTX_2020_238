@@ -357,6 +357,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			gsl_blas_dgemv(CblasNoTrans, 1.0, element->U, &time_series, 0.0, &orthogonal_snr_samples);
 
 			/*
+			 * Compute the magnitude of the component of h(t)
+			 * in the bank
+			 */
+
+			gsl_blas_dnrm2(&orthogonal_snr_samples);
+
+			/*
 			 * Advance the pointers.
 			 */
 
