@@ -54,7 +54,8 @@ typedef struct {
 typedef struct {
 	GstElement element;
 
-	GstPad *srcpad;
+	GstPad *orthogonal_snr_pad;
+	GstPad *bank_magnitude_pad;
 
 	GstAdapter *adapter;
 
