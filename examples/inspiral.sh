@@ -3,7 +3,7 @@
 LALCACHE="/home/kipp/scratch_local/874000000-20063/cache/data.cache"
 GPSSTART="874000000"
 #GPSSTOP="874020000"
-GPSSTOP="874000320"
+GPSSTOP="874003600"
 INSTRUMENT="H1"
 CHANNEL="LSC-STRAIN"
 
@@ -25,7 +25,7 @@ SRC="lal_framesrc \
 #! audio/x-raw-float, width=64, channels=1, rate=16384, endianness=1234"
 
 SINK="queue ! lal_multiscope trace-duration=0.25 ! ffmpegcolorspace ! timeoverlay ! ffmpegcolorspace ! ximagesink"
-#SINK="fakesink"
+#SINK="queue ! fakesink"
 
 gst-launch \
 	$SRC \
