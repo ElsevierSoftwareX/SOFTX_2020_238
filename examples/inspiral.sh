@@ -24,7 +24,7 @@ SRC="lal_framesrc \
 #	datarate=$((16384*8)) \
 #! audio/x-raw-float, width=64, channels=1, rate=16384, endianness=1234"
 
-SINK="queue ! lal_multiscope trace-duration=0.25 ! ffmpegcolorspace ! ximagesink"
+SINK="queue ! lal_multiscope trace-duration=0.25 ! ffmpegcolorspace ! timeoverlay ! ffmpegcolorspace ! ximagesink"
 #SINK="fakesink"
 
 gst-launch \
@@ -42,4 +42,5 @@ gst-launch \
 		t-start=0 \
 		t-end=1 \
 		snr-length=$((2048*16)) \
-	templatebank0.orthogonal_snr ! $SINK
+	templatebank0.orthogonal_snr ! $SINK \
+	templatebank0.bank_magnitude ! $SINK
