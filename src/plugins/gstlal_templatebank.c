@@ -404,7 +404,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		if(result != GST_FLOW_OK)
 			goto done;
 
-		fprintf(stderr, "largest magnitude of component in bank = %.16g\n", gsl_vector_max(&bank_magnitude));
+		fprintf(stderr, "largest magnitude of component in bank = %.16g (at %.16g s)\n", gsl_vector_max(&bank_magnitude), GST_BUFFER_TIMESTAMP(bank_magnitude_buf) / (double) GST_SECOND + gsl_vector_max_index(&bank_magnitude) / (double) sample_rate);
 		result = gst_pad_push(element->bank_magnitude_pad, bank_magnitude_buf);
 		if(result != GST_FLOW_OK)
 			goto done;
@@ -414,7 +414,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * required.
 		 */
 
-		gst_adapter_flush(element->adapter, output_length);
+		gst_adapter_flush(element->adapter, output_length * sizeof(*time_series.data));
 
 		/*
 		 * Advance the sample count.
