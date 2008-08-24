@@ -1,9 +1,10 @@
 # A gst-launch pipeline to perform an inspiral matched filter analysis.
 
-LALCACHE="/home/kipp/scratch_local/874000000-20063/cache/data.cache"
-GPSSTART="874000000"
-#GPSSTOP="874020000"
-GPSSTOP="874003600"
+LALCACHE="/home/kipp/scratch_local/874100000-20000/cache/874100000-20000.cache"
+GPSSTART="874100000"
+GPSSTART="874106958"
+GPSSTOP="874120000"
+#GPSSTOP="874103600"
 INSTRUMENT="H1"
 CHANNEL="LSC-STRAIN"
 
@@ -27,7 +28,7 @@ SRC="lal_framesrc \
 SINK="queue ! lal_multiscope trace-duration=0.25 ! ffmpegcolorspace ! timeoverlay ! ffmpegcolorspace ! ximagesink"
 #SINK="queue ! fakesink"
 
-gst-launch \
+gst-launch --gst-debug-level=1 \
 	$SRC \
 	! audioconvert \
 	! audio/x-raw-float, width=64 \
