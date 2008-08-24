@@ -233,7 +233,7 @@ static void *read_series(GSTLALFrameSrc *element, long start_sample, long length
 		break;
 
 	default:
-		GST_DEBUG("unsupported data type (LALTYPECODE=%d)", element->series_type);
+		GST_ERROR("unsupported data type (LALTYPECODE=%d)", element->series_type);
 		return NULL;
 	}
 	buffer_start_sample = (long) (XLALGPSDiff(&buffer_start_time, &element->start_time) / deltaT + 0.5);
@@ -241,7 +241,7 @@ static void *read_series(GSTLALFrameSrc *element, long start_sample, long length
 
 	/* clip the requested interval to the input domain */
 	if(start_sample + length < 0 || start_sample >= input_length) {
-		GST_DEBUG("requested interval lies outside input domain");
+		GST_ERROR("requested interval lies outside input domain");
 		return NULL;
 	}
 	if(start_sample < 0) {
@@ -288,7 +288,7 @@ static void *read_series(GSTLALFrameSrc *element, long start_sample, long length
 		}
 
 		if(!element->series_buffer) {
-			GST_DEBUG("XLALFrRead*TimeSeries() failed");
+			GST_ERROR("XLALFrRead*TimeSeries() failed");
 			return NULL;
 		}
 	}
@@ -369,13 +369,13 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	case ARG_SRC_START_TIME_GPS:
 		if(XLALStrToGPS(&element->start_time, g_value_get_string(value), NULL) < 0) {
-			GST_DEBUG("invalid start_time_gps \"%s\"", g_value_get_string(value));
+			GST_ERROR("invalid start_time_gps \"%s\"", g_value_get_string(value));
 		}
 		break;
 
 	case ARG_SRC_STOP_TIME_GPS:
 		if(XLALStrToGPS(&element->stop_time, g_value_get_string(value), NULL) < 0) {
-			GST_DEBUG("invalid stop_time_gps \"%s\"", g_value_get_string(value));
+			GST_ERROR("invalid stop_time_gps \"%s\"", g_value_get_string(value));
 		}
 		break;
 	}
@@ -434,13 +434,13 @@ static gboolean start(GstBaseSrc *object)
 
 	cache = XLALFrImportCache(element->location);
 	if(!cache) {
-		GST_DEBUG("XLALFrImportCache() failed");
+		GST_ERROR("XLALFrImportCache() failed");
 		return FALSE;
 	}
 	element->stream = XLALFrCacheOpen(cache);
 	XLALFrDestroyCache(cache);
 	if(!element->stream) {
-		GST_DEBUG("XLALFrCacheOpen() failed");
+		GST_ERROR("XLALFrCacheOpen() failed");
 		return FALSE;
 	}
 
@@ -474,16 +474,16 @@ static gboolean start(GstBaseSrc *object)
 		break;
 
 	case -1:
-		GST_DEBUG("XLALFrGetTimeSeriesType() failed");
+		GST_ERROR("XLALFrGetTimeSeriesType() failed");
 		goto error;
 
 	default:
-		GST_DEBUG("unsupported data type (LALTYPECODE=%d) in channel \"%s\"", element->series_type, element->full_channel_name);
+		GST_ERROR("unsupported data type (LALTYPECODE=%d) in channel \"%s\"", element->series_type, element->full_channel_name);
 		goto error;
 	}
 
 	if(!element->series_buffer) {
-		GST_DEBUG("XLALFrRead*TimeSeries() failed");
+		GST_ERROR("XLALFrRead*TimeSeries() failed");
 		goto error;
 	}
 
