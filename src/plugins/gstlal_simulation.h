@@ -23,58 +23,51 @@
 
 
 #include <gst/gst.h>
-#include <gst/base/gstadapter.h>
 
-#include <gsl/gsl_vector.h>
-#include <gsl/gsl_matrix.h>
+
+#include <lal/LALDetectors.h>
+#include <lal/LIGOMetadataTables.h>
+
 
 G_BEGIN_DECLS
-
-
 #define GSTLAL_SIMULATION_TYPE \
-        (gstlal_simulation_get_type())
-	#define GSTLAL_SIMULATION(obj) \
+	(gstlal_simulation_get_type())
+#define GSTLAL_SIMULATION(obj) \
 	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_SIMULATION_TYPE, GSTLALSimulation))
 #define GSTLAL_TEMPLATEBANK_CLASS(klass) \
-        (G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_SIMULATION_TYPE, GSTLALSimulationClass))
+	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_SIMULATION_TYPE, GSTLALSimulationClass))
 #define GST_IS_GSTLAL_SIMULATION(obj) \
-        (G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_SIMULATION_TYPE))
+	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_SIMULATION_TYPE))
 #define GST_IS_GST_SIMULATION_CLASS(klass) \
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_SIMULATION_TYPE))
 
 typedef struct {
-        GstElementClass parent_class;
-	} GSTLALSimulationClass;
+	GstElementClass parent_class;
+} GSTLALSimulationClass;
 
 
 typedef struct {
-        GstElement element;
+	GstElement element;
 
-        GList *srcpads;
+	GstPad *srcpad;
 
-        GstAdapter *adapter;
-	
-	double right_ascension;
-	double declination;
-	double psi;
-	double phic;
-	double m1;
-	double m2;
-	double fmin;
-	double r;
-	double i;
-	int amplitudeO;
-	int phaseO;
-	LALDetector *detector;
-	LIGOTimeGPS *tc;
-	REAL8TimeSeries *h; /* This is the computed detector strain */
+	char *xml_location;
+	const LALDetector *detector;
 
+	struct injection_document {
+		ProcessTable *process_table_head;
+		ProcessParamsTable *process_params_table_head;
+		SearchSummaryTable *search_summary_table_head;
+		int has_sim_burst_table;
+		SimBurst *sim_burst_table_head;
+		int has_sim_inspiral_table;
+		SimInspiralTable *sim_inspiral_table_head;
+	} *injection_document;
 } GSTLALSimulation;
 
 GType gstlal_simulation_get_type(void);
 
 G_END_DECLS
 
-#endif  /* __GSTLAL_SIMULATION_H__ */
 
-
+#endif	/* __GSTLAL_SIMULATION_H__ */
