@@ -397,7 +397,6 @@ static void dispose(GObject * object)
 	element->srcpad = NULL;
 	free(element->xml_location);
 	element->xml_location = NULL;
-	element->detector = NULL;
 	destroy_injection_document(element->injection_document);
 
 	G_OBJECT_CLASS(parent_class)->dispose(object);
@@ -505,7 +504,6 @@ static void instance_init(GTypeInstance * object, gpointer class)
 
 	/* internal data */
 	element->xml_location = NULL;
-	element->detector = NULL;
 	element->injection_document = NULL;
 }
 

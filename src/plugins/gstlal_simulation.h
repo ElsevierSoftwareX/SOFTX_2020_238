@@ -18,6 +18,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+
 #ifndef __GSTLAL_SIMULATION_H__
 #define __GSTLAL_SIMULATION_H__
 
@@ -25,21 +26,23 @@
 #include <gst/gst.h>
 
 
-#include <lal/LALDetectors.h>
 #include <lal/LIGOMetadataTables.h>
 
 
 G_BEGIN_DECLS
+
+
 #define GSTLAL_SIMULATION_TYPE \
 	(gstlal_simulation_get_type())
 #define GSTLAL_SIMULATION(obj) \
 	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_SIMULATION_TYPE, GSTLALSimulation))
-#define GSTLAL_TEMPLATEBANK_CLASS(klass) \
+#define GSTLAL_SIMULATION_CLASS(klass) \
 	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_SIMULATION_TYPE, GSTLALSimulationClass))
 #define GST_IS_GSTLAL_SIMULATION(obj) \
 	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_SIMULATION_TYPE))
 #define GST_IS_GST_SIMULATION_CLASS(klass) \
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_SIMULATION_TYPE))
+
 
 typedef struct {
 	GstElementClass parent_class;
@@ -52,7 +55,6 @@ typedef struct {
 	GstPad *srcpad;
 
 	char *xml_location;
-	const LALDetector *detector;
 
 	struct injection_document {
 		ProcessTable *process_table_head;
@@ -65,7 +67,9 @@ typedef struct {
 	} *injection_document;
 } GSTLALSimulation;
 
+
 GType gstlal_simulation_get_type(void);
+
 
 G_END_DECLS
 
