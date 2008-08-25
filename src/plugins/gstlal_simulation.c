@@ -61,6 +61,7 @@
 #include <lal/FindChirp.h>
 #include <lal/Date.h>
 #include <lal/TimeSeries.h>
+#include <lal/Units.h>
 
 
 /*
@@ -183,22 +184,18 @@ static struct injection_document *load_injection_document(const char *filename, 
  */
 
 
-static int add_xml_injections(REAL8TimeSeries *h, const char *filename, COMPLEX8FrequencySeries *response)
+static int add_xml_injections(REAL8TimeSeries *h, const struct injection_document *injection_document, COMPLEX8FrequencySeries *response)
 {
 	static const char func[] = "add_xml_injections";
-	struct injection_document *injection_document;
 	LIGOTimeGPS start;
 	LIGOTimeGPS end;
 
 	/*
-	 * load document
+	 * Compute bounds of injection interval
 	 */
 
 	start = end = h->epoch;
 	XLALGPSAdd(&end, h->data->length * h->deltaT);
-	injection_document = load_injection_document(filename, start, end);
-	if(!injection_document)
-		XLAL_ERROR(func, XLAL_EFUNC);
 
 	/*
 	 * sim_burst
@@ -206,10 +203,8 @@ static int add_xml_injections(REAL8TimeSeries *h, const char *filename, COMPLEX8
 
 	if(injection_document->sim_burst_table_head) {
 		XLALPrintInfo("%s(): computing sim_burst injections ...\n", func);
-		if(XLALBurstInjectSignals(h, injection_document->sim_burst_table_head, NULL)) {
-			destroy_injection_document(injection_document);
+		if(XLALBurstInjectSignals(h, injection_document->sim_burst_table_head, NULL))
 			XLAL_ERROR(func, XLAL_EFUNC);
-		}
 		XLALPrintInfo("%s(): done\n", func);
 	}
 
@@ -223,10 +218,8 @@ static int add_xml_injections(REAL8TimeSeries *h, const char *filename, COMPLEX8
 		unsigned i;
 
 		mdc = XLALCreateREAL4TimeSeries(h->name, &h->epoch, h->f0, h->deltaT, &h->sampleUnits, h->data->length);
-		if(!mdc) {
-			destroy_injection_document(injection_document);
+		if(!mdc)
 			XLAL_ERROR(func, XLAL_EFUNC);
-		}
 		memset(mdc->data->data, 0, mdc->data->length * sizeof(*mdc->data->data));
 		memset(&stat, 0, sizeof(stat));
 
@@ -244,8 +237,6 @@ static int add_xml_injections(REAL8TimeSeries *h, const char *filename, COMPLEX8
 	/*
 	 * done
 	 */
-
-	destroy_injection_document(injection_document);
 
 	return 0;
 }
@@ -296,6 +287,8 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 	case ARG_XML_LOCATION:
 		free(element->xml_location);
 		element->xml_location = g_value_dup_string(value);
+		destroy_injection_document(element->injection_document);
+		element->injection_document = NULL;
 		break;
 	}
 }
@@ -313,43 +306,72 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 
 
 /*
- * setcaps()
- */
-
-
-static gboolean setcaps(GstPad *pad, GstCaps *caps)
-{
-	GSTLALSimulation *element = GSTLAL_SIMULATION(gst_pad_get_parent(pad));
-	gboolean result = TRUE;
-	const char *instrument;
-	const LALDetector *detector;
-
-	instrument = gst_structure_get_string(gst_caps_get_structure(caps, 0), "instrument");
-	detector = XLALInstrumentNameToLALDetector(instrument);
-	if(!detector) {
-		/* FIXME: handle error */
-		GST_ERROR("cannot convert \"%s\" into a LALDetector structure", instrument);
-		result = FALSE;
-		goto done;
-	}
-
-	element->detector = detector;
-
-done:
-	gst_object_unref(element);
-	return result;
-}
-
-
-
-/*
  * chain()
  */
 
 
-static GstFlowReturn chain(GstPad * pad, GstBuffer * sinkbuf)
+static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 {
-	/* FIXME: Add the actual injection functionality here */
+	GSTLALSimulation *element = GSTLAL_SIMULATION(gst_pad_get_parent(pad));
+	GstCaps *caps = gst_buffer_get_caps(buf);
+	GstFlowReturn result = GST_FLOW_OK;
+	const char *instrument;
+	LIGOTimeGPS epoch;
+	double deltaT;
+	REAL8TimeSeries *h;
+
+	/*
+	 * Load injections if needed
+	 */
+
+	if(!element->injection_document) {
+		/* FIXME:  hard-coded times, bad bad bad */
+		LIGOTimeGPS start = {-999999999, 0};
+		LIGOTimeGPS end = {+999999999, 0};
+		element->injection_document = load_injection_document(element->xml_location, start, end);
+		if(!element->injection_document) {
+			GST_ERROR("unable to open/parse/something \"%s\"", element->xml_location);
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
+	}
+
+	/*
+	 * Wrap buffer in a REAL8TimeSeries
+	 */
+
+	instrument = gst_structure_get_string(gst_caps_get_structure(caps, 0), "instrument");
+	XLALINT8NSToGPS(&epoch, GST_BUFFER_TIMESTAMP(buf));
+	deltaT = 1.0 / g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
+	h = XLALCreateREAL8TimeSeries(instrument, &epoch, 0.0, deltaT, &lalStrainUnit, 0);
+	free(h->data->data);
+	h->data->data = (double *) GST_BUFFER_DATA(buf);
+
+	/*
+	 * Add injections
+	 */
+
+	if(add_xml_injections(h, element->injection_document, NULL) < 0) {
+		/* FIXME: handle error */
+	}
+
+	/*
+	 * Push data out srcpad
+	 */
+
+	result = gst_pad_push(element->srcpad, buf);
+
+	/*
+	 * Done
+	 */
+
+	h->data->data = NULL;	/* prevent XLALDestroyREAL8TimeSeries from free()ing the buffer */
+	XLALDestroyREAL8TimeSeries(h);
+
+done:
+	gst_caps_unref(caps);
+	gst_object_unref(element);
+	return result;
 }
 
 
@@ -475,7 +497,6 @@ static void instance_init(GTypeInstance * object, gpointer class)
 
 	/* configure sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_setcaps_function(pad, setcaps);
 	gst_pad_set_chain_function(pad, chain);
 	gst_object_unref(pad);
 
