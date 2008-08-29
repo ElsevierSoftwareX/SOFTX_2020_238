@@ -66,7 +66,7 @@ typedef struct {
 	unsigned long next_sample;
 	double mean;
 	double variance;
-	double average_length;
+	double average_interval;
 	gboolean do_timestamp;
 } GSTLALMultiScope;
 

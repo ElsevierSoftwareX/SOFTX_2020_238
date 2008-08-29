@@ -77,7 +77,7 @@
 #define DEFAULT_SCOPE_HEIGHT 200
 #define DEFAULT_VERTICAL_SCALE_SIGMAS 10
 #define DEFAULT_TRACE_DURATION 1.0
-#define DEFAULT_AVERAGE_LENGTH 1000.0
+#define DEFAULT_AVERAGE_INTERVAL 1.0
 #define DEFAULT_DO_TIMESTAMP TRUE
 
 
@@ -117,7 +117,7 @@ enum property {
 	ARG_HEIGHT,
 	ARG_TRACE_DURATION,
 	ARG_VERTICAL_SCALE,
-	ARG_AVERAGE_LENGTH,
+	ARG_AVERAGE_INTERVAL,
 	ARG_DO_TIMESTAMP
 };
 
@@ -135,8 +135,8 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->vertical_scale_sigmas = g_value_get_double(value);
 		break;
 
-	case ARG_AVERAGE_LENGTH:
-		element->average_length = g_value_get_double(value);
+	case ARG_AVERAGE_INTERVAL:
+		element->average_interval = g_value_get_double(value);
 		break;
 
 	case ARG_DO_TIMESTAMP:
@@ -159,8 +159,8 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_double(value, element->vertical_scale_sigmas);
 		break;
 
-	case ARG_AVERAGE_LENGTH:
-		g_value_set_double(value, element->average_length);
+	case ARG_AVERAGE_INTERVAL:
+		g_value_set_double(value, element->average_interval);
 		break;
 
 	case ARG_DO_TIMESTAMP:
@@ -214,6 +214,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GSTLALMultiScope *element = GSTLAL_MULTISCOPE(gst_pad_get_parent(pad));
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	GstFlowReturn result = GST_FLOW_OK;
+	double average_length = element->average_interval * element->rate;
 	int samples = element->trace_duration * element->rate;
 
 	/*
@@ -270,8 +271,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		d = data;
 		for(i = 0; i < samples * element->channels; i++) {
-			element->variance = (element->variance * (element->average_length - 1) + pow(*d - element->mean, 2)) / element->average_length;
-			element->mean = (element->mean * (element->average_length - 1) + *d) / element->average_length;
+			element->variance = (element->variance * (average_length - 1) + pow(*d - element->mean, 2)) / average_length;
+			element->mean = (element->mean * (average_length - 1) + *d) / average_length;
 			d++;
 		}
 
@@ -415,7 +416,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	g_object_class_install_property(gobject_class, ARG_TRACE_DURATION, g_param_spec_double("trace-duration", "Trace Duration", "Width of scope display in seconds.", 0, G_MAXDOUBLE, DEFAULT_TRACE_DURATION, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_VERTICAL_SCALE, g_param_spec_double("vertical-scale", "Vertical Scale", "Height of scope display in standard deviations of the time series", 0, G_MAXDOUBLE, DEFAULT_VERTICAL_SCALE_SIGMAS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_AVERAGE_LENGTH, g_param_spec_double("average-length", "Average Length", "Number of update intervals over which the trace mean and variance are averaged to set the display center and scale respectively", 1, G_MAXDOUBLE, DEFAULT_AVERAGE_LENGTH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_AVERAGE_INTERVAL, g_param_spec_double("average-interval", "Average Interval", "Time interval in seconds over which the trace mean and variance are averaged to set the display center and scale respectively", 0.0, G_MAXDOUBLE, DEFAULT_AVERAGE_INTERVAL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_DO_TIMESTAMP, g_param_spec_boolean("do-timestamp", "Do Timestamp", "Set timestamps on frames.", DEFAULT_DO_TIMESTAMP, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
@@ -455,7 +456,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->next_sample = 0;
 	element->mean = 0.0;
 	element->variance = 0.0;
-	element->average_length = DEFAULT_AVERAGE_LENGTH;
+	element->average_interval = DEFAULT_AVERAGE_INTERVAL;
 	element->do_timestamp = DEFAULT_DO_TIMESTAMP;
 }
 
