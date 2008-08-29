@@ -264,7 +264,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * the srcpad's caps properly.
 		 */
 
-		success = gst_pad_set_caps(element->bank_magnitude_pad, caps);
+		success = gst_pad_set_caps(element->orthogonal_snr_sum_squares_pad, caps);
 		if(success != TRUE) {
 			result = GST_FLOW_NOT_NEGOTIATED;
 			goto done;
@@ -298,14 +298,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			.block = NULL,
 			.owner = 0
 		};
-		gsl_vector orthogonal_snr_samples = {
+		gsl_vector orthogonal_snr = {
 			.size = element->U->size1,
 			.stride = 1,
 			.data = NULL,
 			.block = NULL,
 			.owner = 0
 		};
-		gsl_vector bank_magnitude = {
+		gsl_vector orthogonal_snr_sum_squares = {
 			.size = 0,
 			.stride = 1,
 			.data = NULL,
@@ -313,7 +313,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			.owner = 0
 		};
 		GstBuffer *orthogonal_snr_buf;
-		GstBuffer *bank_magnitude_buf;
+		GstBuffer *orthogonal_snr_sum_squares_buf;
 
 		/*
 		 * Check for available data, clip to the required output
@@ -332,26 +332,33 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Get a buffer from the downstream peer
 		 */
 
-		result = gst_pad_alloc_buffer(element->orthogonal_snr_pad, element->next_sample, element->U->size1 * output_length * sizeof(*orthogonal_snr_samples.data), GST_PAD_CAPS(element->orthogonal_snr_pad), &orthogonal_snr_buf);
+		result = gst_pad_alloc_buffer(element->orthogonal_snr_pad, element->next_sample, element->U->size1 * output_length * sizeof(*orthogonal_snr.data), GST_PAD_CAPS(element->orthogonal_snr_pad), &orthogonal_snr_buf);
 		if(result != GST_FLOW_OK)
 			goto done;
 
-		result = gst_pad_alloc_buffer(element->bank_magnitude_pad, element->next_sample, output_length * sizeof(*bank_magnitude.data), GST_PAD_CAPS(element->bank_magnitude_pad), &bank_magnitude_buf);
+		result = gst_pad_alloc_buffer(element->orthogonal_snr_sum_squares_pad, element->next_sample, output_length * sizeof(*orthogonal_snr_sum_squares.data), GST_PAD_CAPS(element->orthogonal_snr_sum_squares_pad), &orthogonal_snr_sum_squares_buf);
 		if(result != GST_FLOW_OK)
 			/* FIXME: unref other buffers */
 			goto done;
 
 		/*
-		 * Set the metadata.
+		 * Set the metadata.  The time of the start of the h(t)
+		 * buffer from which the orthogonal SNR buffer has been
+		 * constructed is
 		 *
-		 * FIXME:  I'm pretty sure the time stamp is wrong, I think
-		 * it needs to be shifted by the length of the template
-		 * (+/- 1 sample, maybe) in one direction or another
+		 * GST_BUFFER_OFFSET(orthogonal_snr_buf) * GST_SECOND /
+		 * sample_rate
+		 *
+		 * Relative to the time-of-coalescence --- the "time" of
+		 * the template --- the first sample of the orthogonal
+		 * template vector is at -t_end + 1 * deltaT.  The "time"
+		 * of an SNR sample is, therefore, the start of the h(t)
+		 * buffer + t_end - 1*deltaT.
 		 */
 
-		GST_BUFFER_OFFSET_END(bank_magnitude_buf) = GST_BUFFER_OFFSET_END(orthogonal_snr_buf) = GST_BUFFER_OFFSET(orthogonal_snr_buf) + output_length - 1;
-		GST_BUFFER_TIMESTAMP(bank_magnitude_buf) = GST_BUFFER_TIMESTAMP(orthogonal_snr_buf) = GST_BUFFER_OFFSET(orthogonal_snr_buf) * GST_SECOND / sample_rate + element->t_start * GST_SECOND;
-		GST_BUFFER_DURATION(bank_magnitude_buf) = GST_BUFFER_DURATION(orthogonal_snr_buf) = output_length * GST_SECOND / sample_rate;
+		GST_BUFFER_OFFSET_END(orthogonal_snr_sum_squares_buf) = GST_BUFFER_OFFSET_END(orthogonal_snr_buf) = GST_BUFFER_OFFSET(orthogonal_snr_buf) + output_length - 1;
+		GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) = GST_BUFFER_TIMESTAMP(orthogonal_snr_buf) = GST_BUFFER_OFFSET(orthogonal_snr_buf) * GST_SECOND / sample_rate + element->t_end * GST_SECOND - GST_SECOND / sample_rate;
+		GST_BUFFER_DURATION(orthogonal_snr_sum_squares_buf) = GST_BUFFER_DURATION(orthogonal_snr_buf) = output_length * GST_SECOND / sample_rate;
 
 		/*
 		 * Assemble the orthogonal SNR time series as the columns
@@ -367,9 +374,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		time_series.data = (double *) gst_adapter_peek(element->adapter, (time_series.size + output_length - 1) * sizeof(*time_series.data));
-		orthogonal_snr_samples.data = (double *) GST_BUFFER_DATA(orthogonal_snr_buf);
-		bank_magnitude.data = (double *) GST_BUFFER_DATA(bank_magnitude_buf);
-		bank_magnitude.size = output_length;
+		orthogonal_snr.data = (double *) GST_BUFFER_DATA(orthogonal_snr_buf);
+		orthogonal_snr_sum_squares.data = (double *) GST_BUFFER_DATA(orthogonal_snr_sum_squares_buf);
+		orthogonal_snr_sum_squares.size = output_length;
 
 		for(i = 0; i < output_length; i++) {
 			/*
@@ -378,7 +385,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 * orthonormal basis.
 			 */
 
-			gsl_blas_dgemv(CblasNoTrans, 1.0, element->U, &time_series, 0.0, &orthogonal_snr_samples);
+			gsl_blas_dgemv(CblasNoTrans, 1.0, element->U, &time_series, 0.0, &orthogonal_snr);
 
 			/*
 			 * From the projection of h(t) onto the bank's
@@ -386,14 +393,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 * component of h(t) in the bank
 			 */
 
-			gsl_vector_set(&bank_magnitude, i, gsl_blas_dnrm2(&orthogonal_snr_samples));
+			gsl_vector_set(&orthogonal_snr_sum_squares, i, pow(gsl_blas_dnrm2(&orthogonal_snr), 2));
 
 			/*
 			 * Advance the pointers.
 			 */
 
 			time_series.data++;
-			orthogonal_snr_samples.data += orthogonal_snr_samples.size;
+			orthogonal_snr.data += orthogonal_snr.size;
 		}
 
 		/*
@@ -404,8 +411,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		if(result != GST_FLOW_OK)
 			goto done;
 
-		fprintf(stderr, "largest magnitude of component in bank = %.16g (at %.16g s)\n", gsl_vector_max(&bank_magnitude), GST_BUFFER_TIMESTAMP(bank_magnitude_buf) / (double) GST_SECOND + gsl_vector_max_index(&bank_magnitude) / (double) sample_rate);
-		result = gst_pad_push(element->bank_magnitude_pad, bank_magnitude_buf);
+		fprintf(stderr, "largest orthogonal SNR sum-of-squares = %.16g (at %.16g s)\n", gsl_vector_max(&orthogonal_snr_sum_squares), GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) / (double) GST_SECOND + gsl_vector_max_index(&orthogonal_snr_sum_squares) / (double) sample_rate);
+		result = gst_pad_push(element->orthogonal_snr_sum_squares_pad, orthogonal_snr_sum_squares_buf);
 		if(result != GST_FLOW_OK)
 			goto done;
 
@@ -453,8 +460,8 @@ static void dispose(GObject *object)
 
 	gst_object_unref(element->orthogonal_snr_pad);
 	element->orthogonal_snr_pad = NULL;
-	gst_object_unref(element->bank_magnitude_pad);
-	element->bank_magnitude_pad = NULL;
+	gst_object_unref(element->orthogonal_snr_sum_squares_pad);
+	element->orthogonal_snr_sum_squares_pad = NULL;
 	g_object_unref(element->adapter);
 	element->adapter = NULL;
 
@@ -518,7 +525,7 @@ static void base_init(gpointer class)
 	gst_element_class_add_pad_template(
 		element_class,
 		gst_pad_template_new(
-			"bank_magnitude",
+			"orthogonal_snr_sum_squares",
 			GST_PAD_SRC,
 			GST_PAD_ALWAYS,
 			gst_caps_new_simple(
@@ -580,8 +587,8 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	/* retrieve (and ref) orthogonal_snr pad */
 	element->orthogonal_snr_pad = gst_element_get_static_pad(GST_ELEMENT(element), "orthogonal_snr");
 
-	/* retrieve (and ref) bank_magnitude pad */
-	element->bank_magnitude_pad = gst_element_get_static_pad(GST_ELEMENT(element), "bank_magnitude");
+	/* retrieve (and ref) orthogonal_snr_sum_squares pad */
+	element->orthogonal_snr_sum_squares_pad = gst_element_get_static_pad(GST_ELEMENT(element), "orthogonal_snr_sum_squares");
 
 	/* internal data */
 	element->adapter = gst_adapter_new();
