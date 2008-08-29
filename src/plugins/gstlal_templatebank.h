@@ -55,7 +55,7 @@ typedef struct {
 	GstElement element;
 
 	GstPad *orthogonal_snr_pad;
-	GstPad *bank_magnitude_pad;
+	GstPad *orthogonal_snr_sum_squares_pad;
 
 	GstAdapter *adapter;
 
