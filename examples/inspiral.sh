@@ -45,33 +45,34 @@ gst-launch --gst-debug-level=1 \
 	! audioresample \
 	! audio/x-raw-float, rate=512 \
 	! tee name=hoft_512 \
-	hoft_2048. ! queue ! queue ! queue ! $SINK \
+	adder name=orthogonal_snr_sum_squares ! $SINK \
+	hoft_2048. ! queue max-size-time=32 ! $SINK \
 	hoft_2048. ! queue ! lal_templatebank \
 		name=templatebank0 \
 		t-start=0 \
 		t-end=1 \
-		snr-length=$((2048*16)) \
+		snr-length=$((2048*8)) \
 	templatebank0.orthogonal_snr ! $SINK \
-	templatebank0.orthogonal_snr_sum_squares ! $SINK \
+	templatebank0.orthogonal_snr_sum_squares ! queue max-size-time=16 ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
 	hoft_2048. ! queue ! lal_templatebank \
 		name=templatebank1 \
 		t-start=1 \
 		t-end=2 \
-		snr-length=$((2048*16)) \
+		snr-length=$((2048*8)) \
 	templatebank1.orthogonal_snr ! $SINK \
-	templatebank1.orthogonal_snr_sum_squares ! $SINK \
+	templatebank1.orthogonal_snr_sum_squares ! queue max-size-time=16 ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
 	hoft_1024. ! queue ! lal_templatebank \
 		name=templatebank2 \
 		t-start=2 \
 		t-end=4 \
-		snr-length=$((2048*16)) \
+		snr-length=$((1024*8)) \
 	templatebank2.orthogonal_snr ! $SINK \
-	templatebank2.orthogonal_snr_sum_squares ! $SINK \
+	templatebank2.orthogonal_snr_sum_squares ! queue max-size-time=16 ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
 	hoft_512. ! queue ! lal_templatebank \
 		name=templatebank3 \
 		t-start=4 \
 		t-end=8 \
-		snr-length=$((2048*16)) \
+		snr-length=$((512*8)) \
 	templatebank3.orthogonal_snr ! $SINK \
-	templatebank3.orthogonal_snr_sum_squares ! $SINK
+	templatebank3.orthogonal_snr_sum_squares ! queue max-size-time=16 ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares.
 
