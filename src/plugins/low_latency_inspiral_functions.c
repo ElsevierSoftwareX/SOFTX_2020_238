@@ -44,11 +44,11 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
   *V = gsl_matrix_calloc(numtemps,numtemps);
   *chifacs = gsl_vector_calloc(numtemps);
 
-  if (verbose) printf("allocated matrices...\n");
+  if (verbose) fprintf(stderr, "allocated matrices...\n");
   /* create the templates in the bank */
   for (i=0;i<numtemps;i++)
     {
-    if (verbose) printf("generating template number %zu...\n",i);
+    if (verbose) fprintf(stderr, "generating template number %zu...\n",i);
     /* increment the mass */
     /* this coefficient should maybe be 0.0001 */
     M = chirp_mass_start + 0.0001*i*M/0.7;
@@ -58,7 +58,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
     /* FIXME We should check that the frequency at this time fits within the */
     /* downsampled rate!!! 						     */
     maxFreq = (1.0/(M_PI*Mg)) * (pow((5.0/256.0)*(Mg/(-T)),3.0/8.0));
-    if (verbose) printf("T=%e f_Nyquist=%e M_chirp=%e f_max=%e\n",T,ny_freq,M,maxFreq);
+    if (verbose) fprintf(stderr, "T=%e f_Nyquist=%e M_chirp=%e f_max=%e\n",T,ny_freq,M,maxFreq);
 
     if (maxFreq > ((double) (ny_freq/down_samp_fac+1.0/base_sample_rate)) )
       {
@@ -90,7 +90,6 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
     return 1; 
     }
   trim_matrix(U,V,S,tolerance);
-  if (verbose) fprintf(stderr,"number of orthogonal templates = %d\n",(int) (*U)->size2);
   for (i = 0; i < (*S)->size; i++)
     {
     for (j = 0; j < (*V)->size1; j++)
@@ -100,7 +99,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
     }
   not_gsl_matrix_transpose(U);
   not_gsl_matrix_transpose(V);
-  printf("V is %dx%d, U is %dx%d\n\n",(int)(*V)->size1,(int)(*V)->size2,(int)(*U)->size1,(int)(*U)->size2);
+  if(verbose) fprintf(stderr, "%.16g s -- %.16g s: %d orthogonal templates, V is %dx%d, U is %dx%d\n\n", t_start, t_end, (int) (*U)->size1, (int) (*V)->size1, (int) (*V)->size2, (int) (*U)->size1, (int) (*U)->size2);
   gsl_vector_free(work_space);
   gsl_matrix_free(work_space_matrix);
   return 0;
