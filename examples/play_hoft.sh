@@ -1,12 +1,12 @@
 # A gst-launch pipeline to play h(t) through a sound card.
 
-LALCACHE="/home/kipp/scratch_local/874000000-20063/cache/data.cache"
+LALCACHE="/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache"
 GPSSTART="874000000"
 GPSSTOP="874020000"
 INSTRUMENT="H1"
 CHANNEL="LSC-STRAIN"
 
-gst-launch \
+gst-launch --gst-debug-level=1 \
 	lal_framesrc \
 		blocksize=65536 \
 		location="${LALCACHE}" \
@@ -28,4 +28,4 @@ gst-launch \
 	! queue \
 	! audioconvert \
 	! alsasink  \
-	tee. ! queue ! audioconvert ! lal_multiscope ! ffmpegcolorspace ! ximagesink
+	tee. ! queue ! audioconvert ! lal_multiscope trace-duration=0.25 average-interval=10.0 ! ffmpegcolorspace ! timeoverlay ! xvimagesink
