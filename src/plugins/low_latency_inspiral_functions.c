@@ -99,6 +99,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
       }
     }
   not_gsl_matrix_transpose(U);
+  not_gsl_matrix_transpose(V);
   printf("V is %dx%d, U is %dx%d\n\n",(int)(*V)->size1,(int)(*V)->size2,(int)(*U)->size1,(int)(*U)->size2);
   gsl_vector_free(work_space);
   gsl_matrix_free(work_space_matrix);
