@@ -54,11 +54,13 @@ typedef struct {
 typedef struct {
 	GstElement element;
 
-	GstPad *orthogonal_snr_pad;
-	GstPad *orthogonal_snr_sum_squares_pad;
-
 	GstAdapter *adapter;
 
+	GstPad *orthogonal_snr_pad;
+	GstPad *orthogonal_snr_sum_squares_pad;
+	GstPad *snr_pad;
+
+	int sample_rate;
 	unsigned int t_start;
 	unsigned int t_end;
 	unsigned int snr_length;

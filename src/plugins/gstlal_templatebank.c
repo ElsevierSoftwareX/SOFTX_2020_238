@@ -213,12 +213,56 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
  */
 
 
-static gboolean setcaps(GstPad *pad, GstCaps *caps)
+static gboolean setcaps_sink(GstPad *pad, GstCaps *caps)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
 	gboolean result = TRUE;
 
+	element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
+
+	gst_object_unref(element);
+	return result;
+}
+
+
+static gboolean setcaps_orthogonal_snr_sink(GstPad *pad, GstCaps *caps)
+{
+	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
+	gboolean result = TRUE;
+
+	/*
+	 * get a modifiable copy of the caps
+	 */
+
+	caps = gst_caps_make_writable(caps);
+
+	/*
+	 * has the reconstruction matrix been built yet?
+	 */
+
+	if(!element->V)
+		goto done;
+
+	/*
+	 * check that the number of input channels matches the size of the
+	 * reconstruction matrix
+	 */
+
+	if((unsigned) g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")) != element->V->size1) {
+		result = FALSE;
+		goto done;
+	}
+
+	/*
+	 * set the number of output channels and forward caps to next
+	 * element
+	 */
+
+	gst_caps_set_simple(caps, "channels", G_TYPE_INT, element->V->size2, NULL);
+	result = gst_pad_set_caps(element->snr_pad, caps);
+
 done:
+	gst_caps_unref(caps);
 	gst_object_unref(element);
 	return result;
 }
@@ -229,20 +273,13 @@ done:
  */
 
 
-static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
+static GstFlowReturn chain_sink(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	GstFlowReturn result = GST_FLOW_OK;
-	int sample_rate;
 	int output_length;
 	int i;
-
-	/*
-	 * Extract the sample rate from the input buffer's caps
-	 */
-
-	sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 
 	/*
 	 * Now that we know the sample rate, construct orthogonal basis for
@@ -257,7 +294,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Create the orthogonal basis.
 		 */
 
-		svd_create(element, sample_rate);
+		svd_create(element, element->sample_rate);
 
 		/*
 		 * Now that we know how many channels we'll produce, set
@@ -357,8 +394,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		GST_BUFFER_OFFSET_END(orthogonal_snr_sum_squares_buf) = GST_BUFFER_OFFSET_END(orthogonal_snr_buf) = GST_BUFFER_OFFSET(orthogonal_snr_buf) + output_length - 1;
-		GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) = GST_BUFFER_TIMESTAMP(orthogonal_snr_buf) = GST_BUFFER_OFFSET(orthogonal_snr_buf) * GST_SECOND / sample_rate + element->t_end * GST_SECOND - GST_SECOND / sample_rate;
-		GST_BUFFER_DURATION(orthogonal_snr_sum_squares_buf) = GST_BUFFER_DURATION(orthogonal_snr_buf) = output_length * GST_SECOND / sample_rate;
+		GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) = GST_BUFFER_TIMESTAMP(orthogonal_snr_buf) = GST_BUFFER_OFFSET(orthogonal_snr_buf) * GST_SECOND / element->sample_rate + element->t_end * GST_SECOND - GST_SECOND / element->sample_rate;
+		GST_BUFFER_DURATION(orthogonal_snr_sum_squares_buf) = GST_BUFFER_DURATION(orthogonal_snr_buf) = output_length * GST_SECOND / element->sample_rate;
 
 		/*
 		 * Assemble the orthogonal SNR time series as the columns
@@ -411,7 +448,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		if(result != GST_FLOW_OK)
 			goto done;
 
-		fprintf(stderr, "largest orthogonal SNR sum-of-squares = %.16g (at %.16g s)\n", gsl_vector_max(&orthogonal_snr_sum_squares), GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) / (double) GST_SECOND + gsl_vector_max_index(&orthogonal_snr_sum_squares) / (double) sample_rate);
+		fprintf(stderr, "largest orthogonal SNR sum-of-squares = %.16g (at %.16g s)\n", gsl_vector_max(&orthogonal_snr_sum_squares), GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) / (double) GST_SECOND + gsl_vector_max_index(&orthogonal_snr_sum_squares) / (double) element->sample_rate);
 		result = gst_pad_push(element->orthogonal_snr_sum_squares_pad, orthogonal_snr_sum_squares_buf);
 		if(result != GST_FLOW_OK)
 			goto done;
@@ -441,6 +478,73 @@ done:
 }
 
 
+static GstFlowReturn chain_orthogonal_snr_sink(GstPad *pad, GstBuffer *sinkbuf)
+{
+	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
+	gsl_matrix orthogonal_snr = {
+		/* number of samples in each SNR channel */
+		.size1 = GST_BUFFER_SIZE(sinkbuf) / sizeof(*orthogonal_snr.data) / element->U->size1,
+		/* number of orthogonal SNR channels coming in */
+		.size2 = element->V->size1,
+		.tda = element->V->size1,
+		.data = (double *) GST_BUFFER_DATA(sinkbuf),
+		.block = NULL,
+		.owner = 0
+	};
+	GstBuffer *srcbuf;
+	gsl_matrix snr = {
+		/* number of samples in each SNR channel */
+		.size1 = orthogonal_snr.size1,
+		/* number of SNR channels going out */
+		.size2 = element->V->size2,
+		.tda = element->V->size2,
+		.data = NULL,
+		.block = NULL,
+		.owner = 0
+	};
+	GstFlowReturn result = GST_FLOW_OK;
+
+	/*
+	 * Get a buffer from the downstream peer
+	 */
+
+	result = gst_pad_alloc_buffer(element->snr_pad, GST_BUFFER_OFFSET(sinkbuf), snr.size1 * snr.size2 * sizeof(*snr.data), GST_PAD_CAPS(element->snr_pad), &srcbuf);
+	if(result != GST_FLOW_OK)
+		goto done;
+	snr.data = (double *) GST_BUFFER_DATA(srcbuf);
+
+	/*
+	 * Copy metadata
+	 */
+
+	GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET_END(sinkbuf);
+	GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf);
+	GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_DURATION(sinkbuf);
+
+	/*
+	 * Reconstruct SNRs
+	 */
+
+	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, &orthogonal_snr, element->V, 0, &snr);
+
+	/*
+	 * Push the buffer downstream
+	 */
+
+	result = gst_pad_push(element->snr_pad, srcbuf);
+	if(result != GST_FLOW_OK)
+		goto done;
+
+	/*
+	 * Done
+	 */
+
+done:
+	gst_object_unref(element);
+	return result;
+}
+
+
 /*
  * Parent class.
  */
@@ -462,6 +566,8 @@ static void dispose(GObject *object)
 	element->orthogonal_snr_pad = NULL;
 	gst_object_unref(element->orthogonal_snr_sum_squares_pad);
 	element->orthogonal_snr_sum_squares_pad = NULL;
+	gst_object_unref(element->snr_pad);
+	element->snr_pad = NULL;
 	g_object_unref(element->adapter);
 	element->adapter = NULL;
 
@@ -538,6 +644,38 @@ static void base_init(gpointer class)
 			)
 		)
 	);
+	gst_element_class_add_pad_template(
+		element_class,
+		gst_pad_template_new(
+			"orthogonal_snr_sink",
+			GST_PAD_SINK,
+			GST_PAD_ALWAYS,
+			gst_caps_new_simple(
+				"audio/x-raw-float",
+				"rate", GST_TYPE_INT_RANGE, 1, G_MAXINT,
+				"channels", GST_TYPE_INT_RANGE, 1, G_MAXINT,
+				"endianness", G_TYPE_INT, G_BYTE_ORDER,
+				"width", G_TYPE_INT, 64,
+				NULL
+			)
+		)
+	);
+	gst_element_class_add_pad_template(
+		element_class,
+		gst_pad_template_new(
+			"snr",
+			GST_PAD_SRC,
+			GST_PAD_ALWAYS,
+			gst_caps_new_simple(
+				"audio/x-raw-float",
+				"rate", GST_TYPE_INT_RANGE, 1, G_MAXINT,
+				"channels", GST_TYPE_INT_RANGE, 1, G_MAXINT,
+				"endianness", G_TYPE_INT, G_BYTE_ORDER,
+				"width", G_TYPE_INT, 64,
+				NULL
+			)
+		)
+	);
 }
 
 
@@ -580,8 +718,8 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	/* configure sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_setcaps_function(pad, setcaps);
-	gst_pad_set_chain_function(pad, chain);
+	gst_pad_set_setcaps_function(pad, setcaps_sink);
+	gst_pad_set_chain_function(pad, chain_sink);
 	gst_object_unref(pad);
 
 	/* retrieve (and ref) orthogonal_snr pad */
@@ -589,6 +727,15 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	/* retrieve (and ref) orthogonal_snr_sum_squares pad */
 	element->orthogonal_snr_sum_squares_pad = gst_element_get_static_pad(GST_ELEMENT(element), "orthogonal_snr_sum_squares");
+
+	/* configure orthogonal_snr_sink pad */
+	pad = gst_element_get_static_pad(GST_ELEMENT(element), "orthogonal_snr_sink");
+	gst_pad_set_setcaps_function(pad, setcaps_orthogonal_snr_sink);
+	gst_pad_set_chain_function(pad, chain_orthogonal_snr_sink);
+	gst_object_unref(pad);
+
+	/* retrieve (and ref) snr pad */
+	element->snr_pad = gst_element_get_static_pad(GST_ELEMENT(element), "snr");
 
 	/* internal data */
 	element->adapter = gst_adapter_new();
