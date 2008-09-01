@@ -117,8 +117,10 @@ static struct injection_document *load_injection_document(const char *filename, 
 	const double longest_injection = 600.0;
 
 	new = malloc(sizeof(*new));
-	if(!new)
+	if(!new) {
+		XLALPrintError("%s(): malloc() failed\n", func);
 		XLAL_ERROR_NULL(func, XLAL_ENOMEM);
+	}
 
 	/*
 	 * adjust start and end times
@@ -151,6 +153,7 @@ static struct injection_document *load_injection_document(const char *filename, 
 
 	new->has_sim_inspiral_table = XLALLIGOLwHasTable(filename, "sim_inspiral");
 	if(new->has_sim_inspiral_table) {
+		new->sim_inspiral_table_head = NULL;
 		if(SimInspiralTableFromLIGOLw(&new->sim_inspiral_table_head, filename, start.gpsSeconds - 1, end.gpsSeconds + 1) < 0)
 			new->sim_inspiral_table_head = NULL;
 	} else
@@ -163,10 +166,12 @@ static struct injection_document *load_injection_document(const char *filename, 
 	if(
 		!new->process_table_head ||
 		!new->process_params_table_head ||
-		!new->search_summary_table_head ||
+		/* FIXME:  lalapps_inspinj doesn't include this table */
+		/*!new->search_summary_table_head || */
 		(new->has_sim_burst_table && !new->sim_burst_table_head) ||
 		(new->has_sim_inspiral_table && !new->sim_inspiral_table_head)
 	) {
+		XLALPrintError("%s(): document is incomplete\n", func);
 		destroy_injection_document(new);
 		XLAL_ERROR_NULL(func, XLAL_EFUNC);
 	}
