@@ -86,7 +86,7 @@
 #define TEMPLATE_DURATION 64	/* seconds */
 #define CHIRPMASS_START 1.15	/* M_sun */
 #define TEMPLATE_SAMPLE_RATE 2048	/* Hertz */
-#define NUM_TEMPLATES 600
+#define NUM_TEMPLATES 200
 #define TOLERANCE 0.97
 
 
