@@ -14,14 +14,11 @@ gst-launch --gst-debug-level=1 \
 		channel-name="${CHANNEL}" \
 		start-time-gps="${GPSSTART}" \
 		stop-time-gps="${GPSSTOP}" \
-	! audioconvert \
-	! audio/x-raw-float, width=64 \
 	! audiochebband \
 		lower-frequency=45 \
 		upper-frequency=2500 \
 		poles=8 \
 	! audioconvert \
-	! audio/x-raw-float, width=32 \
 	! audioamplify \
 		amplification=2e+17 \
 	! tee name=tee \
