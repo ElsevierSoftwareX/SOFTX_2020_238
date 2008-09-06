@@ -298,7 +298,9 @@ static GstFlowReturn chain_sink(GstPad *pad, GstBuffer *sinkbuf)
 
 		/*
 		 * Now that we know how many channels we'll produce, set
-		 * the srcpad's caps properly.
+		 * the srcpad's caps properly.  gst_caps_make_writable()
+		 * unref()s its argument so we have to ref() it first to
+		 * keep it valid.
 		 */
 
 		success = gst_pad_set_caps(element->orthogonal_snr_sum_squares_pad, caps);
@@ -306,6 +308,7 @@ static GstFlowReturn chain_sink(GstPad *pad, GstBuffer *sinkbuf)
 			result = GST_FLOW_NOT_NEGOTIATED;
 			goto done;
 		}
+		gst_caps_ref(caps);
 		srccaps = gst_caps_make_writable(caps);
 		gst_caps_set_simple(srccaps, "channels", G_TYPE_INT, element->U->size1, NULL);
 		success = gst_pad_set_caps(element->orthogonal_snr_pad, srccaps);
