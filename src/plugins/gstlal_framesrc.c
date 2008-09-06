@@ -491,6 +491,8 @@ static gboolean start(GstBaseSrc *object)
 	if(!gst_pad_set_caps(srcpad, caps)) {
 		GST_DEBUG("gst_pad_set_caps() failed");
 		DestroyTimeSeries(element->series_buffer, element->series_type);
+		element->series_buffer = NULL;
+		element->series_type = -1;
 		gst_caps_unref(caps);
 		goto error;
 	}
