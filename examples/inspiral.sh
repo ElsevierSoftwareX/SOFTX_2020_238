@@ -25,7 +25,7 @@ SRC="lal_framesrc \
 #	datarate=$((16384*8)) \
 #! audio/x-raw-float, width=64, channels=1, rate=16384, endianness=1234, instrument=${INSTRUMENT}, channel=${CHANNEL}"
 
-SINK="queue max-size-time=96 ! lal_multiscope trace-duration=0.25 average-interval=10.0 ! ffmpegcolorspace ! timeoverlay ! xvimagesink"
+SINK="queue max-size-time=96 ! lal_multiscope trace-duration=0.25 average-interval=10.0 ! ffmpegcolorspace ! cairotimeoverlay ! xvimagesink"
 #SINK="queue ! fakesink"
 
 gst-launch --gst-debug-level=1 \
@@ -101,7 +101,6 @@ gst-launch --gst-debug-level=1 \
 	hoft_128. ! queue ! templatebank5.sink \
 	templatebank5.orthogonal_snr ! queue ! tee name=orthosnr5 ! $SINK \
 	templatebank5.orthogonal_snr_sum_squares ! queue max-size-time=96 ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
-
 	#lal_templatebank \
 	#	name=templatebank6 \
 	#	t-start=32 \
