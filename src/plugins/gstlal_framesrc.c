@@ -555,8 +555,10 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length - 1;
-		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) (element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&element->start_time) + (GstClockTime) (element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
 		GST_BUFFER_DURATION(*buffer) = (GstClockTime) (chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
+		if(element->next_sample == 0)
+			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 		element->next_sample += chunk->data->length;
 		XLALDestroyINT4TimeSeries(chunk);
 		break;
@@ -575,8 +577,10 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length - 1;
-		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) (element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&element->start_time) + (GstClockTime) (element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
 		GST_BUFFER_DURATION(*buffer) = (GstClockTime) (chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
+		if(element->next_sample == 0)
+			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 		element->next_sample += chunk->data->length;
 		XLALDestroyREAL4TimeSeries(chunk);
 		break;
@@ -595,8 +599,10 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length - 1;
-		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) (element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&element->start_time) + (GstClockTime) (element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
 		GST_BUFFER_DURATION(*buffer) = (GstClockTime) (chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
+		if(element->next_sample == 0)
+			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 		element->next_sample += chunk->data->length;
 		XLALDestroyREAL8TimeSeries(chunk);
 		break;
