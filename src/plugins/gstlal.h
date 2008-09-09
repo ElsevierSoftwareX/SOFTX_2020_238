@@ -29,9 +29,6 @@
 G_BEGIN_DECLS
 
 
-GstCaps *gstlal_get_template_caps(const GType *);
-
-
 G_END_DECLS
 
 

@@ -684,7 +684,6 @@ static void base_init(gpointer class)
 		"Kipp Cannon <kcannon@ligo.caltech.edu>"
 	};
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
-	GType types[] = {G_TYPE_FLOAT, G_TYPE_DOUBLE, G_TYPE_INT, 0};
 
 	gst_element_class_set_details(element_class, &plugin_details);
 
@@ -694,9 +693,23 @@ static void base_init(gpointer class)
 			"src",
 			GST_PAD_SRC,
 			GST_PAD_ALWAYS,
-			gstlal_get_template_caps(types)
+			gst_caps_from_string(
+				"audio/x-raw-float, " \
+				"rate = (int) [1, MAX], " \
+				"channels = (int) 1, " \
+				"endianness = (int) BYTE_ORDER, " \
+				"width = (int) {32, 64}; " \
+				"audio/x-raw-int, " \
+				"rate = (int) [1, MAX], " \
+				"channels = (int) 1, " \
+				"endianness = (int) BYTE_ORDER, " \
+				"width = (int) 32, " \
+				"depth = (int) 32, " \
+				"signed = (boolean) true"
+			)
 		)
 	);
+
 }
 
 
