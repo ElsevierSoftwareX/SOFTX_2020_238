@@ -1,5 +1,5 @@
 /*
- * A template bank.
+ * An interface to LALSimulation.  
  *
  * Copyright (C) 2008  Kipp Cannon, Chad Hanna
  *
@@ -69,7 +69,6 @@
  */
 
 
-#include <gstlal.h>
 #include <gstlal_simulation.h>
 
 
@@ -521,7 +520,7 @@ static void instance_init(GTypeInstance * object, gpointer class)
 
 
 /*
- * gstlal_templatebank_get_type().
+ * gstlal_simulation_get_type().
  */
 
 

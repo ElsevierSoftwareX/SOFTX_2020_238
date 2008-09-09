@@ -60,7 +60,6 @@
  */
 
 
-#include <gstlal.h>
 #include <gstlal_multiscope.h>
 
 
