@@ -25,7 +25,7 @@ SRC="lal_framesrc \
 #	datarate=$((16384*8)) \
 #! audio/x-raw-float, width=64, channels=1, rate=16384, endianness=1234, instrument=${INSTRUMENT}, channel=${CHANNEL}"
 
-SINK="queue max-size-time=96 ! lal_multiscope trace-duration=0.25 average-interval=10.0 ! ffmpegcolorspace ! cairotimeoverlay ! xvimagesink"
+SINK="queue max-size-time=96 ! lal_multiscope trace-duration=0.25 frame-interval=0.25 average-interval=10.0 ! ffmpegcolorspace ! cairotimeoverlay ! xvimagesink"
 #SINK="queue ! fakesink"
 
 #
@@ -48,15 +48,6 @@ gst-launch --gst-debug-level=1 \
 	! queue ! audioresample \
 	! audio/x-raw-float, rate=1024 \
 	! tee name=hoft_1024 \
-	! queue ! audioresample \
-	! audio/x-raw-float, rate=512 \
-	! tee name=hoft_512 \
-	! queue ! audioresample \
-	! audio/x-raw-float, rate=256 \
-	! tee name=hoft_256 \
-	! queue ! audioresample \
-	! audio/x-raw-float, rate=128 \
-	! tee name=hoft_128 \
 	adder name=orthogonal_snr_sum_squares ! $SINK \
 	hoft_2048. ! $SINK \
 	lal_templatebank \
@@ -83,6 +74,18 @@ gst-launch --gst-debug-level=1 \
 	hoft_1024. ! queue ! templatebank2.sink \
 	templatebank2.orthogonal_snr ! queue ! tee name=orthosnr2 ! $SINK \
 	templatebank2.orthogonal_snr_sum_squares ! queue max-size-time=96 ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
+
+exit
+
+	! queue ! audioresample \
+	! audio/x-raw-float, rate=512 \
+	! tee name=hoft_512 \
+	! queue ! audioresample \
+	! audio/x-raw-float, rate=256 \
+	! tee name=hoft_256 \
+	! queue ! audioresample \
+	! audio/x-raw-float, rate=128 \
+	! tee name=hoft_128 \
 	lal_templatebank \
 		name=templatebank3 \
 		t-start=4 \
@@ -108,7 +111,6 @@ gst-launch --gst-debug-level=1 \
 	templatebank5.orthogonal_snr ! queue ! tee name=orthosnr5 ! $SINK \
 	templatebank5.orthogonal_snr_sum_squares ! queue max-size-time=96 ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
 
-exit
 	#lal_templatebank \
 	#	name=templatebank6 \
 	#	t-start=32 \

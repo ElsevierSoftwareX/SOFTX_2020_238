@@ -115,6 +115,7 @@ enum property {
 	ARG_WIDTH = 1,
 	ARG_HEIGHT,
 	ARG_TRACE_DURATION,
+	ARG_FRAME_INTERVAL,
 	ARG_VERTICAL_SCALE,
 	ARG_AVERAGE_INTERVAL,
 	ARG_DO_TIMESTAMP
@@ -128,6 +129,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	switch(id) {
 	case ARG_TRACE_DURATION:
 		element->trace_duration = g_value_get_double(value);
+		break;
+
+	case ARG_FRAME_INTERVAL:
+		element->frame_interval = g_value_get_double(value);
 		break;
 
 	case ARG_VERTICAL_SCALE:
@@ -152,6 +157,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	switch(id) {
 	case ARG_TRACE_DURATION:
 		g_value_set_double(value, element->trace_duration);
+		break;
+
+	case ARG_FRAME_INTERVAL:
+		g_value_set_double(value, element->frame_interval);
 		break;
 
 	case ARG_VERTICAL_SCALE:
@@ -214,7 +223,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	GstFlowReturn result = GST_FLOW_OK;
 	double average_length = element->average_interval * element->rate;
-	int samples = element->trace_duration * element->rate;
+	int trace_samples = trunc(element->trace_duration * element->rate + 0.5);
+	int flush_samples = trunc(element->frame_interval * element->rate + 0.5);
 
 	/*
 	 * Put buffer into adapter, and measure the length of the SNR time
@@ -227,8 +237,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Loop while data's available.
 	 */
 
-	while(gst_adapter_available(element->adapter) >= samples * element->channels * sizeof(double)) {
-		double *data = (double *) gst_adapter_peek(element->adapter, samples * element->channels * sizeof(*data));
+	while(gst_adapter_available(element->adapter) >= trace_samples * element->channels * sizeof(double)) {
+		double *data = (double *) gst_adapter_peek(element->adapter, trace_samples * element->channels * sizeof(*data));
 		double *d;
 		uint32_t *pixels;
 		GstBuffer *srcbuf;
@@ -250,7 +260,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf);
 		if(element->do_timestamp) {
 			GST_BUFFER_TIMESTAMP(srcbuf) = element->next_sample * GST_SECOND / element->rate;
-			GST_BUFFER_DURATION(srcbuf) = samples * GST_SECOND / element->rate;
+			GST_BUFFER_DURATION(srcbuf) = (GstClockTime) trunc(element->frame_interval * GST_SECOND + 0.5);
 		} else {
 			GST_BUFFER_TIMESTAMP(srcbuf) = GST_CLOCK_TIME_NONE;
 			GST_BUFFER_DURATION(srcbuf) = GST_CLOCK_TIME_NONE;
@@ -269,7 +279,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		d = data;
-		for(i = 0; i < samples * element->channels; i++) {
+		for(i = 0; i < trace_samples * element->channels; i++) {
 			element->variance = (element->variance * (average_length - 1) + pow(*d - element->mean, 2)) / average_length;
 			element->mean = (element->mean * (average_length - 1) + *d) / average_length;
 			d++;
@@ -280,10 +290,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		d = data;
-		for(i = 0; i < samples; i++) {
-			int x = i * DEFAULT_SCOPE_WIDTH / samples;
+		for(i = 0; i < trace_samples; i++) {
+			int x = i * DEFAULT_SCOPE_WIDTH / trace_samples;
 			for(j = 0; j < element->channels; j++) {
-				int y = DEFAULT_SCOPE_HEIGHT / element->vertical_scale_sigmas * (*(d++) - element->mean) / sqrt(element->variance) + 0.5;
+				int y = trunc(DEFAULT_SCOPE_HEIGHT / element->vertical_scale_sigmas * (*(d++) - element->mean) / sqrt(element->variance) + 0.5);
 				y = DEFAULT_SCOPE_HEIGHT / 2 - y;
 				if(0 <= y && y < DEFAULT_SCOPE_HEIGHT)
 					pixels[y * DEFAULT_SCOPE_WIDTH + x] = pixel_colour(element->channels, j);
@@ -302,8 +312,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Flush the data from the adapter.
 		 */
 
-		gst_adapter_flush(element->adapter, samples * element->channels * sizeof(*data));
-		element->next_sample += samples;
+		gst_adapter_flush(element->adapter, flush_samples * element->channels * sizeof(*data));
+		element->next_sample += flush_samples;
 	}
 
 	/*
@@ -413,7 +423,8 @@ static void class_init(gpointer class, gpointer class_data)
 	gobject_class->get_property = get_property;
 	gobject_class->dispose = dispose;
 
-	g_object_class_install_property(gobject_class, ARG_TRACE_DURATION, g_param_spec_double("trace-duration", "Trace Duration", "Width of scope display in seconds.", 0, G_MAXDOUBLE, DEFAULT_TRACE_DURATION, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_TRACE_DURATION, g_param_spec_double("trace-duration", "Trace Duration", "Width of scope display in seconds", 0, G_MAXDOUBLE, DEFAULT_TRACE_DURATION, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_FRAME_INTERVAL, g_param_spec_double("frame-interval", "Frame interval", "Display update interval in seconds", 0, G_MAXDOUBLE, DEFAULT_TRACE_DURATION, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_VERTICAL_SCALE, g_param_spec_double("vertical-scale", "Vertical Scale", "Height of scope display in standard deviations of the time series", 0, G_MAXDOUBLE, DEFAULT_VERTICAL_SCALE_SIGMAS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_AVERAGE_INTERVAL, g_param_spec_double("average-interval", "Average Interval", "Time interval in seconds over which the trace mean and variance are averaged to set the display center and scale respectively", 0.0, G_MAXDOUBLE, DEFAULT_AVERAGE_INTERVAL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_DO_TIMESTAMP, g_param_spec_boolean("do-timestamp", "Do Timestamp", "Set timestamps on frames.", DEFAULT_DO_TIMESTAMP, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
@@ -451,6 +462,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->channels = 0;
 	element->rate = 0;
 	element->trace_duration = DEFAULT_TRACE_DURATION;
+	element->frame_interval = DEFAULT_TRACE_DURATION;
 	element->vertical_scale_sigmas = DEFAULT_VERTICAL_SCALE_SIGMAS;
 	element->next_sample = 0;
 	element->mean = 0.0;
