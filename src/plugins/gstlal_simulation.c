@@ -335,14 +335,16 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 		LIGOTimeGPS end = {+999999999, 0};
 		element->injection_document = load_injection_document(element->xml_location, start, end);
 		if(!element->injection_document) {
-			GST_ERROR("unable to open/parse/something \"%s\"", element->xml_location);
+			GST_ERROR("error loading \"%s\"", element->xml_location);
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
 	}
 
 	/*
-	 * Wrap buffer in a REAL8TimeSeries
+	 * Wrap buffer in a REAL8TimeSeries by creating a 0 length time
+	 * series, free()ing the data, and pointing it at the buffer's
+	 * contents instead.
 	 */
 
 	instrument = gst_structure_get_string(gst_caps_get_structure(caps, 0), "instrument");
@@ -361,6 +363,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	}
 
 	/*
+	 * Free the wrapping.  Setting the data pointer to NULL prevents
+	 * XLALDestroyREAL8TimeSeries() from free()ing the buffer's data.
+	 */
+
+	h->data->data = NULL;
+	XLALDestroyREAL8TimeSeries(h);
+
+	/*
 	 * Push data out srcpad
 	 */
 
@@ -369,9 +379,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	/*
 	 * Done
 	 */
-
-	h->data->data = NULL;	/* prevent XLALDestroyREAL8TimeSeries from free()ing the buffer */
-	XLALDestroyREAL8TimeSeries(h);
 
 done:
 	gst_caps_unref(caps);
