@@ -691,6 +691,8 @@ static void base_init(gpointer class)
 	};
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
 
+	gst_element_class_set_details(element_class, &plugin_details);
+
 	gst_element_class_add_pad_template(
 		element_class,
 		gst_pad_template_new(
@@ -713,8 +715,6 @@ static void base_init(gpointer class)
 			)
 		)
 	);
-
-	gst_element_class_set_details(element_class, &plugin_details);
 }
 
 
@@ -775,9 +775,9 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	XLALGPSSet(&element->stop_time, 0, 0);
 	element->next_sample = 0;
 	element->stream = NULL;
-	element->series_type = -1;
 	element->series_buffer_duration = DEFAULT_BUFFER_DURATION;
 	element->series_buffer = NULL;
+	element->series_type = -1;
 
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
 }
