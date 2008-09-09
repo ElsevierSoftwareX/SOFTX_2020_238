@@ -685,8 +685,6 @@ static void base_init(gpointer class)
 	};
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
 
-	gst_element_class_set_details(element_class, &plugin_details);
-
 	gst_element_class_add_pad_template(
 		element_class,
 		gst_pad_template_new(
@@ -710,6 +708,7 @@ static void base_init(gpointer class)
 		)
 	);
 
+	gst_element_class_set_details(element_class, &plugin_details);
 }
 
 
