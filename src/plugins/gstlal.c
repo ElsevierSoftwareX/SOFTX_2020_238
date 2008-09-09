@@ -1,7 +1,7 @@
 /*
  * Various bits of LAL wrapped in gstreamer elements.
  *
- * Copyright (C) 2008  Kipp C. Cannon
+ * Copyright (C) 2008  Kipp Cannon, Chad Hanna
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -36,6 +36,7 @@
 #include <gstlal_templatebank.h>
 #include <gstlal_multiscope.h>
 #include <gstlal_simulation.h>
+#include <gstlal_whiten.h>
 
 
 /*
@@ -57,6 +58,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_templatebank", gstlal_templatebank_get_type},
 		{"lal_multiscope", gstlal_multiscope_get_type},
 		{"lal_simulation", gstlal_simulation_get_type},
+		{"lal_whiten", gstlal_whiten_get_type},
 		{NULL, NULL},
 	};
 
