@@ -367,42 +367,47 @@ static void base_init(gpointer class)
 		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chan Hanna <channa@ligo.caltech.edu>"
 	};
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
-	GstPadTemplate *sinkpad_template = gst_pad_template_new(
-		"sink",
-		GST_PAD_SINK,
-		GST_PAD_ALWAYS,
-		gst_caps_new_simple(
-			"audio/x-raw-float",
-			"rate", GST_TYPE_INT_RANGE, 1, 32768,
-			"channels", GST_TYPE_INT_RANGE, 1, 16384,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, 64,
-			NULL
-		)
-	);
-	GstPadTemplate *srcpad_template = gst_pad_template_new(
-		"src",
-		GST_PAD_SRC,
-		GST_PAD_ALWAYS,
-		gst_caps_new_simple(
-			"video/x-raw-rgb",
-			"width", G_TYPE_INT, DEFAULT_SCOPE_WIDTH,
-			"height", G_TYPE_INT, DEFAULT_SCOPE_HEIGHT,
-			"framerate", GST_TYPE_FRACTION_RANGE, 0, 1, G_MAXINT, 1,
-			"bpp", G_TYPE_INT, 32,
-			"depth", G_TYPE_INT, 24,
-			"red_mask", G_TYPE_INT, 0x0000ff00,
-			"green_mask", G_TYPE_INT, 0x00ff0000,
-			"blue_mask", G_TYPE_INT, 0xff000000,
-			"endianness", G_TYPE_INT, 4321,
-			NULL
-		)
-	);
 
 	gst_element_class_set_details(element_class, &plugin_details);
 
-	gst_element_class_add_pad_template(element_class, sinkpad_template);
-	gst_element_class_add_pad_template(element_class, srcpad_template);
+	gst_element_class_add_pad_template(
+		element_class,
+		gst_pad_template_new(
+			"sink",
+			GST_PAD_SINK,
+			GST_PAD_ALWAYS,
+			gst_caps_new_simple(
+				"audio/x-raw-float",
+				"rate", GST_TYPE_INT_RANGE, 1, 32768,
+				"channels", GST_TYPE_INT_RANGE, 1, 16384,
+				"endianness", G_TYPE_INT, G_BYTE_ORDER,
+				"width", G_TYPE_INT, 64,
+				NULL
+			)
+		)
+	);
+
+	gst_element_class_add_pad_template(
+		element_class,
+		gst_pad_template_new(
+			"src",
+			GST_PAD_SRC,
+			GST_PAD_ALWAYS,
+			gst_caps_new_simple(
+				"video/x-raw-rgb",
+				"width", G_TYPE_INT, DEFAULT_SCOPE_WIDTH,
+				"height", G_TYPE_INT, DEFAULT_SCOPE_HEIGHT,
+				"framerate", GST_TYPE_FRACTION_RANGE, 0, 1, G_MAXINT, 1,
+				"bpp", G_TYPE_INT, 32,
+				"depth", G_TYPE_INT, 24,
+				"red_mask", G_TYPE_INT, 0x0000ff00,
+				"green_mask", G_TYPE_INT, 0x00ff0000,
+				"blue_mask", G_TYPE_INT, 0xff000000,
+				"endianness", G_TYPE_INT, 4321,
+				NULL
+			)
+		)
+	);
 }
 
 
