@@ -642,7 +642,7 @@ static gboolean stop(GstBaseSrc *object)
  */
 
 
-static GstElementClass *parent_class = NULL;
+static GstPushSrcClass *parent_class = NULL;
 
 
 /*
@@ -731,7 +731,7 @@ static void class_init(gpointer class, gpointer class_data)
 	GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS(class);
 	GstPushSrcClass *gstpush_src_class = GST_PUSH_SRC_CLASS(class);
 
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
+	parent_class = g_type_class_ref(GST_TYPE_PUSH_SRC);
 
 	gobject_class->set_property = set_property;
 	gobject_class->get_property = get_property;
