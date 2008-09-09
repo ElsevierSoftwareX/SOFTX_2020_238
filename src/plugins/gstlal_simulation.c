@@ -386,7 +386,6 @@ done:
 }
 
 
-
 /*
  * Parent class.
  */
@@ -412,7 +411,6 @@ static void dispose(GObject * object)
 
 	G_OBJECT_CLASS(parent_class)->dispose(object);
 }
-
 
 
 /*
