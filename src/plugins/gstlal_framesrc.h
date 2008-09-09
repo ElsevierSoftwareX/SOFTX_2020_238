@@ -51,7 +51,7 @@ typedef struct {
 
 
 typedef struct {
-	GstPushSrc element;
+	GstPushSrc pushsrc;
 
 	char *location;
 	char *instrument;
