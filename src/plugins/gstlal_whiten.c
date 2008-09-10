@@ -33,6 +33,9 @@
  */
 
 
+#include <math.h>
+
+
 /*
  * stuff from gstreamer
  */
