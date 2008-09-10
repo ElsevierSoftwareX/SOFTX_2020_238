@@ -25,7 +25,7 @@ SRC="lal_framesrc \
 #	datarate=$((16384*8)) \
 #! audio/x-raw-float, width=64, channels=1, rate=16384, endianness=1234, instrument=${INSTRUMENT}, channel=${CHANNEL}"
 
-SINK="queue max-size-time=96 ! lal_multiscope trace-duration=0.25 frame-interval=0.25 average-interval=10.0 ! ffmpegcolorspace ! cairotimeoverlay ! xvimagesink"
+SINK="queue max-size-time=96 ! lal_multiscope trace-duration=4.0 frame-interval=0.0625 average-interval=32.0 ! ffmpegcolorspace ! cairotimeoverlay ! autovideosink"
 #SINK="queue ! fakesink"
 
 #
@@ -38,10 +38,7 @@ gst-launch --gst-debug-level=1 \
 	$SRC \
 	! lal_simulation \
 		xml-location="bns_injections.xml" \
-	! audiochebband \
-		lower-frequency=40 \
-		upper-frequency=1000 \
-		poles=8 \
+	! lal_whiten \
 	! audioresample \
 	! audio/x-raw-float, rate=2048 \
 	! tee name=hoft_2048 \
