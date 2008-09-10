@@ -66,6 +66,7 @@ typedef struct {
 	unsigned int snr_length;
 
 	unsigned long next_sample;
+	GstClockTime adapter_head_timestamp;
 
 	gsl_matrix *U;
 	gsl_vector *S;
