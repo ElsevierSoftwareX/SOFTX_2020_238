@@ -193,7 +193,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 * buffer's caps
 	 */
 
-	element->rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
+	element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 	element->channels = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels"));
 
 	/*
@@ -221,10 +221,21 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALMultiScope *element = GSTLAL_MULTISCOPE(gst_pad_get_parent(pad));
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
+	gboolean is_discontinuity = FALSE;
 	GstFlowReturn result = GST_FLOW_OK;
-	double average_length = element->average_interval * element->rate;
-	int trace_samples = trunc(element->trace_duration * element->rate + 0.5);
-	int flush_samples = trunc(element->frame_interval * element->rate + 0.5);
+	double average_length = element->average_interval * element->sample_rate;
+	int trace_samples = trunc(element->trace_duration * element->sample_rate + 0.5);
+	int flush_samples = trunc(element->frame_interval * element->sample_rate + 0.5);
+
+	/*
+	 * Check for a discontinuity
+	 */
+
+	if(GST_BUFFER_IS_DISCONT(sinkbuf)) {
+		is_discontinuity = TRUE;
+		gst_adapter_clear(element->adapter);
+		element->adapter_head_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);
+	}
 
 	/*
 	 * Put buffer into adapter, and measure the length of the SNR time
@@ -258,8 +269,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf);
+		if(is_discontinuity) {
+			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
+			is_discontinuity = FALSE;
+		}
 		if(element->do_timestamp) {
-			GST_BUFFER_TIMESTAMP(srcbuf) = element->next_sample * GST_SECOND / element->rate;
+			GST_BUFFER_TIMESTAMP(srcbuf) = element->adapter_head_timestamp;
 			GST_BUFFER_DURATION(srcbuf) = (GstClockTime) trunc(element->frame_interval * GST_SECOND + 0.5);
 		} else {
 			GST_BUFFER_TIMESTAMP(srcbuf) = GST_CLOCK_TIME_NONE;
@@ -309,11 +324,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			goto done;
 
 		/*
-		 * Flush the data from the adapter.
+		 * Flush the data from the adapter and avance the sample
+		 * counters.
 		 */
 
 		gst_adapter_flush(element->adapter, flush_samples * element->channels * sizeof(*data));
 		element->next_sample += flush_samples;
+		element->adapter_head_timestamp += (GstClockTime) flush_samples * GST_SECOND / element->sample_rate;
 	}
 
 	/*
@@ -465,11 +482,12 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	/* internal data */
 	element->adapter = gst_adapter_new();
 	element->channels = 0;
-	element->rate = 0;
+	element->sample_rate = 0;
 	element->trace_duration = DEFAULT_TRACE_DURATION;
 	element->frame_interval = DEFAULT_TRACE_DURATION;
 	element->vertical_scale_sigmas = DEFAULT_VERTICAL_SCALE_SIGMAS;
 	element->next_sample = 0;
+	element->adapter_head_timestamp = 0;
 	element->mean = 0.0;
 	element->variance = 0.0;
 	element->average_interval = DEFAULT_AVERAGE_INTERVAL;

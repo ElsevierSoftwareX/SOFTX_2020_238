@@ -59,12 +59,14 @@ typedef struct {
 	GstAdapter *adapter;
 
 	int channels;
-	int rate;
+	int sample_rate;
 	double trace_duration;
 	double frame_interval;
 	double vertical_scale_sigmas;
 
 	unsigned long next_sample;
+	GstClockTime adapter_head_timestamp;
+
 	double mean;
 	double variance;
 	double average_interval;
