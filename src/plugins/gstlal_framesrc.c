@@ -33,6 +33,7 @@
  */
 
 
+#include <math.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -152,11 +153,15 @@ static void DestroyTimeSeries(void *series, LALTYPECODE type)
 
 static GstCaps *series_to_caps(const char *instrument, const char *channel_name, void *series, LALTYPECODE type)
 {
+	char units[100];
+
 	switch(type) {
-	case LAL_I4_TYPE_CODE:
+	case LAL_I4_TYPE_CODE: {
+		INT4TimeSeries *local_series = series;
+		XLALUnitAsString(units, 100, &local_series->sampleUnits);
 		return gst_caps_new_simple(
 			"audio/x-raw-int",
-			"rate", G_TYPE_INT, (int) (1.0 / ((INT4TimeSeries *) series)->deltaT + 0.5),
+			"rate", G_TYPE_INT, (int) trunc(1.0 / local_series->deltaT + 0.5),
 			"channels", G_TYPE_INT, 1,
 			"endianness", G_TYPE_INT, G_BYTE_ORDER,
 			"width", G_TYPE_INT, 32,
@@ -164,32 +169,42 @@ static GstCaps *series_to_caps(const char *instrument, const char *channel_name,
 			"signed", G_TYPE_BOOLEAN, TRUE,
 			"instrument", G_TYPE_STRING, instrument,
 			"channel_name", G_TYPE_STRING, channel_name,
+			"units", G_TYPE_STRING, units,
 			NULL
 		);
+	}
 
-	case LAL_S_TYPE_CODE:
+	case LAL_S_TYPE_CODE: {
+		REAL4TimeSeries *local_series = series;
+		XLALUnitAsString(units, 100, &local_series->sampleUnits);
 		return gst_caps_new_simple(
 			"audio/x-raw-float",
-			"rate", G_TYPE_INT, (int) (1.0 / ((REAL4TimeSeries *) series)->deltaT + 0.5),
+			"rate", G_TYPE_INT, (int) trunc(1.0 / local_series->deltaT + 0.5),
 			"channels", G_TYPE_INT, 1,
 			"endianness", G_TYPE_INT, G_BYTE_ORDER,
 			"width", G_TYPE_INT, 32,
 			"instrument", G_TYPE_STRING, instrument,
 			"channel_name", G_TYPE_STRING, channel_name,
+			"units", G_TYPE_STRING, units,
 			NULL
 		);
+	}
 
-	case LAL_D_TYPE_CODE:
+	case LAL_D_TYPE_CODE: {
+		REAL8TimeSeries *local_series = series;
+		XLALUnitAsString(units, 100, &local_series->sampleUnits);
 		return gst_caps_new_simple(
 			"audio/x-raw-float",
-			"rate", G_TYPE_INT, (int) (1.0 / ((REAL8TimeSeries *) series)->deltaT + 0.5),
+			"rate", G_TYPE_INT, (int) trunc(1.0 / local_series->deltaT + 0.5),
 			"channels", G_TYPE_INT, 1,
 			"endianness", G_TYPE_INT, G_BYTE_ORDER,
 			"width", G_TYPE_INT, 64,
 			"instrument", G_TYPE_STRING, instrument,
 			"channel_name", G_TYPE_STRING, channel_name,
+			"units", G_TYPE_STRING, units,
 			NULL
 		);
+	}
 	
 	default:
 		return NULL;
@@ -236,8 +251,8 @@ static void *read_series(GSTLALFrameSrc *element, long start_sample, long length
 		GST_ERROR("unsupported data type (LALTYPECODE=%d)", element->series_type);
 		return NULL;
 	}
-	buffer_start_sample = (long) (XLALGPSDiff(&buffer_start_time, &element->start_time) / deltaT + 0.5);
-	input_length = (long) (XLALGPSDiff(&element->stop_time, &element->start_time) / deltaT + 0.5);
+	buffer_start_sample = (long) trunc(XLALGPSDiff(&buffer_start_time, &element->start_time) / deltaT + 0.5);
+	input_length = (long) trunc(XLALGPSDiff(&element->stop_time, &element->start_time) / deltaT + 0.5);
 
 	/* clip the requested interval to the input domain */
 	if(start_sample + length < 0 || start_sample >= input_length) {
@@ -262,7 +277,7 @@ static void *read_series(GSTLALFrameSrc *element, long start_sample, long length
 		/* compute the bounds of the new buffer, using the
 		 * requested start time as the buffer's start time */
 		buffer_start_sample = start_sample;
-		buffer_length = (long) (element->series_buffer_duration / deltaT + 0.5);
+		buffer_length = (long) trunc(element->series_buffer_duration / deltaT + 0.5);
 		if(buffer_start_sample + buffer_length > input_length)
 			buffer_length = input_length - buffer_start_sample;
 		buffer_start_time = element->start_time;
@@ -555,8 +570,8 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length - 1;
-		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&element->start_time) + (GstClockTime) (element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
-		GST_BUFFER_DURATION(*buffer) = (GstClockTime) (chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&element->start_time) + (GstClockTime) trunc(element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_DURATION(*buffer) = (GstClockTime) trunc(chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
 		if(element->next_sample == 0)
 			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 		element->next_sample += chunk->data->length;
@@ -577,8 +592,8 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length - 1;
-		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&element->start_time) + (GstClockTime) (element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
-		GST_BUFFER_DURATION(*buffer) = (GstClockTime) (chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&element->start_time) + (GstClockTime) trunc(element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_DURATION(*buffer) = (GstClockTime) trunc(chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
 		if(element->next_sample == 0)
 			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 		element->next_sample += chunk->data->length;
@@ -599,8 +614,8 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length - 1;
-		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&element->start_time) + (GstClockTime) (element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
-		GST_BUFFER_DURATION(*buffer) = (GstClockTime) (chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&element->start_time) + (GstClockTime) trunc(element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_DURATION(*buffer) = (GstClockTime) trunc(chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
 		if(element->next_sample == 0)
 			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 		element->next_sample += chunk->data->length;
