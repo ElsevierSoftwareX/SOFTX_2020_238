@@ -27,7 +27,34 @@
 #include <gst/base/gstadapter.h>
 
 
+#include <lal/LALDatatypes.h>
+#include <lal/TimeFreqFFT.h>
+
+
 G_BEGIN_DECLS
+
+
+/*
+ * gstlal_psdmode_t enum
+ */
+
+
+enum gstlal_psdmode_t {
+	GSTLAL_PSDMODE_INITIAL_LIGO_SRD,
+	GSTLAL_PSDMODE_RUNNING_AVERAGE
+};
+
+
+#define GSTLAL_PSDMODE_TYPE  \
+	(gstlal_psdmode_get_type())
+
+
+GType gstlal_psdmode_get_type(void);
+
+
+/*
+ * lal_whiten element
+ */
 
 
 #define GSTLAL_WHITEN_TYPE \
@@ -54,8 +81,20 @@ typedef struct {
 
 	GstPad *srcpad;
 
+	int sample_rate;
+
 	double filter_length;
 	double convolution_length;
+	enum gstlal_psdmode_t psdmode;
+
+	unsigned long next_sample;
+	GstClockTime adapter_head_timestamp;
+
+	REAL8FFTPlan *fwdplan;
+	REAL8FFTPlan *revplan;
+	LALPSDRegressor *psd_regressor;
+	REAL8FrequencySeries *psd;
+	REAL8FrequencySeries *filter;
 } GSTLALWhiten;
 
 
