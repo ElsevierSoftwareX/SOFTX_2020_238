@@ -306,7 +306,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	GstFlowReturn result = GST_FLOW_OK;
-	int is_discontinuity = FALSE;
+	gboolean is_discontinuity = FALSE;
 	unsigned segment_length = trunc(element->convolution_length * element->sample_rate + 0.5);
 	unsigned transient = trunc(element->filter_length * element->sample_rate + 0.5);
 	REAL8TimeSeries *segment = NULL;
@@ -358,7 +358,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * reset the clock
 	 */
 
-	if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT)) {
+	if(GST_BUFFER_IS_DISCONT(sinkbuf)) {
 		is_discontinuity = TRUE;
 		gst_adapter_clear(element->adapter);
 		element->adapter_head_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);
