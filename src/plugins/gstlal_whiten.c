@@ -156,12 +156,25 @@ static int make_fft_plans(GSTLALWhiten *element)
 }
 
 
-static int get_psd(GSTLALWhiten *element)
+static REAL8FrequencySeries *make_empty_psd(const GSTLALWhiten *element)
 {
 	LIGOTimeGPS gps_zero = {0, 0};
 	LALUnit strain_squared_per_hertz = lalStrainSquaredPerHertz();
 	unsigned segment_length = trunc(element->convolution_length * element->sample_rate + 0.5);
 	unsigned psd_length = segment_length / 2 + 1;
+	REAL8FrequencySeries *psd;
+
+	psd = XLALCreateREAL8FrequencySeries("PSD", &gps_zero, 0.0, 1.0 / element->convolution_length, &strain_squared_per_hertz, psd_length);
+
+	if(!psd)
+		GST_ERROR("XLALCreateREAL8FrequencySeries() failed");
+
+	return psd;
+}
+
+
+static int get_psd(GSTLALWhiten *element)
+{
 	unsigned i;
 
 	XLALDestroyREAL8FrequencySeries(element->psd);
@@ -169,18 +182,31 @@ static int get_psd(GSTLALWhiten *element)
 
 	switch(element->psdmode) {
 	case GSTLAL_PSDMODE_INITIAL_LIGO_SRD:
-		element->psd = XLALCreateREAL8FrequencySeries("PSD", &gps_zero, 0.0, 1.0 / element->convolution_length, &strain_squared_per_hertz, psd_length);
-		if(!element->psd) {
-			GST_ERROR("XLALCreateREAL8FrequencySeries() failed");
+		element->psd = make_empty_psd(element);
+		if(!element->psd)
 			return -1;
-		}
 		for(i = 0; i < element->psd->data->length; i++)
 			element->psd->data->data[i] = XLALLIGOIPsd(element->psd->f0 + i * element->psd->deltaF);
 		break;
 
 	case GSTLAL_PSDMODE_RUNNING_AVERAGE:
-		/* FIXME */
-		return -1;
+		if(element->psd_regressor->n_samples) {
+			element->psd = XLALPSDRegressorGetPSD(element->psd_regressor);
+			if(!element->psd) {
+				GST_ERROR("XLALPSDRegressorGetPSD() failed");
+				return -1;
+			}
+		} else {
+			/* no data for the average yet, construct identity
+			 * filter */
+			element->psd = make_empty_psd(element);
+			if(!element->psd)
+				return -1;
+			for(i = 0; i < element->psd->data->length; i++)
+				/* FIXME:  wrong constant */
+				element->psd->data->data[i] = 1.0;
+		}
+		break;
 	}
 
 	return 0;
@@ -192,6 +218,8 @@ static int make_filter(GSTLALWhiten *element)
 	unsigned segment_length = trunc(element->convolution_length * element->sample_rate + 0.5);
 
 	XLALDestroyREAL8FrequencySeries(element->filter);
+	element->filter = NULL;
+
 	element->filter = XLALCutREAL8FrequencySeries(element->psd, 0, element->psd->data->length);
 	if(!element->filter) {
 		GST_ERROR("XLALCutREAL8FrequencySeries() failed");
@@ -249,8 +277,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		break;
 
 	case ARG_AVERAGE_SAMPLES:
-		XLALPSDRegressorFree(element->psd_regressor);
-		element->psd_regressor = XLALPSDRegressorNew(g_value_get_int(value));
+		element->psd_regressor->max_samples = g_value_get_int(value);
 		break;
 	}
 }
@@ -316,6 +343,19 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	COMPLEX16FrequencySeries *tilde_segment = NULL;
 
 	/*
+	 * Push the incoming buffer into the adapter.  If the buffer is a
+	 * discontinuity, first clear the adapter and reset the clock
+	 */
+
+	if(GST_BUFFER_IS_DISCONT(sinkbuf)) {
+		is_discontinuity = TRUE;
+		gst_adapter_clear(element->adapter);
+		element->adapter_head_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);
+	}
+
+	gst_adapter_push(element->adapter, sinkbuf);
+
+	/*
 	 * Make sure we've got FFT plans
 	 */
 
@@ -327,29 +367,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	/*
-	 * Make sure we've got a PSD
-	 */
-
-	if(!element->psd) {
-		if(get_psd(element)) {
-			result = GST_FLOW_ERROR;
-			goto done;
-		}
-		if(make_filter(element)) {
-			result = GST_FLOW_ERROR;
-			goto done;
-		}
-	} else {
-		/* FIXME: add code to update the PSD in the moving average
-		 * case */
-	}
-
-	/*
-	 * Create holding area
+	 * Create holding area.  Note that frequency series metadata is
+	 * populated by FFT routine so we don't have to get it right.
 	 */
 
 	segment = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0, 0}, 0.0, (double) 1.0 / element->sample_rate, &lalStrainUnit, segment_length);
-	tilde_segment = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0, 0}, 0.0, element->filter->deltaF, &lalDimensionlessUnit, element->filter->data->length);
+	tilde_segment = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0, 0}, 0.0, 0.0, &lalDimensionlessUnit, segment_length / 2 + 1);
 	if(!segment || !tilde_segment) {
 		GST_ERROR("failure creating holding area");
 		result = GST_FLOW_ERROR;
@@ -357,25 +380,27 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	/*
-	 * If incoming buffer is a discontinuity, clear the adapter and
-	 * reset the clock
-	 */
-
-	if(GST_BUFFER_IS_DISCONT(sinkbuf)) {
-		is_discontinuity = TRUE;
-		gst_adapter_clear(element->adapter);
-		element->adapter_head_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);
-	}
-
-	/*
 	 * Iterate over the available data
 	 */
-
-	gst_adapter_push(element->adapter, sinkbuf);
 
 	while(gst_adapter_available(element->adapter) / sizeof(*segment->data->data) >= segment_length) {
 		GstBuffer *srcbuf;
 		unsigned i;
+
+		/*
+		 * Make sure we've got an up-to-date PSD
+		 */
+
+		if(!element->psd || element->psdmode == GSTLAL_PSDMODE_RUNNING_AVERAGE) {
+			if(get_psd(element)) {
+				result = GST_FLOW_ERROR;
+				goto done;
+			}
+			if(make_filter(element)) {
+				result = GST_FLOW_ERROR;
+				goto done;
+			}
+		}
 
 		/*
 		 * Copy data from adapter into holding area
@@ -394,8 +419,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 
 		/*
-		 * FIXME:  update averaging PSD estimator here
+		 * Add frequency domain data to spectrum averager
 		 */
+
+		if(XLALPSDRegressorAdd(element->psd_regressor, tilde_segment)) {
+			GST_ERROR("XLALPSDRegressorAdd() failed");
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
 
 		/*
 		 * Multiply by filter
