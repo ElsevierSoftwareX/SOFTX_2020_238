@@ -39,6 +39,7 @@ gst-launch --gst-debug-level=1 \
 	! lal_simulation \
 		xml-location="bns_injections.xml" \
 	! lal_whiten \
+		psd-mode=1 \
 	! audioresample \
 	! audio/x-raw-float, rate=2048 \
 	! tee name=hoft_2048 \
