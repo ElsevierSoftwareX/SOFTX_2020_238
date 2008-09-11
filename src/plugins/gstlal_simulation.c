@@ -426,7 +426,7 @@ static void base_init(gpointer class)
 		"Simulation",
 		"Filter",
 		"An injection routine",
-		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chan Hanna <chann@ligo.caltech.edu>"
+		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chan Hanna <channa@ligo.caltech.edu>"
 	};
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
 
