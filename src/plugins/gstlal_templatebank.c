@@ -66,6 +66,7 @@
  */
 
 
+#include <gstlal.h>
 #include <gstlal_templatebank.h>
 #include <low_latency_inspiral_functions.h>
 

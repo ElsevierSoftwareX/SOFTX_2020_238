@@ -69,6 +69,7 @@
  */
 
 
+#include <gstlal.h>
 #include <gstlal_simulation.h>
 
 
