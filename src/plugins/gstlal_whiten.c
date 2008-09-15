@@ -53,12 +53,15 @@
 #include <lal/LALDatatypes.h>
 #include <lal/LALStdlib.h>
 #include <lal/Date.h>
+#include <lal/Sequence.h>
 #include <lal/TimeSeries.h>
 #include <lal/FrequencySeries.h>
 #include <lal/TimeFreqFFT.h>
 #include <lal/LALNoiseModels.h>
 #include <lal/Units.h>
 #include <lal/LALComplex.h>
+#include <lal/Window.h>
+#include <lal/EPSearch.h>
 
 
 /*
@@ -133,6 +136,25 @@ static LALUnit lalStrainSquaredPerHertz(void)
 }
 
 
+static int make_window(GSTLALWhiten *element)
+{
+	unsigned transient = trunc(element->filter_length * element->sample_rate + 0.5);
+	unsigned hann_length = trunc(element->convolution_length * element->sample_rate + 0.5) - 2 * transient;
+
+	element->window = XLALCreateHannREAL8Window(hann_length);
+	if(!element->window) {
+		GST_ERROR("failure creating Hann window");
+		return -1;
+	}
+	if(!XLALResizeREAL8Sequence(element->window->data, -transient, hann_length + 2 * transient)) {
+		GST_ERROR("failure resizing Hann window");
+		return -1;
+	}
+
+	return 0;
+}
+
+
 static int make_fft_plans(GSTLALWhiten *element)
 {
 	unsigned fft_length = trunc(element->convolution_length * element->sample_rate + 0.5);
@@ -173,38 +195,51 @@ static REAL8FrequencySeries *make_empty_psd(const GSTLALWhiten *element)
 }
 
 
-static int get_psd(GSTLALWhiten *element)
+static REAL8FrequencySeries *make_iligo_psd(const GSTLALWhiten *element)
 {
+	REAL8FrequencySeries *psd = make_empty_psd(element);
 	unsigned i;
 
+	if(!psd)
+		return NULL;
+
+	for(i = 0; i < psd->data->length; i++)
+		psd->data->data[i] = XLALLIGOIPsd(psd->f0 + i * psd->deltaF);
+
+	return psd;
+}
+
+
+static int get_psd(GSTLALWhiten *element)
+{
 	XLALDestroyREAL8FrequencySeries(element->psd);
 	element->psd = NULL;
 
 	switch(element->psdmode) {
 	case GSTLAL_PSDMODE_INITIAL_LIGO_SRD:
-		element->psd = make_empty_psd(element);
+		element->psd = make_iligo_psd(element);
 		if(!element->psd)
 			return -1;
-		for(i = 0; i < element->psd->data->length; i++)
-			element->psd->data->data[i] = XLALLIGOIPsd(element->psd->f0 + i * element->psd->deltaF);
 		break;
 
 	case GSTLAL_PSDMODE_RUNNING_AVERAGE:
-		if(element->psd_regressor->n_samples) {
-			element->psd = XLALPSDRegressorGetPSD(element->psd_regressor);
-			if(!element->psd) {
-				GST_ERROR("XLALPSDRegressorGetPSD() failed");
+		if(!element->psd_regressor->n_samples) {
+			/* no data for the average yet, seed psd regressor
+			 * with initial LIGO SRD */
+			REAL8FrequencySeries *psd = make_iligo_psd(element);
+			if(!psd)
+				return -1;
+			if(XLALPSDRegressorSetPSD(element->psd_regressor, psd, element->psd_regressor->max_samples)) {
+				GST_ERROR("XLALPSDRegressorSetPSD() failed");
+				XLALDestroyREAL8FrequencySeries(psd);
 				return -1;
 			}
-		} else {
-			/* no data for the average yet, construct identity
-			 * filter */
-			element->psd = make_empty_psd(element);
-			if(!element->psd)
-				return -1;
-			for(i = 0; i < element->psd->data->length; i++)
-				/* FIXME:  wrong constant */
-				element->psd->data->data[i] = 1.0;
+			XLALDestroyREAL8FrequencySeries(psd);
+		}
+		element->psd = XLALPSDRegressorGetPSD(element->psd_regressor);
+		if(!element->psd) {
+			GST_ERROR("XLALPSDRegressorGetPSD() failed");
+			return -1;
 		}
 		break;
 	}
@@ -317,6 +352,9 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	gboolean result = TRUE;
 
+	/* FIXME:  this element doesn't handle the caps changing in mid
+	 * stream, but it could */
+
 	element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 
 	result = gst_pad_set_caps(element->srcpad, caps);
@@ -356,9 +394,15 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	gst_adapter_push(element->adapter, sinkbuf);
 
 	/*
-	 * Make sure we've got FFT plans
+	 * Make sure we've got a Hann window and FFT plans
 	 */
 
+	if(!element->window) {
+		if(make_window(element)) {
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
+	}
 	if(!element->fwdplan || !element->revplan) {
 		if(make_fft_plans(element)) {
 			result = GST_FLOW_ERROR;
@@ -367,16 +411,23 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	/*
-	 * Create holding area.  Note that frequency series metadata is
-	 * populated by FFT routine so we don't have to get it right.
+	 * Create holding area and make sure we've got a holding place for
+	 * the tail.
 	 */
 
 	segment = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0, 0}, 0.0, (double) 1.0 / element->sample_rate, &lalStrainUnit, segment_length);
-	tilde_segment = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0, 0}, 0.0, 0.0, &lalDimensionlessUnit, segment_length / 2 + 1);
-	if(!segment || !tilde_segment) {
+	if(!segment) {
 		GST_ERROR("failure creating holding area");
 		result = GST_FLOW_ERROR;
 		goto done;
+	}
+	if(!element->tail) {
+		element->tail = XLALCutREAL8Sequence(segment->data, 0, segment_length / 2 - transient);
+		if(!element->tail) {
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
+		memset(element->tail->data, 0, element->tail->length * sizeof(*element->tail->data));
 	}
 
 	/*
@@ -412,8 +463,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Transform to frequency domain
 		 */
 
-		if(XLALREAL8TimeFreqFFT(tilde_segment, segment, element->fwdplan)) {
-			GST_ERROR("XLALREAL8TimeFreqFFT() failed");
+		tilde_segment = XLALWindowedREAL8ForwardFFT(segment, element->window, element->fwdplan);
+		if(!tilde_segment) {
+			GST_ERROR("XLALWindowedREAL8ForwardFFT() failed");
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
@@ -435,6 +487,15 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		for(i = 0; i < tilde_segment->data->length; i++)
 			tilde_segment->data->data[i] = XLALCOMPLEX16MulReal(tilde_segment->data->data[i], element->filter->data->data[i]);
 
+#if 0
+		if(element->next_sample / element->sample_rate > 1024) {
+			FILE *f = fopen("fbins.data", "a");
+			for(i = 0; i < tilde_segment->data->length; i++)
+				fprintf(f, "%g\n%g\n", tilde_segment->data->data[i]);
+			fclose(f);
+		}
+#endif
+
 		/*
 		 * Transform to time domain
 		 */
@@ -444,13 +505,15 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
+		XLALDestroyCOMPLEX16FrequencySeries(tilde_segment);
+		tilde_segment = NULL;
 
 		/*
 		 * Get a buffer from the downstream peer (note the size is
-		 * smaller than the holding area by two filter transients)
+		 * half of the holding area minus the transient)
 		 */
 
-		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, (segment_length - 2 * transient) * sizeof(*segment->data->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
+		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, (segment_length / 2 - transient) * sizeof(*segment->data->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
 		if(result != GST_FLOW_OK)
 			goto done;
 		if(is_discontinuity) {
@@ -459,14 +522,16 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + segment_length - 1;
 		GST_BUFFER_TIMESTAMP(srcbuf) = element->adapter_head_timestamp + transient * GST_SECOND / element->sample_rate;
-		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) (segment_length - 2 * transient) * GST_SECOND / element->sample_rate;
+		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) (segment_length / 2 - transient) * GST_SECOND / element->sample_rate;
 
 		/*
-		 * Copy data into it, removing the filter transient from
-		 * the start and end
+		 * Copy the first half of the time series into the buffer,
+		 * removing the transient from the start, and adding the
+		 * contents of the tail
 		 */
 
-		memcpy(GST_BUFFER_DATA(srcbuf), &segment->data->data[transient], (segment_length - 2 * transient) * sizeof(*segment->data->data));
+		for(i = 0; i < element->tail->length; i++)
+			((double *) GST_BUFFER_DATA(srcbuf))[i] = segment->data->data[transient + i] + element->tail->data[i];
 
 		/*
 		 * Push the buffer downstream
@@ -477,13 +542,20 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			goto done;
 
 		/*
+		 * Save the second half of time series data minus the final
+		 * transient in the tail
+		 */
+
+		memcpy(element->tail->data, &segment->data->data[transient + i], element->tail->length * sizeof(*element->tail->data));
+
+		/*
 		 * Flush the adapter and advance the sample count and
 		 * adapter clock
 		 */
 
-		gst_adapter_flush(element->adapter, (segment_length - 2 * transient) * sizeof(*segment->data->data));
-		element->next_sample += segment_length - 2 * transient;
-		element->adapter_head_timestamp += (GstClockTime) (segment_length - 2 * transient) * GST_SECOND / element->sample_rate;
+		gst_adapter_flush(element->adapter, (segment_length / 2 - transient) * sizeof(*segment->data->data));
+		element->next_sample += segment_length / 2 - transient;
+		element->adapter_head_timestamp += (GstClockTime) (segment_length / 2 - transient) * GST_SECOND / element->sample_rate;
 	}
 
 	/*
@@ -520,11 +592,13 @@ static void dispose(GObject * object)
 	element->adapter = NULL;
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
+	XLALDestroyREAL8Window(element->window);
 	XLALDestroyREAL8FFTPlan(element->fwdplan);
 	XLALDestroyREAL8FFTPlan(element->revplan);
 	XLALPSDRegressorFree(element->psd_regressor);
 	XLALDestroyREAL8FrequencySeries(element->psd);
 	XLALDestroyREAL8FrequencySeries(element->filter);
+	XLALDestroyREAL8Sequence(element->tail);
 
 	G_OBJECT_CLASS(parent_class)->dispose(object);
 }
@@ -640,11 +714,13 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->convolution_length = DEFAULT_CONVOLUTION_LENGTH;
 	element->psdmode = DEFAULT_PSDMODE;
 	element->sample_rate = 0;
+	element->window = NULL;
 	element->fwdplan = NULL;
 	element->revplan = NULL;
 	element->psd_regressor = XLALPSDRegressorNew(DEFAULT_AVERAGE_SAMPLES);
 	element->psd = NULL;
 	element->filter = NULL;
+	element->tail = NULL;
 }
 
 
