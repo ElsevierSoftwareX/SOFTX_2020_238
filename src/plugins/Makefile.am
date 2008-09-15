@@ -7,7 +7,8 @@ libgstlal_la_SOURCES = \
 	gstlal_templatebank.h gstlal_templatebank.c \
 	gstlal_multiscope.h gstlal_multiscope.c \
 	gstlal_simulation.h gstlal_simulation.c \
-	gstlal_whiten.h gstlal_whiten.c
+	gstlal_whiten.h gstlal_whiten.c \
+	gstadder.h gstadder.c
 libgstlal_la_CFLAGS = $(AM_CFLAGS) $(CFLAGS) ${gstreamer_CFLAGS} ${LAL_CFLAGS} ${GSL_CFLAGS}
 libgstlal_la_LIBADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS}
 libgstlal_la_LDFLAGS = ${GSTREAMER_PLUGIN_LDFLAGS}

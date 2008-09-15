@@ -37,6 +37,7 @@
 #include <gstlal_multiscope.h>
 #include <gstlal_simulation.h>
 #include <gstlal_whiten.h>
+#include <gstadder.h>
 
 
 /*
@@ -59,6 +60,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_multiscope", gstlal_multiscope_get_type},
 		{"lal_simulation", gstlal_simulation_get_type},
 		{"lal_whiten", gstlal_whiten_get_type},
+		{"lal_adder", gst_adder_get_type},
 		{NULL, NULL},
 	};
 
