@@ -143,7 +143,7 @@ gst_adder_get_type (void)
       (GInstanceInitFunc) gst_adder_init,
     };
 
-    adder_type = g_type_register_static (GST_TYPE_ELEMENT, "GstAdder",
+    adder_type = g_type_register_static (GST_TYPE_ELEMENT, "LALGstAdder",
         &adder_info, 0);
     GST_DEBUG_CATEGORY_INIT (GST_CAT_DEFAULT, "adder", 0,
         "audio channel mixing element");
