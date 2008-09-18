@@ -95,7 +95,6 @@ typedef struct {
 	REAL8FFTPlan *revplan;
 	LALPSDRegressor *psd_regressor;
 	REAL8FrequencySeries *psd;
-	REAL8FrequencySeries *filter;
 	REAL8Sequence *tail;
 } GSTLALWhiten;
 

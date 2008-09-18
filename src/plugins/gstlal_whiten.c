@@ -61,7 +61,6 @@
 #include <lal/Units.h>
 #include <lal/LALComplex.h>
 #include <lal/Window.h>
-#include <lal/EPSearch.h>
 
 
 /*
@@ -248,29 +247,6 @@ static int get_psd(GSTLALWhiten *element)
 }
 
 
-static int make_filter(GSTLALWhiten *element)
-{
-	unsigned segment_length = trunc(element->convolution_length * element->sample_rate + 0.5);
-
-	XLALDestroyREAL8FrequencySeries(element->filter);
-	element->filter = NULL;
-
-	element->filter = XLALCutREAL8FrequencySeries(element->psd, 0, element->psd->data->length);
-	if(!element->filter) {
-		GST_ERROR("XLALCutREAL8FrequencySeries() failed");
-		return -1;
-	}
-	if(XLALREAL8SpectrumInvertTruncate(element->filter, 0, segment_length, trunc(element->filter_length * element->sample_rate + 0.5), element->fwdplan, element->revplan)) {
-		GST_ERROR("XLALREAL8SpectrumInvertTruncate() failed");
-		XLALDestroyREAL8FrequencySeries(element->filter);
-		element->filter = NULL;
-		return -1;
-	}
-
-	return 0;
-}
-
-
 /*
  * ============================================================================
  *
@@ -386,6 +362,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(GST_BUFFER_IS_DISCONT(sinkbuf)) {
+		/* FIXME:  if there is tail data left over, maybe it should
+		 * be pushed downstream? */
 		is_discontinuity = TRUE;
 		gst_adapter_clear(element->adapter);
 		element->adapter_head_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);
@@ -416,7 +394,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	segment = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0, 0}, 0.0, (double) 1.0 / element->sample_rate, &lalStrainUnit, segment_length);
-	if(!segment) {
+	tilde_segment = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0, 0}, 0, 0, &lalDimensionlessUnit, segment_length / 2 + 1);
+	if(!segment || !tilde_segment) {
 		GST_ERROR("failure creating holding area");
 		result = GST_FLOW_ERROR;
 		goto done;
@@ -447,10 +426,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 				result = GST_FLOW_ERROR;
 				goto done;
 			}
-			if(make_filter(element)) {
-				result = GST_FLOW_ERROR;
-				goto done;
-			}
 		}
 
 		/*
@@ -463,9 +438,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Transform to frequency domain
 		 */
 
-		tilde_segment = XLALWindowedREAL8ForwardFFT(segment, element->window, element->fwdplan);
-		if(!tilde_segment) {
-			GST_ERROR("XLALWindowedREAL8ForwardFFT() failed");
+		if(!XLALUnitaryWindowREAL8Sequence(segment->data, element->window)) {
+			GST_ERROR("XLALUnitaryWindowREAL8Sequence() failed");
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
+		if(XLALREAL8TimeFreqFFT(tilde_segment, segment, element->fwdplan)) {
+			GST_ERROR("XLALREAL8TimeFreqFFT() failed");
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
@@ -481,20 +460,19 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 
 		/*
-		 * Multiply by filter
+		 * Remove lines and whiten.
 		 */
 
-		for(i = 0; i < tilde_segment->data->length; i++)
-			tilde_segment->data->data[i] = XLALCOMPLEX16MulReal(tilde_segment->data->data[i], element->filter->data->data[i]);
-
-#if 0
-		if(element->next_sample / element->sample_rate > 1024) {
-			FILE *f = fopen("fbins.data", "a");
-			for(i = 0; i < tilde_segment->data->length; i++)
-				fprintf(f, "%g\n%g\n", tilde_segment->data->data[i]);
-			fclose(f);
+		if(XLALPSDRegressorRemoveLines(element->psd_regressor, tilde_segment, 4.0)) {
+			GST_ERROR("XLALPSDRegressorRemoveLines() failed");
+			result = GST_FLOW_ERROR;
+			goto done;
 		}
-#endif
+		if(!XLALWhitenCOMPLEX16FrequencySeries(tilde_segment, element->psd, element->psd->f0, element->psd->f0 + element->psd->data->length * element->psd->deltaF)) {
+			GST_ERROR("XLALWhitenCOMPLEX16FrequencySeries() failed");
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
 
 		/*
 		 * Transform to time domain
@@ -505,8 +483,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
-		XLALDestroyCOMPLEX16FrequencySeries(tilde_segment);
-		tilde_segment = NULL;
 
 		/*
 		 * Get a buffer from the downstream peer (note the size is
@@ -597,7 +573,6 @@ static void dispose(GObject * object)
 	XLALDestroyREAL8FFTPlan(element->revplan);
 	XLALPSDRegressorFree(element->psd_regressor);
 	XLALDestroyREAL8FrequencySeries(element->psd);
-	XLALDestroyREAL8FrequencySeries(element->filter);
 	XLALDestroyREAL8Sequence(element->tail);
 
 	G_OBJECT_CLASS(parent_class)->dispose(object);
@@ -719,7 +694,6 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->revplan = NULL;
 	element->psd_regressor = XLALPSDRegressorNew(DEFAULT_AVERAGE_SAMPLES);
 	element->psd = NULL;
-	element->filter = NULL;
 	element->tail = NULL;
 }
 
