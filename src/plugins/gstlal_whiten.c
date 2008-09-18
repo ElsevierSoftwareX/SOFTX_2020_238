@@ -468,7 +468,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
-		if(!XLALWhitenCOMPLEX16FrequencySeries(tilde_segment, element->psd, element->psd->f0, element->psd->f0 + element->psd->data->length * element->psd->deltaF)) {
+		if(!XLALWhitenCOMPLEX16FrequencySeries(tilde_segment, element->psd)) {
 			GST_ERROR("XLALWhitenCOMPLEX16FrequencySeries() failed");
 			result = GST_FLOW_ERROR;
 			goto done;
