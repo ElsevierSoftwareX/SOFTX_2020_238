@@ -101,7 +101,7 @@ static uint32_t pixel_colour(int n_channels, int channel)
 /*
  * ============================================================================
  *
- *                          GStreamer Source Element
+ *                             GStreamer Element
  *
  * ============================================================================
  */
