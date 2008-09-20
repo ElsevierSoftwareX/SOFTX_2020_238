@@ -56,9 +56,9 @@ typedef struct {
 
 	GstAdapter *adapter;
 
-	GstPad *orthogonal_snr_pad;
-	GstPad *orthogonal_snr_sum_squares_pad;
-	GstPad *snr_pad;
+	GstPad *matrixpad;
+	GstPad *srcpad;
+	GstPad *sumsquarespad;
 
 	int sample_rate;
 	unsigned int t_start;

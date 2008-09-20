@@ -34,6 +34,7 @@
 #include <gstlal.h>
 #include <gstlal_framesrc.h>
 #include <gstlal_templatebank.h>
+#include <gstlal_matrixmixer.h>
 #include <gstlal_multiscope.h>
 #include <gstlal_simulation.h>
 #include <gstlal_whiten.h>
@@ -57,6 +58,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 	} *element, elements[] = {
 		{"lal_framesrc", gstlal_framesrc_get_type},
 		{"lal_templatebank", gstlal_templatebank_get_type},
+		{"lal_matrixmixer", gstlal_matrixmixer_get_type},
 		{"lal_multiscope", gstlal_multiscope_get_type},
 		{"lal_simulation", gstlal_simulation_get_type},
 		{"lal_whiten", gstlal_whiten_get_type},
