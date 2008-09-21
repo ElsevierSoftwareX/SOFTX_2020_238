@@ -157,7 +157,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(gst_pad_get_parent(pad));
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
-	gsl_matrix_view orthogonal_snr;
+	gsl_matrix_view input_channels;
 	GstBuffer *srcbuf;
 	GstFlowReturn result = GST_FLOW_OK;
 
@@ -193,9 +193,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Wrap the incoming buffer in a GSL matrix view.
 	 */
 
-	orthogonal_snr = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), GST_BUFFER_SIZE(sinkbuf) / sizeof(*element->V.matrix.data) / element->V.matrix.size1, element->V.matrix.size1);
+	input_channels = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), GST_BUFFER_SIZE(sinkbuf) / sizeof(*element->V.matrix.data) / element->V.matrix.size1, element->V.matrix.size1);
 
-	if(orthogonal_snr.matrix.size1 * orthogonal_snr.matrix.size2 * sizeof(*orthogonal_snr.matrix.data) != GST_BUFFER_SIZE(sinkbuf)) {
+	if(input_channels.matrix.size1 * input_channels.matrix.size2 * sizeof(*input_channels.matrix.data) != GST_BUFFER_SIZE(sinkbuf)) {
 		GST_ERROR("buffer size mismatch:  input buffer size not divisible by the channel count");
 		g_mutex_unlock(element->V_lock);
 		result = GST_FLOW_NOT_NEGOTIATED;
@@ -206,7 +206,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Get a buffer from the downstream peer
 	 */
 
-	result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(sinkbuf), orthogonal_snr.matrix.size1 * element->V.matrix.size2 * sizeof(*element->V.matrix.data), GST_PAD_CAPS(element->srcpad), &srcbuf);
+	result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(sinkbuf), input_channels.matrix.size1 * element->V.matrix.size2 * sizeof(*element->V.matrix.data), GST_PAD_CAPS(element->srcpad), &srcbuf);
 	if(result != GST_FLOW_OK) {
 		g_mutex_unlock(element->V_lock);
 		goto done;
@@ -227,13 +227,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Wrap the outgoing buffer in a GSL matrix view.
 		 */
 
-		gsl_matrix_view snr = gsl_matrix_view_array((double *) GST_BUFFER_DATA(srcbuf), orthogonal_snr.matrix.size1, element->V.matrix.size2);
+		gsl_matrix_view output_channels = gsl_matrix_view_array((double *) GST_BUFFER_DATA(srcbuf), input_channels.matrix.size1, element->V.matrix.size2);
 
 		/*
 		 * Mix input channels into output channels.
 		 */
 
-		gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, &orthogonal_snr.matrix, &element->V.matrix, 0, &snr.matrix);
+		gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, &input_channels.matrix, &element->V.matrix, 0, &output_channels.matrix);
 	} else
 		memset(GST_BUFFER_DATA(srcbuf), 0, GST_BUFFER_SIZE(srcbuf));
 
