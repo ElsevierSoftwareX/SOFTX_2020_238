@@ -55,7 +55,7 @@ gst-launch --gst-debug-level=1 \
 	! tee name=hoft_1024 \
 	lal_adder name=orthogonal_snr_sum_squares ! $SINK \
 	hoft_2048. ! $SINK \
-	hoft_2048. ! queue ! lal_templatebank \
+	hoft_2048. ! lal_templatebank \
 		name=templatebank0 \
 		t-start=0 \
 		t-end=1 \
@@ -67,7 +67,7 @@ gst-launch --gst-debug-level=1 \
 	templatebank0.matrix ! snr0.matrix \
 	orthosnr0. ! snr0.sink \
 	snr0. ! queue ! fakesink \
-	hoft_2048. ! queue ! lal_templatebank \
+	hoft_2048. ! lal_templatebank \
 		name=templatebank1 \
 		t-start=1 \
 		t-end=2 \
@@ -79,7 +79,7 @@ gst-launch --gst-debug-level=1 \
 	templatebank1.matrix ! snr1.matrix \
 	orthosnr1. ! snr1.sink \
 	snr1. ! queue ! fakesink \
-	hoft_1024. ! queue ! lal_templatebank \
+	hoft_1024. ! lal_templatebank \
 		name=templatebank2 \
 		t-start=2 \
 		t-end=4 \
@@ -103,7 +103,7 @@ exit
 	! audioresample \
 	! audio/x-raw-float, rate=128 \
 	! tee name=hoft_128 \
-	hoft_512. ! queue ! lal_templatebank \
+	hoft_512. ! lal_templatebank \
 		name=templatebank3 \
 		t-start=4 \
 		t-end=8 \
@@ -115,7 +115,7 @@ exit
 	templatebank3.matrix ! snr3.matrix \
 	orthosnr3. ! snr3.sink \
 	snr3. ! queue ! fakesink \
-	hoft_256. ! queue ! lal_templatebank \
+	hoft_256. ! lal_templatebank \
 		name=templatebank4 \
 		t-start=8 \
 		t-end=16 \
@@ -127,7 +127,7 @@ exit
 	templatebank4.matrix ! snr4.matrix \
 	orthosnr4. ! snr4.sink \
 	snr4. ! queue ! fakesink \
-	hoft_128. ! queue ! lal_templatebank \
+	hoft_128. ! lal_templatebank \
 		name=templatebank5 \
 		t-start=16 \
 		t-end=32 \
@@ -139,7 +139,7 @@ exit
 	templatebank5.matrix ! snr5.matrix \
 	orthosnr5. ! snr5.sink \
 	snr5. ! queue ! fakesink \
-	hoft_128. ! queue ! lal_templatebank \
+	hoft_128. ! lal_templatebank \
 		name=templatebank6 \
 		t-start=32 \
 		t-end=48 \
@@ -151,7 +151,7 @@ exit
 	templatebank6.matrix ! snr6.matrix \
 	orthosnr6. ! snr6.sink \
 	snr6. ! queue ! fakesink \
-	hoft_128. ! queue ! lal_templatebank \
+	hoft_128. ! lal_templatebank \
 		name=templatebank7 \
 		t-start=48 \
 		t-end=64 \
