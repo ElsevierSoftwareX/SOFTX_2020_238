@@ -411,7 +411,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			break;
 
 		/*
-		 * Get a buffer from the downstream peer
+		 * Get buffers from the downstream peers
 		 */
 
 		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, element->U->size1 * output_length * sizeof(*orthogonal_snr.data), GST_PAD_CAPS(element->srcpad), &orthogonal_snr_buf);
@@ -419,9 +419,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			goto done;
 
 		result = gst_pad_alloc_buffer(element->sumsquarespad, element->next_sample, output_length * sizeof(*orthogonal_snr_sum_squares.data), GST_PAD_CAPS(element->sumsquarespad), &orthogonal_snr_sum_squares_buf);
-		if(result != GST_FLOW_OK)
-			/* FIXME: unref other buffers */
+		if(result != GST_FLOW_OK) {
+			gst_buffer_unref(orthogonal_snr_buf);
 			goto done;
+		}
 
 		/*
 		 * Set the metadata.  The time of the start of the h(t)
@@ -490,12 +491,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Push the buffers downstream.
 		 */
 
-		result = gst_pad_push(element->srcpad, orthogonal_snr_buf);
-		if(result != GST_FLOW_OK)
-			goto done;
-
-		fprintf(stderr, "largest orthogonal SNR sum-of-squares = %.16g (at %.16g s)\n", gsl_vector_max(&orthogonal_snr_sum_squares), GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) / (double) GST_SECOND + gsl_vector_max_index(&orthogonal_snr_sum_squares) / (double) element->sample_rate);
 		result = gst_pad_push(element->sumsquarespad, orthogonal_snr_sum_squares_buf);
+		if(result != GST_FLOW_OK) {
+			gst_buffer_unref(orthogonal_snr_buf);
+			goto done;
+		}
+
+		result = gst_pad_push(element->srcpad, orthogonal_snr_buf);
 		if(result != GST_FLOW_OK)
 			goto done;
 
