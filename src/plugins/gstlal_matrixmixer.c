@@ -116,8 +116,10 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	g_mutex_lock(element->V_lock);
-	if(!element->V_buf)
+	if(!element->V_buf) {
+		g_mutex_unlock(element->V_lock);
 		goto done;
+	}
 
 	/*
 	 * check that the number of input channels matches the size of the
@@ -125,6 +127,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	if(g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")) != (int) element->V.matrix.size1) {
+		g_mutex_unlock(element->V_lock);
 		result = FALSE;
 		goto done;
 	}
@@ -135,10 +138,10 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	gst_caps_set_simple(caps, "channels", G_TYPE_INT, element->V.matrix.size2, NULL);
+	g_mutex_unlock(element->V_lock);
 	result = gst_pad_set_caps(element->srcpad, caps);
 
 done:
-	g_mutex_unlock(element->V_lock);
 	gst_caps_unref(caps);
 	gst_object_unref(element);
 	return result;
@@ -169,6 +172,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		if(!element->V_buf) {
 			/* mixing matrix didn't get set.  probably means
 			 * we're being disposed(). */
+			g_mutex_unlock(element->V_lock);
 			GST_ERROR("no mixing matrix available");
 			result = GST_FLOW_NOT_NEGOTIATED;
 			goto done;
@@ -181,6 +185,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 	if(g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")) != (int) element->V.matrix.size1) {
 		GST_ERROR("channel count mismatch:  mixing matrix requires %u channels, received buffer with %d", element->V.matrix.size1, g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")));
+		g_mutex_unlock(element->V_lock);
 		result = GST_FLOW_NOT_NEGOTIATED;
 		goto done;
 	}
