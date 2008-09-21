@@ -55,10 +55,10 @@ typedef struct {
 	GstPad *sinkpad;
 	GstPad *srcpad;
 
-	GMutex *V_lock;
-	GCond *V_available;
-	GstBuffer *V_buf;
-	gsl_matrix_view V;
+	GMutex *mixmatrix_lock;
+	GCond *mixmatrix_available;
+	GstBuffer *mixmatrix_buf;
+	gsl_matrix_view mixmatrix;
 } GSTLALMatrixMixer;
 
 

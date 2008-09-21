@@ -115,9 +115,9 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 * has the reconstruction matrix been built yet?
 	 */
 
-	g_mutex_lock(element->V_lock);
-	if(!element->V_buf) {
-		g_mutex_unlock(element->V_lock);
+	g_mutex_lock(element->mixmatrix_lock);
+	if(!element->mixmatrix_buf) {
+		g_mutex_unlock(element->mixmatrix_lock);
 		goto done;
 	}
 
@@ -126,8 +126,8 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 * reconstruction matrix
 	 */
 
-	if(g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")) != (int) element->V.matrix.size1) {
-		g_mutex_unlock(element->V_lock);
+	if(g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")) != (int) element->mixmatrix.matrix.size1) {
+		g_mutex_unlock(element->mixmatrix_lock);
 		result = FALSE;
 		goto done;
 	}
@@ -137,8 +137,8 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 * element
 	 */
 
-	gst_caps_set_simple(caps, "channels", G_TYPE_INT, element->V.matrix.size2, NULL);
-	g_mutex_unlock(element->V_lock);
+	gst_caps_set_simple(caps, "channels", G_TYPE_INT, element->mixmatrix.matrix.size2, NULL);
+	g_mutex_unlock(element->mixmatrix_lock);
 	result = gst_pad_set_caps(element->srcpad, caps);
 
 done:
@@ -165,13 +165,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Make sure we have a mixing matrix, wait until we do.
 	 */
 
-	g_mutex_lock(element->V_lock);
-	if(!element->V_buf) {
-		g_cond_wait(element->V_available, element->V_lock);
-		if(!element->V_buf) {
+	g_mutex_lock(element->mixmatrix_lock);
+	if(!element->mixmatrix_buf) {
+		g_cond_wait(element->mixmatrix_available, element->mixmatrix_lock);
+		if(!element->mixmatrix_buf) {
 			/* mixing matrix didn't get set.  probably means
 			 * we're being disposed(). */
-			g_mutex_unlock(element->V_lock);
+			g_mutex_unlock(element->mixmatrix_lock);
 			GST_ERROR("no mixing matrix available");
 			result = GST_FLOW_NOT_NEGOTIATED;
 			goto done;
@@ -182,9 +182,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Check the number of channels coming in
 	 */
 
-	if(g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")) != (int) element->V.matrix.size1) {
-		GST_ERROR("channel count mismatch:  mixing matrix requires %u channels, received buffer with %d", element->V.matrix.size1, g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")));
-		g_mutex_unlock(element->V_lock);
+	if(g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")) != (int) element->mixmatrix.matrix.size1) {
+		GST_ERROR("channel count mismatch:  mixing matrix requires %u channels, received buffer with %d", element->mixmatrix.matrix.size1, g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")));
+		g_mutex_unlock(element->mixmatrix_lock);
 		result = GST_FLOW_NOT_NEGOTIATED;
 		goto done;
 	}
@@ -193,11 +193,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Wrap the incoming buffer in a GSL matrix view.
 	 */
 
-	input_channels = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), GST_BUFFER_SIZE(sinkbuf) / sizeof(*element->V.matrix.data) / element->V.matrix.size1, element->V.matrix.size1);
+	input_channels = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), GST_BUFFER_SIZE(sinkbuf) / sizeof(*element->mixmatrix.matrix.data) / element->mixmatrix.matrix.size1, element->mixmatrix.matrix.size1);
 
 	if(input_channels.matrix.size1 * input_channels.matrix.size2 * sizeof(*input_channels.matrix.data) != GST_BUFFER_SIZE(sinkbuf)) {
 		GST_ERROR("buffer size mismatch:  input buffer size not divisible by the channel count");
-		g_mutex_unlock(element->V_lock);
+		g_mutex_unlock(element->mixmatrix_lock);
 		result = GST_FLOW_NOT_NEGOTIATED;
 		goto done;
 	}
@@ -206,9 +206,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Get a buffer from the downstream peer
 	 */
 
-	result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(sinkbuf), input_channels.matrix.size1 * element->V.matrix.size2 * sizeof(*element->V.matrix.data), GST_PAD_CAPS(element->srcpad), &srcbuf);
+	result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(sinkbuf), input_channels.matrix.size1 * element->mixmatrix.matrix.size2 * sizeof(*element->mixmatrix.matrix.data), GST_PAD_CAPS(element->srcpad), &srcbuf);
 	if(result != GST_FLOW_OK) {
-		g_mutex_unlock(element->V_lock);
+		g_mutex_unlock(element->mixmatrix_lock);
 		goto done;
 	}
 
@@ -227,17 +227,17 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Wrap the outgoing buffer in a GSL matrix view.
 		 */
 
-		gsl_matrix_view output_channels = gsl_matrix_view_array((double *) GST_BUFFER_DATA(srcbuf), input_channels.matrix.size1, element->V.matrix.size2);
+		gsl_matrix_view output_channels = gsl_matrix_view_array((double *) GST_BUFFER_DATA(srcbuf), input_channels.matrix.size1, element->mixmatrix.matrix.size2);
 
 		/*
 		 * Mix input channels into output channels.
 		 */
 
-		gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, &input_channels.matrix, &element->V.matrix, 0, &output_channels.matrix);
+		gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, &input_channels.matrix, &element->mixmatrix.matrix, 0, &output_channels.matrix);
 	} else
 		memset(GST_BUFFER_DATA(srcbuf), 0, GST_BUFFER_SIZE(srcbuf));
 
-	g_mutex_unlock(element->V_lock);
+	g_mutex_unlock(element->mixmatrix_lock);
 
 	/*
 	 * Push the buffer downstream
@@ -263,7 +263,7 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(gst_pad_get_parent(pad));
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
-	gsl_matrix_view V_new;
+	gsl_matrix_view mixmatrix_new;
 	GstFlowReturn result = GST_FLOW_OK;
 	int rows;
 	int cols;
@@ -273,15 +273,15 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	cols = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels"));
-	rows = GST_BUFFER_SIZE(sinkbuf) / sizeof(*element->V.matrix.data) / cols;
+	rows = GST_BUFFER_SIZE(sinkbuf) / sizeof(*element->mixmatrix.matrix.data) / cols;
 
 	/*
 	 * Wrap the buffer in a GSL matrix view.
 	 */
 
-	V_new = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
+	mixmatrix_new = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
 
-	if(V_new.matrix.size1 * V_new.matrix.size2 * sizeof(*V_new.matrix.data) != GST_BUFFER_SIZE(sinkbuf)) {
+	if(mixmatrix_new.matrix.size1 * mixmatrix_new.matrix.size2 * sizeof(*mixmatrix_new.matrix.data) != GST_BUFFER_SIZE(sinkbuf)) {
 		GST_ERROR("buffer size mismatch:  input buffer size not divisible by the channel count");
 		result = GST_FLOW_NOT_NEGOTIATED;
 		goto done;
@@ -291,13 +291,13 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 	 * Replace the current matrix with the new one.
 	 */
 
-	g_mutex_lock(element->V_lock);
-	if(element->V_buf)
-		gst_buffer_unref(element->V_buf);
-	element->V_buf = sinkbuf;
-	element->V = V_new;
-	g_cond_signal(element->V_available);
-	g_mutex_unlock(element->V_lock);
+	g_mutex_lock(element->mixmatrix_lock);
+	if(element->mixmatrix_buf)
+		gst_buffer_unref(element->mixmatrix_buf);
+	element->mixmatrix_buf = sinkbuf;
+	element->mixmatrix = mixmatrix_new;
+	g_cond_signal(element->mixmatrix_available);
+	g_mutex_unlock(element->mixmatrix_lock);
 
 	/*
 	 * Done
@@ -331,13 +331,13 @@ static void dispose(GObject *object)
 	element->sinkpad = NULL;
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
-	g_mutex_free(element->V_lock);
-	element->V_lock = NULL;
-	g_cond_free(element->V_available);
-	element->V_available = NULL;
-	if(element->V_buf) {
-		gst_buffer_unref(element->V_buf);
-		element->V_buf = NULL;
+	g_mutex_free(element->mixmatrix_lock);
+	element->mixmatrix_lock = NULL;
+	g_cond_free(element->mixmatrix_available);
+	element->mixmatrix_available = NULL;
+	if(element->mixmatrix_buf) {
+		gst_buffer_unref(element->mixmatrix_buf);
+		element->mixmatrix_buf = NULL;
 	}
 
 	G_OBJECT_CLASS(parent_class)->dispose(object);
@@ -459,9 +459,9 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->srcpad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
 
 	/* internal data */
-	element->V_lock = g_mutex_new();
-	element->V_available = g_cond_new();
-	element->V_buf = NULL;
+	element->mixmatrix_lock = g_mutex_new();
+	element->mixmatrix_available = g_cond_new();
+	element->mixmatrix_buf = NULL;
 }
 
 
