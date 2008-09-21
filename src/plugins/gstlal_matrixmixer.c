@@ -124,7 +124,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 * reconstruction matrix
 	 */
 
-	if((unsigned) g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")) != element->V.matrix.size1) {
+	if(g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")) != (int) element->V.matrix.size1) {
 		result = FALSE;
 		goto done;
 	}
@@ -136,8 +136,6 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 
 	gst_caps_set_simple(caps, "channels", G_TYPE_INT, element->V.matrix.size2, NULL);
 	result = gst_pad_set_caps(element->srcpad, caps);
-	if(!result)
-		goto done;
 
 done:
 	g_mutex_unlock(element->V_lock);
@@ -171,6 +169,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		if(!element->V_buf) {
 			/* mixing matrix didn't get set.  probably means
 			 * we're being disposed(). */
+			GST_ERROR("no mixing matrix available");
 			result = GST_FLOW_NOT_NEGOTIATED;
 			goto done;
 		}
@@ -181,6 +180,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")) != (int) element->V.matrix.size1) {
+		GST_ERROR("channel count mismatch:  mixing matrix requires %u channels, received buffer with %d", element->V.matrix.size1, g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")));
 		result = GST_FLOW_NOT_NEGOTIATED;
 		goto done;
 	}
@@ -190,14 +190,18 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	orthogonal_snr = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), GST_BUFFER_SIZE(sinkbuf) / sizeof(*element->V.matrix.data) / element->V.matrix.size1, element->V.matrix.size1);
+	/* FIXME:  check that the matrix is actually the same size as the
+	 * input buffer */
 
 	/*
 	 * Get a buffer from the downstream peer
 	 */
 
 	result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(sinkbuf), orthogonal_snr.matrix.size1 * element->V.matrix.size2 * sizeof(*element->V.matrix.data), GST_PAD_CAPS(element->srcpad), &srcbuf);
-	if(result != GST_FLOW_OK)
+	if(result != GST_FLOW_OK) {
+		g_mutex_unlock(element->V_lock);
 		goto done;
+	}
 
 	/*
 	 * Copy metadata
@@ -216,6 +220,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, &orthogonal_snr.matrix, &element->V.matrix, 0, &snr.matrix);
+	g_mutex_unlock(element->V_lock);
 
 	/*
 	 * Push the buffer downstream
@@ -230,7 +235,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 done:
-	g_mutex_unlock(element->V_lock);
 	gst_buffer_unref(sinkbuf);
 	gst_caps_unref(caps);
 	gst_object_unref(element);
@@ -259,6 +263,8 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	V_new = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
+	/* FIXME:  check that the matrix is actually the same size as the
+	 * input buffer */
 
 	/*
 	 * Replace the current matrix with the new one.
@@ -359,7 +365,7 @@ static void base_init(gpointer class)
 			gst_caps_new_simple(
 				"audio/x-raw-float",
 				"rate", GST_TYPE_INT_RANGE, 1, G_MAXINT,
-				"channels", G_TYPE_INT, 1,
+				"channels", GST_TYPE_INT_RANGE, 1, G_MAXINT,
 				"endianness", G_TYPE_INT, G_BYTE_ORDER,
 				"width", G_TYPE_INT, 64,
 				NULL
