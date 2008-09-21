@@ -373,36 +373,18 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	while(1) {
-		gsl_vector time_series = {
-			.size = element->U->size2,
-			.stride = 1,
-			.data = NULL,
-			.block = NULL,
-			.owner = 0
-		};
-		gsl_vector orthogonal_snr = {
-			.size = element->U->size1,
-			.stride = 1,
-			.data = NULL,
-			.block = NULL,
-			.owner = 0
-		};
-		gsl_vector orthogonal_snr_sum_squares = {
-			.size = 0,
-			.stride = 1,
-			.data = NULL,
-			.block = NULL,
-			.owner = 0
-		};
 		GstBuffer *orthogonal_snr_buf;
 		GstBuffer *orthogonal_snr_sum_squares_buf;
+		gsl_vector_view time_series;
+		gsl_matrix_view orthogonal_snr;
+		gsl_vector_view orthogonal_snr_sum_squares;
 
 		/*
 		 * Check for available data, clip to the required output
-		 * length.
+		 * length.  Wrap the data in a GSL vector view.
 		 */
 
-		output_length = (gst_adapter_available(element->adapter) / sizeof(*time_series.data)) - element->U->size2;
+		output_length = (gst_adapter_available(element->adapter) / sizeof(*time_series.vector.data)) - element->U->size2;
 		if(element->snr_length) {
 			if(output_length < (int) element->snr_length)
 				break;
@@ -410,19 +392,26 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		} else if(output_length <= 0)
 			break;
 
+		time_series = gsl_vector_view_array((double *) gst_adapter_peek(element->adapter, (element->U->size2 + output_length - 1) * sizeof(*time_series.vector.data)), element->U->size2);
+
 		/*
-		 * Get buffers from the downstream peers
+		 * Get buffers from the downstream peers, wrap both in GSL
+		 * views.
 		 */
 
-		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, element->U->size1 * output_length * sizeof(*orthogonal_snr.data), GST_PAD_CAPS(element->srcpad), &orthogonal_snr_buf);
+		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, element->U->size1 * output_length * sizeof(*orthogonal_snr.matrix.data), GST_PAD_CAPS(element->srcpad), &orthogonal_snr_buf);
 		if(result != GST_FLOW_OK)
 			goto done;
 
-		result = gst_pad_alloc_buffer(element->sumsquarespad, element->next_sample, output_length * sizeof(*orthogonal_snr_sum_squares.data), GST_PAD_CAPS(element->sumsquarespad), &orthogonal_snr_sum_squares_buf);
+		orthogonal_snr = gsl_matrix_view_array((double *) GST_BUFFER_DATA(orthogonal_snr_buf), output_length, element->U->size1);
+
+		result = gst_pad_alloc_buffer(element->sumsquarespad, element->next_sample, output_length * sizeof(*orthogonal_snr_sum_squares.vector.data), GST_PAD_CAPS(element->sumsquarespad), &orthogonal_snr_sum_squares_buf);
 		if(result != GST_FLOW_OK) {
 			gst_buffer_unref(orthogonal_snr_buf);
 			goto done;
 		}
+
+		orthogonal_snr_sum_squares = gsl_vector_view_array((double *) GST_BUFFER_DATA(orthogonal_snr_sum_squares_buf), output_length);
 
 		/*
 		 * Set the metadata.  The time of the start of the h(t)
@@ -446,45 +435,39 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		/*
 		 * Assemble the orthogonal SNR time series as the columns
-		 * of a matrix.  Instead of shuffling the bytes around in
-		 * memory, we play games with the adapter and pointers.  We
-		 * start by asking for all the data we will need for the
-		 * convolution, but only use part of it and then shift the
-		 * pointer and iterate.  Later we'll use a single flush to
-		 * discard all the samples we no longer need.  The adapter
-		 * will keep the data valid until another method is called,
-		 * so we have to be careful not to call any methods on the
-		 * adapter until the loop is finished.
+		 * of a matrix (as the channels of a multi-channel audio
+		 * stream).
 		 */
 
-		time_series.data = (double *) gst_adapter_peek(element->adapter, (time_series.size + output_length - 1) * sizeof(*time_series.data));
-		orthogonal_snr.data = (double *) GST_BUFFER_DATA(orthogonal_snr_buf);
-		orthogonal_snr_sum_squares.data = (double *) GST_BUFFER_DATA(orthogonal_snr_sum_squares_buf);
-		orthogonal_snr_sum_squares.size = output_length;
-
 		for(i = 0; i < output_length; i++) {
+			/*
+			 * The current row (time sample) in the output
+			 * matrix.
+			 */
+
+			gsl_vector_view orthogonal_snr_sample = gsl_matrix_row(&orthogonal_snr.matrix, i);
+
 			/*
 			 * Compute one vector of orthogonal SNR samples ---
 			 * the projection of h(t) onto the template bank's
 			 * orthonormal basis.
 			 */
 
-			gsl_blas_dgemv(CblasNoTrans, 1.0, element->U, &time_series, 0.0, &orthogonal_snr);
+			gsl_blas_dgemv(CblasNoTrans, 1.0, element->U, &time_series.vector, 0.0, &orthogonal_snr_sample.vector);
 
 			/*
 			 * From the projection of h(t) onto the bank's
-			 * orthonormal basis, compute the magnitude of the
-			 * component of h(t) in the bank
+			 * orthonormal basis, compute the square magnitude
+			 * of the component of h(t) in the bank
 			 */
 
-			gsl_vector_set(&orthogonal_snr_sum_squares, i, pow(gsl_blas_dnrm2(&orthogonal_snr), 2));
+			gsl_vector_set(&orthogonal_snr_sum_squares.vector, i, pow(gsl_blas_dnrm2(&orthogonal_snr_sample.vector), 2));
 
 			/*
-			 * Advance the pointers.
+			 * Advance the time series pointer.
 			 */
 
-			time_series.data++;
-			orthogonal_snr.data += orthogonal_snr.size;
+			time_series.vector.data++;
 		}
 
 		/*
@@ -506,7 +489,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * required, and advance the sample count.
 		 */
 
-		gst_adapter_flush(element->adapter, output_length * sizeof(*time_series.data));
+		gst_adapter_flush(element->adapter, output_length * sizeof(*time_series.vector.data));
 		element->adapter_head_timestamp += (GstClockTime) output_length * GST_SECOND / element->sample_rate;
 		element->next_sample += output_length;
 	}
