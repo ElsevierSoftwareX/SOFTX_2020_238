@@ -28,7 +28,7 @@ SRC="lal_framesrc \
 SINK="queue max-size-time=96 ! lal_multiscope trace-duration=4.0 frame-interval=0.0625 average-interval=32.0 do-timestamp=false ! ffmpegcolorspace ! cairotimeoverlay ! autovideosink"
 #SINK="queue ! fakesink"
 
-PLAYBACK="adder ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=1e-3 ! audioconvert ! queue max-size-time=3 ! alsasink"
+PLAYBACK="adder ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=1e-3 ! audioconvert ! queue max-size-time=3 ! progressreport update-freq=1 ! alsasink"
 
 
 #
