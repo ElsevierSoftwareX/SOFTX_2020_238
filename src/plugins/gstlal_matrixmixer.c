@@ -195,8 +195,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	orthogonal_snr = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), GST_BUFFER_SIZE(sinkbuf) / sizeof(*element->V.matrix.data) / element->V.matrix.size1, element->V.matrix.size1);
-	/* FIXME:  check that the matrix is actually the same size as the
-	 * input buffer */
+
+	if(orthogonal_snr.matrix.size1 * orthogonal_snr.matrix.size2 * sizeof(*orthogonal_snr.matrix.data) != GST_BUFFER_SIZE(sinkbuf)) {
+		GST_ERROR("buffer size mismatch:  input buffer size not divisible by the channel count");
+		g_mutex_unlock(element->V_lock);
+		result = GST_FLOW_NOT_NEGOTIATED;
+		goto done;
+	}
 
 	/*
 	 * Get a buffer from the downstream peer
@@ -268,8 +273,12 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	V_new = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
-	/* FIXME:  check that the matrix is actually the same size as the
-	 * input buffer */
+
+	if(V_new.matrix.size1 * V_new.matrix.size2 * sizeof(*V_new.matrix.data) != GST_BUFFER_SIZE(sinkbuf)) {
+		GST_ERROR("buffer size mismatch:  input buffer size not divisible by the channel count");
+		result = GST_FLOW_NOT_NEGOTIATED;
+		goto done;
+	}
 
 	/*
 	 * Replace the current matrix with the new one.
@@ -287,6 +296,7 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 	 * Done
 	 */
 
+done:
 	gst_caps_unref(caps);
 	gst_object_unref(element);
 	return result;
