@@ -159,7 +159,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	gsl_matrix_view orthogonal_snr;
 	GstBuffer *srcbuf;
-	gsl_matrix_view snr;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
@@ -220,16 +219,24 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 
 	/*
-	 * Wrap the outgoing buffer in a GSL matrix view.
+	 * Only do the real work if the buffer isn't a gap.
 	 */
 
-	snr = gsl_matrix_view_array((double *) GST_BUFFER_DATA(srcbuf), orthogonal_snr.matrix.size1, element->V.matrix.size2);
+	if(!GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP)) {
+		/*
+		 * Wrap the outgoing buffer in a GSL matrix view.
+		 */
 
-	/*
-	 * Reconstruct SNRs
-	 */
+		gsl_matrix_view snr = gsl_matrix_view_array((double *) GST_BUFFER_DATA(srcbuf), orthogonal_snr.matrix.size1, element->V.matrix.size2);
 
-	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, &orthogonal_snr.matrix, &element->V.matrix, 0, &snr.matrix);
+		/*
+		 * Mix input channels into output channels.
+		 */
+
+		gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, &orthogonal_snr.matrix, &element->V.matrix, 0, &snr.matrix);
+	} else
+		memset(GST_BUFFER_DATA(srcbuf), 0, GST_BUFFER_SIZE(srcbuf));
+
 	g_mutex_unlock(element->V_lock);
 
 	/*
