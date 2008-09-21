@@ -50,7 +50,7 @@ gst-launch --gst-debug-level=1 \
 	! audioresample \
 	! audio/x-raw-float, rate=2048 \
 	! tee name=hoft_2048 \
-	! queue ! audioresample \
+	! audioresample \
 	! audio/x-raw-float, rate=1024 \
 	! tee name=hoft_1024 \
 	lal_adder name=orthogonal_snr_sum_squares ! $SINK \
@@ -94,13 +94,13 @@ gst-launch --gst-debug-level=1 \
 
 exit
 
-	! queue ! audioresample \
+	! audioresample \
 	! audio/x-raw-float, rate=512 \
 	! tee name=hoft_512 \
-	! queue ! audioresample \
+	! audioresample \
 	! audio/x-raw-float, rate=256 \
 	! tee name=hoft_256 \
-	! queue ! audioresample \
+	! audioresample \
 	! audio/x-raw-float, rate=128 \
 	! tee name=hoft_128 \
 	hoft_512. ! queue ! lal_templatebank \
@@ -108,38 +108,58 @@ exit
 		t-start=4 \
 		t-end=8 \
 		snr-length=$((512*8)) \
+	lal_matrixmixer \
+		name=snr3 \
 	templatebank3.src ! tee name=orthosnr3 ! $SINK \
 	templatebank3.sumofsquares ! queue max-size-time=96 ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
-	templatebank3.matrix ! fakesink \
+	templatebank3.matrix ! snr3.matrix \
+	orthosnr3. ! snr3.sink \
+	snr3. ! queue ! fakesink \
 	hoft_256. ! queue ! lal_templatebank \
 		name=templatebank4 \
 		t-start=8 \
 		t-end=16 \
 		snr-length=$((256*8)) \
+	lal_matrixmixer \
+		name=snr4 \
 	templatebank4.src ! tee name=orthosnr4 ! $SINK \
 	templatebank4.sumofsquares ! queue max-size-time=96 ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
-	templatebank4.matrix ! fakesink \
+	templatebank4.matrix ! snr4.matrix \
+	orthosnr4. ! snr4.sink \
+	snr4. ! queue ! fakesink \
 	hoft_128. ! queue ! lal_templatebank \
 		name=templatebank5 \
 		t-start=16 \
 		t-end=32 \
 		snr-length=$((128*8)) \
+	lal_matrixmixer \
+		name=snr5 \
 	templatebank5.src ! tee name=orthosnr5 ! $SINK \
 	templatebank5.sumofsquares ! queue max-size-time=96 ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
-	templatebank5.matrix ! fakesink \
+	templatebank5.matrix ! snr5.matrix \
+	orthosnr5. ! snr5.sink \
+	snr5. ! queue ! fakesink \
 	hoft_128. ! queue ! lal_templatebank \
 		name=templatebank6 \
 		t-start=32 \
 		t-end=48 \
 		snr-length=$((128*8)) \
+	lal_matrixmixer \
+		name=snr6 \
 	templatebank6.src ! tee name=orthosnr6 ! $SINK \
 	templatebank6.sumofsquares ! queue max-size-time=96 ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
-	templatebank6.matrix ! fakesink \
+	templatebank6.matrix ! snr6.matrix \
+	orthosnr6. ! snr6.sink \
+	snr6. ! queue ! fakesink \
 	hoft_128. ! queue ! lal_templatebank \
 		name=templatebank7 \
 		t-start=48 \
 		t-end=64 \
 		snr-length=$((128*8)) \
+	lal_matrixmixer \
+		name=snr7 \
 	templatebank7.src ! tee name=orthosnr7 ! $SINK \
 	templatebank7.sumofsquares ! queue max-size-time=96 ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
-	templatebank7.matrix ! fakesink \
+	templatebank7.matrix ! snr7.matrix \
+	orthosnr7. ! snr7.sink \
+	snr7. ! queue ! fakesink \
