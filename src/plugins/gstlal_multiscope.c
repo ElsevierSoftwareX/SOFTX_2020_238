@@ -224,7 +224,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	gboolean is_discontinuity = FALSE;
 	GstFlowReturn result = GST_FLOW_OK;
-	double average_length = element->average_interval * element->sample_rate;
+	double average_length = element->average_interval * element->sample_rate * element->channels;
 	int trace_samples = trunc(element->trace_duration * element->sample_rate + 0.5);
 	int flush_samples = trunc(element->frame_interval * element->sample_rate + 0.5);
 
