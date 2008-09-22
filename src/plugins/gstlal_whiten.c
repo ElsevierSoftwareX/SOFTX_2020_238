@@ -61,6 +61,8 @@
 #include <lal/Units.h>
 #include <lal/LALComplex.h>
 #include <lal/Window.h>
+#include <lal/LIGOLwXML.h>
+#include <lal/LIGOLwXMLArray.h>
 
 
 /*
@@ -211,6 +213,8 @@ static REAL8FrequencySeries *make_iligo_psd(const GSTLALWhiten *element)
 
 static int get_psd(GSTLALWhiten *element)
 {
+	unsigned i;
+
 	XLALDestroyREAL8FrequencySeries(element->psd);
 	element->psd = NULL;
 
@@ -243,6 +247,23 @@ static int get_psd(GSTLALWhiten *element)
 		break;
 	}
 
+	/*
+	 * replace any infs with 0.  the whiten function that applies the
+	 * PSD treats a 0 in the PSD as an inf (it zeros the bin instead of
+	 * allowing a floating point divide-by-zero error), so
+	 * algebraically this works out.  more importantly, it allows an
+	 * average over time to work out (otherwise a bin at +inf stays
+	 * there forever).
+	 *
+	 * we can only get infs from model PSDs, for example from something
+	 * like the initial LIGO SRD, so this isn't normally a big deal.
+	 * real PSDs will never have them.
+	 */
+
+	for(i = 0; i < element->psd->data->length; i++)
+		if(isinf(element->psd->data->data[i]))
+			element->psd->data->data[i] = 0;
+
 	return 0;
 }
 
@@ -265,7 +286,8 @@ enum property {
 	ARG_PSDMODE = 1,
 	ARG_FILTER_LENGTH,
 	ARG_CONVOLUTION_LENGTH,
-	ARG_AVERAGE_SAMPLES
+	ARG_AVERAGE_SAMPLES,
+	ARG_XML_FILENAME
 };
 
 
@@ -290,6 +312,21 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 	case ARG_AVERAGE_SAMPLES:
 		element->psd_regressor->max_samples = g_value_get_int(value);
 		break;
+
+	case ARG_XML_FILENAME:
+		free(element->xml_filename);
+		element->xml_filename = g_value_dup_string(value);
+		XLALCloseLIGOLwXMLFile(element->xml_stream);
+		if(element->xml_filename) {
+			element->xml_stream = XLALOpenLIGOLwXMLFile(element->xml_filename);
+			if(!element->xml_stream) {
+				GST_ERROR("XLALOpenLIGOLwXMLFile() failed");
+				free(element->xml_filename);
+				element->xml_filename = NULL;
+			}
+		} else
+			element->xml_stream = NULL;
+		break;
 	}
 }
 
@@ -313,6 +350,10 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 
 	case ARG_AVERAGE_SAMPLES:
 		g_value_set_int(value, element->psd_regressor->max_samples);
+		break;
+
+	case ARG_XML_FILENAME:
+		g_value_set_string(value, element->xml_filename);
 		break;
 	}
 }
@@ -426,6 +467,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 				result = GST_FLOW_ERROR;
 				goto done;
 			}
+		}
+
+		if(element->xml_stream) {
+			if(XLALWriteLIGOLwXMLArrayREAL8FrequencySeries(element->xml_stream, "Recorded by GSTLAL element lal_whiten", element->psd))
+				GST_ERROR("XLALWriteLIGOLwXMLArrayREAL8FrequencySeries() failed");
 		}
 
 		/*
@@ -574,6 +620,10 @@ static void dispose(GObject * object)
 	XLALPSDRegressorFree(element->psd_regressor);
 	XLALDestroyREAL8FrequencySeries(element->psd);
 	XLALDestroyREAL8Sequence(element->tail);
+	free(element->xml_filename);
+	element->xml_filename = NULL;
+	XLALCloseLIGOLwXMLFile(element->xml_stream);
+	element->xml_stream = NULL;
 
 	G_OBJECT_CLASS(parent_class)->dispose(object);
 }
@@ -655,6 +705,7 @@ static void class_init(gpointer class, gpointer class_data)
 	g_object_class_install_property(gobject_class, ARG_FILTER_LENGTH, g_param_spec_double("filter-length", "Filter length", "Length of the whitening filter in seconds", 0, G_MAXDOUBLE, DEFAULT_FILTER_LENGTH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_CONVOLUTION_LENGTH, g_param_spec_double("convolution-length", "Convolution length", "Length of the FFT convolution in seconds", 0, G_MAXDOUBLE, DEFAULT_CONVOLUTION_LENGTH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_AVERAGE_SAMPLES, g_param_spec_int("average-samples", "Average samples", "Number of convolution-length intervals used in PSD average", 1, G_MAXINT, DEFAULT_AVERAGE_SAMPLES, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_XML_FILENAME, g_param_spec_string("xml-filename", "XML Filename", "Name of file into which will be dumped PSD snapshots (null = disable).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 
@@ -695,6 +746,8 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->psd_regressor = XLALPSDRegressorNew(DEFAULT_AVERAGE_SAMPLES);
 	element->psd = NULL;
 	element->tail = NULL;
+	element->xml_filename = NULL;
+	element->xml_stream = NULL;
 }
 
 

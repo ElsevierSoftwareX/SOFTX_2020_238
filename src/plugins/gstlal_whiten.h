@@ -28,6 +28,7 @@
 
 
 #include <lal/LALDatatypes.h>
+#include <lal/LIGOLwXML.h>
 #include <lal/TimeFreqFFT.h>
 
 
@@ -82,13 +83,12 @@ typedef struct {
 	GstPad *srcpad;
 
 	int sample_rate;
+	unsigned long next_sample;
+	GstClockTime adapter_head_timestamp;
 
 	double filter_length;
 	double convolution_length;
 	enum gstlal_psdmode_t psdmode;
-
-	unsigned long next_sample;
-	GstClockTime adapter_head_timestamp;
 
 	REAL8Window *window;
 	REAL8FFTPlan *fwdplan;
@@ -96,6 +96,9 @@ typedef struct {
 	LALPSDRegressor *psd_regressor;
 	REAL8FrequencySeries *psd;
 	REAL8Sequence *tail;
+
+	char *xml_filename;
+	LIGOLwXMLStream *xml_stream;
 } GSTLALWhiten;
 
 
