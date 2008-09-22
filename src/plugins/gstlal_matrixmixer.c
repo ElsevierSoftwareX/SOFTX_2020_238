@@ -106,9 +106,12 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	gboolean result = TRUE;
 
 	/*
-	 * get a modifiable copy of the caps
+	 * get a modifiable copy of the caps.  gst_caps_make_writable()
+	 * unref()s its argument so we have to ref() it first to keep it
+	 * valid.
 	 */
 
+	gst_caps_ref(caps);
 	caps = gst_caps_make_writable(caps);
 
 	/*
