@@ -28,7 +28,7 @@ SRC="lal_framesrc \
 SINK="queue max-size-time=96 ! lal_multiscope trace-duration=4.0 frame-interval=0.0625 average-interval=32.0 do-timestamp=false ! ffmpegcolorspace ! cairotimeoverlay ! autovideosink"
 #SINK="queue ! fakesink sync=false preroll-queue-len=1"
 
-PLAYBACK="adder ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=1e-3 ! audioconvert ! queue max-size-time=3 ! progressreport update-freq=1 ! alsasink"
+PLAYBACK="adder ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=1e-3 ! audioconvert ! queue max-size-time=3 ! alsasink"
 
 
 #
@@ -76,7 +76,7 @@ gst-launch --gst-debug-level=1 \
 	lal_matrixmixer \
 		name=snr1 \
 	templatebank1.src ! tee name=orthosnr1 ! $SINK \
-	templatebank1.sumofsquares ! queue max-size-time=64 ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
+	templatebank1.sumofsquares ! queue max-size-time=96 ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
 	templatebank1.matrix ! snr1.matrix \
 	orthosnr1. ! snr1.sink \
 	snr1. ! queue ! fakesink sync=false preroll-queue-len=1 \
