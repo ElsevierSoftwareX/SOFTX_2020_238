@@ -69,7 +69,7 @@ GType gstlal_psdmode_get_type(void);
 	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_WHITEN_TYPE, GSTLALWhitenClass))
 #define GST_IS_GSTLAL_WHITEN(obj) \
 	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_WHITEN_TYPE))
-#define GST_IS_GST_WHITEN_CLASS(klass) \
+#define GST_IS_GSTLAL_WHITEN_CLASS(klass) \
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_WHITEN_TYPE))
 
 
