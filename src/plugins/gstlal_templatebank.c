@@ -99,6 +99,11 @@
  */
 
 
+/**
+ * Create and destroy the orthonormal basis for the template bank.
+ */
+
+
 static void svd_destroy(GSTLALTemplateBank *element)
 {
 	if(element->U) {
@@ -124,12 +129,16 @@ static int svd_create(GSTLALTemplateBank *element, int sample_rate)
 {
 	int verbose = 1;
 
-	/* be sure we don't leak memory */
+	/*
+	 * be sure we don't leak memory
+	 */
 
 	svd_destroy(element);
 
-	/* clip t_start and t_end so that 0 <= t_start <= t_end <=
-	 * TEMPLATE_DURATION (both are unsigned so can't be negative) */
+	/*
+	 * clip t_start and t_end so that 0 <= t_start <= t_end <=
+	 * TEMPLATE_DURATION (both are unsigned so can't be negative)
+	 */
 
 	if(element->t_start > TEMPLATE_DURATION)
 		element->t_start = TEMPLATE_DURATION;
@@ -138,14 +147,24 @@ static int svd_create(GSTLALTemplateBank *element, int sample_rate)
 	else if(element->t_end > TEMPLATE_DURATION)
 		element->t_end = TEMPLATE_DURATION;
 
-	/* generate orthogonal template bank */
+	/*
+	 * generate orthonormal template bank
+	 */
 
 	generate_bank_svd(&element->U, &element->S, &element->V, &element->chifacs, CHIRPMASS_START, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / sample_rate, NUM_TEMPLATES, element->t_start, element->t_end, TEMPLATE_DURATION, TOLERANCE, verbose);
 
-	/* done */
+	/*
+	 * done
+	 */
 
 	return 0;
 }
+
+
+/**
+ * Transmit the mixer matrix to the mixer element, downstream in the
+ * pipeline.
+ */
 
 
 static GstFlowReturn push_mixer_matrix(GstPad *pad, gsl_matrix *matrix, GstClockTime timestamp)
@@ -177,7 +196,7 @@ static GstFlowReturn push_mixer_matrix(GstPad *pad, gsl_matrix *matrix, GstClock
 	 * Get a buffer from the mixer.
 	 */
 
-	result = gst_pad_alloc_buffer(pad, 0, matrix->size1 * matrix->size2 * sizeof(*matrix->data), GST_PAD_CAPS(pad), &buf);
+	result = gst_pad_alloc_buffer(pad, GST_BUFFER_OFFSET_NONE, matrix->size1 * matrix->size2 * sizeof(*matrix->data), GST_PAD_CAPS(pad), &buf);
 	if(result != GST_FLOW_OK) {
 		GST_ERROR("failure getting buffer from mixer");
 		goto done;
