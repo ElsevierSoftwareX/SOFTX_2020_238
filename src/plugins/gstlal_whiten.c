@@ -198,7 +198,7 @@ static REAL8FrequencySeries *make_iligo_psd(const GSTLALWhiten *element)
 		return NULL;
 
 	for(i = 0; i < psd->data->length; i++)
-		psd->data->data[i] = XLALLIGOIPsd(psd->f0 + i * psd->deltaF);
+		psd->data->data[i] = XLALLIGOIPsd(psd->f0 + i * psd->deltaF) / (2 * psd->deltaF);
 
 	return psd;
 }
@@ -222,20 +222,21 @@ static int get_psd(GSTLALWhiten *element)
 		if(!element->psd_regressor->n_samples) {
 			/* no data for the average yet, seed psd regressor
 			 * with initial LIGO SRD */
-			REAL8FrequencySeries *psd = make_iligo_psd(element);
-			if(!psd)
+			element->psd = make_iligo_psd(element);
+			if(!element->psd)
 				return -1;
-			if(XLALPSDRegressorSetPSD(element->psd_regressor, psd, element->psd_regressor->max_samples)) {
+			if(XLALPSDRegressorSetPSD(element->psd_regressor, element->psd, element->psd_regressor->max_samples)) {
 				GST_ERROR("XLALPSDRegressorSetPSD() failed");
-				XLALDestroyREAL8FrequencySeries(psd);
+				XLALDestroyREAL8FrequencySeries(element->psd);
+				element->psd = NULL;
 				return -1;
 			}
-			XLALDestroyREAL8FrequencySeries(psd);
-		}
-		element->psd = XLALPSDRegressorGetPSD(element->psd_regressor);
-		if(!element->psd) {
-			GST_ERROR("XLALPSDRegressorGetPSD() failed");
-			return -1;
+		} else {
+			element->psd = XLALPSDRegressorGetPSD(element->psd_regressor);
+			if(!element->psd) {
+				GST_ERROR("XLALPSDRegressorGetPSD() failed");
+				return -1;
+			}
 		}
 		break;
 	}
