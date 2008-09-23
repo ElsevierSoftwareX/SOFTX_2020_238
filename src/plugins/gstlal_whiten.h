@@ -27,6 +27,9 @@
 #include <gst/base/gstadapter.h>
 
 
+#include <gsl/gsl_spline.h>
+
+
 #include <lal/LALDatatypes.h>
 #include <lal/LIGOLwXML.h>
 #include <lal/TimeFreqFFT.h>
@@ -99,6 +102,9 @@ typedef struct {
 
 	char *xml_filename;
 	LIGOLwXMLStream *xml_stream;
+
+	char *compensation_psd_filename;
+	REAL8FrequencySeries *compensation_psd;
 } GSTLALWhiten;
 
 

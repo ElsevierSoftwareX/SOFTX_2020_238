@@ -70,6 +70,7 @@
  */
 
 
+#include <gstlal.h>
 #include <gstlal_whiten.h>
 
 
@@ -129,14 +130,6 @@ GType gstlal_psdmode_get_type(void)
  */
 
 
-static LALUnit lalStrainSquaredPerHertz(void)
-{
-	LALUnit unit;
-
-	return *XLALUnitMultiply(&unit, XLALUnitSquare(&unit, &lalStrainUnit), &lalSecondUnit);
-}
-
-
 static int make_window(GSTLALWhiten *element)
 {
 	unsigned transient = trunc(element->filter_length * element->sample_rate + 0.5);
@@ -182,7 +175,7 @@ static int make_fft_plans(GSTLALWhiten *element)
 static REAL8FrequencySeries *make_empty_psd(const GSTLALWhiten *element)
 {
 	LIGOTimeGPS gps_zero = {0, 0};
-	LALUnit strain_squared_per_hertz = lalStrainSquaredPerHertz();
+	LALUnit strain_squared_per_hertz = gstlal_lalStrainSquaredPerHertz();
 	unsigned segment_length = trunc(element->convolution_length * element->sample_rate + 0.5);
 	unsigned psd_length = segment_length / 2 + 1;
 	REAL8FrequencySeries *psd;
@@ -287,7 +280,8 @@ enum property {
 	ARG_FILTER_LENGTH,
 	ARG_CONVOLUTION_LENGTH,
 	ARG_AVERAGE_SAMPLES,
-	ARG_XML_FILENAME
+	ARG_XML_FILENAME,
+	ARG_COMPENSATION_PSD
 };
 
 
@@ -327,6 +321,13 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		} else
 			element->xml_stream = NULL;
 		break;
+
+	case ARG_COMPENSATION_PSD:
+		XLALDestroyREAL8FrequencySeries(element->compensation_psd);
+		element->compensation_psd = NULL;
+		free(element->compensation_psd_filename);
+		element->compensation_psd_filename = g_value_dup_string(value);
+		break;
 	}
 }
 
@@ -354,6 +355,10 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 
 	case ARG_XML_FILENAME:
 		g_value_set_string(value, element->xml_filename);
+		break;
+
+	case ARG_COMPENSATION_PSD:
+		g_value_set_string(value, element->compensation_psd_filename);
 		break;
 	}
 }
@@ -467,11 +472,35 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 				result = GST_FLOW_ERROR;
 				goto done;
 			}
+			if(element->xml_stream) {
+				if(XLALWriteLIGOLwXMLArrayREAL8FrequencySeries(element->xml_stream, "Recorded by GSTLAL element lal_whiten", element->psd))
+					GST_ERROR("XLALWriteLIGOLwXMLArrayREAL8FrequencySeries() failed");
+			}
 		}
 
-		if(element->xml_stream) {
-			if(XLALWriteLIGOLwXMLArrayREAL8FrequencySeries(element->xml_stream, "Recorded by GSTLAL element lal_whiten", element->psd))
-				GST_ERROR("XLALWriteLIGOLwXMLArrayREAL8FrequencySeries() failed");
+		/*
+		 * If we're compensating for a reference spectrum, make
+		 * sure we have one of those that's up-to-date as well.
+		 */
+
+		if(element->compensation_psd_filename) {
+			if(element->compensation_psd) {
+				if(element->compensation_psd->f0 != element->psd->f0 || element->compensation_psd->deltaF != element->psd->deltaF || element->compensation_psd->data->length != element->psd->data->length) {
+					/* reference spectrum doesn't match
+					 * current PSD, delete to induce a
+					 * new one to be loaded */
+					XLALDestroyREAL8FrequencySeries(element->compensation_psd);
+					element->compensation_psd = NULL;
+				}
+			}
+			if(!element->compensation_psd) {
+				element->compensation_psd = gstlal_get_reference_psd(element->compensation_psd_filename, element->psd->f0, element->psd->deltaF, element->psd->data->length);
+				if(!element->compensation_psd) {
+					result = GST_FLOW_ERROR;
+					goto done;
+				}
+				GST_INFO_OBJECT(element, "loaded reference PSD from \"%s\" with %d samples at %.16g Hz resolution spanning the frequency band %.16g Hz -- %.16g Hz", element->compensation_psd_filename, element->compensation_psd->data->length, element->compensation_psd->deltaF, element->compensation_psd->f0, element->compensation_psd->f0 + (element->compensation_psd->data->length - 1) * element->compensation_psd->deltaF);
+			}
 		}
 
 		/*
@@ -518,6 +547,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			GST_ERROR("XLALWhitenCOMPLEX16FrequencySeries() failed");
 			result = GST_FLOW_ERROR;
 			goto done;
+		}
+		if(element->compensation_psd) {
+			for(i = 0; i < tilde_segment->data->length; i++) {
+				if(element->psd->data->data[i] == 0)
+					tilde_segment->data->data[i] = LAL_COMPLEX16_ZERO;
+				else
+					tilde_segment->data->data[i] = XLALCOMPLEX16MulReal(tilde_segment->data->data[i], sqrt(element->compensation_psd->data->data[i] / element->psd->data->data[i]));
+			}
 		}
 
 		/*
@@ -611,9 +648,7 @@ static void dispose(GObject * object)
 	GSTLALWhiten *element = GSTLAL_WHITEN(object);
 
 	g_object_unref(element->adapter);
-	element->adapter = NULL;
 	gst_object_unref(element->srcpad);
-	element->srcpad = NULL;
 	XLALDestroyREAL8Window(element->window);
 	XLALDestroyREAL8FFTPlan(element->fwdplan);
 	XLALDestroyREAL8FFTPlan(element->revplan);
@@ -621,9 +656,9 @@ static void dispose(GObject * object)
 	XLALDestroyREAL8FrequencySeries(element->psd);
 	XLALDestroyREAL8Sequence(element->tail);
 	free(element->xml_filename);
-	element->xml_filename = NULL;
 	XLALCloseLIGOLwXMLFile(element->xml_stream);
-	element->xml_stream = NULL;
+	free(element->compensation_psd_filename);
+	XLALDestroyREAL8FrequencySeries(element->compensation_psd);
 
 	G_OBJECT_CLASS(parent_class)->dispose(object);
 }
@@ -706,6 +741,7 @@ static void class_init(gpointer class, gpointer class_data)
 	g_object_class_install_property(gobject_class, ARG_CONVOLUTION_LENGTH, g_param_spec_double("convolution-length", "Convolution length", "Length of the FFT convolution in seconds", 0, G_MAXDOUBLE, DEFAULT_CONVOLUTION_LENGTH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_AVERAGE_SAMPLES, g_param_spec_int("average-samples", "Average samples", "Number of convolution-length intervals used in PSD average", 1, G_MAXINT, DEFAULT_AVERAGE_SAMPLES, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_XML_FILENAME, g_param_spec_string("xml-filename", "XML Filename", "Name of file into which will be dumped PSD snapshots (null = disable).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_COMPENSATION_PSD, g_param_spec_string("compensation-psd", "Filename", "Name of text file from which to read reference spectrum to be compensated for by over-whitening (null = disable).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 
@@ -748,6 +784,8 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->tail = NULL;
 	element->xml_filename = NULL;
 	element->xml_stream = NULL;
+	element->compensation_psd_filename = NULL;
+	element->compensation_psd = NULL;
 }
 
 

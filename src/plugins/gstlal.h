@@ -26,15 +26,29 @@
 #include <gst/gst.h>
 
 
+#include <lal/LALDatatypes.h>
+#include <lal/Units.h>
+
+
 G_BEGIN_DECLS
 
 /*
- * hack to work on ancient CentOS
+ * Hack to work on ancient CentOS
  */
 
 #ifndef G_PARAM_STATIC_STRINGS
 #define G_PARAM_STATIC_STRINGS (G_PARAM_STATIC_NAME | G_PARAM_STATIC_NICK | G_PARAM_STATIC_BLURB)
 #endif
+
+
+/*
+ * Function prototypes
+ */
+
+
+LALUnit gstlal_lalStrainSquaredPerHertz(void);
+REAL8FrequencySeries *gstlal_read_reference_psd(const char *);
+REAL8FrequencySeries *gstlal_get_reference_psd(const char *, double, double, size_t);
 
 
 G_END_DECLS

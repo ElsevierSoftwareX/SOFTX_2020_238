@@ -28,7 +28,46 @@
  */
 
 
+/*
+ * Stuff from the C library
+ */
+
+
+#include <math.h>
+#include <stdio.h>
+
+
+/*
+ * Stuff from GStreamer
+ */
+
+
 #include <gst/gst.h>
+
+
+/*
+ * stuff from GSL
+ */
+
+
+#include <gsl/gsl_spline.h>
+
+
+/*
+ * Stuff from LAL
+ */
+
+
+#include <lal/Date.h>
+#include <lal/LALDatatypes.h>
+#include <lal/Sequence.h>
+#include <lal/FrequencySeries.h>
+#include <lal/Units.h>
+
+
+/*
+ * Our own stuff
+ */
 
 
 #include <gstlal.h>
@@ -39,6 +78,178 @@
 #include <gstlal_simulation.h>
 #include <gstlal_whiten.h>
 #include <gstadder.h>
+
+
+/*
+ * ============================================================================
+ *
+ *                             Utility Functions
+ *
+ * ============================================================================
+ */
+
+
+/**
+ * Return the LALUnit structure equal to "strain^2 / Hz".
+ */
+
+
+LALUnit gstlal_lalStrainSquaredPerHertz(void)
+{
+	LALUnit unit;
+
+	return *XLALUnitMultiply(&unit, XLALUnitSquare(&unit, &lalStrainUnit), &lalSecondUnit);
+}
+
+
+/**
+ * Read a PSD from a spectrum file.  Ugly file format, but if everything
+ * uses *this* function to read it, we can switch to something more cool
+ * later.
+ */
+
+
+REAL8FrequencySeries *gstlal_read_reference_psd(const char *filename)
+{
+	LIGOTimeGPS gps_zero = {0, 0};
+	LALUnit strain_squared_per_hertz = gstlal_lalStrainSquaredPerHertz();
+	REAL8FrequencySeries *psd;
+	FILE *file;
+	unsigned i;
+
+	file = fopen(filename, "r");
+	if(!file) {
+		GST_ERROR("fopen(\"%s\") failed", filename);
+		return NULL;
+	}
+
+	psd = XLALCreateREAL8FrequencySeries("PSD", &gps_zero, 0.0, 0.0, &strain_squared_per_hertz, 0);
+	if(!psd) {
+		GST_ERROR("XLALCreateREAL8FrequencySeries() failed");
+		fclose(file);
+		return NULL;
+	}
+
+	for(i = 0; 1; i++) {
+		char line[100];	/* argh:  hard-coded size = BAD BAD BAD */
+		double f, amp;
+
+		if(!fgets(line, sizeof(line), file)) {
+			if(feof(file)) {
+				fclose(file);
+				return psd;
+			} else {
+				GST_ERROR("fgets() failed");
+				fclose(file);
+				XLALDestroyREAL8FrequencySeries(psd);
+				return NULL;
+			}
+		}
+
+		sscanf(line, "%lg %lg", &f, &amp);
+
+		if(!XLALResizeREAL8Sequence(psd->data, 0, i + 1)) {
+			GST_ERROR("XLALResizeREAL8Sequence() failed");
+			fclose(file);
+			XLALDestroyREAL8FrequencySeries(psd);
+			return NULL;
+		}
+
+		if(i == 0)
+			psd->f0 = f;
+		else
+			psd->deltaF = (f - psd->f0) / i;
+		/* replace any infs with 0 */
+		psd->data->data[i] = isinf(amp) ? 0 : amp;
+	}
+}
+
+
+/**
+ * Retrieve a PSD from a spectrum file, and re-interpolate to the desired
+ * frequency band and resolution.
+ */
+
+
+REAL8FrequencySeries *gstlal_get_reference_psd(const char *filename, double f0, double deltaF, size_t length)
+{
+	REAL8FrequencySeries *psd;
+	double *f;
+	gsl_spline *spline;
+	gsl_interp_accel *accel;
+	unsigned i;
+
+	/*
+	 * load the reference PSD
+	 */
+
+	psd = gstlal_read_reference_psd(filename);
+	if(!psd)
+		return NULL;
+
+	/*
+	 * feelin' lucky?
+	 */
+
+	if(psd->f0 == f0 && psd->deltaF == deltaF && psd->data->length == length)
+		return psd;
+
+	/*
+	 * construct an interpolator
+	 */
+
+	f = malloc(psd->data->length * sizeof(*f));
+	spline = gsl_spline_alloc(gsl_interp_linear, length);
+	accel = gsl_interp_accel_alloc();
+	if(!f || !spline || !accel) {
+		GST_ERROR("gsl_spline_alloc() or gsl_interp_accel_alloc() failed");
+		XLALDestroyREAL8FrequencySeries(psd);
+		free(f);
+		if(spline)
+			gsl_spline_free(spline);
+		if(accel)
+			gsl_interp_accel_free(accel);
+		return NULL;
+	}
+	for(i = 0; i < psd->data->length; i++)
+		f[i] = psd->f0 + i * psd->deltaF;
+	if(gsl_spline_init(spline, f, psd->data->data, psd->data->length)) {
+		XLALDestroyREAL8FrequencySeries(psd);
+		free(f);
+		gsl_spline_free(spline);
+		gsl_interp_accel_free(accel);
+		return NULL;
+	}
+
+	/*
+	 * repopulate reference PSD from interpolator to match desired
+	 * resolution and size
+	 *
+	 * FIXME:  what if part of the desired frequency band lies outside
+	 * the reference spectrum loaded from the file?
+	 */
+
+	if(!XLALResizeREAL8Sequence(psd->data, 0, length)) {
+		XLALDestroyREAL8FrequencySeries(psd);
+		free(f);
+		gsl_spline_free(spline);
+		gsl_interp_accel_free(accel);
+		return NULL;
+	}
+	psd->f0 = f0;
+	psd->deltaF = deltaF;
+	for(i = 0; i < psd->data->length; i++)
+		psd->data->data[i] = gsl_spline_eval(spline, psd->f0 + i * psd->deltaF, accel);
+
+	/*
+	 * done
+	 */
+
+	free(f);
+	gsl_spline_free(spline);
+	gsl_interp_accel_free(accel);
+	return psd;
+}
 
 
 /*
