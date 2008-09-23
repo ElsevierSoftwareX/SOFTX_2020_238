@@ -324,7 +324,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
-	gboolean is_discontinuity = FALSE;
 	GstFlowReturn result = GST_FLOW_OK;
 	int output_length;
 	int i;
@@ -356,7 +355,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Now that we know how many channels we'll produce, set
 		 * the srcpad's caps properly.  gst_caps_make_writable()
 		 * unref()s its argument so we have to ref() it first to
-		 * keep it valid.
+		 * avoid free()ing it (we don't own it).
 		 */
 
 		success = gst_pad_set_caps(element->sumsquarespad, caps);
@@ -382,7 +381,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	if(GST_BUFFER_IS_DISCONT(sinkbuf)) {
 		GstBuffer *zeros;
 
-		is_discontinuity = TRUE;
 		gst_adapter_clear(element->adapter);
 
 		/*
@@ -399,6 +397,41 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 		memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
 		gst_adapter_push(element->adapter, zeros);
+
+		/*
+		 * Push GAP buffers of zeros out both src pads to pad the
+		 * output streams.
+		 */
+
+		if(element->t_start) {
+			result = gst_pad_alloc_buffer(element->sumsquarespad, element->next_sample, element->t_start * element->sample_rate * sizeof(*element->U->data), GST_PAD_CAPS(element->sumsquarespad), &zeros);
+			if(result != GST_FLOW_OK)
+				goto done;
+			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
+			gst_buffer_copy_metadata(zeros, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
+			GST_BUFFER_FLAG_SET(zeros, GST_BUFFER_FLAG_GAP);
+			GST_BUFFER_OFFSET_END(zeros) = GST_BUFFER_OFFSET(zeros) + element->t_start * element->sample_rate - 1;
+			GST_BUFFER_DURATION(zeros) = element->t_start * GST_SECOND;
+
+			result = gst_pad_push(element->sumsquarespad, zeros);
+			if(result != GST_FLOW_OK)
+				goto done;
+
+			result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, element->U->size1 * element->t_start * element->sample_rate * sizeof(*element->U->data), GST_PAD_CAPS(element->srcpad), &zeros);
+			if(result != GST_FLOW_OK)
+				goto done;
+			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
+			gst_buffer_copy_metadata(zeros, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
+			GST_BUFFER_FLAG_SET(zeros, GST_BUFFER_FLAG_GAP);
+			GST_BUFFER_OFFSET_END(zeros) = GST_BUFFER_OFFSET(zeros) + element->t_start * element->sample_rate - 1;
+			GST_BUFFER_DURATION(zeros) = element->t_start * GST_SECOND;
+
+			result = gst_pad_push(element->srcpad, zeros);
+			if(result != GST_FLOW_OK)
+				goto done;
+
+			element->next_sample += element->t_start * element->sample_rate;
+		}
 
 		/*
 		 * The time of the start of the h(t) buffer from which the
@@ -474,11 +507,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Set the metadata.
 		 */
 
-		if(is_discontinuity) {
-			GST_BUFFER_FLAG_SET(orthogonal_snr_sum_squares_buf, GST_BUFFER_FLAG_DISCONT);
-			GST_BUFFER_FLAG_SET(orthogonal_snr_buf, GST_BUFFER_FLAG_DISCONT);
-			is_discontinuity = FALSE;
-		}
 		GST_BUFFER_OFFSET_END(orthogonal_snr_sum_squares_buf) = GST_BUFFER_OFFSET_END(orthogonal_snr_buf) = GST_BUFFER_OFFSET(orthogonal_snr_buf) + output_length - 1;
 		GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) = GST_BUFFER_TIMESTAMP(orthogonal_snr_buf) = element->output_timestamp;
 		GST_BUFFER_DURATION(orthogonal_snr_sum_squares_buf) = GST_BUFFER_DURATION(orthogonal_snr_buf) = output_length * GST_SECOND / element->sample_rate;
