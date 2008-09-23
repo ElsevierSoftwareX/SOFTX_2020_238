@@ -234,6 +234,11 @@ done:
 
 
 /*
+ * Project some input data onto the template bank
+ */
+
+
+/*
  * ============================================================================
  *
  *                             GStreamer Element
@@ -371,13 +376,24 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	/*
-	 * Check for a discontinuity
+	 * Check for a discontinuity.
 	 */
 
 	if(GST_BUFFER_IS_DISCONT(sinkbuf)) {
 		is_discontinuity = TRUE;
 		gst_adapter_clear(element->adapter);
-		element->adapter_head_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);
+
+		/*
+		 * The time of the start of the h(t) buffer from which the
+		 * SNR buffer will be constructed is
+		 * GST_BUFFER_TIMESTAMP(sinkbuf).  Relative to the
+		 * time-of-coalescence --- the "time" of the template ---
+		 * the first sample of the template vector is at -t_end + 1
+		 * * deltaT.  The "time" of an SNR sample is, therefore,
+		 * the start of the h(t) buffer + t_end - 1*deltaT.
+		 */
+
+		element->output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf) + element->t_end * GST_SECOND - GST_SECOND / element->sample_rate;
 	}
 
 	/*
@@ -433,14 +449,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		orthogonal_snr_sum_squares = gsl_vector_view_array((double *) GST_BUFFER_DATA(orthogonal_snr_sum_squares_buf), output_length);
 
 		/*
-		 * Set the metadata.  The time of the start of the h(t)
-		 * buffer from which the orthogonal SNR buffer has been
-		 * constructed is element->adapter_head_timestamp.
-		 * Relative to the time-of-coalescence --- the "time" of
-		 * the template --- the first sample of the orthogonal
-		 * template vector is at -t_end + 1 * deltaT.  The "time"
-		 * of an SNR sample is, therefore, the start of the h(t)
-		 * buffer + t_end - 1*deltaT.
+		 * Set the metadata.
 		 */
 
 		if(is_discontinuity) {
@@ -449,7 +458,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			is_discontinuity = FALSE;
 		}
 		GST_BUFFER_OFFSET_END(orthogonal_snr_sum_squares_buf) = GST_BUFFER_OFFSET_END(orthogonal_snr_buf) = GST_BUFFER_OFFSET(orthogonal_snr_buf) + output_length - 1;
-		GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) = GST_BUFFER_TIMESTAMP(orthogonal_snr_buf) = element->adapter_head_timestamp + element->t_end * GST_SECOND - GST_SECOND / element->sample_rate;
+		GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) = GST_BUFFER_TIMESTAMP(orthogonal_snr_buf) = element->output_timestamp;
 		GST_BUFFER_DURATION(orthogonal_snr_sum_squares_buf) = GST_BUFFER_DURATION(orthogonal_snr_buf) = output_length * GST_SECOND / element->sample_rate;
 
 		/*
@@ -509,7 +518,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		gst_adapter_flush(element->adapter, output_length * sizeof(*time_series.vector.data));
-		element->adapter_head_timestamp += (GstClockTime) output_length * GST_SECOND / element->sample_rate;
+		element->output_timestamp += (GstClockTime) output_length * GST_SECOND / element->sample_rate;
 		element->next_sample += output_length;
 	}
 
@@ -700,7 +709,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->snr_length = DEFAULT_SNR_LENGTH;
 
 	element->next_sample = 0;
-	element->adapter_head_timestamp = 0;
+	element->output_timestamp = 0;
 
 	element->U = NULL;
 	element->S = NULL;
