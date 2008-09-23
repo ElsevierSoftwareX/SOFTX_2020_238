@@ -47,6 +47,7 @@ gst-launch --gst-debug-level=1 \
 		filter-length=4 \
 		convolution-length=16 \
 		average-samples=256 \
+		compensation-psd=reference_psd.txt \
 	! tee name=hoft_white \
 	! audioresample \
 	! audio/x-raw-float, rate=2048 \
