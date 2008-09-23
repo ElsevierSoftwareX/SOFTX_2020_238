@@ -238,8 +238,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, &input_channels.matrix, &element->mixmatrix.matrix, 0, &output_channels.matrix);
-	} else
+	} else {
+		/*
+		 * Just zero the output
+		 */
+
 		memset(GST_BUFFER_DATA(srcbuf), 0, GST_BUFFER_SIZE(srcbuf));
+	}
 
 	g_mutex_unlock(element->mixmatrix_lock);
 
