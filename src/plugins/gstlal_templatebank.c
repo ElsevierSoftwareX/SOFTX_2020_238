@@ -380,20 +380,42 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(GST_BUFFER_IS_DISCONT(sinkbuf)) {
+		GstBuffer *zeros;
+
 		is_discontinuity = TRUE;
 		gst_adapter_clear(element->adapter);
 
 		/*
-		 * The time of the start of the h(t) buffer from which the
-		 * SNR buffer will be constructed is
-		 * GST_BUFFER_TIMESTAMP(sinkbuf).  Relative to the
-		 * time-of-coalescence --- the "time" of the template ---
-		 * the first sample of the template vector is at -t_end + 1
-		 * * deltaT.  The "time" of an SNR sample is, therefore,
-		 * the start of the h(t) buffer + t_end - 1*deltaT.
+		 * Pad the adapter with enough 0s to accomodate the
+		 * template minus 1 sample, so that the first SNR sample
+		 * generated is for when the first input sample intersects
+		 * the start of the template.
 		 */
 
-		element->output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf) + element->t_end * GST_SECOND - GST_SECOND / element->sample_rate;
+		zeros = gst_buffer_try_new_and_alloc((element->U->size1 - 1) * sizeof(*element->U->data));
+		if(!zeros) {
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
+		memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
+		gst_adapter_push(element->adapter, zeros);
+
+		/*
+		 * The time of the start of the h(t) buffer from which the
+		 * SNR buffer will be constructed is
+		 * GST_BUFFER_TIMESTAMP(sinkbuf) - (element->U->size1 - 1)
+		 * / sample_rate.  Relative to the time-of-coalescence ---
+		 * the "time" of the template --- the first sample of the
+		 * template vector is at -t_end + 1 * deltaT.  The "time"
+		 * of an SNR sample is, therefore, the start of the h(t)
+		 * buffer + t_end - 1*deltaT - (element->U->size1 -
+		 * 1)*deltaT = buffer + t_end - element->U->size1*deltaT =
+		 * buffer + t_start.
+		 *
+		 * FIXME:  that explanation sucks.  draw a picture.
+		 */
+
+		element->output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf) + GST_SECOND * element->t_start;
 	}
 
 	/*
