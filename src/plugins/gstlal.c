@@ -91,6 +91,36 @@
  */
 
 
+/*
+ * Prefix a channel name with the instrument name.  I.e., turn "H1" and
+ * "LSC-STRAIN" into "H1:LSC-STRAIN".  If either instrument or channel_name
+ * is NULL, then the corresponding part of the result is left blank and the
+ * colon is omited.  The return value is NULL on failure or a
+ * newly-allocated string.   The calling code should free() the string when
+ * finished with it.
+ */
+
+
+char *gstlal_build_full_channel_name(const char *instrument, const char *channel_name)
+{
+	char *full_channel_name;
+	int len = 2;	/* for ":" and null terminator */
+
+	if(instrument)
+		len += strlen(instrument);
+	if(channel_name)
+		len += strlen(channel_name);
+
+	full_channel_name = malloc(len * sizeof(*full_channel_name));
+	if(!full_channel_name)
+		return NULL;
+
+	snprintf(full_channel_name, len, instrument && channel_name ? "%s:%s" : "%s%s", instrument ? instrument : "", channel_name ? channel_name : "");
+
+	return full_channel_name;
+}
+
+
 /**
  * Wrap a GstBuffer in a REAL8TimeSeries.  The time series's data->data
  * pointer points to the GstBuffer's own data, so this pointer must not be

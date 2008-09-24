@@ -32,9 +32,11 @@
 
 G_BEGIN_DECLS
 
+
 /*
  * Hack to work on ancient CentOS
  */
+
 
 #ifndef G_PARAM_STATIC_STRINGS
 #define G_PARAM_STATIC_STRINGS (G_PARAM_STATIC_NAME | G_PARAM_STATIC_NICK | G_PARAM_STATIC_BLURB)
@@ -46,6 +48,7 @@ G_BEGIN_DECLS
  */
 
 
+char *gstlal_build_full_channel_name(const char *, const char *);
 REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *);
 LALUnit gstlal_lalStrainSquaredPerHertz(void);
 REAL8FrequencySeries *gstlal_read_reference_psd(const char *);
