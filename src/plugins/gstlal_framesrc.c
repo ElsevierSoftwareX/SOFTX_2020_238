@@ -384,13 +384,13 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	case ARG_SRC_START_TIME_GPS:
 		if(XLALStrToGPS(&element->start_time, g_value_get_string(value), NULL) < 0) {
-			GST_ERROR("invalid start_time_gps \"%s\"", g_value_get_string(value));
+			GST_ERROR("invalid start-time-gps \"%s\"", g_value_get_string(value));
 		}
 		break;
 
 	case ARG_SRC_STOP_TIME_GPS:
 		if(XLALStrToGPS(&element->stop_time, g_value_get_string(value), NULL) < 0) {
-			GST_ERROR("invalid stop_time_gps \"%s\"", g_value_get_string(value));
+			GST_ERROR("invalid stop-time-gps \"%s\"", g_value_get_string(value));
 		}
 		break;
 	}
