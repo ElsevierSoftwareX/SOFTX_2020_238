@@ -318,11 +318,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 {
 	GSTLALSimulation *element = GSTLAL_SIMULATION(gst_pad_get_parent(pad));
-	GstCaps *caps = gst_buffer_get_caps(buf);
 	GstFlowReturn result = GST_FLOW_OK;
-	const char *instrument;
-	LIGOTimeGPS epoch;
-	double deltaT;
 	REAL8TimeSeries *h;
 
 	/*
@@ -330,9 +326,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 */
 
 	if(!element->injection_document) {
-		/* FIXME:  hard-coded times, bad bad bad */
-		LIGOTimeGPS start = {-999999999, 0};
-		LIGOTimeGPS end = {+999999999, 0};
+		LIGOTimeGPS start;
+		LIGOTimeGPS end;
+		/* earliest and latest possible LIGOTimeGPS */
+		/* FIXME:  hard-coded = BAD BAD BAD */
+		XLALINT8NSToGPS(&start, (INT8) 1 << 63);
+		XLALINT8NSToGPS(&end, ((INT8) 1 << 63) - 1);
 		element->injection_document = load_injection_document(element->xml_location, start, end);
 		if(!element->injection_document) {
 			GST_ERROR("error loading \"%s\"", element->xml_location);
@@ -342,17 +341,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	}
 
 	/*
-	 * Wrap buffer in a REAL8TimeSeries by creating a 0 length time
-	 * series, free()ing the data, and pointing it at the buffer's
-	 * contents instead.
+	 * Wrap buffer in a LAL REAL8TimeSeries.
 	 */
 
-	instrument = gst_structure_get_string(gst_caps_get_structure(caps, 0), "instrument");
-	XLALINT8NSToGPS(&epoch, GST_BUFFER_TIMESTAMP(buf));
-	deltaT = 1.0 / g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
-	h = XLALCreateREAL8TimeSeries(instrument, &epoch, 0.0, deltaT, &lalStrainUnit, 0);
-	free(h->data->data);
-	h->data->data = (double *) GST_BUFFER_DATA(buf);
+	h = gstlal_REAL8TimeSeries_from_buffer(buf);
+	if(!h) {
+		/* FIXME: handle error */
+	}
 
 	/*
 	 * Add injections
@@ -381,7 +376,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 */
 
 done:
-	gst_caps_unref(caps);
 	gst_object_unref(element);
 	return result;
 }
