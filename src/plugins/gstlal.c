@@ -61,6 +61,7 @@
 #include <lal/Date.h>
 #include <lal/LALDatatypes.h>
 #include <lal/Sequence.h>
+#include <lal/TimeSeries.h>
 #include <lal/FrequencySeries.h>
 #include <lal/Units.h>
 
@@ -88,6 +89,75 @@
  *
  * ============================================================================
  */
+
+
+/**
+ * Wrap a GstBuffer in a REAL8TimeSeries.  The time series's data->data
+ * pointer points to the GstBuffer's own data, so this pointer must not be
+ * freed.  That means it must be set to NULL before passing the time series
+ * to the destroy function.
+ *
+ * Example:
+ *
+ * REAL8TimeSeries *series;
+ *
+ * series = gstlal_REAL8TimeSeries_from_buffer(buf);
+ * if(!series)
+ * 	handle_error();
+ *
+ * blah_blah_blah();
+ *
+ * series->data->data = NULL;
+ * XLALDestroyREAL8TimeSeries(series);
+ */
+
+
+REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf)
+{
+	GstCaps *caps = gst_buffer_get_caps(buf);
+	const char *instrument;
+	const char *channel;
+	LIGOTimeGPS epoch;
+	double deltaT;
+	REAL8TimeSeries *series;
+
+	/*
+	 * Retrieve the instrument, channel name, and sample rate
+	 */
+
+	instrument = gst_structure_get_string(gst_caps_get_structure(caps, 0), "instrument");
+	channel = gst_structure_get_string(gst_caps_get_structure(caps, 0), "channel");
+	deltaT = 1.0 / g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
+
+	/*
+	 * Retrieve the epoch
+	 */
+
+	XLALINT8NSToGPS(&epoch, GST_BUFFER_TIMESTAMP(buf));
+
+	/*
+	 * Build a zero-length time series with the correct metadata
+	 */
+
+	series = XLALCreateREAL8TimeSeries(instrument, &epoch, 0.0, deltaT, &lalStrainUnit, 0);
+	if(!series)
+		goto done;
+
+	/*
+	 * Replace the time series' data pointer with the GstBuffer's
+	 */
+
+	free(series->data->data);
+	series->data->data = (double *) GST_BUFFER_DATA(buf);
+
+	/*
+	 * Done.
+	 */
+
+done:
+	gst_caps_unref(caps);
+	return series;
+}
 
 
 /**
