@@ -201,8 +201,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 * Try a setcaps on the src pad
 	 */
 
-	caps = gst_pad_get_allowed_caps(element->srcpad);
-	caps = gst_caps_make_writable(caps);
+	caps = gst_caps_make_writable(gst_pad_get_allowed_caps(element->srcpad));
 	gst_caps_do_simplify(caps);
 	gst_caps_set_simple(caps, "framerate", GST_TYPE_FRACTION, 1024, (int) (element->trace_duration * 1024), NULL);
 	result = gst_pad_set_caps(element->srcpad, caps);
