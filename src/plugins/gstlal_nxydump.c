@@ -209,7 +209,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * of this buffer, clipped to the buffer edges.
 	 */
 
-	if(GST_BUFFER_TIMESTAMP(sinkbuf) != GST_CLOCK_TIME_NONE) {
+	if(GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf)) {
 		start = timestamp_to_sample_clipped(GST_BUFFER_TIMESTAMP(sinkbuf), samples, element->sample_rate, element->start_time);
 		stop = timestamp_to_sample_clipped(GST_BUFFER_TIMESTAMP(sinkbuf), samples, element->sample_rate, element->stop_time);
 	} else {
@@ -261,6 +261,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET_NONE;
 	GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + start * GST_SECOND / element->sample_rate;
 	GST_BUFFER_DURATION(srcbuf) = (stop - start) * GST_SECOND / element->sample_rate;
+	gst_caps_ref(GST_PAD_CAPS(element->srcpad));
 	gst_buffer_set_caps(srcbuf, GST_PAD_CAPS(element->srcpad));
 
 	/*
@@ -273,12 +274,17 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	for(i = start; i < stop; i++) {
 		GstClockTime t = GST_BUFFER_TIMESTAMP(sinkbuf) + GST_SECOND * i / element->sample_rate;
 
-		if((guint8 *) location - GST_BUFFER_DATA(srcbuf) + 1000 >= GST_BUFFER_SIZE(srcbuf)) {
-			guint8 *new = realloc(GST_BUFFER_DATA(srcbuf), GST_BUFFER_SIZE(srcbuf) + 1024);
-			if(!new)
-				break;
+		if((guint8 *) location - GST_BUFFER_DATA(srcbuf) + (channels + 1) * 24 + 1000 >= GST_BUFFER_SIZE(srcbuf)) {
+			int increment = (channels + 1) * 24 + 1024;
+			guint8 *new = realloc(GST_BUFFER_DATA(srcbuf), GST_BUFFER_SIZE(srcbuf) + increment);
+			if(!new) {
+				GST_ERROR("buffer resize failed");
+				gst_buffer_unref(srcbuf);
+				result = GST_FLOW_ERROR;
+				goto done;
+			}
 			GST_BUFFER_DATA(srcbuf) = GST_BUFFER_MALLOCDATA(srcbuf) = new;
-			GST_BUFFER_SIZE(srcbuf) += 1024;
+			GST_BUFFER_SIZE(srcbuf) += increment;
 		}
 
 		location += sprintf(location, "%d.%09u", (int) (t / GST_SECOND), (unsigned) (t % GST_SECOND));
