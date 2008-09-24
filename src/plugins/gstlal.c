@@ -186,7 +186,7 @@ REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf)
 	 * manually set the time series' length.
 	 */
 
-	free(series->data->data);
+	XLALFree(series->data->data);
 	series->data->data = (double *) GST_BUFFER_DATA(buf);
 	series->data->length = length;
 
