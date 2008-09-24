@@ -310,6 +310,8 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 
 	element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 
+	result = gst_pad_set_caps(element->sumsquarespad, caps);
+
 	gst_object_unref(element);
 	return result;
 }
@@ -323,7 +325,6 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
-	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	GstFlowReturn result = GST_FLOW_OK;
 	int output_length;
 	int i;
@@ -334,7 +335,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(!element->U) {
-		GstCaps *srccaps;
+		GstCaps *caps;
 		gboolean success;
 
 		/*
@@ -353,21 +354,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		/*
 		 * Now that we know how many channels we'll produce, set
-		 * the srcpad's caps properly.  gst_caps_make_writable()
-		 * unref()s its argument so we have to ref() it first to
-		 * avoid free()ing it (we don't own it).
+		 * the srcpad's caps.  gst_caps_make_writable() unref()s
+		 * its argument.
 		 */
 
-		success = gst_pad_set_caps(element->sumsquarespad, caps);
-		if(success != TRUE) {
-			result = GST_FLOW_NOT_NEGOTIATED;
-			goto done;
-		}
-		gst_caps_ref(caps);
-		srccaps = gst_caps_make_writable(caps);
-		gst_caps_set_simple(srccaps, "channels", G_TYPE_INT, element->U->size1, NULL);
-		success = gst_pad_set_caps(element->srcpad, srccaps);
-		gst_caps_unref(srccaps);
+		caps = gst_caps_make_writable(gst_buffer_get_caps(sinkbuf));
+		gst_caps_set_simple(caps, "channels", G_TYPE_INT, element->U->size1, NULL);
+		success = gst_pad_set_caps(element->srcpad, caps);
+		gst_caps_unref(caps);
 		if(success != TRUE) {
 			result = GST_FLOW_NOT_NEGOTIATED;
 			goto done;
@@ -577,7 +571,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 done:
-	gst_caps_unref(caps);
 	gst_object_unref(element);
 	return result;
 }
