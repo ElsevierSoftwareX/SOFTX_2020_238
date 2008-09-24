@@ -64,6 +64,7 @@
 #include <lal/TimeSeries.h>
 #include <lal/FrequencySeries.h>
 #include <lal/Units.h>
+#include <lal/XLALError.h>
 
 
 /*
@@ -388,10 +389,25 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{NULL, NULL},
 	};
 
-	/* tell gstreamer about the elements */
+	/*
+	 * Tell GStreamer about the elements.
+	 */
+
 	for(element = elements; element->name; element++)
 		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->type()))
 			return FALSE;
+
+	/*
+	 * Set the LAL debug level.
+	 */
+
+	lalDebugLevel = LALINFO | LALWARNING | LALERROR;
+	XLALSetErrorHandler(XLALSetSilentErrorHandler);
+
+	/*
+	 * Done.
+	 */
+
 	return TRUE;
 }
 
