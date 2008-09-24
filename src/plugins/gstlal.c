@@ -145,8 +145,7 @@ char *gstlal_build_full_channel_name(const char *instrument, const char *channel
 REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf)
 {
 	GstCaps *caps = gst_buffer_get_caps(buf);
-	const char *instrument;
-	const char *channel;
+	char *name;
 	LIGOTimeGPS epoch;
 	LALUnit units;
 	double deltaT;
@@ -158,8 +157,7 @@ REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf)
 	 * from the caps.
 	 */
 
-	instrument = gst_structure_get_string(gst_caps_get_structure(caps, 0), "instrument");
-	channel = gst_structure_get_string(gst_caps_get_structure(caps, 0), "channel");
+	name = gstlal_build_full_channel_name(gst_structure_get_string(gst_caps_get_structure(caps, 0), "instrument"), gst_structure_get_string(gst_caps_get_structure(caps, 0), "channel"));
 	deltaT = 1.0 / g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 	if(!XLALParseUnitString(&units, gst_structure_get_string(gst_caps_get_structure(caps, 0), "units"))) {
 		/* FIXME:  handle error */
@@ -177,7 +175,8 @@ REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf)
 	 * Build a zero-length time series with the correct metadata
 	 */
 
-	series = XLALCreateREAL8TimeSeries(instrument, &epoch, 0.0, deltaT, &units, 0);
+	series = XLALCreateREAL8TimeSeries(name, &epoch, 0.0, deltaT, &units, 0);
+	free(name);
 	if(!series)
 		goto done;
 
