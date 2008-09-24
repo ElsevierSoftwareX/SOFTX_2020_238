@@ -401,7 +401,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 	 * Set the LAL debug level.
 	 */
 
-	lalDebugLevel = LALINFO | LALWARNING | LALERROR;
+	lalDebugLevel = LALINFO | LALWARNING | LALERROR | LALNMEMDBG | LALNMEMPAD | LALNMEMTRK;
 	XLALSetErrorHandler(XLALSetSilentErrorHandler);
 
 	/*
