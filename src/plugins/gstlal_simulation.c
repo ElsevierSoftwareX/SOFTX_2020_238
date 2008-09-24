@@ -108,13 +108,14 @@ static void destroy_injection_document(struct injection_document *doc)
  */
 
 
-static struct injection_document *load_injection_document(const char *filename, LIGOTimeGPS start, LIGOTimeGPS end)
+static struct injection_document *load_injection_document(const char *filename, LIGOTimeGPS start, LIGOTimeGPS end, double longest_injection)
 {
 	static const char func[] = "load_injection_document";
 	struct injection_document *new;
-	/* hard-coded speed hack.  only injections whose "times" are within
-	 * this many seconds of the requested interval will be loaded */
-	const double longest_injection = 600.0;
+
+	/*
+	 * allocate the document
+	 */
 
 	new = malloc(sizeof(*new));
 	if(!new) {
@@ -243,6 +244,7 @@ static int add_xml_injections(REAL8TimeSeries *h, const struct injection_documen
 		XLALPrintInfo("%s(): computing sim_inspiral injections ...\n", func);
 		/* FIXME: figure out how to do error handling like this */
 		/*LAL_CALL(LALFindChirpInjectSignals(&stat, mdc, injection_document->sim_inspiral_table_head, response), &stat);*/
+		XLALClearErrno();
 		LALFindChirpInjectSignals(&stat, mdc, injection_document->sim_inspiral_table_head, response);
 		XLALPrintInfo("%s(): done\n", func);
 
@@ -338,15 +340,16 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 */
 
 	if(!element->injection_document) {
-		LIGOTimeGPS start;
-		LIGOTimeGPS end;
+		LIGOTimeGPS start = {-999999999, 0};
+		LIGOTimeGPS end = {+999999999, 0};
 		/* earliest and latest possible LIGOTimeGPS */
 		/* FIXME:  hard-coded = BAD BAD BAD */
-		XLALINT8NSToGPS(&start, (INT8) 1 << 63);
-		XLALINT8NSToGPS(&end, ((INT8) 1 << 63) - 1);
-		element->injection_document = load_injection_document(element->xml_location, start, end);
+		/*XLALINT8NSToGPS(&start, (INT8) 1 << 63);
+		XLALINT8NSToGPS(&end, ((INT8) 1 << 63) - 1);*/
+		element->injection_document = load_injection_document(element->xml_location, start, end, 0.0);
 		if(!element->injection_document) {
 			GST_ERROR("error loading \"%s\"", element->xml_location);
+			gst_buffer_unref(buf);
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
@@ -358,7 +361,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 
 	h = gstlal_REAL8TimeSeries_from_buffer(buf);
 	if(!h) {
-		/* FIXME: handle error */
+		GST_ERROR("failure wrapping buffer in REAL8TimeSeries");
+		gst_buffer_unref(buf);
+		result = GST_FLOW_ERROR;
+		goto done;
 	}
 
 	/*
@@ -366,7 +372,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 */
 
 	if(add_xml_injections(h, element->injection_document, NULL) < 0) {
-		/* FIXME: handle error */
+		GST_ERROR("failure performing injections");
+		h->data->data = NULL;
+		XLALDestroyREAL8TimeSeries(h);
+		gst_buffer_unref(buf);
+		result = GST_FLOW_ERROR;
+		goto done;
 	}
 
 	/*
