@@ -118,37 +118,47 @@ REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf)
 	const char *instrument;
 	const char *channel;
 	LIGOTimeGPS epoch;
+	LALUnit units;
 	double deltaT;
+	size_t length;
 	REAL8TimeSeries *series;
 
 	/*
-	 * Retrieve the instrument, channel name, and sample rate
+	 * Retrieve the instrument, channel name, sample rate, and units
+	 * from the caps.
 	 */
 
 	instrument = gst_structure_get_string(gst_caps_get_structure(caps, 0), "instrument");
 	channel = gst_structure_get_string(gst_caps_get_structure(caps, 0), "channel");
 	deltaT = 1.0 / g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
+	if(!XLALParseUnitString(&units, gst_structure_get_string(gst_caps_get_structure(caps, 0), "units"))) {
+		/* FIXME:  handle error */
+	}
 
 	/*
-	 * Retrieve the epoch
+	 * Retrieve the epoch from the time stamp and the length from the
+	 * size.
 	 */
 
 	XLALINT8NSToGPS(&epoch, GST_BUFFER_TIMESTAMP(buf));
+	length = GST_BUFFER_SIZE(buf) / sizeof(*series->data->data);
 
 	/*
 	 * Build a zero-length time series with the correct metadata
 	 */
 
-	series = XLALCreateREAL8TimeSeries(instrument, &epoch, 0.0, deltaT, &lalStrainUnit, 0);
+	series = XLALCreateREAL8TimeSeries(instrument, &epoch, 0.0, deltaT, &units, 0);
 	if(!series)
 		goto done;
 
 	/*
-	 * Replace the time series' data pointer with the GstBuffer's
+	 * Replace the time series' data pointer with the GstBuffer's, and
+	 * manually set the time series' length.
 	 */
 
 	free(series->data->data);
 	series->data->data = (double *) GST_BUFFER_DATA(buf);
+	series->data->length = length;
 
 	/*
 	 * Done.
