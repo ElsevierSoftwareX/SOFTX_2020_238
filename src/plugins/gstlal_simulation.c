@@ -241,12 +241,12 @@ static int add_xml_injections(REAL8TimeSeries *h, const struct injection_documen
 
 		if(!response) {
 			LALUnit strain_per_count = gstlal_lalStrainPerADCCount();
-			underflow_protection = 1e20;
+			underflow_protection = 1e-20;
 			inspiral_response = XLALCreateCOMPLEX8FrequencySeries(NULL, &h->epoch, 0.0, 1.0 / (h->data->length * h->deltaT), &strain_per_count, h->data->length / 2 + 1);
 			if(!inspiral_response)
 				XLAL_ERROR(func, XLAL_EFUNC);
 			for(i = 0; i < inspiral_response->data->length; i++)
-				inspiral_response->data->data[i] = XLALCOMPLEX8Rect(1.0 / underflow_protection, 0.0);
+				inspiral_response->data->data[i] = XLALCOMPLEX8Rect(underflow_protection, 0.0);
 		}
 
 		mdc = XLALCreateREAL4TimeSeries(h->name, &h->epoch, h->f0, h->deltaT, &h->sampleUnits, h->data->length);
