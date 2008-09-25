@@ -131,7 +131,7 @@ static GstCaps *series_to_caps(const char *instrument, const char *channel_name,
 		XLALUnitAsString(units, 100, &local_series->sampleUnits);
 		return gst_caps_new_simple(
 			"audio/x-raw-int",
-			"rate", G_TYPE_INT, (int) trunc(1.0 / local_series->deltaT + 0.5),
+			"rate", G_TYPE_INT, (int) floor(1.0 / local_series->deltaT + 0.5),
 			"channels", G_TYPE_INT, 1,
 			"endianness", G_TYPE_INT, G_BYTE_ORDER,
 			"width", G_TYPE_INT, 32,
@@ -149,7 +149,7 @@ static GstCaps *series_to_caps(const char *instrument, const char *channel_name,
 		XLALUnitAsString(units, 100, &local_series->sampleUnits);
 		return gst_caps_new_simple(
 			"audio/x-raw-float",
-			"rate", G_TYPE_INT, (int) trunc(1.0 / local_series->deltaT + 0.5),
+			"rate", G_TYPE_INT, (int) floor(1.0 / local_series->deltaT + 0.5),
 			"channels", G_TYPE_INT, 1,
 			"endianness", G_TYPE_INT, G_BYTE_ORDER,
 			"width", G_TYPE_INT, 32,
@@ -165,7 +165,7 @@ static GstCaps *series_to_caps(const char *instrument, const char *channel_name,
 		XLALUnitAsString(units, 100, &local_series->sampleUnits);
 		return gst_caps_new_simple(
 			"audio/x-raw-float",
-			"rate", G_TYPE_INT, (int) trunc(1.0 / local_series->deltaT + 0.5),
+			"rate", G_TYPE_INT, (int) floor(1.0 / local_series->deltaT + 0.5),
 			"channels", G_TYPE_INT, 1,
 			"endianness", G_TYPE_INT, G_BYTE_ORDER,
 			"width", G_TYPE_INT, 64,
@@ -221,8 +221,8 @@ static void *read_series(GSTLALFrameSrc *element, long start_sample, long length
 		GST_ERROR("unsupported data type (LALTYPECODE=%d)", element->series_type);
 		return NULL;
 	}
-	buffer_start_sample = (long) trunc(XLALGPSDiff(&buffer_start_time, &element->start_time) / deltaT + 0.5);
-	input_length = (long) trunc(XLALGPSDiff(&element->stop_time, &element->start_time) / deltaT + 0.5);
+	buffer_start_sample = (long) floor(XLALGPSDiff(&buffer_start_time, &element->start_time) / deltaT + 0.5);
+	input_length = (long) floor(XLALGPSDiff(&element->stop_time, &element->start_time) / deltaT + 0.5);
 
 	/* clip the requested interval to the input domain */
 	if(start_sample + length < 0 || start_sample >= input_length) {
@@ -247,7 +247,7 @@ static void *read_series(GSTLALFrameSrc *element, long start_sample, long length
 		/* compute the bounds of the new buffer, using the
 		 * requested start time as the buffer's start time */
 		buffer_start_sample = start_sample;
-		buffer_length = (long) trunc(element->series_buffer_duration / deltaT + 0.5);
+		buffer_length = (long) floor(element->series_buffer_duration / deltaT + 0.5);
 		if(buffer_start_sample + buffer_length > input_length)
 			buffer_length = input_length - buffer_start_sample;
 		buffer_start_time = element->start_time;
@@ -353,15 +353,11 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		break;
 
 	case ARG_SRC_START_TIME_GPS:
-		if(XLALStrToGPS(&element->start_time, g_value_get_string(value), NULL) < 0) {
-			GST_ERROR("invalid start-time-gps \"%s\"", g_value_get_string(value));
-		}
+		XLALINT8NSToGPS(&element->start_time, g_value_get_int64(value));
 		break;
 
 	case ARG_SRC_STOP_TIME_GPS:
-		if(XLALStrToGPS(&element->stop_time, g_value_get_string(value), NULL) < 0) {
-			GST_ERROR("invalid stop-time-gps \"%s\"", g_value_get_string(value));
-		}
+		XLALINT8NSToGPS(&element->stop_time, g_value_get_int64(value));
 		break;
 	}
 }
@@ -389,11 +385,11 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		break;
 
 	case ARG_SRC_START_TIME_GPS:
-		g_value_take_string(value, XLALGPSToStr(NULL, &element->start_time));
+		g_value_set_int64(value, XLALGPSToINT8NS(&element->start_time));
 		break;
 
 	case ARG_SRC_STOP_TIME_GPS:
-		g_value_take_string(value, XLALGPSToStr(NULL, &element->stop_time));
+		g_value_set_int64(value, XLALGPSToINT8NS(&element->stop_time));
 		break;
 	}
 }
@@ -540,8 +536,8 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length - 1;
-		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&element->start_time) + (GstClockTime) trunc(element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
-		GST_BUFFER_DURATION(*buffer) = (GstClockTime) trunc(chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&element->start_time) + (GstClockTime) floor(element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_DURATION(*buffer) = (GstClockTime) floor(chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
 		if(element->next_sample == 0)
 			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 		element->next_sample += chunk->data->length;
@@ -562,8 +558,8 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length - 1;
-		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&element->start_time) + (GstClockTime) trunc(element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
-		GST_BUFFER_DURATION(*buffer) = (GstClockTime) trunc(chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&element->start_time) + (GstClockTime) floor(element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_DURATION(*buffer) = (GstClockTime) floor(chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
 		if(element->next_sample == 0)
 			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 		element->next_sample += chunk->data->length;
@@ -584,8 +580,8 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length - 1;
-		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&element->start_time) + (GstClockTime) trunc(element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
-		GST_BUFFER_DURATION(*buffer) = (GstClockTime) trunc(chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&element->start_time) + (GstClockTime) floor(element->next_sample * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_DURATION(*buffer) = (GstClockTime) floor(chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
 		if(element->next_sample == 0)
 			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 		element->next_sample += chunk->data->length;
@@ -727,8 +723,8 @@ static void class_init(gpointer class, gpointer class_data)
 	g_object_class_install_property(gobject_class, ARG_SRC_INSTRUMENT, g_param_spec_string("instrument", "Instrument", "Instrument name (e.g., \"H1\").", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_CHANNEL_NAME, g_param_spec_string("channel-name", "Channel name", "Channel name (e.g., \"LSC-STRAIN\").", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	/* FIXME:  "string" is not the best type for these ... */
-	g_object_class_install_property(gobject_class, ARG_SRC_START_TIME_GPS, g_param_spec_string("start-time-gps", "Start time", "Start time in GPS seconds.", "0.000000000", G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_SRC_STOP_TIME_GPS, g_param_spec_string("stop-time-gps", "Stop time", "Stop time in GPS seconds.", "0.000000000", G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_SRC_START_TIME_GPS, g_param_spec_int64("start-time-gps-ns", "Start time", "Start time in GPS nanoseconds.", G_MININT64, G_MAXINT64, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_SRC_STOP_TIME_GPS, g_param_spec_int64("stop-time-gps-ns", "Stop time", "Stop time in GPS nanoseconds.", G_MININT64, G_MAXINT64, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
 	/*
 	 * pushsrc method overrides
