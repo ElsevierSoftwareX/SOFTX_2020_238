@@ -171,6 +171,7 @@ static GstFlowReturn push_mixer_matrix(GstPad *pad, gsl_matrix *matrix, GstClock
 {
 	GstBuffer *buf;
 	GstCaps *caps;
+	gboolean success;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
@@ -184,13 +185,13 @@ static GstFlowReturn push_mixer_matrix(GstPad *pad, gsl_matrix *matrix, GstClock
 		"width", G_TYPE_INT, 64,
 		NULL
 	);
-	if(!gst_pad_set_caps(pad, caps)) {
+	success = gst_pad_set_caps(pad, caps);
+	gst_caps_unref(caps);
+	if(!success) {
 		GST_ERROR("failure negotiating caps with mixer");
-		gst_caps_unref(caps);
 		result = GST_FLOW_NOT_NEGOTIATED;
 		goto done;
 	}
-	gst_caps_unref(caps);
 
 	/*
 	 * Get a buffer from the mixer.
@@ -231,11 +232,6 @@ static GstFlowReturn push_mixer_matrix(GstPad *pad, gsl_matrix *matrix, GstClock
 done:
 	return result;
 }
-
-
-/*
- * Project some input data onto the template bank
- */
 
 
 /*
@@ -375,7 +371,60 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	if(GST_BUFFER_IS_DISCONT(sinkbuf)) {
 		GstBuffer *zeros;
 
+		/*
+		 * Clear the contents of the adpater
+		 *
+		 * FIXME:  how 'bout pushing in more zeros and finishing
+		 * off the contents of the adapter first?
+		 */
+
 		gst_adapter_clear(element->adapter);
+
+		/*
+		 * Synchronize the output sample counter and time stamp
+		 * with the input buffer.
+		 */
+
+		if(GST_BUFFER_OFFSET_IS_VALID(sinkbuf))
+			element->next_sample = GST_BUFFER_OFFSET(sinkbuf);
+		if(GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf))
+			element->output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);
+
+		/*
+		 * Push GAP buffers of zeros out both src pads to pad the
+		 * output streams.
+		 */
+
+		if(element->t_start) {
+			result = gst_pad_alloc_buffer(element->sumsquarespad, element->next_sample, element->t_start * element->sample_rate * sizeof(*element->U->data), GST_PAD_CAPS(element->sumsquarespad), &zeros);
+			if(result != GST_FLOW_OK)
+				goto done;
+			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
+			gst_buffer_copy_metadata(zeros, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
+			GST_BUFFER_FLAG_SET(zeros, GST_BUFFER_FLAG_GAP);
+			GST_BUFFER_OFFSET_END(zeros) = element->next_sample + element->t_start * element->sample_rate - 1;
+			GST_BUFFER_DURATION(zeros) = (GstClockTime) element->t_start * GST_SECOND;
+
+			result = gst_pad_push(element->sumsquarespad, zeros);
+			if(result != GST_FLOW_OK)
+				goto done;
+
+			result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, element->U->size1 * element->t_start * element->sample_rate * sizeof(*element->U->data), GST_PAD_CAPS(element->srcpad), &zeros);
+			if(result != GST_FLOW_OK)
+				goto done;
+			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
+			gst_buffer_copy_metadata(zeros, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
+			GST_BUFFER_FLAG_SET(zeros, GST_BUFFER_FLAG_GAP);
+			GST_BUFFER_OFFSET_END(zeros) = element->next_sample + element->t_start * element->sample_rate - 1;
+			GST_BUFFER_DURATION(zeros) = (GstClockTime) element->t_start * GST_SECOND;
+
+			result = gst_pad_push(element->srcpad, zeros);
+			if(result != GST_FLOW_OK)
+				goto done;
+
+			element->next_sample += element->t_start * element->sample_rate;
+			element->output_timestamp += (GstClockTime) element->t_start * GST_SECOND;
+		}
 
 		/*
 		 * Pad the adapter with enough 0s to accomodate the
@@ -391,58 +440,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 		memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
 		gst_adapter_push(element->adapter, zeros);
-
-		/*
-		 * Push GAP buffers of zeros out both src pads to pad the
-		 * output streams.
-		 */
-
-		if(element->t_start) {
-			result = gst_pad_alloc_buffer(element->sumsquarespad, element->next_sample, element->t_start * element->sample_rate * sizeof(*element->U->data), GST_PAD_CAPS(element->sumsquarespad), &zeros);
-			if(result != GST_FLOW_OK)
-				goto done;
-			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
-			gst_buffer_copy_metadata(zeros, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
-			GST_BUFFER_FLAG_SET(zeros, GST_BUFFER_FLAG_GAP);
-			GST_BUFFER_OFFSET_END(zeros) = GST_BUFFER_OFFSET(zeros) + element->t_start * element->sample_rate - 1;
-			GST_BUFFER_DURATION(zeros) = element->t_start * GST_SECOND;
-
-			result = gst_pad_push(element->sumsquarespad, zeros);
-			if(result != GST_FLOW_OK)
-				goto done;
-
-			result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, element->U->size1 * element->t_start * element->sample_rate * sizeof(*element->U->data), GST_PAD_CAPS(element->srcpad), &zeros);
-			if(result != GST_FLOW_OK)
-				goto done;
-			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
-			gst_buffer_copy_metadata(zeros, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
-			GST_BUFFER_FLAG_SET(zeros, GST_BUFFER_FLAG_GAP);
-			GST_BUFFER_OFFSET_END(zeros) = GST_BUFFER_OFFSET(zeros) + element->t_start * element->sample_rate - 1;
-			GST_BUFFER_DURATION(zeros) = element->t_start * GST_SECOND;
-
-			result = gst_pad_push(element->srcpad, zeros);
-			if(result != GST_FLOW_OK)
-				goto done;
-
-			element->next_sample += element->t_start * element->sample_rate;
-		}
-
-		/*
-		 * The time of the start of the h(t) buffer from which the
-		 * SNR buffer will be constructed is
-		 * GST_BUFFER_TIMESTAMP(sinkbuf) - (element->U->size1 - 1)
-		 * / sample_rate.  Relative to the time-of-coalescence ---
-		 * the "time" of the template --- the first sample of the
-		 * template vector is at -t_end + 1 * deltaT.  The "time"
-		 * of an SNR sample is, therefore, the start of the h(t)
-		 * buffer + t_end - 1*deltaT - (element->U->size1 -
-		 * 1)*deltaT = buffer + t_end - element->U->size1*deltaT =
-		 * buffer + t_start.
-		 *
-		 * FIXME:  that explanation sucks.  draw a picture.
-		 */
-
-		element->output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf) + GST_SECOND * element->t_start;
 	}
 
 	/*
@@ -483,12 +480,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * views.
 		 */
 
-		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, element->U->size1 * output_length * sizeof(*orthogonal_snr.matrix.data), GST_PAD_CAPS(element->srcpad), &orthogonal_snr_buf);
-		if(result != GST_FLOW_OK)
-			goto done;
-
-		orthogonal_snr = gsl_matrix_view_array((double *) GST_BUFFER_DATA(orthogonal_snr_buf), output_length, element->U->size1);
-
 		result = gst_pad_alloc_buffer(element->sumsquarespad, element->next_sample, output_length * sizeof(*orthogonal_snr_sum_squares.vector.data), GST_PAD_CAPS(element->sumsquarespad), &orthogonal_snr_sum_squares_buf);
 		if(result != GST_FLOW_OK) {
 			gst_buffer_unref(orthogonal_snr_buf);
@@ -497,13 +488,19 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		orthogonal_snr_sum_squares = gsl_vector_view_array((double *) GST_BUFFER_DATA(orthogonal_snr_sum_squares_buf), output_length);
 
+		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, element->U->size1 * output_length * sizeof(*orthogonal_snr.matrix.data), GST_PAD_CAPS(element->srcpad), &orthogonal_snr_buf);
+		if(result != GST_FLOW_OK)
+			goto done;
+
+		orthogonal_snr = gsl_matrix_view_array((double *) GST_BUFFER_DATA(orthogonal_snr_buf), output_length, element->U->size1);
+
 		/*
 		 * Set the metadata.
 		 */
 
 		GST_BUFFER_OFFSET_END(orthogonal_snr_sum_squares_buf) = GST_BUFFER_OFFSET_END(orthogonal_snr_buf) = GST_BUFFER_OFFSET(orthogonal_snr_buf) + output_length - 1;
 		GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) = GST_BUFFER_TIMESTAMP(orthogonal_snr_buf) = element->output_timestamp;
-		GST_BUFFER_DURATION(orthogonal_snr_sum_squares_buf) = GST_BUFFER_DURATION(orthogonal_snr_buf) = output_length * GST_SECOND / element->sample_rate;
+		GST_BUFFER_DURATION(orthogonal_snr_sum_squares_buf) = GST_BUFFER_DURATION(orthogonal_snr_buf) = (GstClockTime) output_length * GST_SECOND / element->sample_rate;
 
 		/*
 		 * Assemble the orthogonal SNR time series as the columns
@@ -562,8 +559,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		gst_adapter_flush(element->adapter, output_length * sizeof(*time_series.vector.data));
-		element->output_timestamp += (GstClockTime) output_length * GST_SECOND / element->sample_rate;
 		element->next_sample += output_length;
+		element->output_timestamp += (GstClockTime) output_length * GST_SECOND / element->sample_rate;
 	}
 
 	/*
