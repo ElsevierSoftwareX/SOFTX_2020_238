@@ -76,15 +76,30 @@
  */
 
 
+/**
+ * Convert a time stamp and a sample rate into a sample offset relative to
+ * the time stamp of the start of a buffer.
+ */
+
+
 static int timestamp_to_sample_clipped(GstClockTime start, int samples, int sample_rate, GstClockTime t)
 {
 	if(t <= start)
 		return 0;
 	t -= start;
-	if((long) t > samples * GST_SECOND / sample_rate + 1)
+	if(t > (GstClockTime) samples * GST_SECOND / sample_rate + 1)
 		return samples;
 	return t * sample_rate / GST_SECOND;
 }
+
+
+/**
+ * Construct an empty buffer flagged as a gap and push it on the pad.  The
+ * buffer's time stamp, etc., will be derived from the template, and will
+ * be constructed so as to span the interval in the stream corresponding to
+ * the samples [start, stop) relative to the start of the template buffer,
+ * give the sample rate.
+ */
 
 
 static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int sample_rate, int start, int stop)
@@ -101,8 +116,8 @@ static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int sample
 	gst_buffer_copy_metadata(buf, template, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 	GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
 	GST_BUFFER_OFFSET_END(buf) = GST_BUFFER_OFFSET(buf);
-	GST_BUFFER_TIMESTAMP(buf) = GST_BUFFER_TIMESTAMP(template) + start * GST_SECOND / sample_rate;
-	GST_BUFFER_DURATION(buf) = (stop - start) * GST_SECOND / sample_rate;
+	GST_BUFFER_TIMESTAMP(buf) = GST_BUFFER_TIMESTAMP(template) + (GstClockTime) start * GST_SECOND / sample_rate;
+	GST_BUFFER_DURATION(buf) = (GstClockTime) (stop - start) * GST_SECOND / sample_rate;
 
 	result = gst_pad_push(pad, buf);
 	if(result != GST_FLOW_OK) {
@@ -262,8 +277,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 	gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS);
 	GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET_NONE;
-	GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + start * GST_SECOND / element->sample_rate;
-	GST_BUFFER_DURATION(srcbuf) = (stop - start) * GST_SECOND / element->sample_rate;
+	GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + (GstClockTime) start * GST_SECOND / element->sample_rate;
+	GST_BUFFER_DURATION(srcbuf) = (GstClockTime) (stop - start) * GST_SECOND / element->sample_rate;
 	gst_buffer_set_caps(srcbuf, GST_PAD_CAPS(element->srcpad));
 
 	/*
@@ -274,9 +289,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 	location = (char *) GST_BUFFER_DATA(srcbuf);
 	for(i = start; i < stop; i++) {
-		GstClockTime t = GST_BUFFER_TIMESTAMP(sinkbuf) + i * GST_SECOND / element->sample_rate;
+		GstClockTime t = GST_BUFFER_TIMESTAMP(sinkbuf) + (GstClockTime) i * GST_SECOND / element->sample_rate;
 
 		if((guint8 *) location - GST_BUFFER_DATA(srcbuf) + (channels + 1) * ASSUMED_BYTES_PER_CHANNEL + 1024 >= GST_BUFFER_SIZE(srcbuf)) {
+			/* save offset of current location in buffer */
+			size_t offset = location - (char *) GST_BUFFER_DATA(srcbuf);
 			/* add space for 100 rows plus a bit extra */
 			int increment = 100 * (channels + 1) * ASSUMED_BYTES_PER_CHANNEL + 1024;
 			guint8 *new = g_try_realloc(GST_BUFFER_MALLOCDATA(srcbuf), GST_BUFFER_SIZE(srcbuf) + increment);
@@ -288,6 +305,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			}
 			GST_BUFFER_DATA(srcbuf) = GST_BUFFER_MALLOCDATA(srcbuf) = new;
 			GST_BUFFER_SIZE(srcbuf) += increment;
+			/* restore location */
+			location = (char *) GST_BUFFER_DATA(srcbuf) + offset;
 		}
 
 		location += sprintf(location, "%d.%09u", (int) (t / GST_SECOND), (unsigned) (t % GST_SECOND));
