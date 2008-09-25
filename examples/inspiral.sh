@@ -24,6 +24,13 @@ FAKESRC="audiotestsrc \
 	volume=1e-20 \
 ! audio/x-raw-float, width=64, rate=16384, instrument=${INSTRUMENT}, channel=${CHANNEL}, units=count"
 
+WHITEN="lal_whiten \
+	psd-mode=1 \
+	filter-length=4 \
+	convolution-length=16 \
+	average-samples=256 \
+	compensation-psd=reference_psd.txt"
+
 SINK="queue ! lal_multiscope trace-duration=4.0 frame-interval=0.0625 average-interval=32.0 do-timestamp=false ! ffmpegcolorspace ! cairotimeoverlay ! autovideosink"
 
 FAKESINK="queue ! fakesink sync=false preroll-queue-len=1"
@@ -45,12 +52,7 @@ gst-launch --gst-debug-level=1 \
 	! progressreport \
 	! lal_simulation \
 		xml-location="bns_injections.xml" \
-	! lal_whiten \
-		psd-mode=1 \
-		filter-length=4 \
-		convolution-length=16 \
-		average-samples=256 \
-		compensation-psd=reference_psd.txt \
+	! $WHITEN \
 	! audioresample \
 		filter-length=64 \
 	! audio/x-raw-float, rate=2048 \
