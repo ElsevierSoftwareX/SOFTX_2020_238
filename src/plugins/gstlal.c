@@ -201,6 +201,19 @@ done:
 
 
 /**
+ * Return the LALUnit structure equal to "strain / ADC count".
+ */
+
+
+LALUnit gstlal_lalStrainPerADCCount(void)
+{
+	LALUnit unit;
+
+	return *XLALUnitDivide(&unit, &lalStrainUnit, &lalADCCountUnit);
+}
+
+
+/**
  * Return the LALUnit structure equal to "strain^2 / Hz".
  */
 

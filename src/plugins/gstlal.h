@@ -50,6 +50,7 @@ G_BEGIN_DECLS
 
 char *gstlal_build_full_channel_name(const char *, const char *);
 REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *);
+LALUnit gstlal_lalStrainPerADCCount(void);
 LALUnit gstlal_lalStrainSquaredPerHertz(void);
 REAL8FrequencySeries *gstlal_read_reference_psd(const char *);
 REAL8FrequencySeries *gstlal_get_reference_psd(const char *, double, double, size_t);
