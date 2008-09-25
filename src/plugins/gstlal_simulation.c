@@ -51,6 +51,7 @@
  */
 
 
+#include <lal/LALComplex.h>
 #include <lal/LALDatatypes.h>
 #include <lal/LALStdlib.h>
 #include <lal/LALSimulation.h>
@@ -61,6 +62,7 @@
 #include <lal/FindChirp.h>
 #include <lal/Date.h>
 #include <lal/TimeSeries.h>
+#include <lal/FrequencySeries.h>
 #include <lal/Units.h>
 
 
@@ -232,24 +234,40 @@ static int add_xml_injections(REAL8TimeSeries *h, const struct injection_documen
 
 	if(injection_document->sim_inspiral_table_head) {
 		LALStatus stat;
+		double underflow_protection = 1.0;
+		COMPLEX8FrequencySeries *inspiral_response = NULL;
 		REAL4TimeSeries *mdc;
 		unsigned i;
 
+		if(!response) {
+			LALUnit strain_per_count = gstlal_lalStrainPerADCCount();
+			underflow_protection = 1e20;
+			inspiral_response = XLALCreateCOMPLEX8FrequencySeries(NULL, &h->epoch, 0.0, 1.0 / (h->data->length * h->deltaT), &strain_per_count, h->data->length / 2 + 1);
+			if(!inspiral_response)
+				XLAL_ERROR(func, XLAL_EFUNC);
+			for(i = 0; i < inspiral_response->data->length; i++)
+				inspiral_response->data->data[i] = XLALCOMPLEX8Rect(1.0 / underflow_protection, 0.0);
+		}
+
 		mdc = XLALCreateREAL4TimeSeries(h->name, &h->epoch, h->f0, h->deltaT, &h->sampleUnits, h->data->length);
-		if(!mdc)
+		if(!mdc) {
+			XLALDestroyCOMPLEX8FrequencySeries(inspiral_response);
 			XLAL_ERROR(func, XLAL_EFUNC);
+		}
 		memset(mdc->data->data, 0, mdc->data->length * sizeof(*mdc->data->data));
-		memset(&stat, 0, sizeof(stat));
 
 		XLALPrintInfo("%s(): computing sim_inspiral injections ...\n", func);
 		/* FIXME: figure out how to do error handling like this */
 		/*LAL_CALL(LALFindChirpInjectSignals(&stat, mdc, injection_document->sim_inspiral_table_head, response), &stat);*/
 		XLALClearErrno();
-		LALFindChirpInjectSignals(&stat, mdc, injection_document->sim_inspiral_table_head, response);
+		memset(&stat, 0, sizeof(stat));
+		LALFindChirpInjectSignals(&stat, mdc, injection_document->sim_inspiral_table_head, response ? response : inspiral_response);
 		XLALPrintInfo("%s(): done\n", func);
 
 		for(i = 0; i < h->data->length; i++)
-			h->data->data[i] += mdc->data->data[i];
+			h->data->data[i] += mdc->data->data[i] * underflow_protection;
+
+		XLALDestroyCOMPLEX8FrequencySeries(inspiral_response);
 		XLALDestroyREAL4TimeSeries(mdc);
 	}
 
