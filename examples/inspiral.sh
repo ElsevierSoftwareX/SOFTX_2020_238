@@ -16,14 +16,13 @@ SRC="lal_framesrc \
 	start-time-gps-ns=${GPSSTART} \
 	stop-time-gps-ns=${GPSSTOP}"
 
-FAKESRC="fakesrc \
-	blocksize=$((16384*8*16)) \
-	num-buffers=$((320/16)) \
-	sizetype=2 \
-	sizemax=$((16384*8*16)) \
-	filltype=2 \
-	datarate=$((16384*8)) \
-! audio/x-raw-float, width=64, channels=1, rate=16384, endianness=1234, instrument=${INSTRUMENT}, channel=${CHANNEL}"
+FAKESRC="audiotestsrc \
+	timestamp-offset=$GPSSTART \
+	samplesperbuffer=$((16384*16)) \
+	num-buffers=$((($GPSSTOP-$GPSSTART)/100000000)) \
+	wave=5 \
+	volume=1e-20 \
+! audio/x-raw-float, width=64, rate=16384, instrument=${INSTRUMENT}, channel=${CHANNEL}, units=count"
 
 SINK="queue ! lal_multiscope trace-duration=4.0 frame-interval=0.0625 average-interval=32.0 do-timestamp=false ! ffmpegcolorspace ! cairotimeoverlay ! autovideosink"
 
@@ -53,18 +52,23 @@ gst-launch --gst-debug-level=1 \
 		average-samples=256 \
 		compensation-psd=reference_psd.txt \
 	! audioresample \
+		filter-length=64 \
 	! audio/x-raw-float, rate=2048 \
 	! tee name=hoft_2048 \
 	! audioresample \
+		filter-length=64 \
 	! audio/x-raw-float, rate=1024 \
 	! tee name=hoft_1024 \
 	! audioresample \
+		filter-length=64 \
 	! audio/x-raw-float, rate=512 \
 	! tee name=hoft_512 \
 	! audioresample \
+		filter-length=64 \
 	! audio/x-raw-float, rate=256 \
 	! tee name=hoft_256 \
 	! audioresample \
+		filter-length=64 \
 	! audio/x-raw-float, rate=128 \
 	! tee name=hoft_128 \
 	lal_adder name=orthogonal_snr_sum_squares ! $NXYDUMP=nxydump.txt \
