@@ -113,6 +113,7 @@ static void destroy_injection_document(struct injection_document *doc)
 static struct injection_document *load_injection_document(const char *filename, LIGOTimeGPS start, LIGOTimeGPS end, double longest_injection)
 {
 	static const char func[] = "load_injection_document";
+	int success = 1;
 	struct injection_document *new;
 
 	/*
@@ -136,18 +137,25 @@ static struct injection_document *load_injection_document(const char *filename, 
 	 * load required tables
 	 */
 
+	XLALClearErrno();
 	new->process_table_head = XLALProcessTableFromLIGOLw(filename);
-	if(!new->process_table_head)
+	if(XLALGetBaseErrno()) {
 		XLALPrintError("%s(): failure reading process table\n", func);
-	else
+		success = 0;
+	} else
 		XLALPrintInfo("%s(): found process table\n", func);
+
+	XLALClearErrno();
 	new->process_params_table_head = XLALProcessParamsTableFromLIGOLw(filename);
-	if(!new->process_params_table_head)
+	if(XLALGetBaseErrno()) {
 		XLALPrintError("%s(): failure reading process_params table\n", func);
-	else
+		success = 0;
+	} else
 		XLALPrintInfo("%s(): found process_params table\n", func);
+
+	XLALClearErrno();
 	new->search_summary_table_head = XLALSearchSummaryTableFromLIGOLw(filename);
-	if(!new->search_summary_table_head)
+	if(XLALGetBaseErrno())
 		XLALPrintError("%s(): non-fatal failure reading search_summary table\n", func);
 	else
 		XLALPrintInfo("%s(): found search_summary table\n", func);
@@ -158,10 +166,12 @@ static struct injection_document *load_injection_document(const char *filename, 
 
 	new->has_sim_burst_table = XLALLIGOLwHasTable(filename, "sim_burst");
 	if(new->has_sim_burst_table) {
+		XLALClearErrno();
 		new->sim_burst_table_head = XLALSimBurstTableFromLIGOLw(filename, &start, &end);
-		if(!new->sim_burst_table_head)
+		if(XLALGetBaseErrno()) {
 			XLALPrintError("%s(): failure reading sim_burst table\n", func);
-		else
+			success = 0;
+		} else
 			XLALPrintInfo("%s(): found sim_burst table\n", func);
 	} else
 		new->sim_burst_table_head = NULL;
@@ -176,6 +186,7 @@ static struct injection_document *load_injection_document(const char *filename, 
 		if(SimInspiralTableFromLIGOLw(&new->sim_inspiral_table_head, filename, start.gpsSeconds - 1, end.gpsSeconds + 1) < 0) {
 			XLALPrintError("%s(): failure reading sim_inspiral table\n", func);
 			new->sim_inspiral_table_head = NULL;
+			success = 0;
 		} else
 			XLALPrintInfo("%s(): found sim_inspiral table\n", func);
 	} else
@@ -185,14 +196,7 @@ static struct injection_document *load_injection_document(const char *filename, 
 	 * did we get it all?
 	 */
 
-	if(
-		!new->process_table_head ||
-		!new->process_params_table_head ||
-		/* FIXME:  lalapps_inspinj doesn't include this table */
-		/*!new->search_summary_table_head || */
-		(new->has_sim_burst_table && !new->sim_burst_table_head) ||
-		(new->has_sim_inspiral_table && !new->sim_inspiral_table_head)
-	) {
+	if(!success) {
 		XLALPrintError("%s(): document is incomplete and/or malformed\n", func);
 		destroy_injection_document(new);
 		XLAL_ERROR_NULL(func, XLAL_EFUNC);
