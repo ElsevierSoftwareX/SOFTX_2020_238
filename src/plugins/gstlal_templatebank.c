@@ -100,6 +100,28 @@
 
 
 /**
+ * Template bank properties:  number of samples in each template.
+ */
+
+
+static int template_length(const GSTLALTemplateBank *element)
+{
+	return element->U->size2;
+}
+
+
+/**
+ * Template bank properties:  number of templates.
+ */
+
+
+static int num_templates(const GSTLALTemplateBank *element)
+{
+	return element->U->size1;
+}
+
+
+/**
  * Create and destroy the orthonormal basis for the template bank.
  */
 
@@ -355,7 +377,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		caps = gst_caps_make_writable(gst_buffer_get_caps(sinkbuf));
-		gst_caps_set_simple(caps, "channels", G_TYPE_INT, element->U->size1, NULL);
+		gst_caps_set_simple(caps, "channels", G_TYPE_INT, num_templates(element), NULL);
 		success = gst_pad_set_caps(element->srcpad, caps);
 		gst_caps_unref(caps);
 		if(success != TRUE) {
@@ -370,6 +392,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 	if(GST_BUFFER_IS_DISCONT(sinkbuf)) {
 		GstBuffer *zeros;
+
+		/*
+		 * Remember to set the discontinuity flag on the next
+		 * buffer we push out.
+		 */
+
+		element->next_is_discontinuity = TRUE;
 
 		/*
 		 * Clear the contents of the adpater
@@ -409,7 +438,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			if(result != GST_FLOW_OK)
 				goto done;
 
-			result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, element->U->size1 * element->t_start * element->sample_rate * sizeof(*element->U->data), GST_PAD_CAPS(element->srcpad), &zeros);
+			result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, num_templates(element) * element->t_start * element->sample_rate * sizeof(*element->U->data), GST_PAD_CAPS(element->srcpad), &zeros);
 			if(result != GST_FLOW_OK)
 				goto done;
 			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
@@ -422,6 +451,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			if(result != GST_FLOW_OK)
 				goto done;
 
+			/*
+			 * Update the offset and time stamp.
+			 */
+
+			element->next_is_discontinuity = FALSE;
 			element->next_sample += element->t_start * element->sample_rate;
 			element->output_timestamp += (GstClockTime) element->t_start * GST_SECOND;
 		}
@@ -433,7 +467,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * the start of the template.
 		 */
 
-		zeros = gst_buffer_try_new_and_alloc((element->U->size1 - 1) * sizeof(*element->U->data));
+		zeros = gst_buffer_try_new_and_alloc((template_length(element) - 1) * sizeof(*element->U->data));
 		if(!zeros) {
 			result = GST_FLOW_ERROR;
 			goto done;
@@ -461,11 +495,19 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		gsl_vector_view orthogonal_snr_sum_squares;
 
 		/*
-		 * Check for available data, clip to the required output
-		 * length.  Wrap the data in a GSL vector view.
+		 * How many SNR samples can we construct from the contents
+		 * of the adapter?  The +1 is because when there is 1
+		 * template-length of data in the adapter then we can
+		 * produce 1 SNR sample, not 0.
 		 */
 
-		output_length = (gst_adapter_available(element->adapter) / sizeof(*time_series.vector.data)) - element->U->size2;
+		output_length = (int) (gst_adapter_available(element->adapter) / sizeof(*time_series.vector.data)) - template_length(element) + 1;
+
+		/*
+		 * Clip to the requested output length.  Quit the loop if
+		 * there aren't enough samples.
+		 */
+
 		if(element->snr_length) {
 			if(output_length < (int) element->snr_length)
 				break;
@@ -473,7 +515,15 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		} else if(output_length <= 0)
 			break;
 
-		time_series = gsl_vector_view_array((double *) gst_adapter_peek(element->adapter, (element->U->size2 + output_length - 1) * sizeof(*time_series.vector.data)), element->U->size2);
+		/*
+		 * Wrap the adapter's contents in a GSL vector view.  To
+		 * produce output_length SNR samples requires output_length
+		 * + template_length - 1 samples from the adapter.  Note
+		 * that the wrapper vector's length is set to the template
+		 * length so that inner products work properly.
+		 */
+
+		time_series = gsl_vector_view_array((double *) gst_adapter_peek(element->adapter, (output_length + template_length(element) - 1) * sizeof(*time_series.vector.data)), template_length(element));
 
 		/*
 		 * Get buffers from the downstream peers, wrap both in GSL
@@ -488,16 +538,20 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		orthogonal_snr_sum_squares = gsl_vector_view_array((double *) GST_BUFFER_DATA(orthogonal_snr_sum_squares_buf), output_length);
 
-		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, element->U->size1 * output_length * sizeof(*orthogonal_snr.matrix.data), GST_PAD_CAPS(element->srcpad), &orthogonal_snr_buf);
+		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, num_templates(element) * output_length * sizeof(*orthogonal_snr.matrix.data), GST_PAD_CAPS(element->srcpad), &orthogonal_snr_buf);
 		if(result != GST_FLOW_OK)
 			goto done;
 
-		orthogonal_snr = gsl_matrix_view_array((double *) GST_BUFFER_DATA(orthogonal_snr_buf), output_length, element->U->size1);
+		orthogonal_snr = gsl_matrix_view_array((double *) GST_BUFFER_DATA(orthogonal_snr_buf), output_length, num_templates(element));
 
 		/*
 		 * Set the metadata.
 		 */
 
+		if(element->next_is_discontinuity) {
+			GST_BUFFER_FLAG_SET(orthogonal_snr_sum_squares_buf, GST_BUFFER_FLAG_DISCONT);
+			GST_BUFFER_FLAG_SET(orthogonal_snr_buf, GST_BUFFER_FLAG_DISCONT);
+		}
 		GST_BUFFER_OFFSET_END(orthogonal_snr_sum_squares_buf) = GST_BUFFER_OFFSET_END(orthogonal_snr_buf) = GST_BUFFER_OFFSET(orthogonal_snr_buf) + output_length - 1;
 		GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) = GST_BUFFER_TIMESTAMP(orthogonal_snr_buf) = element->output_timestamp;
 		GST_BUFFER_DURATION(orthogonal_snr_sum_squares_buf) = GST_BUFFER_DURATION(orthogonal_snr_buf) = (GstClockTime) output_length * GST_SECOND / element->sample_rate;
@@ -559,6 +613,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		gst_adapter_flush(element->adapter, output_length * sizeof(*time_series.vector.data));
+		element->next_is_discontinuity = FALSE;
 		element->next_sample += output_length;
 		element->output_timestamp += (GstClockTime) output_length * GST_SECOND / element->sample_rate;
 	}
@@ -748,6 +803,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->t_end = DEFAULT_T_END;
 	element->snr_length = DEFAULT_SNR_LENGTH;
 
+	element->next_is_discontinuity = FALSE;
 	element->next_sample = 0;
 	element->output_timestamp = 0;
 

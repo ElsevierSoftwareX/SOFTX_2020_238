@@ -65,6 +65,7 @@ typedef struct {
 	unsigned int t_end;
 	unsigned int snr_length;
 
+	gboolean next_is_discontinuity;
 	unsigned long next_sample;
 	GstClockTime output_timestamp;
 
