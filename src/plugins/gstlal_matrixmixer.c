@@ -207,10 +207,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	/*
-	 * Get a buffer from the downstream peer
+	 * Get a buffer from the downstream peer.  Ask for a size of zero
+	 * if the input buffer is a gap.
 	 */
 
-	result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(sinkbuf), input_channels.matrix.size1 * element->mixmatrix.matrix.size2 * sizeof(*element->mixmatrix.matrix.data), GST_PAD_CAPS(element->srcpad), &srcbuf);
+	result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(sinkbuf), GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP) ? 0 : input_channels.matrix.size1 * element->mixmatrix.matrix.size2 * sizeof(*element->mixmatrix.matrix.data), GST_PAD_CAPS(element->srcpad), &srcbuf);
 	if(result != GST_FLOW_OK) {
 		g_mutex_unlock(element->mixmatrix_lock);
 		goto done;
@@ -238,12 +239,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, &input_channels.matrix, &element->mixmatrix.matrix, 0, &output_channels.matrix);
-	} else {
-		/*
-		 * Just zero the output
-		 */
-
-		memset(GST_BUFFER_DATA(srcbuf), 0, GST_BUFFER_SIZE(srcbuf));
 	}
 
 	g_mutex_unlock(element->mixmatrix_lock);
