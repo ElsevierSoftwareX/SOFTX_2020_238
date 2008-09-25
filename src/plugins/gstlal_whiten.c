@@ -448,8 +448,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		goto done;
 	}
 	if(!element->tail) {
-		element->tail = XLALCutREAL8Sequence(segment->data, 0, segment_length / 2 - transient);
+		element->tail = XLALCreateREAL8Sequence(segment_length / 2 - transient);
 		if(!element->tail) {
+			GST_ERROR("failure allocating tail buffer");
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
