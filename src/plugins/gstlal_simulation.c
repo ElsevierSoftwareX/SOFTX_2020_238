@@ -139,12 +139,18 @@ static struct injection_document *load_injection_document(const char *filename, 
 	new->process_table_head = XLALProcessTableFromLIGOLw(filename);
 	if(!new->process_table_head)
 		XLALPrintError("%s(): failure reading process table\n", func);
+	else
+		XLALPrintInfo("%s(): found process table\n", func);
 	new->process_params_table_head = XLALProcessParamsTableFromLIGOLw(filename);
 	if(!new->process_params_table_head)
 		XLALPrintError("%s(): failure reading process_params table\n", func);
+	else
+		XLALPrintInfo("%s(): found process_params table\n", func);
 	new->search_summary_table_head = XLALSearchSummaryTableFromLIGOLw(filename);
 	if(!new->search_summary_table_head)
-		XLALPrintError("%s(): failure reading search_summary table\n", func);
+		XLALPrintError("%s(): non-fatal failure reading search_summary table\n", func);
+	else
+		XLALPrintInfo("%s(): found search_summary table\n", func);
 
 	/*
 	 * load optional sim_burst table
@@ -152,10 +158,11 @@ static struct injection_document *load_injection_document(const char *filename, 
 
 	new->has_sim_burst_table = XLALLIGOLwHasTable(filename, "sim_burst");
 	if(new->has_sim_burst_table) {
-		XLALPrintInfo("%s(): found sim_burst table\n", func);
 		new->sim_burst_table_head = XLALSimBurstTableFromLIGOLw(filename, &start, &end);
 		if(!new->sim_burst_table_head)
 			XLALPrintError("%s(): failure reading sim_burst table\n", func);
+		else
+			XLALPrintInfo("%s(): found sim_burst table\n", func);
 	} else
 		new->sim_burst_table_head = NULL;
 
@@ -165,12 +172,12 @@ static struct injection_document *load_injection_document(const char *filename, 
 
 	new->has_sim_inspiral_table = XLALLIGOLwHasTable(filename, "sim_inspiral");
 	if(new->has_sim_inspiral_table) {
-		XLALPrintInfo("%s(): found sim_inspiral table\n", func);
 		new->sim_inspiral_table_head = NULL;
 		if(SimInspiralTableFromLIGOLw(&new->sim_inspiral_table_head, filename, start.gpsSeconds - 1, end.gpsSeconds + 1) < 0) {
 			XLALPrintError("%s(): failure reading sim_inspiral table\n", func);
 			new->sim_inspiral_table_head = NULL;
-		}
+		} else
+			XLALPrintInfo("%s(): found sim_inspiral table\n", func);
 	} else
 		new->sim_inspiral_table_head = NULL;
 
@@ -186,7 +193,7 @@ static struct injection_document *load_injection_document(const char *filename, 
 		(new->has_sim_burst_table && !new->sim_burst_table_head) ||
 		(new->has_sim_inspiral_table && !new->sim_inspiral_table_head)
 	) {
-		XLALPrintError("%s(): document is incomplete\n", func);
+		XLALPrintError("%s(): document is incomplete and/or malformed\n", func);
 		destroy_injection_document(new);
 		XLAL_ERROR_NULL(func, XLAL_EFUNC);
 	}
