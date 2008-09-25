@@ -129,6 +129,104 @@ static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int sample
 }
 
 
+/**
+ * Print the samples from a buffer of double precision floats into a buffer
+ * of text.
+ */
+
+
+static GstFlowReturn print_samples(GstBuffer *out, const double *samples, int channels, int sample_rate, int start, int stop)
+{
+	char *location = (char *) GST_BUFFER_DATA(out);
+	int i;
+	int j;
+
+	for(i = start; i < stop; i++) {
+		/*
+		 * The current time stamp
+		 */
+
+		GstClockTime t = GST_BUFFER_TIMESTAMP(out) + (GstClockTime) (i - start) * GST_SECOND / sample_rate;
+
+		/*
+		 * Are we almost out of space?
+		 */
+
+		if((guint8 *) location - GST_BUFFER_DATA(out) + (channels + 1) * ASSUMED_BYTES_PER_CHANNEL + 1024 >= GST_BUFFER_SIZE(out)) {
+			/*
+			 * Save offset of current location in buffer
+			 */
+
+			size_t offset = location - (char *) GST_BUFFER_DATA(out);
+
+			/*
+			 * Add space for 100 rows plus a bit extra
+			 */
+
+			int increment = 100 * (channels + 1) * ASSUMED_BYTES_PER_CHANNEL + 1024;
+
+			/*
+			 * Try reallocating the buffer
+			 */
+
+			guint8 *new = g_try_realloc(GST_BUFFER_MALLOCDATA(out), GST_BUFFER_SIZE(out) + increment);
+
+			if(!new) {
+				GST_ERROR("buffer resize failed");
+				return GST_FLOW_ERROR;
+			}
+
+			/*
+			 * Update the buffer's pointers
+			 */
+
+			GST_BUFFER_DATA(out) = GST_BUFFER_MALLOCDATA(out) = new;
+			GST_BUFFER_SIZE(out) += increment;
+
+			/*
+			 * Restore location
+			 */
+
+			location = (char *) GST_BUFFER_DATA(out) + offset;
+		}
+
+		/*
+		 * Print the time
+		 */
+
+		location += sprintf(location, "%d.%09u", (int) (t / GST_SECOND), (unsigned) (t % GST_SECOND));
+
+		/*
+		 * Print the channel samples
+		 */
+
+		for(j = 0; j < channels; j++)
+			location += sprintf(location, " %.16g", *samples++);
+
+		/*
+		 * Finish with a new line
+		 */
+
+		location += sprintf(location, "\n");
+	}
+
+	/*
+	 * Record the actual size of the buffer, but don't bother
+	 * realloc()ing.  Note that the final size excludes the \0
+	 * terminator.  That's appropriate for strings intended to be
+	 * written to a file.
+	 */
+
+	GST_BUFFER_SIZE(out) = (guint8 *) location - GST_BUFFER_DATA(out);
+
+	/*
+	 * Done
+	 */
+
+	return GST_FLOW_OK;
+}
+
+
 /*
  * ============================================================================
  *
@@ -212,8 +310,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	int channels;
 	int samples;
 	int start, stop;
-	char *location;
-	int i, j;
 
 	/*
 	 * Retrieve the number of channels, and measure the number of
@@ -282,39 +378,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	gst_buffer_set_caps(srcbuf, GST_PAD_CAPS(element->srcpad));
 
 	/*
-	 * Print samples into output buffer.  Note that the final size
-	 * excludes the \0 terminator.  That's appropriate for strings
-	 * intended to be written to a file.
+	 * Print samples into output buffer.
 	 */
 
-	location = (char *) GST_BUFFER_DATA(srcbuf);
-	for(i = start; i < stop; i++) {
-		GstClockTime t = GST_BUFFER_TIMESTAMP(sinkbuf) + (GstClockTime) i * GST_SECOND / element->sample_rate;
-
-		if((guint8 *) location - GST_BUFFER_DATA(srcbuf) + (channels + 1) * ASSUMED_BYTES_PER_CHANNEL + 1024 >= GST_BUFFER_SIZE(srcbuf)) {
-			/* save offset of current location in buffer */
-			size_t offset = location - (char *) GST_BUFFER_DATA(srcbuf);
-			/* add space for 100 rows plus a bit extra */
-			int increment = 100 * (channels + 1) * ASSUMED_BYTES_PER_CHANNEL + 1024;
-			guint8 *new = g_try_realloc(GST_BUFFER_MALLOCDATA(srcbuf), GST_BUFFER_SIZE(srcbuf) + increment);
-			if(!new) {
-				GST_ERROR("buffer resize failed");
-				gst_buffer_unref(srcbuf);
-				result = GST_FLOW_ERROR;
-				goto done;
-			}
-			GST_BUFFER_DATA(srcbuf) = GST_BUFFER_MALLOCDATA(srcbuf) = new;
-			GST_BUFFER_SIZE(srcbuf) += increment;
-			/* restore location */
-			location = (char *) GST_BUFFER_DATA(srcbuf) + offset;
-		}
-
-		location += sprintf(location, "%d.%09u", (int) (t / GST_SECOND), (unsigned) (t % GST_SECOND));
-		for(j = 0; j < channels; j++)
-			location += sprintf(location, " %.16g", *((double *) GST_BUFFER_DATA(sinkbuf) + i * channels + j));
-		location += sprintf(location, "\n");
+	result = print_samples(srcbuf, (const double *) GST_BUFFER_DATA(sinkbuf), channels, element->sample_rate, start, stop);
+	if(result != GST_FLOW_OK) {
+		gst_buffer_unref(srcbuf);
+		goto done;
 	}
-	GST_BUFFER_SIZE(srcbuf) = (guint8 *) location - GST_BUFFER_DATA(srcbuf);
 
 	/*
 	 * Push the buffer downstream.
