@@ -187,7 +187,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALMultiScope *element = GSTLAL_MULTISCOPE(gst_pad_get_parent(pad));
-	gboolean result = TRUE;
+	gboolean success = TRUE;
 
 	/*
 	 * Extract the sample rate and channel count from the input
@@ -204,11 +204,11 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	caps = gst_caps_make_writable(gst_pad_get_allowed_caps(element->srcpad));
 	gst_caps_do_simplify(caps);
 	gst_caps_set_simple(caps, "framerate", GST_TYPE_FRACTION, 1024, (int) (element->trace_duration * 1024), NULL);
-	result = gst_pad_set_caps(element->srcpad, caps);
+	success = gst_pad_set_caps(element->srcpad, caps);
 	gst_caps_unref(caps);
 
 	gst_object_unref(element);
-	return result;
+	return success;
 }
 
 
@@ -221,19 +221,18 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALMultiScope *element = GSTLAL_MULTISCOPE(gst_pad_get_parent(pad));
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
-	gboolean is_discontinuity = FALSE;
 	GstFlowReturn result = GST_FLOW_OK;
 	double average_length = element->average_interval * element->sample_rate * element->channels;
-	int trace_samples = trunc(element->trace_duration * element->sample_rate + 0.5);
-	int flush_samples = trunc(element->frame_interval * element->sample_rate + 0.5);
+	int trace_samples = floor(element->trace_duration * element->sample_rate + 0.5);
+	int flush_samples = floor(element->frame_interval * element->sample_rate + 0.5);
 
 	/*
 	 * Check for a discontinuity
 	 */
 
 	if(GST_BUFFER_IS_DISCONT(sinkbuf)) {
-		is_discontinuity = TRUE;
 		gst_adapter_clear(element->adapter);
+		element->next_is_discontinuity = TRUE;
 		element->adapter_head_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);
 	}
 
@@ -269,13 +268,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf);
-		if(is_discontinuity) {
+		if(element->next_is_discontinuity)
 			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
-			is_discontinuity = FALSE;
-		}
 		if(element->do_timestamp) {
 			GST_BUFFER_TIMESTAMP(srcbuf) = element->adapter_head_timestamp;
-			GST_BUFFER_DURATION(srcbuf) = (GstClockTime) trunc(element->frame_interval * GST_SECOND + 0.5);
+			GST_BUFFER_DURATION(srcbuf) = (GstClockTime) floor(element->frame_interval * GST_SECOND + 0.5);
 		} else {
 			GST_BUFFER_TIMESTAMP(srcbuf) = GST_CLOCK_TIME_NONE;
 			GST_BUFFER_DURATION(srcbuf) = GST_CLOCK_TIME_NONE;
@@ -306,10 +303,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		d = data;
 		for(i = 0; i < trace_samples; i++) {
-			int x = i * DEFAULT_SCOPE_WIDTH / trace_samples;
+			int x = floor((double) i * DEFAULT_SCOPE_WIDTH / trace_samples + 0.5);
 			for(j = 0; j < element->channels; j++) {
-				int y = trunc(DEFAULT_SCOPE_HEIGHT / element->vertical_scale_sigmas * (*(d++) - element->mean) / sqrt(element->variance) + 0.5);
-				y = DEFAULT_SCOPE_HEIGHT / 2 - y;
+				int y = DEFAULT_SCOPE_HEIGHT / 2 - (int) floor(DEFAULT_SCOPE_HEIGHT / element->vertical_scale_sigmas * (*(d++) - element->mean) / sqrt(element->variance) + 0.5);
 				if(0 <= y && y < DEFAULT_SCOPE_HEIGHT)
 					pixels[y * DEFAULT_SCOPE_WIDTH + x] = pixel_colour(element->channels, j);
 			}
@@ -329,6 +325,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		gst_adapter_flush(element->adapter, flush_samples * element->channels * sizeof(*data));
+		element->next_is_discontinuity = FALSE;
 		element->next_sample += flush_samples;
 		element->adapter_head_timestamp += (GstClockTime) flush_samples * GST_SECOND / element->sample_rate;
 	}
@@ -486,6 +483,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->trace_duration = DEFAULT_TRACE_DURATION;
 	element->frame_interval = DEFAULT_TRACE_DURATION;
 	element->vertical_scale_sigmas = DEFAULT_VERTICAL_SCALE_SIGMAS;
+	element->next_is_discontinuity = FALSE;
 	element->next_sample = 0;
 	element->adapter_head_timestamp = 0;
 	element->mean = 0.0;

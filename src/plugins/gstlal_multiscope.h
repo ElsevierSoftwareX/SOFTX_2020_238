@@ -64,6 +64,7 @@ typedef struct {
 	double frame_interval;
 	double vertical_scale_sigmas;
 
+	gboolean next_is_discontinuity;
 	unsigned long next_sample;
 	GstClockTime adapter_head_timestamp;
 
