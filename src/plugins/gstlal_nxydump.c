@@ -42,6 +42,7 @@
  */
 
 
+#include <glib.h>
 #include <gst/gst.h>
 
 
@@ -61,6 +62,9 @@
  *
  * ========================================================================
  */
+
+
+#define ASSUMED_BYTES_PER_CHANNEL 24
 
 
 /*
@@ -88,7 +92,7 @@ static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int sample
 	GstFlowReturn result = GST_FLOW_OK;
 	GstBuffer *buf;
 
-	result = gst_pad_alloc_buffer(pad, GST_BUFFER_OFFSET(template) + start, 0, GST_PAD_CAPS(pad), &buf);
+	result = gst_pad_alloc_buffer(pad, GST_BUFFER_OFFSET_NONE, 0, GST_PAD_CAPS(pad), &buf);
 	if(result != GST_FLOW_OK) {
 		GST_ERROR("gst_pad_alloc_buffer() failed allocating gap buffer");
 		return result;
@@ -96,7 +100,7 @@ static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int sample
 
 	gst_buffer_copy_metadata(buf, template, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 	GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
-	GST_BUFFER_OFFSET_END(buf) = GST_BUFFER_OFFSET(buf) + (stop - start) - 1;
+	GST_BUFFER_OFFSET_END(buf) = GST_BUFFER_OFFSET(buf);
 	GST_BUFFER_TIMESTAMP(buf) = GST_BUFFER_TIMESTAMP(template) + start * GST_SECOND / sample_rate;
 	GST_BUFFER_DURATION(buf) = (stop - start) * GST_SECOND / sample_rate;
 
@@ -230,7 +234,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	/*
-	 * If start != 0, need to push a gap buffer.
+	 * If start != 0, need to push a gap buffer to precede the data.
 	 */
 
 	if(start) {
@@ -240,12 +244,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	/*
-	 * Start an output buffer.  Assume 24 bytes per channel per sample,
-	 * with an additional channel for the time stamps.  It will be
-	 * resized if it's not big enough.
+	 * Start an output buffer.  Assume an additional channel for the
+	 * time stamps.  If the buffer isn't big enough, it will be resized
+	 * later.
 	 */
 
-	srcbuf = gst_buffer_new_and_alloc((channels + 1) * (stop - start) * 24);
+	srcbuf = gst_buffer_new_and_alloc((channels + 1) * (stop - start) * ASSUMED_BYTES_PER_CHANNEL);
 	if(!srcbuf) {
 		GST_ERROR_OBJECT(element, "failure allocating output buffer");
 		result = GST_FLOW_ERROR;
@@ -257,11 +261,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS);
-	GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_NONE;
-	GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET_NONE;
+	GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET_NONE;
 	GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + start * GST_SECOND / element->sample_rate;
 	GST_BUFFER_DURATION(srcbuf) = (stop - start) * GST_SECOND / element->sample_rate;
-	gst_caps_ref(GST_PAD_CAPS(element->srcpad));
 	gst_buffer_set_caps(srcbuf, GST_PAD_CAPS(element->srcpad));
 
 	/*
@@ -272,11 +274,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 	location = (char *) GST_BUFFER_DATA(srcbuf);
 	for(i = start; i < stop; i++) {
-		GstClockTime t = GST_BUFFER_TIMESTAMP(sinkbuf) + GST_SECOND * i / element->sample_rate;
+		GstClockTime t = GST_BUFFER_TIMESTAMP(sinkbuf) + i * GST_SECOND / element->sample_rate;
 
-		if((guint8 *) location - GST_BUFFER_DATA(srcbuf) + (channels + 1) * 24 + 1000 >= GST_BUFFER_SIZE(srcbuf)) {
-			int increment = (channels + 1) * 24 + 1024;
-			guint8 *new = realloc(GST_BUFFER_DATA(srcbuf), GST_BUFFER_SIZE(srcbuf) + increment);
+		if((guint8 *) location - GST_BUFFER_DATA(srcbuf) + (channels + 1) * ASSUMED_BYTES_PER_CHANNEL + 1024 >= GST_BUFFER_SIZE(srcbuf)) {
+			/* add space for 100 rows plus a bit extra */
+			int increment = 100 * (channels + 1) * ASSUMED_BYTES_PER_CHANNEL + 1024;
+			guint8 *new = g_try_realloc(GST_BUFFER_MALLOCDATA(srcbuf), GST_BUFFER_SIZE(srcbuf) + increment);
 			if(!new) {
 				GST_ERROR("buffer resize failed");
 				gst_buffer_unref(srcbuf);
@@ -295,7 +298,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GST_BUFFER_SIZE(srcbuf) = (guint8 *) location - GST_BUFFER_DATA(srcbuf);
 
 	/*
-	 * Push the buffer downstream
+	 * Push the buffer downstream.
 	 */
 
 	result = gst_pad_push(element->srcpad, srcbuf);
@@ -303,7 +306,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		goto done;
 
 	/*
-	 * If stop != samples, finish with a gap buffer.
+	 * If stop != samples, push a gap buffer to pad the output stream
+	 * up to the end of the input buffer.
 	 */
 
 	if(stop != samples) {
