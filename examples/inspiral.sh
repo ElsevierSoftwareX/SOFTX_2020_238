@@ -1,10 +1,10 @@
 # A gst-launch pipeline to perform an inspiral matched filter analysis.
 
 LALCACHE="/home/kipp/scratch_local/874100000-20000/cache/874100000-20000.cache"
-GPSSTART="874100000"
-GPSSTART="874106958"
-GPSSTOP="874120000"
-#GPSSTOP="874110558"
+GPSSTART="874100000000000000"
+GPSSTART="874106958000000000"
+GPSSTOP="874120000000000000"
+#GPSSTOP="874110558000000000"
 INSTRUMENT="H1"
 CHANNEL="LSC-STRAIN"
 
@@ -13,25 +13,27 @@ SRC="lal_framesrc \
 	location=${LALCACHE} \
 	instrument=${INSTRUMENT} \
 	channel-name=${CHANNEL} \
-	start-time-gps=${GPSSTART} \
-	stop-time-gps=${GPSSTOP}"
+	start-time-gps-ns=${GPSSTART} \
+	stop-time-gps-ns=${GPSSTOP}"
 
-#SRC="fakesrc \
-#	blocksize=$((16384*8*16)) \
-#	num-buffers=$((320/16)) \
-#	sizetype=2 \
-#	sizemax=$((16384*8*16)) \
-#	filltype=2 \
-#	datarate=$((16384*8)) \
-#! audio/x-raw-float, width=64, channels=1, rate=16384, endianness=1234, instrument=${INSTRUMENT}, channel=${CHANNEL}"
+FAKESRC="fakesrc \
+	blocksize=$((16384*8*16)) \
+	num-buffers=$((320/16)) \
+	sizetype=2 \
+	sizemax=$((16384*8*16)) \
+	filltype=2 \
+	datarate=$((16384*8)) \
+! audio/x-raw-float, width=64, channels=1, rate=16384, endianness=1234, instrument=${INSTRUMENT}, channel=${CHANNEL}"
 
 SINK="queue ! lal_multiscope trace-duration=4.0 frame-interval=0.0625 average-interval=32.0 do-timestamp=false ! ffmpegcolorspace ! cairotimeoverlay ! autovideosink"
 
 FAKESINK="queue ! fakesink sync=false preroll-queue-len=1"
+SINK=$FAKESINK
 
 PLAYBACK="adder ! audioresample ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=1e-3 ! audioconvert ! queue max-size-time=3000000000 ! alsasink"
 
-NXYDUMP="queue ! lal_nxydump start-time=110000000000 stop-time=130000000000 ! filesink sync=false preroll-queue-len=1 location=nxydump.txt"
+#NXYDUMP="queue ! lal_nxydump start-time=110000000000 stop-time=130000000000 ! filesink sync=false preroll-queue-len=1 location"
+NXYDUMP="queue ! lal_nxydump start-time=170000000000 stop-time=310000000000 ! filesink sync=false preroll-queue-len=1 location"
 
 #
 # run with GST_DEBUG_DUMP_DOT_DIR set to some location to get a set of dot
@@ -65,7 +67,7 @@ gst-launch --gst-debug-level=1 \
 	! audioresample \
 	! audio/x-raw-float, rate=128 \
 	! tee name=hoft_128 \
-	lal_adder name=orthogonal_snr_sum_squares ! $NXYDUMP \
+	lal_adder name=orthogonal_snr_sum_squares ! $NXYDUMP=nxydump.txt \
 	hoft_2048. ! $SINK \
 	hoft_2048. ! queue max-size-time=96000000000 ! lal_templatebank \
 		name=templatebank0 \
@@ -144,10 +146,10 @@ gst-launch --gst-debug-level=1 \
 		t-start=32 \
 		t-end=48 \
 		snr-length=$((128*8)) \
-	lal_matrixmixer \
-		name=snr6 \
 	templatebank6.src ! tee name=orthosnr6 ! $SINK \
 	templatebank6.sumofsquares ! queue ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
+	lal_matrixmixer \
+		name=snr6 \
 	templatebank6.matrix ! snr6.matrix \
 	orthosnr6. ! snr6.sink \
 	snr6. ! $FAKESINK \
@@ -156,10 +158,10 @@ gst-launch --gst-debug-level=1 \
 		t-start=48 \
 		t-end=64 \
 		snr-length=$((128*8)) \
-	lal_matrixmixer \
-		name=snr7 \
 	templatebank7.src ! tee name=orthosnr7 ! $SINK \
 	templatebank7.sumofsquares ! queue ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
+	lal_matrixmixer \
+		name=snr7 \
 	templatebank7.matrix ! snr7.matrix \
 	orthosnr7. ! snr7.sink \
 	snr7. ! $FAKESINK \
