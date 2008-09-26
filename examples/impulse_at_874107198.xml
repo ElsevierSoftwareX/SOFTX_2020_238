@@ -1,0 +1,48 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!DOCTYPE LIGO_LW SYSTEM "http://ldas-sw.ligo.caltech.edu/doc/ligolwAPI/html/ligolw_dtd.txt">
+<LIGO_LW>
+	<Table Name="process:table">
+		<Column Type="lstring" Name="process:program"/>
+		<Column Type="lstring" Name="process:version"/>
+		<Column Type="lstring" Name="process:cvs_repository"/>
+		<Column Type="int_4s" Name="process:cvs_entry_time"/>
+		<Column Type="lstring" Name="process:comment"/>
+		<Column Type="int_4s" Name="process:is_online"/>
+		<Column Type="lstring" Name="process:node"/>
+		<Column Type="lstring" Name="process:username"/>
+		<Column Type="int_4s" Name="process:unix_procid"/>
+		<Column Type="int_4s" Name="process:start_time"/>
+		<Column Type="int_4s" Name="process:end_time"/>
+		<Column Type="int_4s" Name="process:jobid"/>
+		<Column Type="lstring" Name="process:domain"/>
+		<Column Type="lstring" Name="process:ifos"/>
+		<Column Type="ilwd:char" Name="process:process_id"/>
+		<Stream Name="process:table" Type="Local" Delimiter=",">
+			"by hand",,,,,0,"m57.ligo.caltech.edu","kipp",,,,0,"lalapps",,"process:process_id:0"
+		</Stream>
+	</Table>
+	<Table Name="process_params:table">
+		<Column Type="lstring" Name="process_params:program"/>
+		<Column Type="ilwd:char" Name="process_params:process_id"/>
+		<Column Type="lstring" Name="process_params:param"/>
+		<Column Type="lstring" Name="process_params:type"/>
+		<Column Type="lstring" Name="process_params:value"/>
+		<Stream Name="process_params:table" Type="Local" Delimiter=",">
+		</Stream>
+	</Table>
+	<Table Name="sim_burst:table">
+		<Column Type="ilwd:char" Name="sim_burst:process_id"/>
+		<Column Type="lstring" Name="sim_burst:waveform"/>
+		<Column Type="real_8" Name="sim_burst:ra"/>
+		<Column Type="real_8" Name="sim_burst:dec"/>
+		<Column Type="real_8" Name="sim_burst:psi"/>
+		<Column Type="int_4s" Name="sim_burst:time_geocent_gps"/>
+		<Column Type="int_4s" Name="sim_burst:time_geocent_gps_ns"/>
+		<Column Type="real_8" Name="sim_burst:time_geocent_gmst"/>
+		<Column Type="real_8" Name="sim_burst:amplitude"/>
+		<Column Type="ilwd:char" Name="sim_burst:simulation_id"/>
+		<Stream Name="sim_burst:table" Type="Local" Delimiter=",">
+			"process:process_id:0","Impulse",0.0,0.0,0.0,874107198,0,0,1e-17,"sim_burst:simulation_id:0"
+		</Stream>
+	</Table>
+</LIGO_LW>
