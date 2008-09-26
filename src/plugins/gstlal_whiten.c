@@ -132,8 +132,8 @@ GType gstlal_psdmode_get_type(void)
 
 static int make_window(GSTLALWhiten *element)
 {
-	unsigned transient = trunc(element->filter_length * element->sample_rate + 0.5);
-	unsigned hann_length = trunc(element->convolution_length * element->sample_rate + 0.5) - 2 * transient;
+	unsigned transient = floor(element->filter_length * element->sample_rate + 0.5);
+	unsigned hann_length = floor(element->convolution_length * element->sample_rate + 0.5) - 2 * transient;
 
 	element->window = XLALCreateHannREAL8Window(hann_length);
 	if(!element->window) {
@@ -151,7 +151,7 @@ static int make_window(GSTLALWhiten *element)
 
 static int make_fft_plans(GSTLALWhiten *element)
 {
-	unsigned fft_length = trunc(element->convolution_length * element->sample_rate + 0.5);
+	unsigned fft_length = floor(element->convolution_length * element->sample_rate + 0.5);
 
 	XLALDestroyREAL8FFTPlan(element->fwdplan);
 	XLALDestroyREAL8FFTPlan(element->revplan);
@@ -176,7 +176,7 @@ static REAL8FrequencySeries *make_empty_psd(const GSTLALWhiten *element)
 {
 	LIGOTimeGPS gps_zero = {0, 0};
 	LALUnit strain_squared_per_hertz = gstlal_lalStrainSquaredPerHertz();
-	unsigned segment_length = trunc(element->convolution_length * element->sample_rate + 0.5);
+	unsigned segment_length = floor(element->convolution_length * element->sample_rate + 0.5);
 	unsigned psd_length = segment_length / 2 + 1;
 	REAL8FrequencySeries *psd;
 
@@ -398,8 +398,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	GstFlowReturn result = GST_FLOW_OK;
 	gboolean is_discontinuity = FALSE;
-	unsigned segment_length = trunc(element->convolution_length * element->sample_rate + 0.5);
-	unsigned transient = trunc(element->filter_length * element->sample_rate + 0.5);
+	unsigned segment_length = floor(element->convolution_length * element->sample_rate + 0.5);
+	unsigned transient = floor(element->filter_length * element->sample_rate + 0.5);
 	REAL8TimeSeries *segment = NULL;
 	COMPLEX16FrequencySeries *tilde_segment = NULL;
 
