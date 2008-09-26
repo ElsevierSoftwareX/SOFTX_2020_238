@@ -742,7 +742,7 @@ static void class_init(gpointer class, gpointer class_data)
 	g_object_class_install_property(gobject_class, ARG_SRC_BUFFER_DURATION, g_param_spec_int("buffer-duration", "Buffer duration", "Size of input buffer in seconds.", 1, 2048, DEFAULT_BUFFER_DURATION, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_INSTRUMENT, g_param_spec_string("instrument", "Instrument", "Instrument name (e.g., \"H1\").", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_CHANNEL_NAME, g_param_spec_string("channel-name", "Channel name", "Channel name (e.g., \"LSC-STRAIN\").", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_SRC_UNITS, g_param_spec_string("units", "Units", "Units string parsable by LAL's Units code (e.g., \"strain\" or \"counts\"). null or an empty string means dimensionless", DEFAULT_UNITS_STRING, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_SRC_UNITS, g_param_spec_string("units", "Units", "Units string parsable by LAL's Units code (e.g., \"strain\" or \"counts\"). null or an empty string means dimensionless.", DEFAULT_UNITS_STRING, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_START_TIME_GPS, g_param_spec_int64("start-time-gps-ns", "Start time", "Start time in GPS nanoseconds.", G_MININT64, G_MAXINT64, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_STOP_TIME_GPS, g_param_spec_int64("stop-time-gps-ns", "Stop time", "Stop time in GPS nanoseconds.", G_MININT64, G_MAXINT64, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
