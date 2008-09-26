@@ -151,18 +151,22 @@ REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf)
 	LALUnit units;
 	double deltaT;
 	size_t length;
-	REAL8TimeSeries *series;
+	REAL8TimeSeries *series = NULL;
 
 	/*
 	 * Retrieve the instrument, channel name, sample rate, and units
 	 * from the caps.
 	 */
 
-	name = gstlal_build_full_channel_name(gst_structure_get_string(gst_caps_get_structure(caps, 0), "instrument"), gst_structure_get_string(gst_caps_get_structure(caps, 0), "channel"));
+	name = gstlal_build_full_channel_name(gst_structure_get_string(gst_caps_get_structure(caps, 0), "instrument"), gst_structure_get_string(gst_caps_get_structure(caps, 0), "channel_name"));
 	deltaT = 1.0 / g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 	if(!XLALParseUnitString(&units, gst_structure_get_string(gst_caps_get_structure(caps, 0), "units"))) {
-		/* FIXME:  handle error */
+		GST_ERROR("failure parsing units");
+		goto done;
 	}
+	/* FIXME:  this is hard-coded until I can figure out why passing
+	 * the units via the caps doesn't work */
+	units = lalStrainUnit;
 
 	/*
 	 * Retrieve the epoch from the time stamp and the length from the
@@ -177,7 +181,6 @@ REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf)
 	 */
 
 	series = XLALCreateREAL8TimeSeries(name, &epoch, 0.0, deltaT, &units, 0);
-	free(name);
 	if(!series)
 		goto done;
 
@@ -196,6 +199,7 @@ REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf)
 
 done:
 	gst_caps_unref(caps);
+	free(name);
 	return series;
 }
 
