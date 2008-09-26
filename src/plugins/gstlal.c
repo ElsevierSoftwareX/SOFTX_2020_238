@@ -164,9 +164,6 @@ REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf)
 		GST_ERROR("failure parsing units");
 		goto done;
 	}
-	/* FIXME:  this is hard-coded until I can figure out why passing
-	 * the units via the caps doesn't work */
-	units = lalStrainUnit;
 
 	/*
 	 * Retrieve the epoch from the time stamp and the length from the
