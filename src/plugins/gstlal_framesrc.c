@@ -79,6 +79,8 @@
 
 
 #define DEFAULT_BUFFER_DURATION 16
+#define DEFAULT_UNITS_STRING "strain"
+#define DEFAULT_UNITS_UNIT lalStrainUnit
 
 
 /*
@@ -128,7 +130,7 @@ static GstCaps *series_to_caps(const char *instrument, const char *channel_name,
 	switch(type) {
 	case LAL_I4_TYPE_CODE: {
 		INT4TimeSeries *local_series = series;
-		XLALUnitAsString(units, 100, &local_series->sampleUnits);
+		XLALUnitAsString(units, sizeof(units), &local_series->sampleUnits);
 		return gst_caps_new_simple(
 			"audio/x-raw-int",
 			"rate", G_TYPE_INT, (int) floor(1.0 / local_series->deltaT + 0.5),
@@ -257,14 +259,17 @@ static void *read_series(GSTLALFrameSrc *element, long start_sample, long length
 		switch(element->series_type) {
 		case LAL_I4_TYPE_CODE:
 			element->series_buffer = XLALFrReadINT4TimeSeries(element->stream, element->full_channel_name, &buffer_start_time, buffer_length * deltaT, 0);
+			((INT4TimeSeries *) (element->series_buffer))->sampleUnits = element->units;
 			break;
 
 		case LAL_S_TYPE_CODE:
 			element->series_buffer = XLALFrReadREAL4TimeSeries(element->stream, element->full_channel_name, &buffer_start_time, buffer_length * deltaT, 0);
+			((REAL4TimeSeries *) (element->series_buffer))->sampleUnits = element->units;
 			break;
 
 		case LAL_D_TYPE_CODE:
 			element->series_buffer = XLALFrReadREAL8TimeSeries(element->stream, element->full_channel_name, &buffer_start_time, buffer_length * deltaT, 0);
+			((REAL8TimeSeries *) (element->series_buffer))->sampleUnits = element->units;
 			break;
 
 		default:
@@ -319,6 +324,7 @@ enum property {
 	ARG_SRC_BUFFER_DURATION,
 	ARG_SRC_INSTRUMENT,
 	ARG_SRC_CHANNEL_NAME,
+	ARG_SRC_UNITS,
 	ARG_SRC_START_TIME_GPS,
 	ARG_SRC_STOP_TIME_GPS
 };
@@ -352,6 +358,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->full_channel_name = gstlal_build_full_channel_name(element->instrument, element->channel_name);
 		break;
 
+	case ARG_SRC_UNITS:
+		XLALParseUnitString(&element->units, g_value_get_string(value));
+		break;
+
 	case ARG_SRC_START_TIME_GPS:
 		XLALINT8NSToGPS(&element->start_time, g_value_get_int64(value));
 		break;
@@ -383,6 +393,13 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	case ARG_SRC_CHANNEL_NAME:
 		g_value_set_string(value, element->channel_name);
 		break;
+
+	case ARG_SRC_UNITS: {
+		char units[100];
+		XLALUnitAsString(units, sizeof(units), &element->units);
+		g_value_set_string(value, units);
+		break;
+	}
 
 	case ARG_SRC_START_TIME_GPS:
 		g_value_set_int64(value, XLALGPSToINT8NS(&element->start_time));
@@ -444,14 +461,17 @@ static gboolean start(GstBaseSrc *object)
 	switch(element->series_type) {
 	case LAL_I4_TYPE_CODE:
 		element->series_buffer = XLALFrReadINT4TimeSeries(element->stream, element->full_channel_name, &element->start_time, buffer_duration, 0);
+		((INT4TimeSeries *) (element->series_buffer))->sampleUnits = element->units;
 		break;
 
 	case LAL_S_TYPE_CODE:
 		element->series_buffer = XLALFrReadREAL4TimeSeries(element->stream, element->full_channel_name, &element->start_time, buffer_duration, 0);
+		((REAL8TimeSeries *) (element->series_buffer))->sampleUnits = element->units;
 		break;
 
 	case LAL_D_TYPE_CODE:
 		element->series_buffer = XLALFrReadREAL8TimeSeries(element->stream, element->full_channel_name, &element->start_time, buffer_duration, 0);
+		((REAL8TimeSeries *) (element->series_buffer))->sampleUnits = element->units;
 		break;
 
 	case -1:
@@ -722,7 +742,7 @@ static void class_init(gpointer class, gpointer class_data)
 	g_object_class_install_property(gobject_class, ARG_SRC_BUFFER_DURATION, g_param_spec_int("buffer-duration", "Buffer duration", "Size of input buffer in seconds.", 1, 2048, DEFAULT_BUFFER_DURATION, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_INSTRUMENT, g_param_spec_string("instrument", "Instrument", "Instrument name (e.g., \"H1\").", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_CHANNEL_NAME, g_param_spec_string("channel-name", "Channel name", "Channel name (e.g., \"LSC-STRAIN\").", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	/* FIXME:  "string" is not the best type for these ... */
+	g_object_class_install_property(gobject_class, ARG_SRC_UNITS, g_param_spec_string("units", "Units", "Units string parsable by LAL's Units code (e.g., \"strain\" or \"counts\"). null or an empty string means dimensionless", DEFAULT_UNITS_STRING, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_START_TIME_GPS, g_param_spec_int64("start-time-gps-ns", "Start time", "Start time in GPS nanoseconds.", G_MININT64, G_MAXINT64, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_STOP_TIME_GPS, g_param_spec_int64("stop-time-gps-ns", "Stop time", "Stop time in GPS nanoseconds.", G_MININT64, G_MAXINT64, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
@@ -756,6 +776,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	XLALGPSSet(&element->stop_time, 0, 0);
 	element->next_sample = 0;
 	element->stream = NULL;
+	element->units = DEFAULT_UNITS_UNIT;
 	element->series_buffer_duration = DEFAULT_BUFFER_DURATION;
 	element->series_buffer = NULL;
 	element->series_type = -1;

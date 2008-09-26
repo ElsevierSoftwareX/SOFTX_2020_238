@@ -28,6 +28,7 @@
 
 #include <lal/FrameStream.h>
 #include <lal/LALDatatypes.h>
+#include <lal/Units.h>
 
 
 G_BEGIN_DECLS
@@ -64,6 +65,7 @@ typedef struct {
 
 	FrStream *stream;
 	LALTYPECODE series_type;
+	LALUnit units;
 
 	int series_buffer_duration;
 	void *series_buffer;
