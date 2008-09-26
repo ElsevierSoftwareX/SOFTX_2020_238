@@ -97,8 +97,8 @@ static int timestamp_to_sample_clipped(GstClockTime start, int samples, int samp
  * Construct an empty buffer flagged as a gap and push it on the pad.  The
  * buffer's time stamp, etc., will be derived from the template, and will
  * be constructed so as to span the interval in the stream corresponding to
- * the samples [start, stop) relative to the start of the template buffer,
- * give the sample rate.
+ * the samples [start, stop) relative to the template's time stamp given
+ * the sample rate.
  */
 
 
@@ -116,7 +116,8 @@ static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int sample
 	gst_buffer_copy_metadata(buf, template, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 	GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
 	GST_BUFFER_OFFSET_END(buf) = GST_BUFFER_OFFSET(buf);
-	GST_BUFFER_TIMESTAMP(buf) = GST_BUFFER_TIMESTAMP(template) + (GstClockTime) start * GST_SECOND / sample_rate;
+	if(GST_BUFFER_TIMESTAMP_IS_VALID(buf))
+		GST_BUFFER_TIMESTAMP(buf) += (GstClockTime) start * GST_SECOND / sample_rate;
 	GST_BUFFER_DURATION(buf) = (GstClockTime) (stop - start) * GST_SECOND / sample_rate;
 
 	result = gst_pad_push(pad, buf);
@@ -317,7 +318,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	channels = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels"));
-	samples = GST_BUFFER_SIZE(sinkbuf) / sizeof(double) / channels;
+	if(GST_BUFFER_DURATION_IS_VALID(sinkbuf))
+		samples = GST_BUFFER_DURATION(sinkbuf) * element->sample_rate / GST_SECOND;
+	else if(GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))
+		samples = GST_BUFFER_OFFSET_END(sinkbuf) + 1 - GST_BUFFER_OFFSET(sinkbuf);
+	else
+		samples = GST_BUFFER_SIZE(sinkbuf) / sizeof(double) / channels;
 
 	/*
 	 * Compute the desired start and stop samples relative to the start
@@ -335,11 +341,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	/*
-	 * If we don't need any of the samples from this buffer, we're
-	 * done --> push gap buffer downstream.
+	 * If we don't need any of the samples from this buffer or it's a
+	 * gap then we're done --> push gap buffer downstream.
 	 */
 
-	if(stop == start) {
+	if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP) || (stop == start)) {
 		result = push_gap(element->srcpad, sinkbuf, element->sample_rate, 0, samples);
 		goto done;
 	}
