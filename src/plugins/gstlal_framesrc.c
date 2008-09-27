@@ -358,9 +358,14 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->full_channel_name = gstlal_build_full_channel_name(element->instrument, element->channel_name);
 		break;
 
-	case ARG_SRC_UNITS:
-		XLALParseUnitString(&element->units, g_value_get_string(value));
+	case ARG_SRC_UNITS: {
+		const char *units = g_value_get_string(value);
+		if(!units)
+			element->units = lalDimensionlessUnit;
+		else
+			XLALParseUnitString(&element->units, units);
 		break;
+	}
 
 	case ARG_SRC_START_TIME_GPS:
 		XLALINT8NSToGPS(&element->start_time, g_value_get_int64(value));
