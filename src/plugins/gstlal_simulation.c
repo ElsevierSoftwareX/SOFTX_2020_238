@@ -215,18 +215,9 @@ static struct injection_document *load_injection_document(const char *filename, 
  */
 
 
-static int add_xml_injections(REAL8TimeSeries *h, const struct injection_document *injection_document, COMPLEX8FrequencySeries *response)
+static int add_xml_injections(REAL8TimeSeries *h, const struct injection_document *injection_document, COMPLEX16FrequencySeries *response)
 {
 	static const char func[] = "add_xml_injections";
-	LIGOTimeGPS start;
-	LIGOTimeGPS end;
-
-	/*
-	 * Compute bounds of injection interval
-	 */
-
-	start = end = h->epoch;
-	XLALGPSAdd(&end, h->data->length * h->deltaT);
 
 	/*
 	 * sim_burst
@@ -234,7 +225,7 @@ static int add_xml_injections(REAL8TimeSeries *h, const struct injection_documen
 
 	if(injection_document->sim_burst_table_head) {
 		XLALPrintInfo("%s(): computing sim_burst injections ...\n", func);
-		if(XLALBurstInjectSignals(h, injection_document->sim_burst_table_head, NULL))
+		if(XLALBurstInjectSignals(h, injection_document->sim_burst_table_head, response))
 			XLAL_ERROR(func, XLAL_EFUNC);
 		XLALPrintInfo("%s(): done\n", func);
 	}
@@ -246,37 +237,79 @@ static int add_xml_injections(REAL8TimeSeries *h, const struct injection_documen
 	if(injection_document->sim_inspiral_table_head) {
 		LALStatus stat;
 		double underflow_protection = 1.0;
-		COMPLEX8FrequencySeries *inspiral_response = NULL;
+		LALUnit strain_per_count = gstlal_lalStrainPerADCCount();
+		COMPLEX8FrequencySeries *inspiral_response;
 		REAL4TimeSeries *mdc;
 		unsigned i;
 
-		if(!response) {
-			LALUnit strain_per_count = gstlal_lalStrainPerADCCount();
-			underflow_protection = 1e-20;
+		/*
+		 * confirm the input time series has the correct sample
+		 * units.  argh.  XLALUnitCompare() is backwards from every
+		 * other kind of comparison function in the world.  Oh the
+		 * humanity!  0 == different, 1 == same.  sigh.
+		 */
+
+		if(!XLALUnitCompare(&lalStrainUnit, &h->sampleUnits)) {
+			XLALPrintError("%s(): target time series must have units of strain\n", func);
+			XLAL_ERROR(func, XLAL_EUNIT);
+		}
+
+		/*
+		 * create a response function, copy the double precision
+		 * version if one was provided otherwise make a dummy flat
+		 * response
+		 */
+
+		if(response)
+			inspiral_response = XLALCreateCOMPLEX8FrequencySeries(response->name, &response->epoch, response->f0, response->deltaF, &response->sampleUnits, response->data->length);
+		else
 			inspiral_response = XLALCreateCOMPLEX8FrequencySeries(NULL, &h->epoch, 0.0, 1.0 / (h->data->length * h->deltaT), &strain_per_count, h->data->length / 2 + 1);
-			if(!inspiral_response)
-				XLAL_ERROR(func, XLAL_EFUNC);
+		if(!inspiral_response)
+			XLAL_ERROR(func, XLAL_EFUNC);
+
+		if(response) {
+			for(i = 0; i < inspiral_response->data->length; i++)
+				inspiral_response->data->data[i] = XLALCOMPLEX8Rect(LAL_REAL(response->data->data[i]), LAL_IMAG(response->data->data[i]));
+		} else {
+			underflow_protection = 1e-20;
 			for(i = 0; i < inspiral_response->data->length; i++)
 				inspiral_response->data->data[i] = XLALCOMPLEX8Rect(underflow_protection, 0.0);
 		}
 
-		mdc = XLALCreateREAL4TimeSeries(h->name, &h->epoch, h->f0, h->deltaT, &h->sampleUnits, h->data->length);
+		/*
+		 * create a single-precision time series of zeros to hold
+		 * the injection
+		 */
+
+		mdc = XLALCreateREAL4TimeSeries(h->name, &h->epoch, h->f0, h->deltaT, &lalADCCountUnit, h->data->length);
 		if(!mdc) {
 			XLALDestroyCOMPLEX8FrequencySeries(inspiral_response);
 			XLAL_ERROR(func, XLAL_EFUNC);
 		}
 		memset(mdc->data->data, 0, mdc->data->length * sizeof(*mdc->data->data));
 
+		/*
+		 * compute the injections
+		 */
+
 		XLALPrintInfo("%s(): computing sim_inspiral injections ...\n", func);
 		/* FIXME: figure out how to do error handling like this */
 		/*LAL_CALL(LALFindChirpInjectSignals(&stat, mdc, injection_document->sim_inspiral_table_head, response), &stat);*/
 		XLALClearErrno();
 		memset(&stat, 0, sizeof(stat));
-		LALFindChirpInjectSignals(&stat, mdc, injection_document->sim_inspiral_table_head, response ? response : inspiral_response);
+		LALFindChirpInjectSignals(&stat, mdc, injection_document->sim_inspiral_table_head, inspiral_response);
 		XLALPrintInfo("%s(): done\n", func);
+
+		/*
+		 * add injections to target time series
+		 */
 
 		for(i = 0; i < h->data->length; i++)
 			h->data->data[i] += mdc->data->data[i] * underflow_protection;
+
+		/*
+		 * clean up
+		 */
 
 		XLALDestroyCOMPLEX8FrequencySeries(inspiral_response);
 		XLALDestroyREAL4TimeSeries(mdc);
