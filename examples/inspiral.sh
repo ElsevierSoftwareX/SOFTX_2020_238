@@ -19,7 +19,7 @@ SRC="lal_framesrc \
 FAKESRC="audiotestsrc \
 	timestamp-offset=$GPSSTART \
 	samplesperbuffer=$((16384*16)) \
-	num-buffers=$((($GPSSTOP-$GPSSTART)/100000000)) \
+	num-buffers=$((($GPSSTOP-$GPSSTART)/100000000/16)) \
 	wave=5 \
 	volume=1e-20 \
 ! audio/x-raw-float, width=64, rate=16384, instrument=${INSTRUMENT}, channel=${CHANNEL}, units=strain"
