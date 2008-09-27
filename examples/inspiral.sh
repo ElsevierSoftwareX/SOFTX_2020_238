@@ -22,7 +22,7 @@ FAKESRC="audiotestsrc \
 	num-buffers=$((($GPSSTOP-$GPSSTART)/100000000/16)) \
 	wave=5 \
 	volume=1e-20 \
-! audio/x-raw-float, width=64, rate=16384, instrument=${INSTRUMENT}, channel=${CHANNEL}, units=strain"
+! audio/x-raw-float, width=64, rate=16384, instrument=${INSTRUMENT}, channel_name=${CHANNEL}, units=strain"
 
 WHITEN="lal_whiten \
 	psd-mode=1 \
