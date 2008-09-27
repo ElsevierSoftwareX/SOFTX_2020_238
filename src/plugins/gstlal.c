@@ -92,7 +92,7 @@
  */
 
 
-/*
+/**
  * Prefix a channel name with the instrument name.  I.e., turn "H1" and
  * "LSC-STRAIN" into "H1:LSC-STRAIN".  If either instrument or channel_name
  * is NULL, then the corresponding part of the result is left blank and the
@@ -125,8 +125,8 @@ char *gstlal_build_full_channel_name(const char *instrument, const char *channel
 /**
  * Wrap a GstBuffer in a REAL8TimeSeries.  The time series's data->data
  * pointer points to the GstBuffer's own data, so this pointer must not be
- * freed.  That means it must be set to NULL before passing the time series
- * to the destroy function.
+ * free()ed.  That means it must be set to NULL before passing the time
+ * series to the destroy function.
  *
  * Example:
  *
@@ -147,21 +147,29 @@ REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf)
 {
 	GstCaps *caps = gst_buffer_get_caps(buf);
 	char *name;
-	LIGOTimeGPS epoch;
-	LALUnit units;
 	double deltaT;
+	LALUnit units;
+	int channels;
+	LIGOTimeGPS epoch;
 	size_t length;
 	REAL8TimeSeries *series = NULL;
 
 	/*
-	 * Retrieve the instrument, channel name, sample rate, and units
-	 * from the caps.
+	 * Retrieve the instrument, channel name, sample rate, units, and
+	 * number of channels from the caps.
 	 */
 
 	name = gstlal_build_full_channel_name(gst_structure_get_string(gst_caps_get_structure(caps, 0), "instrument"), gst_structure_get_string(gst_caps_get_structure(caps, 0), "channel_name"));
 	deltaT = 1.0 / g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 	if(!XLALParseUnitString(&units, gst_structure_get_string(gst_caps_get_structure(caps, 0), "units"))) {
 		GST_ERROR("failure parsing units");
+		goto done;
+	}
+	channels = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels"));
+	if(channels != 1) {
+		/* FIXME:  might do something like return an array of time
+		 * series? */
+		GST_ERROR("cannot wrap multi-channel buffers in LAL time series");
 		goto done;
 	}
 
@@ -242,11 +250,19 @@ REAL8FrequencySeries *gstlal_read_reference_psd(const char *filename)
 	FILE *file;
 	unsigned i;
 
+	/*
+	 * open the psd file
+	 */
+
 	file = fopen(filename, "r");
 	if(!file) {
 		GST_ERROR("fopen(\"%s\") failed", filename);
 		return NULL;
 	}
+
+	/*
+	 * allocate a frequency series
+	 */
 
 	psd = XLALCreateREAL8FrequencySeries("PSD", &gps_zero, 0.0, 0.0, &strain_squared_per_hertz, 0);
 	if(!psd) {
@@ -255,23 +271,40 @@ REAL8FrequencySeries *gstlal_read_reference_psd(const char *filename)
 		return NULL;
 	}
 
+	/*
+	 * read the psd into the frequency series one sample at a time
+	 */
+
 	for(i = 0; 1; i++) {
 		char line[100];	/* argh:  hard-coded size = BAD BAD BAD */
 		double f, amp;
 
+		/*
+		 * read one line of text
+		 */
+
 		if(!fgets(line, sizeof(line), file)) {
-			if(feof(file)) {
-				fclose(file);
-				return psd;
-			} else {
-				GST_ERROR("fgets() failed");
-				fclose(file);
-				XLALDestroyREAL8FrequencySeries(psd);
-				return NULL;
-			}
+			if(feof(file))
+				/*
+				 * eof == done w/ success
+				 */
+				break;
+
+			GST_ERROR("fgets() failed");
+			fclose(file);
+			XLALDestroyREAL8FrequencySeries(psd);
+			return NULL;
 		}
 
+		/*
+		 * parse f and one psd sample
+		 */
+
 		sscanf(line, "%lg %lg", &f, &amp);
+
+		/*
+		 * store in frequency series, replacing any infs with 0
+		 */
 
 		if(!XLALResizeREAL8Sequence(psd->data, 0, i + 1)) {
 			GST_ERROR("XLALResizeREAL8Sequence() failed");
@@ -280,13 +313,25 @@ REAL8FrequencySeries *gstlal_read_reference_psd(const char *filename)
 			return NULL;
 		}
 
+		psd->data->data[i] = isinf(amp) ? 0 : amp;
+
+		/*
+		 * update the metadata
+		 */
+
 		if(i == 0)
 			psd->f0 = f;
 		else
 			psd->deltaF = (f - psd->f0) / i;
-		/* replace any infs with 0 */
-		psd->data->data[i] = isinf(amp) ? 0 : amp;
 	}
+
+	/*
+	 * done
+	 */
+
+	fclose(file);
+
+	return psd;
 }
 
 
@@ -361,10 +406,18 @@ REAL8FrequencySeries *gstlal_get_reference_psd(const char *filename, double f0, 
 		gsl_interp_accel_free(accel);
 		return NULL;
 	}
+	for(i = 0; i < psd->data->length; i++)
+		psd->data->data[i] = gsl_spline_eval(spline, f0 + i * deltaF, accel);
+
+	/*
+	 * adjust normalization for the new bin size, then update the
+	 * metadata
+	 */
+
+	for(i = 0; i < psd->data->length; i++)
+		psd->data->data[i] *= deltaF / psd->deltaF;
 	psd->f0 = f0;
 	psd->deltaF = deltaF;
-	for(i = 0; i < psd->data->length; i++)
-		psd->data->data[i] = gsl_spline_eval(spline, psd->f0 + i * psd->deltaF, accel);
 
 	/*
 	 * done
