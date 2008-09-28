@@ -258,6 +258,10 @@ static int get_psd(GSTLALWhiten *element)
 		if(isinf(element->psd->data->data[i]))
 			element->psd->data->data[i] = 0;
 
+	/*
+	 * done
+	 */
+
 	return 0;
 }
 
@@ -324,6 +328,13 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		break;
 
 	case ARG_COMPENSATION_PSD:
+		/*
+		 * a reload of the reference PSD occurs when the PSD
+		 * filename is non-NULL, but the PSD frequency series
+		 * itself is NULL, so we just set it up that way to induce
+		 * a reload
+		 */
+
 		XLALDestroyREAL8FrequencySeries(element->compensation_psd);
 		element->compensation_psd = NULL;
 		free(element->compensation_psd_filename);
