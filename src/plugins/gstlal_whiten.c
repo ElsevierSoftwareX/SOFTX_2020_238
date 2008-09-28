@@ -135,6 +135,7 @@ static int make_window(GSTLALWhiten *element)
 	unsigned transient = floor(element->filter_length * element->sample_rate + 0.5);
 	unsigned hann_length = floor(element->convolution_length * element->sample_rate + 0.5) - 2 * transient;
 
+	XLALDestroyREAL8Window(element->window);
 	element->window = XLALCreateHannREAL8Window(hann_length);
 	if(!element->window) {
 		GST_ERROR("failure creating Hann window");
@@ -142,6 +143,8 @@ static int make_window(GSTLALWhiten *element)
 	}
 	if(!XLALResizeREAL8Sequence(element->window->data, -transient, hann_length + 2 * transient)) {
 		GST_ERROR("failure resizing Hann window");
+		XLALDestroyREAL8Window(element->window);
+		element->window = NULL;
 		return -1;
 	}
 
@@ -386,9 +389,6 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	gboolean result = TRUE;
 
-	/* FIXME:  this element doesn't handle the caps changing in mid
-	 * stream, but it could */
-
 	element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 
 	result = gst_pad_set_caps(element->srcpad, caps);
@@ -406,7 +406,6 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
-	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	GstFlowReturn result = GST_FLOW_OK;
 	gboolean is_discontinuity = FALSE;
 	unsigned segment_length = floor(element->convolution_length * element->sample_rate + 0.5);
@@ -592,7 +591,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
 			is_discontinuity = FALSE;
 		}
-		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + segment_length - 1;
+		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + (segment_length / 2 - transient) - 1;
 		GST_BUFFER_TIMESTAMP(srcbuf) = element->adapter_head_timestamp + transient * GST_SECOND / element->sample_rate;
 		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) (segment_length / 2 - transient) * GST_SECOND / element->sample_rate;
 
@@ -637,7 +636,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 done:
 	XLALDestroyREAL8TimeSeries(segment);
 	XLALDestroyCOMPLEX16FrequencySeries(tilde_segment);
-	gst_caps_unref(caps);
 	gst_object_unref(element);
 	return result;
 }
