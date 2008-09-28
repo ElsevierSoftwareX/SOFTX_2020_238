@@ -87,7 +87,7 @@ static int timestamp_to_sample_clipped(GstClockTime start, int samples, int samp
 	if(t <= start)
 		return 0;
 	t -= start;
-	if(t > (GstClockTime) samples * GST_SECOND / sample_rate + 1)
+	if(t > (GstClockTime) samples * GST_SECOND / sample_rate)
 		return samples;
 	return t * sample_rate / GST_SECOND;
 }
