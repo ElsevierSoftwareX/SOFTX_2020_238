@@ -179,15 +179,21 @@ REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf)
 	 */
 
 	XLALINT8NSToGPS(&epoch, GST_BUFFER_TIMESTAMP(buf));
-	length = GST_BUFFER_SIZE(buf) / sizeof(*series->data->data);
+	length = GST_BUFFER_SIZE(buf) / sizeof(*series->data->data) / channels;
+	if(channels * length * sizeof(*series->data->data) != GST_BUFFER_SIZE(buf)) {
+		GST_ERROR("buffer size not an integer multiple of the sample size");
+		goto done;
+	}
 
 	/*
 	 * Build a zero-length time series with the correct metadata
 	 */
 
 	series = XLALCreateREAL8TimeSeries(name, &epoch, 0.0, deltaT, &units, 0);
-	if(!series)
+	if(!series) {
+		GST_ERROR("XLALCreateREAL8TimeSeries() failed");
 		goto done;
+	}
 
 	/*
 	 * Replace the time series' data pointer with the GstBuffer's, and
