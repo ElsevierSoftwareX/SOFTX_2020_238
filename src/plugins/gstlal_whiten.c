@@ -407,7 +407,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	GstFlowReturn result = GST_FLOW_OK;
-	gboolean is_discontinuity = FALSE;
 	unsigned segment_length = floor(element->convolution_length * element->sample_rate + 0.5);
 	unsigned transient = floor(element->filter_length * element->sample_rate + 0.5);
 	REAL8TimeSeries *segment = NULL;
@@ -421,8 +420,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	if(GST_BUFFER_IS_DISCONT(sinkbuf)) {
 		/* FIXME:  if there is tail data left over, maybe it should
 		 * be pushed downstream? */
-		is_discontinuity = TRUE;
 		gst_adapter_clear(element->adapter);
+		element->next_is_discontinuity = TRUE;
+		element->next_sample = GST_BUFFER_OFFSET(sinkbuf);
 		element->adapter_head_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);
 	}
 
@@ -584,15 +584,15 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * half of the holding area minus the transient)
 		 */
 
-		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, (segment_length / 2 - transient) * sizeof(*segment->data->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
+		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample + transient, (segment_length / 2 - transient) * sizeof(*segment->data->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
 		if(result != GST_FLOW_OK)
 			goto done;
-		if(is_discontinuity) {
+		if(element->next_is_discontinuity) {
 			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
-			is_discontinuity = FALSE;
+			element->next_is_discontinuity = FALSE;
 		}
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + (segment_length / 2 - transient) - 1;
-		GST_BUFFER_TIMESTAMP(srcbuf) = element->adapter_head_timestamp + transient * GST_SECOND / element->sample_rate;
+		GST_BUFFER_TIMESTAMP(srcbuf) = element->adapter_head_timestamp + (GstClockTime) transient * GST_SECOND / element->sample_rate;
 		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) (segment_length / 2 - transient) * GST_SECOND / element->sample_rate;
 
 		/*
@@ -781,6 +781,7 @@ static void instance_init(GTypeInstance * object, gpointer class)
 
 	/* internal data */
 	element->adapter = gst_adapter_new();
+	element->next_is_discontinuity = FALSE;
 	element->next_sample = 0;
 	element->adapter_head_timestamp = 0;
 	element->filter_length = DEFAULT_FILTER_LENGTH;

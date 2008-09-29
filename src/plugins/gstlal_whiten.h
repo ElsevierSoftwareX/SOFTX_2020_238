@@ -86,6 +86,7 @@ typedef struct {
 	GstPad *srcpad;
 
 	int sample_rate;
+	gboolean next_is_discontinuity;
 	unsigned long next_sample;
 	GstClockTime adapter_head_timestamp;
 
