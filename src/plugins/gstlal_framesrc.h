@@ -61,7 +61,7 @@ typedef struct {
 
 	LIGOTimeGPS start_time;
 	LIGOTimeGPS stop_time;
-	int next_sample;
+	guint64 next_sample;
 
 	FrStream *stream;
 	LALTYPECODE series_type;
