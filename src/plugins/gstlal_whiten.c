@@ -201,7 +201,7 @@ static REAL8FrequencySeries *make_iligo_psd(const GSTLALWhiten *element)
 		return NULL;
 
 	for(i = 0; i < psd->data->length; i++)
-		psd->data->data[i] = XLALLIGOIPsd(psd->f0 + i * psd->deltaF) / (2 * psd->deltaF);
+		psd->data->data[i] = XLALLIGOIPsd(psd->f0 + i * psd->deltaF) * (2 * psd->deltaF);
 
 	return psd;
 }
@@ -411,6 +411,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	unsigned transient = floor(element->filter_length * element->sample_rate + 0.5);
 	REAL8TimeSeries *segment = NULL;
 	COMPLEX16FrequencySeries *tilde_segment = NULL;
+	COMPLEX16FrequencySeries *mean = NULL;
 
 	/*
 	 * Push the incoming buffer into the adapter.  If the buffer is a
@@ -491,6 +492,24 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 
 		/*
+		 * And an up-to-date mean.  We store the negative of the
+		 * mean to simplify the process of adding to the transform
+		 * of the data.
+		 */
+
+		if(element->psdmode == GSTLAL_PSDMODE_RUNNING_AVERAGE) {
+			XLALDestroyCOMPLEX16FrequencySeries(mean);
+			mean = XLALPSDRegressorGetMean(element->psd_regressor, &segment->epoch, 4.0);
+			if(!mean) {
+				GST_ERROR("XLALPSDRegressorGetMean() failed");
+				result = GST_FLOW_ERROR;
+				goto done;
+			}
+			for(i = 0; i < mean->data->length; i++)
+				mean->data->data[i] = XLALCOMPLEX16Negative(mean->data->data[i]);
+		}
+
+		/*
 		 * If we're compensating for a reference spectrum, make
 		 * sure we have one of those that's up-to-date as well.
 		 */
@@ -516,10 +535,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 
 		/*
-		 * Copy data from adapter into holding area
+		 * Copy data from adapter into holding area.  Have to reset
+		 * some metadata that would otherwise get modified through
+		 * each iteration of this loop.
 		 */
 
 		memcpy(segment->data->data, gst_adapter_peek(element->adapter, segment_length * sizeof(*segment->data->data)), segment_length * sizeof(*segment->data->data));
+		segment->deltaT = (double) 1.0 / element->sample_rate;
+		segment->sampleUnits = lalStrainUnit;
 
 		/*
 		 * Transform to frequency domain
@@ -550,11 +573,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Remove lines and whiten.
 		 */
 
-		if(XLALPSDRegressorRemoveLines(element->psd_regressor, tilde_segment, 4.0)) {
-			GST_ERROR("XLALPSDRegressorRemoveLines() failed");
-			result = GST_FLOW_ERROR;
-			goto done;
-		}
+		if(mean)
+			if(!XLALAddCOMPLEX16FrequencySeries(tilde_segment, mean)) {
+				GST_ERROR("XLALAddCOMPLEX16FrequencySeries() failed");
+				result = GST_FLOW_ERROR;
+				goto done;
+			}
 		if(!XLALWhitenCOMPLEX16FrequencySeries(tilde_segment, element->psd)) {
 			GST_ERROR("XLALWhitenCOMPLEX16FrequencySeries() failed");
 			result = GST_FLOW_ERROR;
@@ -636,6 +660,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 done:
 	XLALDestroyREAL8TimeSeries(segment);
 	XLALDestroyCOMPLEX16FrequencySeries(tilde_segment);
+	XLALDestroyCOMPLEX16FrequencySeries(mean);
 	gst_object_unref(element);
 	return result;
 }
