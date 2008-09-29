@@ -42,7 +42,7 @@
 		<Column Type="real_8" Name="sim_burst:amplitude"/>
 		<Column Type="ilwd:char" Name="sim_burst:simulation_id"/>
 		<Stream Name="sim_burst:table" Type="Local" Delimiter=",">
-			"process:process_id:0","Impulse",0.0,0.0,0.0,874107198,0,0,1e-17,"sim_burst:simulation_id:0"
+			"process:process_id:0","Impulse",0.0,0.0,0.0,874107198,0,0,1e-15,"sim_burst:simulation_id:0"
 		</Stream>
 	</Table>
 </LIGO_LW>
