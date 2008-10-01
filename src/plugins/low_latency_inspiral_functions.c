@@ -1,10 +1,63 @@
-#include "low_latency_inspiral_functions.h"
+/*
+ * A template bank.
+ *
+ * Copyright (C) 2008  Kipp Cannon, Chad Hanna
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
+
+
+/* standard includes */
 #include <stdio.h>
+#include <math.h>
+
+/* gsl includes */
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
-#include <math.h>
 #include <gsl/gsl_linalg.h>
+
+/* LAL Includes */
+
+#include <lal/LALDatatypes.h>
+#include <lal/LALStdlib.h>
+#include <lal/Date.h>
+#include <lal/Sequence.h>
+#include <lal/TimeSeries.h>
+#include <lal/FrequencySeries.h>
+#include <lal/TimeFreqFFT.h>
+#include <lal/LALNoiseModels.h>
+#include <lal/Units.h>
+#include <lal/LALComplex.h>
+#include <lal/Window.h>
+#include <lal/LALInspiral.h>
+#include <lal/FindChirp.h>
+#include <lal/AVFactories.h>
+#include <lal/LIGOMetadataTables.h>
+#include <lal/LIGOMetadataUtils.h>
+#include <lal/LIGOLwXML.h>
+#include <lal/LIGOLwXMLRead.h>
+#include <lal/FindChirpTD.h>
+#include <lal/LALError.h>
+#include <lal/LALStdio.h>
+
+/* gstlal includes */
+#include "gstlal.h"
+#include "low_latency_inspiral_functions.h"
+#include "gstlal_whiten.h"
+
 
 /* FIXME: this is a place holder and needs to be implemented rigorously with  
  * lal functions */
@@ -104,6 +157,104 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
   gsl_matrix_free(work_space_matrix);
   return 0;
   }
+
+
+int create_template_from_sngl_inspiral(InspiralTemplate *bankHead,
+                       gsl_matrix *U, double duration, int fsamp)
+
+  {
+  int numsamps = fsamp*128.0;/*duration;*/
+  int i = 0;
+  double dt = 1.0/fsamp;
+  REAL8TimeSeries *template = NULL;
+  COMPLEX16FrequencySeries *fft_template = NULL;
+  REAL8FrequencySeries *psd = NULL;
+  FindChirpFilterInput         *fcFilterInput  = NULL;
+  FindChirpTmpltParams         *fcTmpltParams  = NULL;
+  FindChirpInitParams          *fcInitParams   = NULL;
+  LALStatus *status = NULL;
+  status = (LALStatus *) calloc(1,sizeof(LALStatus));
+  /*fcFilterInput = (FindChirpFilterInput *) calloc(1,sizeof(FindChirpFilterInput));
+ *   fcFilterInput->fcTmplt = (FindChirpTemplate *) calloc(1,sizeof(FindChirpTemplate));*/
+  printf("creating fft plans \n");
+  REAL8FFTPlan *fwdplan = XLALCreateForwardREAL8FFTPlan(numsamps, 0);
+  REAL8FFTPlan *revplan = XLALCreateReverseREAL8FFTPlan(numsamps, 0);
+
+  printf("Reading psd \n");
+  psd = gstlal_get_reference_psd("reference_psd.txt", 0, 1.0/duration, numsamps / 2 + 1);
+
+  if ( ! ( fcInitParams = (FindChirpInitParams *)
+        LALCalloc( 1, sizeof(FindChirpInitParams) ) ) )
+  {
+    fprintf( stderr, "could not allocate memory for findchirp init params\n" );
+    exit( 1 );
+  }
+  /* maybe remove these?*/
+  fcInitParams->numPoints      = numsamps;
+  fcInitParams->numSegments    = 1;
+  fcInitParams->numChisqBins   = 0;
+  fcInitParams->createRhosqVec = 0;
+  fcInitParams->ovrlap         = 0;
+  /* FIXME PPN has a hard coded max frequency that wont work !!! EOB for now*/
+  fcInitParams->approximant    = EOB;
+  fcInitParams->order          = twoPN;
+  fcInitParams->createCVec     = 0;
+
+  printf("LALFindChirpTemplateInit()\n");
+  LALFindChirpTemplateInit( status, &fcTmpltParams,
+        fcInitParams );
+
+  fcTmpltParams->deltaT = dt;
+  /* FIXME This needs to be calculated based on the mass range of the bank.
+ *      We want all the templates to fit in the allotted durations */
+  fcTmpltParams->fLow = 27.0;
+  fcTmpltParams->reverseChirpBank = 0;
+  /*fcTmpltParams->order = order;*/
+
+  printf("XLALCreateREAL8TimeSeriest()\n");
+  template = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0,
+                                       dt, &lalStrainUnit, numsamps);
+
+  printf("XLALCreateCOMPLEX16FrequencySeries()\n");
+  fft_template = XLALCreateCOMPLEX16FrequencySeries(NULL,
+                      &(LIGOTimeGPS) {0,0}, 0, 0, &lalDimensionlessUnit,
+                      numsamps / 2 + 1);
+
+  /* Create Template - to be replaced by a LAL template generation call */
+  printf("LALCreateFindChirpInput()\n");
+
+  LALCreateFindChirpInput( status, &fcFilterInput, fcInitParams );
+  CHECKSTATUSPTR( status );
+
+  printf("LALFindChirpTDTemplate()\n");
+
+  LALFindChirpTDTemplate( status, fcFilterInput->fcTmplt,
+                  bankHead, fcTmpltParams );
+
+  CHECKSTATUSPTR( status );
+  printf("Copying template\n");
+  for (i=0; i< numsamps; i++)
+    {
+    printf("i = %d\n",i);
+    fft_template->data->data[i].im = (REAL8) fcFilterInput->fcTmplt->data->data[i].im;
+    fft_template->data->data[i].re = (REAL8) fcFilterInput->fcTmplt->data->data[i].re;
+    }
+  XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd);
+  XLALREAL8FreqTimeFFT(template,fft_template,revplan);
+
+  /* Actually return the peice of the template */
+
+  /* Deallocate everything */
+  /* FIXME DONT FORGET TO DESTROY LALCreateFindChirpInput */
+  XLALDestroyREAL8FFTPlan(fwdplan);
+  XLALDestroyREAL8FFTPlan(revplan);
+  LALFindChirpTemplateFinalize( status, &fcTmpltParams );
+  LALFree( fcInitParams );
+  XLALDestroyCOMPLEX16FrequencySeries(fft_template);
+  XLALDestroyREAL8TimeSeries(template);
+  return 0;
+  }
+
 
 void not_gsl_matrix_transpose(gsl_matrix **m)
 {

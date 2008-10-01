@@ -2,7 +2,21 @@
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_blas.h>
+#include <lal/LALInspiral.h>
+#include <lal/FindChirp.h>
+#include <lal/LIGOLwXMLRead.h>
+#include "low_latency_inspiral_functions.h"
 
+int main()
+  {
+  InspiralTemplate             *bankHead     = NULL;
+  int numTmplts = InspiralTmpltBankFromLIGOLw( &bankHead, "Bank.xml",-1,-1);
+  printf("read in %d templates\n",numTmplts);
+  create_template_from_sngl_inspiral(bankHead, NULL, 64, 2048);
+  }
+
+
+#if 0
 int main()
 {
   int tmpDur = 64;
@@ -52,3 +66,7 @@ int main()
   fclose(FP);
   return 0;
 }  
+#endif
+
+
+
