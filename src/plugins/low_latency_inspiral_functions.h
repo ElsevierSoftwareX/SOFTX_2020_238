@@ -28,13 +28,16 @@
 #include <lal/FindChirp.h>
 
 int create_template_from_sngl_inspiral(InspiralTemplate *bankHead,
-                       gsl_matrix *U, double duration, int fsamp);
+                       gsl_matrix *U, gsl_vector *V, double duration, int fsamp,
+                       int downsampfac, double t_start, double t_end, 
+                       int U_column);
 
 int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
-                gsl_vector **chifacs,
-		double chirp_mass_start, int base_sample_rate,
-		int down_samp_fac, unsigned numtemps, double t_start,
-		double t_end, double tmax, double tolerance, int verbose);
+                           gsl_vector **chifacs,
+                           char * bank_name, int base_sample_rate,
+                           int down_samp_fac, double t_start,
+                           double t_end, double tmax, double tolerance,
+                           int verbose);
 
 double normalize_template(double M, double ts, double duration,
                                 int fsamp);

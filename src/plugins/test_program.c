@@ -9,10 +9,11 @@
 
 int main()
   {
+  lalDebugLevel = LALINFO | LALWARNING | LALERROR | LALNMEMDBG | LALNMEMPAD | LALNMEMTRK;
   InspiralTemplate             *bankHead     = NULL;
   int numTmplts = InspiralTmpltBankFromLIGOLw( &bankHead, "Bank.xml",-1,-1);
-  printf("read in %d templates\n",numTmplts);
-  create_template_from_sngl_inspiral(bankHead, NULL, 64, 2048);
+  printf("read in %d templates bank_head %p\n",numTmplts,bankHead);
+  create_template_from_sngl_inspiral(bankHead, NULL, NULL, 128, 2048,2,0,1,0);
   }
 
 

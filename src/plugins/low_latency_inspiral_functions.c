@@ -58,74 +58,48 @@
 #include "low_latency_inspiral_functions.h"
 #include "gstlal_whiten.h"
 
+#define LAL_CALL( function, statusptr ) \
+  ((function),lal_errhandler(statusptr,#function,__FILE__,__LINE__,rcsid))
 
 /* FIXME: this is a place holder and needs to be implemented rigorously with  
  * lal functions */
 int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
                            gsl_vector **chifacs,
-                           double chirp_mass_start, int base_sample_rate,
-                           int down_samp_fac, unsigned numtemps, double t_start,
+                           char * bank_name, int base_sample_rate,
+                           int down_samp_fac, double t_start,
                            double t_end, double tmax, double tolerance,
 			   int verbose)
   {
-  FILE *FP = NULL;
-  double c = 299792458;
-  double G = 6.67428e-11;
-  double Msol = 1.98893e30;
-  double M = chirp_mass_start;
-  double Mg = M*Msol*G/c/c/c;
-  double ny_freq = base_sample_rate / 2;
-  double T = 0;
+  InspiralTemplate *bankHead     = NULL;
+  int numtemps = InspiralTmpltBankFromLIGOLw( &bankHead, bank_name,-1,-1);
   size_t i = 0;
   size_t j = 0;
   int svd_err_code = 0;
-  size_t numsamps = floor((t_end - t_start) * base_sample_rate / down_samp_fac + 0.5);
-  double dt = (double) down_samp_fac / base_sample_rate;
-  double tmpltpower;
-  double h;
-  double norm;
-  double maxFreq;
+  size_t numsamps = floor((double) (t_end-t_start) * base_sample_rate 
+               / down_samp_fac);
   gsl_vector *work_space = gsl_vector_calloc(numtemps);
   gsl_matrix *work_space_matrix = gsl_matrix_calloc(numtemps,numtemps);
-  if (verbose) FP = fopen("tmpbankdata.dat","w");
   *U = gsl_matrix_calloc(numsamps,numtemps);
   *S = gsl_vector_calloc(numtemps);
   *V = gsl_matrix_calloc(numtemps,numtemps);
   *chifacs = gsl_vector_calloc(numtemps);
+  
+  if (verbose) fprintf(stderr,"read in %d templates bank_head %p\n",numtemps,bankHead);
 
   if (verbose) fprintf(stderr, "allocated matrices...\n");
   /* create the templates in the bank */
-  for (i=0;i<numtemps;i++)
+  j = 0;
+  while(bankHead)
     {
-    if (verbose) fprintf(stderr, "generating template number %zu...\n",i);
-    /* increment the mass */
-    /* this coefficient should maybe be 0.0001 */
-    M = chirp_mass_start + 0.0001*i*M;
-    Mg = M*Msol*G/c/c/c;
-    T = -1.0 / (pow(M_PI * Mg * (ny_freq * 0.9), 8.0 / 3.0) / (5.0 / 256.0 * Mg)) - t_start;
-    maxFreq = (1.0/(M_PI*Mg)) * (pow((5.0/256.0)*(Mg/(-T)),3.0/8.0));
-    if (verbose) fprintf(stderr, "T=%e f_Nyquist=%e M_chirp=%e f_max=%e\n",T,ny_freq,M,maxFreq);
-
-    if (maxFreq > ((double) (ny_freq/down_samp_fac+1.0/base_sample_rate)) )
-      {
-      fprintf(stderr,
-              "cannot generate template segment at requested sample rate\n");
-      return 1;
-      }
-    norm = normalize_template(Mg, T, tmax, base_sample_rate);
-    tmpltpower = 0;
-    for(j = 0; j < numsamps; j++)
-      {
-      h = 4.0*Mg*pow(5.0/256.0*(Mg/(-T+dt*j)),0.25)
-        * sin(-2.0 * pow((-T+dt*j)/(5.0*Mg),(5.0/8.0)));
-      tmpltpower+=h*h*dt;
-      gsl_matrix_set(*U,numsamps-1-j,i,h/norm);
-      if (verbose && i ==0) fprintf(FP,"%e\n",h/norm);
-      }
-    gsl_vector_set(*chifacs,i,sqrt(tmpltpower));
+    create_template_from_sngl_inspiral(bankHead, *U, *chifacs, tmax, base_sample_rate,down_samp_fac,t_start,t_end,j);
+    if (verbose) fprintf(stderr, "M_chirp=%e",bankHead->chirpMass);
+    bankHead = bankHead->next;
+    j++;
     }
-  /*gsl_matrix_fprintf(FP,*U,"%f");*/
-  if (FP) fclose(FP);
+  j = 0;
+
+  /* SET THIS IN create_template_.. gsl_vector_set(*chifacs,i,sqrt(tmpltpower));*/
+    
   svd_err_code = gsl_linalg_SV_decomp_mod(*U, work_space_matrix, 
                                              *V, *S, work_space);
   /*svd_err_code = gsl_linalg_SV_decomp(*U,*V, *S, work_space);*/
@@ -152,13 +126,29 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
   }
 
 
+static double time_to_freq(double M, double time)
+  {
+  double c3_8 = 3.0/8.0;
+  double c5_256 = 5.0/256.0;
+  double c = 299792458;
+  double G = 6.67428e-11;
+  double Msol = 1.98893e30;
+  double Mg = M*Msol*G/c/c/c;
+  return (1.0/(M_PI*Mg)) * (pow((c5_256)*(Mg/(-time)),c3_8));
+  }
+
 int create_template_from_sngl_inspiral(InspiralTemplate *bankHead,
-                       gsl_matrix *U, double duration, int fsamp)
+                       gsl_matrix *U, gsl_vector *chifacs, 
+		       double duration, int fsamp, 
+		       int downsampfac, double t_start, double t_end, 
+		       int U_column)
 
   {
-  int numsamps = fsamp*128.0;/*duration;*/
+  int numsamps = fsamp*duration;
   int i = 0;
+  int counter = 0;
   double dt = 1.0/fsamp;
+  double chinorm = 0;
   REAL8TimeSeries *template = NULL;
   COMPLEX16FrequencySeries *fft_template = NULL;
   REAL8FrequencySeries *psd = NULL;
@@ -192,7 +182,7 @@ int create_template_from_sngl_inspiral(InspiralTemplate *bankHead,
   fcInitParams->approximant    = EOB;
   fcInitParams->order          = twoPN;
   fcInitParams->createCVec     = 0;
-
+  bankHead->order = threePointFivePN;
   printf("LALFindChirpTemplateInit()\n");
   LALFindChirpTemplateInit( status, &fcTmpltParams,
         fcInitParams );
@@ -200,11 +190,14 @@ int create_template_from_sngl_inspiral(InspiralTemplate *bankHead,
   fcTmpltParams->deltaT = dt;
   /* FIXME This needs to be calculated based on the mass range of the bank.
  *      We want all the templates to fit in the allotted durations */
-  fcTmpltParams->fLow = 27.0;
+  fprintf(stderr,"chirpmass = %f, flow = %f\n\n",bankHead->chirpMass,time_to_freq(bankHead->chirpMass,duration/2.0));
+  fcTmpltParams->fLow = 25; /*floor(time_to_freq(bankHead->chirpMass,duration/2.0));*/
   fcTmpltParams->reverseChirpBank = 0;
+  fcTmpltParams->taperTmplt = 1;
+
   /*fcTmpltParams->order = order;*/
 
-  printf("XLALCreateREAL8TimeSeriest()\n");
+  printf("XLALCreateREAL8TimeSeriest() dt is %f\n",dt);
   template = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0,
                                        dt, &lalStrainUnit, numsamps);
 
@@ -217,34 +210,61 @@ int create_template_from_sngl_inspiral(InspiralTemplate *bankHead,
   printf("LALCreateFindChirpInput()\n");
 
   LALCreateFindChirpInput( status, &fcFilterInput, fcInitParams );
-  CHECKSTATUSPTR( status );
 
-  printf("LALFindChirpTDTemplate()\n");
+  printf("LALFindChirpTDTemplate() tmplate is %p \n", fcFilterInput->fcTmplt);
 
+  printf("status is %p\n bankHead order is %d",status,bankHead->order);
+
+  fcTmpltParams->order = threePointFivePN;
+  fcTmpltParams->approximant = EOB;
+  fcTmpltParams->dynRange = pow(2,63);
   LALFindChirpTDTemplate( status, fcFilterInput->fcTmplt,
                   bankHead, fcTmpltParams );
 
-  CHECKSTATUSPTR( status );
-  printf("Copying template\n");
+  /*CHECKSTATUSPTR(status); */
+  /*printf("Copying template\n");
+  FILE *FP = fopen("tmp.txt","w");*/
   for (i=0; i< numsamps; i++)
     {
-    printf("i = %d\n",i);
-    fft_template->data->data[i].im = (REAL8) fcFilterInput->fcTmplt->data->data[i].im;
-    fft_template->data->data[i].re = (REAL8) fcFilterInput->fcTmplt->data->data[i].re;
+    /*fprintf(FP,"%f\n",fcTmpltParams->xfacVec->data[i]);*/
+    template->data->data[i] = (REAL8) fcTmpltParams->xfacVec->data[i];
+    /*fft_template->data->data[i].im = (REAL8) fcFilterInput->fcTmplt->data->data[i].im;
+    fft_template->data->data[i].re = (REAL8) fcFilterInput->fcTmplt->data->data[i].re;*/
     }
+  XLALREAL8TimeFreqFFT(fft_template,template,fwdplan);
   XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd);
   XLALREAL8FreqTimeFFT(template,fft_template,revplan);
+
+  /*FP = fopen("tmpwh.txt","w");
+  for (i=0; i< numsamps; i++)
+    {
+    fprintf(FP,"%f\n",template->data->data[i]);
+    }
+  fclose(FP);*/
 
   /* Actually return the peice of the template */
 
   /* Deallocate everything */
   /* FIXME DONT FORGET TO DESTROY LALCreateFindChirpInput */
+  counter = 0;
+  /*FP = fopen("tmpshort.txt","w");*/
+  for (i=numsamps - t_end*fsamp; i< numsamps-t_start*fsamp; i+=downsampfac)
+    {
+    /*fprintf(FP,"%f\n",template->data->data[i]);*/
+    chinorm+= template->data->data[i] * template->data->data[i] * dt*downsampfac;
+    /*gsl_matrix_set(U,counter,U_column,template->data->data[i]);*/  
+    counter++;
+    }
+  /*gsl_vector_set(chifacs,U_row,sqrt(chinorm)) */
+
+  /*fclose(FP);*/
   XLALDestroyREAL8FFTPlan(fwdplan);
   XLALDestroyREAL8FFTPlan(revplan);
   LALFindChirpTemplateFinalize( status, &fcTmpltParams );
   LALFree( fcInitParams );
   XLALDestroyCOMPLEX16FrequencySeries(fft_template);
   XLALDestroyREAL8TimeSeries(template);
+  LALDestroyFindChirpInput(status,&fcFilterInput);
   return 0;
   }
 
@@ -270,7 +290,7 @@ double normalize_template(double M, double ts, double duration,
   for (i=0; i< numsamps; i++)
     {
     h = 4.0 * M * pow(5.0/256.0*(M/(-ts+dt*i)),0.25) 
-      * sin(-2.0 * pow((-ts+dt*i)/(5.0*M),(5.0/8.0)));
+      * sin(-2.0/2.0/M_PI * pow((-ts+dt*i)/(5.0*M),(5.0/8.0)));
     tmpltpower+=h*h*dt;
     }
   return sqrt(tmpltpower);
