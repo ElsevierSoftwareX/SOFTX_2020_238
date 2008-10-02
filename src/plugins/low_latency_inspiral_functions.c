@@ -113,7 +113,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
               "cannot generate template segment at requested sample rate\n");
       return 1;
       }
-    norm = normalize_template(Mg, T, tmax, base_sample_rate * 8);
+    norm = normalize_template(Mg, T, tmax, base_sample_rate);
     tmpltpower = 0;
     for(j = 0; j < numsamps; j++)
       {
