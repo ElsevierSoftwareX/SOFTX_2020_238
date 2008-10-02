@@ -375,7 +375,7 @@ REAL8FrequencySeries *gstlal_get_reference_psd(const char *filename, double f0, 
 	 */
 
 	f = malloc(psd->data->length * sizeof(*f));
-	spline = gsl_spline_alloc(gsl_interp_linear, length);
+	spline = gsl_spline_alloc(gsl_interp_linear, psd->data->length);
 	accel = gsl_interp_accel_alloc();
 	if(!f || !spline || !accel) {
 		GST_ERROR("gsl_spline_alloc() or gsl_interp_accel_alloc() failed");
