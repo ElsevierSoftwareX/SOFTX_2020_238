@@ -155,15 +155,16 @@ int create_template_from_sngl_inspiral(InspiralTemplate *bankHead,
   FindChirpFilterInput         *fcFilterInput  = NULL;
   FindChirpTmpltParams         *fcTmpltParams  = NULL;
   FindChirpInitParams          *fcInitParams   = NULL;
-  LALStatus *status = NULL;
-  status = (LALStatus *) calloc(1,sizeof(LALStatus));
+  LALStatus status;
   /*fcFilterInput = (FindChirpFilterInput *) calloc(1,sizeof(FindChirpFilterInput));
  *   fcFilterInput->fcTmplt = (FindChirpTemplate *) calloc(1,sizeof(FindChirpTemplate));*/
-  printf("creating fft plans \n");
+  fprintf(stderr, "creating fft plans \n");
   REAL8FFTPlan *fwdplan = XLALCreateForwardREAL8FFTPlan(numsamps, 0);
   REAL8FFTPlan *revplan = XLALCreateReverseREAL8FFTPlan(numsamps, 0);
 
-  printf("Reading psd \n");
+  memset(&status, 0, sizeof(status));
+
+  fprintf(stderr, "Reading psd \n");
   psd = gstlal_get_reference_psd("reference_psd.txt", 0, 1.0/duration, numsamps / 2 + 1);
 
   if ( ! ( fcInitParams = (FindChirpInitParams *)
@@ -183,8 +184,8 @@ int create_template_from_sngl_inspiral(InspiralTemplate *bankHead,
   fcInitParams->order          = twoPN;
   fcInitParams->createCVec     = 0;
   bankHead->order = threePointFivePN;
-  printf("LALFindChirpTemplateInit()\n");
-  LALFindChirpTemplateInit( status, &fcTmpltParams,
+  fprintf(stderr, "LALFindChirpTemplateInit()\n");
+  LALFindChirpTemplateInit( &status, &fcTmpltParams,
         fcInitParams );
 
   fcTmpltParams->deltaT = dt;
@@ -197,32 +198,32 @@ int create_template_from_sngl_inspiral(InspiralTemplate *bankHead,
 
   /*fcTmpltParams->order = order;*/
 
-  printf("XLALCreateREAL8TimeSeriest() dt is %f\n",dt);
+  fprintf(stderr, "XLALCreateREAL8TimeSeriest() dt is %f\n",dt);
   template = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0,
                                        dt, &lalStrainUnit, numsamps);
 
-  printf("XLALCreateCOMPLEX16FrequencySeries()\n");
+  fprintf(stderr, "XLALCreateCOMPLEX16FrequencySeries()\n");
   fft_template = XLALCreateCOMPLEX16FrequencySeries(NULL,
                       &(LIGOTimeGPS) {0,0}, 0, 0, &lalDimensionlessUnit,
                       numsamps / 2 + 1);
 
   /* Create Template - to be replaced by a LAL template generation call */
-  printf("LALCreateFindChirpInput()\n");
+  fprintf(stderr, "LALCreateFindChirpInput()\n");
 
-  LALCreateFindChirpInput( status, &fcFilterInput, fcInitParams );
+  LALCreateFindChirpInput( &status, &fcFilterInput, fcInitParams );
 
-  printf("LALFindChirpTDTemplate() tmplate is %p \n", fcFilterInput->fcTmplt);
+  fprintf(stderr, "LALFindChirpTDTemplate() tmplate is %p \n", fcFilterInput->fcTmplt);
 
-  printf("status is %p\n bankHead order is %d",status,bankHead->order);
+  fprintf(stderr, "status is %p\n bankHead order is %d",&status,bankHead->order);
 
   fcTmpltParams->order = threePointFivePN;
   fcTmpltParams->approximant = EOB;
   fcTmpltParams->dynRange = pow(2,63);
-  LALFindChirpTDTemplate( status, fcFilterInput->fcTmplt,
+  LALFindChirpTDTemplate( &status, fcFilterInput->fcTmplt,
                   bankHead, fcTmpltParams );
 
-  /*CHECKSTATUSPTR(status); */
-  /*printf("Copying template\n");
+  /*CHECKSTATUSPTR(&status); */
+  /*fprintf(stderr, "Copying template\n");
   FILE *FP = fopen("tmp.txt","w");*/
   for (i=0; i< numsamps; i++)
     {
@@ -252,19 +253,19 @@ int create_template_from_sngl_inspiral(InspiralTemplate *bankHead,
     {
     /*fprintf(FP,"%f\n",template->data->data[i]);*/
     chinorm+= template->data->data[i] * template->data->data[i] * dt*downsampfac;
-    /*gsl_matrix_set(U,counter,U_column,template->data->data[i]);*/  
+    gsl_matrix_set(U,counter,U_column,template->data->data[i]);
     counter++;
     }
-  /*gsl_vector_set(chifacs,U_row,sqrt(chinorm)) */
+  gsl_vector_set(chifacs,U_column,sqrt(chinorm));
 
   /*fclose(FP);*/
   XLALDestroyREAL8FFTPlan(fwdplan);
   XLALDestroyREAL8FFTPlan(revplan);
-  LALFindChirpTemplateFinalize( status, &fcTmpltParams );
+  LALFindChirpTemplateFinalize( &status, &fcTmpltParams );
   LALFree( fcInitParams );
   XLALDestroyCOMPLEX16FrequencySeries(fft_template);
   XLALDestroyREAL8TimeSeries(template);
-  LALDestroyFindChirpInput(status,&fcFilterInput);
+  LALDestroyFindChirpInput(&status,&fcFilterInput);
   return 0;
   }
 
@@ -307,7 +308,7 @@ double normalize_template(double M, double ts, double duration,
   /*for (i = 0; i < (*S)->size; i++) 
     {
     sumb+= gsl_vector_get(*S,i);
-    printf("S(%d) = %f",i,gsl_vector_get(*S,i));
+    fprintf(stderr, "S(%d) = %f",i,gsl_vector_get(*S,i));
     }*/
   sumb = gsl_vector_get(*S,0);
   for (i = 0; i < (*S)->size; i++)
