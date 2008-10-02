@@ -13,7 +13,7 @@ int main()
   InspiralTemplate             *bankHead     = NULL;
   int numTmplts = InspiralTmpltBankFromLIGOLw( &bankHead, "Bank.xml",-1,-1);
   printf("read in %d templates bank_head %p\n",numTmplts,bankHead);
-  create_template_from_sngl_inspiral(bankHead, NULL, NULL, 128, 2048,2,0,1,0);
+  /*create_template_from_sngl_inspiral(bankHead, NULL, NULL, 128, 2048,2,0,1,0);*/
   }
 
 
