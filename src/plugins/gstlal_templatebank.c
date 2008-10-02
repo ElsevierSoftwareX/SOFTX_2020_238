@@ -573,10 +573,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			/*
 			 * Compute one vector of orthogonal SNR samples ---
 			 * the projection of h(t) onto the template bank's
-			 * orthonormal basis.
+			 * orthonormal basis.  The factor of 1/rate = dt is
+			 * to make the inner product an approximation of
+			 *
+			 * \int f1(t) f2(t) dt.
 			 */
 
-			gsl_blas_dgemv(CblasNoTrans, 1.0, element->U, &time_series.vector, 0.0, &orthogonal_snr_sample.vector);
+			gsl_blas_dgemv(CblasNoTrans, 1.0 / element->sample_rate, element->U, &time_series.vector, 0.0, &orthogonal_snr_sample.vector);
 
 			/*
 			 * From the projection of h(t) onto the bank's
