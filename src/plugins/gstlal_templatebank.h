@@ -60,6 +60,7 @@ typedef struct {
 	GstPad *srcpad;
 	GstPad *sumsquarespad;
 
+	char *template_bank_xml;
 	int sample_rate;
 	double t_start;
 	double t_end;

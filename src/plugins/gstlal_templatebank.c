@@ -271,7 +271,8 @@ done:
 
 
 enum property {
-	ARG_T_START = 1,
+	ARG_TEMPLATE_BANK = 1,
+	ARG_T_START,
 	ARG_T_END,
 	ARG_SNR_LENGTH
 };
@@ -282,6 +283,11 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(object);
 
 	switch(id) {
+	case ARG_TEMPLATE_BANK:
+		free(element->template_bank_xml);
+		element->template_bank_xml = g_value_dup_string(value);
+		break;
+
 	case ARG_T_START:
 		element->t_start = g_value_get_double(value);
 		break;
@@ -302,6 +308,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(object);
 
 	switch(id) {
+	case ARG_TEMPLATE_BANK:
+		g_value_set_string(value, element->template_bank_xml);
+		break;
+
 	case ARG_T_START:
 		g_value_set_double(value, element->t_start);
 		break;
@@ -656,6 +666,7 @@ static void dispose(GObject *object)
 	element->srcpad = NULL;
 	g_object_unref(element->adapter);
 	element->adapter = NULL;
+	free(element->template_bank_xml);
 
 	svd_destroy(element);
 
@@ -765,6 +776,7 @@ static void class_init(gpointer class, gpointer class_data)
 	gobject_class->get_property = get_property;
 	gobject_class->dispose = dispose;
 
+	g_object_class_install_property(gobject_class, ARG_TEMPLATE_BANK, g_param_spec_string("template-bank", "XML Template Bank", "Name of LIGO Light Weight XML file containing inspiral template bank", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_T_START, g_param_spec_double("t-start", "Start time", "Start time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXDOUBLE, DEFAULT_T_START, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_T_END, g_param_spec_double("t-end", "End time", "End time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXDOUBLE, DEFAULT_T_END, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SNR_LENGTH, g_param_spec_uint("snr-length", "SNR length", "Length, in samples, of the output SNR time series (0 = no limit)", 0, G_MAXUINT, DEFAULT_SNR_LENGTH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
@@ -802,6 +814,8 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	/* internal data */
 	element->adapter = gst_adapter_new();
+
+	element->template_bank_xml = NULL;
 	element->t_start = DEFAULT_T_START;
 	element->t_end = DEFAULT_T_END;
 	element->snr_length = DEFAULT_SNR_LENGTH;
