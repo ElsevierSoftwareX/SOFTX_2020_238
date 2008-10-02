@@ -585,12 +585,19 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			goto done;
 		}
 		if(element->compensation_psd) {
+			double rms = 0;
 			for(i = 0; i < tilde_segment->data->length; i++) {
 				if(element->psd->data->data[i] == 0)
 					tilde_segment->data->data[i] = LAL_COMPLEX16_ZERO;
-				else
-					tilde_segment->data->data[i] = XLALCOMPLEX16MulReal(tilde_segment->data->data[i], sqrt(element->compensation_psd->data->data[i] / element->psd->data->data[i]));
+				else {
+					double psd_ratio = element->compensation_psd->data->data[i] / element->psd->data->data[i];
+					rms += psd_ratio;
+					tilde_segment->data->data[i] = XLALCOMPLEX16MulReal(tilde_segment->data->data[i], sqrt(psd_ratio));
+				}
 			}
+			rms = sqrt(rms / tilde_segment->data->length);
+			for(i = 0; i < tilde_segment->data->length; i++)
+				tilde_segment->data->data[i] = XLALCOMPLEX16MulReal(tilde_segment->data->data[i], 1.0 / rms);
 		}
 
 		/*
