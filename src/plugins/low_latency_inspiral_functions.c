@@ -74,18 +74,17 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
   double Msol = 1.98893e30;
   double M = chirp_mass_start;
   double Mg = M*Msol*G/c/c/c;
-  double ny_freq = 0.5*base_sample_rate;
+  double ny_freq = base_sample_rate / 2;
   double T = 0;
   size_t i = 0;
   size_t j = 0;
   int svd_err_code = 0;
-  size_t numsamps = floor((double) (t_end-t_start) * base_sample_rate 
-               / down_samp_fac);
-  double dt = (double) down_samp_fac/base_sample_rate;
+  size_t numsamps = floor((t_end - t_start) * base_sample_rate / down_samp_fac + 0.5);
+  double dt = (double) down_samp_fac / base_sample_rate;
   double tmpltpower;
-  double h=0;
-  double norm = 0;
-  double maxFreq = 0;
+  double h;
+  double norm;
+  double maxFreq;
   gsl_vector *work_space = gsl_vector_calloc(numtemps);
   gsl_matrix *work_space_matrix = gsl_matrix_calloc(numtemps,numtemps);
   if (verbose) FP = fopen("tmpbankdata.dat","w");
@@ -103,7 +102,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
     /* this coefficient should maybe be 0.0001 */
     M = chirp_mass_start + 0.0001*i*M;
     Mg = M*Msol*G/c/c/c;
-    T = -1.0 / (pow(M_PI * Mg * ny_freq, 8.0 / 3.0) / (5.0 / 256.0 * Mg)) - t_start;
+    T = -1.0 / (pow(M_PI * Mg * (ny_freq * 0.9), 8.0 / 3.0) / (5.0 / 256.0 * Mg)) - t_start;
     maxFreq = (1.0/(M_PI*Mg)) * (pow((5.0/256.0)*(Mg/(-T)),3.0/8.0));
     if (verbose) fprintf(stderr, "T=%e f_Nyquist=%e M_chirp=%e f_max=%e\n",T,ny_freq,M,maxFreq);
 
