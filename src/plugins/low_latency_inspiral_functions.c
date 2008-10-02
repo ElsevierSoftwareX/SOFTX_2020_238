@@ -69,9 +69,6 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
 			   int verbose)
   {
   FILE *FP = NULL;
-  double c8_3 = 8.0/3.0;
-  double c3_8 = 3.0/8.0;
-  double c5_256 = 5.0/256.0;
   double c = 299792458;
   double G = 6.67428e-11;
   double Msol = 1.98893e30;
@@ -106,10 +103,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
     /* this coefficient should maybe be 0.0001 */
     M = chirp_mass_start + 0.0001*i*M;
     Mg = M*Msol*G/c/c/c;
-    T = -1.0/( pow(M_PI * Mg * ny_freq, 8.0/3.0) / (5.0/256.0*Mg) )
-      - t_start;
-    /* FIXME We should check that the frequency at this time fits within the */
-    /* downsampled rate!!! 						     */
+    T = -1.0 / (pow(M_PI * Mg * ny_freq, 8.0 / 3.0) / (5.0 / 256.0 * Mg)) - t_start;
     maxFreq = (1.0/(M_PI*Mg)) * (pow((5.0/256.0)*(Mg/(-T)),3.0/8.0));
     if (verbose) fprintf(stderr, "T=%e f_Nyquist=%e M_chirp=%e f_max=%e\n",T,ny_freq,M,maxFreq);
 
@@ -119,12 +113,12 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
               "cannot generate template segment at requested sample rate\n");
       return 1;
       }
-    norm = normalize_template(Mg, T, tmax, base_sample_rate);
+    norm = normalize_template(Mg, T, tmax, base_sample_rate * 8);
     tmpltpower = 0;
     for(j = 0; j < numsamps; j++)
       {
       h = 4.0*Mg*pow(5.0/256.0*(Mg/(-T+dt*j)),0.25)
-        * sin(-2.0/2.0/M_PI* pow((-T+dt*j)/(5.0*Mg),(5.0/8.0)));
+        * sin(-2.0 * pow((-T+dt*j)/(5.0*Mg),(5.0/8.0)));
       tmpltpower+=h*h*dt;
       gsl_matrix_set(*U,numsamps-1-j,i,h/norm);
       if (verbose && i ==0) fprintf(FP,"%e\n",h/norm);
@@ -277,7 +271,7 @@ double normalize_template(double M, double ts, double duration,
   for (i=0; i< numsamps; i++)
     {
     h = 4.0 * M * pow(5.0/256.0*(M/(-ts+dt*i)),0.25) 
-      * sin(-2.0/2.0/M_PI * pow((-ts+dt*i)/(5.0*M),(5.0/8.0)));
+      * sin(-2.0 * pow((-ts+dt*i)/(5.0*M),(5.0/8.0)));
     tmpltpower+=h*h*dt;
     }
   return sqrt(tmpltpower);
