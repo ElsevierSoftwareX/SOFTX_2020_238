@@ -83,10 +83,8 @@
 #define DEFAULT_T_START 0
 #define DEFAULT_T_END G_MAXDOUBLE
 #define DEFAULT_SNR_LENGTH 2048	/* samples */
-#define TEMPLATE_DURATION 64	/* seconds */
-#define CHIRPMASS_START 1.21	/* M_sun */
+#define TEMPLATE_DURATION 128	/* seconds */
 #define TEMPLATE_SAMPLE_RATE 2048	/* Hertz */
-#define NUM_TEMPLATES 200
 #define TOLERANCE 0.97
 
 
@@ -173,7 +171,7 @@ static int svd_create(GSTLALTemplateBank *element, int sample_rate)
 	 * generate orthonormal template bank
 	 */
 
-	generate_bank_svd(&element->U, &element->S, &element->V, &element->chifacs, CHIRPMASS_START, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / sample_rate, NUM_TEMPLATES, element->t_start, element->t_end, TEMPLATE_DURATION, TOLERANCE, verbose);
+	generate_bank_svd(&element->U, &element->S, &element->V, &element->chifacs, element->template_bank_filename, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / sample_rate, element->t_start, element->t_end, TEMPLATE_DURATION, TOLERANCE, verbose);
 
 	/*
 	 * done
@@ -285,8 +283,8 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	switch(id) {
 	case ARG_TEMPLATE_BANK:
-		free(element->template_bank_xml);
-		element->template_bank_xml = g_value_dup_string(value);
+		free(element->template_bank_filename);
+		element->template_bank_filename = g_value_dup_string(value);
 		break;
 
 	case ARG_REFERENCE_PSD:
@@ -315,7 +313,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	switch(id) {
 	case ARG_TEMPLATE_BANK:
-		g_value_set_string(value, element->template_bank_xml);
+		g_value_set_string(value, element->template_bank_filename);
 		break;
 
 	case ARG_REFERENCE_PSD:
@@ -672,7 +670,7 @@ static void dispose(GObject *object)
 	gst_object_unref(element->sumsquarespad);
 	gst_object_unref(element->srcpad);
 	g_object_unref(element->adapter);
-	free(element->template_bank_xml);
+	free(element->template_bank_filename);
 	free(element->reference_psd_filename);
 
 	svd_destroy(element);
@@ -824,7 +822,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->adapter = gst_adapter_new();
 
 	element->reference_psd_filename = NULL;
-	element->template_bank_xml = NULL;
+	element->template_bank_filename = NULL;
 	element->t_start = DEFAULT_T_START;
 	element->t_end = DEFAULT_T_END;
 	element->snr_length = DEFAULT_SNR_LENGTH;
