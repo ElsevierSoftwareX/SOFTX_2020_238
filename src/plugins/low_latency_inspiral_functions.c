@@ -104,7 +104,7 @@ int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
     if (verbose) fprintf(stderr, "generating template number %zu...\n",i);
     /* increment the mass */
     /* this coefficient should maybe be 0.0001 */
-    M = chirp_mass_start + 0.0003*i*M/0.7;
+    M = chirp_mass_start + 0.0001*i*M;
     Mg = M*Msol*G/c/c/c;
     T = -1.0/( pow(M_PI * Mg * ny_freq, 8.0/3.0) / (5.0/256.0*Mg) )
       - t_start;
