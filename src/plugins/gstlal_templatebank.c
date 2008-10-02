@@ -81,7 +81,7 @@
 
 
 #define DEFAULT_T_START 0
-#define DEFAULT_T_END G_MAXUINT
+#define DEFAULT_T_END G_MAXDOUBLE
 #define DEFAULT_SNR_LENGTH 2048	/* samples */
 #define TEMPLATE_DURATION 64	/* seconds */
 #define CHIRPMASS_START 1.21	/* M_sun */
@@ -283,11 +283,11 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	switch(id) {
 	case ARG_T_START:
-		element->t_start = g_value_get_uint(value);
+		element->t_start = g_value_get_double(value);
 		break;
 
 	case ARG_T_END:
-		element->t_end = g_value_get_uint(value);
+		element->t_end = g_value_get_double(value);
 		break;
 
 	case ARG_SNR_LENGTH:
@@ -303,11 +303,11 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	switch(id) {
 	case ARG_T_START:
-		g_value_set_uint(value, element->t_start);
+		g_value_set_double(value, element->t_start);
 		break;
 
 	case ARG_T_END:
-		g_value_set_uint(value, element->t_end);
+		g_value_set_double(value, element->t_end);
 		break;
 
 	case ARG_SNR_LENGTH:
@@ -425,27 +425,27 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		if(element->t_start) {
-			result = gst_pad_alloc_buffer(element->sumsquarespad, element->next_sample, element->t_start * element->sample_rate * sizeof(*element->U->data), GST_PAD_CAPS(element->sumsquarespad), &zeros);
+			result = gst_pad_alloc_buffer(element->sumsquarespad, element->next_sample, (size_t) floor(element->t_start * element->sample_rate + 0.5) * sizeof(*element->U->data), GST_PAD_CAPS(element->sumsquarespad), &zeros);
 			if(result != GST_FLOW_OK)
 				goto done;
 			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
 			gst_buffer_copy_metadata(zeros, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 			GST_BUFFER_FLAG_SET(zeros, GST_BUFFER_FLAG_GAP);
-			GST_BUFFER_OFFSET_END(zeros) = element->next_sample + element->t_start * element->sample_rate - 1;
-			GST_BUFFER_DURATION(zeros) = (GstClockTime) element->t_start * GST_SECOND;
+			GST_BUFFER_OFFSET_END(zeros) = element->next_sample + (size_t) floor(element->t_start * element->sample_rate + 0.5) - 1;
+			GST_BUFFER_DURATION(zeros) = (GstClockTime) floor(element->t_start * GST_SECOND + 0.5);
 
 			result = gst_pad_push(element->sumsquarespad, zeros);
 			if(result != GST_FLOW_OK)
 				goto done;
 
-			result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, num_templates(element) * element->t_start * element->sample_rate * sizeof(*element->U->data), GST_PAD_CAPS(element->srcpad), &zeros);
+			result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, num_templates(element) * (size_t) floor(element->t_start * element->sample_rate + 0.5) * sizeof(*element->U->data), GST_PAD_CAPS(element->srcpad), &zeros);
 			if(result != GST_FLOW_OK)
 				goto done;
 			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
 			gst_buffer_copy_metadata(zeros, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 			GST_BUFFER_FLAG_SET(zeros, GST_BUFFER_FLAG_GAP);
-			GST_BUFFER_OFFSET_END(zeros) = element->next_sample + element->t_start * element->sample_rate - 1;
-			GST_BUFFER_DURATION(zeros) = (GstClockTime) element->t_start * GST_SECOND;
+			GST_BUFFER_OFFSET_END(zeros) = element->next_sample + (size_t) floor(element->t_start * element->sample_rate + 0.5) - 1;
+			GST_BUFFER_DURATION(zeros) = (GstClockTime) floor(element->t_start * GST_SECOND + 0.5);
 
 			result = gst_pad_push(element->srcpad, zeros);
 			if(result != GST_FLOW_OK)
@@ -456,8 +456,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 */
 
 			element->next_is_discontinuity = FALSE;
-			element->next_sample += element->t_start * element->sample_rate;
-			element->output_timestamp += (GstClockTime) element->t_start * GST_SECOND;
+			element->next_sample += (size_t) floor(element->t_start * element->sample_rate + 0.5);
+			element->output_timestamp += (GstClockTime) floor(element->t_start * GST_SECOND + 0.5);
 		}
 
 		/*
@@ -765,8 +765,8 @@ static void class_init(gpointer class, gpointer class_data)
 	gobject_class->get_property = get_property;
 	gobject_class->dispose = dispose;
 
-	g_object_class_install_property(gobject_class, ARG_T_START, g_param_spec_uint("t-start", "Start time", "Start time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXUINT, DEFAULT_T_START, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_T_END, g_param_spec_uint("t-end", "End time", "End time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXUINT, DEFAULT_T_END, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_T_START, g_param_spec_double("t-start", "Start time", "Start time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXDOUBLE, DEFAULT_T_START, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_T_END, g_param_spec_double("t-end", "End time", "End time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXDOUBLE, DEFAULT_T_END, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SNR_LENGTH, g_param_spec_uint("snr-length", "SNR length", "Length, in samples, of the output SNR time series (0 = no limit)", 0, G_MAXUINT, DEFAULT_SNR_LENGTH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 

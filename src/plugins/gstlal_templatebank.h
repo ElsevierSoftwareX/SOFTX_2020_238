@@ -61,8 +61,8 @@ typedef struct {
 	GstPad *sumsquarespad;
 
 	int sample_rate;
-	unsigned int t_start;
-	unsigned int t_end;
+	double t_start;
+	double t_end;
 	unsigned int snr_length;
 
 	gboolean next_is_discontinuity;
