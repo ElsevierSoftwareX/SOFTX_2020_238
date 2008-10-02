@@ -463,19 +463,19 @@ static gboolean plugin_init(GstPlugin *plugin)
 	};
 
 	/*
+	 * Set the LAL debug level.
+	 */
+
+	lalDebugLevel = LALINFO | LALWARNING | LALERROR | LALNMEMDBG | LALNMEMPAD | LALNMEMTRK;
+	XLALSetSilentErrorHandler();
+
+	/*
 	 * Tell GStreamer about the elements.
 	 */
 
 	for(element = elements; element->name; element++)
 		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->type()))
 			return FALSE;
-
-	/*
-	 * Set the LAL debug level.
-	 */
-
-	lalDebugLevel = LALINFO | LALWARNING | LALERROR | LALNMEMDBG | LALNMEMPAD | LALNMEMTRK;
-	XLALSetSilentErrorHandler();
 
 	/*
 	 * Done.
