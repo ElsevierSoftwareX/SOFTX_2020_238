@@ -28,18 +28,19 @@ WHITEN="lal_whiten \
 	psd-mode=1 \
 	filter-length=4 \
 	convolution-length=16 \
-	average-samples=256 \
+	average-samples=32 \
 	compensation-psd=reference_psd.txt"
 
-SINK="queue ! lal_multiscope trace-duration=4.0 frame-interval=0.0625 average-interval=32.0 do-timestamp=false ! ffmpegcolorspace ! cairotimeoverlay ! autovideosink"
+SCOPE="queue ! lal_multiscope trace-duration=4.0 frame-interval=0.0625 average-interval=32.0 do-timestamp=false ! ffmpegcolorspace ! cairotimeoverlay ! autovideosink"
 
 FAKESINK="queue ! fakesink sync=false preroll-queue-len=1"
-SINK=$FAKESINK
 
 PLAYBACK="adder ! audioresample ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=1e-3 ! audioconvert ! queue max-size-time=3000000000 ! alsasink"
 
-#NXYDUMP="queue ! lal_nxydump start-time=110000000000 stop-time=130000000000 ! filesink sync=false preroll-queue-len=1 location"
-NXYDUMP="queue ! lal_nxydump start-time=170000000000 stop-time=310000000000 ! filesink sync=false preroll-queue-len=1 location"
+#NXYDUMP="queue ! lal_nxydump start-time=111000000000 stop-time=121000000000 ! filesink sync=false preroll-queue-len=1 location"
+#NXYDUMP="queue ! lal_nxydump start-time=0 stop-time=20000000000 ! filesink sync=false preroll-queue-len=1 location"
+NXYDUMP="queue ! lal_nxydump start-time=235000000000 stop-time=251000000000 ! filesink sync=false preroll-queue-len=1 location"
+#NXYDUMP="queue ! lal_nxydump start-time=874107188000000000 stop-time=874107208000000000 ! filesink sync=false preroll-queue-len=1 location"
 
 #
 # run with GST_DEBUG_DUMP_DOT_DIR set to some location to get a set of dot
@@ -50,124 +51,148 @@ NXYDUMP="queue ! lal_nxydump start-time=170000000000 stop-time=310000000000 ! fi
 gst-launch --gst-debug-level=1 \
 	$SRC \
 	! progressreport \
+		name=progress_src \
 	! lal_simulation \
-		xml-location="bns_injections.xml" \
+		xml-location="impulse_at_874107198.xml" \
 	! $WHITEN \
+	! tee name=hoft_16384 \
+	! audiowsinclimit \
+		length=301 \
+		cutoff=1003.52 \
 	! audioresample \
-		filter-length=64 \
 	! audio/x-raw-float, rate=2048 \
 	! tee name=hoft_2048 \
+	hoft_16384. ! audiowsinclimit \
+		length=301 \
+		cutoff=250.88 \
 	! audioresample \
-		filter-length=64 \
-	! audio/x-raw-float, rate=1024 \
-	! tee name=hoft_1024 \
-	! audioresample \
-		filter-length=64 \
 	! audio/x-raw-float, rate=512 \
 	! tee name=hoft_512 \
+	hoft_16384. ! audiowsinclimit \
+		length=301 \
+		cutoff=125.44 \
 	! audioresample \
-		filter-length=64 \
 	! audio/x-raw-float, rate=256 \
 	! tee name=hoft_256 \
+	hoft_16384. ! audiowsinclimit \
+		length=301 \
+		cutoff=62.72 \
 	! audioresample \
-		filter-length=64 \
 	! audio/x-raw-float, rate=128 \
 	! tee name=hoft_128 \
-	lal_adder name=orthogonal_snr_sum_squares ! $NXYDUMP=nxydump.txt \
-	hoft_2048. ! $SINK \
+	lal_adder name=orthogonal_snr_sum_squares ! $NXYDUMP=sumsquares.txt \
+	lal_adder name=snr ! progressreport name=progress_snr ! $NXYDUMP=snr.txt \
 	hoft_2048. ! queue max-size-time=96000000000 ! lal_templatebank \
 		name=templatebank0 \
+		template-bank=Bank.xml \
+		reference-psd=reference_psd.xml \
 		t-start=0 \
 		t-end=1 \
 		snr-length=$((2048*8)) \
-	templatebank0.sumofsquares ! queue ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
-	templatebank0.src ! tee name=orthosnr0 ! $SINK \
+	templatebank0.sumofsquares ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! orthogonal_snr_sum_squares. \
 	lal_matrixmixer \
 		name=snr0 \
 	templatebank0.matrix ! snr0.matrix \
-	orthosnr0. ! snr0.sink \
-	snr0. ! $FAKESINK \
-	hoft_2048. ! queue max-size-time=96000000000 ! lal_templatebank \
+	templatebank0.src ! tee name=orthosnr0 ! snr0.sink \
+	snr0. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
+	hoft_512. ! queue max-size-time=96000000000 ! lal_templatebank \
 		name=templatebank1 \
+		template-bank=Bank.xml \
+		reference-psd=reference_psd.xml \
 		t-start=1 \
-		t-end=2 \
-		snr-length=$((2048*8)) \
-	templatebank1.sumofsquares ! queue ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
-	templatebank1.src ! tee name=orthosnr1 ! $SINK \
+		t-end=5 \
+		snr-length=$((512*8)) \
+	templatebank1.sumofsquares ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! orthogonal_snr_sum_squares. \
 	lal_matrixmixer \
 		name=snr1 \
 	templatebank1.matrix ! snr1.matrix \
-	orthosnr1. ! snr1.sink \
-	snr1. ! $FAKESINK \
-	hoft_1024. ! queue max-size-time=96000000000 ! lal_templatebank \
+	templatebank1.src ! tee name=orthosnr1 ! snr1.sink \
+	snr1. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
+	hoft_256. ! queue max-size-time=96000000000 ! lal_templatebank \
 		name=templatebank2 \
-		t-start=2 \
-		t-end=4 \
-		snr-length=$((1024*8)) \
-	templatebank2.sumofsquares ! queue ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
-	templatebank2.src ! tee name=orthosnr2 ! $SINK \
+		template-bank=Bank.xml \
+		reference-psd=reference_psd.xml \
+		t-start=5 \
+		t-end=13 \
+		snr-length=$((256*8)) \
+	templatebank2.sumofsquares ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! orthogonal_snr_sum_squares. \
 	lal_matrixmixer \
 		name=snr2 \
 	templatebank2.matrix ! snr2.matrix \
-	orthosnr2. ! snr2.sink \
-	snr2. ! $FAKESINK \
-	hoft_512. ! queue max-size-time=96000000000 ! lal_templatebank \
+	templatebank2.src ! tee name=orthosnr2 ! snr2.sink \
+	snr2. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
+	hoft_128. ! queue max-size-time=96000000000 ! lal_templatebank \
 		name=templatebank3 \
-		t-start=4 \
-		t-end=8 \
-		snr-length=$((512*8)) \
-	templatebank3.sumofsquares ! queue ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
-	templatebank3.src ! tee name=orthosnr3 ! $SINK \
+		template-bank=Bank.xml \
+		reference-psd=reference_psd.xml \
+		t-start=13 \
+		t-end=29 \
+		snr-length=$((128*8)) \
+	templatebank3.sumofsquares ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! orthogonal_snr_sum_squares. \
 	lal_matrixmixer \
 		name=snr3 \
 	templatebank3.matrix ! snr3.matrix \
-	orthosnr3. ! snr3.sink \
-	snr3. ! $FAKESINK \
-	hoft_256. ! queue max-size-time=96000000000 ! lal_templatebank \
+	templatebank3.src ! tee name=orthosnr3 ! snr3.sink \
+	snr3. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
+	hoft_128. ! queue max-size-time=96000000000 ! lal_templatebank \
 		name=templatebank4 \
-		t-start=8 \
-		t-end=16 \
-		snr-length=$((256*8)) \
-	templatebank4.sumofsquares ! queue ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
-	templatebank4.src ! tee name=orthosnr4 ! $SINK \
+		template-bank=Bank.xml \
+		reference-psd=reference_psd.xml \
+		t-start=29 \
+		t-end=45 \
+		snr-length=$((128*8)) \
+	templatebank4.sumofsquares ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! orthogonal_snr_sum_squares. \
 	lal_matrixmixer \
 		name=snr4 \
 	templatebank4.matrix ! snr4.matrix \
-	orthosnr4. ! snr4.sink \
-	snr4. ! $FAKESINK \
+	templatebank4.src ! tee name=orthosnr4 ! snr4.sink \
+	snr4. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
+
+exit
+
+	hoft_16384. ! audiowsinclimit \
+		length=301 \
+		cutoff=501.76 \
+	! audioresample \
+	! audio/x-raw-float, rate=1024 \
+	! tee name=hoft_1024 \
+
 	hoft_128. ! queue max-size-time=96000000000 ! lal_templatebank \
 		name=templatebank5 \
+		template-bank=Bank.xml \
+		reference-psd=reference_psd.xml \
 		t-start=16 \
 		t-end=32 \
 		snr-length=$((128*8)) \
-	templatebank5.sumofsquares ! queue ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
-	templatebank5.src ! tee name=orthosnr5 ! $SINK \
+	templatebank5.sumofsquares ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! orthogonal_snr_sum_squares. \
 	lal_matrixmixer \
 		name=snr5 \
 	templatebank5.matrix ! snr5.matrix \
-	orthosnr5. ! snr5.sink \
-	snr5. ! $FAKESINK \
+	templatebank5.src ! tee name=orthosnr5 ! snr5.sink \
+	snr5. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
 	hoft_128. ! queue max-size-time=96000000000 ! lal_templatebank \
 		name=templatebank6 \
+		template-bank=Bank.xml \
+		reference-psd=reference_psd.xml \
 		t-start=32 \
 		t-end=48 \
 		snr-length=$((128*8)) \
-	templatebank6.src ! tee name=orthosnr6 ! $SINK \
-	templatebank6.sumofsquares ! queue ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
+	templatebank6.sumofsquares ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! orthogonal_snr_sum_squares. \
 	lal_matrixmixer \
 		name=snr6 \
 	templatebank6.matrix ! snr6.matrix \
-	orthosnr6. ! snr6.sink \
-	snr6. ! $FAKESINK \
+	templatebank6.src ! tee name=orthosnr6 ! snr6.sink \
+	snr6. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
 	hoft_128. ! queue max-size-time=96000000000 ! lal_templatebank \
 		name=templatebank7 \
+		template-bank=Bank.xml \
+		reference-psd=reference_psd.xml \
 		t-start=48 \
 		t-end=64 \
 		snr-length=$((128*8)) \
-	templatebank7.src ! tee name=orthosnr7 ! $SINK \
-	templatebank7.sumofsquares ! queue ! audioresample ! audio/x-raw-float, rate=2048 ! orthogonal_snr_sum_squares. \
+	templatebank7.sumofsquares ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! orthogonal_snr_sum_squares. \
 	lal_matrixmixer \
 		name=snr7 \
 	templatebank7.matrix ! snr7.matrix \
-	orthosnr7. ! snr7.sink \
-	snr7. ! $FAKESINK \
+	templatebank7.src ! tee name=orthosnr7 ! snr7.sink \
+	snr7. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
