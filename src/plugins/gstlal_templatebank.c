@@ -84,7 +84,7 @@
 #define DEFAULT_T_END G_MAXUINT
 #define DEFAULT_SNR_LENGTH 2048	/* samples */
 #define TEMPLATE_DURATION 64	/* seconds */
-#define CHIRPMASS_START 1.15	/* M_sun */
+#define CHIRPMASS_START 1.21	/* M_sun */
 #define TEMPLATE_SAMPLE_RATE 2048	/* Hertz */
 #define NUM_TEMPLATES 200
 #define TOLERANCE 0.97
