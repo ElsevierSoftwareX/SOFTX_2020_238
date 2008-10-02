@@ -272,6 +272,7 @@ done:
 
 enum property {
 	ARG_TEMPLATE_BANK = 1,
+	ARG_REFERENCE_PSD,
 	ARG_T_START,
 	ARG_T_END,
 	ARG_SNR_LENGTH
@@ -286,6 +287,11 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case ARG_TEMPLATE_BANK:
 		free(element->template_bank_xml);
 		element->template_bank_xml = g_value_dup_string(value);
+		break;
+
+	case ARG_REFERENCE_PSD:
+		free(element->reference_psd_filename);
+		element->reference_psd_filename = g_value_dup_string(value);
 		break;
 
 	case ARG_T_START:
@@ -310,6 +316,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	switch(id) {
 	case ARG_TEMPLATE_BANK:
 		g_value_set_string(value, element->template_bank_xml);
+		break;
+
+	case ARG_REFERENCE_PSD:
+		g_value_set_string(value, element->reference_psd_filename);
 		break;
 
 	case ARG_T_START:
@@ -659,14 +669,11 @@ static void dispose(GObject *object)
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(object);
 
 	gst_object_unref(element->matrixpad);
-	element->matrixpad = NULL;
 	gst_object_unref(element->sumsquarespad);
-	element->sumsquarespad = NULL;
 	gst_object_unref(element->srcpad);
-	element->srcpad = NULL;
 	g_object_unref(element->adapter);
-	element->adapter = NULL;
 	free(element->template_bank_xml);
+	free(element->reference_psd_filename);
 
 	svd_destroy(element);
 
@@ -777,6 +784,7 @@ static void class_init(gpointer class, gpointer class_data)
 	gobject_class->dispose = dispose;
 
 	g_object_class_install_property(gobject_class, ARG_TEMPLATE_BANK, g_param_spec_string("template-bank", "XML Template Bank", "Name of LIGO Light Weight XML file containing inspiral template bank", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_REFERENCE_PSD, g_param_spec_string("reference-psd", "Reference PSD", "Name of file from which to read a reference PSD", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_T_START, g_param_spec_double("t-start", "Start time", "Start time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXDOUBLE, DEFAULT_T_START, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_T_END, g_param_spec_double("t-end", "End time", "End time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXDOUBLE, DEFAULT_T_END, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SNR_LENGTH, g_param_spec_uint("snr-length", "SNR length", "Length, in samples, of the output SNR time series (0 = no limit)", 0, G_MAXUINT, DEFAULT_SNR_LENGTH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
@@ -815,6 +823,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	/* internal data */
 	element->adapter = gst_adapter_new();
 
+	element->reference_psd_filename = NULL;
 	element->template_bank_xml = NULL;
 	element->t_start = DEFAULT_T_START;
 	element->t_end = DEFAULT_T_END;
