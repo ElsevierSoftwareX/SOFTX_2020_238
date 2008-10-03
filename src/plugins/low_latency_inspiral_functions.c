@@ -96,12 +96,14 @@ int generate_bank_svd(
   REAL8FrequencySeries *psd = NULL;
   FindChirpFilterInput         *fcFilterInput  = NULL;
   FindChirpTmpltParams         *fcTmpltParams  = NULL;
-  FindChirpInitParams          *fcInitParams   = NULL;
+  FindChirpInitParams          fcInitParams;
   LALStatus status;
   int full_numsamps = base_sample_rate*tmax;
   double dt = 1.0/base_sample_rate;
   
   memset(&status, 0, sizeof(status));
+  memset(&fcInitParams, 0, sizeof(fcInitParams));
+
   fprintf(stderr,"U = %zd,%zd V = %zd,%zd S = %zd\n",(*U)->size1,(*U)->size2,(*V)->size1,(*V)->size2,(*S)->size);
 
   if (verbose) fprintf(stderr, "creating fft plans \n");
@@ -112,25 +114,18 @@ int generate_bank_svd(
   if (verbose) fprintf(stderr, "Reading psd \n");
   psd = gstlal_get_reference_psd("reference_psd.txt", 0, 1.0/tmax, full_numsamps / 2 + 1);
 
-  if ( ! ( fcInitParams = (FindChirpInitParams *)
-        LALCalloc( 1, sizeof(FindChirpInitParams) ) ) )
-  {
-    fprintf( stderr, "could not allocate memory for findchirp init params\n" );
-    exit( 1 );
-  }
-
-  fcInitParams->numPoints      = full_numsamps;
-  fcInitParams->numSegments    = 1;
-  fcInitParams->numChisqBins   = 0;
-  fcInitParams->createRhosqVec = 0;
-  fcInitParams->ovrlap         = 0;
-  fcInitParams->approximant    = EOB;
-  fcInitParams->order          = twoPN;
-  fcInitParams->createCVec     = 0;
+  fcInitParams.numPoints      = full_numsamps;
+  fcInitParams.numSegments    = 1;
+  fcInitParams.numChisqBins   = 0;
+  fcInitParams.createRhosqVec = 0;
+  fcInitParams.ovrlap         = 0;
+  fcInitParams.approximant    = EOB;
+  fcInitParams.order          = twoPN;
+  fcInitParams.createCVec     = 0;
   bankHead->order = threePointFivePN;
 
   if (verbose) fprintf(stderr,"LALFindChirpTemplateInit()\n");
-  LALFindChirpTemplateInit( &status, &fcTmpltParams, fcInitParams );
+  LALFindChirpTemplateInit( &status, &fcTmpltParams, &fcInitParams );
   fcTmpltParams->deltaT = dt;
   fcTmpltParams->fLow = 25; 
 
@@ -153,7 +148,7 @@ int generate_bank_svd(
   /* Create Template - to be replaced by a LAL template generation call */
   if (verbose) fprintf(stderr,"LALCreateFindChirpInput()\n");
 
-  LALCreateFindChirpInput( &status, &fcFilterInput, fcInitParams );
+  LALCreateFindChirpInput( &status, &fcFilterInput, &fcInitParams );
 
   fprintf(stderr, "LALFindChirpTDTemplate() tmplate is %p \n", fcFilterInput->fcTmplt);
 
@@ -205,7 +200,6 @@ int generate_bank_svd(
   XLALDestroyREAL8FFTPlan(fwdplan);
   XLALDestroyREAL8FFTPlan(revplan);
   LALFindChirpTemplateFinalize( &status, &fcTmpltParams );
-  LALFree( fcInitParams );
   XLALDestroyCOMPLEX16FrequencySeries(fft_template);
   XLALDestroyREAL8TimeSeries(template);
   LALDestroyFindChirpInput(&status,&fcFilterInput);
@@ -261,12 +255,9 @@ int create_template_from_sngl_inspiral(
     template->data->data[i] = (REAL8) fcTmpltParams->xfacVec->data[i];
     }
 
-/*
- * FIXME:  re-enable whitening
   XLALREAL8TimeFreqFFT(fft_template,template,fwdplan);
   XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd);
   XLALREAL8FreqTimeFFT(template,fft_template,revplan);
-*/
 
   /* Actually return the peice of the template */
 
