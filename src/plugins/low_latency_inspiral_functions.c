@@ -65,7 +65,8 @@
  * lal functions */
 int generate_bank_svd(
                       gsl_matrix **U, 
-                      gsl_vector **S, gsl_matrix **V,
+                      gsl_vector **S, 
+		      gsl_matrix **V,
                       gsl_vector **chifacs,
                       char * bank_name, 
                       int base_sample_rate,
@@ -77,12 +78,13 @@ int generate_bank_svd(
 	              int verbose)
   {
   InspiralTemplate *bankHead     = NULL;
-  int numtemps = InspiralTmpltBankFromLIGOLw( &bankHead, bank_name,-1,-1);
+  int numtemps = InspiralTmpltBankFromLIGOLw( &bankHead, bank_name,0,9999999);
   size_t i = 0;
   size_t j = 0;
   int svd_err_code = 0;
   size_t numsamps = floor((double) (t_end-t_start) * base_sample_rate 
                / down_samp_fac);
+
   gsl_vector *work_space = gsl_vector_calloc(numtemps);
   gsl_matrix *work_space_matrix = gsl_matrix_calloc(numtemps,numtemps);
   *U = gsl_matrix_calloc(numsamps,numtemps);
@@ -97,34 +99,18 @@ int generate_bank_svd(
   FindChirpInitParams          *fcInitParams   = NULL;
   LALStatus *status = NULL;
   status = (LALStatus *) calloc(1,sizeof(LALStatus));
-
   int full_numsamps = base_sample_rate*tmax;
   double dt = 1.0/base_sample_rate;
-
-
-  fcInitParams->numPoints      = full_numsamps;
-  fcInitParams->numSegments    = 1;
-  fcInitParams->numChisqBins   = 0;
-  fcInitParams->createRhosqVec = 0;
-  fcInitParams->ovrlap         = 0;
-  /* FIXME PPN has a hard coded max frequency that wont work !!! EOB for now*/
-  fcInitParams->approximant    = EOB;
-  fcInitParams->order          = twoPN;
-  fcInitParams->createCVec     = 0;
-  bankHead->order = threePointFivePN;
-
-  if (verbose) fprintf(stderr,"read in %d templates bank_head %p\n",numtemps,bankHead);
-
-
-  if (verbose) fprintf(stderr, "Calling LALFindChirpTemplateInit()\n");
-  LALFindChirpTemplateInit( status, &fcTmpltParams,
-        fcInitParams );
-
+  
+  fprintf(stderr,"U = %d,%d V = %d,%d S = %d\n",(*U)->size1,(*U)->size2,(*V)->size1,(*V)->size2,(*S)->size);
 
   if (verbose) printf("creating fft plans \n");
   REAL8FFTPlan *fwdplan = XLALCreateForwardREAL8FFTPlan(full_numsamps, 0);
   REAL8FFTPlan *revplan = XLALCreateReverseREAL8FFTPlan(full_numsamps, 0);
 
+  if (verbose) fprintf(stderr,"read in %d templates bankHead %p\n", numtemps,bankHead);
+  if (verbose) fprintf(stderr, "Calling LALFindChirpTemplateInit()\n");
+  LALFindChirpTemplateInit( status, &fcTmpltParams, fcInitParams );
   if (verbose) printf("Reading psd \n");
   psd = gstlal_get_reference_psd("reference_psd.txt", 0, 1.0/tmax, full_numsamps / 2 + 1);
 
@@ -144,11 +130,11 @@ int generate_bank_svd(
   fcInitParams->order          = twoPN;
   fcInitParams->createCVec     = 0;
   bankHead->order = threePointFivePN;
-  printf("LALFindChirpTemplateInit()\n");
-  LALFindChirpTemplateInit( status, &fcTmpltParams,
-        fcInitParams );
+
+  if (verbose) fprintf(stderr,"LALFindChirpTemplateInit()\n");
+  LALFindChirpTemplateInit( status, &fcTmpltParams, fcInitParams );
   fcTmpltParams->deltaT = dt;
-  fcTmpltParams->fLow = 25; /*floor(time_to_freq(bankHead->chirpMass,duration/2.0));*/
+  fcTmpltParams->fLow = 25; 
 
   if (verbose) fprintf(stderr,"chirpmass = %f, flow = %f\n\n",bankHead->chirpMass,fcTmpltParams->fLow);
 
@@ -157,17 +143,17 @@ int generate_bank_svd(
 
   /*fcTmpltParams->order = order;*/
 
-  printf("XLALCreateREAL8TimeSeriest() dt is %f\n",dt);
+  if (verbose) fprintf(stderr, "XLALCreateREAL8TimeSeriest() dt is %f\n",dt);
   template = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0,
                                        dt, &lalStrainUnit, full_numsamps);
 
-  printf("XLALCreateCOMPLEX16FrequencySeries()\n");
+  if (verbose) fprintf(stderr, "XLALCreateCOMPLEX16FrequencySeries()\n");
   fft_template = XLALCreateCOMPLEX16FrequencySeries(NULL,
                       &(LIGOTimeGPS) {0,0}, 0, 0, &lalDimensionlessUnit,
                       full_numsamps / 2 + 1);
 
   /* Create Template - to be replaced by a LAL template generation call */
-  printf("LALCreateFindChirpInput()\n");
+  if (verbose) fprintf(stderr,"LALCreateFindChirpInput()\n");
 
   LALCreateFindChirpInput( status, &fcFilterInput, fcInitParams );
 
@@ -185,15 +171,17 @@ int generate_bank_svd(
   j = 0;
   while(bankHead)
     {
-    create_template_from_sngl_inspiral(bankHead, *U, *chifacs, tmax, base_sample_rate,down_samp_fac,t_start,t_end,j, fcFilterInput, fcTmpltParams, template, fft_template, fwdplan, revplan, psd);
-    if (verbose) fprintf(stderr, "M_chirp=%e",bankHead->chirpMass);
+    /*create_template_from_sngl_inspiral(bankHead, *U, *chifacs, tmax, base_sample_rate,down_samp_fac,t_start,t_end,j, fcFilterInput, fcTmpltParams, template, fft_template, fwdplan, revplan, psd);*/
+    if (verbose) fprintf(stderr, "template %d M_chirp=%e\n",j,
+                         bankHead->chirpMass);
     bankHead = bankHead->next;
     j++;
     }
   j = 0;
 
   /* SET THIS IN create_template_.. gsl_vector_set(*chifacs,i,sqrt(tmpltpower));*/
-    
+  if (verbose)     fprintf(stderr,"Doing the SVD \n");
+
   svd_err_code = gsl_linalg_SV_decomp_mod(*U, work_space_matrix, 
                                              *V, *S, work_space);
   /*svd_err_code = gsl_linalg_SV_decomp(*U,*V, *S, work_space);*/
@@ -390,6 +378,7 @@ int create_template_from_sngl_inspiral(
   /* FIXME DONT FORGET TO DESTROY LALCreateFindChirpInput */
   counter = 0;
   /*FP = fopen("tmpshort.txt","w");*/
+
   for (i=numsamps - t_end*fsamp; i< numsamps-t_start*fsamp; i+=downsampfac)
     {
     /*fprintf(FP,"%f\n",template->data->data[i]);*/
