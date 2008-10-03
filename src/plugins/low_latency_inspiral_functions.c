@@ -97,19 +97,19 @@ int generate_bank_svd(
   FindChirpFilterInput         *fcFilterInput  = NULL;
   FindChirpTmpltParams         *fcTmpltParams  = NULL;
   FindChirpInitParams          *fcInitParams   = NULL;
-  LALStatus *status = NULL;
-  status = (LALStatus *) calloc(1,sizeof(LALStatus));
+  LALStatus status;
   int full_numsamps = base_sample_rate*tmax;
   double dt = 1.0/base_sample_rate;
   
+  memset(&status, 0, sizeof(status));
   fprintf(stderr,"U = %zd,%zd V = %zd,%zd S = %zd\n",(*U)->size1,(*U)->size2,(*V)->size1,(*V)->size2,(*S)->size);
 
-  if (verbose) printf("creating fft plans \n");
+  if (verbose) fprintf(stderr, "creating fft plans \n");
   REAL8FFTPlan *fwdplan = XLALCreateForwardREAL8FFTPlan(full_numsamps, 0);
   REAL8FFTPlan *revplan = XLALCreateReverseREAL8FFTPlan(full_numsamps, 0);
 
   if (verbose) fprintf(stderr,"read in %d templates bankHead %p\n", numtemps,bankHead);
-  if (verbose) printf("Reading psd \n");
+  if (verbose) fprintf(stderr, "Reading psd \n");
   psd = gstlal_get_reference_psd("reference_psd.txt", 0, 1.0/tmax, full_numsamps / 2 + 1);
 
   if ( ! ( fcInitParams = (FindChirpInitParams *)
@@ -130,7 +130,7 @@ int generate_bank_svd(
   bankHead->order = threePointFivePN;
 
   if (verbose) fprintf(stderr,"LALFindChirpTemplateInit()\n");
-  LALFindChirpTemplateInit( status, &fcTmpltParams, fcInitParams );
+  LALFindChirpTemplateInit( &status, &fcTmpltParams, fcInitParams );
   fcTmpltParams->deltaT = dt;
   fcTmpltParams->fLow = 25; 
 
@@ -153,11 +153,11 @@ int generate_bank_svd(
   /* Create Template - to be replaced by a LAL template generation call */
   if (verbose) fprintf(stderr,"LALCreateFindChirpInput()\n");
 
-  LALCreateFindChirpInput( status, &fcFilterInput, fcInitParams );
+  LALCreateFindChirpInput( &status, &fcFilterInput, fcInitParams );
 
-  printf("LALFindChirpTDTemplate() tmplate is %p \n", fcFilterInput->fcTmplt);
+  fprintf(stderr, "LALFindChirpTDTemplate() tmplate is %p \n", fcFilterInput->fcTmplt);
 
-  printf("status is %p\n bankHead order is %d",status,bankHead->order);
+  fprintf(stderr, "status is %p\n bankHead order is %d",&status,bankHead->order);
 
   fcTmpltParams->order = threePointFivePN;
   fcTmpltParams->approximant = EOB;
@@ -204,12 +204,11 @@ int generate_bank_svd(
   gsl_matrix_free(work_space_matrix);
   XLALDestroyREAL8FFTPlan(fwdplan);
   XLALDestroyREAL8FFTPlan(revplan);
-  LALFindChirpTemplateFinalize( status, &fcTmpltParams );
+  LALFindChirpTemplateFinalize( &status, &fcTmpltParams );
   LALFree( fcInitParams );
   XLALDestroyCOMPLEX16FrequencySeries(fft_template);
   XLALDestroyREAL8TimeSeries(template);
-  LALDestroyFindChirpInput(status,&fcFilterInput);
-  free(status);
+  LALDestroyFindChirpInput(&status,&fcFilterInput);
   return 0;
   }
 
@@ -250,152 +249,38 @@ int create_template_from_sngl_inspiral(
   int counter = 0;
   double dt = 1.0/fsamp;
   double chinorm = 0;
+  LALStatus status;
 
-  /*
-  REAL8TimeSeries *template = NULL;
-  COMPLEX16FrequencySeries *fft_template = NULL;
-  REAL8FrequencySeries *psd = NULL;
-  FindChirpFilterInput         *fcFilterInput  = NULL;
-  FindChirpTmpltParams         *fcTmpltParams  = NULL;
-  FindChirpInitParams          *fcInitParams   = NULL;*/
-
-  LALStatus *status = NULL;
-  status = (LALStatus *) calloc(1,sizeof(LALStatus));
+  memset(&status, 0, sizeof(status));
  
-  /*fcFilterInput = (FindChirpFilterInput *) calloc(1,sizeof(FindChirpFilterInput));
- *   fcFilterInput->fcTmplt = (FindChirpTemplate *) calloc(1,sizeof(FindChirpTemplate));*/
-
-  /*
-  printf("creating fft plans \n");
-  REAL8FFTPlan *fwdplan = XLALCreateForwardREAL8FFTPlan(numsamps, 0);
-  REAL8FFTPlan *revplan = XLALCreateReverseREAL8FFTPlan(numsamps, 0);
-
-  printf("Reading psd \n");
-  psd = gstlal_get_reference_psd("reference_psd.txt", 0, 1.0/duration, numsamps / 2 + 1);
-
-  if ( ! ( fcInitParams = (FindChirpInitParams *)
-        LALCalloc( 1, sizeof(FindChirpInitParams) ) ) )
-  {
-    fprintf( stderr, "could not allocate memory for findchirp init params\n" );
-    exit( 1 );
-  }
-  */
-
-  /* maybe remove these?*/
-
-/*  fcInitParams->numPoints      = numsamps;
-  fcInitParams->numSegments    = 1;
-  fcInitParams->numChisqBins   = 0;
-  fcInitParams->createRhosqVec = 0;
-  fcInitParams->ovrlap         = 0;
-*/
-  /* FIXME PPN has a hard coded max frequency that wont work !!! EOB for now*/
-/*
-  fcInitParams->approximant    = EOB;
-  fcInitParams->order          = twoPN;
-  fcInitParams->createCVec     = 0;
-  bankHead->order = threePointFivePN;
-  printf("LALFindChirpTemplateInit()\n");
-  LALFindChirpTemplateInit( status, &fcTmpltParams,
-        fcInitParams );
-*/
-
-  /* fcTmpltParams->deltaT = dt; */
-
-  /* FIXME This needs to be calculated based on the mass range of the bank.
- *      We want all the templates to fit in the allotted durations */
-
-/*
-  fprintf(stderr,"chirpmass = %f, flow = %f\n\n",bankHead->chirpMass,time_to_freq(bankHead->chirpMass,duration/2.0));
-  fcTmpltParams->fLow = 25; 
-*/
-/*floor(time_to_freq(bankHead->chirpMass,duration/2.0));*/
-
-/*
-  fcTmpltParams->reverseChirpBank = 0;
-  fcTmpltParams->taperTmplt = 1;
-*/
-  /*fcTmpltParams->order = order;*/
-/*
-  printf("XLALCreateREAL8TimeSeriest() dt is %f\n",dt);
-  template = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0,
-                                       dt, &lalStrainUnit, numsamps);
-*/
-
-/*
-  printf("XLALCreateCOMPLEX16FrequencySeries()\n");
-  fft_template = XLALCreateCOMPLEX16FrequencySeries(NULL,
-                      &(LIGOTimeGPS) {0,0}, 0, 0, &lalDimensionlessUnit,
-                      numsamps / 2 + 1);
-*/
-
-  /* Create Template - to be replaced by a LAL template generation call */
-
-  /*
-  printf("LALCreateFindChirpInput()\n");
-
-  LALCreateFindChirpInput( status, &fcFilterInput, fcInitParams );
-
-  printf("LALFindChirpTDTemplate() tmplate is %p \n", fcFilterInput->fcTmplt);
-
-  printf("status is %p\n bankHead order is %d",status,bankHead->order);
-
-  fcTmpltParams->order = threePointFivePN;
-  fcTmpltParams->approximant = EOB;
-  fcTmpltParams->dynRange = pow(2,63);
-  */
-  
-  LALFindChirpTDTemplate( status, fcFilterInput->fcTmplt,
+  LALFindChirpTDTemplate( &status, fcFilterInput->fcTmplt,
                   bankHead, fcTmpltParams );
 
-  /*CHECKSTATUSPTR(status); */
-  /*printf("Copying template\n");
-  FILE *FP = fopen("tmp.txt","w");*/
   for (i=0; i< numsamps; i++)
     {
-    /*fprintf(FP,"%f\n",fcTmpltParams->xfacVec->data[i]);*/
     template->data->data[i] = (REAL8) fcTmpltParams->xfacVec->data[i];
-    /*fft_template->data->data[i].im = (REAL8) fcFilterInput->fcTmplt->data->data[i].im;
-    fft_template->data->data[i].re = (REAL8) fcFilterInput->fcTmplt->data->data[i].re;*/
     }
 
+/*
+ * FIXME:  re-enable whitening
   XLALREAL8TimeFreqFFT(fft_template,template,fwdplan);
   XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd);
   XLALREAL8FreqTimeFFT(template,fft_template,revplan);
-
-  /*FP = fopen("tmpwh.txt","w");
-  for (i=0; i< numsamps; i++)
-    {
-    fprintf(FP,"%f\n",template->data->data[i]);
-    }
-  fclose(FP);*/
+*/
 
   /* Actually return the peice of the template */
 
   /* Deallocate everything */
-  /* FIXME DONT FORGET TO DESTROY LALCreateFindChirpInput */
   counter = 0;
-  /*FP = fopen("tmpshort.txt","w");*/
 
   for (i=numsamps - t_end*fsamp; i< numsamps-t_start*fsamp; i+=downsampfac)
     {
-    /*fprintf(FP,"%f\n",template->data->data[i]);*/
     chinorm+= template->data->data[i] * template->data->data[i] * dt*downsampfac;
     gsl_matrix_set(U,counter,U_column,template->data->data[i]);
     counter++;
     }
   gsl_vector_set(chifacs,U_column,sqrt(chinorm));
 
-  /*fclose(FP);*/
-/*
-  XLALDestroyREAL8FFTPlan(fwdplan);
-  XLALDestroyREAL8FFTPlan(revplan);
-  LALFindChirpTemplateFinalize( status, &fcTmpltParams );
-  LALFree( fcInitParams );
-  XLALDestroyCOMPLEX16FrequencySeries(fft_template);
-  XLALDestroyREAL8TimeSeries(template);
-  LALDestroyFindChirpInput(status,&fcFilterInput);
-*/
   return 0;
   }
 
@@ -438,7 +323,7 @@ double normalize_template(double M, double ts, double duration,
   /*for (i = 0; i < (*S)->size; i++) 
     {
     sumb+= gsl_vector_get(*S,i);
-    printf("S(%d) = %f",i,gsl_vector_get(*S,i));
+    fprintf(stderr, "S(%d) = %f",i,gsl_vector_get(*S,i));
     }*/
   sumb = gsl_vector_get(*S,0);
   for (i = 0; i < (*S)->size; i++)
