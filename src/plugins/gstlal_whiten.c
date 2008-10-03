@@ -138,11 +138,11 @@ static int make_window(GSTLALWhiten *element)
 	XLALDestroyREAL8Window(element->window);
 	element->window = XLALCreateHannREAL8Window(hann_length);
 	if(!element->window) {
-		GST_ERROR("failure creating Hann window");
+		GST_ERROR_OBJECT(element, "failure creating Hann window");
 		return -1;
 	}
 	if(!XLALResizeREAL8Sequence(element->window->data, -transient, hann_length + 2 * transient)) {
-		GST_ERROR("failure resizing Hann window");
+		GST_ERROR_OBJECT(element, "failure resizing Hann window");
 		XLALDestroyREAL8Window(element->window);
 		element->window = NULL;
 		return -1;
@@ -163,7 +163,7 @@ static int make_fft_plans(GSTLALWhiten *element)
 	element->revplan = XLALCreateReverseREAL8FFTPlan(fft_length, 1);
 
 	if(!element->fwdplan || !element->revplan) {
-		GST_ERROR("failure creating FFT plans");
+		GST_ERROR_OBJECT(element, "failure creating FFT plans");
 		XLALDestroyREAL8FFTPlan(element->fwdplan);
 		XLALDestroyREAL8FFTPlan(element->revplan);
 		element->fwdplan = NULL;
@@ -175,15 +175,15 @@ static int make_fft_plans(GSTLALWhiten *element)
 }
 
 
-static REAL8FrequencySeries *make_empty_psd(const GSTLALWhiten *element)
+static REAL8FrequencySeries *make_empty_psd(double segment_duration, int sample_rate)
 {
 	LIGOTimeGPS gps_zero = {0, 0};
 	LALUnit strain_squared_per_hertz = gstlal_lalStrainSquaredPerHertz();
-	unsigned segment_length = floor(element->convolution_length * element->sample_rate + 0.5);
+	unsigned segment_length = floor(segment_duration * sample_rate + 0.5);
 	unsigned psd_length = segment_length / 2 + 1;
 	REAL8FrequencySeries *psd;
 
-	psd = XLALCreateREAL8FrequencySeries("PSD", &gps_zero, 0.0, 1.0 / element->convolution_length, &strain_squared_per_hertz, psd_length);
+	psd = XLALCreateREAL8FrequencySeries("PSD", &gps_zero, 0.0, 1.0 / segment_duration, &strain_squared_per_hertz, psd_length);
 
 	if(!psd)
 		GST_ERROR("XLALCreateREAL8FrequencySeries() failed");
@@ -192,9 +192,9 @@ static REAL8FrequencySeries *make_empty_psd(const GSTLALWhiten *element)
 }
 
 
-static REAL8FrequencySeries *make_iligo_psd(const GSTLALWhiten *element)
+static REAL8FrequencySeries *make_iligo_psd(double segment_duration, int sample_rate)
 {
-	REAL8FrequencySeries *psd = make_empty_psd(element);
+	REAL8FrequencySeries *psd = make_empty_psd(segment_duration, sample_rate);
 	unsigned i;
 
 	if(!psd)
@@ -216,7 +216,7 @@ static int get_psd(GSTLALWhiten *element)
 
 	switch(element->psdmode) {
 	case GSTLAL_PSDMODE_INITIAL_LIGO_SRD:
-		element->psd = make_iligo_psd(element);
+		element->psd = make_iligo_psd(element->convolution_length, element->sample_rate);
 		if(!element->psd)
 			return -1;
 		break;
@@ -225,11 +225,11 @@ static int get_psd(GSTLALWhiten *element)
 		if(!element->psd_regressor->n_samples) {
 			/* no data for the average yet, seed psd regressor
 			 * with initial LIGO SRD */
-			element->psd = make_iligo_psd(element);
+			element->psd = make_iligo_psd(element->convolution_length, element->sample_rate);
 			if(!element->psd)
 				return -1;
 			if(XLALPSDRegressorSetPSD(element->psd_regressor, element->psd, element->psd_regressor->max_samples)) {
-				GST_ERROR("XLALPSDRegressorSetPSD() failed");
+				GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
 				XLALDestroyREAL8FrequencySeries(element->psd);
 				element->psd = NULL;
 				return -1;
@@ -237,7 +237,7 @@ static int get_psd(GSTLALWhiten *element)
 		} else {
 			element->psd = XLALPSDRegressorGetPSD(element->psd_regressor);
 			if(!element->psd) {
-				GST_ERROR("XLALPSDRegressorGetPSD() failed");
+				GST_ERROR_OBJECT(element, "XLALPSDRegressorGetPSD() failed");
 				return -1;
 			}
 		}
@@ -322,7 +322,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		if(element->xml_filename) {
 			element->xml_stream = XLALOpenLIGOLwXMLFile(element->xml_filename);
 			if(!element->xml_stream) {
-				GST_ERROR("XLALOpenLIGOLwXMLFile() failed");
+				GST_ERROR_OBJECT(element, "XLALOpenLIGOLwXMLFile() failed");
 				free(element->xml_filename);
 				element->xml_filename = NULL;
 			}
@@ -454,14 +454,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	segment = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0, 0}, 0.0, (double) 1.0 / element->sample_rate, &lalStrainUnit, segment_length);
 	tilde_segment = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0, 0}, 0, 0, &lalDimensionlessUnit, segment_length / 2 + 1);
 	if(!segment || !tilde_segment) {
-		GST_ERROR("failure creating holding area");
+		GST_ERROR_OBJECT(element, "failure creating holding area");
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
 	if(!element->tail) {
 		element->tail = XLALCreateREAL8Sequence(segment_length / 2 - transient);
 		if(!element->tail) {
-			GST_ERROR("failure allocating tail buffer");
+			GST_ERROR_OBJECT(element, "failure allocating tail buffer");
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
@@ -481,13 +481,17 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		if(!element->psd || element->psdmode == GSTLAL_PSDMODE_RUNNING_AVERAGE) {
+			static int n = 0;
 			if(get_psd(element)) {
 				result = GST_FLOW_ERROR;
 				goto done;
 			}
-			if(element->xml_stream) {
+			if(!(n++ % (element->psd_regressor->max_samples / 2)) && element->xml_stream) {
+				static int n = 1;
 				if(XLALWriteLIGOLwXMLArrayREAL8FrequencySeries(element->xml_stream, "Recorded by GSTLAL element lal_whiten", element->psd))
-					GST_ERROR("XLALWriteLIGOLwXMLArrayREAL8FrequencySeries() failed");
+					GST_ERROR_OBJECT(element, "XLALWriteLIGOLwXMLArrayREAL8FrequencySeries() failed");
+				else
+					GST_LOG_OBJECT(element, "wrote PSD snapshot %d", n++);
 			}
 		}
 
@@ -501,7 +505,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			XLALDestroyCOMPLEX16FrequencySeries(mean);
 			mean = XLALPSDRegressorGetMean(element->psd_regressor, &segment->epoch, 4.0);
 			if(!mean) {
-				GST_ERROR("XLALPSDRegressorGetMean() failed");
+				GST_ERROR_OBJECT(element, "XLALPSDRegressorGetMean() failed");
 				result = GST_FLOW_ERROR;
 				goto done;
 			}
@@ -536,8 +540,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		/*
 		 * Copy data from adapter into holding area.  Have to reset
-		 * some metadata that would otherwise get modified through
-		 * each iteration of this loop.
+		 * some metadata that gets modified through each iteration
+		 * of this loop.
 		 */
 
 		memcpy(segment->data->data, gst_adapter_peek(element->adapter, segment_length * sizeof(*segment->data->data)), segment_length * sizeof(*segment->data->data));
@@ -549,12 +553,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		if(!XLALUnitaryWindowREAL8Sequence(segment->data, element->window)) {
-			GST_ERROR("XLALUnitaryWindowREAL8Sequence() failed");
+			GST_ERROR_OBJECT(element, "XLALUnitaryWindowREAL8Sequence() failed");
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
 		if(XLALREAL8TimeFreqFFT(tilde_segment, segment, element->fwdplan)) {
-			GST_ERROR("XLALREAL8TimeFreqFFT() failed");
+			GST_ERROR_OBJECT(element, "XLALREAL8TimeFreqFFT() failed");
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
@@ -564,7 +568,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		if(XLALPSDRegressorAdd(element->psd_regressor, tilde_segment)) {
-			GST_ERROR("XLALPSDRegressorAdd() failed");
+			GST_ERROR_OBJECT(element, "XLALPSDRegressorAdd() failed");
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
@@ -575,12 +579,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		if(mean)
 			if(!XLALAddCOMPLEX16FrequencySeries(tilde_segment, mean)) {
-				GST_ERROR("XLALAddCOMPLEX16FrequencySeries() failed");
+				GST_ERROR_OBJECT(element, "XLALAddCOMPLEX16FrequencySeries() failed");
 				result = GST_FLOW_ERROR;
 				goto done;
 			}
 		if(!XLALWhitenCOMPLEX16FrequencySeries(tilde_segment, element->psd)) {
-			GST_ERROR("XLALWhitenCOMPLEX16FrequencySeries() failed");
+			GST_ERROR_OBJECT(element, "XLALWhitenCOMPLEX16FrequencySeries() failed");
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
@@ -605,7 +609,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		if(XLALREAL8FreqTimeFFT(segment, tilde_segment, element->revplan)) {
-			GST_ERROR("XLALREAL8FreqTimeFFT() failed");
+			GST_ERROR_OBJECT(element, "XLALREAL8FreqTimeFFT() failed");
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
