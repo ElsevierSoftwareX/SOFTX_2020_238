@@ -102,15 +102,13 @@ int generate_bank_svd(
   int full_numsamps = base_sample_rate*tmax;
   double dt = 1.0/base_sample_rate;
   
-  fprintf(stderr,"U = %d,%d V = %d,%d S = %d\n",(*U)->size1,(*U)->size2,(*V)->size1,(*V)->size2,(*S)->size);
+  fprintf(stderr,"U = %zd,%zd V = %zd,%zd S = %zd\n",(*U)->size1,(*U)->size2,(*V)->size1,(*V)->size2,(*S)->size);
 
   if (verbose) printf("creating fft plans \n");
   REAL8FFTPlan *fwdplan = XLALCreateForwardREAL8FFTPlan(full_numsamps, 0);
   REAL8FFTPlan *revplan = XLALCreateReverseREAL8FFTPlan(full_numsamps, 0);
 
   if (verbose) fprintf(stderr,"read in %d templates bankHead %p\n", numtemps,bankHead);
-  if (verbose) fprintf(stderr, "Calling LALFindChirpTemplateInit()\n");
-  LALFindChirpTemplateInit( status, &fcTmpltParams, fcInitParams );
   if (verbose) printf("Reading psd \n");
   psd = gstlal_get_reference_psd("reference_psd.txt", 0, 1.0/tmax, full_numsamps / 2 + 1);
 
@@ -171,8 +169,8 @@ int generate_bank_svd(
   j = 0;
   while(bankHead)
     {
-    /*create_template_from_sngl_inspiral(bankHead, *U, *chifacs, tmax, base_sample_rate,down_samp_fac,t_start,t_end,j, fcFilterInput, fcTmpltParams, template, fft_template, fwdplan, revplan, psd);*/
-    if (verbose) fprintf(stderr, "template %d M_chirp=%e\n",j,
+    create_template_from_sngl_inspiral(bankHead, *U, *chifacs, tmax, base_sample_rate,down_samp_fac,t_start,t_end,j, fcFilterInput, fcTmpltParams, template, fft_template, fwdplan, revplan, psd);
+    if (verbose) fprintf(stderr, "template %zd M_chirp=%e\n",j,
                          bankHead->chirpMass);
     bankHead = bankHead->next;
     j++;
@@ -383,10 +381,10 @@ int create_template_from_sngl_inspiral(
     {
     /*fprintf(FP,"%f\n",template->data->data[i]);*/
     chinorm+= template->data->data[i] * template->data->data[i] * dt*downsampfac;
-    /*gsl_matrix_set(U,counter,U_column,template->data->data[i]);*/  
+    gsl_matrix_set(U,counter,U_column,template->data->data[i]);
     counter++;
     }
-  /*gsl_vector_set(chifacs,U_row,sqrt(chinorm)) */
+  gsl_vector_set(chifacs,U_column,sqrt(chinorm));
 
   /*fclose(FP);*/
 /*
