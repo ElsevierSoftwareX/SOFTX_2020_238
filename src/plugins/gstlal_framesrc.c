@@ -525,7 +525,6 @@ static gboolean start(GstBaseSrc *object)
 
 	caps = series_to_caps(element->instrument, element->channel_name, element->series_buffer, element->series_type);
 	if(!gst_pad_set_caps(srcpad, caps)) {
-		GST_ERROR_OBJECT(element, "gst_pad_set_caps() failed");
 		DestroyTimeSeries(element->series_buffer, element->series_type);
 		element->series_buffer = NULL;
 		element->series_type = -1;
@@ -592,7 +591,6 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 			return GST_FLOW_UNEXPECTED;
 		result = gst_pad_alloc_buffer_and_set_caps(srcpad, (guint64) floor(XLALGPSDiff(&chunk->epoch, &element->start_time) / chunk->deltaT + 0.5), chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(srcpad), buffer);
 		if(result != GST_FLOW_OK) {
-			GST_ERROR_OBJECT(element, "gst_pad_alloc_buffer() failed");
 			XLALDestroyINT4TimeSeries(chunk);
 			return result;
 		}
@@ -623,7 +621,6 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 			return GST_FLOW_UNEXPECTED;
 		result = gst_pad_alloc_buffer_and_set_caps(srcpad, (guint64) floor(XLALGPSDiff(&chunk->epoch, &element->start_time) / chunk->deltaT + 0.5), chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(srcpad), buffer);
 		if(result != GST_FLOW_OK) {
-			GST_ERROR_OBJECT(element, "gst_pad_alloc_buffer() failed");
 			XLALDestroyREAL4TimeSeries(chunk);
 			return result;
 		}
@@ -654,7 +651,6 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 			return GST_FLOW_UNEXPECTED;
 		result = gst_pad_alloc_buffer_and_set_caps(srcpad, (guint64) floor(XLALGPSDiff(&chunk->epoch, &element->start_time) / chunk->deltaT + 0.5), chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(srcpad), buffer);
 		if(result != GST_FLOW_OK) {
-			GST_ERROR_OBJECT(element, "gst_pad_alloc_buffer() failed");
 			XLALDestroyREAL8TimeSeries(chunk);
 			return result;
 		}
