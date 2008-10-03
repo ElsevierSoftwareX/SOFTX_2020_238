@@ -477,6 +477,32 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		unsigned i;
 
 		/*
+		 * Copy data from adapter into holding area.  Have to reset
+		 * some metadata that gets modified through each iteration
+		 * of this loop.
+		 */
+
+		memcpy(segment->data->data, gst_adapter_peek(element->adapter, segment_length * sizeof(*segment->data->data)), segment_length * sizeof(*segment->data->data));
+		segment->deltaT = (double) 1.0 / element->sample_rate;
+		segment->sampleUnits = lalStrainUnit;
+		XLALINT8NSToGPS(&segment->epoch, element->adapter_head_timestamp);
+
+		/*
+		 * Transform to frequency domain
+		 */
+
+		if(!XLALUnitaryWindowREAL8Sequence(segment->data, element->window)) {
+			GST_ERROR_OBJECT(element, "XLALUnitaryWindowREAL8Sequence() failed");
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
+		if(XLALREAL8TimeFreqFFT(tilde_segment, segment, element->fwdplan)) {
+			GST_ERROR_OBJECT(element, "XLALREAL8TimeFreqFFT() failed");
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
+
+		/*
 		 * Make sure we've got an up-to-date PSD
 		 */
 
@@ -536,31 +562,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 				}
 				GST_INFO_OBJECT(element, "loaded reference PSD from \"%s\" with %d samples at %.16g Hz resolution spanning the frequency band %.16g Hz -- %.16g Hz", element->compensation_psd_filename, element->compensation_psd->data->length, element->compensation_psd->deltaF, element->compensation_psd->f0, element->compensation_psd->f0 + (element->compensation_psd->data->length - 1) * element->compensation_psd->deltaF);
 			}
-		}
-
-		/*
-		 * Copy data from adapter into holding area.  Have to reset
-		 * some metadata that gets modified through each iteration
-		 * of this loop.
-		 */
-
-		memcpy(segment->data->data, gst_adapter_peek(element->adapter, segment_length * sizeof(*segment->data->data)), segment_length * sizeof(*segment->data->data));
-		segment->deltaT = (double) 1.0 / element->sample_rate;
-		segment->sampleUnits = lalStrainUnit;
-
-		/*
-		 * Transform to frequency domain
-		 */
-
-		if(!XLALUnitaryWindowREAL8Sequence(segment->data, element->window)) {
-			GST_ERROR_OBJECT(element, "XLALUnitaryWindowREAL8Sequence() failed");
-			result = GST_FLOW_ERROR;
-			goto done;
-		}
-		if(XLALREAL8TimeFreqFFT(tilde_segment, segment, element->fwdplan)) {
-			GST_ERROR_OBJECT(element, "XLALREAL8TimeFreqFFT() failed");
-			result = GST_FLOW_ERROR;
-			goto done;
 		}
 
 		/*
