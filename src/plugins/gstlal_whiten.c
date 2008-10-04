@@ -63,6 +63,7 @@
 #include <lal/Window.h>
 #include <lal/LIGOLwXML.h>
 #include <lal/LIGOLwXMLArray.h>
+#include <lal/Units.h>
 
 
 /*
@@ -196,8 +197,33 @@ static REAL8FrequencySeries *make_iligo_psd(double f0, double deltaF, int length
 	if(!psd)
 		return NULL;
 
-	for(i = 0; i < psd->data->length; i++)
+	/*
+	 * Use LAL's LIGO I PSD function to populate the frequency series.
+	 */
+
+	for(i = 0; i < psd->data->length; i++) {
 		psd->data->data[i] = XLALLIGOIPsd(psd->f0 + i * psd->deltaF) * (2 * psd->deltaF);
+
+		/*
+		 * Replace any infs with 0.  the whiten function that
+		 * applies the PSD treats a 0 in the PSD as an inf (it
+		 * zeros the bin instead of allowing a floating point
+		 * divide-by-zero error), so algebraically this works out.
+		 * more importantly, it allows an average over time to work
+		 * out (otherwise a bin at +inf stays there forever).
+		 */
+
+		if(isinf(psd->data->data[i]))
+			psd->data->data[i] = 0;
+	}
+
+	/*
+	 * Zero the DC and Nyquist components
+	 */
+
+	if(psd->f0 == 0)
+		psd->data->data[0] = 0;
+	psd->data->data[psd->data->length - 1] = 0;
 
 	return psd;
 }
@@ -211,10 +237,6 @@ static REAL8FrequencySeries *make_psd_from_fseries(const COMPLEX16FrequencySerie
 	if(!psd)
 		return NULL;
 
-	/*
-	 * Use the frequency series components as the PSD
-	 */
-
 	for(i = 0; i < psd->data->length; i++)
 		psd->data->data[i] = XLALCOMPLEX16Abs2(fseries->data->data[i]) * (2 * psd->deltaF);
 
@@ -226,10 +248,6 @@ static REAL8FrequencySeries *make_psd_from_fseries(const COMPLEX16FrequencySerie
 		psd->data->data[0] = 0;
 	psd->data->data[psd->data->length - 1] = 0;
 
-	/*
-	 * Done
-	 */
-
 	return psd;
 }
 
@@ -237,7 +255,6 @@ static REAL8FrequencySeries *make_psd_from_fseries(const COMPLEX16FrequencySerie
 static REAL8FrequencySeries *get_psd(enum gstlal_psdmode_t psdmode, LALPSDRegressor *psd_regressor, const COMPLEX16FrequencySeries *fseries)
 {
 	REAL8FrequencySeries *psd;
-	unsigned i;
 
 	switch(psdmode) {
 	case GSTLAL_PSDMODE_INITIAL_LIGO_SRD:
@@ -248,8 +265,11 @@ static REAL8FrequencySeries *get_psd(enum gstlal_psdmode_t psdmode, LALPSDRegres
 
 	case GSTLAL_PSDMODE_RUNNING_AVERAGE:
 		if(!psd_regressor->n_samples) {
-			/* no data for the average yet, seed psd regressor
-			 * with current frequency series */
+			/*
+			 * No data for the average yet, seed psd regressor
+			 * with current frequency series.
+			 */
+
 			psd = make_psd_from_fseries(fseries);
 			if(!psd)
 				return NULL;
@@ -267,23 +287,6 @@ static REAL8FrequencySeries *get_psd(enum gstlal_psdmode_t psdmode, LALPSDRegres
 		}
 		break;
 	}
-
-	/*
-	 * replace any infs with 0.  the whiten function that applies the
-	 * PSD treats a 0 in the PSD as an inf (it zeros the bin instead of
-	 * allowing a floating point divide-by-zero error), so
-	 * algebraically this works out.  more importantly, it allows an
-	 * average over time to work out (otherwise a bin at +inf stays
-	 * there forever).
-	 *
-	 * we can only get infs from model PSDs, for example from something
-	 * like the initial LIGO SRD, so this isn't normally a big deal.
-	 * real PSDs will never have them.
-	 */
-
-	for(i = 0; i < psd->data->length; i++)
-		if(isinf(psd->data->data[i]))
-			psd->data->data[i] = 0;
 
 	/*
 	 * done
@@ -411,11 +414,40 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
+	char units[100];	/* FIXME:  argh, hard-coded length = BAD BAD BAD */
 	gboolean result = TRUE;
+
+	/*
+	 * record the sample rate
+	 */
 
 	element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 
+	/*
+	 * get a modifiable copy of the caps.  gst_caps_make_writable()
+	 * unref()s its argument so we have to ref() it first to keep it
+	 * valid.
+	 */
+
+	gst_caps_ref(caps);
+	caps = gst_caps_make_writable(caps);
+
+	/*
+	 * set the units to dimensionless
+	 */
+
+	XLALUnitAsString(units, sizeof(units), &lalDimensionlessUnit);
+	gst_caps_set_simple(caps, "units", G_TYPE_STRING, units, NULL);
+
+	/*
+	 * try setting the caps on the downstream peer
+	 */
+
 	result = gst_pad_set_caps(element->srcpad, caps);
+
+	/*
+	 * done
+	 */
 
 	gst_object_unref(element);
 	return result;
@@ -540,10 +572,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			}
 			if(!(n++ % (element->psd_regressor->max_samples / 2)) && element->xml_stream) {
 				static int n = 1;
+				GST_INFO_OBJECT(element, "writing PSD snapshot %d", n++);
 				if(XLALWriteLIGOLwXMLArrayREAL8FrequencySeries(element->xml_stream, "Recorded by GSTLAL element lal_whiten", element->psd))
 					GST_ERROR_OBJECT(element, "XLALWriteLIGOLwXMLArrayREAL8FrequencySeries() failed");
-				else
-					GST_LOG_OBJECT(element, "wrote PSD snapshot %d", n++);
 			}
 		}
 
@@ -572,16 +603,19 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		if(element->compensation_psd_filename) {
 			if(element->compensation_psd) {
-				if(element->compensation_psd->f0 != element->psd->f0 || element->compensation_psd->deltaF != element->psd->deltaF || element->compensation_psd->data->length != element->psd->data->length) {
-					/* reference spectrum doesn't match
+				if(element->compensation_psd->f0 != tilde_segment->f0 || element->compensation_psd->deltaF != tilde_segment->deltaF || element->compensation_psd->data->length != tilde_segment->data->length) {
+					/*
+					 * Reference spectrum doesn't match
 					 * current PSD, delete to induce a
-					 * new one to be loaded */
+					 * new one to be loaded
+					 */
+
 					XLALDestroyREAL8FrequencySeries(element->compensation_psd);
 					element->compensation_psd = NULL;
 				}
 			}
 			if(!element->compensation_psd) {
-				element->compensation_psd = gstlal_get_reference_psd(element->compensation_psd_filename, element->psd->f0, element->psd->deltaF, element->psd->data->length);
+				element->compensation_psd = gstlal_get_reference_psd(element->compensation_psd_filename, tilde_segment->f0, tilde_segment->deltaF, tilde_segment->data->length);
 				if(!element->compensation_psd) {
 					result = GST_FLOW_ERROR;
 					goto done;
