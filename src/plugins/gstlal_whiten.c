@@ -559,7 +559,47 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 
 		/*
-		 * Make sure we've got an up-to-date PSD
+		 * If we're compensating for a reference spectrum, make
+		 * sure we have one that's up-to-date.
+		 */
+
+		if(element->compensation_psd_filename) {
+			if(element->compensation_psd) {
+				if(element->compensation_psd->f0 != tilde_segment->f0 || element->compensation_psd->deltaF != tilde_segment->deltaF || element->compensation_psd->data->length != tilde_segment->data->length) {
+					/*
+					 * Reference spectrum doesn't match
+					 * current PSD, delete to induce a
+					 * new one to be loaded
+					 */
+
+					XLALDestroyREAL8FrequencySeries(element->compensation_psd);
+					element->compensation_psd = NULL;
+				}
+			}
+			if(!element->compensation_psd) {
+				element->compensation_psd = gstlal_get_reference_psd(element->compensation_psd_filename, tilde_segment->f0, tilde_segment->deltaF, tilde_segment->data->length);
+				if(!element->compensation_psd) {
+					result = GST_FLOW_ERROR;
+					goto done;
+				}
+				GST_INFO_OBJECT(element, "loaded reference PSD from \"%s\" with %d samples at %.16g Hz resolution spanning the frequency band %.16g Hz -- %.16g Hz", element->compensation_psd_filename, element->compensation_psd->data->length, element->compensation_psd->deltaF, element->compensation_psd->f0, element->compensation_psd->f0 + (element->compensation_psd->data->length - 1) * element->compensation_psd->deltaF);
+			}
+			if(!element->psd_regressor->n_samples) {
+				/*
+				 * No data for the average yet, seed psd
+				 * regressor with reference spectrum.
+				 */
+
+				if(XLALPSDRegressorSetPSD(element->psd_regressor, element->compensation_psd, element->psd_regressor->max_samples)) {
+					GST_ERROR("XLALPSDRegressorSetPSD() failed");
+					result = GST_FLOW_ERROR;
+					goto done;
+				}
+			}
+		}
+
+		/*
+		 * Make sure we've got an up-to-date PSD.
 		 */
 
 		if(!element->psd || element->psdmode == GSTLAL_PSDMODE_RUNNING_AVERAGE) {
@@ -594,34 +634,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			}
 			for(i = 0; i < mean->data->length; i++)
 				mean->data->data[i] = XLALCOMPLEX16Negative(mean->data->data[i]);
-		}
-
-		/*
-		 * If we're compensating for a reference spectrum, make
-		 * sure we have one of those that's up-to-date as well.
-		 */
-
-		if(element->compensation_psd_filename) {
-			if(element->compensation_psd) {
-				if(element->compensation_psd->f0 != tilde_segment->f0 || element->compensation_psd->deltaF != tilde_segment->deltaF || element->compensation_psd->data->length != tilde_segment->data->length) {
-					/*
-					 * Reference spectrum doesn't match
-					 * current PSD, delete to induce a
-					 * new one to be loaded
-					 */
-
-					XLALDestroyREAL8FrequencySeries(element->compensation_psd);
-					element->compensation_psd = NULL;
-				}
-			}
-			if(!element->compensation_psd) {
-				element->compensation_psd = gstlal_get_reference_psd(element->compensation_psd_filename, tilde_segment->f0, tilde_segment->deltaF, tilde_segment->data->length);
-				if(!element->compensation_psd) {
-					result = GST_FLOW_ERROR;
-					goto done;
-				}
-				GST_INFO_OBJECT(element, "loaded reference PSD from \"%s\" with %d samples at %.16g Hz resolution spanning the frequency band %.16g Hz -- %.16g Hz", element->compensation_psd_filename, element->compensation_psd->data->length, element->compensation_psd->deltaF, element->compensation_psd->f0, element->compensation_psd->f0 + (element->compensation_psd->data->length - 1) * element->compensation_psd->deltaF);
-			}
 		}
 
 		/*
