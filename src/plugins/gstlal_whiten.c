@@ -175,15 +175,11 @@ static int make_fft_plans(GSTLALWhiten *element)
 }
 
 
-static REAL8FrequencySeries *make_empty_psd(double segment_duration, int sample_rate)
+static REAL8FrequencySeries *make_empty_psd(double f0, double deltaF, int length)
 {
 	LIGOTimeGPS gps_zero = {0, 0};
 	LALUnit strain_squared_per_hertz = gstlal_lalStrainSquaredPerHertz();
-	unsigned segment_length = floor(segment_duration * sample_rate + 0.5);
-	unsigned psd_length = segment_length / 2 + 1;
-	REAL8FrequencySeries *psd;
-
-	psd = XLALCreateREAL8FrequencySeries("PSD", &gps_zero, 0.0, 1.0 / segment_duration, &strain_squared_per_hertz, psd_length);
+	REAL8FrequencySeries *psd = XLALCreateREAL8FrequencySeries("PSD", &gps_zero, f0, deltaF, &strain_squared_per_hertz, length);
 
 	if(!psd)
 		GST_ERROR("XLALCreateREAL8FrequencySeries() failed");
@@ -192,9 +188,9 @@ static REAL8FrequencySeries *make_empty_psd(double segment_duration, int sample_
 }
 
 
-static REAL8FrequencySeries *make_iligo_psd(double segment_duration, int sample_rate)
+static REAL8FrequencySeries *make_iligo_psd(double f0, double deltaF, int length)
 {
-	REAL8FrequencySeries *psd = make_empty_psd(segment_duration, sample_rate);
+	REAL8FrequencySeries *psd = make_empty_psd(f0, deltaF, length);
 	unsigned i;
 
 	if(!psd)
@@ -207,38 +203,66 @@ static REAL8FrequencySeries *make_iligo_psd(double segment_duration, int sample_
 }
 
 
-static int get_psd(GSTLALWhiten *element)
+static REAL8FrequencySeries *make_psd_from_fseries(const COMPLEX16FrequencySeries *fseries)
 {
+	REAL8FrequencySeries *psd = make_empty_psd(fseries->f0, fseries->deltaF, fseries->data->length);
 	unsigned i;
 
-	XLALDestroyREAL8FrequencySeries(element->psd);
-	element->psd = NULL;
+	if(!psd)
+		return NULL;
 
-	switch(element->psdmode) {
+	/*
+	 * Use the frequency series components as the PSD
+	 */
+
+	for(i = 0; i < psd->data->length; i++)
+		psd->data->data[i] = XLALCOMPLEX16Abs2(fseries->data->data[i]) * (2 * psd->deltaF);
+
+	/*
+	 * Zero the DC and Nyquist components
+	 */
+
+	if(psd->f0 == 0)
+		psd->data->data[0] = 0;
+	psd->data->data[psd->data->length - 1] = 0;
+
+	/*
+	 * Done
+	 */
+
+	return psd;
+}
+
+
+static REAL8FrequencySeries *get_psd(enum gstlal_psdmode_t psdmode, LALPSDRegressor *psd_regressor, const COMPLEX16FrequencySeries *fseries)
+{
+	REAL8FrequencySeries *psd;
+	unsigned i;
+
+	switch(psdmode) {
 	case GSTLAL_PSDMODE_INITIAL_LIGO_SRD:
-		element->psd = make_iligo_psd(element->convolution_length, element->sample_rate);
-		if(!element->psd)
-			return -1;
+		psd = make_iligo_psd(fseries->f0, fseries->deltaF, fseries->data->length);
+		if(!psd)
+			return NULL;
 		break;
 
 	case GSTLAL_PSDMODE_RUNNING_AVERAGE:
-		if(!element->psd_regressor->n_samples) {
+		if(!psd_regressor->n_samples) {
 			/* no data for the average yet, seed psd regressor
-			 * with initial LIGO SRD */
-			element->psd = make_iligo_psd(element->convolution_length, element->sample_rate);
-			if(!element->psd)
-				return -1;
-			if(XLALPSDRegressorSetPSD(element->psd_regressor, element->psd, element->psd_regressor->max_samples)) {
-				GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
-				XLALDestroyREAL8FrequencySeries(element->psd);
-				element->psd = NULL;
-				return -1;
+			 * with current frequency series */
+			psd = make_psd_from_fseries(fseries);
+			if(!psd)
+				return NULL;
+			if(XLALPSDRegressorSetPSD(psd_regressor, psd, psd_regressor->max_samples)) {
+				GST_ERROR("XLALPSDRegressorSetPSD() failed");
+				XLALDestroyREAL8FrequencySeries(psd);
+				return NULL;
 			}
 		} else {
-			element->psd = XLALPSDRegressorGetPSD(element->psd_regressor);
-			if(!element->psd) {
-				GST_ERROR_OBJECT(element, "XLALPSDRegressorGetPSD() failed");
-				return -1;
+			psd = XLALPSDRegressorGetPSD(psd_regressor);
+			if(!psd) {
+				GST_ERROR("XLALPSDRegressorGetPSD() failed");
+				return NULL;
 			}
 		}
 		break;
@@ -257,15 +281,15 @@ static int get_psd(GSTLALWhiten *element)
 	 * real PSDs will never have them.
 	 */
 
-	for(i = 0; i < element->psd->data->length; i++)
-		if(isinf(element->psd->data->data[i]))
-			element->psd->data->data[i] = 0;
+	for(i = 0; i < psd->data->length; i++)
+		if(isinf(psd->data->data[i]))
+			psd->data->data[i] = 0;
 
 	/*
 	 * done
 	 */
 
-	return 0;
+	return psd;
 }
 
 
@@ -508,7 +532,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		if(!element->psd || element->psdmode == GSTLAL_PSDMODE_RUNNING_AVERAGE) {
 			static int n = 0;
-			if(get_psd(element)) {
+			XLALDestroyREAL8FrequencySeries(element->psd);
+			element->psd = get_psd(element->psdmode, element->psd_regressor, tilde_segment);
+			if(!element->psd) {
 				result = GST_FLOW_ERROR;
 				goto done;
 			}
