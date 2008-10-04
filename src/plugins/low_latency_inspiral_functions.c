@@ -100,6 +100,8 @@ int generate_bank_svd(
   LALStatus status;
   int full_numsamps = base_sample_rate*tmax;
   double dt = 1.0/base_sample_rate;
+  REAL8FFTPlan *fwdplan;
+  REAL8FFTPlan *revplan;
   
   memset(&status, 0, sizeof(status));
   memset(&fcInitParams, 0, sizeof(fcInitParams));
@@ -107,8 +109,8 @@ int generate_bank_svd(
   fprintf(stderr,"U = %zd,%zd V = %zd,%zd S = %zd\n",(*U)->size1,(*U)->size2,(*V)->size1,(*V)->size2,(*S)->size);
 
   if (verbose) fprintf(stderr, "creating fft plans \n");
-  REAL8FFTPlan *fwdplan = XLALCreateForwardREAL8FFTPlan(full_numsamps, 0);
-  REAL8FFTPlan *revplan = XLALCreateReverseREAL8FFTPlan(full_numsamps, 0);
+  fwdplan = XLALCreateForwardREAL8FFTPlan(full_numsamps, 0);
+  revplan = XLALCreateReverseREAL8FFTPlan(full_numsamps, 0);
 
   if (verbose) fprintf(stderr,"read in %d templates bankHead %p\n", numtemps,bankHead);
   if (verbose) fprintf(stderr, "Reading psd \n");
