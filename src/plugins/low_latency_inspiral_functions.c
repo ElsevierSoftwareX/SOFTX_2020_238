@@ -78,7 +78,7 @@ int generate_bank_svd(
 	              int verbose)
   {
   InspiralTemplate *bankHead     = NULL;
-  int numtemps = InspiralTmpltBankFromLIGOLw( &bankHead, bank_name,0,9999999);
+  int numtemps = InspiralTmpltBankFromLIGOLw( &bankHead, bank_name,-1,-1);
   size_t i = 0;
   size_t j = 0;
   int svd_err_code = 0;
@@ -120,7 +120,7 @@ int generate_bank_svd(
   fcInitParams.createRhosqVec = 0;
   fcInitParams.ovrlap         = 0;
   fcInitParams.approximant    = EOB;
-  fcInitParams.order          = twoPN;
+  fcInitParams.order          = threePointFivePN;
   fcInitParams.createCVec     = 0;
   bankHead->order = threePointFivePN;
 
@@ -164,6 +164,11 @@ int generate_bank_svd(
   j = 0;
   while(bankHead)
     {
+    /* this sets the cut off frequency in my version of lal only */
+    /* Sathya is supposed to fix this */
+
+    bankHead->fFinal = base_sample_rate / 2.0 - 1; /*nyquist*/
+
     create_template_from_sngl_inspiral(bankHead, *U, *chifacs, tmax, base_sample_rate,down_samp_fac,t_start,t_end,j, fcFilterInput, fcTmpltParams, template, fft_template, fwdplan, revplan, psd);
     if (verbose) fprintf(stderr, "template %zd M_chirp=%e\n",j,
                          bankHead->chirpMass);
