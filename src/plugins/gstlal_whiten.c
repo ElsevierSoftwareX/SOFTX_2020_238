@@ -630,7 +630,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		/*
 		 * Retrieve the mean if required.  We store the negative of
-		 * the mean to simplify the process of adding to the
+		 * the mean to simplify the process of adding it to the
 		 * transform of the data.
 		 */
 
@@ -679,7 +679,44 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		/*
 		 * Compensate for the use of a mis-matched PSD for
 		 * whitening the templates in a subsequent matched-filter
-		 * stage.  We can write
+		 * stage.  Given data h(f), template s(f), and PSD S(f),
+		 * the inner product of the data with the template is
+		 *
+		 * 	    h(f)     s*(f)
+		 * 	---------------------
+		 * 	sqrt(S(f)) sqrt(S(f))
+		 *
+		 * which we can write as
+		 *
+		 * 	(    h(f)      sqrt(W(f)) )     s*(f)
+		 * 	( ---------- * ---------- ) * ----------
+		 * 	( sqrt(S(f))   sqrt(S(f)) )   sqrt(W(f))
+		 *
+		 * for some approximate PSD W(f).  Our frequency series
+		 * contains h(f)/sqrt(S(f)), and we now multiply by the
+		 * additional factor of sqrt(W(f) / S(f)) to provide the
+		 * compensation required for s*(f) being divided by the
+		 * wrong PSD.
+		 *
+		 * There is a complication in that s(f) is normalized to
+		 * the PSD by requiring that |s(f)|^2/S(f) = 1, but if W(f)
+		 * is used to normalize s(f) instead of the correct PSD,
+		 * then the overall normalization of s(f) will be
+		 * incorrect.  We adjust for that here as well by dividing
+		 * by the RMS of sqrt(W(f)/S(f)).  This correction factor
+		 * is only exact when s(f) itself has a flat spectrum, if
+		 * s(f) samples the spectrum non-uniformly then the
+		 * normalization adjustment factor will be wrong.  However,
+		 * if W(f) is a good approximation of S(f) then the effect
+		 * will be small, and the approximate normalization
+		 * correction factor will be close to the exact value.
+		 *
+		 * (I don't really know if that last bit is true, but when
+		 * W(f) is horribly different from S(f), for example when 1
+		 * is used for W(f), then applying the approximate
+		 * correction is much better than not applying it at all
+		 * because then at least the SNR comes out close to the
+		 * correct order of magnitude).
 		 */
 
 		if(element->compensation_psd) {
@@ -701,7 +738,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 
 		/*
-		 * Transform to time domain
+		 * Transform to time domain.
 		 */
 
 		if(XLALREAL8FreqTimeFFT(segment, tilde_segment, element->revplan)) {
@@ -709,6 +746,35 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
+
+		/* 
+		 * Divide by \Delta F \sqrt{N} to yield a time series of
+		 * unit variance Gaussian random variables.  Note: the
+		 * result will *not*, in general, be a unit variance random
+		 * process if the PSD compensation filter was applied for
+		 * that implies a normalization adjustment; and because the
+		 * original time series had been windowed and the frequency
+		 * components rendered non-indepedent as a result, the time
+		 * series here retains the shape of the original window.
+		 *
+		 * FIXME:  the normalization factor used here is only
+		 * correct when the frequency bins are independent random
+		 * variables, which they aren't.  The correct normalization
+		 * requires making use of the two-point spectral covariance
+		 * function which is derived from the Fourier transform of
+		 * the Hann-like window applied to the data.
+		 *
+		 * FIXME:  recheck this factor
+		 */
+
+		for(i = 0; i < segment->data->length; i++)
+			segment->data->data[i] /= tilde_segment->deltaF * sqrt(segment->data->length);
+		XLALUnitDivide(&segment->sampleUnits, &segment->sampleUnits, &lalHertzUnit);
+
+		/*
+		 * Verify the result is dimensionless.
+		 */
+
 		if(XLALUnitCompare(&lalDimensionlessUnit, &segment->sampleUnits)) {
 			char units[100];
 			XLALUnitAsString(units, sizeof(units), &segment->sampleUnits);
