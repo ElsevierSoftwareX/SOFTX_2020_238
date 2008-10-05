@@ -109,8 +109,8 @@ int generate_bank_svd(
   fprintf(stderr,"U = %zd,%zd V = %zd,%zd S = %zd\n",(*U)->size1,(*U)->size2,(*V)->size1,(*V)->size2,(*S)->size);
 
   if (verbose) fprintf(stderr, "creating fft plans \n");
-  fwdplan = XLALCreateForwardREAL8FFTPlan(full_numsamps, 0);
-  revplan = XLALCreateReverseREAL8FFTPlan(full_numsamps, 0);
+  fwdplan = XLALCreateForwardREAL8FFTPlan(full_numsamps, 1);
+  revplan = XLALCreateReverseREAL8FFTPlan(full_numsamps, 1);
 
   if (verbose) fprintf(stderr,"read in %d templates bankHead %p\n", numtemps,bankHead);
   if (verbose) fprintf(stderr, "Reading psd \n");
