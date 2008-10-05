@@ -244,12 +244,10 @@ static int add_xml_injections(REAL8TimeSeries *h, const struct injection_documen
 
 		/*
 		 * confirm the input time series has the correct sample
-		 * units.  argh.  XLALUnitCompare() is backwards from every
-		 * other kind of comparison function in the world.  Oh the
-		 * humanity!  0 == different, 1 == same.  sigh.
+		 * units.
 		 */
 
-		if(!XLALUnitCompare(&lalStrainUnit, &h->sampleUnits)) {
+		if(XLALUnitCompare(&lalStrainUnit, &h->sampleUnits)) {
 			XLALPrintError("%s(): target time series must have units of strain\n", func);
 			XLAL_ERROR(func, XLAL_EUNIT);
 		}
