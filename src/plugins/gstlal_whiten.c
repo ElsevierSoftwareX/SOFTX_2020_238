@@ -133,8 +133,8 @@ GType gstlal_psdmode_get_type(void)
 
 static int make_window(GSTLALWhiten *element)
 {
-	unsigned transient = floor(element->filter_length * element->sample_rate + 0.5);
-	unsigned hann_length = floor(element->convolution_length * element->sample_rate + 0.5) - 2 * transient;
+	int transient = floor(element->filter_length * element->sample_rate + 0.5);
+	int hann_length = (int) floor(element->convolution_length * element->sample_rate + 0.5) - 2 * transient;
 
 	XLALDestroyREAL8Window(element->window);
 	element->window = XLALCreateHannREAL8Window(hann_length);
@@ -155,7 +155,7 @@ static int make_window(GSTLALWhiten *element)
 
 static int make_fft_plans(GSTLALWhiten *element)
 {
-	unsigned fft_length = floor(element->convolution_length * element->sample_rate + 0.5);
+	int fft_length = floor(element->convolution_length * element->sample_rate + 0.5);
 
 	XLALDestroyREAL8FFTPlan(element->fwdplan);
 	XLALDestroyREAL8FFTPlan(element->revplan);
@@ -209,7 +209,7 @@ static REAL8FrequencySeries *make_iligo_psd(double f0, double deltaF, int length
 		 * applies the PSD treats a 0 in the PSD as an inf (it
 		 * zeros the bin instead of allowing a floating point
 		 * divide-by-zero error), so algebraically this works out.
-		 * more importantly, it allows an average over time to work
+		 * More importantly, it allows an average over time to work
 		 * out (otherwise a bin at +inf stays there forever).
 		 */
 
@@ -359,10 +359,10 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 
 	case ARG_COMPENSATION_PSD:
 		/*
-		 * a reload of the reference PSD occurs when the PSD
-		 * filename is non-NULL, but the PSD frequency series
-		 * itself is NULL, so we just set it up that way to induce
-		 * a reload
+		 * A reload of the reference PSD occurs when the PSD
+		 * filename is non-NULL and the PSD frequency series itself
+		 * is NULL, so we just set it up that way to induce a
+		 * reload
 		 */
 
 		XLALDestroyREAL8FrequencySeries(element->compensation_psd);
@@ -515,7 +515,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		goto done;
 	}
 	if(!element->tail) {
-		element->tail = XLALCreateREAL8Sequence(segment_length / 2 - transient);
+		element->tail = XLALCreateREAL8Sequence(segment->data->length / 2 - transient);
 		if(!element->tail) {
 			GST_ERROR_OBJECT(element, "failure allocating tail buffer");
 			result = GST_FLOW_ERROR;
@@ -528,7 +528,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Iterate over the available data
 	 */
 
-	while(gst_adapter_available(element->adapter) / sizeof(*segment->data->data) >= segment_length) {
+	while(gst_adapter_available(element->adapter) / sizeof(*segment->data->data) >= segment->data->length) {
 		GstBuffer *srcbuf;
 		unsigned i;
 
@@ -538,7 +538,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * of this loop.
 		 */
 
-		memcpy(segment->data->data, gst_adapter_peek(element->adapter, segment_length * sizeof(*segment->data->data)), segment_length * sizeof(*segment->data->data));
+		memcpy(segment->data->data, gst_adapter_peek(element->adapter, segment->data->length * sizeof(*segment->data->data)), segment->data->length * sizeof(*segment->data->data));
 		segment->deltaT = (double) 1.0 / element->sample_rate;
 		segment->sampleUnits = lalStrainUnit;
 		XLALINT8NSToGPS(&segment->epoch, element->adapter_head_timestamp);
@@ -564,18 +564,26 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		if(element->compensation_psd_filename) {
+			/*
+			 * If a reference spectrum is already available,
+			 * confirm that it matches the current frequency
+			 * resolution, otherwise delete it to induce a new
+			 * one to be loaded.
+			 */
+
 			if(element->compensation_psd) {
 				if(element->compensation_psd->f0 != tilde_segment->f0 || element->compensation_psd->deltaF != tilde_segment->deltaF || element->compensation_psd->data->length != tilde_segment->data->length) {
-					/*
-					 * Reference spectrum doesn't match
-					 * current PSD, delete to induce a
-					 * new one to be loaded
-					 */
 
 					XLALDestroyREAL8FrequencySeries(element->compensation_psd);
 					element->compensation_psd = NULL;
 				}
 			}
+
+			/*
+			 * Load a reference spectrum if one is not
+			 * available.
+			 */
+
 			if(!element->compensation_psd) {
 				element->compensation_psd = gstlal_get_reference_psd(element->compensation_psd_filename, tilde_segment->f0, tilde_segment->deltaF, tilde_segment->data->length);
 				if(!element->compensation_psd) {
@@ -584,14 +592,16 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 				}
 				GST_INFO_OBJECT(element, "loaded reference PSD from \"%s\" with %d samples at %.16g Hz resolution spanning the frequency band %.16g Hz -- %.16g Hz", element->compensation_psd_filename, element->compensation_psd->data->length, element->compensation_psd->deltaF, element->compensation_psd->f0, element->compensation_psd->f0 + (element->compensation_psd->data->length - 1) * element->compensation_psd->deltaF);
 			}
+
+			/*
+			 * If there's no data in the spectrum averager yet,
+			 * use the reference spectrum to initialize it.
+			 */
+
 			if(!element->psd_regressor->n_samples) {
-				/*
-				 * No data for the average yet, seed psd
-				 * regressor with reference spectrum.
-				 */
 
 				if(XLALPSDRegressorSetPSD(element->psd_regressor, element->compensation_psd, element->psd_regressor->max_samples)) {
-					GST_ERROR("XLALPSDRegressorSetPSD() failed");
+					GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
 					result = GST_FLOW_ERROR;
 					goto done;
 				}
@@ -619,9 +629,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 
 		/*
-		 * And an up-to-date mean.  We store the negative of the
-		 * mean to simplify the process of adding to the transform
-		 * of the data.
+		 * Retrieve the mean if required.  We store the negative of
+		 * the mean to simplify the process of adding to the
+		 * transform of the data.
 		 */
 
 		if(element->psdmode == GSTLAL_PSDMODE_RUNNING_AVERAGE) {
@@ -647,7 +657,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 
 		/*
-		 * Remove lines and whiten.
+		 * Remove lines and whiten.  After this, the frequency bins
+		 * should be unit variance zero mean complex Gaussian
+		 * random variables.  They are *not* independent random
+		 * variables because the source time series data was
+		 * windowed before conversion to the frequency domain.
 		 */
 
 		if(mean)
@@ -661,18 +675,27 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
+
+		/*
+		 * Compensate for the use of a mis-matched PSD for
+		 * whitening the templates in a subsequent matched-filter
+		 * stage.  We can write
+		 */
+
 		if(element->compensation_psd) {
 			double rms = 0;
 			for(i = 0; i < tilde_segment->data->length; i++) {
-				if(element->psd->data->data[i] == 0)
+				if(element->psd->data->data[i] == 0) {
+					rms += 1;
 					tilde_segment->data->data[i] = LAL_COMPLEX16_ZERO;
-				else {
+				} else {
 					double psd_ratio = element->compensation_psd->data->data[i] / element->psd->data->data[i];
 					rms += psd_ratio;
 					tilde_segment->data->data[i] = XLALCOMPLEX16MulReal(tilde_segment->data->data[i], sqrt(psd_ratio));
 				}
 			}
 			rms = sqrt(rms / tilde_segment->data->length);
+			fprintf(stderr, "PSD compensation filter's RMS = %.16g\n", rms);
 			for(i = 0; i < tilde_segment->data->length; i++)
 				tilde_segment->data->data[i] = XLALCOMPLEX16MulReal(tilde_segment->data->data[i], 1.0 / rms);
 		}
@@ -692,16 +715,16 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * half of the holding area minus the transient)
 		 */
 
-		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample + transient, (segment_length / 2 - transient) * sizeof(*segment->data->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
+		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample + transient, (segment->data->length / 2 - transient) * sizeof(*segment->data->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
 		if(result != GST_FLOW_OK)
 			goto done;
 		if(element->next_is_discontinuity) {
 			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
 			element->next_is_discontinuity = FALSE;
 		}
-		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + (segment_length / 2 - transient) - 1;
+		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + (segment->data->length / 2 - transient) - 1;
 		GST_BUFFER_TIMESTAMP(srcbuf) = element->adapter_head_timestamp + (GstClockTime) transient * GST_SECOND / element->sample_rate;
-		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) (segment_length / 2 - transient) * GST_SECOND / element->sample_rate;
+		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) (segment->data->length / 2 - transient) * GST_SECOND / element->sample_rate;
 
 		/*
 		 * Copy the first half of the time series into the buffer,
@@ -732,9 +755,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * adapter clock
 		 */
 
-		gst_adapter_flush(element->adapter, (segment_length / 2 - transient) * sizeof(*segment->data->data));
-		element->next_sample += segment_length / 2 - transient;
-		element->adapter_head_timestamp += (GstClockTime) (segment_length / 2 - transient) * GST_SECOND / element->sample_rate;
+		gst_adapter_flush(element->adapter, (segment->data->length / 2 - transient) * sizeof(*segment->data->data));
+		element->next_sample += segment->data->length / 2 - transient;
+		element->adapter_head_timestamp += (GstClockTime) (segment->data->length / 2 - transient) * GST_SECOND / element->sample_rate;
 	}
 
 	/*
