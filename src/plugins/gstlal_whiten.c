@@ -695,7 +695,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 				}
 			}
 			rms = sqrt(rms / tilde_segment->data->length);
-			fprintf(stderr, "PSD compensation filter's RMS = %.16g\n", rms);
+			GST_LOG_OBJECT(stderr, "PSD compensation filter's RMS = %.16g\n", rms);
 			for(i = 0; i < tilde_segment->data->length; i++)
 				tilde_segment->data->data[i] = XLALCOMPLEX16MulReal(tilde_segment->data->data[i], 1.0 / rms);
 		}
@@ -706,6 +706,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		if(XLALREAL8FreqTimeFFT(segment, tilde_segment, element->revplan)) {
 			GST_ERROR_OBJECT(element, "XLALREAL8FreqTimeFFT() failed");
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
+		if(XLALUnitCompare(&lalDimensionlessUnit, &segment->sampleUnits)) {
+			char units[100];
+			XLALUnitAsString(units, sizeof(units), &segment->sampleUnits);
+			GST_ERROR_OBJECT(element, "whitening process failed to produce dimensionless time series: result has units \"%s\"", units);
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
