@@ -605,6 +605,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 * of the component of h(t) in the bank
 			 */
 
+			gsl_vector_mul(&orthogonal_snr_sample.vector, element->S);
 			gsl_vector_set(&orthogonal_snr_sum_squares.vector, i, pow(gsl_blas_dnrm2(&orthogonal_snr_sample.vector), 2));
 
 			/*
