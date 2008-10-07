@@ -40,7 +40,7 @@ int main()
   generate_bank_svd(&U,&S,&V,&chifacs,"Bank.xml.bk",base_sample_rate,
                     down_samp_fac,t_start,t_end,tmax,tolerance,vrb);
 
-  fprintf(stderr,"U = %d,%d V = %d,%d S = %d\n",U->size1,U->size2,V->size1,V->size2,S->size);
+  fprintf(stderr,"U = %zd,%zd V = %zd,%zd S = %zd\n",U->size1,U->size2,V->size1,V->size2,S->size);
 
   /*gsl_matrix_transpose(V);*/
   /*for (i = 0; i < S->size; i++)
