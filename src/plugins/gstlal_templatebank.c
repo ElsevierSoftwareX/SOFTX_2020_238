@@ -519,6 +519,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		GstBuffer *orthogonal_snr_sum_squares_buf;
 		gsl_vector_view time_series;
 		gsl_matrix_view orthogonal_snr;
+		gsl_vector *orthogonal_snr_sample;
 		gsl_vector_view orthogonal_snr_sum_squares;
 
 		/*
@@ -559,15 +560,16 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		result = gst_pad_alloc_buffer(element->sumsquarespad, element->next_sample, output_length * sizeof(*orthogonal_snr_sum_squares.vector.data), GST_PAD_CAPS(element->sumsquarespad), &orthogonal_snr_sum_squares_buf);
 		if(result != GST_FLOW_OK) {
-			gst_buffer_unref(orthogonal_snr_buf);
 			goto done;
 		}
 
 		orthogonal_snr_sum_squares = gsl_vector_view_array((double *) GST_BUFFER_DATA(orthogonal_snr_sum_squares_buf), output_length);
 
 		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, num_templates(element) * output_length * sizeof(*orthogonal_snr.matrix.data), GST_PAD_CAPS(element->srcpad), &orthogonal_snr_buf);
-		if(result != GST_FLOW_OK)
+		if(result != GST_FLOW_OK) {
+			gst_buffer_unref(orthogonal_snr_sum_squares_buf);
 			goto done;
+		}
 
 		orthogonal_snr = gsl_matrix_view_array((double *) GST_BUFFER_DATA(orthogonal_snr_buf), output_length, num_templates(element));
 
@@ -589,13 +591,21 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * stream).
 		 */
 
+		orthogonal_snr_sample = gsl_vector_alloc(orthogonal_snr.matrix.size2);
+		if(!orthogonal_snr_sample) {
+			GST_ERROR_OBJECT(element, "gsl_vector_new() failed");
+			gst_buffer_unref(orthogonal_snr_sum_squares_buf);
+			gst_buffer_unref(orthogonal_snr_buf);
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
 		for(i = 0; i < output_length; i++) {
 			/*
 			 * The current row (time sample) in the output
 			 * matrix.
 			 */
 
-			gsl_vector_view orthogonal_snr_sample = gsl_matrix_row(&orthogonal_snr.matrix, i);
+			gsl_vector_view orthogonal_snr_row = gsl_matrix_row(&orthogonal_snr.matrix, i);
 
 			/*
 			 * Compute one vector of orthogonal SNR samples ---
@@ -604,10 +614,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 * dt/T is to make the inner product an
 			 * approximation of
 			 *
-			 * (1/T) \int f1(t) f2(t) dt.
+			 *	(f | g) = (1/T) \int f(t) g(t) dt.
 			 */
 
-			gsl_blas_dgemv(CblasNoTrans, 1.0 / (element->t_total_duration * element->sample_rate), element->U, &time_series.vector, 0.0, &orthogonal_snr_sample.vector);
+			gsl_blas_dgemv(CblasNoTrans, 1.0 / (element->t_total_duration * element->sample_rate), element->U, &time_series.vector, 0.0, orthogonal_snr_sample);
+			gsl_vector_memcpy(&orthogonal_snr_row.vector, orthogonal_snr_sample);
 
 			/*
 			 * From the projection of h(t) onto the bank's
@@ -615,8 +626,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 * of the component of h(t) in the bank
 			 */
 
-			gsl_vector_mul(&orthogonal_snr_sample.vector, element->S);
-			gsl_vector_set(&orthogonal_snr_sum_squares.vector, i, pow(gsl_blas_dnrm2(&orthogonal_snr_sample.vector), 2));
+			gsl_vector_mul(orthogonal_snr_sample, element->S);
+			gsl_vector_set(&orthogonal_snr_sum_squares.vector, i, pow(gsl_blas_dnrm2(orthogonal_snr_sample), 2));
 
 			/*
 			 * Advance the time series pointer.
@@ -624,6 +635,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 			time_series.vector.data++;
 		}
+		gsl_vector_free(orthogonal_snr_sample);
 
 		/*
 		 * Push the buffers downstream.
