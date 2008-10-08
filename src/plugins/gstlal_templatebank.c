@@ -83,7 +83,6 @@
 #define DEFAULT_T_START 0
 #define DEFAULT_T_END G_MAXDOUBLE
 #define DEFAULT_SNR_LENGTH 2048	/* samples */
-#define TEMPLATE_DURATION 128	/* seconds */
 #define TEMPLATE_SAMPLE_RATE 2048	/* Hertz */
 #define TOLERANCE 0.97
 
@@ -157,21 +156,22 @@ static int svd_create(GSTLALTemplateBank *element, int sample_rate)
 
 	/*
 	 * clip t_start and t_end so that 0 <= t_start <= t_end <=
-	 * TEMPLATE_DURATION (both are unsigned so can't be negative)
+	 * element->t_total_duration (both are unsigned so can't be
+	 * negative)
 	 */
 
-	if(element->t_start > TEMPLATE_DURATION)
-		element->t_start = TEMPLATE_DURATION;
+	if(element->t_start > element->t_total_duration)
+		element->t_start = element->t_total_duration;
 	if(element->t_end < element->t_start)
 		element->t_end = element->t_start;
-	else if(element->t_end > TEMPLATE_DURATION)
-		element->t_end = TEMPLATE_DURATION;
+	else if(element->t_end > element->t_total_duration)
+		element->t_end = element->t_total_duration;
 
 	/*
 	 * generate orthonormal template bank
 	 */
 
-	generate_bank_svd(&element->U, &element->S, &element->V, &element->chifacs, element->template_bank_filename, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / sample_rate, element->t_start, element->t_end, TEMPLATE_DURATION, TOLERANCE, verbose);
+	generate_bank_svd(&element->U, &element->S, &element->V, &element->chifacs, element->template_bank_filename, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / sample_rate, element->t_start, element->t_end, element->t_total_duration, TOLERANCE, verbose);
 
 	/*
 	 * done
@@ -273,6 +273,7 @@ enum property {
 	ARG_REFERENCE_PSD,
 	ARG_T_START,
 	ARG_T_END,
+	ARG_T_TOTAL_DURATION,
 	ARG_SNR_LENGTH
 };
 
@@ -298,6 +299,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	case ARG_T_END:
 		element->t_end = g_value_get_double(value);
+		break;
+
+	case ARG_T_TOTAL_DURATION:
+		element->t_total_duration = g_value_get_double(value);
 		break;
 
 	case ARG_SNR_LENGTH:
@@ -326,6 +331,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case ARG_T_END:
 		g_value_set_double(value, element->t_end);
+		break;
+
+	case ARG_T_TOTAL_DURATION:
+		g_value_set_double(value, element->t_total_duration);
 		break;
 
 	case ARG_SNR_LENGTH:
@@ -591,13 +600,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			/*
 			 * Compute one vector of orthogonal SNR samples ---
 			 * the projection of h(t) onto the template bank's
-			 * orthonormal basis.  The factor of 1/rate = dt is
-			 * to make the inner product an approximation of
+			 * orthonormal basis.  The factor of 1/(T * rate) =
+			 * dt/T is to make the inner product an
+			 * approximation of
 			 *
-			 * \int f1(t) f2(t) dt.
+			 * (1/T) \int f1(t) f2(t) dt.
 			 */
 
-			gsl_blas_dgemv(CblasNoTrans, 1.0 / element->sample_rate, element->U, &time_series.vector, 0.0, &orthogonal_snr_sample.vector);
+			gsl_blas_dgemv(CblasNoTrans, 1.0 / (element->t_total_duration * element->sample_rate), element->U, &time_series.vector, 0.0, &orthogonal_snr_sample.vector);
 
 			/*
 			 * From the projection of h(t) onto the bank's
@@ -786,6 +796,7 @@ static void class_init(gpointer class, gpointer class_data)
 	g_object_class_install_property(gobject_class, ARG_REFERENCE_PSD, g_param_spec_string("reference-psd", "Reference PSD", "Name of file from which to read a reference PSD", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_T_START, g_param_spec_double("t-start", "Start time", "Start time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXDOUBLE, DEFAULT_T_START, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_T_END, g_param_spec_double("t-end", "End time", "End time of subtemplate in seconds measure backwards from end of bank", 0, G_MAXDOUBLE, DEFAULT_T_END, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_T_TOTAL_DURATION, g_param_spec_double("t-total-duration", "Template total duration", "Total duration of the template (not just the piece being processed here) in seconds", 0, G_MAXDOUBLE, DEFAULT_T_END - DEFAULT_T_START, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SNR_LENGTH, g_param_spec_uint("snr-length", "SNR length", "Length, in samples, of the output SNR time series (0 = no limit)", 0, G_MAXUINT, DEFAULT_SNR_LENGTH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
@@ -826,6 +837,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->template_bank_filename = NULL;
 	element->t_start = DEFAULT_T_START;
 	element->t_end = DEFAULT_T_END;
+	element->t_total_duration = 0;
 	element->snr_length = DEFAULT_SNR_LENGTH;
 
 	element->next_is_discontinuity = FALSE;

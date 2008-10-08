@@ -65,6 +65,7 @@ typedef struct {
 	int sample_rate;
 	double t_start;
 	double t_end;
+	double t_total_duration;
 	unsigned int snr_length;
 
 	gboolean next_is_discontinuity;
