@@ -507,6 +507,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * the tail.
 	 */
 
+	if(segment_length & 1) {
+		GST_ERROR_OBJECT(element, "segment length is odd");
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
 	segment = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0, 0}, 0.0, (double) 1.0 / element->sample_rate, &lalStrainUnit, segment_length);
 	tilde_segment = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0, 0}, 0, 0, &lalDimensionlessUnit, segment_length / 2 + 1);
 	if(!segment || !tilde_segment) {
@@ -573,7 +578,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 			if(element->compensation_psd) {
 				if(element->compensation_psd->f0 != tilde_segment->f0 || element->compensation_psd->deltaF != tilde_segment->deltaF || element->compensation_psd->data->length != tilde_segment->data->length) {
-
 					XLALDestroyREAL8FrequencySeries(element->compensation_psd);
 					element->compensation_psd = NULL;
 				}
@@ -749,13 +753,27 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		/* 
 		 * Divide by \Delta F \sqrt{N} to yield a time series of
-		 * unit variance Gaussian random variables.  Note: the
-		 * result will *not*, in general, be a unit variance random
-		 * process if the PSD compensation filter was applied for
-		 * that implies a normalization adjustment; and because the
-		 * original time series had been windowed and the frequency
-		 * components rendered non-indepedent as a result, the time
-		 * series here retains the shape of the original window.
+		 * unit variance zero mean Gaussian random variables.
+		 *
+		 * Note: that because the original time series had been
+		 * windowed (and the frequency components rendered
+		 * non-indepedent as a result) the time series here still
+		 * retains the shape of the original window.  The mean
+		 * square is not only an ensemble average but an average
+		 * over the segment.  The mean square for any given sample
+		 * in the segment can be computed from the window function
+		 * knowing that the average over the segment is 1, and is
+		 *
+		 * <x_{j}^{2}> = w_{j}^2 * (N / sum-of-squares)
+		 *
+		 * where N is the length of the window (and the segment)
+		 * and sum-of-squares is the sum of the squares of the
+		 * window.
+		 *
+		 * Also note that the result will *not*, in general, be a
+		 * unit variance random process if the PSD compensation
+		 * filter was applied for that implies a normalization
+		 * adjustment.
 		 *
 		 * FIXME:  the normalization factor used here is only
 		 * correct when the frequency bins are independent random
@@ -763,8 +781,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * requires making use of the two-point spectral covariance
 		 * function which is derived from the Fourier transform of
 		 * the Hann-like window applied to the data.
-		 *
-		 * FIXME:  recheck this factor
 		 */
 
 		for(i = 0; i < segment->data->length; i++)
@@ -785,7 +801,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		/*
 		 * Get a buffer from the downstream peer (note the size is
-		 * half of the holding area minus the transient)
+		 * half of the holding area minus the transient).
 		 */
 
 		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample + transient, (segment->data->length / 2 - transient) * sizeof(*segment->data->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
@@ -802,11 +818,20 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		/*
 		 * Copy the first half of the time series into the buffer,
 		 * removing the transient from the start, and adding the
-		 * contents of the tail
+		 * contents of the tail.  We want the result to be a unit
+		 * variance random process.  When we add the two time
+		 * series (the first half of the piece we have just
+		 * whitened and the contents of the tail buffer), we do so
+		 * overlapping the Hann windows so that the sum of the
+		 * windows is 1.  This leaves the mean square of the
+		 * samples equal to N / sum-of-squares (see the comments
+		 * above about the sample-to-sample variation of the mean
+		 * square).  We remove this factor leaving us with a unit
+		 * variance random process.
 		 */
 
 		for(i = 0; i < element->tail->length; i++)
-			((double *) GST_BUFFER_DATA(srcbuf))[i] = segment->data->data[transient + i] + element->tail->data[i];
+			((double *) GST_BUFFER_DATA(srcbuf))[i] = (segment->data->data[transient + i] + element->tail->data[i]) / sqrt(element->window->data->length / element->window->sumofsquares);
 
 		/*
 		 * Push the buffer downstream
