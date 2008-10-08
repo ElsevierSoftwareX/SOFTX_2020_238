@@ -627,7 +627,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 */
 
 			gsl_vector_mul(orthogonal_snr_sample, element->S);
-			gsl_vector_set(&orthogonal_snr_sum_squares.vector, i, pow(gsl_blas_dnrm2(orthogonal_snr_sample), 2));
+			gsl_vector_set(&orthogonal_snr_sum_squares.vector, i, pow(gsl_blas_dnrm2(orthogonal_snr_sample), 2) / num_templates(element));
 
 			/*
 			 * Advance the time series pointer.
