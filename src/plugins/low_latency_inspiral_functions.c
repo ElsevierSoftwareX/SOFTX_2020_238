@@ -70,7 +70,6 @@ static int create_template_from_sngl_inspiral(
                        gsl_vector *chifacs,
                        int fsamp,
                        int downsampfac, 
-                       double t_start, 
                        double t_end,
                        double t_total_duration, 
                        int U_column,
@@ -84,8 +83,7 @@ static int create_template_from_sngl_inspiral(
                        )
 
   {
-  int numsamps = fsamp*TEMPLATE_DURATION;	/* bigger length of the template */
-  int i;
+  unsigned i;
   int t_total_length = floor(t_total_duration * fsamp + 0.5);	/* length of the template */
   double template_norm;
   gsl_vector_view col;
@@ -94,13 +92,12 @@ static int create_template_from_sngl_inspiral(
 
   memset(&status, 0, sizeof(status));
  
+  memset(fcTmpltParams->xfacVec->data, 0, template->data->length * sizeof(*fcTmpltParams->xfacVec->data));
   LALFindChirpTDTemplate( &status, fcFilterInput->fcTmplt,
                   bankHead, fcTmpltParams );
 
-  for (i=0; i< numsamps; i++)
-    {
+  for (i=0; i< template->data->length; i++)
     template->data->data[i] = (REAL8) fcTmpltParams->xfacVec->data[i];
-    }
 
   XLALREAL8TimeFreqFFT(fft_template,template,fwdplan);
   XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd);
@@ -117,9 +114,9 @@ static int create_template_from_sngl_inspiral(
 
   template_norm = sqrt(XLALREAL8SequenceSumSquares(template->data, template->data->length - t_total_length, t_total_length) / t_total_length);
 
-  /* Actually return the peice of the template */
+  /* Actually return the piece of the template */
   col = gsl_matrix_column(U, U_column);
-  tmplt = gsl_vector_view_array_with_stride(template->data->data + numsamps - (int) floor(t_end * fsamp + 0.5), downsampfac, col.vector.size);
+  tmplt = gsl_vector_view_array_with_stride(template->data->data + template->data->length - (int) floor(t_end * fsamp + 0.5), downsampfac, col.vector.size);
   gsl_vector_memcpy(&col.vector, &tmplt.vector);
   gsl_vector_scale(&col.vector, 1.0 / template_norm);
 
@@ -239,7 +236,7 @@ int generate_bank_svd(
 
     bankHead->fFinal = base_sample_rate / 2.0 - 1; /*nyquist*/
 
-    create_template_from_sngl_inspiral(bankHead, *U, *chifacs, base_sample_rate,down_samp_fac,t_start,t_end, TEMPLATE_DURATION, j, fcFilterInput, fcTmpltParams, template, fft_template, fwdplan, revplan, psd);
+    create_template_from_sngl_inspiral(bankHead, *U, *chifacs, base_sample_rate,down_samp_fac,t_end, t_total_duration, j, fcFilterInput, fcTmpltParams, template, fft_template, fwdplan, revplan, psd);
     if (verbose) fprintf(stderr, "template %zd M_chirp=%e\n",j,
                          bankHead->chirpMass);
     bankHead = bankHead->next;
