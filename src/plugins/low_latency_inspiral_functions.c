@@ -28,6 +28,7 @@
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_linalg.h>
+#include <gsl/gsl_blas.h>
 
 /* LAL Includes */
 
@@ -58,8 +59,75 @@
 #include "low_latency_inspiral_functions.h"
 #include "gstlal_whiten.h"
 
+#define TEMPLATE_DURATION 128	/* seconds */
+
 #define LAL_CALL( function, statusptr ) \
   ((function),lal_errhandler(statusptr,#function,__FILE__,__LINE__,rcsid))
+
+static int create_template_from_sngl_inspiral(
+                       InspiralTemplate *bankHead,
+                       gsl_matrix *U, 
+                       gsl_vector *chifacs,
+                       int fsamp,
+                       int downsampfac, 
+                       double t_start, 
+                       double t_end,
+                       double t_total_duration, 
+                       int U_column,
+                       FindChirpFilterInput *fcFilterInput,
+                       FindChirpTmpltParams *fcTmpltParams,
+                       REAL8TimeSeries *template,
+                       COMPLEX16FrequencySeries *fft_template,
+                       REAL8FFTPlan *fwdplan,
+                       REAL8FFTPlan *revplan,
+                       REAL8FrequencySeries *psd
+                       )
+
+  {
+  int numsamps = fsamp*TEMPLATE_DURATION;	/* bigger length of the template */
+  int i;
+  int t_total_length = floor(t_total_duration * fsamp + 0.5);	/* length of the template */
+  double template_norm;
+  gsl_vector_view col;
+  gsl_vector_view tmplt;
+  LALStatus status;
+
+  memset(&status, 0, sizeof(status));
+ 
+  LALFindChirpTDTemplate( &status, fcFilterInput->fcTmplt,
+                  bankHead, fcTmpltParams );
+
+  for (i=0; i< numsamps; i++)
+    {
+    template->data->data[i] = (REAL8) fcTmpltParams->xfacVec->data[i];
+    }
+
+  XLALREAL8TimeFreqFFT(fft_template,template,fwdplan);
+  XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd);
+  XLALREAL8FreqTimeFFT(template,fft_template,revplan);
+
+  /*
+   * Normalize the template.  The template is normalized so that
+   *
+   *	(1/T) \sum s^2 \Delta t = 1
+   *
+   * after whitening.  (a common factor of \Delta t is removed from the
+   * numerator and denominator in the statement below).
+   */
+
+  template_norm = sqrt(XLALREAL8SequenceSumSquares(template->data, template->data->length - t_total_length, t_total_length) / t_total_length);
+
+  /* Actually return the peice of the template */
+  col = gsl_matrix_column(U, U_column);
+  tmplt = gsl_vector_view_array_with_stride(template->data->data + numsamps - (int) floor(t_end * fsamp + 0.5), downsampfac, col.vector.size);
+  gsl_vector_memcpy(&col.vector, &tmplt.vector);
+  gsl_vector_scale(&col.vector, 1.0 / template_norm);
+
+  /* Compute the \Xi^2 thing */
+  gsl_vector_set(chifacs,U_column,gsl_blas_dnrm2(&col.vector));
+
+  return 0;
+  }
 
 /* FIXME: this is a place holder and needs to be implemented rigorously with  
  * lal functions */
@@ -73,7 +141,7 @@ int generate_bank_svd(
                       int down_samp_fac, 
                       double t_start,
                       double t_end, 
-                      double tmax, 
+                      double t_total_duration, 
                       double tolerance,
 	              int verbose)
   {
@@ -98,7 +166,7 @@ int generate_bank_svd(
   FindChirpTmpltParams         *fcTmpltParams  = NULL;
   FindChirpInitParams          fcInitParams;
   LALStatus status;
-  int full_numsamps = base_sample_rate*tmax;
+  int full_numsamps = base_sample_rate*TEMPLATE_DURATION;
   double dt = 1.0/base_sample_rate;
   REAL8FFTPlan *fwdplan;
   REAL8FFTPlan *revplan;
@@ -114,7 +182,7 @@ int generate_bank_svd(
 
   if (verbose) fprintf(stderr,"read in %d templates bankHead %p\n", numtemps,bankHead);
   if (verbose) fprintf(stderr, "Reading psd \n");
-  psd = gstlal_get_reference_psd("reference_psd.txt", 0, 1.0/tmax, full_numsamps / 2 + 1);
+  psd = gstlal_get_reference_psd("reference_psd.txt", 0, 1.0/TEMPLATE_DURATION, full_numsamps / 2 + 1);
 
   fcInitParams.numPoints      = full_numsamps;
   fcInitParams.numSegments    = 1;
@@ -171,7 +239,7 @@ int generate_bank_svd(
 
     bankHead->fFinal = base_sample_rate / 2.0 - 1; /*nyquist*/
 
-    create_template_from_sngl_inspiral(bankHead, *U, *chifacs, tmax, base_sample_rate,down_samp_fac,t_start,t_end,j, fcFilterInput, fcTmpltParams, template, fft_template, fwdplan, revplan, psd);
+    create_template_from_sngl_inspiral(bankHead, *U, *chifacs, base_sample_rate,down_samp_fac,t_start,t_end, TEMPLATE_DURATION, j, fcFilterInput, fcTmpltParams, template, fft_template, fwdplan, revplan, psd);
     if (verbose) fprintf(stderr, "template %zd M_chirp=%e\n",j,
                          bankHead->chirpMass);
     bankHead = bankHead->next;
@@ -223,63 +291,6 @@ static double time_to_freq(double M, double time)
   double Msol = 1.98893e30;
   double Mg = M*Msol*G/c/c/c;
   return (1.0/(M_PI*Mg)) * (pow((c5_256)*(Mg/(-time)),c3_8));
-  }
-
-int create_template_from_sngl_inspiral(
-                       InspiralTemplate *bankHead,
-                       gsl_matrix *U, 
-                       gsl_vector *chifacs,
-                       double duration, 
-                       int fsamp,
-                       int downsampfac, 
-                       double t_start, 
-                       double t_end,
-                       int U_column,
-                       FindChirpFilterInput *fcFilterInput,
-                       FindChirpTmpltParams *fcTmpltParams,
-                       REAL8TimeSeries *template,
-                       COMPLEX16FrequencySeries *fft_template,
-                       REAL8FFTPlan *fwdplan,
-                       REAL8FFTPlan *revplan,
-                       REAL8FrequencySeries *psd
-                       )
-
-  {
-  int numsamps = fsamp*duration;
-  int i = 0;
-  int counter = 0;
-  double dt = 1.0/fsamp;
-  double chinorm = 0;
-  LALStatus status;
-
-  memset(&status, 0, sizeof(status));
- 
-  LALFindChirpTDTemplate( &status, fcFilterInput->fcTmplt,
-                  bankHead, fcTmpltParams );
-
-  for (i=0; i< numsamps; i++)
-    {
-    template->data->data[i] = (REAL8) fcTmpltParams->xfacVec->data[i];
-    }
-
-  XLALREAL8TimeFreqFFT(fft_template,template,fwdplan);
-  XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd);
-  XLALREAL8FreqTimeFFT(template,fft_template,revplan);
-
-  /* Actually return the peice of the template */
-
-  /* Deallocate everything */
-  counter = 0;
-
-  for (i=numsamps - t_end*fsamp; i< numsamps-t_start*fsamp; i+=downsampfac)
-    {
-    chinorm+= template->data->data[i] * template->data->data[i] * dt*downsampfac;
-    gsl_matrix_set(U,counter,U_column,template->data->data[i]);
-    counter++;
-    }
-  gsl_vector_set(chifacs,U_column,sqrt(chinorm));
-
-  return 0;
   }
 
 
