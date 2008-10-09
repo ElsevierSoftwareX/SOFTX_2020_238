@@ -215,7 +215,7 @@ static struct injection_document *load_injection_document(const char *filename, 
  */
 
 
-static int add_xml_injections(REAL8TimeSeries *h, const struct injection_document *injection_document, COMPLEX16FrequencySeries *response)
+static int add_xml_injections(REAL8TimeSeries *h, const struct injection_document *injection_document, const COMPLEX16FrequencySeries *response)
 {
 	static const char func[] = "add_xml_injections";
 
@@ -408,7 +408,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 		XLALINT8NSToGPS(&end, ((INT8) 1 << 63) - 1);*/
 		element->injection_document = load_injection_document(element->xml_location, start, end, 0.0);
 		if(!element->injection_document) {
-			GST_ERROR("error loading \"%s\"", element->xml_location);
+			GST_ERROR_OBJECT(element, "error loading \"%s\"", element->xml_location);
 			gst_buffer_unref(buf);
 			result = GST_FLOW_ERROR;
 			goto done;
@@ -421,7 +421,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 
 	h = gstlal_REAL8TimeSeries_from_buffer(buf);
 	if(!h) {
-		GST_ERROR("failure wrapping buffer in REAL8TimeSeries");
+		GST_ERROR_OBJECT(element, "failure wrapping buffer in REAL8TimeSeries");
 		gst_buffer_unref(buf);
 		result = GST_FLOW_ERROR;
 		goto done;
@@ -432,7 +432,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 */
 
 	if(add_xml_injections(h, element->injection_document, NULL) < 0) {
-		GST_ERROR("failure performing injections");
+		GST_ERROR_OBJECT(element, "failure performing injections");
 		h->data->data = NULL;
 		XLALDestroyREAL8TimeSeries(h);
 		gst_buffer_unref(buf);
