@@ -297,7 +297,16 @@ REAL8FrequencySeries *gstlal_read_reference_psd(const char *filename)
 				 * eof == done w/ success
 				 */
 				break;
-			perror("gstlal_read_reference_psd()");
+			if(result < 0)
+				/*
+				 * I/O error of some kind
+				 */
+				perror("gstlal_read_reference_psd()");
+			else
+				/*
+				 * no errors, but couldn't parse file
+				 */
+				GST_ERROR("unable to parse \"%s\"", filename);
 			fclose(file);
 			XLALDestroyREAL8FrequencySeries(psd);
 			return NULL;
