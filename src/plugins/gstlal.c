@@ -262,6 +262,7 @@ REAL8FrequencySeries *gstlal_read_reference_psd(const char *filename)
 
 	file = fopen(filename, "r");
 	if(!file) {
+		perror("gstlal_read_reference_psd()");
 		GST_ERROR("fopen(\"%s\") failed", filename);
 		return NULL;
 	}
