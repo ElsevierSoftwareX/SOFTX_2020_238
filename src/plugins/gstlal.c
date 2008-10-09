@@ -282,31 +282,25 @@ REAL8FrequencySeries *gstlal_read_reference_psd(const char *filename)
 	 */
 
 	for(i = 0; 1; i++) {
-		char line[100];	/* argh:  hard-coded size = BAD BAD BAD */
+		int result;
 		double f, amp;
 
 		/*
-		 * read one line of text
+		 * parse f and one psd sample from one line of input text
 		 */
 
-		if(!fgets(line, sizeof(line), file)) {
+		result = fscanf(file, " %lg %lg", &f, &amp);
+		if(result == EOF || result < 2) {
 			if(feof(file))
 				/*
 				 * eof == done w/ success
 				 */
 				break;
-
-			GST_ERROR("fgets() failed");
+			perror("gstlal_read_reference_psd()");
 			fclose(file);
 			XLALDestroyREAL8FrequencySeries(psd);
 			return NULL;
 		}
-
-		/*
-		 * parse f and one psd sample
-		 */
-
-		sscanf(line, "%lg %lg", &f, &amp);
 
 		/*
 		 * store in frequency series, replacing any infs with 0
