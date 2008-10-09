@@ -86,6 +86,18 @@
 /*
  * ============================================================================
  *
+ *                                    Data
+ *
+ * ============================================================================
+ */
+
+
+GMutex *gstlal_fftw_lock;
+
+
+/*
+ * ============================================================================
+ *
  *                             Utility Functions
  *
  * ============================================================================
@@ -472,6 +484,12 @@ static gboolean plugin_init(GstPlugin *plugin)
 
 	lalDebugLevel = LALINFO | LALWARNING | LALERROR | LALNMEMDBG | LALNMEMPAD | LALNMEMTRK;
 	XLALSetSilentErrorHandler();
+
+	/*
+	 * Initialize the mutices.
+	 */
+
+	gstlal_fftw_lock = g_mutex_new();
 
 	/*
 	 * Tell GStreamer about the elements.
