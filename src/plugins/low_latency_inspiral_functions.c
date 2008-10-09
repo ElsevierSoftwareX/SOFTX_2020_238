@@ -85,42 +85,60 @@ static int create_template_from_sngl_inspiral(
   {
   unsigned i;
   int t_total_length = floor(t_total_duration * fsamp + 0.5);	/* length of the template */
-  double template_norm;
+  double norm;
   gsl_vector_view col;
   gsl_vector_view tmplt;
   LALStatus status;
 
   memset(&status, 0, sizeof(status));
  
-  memset(fcTmpltParams->xfacVec->data, 0, template->data->length * sizeof(*fcTmpltParams->xfacVec->data));
   LALFindChirpTDTemplate( &status, fcFilterInput->fcTmplt,
                   bankHead, fcTmpltParams );
 
   for (i=0; i< template->data->length; i++)
     template->data->data[i] = (REAL8) fcTmpltParams->xfacVec->data[i];
 
+  /*
+   * Whiten the template.
+   */
+
   XLALREAL8TimeFreqFFT(fft_template,template,fwdplan);
   XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd);
   XLALREAL8FreqTimeFFT(template,fft_template,revplan);
 
   /*
-   * Normalize the template.  The template is normalized so that
+   * Normalize the template.  If s is the template and n is a stationary
+   * noise process of independent samples, s is normalized so that
    *
-   *	(1/T) \sum s^2 \Delta t = 1
+   *	< (n|s)^2 > = < n^2 >
    *
-   * after whitening.  (a common factor of \Delta t is removed from the
-   * numerator and denominator in the statement below).
+   * that is, s acts as a mean-square preserving filter.  That condition is
+   * equivalent to
+   *
+   *	(s|s) = (1/T) \sum s^2 \Delta t = T / \Delta t = N
    */
 
-  template_norm = sqrt(XLALREAL8SequenceSumSquares(template->data, template->data->length - t_total_length, t_total_length) / t_total_length);
+  norm = t_total_length / sqrt(XLALREAL8SequenceSumSquares(template->data, template->data->length - t_total_length, t_total_length));
 
-  /* Actually return the piece of the template */
+  /*
+   * Extract a piece of the template.  The change in sample rate
+   * necessitates an adjustment to the normalization:
+   *
+   *	(s|s) --> (s|s) \Delta t / \Delta t'
+   *
+   * "Huh?  \sqrt{8 / 0.98}?"  No, my friend, don't ask questions you don't
+   * want to hear the answer to.
+   */
+
   col = gsl_matrix_column(U, U_column);
   tmplt = gsl_vector_view_array_with_stride(template->data->data + template->data->length - (int) floor(t_end * fsamp + 0.5), downsampfac, col.vector.size);
   gsl_vector_memcpy(&col.vector, &tmplt.vector);
-  gsl_vector_scale(&col.vector, 1.0 / template_norm);
+  gsl_vector_scale(&col.vector, norm * sqrt(8.0 / 0.98));
 
-  /* Compute the \Xi^2 thing */
+  /*
+   * Compute the \Xi^2 factor.
+   */
+
   gsl_vector_set(chifacs,U_column,gsl_blas_dnrm2(&col.vector));
 
   return 0;
