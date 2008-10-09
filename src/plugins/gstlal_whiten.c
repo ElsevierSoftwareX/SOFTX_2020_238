@@ -37,10 +37,11 @@
 
 
 /*
- * stuff from gstreamer
+ * stuff from glib/gstreamer
  */
 
 
+#include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
 
@@ -157,16 +158,20 @@ static int make_fft_plans(GSTLALWhiten *element)
 {
 	int fft_length = floor(element->convolution_length * element->sample_rate + 0.5);
 
+	g_mutex_lock(gstlal_fftw_lock);
 	XLALDestroyREAL8FFTPlan(element->fwdplan);
 	XLALDestroyREAL8FFTPlan(element->revplan);
 
 	element->fwdplan = XLALCreateForwardREAL8FFTPlan(fft_length, 1);
 	element->revplan = XLALCreateReverseREAL8FFTPlan(fft_length, 1);
+	g_mutex_unlock(gstlal_fftw_lock);
 
 	if(!element->fwdplan || !element->revplan) {
 		GST_ERROR_OBJECT(element, "failure creating FFT plans");
+		g_mutex_lock(gstlal_fftw_lock);
 		XLALDestroyREAL8FFTPlan(element->fwdplan);
 		XLALDestroyREAL8FFTPlan(element->revplan);
+		g_mutex_unlock(gstlal_fftw_lock);
 		element->fwdplan = NULL;
 		element->revplan = NULL;
 		return -1;
@@ -891,8 +896,10 @@ static void dispose(GObject * object)
 	g_object_unref(element->adapter);
 	gst_object_unref(element->srcpad);
 	XLALDestroyREAL8Window(element->window);
+	g_mutex_lock(gstlal_fftw_lock);
 	XLALDestroyREAL8FFTPlan(element->fwdplan);
 	XLALDestroyREAL8FFTPlan(element->revplan);
+	g_mutex_unlock(gstlal_fftw_lock);
 	XLALPSDRegressorFree(element->psd_regressor);
 	XLALDestroyREAL8FrequencySeries(element->psd);
 	XLALDestroyREAL8Sequence(element->tail);
