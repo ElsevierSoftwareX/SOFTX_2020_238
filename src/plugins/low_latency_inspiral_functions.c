@@ -23,6 +23,9 @@
 #include <stdio.h>
 #include <math.h>
 
+/* glib/gstreamer includes */
+#include <glib.h>
+
 /* gsl includes */
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_vector.h>
@@ -65,7 +68,7 @@
   ((function),lal_errhandler(statusptr,#function,__FILE__,__LINE__,rcsid))
 
 static int create_template_from_sngl_inspiral(
-                       InspiralTemplate *bankHead,
+                       InspiralTemplate *bankRow,
                        gsl_matrix *U, 
                        gsl_vector *chifacs,
                        int fsamp,
@@ -93,7 +96,7 @@ static int create_template_from_sngl_inspiral(
   memset(&status, 0, sizeof(status));
  
   LALFindChirpTDTemplate( &status, fcFilterInput->fcTmplt,
-                  bankHead, fcTmpltParams );
+                  bankRow, fcTmpltParams );
 
   for (i=0; i< template->data->length; i++)
     template->data->data[i] = (REAL8) fcTmpltParams->xfacVec->data[i];
@@ -161,44 +164,43 @@ int generate_bank_svd(
                       double tolerance,
 	              int verbose)
   {
-  InspiralTemplate *bankHead     = NULL;
+  InspiralTemplate *bankRow, *bankHead = NULL;
   int numtemps = InspiralTmpltBankFromLIGOLw( &bankHead, xml_bank_filename,-1,-1);
-  size_t i = 0;
-  size_t j = 0;
-  int svd_err_code = 0;
-  size_t numsamps = floor((double) (t_end-t_start) * base_sample_rate 
-               / down_samp_fac);
-
+  size_t i, j;
+  size_t numsamps = floor((t_end - t_start) * base_sample_rate / down_samp_fac + 0.5);
+  size_t full_numsamps = base_sample_rate*TEMPLATE_DURATION;
   gsl_vector *work_space = gsl_vector_calloc(numtemps);
   gsl_matrix *work_space_matrix = gsl_matrix_calloc(numtemps,numtemps);
-  *U = gsl_matrix_calloc(numsamps,numtemps);
-  *S = gsl_vector_calloc(numtemps);
-  *V = gsl_matrix_calloc(numtemps,numtemps);
-  *chifacs = gsl_vector_calloc(numtemps);
-  REAL8TimeSeries *template = NULL;
-  COMPLEX16FrequencySeries *fft_template = NULL;
-  REAL8FrequencySeries *psd = NULL;
-  FindChirpFilterInput         *fcFilterInput  = NULL;
-  FindChirpTmpltParams         *fcTmpltParams  = NULL;
-  FindChirpInitParams          fcInitParams;
+  REAL8TimeSeries *template;
+  COMPLEX16FrequencySeries *fft_template;
+  REAL8FrequencySeries *psd;
+  FindChirpFilterInput *fcFilterInput  = NULL;
+  FindChirpTmpltParams *fcTmpltParams  = NULL;
+  FindChirpInitParams fcInitParams;
   LALStatus status;
-  int full_numsamps = base_sample_rate*TEMPLATE_DURATION;
-  double dt = 1.0/base_sample_rate;
   REAL8FFTPlan *fwdplan;
   REAL8FFTPlan *revplan;
+
+  if (verbose) fprintf(stderr,"read %d templates\n", numtemps);
   
   memset(&status, 0, sizeof(status));
   memset(&fcInitParams, 0, sizeof(fcInitParams));
 
+  *U = gsl_matrix_calloc(numsamps,numtemps);
+  *S = gsl_vector_calloc(numtemps);
+  *V = gsl_matrix_calloc(numtemps,numtemps);
+  *chifacs = gsl_vector_calloc(numtemps);
+
   fprintf(stderr,"U = %zd,%zd V = %zd,%zd S = %zd\n",(*U)->size1,(*U)->size2,(*V)->size1,(*V)->size2,(*S)->size);
 
-  if (verbose) fprintf(stderr, "creating fft plans \n");
+  g_mutex_lock(gstlal_fftw_lock);
   fwdplan = XLALCreateForwardREAL8FFTPlan(full_numsamps, 1);
   revplan = XLALCreateReverseREAL8FFTPlan(full_numsamps, 1);
+  g_mutex_unlock(gstlal_fftw_lock);
 
-  if (verbose) fprintf(stderr,"read in %d templates bankHead %p\n", numtemps,bankHead);
-  if (verbose) fprintf(stderr, "Reading psd \n");
-  psd = gstlal_get_reference_psd(reference_psd_filename, 0, 1.0/TEMPLATE_DURATION, full_numsamps / 2 + 1);
+  template = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, full_numsamps);
+  fft_template = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 0, &lalDimensionlessUnit, template->data->length / 2 + 1);
+  psd = gstlal_get_reference_psd(reference_psd_filename, template->f0, 1.0/TEMPLATE_DURATION, fft_template->data->length);
 
   fcInitParams.numPoints      = full_numsamps;
   fcInitParams.numSegments    = 1;
@@ -210,9 +212,10 @@ int generate_bank_svd(
   fcInitParams.createCVec     = 0;
   bankHead->order = threePointFivePN;
 
-  if (verbose) fprintf(stderr,"LALFindChirpTemplateInit()\n");
+  if (verbose) fprintf(stderr,"LALFindChirpTemplateInit() ...\n");
   LALFindChirpTemplateInit( &status, &fcTmpltParams, &fcInitParams );
-  fcTmpltParams->deltaT = dt;
+  if (verbose) fprintf(stderr,"LALFindChirpTemplateInit() done\n");
+  fcTmpltParams->deltaT = 1.0 / base_sample_rate;
   fcTmpltParams->fLow = 25; 
 
   if (verbose) fprintf(stderr,"chirpmass = %f, flow = %f\n\n",bankHead->chirpMass,fcTmpltParams->fLow);
@@ -222,23 +225,14 @@ int generate_bank_svd(
 
   /*fcTmpltParams->order = order;*/
 
-  if (verbose) fprintf(stderr, "XLALCreateREAL8TimeSeriest() dt is %f\n",dt);
-  template = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0,
-                                       dt, &lalStrainUnit, full_numsamps);
-
-  if (verbose) fprintf(stderr, "XLALCreateCOMPLEX16FrequencySeries()\n");
-  fft_template = XLALCreateCOMPLEX16FrequencySeries(NULL,
-                      &(LIGOTimeGPS) {0,0}, 0, 0, &lalDimensionlessUnit,
-                      full_numsamps / 2 + 1);
-
   /* Create Template - to be replaced by a LAL template generation call */
-  if (verbose) fprintf(stderr,"LALCreateFindChirpInput()\n");
-
+  if (verbose) fprintf(stderr,"LALCreateFindChirpInput() ...\n");
   LALCreateFindChirpInput( &status, &fcFilterInput, &fcInitParams );
+  if (verbose) fprintf(stderr,"LALCreateFindChirpInput() done\n");
 
-  fprintf(stderr, "LALFindChirpTDTemplate() tmplate is %p \n", fcFilterInput->fcTmplt);
+  fprintf(stderr, "LALFindChirpTDTemplate() tmplate is %p\n", fcFilterInput->fcTmplt);
 
-  fprintf(stderr, "status is %p\n bankHead order is %d",&status,bankHead->order);
+  fprintf(stderr, "bankHead order is %d",bankHead->order);
 
   fcTmpltParams->order = threePointFivePN;
   fcTmpltParams->approximant = EOB;
@@ -247,53 +241,53 @@ int generate_bank_svd(
 
   if (verbose) fprintf(stderr, "allocated matrices...\n");
   /* create the templates in the bank */
-  j = 0;
-  while(bankHead)
+  for(bankRow = bankHead, j = 0; bankRow; bankRow = bankRow->next, j++)
     {
     /* this sets the cut off frequency in my version of lal only */
     /* Sathya is supposed to fix this */
 
-    bankHead->fFinal = base_sample_rate / 2.0 - 1; /*nyquist*/
+    bankRow->fFinal = base_sample_rate / 2.0 - 1; /*nyquist*/
 
-    create_template_from_sngl_inspiral(bankHead, *U, *chifacs, base_sample_rate,down_samp_fac,t_end, t_total_duration, j, fcFilterInput, fcTmpltParams, template, fft_template, fwdplan, revplan, psd);
-    if (verbose) fprintf(stderr, "template %zd M_chirp=%e\n",j,
-                         bankHead->chirpMass);
-    bankHead = bankHead->next;
-    j++;
+    create_template_from_sngl_inspiral(bankRow, *U, *chifacs, base_sample_rate,down_samp_fac,t_end, t_total_duration, j, fcFilterInput, fcTmpltParams, template, fft_template, fwdplan, revplan, psd);
+    if (verbose) fprintf(stderr, "template %zd M_chirp=%e\n",j, bankRow->chirpMass);
     }
-  j = 0;
 
   /* SET THIS IN create_template_.. gsl_vector_set(*chifacs,i,sqrt(tmpltpower));*/
   if (verbose)     fprintf(stderr,"Doing the SVD \n");
 
-  svd_err_code = gsl_linalg_SV_decomp_mod(*U, work_space_matrix, 
-                                             *V, *S, work_space);
-  /*svd_err_code = gsl_linalg_SV_decomp(*U,*V, *S, work_space);*/
-  /*svd_err_code = gsl_linalg_SV_decomp_jacobi(*U, *V, *S);*/
-  if ( svd_err_code ) 
+  /*if(gsl_linalg_SV_decomp(*U,*V, *S, work_space))*/
+  /*if(gsl_linalg_SV_decomp_jacobi(*U, *V, *S))*/
+  if(gsl_linalg_SV_decomp_mod(*U, work_space_matrix, *V, *S, work_space))
     {
     fprintf(stderr,"could not do SVD \n");
     return 1; 
     }
   trim_matrix(U,V,S,tolerance);
   for (i = 0; i < (*S)->size; i++)
-    {
     for (j = 0; j < (*V)->size1; j++)
-      {
       gsl_matrix_set(*V,j,i,gsl_vector_get(*S,i)*gsl_matrix_get(*V,j,i));
-      }
-    }
+
   not_gsl_matrix_transpose(U);
   not_gsl_matrix_transpose(V);
-  if(verbose) fprintf(stderr, "%.16g s -- %.16g s: %d orthogonal templates, V is %dx%d, U is %dx%d\n\n", t_start, t_end, (int) (*U)->size1, (int) (*V)->size1, (int) (*V)->size2, (int) (*U)->size1, (int) (*U)->size2);
+  if(verbose) fprintf(stderr, "%.16g s -- %.16g s: %zd orthogonal templates, V is %zdx%zd, U is %zdx%zd\n\n", t_start, t_end, (*U)->size1, (*V)->size1, (*V)->size2, (*U)->size1, (*U)->size2);
+
+
   gsl_vector_free(work_space);
   gsl_matrix_free(work_space_matrix);
+  g_mutex_lock(gstlal_fftw_lock);
   XLALDestroyREAL8FFTPlan(fwdplan);
   XLALDestroyREAL8FFTPlan(revplan);
+  g_mutex_unlock(gstlal_fftw_lock);
   LALFindChirpTemplateFinalize( &status, &fcTmpltParams );
   XLALDestroyCOMPLEX16FrequencySeries(fft_template);
   XLALDestroyREAL8TimeSeries(template);
   LALDestroyFindChirpInput(&status,&fcFilterInput);
+  while(bankHead)
+    {
+    InspiralTemplate *next = bankHead->next;
+    XLALFree(bankHead);
+    bankHead = next;
+    }
   return 0;
   }
 
