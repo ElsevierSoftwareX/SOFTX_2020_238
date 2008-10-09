@@ -151,7 +151,8 @@ int generate_bank_svd(
                       gsl_vector **S, 
 		      gsl_matrix **V,
                       gsl_vector **chifacs,
-                      char * bank_name, 
+                      const char *xml_bank_filename,
+		      const char *reference_psd_filename,
                       int base_sample_rate,
                       int down_samp_fac, 
                       double t_start,
@@ -161,7 +162,7 @@ int generate_bank_svd(
 	              int verbose)
   {
   InspiralTemplate *bankHead     = NULL;
-  int numtemps = InspiralTmpltBankFromLIGOLw( &bankHead, bank_name,-1,-1);
+  int numtemps = InspiralTmpltBankFromLIGOLw( &bankHead, xml_bank_filename,-1,-1);
   size_t i = 0;
   size_t j = 0;
   int svd_err_code = 0;
@@ -197,7 +198,7 @@ int generate_bank_svd(
 
   if (verbose) fprintf(stderr,"read in %d templates bankHead %p\n", numtemps,bankHead);
   if (verbose) fprintf(stderr, "Reading psd \n");
-  psd = gstlal_get_reference_psd("reference_psd.txt", 0, 1.0/TEMPLATE_DURATION, full_numsamps / 2 + 1);
+  psd = gstlal_get_reference_psd(reference_psd_filename, 0, 1.0/TEMPLATE_DURATION, full_numsamps / 2 + 1);
 
   fcInitParams.numPoints      = full_numsamps;
   fcInitParams.numSegments    = 1;
