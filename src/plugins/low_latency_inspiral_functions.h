@@ -50,6 +50,15 @@ int generate_bank_svd(
                       double tolerance,
                       int verbose);
 
+int compute_time_frequency_boundaries_from_bank(char * bank_name,
+                                                double min_subtemplate_samples,
+                                                double base_sample_rate,
+                                                double f_lower,
+                                                gsl_vector **sample_rates,
+                                                gsl_vector **start_times,
+                                                gsl_vector **stop_times,
+                                                int verbose);
+
 double normalize_template(double M, double ts, double duration,
                                 int fsamp);
 

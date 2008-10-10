@@ -147,6 +147,130 @@ static int create_template_from_sngl_inspiral(
   return 0;
   }
 
+
+static double time_to_freq(double M, double time)
+  {
+  /* This function gives the instantaneous frequency at a given time based
+   * on the quadrupole approximation.  It is bound to be a bit off from other
+   * template families so use it with caution 
+   */
+  double c3_8 = 3.0/8.0;
+  double c5_256 = 5.0/256.0;
+  double Mg = M*LAL_MTSUN_SI;
+  return (1.0/(LAL_PI*Mg)) * (pow((c5_256)*(Mg/(time)),c3_8));
+  }
+
+
+static double freq_to_time(double M, double freq)
+  {
+  /* This function gives the instantaneous frequency at a given time based
+   * on the quadrupole approximation.  It is bound to be a bit off from other
+   * template families so use it with caution 
+   */
+  double Mg = M*LAL_MTSUN_SI;
+  return 5./256. * Mg / pow(LAL_PI*Mg*freq,8./3.);
+  }
+
+
+
+int compute_time_frequency_boundaries_from_bank(char * bank_name,
+                                                double min_subtemplate_samples,
+						double base_sample_rate,
+						double f_lower,
+						gsl_vector **sample_rates,
+						gsl_vector **start_times,
+                                                gsl_vector **stop_times,
+						int verbose)
+  {
+  InspiralTemplate *bankHead     = NULL;
+  int numtemps = InspiralTmpltBankFromLIGOLw( &bankHead, bank_name,-1,-1);  
+  double maxMass = 0;
+  double minMass = 0;
+  double minChirpMass = 0;
+  double minFreq = 0;
+  double Nyquist = base_sample_rate / 2.0;
+  double base_time = 0;
+  double duration = 0;
+  double freq = 0;
+  double time = 0;
+  double sampleRate = 0;
+  double prev_time = 0;
+  int veclength = 0;
+
+  if (verbose) fprintf(stderr, "Read %d templates from file %s\n",numtemps, bank_name);
+
+  /* Compute the minimum and maximum masses as well as the minimum chirpmass 
+   * The Masses will be used to determine frequency boundaries.  However the 
+   * chirp mass will be used to determine the duration */
+  maxMass = bankHead->mass1+bankHead->mass2;
+  minChirpMass = bankHead->chirpMass;
+  while (bankHead)
+    {
+    if ( (bankHead->mass1 + bankHead->mass2) > maxMass)
+          maxMass = bankHead->mass1 + bankHead->mass2;
+    if ( (bankHead->mass1 + bankHead->mass2) < minMass)
+              minMass = bankHead->mass1 + bankHead->mass2;
+    if (bankHead->chirpMass < minChirpMass) minChirpMass = bankHead->chirpMass;
+    bankHead = bankHead->next;
+    }
+
+  /* This assumes that the maximum integration point is light ring */
+  minFreq = 1.0 / (pow(3.0,1.5) * minMass) / LAL_PI / LAL_MTSUN_SI;
+  /* if the lowest termination frequency exceeds nyquist then we should set */
+  /* it to Nyquist */
+  if (minFreq > Nyquist) minFreq = Nyquist;
+  if (verbose) fprintf(stderr,"Lowest LR frequency in the bank = %f minChirp = %f\n",minFreq,minChirpMass);
+
+  /* We need to start at time defined by the first frequency this could be a
+   * long time before coalescence if the nyquist frequency is low compared to 
+   * the light ring frequency
+   */
+  base_time = freq_to_time(minChirpMass,minFreq);
+  duration = freq_to_time(minChirpMass,f_lower) - base_time;
+  sampleRate = 2.0 * floor(pow(2.0,floor(log(minFreq)/log(2.0))));
+  freq = sampleRate;
+  time = 0;
+  prev_time = 0;
+  if (verbose) fprintf(stderr, "sampleRate is %f base time is %f duration is %f\n",sampleRate,base_time,duration-base_time);
+  
+  while (freq > f_lower)
+    {
+    time+=min_subtemplate_samples/sampleRate;
+    if (verbose) fprintf(stderr, "Sample rate is %f interval is [%f, %f)\n",sampleRate,prev_time,time);
+    prev_time = time;
+    freq = time_to_freq(minChirpMass,time+base_time);
+    sampleRate = 2.0 * (pow(2.0,ceil(log(freq)/log(2.0))));
+    veclength++;
+    }
+
+  /* Allocate the return vectors */
+  *start_times = gsl_vector_calloc(veclength);
+  *stop_times = gsl_vector_calloc(veclength);
+  *sample_rates = gsl_vector_calloc(veclength);
+
+  /* populate the vectors */
+  veclength = 0;
+  base_time = freq_to_time(minChirpMass,minFreq);
+  duration = freq_to_time(minChirpMass,f_lower) - base_time;
+  sampleRate = 2.0 * floor(pow(2.0,floor(log(minFreq)/log(2.0))));
+  freq = sampleRate;
+  time = 0;
+  prev_time = 0;
+  while (freq > f_lower)
+    {
+    time+=min_subtemplate_samples/sampleRate;
+    gsl_vector_set(*start_times,veclength,prev_time);
+    gsl_vector_set(*stop_times,veclength,time);
+    gsl_vector_set(*sample_rates,veclength,sampleRate);  
+    prev_time = time;
+    freq = time_to_freq(minChirpMass,time+base_time);
+    sampleRate = 2.0 * (pow(2.0,ceil(log(freq)/log(2.0))));
+    veclength++;
+    }
+
+  return 0;
+  }
+
 /* FIXME: this is a place holder and needs to be implemented rigorously with  
  * lal functions */
 int generate_bank_svd(
@@ -289,18 +413,6 @@ int generate_bank_svd(
     bankHead = next;
     }
   return 0;
-  }
-
-
-static double time_to_freq(double M, double time)
-  {
-  double c3_8 = 3.0/8.0;
-  double c5_256 = 5.0/256.0;
-  double c = 299792458;
-  double G = 6.67428e-11;
-  double Msol = 1.98893e30;
-  double Mg = M*Msol*G/c/c/c;
-  return (1.0/(M_PI*Mg)) * (pow((c5_256)*(Mg/(-time)),c3_8));
   }
 
 
