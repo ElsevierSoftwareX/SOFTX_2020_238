@@ -7,6 +7,7 @@ GPSSTOP="874120000000000000"
 #GPSSTOP="874110558000000000"
 INSTRUMENT="H1"
 CHANNEL="LSC-STRAIN"
+REFERENCEPSD="reference_psd.txt"
 BANK="H1-TMPLTBANK_09_1.207-874000000-2048.xml"
 
 SRC="lal_framesrc \
@@ -18,7 +19,7 @@ SRC="lal_framesrc \
 	stop-time-gps-ns=${GPSSTOP}"
 
 FAKESRC="audiotestsrc \
-	timestamp-offset=$GPSSTART \
+	timestamp-offset=${GPSSTART} \
 	samplesperbuffer=$((16384*16)) \
 	num-buffers=$((($GPSSTOP-$GPSSTART)/100000000/16)) \
 	wave=5 \
@@ -30,7 +31,7 @@ WHITEN="lal_whiten \
 	filter-length=4 \
 	convolution-length=16 \
 	average-samples=64 \
-	compensation-psd=reference_psd.txt"
+	compensation-psd=${REFERENCEPSD}"
 
 SCOPE="queue ! lal_multiscope trace-duration=4.0 frame-interval=0.0625 average-interval=32.0 do-timestamp=false ! ffmpegcolorspace ! cairotimeoverlay ! autovideosink"
 
@@ -50,41 +51,41 @@ NXYDUMP="queue ! lal_nxydump start-time=106000000000 stop-time=126000000000 ! fi
 #
 
 gst-launch --gst-debug-level=1 \
-	$SRC \
+	${SRC} \
 	! progressreport \
 		name=progress_src \
 	! $WHITEN \
 	! tee name=hoft_16384 \
 	! audiowsinclimit \
 		length=301 \
-		cutoff=1003.52 \
+		cutoff=1024 \
 	! audioresample \
 	! audio/x-raw-float, rate=2048 \
 	! tee name=hoft_2048 \
 	hoft_16384. ! audiowsinclimit \
 		length=301 \
-		cutoff=250.88 \
+		cutoff=256 \
 	! audioresample \
 	! audio/x-raw-float, rate=512 \
 	! tee name=hoft_512 \
 	hoft_16384. ! audiowsinclimit \
 		length=301 \
-		cutoff=125.44 \
+		cutoff=128 \
 	! audioresample \
 	! audio/x-raw-float, rate=256 \
 	! tee name=hoft_256 \
 	hoft_16384. ! audiowsinclimit \
 		length=301 \
-		cutoff=62.72 \
+		cutoff=64 \
 	! audioresample \
 	! audio/x-raw-float, rate=128 \
 	! tee name=hoft_128 \
-	lal_adder name=orthogonal_snr_sum_squares ! $NXYDUMP=sumsquares.txt \
-	lal_adder name=snr ! progressreport name=progress_snr ! $NXYDUMP=snr.txt \
-	hoft_2048. ! queue max-size-time=60000000000 ! lal_templatebank \
+	lal_adder name=orthogonal_snr_sum_squares ! ${NXYDUMP}=sumsquares.txt \
+	lal_adder name=snr ! progressreport name=progress_snr ! ${NXYDUMP}=snr.txt \
+	hoft_2048. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank0 \
-		template-bank=$BANK \
-		reference-psd=reference_psd.xml \
+		template-bank=${BANK} \
+		reference-psd=${REFERENCEPSD} \
 		t-start=0 \
 		t-end=1 \
 		t-total-duration=45 \
@@ -95,10 +96,10 @@ gst-launch --gst-debug-level=1 \
 	templatebank0.matrix ! snr0.matrix \
 	templatebank0.src ! tee name=orthosnr0 ! snr0.sink \
 	snr0. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
-	hoft_512. ! queue max-size-time=60000000000 ! lal_templatebank \
+	hoft_512. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank1 \
-		template-bank=$BANK \
-		reference-psd=reference_psd.xml \
+		template-bank=${BANK} \
+		reference-psd=${REFERENCEPSD} \
 		t-start=1 \
 		t-end=5 \
 		t-total-duration=45 \
@@ -109,10 +110,10 @@ gst-launch --gst-debug-level=1 \
 	templatebank1.matrix ! snr1.matrix \
 	templatebank1.src ! tee name=orthosnr1 ! snr1.sink \
 	snr1. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
-	hoft_256. ! queue max-size-time=60000000000 ! lal_templatebank \
+	hoft_256. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank2 \
-		template-bank=$BANK \
-		reference-psd=reference_psd.xml \
+		template-bank=${BANK} \
+		reference-psd=${REFERENCEPSD} \
 		t-start=5 \
 		t-end=13 \
 		t-total-duration=45 \
@@ -123,10 +124,10 @@ gst-launch --gst-debug-level=1 \
 	templatebank2.matrix ! snr2.matrix \
 	templatebank2.src ! tee name=orthosnr2 ! snr2.sink \
 	snr2. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
-	hoft_128. ! queue max-size-time=60000000000 ! lal_templatebank \
+	hoft_128. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank3 \
-		template-bank=$BANK \
-		reference-psd=reference_psd.xml \
+		template-bank=${BANK} \
+		reference-psd=${REFERENCEPSD} \
 		t-start=13 \
 		t-end=29 \
 		t-total-duration=45 \
@@ -137,10 +138,10 @@ gst-launch --gst-debug-level=1 \
 	templatebank3.matrix ! snr3.matrix \
 	templatebank3.src ! tee name=orthosnr3 ! snr3.sink \
 	snr3. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
-	hoft_128. ! queue max-size-time=60000000000 ! lal_templatebank \
+	hoft_128. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank4 \
-		template-bank=$BANK \
-		reference-psd=reference_psd.xml \
+		template-bank=${BANK} \
+		reference-psd=${REFERENCEPSD} \
 		t-start=29 \
 		t-end=45 \
 		t-total-duration=45 \
