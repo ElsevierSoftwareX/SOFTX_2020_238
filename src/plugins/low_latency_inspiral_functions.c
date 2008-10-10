@@ -136,7 +136,7 @@ static int create_template_from_sngl_inspiral(
   col = gsl_matrix_column(U, U_column);
   tmplt = gsl_vector_view_array_with_stride(template->data->data + template->data->length - (int) floor(t_end * fsamp + 0.5), downsampfac, col.vector.size);
   gsl_vector_memcpy(&col.vector, &tmplt.vector);
-  gsl_vector_scale(&col.vector, norm * sqrt(8.0 / 0.98));
+  gsl_vector_scale(&col.vector, norm * sqrt(8.0 / 0.99148));
 
   /*
    * Compute the \Xi^2 factor.
