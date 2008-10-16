@@ -41,8 +41,8 @@ FAKESINK="queue ! fakesink sync=false preroll-queue-len=1"
 
 PLAYBACK="adder ! audioresample ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=5e-2 ! audioconvert ! queue max-size-time=3000000000 ! alsasink"
 
-NXYDUMP="queue ! lal_nxydump start-time=106000000000 stop-time=126000000000 ! filesink sync=false preroll-queue-len=1 location"
-#NXYDUMP="queue ! lal_nxydump start-time=0 stop-time=384000000000 ! filesink sync=false preroll-queue-len=1 location"
+#NXYDUMP="queue ! lal_nxydump start-time=106000000000 stop-time=126000000000 ! filesink sync=false preroll-queue-len=1 location"
+NXYDUMP="queue ! lal_nxydump start-time=0 stop-time=384000000000 ! filesink sync=false preroll-queue-len=1 location"
 #NXYDUMP="queue ! lal_nxydump start-time=235000000000 stop-time=290000000000 ! filesink sync=false preroll-queue-len=1 location"
 #NXYDUMP="queue ! lal_nxydump start-time=874107188000000000 stop-time=874107208000000000 ! filesink sync=false preroll-queue-len=1 location"
 
@@ -56,7 +56,6 @@ gst-launch --gst-debug-level=1 \
 	${SRC} \
 	! progressreport \
 		name=progress_src \
-	! ${INJECTIONS} \
 	! ${WHITEN} \
 	! tee name=hoft_16384 \
 	! audiowsinclimit \
@@ -83,8 +82,8 @@ gst-launch --gst-debug-level=1 \
 	! audioresample \
 	! audio/x-raw-float, rate=128 \
 	! tee name=hoft_128 \
-	lal_adder name=orthogonal_snr_sum_squares ! ${NXYDUMP}=sumsquares.txt \
-	lal_adder name=snr ! progressreport name=progress_snr ! ${NXYDUMP}=snr.txt \
+	lal_adder name=orthogonal_snr_sum_squares ! audio/x-raw-float, rate=2048 ! ${NXYDUMP}=sumsquares.txt \
+	lal_adder name=snr ! audio/x-raw-float, rate=2048 ! progressreport name=progress_snr ! ${FAKESINK} \
 	hoft_2048. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank0 \
 		template-bank=${TEMPLATEBANK} \
@@ -93,12 +92,12 @@ gst-launch --gst-debug-level=1 \
 		t-end=1 \
 		t-total-duration=45 \
 		snr-length=$((2048*1)) \
-	templatebank0.sumofsquares ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! orthogonal_snr_sum_squares. \
+	templatebank0.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares. \
 	lal_matrixmixer \
 		name=snr0 \
 	templatebank0.matrix ! snr0.matrix \
 	templatebank0.src ! tee name=orthosnr0 ! snr0.sink \
-	snr0. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
+	snr0. ! audioresample filter-length=3 ! queue ! snr. \
 	hoft_512. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank1 \
 		template-bank=${TEMPLATEBANK} \
@@ -107,12 +106,12 @@ gst-launch --gst-debug-level=1 \
 		t-end=5 \
 		t-total-duration=45 \
 		snr-length=$((512*1)) \
-	templatebank1.sumofsquares ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! orthogonal_snr_sum_squares. \
+	templatebank1.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares. \
 	lal_matrixmixer \
 		name=snr1 \
 	templatebank1.matrix ! snr1.matrix \
 	templatebank1.src ! tee name=orthosnr1 ! snr1.sink \
-	snr1. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
+	snr1. ! audioresample filter-length=3 ! queue ! snr. \
 	hoft_256. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank2 \
 		template-bank=${TEMPLATEBANK} \
@@ -121,12 +120,12 @@ gst-launch --gst-debug-level=1 \
 		t-end=13 \
 		t-total-duration=45 \
 		snr-length=$((256*1)) \
-	templatebank2.sumofsquares ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! orthogonal_snr_sum_squares. \
+	templatebank2.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares. \
 	lal_matrixmixer \
 		name=snr2 \
 	templatebank2.matrix ! snr2.matrix \
 	templatebank2.src ! tee name=orthosnr2 ! snr2.sink \
-	snr2. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
+	snr2. ! audioresample filter-length=3 ! queue ! snr. \
 	hoft_128. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank3 \
 		template-bank=${TEMPLATEBANK} \
@@ -135,12 +134,12 @@ gst-launch --gst-debug-level=1 \
 		t-end=29 \
 		t-total-duration=45 \
 		snr-length=$((128*1)) \
-	templatebank3.sumofsquares ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! orthogonal_snr_sum_squares. \
+	templatebank3.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares. \
 	lal_matrixmixer \
 		name=snr3 \
 	templatebank3.matrix ! snr3.matrix \
 	templatebank3.src ! tee name=orthosnr3 ! snr3.sink \
-	snr3. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
+	snr3. ! audioresample filter-length=3 ! queue ! snr. \
 	hoft_128. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank4 \
 		template-bank=${TEMPLATEBANK} \
@@ -149,11 +148,11 @@ gst-launch --gst-debug-level=1 \
 		t-end=45 \
 		t-total-duration=45 \
 		snr-length=$((128*1)) \
-	templatebank4.sumofsquares ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! orthogonal_snr_sum_squares. \
+	templatebank4.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares. \
 	lal_matrixmixer \
 		name=snr4 \
 	templatebank4.matrix ! snr4.matrix \
 	templatebank4.src ! tee name=orthosnr4 ! snr4.sink \
-	snr4. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
+	snr4. ! audioresample filter-length=3 ! queue ! snr. \
 
 exit
