@@ -4,11 +4,10 @@ LALCACHE="/home/kipp/scratch_local/874100000-20000/cache/874100000-20000.cache"
 GPSSTART="874100000000000000"
 GPSSTART="874106958000000000"
 GPSSTOP="874120000000000000"
-#GPSSTOP="874110558000000000"
 INSTRUMENT="H1"
 CHANNEL="LSC-STRAIN"
 REFERENCEPSD="reference_psd.txt"
-BANK="H1-TMPLTBANK_09_1.207-874000000-2048.xml"
+TEMPLATEBANK="H1-TMPLTBANK_09_1.207-874000000-2048.xml"
 
 SRC="lal_framesrc \
 	blocksize=$((16384*8*16)) \
@@ -26,6 +25,9 @@ FAKESRC="audiotestsrc \
 	volume=1e-20 \
 ! audio/x-raw-float, width=64, rate=16384, instrument=${INSTRUMENT}, channel_name=${CHANNEL}, units=strain"
 
+INJECTIONS="lal_simulation \
+	xml-location=impulse_at_874107198.xml"
+
 WHITEN="lal_whiten \
 	psd-mode=1 \
 	filter-length=4 \
@@ -37,7 +39,7 @@ SCOPE="queue ! lal_multiscope trace-duration=4.0 frame-interval=0.0625 average-i
 
 FAKESINK="queue ! fakesink sync=false preroll-queue-len=1"
 
-PLAYBACK="adder ! audioresample ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=1e-3 ! audioconvert ! queue max-size-time=3000000000 ! alsasink"
+PLAYBACK="adder ! audioresample ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=5e-2 ! audioconvert ! queue max-size-time=3000000000 ! alsasink"
 
 NXYDUMP="queue ! lal_nxydump start-time=106000000000 stop-time=126000000000 ! filesink sync=false preroll-queue-len=1 location"
 #NXYDUMP="queue ! lal_nxydump start-time=0 stop-time=384000000000 ! filesink sync=false preroll-queue-len=1 location"
@@ -54,7 +56,8 @@ gst-launch --gst-debug-level=1 \
 	${SRC} \
 	! progressreport \
 		name=progress_src \
-	! $WHITEN \
+	! ${INJECTIONS} \
+	! ${WHITEN} \
 	! tee name=hoft_16384 \
 	! audiowsinclimit \
 		length=301 \
@@ -84,7 +87,7 @@ gst-launch --gst-debug-level=1 \
 	lal_adder name=snr ! progressreport name=progress_snr ! ${NXYDUMP}=snr.txt \
 	hoft_2048. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank0 \
-		template-bank=${BANK} \
+		template-bank=${TEMPLATEBANK} \
 		reference-psd=${REFERENCEPSD} \
 		t-start=0 \
 		t-end=1 \
@@ -98,7 +101,7 @@ gst-launch --gst-debug-level=1 \
 	snr0. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
 	hoft_512. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank1 \
-		template-bank=${BANK} \
+		template-bank=${TEMPLATEBANK} \
 		reference-psd=${REFERENCEPSD} \
 		t-start=1 \
 		t-end=5 \
@@ -112,7 +115,7 @@ gst-launch --gst-debug-level=1 \
 	snr1. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
 	hoft_256. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank2 \
-		template-bank=${BANK} \
+		template-bank=${TEMPLATEBANK} \
 		reference-psd=${REFERENCEPSD} \
 		t-start=5 \
 		t-end=13 \
@@ -126,7 +129,7 @@ gst-launch --gst-debug-level=1 \
 	snr2. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
 	hoft_128. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank3 \
-		template-bank=${BANK} \
+		template-bank=${TEMPLATEBANK} \
 		reference-psd=${REFERENCEPSD} \
 		t-start=13 \
 		t-end=29 \
@@ -140,7 +143,7 @@ gst-launch --gst-debug-level=1 \
 	snr3. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
 	hoft_128. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank4 \
-		template-bank=${BANK} \
+		template-bank=${TEMPLATEBANK} \
 		reference-psd=${REFERENCEPSD} \
 		t-start=29 \
 		t-end=45 \
@@ -154,5 +157,3 @@ gst-launch --gst-debug-level=1 \
 	snr4. ! audioresample filter-length=3 ! audio/x-raw-float, rate=2048 ! queue ! snr. \
 
 exit
-	! lal_simulation \
-		xml-location="impulse_at_874107198.xml" \
