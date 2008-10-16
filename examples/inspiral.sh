@@ -96,7 +96,7 @@ gst-launch --gst-debug-level=1 \
 	lal_matrixmixer \
 		name=snr0 \
 	templatebank0.matrix ! snr0.matrix \
-	templatebank0.src ! tee name=orthosnr0 ! snr0.sink \
+	templatebank0.src ! snr0.sink \
 	snr0. ! audioresample filter-length=3 ! queue ! snr. \
 	hoft_512. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank1 \
@@ -110,7 +110,7 @@ gst-launch --gst-debug-level=1 \
 	lal_matrixmixer \
 		name=snr1 \
 	templatebank1.matrix ! snr1.matrix \
-	templatebank1.src ! tee name=orthosnr1 ! snr1.sink \
+	templatebank1.src ! snr1.sink \
 	snr1. ! audioresample filter-length=3 ! queue ! snr. \
 	hoft_256. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank2 \
@@ -124,7 +124,7 @@ gst-launch --gst-debug-level=1 \
 	lal_matrixmixer \
 		name=snr2 \
 	templatebank2.matrix ! snr2.matrix \
-	templatebank2.src ! tee name=orthosnr2 ! snr2.sink \
+	templatebank2.src ! snr2.sink \
 	snr2. ! audioresample filter-length=3 ! queue ! snr. \
 	hoft_128. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank3 \
@@ -138,7 +138,7 @@ gst-launch --gst-debug-level=1 \
 	lal_matrixmixer \
 		name=snr3 \
 	templatebank3.matrix ! snr3.matrix \
-	templatebank3.src ! tee name=orthosnr3 ! snr3.sink \
+	templatebank3.src ! snr3.sink \
 	snr3. ! audioresample filter-length=3 ! queue ! snr. \
 	hoft_128. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank4 \
@@ -152,7 +152,7 @@ gst-launch --gst-debug-level=1 \
 	lal_matrixmixer \
 		name=snr4 \
 	templatebank4.matrix ! snr4.matrix \
-	templatebank4.src ! tee name=orthosnr4 ! snr4.sink \
+	templatebank4.src ! snr4.sink \
 	snr4. ! audioresample filter-length=3 ! queue ! snr. \
 
 exit
