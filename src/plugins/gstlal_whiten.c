@@ -449,6 +449,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	result = gst_pad_set_caps(element->srcpad, caps);
+	gst_caps_unref(caps);
 
 	/*
 	 * done
