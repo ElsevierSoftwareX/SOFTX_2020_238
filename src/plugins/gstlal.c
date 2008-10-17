@@ -465,7 +465,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 {
 	struct {
 		const gchar *name;
-		GType (*type)(void);
+		GType (*get_type)(void);
 	} *element, elements[] = {
 		{"lal_framesrc", gstlal_framesrc_get_type},
 		{"lal_templatebank", gstlal_templatebank_get_type},
@@ -496,7 +496,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 	 */
 
 	for(element = elements; element->name; element++)
-		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->type()))
+		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->get_type()))
 			return FALSE;
 
 	/*
