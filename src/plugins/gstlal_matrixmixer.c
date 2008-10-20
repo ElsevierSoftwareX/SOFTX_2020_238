@@ -213,7 +213,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	if(GST_BUFFER_DURATION_IS_VALID(sinkbuf))
 		samples = GST_BUFFER_DURATION(sinkbuf) * g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate")) / GST_SECOND;
 	else if(GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))
-		samples = GST_BUFFER_OFFSET_END(sinkbuf) + 1 - GST_BUFFER_OFFSET(sinkbuf);
+		samples = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
 	else
 		samples = GST_BUFFER_SIZE(sinkbuf) / sizeof(*element->mixmatrix.matrix.data) / num_input_channels(element);
 

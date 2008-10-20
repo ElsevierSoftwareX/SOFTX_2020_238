@@ -817,7 +817,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
 			element->next_is_discontinuity = FALSE;
 		}
-		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + (segment->data->length / 2 - transient) - 1;
+		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + (segment->data->length / 2 - transient);
 		GST_BUFFER_TIMESTAMP(srcbuf) = element->adapter_head_timestamp + (GstClockTime) transient * GST_SECOND / element->sample_rate;
 		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) (segment->data->length / 2 - transient) * GST_SECOND / element->sample_rate;
 

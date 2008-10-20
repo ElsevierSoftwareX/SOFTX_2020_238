@@ -595,7 +595,7 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 			return result;
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
-		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length - 1;
+		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
 		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&chunk->epoch);
 		GST_BUFFER_DURATION(*buffer) = (GstClockTime) floor(chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
 		if(element->next_sample == 0 || element->next_sample != GST_BUFFER_OFFSET(*buffer)) {
@@ -625,7 +625,7 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 			return result;
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
-		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length - 1;
+		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
 		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&chunk->epoch);
 		GST_BUFFER_DURATION(*buffer) = (GstClockTime) floor(chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
 		if(element->next_sample == 0 || element->next_sample != GST_BUFFER_OFFSET(*buffer)) {
@@ -655,7 +655,7 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 			return result;
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
-		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length - 1;
+		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
 		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&chunk->epoch);
 		GST_BUFFER_DURATION(*buffer) = (GstClockTime) floor(chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
 		if(element->next_sample == 0 || element->next_sample != GST_BUFFER_OFFSET(*buffer)) {

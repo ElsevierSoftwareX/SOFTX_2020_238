@@ -115,7 +115,7 @@ static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int sample
 
 	gst_buffer_copy_metadata(buf, template, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 	GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
-	GST_BUFFER_OFFSET_END(buf) = GST_BUFFER_OFFSET(buf);
+	GST_BUFFER_OFFSET_END(buf) = GST_BUFFER_OFFSET_NONE;
 	if(GST_BUFFER_TIMESTAMP_IS_VALID(buf))
 		GST_BUFFER_TIMESTAMP(buf) += (GstClockTime) start * GST_SECOND / sample_rate;
 	GST_BUFFER_DURATION(buf) = (GstClockTime) (stop - start) * GST_SECOND / sample_rate;
@@ -323,7 +323,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	if(GST_BUFFER_DURATION_IS_VALID(sinkbuf))
 		samples = GST_BUFFER_DURATION(sinkbuf) * element->sample_rate / GST_SECOND;
 	else if(GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))
-		samples = GST_BUFFER_OFFSET_END(sinkbuf) + 1 - GST_BUFFER_OFFSET(sinkbuf);
+		samples = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
 	else
 		samples = GST_BUFFER_SIZE(sinkbuf) / sizeof(double) / channels;
 
