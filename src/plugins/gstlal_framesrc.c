@@ -334,14 +334,9 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, size_t l
 /*
  * ============================================================================
  *
- *                          GStreamer Source Element
+ *                                 Properties
  *
  * ============================================================================
- */
-
-
-/*
- * Properties
  */
 
 
@@ -440,6 +435,31 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_int64(value, XLALGPSToINT8NS(&element->stop_time));
 		break;
 	}
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                        GstPushSrc Method Overrides
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * get_caps()
+ */
+
+
+static GstCaps *get_caps(GstBaseSrc *object)
+{
+	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
+
+	if(element->series_buffer)
+		return series_to_caps(element->instrument, element->channel_name, element->series_buffer, element->series_type);
+	else
+		return gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_SRC_PAD(object)));
 }
 
 
@@ -549,18 +569,23 @@ error:
 
 
 /*
- * get_caps()
+ * stop()
  */
 
 
-static GstCaps *get_caps(GstBaseSrc *object)
+static gboolean stop(GstBaseSrc *object)
 {
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
 
-	if(element->series_buffer)
-		return series_to_caps(element->instrument, element->channel_name, element->series_buffer, element->series_type);
-	else
-		return gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_SRC_PAD(object)));
+	if(element->stream) {
+		XLALFrClose(element->stream);
+		element->stream = NULL;
+	}
+	DestroyTimeSeries(element->series_buffer, element->series_type);
+	element->series_buffer = NULL;
+	element->series_type = -1;
+
+	return TRUE;
 }
 
 
@@ -676,24 +701,12 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 
 
 /*
- * stop()
+ * ============================================================================
+ *
+ *                                Type Support
+ *
+ * ============================================================================
  */
-
-
-static gboolean stop(GstBaseSrc *object)
-{
-	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
-
-	if(element->stream) {
-		XLALFrClose(element->stream);
-		element->stream = NULL;
-	}
-	DestroyTimeSeries(element->series_buffer, element->series_type);
-	element->series_buffer = NULL;
-	element->series_type = -1;
-
-	return TRUE;
-}
 
 
 /*
@@ -742,7 +755,7 @@ static void dispose(GObject *object)
 
 static void base_init(gpointer class)
 {
-	static GstElementDetails plugin_details = {
+	static const GstElementDetails plugin_details = {
 		"GWF Frame File Source",
 		"Source",
 		"LAL cache-based .gwf frame file source element",
@@ -805,7 +818,7 @@ static void class_init(gpointer class, gpointer class_data)
 	g_object_class_install_property(gobject_class, ARG_SRC_STOP_TIME_GPS, g_param_spec_int64("stop-time-gps-ns", "Stop time", "Stop time in GPS nanoseconds.", G_MININT64, G_MAXINT64, DEFAULT_STOP_TIME_GPS_NS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
 	/*
-	 * pushsrc method overrides
+	 * GstPushSrc method overrides
 	 */
 
 	gstbasesrc_class->start = start;
