@@ -41,7 +41,7 @@ FAKESINK="queue ! fakesink sync=false preroll-queue-len=1"
 
 PLAYBACK="adder ! audioresample ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=5e-2 ! audioconvert ! queue max-size-time=3000000000 ! alsasink"
 
-NXYDUMP="queue ! lal_nxydump start-time=106000000000 stop-time=126000000000 ! filesink sync=false preroll-queue-len=1 location"
+NXYDUMP="queue ! lal_nxydump start-time=874107068000000000 stop-time=874107088000000000 ! filesink sync=false preroll-queue-len=1 location"
 #NXYDUMP="queue ! lal_nxydump start-time=0 stop-time=384000000000 ! filesink sync=false preroll-queue-len=1 location"
 #NXYDUMP="queue ! lal_nxydump start-time=235000000000 stop-time=290000000000 ! filesink sync=false preroll-queue-len=1 location"
 #NXYDUMP="queue ! lal_nxydump start-time=874107188000000000 stop-time=874107208000000000 ! filesink sync=false preroll-queue-len=1 location"
@@ -58,7 +58,7 @@ gst-launch --gst-debug-level=1 \
 		name=progress_src \
 	! ${WHITEN} \
 	! tee name=hoft_16384 \
-	! audiowsinclimit \
+	hoft_16384. ! audiowsinclimit \
 		length=301 \
 		cutoff=1024 \
 	! audioresample \
@@ -82,8 +82,8 @@ gst-launch --gst-debug-level=1 \
 	! audioresample \
 	! audio/x-raw-float, rate=128 \
 	! tee name=hoft_128 \
-	lal_adder name=orthogonal_snr_sum_squares ! audio/x-raw-float, rate=2048 ! ${NXYDUMP}=sumsquares.txt \
-	lal_adder name=snr ! audio/x-raw-float, rate=2048 ! progressreport name=progress_snr ! ${NXYDUMP}=snr.txt \
+	lal_adder name=orthogonal_snr_sum_squares sync=true ! audio/x-raw-float, rate=2048 ! ${NXYDUMP}=sumsquares.txt \
+	lal_adder name=snr sync=true ! audio/x-raw-float, rate=2048 ! progressreport name=progress_snr ! ${NXYDUMP}=snr.txt \
 	hoft_2048. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank0 \
 		template-bank=${TEMPLATEBANK} \
