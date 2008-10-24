@@ -53,6 +53,7 @@ typedef struct {
 typedef struct {
 	GstElement element;
 
+	GstPad *matrixpad;
 	GstPad *sinkpad;
 	GstPad *srcpad;
 
@@ -93,7 +94,14 @@ typedef struct {
 	GMutex *mixmatrix_lock;
 	GCond *mixmatrix_available;
 	GstBuffer *mixmatrix_buf;
-	gsl_matrix_view mixmatrix;
+	enum {
+		GSTLAL_MATRIXMIXER_DOUBLE,
+		GSTLAL_MATRIXMIXER_COMPLEX
+	} data_type;
+	union {
+		gsl_matrix_view as_double;
+		gsl_matrix_complex_view as_complex;
+	} mixmatrix;
 } GSTLALMatrixMixer;
 
 

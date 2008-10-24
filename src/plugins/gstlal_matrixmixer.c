@@ -33,6 +33,7 @@
  */
 
 
+#include <complex.h>
 #include <string.h>
 
 
@@ -55,6 +56,8 @@
  */
 
 
+#include <gsl/gsl_complex.h>
+#include <gsl/gsl_complex_math.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_blas.h>
 
@@ -88,13 +91,46 @@
 
 static int num_input_channels(const GSTLALMatrixMixer *element)
 {
-	return element->mixmatrix.matrix.size1;
+	switch(element->data_type) {
+	case GSTLAL_MATRIXMIXER_DOUBLE:
+		return element->mixmatrix.as_double.matrix.size1;
+
+	case GSTLAL_MATRIXMIXER_COMPLEX:
+		return element->mixmatrix.as_complex.matrix.size1;
+
+	default:
+		return 0;
+	}
 }
 
 
 static int num_output_channels(const GSTLALMatrixMixer *element)
 {
-	return element->mixmatrix.matrix.size2;
+	switch(element->data_type) {
+	case GSTLAL_MATRIXMIXER_DOUBLE:
+		return element->mixmatrix.as_double.matrix.size2;
+
+	case GSTLAL_MATRIXMIXER_COMPLEX:
+		return element->mixmatrix.as_complex.matrix.size2;
+
+	default:
+		return 0;
+	}
+}
+
+
+static size_t mixmatrix_element_size(const GSTLALMatrixMixer *element)
+{
+	switch(element->data_type) {
+	case GSTLAL_MATRIXMIXER_DOUBLE:
+		return sizeof(*element->mixmatrix.as_double.matrix.data);
+
+	case GSTLAL_MATRIXMIXER_COMPLEX:
+		return sizeof(*element->mixmatrix.as_complex.matrix.data);
+
+	default:
+		return 0;
+	}
 }
 
 
@@ -136,13 +172,25 @@ static GstCaps *getcaps(GstPad *pad)
 	}
 
 	/*
-	 * if we have a mixing matrix the sink pad's channels must match
-	 * the number of rows in the mixing matrix.
+	 * if we have a mixing matrix the sink pad's media type must be the
+	 * same as the mixing matrix', and the number of channels must
+	 * match the number of rows in the mixing matrix.
 	 */
 
 	if(element->mixmatrix_buf) {
-		sinkcaps = gst_caps_make_writable(sinkcaps);
-		gst_caps_set_simple(sinkcaps, "channels", G_TYPE_INT, num_input_channels(element), NULL);
+		GstCaps *matrixcaps = GST_PAD_CAPS(element->matrixpad);
+		GstCaps *result;
+		guint n;
+
+		gst_caps_ref(matrixcaps);
+		matrixcaps = gst_caps_make_writable(matrixcaps);
+		for(n = 0; n < gst_caps_get_size(matrixcaps); n++)
+			gst_structure_set(gst_caps_get_structure(matrixcaps, n), "channels", G_TYPE_INT, num_input_channels(element), NULL);
+
+		result = gst_caps_intersect(matrixcaps, sinkcaps);
+		gst_caps_unref(sinkcaps);
+		gst_caps_unref(matrixcaps);
+		sinkcaps = result;
 	}
 
 	/*
@@ -204,7 +252,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(gst_pad_get_parent(pad));
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	int samples;
-	gsl_matrix_view input_channels;
+	union {
+		gsl_matrix_view as_double;
+		gsl_matrix_complex_view as_complex;
+	} input_channels;
 	GstBuffer *srcbuf;
 	GstFlowReturn result = GST_FLOW_OK;
 
@@ -229,13 +280,33 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Wrap the incoming buffer in a GSL matrix view.
 	 */
 
-	samples = GST_BUFFER_SIZE(sinkbuf) / sizeof(*element->mixmatrix.matrix.data) / num_input_channels(element);
-	input_channels = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), samples, num_input_channels(element));
-	if(input_channels.matrix.size1 * input_channels.matrix.size2 * sizeof(*element->mixmatrix.matrix.data) != GST_BUFFER_SIZE(sinkbuf)) {
-		GST_ERROR_OBJECT(element, "buffer size mismatch:  input buffer size not divisible by the channel count");
+	if(!(GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))) {
 		g_mutex_unlock(element->mixmatrix_lock);
-		result = GST_FLOW_NOT_NEGOTIATED;
+		GST_ERROR_OBJECT(element, "cannot compute number of input samples:  invalid offset and/or end offset");
+		result = GST_FLOW_ERROR;
 		goto done;
+	}
+	samples = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
+	switch(element->data_type) {
+	case GSTLAL_MATRIXMIXER_DOUBLE:
+		input_channels.as_double = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), samples, num_input_channels(element));
+		if(input_channels.as_double.matrix.size1 * input_channels.as_double.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(sinkbuf)) {
+			g_mutex_unlock(element->mixmatrix_lock);
+			GST_ERROR_OBJECT(element, "invalid input buffer:  size not divisible by the channel count");
+			result = GST_FLOW_NOT_NEGOTIATED;
+			goto done;
+		}
+		break;
+
+	case GSTLAL_MATRIXMIXER_COMPLEX:
+		input_channels.as_complex = gsl_matrix_complex_view_array((double *) GST_BUFFER_DATA(sinkbuf), samples, num_input_channels(element));
+		if(input_channels.as_complex.matrix.size1 * input_channels.as_complex.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(sinkbuf)) {
+			g_mutex_unlock(element->mixmatrix_lock);
+			GST_ERROR_OBJECT(element, "invalid input buffer:  size not divisible by the channel count");
+			result = GST_FLOW_NOT_NEGOTIATED;
+			goto done;
+		}
+		break;
 	}
 
 	/*
@@ -243,7 +314,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * from the input buffer.
 	 */
 
-	result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(sinkbuf), samples * num_output_channels(element) * sizeof(*element->mixmatrix.matrix.data), GST_PAD_CAPS(element->srcpad), &srcbuf);
+	result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(sinkbuf), samples * num_output_channels(element) * mixmatrix_element_size(element), GST_PAD_CAPS(element->srcpad), &srcbuf);
 	if(result != GST_FLOW_OK) {
 		g_mutex_unlock(element->mixmatrix_lock);
 		goto done;
@@ -256,17 +327,27 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(!GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP)) {
+		union {
+			gsl_matrix_view as_double;
+			gsl_matrix_complex_view as_complex;
+		} output_channels;
+
 		/*
-		 * Wrap the outgoing buffer in a GSL matrix view.
+		 * Wrap the outgoing buffer in a GSL matrix view, then mix
+		 * input channels into output channels.
 		 */
 
-		gsl_matrix_view output_channels = gsl_matrix_view_array((double *) GST_BUFFER_DATA(srcbuf), samples, num_output_channels(element));
+		switch(element->data_type) {
+		case GSTLAL_MATRIXMIXER_DOUBLE:
+			output_channels.as_double = gsl_matrix_view_array((double *) GST_BUFFER_DATA(srcbuf), samples, num_output_channels(element));
+			gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, &input_channels.as_double.matrix, &element->mixmatrix.as_double.matrix, 0, &output_channels.as_double.matrix);
+			break;
 
-		/*
-		 * Mix input channels into output channels.
-		 */
-
-		gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, &input_channels.matrix, &element->mixmatrix.matrix, 0, &output_channels.matrix);
+		case GSTLAL_MATRIXMIXER_COMPLEX:
+			output_channels.as_complex = gsl_matrix_complex_view_array((double *) GST_BUFFER_DATA(srcbuf), samples, num_output_channels(element));
+			gsl_blas_zgemm(CblasNoTrans, CblasNoTrans, gsl_complex_rect(1, 0), &input_channels.as_complex.matrix, &element->mixmatrix.as_complex.matrix, gsl_complex_rect(0, 0), &output_channels.as_complex.matrix);
+			break;
+		}
 	} else
 		memset(GST_BUFFER_DATA(srcbuf), 0, GST_BUFFER_SIZE(srcbuf));
 
@@ -302,6 +383,44 @@ done:
 
 
 /*
+ * setcaps()
+ */
+
+
+static gboolean setcaps_matrix(GstPad *pad, GstCaps *caps)
+{
+	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(gst_pad_get_parent(pad));
+	GstStructure *structure = gst_caps_get_structure(caps, 0);
+	const char *media_type;
+	int width;
+	gboolean result = TRUE;
+
+	media_type = gst_structure_get_name(structure);
+	gst_structure_get_int(structure, "width", &width);
+
+	if(!strcmp(media_type, "audio/x-raw-float")) {
+		if(width == 64)
+			element->data_type = GSTLAL_MATRIXMIXER_DOUBLE;
+		else
+			result = FALSE;
+	} else if(!strcmp(media_type, "audio/x-raw-complex")) {
+		if(width == 128)
+			element->data_type = GSTLAL_MATRIXMIXER_COMPLEX;
+		else
+			result = FALSE;
+	} else
+		result = FALSE;
+
+	/*
+	 * done.
+	 */
+
+	gst_object_unref(element);
+	return result;
+}
+
+
+/*
  * chain()
  */
 
@@ -310,6 +429,7 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(gst_pad_get_parent(pad));
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
+	GstStructure *structure = gst_caps_get_structure(caps, 0);
 	GstFlowReturn result = GST_FLOW_OK;
 	int rows;
 	int cols;
@@ -318,9 +438,9 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 	 * Get the matrix size.
 	 */
 
-	gst_structure_get_int(gst_caps_get_structure(caps, 0), "channels", &cols);
-	rows = GST_BUFFER_SIZE(sinkbuf) / sizeof(*element->mixmatrix.matrix.data) / cols;
-	if(rows * cols * sizeof(*element->mixmatrix.matrix.data) != GST_BUFFER_SIZE(sinkbuf)) {
+	gst_structure_get_int(structure, "channels", &cols);
+	rows = GST_BUFFER_SIZE(sinkbuf) / mixmatrix_element_size(element) / cols;
+	if(rows * cols * mixmatrix_element_size(element) != GST_BUFFER_SIZE(sinkbuf)) {
 		GST_ERROR_OBJECT(element, "buffer size mismatch:  input buffer size not divisible by the channel count");
 		gst_buffer_unref(sinkbuf);
 		result = GST_FLOW_NOT_NEGOTIATED;
@@ -335,7 +455,16 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 	if(element->mixmatrix_buf)
 		gst_buffer_unref(element->mixmatrix_buf);
 	element->mixmatrix_buf = sinkbuf;
-	element->mixmatrix = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
+	switch(element->data_type) {
+	case GSTLAL_MATRIXMIXER_DOUBLE:
+		element->mixmatrix.as_double = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
+		
+		break;
+
+	case GSTLAL_MATRIXMIXER_COMPLEX:
+		element->mixmatrix.as_complex = gsl_matrix_complex_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
+		break;
+	}
 	g_cond_signal(element->mixmatrix_available);
 	g_mutex_unlock(element->mixmatrix_lock);
 
@@ -376,6 +505,8 @@ static void dispose(GObject *object)
 {
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(object);
 
+	gst_object_unref(element->matrixpad);
+	element->matrixpad = NULL;
 	gst_object_unref(element->sinkpad);
 	element->sinkpad = NULL;
 	gst_object_unref(element->srcpad);
@@ -422,7 +553,11 @@ static void base_init(gpointer class)
 				"audio/x-raw-float, " \
 				"channels = (int) [ 1, MAX ], " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 64"
+				"width = (int) 64 ; " \
+				"audio/x-raw-complex, " \
+				"channels = (int) [ 1, MAX ], " \
+				"endianness = (int) BYTE_ORDER, " \
+				"width = (int) 128"
 			)
 		)
 	);
@@ -437,7 +572,12 @@ static void base_init(gpointer class)
 				"rate = (int) [ 1, MAX ], " \
 				"channels = (int) [ 1, MAX ], " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 64"
+				"width = (int) 64 ; " \
+				"audio/x-raw-complex, " \
+				"rate = (int) [ 1, MAX ], " \
+				"channels = (int) [ 1, MAX ], " \
+				"endianness = (int) BYTE_ORDER, " \
+				"width = (int) 128"
 			)
 		)
 	);
@@ -447,13 +587,17 @@ static void base_init(gpointer class)
 			"src",
 			GST_PAD_SRC,
 			GST_PAD_ALWAYS,
-			gst_caps_new_simple(
-				"audio/x-raw-float",
-				"rate", GST_TYPE_INT_RANGE, 1, G_MAXINT,
-				"channels", GST_TYPE_INT_RANGE, 1, G_MAXINT,
-				"endianness", G_TYPE_INT, G_BYTE_ORDER,
-				"width", G_TYPE_INT, 64,
-				NULL
+			gst_caps_from_string(
+				"audio/x-raw-float, " \
+				"rate = (int) [ 1, MAX ], " \
+				"channels = (int) [ 1, MAX ], " \
+				"endianness = (int) BYTE_ORDER, " \
+				"width = (int) 64 ; " \
+				"audio/x-raw-complex, " \
+				"rate = (int) [ 1, MAX ], " \
+				"channels = (int) [ 1, MAX ], " \
+				"endianness = (int) BYTE_ORDER, " \
+				"width = (int) 128"
 			)
 		)
 	);
@@ -491,10 +635,11 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
 
-	/* configure matrix pad */
+	/* configure (and ref) matrix pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "matrix");
+	gst_pad_set_setcaps_function(pad, setcaps_matrix);
 	gst_pad_set_chain_function(pad, chain_matrix);
-	gst_object_unref(pad);
+	element->matrixpad = pad;
 
 	/* configure (and ref) sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
