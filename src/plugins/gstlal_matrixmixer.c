@@ -92,11 +92,17 @@
 static int num_input_channels(const GSTLALMatrixMixer *element)
 {
 	switch(element->data_type) {
+	case GSTLAL_MATRIXMIXER_FLOAT:
+		return element->mixmatrix.as_float.matrix.size1;
+
 	case GSTLAL_MATRIXMIXER_DOUBLE:
 		return element->mixmatrix.as_double.matrix.size1;
 
-	case GSTLAL_MATRIXMIXER_COMPLEX:
-		return element->mixmatrix.as_complex.matrix.size1;
+	case GSTLAL_MATRIXMIXER_COMPLEX_FLOAT:
+		return element->mixmatrix.as_complex_float.matrix.size1;
+
+	case GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE:
+		return element->mixmatrix.as_complex_double.matrix.size1;
 
 	default:
 		return 0;
@@ -107,11 +113,17 @@ static int num_input_channels(const GSTLALMatrixMixer *element)
 static int num_output_channels(const GSTLALMatrixMixer *element)
 {
 	switch(element->data_type) {
+	case GSTLAL_MATRIXMIXER_FLOAT:
+		return element->mixmatrix.as_float.matrix.size2;
+
 	case GSTLAL_MATRIXMIXER_DOUBLE:
 		return element->mixmatrix.as_double.matrix.size2;
 
-	case GSTLAL_MATRIXMIXER_COMPLEX:
-		return element->mixmatrix.as_complex.matrix.size2;
+	case GSTLAL_MATRIXMIXER_COMPLEX_FLOAT:
+		return element->mixmatrix.as_complex_float.matrix.size2;
+
+	case GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE:
+		return element->mixmatrix.as_complex_double.matrix.size2;
 
 	default:
 		return 0;
@@ -122,11 +134,17 @@ static int num_output_channels(const GSTLALMatrixMixer *element)
 static size_t mixmatrix_element_size(const GSTLALMatrixMixer *element)
 {
 	switch(element->data_type) {
+	case GSTLAL_MATRIXMIXER_FLOAT:
+		return sizeof(*element->mixmatrix.as_float.matrix.data);
+
 	case GSTLAL_MATRIXMIXER_DOUBLE:
 		return sizeof(*element->mixmatrix.as_double.matrix.data);
 
-	case GSTLAL_MATRIXMIXER_COMPLEX:
-		return sizeof(*element->mixmatrix.as_complex.matrix.data);
+	case GSTLAL_MATRIXMIXER_COMPLEX_FLOAT:
+		return sizeof(*element->mixmatrix.as_complex_float.matrix.data);
+
+	case GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE:
+		return sizeof(*element->mixmatrix.as_complex_double.matrix.data);
 
 	default:
 		return 0;
@@ -172,9 +190,9 @@ static GstCaps *getcaps(GstPad *pad)
 	}
 
 	/*
-	 * if we have a mixing matrix the sink pad's media type must be the
-	 * same as the mixing matrix', and the number of channels must
-	 * match the number of rows in the mixing matrix.
+	 * if we have a mixing matrix the sink pad's media type and sample
+	 * width must be the same as the mixing matrix's, and the number of
+	 * channels must match the number of rows in the mixing matrix.
 	 */
 
 	if(element->mixmatrix_buf) {
@@ -253,8 +271,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	int samples;
 	union {
+		gsl_matrix_float_view as_float;
 		gsl_matrix_view as_double;
-		gsl_matrix_complex_view as_complex;
+		gsl_matrix_complex_float_view as_complex_float;
+		gsl_matrix_complex_view as_complex_double;
 	} input_channels;
 	GstBuffer *srcbuf;
 	GstFlowReturn result = GST_FLOW_OK;
@@ -288,6 +308,16 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 	samples = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
 	switch(element->data_type) {
+	case GSTLAL_MATRIXMIXER_FLOAT:
+		input_channels.as_float = gsl_matrix_float_view_array((float *) GST_BUFFER_DATA(sinkbuf), samples, num_input_channels(element));
+		if(input_channels.as_float.matrix.size1 * input_channels.as_float.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(sinkbuf)) {
+			g_mutex_unlock(element->mixmatrix_lock);
+			GST_ERROR_OBJECT(element, "invalid input buffer:  size not divisible by the channel count");
+			result = GST_FLOW_NOT_NEGOTIATED;
+			goto done;
+		}
+		break;
+
 	case GSTLAL_MATRIXMIXER_DOUBLE:
 		input_channels.as_double = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), samples, num_input_channels(element));
 		if(input_channels.as_double.matrix.size1 * input_channels.as_double.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(sinkbuf)) {
@@ -298,9 +328,19 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 		break;
 
-	case GSTLAL_MATRIXMIXER_COMPLEX:
-		input_channels.as_complex = gsl_matrix_complex_view_array((double *) GST_BUFFER_DATA(sinkbuf), samples, num_input_channels(element));
-		if(input_channels.as_complex.matrix.size1 * input_channels.as_complex.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(sinkbuf)) {
+	case GSTLAL_MATRIXMIXER_COMPLEX_FLOAT:
+		input_channels.as_complex_float = gsl_matrix_complex_float_view_array((float *) GST_BUFFER_DATA(sinkbuf), samples, num_input_channels(element));
+		if(input_channels.as_complex_float.matrix.size1 * input_channels.as_complex_float.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(sinkbuf)) {
+			g_mutex_unlock(element->mixmatrix_lock);
+			GST_ERROR_OBJECT(element, "invalid input buffer:  size not divisible by the channel count");
+			result = GST_FLOW_NOT_NEGOTIATED;
+			goto done;
+		}
+		break;
+
+	case GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE:
+		input_channels.as_complex_double = gsl_matrix_complex_view_array((double *) GST_BUFFER_DATA(sinkbuf), samples, num_input_channels(element));
+		if(input_channels.as_complex_double.matrix.size1 * input_channels.as_complex_double.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(sinkbuf)) {
 			g_mutex_unlock(element->mixmatrix_lock);
 			GST_ERROR_OBJECT(element, "invalid input buffer:  size not divisible by the channel count");
 			result = GST_FLOW_NOT_NEGOTIATED;
@@ -328,8 +368,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 	if(!GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP)) {
 		union {
+			gsl_matrix_float_view as_float;
 			gsl_matrix_view as_double;
-			gsl_matrix_complex_view as_complex;
+			gsl_matrix_complex_float_view as_complex_float;
+			gsl_matrix_complex_view as_complex_double;
 		} output_channels;
 
 		/*
@@ -338,14 +380,28 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		switch(element->data_type) {
+		case GSTLAL_MATRIXMIXER_FLOAT:
+			output_channels.as_float = gsl_matrix_float_view_array((float *) GST_BUFFER_DATA(srcbuf), samples, num_output_channels(element));
+			gsl_blas_sgemm(CblasNoTrans, CblasNoTrans, 1, &input_channels.as_float.matrix, &element->mixmatrix.as_float.matrix, 0, &output_channels.as_float.matrix);
+			break;
+
 		case GSTLAL_MATRIXMIXER_DOUBLE:
 			output_channels.as_double = gsl_matrix_view_array((double *) GST_BUFFER_DATA(srcbuf), samples, num_output_channels(element));
 			gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, &input_channels.as_double.matrix, &element->mixmatrix.as_double.matrix, 0, &output_channels.as_double.matrix);
 			break;
 
-		case GSTLAL_MATRIXMIXER_COMPLEX:
-			output_channels.as_complex = gsl_matrix_complex_view_array((double *) GST_BUFFER_DATA(srcbuf), samples, num_output_channels(element));
-			gsl_blas_zgemm(CblasNoTrans, CblasNoTrans, gsl_complex_rect(1, 0), &input_channels.as_complex.matrix, &element->mixmatrix.as_complex.matrix, gsl_complex_rect(0, 0), &output_channels.as_complex.matrix);
+		case GSTLAL_MATRIXMIXER_COMPLEX_FLOAT:
+			output_channels.as_complex_float = gsl_matrix_complex_float_view_array((float *) GST_BUFFER_DATA(srcbuf), samples, num_output_channels(element));
+			/* FIXME:  frigging GSL decides it needs its own
+			 * *special* complex type, then doesn't provide a
+			 * complete suite of support functions.  now we
+			 * have to create 1 and 0 by hand */
+			gsl_blas_cgemm(CblasNoTrans, CblasNoTrans, (gsl_complex_float) {{1,0}}, &input_channels.as_complex_float.matrix, &element->mixmatrix.as_complex_float.matrix, (gsl_complex_float) {{0,0}}, &output_channels.as_complex_float.matrix);
+			break;
+
+		case GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE:
+			output_channels.as_complex_double = gsl_matrix_complex_view_array((double *) GST_BUFFER_DATA(srcbuf), samples, num_output_channels(element));
+			gsl_blas_zgemm(CblasNoTrans, CblasNoTrans, GSL_COMPLEX_ONE, &input_channels.as_complex_double.matrix, &element->mixmatrix.as_complex_double.matrix, GSL_COMPLEX_ZERO, &output_channels.as_complex_double.matrix);
 			break;
 		}
 	} else
@@ -399,15 +455,29 @@ static gboolean setcaps_matrix(GstPad *pad, GstCaps *caps)
 	gst_structure_get_int(structure, "width", &width);
 
 	if(!strcmp(media_type, "audio/x-raw-float")) {
-		if(width == 64)
+		switch(width) {
+		case 32:
+			element->data_type = GSTLAL_MATRIXMIXER_FLOAT;
+			break;
+		case 64:
 			element->data_type = GSTLAL_MATRIXMIXER_DOUBLE;
-		else
+			break;
+		default:
 			result = FALSE;
+			break;
+		}
 	} else if(!strcmp(media_type, "audio/x-raw-complex")) {
-		if(width == 128)
-			element->data_type = GSTLAL_MATRIXMIXER_COMPLEX;
-		else
+		switch(width) {
+		case 64:
+			element->data_type = GSTLAL_MATRIXMIXER_COMPLEX_FLOAT;
+			break;
+		case 128:
+			element->data_type = GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE;
+			break;
+		default:
 			result = FALSE;
+			break;
+		}
 	} else
 		result = FALSE;
 
@@ -456,13 +526,20 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 		gst_buffer_unref(element->mixmatrix_buf);
 	element->mixmatrix_buf = sinkbuf;
 	switch(element->data_type) {
-	case GSTLAL_MATRIXMIXER_DOUBLE:
-		element->mixmatrix.as_double = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
-		
+	case GSTLAL_MATRIXMIXER_FLOAT:
+		element->mixmatrix.as_float = gsl_matrix_float_view_array((float *) GST_BUFFER_DATA(sinkbuf), rows, cols);
 		break;
 
-	case GSTLAL_MATRIXMIXER_COMPLEX:
-		element->mixmatrix.as_complex = gsl_matrix_complex_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
+	case GSTLAL_MATRIXMIXER_DOUBLE:
+		element->mixmatrix.as_double = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
+		break;
+
+	case GSTLAL_MATRIXMIXER_COMPLEX_FLOAT:
+		element->mixmatrix.as_complex_float = gsl_matrix_complex_float_view_array((float *) GST_BUFFER_DATA(sinkbuf), rows, cols);
+		break;
+
+	case GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE:
+		element->mixmatrix.as_complex_double = gsl_matrix_complex_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
 		break;
 	}
 	g_cond_signal(element->mixmatrix_available);
@@ -553,11 +630,11 @@ static void base_init(gpointer class)
 				"audio/x-raw-float, " \
 				"channels = (int) [ 1, MAX ], " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 64 ; " \
+				"width = (int) {32, 64} ; " \
 				"audio/x-raw-complex, " \
 				"channels = (int) [ 1, MAX ], " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 128"
+				"width = (int) {64, 128}"
 			)
 		)
 	);
@@ -572,12 +649,12 @@ static void base_init(gpointer class)
 				"rate = (int) [ 1, MAX ], " \
 				"channels = (int) [ 1, MAX ], " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 64 ; " \
+				"width = (int) {32, 64} ; " \
 				"audio/x-raw-complex, " \
 				"rate = (int) [ 1, MAX ], " \
 				"channels = (int) [ 1, MAX ], " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 128"
+				"width = (int) {64, 128}"
 			)
 		)
 	);
@@ -592,12 +669,12 @@ static void base_init(gpointer class)
 				"rate = (int) [ 1, MAX ], " \
 				"channels = (int) [ 1, MAX ], " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 64 ; " \
+				"width = (int) {32, 64} ; " \
 				"audio/x-raw-complex, " \
 				"rate = (int) [ 1, MAX ], " \
 				"channels = (int) [ 1, MAX ], " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 128"
+				"width = (int) {64, 128}"
 			)
 		)
 	);

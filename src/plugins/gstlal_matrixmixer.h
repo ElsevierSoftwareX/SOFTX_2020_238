@@ -95,12 +95,16 @@ typedef struct {
 	GCond *mixmatrix_available;
 	GstBuffer *mixmatrix_buf;
 	enum {
+		GSTLAL_MATRIXMIXER_FLOAT,
 		GSTLAL_MATRIXMIXER_DOUBLE,
-		GSTLAL_MATRIXMIXER_COMPLEX
+		GSTLAL_MATRIXMIXER_COMPLEX_FLOAT,
+		GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE
 	} data_type;
 	union {
+		gsl_matrix_float_view as_float;
 		gsl_matrix_view as_double;
-		gsl_matrix_complex_view as_complex;
+		gsl_matrix_complex_float_view as_complex_float;
+		gsl_matrix_complex_view as_complex_double;
 	} mixmatrix;
 } GSTLALMatrixMixer;
 
