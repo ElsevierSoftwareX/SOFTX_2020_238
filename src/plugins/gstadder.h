@@ -32,23 +32,11 @@
 
 G_BEGIN_DECLS
 #define GST_TYPE_ADDER            (gst_adder_get_type())
-#define GST_ADDER(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_ADDER,GstAdder))
-#define GST_IS_ADDER(obj)         (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_ADDER))
-#define GST_ADDER_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass) ,GST_TYPE_ADDER,GstAdderClass))
-#define GST_IS_ADDER_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass) ,GST_TYPE_ADDER))
-#define GST_ADDER_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS((obj) ,GST_TYPE_ADDER,GstAdderClass))
-
-
-typedef struct _GstAdder GstAdder;
-typedef struct _GstAdderClass GstAdderClass;
-typedef struct _GstAdderInputChannel GstAdderInputChannel;
-
-
-typedef enum {
-	GST_ADDER_FORMAT_UNSET,
-	GST_ADDER_FORMAT_INT,
-	GST_ADDER_FORMAT_FLOAT
-} GstAdderFormat;
+#define GST_ADDER(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_ADDER, GstAdder))
+#define GST_IS_ADDER(obj)         (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_ADDER))
+#define GST_ADDER_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_ADDER, GstAdderClass))
+#define GST_IS_ADDER_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_ADDER))
+#define GST_ADDER_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS((obj), GST_TYPE_ADDER, GstAdderClass))
 
 
 typedef void (*GstAdderFunction) (gpointer out, const gpointer in, size_t size);
@@ -79,7 +67,7 @@ typedef struct {
  */
 
 
-struct _GstAdder {
+typedef struct {
 	GstElement element;
 
 	GstPad *srcpad;
@@ -87,14 +75,11 @@ struct _GstAdder {
 	/* pad counter, used for creating unique request pads */
 	gint padcount;
 
-	/* the next are valid for both int and float */
-	GstAdderFormat format;
+	/* stream format */
 	gint rate;
 	gint channels;
 	gint width;
 	gint endianness;
-
-	/* the next are valid only for format == GST_ADDER_FORMAT_INT */
 	gint depth;
 	gboolean is_signed;
 
@@ -115,12 +100,19 @@ struct _GstAdder {
 	gboolean segment_pending;
 	guint64 segment_position;
 	gdouble segment_rate;
-};
+} GstAdder;
 
 
-struct _GstAdderClass {
+/**
+ * GstAdderClass:
+ *
+ * The adder class structure.
+ */
+
+
+typedef struct {
 	GstElementClass parent_class;
-};
+} GstAdderClass;
 
 
 GType gst_adder_get_type(void);

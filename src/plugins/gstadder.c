@@ -63,6 +63,7 @@
 #endif
 #include "gstadder.h"
 #include <gst/audio/audio.h>
+#include <complex.h>
 #include <math.h>
 #include <string.h>
 
@@ -117,7 +118,7 @@ static void name(gpointer out, const gpointer in, size_t bytes)              \
 
 
 /*
- * non-clipping versions (for float)
+ * non-clipping versions
  */
 
 
@@ -138,6 +139,8 @@ MAKE_FUNC(add_int8, gint8, gint16, MIN_INT_8, MAX_INT_8)
 MAKE_FUNC(add_uint32, guint32, guint64, MIN_UINT_32, MAX_UINT_32)
 MAKE_FUNC(add_uint16, guint16, guint32, MIN_UINT_16, MAX_UINT_16)
 MAKE_FUNC(add_uint8, guint8, guint16, MIN_UINT_8, MAX_UINT_8)
+MAKE_FUNC_NC(add_complex128, double complex, double complex)
+MAKE_FUNC_NC(add_complex64, float complex, float complex)
 MAKE_FUNC_NC(add_float64, gdouble, gdouble)
 MAKE_FUNC_NC(add_float32, gfloat, gfloat)
 /* *INDENT-ON* */
@@ -175,6 +178,9 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 
 	switch (id) {
 	case ARG_SYNCHRONOUS:
+		/* FIXME:  on asynchronous --> synchronous transition, mark
+		 * all collect pad's offset_offsets as invalid to force a
+		 * resync */
 		g_value_set_boolean(value, adder->synchronous);
 		break;
 	}
@@ -276,7 +282,6 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 	media_type = gst_structure_get_name(structure);
 	if(!strcmp(media_type, "audio/x-raw-int")) {
 		GST_DEBUG_OBJECT(adder, "gst_adder_setcaps() sets adder to format int");
-		adder->format = GST_ADDER_FORMAT_INT;
 		gst_structure_get_int(structure, "width", &adder->width);
 		gst_structure_get_int(structure, "depth", &adder->depth);
 		gst_structure_get_int(structure, "endianness", &adder->endianness);
@@ -300,7 +305,6 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 		}
 	} else if(!strcmp(media_type, "audio/x-raw-float")) {
 		GST_DEBUG_OBJECT(adder, "gst_adder_setcaps() sets adder to format float");
-		adder->format = GST_ADDER_FORMAT_FLOAT;
 		gst_structure_get_int(structure, "width", &adder->width);
 		gst_structure_get_int(structure, "endianness", &adder->endianness);
 
@@ -313,6 +317,24 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 			break;
 		case 64:
 			adder->func = add_float64;
+			break;
+		default:
+			goto not_supported;
+		}
+	} else if(!strcmp(media_type, "audio/x-raw-complex")) {
+		GST_DEBUG_OBJECT(adder, "gst_adder_setcaps() sets adder to format complex");
+		gst_structure_get_int(structure, "width", &adder->width);
+		gst_structure_get_int(structure, "endianness", &adder->endianness);
+
+		if(adder->endianness != G_BYTE_ORDER)
+			goto not_supported;
+
+		switch (adder->width) {
+		case 64:
+			adder->func = add_complex64;
+			break;
+		case 128:
+			adder->func = add_complex128;
 			break;
 		default:
 			goto not_supported;
@@ -592,6 +614,25 @@ static gboolean gst_adder_query(GstPad * pad, GstQuery * query)
 
 
 /*
+ * find the GstAdderCollectData object associated with a given pad.
+ */
+
+
+static gint _find_pad(gconstpointer data, gconstpointer pad)
+{
+	return ((const GstCollectData *) data)->pad != (const GstPad *) pad;
+}
+
+
+static GstAdderCollectData *gst_adder_collect_data_find_pad(GstCollectPads *pads, GstPad *pad)
+{
+	if(!pads->data)
+		return NULL;
+	return g_slist_find_custom(pads->data /*pads->abidata.ABI.pad_list*/, pad, _find_pad)->data;
+}
+
+
+/*
  * helper function used by forward_event() (see below)
  */
 
@@ -647,8 +688,10 @@ static gboolean gst_adder_src_event(GstPad * pad, GstEvent * event)
 
 	switch (GST_EVENT_TYPE(event)) {
 	case GST_EVENT_QOS:
+	case GST_EVENT_NAVIGATION:
 		/*
-		 * not handled. QoS might be tricky
+		 * not handled. QoS might be tricky, navigation is
+		 * pointless.
 		 */
 
 		result = FALSE;
@@ -704,17 +747,9 @@ static gboolean gst_adder_src_event(GstPad * pad, GstEvent * event)
 			break;
 		}
 
-	case GST_EVENT_NAVIGATION:
-		/*
-		 * not handled.  navigation is rather pointless.
-		 */
-
-		result = FALSE;
-		break;
-
 	default:
 		/*
-		 * forward the rest
+		 * forward the rest.
 		 */
 
 		result = forward_event(adder, event);
@@ -742,9 +777,13 @@ static gboolean gst_adder_src_event(GstPad * pad, GstEvent * event)
 static gboolean gst_adder_sink_event(GstPad * pad, GstEvent * event)
 {
 	GstAdder *adder = GST_ADDER(gst_pad_get_parent(pad));
-	gboolean ret;
+	GstAdderCollectData *data;
+	
+	GST_OBJECT_LOCK(adder->collect);
+	data = gst_adder_collect_data_find_pad(adder->collect, pad);
+	GST_OBJECT_UNLOCK(adder->collect);
 
-	GST_DEBUG("got event %p (%s) on pad %s:%s", event, GST_EVENT_TYPE_NAME(event), GST_DEBUG_PAD_NAME(pad));
+	GST_DEBUG("got event %p (%s) on pad %s:%s --> GstAdderCollectData is %p", event, GST_EVENT_TYPE_NAME(event), GST_DEBUG_PAD_NAME(pad), data);
 
 	/*
 	 * mark a pending new segment. This event is synchronized with the
@@ -764,17 +803,11 @@ static gboolean gst_adder_sink_event(GstPad * pad, GstEvent * event)
 	}
 
 	/*
-	 * now GstCollectPads can take care of the rest, e.g. EOS
-	 */
-
-	ret = adder->collect_event(pad, event);
-
-	/*
-	 * done
+	 * now chain to GstCollectPads handler to take care of the rest.
 	 */
 
 	gst_object_unref(adder);
-	return ret;
+	return adder->collect_event(pad, event);
 }
 
 
@@ -1501,7 +1534,12 @@ static GstElementClass *parent_class = NULL;
 	"rate = (int) [ 1, MAX ], " \
 	"channels = (int) [ 1, MAX ], " \
 	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) { 32, 64 }"
+	"width = (int) { 32, 64 } ;" \
+	"audio/x-raw-complex, " \
+	"rate = (int) [ 1, MAX ], " \
+	"channels = (int) [ 1, MAX ], " \
+	"endianness = (int) BYTE_ORDER, " \
+	"width = (int) { 64, 128 }"
 
 
 static GstStaticPadTemplate gst_adder_src_template =
@@ -1628,13 +1666,11 @@ static void gst_adder_init(GTypeInstance * object, gpointer class)
 	gst_pad_set_query_function(adder->srcpad, GST_DEBUG_FUNCPTR(gst_adder_query));
 #endif
 	gst_pad_set_event_function(adder->srcpad, GST_DEBUG_FUNCPTR(gst_adder_src_event));
-	gst_element_add_pad(GST_ELEMENT(adder), adder->srcpad);
+	gst_element_add_pad(GST_ELEMENT(object), adder->srcpad);
 
-	adder->format = GST_ADDER_FORMAT_UNSET;
 	adder->padcount = 0;
 	adder->func = NULL;
 
-	/* keep track of the sinkpads requested */
 	adder->collect = gst_collect_pads_new();
 	gst_collect_pads_set_function(adder->collect, GST_DEBUG_FUNCPTR(gst_adder_collected), adder);
 }
