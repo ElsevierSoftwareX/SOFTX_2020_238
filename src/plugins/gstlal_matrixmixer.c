@@ -101,10 +101,58 @@ static int num_output_channels(const GSTLALMatrixMixer *element)
 /*
  * ============================================================================
  *
- *                             GStreamer Element
+ *                                  Sink Pad
  *
  * ============================================================================
  */
+
+
+/*
+ * getcaps()
+ */
+
+
+static GstCaps *getcaps(GstPad *pad)
+{
+	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(gst_pad_get_parent(pad));
+	GstCaps *sinkcaps;
+	GstCaps *peercaps;
+
+	g_mutex_lock(element->mixmatrix_lock);
+
+	/*
+	 * start by computing the intersection of our own allowed caps with
+	 * the peer's caps.  use get_fixed_caps_func() to avoid recursing
+	 * back into this function.
+	 */
+
+	sinkcaps = gst_pad_get_fixed_caps_func(pad);
+	peercaps = gst_pad_peer_get_caps(pad);
+	if(peercaps) {
+		GstCaps *result = gst_caps_intersect(peercaps, sinkcaps);
+		gst_caps_unref(sinkcaps);
+		gst_caps_unref(peercaps);
+		sinkcaps = result;
+	}
+
+	/*
+	 * if we have a mixing matrix the sink pad's channels must match
+	 * the number of rows in the mixing matrix.
+	 */
+
+	if(element->mixmatrix_buf) {
+		sinkcaps = gst_caps_make_writable(sinkcaps);
+		gst_caps_set_simple(sinkcaps, "channels", G_TYPE_INT, num_input_channels(element), NULL);
+	}
+
+	/*
+	 * done.
+	 */
+
+	g_mutex_unlock(element->mixmatrix_lock);
+	gst_object_unref(element);
+	return sinkcaps;
+}
 
 
 /*
@@ -118,46 +166,29 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	gboolean result = TRUE;
 
 	/*
-	 * get a modifiable copy of the caps.  gst_caps_make_writable()
+	 * if we have a mixing matrix, set the number of output channels to
+	 * the number of columns in the mixing matrix and check if the
+	 * downstream peer will accept the caps.  gst_caps_make_writable()
 	 * unref()s its argument so we have to ref() it first to keep it
 	 * valid.
 	 */
 
-	gst_caps_ref(caps);
-	caps = gst_caps_make_writable(caps);
-
-	/*
-	 * do we have a mixing matrix yet?
-	 */
-
 	g_mutex_lock(element->mixmatrix_lock);
-	if(!element->mixmatrix_buf) {
-		g_mutex_unlock(element->mixmatrix_lock);
-		goto done;
+	if(element->mixmatrix_buf) {
+		gst_caps_ref(caps);
+		caps = gst_caps_make_writable(caps);
+
+		gst_caps_set_simple(caps, "channels", G_TYPE_INT, num_output_channels(element), NULL);
+		result = gst_pad_set_caps(element->srcpad, caps);
+
+		gst_caps_unref(caps);
 	}
-
-	/*
-	 * check that the number of input channels matches the number of
-	 * rows in the mixing matrix
-	 */
-
-	if(g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")) != num_input_channels(element)) {
-		g_mutex_unlock(element->mixmatrix_lock);
-		result = FALSE;
-		goto done;
-	}
-
-	/*
-	 * set the number of output channels to the number of columns in
-	 * the mixing matrix, and try forwarding the caps to next element
-	 */
-
-	gst_caps_set_simple(caps, "channels", G_TYPE_INT, num_output_channels(element), NULL);
 	g_mutex_unlock(element->mixmatrix_lock);
-	result = gst_pad_set_caps(element->srcpad, caps);
 
-done:
-	gst_caps_unref(caps);
+	/*
+	 * done.
+	 */
+
 	gst_object_unref(element);
 	return result;
 }
@@ -195,30 +226,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	/*
-	 * Check the number of channels coming in, must be the same as the
-	 * number of rows in the mixing matrix.
-	 */
-
-	if(g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")) != num_input_channels(element)) {
-		GST_ERROR_OBJECT(element, "channel count mismatch:  mixing matrix requires %u channels, received buffer with %d", num_input_channels(element), g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels")));
-		g_mutex_unlock(element->mixmatrix_lock);
-		result = GST_FLOW_NOT_NEGOTIATED;
-		goto done;
-	}
-
-	/*
 	 * Wrap the incoming buffer in a GSL matrix view.
 	 */
 
-	if(GST_BUFFER_DURATION_IS_VALID(sinkbuf))
-		samples = GST_BUFFER_DURATION(sinkbuf) * g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate")) / GST_SECOND;
-	else if(GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))
-		samples = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
-	else
-		samples = GST_BUFFER_SIZE(sinkbuf) / sizeof(*element->mixmatrix.matrix.data) / num_input_channels(element);
-
+	samples = GST_BUFFER_SIZE(sinkbuf) / sizeof(*element->mixmatrix.matrix.data) / num_input_channels(element);
 	input_channels = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), samples, num_input_channels(element));
-
 	if(input_channels.matrix.size1 * input_channels.matrix.size2 * sizeof(*element->mixmatrix.matrix.data) != GST_BUFFER_SIZE(sinkbuf)) {
 		GST_ERROR_OBJECT(element, "buffer size mismatch:  input buffer size not divisible by the channel count");
 		g_mutex_unlock(element->mixmatrix_lock);
@@ -227,25 +239,20 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	/*
-	 * Get a buffer from the downstream peer.  Ask for a size of zero
-	 * if the input buffer is a gap.
+	 * Get a buffer from the downstream peer, and copy the metadata
+	 * from the input buffer.
 	 */
 
-	/*result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(sinkbuf), GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP) ? 0 : samples * num_output_channels(element) * sizeof(*element->mixmatrix.matrix.data), GST_PAD_CAPS(element->srcpad), &srcbuf);*/
 	result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(sinkbuf), samples * num_output_channels(element) * sizeof(*element->mixmatrix.matrix.data), GST_PAD_CAPS(element->srcpad), &srcbuf);
 	if(result != GST_FLOW_OK) {
 		g_mutex_unlock(element->mixmatrix_lock);
 		goto done;
 	}
-
-	/*
-	 * Copy metadata
-	 */
-
 	gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 
 	/*
-	 * Only do the real work if the buffer isn't a gap.
+	 * Math.  Just memset() the output to 0 if the input buffer is a
+	 * gap.
 	 */
 
 	if(!GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP)) {
@@ -285,6 +292,20 @@ done:
 }
 
 
+/*
+ * ============================================================================
+ *
+ *                                 Matrix Pad
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * chain()
+ */
+
+
 static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(gst_pad_get_parent(pad));
@@ -297,7 +318,7 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 	 * Get the matrix size.
 	 */
 
-	cols = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels"));
+	gst_structure_get_int(gst_caps_get_structure(caps, 0), "channels", &cols);
 	rows = GST_BUFFER_SIZE(sinkbuf) / sizeof(*element->mixmatrix.matrix.data) / cols;
 	if(rows * cols * sizeof(*element->mixmatrix.matrix.data) != GST_BUFFER_SIZE(sinkbuf)) {
 		GST_ERROR_OBJECT(element, "buffer size mismatch:  input buffer size not divisible by the channel count");
@@ -319,10 +340,6 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 	g_mutex_unlock(element->mixmatrix_lock);
 
 	/*
-	 * FIXME:  set the sink pad's caps
-	 */
-
-	/*
 	 * Done
 	 */
 
@@ -331,6 +348,15 @@ done:
 	gst_object_unref(element);
 	return result;
 }
+
+
+/*
+ * ============================================================================
+ *
+ *                                Type Support
+ *
+ * ============================================================================
+ */
 
 
 /*
@@ -350,6 +376,8 @@ static void dispose(GObject *object)
 {
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(object);
 
+	gst_object_unref(element->sinkpad);
+	element->sinkpad = NULL;
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
 	g_mutex_free(element->mixmatrix_lock);
@@ -390,12 +418,11 @@ static void base_init(gpointer class)
 			"matrix",
 			GST_PAD_SINK,
 			GST_PAD_ALWAYS,
-			gst_caps_new_simple(
-				"audio/x-raw-float",
-				"channels", GST_TYPE_INT_RANGE, 1, G_MAXINT,
-				"endianness", G_TYPE_INT, G_BYTE_ORDER,
-				"width", G_TYPE_INT, 64,
-				NULL
+			gst_caps_from_string(
+				"audio/x-raw-float, " \
+				"channels = (int) [ 1, MAX ], " \
+				"endianness = (int) BYTE_ORDER, " \
+				"width = (int) 64"
 			)
 		)
 	);
@@ -405,13 +432,12 @@ static void base_init(gpointer class)
 			"sink",
 			GST_PAD_SINK,
 			GST_PAD_ALWAYS,
-			gst_caps_new_simple(
-				"audio/x-raw-float",
-				"rate", GST_TYPE_INT_RANGE, 1, G_MAXINT,
-				"channels", GST_TYPE_INT_RANGE, 1, G_MAXINT,
-				"endianness", G_TYPE_INT, G_BYTE_ORDER,
-				"width", G_TYPE_INT, 64,
-				NULL
+			gst_caps_from_string(
+				"audio/x-raw-float, " \
+				"rate = (int) [ 1, MAX ], " \
+				"channels = (int) [ 1, MAX ], " \
+				"endianness = (int) BYTE_ORDER, " \
+				"width = (int) 64"
 			)
 		)
 	);
@@ -465,16 +491,17 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
 
-	/* configure sink pad */
-	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_setcaps_function(pad, setcaps);
-	gst_pad_set_chain_function(pad, chain);
-	gst_object_unref(pad);
-
 	/* configure matrix pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "matrix");
 	gst_pad_set_chain_function(pad, chain_matrix);
 	gst_object_unref(pad);
+
+	/* configure (and ref) sink pad */
+	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
+	gst_pad_set_getcaps_function(pad, getcaps);
+	gst_pad_set_setcaps_function(pad, setcaps);
+	gst_pad_set_chain_function(pad, chain);
+	element->sinkpad = pad;
 
 	/* retrieve (and ref) src pad */
 	element->srcpad = gst_element_get_static_pad(GST_ELEMENT(element), "src");

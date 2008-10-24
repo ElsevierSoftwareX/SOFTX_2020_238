@@ -53,6 +53,7 @@ typedef struct {
 typedef struct {
 	GstElement element;
 
+	GstPad *sinkpad;
 	GstPad *srcpad;
 
 	/*
