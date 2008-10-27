@@ -320,12 +320,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	channels = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels"));
-	if(GST_BUFFER_DURATION_IS_VALID(sinkbuf))
-		samples = GST_BUFFER_DURATION(sinkbuf) * element->sample_rate / GST_SECOND;
-	else if(GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))
-		samples = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
-	else
-		samples = GST_BUFFER_SIZE(sinkbuf) / sizeof(double) / channels;
+	if(!(GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))) {
+		GST_ERROR_OBJECT(element, "cannot compute number of input samples:  invalid offset and/or end offset");
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+	samples = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
 
 	/*
 	 * Compute the desired start and stop samples relative to the start
