@@ -465,16 +465,16 @@ static gboolean plugin_init(GstPlugin *plugin)
 {
 	struct {
 		const gchar *name;
-		GType (*get_type)(void);
+		GType type;
 	} *element, elements[] = {
-		{"lal_framesrc", gstlal_framesrc_get_type},
-		{"lal_templatebank", gstlal_templatebank_get_type},
-		{"lal_matrixmixer", gstlal_matrixmixer_get_type},
-		{"lal_multiscope", gstlal_multiscope_get_type},
-		{"lal_simulation", gstlal_simulation_get_type},
-		{"lal_whiten", gstlal_whiten_get_type},
-		{"lal_nxydump", gstlal_nxydump_get_type},
-		{"lal_adder", gst_adder_get_type},
+		{"lal_framesrc", GSTLAL_FRAMESRC_TYPE},
+		{"lal_templatebank", GSTLAL_TEMPLATEBANK_TYPE},
+		{"lal_matrixmixer", GSTLAL_MATRIXMIXER_TYPE},
+		{"lal_multiscope", GSTLAL_MULTISCOPE_TYPE},
+		{"lal_simulation", GSTLAL_SIMULATION_TYPE},
+		{"lal_whiten", GSTLAL_WHITEN_TYPE},
+		{"lal_nxydump", GSTLAL_NXYDUMP_TYPE},
+		{"lal_adder", GST_TYPE_ADDER},
 		{NULL, NULL},
 	};
 
@@ -496,7 +496,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 	 */
 
 	for(element = elements; element->name; element++)
-		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->get_type()))
+		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->type))
 			return FALSE;
 
 	/*
