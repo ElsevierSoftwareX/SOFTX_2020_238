@@ -10,7 +10,8 @@ libgstlal_la_SOURCES = \
 	gstlal_simulation.h gstlal_simulation.c \
 	gstlal_whiten.h gstlal_whiten.c \
 	gstlal_nxydump.h gstlal_nxydump.c \
-	gstadder.h gstadder.c
+	gstadder.h gstadder.c \
+	gstlal_triggergen.c gstlal_triggergen.h
 libgstlal_la_CFLAGS = -O2 $(AM_CFLAGS) $(CFLAGS) ${gstreamer_CFLAGS} ${LAL_CFLAGS} ${GSL_CFLAGS} 
 libgstlal_la_LIBADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS} 
 libgstlal_la_LDFLAGS = ${GSTREAMER_PLUGIN_LDFLAGS}
@@ -26,7 +27,8 @@ test_program_SOURCES = test_program.c \
 	gstlal_simulation.h gstlal_simulation.c \
 	gstlal_whiten.h gstlal_whiten.c \
 	gstlal_nxydump.h gstlal_nxydump.c \
-	gstadder.h gstadder.c
+	gstadder.h gstadder.c \ 
+	gstlal_triggergen.c gstlal_triggergen.h
 test_program_CFLAGS = -g -O2 $(AM_CFLAGS) $(CFLAGS) ${gstreamer_CFLAGS} ${LAL_CFLAGS} ${GSL_CFLAGS} 
 test_program_LDADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS}
 
