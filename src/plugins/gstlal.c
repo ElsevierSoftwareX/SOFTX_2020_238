@@ -477,7 +477,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_nxydump", GSTLAL_NXYDUMP_TYPE},
 		{"lal_adder", GST_TYPE_ADDER},
 		{"lal_triggergen", GSTLAL_TRIGGERGEN_TYPE},
-		{NULL, NULL},
+		{NULL, 0},
 	};
 
 	/*
