@@ -168,7 +168,7 @@ static void finalize(GObject *object)
 	"rate = (int) [ 1, MAX ], " \
 	"channels = (int) [ 1, MAX ], " \
 	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {8, 16, 32, 64}, " \
+	"width = (int) {8, 16, 32, 64} ; " \
 	"audio/x-raw-float, " \
 	"rate = (int) [ 1, MAX ], " \
 	"channels = (int) [ 1, MAX ], " \
