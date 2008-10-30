@@ -23,10 +23,8 @@
 #define __GSTLAL_TRIGGERGEN_H__
 
 
-#include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasesink.h>
-#include <gsl/gsl_matrix.h>
 
 
 G_BEGIN_DECLS
@@ -51,12 +49,7 @@ typedef struct {
 
 typedef struct {
 	GstBaseSink element;
-
-	GstPad *sinkpad;
-
-	/*GMutex *mixmatrix_lock;
-	GCond *mixmatrix_available;
-	GstBuffer *mixmatrix_buf;*/
+	double snr_thresh;
 } GSTLALTriggerGen;
 
 

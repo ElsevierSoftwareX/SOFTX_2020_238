@@ -81,6 +81,7 @@
 #include <gstlal_whiten.h>
 #include <gstlal_nxydump.h>
 #include <gstadder.h>
+#include <gstlal_triggergen.h>
 
 
 /*
@@ -475,6 +476,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_whiten", GSTLAL_WHITEN_TYPE},
 		{"lal_nxydump", GSTLAL_NXYDUMP_TYPE},
 		{"lal_adder", GST_TYPE_ADDER},
+		{"lal_triggergen", GSTLAL_TRIGGERGEN_TYPE},
 		{NULL, NULL},
 	};
 

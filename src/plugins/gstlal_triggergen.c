@@ -4,38 +4,156 @@
 #include <gstlal.h>
 #include <gstlal_triggergen.h>
 #include <gst/base/gstbasesink.h>
+#include <lal/Date.h>
+#include <lal/LIGOMetadataTables.h>
+#include <lal/LIGOLwXML.h>
+#include <lal/LALStdlib.h>
 
 
+#define DEFAULT_SNR_THRESH 5.5
 
 
-/* Override the render function.  This will write files out */
+static void append_trigger(LIGOTimeGPS epoch, double SNR, int channel, SnglInspiralTable *head)
+  {
+  (head)->snr = SNR;
+  (head)->end_time = epoch;
+  (head)->mass1 = channel;
+  }
+ 
+static void write_trigger_file( SnglInspiralTable *first, char *filename )
+  {
+  LALStatus *status = NULL;
+  LIGOLwXMLStream * xml = NULL;
+  SnglInspiralTable *tmp = NULL;
+  MetadataTable table;
+  table.snglInspiralTable  = first;
+  /* write the table to the file */
+  xml = XLALOpenLIGOLwXMLFile( filename );
+  status = (LALStatus *) calloc(1,sizeof(LALStatus));
+  LALBeginLIGOLwXMLTable (status, xml, sngl_inspiral_table);
+  LALWriteLIGOLwXMLTable (status, xml, table, sngl_inspiral_table);
+  LALEndLIGOLwXMLTable (status, xml);
+  XLALCloseLIGOLwXMLFile(xml);
+
+  /* free the linked list */
+  while (first)
+    {
+    tmp = first;
+    first = first->next;
+    free(tmp);
+    }
+  free(status);
+  }
+
+/* Override the render function.  This will write files out.  It is really
+ * the only thing that "does anything" */
 static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer)
   {
+  /* This is a bit confusing, but you need to cast the sink structure into a GSTLALTriggerGen to access the snr_thresh property */
+  GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(sink);
   int samples;
-  double max;
   int numchannels = 1;
-  gsl_matrix_view m;
+  int rate = 0;
+  int i,j;
+  double SNR = 0;
+  guint64 base_time = GST_BUFFER_TIMESTAMP(buffer);
+  double *data = (double *) GST_BUFFER_DATA(buffer);
+  LIGOTimeGPS epoch;
+  SnglInspiralTable *head = NULL;
+  SnglInspiralTable *first = head;
+  char filename[255];
+  double *max_snr = NULL;
+  LIGOTimeGPS *time_data = NULL;
+  int first_trigger;
+
+  sprintf(filename, "INSPIRAL-%llu.xml",base_time);
+
   /* Use the built in Macro to extract the buffers caps */
   GstCaps *caps = GST_BUFFER_CAPS(buffer);
   /* Now that we have the caps extract the structure */
   GstStructure *structure;
+  
   structure = gst_caps_get_structure(caps, 0);
 
   /* Now that we have the caps structure try to extract the number of channels*/
   gst_structure_get_int(structure, "channels", &numchannels);
-
+  gst_structure_get_int(structure, "rate", &rate);
+  max_snr = (double *) calloc(numchannels, sizeof(double));
+  time_data = (LIGOTimeGPS *) calloc(numchannels, sizeof(LIGOTimeGPS));
 
   samples = GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer);
+
+  for (i = 0; i < samples; i++)
+    {
+    for (j = 0; j < numchannels; j++)
+      {
+      SNR = data[numchannels*i + j];
+      XLALINT8NSToGPS(&epoch,base_time);
+      XLALGPSAdd( &epoch, (REAL8) i / rate);
+      if (SNR > element->snr_thresh)
+        {
+        if (SNR > max_snr[j])
+          {
+          max_snr[j] = SNR;
+          time_data[j] = epoch;
+          }
+	}
+      }
+    }
   
-  m = gsl_matrix_view_array((double *) GST_BUFFER_DATA(buffer), samples, numchannels); 
+  first_trigger = 1;
+  for (j = 0; j < numchannels; j++)
+    {
+    if (max_snr[j]) 
+      {
+      head = (SnglInspiralTable *) calloc(1,sizeof(SnglInspiralTable));
+      if (first_trigger) 
+        {
+        first = head;
+        first_trigger = 0;
+        }
+      append_trigger(time_data[j], max_snr[j], j, head);
+      head = head->next;
+      }
+    }
 
-  max = gsl_matrix_max(&(m.matrix));
-  fprintf(stderr,"Max SNR %f\n",max);
-
-  /* We are done with the buffer so free it */
-  gst_buffer_unref(buffer);
+  write_trigger_file(first, filename);
+  free(max_snr);
+  free(time_data);
   return GST_FLOW_OK;
   }
+
+/* These functions allow "command line arguments" */
+
+enum property {
+        ARG_SNR_THRESH = 1
+};
+
+static void set_property(GObject * object, enum property id, const GValue * value, GParamSpec * pspec)
+  {
+  GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
+
+  switch(id) 
+    {
+    case ARG_SNR_THRESH:
+      element->snr_thresh = g_value_get_double(value);
+      break;
+    }
+  }
+
+
+static void get_property(GObject * object, enum property id, GValue * value, GParamSpec * pspec)
+  {
+  GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
+
+  switch(id)
+    {
+    case ARG_SNR_THRESH:
+      g_value_set_double(value,element->snr_thresh);
+      break;
+    }
+  }
+
 
 
 static GstBaseSink *parent_class = NULL;
@@ -77,10 +195,16 @@ static void base_init(gpointer g_class)
 
 static void class_init(gpointer class, gpointer class_data)
 {
+        GObjectClass *gobject_class = G_OBJECT_CLASS(class);
+
 	GstBaseSinkClass *gstbasesink_class = GST_BASE_SINK_CLASS(class);
         parent_class = g_type_class_ref(GST_TYPE_BASE_SINK);
 	/* Override the render function */
 	gstbasesink_class->render = render;
+	gobject_class->set_property = set_property;
+	gobject_class->get_property = get_property;
+	g_object_class_install_property(gobject_class, ARG_SNR_THRESH, g_param_spec_double("snr-thresh", "SNR Threshold", "SNR Threshold that determines a trigger", 0, G_MAXDOUBLE, DEFAULT_SNR_THRESH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
 
 }
 
@@ -94,6 +218,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
         pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
         /*gst_pad_set_setcaps_function(pad, setcaps);*/
 	gst_object_unref(pad);
+	element->snr_thresh = DEFAULT_SNR_THRESH;
 }
 
 
@@ -109,7 +234,7 @@ GType gstlal_triggergen_get_type(void)
                         .instance_size = sizeof(GSTLALTriggerGen),
                         .instance_init = instance_init,
                 };
-                type = g_type_register_static(GST_TYPE_ELEMENT, "lal_triggergen", &info, 0);
+                type = g_type_register_static(GST_TYPE_BASE_SINK, "lal_triggergen", &info, 0);
         }
 
         return type;
