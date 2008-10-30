@@ -1364,8 +1364,10 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 * mixing.
 		 */
 
-		if(!adder->synchronous)
+		if(!adder->synchronous) {
+			inbuf = gst_buffer_make_metadata_writable(inbuf);
 			GST_BUFFER_OFFSET(inbuf) = earliest_input_offset;
+		}
 
 		/*
 		 * determine the buffer's location relative to the desired
@@ -1464,16 +1466,11 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 
 	/*
 	 * push the output buffer (populates the metadata and updates the
-	 * element's state counters).
+	 * element's state counters).  this function expects the buffer's
+	 * offset to be set correctly on input.
 	 */
 
-	ret = push_output_buffer(adder, outbuf, empty);
-
-	/*
-	 * done
-	 */
-
-	return ret;
+	return push_output_buffer(adder, outbuf, empty);
 
 	/*
 	 * ERRORS
