@@ -129,8 +129,8 @@ static int create_template_from_sngl_inspiral(
    *
    *	(s|s) --> (s|s) \Delta t / \Delta t'
    *
-   * "Huh?  \sqrt{8 / 0.98}?"  No, my friend, don't ask questions you don't
-   * want to hear the answer to.
+   * "Huh?  \sqrt{8 / 0.99148}?"  No, my friend, don't ask questions you
+   * don't want to hear the answer to.
    */
 
   col = gsl_matrix_column(U, U_column);
