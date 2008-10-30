@@ -50,6 +50,17 @@ typedef struct {
 typedef struct {
 	GstBaseSink element;
 	double snr_thresh;
+	double *mass1;
+	double *mass2;
+	/* only one additional parameter is necessary to derive tau0,tau3 from
+	 * mass, the lower cutoff frequency.  But since that isn't available 
+	 * directly I'll just store tau0 and tau3;
+	 */
+	double *tau0;
+	double *tau3;
+	double *sigmasq;
+	double *Gamma;
+	char *bank_filename;
 } GSTLALTriggerGen;
 
 
