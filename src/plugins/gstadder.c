@@ -1307,7 +1307,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 */
 
 		if(earliest_input_offset < adder->output_offset) {
-			GST_ERROR_OBJECT(adder, "detected time reversal in at least one input stream");
+			GST_ERROR_OBJECT(adder, "detected time reversal in at least one input stream:  expected nothing earlier than offset %llu, found sample at offset %llu", (unsigned long long) adder->output_offset, (unsigned long long) earliest_input_offset);
 			return GST_FLOW_ERROR;
 		}
 	} else {
