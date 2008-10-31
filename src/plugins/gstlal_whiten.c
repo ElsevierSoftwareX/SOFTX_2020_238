@@ -886,11 +886,11 @@ static GstElementClass *parent_class = NULL;
 
 
 /*
- * Instance dispose function.  See ???
+ * Instance finalize function.  See ???
  */
 
 
-static void dispose(GObject * object)
+static void finalize(GObject * object)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(object);
 
@@ -909,7 +909,7 @@ static void dispose(GObject * object)
 	free(element->compensation_psd_filename);
 	XLALDestroyREAL8FrequencySeries(element->compensation_psd);
 
-	G_OBJECT_CLASS(parent_class)->dispose(object);
+	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
 
@@ -983,7 +983,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	gobject_class->set_property = set_property;
 	gobject_class->get_property = get_property;
-	gobject_class->dispose = dispose;
+	gobject_class->finalize = finalize;
 
 	g_object_class_install_property(gobject_class, ARG_PSDMODE, g_param_spec_enum("psd-mode", "PSD mode", "PSD estimation mode", GSTLAL_PSDMODE_TYPE, DEFAULT_PSDMODE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_FILTER_LENGTH, g_param_spec_double("filter-length", "Filter length", "Length of the whitening filter in seconds", 0, G_MAXDOUBLE, DEFAULT_FILTER_LENGTH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));

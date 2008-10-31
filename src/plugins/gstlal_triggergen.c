@@ -241,7 +241,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 
 static GstBaseSink *parent_class = NULL;
 
-static void dispose(GObject *object)
+static void finalize(GObject *object)
   {
   GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
   if (element->mass1) free(element->mass1);
@@ -258,7 +258,7 @@ static void dispose(GObject *object)
   element->Gamma = NULL;
   if (element->bank_filename) free(element->bank_filename);
   element->bank_filename = NULL;
-  G_OBJECT_CLASS(parent_class)->dispose(object);
+  G_OBJECT_CLASS(parent_class)->finalize(object);
   }
   
 static void base_init(gpointer g_class)
@@ -306,7 +306,7 @@ static void class_init(gpointer class, gpointer class_data)
 	gstbasesink_class->render = render;
 	gobject_class->set_property = set_property;
 	gobject_class->get_property = get_property;
-        gobject_class->dispose = dispose;
+        gobject_class->finalize = finalize;
 
         g_object_class_install_property(gobject_class, ARG_BANK_FILENAME, g_param_spec_string("bank-filename", "Bank file name", "Path to XML file used to generate the template bank", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SNR_THRESH, g_param_spec_double("snr-thresh", "SNR Threshold", "SNR Threshold that determines a trigger", 0, G_MAXDOUBLE, DEFAULT_SNR_THRESH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));

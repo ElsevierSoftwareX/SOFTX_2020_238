@@ -680,11 +680,11 @@ static GstElementClass *parent_class = NULL;
 
 
 /*
- * Instance dispose function.  See ???
+ * Instance finalize function.  See ???
  */
 
 
-static void dispose(GObject *object)
+static void finalize(GObject *object)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(object);
 
@@ -697,7 +697,7 @@ static void dispose(GObject *object)
 
 	svd_destroy(element);
 
-	G_OBJECT_CLASS(parent_class)->dispose(object);
+	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
 
@@ -801,7 +801,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	gobject_class->set_property = set_property;
 	gobject_class->get_property = get_property;
-	gobject_class->dispose = dispose;
+	gobject_class->finalize = finalize;
 
 	g_object_class_install_property(gobject_class, ARG_TEMPLATE_BANK, g_param_spec_string("template-bank", "XML Template Bank", "Name of LIGO Light Weight XML file containing inspiral template bank", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_REFERENCE_PSD, g_param_spec_string("reference-psd", "Reference PSD", "Name of file from which to read a reference PSD", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));

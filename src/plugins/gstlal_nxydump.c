@@ -435,17 +435,17 @@ static GstElementClass *parent_class = NULL;
 
 
 /*
- * Instance dispose function.  See ???
+ * Instance finalize function.  See ???
  */
 
 
-static void dispose(GObject *object)
+static void finalize(GObject *object)
 {
 	GSTLALNXYDump *element = GSTLAL_NXYDUMP(object);
 
 	gst_object_unref(element->srcpad);
 
-	G_OBJECT_CLASS(parent_class)->dispose(object);
+	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
 
@@ -514,7 +514,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	gobject_class->set_property = set_property;
 	gobject_class->get_property = get_property;
-	gobject_class->dispose = dispose;
+	gobject_class->finalize = finalize;
 
 	/* FIXME:  "string" is not the best type for these ... */
 	g_object_class_install_property(gobject_class, ARG_START_TIME, g_param_spec_int64("start-time", "Start time", "Start time in nanoseconds.", 0, G_MAXINT64, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));

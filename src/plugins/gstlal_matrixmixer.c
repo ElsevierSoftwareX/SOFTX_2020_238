@@ -565,11 +565,11 @@ static GstElementClass *parent_class = NULL;
 
 
 /*
- * Instance dispose function.  See ???
+ * Instance finalize function.  See ???
  */
 
 
-static void dispose(GObject *object)
+static void finalize(GObject *object)
 {
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(object);
 
@@ -588,7 +588,7 @@ static void dispose(GObject *object)
 		element->mixmatrix_buf = NULL;
 	}
 
-	G_OBJECT_CLASS(parent_class)->dispose(object);
+	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
 
@@ -685,7 +685,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
 
-	gobject_class->dispose = dispose;
+	gobject_class->finalize = finalize;
 }
 
 
