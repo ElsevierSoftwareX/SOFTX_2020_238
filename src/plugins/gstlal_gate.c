@@ -34,6 +34,7 @@
  */
 
 
+#include <math.h>
 #include <stdlib.h>
 
 
@@ -44,7 +45,6 @@
 
 #include <glib.h>
 #include <gst/gst.h>
-#include <gst/base/gstcollectpads.h>
 
 
 /*
@@ -78,18 +78,18 @@
 
 
 /*
- * unref the control buffer, signal it being freed.  must be called with
+ * unref the control buffer, signal it being flushed.  must be called with
  * the control lock held.
  */
 
 
-static void control_unref(GSTLALGate *element)
+static void control_flush(GSTLALGate *element)
 {
 	if(element->control_buf) {
 		gst_buffer_unref(element->control_buf);
 		element->control_buf = NULL;
 	}
-	g_cond_signal(element->control_freed);
+	g_cond_signal(element->control_flushed);
 }
 
 
@@ -104,15 +104,17 @@ static void control_unref(GSTLALGate *element)
 
 static gint control_state(GSTLALGate *element, GstClockTime t)
 {
-	double *control_data = (double *) GST_BUFFER_DATA(element->control_buf);
 	guint sample;
+	double control;
 
 	if(t < GST_BUFFER_TIMESTAMP(element->control_buf) || element->control_end <= t)
 		return -1;
 
 	sample = gst_util_uint64_scale_int(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
 
-	return fabs(control_data[sample]) >= element->threshold;
+	control = ((double *) GST_BUFFER_DATA(element->control_buf))[sample];
+
+	return fabs(control) >= element->threshold;
 }
 
 
@@ -253,8 +255,6 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 		result = FALSE;
 	if(!gst_structure_get_int(structure, "width", &width))
 		result = FALSE;
-	if(width % 8)
-		result = FALSE;
 	if(!gst_structure_get_int(structure, "channels", &channels))
 		result = FALSE;
 	element->bytes_per_sample = width / 8 * channels;
@@ -299,12 +299,12 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	/*
-	 * if there's already a buffer stored, wait for it to be discarded
+	 * if there's already a buffer stored, wait for it to be flushed
 	 */
 
 	g_mutex_lock(element->control_lock);
 	while(element->control_buf)
-		g_cond_wait(element->control_freed, element->control_lock);
+		g_cond_wait(element->control_flushed, element->control_lock);
 
 	/*
 	 * store this buffer, extract some metadata
@@ -338,11 +338,11 @@ done:
 static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
-	GstFlowReturn result = GST_FLOW_OK;
 	guint sinkbuf_samples;
-	gint state;
 	guint start, length;
 	GstClockTime t;
+	gint state;
+	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
 	 * check validity of timestamp and offsets
@@ -368,7 +368,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		while(!element->control_buf || element->control_end <= t) {
-			control_unref(element);
+			control_flush(element);
 			g_cond_wait(element->control_available, element->control_lock);
 		}
 
@@ -435,7 +435,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		if(t >= element->control_end)
-			control_unref(element);
+			control_flush(element);
 	}
 	g_mutex_unlock(element->control_lock);
 
@@ -486,8 +486,8 @@ static void finalize(GObject *object)
 	element->control_lock = NULL;
 	g_cond_free(element->control_available);
 	element->control_available = NULL;
-	g_cond_free(element->control_freed);
-	element->control_freed = NULL;
+	g_cond_free(element->control_flushed);
+	element->control_flushed = NULL;
 	if(element->control_buf) {
 		gst_buffer_unref(element->control_buf);
 		element->control_buf = NULL;
@@ -623,7 +623,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	/* internal data */
 	element->control_lock = g_mutex_new();
 	element->control_available = g_cond_new();
-	element->control_freed = g_cond_new();
+	element->control_flushed = g_cond_new();
 	element->control_buf = NULL;
 	element->threshold = DEFAULT_THRESHOLD;
 	element->rate = 0;

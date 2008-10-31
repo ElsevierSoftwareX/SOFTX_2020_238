@@ -57,7 +57,7 @@ typedef struct {
 
 	GMutex *control_lock;
 	GCond *control_available;
-	GCond *control_freed;
+	GCond *control_flushed;
 	GstBuffer *control_buf;
 	GstClockTime control_end;
 
