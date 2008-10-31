@@ -8,6 +8,7 @@ INSTRUMENT="H1"
 CHANNEL="LSC-STRAIN"
 REFERENCEPSD="reference_psd.txt"
 TEMPLATEBANK="H1-TMPLTBANK_09_1.207-874000000-2048.xml"
+SUMSQUARESTHRESHOLD="1.0"
 
 SRC="lal_framesrc \
 	blocksize=$((16384*8*16)) \
@@ -82,8 +83,18 @@ gst-launch --gst-debug-level=1 \
 	! audioresample \
 	! audio/x-raw-float, rate=128 \
 	! tee name=hoft_128 \
-	lal_adder name=orthogonal_snr_sum_squares sync=true ! audio/x-raw-float, rate=2048 ! ${NXYDUMP}=sumsquares.txt \
-	lal_adder name=snr sync=true ! audio/x-raw-float, rate=2048 ! progressreport name=progress_snr ! ${NXYDUMP}=snr.txt \
+	lal_adder \
+		name=orthogonal_snr_sum_squares_adder \
+		sync=true \
+	! audio/x-raw-float, rate=2048 \
+	! tee name=orthogonal_snr_sum_squares \
+	! ${NXYDUMP}=sumsquares.txt \
+	lal_adder \
+		name=snr \
+		sync=true \
+	! audio/x-raw-float, rate=2048 \
+	! progressreport name=progress_snr \
+	! ${NXYDUMP}=snr.txt \
 	hoft_2048. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank0 \
 		template-bank=${TEMPLATEBANK} \
@@ -92,11 +103,16 @@ gst-launch --gst-debug-level=1 \
 		t-end=1 \
 		t-total-duration=45 \
 		snr-length=$((2048*1)) \
-	templatebank0.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares. \
+	templatebank0.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares_adder. \
+	lal_gate \
+		name=snr_gate0 \
+		threshold=${SUMSQUARESTHRESHOLD} \
 	lal_matrixmixer \
 		name=snr0 \
 	templatebank0.matrix ! snr0.matrix \
-	templatebank0.src ! snr0.sink \
+	templatebank0.src ! queue max-size-buffers=200 ! snr_gate0.sink \
+	orthogonal_snr_sum_squares. ! queue max-size-buffers=200 ! snr_gate0.control \
+	snr_gate0.src ! snr0.sink \
 	snr0. ! audioresample filter-length=3 ! queue ! snr. \
 	hoft_512. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank1 \
@@ -106,11 +122,16 @@ gst-launch --gst-debug-level=1 \
 		t-end=5 \
 		t-total-duration=45 \
 		snr-length=$((512*1)) \
-	templatebank1.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares. \
+	templatebank1.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares_adder. \
+	lal_gate \
+		name=snr_gate1 \
+		threshold=${SUMSQUARESTHRESHOLD} \
 	lal_matrixmixer \
 		name=snr1 \
 	templatebank1.matrix ! snr1.matrix \
-	templatebank1.src ! snr1.sink \
+	templatebank1.src ! queue max-size-buffers=200 ! snr_gate1.sink \
+	orthogonal_snr_sum_squares. ! queue max-size-buffers=200 ! snr_gate1.control \
+	snr_gate1.src ! snr1.sink \
 	snr1. ! audioresample filter-length=3 ! queue ! snr. \
 	hoft_256. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank2 \
@@ -120,11 +141,16 @@ gst-launch --gst-debug-level=1 \
 		t-end=13 \
 		t-total-duration=45 \
 		snr-length=$((256*1)) \
-	templatebank2.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares. \
+	templatebank2.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares_adder. \
+	lal_gate \
+		name=snr_gate2 \
+		threshold=${SUMSQUARESTHRESHOLD} \
 	lal_matrixmixer \
 		name=snr2 \
 	templatebank2.matrix ! snr2.matrix \
-	templatebank2.src ! snr2.sink \
+	templatebank2.src ! queue max-size-buffers=200 ! snr_gate2.sink \
+	orthogonal_snr_sum_squares. ! queue max-size-buffers=200 ! snr_gate2.control \
+	snr_gate2.src ! snr2.sink \
 	snr2. ! audioresample filter-length=3 ! queue ! snr. \
 	hoft_128. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank3 \
@@ -134,11 +160,16 @@ gst-launch --gst-debug-level=1 \
 		t-end=29 \
 		t-total-duration=45 \
 		snr-length=$((128*1)) \
-	templatebank3.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares. \
+	templatebank3.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares_adder. \
+	lal_gate \
+		name=snr_gate3 \
+		threshold=${SUMSQUARESTHRESHOLD} \
 	lal_matrixmixer \
 		name=snr3 \
 	templatebank3.matrix ! snr3.matrix \
-	templatebank3.src ! snr3.sink \
+	templatebank3.src ! queue max-size-buffers=200 ! snr_gate3.sink \
+	orthogonal_snr_sum_squares. ! queue max-size-buffers=200 ! snr_gate3.control \
+	snr_gate3.src ! snr3.sink \
 	snr3. ! audioresample filter-length=3 ! queue ! snr. \
 	hoft_128. ! queue max-size-time=50000000000 ! lal_templatebank \
 		name=templatebank4 \
@@ -148,11 +179,16 @@ gst-launch --gst-debug-level=1 \
 		t-end=45 \
 		t-total-duration=45 \
 		snr-length=$((128*1)) \
-	templatebank4.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares. \
+	templatebank4.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares_adder. \
+	lal_gate \
+		name=snr_gate4 \
+		threshold=${SUMSQUARESTHRESHOLD} \
 	lal_matrixmixer \
 		name=snr4 \
 	templatebank4.matrix ! snr4.matrix \
-	templatebank4.src ! snr4.sink \
+	templatebank4.src ! queue max-size-buffers=200 ! snr_gate4.sink \
+	orthogonal_snr_sum_squares. ! queue max-size-buffers=200 ! snr_gate4.control \
+	snr_gate4.src ! snr4.sink \
 	snr4. ! audioresample filter-length=3 ! queue ! snr. \
 
 exit
