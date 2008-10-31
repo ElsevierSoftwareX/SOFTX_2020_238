@@ -26,7 +26,6 @@
 
 #include <glib.h>
 #include <gst/gst.h>
-#include <gst/base/gstcollectpads.h>
 
 
 G_BEGIN_DECLS
@@ -56,10 +55,17 @@ typedef struct {
 	GstPad *sinkpad;
 	GstPad *srcpad;
 
-	GstCollectPads *collect;
+	GMutex *control_lock;
+	GCond *control_available;
+	GCond *control_freed;
+	GstBuffer *control_buf;
+	GstClockTime control_end;
+
+	double threshold;
 
 	gint rate;
-	gint controlrate;
+	gint bytes_per_sample;
+	gint control_rate;
 } GSTLALGate;
 
 

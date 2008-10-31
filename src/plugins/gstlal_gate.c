@@ -30,6 +30,14 @@
 
 
 /*
+ * struff from the C library
+ */
+
+
+#include <stdlib.h>
+
+
+/*
  * stuff from glib/gstreamer
  */
 
@@ -51,29 +59,70 @@
 /*
  * ============================================================================
  *
- *                                    Caps
+ *                                 Parameters
+ *
+ * ============================================================================
+ */
+
+
+#define DEFAULT_THRESHOLD 0.7
+
+
+/*
+ * ============================================================================
+ *
+ *                             Utility Functions
  *
  * ============================================================================
  */
 
 
 /*
- * sink pad
+ * unref the control buffer, signal it being freed.  must be called with
+ * the control lock held.
  */
 
 
-static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
+static void control_unref(GSTLALGate *element)
 {
-	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
-	gboolean result = TRUE;
-
-	/*
-	 * done.
-	 */
-
-	gst_object_unref(element);
-	return result;
+	if(element->control_buf) {
+		gst_buffer_unref(element->control_buf);
+		element->control_buf = NULL;
+	}
+	g_cond_signal(element->control_freed);
 }
+
+
+/*
+ * return the state of the control input at the given timestamp.  the
+ * return value is < 0 for times outside the interval spanned by the
+ * currently-queued control buffer, 0 if the control buffer is < the
+ * threshold at the given time, and > 0 if the contro buffer is >= the
+ * threshold at the given time.
+ */
+
+
+static gint control_state(GSTLALGate *element, GstClockTime t)
+{
+	double *control_data = (double *) GST_BUFFER_DATA(element->control_buf);
+	guint sample;
+
+	if(t < GST_BUFFER_TIMESTAMP(element->control_buf) || element->control_end <= t)
+		return -1;
+
+	sample = gst_util_uint64_scale_int(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
+
+	return control_data[sample] >= element->threshold;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                                    Caps
+ *
+ * ============================================================================
+ */
 
 
 /*
@@ -84,7 +133,16 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
+	GstStructure *structure;
 	gboolean result = TRUE;
+
+	/*
+	 * parse caps
+	 */
+
+	structure = gst_caps_get_structure(caps, 0);
+	if(!gst_structure_get_int(structure, "rate", &element->control_rate))
+		result = FALSE;
 
 	/*
 	 * done.
@@ -96,29 +154,260 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 
 
 /*
+ * sink pad
+ */
+
+
+static GstCaps *sink_getcaps(GstPad * pad)
+{
+	GSTLALGate *element = GSTLAL_GATE(GST_PAD_PARENT(pad));
+	GstCaps *result, *peercaps, *sinkcaps;
+
+	GST_OBJECT_LOCK(element);
+
+	/*
+	 * get the allowed caps from the downstream peer
+	 */
+
+	peercaps = gst_pad_peer_get_caps(element->srcpad);
+
+	/*
+	 * get our own allowed caps.  use the fixed caps function to avoid
+	 * recursing back into this function.
+	 */
+
+	sinkcaps = gst_pad_get_fixed_caps_func(pad);
+
+	/*
+	 * if the peer has caps, intersect.  if the peer has no caps (or
+	 * there is no peer), use the allowed caps of this sinkpad.
+	 */
+
+	if(peercaps) {
+		result = gst_caps_intersect(peercaps, sinkcaps);
+		gst_caps_unref(peercaps);
+		gst_caps_unref(sinkcaps);
+	} else
+		result = sinkcaps;
+
+	/*
+	 * done
+	 */
+
+	GST_OBJECT_UNLOCK(element);
+	return result;
+}
+
+
+static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
+{
+	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
+	GstStructure *structure;
+	gint width, channels;
+	gboolean result = TRUE;
+
+	/*
+	 * parse caps
+	 */
+
+	structure = gst_caps_get_structure(caps, 0);
+	if(!gst_structure_get_int(structure, "rate", &element->rate))
+		result = FALSE;
+	if(!gst_structure_get_int(structure, "width", &width))
+		result = FALSE;
+	if(width % 8)
+		result = FALSE;
+	if(!gst_structure_get_int(structure, "channels", &channels))
+		result = FALSE;
+	element->bytes_per_sample = width / 8 * channels;
+
+	/*
+	 * done
+	 */
+
+	gst_object_unref(element);
+	return result;
+}
+
+
+/*
  * ============================================================================
  *
- *                                    Gate
+ *                                   Chain
  *
  * ============================================================================
  */
 
 
 /*
- * chain()
+ * control pad
  */
 
 
-static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
+static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 {
-	GSTLALGate *element = GSTLAL_GATE(user_data);
-	GstBuffer *srcbuf;
+	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
 	GstFlowReturn result = GST_FLOW_OK;
+
+	/*
+	 * check validity of timestamp and offsets
+	 */
+
+	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
+		GST_ERROR_OBJECT(element, "error in control stream: buffer has invalid timestamp and/or offset");
+		gst_buffer_unref(sinkbuf);
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+
+	/*
+	 * if there's already a buffer stored, wait for it to be discarded
+	 */
+
+	g_mutex_lock(element->control_lock);
+	while(element->control_buf)
+		g_cond_wait(element->control_freed, element->control_lock);
+
+	/*
+	 * store this buffer, extract some metadata
+	 */
+
+	element->control_buf = sinkbuf;
+	element->control_end = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int(GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf), GST_SECOND, element->control_rate);
+
+	/*
+	 * signal the buffer's availability
+	 */
+
+	g_cond_signal(element->control_available);
+	g_mutex_unlock(element->control_lock);
 
 	/*
 	 * done
 	 */
 
+done:
+	gst_object_unref(element);
+	return result;
+}
+
+
+/*
+ * sink pad
+ */
+
+
+static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
+{
+	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
+	GstFlowReturn result = GST_FLOW_OK;
+	guint sinkbuf_samples;
+	gint state;
+	guint start, length;
+	GstClockTime t;
+
+	/*
+	 * check validity of timestamp and offsets
+	 */
+
+	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
+		GST_ERROR_OBJECT(element, "error in input stream: buffer has invalid timestamp and/or offset");
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+
+	sinkbuf_samples = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
+
+	/*
+	 * loop over the contents of the input buffer.
+	 */
+
+	g_mutex_lock(element->control_lock);
+	for(start = length = 0, t = GST_BUFFER_TIMESTAMP(sinkbuf); start < sinkbuf_samples; start += length, length = 0) {
+		/*
+		 * wait for a control buffer that does not precede the
+		 * current time.
+		 */
+
+		while(!element->control_buf || element->control_end <= t) {
+			control_unref(element);
+			g_cond_wait(element->control_available, element->control_lock);
+		}
+
+		/*
+		 * find the end of the interval with the same state as the
+		 * current sample.
+		 */
+		/* FIXME:  could optimize a little:  if t is initially
+		 * prior to the start of the control buffer, the "interval"
+		 * is all of the time prior to the start of the buffer.
+		 * this counts as 0 (below threshold) later, so if the
+		 * control buffer starts below treshold there is no need to
+		 * place a buffer boundary there. */
+
+		for(state = control_state(element, t); start + length < sinkbuf_samples && t < element->control_end && control_state(element, t) == state; t = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int(start + ++length, GST_SECOND, element->rate));
+
+		/*
+		 * if the interval has non-zero length, build a buffer out
+		 * of it and push down stream.
+		 */
+
+		if(length) {
+			GstBuffer *srcbuf = gst_buffer_create_sub(sinkbuf, start * element->bytes_per_sample, length * element->bytes_per_sample);
+
+			/*
+			 * set flags, caps, offset, and timestamps.
+			 */
+
+			gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
+			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + start;
+			GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + length;
+			GST_BUFFER_TIMESTAMP(srcbuf) = t;
+			GST_BUFFER_DURATION(srcbuf) = gst_util_uint64_scale_int(length, GST_SECOND, element->rate);
+
+			/*
+			 * only the first subbuffer of a buffer flagged as
+			 * discontinuous is a discontinuity.
+			 */
+
+			if(start)
+				GST_BUFFER_FLAG_UNSET(srcbuf, GST_BUFFER_FLAG_DISCONT);
+
+			/*
+			 * if control input was below threshold flag buffer
+			 * as silence.
+			 */
+
+			if(state <= 0)
+				GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
+
+			/*
+			 * push buffer down stream
+			 */
+
+			result = gst_pad_push(element->srcpad, srcbuf);
+			if(result != GST_FLOW_OK) {
+				g_mutex_unlock(element->control_lock);
+				goto done;
+			}
+		}
+
+		/*
+		 * if we're at the end of this control buffer, discard it
+		 */
+
+		if(t >= element->control_end)
+			control_unref(element);
+	}
+	g_mutex_unlock(element->control_lock);
+
+	/*
+	 * done
+	 */
+
+done:
+	gst_buffer_unref(sinkbuf);
+	gst_object_unref(element);
 	return result;
 }
 
@@ -149,8 +438,22 @@ static void finalize(GObject *object)
 {
 	GSTLALGate *element = GSTLAL_GATE(object);
 
-	gst_object_unref(element->collect);
-	element->collect = NULL;
+	gst_object_unref(element->controlpad);
+	element->controlpad = NULL;
+	gst_object_unref(element->sinkpad);
+	element->sinkpad = NULL;
+	gst_object_unref(element->srcpad);
+	element->srcpad = NULL;
+	g_mutex_free(element->control_lock);
+	element->control_lock = NULL;
+	g_cond_free(element->control_available);
+	element->control_available = NULL;
+	g_cond_free(element->control_freed);
+	element->control_freed = NULL;
+	if(element->control_buf) {
+		gst_buffer_unref(element->control_buf);
+		element->control_buf = NULL;
+	}
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -259,26 +562,31 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
 
-	/* collector */
-	element->collect = gst_collect_pads_new();
-	gst_collect_pads_set_function(element->collect, GST_DEBUG_FUNCPTR(collected), element);
-
 	/* configure (and ref) control pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "control");
-	gst_collect_pads_add_pad(element->collect, pad, sizeof(GstCollectData));
 	gst_pad_set_setcaps_function(pad, control_setcaps);
+	gst_pad_set_chain_function(pad, control_chain);
 	element->controlpad = pad;
 
 	/* configure (and ref) sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_collect_pads_add_pad(element->collect, pad, sizeof(GstCollectData));
+	gst_pad_set_getcaps_function(pad, sink_getcaps);
 	gst_pad_set_setcaps_function(pad, sink_setcaps);
+	gst_pad_set_chain_function(pad, sink_chain);
 	element->sinkpad = pad;
 
 	/* retrieve (and ref) src pad */
 	element->srcpad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
 
 	/* internal data */
+	element->control_lock = g_mutex_new();
+	element->control_available = g_cond_new();
+	element->control_freed = g_cond_new();
+	element->control_buf = NULL;
+	element->threshold = DEFAULT_THRESHOLD;
+	element->rate = 0;
+	element->bytes_per_sample = 0;
+	element->control_rate = 0;
 }
 
 
