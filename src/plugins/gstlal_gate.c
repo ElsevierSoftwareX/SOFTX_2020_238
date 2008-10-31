@@ -65,7 +65,7 @@
  */
 
 
-#define DEFAULT_THRESHOLD 0.7
+#define DEFAULT_THRESHOLD 0
 
 
 /*
@@ -97,7 +97,7 @@ static void control_unref(GSTLALGate *element)
  * return the state of the control input at the given timestamp.  the
  * return value is < 0 for times outside the interval spanned by the
  * currently-queued control buffer, 0 if the control buffer is < the
- * threshold at the given time, and > 0 if the contro buffer is >= the
+ * threshold at the given time, and > 0 if the control buffer is >= the
  * threshold at the given time.
  */
 
@@ -112,7 +112,45 @@ static gint control_state(GSTLALGate *element, GstClockTime t)
 
 	sample = gst_util_uint64_scale_int(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
 
-	return control_data[sample] >= element->threshold;
+	return fabs(control_data[sample]) >= element->threshold;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                                 Properties
+ *
+ * ============================================================================
+ */
+
+
+enum property {
+	ARG_THRESHOLD = 1
+};
+
+
+static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
+{
+	GSTLALGate *element = GSTLAL_GATE(object);
+
+	switch(id) {
+	case ARG_THRESHOLD:
+		element->threshold = g_value_get_double(value);
+		break;
+	}
+}
+
+
+static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
+{
+	GSTLALGate *element = GSTLAL_GATE(object);
+
+	switch(id) {
+	case ARG_THRESHOLD:
+		g_value_set_double(value, element->threshold);
+		break;
+	}
 }
 
 
@@ -544,7 +582,11 @@ static void class_init(gpointer class, gpointer class_data)
 
 	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
 
+	gobject_class->set_property = set_property;
+	gobject_class->get_property = get_property;
 	gobject_class->finalize = finalize;
+
+	g_object_class_install_property(gobject_class, ARG_THRESHOLD, g_param_spec_double("threshold", "Threshold", "Control input threshold", 0, G_MAXDOUBLE, DEFAULT_THRESHOLD, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 
