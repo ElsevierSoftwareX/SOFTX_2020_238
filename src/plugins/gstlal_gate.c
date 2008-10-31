@@ -363,18 +363,19 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	g_mutex_lock(element->control_lock);
 	for(start = length = 0, t = GST_BUFFER_TIMESTAMP(sinkbuf); start < sinkbuf_samples; start += length, length = 0) {
 		/*
-		 * wait for a control buffer that does not precede the
-		 * current time.
+		 * if there is no control buffer available or the input has
+		 * advanced beyond its end, flush it and wait for one that
+		 * overlaps the input data
 		 */
 
-		while(!element->control_buf || element->control_end <= t) {
+		while(!element->control_buf || t >= element->control_end) {
 			control_flush(element);
 			g_cond_wait(element->control_available, element->control_lock);
 		}
 
 		/*
-		 * find the end of the interval with the same state as the
-		 * current sample.
+		 * in the control buffer, find the end of the interval with
+		 * the same state as the current sample.
 		 */
 		/* FIXME:  could optimize a little:  if t is initially
 		 * prior to the start of the control buffer, the "interval"
@@ -400,7 +401,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
 			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + start;
 			GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + length;
-			GST_BUFFER_TIMESTAMP(srcbuf) = t;
+			GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int(start, GST_SECOND, element->rate);
 			GST_BUFFER_DURATION(srcbuf) = gst_util_uint64_scale_int(length, GST_SECOND, element->rate);
 
 			/*
@@ -412,8 +413,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 				GST_BUFFER_FLAG_UNSET(srcbuf, GST_BUFFER_FLAG_DISCONT);
 
 			/*
-			 * if control input was below threshold flag buffer
-			 * as silence.
+			 * if control input was below threshold or
+			 * unavailable flag buffer as silence.
 			 */
 
 			if(state <= 0)
@@ -429,14 +430,14 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 				goto done;
 			}
 		}
-
-		/*
-		 * if we're at the end of this control buffer, discard it
-		 */
-
-		if(t >= element->control_end)
-			control_flush(element);
 	}
+
+	/*
+	 * if we're at the end of this control buffer, flush it
+	 */
+
+	if(t >= element->control_end)
+		control_flush(element);
 	g_mutex_unlock(element->control_lock);
 
 	/*
