@@ -1360,23 +1360,14 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		}
 
 		/*
-		 * fake the buffer's offset when not doing synchronous
-		 * mixing.
-		 */
-
-		if(!adder->synchronous) {
-			inbuf = gst_buffer_make_metadata_writable(inbuf);
-			GST_BUFFER_OFFSET(inbuf) = earliest_input_offset;
-		}
-
-		/*
 		 * determine the buffer's location relative to the desired
 		 * range of offsets.  we've checked above that time hasn't
 		 * gone backwards on any input buffer so gap can't be
-		 * negative.
+		 * negative.  if not doing synchronous mixing, the buffer
+		 * starts now.
 		 */
 
-		gap = (GST_BUFFER_OFFSET(inbuf) - earliest_input_offset) * adder->bytes_per_sample;
+		gap = adder->synchronous ? (GST_BUFFER_OFFSET(inbuf) - earliest_input_offset) * adder->bytes_per_sample : 0;
 		len = GST_BUFFER_SIZE(inbuf);
 
 		/*
@@ -1388,6 +1379,9 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			 * alloc a new output buffer of length samples, and
 			 * set its offset.
 			 */
+			/* FIXME:  if this returns a short buffer we're
+			 * sort of screwed.  a code re-organization could
+			 * fix it */
 
 			GST_LOG_OBJECT(adder, "requesting output buffer of %u samples", length);
 			ret = gst_pad_alloc_buffer(adder->srcpad, earliest_input_offset, length * adder->bytes_per_sample, GST_PAD_CAPS(adder->srcpad), &outbuf);
