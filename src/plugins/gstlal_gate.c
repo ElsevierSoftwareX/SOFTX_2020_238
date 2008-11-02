@@ -102,19 +102,64 @@ static void control_flush(GSTLALGate *element)
  */
 
 
+static double control_sample_int8(const GSTLALGate *element, size_t sample)
+{
+	return ((const gint8 *) GST_BUFFER_DATA(element->control_buf))[sample];
+}
+
+
+static double control_sample_uint8(const GSTLALGate *element, size_t sample)
+{
+	return ((const guint8 *) GST_BUFFER_DATA(element->control_buf))[sample];
+}
+
+
+static double control_sample_int16(const GSTLALGate *element, size_t sample)
+{
+	return ((const gint16 *) GST_BUFFER_DATA(element->control_buf))[sample];
+}
+
+
+static double control_sample_uint16(const GSTLALGate *element, size_t sample)
+{
+	return ((const guint16 *) GST_BUFFER_DATA(element->control_buf))[sample];
+}
+
+
+static double control_sample_int32(const GSTLALGate *element, size_t sample)
+{
+	return ((const gint32 *) GST_BUFFER_DATA(element->control_buf))[sample];
+}
+
+
+static double control_sample_uint32(const GSTLALGate *element, size_t sample)
+{
+	return ((const guint32 *) GST_BUFFER_DATA(element->control_buf))[sample];
+}
+
+
+static double control_sample_float32(const GSTLALGate *element, size_t sample)
+{
+	return ((const float *) GST_BUFFER_DATA(element->control_buf))[sample];
+}
+
+
+static double control_sample_float64(const GSTLALGate *element, size_t sample)
+{
+	return ((const double *) GST_BUFFER_DATA(element->control_buf))[sample];
+}
+
+
 static gint control_state(GSTLALGate *element, GstClockTime t)
 {
 	guint sample;
-	double control;
 
 	if(t < GST_BUFFER_TIMESTAMP(element->control_buf) || element->control_end <= t)
 		return -1;
 
 	sample = gst_util_uint64_scale_int(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
 
-	control = ((double *) GST_BUFFER_DATA(element->control_buf))[sample];
-
-	return fabs(control) >= element->threshold;
+	return fabs(element->control_sample_func(element, sample)) >= element->threshold;
 }
 
 
@@ -174,19 +219,60 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
 	GstStructure *structure;
+	const gchar *media_type;
+	gint width;
 	gboolean result = TRUE;
+
+	g_mutex_lock(element->control_lock);
 
 	/*
 	 * parse caps
 	 */
 
 	structure = gst_caps_get_structure(caps, 0);
+	media_type = gst_structure_get_name(structure);
+	if(!gst_structure_get_int(structure, "width", &width))
+		result = FALSE;
 	if(!gst_structure_get_int(structure, "rate", &element->control_rate))
+		result = FALSE;
+	if(!strcmp(media_type, "audio/x-raw-float")) {
+		switch(width) {
+		case 32:
+			element->control_sample_func = control_sample_float32;
+			break;
+		case 64:
+			element->control_sample_func = control_sample_float64;
+			break;
+		default:
+			result = FALSE;
+			break;
+		}
+	} else if(!strcmp(media_type, "audio/x-raw-int")) {
+		gboolean is_signed = TRUE;
+		if(!gst_structure_get_boolean(structure, "signed", &is_signed))
+			result = FALSE;
+		switch(width) {
+		case 8:
+			element->control_sample_func = is_signed ? control_sample_int8 : control_sample_uint8;
+			break;
+		case 16:
+			element->control_sample_func = is_signed ? control_sample_int16 : control_sample_uint16;
+			break;
+		case 32:
+			element->control_sample_func = is_signed ? control_sample_int32 : control_sample_uint32;
+			break;
+		default:
+			result = FALSE;
+			break;
+		}
+	} else
 		result = FALSE;
 
 	/*
 	 * done.
 	 */
+
+	g_mutex_unlock(element->control_lock);
 
 	gst_object_unref(element);
 	return result;
@@ -510,7 +596,8 @@ static void finalize(GObject *object)
 	"rate = (int) [ 1, MAX ], " \
 	"channels = (int) [ 1, MAX ], " \
 	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {8, 16, 32, 64} ; " \
+	"width = (int) {8, 16, 32, 64}, " \
+	"signed = (boolean) {true, false} ; " \
 	"audio/x-raw-float, " \
 	"rate = (int) [ 1, MAX ], " \
 	"channels = (int) [ 1, MAX ], " \
@@ -542,10 +629,17 @@ static void base_init(gpointer class)
 			GST_PAD_SINK,
 			GST_PAD_ALWAYS,
 			gst_caps_from_string(
-				"audio/x-raw-float, " \
+				"audio/x-raw-int, " \
+				"rate = (int) [ 1, MAX ], " \
 				"channels = (int) 1, " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 64"
+				"width = (int) {8, 16, 32, 64}, " \
+				"signed = (boolean) {true, false} ; " \
+				"audio/x-raw-float, " \
+				"rate = (int) [ 1, MAX ], " \
+				"channels = (int) 1, " \
+				"endianness = (int) BYTE_ORDER, " \
+				"width = (int) {32, 64}"
 			)
 		)
 	);
@@ -626,6 +720,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->control_available = g_cond_new();
 	element->control_flushed = g_cond_new();
 	element->control_buf = NULL;
+	element->control_sample_func = NULL;
 	element->threshold = DEFAULT_THRESHOLD;
 	element->rate = 0;
 	element->bytes_per_sample = 0;

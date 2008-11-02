@@ -48,7 +48,7 @@ typedef struct {
 } GSTLALGateClass;
 
 
-typedef struct {
+typedef struct _GSTLALGate {
 	GstElement element;
 
 	GstPad *controlpad;
@@ -60,6 +60,7 @@ typedef struct {
 	GCond *control_flushed;
 	GstBuffer *control_buf;
 	GstClockTime control_end;
+	double (*control_sample_func)(const struct _GSTLALGate *, size_t);
 
 	double threshold;
 
