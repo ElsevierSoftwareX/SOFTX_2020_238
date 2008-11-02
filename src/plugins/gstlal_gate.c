@@ -488,7 +488,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + start;
 			GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + length;
 			GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int(start, GST_SECOND, element->rate);
-			GST_BUFFER_DURATION(srcbuf) = gst_util_uint64_scale_int(length, GST_SECOND, element->rate);
+			GST_BUFFER_DURATION(srcbuf) = gst_util_uint64_scale_int(start + length, GST_SECOND, element->rate) - gst_util_uint64_scale_int(start, GST_SECOND, element->rate);
 
 			/*
 			 * only the first subbuffer of a buffer flagged as
