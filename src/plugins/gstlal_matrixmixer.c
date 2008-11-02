@@ -357,7 +357,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * gap.
 	 */
 
-	if(!GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP)) {
+	if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP))
+		memset(GST_BUFFER_DATA(srcbuf), 0, GST_BUFFER_SIZE(srcbuf));
+	else {
 		union {
 			gsl_matrix_float_view as_float;
 			gsl_matrix_view as_double;
@@ -395,8 +397,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			gsl_blas_zgemm(CblasNoTrans, CblasNoTrans, GSL_COMPLEX_ONE, &input_channels.as_complex_double.matrix, &element->mixmatrix.as_complex_double.matrix, GSL_COMPLEX_ZERO, &output_channels.as_complex_double.matrix);
 			break;
 		}
-	} else
-		memset(GST_BUFFER_DATA(srcbuf), 0, GST_BUFFER_SIZE(srcbuf));
+	}
 
 	g_mutex_unlock(element->mixmatrix_lock);
 
