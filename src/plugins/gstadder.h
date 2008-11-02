@@ -48,7 +48,7 @@ typedef void (*GstAdderFunction) (gpointer out, const gpointer in, size_t size);
  */
 
 
-typedef struct {
+typedef struct _GstAdderCollectData {
 	GstCollectData collectdata;
 
 	/* offset_offset is the difference between this input stream's
@@ -67,7 +67,7 @@ typedef struct {
  */
 
 
-typedef struct {
+typedef struct _GstAdder {
 	GstElement element;
 
 	GstPad *srcpad;
@@ -110,7 +110,7 @@ typedef struct {
  */
 
 
-typedef struct {
+typedef struct _GstAdderClass {
 	GstElementClass parent_class;
 } GstAdderClass;
 
