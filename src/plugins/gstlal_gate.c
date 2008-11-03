@@ -450,8 +450,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	for(start = length = 0, t = GST_BUFFER_TIMESTAMP(sinkbuf); start < sinkbuf_samples; start += length, length = 0) {
 		/*
 		 * if there is no control buffer available or the input has
-		 * advanced beyond its end, flush it and wait for one that
-		 * overlaps the input data
+		 * advanced beyond its end, flush the control buffer and
+		 * wait for one that overlaps the input data
 		 */
 
 		while(!element->control_buf || t >= element->control_end) {
