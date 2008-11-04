@@ -387,7 +387,13 @@ static GstClockTime output_timestamp_from_offset(const GstAdder *adder, guint64 
 }
 
 
-#if 0
+/*
+ * FIXME:  this is the original query code.  it has not been updated since
+ * the addition of synchronous adding.  it should be checked over, it
+ * almost certainly can be improved now that relative input offsets are
+ * known, but might need to be just plain fixed.
+ */
+
 /* FIXME, the duration query should reflect how long you will produce
  * data, that is the amount of stream time until you will emit EOS.
  *
@@ -408,116 +414,123 @@ static GstClockTime output_timestamp_from_offset(const GstAdder *adder, guint64 
 
 static gboolean gst_adder_query_duration(GstAdder * adder, GstQuery * query)
 {
-	gint64 max;
-	gboolean res;
-	GstFormat format;
 	GstIterator *it;
-	gboolean done;
+	gint64 max = -1;
+	GstFormat format;
+	gboolean success = TRUE;
+	gboolean done = FALSE;
 
-	/* parse format */
+	/*
+	 * parse duration query format
+	 */
+
 	gst_query_parse_duration(query, &format, NULL);
 
-	max = -1;
-	res = TRUE;
-	done = FALSE;
+	/*
+	 * iterate over sink pads
+	 */
 
 	it = gst_element_iterate_sink_pads(GST_ELEMENT_CAST(adder));
-	while(!done) {
-		GstIteratorResult ires;
-
+	while(!done && success) {
 		gpointer item;
 
-		ires = gst_iterator_next(it, &item);
-		switch (ires) {
+		switch(gst_iterator_next(it, &item)) {
 		case GST_ITERATOR_DONE:
 			done = TRUE;
 			break;
+
 		case GST_ITERATOR_OK:
 			{
 				GstPad *pad = GST_PAD_CAST(item);
-
 				gint64 duration;
 
-				/* ask sink peer for duration */
-				res &= gst_pad_query_peer_duration(pad, &format, &duration);
-				/* take max from all valid return values */
-				if(res) {
-					/* valid unknown length, stop searching */
+				/*
+				 * ask sink peer for duration.  take max
+				 * from all valid return values
+				 */
+
+				if(gst_pad_query_peer_duration(pad, &format, &duration)) {
 					if(duration == -1) {
+						/*
+						 * valid unknown length,
+						 * stop searching
+						 */
 						max = duration;
 						done = TRUE;
-					}
-					/* else see if bigger than current max */
-					else if(duration > max)
+					} else if(duration > max) {
+						/*
+						 * else see if bigger than
+						 * current max
+						 */
 						max = duration;
-				}
+					}
+				} else
+					success = FALSE;
 				gst_object_unref(pad);
 				break;
 			}
+
 		case GST_ITERATOR_RESYNC:
 			max = -1;
-			res = TRUE;
+			success = TRUE;
 			gst_iterator_resync(it);
 			break;
+
 		default:
-			res = FALSE;
+			success = FALSE;
 			done = TRUE;
 			break;
 		}
 	}
 	gst_iterator_free(it);
 
-	if(res) {
+	if(success) {
 		/* and store the max */
 		GST_DEBUG_OBJECT(adder, "Total duration in format %s: %" GST_TIME_FORMAT, gst_format_get_name(format), GST_TIME_ARGS(max));
 		gst_query_set_duration(query, format, max);
 	}
 
-	return res;
+	return success;
 }
 
 
 static gboolean gst_adder_query_latency(GstAdder * adder, GstQuery * query)
 {
-	GstClockTime min, max;
-	gboolean live;
-	gboolean res;
 	GstIterator *it;
-	gboolean done;
+	GstClockTime min = 0;
+	GstClockTime max = GST_CLOCK_TIME_NONE;
+	gboolean live = FALSE;
+	gboolean success = TRUE;
+	gboolean done = FALSE;
 
-	res = TRUE;
-	done = FALSE;
+	/*
+	 * take maximum of all latency values
+	 */
 
-	live = FALSE;
-	min = 0;
-	max = GST_CLOCK_TIME_NONE;
-
-	/* Take maximum of all latency values */
 	it = gst_element_iterate_sink_pads(GST_ELEMENT_CAST(adder));
-	while(!done) {
-		GstIteratorResult ires;
-
+	while(!done && success) {
 		gpointer item;
 
-		ires = gst_iterator_next(it, &item);
-		switch (ires) {
+		switch(gst_iterator_next(it, &item)) {
 		case GST_ITERATOR_DONE:
 			done = TRUE;
 			break;
+
 		case GST_ITERATOR_OK:
 			{
 				GstPad *pad = GST_PAD_CAST(item);
-				GstQuery *peerquery;
-				GstClockTime min_cur, max_cur;
-				gboolean live_cur;
+				GstQuery *peerquery = gst_query_new_latency();
 
-				peerquery = gst_query_new_latency();
+				/* 
+				 * ask peer for latency, the max of valid
+				 * return values
+				 */
 
-				/* Ask peer for latency */
-				res &= gst_pad_peer_query(pad, peerquery);
+				if(gst_pad_peer_query(pad, peerquery)) {
+					GstClockTime min_cur;
+					GstClockTime max_cur;
+					gboolean live_cur;
 
-				/* take max from all valid return values */
-				if(res) {
 					gst_query_parse_latency(peerquery, &live_cur, &min_cur, &max_cur);
 
 					if(min_cur > min)
@@ -526,82 +539,88 @@ static gboolean gst_adder_query_latency(GstAdder * adder, GstQuery * query)
 					if(max_cur != GST_CLOCK_TIME_NONE && ((max != GST_CLOCK_TIME_NONE && max_cur > max) || (max == GST_CLOCK_TIME_NONE)))
 						max = max_cur;
 
-					live = live || live_cur;
-				}
+					live |= live_cur;
+				} else
+					success = FALSE;
 
 				gst_query_unref(peerquery);
 				gst_object_unref(pad);
 				break;
 			}
+
 		case GST_ITERATOR_RESYNC:
 			live = FALSE;
 			min = 0;
 			max = GST_CLOCK_TIME_NONE;
-			res = TRUE;
+			success = TRUE;
 			gst_iterator_resync(it);
 			break;
+
 		default:
-			res = FALSE;
+			success = FALSE;
 			done = TRUE;
 			break;
 		}
 	}
 	gst_iterator_free(it);
 
-	if(res) {
+	if(success) {
 		/* store the results */
 		GST_DEBUG_OBJECT(adder, "Calculated total latency: live %s, min %" GST_TIME_FORMAT ", max %" GST_TIME_FORMAT, (live ? "yes" : "no"), GST_TIME_ARGS(min), GST_TIME_ARGS(max));
 		gst_query_set_latency(query, live, min, max);
 	}
 
-	return res;
+	return success;
 }
 
 
 static gboolean gst_adder_query(GstPad * pad, GstQuery * query)
 {
 	GstAdder *adder = GST_ADDER(gst_pad_get_parent(pad));
-	gboolean res = FALSE;
+	gboolean success = TRUE;
 
-	switch (GST_QUERY_TYPE(query)) {
+	switch(GST_QUERY_TYPE(query)) {
 	case GST_QUERY_POSITION:
 		{
 			GstFormat format;
 
 			gst_query_parse_position(query, &format, NULL);
 
-			switch (format) {
+			switch(format) {
 			case GST_FORMAT_TIME:
 				/* FIXME, bring to stream time, might be tricky */
 				gst_query_set_position(query, format, output_timestamp_from_offset(adder, adder->output_offset));
-				res = TRUE;
 				break;
+
 			case GST_FORMAT_DEFAULT:
 				gst_query_set_position(query, format, adder->output_offset);
-				res = TRUE;
 				break;
+
 			default:
+				success = FALSE;
 				break;
 			}
 			break;
 		}
+
 	case GST_QUERY_DURATION:
-		res = gst_adder_query_duration(adder, query);
+		success = gst_adder_query_duration(adder, query);
 		break;
+
 	case GST_QUERY_LATENCY:
-		res = gst_adder_query_latency(adder, query);
+		success = gst_adder_query_latency(adder, query);
 		break;
+
 	default:
 		/* FIXME, needs a custom query handler because we have multiple
 		 * sinkpads */
-		res = gst_pad_query_default(pad, query);
+		success = gst_pad_query_default(pad, query);
 		break;
 	}
 
 	gst_object_unref(adder);
-	return res;
+	return success;
 }
-#endif
 
 
 /*
@@ -748,10 +767,10 @@ static gboolean gst_adder_src_event(GstPad * pad, GstEvent * event)
 
 /*
  * sink pad event handler.  this is hacked in as an override of the collect
- * pads object's own event handler so that we can detect flush stop events
- * arriving on sink pads.  the real event handling is accomplished by
- * chaining to the original event handler installed by the collect pads
- * object.
+ * pads object's own event handler so that we can detect new segments and
+ * flush stop events arriving on sink pads.  the real event handling is
+ * accomplished by chaining to the original event handler installed by the
+ * collect pads object.
  */
 
 
@@ -1257,7 +1276,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 	GstBuffer *outbuf = NULL;
 	gpointer outbytes = NULL;
 	gboolean empty = TRUE;
-	GstFlowReturn ret;
+	GstFlowReturn result;
 
 	/*
 	 * this is fatal
@@ -1378,8 +1397,8 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			 * */
 
 			GST_LOG_OBJECT(adder, "requesting output buffer of %u samples", length);
-			ret = gst_pad_alloc_buffer(adder->srcpad, earliest_input_offset, length * adder->bytes_per_sample, GST_PAD_CAPS(adder->srcpad), &outbuf);
-			if(ret != GST_FLOW_OK) {
+			result = gst_pad_alloc_buffer(adder->srcpad, earliest_input_offset, length * adder->bytes_per_sample, GST_PAD_CAPS(adder->srcpad), &outbuf);
+			if(result != GST_FLOW_OK) {
 				/* FIXME: handle failure */
 			}
 			outbytes = GST_BUFFER_DATA(outbuf);
@@ -1555,11 +1574,11 @@ static GstStaticPadTemplate gst_adder_sink_template =
 static GstStateChangeReturn gst_adder_change_state(GstElement * element, GstStateChange transition)
 {
 	GstAdder *adder = GST_ADDER(element);
-	GstStateChangeReturn ret;
 
-	switch (transition) {
+	switch(transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
 		break;
+
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		adder->output_offset = 0;
 		adder->output_timestamp_at_zero = 0;
@@ -1569,20 +1588,21 @@ static GstStateChangeReturn gst_adder_change_state(GstElement * element, GstStat
 		gst_segment_init(&adder->segment, GST_FORMAT_UNDEFINED);
 		gst_collect_pads_start(adder->collect);
 		break;
+
 	case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
 		break;
+
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
 		/* need to unblock the collectpads before calling the
 		 * parent change_state so that streaming can finish */
 		gst_collect_pads_stop(adder->collect);
 		break;
+
 	default:
 		break;
 	}
 
-	ret = GST_ELEMENT_CLASS(parent_class)->change_state(element, transition);
-
-	return ret;
+	return GST_ELEMENT_CLASS(parent_class)->change_state(element, transition);
 }
 
 
@@ -1647,9 +1667,7 @@ static void gst_adder_init(GTypeInstance * object, gpointer class)
 
 	gst_pad_set_getcaps_function(adder->srcpad, GST_DEBUG_FUNCPTR(gst_pad_proxy_getcaps));
 	gst_pad_set_setcaps_function(adder->srcpad, GST_DEBUG_FUNCPTR(gst_adder_setcaps));
-#if 0
 	gst_pad_set_query_function(adder->srcpad, GST_DEBUG_FUNCPTR(gst_adder_query));
-#endif
 	gst_pad_set_event_function(adder->srcpad, GST_DEBUG_FUNCPTR(gst_adder_src_event));
 	gst_element_add_pad(GST_ELEMENT(object), adder->srcpad);
 
