@@ -614,25 +614,6 @@ static gboolean gst_adder_query(GstPad * pad, GstQuery * query)
 
 
 /*
- * find the GstAdderCollectData object associated with a given pad.
- */
-
-
-static gint _find_pad(gconstpointer data, gconstpointer pad)
-{
-	return ((const GstCollectData *) data)->pad != (const GstPad *) pad;
-}
-
-
-static GstAdderCollectData *gst_adder_collect_data_find_pad(GstCollectPads *pads, GstPad *pad)
-{
-	if(!pads->data)
-		return NULL;
-	return g_slist_find_custom(pads->data /*pads->abidata.ABI.pad_list*/, pad, _find_pad)->data;
-}
-
-
-/*
  * helper function used by forward_event() (see below)
  */
 
@@ -777,24 +758,35 @@ static gboolean gst_adder_src_event(GstPad * pad, GstEvent * event)
 static gboolean gst_adder_sink_event(GstPad * pad, GstEvent * event)
 {
 	GstAdder *adder = GST_ADDER(gst_pad_get_parent(pad));
-	GstAdderCollectData *data;
+	/* FIXME:  the collect pads stores the address of the
+	 * GstCollectData object in the pad's element private.  this is
+	 * undocumented behaviour, but we rely on it! */
+	GstAdderCollectData *data = gst_pad_get_element_private(pad);
 	
-	GST_OBJECT_LOCK(adder->collect);
-	data = gst_adder_collect_data_find_pad(adder->collect, pad);
-	GST_OBJECT_UNLOCK(adder->collect);
-
 	GST_DEBUG("got event %p (%s) on pad %s:%s --> GstAdderCollectData is %p", event, GST_EVENT_TYPE_NAME(event), GST_DEBUG_PAD_NAME(pad), data);
 
 	/*
-	 * mark a pending new segment. This event is synchronized with the
-	 * streaming thread so we can safely update the variable without
-	 * races. It's somewhat weird because we assume the collectpads
-	 * forwarded the FLUSH_STOP past us and downstream (using our
-	 * source pad, the bastard!).
+	 * handle events
 	 */
 
 	switch (GST_EVENT_TYPE(event)) {
+	case GST_EVENT_NEWSEGMENT:
+		/*
+		 * flag the offset_offset as invalid to force a resync
+		 */
+
+		data->offset_offset_valid = FALSE;
+		break;
+
 	case GST_EVENT_FLUSH_STOP:
+		/*
+		 * mark a pending new segment. This event is synchronized
+		 * with the streaming thread so we can safely update the
+		 * variable without races. It's somewhat weird because we
+		 * assume the collectpads forwarded the FLUSH_STOP past us
+		 * and downstream (using our source pad, the bastard!).
+		 */
+
 		adder->segment_pending = TRUE;
 		break;
 
@@ -875,7 +867,7 @@ static GstPad *gst_adder_request_new_pad(GstElement * element, GstPadTemplate * 
 
 	/*
 	 * FIXME: hacked way to override/extend the event function of
-	 * GstCollectPads; because it sets its own event function giving
+	 * GstCollectPads;  because it sets its own event function giving
 	 * the element (us) no access to events
 	 */
 
@@ -1381,7 +1373,9 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			 */
 			/* FIXME:  if this returns a short buffer we're
 			 * sort of screwed.  a code re-organization could
-			 * fix it */
+			 * fix it:  request buffer before entering the loop
+			 * and figure out a different way to check for EOS
+			 * */
 
 			GST_LOG_OBJECT(adder, "requesting output buffer of %u samples", length);
 			ret = gst_pad_alloc_buffer(adder->srcpad, earliest_input_offset, length * adder->bytes_per_sample, GST_PAD_CAPS(adder->srcpad), &outbuf);
