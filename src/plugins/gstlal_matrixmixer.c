@@ -47,11 +47,6 @@
 
 
 /*
- * stuff from LAL
- */
-
-
-/*
  * stuff from GSL
  */
 
