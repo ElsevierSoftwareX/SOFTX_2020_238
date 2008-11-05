@@ -388,27 +388,32 @@ static GstClockTime output_timestamp_from_offset(const GstAdder *adder, guint64 
 
 
 /*
- * FIXME:  this is the original query code.  it has not been updated since
- * the addition of synchronous adding.  it should be checked over, it
- * almost certainly can be improved now that relative input offsets are
- * known, but might need to be just plain fixed.
- */
-
-/* FIXME, the duration query should reflect how long you will produce
- * data, that is the amount of stream time until you will emit EOS.
+ * The duration query should reflect how long you will produce data, that
+ * is the amount of stream time until you will emit EOS.  This is the max
+ * of all the durations of upstream since we emit EOS when all of them
+ * finished.
  *
- * For synchronized mixing this is always the max of all the durations
- * of upstream since we emit EOS when all of them finished.
+ * FIXME: This is true for asynchronous mixing.  For synchronous mixing, an
+ * input stream might be delayed so that although it reports X seconds
+ * remaining until EOS, that data might not have started being mixed into
+ * the output yet and won't start for another Y seconds, so our output has
+ * X + Y seconds reminaing in it.  We know that delay so we should be able
+ * to incorporate it in our answer.  However, even if all streams are being
+ * mixed, i.e., the output timestamp has advanced into all input segments
+ * so that none are being held back, then taking the maximum of the
+ * upstream durations is mostly correct but there is still the possibility
+ * that discontinuities will occur in one or more input streams which
+ * become gaps that get filled by other input streams so that the total
+ * duration of our output is larger than the durations of any of the
+ * upstream peers.  In general, there is no way to compute the duration of
+ * our output without advance knowledge of the intervals of time for which
+ * each input will provide data, which we don't have.  In the synchronous
+ * case, the duration will always have to be an approximation that becomes
+ * more accurate the closer we get to the true EOS.
  *
- * We don't do synchronized mixing so this really depends on where the
- * streams where punched in and what their relative offsets are against
- * eachother which we can get from the first timestamps we see.
- *
- * When we add a new stream (or remove a stream) the duration might
- * also become invalid again and we need to post a new DURATION
- * message to notify this fact to the parent.
- * For now we take the max of all the upstream elements so the simple
- * cases work at least somewhat.
+ * FIXME:  when we add a new stream (or remove a stream) the duration might
+ * become invalid and we need to post a new DURATION message to notify this
+ * fact to the parent.
  */
 
 
@@ -445,27 +450,37 @@ static gboolean gst_adder_query_duration(GstAdder * adder, GstQuery * query)
 				gint64 duration;
 
 				/*
-				 * ask sink peer for duration.  take max
-				 * from all valid return values
+				 * query upstream peer for duration
 				 */
 
 				if(gst_pad_query_peer_duration(pad, &format, &duration)) {
+					/*
+					 * query succeeded
+					 */
+
 					if(duration == -1) {
 						/*
-						 * valid unknown length,
-						 * stop searching
+						 * unknown duration --> the
+						 * duration of our output
+						 * is unknown
 						 */
+
 						max = duration;
 						done = TRUE;
 					} else if(duration > max) {
 						/*
-						 * else see if bigger than
-						 * current max
+						 * take largest duration
 						 */
+
 						max = duration;
 					}
-				} else
+				} else {
+					/*
+					 * query failed
+					 */
+
 					success = FALSE;
+				}
 				gst_object_unref(pad);
 				break;
 			}
@@ -504,7 +519,7 @@ static gboolean gst_adder_query_latency(GstAdder * adder, GstQuery * query)
 	gboolean done = FALSE;
 
 	/*
-	 * take maximum of all latency values
+	 * iterate over sink pads
 	 */
 
 	it = gst_element_iterate_sink_pads(GST_ELEMENT_CAST(adder));
@@ -522,16 +537,24 @@ static gboolean gst_adder_query_latency(GstAdder * adder, GstQuery * query)
 				GstQuery *peerquery = gst_query_new_latency();
 
 				/* 
-				 * ask peer for latency, the max of valid
-				 * return values
+				 * query upstream peer for latency
 				 */
 
 				if(gst_pad_peer_query(pad, peerquery)) {
+					/*
+					 * query succeeded
+					 */
+
 					GstClockTime min_cur;
 					GstClockTime max_cur;
 					gboolean live_cur;
 
 					gst_query_parse_latency(peerquery, &live_cur, &min_cur, &max_cur);
+
+					/*
+					 * take the largest of the
+					 * latencies
+					 */
 
 					if(min_cur > min)
 						min = min_cur;
@@ -539,9 +562,19 @@ static gboolean gst_adder_query_latency(GstAdder * adder, GstQuery * query)
 					if(max_cur != GST_CLOCK_TIME_NONE && ((max != GST_CLOCK_TIME_NONE && max_cur > max) || (max == GST_CLOCK_TIME_NONE)))
 						max = max_cur;
 
+					/*
+					 * we're live if any upstream peer
+					 * is live
+					 */
+
 					live |= live_cur;
-				} else
+				} else {
+					/*
+					 * query failed
+					 */
+
 					success = FALSE;
+				}
 
 				gst_query_unref(peerquery);
 				gst_object_unref(pad);
