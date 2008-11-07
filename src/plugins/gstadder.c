@@ -500,7 +500,10 @@ static gboolean gst_adder_query_duration(GstAdder * adder, GstQuery * query)
 	gst_iterator_free(it);
 
 	if(success) {
-		/* and store the max */
+		/*
+		 * store the max
+		 */
+
 		GST_DEBUG_OBJECT(adder, "Total duration in format %s: %" GST_TIME_FORMAT, gst_format_get_name(format), GST_TIME_ARGS(max));
 		gst_query_set_duration(query, format, max);
 	}
@@ -1039,6 +1042,16 @@ static gboolean get_earliest_input_offsets(GstAdder *adder, guint64 * offset, gu
 		}
 
 		/*
+		 * require a valid start offset
+		 */
+
+		if(!GST_BUFFER_OFFSET_IS_VALID(buf)) {
+			GST_LOG_OBJECT(adder, "%p: input buffer does not have valid offset\n", data);
+			gst_buffer_unref(buf);
+			return FALSE;
+		}
+
+		/*
 		 * (re)set this pad's offset_offset if this buffer is
 		 * flagged as a discontinuity and we have not yet extracted
 		 * data from it, or if this pad's offset_offset is not yet
@@ -1047,11 +1060,11 @@ static gboolean get_earliest_input_offsets(GstAdder *adder, guint64 * offset, gu
 
 		if((GST_BUFFER_IS_DISCONT(buf) && !data->collectdata.pos) || !data->offset_offset_valid) {
 			/*
-			 * require a valid timestamp and offset.
+			 * require a valid timestamp
 			 */
 
-			if(!(GST_BUFFER_TIMESTAMP_IS_VALID(buf) && GST_BUFFER_OFFSET_IS_VALID(buf))) {
-				GST_LOG_OBJECT(adder, "%p: unable to (re)set input-output offset: input buffer has invalid timestamp and/or invalid offset\n", data);
+			if(!GST_BUFFER_TIMESTAMP_IS_VALID(buf)) {
+				GST_LOG_OBJECT(adder, "%p: input buffer does not have valid timestamp\n", data);
 				data->offset_offset_valid = FALSE;
 				gst_buffer_unref(buf);
 				return FALSE;
@@ -1068,7 +1081,7 @@ static gboolean get_earliest_input_offsets(GstAdder *adder, guint64 * offset, gu
 			 * output stream.
 			 */
 
-			data->offset_offset -= (gint64) floor(((double) ((gint64) GST_BUFFER_TIMESTAMP(buf) - adder->output_timestamp_at_zero)) * adder->rate / GST_SECOND + 0.5);
+			data->offset_offset -= ((gint64) GST_BUFFER_TIMESTAMP(buf) - adder->output_timestamp_at_zero) * adder->rate / GST_SECOND;
 
 			/*
 			 * offset_offset is now valid.
@@ -1082,47 +1095,28 @@ static gboolean get_earliest_input_offsets(GstAdder *adder, guint64 * offset, gu
 		}
 
 		/*
-		 * check for valid start and end offsets
+		 * compute this buffer's start and end offsets in the
+		 * output stream
 		 */
 
-		if(GST_BUFFER_OFFSET_IS_VALID(buf)) {
-			this_offset = (gint64) GST_BUFFER_OFFSET(buf) + data->collectdata.pos / adder->bytes_per_sample - data->offset_offset;
+		this_offset = (gint64) GST_BUFFER_OFFSET(buf) + data->collectdata.pos / adder->bytes_per_sample - data->offset_offset;
 
-			if(GST_BUFFER_OFFSET_END_IS_VALID(buf)) {
-				this_offset_end = (gint64) GST_BUFFER_OFFSET_END(buf) - data->offset_offset;
-			} else if(GST_BUFFER_OFFSET_IS_VALID(buf)) {
-				/*
-				 * end offset is not valid, but start
-				 * offset is valid so derive the end offset
-				 * from the start offset, buffer size, and
-				 * bytes / sample
-				 */
-
-				this_offset_end = (gint64) (GST_BUFFER_OFFSET(buf) + GST_BUFFER_SIZE(buf) / adder->bytes_per_sample) - data->offset_offset;
-			} else {
-				/*
-				 * can't continue without a valid end
-				 * offset
-				 */
-
-				GST_LOG_OBJECT(adder, "%p: invalid offset end\n", data);
-				gst_buffer_unref(buf);
-				return FALSE;
-			}
-			GST_LOG_OBJECT(adder, "%p: %ld --> %ld\n", data, this_offset, this_offset_end);
+		if(GST_BUFFER_OFFSET_END_IS_VALID(buf)) {
+			this_offset_end = (gint64) GST_BUFFER_OFFSET_END(buf) - data->offset_offset;
 		} else {
 			/*
-			 * can't continue without a valid start offset
+			 * end offset is not valid, but start offset is
+			 * valid (see above) so derive the end offset from
+			 * the start offset, buffer size, and bytes /
+			 * sample
 			 */
 
-			GST_LOG_OBJECT(adder, "%p: invalid offset\n", data);
-			gst_buffer_unref(buf);
-			return FALSE;
+			this_offset_end = (gint64) (GST_BUFFER_OFFSET(buf) + GST_BUFFER_SIZE(buf) / adder->bytes_per_sample) - data->offset_offset;
 		}
+		GST_LOG_OBJECT(adder, "%p: %ld --> %ld\n", data, this_offset, this_offset_end);
 		gst_buffer_unref(buf);
 
 		/*
-		 * we have valid start and end offsets for this buffer,
 		 * update the minima
 		 */
 
@@ -1158,11 +1152,11 @@ static gboolean get_earliest_input_offsets(GstAdder *adder, guint64 * offset, gu
 
 /*
  * wrapper for gst_collect_pads_take_buffer().  Returns a buffer with its
- * offset metadata set properly indicating its location in the output
- * stream.  The offset and length parameters indicate the range of offsets
- * the calling code would like the buffer to span.  The buffer returned by
- * this function may span an interval preceding the requested interval, but
- * will never span an interval subsequent to that requested.  Calling this
+ * offset set to properly indicate its location in the output stream.  The
+ * offset and length parameters indicate the range of offsets the calling
+ * code would like the buffer to span.  The buffer returned by this
+ * function may span an interval preceding the requested interval, but will
+ * never span an interval subsequent to that requested.  Calling this
  * function has the effect of flushing the pad upto the upper bound of the
  * requested interval or the upper bound of the available data, whichever
  * comes first.
@@ -1206,7 +1200,7 @@ static GstBuffer *gst_adder_collect_pads_take_buffer(GstCollectPads * pads, GstA
 	 * queued buffer --> set the length to 0 to return an empty buffer.
 	 */
 
-	length = offset + length - dequeued_offset;
+	length += (gint64) offset - (gint64) dequeued_offset;
 	if(length < 0)
 		length = 0;
 
@@ -1223,14 +1217,11 @@ static GstBuffer *gst_adder_collect_pads_take_buffer(GstCollectPads * pads, GstA
 		return NULL;
 
 	/*
-	 * set the buffer's metadata.  use the buffer's size instead of the
-	 * pre-computed length because we might have gotten a smaller
-	 * buffer than requested.
+	 * set the buffer's offset
 	 */
 
 	buf = gst_buffer_make_metadata_writable(buf);
 	GST_BUFFER_OFFSET(buf) = dequeued_offset;
-	GST_BUFFER_OFFSET_END(buf) = dequeued_offset + GST_BUFFER_SIZE(buf) / bytes_per_sample;
 
 	return buf;
 }
