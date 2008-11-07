@@ -89,13 +89,13 @@ int sngl_inspiral_table_value_to_string(SnglInspiralTable *tab, char *str, int c
          sprintf(str, "''");
 	 break;
     case 1: 
- 	sprintf(str, "'%s'", tab->ifo);
+ 	sprintf(str, "%s", tab->ifo);
 	break;
     case 2: 
-	sprintf(str, "'%s'", tab->search);
+	sprintf(str, "%s", tab->search);
 	break;
     case 3: 
-	sprintf(str, "'%s'", tab->channel);
+	sprintf(str, "%s", tab->channel);
 	break;
     case 4: 
 	sprintf(str, "%d", tab->end_time.gpsSeconds);
