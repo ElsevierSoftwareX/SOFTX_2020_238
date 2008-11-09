@@ -43,24 +43,6 @@ typedef void (*GstAdderFunction) (gpointer out, const gpointer in, size_t size);
 
 
 /**
- * Custom GstCollectData structure with extra metadata required for
- * synchronous mixing of input streams.
- */
-
-
-typedef struct _GstAdderCollectData {
-	GstCollectData collectdata;
-
-	/* offset_offset is the difference between this input stream's
-	 * offset counter and the adder's output stream's offset counter
-	 * for the same timestamp in both streams: offset_offset =
-	 * intput_offset - output_offset @ a common timestamp */
-	gboolean offset_offset_valid;
-	gint64 offset_offset;
-} GstAdderCollectData;
-
-
-/**
  * GstAdder:
  *
  * The adder object structure.
@@ -84,7 +66,7 @@ typedef struct _GstAdder {
 	gboolean is_signed;
 
 	/* number of bytes per sample (= width / 8 * channels) */
-	size_t bytes_per_sample;
+	guint bytes_per_sample;
 
 	/* function to add samples */
 	GstAdderFunction func;
