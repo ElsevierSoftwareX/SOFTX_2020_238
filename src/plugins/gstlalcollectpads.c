@@ -217,7 +217,7 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 	gint64 min_offset = G_MAXINT64;
 	gint64 min_offset_end = G_MAXINT64;
 	gboolean valid = FALSE;
-	GSList *listentry;
+	GSList *collectdatalist;
 
 	/*
 	 * safety
@@ -229,8 +229,8 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 	 * loop over sink pads
 	 */
 
-	for(listentry = pads->data; listentry; listentry = g_slist_next(listentry)) {
-		GstLALCollectData *data = listentry->data;
+	for(collectdatalist = pads->data; collectdatalist; collectdatalist = g_slist_next(collectdatalist)) {
+		GstLALCollectData *data = collectdatalist->data;
 		GstBuffer *buf = gst_collect_pads_peek(pads, (GstCollectData *) data);
 		gint64 this_offset;
 		gint64 this_offset_end;
