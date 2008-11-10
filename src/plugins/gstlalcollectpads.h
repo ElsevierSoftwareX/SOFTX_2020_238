@@ -41,13 +41,19 @@ typedef struct _GstLALCollectData {
 	 * parent structure first so we can be cast to it
 	 */
 
-	GstCollectData collectdata;
+	GstCollectData as_gstcollectdata;
 
 	/*
 	 * event handler (chains to the original one)
 	 */
 
 	GstPadEventFunction collect_event_func;
+
+	/*
+	 * number of bytes per sample (= width / 8 * channels)
+	 */
+
+	guint bytes_per_sample;
 
 	/*
 	 * offset_offset is the difference between this input stream's
@@ -68,8 +74,9 @@ typedef struct _GstLALCollectData {
 
 GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *, GstPad *, guint);
 gboolean gstlal_collect_pads_remove_pad(GstCollectPads *, GstPad *);
-gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *, guint64 *, guint64 *, gint, gint, GstClockTime);
-GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *, GstLALCollectData *, guint64, gint64, size_t);
+void gstlal_collect_pads_set_bytes_per_sample(GstPad *, guint);
+gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *, guint64 *, guint64 *, gint, GstClockTime);
+GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *, GstLALCollectData *, guint64);
 
 
 G_END_DECLS

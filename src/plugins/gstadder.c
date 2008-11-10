@@ -68,7 +68,7 @@
 #include <gst/base/gstcollectpads.h>
 #include <gst/audio/audio.h>
 #include "gstadder.h"
-#include "gstlalcollectpads.h"
+#include <gstlalcollectpads.h>
 
 
 #define GST_CAT_DEFAULT gst_adder_debug
@@ -259,19 +259,26 @@ static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 {
 	GstAdder *adder = GST_ADDER(GST_PAD_PARENT(pad));
-	GList *pads;
+	GList *padlist;
 	GstStructure *structure;
 	const char *media_type;
+	gint width;
+	gint channels;
+	gboolean is_signed;
 
 	GST_LOG_OBJECT(adder, "setting caps on pad %s:%s to %" GST_PTR_FORMAT, GST_DEBUG_PAD_NAME(pad), caps);
+
+	/*
+	 * loop over all of the element's pads (source and sink), and set
+	 * them all to the same format.
+	 */
 
 	/* FIXME, see if the other pads can accept the format. Also lock
 	 * the format on the other pads to this new format. */
 
 	GST_OBJECT_LOCK(adder);
-	for(pads = GST_ELEMENT(adder)->pads; pads; pads = g_list_next(pads)) {
-		GstPad *otherpad = GST_PAD(pads->data);
-
+	for(padlist = GST_ELEMENT(adder)->pads; padlist; padlist = g_list_next(padlist)) {
+		GstPad *otherpad = GST_PAD(padlist->data);
 		if(otherpad != pad)
 			gst_caps_replace(&GST_PAD_CAPS(otherpad), caps);
 	}
@@ -283,38 +290,31 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 
 	structure = gst_caps_get_structure(caps, 0);
 	media_type = gst_structure_get_name(structure);
+	gst_structure_get_int(structure, "rate", &adder->rate);
+	gst_structure_get_int(structure, "channels", &channels);
 	if(!strcmp(media_type, "audio/x-raw-int")) {
 		GST_DEBUG_OBJECT(adder, "gst_adder_setcaps() sets adder to format int");
-		gst_structure_get_int(structure, "width", &adder->width);
-		gst_structure_get_int(structure, "depth", &adder->depth);
-		gst_structure_get_int(structure, "endianness", &adder->endianness);
-		gst_structure_get_boolean(structure, "signed", &adder->is_signed);
+		gst_structure_get_int(structure, "width", &width);
+		gst_structure_get_boolean(structure, "signed", &is_signed);
 
-		if(adder->endianness != G_BYTE_ORDER)
-			goto not_supported;
-
-		switch (adder->width) {
+		switch (width) {
 		case 8:
-			adder->func = adder->is_signed ? add_int8 : add_uint8;
+			adder->func = is_signed ? add_int8 : add_uint8;
 			break;
 		case 16:
-			adder->func = adder->is_signed ? add_int16 : add_uint16;
+			adder->func = is_signed ? add_int16 : add_uint16;
 			break;
 		case 32:
-			adder->func = adder->is_signed ? add_int32 : add_uint32;
+			adder->func = is_signed ? add_int32 : add_uint32;
 			break;
 		default:
 			goto not_supported;
 		}
 	} else if(!strcmp(media_type, "audio/x-raw-float")) {
 		GST_DEBUG_OBJECT(adder, "gst_adder_setcaps() sets adder to format float");
-		gst_structure_get_int(structure, "width", &adder->width);
-		gst_structure_get_int(structure, "endianness", &adder->endianness);
+		gst_structure_get_int(structure, "width", &width);
 
-		if(adder->endianness != G_BYTE_ORDER)
-			goto not_supported;
-
-		switch (adder->width) {
+		switch (width) {
 		case 32:
 			adder->func = add_float32;
 			break;
@@ -326,13 +326,9 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 		}
 	} else if(!strcmp(media_type, "audio/x-raw-complex")) {
 		GST_DEBUG_OBJECT(adder, "gst_adder_setcaps() sets adder to format complex");
-		gst_structure_get_int(structure, "width", &adder->width);
-		gst_structure_get_int(structure, "endianness", &adder->endianness);
+		gst_structure_get_int(structure, "width", &width);
 
-		if(adder->endianness != G_BYTE_ORDER)
-			goto not_supported;
-
-		switch (adder->width) {
+		switch (width) {
 		case 64:
 			adder->func = add_complex64;
 			break;
@@ -345,14 +341,19 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 	} else
 		goto not_supported;
 
-	gst_structure_get_int(structure, "channels", &adder->channels);
-	gst_structure_get_int(structure, "rate", &adder->rate);
-
 	/*
 	 * pre-calculate bytes / sample
 	 */
 
-	adder->bytes_per_sample = (adder->width / 8) * adder->channels;
+	adder->bytes_per_sample = (width / 8) * channels;
+
+	GST_OBJECT_LOCK(adder);
+	for(padlist = GST_ELEMENT(adder)->pads; padlist; padlist = g_list_next(padlist)) {
+		GstPad *pad = GST_PAD(padlist->data);
+		if(gst_pad_get_direction(pad) == GST_PAD_SINK)
+			gstlal_collect_pads_set_bytes_per_sample(pad, adder->bytes_per_sample);
+	}
+	GST_OBJECT_UNLOCK(adder);
 
 	/*
 	 * done
@@ -1055,7 +1056,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 * real.
 		 */
 
-		if(!gstlal_collect_pads_get_earliest_offsets(adder->collect, &earliest_input_offset, &earliest_input_offset_end, adder->rate, adder->bytes_per_sample, adder->output_timestamp_at_zero)) {
+		if(!gstlal_collect_pads_get_earliest_offsets(adder->collect, &earliest_input_offset, &earliest_input_offset_end, adder->rate, adder->output_timestamp_at_zero)) {
 			GST_ERROR_OBJECT(adder, "cannot deduce input timestamp offset information");
 			return GST_FLOW_ERROR;
 		}
@@ -1109,14 +1110,13 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		size_t len;
 
 		/*
-		 * (try to) get a buffer of length samples starting at the
-		 * desired offset.
+		 * (try to) get a buffer upto the desired end offset.
 		 */
 
 		if(adder->synchronous)
-			inbuf = gstlal_collect_pads_take_buffer(pads, data, earliest_input_offset, length, adder->bytes_per_sample);
+			inbuf = gstlal_collect_pads_take_buffer(pads, data, earliest_input_offset_end);
 		else
-			inbuf = gst_collect_pads_take_buffer(pads, &data->collectdata, length * adder->bytes_per_sample);
+			inbuf = gst_collect_pads_take_buffer(pads, (GstCollectData *) data, length * adder->bytes_per_sample);
 
 		/*
 		 * NULL means EOS.
@@ -1429,10 +1429,13 @@ static void gst_adder_init(GTypeInstance * object, gpointer class)
 	gst_element_add_pad(GST_ELEMENT(object), adder->srcpad);
 
 	adder->padcount = 0;
-	adder->func = NULL;
 
 	adder->collect = gst_collect_pads_new();
 	gst_collect_pads_set_function(adder->collect, GST_DEBUG_FUNCPTR(gst_adder_collected), adder);
+
+	adder->rate = 0;
+	adder->bytes_per_sample = 0;
+	adder->func = NULL;
 }
 
 

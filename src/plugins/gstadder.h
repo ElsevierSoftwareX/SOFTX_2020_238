@@ -59,11 +59,6 @@ typedef struct _GstAdder {
 
 	/* stream format */
 	gint rate;
-	gint channels;
-	gint width;
-	gint endianness;
-	gint depth;
-	gboolean is_signed;
 
 	/* number of bytes per sample (= width / 8 * channels) */
 	guint bytes_per_sample;
