@@ -262,7 +262,6 @@ int sngl_inspiral_table_value_to_string(SnglInspiralTable *tab, char *str, int c
     }
   }
 
-
 int int_inspiral_column_by_name(SnglInspiralTable *tab, const char *name)
   {
   if (!strcmp(name,"end_time")) return tab->end_time.gpsSeconds;
@@ -473,7 +472,6 @@ int get_sngl_inspiral_table_values_string(char *str, SnglInspiralTable *tab, int
   int cnt = 0;
   if (skip_event_id) num_col -= 1;
   if (!tab) return 1; /* There is nothing to do */
-  /* FIXME INSERT IS BROKEN - WRONG COLUMNS */
   while(tab)
     {
     /*strcat(str, " (");*/
@@ -548,37 +546,6 @@ int get_sngl_inspiral_table_values_string(char *str, SnglInspiralTable *tab, int
         sprintf(buf, ", %d)",tab->event_id->id);
         strcat(str,buf);
         }
-
-      /* THIS TRIED TO BE CLEVER BUT WAS TOO SLOW */
-      /*
-      if (!(strcmp(sngl_inspiral_table_columns[i][1],"int")))
-        {
-        sprintf(buf,"%d",
-          int_inspiral_column_by_name(tab,sngl_inspiral_table_columns[i][0]));
-        strcat(str,buf);
-        }
-      if (!(strcmp(sngl_inspiral_table_columns[i][1],"float")))
-        {
-        sprintf(buf,"%f",
-         float_inspiral_column_by_name(tab,sngl_inspiral_table_columns[i][0]));
-        strcat(str,buf);
-        }
-      if (!(strcmp(sngl_inspiral_table_columns[i][1],"double")))
-        {
-        sprintf(buf,"%f",
-         double_inspiral_column_by_name(tab,sngl_inspiral_table_columns[i][0]));
-        strcat(str,buf);
-        }
-      if (!(strcmp(sngl_inspiral_table_columns[i][1],"string")))
-        {
-        sprintf(buf,"'%s'",
-         string_inspiral_column_by_name(tab,sngl_inspiral_table_columns[i][0]));
-        strcat(str,buf);
-        }
-      */
-      /*if (i < (num_col-1)) strcat(str,", ");
-      else strcat(str, ") ");
-      }*/
     if (tab->next) strcat(str, ", ");
     /*else strcat(str,")");*/
     tab = tab->next;
@@ -605,6 +572,7 @@ PGresult * execute_and_check_query(PGconn *con, char *command)
   if (stat == PGRES_FATAL_ERROR)
     {
     fprintf(stderr, "## QUERY FAILED WITH FATAL ERROR ##- is the database connection set up?  Have you done a proper tunnel? This is likely to be somthing silly like that and not a syntax error in the request.\n\n");
+    fprintf(stderr, "stat %d ERROR MESSAGE IS: \n\t%s\n\n", stat, PQresultErrorMessage(result));
     return result;
     }
   /* Otherwise ...*/
@@ -652,7 +620,7 @@ PGresult * execute_and_check_prepared_query(PGconn *con, char *command,
 
 PGresult *prepare_and_check_query(PGconn *con, char *name, char *query, int n)
   {
-  PGresult *result = PQprepare(con, "insert_sngl_inspiral", query, 56, NULL);
+  PGresult *result = PQprepare(con, name, query, 56, NULL);
   ExecStatusType stat;
   stat = PQresultStatus(result);
   if (stat == PGRES_COMMAND_OK)
@@ -688,7 +656,7 @@ int insert_sngl_inspiral_table(PGconn *con, SnglInspiralTable *tab)
   char * pval[num_inspiral_columns -2];
   char *query = "INSERT INTO sngl_inspiral_table VALUES ('', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56);";
   int i;
-  PGresult *result = prepare_and_check_query(con, "insert_sngl_inspiral", query, 56);
+  PGresult *result = prepare_and_check_query(con, "", query, 56);
 
   PQclear(result);
   while (tab)
@@ -701,12 +669,13 @@ int insert_sngl_inspiral_table(PGconn *con, SnglInspiralTable *tab)
       pval[i-1] =  p[i-1];
       }
     /*fprintf(stderr, "executing query \n");*/
-    result = execute_and_check_prepared_query(con, query, "insert_sngl_inspiral", 56, pval);
+    result = execute_and_check_prepared_query(con, query, "", 56, pval);
     PQclear(result);
     tab = tab->next;
     }
   }
 
+#if 0
 int insert_from_sngl_inspiral_table(PGconn *connection, SnglInspiralTable *tab,
                                     int num_rows)
   {
@@ -736,6 +705,7 @@ int insert_from_sngl_inspiral_table(PGconn *connection, SnglInspiralTable *tab,
 /* All DONE */
   return 0;
   }
+#endif
 
 int set_pgvalue_to_int(char *value)
   {
@@ -817,7 +787,7 @@ SnglInspiralTable * PGresult_to_sngl_inspiral_table(PGresult *result)
       tab->event_id = (EventIDColumn *) calloc(1,sizeof(EventIDColumn));
       }
     }
-  fprintf(stderr, "last row gamma 0 %f\n",tab->Gamma[0]);
+  fprintf(stderr, "Found %d inspiral triggers in requested range\n",nRows);
   return first;
   }
 
@@ -833,6 +803,22 @@ int free_sngl_inspiral_table(SnglInspiralTable* tab)
     }
   return 0;
   }
+
+int free_coinc_inspiral_table(CoincInspiralTable *tab)
+  {
+  /* THIS FUNCTION ASSUMES THAT THE ASSOCIATED TABLES HAVE BEEN FREED*/
+  CoincInspiralTable *tmp;
+  int i; 
+  while (tab)
+    {
+    tmp = tab;
+    tab = tab->next;
+    free(tmp);
+    }
+  return 0;
+  }
+
+
 
 SnglInspiralTable * select_to_sngl_inspiral_table(PGconn *connection, 
                                          char *WHERE_str)
@@ -942,7 +928,6 @@ CoincInspiralTable * compute_coincs_from_sngl_inspiral_table(SnglInspiralTable *
 
   /* Now actually do the coincidence test */
   LALCreateTwoIFOCoincListEllipsoid(stat, &coincTable, tab, accuracy);
-  fprintf(stderr,"Coinc TAble %p\n",coincTable);
   numIFO = get_number_of_ifos_from_sngl_inspiral_table(tab);
   fprintf(stderr, "computing multi ifo coincs...\n");
   for( N = 3; N <= numIFO; N++)
@@ -954,9 +939,7 @@ CoincInspiralTable * compute_coincs_from_sngl_inspiral_table(SnglInspiralTable *
   free(stat);
   }
 
-
-int insert_CoincInspiralTable(PGconn *connection, 
-                             CoincInspiralTable *tab)
+int insert_CoincInspiralRow(PGconn *connection, CoincInspiralTable *row)
   {
   char insert[256+LAL_NUM_IFO*64];
   char buf[256];
@@ -964,44 +947,255 @@ int insert_CoincInspiralTable(PGconn *connection,
   int i;
   int ID;
   int cnt;
-  /* FIXME could this be done with two queries instead of 2*N ?*/
+
+  sprintf(insert, "INSERT INTO coinc_event (coinc_def_id, nevents) VALUES ('sngl_inspiral_to_sngl_inspiral', %d) RETURNING coinc_event_id", row->numIfos);
+  result = execute_and_check_query(connection, insert);
+  ID = set_pgvalue_to_int( PQgetvalue(result, 0, 0) );
+  sprintf(insert, "INSERT INTO coinc_event_map (coinc_event_id, table_name, event_id) VALUES ");
+  cnt = 0;
+  for (i = 0; i < LAL_NUM_IFO; i++)
+    {
+    if (row->snglInspiral[i])
+      {
+      sprintf(buf," (%d, 'sngl_inspiral_table', %d)", ID,
+               row->snglInspiral[i]->event_id->id);
+      strcat(insert,buf);
+      cnt++;
+      }
+    if (cnt == row->numIfos)
+      {
+      strcat(insert,";");
+      break;
+      }
+    if (cnt >= 1 && cnt < row->numIfos) strcat(insert,",");
+    }
+  fprintf(stderr, "%s\n", insert);
+  result = execute_and_check_query(connection, insert);
+  PQclear(result);
+  }
+
+int insert_CoincInspiralTable(PGconn *connection, 
+                             CoincInspiralTable *tab)
+  {
   fprintf(stderr,"Inserting coinc inspiral triggers\n");
   while (tab)
     {
-    sprintf(insert, "INSERT INTO coinc_event (coinc_def_id, nevents) VALUES ('sngl_inspiral_to_sngl_inspiral', %d) RETURNING coinc_event_id", tab->numIfos);
-    result = execute_and_check_query(connection, insert);
-    ID = set_pgvalue_to_int( PQgetvalue(result, 0, 0) );
-    sprintf(insert, "INSERT INTO coinc_event_map (coinc_event_id, table_name, event_id) VALUES ");
-    cnt = 0;
-    fprintf(stderr, "num ifos = %d\n",tab->numIfos);
-    for (i = 0; i < LAL_NUM_IFO; i++)
-      {
-      if (tab->snglInspiral[i]) 
-        {
-        sprintf(buf," (%d, 'sngl_inspiral_table', %d)", ID, 
-               tab->snglInspiral[i]->event_id->id);
-	strcat(insert,buf);
-        cnt++;
-        }
-      if (cnt == tab->numIfos)
-        {
-        strcat(insert,";");
-	break;
-	}
-      if (cnt >= 1 && cnt < tab->numIfos) strcat(insert,",");
-      }
-    fprintf(stderr, "%s\n", insert);
-    result = execute_and_check_query(connection, insert);
-    /* Walk the list */
+    insert_CoincInspiralRow(connection, tab);
+    /* walk the list */
     tab = tab->next;
-    PQclear(result);
     }
   }
 
-
-int delete_coincs_from_sngl_inspiral_table(void)
+static int * set_ids_from_coinc_table(CoincInspiralTable *tab)
   {
+  int *ids1 = calloc(LAL_NUM_IFO, sizeof(int));
+  if (tab->snglInspiral[LAL_IFO_G1])
+    ids1[LAL_IFO_G1] = tab->snglInspiral[LAL_IFO_G1]->event_id->id;
+  if (tab->snglInspiral[LAL_IFO_H1])
+    ids1[LAL_IFO_H1] = tab->snglInspiral[LAL_IFO_H1]->event_id->id;
+  if (tab->snglInspiral[LAL_IFO_H2])
+    ids1[LAL_IFO_H2] = tab->snglInspiral[LAL_IFO_H2]->event_id->id;
+  if (tab->snglInspiral[LAL_IFO_L1])
+    ids1[LAL_IFO_L1] = tab->snglInspiral[LAL_IFO_L1]->event_id->id;
+  if (tab->snglInspiral[LAL_IFO_T1])
+    ids1[LAL_IFO_T1] = tab->snglInspiral[LAL_IFO_T1]->event_id->id;
+  if (tab->snglInspiral[LAL_IFO_V1])
+    ids1[LAL_IFO_V1] = tab->snglInspiral[LAL_IFO_V1]->event_id->id;
+  return ids1;
+  }
 
+static int ifo_to_num(char *ifo)
+  {
+  if (!(strcmp(ifo, "G1"))) return LAL_IFO_G1;
+  if (!(strcmp(ifo, "H1"))) return LAL_IFO_H1;
+  if (!(strcmp(ifo, "H2"))) return LAL_IFO_H2;
+  if (!(strcmp(ifo, "L1"))) return LAL_IFO_L1;
+  if (!(strcmp(ifo, "T1"))) return LAL_IFO_T1;
+  if (!(strcmp(ifo, "V1"))) return LAL_IFO_V1;
+  }
+
+
+
+static int * set_ids_from_coinc_result(PGresult *res, int *nrows, int *coinc_ids, int *num_ifos)
+  {
+  int i,cnt;
+  int nFields = PQnfields(res);
+  int nRows =  PQntuples(res);
+  int cid;
+  int * ids2 = NULL;
+  coinc_ids = NULL;
+  num_ifos = NULL;
+  (*nrows) = 0;
+  /* if there weren't any coincidences then we are done */
+  if (nRows == 0) return NULL;
+
+  cid = set_pgvalue_to_int(PQgetvalue(res,0,3));
+
+  for (i=0; i < nRows; i++)
+    {
+    /* if this is a new coincidence reset */
+    if (cid != set_pgvalue_to_int(PQgetvalue(res,0,3)))
+      (*nrows)++;    
+    cid = set_pgvalue_to_int(PQgetvalue(res,i,3));
+    }
+  
+  ids2 = (int *) calloc((*nrows)*LAL_NUM_IFO, sizeof(int));
+  coinc_ids = (int *) calloc(*nrows, sizeof(int));
+  num_ifos = (int *) calloc(*nrows, sizeof(int));
+  /* reset the coinc id to check */
+  cid = set_pgvalue_to_int(PQgetvalue(res,0,3));
+  cnt = 0;
+  for (i=0; i < nRows; i++)
+    {
+    coinc_ids[cnt] = set_pgvalue_to_int(PQgetvalue(res,i,3));
+    num_ifos[cnt] = set_pgvalue_to_int(PQgetvalue(res,i,4));
+    /* if this is a new coincidence move on*/
+    if (cid != coinc_ids[cnt]) cnt++;   
+    cid = set_pgvalue_to_int(PQgetvalue(res,i,3));
+    ids2[cnt * (*nrows) + ifo_to_num(PQgetvalue(res,cnt,1))] =
+      set_pgvalue_to_int(PQgetvalue(res,i,0)); 
+    }
+  return ids2;  
+  }
+
+static int check_coincs(int *ids1, int *ids2, int ncoinc)
+  {
+  int sum1 = 0;
+  int sum2 = 0;
+  int i = 0;
+  for (i = 0; i < LAL_NUM_IFO; i++)
+    {
+    sum1 += ids1[i];
+    sum2 += ids2[LAL_NUM_IFO*ncoinc +i];
+    }
+  if ( (sum1) && (sum2)   ) return 1; /* The new coinc doesn't look like any of the coincs - this must be a new coinc - add it*/
+  if ( (sum1) && (!sum2)  ) return 0; /* The new coinc is a subset of one that already exists - do nothing*/
+  if ( (!sum1) && (sum2)  ) return -1; /* The new coinc is a superset of one that already exists - update the coinc */
+  if ( (!sum1) && (!sum2) ) return 0; /* The coincs are identical - nothing to be done */
+  }
+
+static int update_coinc_map(PGconn *con, int cid, int *ids, int nevents)
+  {
+  char update_coinc_event[512];
+  int i;
+  PGresult *res = NULL;
+  sprintf(update_coinc_event, "UPDATE coinc_event SET nevents = %d WHERE coinc_event_id = %d;", nevents+1, cid);
+  res = execute_and_check_query(con, update_coinc_event);
+  PQclear(res);
+  for (i = 0; i < LAL_NUM_IFO; i++)
+    {
+    if (ids[i])
+      {
+      sprintf(update_coinc_event, "INSERT INTO coinc_event_map (coinc_event_id, table_name, event_id) VALUES (%d, 'sngl_inspiral_table', %d);", cid, ids[i]);
+      res = execute_and_check_query(con, update_coinc_event);
+      PQclear(res);
+      }
+    }
+  }
+
+static int update_coinc_row(PGconn *con, PGresult *res, CoincInspiralTable *tab)
+  {
+  /* There are only three options.  Either we update the coinc that exists or
+   * we make a new one or we do nothing.  
+   * So this logic has to determine whether or not the
+   * coinc in question exists (even as a subset) in the database already */
+  int *ids1 = set_ids_from_coinc_table(tab);
+  int ncoincs, i, j, test;
+  int *coinc_ids = NULL;
+  int *num_ifos = NULL;
+  int *ids2 = set_ids_from_coinc_result(res,&ncoincs,coinc_ids,num_ifos);
+  int *tests = NULL;
+  int mintest = 0;
+  /* if there weren't any coincidences in the database then just add the new 
+   * coinc */
+  if (ncoincs == 0) 
+    {
+    /*fprintf(stderr, "no coincs found\n");*/
+    insert_CoincInspiralRow(con, tab);
+    return 1;
+    }
+  /*else fprintf(stderr, "found %d coincs\n",ncoincs);*/
+  tests = (int *) calloc(ncoincs, sizeof(int));
+  for (i = 0; i < ncoincs; i++)
+    {
+    for (j = 0; j < LAL_NUM_IFO; j++)
+      { 
+      if (ids1[j] = ids2[i*LAL_NUM_IFO + j])
+        ids1[j] = 0;
+	ids2[i*LAL_NUM_IFO + j] = 0;
+      }
+    tests[i] = check_coincs(ids1, ids2, i);
+    /*
+    if (!test) continue;
+    if (test == 1) 
+      {
+      insert_CoincInspiralRow(con, tab);
+      break;
+      }
+    if (test == -1)
+      {
+      update_coinc_map(con, coinc_ids[i],ids1, num_ifos[i]);
+      break;
+      }
+    */
+    }
+  /* check what the appropriate thing to do is */
+  /* The one with the minimum test value is what should be done for the coinc*/
+  mintest = tests[0];
+  for (i = 1; i < ncoincs; i++) if (tests[i] < mintest) mintest = tests[i];
+
+  if (mintest == 1) insert_CoincInspiralRow(con, tab);
+  if (test == -1) update_coinc_map(con, coinc_ids[i],ids1, num_ifos[i]);
+
+  if (ids1) free(ids1);
+  if (ids2) free(ids2);
+  if (coinc_ids) free(coinc_ids);
+  if (num_ifos) free(num_ifos);
+  return mintest;
+  }
+
+int update_coincs_from_coinc_inspiral_table(PGconn *con,
+                                            CoincInspiralTable *tab)
+  {
+  CoincInspiralTable *toInsert = NULL;
+  char select[2048];
+  char buf[512];
+  int i, cnt, id, upflag;
+  PGresult *res;
+  int newcoinc = 0;
+  int donothing = 0;
+  int updatecoinc = 0;
+  int ncoincs = 0;
+  while (tab)
+    {
+    cnt = 0;
+    for (i = 0; i < LAL_NUM_IFO; i++)
+      {
+      if (tab->snglInspiral[i])
+        {
+	id = tab->snglInspiral[i]->event_id->id;
+        if (cnt == 0) sprintf(select,"SELECT sngl_inspiral_table.event_id, sngl_inspiral_table.ifo, coinc_event_map.table_name, coinc_event.coinc_event_id, coinc_event.nevents, coinc_event.process_id, coinc_event.coinc_def_id, coinc_event.time_slide_id, coinc_event.nevents FROM coinc_event INNER JOIN coinc_event_map ON coinc_event_map.coinc_event_id = coinc_event.coinc_event_id JOIN sngl_inspiral_table ON CAST (sngl_inspiral_table.event_id AS text) = coinc_event_map.event_id WHERE coinc_def_id = 'sngl_inspiral_to_sngl_inspiral' AND (sngl_inspiral_table.event_id = %d ",id);
+        else 
+	  {
+	  sprintf(buf," OR sngl_inspiral_table.event_id = %d ",id);
+	  strcat(select, buf);
+	  }
+	cnt++;
+	}
+      }
+    strcat(select,") ORDER BY coinc_event.coinc_event_id;");
+    res = execute_and_check_query(con, select);
+    upflag = update_coinc_row(con, res, tab);
+    if (upflag == 1) newcoinc++;
+    if (upflag == 0) donothing++;
+    if (upflag == -1) updatecoinc++;
+    PQclear(res);
+    tab = tab->next;
+    ncoincs++;
+    }
+  fprintf(stderr, "updated %d coincs\n",ncoincs);
+  fprintf(stderr, "%d did not change %d were updated %d were new\n",donothing, updatecoinc, newcoinc);
+  return 0;  
   }
 
 int coinc_on_insert_from_sngl_inspiral_table(PGconn *connection, 
@@ -1010,7 +1204,7 @@ int coinc_on_insert_from_sngl_inspiral_table(PGconn *connection,
   double times[2];
   SnglInspiralTable *coinc_query_sngls = NULL;
   CoincInspiralTable *coincs = NULL;
-  insert_from_sngl_inspiral_table(connection, tab, num_rows);
+  insert_sngl_inspiral_table(connection, tab);
   /* Figure out the time boundaries of what we just inserted */
   get_time_boundaries_from_sngl_inspiral(tab, times);
   fprintf(stderr,"SELECTING sngl_inspirals on time interval %f-%f \n",times[0],times[1]);
@@ -1025,16 +1219,24 @@ int coinc_on_insert_from_sngl_inspiral_table(PGconn *connection,
   else fprintf(stderr, "no sngl inspiral triggers found\n");
 
   if (coincs)
-    insert_CoincInspiralTable(connection, coincs);
+    {
+    update_coincs_from_coinc_inspiral_table(connection, coincs);
+    /*insert_CoincInspiralTable(connection, coincs);*/
+    }
   else fprintf(stderr, "no coincident inspiral triggers found\n");
 
   /* CAREFUL! This function must only delete coincs in which all of the
    * sngl_inspiral_triggers are in this table.  It is possible that only one
    * of the inspiral triggers will be from this table, and we don't want to
    * delete that!! */
-  
+  /* FIXME also free the coincs !!! */
+  fprintf(stderr, "freeing sngl inspiral triggers \n");
   free_sngl_inspiral_table(coinc_query_sngls);
-  /* QUERY the database, compute e-thinca, etc */
+  /* always free the sngls first, cause this will attempt to free them if they
+   * exist and maybe break the list */
+  fprintf(stderr, "freeing coinc inspiral triggers \n");
+  free_coinc_inspiral_table(coincs);
+  /* let the calling function worry about cleaning up tab */
   return 0;
   }
 
@@ -1046,7 +1248,8 @@ int coinc_on_insert_from_inspiral_xml(PGconn *connection, char *filename)
   fprintf(stderr,"Trying to insert %d rows to the sngl_inspiral_table\n", num_rows);
   coinc_on_insert_from_sngl_inspiral_table(connection, tab, num_rows);
   fprintf(stderr, "Freeing sngl_inspiral table\n"); 
-  free(tab);
+  free_sngl_inspiral_table(tab);
+  return 0;
   }
 
 int insert_inspiral_xml(PGconn *connection, char *filename)
@@ -1062,7 +1265,7 @@ int insert_inspiral_xml(PGconn *connection, char *filename)
   /*int num_rows = 
       XLALReadInspiralTriggerFile (&tab, &tmp, &summTab, &sumvars, filename);*/
 
-  if (insert_from_sngl_inspiral_table(connection, tab, num_rows))
+  if (insert_sngl_inspiral_table(connection, tab))
     fprintf(stderr,"Inserting from %s failed\n\n",filename);
   else fprintf(stderr,"Inserted %d inspiral rows\n\n",num_rows);
   /* clean up */
