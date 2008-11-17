@@ -225,13 +225,14 @@ for (i = midIndex; i < fft_template_full->data->length-1; i++)
   tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5)), 2*downsampfac, col.vector.size);
   gsl_vector_memcpy(&col.vector, &tmplt.vector);
   gsl_vector_scale(&col.vector, norm * sqrt(8.0 / 0.99148));
-  gsl_vector_fprintf (FPr, &col.vector, "%e\n");
+  gsl_vector_fprintf (FPr, &col.vector, "%e");
+
   /* Imaginary part */
   col = gsl_matrix_column(U,2*U_column + 1);
-  tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5) + 1), 2*downsampfac, col.vector.size);
+  tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5)) + 1, 2*downsampfac, col.vector.size);
   gsl_vector_memcpy(&col.vector, &tmplt.vector);
   gsl_vector_scale(&col.vector, norm * sqrt(8.0 / 0.99148));
-  gsl_vector_fprintf (FPi, &col.vector, "%e\n");
+  gsl_vector_fprintf (FPi, &col.vector, "%e");
   /*
    * Compute the \Xi^2 factor.
    */
