@@ -56,6 +56,8 @@
 #include <lal/FindChirpTD.h>
 #include <lal/LALError.h>
 #include <lal/LALStdio.h>
+#include <lal/TimeFreqFFT.h>
+#include <lal/RealFFT.h>
 
 /* gstlal includes */
 #include "gstlal.h"
@@ -78,10 +80,12 @@ static int create_template_from_sngl_inspiral(
                        int U_column,
                        FindChirpFilterInput *fcFilterInput,
                        FindChirpTmpltParams *fcTmpltParams,
-                       REAL8TimeSeries *template,
+		       REAL8TimeSeries *template,
+                       COMPLEX16TimeSeries *template_out,
                        COMPLEX16FrequencySeries *fft_template,
+		       COMPLEX16FrequencySeries *fft_template_full,
                        REAL8FFTPlan *fwdplan,
-                       REAL8FFTPlan *revplan,
+                       COMPLEX16FFTPlan *revplan,
                        REAL8FrequencySeries *psd
                        )
 
@@ -89,27 +93,102 @@ static int create_template_from_sngl_inspiral(
   unsigned i;
   int t_total_length = floor(t_total_duration * fsamp + 0.5);	/* length of the template */
   double norm;
+  unsigned midIndex = floor(fft_template_full->data->length / 2.0);
   gsl_vector_view col;
   gsl_vector_view tmplt;
   LALStatus status;
-
+  /* FIXME remove this. for debugging only */
+  FILE *FPr = NULL;
+  FILE *FPi = NULL;
+  FILE *FP = NULL;
+  char FPrname[256];
+  char FPiname[256];
+  char FPname[256];
+  int err;
   memset(&status, 0, sizeof(status));
  
   LALFindChirpTDTemplate( &status, fcFilterInput->fcTmplt,
                   bankRow, fcTmpltParams );
 
+  sprintf(FPname,"Orig-%d.txt",(int) floor(t_end * fsamp + 0.5));
+  FP = fopen(FPname,"w");
   for (i=0; i< template->data->length; i++)
+    {
     template->data->data[i] = (REAL8) fcTmpltParams->xfacVec->data[i];
+    fprintf(FP,"%e\n",template->data->data[i]);
+    }
+  fclose(FP);
 
   /*
    * Whiten the template.
    */
 
-  XLALREAL8TimeFreqFFT(fft_template,template,fwdplan);
-  XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd);
-  XLALREAL8FreqTimeFFT(template,fft_template,revplan);
+  err = XLALREAL8TimeFreqFFT(fft_template,template,fwdplan);
+  if (err) 
+    {
+    fprintf(stderr, "Forward FFT failed %d\n", err);
+    exit(1);
+    }
 
-  /*
+  if (!XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd))
+    {
+    fprintf(stderr, "Whiten failed NULL return\n");
+    exit(1);
+    }
+
+  /* compute the quadrature phases now we need a complex frequency series that
+   * is twice as large.  We'll store the negative frequency components that'll
+   * give the sine and cosine phase */
+  /*fft_template_full->data->data[0].re = 0.0;
+  fft_template_full->data->data[0].im = 0.0;*/
+  for (i = 0; i < midIndex; i++)
+    {
+    fft_template_full->data->data[midIndex-i].re = 2.0 * fft_template->data->data[i].re;
+    /* conjugate */
+    fft_template_full->data->data[midIndex-i].im = 0.0 - 2.0 * fft_template->data->data[i].im;
+    }
+/*
+for (i = midIndex; i < fft_template_full->data->length-1; i++)
+    {
+    fft_template_full->data->data[i].re = 0.0 * fft_template->data->data[i-midIndex].re;
+    fft_template_full->data->data[i].im = 0.0 * fft_template->data->data[i-midIndex].im;
+    }*/
+  /*fft_template_full->data->data[fft_template_full->data->length-1].re = 0.0;
+  fft_template_full->data->data[fft_template_full->data->length-1].im = 0.0;*/
+
+  err = XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan);
+  if (err) 
+    {
+    fprintf(stderr, "Reverse FFT failed %d\n", err);
+    exit(1);
+    }
+
+  /*err = XLALREAL8FreqTimeFFT(template, fft_template, rplan);
+  if (err)
+    {
+    fprintf(stderr, "Reverse FFT failed %d\n", err);
+    exit(1);
+    }*/
+
+  sprintf(FPrname,"Real-%d.txt",(int) floor(t_end * fsamp + 0.5));
+  FPr = fopen(FPrname,"w");
+
+  for (i = 0; i < template_out->data->length; i++)
+    {
+    fprintf(FPr,"%d %e\n", i, template_out->data->data[i].re);
+    }
+
+  sprintf(FPiname,"Imag-%d.txt",(int) floor(t_end * fsamp + 0.5));
+  FPi = fopen(FPiname,"w");
+  for (i = 0; i < template_out->data->length; i++)
+    {
+    fprintf(FPi,"%d %e\n", i, template_out->data->data[i].im);
+    }
+  fclose(FPr);
+  fclose(FPi);
+
+
+   /*
    * Normalize the template.  If s is the template and n is a stationary
    * noise process of independent samples, s is normalized so that
    *
@@ -119,9 +198,14 @@ static int create_template_from_sngl_inspiral(
    * equivalent to
    *
    *	(s|s) = (1/T) \sum s^2 \Delta t = T / \Delta t = N
+   *
+   * The factor of \sqrt{2} makes the result consistent with the inspiral
+   * definition of "SNR", wherein each of the real and imaginary components
+   * has a mean square of 1, so the mean square of the complex sample is
+   * \sqrt{2}.
    */
 
-  norm = t_total_length / sqrt(XLALREAL8SequenceSumSquares(template->data, template->data->length - t_total_length, t_total_length));
+  norm = t_total_length / sqrt(XLALCOMPLEX16SequenceSumSquares(template_out->data, template_out->data->length - t_total_length, t_total_length) / 2);
 
   /*
    * Extract a piece of the template.  The change in sample rate
@@ -133,11 +217,19 @@ static int create_template_from_sngl_inspiral(
    * don't want to hear the answer to.
    */
 
-  col = gsl_matrix_column(U, U_column);
-  tmplt = gsl_vector_view_array_with_stride(template->data->data + template->data->length - (int) floor(t_end * fsamp + 0.5), downsampfac, col.vector.size);
+  /* Real part */
+  /* there are twice as many waveforms as templates hence the multiplying 
+   * U_colum by 2*/
+  col = gsl_matrix_column(U,2*U_column);
+  tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5)), 2*downsampfac, col.vector.size);
   gsl_vector_memcpy(&col.vector, &tmplt.vector);
   gsl_vector_scale(&col.vector, norm * sqrt(8.0 / 0.99148));
 
+  /* Imaginary part */
+  col = gsl_matrix_column(U,2*U_column + 1);
+  tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5) + 1), 2*downsampfac, col.vector.size);
+  gsl_vector_memcpy(&col.vector, &tmplt.vector);
+  gsl_vector_scale(&col.vector, norm * sqrt(8.0 / 0.99148));
   /*
    * Compute the \Xi^2 factor.
    */
@@ -293,38 +385,62 @@ int generate_bank_svd(
   size_t i, j;
   size_t numsamps = floor((t_end - t_start) * base_sample_rate / down_samp_fac + 0.5);
   size_t full_numsamps = base_sample_rate*TEMPLATE_DURATION;
-  gsl_vector *work_space = gsl_vector_calloc(numtemps);
-  gsl_matrix *work_space_matrix = gsl_matrix_calloc(numtemps,numtemps);
+  /* There are twice as many waveforms as templates */
+  gsl_vector *work_space = gsl_vector_calloc(2 * numtemps);
+  gsl_matrix *work_space_matrix = gsl_matrix_calloc(2 * numtemps,2 * numtemps);
+  COMPLEX16TimeSeries *template_out;
   REAL8TimeSeries *template;
   COMPLEX16FrequencySeries *fft_template;
+  COMPLEX16FrequencySeries *fft_template_full;
+
   REAL8FrequencySeries *psd;
   FindChirpFilterInput *fcFilterInput  = NULL;
   FindChirpTmpltParams *fcTmpltParams  = NULL;
   FindChirpInitParams fcInitParams;
   LALStatus status;
   REAL8FFTPlan *fwdplan;
-  REAL8FFTPlan *revplan;
+  COMPLEX16FFTPlan *revplan;
 
   if (verbose) fprintf(stderr,"read %d templates\n", numtemps);
   
   memset(&status, 0, sizeof(status));
   memset(&fcInitParams, 0, sizeof(fcInitParams));
 
-  *U = gsl_matrix_calloc(numsamps,numtemps);
-  *S = gsl_vector_calloc(numtemps);
-  *V = gsl_matrix_calloc(numtemps,numtemps);
+  *U = gsl_matrix_calloc(numsamps,2 * numtemps);
+  *S = gsl_vector_calloc(2 * numtemps);
+  *V = gsl_matrix_calloc(2 * numtemps,2 * numtemps);
+  /* I have just computed chifacs for one of the quadratures...it should be
+   * redundant */
   *chifacs = gsl_vector_calloc(numtemps);
 
   fprintf(stderr,"U = %zd,%zd V = %zd,%zd S = %zd\n",(*U)->size1,(*U)->size2,(*V)->size1,(*V)->size2,(*S)->size);
 
   g_mutex_lock(gstlal_fftw_lock);
   fwdplan = XLALCreateForwardREAL8FFTPlan(full_numsamps, 1);
-  revplan = XLALCreateReverseREAL8FFTPlan(full_numsamps, 1);
+  if (!fwdplan)
+    {
+    fprintf(stderr, "Generating the forward plan failed");
+    exit(1);
+    }
+  revplan = XLALCreateReverseCOMPLEX16FFTPlan(full_numsamps, 1);
+  if (!revplan)
+    {
+    fprintf(stderr, "Generating the reverse plan failed");
+    exit(1);
+    }
   g_mutex_unlock(gstlal_fftw_lock);
 
   template = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, full_numsamps);
-  fft_template = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 0, &lalDimensionlessUnit, template->data->length / 2 + 1);
-  psd = gstlal_get_reference_psd(reference_psd_filename, template->f0, 1.0/TEMPLATE_DURATION, fft_template->data->length);
+  
+  template_out = XLALCreateCOMPLEX16TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, full_numsamps);
+
+  fft_template = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, (int) floor(full_numsamps/2)+1);
+
+  /*fft_template = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / base_sample_rate, &lalDimensionlessUnit, full_numsamps);*/
+
+  fft_template_full = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps);
+
+  psd = gstlal_get_reference_psd(reference_psd_filename, template_out->f0, 1.0/TEMPLATE_DURATION, fft_template->data->length);
 
   fcInitParams.numPoints      = full_numsamps;
   fcInitParams.numSegments    = 1;
@@ -356,14 +472,11 @@ int generate_bank_svd(
 
   fprintf(stderr, "LALFindChirpTDTemplate() tmplate is %p\n", fcFilterInput->fcTmplt);
 
-  fprintf(stderr, "bankHead order is %d",bankHead->order);
-
   fcTmpltParams->order = threePointFivePN;
   fcTmpltParams->approximant = EOB;
   fcTmpltParams->dynRange = pow(2,63);
 
 
-  if (verbose) fprintf(stderr, "allocated matrices...\n");
   /* create the templates in the bank */
   for(bankRow = bankHead, j = 0; bankRow; bankRow = bankRow->next, j++)
     {
@@ -372,7 +485,7 @@ int generate_bank_svd(
 
     bankRow->fFinal = base_sample_rate / 2.0 - 1; /*nyquist*/
 
-    create_template_from_sngl_inspiral(bankRow, *U, *chifacs, base_sample_rate,down_samp_fac,t_end, t_total_duration, j, fcFilterInput, fcTmpltParams, template, fft_template, fwdplan, revplan, psd);
+    create_template_from_sngl_inspiral(bankRow, *U, *chifacs, base_sample_rate,down_samp_fac,t_end, t_total_duration, j, fcFilterInput, fcTmpltParams, template, template_out, fft_template, fft_template_full, fwdplan, revplan, psd);
     if (verbose) fprintf(stderr, "template %zd M_chirp=%e\n",j, bankRow->chirpMass);
     }
 
@@ -395,17 +508,29 @@ int generate_bank_svd(
   not_gsl_matrix_transpose(V);
   if(verbose) fprintf(stderr, "%.16g s -- %.16g s: %zd orthogonal templates, V is %zdx%zd, U is %zdx%zd\n\n", t_start, t_end, (*U)->size1, (*V)->size1, (*V)->size2, (*U)->size1, (*U)->size2);
 
-
+  /* free gsl stuff */
   gsl_vector_free(work_space);
   gsl_matrix_free(work_space_matrix);
+
+  /* Destroy plans */
   g_mutex_lock(gstlal_fftw_lock);
   XLALDestroyREAL8FFTPlan(fwdplan);
-  XLALDestroyREAL8FFTPlan(revplan);
+  XLALDestroyCOMPLEX16FFTPlan(revplan);
   g_mutex_unlock(gstlal_fftw_lock);
+
+  /* Destroy Template */
   LALFindChirpTemplateFinalize( &status, &fcTmpltParams );
+
+  /* Destroy time/freq series */
   XLALDestroyCOMPLEX16FrequencySeries(fft_template);
+  XLALDestroyCOMPLEX16FrequencySeries(fft_template_full);
+  XLALDestroyCOMPLEX16TimeSeries(template_out);
   XLALDestroyREAL8TimeSeries(template);
+
+  /* Destroy find chirp input */
   LALDestroyFindChirpInput(&status,&fcFilterInput);
+
+  /* free the template list */
   while(bankHead)
     {
     InspiralTemplate *next = bankHead->next;
