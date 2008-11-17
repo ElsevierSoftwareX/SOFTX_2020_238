@@ -173,20 +173,21 @@ for (i = midIndex; i < fft_template_full->data->length-1; i++)
   sprintf(FPrname,"Real-%d.txt",(int) floor(t_end * fsamp + 0.5));
   FPr = fopen(FPrname,"w");
 
-  for (i = 0; i < template_out->data->length; i++)
+  /*for (i = 0; i < template_out->data->length; i++)
     {
     fprintf(FPr,"%d %e\n", i, template_out->data->data[i].re);
     }
-
+  */
   sprintf(FPiname,"Imag-%d.txt",(int) floor(t_end * fsamp + 0.5));
   FPi = fopen(FPiname,"w");
+  /*
   for (i = 0; i < template_out->data->length; i++)
     {
     fprintf(FPi,"%d %e\n", i, template_out->data->data[i].im);
     }
   fclose(FPr);
   fclose(FPi);
-
+  */
 
    /*
    * Normalize the template.  If s is the template and n is a stationary
@@ -224,15 +225,19 @@ for (i = midIndex; i < fft_template_full->data->length-1; i++)
   tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5)), 2*downsampfac, col.vector.size);
   gsl_vector_memcpy(&col.vector, &tmplt.vector);
   gsl_vector_scale(&col.vector, norm * sqrt(8.0 / 0.99148));
-
+  gsl_vector_fprintf (FPr, &col.vector, "%e\n");
   /* Imaginary part */
   col = gsl_matrix_column(U,2*U_column + 1);
   tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5) + 1), 2*downsampfac, col.vector.size);
   gsl_vector_memcpy(&col.vector, &tmplt.vector);
   gsl_vector_scale(&col.vector, norm * sqrt(8.0 / 0.99148));
+  gsl_vector_fprintf (FPi, &col.vector, "%e\n");
   /*
    * Compute the \Xi^2 factor.
    */
+
+  fclose(FPr);
+  fclose(FPi);
 
   gsl_vector_set(chifacs,U_column,gsl_blas_dnrm2(&col.vector));
 
