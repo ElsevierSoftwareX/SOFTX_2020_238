@@ -97,27 +97,18 @@ static int create_template_from_sngl_inspiral(
   gsl_vector_view col;
   gsl_vector_view tmplt;
   LALStatus status;
-  /* FIXME remove this. for debugging only */
-  FILE *FPr = NULL;
-  FILE *FPi = NULL;
-  FILE *FP = NULL;
-  char FPrname[256];
-  char FPiname[256];
-  char FPname[256];
   int err;
   memset(&status, 0, sizeof(status));
  
   LALFindChirpTDTemplate( &status, fcFilterInput->fcTmplt,
                   bankRow, fcTmpltParams );
 
-  sprintf(FPname,"Orig-%d.txt",(int) floor(t_end * fsamp + 0.5));
-  FP = fopen(FPname,"w");
+  /* copy the template into a double :( */
+
   for (i=0; i< template->data->length; i++)
     {
     template->data->data[i] = (REAL8) fcTmpltParams->xfacVec->data[i];
-    fprintf(FP,"%e\n",template->data->data[i]);
     }
-  fclose(FP);
 
   /*
    * Whiten the template.
@@ -139,22 +130,12 @@ static int create_template_from_sngl_inspiral(
   /* compute the quadrature phases now we need a complex frequency series that
    * is twice as large.  We'll store the negative frequency components that'll
    * give the sine and cosine phase */
-  /*fft_template_full->data->data[0].re = 0.0;
-  fft_template_full->data->data[0].im = 0.0;*/
   for (i = 0; i < midIndex; i++)
     {
     fft_template_full->data->data[midIndex-i].re = 2.0 * fft_template->data->data[i].re;
     /* conjugate */
     fft_template_full->data->data[midIndex-i].im = 0.0 - 2.0 * fft_template->data->data[i].im;
     }
-/*
-for (i = midIndex; i < fft_template_full->data->length-1; i++)
-    {
-    fft_template_full->data->data[i].re = 0.0 * fft_template->data->data[i-midIndex].re;
-    fft_template_full->data->data[i].im = 0.0 * fft_template->data->data[i-midIndex].im;
-    }*/
-  /*fft_template_full->data->data[fft_template_full->data->length-1].re = 0.0;
-  fft_template_full->data->data[fft_template_full->data->length-1].im = 0.0;*/
 
   err = XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan);
   if (err) 
@@ -162,32 +143,6 @@ for (i = midIndex; i < fft_template_full->data->length-1; i++)
     fprintf(stderr, "Reverse FFT failed %d\n", err);
     exit(1);
     }
-
-  /*err = XLALREAL8FreqTimeFFT(template, fft_template, rplan);
-  if (err)
-    {
-    fprintf(stderr, "Reverse FFT failed %d\n", err);
-    exit(1);
-    }*/
-
-  sprintf(FPrname,"Real-%d.txt",(int) floor(t_end * fsamp + 0.5));
-  FPr = fopen(FPrname,"w");
-
-  /*for (i = 0; i < template_out->data->length; i++)
-    {
-    fprintf(FPr,"%d %e\n", i, template_out->data->data[i].re);
-    }
-  */
-  sprintf(FPiname,"Imag-%d.txt",(int) floor(t_end * fsamp + 0.5));
-  FPi = fopen(FPiname,"w");
-  /*
-  for (i = 0; i < template_out->data->length; i++)
-    {
-    fprintf(FPi,"%d %e\n", i, template_out->data->data[i].im);
-    }
-  fclose(FPr);
-  fclose(FPi);
-  */
 
    /*
    * Normalize the template.  If s is the template and n is a stationary
@@ -225,20 +180,15 @@ for (i = midIndex; i < fft_template_full->data->length-1; i++)
   tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5)), 2*downsampfac, col.vector.size);
   gsl_vector_memcpy(&col.vector, &tmplt.vector);
   gsl_vector_scale(&col.vector, norm * sqrt(8.0 / 0.99148));
-  gsl_vector_fprintf (FPr, &col.vector, "%e");
 
   /* Imaginary part */
   col = gsl_matrix_column(U,2*U_column + 1);
   tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5)) + 1, 2*downsampfac, col.vector.size);
   gsl_vector_memcpy(&col.vector, &tmplt.vector);
   gsl_vector_scale(&col.vector, norm * sqrt(8.0 / 0.99148));
-  gsl_vector_fprintf (FPi, &col.vector, "%e");
   /*
    * Compute the \Xi^2 factor.
    */
-
-  fclose(FPr);
-  fclose(FPi);
 
   gsl_vector_set(chifacs,U_column,gsl_blas_dnrm2(&col.vector));
 
@@ -441,8 +391,6 @@ int generate_bank_svd(
   template_out = XLALCreateCOMPLEX16TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, full_numsamps);
 
   fft_template = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, (int) floor(full_numsamps/2)+1);
-
-  /*fft_template = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / base_sample_rate, &lalDimensionlessUnit, full_numsamps);*/
 
   fft_template_full = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps);
 
