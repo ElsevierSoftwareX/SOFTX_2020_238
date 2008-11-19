@@ -173,6 +173,8 @@ void gstlal_collect_pads_set_bytes_per_sample(GstPad *pad, guint bytes_per_sampl
 	 * undocumented behaviour, but we rely on it! */
 	GstLALCollectData *data = gst_pad_get_element_private(pad);
 
+	g_return_if_fail(data != NULL);
+
 	data->bytes_per_sample = bytes_per_sample;
 }
 
@@ -231,14 +233,21 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 
 	for(collectdatalist = pads->data; collectdatalist; collectdatalist = g_slist_next(collectdatalist)) {
 		GstLALCollectData *data = collectdatalist->data;
-		GstBuffer *buf = gst_collect_pads_peek(pads, (GstCollectData *) data);
+		GstBuffer *buf;
 		gint64 this_offset;
 		gint64 this_offset_end;
+
+		/*
+		 * check for uninitialized GstLALCollectData
+		 */
+
+		g_return_val_if_fail(data->bytes_per_sample != 0, FALSE);
 
 		/*
 		 * check for EOS
 		 */
 
+		buf = gst_collect_pads_peek(pads, (GstCollectData *) data);
 		if(!buf) {
 			GST_LOG("%p: EOS\n", data);
 			continue;
