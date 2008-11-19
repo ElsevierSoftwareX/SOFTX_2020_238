@@ -213,17 +213,17 @@ static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 	GST_OBJECT_LOCK(adder);
 
 	/*
-	 * get the allowed caps from the downstream peer
-	 */
-
-	peercaps = gst_pad_peer_get_caps(adder->srcpad);
-
-	/*
 	 * get our own allowed caps.  use the fixed caps function to avoid
 	 * recursing back into this function.
 	 */
 
 	sinkcaps = gst_pad_get_fixed_caps_func(pad);
+
+	/*
+	 * get the allowed caps from the downstream peer
+	 */
+
+	peercaps = gst_pad_peer_get_caps(adder->srcpad);
 
 	/*
 	 * if the peer has caps, intersect.  if the peer has no caps (or
