@@ -83,6 +83,7 @@
 #include <gstadder.h>
 #include <gstlal_triggergen.h>
 #include <gstlal_gate.h>
+#include <gstlal_chisquare.h>
 
 
 /*
@@ -479,6 +480,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_adder", GST_TYPE_ADDER},
 		{"lal_triggergen", GSTLAL_TRIGGERGEN_TYPE},
 		{"lal_gate", GSTLAL_GATE_TYPE},
+		{"lal_chisquare", GSTLAL_CHISQUARE_TYPE},
 		{NULL, 0},
 	};
 

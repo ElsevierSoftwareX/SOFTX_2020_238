@@ -13,7 +13,8 @@ libgstlal_la_SOURCES = \
 	gstlalcollectpads.h gstlalcollectpads.c \
 	gstadder.h gstadder.c \
 	gstlal_triggergen.h gstlal_triggergen.c \
-	gstlal_gate.h gstlal_gate.c
+	gstlal_gate.h gstlal_gate.c \
+	gstlal_chisquare.h gstlal_chisquare.c
 libgstlal_la_CFLAGS = -O2 $(AM_CFLAGS) $(CFLAGS) ${gstreamer_CFLAGS} ${LAL_CFLAGS} ${GSL_CFLAGS} 
 libgstlal_la_LIBADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS} 
 libgstlal_la_LDFLAGS = ${GSTREAMER_PLUGIN_LDFLAGS}
@@ -32,7 +33,8 @@ test_program_SOURCES = test_program.c \
 	gstlalcollectpads.h gstlalcollectpads.c \
 	gstadder.h gstadder.c \
 	gstlal_triggergen.h gstlal_triggergen.c \
-	gstlal_gate.h gstlal_gate.c
+	gstlal_gate.h gstlal_gate.c \
+	gstlal_chisquare.h gstlal_chisquare.c
 test_program_CFLAGS = -g -O2 $(AM_CFLAGS) $(CFLAGS) ${gstreamer_CFLAGS} ${LAL_CFLAGS} ${GSL_CFLAGS} 
 test_program_LDADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS}
 
