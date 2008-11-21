@@ -207,6 +207,10 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	guint length;
 	GstBuffer *buf;
 	GstBuffer *orthosnrbuf;
+	guint numinputs, numoutputs, numsamps, dof, i, j, k;
+	double *chisqdata;
+	double *orthodata;
+	double chisq, snr, mfac, orthosnr;
 
 	/*
 	 * get the range of offsets (in the output stream) spanned by the
@@ -254,7 +258,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	/*
 	 * NULL means EOS.
 	 */
-
+ 
 	if(!buf && !orthosnrbuf) {
 		/* FIXME:  handle EOS */
 	}
@@ -262,8 +266,47 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	/*
 	 * compute the \Chi^{2} values in-place in the input buffer
 	 */
+	/* FIXME This assumes that the number of inputs and outputs are defined by the
+	 * reconstruction matrix and doesn't check that the number of channels is right 
+	 * This NEEDS to be done somewhere else */
+	numinputs = (guint) num_input_channels(element);
+	numoutputs = (guint) num_output_channels(element);
+	numsamps = GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
+	chisqdata = (double *) GST_BUFFER_DATA(buf);
+	orthodata = (double *) GST_BUFFER_DATA(orthosnrbuf);
+	/* FIXME: Hard coded degrees of freedom for now 
+	 * Why a max of 10 you might ask?  Well For inspiral analysis we usually have
+	 * about 5 different pieces of the waveform.  So computing a 10 degree chisq
+	 * test on each gives 50 degrees of freedom total.  The std dev of that 
+	 * chisq distribution is sqrt(50) and can be compared to the SNR^2 that we are
+	 * trying to distinguish from a glitch.  That means we can begin to have 
+	 * discriminatory power at SNR = 50^(1/4) = 2.66 which is in the bulk of the
+	 * SNR distribution expected from Gaussian noise - exactly where we want to be*/
 
-	/* FIXME:  do this */
+	if (numinputs < 10) dof = numinputs;
+	else dof = 10;
+
+
+	/* FIXME:  Assumes that the most important basis vectors are at the beginning
+	 * this is a sensible assumption */
+	/* FIXME: do with gsl functions?? */
+
+        for (i = 0; i < numsamps; i++)
+	  {
+	  for (j = 0; j < numoutputs; j++)
+	    {
+	    chisq = 0;
+	    snr = chisqdata[numoutputs*i + j];
+            for (k = 0; k < dof; k++)
+	      {
+	      mfac = gsl_matrix_get(&(element->mixmatrix.matrix), k, j);
+	      orthosnr = orthodata[numinputs*i + k];
+              chisq += (orthosnr/mfac - snr) * (orthosnr/mfac - snr);
+	      }
+	    /* put the chisq value into the input buffer */
+	    chisqdata[numoutputs*i + j] = chisq;
+	    }
+	  }
 
 	/*
 	 * push the buffer downstream
