@@ -269,6 +269,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	/* FIXME This assumes that the number of inputs and outputs are defined by the
 	 * reconstruction matrix and doesn't check that the number of channels is right 
 	 * This NEEDS to be done somewhere else */
+	/* We'll be reading from the mixing matrix so we need to lock it */
+	g_mutex_lock(element->mixmatrix_lock);
 	numinputs = (guint) num_input_channels(element);
 	numoutputs = (guint) num_output_channels(element);
 	numsamps = GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
@@ -276,7 +278,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	orthodata = (double *) GST_BUFFER_DATA(orthosnrbuf);
 	/* FIXME: Hard coded degrees of freedom for now 
 	 * Why a max of 10 you might ask?  Well For inspiral analysis we usually have
-	 * about 5 different pieces of the waveform.  So computing a 10 degree chisq
+	 * about 5 different pieces of the waveform (give or take a few).  
+	 * So computing a 10 degree chisq
 	 * test on each gives 50 degrees of freedom total.  The std dev of that 
 	 * chisq distribution is sqrt(50) and can be compared to the SNR^2 that we are
 	 * trying to distinguish from a glitch.  That means we can begin to have 
@@ -307,6 +310,9 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	    chisqdata[numoutputs*i + j] = chisq;
 	    }
 	  }
+
+        /* We are done with the matrix so unlock it */
+	g_mutex_unlock(element->mixmatrix_lock);
 
 	/*
 	 * push the buffer downstream
