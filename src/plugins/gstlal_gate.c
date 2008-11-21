@@ -616,7 +616,7 @@ static void base_init(gpointer class)
 		"Gate",
 		"Filter",
 		"Flag buffers as gaps based on the value of a control input",
-		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chan Hanna <channa@ligo.caltech.edu>"
+		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chad Hanna <channa@ligo.caltech.edu>"
 	};
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
 

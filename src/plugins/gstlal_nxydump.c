@@ -462,7 +462,7 @@ static void base_init(gpointer class)
 		"NXY Dump",
 		"Filter",
 		"A time-series dumper compatible with Grace's \"nxy\" input format",
-		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chan Hanna <channa@ligo.caltech.edu>"
+		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chad Hanna <channa@ligo.caltech.edu>"
 	};
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
 

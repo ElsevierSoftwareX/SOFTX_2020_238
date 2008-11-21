@@ -926,7 +926,7 @@ static void base_init(gpointer class)
 		"Whiten",
 		"Filter",
 		"A PSD estimator and time series whitener",
-		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chan Hanna <channa@ligo.caltech.edu>"
+		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chad Hanna <channa@ligo.caltech.edu>"
 	};
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
 
