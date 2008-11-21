@@ -422,9 +422,7 @@ int generate_bank_svd(
   /* Create Template - to be replaced by a LAL template generation call */
   if (verbose) fprintf(stderr,"LALCreateFindChirpInput() ...\n");
   LALCreateFindChirpInput( &status, &fcFilterInput, &fcInitParams );
-  if (verbose) fprintf(stderr,"LALCreateFindChirpInput() done\n");
-
-  fprintf(stderr, "LALFindChirpTDTemplate() tmplate is %p\n", fcFilterInput->fcTmplt);
+  if (verbose) fprintf(stderr,"LALCreateFindChirpInput() done, tmplate is %p\n", fcFilterInput->fcTmplt);
 
   fcTmpltParams->order = threePointFivePN;
   fcTmpltParams->approximant = EOB;
