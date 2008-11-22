@@ -52,6 +52,7 @@ typedef struct {
 	GstPad *srcpad;
 
 	int sample_rate;
+	int channels;
 
 	GstClockTime start_time;
 	GstClockTime stop_time;

@@ -64,6 +64,12 @@
  */
 
 
+/*
+ * number bigger than the number of characters it takes to print the value
+ * for one channel including white space, sign characters, etc.
+ */
+
+
 #define ASSUMED_BYTES_PER_CHANNEL 24
 
 
@@ -87,9 +93,9 @@ static int timestamp_to_sample_clipped(GstClockTime start, int samples, int samp
 	if(t <= start)
 		return 0;
 	t -= start;
-	if(t >= (GstClockTime) samples * GST_SECOND / sample_rate)
+	if(t >= gst_util_uint64_scale_int(samples, GST_SECOND, sample_rate))
 		return samples;
-	return t * sample_rate / GST_SECOND;
+	return gst_util_uint64_scale_int(t, sample_rate, GST_SECOND);
 }
 
 
@@ -117,8 +123,8 @@ static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int sample
 	GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
 	GST_BUFFER_OFFSET_END(buf) = GST_BUFFER_OFFSET_NONE;
 	if(GST_BUFFER_TIMESTAMP_IS_VALID(buf))
-		GST_BUFFER_TIMESTAMP(buf) += (GstClockTime) start * GST_SECOND / sample_rate;
-	GST_BUFFER_DURATION(buf) = (GstClockTime) (stop - start) * GST_SECOND / sample_rate;
+		GST_BUFFER_TIMESTAMP(buf) += (GstClockTime) gst_util_uint64_scale_int(start, GST_SECOND, sample_rate);
+	GST_BUFFER_DURATION(buf) = (GstClockTime) gst_util_uint64_scale_int(stop - start, GST_SECOND, sample_rate);
 
 	result = gst_pad_push(pad, buf);
 	if(result != GST_FLOW_OK) {
@@ -149,13 +155,13 @@ static GstFlowReturn print_samples(GstBuffer *out, const double *samples, int ch
 		 * The current time stamp
 		 */
 
-		GstClockTime t = GST_BUFFER_TIMESTAMP(out) + (GstClockTime) (i - start) * GST_SECOND / sample_rate;
+		GstClockTime t = GST_BUFFER_TIMESTAMP(out) + gst_util_uint64_scale_int(i - start, GST_SECOND, sample_rate);
 
 		/*
 		 * Are we almost out of space?
 		 */
 
-		if((guint8 *) location - GST_BUFFER_DATA(out) + (channels + 1) * ASSUMED_BYTES_PER_CHANNEL + 1024 >= GST_BUFFER_SIZE(out)) {
+		if((guint8 *) location + (channels + 1) * ASSUMED_BYTES_PER_CHANNEL >= GST_BUFFER_DATA(out) + GST_BUFFER_SIZE(out)) {
 			/*
 			 * Save offset of current location in buffer
 			 */
@@ -163,17 +169,16 @@ static GstFlowReturn print_samples(GstBuffer *out, const double *samples, int ch
 			size_t offset = location - (char *) GST_BUFFER_DATA(out);
 
 			/*
-			 * Add space for 100 rows plus a bit extra
+			 * Add space for 500 rows
 			 */
 
-			int increment = 100 * (channels + 1) * ASSUMED_BYTES_PER_CHANNEL + 1024;
+			int increment = 500 * (channels + 1) * ASSUMED_BYTES_PER_CHANNEL;
 
 			/*
 			 * Try reallocating the buffer
 			 */
 
 			guint8 *new = g_try_realloc(GST_BUFFER_MALLOCDATA(out), GST_BUFFER_SIZE(out) + increment);
-
 			if(!new) {
 				GST_ERROR("buffer resize failed");
 				return GST_FLOW_ERROR;
@@ -293,6 +298,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	gboolean result = TRUE;
 
 	element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
+	element->channels = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels"));
 
 	gst_object_unref(element);
 	return result;
@@ -310,16 +316,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	GstBuffer *srcbuf;
 	GstFlowReturn result = GST_FLOW_OK;
-	int channels;
 	int samples;
 	int start, stop;
 
 	/*
-	 * Retrieve the number of channels, and measure the number of
-	 * samples.
+	 * Measure the number of samples.
 	 */
 
-	channels = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels"));
 	if(!(GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))) {
 		GST_ERROR_OBJECT(element, "cannot compute number of input samples:  invalid offset and/or end offset");
 		result = GST_FLOW_ERROR;
@@ -368,7 +371,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * later.
 	 */
 
-	srcbuf = gst_buffer_new_and_alloc((channels + 1) * (stop - start) * ASSUMED_BYTES_PER_CHANNEL);
+	srcbuf = gst_buffer_new_and_alloc((element->channels + 1) * (stop - start) * ASSUMED_BYTES_PER_CHANNEL);
 	if(!srcbuf) {
 		GST_ERROR_OBJECT(element, "failure allocating output buffer");
 		result = GST_FLOW_ERROR;
@@ -389,7 +392,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Print samples into output buffer.
 	 */
 
-	result = print_samples(srcbuf, (const double *) GST_BUFFER_DATA(sinkbuf), channels, element->sample_rate, start, stop);
+	result = print_samples(srcbuf, (const double *) GST_BUFFER_DATA(sinkbuf), element->channels, element->sample_rate, start, stop);
 	if(result != GST_FLOW_OK) {
 		gst_buffer_unref(srcbuf);
 		goto done;
@@ -547,6 +550,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	/* internal data */
 	element->sample_rate = 0;
+	element->channels = 0;
 	element->start_time = 0;
 	element->stop_time = 0;
 }
