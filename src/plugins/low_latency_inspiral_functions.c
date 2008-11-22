@@ -93,7 +93,6 @@ static int create_template_from_sngl_inspiral(
   unsigned i;
   int t_total_length = floor(t_total_duration * fsamp + 0.5);	/* length of the template */
   double norm;
-  unsigned midIndex = floor(fft_template_full->data->length / 2.0);
   gsl_vector_view col;
   gsl_vector_view tmplt;
   LALStatus status;
@@ -130,12 +129,13 @@ static int create_template_from_sngl_inspiral(
   /* compute the quadrature phases now we need a complex frequency series that
    * is twice as large.  We'll store the negative frequency components that'll
    * give the sine and cosine phase */
-  for (i = 0; i < midIndex; i++)
+  for (i = 0; i < fft_template->data->length; i++)
     {
-    fft_template_full->data->data[midIndex-i].re = 2.0 * fft_template->data->data[i].re;
-    /* conjugate */
-    fft_template_full->data->data[midIndex-i].im = 0.0 - 2.0 * fft_template->data->data[i].im;
+    /* conjugate times 2 */
+    fft_template_full->data->data[fft_template->data->length - 1 - i].re = 2.0 * fft_template->data->data[i].re;
+    fft_template_full->data->data[fft_template->data->length - 1 - i].im = -2.0 * fft_template->data->data[i].im;
     }
+  memset(&fft_template_full->data->data[fft_template->data->length], 0, (fft_template_full->data->length - fft_template->data->length) * sizeof(*fft_template_full->data->data));
 
   err = XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan);
   if (err) 
@@ -390,7 +390,7 @@ int generate_bank_svd(
   
   template_out = XLALCreateCOMPLEX16TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, full_numsamps);
 
-  fft_template = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, (int) floor(full_numsamps/2)+1);
+  fft_template = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps / 2 + 1);
 
   fft_template_full = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps);
 
