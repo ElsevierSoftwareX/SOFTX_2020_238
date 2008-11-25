@@ -99,8 +99,10 @@ static int create_template_from_sngl_inspiral(
   int err;
   memset(&status, 0, sizeof(status));
  
+  g_mutex_lock(gstlal_fftw_lock);
   LALFindChirpTDTemplate( &status, fcFilterInput->fcTmplt,
                   bankRow, fcTmpltParams );
+  g_mutex_unlock(gstlal_fftw_lock);
 
   /* copy the template into a double :( */
 
@@ -114,17 +116,11 @@ static int create_template_from_sngl_inspiral(
    */
 
   err = XLALREAL8TimeFreqFFT(fft_template,template,fwdplan);
-  if (err) 
-    {
-    fprintf(stderr, "Forward FFT failed %d\n", err);
-    exit(1);
-    }
+  if (err)
+    return -1;
 
   if (!XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd))
-    {
-    fprintf(stderr, "Whiten failed NULL return\n");
-    exit(1);
-    }
+    return -1;
 
   /* compute the quadrature phases now we need a complex frequency series that
    * is twice as large.  We'll store the negative frequency components that'll
@@ -139,21 +135,12 @@ static int create_template_from_sngl_inspiral(
 
   err = XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan);
   if (err) 
-    {
-    fprintf(stderr, "Reverse FFT failed %d\n", err);
-    exit(1);
-    }
+    return -1;
 
-   /*
-   * Normalize the template.  If s is the template and n is a stationary
-   * noise process of independent samples, s is normalized so that
+  /*
+   * Normalize the template.
    *
-   *	< (n|s)^2 > = < n^2 >
-   *
-   * that is, s acts as a mean-square preserving filter.  That condition is
-   * equivalent to
-   *
-   *	(s|s) = (1/T) \sum s^2 \Delta t = T / \Delta t = N
+   * The normalization is (s|s) = \vec{s} \cdot \vec{s} = 1
    *
    * The factor of \sqrt{2} makes the result consistent with the inspiral
    * definition of "SNR", wherein each of the real and imaginary components
@@ -161,16 +148,13 @@ static int create_template_from_sngl_inspiral(
    * \sqrt{2}.
    */
 
-  norm = t_total_length / sqrt(XLALCOMPLEX16SequenceSumSquares(template_out->data, template_out->data->length - t_total_length, t_total_length) / 2);
+  norm = 1.0 / sqrt(XLALCOMPLEX16SequenceSumSquares(template_out->data, template_out->data->length - t_total_length, t_total_length) / 2);
 
   /*
    * Extract a piece of the template.  The change in sample rate
    * necessitates an adjustment to the normalization:
    *
    *	(s|s) --> (s|s) \Delta t / \Delta t'
-   *
-   * "Huh?  \sqrt{8 / 0.99148}?"  No, my friend, don't ask questions you
-   * don't want to hear the answer to.
    */
 
   /* Real part */
@@ -179,13 +163,13 @@ static int create_template_from_sngl_inspiral(
   col = gsl_matrix_column(U,2*U_column);
   tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5)), 2*downsampfac, col.vector.size);
   gsl_vector_memcpy(&col.vector, &tmplt.vector);
-  gsl_vector_scale(&col.vector, norm * sqrt(8.0 / 0.99148));
+  gsl_vector_scale(&col.vector, norm * sqrt(downsampfac));
 
   /* Imaginary part */
   col = gsl_matrix_column(U,2*U_column + 1);
   tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5)) + 1, 2*downsampfac, col.vector.size);
   gsl_vector_memcpy(&col.vector, &tmplt.vector);
-  gsl_vector_scale(&col.vector, norm * sqrt(8.0 / 0.99148));
+  gsl_vector_scale(&col.vector, norm * sqrt(downsampfac));
   /*
    * Compute the \Xi^2 factor.
    */
@@ -319,8 +303,7 @@ int compute_time_frequency_boundaries_from_bank(char * bank_name,
   return 0;
   }
 
-/* FIXME: this is a place holder and needs to be implemented rigorously with  
- * lal functions */
+
 int generate_bank_svd(
                       gsl_matrix **U, 
                       gsl_vector **S, 
@@ -401,10 +384,16 @@ int generate_bank_svd(
   fcInitParams.numChisqBins   = 0;
   fcInitParams.createRhosqVec = 0;
   fcInitParams.ovrlap         = 0;
+#if 0
   fcInitParams.approximant    = EOB;
   fcInitParams.order          = threePointFivePN;
-  fcInitParams.createCVec     = 0;
   bankHead->order = threePointFivePN;
+#else
+  fcInitParams.approximant    = TaylorT2;
+  fcInitParams.order          = twoPN;
+  bankHead->order = twoPN;
+#endif
+  fcInitParams.createCVec     = 0;
 
   if (verbose) fprintf(stderr,"LALFindChirpTemplateInit() ...\n");
   LALFindChirpTemplateInit( &status, &fcTmpltParams, &fcInitParams );
@@ -424,8 +413,13 @@ int generate_bank_svd(
   LALCreateFindChirpInput( &status, &fcFilterInput, &fcInitParams );
   if (verbose) fprintf(stderr,"LALCreateFindChirpInput() done, tmplate is %p\n", fcFilterInput->fcTmplt);
 
-  fcTmpltParams->order = threePointFivePN;
+#if 0
   fcTmpltParams->approximant = EOB;
+  fcTmpltParams->order = threePointFivePN;
+#else
+  fcTmpltParams->approximant = TaylorT2;
+  fcTmpltParams->order = twoPN;
+#endif
   fcTmpltParams->dynRange = pow(2,63);
 
 
@@ -437,7 +431,10 @@ int generate_bank_svd(
 
     bankRow->fFinal = base_sample_rate / 2.0 - 1; /*nyquist*/
 
-    create_template_from_sngl_inspiral(bankRow, *U, *chifacs, base_sample_rate,down_samp_fac,t_end, t_total_duration, j, fcFilterInput, fcTmpltParams, template, template_out, fft_template, fft_template_full, fwdplan, revplan, psd);
+    if(create_template_from_sngl_inspiral(bankRow, *U, *chifacs, base_sample_rate,down_samp_fac,t_end, t_total_duration, j, fcFilterInput, fcTmpltParams, template, template_out, fft_template, fft_template_full, fwdplan, revplan, psd) < 0)
+      {
+      /* FIXME:  handle error */
+      }
     if (verbose) fprintf(stderr, "template %zd M_chirp=%e\n",j, bankRow->chirpMass);
     }
 

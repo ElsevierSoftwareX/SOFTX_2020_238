@@ -33,6 +33,7 @@
  */
 
 
+#include <math.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -83,7 +84,7 @@
 #define DEFAULT_T_START 0
 #define DEFAULT_T_END G_MAXDOUBLE
 #define DEFAULT_SNR_LENGTH 2048	/* samples */
-#define TEMPLATE_SAMPLE_RATE 2048	/* Hertz */
+#define TEMPLATE_SAMPLE_RATE 4096	/* Hertz */
 #define TOLERANCE 0.97
 
 
@@ -251,6 +252,29 @@ static GstFlowReturn push_mixer_matrix(GstPad *pad, gsl_matrix *matrix, GstClock
 
 done:
 	return result;
+}
+
+
+/**
+ * Normalization correction because we don't know what we're doing.
+ *
+ * This is a fit to the standard deviations of the low-passed and
+ * down-sampled time series.  The measured values were:
+ *
+ *	16384	1.0129
+ *	 4096	0.50173
+ *	 2048	0.35129
+ *	  512	0.16747
+ *	  256	0.11191
+ *	  128	0.077322
+ *
+ * dividing the input time series by this gives it a mean square of 1.
+ */
+
+
+static double normalization_correction(double rate)
+{
+	return exp(0.53222 * log(rate) - 5.1269);
 }
 
 
@@ -610,13 +634,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			/*
 			 * Compute one vector of orthogonal SNR samples ---
 			 * the projection of h(t) onto the template bank's
-			 * orthonormal basis.  The factor of 1/(T * rate) =
-			 * dt/T is to make the inner product equal to
-			 *
-			 *	(f | g) = (1/T) \sum f(t) g(t) \Delta t.
+			 * orthonormal basis.
 			 */
 
-			gsl_blas_dgemv(CblasNoTrans, 1.0 / (element->t_total_duration * element->sample_rate), element->U, &time_series.vector, 0.0, orthogonal_snr_sample);
+			gsl_blas_dgemv(CblasNoTrans, 1.0 / normalization_correction(element->sample_rate), element->U, &time_series.vector, 0.0, orthogonal_snr_sample);
 			gsl_vector_memcpy(&orthogonal_snr_row.vector, orthogonal_snr_sample);
 
 			/*
