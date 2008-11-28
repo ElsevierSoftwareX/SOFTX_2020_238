@@ -8,7 +8,7 @@ INSTRUMENT="H1"
 CHANNEL="LSC-STRAIN"
 REFERENCEPSD="reference_psd.txt"
 TEMPLATEBANK="H1-TMPLTBANK_09_1.207-874000000-2048.xml"
-SUMSQUARESTHRESHOLD="1.0"
+SUMSQUARESTHRESHOLD="4.0"
 
 SRC="lal_framesrc \
 	blocksize=$((16384*8*16)) \
@@ -43,7 +43,7 @@ FAKESINK="queue ! fakesink sync=false preroll-queue-len=1"
 PLAYBACK="adder ! audioresample ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=5e-2 ! audioconvert ! queue max-size-time=3000000000 ! alsasink"
 
 NXYDUMP="queue ! lal_nxydump start-time=874107068000000000 stop-time=874107088000000000 ! filesink sync=false preroll-queue-len=1 location"
-#NXYDUMP="queue ! lal_nxydump start-time=0 stop-time=384000000000 ! filesink sync=false preroll-queue-len=1 location"
+#NXYDUMP="queue ! lal_nxydump start-time=874100128000000000 stop-time=874120000000000000 ! filesink sync=false preroll-queue-len=1 location"
 #NXYDUMP="queue ! lal_nxydump start-time=235000000000 stop-time=290000000000 ! filesink sync=false preroll-queue-len=1 location"
 #NXYDUMP="queue ! lal_nxydump start-time=874107188000000000 stop-time=874107258000000000 ! filesink sync=false preroll-queue-len=1 location"
 
