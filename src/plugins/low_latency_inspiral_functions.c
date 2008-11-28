@@ -69,6 +69,56 @@
 #define LAL_CALL( function, statusptr ) \
   ((function),lal_errhandler(statusptr,#function,__FILE__,__LINE__,rcsid))
 
+
+static double time_to_freq(double M, double time)
+  {
+  /* This function gives the instantaneous frequency at a given time based
+   * on the quadrupole approximation.  It is bound to be a bit off from other
+   * template families so use it with caution 
+   */
+  double c3_8 = 3.0/8.0;
+  double c5_256 = 5.0/256.0;
+  double Mg = M*LAL_MTSUN_SI;
+  return (1.0/(LAL_PI*Mg)) * (pow((c5_256)*(Mg/(time)),c3_8));
+  }
+
+
+static double freq_to_time(double M, double freq)
+  {
+  /* This function gives the instantaneous frequency at a given time based
+   * on the quadrupole approximation.  It is bound to be a bit off from other
+   * template families so use it with caution 
+   */
+  double Mg = M*LAL_MTSUN_SI;
+  return 5./256. * Mg / pow(LAL_PI*Mg*freq,8./3.);
+  }
+
+
+static void quadrupole_template(double M, double duration,
+                          REAL8TimeSeries *template)
+  {
+  /* time (prior to coalescence) at which template goes through the Nyquist
+   * frequency */
+  double tstart = freq_to_time(M, 0.5 / template->deltaT);
+  /* number of samples to compute */
+  unsigned numsamps = floor(duration / template->deltaT + 0.5);
+  unsigned i;
+
+  M *= LAL_MTSUN_SI;
+
+  if(numsamps > template->data->length)
+    numsamps = template->data->length;
+
+  memset(template->data->data, 0, (template->data->length - numsamps) * sizeof(*template->data->data));
+  for (i=0; i< numsamps; i++)
+    {
+    /* t must equal -tstart in the last bin */
+    double t = -duration + template->deltaT * (i + 1) - tstart;
+    template->data->data[template->data->length - numsamps + i] = 4.0 * M * pow(5.0/256.0*(M/-t),0.25) * sin(-2.0 * pow(-t/(5.0*M),(5.0/8.0)));
+    }
+  }
+
+
 static int create_template_from_sngl_inspiral(
                        InspiralTemplate *bankRow,
                        gsl_matrix *U, 
@@ -99,17 +149,20 @@ static int create_template_from_sngl_inspiral(
   int err;
   memset(&status, 0, sizeof(status));
  
+#if 0
   g_mutex_lock(gstlal_fftw_lock);
   LALFindChirpTDTemplate( &status, fcFilterInput->fcTmplt,
                   bankRow, fcTmpltParams );
   g_mutex_unlock(gstlal_fftw_lock);
 
   /* copy the template into a double :( */
-
   for (i=0; i< template->data->length; i++)
     {
     template->data->data[i] = (REAL8) fcTmpltParams->xfacVec->data[i];
     }
+#else
+  quadrupole_template(bankRow->chirpMass, t_total_duration, template);
+#endif
 
   /*
    * Whiten the template.
@@ -140,21 +193,26 @@ static int create_template_from_sngl_inspiral(
   /*
    * Normalize the template.
    *
-   * The normalization is (s|s) = \vec{s} \cdot \vec{s} = 1
+   * The normalization is (s|s) = \vec{s} \cdot \vec{s} = 2
    *
-   * The factor of \sqrt{2} makes the result consistent with the inspiral
-   * definition of "SNR", wherein each of the real and imaginary components
-   * has a mean square of 1, so the mean square of the complex sample is
-   * \sqrt{2}.
+   * The right-hand side equalling 2 yields an "SNR" that this consistent
+   * with the inspiral definition, wherein each of the real and imaginary
+   * components has a mean square of 1, so the mean square of the complex
+   * sample is 2.
+   *
+   * Multiplying the vector by \sqrt{2 / \sum s^{2}} makes the dot product
+   * of the vector with itself equal to 2.
+   *
+   * Because the sample rate will be adjusted (samples removed from the
+   * time series) the normalization factor must be scaled up by a factor of
+   * \sqrt{down-sample factor} so that the remaining samples alone will
+   * have a dot product with themselves equal to 2.
    */
 
-  norm = 1.0 / sqrt(XLALCOMPLEX16SequenceSumSquares(template_out->data, template_out->data->length - t_total_length, t_total_length) / 2);
+  norm = sqrt(2 * downsampfac / XLALCOMPLEX16SequenceSumSquares(template_out->data, template_out->data->length - t_total_length, t_total_length));
 
   /*
-   * Extract a piece of the template.  The change in sample rate
-   * necessitates an adjustment to the normalization:
-   *
-   *	(s|s) --> (s|s) \Delta t / \Delta t'
+   * Extract a piece of the template.
    */
 
   /* Real part */
@@ -163,46 +221,22 @@ static int create_template_from_sngl_inspiral(
   col = gsl_matrix_column(U,2*U_column);
   tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5)), 2*downsampfac, col.vector.size);
   gsl_vector_memcpy(&col.vector, &tmplt.vector);
-  gsl_vector_scale(&col.vector, norm * sqrt(downsampfac));
+  gsl_vector_scale(&col.vector, norm);
 
   /* Imaginary part */
   col = gsl_matrix_column(U,2*U_column + 1);
   tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5)) + 1, 2*downsampfac, col.vector.size);
   gsl_vector_memcpy(&col.vector, &tmplt.vector);
-  gsl_vector_scale(&col.vector, norm * sqrt(downsampfac));
+  gsl_vector_scale(&col.vector, norm);
+
   /*
-   * Compute the \Xi^2 factor.
+   * Compute the \Chi^2 factor.
    */
 
   gsl_vector_set(chifacs,U_column,gsl_blas_dnrm2(&col.vector));
 
   return 0;
   }
-
-
-static double time_to_freq(double M, double time)
-  {
-  /* This function gives the instantaneous frequency at a given time based
-   * on the quadrupole approximation.  It is bound to be a bit off from other
-   * template families so use it with caution 
-   */
-  double c3_8 = 3.0/8.0;
-  double c5_256 = 5.0/256.0;
-  double Mg = M*LAL_MTSUN_SI;
-  return (1.0/(LAL_PI*Mg)) * (pow((c5_256)*(Mg/(time)),c3_8));
-  }
-
-
-static double freq_to_time(double M, double freq)
-  {
-  /* This function gives the instantaneous frequency at a given time based
-   * on the quadrupole approximation.  It is bound to be a bit off from other
-   * template families so use it with caution 
-   */
-  double Mg = M*LAL_MTSUN_SI;
-  return 5./256. * Mg / pow(LAL_PI*Mg*freq,8./3.);
-  }
-
 
 
 int compute_time_frequency_boundaries_from_bank(char * bank_name,
@@ -384,7 +418,7 @@ int generate_bank_svd(
   fcInitParams.numChisqBins   = 0;
   fcInitParams.createRhosqVec = 0;
   fcInitParams.ovrlap         = 0;
-#if 0
+#if 1
   fcInitParams.approximant    = EOB;
   fcInitParams.order          = threePointFivePN;
   bankHead->order = threePointFivePN;
@@ -413,7 +447,7 @@ int generate_bank_svd(
   LALCreateFindChirpInput( &status, &fcFilterInput, &fcInitParams );
   if (verbose) fprintf(stderr,"LALCreateFindChirpInput() done, tmplate is %p\n", fcFilterInput->fcTmplt);
 
-#if 0
+#if 1
   fcTmpltParams->approximant = EOB;
   fcTmpltParams->order = threePointFivePN;
 #else
@@ -498,25 +532,6 @@ void not_gsl_matrix_transpose(gsl_matrix **m)
   gsl_matrix_free(*m);
   *m = new;
 }
-
-double normalize_template(double M, double ts, double duration,
-                                int fsamp)
-
-  {
-  int numsamps = fsamp*duration;
-  double tmpltpower = 0;
-  double h = 0;
-  int i = 0;
-  double dt = 1.0/fsamp;
-  for (i=0; i< numsamps; i++)
-    {
-    h = 4.0 * M * pow(5.0/256.0*(M/(-ts+dt*i)),0.25) 
-      * sin(-2.0/2.0/M_PI * pow((-ts+dt*i)/(5.0*M),(5.0/8.0)));
-    tmpltpower+=h*h*dt;
-    }
-  return sqrt(tmpltpower);
-   
-  }
 
  int trim_matrix(gsl_matrix **U, gsl_matrix **V, gsl_vector **S, 
                         double tolerance)
