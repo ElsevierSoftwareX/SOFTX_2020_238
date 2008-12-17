@@ -158,13 +158,13 @@ static GstCaps *getcaps(GstPad *pad)
 	GstCaps *sinkcaps;
 	GstCaps *peercaps;
 
-	g_mutex_lock(element->mixmatrix_lock);
-
 	/*
 	 * start by computing the intersection of our own allowed caps with
 	 * the peer's caps.  use get_fixed_caps_func() to avoid recursing
 	 * back into this function.
 	 */
+
+	/* FIXME:  shouldn't we be intersecting with the downstream peer? */
 
 	sinkcaps = gst_pad_get_fixed_caps_func(pad);
 	peercaps = gst_pad_peer_get_caps(pad);
@@ -181,6 +181,7 @@ static GstCaps *getcaps(GstPad *pad)
 	 * channels must match the number of rows in the mixing matrix.
 	 */
 
+	g_mutex_lock(element->mixmatrix_lock);
 	if(element->mixmatrix_buf) {
 		GstCaps *matrixcaps = GST_PAD_CAPS(element->matrixpad);
 		GstCaps *result;
@@ -196,12 +197,12 @@ static GstCaps *getcaps(GstPad *pad)
 		gst_caps_unref(matrixcaps);
 		sinkcaps = result;
 	}
+	g_mutex_unlock(element->mixmatrix_lock);
 
 	/*
 	 * done.
 	 */
 
-	g_mutex_unlock(element->mixmatrix_lock);
 	gst_object_unref(element);
 	return sinkcaps;
 }
