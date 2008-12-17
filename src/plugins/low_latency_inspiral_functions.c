@@ -146,7 +146,6 @@ static int create_template_from_sngl_inspiral(
   gsl_vector_view col;
   gsl_vector_view tmplt;
   LALStatus status;
-  int err;
   memset(&status, 0, sizeof(status));
  
 #if 0
@@ -168,11 +167,10 @@ static int create_template_from_sngl_inspiral(
    * Whiten the template.
    */
 
-  err = XLALREAL8TimeFreqFFT(fft_template,template,fwdplan);
-  if (err)
+  if(XLALREAL8TimeFreqFFT(fft_template,template,fwdplan))
     return -1;
 
-  if (!XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd))
+  if(!XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd))
     return -1;
 
   /* compute the quadrature phases now we need a complex frequency series that
@@ -186,8 +184,7 @@ static int create_template_from_sngl_inspiral(
     }
   memset(&fft_template_full->data->data[fft_template->data->length], 0, (fft_template_full->data->length - fft_template->data->length) * sizeof(*fft_template_full->data->data));
 
-  err = XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan);
-  if (err) 
+  if(XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan))
     return -1;
 
   /*
