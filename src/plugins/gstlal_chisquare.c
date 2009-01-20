@@ -33,7 +33,7 @@
  */
 
 
-#include <complex.h>
+#include <math.h>
 #include <string.h>
 
 
@@ -71,19 +71,41 @@
 /*
  * ========================================================================
  *
+ *                                 Parameters
+ *
+ * ========================================================================
+ */
+
+
+/* FIXME: Hard coded (for now) max degrees of freedom.  Why a max of 10 you
+ * might ask?  Well For inspiral analysis we usually have about 5 different
+ * pieces of the waveform (give or take a few).  So computing a 10 degree
+ * chisq test on each gives 50 degrees of freedom total.  The std dev of
+ * that chisq distribution is sqrt(50) and can be compared to the SNR^2
+ * that we are trying to distinguish from a glitch.  That means we can
+ * begin to have discriminatory power at SNR = 50^(1/4) = 2.66 which is in
+ * the bulk of the SNR distribution expected from Gaussian noise - exactly
+ * where we want to be*/
+
+#define DEFAULT_MAX_DOF 10
+
+
+/*
+ * ========================================================================
+ *
  *                             Utility Functions
  *
  * ========================================================================
  */
 
 
-static int num_input_channels(const GSTLALChiSquare *element)
+static int num_orthosnr_channels(const GSTLALChiSquare *element)
 {
 	return element->mixmatrix.matrix.size1;
 }
 
 
-static int num_output_channels(const GSTLALChiSquare *element)
+static int num_snr_channels(const GSTLALChiSquare *element)
 {
 	return element->mixmatrix.matrix.size2;
 }
@@ -96,9 +118,27 @@ static size_t mixmatrix_element_size(const GSTLALChiSquare *element)
 
 
 /*
+ * parse caps, and set bytes per sample on collect pads object
+ */
+
+
+static void set_bytes_per_sample(GstPad *pad, GstCaps *caps)
+{
+	GstStructure *structure;
+	gint width, channels;
+
+	structure = gst_caps_get_structure(caps, 0);
+	gst_structure_get_int(structure, "width", &width);
+	gst_structure_get_int(structure, "channels", &channels);
+
+	gstlal_collect_pads_set_bytes_per_sample(pad, (width / 8) * channels);
+}
+
+
+/*
  * ============================================================================
  *
- *                                    Caps
+ *                              Caps --- SNR Pad
  *
  * ============================================================================
  */
@@ -106,44 +146,96 @@ static size_t mixmatrix_element_size(const GSTLALChiSquare *element)
 
 /*
  * we can only accept caps that both ourselves and the downstream peer can
- * handle
+ * handle, and the number of channels must match the size of the mixing
+ * matrix
  */
 
 
 static GstCaps *getcaps_snr(GstPad *pad)
 {
 	GSTLALChiSquare *element = GSTLAL_CHISQUARE(GST_PAD_PARENT(pad));
-	GstCaps *result, *peercaps, *sinkcaps;
+	GstCaps *peercaps, *caps;
 
 	GST_OBJECT_LOCK(element);
 
 	/*
-	 * get the allowed caps from the downstream peer
+	 * start by retrieving our own caps.  use get_fixed_caps_func() to
+	 * avoid recursing back into this function.
+	 */
+
+	caps = gst_pad_get_fixed_caps_func(pad);
+
+	/*
+	 * if we have a mixing matrix the sink pad's media type and sample
+	 * width must be the same as the mixing matrix's, and the number of
+	 * channels must match the number of columns in the mixing matrix.
+	 */
+
+	g_mutex_lock(element->mixmatrix_lock);
+	if(element->mixmatrix_buf) {
+		GstCaps *matrixcaps = gst_caps_make_writable(gst_buffer_get_caps(element->mixmatrix_buf));
+		GstCaps *result;
+		guint n;
+
+		for(n = 0; n < gst_caps_get_size(matrixcaps); n++)
+			gst_structure_set(gst_caps_get_structure(matrixcaps, n), "channels", G_TYPE_INT, num_snr_channels(element), NULL);
+		result = gst_caps_intersect(matrixcaps, caps);
+		gst_caps_unref(caps);
+		gst_caps_unref(matrixcaps);
+		caps = result;
+	}
+	g_mutex_unlock(element->mixmatrix_lock);
+
+	/*
+	 * now compute the intersection of the caps with the downstream
+	 * peer's caps if known.
 	 */
 
 	peercaps = gst_pad_peer_get_caps(element->srcpad);
-
-	/*
-	 * get our own allowed caps.  use the fixed caps function to avoid
-	 * recursing back into this function.
-	 */
-
-	sinkcaps = gst_pad_get_fixed_caps_func(pad);
-
-	/*
-	 * if the peer has caps, intersect.  if the peer has no caps (or
-	 * there is no peer), use the allowed caps of this sinkpad.
-	 */
-
 	if(peercaps) {
-		GST_DEBUG_OBJECT(element, "intersecting peer and template caps");
-		result = gst_caps_intersect(peercaps, sinkcaps);
+		GstCaps *result = gst_caps_intersect(peercaps, caps);
+		gst_caps_unref(caps);
 		gst_caps_unref(peercaps);
-		gst_caps_unref(sinkcaps);
-	} else {
-		GST_DEBUG_OBJECT(element, "no peer caps, using sinkcaps");
-		result = sinkcaps;
+		caps = result;
 	}
+
+	/*
+	 * done
+	 */
+
+	GST_OBJECT_UNLOCK(element);
+	return caps;
+}
+
+
+/*
+ * when setting new caps, extract the sample rate and bytes/sample from the
+ * caps
+ */
+
+
+static gboolean setcaps_snr(GstPad *pad, GstCaps *caps)
+{
+	GSTLALChiSquare *element = GSTLAL_CHISQUARE(GST_PAD_PARENT(pad));
+	GstStructure *structure;
+	const char *media_type;
+	gboolean result = TRUE;
+
+	GST_OBJECT_LOCK(element);
+
+	/*
+	 * set bytes per sample on collect pads object
+	 */
+
+	set_bytes_per_sample(pad, caps);
+
+	/*
+	 * extract rate
+	 */
+
+	structure = gst_caps_get_structure(caps, 0);
+	media_type = gst_structure_get_name(structure);
+	gst_structure_get_int(structure, "rate", &element->rate);
 
 	/*
 	 * done
@@ -155,39 +247,178 @@ static GstCaps *getcaps_snr(GstPad *pad)
 
 
 /*
- * when getting new caps, extract the sample rate and bytes/sample from the
- * caps
+ * ============================================================================
+ *
+ *                        Caps --- Orthogonal SNR Pad
+ *
+ * ============================================================================
  */
 
 
-static gboolean setcaps(GstPad *pad, GstCaps *caps)
+/*
+ * we can only accept caps that both ourselves and the downstream peer can
+ * handle, and the number of channels must match the size of the mixing
+ * matrix
+ */
+
+
+static GstCaps *getcaps_orthosnr(GstPad *pad)
 {
 	GSTLALChiSquare *element = GSTLAL_CHISQUARE(GST_PAD_PARENT(pad));
-	GstStructure *structure;
-	const char *media_type;
-	gint width, channels;
+	GstCaps *result, *snrcaps, *caps;
+
+	GST_OBJECT_LOCK(element);
 
 	/*
-	 * parse caps
+	 * start by retrieving our own caps.  use get_fixed_caps_func() to
+	 * avoid recursing back into this function.
 	 */
 
-	structure = gst_caps_get_structure(caps, 0);
-	media_type = gst_structure_get_name(structure);
-	gst_structure_get_int(structure, "rate", &element->rate);
-	gst_structure_get_int(structure, "width", &width);
-	gst_structure_get_int(structure, "channels", &channels);
+	caps = gst_pad_get_fixed_caps_func(pad);
 
 	/*
-	 * pre-calculate bytes / sample
+	 * now intersect with the SNR pad's caps, replacing the number of
+	 * channels with the number of rows in the mixing matrix if known.
+	 * Retrieving the SNR pad's caps in-turn performs an intersection
+	 * with the down-stream peer so we don't have to do that here
 	 */
 
-	gstlal_collect_pads_set_bytes_per_sample(pad, (width / 8) * channels);
+	GST_OBJECT_UNLOCK(element);
+	snrcaps = gst_pad_get_caps(element->snrpad);
+	GST_OBJECT_LOCK(element);
+
+	g_mutex_lock(element->mixmatrix_lock);
+	if(element->mixmatrix_buf) {
+		guint n;
+		for(n = 0; n < gst_caps_get_size(snrcaps); n++)
+			gst_structure_set(gst_caps_get_structure(snrcaps, n), "channels", G_TYPE_INT, num_orthosnr_channels(element), NULL);
+	}
+	g_mutex_unlock(element->mixmatrix_lock);
+
+	result = gst_caps_intersect(snrcaps, caps);
+	gst_caps_unref(caps);
+	gst_caps_unref(snrcaps);
 
 	/*
 	 * done
 	 */
 
+	GST_OBJECT_UNLOCK(element);
+	return result;
+}
+
+
+/*
+ * when setting new caps, extract the sample rate and bytes/sample from the
+ * caps
+ */
+
+
+static gboolean setcaps_orthosnr(GstPad *pad, GstCaps *caps)
+{
+	GSTLALChiSquare *element = GSTLAL_CHISQUARE(GST_PAD_PARENT(pad));
+
+	GST_OBJECT_LOCK(element);
+
+	/*
+	 * set bytes per sample on collect pads object
+	 */
+
+	set_bytes_per_sample(pad, caps);
+
+	/*
+	 * extract rate
+	 */
+
+	/* FIXME:  check that it is allowed */
+
+	/*
+	 * done
+	 */
+
+	GST_OBJECT_UNLOCK(element);
 	return TRUE;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                                 Matrix Pad
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * setcaps()
+ */
+
+
+static gboolean setcaps_matrix(GstPad *pad, GstCaps *caps)
+{
+	GSTLALChiSquare *element = GSTLAL_CHISQUARE(GST_PAD_PARENT(pad));
+	gboolean result = TRUE;
+
+	GST_OBJECT_LOCK(element);
+
+	/*
+	 * done
+	 */
+
+	GST_OBJECT_UNLOCK(element);
+	return result;
+}
+
+
+/*
+ * chain()
+ */
+
+
+static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
+{
+	GSTLALChiSquare *element = GSTLAL_CHISQUARE(GST_PAD_PARENT(pad));
+	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
+	GstStructure *structure = gst_caps_get_structure(caps, 0);
+	GstFlowReturn result = GST_FLOW_OK;
+	gint rows, cols;
+
+	GST_OBJECT_LOCK(element);
+
+	/*
+	 * get the matrix size
+	 */
+
+	gst_structure_get_int(structure, "channels", &cols);
+	rows = GST_BUFFER_SIZE(sinkbuf) / mixmatrix_element_size(element) / cols;
+	if(rows * cols * mixmatrix_element_size(element) != GST_BUFFER_SIZE(sinkbuf)) {
+		GST_ERROR_OBJECT(element, "buffer size mismatch:  input buffer size not divisible by the channel count");
+		gst_buffer_unref(sinkbuf);
+		result = GST_FLOW_NOT_NEGOTIATED;
+		goto done;
+	}
+
+	/*
+	 * replace the current matrix with the new one
+	 */
+
+	g_mutex_lock(element->mixmatrix_lock);
+	if(element->mixmatrix_buf)
+		gst_buffer_unref(element->mixmatrix_buf);
+	element->mixmatrix_buf = sinkbuf;
+	element->mixmatrix = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
+	g_cond_signal(element->mixmatrix_available);
+	g_mutex_unlock(element->mixmatrix_lock);
+
+	/*
+	 * done
+	 */
+
+done:
+	gst_caps_unref(caps);
+	GST_OBJECT_UNLOCK(element);
+	return result;
 }
 
 
@@ -204,13 +435,12 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 {
 	GSTLALChiSquare *element = GSTLAL_CHISQUARE(user_data);
 	guint64 earliest_input_offset, earliest_input_offset_end;
-	guint length;
+	guint sample, length;
 	GstBuffer *buf;
 	GstBuffer *orthosnrbuf;
-	guint numinputs, numoutputs, numsamps, dof, i, j, k;
-	double *chisqdata;
-	double *orthodata;
-	double chisq, snr, mfac, orthosnr;
+	gint dof;
+	gint ortho_channel, numorthochannels;
+	gint channel, numchannels;
 
 	/*
 	 * get the range of offsets (in the output stream) spanned by the
@@ -242,13 +472,6 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	}
 
 	/*
-	 * compute the number of samples for which all sink pads can
-	 * contribute information.  0 does not necessarily mean EOS.
-	 */
-
-	length = earliest_input_offset_end - earliest_input_offset;
-
-	/*
 	 * get buffers upto the desired end offset.
 	 */
 
@@ -259,65 +482,88 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 * NULL means EOS.
 	 */
  
-	if(!buf && !orthosnrbuf) {
+	if(!buf || !orthosnrbuf) {
 		/* FIXME:  handle EOS */
+	}
+
+	/*
+	 * FIXME:  rethink the collect pads system so that this doesn't
+	 * happen  (I think the second part already cannot happen because
+	 * we get the collect pads system to tell us the upper bound of
+	 * available offsets before asking for the buffers, but need to
+	 * check this)
+	 */
+
+	if(GST_BUFFER_OFFSET(buf) != GST_BUFFER_OFFSET(orthosnrbuf) || GST_BUFFER_OFFSET_END(buf) != GST_BUFFER_OFFSET_END(orthosnrbuf)) {
+		gst_buffer_unref(buf);
+		gst_buffer_unref(orthosnrbuf);
+		GST_ERROR_OBJECT(element, "misaligned buffer boundaries");
+		return GST_FLOW_ERROR;
+	}
+
+	/*
+	 * Gap --> pass-through
+	 */
+
+	if(GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP) || GST_BUFFER_FLAG_IS_SET(orthosnrbuf, GST_BUFFER_FLAG_GAP)) {
+		memset(GST_BUFFER_DATA(buf), 0, GST_BUFFER_SIZE(buf));
+		gst_buffer_unref(orthosnrbuf);
+		return gst_pad_push(element->srcpad, buf);
+	}
+
+	/*
+	 * compute the number of samples in each channel
+	 */
+
+	length = GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
+
+	/*
+	 * make sure the mix matrix is available, wait until it is
+	 */
+
+	g_mutex_lock(element->mixmatrix_lock);
+	if(!element->mixmatrix_buf) {
+		g_cond_wait(element->mixmatrix_available, element->mixmatrix_lock);
+		if(!element->mixmatrix_buf) {
+			/* mixing matrix didn't get set.  probably means
+			 * we're being disposed(). */
+			g_mutex_unlock(element->mixmatrix_lock);
+			gst_buffer_unref(buf);
+			gst_buffer_unref(orthosnrbuf);
+			GST_ERROR_OBJECT(element, "no mixing matrix available");
+			return GST_FLOW_NOT_NEGOTIATED;
+		}
 	}
 
 	/*
 	 * compute the \Chi^{2} values in-place in the input buffer
 	 */
-	/* FIXME This assumes that the number of inputs and outputs are defined by the
-	 * reconstruction matrix and doesn't check that the number of channels is right 
-	 * This NEEDS to be done somewhere else */
-	/* We'll be reading from the mixing matrix so we need to lock it */
-	g_mutex_lock(element->mixmatrix_lock);
-	numinputs = (guint) num_input_channels(element);
-	numoutputs = (guint) num_output_channels(element);
-	numsamps = GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
-	chisqdata = (double *) GST_BUFFER_DATA(buf);
-	orthodata = (double *) GST_BUFFER_DATA(orthosnrbuf);
-	/* FIXME: Hard coded degrees of freedom for now 
-	 * Why a max of 10 you might ask?  Well For inspiral analysis we usually have
-	 * about 5 different pieces of the waveform (give or take a few).  
-	 * So computing a 10 degree chisq
-	 * test on each gives 50 degrees of freedom total.  The std dev of that 
-	 * chisq distribution is sqrt(50) and can be compared to the SNR^2 that we are
-	 * trying to distinguish from a glitch.  That means we can begin to have 
-	 * discriminatory power at SNR = 50^(1/4) = 2.66 which is in the bulk of the
-	 * SNR distribution expected from Gaussian noise - exactly where we want to be*/
-
-	if (numinputs < 10) dof = numinputs;
-	else dof = 10;
-
-
-	/* FIXME:  Assumes that the most important basis vectors are at the beginning
-	 * this is a sensible assumption */
+	/* FIXME:  Assumes that the most important basis vectors are at the
+	 * beginning this is a sensible assumption */
 	/* FIXME: do with gsl functions?? */
 
-        for (i = 0; i < numsamps; i++)
-	  {
-	  for (j = 0; j < numoutputs; j++)
-	    {
-	    chisq = 0;
-	    snr = chisqdata[numoutputs*i + j];
-            for (k = 0; k < dof; k++)
-	      {
-	      mfac = gsl_matrix_get(&(element->mixmatrix.matrix), k, j);
-	      orthosnr = orthodata[numinputs*i + k];
-              chisq += (orthosnr/mfac - snr) * (orthosnr/mfac - snr);
-	      }
-	    /* put the chisq value into the input buffer */
-	    chisqdata[numoutputs*i + j] = chisq;
-	    }
-	  }
+	numorthochannels = (guint) num_orthosnr_channels(element);
+	numchannels = (guint) num_snr_channels(element);
+	dof = (numorthochannels < element->max_dof) ? numorthochannels : element->max_dof;
 
-        /* We are done with the matrix so unlock it */
+	for(sample = 0; sample < length; sample++) {
+		double *data = &((double *) GST_BUFFER_DATA(buf))[numchannels * sample];
+		const double *orthodata = &((double *) GST_BUFFER_DATA(orthosnrbuf))[numorthochannels * sample];
+		for(channel = 0; channel < numchannels; channel++) {
+			double snr = data[channel];
+			data[channel] = 0;
+			for(ortho_channel = 0; ortho_channel < dof; ortho_channel++)
+				data[channel] += pow(orthodata[ortho_channel] / gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel) - snr, 2.0);
+			
+		}
+	}
 	g_mutex_unlock(element->mixmatrix_lock);
 
 	/*
 	 * push the buffer downstream
 	 */
 
+	gst_buffer_unref(orthosnrbuf);
 	return gst_pad_push(element->srcpad, buf);
 
 eos:
@@ -432,11 +678,7 @@ static void base_init(gpointer class)
 				"audio/x-raw-float, " \
 				"channels = (int) [ 1, MAX ], " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {32, 64} ; " \
-				"audio/x-raw-complex, " \
-				"channels = (int) [ 1, MAX ], " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {64, 128}"
+				"width = (int) 64"
 			)
 		)
 	);
@@ -451,12 +693,7 @@ static void base_init(gpointer class)
 				"rate = (int) [ 1, MAX ], " \
 				"channels = (int) [ 1, MAX ], " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {32, 64} ; " \
-				"audio/x-raw-complex, " \
-				"rate = (int) [ 1, MAX ], " \
-				"channels = (int) [ 1, MAX ], " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {64, 128}"
+				"width = (int) 64"
 			)
 		)
 	);
@@ -471,12 +708,7 @@ static void base_init(gpointer class)
 				"rate = (int) [ 1, MAX ], " \
 				"channels = (int) [ 1, MAX ], " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {32, 64} ; " \
-				"audio/x-raw-complex, " \
-				"rate = (int) [ 1, MAX ], " \
-				"channels = (int) [ 1, MAX ], " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {64, 128}"
+				"width = (int) 64"
 			)
 		)
 	);
@@ -491,12 +723,7 @@ static void base_init(gpointer class)
 				"rate = (int) [ 1, MAX ], " \
 				"channels = (int) [ 1, MAX ], " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {32, 64} ; " \
-				"audio/x-raw-complex, " \
-				"rate = (int) [ 1, MAX ], " \
-				"channels = (int) [ 1, MAX ], " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {64, 128}"
+				"width = (int) 64"
 			)
 		)
 	);
@@ -541,21 +768,21 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	/* configure (and ref) matrix pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "matrix");
-	/*gst_pad_set_setcaps_function(pad, setcaps_matrix);
-	gst_pad_set_chain_function(pad, chain_matrix);*/
+	gst_pad_set_setcaps_function(pad, setcaps_matrix);
+	gst_pad_set_chain_function(pad, chain_matrix);
 	element->matrixpad = pad;
 
 	/* configure (and ref) orthogonal SNR sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "orthosnr");
-	/*gst_pad_set_getcaps_function(pad, getcaps);*/
-	gst_pad_set_setcaps_function(pad, setcaps);
+	gst_pad_set_getcaps_function(pad, getcaps_orthosnr);
+	gst_pad_set_setcaps_function(pad, setcaps_orthosnr);
 	element->orthosnrcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->orthosnrcollectdata));
 	element->orthosnrpad = pad;
 
 	/* configure (and ref) SNR sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "snr");
 	gst_pad_set_getcaps_function(pad, getcaps_snr);
-	gst_pad_set_setcaps_function(pad, setcaps);
+	gst_pad_set_setcaps_function(pad, setcaps_snr);
 	element->snrcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->snrcollectdata));
 	element->snrpad = pad;
 
@@ -564,6 +791,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	/* internal data */
 	element->rate = 0;
+	element->max_dof = DEFAULT_MAX_DOF;
 	element->mixmatrix_lock = g_mutex_new();
 	element->mixmatrix_available = g_cond_new();
 	element->mixmatrix_buf = NULL;

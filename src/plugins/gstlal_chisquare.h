@@ -64,6 +64,9 @@ typedef struct {
 	GstLALCollectData *snrcollectdata;
 	GstPad *srcpad;
 
+	/* max dof to use */
+	gint max_dof;
+
 	/* stream format */
 	gint rate;
 
