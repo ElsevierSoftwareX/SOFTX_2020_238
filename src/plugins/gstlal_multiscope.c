@@ -247,7 +247,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Loop while data's available.
 	 */
 
-	while(gst_adapter_available(element->adapter) >= trace_samples * element->channels * sizeof(double)) {
+	while(gst_adapter_available(element->adapter) >= (trace_samples >= flush_samples ? trace_samples : flush_samples) * element->channels * sizeof(double)) {
 		double *data = (double *) gst_adapter_peek(element->adapter, trace_samples * element->channels * sizeof(*data));
 		double *d;
 		uint32_t *pixels;
@@ -320,14 +320,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			goto done;
 
 		/*
-		 * Flush the data from the adapter and avance the sample
+		 * Flush the data from the adapter and advance the sample
 		 * counters.
 		 */
 
 		gst_adapter_flush(element->adapter, flush_samples * element->channels * sizeof(*data));
 		element->next_is_discontinuity = FALSE;
 		element->next_sample += flush_samples;
-		element->adapter_head_timestamp += (GstClockTime) flush_samples * GST_SECOND / element->sample_rate;
+		element->adapter_head_timestamp += gst_util_uint64_scale_int(flush_samples, GST_SECOND, element->sample_rate);
 	}
 
 	/*
