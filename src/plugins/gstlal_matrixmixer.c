@@ -183,15 +183,12 @@ static GstCaps *getcaps(GstPad *pad)
 
 	g_mutex_lock(element->mixmatrix_lock);
 	if(element->mixmatrix_buf) {
-		GstCaps *matrixcaps = GST_PAD_CAPS(element->matrixpad);
+		GstCaps *matrixcaps = gst_caps_make_writable(gst_buffer_get_caps(element->mixmatrix_buf));
 		GstCaps *result;
 		guint n;
 
-		gst_caps_ref(matrixcaps);
-		matrixcaps = gst_caps_make_writable(matrixcaps);
 		for(n = 0; n < gst_caps_get_size(matrixcaps); n++)
 			gst_structure_set(gst_caps_get_structure(matrixcaps, n), "channels", G_TYPE_INT, num_input_channels(element), NULL);
-
 		result = gst_caps_intersect(matrixcaps, sinkcaps);
 		gst_caps_unref(sinkcaps);
 		gst_caps_unref(matrixcaps);
