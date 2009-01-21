@@ -39,3 +39,6 @@ test_program_CFLAGS = -g -O2 $(AM_CFLAGS) $(CFLAGS) ${gstreamer_CFLAGS} ${LAL_CF
 test_program_LDADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS}
 
 noinst_HEADERS = gstlal.h
+
+SUBDIRS = speexresample
+DIST_SUBDIRS = speexresample

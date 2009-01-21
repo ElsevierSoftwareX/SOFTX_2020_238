@@ -15,6 +15,7 @@ AC_CONFIG_FILES([ \
 	src/Makefile \
 	src/plugins/Makefile \
 	src/utilities/Makefile \
+	src/plugins/speexresample/Makefile \
 ])
 
 
@@ -66,6 +67,18 @@ AC_MSG_NOTICE([If you have chosen to install the software in a location not incl
 	
 to your GST_PLUGIN_PATH environment variable.])
 AC_SUBST([GSTREAMER_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\).*"])
+
+
+#
+# Check for liboil 0.3
+#
+
+
+AC_SUBST([LIBOIL_RELEASE], [0.3])
+AC_SUBST([MIN_LIBOIL_VERSION], [0.3.14])
+PKG_CHECK_MODULES([liboil], [liboil-${LIBOIL_RELEASE} >= ${MIN_LIBOIL_VERSION}], , [echo "Not Found!" ; exit 1])
+AC_SUBST([liboil_CFLAGS])
+AC_SUBST([liboil_LIBS])
 
 
 #
