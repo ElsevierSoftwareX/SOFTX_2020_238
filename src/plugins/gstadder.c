@@ -236,7 +236,7 @@ static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 		gst_caps_unref(peercaps);
 		gst_caps_unref(sinkcaps);
 	} else {
-		GST_DEBUG_OBJECT(adder, "no peer caps, using sinkcaps");
+		GST_DEBUG_OBJECT(adder, "no peer caps, using template caps");
 		result = sinkcaps;
 	}
 
