@@ -116,7 +116,7 @@ GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *pads, GstPad *pad
 	}
 
 	/*
-	 * initialize our own extra contents of the GstAdderCollectData
+	 * initialize our own extra contents of the GstLALCollectData
 	 * structure
 	 */
 
