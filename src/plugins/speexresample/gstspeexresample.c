@@ -121,6 +121,7 @@ GST_DEBUG_CATEGORY (speex_resample_debug);
 					  _GSTLAL_PUT (data, 2, 32,  16, num); \
 					} while (0)
 
+static const int quality_map[11] = {8,16,32,48,64,80,96,128,160,192,256};
 
 enum
 {
@@ -965,6 +966,11 @@ gst_speex_resample_process (GstSpeexResample * resample, GstBuffer * inbuf,
   guint8 *in_tmp = NULL, *out_tmp = NULL;
   gboolean need_convert = (resample->funcs->width != resample->width);
 
+  int  rate_ratio = resample->inrate / resample->outrate;
+  /* FIXME: THIS NEEDS TO BE MORE CARFUL for non power of 2*/
+  int latency = (int) resample->funcs->get_input_latency (resample->state) / rate_ratio;
+  int skipGAP = 0;
+  
   in_len = GST_BUFFER_SIZE (inbuf) / resample->channels;
   out_len = GST_BUFFER_SIZE (outbuf) / resample->channels;
 
@@ -973,6 +979,11 @@ gst_speex_resample_process (GstSpeexResample * resample, GstBuffer * inbuf,
 
   in_processed = in_len;
   out_processed = out_len;
+  /* Check if we should skip this gap, if it is shorter than the latency times
+   * it will break, so also check the buffer is long enough  
+   */
+  if (in_len > ( latency * rate_ratio) && GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) )
+    skipGAP = 1;
 
   if (need_convert) {
     guint in_size_tmp =
@@ -997,16 +1008,25 @@ gst_speex_resample_process (GstSpeexResample * resample, GstBuffer * inbuf,
       resample->tmp_out_size = out_size_tmp;
     }
   }
-
   if (need_convert) {
-    err = resample->funcs->process (resample->state,
+    /* don't bother with the resample filter if it is a gap */    
+    if ( skipGAP ) {
+      GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
+   }
+   else
+      err = resample->funcs->process (resample->state,
         in_tmp, &in_processed, out_tmp, &out_processed);
   } else {
-    err = resample->funcs->process (resample->state,
+    /* don't bother with the resample filter if it is a gap */
+    if ( skipGAP ) {
+      GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
+    }
+    else
+      err = resample->funcs->process (resample->state,
         (const guint8 *) GST_BUFFER_DATA (inbuf), &in_processed,
         (guint8 *) GST_BUFFER_DATA (outbuf), &out_processed);
   }
-
+  fprintf(stderr,"%d %d\n", in_len, latency * rate_ratio);
   if (G_UNLIKELY (in_len != in_processed))
     GST_WARNING_OBJECT (resample, "Converted %d of %d input samples",
         in_processed, in_len);
@@ -1033,18 +1053,30 @@ gst_speex_resample_process (GstSpeexResample * resample, GstBuffer * inbuf,
       gst_speex_resample_convert_buffer (resample, out_tmp,
           GST_BUFFER_DATA (outbuf), out_processed, TRUE);
 
+
+    if ( skipGAP ){ 
+      out_processed -= latency; 
+      gst_speex_resample_push_drain (resample);
+      gst_speex_resample_reset_state (resample);
+    }
+
     GST_BUFFER_DURATION (outbuf) =
         GST_FRAMES_TO_CLOCK_TIME (out_processed, resample->outrate);
     GST_BUFFER_SIZE (outbuf) =
         out_processed * resample->channels * (resample->width / 8);
 
-    if (GST_CLOCK_TIME_IS_VALID (resample->next_ts)) {
-      GST_BUFFER_TIMESTAMP (outbuf) = resample->next_ts;
-      GST_BUFFER_OFFSET (outbuf) = resample->next_offset;
-      GST_BUFFER_OFFSET_END (outbuf) = resample->next_offset + out_processed;
+    if (0 && GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ) {
+        gst_speex_resample_push_drain (resample);
+        gst_speex_resample_reset_state (resample);
+    }
 
-      resample->next_ts += GST_BUFFER_DURATION (outbuf);
-      resample->next_offset += out_processed;
+    if (GST_CLOCK_TIME_IS_VALID (resample->next_ts)) {
+        GST_BUFFER_TIMESTAMP (outbuf) = resample->next_ts;
+        GST_BUFFER_OFFSET (outbuf) = resample->next_offset;
+        GST_BUFFER_OFFSET_END (outbuf) = resample->next_offset + out_processed;
+
+        resample->next_ts += GST_BUFFER_DURATION (outbuf);
+        resample->next_offset += out_processed;
     }
 
     GST_LOG_OBJECT (resample,
