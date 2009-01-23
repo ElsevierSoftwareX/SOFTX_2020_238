@@ -487,6 +487,12 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	}
 
 	/*
+	 * in-place transform, buf must be writable
+	 */
+
+	buf = gst_buffer_make_writable(buf);
+
+	/*
 	 * FIXME:  rethink the collect pads system so that this doesn't
 	 * happen  (I think the second part already cannot happen because
 	 * we get the collect pads system to tell us the upper bound of
@@ -539,7 +545,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 * compute the \Chi^{2} values in-place in the input buffer
 	 */
 	/* FIXME:  Assumes that the most important basis vectors are at the
-	 * beginning this is a sensible assumption */
+	 * beginning;  this is a sensible assumption */
 	/* FIXME: do with gsl functions?? */
 
 	numorthochannels = (guint) num_orthosnr_channels(element);
@@ -627,18 +633,42 @@ static void finalize(GObject *object)
 
 
 /*
- * change state
+ * change state.  reset element's internal state and start the collect pads
+ * on READY --> PAUSED state change.  stop the collect pads on PAUSED -->
+ * READY state change.
  */
 
 
-static GstStateChangeReturn change_state(GstElement * element, GstStateChange transition)
+static GstStateChangeReturn change_state(GstElement *element, GstStateChange transition)
 {
 	GSTLALChiSquare *chisquare = GSTLAL_CHISQUARE(element);
 
 	switch(transition) {
+	case GST_STATE_CHANGE_NULL_TO_READY:
+		break;
+
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		chisquare->output_offset = 0;
-		chisquare->output_timestamp_at_zero = 0;
+		/* FIXME:  temporarily hard-coded to a value that prevents
+		 * overflow in our test pipeline.  must figure out how to
+		 * handle arbitrary start times without overflow */
+		chisquare->output_timestamp_at_zero = 874100000 * GST_SECOND;
+		/* FIXME:  how do we handle segments?
+		chisquare->segment_pending = TRUE;
+		chisquare->segment_position = 0;
+		chisquare->segment_rate = 1.0;
+		gst_segment_init(&chisquare->segment, GST_FORMAT_UNDEFINED);
+		*/
+		gst_collect_pads_start(chisquare->collect);
+		break;
+
+	case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
+		break;
+
+	case GST_STATE_CHANGE_PAUSED_TO_READY:
+		/* need to unblock the collectpads before calling the
+		 * parent change_state so that streaming can finish */
+		gst_collect_pads_stop(chisquare->collect);
 		break;
 
 	default:
