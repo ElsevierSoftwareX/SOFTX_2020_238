@@ -1157,6 +1157,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			result = gst_pad_alloc_buffer(adder->srcpad, earliest_input_offset, length * adder->bytes_per_sample, GST_PAD_CAPS(adder->srcpad), &outbuf);
 			if(result != GST_FLOW_OK) {
 				/* FIXME: handle failure */
+				outbuf = NULL;
 			}
 			outbytes = GST_BUFFER_DATA(outbuf);
 
