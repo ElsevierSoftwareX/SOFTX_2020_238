@@ -93,7 +93,7 @@ NXYDUMP="queue ! lal_nxydump start-time=874107068000000000 stop-time=87410708800
 # on each link
 #
 
-GST_DEBUG_DUMP_DOT_DIR=/tmp gst-launch --gst-debug-level=2 \
+gst-launch --gst-debug-level=2 \
 	${SRC} \
 	! progressreport \
 		name=progress_src \
