@@ -8,7 +8,7 @@ INSTRUMENT="H1"
 CHANNEL="LSC-STRAIN"
 REFERENCEPSD="reference_psd.txt"
 TEMPLATEBANK="H1-TMPLTBANK_09_1.207-874000000-2048.xml"
-SUMSQUARESTHRESHOLD="4.0"
+SUMSQUARESTHRESHOLD="5.0"
 
 SRC="lal_framesrc \
 	blocksize=$((16384*8*16)) \
@@ -36,16 +36,56 @@ WHITEN="lal_whiten \
 	average-samples=64 \
 	compensation-psd=${REFERENCEPSD}"
 
+function templatebank() {
+	SUFFIX=${1}
+	TSTART=${2}
+	TEND=${3}
+	TTOTALDURATION=${4}
+	SNRLENGTH=${5}
+	echo "queue max-size-time=50000000000 \
+	! lal_templatebank \
+		name=templatebank${SUFFIX} \
+		template-bank=${TEMPLATEBANK} \
+		reference-psd=${REFERENCEPSD} \
+		t-start=${TSTART} \
+		t-end=${TEND} \
+		t-total-duration=${TTOTALDURATION} \
+		snr-length=${SNRLENGTH} \
+	templatebank${SUFFIX}.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares_adder. \
+	lal_gate \
+		name=snr_gate${SUFFIX} \
+		threshold=${SUMSQUARESTHRESHOLD} \
+	lal_matrixmixer \
+		name=mixer${SUFFIX} \
+	! tee \
+		name=snr${SUFFIX} \
+	lal_chisquare \
+		name=chisquare${SUFFIX} \
+	templatebank${SUFFIX}.matrix ! tee name=matrix${SUFFIX} ! queue ! mixer${SUFFIX}.matrix \
+	matrix${SUFFIX}. ! queue ! chisquare${SUFFIX}.matrix \
+	templatebank${SUFFIX}.src ! tee name=orthogonalsnr${SUFFIX} ! queue ! snr_gate${SUFFIX}.sink \
+	orthogonalsnr${SUFFIX}. ! queue ! chisquare${SUFFIX}.orthosnr \
+	orthogonal_snr_sum_squares. ! queue ! snr_gate${SUFFIX}.control \
+	snr_gate${SUFFIX}.src ! mixer${SUFFIX}.sink \
+	snr${SUFFIX}. ! audioresample filter-length=3 ! queue ! snr. \
+	snr${SUFFIX}. ! queue ! chisquare${SUFFIX}.snr \
+	chisquare${SUFFIX}.src ! audioresample filter-length=3 ! queue ! chisquare."
+}
+
 SCOPE="queue ! lal_multiscope trace-duration=4.0 frame-interval=0.0625 average-interval=32.0 do-timestamp=false ! ffmpegcolorspace ! cairotimeoverlay ! autovideosink"
 
 FAKESINK="queue ! fakesink sync=false preroll-queue-len=1"
 
 PLAYBACK="adder ! audioresample ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=5e-2 ! audioconvert ! queue max-size-time=3000000000 ! alsasink"
 
-NXYDUMP="queue ! lal_nxydump start-time=874107068000000000 stop-time=874107088000000000 ! filesink sync=false preroll-queue-len=1 location"
-#NXYDUMP="queue ! lal_nxydump start-time=874100128000000000 stop-time=874120000000000000 ! filesink sync=false preroll-queue-len=1 location"
-#NXYDUMP="queue ! lal_nxydump start-time=235000000000 stop-time=290000000000 ! filesink sync=false preroll-queue-len=1 location"
-#NXYDUMP="queue ! lal_nxydump start-time=874107188000000000 stop-time=874107258000000000 ! filesink sync=false preroll-queue-len=1 location"
+# output for hardware injection at 874107078.149271066
+NXYDUMP="queue ! lal_nxydump start-time=874107068000000000 stop-time=874107088000000000 ! filesink sync=false preroll-queue-len=1 buffer-mode=2 location"
+# alternate output for use with impulse injection at 874107189
+#NXYDUMP="queue ! lal_nxydump start-time=874107188000000000 stop-time=874107258000000000 ! filesink sync=false preroll-queue-len=1 buffer-mode=2 location"
+# alternate output to dump lots and lots of data (the whole cache)
+#NXYDUMP="queue ! lal_nxydump start-time=874100128000000000 stop-time=874120000000000000 ! filesink sync=false preroll-queue-len=1 buffer-mode=2 location"
+# ??
+#NXYDUMP="queue ! lal_nxydump start-time=235000000000 stop-time=290000000000 ! filesink sync=false preroll-queue-len=1 buffer-mode=2 location"
 
 #
 # run with GST_DEBUG_DUMP_DOT_DIR set to some location to get a set of dot
@@ -53,7 +93,7 @@ NXYDUMP="queue ! lal_nxydump start-time=874107068000000000 stop-time=87410708800
 # on each link
 #
 
-gst-launch --gst-debug-level=1 \
+GST_DEBUG_DUMP_DOT_DIR=/tmp gst-launch --gst-debug-level=2 \
 	${SRC} \
 	! progressreport \
 		name=progress_src \
@@ -102,119 +142,17 @@ gst-launch --gst-debug-level=1 \
 	! audio/x-raw-float, rate=4096 \
 	! progressreport name=progress_snr \
 	! ${NXYDUMP}=snr.txt \
-	hoft_4096. ! queue max-size-time=50000000000 ! lal_templatebank \
-		name=templatebank0 \
-		template-bank=${TEMPLATEBANK} \
-		reference-psd=${REFERENCEPSD} \
-		t-start=0 \
-		t-end=0.25 \
-		t-total-duration=45 \
-		snr-length=$((4096*1)) \
-	templatebank0.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares_adder. \
-	lal_gate \
-		name=snr_gate0 \
-		threshold=${SUMSQUARESTHRESHOLD} \
-	lal_matrixmixer \
-		name=snr0 \
-	templatebank0.matrix ! snr0.matrix \
-	templatebank0.src ! queue ! snr_gate0.sink \
-	orthogonal_snr_sum_squares. ! queue ! snr_gate0.control \
-	snr_gate0.src ! snr0.sink \
-	snr0. ! audioresample filter-length=3 ! queue ! snr. \
-	hoft_2048. ! queue max-size-time=50000000000 ! lal_templatebank \
-		name=templatebank1 \
-		template-bank=${TEMPLATEBANK} \
-		reference-psd=${REFERENCEPSD} \
-		t-start=0.25 \
-		t-end=1.25 \
-		t-total-duration=45 \
-		snr-length=$((2048*1)) \
-	templatebank1.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares_adder. \
-	lal_gate \
-		name=snr_gate1 \
-		threshold=${SUMSQUARESTHRESHOLD} \
-	lal_matrixmixer \
-		name=snr1 \
-	templatebank1.matrix ! snr1.matrix \
-	templatebank1.src ! queue ! snr_gate1.sink \
-	orthogonal_snr_sum_squares. ! queue ! snr_gate1.control \
-	snr_gate1.src ! snr1.sink \
-	snr1. ! audioresample filter-length=3 ! queue ! snr. \
-	hoft_512. ! queue max-size-time=50000000000 ! lal_templatebank \
-		name=templatebank2 \
-		template-bank=${TEMPLATEBANK} \
-		reference-psd=${REFERENCEPSD} \
-		t-start=1.25 \
-		t-end=5.25 \
-		t-total-duration=45 \
-		snr-length=$((512*1)) \
-	templatebank2.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares_adder. \
-	lal_gate \
-		name=snr_gate2 \
-		threshold=${SUMSQUARESTHRESHOLD} \
-	lal_matrixmixer \
-		name=snr2 \
-	templatebank2.matrix ! snr2.matrix \
-	templatebank2.src ! queue ! snr_gate2.sink \
-	orthogonal_snr_sum_squares. ! queue ! snr_gate2.control \
-	snr_gate2.src ! snr2.sink \
-	snr2. ! audioresample filter-length=3 ! queue ! snr. \
-	hoft_256. ! queue max-size-time=50000000000 ! lal_templatebank \
-		name=templatebank3 \
-		template-bank=${TEMPLATEBANK} \
-		reference-psd=${REFERENCEPSD} \
-		t-start=5.25 \
-		t-end=13.25 \
-		t-total-duration=45 \
-		snr-length=$((256*1)) \
-	templatebank3.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares_adder. \
-	lal_gate \
-		name=snr_gate3 \
-		threshold=${SUMSQUARESTHRESHOLD} \
-	lal_matrixmixer \
-		name=snr3 \
-	templatebank3.matrix ! snr3.matrix \
-	templatebank3.src ! queue ! snr_gate3.sink \
-	orthogonal_snr_sum_squares. ! queue ! snr_gate3.control \
-	snr_gate3.src ! snr3.sink \
-	snr3. ! audioresample filter-length=3 ! queue ! snr. \
-	hoft_128. ! queue max-size-time=50000000000 ! lal_templatebank \
-		name=templatebank4 \
-		template-bank=${TEMPLATEBANK} \
-		reference-psd=${REFERENCEPSD} \
-		t-start=13.25 \
-		t-end=29.25 \
-		t-total-duration=45 \
-		snr-length=$((128*1)) \
-	templatebank4.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares_adder. \
-	lal_gate \
-		name=snr_gate4 \
-		threshold=${SUMSQUARESTHRESHOLD} \
-	lal_matrixmixer \
-		name=snr4 \
-	templatebank4.matrix ! snr4.matrix \
-	templatebank4.src ! queue ! snr_gate4.sink \
-	orthogonal_snr_sum_squares. ! queue ! snr_gate4.control \
-	snr_gate4.src ! snr4.sink \
-	snr4. ! audioresample filter-length=3 ! queue ! snr. \
-	hoft_128. ! queue max-size-time=50000000000 ! lal_templatebank \
-		name=templatebank5 \
-		template-bank=${TEMPLATEBANK} \
-		reference-psd=${REFERENCEPSD} \
-		t-start=29.25 \
-		t-end=45.25 \
-		t-total-duration=45 \
-		snr-length=$((128*1)) \
-	templatebank5.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares_adder. \
-	lal_gate \
-		name=snr_gate5 \
-		threshold=${SUMSQUARESTHRESHOLD} \
-	lal_matrixmixer \
-		name=snr5 \
-	templatebank5.matrix ! snr5.matrix \
-	templatebank5.src ! queue ! snr_gate5.sink \
-	orthogonal_snr_sum_squares. ! queue ! snr_gate5.control \
-	snr_gate5.src ! snr5.sink \
-	snr5. ! audioresample filter-length=3 ! queue ! snr. \
+	lal_adder \
+		name=chisquare \
+		sync=true \
+	! audio/x-raw-float, rate=4096 \
+	! progressreport name=progress_chisquare \
+	! ${NXYDUMP}=chisquare.txt \
+	hoft_4096. ! $(templatebank 0 0 0.25 45.25 $((4096*1))) \
+	hoft_2048. ! $(templatebank 1 0.25 1.25 45.25 $((2048*1))) \
+	hoft_512. ! $(templatebank 2 1.25 5.25 45.25 $((512*1))) \
+	hoft_256. ! $(templatebank 3 5.25 13.25 45.25 $((256*1))) \
+	hoft_128. ! $(templatebank 4 13.25 29.25 45.25 $((128*1))) \
+	hoft_128. ! $(templatebank 5 29.25 45.25 45.25 $((128*1))) \
 
 exit
