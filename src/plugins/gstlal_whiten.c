@@ -623,6 +623,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		if(!element->psd || element->psdmode == GSTLAL_PSDMODE_RUNNING_AVERAGE) {
+			/* FIXME:  if more than one whitener is in the
+			 * pipeline, this counter is probably shared
+			 * between them.  bad */
 			static int n = 0;
 			XLALDestroyREAL8FrequencySeries(element->psd);
 			element->psd = get_psd(element->psdmode, element->psd_regressor, tilde_segment);
@@ -818,8 +821,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			element->next_is_discontinuity = FALSE;
 		}
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + (segment->data->length / 2 - transient);
-		GST_BUFFER_TIMESTAMP(srcbuf) = element->adapter_head_timestamp + (GstClockTime) transient * GST_SECOND / element->sample_rate;
-		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) (segment->data->length / 2 - transient) * GST_SECOND / element->sample_rate;
+		GST_BUFFER_TIMESTAMP(srcbuf) = element->adapter_head_timestamp + gst_util_uint64_scale_int(transient, GST_SECOND, element->sample_rate);
+		GST_BUFFER_DURATION(srcbuf) = gst_util_uint64_scale_int(segment->data->length / 2 - transient, GST_SECOND, element->sample_rate);
 
 		/*
 		 * Copy the first half of the time series into the buffer,
@@ -861,7 +864,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		gst_adapter_flush(element->adapter, (segment->data->length / 2 - transient) * sizeof(*segment->data->data));
 		element->next_sample += segment->data->length / 2 - transient;
-		element->adapter_head_timestamp += (GstClockTime) (segment->data->length / 2 - transient) * GST_SECOND / element->sample_rate;
+		/* FIXME:  this accumulates round-off, the time stamp
+		 * should be calculated directly somehow */
+		element->adapter_head_timestamp += gst_util_uint64_scale_int(segment->data->length / 2 - transient, GST_SECOND, element->sample_rate);
 	}
 
 	/*
