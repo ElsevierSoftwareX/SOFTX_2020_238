@@ -42,8 +42,7 @@ function templatebank() {
 	TEND=${3}
 	TTOTALDURATION=${4}
 	SNRLENGTH=${5}
-	echo "queue max-size-time=50000000000 \
-	! lal_templatebank \
+	echo "lal_templatebank \
 		name=templatebank${SUFFIX} \
 		template-bank=${TEMPLATEBANK} \
 		reference-psd=${REFERENCEPSD} \
@@ -55,21 +54,21 @@ function templatebank() {
 	lal_gate \
 		name=snr_gate${SUFFIX} \
 		threshold=${SUMSQUARESTHRESHOLD} \
+	orthogonal_snr_sum_squares. ! queue ! snr_gate${SUFFIX}.control \
+	templatebank${SUFFIX}.src ! tee name=orthogonalsnr${SUFFIX} ! queue ! snr_gate${SUFFIX}.sink \
 	lal_matrixmixer \
 		name=mixer${SUFFIX} \
 	! tee \
 		name=snr${SUFFIX} \
+	! audioresample filter-length=3 ! queue ! snr. \
+	templatebank${SUFFIX}.matrix ! tee name=matrix${SUFFIX} ! queue ! mixer${SUFFIX}.matrix \
+	snr_gate${SUFFIX}.src ! mixer${SUFFIX}.sink \
 	lal_chisquare \
 		name=chisquare${SUFFIX} \
-	templatebank${SUFFIX}.matrix ! tee name=matrix${SUFFIX} ! queue ! mixer${SUFFIX}.matrix \
+	! audioresample filter-length=3 ! queue ! chisquare. \
 	matrix${SUFFIX}. ! queue ! chisquare${SUFFIX}.matrix \
-	templatebank${SUFFIX}.src ! tee name=orthogonalsnr${SUFFIX} ! queue ! snr_gate${SUFFIX}.sink \
 	orthogonalsnr${SUFFIX}. ! queue ! chisquare${SUFFIX}.orthosnr \
-	orthogonal_snr_sum_squares. ! queue ! snr_gate${SUFFIX}.control \
-	snr_gate${SUFFIX}.src ! mixer${SUFFIX}.sink \
-	snr${SUFFIX}. ! audioresample filter-length=3 ! queue ! snr. \
-	snr${SUFFIX}. ! queue ! chisquare${SUFFIX}.snr \
-	chisquare${SUFFIX}.src ! audioresample filter-length=3 ! queue ! chisquare."
+	snr${SUFFIX}. ! queue ! chisquare${SUFFIX}.snr"
 }
 
 SCOPE="queue ! lal_multiscope trace-duration=4.0 frame-interval=0.0625 average-interval=32.0 do-timestamp=false ! ffmpegcolorspace ! cairotimeoverlay ! autovideosink"
@@ -99,36 +98,11 @@ gst-launch --gst-debug-level=2 \
 		name=progress_src \
 	! ${WHITEN} \
 	! tee name=hoft_16384 \
-	hoft_16384. ! audiowsinclimit \
-		length=301 \
-		cutoff=2048 \
-	! audioresample \
-	! audio/x-raw-float, rate=4096 \
-	! tee name=hoft_4096 \
-	hoft_16384. ! audiowsinclimit \
-		length=301 \
-		cutoff=1024 \
-	! audioresample \
-	! audio/x-raw-float, rate=2048 \
-	! tee name=hoft_2048 \
-	hoft_16384. ! audiowsinclimit \
-		length=301 \
-		cutoff=256 \
-	! audioresample \
-	! audio/x-raw-float, rate=512 \
-	! tee name=hoft_512 \
-	hoft_16384. ! audiowsinclimit \
-		length=301 \
-		cutoff=128 \
-	! audioresample \
-	! audio/x-raw-float, rate=256 \
-	! tee name=hoft_256 \
-	hoft_16384. ! audiowsinclimit \
-		length=301 \
-		cutoff=64 \
-	! audioresample \
-	! audio/x-raw-float, rate=128 \
-	! tee name=hoft_128 \
+	hoft_16384. ! audiowsinclimit length=301 cutoff=2048 ! audioresample ! audio/x-raw-float, rate=4096 ! tee name=hoft_4096 \
+	hoft_16384. ! audiowsinclimit length=301 cutoff=1024 ! audioresample ! audio/x-raw-float, rate=2048 ! tee name=hoft_2048 \
+	hoft_16384. ! audiowsinclimit length=301 cutoff=256 ! audioresample ! audio/x-raw-float, rate=512 ! tee name=hoft_512 \
+	hoft_16384. ! audiowsinclimit length=301 cutoff=128 ! audioresample ! audio/x-raw-float, rate=256 ! tee name=hoft_256 \
+	hoft_16384. ! audiowsinclimit length=301 cutoff=64 ! audioresample ! audio/x-raw-float, rate=128 ! tee name=hoft_128 \
 	lal_adder \
 		name=orthogonal_snr_sum_squares_adder \
 		sync=true \
@@ -148,11 +122,11 @@ gst-launch --gst-debug-level=2 \
 	! audio/x-raw-float, rate=4096 \
 	! progressreport name=progress_chisquare \
 	! ${NXYDUMP}=chisquare.txt \
-	hoft_4096. ! $(templatebank 0 0 0.25 45.25 $((4096*1))) \
-	hoft_2048. ! $(templatebank 1 0.25 1.25 45.25 $((2048*1))) \
-	hoft_512. ! $(templatebank 2 1.25 5.25 45.25 $((512*1))) \
-	hoft_256. ! $(templatebank 3 5.25 13.25 45.25 $((256*1))) \
-	hoft_128. ! $(templatebank 4 13.25 29.25 45.25 $((128*1))) \
-	hoft_128. ! $(templatebank 5 29.25 45.25 45.25 $((128*1))) \
+	hoft_4096. ! queue max-size-time=50000000000 ! $(templatebank 0 0 0.25 45.25 $((4096*1))) \
+	hoft_2048. ! queue max-size-time=50000000000 ! $(templatebank 1 0.25 1.25 45.25 $((2048*1))) \
+	hoft_512. ! queue max-size-time=50000000000 ! $(templatebank 2 1.25 5.25 45.25 $((512*1))) \
+	hoft_256. ! queue max-size-time=50000000000 ! $(templatebank 3 5.25 13.25 45.25 $((256*1))) \
+	hoft_128. ! queue max-size-time=50000000000 ! $(templatebank 4 13.25 29.25 45.25 $((128*1))) \
+	hoft_128. ! queue max-size-time=50000000000 ! $(templatebank 5 29.25 45.25 45.25 $((128*1))) \
 
 exit
