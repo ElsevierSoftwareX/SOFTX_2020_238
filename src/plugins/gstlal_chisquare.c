@@ -554,7 +554,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 	for(sample = 0; sample < length; sample++) {
 		double *data = &((double *) GST_BUFFER_DATA(buf))[numchannels * sample];
-		const double *orthodata = &((double *) GST_BUFFER_DATA(orthosnrbuf))[numorthochannels * sample];
+		const double *orthodata = &((const double *) GST_BUFFER_DATA(orthosnrbuf))[numorthochannels * sample];
 		for(channel = 0; channel < numchannels; channel++) {
 			double snr = data[channel];
 			data[channel] = 0;
