@@ -487,12 +487,6 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	}
 
 	/*
-	 * in-place transform, buf must be writable
-	 */
-
-	buf = gst_buffer_make_writable(buf);
-
-	/*
 	 * FIXME:  rethink the collect pads system so that this doesn't
 	 * happen  (I think the second part already cannot happen because
 	 * we get the collect pads system to tell us the upper bound of
@@ -506,6 +500,12 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		GST_ERROR_OBJECT(element, "misaligned buffer boundaries");
 		return GST_FLOW_ERROR;
 	}
+
+	/*
+	 * in-place transform, buf must be writable
+	 */
+
+	buf = gst_buffer_make_writable(buf);
 
 	/*
 	 * Gap --> pass-through
@@ -559,8 +559,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			double snr = data[channel];
 			data[channel] = 0;
 			for(ortho_channel = 0; ortho_channel < dof; ortho_channel++)
-				data[channel] += pow(orthodata[ortho_channel] / gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel) - snr, 2.0);
-			
+				data[channel] += pow(snr * gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel) - orthodata[ortho_channel], 2.0);
 		}
 	}
 	g_mutex_unlock(element->mixmatrix_lock);
