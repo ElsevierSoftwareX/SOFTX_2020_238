@@ -239,6 +239,7 @@ static int add_xml_injections(REAL8TimeSeries *h, const struct injection_documen
 		double underflow_protection = 1.0;
 		LALUnit strain_per_count = gstlal_lalStrainPerADCCount();
 		COMPLEX8FrequencySeries *inspiral_response;
+		double mdc_pad = 256.0;	/* seconds */
 		REAL4TimeSeries *mdc;
 		unsigned i;
 
@@ -259,9 +260,14 @@ static int add_xml_injections(REAL8TimeSeries *h, const struct injection_documen
 		 */
 
 		if(response)
+			/*
+			 * FIXME:  because the mdc time series constructed
+			 * below has extra padding added to it, the
+			 * resolution of this response is probably wrong.
+			 */
 			inspiral_response = XLALCreateCOMPLEX8FrequencySeries(response->name, &response->epoch, response->f0, response->deltaF, &response->sampleUnits, response->data->length);
 		else
-			inspiral_response = XLALCreateCOMPLEX8FrequencySeries(NULL, &h->epoch, 0.0, 1.0 / (h->data->length * h->deltaT), &strain_per_count, h->data->length / 2 + 1);
+			inspiral_response = XLALCreateCOMPLEX8FrequencySeries(NULL, &h->epoch, 0.0, 1.0 / (h->data->length * h->deltaT + 2 * mdc_pad), &strain_per_count, (h->data->length + (int) (2 * mdc_pad / h->deltaT + 0.5)) / 2 + 1);
 		if(!inspiral_response)
 			XLAL_ERROR(func, XLAL_EFUNC);
 
@@ -276,18 +282,23 @@ static int add_xml_injections(REAL8TimeSeries *h, const struct injection_documen
 
 		/*
 		 * create a single-precision time series of zeros to hold
-		 * the injection
+		 * the injection.  pad time series because inspiral
+		 * injection code will not do injection unless the entire
+		 * thing fits in the target time series (?!)
+		 * FIXME:  this will be fixed if we switch to the new XLAL
+		 * injection code.
 		 */
 
-		mdc = XLALCreateREAL4TimeSeries(h->name, &h->epoch, h->f0, h->deltaT, &lalADCCountUnit, h->data->length);
+		mdc = XLALCreateREAL4TimeSeries(h->name, &h->epoch, h->f0, h->deltaT, &lalADCCountUnit, h->data->length + (int) (2 * mdc_pad / h->deltaT + 0.5));
 		if(!mdc) {
 			XLALDestroyCOMPLEX8FrequencySeries(inspiral_response);
 			XLAL_ERROR(func, XLAL_EFUNC);
 		}
+		XLALGPSAdd(&mdc->epoch, -mdc_pad);
 		memset(mdc->data->data, 0, mdc->data->length * sizeof(*mdc->data->data));
 
 		/*
-		 * compute the injections
+		 * compute the injections.
 		 */
 
 		XLALPrintInfo("%s(): computing sim_inspiral injections ...\n", func);
@@ -299,11 +310,12 @@ static int add_xml_injections(REAL8TimeSeries *h, const struct injection_documen
 		XLALPrintInfo("%s(): done\n", func);
 
 		/*
-		 * add injections to target time series
+		 * add injections to target time series.  remember to skip
+		 * padding.
 		 */
 
 		for(i = 0; i < h->data->length; i++)
-			h->data->data[i] += mdc->data->data[i] * underflow_protection;
+			h->data->data[i] += mdc->data->data[i + (int) (mdc_pad / mdc->deltaT + 0.5)] * underflow_protection;
 
 		/*
 		 * clean up
