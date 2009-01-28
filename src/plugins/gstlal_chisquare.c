@@ -87,7 +87,7 @@
  * the bulk of the SNR distribution expected from Gaussian noise - exactly
  * where we want to be*/
 
-#define DEFAULT_MAX_DOF 10
+#define DEFAULT_MAX_DOF 1000
 
 
 /*
@@ -558,8 +558,10 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		for(channel = 0; channel < numchannels; channel++) {
 			double snr = data[channel];
 			data[channel] = 0;
-			for(ortho_channel = 0; ortho_channel < dof; ortho_channel++)
-				data[channel] += pow(snr * gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel) - orthodata[ortho_channel], 2.0);
+			for(ortho_channel = 0; ortho_channel < dof; ortho_channel++) {
+				double mixing_coefficient = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel);
+				data[channel] += pow((snr * mixing_coefficient - orthodata[ortho_channel]) * mixing_coefficient, 2.0);
+			}
 		}
 	}
 	g_mutex_unlock(element->mixmatrix_lock);
