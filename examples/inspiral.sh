@@ -27,7 +27,7 @@ FAKESRC="audiotestsrc \
 ! audio/x-raw-float, width=64, rate=16384, instrument=${INSTRUMENT}, channel_name=${CHANNEL}, units=strain"
 
 INJECTIONS="lal_simulation \
-	xml-location=impulse_at_874107198.xml"
+	xml-location=bns_injections.xml"
 
 WHITEN="lal_whiten \
 	psd-mode=1 \
@@ -50,7 +50,7 @@ function templatebank() {
 		t-end=${TEND} \
 		t-total-duration=${TTOTALDURATION} \
 		snr-length=${SNRLENGTH} \
-	templatebank${SUFFIX}.sumofsquares ! audioresample filter-length=3 ! queue ! orthogonal_snr_sum_squares_adder. \
+	templatebank${SUFFIX}.sumofsquares ! gstlal-audioresample ! queue ! orthogonal_snr_sum_squares_adder. \
 	lal_gate \
 		name=snr_gate${SUFFIX} \
 		threshold=${SUMSQUARESTHRESHOLD} \
@@ -60,12 +60,12 @@ function templatebank() {
 		name=mixer${SUFFIX} \
 	! tee \
 		name=snr${SUFFIX} \
-	! audioresample filter-length=3 ! queue ! snr. \
+	! gstlal-audioresample quality=0 ! queue ! snr. \
 	templatebank${SUFFIX}.matrix ! tee name=matrix${SUFFIX} ! queue ! mixer${SUFFIX}.matrix \
 	snr_gate${SUFFIX}.src ! mixer${SUFFIX}.sink \
 	lal_chisquare \
 		name=chisquare${SUFFIX} \
-	! audioresample filter-length=3 ! queue ! chisquare. \
+	! gstlal-audioresample quality=0 ! queue ! chisquare. \
 	matrix${SUFFIX}. ! queue ! chisquare${SUFFIX}.matrix \
 	orthogonalsnr${SUFFIX}. ! queue ! chisquare${SUFFIX}.orthosnr \
 	snr${SUFFIX}. ! queue ! chisquare${SUFFIX}.snr"
@@ -75,12 +75,12 @@ SCOPE="queue ! lal_multiscope trace-duration=4.0 frame-interval=0.0625 average-i
 
 FAKESINK="queue ! fakesink sync=false preroll-queue-len=1"
 
-PLAYBACK="adder ! audioresample ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=5e-2 ! audioconvert ! queue max-size-time=3000000000 ! alsasink"
+PLAYBACK="adder ! gstlal-audioresample ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=5e-2 ! audioconvert ! queue max-size-time=3000000000 ! alsasink"
 
 # output for hardware injection at 874107078.149271066
-NXYDUMP="queue ! lal_nxydump start-time=874107068000000000 stop-time=874107088000000000 ! filesink sync=false preroll-queue-len=1 buffer-mode=2 location"
-# alternate output for use with impulse injection at 874107189
-#NXYDUMP="queue ! lal_nxydump start-time=874107188000000000 stop-time=874107258000000000 ! filesink sync=false preroll-queue-len=1 buffer-mode=2 location"
+#NXYDUMP="queue ! lal_nxydump start-time=874107068000000000 stop-time=874107088000000000 ! filesink sync=false preroll-queue-len=1 buffer-mode=2 location"
+# alternate output for use with injection (bns_injections.xml=874107198.405080859 and impulse_at_874107198.xml) at 874107189
+NXYDUMP="queue ! lal_nxydump start-time=874107188000000000 stop-time=874107258000000000 ! filesink sync=false preroll-queue-len=1 buffer-mode=2 location"
 # alternate output to dump lots and lots of data (the whole cache)
 #NXYDUMP="queue ! lal_nxydump start-time=874100128000000000 stop-time=874120000000000000 ! filesink sync=false preroll-queue-len=1 buffer-mode=2 location"
 # ??
@@ -92,17 +92,18 @@ NXYDUMP="queue ! lal_nxydump start-time=874107068000000000 stop-time=87410708800
 # on each link
 #
 
-gst-launch --gst-debug-level=2 \
+gst-launch --verbose --messages --gst-debug-level=2 \
 	${SRC} \
 	! progressreport \
 		name=progress_src \
+	! ${INJECTIONS} \
 	! ${WHITEN} \
 	! tee name=hoft_16384 \
-	hoft_16384. ! audiowsinclimit length=301 cutoff=2048 ! audioresample ! audio/x-raw-float, rate=4096 ! tee name=hoft_4096 \
-	hoft_16384. ! audiowsinclimit length=301 cutoff=1024 ! audioresample ! audio/x-raw-float, rate=2048 ! tee name=hoft_2048 \
-	hoft_16384. ! audiowsinclimit length=301 cutoff=256 ! audioresample ! audio/x-raw-float, rate=512 ! tee name=hoft_512 \
-	hoft_16384. ! audiowsinclimit length=301 cutoff=128 ! audioresample ! audio/x-raw-float, rate=256 ! tee name=hoft_256 \
-	hoft_16384. ! audiowsinclimit length=301 cutoff=64 ! audioresample ! audio/x-raw-float, rate=128 ! tee name=hoft_128 \
+	hoft_16384. ! gstlal-audioresample ! audio/x-raw-float, rate=4096 ! tee name=hoft_4096 \
+	hoft_16384. ! gstlal-audioresample ! audio/x-raw-float, rate=2048 ! tee name=hoft_2048 \
+	hoft_16384. ! gstlal-audioresample ! audio/x-raw-float, rate=512 ! tee name=hoft_512 \
+	hoft_16384. ! gstlal-audioresample ! audio/x-raw-float, rate=256 ! tee name=hoft_256 \
+	hoft_16384. ! gstlal-audioresample ! audio/x-raw-float, rate=128 ! tee name=hoft_128 \
 	lal_adder \
 		name=orthogonal_snr_sum_squares_adder \
 		sync=true \
@@ -122,7 +123,7 @@ gst-launch --gst-debug-level=2 \
 	! audio/x-raw-float, rate=4096 \
 	! progressreport name=progress_chisquare \
 	! ${NXYDUMP}=chisquare.txt \
-	hoft_4096. ! queue max-size-time=50000000000 ! $(templatebank 0 0 0.25 45.25 $((4096*1))) \
+	hoft_4096. ! queue max-size-time=50000000000 ! $(templatebank 0 0.0 0.25 45.25 $((4096*1))) \
 	hoft_2048. ! queue max-size-time=50000000000 ! $(templatebank 1 0.25 1.25 45.25 $((2048*1))) \
 	hoft_512. ! queue max-size-time=50000000000 ! $(templatebank 2 1.25 5.25 45.25 $((512*1))) \
 	hoft_256. ! queue max-size-time=50000000000 ! $(templatebank 3 5.25 13.25 45.25 $((256*1))) \
@@ -130,3 +131,4 @@ gst-launch --gst-debug-level=2 \
 	hoft_128. ! queue max-size-time=50000000000 ! $(templatebank 5 29.25 45.25 45.25 $((128*1))) \
 
 exit
+
