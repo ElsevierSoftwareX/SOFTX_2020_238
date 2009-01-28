@@ -966,13 +966,11 @@ gst_speex_resample_process (GstSpeexResample * resample, GstBuffer * inbuf,
   guint8 *in_tmp = NULL, *out_tmp = NULL;
   gboolean need_convert = (resample->funcs->width != resample->width);
   int in_latency, latency, skipGAP, addSample;
-  /*int  rate_ratio = resample->inrate / resample->outrate;*/
   /* FIXME: THIS NEEDS TO BE MORE CARFUL for non power of 2*/
-  /*int latency = (int) resample->funcs->get_input_latency (resample->state) / rate_ratio;*/
   if (resample->inrate < resample->outrate) addSample = 0;
   else addSample = 1;
   /* used to calculate proper behavior when there is a gap */
-  in_latency = (int) resample->funcs->get_input_latency (resample->state) + addSample; /* +1 for downsampling */ 
+  in_latency = (int) resample->funcs->get_input_latency (resample->state) + addSample; /* +1 for downsampling  0 otherwise */ 
   latency = (int) in_latency * resample->outrate / resample->inrate;
 
   skipGAP = 0;
@@ -1027,7 +1025,6 @@ gst_speex_resample_process (GstSpeexResample * resample, GstBuffer * inbuf,
   /* ZERO Output buffer if skipping gap */
   if (skipGAP) memset( GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf) );
 
-  /*fprintf(stderr,"%d %d\n", in_len, in_latency);*/
   if (G_UNLIKELY (in_len != in_processed))
     GST_WARNING_OBJECT (resample, "Converted %d of %d input samples",
         in_processed, in_len);
@@ -1079,7 +1076,6 @@ gst_speex_resample_process (GstSpeexResample * resample, GstBuffer * inbuf,
         resample->next_ts += GST_BUFFER_DURATION (outbuf);
         resample->next_offset += out_processed;
     }
-    fprintf(stdout, "%ld %ld %ld\n", GST_BUFFER_TIMESTAMP (inbuf), GST_BUFFER_TIMESTAMP (outbuf), GST_BUFFER_TIMESTAMP (inbuf) - GST_BUFFER_TIMESTAMP (outbuf));
     GST_LOG_OBJECT (resample,
         "Converted to buffer of %u bytes with timestamp %" GST_TIME_FORMAT
         ", duration %" GST_TIME_FORMAT ", offset %" G_GUINT64_FORMAT
