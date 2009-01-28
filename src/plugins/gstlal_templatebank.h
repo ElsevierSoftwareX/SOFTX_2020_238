@@ -57,6 +57,7 @@ typedef struct {
 	GstAdapter *adapter;
 
 	GstPad *matrixpad;
+	GstPad *chifacspad;
 	GstPad *srcpad;
 	GstPad *sumsquarespad;
 

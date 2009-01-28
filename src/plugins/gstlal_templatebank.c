@@ -281,14 +281,9 @@ static double normalization_correction(double rate)
 /*
  * ============================================================================
  *
- *                             GStreamer Element
+ *                                 Properties
  *
  * ============================================================================
- */
-
-
-/*
- * Properties
  */
 
 
@@ -365,6 +360,15 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_uint(value, element->snr_length);
 	}
 }
+
+
+/*
+ * ============================================================================
+ *
+ *                                  Sink Pad
+ *
+ * ============================================================================
+ */
 
 
 /*
@@ -693,6 +697,15 @@ done:
 
 
 /*
+ * ============================================================================
+ *
+ *                            GObject Type Support
+ *
+ * ============================================================================
+ */
+
+
+/*
  * Parent class.
  */
 
@@ -710,6 +723,7 @@ static void finalize(GObject *object)
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(object);
 
 	gst_object_unref(element->matrixpad);
+	gst_object_unref(element->chifacspad);
 	gst_object_unref(element->sumsquarespad);
 	gst_object_unref(element->srcpad);
 	g_object_unref(element->adapter);
@@ -766,6 +780,21 @@ static void base_init(gpointer class)
 			gst_caps_new_simple(
 				"audio/x-raw-float",
 				"channels", GST_TYPE_INT_RANGE, 1, G_MAXINT,
+				"endianness", G_TYPE_INT, G_BYTE_ORDER,
+				"width", G_TYPE_INT, 64,
+				NULL
+			)
+		)
+	);
+	gst_element_class_add_pad_template(
+		element_class,
+		gst_pad_template_new(
+			"chifacs",
+			GST_PAD_SRC,
+			GST_PAD_ALWAYS,
+			gst_caps_new_simple(
+				"audio/x-raw-float",
+				"channels", G_TYPE_INT, 1,
 				"endianness", G_TYPE_INT, G_BYTE_ORDER,
 				"width", G_TYPE_INT, 64,
 				NULL
@@ -854,13 +883,16 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	gst_object_unref(pad);
 
 	/* retrieve (and ref) matrix pad */
-	element->matrixpad = gst_element_get_static_pad(GST_ELEMENT(element), "matrix");
+	element->matrixpad = gst_element_get_pad(GST_ELEMENT(element), "matrix");
+
+	/* retrieve (and ref) chifacs pad */
+	element->chifacspad = gst_element_get_pad(GST_ELEMENT(element), "chifacs");
 
 	/* retrieve (and ref) src pad */
-	element->srcpad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
+	element->srcpad = gst_element_get_pad(GST_ELEMENT(element), "src");
 
 	/* retrieve (and ref) sum-of-squares pad */
-	element->sumsquarespad = gst_element_get_static_pad(GST_ELEMENT(element), "sumofsquares");
+	element->sumsquarespad = gst_element_get_pad(GST_ELEMENT(element), "sumofsquares");
 
 	/* internal data */
 	element->adapter = gst_adapter_new();
