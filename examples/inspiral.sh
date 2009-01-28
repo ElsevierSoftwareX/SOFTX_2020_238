@@ -26,6 +26,12 @@ FAKESRC="audiotestsrc \
 	volume=1e-20 \
 ! audio/x-raw-float, width=64, rate=16384, instrument=${INSTRUMENT}, channel_name=${CHANNEL}, units=strain"
 
+FAKESINK="queue ! fakesink sync=false preroll-queue-len=1"
+
+SCOPE="queue ! lal_multiscope trace-duration=4.0 frame-interval=0.0625 average-interval=32.0 do-timestamp=false ! ffmpegcolorspace ! cairotimeoverlay ! autovideosink"
+
+PLAYBACK="adder ! gstlal-audioresample ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=5e-2 ! audioconvert ! queue max-size-time=3000000000 ! alsasink"
+
 INJECTIONS="lal_simulation \
 	xml-location=bns_injections.xml"
 
@@ -62,6 +68,7 @@ function templatebank() {
 		name=snr${SUFFIX} \
 	! gstlal-audioresample quality=0 ! queue ! snr. \
 	templatebank${SUFFIX}.matrix ! tee name=matrix${SUFFIX} ! queue ! mixer${SUFFIX}.matrix \
+	templatebank${SUFFIX}.chifacs ! ${FAKESINK} \
 	snr_gate${SUFFIX}.src ! mixer${SUFFIX}.sink \
 	lal_chisquare \
 		name=chisquare${SUFFIX} \
@@ -70,12 +77,6 @@ function templatebank() {
 	orthogonalsnr${SUFFIX}. ! queue ! chisquare${SUFFIX}.orthosnr \
 	snr${SUFFIX}. ! queue ! chisquare${SUFFIX}.snr"
 }
-
-SCOPE="queue ! lal_multiscope trace-duration=4.0 frame-interval=0.0625 average-interval=32.0 do-timestamp=false ! ffmpegcolorspace ! cairotimeoverlay ! autovideosink"
-
-FAKESINK="queue ! fakesink sync=false preroll-queue-len=1"
-
-PLAYBACK="adder ! gstlal-audioresample ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=5e-2 ! audioconvert ! queue max-size-time=3000000000 ! alsasink"
 
 # output for hardware injection at 874107078.149271066
 #NXYDUMP="queue ! lal_nxydump start-time=874107068000000000 stop-time=874107088000000000 ! filesink sync=false preroll-queue-len=1 buffer-mode=2 location"
