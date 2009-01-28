@@ -794,7 +794,7 @@ static void base_init(gpointer class)
 			GST_PAD_ALWAYS,
 			gst_caps_new_simple(
 				"audio/x-raw-float",
-				"channels", G_TYPE_INT, 1,
+				"channels", GST_TYPE_INT_RANGE, 1, G_MAXINT,
 				"endianness", G_TYPE_INT, G_BYTE_ORDER,
 				"width", G_TYPE_INT, 64,
 				NULL
@@ -826,7 +826,7 @@ static void base_init(gpointer class)
 			gst_caps_new_simple(
 				"audio/x-raw-float",
 				"rate", GST_TYPE_INT_RANGE, 1, TEMPLATE_SAMPLE_RATE,
-				"channels", GST_TYPE_INT_RANGE, 1, G_MAXINT,
+				"channels", G_TYPE_INT, 1,
 				"endianness", G_TYPE_INT, G_BYTE_ORDER,
 				"width", G_TYPE_INT, 64,
 				NULL
