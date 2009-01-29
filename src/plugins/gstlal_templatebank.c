@@ -183,8 +183,7 @@ static int svd_create(GSTLALTemplateBank *element, int sample_rate)
 
 
 /**
- * Transmit the mixer matrix to the mixer element, downstream in the
- * pipeline.
+ * Transmit the mixer matrix downstream.
  */
 
 
@@ -209,7 +208,7 @@ static GstFlowReturn push_mixer_matrix(GstPad *pad, gsl_matrix *matrix, GstClock
 	success = gst_pad_set_caps(pad, caps);
 	gst_caps_unref(caps);
 	if(!success) {
-		GST_ERROR("failure negotiating caps with mixer");
+		GST_ERROR("failure negotiating mixing matrix caps");
 		result = GST_FLOW_NOT_NEGOTIATED;
 		goto done;
 	}
@@ -220,7 +219,7 @@ static GstFlowReturn push_mixer_matrix(GstPad *pad, gsl_matrix *matrix, GstClock
 
 	result = gst_pad_alloc_buffer(pad, GST_BUFFER_OFFSET_NONE, matrix->size1 * matrix->size2 * sizeof(*matrix->data), GST_PAD_CAPS(pad), &buf);
 	if(result != GST_FLOW_OK) {
-		GST_ERROR("failure getting buffer from mixer");
+		GST_ERROR("failure getting mixing matrix buffer");
 		goto done;
 	}
 
@@ -242,7 +241,79 @@ static GstFlowReturn push_mixer_matrix(GstPad *pad, gsl_matrix *matrix, GstClock
 
 	result = gst_pad_push(pad, buf);
 	if(result != GST_FLOW_OK) {
-		GST_ERROR("mixer won't accept matrix");
+		GST_ERROR("failure pushing mixing matrix");
+		goto done;
+	}
+
+	/*
+	 * Done.
+	 */
+
+done:
+	return result;
+}
+
+
+/**
+ * Transmit the chifacs vector downstream.
+ */
+
+
+static GstFlowReturn push_chifacs_vector(GstPad *pad, gsl_vector *vector, GstClockTime timestamp)
+{
+	GstBuffer *buf;
+	GstCaps *caps;
+	gboolean success;
+	GstFlowReturn result = GST_FLOW_OK;
+
+	/*
+	 * Negotiate the matrix size with the mixer.
+	 */
+
+	caps = gst_caps_new_simple(
+		"audio/x-raw-float",
+		"channels", G_TYPE_INT, vector->size,
+		"endianness", G_TYPE_INT, G_BYTE_ORDER,
+		"width", G_TYPE_INT, 64,
+		NULL
+	);
+	success = gst_pad_set_caps(pad, caps);
+	gst_caps_unref(caps);
+	if(!success) {
+		GST_ERROR("failure negotiating chifacs vector caps");
+		result = GST_FLOW_NOT_NEGOTIATED;
+		goto done;
+	}
+
+	/*
+	 * Get a buffer from the mixer.
+	 */
+
+	result = gst_pad_alloc_buffer(pad, GST_BUFFER_OFFSET_NONE, vector->size * sizeof(*vector->data), GST_PAD_CAPS(pad), &buf);
+	if(result != GST_FLOW_OK) {
+		GST_ERROR("failure getting chifacs vector buffer");
+		goto done;
+	}
+
+	/*
+	 * Set the metadata.
+	 */
+
+	GST_BUFFER_TIMESTAMP(buf) = timestamp;
+
+	/*
+	 * Copy the matrix data into the buffer.
+	 */
+
+	memcpy(GST_BUFFER_DATA(buf), vector->data, GST_BUFFER_SIZE(buf));
+
+	/*
+	 * Push the buffer downstream.
+	 */
+
+	result = gst_pad_push(pad, buf);
+	if(result != GST_FLOW_OK) {
+		GST_ERROR("failure pushing chifacs vector");
 		goto done;
 	}
 
@@ -422,6 +493,15 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		result = push_mixer_matrix(element->matrixpad, element->V, GST_BUFFER_TIMESTAMP(sinkbuf));
+		if(result != GST_FLOW_OK)
+			goto done;
+
+		/*
+		 * Tell the \Chi^{2} element the significance of the
+		 * template components.
+		 */
+
+		result = push_chifacs_vector(element->chifacspad, element->chifacs, GST_BUFFER_TIMESTAMP(sinkbuf));
 		if(result != GST_FLOW_OK)
 			goto done;
 
