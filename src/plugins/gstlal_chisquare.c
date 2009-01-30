@@ -513,6 +513,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 	if(GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP) || GST_BUFFER_FLAG_IS_SET(orthosnrbuf, GST_BUFFER_FLAG_GAP)) {
 		memset(GST_BUFFER_DATA(buf), 0, GST_BUFFER_SIZE(buf));
+		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
 		gst_buffer_unref(orthosnrbuf);
 		return gst_pad_push(element->srcpad, buf);
 	}
