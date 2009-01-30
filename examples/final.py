@@ -25,5 +25,5 @@ for snrline, chisqline in itertools.izip(file("snr.txt"), file("chisquare.txt"))
 	print >>chisqout, chisqline[0], " ".join("%.16g" % x for x in chisq2)
 	print >>xiout, snrline[0], " ".join("%.16g" % x for x in xi)
 
-print >>sys.stderr, "max snr in a phase was %.16g in channel %d" % (max_phase_snr, max_phase_channel)
-print >>sys.stderr, "max snr was %.16g in channel %d" % (max_snr, max_channel)
+print >>sys.stderr, "max |snr| in a phase was %.16g in channel %d" % (max_phase_snr, max_phase_channel)
+print >>sys.stderr, "max |snr| was %.16g in channel %d" % (max_snr, max_channel)
