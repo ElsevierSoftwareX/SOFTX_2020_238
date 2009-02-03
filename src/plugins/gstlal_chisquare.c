@@ -113,7 +113,15 @@ static int num_snr_channels(const GSTLALChiSquare *element)
 
 static size_t mixmatrix_element_size(const GSTLALChiSquare *element)
 {
+	/* evaluating this does not require the lock to be held */
 	return sizeof(*element->mixmatrix.matrix.data);
+}
+
+
+static size_t chifacs_element_size(const GSTLALChiSquare *element)
+{
+	/* evaluating this does not require the lock to be held */
+	return sizeof(*element->chifacs.vector.data);
 }
 
 
@@ -393,7 +401,7 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 	gst_structure_get_int(structure, "channels", &cols);
 	rows = GST_BUFFER_SIZE(sinkbuf) / mixmatrix_element_size(element) / cols;
 	if(rows * cols * mixmatrix_element_size(element) != GST_BUFFER_SIZE(sinkbuf)) {
-		GST_ERROR_OBJECT(element, "buffer size mismatch:  input buffer size not divisible by the channel count");
+		GST_ERROR_OBJECT(pad, "buffer size mismatch:  input buffer size not divisible by the channel count");
 		gst_buffer_unref(sinkbuf);
 		result = GST_FLOW_NOT_NEGOTIATED;
 		goto done;
@@ -410,6 +418,86 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 	element->mixmatrix = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
 	g_cond_signal(element->mixmatrix_available);
 	g_mutex_unlock(element->mixmatrix_lock);
+
+	/*
+	 * done
+	 */
+
+done:
+	gst_caps_unref(caps);
+	GST_OBJECT_UNLOCK(element);
+	return result;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                                Chifacs Pad
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * setcaps()
+ */
+
+
+static gboolean setcaps_chifacs(GstPad *pad, GstCaps *caps)
+{
+	GSTLALChiSquare *element = GSTLAL_CHISQUARE(GST_PAD_PARENT(pad));
+	gboolean result = TRUE;
+
+	GST_OBJECT_LOCK(element);
+
+	/*
+	 * done
+	 */
+
+	GST_OBJECT_UNLOCK(element);
+	return result;
+}
+
+
+/*
+ * chain()
+ */
+
+
+static GstFlowReturn chain_chifacs(GstPad *pad, GstBuffer *sinkbuf)
+{
+	GSTLALChiSquare *element = GSTLAL_CHISQUARE(GST_PAD_PARENT(pad));
+	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
+	GstStructure *structure = gst_caps_get_structure(caps, 0);
+	GstFlowReturn result = GST_FLOW_OK;
+	gint cols;
+
+	GST_OBJECT_LOCK(element);
+
+	/*
+	 * get the vector size
+	 */
+
+	gst_structure_get_int(structure, "channels", &cols);
+	if(cols * chifacs_element_size(element) != GST_BUFFER_SIZE(sinkbuf)) {
+		GST_ERROR_OBJECT(pad, "buffer size mismatch:  input buffer size not divisible by the channel count");
+		gst_buffer_unref(sinkbuf);
+		result = GST_FLOW_NOT_NEGOTIATED;
+		goto done;
+	}
+
+	/*
+	 * replace the current matrix with the new one
+	 */
+
+	g_mutex_lock(element->chifacs_lock);
+	if(element->chifacs_buf)
+		gst_buffer_unref(element->chifacs_buf);
+	element->chifacs_buf = sinkbuf;
+	element->chifacs = gsl_vector_view_array((double *) GST_BUFFER_DATA(sinkbuf), cols);
+	g_cond_signal(element->chifacs_available);
+	g_mutex_unlock(element->chifacs_lock);
 
 	/*
 	 * done
@@ -613,6 +701,8 @@ static void finalize(GObject *object)
 	element->snrpad = NULL;
 	gst_object_unref(element->matrixpad);
 	element->matrixpad = NULL;
+	gst_object_unref(element->chifacspad);
+	element->chifacspad = NULL;
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
 
@@ -628,6 +718,15 @@ static void finalize(GObject *object)
 	if(element->mixmatrix_buf) {
 		gst_buffer_unref(element->mixmatrix_buf);
 		element->mixmatrix_buf = NULL;
+	}
+
+	g_mutex_free(element->chifacs_lock);
+	element->chifacs_lock = NULL;
+	g_cond_free(element->chifacs_available);
+	element->chifacs_available = NULL;
+	if(element->chifacs_buf) {
+		gst_buffer_unref(element->chifacs_buf);
+		element->chifacs_buf = NULL;
 	}
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
@@ -704,6 +803,20 @@ static void base_init(gpointer class)
 		element_class,
 		gst_pad_template_new(
 			"matrix",
+			GST_PAD_SINK,
+			GST_PAD_ALWAYS,
+			gst_caps_from_string(
+				"audio/x-raw-float, " \
+				"channels = (int) [ 1, MAX ], " \
+				"endianness = (int) BYTE_ORDER, " \
+				"width = (int) 64"
+			)
+		)
+	);
+	gst_element_class_add_pad_template(
+		element_class,
+		gst_pad_template_new(
+			"chifacs",
 			GST_PAD_SINK,
 			GST_PAD_ALWAYS,
 			gst_caps_from_string(
@@ -799,20 +912,26 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	gst_collect_pads_set_function(element->collect, collected, element);
 
 	/* configure (and ref) matrix pad */
-	pad = gst_element_get_static_pad(GST_ELEMENT(element), "matrix");
+	pad = gst_element_get_pad(GST_ELEMENT(element), "matrix");
 	gst_pad_set_setcaps_function(pad, setcaps_matrix);
 	gst_pad_set_chain_function(pad, chain_matrix);
 	element->matrixpad = pad;
 
+	/* configure (and ref) chifacs pad */
+	pad = gst_element_get_pad(GST_ELEMENT(element), "chifacs");
+	gst_pad_set_setcaps_function(pad, setcaps_chifacs);
+	gst_pad_set_chain_function(pad, chain_chifacs);
+	element->chifacspad = pad;
+
 	/* configure (and ref) orthogonal SNR sink pad */
-	pad = gst_element_get_static_pad(GST_ELEMENT(element), "orthosnr");
+	pad = gst_element_get_pad(GST_ELEMENT(element), "orthosnr");
 	gst_pad_set_getcaps_function(pad, getcaps_orthosnr);
 	gst_pad_set_setcaps_function(pad, setcaps_orthosnr);
 	element->orthosnrcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->orthosnrcollectdata));
 	element->orthosnrpad = pad;
 
 	/* configure (and ref) SNR sink pad */
-	pad = gst_element_get_static_pad(GST_ELEMENT(element), "snr");
+	pad = gst_element_get_pad(GST_ELEMENT(element), "snr");
 	gst_pad_set_getcaps_function(pad, getcaps_snr);
 	gst_pad_set_setcaps_function(pad, setcaps_snr);
 	element->snrcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->snrcollectdata));
@@ -827,6 +946,9 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->mixmatrix_lock = g_mutex_new();
 	element->mixmatrix_available = g_cond_new();
 	element->mixmatrix_buf = NULL;
+	element->chifacs_lock = g_mutex_new();
+	element->chifacs_available = g_cond_new();
+	element->chifacs_buf = NULL;
 }
 
 

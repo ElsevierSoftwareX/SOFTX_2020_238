@@ -58,6 +58,7 @@ typedef struct {
 	GstCollectPads *collect;
 
 	GstPad *matrixpad;
+	GstPad *chifacspad;
 	GstPad *orthosnrpad;
 	GstLALCollectData *orthosnrcollectdata;
 	GstPad *snrpad;
@@ -74,6 +75,11 @@ typedef struct {
 	GCond *mixmatrix_available;
 	GstBuffer *mixmatrix_buf;
 	gsl_matrix_view mixmatrix;
+
+	GMutex *chifacs_lock;
+	GCond *chifacs_available;
+	GstBuffer *chifacs_buf;
+	gsl_vector_view chifacs;
 
 	/* counters to keep track of timestamps. */
 	guint64 output_offset;
