@@ -230,7 +230,7 @@ static int create_template_from_sngl_inspiral(
    * Compute the \Chi^2 factor.
    */
 
-  gsl_vector_set(chifacs,U_column,gsl_blas_dnrm2(&col.vector));
+  gsl_vector_set(chifacs,U_column,pow(gsl_blas_dnrm2(&col.vector),2.0));
 
   return 0;
   }
