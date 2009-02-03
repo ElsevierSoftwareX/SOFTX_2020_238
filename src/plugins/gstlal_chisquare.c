@@ -179,7 +179,7 @@ static GstCaps *getcaps_snr(GstPad *pad)
 	 * channels must match the number of columns in the mixing matrix.
 	 */
 
-	g_mutex_lock(element->mixmatrix_lock);
+	g_mutex_lock(element->coefficients_lock);
 	if(element->mixmatrix_buf) {
 		GstCaps *matrixcaps = gst_caps_make_writable(gst_buffer_get_caps(element->mixmatrix_buf));
 		GstCaps *result;
@@ -192,7 +192,7 @@ static GstCaps *getcaps_snr(GstPad *pad)
 		gst_caps_unref(matrixcaps);
 		caps = result;
 	}
-	g_mutex_unlock(element->mixmatrix_lock);
+	g_mutex_unlock(element->coefficients_lock);
 
 	/*
 	 * now compute the intersection of the caps with the downstream
@@ -295,13 +295,13 @@ static GstCaps *getcaps_orthosnr(GstPad *pad)
 	snrcaps = gst_pad_get_caps(element->snrpad);
 	GST_OBJECT_LOCK(element);
 
-	g_mutex_lock(element->mixmatrix_lock);
+	g_mutex_lock(element->coefficients_lock);
 	if(element->mixmatrix_buf) {
 		guint n;
 		for(n = 0; n < gst_caps_get_size(snrcaps); n++)
 			gst_structure_set(gst_caps_get_structure(snrcaps, n), "channels", G_TYPE_INT, num_orthosnr_channels(element), NULL);
 	}
-	g_mutex_unlock(element->mixmatrix_lock);
+	g_mutex_unlock(element->coefficients_lock);
 
 	result = gst_caps_intersect(snrcaps, caps);
 	gst_caps_unref(caps);
@@ -359,27 +359,6 @@ static gboolean setcaps_orthosnr(GstPad *pad, GstCaps *caps)
 
 
 /*
- * setcaps()
- */
-
-
-static gboolean setcaps_matrix(GstPad *pad, GstCaps *caps)
-{
-	GSTLALChiSquare *element = GSTLAL_CHISQUARE(GST_PAD_PARENT(pad));
-	gboolean result = TRUE;
-
-	GST_OBJECT_LOCK(element);
-
-	/*
-	 * done
-	 */
-
-	GST_OBJECT_UNLOCK(element);
-	return result;
-}
-
-
-/*
  * chain()
  */
 
@@ -411,13 +390,17 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 	 * replace the current matrix with the new one
 	 */
 
-	g_mutex_lock(element->mixmatrix_lock);
+	g_mutex_lock(element->coefficients_lock);
 	if(element->mixmatrix_buf)
 		gst_buffer_unref(element->mixmatrix_buf);
 	element->mixmatrix_buf = sinkbuf;
 	element->mixmatrix = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
-	g_cond_signal(element->mixmatrix_available);
-	g_mutex_unlock(element->mixmatrix_lock);
+	g_cond_signal(element->coefficients_available);
+	g_mutex_unlock(element->coefficients_lock);
+
+	/* FIXME:  clear the caps on the snr and orthosnr pads to induce a
+	 * caps negotiation sequence when the next buffers arrive in order
+	 * to check the number of channels */
 
 	/*
 	 * done
@@ -437,27 +420,6 @@ done:
  *
  * ============================================================================
  */
-
-
-/*
- * setcaps()
- */
-
-
-static gboolean setcaps_chifacs(GstPad *pad, GstCaps *caps)
-{
-	GSTLALChiSquare *element = GSTLAL_CHISQUARE(GST_PAD_PARENT(pad));
-	gboolean result = TRUE;
-
-	GST_OBJECT_LOCK(element);
-
-	/*
-	 * done
-	 */
-
-	GST_OBJECT_UNLOCK(element);
-	return result;
-}
 
 
 /*
@@ -491,13 +453,17 @@ static GstFlowReturn chain_chifacs(GstPad *pad, GstBuffer *sinkbuf)
 	 * replace the current matrix with the new one
 	 */
 
-	g_mutex_lock(element->chifacs_lock);
+	g_mutex_lock(element->coefficients_lock);
 	if(element->chifacs_buf)
 		gst_buffer_unref(element->chifacs_buf);
 	element->chifacs_buf = sinkbuf;
 	element->chifacs = gsl_vector_view_array((double *) GST_BUFFER_DATA(sinkbuf), cols);
-	g_cond_signal(element->chifacs_available);
-	g_mutex_unlock(element->chifacs_lock);
+	g_cond_signal(element->coefficients_available);
+	g_mutex_unlock(element->coefficients_lock);
+
+	/* FIXME:  clear the caps on the snr and orthosnr pads to induce a
+	 * caps negotiation sequence when the next buffers arrive in order
+	 * to check the number of channels */
 
 	/*
 	 * done
@@ -613,21 +579,15 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	length = GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
 
 	/*
-	 * make sure the mix matrix is available, wait until it is
+	 * make sure the mix matrix and chifacs vectors are available, wait
+	 * until they are
 	 */
 
-	g_mutex_lock(element->mixmatrix_lock);
-	if(!element->mixmatrix_buf) {
-		g_cond_wait(element->mixmatrix_available, element->mixmatrix_lock);
-		if(!element->mixmatrix_buf) {
-			/* mixing matrix didn't get set.  probably means
-			 * we're being disposed(). */
-			g_mutex_unlock(element->mixmatrix_lock);
-			gst_buffer_unref(buf);
-			gst_buffer_unref(orthosnrbuf);
-			GST_ERROR_OBJECT(element, "no mixing matrix available");
-			return GST_FLOW_NOT_NEGOTIATED;
-		}
+	g_mutex_lock(element->coefficients_lock);
+	while(!element->mixmatrix_buf || !element->chifacs_buf) {
+		g_cond_wait(element->coefficients_available, element->coefficients_lock);
+		/* FIXME:  we need some way of getting out of this loop.
+		 * maybe check for a flag set in an event handler */
 	}
 
 	/*
@@ -649,11 +609,11 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			data[channel] = 0;
 			for(ortho_channel = 0; ortho_channel < dof; ortho_channel++) {
 				double mixing_coefficient = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel);
-				data[channel] += pow((snr * mixing_coefficient - orthodata[ortho_channel]) * mixing_coefficient, 2.0);
+				data[channel] += pow((snr * mixing_coefficient - orthodata[ortho_channel]) * mixing_coefficient, 2.0) * gsl_vector_get(&element->chifacs.vector, channel);
 			}
 		}
 	}
-	g_mutex_unlock(element->mixmatrix_lock);
+	g_mutex_unlock(element->coefficients_lock);
 
 	/*
 	 * push the buffer downstream
@@ -711,19 +671,14 @@ static void finalize(GObject *object)
 	element->snrcollectdata = NULL;
 	element->collect = NULL;
 
-	g_mutex_free(element->mixmatrix_lock);
-	element->mixmatrix_lock = NULL;
-	g_cond_free(element->mixmatrix_available);
-	element->mixmatrix_available = NULL;
+	g_mutex_free(element->coefficients_lock);
+	element->coefficients_lock = NULL;
+	g_cond_free(element->coefficients_available);
+	element->coefficients_available = NULL;
 	if(element->mixmatrix_buf) {
 		gst_buffer_unref(element->mixmatrix_buf);
 		element->mixmatrix_buf = NULL;
 	}
-
-	g_mutex_free(element->chifacs_lock);
-	element->chifacs_lock = NULL;
-	g_cond_free(element->chifacs_available);
-	element->chifacs_available = NULL;
 	if(element->chifacs_buf) {
 		gst_buffer_unref(element->chifacs_buf);
 		element->chifacs_buf = NULL;
@@ -913,13 +868,11 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	/* configure (and ref) matrix pad */
 	pad = gst_element_get_pad(GST_ELEMENT(element), "matrix");
-	gst_pad_set_setcaps_function(pad, setcaps_matrix);
 	gst_pad_set_chain_function(pad, chain_matrix);
 	element->matrixpad = pad;
 
 	/* configure (and ref) chifacs pad */
 	pad = gst_element_get_pad(GST_ELEMENT(element), "chifacs");
-	gst_pad_set_setcaps_function(pad, setcaps_chifacs);
 	gst_pad_set_chain_function(pad, chain_chifacs);
 	element->chifacspad = pad;
 
@@ -943,11 +896,9 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	/* internal data */
 	element->rate = 0;
 	element->max_dof = DEFAULT_MAX_DOF;
-	element->mixmatrix_lock = g_mutex_new();
-	element->mixmatrix_available = g_cond_new();
+	element->coefficients_lock = g_mutex_new();
+	element->coefficients_available = g_cond_new();
 	element->mixmatrix_buf = NULL;
-	element->chifacs_lock = g_mutex_new();
-	element->chifacs_available = g_cond_new();
 	element->chifacs_buf = NULL;
 }
 
