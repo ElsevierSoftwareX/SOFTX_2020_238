@@ -611,7 +611,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 				double mixing_coefficient = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel);
 				data[channel] += pow((snr * mixing_coefficient - orthodata[ortho_channel]) * mixing_coefficient, 2.0);
 			}
-			data[channel] *= gsl_vector_get(&element->chifacs.vector, channel);
+			data[channel] *= gsl_vector_get(&element->chifacs.vector, channel / 2);
 		}
 	}
 	g_mutex_unlock(element->coefficients_lock);
