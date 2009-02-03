@@ -609,8 +609,9 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			data[channel] = 0;
 			for(ortho_channel = 0; ortho_channel < dof; ortho_channel++) {
 				double mixing_coefficient = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel);
-				data[channel] += pow((snr * mixing_coefficient - orthodata[ortho_channel]) * mixing_coefficient, 2.0) * gsl_vector_get(&element->chifacs.vector, channel);
+				data[channel] += pow((snr * mixing_coefficient - orthodata[ortho_channel]) * mixing_coefficient, 2.0);
 			}
+			data[channel] *= gsl_vector_get(&element->chifacs.vector, channel);
 		}
 	}
 	g_mutex_unlock(element->coefficients_lock);
