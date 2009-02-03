@@ -427,7 +427,9 @@ int generate_bank_svd(
   fcInitParams.createCVec     = 0;
 
   if (verbose) fprintf(stderr,"LALFindChirpTemplateInit() ...\n");
+  g_mutex_lock(gstlal_fftw_lock);
   LALFindChirpTemplateInit( &status, &fcTmpltParams, &fcInitParams );
+  g_mutex_unlock(gstlal_fftw_lock);
   if (verbose) fprintf(stderr,"LALFindChirpTemplateInit() done\n");
   fcTmpltParams->deltaT = 1.0 / base_sample_rate;
   fcTmpltParams->fLow = 25; 
@@ -441,7 +443,9 @@ int generate_bank_svd(
 
   /* Create Template - to be replaced by a LAL template generation call */
   if (verbose) fprintf(stderr,"LALCreateFindChirpInput() ...\n");
+  g_mutex_lock(gstlal_fftw_lock);
   LALCreateFindChirpInput( &status, &fcFilterInput, &fcInitParams );
+  g_mutex_unlock(gstlal_fftw_lock);
   if (verbose) fprintf(stderr,"LALCreateFindChirpInput() done, tmplate is %p\n", fcFilterInput->fcTmplt);
 
 #if 1
@@ -499,7 +503,9 @@ int generate_bank_svd(
   g_mutex_unlock(gstlal_fftw_lock);
 
   /* Destroy Template */
+  g_mutex_lock(gstlal_fftw_lock);
   LALFindChirpTemplateFinalize( &status, &fcTmpltParams );
+  g_mutex_unlock(gstlal_fftw_lock);
 
   /* Destroy time/freq series */
   XLALDestroyCOMPLEX16FrequencySeries(fft_template);
@@ -508,7 +514,9 @@ int generate_bank_svd(
   XLALDestroyREAL8TimeSeries(template);
 
   /* Destroy find chirp input */
+  g_mutex_lock(gstlal_fftw_lock);
   LALDestroyFindChirpInput(&status,&fcFilterInput);
+  g_mutex_unlock(gstlal_fftw_lock);
 
   /* free the template list */
   while(bankHead)
