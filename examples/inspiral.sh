@@ -68,12 +68,12 @@ function templatebank() {
 		name=snr${SUFFIX} \
 	! gstlal-audioresample quality=0 ! queue ! snr. \
 	templatebank${SUFFIX}.matrix ! tee name=matrix${SUFFIX} ! queue ! mixer${SUFFIX}.matrix \
-	templatebank${SUFFIX}.chifacs ! ${FAKESINK} \
 	snr_gate${SUFFIX}.src ! mixer${SUFFIX}.sink \
 	lal_chisquare \
 		name=chisquare${SUFFIX} \
 	! gstlal-audioresample quality=0 ! queue ! chisquare. \
 	matrix${SUFFIX}. ! queue ! chisquare${SUFFIX}.matrix \
+	templatebank${SUFFIX}.chifacs ! queue ! chisquare${SUFFIX}.chifacs \
 	orthogonalsnr${SUFFIX}. ! queue ! chisquare${SUFFIX}.orthosnr \
 	snr${SUFFIX}. ! queue ! chisquare${SUFFIX}.snr"
 }
