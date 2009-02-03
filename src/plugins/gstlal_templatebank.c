@@ -629,6 +629,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		gsl_matrix_view orthogonal_snr;
 		gsl_vector *orthogonal_snr_sample;
 		gsl_vector_view orthogonal_snr_sum_squares;
+		double S_sumsquares = pow(gsl_blas_dnrm2(element->S), 2.0);
+		double chifacs_mean = gsl_blas_dasum(element->chifacs) / element->chifacs->size;
 
 		/*
 		 * How many SNR samples can we construct from the contents
@@ -731,7 +733,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 */
 
 			gsl_vector_mul(orthogonal_snr_sample, element->S);
-			gsl_vector_set(&orthogonal_snr_sum_squares.vector, i, pow(gsl_blas_dnrm2(orthogonal_snr_sample) / num_templates(element), 2));
+			gsl_vector_set(&orthogonal_snr_sum_squares.vector, i, pow(gsl_blas_dnrm2(orthogonal_snr_sample), 2) / S_sumsquares * chifacs_mean);
 
 			/*
 			 * Advance the time series pointer.
