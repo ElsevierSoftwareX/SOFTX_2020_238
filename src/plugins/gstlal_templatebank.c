@@ -501,12 +501,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * template components.
 		 */
 
-#if 0		/* FIXME: put this back in when the chisquare element knows what to do with it */
-
 		result = push_chifacs_vector(element->chifacspad, element->chifacs, GST_BUFFER_TIMESTAMP(sinkbuf));
 		if(result != GST_FLOW_OK)
 			goto done;
-#endif
 
 		/*
 		 * Now that we know how many channels we'll produce, set
