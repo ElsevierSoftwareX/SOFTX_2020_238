@@ -85,7 +85,7 @@
 #define DEFAULT_T_END G_MAXDOUBLE
 #define DEFAULT_SNR_LENGTH 2048	/* samples */
 #define TEMPLATE_SAMPLE_RATE 4096	/* Hertz */
-#define TOLERANCE 0.97
+#define TOLERANCE 0.999
 
 
 /*
@@ -345,7 +345,8 @@ done:
 
 static double normalization_correction(double rate)
 {
-	return exp(0.53222 * log(rate) - 5.1269);
+        return sqrt(rate / 16384.0);
+	/*return exp(0.53222 * log(rate) - 5.1269);*/
 }
 
 
