@@ -545,16 +545,16 @@ void not_gsl_matrix_transpose(gsl_matrix **m)
   double cumsumb = 0;
   int maxb = 0;
   size_t i = 0;
-  /*for (i = 0; i < (*S)->size; i++) 
+  double tol = tolerance; /*1- (1-tolerance)/2.0;*/
+  for (i = 0; i < (*S)->size; i++) 
     {
-    sumb+= gsl_vector_get(*S,i);
-    fprintf(stderr, "S(%d) = %f",i,gsl_vector_get(*S,i));
-    }*/
-  sumb = gsl_vector_get(*S,0);
+    sumb+= gsl_vector_get(*S,i) * gsl_vector_get(*S,i);
+    }
+  /*sumb = gsl_vector_get(*S,0);*/
   for (i = 0; i < (*S)->size; i++)
     {
-    cumsumb = 1-gsl_vector_get(*S,i)/sumb;
-    if ((cumsumb*cumsumb) > tolerance) break;
+    cumsumb += gsl_vector_get(*S,i) * gsl_vector_get(*S,i) ;
+    if (sqrt(cumsumb / sumb) > tol) break;
     }
   maxb = i;/* (*S)->size;*/
   if (not_gsl_matrix_chop(U,(*U)->size1,maxb)) return 1;
