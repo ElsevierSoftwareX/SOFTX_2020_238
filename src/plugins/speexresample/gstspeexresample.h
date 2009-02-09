@@ -33,23 +33,23 @@ G_BEGIN_DECLS
 #define GST_TYPE_SPEEX_RESAMPLE \
   (gst_speex_resample_get_type())
 #define GST_SPEEX_RESAMPLE(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_SPEEX_RESAMPLE,GstSpeexResample))
+  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_SPEEX_RESAMPLE,GstlalSpeexResample))
 #define GST_SPEEX_RESAMPLE_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_SPEEX_RESAMPLE,GstSpeexResampleClass))
+  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_SPEEX_RESAMPLE,GstlalSpeexResampleClass))
 #define GST_IS_SPEEX_RESAMPLE(obj) \
   (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_SPEEX_RESAMPLE))
 #define GST_IS_SPEEX_RESAMPLE_CLASS(klass) \
   (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_SPEEX_RESAMPLE))
 
-typedef struct _GstSpeexResample GstSpeexResample;
-typedef struct _GstSpeexResampleClass GstSpeexResampleClass;
+typedef struct _GstlalSpeexResample GstlalSpeexResample;
+typedef struct _GstlalSpeexResampleClass GstlalSpeexResampleClass;
 
 /**
- * GstSpeexResample:
+ * GstlalSpeexResample:
  *
  * Opaque data structure.
  */
-struct _GstSpeexResample {
+struct _GstlalSpeexResample {
   GstBaseTransform element;
 
   /* <private> */
@@ -79,7 +79,7 @@ struct _GstSpeexResample {
   const SpeexResampleFuncs *funcs;
 };
 
-struct _GstSpeexResampleClass {
+struct _GstlalSpeexResampleClass {
   GstBaseTransformClass parent_class;
 };
 
