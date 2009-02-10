@@ -8,7 +8,8 @@ INSTRUMENT="H1"
 CHANNEL="LSC-STRAIN"
 REFERENCEPSD="reference_psd.txt"
 TEMPLATEBANK="H1-TMPLTBANK_09_1.207-874000000-2048.xml"
-SUMSQUARESTHRESHOLD="5.0"
+SUMSQUARESTHRESHOLD="2.0"
+SNRTHRESHOLD="0.0"
 
 SRC="lal_framesrc \
 	blocksize=$((16384*8*16)) \
@@ -66,12 +67,12 @@ function templatebank() {
 		name=mixer${SUFFIX} \
 	! tee \
 		name=snr${SUFFIX} \
-	! gstlal-audioresample quality=0 ! queue ! snr. \
+	! gstlal-audioresample quality=0 ! queue ! snradder. \
 	templatebank${SUFFIX}.matrix ! tee name=matrix${SUFFIX} ! queue ! mixer${SUFFIX}.matrix \
 	snr_gate${SUFFIX}.src ! mixer${SUFFIX}.sink \
 	lal_chisquare \
 		name=chisquare${SUFFIX} \
-	! gstlal-audioresample quality=0 ! queue ! chisquare. \
+	! gstlal-audioresample quality=0 ! queue ! chisquareadder. \
 	matrix${SUFFIX}. ! queue ! chisquare${SUFFIX}.matrix \
 	templatebank${SUFFIX}.chifacs ! queue ! chisquare${SUFFIX}.chifacs \
 	orthogonalsnr${SUFFIX}. ! queue ! chisquare${SUFFIX}.orthosnr \
@@ -93,7 +94,7 @@ NXYDUMP="queue ! lal_nxydump start-time=874107188000000000 stop-time=87410725800
 # on each link
 #
 
-gst-launch --verbose --messages --gst-debug-level=2 \
+gst-launch --gst-debug-level=2 \
 	${SRC} \
 	! progressreport \
 		name=progress_src \
@@ -113,15 +114,17 @@ gst-launch --verbose --messages --gst-debug-level=2 \
 	! progressreport name=progress_sumsquares \
 	! ${NXYDUMP}=sumsquares.txt \
 	lal_adder \
-		name=snr \
+		name=snradder \
 		sync=true \
 	! audio/x-raw-float, rate=4096 \
+	! tee name=snr \
 	! progressreport name=progress_snr \
 	! ${NXYDUMP}=snr.txt \
 	lal_adder \
-		name=chisquare \
+		name=chisquareadder \
 		sync=true \
 	! audio/x-raw-float, rate=4096 \
+	! tee name=chisquare \
 	! progressreport name=progress_chisquare \
 	! ${NXYDUMP}=chisquare.txt \
 	hoft_4096. ! queue max-size-time=50000000000 ! $(templatebank 0 0.0 0.25 45.25 $((4096*1))) \
@@ -130,6 +133,16 @@ gst-launch --verbose --messages --gst-debug-level=2 \
 	hoft_256. ! queue max-size-time=50000000000 ! $(templatebank 3 5.25 13.25 45.25 $((256*1))) \
 	hoft_128. ! queue max-size-time=50000000000 ! $(templatebank 4 13.25 29.25 45.25 $((128*1))) \
 	hoft_128. ! queue max-size-time=50000000000 ! $(templatebank 5 29.25 45.25 45.25 $((128*1))) \
+	lal_triggergen \
+		name=triggergen \
+		bank-filename=${TEMPLATEBANK} \
+		snr-thresh=${SNRTHRESHOLD} \
+	! lal_triggerxmlwriter \
+		location=output.xml \
+		sync=false \
+		preroll-queue-len=1 \
+	snr. ! queue ! triggergen.snr \
+	chisquare. ! queue ! triggergen.chisquare \
 
 exit
 
