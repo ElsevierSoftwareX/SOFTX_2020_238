@@ -25,9 +25,22 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstbasesink.h>
+#include <gst/base/gstcollectpads.h>
+#include <gstlalcollectpads.h>
+#include <lal/LIGOLwXML.h>
+#include <lal/LIGOMetadataTables.h>
 
 
 G_BEGIN_DECLS
+
+
+/*
+ * ============================================================================
+ *
+ *                             Trigger Generator
+ *
+ * ============================================================================
+ */
 
 
 #define GSTLAL_TRIGGERGEN_TYPE \
@@ -43,28 +56,70 @@ G_BEGIN_DECLS
 
 
 typedef struct {
-	GstBaseSinkClass parent_class;
+	GstElementClass parent_class;
 } GSTLALTriggerGenClass;
 
 
 typedef struct {
-	GstBaseSink element;
-	double snr_thresh;
-	double *mass1;
-	double *mass2;
-	/* only one additional parameter is necessary to derive tau0,tau3 from
-	 * mass, the lower cutoff frequency.  But since that isn't available 
-	 * directly I'll just store tau0 and tau3;
-	 */
-	double *tau0;
-	double *tau3;
-	double *sigmasq;
-	double *Gamma;
+	GstElement element;
+
+	GstCollectPads *collect;
+
+	GstPad *snrpad;
+	GstLALCollectData *snrcollectdata;
+	GstPad *chisqpad;
+	GstLALCollectData *chisqcollectdata;
+	GstPad *srcpad;
+
+	guint64 output_offset;
+	GstClockTime output_timestamp_at_zero;
+
+	int rate;
+
 	char *bank_filename;
+	SnglInspiralTable *bank;
+	int num_templates;
+	double snr_thresh;
 } GSTLALTriggerGen;
 
 
 GType gstlal_triggergen_get_type(void);
+
+
+/*
+ * ============================================================================
+ *
+ *                             Trigger XML Writer
+ *
+ * ============================================================================
+ */
+
+
+#define GSTLAL_TRIGGERXMLWRITER_TYPE \
+	(gstlal_triggerxmlwriter_get_type())
+#define GSTLAL_TRIGGERXMLWRITER(obj) \
+	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_TRIGGERXMLWRITER_TYPE, GSTLALTriggerXMLWriter))
+#define GSTLAL_TRIGGERXMLWRITER_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_TRIGGERXMLWRITER_TYPE, GSTLALTriggerXMLWriterClass))
+#define GST_IS_GSTLAL_TRIGGERXMLWRITER(obj) \
+	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_TRIGGERXMLWRITER_TYPE))
+#define GST_IS_GSTLAL_TRIGGERXMLWRITER_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_TRIGGERXMLWRITER_TYPE))
+
+
+typedef struct {
+	GstBaseSinkClass parent_class;
+} GSTLALTriggerXMLWriterClass;
+
+
+typedef struct {
+	GstBaseSink element;
+	char *location;
+	LIGOLwXMLStream *xml;
+} GSTLALTriggerXMLWriter;
+
+
+GType gstlal_triggerxmlwriter_get_type(void);
 
 
 G_END_DECLS

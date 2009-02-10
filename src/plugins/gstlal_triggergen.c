@@ -1,3 +1,4 @@
+#include <complex.h>
 #include <math.h>
 #include <glib.h>
 #include <gst/gst.h>
@@ -12,11 +13,20 @@
 #include <lal/LALStdlib.h>
 
 
+/*
+ * ============================================================================
+ *
+ *                             Trigger Generator
+ *
+ * ============================================================================
+ */
+
+
 #define DEFAULT_SNR_THRESH 5.5
 
 static double eta(double m1, double m2)
   {
-  return m1*m2/(m1+m2)/(m1+m2);
+  return m1*m2/pow(m1+m2,2);
   }
 
 static double mchirp(double m1, double m2)
@@ -29,183 +39,234 @@ static double effective_distance(double snr, double sigmasq)
   return sqrt(sigmasq) / snr;
   }
 
-static void setup_bankfile_input(GSTLALTriggerGen *element)
+static void setup_bankfile_input(GSTLALTriggerGen *element, char *bank_filename)
   {
   SnglInspiralTable *bank = NULL;
-  SnglInspiralTable *tmp = NULL;
-  int i = 0;
-  int j = 0;
-  if (element->bank_filename)
-    {
-    int numtemps = LALSnglInspiralTableFromLIGOLw( &bank, element->bank_filename,-1,-1);
-    element->mass1 = (double *) calloc(numtemps,sizeof(double) );
-    element->mass2 = (double *) calloc(numtemps,sizeof(double) );
-    element->tau0 = (double *) calloc(numtemps,sizeof(double) );
-    element->tau3 = (double *) calloc(numtemps,sizeof(double) );
-    element->sigmasq = (double *) calloc(numtemps,sizeof(double) );
-    element->Gamma = (double *) calloc(10 * numtemps,sizeof(double) );
-    i = 0;
-    while (bank)
-      {
-      element->mass1[i] = bank->mass1;
-      element->mass2[i] = bank->mass2; 
-      element->tau0[i] = bank->tau0;
-      element->tau3[i] = bank->tau3;
-      element->sigmasq[i] = bank->sigmasq;
-      for (j=0; j < 10; j++)
-        {
-        element->Gamma[10*i + j] = bank->Gamma[j];
-        }
-      tmp = bank;
-      bank = bank->next;
-      free(tmp);
-      i++;
-      }
-    }
-  }
-
-static void append_trigger(LIGOTimeGPS epoch, double SNR, int channel, SnglInspiralTable *head, GSTLALTriggerGen *element)
-  {
   int i;
-  (head)->snr = SNR;
-  (head)->end_time = epoch;
-  if (!(element->mass1)) (head)->mass1 = channel;
-  else 
+
+  element->bank_filename = bank_filename;
+  element->num_templates = LALSnglInspiralTableFromLIGOLw(&bank, element->bank_filename, -1, -1);
+  element->bank = calloc(element->num_templates, sizeof(*element->bank));
+  if(!element->bank)
     {
-    (head)->mass1 = element->mass1[channel];
-    (head)->mass2 = element->mass2[channel];
-    (head)->tau0 = element->tau0[channel];
-    (head)->tau3 = element->tau3[channel];
-    (head)->sigmasq = element->sigmasq[channel];
-    (head)->eta = eta( (head)->mass1, (head)->mass2 );
-    (head)->mchirp = mchirp( (head)->mass1, (head)->mass2 );
-    (head)->eff_distance = effective_distance( (head)->snr, (head)->sigmasq );
-    for (i=0; i < 10; i++)
-      {
-      /* gammas are the 10 coefficients of a 4x4 symmetric matrix */
-      (head)->Gamma[i] = element->Gamma[10*channel +i];
-      }
+    /* FIXME:  free template bank */
+    return;
+    }
+
+  for(i = 0; bank; i++)
+    {
+    SnglInspiralTable *prev = bank;
+    element->bank[i] = *bank;
+    element->bank[i].next = NULL;
+    bank = bank->next;
+    free(prev);
     }
   }
- 
-static void write_trigger_file( SnglInspiralTable *first, char *filename )
-  {
-  LALStatus *status = NULL;
-  LIGOLwXMLStream * xml = NULL;
-  SnglInspiralTable *tmp = NULL;
-  MetadataTable table;
-  table.snglInspiralTable  = first;
-  /* write the table to the file */
-  xml = XLALOpenLIGOLwXMLFile( filename );
-  status = (LALStatus *) calloc(1,sizeof(LALStatus));
-  LALBeginLIGOLwXMLTable (status, xml, sngl_inspiral_table);
-  LALWriteLIGOLwXMLTable (status, xml, table, sngl_inspiral_table);
-  LALEndLIGOLwXMLTable (status, xml);
-  XLALCloseLIGOLwXMLFile(xml);
 
-  /* free the linked list */
-  while (first)
-    {
-    tmp = first;
-    first = first->next;
-    free(tmp);
-    }
-  free(status);
+static void free_bankfile(GSTLALTriggerGen *element)
+  {
+  if(element->bank_filename) { free(element->bank_filename); element->bank_filename = NULL; }
+  if(element->bank) { free(element->bank); element->bank = NULL; }
+  element->num_templates = 0;
   }
 
-/* Override the render function.  This will write files out.  It is really
- * the only thing that "does anything" */
-static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer)
+static SnglInspiralTable *new_event(SnglInspiralTable *dest, LIGOTimeGPS epoch, double complex z, double complex chisq, int channel, GSTLALTriggerGen *element)
   {
-  /* This is a bit confusing, but you need to cast the sink structure into a GSTLALTriggerGen to access the snr_thresh property */
-  GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(sink);
-  int samples;
-  int numchannels = 1;
-  int rate = 0;
-  int i,j;
-  double SNR = 0;
-  guint64 base_time = GST_BUFFER_TIMESTAMP(buffer);
-  double *data = (double *) GST_BUFFER_DATA(buffer);
-  LIGOTimeGPS epoch;
-  SnglInspiralTable *head = NULL;
-  SnglInspiralTable *first = head;
-  char filename[255];
-  double *max_snr = NULL;
-  LIGOTimeGPS *time_data = NULL;
-  int first_trigger;
+  double xi;
 
-  /* check to see if we have a bank file and need to read it. Should only be 
-   * done once */
-  if ( element->bank_filename && !(element->mass1) )
-    {
-    setup_bankfile_input(element);
-    }
-  
-  sprintf(filename, "INSPIRAL-%llu.xml",(long long unsigned) base_time);
+  *dest = element->bank[channel];
 
-  /* Use the built in Macro to extract the buffers caps */
-  GstCaps *caps = GST_BUFFER_CAPS(buffer);
-  /* Now that we have the caps extract the structure */
+  dest->snr = cabs(z);
+  dest->coa_phase = atan2(cimag(z), creal(z));
+  dest->chisq = creal(chisq) + cimag(chisq);
+  dest->chisq_dof = 1;
+  dest->end_time = epoch;
+  dest->eff_distance = effective_distance(dest->snr, dest->sigmasq);
+
+  xi = dest->chisq / (1 + 0.1 * dest->snr * dest->snr);
+
+  return dest;
+  }
+
+static void gen_set_bytes_per_sample(GstPad *pad, GstCaps *caps)
+  {
   GstStructure *structure;
-  
+  gint width, channels;
+
   structure = gst_caps_get_structure(caps, 0);
+  gst_structure_get_int(structure, "width", &width);
+  gst_structure_get_int(structure, "channels", &channels);
 
-  /* Now that we have the caps structure try to extract the number of channels*/
-  gst_structure_get_int(structure, "channels", &numchannels);
-  gst_structure_get_int(structure, "rate", &rate);
-  max_snr = (double *) calloc(numchannels, sizeof(double));
-  time_data = (LIGOTimeGPS *) calloc(numchannels, sizeof(LIGOTimeGPS));
+  gstlal_collect_pads_set_bytes_per_sample(pad, (width / 8) * channels);
+  }
 
-  samples = GST_BUFFER_OFFSET_END(buffer) - GST_BUFFER_OFFSET(buffer);
+static gboolean gen_setcaps(GstPad *pad, GstCaps *caps)
+  {
+  GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(GST_PAD_PARENT(pad));
+  GstStructure *structure;
+  gboolean result = TRUE;
 
-  for (i = 0; i < samples; i++)
+  GST_OBJECT_LOCK(element);
+  gen_set_bytes_per_sample(pad, caps);
+  structure = gst_caps_get_structure(caps, 0);
+  gst_structure_get_int(structure, "rate", &element->rate);
+  GST_OBJECT_UNLOCK(element);
+  return result;
+  }
+
+static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
+  {
+  GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(user_data);
+  guint64 earliest_input_offset, earliest_input_offset_end;
+  GstBuffer *snrbuf;
+  GstBuffer *chisqbuf;
+  GstBuffer *srcbuf;
+  LIGOTimeGPS epoch;
+  const double complex *snrdata;
+  const double complex *chisqdata;
+  int length;
+  int sample, channel;
+  SnglInspiralTable event;
+  GstFlowReturn result;
+
+  /*
+   * get the range of offsets (in the output stream) spanned by the
+   * available input buffers.
+   */
+
+  if(!gstlal_collect_pads_get_earliest_offsets(element->collect, &earliest_input_offset, &earliest_input_offset_end, element->rate, element->output_timestamp_at_zero))
     {
-    for (j = 0; j < numchannels; j++)
-      {
-      SNR = fabs(data[numchannels*i + j]);
-      XLALINT8NSToGPS(&epoch,base_time);
-      XLALGPSAdd( &epoch, (REAL8) i / rate);
-      if (SNR > element->snr_thresh)
-        {
-        if (SNR > max_snr[j])
-          {
-          max_snr[j] = SNR;
-          time_data[j] = epoch;
-          }
-	}
-      }
+    GST_ERROR_OBJECT(element, "cannot deduce input timestamp offset information");
+    return GST_FLOW_ERROR;
     }
-  
-  first_trigger = 1;
-  for (j = 0; j < numchannels; j++)
+
+  /*
+   * check for EOS
+   */
+
+  if(earliest_input_offset == GST_BUFFER_OFFSET_NONE)
+    goto eos;
+
+  /*
+   * don't let time go backwards.  in principle we could be smart and
+   * handle this, but the audiorate element can be used to correct
+   * screwed up time series so there is no point in re-inventing its
+   * capabilities here.
+   */
+
+  if(earliest_input_offset < element->output_offset)
     {
-    if (max_snr[j]) 
+    GST_ERROR_OBJECT(element, "detected time reversal in at least one input stream:  expected nothing earlier than offset %llu, found sample at offset %llu", (unsigned long long) element->output_offset, (unsigned long long) earliest_input_offset);
+    return GST_FLOW_ERROR;
+    }
+
+  /*
+   * get buffers upto the desired end offset.
+   */
+
+  snrbuf = gstlal_collect_pads_take_buffer(pads, element->snrcollectdata, earliest_input_offset_end);
+  chisqbuf = gstlal_collect_pads_take_buffer(pads, element->chisqcollectdata, earliest_input_offset_end);
+
+  /*
+   * NULL means EOS.
+   */
+
+  if(!snrbuf || !chisqbuf)
+    {
+    /* FIXME:  handle EOS */
+    }
+
+  /*
+   * FIXME:  rethink the collect pads system so that this doesn't
+   * happen  (I think the second part already cannot happen because
+   * we get the collect pads system to tell us the upper bound of
+   * available offsets before asking for the buffers, but need to
+   * check this)
+   */
+
+  if(GST_BUFFER_OFFSET(snrbuf) != GST_BUFFER_OFFSET(chisqbuf) || GST_BUFFER_OFFSET_END(snrbuf) != GST_BUFFER_OFFSET_END(chisqbuf))
+    {
+    gst_buffer_unref(snrbuf);
+    gst_buffer_unref(chisqbuf);
+    GST_ERROR_OBJECT(element, "misaligned buffer boundaries");
+    return GST_FLOW_ERROR;
+    }
+
+  /*
+   * GAP --> no-op
+   */
+
+  if(GST_BUFFER_FLAG_IS_SET(snrbuf, GST_BUFFER_FLAG_GAP) || GST_BUFFER_FLAG_IS_SET(chisqbuf, GST_BUFFER_FLAG_GAP))
+    {
+    srcbuf = gst_buffer_new();
+    gst_buffer_copy_metadata(srcbuf, snrbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
+    GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
+    gst_buffer_unref(snrbuf);
+    gst_buffer_unref(chisqbuf);
+    return gst_pad_push(element->srcpad, srcbuf);
+    }
+
+  /*
+   * Find events
+   */
+
+  XLALINT8NSToGPS(&epoch, GST_BUFFER_TIMESTAMP(snrbuf));
+  length = GST_BUFFER_OFFSET_END(snrbuf) - GST_BUFFER_OFFSET(snrbuf);
+  snrdata = (const double complex *) GST_BUFFER_DATA(snrbuf);
+  chisqdata = (const double complex *) GST_BUFFER_DATA(chisqbuf);
+
+  event.snr = 0;
+
+  for(sample = 0; sample < length; sample++)
+    {
+    for(channel = 0; channel < element->num_templates; channel++)
       {
-      head = (SnglInspiralTable *) calloc(1,sizeof(SnglInspiralTable));
-      if (first_trigger) 
+      int index = sample * element->num_templates + channel;
+      if(cabs(snrdata[index]) > event.snr)
         {
-        first = head;
-        first_trigger = 0;
+	LIGOTimeGPS t = epoch;
+	XLALGPSAdd(&t, (double) sample / element->rate);
+        new_event(&event, t, snrdata[index], chisqdata[index], channel, element);
         }
-      append_trigger(time_data[j], max_snr[j], j, head, element);
-      head = head->next;
       }
     }
 
-  write_trigger_file(first, filename);
-  free(max_snr);
-  free(time_data);
-  return GST_FLOW_OK;
+  /*
+   * Push event downstream
+   */
+
+  if(event.snr > element->snr_thresh)
+    {
+    result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(snrbuf), sizeof(event), GST_PAD_CAPS(element->srcpad), &srcbuf);
+    gst_buffer_copy_metadata(srcbuf, snrbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
+    memcpy(GST_BUFFER_DATA(srcbuf), &event, sizeof(event));
+    }
+  else
+    {
+    srcbuf = gst_buffer_new();
+    gst_buffer_copy_metadata(srcbuf, snrbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
+    GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
+    }
+
+  gst_buffer_unref(snrbuf);
+  gst_buffer_unref(chisqbuf);
+
+  return gst_pad_push(element->srcpad, srcbuf);
+
+eos:
+  GST_DEBUG_OBJECT(element, "no data available (EOS)");
+  gst_pad_push_event(element->srcpad, gst_event_new_eos());
+  return GST_FLOW_UNEXPECTED;
   }
 
 /* These functions allow "command line arguments" */
 
-enum property {
+enum gen_property {
         ARG_SNR_THRESH = 1, 
 	ARG_BANK_FILENAME
 };
 
-static void set_property(GObject * object, enum property id, const GValue * value, GParamSpec * pspec)
+static void gen_set_property(GObject * object, enum gen_property id, const GValue * value, GParamSpec * pspec)
   {
   GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
 
@@ -215,14 +276,14 @@ static void set_property(GObject * object, enum property id, const GValue * valu
       element->snr_thresh = g_value_get_double(value);
       break;
     case ARG_BANK_FILENAME:
-      free(element->bank_filename);
-      element->bank_filename = g_value_dup_string(value);
+      free_bankfile(element);
+      setup_bankfile_input(element, g_value_dup_string(value));
       break;
     }
   }
 
 
-static void get_property(GObject * object, enum property id, GValue * value, GParamSpec * pspec)
+static void gen_get_property(GObject * object, enum gen_property id, GValue * value, GParamSpec * pspec)
   {
   GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
 
@@ -239,31 +300,53 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 
 
 
-static GstBaseSink *parent_class = NULL;
+static GstElementClass *gen_parent_class = NULL;
 
-static void finalize(GObject *object)
+static void gen_finalize(GObject *object)
   {
   GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
-  if (element->mass1) free(element->mass1);
-  element->mass1 = NULL;
-  if (element->mass2) free(element->mass2);
-  element->mass2 = NULL;
-  if (element->tau0) free(element->tau0);
-  element->tau0 = NULL;
-  if (element->tau3) free(element->tau3);
-  element->tau3 = NULL;
-  if (element->sigmasq) free(element->sigmasq);
-  element->sigmasq = NULL;
-  if (element->Gamma) free(element->Gamma);
-  element->Gamma = NULL;
-  if (element->bank_filename) free(element->bank_filename);
-  element->bank_filename = NULL;
-  G_OBJECT_CLASS(parent_class)->finalize(object);
+  free_bankfile(element);
+  G_OBJECT_CLASS(gen_parent_class)->finalize(object);
   }
-  
-static void base_init(gpointer g_class)
-  {
 
+
+static GstStateChangeReturn gen_change_state(GstElement *element, GstStateChange transition)
+  {
+  GSTLALTriggerGen *triggergen = GSTLAL_TRIGGERGEN(element);
+
+  switch(transition)
+    {
+    case GST_STATE_CHANGE_NULL_TO_READY:
+      break;
+
+    case GST_STATE_CHANGE_READY_TO_PAUSED:
+      triggergen->output_offset = 0;
+      /* FIXME:  temporarily hard-coded to a value that prevents
+       * overflow in our test pipeline.  must figure out how to
+       * handle arbitrary start times without overflow */
+      triggergen->output_timestamp_at_zero = 874100000 * GST_SECOND;
+      gst_collect_pads_start(triggergen->collect);
+      break;
+
+    case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
+      break;
+
+    case GST_STATE_CHANGE_PAUSED_TO_READY:
+      /* need to unblock the collectpads before calling the
+       * parent change_state so that streaming can finish */
+      gst_collect_pads_stop(triggergen->collect);
+      break;
+
+    default:
+      break;
+    }
+
+  return gen_parent_class->change_state(element, transition);
+  }
+
+
+static void gen_base_init(gpointer g_class)
+  {
   static GstElementDetails plugin_details = {
                   "Trigger Generator",
 		  "Filter",
@@ -273,65 +356,97 @@ static void base_init(gpointer g_class)
   GstElementClass *element_class = GST_ELEMENT_CLASS(g_class);
   gst_element_class_set_details (element_class, &plugin_details);
 
-
   gst_element_class_add_pad_template(
                 element_class,
                 gst_pad_template_new(
-                        "sink",
+                        "snr",
                         GST_PAD_SINK,
                         GST_PAD_ALWAYS,
                         gst_caps_from_string(
                                 "audio/x-raw-float, " \
+				"rate = (int) [1, MAX ], " \
                                 "channels = (int) [ 1, MAX ], " \
                                 "endianness = (int) BYTE_ORDER, " \
-                                "width = (int) {32, 64}"
+                                "width = (int) 64"
                         )
                 )
         );
-
-
-
+  gst_element_class_add_pad_template(
+                element_class,
+                gst_pad_template_new(
+                        "chisquare",
+                        GST_PAD_SINK,
+                        GST_PAD_ALWAYS,
+                        gst_caps_from_string(
+                                "audio/x-raw-float, " \
+				"rate = (int) [1, MAX ], " \
+                                "channels = (int) [ 1, MAX ], " \
+                                "endianness = (int) BYTE_ORDER, " \
+                                "width = (int) 64"
+                        )
+                )
+        );
+  gst_element_class_add_pad_template(
+                element_class,
+                gst_pad_template_new(
+                        "src",
+                        GST_PAD_SRC,
+                        GST_PAD_ALWAYS,
+                        gst_caps_from_string(
+                                "application/x-lal-snglinspiral"
+                        )
+                )
+        );
   }
 
 
-
-
-static void class_init(gpointer class, gpointer class_data)
+static void gen_class_init(gpointer klass, gpointer class_data)
 {
-        GObjectClass *gobject_class = G_OBJECT_CLASS(class);
+        GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstElementClass *gstelement_class = GST_ELEMENT_CLASS(klass);
 
-	GstBaseSinkClass *gstbasesink_class = GST_BASE_SINK_CLASS(class);
-        parent_class = g_type_class_ref(GST_TYPE_BASE_SINK);
-	/* Override the render function */
-	gstbasesink_class->render = render;
-	gobject_class->set_property = set_property;
-	gobject_class->get_property = get_property;
-        gobject_class->finalize = finalize;
+        gen_parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
+	gobject_class->set_property = gen_set_property;
+	gobject_class->get_property = gen_get_property;
+        gobject_class->finalize = gen_finalize;
+	gstelement_class->change_state = gen_change_state;
 
         g_object_class_install_property(gobject_class, ARG_BANK_FILENAME, g_param_spec_string("bank-filename", "Bank file name", "Path to XML file used to generate the template bank", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SNR_THRESH, g_param_spec_double("snr-thresh", "SNR Threshold", "SNR Threshold that determines a trigger", 0, G_MAXDOUBLE, DEFAULT_SNR_THRESH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-
 }
 
 
-static void instance_init(GTypeInstance *object, gpointer class)
+static void gen_instance_init(GTypeInstance *object, gpointer klass)
 {
         GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
         GstPad *pad;
 
-        /* configure sink pad */
-        pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-        /*gst_pad_set_setcaps_function(pad, setcaps);*/
-	gst_object_unref(pad);
+	gst_element_create_all_pads(GST_ELEMENT(element));
+	element->collect = gst_collect_pads_new();
+	gst_collect_pads_set_function(element->collect, gen_collected, element);
+
+        /* configure snr pad */
+        pad = gst_element_get_pad(GST_ELEMENT(element), "snr");
+        gst_pad_set_setcaps_function(pad, gen_setcaps);
+	element->snrcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->snrcollectdata));
+	element->snrpad = pad;
+
+	/* configure chisquare pad */
+        pad = gst_element_get_pad(GST_ELEMENT(element), "chisquare");
+        gst_pad_set_setcaps_function(pad, gen_setcaps);
+	element->chisqcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->chisqcollectdata));
+	element->chisqpad = pad;
+
+	/* retrieve (and ref) src pad */
+	pad = gst_element_get_pad(GST_ELEMENT(element), "src");
+	element->srcpad = pad;
+
+        /* internal data */
+	element->rate = 0;
+	element->bank_filename = NULL;
+        element->bank = NULL;
+	element->num_templates = 0;
 	element->snr_thresh = DEFAULT_SNR_THRESH;
-        /*element->bank_filename = NULL;*/
-        element->mass1 = NULL;
-        element->mass2 = NULL;
-        element->tau0 = NULL;
-        element->tau3 = NULL;
-        element->sigmasq = NULL;
-        element->Gamma = NULL;
 }
 
 
@@ -342,14 +457,178 @@ GType gstlal_triggergen_get_type(void)
         if(!type) {
                 static const GTypeInfo info = {
                         .class_size = sizeof(GSTLALTriggerGenClass),
-                        .class_init = class_init,
-                        .base_init = base_init,
+                        .class_init = gen_class_init,
+                        .base_init = gen_base_init,
                         .instance_size = sizeof(GSTLALTriggerGen),
-                        .instance_init = instance_init,
+                        .instance_init = gen_instance_init,
                 };
-                type = g_type_register_static(GST_TYPE_BASE_SINK, "lal_triggergen", &info, 0);
+                type = g_type_register_static(GST_TYPE_ELEMENT, "lal_triggergen", &info, 0);
         }
 
         return type;
 }
 
+
+/*
+ * ============================================================================
+ *
+ *                             Trigger XML Writer
+ *
+ * ============================================================================
+ */
+
+
+static gboolean xmlwriter_start(GstBaseSink *sink)
+  {
+  GSTLALTriggerXMLWriter *element = GSTLAL_TRIGGERXMLWRITER(sink);
+  LALStatus status;
+  memset(&status, 0, sizeof(status));
+
+  element->xml = XLALOpenLIGOLwXMLFile(element->location);
+  LALBeginLIGOLwXMLTable(&status, element->xml, sngl_inspiral_table);
+
+  return TRUE;
+  }
+
+
+static gboolean xmlwriter_stop(GstBaseSink *sink)
+  {
+  GSTLALTriggerXMLWriter *element = GSTLAL_TRIGGERXMLWRITER(sink);
+  LALStatus status;
+  memset(&status, 0, sizeof(status));
+
+  if(element->xml)
+    {
+    LALEndLIGOLwXMLTable(&status, element->xml);
+    XLALCloseLIGOLwXMLFile(element->xml);
+    element->xml = NULL;
+    }
+
+  return TRUE;
+  }
+
+
+static GstFlowReturn xmlwriter_render(GstBaseSink *sink, GstBuffer *buffer)
+  {
+  GSTLALTriggerXMLWriter *element = GSTLAL_TRIGGERXMLWRITER(sink);
+  LALStatus status;
+  MetadataTable table = {
+    .snglInspiralTable = (SnglInspiralTable *) GST_BUFFER_DATA(buffer)
+  };
+  memset(&status, 0, sizeof(status));
+
+  if(!GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_GAP))
+    {
+    LALWriteLIGOLwXMLTable(&status, element->xml, table, sngl_inspiral_table);
+    }
+
+  return GST_FLOW_OK;
+  }
+
+
+enum xmlwriter_property {
+        ARG_LOCATION = 1
+};
+
+
+static void xmlwriter_set_property(GObject * object, enum xmlwriter_property id, const GValue * value, GParamSpec * pspec)
+  {
+  GSTLALTriggerXMLWriter *element = GSTLAL_TRIGGERXMLWRITER(object);
+
+  switch(id) 
+    {
+    case ARG_LOCATION:
+      free(element->location);
+      element->location = g_value_dup_string(value);
+      break;
+    }
+  }
+
+
+static void xmlwriter_get_property(GObject * object, enum xmlwriter_property id, GValue * value, GParamSpec * pspec)
+  {
+  GSTLALTriggerXMLWriter *element = GSTLAL_TRIGGERXMLWRITER(object);
+
+  switch(id)
+    {
+    case ARG_LOCATION:
+      g_value_set_string(value,element->location);
+      break;
+    }
+  }
+
+
+static GstBaseSink *xmlwriter_parent_class = NULL;
+
+
+static void xmlwriter_base_init(gpointer g_class)
+  {
+  static GstElementDetails plugin_details = {
+                  "Trigger XML Writer",
+		  "Sink/File",
+      	 	  "Writes LAL's SnglInspiralTable C structures to an XML file",
+		  "Kipp Cannon <kcannon@ligo.caltech.edu>, Chad Hanna <channa@ligo.caltech.edu>"};
+
+  GstElementClass *element_class = GST_ELEMENT_CLASS(g_class);
+  gst_element_class_set_details (element_class, &plugin_details);
+
+  gst_element_class_add_pad_template(
+                element_class,
+                gst_pad_template_new(
+                        "sink",
+                        GST_PAD_SINK,
+                        GST_PAD_ALWAYS,
+                        gst_caps_from_string(
+                                "application/x-lal-snglinspiral"
+                        )
+                )
+        );
+  }
+
+
+static void xmlwriter_class_init(gpointer klass, gpointer class_data)
+{
+        GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstBaseSinkClass *gstbasesink_class = GST_BASE_SINK_CLASS(klass);
+
+        xmlwriter_parent_class = g_type_class_ref(GST_TYPE_BASE_SINK);
+	gobject_class->set_property = xmlwriter_set_property;
+	gobject_class->get_property = xmlwriter_get_property;
+	gstbasesink_class->start = xmlwriter_start;
+	gstbasesink_class->stop = xmlwriter_stop;
+	gstbasesink_class->render = xmlwriter_render;
+
+        g_object_class_install_property(gobject_class, ARG_LOCATION, g_param_spec_string("location", "filename", "Path to output file", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+}
+
+
+static void xmlwriter_instance_init(GTypeInstance *object, gpointer klass)
+{
+        GSTLALTriggerXMLWriter *element = GSTLAL_TRIGGERXMLWRITER(object);
+
+	/*
+	 * Internal data
+	 */
+
+	element->location = NULL;
+	element->xml = NULL;
+}
+
+
+GType gstlal_triggerxmlwriter_get_type(void)
+{
+        static GType type = 0;
+
+        if(!type) {
+                static const GTypeInfo info = {
+                        .class_size = sizeof(GSTLALTriggerXMLWriterClass),
+                        .class_init = xmlwriter_class_init,
+                        .base_init = xmlwriter_base_init,
+                        .instance_size = sizeof(GSTLALTriggerXMLWriter),
+                        .instance_init = xmlwriter_instance_init,
+                };
+                type = g_type_register_static(GST_TYPE_BASE_SINK, "lal_triggerxmlwriter", &info, 0);
+        }
+
+        return type;
+}
