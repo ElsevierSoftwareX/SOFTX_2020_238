@@ -426,19 +426,19 @@ static void gen_instance_init(GTypeInstance *object, gpointer klass)
 	gst_collect_pads_set_function(element->collect, gen_collected, element);
 
         /* configure snr pad */
-        pad = gst_element_get_pad(GST_ELEMENT(element), "snr");
+        pad = gst_element_get_static_pad(GST_ELEMENT(element), "snr");
         gst_pad_set_setcaps_function(pad, gen_setcaps);
 	element->snrcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->snrcollectdata));
 	element->snrpad = pad;
 
 	/* configure chisquare pad */
-        pad = gst_element_get_pad(GST_ELEMENT(element), "chisquare");
+        pad = gst_element_get_static_pad(GST_ELEMENT(element), "chisquare");
         gst_pad_set_setcaps_function(pad, gen_setcaps);
 	element->chisqcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->chisqcollectdata));
 	element->chisqpad = pad;
 
 	/* retrieve (and ref) src pad */
-	pad = gst_element_get_pad(GST_ELEMENT(element), "src");
+	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
 	element->srcpad = pad;
 
         /* internal data */

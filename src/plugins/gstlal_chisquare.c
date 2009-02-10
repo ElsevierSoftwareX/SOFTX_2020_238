@@ -868,24 +868,24 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	gst_collect_pads_set_function(element->collect, collected, element);
 
 	/* configure (and ref) matrix pad */
-	pad = gst_element_get_pad(GST_ELEMENT(element), "matrix");
+	pad = gst_element_get_static_pad(GST_ELEMENT(element), "matrix");
 	gst_pad_set_chain_function(pad, chain_matrix);
 	element->matrixpad = pad;
 
 	/* configure (and ref) chifacs pad */
-	pad = gst_element_get_pad(GST_ELEMENT(element), "chifacs");
+	pad = gst_element_get_static_pad(GST_ELEMENT(element), "chifacs");
 	gst_pad_set_chain_function(pad, chain_chifacs);
 	element->chifacspad = pad;
 
 	/* configure (and ref) orthogonal SNR sink pad */
-	pad = gst_element_get_pad(GST_ELEMENT(element), "orthosnr");
+	pad = gst_element_get_static_pad(GST_ELEMENT(element), "orthosnr");
 	gst_pad_set_getcaps_function(pad, getcaps_orthosnr);
 	gst_pad_set_setcaps_function(pad, setcaps_orthosnr);
 	element->orthosnrcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->orthosnrcollectdata));
 	element->orthosnrpad = pad;
 
 	/* configure (and ref) SNR sink pad */
-	pad = gst_element_get_pad(GST_ELEMENT(element), "snr");
+	pad = gst_element_get_static_pad(GST_ELEMENT(element), "snr");
 	gst_pad_set_getcaps_function(pad, getcaps_snr);
 	gst_pad_set_setcaps_function(pad, setcaps_snr);
 	element->snrcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->snrcollectdata));

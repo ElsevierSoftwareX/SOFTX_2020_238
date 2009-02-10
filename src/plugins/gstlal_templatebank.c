@@ -966,16 +966,16 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	gst_object_unref(pad);
 
 	/* retrieve (and ref) matrix pad */
-	element->matrixpad = gst_element_get_pad(GST_ELEMENT(element), "matrix");
+	element->matrixpad = gst_element_get_static_pad(GST_ELEMENT(element), "matrix");
 
 	/* retrieve (and ref) chifacs pad */
-	element->chifacspad = gst_element_get_pad(GST_ELEMENT(element), "chifacs");
+	element->chifacspad = gst_element_get_static_pad(GST_ELEMENT(element), "chifacs");
 
 	/* retrieve (and ref) src pad */
-	element->srcpad = gst_element_get_pad(GST_ELEMENT(element), "src");
+	element->srcpad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
 
 	/* retrieve (and ref) sum-of-squares pad */
-	element->sumsquarespad = gst_element_get_pad(GST_ELEMENT(element), "sumofsquares");
+	element->sumsquarespad = gst_element_get_static_pad(GST_ELEMENT(element), "sumofsquares");
 
 	/* internal data */
 	element->adapter = gst_adapter_new();
