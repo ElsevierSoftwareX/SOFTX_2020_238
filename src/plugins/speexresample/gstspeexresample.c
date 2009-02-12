@@ -965,16 +965,12 @@ gst_speex_resample_process (GstlalSpeexResample * resample, GstBuffer * inbuf,
   gint err = RESAMPLER_ERR_SUCCESS;
   guint8 *in_tmp = NULL, *out_tmp = NULL;
   gboolean need_convert = (resample->funcs->width != resample->width);
-  int in_latency, latency, skipGAP, addSample;
-  /* FIXME: THIS NEEDS TO BE MORE CARFUL for non power of 2*/
-  if (resample->inrate < resample->outrate) addSample = 0;
-  else addSample = 1;
+  guint32 in_latency, latency;
+  gboolean skipGAP;
   /* used to calculate proper behavior when there is a gap */
-  in_latency = (int) resample->funcs->get_input_latency (resample->state) + addSample; /* +1 for downsampling  0 otherwise */ 
-  latency = (int) in_latency * resample->outrate / resample->inrate;
+  in_latency = resample->funcs->get_input_latency (resample->state) + (resample->inrate >= resample->outrate); /* +1 for downsampling  0 otherwise FIXME: THIS NEEDS TO BE MORE CARFUL for non power of 2*/
+  latency = in_latency * resample->outrate / resample->inrate;
 
-  skipGAP = 0;
-  
   in_len = GST_BUFFER_SIZE (inbuf) / resample->channels;
   out_len = GST_BUFFER_SIZE (outbuf) / resample->channels;
 
@@ -986,8 +982,7 @@ gst_speex_resample_process (GstlalSpeexResample * resample, GstBuffer * inbuf,
   /* Check if we should skip this gap, if it is shorter than the latency times
    * it will break, so also check the buffer is long enough  
    */
-  if (in_len > ( in_latency ) && GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) )
-    skipGAP = 1;
+  skipGAP = in_len > in_latency && GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP);
 
   if (need_convert) {
     guint in_size_tmp =
@@ -1012,18 +1007,17 @@ gst_speex_resample_process (GstlalSpeexResample * resample, GstBuffer * inbuf,
       resample->tmp_out_size = out_size_tmp;
     }
   }
-  if (need_convert) {
-    /* don't bother with the resample filter if it is a gap */    
-    if ( skipGAP ) GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
-    else err = resample->funcs->process (resample->state, in_tmp, &in_processed, out_tmp, &out_processed);
-  } 
-  else {
-    /* don't bother with the resample filter if it is a gap */
-    if ( skipGAP ) GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
-    else err = resample->funcs->process (resample->state, (const guint8 *) GST_BUFFER_DATA (inbuf), &in_processed, (guint8 *) GST_BUFFER_DATA (outbuf), &out_processed);
+  /* don't bother with the resample filter if it is a gap */    
+  if ( skipGAP ) {
+    GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
+    memset( GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf) );
+    err = 0;
+  } else {
+    if (need_convert)
+      err = resample->funcs->process (resample->state, in_tmp, &in_processed, out_tmp, &out_processed);
+    else
+      err = resample->funcs->process (resample->state, (const guint8 *) GST_BUFFER_DATA (inbuf), &in_processed, (guint8 *) GST_BUFFER_DATA (outbuf), &out_processed);
   }
-  /* ZERO Output buffer if skipping gap */
-  if (skipGAP) memset( GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf) );
 
   if (G_UNLIKELY (in_len != in_processed))
     GST_WARNING_OBJECT (resample, "Converted %d of %d input samples",
@@ -1363,7 +1357,7 @@ _benchmark_int_float (SpeexResamplerState * st)
 {
   gint16 in[BENCHMARK_SIZE] = { 0, }, out[BENCHMARK_SIZE / 2];
   gfloat in_tmp[BENCHMARK_SIZE], out_tmp[BENCHMARK_SIZE / 2];
-  gint i;
+  guint i;
   guint32 inlen = BENCHMARK_SIZE, outlen = BENCHMARK_SIZE / 2;
 
   for (i = 0; i < BENCHMARK_SIZE; i++) {
