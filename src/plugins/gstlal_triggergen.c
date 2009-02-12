@@ -70,7 +70,7 @@ static void free_bankfile(GSTLALTriggerGen *element)
   element->num_templates = 0;
   }
 
-static SnglInspiralTable *new_event(SnglInspiralTable *dest, LIGOTimeGPS epoch, double complex z, double complex chisq, int channel, GSTLALTriggerGen *element)
+static SnglInspiralTable *new_event(SnglInspiralTable *dest, LIGOTimeGPS end_time, double complex z, double complex chisq, int channel, GSTLALTriggerGen *element)
   {
   double xi;
 
@@ -80,7 +80,8 @@ static SnglInspiralTable *new_event(SnglInspiralTable *dest, LIGOTimeGPS epoch, 
   dest->coa_phase = atan2(cimag(z), creal(z));
   dest->chisq = creal(chisq) + cimag(chisq);
   dest->chisq_dof = 1;
-  dest->end_time = epoch;
+  dest->end_time = end_time;
+  dest->end_time_gmst = XLALGreenwichMeanSiderealTime(&end_time);
   dest->eff_distance = effective_distance(dest->snr, dest->sigmasq);
 
   xi = dest->chisq / (1 + 0.1 * dest->snr * dest->snr);
@@ -518,9 +519,7 @@ static GstFlowReturn xmlwriter_render(GstBaseSink *sink, GstBuffer *buffer)
   memset(&status, 0, sizeof(status));
 
   if(!GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_GAP))
-    {
     LALWriteLIGOLwXMLTable(&status, element->xml, table, sngl_inspiral_table);
-    }
 
   return GST_FLOW_OK;
   }
