@@ -100,13 +100,13 @@ gst-launch --gst-debug-level=2 \
 	! progressreport \
 		name=progress_src \
 	! ${INJECTIONS} \
+	! gstlal-audioresample ! audio/x-raw-float, rate=4096 \
 	! ${WHITEN} \
-	! tee name=hoft_16384 \
-	hoft_16384. ! gstlal-audioresample ! audio/x-raw-float, rate=4096 ! tee name=hoft_4096 \
-	hoft_16384. ! gstlal-audioresample ! audio/x-raw-float, rate=2048 ! tee name=hoft_2048 \
-	hoft_16384. ! gstlal-audioresample ! audio/x-raw-float, rate=512 ! tee name=hoft_512 \
-	hoft_16384. ! gstlal-audioresample ! audio/x-raw-float, rate=256 ! tee name=hoft_256 \
-	hoft_16384. ! gstlal-audioresample ! audio/x-raw-float, rate=128 ! tee name=hoft_128 \
+	! tee name=hoft_4096 \
+	hoft_4096. ! gstlal-audioresample ! audio/x-raw-float, rate=2048 ! tee name=hoft_2048 \
+	hoft_4096. ! gstlal-audioresample ! audio/x-raw-float, rate=512 ! tee name=hoft_512 \
+	hoft_4096. ! gstlal-audioresample ! audio/x-raw-float, rate=256 ! tee name=hoft_256 \
+	hoft_4096. ! gstlal-audioresample ! audio/x-raw-float, rate=128 ! tee name=hoft_128 \
 	lal_adder \
 		name=orthogonal_snr_sum_squares_adder \
 		sync=true \
