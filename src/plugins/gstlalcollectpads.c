@@ -60,7 +60,7 @@ static gboolean gstlal_collect_pads_sink_event(GstPad *pad, GstEvent *event)
 	 * undocumented behaviour, but we rely on it! */
 	GstLALCollectData *data = gst_pad_get_element_private(pad);
 
-	g_return_if_fail(data != NULL);
+	g_return_val_if_fail(data != NULL, FALSE);
 
 	/*
 	 * handle events
@@ -103,7 +103,7 @@ static gboolean gstlal_collect_pads_sink_event(GstPad *pad, GstEvent *event)
  */
 
 
-GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *pads, GstPad *pad, guint size)
+GstLALCollectData *gstlal_collect_pads_add_pad_full(GstCollectPads *pads, GstPad *pad, guint size, GstCollectDataDestroyNotify destroy_notify)
 {
 	GstLALCollectData *data;
 
@@ -111,7 +111,7 @@ GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *pads, GstPad *pad
 	 * add pad to collect pads object
 	 */
 
-	data = (GstLALCollectData *) gst_collect_pads_add_pad(pads, pad, size);
+	data = (GstLALCollectData *) gst_collect_pads_add_pad_full(pads, pad, size, destroy_notify);
 	if(!data) {
 		GST_DEBUG_OBJECT(pads, "could not add pad to collectpads object");
 		return NULL;
@@ -140,6 +140,12 @@ GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *pads, GstPad *pad
 	 */
 
 	return data;
+}
+
+
+GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *pads, GstPad *pad, guint size)
+{
+	return gstlal_collect_pads_add_pad_full(pads, pad, size, NULL);
 }
 
 

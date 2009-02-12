@@ -73,6 +73,7 @@ typedef struct _GstLALCollectData {
 
 
 GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *, GstPad *, guint);
+GstLALCollectData *gstlal_collect_pads_add_pad_full(GstCollectPads *, GstPad *, guint, GstCollectDataDestroyNotify);
 gboolean gstlal_collect_pads_remove_pad(GstCollectPads *, GstPad *);
 void gstlal_collect_pads_set_bytes_per_sample(GstPad *, guint);
 gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *, guint64 *, guint64 *, gint, GstClockTime);
