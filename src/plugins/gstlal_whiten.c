@@ -310,6 +310,9 @@ static REAL8FrequencySeries *get_psd(enum gstlal_psdmode_t psdmode, LALPSDRegres
  */
 
 
+/* FIXME:  try rewriting this as a subclass of the base transform class */
+
+
 /*
  * Properties
  */
@@ -458,6 +461,10 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	gst_object_unref(element);
 	return result;
 }
+
+
+/* FIXME:  add an event handler to handle flusing and eos (i.e. flush the
+ * adapter and send the last bit of data downstream) */
 
 
 /*

@@ -359,6 +359,9 @@ static REAL8TimeSeries *compute_strain(double right_ascension, double declinatio
  */
 
 
+/* FIXME:  re-write this as a subclass of the base transform class */
+
+
 /*
  * Properties
  */

@@ -462,6 +462,10 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 }
 
 
+/* FIXME:  how 'bout adding an event handler to handle flushing and eos by
+ * sending any remaining data downstream? */
+
+
 /*
  * chain()
  */
