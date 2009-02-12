@@ -1,15 +1,16 @@
 # A gst-launch pipeline to perform an inspiral matched filter analysis.
 
-LALCACHE="/home/kipp/scratch_local/874100000-20000/cache/874100000-20000.cache"
+LALCACHE="/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache"
 GPSSTART="874100000000000000"
 GPSSTART="874106958000000000"
 GPSSTOP="874120000000000000"
-INSTRUMENT="H1"
+INSTRUMENT="L1"
 CHANNEL="LSC-STRAIN"
 REFERENCEPSD="reference_psd.txt"
-TEMPLATEBANK="H1-TMPLTBANK_09_1.207-874000000-2048.xml"
+TEMPLATEBANK="quad_bank.xml"
 SUMSQUARESTHRESHOLD="2.0"
 SNRTHRESHOLD="0.0"
+TRIGGERFILENAME="output.xml"
 
 SRC="lal_framesrc \
 	blocksize=$((16384*8*16)) \
@@ -138,7 +139,7 @@ gst-launch --gst-debug-level=2 \
 		bank-filename=${TEMPLATEBANK} \
 		snr-thresh=${SNRTHRESHOLD} \
 	! lal_triggerxmlwriter \
-		location=output.xml \
+		location=${TRIGGERFILENAME} \
 		sync=false \
 		preroll-queue-len=1 \
 	snr. ! queue ! triggergen.snr \
