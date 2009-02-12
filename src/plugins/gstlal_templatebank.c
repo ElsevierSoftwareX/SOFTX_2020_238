@@ -345,7 +345,7 @@ done:
 
 static double normalization_correction(double rate)
 {
-        return sqrt(rate / 16384.0);
+        return sqrt(rate / 4096.0);
 	/*return exp(0.53222 * log(rate) - 5.1269);*/
 }
 
