@@ -60,6 +60,8 @@ static gboolean gstlal_collect_pads_sink_event(GstPad *pad, GstEvent *event)
 	 * undocumented behaviour, but we rely on it! */
 	GstLALCollectData *data = gst_pad_get_element_private(pad);
 
+	g_return_if_fail(data != NULL);
+
 	/*
 	 * handle events
 	 */
