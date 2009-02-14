@@ -1,0 +1,490 @@
+#!/usr/bin/python
+#
+# $Id$
+#
+# Copyright (C) 2009  Kipp Cannon, Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import pygtk
+import gtk
+import gobject
+import pygst
+pygst.require("0.10")
+import gst
+
+
+#
+# =============================================================================
+#
+#                              Pipeline Elements
+#
+# =============================================================================
+#
+
+
+def playback(pipeline):
+	adder = gst.element_factory_make("adder")
+	amplify = gst.element_factory_make("audioamplify")
+	amplify.set_property("amplification", 5e-2)
+	resampler = gst.element_factory_make("gstlal-audioresample")
+	conv = gst.element_factory_make("audioconvert")
+	queue = gst.element_factory_make("queue")
+	queue.set_property("max-size-time", 3000000000)
+	sink = gst.element_factory_make("alsasink")
+
+	pipeline.add(adder, amplify, resampler, conv, queue, sink)
+	gst.element_link_many(adder, amplify, resampler, conv, queue, sink)
+
+	return adder
+
+
+class TemplateBankStage(object):
+	def __init__(self, pipeline, sum_squares_adder_sink, sum_squares_adder_src):
+		#
+		# create the templatebank element, attach a tee to the orthogonal
+		# SNR source pad and matrix source pad
+		#
+
+		self.templatebank = gst.element_factory_make("lal_templatebank")
+		pipeline.add(self.templatebank)
+		orthogonalsnrtee = gst.element_factory_make("tee")
+		pipeline.add(orthogonalsnrtee)
+		matrixtee = gst.element_factory_make("tee")
+		pipeline.add(matrixtee)
+		self.templatebank.link_pads("src", orthogonalsnrtee, "sink")
+		self.templatebank.link_pads("matrix", matrixtee, "sink")
+
+		#
+		# link the templatebank's sum-of-squares source pad to the
+		# sum-of-squares adder through a resampler and queue
+		#
+
+		resampler = gst.element_factory_make("gstlal-audioresample")
+		pipeline.add(resampler)
+		self.templatebank.link_pads("sumofsquares", resampler, "sink")
+		queue = gst.element_factory_make("queue")
+		pipeline.add(queue)
+		resampler.link(queue)
+		queue.link(sum_squares_adder_sink)
+
+		#
+		# link the orthogonal SNRs and sum-of-squares into a gate, both
+		# through queues
+		#
+
+		queue = gst.element_factory_make("queue")
+		pipeline.add(queue)
+		sum_squares_adder_src.link(queue)
+		self.gate = gst.element_factory_make("lal_gate")
+		pipeline.add(self.gate)
+		queue.link_pads("src", self.gate, "control")
+		queue = gst.element_factory_make("queue")
+		pipeline.add(queue)
+		orthogonalsnrtee.link(queue)
+		queue.link_pads("src", self.gate, "sink")
+
+		#
+		# link the template bank's matrix and the output of the gate into
+		# the mixer
+		#
+
+		mixer = gst.element_factory_make("lal_matrixmixer")
+		pipeline.add(mixer)
+		self.gate.link_pads("src", mixer, "sink")
+		queue = gst.element_factory_make("queue")
+		pipeline.add(queue)
+		matrixtee.link(queue)
+		queue.link_pads("src", mixer, "matrix")
+		snrtee = gst.element_factory_make("tee")
+		pipeline.add(snrtee)
+		mixer.link(snrtee)
+		self.snrresampler = gst.element_factory_make("gstlal-audioresample")
+		pipeline.add(self.snrresampler)
+		self.snrresampler.set_property("quality", 0)
+		snrtee.link(self.snrresampler)
+
+		#
+		# hook the reconstruction matrix, the chifacs, the
+		# orthogonal snr and the snr into a chisquare calculator
+		#
+
+		chisquare = gst.element_factory_make("lal_chisquare")
+		pipeline.add(chisquare)
+
+		queue = gst.element_factory_make("queue")
+		pipeline.add(queue)
+		matrixtee.link(queue)
+		queue.link_pads("src", chisquare, "matrix")
+
+		queue = gst.element_factory_make("queue")
+		pipeline.add(queue)
+		self.templatebank.link_pads("chifacs", queue, "sink")
+		queue.link_pads("src", chisquare, "chifacs")
+
+		queue = gst.element_factory_make("queue")
+		pipeline.add(queue)
+		orthogonalsnrtee.link(queue)
+		queue.link_pads("src", chisquare, "orthosnr")
+
+		queue = gst.element_factory_make("queue")
+		pipeline.add(queue)
+		snrtee.link(queue)
+		queue.link_pads("src", chisquare, "snr")
+
+		self.chisqresampler = gst.element_factory_make("gstlal-audioresample")
+		pipeline.add(self.chisqresampler)
+		self.chisqresampler.set_property("quality", 0)
+		chisquare.link(self.chisqresampler)
+
+	def get_templatebank_element(self):
+		return self.templatebank
+
+	def get_snr_element(self):
+		return self.snrresampler
+
+	def get_chisquare_element(self):
+		return self.chisqresampler
+
+	def set_templatebank(self, filename):
+		self.templatebank.set_property("template-bank", filename)
+
+	def set_reference_psd(self, filename):
+		self.templatebank.set_property("reference-psd", filename)
+
+	def set_template_slice(self, start, end, total_duration):
+		self.templatebank.set_property("t-start", start)
+		self.templatebank.set_property("t-end", end)
+		self.templatebank.set_property("t-total-duration", total_duration)
+
+	def set_preferred_block_size(self, samples):
+		self.templatebank.set_property("snr-length", samples)
+
+	def set_sumsquares_threshold(self, threshold):
+		self.gate.set_property("threshold", threshold)
+
+
+class LLOID(object):
+	def __init__(self, pipeline, injections = False):
+		#
+		# frame source
+		#
+
+		self.framesrc = gst.element_factory_make("lal_framesrc")
+		pipeline.add(self.framesrc)
+		self.framesrc.set_property("blocksize", 16384 * 8 * 16)
+		progress = gst.element_factory_make("progressreport", "progress_src")
+		pipeline.add(progress)
+		self.framesrc.link(progress)
+
+		progress.link(playback(pipeline))
+		return
+
+		#
+		# optional injections
+		#
+
+		if injections:
+			self.simulation = gst.element_factory_make("lal_simulation")
+			pipeline.add(self.simulation)
+			progress.link(self.simulation)
+			head = self.simulation
+		else:
+			self.simulation = None
+			head = progress
+
+		#
+		# downsample to 4096 Hz
+		#
+
+		resample = gst.element_factory_make("gstlal-audioresample")
+		pipeline.add(resample)
+		head.link(resample)
+		filter = gst.element_factory_make("capsfilter")
+		pipeline.add(filter)
+		filter.set_property("caps", gst.Caps("audio/x-raw-float, rate=4096"))
+		resample.link(filter)
+
+		#
+		# whiten
+		#
+
+		self.whiten = gst.element_factory_make("lal_whiten")
+		pipeline.add(self.whiten)
+		self.whiten.set_property("psd-mode", 1)
+		self.whiten.set_property("filter-length", 4)
+		self.whiten.set_property("convolution-length", 16)
+		self.whiten.set_property("average-samples", 64)
+		filter.link(self.whiten)
+
+		#
+		# tee off downsamplers from the whitened 4096 Hz stream
+		#
+
+		hoft_4096 = gst.element_factory_make("tee")
+		pipeline.add(hoft_4096)
+		self.whiten.link(hoft_4096)
+
+		resample = gst.element_factory_make("gstlal-audioresample")
+		pipeline.add(resample)
+		hoft_4096.link(resample)
+		filter = gst.element_factory_make("capsfilter")
+		pipeline.add(filter)
+		filter.set_property("caps", gst.Caps("audio/x-raw-float, rate=2048"))
+		resample.link(filter)
+		hoft_2048 = gst.element_factory_make("tee")
+		pipeline.add(hoft_2048)
+		filter.link(hoft_2048)
+
+		resample = gst.element_factory_make("gstlal-audioresample")
+		pipeline.add(resample)
+		hoft_4096.link(resample)
+		filter = gst.element_factory_make("capsfilter")
+		pipeline.add(filter)
+		filter.set_property("caps", gst.Caps("audio/x-raw-float, rate=512"))
+		resample.link(filter)
+		hoft_512 = gst.element_factory_make("tee")
+		pipeline.add(hoft_512)
+		filter.link(hoft_512)
+
+		resample = gst.element_factory_make("gstlal-audioresample")
+		pipeline.add(resample)
+		hoft_4096.link(resample)
+		filter = gst.element_factory_make("capsfilter")
+		pipeline.add(filter)
+		filter.set_property("caps", gst.Caps("audio/x-raw-float, rate=256"))
+		resample.link(filter)
+		hoft_256 = gst.element_factory_make("tee")
+		pipeline.add(hoft_256)
+		filter.link(hoft_256)
+
+		resample = gst.element_factory_make("gstlal-audioresample")
+		pipeline.add(resample)
+		hoft_4096.link(resample)
+		filter = gst.element_factory_make("capsfilter")
+		pipeline.add(filter)
+		filter.set_property("caps", gst.Caps("audio/x-raw-float, rate=128"))
+		resample.link(filter)
+		hoft_128 = gst.element_factory_make("tee")
+		pipeline.add(hoft_128)
+		filter.link(hoft_128)
+
+		#
+		# sum-of-squares adder
+		#
+
+		sumsqadder = gst.element_factory_make("lal_adder")
+		pipeline.add(sumsqadder)
+		sumsqadder.set_property("sync", True)
+		filter = gst.element_factory_make("capsfilter")
+		pipeline.add(filter)
+		filter.set_property("caps", gst.Caps("audio/x-raw-float, rate=4096"))
+		sumsqadder.link(filter)
+		sumsqtee = gst.element_factory_make("tee")
+		pipeline.add(sumsqtee)
+
+		#
+		# template bank blocks
+		#
+
+		self.templatebank = [None] * 6
+		instructions = [
+			(hoft_4096,  0.00,  0.25, 45.25, 4096 * 1),
+			(hoft_2048,  0.25,  1.25, 45.25, 2048 * 1),
+			( hoft_512,  1.25,  5.25, 45.25,  512 * 1),
+			( hoft_256,  5.25, 13.25, 45.25,  256 * 1),
+			( hoft_128, 13.25, 29.25, 45.25,  128 * 1),
+			( hoft_128, 29.25, 45.25, 45.25,  128 * 1)
+		]
+
+		for i, (tee, start, end, total_duration, blocksize) in enumerate(instructions):
+			queue = gst.element_factory_make("queue")
+			pipeline.add(queue)
+			queue.set_property("max-size-time", 50000000000)
+			tee.link(queue)
+			self.templatebank[i] = TemplateBankStage(pipeline, sumsqadder, sumsqtee)
+			queue.link(self.templatebank[i].get_templatebank_element())
+			self.templatebank[i].set_template_slice(start, end, total_duration)
+			self.templatebank[i].set_preferred_block_size(blocksize)
+
+		#
+		# snr adder, and chisquare adder
+		#
+
+		snradder = gst.element_factory_make("lal_adder")
+		pipeline.add(snradder)
+		snradder.set_property("sync", True)
+		filter = gst.element_factory_make("capsfilter")
+		pipeline.add(filter)
+		filter.set_property("caps", gst.Caps("audio/x-raw-float, rate=4096"))
+		snradder.link(filter)
+		snrprogress = gst.element_factory_make("progressreport", "progress_snr")
+		pipeline.add(snrprogress)
+		filter.link(snrprogress)
+
+		chisqadder = gst.element_factory_make("lal_adder")
+		pipeline.add(chisqadder)
+		chisqadder.set_property("sync", True)
+		filter = gst.element_factory_make("capsfilter")
+		pipeline.add(filter)
+		filter.set_property("caps", gst.Caps("audio/x-raw-float, rate=4096"))
+		chisqadder.link(filter)
+		chisqprogress = gst.element_factory_make("progressreport", "progress_chisquare")
+		pipeline.add(chisqprogress)
+		filter.link(chisqprogress)
+
+		for templatebank in self.templatebank:
+			queue = gst.element_factory_make("queue")
+			pipeline.add(queue)
+			templatebank.get_snr_element().link(queue)
+			queue.link(snradder)
+
+			queue = gst.element_factory_make("queue")
+			pipeline.add(queue)
+			templatebank.get_chisquare_element().link(queue)
+			queue.link(chisqadder)
+
+		#
+		# XML writer
+		#
+
+		self.triggergen = gst.element_factory_make("lal_triggergen")
+		pipeline.add(self.triggergen)
+
+		queue = gst.element_factory_make("queue")
+		pipeline.add(queue)
+		snrprogress.link(queue)
+		queue.link_pads("src", self.triggergen, "snr")
+
+		queue = gst.element_factory_make("queue")
+		pipeline.add(queue)
+		chisqprogress.link(queue)
+		queue.link_pads("src", self.triggergen, "chisquare")
+
+		self.xmlwriter = gst.element_factory_make("lal_triggerxmlwriter")
+		pipeline.add(self.xmlwriter)
+		self.xmlwriter.set_property("sync", False)
+		self.xmlwriter.set_property("preroll-queue-len", 1)
+		self.triggergen.link(self.xmlwriter)
+
+	def set_frame_cache(self, filename):
+		self.framesrc.set_property("location", filename)
+
+	def set_channel(self, instrument, channel):
+		self.framesrc.set_property("instrument", instrument)
+		self.framesrc.set_property("channel-name", channel)
+
+	def set_segment(self, startns, stopns):
+		self.framesrc.set_property("start-time-gps-ns", startns)
+		self.framesrc.set_property("stop-time-gps-ns", stopns)
+
+	def set_injection_list(self, filename):
+		if self.simulation is None:
+			raise TypeError, "no injection node in pipeline"
+		self.simulation.set_property("xml-location", filename)
+
+	def set_reference_psd(self, filename):
+		self.whiten.set_property("compensation-psd", filename)
+		for templatebank in self.templatebank:
+			templatebank.set_reference_psd(filename)
+
+	def set_templatebank(self, filename):
+		self.triggergen.set_property("bank-filename", filename)
+		for templatebank in self.templatebank:
+			templatebank.set_templatebank(filename)
+
+	def set_sumsquares_threshold(self, threshold):
+		for templatebank in self.templatebank:
+			templatebank.set_sumsquares_threshold(threshold)
+
+	def set_snr_threshold(self, threshold):
+		self.triggergen.set_property("snr-thresh", threshold)
+
+	def set_output(self, filename):
+		self.xmlwriter.set_property("location", filename)
+
+
+#
+# =============================================================================
+#
+#                                     ...
+#
+# =============================================================================
+#
+
+
+class GTK_Main:
+	def __init__(self):
+		window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+		window.set_title("MP3-Player")
+		window.set_default_size(400, 200)
+		window.connect("destroy", gtk.main_quit, "WM destroy")
+		vbox = gtk.VBox()
+		window.add(vbox)
+		self.button = gtk.Button("Start")
+		self.button.connect("clicked", self.start_stop)
+		vbox.add(self.button)
+		window.show_all()
+
+		self.pipeline = gst.Pipeline("lloid")
+		lloid = LLOID(self.pipeline, injections = True)
+
+		lloid.set_frame_cache("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache")
+		lloid.set_channel("H1", "LSC-STRAIN")
+		##lloid.set_segment(874100000000000000, 874120000000000000)
+		lloid.set_segment(874106958000000000, 874107558000000000)
+		#lloid.set_injection_list("bns_injections.xml")
+		#lloid.set_reference_psd("reference_psd.txt")
+		#lloid.set_templatebank("quad_bank.xml")
+		#lloid.set_sumsquares_threshold(2.2)
+		#lloid.set_snr_threshold(0.0)
+		#lloid.set_output("output.xml")
+
+		bus = self.pipeline.get_bus()
+		bus.add_signal_watch()
+		bus.connect("message", self.on_message)
+
+	def start_stop(self, w):
+		if self.button.get_label() == "Start":
+			self.button.set_label("Stop")
+			self.pipeline.set_state(gst.STATE_PLAYING)
+		else:
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.button.set_label("Start")
+
+	def on_message(self, bus, message):
+		t = message.type
+		if t == gst.MESSAGE_EOS:
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.button.set_label("Start")
+		elif t == gst.MESSAGE_ERROR:
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.button.set_label("Start")
+			err, debug = message.parse_error()
+			print "Error: %s", err, debug
+
+GTK_Main()
+gtk.gdk.threads_init()
+gtk.main()
