@@ -47,16 +47,19 @@ import gst
 
 def playback(pipeline):
 	adder = gst.element_factory_make("adder")
-	amplify = gst.element_factory_make("audioamplify")
-	amplify.set_property("amplification", 5e-2)
-	resampler = gst.element_factory_make("gstlal-audioresample")
-	conv = gst.element_factory_make("audioconvert")
+	resampler = gst.element_factory_make("audioresample")
+	conv1 = gst.element_factory_make("audioconvert")
+	filter = gst.element_factory_make("capsfilter")
+	filter.set_property("caps", gst.Caps("audio/x-raw-float, width=32"))
+	amp = gst.element_factory_make("audioamplify")
+	amp.set_property("amplification", 5e-2)
+	conv2 = gst.element_factory_make("audioconvert")
 	queue = gst.element_factory_make("queue")
 	queue.set_property("max-size-time", 3000000000)
 	sink = gst.element_factory_make("alsasink")
 
-	pipeline.add(adder, amplify, resampler, conv, queue, sink)
-	gst.element_link_many(adder, amplify, resampler, conv, queue, sink)
+	pipeline.add(adder, resampler, conv1, filter, amp, conv2, queue, sink)
+	gst.element_link_many(adder, resampler, conv1, filter, amp, conv2, queue, sink)
 
 	return adder
 
@@ -198,9 +201,6 @@ class LLOID(object):
 		progress = gst.element_factory_make("progressreport", "progress_src")
 		pipeline.add(progress)
 		self.framesrc.link(progress)
-
-		progress.link(playback(pipeline))
-		return
 
 		#
 		# optional injections
@@ -438,7 +438,7 @@ class LLOID(object):
 class GTK_Main:
 	def __init__(self):
 		window = gtk.Window(gtk.WINDOW_TOPLEVEL)
-		window.set_title("MP3-Player")
+		window.set_title("LLOID GUI")
 		window.set_default_size(400, 200)
 		window.connect("destroy", gtk.main_quit, "WM destroy")
 		vbox = gtk.VBox()
@@ -452,15 +452,15 @@ class GTK_Main:
 		lloid = LLOID(self.pipeline, injections = True)
 
 		lloid.set_frame_cache("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache")
-		lloid.set_channel("H1", "LSC-STRAIN")
-		##lloid.set_segment(874100000000000000, 874120000000000000)
+		lloid.set_channel("L1", "LSC-STRAIN")
+		#lloid.set_segment(874100000000000000, 874120000000000000)
 		lloid.set_segment(874106958000000000, 874107558000000000)
-		#lloid.set_injection_list("bns_injections.xml")
-		#lloid.set_reference_psd("reference_psd.txt")
-		#lloid.set_templatebank("quad_bank.xml")
-		#lloid.set_sumsquares_threshold(2.2)
-		#lloid.set_snr_threshold(0.0)
-		#lloid.set_output("output.xml")
+		lloid.set_injection_list("bns_injections.xml")
+		lloid.set_reference_psd("reference_psd.txt")
+		lloid.set_templatebank("quad_bank.xml")
+		lloid.set_sumsquares_threshold(2.2)
+		lloid.set_snr_threshold(0.0)
+		lloid.set_output("output.xml")
 
 		bus = self.pipeline.get_bus()
 		bus.add_signal_watch()
