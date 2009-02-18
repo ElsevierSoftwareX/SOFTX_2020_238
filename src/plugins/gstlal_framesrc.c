@@ -528,6 +528,14 @@ static gboolean start(GstBaseSrc *object)
 	 */
 
 	element->series_type = XLALFrGetTimeSeriesType(element->full_channel_name, element->stream);
+	/* FIXME:  series_type should not be an unsigned type if negative
+	 * values are used to indicate failure */
+	if((int) element->series_type < 0) {
+		GST_ERROR_OBJECT(element, "XLALFrGetTimeSeriesType() failed");
+		XLALFrClose(element->stream);
+		element->stream = NULL;
+		return FALSE;
+	}
 
 	/*
 	 * Done
