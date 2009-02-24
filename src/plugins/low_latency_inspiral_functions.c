@@ -46,7 +46,6 @@
 #include <lal/Units.h>
 #include <lal/LALComplex.h>
 #include <lal/Window.h>
-#include <lal/LALInspiral.h>
 #include <lal/FindChirp.h>
 #include <lal/AVFactories.h>
 #include <lal/LIGOMetadataTables.h>
@@ -54,10 +53,12 @@
 #include <lal/LIGOLwXML.h>
 #include <lal/LIGOLwXMLRead.h>
 #include <lal/FindChirpTD.h>
+#include <lal/FindChirp.h>
 #include <lal/LALError.h>
 #include <lal/LALStdio.h>
 #include <lal/TimeFreqFFT.h>
 #include <lal/RealFFT.h>
+#include <lal/LALInspiral.h>
 
 /* gstlal includes */
 #include "gstlal.h"
@@ -69,6 +70,8 @@
 #define LAL_CALL( function, statusptr ) \
   ((function),lal_errhandler(statusptr,#function,__FILE__,__LINE__,rcsid))
 
+
+static int SPAWaveform (InspiralTemplate *, REAL8, COMPLEX16FrequencySeries *);
 
 static double time_to_freq(double M, double time)
   {
@@ -128,9 +131,6 @@ static int create_template_from_sngl_inspiral(
                        double t_end,
                        double t_total_duration, 
                        int U_column,
-                       FindChirpFilterInput *fcFilterInput,
-                       FindChirpTmpltParams *fcTmpltParams,
-		       REAL8TimeSeries *template,
                        COMPLEX16TimeSeries *template_out,
                        COMPLEX16FrequencySeries *fft_template,
 		       COMPLEX16FrequencySeries *fft_template_full,
@@ -145,34 +145,15 @@ static int create_template_from_sngl_inspiral(
   double norm;
   gsl_vector_view col;
   gsl_vector_view tmplt;
-  LALStatus status;
-  memset(&status, 0, sizeof(status));
- 
-#if 0
-  g_mutex_lock(gstlal_fftw_lock);
-  LALFindChirpTDTemplate( &status, fcFilterInput->fcTmplt,
-                  bankRow, fcTmpltParams );
-  g_mutex_unlock(gstlal_fftw_lock);
-
-  /* copy the template into a double :( */
-  for (i=0; i< template->data->length; i++)
-    {
-    template->data->data[i] = (REAL8) fcTmpltParams->xfacVec->data[i];
-    }
-#else
-  quadrupole_template(bankRow->chirpMass, t_total_duration, template);
-#endif
+  
+  SPAWaveform (bankRow, template_out->deltaT, fft_template);
 
   /*
    * Whiten the template.
    */
 
-  if(XLALREAL8TimeFreqFFT(fft_template,template,fwdplan))
-    return -1;
-
   if(!XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd))
     return -1;
-
   /* compute the quadrature phases now we need a complex frequency series that
    * is twice as large.  We'll store the negative frequency components that'll
    * give the sine and cosine phase */
@@ -186,7 +167,6 @@ static int create_template_from_sngl_inspiral(
 
   if(XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan))
     return -1;
-
   /*
    * Normalize the template.
    *
@@ -359,22 +339,15 @@ int generate_bank_svd(
   gsl_vector *work_space = gsl_vector_calloc(2 * numtemps);
   gsl_matrix *work_space_matrix = gsl_matrix_calloc(2 * numtemps,2 * numtemps);
   COMPLEX16TimeSeries *template_out;
-  REAL8TimeSeries *template;
   COMPLEX16FrequencySeries *fft_template;
   COMPLEX16FrequencySeries *fft_template_full;
 
   REAL8FrequencySeries *psd;
-  FindChirpFilterInput *fcFilterInput  = NULL;
-  FindChirpTmpltParams *fcTmpltParams  = NULL;
-  FindChirpInitParams fcInitParams;
-  LALStatus status;
   REAL8FFTPlan *fwdplan;
   COMPLEX16FFTPlan *revplan;
 
   if (verbose) fprintf(stderr,"read %d templates\n", numtemps);
   
-  memset(&status, 0, sizeof(status));
-  memset(&fcInitParams, 0, sizeof(fcInitParams));
 
   *U = gsl_matrix_calloc(numsamps,2 * numtemps);
   *S = gsl_vector_calloc(2 * numtemps);
@@ -400,73 +373,25 @@ int generate_bank_svd(
     }
   g_mutex_unlock(gstlal_fftw_lock);
 
-  template = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, full_numsamps);
-  
+
+  /* create workspace vectors for the templates */
   template_out = XLALCreateCOMPLEX16TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, full_numsamps);
-
   fft_template = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps / 2 + 1);
-
   fft_template_full = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps);
-
+  /* get the reference psd */
   psd = gstlal_get_reference_psd(reference_psd_filename, template_out->f0, 1.0/TEMPLATE_DURATION, fft_template->data->length);
-
-  fcInitParams.numPoints      = full_numsamps;
-  fcInitParams.numSegments    = 1;
-  fcInitParams.numChisqBins   = 0;
-  fcInitParams.createRhosqVec = 0;
-  fcInitParams.ovrlap         = 0;
-#if 1
-  fcInitParams.approximant    = EOB;
-  fcInitParams.order          = threePointFivePN;
-  bankHead->order = threePointFivePN;
-#else
-  fcInitParams.approximant    = TaylorT2;
-  fcInitParams.order          = twoPN;
-  bankHead->order = twoPN;
-#endif
-  fcInitParams.createCVec     = 0;
-
-  if (verbose) fprintf(stderr,"LALFindChirpTemplateInit() ...\n");
-  g_mutex_lock(gstlal_fftw_lock);
-  LALFindChirpTemplateInit( &status, &fcTmpltParams, &fcInitParams );
-  g_mutex_unlock(gstlal_fftw_lock);
-  if (verbose) fprintf(stderr,"LALFindChirpTemplateInit() done\n");
-  fcTmpltParams->deltaT = 1.0 / base_sample_rate;
-  fcTmpltParams->fLow = 25; 
-
-  if (verbose) fprintf(stderr,"chirpmass = %f, flow = %f\n\n",bankHead->chirpMass,fcTmpltParams->fLow);
-
-  fcTmpltParams->reverseChirpBank = 0;
-  fcTmpltParams->taperTmplt = 1;
-
-  /*fcTmpltParams->order = order;*/
-
-  /* Create Template - to be replaced by a LAL template generation call */
-  if (verbose) fprintf(stderr,"LALCreateFindChirpInput() ...\n");
-  g_mutex_lock(gstlal_fftw_lock);
-  LALCreateFindChirpInput( &status, &fcFilterInput, &fcInitParams );
-  g_mutex_unlock(gstlal_fftw_lock);
-  if (verbose) fprintf(stderr,"LALCreateFindChirpInput() done, tmplate is %p\n", fcFilterInput->fcTmplt);
-
-#if 1
-  fcTmpltParams->approximant = EOB;
-  fcTmpltParams->order = threePointFivePN;
-#else
-  fcTmpltParams->approximant = TaylorT2;
-  fcTmpltParams->order = twoPN;
-#endif
-  fcTmpltParams->dynRange = pow(2,63);
-
 
   /* create the templates in the bank */
   for(bankRow = bankHead, j = 0; bankRow; bankRow = bankRow->next, j++)
     {
-    /* this sets the cut off frequency in my version of lal only */
-    /* Sathya is supposed to fix this */
-
-    bankRow->fFinal = base_sample_rate / 2.0 - 1; /*nyquist*/
-
-    if(create_template_from_sngl_inspiral(bankRow, *U, *chifacs, base_sample_rate,down_samp_fac,t_end, t_total_duration, j, fcFilterInput, fcTmpltParams, template, template_out, fft_template, fft_template_full, fwdplan, revplan, psd) < 0)
+    bankRow->fFinal = 0.95 * (base_sample_rate / 2.0 - 1); /*95% of Nyquist*/
+    bankRow->fLower = 25.0;
+    bankRow->tSampling = base_sample_rate;
+    bankRow->fCutoff = bankRow->fFinal;
+    bankRow->order = threePointFivePN;
+    bankRow->signalAmplitude = 1.0;
+ 
+    if(create_template_from_sngl_inspiral(bankRow, *U, *chifacs, base_sample_rate, down_samp_fac,t_end, t_total_duration, j, template_out, fft_template, fft_template_full, fwdplan, revplan, psd) < 0)
       {
       /* FIXME:  handle error */
       }
@@ -502,21 +427,10 @@ int generate_bank_svd(
   XLALDestroyCOMPLEX16FFTPlan(revplan);
   g_mutex_unlock(gstlal_fftw_lock);
 
-  /* Destroy Template */
-  g_mutex_lock(gstlal_fftw_lock);
-  LALFindChirpTemplateFinalize( &status, &fcTmpltParams );
-  g_mutex_unlock(gstlal_fftw_lock);
-
   /* Destroy time/freq series */
   XLALDestroyCOMPLEX16FrequencySeries(fft_template);
   XLALDestroyCOMPLEX16FrequencySeries(fft_template_full);
   XLALDestroyCOMPLEX16TimeSeries(template_out);
-  XLALDestroyREAL8TimeSeries(template);
-
-  /* Destroy find chirp input */
-  g_mutex_lock(gstlal_fftw_lock);
-  LALDestroyFindChirpInput(&status,&fcFilterInput);
-  g_mutex_unlock(gstlal_fftw_lock);
 
   /* free the template list */
   while(bankHead)
@@ -608,3 +522,243 @@ void not_gsl_matrix_transpose(gsl_matrix **m)
   gsl_vector_free(tmp);
   return 0;
   }
+
+
+static int SPAWaveform (
+    InspiralTemplate           *tmplt,
+    REAL8			deltaT,
+    COMPLEX16FrequencySeries   *signal 
+    )
+/* </lalVerbatim> */
+{
+  UINT4         numPoints  = 0;
+  REAL8         deltaF     = 0.0;
+  REAL8         m          = 0.0;
+  REAL8         eta        = 0.0;
+  REAL8         mu         = 0.0;
+  REAL8         tNorm      = 0.0;
+  COMPLEX16    *expPsi     = NULL;
+  REAL8         x1         = 0.0;
+  REAL8         psi        = 0.0;
+  REAL8         psi0       = 0.0;
+  INT4          k          = 0;
+  INT4          kmin       = 0;
+  INT4          kmax       = 0;
+
+  REAL8         distNorm;
+  const REAL8   cannonDist = 1.0; /* Mpc */
+
+  /* pn constants */
+  REAL8 c0, c10, c15, c20, c25, c25Log, c30, c30Log, c35, c40P; 
+
+  /* variables used to compute chirp time */
+  REAL8 c0T, c2T, c3T, c4T, c5T, c6T, c6LogT, c7T;
+  REAL8 x, xT, x2T, x3T, x4T, x5T, x6T, x7T, x8T;
+
+  /* chebychev coefficents for expansion of sin and cos */
+  const REAL8 s2 = -0.16605;
+  const REAL8 s4 =  0.00761;
+  const REAL8 c2 = -0.49670;
+  const REAL8 c4 =  0.03705;
+  /*FILE *FP = fopen("template.txt","w");*/
+  /*
+ *    *
+ *       * check that the arguments are reasonable
+ *          *
+ *             */
+  
+  /* set up pointers */
+  expPsi = signal->data->data;
+  numPoints = 2 * (signal->data->length - 1);
+
+  /* set the waveform approximant */
+  tmplt->approximant = tmplt->approximant;
+
+  /* set the pN order of the template */
+  tmplt->order = tmplt->order;
+
+  /* zero output */
+  memset( expPsi, 0, signal->data->length * sizeof(COMPLEX8) );
+
+  /* parameters */
+  deltaF = signal->deltaF;
+  m      = (REAL8) tmplt->totalMass;
+  eta    = (REAL8) tmplt->eta;
+  mu     = (REAL8) tmplt->mu;
+
+  /* template dependent normalisation */
+  distNorm = 2.0 * LAL_MRSUN_SI / (cannonDist * 1.0e6 * LAL_PC_SI);
+
+  tNorm = sqrt( (5.0*mu) / 96.0 ) *
+    pow( m / (LAL_PI*LAL_PI) , 1.0/3.0 ) *
+    pow( LAL_MTSUN_SI / (REAL8) deltaT, -1.0/6.0 );
+  tNorm *= tNorm;
+  tNorm *= distNorm * distNorm;
+
+  /* Initialize all PN phase coeffs to zero. */
+  c0 = c10 = c15 = c20 = c25 = c25Log = 0.;
+  c30 = c30Log = c35 = c40P = 0.;
+
+  /* Switch on PN order, set the appropriate phase coeffs for that order */
+  switch( tmplt->order )
+  {
+    case pseudoFourPN: 
+      c40P = 3923.0;
+    case threePointFivePN: 
+      c35 = LAL_PI*(77096675.0/254016.0 + eta*378515.0/1512.0 
+            - eta*eta*74045.0/756.0);
+    case threePN:
+      c30 = 11583231236531.0/4694215680.0 - LAL_GAMMA*6848.0/21.0 
+            - LAL_PI*LAL_PI*640.0/3.0 + eta*(LAL_PI*LAL_PI*2255.0/12.0 
+            - 15737765635.0/3048192.0) + eta*eta*76055.0/1728.0 
+            - eta*eta*eta*127825.0/1296.0 - 6848.0*log(4.0)/21.0;
+      c30Log = -6848.0/21.0;
+    case twoPointFivePN:
+      c25 = LAL_PI*38645.0/756.0 - LAL_PI*eta*65.0/9.0;
+      c25Log = 3*c25;
+    case twoPN:
+      c20 = 15293365.0/508032.0 + eta*(27145.0/504.0 + eta*3085.0/72.0);
+      c15 = -16*LAL_PI;
+      c10 = 3715.0/756.0 + eta*55.0/9.0;
+      c0  = 3.0/(eta*128.0);
+      break;
+    default: 
+      break;
+  }
+
+  /* x1 */
+  x1 = pow( LAL_PI * m * LAL_MTSUN_SI * deltaF, -1.0/3.0 );
+
+  /* frequency cutoffs */
+  kmin = tmplt->fLower / deltaF > 1 ? tmplt->fLower / deltaF : 1;
+  kmax = tmplt->fFinal / deltaF < numPoints/2 ? 
+    tmplt->fFinal / deltaF : numPoints/2;
+
+  /* compute psi0: used in range reduction */
+
+  /* This formula works for any PN order, because */
+  /* higher order coeffs will be set to zero.     */
+
+  x = x1 * pow((REAL8) kmin, -1.0/3.0);
+  psi = c0 * ( x * ( c20 + x * ( c15 + x * (c10 + x * x ) ) ) 
+                + c25 - c25Log * log(x) + (1.0/x) 
+                * ( c30 - c30Log * log(x) + (1.0/x) * ( c35 - (1.0/x) 
+                * c40P * log(x) ) ) );
+  psi0 = -2 * LAL_PI * ( floor ( 0.5 * psi / LAL_PI ) );
+
+  /* Chirp Time */
+  /* This formula works for any PN order, because */
+  /* higher order coeffs will be set to zero.     */
+  for ( k = kmin; k < kmax ; ++k )
+    {
+    REAL8 x = x1 * pow((REAL8) k,- 1.0/3.0);
+    REAL8 psi = c0 * ( x * ( c20 + x * ( c15 + x * (c10 + x * x ) ) ) 
+                  + c25 - c25Log * log(x) + (1.0/x) * ( c30 - c30Log * log(x) 
+                  + (1.0/x) * ( c35 - (1.0/x) * c40P * log(x) ) ) );
+    REAL8 psi1 = psi + psi0;
+    REAL8 psi2;
+
+    /* range reduction of psi1 */
+    while ( psi1 < -LAL_PI )
+    {
+      psi1 += 2 * LAL_PI;
+      psi0 += 2 * LAL_PI;
+    }
+    while ( psi1 > LAL_PI )
+    {
+      psi1 -= 2 * LAL_PI;
+      psi0 -= 2 * LAL_PI;
+    }
+
+    /* compute approximate sine and cosine of psi1 */
+    if ( psi1 < -LAL_PI/2 )
+    {
+      psi1 = -LAL_PI - psi1;
+      psi2 = psi1 * psi1;
+      /* XXX minus sign added because of new sign convention for fft */
+      expPsi[k].im = - psi1 * ( 1 + psi2 * ( s2 + psi2 * s4 ) );
+      expPsi[k].re = -1 - psi2 * ( c2 + psi2 * c4 );
+    }
+    else if ( psi1 > LAL_PI/2 )
+    {
+      psi1 = LAL_PI - psi1;
+      psi2 = psi1 * psi1;
+      /* XXX minus sign added because of new sign convention for fft */
+      expPsi[k].im = - psi1 * ( 1 + psi2 * ( s2 + psi2 * s4 ) );
+      expPsi[k].re = -1 - psi2 * ( c2 + psi2 * c4 );
+    }
+    else
+    {
+      psi2 = psi1 * psi1;
+      /* XXX minus sign added because of new sign convention for fft */
+      expPsi[k].im = - psi1 * ( 1 + psi2 * ( s2 + psi2 * s4 ) );
+      expPsi[k].re = 1 + psi2 * ( c2 + psi2 * c4 );
+    }
+
+    /* put in the first order amplitude factor */
+    expPsi[k].re *= pow(k, -7.0/6.0);
+    expPsi[k].im *= pow(k, -7.0/6.0);
+    /*fprintf(FP,"%d %e %e\n", k, expPsi[k].re, expPsi[k].im);*/
+  }
+  /*fclose(FP);*/
+
+
+  /*
+ *    *
+ *       * compute the length of the stationary phase chirp
+ *          *
+ *             */
+
+  /* This formula works for any PN order, because */
+  /* higher order coeffs will be set to zero.     */
+
+  
+  /* Initialize all PN chirp time coeffs to zero. */
+  c0T = c2T = c3T = c4T = c5T = c6T = c6LogT = c7T = 0.;
+
+  /* Switch on PN order, set the chirp time coeffs for that order */
+  switch( tmplt->order )
+  {
+    case pseudoFourPN: 
+    case threePointFivePN: 
+      c7T = LAL_PI*(14809.0*eta*eta - 75703.0*eta/756.0 - 15419335.0/127008.0);
+    case threePN:
+      c6T = LAL_GAMMA*6848.0/105.0 - 10052469856691.0/23471078400.0 
+            + LAL_PI*LAL_PI*128.0/3.0 + eta*( 3147553127.0/3048192.0 
+            - LAL_PI*LAL_PI*451.0/12.0 ) - eta*eta*15211.0/1728.0 
+            + eta*eta*eta*25565.0/1296.0 + log(4.0)*6848.0/105.0;
+      c6LogT = 6848.0/105.0;
+    case twoPointFivePN:
+      c5T = 13.0*LAL_PI*eta/3.0 - 7729.0/252.0;
+    case twoPN:
+      c4T = 3058673.0/508032.0 + eta * (5429.0/504.0 + eta * 617.0/72.0);
+      c3T = -32.0 * LAL_PI / 5.0;
+      c2T = 743.0/252.0 + eta * 11.0/3.0;
+      c0T = 5.0 * m * LAL_MTSUN_SI / (256.0 * eta);
+      break;
+    default: 
+      break;
+  }
+
+  /* This is the PN parameter v evaluated at the lower freq. cutoff */
+  xT  = pow( LAL_PI * m * LAL_MTSUN_SI * tmplt->fLower, 1.0/3.0);
+  x2T = xT * xT;
+  x3T = xT * x2T;
+  x4T = x2T * x2T;
+  x5T = x2T * x3T;
+  x6T = x3T * x3T;
+  x7T = x3T * x4T;
+  x8T = x4T * x4T;
+
+  /* Computes the chirp time as tC = t(v_low)    */
+  /* tC = t(v_low) - t(v_upper) would be more    */
+  /* correct, but the difference is negligble.   */
+
+  /* This formula works for any PN order, because */
+  /* higher order coeffs will be set to zero.     */
+
+  tmplt->tC = c0T * ( 1 + c2T*x2T + c3T*x3T + c4T*x4T + c5T*x5T 
+              + ( c6T + c6LogT*log(xT) )*x6T + c7T*x7T ) / x8T;
+
+  return 0;
+}
