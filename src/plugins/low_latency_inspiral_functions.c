@@ -345,6 +345,8 @@ int generate_bank_svd(
   REAL8FrequencySeries *psd;
   REAL8FFTPlan *fwdplan;
   COMPLEX16FFTPlan *revplan;
+  
+  if (verbose) fprintf(stderr, "base sample rate: %d down samp factor: %d t start: %e t end: %e t total: %e tolerance: %e\n", base_sample_rate,down_samp_fac,t_start,t_end,t_total_duration,tolerance);
 
   if (verbose) fprintf(stderr,"read %d templates\n", numtemps);
   
@@ -468,7 +470,7 @@ void not_gsl_matrix_transpose(gsl_matrix **m)
   for (i = 0; i < (*S)->size; i++)
     {
     cumsumb += gsl_vector_get(*S,i) * gsl_vector_get(*S,i) ;
-    if (sqrt(cumsumb / sumb) > tol) break;
+    if (i && sqrt(cumsumb / sumb) > tol) break;
     }
   maxb = i;/* (*S)->size;*/
   if (not_gsl_matrix_chop(U,(*U)->size1,maxb)) return 1;
@@ -480,7 +482,6 @@ void not_gsl_matrix_transpose(gsl_matrix **m)
 /*FIXME this is terrible and needs to be made more efficient!!!!!!!*/
  int not_gsl_matrix_chop(gsl_matrix **M, size_t m, size_t n)
   {
-  /*FILE *FP = NULL;*/
   gsl_matrix *tmp = (*M);
   gsl_matrix *newM = NULL;
   size_t i = 0; 
@@ -488,7 +489,6 @@ void not_gsl_matrix_transpose(gsl_matrix **m)
   
   if ( (*M)->size1 < m ) return 1;
   if ( (*M)->size2 < n ) return 1;
-  /*FP = fopen("svd.dat","w");*/
   newM = gsl_matrix_calloc(m,n);
 
   for (i=0; i<m; i++)
@@ -496,7 +496,6 @@ void not_gsl_matrix_transpose(gsl_matrix **m)
     for (j=0; j<n; j++)
       {
       gsl_matrix_set(newM,i,j,gsl_matrix_get(*M,i,j));
-      /*fprintf(FP,"%e\n",gsl_matrix_get(*M,i,j));*/
       }
     }
   *M = newM;
