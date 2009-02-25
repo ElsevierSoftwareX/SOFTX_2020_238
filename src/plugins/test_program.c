@@ -7,6 +7,7 @@
 #include <lal/LIGOLwXMLRead.h>
 #include "low_latency_inspiral_functions.h"
 
+# if 0
 int main()
   {
   gsl_vector *start;
@@ -33,18 +34,19 @@ int main()
   int numTmplts = InspiralTmpltBankFromLIGOLw( &bankHead, "Bank.xml",-1,-1);
   printf("read in %d templates bank_head %p\n",numTmplts,bankHead);*/
   }
+#endif
 
-#if 0
+#if 1
 int main()
 {
   int tmpDur = 128.0;
   int noiseDur = 128.0;
-  int base_sample_rate = 2048;
-  int down_samp_fac = 16;
-  double t_start = 13;
-  double t_end = 29;
-  double tmax = 128.0;
-  double tolerance = 0.97;
+  int base_sample_rate = 4096;
+  int down_samp_fac = 32;
+  double t_start = 29;
+  double t_end = 45;
+  double tmax = 45.25;
+  double tolerance = 0.999;
   int vrb = 1;
   int i = 0;
   int j = 0;
@@ -55,7 +57,7 @@ int main()
   gsl_matrix *V = NULL;
   gsl_matrix *bank = NULL;
   gsl_vector *chifacs = NULL;
-  generate_bank_svd(&U,&S,&V,&chifacs,"../../examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml",base_sample_rate,
+  generate_bank_svd(&U,&S,&V,&chifacs,"../../examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml","/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", base_sample_rate,
                     down_samp_fac,t_start,t_end,tmax,tolerance,vrb);
 
   fprintf(stderr,"U = %zd,%zd V = %zd,%zd S = %zd\n",U->size1,U->size2,V->size1,V->size2,S->size);
@@ -81,7 +83,7 @@ int main()
     fprintf(FP,"%e %e\n", j * down_samp_fac / (double) base_sample_rate, gsl_matrix_get(bank,1,j));
     }
   */  
-  fclose(FP);
+  /*fclose(FP);*/
   
   return 0;
 }  
