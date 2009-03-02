@@ -29,6 +29,13 @@
 
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
+#include <gsl/gsl_fft_real.h>
+#include <gsl/gsl_fft_halfcomplex.h>
+
+#include <lal/RealFFT.h>
+#include <lal/LALDatatypes.h>
+#include <lal/LALStdlib.h>
+/*#include <rfftw.h>*/
 
 
 G_BEGIN_DECLS
@@ -77,6 +84,25 @@ typedef struct {
 	gsl_vector *S;
 	gsl_matrix *V;
 	gsl_vector *chifacs;
+
+	int fft_input_length;
+	gsl_vector *fft_f;
+	gsl_vector *fft_s;
+
+	/*gsl_fft_real_wavetable *fft_real;
+	gsl_fft_halfcomplex_wavetable *fft_hc;
+	gsl_fft_real_workspace *fft_work;*/
+	
+	REAL8FFTPlan *fwdplan;
+	REAL8FFTPlan *revplan;
+	COMPLEX16Vector *fft_sv;
+	COMPLEX16Vector *fft_fv;
+	
+	COMPLEX16Vector **fft_filters;
+
+	/*rfftw_plan fwdplan;
+	rfftw_plan revplan;*/
+
 } GSTLALTemplateBank;
 
 

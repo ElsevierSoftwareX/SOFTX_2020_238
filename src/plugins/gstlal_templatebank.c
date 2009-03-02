@@ -51,6 +51,9 @@
  * stuff from LAL
  */
 
+#include <lal/RealFFT.h>
+#include <lal/LALDatatypes.h>
+#include <lal/LALStdlib.h>
 
 /*
  * stuff from GSL
@@ -60,7 +63,11 @@
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_blas.h>
+#include <gsl/gsl_fft_real.h>
+#include <gsl/gsl_fft_halfcomplex.h>
 
+/* fftw */
+/*#include <rfftw.h>*/
 
 /*
  * our own stuff
@@ -96,6 +103,135 @@
  * ========================================================================
  */
 
+static double normalization_correction(double rate)
+{
+        return sqrt(rate / 4096.0);
+        /*return exp(0.53222 * log(rate) - 5.1269);*/
+}
+
+static void gsl_half_complex_conjugate_product(gsl_vector *f, gsl_vector *s, double norm)
+{
+	unsigned j;
+	double re, im;
+	gsl_vector_set(f,0, gsl_vector_get(f,0) * gsl_vector_get(s,0) * norm);
+	for (j = 1; j < f->size-1; j+=2) {
+		re = gsl_vector_get(f,j)*gsl_vector_get(s,j) + gsl_vector_get(f,j+1)*gsl_vector_get(s,j+1);
+		im = gsl_vector_get(f,j)*gsl_vector_get(s,j+1) - gsl_vector_get(f,j+1)*gsl_vector_get(s,j);
+		gsl_vector_set(f,j, re * norm);
+		gsl_vector_set(f,j+1, im * norm);
+	}
+}
+
+static void lal_convolve(const GSTLALTemplateBank *element, COMPLEX16Vector *a, COMPLEX16Vector *b, gsl_vector *out, double norm)
+{
+	unsigned j;
+        double re, im;
+	int N = out->size;
+	int returncode;
+	REAL8Vector outvec;
+	outvec.length = N;
+	outvec.data = out->data;
+	for (j = 0; j < a->length; j++) {
+		re = a->data[j].re * b->data[j].re + a->data[j].im * b->data[j].im;
+		im = a->data[j].re * b->data[j].im - a->data[j].im * b->data[j].re;
+                a->data[j].re = re * norm;
+		a->data[j].im = im * norm;
+	}
+	returncode = XLALREAL8ReverseFFT( &outvec, a, element->revplan);
+	if (returncode ) fprintf(stderr, "lal_convolve() failed %d\n",returncode);
+}
+
+static void lal_fft(const GSTLALTemplateBank *element, gsl_vector *s, COMPLEX16Vector *out) 
+{
+        REAL8Vector in;
+	int returncode;
+ 	in.length = s->size;
+	in.data = s->data;
+ 	returncode = XLALREAL8ForwardFFT(out, &in, element->fwdplan);
+	if (returncode) fprintf(stderr, "lal_fft() failed %d\n",returncode);
+}
+	
+static void fft_convolve_filter_matrix (const GSTLALTemplateBank *element, gsl_vector_view *signal,  gsl_matrix_view *output, int output_length)
+{
+        /* This function assumes that the filter is shorter than the signal.
+         * the output length of a given filter is equal to 
+         * signal length - filter length + 1 
+         */
+	unsigned i;
+	/* FIXME the actual length of the signal is longer than reported by kipp's convention!!! */
+	int input_length = element->fft_input_length;
+	gsl_vector *s = element->fft_s;
+        gsl_vector *f = element->fft_f;
+        gsl_vector_view outrow;
+        gsl_matrix *filter = element->U;
+	double norm = 1.0 / normalization_correction(element->sample_rate) / input_length;
+	/* memcopy the signal passed in, which is longer than what it reports */
+	memcpy(s->data, signal->vector.data, input_length * sizeof(double));
+
+	/* fft the signal */
+	lal_fft(element, s, element->fft_sv);
+
+	
+	for (i = 0; i < filter->size1; i ++){
+		
+		/* use the precomputed zero-padded, fft'ed filters */
+		memcpy(element->fft_fv->data, element->fft_filters[i]->data, element->fft_fv->length * sizeof(COMPLEX16));
+
+		/* replace the f vector  with the convolution product */
+		lal_convolve(element, element->fft_fv, element->fft_sv, f, norm);
+		/* copy output into output matrix ?? maybe filter->size1 -1 */
+		/*outrow = gsl_vector_subvector(f, filter->size2 - 1, output_length);*/
+		outrow = gsl_vector_subvector(f, filter->size2, output_length);
+		gsl_matrix_set_col (&(output->matrix), i, &(outrow.vector) );
+	}
+}
+
+static void convolva(
+	const GSTLALTemplateBank *element, 
+	int output_length, 
+	double chifacs_mean, 
+	gsl_vector *orthogonal_snr_sample,
+	gsl_matrix_view *orthogonal_snr,
+	gsl_vector_view *orthogonal_snr_sum_squares,
+	double S_sumsquares,
+	gsl_vector_view *time_series
+	 )
+{
+        int i;
+	int td_flag = 0;
+
+	if (!td_flag) fft_convolve_filter_matrix (element, time_series,  orthogonal_snr, output_length);
+	for(i = 0; i < output_length; i++) {
+		/*
+		 * The current row (time sample) in the output
+		 * matrix.
+		 */
+
+		if (td_flag) {
+			gsl_vector_view orthogonal_snr_row = gsl_matrix_row(&(orthogonal_snr->matrix), i);
+		/*
+		 * Compute one vector of orthogonal SNR samples ---
+		 * the projection of h(t) onto the template bank's
+		 * orthonormal basis.
+		 */
+			gsl_blas_dgemv(CblasNoTrans, 1.0 / normalization_correction(element->sample_rate), element->U, &(time_series->vector), 0.0, orthogonal_snr_sample);
+			gsl_vector_memcpy(&orthogonal_snr_row.vector, orthogonal_snr_sample);
+		}
+		else /* it has already been computed */
+			gsl_matrix_get_row(orthogonal_snr_sample, &(orthogonal_snr->matrix), i);
+		/*	
+		 * From the projection of h(t) onto the bank's
+		 * orthonormal basis, compute the square magnitude
+		 * of the component of h(t) in the bank
+		 */
+		gsl_vector_mul(orthogonal_snr_sample, element->S);
+		gsl_vector_set(&(orthogonal_snr_sum_squares->vector), i, pow(gsl_blas_dnrm2(orthogonal_snr_sample), 2) / S_sumsquares * chifacs_mean);
+		/*
+		 * Advance the time series pointer.
+		 */
+		(*time_series).vector.data++;
+	}
+}
 
 /**
  * Template bank properties:  number of samples in each template.
@@ -126,6 +262,16 @@ static int num_templates(const GSTLALTemplateBank *element)
 
 static void svd_destroy(GSTLALTemplateBank *element)
 {
+	unsigned i;
+
+	if(element->fft_filters) {
+		for (i = 0; i < element->U->size1; i++) {
+			if (element->fft_filters[i]) XLALDestroyCOMPLEX16Vector(element->fft_filters[i]);
+		}
+		free(element->fft_filters);
+		element->fft_filters = NULL;
+	}
+		
 	if(element->U) {
 		gsl_matrix_free(element->U);
 		element->U = NULL;
@@ -142,12 +288,40 @@ static void svd_destroy(GSTLALTemplateBank *element)
 		gsl_vector_free(element->chifacs);
 		element->chifacs = NULL;
 	}
-}
+	if(element->fft_s) {
+		gsl_vector_free(element->fft_s);
+		element->fft_s = NULL;
+	}
+	if(element->fft_f) {
+		gsl_vector_free(element->fft_f);
+		element->fft_f = NULL;
+	}
+	if(element->fft_fv) {
+		XLALDestroyCOMPLEX16Vector(element->fft_fv);
+		element->fft_fv = NULL;
+	}
+        if(element->fft_sv) {
+                XLALDestroyCOMPLEX16Vector(element->fft_sv);
+                element->fft_sv = NULL;
+        }
+	if(element->fwdplan) {
+		g_mutex_lock(gstlal_fftw_lock);
+		XLALDestroyREAL8FFTPlan( element->fwdplan );
+		g_mutex_unlock(gstlal_fftw_lock);
+	}
+        if(element->revplan) {
+                g_mutex_lock(gstlal_fftw_lock);
+                XLALDestroyREAL8FFTPlan( element->revplan );
+                g_mutex_unlock(gstlal_fftw_lock);
+        }
 
+}
 
 static int svd_create(GSTLALTemplateBank *element, int sample_rate)
 {
 	int verbose = 1;
+	unsigned i;
+	gsl_vector_view fp;
 
 	/*
 	 * be sure we don't leak memory
@@ -174,7 +348,40 @@ static int svd_create(GSTLALTemplateBank *element, int sample_rate)
 
 	generate_bank_svd(&element->U, &element->S, &element->V, &element->chifacs, element->template_bank_filename, element->reference_psd_filename, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / sample_rate, element->t_start, element->t_end, element->t_total_duration, TOLERANCE, verbose);
 
-	/*
+	/* 
+  	 * Compute the workspace for fft convolutions 
+  	 */
+
+	element->fft_input_length = element->snr_length + element->U->size2 - 1;
+
+        g_mutex_lock(gstlal_fftw_lock);
+        element->fwdplan = XLALCreateForwardREAL8FFTPlan( element->fft_input_length+1, 1 );
+        element->revplan = XLALCreateReverseREAL8FFTPlan( element->fft_input_length+1, 1 );
+        g_mutex_unlock(gstlal_fftw_lock);
+
+        if (!element->fwdplan) fprintf(stderr,"\nforward plan failed\n\n");
+        if (!element->revplan) fprintf(stderr,"\nreverse plan failed\n\n");
+
+        element->fft_s = gsl_vector_calloc(element->fft_input_length+1);
+        element->fft_f = gsl_vector_calloc(element->fft_input_length+1);
+
+	element->fft_fv = XLALCreateCOMPLEX16Vector((element->fft_input_length+1) / 2 + 1);
+	element->fft_sv = XLALCreateCOMPLEX16Vector((element->fft_input_length+1) / 2 + 1);
+	if (!element->fft_fv) fprintf(stderr, "\n\nXLALCreateCOMPLEX16Vector(fv) failed\n\n");
+        if (!element->fft_sv) fprintf(stderr, "\n\nXLALCreateCOMPLEX16Vector(sv) failed\n\n");
+
+        element->fft_filters = (COMPLEX16Vector **) calloc(element->U->size1, sizeof(COMPLEX16Vector *));
+
+	/* FFT the zero padded filters */
+	for (i=0; i < element->U->size1; i++){
+		element->fft_filters[i] = XLALCreateCOMPLEX16Vector((element->fft_input_length+1) / 2 + 1);
+                gsl_vector_set_zero(element->fft_f);
+                fp = gsl_vector_subvector(element->fft_f, element->snr_length - 1, element->U->size2);
+                gsl_matrix_get_row (&(fp.vector), element->U, i);
+                lal_fft(element, element->fft_f, element->fft_filters[i]);
+	}
+	
+        /*
 	 * done
 	 */
 
@@ -343,13 +550,6 @@ done:
  */
 
 
-static double normalization_correction(double rate)
-{
-        return sqrt(rate / 4096.0);
-	/*return exp(0.53222 * log(rate) - 5.1269);*/
-}
-
-
 /*
  * ============================================================================
  *
@@ -476,7 +676,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
 	GstFlowReturn result = GST_FLOW_OK;
 	int output_length;
-	int i;
+	/*int i;*/
 
 	/*
 	 * Now that we know the sample rate, construct orthogonal basis for
@@ -714,38 +914,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
-		for(i = 0; i < output_length; i++) {
-			/*
-			 * The current row (time sample) in the output
-			 * matrix.
-			 */
+		/* do the convolution */ 
+		convolva(element, output_length, chifacs_mean, orthogonal_snr_sample, &orthogonal_snr, &orthogonal_snr_sum_squares, S_sumsquares, &time_series);
 
-			gsl_vector_view orthogonal_snr_row = gsl_matrix_row(&orthogonal_snr.matrix, i);
-
-			/*
-			 * Compute one vector of orthogonal SNR samples ---
-			 * the projection of h(t) onto the template bank's
-			 * orthonormal basis.
-			 */
-
-			gsl_blas_dgemv(CblasNoTrans, 1.0 / normalization_correction(element->sample_rate), element->U, &time_series.vector, 0.0, orthogonal_snr_sample);
-			gsl_vector_memcpy(&orthogonal_snr_row.vector, orthogonal_snr_sample);
-
-			/*
-			 * From the projection of h(t) onto the bank's
-			 * orthonormal basis, compute the square magnitude
-			 * of the component of h(t) in the bank
-			 */
-
-			gsl_vector_mul(orthogonal_snr_sample, element->S);
-			gsl_vector_set(&orthogonal_snr_sum_squares.vector, i, pow(gsl_blas_dnrm2(orthogonal_snr_sample), 2) / S_sumsquares * chifacs_mean);
-
-			/*
-			 * Advance the time series pointer.
-			 */
-
-			time_series.vector.data++;
-		}
 		gsl_vector_free(orthogonal_snr_sample);
 
 		/*
@@ -999,6 +1170,16 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->S = NULL;
 	element->V = NULL;
 	element->chifacs = NULL;
+	/*element->fft_work = NULL;*/	/*gsl_fft_real_workspace_alloc (input_length);*/
+        /*element->fft_real = NULL;*/	/*gsl_fft_real_wavetable_alloc (input_length);*/
+        /*element->fft_hc = NULL;*/		/*gsl_fft_halfcomplex_wavetable_alloc (input_length);*/
+        element->fft_s = NULL;		/*gsl_vector_calloc(input_length);*/
+        element->fft_f = NULL;		/*gsl_vector_calloc(input_length);*/
+	element->fft_fv = NULL;
+	element->fft_sv = NULL;
+	element->fwdplan = NULL;
+	element->revplan = NULL;
+	element->fft_filters = NULL;
 }
 
 
