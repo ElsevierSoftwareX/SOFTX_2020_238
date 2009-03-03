@@ -145,7 +145,7 @@ static int create_template_from_sngl_inspiral(
   double norm;
   gsl_vector_view col;
   gsl_vector_view tmplt;
-  
+  fprintf(stderr, "fsamp %d downsampfac %d t_end %e t_total_duration %e\n", fsamp, downsampfac,t_end,t_total_duration); 
   SPAWaveform (bankRow, template_out->deltaT, fft_template);
 
   /*
@@ -154,6 +154,7 @@ static int create_template_from_sngl_inspiral(
 
   if(!XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd))
     return -1;
+
   /* compute the quadrature phases now we need a complex frequency series that
    * is twice as large.  We'll store the negative frequency components that'll
    * give the sine and cosine phase */
@@ -167,6 +168,7 @@ static int create_template_from_sngl_inspiral(
 
   if(XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan))
     return -1;
+
   /*
    * Normalize the template.
    *
@@ -346,7 +348,6 @@ int generate_bank_svd(
   REAL8FFTPlan *fwdplan;
   COMPLEX16FFTPlan *revplan;
   
-  if (verbose) fprintf(stderr, "base sample rate: %d down samp factor: %d t start: %e t end: %e t total: %e tolerance: %e\n", base_sample_rate,down_samp_fac,t_start,t_end,t_total_duration,tolerance);
 
   if (verbose) fprintf(stderr,"read %d templates\n", numtemps);
   
@@ -361,13 +362,13 @@ int generate_bank_svd(
   fprintf(stderr,"U = %zd,%zd V = %zd,%zd S = %zd\n",(*U)->size1,(*U)->size2,(*V)->size1,(*V)->size2,(*S)->size);
 
   g_mutex_lock(gstlal_fftw_lock);
-  fwdplan = XLALCreateForwardREAL8FFTPlan(full_numsamps, 1);
+  fwdplan = XLALCreateForwardREAL8FFTPlan(full_numsamps, 0);
   if (!fwdplan)
     {
     fprintf(stderr, "Generating the forward plan failed");
     exit(1);
     }
-  revplan = XLALCreateReverseCOMPLEX16FFTPlan(full_numsamps, 1);
+  revplan = XLALCreateReverseCOMPLEX16FFTPlan(full_numsamps, 0);
   if (!revplan)
     {
     fprintf(stderr, "Generating the reverse plan failed");
@@ -382,6 +383,7 @@ int generate_bank_svd(
   fft_template_full = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps);
   /* get the reference psd */
   psd = gstlal_get_reference_psd(reference_psd_filename, template_out->f0, 1.0/TEMPLATE_DURATION, fft_template->data->length);
+  if (verbose) fprintf(stderr, "template_out->data->length %d fft_template->data->length %d fft_template_full->data->length %d \n",template_out->data->length, fft_template->data->length, fft_template_full->data->length);
 
   /* create the templates in the bank */
   for(bankRow = bankHead, j = 0; bankRow; bankRow = bankRow->next, j++)
@@ -410,6 +412,7 @@ int generate_bank_svd(
     fprintf(stderr,"could not do SVD \n");
     return 1; 
     }
+
   trim_matrix(U,V,S,tolerance);
   for (i = 0; i < (*S)->size; i++)
     for (j = 0; j < (*V)->size1; j++)
@@ -470,7 +473,7 @@ void not_gsl_matrix_transpose(gsl_matrix **m)
   for (i = 0; i < (*S)->size; i++)
     {
     cumsumb += gsl_vector_get(*S,i) * gsl_vector_get(*S,i) ;
-    if (i && sqrt(cumsumb / sumb) > tol) break;
+    if (i>1 && sqrt(cumsumb / sumb) > tol) break;
     }
   maxb = i;/* (*S)->size;*/
   if (not_gsl_matrix_chop(U,(*U)->size1,maxb)) return 1;
