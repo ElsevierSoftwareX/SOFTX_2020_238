@@ -92,7 +92,7 @@
 #define DEFAULT_T_END G_MAXDOUBLE
 #define DEFAULT_SNR_LENGTH 2048	/* samples */
 #define TEMPLATE_SAMPLE_RATE 4096	/* Hertz */
-#define TOLERANCE 0.999
+#define TOLERANCE 0.99
 
 
 /*
@@ -181,7 +181,9 @@ static void fft_convolve_filter_matrix (const GSTLALTemplateBank *element, gsl_v
 		lal_convolve(element, element->fft_fv, element->fft_sv, f, norm);
 		/* copy output into output matrix ?? maybe filter->size1 -1 */
 		/*outrow = gsl_vector_subvector(f, filter->size2 - 1, output_length);*/
-		outrow = gsl_vector_subvector(f, filter->size2, output_length);
+                outrow = gsl_vector_subvector(f, filter->size2, output_length);
+
+		/*outrow = gsl_vector_subvector(f, filter->size2, output_length);*/
 		gsl_matrix_set_col (&(output->matrix), i, &(outrow.vector) );
 	}
 }
@@ -198,7 +200,7 @@ static void convolva(
 	 )
 {
         int i;
-	int td_flag = 0;
+	int td_flag = 1;
 
 	if (!td_flag) fft_convolve_filter_matrix (element, time_series,  orthogonal_snr, output_length);
 	for(i = 0; i < output_length; i++) {
@@ -355,8 +357,8 @@ static int svd_create(GSTLALTemplateBank *element, int sample_rate)
 	element->fft_input_length = element->snr_length + element->U->size2 - 1;
 
         g_mutex_lock(gstlal_fftw_lock);
-        element->fwdplan = XLALCreateForwardREAL8FFTPlan( element->fft_input_length+1, 1 );
-        element->revplan = XLALCreateReverseREAL8FFTPlan( element->fft_input_length+1, 1 );
+        element->fwdplan = XLALCreateForwardREAL8FFTPlan( element->fft_input_length+1, 0 );
+        element->revplan = XLALCreateReverseREAL8FFTPlan( element->fft_input_length+1, 0 );
         g_mutex_unlock(gstlal_fftw_lock);
 
         if (!element->fwdplan) fprintf(stderr,"\nforward plan failed\n\n");
