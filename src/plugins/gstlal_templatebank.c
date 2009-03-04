@@ -200,7 +200,7 @@ static void convolva(
 	 )
 {
         int i;
-	int td_flag = 1;
+	int td_flag = 0;
 
 	if (!td_flag) fft_convolve_filter_matrix (element, time_series,  orthogonal_snr, output_length);
 	for(i = 0; i < output_length; i++) {
