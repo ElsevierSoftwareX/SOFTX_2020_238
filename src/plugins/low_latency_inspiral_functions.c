@@ -392,7 +392,8 @@ int generate_bank_svd(
     bankRow->fLower = 25.0;
     bankRow->tSampling = base_sample_rate;
     bankRow->fCutoff = bankRow->fFinal;
-    bankRow->order = threePointFivePN;
+    /*bankRow->order = threePointFivePN;*/
+    bankRow->order = twoPN;
     bankRow->signalAmplitude = 1.0;
  
     if(create_template_from_sngl_inspiral(bankRow, *U, *chifacs, base_sample_rate, down_samp_fac,t_end, t_total_duration, j, template_out, fft_template, fft_template_full, fwdplan, revplan, psd) < 0)
