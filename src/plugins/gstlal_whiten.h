@@ -90,7 +90,7 @@ typedef struct {
 	unsigned long next_sample;
 	GstClockTime adapter_head_timestamp;
 
-	double filter_length;
+	double zero_pad_seconds;
 	double convolution_length;
 	enum gstlal_psdmode_t psdmode;
 

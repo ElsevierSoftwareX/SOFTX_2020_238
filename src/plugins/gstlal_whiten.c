@@ -85,8 +85,8 @@
  */
 
 
-#define DEFAULT_FILTER_LENGTH 8.0
-#define DEFAULT_CONVOLUTION_LENGTH 64.0
+#define DEFAULT_ZERO_PAD_SECONDS 2.0
+#define DEFAULT_CONVOLUTION_LENGTH 8.0
 #define DEFAULT_AVERAGE_SAMPLES 16
 #define DEFAULT_PSDMODE GSTLAL_PSDMODE_INITIAL_LIGO_SRD
 
@@ -134,8 +134,8 @@ GType gstlal_psdmode_get_type(void)
 
 static int make_window(GSTLALWhiten *element)
 {
-	int transient = floor(element->filter_length * element->sample_rate + 0.5);
-	int hann_length = (int) floor(element->convolution_length * element->sample_rate + 0.5) - 2 * transient;
+	int zero_pad = floor(element->zero_pad_seconds * element->sample_rate + 0.5);
+	int hann_length = (int) floor(element->convolution_length * element->sample_rate + 0.5) - 2 * zero_pad;
 
 	XLALDestroyREAL8Window(element->window);
 	element->window = XLALCreateHannREAL8Window(hann_length);
@@ -143,7 +143,7 @@ static int make_window(GSTLALWhiten *element)
 		GST_ERROR_OBJECT(element, "failure creating Hann window");
 		return -1;
 	}
-	if(!XLALResizeREAL8Sequence(element->window->data, -transient, hann_length + 2 * transient)) {
+	if(!XLALResizeREAL8Sequence(element->window->data, -zero_pad, hann_length + 2 * zero_pad)) {
 		GST_ERROR_OBJECT(element, "failure resizing Hann window");
 		XLALDestroyREAL8Window(element->window);
 		element->window = NULL;
@@ -320,7 +320,7 @@ static REAL8FrequencySeries *get_psd(enum gstlal_psdmode_t psdmode, LALPSDRegres
 
 enum property {
 	ARG_PSDMODE = 1,
-	ARG_FILTER_LENGTH,
+	ARG_ZERO_PAD_SECONDS,
 	ARG_CONVOLUTION_LENGTH,
 	ARG_AVERAGE_SAMPLES,
 	ARG_XML_FILENAME,
@@ -338,8 +338,8 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		element->psdmode = g_value_get_enum(value);
 		break;
 
-	case ARG_FILTER_LENGTH:
-		element->filter_length = g_value_get_double(value);
+	case ARG_ZERO_PAD_SECONDS:
+		element->zero_pad_seconds = g_value_get_double(value);
 		break;
 
 	case ARG_CONVOLUTION_LENGTH:
@@ -391,8 +391,8 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		g_value_set_enum(value, element->psdmode);
 		break;
 
-	case ARG_FILTER_LENGTH:
-		g_value_set_double(value, element->filter_length);
+	case ARG_ZERO_PAD_SECONDS:
+		g_value_set_double(value, element->zero_pad_seconds);
 		break;
 
 	case ARG_CONVOLUTION_LENGTH:
@@ -477,7 +477,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	GstFlowReturn result = GST_FLOW_OK;
 	unsigned segment_length = floor(element->convolution_length * element->sample_rate + 0.5);
-	unsigned transient = floor(element->filter_length * element->sample_rate + 0.5);
+	unsigned zero_pad = floor(element->zero_pad_seconds * element->sample_rate + 0.5);
 	REAL8TimeSeries *segment = NULL;
 	COMPLEX16FrequencySeries *tilde_segment = NULL;
 	COMPLEX16FrequencySeries *mean = NULL;
@@ -533,7 +533,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		goto done;
 	}
 	if(!element->tail) {
-		element->tail = XLALCreateREAL8Sequence(segment->data->length / 2 - transient);
+		element->tail = XLALCreateREAL8Sequence(segment->data->length / 2 - zero_pad);
 		if(!element->tail) {
 			GST_ERROR_OBJECT(element, "failure allocating tail buffer");
 			result = GST_FLOW_ERROR;
@@ -817,23 +817,23 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		/*
 		 * Get a buffer from the downstream peer (note the size is
-		 * half of the holding area minus the transient).
+		 * half of the holding area minus the zero_pad).
 		 */
 
-		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample + transient, (segment->data->length / 2 - transient) * sizeof(*segment->data->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
+		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample + zero_pad, (segment->data->length / 2 - zero_pad) * sizeof(*segment->data->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
 		if(result != GST_FLOW_OK)
 			goto done;
 		if(element->next_is_discontinuity) {
 			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
 			element->next_is_discontinuity = FALSE;
 		}
-		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + (segment->data->length / 2 - transient);
-		GST_BUFFER_TIMESTAMP(srcbuf) = element->adapter_head_timestamp + gst_util_uint64_scale_int(transient, GST_SECOND, element->sample_rate);
-		GST_BUFFER_DURATION(srcbuf) = gst_util_uint64_scale_int(segment->data->length / 2 - transient, GST_SECOND, element->sample_rate);
+		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + (segment->data->length / 2 - zero_pad);
+		GST_BUFFER_TIMESTAMP(srcbuf) = element->adapter_head_timestamp + gst_util_uint64_scale_int(zero_pad, GST_SECOND, element->sample_rate);
+		GST_BUFFER_DURATION(srcbuf) = gst_util_uint64_scale_int(segment->data->length / 2 - zero_pad, GST_SECOND, element->sample_rate);
 
 		/*
 		 * Copy the first half of the time series into the buffer,
-		 * removing the transient from the start, and adding the
+		 * removing the zero_pad from the start, and adding the
 		 * contents of the tail.  We want the result to be a unit
 		 * variance random process.  When we add the two time
 		 * series (the first half of the piece we have just
@@ -847,7 +847,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		for(i = 0; i < element->tail->length; i++)
-			((double *) GST_BUFFER_DATA(srcbuf))[i] = (segment->data->data[transient + i] + element->tail->data[i]) / sqrt(element->window->data->length / element->window->sumofsquares);
+			((double *) GST_BUFFER_DATA(srcbuf))[i] = (segment->data->data[zero_pad + i] + element->tail->data[i]) / sqrt(element->window->data->length / element->window->sumofsquares);
 
 		/*
 		 * Push the buffer downstream
@@ -859,21 +859,21 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		/*
 		 * Save the second half of time series data minus the final
-		 * transient in the tail
+		 * zero_pad in the tail
 		 */
 
-		memcpy(element->tail->data, &segment->data->data[transient + i], element->tail->length * sizeof(*element->tail->data));
+		memcpy(element->tail->data, &segment->data->data[zero_pad + i], element->tail->length * sizeof(*element->tail->data));
 
 		/*
 		 * Flush the adapter and advance the sample count and
 		 * adapter clock
 		 */
 
-		gst_adapter_flush(element->adapter, (segment->data->length / 2 - transient) * sizeof(*segment->data->data));
-		element->next_sample += segment->data->length / 2 - transient;
+		gst_adapter_flush(element->adapter, (segment->data->length / 2 - zero_pad) * sizeof(*segment->data->data));
+		element->next_sample += segment->data->length / 2 - zero_pad;
 		/* FIXME:  this accumulates round-off, the time stamp
 		 * should be calculated directly somehow */
-		element->adapter_head_timestamp += gst_util_uint64_scale_int(segment->data->length / 2 - transient, GST_SECOND, element->sample_rate);
+		element->adapter_head_timestamp += gst_util_uint64_scale_int(segment->data->length / 2 - zero_pad, GST_SECOND, element->sample_rate);
 	}
 
 	/*
@@ -998,7 +998,7 @@ static void class_init(gpointer class, gpointer class_data)
 	gobject_class->finalize = finalize;
 
 	g_object_class_install_property(gobject_class, ARG_PSDMODE, g_param_spec_enum("psd-mode", "PSD mode", "PSD estimation mode", GSTLAL_PSDMODE_TYPE, DEFAULT_PSDMODE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_FILTER_LENGTH, g_param_spec_double("filter-length", "Filter length", "Length of the whitening filter in seconds", 0, G_MAXDOUBLE, DEFAULT_FILTER_LENGTH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_ZERO_PAD_SECONDS, g_param_spec_double("zero-pad", "Zero-padding", "Length of the zero-padding on both sides of the FFT in seconds", 0, G_MAXDOUBLE, DEFAULT_ZERO_PAD_SECONDS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_CONVOLUTION_LENGTH, g_param_spec_double("convolution-length", "Convolution length", "Length of the FFT convolution in seconds", 0, G_MAXDOUBLE, DEFAULT_CONVOLUTION_LENGTH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_AVERAGE_SAMPLES, g_param_spec_int("average-samples", "Average samples", "Number of convolution-length intervals used in PSD average", 1, G_MAXINT, DEFAULT_AVERAGE_SAMPLES, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_XML_FILENAME, g_param_spec_string("xml-filename", "XML Filename", "Name of file into which will be dumped PSD snapshots (null = disable).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
@@ -1034,7 +1034,7 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->next_is_discontinuity = FALSE;
 	element->next_sample = 0;
 	element->adapter_head_timestamp = 0;
-	element->filter_length = DEFAULT_FILTER_LENGTH;
+	element->zero_pad_seconds = DEFAULT_ZERO_PAD_SECONDS;
 	element->convolution_length = DEFAULT_CONVOLUTION_LENGTH;
 	element->psdmode = DEFAULT_PSDMODE;
 	element->sample_rate = 0;
