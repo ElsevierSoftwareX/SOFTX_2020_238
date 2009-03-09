@@ -415,6 +415,47 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 
 
 /*
+ * getcaps()
+ */
+
+
+static GstCaps *getcaps(GstPad *pad)
+{
+	GSTLALWhiten *element = GSTLAL_WHITEN(GST_PAD_PARENT(pad));
+	GstCaps *caps, *peercaps;
+
+	GST_OBJECT_LOCK(element);
+
+	/*
+	 * start by retrieving our own caps.  use get_fixed_caps_func() to
+	 * avoid recursing back into this function.
+	 */
+
+	caps = gst_pad_get_fixed_caps_func(pad);
+
+	/*
+	 * now compute the intersection of the caps with the downstream
+	 * peer's caps if known.
+	 */
+
+	peercaps = gst_pad_peer_get_caps(element->srcpad);
+	if(peercaps) {
+		GstCaps *result = gst_caps_intersect(peercaps, caps);
+		gst_caps_unref(caps);
+		gst_caps_unref(peercaps);
+		caps = result;
+	}
+
+	/*
+	 * done
+	 */
+
+	GST_OBJECT_UNLOCK(element);
+	return caps;
+}
+
+
+/*
  * setcaps()
  */
 
@@ -432,24 +473,18 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 
 	/*
-	 * get a modifiable copy of the caps.  gst_caps_make_writable()
-	 * unref()s its argument so we have to ref() it first to keep it
-	 * valid.
+	 * get a modifiable copy of the caps, set the caps' units to
+	 * dimensionless, and try setting the new caps on the downstream
+	 * peer.  doing this here means we don't have to do this repeatedly
+	 * in the chain function.  gst_caps_make_writable() unref()s its
+	 * argument so we have to ref() it first to keep it valid.
 	 */
 
 	gst_caps_ref(caps);
 	caps = gst_caps_make_writable(caps);
 
-	/*
-	 * set the units to dimensionless
-	 */
-
 	XLALUnitAsString(units, sizeof(units), &lalDimensionlessUnit);
 	gst_caps_set_simple(caps, "units", G_TYPE_STRING, units, NULL);
-
-	/*
-	 * try setting the caps on the downstream peer
-	 */
 
 	result = gst_pad_set_caps(element->srcpad, caps);
 	gst_caps_unref(caps);
@@ -1022,6 +1057,7 @@ static void instance_init(GTypeInstance * object, gpointer class)
 
 	/* configure sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
+	gst_pad_set_getcaps_function(pad, getcaps);
 	gst_pad_set_setcaps_function(pad, setcaps);
 	gst_pad_set_chain_function(pad, chain);
 	gst_object_unref(pad);
