@@ -556,7 +556,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	GstFlowReturn result = GST_FLOW_OK;
-	unsigned segment_length = floor(element->convolution_length * element->sample_rate + 0.5);
 	unsigned zero_pad = floor(element->zero_pad_seconds * element->sample_rate + 0.5);
 	REAL8TimeSeries *segment = NULL;
 	COMPLEX16FrequencySeries *tilde_segment = NULL;
@@ -591,8 +590,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Create workspace
 	 */
 
-	segment = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0, 0}, 0.0, (double) 1.0 / element->sample_rate, &lalStrainUnit, segment_length);
-	tilde_segment = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0, 0}, 0, 0, &lalDimensionlessUnit, segment_length / 2 + 1);
+	segment = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0, 0}, 0.0, (double) 1.0 / element->sample_rate, &lalStrainUnit, element->window->data->length);
+	tilde_segment = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0, 0}, 0, 0, &lalDimensionlessUnit, element->window->data->length / 2 + 1);
 	if(!segment || !tilde_segment) {
 		GST_ERROR_OBJECT(element, "failure creating workspace");
 		result = GST_FLOW_ERROR;
