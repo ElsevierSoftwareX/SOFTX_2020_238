@@ -39,7 +39,7 @@ INJECTIONS="lal_simulation \
 
 WHITEN="lal_whiten \
 	psd-mode=1 \
-	filter-length=4 \
+	zero-pad=4 \
 	convolution-length=16 \
 	average-samples=64 \
 	compensation-psd=${REFERENCEPSD}"
