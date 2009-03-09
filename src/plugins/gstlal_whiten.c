@@ -132,10 +132,14 @@ GType gstlal_psdmode_get_type(void)
  */
 
 
-static int make_window(GSTLALWhiten *element)
+static int make_window_and_fft_plans(GSTLALWhiten *element)
 {
 	int zero_pad = floor(element->zero_pad_seconds * element->sample_rate + 0.5);
 	int hann_length = (int) floor(element->convolution_length * element->sample_rate + 0.5) - 2 * zero_pad;
+
+	/*
+	 * build a Hann window with zero-padding
+	 */
 
 	XLALDestroyREAL8Window(element->window);
 	element->window = XLALCreateHannREAL8Window(hann_length);
@@ -150,20 +154,16 @@ static int make_window(GSTLALWhiten *element)
 		return -1;
 	}
 
-	return 0;
-}
-
-
-static int make_fft_plans(GSTLALWhiten *element)
-{
-	int fft_length = floor(element->convolution_length * element->sample_rate + 0.5);
+	/*
+	 * use the zero-padded window's length to construct FFT plans
+	 */
 
 	g_mutex_lock(gstlal_fftw_lock);
 	XLALDestroyREAL8FFTPlan(element->fwdplan);
 	XLALDestroyREAL8FFTPlan(element->revplan);
 
-	element->fwdplan = XLALCreateForwardREAL8FFTPlan(fft_length, 1);
-	element->revplan = XLALCreateReverseREAL8FFTPlan(fft_length, 1);
+	element->fwdplan = XLALCreateForwardREAL8FFTPlan(element->window->data->length, 1);
+	element->revplan = XLALCreateReverseREAL8FFTPlan(element->window->data->length, 1);
 	g_mutex_unlock(gstlal_fftw_lock);
 
 	if(!element->fwdplan || !element->revplan) {
@@ -473,10 +473,10 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 
 	/*
-	 * update the Hann window
+	 * make a new Hann window and new FFT plans
 	 */
 
-	if(make_window(element)) {
+	if(make_window_and_fft_plans(element)) {
 		result = FALSE;
 		goto done;
 	}
@@ -542,17 +542,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	gst_adapter_push(element->adapter, sinkbuf);
-
-	/*
-	 * Make sure we've got FFT plans
-	 */
-
-	if(!element->fwdplan || !element->revplan) {
-		if(make_fft_plans(element)) {
-			result = GST_FLOW_ERROR;
-			goto done;
-		}
-	}
 
 	/*
 	 * Create holding area and make sure we've got a holding place for
