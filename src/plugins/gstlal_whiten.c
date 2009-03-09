@@ -473,6 +473,15 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 
 	/*
+	 * update the Hann window
+	 */
+
+	if(make_window(element)) {
+		result = FALSE;
+		goto done;
+	}
+
+	/*
 	 * get a modifiable copy of the caps, set the caps' units to
 	 * dimensionless, and try setting the new caps on the downstream
 	 * peer.  doing this here means we don't have to do this repeatedly
@@ -493,6 +502,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 * done
 	 */
 
+done:
 	gst_object_unref(element);
 	return result;
 }
@@ -534,15 +544,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	gst_adapter_push(element->adapter, sinkbuf);
 
 	/*
-	 * Make sure we've got a Hann window and FFT plans
+	 * Make sure we've got FFT plans
 	 */
 
-	if(!element->window) {
-		if(make_window(element)) {
-			result = GST_FLOW_ERROR;
-			goto done;
-		}
-	}
 	if(!element->fwdplan || !element->revplan) {
 		if(make_fft_plans(element)) {
 			result = GST_FLOW_ERROR;
