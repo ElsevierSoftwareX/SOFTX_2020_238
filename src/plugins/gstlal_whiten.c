@@ -563,6 +563,15 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	COMPLEX16FrequencySeries *mean = NULL;
 
 	/*
+	 * Confirm that setcaps() has successfully configured everything
+	 */
+
+	if(!element->window || !element->tail || !element->fwdplan || !element->revplan) {
+		result = GST_FLOW_NOT_NEGOTIATED;
+		goto done;
+	}
+
+	/*
 	 * Push the incoming buffer into the adapter.  If the buffer is a
 	 * discontinuity, first clear the adapter and reset the clock
 	 */
