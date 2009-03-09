@@ -134,20 +134,20 @@ GType gstlal_psdmode_get_type(void)
 
 static int make_window_and_fft_plans(GSTLALWhiten *element)
 {
+	int fft_length = floor(element->convolution_length * element->sample_rate + 0.5);
 	int zero_pad = floor(element->zero_pad_seconds * element->sample_rate + 0.5);
-	int hann_length = (int) floor(element->convolution_length * element->sample_rate + 0.5) - 2 * zero_pad;
 
 	/*
 	 * build a Hann window with zero-padding
 	 */
 
 	XLALDestroyREAL8Window(element->window);
-	element->window = XLALCreateHannREAL8Window(hann_length);
+	element->window = XLALCreateHannREAL8Window(fft_length - 2 * zero_pad);
 	if(!element->window) {
 		GST_ERROR_OBJECT(element, "failure creating Hann window");
 		return -1;
 	}
-	if(!XLALResizeREAL8Sequence(element->window->data, -zero_pad, hann_length + 2 * zero_pad)) {
+	if(!XLALResizeREAL8Sequence(element->window->data, -zero_pad, fft_length)) {
 		GST_ERROR_OBJECT(element, "failure resizing Hann window");
 		XLALDestroyREAL8Window(element->window);
 		element->window = NULL;
@@ -155,7 +155,19 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 	}
 
 	/*
-	 * use the zero-padded window's length to construct FFT plans
+	 * allocate a tail buffer
+	 */
+
+	XLALDestroyREAL8Sequence(element->tail);
+	element->tail = XLALCreateREAL8Sequence(element->window->data->length / 2 - zero_pad);
+	if(!element->tail) {
+		GST_ERROR_OBJECT(element, "failure allocating tail buffer");
+		return -1;
+	}
+	memset(element->tail->data, 0, element->tail->length * sizeof(*element->tail->data));
+
+	/*
+	 * construct FFT plans
 	 */
 
 	g_mutex_lock(gstlal_fftw_lock);
@@ -463,20 +475,18 @@ static GstCaps *getcaps(GstPad *pad)
 static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
+	int sample_rate;
 	char units[100];	/* FIXME:  argh, hard-coded length = BAD BAD BAD */
 	gboolean result = TRUE;
 
 	/*
-	 * record the sample rate
+	 * extract the sample rate, and check that it is allowed
 	 */
 
-	element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
+	sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 
-	/*
-	 * make a new Hann window and new FFT plans
-	 */
-
-	if(make_window_and_fft_plans(element)) {
+	if((int) floor(element->convolution_length * sample_rate + 0.5) & 1) {
+		GST_ERROR_OBJECT(element, "convolution length is an odd number of samples");
 		result = FALSE;
 		goto done;
 	}
@@ -484,9 +494,10 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	/*
 	 * get a modifiable copy of the caps, set the caps' units to
 	 * dimensionless, and try setting the new caps on the downstream
-	 * peer.  doing this here means we don't have to do this repeatedly
-	 * in the chain function.  gst_caps_make_writable() unref()s its
-	 * argument so we have to ref() it first to keep it valid.
+	 * peer.  if this succeeds, doing this here means we don't have to
+	 * do this repeatedly in the chain function.
+	 * gst_caps_make_writable() unref()s its argument so we have to
+	 * ref() it first to keep it valid.
 	 */
 
 	gst_caps_ref(caps);
@@ -497,6 +508,30 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 
 	result = gst_pad_set_caps(element->srcpad, caps);
 	gst_caps_unref(caps);
+
+	if(!result)
+		goto done;
+
+	/*
+	 * record the sample rate
+	 */
+
+	element->sample_rate = sample_rate;
+
+	/*
+	 * make a new Hann window, new tail buffer, and new FFT plans
+	 */
+
+	if(make_window_and_fft_plans(element)) {
+		result = FALSE;
+		goto done;
+	}
+
+	/*
+	 * erase the contents of the adapter
+	 */
+
+	gst_adapter_clear(element->adapter);
 
 	/*
 	 * done
@@ -544,30 +579,15 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	gst_adapter_push(element->adapter, sinkbuf);
 
 	/*
-	 * Create holding area and make sure we've got a holding place for
-	 * the tail.
+	 * Create workspace
 	 */
 
-	if(segment_length & 1) {
-		GST_ERROR_OBJECT(element, "segment length is odd");
-		result = GST_FLOW_ERROR;
-		goto done;
-	}
 	segment = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0, 0}, 0.0, (double) 1.0 / element->sample_rate, &lalStrainUnit, segment_length);
 	tilde_segment = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0, 0}, 0, 0, &lalDimensionlessUnit, segment_length / 2 + 1);
 	if(!segment || !tilde_segment) {
-		GST_ERROR_OBJECT(element, "failure creating holding area");
+		GST_ERROR_OBJECT(element, "failure creating workspace");
 		result = GST_FLOW_ERROR;
 		goto done;
-	}
-	if(!element->tail) {
-		element->tail = XLALCreateREAL8Sequence(segment->data->length / 2 - zero_pad);
-		if(!element->tail) {
-			GST_ERROR_OBJECT(element, "failure allocating tail buffer");
-			result = GST_FLOW_ERROR;
-			goto done;
-		}
-		memset(element->tail->data, 0, element->tail->length * sizeof(*element->tail->data));
 	}
 
 	/*
@@ -579,9 +599,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		unsigned i;
 
 		/*
-		 * Copy data from adapter into holding area.  Have to reset
-		 * some metadata that gets modified through each iteration
-		 * of this loop.
+		 * Copy data from adapter into time-domain workspace.
+		 * Reset the workspace's metadata that gets modified
+		 * through each iteration of this loop.
 		 */
 
 		memcpy(segment->data->data, gst_adapter_peek(element->adapter, segment->data->length * sizeof(*segment->data->data)), segment->data->length * sizeof(*segment->data->data));
