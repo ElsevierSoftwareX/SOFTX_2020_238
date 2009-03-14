@@ -86,7 +86,7 @@
 
 
 #define DEFAULT_ZERO_PAD_SECONDS 2.0
-#define DEFAULT_CONVOLUTION_LENGTH 8.0
+#define DEFAULT_FFT_LENGTH_SECONDS 8.0
 #define DEFAULT_AVERAGE_SAMPLES 16
 #define DEFAULT_PSDMODE GSTLAL_PSDMODE_INITIAL_LIGO_SRD
 
@@ -134,7 +134,7 @@ GType gstlal_psdmode_get_type(void)
 
 static int make_window_and_fft_plans(GSTLALWhiten *element)
 {
-	int fft_length = floor(element->convolution_length * element->sample_rate + 0.5);
+	int fft_length = floor(element->fft_length_seconds * element->sample_rate + 0.5);
 	int zero_pad = floor(element->zero_pad_seconds * element->sample_rate + 0.5);
 
 	/*
@@ -333,7 +333,7 @@ static REAL8FrequencySeries *get_psd(enum gstlal_psdmode_t psdmode, LALPSDRegres
 enum property {
 	ARG_PSDMODE = 1,
 	ARG_ZERO_PAD_SECONDS,
-	ARG_CONVOLUTION_LENGTH,
+	ARG_FFT_LENGTH,
 	ARG_AVERAGE_SAMPLES,
 	ARG_XML_FILENAME,
 	ARG_COMPENSATION_PSD
@@ -354,8 +354,8 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		element->zero_pad_seconds = g_value_get_double(value);
 		break;
 
-	case ARG_CONVOLUTION_LENGTH:
-		element->convolution_length = g_value_get_double(value);
+	case ARG_FFT_LENGTH:
+		element->fft_length_seconds = g_value_get_double(value);
 		break;
 
 	case ARG_AVERAGE_SAMPLES:
@@ -407,8 +407,8 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		g_value_set_double(value, element->zero_pad_seconds);
 		break;
 
-	case ARG_CONVOLUTION_LENGTH:
-		g_value_set_double(value, element->convolution_length);
+	case ARG_FFT_LENGTH:
+		g_value_set_double(value, element->fft_length_seconds);
 		break;
 
 	case ARG_AVERAGE_SAMPLES:
@@ -485,8 +485,8 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 
 	sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 
-	if((int) floor(element->convolution_length * sample_rate + 0.5) & 1) {
-		GST_ERROR_OBJECT(element, "convolution length is an odd number of samples");
+	if((int) floor(element->fft_length_seconds * sample_rate + 0.5) & 1) {
+		GST_ERROR_OBJECT(element, "FFT length is an odd number of samples");
 		result = FALSE;
 		goto done;
 	}
@@ -672,7 +672,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 */
 
 			if(!element->psd_regressor->n_samples) {
-
 				if(XLALPSDRegressorSetPSD(element->psd_regressor, element->compensation_psd, element->psd_regressor->max_samples)) {
 					GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
 					result = GST_FLOW_ERROR;
@@ -808,7 +807,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 				}
 			}
 			rms = sqrt(rms / tilde_segment->data->length);
-			GST_LOG_OBJECT(stderr, "PSD compensation filter's RMS = %.16g\n", rms);
+			GST_LOG_OBJECT(element, "PSD compensation filter's RMS = %.16g\n", rms);
 			for(i = 0; i < tilde_segment->data->length; i++)
 				tilde_segment->data->data[i] = XLALCOMPLEX16MulReal(tilde_segment->data->data[i], 1.0 / rms);
 		}
@@ -872,20 +871,19 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 
 		/*
-		 * Get a buffer from the downstream peer (note the size is
-		 * half of the holding area minus the zero_pad).
+		 * Get a buffer from the downstream peer.
 		 */
 
-		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample + zero_pad, (segment->data->length / 2 - zero_pad) * sizeof(*segment->data->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
+		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample + zero_pad, element->tail->length * sizeof(*segment->data->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
 		if(result != GST_FLOW_OK)
 			goto done;
 		if(element->next_is_discontinuity) {
 			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
 			element->next_is_discontinuity = FALSE;
 		}
-		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + (segment->data->length / 2 - zero_pad);
+		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + element->tail->length;
 		GST_BUFFER_TIMESTAMP(srcbuf) = element->adapter_head_timestamp + gst_util_uint64_scale_int(zero_pad, GST_SECOND, element->sample_rate);
-		GST_BUFFER_DURATION(srcbuf) = gst_util_uint64_scale_int(segment->data->length / 2 - zero_pad, GST_SECOND, element->sample_rate);
+		GST_BUFFER_DURATION(srcbuf) = gst_util_uint64_scale_int(element->tail->length, GST_SECOND, element->sample_rate);
 
 		/*
 		 * Copy the first half of the time series into the buffer,
@@ -925,11 +923,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * adapter clock
 		 */
 
-		gst_adapter_flush(element->adapter, (segment->data->length / 2 - zero_pad) * sizeof(*segment->data->data));
-		element->next_sample += segment->data->length / 2 - zero_pad;
+		gst_adapter_flush(element->adapter, element->tail->length * sizeof(*segment->data->data));
+		element->next_sample += element->tail->length;
 		/* FIXME:  this accumulates round-off, the time stamp
 		 * should be calculated directly somehow */
-		element->adapter_head_timestamp += gst_util_uint64_scale_int(segment->data->length / 2 - zero_pad, GST_SECOND, element->sample_rate);
+		element->adapter_head_timestamp += gst_util_uint64_scale_int(element->tail->length, GST_SECOND, element->sample_rate);
 	}
 
 	/*
@@ -1054,9 +1052,9 @@ static void class_init(gpointer class, gpointer class_data)
 	gobject_class->finalize = finalize;
 
 	g_object_class_install_property(gobject_class, ARG_PSDMODE, g_param_spec_enum("psd-mode", "PSD mode", "PSD estimation mode", GSTLAL_PSDMODE_TYPE, DEFAULT_PSDMODE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_ZERO_PAD_SECONDS, g_param_spec_double("zero-pad", "Zero-padding", "Length of the zero-padding on both sides of the FFT in seconds", 0, G_MAXDOUBLE, DEFAULT_ZERO_PAD_SECONDS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_CONVOLUTION_LENGTH, g_param_spec_double("convolution-length", "Convolution length", "Length of the FFT convolution in seconds", 0, G_MAXDOUBLE, DEFAULT_CONVOLUTION_LENGTH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_AVERAGE_SAMPLES, g_param_spec_int("average-samples", "Average samples", "Number of convolution-length intervals used in PSD average", 1, G_MAXINT, DEFAULT_AVERAGE_SAMPLES, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_ZERO_PAD_SECONDS, g_param_spec_double("zero-pad", "Zero-padding", "Length of the zero-padding to include on both sides of the FFT in seconds", 0, G_MAXDOUBLE, DEFAULT_ZERO_PAD_SECONDS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_FFT_LENGTH, g_param_spec_double("fft-length", "FFT length", "Total length of the FFT convolution in seconds", 0, G_MAXDOUBLE, DEFAULT_FFT_LENGTH_SECONDS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_AVERAGE_SAMPLES, g_param_spec_int("average-samples", "Average samples", "Number of FFTs used in PSD average", 1, G_MAXINT, DEFAULT_AVERAGE_SAMPLES, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_XML_FILENAME, g_param_spec_string("xml-filename", "XML Filename", "Name of file into which will be dumped PSD snapshots (null = disable).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_COMPENSATION_PSD, g_param_spec_string("compensation-psd", "Filename", "Name of text file from which to read reference spectrum to be compensated for by over-whitening (null = disable).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
@@ -1092,7 +1090,7 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->next_sample = 0;
 	element->adapter_head_timestamp = 0;
 	element->zero_pad_seconds = DEFAULT_ZERO_PAD_SECONDS;
-	element->convolution_length = DEFAULT_CONVOLUTION_LENGTH;
+	element->fft_length_seconds = DEFAULT_FFT_LENGTH_SECONDS;
 	element->psdmode = DEFAULT_PSDMODE;
 	element->sample_rate = 0;
 	element->window = NULL;

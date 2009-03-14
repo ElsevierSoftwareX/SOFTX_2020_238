@@ -91,7 +91,7 @@ typedef struct {
 	GstClockTime adapter_head_timestamp;
 
 	double zero_pad_seconds;
-	double convolution_length;
+	double fft_length_seconds;
 	enum gstlal_psdmode_t psdmode;
 
 	REAL8Window *window;
