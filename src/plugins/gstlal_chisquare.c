@@ -87,7 +87,7 @@
  * the bulk of the SNR distribution expected from Gaussian noise - exactly
  * where we want to be*/
 
-#define DEFAULT_MAX_DOF 1000
+#define DEFAULT_MAX_DOF 4
 
 
 /*
@@ -495,6 +495,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	gint dof;
 	gint ortho_channel, numorthochannels;
 	gint channel, numchannels;
+	gint chisq_start;
 
 	/*
 	 * get the range of offsets (in the output stream) spanned by the
@@ -600,7 +601,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	numorthochannels = (guint) num_orthosnr_channels(element);
 	numchannels = (guint) num_snr_channels(element);
 	dof = (numorthochannels < element->max_dof) ? numorthochannels : element->max_dof;
-
+	chisq_start = (numorthochannels - 5 < 0 ) ? 0 : numorthochannels -5;
 	for(sample = 0; sample < length; sample++) {
 		double *data = &((double *) GST_BUFFER_DATA(buf))[numchannels * sample];
 		const double *orthodata = &((const double *) GST_BUFFER_DATA(orthosnrbuf))[numorthochannels * sample];
@@ -611,7 +612,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			double arg = atan2(snr2, snr1);
 			data[channel] = 0;
 			
-			for(ortho_channel = 0; ortho_channel < dof; ortho_channel++) {
+			for(ortho_channel = chisq_start; ortho_channel < numorthochannels; ortho_channel++) {
 				double mixing_coefficient1 = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel);
 				double mixing_coefficient2 = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel+1);
 				double mc = mixing_coefficient1*cos(arg)+mixing_coefficient1*sin(arg);
