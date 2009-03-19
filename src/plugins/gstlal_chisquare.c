@@ -604,14 +604,20 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	for(sample = 0; sample < length; sample++) {
 		double *data = &((double *) GST_BUFFER_DATA(buf))[numchannels * sample];
 		const double *orthodata = &((const double *) GST_BUFFER_DATA(orthosnrbuf))[numorthochannels * sample];
-		for(channel = 0; channel < numchannels; channel++) {
-			double snr = data[channel];
+		for(channel = 0; channel < numchannels; channel+=2) {
+			double snr1 = data[channel];
+                        double snr2 = data[channel+1];
+			double snr = sqrt(snr1*snr1+snr2*snr2);
+			double arg = atan2(snr2, snr1);
 			data[channel] = 0;
+			
 			for(ortho_channel = 0; ortho_channel < dof; ortho_channel++) {
-				double mixing_coefficient = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel);
-				data[channel] += pow((snr * mixing_coefficient - orthodata[ortho_channel]) * mixing_coefficient, 2.0);
+				double mixing_coefficient1 = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel);
+				double mixing_coefficient2 = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel+1);
+				double mc = mixing_coefficient1*cos(arg)+mixing_coefficient1*sin(arg);
+				data[channel] += pow( ( snr * mc - orthodata[ortho_channel] ), 2.0 );
 			}
-			data[channel] *= gsl_vector_get(&element->chifacs.vector, channel / 2);
+			data[channel+1] = data[channel];
 		}
 	}
 	g_mutex_unlock(element->coefficients_lock);
