@@ -701,7 +701,7 @@ static gboolean forward_event_func(GstPad * pad, GValue * ret, GstEvent * event)
 static gboolean forward_event(GstAdder * adder, GstEvent * event)
 {
 	GstIterator *it;
-	GValue vret;
+	GValue vret = {0};
 
 	GST_LOG_OBJECT(adder, "forwarding event %p (%s)", event, GST_EVENT_TYPE_NAME(event));
 
@@ -1169,6 +1169,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			 */
 
 			if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) && len) {
+				GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 				GST_LOG_OBJECT(adder, "channel %p: copying %d bytes from data %p", data, len, GST_BUFFER_DATA(inbuf));
 				memset(outbytes, 0, gap);
 				memcpy(outbytes + gap, GST_BUFFER_DATA(inbuf), len);
@@ -1186,6 +1187,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			 */
 
 			if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) && len) {
+				GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 				GST_LOG_OBJECT(adder, "channel %p: mixing %d bytes from data %p", data, len, GST_BUFFER_DATA(inbuf));
 				adder->func(outbytes + gap, GST_BUFFER_DATA(inbuf), len);
 				empty = FALSE;
