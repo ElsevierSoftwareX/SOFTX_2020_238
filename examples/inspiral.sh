@@ -32,7 +32,7 @@ FAKESINK="queue ! fakesink sync=false preroll-queue-len=1"
 
 SCOPE="queue ! lal_multiscope trace-duration=4.0 frame-interval=0.0625 average-interval=32.0 do-timestamp=false ! ffmpegcolorspace ! cairotimeoverlay ! autovideosink"
 
-PLAYBACK="adder ! gstlal-audioresample ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=5e-2 ! audioconvert ! queue max-size-time=3000000000 ! alsasink"
+PLAYBACK="adder ! audioresample ! audioconvert ! audio/x-raw-float, width=32 ! audioamplify amplification=5e-2 ! audioconvert ! queue max-size-time=3000000000 ! alsasink"
 
 INJECTIONS="lal_simulation \
 	xml-location=bns_injections.xml"
@@ -58,7 +58,7 @@ function templatebank() {
 		t-end=${TEND} \
 		t-total-duration=${TTOTALDURATION} \
 		snr-length=${SNRLENGTH} \
-	templatebank${SUFFIX}.sumofsquares ! gstlal-audioresample ! queue ! orthogonal_snr_sum_squares_adder. \
+	templatebank${SUFFIX}.sumofsquares ! audioresample ! queue ! orthogonal_snr_sum_squares_adder. \
 	lal_gate \
 		name=snr_gate${SUFFIX} \
 		threshold=${SUMSQUARESTHRESHOLD} \
@@ -68,12 +68,12 @@ function templatebank() {
 		name=mixer${SUFFIX} \
 	! tee \
 		name=snr${SUFFIX} \
-	! gstlal-audioresample quality=0 ! queue ! snradder. \
+	! audioresample quality=0 ! queue ! snradder. \
 	templatebank${SUFFIX}.matrix ! tee name=matrix${SUFFIX} ! queue ! mixer${SUFFIX}.matrix \
 	snr_gate${SUFFIX}.src ! mixer${SUFFIX}.sink \
 	lal_chisquare \
 		name=chisquare${SUFFIX} \
-	! gstlal-audioresample quality=0 ! queue ! chisquareadder. \
+	! audioresample quality=0 ! queue ! chisquareadder. \
 	matrix${SUFFIX}. ! queue ! chisquare${SUFFIX}.matrix \
 	templatebank${SUFFIX}.chifacs ! queue ! chisquare${SUFFIX}.chifacs \
 	orthogonalsnr${SUFFIX}. ! queue ! chisquare${SUFFIX}.orthosnr \
@@ -100,40 +100,37 @@ gst-launch --gst-debug-level=2 \
 	! progressreport \
 		name=progress_src \
 	! ${INJECTIONS} \
-	! gstlal-audioresample ! audio/x-raw-float, rate=4096 \
+	! audioresample ! audio/x-raw-float, rate=2048 \
 	! ${WHITEN} \
-	! tee name=hoft_4096 \
-	hoft_4096. ! gstlal-audioresample ! audio/x-raw-float, rate=2048 ! tee name=hoft_2048 \
-	hoft_4096. ! gstlal-audioresample ! audio/x-raw-float, rate=512 ! tee name=hoft_512 \
-	hoft_4096. ! gstlal-audioresample ! audio/x-raw-float, rate=256 ! tee name=hoft_256 \
-	hoft_4096. ! gstlal-audioresample ! audio/x-raw-float, rate=128 ! tee name=hoft_128 \
+	! tee name=hoft_2048 \
+	hoft_2048. ! audioresample ! audio/x-raw-float, rate=512 ! tee name=hoft_512 \
+	hoft_2048. ! audioresample ! audio/x-raw-float, rate=256 ! tee name=hoft_256 \
+	hoft_2048. ! audioresample ! audio/x-raw-float, rate=128 ! tee name=hoft_128 \
 	lal_adder \
 		name=orthogonal_snr_sum_squares_adder \
 		sync=true \
-	! audio/x-raw-float, rate=4096 \
+	! audio/x-raw-float, rate=2048 \
 	! tee name=orthogonal_snr_sum_squares \
 	! progressreport name=progress_sumsquares \
 	! ${NXYDUMP}=sumsquares.txt \
 	lal_adder \
 		name=snradder \
 		sync=true \
-	! audio/x-raw-float, rate=4096 \
+	! audio/x-raw-float, rate=2048 \
 	! tee name=snr \
 	! progressreport name=progress_snr \
 	! ${NXYDUMP}=snr.txt \
 	lal_adder \
 		name=chisquareadder \
 		sync=true \
-	! audio/x-raw-float, rate=4096 \
+	! audio/x-raw-float, rate=2048 \
 	! tee name=chisquare \
 	! progressreport name=progress_chisquare \
 	! ${NXYDUMP}=chisquare.txt \
-	hoft_4096. ! queue max-size-time=50000000000 ! $(templatebank 0 0.0 0.25 45.25 $((4096*1))) \
-	hoft_2048. ! queue max-size-time=50000000000 ! $(templatebank 1 0.25 1.25 45.25 $((2048*1))) \
-	hoft_512. ! queue max-size-time=50000000000 ! $(templatebank 2 1.25 5.25 45.25 $((512*1))) \
-	hoft_256. ! queue max-size-time=50000000000 ! $(templatebank 3 5.25 13.25 45.25 $((256*1))) \
-	hoft_128. ! queue max-size-time=50000000000 ! $(templatebank 4 13.25 29.25 45.25 $((128*1))) \
-	hoft_128. ! queue max-size-time=50000000000 ! $(templatebank 5 29.25 45.25 45.25 $((128*1))) \
+	hoft_2048. ! queue max-size-time=50000000000 ! $(templatebank 1 0.0 1.0 29.0 $((2048*1))) \
+	hoft_512. ! queue max-size-time=50000000000 ! $(templatebank 2 1.0 5.0 29.0 $((512*1))) \
+	hoft_256. ! queue max-size-time=50000000000 ! $(templatebank 3 5.0 13.0 29.0 $((256*1))) \
+	hoft_128. ! queue max-size-time=50000000000 ! $(templatebank 4 13.0 29.0 29.0 $((128*1))) \
 	lal_triggergen \
 		name=triggergen \
 		bank-filename=${TEMPLATEBANK} \
