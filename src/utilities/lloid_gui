@@ -294,20 +294,18 @@ class LLOID(object):
                         self.tee[rate].link(queue)
 			bank, orthotee, matrixtee = self.generate_template_bank(i, start, end, dur, blocksize, src=queue)
 
+			#FIXME why do I have to link template bank to resampler befor queue?
 			queue = self.generate_queue(src=None)
 			resampler = self.generate_resampler(rsrc=None)
-
-                	#resampler = gst.element_factory_make("audioresample")
-	                #self.pipeline.add(resampler)
 	                self.templatebank[i].link_pads("sumofsquares", resampler, "sink")
-        	        #queue = gst.element_factory_make("queue")
-                	#self.pipeline.add(queue)
                 	resampler.link(queue)
                 	queue.link(sumsqadder)
 
-	                queue = gst.element_factory_make("queue")
-        	        self.pipeline.add(queue)
-                	sumsqtee.link(queue)
+			queue = self.generate_queue(src=sumsqtee)
+
+	                #queue = gst.element_factory_make("queue")
+        	        #self.pipeline.add(queue)
+                	#sumsqtee.link(queue)
 	                self.gate[i] = gst.element_factory_make("lal_gate")
         	        self.pipeline.add(self.gate[i])
                 	queue.link_pads("src", self.gate[i], "control")
