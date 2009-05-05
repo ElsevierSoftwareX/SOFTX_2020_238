@@ -85,7 +85,7 @@ class TemplateBankStage(object):
 		# sum-of-squares adder through a resampler and queue
 		#
 
-		resampler = gst.element_factory_make("gstlal-audioresample")
+		resampler = gst.element_factory_make("audioresample")
 		pipeline.add(resampler)
 		self.templatebank.link_pads("sumofsquares", resampler, "sink")
 		queue = gst.element_factory_make("queue")
@@ -124,7 +124,7 @@ class TemplateBankStage(object):
 		snrtee = gst.element_factory_make("tee")
 		pipeline.add(snrtee)
 		mixer.link(snrtee)
-		self.snrresampler = gst.element_factory_make("gstlal-audioresample")
+		self.snrresampler = gst.element_factory_make("audioresample")
 		pipeline.add(self.snrresampler)
 		self.snrresampler.set_property("quality", 0)
 		snrtee.link(self.snrresampler)
@@ -157,7 +157,7 @@ class TemplateBankStage(object):
 		snrtee.link(queue)
 		queue.link_pads("src", chisquare, "snr")
 
-		self.chisqresampler = gst.element_factory_make("gstlal-audioresample")
+		self.chisqresampler = gst.element_factory_make("audioresample")
 		pipeline.add(self.chisqresampler)
 		self.chisqresampler.set_property("quality", 0)
 		chisquare.link(self.chisqresampler)
@@ -191,184 +191,58 @@ class TemplateBankStage(object):
 
 class LLOID(object):
 	def __init__(self, pipeline, injections = False):
-		#
+
+		# lets store the input in ourself 
+		self.pipeline = pipeline
+		self.injections = injections
+		self.head = None # stores the recent thing to link to
+                self.tee = {}
+		self.hoft = {}
+		self.bank_defs = [
+                        (2048,  0.00,  1.00, 29.00, 2048 * 1),
+                        (512,   1.00,  5.00, 29.00,  512 * 1),
+                        (256,   5.00, 13.00, 29.00,  256 * 1),
+                        (128,  13.00, 29.00, 29.00,  128 * 1),
+                ]
+		self.templatebank = [None] * len(self.bank_defs)
+		self.sample_rates = list(set([l[0] for l in self.bank_defs]))
+		self.sample_rates.sort(reverse=True) # get the sample rates in desc. order
+		self.base_rate = self.sample_rates[0]
+	
 		# frame source
-		#
+		self.generate_framesrc()
 
-		self.framesrc = gst.element_factory_make("lal_framesrc")
-		pipeline.add(self.framesrc)
-		self.framesrc.set_property("blocksize", 16384 * 8 * 16)
-		progress = gst.element_factory_make("progressreport", "progress_src")
-		pipeline.add(progress)
-		self.framesrc.link(progress)
-
-		#
 		# optional injections
-		#
+		self.generate_injections()
 
-		if injections:
-			self.simulation = gst.element_factory_make("lal_simulation")
-			pipeline.add(self.simulation)
-			progress.link(self.simulation)
-			head = self.simulation
-		else:
-			self.simulation = None
-			head = progress
+		# downsample to max template frequency, whiten and tee
+		self.generate_downsampled_stream(self.base_rate)
+		self.hoft[self.base_rate] = self.generate_whiten()
+		self.tee[self.base_rate] = self.generate_tee()
 
-		#
-		# downsample to 4096 Hz
-		#
-
-		resample = gst.element_factory_make("gstlal-audioresample")
-		pipeline.add(resample)
-		head.link(resample)
-		filter = gst.element_factory_make("capsfilter")
-		pipeline.add(filter)
-		filter.set_property("caps", gst.Caps("audio/x-raw-float, rate=4096"))
-		resample.link(filter)
-
-		#
-		# whiten
-		#
-
-		self.whiten = gst.element_factory_make("lal_whiten")
-		pipeline.add(self.whiten)
-		self.whiten.set_property("psd-mode", 1)
-		self.whiten.set_property("zero-pad", 4)
-		self.whiten.set_property("fft-length", 16)
-		self.whiten.set_property("average-samples", 64)
-		filter.link(self.whiten)
-
-		#
-		# tee off downsamplers from the whitened 4096 Hz stream
-		#
-
-		hoft_4096 = gst.element_factory_make("tee")
-		pipeline.add(hoft_4096)
-		self.whiten.link(hoft_4096)
-
-		resample = gst.element_factory_make("gstlal-audioresample")
-		pipeline.add(resample)
-		hoft_4096.link(resample)
-		filter = gst.element_factory_make("capsfilter")
-		pipeline.add(filter)
-		filter.set_property("caps", gst.Caps("audio/x-raw-float, rate=2048"))
-		resample.link(filter)
-		hoft_2048 = gst.element_factory_make("tee")
-		pipeline.add(hoft_2048)
-		filter.link(hoft_2048)
-
-		resample = gst.element_factory_make("gstlal-audioresample")
-		pipeline.add(resample)
-		hoft_4096.link(resample)
-		filter = gst.element_factory_make("capsfilter")
-		pipeline.add(filter)
-		filter.set_property("caps", gst.Caps("audio/x-raw-float, rate=512"))
-		resample.link(filter)
-		hoft_512 = gst.element_factory_make("tee")
-		pipeline.add(hoft_512)
-		filter.link(hoft_512)
-
-		resample = gst.element_factory_make("gstlal-audioresample")
-		pipeline.add(resample)
-		hoft_4096.link(resample)
-		filter = gst.element_factory_make("capsfilter")
-		pipeline.add(filter)
-		filter.set_property("caps", gst.Caps("audio/x-raw-float, rate=256"))
-		resample.link(filter)
-		hoft_256 = gst.element_factory_make("tee")
-		pipeline.add(hoft_256)
-		filter.link(hoft_256)
-
-		resample = gst.element_factory_make("gstlal-audioresample")
-		pipeline.add(resample)
-		hoft_4096.link(resample)
-		filter = gst.element_factory_make("capsfilter")
-		pipeline.add(filter)
-		filter.set_property("caps", gst.Caps("audio/x-raw-float, rate=128"))
-		resample.link(filter)
-		hoft_128 = gst.element_factory_make("tee")
-		pipeline.add(hoft_128)
-		filter.link(hoft_128)
-
-		#
+		# downsampled streams, don't need the first one, it was a special case
+                for r in self.sample_rates[1:]:	
+                	tmp, self.hoft[r] = self.generate_downsampled_stream( r, src=self.hoft[self.base_rate] )
+			self.tee[r] = self.generate_tee( src=self.hoft[r] )	
+  
 		# sum-of-squares adder
-		#
+		sumsqadder, filter = self.generate_adder(self.base_rate, src=[])
 
-		sumsqadder = gst.element_factory_make("lal_adder")
-		pipeline.add(sumsqadder)
-		sumsqadder.set_property("sync", True)
-		filter = gst.element_factory_make("capsfilter")
-		pipeline.add(filter)
-		filter.set_property("caps", gst.Caps("audio/x-raw-float, rate=4096"))
-		sumsqadder.link(filter)
-		sumsqtee = gst.element_factory_make("tee")
-		pipeline.add(sumsqtee)
+		sumsqtee = self.generate_tee(src=None)
 
-		#
 		# template bank blocks
-		#
+		self.generate_banks(sumsqadder, sumsqtee)
 
-		self.templatebank = [None] * 6
-		instructions = [
-			(hoft_4096,  0.00,  0.25, 45.25, 4096 * 1),
-			(hoft_2048,  0.25,  1.25, 45.25, 2048 * 1),
-			( hoft_512,  1.25,  5.25, 45.25,  512 * 1),
-			( hoft_256,  5.25, 13.25, 45.25,  256 * 1),
-			( hoft_128, 13.25, 29.25, 45.25,  128 * 1),
-			( hoft_128, 29.25, 45.25, 45.25,  128 * 1)
-		]
-
-		for i, (tee, start, end, total_duration, blocksize) in enumerate(instructions):
-			queue = gst.element_factory_make("queue")
-			pipeline.add(queue)
-			queue.set_property("max-size-time", 50000000000)
-			tee.link(queue)
-			self.templatebank[i] = TemplateBankStage(pipeline, sumsqadder, sumsqtee)
-			queue.link(self.templatebank[i].get_templatebank_element())
-			self.templatebank[i].set_template_slice(start, end, total_duration)
-			self.templatebank[i].set_preferred_block_size(blocksize)
-
-		#
 		# snr adder, and chisquare adder
-		#
+		snradder, snr_out = self.generate_adder(self.base_rate, src=[])
+		snrprogress = self.generate_progress("progress_snr")
 
-		snradder = gst.element_factory_make("lal_adder")
-		pipeline.add(snradder)
-		snradder.set_property("sync", True)
-		filter = gst.element_factory_make("capsfilter")
-		pipeline.add(filter)
-		filter.set_property("caps", gst.Caps("audio/x-raw-float, rate=4096"))
-		snradder.link(filter)
-		snrprogress = gst.element_factory_make("progressreport", "progress_snr")
-		pipeline.add(snrprogress)
-		filter.link(snrprogress)
+		chisqadder, chisq_out = self.generate_adder(self.base_rate, src=[])
+                chisqprogress = self.generate_progress("progress_chisquare")
 
-		chisqadder = gst.element_factory_make("lal_adder")
-		pipeline.add(chisqadder)
-		chisqadder.set_property("sync", True)
-		filter = gst.element_factory_make("capsfilter")
-		pipeline.add(filter)
-		filter.set_property("caps", gst.Caps("audio/x-raw-float, rate=4096"))
-		chisqadder.link(filter)
-		chisqprogress = gst.element_factory_make("progressreport", "progress_chisquare")
-		pipeline.add(chisqprogress)
-		filter.link(chisqprogress)
+		self.link_banks(snradder, chisqadder)
 
-		for templatebank in self.templatebank:
-			queue = gst.element_factory_make("queue")
-			pipeline.add(queue)
-			templatebank.get_snr_element().link(queue)
-			queue.link(snradder)
-
-			queue = gst.element_factory_make("queue")
-			pipeline.add(queue)
-			templatebank.get_chisquare_element().link(queue)
-			queue.link(chisqadder)
-
-		#
 		# XML writer
-		#
 
 		self.triggergen = gst.element_factory_make("lal_triggergen")
 		pipeline.add(self.triggergen)
@@ -388,6 +262,7 @@ class LLOID(object):
 		self.xmlwriter.set_property("sync", False)
 		self.xmlwriter.set_property("preroll-queue-len", 1)
 		self.triggergen.link(self.xmlwriter)
+ 
 
 	def set_frame_cache(self, filename):
 		self.framesrc.set_property("location", filename)
@@ -425,6 +300,128 @@ class LLOID(object):
 	def set_output(self, filename):
 		self.xmlwriter.set_property("location", filename)
 
+	def generate_downsampled_stream(self, rate, src = "head"):
+		if src == "head": src = self.head
+        	resample = gst.element_factory_make("audioresample")
+	        self.pipeline.add(resample)
+	        self.head.link(resample)
+	        filter = gst.element_factory_make("capsfilter")
+        	self.pipeline.add(filter)
+	        filter.set_property("caps", gst.Caps("audio/x-raw-float, rate="+str(rate)))
+        	resample.link(filter)
+		self.head = filter
+		return resample, filter
+
+	def generate_tee(self, src="head"):
+                if src == "head": src = self.head
+                tee = gst.element_factory_make("tee")
+                self.pipeline.add(tee)
+                if src:
+			src.link(tee)
+			self.head = tee
+		return tee
+
+	def generate_framesrc(self, block_size=16384 * 8 * 16):
+		# Note this should be the first element in the pipeline
+                self.framesrc = gst.element_factory_make("lal_framesrc")
+                self.pipeline.add(self.framesrc)
+                self.framesrc.set_property("blocksize", block_size)
+                self.head = gst.element_factory_make("progressreport", "progress_src")
+                self.pipeline.add(self.head)
+                self.framesrc.link(self.head)
+		return self.head
+
+	def generate_injections(self, src="head"):
+                if src == "head": src = self.head
+                if self.injections:
+                        self.simulation = gst.element_factory_make("lal_simulation")
+                        self.pipeline.add(self.simulation)
+                        src.link(self.simulation)
+                        self.head = self.simulation
+			return self.head
+                else:
+                        self.simulation = None # self.head stays the same
+			return self.head
+
+	def generate_whiten(self, psd_mode=1, zero_pad=4, fft_length=16, average_samples=64, src="head"):
+                if src == "head": src = self.head
+                self.whiten = gst.element_factory_make("lal_whiten")
+                self.pipeline.add(self.whiten)
+                self.whiten.set_property("psd-mode", psd_mode)
+                self.whiten.set_property("zero-pad", zero_pad)
+                self.whiten.set_property("fft-length", fft_length)
+                self.whiten.set_property("average-samples", average_samples)
+                src.link(self.whiten)
+		self.head = self.whiten
+		return self.head
+
+	def generate_adder(self, rate, src=[]):
+                adder = gst.element_factory_make("lal_adder")
+                self.pipeline.add(adder)
+                adder.set_property("sync", True)
+                filter = gst.element_factory_make("capsfilter")
+                self.pipeline.add(filter)
+                filter.set_property("caps", gst.Caps("audio/x-raw-float, rate="+str(rate)))
+                adder.link(filter)
+		self.head = filter
+		for s in src:
+			s.link(adder)
+		return adder, filter
+
+	def generate_progress(self, name, src="head"):
+                if src == "head": src = self.head
+		progress = gst.element_factory_make("progressreport", name)
+                self.pipeline.add(progress)
+                src.link(progress)
+		self.head = progress
+		return progress
+
+	def generate_template_bank(self, i, bank_filename, psd_filename, start, end, dur, blocksize, threshold, src="head"):
+                if src == "head": src = self.head
+                self.templatebank[i] = gst.element_factory_make("lal_templatebank")
+                self.pipeline.add(self.templatebank[i])
+		if src: src.link(self.templatebank[i])
+		orthogonalsnrtee = self.generate_tee(src=None)
+		matrixtee = self.generate_tee(src=None)
+                self.templatebank.link_pads("src", orthogonalsnrtee, "sink")
+                self.templatebank.link_pads("matrix", matrixtee, "sink")
+                self.templatebank[i].set_property("template-bank", bank_filename)
+                self.templatebank[i].set_property("reference-psd", filename)
+                self.templatebank[i].set_property("t-start", start)
+                self.templatebank[i].set_property("t-end", end)
+                self.templatebank[i].set_property("t-total-duration", dur)
+                self.templatebank[i].set_property("snr-length", blocksize)
+		return self.templatebank[i], orthogonalsnrtee, orthogonalsnrtee
+
+	def generate_gate(self):
+                self.gate.set_property("threshold", threshold)
+
+
+	def generate_banks(self, sumsqadder, sumsqtee):
+                for i, (rate, start, end, total_duration, blocksize) in enumerate(self.bank_defs):
+                        queue = gst.element_factory_make("queue")
+                        self.pipeline.add(queue)
+                        queue.set_property("max-size-time", int(end) + 1000000000)
+                        self.tee[rate].link(queue)
+                        self.templatebank[i] = TemplateBankStage(self.pipeline, sumsqadder, sumsqtee)
+                        queue.link(self.templatebank[i].get_templatebank_element())
+                        self.templatebank[i].set_template_slice(start, end, total_duration)
+                        self.templatebank[i].set_preferred_block_size(blocksize)
+
+
+	def link_banks(self, snradder, chisqadder):
+                for templatebank in self.templatebank:
+                        queue = gst.element_factory_make("queue")
+                        self.pipeline.add(queue)
+                        templatebank.get_snr_element().link(queue)
+                        queue.link(snradder)
+                        queue = gst.element_factory_make("queue")
+                        self.pipeline.add(queue)
+                        templatebank.get_chisquare_element().link(queue)
+                        queue.link(chisqadder)
+
+		
+
 
 #
 # =============================================================================
@@ -449,15 +446,15 @@ class GTK_Main:
 		window.show_all()
 
 		self.pipeline = gst.Pipeline("lloid")
-		lloid = LLOID(self.pipeline, injections = True)
+		lloid = LLOID(self.pipeline, injections = False)
 
 		lloid.set_frame_cache("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache")
 		lloid.set_channel("L1", "LSC-STRAIN")
 		#lloid.set_segment(874100000000000000, 874120000000000000)
 		lloid.set_segment(874106958000000000, 874107558000000000)
-		lloid.set_injection_list("bns_injections.xml")
-		lloid.set_reference_psd("reference_psd.txt")
-		lloid.set_templatebank("H1-TMPLTBANK_09_1.207-874000000-2048.xml")
+		#lloid.set_injection_list("/home/channa/cvs/lsware/gstlal/examples/bns_injections.xml")
+		lloid.set_reference_psd("/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt")
+		lloid.set_templatebank("/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml")
 		lloid.set_sumsquares_threshold(2.2)
 		lloid.set_snr_threshold(0.0)
 		lloid.set_output("output.xml")
