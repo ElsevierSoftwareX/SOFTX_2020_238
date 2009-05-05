@@ -180,11 +180,11 @@ class LLOID(object):
 
 	# Utility functions for elements and compound elements
 
-	def generate_resampler(self, rsrc = "head"):
-		if rsrc == "head": rsrc = self.head
+	def generate_resampler(self, src = "head"):
+		if src == "head": src = self.head
                 resample = gst.element_factory_make("audioresample")
                 self.pipeline.add(resample)
-                if rsrc: rsrc.link(resample)
+                if src: src.link(resample)
 		self.head = resample
 		return resample
 
@@ -199,7 +199,7 @@ class LLOID(object):
 
 	def resample_to_rate(self, rate, src="head"):
                 if src == "head": src = self.head
-		resample = self.generate_resampler(rsrc=src)
+		resample = self.generate_resampler(src=src)
 		filter = self.generate_caps("audio/x-raw-float, rate="+str(rate), csrc=resample)
 		return resample, filter
 
@@ -286,6 +286,30 @@ class LLOID(object):
                 self.head = queue
                 return queue
 
+	def generate_gate(self, src="head"):
+                if src == "head": src = self.head
+                gate = gst.element_factory_make("lal_gate")
+                self.pipeline.add(gate)
+                if src: src.link(gate)
+                self.head = gate
+                return gate
+
+	def generate_mixer(self, src="head"):
+                if src == "head": src = self.head
+                mixer = gst.element_factory_make("lal_matrixmixer")
+                self.pipeline.add(mixer)
+                if src: src.link(mixer)
+                self.head = mixer
+                return mixer
+
+	def generate_chisq(self, src="head"):
+                if src == "head": src = self.head
+                chisq = gst.element_factory_make("lal_chisquare")
+                self.pipeline.add(chisq)
+                if src: src.link(chisq)
+                self.head = chisq
+                return chisq
+
         def generate_banks(self, sumsqadder, sumsqtee, snradder, chisqadder):
                 for i, (rate, start, end, dur, blocksize) in enumerate(self.bank_defs):
                         queue = gst.element_factory_make("queue")
@@ -294,76 +318,82 @@ class LLOID(object):
                         self.tee[rate].link(queue)
 			bank, orthotee, matrixtee = self.generate_template_bank(i, start, end, dur, blocksize, src=queue)
 
-			#FIXME why do I have to link template bank to resampler befor queue?
+			# FIXME why do I have to link template bank to resampler befor queue?
 			queue = self.generate_queue(src=None)
-			resampler = self.generate_resampler(rsrc=None)
+			resampler = self.generate_resampler(src=None)
 	                self.templatebank[i].link_pads("sumofsquares", resampler, "sink")
                 	resampler.link(queue)
                 	queue.link(sumsqadder)
 
 			queue = self.generate_queue(src=sumsqtee)
-
-	                #queue = gst.element_factory_make("queue")
-        	        #self.pipeline.add(queue)
-                	#sumsqtee.link(queue)
-	                self.gate[i] = gst.element_factory_make("lal_gate")
-        	        self.pipeline.add(self.gate[i])
+			self.gate[i] = self.generate_gate(src=None)
                 	queue.link_pads("src", self.gate[i], "control")
-	                queue = gst.element_factory_make("queue")
-        	        self.pipeline.add(queue)
-                	orthotee.link(queue)
+			
+			queue = self.generate_queue(src=orthotee)
 	                queue.link_pads("src", self.gate[i], "sink")
 
-	                mixer = gst.element_factory_make("lal_matrixmixer")
-        	        self.pipeline.add(mixer)
+			queue = self.generate_queue(src=matrixtee)
+			mixer = self.generate_mixer(src=None)
                 	self.gate[i].link_pads("src", mixer, "sink")
-	                queue = gst.element_factory_make("queue")
-        	        self.pipeline.add(queue)
-                	matrixtee.link(queue)
 	                queue.link_pads("src", mixer, "matrix")
-        	        snrtee = gst.element_factory_make("tee")
-                	self.pipeline.add(snrtee)
-	                mixer.link(snrtee)
-        	        self.snrresampler[i] = gst.element_factory_make("audioresample")
-                	self.pipeline.add(self.snrresampler[i])
-	                self.snrresampler[i].set_property("quality", 0)
-        	        snrtee.link(self.snrresampler[i])
-
-		        chisquare = gst.element_factory_make("lal_chisquare")
-                	self.pipeline.add(chisquare)
-
-	                queue = gst.element_factory_make("queue")
-        	        self.pipeline.add(queue)
-                	matrixtee.link(queue)
-	                queue.link_pads("src", chisquare, "matrix")
 	
-        	        queue = gst.element_factory_make("queue")
-                	self.pipeline.add(queue)
+			snrtee = self.generate_tee(src=mixer)
+        	        #snrtee = gst.element_factory_make("tee")
+                	#self.pipeline.add(snrtee)
+	                #mixer.link(snrtee)
+			self.snrresampler[i] = self.generate_resampler(src=snrtee)
+        	        #self.snrresampler[i] = gst.element_factory_make("audioresample")
+                	#self.pipeline.add(self.snrresampler[i])
+	                self.snrresampler[i].set_property("quality", 0)
+        	        #snrtee.link(self.snrresampler[i])
+
+			chisquare = self.generate_chisq(src=None)
+		        #chisquare = gst.element_factory_make("lal_chisquare")
+                	#self.pipeline.add(chisquare)
+
+			queue = self.generate_queue(src=matrixtee)
+	                #queue = gst.element_factory_make("queue")
+        	        #self.pipeline.add(queue)
+                	#matrixtee.link(queue)
+	                queue.link_pads("src", chisquare, "matrix")
+
+			queue = self.generate_queue(src=None)	
+        	        #queue = gst.element_factory_make("queue")
+                	#self.pipeline.add(queue)
 	                self.templatebank[i].link_pads("chifacs", queue, "sink")
         	        queue.link_pads("src", chisquare, "chifacs")
 
-	                queue = gst.element_factory_make("queue")
-        	        self.pipeline.add(queue)
-                	orthotee.link(queue)
+			queue = self.generate_queue(src=orthotee)
+
+	                #queue = gst.element_factory_make("queue")
+        	        #self.pipeline.add(queue)
+                	#orthotee.link(queue)
 	                queue.link_pads("src", chisquare, "orthosnr")
 
-        	        queue = gst.element_factory_make("queue")
-                	self.pipeline.add(queue)
-	                snrtee.link(queue)
+			queue = self.generate_queue(src=snrtee)
+        	        #queue = gst.element_factory_make("queue")
+                	#self.pipeline.add(queue)
+	                #snrtee.link(queue)
         	        queue.link_pads("src", chisquare, "snr")
 
-	                self.chisqresampler[i] = gst.element_factory_make("audioresample")
-        	        self.pipeline.add(self.chisqresampler[i])
+			self.chisqresampler[i] = self.generate_resampler(src=chisquare)
+	                #self.chisqresampler[i] = gst.element_factory_make("audioresample")
+        	        #self.pipeline.add(self.chisqresampler[i])
                 	self.chisqresampler[i].set_property("quality", 0)
-	                chisquare.link(self.chisqresampler[i])
+	                #chisquare.link(self.chisqresampler[i])
 
-                        queue = gst.element_factory_make("queue")
-                        self.pipeline.add(queue)
-                        self.snrresampler[i].link(queue)
+			queue = self.generate_queue(src=self.snrresampler[i])
+
+                        #queue = gst.element_factory_make("queue")
+                        #self.pipeline.add(queue)
+                        #self.snrresampler[i].link(queue)
                         queue.link(snradder)
-                        queue = gst.element_factory_make("queue")
-                        self.pipeline.add(queue)
-                        self.chisqresampler[i].link(queue)
+
+			queue = self.generate_queue(src=self.chisqresampler[i])
+
+                        #queue = gst.element_factory_make("queue")
+                        #self.pipeline.add(queue)
+                        #self.chisqresampler[i].link(queue)
                         queue.link(chisqadder)
 
 
