@@ -94,13 +94,13 @@ class LLOID(object):
 		self.generate_injections()
 
 		# downsample to max template frequency, whiten and tee
-		self.generate_downsampled_stream(self.base_rate)
+		self.resample_to_rate(self.base_rate)
 		self.hoft[self.base_rate] = self.generate_whiten()
 		self.tee[self.base_rate] = self.generate_tee()
 
 		# downsampled streams, don't need the first one, it was a special case
                 for r in self.sample_rates[1:]:	
-                	tmp, self.hoft[r] = self.generate_downsampled_stream( r, src=self.hoft[self.base_rate] )
+                	tmp, self.hoft[r] = self.resample_to_rate( r, src=self.tee[self.base_rate] )
 			self.tee[r] = self.generate_tee( src=self.hoft[r] )	
   
 		# sum-of-squares adder
@@ -178,16 +178,29 @@ class LLOID(object):
 	def set_output(self, filename):
 		self.xmlwriter.set_property("location", filename)
 
-	def generate_downsampled_stream(self, rate, src = "head"):
-		if src == "head": src = self.head
-        	resample = gst.element_factory_make("audioresample")
-	        self.pipeline.add(resample)
-	        if src: self.head.link(resample)
-	        filter = gst.element_factory_make("capsfilter")
-        	self.pipeline.add(filter)
-	        filter.set_property("caps", gst.Caps("audio/x-raw-float, rate="+str(rate)))
-        	resample.link(filter)
+	# Utility functions for elements and compound elements
+
+	def generate_resampler(self, rsrc = "head"):
+		if rsrc == "head": rsrc = self.head
+                resample = gst.element_factory_make("audioresample")
+                self.pipeline.add(resample)
+                if rsrc: rsrc.link(resample)
+		self.head = resample
+		return resample
+
+	def generate_caps(self, caps, csrc = "head"):
+                if csrc == "head": csrc = self.head
+		filter = gst.element_factory_make("capsfilter")
+                self.pipeline.add(filter)
+                filter.set_property("caps", gst.Caps(caps))
+		if csrc: csrc.link(filter)
 		self.head = filter
+		return filter
+
+	def resample_to_rate(self, rate, src="head"):
+                if src == "head": src = self.head
+		resample = self.generate_resampler(rsrc=src)
+		filter = self.generate_caps("audio/x-raw-float, rate="+str(rate), csrc=resample)
 		return resample, filter
 
 	def generate_tee(self, src="head"):
@@ -237,11 +250,7 @@ class LLOID(object):
                 adder = gst.element_factory_make("lal_adder")
                 self.pipeline.add(adder)
                 adder.set_property("sync", True)
-                filter = gst.element_factory_make("capsfilter")
-                self.pipeline.add(filter)
-                filter.set_property("caps", gst.Caps("audio/x-raw-float, rate="+str(rate)))
-                adder.link(filter)
-		self.head = filter
+                filter = self.generate_caps("audio/x-raw-float, rate="+str(rate), csrc=adder)
 		for s in src:
 			s.link(adder)
 		return adder, filter
@@ -250,7 +259,7 @@ class LLOID(object):
                 if src == "head": src = self.head
 		progress = gst.element_factory_make("progressreport", name)
                 self.pipeline.add(progress)
-                src.link(progress)
+                if src: src.link(progress)
 		self.head = progress
 		return progress
 
@@ -269,21 +278,30 @@ class LLOID(object):
                 self.templatebank[i].set_property("snr-length", blocksize)
 		return self.templatebank[i], orthogonalsnrtee, matrixtee
 
+	def generate_queue(self, src="head"):
+                if src == "head": src = self.head
+                queue = gst.element_factory_make("queue")
+                self.pipeline.add(queue)
+                if src: src.link(queue)
+                self.head = queue
+                return queue
 
         def generate_banks(self, sumsqadder, sumsqtee, snradder, chisqadder):
                 for i, (rate, start, end, dur, blocksize) in enumerate(self.bank_defs):
-			print i
                         queue = gst.element_factory_make("queue")
                         self.pipeline.add(queue)
                         queue.set_property("max-size-time", int(end) + 1000000000)
                         self.tee[rate].link(queue)
 			bank, orthotee, matrixtee = self.generate_template_bank(i, start, end, dur, blocksize, src=queue)
 
-                	resampler = gst.element_factory_make("audioresample")
-	                self.pipeline.add(resampler)
+			queue = self.generate_queue(src=None)
+			resampler = self.generate_resampler(rsrc=None)
+
+                	#resampler = gst.element_factory_make("audioresample")
+	                #self.pipeline.add(resampler)
 	                self.templatebank[i].link_pads("sumofsquares", resampler, "sink")
-        	        queue = gst.element_factory_make("queue")
-                	self.pipeline.add(queue)
+        	        #queue = gst.element_factory_make("queue")
+                	#self.pipeline.add(queue)
                 	resampler.link(queue)
                 	queue.link(sumsqadder)
 
