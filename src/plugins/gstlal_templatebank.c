@@ -137,6 +137,8 @@ static void lal_convolve(const GSTLALTemplateBank *element, COMPLEX16Vector *a, 
                 a->data[j].re = re * norm;
 		a->data[j].im = im * norm;
 	}
+	a->data[0].im = 0;/*DC to zero*/
+	a->data[a->length-1].im = 0;/*Nyquist to zero*/ 
 	returncode = XLALREAL8ReverseFFT( &outvec, a, element->revplan);
 	if (returncode ) fprintf(stderr, "lal_convolve() failed %d\n",returncode);
 }
@@ -402,7 +404,6 @@ static GstFlowReturn push_mixer_matrix(GstPad *pad, gsl_matrix *matrix, GstClock
 	GstCaps *caps;
 	gboolean success;
 	GstFlowReturn result = GST_FLOW_OK;
-
 	/*
 	 * Negotiate the matrix size with the mixer.
 	 */
