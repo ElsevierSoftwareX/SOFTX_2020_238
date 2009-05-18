@@ -227,7 +227,7 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 	gint64 min_offset = G_MAXINT64;
 	gint64 min_offset_end = G_MAXINT64;
 	gboolean valid = FALSE;
-	GSList *collectdatalist;
+	GSList *collectdatalist = NULL;
 
 	/*
 	 * safety

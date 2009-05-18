@@ -208,7 +208,9 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 {
 	GstAdder *adder = GST_ADDER(GST_PAD_PARENT(pad));
-	GstCaps *result, *peercaps, *sinkcaps;
+	GstCaps *result = NULL;
+	GstCaps *peercaps = NULL;
+	GstCaps *sinkcaps = NULL;
 
 	GST_OBJECT_LOCK(adder);
 
@@ -259,8 +261,8 @@ static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 {
 	GstAdder *adder = GST_ADDER(GST_PAD_PARENT(pad));
-	GList *padlist;
-	GstStructure *structure;
+	GList *padlist = NULL;
+	GstStructure *structure = NULL;
 	const char *media_type;
 	gint width;
 	gint channels;
@@ -423,7 +425,7 @@ static GstClockTime output_timestamp_from_offset(const GstAdder *adder, guint64 
 
 static gboolean gst_adder_query_duration(GstAdder * adder, GstQuery * query)
 {
-	GstIterator *it;
+	GstIterator *it = NULL;
 	gint64 max = -1;
 	GstFormat format;
 	gboolean success = TRUE;
@@ -518,7 +520,7 @@ static gboolean gst_adder_query_duration(GstAdder * adder, GstQuery * query)
 
 static gboolean gst_adder_query_latency(GstAdder * adder, GstQuery * query)
 {
-	GstIterator *it;
+	GstIterator *it = NULL;
 	GstClockTime min = 0;
 	GstClockTime max = GST_CLOCK_TIME_NONE;
 	gboolean live = FALSE;
@@ -700,7 +702,7 @@ static gboolean forward_event_func(GstPad * pad, GValue * ret, GstEvent * event)
 
 static gboolean forward_event(GstAdder * adder, GstEvent * event)
 {
-	GstIterator *it;
+	GstIterator *it = NULL;
 	GValue vret = {0};
 
 	GST_LOG_OBJECT(adder, "forwarding event %p (%s)", event, GST_EVENT_TYPE_NAME(event));
@@ -862,9 +864,9 @@ static gboolean gst_adder_sink_event(GstPad * pad, GstEvent * event)
 static GstPad *gst_adder_request_new_pad(GstElement * element, GstPadTemplate * templ, const gchar * unused)
 {
 	GstAdder *adder = GST_ADDER(element);
-	gchar *name;
-	GstPad *newpad;
-	GstLALCollectData *data;
+	gchar *name = NULL;
+	GstPad *newpad = NULL;
+	GstLALCollectData *data = NULL;
 	gint padcount;
 
 	/*
@@ -1028,7 +1030,7 @@ static GstFlowReturn push_output_buffer(GstAdder *adder, GstBuffer *outbuf, gboo
 static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_data)
 {
 	GstAdder *adder = GST_ADDER(user_data);
-	GSList *collected;
+	GSList *collected = NULL;
 	guint64 earliest_input_offset, earliest_input_offset_end;
 	guint length;
 	GstBuffer *outbuf = NULL;
@@ -1051,11 +1053,12 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 	 */
 
 	if(adder->synchronous) {
+
 		/*
 		 * when doing synchronous adding, determine the offsets for
 		 * real.
 		 */
-
+		
 		if(!gstlal_collect_pads_get_earliest_offsets(adder->collect, &earliest_input_offset, &earliest_input_offset_end, adder->rate, adder->output_timestamp_at_zero)) {
 			GST_ERROR_OBJECT(adder, "cannot deduce input timestamp offset information");
 			return GST_FLOW_ERROR;
@@ -1080,6 +1083,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			return GST_FLOW_ERROR;
 		}
 	} else {
+
 		/*
 		 * when not doing synchronous adding use the element's
 		 * output offset counter and the number of bytes available.
@@ -1422,7 +1426,7 @@ static void gst_adder_class_init(gpointer klass, gpointer class_data)
 static void gst_adder_init(GTypeInstance * object, gpointer class)
 {
 	GstAdder *adder = GST_ADDER(object);
-	GstPadTemplate *template;
+	GstPadTemplate *template = NULL;
 
 	template = gst_static_pad_template_get(&gst_adder_src_template);
 	adder->srcpad = gst_pad_new_from_template(template, "src");
