@@ -139,20 +139,42 @@ class LLOID(object):
 		# whitened hoft	
 		hoft_tees = self.whitened_hoft_tees(simulation)	
 
+		dump = self.nxy_dump(874107086000000000, 874107286000000000, "hoft.txt")
+                hoft_tees["L1"][2048].link(dump)
+
 		# SVD filter output (this has 4 src pads!!! "src", "sumofsquares", "chifacs", "matrix")
 		orthosnrtee, matrixtee, chifacstee, sumofsquarestee = self.svd_filter_tees(hoft_tees)
+
+                dump = self.nxy_dump(874107086000000000, 874107286000000000, "sumsq.txt")
+                sumofsquarestee["L1"][0].link(dump)
 	
-		control_tee = self.control_tee(sumofsquarestee)
+		control_tee = self.control_tees(sumofsquarestee)
 
-		dump = self.nxy_dump(874106958000000000, 874107158000000000)
-		control_tee.link(dump)
+		#fake = self.fakesink()
+		sink = self.filesink("control.txt")
+		#dump = self.nxy_dump(874107086000000000, 874107286000000000, "control.txt")
+		#control_tee.link(dump)
+		control_tee.link(sink)
+		
 
+		#for k, v in matrixtee.items():
+		#	for l in [matrixtee[k], orthosnrtee[k], chifacstee[k]]:#, sumofsquarestee[k]]:
+		#		for elem in l:
+		#			fake = self.fakesink()
+		#			elem.link(fake)
+		#return 
 		gate_tee = self.gate_tees(orthosnrtee, control_tee)
 		reconstructed_snr_tee = self.reconstructed_snr_tees(gate_tee, matrixtee)
 		chisq_tee = self.chisquare_tees(orthosnrtee, matrixtee, reconstructed_snr_tee, chifacstee)
 
+		dump = self.nxy_dump(874107086000000000, 874107286000000000, "snr0.txt")
+                reconstructed_snr_tee["L1"][0].link(dump)
+
 		added_snr_tee = self.added_snr_tees(reconstructed_snr_tee)
 		added_chisq_tee = self.added_chisq_tees(chisq_tee)
+
+		dump = self.nxy_dump(874107086000000000, 874107286000000000, "addedsnr.txt")
+                added_snr_tee["L1"].link(dump)
 
 	
 		trigger_gen_tee = self.trigger_gen_tees(added_snr_tee, added_chisq_tee)
@@ -162,48 +184,6 @@ class LLOID(object):
 		return 
 
  
-
-	#def set_frame_cache(self, filename):
-	#	self.framesrc.set_property("location", filename)
-
-	#def set_channel(self, instrument, channel):
-	#	self.framesrc.set_property("instrument", instrument)
-	#	self.framesrc.set_property("channel-name", channel)
-
-	#def set_segment(self, startns, stopns):
-	#	for det in self.detectors.keys()
-	#		
-	#		self.framesrc.set_property("start-time-gps-ns", startns)
-	#		self.framesrc.set_property("stop-time-gps-ns", stopns)
-
-	#def set_injection_list(self, filename):
-	#	if self.simulation is None:
-	#		raise TypeError, "no injection node in pipeline"
-	#	self.simulation.set_property("xml-location", filename)
-
-	#def set_reference_psd(self, filename):
-	#	self.whiten.set_property("compensation-psd", filename)
-	#	for templatebank in self.templatebank:
-	#		templatebank.set_property("reference-psd", filename)
-
-	#def set_templatebank(self, filename):
-		#self.triggergen.set_property("bank-filename", filename)
-	#	for templatebank in self.templatebank:
-	#		templatebank.set_property("template-bank", filename)
-
-	#def set_sumsquares_threshold(self, threshold):
-	#	for gate in self.gate:
-	#		gate.set_property("threshold", threshold)
-
-
-	#def set_snr_threshold(self, threshold):
-	#	self.triggergen.set_property("snr-thresh", threshold)
-
-	#def set_output(self, filename):
-	#	self.xmlwriter.set_property("location", filename)
-
-	# Utility functions for elements and compound elements
-
 	def fakesink(self):
 		q = self.queue()
 		fake = gst.element_factory_make("fakesink")
@@ -211,12 +191,21 @@ class LLOID(object):
 		q.link(fake)
 		return q
 
-	def nxy_dump(self,start,end):
+	def filesink(self,fname):
+		filesink = gst.element_factory_make("filesink")
+		self.pipeline.add(filesink)
+		filesink.set_property("sync", False)
+		filesink.set_property("buffer-mode",2)
+		filesink.set_property("preroll-queue-len",1)
+		filesink.set_property("location",fname)
+		return filesink
+
+	def nxy_dump(self,start, end, fname="nxydump.txt"):
 		dump = gst.element_factory_make("lal_nxydump"); self.pipeline.add(dump)
 		dump.set_property("start-time", start)
 		dump.set_property("stop-time", end)
-		fake = self.fakesink()
-		dump.link(fake)
+		fsink = self.filesink(fname)
+		dump.link(fsink)
 		return dump
 		
 
@@ -404,7 +393,7 @@ class LLOID(object):
 		return self.chisq_tees
 
 
-	def control_tee(self, src, control_rate=32):
+	def control_tees(self, src, control_rate=2048):
 		adder = gst.element_factory_make("lal_adder")
                 self.pipeline.add(adder)
                 adder.set_property("sync", True)
@@ -412,10 +401,13 @@ class LLOID(object):
 			for j in range(len(src[det])):
 				qin, qout = self.resample_to_rate(control_rate)
 				src[det][j].link(qin)
-				qout.link_pads("src", adder, "sink"+str(j+ len(src[det]) * i))
-		tee = self.tee() 
-		adder.link(tee)
-		return tee
+				qout.link(adder)
+
+		self.control_tee = self.tee() 
+		queue = self.queue()
+		adder.link(queue)
+		queue.link(self.control_tee)
+		return self.control_tee
 
 	def added_snr_tees(self, reconstructed_snr_tee):
 		self.added_snr_tees = {}
@@ -511,19 +503,8 @@ class GTK_Main:
 		banks.add_bank(128, 13.0, 29.0)
 		detectors= DetectorData(874106958000000000,874107558000000000)
 		detectors.add_detector("L1", "/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", "/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml")
-		#detectors.set_segment(874106958000000000, 874107558000000000)
 		self.pipeline = gst.Pipeline("lloid")
 		lloid = LLOID(self.pipeline, detectors, banks, do_injections = False)
-		#lloid.set_frame_cache("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache")
-		#lloid.set_channel("L1", "LSC-STRAIN")
-		#lloid.set_segment(874100000000000000, 874120000000000000)
-		#lloid.set_segment(874106958000000000, 874107558000000000)
-		#lloid.set_injection_list("/home/channa/cvs/lsware/gstlal/examples/bns_injections.xml")
-		#lloid.set_reference_psd("/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt")
-		#lloid.set_templatebank("/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml")
-		#lloid.set_sumsquares_threshold(2.2)
-		#lloid.set_snr_threshold(0.0)
-		#lloid.set_output("output.xml")
 
 		bus = self.pipeline.get_bus()
 		bus.add_signal_watch()
