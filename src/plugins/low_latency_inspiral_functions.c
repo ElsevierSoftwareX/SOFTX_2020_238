@@ -145,29 +145,38 @@ static int create_template_from_sngl_inspiral(
   double norm;
   gsl_vector_view col;
   gsl_vector_view tmplt;
-  fprintf(stderr, "fsamp %d downsampfac %d t_end %e t_total_duration %e\n", fsamp, downsampfac,t_end,t_total_duration); 
+  /*fprintf(stderr, "fsamp %d downsampfac %d t_end %e t_total_duration %e\n", fsamp, downsampfac,t_end,t_total_duration); */
   SPAWaveform (bankRow, template_out->deltaT, fft_template);
 
   /*
    * Whiten the template.
    */
 
-  if(!XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd))
+  if(!XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd)) {
+    fprintf(stderr, "create_template_from_sngl_inspiral XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan) FAILED\n");
     return -1;
+    }
 
   /* compute the quadrature phases now we need a complex frequency series that
    * is twice as large.  We'll store the negative frequency components that'll
    * give the sine and cosine phase */
+  fft_template->data->data[0].im = 0;
+  fft_template->data->data[0].re = 0;
+  fft_template->data->data[fft_template->data->length].im = 0;
+
   for (i = 0; i < fft_template->data->length; i++)
     {
     /* conjugate times 2 */
     fft_template_full->data->data[fft_template->data->length - 1 - i].re = 2.0 * fft_template->data->data[i].re;
     fft_template_full->data->data[fft_template->data->length - 1 - i].im = -2.0 * fft_template->data->data[i].im;
     }
+  
   memset(&fft_template_full->data->data[fft_template->data->length], 0, (fft_template_full->data->length - fft_template->data->length) * sizeof(*fft_template_full->data->data));
 
-  if(XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan))
+  if(XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan)) {
+    fprintf(stderr, "create_template_from_sngl_inspiral XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan) FAILED\n");
     return -1;
+    }
 
   /*
    * Normalize the template.
@@ -199,14 +208,30 @@ static int create_template_from_sngl_inspiral(
    * U_colum by 2*/
   col = gsl_matrix_column(U,2*U_column);
   tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5)), 2*downsampfac, col.vector.size);
-  gsl_vector_memcpy(&col.vector, &tmplt.vector);
-  gsl_vector_scale(&col.vector, norm);
+  if (gsl_vector_memcpy(&col.vector, &tmplt.vector)) {
+    fprintf(stderr, "create_template_from_sngl_inspiral() gsl_vector_memcpy(&col.vector, &tmplt.vector) FAILED\n");
+    return -1;
+    }
+
+  if (gsl_vector_scale(&col.vector, norm)) {
+    fprintf(stderr, "create_template_from_sngl_inspiral() gsl_vector_scale(&col.vector, norm) FAILED\n"); 
+    return -1;
+    }
 
   /* Imaginary part */
   col = gsl_matrix_column(U,2*U_column + 1);
   tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5)) + 1, 2*downsampfac, col.vector.size);
-  gsl_vector_memcpy(&col.vector, &tmplt.vector);
-  gsl_vector_scale(&col.vector, norm);
+
+  if (gsl_vector_memcpy(&col.vector, &tmplt.vector)) {
+    fprintf(stderr, "create_template_from_sngl_inspiral() gsl_vector_memcpy(&col.vector, &tmplt.vector) FAILED\n");
+    return -1;
+    }
+
+  if (gsl_vector_scale(&col.vector, norm)) {
+    fprintf(stderr, "create_template_from_sngl_inspiral() gsl_vector_scale(&col.vector, norm) FAILED\n");
+    return -1;
+    }
+
 
   /*
    * Compute the \Chi^2 factor.
@@ -241,7 +266,7 @@ int compute_time_frequency_boundaries_from_bank(char * bank_name,
   double sampleRate = 0;
   double prev_time = 0;
   int veclength = 0;
-
+  
   if (verbose) fprintf(stderr, "Read %d templates from file %s\n",numtemps, bank_name);
 
   /* Compute the minimum and maximum masses as well as the minimum chirpmass 
@@ -348,6 +373,10 @@ int generate_bank_svd(
   REAL8FFTPlan *fwdplan;
   COMPLEX16FFTPlan *revplan;
   
+  if (numtemps <= 0) {
+    fprintf(stderr, "FAILED generate_bank_svd() numtemps <=0\n");
+    exit(1);
+    }
 
   if (verbose) fprintf(stderr,"read %d templates\n", numtemps);
   
@@ -359,19 +388,19 @@ int generate_bank_svd(
    * redundant */
   *chifacs = gsl_vector_calloc(numtemps);
 
-  fprintf(stderr,"U = %zd,%zd V = %zd,%zd S = %zd\n",(*U)->size1,(*U)->size2,(*V)->size1,(*V)->size2,(*S)->size);
+  /*fprintf(stderr,"U = %zd,%zd V = %zd,%zd S = %zd\n",(*U)->size1,(*U)->size2,(*V)->size1,(*V)->size2,(*S)->size);*/
 
   g_mutex_lock(gstlal_fftw_lock);
   fwdplan = XLALCreateForwardREAL8FFTPlan(full_numsamps, 0);
   if (!fwdplan)
     {
-    fprintf(stderr, "Generating the forward plan failed");
+    fprintf(stderr, "FAILED Generating the forward plan failed\n");
     exit(1);
     }
   revplan = XLALCreateReverseCOMPLEX16FFTPlan(full_numsamps, 0);
   if (!revplan)
     {
-    fprintf(stderr, "Generating the reverse plan failed");
+    fprintf(stderr, "FAILED Generating the reverse plan failed\n");
     exit(1);
     }
   g_mutex_unlock(gstlal_fftw_lock);
@@ -383,6 +412,13 @@ int generate_bank_svd(
   fft_template_full = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps);
   /* get the reference psd */
   psd = gstlal_get_reference_psd(reference_psd_filename, template_out->f0, 1.0/TEMPLATE_DURATION, fft_template->data->length);
+
+  if (!template_out || !fft_template || !fft_template_full || !psd){
+    fprintf(stderr, "FAILED Allocating template or reading psd failed\n");
+    exit(1);
+    }
+    
+
   if (verbose) fprintf(stderr, "template_out->data->length %d fft_template->data->length %d fft_template_full->data->length %d \n",template_out->data->length, fft_template->data->length, fft_template_full->data->length);
 
   /* create the templates in the bank */
@@ -398,7 +434,7 @@ int generate_bank_svd(
  
     if(create_template_from_sngl_inspiral(bankRow, *U, *chifacs, base_sample_rate, down_samp_fac,t_end, t_total_duration, j, template_out, fft_template, fft_template_full, fwdplan, revplan, psd) < 0)
       {
-      /* FIXME:  handle error */
+      exit(1);
       }
     if (verbose) fprintf(stderr, "template %zd M_chirp=%e\n",j, bankRow->chirpMass);
     }
@@ -410,8 +446,8 @@ int generate_bank_svd(
   /*if(gsl_linalg_SV_decomp_jacobi(*U, *V, *S))*/
   if(gsl_linalg_SV_decomp_mod(*U, work_space_matrix, *V, *S, work_space))
     {
-    fprintf(stderr,"could not do SVD \n");
-    return 1; 
+    fprintf(stderr,"FAILED could not do SVD \n");
+        exit(1); 
     }
 
   trim_matrix(U,V,S,tolerance);
@@ -419,8 +455,11 @@ int generate_bank_svd(
     for (j = 0; j < (*V)->size1; j++)
       gsl_matrix_set(*V,j,i,gsl_vector_get(*S,i)*gsl_matrix_get(*V,j,i));
 
-  not_gsl_matrix_transpose(U);
-  not_gsl_matrix_transpose(V);
+  if ( not_gsl_matrix_transpose(U) || not_gsl_matrix_transpose(V) ) {
+    fprintf(stderr, "FAILED matrix transpose failed\n");
+    exit(1);
+    }
+
   if(verbose) fprintf(stderr, "%.16g s -- %.16g s: %zd orthogonal templates, V is %zdx%zd, U is %zdx%zd\n\n", t_start, t_end, (*U)->size1, (*V)->size1, (*V)->size2, (*U)->size1, (*U)->size2);
 
   /* free gsl stuff */
@@ -449,16 +488,21 @@ int generate_bank_svd(
   }
 
 
-void not_gsl_matrix_transpose(gsl_matrix **m)
+int not_gsl_matrix_transpose(gsl_matrix **m)
 {
   gsl_matrix *new = gsl_matrix_calloc((*m)->size2, (*m)->size1);
   if(new)
     gsl_matrix_transpose_memcpy(new, *m);
+  else {
+    fprintf(stderr, "not_gsl_matrix_transpose() transpose failed to allocate memory\n");
+    return -1;
+    }
   gsl_matrix_free(*m);
   *m = new;
+  return 0;
 }
 
- int trim_matrix(gsl_matrix **U, gsl_matrix **V, gsl_vector **S, 
+int trim_matrix(gsl_matrix **U, gsl_matrix **V, gsl_vector **S, 
                         double tolerance)
   {
   double sumb = 0;
@@ -508,7 +552,7 @@ void not_gsl_matrix_transpose(gsl_matrix **m)
   }
 
 /*FIXME this is terrible and needs to be made more efficient!!!!!!!*/
- int not_gsl_vector_chop(gsl_vector **V, size_t m)
+int not_gsl_vector_chop(gsl_vector **V, size_t m)
   {
 
   gsl_vector *tmp = (*V);
