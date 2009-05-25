@@ -69,5 +69,5 @@ int not_gsl_matrix_chop(gsl_matrix **M, size_t m, size_t n);
 
 int not_gsl_vector_chop(gsl_vector **V, size_t m);
 
-void not_gsl_matrix_transpose(gsl_matrix **m);
+int not_gsl_matrix_transpose(gsl_matrix **m);
 
