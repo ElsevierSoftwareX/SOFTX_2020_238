@@ -45,19 +45,19 @@ import gst
 #
 
 
-def fakesrc(lloid):
+def fakesrc(lloid, wave, vol=1e-20):
         fakesrc = gst.element_factory_make("audiotestsrc")
         fakesrc.set_property("timestamp-offset", 874106958000000000)
         fakesrc.set_property("samplesperbuffer", 16384)
-        fakesrc.set_property("num-buffers", 10000)
-        fakesrc.set_property("wave", 5)
-        fakesrc.set_property("volume", 1e-20)
+        fakesrc.set_property("num-buffers", 1)
+        fakesrc.set_property("wave", wave)
+        fakesrc.set_property("volume", vol)
         lloid.pipeline.add(fakesrc)
         filter = gst.element_factory_make("capsfilter")
         #filter.set_property("caps", gst.Caps("audio/x-raw-float, width=64, rate=16384, instrument=L1, channel_name=LSC-STRAIN, units=strain"))
         lloid.pipeline.add(filter)
         fakesrc.link(filter)
-        lloid.head = filter
+        return filter
 
 
 def playback(pipeline):
@@ -132,6 +132,20 @@ class LLOID(object):
 
 		# frame source
 		report = self.framesrcs()
+		#fake = fakesrc(self, 3, 0.5)
+	        #adder = gst.element_factory_make("lal_adder"); self.pipeline.add(adder)
+		#q = self.queue()
+		#fake.link(q)
+		#report["L1"].link(q)
+		#q.link_pads("src", adder, "sink0")
+		#dump = self.nxy_dump(874106958000000000,874107558000000000, "control.txt")
+		#sink = self.filesink("control.txt")
+		#adder.link_pads("sink0", dump, "src")
+		#fake.link(sink)
+                #adder.set_property("sync", True)
+
+
+		#return
 
 		# optional injections
 		simulation = self.injections(report)
@@ -139,22 +153,33 @@ class LLOID(object):
 		# whitened hoft	
 		hoft_tees = self.whitened_hoft_tees(simulation)	
 
-		dump = self.nxy_dump(874107086000000000, 874107286000000000, "hoft.txt")
-                hoft_tees["L1"][2048].link(dump)
+		#dump = self.nxy_dump(874106958000000000,874107558000000000, "hoft.txt")
+                #hoft_tees["L1"][2048].link(dump)
 
 		# SVD filter output (this has 4 src pads!!! "src", "sumofsquares", "chifacs", "matrix")
 		orthosnrtee, matrixtee, chifacstee, sumofsquarestee = self.svd_filter_tees(hoft_tees)
 
-                dump = self.nxy_dump(874107086000000000, 874107286000000000, "sumsq.txt")
-                sumofsquarestee["L1"][0].link(dump)
+		for det in sumofsquarestee.keys():
+			for i, bank in enumerate(sumofsquarestee[det]):
+				dump = self.nxy_dump(874106958000000000,874107558000000000, "sumsq"+det+str(i)+".txt")
+		                bank.link(dump)
+
+                #dump = self.nxy_dump(874106958000000000,874107558000000000, "sumsq.txt")
+                #sumofsquarestee["L1"][0].link(dump)
 	
 		control_tee = self.control_tees(sumofsquarestee)
 
 		#fake = self.fakesink()
-		sink = self.filesink("control.txt")
-		#dump = self.nxy_dump(874107086000000000, 874107286000000000, "control.txt")
-		#control_tee.link(dump)
-		control_tee.link(sink)
+		#sink = self.filesink("control.txt")
+		dump = self.nxy_dump(874107086000000000, 874107286000000000, "control.txt")
+		control_tee.link(dump)
+
+                #control_tee2 = self.control_tees(orthosnrtee)
+
+		#dump = self.nxy_dump(874107086000000000, 874107286000000000, "control2.txt")
+                #control_tee2.link(dump)
+
+		#control_tee.link(sink)
 		
 
 		#for k, v in matrixtee.items():
@@ -393,7 +418,7 @@ class LLOID(object):
 		return self.chisq_tees
 
 
-	def control_tees(self, src, control_rate=2048):
+	def control_tees(self, src, control_rate=32):
 		adder = gst.element_factory_make("lal_adder")
                 self.pipeline.add(adder)
                 adder.set_property("sync", True)
@@ -402,6 +427,9 @@ class LLOID(object):
 				qin, qout = self.resample_to_rate(control_rate)
 				src[det][j].link(qin)
 				qout.link(adder)
+				#q = self.queue()
+				#src[det][j].link(q)
+				#q.link(adder)
 
 		self.control_tee = self.tee() 
 		queue = self.queue()
