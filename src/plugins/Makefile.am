@@ -40,5 +40,5 @@ test_program_LDADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS}
 
 noinst_HEADERS = gstlal.h
 
-SUBDIRS = speexresample
-DIST_SUBDIRS = speexresample
+#SUBDIRS = speexresample
+#DIST_SUBDIRS = speexresample
