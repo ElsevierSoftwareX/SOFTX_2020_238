@@ -162,7 +162,7 @@ static int create_template_from_sngl_inspiral(
    * give the sine and cosine phase */
   fft_template->data->data[0].im = 0;
   fft_template->data->data[0].re = 0;
-  fft_template->data->data[fft_template->data->length].im = 0;
+  fft_template->data->data[fft_template->data->length-1].im = 0;
 
   for (i = 0; i < fft_template->data->length; i++)
     {
