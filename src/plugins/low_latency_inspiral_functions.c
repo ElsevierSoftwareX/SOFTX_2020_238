@@ -122,6 +122,8 @@ static void quadrupole_template(double M, double duration,
   }
 
 
+
+
 static int create_template_from_sngl_inspiral(
                        InspiralTemplate *bankRow,
                        gsl_matrix *U, 
@@ -147,7 +149,7 @@ static int create_template_from_sngl_inspiral(
   gsl_vector_view tmplt;
   /*fprintf(stderr, "fsamp %d downsampfac %d t_end %e t_total_duration %e\n", fsamp, downsampfac,t_end,t_total_duration); */
   SPAWaveform (bankRow, template_out->deltaT, fft_template);
-
+ 
   /*
    * Whiten the template.
    */
@@ -156,7 +158,7 @@ static int create_template_from_sngl_inspiral(
     fprintf(stderr, "create_template_from_sngl_inspiral XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan) FAILED\n");
     return -1;
     }
-
+  
   /* compute the quadrature phases now we need a complex frequency series that
    * is twice as large.  We'll store the negative frequency components that'll
    * give the sine and cosine phase */
@@ -170,7 +172,8 @@ static int create_template_from_sngl_inspiral(
     fft_template_full->data->data[fft_template->data->length - 1 - i].re = 2.0 * fft_template->data->data[i].re;
     fft_template_full->data->data[fft_template->data->length - 1 - i].im = -2.0 * fft_template->data->data[i].im;
     }
-  
+
+ 
   memset(&fft_template_full->data->data[fft_template->data->length], 0, (fft_template_full->data->length - fft_template->data->length) * sizeof(*fft_template_full->data->data));
 
   if(XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan)) {
@@ -198,6 +201,7 @@ static int create_template_from_sngl_inspiral(
    */
 
   norm = sqrt(2 * downsampfac / XLALCOMPLEX16SequenceSumSquares(template_out->data, template_out->data->length - t_total_length, t_total_length));
+	
 
   /*
    * Extract a piece of the template.
@@ -217,6 +221,7 @@ static int create_template_from_sngl_inspiral(
     fprintf(stderr, "create_template_from_sngl_inspiral() gsl_vector_scale(&col.vector, norm) FAILED\n"); 
     return -1;
     }
+
 
   /* Imaginary part */
   col = gsl_matrix_column(U,2*U_column + 1);
@@ -625,7 +630,7 @@ static int SPAWaveform (
   tmplt->order = tmplt->order;
 
   /* zero output */
-  memset( expPsi, 0, signal->data->length * sizeof(COMPLEX8) );
+  memset( expPsi, 0, signal->data->length * sizeof(COMPLEX16) );
 
   /* parameters */
   deltaF = signal->deltaF;
