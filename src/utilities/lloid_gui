@@ -78,18 +78,18 @@ def playback(pipeline):
 
 	return adder
 
-class Bank(object):
-	def __init__(self, rate, start, end, length, blocksize = None):
-		self.filt_length = length
-		self.rate = rate
-		self.start = start
-		self.end = end
-		if blocksize is not None:
-			self.blocksize = blocksize
-		else:
-			self.blocksize = rate
-
 class Banks(list):
+	class Bank(object):
+		def __init__(self, rate, start, end, length, blocksize = None):
+			self.filt_length = length
+			self.rate = rate
+			self.start = start
+			self.end = end
+			if blocksize is not None:
+				self.blocksize = blocksize
+			else:
+				self.blocksize = rate
+
 	def get_rates(self):
 		return tuple(sorted(set(bank.rate for bank in self), reverse = True))
 
@@ -513,10 +513,10 @@ class GTK_Main:
 		vbox.add(self.button)
 		window.show_all()
 		banks = Banks([
-			Bank(2048, 0.0, 1.0, 29.0),
-			Bank(512, 1.0, 5.0, 29.0),
-			Bank(256, 5.0, 13.0, 29.0),
-			Bank(128, 13.0, 29.0, 29.0)
+			Banks.Bank(2048, 0.0, 1.0, 29.0),
+			Banks.Bank(512, 1.0, 5.0, 29.0),
+			Banks.Bank(256, 5.0, 13.0, 29.0),
+			Banks.Bank(128, 13.0, 29.0, 29.0)
 		])
 		detectors= DetectorData(874106958000000000, 874107558000000000)
 		detectors.add_detector("L1", "/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", "/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml")
