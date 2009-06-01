@@ -725,7 +725,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
-		{unsigned i; double m; for(i = m = 0; i < tilde_segment->data->length; m += XLALCOMPLEX16Abs2(tilde_segment->data->data[i++])); fprintf(stderr, "var (fd) = %.16g\n", m / tilde_segment->data->length);}
 
 		/*
 		 * Compensate for the use of a mis-matched PSD for
@@ -878,7 +877,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		for(i = 0; i < element->tail->length; i++)
 			((double *) GST_BUFFER_DATA(srcbuf))[i] = (segment->data->data[zero_pad + i] + element->tail->data[i]) / sqrt(element->window->data->length / element->window->sumofsquares);
-		{unsigned i; double m; for(i = m = 0; i < element->tail->length; m += pow(((double *)GST_BUFFER_DATA(srcbuf))[i++], 2)); fprintf(stderr, "var (td) = %.16g\n", m / element->tail->length);}
 
 		/*
 		 * Push the buffer downstream
