@@ -94,7 +94,7 @@ class Banks(list):
 		return tuple(sorted(set(bank.rate for bank in self), reverse = True))
 
 	def base_rate(self):
-		return max(self.get_rates())    
+		return max(bank.rate for bank in self)
 
 class DetectorData(object):
 	def __init__(self, start, end, block_size = 16384 * 16 * 8):
@@ -110,9 +110,9 @@ class DetectorData(object):
 	def add_detector(self, instrument, frame_cache, channel, psd, template_bank_file_name, injection_file=None):
 		self.instrument[instrument] = instrument
 		self.frame_cache[instrument] = frame_cache
-                self.channel[instrument] = channel
-                self.psd[instrument] = psd
-                self.template_bank_file_name[instrument] = template_bank_file_name
+		self.channel[instrument] = channel
+		self.psd[instrument] = psd
+		self.template_bank_file_name[instrument] = template_bank_file_name
 		self.injection_file[instrument] = injection_file
 		
 class LLOID(object):
@@ -126,7 +126,7 @@ class LLOID(object):
 		# frame source
 		report = self.framesrcs()
 		#fake = fakesrc(self.pipeline, 3, 0.5)
-	        #adder = gst.element_factory_make("lal_adder"); self.pipeline.add(adder)
+		#adder = gst.element_factory_make("lal_adder"); self.pipeline.add(adder)
 		#q = self.queue()
 		#fake.link(q)
 		#report["L1"].link(q)
@@ -135,8 +135,7 @@ class LLOID(object):
 		#sink = self.filesink("control.txt")
 		#adder.link_pads("sink0", dump, "src")
 		#fake.link(sink)
-                #adder.set_property("sync", True)
-
+		#adder.set_property("sync", True)
 
 		#return
 
@@ -147,18 +146,18 @@ class LLOID(object):
 		hoft_tees = self.whitened_hoft_tees(simulation)	
 
 		#dump = self.nxy_dump(874106958000000000,874107558000000000, "hoft.txt")
-                #hoft_tees["L1"][2048].link(dump)
+		#hoft_tees["L1"][2048].link(dump)
 
 		# SVD filter output (this has 4 src pads!!! "src", "sumofsquares", "chifacs", "matrix")
 		orthosnrtee, matrixtee, chifacstee, sumofsquarestee = self.svd_filter_tees(hoft_tees)
 
 		for det in sumofsquarestee.keys():
 			for i, bank in enumerate(sumofsquarestee[det]):
-				dump = self.nxy_dump(874106958000000000,874107558000000000, "sumsq"+det+str(i)+".txt")
-		                bank.link(dump)
+				dump = self.nxy_dump(874106958000000000, 874107558000000000, "sumsq"+det+str(i)+".txt")
+				bank.link(dump)
 
-                #dump = self.nxy_dump(874106958000000000,874107558000000000, "sumsq.txt")
-                #sumofsquarestee["L1"][0].link(dump)
+		#dump = self.nxy_dump(874106958000000000,874107558000000000, "sumsq.txt")
+		#sumofsquarestee["L1"][0].link(dump)
 	
 		control_tee = self.control_tees(sumofsquarestee)
 
@@ -167,10 +166,10 @@ class LLOID(object):
 		dump = self.nxy_dump(874107086000000000, 874107286000000000, "control.txt")
 		control_tee.link(dump)
 
-                #control_tee2 = self.control_tees(orthosnrtee)
+		#control_tee2 = self.control_tees(orthosnrtee)
 
 		#dump = self.nxy_dump(874107086000000000, 874107286000000000, "control2.txt")
-                #control_tee2.link(dump)
+		#control_tee2.link(dump)
 
 		#control_tee.link(sink)
 		
@@ -186,22 +185,21 @@ class LLOID(object):
 		chisq_tee = self.chisquare_tees(orthosnrtee, matrixtee, reconstructed_snr_tee, chifacstee)
 
 		dump = self.nxy_dump(874107086000000000, 874107286000000000, "snr0.txt")
-                reconstructed_snr_tee["L1"][0].link(dump)
+		reconstructed_snr_tee["L1"][0].link(dump)
 
 		added_snr_tee = self.added_snr_tees(reconstructed_snr_tee)
 		added_chisq_tee = self.added_chisq_tees(chisq_tee)
 
 		dump = self.nxy_dump(874107086000000000, 874107286000000000, "addedsnr.txt")
-                added_snr_tee["L1"].link(dump)
+		added_snr_tee["L1"].link(dump)
 
-	
 		trigger_gen_tee = self.trigger_gen_tees(added_snr_tee, added_chisq_tee)
 
 		self.xml_writer(trigger_gen_tee)
 
 		return 
 
- 
+
 	def fakesink(self):
 		q = self.queue()
 		fake = gst.element_factory_make("fakesink")
@@ -228,8 +226,8 @@ class LLOID(object):
 		
 
 	def resample(self):
-                resample = gst.element_factory_make("audioresample")
-                self.pipeline.add(resample)
+		resample = gst.element_factory_make("audioresample")
+		self.pipeline.add(resample)
 		return resample
 
 	def filter_caps(self, caps):
@@ -249,19 +247,19 @@ class LLOID(object):
 		queue_in.link(resample)
 		filter = self.filter_caps("audio/x-raw-float, rate="+str(rate))
 		resample.link(filter)
-                queue_out = self.queue()
+		queue_out = self.queue()
 		filter.link(queue_out)
 		return queue_in, queue_out
 
 	def whiten(self, filename, psd_mode=1, zero_pad=4, fft_length=16, average_samples=64):
-                whiten = gst.element_factory_make("lal_whiten")
-                self.pipeline.add(whiten)
-                whiten.set_property("psd-mode", psd_mode)
-                whiten.set_property("zero-pad", zero_pad)
-                whiten.set_property("fft-length", fft_length)
-                whiten.set_property("average-samples", average_samples)
-                #self.whiten.set_property("compensation-psd", filename)
-                return whiten
+		whiten = gst.element_factory_make("lal_whiten")
+		self.pipeline.add(whiten)
+		whiten.set_property("psd-mode", psd_mode)
+		whiten.set_property("zero-pad", zero_pad)
+		whiten.set_property("fft-length", fft_length)
+		whiten.set_property("average-samples", average_samples)
+		#self.whiten.set_property("compensation-psd", filename)
+		return whiten
 
 	def tee(self):
 		tee = gst.element_factory_make("tee")
@@ -275,7 +273,7 @@ class LLOID(object):
 			trig.set_property("bank-filename",  self.detectors.template_bank_file_name[det])
 			trig.set_property("snr-thresh", snr_thresh)
 			snrq = self.queue()
-                        chisqq = self.queue()
+			chisqq = self.queue()
 			added_snr_tee[det].link(snrq)
 			added_chisq_tee[det].link(chisqq)
 			snrq.link_pads("src", trig, "snr")
@@ -313,9 +311,8 @@ class LLOID(object):
 			for i, rate in enumerate(self.banks.get_rates()[1:]):
 				qin, qout = self.resample_to_rate(rate)
 				self.hoft_tee[det][base_rate].link(qin)
-		                self.hoft_tee[det][rate] = self.tee()
+				self.hoft_tee[det][rate] = self.tee()
 				qout.link(self.hoft_tee[det][rate])
-				
 		return self.hoft_tee
 
 
@@ -325,31 +322,30 @@ class LLOID(object):
 		self.framesrc = {}
 		report = {}
 		for det in self.detectors.channel.keys():
-	                self.framesrc[det] = gst.element_factory_make("lal_framesrc")
-        	        self.pipeline.add(self.framesrc[det])
-                	self.framesrc[det].set_property("blocksize", self.detectors.block_size)
+			self.framesrc[det] = gst.element_factory_make("lal_framesrc")
+			self.pipeline.add(self.framesrc[det])
+			self.framesrc[det].set_property("blocksize", self.detectors.block_size)
 			self.framesrc[det].set_property("location", self.detectors.frame_cache[det])
 			self.framesrc[det].set_property("instrument", self.detectors.instrument[det])
-	                self.framesrc[det].set_property("channel-name", self.detectors.channel[det])
+			self.framesrc[det].set_property("channel-name", self.detectors.channel[det])
 			self.framesrc[det].set_property("start-time-gps-ns", self.detectors.start)
 			self.framesrc[det].set_property("stop-time-gps-ns", self.detectors.end)
-	                report[det] = gst.element_factory_make("progressreport", "progress_src")
-        	        self.pipeline.add(report[det])
-                	self.framesrc[det].link(report[det])
+			report[det] = gst.element_factory_make("progressreport", "progress_src")
+			self.pipeline.add(report[det])
+			self.framesrc[det].link(report[det])
 		return report
 
 
 	def injections(self, src):
 		self.simulation = {}
-                if self.do_injections:
+		if self.do_injections:
 			for det in self.detectors.channel.keys():	
-                	        self.simulation[det] = gst.element_factory_make("lal_simulation")
+				self.simulation[det] = gst.element_factory_make("lal_simulation")
 				self.simulation[det].set_property("xml-location", self.detectors.injection_file[det])
-                        	self.pipeline.add(self.simulation[det])
-	                        src[det].link(self.simulation[det])
+				self.pipeline.add(self.simulation[det])
+				src[det].link(self.simulation[det])
 			return self.simulation
-	        else:
-			return src
+		return src
 
 	def gate_tees(self, src, control_tee, thresh=0):
 		gate_tee = {}
@@ -358,7 +354,7 @@ class LLOID(object):
 			for j in range(len(src[det])):
 				print i, det, j
 				queuesrc = self.queue()
-                                queuecontrol = self.queue() 
+				queuecontrol = self.queue() 
 				gate = gst.element_factory_make("lal_gate"); self.pipeline.add(gate)
 				gate.set_property("threshold", thresh)
 				src[det][j].link(queuesrc)
@@ -367,7 +363,6 @@ class LLOID(object):
 				queuecontrol.link_pads("src", gate, "control")
 				gate_tee[det].append(self.tee())
 				gate.link(gate_tee[det][j])
-				
 		return gate_tee
 			
 
@@ -377,7 +372,7 @@ class LLOID(object):
 			self.snr_tee[det] = []
 			for j in range(len(gate_tee[det])):
 				queuesrc = self.queue() 
-                                queuematrix = self.queue()
+				queuematrix = self.queue()
 				snr = gst.element_factory_make("lal_matrixmixer"); self.pipeline.add(snr)
 				gate_tee[det][j].link(queuesrc)
 				queuesrc.link(snr)
@@ -390,12 +385,12 @@ class LLOID(object):
 	def chisquare_tees(self, orthosnrtee, matrixtee, reconstructed_snr_tee, chifacstee):
 		self.chisq_tees = {}
 		for i, det in enumerate(reconstructed_snr_tee.keys()):
-                        self.chisq_tees[det] = []
-                        for j in range(len(reconstructed_snr_tee[det])):
+			self.chisq_tees[det] = []
+			for j in range(len(reconstructed_snr_tee[det])):
 				queuesnr = self.queue()
-                                queueorthosnr = self.queue() 
-                                queuechifacs = self.queue()
-                                queuematrix = self.queue() 
+				queueorthosnr = self.queue() 
+				queuechifacs = self.queue()
+				queuematrix = self.queue() 
 				orthosnrtee[det][j].link(queueorthosnr)
 				matrixtee[det][j].link(queuematrix)
 				chifacstee[det][j].link(queuechifacs)
@@ -413,8 +408,8 @@ class LLOID(object):
 
 	def control_tees(self, src, control_rate=32):
 		adder = gst.element_factory_make("lal_adder")
-                self.pipeline.add(adder)
-                adder.set_property("sync", True)
+		self.pipeline.add(adder)
+		adder.set_property("sync", True)
 		for i, det in enumerate(src.keys()):
 			for j in range(len(src[det])):
 				qin, qout = self.resample_to_rate(control_rate)
@@ -423,7 +418,6 @@ class LLOID(object):
 				#q = self.queue()
 				#src[det][j].link(q)
 				#q.link(adder)
-
 		self.control_tee = self.tee() 
 		queue = self.queue()
 		adder.link(queue)
@@ -434,29 +428,29 @@ class LLOID(object):
 		self.added_snr_tees = {}
 		for i, det in enumerate(reconstructed_snr_tee.keys()):
 			adder = gst.element_factory_make("lal_adder")
-	                self.pipeline.add(adder)
-        	        adder.set_property("sync", True)
+			self.pipeline.add(adder)
+			adder.set_property("sync", True)
 			for j in range(len(reconstructed_snr_tee[det])):
 				qin, qout = self.resample_to_rate(self.banks.base_rate())
-                                reconstructed_snr_tee[det][j].link(qin)
-                                qout.link_pads("src", adder, "sink"+str(j))
+				reconstructed_snr_tee[det][j].link(qin)
+				qout.link_pads("src", adder, "sink"+str(j))
 			self.added_snr_tees[det] = self.tee()
 			adder.link(self.added_snr_tees[det])
 		return self.added_snr_tees
 
-        def added_chisq_tees(self, chisq_tee):
-                self.added_chisq_tees = {}
-                for i, det in enumerate(chisq_tee.keys()):
-                        adder = gst.element_factory_make("lal_adder")
-                        self.pipeline.add(adder)
-                        adder.set_property("sync", True)
-                        for j in range(len(chisq_tee[det])):
-                                qin, qout = self.resample_to_rate(self.banks.base_rate())
-                                chisq_tee[det][j].link(qin)
-                                qout.link_pads("src", adder, "sink"+str(j))
-                        self.added_chisq_tees[det] = self.tee()
-                        adder.link(self.added_chisq_tees[det])
-                return self.added_chisq_tees
+	def added_chisq_tees(self, chisq_tee):
+		self.added_chisq_tees = {}
+		for i, det in enumerate(chisq_tee.keys()):
+			adder = gst.element_factory_make("lal_adder")
+			self.pipeline.add(adder)
+			adder.set_property("sync", True)
+			for j in range(len(chisq_tee[det])):
+				qin, qout = self.resample_to_rate(self.banks.base_rate())
+				chisq_tee[det][j].link(qin)
+				qout.link_pads("src", adder, "sink"+str(j))
+			self.added_chisq_tees[det] = self.tee()
+			adder.link(self.added_chisq_tees[det])
+		return self.added_chisq_tees
 
 	def svd_filter_tees(self, src):
 		self.svd_filter = {}
@@ -467,31 +461,31 @@ class LLOID(object):
 		for det in self.detectors.channel.keys():
 			self.svd_filter[det] = []
 			self.orthosnrtee[det] = []
-	                self.matrixtee[det] = []
-        	        self.chifacstee[det] = []
-                	self.sumofsquarestee[det] = []
+			self.matrixtee[det] = []
+			self.chifacstee[det] = []
+			self.sumofsquarestee[det] = []
 			for i in range(len(self.banks)):
-                        	queue = gst.element_factory_make("queue")
-                        	self.pipeline.add(queue)
-                        	queue.set_property("max-size-time", int(self.banks[i].end)*10000000000 + 1000000000)
-                        	src[det][self.banks[i].rate].link(queue)
+				queue = gst.element_factory_make("queue")
+				self.pipeline.add(queue)
+				queue.set_property("max-size-time", int(self.banks[i].end)*10000000000 + 1000000000)
+				src[det][self.banks[i].rate].link(queue)
 				self.svd_filter[det].append(gst.element_factory_make("lal_templatebank"))
-		                self.pipeline.add(self.svd_filter[det][i])
+				self.pipeline.add(self.svd_filter[det][i])
 				queue.link_pads("src", self.svd_filter[det][i], "sink")
-		                self.svd_filter[det][i].set_property("t-start", self.banks[i].start)
-                		self.svd_filter[det][i].set_property("t-end", self.banks[i].end)
-		                self.svd_filter[det][i].set_property("t-total-duration", self.banks[i].filt_length)
-                		self.svd_filter[det][i].set_property("snr-length", self.banks[i].blocksize)
+				self.svd_filter[det][i].set_property("t-start", self.banks[i].start)
+				self.svd_filter[det][i].set_property("t-end", self.banks[i].end)
+				self.svd_filter[det][i].set_property("t-total-duration", self.banks[i].filt_length)
+				self.svd_filter[det][i].set_property("snr-length", self.banks[i].blocksize)
 				self.svd_filter[det][i].set_property("template-bank", self.detectors.template_bank_file_name[det])
 				self.svd_filter[det][i].set_property("reference-psd", self.detectors.psd[det])
 				self.orthosnrtee[det].append(self.tee())
-                                self.matrixtee[det].append(self.tee()) 
-                                self.chifacstee[det].append(self.tee())
-                                self.sumofsquarestee[det].append(self.tee())
+				self.matrixtee[det].append(self.tee()) 
+				self.chifacstee[det].append(self.tee())
+				self.sumofsquarestee[det].append(self.tee())
 				self.svd_filter[det][i].link_pads("src", self.orthosnrtee[det][i], "sink")
-                                self.svd_filter[det][i].link_pads("matrix", self.matrixtee[det][i], "sink")
-                                self.svd_filter[det][i].link_pads("chifacs", self.chifacstee[det][i], "sink")
-                                self.svd_filter[det][i].link_pads("sumofsquares", self.sumofsquarestee[det][i], "sink")
+				self.svd_filter[det][i].link_pads("matrix", self.matrixtee[det][i], "sink")
+				self.svd_filter[det][i].link_pads("chifacs", self.chifacstee[det][i], "sink")
+				self.svd_filter[det][i].link_pads("sumofsquares", self.sumofsquarestee[det][i], "sink")
 
 		return self.orthosnrtee, self.matrixtee, self.chifacstee, self.sumofsquarestee
 
@@ -524,7 +518,7 @@ class GTK_Main:
 			Bank(256, 5.0, 13.0, 29.0),
 			Bank(128, 13.0, 29.0, 29.0)
 		])
-		detectors= DetectorData(874106958000000000,874107558000000000)
+		detectors= DetectorData(874106958000000000, 874107558000000000)
 		detectors.add_detector("L1", "/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", "/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml")
 		self.pipeline = gst.Pipeline("lloid")
 		lloid = LLOID(self.pipeline, detectors, banks, do_injections = False)
@@ -542,11 +536,10 @@ class GTK_Main:
 			self.button.set_label("Start")
 
 	def on_message(self, bus, message):
-		t = message.type
-		if t == gst.MESSAGE_EOS:
+		if message.type == gst.MESSAGE_EOS:
 			self.pipeline.set_state(gst.STATE_NULL)
 			self.button.set_label("Start")
-		elif t == gst.MESSAGE_ERROR:
+		elif message.type == gst.MESSAGE_ERROR:
 			self.pipeline.set_state(gst.STATE_NULL)
 			self.button.set_label("Start")
 			err, debug = message.parse_error()
