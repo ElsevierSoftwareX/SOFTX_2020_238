@@ -114,24 +114,6 @@ class Detectors(dict):
 		self.end = end
 		self.block_size = block_size
 
-
-class DetectorData(object):
-	def __init__(self, start, end, block_size = 16384 * 16 * 8):
-		self.frame_cache = {}
-		self.channel = {}
-		self.psd = {}
-		self.template_bank_file_name = {}
-		self.injection_file = {}
-		self.start = start
-		self.end = end
-		self.block_size = block_size
-	def add_detector(self, instrument, frame_cache, channel, psd, template_bank_file_name, injection_file=None):
-		self.frame_cache[instrument] = frame_cache
-		self.channel[instrument] = channel
-		self.psd[instrument] = psd
-		self.template_bank_file_name[instrument] = template_bank_file_name
-		self.injection_file[instrument] = injection_file
-		
 class LLOID(object):
 	def __init__(self, pipeline, detectors, banks, do_injections = False):
 		self.banks = banks
