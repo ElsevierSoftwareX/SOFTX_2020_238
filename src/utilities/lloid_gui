@@ -54,7 +54,7 @@ def fakesrc(pipeline, wave, vol=1e-20):
 	src.set_property("volume", vol)
 	pipeline.add(src)
 	filter = gst.element_factory_make("capsfilter")
-	#filter.set_property("caps", gst.Caps("audio/x-raw-float, width=64, rate=16384, instrument=L1, channel_name=LSC-STRAIN, units=strain"))
+	filter.set_property("caps", gst.Caps("audio/x-raw-float, width=64, rate=16384, instrument=L1, channel_name=LSC-STRAIN, units=strain"))
 	pipeline.add(filter)
 	src.link(filter)
 	return filter
