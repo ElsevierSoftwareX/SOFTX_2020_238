@@ -46,18 +46,18 @@ import gst
 
 
 def fakesrc(pipeline, wave, vol=1e-20):
-        src = gst.element_factory_make("audiotestsrc")
-        src.set_property("timestamp-offset", 874106958000000000)
-        src.set_property("samplesperbuffer", 16384)
-        src.set_property("num-buffers", 1)
-        src.set_property("wave", wave)
-        src.set_property("volume", vol)
-        pipeline.add(src)
-        filter = gst.element_factory_make("capsfilter")
-        #filter.set_property("caps", gst.Caps("audio/x-raw-float, width=64, rate=16384, instrument=L1, channel_name=LSC-STRAIN, units=strain"))
-        pipeline.add(filter)
-        src.link(filter)
-        return filter
+	src = gst.element_factory_make("audiotestsrc")
+	src.set_property("timestamp-offset", 874106958000000000)
+	src.set_property("samplesperbuffer", 16384)
+	src.set_property("num-buffers", 1)
+	src.set_property("wave", wave)
+	src.set_property("volume", vol)
+	pipeline.add(src)
+	filter = gst.element_factory_make("capsfilter")
+	#filter.set_property("caps", gst.Caps("audio/x-raw-float, width=64, rate=16384, instrument=L1, channel_name=LSC-STRAIN, units=strain"))
+	pipeline.add(filter)
+	src.link(filter)
+	return filter
 
 
 def playback(pipeline):
@@ -79,29 +79,22 @@ def playback(pipeline):
 	return adder
 
 class Bank(object):
-	def __init__(self, rate, start, end, length, blocksize=None):
-		self.filt_length = [length]
-		self.rate = [rate]
-		self.start = [start]
-		self.end = [end]
-		if blocksize: self.blocksize = [blocksize]
-		else: self.blocksize = [rate]
-   
-	def add_bank(self, rate, start, end, blocksize = None):
-		self.filt_length.append(self.filt_length[0])
-		self.rate.append(rate)
-		self.start.append(start)
-		self.end.append(end)
-		if blocksize: self.blocksize.append(blocksize)
-		else: self.blocksize.append(rate)
+	def __init__(self, rate, start, end, length, blocksize = None):
+		self.filt_length = length
+		self.rate = rate
+		self.start = start
+		self.end = end
+		if blocksize is not None:
+			self.blocksize = blocksize
+		else:
+			self.blocksize = rate
 
+class Banks(list):
 	def get_rates(self):
-		l = list(set(self.rate))
-		l.sort(reverse=True)
-		return tuple(l)
+		return tuple(sorted(set(bank.rate for bank in self), reverse = True))
 
-        def base_rate(self):
-                return max(self.get_rates())    
+	def base_rate(self):
+		return max(self.get_rates())    
 
 class DetectorData(object):
 	def __init__(self, start, end, block_size = 16384 * 16 * 8):
@@ -308,7 +301,7 @@ class LLOID(object):
 
 	def whitened_hoft_tees(self, src):
 		self.hoft_tee={}
-		base_rate = self.banks.get_rates()[0]
+		base_rate = self.banks.base_rate()
 		for det in self.detectors.channel.keys():
 			self.hoft_tee[det] = {}
 			qin, qout = self.resample_to_rate(base_rate)
@@ -477,18 +470,18 @@ class LLOID(object):
 	                self.matrixtee[det] = []
         	        self.chifacstee[det] = []
                 	self.sumofsquarestee[det] = []
-			for i in range(len(self.banks.rate)):
+			for i in range(len(self.banks)):
                         	queue = gst.element_factory_make("queue")
                         	self.pipeline.add(queue)
-                        	queue.set_property("max-size-time", int(self.banks.end[i])*10000000000 + 1000000000)
-                        	src[det][self.banks.rate[i]].link(queue)
+                        	queue.set_property("max-size-time", int(self.banks[i].end)*10000000000 + 1000000000)
+                        	src[det][self.banks[i].rate].link(queue)
 				self.svd_filter[det].append(gst.element_factory_make("lal_templatebank"))
 		                self.pipeline.add(self.svd_filter[det][i])
 				queue.link_pads("src", self.svd_filter[det][i], "sink")
-		                self.svd_filter[det][i].set_property("t-start", self.banks.start[i])
-                		self.svd_filter[det][i].set_property("t-end", self.banks.end[i])
-		                self.svd_filter[det][i].set_property("t-total-duration", self.banks.filt_length[i])
-                		self.svd_filter[det][i].set_property("snr-length", self.banks.blocksize[i])
+		                self.svd_filter[det][i].set_property("t-start", self.banks[i].start)
+                		self.svd_filter[det][i].set_property("t-end", self.banks[i].end)
+		                self.svd_filter[det][i].set_property("t-total-duration", self.banks[i].filt_length)
+                		self.svd_filter[det][i].set_property("snr-length", self.banks[i].blocksize)
 				self.svd_filter[det][i].set_property("template-bank", self.detectors.template_bank_file_name[det])
 				self.svd_filter[det][i].set_property("reference-psd", self.detectors.psd[det])
 				self.orthosnrtee[det].append(self.tee())
@@ -525,10 +518,12 @@ class GTK_Main:
 		self.button.connect("clicked", self.start_stop)
 		vbox.add(self.button)
 		window.show_all()
-		banks = Bank(2048, 0.0, 1.0, 29.0)
-		banks.add_bank(512, 1.0, 5.0)
-		banks.add_bank(256, 5.0, 13.0)
-		banks.add_bank(128, 13.0, 29.0)
+		banks = Banks([
+			Bank(2048, 0.0, 1.0, 29.0),
+			Bank(512, 1.0, 5.0, 29.0),
+			Bank(256, 5.0, 13.0, 29.0),
+			Bank(128, 13.0, 29.0, 29.0)
+		])
 		detectors= DetectorData(874106958000000000,874107558000000000)
 		detectors.add_detector("L1", "/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", "/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml")
 		self.pipeline = gst.Pipeline("lloid")
