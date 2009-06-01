@@ -479,6 +479,12 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		if(length) {
 			GstBuffer *srcbuf = gst_buffer_create_sub(sinkbuf, start * element->bytes_per_sample, length * element->bytes_per_sample);
+			if(!srcbuf) {
+				GST_ERROR_OBJECT(element, "failure creating sub-buffer");
+				g_mutex_unlock(element->control_lock);
+				result = GST_FLOW_ERROR;
+				goto done;
+			}
 
 			/*
 			 * set flags, caps, offset, and timestamps.
