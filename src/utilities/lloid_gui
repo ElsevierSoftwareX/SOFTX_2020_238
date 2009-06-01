@@ -98,7 +98,6 @@ class Banks(list):
 
 class DetectorData(object):
 	def __init__(self, start, end, block_size = 16384 * 16 * 8):
-		self.instrument = {}
 		self.frame_cache = {}
 		self.channel = {}
 		self.psd = {}
@@ -108,7 +107,6 @@ class DetectorData(object):
 		self.end = end
 		self.block_size = block_size
 	def add_detector(self, instrument, frame_cache, channel, psd, template_bank_file_name, injection_file=None):
-		self.instrument[instrument] = instrument
 		self.frame_cache[instrument] = frame_cache
 		self.channel[instrument] = channel
 		self.psd[instrument] = psd
@@ -326,7 +324,7 @@ class LLOID(object):
 			self.pipeline.add(self.framesrc[det])
 			self.framesrc[det].set_property("blocksize", self.detectors.block_size)
 			self.framesrc[det].set_property("location", self.detectors.frame_cache[det])
-			self.framesrc[det].set_property("instrument", self.detectors.instrument[det])
+			self.framesrc[det].set_property("instrument", det)
 			self.framesrc[det].set_property("channel-name", self.detectors.channel[det])
 			self.framesrc[det].set_property("start-time-gps-ns", self.detectors.start)
 			self.framesrc[det].set_property("stop-time-gps-ns", self.detectors.end)
