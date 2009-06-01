@@ -290,7 +290,7 @@ static REAL8FrequencySeries *get_psd(enum gstlal_psdmode_t psdmode, LALPSDRegres
 			psd = make_psd_from_fseries(fseries);
 			if(!psd)
 				return NULL;
-			if(XLALPSDRegressorSetPSD(psd_regressor, psd, psd_regressor->max_samples)) {
+			if(XLALPSDRegressorSetPSD(psd_regressor, psd, psd_regressor->average_samples)) {
 				GST_ERROR("XLALPSDRegressorSetPSD() failed");
 				XLALDestroyREAL8FrequencySeries(psd);
 				return NULL;
@@ -359,7 +359,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		break;
 
 	case ARG_AVERAGE_SAMPLES:
-		element->psd_regressor->max_samples = g_value_get_int(value);
+		element->psd_regressor->average_samples = g_value_get_int(value);
 		break;
 
 	case ARG_XML_FILENAME:
@@ -412,7 +412,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		break;
 
 	case ARG_AVERAGE_SAMPLES:
-		g_value_set_int(value, element->psd_regressor->max_samples);
+		g_value_set_int(value, element->psd_regressor->average_samples);
 		break;
 
 	case ARG_XML_FILENAME:
@@ -559,7 +559,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	unsigned zero_pad = floor(element->zero_pad_seconds * element->sample_rate + 0.5);
 	REAL8TimeSeries *segment = NULL;
 	COMPLEX16FrequencySeries *tilde_segment = NULL;
-	COMPLEX16FrequencySeries *mean = NULL;
 
 	/*
 	 * Confirm that setcaps() has successfully configured everything
@@ -672,7 +671,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 */
 
 			if(!element->psd_regressor->n_samples) {
-				if(XLALPSDRegressorSetPSD(element->psd_regressor, element->compensation_psd, element->psd_regressor->max_samples)) {
+				if(XLALPSDRegressorSetPSD(element->psd_regressor, element->compensation_psd, element->psd_regressor->average_samples)) {
 					GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
 					result = GST_FLOW_ERROR;
 					goto done;
@@ -695,30 +694,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 				result = GST_FLOW_ERROR;
 				goto done;
 			}
-			if(!(n++ % (element->psd_regressor->max_samples / 2)) && element->xml_stream) {
+			if(!(n++ % (element->psd_regressor->average_samples / 2)) && element->xml_stream) {
 				static int n = 1;
 				GST_INFO_OBJECT(element, "writing PSD snapshot %d", n++);
 				if(XLALWriteLIGOLwXMLArrayREAL8FrequencySeries(element->xml_stream, "Recorded by GSTLAL element lal_whiten", element->psd))
 					GST_ERROR_OBJECT(element, "XLALWriteLIGOLwXMLArrayREAL8FrequencySeries() failed");
 			}
-		}
-
-		/*
-		 * Retrieve the mean if required.  We store the negative of
-		 * the mean to simplify the process of adding it to the
-		 * transform of the data.
-		 */
-
-		if(element->psdmode == GSTLAL_PSDMODE_RUNNING_AVERAGE) {
-			XLALDestroyCOMPLEX16FrequencySeries(mean);
-			mean = XLALPSDRegressorGetMean(element->psd_regressor, &segment->epoch, 4.0);
-			if(!mean) {
-				GST_ERROR_OBJECT(element, "XLALPSDRegressorGetMean() failed");
-				result = GST_FLOW_ERROR;
-				goto done;
-			}
-			for(i = 0; i < mean->data->length; i++)
-				mean->data->data[i] = XLALCOMPLEX16Negative(mean->data->data[i]);
 		}
 
 		/*
@@ -739,17 +720,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * windowed before conversion to the frequency domain.
 		 */
 
-		if(mean)
-			if(!XLALAddCOMPLEX16FrequencySeries(tilde_segment, mean)) {
-				GST_ERROR_OBJECT(element, "XLALAddCOMPLEX16FrequencySeries() failed");
-				result = GST_FLOW_ERROR;
-				goto done;
-			}
 		if(!XLALWhitenCOMPLEX16FrequencySeries(tilde_segment, element->psd)) {
 			GST_ERROR_OBJECT(element, "XLALWhitenCOMPLEX16FrequencySeries() failed");
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
+		{unsigned i; double m; for(i = m = 0; i < tilde_segment->data->length; m += XLALCOMPLEX16Abs2(tilde_segment->data->data[i++])); fprintf(stderr, "var (fd) = %.16g\n", m / tilde_segment->data->length);}
 
 		/*
 		 * Compensate for the use of a mis-matched PSD for
@@ -902,6 +878,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		for(i = 0; i < element->tail->length; i++)
 			((double *) GST_BUFFER_DATA(srcbuf))[i] = (segment->data->data[zero_pad + i] + element->tail->data[i]) / sqrt(element->window->data->length / element->window->sumofsquares);
+		{unsigned i; double m; for(i = m = 0; i < element->tail->length; m += pow(((double *)GST_BUFFER_DATA(srcbuf))[i++], 2)); fprintf(stderr, "var (td) = %.16g\n", m / element->tail->length);}
 
 		/*
 		 * Push the buffer downstream
@@ -937,7 +914,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 done:
 	XLALDestroyREAL8TimeSeries(segment);
 	XLALDestroyCOMPLEX16FrequencySeries(tilde_segment);
-	XLALDestroyCOMPLEX16FrequencySeries(mean);
 	gst_object_unref(element);
 	return result;
 }
@@ -1096,7 +1072,7 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->window = NULL;
 	element->fwdplan = NULL;
 	element->revplan = NULL;
-	element->psd_regressor = XLALPSDRegressorNew(DEFAULT_AVERAGE_SAMPLES);
+	element->psd_regressor = XLALPSDRegressorNew(DEFAULT_AVERAGE_SAMPLES, 1);
 	element->psd = NULL;
 	element->tail = NULL;
 	element->xml_filename = NULL;
