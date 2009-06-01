@@ -45,18 +45,18 @@ import gst
 #
 
 
-def fakesrc(lloid, wave, vol=1e-20):
-        fakesrc = gst.element_factory_make("audiotestsrc")
-        fakesrc.set_property("timestamp-offset", 874106958000000000)
-        fakesrc.set_property("samplesperbuffer", 16384)
-        fakesrc.set_property("num-buffers", 1)
-        fakesrc.set_property("wave", wave)
-        fakesrc.set_property("volume", vol)
-        lloid.pipeline.add(fakesrc)
+def fakesrc(pipeline, wave, vol=1e-20):
+        src = gst.element_factory_make("audiotestsrc")
+        src.set_property("timestamp-offset", 874106958000000000)
+        src.set_property("samplesperbuffer", 16384)
+        src.set_property("num-buffers", 1)
+        src.set_property("wave", wave)
+        src.set_property("volume", vol)
+        pipeline.add(src)
         filter = gst.element_factory_make("capsfilter")
         #filter.set_property("caps", gst.Caps("audio/x-raw-float, width=64, rate=16384, instrument=L1, channel_name=LSC-STRAIN, units=strain"))
-        lloid.pipeline.add(filter)
-        fakesrc.link(filter)
+        pipeline.add(filter)
+        src.link(filter)
         return filter
 
 
@@ -132,7 +132,7 @@ class LLOID(object):
 
 		# frame source
 		report = self.framesrcs()
-		#fake = fakesrc(self, 3, 0.5)
+		#fake = fakesrc(self.pipeline, 3, 0.5)
 	        #adder = gst.element_factory_make("lal_adder"); self.pipeline.add(adder)
 		#q = self.queue()
 		#fake.link(q)
