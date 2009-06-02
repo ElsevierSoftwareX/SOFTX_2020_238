@@ -56,7 +56,7 @@ class Banks(list):
 				self.blocksize = blocksize
 			else:
 				self.blocksize = rate
-			self.gate_threshold = 5.0
+			self.gate_threshold = gate_threshold
 
 	def get_rates(self):
 		return tuple(sorted(set(bank.rate for bank in self), reverse = True))
@@ -232,9 +232,23 @@ def mkfilesink(pipeline, src, filename):
 
 def mknxydumpsink(pipeline, src, filename):
 	elem = gst.element_factory_make("lal_nxydump")
-	elem.set_property("start-time", 874107188000000000)
-	elem.set_property("stop-time", 874107258000000000)
-	mkfilesink(pipeline, src, filename)
+	if True:
+		# output for hardware injection @ 874107078.149271066
+		elem.set_property("start-time", 874107068000000000)
+		elem.set_property("stop-time", 874107088000000000)
+	elif False:
+		# output for use with software injections:
+		# bns_injections.xml = 874107198.405080859, impulse =
+		# 874107189
+		elem.set_property("start-time", 874107188000000000)
+		elem.set_property("stop-time", 874107258000000000)
+	else:
+		# output to dump lots and lots of data (the whole cache)
+		elem.set_property("start-time", 874100128000000000)
+		elem.set_property("stop-time", 874120000000000000)
+	pipeline.add(elem)
+	src.link(elem)
+	mkfilesink(pipeline, elem, filename)
 
 def mktriggergen(pipeline, snr, chisq, detectordata):
 	elem = gst.element_factory_make("lal_triggergen")
@@ -304,7 +318,7 @@ def mkLLOIDSingle(pipeline, instrument, detectors, banks, trigger_filename = "ou
 		if progress_report:
 			control_src = mkprogressreport(pipeline, control_src, "progress_sumsquares_%s" % instrument)
 		control_src = mktee(pipeline, control_src)
-		#mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_%s.txt" % instrument)
+		mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_%s.txt" % instrument)
 
 	snr_adder = gst.element_factory_make("lal_adder")
 	snr_adder.set_property("sync", True)
@@ -394,13 +408,13 @@ class GTK_Main:
 		vbox.add(self.button)
 		window.show_all()
 		banks = Banks([
-			Banks.Bank(2048, 0.0, 1.0, 29.0),
-			Banks.Bank(512, 1.0, 5.0, 29.0),
-			Banks.Bank(256, 5.0, 13.0, 29.0),
-			Banks.Bank(128, 13.0, 29.0, 29.0)
+			Banks.Bank(2048, 0.0, 1.0, 29.0, gate_threshold = 3.0),
+			Banks.Bank(512, 1.0, 5.0, 29.0, gate_threshold = 3.0),
+			Banks.Bank(256, 5.0, 13.0, 29.0, gate_threshold = 3.0),
+			Banks.Bank(128, 13.0, 29.0, 29.0, gate_threshold = 3.0)
 		])
 		detectors = Detectors({
-			"L1": Detectors.DetectorData("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", "/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml", snr_threshold = 7.0, injection_file = "/home/channa/cvs/lsware/gstlal/examples/bns_injections.xml")
+			"L1": Detectors.DetectorData("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", "/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml", snr_threshold = 6.0, injection_file = "/home/channa/cvs/lsware/gstlal/examples/bns_injections.xml")
 		}, start = 874106958000000000, end = 874120000000000000)
 		self.pipeline = gst.Pipeline("lloid")
 
