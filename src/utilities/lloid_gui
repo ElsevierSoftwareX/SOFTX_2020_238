@@ -287,8 +287,7 @@ def mkplaybacksink(pipeline, src):
 
 
 def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = "output.xml", do_injections = False, progress_report = False, control_snk = None, control_src = None):
-	# FIXME:  switch to mkframesrc()
-	head = mkfakesrc(pipeline, instrument, detectors)
+	head = mkframesrc(pipeline, instrument, detectors)
 	if progress_report:
 		head = mkprogressreport(pipeline, head, "progress_src_%s" % instrument)
 
