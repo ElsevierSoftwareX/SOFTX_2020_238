@@ -39,48 +39,15 @@ import gst
 #
 # =============================================================================
 #
-#                              Pipeline Elements
+#                              Pipeline Metadata
 #
 # =============================================================================
 #
 
 
-def fakesrc(pipeline, wave, vol=1e-20):
-	src = gst.element_factory_make("audiotestsrc")
-	src.set_property("timestamp-offset", 874106958000000000)
-	src.set_property("samplesperbuffer", 16384)
-	src.set_property("num-buffers", 1)
-	src.set_property("wave", wave)
-	src.set_property("volume", vol)
-	pipeline.add(src)
-	filter = gst.element_factory_make("capsfilter")
-	filter.set_property("caps", gst.Caps("audio/x-raw-float, width=64, rate=16384, instrument=L1, channel_name=LSC-STRAIN, units=strain"))
-	pipeline.add(filter)
-	src.link(filter)
-	return filter
-
-
-def playback(pipeline):
-	adder = gst.element_factory_make("adder")
-	resampler = gst.element_factory_make("audioresample")
-	conv1 = gst.element_factory_make("audioconvert")
-	filter = gst.element_factory_make("capsfilter")
-	filter.set_property("caps", gst.Caps("audio/x-raw-float, width=32"))
-	amp = gst.element_factory_make("audioamplify")
-	amp.set_property("amplification", 5e-2)
-	conv2 = gst.element_factory_make("audioconvert")
-	queue = gst.element_factory_make("queue")
-	queue.set_property("max-size-time", 3000000000)
-	sink = gst.element_factory_make("alsasink")
-
-	pipeline.add(adder, resampler, conv1, filter, amp, conv2, queue, sink)
-	gst.element_link_many(adder, resampler, conv1, filter, amp, conv2, queue, sink)
-
-	return adder
-
 class Banks(list):
 	class Bank(object):
-		def __init__(self, rate, start, end, length, blocksize = None):
+		def __init__(self, rate, start, end, length, blocksize = None, gate_threshold = 5.0):
 			self.filt_length = length
 			self.rate = rate
 			self.start = start
@@ -89,20 +56,23 @@ class Banks(list):
 				self.blocksize = blocksize
 			else:
 				self.blocksize = rate
+			self.gate_threshold = 5.0
 
 	def get_rates(self):
 		return tuple(sorted(set(bank.rate for bank in self), reverse = True))
 
-	def base_rate(self):
+	def max_rate(self):
 		return max(bank.rate for bank in self)
+
 
 class Detectors(dict):
 	class DetectorData(object):
-		def __init__(self, frame_cache, channel, psd, template_bank_file_name, injection_file = None):
+		def __init__(self, frame_cache, channel, psd, template_bank_file_name, snr_threshold, injection_file = None):
 			self.frame_cache = frame_cache
 			self.channel = channel
 			self.psd = psd
 			self.template_bank_file_name = template_bank_file_name
+			self.snr_threshold = snr_threshold
 			self.injection_file = injection_file
 
 	def __new__(cls, initializer, *args, **kwargs):
@@ -114,380 +84,292 @@ class Detectors(dict):
 		self.end = end
 		self.block_size = block_size
 
-class LLOID(object):
-	def __init__(self, pipeline, detectors, banks, do_injections = False):
-		self.banks = banks
-		self.detectors = detectors
-		# lets store the input in ourself 
-		self.pipeline = pipeline
-		self.do_injections = do_injections
 
-		# frame source
-		report = self.framesrcs()
-		#fake = fakesrc(self.pipeline, 3, 0.5)
-		#adder = gst.element_factory_make("lal_adder"); self.pipeline.add(adder)
-		#q = self.queue()
-		#fake.link(q)
-		#report["L1"].link(q)
-		#q.link_pads("src", adder, "sink0")
-		#dump = self.nxy_dump(874106958000000000,874107558000000000, "control.txt")
-		#sink = self.filesink("control.txt")
-		#adder.link_pads("sink0", dump, "src")
-		#fake.link(sink)
-		#adder.set_property("sync", True)
-
-		#return
-
-		# optional injections
-		simulation = self.injections(report)
-
-		# whitened hoft	
-		hoft_tees = self.whitened_hoft_tees(simulation)	
-
-		#dump = self.nxy_dump(874106958000000000,874107558000000000, "hoft.txt")
-		#hoft_tees["L1"][2048].link(dump)
-
-		# SVD filter output (this has 4 src pads!!! "src", "sumofsquares", "chifacs", "matrix")
-		orthosnrtee, matrixtee, chifacstee, sumofsquarestee = self.svd_filter_tees(hoft_tees)
-
-		for det in sumofsquarestee.keys():
-			for i, bank in enumerate(sumofsquarestee[det]):
-				dump = self.nxy_dump(874106958000000000, 874107558000000000, "sumsq"+det+str(i)+".txt")
-				bank.link(dump)
-
-		#dump = self.nxy_dump(874106958000000000,874107558000000000, "sumsq.txt")
-		#sumofsquarestee["L1"][0].link(dump)
-	
-		control_tee = self.control_tees(sumofsquarestee)
-
-		#fake = self.fakesink()
-		#sink = self.filesink("control.txt")
-		dump = self.nxy_dump(874107086000000000, 874107286000000000, "control.txt")
-		control_tee.link(dump)
-
-		#control_tee2 = self.control_tees(orthosnrtee)
-
-		#dump = self.nxy_dump(874107086000000000, 874107286000000000, "control2.txt")
-		#control_tee2.link(dump)
-
-		#control_tee.link(sink)
-		
-
-		#for k, v in matrixtee.items():
-		#	for l in [matrixtee[k], orthosnrtee[k], chifacstee[k]]:#, sumofsquarestee[k]]:
-		#		for elem in l:
-		#			fake = self.fakesink()
-		#			elem.link(fake)
-		#return 
-		gate_tee = self.gate_tees(orthosnrtee, control_tee)
-		reconstructed_snr_tee = self.reconstructed_snr_tees(gate_tee, matrixtee)
-		chisq_tee = self.chisquare_tees(orthosnrtee, matrixtee, reconstructed_snr_tee, chifacstee)
-
-		dump = self.nxy_dump(874107086000000000, 874107286000000000, "snr0.txt")
-		reconstructed_snr_tee["L1"][0].link(dump)
-
-		added_snr_tee = self.added_snr_tees(reconstructed_snr_tee)
-		added_chisq_tee = self.added_chisq_tees(chisq_tee)
-
-		dump = self.nxy_dump(874107086000000000, 874107286000000000, "addedsnr.txt")
-		added_snr_tee["L1"].link(dump)
-
-		trigger_gen_tee = self.trigger_gen_tees(added_snr_tee, added_chisq_tee)
-
-		self.xml_writer(trigger_gen_tee)
-
-		return 
+#
+# =============================================================================
+#
+#                              Pipeline Elements
+#
+# =============================================================================
+#
 
 
-	def fakesink(self):
-		q = self.queue()
-		fake = gst.element_factory_make("fakesink")
-		self.pipeline.add(fake)
-		q.link(fake)
-		return q
+def mkframesrc(pipeline, instrument, detectors):
+	elem = gst.element_factory_make("lal_framesrc")
+	elem.set_property("blocksize", detectors.block_size)
+	elem.set_property("location", detectors[instrument].frame_cache)
+	elem.set_property("instrument", instrument)
+	elem.set_property("channel-name", detectors[instrument].channel)
+	elem.set_property("start-time-gps-ns", detectors.start)
+	elem.set_property("stop-time-gps-ns", detectors.end)
+	pipeline.add(elem)
+	return elem
 
-	def filesink(self,fname):
-		filesink = gst.element_factory_make("filesink")
-		self.pipeline.add(filesink)
-		filesink.set_property("sync", False)
-		filesink.set_property("buffer-mode",2)
-		filesink.set_property("preroll-queue-len",1)
-		filesink.set_property("location",fname)
-		return filesink
+def mkcapsfilter(pipeline, src, caps):
+	elem = gst.element_factory_make("capsfilter")
+	elem.set_property("caps", gst.Caps(caps))
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
 
-	def nxy_dump(self,start, end, fname="nxydump.txt"):
-		dump = gst.element_factory_make("lal_nxydump"); self.pipeline.add(dump)
-		dump.set_property("start-time", start)
-		dump.set_property("stop-time", end)
-		fsink = self.filesink(fname)
-		dump.link(fsink)
-		return dump
-		
+def mkfakesrc(pipeline, instrument, detectors):
+	elem = gst.element_factory_make("audiotestsrc")
+	elem.set_property("timestamp-offset", detectors.start)
+	elem.set_property("samplesperbuffer", detectors.block_size / 8)
+	elem.set_property("num-buffers", (detectors.end - detectors.start) / 1000000000 / (detectors.block_size / 16384 / 8))
+	elem.set_property("wave", 5)
+	elem.set_property("volume", 1e-20)
+	pipeline.add(elem)
+	return mkcapsfilter(pipeline, elem, "audio/x-raw-float, width=64, rate=16384, instrument=%s, channel_name=%s, units=strain" % (instrument, detectors[instrument].channel))
 
-	def resample(self):
-		resample = gst.element_factory_make("audioresample")
-		self.pipeline.add(resample)
-		return resample
+def mkprogressreport(pipeline, src, name):
+	elem = gst.element_factory_make("progressreport", name)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
 
-	def filter_caps(self, caps):
-		filter = gst.element_factory_make("capsfilter")
-		filter.set_property("caps", gst.caps_from_string(caps))
-		self.pipeline.add(filter)
-		return filter
+def mkinjections(pipeline, src, filename):
+	elem = gst.element_factory_make("lal_simulation")
+	elem.set_property("xml-location", filename)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
 
-	def queue(self):
-		queue = gst.element_factory_make("queue")
-		self.pipeline.add(queue)
-		return queue
+def mkresample(pipeline, src, pad_name = None, **properties):
+	elem = gst.element_factory_make("audioresample")
+	for name, value in properties.items():
+		elem.set_property(name.replace("_", "-"), value)
+	pipeline.add(elem)
+	if pad_name is None:
+		src.link(elem)
+	else:
+		src.link_pads(pad_name, elem, "sink")
+	return elem
 
-	def resample_to_rate(self, rate):
-		queue_in = self.queue()
-		resample = self.resample()
-		queue_in.link(resample)
-		filter = self.filter_caps("audio/x-raw-float, rate="+str(rate))
-		resample.link(filter)
-		queue_out = self.queue()
-		filter.link(queue_out)
-		return queue_in, queue_out
+def mkwhiten(pipeline, src, reference_psd_filename):
+	elem = gst.element_factory_make("lal_whiten")
+	elem.set_property("psd-mode", 1)
+	elem.set_property("zero-pad", 0)
+	elem.set_property("fft-length", 8)
+	elem.set_property("average-samples", 16)
+	elem.set_property("compensation-psd", reference_psd_filename)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
 
-	def whiten(self, filename, psd_mode=1, zero_pad=4, fft_length=16, average_samples=64):
-		whiten = gst.element_factory_make("lal_whiten")
-		self.pipeline.add(whiten)
-		whiten.set_property("psd-mode", psd_mode)
-		whiten.set_property("zero-pad", zero_pad)
-		whiten.set_property("fft-length", fft_length)
-		whiten.set_property("average-samples", average_samples)
-		#self.whiten.set_property("compensation-psd", filename)
-		return whiten
+def mktee(pipeline, src, pad_name = None):
+	elem = gst.element_factory_make("tee")
+	pipeline.add(elem)
+	if pad_name is None:
+		src.link(elem)
+	else:
+		src.link_pads(pad_name, elem, "sink")
+	return elem
 
-	def tee(self):
-		tee = gst.element_factory_make("tee")
-		self.pipeline.add(tee)
-		return tee
+def mkqueue(pipeline, src, pad_name = None, **properties):
+	elem = gst.element_factory_make("queue")
+	for name, value in properties.items():
+		elem.set_property(name.replace("_", "-"), value)
+	pipeline.add(elem)
+	if pad_name is None:
+		src.link(elem)
+	else:
+		src.link_pads(pad_name, elem, "sink")
+	return elem
 
-	def trigger_gen_tees(self, added_snr_tee, added_chisq_tee, snr_thresh=1.0):
-		self.trigger_gen_tee = {}
-		for det in added_snr_tee.keys():
-			trig = gst.element_factory_make("lal_triggergen"); self.pipeline.add(trig)
-			trig.set_property("bank-filename",  self.detectors[det].template_bank_file_name)
-			trig.set_property("snr-thresh", snr_thresh)
-			snrq = self.queue()
-			chisqq = self.queue()
-			added_snr_tee[det].link(snrq)
-			added_chisq_tee[det].link(chisqq)
-			snrq.link_pads("src", trig, "snr")
-			chisqq.link_pads("src", trig, "chisquare")
-			self.trigger_gen_tee[det] = self.tee()
-			trig.link(self.trigger_gen_tee[det])
-		return self.trigger_gen_tee
+def mkbank(pipeline, src, detectordata, bank, control_snk, control_src):
+	elem = gst.element_factory_make("lal_templatebank")
+	elem.set_property("t-start", bank.start)
+	elem.set_property("t-end", bank.end)
+	elem.set_property("t-total-duration", bank.filt_length)
+	elem.set_property("snr-length", bank.blocksize)
+	elem.set_property("template-bank", detectordata.template_bank_file_name)
+	elem.set_property("reference-psd", detectordata.psd)
+	pipeline.add(elem)
+	src.link(elem)
 
+	mkqueue(pipeline, mkresample(pipeline, elem, pad_name = "sumofsquares")).link(control_snk)
+	orthosnr = mktee(pipeline, elem, pad_name = "src")
+	matrix = mktee(pipeline, elem, pad_name = "matrix")
 
-	def xml_writer(self, trigger_gen_tee, location="output.xml"):
-		"""
-		A sink
-		"""
-		for det in trigger_gen_tee.keys():
-			xml = gst.element_factory_make("lal_triggerxmlwriter"); self.pipeline.add(xml)
-			xml.set_property("location", location)
-			xml.set_property("sync", False)
-			xml.set_property("preroll-queue-len", 1)
-			q = self.queue()
-			q.link(xml)
-			trigger_gen_tee[det].link(q)
-			
+	gate = gst.element_factory_make("lal_gate")
+	gate.set_property("threshold", bank.gate_threshold)
+	pipeline.add(gate)
+	mkqueue(pipeline, control_src).link_pads("src", gate, "control")
+	mkqueue(pipeline, orthosnr).link(gate)
 
-	def whitened_hoft_tees(self, src):
-		self.hoft_tee={}
-		base_rate = self.banks.base_rate()
-		for det in self.detectors.keys():
-			self.hoft_tee[det] = {}
-			qin, qout = self.resample_to_rate(base_rate)
-			src[det].link(qin)
-			h = self.whiten(filename=self.detectors[det].psd)
-			qout.link(h)
-			self.hoft_tee[det][base_rate] = self.tee()
-			h.link(self.hoft_tee[det][base_rate])
-			for i, rate in enumerate(self.banks.get_rates()[1:]):
-				qin, qout = self.resample_to_rate(rate)
-				self.hoft_tee[det][base_rate].link(qin)
-				self.hoft_tee[det][rate] = self.tee()
-				qout.link(self.hoft_tee[det][rate])
-		return self.hoft_tee
+	snr = gst.element_factory_make("lal_matrixmixer")
+	pipeline.add(snr)
+	mkqueue(pipeline, matrix).link_pads("src", snr, "matrix")
+	gate.link(snr)
+	snr = mktee(pipeline, snr)
 
+	chisq = gst.element_factory_make("lal_chisquare")
+	pipeline.add(chisq)
+	mkqueue(pipeline, matrix).link_pads("src", chisq, "matrix")
+	mkqueue(pipeline, elem, pad_name = "chifacs").link_pads("src", chisq, "chifacs")
+	mkqueue(pipeline, orthosnr).link_pads("src", chisq, "orthosnr")
+	mkqueue(pipeline, snr).link_pads("src", chisq, "snr")
 
+	return snr, chisq
 
-	def framesrcs(self, block_size=16384 * 8 * 16):
-		# Note this should be the first element in the pipeline
-		self.framesrc = {}
-		report = {}
-		for det in self.detectors.keys():
-			self.framesrc[det] = gst.element_factory_make("lal_framesrc")
-			self.pipeline.add(self.framesrc[det])
-			self.framesrc[det].set_property("blocksize", self.detectors.block_size)
-			self.framesrc[det].set_property("location", self.detectors[det].frame_cache)
-			self.framesrc[det].set_property("instrument", det)
-			self.framesrc[det].set_property("channel-name", self.detectors[det].channel)
-			self.framesrc[det].set_property("start-time-gps-ns", self.detectors.start)
-			self.framesrc[det].set_property("stop-time-gps-ns", self.detectors.end)
-			report[det] = gst.element_factory_make("progressreport", "progress_src")
-			self.pipeline.add(report[det])
-			self.framesrc[det].link(report[det])
-		return report
+def mkfakesink(pipeline, src, pad_name = None):
+	src = mkqueue(pipeline, src, pad_name = pad_name)
+	elem = gst.element_factory_make("fakesink")
+	elem.set_property("sync", False)
+	elem.set_property("preroll-queue-len", 1)
+	pipeline.add(elem)
+	src.link(elem)
 
+def mkfilesink(pipeline, src, filename):
+	elem = gst.element_factory_make("filesink")
+	elem.set_property("sync", False)
+	elem.set_property("preroll-queue-len", 1)
+	elem.set_property("buffer-mode", 2)
+	elem.set_property("location", filename)
+	pipeline.add(elem)
+	src.link(elem)
 
-	def injections(self, src):
-		self.simulation = {}
-		if self.do_injections:
-			for det in self.detectors.keys():	
-				self.simulation[det] = gst.element_factory_make("lal_simulation")
-				self.simulation[det].set_property("xml-location", self.detectors[det].injection_file)
-				self.pipeline.add(self.simulation[det])
-				src[det].link(self.simulation[det])
-			return self.simulation
-		return src
+def mknxydumpsink(pipeline, src, filename):
+	elem = gst.element_factory_make("lal_nxydump")
+	elem.set_property("start-time", 874107188000000000)
+	elem.set_property("stop-time", 874107258000000000)
+	mkfilesink(pipeline, src, filename)
 
-	def gate_tees(self, src, control_tee, thresh=0):
-		gate_tee = {}
-		for i, det in enumerate(src.keys()):
-			gate_tee[det] = []
-			for j in range(len(src[det])):
-				print i, det, j
-				queuesrc = self.queue()
-				queuecontrol = self.queue() 
-				gate = gst.element_factory_make("lal_gate"); self.pipeline.add(gate)
-				gate.set_property("threshold", thresh)
-				src[det][j].link(queuesrc)
-				queuesrc.link_pads("src", gate, "sink")
-				control_tee.link(queuecontrol)
-				queuecontrol.link_pads("src", gate, "control")
-				gate_tee[det].append(self.tee())
-				gate.link(gate_tee[det][j])
-		return gate_tee
-			
+def mktriggergen(pipeline, snr, chisq, detectordata):
+	elem = gst.element_factory_make("lal_triggergen")
+	elem.set_property("bank-filename", detectordata.template_bank_file_name)
+	elem.set_property("snr-thresh", detectordata.snr_threshold)
+	pipeline.add(elem)
+	snr.link_pads("src", elem, "snr")
+	chisq.link(elem)
+	return elem
 
-	def reconstructed_snr_tees(self, gate_tee, matrixtee):
-		self.snr_tee = {}
-		for i, det in enumerate(gate_tee.keys()):
-			self.snr_tee[det] = []
-			for j in range(len(gate_tee[det])):
-				queuesrc = self.queue() 
-				queuematrix = self.queue()
-				snr = gst.element_factory_make("lal_matrixmixer"); self.pipeline.add(snr)
-				gate_tee[det][j].link(queuesrc)
-				queuesrc.link(snr)
-				matrixtee[det][j].link(queuematrix)
-				queuematrix.link_pads("src", snr, "matrix")
- 				self.snr_tee[det].append(self.tee())
-				snr.link(self.snr_tee[det][j])
-		return self.snr_tee
-				
-	def chisquare_tees(self, orthosnrtee, matrixtee, reconstructed_snr_tee, chifacstee):
-		self.chisq_tees = {}
-		for i, det in enumerate(reconstructed_snr_tee.keys()):
-			self.chisq_tees[det] = []
-			for j in range(len(reconstructed_snr_tee[det])):
-				queuesnr = self.queue()
-				queueorthosnr = self.queue() 
-				queuechifacs = self.queue()
-				queuematrix = self.queue() 
-				orthosnrtee[det][j].link(queueorthosnr)
-				matrixtee[det][j].link(queuematrix)
-				chifacstee[det][j].link(queuechifacs)
-				reconstructed_snr_tee[det][j].link(queuesnr)
-				chisq = gst.element_factory_make("lal_chisquare"); self.pipeline.add(chisq)
-				queuesnr.link_pads("src", chisq, "snr")
-				queueorthosnr.link_pads("src", chisq, "orthosnr")
-				queuechifacs.link_pads("src", chisq, "chifacs")
-				queuematrix.link_pads("src", chisq, "matrix")
-				self.chisq_tees[det].append(self.tee())
-				chisq.link(self.chisq_tees[det][j])
+def mktriggerxmlwritersink(pipeline, src, filename):
+	elem = gst.element_factory_make("lal_triggerxmlwriter")
+	elem.set_property("location", filename)
+	elem.set_property("sync", False)
+	elem.set_property("preroll-queue-len", 1)
+	pipeline.add(elem)
+	src.link(elem)
 
-		return self.chisq_tees
+def mkplaybacksink(pipeline, src):
+	adder = gst.element_factory_make("adder")
+	resampler = gst.element_factory_make("audioresample")
+	conv1 = gst.element_factory_make("audioconvert")
+	filter = gst.element_factory_make("capsfilter")
+	filter.set_property("caps", gst.Caps("audio/x-raw-float, width=32"))
+	amp = gst.element_factory_make("audioamplify")
+	amp.set_property("amplification", 5e-2)
+	conv2 = gst.element_factory_make("audioconvert")
+	queue = gst.element_factory_make("queue")
+	queue.set_property("max-size-time", 3000000000)
+	sink = gst.element_factory_make("alsasink")
+	pipeline.add(adder, resampler, conv1, filter, amp, conv2, queue, sink)
+	gst.element_link_many(src, adder, resampler, conv1, filter, amp, conv2, queue, sink)
 
 
-	def control_tees(self, src, control_rate=32):
-		adder = gst.element_factory_make("lal_adder")
-		self.pipeline.add(adder)
-		adder.set_property("sync", True)
-		for i, det in enumerate(src.keys()):
-			for j in range(len(src[det])):
-				qin, qout = self.resample_to_rate(control_rate)
-				src[det][j].link(qin)
-				qout.link(adder)
-				#q = self.queue()
-				#src[det][j].link(q)
-				#q.link(adder)
-		self.control_tee = self.tee() 
-		queue = self.queue()
-		adder.link(queue)
-		queue.link(self.control_tee)
-		return self.control_tee
+#
+# LLOID for one instrument
+#
 
-	def added_snr_tees(self, reconstructed_snr_tee):
-		self.added_snr_tees = {}
-		for i, det in enumerate(reconstructed_snr_tee.keys()):
-			adder = gst.element_factory_make("lal_adder")
-			self.pipeline.add(adder)
-			adder.set_property("sync", True)
-			for j in range(len(reconstructed_snr_tee[det])):
-				qin, qout = self.resample_to_rate(self.banks.base_rate())
-				reconstructed_snr_tee[det][j].link(qin)
-				qout.link_pads("src", adder, "sink"+str(j))
-			self.added_snr_tees[det] = self.tee()
-			adder.link(self.added_snr_tees[det])
-		return self.added_snr_tees
 
-	def added_chisq_tees(self, chisq_tee):
-		self.added_chisq_tees = {}
-		for i, det in enumerate(chisq_tee.keys()):
-			adder = gst.element_factory_make("lal_adder")
-			self.pipeline.add(adder)
-			adder.set_property("sync", True)
-			for j in range(len(chisq_tee[det])):
-				qin, qout = self.resample_to_rate(self.banks.base_rate())
-				chisq_tee[det][j].link(qin)
-				qout.link_pads("src", adder, "sink"+str(j))
-			self.added_chisq_tees[det] = self.tee()
-			adder.link(self.added_chisq_tees[det])
-		return self.added_chisq_tees
+def mkLLOIDSingle(pipeline, instrument, detectors, banks, trigger_filename = "output.xml", do_injections = False, progress_report = False, control_snk = None, control_src = None):
+	# FIXME:  switch to mkframesrc()
+	head = mkfakesrc(pipeline, instrument, detectors)
+	if progress_report:
+		head = mkprogressreport(pipeline, head, "progress_src_%s" % instrument)
 
-	def svd_filter_tees(self, src):
-		self.svd_filter = {}
-		self.orthosnrtee = {}
-		self.matrixtee = {}
-		self.chifacstee = {} 
-		self.sumofsquarestee = {}
-		for det in self.detectors.keys():
-			self.svd_filter[det] = []
-			self.orthosnrtee[det] = []
-			self.matrixtee[det] = []
-			self.chifacstee[det] = []
-			self.sumofsquarestee[det] = []
-			for i in range(len(self.banks)):
-				queue = gst.element_factory_make("queue")
-				self.pipeline.add(queue)
-				queue.set_property("max-size-time", int(self.banks[i].end)*10000000000 + 1000000000)
-				src[det][self.banks[i].rate].link(queue)
-				self.svd_filter[det].append(gst.element_factory_make("lal_templatebank"))
-				self.pipeline.add(self.svd_filter[det][i])
-				queue.link_pads("src", self.svd_filter[det][i], "sink")
-				self.svd_filter[det][i].set_property("t-start", self.banks[i].start)
-				self.svd_filter[det][i].set_property("t-end", self.banks[i].end)
-				self.svd_filter[det][i].set_property("t-total-duration", self.banks[i].filt_length)
-				self.svd_filter[det][i].set_property("snr-length", self.banks[i].blocksize)
-				self.svd_filter[det][i].set_property("template-bank", self.detectors[det].template_bank_file_name)
-				self.svd_filter[det][i].set_property("reference-psd", self.detectors[det].psd)
-				self.orthosnrtee[det].append(self.tee())
-				self.matrixtee[det].append(self.tee()) 
-				self.chifacstee[det].append(self.tee())
-				self.sumofsquarestee[det].append(self.tee())
-				self.svd_filter[det][i].link_pads("src", self.orthosnrtee[det][i], "sink")
-				self.svd_filter[det][i].link_pads("matrix", self.matrixtee[det][i], "sink")
-				self.svd_filter[det][i].link_pads("chifacs", self.chifacstee[det][i], "sink")
-				self.svd_filter[det][i].link_pads("sumofsquares", self.sumofsquarestee[det][i], "sink")
+	if do_injections:
+		if detectors[instrument].injection_file is None:
+			# pygst segfaults if None is used for a
+			# string value
+			raise ValueError, "%s injection file is %s" % (instrument, repr(detectors[instrument].injection_file))
+		head = mkinjections(pipeline, head, detectors[instrument].injection_file)
 
-		return self.orthosnrtee, self.matrixtee, self.chifacstee, self.sumofsquarestee
+	rates = banks.get_rates()
 
+	head = mkcapsfilter(pipeline, mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % rates[0])
+	head = mkwhiten(pipeline, head, detectors[instrument].psd)
+
+	hoft = {rates[0]: mktee(pipeline, head)}
+	for rate in rates[1:]:
+		hoft[rate] = mktee(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, hoft[rates[0]]), "audio/x-raw-float, rate=%d" % rate))
+
+	if control_snk is None:
+		control_snk = gst.element_factory_make("lal_adder")
+		control_snk.set_property("sync", True)
+		pipeline.add(control_snk)
+		control_src = mkcapsfilter(pipeline, control_snk, "audio/x-raw-float, rate=%d" % rates[-1])
+		if progress_report:
+			control_src = mkprogressreport(pipeline, control_src, "progress_sumsquares_%s" % instrument)
+		control_src = mktee(pipeline, control_src)
+		#mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_%s.txt" % instrument)
+
+	snr_adder = gst.element_factory_make("lal_adder")
+	snr_adder.set_property("sync", True)
+	pipeline.add(snr_adder)
+
+	chisq_adder = gst.element_factory_make("lal_adder")
+	chisq_adder.set_property("sync", True)
+	pipeline.add(chisq_adder)
+
+	for bank in banks:
+		head = mkqueue(pipeline, hoft[bank.rate], max_size_time = int(max(bank.filt_length for bank in banks)) * 2 * 1000000000)
+		snr, chisq = mkbank(pipeline, head, detectors[instrument], bank, control_snk, control_src)
+
+		mkqueue(pipeline, mkresample(pipeline, snr, quality = 0)).link(snr_adder)
+		mkqueue(pipeline, mkresample(pipeline, chisq, quality = 0)).link(chisq_adder)
+
+	snr = mkcapsfilter(pipeline, snr_adder, "audio/x-raw-float, rate=%d" % rates[0])
+	chisq = mkcapsfilter(pipeline, chisq_adder, "audio/x-raw-float, rate=%d" % rates[0])
+	if progress_report:
+		snr = mkprogressreport(pipeline, snr, "progress_snr_%s" % instrument)
+		chisq = mkprogressreport(pipeline, chisq, "progress_chisquare_%s" % instrument)
+	snr = mktee(pipeline, snr)
+	chisq = mktee(pipeline, chisq)
+	#mknxydumpsink(pipeline, mkqueue(pipeline, snr), "snr_%s.txt" % instrument)
+	#mknxydumpsink(pipeline, mkqueue(pipeline, chisq), "chisquare_%s.txt" % instrument)
+
+	if trigger_filename is not None:
+		head = mktriggergen(pipeline, mkqueue(pipeline, snr), mkqueue(pipeline, chisq), detectors[instrument])
+		if progress_report:
+			head = mkprogressreport(pipeline, head, "progress_xml_%s" % instrument)
+		mktriggerxmlwritersink(pipeline, head, trigger_filename)
+
+	return snr, chisq
+
+
+#
+# LLOID for multiple instruments with coincidence applied at the orthogonal
+# sum-of-squares stage (using an adder)
+#
+
+
+def mkLLOIDmulti(pipeline, detectors, banks, do_injections = False, progress_report = False):
+	control_snk = gst.element_factory_make("lal_adder")
+	control_snk.set_property("sync", True)
+	pipeline.add(control_snk)
+	control_src = mkcapsfilter(pipeline, control_snk, "audio/x-raw-float, rate=%d" % rates[-1])
+	if progress_report:
+		control_src = mkprogressreport(pipeline, control_src, "progress_sumsquares_coinc")
+	control_src = mktee(pipeline, control_src)
+	#mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_coinc.txt")
+
+	snr = {}
+	chisq = {}
+	for instrument in detectors.keys():
+		snr[instrument], chisq[instrument] = mkLLOIDSingle(
+			pipeline,
+			instrument,
+			detectors,
+			banks,
+			trigger_filename = "output_%s.xml" % instrument,
+			do_injections = do_injections,
+			progress_report = progress_report,
+			control_snk = control_snk,
+			control_src = control_src
+		)
 
 
 #
@@ -518,10 +400,11 @@ class GTK_Main:
 			Banks.Bank(128, 13.0, 29.0, 29.0)
 		])
 		detectors = Detectors({
-			"L1": Detectors.DetectorData("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", "/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml")
-		}, start = 874106958000000000, end = 874107558000000000)
+			"L1": Detectors.DetectorData("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", "/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml", snr_threshold = 7.0, injection_file = "/home/channa/cvs/lsware/gstlal/examples/bns_injections.xml")
+		}, start = 874106958000000000, end = 874120000000000000)
 		self.pipeline = gst.Pipeline("lloid")
-		lloid = LLOID(self.pipeline, detectors, banks, do_injections = False)
+
+		mkLLOIDSingle(self.pipeline, "L1", detectors, banks, trigger_filename = "output.xml", do_injections = False, progress_report = True)
 
 		bus = self.pipeline.get_bus()
 		bus.add_signal_watch()
