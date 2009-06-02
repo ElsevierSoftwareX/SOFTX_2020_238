@@ -265,20 +265,36 @@ def mktriggerxmlwritersink(pipeline, src, filename):
 	pipeline.add(elem)
 	src.link(elem)
 
+def mkscopesink(pipeline, src):
+	elems = (
+		gst.element_factory_make("lal_multiscope"),
+		gst.element_factory_make("ffmpegcolorspace"),
+		gst.element_factory_make("cairotimeoverlay"),
+		gst.element_factory_make("autovideosink")
+	)
+	elems[0].set_property("trace-duration", 4.0)
+	elems[0].set_property("frame-interval", 1.0 / 16)
+	elems[0].set_property("average-interval", 32.0)
+	elems[0].set_property("do-timestamp", False)
+	pipeline.add(*elems)
+	gst.element_link_many(mkqueue(pipeline, src), *elems)
+
 def mkplaybacksink(pipeline, src):
-	adder = gst.element_factory_make("adder")
-	resampler = gst.element_factory_make("audioresample")
-	conv1 = gst.element_factory_make("audioconvert")
-	filter = gst.element_factory_make("capsfilter")
-	filter.set_property("caps", gst.Caps("audio/x-raw-float, width=32"))
-	amp = gst.element_factory_make("audioamplify")
-	amp.set_property("amplification", 5e-2)
-	conv2 = gst.element_factory_make("audioconvert")
-	queue = gst.element_factory_make("queue")
-	queue.set_property("max-size-time", 3000000000)
-	sink = gst.element_factory_make("alsasink")
-	pipeline.add(adder, resampler, conv1, filter, amp, conv2, queue, sink)
-	gst.element_link_many(src, adder, resampler, conv1, filter, amp, conv2, queue, sink)
+	elems = (
+		gst.element_factory_make("adder"),
+		gst.element_factory_make("audioresample"),
+		gst.element_factory_make("audioconvert"),
+		gst.element_factory_make("capsfilter"),
+		gst.element_factory_make("audioamplify"),
+		gst.element_factory_make("audioconvert"),
+		gst.element_factory_make("queue"),
+		gst.element_factory_make("alsasink")
+	)
+	elems[3].set_property("caps", gst.Caps("audio/x-raw-float, width=32"))
+	elems[4].set_property("amplification", 5e-2)
+	elems[6].set_property("max-size-time", 3000000000)
+	pipeline.add(*elems)
+	gst.element_link_many(*elems)
 
 
 #
@@ -300,8 +316,7 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = "ou
 
 	rates = banks.get_rates()
 
-	head = mkcapsfilter(pipeline, mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % rates[0])
-	head = mkwhiten(pipeline, head, detectors[instrument].psd)
+	head = mkwhiten(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % rates[0]), detectors[instrument].psd)
 
 	hoft = {rates[0]: mktee(pipeline, head)}
 	for rate in rates[1:]:
@@ -317,23 +332,23 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = "ou
 		control_src = mktee(pipeline, control_src)
 		mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_%s.txt" % instrument)
 
-	snr_adder = gst.element_factory_make("lal_adder")
-	snr_adder.set_property("sync", True)
-	pipeline.add(snr_adder)
+	snr = gst.element_factory_make("lal_adder")
+	snr.set_property("sync", True)
+	pipeline.add(snr)
 
-	chisq_adder = gst.element_factory_make("lal_adder")
-	chisq_adder.set_property("sync", True)
-	pipeline.add(chisq_adder)
+	chisq = gst.element_factory_make("lal_adder")
+	chisq.set_property("sync", True)
+	pipeline.add(chisq)
 
 	for bank in banks:
 		head = mkqueue(pipeline, hoft[bank.rate], max_size_time = int(max(bank.filt_length for bank in banks)) * 2 * 1000000000)
-		snr, chisq = mkbank(pipeline, head, detectors[instrument], bank, control_snk, control_src)
+		bank_snr, bank_chisq = mkbank(pipeline, head, detectors[instrument], bank, control_snk, control_src)
 
-		mkqueue(pipeline, mkresample(pipeline, snr, quality = 0)).link(snr_adder)
-		mkqueue(pipeline, mkresample(pipeline, chisq, quality = 0)).link(chisq_adder)
+		mkqueue(pipeline, mkresample(pipeline, bank_snr, quality = 0)).link(snr)
+		mkqueue(pipeline, mkresample(pipeline, bank_chisq, quality = 0)).link(chisq)
 
-	snr = mkcapsfilter(pipeline, snr_adder, "audio/x-raw-float, rate=%d" % rates[0])
-	chisq = mkcapsfilter(pipeline, chisq_adder, "audio/x-raw-float, rate=%d" % rates[0])
+	snr = mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % rates[0])
+	chisq = mkcapsfilter(pipeline, chisq, "audio/x-raw-float, rate=%d" % rates[0])
 	if progress_report:
 		snr = mkprogressreport(pipeline, snr, "progress_snr_%s" % instrument)
 		chisq = mkprogressreport(pipeline, chisq, "progress_chisquare_%s" % instrument)
