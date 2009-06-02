@@ -630,7 +630,7 @@ static int SPAWaveform (
   tmplt->order = tmplt->order;
 
   /* zero output */
-  memset( expPsi, 0, signal->data->length * sizeof(COMPLEX16) );
+  memset( expPsi, 0, signal->data->length * sizeof(*expPsi) );
 
   /* parameters */
   deltaF = signal->deltaF;
