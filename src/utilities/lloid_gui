@@ -28,8 +28,6 @@
 #
 
 
-import pygtk
-import gtk
 import gobject
 import pygst
 pygst.require("0.10")
@@ -288,7 +286,7 @@ def mkplaybacksink(pipeline, src):
 #
 
 
-def mkLLOIDSingle(pipeline, instrument, detectors, banks, trigger_filename = "output.xml", do_injections = False, progress_report = False, control_snk = None, control_src = None):
+def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = "output.xml", do_injections = False, progress_report = False, control_snk = None, control_src = None):
 	# FIXME:  switch to mkframesrc()
 	head = mkfakesrc(pipeline, instrument, detectors)
 	if progress_report:
@@ -373,7 +371,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, do_injections = False, progress_rep
 	snr = {}
 	chisq = {}
 	for instrument in detectors.keys():
-		snr[instrument], chisq[instrument] = mkLLOIDSingle(
+		snr[instrument], chisq[instrument] = mkLLOIDsingle(
 			pipeline,
 			instrument,
 			detectors,
@@ -395,18 +393,10 @@ def mkLLOIDmulti(pipeline, detectors, banks, do_injections = False, progress_rep
 #
 
 
-class GTK_Main:
+class Main(object):
 	def __init__(self):
-		window = gtk.Window(gtk.WINDOW_TOPLEVEL)
-		window.set_title("LLOID GUI")
-		window.set_default_size(400, 200)
-		window.connect("destroy", gtk.main_quit, "WM destroy")
-		vbox = gtk.VBox()
-		window.add(vbox)
-		self.button = gtk.Button("Start")
-		self.button.connect("clicked", self.start_stop)
-		vbox.add(self.button)
-		window.show_all()
+		self.pipeline = gst.Pipeline("lloid")
+
 		banks = Banks([
 			Banks.Bank(2048, 0.0, 1.0, 29.0, gate_threshold = 3.0),
 			Banks.Bank(512, 1.0, 5.0, 29.0, gate_threshold = 3.0),
@@ -415,33 +405,25 @@ class GTK_Main:
 		])
 		detectors = Detectors({
 			"L1": Detectors.DetectorData("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", "/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml", snr_threshold = 6.0, injection_file = "/home/channa/cvs/lsware/gstlal/examples/bns_injections.xml")
-		}, start = 874106958000000000, end = 874120000000000000)
-		self.pipeline = gst.Pipeline("lloid")
+		}, start = 874100000000000000, end = 874120000000000000)
 
-		mkLLOIDSingle(self.pipeline, "L1", detectors, banks, trigger_filename = "output.xml", do_injections = False, progress_report = True)
+		mkLLOIDsingle(self.pipeline, "L1", detectors, banks, trigger_filename = "output.xml", do_injections = False, progress_report = True)
 
 		bus = self.pipeline.get_bus()
 		bus.add_signal_watch()
 		bus.connect("message", self.on_message)
 
-	def start_stop(self, w):
-		if self.button.get_label() == "Start":
-			self.button.set_label("Stop")
-			self.pipeline.set_state(gst.STATE_PLAYING)
-		else:
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.button.set_label("Start")
 
 	def on_message(self, bus, message):
 		if message.type == gst.MESSAGE_EOS:
 			self.pipeline.set_state(gst.STATE_NULL)
-			self.button.set_label("Start")
 		elif message.type == gst.MESSAGE_ERROR:
 			self.pipeline.set_state(gst.STATE_NULL)
-			self.button.set_label("Start")
 			err, debug = message.parse_error()
 			print "Error: %s", err, debug
 
-GTK_Main()
-gtk.gdk.threads_init()
-gtk.main()
+
+gobject.threads_init()
+m = Main()
+m.pipeline.set_state(gst.STATE_PLAYING)
+gobject.MainLoop().run()
