@@ -88,6 +88,7 @@
 #define DEFAULT_ZERO_PAD_SECONDS 2.0
 #define DEFAULT_FFT_LENGTH_SECONDS 8.0
 #define DEFAULT_AVERAGE_SAMPLES 16
+#define DEFAULT_MEDIAN_SAMPLES 13
 #define DEFAULT_PSDMODE GSTLAL_PSDMODE_INITIAL_LIGO_SRD
 
 
@@ -1070,7 +1071,7 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->window = NULL;
 	element->fwdplan = NULL;
 	element->revplan = NULL;
-	element->psd_regressor = XLALPSDRegressorNew(DEFAULT_AVERAGE_SAMPLES, 1);
+	element->psd_regressor = XLALPSDRegressorNew(DEFAULT_AVERAGE_SAMPLES, DEFAULT_MEDIAN_SAMPLES);
 	element->psd = NULL;
 	element->tail = NULL;
 	element->xml_filename = NULL;
