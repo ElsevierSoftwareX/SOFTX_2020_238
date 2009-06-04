@@ -149,8 +149,8 @@ def mkwhiten(pipeline, src, reference_psd_filename):
 	elem.set_property("psd-mode", 1)
 	elem.set_property("zero-pad", 0)
 	elem.set_property("fft-length", 8)
-	elem.set_property("average-samples", 16)
-	elem.set_property("compensation-psd", reference_psd_filename)
+	elem.set_property("average-samples", 64)
+	#elem.set_property("compensation-psd", reference_psd_filename)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
@@ -189,6 +189,8 @@ def mkbank(pipeline, src, detectordata, bank, control_snk, control_src):
 	mkqueue(pipeline, mkresample(pipeline, elem, pad_name = "sumofsquares")).link(control_snk)
 	orthosnr = mktee(pipeline, elem, pad_name = "src")
 	matrix = mktee(pipeline, elem, pad_name = "matrix")
+
+	#mknxydumpsink(pipeline, mkqueue(pipeline, orthosnr), "orthosnr_%s.txt" % elem.get_name())
 
 	gate = gst.element_factory_make("lal_gate")
 	gate.set_property("threshold", bank.gate_threshold)
@@ -354,8 +356,8 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = "ou
 		chisq = mkprogressreport(pipeline, chisq, "progress_chisquare_%s" % instrument)
 	snr = mktee(pipeline, snr)
 	chisq = mktee(pipeline, chisq)
-	#mknxydumpsink(pipeline, mkqueue(pipeline, snr), "snr_%s.txt" % instrument)
-	#mknxydumpsink(pipeline, mkqueue(pipeline, chisq), "chisquare_%s.txt" % instrument)
+	mknxydumpsink(pipeline, mkqueue(pipeline, snr), "snr_%s.txt" % instrument)
+	mknxydumpsink(pipeline, mkqueue(pipeline, chisq), "chisquare_%s.txt" % instrument)
 
 	if trigger_filename is not None:
 		head = mktriggergen(pipeline, mkqueue(pipeline, snr), mkqueue(pipeline, chisq), detectors[instrument])
@@ -412,14 +414,14 @@ class Main(object):
 		self.pipeline = gst.Pipeline("lloid")
 
 		banks = Banks([
-			Banks.Bank(2048, 0.0, 1.0, 29.0, gate_threshold = 3.0),
-			Banks.Bank(512, 1.0, 5.0, 29.0, gate_threshold = 3.0),
-			Banks.Bank(256, 5.0, 13.0, 29.0, gate_threshold = 3.0),
-			Banks.Bank(128, 13.0, 29.0, 29.0, gate_threshold = 3.0)
+			Banks.Bank(2048, 0.0, 1.0, 29.0, gate_threshold = 4.5),
+			Banks.Bank(512, 1.0, 5.0, 29.0, gate_threshold = 4.5),
+			Banks.Bank(256, 5.0, 13.0, 29.0, gate_threshold = 4.5),
+			Banks.Bank(128, 13.0, 29.0, 29.0, gate_threshold = 4.5)
 		])
 		detectors = Detectors({
-			"L1": Detectors.DetectorData("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", "/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml", snr_threshold = 6.0, injection_file = "/home/channa/cvs/lsware/gstlal/examples/bns_injections.xml")
-		}, start = 874100000000000000, end = 874120000000000000)
+			"L1": Detectors.DetectorData("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", "/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml", snr_threshold = 5.5, injection_file = "/home/channa/cvs/lsware/gstlal/examples/bns_injections.xml")
+		}, start = 874106000000000000, end = 874120000000000000)
 
 		mkLLOIDsingle(self.pipeline, "L1", detectors, banks, trigger_filename = "output.xml", do_injections = False, progress_report = True)
 
