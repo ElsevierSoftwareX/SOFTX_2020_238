@@ -35,8 +35,8 @@ function test_whiten() {
 	gst-launch \
 		audiotestsrc wave=5 volume=1e-5 \
 		! audio/x-raw-float, width=64, rate=1024 \
-		! lal_whiten psd-mode=1 zero-pad=0 fft-length=8 average-samples=2 compensation-psd="unit_psd.txt" \
-		! lal_nxydump start-time=0 stop-time=300000000000 \
+		! lal_whiten psd-mode=1 zero-pad=0 fft-length=8 average-samples=128 \
+		! lal_nxydump start-time=0 stop-time=600000000000 \
 		! progressreport \
 		! filesink location="dump.txt" buffer-mode=2
 }
