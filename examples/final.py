@@ -7,7 +7,7 @@ xiout = file("xi.txt", "w")
 
 max_phase_snr = 0
 max_snr = 0
-for snrline, chisqline in itertools.izip(file("snr.txt"), file("chisquare.txt")):
+for snrline, chisqline in itertools.izip(file("snr_L1.txt"), file("chisquare_L1.txt")):
 	snrline = snrline.strip().split()
 	chisqline = chisqline.strip().split()
 	snr = tuple(map(float, snrline[1:]))
