@@ -291,7 +291,7 @@ static REAL8FrequencySeries *get_psd(enum gstlal_psdmode_t psdmode, LALPSDRegres
 			psd = make_psd_from_fseries(fseries);
 			if(!psd)
 				return NULL;
-			if(XLALPSDRegressorSetPSD(psd_regressor, psd, psd_regressor->average_samples)) {
+			if(XLALPSDRegressorSetPSD(psd_regressor, psd, 1)) {
 				GST_ERROR("XLALPSDRegressorSetPSD() failed");
 				XLALDestroyREAL8FrequencySeries(psd);
 				return NULL;
