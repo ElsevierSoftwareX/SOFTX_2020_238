@@ -360,7 +360,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		break;
 
 	case ARG_AVERAGE_SAMPLES:
-		element->psd_regressor->average_samples = g_value_get_int(value);
+		XLALPSDRegressorSetAverageSamples(element->psd_regressor, g_value_get_uint(value));
 		break;
 
 	case ARG_XML_FILENAME:
@@ -413,7 +413,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		break;
 
 	case ARG_AVERAGE_SAMPLES:
-		g_value_set_int(value, element->psd_regressor->average_samples);
+		g_value_set_uint(value, XLALPSDRegressorGetAverageSamples(element->psd_regressor));
 		break;
 
 	case ARG_XML_FILENAME:
@@ -672,7 +672,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 */
 
 			if(!element->psd_regressor->n_samples) {
-				if(XLALPSDRegressorSetPSD(element->psd_regressor, element->compensation_psd, element->psd_regressor->average_samples)) {
+				if(XLALPSDRegressorSetPSD(element->psd_regressor, element->compensation_psd, XLALPSDRegressorGetAverageSamples(element->psd_regressor))) {
 					GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
 					result = GST_FLOW_ERROR;
 					goto done;
@@ -695,7 +695,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 				result = GST_FLOW_ERROR;
 				goto done;
 			}
-			if(!(n++ % (element->psd_regressor->average_samples / 2)) && element->xml_stream) {
+			if(!(n++ % (XLALPSDRegressorGetAverageSamples(element->psd_regressor) / 2)) && element->xml_stream) {
 				static int n = 1;
 				GST_INFO_OBJECT(element, "writing PSD snapshot %d", n++);
 				if(XLALWriteLIGOLwXMLArrayREAL8FrequencySeries(element->xml_stream, "Recorded by GSTLAL element lal_whiten", element->psd))
@@ -1029,7 +1029,7 @@ static void class_init(gpointer class, gpointer class_data)
 	g_object_class_install_property(gobject_class, ARG_PSDMODE, g_param_spec_enum("psd-mode", "PSD mode", "PSD estimation mode", GSTLAL_PSDMODE_TYPE, DEFAULT_PSDMODE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_ZERO_PAD_SECONDS, g_param_spec_double("zero-pad", "Zero-padding", "Length of the zero-padding to include on both sides of the FFT in seconds", 0, G_MAXDOUBLE, DEFAULT_ZERO_PAD_SECONDS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_FFT_LENGTH, g_param_spec_double("fft-length", "FFT length", "Total length of the FFT convolution in seconds", 0, G_MAXDOUBLE, DEFAULT_FFT_LENGTH_SECONDS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_AVERAGE_SAMPLES, g_param_spec_int("average-samples", "Average samples", "Number of FFTs used in PSD average", 1, G_MAXINT, DEFAULT_AVERAGE_SAMPLES, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_AVERAGE_SAMPLES, g_param_spec_uint("average-samples", "Average samples", "Number of FFTs used in PSD average", 1, G_MAXUINT, DEFAULT_AVERAGE_SAMPLES, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_XML_FILENAME, g_param_spec_string("xml-filename", "XML Filename", "Name of file into which will be dumped PSD snapshots (null = disable).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_COMPENSATION_PSD, g_param_spec_string("compensation-psd", "Filename", "Name of text file from which to read reference spectrum to be compensated for by over-whitening (null = disable).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
