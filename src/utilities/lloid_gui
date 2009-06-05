@@ -150,6 +150,7 @@ def mkwhiten(pipeline, src, reference_psd_filename):
 	elem.set_property("zero-pad", 0)
 	elem.set_property("fft-length", 8)
 	elem.set_property("average-samples", 64)
+	elem.set_property("median-samples", 7)
 	#elem.set_property("compensation-psd", reference_psd_filename)
 	pipeline.add(elem)
 	src.link(elem)
