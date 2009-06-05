@@ -88,7 +88,7 @@
 #define DEFAULT_ZERO_PAD_SECONDS 2.0
 #define DEFAULT_FFT_LENGTH_SECONDS 8.0
 #define DEFAULT_AVERAGE_SAMPLES 32
-#define DEFAULT_MEDIAN_SAMPLES 13
+#define DEFAULT_MEDIAN_SAMPLES 9
 #define DEFAULT_PSDMODE GSTLAL_PSDMODE_INITIAL_LIGO_SRD
 
 
@@ -336,6 +336,7 @@ enum property {
 	ARG_ZERO_PAD_SECONDS,
 	ARG_FFT_LENGTH,
 	ARG_AVERAGE_SAMPLES,
+	ARG_MEDIAN_SAMPLES,
 	ARG_XML_FILENAME,
 	ARG_COMPENSATION_PSD
 };
@@ -361,6 +362,10 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 
 	case ARG_AVERAGE_SAMPLES:
 		XLALPSDRegressorSetAverageSamples(element->psd_regressor, g_value_get_uint(value));
+		break;
+
+	case ARG_MEDIAN_SAMPLES:
+		XLALPSDRegressorSetMedianSamples(element->psd_regressor, g_value_get_uint(value));
 		break;
 
 	case ARG_XML_FILENAME:
@@ -414,6 +419,10 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 
 	case ARG_AVERAGE_SAMPLES:
 		g_value_set_uint(value, XLALPSDRegressorGetAverageSamples(element->psd_regressor));
+		break;
+
+	case ARG_MEDIAN_SAMPLES:
+		g_value_set_uint(value, XLALPSDRegressorGetMedianSamples(element->psd_regressor));
 		break;
 
 	case ARG_XML_FILENAME:
@@ -1030,6 +1039,7 @@ static void class_init(gpointer class, gpointer class_data)
 	g_object_class_install_property(gobject_class, ARG_ZERO_PAD_SECONDS, g_param_spec_double("zero-pad", "Zero-padding", "Length of the zero-padding to include on both sides of the FFT in seconds", 0, G_MAXDOUBLE, DEFAULT_ZERO_PAD_SECONDS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_FFT_LENGTH, g_param_spec_double("fft-length", "FFT length", "Total length of the FFT convolution in seconds", 0, G_MAXDOUBLE, DEFAULT_FFT_LENGTH_SECONDS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_AVERAGE_SAMPLES, g_param_spec_uint("average-samples", "Average samples", "Number of FFTs used in PSD average", 1, G_MAXUINT, DEFAULT_AVERAGE_SAMPLES, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_MEDIAN_SAMPLES, g_param_spec_uint("median-samples", "Median samples", "Number of FFTs used in PSD median history", 1, G_MAXUINT, DEFAULT_MEDIAN_SAMPLES, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_XML_FILENAME, g_param_spec_string("xml-filename", "XML Filename", "Name of file into which will be dumped PSD snapshots (null = disable).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_COMPENSATION_PSD, g_param_spec_string("compensation-psd", "Filename", "Name of text file from which to read reference spectrum to be compensated for by over-whitening (null = disable).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
