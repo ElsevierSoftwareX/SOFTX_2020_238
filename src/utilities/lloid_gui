@@ -59,9 +59,6 @@ class Banks(list):
 	def get_rates(self):
 		return tuple(sorted(set(bank.rate for bank in self), reverse = True))
 
-	def max_rate(self):
-		return max(bank.rate for bank in self)
-
 
 class Detectors(dict):
 	class DetectorData(object):
@@ -305,7 +302,7 @@ def mkplaybacksink(pipeline, src):
 #
 
 
-def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = "output.xml", do_injections = False, progress_report = False, control_snk = None, control_src = None):
+def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = None, do_injections = False, progress_report = False, control_snk = None, control_src = None):
 	head = mkframesrc(pipeline, instrument, detectors)
 	if progress_report:
 		head = mkprogressreport(pipeline, head, "progress_src_%s" % instrument)
