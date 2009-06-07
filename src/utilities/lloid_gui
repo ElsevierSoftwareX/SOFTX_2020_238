@@ -407,9 +407,10 @@ def mkLLOIDmulti(pipeline, detectors, banks, do_injections = False, progress_rep
 #
 
 
-class Main(object):
-	def __init__(self):
-		self.pipeline = gst.Pipeline("lloid")
+class LLOIDHandler(object):
+	def __init__(self, mainloop, pipeline):
+		self.mainloop = mainloop
+		self.pipeline = pipeline
 
 		banks = Banks([
 			Banks.Bank(2048, 0.0, 1.0, 29.0, gate_threshold = 4.5),
@@ -421,9 +422,9 @@ class Main(object):
 			"L1": Detectors.DetectorData("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", "/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml", snr_threshold = 5.5, injection_file = "/home/channa/cvs/lsware/gstlal/examples/bns_injections.xml")
 		}, start = 874106000000000000, end = 874120000000000000)
 
-		mkLLOIDsingle(self.pipeline, "L1", detectors, banks, trigger_filename = "output.xml", do_injections = False, progress_report = True)
+		mkLLOIDsingle(pipeline, "L1", detectors, banks, trigger_filename = "output.xml", do_injections = False, progress_report = True)
 
-		bus = self.pipeline.get_bus()
+		bus = pipeline.get_bus()
 		bus.add_signal_watch()
 		bus.connect("message", self.on_message)
 
@@ -431,13 +432,20 @@ class Main(object):
 	def on_message(self, bus, message):
 		if message.type == gst.MESSAGE_EOS:
 			self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
 		elif message.type == gst.MESSAGE_ERROR:
 			self.pipeline.set_state(gst.STATE_NULL)
 			err, debug = message.parse_error()
 			print "Error: %s", err, debug
+			self.mainloop.quit()
 
 
 gobject.threads_init()
-m = Main()
-m.pipeline.set_state(gst.STATE_PLAYING)
-gobject.MainLoop().run()
+
+pipeline = gst.Pipeline("lloid")
+mainloop = gobject.MainLoop()
+
+handler = LLOIDHandler(mainloop, pipeline)
+
+pipeline.set_state(gst.STATE_PLAYING)
+mainloop.run()
