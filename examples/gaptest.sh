@@ -2,11 +2,11 @@ STOP_TIME=40000000000
 IN_SAMPLE=64
 OUT_SAMPLE=2048
 QUALITY=10
-gst-launch-0.10 \
+gst-launch-0.10 --gst-debug-level=1\
 	lal_gate \
 		name=gate \
 		threshold=0.75 \
-	! gstlal-audioresample \
+	! audioresample \
 	! audio/x-raw-float, width=64, rate=${OUT_SAMPLE}, quality=${QUALITY} \
 	! lal_nxydump \
 		start-time=0 \
