@@ -322,10 +322,7 @@ static GstStateChangeReturn gen_change_state(GstElement *element, GstStateChange
 
     case GST_STATE_CHANGE_READY_TO_PAUSED:
       triggergen->output_offset = 0;
-      /* FIXME:  temporarily hard-coded to a value that prevents
-       * overflow in our test pipeline.  must figure out how to
-       * handle arbitrary start times without overflow */
-      triggergen->output_timestamp_at_zero = 874100000 * GST_SECOND;
+      triggergen->output_timestamp_at_zero = GSTLAL_COLLECTPADS_TIMESTAMP_AT_ZERO;
       gst_collect_pads_start(triggergen->collect);
       break;
 

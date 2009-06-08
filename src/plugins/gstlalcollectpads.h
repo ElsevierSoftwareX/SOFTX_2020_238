@@ -67,6 +67,12 @@ typedef struct _GstLALCollectData {
 } GstLALCollectData;
 
 
+/* FIXME:  temporarily hard-coded to a value that prevents overflow in our
+ * test pipeline.  must figure out how to handle arbitrary start times
+ * without overflow */
+#define GSTLAL_COLLECTPADS_TIMESTAMP_AT_ZERO (874100000 * GST_SECOND)
+
+
 /*
  * Function prototypes.
  */
