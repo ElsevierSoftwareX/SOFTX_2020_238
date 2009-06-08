@@ -301,7 +301,10 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 			 * output stream.
 			 */
 
-			data->offset_offset -= ((gint64) GST_BUFFER_TIMESTAMP(buf) - (gint64) output_timestamp_at_zero_offset) * rate / GST_SECOND;
+			if(GST_BUFFER_TIMESTAMP(buf) >= output_timestamp_at_zero_offset)
+				data->offset_offset -= gst_util_uint64_scale_int(GST_BUFFER_TIMESTAMP(buf) - output_timestamp_at_zero_offset, rate, GST_SECOND);
+			else
+				data->offset_offset += gst_util_uint64_scale_int(output_timestamp_at_zero_offset - GST_BUFFER_TIMESTAMP(buf), rate, GST_SECOND);
 
 			/*
 			 * offset_offset is now valid.
