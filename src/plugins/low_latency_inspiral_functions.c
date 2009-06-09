@@ -496,12 +496,11 @@ int generate_bank_svd(
 int not_gsl_matrix_transpose(gsl_matrix **m)
 {
   gsl_matrix *new = gsl_matrix_calloc((*m)->size2, (*m)->size1);
-  if(new)
-    gsl_matrix_transpose_memcpy(new, *m);
-  else {
+  if(!new) {
     fprintf(stderr, "not_gsl_matrix_transpose() transpose failed to allocate memory\n");
     return -1;
-    }
+  }
+  gsl_matrix_transpose_memcpy(new, *m);
   gsl_matrix_free(*m);
   *m = new;
   return 0;
