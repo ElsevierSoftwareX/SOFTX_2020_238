@@ -1352,10 +1352,7 @@ static GstStateChangeReturn gst_adder_change_state(GstElement * element, GstStat
 
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		adder->output_offset = 0;
-		/* FIXME:  temporarily hard-coded to a value that prevents
-		 * overflow in our test pipeline.  must figure out how to
-		 * handle arbitrary start times without overflow */
-		adder->output_timestamp_at_zero = 874100000 * GST_SECOND;
+		adder->output_timestamp_at_zero = GSTLAL_COLLECTPADS_TIMESTAMP_AT_ZERO;
 		adder->segment_pending = TRUE;
 		adder->segment_position = 0;
 		adder->segment_rate = 1.0;
