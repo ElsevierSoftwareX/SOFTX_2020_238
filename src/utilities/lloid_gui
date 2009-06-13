@@ -43,30 +43,34 @@ import gst
 #
 
 
-class Banks(list):
-	class Bank(object):
-		def __init__(self, rate, start, end, length, blocksize = None, gate_threshold = 5.0):
-			self.filt_length = length
+class Banks(object):
+	class BankFragment(object):
+		def __init__(self, rate, start, end, blocksize = None):
 			self.rate = rate
 			self.start = start
 			self.end = end
 			if blocksize is not None:
 				self.blocksize = blocksize
 			else:
+				# 1 second
 				self.blocksize = rate
-			self.gate_threshold = gate_threshold
+
+	def __init__(self, template_bank_filename, bank_fragments, length, gate_threshold):
+		self.template_bank_filename = template_bank_filename
+		self.bank_fragments = bank_fragments
+		self.filter_length = length
+		self.gate_threshold = gate_threshold
 
 	def get_rates(self):
-		return tuple(sorted(set(bank.rate for bank in self), reverse = True))
+		return tuple(sorted(set(bank_fragment.rate for bank_fragment in self.bank_fragments), reverse = True))
 
 
 class Detectors(dict):
 	class DetectorData(object):
-		def __init__(self, frame_cache, channel, psd, template_bank_file_name, snr_threshold, injection_file = None):
+		def __init__(self, frame_cache, channel, psd, snr_threshold, injection_file = None):
 			self.frame_cache = frame_cache
 			self.channel = channel
 			self.psd = psd
-			self.template_bank_file_name = template_bank_file_name
 			self.snr_threshold = snr_threshold
 			self.injection_file = injection_file
 
@@ -173,14 +177,14 @@ def mkqueue(pipeline, src, pad_name = None, **properties):
 		src.link_pads(pad_name, elem, "sink")
 	return elem
 
-def mkbank(pipeline, src, detectordata, bank, control_snk, control_src):
+def mkbank(pipeline, src, reference_psd_filename, banks, bank, control_snk, control_src):
 	elem = gst.element_factory_make("lal_templatebank")
 	elem.set_property("t-start", bank.start)
 	elem.set_property("t-end", bank.end)
-	elem.set_property("t-total-duration", bank.filt_length)
+	elem.set_property("t-total-duration", banks.filter_length)
 	elem.set_property("snr-length", bank.blocksize)
-	elem.set_property("template-bank", detectordata.template_bank_file_name)
-	elem.set_property("reference-psd", detectordata.psd)
+	elem.set_property("template-bank", banks.template_bank_filename)
+	elem.set_property("reference-psd", reference_psd_filename)
 	pipeline.add(elem)
 	src.link(elem)
 
@@ -191,7 +195,7 @@ def mkbank(pipeline, src, detectordata, bank, control_snk, control_src):
 	#mknxydumpsink(pipeline, mkqueue(pipeline, orthosnr), "orthosnr_%s.txt" % elem.get_name())
 
 	gate = gst.element_factory_make("lal_gate")
-	gate.set_property("threshold", bank.gate_threshold)
+	gate.set_property("threshold", banks.gate_threshold)
 	pipeline.add(gate)
 	mkqueue(pipeline, control_src).link_pads("src", gate, "control")
 	mkqueue(pipeline, orthosnr).link(gate)
@@ -248,10 +252,10 @@ def mknxydumpsink(pipeline, src, filename):
 	src.link(elem)
 	mkfilesink(pipeline, elem, filename)
 
-def mktriggergen(pipeline, snr, chisq, detectordata):
+def mktriggergen(pipeline, snr, chisq, template_bank_filename, snr_threshold):
 	elem = gst.element_factory_make("lal_triggergen")
-	elem.set_property("bank-filename", detectordata.template_bank_file_name)
-	elem.set_property("snr-thresh", detectordata.snr_threshold)
+	elem.set_property("bank-filename", template_bank_filename)
+	elem.set_property("snr-thresh", snr_threshold)
 	pipeline.add(elem)
 	snr.link_pads("src", elem, "snr")
 	chisq.link(elem)
@@ -340,9 +344,17 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = Non
 	chisq.set_property("sync", True)
 	pipeline.add(chisq)
 
-	for bank in banks:
-		head = mkqueue(pipeline, hoft[bank.rate], max_size_time = int(max(bank.filt_length for bank in banks)) * 2 * 1000000000)
-		bank_snr, bank_chisq = mkbank(pipeline, head, detectors[instrument], bank, control_snk, control_src)
+	for bank_fragment in banks.bank_fragments:
+		head = mkqueue(pipeline, hoft[bank_fragment.rate], max_size_time = int(banks.filter_length) * 2 * 1000000000)
+		bank_snr, bank_chisq = mkbank(
+			pipeline,
+			head,
+			detectors[instrument].psd,
+			banks,
+			bank_fragment,
+			control_snk,
+			control_src
+		)
 
 		mkqueue(pipeline, mkresample(pipeline, bank_snr, quality = 0)).link(snr)
 		mkqueue(pipeline, mkresample(pipeline, bank_chisq, quality = 0)).link(chisq)
@@ -358,7 +370,7 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = Non
 	mknxydumpsink(pipeline, mkqueue(pipeline, chisq), "chisquare_%s.txt" % instrument)
 
 	if trigger_filename is not None:
-		head = mktriggergen(pipeline, mkqueue(pipeline, snr), mkqueue(pipeline, chisq), detectors[instrument])
+		head = mktriggergen(pipeline, mkqueue(pipeline, snr), mkqueue(pipeline, chisq), banks.template_bank_filename, detectors[instrument].snr_threshold)
 		if progress_report:
 			head = mkprogressreport(pipeline, head, "progress_xml_%s" % instrument)
 		mktriggerxmlwritersink(pipeline, head, trigger_filename)
@@ -412,18 +424,6 @@ class LLOIDHandler(object):
 		self.mainloop = mainloop
 		self.pipeline = pipeline
 
-		banks = Banks([
-			Banks.Bank(2048, 0.0, 1.0, 29.0, gate_threshold = 4.5),
-			Banks.Bank(512, 1.0, 5.0, 29.0, gate_threshold = 4.5),
-			Banks.Bank(256, 5.0, 13.0, 29.0, gate_threshold = 4.5),
-			Banks.Bank(128, 13.0, 29.0, 29.0, gate_threshold = 4.5)
-		])
-		detectors = Detectors({
-			"L1": Detectors.DetectorData("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", "/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml", snr_threshold = 5.5, injection_file = "/home/channa/cvs/lsware/gstlal/examples/bns_injections.xml")
-		}, start = 874106000000000000, end = 874120000000000000)
-
-		mkLLOIDsingle(pipeline, "L1", detectors, banks, trigger_filename = "output.xml", do_injections = False, progress_report = True)
-
 		bus = pipeline.get_bus()
 		bus.add_signal_watch()
 		bus.connect("message", self.on_message)
@@ -444,6 +444,29 @@ gobject.threads_init()
 
 pipeline = gst.Pipeline("lloid")
 mainloop = gobject.MainLoop()
+
+
+mkLLOIDsingle(
+	pipeline,
+	"L1",
+	detectors = Detectors({
+		"L1": Detectors.DetectorData("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", snr_threshold = 5.5, injection_file = "/home/channa/cvs/lsware/gstlal/examples/bns_injections.xml")
+	}, start = 874106000000000000, end = 874120000000000000),
+	banks = Banks(
+		"/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml",
+		[
+			Banks.BankFragment(2048, 0.0, 1.0),
+			Banks.BankFragment(512, 1.0, 5.0),
+			Banks.BankFragment(256, 5.0, 13.0),
+			Banks.BankFragment(128, 13.0, 29.0)
+		],
+		length = 29.0,
+		gate_threshold = 4.5
+	),
+	trigger_filename = "output.xml",
+	do_injections = False,
+	progress_report = True
+)
 
 handler = LLOIDHandler(mainloop, pipeline)
 
