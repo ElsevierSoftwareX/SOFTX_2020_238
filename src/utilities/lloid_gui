@@ -247,6 +247,12 @@ def mknxydumpsink(pipeline, src, filename):
 		elem.set_property("stop-time", 874120000000000000)
 	pipeline.add(elem)
 	src.link(elem)
+	# FIXME:  add bz2enc element from plugins-bad to compress text
+	# streams.
+	#src = elem
+	#elem = gst.element_factory_make("bz2enc")
+	#pipeline.add(elem)
+	#src.link(elem)
 	mkfilesink(pipeline, elem, filename)
 
 def mktriggergen(pipeline, snr, chisq, template_bank_filename, snr_threshold):
