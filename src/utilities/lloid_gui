@@ -303,7 +303,7 @@ def mkplaybacksink(pipeline, src):
 #
 
 
-def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = None, injection_filename = None, progress_report = False, control_snk = None, control_src = None):
+def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = None, progress_report = False, control_snk = None, control_src = None):
 	head = mkframesrc(pipeline, instrument, detectors)
 	if progress_report:
 		head = mkprogressreport(pipeline, head, "progress_src_%s" % instrument)
@@ -357,16 +357,10 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = Non
 	if progress_report:
 		snr = mkprogressreport(pipeline, snr, "progress_snr_%s" % instrument)
 		chisq = mkprogressreport(pipeline, chisq, "progress_chisquare_%s" % instrument)
-	snr = mktee(pipeline, snr)
-	chisq = mktee(pipeline, chisq)
+	#snr = mktee(pipeline, snr)
 	#mknxydumpsink(pipeline, mkqueue(pipeline, snr), "snr_%s.txt" % instrument)
+	#chisq = mktee(pipeline, chisq)
 	#mknxydumpsink(pipeline, mkqueue(pipeline, chisq), "chisquare_%s.txt" % instrument)
-
-	if trigger_filename is not None:
-		head = mktriggergen(pipeline, mkqueue(pipeline, snr), mkqueue(pipeline, chisq), banks.template_bank_filename, detectors[instrument].snr_threshold)
-		if progress_report:
-			head = mkprogressreport(pipeline, head, "progress_xml_%s" % instrument)
-		mktriggerxmlwritersink(pipeline, head, trigger_filename)
 
 	return snr, chisq
 
@@ -377,30 +371,34 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = Non
 #
 
 
-def mkLLOIDmulti(pipeline, detectors, banks, injection_filename = None, progress_report = False):
+def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filename = None, progress_report = False):
 	control_snk = gst.element_factory_make("lal_adder")
 	control_snk.set_property("sync", True)
 	pipeline.add(control_snk)
-	control_src = mkcapsfilter(pipeline, control_snk, "audio/x-raw-float, rate=%d" % rates[-1])
+	control_src = mkcapsfilter(pipeline, control_snk, "audio/x-raw-float, rate=%d" % min(banks.get_rates()))
 	if progress_report:
 		control_src = mkprogressreport(pipeline, control_src, "progress_sumsquares_coinc")
 	control_src = mktee(pipeline, control_src)
 	#mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_coinc.txt")
 
-	snr = {}
-	chisq = {}
 	for instrument in detectors.keys():
-		snr[instrument], chisq[instrument] = mkLLOIDsingle(
+		snr, chisq = mkLLOIDsingle(
 			pipeline,
 			instrument,
 			detectors,
 			banks,
-			trigger_filename = "output_%s.xml" % instrument,
 			injection_filename = injection_filename,
 			progress_report = progress_report,
 			control_snk = control_snk,
 			control_src = control_src
 		)
+
+		head = mktriggergen(pipeline, mkqueue(pipeline, snr), mkqueue(pipeline, chisq), banks.template_bank_filename, detectors[instrument].snr_threshold)
+		if progress_report:
+			head = mkprogressreport(pipeline, head, "progress_xml_%s" % instrument)
+		# FIXME:  write all triggers to the same file using
+		# "input-selector" element from plugins-bad.
+		mktriggerxmlwritersink(pipeline, head, trigger_filename.replace(".xml", "_%s.xml" % instrument))
 
 
 #
@@ -437,9 +435,8 @@ gobject.threads_init()
 pipeline = gst.Pipeline("lloid")
 mainloop = gobject.MainLoop()
 
-mkLLOIDsingle(
+mkLLOIDmulti(
 	pipeline,
-	"L1",
 	detectors = Detectors({
 		"L1": Detectors.DetectorData("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", snr_threshold = 5.5)
 	}),
