@@ -32,6 +32,7 @@ import gobject
 import pygst
 pygst.require("0.10")
 import gst
+import sys
 
 
 #
@@ -43,7 +44,7 @@ import gst
 #
 
 
-class Banks(object):
+class Bank(object):
 	class BankFragment(object):
 		def __init__(self, rate, start, end, blocksize = None):
 			self.rate = rate
@@ -67,20 +68,19 @@ class Banks(object):
 
 class Detectors(dict):
 	class DetectorData(object):
-		def __init__(self, frame_cache, channel, psd, snr_threshold, injection_file = None):
+		def __init__(self, frame_cache, channel, psd, snr_threshold):
 			self.frame_cache = frame_cache
 			self.channel = channel
 			self.psd = psd
 			self.snr_threshold = snr_threshold
-			self.injection_file = injection_file
 
 	def __new__(cls, initializer, *args, **kwargs):
 		return dict.__new__(cls, initializer)
 
-	def __init__(self, initializer = {}, start = None, end = None, block_size = 16384 * 16 * 8):
+	def __init__(self, initializer = {}, block_size = 16384 * 16 * 8):
 		dict.__init__(self, initializer)
-		self.start = start
-		self.end = end
+		# default block_size = 16384 samples/second * 16 seconds *
+		# 8 bytes/sample
 		self.block_size = block_size
 
 
@@ -99,8 +99,6 @@ def mkframesrc(pipeline, instrument, detectors):
 	elem.set_property("location", detectors[instrument].frame_cache)
 	elem.set_property("instrument", instrument)
 	elem.set_property("channel-name", detectors[instrument].channel)
-	elem.set_property("start-time-gps-ns", detectors.start)
-	elem.set_property("stop-time-gps-ns", detectors.end)
 	pipeline.add(elem)
 	return elem
 
@@ -152,6 +150,7 @@ def mkwhiten(pipeline, src, reference_psd_filename):
 	elem.set_property("fft-length", 8)
 	elem.set_property("average-samples", 64)
 	elem.set_property("median-samples", 7)
+	# FIXME:  re-enable this
 	#elem.set_property("compensation-psd", reference_psd_filename)
 	pipeline.add(elem)
 	src.link(elem)
@@ -215,8 +214,7 @@ def mkbank(pipeline, src, reference_psd_filename, banks, bank, control_snk, cont
 
 	return snr, chisq
 
-def mkfakesink(pipeline, src, pad_name = None):
-	src = mkqueue(pipeline, src, pad_name = pad_name)
+def mkfakesink(pipeline, src):
 	elem = gst.element_factory_make("fakesink")
 	elem.set_property("sync", False)
 	elem.set_property("preroll-queue-len", 1)
@@ -306,17 +304,13 @@ def mkplaybacksink(pipeline, src):
 #
 
 
-def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = None, do_injections = False, progress_report = False, control_snk = None, control_src = None):
+def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = None, injection_filename = None, progress_report = False, control_snk = None, control_src = None):
 	head = mkframesrc(pipeline, instrument, detectors)
 	if progress_report:
 		head = mkprogressreport(pipeline, head, "progress_src_%s" % instrument)
 
-	if do_injections:
-		if detectors[instrument].injection_file is None:
-			# pygst segfaults if None is used for a
-			# string value
-			raise ValueError, "%s injection file is %s" % (instrument, repr(detectors[instrument].injection_file))
-		head = mkinjections(pipeline, head, detectors[instrument].injection_file)
+	if injection_filename is not None:
+		head = mkinjections(pipeline, head, injection_filename)
 
 	rates = banks.get_rates()
 
@@ -334,7 +328,7 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = Non
 		if progress_report:
 			control_src = mkprogressreport(pipeline, control_src, "progress_sumsquares_%s" % instrument)
 		control_src = mktee(pipeline, control_src)
-		mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_%s.txt" % instrument)
+		#mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_%s.txt" % instrument)
 
 	snr = gst.element_factory_make("lal_adder")
 	snr.set_property("sync", True)
@@ -345,7 +339,7 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = Non
 	pipeline.add(chisq)
 
 	for bank_fragment in banks.bank_fragments:
-		head = mkqueue(pipeline, hoft[bank_fragment.rate], max_size_time = int(banks.filter_length) * 2 * 1000000000)
+		head = mkqueue(pipeline, hoft[bank_fragment.rate], max_size_time = int(banks.filter_length * 1.5) * 1000000000)
 		bank_snr, bank_chisq = mkbank(
 			pipeline,
 			head,
@@ -366,8 +360,8 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = Non
 		chisq = mkprogressreport(pipeline, chisq, "progress_chisquare_%s" % instrument)
 	snr = mktee(pipeline, snr)
 	chisq = mktee(pipeline, chisq)
-	mknxydumpsink(pipeline, mkqueue(pipeline, snr), "snr_%s.txt" % instrument)
-	mknxydumpsink(pipeline, mkqueue(pipeline, chisq), "chisquare_%s.txt" % instrument)
+	#mknxydumpsink(pipeline, mkqueue(pipeline, snr), "snr_%s.txt" % instrument)
+	#mknxydumpsink(pipeline, mkqueue(pipeline, chisq), "chisquare_%s.txt" % instrument)
 
 	if trigger_filename is not None:
 		head = mktriggergen(pipeline, mkqueue(pipeline, snr), mkqueue(pipeline, chisq), banks.template_bank_filename, detectors[instrument].snr_threshold)
@@ -384,7 +378,7 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, trigger_filename = Non
 #
 
 
-def mkLLOIDmulti(pipeline, detectors, banks, do_injections = False, progress_report = False):
+def mkLLOIDmulti(pipeline, detectors, banks, injection_filename = None, progress_report = False):
 	control_snk = gst.element_factory_make("lal_adder")
 	control_snk.set_property("sync", True)
 	pipeline.add(control_snk)
@@ -403,7 +397,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, do_injections = False, progress_rep
 			detectors,
 			banks,
 			trigger_filename = "output_%s.xml" % instrument,
-			do_injections = do_injections,
+			injection_filename = injection_filename,
 			progress_report = progress_report,
 			control_snk = control_snk,
 			control_src = control_src
@@ -413,7 +407,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, do_injections = False, progress_rep
 #
 # =============================================================================
 #
-#                                     ...
+#                                     Main
 #
 # =============================================================================
 #
@@ -428,15 +422,14 @@ class LLOIDHandler(object):
 		bus.add_signal_watch()
 		bus.connect("message", self.on_message)
 
-
 	def on_message(self, bus, message):
 		if message.type == gst.MESSAGE_EOS:
 			self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
 		elif message.type == gst.MESSAGE_ERROR:
+			gerr, dbgmsg = message.parse_error()
+			print >>sys.stderr, "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
 			self.pipeline.set_state(gst.STATE_NULL)
-			err, debug = message.parse_error()
-			print "Error: %s", err, debug
 			self.mainloop.quit()
 
 
@@ -445,30 +438,31 @@ gobject.threads_init()
 pipeline = gst.Pipeline("lloid")
 mainloop = gobject.MainLoop()
 
-
 mkLLOIDsingle(
 	pipeline,
 	"L1",
 	detectors = Detectors({
-		"L1": Detectors.DetectorData("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", snr_threshold = 5.5, injection_file = "/home/channa/cvs/lsware/gstlal/examples/bns_injections.xml")
-	}, start = 874106000000000000, end = 874120000000000000),
-	banks = Banks(
+		"L1": Detectors.DetectorData("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", snr_threshold = 5.5)
+	}),
+	banks = Bank(
 		"/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml",
 		[
-			Banks.BankFragment(2048, 0.0, 1.0),
-			Banks.BankFragment(512, 1.0, 5.0),
-			Banks.BankFragment(256, 5.0, 13.0),
-			Banks.BankFragment(128, 13.0, 29.0)
+			Bank.BankFragment(2048, 0.0, 1.0),
+			Bank.BankFragment(512, 1.0, 5.0),
+			Bank.BankFragment(256, 5.0, 13.0),
+			Bank.BankFragment(128, 13.0, 29.0)
 		],
 		length = 29.0,
-		gate_threshold = 4.5
+		gate_threshold = 2.0
 	),
 	trigger_filename = "output.xml",
-	do_injections = False,
+	#injection_filename = "/home/channa/cvs/lsware/gstlal/examples/bns_injections.xml",
 	progress_report = True
 )
 
 handler = LLOIDHandler(mainloop, pipeline)
 
+pipeline.set_state(gst.STATE_PAUSED)
+pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, 874106000000000000, gst.SEEK_TYPE_SET, 874120000000000000)
 pipeline.set_state(gst.STATE_PLAYING)
 mainloop.run()
