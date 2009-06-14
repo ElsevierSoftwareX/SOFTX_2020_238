@@ -79,8 +79,6 @@
 
 
 #define DEFAULT_BUFFER_DURATION 16
-#define DEFAULT_START_TIME_GPS_NS 0
-#define DEFAULT_STOP_TIME_GPS_NS 0
 #define DEFAULT_UNITS_STRING "strain"
 #define DEFAULT_UNITS_UNIT lalStrainUnit
 
@@ -130,17 +128,17 @@ static gint series_to_rate(const void *series, LALTYPECODE type)
 	switch(type) {
 	case LAL_I4_TYPE_CODE: {
 		const INT4TimeSeries *local_series = series;
-		return floor(1.0 / local_series->deltaT + 0.5);
+		return round(1.0 / local_series->deltaT);
 	}
 
 	case LAL_S_TYPE_CODE: {
 		const REAL4TimeSeries *local_series = series;
-		return floor(1.0 / local_series->deltaT + 0.5);
+		return round(1.0 / local_series->deltaT);
 	}
 
 	case LAL_D_TYPE_CODE: {
 		const REAL8TimeSeries *local_series = series;
-		return floor(1.0 / local_series->deltaT + 0.5);
+		return round(1.0 / local_series->deltaT);
 	}
 
 	default:
@@ -216,13 +214,13 @@ static GstCaps *series_to_caps(const char *instrument, const char *channel_name,
  */
 
 
-static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, size_t length)
+static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 length)
 {
 	double deltaT;
-	size_t input_length;
+	guint64 input_length;
 	LIGOTimeGPS buffer_start_time;
 	guint64 buffer_start_sample;
-	size_t buffer_length;
+	guint64 buffer_length;
 
 	/*
 	 * retrieve the bounds of the current buffer and the input domain
@@ -230,29 +228,32 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, size_t l
 
 	switch(element->series_type) {
 	case LAL_I4_TYPE_CODE:
-		deltaT = ((INT4TimeSeries *) element->series_buffer)->deltaT;
-		buffer_start_time = ((INT4TimeSeries *) element->series_buffer)->epoch;
-		buffer_length = ((INT4TimeSeries *) element->series_buffer)->data->length;
+		deltaT = ((INT4TimeSeries *) element->input_buffer)->deltaT;
+		buffer_start_time = ((INT4TimeSeries *) element->input_buffer)->epoch;
+		buffer_length = ((INT4TimeSeries *) element->input_buffer)->data->length;
 		break;
 
 	case LAL_S_TYPE_CODE:
-		deltaT = ((REAL4TimeSeries *) element->series_buffer)->deltaT;
-		buffer_start_time = ((REAL4TimeSeries *) element->series_buffer)->epoch;
-		buffer_length = ((REAL4TimeSeries *) element->series_buffer)->data->length;
+		deltaT = ((REAL4TimeSeries *) element->input_buffer)->deltaT;
+		buffer_start_time = ((REAL4TimeSeries *) element->input_buffer)->epoch;
+		buffer_length = ((REAL4TimeSeries *) element->input_buffer)->data->length;
 		break;
 
 	case LAL_D_TYPE_CODE:
-		deltaT = ((REAL8TimeSeries *) element->series_buffer)->deltaT;
-		buffer_start_time = ((REAL8TimeSeries *) element->series_buffer)->epoch;
-		buffer_length = ((REAL8TimeSeries *) element->series_buffer)->data->length;
+		deltaT = ((REAL8TimeSeries *) element->input_buffer)->deltaT;
+		buffer_start_time = ((REAL8TimeSeries *) element->input_buffer)->epoch;
+		buffer_length = ((REAL8TimeSeries *) element->input_buffer)->data->length;
 		break;
 
 	default:
 		GST_ERROR_OBJECT(element, "unsupported data type (LALTYPECODE=%d)", element->series_type);
 		return NULL;
 	}
-	buffer_start_sample = (guint64) floor(XLALGPSDiff(&buffer_start_time, &element->start_time) / deltaT + 0.5);
-	input_length = (guint64) floor(XLALGPSDiff(&element->stop_time, &element->start_time) / deltaT + 0.5);
+	buffer_start_sample = gst_util_uint64_scale_int(XLALGPSToINT8NS(&buffer_start_time) - element->segment->start, round(1.0 / deltaT), GST_SECOND);
+	if((GstClockTime) element->segment->stop != GST_CLOCK_TIME_NONE)
+		input_length = gst_util_uint64_scale_int(element->segment->stop - element->segment->start, round(1.0 / deltaT), GST_SECOND);
+	else
+		input_length = G_MAXUINT64;
 
 	/*
 	 * clip the requested interval to the input domain
@@ -266,17 +267,12 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, size_t l
 		length = input_length - start_sample;
 
 	/*
-	 * does the requested data start in the buffer?
+	 * does the requested data start in the buffer?  if not, read a new
+	 * buffer
 	 */
 
 	if(start_sample < buffer_start_sample || start_sample >= buffer_start_sample + buffer_length) {
-		/*
-		 * the requested data does not start in the buffer --> read
-		 * a new buffer
-		 */
-
-		DestroyTimeSeries(element->series_buffer, element->series_type);
-		element->series_buffer = NULL;
+		void *new_input_buffer;
 
 		/*
 		 * compute the bounds of the new buffer, using the
@@ -284,10 +280,10 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, size_t l
 		 */
 
 		buffer_start_sample = start_sample;
-		buffer_length = (size_t) floor(element->series_buffer_duration / deltaT + 0.5);
+		buffer_length = round(element->input_buffer_duration / deltaT);
 		if(buffer_start_sample + buffer_length > input_length)
 			buffer_length = input_length - buffer_start_sample;
-		buffer_start_time = element->start_time;
+		XLALINT8NSToGPS(&buffer_start_time, element->segment->start);
 		XLALGPSAdd(&buffer_start_time, buffer_start_sample * deltaT);
 
 		/*
@@ -298,20 +294,36 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, size_t l
 		 * a user-supplied value.
 		 */
 
+		GST_LOG_OBJECT(element, "read %g seconds of channel %s at %d%.09u\n", buffer_length * deltaT, element->full_channel_name, buffer_start_time.gpsSeconds, buffer_start_time.gpsNanoSeconds);
 		switch(element->series_type) {
 		case LAL_I4_TYPE_CODE:
-			element->series_buffer = XLALFrReadINT4TimeSeries(element->stream, element->full_channel_name, &buffer_start_time, buffer_length * deltaT, 0);
-			((INT4TimeSeries *) (element->series_buffer))->sampleUnits = element->units;
+			new_input_buffer = XLALFrReadINT4TimeSeries(element->stream, element->full_channel_name, &buffer_start_time, buffer_length * deltaT, 0);
+			if(!new_input_buffer) {
+				GST_ERROR_OBJECT(element, "XLALFrReadINT4TimeSeries() failed");
+				XLALClearErrno();
+				return NULL;
+			}
+			((INT4TimeSeries *) (new_input_buffer))->sampleUnits = element->units;
 			break;
 
 		case LAL_S_TYPE_CODE:
-			element->series_buffer = XLALFrReadREAL4TimeSeries(element->stream, element->full_channel_name, &buffer_start_time, buffer_length * deltaT, 0);
-			((REAL4TimeSeries *) (element->series_buffer))->sampleUnits = element->units;
+			new_input_buffer = XLALFrReadREAL4TimeSeries(element->stream, element->full_channel_name, &buffer_start_time, buffer_length * deltaT, 0);
+			if(!new_input_buffer) {
+				GST_ERROR_OBJECT(element, "XLALFrReadREAL4TimeSeries() failed");
+				XLALClearErrno();
+				return NULL;
+			}
+			((REAL4TimeSeries *) (new_input_buffer))->sampleUnits = element->units;
 			break;
 
 		case LAL_D_TYPE_CODE:
-			element->series_buffer = XLALFrReadREAL8TimeSeries(element->stream, element->full_channel_name, &buffer_start_time, buffer_length * deltaT, 0);
-			((REAL8TimeSeries *) (element->series_buffer))->sampleUnits = element->units;
+			new_input_buffer = XLALFrReadREAL8TimeSeries(element->stream, element->full_channel_name, &buffer_start_time, buffer_length * deltaT, 0);
+			if(!new_input_buffer) {
+				GST_ERROR_OBJECT(element, "XLALFrReadREAL8TimeSeries() failed");
+				XLALClearErrno();
+				return NULL;
+			}
+			((REAL8TimeSeries *) (new_input_buffer))->sampleUnits = element->units;
 			break;
 
 		default:
@@ -322,10 +334,13 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, size_t l
 			return NULL;
 		}
 
-		if(!element->series_buffer) {
-			GST_ERROR_OBJECT(element, "XLALFrRead*TimeSeries() failed");
-			return NULL;
-		}
+		/*
+		 * new buffer successfully loaded.  replace the old input
+		 * buffer with the new one
+		 */
+
+		DestroyTimeSeries(element->input_buffer, element->series_type);
+		element->input_buffer = new_input_buffer;
 	}
 
 	/*
@@ -341,13 +356,13 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, size_t l
 
 	switch(element->series_type) {
 	case LAL_I4_TYPE_CODE:
-		return XLALCutINT4TimeSeries(element->series_buffer, start_sample - buffer_start_sample, length);
+		return XLALCutINT4TimeSeries(element->input_buffer, start_sample - buffer_start_sample, length);
 
 	case LAL_S_TYPE_CODE:
-		return XLALCutREAL4TimeSeries(element->series_buffer, start_sample - buffer_start_sample, length);
+		return XLALCutREAL4TimeSeries(element->input_buffer, start_sample - buffer_start_sample, length);
 
 	case LAL_D_TYPE_CODE:
-		return XLALCutREAL8TimeSeries(element->series_buffer, start_sample - buffer_start_sample, length);
+		return XLALCutREAL8TimeSeries(element->input_buffer, start_sample - buffer_start_sample, length);
 
 	default:
 		/*
@@ -373,9 +388,7 @@ enum property {
 	ARG_SRC_BUFFER_DURATION,
 	ARG_SRC_INSTRUMENT,
 	ARG_SRC_CHANNEL_NAME,
-	ARG_SRC_UNITS,
-	ARG_SRC_START_TIME_GPS,
-	ARG_SRC_STOP_TIME_GPS
+	ARG_SRC_UNITS
 };
 
 
@@ -390,7 +403,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		break;
 
 	case ARG_SRC_BUFFER_DURATION:
-		element->series_buffer_duration = g_value_get_int(value);
+		element->input_buffer_duration = g_value_get_int(value);
 		break;
 
 	case ARG_SRC_INSTRUMENT:
@@ -415,14 +428,6 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 			XLALParseUnitString(&element->units, units);
 		break;
 	}
-
-	case ARG_SRC_START_TIME_GPS:
-		XLALINT8NSToGPS(&element->start_time, g_value_get_int64(value));
-		break;
-
-	case ARG_SRC_STOP_TIME_GPS:
-		XLALINT8NSToGPS(&element->stop_time, g_value_get_int64(value));
-		break;
 	}
 }
 
@@ -437,7 +442,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		break;
 
 	case ARG_SRC_BUFFER_DURATION:
-		g_value_set_int(value, element->series_buffer_duration);
+		g_value_set_int(value, element->input_buffer_duration);
 		break;
 
 	case ARG_SRC_INSTRUMENT:
@@ -454,14 +459,6 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_string(value, units);
 		break;
 	}
-
-	case ARG_SRC_START_TIME_GPS:
-		g_value_set_int64(value, XLALGPSToINT8NS(&element->start_time));
-		break;
-
-	case ARG_SRC_STOP_TIME_GPS:
-		g_value_set_int64(value, XLALGPSToINT8NS(&element->stop_time));
-		break;
 	}
 }
 
@@ -469,7 +466,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 /*
  * ============================================================================
  *
- *                        GstPushSrc Method Overrides
+ *                        GstBaseSrc Method Overrides
  *
  * ============================================================================
  */
@@ -484,8 +481,8 @@ static GstCaps *get_caps(GstBaseSrc *object)
 {
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
 
-	if(element->series_buffer)
-		return series_to_caps(element->instrument, element->channel_name, element->series_buffer, element->series_type);
+	if(element->input_buffer)
+		return series_to_caps(element->instrument, element->channel_name, element->input_buffer, element->series_type);
 	else
 		return gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_SRC_PAD(object)));
 }
@@ -500,6 +497,7 @@ static gboolean start(GstBaseSrc *object)
 {
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
 	FrCache *cache;
+	LIGOTimeGPS stream_start;
 
 	/*
 	 * Open frame stream.
@@ -508,23 +506,26 @@ static gboolean start(GstBaseSrc *object)
 	cache = XLALFrImportCache(element->location);
 	if(!cache) {
 		GST_ERROR_OBJECT(element, "XLALFrImportCache() failed");
+		XLALClearErrno();
 		return FALSE;
 	}
 	element->stream = XLALFrCacheOpen(cache);
 	XLALFrDestroyCache(cache);
 	if(!element->stream) {
 		GST_ERROR_OBJECT(element, "XLALFrCacheOpen() failed");
+		XLALClearErrno();
 		return FALSE;
 	}
 
 	/*
-	 * Turn on checking for missing data.
+	 * Be verbose, and make gaps in the cache and seeks beyond the end
+	 * of the cache errors.
 	 */
 
-	element->stream->mode = LAL_FR_VERBOSE_MODE;
+	XLALFrSetMode(element->stream, (LAL_FR_DEFAULT_MODE | LAL_FR_VERBOSE_MODE) & ~(LAL_FR_IGNOREGAP_MODE | LAL_FR_IGNORETIME_MODE));
 
 	/*
-	 * Get the series type.
+	 * Get the series type and start time.
 	 */
 
 	element->series_type = XLALFrGetTimeSeriesType(element->full_channel_name, element->stream);
@@ -534,6 +535,85 @@ static gboolean start(GstBaseSrc *object)
 		GST_ERROR_OBJECT(element, "XLALFrGetTimeSeriesType() failed");
 		XLALFrClose(element->stream);
 		element->stream = NULL;
+		XLALClearErrno();
+		return FALSE;
+	}
+	XLALGPSSet(&stream_start, element->stream->file->toc->GTimeS[element->stream->pos], element->stream->file->toc->GTimeN[element->stream->pos]);
+
+	/*
+	 * Create a zero-length I/O buffer, and populate its metadata
+	 *
+	 * NOTE:  frame files cannot be relied on to provide the correct
+	 * units, so we unconditionally override them with a user-supplied
+	 * value.
+	 */
+
+	switch(element->series_type) {
+	case LAL_I4_TYPE_CODE:
+		element->input_buffer = XLALCreateINT4TimeSeries(element->full_channel_name, &stream_start, 0.0, 0.0, &lalDimensionlessUnit, 0);
+		if(!element->input_buffer) {
+			GST_ERROR_OBJECT(element, "XLALCreateINT4TimeSeries() failed");
+			XLALFrClose(element->stream);
+			element->stream = NULL;
+			XLALClearErrno();
+			return FALSE;
+		}
+		if(XLALFrGetINT4TimeSeriesMetadata(element->input_buffer, element->stream)) {
+			GST_ERROR_OBJECT(element, "XLALFrGetINT4TimeSeriesMetadata() failed");
+			XLALDestroyINT4TimeSeries(element->input_buffer);
+			element->input_buffer = NULL;
+			XLALFrClose(element->stream);
+			element->stream = NULL;
+			XLALClearErrno();
+			return FALSE;
+		}
+		((INT4TimeSeries *) (element->input_buffer))->sampleUnits = element->units;
+		break;
+
+	case LAL_S_TYPE_CODE:
+		element->input_buffer = XLALCreateREAL4TimeSeries(element->full_channel_name, &stream_start, 0.0, 0.0, &lalDimensionlessUnit, 0);
+		if(!element->input_buffer) {
+			GST_ERROR_OBJECT(element, "XLALCreateREAL4TimeSeries() failed");
+			XLALFrClose(element->stream);
+			element->stream = NULL;
+			XLALClearErrno();
+			return FALSE;
+		}
+		if(XLALFrGetREAL4TimeSeriesMetadata(element->input_buffer, element->stream)) {
+			GST_ERROR_OBJECT(element, "XLALFrGetREAL4TimeSeriesMetadata() failed");
+			XLALDestroyREAL4TimeSeries(element->input_buffer);
+			element->input_buffer = NULL;
+			XLALFrClose(element->stream);
+			element->stream = NULL;
+			XLALClearErrno();
+			return FALSE;
+		}
+		((REAL4TimeSeries *) (element->input_buffer))->sampleUnits = element->units;
+		break;
+
+	case LAL_D_TYPE_CODE:
+		element->input_buffer = XLALCreateREAL8TimeSeries(element->full_channel_name, &stream_start, 0.0, 0.0, &lalDimensionlessUnit, 0);
+		if(!element->input_buffer) {
+			GST_ERROR_OBJECT(element, "XLALCreateREAL8TimeSeries() failed");
+			XLALFrClose(element->stream);
+			element->stream = NULL;
+			XLALClearErrno();
+			return FALSE;
+		}
+		if(XLALFrGetREAL8TimeSeriesMetadata(element->input_buffer, element->stream)) {
+			GST_ERROR_OBJECT(element, "XLALFrGetREAL8TimeSeriesMetadata() failed");
+			XLALDestroyREAL8TimeSeries(element->input_buffer);
+			element->input_buffer = NULL;
+			XLALFrClose(element->stream);
+			element->stream = NULL;
+			XLALClearErrno();
+			return FALSE;
+		}
+		((REAL8TimeSeries *) (element->input_buffer))->sampleUnits = element->units;
+		break;
+
+	default:
+		GST_ERROR_OBJECT(element, "unsupported data type (LALTYPECODE=%d) for channel \"%s\"", element->series_type, element->full_channel_name);
 		return FALSE;
 	}
 
@@ -558,8 +638,8 @@ static gboolean stop(GstBaseSrc *object)
 		XLALFrClose(element->stream);
 		element->stream = NULL;
 	}
-	DestroyTimeSeries(element->series_buffer, element->series_type);
-	element->series_buffer = NULL;
+	DestroyTimeSeries(element->input_buffer, element->series_type);
+	element->input_buffer = NULL;
 	element->series_type = -1;
 
 	return TRUE;
@@ -571,13 +651,28 @@ static gboolean stop(GstBaseSrc *object)
  */
 
 
-static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
+static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
-	GstBaseSrc *basesrc = GST_BASE_SRC(object);
-	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
+	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(basesrc);
 	GstPad *srcpad = GST_BASE_SRC_PAD(basesrc);
-	GstCaps *caps = series_to_caps(element->instrument, element->channel_name, element->series_buffer, element->series_type);
+	GstCaps *caps;
 	GstFlowReturn result;
+
+	/*
+	 * Just in case
+	 */
+
+	*buffer = NULL;
+
+	/*
+	 * Cannot read data until a successful seek has been performed.
+	 */
+
+	g_return_val_if_fail(element->segment != NULL, GST_FLOW_ERROR);
+
+	/*
+	 * Read data
+	 */
 
 	switch(element->series_type) {
 	case LAL_I4_TYPE_CODE: {
@@ -587,13 +682,14 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 			return GST_FLOW_ERROR;
 		}
 		chunk = read_series(element, element->next_sample, basesrc->blocksize / sizeof(*chunk->data->data));
-		if(!chunk)
+		if(!chunk) {
 			/*
 			 * EOS
 			 */
 			return GST_FLOW_UNEXPECTED;
+		}
 		caps = series_to_caps(element->instrument, element->channel_name, chunk, element->series_type);
-		result = gst_pad_alloc_buffer_and_set_caps(srcpad, (guint64) floor(XLALGPSDiff(&chunk->epoch, &element->start_time) / chunk->deltaT + 0.5), chunk->data->length * sizeof(*chunk->data->data), caps, buffer);
+		result = gst_pad_alloc_buffer_and_set_caps(srcpad, element->next_sample, chunk->data->length * sizeof(*chunk->data->data), caps, buffer);
 		gst_caps_unref(caps);
 		if(result != GST_FLOW_OK) {
 			XLALDestroyINT4TimeSeries(chunk);
@@ -602,7 +698,7 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
 		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&chunk->epoch);
-		GST_BUFFER_DURATION(*buffer) = (GstClockTime) floor(chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_DURATION(*buffer) = (GstClockTime) round(chunk->data->length * GST_SECOND * chunk->deltaT);
 		if(element->next_sample == 0 || element->next_sample != GST_BUFFER_OFFSET(*buffer)) {
 			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 			element->next_sample = GST_BUFFER_OFFSET(*buffer);
@@ -619,13 +715,14 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 			return GST_FLOW_ERROR;
 		}
 		chunk = read_series(element, element->next_sample, basesrc->blocksize / sizeof(*chunk->data->data));
-		if(!chunk)
+		if(!chunk) {
 			/*
 			 * EOS
 			 */
 			return GST_FLOW_UNEXPECTED;
+		}
 		caps = series_to_caps(element->instrument, element->channel_name, chunk, element->series_type);
-		result = gst_pad_alloc_buffer_and_set_caps(srcpad, (guint64) floor(XLALGPSDiff(&chunk->epoch, &element->start_time) / chunk->deltaT + 0.5), chunk->data->length * sizeof(*chunk->data->data), caps, buffer);
+		result = gst_pad_alloc_buffer_and_set_caps(srcpad, element->next_sample, chunk->data->length * sizeof(*chunk->data->data), caps, buffer);
 		gst_caps_unref(caps);
 		if(result != GST_FLOW_OK) {
 			XLALDestroyREAL4TimeSeries(chunk);
@@ -634,7 +731,7 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
 		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&chunk->epoch);
-		GST_BUFFER_DURATION(*buffer) = (GstClockTime) floor(chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_DURATION(*buffer) = (GstClockTime) round(chunk->data->length * GST_SECOND * chunk->deltaT);
 		if(element->next_sample == 0 || element->next_sample != GST_BUFFER_OFFSET(*buffer)) {
 			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 			element->next_sample = GST_BUFFER_OFFSET(*buffer);
@@ -651,13 +748,14 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 			return GST_FLOW_ERROR;
 		}
 		chunk = read_series(element, element->next_sample, basesrc->blocksize / sizeof(*chunk->data->data));
-		if(!chunk)
+		if(!chunk) {
 			/*
 			 * EOS
 			 */
 			return GST_FLOW_UNEXPECTED;
+		}
 		caps = series_to_caps(element->instrument, element->channel_name, chunk, element->series_type);
-		result = gst_pad_alloc_buffer_and_set_caps(srcpad, (guint64) floor(XLALGPSDiff(&chunk->epoch, &element->start_time) / chunk->deltaT + 0.5), chunk->data->length * sizeof(*chunk->data->data), caps, buffer);
+		result = gst_pad_alloc_buffer_and_set_caps(srcpad, element->next_sample, chunk->data->length * sizeof(*chunk->data->data), caps, buffer);
 		gst_caps_unref(caps);
 		if(result != GST_FLOW_OK) {
 			XLALDestroyREAL8TimeSeries(chunk);
@@ -666,7 +764,7 @@ static GstFlowReturn create(GstPushSrc *object, GstBuffer **buffer)
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
 		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&chunk->epoch);
-		GST_BUFFER_DURATION(*buffer) = (GstClockTime) floor(chunk->data->length * GST_SECOND * chunk->deltaT + 0.5);
+		GST_BUFFER_DURATION(*buffer) = (GstClockTime) round(chunk->data->length * GST_SECOND * chunk->deltaT);
 		if(element->next_sample == 0 || element->next_sample != GST_BUFFER_OFFSET(*buffer)) {
 			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 			element->next_sample = GST_BUFFER_OFFSET(*buffer);
@@ -703,83 +801,35 @@ static gboolean is_seekable(GstBaseSrc *object)
 static gboolean do_seek(GstBaseSrc *object, GstSegment *segment)
 {
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
-	double buffer_duration;
-
-	/*
-	 * Free any old data.
-	 */
-
-	DestroyTimeSeries(element->series_buffer, element->series_type);
-	element->series_buffer = NULL;
+	LIGOTimeGPS epoch;
 
 	/*
 	 * Parse the segment
 	 */
 
-	/* FIXME:  uncomment to enable seeking */
-#if 0
-	XLALINT8NSToGPS(&element->start_time, segment->start);
-	if((GstClockTime) segment->stop != GST_CLOCK_TIME_NONE)
-		XLALINT8NSToGPS(&element->stop_time, segment->stop);
-	else
-		/* FIXME:  argh.  time long in the future */
-		element->stop_time = (LIGOTimeGPS) {2000000000, 0};
-#endif
-	element->next_sample = 0;
-
-	/*
-	 * How much data to load, in seconds.
-	 */
-
-	buffer_duration = XLALGPSDiff(&element->stop_time, &element->start_time);
-	if(buffer_duration > element->series_buffer_duration)
-		buffer_duration = element->series_buffer_duration;
-
-	/*
-	 * Load the buffer.
-	 *
-	 * NOTE:  frame files cannot be relied on to provide the correct
-	 * units, so we unconditionally override them with a user-supplied
-	 * value.
-	 */
-
-	switch(element->series_type) {
-	case LAL_I4_TYPE_CODE:
-		element->series_buffer = XLALFrReadINT4TimeSeries(element->stream, element->full_channel_name, &element->start_time, buffer_duration, 0);
-		if(!element->series_buffer) {
-			GST_ERROR_OBJECT(element, "XLALFrReadINT4TimeSeries() failed");
-			return FALSE;
-		}
-		((INT4TimeSeries *) (element->series_buffer))->sampleUnits = element->units;
-		break;
-
-	case LAL_S_TYPE_CODE:
-		element->series_buffer = XLALFrReadREAL4TimeSeries(element->stream, element->full_channel_name, &element->start_time, buffer_duration, 0);
-		if(!element->series_buffer) {
-			GST_ERROR_OBJECT(element, "XLALFrReadREAL4TimeSeries() failed");
-			return FALSE;
-		}
-		((REAL4TimeSeries *) (element->series_buffer))->sampleUnits = element->units;
-		break;
-
-	case LAL_D_TYPE_CODE:
-		element->series_buffer = XLALFrReadREAL8TimeSeries(element->stream, element->full_channel_name, &element->start_time, buffer_duration, 0);
-		if(!element->series_buffer) {
-			GST_ERROR_OBJECT(element, "XLALFrReadREAL8TimeSeries() failed");
-			return FALSE;
-		}
-		((REAL8TimeSeries *) (element->series_buffer))->sampleUnits = element->units;
-		break;
-
-	case -1:
-		GST_ERROR_OBJECT(element, "XLALFrGetTimeSeriesType() failed");
-		return FALSE;
-
-	default:
-		GST_ERROR_OBJECT(element, "unsupported data type (LALTYPECODE=%d) for channel \"%s\"", element->series_type, element->full_channel_name);
+	if((GstClockTime) segment->start == GST_CLOCK_TIME_NONE) {
+		GST_ERROR_OBJECT(element, "seek failed:  start time is required");
 		return FALSE;
 	}
+	XLALINT8NSToGPS(&epoch, segment->start);
 
+	/*
+	 * Try doing the seek
+	 */
+
+	if(XLALFrSeek(element->stream, &epoch)) {
+		GST_WARNING_OBJECT(element, "XLALFrSeek() to GPS time %d.%09d s failed", epoch.gpsSeconds, epoch.gpsNanoSeconds);
+		XLALClearErrno();
+	}
+
+	/*
+	 * Done
+	 */
+
+	if(element->segment)
+		gst_segment_free(element->segment);
+	element->segment = gst_segment_copy(segment);
+	element->next_sample = 0;
 	return TRUE;
 }
 
@@ -798,7 +848,7 @@ static gboolean do_seek(GstBaseSrc *object, GstSegment *segment)
  */
 
 
-static GstPushSrcClass *parent_class = NULL;
+static GstBaseSrcClass *parent_class = NULL;
 
 
 /*
@@ -818,12 +868,16 @@ static void finalize(GObject *object)
 	element->channel_name = NULL;
 	free(element->full_channel_name);
 	element->full_channel_name = NULL;
+	if(element->segment) {
+		gst_segment_free(element->segment);
+		element->segment = NULL;
+	}
 	if(element->stream) {
 		XLALFrClose(element->stream);
 		element->stream = NULL;
 	}
-	DestroyTimeSeries(element->series_buffer, element->series_type);
-	element->series_buffer = NULL;
+	DestroyTimeSeries(element->input_buffer, element->series_type);
+	element->input_buffer = NULL;
 	element->series_type = -1;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
@@ -885,9 +939,8 @@ static void class_init(gpointer class, gpointer class_data)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
 	GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS(class);
-	GstPushSrcClass *gstpush_src_class = GST_PUSH_SRC_CLASS(class);
 
-	parent_class = g_type_class_ref(GST_TYPE_PUSH_SRC);
+	parent_class = g_type_class_ref(GST_TYPE_BASE_SRC);
 
 	gobject_class->set_property = set_property;
 	gobject_class->get_property = get_property;
@@ -898,17 +951,15 @@ static void class_init(gpointer class, gpointer class_data)
 	g_object_class_install_property(gobject_class, ARG_SRC_INSTRUMENT, g_param_spec_string("instrument", "Instrument", "Instrument name (e.g., \"H1\").", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_CHANNEL_NAME, g_param_spec_string("channel-name", "Channel name", "Channel name (e.g., \"LSC-STRAIN\").", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_UNITS, g_param_spec_string("units", "Units", "Units string parsable by LAL's Units code (e.g., \"strain\" or \"counts\"). null or an empty string means dimensionless.", DEFAULT_UNITS_STRING, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_SRC_START_TIME_GPS, g_param_spec_int64("start-time-gps-ns", "Start time", "Start time in GPS nanoseconds.", G_MININT64, G_MAXINT64, DEFAULT_START_TIME_GPS_NS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_SRC_STOP_TIME_GPS, g_param_spec_int64("stop-time-gps-ns", "Stop time", "Stop time in GPS nanoseconds.", G_MININT64, G_MAXINT64, DEFAULT_STOP_TIME_GPS_NS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
 	/*
-	 * GstPushSrc method overrides
+	 * GstBaseSrc method overrides
 	 */
 
 	gstbasesrc_class->get_caps = get_caps;
 	gstbasesrc_class->start = start;
 	gstbasesrc_class->stop = stop;
-	gstpush_src_class->create = create;
+	gstbasesrc_class->create = create;
 	gstbasesrc_class->is_seekable = is_seekable;
 	gstbasesrc_class->do_seek = do_seek;
 }
@@ -929,13 +980,12 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->instrument = NULL;
 	element->channel_name = NULL;
 	element->full_channel_name = NULL;
-	XLALINT8NSToGPS(&element->start_time, DEFAULT_START_TIME_GPS_NS);
-	XLALINT8NSToGPS(&element->stop_time, DEFAULT_STOP_TIME_GPS_NS);
+	element->segment = NULL;
 	element->next_sample = 0;
 	element->stream = NULL;
 	element->units = DEFAULT_UNITS_UNIT;
-	element->series_buffer_duration = DEFAULT_BUFFER_DURATION;
-	element->series_buffer = NULL;
+	element->input_buffer_duration = DEFAULT_BUFFER_DURATION;
+	element->input_buffer = NULL;
 	element->series_type = -1;
 
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
@@ -959,7 +1009,7 @@ GType gstlal_framesrc_get_type(void)
 			.instance_size = sizeof(GSTLALFrameSrc),
 			.instance_init = instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_PUSH_SRC, "lal_framesrc", &info, 0);
+		type = g_type_register_static(GST_TYPE_BASE_SRC, "lal_framesrc", &info, 0);
 	}
 
 	return type;

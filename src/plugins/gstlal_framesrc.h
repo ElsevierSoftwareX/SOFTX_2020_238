@@ -47,28 +47,27 @@ G_BEGIN_DECLS
 
 
 typedef struct {
-	GstPushSrcClass parent_class;
+	GstBaseSrcClass parent_class;
 } GSTLALFrameSrcClass;
 
 
 typedef struct {
-	GstPushSrc pushsrc;
+	GstBaseSrc basesrc;
 
 	char *location;
 	char *instrument;
 	char *channel_name;
 	char *full_channel_name;
 
-	LIGOTimeGPS start_time;
-	LIGOTimeGPS stop_time;
+	GstSegment *segment;
 	guint64 next_sample;
 
 	FrStream *stream;
 	LALTYPECODE series_type;
 	LALUnit units;
 
-	int series_buffer_duration;
-	void *series_buffer;
+	int input_buffer_duration;
+	void *input_buffer;
 } GSTLALFrameSrc;
 
 
