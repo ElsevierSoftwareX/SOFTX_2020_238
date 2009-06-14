@@ -344,7 +344,7 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 	pipeline.add(chisq)
 
 	for bank_fragment in banks.bank_fragments:
-		head = mkqueue(pipeline, hoft[bank_fragment.rate], max_size_time = int(banks.filter_length * 1.5) * 1000000000)
+		head = mkqueue(pipeline, hoft[bank_fragment.rate], max_size_time = int(banks.filter_length) * 1000000000)
 		bank_snr, bank_chisq = mkbank(
 			pipeline,
 			head,
