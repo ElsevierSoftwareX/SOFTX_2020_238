@@ -103,11 +103,15 @@
  * ========================================================================
  */
 
+
+/* FIXME:  replace with an audioamplify element after patching that element
+ * to work with double-precision float time series */
 static double normalization_correction(double rate)
 {
-        return sqrt(rate / 4096.0);
-        /*return exp(0.53222 * log(rate) - 5.1269);*/
+	return sqrt(rate / 2048.0);
+	/*return exp(0.53222 * log(rate) - 5.1269);*/
 }
+
 
 static void gsl_half_complex_conjugate_product(gsl_vector *f, gsl_vector *s, double norm)
 {
