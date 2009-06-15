@@ -1017,12 +1017,6 @@ static GstFlowReturn push_output_buffer(GstAdder *adder, GstBuffer *outbuf, gboo
 	 * push the buffer downstream.
 	 */
 
-	/* FIXME unset the GAP flag, THIS IS BROKEN we don't know why but the adder seems to always push gaps with lloid_gui.
- 	 * This must be fixed or the pipeline won't run as efficiently as it could 
- 	 */ 	
-
-	GST_BUFFER_FLAG_UNSET(outbuf, GST_BUFFER_FLAG_GAP);
-
 	GST_LOG_OBJECT(adder, "pushing outbuf, timestamp %" GST_TIME_FORMAT, GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(outbuf)));
 	return gst_pad_push(adder->srcpad, outbuf);
 }
