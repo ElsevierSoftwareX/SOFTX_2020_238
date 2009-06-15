@@ -28,11 +28,17 @@
 #
 
 
+from optparse import OptionParser
+import sys
+
+
 import gobject
 import pygst
 pygst.require("0.10")
 import gst
-import sys
+
+
+from pylal.date import LIGOTimeGPS
 
 
 #
@@ -410,6 +416,41 @@ def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filenam
 #
 # =============================================================================
 #
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		version = "%prog ??",
+		usage = "%prog [options]",
+		description = "Stream-based inspiral analysis tool"
+	)
+	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache in which to find paths to .gwf frame files (required).")
+	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the GPS start time of the segment to analyze (required).")
+	parser.add_option("--gps-stop-time", metavar = "seconds", help = "Set the GPS stop time of the segment to analyze (required).")
+	parser.add_option("--injections", metavar = "filename", help = "Set the name of the file from which to load injections.")
+	parser.add_option("--output", metavar = "filename", help = "Set the name of the output trigger file (required).")
+	parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the file from which to load the template bank (required).")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+
+	options, filenames = parser.parse_args()
+
+	missing_options = [option for option in ("frame_cache", "gps_start_time", "gps_stop_time", "output", "template_bank") if getattr(options, option) is None]
+	if missing_options:
+		raise ValueError, "missing required options %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+
+	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
+	options.gps_stop_time = LIGOTimeGPS(options.gps_stop_time)
+
+	return options, filenames
+
+
+#
+# =============================================================================
+#
 #                                     Main
 #
 # =============================================================================
@@ -436,6 +477,8 @@ class LLOIDHandler(object):
 			self.mainloop.quit()
 
 
+options, filenames = parse_command_line()
+
 gobject.threads_init()
 
 pipeline = gst.Pipeline("lloid")
@@ -444,10 +487,10 @@ mainloop = gobject.MainLoop()
 mkLLOIDmulti(
 	pipeline,
 	detectors = Detectors({
-		"L1": Detectors.DetectorData("/home/channa/scratch/frames/S5/strain-L2/LLO/L-L1_RDS_C03_L2-8741/L.cache", "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", snr_threshold = 5.5)
+		"L1": Detectors.DetectorData(options.frame_cache, "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", snr_threshold = 5.5)
 	}),
 	banks = Bank(
-		"/home/channa/cvs/lsware/gstlal/examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml",
+		options.template_bank,
 		[
 			Bank.BankFragment(2048, 0.0, 1.0),
 			Bank.BankFragment(512, 1.0, 5.0),
@@ -457,14 +500,14 @@ mkLLOIDmulti(
 		length = 29.0,
 		gate_threshold = 2.0
 	),
-	trigger_filename = "output.xml",
-	#injection_filename = "/home/channa/cvs/lsware/gstlal/examples/bns_injections.xml",
-	progress_report = True
+	trigger_filename = options.output,
+	injection_filename = options.injections,
+	progress_report = options.verbose
 )
 
 handler = LLOIDHandler(mainloop, pipeline)
 
 pipeline.set_state(gst.STATE_PAUSED)
-pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, 874106000000000000, gst.SEEK_TYPE_SET, 874120000000000000)
+pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, options.gps_start_time.ns(), gst.SEEK_TYPE_SET, options.gps_stop_time.ns())
 pipeline.set_state(gst.STATE_PLAYING)
 mainloop.run()
