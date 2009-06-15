@@ -347,6 +347,48 @@ int compute_time_frequency_boundaries_from_bank(char * bank_name,
   }
 
 
+int gstlal_gsl_linalg_SV_decomp_mod(
+  gsl_matrix **U,
+  gsl_matrix **V,
+  gsl_vector **S)
+{
+  int result;
+  int transposed;
+  gsl_vector *work_space;
+  gsl_matrix *work_space_matrix;
+
+  if((*U)->size1 < (*U)->size2)
+  {
+    if(not_gsl_matrix_transpose(U))
+      return -1;
+    transposed = 1;
+  }
+  else
+    transposed = 0;
+
+  *S = gsl_vector_calloc((*U)->size2);
+  *V = gsl_matrix_calloc((*U)->size2, (*U)->size2);
+
+  work_space = gsl_vector_calloc((*U)->size2);
+  work_space_matrix = gsl_matrix_calloc((*U)->size2, (*U)->size2);
+  /* Alternate GSL SVD functions */
+  /*return gsl_linalg_SV_decomp(U, V, S, work_space);*/
+  /*return gsl_linalg_SV_decomp_jacobi(U, V, S);*/
+  result = gsl_linalg_SV_decomp_mod(*U, work_space_matrix, *V, *S, work_space);
+  gsl_matrix_free(work_space_matrix);
+  gsl_vector_free(work_space);
+
+  if(transposed)
+  {
+    gsl_matrix *tmp = *U;
+    *U = *V;
+    *V = tmp;
+  }
+
+  return result;
+}
+
+
 int generate_bank_svd(
                       gsl_matrix **U, 
                       gsl_vector **S, 
@@ -361,15 +403,12 @@ int generate_bank_svd(
                       double t_total_duration, 
                       double tolerance,
 	              int verbose)
-  {
+{
   InspiralTemplate *bankRow, *bankHead = NULL;
   int numtemps = InspiralTmpltBankFromLIGOLw( &bankHead, xml_bank_filename,-1,-1);
   size_t i, j;
   size_t numsamps = floor((t_end - t_start) * base_sample_rate / down_samp_fac + 0.5);
   size_t full_numsamps = base_sample_rate*TEMPLATE_DURATION;
-  /* There are twice as many waveforms as templates */
-  gsl_vector *work_space = gsl_vector_calloc(2 * numtemps);
-  gsl_matrix *work_space_matrix = gsl_matrix_calloc(2 * numtemps,2 * numtemps);
   COMPLEX16TimeSeries *template_out;
   COMPLEX16FrequencySeries *fft_template;
   COMPLEX16FrequencySeries *fft_template_full;
@@ -385,10 +424,9 @@ int generate_bank_svd(
 
   if (verbose) fprintf(stderr,"read %d templates\n", numtemps);
   
+  /* There are twice as many waveforms as templates */
+  *U = gsl_matrix_calloc(numsamps, 2 * numtemps);
 
-  *U = gsl_matrix_calloc(numsamps,2 * numtemps);
-  *S = gsl_vector_calloc(2 * numtemps);
-  *V = gsl_matrix_calloc(2 * numtemps,2 * numtemps);
   /* I have just computed chifacs for one of the quadratures...it should be
    * redundant */
   *chifacs = gsl_vector_calloc(numtemps);
@@ -447,9 +485,7 @@ int generate_bank_svd(
   /* SET THIS IN create_template_.. gsl_vector_set(*chifacs,i,sqrt(tmpltpower));*/
   if (verbose)     fprintf(stderr,"Doing the SVD \n");
 
-  /*if(gsl_linalg_SV_decomp(*U,*V, *S, work_space))*/
-  /*if(gsl_linalg_SV_decomp_jacobi(*U, *V, *S))*/
-  if(gsl_linalg_SV_decomp_mod(*U, work_space_matrix, *V, *S, work_space))
+  if(gstlal_gsl_linalg_SV_decomp_mod(U, V, S))
     {
     fprintf(stderr,"FAILED could not do SVD \n");
         exit(1); 
@@ -466,10 +502,6 @@ int generate_bank_svd(
     }
 
   if(verbose) fprintf(stderr, "%.16g s -- %.16g s: %zd orthogonal templates, V is %zdx%zd, U is %zdx%zd\n\n", t_start, t_end, (*U)->size1, (*V)->size1, (*V)->size2, (*U)->size1, (*U)->size2);
-
-  /* free gsl stuff */
-  gsl_vector_free(work_space);
-  gsl_matrix_free(work_space_matrix);
 
   /* Destroy plans */
   g_mutex_lock(gstlal_fftw_lock);
@@ -490,7 +522,7 @@ int generate_bank_svd(
     bankHead = next;
     }
   return 0;
-  }
+}
 
 
 int not_gsl_matrix_transpose(gsl_matrix **m)
