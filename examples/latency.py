@@ -1,7 +1,7 @@
 #!/usr/bin/python
 from pylab import *
 
-file = open("out4.61.txt")
+file = open("output.txt")
 progdictx = {"progress_src":[], "progress_sumsquares":[], "progress_snr":[], "progress_chisquare":[]}
 progdicty = {"progress_src":[], "progress_sumsquares":[], "progress_snr":[], "progress_chisquare":[]}
 
