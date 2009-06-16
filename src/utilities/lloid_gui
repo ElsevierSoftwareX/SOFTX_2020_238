@@ -387,7 +387,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filenam
 	if progress_report:
 		control_src = mkprogressreport(pipeline, control_src, "progress_sumsquares_coinc")
 	control_src = mktee(pipeline, control_src)
-	mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_coinc.txt")
+	#mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_coinc.txt")
 
 	for instrument in detectors.keys():
 		snr, chisq = mkLLOIDsingle(
