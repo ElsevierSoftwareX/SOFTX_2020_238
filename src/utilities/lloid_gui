@@ -156,7 +156,7 @@ def mkwhiten(pipeline, src, reference_psd_filename):
 	elem.set_property("fft-length", 8)
 	elem.set_property("average-samples", 64)
 	elem.set_property("median-samples", 7)
-	elem.set_property("compensation-psd", reference_psd_filename)
+	#elem.set_property("compensation-psd", reference_psd_filename)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
@@ -237,7 +237,7 @@ def mkfilesink(pipeline, src, filename):
 
 def mknxydumpsink(pipeline, src, filename):
 	elem = gst.element_factory_make("lal_nxydump")
-	if True:
+	if False:
 		# output for hardware injection @ 874107078.149271066
 		elem.set_property("start-time", 874107068000000000)
 		elem.set_property("stop-time", 874107088000000000)
@@ -249,8 +249,8 @@ def mknxydumpsink(pipeline, src, filename):
 		elem.set_property("stop-time", 874107258000000000)
 	else:
 		# output to dump lots and lots of data (the whole cache)
-		elem.set_property("start-time", 874100128000000000)
-		elem.set_property("stop-time", 874120000000000000)
+		elem.set_property("start-time", 873247860000000000)
+		elem.set_property("stop-time", 873424754000000000)
 	pipeline.add(elem)
 	src.link(elem)
 	# FIXME:  add bz2enc element from plugins-bad to compress text
@@ -387,7 +387,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filenam
 	if progress_report:
 		control_src = mkprogressreport(pipeline, control_src, "progress_sumsquares_coinc")
 	control_src = mktee(pipeline, control_src)
-	#mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_coinc.txt")
+	mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_coinc.txt")
 
 	for instrument in detectors.keys():
 		snr, chisq = mkLLOIDsingle(
@@ -410,7 +410,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filenam
 			head = mkprogressreport(pipeline, head, "progress_xml_%s" % instrument)
 		# FIXME:  write all triggers to the same file using
 		# "input-selector" element from plugins-bad.
-		mktriggerxmlwritersink(pipeline, head, trigger_filename.replace(".xml", "_%s.xml" % instrument))
+		mktriggerxmlwritersink(pipeline, head, trigger_filename)
 
 
 #
@@ -432,13 +432,14 @@ def parse_command_line():
 	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the GPS start time of the segment to analyze (required).")
 	parser.add_option("--gps-stop-time", metavar = "seconds", help = "Set the GPS stop time of the segment to analyze (required).")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the file from which to load injections.")
-	parser.add_option("--output", metavar = "filename", help = "Set the name of the output trigger file (required).")
+	parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze (required).")
+	parser.add_option("--output-prefix", metavar = "filename", help = "Set the start of the name of the output trigger file(s) (required).")
 	parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the file from which to load the template bank (required).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
 	options, filenames = parser.parse_args()
 
-	missing_options = [option for option in ("frame_cache", "gps_start_time", "gps_stop_time", "output", "template_bank") if getattr(options, option) is None]
+	missing_options = [option for option in ("frame_cache", "gps_start_time", "gps_stop_time", "output_prefix", "template_bank") if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError, "missing required options %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
 
@@ -487,7 +488,7 @@ mainloop = gobject.MainLoop()
 mkLLOIDmulti(
 	pipeline,
 	detectors = Detectors({
-		"L1": Detectors.DetectorData(options.frame_cache, "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", snr_threshold = 5.5)
+		options.instrument: Detectors.DetectorData(options.frame_cache, "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", snr_threshold = 5.5)
 	}),
 	banks = Bank(
 		options.template_bank,
@@ -498,9 +499,9 @@ mkLLOIDmulti(
 			Bank.BankFragment(128, 13.0, 29.0)
 		],
 		length = 29.0,
-		gate_threshold = 2.0
+		gate_threshold = 1.5 
 	),
-	trigger_filename = options.output,
+	trigger_filename = "%s_%s.xml" % (options.output_prefix, options.instrument),
 	injection_filename = options.injections,
 	progress_report = options.verbose
 )
