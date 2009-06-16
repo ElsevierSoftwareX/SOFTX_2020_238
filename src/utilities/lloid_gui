@@ -501,7 +501,7 @@ mkLLOIDmulti(
 		length = 29.0,
 		gate_threshold = 1.5 
 	),
-	trigger_filename = "%s_%s.xml" % (options.output_prefix, options.instrument),
+	trigger_filename = "%s%s.xml" % (options.output_prefix, options.instrument),
 	injection_filename = options.injections,
 	progress_report = options.verbose
 )
