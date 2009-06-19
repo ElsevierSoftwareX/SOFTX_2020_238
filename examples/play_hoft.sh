@@ -27,7 +27,6 @@ gst-launch --gst-debug-level=1 \
 		lower-frequency=45 \
 		upper-frequency=2500 \
 		poles=8 \
-	! audioconvert \
 	! audioamplify \
 		amplification=2e+17 \
 	! tee name=tee \

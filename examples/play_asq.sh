@@ -21,8 +21,6 @@ gst-launch \
 		lower-frequency=40 \
 		upper-frequency=2500 \
 		poles=8 \
-	! audioconvert \
-	! audio/x-raw-float, width=32 \
 	! audioamplify \
 		amplification=3e-1 \
 	! audioconvert \
