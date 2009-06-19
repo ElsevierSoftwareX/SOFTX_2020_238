@@ -22,6 +22,7 @@ gst-launch \
 		upper-frequency=2500 \
 		poles=8 \
 	! audioamplify \
+		clipping-method=3 \
 		amplification=3e-1 \
 	! audioconvert \
 	! alsasink

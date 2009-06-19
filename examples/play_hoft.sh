@@ -28,6 +28,7 @@ gst-launch --gst-debug-level=1 \
 		upper-frequency=2500 \
 		poles=8 \
 	! audioamplify \
+		clipping-method=3 \
 		amplification=2e+17 \
 	! tee name=tee \
 	! queue \
