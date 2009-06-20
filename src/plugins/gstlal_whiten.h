@@ -104,8 +104,8 @@ typedef struct {
 	char *xml_filename;
 	LIGOLwXMLStream *xml_stream;
 
-	char *compensation_psd_filename;
-	REAL8FrequencySeries *compensation_psd;
+	char *reference_psd_filename;
+	REAL8FrequencySeries *reference_psd;
 } GSTLALWhiten;
 
 

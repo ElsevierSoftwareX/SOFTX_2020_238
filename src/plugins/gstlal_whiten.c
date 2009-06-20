@@ -338,7 +338,7 @@ enum property {
 	ARG_AVERAGE_SAMPLES,
 	ARG_MEDIAN_SAMPLES,
 	ARG_XML_FILENAME,
-	ARG_COMPENSATION_PSD
+	ARG_REFERENCE_PSD
 };
 
 
@@ -383,7 +383,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 			element->xml_stream = NULL;
 		break;
 
-	case ARG_COMPENSATION_PSD:
+	case ARG_REFERENCE_PSD:
 		/*
 		 * A reload of the reference PSD occurs when the PSD
 		 * filename is non-NULL and the PSD frequency series itself
@@ -391,10 +391,10 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		 * reload
 		 */
 
-		XLALDestroyREAL8FrequencySeries(element->compensation_psd);
-		element->compensation_psd = NULL;
-		free(element->compensation_psd_filename);
-		element->compensation_psd_filename = g_value_dup_string(value);
+		XLALDestroyREAL8FrequencySeries(element->reference_psd);
+		element->reference_psd = NULL;
+		free(element->reference_psd_filename);
+		element->reference_psd_filename = g_value_dup_string(value);
 		break;
 	}
 }
@@ -429,8 +429,8 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		g_value_set_string(value, element->xml_filename);
 		break;
 
-	case ARG_COMPENSATION_PSD:
-		g_value_set_string(value, element->compensation_psd_filename);
+	case ARG_REFERENCE_PSD:
+		g_value_set_string(value, element->reference_psd_filename);
 		break;
 	}
 }
@@ -646,7 +646,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * sure we have one that's up-to-date.
 		 */
 
-		if(element->compensation_psd_filename) {
+		if(element->reference_psd_filename) {
 			/*
 			 * If a reference spectrum is already available,
 			 * confirm that it matches the current frequency
@@ -654,10 +654,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 * one to be loaded.
 			 */
 
-			if(element->compensation_psd) {
-				if(element->compensation_psd->f0 != tilde_segment->f0 || element->compensation_psd->deltaF != tilde_segment->deltaF || element->compensation_psd->data->length != tilde_segment->data->length) {
-					XLALDestroyREAL8FrequencySeries(element->compensation_psd);
-					element->compensation_psd = NULL;
+			if(element->reference_psd) {
+				if(element->reference_psd->f0 != tilde_segment->f0 || element->reference_psd->deltaF != tilde_segment->deltaF || element->reference_psd->data->length != tilde_segment->data->length) {
+					XLALDestroyREAL8FrequencySeries(element->reference_psd);
+					element->reference_psd = NULL;
 				}
 			}
 
@@ -666,13 +666,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 * available.
 			 */
 
-			if(!element->compensation_psd) {
-				element->compensation_psd = gstlal_get_reference_psd(element->compensation_psd_filename, tilde_segment->f0, tilde_segment->deltaF, tilde_segment->data->length);
-				if(!element->compensation_psd) {
+			if(!element->reference_psd) {
+				element->reference_psd = gstlal_get_reference_psd(element->reference_psd_filename, tilde_segment->f0, tilde_segment->deltaF, tilde_segment->data->length);
+				if(!element->reference_psd) {
 					result = GST_FLOW_ERROR;
 					goto done;
 				}
-				GST_INFO_OBJECT(element, "loaded reference PSD from \"%s\" with %d samples at %.16g Hz resolution spanning the frequency band %.16g Hz -- %.16g Hz", element->compensation_psd_filename, element->compensation_psd->data->length, element->compensation_psd->deltaF, element->compensation_psd->f0, element->compensation_psd->f0 + (element->compensation_psd->data->length - 1) * element->compensation_psd->deltaF);
+				GST_INFO_OBJECT(element, "loaded reference PSD from \"%s\" with %d samples at %.16g Hz resolution spanning the frequency band %.16g Hz -- %.16g Hz", element->reference_psd_filename, element->reference_psd->data->length, element->reference_psd->deltaF, element->reference_psd->f0, element->reference_psd->f0 + (element->reference_psd->data->length - 1) * element->reference_psd->deltaF);
 			}
 
 			/*
@@ -681,7 +681,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 */
 
 			if(!element->psd_regressor->n_samples) {
-				if(XLALPSDRegressorSetPSD(element->psd_regressor, element->compensation_psd, XLALPSDRegressorGetAverageSamples(element->psd_regressor))) {
+				if(XLALPSDRegressorSetPSD(element->psd_regressor, element->reference_psd, XLALPSDRegressorGetAverageSamples(element->psd_regressor))) {
 					GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
 					result = GST_FLOW_ERROR;
 					goto done;
@@ -779,14 +779,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * correct order of magnitude).
 		 */
 
-		if(element->compensation_psd) {
+		if(element->reference_psd) {
 			double rms = 0;
 			for(i = 0; i < tilde_segment->data->length; i++) {
 				if(element->psd->data->data[i] == 0) {
 					rms += 1;
 					tilde_segment->data->data[i] = LAL_COMPLEX16_ZERO;
 				} else {
-					double psd_ratio = element->compensation_psd->data->data[i] / element->psd->data->data[i];
+					double psd_ratio = element->reference_psd->data->data[i] / element->psd->data->data[i];
 					rms += psd_ratio;
 					tilde_segment->data->data[i] = XLALCOMPLEX16MulReal(tilde_segment->data->data[i], sqrt(psd_ratio));
 				}
@@ -956,8 +956,8 @@ static void finalize(GObject * object)
 	XLALDestroyREAL8Sequence(element->tail);
 	free(element->xml_filename);
 	XLALCloseLIGOLwXMLFile(element->xml_stream);
-	free(element->compensation_psd_filename);
-	XLALDestroyREAL8FrequencySeries(element->compensation_psd);
+	free(element->reference_psd_filename);
+	XLALDestroyREAL8FrequencySeries(element->reference_psd);
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -1041,7 +1041,7 @@ static void class_init(gpointer class, gpointer class_data)
 	g_object_class_install_property(gobject_class, ARG_AVERAGE_SAMPLES, g_param_spec_uint("average-samples", "Average samples", "Number of FFTs used in PSD average", 1, G_MAXUINT, DEFAULT_AVERAGE_SAMPLES, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_MEDIAN_SAMPLES, g_param_spec_uint("median-samples", "Median samples", "Number of FFTs used in PSD median history", 1, G_MAXUINT, DEFAULT_MEDIAN_SAMPLES, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_XML_FILENAME, g_param_spec_string("xml-filename", "XML Filename", "Name of file into which will be dumped PSD snapshots (null = disable).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_COMPENSATION_PSD, g_param_spec_string("compensation-psd", "Filename", "Name of text file from which to read reference spectrum to be compensated for by over-whitening (null = disable).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_REFERENCE_PSD, g_param_spec_string("reference-psd", "Filename", "Name of text file from which to read reference spectrum (null = disable).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 
@@ -1086,8 +1086,8 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->tail = NULL;
 	element->xml_filename = NULL;
 	element->xml_stream = NULL;
-	element->compensation_psd_filename = NULL;
-	element->compensation_psd = NULL;
+	element->reference_psd_filename = NULL;
+	element->reference_psd = NULL;
 }
 
 
