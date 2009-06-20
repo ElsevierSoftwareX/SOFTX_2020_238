@@ -59,9 +59,6 @@ typedef struct {
 	char *channel_name;
 	char *full_channel_name;
 
-	GstSegment *segment;
-	guint64 next_sample;
-
 	FrStream *stream;
 	LALTYPECODE series_type;
 	LALUnit units;
