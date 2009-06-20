@@ -104,7 +104,7 @@ static void quadrupole_template(double M, double duration,
    * frequency */
   double tstart = freq_to_time(M, 0.5 / template->deltaT);
   /* number of samples to compute */
-  unsigned numsamps = floor(duration / template->deltaT + 0.5);
+  unsigned numsamps = round(duration / template->deltaT);
   unsigned i;
 
   M *= LAL_MTSUN_SI;
@@ -143,7 +143,7 @@ static int create_template_from_sngl_inspiral(
 
   {
   unsigned i;
-  int t_total_length = floor(t_total_duration * fsamp + 0.5);	/* length of the template */
+  int t_total_length = round(t_total_duration * fsamp);	/* length of the template */
   double norm;
   gsl_vector_view col;
   gsl_vector_view tmplt;
@@ -211,7 +211,7 @@ static int create_template_from_sngl_inspiral(
   /* there are twice as many waveforms as templates hence the multiplying 
    * U_colum by 2*/
   col = gsl_matrix_column(U,2*U_column);
-  tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5)), 2*downsampfac, col.vector.size);
+  tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) round(t_end * fsamp)), 2*downsampfac, col.vector.size);
   if (gsl_vector_memcpy(&col.vector, &tmplt.vector)) {
     fprintf(stderr, "create_template_from_sngl_inspiral() gsl_vector_memcpy(&col.vector, &tmplt.vector) FAILED\n");
     return -1;
@@ -225,7 +225,7 @@ static int create_template_from_sngl_inspiral(
 
   /* Imaginary part */
   col = gsl_matrix_column(U,2*U_column + 1);
-  tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) floor(t_end * fsamp + 0.5)) + 1, 2*downsampfac, col.vector.size);
+  tmplt = gsl_vector_view_array_with_stride((double *) (template_out->data->data + template_out->data->length - (int) round(t_end * fsamp)) + 1, 2*downsampfac, col.vector.size);
 
   if (gsl_vector_memcpy(&col.vector, &tmplt.vector)) {
     fprintf(stderr, "create_template_from_sngl_inspiral() gsl_vector_memcpy(&col.vector, &tmplt.vector) FAILED\n");
@@ -302,7 +302,7 @@ int compute_time_frequency_boundaries_from_bank(char * bank_name,
    */
   base_time = freq_to_time(minChirpMass,minFreq);
   duration = freq_to_time(minChirpMass,f_lower) - base_time;
-  sampleRate = 2.0 * floor(pow(2.0,floor(log(minFreq)/log(2.0))));
+  sampleRate = 2.0 * (int) round(pow(2.0,floor(log(minFreq)/log(2.0))));
   freq = sampleRate;
   time = 0;
   prev_time = 0;
@@ -327,7 +327,7 @@ int compute_time_frequency_boundaries_from_bank(char * bank_name,
   veclength = 0;
   base_time = freq_to_time(minChirpMass,minFreq);
   duration = freq_to_time(minChirpMass,f_lower) - base_time;
-  sampleRate = 2.0 * floor(pow(2.0,floor(log(minFreq)/log(2.0))));
+  sampleRate = 2.0 * (int) floor(pow(2.0,floor(log(minFreq)/log(2.0))));
   freq = sampleRate;
   time = 0;
   prev_time = 0;
@@ -407,7 +407,7 @@ int generate_bank_svd(
   InspiralTemplate *bankRow, *bankHead = NULL;
   int numtemps = InspiralTmpltBankFromLIGOLw( &bankHead, xml_bank_filename,-1,-1);
   size_t i, j;
-  size_t numsamps = floor((t_end - t_start) * base_sample_rate / down_samp_fac + 0.5);
+  size_t numsamps = round((t_end - t_start) * base_sample_rate / down_samp_fac);
   size_t full_numsamps = base_sample_rate*TEMPLATE_DURATION;
   COMPLEX16TimeSeries *template_out;
   COMPLEX16FrequencySeries *fft_template;

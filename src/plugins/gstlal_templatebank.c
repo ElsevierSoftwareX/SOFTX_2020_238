@@ -770,27 +770,27 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		if(element->t_start) {
-			result = gst_pad_alloc_buffer(element->sumsquarespad, element->next_sample, (size_t) floor(element->t_start * element->sample_rate + 0.5) * sizeof(*element->U->data), GST_PAD_CAPS(element->sumsquarespad), &zeros);
+			result = gst_pad_alloc_buffer(element->sumsquarespad, element->next_sample, (size_t) round(element->t_start * element->sample_rate) * sizeof(*element->U->data), GST_PAD_CAPS(element->sumsquarespad), &zeros);
 			if(result != GST_FLOW_OK)
 				goto done;
 			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
 			gst_buffer_copy_metadata(zeros, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 			GST_BUFFER_FLAG_SET(zeros, GST_BUFFER_FLAG_GAP);
-			GST_BUFFER_OFFSET_END(zeros) = element->next_sample + (size_t) floor(element->t_start * element->sample_rate + 0.5);
-			GST_BUFFER_DURATION(zeros) = (GstClockTime) floor(element->t_start * GST_SECOND + 0.5);
+			GST_BUFFER_OFFSET_END(zeros) = element->next_sample + (size_t) round(element->t_start * element->sample_rate);
+			GST_BUFFER_DURATION(zeros) = (GstClockTime) round(element->t_start * GST_SECOND);
 
 			result = gst_pad_push(element->sumsquarespad, zeros);
 			if(result != GST_FLOW_OK)
 				goto done;
 
-			result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, num_templates(element) * (size_t) floor(element->t_start * element->sample_rate + 0.5) * sizeof(*element->U->data), GST_PAD_CAPS(element->srcpad), &zeros);
+			result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, num_templates(element) * (size_t) round(element->t_start * element->sample_rate) * sizeof(*element->U->data), GST_PAD_CAPS(element->srcpad), &zeros);
 			if(result != GST_FLOW_OK)
 				goto done;
 			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
 			gst_buffer_copy_metadata(zeros, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 			GST_BUFFER_FLAG_SET(zeros, GST_BUFFER_FLAG_GAP);
-			GST_BUFFER_OFFSET_END(zeros) = element->next_sample + (size_t) floor(element->t_start * element->sample_rate + 0.5);
-			GST_BUFFER_DURATION(zeros) = (GstClockTime) floor(element->t_start * GST_SECOND + 0.5);
+			GST_BUFFER_OFFSET_END(zeros) = element->next_sample + (size_t) round(element->t_start * element->sample_rate);
+			GST_BUFFER_DURATION(zeros) = (GstClockTime) round(element->t_start * GST_SECOND);
 
 			result = gst_pad_push(element->srcpad, zeros);
 			if(result != GST_FLOW_OK)
@@ -801,8 +801,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 */
 
 			element->next_is_discontinuity = FALSE;
-			element->next_sample += (size_t) floor(element->t_start * element->sample_rate + 0.5);
-			element->output_timestamp += (GstClockTime) floor(element->t_start * GST_SECOND + 0.5);
+			element->next_sample += (size_t) round(element->t_start * element->sample_rate);
+			element->output_timestamp += (GstClockTime) round(element->t_start * GST_SECOND);
 		}
 
 		/*

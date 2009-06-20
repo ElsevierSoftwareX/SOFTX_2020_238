@@ -223,8 +223,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	GstFlowReturn result = GST_FLOW_OK;
 	double average_length = element->average_interval * element->sample_rate * element->channels;
-	int trace_samples = floor(element->trace_duration * element->sample_rate + 0.5);
-	int flush_samples = floor(element->frame_interval * element->sample_rate + 0.5);
+	int trace_samples = round(element->trace_duration * element->sample_rate);
+	int flush_samples = round(element->frame_interval * element->sample_rate);
 
 	/*
 	 * Check for a discontinuity
@@ -272,7 +272,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
 		if(element->do_timestamp) {
 			GST_BUFFER_TIMESTAMP(srcbuf) = element->adapter_head_timestamp;
-			GST_BUFFER_DURATION(srcbuf) = (GstClockTime) floor(element->frame_interval * GST_SECOND + 0.5);
+			GST_BUFFER_DURATION(srcbuf) = (GstClockTime) round(element->frame_interval * GST_SECOND);
 		} else {
 			GST_BUFFER_TIMESTAMP(srcbuf) = GST_CLOCK_TIME_NONE;
 			GST_BUFFER_DURATION(srcbuf) = GST_CLOCK_TIME_NONE;
@@ -303,9 +303,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		d = data;
 		for(i = 0; i < trace_samples; i++) {
-			int x = floor((double) i * DEFAULT_SCOPE_WIDTH / trace_samples + 0.5);
+			int x = round((double) i * DEFAULT_SCOPE_WIDTH / trace_samples);
 			for(j = 0; j < element->channels; j++) {
-				int y = DEFAULT_SCOPE_HEIGHT / 2 - (int) floor(DEFAULT_SCOPE_HEIGHT / element->vertical_scale_sigmas * (*(d++) - element->mean) / sqrt(element->variance) + 0.5);
+				int y = DEFAULT_SCOPE_HEIGHT / 2 - (int) round(DEFAULT_SCOPE_HEIGHT / element->vertical_scale_sigmas * (*(d++) - element->mean) / sqrt(element->variance));
 				if(0 <= y && y < DEFAULT_SCOPE_HEIGHT)
 					pixels[y * DEFAULT_SCOPE_WIDTH + x] = pixel_colour(element->channels, j);
 			}
