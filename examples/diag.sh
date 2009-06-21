@@ -34,7 +34,7 @@ function test_resampler() {
 function test_whiten() {
 	gst-launch \
 		audiotestsrc wave=5 volume=1e-5 \
-		! audio/x-raw-float, width=64, rate=1024 \
+		! audio/x-raw-float, width=64, rate=1024, units="strain" \
 		! lal_whiten psd-mode=1 zero-pad=0 fft-length=8 median-samples=7 average-samples=128 \
 		! lal_nxydump start-time=0 stop-time=1200000000000 \
 		! progressreport \
