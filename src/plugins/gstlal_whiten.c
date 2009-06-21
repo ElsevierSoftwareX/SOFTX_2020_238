@@ -342,35 +342,76 @@ static REAL8FrequencySeries *make_psd_from_fseries(const COMPLEX16FrequencySerie
 }
 
 
-static REAL8FrequencySeries *get_psd(enum gstlal_psdmode_t psdmode, LALPSDRegressor *psd_regressor, const COMPLEX16FrequencySeries *fseries)
+static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 {
 	REAL8FrequencySeries *psd;
 
-	switch(psdmode) {
+	/*
+	 * Take this opportunity to retrieve the reference PSD.
+	 */
+
+	if(element->reference_psd_filename) {
+		/*
+		 * If a reference spectrum is not available, or the
+		 * reference spectrum does not match the current frequency
+		 * band and resolution, load a new reference spectrum.
+		 */
+
+		if(!element->reference_psd || element->reference_psd->f0 != element->fdworkspace->f0 || element->reference_psd->deltaF != element->fdworkspace->deltaF || element->reference_psd->data->length != element->fdworkspace->data->length) {
+			XLALDestroyREAL8FrequencySeries(element->reference_psd);
+			element->reference_psd = gstlal_get_reference_psd(element->reference_psd_filename, 0.0, element->fdworkspace->deltaF, element->fdworkspace->data->length);
+			if(!element->reference_psd) {
+				GST_ERROR_OBJECT(element, "gstlal_get_reference_psd() failed");
+				return NULL;
+			}
+			GST_INFO_OBJECT(element, "loaded reference PSD from \"%s\" with %d samples at %.16g Hz resolution spanning the frequency band %.16g Hz -- %.16g Hz", element->reference_psd_filename, element->reference_psd->data->length, element->reference_psd->deltaF, element->reference_psd->f0, element->reference_psd->f0 + (element->reference_psd->data->length - 1) * element->reference_psd->deltaF);
+		}
+
+		/*
+		 * If there's no data in the spectrum averager yet, use the
+		 * reference spectrum to initialize it.
+		 */
+
+		if(!element->psd_regressor->n_samples) {
+			if(XLALPSDRegressorSetPSD(element->psd_regressor, element->reference_psd, XLALPSDRegressorGetAverageSamples(element->psd_regressor))) {
+				GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
+				/*
+				 * erase the reference PSD to force this
+				 * code path to be tried again
+				 */
+				XLALDestroyREAL8FrequencySeries(element->reference_psd);
+				element->reference_psd = NULL;
+				XLALClearErrno();
+				return NULL;
+			}
+		}
+	}
+
+	switch(element->psdmode) {
 	case GSTLAL_PSDMODE_INITIAL_LIGO_SRD:
-		psd = make_iligo_psd(0.0, fseries->deltaF, fseries->data->length);
+		psd = make_iligo_psd(0.0, element->fdworkspace->deltaF, element->fdworkspace->data->length);
 		if(!psd)
 			return NULL;
 		break;
 
 	case GSTLAL_PSDMODE_RUNNING_AVERAGE:
-		if(!psd_regressor->n_samples) {
+		if(!element->psd_regressor->n_samples) {
 			/*
 			 * No data for the average yet, seed psd regressor
 			 * with current frequency series.
 			 */
 
-			psd = make_psd_from_fseries(fseries);
+			psd = make_psd_from_fseries(element->fdworkspace);
 			if(!psd)
 				return NULL;
-			if(XLALPSDRegressorSetPSD(psd_regressor, psd, 1)) {
+			if(XLALPSDRegressorSetPSD(element->psd_regressor, psd, 1)) {
 				GST_ERROR("XLALPSDRegressorSetPSD() failed");
 				XLALDestroyREAL8FrequencySeries(psd);
 				XLALClearErrno();
 				return NULL;
 			}
 		} else {
-			psd = XLALPSDRegressorGetPSD(psd_regressor);
+			psd = XLALPSDRegressorGetPSD(element->psd_regressor);
 			if(!psd) {
 				GST_ERROR("XLALPSDRegressorGetPSD() failed");
 				XLALClearErrno();
@@ -380,8 +421,7 @@ static REAL8FrequencySeries *get_psd(enum gstlal_psdmode_t psdmode, LALPSDRegres
 		break;
 
 	case GSTLAL_PSDMODE_REFERENCE:
-		/* FIXME */
-		psd = NULL;
+		psd = XLALCutREAL8FrequencySeries(element->reference_psd, 0, element->reference_psd->data->length);
 		break;
 	}
 
@@ -693,6 +733,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	while(gst_adapter_available(element->adapter) >= element->tdworkspace->data->length * sizeof(*element->tdworkspace->data->data)) {
+		REAL8FrequencySeries *newpsd;
 		GstBuffer *srcbuf;
 		unsigned i;
 
@@ -728,66 +769,30 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 
 		/*
-		 * If we're compensating for a reference spectrum, make
-		 * sure we have one that's up-to-date.
+		 * Retrieve the PSD.
 		 */
 
-		if(element->reference_psd_filename) {
-			/*
-			 * If a reference spectrum is not available, or the
-			 * reference spectrum does not match the current
-			 * frequency band and resolution, load a new
-			 * reference spectrum.
-			 */
-
-			if(!element->reference_psd || element->reference_psd->f0 != element->fdworkspace->f0 || element->reference_psd->deltaF != element->fdworkspace->deltaF || element->reference_psd->data->length != element->fdworkspace->data->length) {
-				XLALDestroyREAL8FrequencySeries(element->reference_psd);
-				element->reference_psd = gstlal_get_reference_psd(element->reference_psd_filename, 0.0, element->fdworkspace->deltaF, element->fdworkspace->data->length);
-				if(!element->reference_psd) {
-					result = GST_FLOW_ERROR;
-					goto done;
-				}
-				GST_INFO_OBJECT(element, "loaded reference PSD from \"%s\" with %d samples at %.16g Hz resolution spanning the frequency band %.16g Hz -- %.16g Hz", element->reference_psd_filename, element->reference_psd->data->length, element->reference_psd->deltaF, element->reference_psd->f0, element->reference_psd->f0 + (element->reference_psd->data->length - 1) * element->reference_psd->deltaF);
-			}
-
-			/*
-			 * If there's no data in the spectrum averager yet,
-			 * use the reference spectrum to initialize it.
-			 */
-
-			if(!element->psd_regressor->n_samples) {
-				if(XLALPSDRegressorSetPSD(element->psd_regressor, element->reference_psd, XLALPSDRegressorGetAverageSamples(element->psd_regressor))) {
-					GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
-					result = GST_FLOW_ERROR;
-					XLALClearErrno();
-					goto done;
-				}
+		newpsd = get_psd(element);
+		if(!newpsd) {
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
+		/* FIXME:  compare the new PSD to the old PSD and tell the
+		 * world about it if it has changed according to some
+		 * metric */
+		XLALDestroyREAL8FrequencySeries(element->psd);
+		element->psd = newpsd;
+		{
+		/* FIXME:  if more than one whitener is in the pipeline,
+		 * this counter is probably shared between them.  bad */
+		static int n = 0;
+		if(!(n++ % (XLALPSDRegressorGetAverageSamples(element->psd_regressor) / 2)) && element->xml_stream) {
+			GST_INFO_OBJECT(element, "writing PSD snapshot");
+			if(XLALWriteLIGOLwXMLArrayREAL8FrequencySeries(element->xml_stream, "Recorded by GSTLAL element lal_whiten", element->psd)) {
+				GST_ERROR_OBJECT(element, "XLALWriteLIGOLwXMLArrayREAL8FrequencySeries() failed");
+				XLALClearErrno();
 			}
 		}
-
-		/*
-		 * Make sure we've got an up-to-date PSD.
-		 */
-
-		if(!element->psd || element->psdmode == GSTLAL_PSDMODE_RUNNING_AVERAGE) {
-			/* FIXME:  if more than one whitener is in the
-			 * pipeline, this counter is probably shared
-			 * between them.  bad */
-			static int n = 0;
-			XLALDestroyREAL8FrequencySeries(element->psd);
-			element->psd = get_psd(element->psdmode, element->psd_regressor, element->fdworkspace);
-			if(!element->psd) {
-				result = GST_FLOW_ERROR;
-				goto done;
-			}
-			if(!(n++ % (XLALPSDRegressorGetAverageSamples(element->psd_regressor) / 2)) && element->xml_stream) {
-				static int n = 1;
-				GST_INFO_OBJECT(element, "writing PSD snapshot %d", n++);
-				if(XLALWriteLIGOLwXMLArrayREAL8FrequencySeries(element->xml_stream, "Recorded by GSTLAL element lal_whiten", element->psd)) {
-					GST_ERROR_OBJECT(element, "XLALWriteLIGOLwXMLArrayREAL8FrequencySeries() failed");
-					XLALClearErrno();
-				}
-			}
 		}
 
 		/*
@@ -911,7 +916,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * zero_pad in the tail
 		 */
 
-		memcpy(element->tail->data, &element->tdworkspace->data->data[zero_pad + i], element->tail->length * sizeof(*element->tail->data));
+		memcpy(element->tail->data, &element->tdworkspace->data->data[zero_pad + element->tail->length], element->tail->length * sizeof(*element->tail->data));
 
 		/*
 		 * Flush the adapter and advance the sample count and
