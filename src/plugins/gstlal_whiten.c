@@ -114,6 +114,7 @@ GType gstlal_psdmode_get_type(void)
 		static GEnumValue values[] = {
 			{GSTLAL_PSDMODE_INITIAL_LIGO_SRD, "GSTLAL_PSDMODE_INITIAL_LIGO_SRD", "Use Initial LIGO SRD for PSD"},
 			{GSTLAL_PSDMODE_RUNNING_AVERAGE, "GSTLAL_PSDMODE_RUNNING_AVERAGE", "Use running average for PSD"},
+			{GSTLAL_PSDMODE_REFERENCE, "GSTLAL_PSDMODE_REFERENCE", "Use reference spectrum for PSD"},
 			{0, NULL, NULL}
 		};
 
@@ -135,8 +136,8 @@ GType gstlal_psdmode_get_type(void)
 
 static int make_window_and_fft_plans(GSTLALWhiten *element)
 {
-	int fft_length = floor(element->fft_length_seconds * element->sample_rate + 0.5);
-	int zero_pad = floor(element->zero_pad_seconds * element->sample_rate + 0.5);
+	int fft_length = round(element->fft_length_seconds * element->sample_rate);
+	int zero_pad = round(element->zero_pad_seconds * element->sample_rate);
 
 	/*
 	 * build a Hann window with zero-padding
@@ -146,12 +147,14 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 	element->window = XLALCreateHannREAL8Window(fft_length - 2 * zero_pad);
 	if(!element->window) {
 		GST_ERROR_OBJECT(element, "failure creating Hann window");
+		XLALClearErrno();
 		return -1;
 	}
 	if(!XLALResizeREAL8Sequence(element->window->data, -zero_pad, fft_length)) {
 		GST_ERROR_OBJECT(element, "failure resizing Hann window");
 		XLALDestroyREAL8Window(element->window);
 		element->window = NULL;
+		XLALClearErrno();
 		return -1;
 	}
 
@@ -163,6 +166,7 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 	element->tail = XLALCreateREAL8Sequence(element->window->data->length / 2 - zero_pad);
 	if(!element->tail) {
 		GST_ERROR_OBJECT(element, "failure allocating tail buffer");
+		XLALClearErrno();
 		return -1;
 	}
 	memset(element->tail->data, 0, element->tail->length * sizeof(*element->tail->data));
@@ -187,10 +191,42 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 		g_mutex_unlock(gstlal_fftw_lock);
 		element->fwdplan = NULL;
 		element->revplan = NULL;
+		XLALClearErrno();
 		return -1;
 	}
 
+	/*
+	 * construct work spaces
+	 */
+
+	XLALDestroyREAL8TimeSeries(element->tdworkspace);
+	element->tdworkspace = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0, 0}, 0.0, (double) 1.0 / element->sample_rate, &element->sample_units, element->window->data->length);
+	if(!element->tdworkspace) {
+		GST_ERROR_OBJECT(element, "failure creating time-domain workspace");
+		XLALClearErrno();
+		return -1;
+	}
+	XLALDestroyCOMPLEX16FrequencySeries(element->fdworkspace);
+	element->fdworkspace = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0, 0}, 0.0, (double) 1.0 / (element->tdworkspace->deltaT * element->window->data->length), &lalDimensionlessUnit, element->window->data->length / 2 + 1);
+	if(!element->fdworkspace) {
+		GST_ERROR_OBJECT(element, "failure creating frequency-domain workspace");
+		XLALClearErrno();
+		return -1;
+	}
+
+	/*
+	 * done
+	 */
+
 	return 0;
+}
+
+
+static void reset_workspace_metadata(GSTLALWhiten *element)
+{
+	element->tdworkspace->deltaT = (double) 1.0 / element->sample_rate;
+	element->tdworkspace->sampleUnits = element->sample_units;
+	element->fdworkspace->deltaF = (double) 1.0 / (element->tdworkspace->deltaT * element->window->data->length);
 }
 
 
@@ -200,8 +236,10 @@ static REAL8FrequencySeries *make_empty_psd(double f0, double deltaF, int length
 	LALUnit strain_squared_per_hertz = gstlal_lalStrainSquaredPerHertz();
 	REAL8FrequencySeries *psd = XLALCreateREAL8FrequencySeries("PSD", &gps_zero, f0, deltaF, &strain_squared_per_hertz, length);
 
-	if(!psd)
+	if(!psd) {
 		GST_ERROR("XLALCreateREAL8FrequencySeries() failed");
+		XLALClearErrno();
+	}
 
 	return psd;
 }
@@ -276,7 +314,7 @@ static REAL8FrequencySeries *get_psd(enum gstlal_psdmode_t psdmode, LALPSDRegres
 
 	switch(psdmode) {
 	case GSTLAL_PSDMODE_INITIAL_LIGO_SRD:
-		psd = make_iligo_psd(fseries->f0, fseries->deltaF, fseries->data->length);
+		psd = make_iligo_psd(0.0, fseries->deltaF, fseries->data->length);
 		if(!psd)
 			return NULL;
 		break;
@@ -294,15 +332,22 @@ static REAL8FrequencySeries *get_psd(enum gstlal_psdmode_t psdmode, LALPSDRegres
 			if(XLALPSDRegressorSetPSD(psd_regressor, psd, 1)) {
 				GST_ERROR("XLALPSDRegressorSetPSD() failed");
 				XLALDestroyREAL8FrequencySeries(psd);
+				XLALClearErrno();
 				return NULL;
 			}
 		} else {
 			psd = XLALPSDRegressorGetPSD(psd_regressor);
 			if(!psd) {
 				GST_ERROR("XLALPSDRegressorGetPSD() failed");
+				XLALClearErrno();
 				return NULL;
 			}
 		}
+		break;
+
+	case GSTLAL_PSDMODE_REFERENCE:
+		/* FIXME */
+		psd = NULL;
 		break;
 	}
 
@@ -370,17 +415,20 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 
 	case ARG_XML_FILENAME:
 		free(element->xml_filename);
+		if(element->xml_stream) {
+			XLALCloseLIGOLwXMLFile(element->xml_stream);
+			element->xml_stream = NULL;
+		}
 		element->xml_filename = g_value_dup_string(value);
-		XLALCloseLIGOLwXMLFile(element->xml_stream);
 		if(element->xml_filename) {
 			element->xml_stream = XLALOpenLIGOLwXMLFile(element->xml_filename);
 			if(!element->xml_stream) {
 				GST_ERROR_OBJECT(element, "XLALOpenLIGOLwXMLFile() failed");
 				free(element->xml_filename);
 				element->xml_filename = NULL;
+				XLALClearErrno();
 			}
-		} else
-			element->xml_stream = NULL;
+		}
 		break;
 
 	case ARG_REFERENCE_PSD:
@@ -486,6 +534,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	int sample_rate;
+	LALUnit sample_units;
 	char units[100];	/* FIXME:  argh, hard-coded length = BAD BAD BAD */
 	gboolean result = TRUE;
 
@@ -495,8 +544,18 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 
 	sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 
-	if((int) floor(element->fft_length_seconds * sample_rate + 0.5) & 1) {
+	if((int) round(element->fft_length_seconds * sample_rate) & 1) {
 		GST_ERROR_OBJECT(element, "FFT length is an odd number of samples");
+		result = FALSE;
+		goto done;
+	}
+
+	/*
+	 * extract the sample units
+	 */
+
+	if(!XLALParseUnitString(&sample_units, g_value_get_string(gst_structure_get_value(gst_caps_get_structure(caps, 0), "units")))) {
+		GST_ERROR_OBJECT(element, "cannot parse units");
 		result = FALSE;
 		goto done;
 	}
@@ -523,13 +582,14 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 		goto done;
 
 	/*
-	 * record the sample rate
+	 * record the sample rate and units
 	 */
 
 	element->sample_rate = sample_rate;
+	element->sample_units = sample_units;
 
 	/*
-	 * make a new Hann window, new tail buffer, and new FFT plans
+	 * make a new Hann window, new FFT plans, and workspaces
 	 */
 
 	if(make_window_and_fft_plans(element)) {
@@ -566,15 +626,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	GstFlowReturn result = GST_FLOW_OK;
-	unsigned zero_pad = floor(element->zero_pad_seconds * element->sample_rate + 0.5);
-	REAL8TimeSeries *segment = NULL;
-	COMPLEX16FrequencySeries *tilde_segment = NULL;
+	unsigned zero_pad = round(element->zero_pad_seconds * element->sample_rate);
 
 	/*
 	 * Confirm that setcaps() has successfully configured everything
 	 */
 
-	if(!element->window || !element->tail || !element->fwdplan || !element->revplan) {
+	if(!element->window || !element->tail || !element->fwdplan || !element->revplan || !element->tdworkspace || !element->fdworkspace) {
 		result = GST_FLOW_NOT_NEGOTIATED;
 		goto done;
 	}
@@ -596,48 +654,41 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	gst_adapter_push(element->adapter, sinkbuf);
 
 	/*
-	 * Create workspace
-	 */
-
-	segment = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0, 0}, 0.0, (double) 1.0 / element->sample_rate, &lalStrainUnit, element->window->data->length);
-	tilde_segment = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0, 0}, 0, 0, &lalDimensionlessUnit, element->window->data->length / 2 + 1);
-	if(!segment || !tilde_segment) {
-		GST_ERROR_OBJECT(element, "failure creating workspace");
-		result = GST_FLOW_ERROR;
-		goto done;
-	}
-
-	/*
 	 * Iterate over the available data
 	 */
 
-	while(gst_adapter_available(element->adapter) / sizeof(*segment->data->data) >= segment->data->length) {
+	while(gst_adapter_available(element->adapter) / sizeof(*element->tdworkspace->data->data) >= element->tdworkspace->data->length) {
 		GstBuffer *srcbuf;
 		unsigned i;
 
 		/*
-		 * Copy data from adapter into time-domain workspace.
 		 * Reset the workspace's metadata that gets modified
 		 * through each iteration of this loop.
 		 */
 
-		memcpy(segment->data->data, gst_adapter_peek(element->adapter, segment->data->length * sizeof(*segment->data->data)), segment->data->length * sizeof(*segment->data->data));
-		segment->deltaT = (double) 1.0 / element->sample_rate;
-		segment->sampleUnits = lalStrainUnit;
-		XLALINT8NSToGPS(&segment->epoch, element->adapter_head_timestamp);
+		reset_workspace_metadata(element);
+
+		/*
+		 * Copy data from adapter into time-domain workspace.
+		 */
+
+		memcpy(element->tdworkspace->data->data, gst_adapter_peek(element->adapter, element->tdworkspace->data->length * sizeof(*element->tdworkspace->data->data)), element->tdworkspace->data->length * sizeof(*element->tdworkspace->data->data));
+		XLALINT8NSToGPS(&element->tdworkspace->epoch, element->adapter_head_timestamp);
 
 		/*
 		 * Transform to frequency domain
 		 */
 
-		if(!XLALUnitaryWindowREAL8Sequence(segment->data, element->window)) {
+		if(!XLALUnitaryWindowREAL8Sequence(element->tdworkspace->data, element->window)) {
 			GST_ERROR_OBJECT(element, "XLALUnitaryWindowREAL8Sequence() failed");
 			result = GST_FLOW_ERROR;
+			XLALClearErrno();
 			goto done;
 		}
-		if(XLALREAL8TimeFreqFFT(tilde_segment, segment, element->fwdplan)) {
+		if(XLALREAL8TimeFreqFFT(element->fdworkspace, element->tdworkspace, element->fwdplan)) {
 			GST_ERROR_OBJECT(element, "XLALREAL8TimeFreqFFT() failed");
 			result = GST_FLOW_ERROR;
+			XLALClearErrno();
 			goto done;
 		}
 
@@ -648,26 +699,15 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		if(element->reference_psd_filename) {
 			/*
-			 * If a reference spectrum is already available,
-			 * confirm that it matches the current frequency
-			 * resolution, otherwise delete it to induce a new
-			 * one to be loaded.
+			 * If a reference spectrum is not available, or the
+			 * reference spectrum does not match the current
+			 * frequency band and resolution, load a new
+			 * reference spectrum.
 			 */
 
-			if(element->reference_psd) {
-				if(element->reference_psd->f0 != tilde_segment->f0 || element->reference_psd->deltaF != tilde_segment->deltaF || element->reference_psd->data->length != tilde_segment->data->length) {
-					XLALDestroyREAL8FrequencySeries(element->reference_psd);
-					element->reference_psd = NULL;
-				}
-			}
-
-			/*
-			 * Load a reference spectrum if one is not
-			 * available.
-			 */
-
-			if(!element->reference_psd) {
-				element->reference_psd = gstlal_get_reference_psd(element->reference_psd_filename, tilde_segment->f0, tilde_segment->deltaF, tilde_segment->data->length);
+			if(!element->reference_psd || element->reference_psd->f0 != element->fdworkspace->f0 || element->reference_psd->deltaF != element->fdworkspace->deltaF || element->reference_psd->data->length != element->fdworkspace->data->length) {
+				XLALDestroyREAL8FrequencySeries(element->reference_psd);
+				element->reference_psd = gstlal_get_reference_psd(element->reference_psd_filename, 0.0, element->fdworkspace->deltaF, element->fdworkspace->data->length);
 				if(!element->reference_psd) {
 					result = GST_FLOW_ERROR;
 					goto done;
@@ -684,6 +724,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 				if(XLALPSDRegressorSetPSD(element->psd_regressor, element->reference_psd, XLALPSDRegressorGetAverageSamples(element->psd_regressor))) {
 					GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
 					result = GST_FLOW_ERROR;
+					XLALClearErrno();
 					goto done;
 				}
 			}
@@ -699,7 +740,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 * between them.  bad */
 			static int n = 0;
 			XLALDestroyREAL8FrequencySeries(element->psd);
-			element->psd = get_psd(element->psdmode, element->psd_regressor, tilde_segment);
+			element->psd = get_psd(element->psdmode, element->psd_regressor, element->fdworkspace);
 			if(!element->psd) {
 				result = GST_FLOW_ERROR;
 				goto done;
@@ -707,8 +748,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			if(!(n++ % (XLALPSDRegressorGetAverageSamples(element->psd_regressor) / 2)) && element->xml_stream) {
 				static int n = 1;
 				GST_INFO_OBJECT(element, "writing PSD snapshot %d", n++);
-				if(XLALWriteLIGOLwXMLArrayREAL8FrequencySeries(element->xml_stream, "Recorded by GSTLAL element lal_whiten", element->psd))
+				if(XLALWriteLIGOLwXMLArrayREAL8FrequencySeries(element->xml_stream, "Recorded by GSTLAL element lal_whiten", element->psd)) {
 					GST_ERROR_OBJECT(element, "XLALWriteLIGOLwXMLArrayREAL8FrequencySeries() failed");
+					XLALClearErrno();
+				}
 			}
 		}
 
@@ -716,23 +759,25 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Add frequency domain data to spectrum averager
 		 */
 
-		if(XLALPSDRegressorAdd(element->psd_regressor, tilde_segment)) {
+		if(XLALPSDRegressorAdd(element->psd_regressor, element->fdworkspace)) {
 			GST_ERROR_OBJECT(element, "XLALPSDRegressorAdd() failed");
 			result = GST_FLOW_ERROR;
+			XLALClearErrno();
 			goto done;
 		}
 
 		/*
-		 * Remove lines and whiten.  After this, the frequency bins
-		 * should be unit variance zero mean complex Gaussian
-		 * random variables.  They are *not* independent random
-		 * variables because the source time series data was
-		 * windowed before conversion to the frequency domain.
+		 * Whiten.  After this, the frequency bins should be unit
+		 * variance zero mean complex Gaussian random variables.
+		 * They are *not* independent random variables because the
+		 * source time series data was windowed before conversion
+		 * to the frequency domain.
 		 */
 
-		if(!XLALWhitenCOMPLEX16FrequencySeries(tilde_segment, element->psd)) {
+		if(!XLALWhitenCOMPLEX16FrequencySeries(element->fdworkspace, element->psd)) {
 			GST_ERROR_OBJECT(element, "XLALWhitenCOMPLEX16FrequencySeries() failed");
 			result = GST_FLOW_ERROR;
+			XLALClearErrno();
 			goto done;
 		}
 
@@ -781,29 +826,30 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		if(element->reference_psd) {
 			double rms = 0;
-			for(i = 0; i < tilde_segment->data->length; i++) {
+			for(i = 0; i < element->fdworkspace->data->length; i++) {
 				if(element->psd->data->data[i] == 0) {
 					rms += 1;
-					tilde_segment->data->data[i] = LAL_COMPLEX16_ZERO;
+					element->fdworkspace->data->data[i] = LAL_COMPLEX16_ZERO;
 				} else {
 					double psd_ratio = element->reference_psd->data->data[i] / element->psd->data->data[i];
 					rms += psd_ratio;
-					tilde_segment->data->data[i] = XLALCOMPLEX16MulReal(tilde_segment->data->data[i], sqrt(psd_ratio));
+					element->fdworkspace->data->data[i] = XLALCOMPLEX16MulReal(element->fdworkspace->data->data[i], sqrt(psd_ratio));
 				}
 			}
-			rms = sqrt(rms / tilde_segment->data->length);
+			rms = sqrt(rms / element->fdworkspace->data->length);
 			GST_LOG_OBJECT(element, "PSD compensation filter's RMS = %.16g\n", rms);
-			for(i = 0; i < tilde_segment->data->length; i++)
-				tilde_segment->data->data[i] = XLALCOMPLEX16MulReal(tilde_segment->data->data[i], 1.0 / rms);
+			for(i = 0; i < element->fdworkspace->data->length; i++)
+				element->fdworkspace->data->data[i] = XLALCOMPLEX16MulReal(element->fdworkspace->data->data[i], 1.0 / rms);
 		}
 
 		/*
 		 * Transform to time domain.
 		 */
 
-		if(XLALREAL8FreqTimeFFT(segment, tilde_segment, element->revplan)) {
+		if(XLALREAL8FreqTimeFFT(element->tdworkspace, element->fdworkspace, element->revplan)) {
 			GST_ERROR_OBJECT(element, "XLALREAL8FreqTimeFFT() failed");
 			result = GST_FLOW_ERROR;
+			XLALClearErrno();
 			goto done;
 		}
 
@@ -839,17 +885,17 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * the Hann-like window applied to the data.
 		 */
 
-		for(i = 0; i < segment->data->length; i++)
-			segment->data->data[i] /= tilde_segment->deltaF * sqrt(segment->data->length);
-		XLALUnitDivide(&segment->sampleUnits, &segment->sampleUnits, &lalHertzUnit);
+		for(i = 0; i < element->tdworkspace->data->length; i++)
+			element->tdworkspace->data->data[i] /= element->fdworkspace->deltaF * sqrt(element->tdworkspace->data->length);
+		XLALUnitDivide(&element->tdworkspace->sampleUnits, &element->tdworkspace->sampleUnits, &lalHertzUnit);
 
 		/*
 		 * Verify the result is dimensionless.
 		 */
 
-		if(XLALUnitCompare(&lalDimensionlessUnit, &segment->sampleUnits)) {
+		if(XLALUnitCompare(&lalDimensionlessUnit, &element->tdworkspace->sampleUnits)) {
 			char units[100];
-			XLALUnitAsString(units, sizeof(units), &segment->sampleUnits);
+			XLALUnitAsString(units, sizeof(units), &element->tdworkspace->sampleUnits);
 			GST_ERROR_OBJECT(element, "whitening process failed to produce dimensionless time series: result has units \"%s\"", units);
 			result = GST_FLOW_ERROR;
 			goto done;
@@ -859,7 +905,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Get a buffer from the downstream peer.
 		 */
 
-		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample + zero_pad, element->tail->length * sizeof(*segment->data->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
+		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample + zero_pad, element->tail->length * sizeof(*element->tdworkspace->data->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
 		if(result != GST_FLOW_OK)
 			goto done;
 		if(element->next_is_discontinuity) {
@@ -886,7 +932,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		for(i = 0; i < element->tail->length; i++)
-			((double *) GST_BUFFER_DATA(srcbuf))[i] = (segment->data->data[zero_pad + i] + element->tail->data[i]) / sqrt(element->window->data->length / element->window->sumofsquares);
+			((double *) GST_BUFFER_DATA(srcbuf))[i] = (element->tdworkspace->data->data[zero_pad + i] + element->tail->data[i]) / sqrt(element->window->data->length / element->window->sumofsquares);
 
 		/*
 		 * Push the buffer downstream
@@ -901,14 +947,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * zero_pad in the tail
 		 */
 
-		memcpy(element->tail->data, &segment->data->data[zero_pad + i], element->tail->length * sizeof(*element->tail->data));
+		memcpy(element->tail->data, &element->tdworkspace->data->data[zero_pad + i], element->tail->length * sizeof(*element->tail->data));
 
 		/*
 		 * Flush the adapter and advance the sample count and
 		 * adapter clock
 		 */
 
-		gst_adapter_flush(element->adapter, element->tail->length * sizeof(*segment->data->data));
+		gst_adapter_flush(element->adapter, element->tail->length * sizeof(*element->tdworkspace->data->data));
 		element->next_sample += element->tail->length;
 		/* FIXME:  this accumulates round-off, the time stamp
 		 * should be calculated directly somehow */
@@ -920,8 +966,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 done:
-	XLALDestroyREAL8TimeSeries(segment);
-	XLALDestroyCOMPLEX16FrequencySeries(tilde_segment);
 	gst_object_unref(element);
 	return result;
 }
@@ -953,6 +997,8 @@ static void finalize(GObject * object)
 	g_mutex_unlock(gstlal_fftw_lock);
 	XLALPSDRegressorFree(element->psd_regressor);
 	XLALDestroyREAL8FrequencySeries(element->psd);
+	XLALDestroyREAL8TimeSeries(element->tdworkspace);
+	XLALDestroyCOMPLEX16FrequencySeries(element->fdworkspace);
 	XLALDestroyREAL8Sequence(element->tail);
 	free(element->xml_filename);
 	XLALCloseLIGOLwXMLFile(element->xml_stream);
@@ -1078,11 +1124,14 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->fft_length_seconds = DEFAULT_FFT_LENGTH_SECONDS;
 	element->psdmode = DEFAULT_PSDMODE;
 	element->sample_rate = 0;
+	element->sample_units = lalDimensionlessUnit;
 	element->window = NULL;
 	element->fwdplan = NULL;
 	element->revplan = NULL;
 	element->psd_regressor = XLALPSDRegressorNew(DEFAULT_AVERAGE_SAMPLES, DEFAULT_MEDIAN_SAMPLES);
 	element->psd = NULL;
+	element->tdworkspace = NULL;
+	element->fdworkspace = NULL;
 	element->tail = NULL;
 	element->xml_filename = NULL;
 	element->xml_stream = NULL;

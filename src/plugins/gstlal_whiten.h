@@ -33,6 +33,7 @@
 #include <lal/LALDatatypes.h>
 #include <lal/LIGOLwXML.h>
 #include <lal/TimeFreqFFT.h>
+#include <lal/Units.h>
 
 
 G_BEGIN_DECLS
@@ -45,7 +46,8 @@ G_BEGIN_DECLS
 
 enum gstlal_psdmode_t {
 	GSTLAL_PSDMODE_INITIAL_LIGO_SRD,
-	GSTLAL_PSDMODE_RUNNING_AVERAGE
+	GSTLAL_PSDMODE_RUNNING_AVERAGE,
+	GSTLAL_PSDMODE_REFERENCE
 };
 
 
@@ -86,6 +88,7 @@ typedef struct {
 	GstPad *srcpad;
 
 	int sample_rate;
+	LALUnit sample_units;
 	gboolean next_is_discontinuity;
 	unsigned long next_sample;
 	GstClockTime adapter_head_timestamp;
@@ -99,6 +102,8 @@ typedef struct {
 	REAL8FFTPlan *revplan;
 	LALPSDRegressor *psd_regressor;
 	REAL8FrequencySeries *psd;
+	REAL8TimeSeries *tdworkspace;
+	COMPLEX16FrequencySeries *fdworkspace;
 	REAL8Sequence *tail;
 
 	char *xml_filename;
