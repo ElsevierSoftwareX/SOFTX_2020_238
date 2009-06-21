@@ -76,6 +76,9 @@
 #include <gstlal_whiten.h>
 
 
+static const LIGOTimeGPS GPS_ZERO = {0, 0};
+
+
 /*
  * ============================================================================
  *
@@ -132,6 +135,14 @@ GType gstlal_psdmode_get_type(void)
  *
  * ============================================================================
  */
+
+
+static void reset_workspace_metadata(GSTLALWhiten *element)
+{
+	element->tdworkspace->deltaT = (double) 1.0 / element->sample_rate;
+	element->tdworkspace->sampleUnits = element->sample_units;
+	element->fdworkspace->deltaF = (double) 1.0 / (element->tdworkspace->deltaT * element->window->data->length);
+}
 
 
 static int make_window_and_fft_plans(GSTLALWhiten *element)
@@ -200,14 +211,14 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 	 */
 
 	XLALDestroyREAL8TimeSeries(element->tdworkspace);
-	element->tdworkspace = XLALCreateREAL8TimeSeries(NULL, &(LIGOTimeGPS) {0, 0}, 0.0, (double) 1.0 / element->sample_rate, &element->sample_units, element->window->data->length);
+	element->tdworkspace = XLALCreateREAL8TimeSeries(NULL, &GPS_ZERO, 0.0, (double) 1.0 / element->sample_rate, &element->sample_units, element->window->data->length);
 	if(!element->tdworkspace) {
 		GST_ERROR_OBJECT(element, "failure creating time-domain workspace");
 		XLALClearErrno();
 		return -1;
 	}
 	XLALDestroyCOMPLEX16FrequencySeries(element->fdworkspace);
-	element->fdworkspace = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0, 0}, 0.0, (double) 1.0 / (element->tdworkspace->deltaT * element->window->data->length), &lalDimensionlessUnit, element->window->data->length / 2 + 1);
+	element->fdworkspace = XLALCreateCOMPLEX16FrequencySeries(NULL, &GPS_ZERO, 0.0, (double) 1.0 / (element->tdworkspace->deltaT * element->window->data->length), &lalDimensionlessUnit, element->window->data->length / 2 + 1);
 	if(!element->fdworkspace) {
 		GST_ERROR_OBJECT(element, "failure creating frequency-domain workspace");
 		XLALClearErrno();
@@ -222,19 +233,10 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 }
 
 
-static void reset_workspace_metadata(GSTLALWhiten *element)
-{
-	element->tdworkspace->deltaT = (double) 1.0 / element->sample_rate;
-	element->tdworkspace->sampleUnits = element->sample_units;
-	element->fdworkspace->deltaF = (double) 1.0 / (element->tdworkspace->deltaT * element->window->data->length);
-}
-
-
 static REAL8FrequencySeries *make_empty_psd(double f0, double deltaF, int length)
 {
-	LIGOTimeGPS gps_zero = {0, 0};
 	LALUnit strain_squared_per_hertz = gstlal_lalStrainSquaredPerHertz();
-	REAL8FrequencySeries *psd = XLALCreateREAL8FrequencySeries("PSD", &gps_zero, f0, deltaF, &strain_squared_per_hertz, length);
+	REAL8FrequencySeries *psd = XLALCreateREAL8FrequencySeries("PSD", &GPS_ZERO, f0, deltaF, &strain_squared_per_hertz, length);
 
 	if(!psd) {
 		GST_ERROR("XLALCreateREAL8FrequencySeries() failed");
@@ -657,7 +659,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Iterate over the available data
 	 */
 
-	while(gst_adapter_available(element->adapter) / sizeof(*element->tdworkspace->data->data) >= element->tdworkspace->data->length) {
+	while(gst_adapter_available(element->adapter) >= element->tdworkspace->data->length * sizeof(*element->tdworkspace->data->data)) {
 		GstBuffer *srcbuf;
 		unsigned i;
 
