@@ -63,7 +63,8 @@ class Bank(object):
 				# 1 second
 				self.blocksize = rate
 
-	def __init__(self, template_bank_filename, bank_fragments, length, gate_threshold):
+	def __init__(self, reference_psd_filename, template_bank_filename, bank_fragments, length, gate_threshold):
+		self.reference_psd_filename = reference_psd_filename
 		self.template_bank_filename = template_bank_filename
 		self.bank_fragments = bank_fragments
 		self.filter_length = length
@@ -75,10 +76,9 @@ class Bank(object):
 
 class Detectors(dict):
 	class DetectorData(object):
-		def __init__(self, frame_cache, channel, psd, snr_threshold):
+		def __init__(self, frame_cache, channel, snr_threshold):
 			self.frame_cache = frame_cache
 			self.channel = channel
-			self.psd = psd
 			self.snr_threshold = snr_threshold
 
 	def __new__(cls, initializer, *args, **kwargs):
@@ -189,14 +189,14 @@ def mkqueue(pipeline, src, pad_name = None, **properties):
 		src.link_pads(pad_name, elem, "sink")
 	return elem
 
-def mkbank(pipeline, src, reference_psd_filename, banks, bank, control_snk, control_src):
+def mkbank(pipeline, src, banks, bank, control_snk, control_src):
 	elem = gst.element_factory_make("lal_templatebank")
 	elem.set_property("t-start", bank.start)
 	elem.set_property("t-end", bank.end)
 	elem.set_property("t-total-duration", banks.filter_length)
 	elem.set_property("snr-length", bank.blocksize)
 	elem.set_property("template-bank", banks.template_bank_filename)
-	elem.set_property("reference-psd", reference_psd_filename)
+	elem.set_property("reference-psd", banks.reference_psd_filename)
 	pipeline.add(elem)
 	src.link(elem)
 
@@ -362,7 +362,6 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 		bank_snr, bank_chisq = mkbank(
 			pipeline,
 			head,
-			detectors[instrument].psd,
 			banks,
 			bank_fragment,
 			control_snk,
@@ -496,9 +495,10 @@ mainloop = gobject.MainLoop()
 mkLLOIDmulti(
 	pipeline,
 	detectors = Detectors({
-		options.instrument: Detectors.DetectorData(options.frame_cache, "LSC-STRAIN", "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", snr_threshold = 5.5)
+		options.instrument: Detectors.DetectorData(options.frame_cache, "LSC-STRAIN", snr_threshold = 5.5)
 	}),
 	banks = Bank(
+		"/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt",
 		options.template_bank,
 		[
 			Bank.BankFragment(2048, 0.0, 1.0),
