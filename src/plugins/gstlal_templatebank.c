@@ -104,32 +104,6 @@
  */
 
 
-/**
- * Normalization correction because we don't know what we're doing.
- *
- * This is a fit to the standard deviations of the low-passed and
- * down-sampled time series.  The measured values were:
- *
- *	16384	1.0129
- *	 4096	0.50173
- *	 2048	0.35129
- *	  512	0.16747
- *	  256	0.11191
- *	  128	0.077322
- *
- * dividing the input time series by this gives it a mean square of 1.
- */
-
-
-/* FIXME:  replace with an audioamplify element after patching that element
- * to work with double-precision float time series */
-static double normalization_correction(double rate)
-{
-	return sqrt(rate / 2048.0);
-	/*return exp(0.53222 * log(rate) - 5.1269); */
-}
-
-
 static void gsl_half_complex_conjugate_product(gsl_vector *f, gsl_vector *s, double norm)
 {
 	unsigned j;
@@ -189,7 +163,7 @@ static void fft_convolve_filter_matrix(const GSTLALTemplateBank *element, gsl_ve
 	gsl_vector *f = element->fft_f;
 	gsl_vector_view outrow;
 	gsl_matrix *filter = element->U;
-	double norm = 1.0 / normalization_correction(element->sample_rate) / input_length;
+	double norm = 1.0 / input_length;
 	/* memcopy the signal passed in, which is longer than what it reports */
 	memcpy(s->data, signal->vector.data, input_length * sizeof(double));
 
@@ -233,7 +207,7 @@ static void convolva(const GSTLALTemplateBank *element, int output_length, doubl
 			 * the projection of h(t) onto the template bank's
 			 * orthonormal basis.
 			 */
-			gsl_blas_dgemv(CblasNoTrans, 1.0 / normalization_correction(element->sample_rate), element->U, &(time_series->vector), 0.0, orthogonal_snr_sample);
+			gsl_blas_dgemv(CblasNoTrans, 1.0, element->U, &(time_series->vector), 0.0, orthogonal_snr_sample);
 			gsl_vector_memcpy(&orthogonal_snr_row.vector, orthogonal_snr_sample);
 		} else		/* it has already been computed */
 			gsl_matrix_get_row(orthogonal_snr_sample, &(orthogonal_snr->matrix), i);

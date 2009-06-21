@@ -28,6 +28,7 @@
 #
 
 
+import math
 from optparse import OptionParser
 import sys
 
@@ -134,6 +135,14 @@ def mkprogressreport(pipeline, src, name):
 def mkinjections(pipeline, src, filename):
 	elem = gst.element_factory_make("lal_simulation")
 	elem.set_property("xml-location", filename)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+def mkaudioamplify(pipeline, src, amplification):
+	elem = gst.element_factory_make("audioamplify")
+	elem.set_property("clipping-method", 3)
+	elem.set_property("amplification", amplification)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
@@ -329,7 +338,7 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 
 	hoft = {rates[0]: mktee(pipeline, head)}
 	for rate in rates[1:]:
-		hoft[rate] = mktee(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, hoft[rates[0]]), "audio/x-raw-float, rate=%d" % rate))
+		hoft[rate] = mktee(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, mkaudioamplify(pipeline, hoft[rates[0]], math.sqrt(rates[0] / rate))), "audio/x-raw-float, rate=%d" % rate))
 
 	if control_snk is None:
 		control_snk = gst.element_factory_make("lal_adder")
