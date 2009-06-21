@@ -450,46 +450,45 @@ static gboolean gst_adder_query_duration(GstAdder * adder, GstQuery * query)
 			done = TRUE;
 			break;
 
-		case GST_ITERATOR_OK:
-			{
-				GstPad *pad = GST_PAD_CAST(item);
-				gint64 duration;
+		case GST_ITERATOR_OK: {
+			GstPad *pad = GST_PAD_CAST(item);
+			gint64 duration;
 
+			/*
+			 * query upstream peer for duration
+			 */
+
+			if(gst_pad_query_peer_duration(pad, &format, &duration)) {
 				/*
-				 * query upstream peer for duration
+				 * query succeeded
 				 */
 
-				if(gst_pad_query_peer_duration(pad, &format, &duration)) {
+				if(duration == -1) {
 					/*
-					 * query succeeded
+					 * unknown duration --> the
+					 * duration of our output is
+					 * unknown
 					 */
 
-					if(duration == -1) {
-						/*
-						 * unknown duration --> the
-						 * duration of our output
-						 * is unknown
-						 */
-
-						max = duration;
-						done = TRUE;
-					} else if(duration > max) {
-						/*
-						 * take largest duration
-						 */
-
-						max = duration;
-					}
-				} else {
+					max = duration;
+					done = TRUE;
+				} else if(duration > max) {
 					/*
-					 * query failed
+					 * take largest duration
 					 */
 
-					success = FALSE;
+					max = duration;
 				}
-				gst_object_unref(pad);
-				break;
+			} else {
+				/*
+				 * query failed
+				 */
+
+				success = FALSE;
 			}
+			gst_object_unref(pad);
+			break;
+		}
 
 		case GST_ITERATOR_RESYNC:
 			max = -1;
@@ -540,55 +539,52 @@ static gboolean gst_adder_query_latency(GstAdder * adder, GstQuery * query)
 			done = TRUE;
 			break;
 
-		case GST_ITERATOR_OK:
-			{
-				GstPad *pad = GST_PAD_CAST(item);
-				GstQuery *peerquery = gst_query_new_latency();
+		case GST_ITERATOR_OK: {
+			GstPad *pad = GST_PAD_CAST(item);
+			GstQuery *peerquery = gst_query_new_latency();
 
-				/* 
-				 * query upstream peer for latency
+			/* 
+			 * query upstream peer for latency
+			 */
+
+			if(gst_pad_peer_query(pad, peerquery)) {
+				/*
+				 * query succeeded
 				 */
 
-				if(gst_pad_peer_query(pad, peerquery)) {
-					/*
-					 * query succeeded
-					 */
+				GstClockTime min_cur;
+				GstClockTime max_cur;
+				gboolean live_cur;
 
-					GstClockTime min_cur;
-					GstClockTime max_cur;
-					gboolean live_cur;
+				gst_query_parse_latency(peerquery, &live_cur, &min_cur, &max_cur);
 
-					gst_query_parse_latency(peerquery, &live_cur, &min_cur, &max_cur);
+				/*
+				 * take the largest of the latencies
+				 */
 
-					/*
-					 * take the largest of the
-					 * latencies
-					 */
+				if(min_cur > min)
+					min = min_cur;
 
-					if(min_cur > min)
-						min = min_cur;
+				if(max_cur != GST_CLOCK_TIME_NONE && ((max != GST_CLOCK_TIME_NONE && max_cur > max) || (max == GST_CLOCK_TIME_NONE)))
+					max = max_cur;
 
-					if(max_cur != GST_CLOCK_TIME_NONE && ((max != GST_CLOCK_TIME_NONE && max_cur > max) || (max == GST_CLOCK_TIME_NONE)))
-						max = max_cur;
+				/*
+				 * we're live if any upstream peer is live
+				 */
 
-					/*
-					 * we're live if any upstream peer
-					 * is live
-					 */
+				live |= live_cur;
+			} else {
+				/*
+				 * query failed
+				 */
 
-					live |= live_cur;
-				} else {
-					/*
-					 * query failed
-					 */
-
-					success = FALSE;
-				}
-
-				gst_query_unref(peerquery);
-				gst_object_unref(pad);
-				break;
+				success = FALSE;
 			}
+
+			gst_query_unref(peerquery);
+			gst_object_unref(pad);
+			break;
+		}
 
 		case GST_ITERATOR_RESYNC:
 			live = FALSE;
@@ -622,28 +618,27 @@ static gboolean gst_adder_query(GstPad * pad, GstQuery * query)
 	gboolean success = TRUE;
 
 	switch(GST_QUERY_TYPE(query)) {
-	case GST_QUERY_POSITION:
-		{
-			GstFormat format;
+	case GST_QUERY_POSITION: {
+		GstFormat format;
 
-			gst_query_parse_position(query, &format, NULL);
+		gst_query_parse_position(query, &format, NULL);
 
-			switch(format) {
-			case GST_FORMAT_TIME:
-				/* FIXME, bring to stream time, might be tricky */
-				gst_query_set_position(query, format, output_timestamp_from_offset(adder, adder->output_offset));
-				break;
+		switch(format) {
+		case GST_FORMAT_TIME:
+			/* FIXME, bring to stream time, might be tricky */
+			gst_query_set_position(query, format, output_timestamp_from_offset(adder, adder->output_offset));
+			break;
 
-			case GST_FORMAT_DEFAULT:
-				gst_query_set_position(query, format, adder->output_offset);
-				break;
+		case GST_FORMAT_DEFAULT:
+			gst_query_set_position(query, format, adder->output_offset);
+			break;
 
-			default:
-				success = FALSE;
-				break;
-			}
+		default:
+			success = FALSE;
 			break;
 		}
+		break;
+	}
 
 	case GST_QUERY_DURATION:
 		success = gst_adder_query_duration(adder, query);
@@ -739,55 +734,53 @@ static gboolean gst_adder_src_event(GstPad * pad, GstEvent * event)
 		result = FALSE;
 		break;
 
-	case GST_EVENT_SEEK:
-		{
-			GstSeekFlags flags;
-			GstSeekType curtype;
-			gint64 cur;
+	case GST_EVENT_SEEK: {
+		GstSeekFlags flags;
+		GstSeekType curtype;
+		gint64 cur;
 
+		/*
+		 * parse the seek parameters
+		 */
+
+		gst_event_parse_seek(event, &adder->segment_rate, NULL, &flags, &curtype, &cur, NULL, NULL);
+
+		/*
+		 * is it a flushing seek?
+		 */
+
+		if(flags & GST_SEEK_FLAG_FLUSH) {
 			/*
-			 * parse the seek parameters
+			 * make sure we accept nothing more and return
+			 * WRONG_STATE
 			 */
 
-			gst_event_parse_seek(event, &adder->segment_rate, NULL, &flags, &curtype, &cur, NULL, NULL);
+			gst_collect_pads_set_flushing(adder->collect, TRUE);
 
 			/*
-			 * is it a flushing seek?
+			 * start flush downstream.  the flush will be done
+			 * when all pads received a FLUSH_STOP.
 			 */
 
-			if(flags & GST_SEEK_FLAG_FLUSH) {
-				/*
-				 * make sure we accept nothing more and
-				 * return WRONG_STATE
-				 */
-
-				gst_collect_pads_set_flushing(adder->collect, TRUE);
-
-				/*
-				 * start flush downstream.  the flush will
-				 * be done when all pads received a
-				 * FLUSH_STOP.
-				 */
-
-				gst_pad_push_event(adder->srcpad, gst_event_new_flush_start());
-			}
-
-			/*
-			 * wait for the collected to be finished and mark a
-			 * new segment
-			 */
-
-			GST_OBJECT_LOCK(adder->collect);
-			if(curtype == GST_SEEK_TYPE_SET)
-				adder->segment_position = cur;
-			else
-				adder->segment_position = 0;
-			adder->segment_pending = TRUE;
-			GST_OBJECT_UNLOCK(adder->collect);
-
-			result = forward_event(adder, event);
-			break;
+			gst_pad_push_event(adder->srcpad, gst_event_new_flush_start());
 		}
+
+		/*
+		 * wait for the collected to be finished and mark a new
+		 * segment
+		 */
+
+		GST_OBJECT_LOCK(adder->collect);
+		if(curtype == GST_SEEK_TYPE_SET)
+			adder->segment_position = cur;
+		else
+			adder->segment_position = 0;
+		adder->segment_pending = TRUE;
+		GST_OBJECT_UNLOCK(adder->collect);
+
+		result = forward_event(adder, event);
+		break;
+	}
 
 	default:
 		/*
@@ -973,7 +966,7 @@ static void gst_adder_release_pad(GstElement * element, GstPad * pad)
  */
 
 
-static GstFlowReturn push_output_buffer(GstAdder *adder, GstBuffer *outbuf, gboolean empty)
+static GstFlowReturn push_output_buffer(GstAdder *adder, GstBuffer *outbuf)
 {
 	/*
 	 * check for a discontinuity.
@@ -1006,14 +999,6 @@ static GstFlowReturn push_output_buffer(GstAdder *adder, GstBuffer *outbuf, gboo
 	GST_BUFFER_DURATION(outbuf) = output_timestamp_from_offset(adder, adder->output_offset) - GST_BUFFER_TIMESTAMP(outbuf);
 
 	/*
-	 * if empty, mark as gap.
-	 */
-
-	if(empty) 
-		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
-
-
-	/*
 	 * push the buffer downstream.
 	 */
 
@@ -1036,7 +1021,6 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 	guint length;
 	GstBuffer *outbuf = NULL;
 	gpointer outbytes = NULL;
-	gboolean empty = TRUE;
 	GstFlowReturn result;
 
 	/*
@@ -1167,6 +1151,12 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			outbytes = GST_BUFFER_DATA(outbuf);
 
 			/*
+			 * buffer is empty until something goes in it
+			 */
+
+			GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
+
+			/*
 			 * if the input buffer isn't a gap and has non-zero
 			 * length copy it into the output buffer and mark
 			 * as non-empty, otherwise memset the new output
@@ -1174,12 +1164,11 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			 */
 
 			if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) && len) {
-				GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 				GST_LOG_OBJECT(adder, "channel %p: copying %d bytes from data %p", data, len, GST_BUFFER_DATA(inbuf));
 				memset(outbytes, 0, gap);
 				memcpy(outbytes + gap, GST_BUFFER_DATA(inbuf), len);
 				memset(outbytes + gap + len, 0, GST_BUFFER_SIZE(outbuf) - len - gap);
-				empty = FALSE;
+				GST_BUFFER_FLAG_UNSET(outbuf, GST_BUFFER_FLAG_GAP);
 			} else {
 				GST_LOG_OBJECT(adder, "channel %p: zeroing %d bytes from data %p", data, GST_BUFFER_SIZE(outbuf), GST_BUFFER_DATA(inbuf));
 				memset(outbytes, 0, GST_BUFFER_SIZE(outbuf));
@@ -1192,10 +1181,9 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			 */
 
 			if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) && len) {
-				GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 				GST_LOG_OBJECT(adder, "channel %p: mixing %d bytes from data %p", data, len, GST_BUFFER_DATA(inbuf));
 				adder->func(outbytes + gap, GST_BUFFER_DATA(inbuf), len);
-				empty = FALSE;
+				GST_BUFFER_FLAG_UNSET(outbuf, GST_BUFFER_FLAG_GAP);
 			} else
 				GST_LOG_OBJECT(adder, "channel %p: skipping %d bytes from data %p", data, len, GST_BUFFER_DATA(inbuf));
 		}
@@ -1242,7 +1230,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 	 * offset to be set correctly on input.
 	 */
 
-	return push_output_buffer(adder, outbuf, empty);
+	return push_output_buffer(adder, outbuf);
 
 	/*
 	 * ERRORS
