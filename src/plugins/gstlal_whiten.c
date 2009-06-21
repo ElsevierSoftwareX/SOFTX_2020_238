@@ -146,31 +146,6 @@ static void reset_workspace_metadata(GSTLALWhiten *element)
 }
 
 
-static double spectral_correlation_bias(REAL8Window *window, REAL8FFTPlan *fwdplan)
-{
-	REAL8Sequence *correlation = XLALREAL8WindowTwoPointSpectralCorrelation(window, fwdplan);
-	int k0, k1;
-	double variance = 0;
-
-	if(!correlation)
-		return XLAL_REAL8_FAIL_NAN;
-
-	for(k0 = 0; (unsigned) k0 < window->data->length; k0++) {
-		double partialsum = 0;
-		for(k1 = 0; (unsigned) k1 < window->data->length; k1++) {
-			unsigned deltak = abs(k1 - k0);
-			if(deltak < correlation->length)
-				partialsum += (deltak & 1 ? -1 : +1) * correlation->data[deltak];
-		}
-		variance += partialsum;
-	}
-
-	XLALDestroyREAL8Sequence(correlation);
-
-	return variance / window->data->length;
-}
-
-
 static int make_window_and_fft_plans(GSTLALWhiten *element)
 {
 	int fft_length = round(element->fft_length_seconds * element->sample_rate);
@@ -267,12 +242,6 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 		XLALClearErrno();
 		return -1;
 	}
-
-	/*
-	 * record spectral correlation bias
-	 */
-
-	element->spectral_correlation_bias = spectral_correlation_bias(element->window, element->fwdplan);
 
 	/*
 	 * done
@@ -724,7 +693,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Confirm that setcaps() has successfully configured everything
 	 */
 
-	if(!element->window || !element->tail || !element->fwdplan || !element->revplan || !element->tdworkspace || !element->fdworkspace || XLAL_IS_REAL8_FAIL_NAN(element->spectral_correlation_bias)) {
+	if(!element->window || !element->tail || !element->fwdplan || !element->revplan || !element->tdworkspace || !element->fdworkspace) {
 		result = GST_FLOW_NOT_NEGOTIATED;
 		goto done;
 	}
@@ -855,30 +824,18 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * After inverse transforming the frequency series to the
 		 * time domain, the variance of the time series is
 		 *
-		 * <x_{j}^{2}> = \Delta f^{2} * sum_{k} sum_{k'} <s_{k}
-		 * s_{k'}^{*}> exp(2 pi i j (k-k') / N)
+		 * <x_{j}^{2}> = w_{j}^{2} / (\Delta t^{2} \sigma^{2})
 		 *
-		 * If we had not windowed the original time series, it
-		 * would have been stationary noise and so <s_{k}
-		 * s_{k'}^{*}> = \delta_{k k'} and the variance would
-		 * simply be
+		 * where \sigma^{2} is the sum-of-squares of the window
+		 * function, \sigma^{2} = \sum_{j} w_{j}^{2}
 		 *
-		 * <x_{j}^{2}> = \Delta f^{2} * N
-		 *
-		 * Because we windowed the data, this is not the case for
-		 * us and we need to calculate the variance more carefully.
-		 * The spectral_correlation_bias() function above computes
-		 * an additional correction factor to apply to this
-		 * expression due to the window function applied to the
-		 * data.
-		 *
-		 * Still the time series has a j-dependent variance, but we
+		 * The time series has a j-dependent variance, but we
 		 * normalize it so that the variance is 1 in the middle of
 		 * the window.
 		 */
 
 		for(i = 0; i < element->tdworkspace->data->length; i++)
-			element->tdworkspace->data->data[i] /= element->fdworkspace->deltaF * sqrt(element->tdworkspace->data->length * element->spectral_correlation_bias);
+			element->tdworkspace->data->data[i] *= element->tdworkspace->deltaT * sqrt(element->window->sumofsquares);
 		XLALUnitDivide(&element->tdworkspace->sampleUnits, &element->tdworkspace->sampleUnits, &lalHertzUnit);
 
 		/*
@@ -1112,7 +1069,6 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->sample_rate = 0;
 	element->sample_units = lalDimensionlessUnit;
 	element->window = NULL;
-	element->spectral_correlation_bias = XLAL_REAL8_FAIL_NAN;
 	element->fwdplan = NULL;
 	element->revplan = NULL;
 	element->psd_regressor = XLALPSDRegressorNew(DEFAULT_AVERAGE_SAMPLES, DEFAULT_MEDIAN_SAMPLES);

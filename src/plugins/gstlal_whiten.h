@@ -98,7 +98,6 @@ typedef struct {
 	enum gstlal_psdmode_t psdmode;
 
 	REAL8Window *window;
-	double spectral_correlation_bias;
 	REAL8FFTPlan *fwdplan;
 	REAL8FFTPlan *revplan;
 	LALPSDRegressor *psd_regressor;
