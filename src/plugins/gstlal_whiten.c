@@ -177,11 +177,28 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 	int zero_pad = round(element->zero_pad_seconds * element->sample_rate);
 
 	/*
-	 * build a Hann window with zero-padding
+	 * build a Hann window with zero-padding.  both fft_length and
+	 * zero_pad are an even number of samples (enforced in the caps
+	 * negotiation phase).  we need a Hann window with an odd number of
+	 * samples so that there is a middle sample (= 1) to overlap the
+	 * end sample (= 0) of the next window.  we achieve this by adding
+	 * 1 to the length of the envelope, and then clipping the last
+	 * sample.  the result is a sequence of windows that fit together
+	 * as shown below:
+	 *
+	 * 1.0 --------A-------B-------C-------
+	 *     ------A---A---B---B---C---C-----
+	 * 0.5 ----A-------A-------B-------C---
+	 *     --A-------B---A---C---B-------C-
+	 * 0.0 A-------B-------C---------------
+	 *
+	 * i.e., A is "missing" its last sample, which is where C begins,
+	 * and B's first sample starts on A's middle sample, and the sum of
+	 * the windows is identically 1 everywhere.
 	 */
 
 	XLALDestroyREAL8Window(element->window);
-	element->window = XLALCreateHannREAL8Window(fft_length - 2 * zero_pad);
+	element->window = XLALCreateHannREAL8Window(fft_length - 2 * zero_pad + 1);
 	if(!element->window) {
 		GST_ERROR_OBJECT(element, "failure creating Hann window");
 		XLALClearErrno();
@@ -618,8 +635,8 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 
 	sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 
-	if((int) round(element->fft_length_seconds * sample_rate) & 1) {
-		GST_ERROR_OBJECT(element, "FFT length is an odd number of samples");
+	if((int) round(element->fft_length_seconds * sample_rate) & 1 || (int) round(element->zero_pad_seconds * sample_rate) & 1) {
+		GST_ERROR_OBJECT(element, "FFT length and/or Zero-padding is an odd number of samples (must be even)");
 		result = FALSE;
 		goto done;
 	}
