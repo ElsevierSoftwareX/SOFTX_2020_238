@@ -412,7 +412,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filenam
 		#chisq = mktee(pipeline, chisq)
 		#mknxydumpsink(pipeline, mkqueue(pipeline, chisq), "chisquare_%s.txt" % instrument)
 
-		head = mktriggergen(pipeline, mkqueue(pipeline, snr), mkqueue(pipeline, chisq), banks.template_bank_filename, detectors[instrument].snr_threshold)
+		head = mktriggergen(pipeline, snr, chisq, banks.template_bank_filename, detectors[instrument].snr_threshold)
 		if progress_report:
 			head = mkprogressreport(pipeline, head, "progress_xml_%s" % instrument)
 		# FIXME:  write all triggers to the same file using
