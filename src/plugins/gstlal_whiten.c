@@ -607,7 +607,8 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	caps = gst_caps_make_writable(caps);
 
 	XLALUnitAsString(units, sizeof(units), &lalDimensionlessUnit);
-	gst_caps_set_simple(caps, "units", G_TYPE_STRING, units, NULL);
+	/* FIXME:  gstreamer doesn't like empty strings */
+	gst_caps_set_simple(caps, "units", G_TYPE_STRING, " "/*units*/, NULL);
 
 	result = gst_pad_set_caps(element->srcpad, caps);
 	gst_caps_unref(caps);
@@ -666,7 +667,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Confirm that setcaps() has successfully configured everything
 	 */
 
-	if(!element->window || !element->tail || !element->fwdplan || !element->revplan || !element->tdworkspace || !element->fdworkspace || element->spectral_correlation_bias == XLAL_REAL8_FAIL_NAN) {
+	if(!element->window || !element->tail || !element->fwdplan || !element->revplan || !element->tdworkspace || !element->fdworkspace || XLAL_IS_REAL8_FAIL_NAN(element->spectral_correlation_bias)) {
 		result = GST_FLOW_NOT_NEGOTIATED;
 		goto done;
 	}
@@ -1089,7 +1090,7 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->sample_rate = 0;
 	element->sample_units = lalDimensionlessUnit;
 	element->window = NULL;
-	element->spectral_correlation_bias = 1.0;
+	element->spectral_correlation_bias = XLAL_REAL8_FAIL_NAN;
 	element->fwdplan = NULL;
 	element->revplan = NULL;
 	element->psd_regressor = XLALPSDRegressorNew(DEFAULT_AVERAGE_SAMPLES, DEFAULT_MEDIAN_SAMPLES);
