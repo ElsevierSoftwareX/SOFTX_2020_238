@@ -158,14 +158,13 @@ def mkresample(pipeline, src, pad_name = None, **properties):
 		src.link_pads(pad_name, elem, "sink")
 	return elem
 
-def mkwhiten(pipeline, src, reference_psd_filename):
+def mkwhiten(pipeline, src):
 	elem = gst.element_factory_make("lal_whiten")
 	elem.set_property("psd-mode", 1)
 	elem.set_property("zero-pad", 0)
 	elem.set_property("fft-length", 8)
 	elem.set_property("average-samples", 64)
 	elem.set_property("median-samples", 7)
-	#elem.set_property("reference-psd", reference_psd_filename)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
@@ -334,7 +333,7 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 
 	rates = banks.get_rates()
 
-	head = mkwhiten(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % rates[0]), detectors[instrument].psd)
+	head = mkwhiten(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % rates[0]))
 
 	hoft = {rates[0]: mktee(pipeline, head)}
 	for rate in rates[1:]:
