@@ -65,6 +65,7 @@
 #include <lal/LIGOLwXML.h>
 #include <lal/LIGOLwXMLArray.h>
 #include <lal/Units.h>
+#include <lal/TFTransform.h>	/* FIXME:  remove when XLALREAL8WindowTwoPointSpectralCorrelation() migrated to fft package */
 
 
 /*
@@ -142,6 +143,31 @@ static void reset_workspace_metadata(GSTLALWhiten *element)
 	element->tdworkspace->deltaT = (double) 1.0 / element->sample_rate;
 	element->tdworkspace->sampleUnits = element->sample_units;
 	element->fdworkspace->deltaF = (double) 1.0 / (element->tdworkspace->deltaT * element->window->data->length);
+}
+
+
+static double spectral_correlation_bias(REAL8Window *window, REAL8FFTPlan *fwdplan)
+{
+	REAL8Sequence *correlation = XLALREAL8WindowTwoPointSpectralCorrelation(window, fwdplan);
+	int k0, k1;
+	double variance = 0;
+
+	if(!correlation)
+		return XLAL_REAL8_FAIL_NAN;
+
+	for(k0 = 0; (unsigned) k0 < window->data->length; k0++) {
+		double partialsum = 0;
+		for(k1 = 0; (unsigned) k1 < window->data->length; k1++) {
+			unsigned deltak = abs(k1 - k0);
+			if(deltak < correlation->length)
+				partialsum += (deltak & 1 ? -1 : +1) * correlation->data[deltak];
+		}
+		variance += partialsum;
+	}
+
+	XLALDestroyREAL8Sequence(correlation);
+
+	return variance / window->data->length;
 }
 
 
@@ -224,6 +250,12 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 		XLALClearErrno();
 		return -1;
 	}
+
+	/*
+	 * record spectral correlation bias
+	 */
+
+	element->spectral_correlation_bias = spectral_correlation_bias(element->window, element->fwdplan);
 
 	/*
 	 * done
@@ -634,7 +666,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Confirm that setcaps() has successfully configured everything
 	 */
 
-	if(!element->window || !element->tail || !element->fwdplan || !element->revplan || !element->tdworkspace || !element->fdworkspace) {
+	if(!element->window || !element->tail || !element->fwdplan || !element->revplan || !element->tdworkspace || !element->fdworkspace || element->spectral_correlation_bias == XLAL_REAL8_FAIL_NAN) {
 		result = GST_FLOW_NOT_NEGOTIATED;
 		goto done;
 	}
@@ -783,7 +815,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			goto done;
 		}
 
-
 		/*
 		 * Transform to time domain.
 		 */
@@ -796,39 +827,35 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 
 		/* 
-		 * Divide by \Delta F \sqrt{N} to yield a time series of
-		 * unit variance zero mean Gaussian random variables.
+		 * Normalize the time series.
 		 *
-		 * Note: that because the original time series had been
-		 * windowed (and the frequency components rendered
-		 * non-indepedent as a result) the time series here still
-		 * retains the shape of the original window.  The mean
-		 * square is not only an ensemble average but an average
-		 * over the segment.  The mean square for any given sample
-		 * in the segment can be computed from the window function
-		 * knowing that the average over the segment is 1, and is
+		 * After inverse transforming the frequency series to the
+		 * time domain, the variance of the time series is
 		 *
-		 * <x_{j}^{2}> = w_{j}^2 * (N / sum-of-squares)
+		 * <x_{j}^{2}> = \Delta f^{2} * sum_{k} sum_{k'} <s_{k}
+		 * s_{k'}^{*}> exp(2 pi i j (k-k') / N)
 		 *
-		 * where N is the length of the window (and the segment)
-		 * and sum-of-squares is the sum of the squares of the
-		 * window.
+		 * If we had not windowed the original time series, it
+		 * would have been stationary noise and so <s_{k}
+		 * s_{k'}^{*}> = \delta_{k k'} and the variance would
+		 * simply be
 		 *
-		 * Also note that the result will *not*, in general, be a
-		 * unit variance random process if the PSD compensation
-		 * filter was applied for that implies a normalization
-		 * adjustment.
+		 * <x_{j}^{2}> = \Delta f^{2} * N
 		 *
-		 * FIXME:  the normalization factor used here is only
-		 * correct when the frequency bins are independent random
-		 * variables, which they aren't.  The correct normalization
-		 * requires making use of the two-point spectral covariance
-		 * function which is derived from the Fourier transform of
-		 * the Hann-like window applied to the data.
+		 * Because we windowed the data, this is not the case for
+		 * us and we need to calculate the variance more carefully.
+		 * The spectral_correlation_bias() function above computes
+		 * an additional correction factor to apply to this
+		 * expression due to the window function applied to the
+		 * data.
+		 *
+		 * Still the time series has a j-dependent variance, but we
+		 * normalize it so that the variance is 1 in the middle of
+		 * the window.
 		 */
 
 		for(i = 0; i < element->tdworkspace->data->length; i++)
-			element->tdworkspace->data->data[i] /= element->fdworkspace->deltaF * sqrt(element->tdworkspace->data->length);
+			element->tdworkspace->data->data[i] /= element->fdworkspace->deltaF * sqrt(element->tdworkspace->data->length * element->spectral_correlation_bias);
 		XLALUnitDivide(&element->tdworkspace->sampleUnits, &element->tdworkspace->sampleUnits, &lalHertzUnit);
 
 		/*
@@ -861,20 +888,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		/*
 		 * Copy the first half of the time series into the buffer,
 		 * removing the zero_pad from the start, and adding the
-		 * contents of the tail.  We want the result to be a unit
-		 * variance random process.  When we add the two time
-		 * series (the first half of the piece we have just
-		 * whitened and the contents of the tail buffer), we do so
-		 * overlapping the Hann windows so that the sum of the
-		 * windows is 1.  This leaves the mean square of the
-		 * samples equal to N / sum-of-squares (see the comments
-		 * above about the sample-to-sample variation of the mean
-		 * square).  We remove this factor leaving us with a unit
-		 * variance random process.
+		 * contents of the tail.  When we add the two time series
+		 * (the first half of the piece we have just whitened and
+		 * the contents of the tail buffer), we do so overlapping
+		 * the Hann windows so that the sum of the windows is 1.
 		 */
 
 		for(i = 0; i < element->tail->length; i++)
-			((double *) GST_BUFFER_DATA(srcbuf))[i] = (element->tdworkspace->data->data[zero_pad + i] + element->tail->data[i]) / sqrt(element->window->data->length / element->window->sumofsquares);
+			((double *) GST_BUFFER_DATA(srcbuf))[i] = element->tdworkspace->data->data[zero_pad + i] + element->tail->data[i];
 
 		/*
 		 * Push the buffer downstream
@@ -1068,6 +1089,7 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->sample_rate = 0;
 	element->sample_units = lalDimensionlessUnit;
 	element->window = NULL;
+	element->spectral_correlation_bias = 1.0;
 	element->fwdplan = NULL;
 	element->revplan = NULL;
 	element->psd_regressor = XLALPSDRegressorNew(DEFAULT_AVERAGE_SAMPLES, DEFAULT_MEDIAN_SAMPLES);
