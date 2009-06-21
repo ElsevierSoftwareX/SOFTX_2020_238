@@ -783,66 +783,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			goto done;
 		}
 
-		/*
-		 * Compensate for the use of a mis-matched PSD for
-		 * whitening the templates in a subsequent matched-filter
-		 * stage.  Given data h(f), template s(f), and PSD S(f),
-		 * the inner product of the data with the template is
-		 *
-		 * 	    h(f)     s*(f)
-		 * 	---------------------
-		 * 	sqrt(S(f)) sqrt(S(f))
-		 *
-		 * which we can write as
-		 *
-		 * 	(    h(f)      sqrt(W(f)) )     s*(f)
-		 * 	( ---------- * ---------- ) * ----------
-		 * 	( sqrt(S(f))   sqrt(S(f)) )   sqrt(W(f))
-		 *
-		 * for some approximate PSD W(f).  Our frequency series
-		 * contains h(f)/sqrt(S(f)), and we now multiply by the
-		 * additional factor of sqrt(W(f) / S(f)) to provide the
-		 * compensation required for s*(f) being divided by the
-		 * wrong PSD.
-		 *
-		 * There is a complication in that s(f) is normalized to
-		 * the PSD by requiring that |s(f)|^2/S(f) = 1, but if W(f)
-		 * is used to normalize s(f) instead of the correct PSD,
-		 * then the overall normalization of s(f) will be
-		 * incorrect.  We adjust for that here as well by dividing
-		 * by the RMS of sqrt(W(f)/S(f)).  This correction factor
-		 * is only exact when s(f) itself has a flat spectrum, if
-		 * s(f) samples the spectrum non-uniformly then the
-		 * normalization adjustment factor will be wrong.  However,
-		 * if W(f) is a good approximation of S(f) then the effect
-		 * will be small, and the approximate normalization
-		 * correction factor will be close to the exact value.
-		 *
-		 * (I don't really know if that last bit is true, but when
-		 * W(f) is horribly different from S(f), for example when 1
-		 * is used for W(f), then applying the approximate
-		 * correction is much better than not applying it at all
-		 * because then at least the SNR comes out close to the
-		 * correct order of magnitude).
-		 */
-
-		if(element->reference_psd) {
-			double rms = 0;
-			for(i = 0; i < element->fdworkspace->data->length; i++) {
-				if(element->psd->data->data[i] == 0) {
-					rms += 1;
-					element->fdworkspace->data->data[i] = LAL_COMPLEX16_ZERO;
-				} else {
-					double psd_ratio = element->reference_psd->data->data[i] / element->psd->data->data[i];
-					rms += psd_ratio;
-					element->fdworkspace->data->data[i] = XLALCOMPLEX16MulReal(element->fdworkspace->data->data[i], sqrt(psd_ratio));
-				}
-			}
-			rms = sqrt(rms / element->fdworkspace->data->length);
-			GST_LOG_OBJECT(element, "PSD compensation filter's RMS = %.16g\n", rms);
-			for(i = 0; i < element->fdworkspace->data->length; i++)
-				element->fdworkspace->data->data[i] = XLALCOMPLEX16MulReal(element->fdworkspace->data->data[i], 1.0 / rms);
-		}
 
 		/*
 		 * Transform to time domain.
