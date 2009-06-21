@@ -31,6 +31,26 @@ function test_resampler() {
 		! fakesink
 }
 
+function test_resampler_gaps() {
+	gst-launch \
+		lal_gate name=gate threshold=0.7 \
+		! audioresample \
+		! audio/x-raw-float, width=64, rate=2048 \
+		! lal_nxydump start-time=0 stop-time=1000000000 \
+		! queue ! filesink location="dump_out.txt" \
+		audiotestsrc freq=16 samplesperbuffer=1024 num-buffers=8 \
+		! audio/x-raw-float, rate=1024 \
+		! gate.control \
+		audiotestsrc freq=256 samplesperbuffer=1024 num-buffers=8 \
+		! audio/x-raw-float, width=64, rate=16384 \
+		! progressreport \
+		! tee name=orig \
+		! gate.sink \
+		orig. \
+		! lal_nxydump start-time=0 stop-time=1000000000 \
+		! queue ! filesink location="dump_in.txt"
+}
+
 function test_whiten() {
 	gst-launch \
 		audiotestsrc wave=9 volume=1e-5 \
@@ -41,4 +61,4 @@ function test_whiten() {
 		! filesink location="dump.txt" buffer-mode=2
 }
 
-test_whiten
+test_resampler_gaps
