@@ -118,9 +118,7 @@ def mkcapsfilter(pipeline, src, caps):
 
 def mkfakesrc(pipeline, instrument, detectors):
 	elem = gst.element_factory_make("audiotestsrc")
-	elem.set_property("timestamp-offset", detectors.start)
 	elem.set_property("samplesperbuffer", detectors.block_size / 8)
-	elem.set_property("num-buffers", (detectors.end - detectors.start) / 1000000000 / (detectors.block_size / 16384 / 8))
 	elem.set_property("wave", 5)
 	elem.set_property("volume", 1e-20)
 	pipeline.add(elem)
