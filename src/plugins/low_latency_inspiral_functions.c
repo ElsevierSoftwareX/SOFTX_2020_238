@@ -155,7 +155,7 @@ static int create_template_from_sngl_inspiral(
    */
 
   if(!XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd)) {
-    fprintf(stderr, "create_template_from_sngl_inspiral XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan) FAILED\n");
+    fprintf(stderr, "create_template_from_sngl_inspiral XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd) FAILED\n");
     return -1;
     }
   
@@ -633,10 +633,7 @@ static int SPAWaveform (
 
   /* pn constants */
   REAL8 c0, c10, c15, c20, c25, c25Log, c30, c30Log, c35, c40P; 
-
-  /* variables used to compute chirp time */
-  REAL8 c0T, c2T, c3T, c4T, c5T, c6T, c6LogT, c7T;
-  REAL8 x, xT, x2T, x3T, x4T, x5T, x6T, x7T, x8T;
+  REAL8 x;
 
   /* chebychev coefficents for expansion of sin and cos */
   const REAL8 s2 = -0.16605;
@@ -645,10 +642,10 @@ static int SPAWaveform (
   const REAL8 c4 =  0.03705;
   /*FILE *FP = fopen("template.txt","w");*/
   /*
- *    *
- *       * check that the arguments are reasonable
- *          *
- *             */
+   *
+   * check that the arguments are reasonable
+   *
+   */
   
   /* set up pointers */
   expPsi = signal->data->data;
@@ -785,30 +782,42 @@ static int SPAWaveform (
   }
   /*fclose(FP);*/
 
+  tmplt->tC = gstlal_spa_chirp_time((REAL8) tmplt->totalMass, (REAL8) tmplt->eta, (REAL8) tmplt->fLower, tmplt->order);
+
+  return 0;
+}
+
+
+double gstlal_spa_chirp_time(REAL8 m, REAL8 eta, REAL8 fLower, LALPNOrder order)
+{
+
+  /* variables used to compute chirp time */
+  REAL8 c0T, c2T, c3T, c4T, c5T, c6T, c6LogT, c7T;
+  REAL8 xT, x2T, x3T, x4T, x5T, x6T, x7T, x8T;
 
   /*
- *    *
- *       * compute the length of the stationary phase chirp
- *          *
- *             */
+   *
+   * compute the length of the stationary phase chirp
+   *
+   */
 
   /* This formula works for any PN order, because */
   /* higher order coeffs will be set to zero.     */
 
-  
+
   /* Initialize all PN chirp time coeffs to zero. */
   c0T = c2T = c3T = c4T = c5T = c6T = c6LogT = c7T = 0.;
 
-  /* Switch on PN order, set the chirp time coeffs for that order */
-  switch( tmplt->order )
+ /* Switch on PN order, set the chirp time coeffs for that order */
+  switch( order )
   {
     case LAL_PNORDER_PSEUDO_FOUR:
     case LAL_PNORDER_THREE_POINT_FIVE:
       c7T = LAL_PI*(14809.0*eta*eta - 75703.0*eta/756.0 - 15419335.0/127008.0);
     case LAL_PNORDER_THREE:
-      c6T = LAL_GAMMA*6848.0/105.0 - 10052469856691.0/23471078400.0 
-            + LAL_PI*LAL_PI*128.0/3.0 + eta*( 3147553127.0/3048192.0 
-            - LAL_PI*LAL_PI*451.0/12.0 ) - eta*eta*15211.0/1728.0 
+      c6T = LAL_GAMMA*6848.0/105.0 - 10052469856691.0/23471078400.0
+            + LAL_PI*LAL_PI*128.0/3.0 + eta*( 3147553127.0/3048192.0
+            - LAL_PI*LAL_PI*451.0/12.0 ) - eta*eta*15211.0/1728.0
             + eta*eta*eta*25565.0/1296.0 + log(4.0)*6848.0/105.0;
       c6LogT = 6848.0/105.0;
     case LAL_PNORDER_TWO_POINT_FIVE:
@@ -824,7 +833,7 @@ static int SPAWaveform (
   }
 
   /* This is the PN parameter v evaluated at the lower freq. cutoff */
-  xT  = pow( LAL_PI * m * LAL_MTSUN_SI * tmplt->fLower, 1.0/3.0);
+  xT  = pow( LAL_PI * m * LAL_MTSUN_SI * fLower, 1.0/3.0);
   x2T = xT * xT;
   x3T = xT * x2T;
   x4T = x2T * x2T;
@@ -840,8 +849,7 @@ static int SPAWaveform (
   /* This formula works for any PN order, because */
   /* higher order coeffs will be set to zero.     */
 
-  tmplt->tC = c0T * ( 1 + c2T*x2T + c3T*x3T + c4T*x4T + c5T*x5T 
+  return c0T * ( 1 + c2T*x2T + c3T*x3T + c4T*x4T + c5T*x5T
               + ( c6T + c6LogT*log(xT) )*x6T + c7T*x7T ) / x8T;
-
-  return 0;
 }
+

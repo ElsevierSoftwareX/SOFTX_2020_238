@@ -71,3 +71,7 @@ int not_gsl_vector_chop(gsl_vector **V, size_t m);
 
 int not_gsl_matrix_transpose(gsl_matrix **m);
 
+double gstlal_spa_chirp_time(REAL8 m,
+                             REAL8 eta,
+                             REAL8 fLower,
+                             LALPNOrder order);

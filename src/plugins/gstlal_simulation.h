@@ -49,6 +49,18 @@ typedef struct {
 } GSTLALSimulationClass;
 
 
+struct GSTLALInjectionCache;
+struct GSTLALInjectionCache {
+	INT8 startTime;
+	INT8 endTime;
+	REAL4TimeSeries *series;
+	double underflow_protection;
+	SimInspiralTable sim_inspiral;
+        SimInspiralTable *sim_inspiral_pointer;
+	struct GSTLALInjectionCache *next;
+};
+
+
 typedef struct {
 	GstElement element;
 
@@ -65,6 +77,8 @@ typedef struct {
 		int has_sim_inspiral_table;
 		SimInspiralTable *sim_inspiral_table_head;
 	} *injection_document;
+
+	struct GSTLALInjectionCache *injection_cache;
 } GSTLALSimulation;
 
 

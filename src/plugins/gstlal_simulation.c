@@ -22,7 +22,7 @@
 /*
  * ========================================================================
  *
- *                                  Preamble
+ *				  Preamble
  *
  * ========================================================================
  */
@@ -73,12 +73,12 @@
 
 #include <gstlal.h>
 #include <gstlal_simulation.h>
-
+#include <low_latency_inspiral_functions.h>
 
 /*
  * ============================================================================
  *
- *                                 XML Input
+ *				 XML Input
  *
  * ============================================================================
  */
@@ -210,119 +210,279 @@ static struct injection_document *load_injection_document(const char *filename, 
 }
 
 
+static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element, const COMPLEX16FrequencySeries *response)
+{
+	LALPNOrder order = LAL_PNORDER_THREE_POINT_FIVE;
+	static const char func[] = "update_injection_cache";
+	unsigned injection_made;
+	double injTime;
+	INT8 hStartTime, hEndTime, injStartTime, injEndTime;
+	SimInspiralTable *thisSimInspiral;
+	struct GSTLALInjectionCache *thisInjectionCacheElement;
+	struct GSTLALInjectionCache *previousInjectionCacheElement;
+
+	/*
+	 * calculate h segment boundaries
+	 */
+
+	hStartTime = XLALGPSToINT8NS(&(h->epoch));
+	hEndTime = hStartTime + (INT8) (h->data->length * h->deltaT * 1000000000.0);
+
+	/*
+	 * loop over injections in file
+	 */
+
+	thisSimInspiral = element->injection_document->sim_inspiral_table_head;
+	while(thisSimInspiral) {
+
+		/*
+		 * calculate start and end times for this series containing this injection
+		 */
+
+		injTime = gstlal_spa_chirp_time((REAL8) thisSimInspiral->mass1 + thisSimInspiral->mass2, (REAL8) thisSimInspiral->eta, (REAL8) thisSimInspiral->f_lower, order);
+		injStartTime = XLALGPSToINT8NS(&(thisSimInspiral->geocent_end_time)) - (INT8) ((1.9*injTime - 1.0) * 1000000000.0);
+		injEndTime = XLALGPSToINT8NS(&(thisSimInspiral->geocent_end_time)) + (INT8) ((0.1*injTime + 1.0) * 1000000000.0);
+
+		/*
+		 * round these times to the nearest ones in h
+		 */
+
+		injStartTime = hStartTime + (INT8) (((int) ((injStartTime - hStartTime)/1000000000.0/h->deltaT))*h->deltaT*1000000000.0);
+		injEndTime = hStartTime + (INT8) (((int) ((injEndTime - hStartTime)/1000000000.0/h->deltaT))*h->deltaT*1000000000.0);
+
+		/*
+		 * check whether injection segment intersects h
+		 */
+
+		if( (injStartTime >= hStartTime && injStartTime < hEndTime) /* injection start time within h */ ||
+		    (injEndTime > hStartTime && injEndTime <= hEndTime) /* injection end time within h */ ||
+		    (injStartTime <= hStartTime && injEndTime >= hEndTime) /* h within injection segment */ ) {
+			thisInjectionCacheElement = element->injection_cache;
+			injection_made = 0;
+
+			/*
+			 * loop over injections in cache and see if this injection has been created
+			 */
+
+			thisInjectionCacheElement = element->injection_cache;
+			while(thisInjectionCacheElement) {
+				if(thisSimInspiral == thisInjectionCacheElement->sim_inspiral_pointer)
+					injection_made++;
+				thisInjectionCacheElement = thisInjectionCacheElement->next;
+			}
+
+			/*
+			 * create injection if non-existent
+			 */
+
+			if(!injection_made) {
+				double underflow_protection = 1.0;
+				LALUnit strain_per_count = gstlal_lalStrainPerADCCount();
+				COMPLEX8FrequencySeries *inspiral_response;
+				LALStatus stat;
+				REAL4TimeSeries *series = NULL;
+				LIGOTimeGPS epoch;
+				unsigned i;
+
+				/*
+				 * create space for the new injection cache element
+				 */
+
+				struct GSTLALInjectionCache *newInjectionCacheElement = calloc(1,sizeof *thisInjectionCacheElement);
+
+				/*
+				 * copy sim_inspiral entry into newInjectionCacheElement and set next and sim_inspiral->next to NULL
+				 */
+
+				memcpy(&(newInjectionCacheElement->sim_inspiral), thisSimInspiral, sizeof(*thisSimInspiral));
+				newInjectionCacheElement->sim_inspiral_pointer = thisSimInspiral;
+				newInjectionCacheElement->next = NULL;
+				newInjectionCacheElement->sim_inspiral.next = NULL;
+
+				/*
+				 * create a response function, copy the double precision
+				 * version if one was provided otherwise make a dummy flat
+				 * response
+				 */
+
+				if(response) {
+					/*
+					 * FIXME:  because the time series constructed
+					 * below has extra padding added to it, the
+					 * resolution of this response is probably wrong.
+					 */
+					inspiral_response = XLALCreateCOMPLEX8FrequencySeries(response->name, &response->epoch, response->f0, response->deltaF, &response->sampleUnits, response->data->length);
+				}
+				else {
+					inspiral_response = XLALCreateCOMPLEX8FrequencySeries(NULL, &h->epoch, 0.0, 1000000000.0 / ((REAL4) (injEndTime - injStartTime)), &strain_per_count, (int) ( ((REAL4) (injEndTime - injStartTime)) / (1000000000.0 * h->deltaT) ));
+				}
+
+				if(!inspiral_response) {
+					free(newInjectionCacheElement);
+					XLAL_ERROR(func, XLAL_EFUNC);
+				}
+
+				if(response) {
+					for(i = 0; i < inspiral_response->data->length; i++)
+						inspiral_response->data->data[i] = XLALCOMPLEX8Rect(LAL_REAL(response->data->data[i]), LAL_IMAG(response->data->data[i]));
+				} else {
+					underflow_protection = 1e-20;
+					for(i = 0; i < inspiral_response->data->length; i++)
+						inspiral_response->data->data[i] = XLALCOMPLEX8Rect(underflow_protection, 0.0);
+				}
+
+				/*
+				 * create the time series in which to store the injection waveform
+				 */
+
+				XLALINT8NSToGPS(&epoch, injStartTime);
+				series = XLALCreateREAL4TimeSeries(h->name, &epoch, h->f0, h->deltaT, &lalADCCountUnit, (int) ( (injEndTime - injStartTime) / (1000000000.0 * h->deltaT) ));
+				if(!series) {
+					free(newInjectionCacheElement);
+					XLALDestroyCOMPLEX8FrequencySeries(inspiral_response);
+					XLAL_ERROR(func, XLAL_EFUNC);
+				}
+				memset(series->data->data, 0, series->data->length * sizeof(*series->data->data));
+
+				/*
+				 * compute the injection waveform
+				 */
+
+				XLALPrintInfo("%s(): computing sim_inspiral injection ...\n", func);
+				/* FIXME: figure out how to do error handling like this */
+				/*LAL_CALL(LALFindChirpInjectSignals(&stat, series, sim_inspiral_head, response), &stat);*/
+				XLALClearErrno();
+				memset(&stat, 0, sizeof(stat));
+				LALFindChirpInjectSignals(&stat, series, &(newInjectionCacheElement->sim_inspiral), inspiral_response);
+				XLALPrintInfo("%s(): done\n", func);
+
+				XLALDestroyCOMPLEX8FrequencySeries(inspiral_response);
+
+				/*
+				 * add the injection waveform and start and end times to the injection cache element
+				 */
+
+				newInjectionCacheElement->series = series;
+				newInjectionCacheElement->startTime = injStartTime;
+				newInjectionCacheElement->endTime = injEndTime;
+				newInjectionCacheElement->underflow_protection = underflow_protection;
+
+				/*
+				 * add this injection cache element to the end of the injection cache linked list
+				 */
+
+				thisInjectionCacheElement = element->injection_cache;
+				if(!thisInjectionCacheElement) {
+					element->injection_cache = newInjectionCacheElement;
+				}
+				else {
+					while(thisInjectionCacheElement->next)
+						thisInjectionCacheElement = thisInjectionCacheElement->next;
+					thisInjectionCacheElement->next = newInjectionCacheElement;
+				}
+
+				/* end if calculate injection */
+			}
+			/* end if injection segment overlaps h */
+		}
+
+		/*
+		 * continue loop over injections
+		 */
+
+		thisSimInspiral = thisSimInspiral->next;
+	}
+
+	/*
+	 * remove injections from cache if no longer needed
+	 */
+
+	previousInjectionCacheElement = NULL;
+	thisInjectionCacheElement = element->injection_cache;
+	while(thisInjectionCacheElement) {
+		if( thisInjectionCacheElement->endTime <= hStartTime ) {
+			struct GSTLALInjectionCache *tmpInjectionCacheElement = thisInjectionCacheElement;
+			if(previousInjectionCacheElement)
+				previousInjectionCacheElement->next = thisInjectionCacheElement->next;
+			else
+				element->injection_cache = thisInjectionCacheElement->next;
+			thisInjectionCacheElement = thisInjectionCacheElement->next;
+
+			/*
+			 * destroy the REAL4 time series and free the injection cache element
+			 */
+
+			XLALDestroyREAL4TimeSeries(tmpInjectionCacheElement->series);
+			free(tmpInjectionCacheElement);
+		}
+		else {
+			previousInjectionCacheElement = thisInjectionCacheElement;
+			thisInjectionCacheElement = thisInjectionCacheElement->next;
+		}
+	}
+
+	return 0;
+}
+
+
 /*
  * This is the function that gets called.
  */
 
 
-static int add_xml_injections(REAL8TimeSeries *h, const struct injection_document *injection_document, const COMPLEX16FrequencySeries *response)
+static int add_xml_injections(REAL8TimeSeries *h, const GSTLALSimulation *element, const COMPLEX16FrequencySeries *response)
 {
 	static const char func[] = "add_xml_injections";
+	struct GSTLALInjectionCache *thisInjectionCacheElement;
+	INT8 hStartTime,hEndTime,injStartTime,injEndTime;
+
+        hStartTime = XLALGPSToINT8NS(&(h->epoch));
+        hEndTime = hStartTime + (INT8) (h->data->length * h->deltaT * 1000000000.0);
 
 	/*
 	 * sim_burst
 	 */
 
-	if(injection_document->sim_burst_table_head) {
+	if(element->injection_document->sim_burst_table_head) {
 		XLALPrintInfo("%s(): computing sim_burst injections ...\n", func);
-		if(XLALBurstInjectSignals(h, injection_document->sim_burst_table_head, response))
+		if(XLALBurstInjectSignals(h, element->injection_document->sim_burst_table_head, response))
 			XLAL_ERROR(func, XLAL_EFUNC);
 		XLALPrintInfo("%s(): done\n", func);
 	}
 
 	/*
-	 * sim_inspiral
+	 * sim_inspiral: loop over calculated injections in injection cache
 	 */
 
-	if(injection_document->sim_inspiral_table_head) {
-		LALStatus stat;
-		double underflow_protection = 1.0;
-		LALUnit strain_per_count = gstlal_lalStrainPerADCCount();
-		COMPLEX8FrequencySeries *inspiral_response;
-		double mdc_pad = 256.0;	/* seconds */
-		REAL4TimeSeries *mdc;
-		unsigned i;
+	thisInjectionCacheElement = element->injection_cache;
+	while(thisInjectionCacheElement) {
+		int startIdx,stopIdx,injOffsetIdx,i;
 
 		/*
-		 * confirm the input time series has the correct sample
-		 * units.
+		 * add injections to target time series
 		 */
 
-		if(XLALUnitCompare(&lalStrainUnit, &h->sampleUnits)) {
-			XLALPrintError("%s(): target time series must have units of strain\n", func);
-			XLAL_ERROR(func, XLAL_EUNIT);
+		injStartTime = thisInjectionCacheElement->startTime;
+		injEndTime = thisInjectionCacheElement->endTime;
+
+		if(injStartTime > hStartTime) {
+			startIdx = (int) ((injStartTime - hStartTime)/(1000000000.0*h->deltaT) + 0.5);
+			injOffsetIdx = -startIdx;
+		}
+		else {
+			startIdx = 0;
+			injOffsetIdx = (int) ((hStartTime - injStartTime)/(1000000000.0*h->deltaT) + 0.5);
 		}
 
-		/*
-		 * create a response function, copy the double precision
-		 * version if one was provided otherwise make a dummy flat
-		 * response
-		 */
-
-		if(response)
-			/*
-			 * FIXME:  because the mdc time series constructed
-			 * below has extra padding added to it, the
-			 * resolution of this response is probably wrong.
-			 */
-			inspiral_response = XLALCreateCOMPLEX8FrequencySeries(response->name, &response->epoch, response->f0, response->deltaF, &response->sampleUnits, response->data->length);
+		if(injEndTime < hEndTime)
+			stopIdx = (int) ((injEndTime - hStartTime)/(1000000000.0*h->deltaT) + 0.5);
 		else
-			inspiral_response = XLALCreateCOMPLEX8FrequencySeries(NULL, &h->epoch, 0.0, 1.0 / (h->data->length * h->deltaT + 2 * mdc_pad), &strain_per_count, (h->data->length + (int) (2 * mdc_pad / h->deltaT + 0.5)) / 2 + 1);
-		if(!inspiral_response)
-			XLAL_ERROR(func, XLAL_EFUNC);
+			stopIdx = h->data->length;
 
-		if(response) {
-			for(i = 0; i < inspiral_response->data->length; i++)
-				inspiral_response->data->data[i] = XLALCOMPLEX8Rect(LAL_REAL(response->data->data[i]), LAL_IMAG(response->data->data[i]));
-		} else {
-			underflow_protection = 1e-20;
-			for(i = 0; i < inspiral_response->data->length; i++)
-				inspiral_response->data->data[i] = XLALCOMPLEX8Rect(underflow_protection, 0.0);
-		}
+		for(i = startIdx; i < stopIdx; i++)
+			h->data->data[i] += thisInjectionCacheElement->series->data->data[i + injOffsetIdx] * thisInjectionCacheElement->underflow_protection;
 
-		/*
-		 * create a single-precision time series of zeros to hold
-		 * the injection.  pad time series because inspiral
-		 * injection code will not do injection unless the entire
-		 * thing fits in the target time series (?!)
-		 * FIXME:  this will be fixed if we switch to the new XLAL
-		 * injection code.
-		 */
-
-		mdc = XLALCreateREAL4TimeSeries(h->name, &h->epoch, h->f0, h->deltaT, &lalADCCountUnit, h->data->length + (int) (2 * mdc_pad / h->deltaT + 0.5));
-		if(!mdc) {
-			XLALDestroyCOMPLEX8FrequencySeries(inspiral_response);
-			XLAL_ERROR(func, XLAL_EFUNC);
-		}
-		XLALGPSAdd(&mdc->epoch, -mdc_pad);
-		memset(mdc->data->data, 0, mdc->data->length * sizeof(*mdc->data->data));
-
-		/*
-		 * compute the injections.
-		 */
-
-		XLALPrintInfo("%s(): computing sim_inspiral injections ...\n", func);
-		/* FIXME: figure out how to do error handling like this */
-		/*LAL_CALL(LALFindChirpInjectSignals(&stat, mdc, injection_document->sim_inspiral_table_head, response), &stat);*/
-		XLALClearErrno();
-		memset(&stat, 0, sizeof(stat));
-		LALFindChirpInjectSignals(&stat, mdc, injection_document->sim_inspiral_table_head, inspiral_response);
-		XLALPrintInfo("%s(): done\n", func);
-
-		/*
-		 * add injections to target time series.  remember to skip
-		 * padding.
-		 */
-
-		for(i = 0; i < h->data->length; i++)
-			h->data->data[i] += mdc->data->data[i + (int) (mdc_pad / mdc->deltaT + 0.5)] * underflow_protection;
-
-		/*
-		 * clean up
-		 */
-
-		XLALDestroyCOMPLEX8FrequencySeries(inspiral_response);
-		XLALDestroyREAL4TimeSeries(mdc);
+		thisInjectionCacheElement = thisInjectionCacheElement->next;
 	}
 
 	/*
@@ -338,9 +498,10 @@ static REAL8TimeSeries *compute_strain(double right_ascension, double declinatio
 	REAL8TimeSeries *hplus = NULL;
 	REAL8TimeSeries *hcross = NULL;
 	if(XLALSimInspiralPN(&hplus, &hcross, tc, phic, deltaT, m1, m2, fmin, r, i, order)) {
+		REAL8TimeSeries *strain = XLALSimDetectorStrainREAL8TimeSeries(hplus, hcross, right_ascension, declination, psi, detector);
 		XLALDestroyREAL8TimeSeries(hplus);
 		XLALDestroyREAL8TimeSeries(hcross);
-		return XLALSimDetectorStrainREAL8TimeSeries(hplus, hcross, right_ascension, declination, psi, detector);
+		return strain;
 	} else {
 		XLALDestroyREAL8TimeSeries(hplus);
 		XLALDestroyREAL8TimeSeries(hcross);
@@ -353,7 +514,7 @@ static REAL8TimeSeries *compute_strain(double right_ascension, double declinatio
 /*
  * ============================================================================
  *
- *                             GStreamer Element
+ *			     GStreamer Element
  *
  * ============================================================================
  */
@@ -443,10 +604,24 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	}
 
 	/*
+	 * Update Injection Cache
+	 * FIXME: needs to update injection cache when new injection file provided
+	 */
+
+	if(update_injection_cache(h, element, NULL) < 0) {
+		GST_ERROR_OBJECT(element, "failure updating injection cache");
+		h->data->data = NULL;
+		XLALDestroyREAL8TimeSeries(h);
+		gst_buffer_unref(buf);
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+
+	/*
 	 * Add injections
 	 */
 
-	if(add_xml_injections(h, element->injection_document, NULL) < 0) {
+	if(add_xml_injections(h, element, NULL) < 0) {
 		GST_ERROR_OBJECT(element, "failure performing injections");
 		h->data->data = NULL;
 		XLALDestroyREAL8TimeSeries(h);
