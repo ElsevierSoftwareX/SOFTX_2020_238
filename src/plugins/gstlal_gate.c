@@ -157,6 +157,8 @@ static gint control_state(GSTLALGate *element, GstClockTime t)
 	if(t < GST_BUFFER_TIMESTAMP(element->control_buf) || element->control_end <= t)
 		return -1;
 
+	/* FIXME:  maybe, instead, this should be
+	sample = gst_util_uint64_scale_int(t, element->control_rate, GST_SECOND) - GST_BUFFER_OFFSET(element->control_buf); */
 	sample = gst_util_uint64_scale_int(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
 
 	return fabs(element->control_sample_func(element, sample)) >= element->threshold;
@@ -426,8 +428,6 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
 	guint sinkbuf_samples;
 	guint start, length;
-	GstClockTime t;
-	gint state;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
@@ -447,30 +447,44 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	g_mutex_lock(element->control_lock);
-	for(start = length = 0, t = GST_BUFFER_TIMESTAMP(sinkbuf); start < sinkbuf_samples; start += length, length = 0) {
+	for(start = 0; start < sinkbuf_samples; start += length) {
+		gint state = -1;	/* initialize to silence warnings */
+
 		/*
-		 * if there is no control buffer available or the input has
-		 * advanced beyond its end, flush the control buffer and
-		 * wait for one that overlaps the input data
+		 * find the next interval of continuous control state
 		 */
 
-		while(!element->control_buf || t >= element->control_end) {
-			control_flush(element);
-			g_cond_wait(element->control_available, element->control_lock);
+		for(length = 0; start + length < sinkbuf_samples; length++) {
+			GstClockTime t = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int(start + length, GST_SECOND, element->rate);
+
+			/*
+			 * if there is no control buffer available or the input has
+			 * advanced beyond its end, flush the control buffer and
+			 * wait for one that overlaps the input data
+			 */
+
+			while(!element->control_buf || t >= element->control_end) {
+				control_flush(element);
+				g_cond_wait(element->control_available, element->control_lock);
+			}
+
+			/*
+			 * check the state of the control input
+			 */
+
+			if(length == 0) {
+				/*
+				 * the control state for this interval
+				 */
+
+				state = control_state(element, t);
+			} else if(control_state(element, t) != state)
+				/*
+				 * control state has changed
+				 */
+
+				break;
 		}
-
-		/*
-		 * in the control buffer, find the end of the interval with
-		 * the same state as the current sample.
-		 */
-		/* FIXME:  could optimize a little:  if t is initially
-		 * prior to the start of the control buffer, the "interval"
-		 * is all of the time prior to the start of the buffer.
-		 * this counts as 0 (below threshold) later, so if the
-		 * control buffer starts below treshold there is no need to
-		 * place a buffer boundary there. */
-
-		for(state = control_state(element, t); start + length < sinkbuf_samples && t < element->control_end && control_state(element, t) == state; t = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int(start + ++length, GST_SECOND, element->rate));
 
 		/*
 		 * if the interval has non-zero length, build a buffer out
@@ -523,13 +537,6 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			}
 		}
 	}
-
-	/*
-	 * if we're at the end of this control buffer, flush it
-	 */
-
-	if(t >= element->control_end)
-		control_flush(element);
 	g_mutex_unlock(element->control_lock);
 
 	/*
