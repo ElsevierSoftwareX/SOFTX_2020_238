@@ -51,8 +51,8 @@ typedef struct {
 
 struct GSTLALInjectionCache;
 struct GSTLALInjectionCache {
-	INT8 startTime;
-	INT8 endTime;
+	LIGOTimeGPS startTime;
+	LIGOTimeGPS endTime;
 	REAL4TimeSeries *series;
 	double underflow_protection;
 	SimInspiralTable sim_inspiral;

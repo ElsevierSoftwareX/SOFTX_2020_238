@@ -216,17 +216,19 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 	static const char func[] = "update_injection_cache";
 	unsigned injection_made;
 	double injTime;
-	INT8 hStartTime, hEndTime, injStartTime, injEndTime;
+	REAL8 tmpREAL8;
+	LIGOTimeGPS hStartTime, hEndTime, injStartTime, injEndTime;
 	SimInspiralTable *thisSimInspiral;
 	struct GSTLALInjectionCache *thisInjectionCacheElement;
 	struct GSTLALInjectionCache *previousInjectionCacheElement;
 
 	/*
-	 * calculate h segment boundaries
+	 * calculate h segment boundaries, h = [hStartTime, hEndTime)
 	 */
 
-	hStartTime = XLALGPSToINT8NS(&(h->epoch));
-	hEndTime = hStartTime + (INT8) (h->data->length * h->deltaT * 1000000000.0);
+	hStartTime = h->epoch;
+	hEndTime = hStartTime;
+	XLALGPSAdd(&hEndTime, h->data->length * h->deltaT);
 
 	/*
 	 * loop over injections in file
@@ -240,23 +242,29 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 		 */
 
 		injTime = gstlal_spa_chirp_time((REAL8) thisSimInspiral->mass1 + thisSimInspiral->mass2, (REAL8) thisSimInspiral->eta, (REAL8) thisSimInspiral->f_lower, order);
-		injStartTime = XLALGPSToINT8NS(&(thisSimInspiral->geocent_end_time)) - (INT8) ((1.9*injTime - 1.0) * 1000000000.0);
-		injEndTime = XLALGPSToINT8NS(&(thisSimInspiral->geocent_end_time)) + (INT8) ((0.1*injTime + 1.0) * 1000000000.0);
+		injStartTime = injEndTime = thisSimInspiral->geocent_end_time;
+		XLALGPSAdd(&injStartTime, -(1.9*injTime - 1.0));
+		XLALGPSAdd(&injEndTime, 0.1*injTime + 1.0);
 
 		/*
 		 * round these times to the nearest ones in h
 		 */
 
-		injStartTime = hStartTime + (INT8) (((int) ((injStartTime - hStartTime)/1000000000.0/h->deltaT))*h->deltaT*1000000000.0);
-		injEndTime = hStartTime + (INT8) (((int) ((injEndTime - hStartTime)/1000000000.0/h->deltaT))*h->deltaT*1000000000.0);
+		tmpREAL8 = XLALGPSDiff(&injStartTime, &hStartTime) / h->deltaT;
+		tmpREAL8 -= floor(tmpREAL8);
+		XLALGPSAdd(&injStartTime, -tmpREAL8);
+
+		tmpREAL8 = XLALGPSDiff(&injEndTime, &hStartTime) / h->deltaT;
+		tmpREAL8 -= floor(tmpREAL8);
+		XLALGPSAdd(&injEndTime, h->deltaT - tmpREAL8);
 
 		/*
 		 * check whether injection segment intersects h
 		 */
 
-		if( (injStartTime >= hStartTime && injStartTime < hEndTime) /* injection start time within h */ ||
-		    (injEndTime > hStartTime && injEndTime <= hEndTime) /* injection end time within h */ ||
-		    (injStartTime <= hStartTime && injEndTime >= hEndTime) /* h within injection segment */ ) {
+		if( (XLALGPSCmp(&injStartTime, &hStartTime) >= 0 && XLALGPSCmp(&injStartTime, &hEndTime) < 0) /* injection start within h */ ||
+		    (XLALGPSCmp(&injEndTime, &hStartTime) > 0 && XLALGPSCmp(&injEndTime, &hEndTime) < 0) /* injection end within h */ ||
+		    (XLALGPSCmp(&injStartTime, &hStartTime) <= 0 && XLALGPSCmp(&injEndTime, &hEndTime) >= 0) /* h within injection segment */ ) {
 			thisInjectionCacheElement = element->injection_cache;
 			injection_made = 0;
 
@@ -281,7 +289,6 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 				COMPLEX8FrequencySeries *inspiral_response;
 				LALStatus stat;
 				REAL4TimeSeries *series = NULL;
-				LIGOTimeGPS epoch;
 				unsigned i;
 
 				/*
@@ -314,7 +321,7 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 					inspiral_response = XLALCreateCOMPLEX8FrequencySeries(response->name, &response->epoch, response->f0, response->deltaF, &response->sampleUnits, response->data->length);
 				}
 				else {
-					inspiral_response = XLALCreateCOMPLEX8FrequencySeries(NULL, &h->epoch, 0.0, 1000000000.0 / ((REAL4) (injEndTime - injStartTime)), &strain_per_count, (int) ( ((REAL4) (injEndTime - injStartTime)) / (1000000000.0 * h->deltaT) ));
+					inspiral_response = XLALCreateCOMPLEX8FrequencySeries(NULL, &h->epoch, 0.0, 1.0 / XLALGPSDiff(&injEndTime, &injStartTime), &strain_per_count, (int) (0.5 + XLALGPSDiff(&injEndTime, &injStartTime) / h->deltaT));
 				}
 
 				if(!inspiral_response) {
@@ -335,8 +342,7 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 				 * create the time series in which to store the injection waveform
 				 */
 
-				XLALINT8NSToGPS(&epoch, injStartTime);
-				series = XLALCreateREAL4TimeSeries(h->name, &epoch, h->f0, h->deltaT, &lalADCCountUnit, (int) ( (injEndTime - injStartTime) / (1000000000.0 * h->deltaT) ));
+				series = XLALCreateREAL4TimeSeries(h->name, &injStartTime, h->f0, h->deltaT, &lalADCCountUnit, (int) (0.5 + XLALGPSDiff(&injEndTime, &injStartTime) / h->deltaT));
 				if(!series) {
 					free(newInjectionCacheElement);
 					XLALDestroyCOMPLEX8FrequencySeries(inspiral_response);
@@ -400,7 +406,7 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 	previousInjectionCacheElement = NULL;
 	thisInjectionCacheElement = element->injection_cache;
 	while(thisInjectionCacheElement) {
-		if( thisInjectionCacheElement->endTime <= hStartTime ) {
+		if( XLALGPSCmp(&(thisInjectionCacheElement->endTime), &hStartTime) <= 0 ) {
 			struct GSTLALInjectionCache *tmpInjectionCacheElement = thisInjectionCacheElement;
 			if(previousInjectionCacheElement)
 				previousInjectionCacheElement->next = thisInjectionCacheElement->next;
@@ -434,10 +440,6 @@ static int add_xml_injections(REAL8TimeSeries *h, const GSTLALSimulation *elemen
 {
 	static const char func[] = "add_xml_injections";
 	struct GSTLALInjectionCache *thisInjectionCacheElement;
-	INT8 hStartTime,hEndTime,injStartTime,injEndTime;
-
-        hStartTime = XLALGPSToINT8NS(&(h->epoch));
-        hEndTime = hStartTime + (INT8) (h->data->length * h->deltaT * 1000000000.0);
 
 	/*
 	 * sim_burst
@@ -456,31 +458,26 @@ static int add_xml_injections(REAL8TimeSeries *h, const GSTLALSimulation *elemen
 
 	thisInjectionCacheElement = element->injection_cache;
 	while(thisInjectionCacheElement) {
-		int startIdx,stopIdx,injOffsetIdx,i;
+		REAL8 Delta_epoch = XLALGPSDiff(&(thisInjectionCacheElement->startTime), &(h->epoch));
+		unsigned i, j;
 
 		/*
-		 * add injections to target time series
+		 * add injection time series to target time series
 		 */
 
-		injStartTime = thisInjectionCacheElement->startTime;
-		injEndTime = thisInjectionCacheElement->endTime;
-
-		if(injStartTime > hStartTime) {
-			startIdx = (int) ((injStartTime - hStartTime)/(1000000000.0*h->deltaT) + 0.5);
-			injOffsetIdx = -startIdx;
-		}
-		else {
-			startIdx = 0;
-			injOffsetIdx = (int) ((hStartTime - injStartTime)/(1000000000.0*h->deltaT) + 0.5);
+		/* set start indexes */
+		if(Delta_epoch >= 0) {
+			i = floor(Delta_epoch / h->deltaT + 0.5);
+			j = 0;
+		} else {
+			i = 0;
+			j = floor(-Delta_epoch / h->deltaT + 0.5);
 		}
 
-		if(injEndTime < hEndTime)
-			stopIdx = (int) ((injEndTime - hStartTime)/(1000000000.0*h->deltaT) + 0.5);
-		else
-			stopIdx = h->data->length;
-
-		for(i = startIdx; i < stopIdx; i++)
-			h->data->data[i] += thisInjectionCacheElement->series->data->data[i + injOffsetIdx] * thisInjectionCacheElement->underflow_protection;
+		/* add injection to h */
+		for(; i < h->data->length && j < thisInjectionCacheElement->series->data->length; i++, j++) {
+			h->data->data[i] += thisInjectionCacheElement->series->data->data[j] * thisInjectionCacheElement->underflow_protection;
+		}
 
 		thisInjectionCacheElement = thisInjectionCacheElement->next;
 	}
