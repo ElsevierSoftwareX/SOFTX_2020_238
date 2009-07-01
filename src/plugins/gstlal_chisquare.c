@@ -495,7 +495,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	gint dof;
 	gint ortho_channel, numorthochannels;
 	gint channel, numchannels;
-	gint chisq_start;
+	gint chisq_start, chisq_end, chisq_stride;
 
 	/*
 	 * get the range of offsets (in the output stream) spanned by the
@@ -601,7 +601,21 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	numorthochannels = (guint) num_orthosnr_channels(element);
 	numchannels = (guint) num_snr_channels(element);
 	dof = (numorthochannels < element->max_dof) ? numorthochannels : element->max_dof;
-	chisq_start = (numorthochannels - dof < 0 ) ? 0 : numorthochannels - dof;
+
+	/* FIXME: using this as the start in the for loop tests the "least"
+	 * important basis vectors, this is maybe the right thing?
+	 */ 	
+	/* chisq_start = (numorthochannels - dof < 0 ) ? 0 : numorthochannels - dof; */
+	/* chisq_end = numorthochannels */
+
+	/* This assumes you want the top dof basis vectors in the test */
+	chisq_start = 0;
+	chisq_end = numorthochannels;
+	/* okay because of conditional on setting dof to be no more 
+	 * than the number of orthonormal channels
+	 */
+	chisq_stride = numorthochannels / dof;
+
 	for(sample = 0; sample < length; sample++) {
 		double *data = &((double *) GST_BUFFER_DATA(buf))[numchannels * sample];
 		const double *orthodata = &((const double *) GST_BUFFER_DATA(orthosnrbuf))[numorthochannels * sample];
@@ -612,7 +626,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			double arg = atan2(snr2, snr1);
 			data[channel] = 0;
 			
-			for(ortho_channel = chisq_start; ortho_channel < numorthochannels; ortho_channel++) {
+			for(ortho_channel = chisq_start; ortho_channel < chisq_end; ortho_channel+=chisq_stride) {
 				double mixing_coefficient1 = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel);
 				double mixing_coefficient2 = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel+1);
 				double mc = mixing_coefficient1*cos(arg)+mixing_coefficient1*sin(arg);
