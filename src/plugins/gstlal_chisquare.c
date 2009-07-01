@@ -87,7 +87,7 @@
  * the bulk of the SNR distribution expected from Gaussian noise - exactly
  * where we want to be*/
 
-#define DEFAULT_MAX_DOF 4
+#define DEFAULT_MAX_DOF 5
 
 
 /*
@@ -601,7 +601,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	numorthochannels = (guint) num_orthosnr_channels(element);
 	numchannels = (guint) num_snr_channels(element);
 	dof = (numorthochannels < element->max_dof) ? numorthochannels : element->max_dof;
-	chisq_start = (numorthochannels - 5 < 0 ) ? 0 : numorthochannels -5;
+	chisq_start = (numorthochannels - dof < 0 ) ? 0 : numorthochannels - dof;
 	for(sample = 0; sample < length; sample++) {
 		double *data = &((double *) GST_BUFFER_DATA(buf))[numchannels * sample];
 		const double *orthodata = &((const double *) GST_BUFFER_DATA(orthosnrbuf))[numorthochannels * sample];
