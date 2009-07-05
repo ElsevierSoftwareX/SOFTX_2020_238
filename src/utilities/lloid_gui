@@ -63,11 +63,11 @@ class Bank(object):
 				# 1 second
 				self.blocksize = rate
 
-	def __init__(self, reference_psd_filename, template_bank_filename, bank_fragments, length, gate_threshold):
+	def __init__(self, reference_psd_filename, template_bank_filename, bank_fragments, gate_threshold):
 		self.reference_psd_filename = reference_psd_filename
 		self.template_bank_filename = template_bank_filename
 		self.bank_fragments = bank_fragments
-		self.filter_length = length
+		self.filter_length = max(fragment.end for fragment in bank_fragments)
 		self.gate_threshold = gate_threshold
 
 	def get_rates(self):
@@ -435,7 +435,7 @@ def parse_command_line():
 	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache in which to find paths to .gwf frame files (required).")
 	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the GPS start time of the segment to analyze (required).")
 	parser.add_option("--gps-stop-time", metavar = "seconds", help = "Set the GPS stop time of the segment to analyze (required).")
-	parser.add_option("--injections", metavar = "filename", help = "Set the name of the file from which to load injections.")
+	parser.add_option("--injections", metavar = "filename", help = "Set the name of the file from which to load injections (optional).")
 	parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze (required).")
 	parser.add_option("--output-prefix", metavar = "filename", help = "Set the start of the name of the output trigger file(s) (required).")
 	parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the file from which to load the template bank (required).")
@@ -503,7 +503,6 @@ mkLLOIDmulti(
 			Bank.BankFragment(256, 5.0, 13.0),
 			Bank.BankFragment(128, 13.0, 29.0)
 		],
-		length = 29.0,
 		gate_threshold = 1.5 
 	),
 	trigger_filename = "%s%s.xml" % (options.output_prefix, options.instrument),
