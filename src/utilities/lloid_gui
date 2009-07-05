@@ -380,7 +380,16 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 		snr = mkprogressreport(pipeline, snr, "progress_snr_%s" % instrument)
 		chisq = mkprogressreport(pipeline, chisq, "progress_chisquare_%s" % instrument)
 
-	return snr, chisq
+	#snr = mktee(pipeline, snr)
+	#mknxydumpsink(pipeline, mkqueue(pipeline, snr), "snr_%s.txt" % instrument)
+	#chisq = mktee(pipeline, chisq)
+	#mknxydumpsink(pipeline, mkqueue(pipeline, chisq), "chisquare_%s.txt" % instrument)
+
+	head = mktriggergen(pipeline, snr, chisq, banks.template_bank_filename, detectors[instrument].snr_threshold)
+	if progress_report:
+		head = mkprogressreport(pipeline, head, "progress_xml_%s" % instrument)
+
+	return head
 
 
 #
@@ -394,7 +403,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filenam
 	#mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_coinc.txt")
 
 	for instrument in detectors.keys():
-		snr, chisq = mkLLOIDsingle(
+		head = mkLLOIDsingle(
 			pipeline,
 			instrument,
 			detectors,
@@ -403,14 +412,6 @@ def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filenam
 			progress_report = progress_report,
 			control_snksrc = control_snksrc
 		)
-		#snr = mktee(pipeline, snr)
-		#mknxydumpsink(pipeline, mkqueue(pipeline, snr), "snr_%s.txt" % instrument)
-		#chisq = mktee(pipeline, chisq)
-		#mknxydumpsink(pipeline, mkqueue(pipeline, chisq), "chisquare_%s.txt" % instrument)
-
-		head = mktriggergen(pipeline, snr, chisq, banks.template_bank_filename, detectors[instrument].snr_threshold)
-		if progress_report:
-			head = mkprogressreport(pipeline, head, "progress_xml_%s" % instrument)
 		# FIXME:  write all triggers to the same file using
 		# "input-selector" element from plugins-bad.
 		mktriggerxmlwritersink(pipeline, head, trigger_filename)
