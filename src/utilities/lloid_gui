@@ -321,6 +321,17 @@ def mkplaybacksink(pipeline, src):
 #
 
 
+def mkcontrolsnksrc(pipeline, rate, progress_report = False, suffix = None):
+	snk = gst.element_factory_make("lal_adder")
+	snk.set_property("sync", True)
+	pipeline.add(snk)
+	src = mkcapsfilter(pipeline, snk, "audio/x-raw-float, rate=%d" % rate)
+	if progress_report:
+		src = mkprogressreport(pipeline, src, "progress_sumsquares%s" % (suffix and "_%s" % suffix or ""))
+	src = mktee(pipeline, src)
+	return snk, src
+
+
 def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = None, progress_report = False, control_snk = None, control_src = None):
 	head = mkframesrc(pipeline, instrument, detectors)
 	if progress_report:
@@ -338,13 +349,7 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 		hoft[rate] = mktee(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, mkaudioamplify(pipeline, hoft[rates[0]], math.sqrt(rates[0] / rate))), "audio/x-raw-float, rate=%d" % rate))
 
 	if control_snk is None:
-		control_snk = gst.element_factory_make("lal_adder")
-		control_snk.set_property("sync", True)
-		pipeline.add(control_snk)
-		control_src = mkcapsfilter(pipeline, control_snk, "audio/x-raw-float, rate=%d" % rates[-1])
-		if progress_report:
-			control_src = mkprogressreport(pipeline, control_src, "progress_sumsquares_%s" % instrument)
-		control_src = mktee(pipeline, control_src)
+		control_snk, control_src = mkcontrolsnksrc(pipeline, rates[-1], progress_report = progress_report, suffix = instrument)
 		#mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_%s.txt" % instrument)
 
 	snr = gst.element_factory_make("lal_adder")
@@ -385,13 +390,7 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 
 
 def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filename = None, progress_report = False):
-	control_snk = gst.element_factory_make("lal_adder")
-	control_snk.set_property("sync", True)
-	pipeline.add(control_snk)
-	control_src = mkcapsfilter(pipeline, control_snk, "audio/x-raw-float, rate=%d" % min(banks.get_rates()))
-	if progress_report:
-		control_src = mkprogressreport(pipeline, control_src, "progress_sumsquares_coinc")
-	control_src = mktee(pipeline, control_src)
+	control_snk, control_src = mkcontrolsnksrc(pipeline, min(banks.get_rates()), progress_report = progress_report)
 	#mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_coinc.txt")
 
 	for instrument in detectors.keys():
