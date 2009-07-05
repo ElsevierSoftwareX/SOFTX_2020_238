@@ -439,13 +439,13 @@ def parse_command_line():
 	parser.add_option("--gps-stop-time", metavar = "seconds", help = "Set the GPS stop time of the segment to analyze (required).")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the file from which to load injections (optional).")
 	parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze (required).")
-	parser.add_option("--output-prefix", metavar = "filename", help = "Set the start of the name of the output trigger file(s) (required).")
+	parser.add_option("--output", metavar = "filename", help = "Set the name of the output trigger file (required).")
 	parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the file from which to load the template bank (required).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
 	options, filenames = parser.parse_args()
 
-	missing_options = [option for option in ("frame_cache", "gps_start_time", "gps_stop_time", "output_prefix", "template_bank") if getattr(options, option) is None]
+	missing_options = [option for option in ("frame_cache", "gps_start_time", "gps_stop_time", "output", "template_bank") if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError, "missing required options %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
 
@@ -507,7 +507,7 @@ mkLLOIDmulti(
 		],
 		gate_threshold = 1.5 
 	)],
-	trigger_filename = "%s%s.xml" % (options.output_prefix, options.instrument),
+	trigger_filename = options.output,
 	injection_filename = options.injections,
 	progress_report = options.verbose
 )
