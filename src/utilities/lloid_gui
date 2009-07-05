@@ -346,7 +346,7 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 
 	hoft = {rates[0]: mktee(pipeline, head)}
 	for rate in rates[1:]:
-		hoft[rate] = mktee(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, mkaudioamplify(pipeline, hoft[rates[0]], math.sqrt(rates[0] / rate))), "audio/x-raw-float, rate=%d" % rate))
+		hoft[rate] = mktee(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, mkaudioamplify(pipeline, hoft[rates[0]], math.sqrt(float(rates[0]) / rate))), "audio/x-raw-float, rate=%d" % rate))
 
 	if control_snk is None:
 		control_snk, control_src = mkcontrolsnksrc(pipeline, rates[-1], progress_report = progress_report, suffix = instrument)
