@@ -332,7 +332,7 @@ def mkcontrolsnksrc(pipeline, rate, progress_report = False, suffix = None):
 	return snk, src
 
 
-def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = None, progress_report = False, control_snk = None, control_src = None):
+def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = None, progress_report = False, control_snksrc = None):
 	head = mkframesrc(pipeline, instrument, detectors)
 	if progress_report:
 		head = mkprogressreport(pipeline, head, "progress_src_%s" % instrument)
@@ -348,8 +348,8 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 	for rate in rates[1:]:
 		hoft[rate] = mktee(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, mkaudioamplify(pipeline, hoft[rates[0]], math.sqrt(float(rates[0]) / rate))), "audio/x-raw-float, rate=%d" % rate))
 
-	if control_snk is None:
-		control_snk, control_src = mkcontrolsnksrc(pipeline, rates[-1], progress_report = progress_report, suffix = instrument)
+	if control_snksrc is None:
+		control_snksrc = mkcontrolsnksrc(pipeline, rates[-1], progress_report = progress_report, suffix = instrument)
 		#mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_%s.txt" % instrument)
 
 	snr = gst.element_factory_make("lal_adder")
@@ -367,8 +367,8 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 			head,
 			banks,
 			bank_fragment,
-			control_snk,
-			control_src
+			control_snksrc[0],
+			control_snksrc[1]
 		)
 
 		mkqueue(pipeline, mkresample(pipeline, bank_snr, quality = 0)).link(snr)
@@ -390,7 +390,7 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 
 
 def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filename = None, progress_report = False):
-	control_snk, control_src = mkcontrolsnksrc(pipeline, min(banks.get_rates()), progress_report = progress_report)
+	control_snksrc = mkcontrolsnksrc(pipeline, min(banks.get_rates()), progress_report = progress_report)
 	#mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_coinc.txt")
 
 	for instrument in detectors.keys():
@@ -401,8 +401,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filenam
 			banks,
 			injection_filename = injection_filename,
 			progress_report = progress_report,
-			control_snk = control_snk,
-			control_src = control_src
+			control_snksrc = control_snksrc
 		)
 		#snr = mktee(pipeline, snr)
 		#mknxydumpsink(pipeline, mkqueue(pipeline, snr), "snr_%s.txt" % instrument)
