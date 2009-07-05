@@ -71,7 +71,7 @@ class Bank(object):
 		self.gate_threshold = gate_threshold
 
 	def get_rates(self):
-		return tuple(sorted(set(bank_fragment.rate for bank_fragment in self.bank_fragments), reverse = True))
+		return set(bank_fragment.rate for bank_fragment in self.bank_fragments)
 
 
 class Detectors(dict):
@@ -340,7 +340,7 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 	if injection_filename is not None:
 		head = mkinjections(pipeline, head, injection_filename)
 
-	rates = banks.get_rates()
+	rates = sorted(set(rate for bank in banks for rate in bank.get_rates()), reverse = True)
 
 	head = mkwhiten(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % rates[0]))
 
@@ -352,44 +352,44 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 		control_snksrc = mkcontrolsnksrc(pipeline, rates[-1], progress_report = progress_report, suffix = instrument)
 		#mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_%s.txt" % instrument)
 
-	snr = gst.element_factory_make("lal_adder")
-	snr.set_property("sync", True)
-	pipeline.add(snr)
+	for bank_number, bank in enumerate(banks):
+		snr = gst.element_factory_make("lal_adder")
+		snr.set_property("sync", True)
+		pipeline.add(snr)
 
-	chisq = gst.element_factory_make("lal_adder")
-	chisq.set_property("sync", True)
-	pipeline.add(chisq)
+		chisq = gst.element_factory_make("lal_adder")
+		chisq.set_property("sync", True)
+		pipeline.add(chisq)
 
-	for bank_fragment in banks.bank_fragments:
-		head = mkqueue(pipeline, hoft[bank_fragment.rate], max_size_time = int(banks.filter_length) * 1000000000)
-		bank_snr, bank_chisq = mkbank(
-			pipeline,
-			head,
-			banks,
-			bank_fragment,
-			control_snksrc[0],
-			control_snksrc[1]
-		)
+		for bank_fragment in bank.bank_fragments:
+			head = mkqueue(pipeline, hoft[bank_fragment.rate], max_size_time = int(bank.filter_length) * 1000000000)
+			bank_snr, bank_chisq = mkbank(
+				pipeline,
+				head,
+				bank,
+				bank_fragment,
+				control_snksrc[0],
+				control_snksrc[1]
+			)
+			mkqueue(pipeline, mkresample(pipeline, bank_snr, quality = 0)).link(snr)
+			mkqueue(pipeline, mkresample(pipeline, bank_chisq, quality = 0)).link(chisq)
 
-		mkqueue(pipeline, mkresample(pipeline, bank_snr, quality = 0)).link(snr)
-		mkqueue(pipeline, mkresample(pipeline, bank_chisq, quality = 0)).link(chisq)
+		snr = mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % rates[0])
+		chisq = mkcapsfilter(pipeline, chisq, "audio/x-raw-float, rate=%d" % rates[0])
+		if progress_report:
+			snr = mkprogressreport(pipeline, snr, "progress_snr_%s_%d" % (instrument, bank_number))
+			chisq = mkprogressreport(pipeline, chisq, "progress_chisquare_%s_%d" % (instrument, bank_number))
 
-	snr = mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % rates[0])
-	chisq = mkcapsfilter(pipeline, chisq, "audio/x-raw-float, rate=%d" % rates[0])
-	if progress_report:
-		snr = mkprogressreport(pipeline, snr, "progress_snr_%s" % instrument)
-		chisq = mkprogressreport(pipeline, chisq, "progress_chisquare_%s" % instrument)
+		#snr = mktee(pipeline, snr)
+		#mknxydumpsink(pipeline, mkqueue(pipeline, snr), "snr_%s_%d.txt" % (instrument, bank_number))
+		#chisq = mktee(pipeline, chisq)
+		#mknxydumpsink(pipeline, mkqueue(pipeline, chisq), "chisquare_%s_%d.txt" % (instrument, bank_number))
 
-	#snr = mktee(pipeline, snr)
-	#mknxydumpsink(pipeline, mkqueue(pipeline, snr), "snr_%s.txt" % instrument)
-	#chisq = mktee(pipeline, chisq)
-	#mknxydumpsink(pipeline, mkqueue(pipeline, chisq), "chisquare_%s.txt" % instrument)
+		head = mktriggergen(pipeline, snr, chisq, bank.template_bank_filename, detectors[instrument].snr_threshold)
+		if progress_report:
+			head = mkprogressreport(pipeline, head, "progress_xml_%s_%d" % (instrument, bank_number))
 
-	head = mktriggergen(pipeline, snr, chisq, banks.template_bank_filename, detectors[instrument].snr_threshold)
-	if progress_report:
-		head = mkprogressreport(pipeline, head, "progress_xml_%s" % instrument)
-
-	return head
+		yield head
 
 
 #
@@ -399,11 +399,13 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 
 
 def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filename = None, progress_report = False):
-	control_snksrc = mkcontrolsnksrc(pipeline, min(banks.get_rates()), progress_report = progress_report)
+	control_snksrc = mkcontrolsnksrc(pipeline, min(min(bank.get_rates()) for bank in banks), progress_report = progress_report)
 	#mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_coinc.txt")
+	if len(banks) > 1:
+		raise ValueError, "only 1 bank supported yet"
 
 	for instrument in detectors.keys():
-		head = mkLLOIDsingle(
+		for head in mkLLOIDsingle(
 			pipeline,
 			instrument,
 			detectors,
@@ -411,10 +413,10 @@ def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filenam
 			injection_filename = injection_filename,
 			progress_report = progress_report,
 			control_snksrc = control_snksrc
-		)
-		# FIXME:  write all triggers to the same file using
-		# "input-selector" element from plugins-bad.
-		mktriggerxmlwritersink(pipeline, head, trigger_filename)
+		):
+			# FIXME:  write all triggers to the same file using
+			# "input-selector" element from plugins-bad.
+			mktriggerxmlwritersink(pipeline, head, trigger_filename)
 
 
 #
@@ -494,7 +496,7 @@ mkLLOIDmulti(
 	detectors = Detectors({
 		options.instrument: Detectors.DetectorData(options.frame_cache, "LSC-STRAIN", snr_threshold = 5.5)
 	}),
-	banks = Bank(
+	banks = [Bank(
 		"/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt",
 		options.template_bank,
 		[
@@ -504,7 +506,7 @@ mkLLOIDmulti(
 			Bank.BankFragment(128, 13.0, 29.0)
 		],
 		gate_threshold = 1.5 
-	),
+	)],
 	trigger_filename = "%s%s.xml" % (options.output_prefix, options.instrument),
 	injection_filename = options.injections,
 	progress_report = options.verbose
