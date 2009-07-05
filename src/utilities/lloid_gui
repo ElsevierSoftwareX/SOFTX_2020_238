@@ -404,6 +404,11 @@ def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filenam
 	if len(banks) > 1:
 		raise ValueError, "only 1 bank supported yet"
 
+	#nto1 = gst.element_factory_make("input-selector")
+	#nto1.set_property("select-all", True)
+	#pipeline.add(nto1)
+	#mktriggerxmlwritersink(pipeline, nto1, trigger_filename)
+
 	for instrument in detectors.keys():
 		for head in mkLLOIDsingle(
 			pipeline,
@@ -414,8 +419,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filenam
 			progress_report = progress_report,
 			control_snksrc = control_snksrc
 		):
-			# FIXME:  write all triggers to the same file using
-			# "input-selector" element from plugins-bad.
+			#head.link(nto1)
 			mktriggerxmlwritersink(pipeline, head, trigger_filename)
 
 
