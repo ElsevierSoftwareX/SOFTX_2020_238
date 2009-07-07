@@ -63,12 +63,12 @@ class Bank(object):
 				# 1 second
 				self.blocksize = rate
 
-	def __init__(self, reference_psd_filename, template_bank_filename, bank_fragments, gate_threshold):
-		self.reference_psd_filename = reference_psd_filename
+	def __init__(self, template_bank_filename, bank_fragments, gate_threshold, snr_threshold):
 		self.template_bank_filename = template_bank_filename
 		self.bank_fragments = bank_fragments
 		self.filter_length = max(fragment.end for fragment in bank_fragments)
 		self.gate_threshold = gate_threshold
+		self.snr_threshold = snr_threshold
 
 	def get_rates(self):
 		return set(bank_fragment.rate for bank_fragment in self.bank_fragments)
@@ -76,10 +76,10 @@ class Bank(object):
 
 class Detectors(dict):
 	class DetectorData(object):
-		def __init__(self, frame_cache, channel, snr_threshold):
+		def __init__(self, frame_cache, channel, reference_psd_filename):
 			self.frame_cache = frame_cache
 			self.channel = channel
-			self.snr_threshold = snr_threshold
+			self.reference_psd_filename = reference_psd_filename
 
 	def __new__(cls, initializer, *args, **kwargs):
 		return dict.__new__(cls, initializer)
@@ -187,14 +187,14 @@ def mkqueue(pipeline, src, pad_name = None, **properties):
 		src.link_pads(pad_name, elem, "sink")
 	return elem
 
-def mkbank(pipeline, src, banks, bank, control_snk, control_src):
+def mkbank(pipeline, src, banks, bank, reference_psd_filename, control_snk, control_src):
 	elem = gst.element_factory_make("lal_templatebank")
 	elem.set_property("t-start", bank.start)
 	elem.set_property("t-end", bank.end)
 	elem.set_property("t-total-duration", banks.filter_length)
 	elem.set_property("snr-length", bank.blocksize)
 	elem.set_property("template-bank", banks.template_bank_filename)
-	elem.set_property("reference-psd", banks.reference_psd_filename)
+	elem.set_property("reference-psd", reference_psd_filename)
 	pipeline.add(elem)
 	src.link(elem)
 
@@ -340,17 +340,17 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 	if injection_filename is not None:
 		head = mkinjections(pipeline, head, injection_filename)
 
-	rates = sorted(set(rate for bank in banks for rate in bank.get_rates()), reverse = True)
+	rates = set(rate for bank in banks for rate in bank.get_rates())
 
-	head = mkwhiten(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % rates[0]))
+	head = mkwhiten(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % max(rates)))
 
-	hoft = {rates[0]: mktee(pipeline, head)}
-	for rate in rates[1:]:
-		hoft[rate] = mktee(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, mkaudioamplify(pipeline, hoft[rates[0]], math.sqrt(float(rates[0]) / rate))), "audio/x-raw-float, rate=%d" % rate))
+	hoft = {max(rates): mktee(pipeline, head)}
+	for rate in sorted(rates)[:-1]:	# all but the highest rate
+		hoft[rate] = mktee(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, mkaudioamplify(pipeline, hoft[max(rates)], math.sqrt(float(max(rates)) / rate))), "audio/x-raw-float, rate=%d" % rate))
 
 	if control_snksrc is None:
-		control_snksrc = mkcontrolsnksrc(pipeline, rates[-1], progress_report = progress_report, suffix = instrument)
-		#mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_%s.txt" % instrument)
+		control_snksrc = mkcontrolsnksrc(pipeline, min(rates), progress_report = progress_report, suffix = instrument)
+		#mknxydumpsink(pipeline, mkqueue(pipeline, control_snksrc[1]), "sumsquares_%s.txt" % instrument)
 
 	for bank_number, bank in enumerate(banks):
 		snr = gst.element_factory_make("lal_adder")
@@ -362,20 +362,20 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 		pipeline.add(chisq)
 
 		for bank_fragment in bank.bank_fragments:
-			head = mkqueue(pipeline, hoft[bank_fragment.rate], max_size_time = int(bank.filter_length) * 1000000000)
 			bank_snr, bank_chisq = mkbank(
 				pipeline,
-				head,
+				mkqueue(pipeline, hoft[bank_fragment.rate], max_size_time = int(bank.filter_length) * 1000000000),
 				bank,
 				bank_fragment,
+				detectors[instrument].reference_psd_filename,
 				control_snksrc[0],
 				control_snksrc[1]
 			)
 			mkqueue(pipeline, mkresample(pipeline, bank_snr, quality = 0)).link(snr)
 			mkqueue(pipeline, mkresample(pipeline, bank_chisq, quality = 0)).link(chisq)
 
-		snr = mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % rates[0])
-		chisq = mkcapsfilter(pipeline, chisq, "audio/x-raw-float, rate=%d" % rates[0])
+		snr = mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(rates))
+		chisq = mkcapsfilter(pipeline, chisq, "audio/x-raw-float, rate=%d" % max(rates))
 		if progress_report:
 			snr = mkprogressreport(pipeline, snr, "progress_snr_%s_%d" % (instrument, bank_number))
 			chisq = mkprogressreport(pipeline, chisq, "progress_chisquare_%s_%d" % (instrument, bank_number))
@@ -385,7 +385,7 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 		#chisq = mktee(pipeline, chisq)
 		#mknxydumpsink(pipeline, mkqueue(pipeline, chisq), "chisquare_%s_%d.txt" % (instrument, bank_number))
 
-		head = mktriggergen(pipeline, snr, chisq, bank.template_bank_filename, detectors[instrument].snr_threshold)
+		head = mktriggergen(pipeline, snr, chisq, bank.template_bank_filename, bank.snr_threshold)
 		if progress_report:
 			head = mkprogressreport(pipeline, head, "progress_xml_%s_%d" % (instrument, bank_number))
 
@@ -400,7 +400,7 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 
 def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filename = None, progress_report = False):
 	control_snksrc = mkcontrolsnksrc(pipeline, min(min(bank.get_rates()) for bank in banks), progress_report = progress_report)
-	#mknxydumpsink(pipeline, mkqueue(pipeline, control_src), "sumsquares_coinc.txt")
+	#mknxydumpsink(pipeline, mkqueue(pipeline, control_snksrc[1]), "sumsquares_coinc.txt")
 	if len(banks) > 1:
 		raise ValueError, "only 1 bank supported yet"
 
@@ -444,14 +444,15 @@ def parse_command_line():
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the file from which to load injections (optional).")
 	parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze (required).")
 	parser.add_option("--output", metavar = "filename", help = "Set the name of the output trigger file (required).")
-	parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the file from which to load the template bank (required).")
+	parser.add_option("--template-bank", metavar = "filename", action = "append", help = "Set the name of the file from which to load the template bank (required).")
+	parser.add_option("--write-pipeline", metavar = "filename", help = "Write an XML description of the as-built pipeline to this file (optional).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
 	options, filenames = parser.parse_args()
 
 	missing_options = [option for option in ("frame_cache", "gps_start_time", "gps_stop_time", "output", "template_bank") if getattr(options, option) is None]
 	if missing_options:
-		raise ValueError, "missing required options %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
 
 	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
 	options.gps_stop_time = LIGOTimeGPS(options.gps_stop_time)
@@ -498,23 +499,28 @@ mainloop = gobject.MainLoop()
 mkLLOIDmulti(
 	pipeline,
 	detectors = Detectors({
-		options.instrument: Detectors.DetectorData(options.frame_cache, "LSC-STRAIN", snr_threshold = 5.5)
+		options.instrument: Detectors.DetectorData(options.frame_cache, "LSC-STRAIN", reference_psd_filename = "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt")
 	}),
-	banks = [Bank(
-		"/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt",
-		options.template_bank,
-		[
-			Bank.BankFragment(2048, 0.0, 1.0),
-			Bank.BankFragment(512, 1.0, 5.0),
-			Bank.BankFragment(256, 5.0, 13.0),
-			Bank.BankFragment(128, 13.0, 29.0)
-		],
-		gate_threshold = 1.5 
-	)],
+	banks = [
+		Bank(
+			template_bank_filename,
+			[
+				Bank.BankFragment(2048, 0.0, 1.0),
+				Bank.BankFragment(512, 1.0, 5.0),
+				Bank.BankFragment(256, 5.0, 13.0),
+				Bank.BankFragment(128, 13.0, 29.0)
+			],
+			gate_threshold = 1.5,
+			snr_threshold = 5.5
+		) for template_bank_filename in options.template_bank
+	],
 	trigger_filename = options.output,
 	injection_filename = options.injections,
 	progress_report = options.verbose
 )
+
+if options.write_pipeline is not None:
+	gst.xml_write_file(pipeline, file(options.write_pipeline, "w"))
 
 handler = LLOIDHandler(mainloop, pipeline)
 
