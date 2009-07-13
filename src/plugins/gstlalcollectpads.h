@@ -67,12 +67,6 @@ typedef struct _GstLALCollectData {
 } GstLALCollectData;
 
 
-/* FIXME:  temporarily hard-coded to a value that prevents overflow in our
- * test pipeline.  must figure out how to handle arbitrary start times
- * without overflow */
-#define GSTLAL_COLLECTPADS_TIMESTAMP_AT_ZERO (874100000 * GST_SECOND)
-
-
 /*
  * Function prototypes.
  */
@@ -82,6 +76,7 @@ GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *, GstPad *, guint
 GstLALCollectData *gstlal_collect_pads_add_pad_full(GstCollectPads *, GstPad *, guint, GstCollectDataDestroyNotify);
 gboolean gstlal_collect_pads_remove_pad(GstCollectPads *, GstPad *);
 void gstlal_collect_pads_set_bytes_per_sample(GstPad *, guint);
+GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads);
 gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *, guint64 *, guint64 *, gint, GstClockTime);
 GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *, GstLALCollectData *, guint64);
 

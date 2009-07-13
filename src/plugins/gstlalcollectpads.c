@@ -188,6 +188,59 @@ void gstlal_collect_pads_set_bytes_per_sample(GstPad *pad, guint bytes_per_sampl
 
 
 /**
+ * Compute the smallest segment that contains the segments of all pads.
+ * The segments must be in the same format on all pads.
+ */
+
+
+GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads)
+{
+	GSList *collectdatalist = NULL;
+	GstSegment *segment = NULL;
+
+	for(collectdatalist = pads->data; collectdatalist; collectdatalist = g_slist_next(collectdatalist)) {
+		/* really a pointer to a GstLALCollectData object, casting
+		 * to GstCollectData */
+		GstCollectData *data = collectdatalist->data;
+
+		/*
+		 * start by copying the segment from the first collect pad
+		 */
+
+		if(!segment) {
+			segment = gst_segment_copy(&data->segment);
+			if(!segment) {
+				/* FIXME:  memory failure, do something about it */
+				fprintf(stderr, "FAILURE COPYING SEGMENT\n");
+			}
+			continue;
+		}
+
+		/*
+		 * check for format/rate mismatch
+		 */
+
+		if(segment->format != data->segment.format || segment->applied_rate != data->segment.applied_rate) {
+			/* FIXME:  format/rate mismatch error, do something
+			 * about it */
+			fprintf(stderr, "FORMAT/RATE MISMATCH\n");
+		}
+
+		/*
+		 * expand start and stop
+		 */
+
+		if(segment->start == -1 || segment->start > data->segment.start)
+			segment->start = data->segment.start;
+		if(segment->stop == -1 || segment->stop < data->segment.stop)
+			segment->stop = data->segment.stop;
+	}
+
+	return segment;
+}
+
+
+/**
  * Computes the earliest of the offsets and of the upper bounds of the
  * offsets spanned by the GstCollectPad's input buffers.  All offsets are
  * converted to their equivalent offsets in the output stream (if this
