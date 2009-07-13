@@ -59,24 +59,19 @@ typedef struct _GstAdder {
 
 	/* stream format */
 	gint rate;
-
-	/* number of bytes per sample (= width / 8 * channels) */
-	guint bytes_per_sample;
+	guint bytes_per_sample; /* = width / 8 * channels */
 
 	/* function to add samples */
 	GstAdderFunction func;
 
 	/* counters to keep track of timestamps. */
 	gboolean synchronous;
-	guint64 output_offset;
-	GstClockTime output_timestamp_at_zero;
 
 	/* sink event handling */
 	GstPadEventFunction collect_event;
-	GstSegment segment;
 	gboolean segment_pending;
+	GstSegment segment;
 	guint64 segment_position;
-	gdouble segment_rate;
 } GstAdder;
 
 

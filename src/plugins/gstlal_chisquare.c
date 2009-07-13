@@ -498,11 +498,36 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	gint chisq_start, chisq_end, chisq_stride;
 
 	/*
+	 * check for new segment
+	 */
+
+	if(element->segment_pending) {
+		GstEvent *event;
+		GstSegment *segment = gstlal_collect_pads_get_segment(element->collect);
+		if(!segment) {
+			/* FIXME:  failure getting bounding segment, do
+			 * something about it */
+		}
+		element->segment = *segment;
+		gst_segment_free(segment);
+		element->segment_position = 0;
+
+		event = gst_event_new_new_segment_full(FALSE, element->segment.rate, 1.0, GST_FORMAT_TIME, element->segment.start, element->segment.stop, element->segment.start);
+		if(!event) {
+			/* FIXME:  failure getting event, do something
+			 * about it */
+		}
+		gst_pad_push_event(element->srcpad, event);
+
+		element->segment_pending = FALSE;
+	}
+
+	/*
 	 * get the range of offsets (in the output stream) spanned by the
 	 * available input buffers.
 	 */
 
-	if(!gstlal_collect_pads_get_earliest_offsets(element->collect, &earliest_input_offset, &earliest_input_offset_end, element->rate, element->output_timestamp_at_zero)) {
+	if(!gstlal_collect_pads_get_earliest_offsets(element->collect, &earliest_input_offset, &earliest_input_offset_end, element->rate, element->segment.start)) {
 		GST_ERROR_OBJECT(element, "cannot deduce input timestamp offset information");
 		return GST_FLOW_ERROR;
 	}
@@ -521,8 +546,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 * capabilities here.
 	 */
 
-	if(earliest_input_offset < element->output_offset) {
-		GST_ERROR_OBJECT(element, "detected time reversal in at least one input stream:  expected nothing earlier than offset %llu, found sample at offset %llu", (unsigned long long) element->output_offset, (unsigned long long) earliest_input_offset);
+	if(earliest_input_offset < element->segment_position) {
+		GST_ERROR_OBJECT(element, "detected time reversal in at least one input stream:  expected nothing earlier than offset %llu, found sample at offset %llu", (unsigned long long) element->segment_position, (unsigned long long) earliest_input_offset);
 		return GST_FLOW_ERROR;
 	}
 
@@ -726,14 +751,9 @@ static GstStateChangeReturn change_state(GstElement *element, GstStateChange tra
 		break;
 
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
-		chisquare->output_offset = 0;
-		chisquare->output_timestamp_at_zero = GSTLAL_COLLECTPADS_TIMESTAMP_AT_ZERO;
-		/* FIXME:  how do we handle segments?
 		chisquare->segment_pending = TRUE;
-		chisquare->segment_position = 0;
-		chisquare->segment_rate = 1.0;
 		gst_segment_init(&chisquare->segment, GST_FORMAT_UNDEFINED);
-		*/
+		chisquare->segment_position = 0;
 		gst_collect_pads_start(chisquare->collect);
 		break;
 

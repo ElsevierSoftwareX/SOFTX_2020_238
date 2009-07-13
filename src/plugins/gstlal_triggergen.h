@@ -71,8 +71,9 @@ typedef struct {
 	GstLALCollectData *chisqcollectdata;
 	GstPad *srcpad;
 
-	guint64 output_offset;
-	GstClockTime output_timestamp_at_zero;
+	gboolean segment_pending;
+	GstSegment segment;
+	guint64 segment_position;
 
 	int rate;
 

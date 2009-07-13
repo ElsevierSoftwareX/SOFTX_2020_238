@@ -80,8 +80,9 @@ typedef struct {
 	gsl_vector_view chifacs;
 
 	/* counters to keep track of timestamps. */
-	guint64 output_offset;
-	GstClockTime output_timestamp_at_zero;
+	gboolean segment_pending;
+	GstSegment segment;
+	guint64 segment_position;
 } GSTLALChiSquare;
 
 
