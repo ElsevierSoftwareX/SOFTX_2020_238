@@ -119,7 +119,7 @@ def mkcapsfilter(pipeline, src, caps):
 def mkfakesrc(pipeline, instrument, detectors):
 	elem = gst.element_factory_make("audiotestsrc")
 	elem.set_property("samplesperbuffer", detectors.block_size / 8)
-	elem.set_property("wave", 5)
+	elem.set_property("wave", 9)
 	elem.set_property("volume", 1e-20)
 	pipeline.add(elem)
 	return mkcapsfilter(pipeline, elem, "audio/x-raw-float, width=64, rate=16384, instrument=%s, channel_name=%s, units=strain" % (instrument, detectors[instrument].channel))
@@ -342,11 +342,18 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 
 	rates = set(rate for bank in banks for rate in bank.get_rates())
 
+	correction = {
+		128: 1.03 / 0.93,
+		256: 1.03 / 0.93,
+		512: 1.03 / 0.93,
+		2048: 1.03 / 1.03
+	}
+
 	head = mkwhiten(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % max(rates)))
 
 	hoft = {max(rates): mktee(pipeline, head)}
 	for rate in sorted(rates)[:-1]:	# all but the highest rate
-		hoft[rate] = mktee(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, mkaudioamplify(pipeline, hoft[max(rates)], math.sqrt(float(max(rates)) / rate))), "audio/x-raw-float, rate=%d" % rate))
+		hoft[rate] = mktee(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, mkaudioamplify(pipeline, hoft[max(rates)], math.sqrt(correction[rate] * float(max(rates)) / rate))), "audio/x-raw-float, rate=%d" % rate))
 
 	if control_snksrc is None:
 		control_snksrc = mkcontrolsnksrc(pipeline, min(rates), progress_report = progress_report, suffix = instrument)
