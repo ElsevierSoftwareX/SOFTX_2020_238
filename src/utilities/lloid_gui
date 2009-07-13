@@ -198,29 +198,30 @@ def mkbank(pipeline, src, banks, bank, reference_psd_filename, control_snk, cont
 	pipeline.add(elem)
 	src.link(elem)
 
-	mkqueue(pipeline, mkresample(pipeline, elem, pad_name = "sumofsquares")).link(control_snk)
-	orthosnr = mktee(pipeline, elem, pad_name = "src")
 	matrix = mktee(pipeline, elem, pad_name = "matrix")
 
-	#mknxydumpsink(pipeline, mkqueue(pipeline, orthosnr), "orthosnr_%s.txt" % elem.get_name())
+	mkqueue(pipeline, mkresample(pipeline, elem, pad_name = "sumofsquares")).link(control_snk)
 
 	gate = gst.element_factory_make("lal_gate")
 	gate.set_property("threshold", banks.gate_threshold)
 	pipeline.add(gate)
+	mkqueue(pipeline, elem, pad_name = "src").link_pads("src", gate, "sink")
 	mkqueue(pipeline, control_src).link_pads("src", gate, "control")
-	mkqueue(pipeline, orthosnr).link(gate)
+	orthosnr = mktee(pipeline, gate, pad_name = "src")
+
+	#mknxydumpsink(pipeline, mkqueue(pipeline, orthosnr), "orthosnr_%s.txt" % elem.get_name())
 
 	snr = gst.element_factory_make("lal_matrixmixer")
 	pipeline.add(snr)
 	mkqueue(pipeline, matrix).link_pads("src", snr, "matrix")
-	gate.link(snr)
-	snr = mktee(pipeline, snr)
+	mkqueue(pipeline, orthosnr).link(snr)
+	snr = mktee(pipeline, mkresample(pipeline, snr, quality = 0))
 
 	chisq = gst.element_factory_make("lal_chisquare")
 	pipeline.add(chisq)
 	mkqueue(pipeline, matrix).link_pads("src", chisq, "matrix")
 	mkqueue(pipeline, elem, pad_name = "chifacs").link_pads("src", chisq, "chifacs")
-	mkqueue(pipeline, orthosnr).link_pads("src", chisq, "orthosnr")
+	mkqueue(pipeline, mkresample(pipeline, orthosnr, quality = 0)).link_pads("src", chisq, "orthosnr")
 	mkqueue(pipeline, snr).link_pads("src", chisq, "snr")
 
 	return snr, chisq
@@ -378,8 +379,8 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 				control_snksrc[0],
 				control_snksrc[1]
 			)
-			mkqueue(pipeline, mkresample(pipeline, bank_snr, quality = 0)).link(snr)
-			mkqueue(pipeline, mkresample(pipeline, bank_chisq, quality = 0)).link(chisq)
+			mkqueue(pipeline, bank_snr).link(snr)
+			mkqueue(pipeline, bank_chisq).link(chisq)
 
 		snr = mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(rates))
 		chisq = mkcapsfilter(pipeline, chisq, "audio/x-raw-float, rate=%d" % max(rates))
