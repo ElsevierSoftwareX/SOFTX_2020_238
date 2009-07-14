@@ -218,61 +218,67 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 {
 	GstBaseSrc *basesrc = GST_BASE_SRC(element);
 	double deltaT;
-	guint64 input_length;
-	LIGOTimeGPS buffer_start_time;
-	guint64 buffer_start_sample;
-	guint64 buffer_length;
+	guint64 segment_length;
+	LIGOTimeGPS input_buffer_epoch;
+	guint64 input_buffer_offset;
+	guint64 input_buffer_length;
 
 	/*
-	 * retrieve the bounds of the current buffer and the input domain
+	 * retrieve the sample rate, timestamp, offset, and size of the
+	 * input buffer
 	 */
 
 	switch(element->series_type) {
 	case LAL_I4_TYPE_CODE:
 		deltaT = ((INT4TimeSeries *) element->input_buffer)->deltaT;
-		buffer_start_time = ((INT4TimeSeries *) element->input_buffer)->epoch;
-		buffer_length = ((INT4TimeSeries *) element->input_buffer)->data->length;
+		input_buffer_epoch = ((INT4TimeSeries *) element->input_buffer)->epoch;
+		input_buffer_length = ((INT4TimeSeries *) element->input_buffer)->data->length;
 		break;
 
 	case LAL_S_TYPE_CODE:
 		deltaT = ((REAL4TimeSeries *) element->input_buffer)->deltaT;
-		buffer_start_time = ((REAL4TimeSeries *) element->input_buffer)->epoch;
-		buffer_length = ((REAL4TimeSeries *) element->input_buffer)->data->length;
+		input_buffer_epoch = ((REAL4TimeSeries *) element->input_buffer)->epoch;
+		input_buffer_length = ((REAL4TimeSeries *) element->input_buffer)->data->length;
 		break;
 
 	case LAL_D_TYPE_CODE:
 		deltaT = ((REAL8TimeSeries *) element->input_buffer)->deltaT;
-		buffer_start_time = ((REAL8TimeSeries *) element->input_buffer)->epoch;
-		buffer_length = ((REAL8TimeSeries *) element->input_buffer)->data->length;
+		input_buffer_epoch = ((REAL8TimeSeries *) element->input_buffer)->epoch;
+		input_buffer_length = ((REAL8TimeSeries *) element->input_buffer)->data->length;
 		break;
 
 	default:
 		GST_ERROR_OBJECT(element, "unsupported data type (LALTYPECODE=%d)", element->series_type);
 		return NULL;
 	}
-	buffer_start_sample = gst_util_uint64_scale_int(XLALGPSToINT8NS(&buffer_start_time) - basesrc->segment.start, round(1.0 / deltaT), GST_SECOND);
-	if((GstClockTime) basesrc->segment.stop != GST_CLOCK_TIME_NONE)
-		input_length = gst_util_uint64_scale_int(basesrc->segment.stop - basesrc->segment.start, round(1.0 / deltaT), GST_SECOND);
-	else
-		input_length = G_MAXUINT64;
+	input_buffer_offset = gst_util_uint64_scale_int(XLALGPSToINT8NS(&input_buffer_epoch) - basesrc->segment.start, (gint) round(1.0 / deltaT), GST_SECOND);
 
 	/*
-	 * clip the requested interval to the input domain
+	 * segment length (now that we know the sample rate)
 	 */
 
-	if(start_sample >= input_length) {
+	if(GST_CLOCK_TIME_IS_VALID(basesrc->segment.stop))
+		segment_length = gst_util_uint64_scale_int(basesrc->segment.stop - basesrc->segment.start, (gint) round(1.0 / deltaT), GST_SECOND);
+	else
+		segment_length = G_MAXUINT64;
+
+	/*
+	 * clip the requested interval to the segment
+	 */
+
+	if(start_sample >= segment_length) {
 		GST_ERROR_OBJECT(element, "requested interval lies outside input domain");
 		return NULL;
 	}
-	if(start_sample + length > input_length)
-		length = input_length - start_sample;
+	if(segment_length - start_sample < length)
+		length = segment_length - start_sample;
 
 	/*
-	 * does the requested data start in the buffer?  if not, read a new
-	 * buffer
+	 * does the requested interval start in the input buffer?  if not,
+	 * read a new buffer
 	 */
 
-	if(start_sample < buffer_start_sample || start_sample >= buffer_start_sample + buffer_length) {
+	if(start_sample < input_buffer_offset || start_sample - input_buffer_offset >= input_buffer_length) {
 		void *new_input_buffer;
 
 		/*
@@ -280,12 +286,12 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 		 * requested start time as the buffer's start time
 		 */
 
-		buffer_start_sample = start_sample;
-		buffer_length = round(element->input_buffer_duration / deltaT);
-		if(buffer_start_sample + buffer_length > input_length)
-			buffer_length = input_length - buffer_start_sample;
-		XLALINT8NSToGPS(&buffer_start_time, basesrc->segment.start);
-		XLALGPSAdd(&buffer_start_time, buffer_start_sample * deltaT);
+		input_buffer_offset = start_sample;
+		input_buffer_length = round(element->input_buffer_duration / deltaT);
+		if(segment_length - input_buffer_offset < input_buffer_length)
+			input_buffer_length = segment_length - input_buffer_offset;
+		XLALINT8NSToGPS(&input_buffer_epoch, basesrc->segment.start);
+		XLALGPSAdd(&input_buffer_epoch, input_buffer_offset * deltaT);
 
 		/*
 		 * load the buffer
@@ -295,10 +301,10 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 		 * a user-supplied value.
 		 */
 
-		GST_LOG_OBJECT(element, "read %g seconds of channel %s at %d%.09u\n", buffer_length * deltaT, element->full_channel_name, buffer_start_time.gpsSeconds, buffer_start_time.gpsNanoSeconds);
+		GST_LOG_OBJECT(element, "read %g seconds of channel %s at %d%.09u\n", input_buffer_length * deltaT, element->full_channel_name, input_buffer_epoch.gpsSeconds, input_buffer_epoch.gpsNanoSeconds);
 		switch(element->series_type) {
 		case LAL_I4_TYPE_CODE:
-			new_input_buffer = XLALFrReadINT4TimeSeries(element->stream, element->full_channel_name, &buffer_start_time, buffer_length * deltaT, 0);
+			new_input_buffer = XLALFrReadINT4TimeSeries(element->stream, element->full_channel_name, &input_buffer_epoch, input_buffer_length * deltaT, 0);
 			if(!new_input_buffer) {
 				GST_ERROR_OBJECT(element, "XLALFrReadINT4TimeSeries() failed");
 				XLALClearErrno();
@@ -308,7 +314,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 			break;
 
 		case LAL_S_TYPE_CODE:
-			new_input_buffer = XLALFrReadREAL4TimeSeries(element->stream, element->full_channel_name, &buffer_start_time, buffer_length * deltaT, 0);
+			new_input_buffer = XLALFrReadREAL4TimeSeries(element->stream, element->full_channel_name, &input_buffer_epoch, input_buffer_length * deltaT, 0);
 			if(!new_input_buffer) {
 				GST_ERROR_OBJECT(element, "XLALFrReadREAL4TimeSeries() failed");
 				XLALClearErrno();
@@ -318,7 +324,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 			break;
 
 		case LAL_D_TYPE_CODE:
-			new_input_buffer = XLALFrReadREAL8TimeSeries(element->stream, element->full_channel_name, &buffer_start_time, buffer_length * deltaT, 0);
+			new_input_buffer = XLALFrReadREAL8TimeSeries(element->stream, element->full_channel_name, &input_buffer_epoch, input_buffer_length * deltaT, 0);
 			if(!new_input_buffer) {
 				GST_ERROR_OBJECT(element, "XLALFrReadREAL8TimeSeries() failed");
 				XLALClearErrno();
@@ -345,11 +351,11 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 	}
 
 	/*
-	 * clip the requested length against the top of the buffer
+	 * clip the requested interval against the top of the input buffer
 	 */
 
-	if(start_sample + length > buffer_start_sample + buffer_length)
-		length = buffer_start_sample + buffer_length - start_sample;
+	if(start_sample + length - input_buffer_offset > input_buffer_length)
+		length = input_buffer_offset + input_buffer_length - start_sample;
 
 	/*
 	 * extract the requested interval
@@ -357,13 +363,13 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 
 	switch(element->series_type) {
 	case LAL_I4_TYPE_CODE:
-		return XLALCutINT4TimeSeries(element->input_buffer, start_sample - buffer_start_sample, length);
+		return XLALCutINT4TimeSeries(element->input_buffer, start_sample - input_buffer_offset, length);
 
 	case LAL_S_TYPE_CODE:
-		return XLALCutREAL4TimeSeries(element->input_buffer, start_sample - buffer_start_sample, length);
+		return XLALCutREAL4TimeSeries(element->input_buffer, start_sample - input_buffer_offset, length);
 
 	case LAL_D_TYPE_CODE:
-		return XLALCutREAL8TimeSeries(element->input_buffer, start_sample - buffer_start_sample, length);
+		return XLALCutREAL8TimeSeries(element->input_buffer, start_sample - input_buffer_offset, length);
 
 	default:
 		/*
@@ -689,14 +695,16 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			XLALDestroyINT4TimeSeries(chunk);
 			return result;
 		}
+		if(basesrc->offset != GST_BUFFER_OFFSET(*buffer)) {
+			/* FIXME:  didn't get the buffer offset we asked
+			 * for, do something about it */
+		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
 		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&chunk->epoch);
 		GST_BUFFER_DURATION(*buffer) = (GstClockTime) round(chunk->data->length * GST_SECOND * chunk->deltaT);
-		if(basesrc->offset == 0 || basesrc->offset != GST_BUFFER_OFFSET(*buffer)) {
+		if(basesrc->offset == 0)
 			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
-			basesrc->offset = GST_BUFFER_OFFSET(*buffer);
-		}
 		basesrc->offset += chunk->data->length;
 		XLALDestroyINT4TimeSeries(chunk);
 		break;
@@ -722,14 +730,16 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			XLALDestroyREAL4TimeSeries(chunk);
 			return result;
 		}
+		if(basesrc->offset != GST_BUFFER_OFFSET(*buffer)) {
+			/* FIXME:  didn't get the buffer offset we asked
+			 * for, do something about it */
+		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
 		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&chunk->epoch);
 		GST_BUFFER_DURATION(*buffer) = (GstClockTime) round(chunk->data->length * GST_SECOND * chunk->deltaT);
-		if(basesrc->offset == 0 || basesrc->offset != GST_BUFFER_OFFSET(*buffer)) {
+		if(basesrc->offset == 0)
 			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
-			basesrc->offset = GST_BUFFER_OFFSET(*buffer);
-		}
 		basesrc->offset += chunk->data->length;
 		XLALDestroyREAL4TimeSeries(chunk);
 		break;
@@ -755,14 +765,16 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			XLALDestroyREAL8TimeSeries(chunk);
 			return result;
 		}
+		if(basesrc->offset != GST_BUFFER_OFFSET(*buffer)) {
+			/* FIXME:  didn't get the buffer offset we asked
+			 * for, do something about it */
+		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
 		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&chunk->epoch);
 		GST_BUFFER_DURATION(*buffer) = (GstClockTime) round(chunk->data->length * GST_SECOND * chunk->deltaT);
-		if(basesrc->offset == 0 || basesrc->offset != GST_BUFFER_OFFSET(*buffer)) {
+		if(basesrc->offset == 0)
 			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
-			basesrc->offset = GST_BUFFER_OFFSET(*buffer);
-		}
 		basesrc->offset += chunk->data->length;
 		XLALDestroyREAL8TimeSeries(chunk);
 		break;
