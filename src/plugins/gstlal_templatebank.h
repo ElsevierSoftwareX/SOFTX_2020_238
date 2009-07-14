@@ -78,7 +78,7 @@ typedef struct {
 
 	gboolean next_is_discontinuity;
 	unsigned long next_sample;
-	GstClockTime output_timestamp;
+	GstClockTime segment_start;
 
 	gsl_matrix *U;
 	gsl_vector *S;

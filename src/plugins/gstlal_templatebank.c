@@ -736,7 +736,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		if(GST_BUFFER_OFFSET_IS_VALID(sinkbuf))
 			element->next_sample = GST_BUFFER_OFFSET(sinkbuf);
 		if(GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf))
-			element->output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);
+			element->segment_start = GST_BUFFER_TIMESTAMP(sinkbuf);
 
 		/*
 		 * Push GAP buffers of zeros out both src pads to pad the
@@ -771,12 +771,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 				goto done;
 
 			/*
-			 * Update the offset and time stamp.
+			 * Update the output offset
 			 */
 
 			element->next_is_discontinuity = FALSE;
 			element->next_sample += (size_t) round(element->t_start * element->sample_rate);
-			element->output_timestamp += (GstClockTime) round(element->t_start * GST_SECOND);
 		}
 
 		/*
@@ -876,8 +875,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			GST_BUFFER_FLAG_SET(orthogonal_snr_buf, GST_BUFFER_FLAG_DISCONT);
 		}
 		GST_BUFFER_OFFSET_END(orthogonal_snr_sum_squares_buf) = GST_BUFFER_OFFSET_END(orthogonal_snr_buf) = GST_BUFFER_OFFSET(orthogonal_snr_buf) + output_length;
-		GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) = GST_BUFFER_TIMESTAMP(orthogonal_snr_buf) = element->output_timestamp;
-		GST_BUFFER_DURATION(orthogonal_snr_sum_squares_buf) = GST_BUFFER_DURATION(orthogonal_snr_buf) = (GstClockTime) output_length *GST_SECOND / element->sample_rate;
+		GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) = GST_BUFFER_TIMESTAMP(orthogonal_snr_buf) = element->segment_start + (GstClockTime) gst_util_uint64_scale_int(element->next_sample, GST_SECOND, element->sample_rate);
+		GST_BUFFER_DURATION(orthogonal_snr_sum_squares_buf) = GST_BUFFER_DURATION(orthogonal_snr_buf) = (GstClockTime) (gst_util_uint64_scale_int(element->next_sample + output_length, GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(element->next_sample, GST_SECOND, element->sample_rate));
 
 		/*
 		 * Assemble the orthogonal SNR time series as the columns
@@ -920,7 +919,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		gst_adapter_flush(element->adapter, output_length * sizeof(*time_series.vector.data));
 		element->next_is_discontinuity = FALSE;
 		element->next_sample += output_length;
-		element->output_timestamp += (GstClockTime) output_length *GST_SECOND / element->sample_rate;
 	}
 
 	/*
@@ -1143,7 +1141,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	element->next_is_discontinuity = FALSE;
 	element->next_sample = 0;
-	element->output_timestamp = 0;
+	element->segment_start = 0;
 
 	element->U = NULL;
 	element->S = NULL;
