@@ -91,7 +91,7 @@ typedef struct {
 	LALUnit sample_units;
 	gboolean next_is_discontinuity;
 	unsigned long next_sample;
-	GstClockTime adapter_head_timestamp;
+	GstClockTime segment_start;
 
 	double zero_pad_seconds;
 	double fft_length_seconds;
