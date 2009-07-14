@@ -157,8 +157,6 @@ static gint control_state(GSTLALGate *element, GstClockTime t)
 	if(t < GST_BUFFER_TIMESTAMP(element->control_buf) || element->control_end <= t)
 		return -1;
 
-	/* FIXME:  maybe, instead, this should be
-	sample = gst_util_uint64_scale_int(t, element->control_rate, GST_SECOND) - GST_BUFFER_OFFSET(element->control_buf); */
 	sample = gst_util_uint64_scale_int(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
 
 	return fabs(element->control_sample_func(element, sample)) >= element->threshold;
@@ -512,7 +510,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 			/*
 			 * only the first subbuffer of a buffer flagged as
-			 * discontinuous is a discontinuity.
+			 * a discontinuity is a discontinuity.
 			 */
 
 			if(start)
@@ -520,7 +518,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 			/*
 			 * if control input was below threshold or
-			 * unavailable flag buffer as silence.
+			 * unavailable then flag buffer as silence.
 			 */
 
 			if(state <= 0)
