@@ -555,8 +555,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 * get buffers upto the desired end offset.
 	 */
 
-	buf = gstlal_collect_pads_take_buffer(pads, element->snrcollectdata, earliest_input_offset_end);
-	orthosnrbuf = gstlal_collect_pads_take_buffer(pads, element->orthosnrcollectdata, earliest_input_offset_end);
+	buf = gstlal_collect_pads_take_buffer(pads, element->snrcollectdata, earliest_input_offset_end, element->rate, element->segment.start);
+	orthosnrbuf = gstlal_collect_pads_take_buffer(pads, element->orthosnrcollectdata, earliest_input_offset_end, element->rate, element->segment.start);
 
 	/*
 	 * NULL means EOS.

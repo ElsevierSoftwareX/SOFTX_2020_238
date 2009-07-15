@@ -193,8 +193,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
    * get buffers upto the desired end offset.
    */
 
-  snrbuf = gstlal_collect_pads_take_buffer(pads, element->snrcollectdata, earliest_input_offset_end);
-  chisqbuf = gstlal_collect_pads_take_buffer(pads, element->chisqcollectdata, earliest_input_offset_end);
+  snrbuf = gstlal_collect_pads_take_buffer(pads, element->snrcollectdata, earliest_input_offset_end, element->rate, element->segment.start);
+  chisqbuf = gstlal_collect_pads_take_buffer(pads, element->chisqcollectdata, earliest_input_offset_end, element->rate, element->segment.start);
 
   /*
    * NULL means EOS.
