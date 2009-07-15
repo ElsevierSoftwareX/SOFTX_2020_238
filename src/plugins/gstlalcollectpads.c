@@ -68,11 +68,6 @@ static gboolean gstlal_collect_pads_sink_event(GstPad *pad, GstEvent *event)
 
 	switch (GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT:
-		/*
-		 * flag the offset_offset as invalid to force a resync
-		 */
-
-		data->offset_offset_valid = FALSE;
 		break;
 
 	default:
@@ -123,8 +118,6 @@ GstLALCollectData *gstlal_collect_pads_add_pad_full(GstCollectPads *pads, GstPad
 	 */
 
 	data->bytes_per_sample = 0;
-	data->offset_offset_valid = FALSE;
-	data->offset_offset = 0;
 
 	/*
 	 * FIXME: hacked way to override/extend the event function of
@@ -269,6 +262,20 @@ GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads)
  */
 
 
+static gint64 compute_offset_offset(GstBuffer *buf, gint rate, GstClockTime output_timestamp_at_zero_offset)
+{
+	/*
+	 * subtract from buffer's offset in the output stream from this
+	 * buffer's offset in the input stream.
+	 */
+
+	if(GST_BUFFER_TIMESTAMP(buf) >= output_timestamp_at_zero_offset)
+		return GST_BUFFER_OFFSET(buf) - gst_util_uint64_scale_int(GST_BUFFER_TIMESTAMP(buf) - output_timestamp_at_zero_offset, rate, GST_SECOND);
+	else
+		return GST_BUFFER_OFFSET(buf) + gst_util_uint64_scale_int(output_timestamp_at_zero_offset - GST_BUFFER_TIMESTAMP(buf), rate, GST_SECOND);
+}
+
+
 /* FIXME:  it would be nice not to have to pass in the rate and timestamp
  * metadata. */
 
@@ -295,6 +302,7 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 	for(collectdatalist = pads->data; collectdatalist; collectdatalist = g_slist_next(collectdatalist)) {
 		GstLALCollectData *data = collectdatalist->data;
 		GstBuffer *buf;
+		gint64 offset_offset;
 		gint64 this_offset;
 		gint64 this_offset_end;
 
@@ -315,7 +323,7 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 		}
 
 		/*
-		 * require a valid start offset
+		 * require a valid start offset and timestamp
 		 */
 
 		if(!GST_BUFFER_OFFSET_IS_VALID(buf)) {
@@ -324,61 +332,27 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 			return FALSE;
 		}
 
+		if(!GST_BUFFER_TIMESTAMP_IS_VALID(buf)) {
+			GST_LOG("%p: input buffer does not have valid timestamp\n", data);
+			gst_buffer_unref(buf);
+			return FALSE;
+		}
+
 		/*
-		 * (re)set this pad's offset_offset if this buffer is
-		 * flagged as a discontinuity and we have not yet extracted
-		 * data from it, or if this pad's offset_offset is not yet
-		 * valid.
+		 * compute this pad's offset_offset
 		 */
 
-		if((GST_BUFFER_IS_DISCONT(buf) && !data->as_gstcollectdata.pos) || !data->offset_offset_valid) {
-			/*
-			 * require a valid timestamp
-			 */
-
-			if(!GST_BUFFER_TIMESTAMP_IS_VALID(buf)) {
-				GST_LOG("%p: input buffer does not have valid timestamp\n", data);
-				data->offset_offset_valid = FALSE;
-				gst_buffer_unref(buf);
-				return FALSE;
-			}
-
-			/*
-			 * this buffer's offset in the input stream.
-			 */
-
-			data->offset_offset = GST_BUFFER_OFFSET(buf);
-
-			/*
-			 * subtract from that this buffer's offset in the
-			 * output stream.
-			 */
-
-			if(GST_BUFFER_TIMESTAMP(buf) >= output_timestamp_at_zero_offset)
-				data->offset_offset -= gst_util_uint64_scale_int(GST_BUFFER_TIMESTAMP(buf) - output_timestamp_at_zero_offset, rate, GST_SECOND);
-			else
-				data->offset_offset += gst_util_uint64_scale_int(output_timestamp_at_zero_offset - GST_BUFFER_TIMESTAMP(buf), rate, GST_SECOND);
-
-			/*
-			 * offset_offset is now valid.
-			 */
-
-			data->offset_offset_valid = TRUE;
-		} else {
-			/* FIXME:  add a sanity check? that the current
-			 * offset_offset does not disagree with the
-			 * buffer's timestamp by more than X samples? */
-		}
+		offset_offset = compute_offset_offset(buf, rate, output_timestamp_at_zero_offset);
 
 		/*
 		 * compute this buffer's start and end offsets in the
 		 * output stream
 		 */
 
-		this_offset = (gint64) GST_BUFFER_OFFSET(buf) + data->as_gstcollectdata.pos / data->bytes_per_sample - data->offset_offset;
+		this_offset = (gint64) GST_BUFFER_OFFSET(buf) + data->as_gstcollectdata.pos / data->bytes_per_sample - offset_offset;
 
 		if(GST_BUFFER_OFFSET_END_IS_VALID(buf)) {
-			this_offset_end = (gint64) GST_BUFFER_OFFSET_END(buf) - data->offset_offset;
+			this_offset_end = (gint64) GST_BUFFER_OFFSET_END(buf) - offset_offset;
 		} else {
 			/*
 			 * end offset is not valid, but start offset is
@@ -387,7 +361,7 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 			 * sample
 			 */
 
-			this_offset_end = (gint64) (GST_BUFFER_OFFSET(buf) + GST_BUFFER_SIZE(buf) / data->bytes_per_sample) - data->offset_offset;
+			this_offset_end = (gint64) GST_BUFFER_OFFSET(buf) + GST_BUFFER_SIZE(buf) / data->bytes_per_sample - offset_offset;
 		}
 		gst_buffer_unref(buf);
 
@@ -446,19 +420,11 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
  */
 
 
-GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *pads, GstLALCollectData *data, guint64 offset_end)
+GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *pads, GstLALCollectData *data, guint64 offset_end, gint rate, GstClockTime output_timestamp_at_zero_offset)
 {
 	GstBuffer *buf;
 	guint64 dequeued_offset;
 	guint64 length;
-
-	/*
-	 * can't do anything unless we understand the relationship between
-	 * this input stream's offsets and the output stream's offsets
-	 */
-
-	if(!data->offset_offset_valid)
-		return NULL;
 
 	/*
 	 * retrieve the offset (in the output stream) of the next buffer to
@@ -471,7 +437,7 @@ GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *pads, GstLALCollectDa
 		 * EOS
 		 */
 		return NULL;
-	dequeued_offset = GST_BUFFER_OFFSET(buf) + data->as_gstcollectdata.pos / data->bytes_per_sample - data->offset_offset;
+	dequeued_offset = GST_BUFFER_OFFSET(buf) + data->as_gstcollectdata.pos / data->bytes_per_sample - compute_offset_offset(buf, rate, output_timestamp_at_zero_offset);
 	gst_buffer_unref(buf);
 
 	/*

@@ -54,16 +54,6 @@ typedef struct _GstLALCollectData {
 	 */
 
 	guint bytes_per_sample;
-
-	/*
-	 * offset_offset is the difference between this input stream's
-	 * offset counter and the adder's output stream's offset counter
-	 * for the same timestamp in both streams: offset_offset =
-	 * intput_offset - output_offset @ a common timestamp
-	 */
-
-	gboolean offset_offset_valid;
-	gint64 offset_offset;
 } GstLALCollectData;
 
 
@@ -78,7 +68,7 @@ gboolean gstlal_collect_pads_remove_pad(GstCollectPads *, GstPad *);
 void gstlal_collect_pads_set_bytes_per_sample(GstPad *, guint);
 GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads);
 gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *, guint64 *, guint64 *, gint, GstClockTime);
-GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *, GstLALCollectData *, guint64);
+GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *, GstLALCollectData *, guint64, gint, GstClockTime);
 
 
 G_END_DECLS
