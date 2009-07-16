@@ -655,7 +655,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
 	GstFlowReturn result = GST_FLOW_OK;
 	int output_length;
-	/*int i; */
 
 	/*
 	 * Now that we know the sample rate, construct orthogonal basis for
@@ -744,27 +743,31 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		if(element->t_start) {
-			result = gst_pad_alloc_buffer(element->sumsquarespad, element->next_sample, (size_t) round(element->t_start * element->sample_rate) * sizeof(*element->U->data), GST_PAD_CAPS(element->sumsquarespad), &zeros);
+			guint64 zero_pad_samples = round(element->t_start * element->sample_rate);
+
+			result = gst_pad_alloc_buffer(element->sumsquarespad, element->next_sample, zero_pad_samples * sizeof(*element->U->data), GST_PAD_CAPS(element->sumsquarespad), &zeros);
 			if(result != GST_FLOW_OK)
 				goto done;
 			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
 			gst_buffer_copy_metadata(zeros, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 			GST_BUFFER_FLAG_SET(zeros, GST_BUFFER_FLAG_GAP);
-			GST_BUFFER_OFFSET_END(zeros) = element->next_sample + (size_t) round(element->t_start * element->sample_rate);
-			GST_BUFFER_DURATION(zeros) = (GstClockTime) round(element->t_start * GST_SECOND);
+			GST_BUFFER_OFFSET_END(zeros) = element->next_sample + zero_pad_samples;
+			GST_BUFFER_TIMESTAMP(zeros) = element->segment_start + (GstClockTime) gst_util_uint64_scale_int(element->next_sample, GST_SECOND, element->sample_rate);
+			GST_BUFFER_DURATION(zeros) = gst_util_uint64_scale_int(GST_BUFFER_OFFSET_END(zeros), GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(GST_BUFFER_OFFSET(zeros), GST_SECOND, element->sample_rate);
 
 			result = gst_pad_push(element->sumsquarespad, zeros);
 			if(result != GST_FLOW_OK)
 				goto done;
 
-			result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, num_templates(element) * (size_t) round(element->t_start * element->sample_rate) * sizeof(*element->U->data), GST_PAD_CAPS(element->srcpad), &zeros);
+			result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, num_templates(element) * zero_pad_samples * sizeof(*element->U->data), GST_PAD_CAPS(element->srcpad), &zeros);
 			if(result != GST_FLOW_OK)
 				goto done;
 			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
 			gst_buffer_copy_metadata(zeros, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 			GST_BUFFER_FLAG_SET(zeros, GST_BUFFER_FLAG_GAP);
-			GST_BUFFER_OFFSET_END(zeros) = element->next_sample + (size_t) round(element->t_start * element->sample_rate);
-			GST_BUFFER_DURATION(zeros) = (GstClockTime) round(element->t_start * GST_SECOND);
+			GST_BUFFER_OFFSET_END(zeros) = element->next_sample + zero_pad_samples;
+			GST_BUFFER_TIMESTAMP(zeros) = element->segment_start + (GstClockTime) gst_util_uint64_scale_int(element->next_sample, GST_SECOND, element->sample_rate);
+			GST_BUFFER_DURATION(zeros) = gst_util_uint64_scale_int(GST_BUFFER_OFFSET_END(zeros), GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(GST_BUFFER_OFFSET(zeros), GST_SECOND, element->sample_rate);
 
 			result = gst_pad_push(element->srcpad, zeros);
 			if(result != GST_FLOW_OK)
@@ -775,7 +778,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 */
 
 			element->next_is_discontinuity = FALSE;
-			element->next_sample += (size_t) round(element->t_start * element->sample_rate);
+			element->next_sample += zero_pad_samples;
 		}
 
 		/*
@@ -876,7 +879,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 		GST_BUFFER_OFFSET_END(orthogonal_snr_sum_squares_buf) = GST_BUFFER_OFFSET_END(orthogonal_snr_buf) = GST_BUFFER_OFFSET(orthogonal_snr_buf) + output_length;
 		GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) = GST_BUFFER_TIMESTAMP(orthogonal_snr_buf) = element->segment_start + (GstClockTime) gst_util_uint64_scale_int(element->next_sample, GST_SECOND, element->sample_rate);
-		GST_BUFFER_DURATION(orthogonal_snr_sum_squares_buf) = GST_BUFFER_DURATION(orthogonal_snr_buf) = (GstClockTime) (gst_util_uint64_scale_int(element->next_sample + output_length, GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(element->next_sample, GST_SECOND, element->sample_rate));
+		GST_BUFFER_DURATION(orthogonal_snr_sum_squares_buf) = GST_BUFFER_DURATION(orthogonal_snr_buf) = (GstClockTime) (gst_util_uint64_scale_int(GST_BUFFER_OFFSET_END(orthogonal_snr_buf), GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(GST_BUFFER_OFFSET(orthogonal_snr_buf), GST_SECOND, element->sample_rate));
 
 		/*
 		 * Assemble the orthogonal SNR time series as the columns
