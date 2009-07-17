@@ -268,8 +268,8 @@ GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads)
 static gint64 compute_offset_offset(GstBuffer *buf, gint rate, GstClockTime output_timestamp_at_zero_offset)
 {
 	/*
-	 * subtract from buffer's offset in the output stream from this
-	 * buffer's offset in the input stream.
+	 * subtract buffer's offset in the output stream from its offset in
+	 * the input stream.
 	 */
 
 	/* FIXME:  the floating-point versions work better than the scale
