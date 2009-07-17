@@ -822,7 +822,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * How many SNR samples can we construct from the contents
 		 * of the adapter?  The +1 is because when there is 1
 		 * template-length of data in the adapter then we can
-		 * produce 1 SNR sample, not 0.
+		 * produce 1 SNR sample, not 0.  Cast to int to allow a
+		 * negative result.
 		 */
 
 		output_length = (int) (gst_adapter_available(element->adapter) / sizeof(*time_series.vector.data)) - template_length(element) + 1;
