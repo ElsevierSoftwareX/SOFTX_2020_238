@@ -577,7 +577,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	if(GST_BUFFER_OFFSET(buf) != GST_BUFFER_OFFSET(orthosnrbuf) || GST_BUFFER_OFFSET_END(buf) != GST_BUFFER_OFFSET_END(orthosnrbuf)) {
 		gst_buffer_unref(buf);
 		gst_buffer_unref(orthosnrbuf);
-		GST_ERROR_OBJECT(element, "misaligned buffer boundaries");
+		GST_ERROR_OBJECT(element, "misaligned buffer boundaries:  requested offsets upto %lu, got snr offsets %ld--%ld and ortho snr offsets %ld--%ld", earliest_input_offset_end, GST_BUFFER_OFFSET(buf), GST_BUFFER_OFFSET_END(buf), GST_BUFFER_OFFSET(orthosnrbuf), GST_BUFFER_OFFSET_END(orthosnrbuf));
 		return GST_FLOW_ERROR;
 	}
 
