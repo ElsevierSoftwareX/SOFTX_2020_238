@@ -30,6 +30,9 @@
  */
 
 
+#include <math.h>
+
+
 #include <gst/gst.h>
 #include <gst/base/gstcollectpads.h>
 #include "gstlalcollectpads.h"
@@ -269,10 +272,14 @@ static gint64 compute_offset_offset(GstBuffer *buf, gint rate, GstClockTime outp
 	 * buffer's offset in the input stream.
 	 */
 
+	/* FIXME:  the floating-point versions work better than the scale
+	 * functions, should I tell the gstreamer people? */
 	if(GST_BUFFER_TIMESTAMP(buf) >= output_timestamp_at_zero_offset)
-		return GST_BUFFER_OFFSET(buf) - gst_util_uint64_scale_int(GST_BUFFER_TIMESTAMP(buf) - output_timestamp_at_zero_offset, rate, GST_SECOND);
+		return GST_BUFFER_OFFSET(buf) - (gint64) round((double) (GST_BUFFER_TIMESTAMP(buf) - output_timestamp_at_zero_offset) * rate / GST_SECOND);
+		/*return GST_BUFFER_OFFSET(buf) - gst_util_uint64_scale_int(GST_BUFFER_TIMESTAMP(buf) - output_timestamp_at_zero_offset, rate, GST_SECOND);*/
 	else
-		return GST_BUFFER_OFFSET(buf) + gst_util_uint64_scale_int(output_timestamp_at_zero_offset - GST_BUFFER_TIMESTAMP(buf), rate, GST_SECOND);
+		return GST_BUFFER_OFFSET(buf) + (gint64) round((double) (output_timestamp_at_zero_offset - GST_BUFFER_TIMESTAMP(buf)) * rate / GST_SECOND);
+		/*return GST_BUFFER_OFFSET(buf) + gst_util_uint64_scale_int(output_timestamp_at_zero_offset - GST_BUFFER_TIMESTAMP(buf), rate, GST_SECOND);*/
 }
 
 
