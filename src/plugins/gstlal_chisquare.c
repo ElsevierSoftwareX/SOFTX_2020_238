@@ -33,6 +33,7 @@
  */
 
 
+#include <complex.h>
 #include <math.h>
 #include <string.h>
 
@@ -645,17 +646,18 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		double *data = &((double *) GST_BUFFER_DATA(buf))[numchannels * sample];
 		const double *orthodata = &((const double *) GST_BUFFER_DATA(orthosnrbuf))[numorthochannels * sample];
 		for(channel = 0; channel < numchannels; channel+=2) {
-			double snr1 = data[channel];
-                        double snr2 = data[channel+1];
-			double snr = sqrt(snr1*snr1+snr2*snr2);
-			double arg = atan2(snr2, snr1);
+			complex double csnr = data[channel] + I * data[channel + 1];
+			double snr = cabs(csnr);
+			double arg = carg(csnr);
+			double cos_arg = cos(arg);
+			double sin_arg = sin(arg);
+
 			data[channel] = 0;
-			
 			for(ortho_channel = chisq_start; ortho_channel < chisq_end; ortho_channel+=chisq_stride) {
-				double mixing_coefficient1 = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel);
-				double mixing_coefficient2 = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel+1);
-				double mc = mixing_coefficient1*cos(arg)+mixing_coefficient1*sin(arg);
-				data[channel] += pow( ( snr * mc - orthodata[ortho_channel] ), 2.0 );
+				double mixing_coefficient_re = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel);
+				double mixing_coefficient_im = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel+1);
+				double mc = mixing_coefficient_re * cos_arg + mixing_coefficient_im * sin_arg;
+				data[channel] += pow((snr * mc - orthodata[ortho_channel]), 2.0);
 			}
 			data[channel+1] = data[channel];
 		}
