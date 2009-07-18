@@ -708,8 +708,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * be pushed downstream? */
 		gst_adapter_clear(element->adapter);
 		element->next_is_discontinuity = TRUE;
-		element->next_sample = GST_BUFFER_OFFSET(sinkbuf);
 		element->segment_start = GST_BUFFER_TIMESTAMP(sinkbuf);
+		element->offset0 = GST_BUFFER_OFFSET(sinkbuf);
+		element->offset = 0;
 	}
 
 	gst_adapter_push(element->adapter, sinkbuf);
@@ -736,7 +737,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		memcpy(element->tdworkspace->data->data, gst_adapter_peek(element->adapter, element->tdworkspace->data->length * sizeof(*element->tdworkspace->data->data)), element->tdworkspace->data->length * sizeof(*element->tdworkspace->data->data));
 		XLALINT8NSToGPS(&element->tdworkspace->epoch, element->segment_start);
-		XLALGPSAdd(&element->tdworkspace->epoch, (double) element->next_sample / element->sample_rate);
+		XLALGPSAdd(&element->tdworkspace->epoch, (double) element->offset / element->sample_rate);
 
 		/*
 		 * Transform to frequency domain
@@ -855,7 +856,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Get a buffer from the downstream peer.
 		 */
 
-		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample + zero_pad, element->tail->length * sizeof(*element->tdworkspace->data->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
+		result = gst_pad_alloc_buffer(element->srcpad, element->offset0 + element->offset + zero_pad, element->tail->length * sizeof(*element->tdworkspace->data->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
 		if(result != GST_FLOW_OK)
 			goto done;
 		if(element->next_is_discontinuity) {
@@ -863,8 +864,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			element->next_is_discontinuity = FALSE;
 		}
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + element->tail->length;
-		GST_BUFFER_TIMESTAMP(srcbuf) = element->segment_start + gst_util_uint64_scale_int(element->next_sample + zero_pad, GST_SECOND, element->sample_rate);
-		GST_BUFFER_DURATION(srcbuf) = gst_util_uint64_scale_int(element->next_sample + zero_pad + element->tail->length, GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(element->next_sample + zero_pad, GST_SECOND, element->sample_rate);
+		GST_BUFFER_TIMESTAMP(srcbuf) = element->segment_start + gst_util_uint64_scale_int(element->offset + zero_pad, GST_SECOND, element->sample_rate);
+		GST_BUFFER_DURATION(srcbuf) = gst_util_uint64_scale_int(element->offset + zero_pad + element->tail->length, GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(element->offset + zero_pad, GST_SECOND, element->sample_rate);
 
 		/*
 		 * Copy the first half of the time series into the buffer,
@@ -899,7 +900,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		gst_adapter_flush(element->adapter, element->tail->length * sizeof(*element->tdworkspace->data->data));
-		element->next_sample += element->tail->length;
+		element->offset += element->tail->length;
 	}
 
 	/*
@@ -1059,8 +1060,9 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	/* internal data */
 	element->adapter = gst_adapter_new();
 	element->next_is_discontinuity = FALSE;
-	element->next_sample = 0;
 	element->segment_start = 0;
+	element->offset0 = 0;
+	element->offset = 0;
 	element->zero_pad_seconds = DEFAULT_ZERO_PAD_SECONDS;
 	element->fft_length_seconds = DEFAULT_FFT_LENGTH_SECONDS;
 	element->psdmode = DEFAULT_PSDMODE;

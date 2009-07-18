@@ -732,10 +732,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * with the input buffer.
 		 */
 
-		if(GST_BUFFER_OFFSET_IS_VALID(sinkbuf))
-			element->next_sample = GST_BUFFER_OFFSET(sinkbuf);
-		if(GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf))
-			element->segment_start = GST_BUFFER_TIMESTAMP(sinkbuf);
+		if(!GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf)) {
+			GST_ERROR_OBJECT(element, "buffer %p has invalid timestamp or offset", sinkbuf);
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
+		element->segment_start = GST_BUFFER_TIMESTAMP(sinkbuf);
+		element->offset0 = GST_BUFFER_OFFSET(sinkbuf);
+		element->offset = 0;
 
 		/*
 		 * Push GAP buffers of zeros out both src pads to pad the
@@ -745,29 +749,30 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		if(element->t_start) {
 			guint64 zero_pad_samples = round(element->t_start * element->sample_rate);
 
-			result = gst_pad_alloc_buffer(element->sumsquarespad, element->next_sample, zero_pad_samples * sizeof(*element->U->data), GST_PAD_CAPS(element->sumsquarespad), &zeros);
+#if 1
+			result = gst_pad_alloc_buffer(element->sumsquarespad, element->offset0 + element->offset, zero_pad_samples * sizeof(*element->U->data), GST_PAD_CAPS(element->sumsquarespad), &zeros);
 			if(result != GST_FLOW_OK)
 				goto done;
 			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
 			gst_buffer_copy_metadata(zeros, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 			GST_BUFFER_FLAG_SET(zeros, GST_BUFFER_FLAG_GAP);
-			GST_BUFFER_OFFSET_END(zeros) = element->next_sample + zero_pad_samples;
-			GST_BUFFER_TIMESTAMP(zeros) = element->segment_start + (GstClockTime) gst_util_uint64_scale_int(element->next_sample, GST_SECOND, element->sample_rate);
-			GST_BUFFER_DURATION(zeros) = gst_util_uint64_scale_int(GST_BUFFER_OFFSET_END(zeros), GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(GST_BUFFER_OFFSET(zeros), GST_SECOND, element->sample_rate);
+			GST_BUFFER_OFFSET_END(zeros) = element->offset0 + element->offset + zero_pad_samples;
+			GST_BUFFER_TIMESTAMP(zeros) = element->segment_start + (GstClockTime) gst_util_uint64_scale_int(element->offset, GST_SECOND, element->sample_rate);
+			GST_BUFFER_DURATION(zeros) = gst_util_uint64_scale_int(element->offset + zero_pad_samples, GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(element->offset, GST_SECOND, element->sample_rate);
 
 			result = gst_pad_push(element->sumsquarespad, zeros);
 			if(result != GST_FLOW_OK)
 				goto done;
 
-			result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, num_templates(element) * zero_pad_samples * sizeof(*element->U->data), GST_PAD_CAPS(element->srcpad), &zeros);
+			result = gst_pad_alloc_buffer(element->srcpad, element->offset0 + element->offset, num_templates(element) * zero_pad_samples * sizeof(*element->U->data), GST_PAD_CAPS(element->srcpad), &zeros);
 			if(result != GST_FLOW_OK)
 				goto done;
 			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
 			gst_buffer_copy_metadata(zeros, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 			GST_BUFFER_FLAG_SET(zeros, GST_BUFFER_FLAG_GAP);
-			GST_BUFFER_OFFSET_END(zeros) = element->next_sample + zero_pad_samples;
-			GST_BUFFER_TIMESTAMP(zeros) = element->segment_start + (GstClockTime) gst_util_uint64_scale_int(element->next_sample, GST_SECOND, element->sample_rate);
-			GST_BUFFER_DURATION(zeros) = gst_util_uint64_scale_int(GST_BUFFER_OFFSET_END(zeros), GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(GST_BUFFER_OFFSET(zeros), GST_SECOND, element->sample_rate);
+			GST_BUFFER_OFFSET_END(zeros) = element->offset0 + element->offset + zero_pad_samples;
+			GST_BUFFER_TIMESTAMP(zeros) = element->segment_start + (GstClockTime) gst_util_uint64_scale_int(element->offset, GST_SECOND, element->sample_rate);
+			GST_BUFFER_DURATION(zeros) = gst_util_uint64_scale_int(element->offset + zero_pad_samples, GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(element->offset, GST_SECOND, element->sample_rate);
 
 			result = gst_pad_push(element->srcpad, zeros);
 			if(result != GST_FLOW_OK)
@@ -778,7 +783,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 */
 
 			element->next_is_discontinuity = FALSE;
-			element->next_sample += zero_pad_samples;
+#endif
+			element->offset += zero_pad_samples;
 		}
 
 		/*
@@ -855,14 +861,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * views.
 		 */
 
-		result = gst_pad_alloc_buffer(element->sumsquarespad, element->next_sample, output_length * sizeof(*orthogonal_snr_sum_squares.vector.data), GST_PAD_CAPS(element->sumsquarespad), &orthogonal_snr_sum_squares_buf);
+		result = gst_pad_alloc_buffer(element->sumsquarespad, element->offset0 + element->offset, output_length * sizeof(*orthogonal_snr_sum_squares.vector.data), GST_PAD_CAPS(element->sumsquarespad), &orthogonal_snr_sum_squares_buf);
 		if(result != GST_FLOW_OK) {
 			goto done;
 		}
 
 		orthogonal_snr_sum_squares = gsl_vector_view_array((double *) GST_BUFFER_DATA(orthogonal_snr_sum_squares_buf), output_length);
 
-		result = gst_pad_alloc_buffer(element->srcpad, element->next_sample, num_templates(element) * output_length * sizeof(*orthogonal_snr.matrix.data), GST_PAD_CAPS(element->srcpad), &orthogonal_snr_buf);
+		result = gst_pad_alloc_buffer(element->srcpad, element->offset0 + element->offset, num_templates(element) * output_length * sizeof(*orthogonal_snr.matrix.data), GST_PAD_CAPS(element->srcpad), &orthogonal_snr_buf);
 		if(result != GST_FLOW_OK) {
 			gst_buffer_unref(orthogonal_snr_sum_squares_buf);
 			goto done;
@@ -879,8 +885,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			GST_BUFFER_FLAG_SET(orthogonal_snr_buf, GST_BUFFER_FLAG_DISCONT);
 		}
 		GST_BUFFER_OFFSET_END(orthogonal_snr_sum_squares_buf) = GST_BUFFER_OFFSET_END(orthogonal_snr_buf) = GST_BUFFER_OFFSET(orthogonal_snr_buf) + output_length;
-		GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) = GST_BUFFER_TIMESTAMP(orthogonal_snr_buf) = element->segment_start + (GstClockTime) gst_util_uint64_scale_int(element->next_sample, GST_SECOND, element->sample_rate);
-		GST_BUFFER_DURATION(orthogonal_snr_sum_squares_buf) = GST_BUFFER_DURATION(orthogonal_snr_buf) = (GstClockTime) (gst_util_uint64_scale_int(GST_BUFFER_OFFSET_END(orthogonal_snr_buf), GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(GST_BUFFER_OFFSET(orthogonal_snr_buf), GST_SECOND, element->sample_rate));
+		GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) = GST_BUFFER_TIMESTAMP(orthogonal_snr_buf) = element->segment_start + (GstClockTime) gst_util_uint64_scale_int(element->offset, GST_SECOND, element->sample_rate);
+		GST_BUFFER_DURATION(orthogonal_snr_sum_squares_buf) = GST_BUFFER_DURATION(orthogonal_snr_buf) = (GstClockTime) (gst_util_uint64_scale_int(element->offset + output_length, GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(element->offset, GST_SECOND, element->sample_rate));
 
 		/*
 		 * Assemble the orthogonal SNR time series as the columns
@@ -922,14 +928,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		gst_adapter_flush(element->adapter, output_length * sizeof(*time_series.vector.data));
 		element->next_is_discontinuity = FALSE;
-		element->next_sample += output_length;
+		element->offset += output_length;
 	}
 
 	/*
 	 * Done
 	 */
 
-      done:
+done:
 	gst_object_unref(element);
 	return result;
 }
@@ -1144,8 +1150,9 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->snr_length = DEFAULT_SNR_LENGTH;
 
 	element->next_is_discontinuity = FALSE;
-	element->next_sample = 0;
 	element->segment_start = 0;
+	element->offset0 = 0;
+	element->offset = 0;
 
 	element->U = NULL;
 	element->S = NULL;

@@ -90,8 +90,9 @@ typedef struct {
 	int sample_rate;
 	LALUnit sample_units;
 	gboolean next_is_discontinuity;
-	unsigned long next_sample;
 	GstClockTime segment_start;
+	guint64 offset0;
+	guint64 offset;
 
 	double zero_pad_seconds;
 	double fft_length_seconds;
