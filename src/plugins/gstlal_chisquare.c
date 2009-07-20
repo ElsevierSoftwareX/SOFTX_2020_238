@@ -511,7 +511,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		}
 		element->segment = *segment;
 		gst_segment_free(segment);
-		element->segment_position = 0;
+		element->offset = GST_BUFFER_OFFSET_NONE;
 
 		event = gst_event_new_new_segment_full(FALSE, element->segment.rate, 1.0, GST_FORMAT_TIME, element->segment.start, element->segment.stop, element->segment.start);
 		if(!event) {
@@ -547,8 +547,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 * capabilities here.
 	 */
 
-	if(earliest_input_offset < element->segment_position) {
-		GST_ERROR_OBJECT(element, "detected time reversal in at least one input stream:  expected nothing earlier than offset %llu, found sample at offset %llu", (unsigned long long) element->segment_position, (unsigned long long) earliest_input_offset);
+	if((element->offset != GST_BUFFER_OFFSET_NONE) && (earliest_input_offset < element->offset)) {
+		GST_ERROR_OBJECT(element, "detected time reversal in at least one input stream:  expected nothing earlier than offset %lu, found sample at offset %lu", element->offset, earliest_input_offset);
 		return GST_FLOW_ERROR;
 	}
 
@@ -578,7 +578,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	if(GST_BUFFER_OFFSET(buf) != GST_BUFFER_OFFSET(orthosnrbuf) || GST_BUFFER_OFFSET_END(buf) != GST_BUFFER_OFFSET_END(orthosnrbuf)) {
 		gst_buffer_unref(buf);
 		gst_buffer_unref(orthosnrbuf);
-		GST_ERROR_OBJECT(element, "misaligned buffer boundaries:  requested offsets upto %lu, got snr offsets %ld--%ld and ortho snr offsets %ld--%ld", earliest_input_offset_end, GST_BUFFER_OFFSET(buf), GST_BUFFER_OFFSET_END(buf), GST_BUFFER_OFFSET(orthosnrbuf), GST_BUFFER_OFFSET_END(orthosnrbuf));
+		GST_ERROR_OBJECT(element, "misaligned buffer boundaries:  requested offsets upto %lu, got snr offsets %lu--%lu and ortho snr offsets %lu--%lu", earliest_input_offset_end, GST_BUFFER_OFFSET(buf), GST_BUFFER_OFFSET_END(buf), GST_BUFFER_OFFSET(orthosnrbuf), GST_BUFFER_OFFSET_END(orthosnrbuf));
 		return GST_FLOW_ERROR;
 	}
 
@@ -589,6 +589,13 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	buf = gst_buffer_make_writable(buf);
 
 	/*
+	 * check for discontinuity
+	 */
+
+	if((element->offset == GST_BUFFER_OFFSET_NONE) || (element->offset != GST_BUFFER_OFFSET(buf)))
+		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
+
+	/*
 	 * Gap --> pass-through
 	 */
 
@@ -596,6 +603,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		memset(GST_BUFFER_DATA(buf), 0, GST_BUFFER_SIZE(buf));
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
 		gst_buffer_unref(orthosnrbuf);
+		element->offset = GST_BUFFER_OFFSET_END(buf);
 		return gst_pad_push(element->srcpad, buf);
 	}
 
@@ -669,6 +677,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 */
 
 	gst_buffer_unref(orthosnrbuf);
+	element->offset = GST_BUFFER_OFFSET_END(buf);
 	return gst_pad_push(element->srcpad, buf);
 
 eos:
@@ -755,7 +764,7 @@ static GstStateChangeReturn change_state(GstElement *element, GstStateChange tra
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		chisquare->segment_pending = TRUE;
 		gst_segment_init(&chisquare->segment, GST_FORMAT_UNDEFINED);
-		chisquare->segment_position = 0;
+		chisquare->offset = GST_BUFFER_OFFSET_NONE;
 		gst_collect_pads_start(chisquare->collect);
 		break;
 

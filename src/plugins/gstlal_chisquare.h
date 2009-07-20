@@ -82,7 +82,7 @@ typedef struct {
 	/* counters to keep track of timestamps. */
 	gboolean segment_pending;
 	GstSegment segment;
-	guint64 segment_position;
+	guint64 offset;
 } GSTLALChiSquare;
 
 
