@@ -73,7 +73,7 @@ typedef struct {
 
 	gboolean segment_pending;
 	GstSegment segment;
-	guint64 segment_position;
+	guint64 offset;
 
 	int rate;
 
