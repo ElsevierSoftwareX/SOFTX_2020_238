@@ -57,18 +57,18 @@ class Bank(object):
 			self.rate = rate
 			self.start = start
 			self.end = end
-			if blocksize is not None:
-				self.blocksize = blocksize
-			else:
-				# 1 second
+			self.blocksize = blocksize
+			if self.blocksize is None:
+				# default = 1 second
 				self.blocksize = rate
 
-	def __init__(self, template_bank_filename, bank_fragments, gate_threshold, snr_threshold):
+	def __init__(self, template_bank_filename, bank_fragments, gate_threshold, snr_threshold, logname = None):
 		self.template_bank_filename = template_bank_filename
 		self.bank_fragments = bank_fragments
 		self.filter_length = max(fragment.end for fragment in bank_fragments)
 		self.gate_threshold = gate_threshold
 		self.snr_threshold = snr_threshold
+		self.logname = logname
 
 	def get_rates(self):
 		return set(bank_fragment.rate for bank_fragment in self.bank_fragments)
