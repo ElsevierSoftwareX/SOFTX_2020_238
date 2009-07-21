@@ -74,18 +74,11 @@ class Bank(object):
 		return set(bank_fragment.rate for bank_fragment in self.bank_fragments)
 
 
-class Detectors(dict):
-	class DetectorData(object):
-		def __init__(self, frame_cache, channel, reference_psd_filename):
-			self.frame_cache = frame_cache
-			self.channel = channel
-			self.reference_psd_filename = reference_psd_filename
-
-	def __new__(cls, initializer, *args, **kwargs):
-		return dict.__new__(cls, initializer)
-
-	def __init__(self, initializer = {}, block_size = 16384 * 16 * 8):
-		dict.__init__(self, initializer)
+class DetectorData(object):
+	def __init__(self, frame_cache, channel, reference_psd_filename, block_size = 16384 * 16 * 8):
+		self.frame_cache = frame_cache
+		self.channel = channel
+		self.reference_psd_filename = reference_psd_filename
 		# default block_size = 16384 samples/second * 16 seconds *
 		# 8 bytes/sample
 		self.block_size = block_size
@@ -100,12 +93,12 @@ class Detectors(dict):
 #
 
 
-def mkframesrc(pipeline, instrument, detectors):
+def mkframesrc(pipeline, instrument, detector):
 	elem = gst.element_factory_make("lal_framesrc")
-	elem.set_property("blocksize", detectors.block_size)
-	elem.set_property("location", detectors[instrument].frame_cache)
+	elem.set_property("blocksize", detector.block_size)
+	elem.set_property("location", detector.frame_cache)
 	elem.set_property("instrument", instrument)
-	elem.set_property("channel-name", detectors[instrument].channel)
+	elem.set_property("channel-name", detector.channel)
 	pipeline.add(elem)
 	return elem
 
@@ -116,13 +109,13 @@ def mkcapsfilter(pipeline, src, caps):
 	src.link(elem)
 	return elem
 
-def mkfakesrc(pipeline, instrument, detectors):
+def mkfakesrc(pipeline, instrument, detector):
 	elem = gst.element_factory_make("audiotestsrc")
-	elem.set_property("samplesperbuffer", detectors.block_size / 8)
+	elem.set_property("samplesperbuffer", detector.block_size / 8)
 	elem.set_property("wave", 9)
 	elem.set_property("volume", 1e-20)
 	pipeline.add(elem)
-	return mkcapsfilter(pipeline, elem, "audio/x-raw-float, width=64, rate=16384, instrument=%s, channel_name=%s, units=strain" % (instrument, detectors[instrument].channel))
+	return mkcapsfilter(pipeline, elem, "audio/x-raw-float, width=64, rate=16384, instrument=%s, channel_name=%s, units=strain" % (instrument, detector.channel))
 
 def mkprogressreport(pipeline, src, name):
 	elem = gst.element_factory_make("progressreport", name)
@@ -333,8 +326,8 @@ def mkcontrolsnksrc(pipeline, rate, progress_report = False, suffix = None):
 	return snk, src
 
 
-def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = None, progress_report = False, control_snksrc = None):
-	head = mkframesrc(pipeline, instrument, detectors)
+def mkLLOIDsingle(pipeline, instrument, detector, banks, injection_filename = None, progress_report = False, control_snksrc = None):
+	head = mkframesrc(pipeline, instrument, detector)
 	if progress_report:
 		head = mkprogressreport(pipeline, head, "progress_src_%s" % instrument)
 
@@ -375,7 +368,7 @@ def mkLLOIDsingle(pipeline, instrument, detectors, banks, injection_filename = N
 				mkqueue(pipeline, hoft[bank_fragment.rate], max_size_time = int(bank.filter_length) * 1000000000),
 				bank,
 				bank_fragment,
-				detectors[instrument].reference_psd_filename,
+				detector.reference_psd_filename,
 				control_snksrc[0],
 				control_snksrc[1]
 			)
@@ -417,11 +410,11 @@ def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filenam
 	#pipeline.add(nto1)
 	#mktriggerxmlwritersink(pipeline, nto1, trigger_filename)
 
-	for instrument in detectors.keys():
+	for instrument in detectors:
 		for head in mkLLOIDsingle(
 			pipeline,
 			instrument,
-			detectors,
+			detectors[instrument],
 			banks,
 			injection_filename = injection_filename,
 			progress_report = progress_report,
@@ -506,9 +499,9 @@ mainloop = gobject.MainLoop()
 
 mkLLOIDmulti(
 	pipeline,
-	detectors = Detectors({
-		options.instrument: Detectors.DetectorData(options.frame_cache, "LSC-STRAIN", reference_psd_filename = "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt")
-	}),
+	detectors = {
+		options.instrument: DetectorData(options.frame_cache, "LSC-STRAIN", reference_psd_filename = "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt")
+	},
 	banks = [
 		Bank(
 			template_bank_filename,
