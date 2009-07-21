@@ -626,11 +626,12 @@ static gboolean gst_adder_query(GstPad * pad, GstQuery * query)
 		switch(format) {
 		case GST_FORMAT_TIME:
 			/* FIXME, bring to stream time, might be tricky */
-			gst_query_set_position(query, format, output_timestamp_from_offset(adder, adder->segment_position));
+			gst_query_set_position(query, format, output_timestamp_from_offset(adder, adder->offset));
 			break;
 
 		case GST_FORMAT_DEFAULT:
-			gst_query_set_position(query, format, adder->segment_position);
+			/* default format for audio is sample count */
+			gst_query_set_position(query, format, adder->offset);
 			break;
 
 		default:
@@ -771,10 +772,6 @@ static gboolean gst_adder_src_event(GstPad * pad, GstEvent * event)
 		 */
 
 		GST_OBJECT_LOCK(adder->collect);
-		if(curtype == GST_SEEK_TYPE_SET)
-			adder->segment_position = cur;
-		else
-			adder->segment_position = 0;
 		adder->segment_pending = TRUE;
 		GST_OBJECT_UNLOCK(adder->collect);
 
@@ -957,57 +954,6 @@ static void gst_adder_release_pad(GstElement * element, GstPad * pad)
 
 
 /*
- * utility function to set the metadata on an output buffer, push it, and
- * update the sample and timestamp counters of the element.  takes
- * ownership of the buffer.  the buffer's offset is used to derive the
- * timestamp, if it does not match the element's offset counter then the
- * buffer is flagged as a discontinuity and the element's offset counter is
- * updated to match.
- */
-
-
-static GstFlowReturn push_output_buffer(GstAdder *adder, GstBuffer *outbuf)
-{
-	/*
-	 * check for a discontinuity.
-	 */
-
-	if(GST_BUFFER_OFFSET(outbuf) != adder->segment_position) {
-		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_DISCONT);
-		adder->segment_position = GST_BUFFER_OFFSET(outbuf);
-	}
-
-	/*
-	 * set the timestamp.
-	 */
-
-	GST_BUFFER_TIMESTAMP(outbuf) = output_timestamp_from_offset(adder, adder->segment_position);
-
-	/*
-	 * increment the offset counter.
-	 */
-
-	adder->segment_position += GST_BUFFER_SIZE(outbuf) / adder->bytes_per_sample;
-
-	/*
-	 * now set the end offset and duration.  doing it this way ensures
-	 * that if some downstream element adds all the buffer durations
-	 * together they'll stay in sync with the timestamp.
-	 */
-
-	GST_BUFFER_OFFSET_END(outbuf) = adder->segment_position;
-	GST_BUFFER_DURATION(outbuf) = output_timestamp_from_offset(adder, adder->segment_position) - GST_BUFFER_TIMESTAMP(outbuf);
-
-	/*
-	 * push the buffer downstream.
-	 */
-
-	GST_LOG_OBJECT(adder, "pushing outbuf, timestamp %" GST_TIME_FORMAT, GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(outbuf)));
-	return gst_pad_push(adder->srcpad, outbuf);
-}
-
-
-/*
  * GstCollectPads callback.  called when data is available on all input
  * pads
  */
@@ -1018,7 +964,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 	GstAdder *adder = GST_ADDER(user_data);
 	GSList *collected = NULL;
 	guint64 earliest_input_offset, earliest_input_offset_end;
-	guint length;
+	guint64 length;
 	GstBuffer *outbuf = NULL;
 	gpointer outbytes = NULL;
 	GstFlowReturn result;
@@ -1044,7 +990,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		}
 		adder->segment = *segment;
 		gst_segment_free(segment);
-		adder->segment_position = 0;
+		adder->offset = GST_BUFFER_OFFSET_NONE;
 	}
 
 	/*
@@ -1077,8 +1023,8 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 * point in re-inventing its capabilities here.
 		 */
 
-		if(earliest_input_offset < adder->segment_position) {
-			GST_ERROR_OBJECT(adder, "detected time reversal in at least one input stream:  expected nothing earlier than offset %llu, found sample at offset %llu", (unsigned long long) adder->segment_position, (unsigned long long) earliest_input_offset);
+		if((adder->offset != GST_BUFFER_OFFSET_NONE) && (earliest_input_offset < adder->offset)) {
+			GST_ERROR_OBJECT(adder, "detected time reversal in at least one input stream:  expected nothing earlier than offset %lu, found sample at offset %lu", adder->offset, earliest_input_offset);
 			return GST_FLOW_ERROR;
 		}
 	} else {
@@ -1089,8 +1035,8 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 * we'll figure out later when no pads produce buffers.
 		 */
 
-		earliest_input_offset = adder->segment_position;
-		earliest_input_offset_end = adder->segment_position + gst_collect_pads_available(pads) / adder->bytes_per_sample;
+		earliest_input_offset = adder->offset == GST_BUFFER_OFFSET_NONE ? 0 : adder->offset;
+		earliest_input_offset_end = earliest_input_offset + gst_collect_pads_available(pads) / adder->bytes_per_sample;
 	}
 
 	/*
@@ -1155,7 +1101,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			 * and figure out a different way to check for EOS
 			 * */
 
-			GST_LOG_OBJECT(adder, "requesting output buffer of %u samples", length);
+			GST_LOG_OBJECT(adder, "requesting output buffer of %lu samples", length);
 			result = gst_pad_alloc_buffer(adder->srcpad, earliest_input_offset, length * adder->bytes_per_sample, GST_PAD_CAPS(adder->srcpad), &outbuf);
 			if(result != GST_FLOW_OK) {
 				/* FIXME: handle failure */
@@ -1222,7 +1168,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 	if(adder->segment_pending) {
 		/* FIXME:  the segment start time is almost certainly
 		 * incorrect */
-		GstEvent *event = gst_event_new_new_segment_full(FALSE, adder->segment.rate, 1.0, GST_FORMAT_TIME, adder->segment.start, adder->segment.stop, output_timestamp_from_offset(adder, adder->segment_position));
+		GstEvent *event = gst_event_new_new_segment_full(FALSE, adder->segment.rate, 1.0, GST_FORMAT_TIME, adder->segment.start, adder->segment.stop, output_timestamp_from_offset(adder, GST_BUFFER_OFFSET(outbuf)));
 
 		if(!event) {
 			/* FIXME:  failure getting event, do something
@@ -1242,12 +1188,30 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 	}
 
 	/*
-	 * push the output buffer (populates the metadata and updates the
-	 * element's state counters).  this function expects the buffer's
-	 * offset to be set correctly on input.
+	 * check for discontinuity.
 	 */
 
-	return push_output_buffer(adder, outbuf);
+	if((adder->offset == GST_BUFFER_OFFSET_NONE) || (adder->offset != GST_BUFFER_OFFSET(outbuf)))
+		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_DISCONT);
+
+	/*
+	 * set the timestamp, end offset, and duration.  computing the
+	 * duration the way we do here ensures that if some downstream
+	 * element adds all the buffer durations together they'll stay in
+	 * sync with the timestamp.  the end offset is saved for comparison
+	 * against the next start offset to watch for discontinuities.
+	 */
+
+	adder->offset = GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + length;
+	GST_BUFFER_TIMESTAMP(outbuf) = output_timestamp_from_offset(adder, GST_BUFFER_OFFSET(outbuf));
+	GST_BUFFER_DURATION(outbuf) = output_timestamp_from_offset(adder, GST_BUFFER_OFFSET_END(outbuf)) - GST_BUFFER_TIMESTAMP(outbuf);
+
+	/*
+	 * push the buffer downstream.
+	 */
+
+	GST_LOG_OBJECT(adder, "pushing outbuf, timestamp %" GST_TIME_FORMAT ", offset %lu", GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(outbuf)), GST_BUFFER_OFFSET(outbuf));
+	return gst_pad_push(adder->srcpad, outbuf);
 
 	/*
 	 * ERRORS
@@ -1351,8 +1315,8 @@ static GstStateChangeReturn gst_adder_change_state(GstElement * element, GstStat
 
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		adder->segment_pending = TRUE;
-		adder->segment_position = 0;
 		gst_segment_init(&adder->segment, GST_FORMAT_UNDEFINED);
+		adder->offset = GST_BUFFER_OFFSET_NONE;
 		gst_collect_pads_start(adder->collect);
 		break;
 
