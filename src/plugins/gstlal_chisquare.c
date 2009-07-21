@@ -521,7 +521,9 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			/* FIXME:  failure getting event, do something
 			 * about it */
 		}
+		GST_OBJECT_UNLOCK(element);
 		gst_pad_push_event(element->srcpad, event);
+		GST_OBJECT_LOCK(element);
 
 		element->segment_pending = FALSE;
 	}
@@ -683,8 +685,8 @@ done:
 
 eos:
 	GST_DEBUG_OBJECT(element, "no data available (EOS)");
-	gst_pad_push_event(element->srcpad, gst_event_new_eos());
 	GST_OBJECT_UNLOCK(element);
+	gst_pad_push_event(element->srcpad, gst_event_new_eos());
 	return GST_FLOW_UNEXPECTED;
 
 error:
