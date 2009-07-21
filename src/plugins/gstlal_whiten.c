@@ -551,7 +551,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 
 static GstCaps *getcaps(GstPad *pad)
 {
-	GSTLALWhiten *element = GSTLAL_WHITEN(GST_PAD_PARENT(pad));
+	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	GstCaps *caps, *peercaps;
 
 	GST_OBJECT_LOCK(element);
@@ -581,6 +581,7 @@ static GstCaps *getcaps(GstPad *pad)
 	 */
 
 	GST_OBJECT_UNLOCK(element);
+	gst_object_unref(element);
 	return caps;
 }
 

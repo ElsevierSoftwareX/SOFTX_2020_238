@@ -144,15 +144,18 @@ static void gen_set_bytes_per_sample(GstPad *pad, GstCaps *caps)
 
 static gboolean gen_setcaps(GstPad *pad, GstCaps *caps)
 {
-	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(GST_PAD_PARENT(pad));
+	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(gst_pad_get_parent(pad));
 	GstStructure *structure;
 	gboolean result = TRUE;
 
 	GST_OBJECT_LOCK(element);
+
 	gen_set_bytes_per_sample(pad, caps);
 	structure = gst_caps_get_structure(caps, 0);
 	gst_structure_get_int(structure, "rate", &element->rate);
+
 	GST_OBJECT_UNLOCK(element);
+	gst_object_unref(element);
 	return result;
 }
 
