@@ -79,7 +79,7 @@ typedef struct {
 
 	char *bank_filename;
 	SnglInspiralTable *bank;
-	int num_templates;
+	guint num_templates;
 	double snr_thresh;
 } GSTLALTriggerGen;
 

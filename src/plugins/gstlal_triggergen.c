@@ -114,7 +114,7 @@ static SnglInspiralTable *new_event(SnglInspiralTable *dest, LIGOTimeGPS end_tim
 	dest->end_time_gmst = XLALGreenwichMeanSiderealTime(&end_time);
 	dest->eff_distance = effective_distance(dest->snr, dest->sigmasq);
 
-	xi = dest->chisq / (1 + 0.1 * dest->snr * dest->snr);
+	xi = dest->chisq / (1 + 0.1 * pow(dest->snr, 2));
 
 	return dest;
 }
@@ -176,12 +176,6 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	GstBuffer *snrbuf;
 	GstBuffer *chisqbuf;
 	GstBuffer *srcbuf;
-	LIGOTimeGPS epoch;
-	const double complex *snrdata;
-	const double complex *chisqdata;
-	int length;
-	int sample, channel;
-	SnglInspiralTable event;
 	GstFlowReturn result;
 
 	/*
@@ -273,36 +267,52 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 */
 
 	if(GST_BUFFER_FLAG_IS_SET(snrbuf, GST_BUFFER_FLAG_GAP) || GST_BUFFER_FLAG_IS_SET(chisqbuf, GST_BUFFER_FLAG_GAP)) {
-		srcbuf = gst_buffer_new();
+		result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(snrbuf), 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
+		if(result != GST_FLOW_OK) {
+			/* FIXME: handle failure */
+		}
 		gst_buffer_copy_metadata(srcbuf, snrbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
-		if((element->offset == GST_BUFFER_OFFSET_NONE) || (element->offset != GST_BUFFER_OFFSET(srcbuf)))
-			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
-		gst_buffer_unref(snrbuf);
-		gst_buffer_unref(chisqbuf);
-		element->offset = GST_BUFFER_OFFSET_END(srcbuf);
-		return gst_pad_push(element->srcpad, srcbuf);
-	}
+	} else {
+		/*
+		 * Find events
+		 */
 
-	/*
-	 * Find events
-	 */
+		LIGOTimeGPS epoch;
+		guint length = GST_BUFFER_OFFSET_END(snrbuf) - GST_BUFFER_OFFSET(snrbuf);
+		const double complex *snrdata = (const double complex *) GST_BUFFER_DATA(snrbuf);
+		const double complex *chisqdata = (const double complex *) GST_BUFFER_DATA(chisqbuf);
+		guint sample, channel;
+		SnglInspiralTable event;
 
-	XLALINT8NSToGPS(&epoch, GST_BUFFER_TIMESTAMP(snrbuf));
-	length = GST_BUFFER_OFFSET_END(snrbuf) - GST_BUFFER_OFFSET(snrbuf);
-	snrdata = (const double complex *) GST_BUFFER_DATA(snrbuf);
-	chisqdata = (const double complex *) GST_BUFFER_DATA(chisqbuf);
+		XLALINT8NSToGPS(&epoch, GST_BUFFER_TIMESTAMP(snrbuf));
 
-	event.snr = 0;
-
-	for(sample = 0; sample < length; sample++) {
-		for(channel = 0; channel < element->num_templates; channel++) {
-			int index = sample * element->num_templates + channel;
-			if(cabs(snrdata[index]) > event.snr) {
-				LIGOTimeGPS t = epoch;
-				XLALGPSAdd(&t, (double) sample / element->rate);
-				new_event(&event, t, snrdata[index], chisqdata[index], channel, element);
+		event.snr = 0;
+		for(sample = 0; sample < length; sample++) {
+			for(channel = 0; channel < element->num_templates; channel++) {
+				int index = sample * element->num_templates + channel;
+				if(cabs(snrdata[index]) > event.snr) {
+					LIGOTimeGPS t = epoch;
+					XLALGPSAdd(&t, (double) sample / element->rate);
+					new_event(&event, t, snrdata[index], chisqdata[index], channel, element);
+				}
 			}
+		}
+
+		if(event.snr > element->snr_thresh) {
+			result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(snrbuf), sizeof(event), GST_PAD_CAPS(element->srcpad), &srcbuf);
+			if(result != GST_FLOW_OK) {
+				/* FIXME: handle failure */
+			}
+			gst_buffer_copy_metadata(srcbuf, snrbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
+			memcpy(GST_BUFFER_DATA(srcbuf), &event, sizeof(event));
+		} else {
+			result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(snrbuf), 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
+			if(result != GST_FLOW_OK) {
+				/* FIXME: handle failure */
+			}
+			gst_buffer_copy_metadata(srcbuf, snrbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
+			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 		}
 	}
 
@@ -310,15 +320,6 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 * Push event downstream
 	 */
 
-	if(event.snr > element->snr_thresh) {
-		result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(snrbuf), sizeof(event), GST_PAD_CAPS(element->srcpad), &srcbuf);
-		gst_buffer_copy_metadata(srcbuf, snrbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
-		memcpy(GST_BUFFER_DATA(srcbuf), &event, sizeof(event));
-	} else {
-		srcbuf = gst_buffer_new();
-		gst_buffer_copy_metadata(srcbuf, snrbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
-		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
-	}
 	if((element->offset == GST_BUFFER_OFFSET_NONE) || (element->offset != GST_BUFFER_OFFSET(srcbuf)))
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
 
