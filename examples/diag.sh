@@ -13,7 +13,7 @@ function test_gate() {
 	gst-launch \
 		lal_gate name=gate threshold=0.7 \
 		! audio/x-raw-float, width=64, rate=16384 \
-		! lal_nxydump start-time=0 stop-time=1000000000 \
+		! lal_nxydump start-time=0 stop-time=10000000000 \
 		! queue ! filesink location="dump_out.txt" \
 		audiotestsrc freq=13 samplesperbuffer=1024 num-buffers=8 \
 		! audio/x-raw-float, rate=1024 \
@@ -22,7 +22,7 @@ function test_gate() {
 		! tee name=orig \
 		! gate.sink
 		orig. \
-		! lal_nxydump start-time=0 stop-time=1000000000 \
+		! lal_nxydump start-time=0 stop-time=10000000000 \
 		! queue ! filesink location="dump_in.txt"
 }
 
@@ -40,21 +40,21 @@ function test_resampler_gaps() {
 		lal_gate name=gate threshold=0.7 \
 		! tee name=orig \
 		! audioresample \
-		! audio/x-raw-float, rate=2048 \
-		! lal_nxydump start-time=0 stop-time=1000000000 \
+		! audio/x-raw-float, width=64, rate=2048 \
+		! lal_nxydump start-time=0 stop-time=10000000000 \
 		! queue ! filesink buffer-mode=2 location="dump_out.txt" \
-		audiotestsrc freq=13 samplesperbuffer=1024 num-buffers=8 \
+		audiotestsrc freq=13 samplesperbuffer=1024 num-buffers=80 \
 		! audio/x-raw-float, width=64, rate=1024 \
 		! tee name=control \
 		! gate.control \
-		audiotestsrc freq=256 samplesperbuffer=1024 num-buffers=8 \
+		audiotestsrc freq=256 samplesperbuffer=1024 num-buffers=2000 \
 		! audio/x-raw-float, width=64, rate=16384 \
 		! gate.sink \
 		control. \
 		! lal_nxydump start-time=0 stop-time=1000000000 \
 		! queue ! filesink buffer-mode=2 location="dump_control.txt" \
 		orig. \
-		! lal_nxydump start-time=0 stop-time=1000000000 \
+		! lal_nxydump start-time=0 stop-time=10000000000 \
 		! queue ! filesink buffer-mode=2 location="dump_in.txt"
 }
 
