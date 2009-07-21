@@ -180,7 +180,6 @@ static GstCaps *getcaps_snr(GstPad *pad)
 	 * channels must match the number of columns in the mixing matrix.
 	 */
 
-	g_mutex_lock(element->coefficients_lock);
 	if(element->mixmatrix_buf) {
 		GstCaps *matrixcaps = gst_caps_make_writable(gst_buffer_get_caps(element->mixmatrix_buf));
 		GstCaps *result;
@@ -193,7 +192,6 @@ static GstCaps *getcaps_snr(GstPad *pad)
 		gst_caps_unref(matrixcaps);
 		caps = result;
 	}
-	g_mutex_unlock(element->coefficients_lock);
 
 	/*
 	 * now compute the intersection of the caps with the downstream
@@ -296,13 +294,11 @@ static GstCaps *getcaps_orthosnr(GstPad *pad)
 	snrcaps = gst_pad_get_caps(element->snrpad);
 	GST_OBJECT_LOCK(element);
 
-	g_mutex_lock(element->coefficients_lock);
 	if(element->mixmatrix_buf) {
 		guint n;
 		for(n = 0; n < gst_caps_get_size(snrcaps); n++)
 			gst_structure_set(gst_caps_get_structure(snrcaps, n), "channels", G_TYPE_INT, num_orthosnr_channels(element), NULL);
 	}
-	g_mutex_unlock(element->coefficients_lock);
 
 	result = gst_caps_intersect(snrcaps, caps);
 	gst_caps_unref(caps);
@@ -392,13 +388,11 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 	 * reference.
 	 */
 
-	g_mutex_lock(element->coefficients_lock);
 	if(element->mixmatrix_buf)
 		gst_buffer_unref(element->mixmatrix_buf);
 	element->mixmatrix_buf = sinkbuf;
 	element->mixmatrix = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
 	g_cond_signal(element->coefficients_available);
-	g_mutex_unlock(element->coefficients_lock);
 
 	/* FIXME:  clear the caps on the snr and orthosnr pads to induce a
 	 * caps negotiation sequence when the next buffers arrive in order
@@ -456,13 +450,11 @@ static GstFlowReturn chain_chifacs(GstPad *pad, GstBuffer *sinkbuf)
 	 * consumes the reference.
 	 */
 
-	g_mutex_lock(element->coefficients_lock);
 	if(element->chifacs_buf)
 		gst_buffer_unref(element->chifacs_buf);
 	element->chifacs_buf = sinkbuf;
 	element->chifacs = gsl_vector_view_array((double *) GST_BUFFER_DATA(sinkbuf), cols);
 	g_cond_signal(element->coefficients_available);
-	g_mutex_unlock(element->coefficients_lock);
 
 	/* FIXME:  clear the caps on the snr and orthosnr pads to induce a
 	 * caps negotiation sequence when the next buffers arrive in order
@@ -501,6 +493,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	gint channel, numchannels;
 	gint chisq_start, chisq_end, chisq_stride;
 
+	GST_OBJECT_LOCK(element);
+
 	/*
 	 * check for new segment
 	 */
@@ -533,7 +527,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 	if(!gstlal_collect_pads_get_earliest_offsets(element->collect, &earliest_input_offset, &earliest_input_offset_end, element->rate, element->segment.start)) {
 		GST_ERROR_OBJECT(element, "cannot deduce input timestamp offset information");
-		return GST_FLOW_ERROR;
+		goto error;
 	}
 
 	/*
@@ -552,7 +546,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 	if((element->offset != GST_BUFFER_OFFSET_NONE) && (earliest_input_offset < element->offset)) {
 		GST_ERROR_OBJECT(element, "detected time reversal in at least one input stream:  expected nothing earlier than offset %lu, found sample at offset %lu", element->offset, earliest_input_offset);
-		return GST_FLOW_ERROR;
+		goto error;
 	}
 
 	/*
@@ -582,7 +576,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		gst_buffer_unref(buf);
 		gst_buffer_unref(orthosnrbuf);
 		GST_ERROR_OBJECT(element, "misaligned buffer boundaries:  requested offsets upto %lu, got snr offsets %lu--%lu and ortho snr offsets %lu--%lu", earliest_input_offset_end, GST_BUFFER_OFFSET(buf), GST_BUFFER_OFFSET_END(buf), GST_BUFFER_OFFSET(orthosnrbuf), GST_BUFFER_OFFSET_END(orthosnrbuf));
-		return GST_FLOW_ERROR;
+		goto error;
 	}
 
 	/*
@@ -607,6 +601,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
 		gst_buffer_unref(orthosnrbuf);
 		element->offset = GST_BUFFER_OFFSET_END(buf);
+		GST_OBJECT_UNLOCK(element);
 		return gst_pad_push(element->srcpad, buf);
 	}
 
@@ -621,9 +616,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 * until they are
 	 */
 
-	g_mutex_lock(element->coefficients_lock);
 	while(!element->mixmatrix_buf || !element->chifacs_buf) {
-		g_cond_wait(element->coefficients_available, element->coefficients_lock);
+		g_cond_wait(element->coefficients_available, GST_OBJECT_GET_LOCK(element));
 		/* FIXME:  we need some way of getting out of this loop.
 		 * maybe check for a flag set in an event handler */
 	}
@@ -673,7 +667,6 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			data[channel+1] = data[channel];
 		}
 	}
-	g_mutex_unlock(element->coefficients_lock);
 
 	/*
 	 * push the buffer downstream
@@ -681,12 +674,18 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 	gst_buffer_unref(orthosnrbuf);
 	element->offset = GST_BUFFER_OFFSET_END(buf);
+	GST_OBJECT_UNLOCK(element);
 	return gst_pad_push(element->srcpad, buf);
 
 eos:
 	GST_DEBUG_OBJECT(element, "no data available (EOS)");
 	gst_pad_push_event(element->srcpad, gst_event_new_eos());
+	GST_OBJECT_UNLOCK(element);
 	return GST_FLOW_UNEXPECTED;
+
+error:
+	GST_OBJECT_UNLOCK(element);
+	return GST_FLOW_ERROR;
 }
 
 
@@ -732,8 +731,6 @@ static void finalize(GObject *object)
 	element->snrcollectdata = NULL;
 	element->collect = NULL;
 
-	g_mutex_free(element->coefficients_lock);
-	element->coefficients_lock = NULL;
 	g_cond_free(element->coefficients_available);
 	element->coefficients_available = NULL;
 	if(element->mixmatrix_buf) {
@@ -949,7 +946,6 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	/* internal data */
 	element->rate = 0;
 	element->max_dof = DEFAULT_MAX_DOF;
-	element->coefficients_lock = g_mutex_new();
 	element->coefficients_available = g_cond_new();
 	element->mixmatrix_buf = NULL;
 	element->chifacs_buf = NULL;

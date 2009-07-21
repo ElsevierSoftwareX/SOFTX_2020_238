@@ -71,7 +71,6 @@ typedef struct {
 	/* stream format */
 	gint rate;
 
-	GMutex *coefficients_lock;
 	GCond *coefficients_available;
 
 	GstBuffer *mixmatrix_buf;
