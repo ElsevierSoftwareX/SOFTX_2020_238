@@ -173,8 +173,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 {
 	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(user_data);
 	guint64 earliest_input_offset, earliest_input_offset_end;
-	GstBuffer *snrbuf;
-	GstBuffer *chisqbuf;
+	GstBuffer *snrbuf = NULL;
+	GstBuffer *chisqbuf = NULL;
 	GstBuffer *srcbuf;
 	GstFlowReturn result;
 
@@ -210,7 +210,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 
 	if(!gstlal_collect_pads_get_earliest_offsets(element->collect, &earliest_input_offset, &earliest_input_offset_end, element->rate, element->segment.start)) {
 		GST_ERROR_OBJECT(element, "cannot deduce input timestamp offset information");
-		return GST_FLOW_ERROR;
+		result = GST_FLOW_ERROR;
+		goto error;
 	}
 
 	/*
@@ -229,7 +230,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 
 	if((element->offset != GST_BUFFER_OFFSET_NONE) && (earliest_input_offset < element->offset)) {
 		GST_ERROR_OBJECT(element, "detected time reversal in at least one input stream:  expected nothing earlier than offset %lu, found sample at offset %lu", element->offset, earliest_input_offset);
-		return GST_FLOW_ERROR;
+		result = GST_FLOW_ERROR;
+		goto error;
 	}
 
 	/*
@@ -256,10 +258,9 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 */
 
 	if(GST_BUFFER_OFFSET(snrbuf) != GST_BUFFER_OFFSET(chisqbuf) || GST_BUFFER_OFFSET_END(snrbuf) != GST_BUFFER_OFFSET_END(chisqbuf)) {
-		gst_buffer_unref(snrbuf);
-		gst_buffer_unref(chisqbuf);
 		GST_ERROR_OBJECT(element, "misaligned buffer boundaries:  requested offsets upto %lu, got snr offsets %lu--%lu and \\chi^{2} offsets %lu--%lu", earliest_input_offset_end, GST_BUFFER_OFFSET(snrbuf), GST_BUFFER_OFFSET_END(snrbuf), GST_BUFFER_OFFSET(chisqbuf), GST_BUFFER_OFFSET_END(chisqbuf));
-		return GST_FLOW_ERROR;
+		result = GST_FLOW_ERROR;
+		goto error;
 	}
 
 	/*
@@ -328,6 +329,18 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 
 	element->offset = GST_BUFFER_OFFSET_END(srcbuf);
 	return gst_pad_push(element->srcpad, srcbuf);
+
+	/*
+	 * Errors
+	 */
+
+
+error:
+	if(snrbuf)
+		gst_buffer_unref(snrbuf);
+	if(chisqbuf)
+		gst_buffer_unref(chisqbuf);
+	return result;
 
 eos:
 	GST_DEBUG_OBJECT(element, "no data available (EOS)");
