@@ -287,10 +287,8 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 
 static GstCaps *sink_getcaps(GstPad * pad)
 {
-	GSTLALGate *element = GSTLAL_GATE(GST_PAD_PARENT(pad));
+	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
 	GstCaps *result, *peercaps, *sinkcaps;
-
-	GST_OBJECT_LOCK(element);
 
 	/*
 	 * get the allowed caps from the downstream peer
@@ -321,7 +319,7 @@ static GstCaps *sink_getcaps(GstPad * pad)
 	 * done
 	 */
 
-	GST_OBJECT_UNLOCK(element);
+	gst_object_unref(element);
 	return result;
 }
 
@@ -332,6 +330,8 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 	GstStructure *structure;
 	gint width, channels;
 	gboolean result = TRUE;
+
+	GST_OBJECT_LOCK(element);
 
 	/*
 	 * parse caps
@@ -350,6 +350,7 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 	 * done
 	 */
 
+	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
 	return result;
 }
@@ -530,7 +531,9 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			 * push buffer down stream
 			 */
 
+			GST_OBJECT_UNLOCK(element);
 			result = gst_pad_push(element->srcpad, srcbuf);
+			GST_OBJECT_LOCK(element);
 			if(result != GST_FLOW_OK)
 				goto done;
 		}
