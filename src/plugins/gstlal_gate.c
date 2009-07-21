@@ -89,6 +89,7 @@ static void control_flush(GSTLALGate *element)
 		gst_buffer_unref(element->control_buf);
 		element->control_buf = NULL;
 	}
+	element->control_end = GST_BUFFER_OFFSET_NONE;
 	g_cond_signal(element->control_flushed);
 }
 
@@ -155,6 +156,7 @@ static gint control_state(GSTLALGate *element, GstClockTime t)
 	guint sample;
 
 	if(t < GST_BUFFER_TIMESTAMP(element->control_buf) || element->control_end <= t)
+		/* t is outside the control buffer */
 		return -1;
 
 	sample = gst_util_uint64_scale_int(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
@@ -397,7 +399,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	element->control_buf = sinkbuf;
-	element->control_end = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int(GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf), GST_SECOND, element->control_rate);
+	element->control_end = GST_BUFFER_TIMESTAMP(sinkbuf) + (GstClockTime) gst_util_uint64_scale_int(GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf), GST_SECOND, element->control_rate);
 
 	/*
 	 * signal the buffer's availability
@@ -731,6 +733,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->control_available = g_cond_new();
 	element->control_flushed = g_cond_new();
 	element->control_buf = NULL;
+	element->control_end = GST_BUFFER_OFFSET_NONE;
 	element->control_sample_func = NULL;
 	element->threshold = DEFAULT_THRESHOLD;
 	element->rate = 0;
