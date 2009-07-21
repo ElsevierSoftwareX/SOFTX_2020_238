@@ -162,7 +162,7 @@ static void set_bytes_per_sample(GstPad *pad, GstCaps *caps)
 
 static GstCaps *getcaps_snr(GstPad *pad)
 {
-	GSTLALChiSquare *element = GSTLAL_CHISQUARE(GST_PAD_PARENT(pad));
+	GSTLALChiSquare *element = GSTLAL_CHISQUARE(gst_pad_get_parent(pad));
 	GstCaps *peercaps, *caps;
 
 	GST_OBJECT_LOCK(element);
@@ -211,6 +211,7 @@ static GstCaps *getcaps_snr(GstPad *pad)
 	 */
 
 	GST_OBJECT_UNLOCK(element);
+	gst_object_unref(element);
 	return caps;
 }
 
@@ -223,7 +224,7 @@ static GstCaps *getcaps_snr(GstPad *pad)
 
 static gboolean setcaps_snr(GstPad *pad, GstCaps *caps)
 {
-	GSTLALChiSquare *element = GSTLAL_CHISQUARE(GST_PAD_PARENT(pad));
+	GSTLALChiSquare *element = GSTLAL_CHISQUARE(gst_pad_get_parent(pad));
 	GstStructure *structure;
 	const char *media_type;
 	gboolean result = TRUE;
@@ -249,6 +250,7 @@ static gboolean setcaps_snr(GstPad *pad, GstCaps *caps)
 	 */
 
 	GST_OBJECT_UNLOCK(element);
+	gst_object_unref(element);
 	return result;
 }
 
@@ -271,7 +273,7 @@ static gboolean setcaps_snr(GstPad *pad, GstCaps *caps)
 
 static GstCaps *getcaps_orthosnr(GstPad *pad)
 {
-	GSTLALChiSquare *element = GSTLAL_CHISQUARE(GST_PAD_PARENT(pad));
+	GSTLALChiSquare *element = GSTLAL_CHISQUARE(gst_pad_get_parent(pad));
 	GstCaps *result, *snrcaps, *caps;
 
 	GST_OBJECT_LOCK(element);
@@ -309,6 +311,7 @@ static GstCaps *getcaps_orthosnr(GstPad *pad)
 	 */
 
 	GST_OBJECT_UNLOCK(element);
+	gst_object_unref(element);
 	return result;
 }
 
@@ -321,7 +324,7 @@ static GstCaps *getcaps_orthosnr(GstPad *pad)
 
 static gboolean setcaps_orthosnr(GstPad *pad, GstCaps *caps)
 {
-	GSTLALChiSquare *element = GSTLAL_CHISQUARE(GST_PAD_PARENT(pad));
+	GSTLALChiSquare *element = GSTLAL_CHISQUARE(gst_pad_get_parent(pad));
 
 	GST_OBJECT_LOCK(element);
 
@@ -342,6 +345,7 @@ static gboolean setcaps_orthosnr(GstPad *pad, GstCaps *caps)
 	 */
 
 	GST_OBJECT_UNLOCK(element);
+	gst_object_unref(element);
 	return TRUE;
 }
 
@@ -362,7 +366,7 @@ static gboolean setcaps_orthosnr(GstPad *pad, GstCaps *caps)
 
 static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 {
-	GSTLALChiSquare *element = GSTLAL_CHISQUARE(GST_PAD_PARENT(pad));
+	GSTLALChiSquare *element = GSTLAL_CHISQUARE(gst_pad_get_parent(pad));
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	GstStructure *structure = gst_caps_get_structure(caps, 0);
 	GstFlowReturn result = GST_FLOW_OK;
@@ -405,6 +409,7 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 done:
 	gst_caps_unref(caps);
 	GST_OBJECT_UNLOCK(element);
+	gst_object_unref(element);
 	return result;
 }
 
@@ -425,7 +430,7 @@ done:
 
 static GstFlowReturn chain_chifacs(GstPad *pad, GstBuffer *sinkbuf)
 {
-	GSTLALChiSquare *element = GSTLAL_CHISQUARE(GST_PAD_PARENT(pad));
+	GSTLALChiSquare *element = GSTLAL_CHISQUARE(gst_pad_get_parent(pad));
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	GstStructure *structure = gst_caps_get_structure(caps, 0);
 	GstFlowReturn result = GST_FLOW_OK;
@@ -468,6 +473,7 @@ static GstFlowReturn chain_chifacs(GstPad *pad, GstBuffer *sinkbuf)
 done:
 	gst_caps_unref(caps);
 	GST_OBJECT_UNLOCK(element);
+	gst_object_unref(element);
 	return result;
 }
 
@@ -599,10 +605,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	if(GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP) || GST_BUFFER_FLAG_IS_SET(orthosnrbuf, GST_BUFFER_FLAG_GAP)) {
 		memset(GST_BUFFER_DATA(buf), 0, GST_BUFFER_SIZE(buf));
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
-		gst_buffer_unref(orthosnrbuf);
-		element->offset = GST_BUFFER_OFFSET_END(buf);
-		GST_OBJECT_UNLOCK(element);
-		return gst_pad_push(element->srcpad, buf);
+		goto done;
 	}
 
 	/*
@@ -672,6 +675,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 * push the buffer downstream
 	 */
 
+done:
 	gst_buffer_unref(orthosnrbuf);
 	element->offset = GST_BUFFER_OFFSET_END(buf);
 	GST_OBJECT_UNLOCK(element);
