@@ -60,7 +60,7 @@ class Bank(object):
 			self.blocksize = blocksize
 			if self.blocksize is None:
 				# default = 1 second
-				self.blocksize = rate
+				self.blocksize = self.rate
 
 	def __init__(self, template_bank_filename, bank_fragments, gate_threshold, snr_threshold, logname = None):
 		self.template_bank_filename = template_bank_filename
@@ -198,8 +198,8 @@ def mkbank(pipeline, src, bank, bank_fragment, reference_psd_filename, control_s
 	gate = gst.element_factory_make("lal_gate")
 	gate.set_property("threshold", bank.gate_threshold)
 	pipeline.add(gate)
-	mkqueue(pipeline, elem, pad_name = "src").link_pads("src", gate, "sink")
-	mkqueue(pipeline, control_src).link_pads("src", gate, "control")
+	mkqueue(pipeline, elem, pad_name = "src", max_size_bytes = 0, max_size_buffers = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000).link_pads("src", gate, "sink")
+	mkqueue(pipeline, control_src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000).link_pads("src", gate, "control")
 	orthosnr = mktee(pipeline, gate, pad_name = "src")
 
 	#mknxydumpsink(pipeline, mkqueue(pipeline, orthosnr), "orthosnr_%s.txt" % elem.get_name())
@@ -366,7 +366,7 @@ def mkLLOIDsingle(pipeline, instrument, detector, bank, injection_filename = Non
 	for bank_fragment in bank.bank_fragments:
 		bank_snr, bank_chisq = mkbank(
 			pipeline,
-			mkqueue(pipeline, hoft[bank_fragment.rate], max_size_time = int(bank.filter_length) * 1000000000),
+			mkqueue(pipeline, hoft[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000),
 			bank,
 			bank_fragment,
 			detector.reference_psd_filename,
