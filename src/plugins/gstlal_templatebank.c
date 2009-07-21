@@ -672,6 +672,21 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		svd_create(element, element->sample_rate);
 
 		/*
+		 * Now that we know how many channels we'll produce, set
+		 * the srcpad's caps.  gst_caps_make_writable() unref()s
+		 * its argument.
+		 */
+
+		caps = gst_caps_make_writable(gst_buffer_get_caps(sinkbuf));
+		gst_caps_set_simple(caps, "channels", G_TYPE_INT, num_templates(element), NULL);
+		success = gst_pad_set_caps(element->srcpad, caps);
+		gst_caps_unref(caps);
+		if(success != TRUE) {
+			result = GST_FLOW_NOT_NEGOTIATED;
+			goto done;
+		}
+
+		/*
 		 * Tell the mixer how to reconstruct the SNRs.
 		 */
 
@@ -687,21 +702,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		result = push_chifacs_vector(element->chifacspad, element->chifacs, GST_BUFFER_TIMESTAMP(sinkbuf));
 		if(result != GST_FLOW_OK)
 			goto done;
-
-		/*
-		 * Now that we know how many channels we'll produce, set
-		 * the srcpad's caps.  gst_caps_make_writable() unref()s
-		 * its argument.
-		 */
-
-		caps = gst_caps_make_writable(gst_buffer_get_caps(sinkbuf));
-		gst_caps_set_simple(caps, "channels", G_TYPE_INT, num_templates(element), NULL);
-		success = gst_pad_set_caps(element->srcpad, caps);
-		gst_caps_unref(caps);
-		if(success != TRUE) {
-			result = GST_FLOW_NOT_NEGOTIATED;
-			goto done;
-		}
 	}
 
 	/*
@@ -749,7 +749,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		if(element->t_start) {
 			guint64 zero_pad_samples = round(element->t_start * element->sample_rate);
 
-#if 1
+#if 0
 			result = gst_pad_alloc_buffer(element->sumsquarespad, element->offset0 + element->offset, zero_pad_samples * sizeof(*element->U->data), GST_PAD_CAPS(element->sumsquarespad), &zeros);
 			if(result != GST_FLOW_OK)
 				goto done;
