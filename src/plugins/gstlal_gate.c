@@ -225,7 +225,7 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 	gint width;
 	gboolean result = TRUE;
 
-	g_mutex_lock(element->control_lock);
+	GST_OBJECT_LOCK(element);
 
 	/*
 	 * parse caps
@@ -274,8 +274,7 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 	 * done.
 	 */
 
-	g_mutex_unlock(element->control_lock);
-
+	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
 	return result;
 }
@@ -375,6 +374,8 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
 	GstFlowReturn result = GST_FLOW_OK;
 
+	GST_OBJECT_LOCK(element);
+
 	/*
 	 * check validity of timestamp and offsets
 	 */
@@ -390,9 +391,8 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * if there's already a buffer stored, wait for it to be flushed
 	 */
 
-	g_mutex_lock(element->control_lock);
 	while(element->control_buf)
-		g_cond_wait(element->control_flushed, element->control_lock);
+		g_cond_wait(element->control_flushed, GST_OBJECT_GET_LOCK(element));
 
 	/*
 	 * store this buffer, extract some metadata
@@ -406,13 +406,13 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	g_cond_signal(element->control_available);
-	g_mutex_unlock(element->control_lock);
 
 	/*
 	 * done
 	 */
 
 done:
+	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
 	return result;
 }
@@ -430,6 +430,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	guint64 start, length;
 	GstFlowReturn result = GST_FLOW_OK;
 
+	GST_OBJECT_LOCK(element);
+
 	/*
 	 * check validity of timestamp and offsets
 	 */
@@ -446,7 +448,6 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * loop over the contents of the input buffer.
 	 */
 
-	g_mutex_lock(element->control_lock);
 	for(start = 0; start < sinkbuf_samples; start += length) {
 		gint state = -1;	/* initialize to silence warnings */
 
@@ -465,7 +466,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 			while(!element->control_buf || t >= element->control_end) {
 				control_flush(element);
-				g_cond_wait(element->control_available, element->control_lock);
+				g_cond_wait(element->control_available, GST_OBJECT_GET_LOCK(element));
 			}
 
 			/*
@@ -495,7 +496,6 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			GstBuffer *srcbuf = gst_buffer_create_sub(sinkbuf, start * element->bytes_per_sample, length * element->bytes_per_sample);
 			if(!srcbuf) {
 				GST_ERROR_OBJECT(element, "failure creating sub-buffer");
-				g_mutex_unlock(element->control_lock);
 				result = GST_FLOW_ERROR;
 				goto done;
 			}
@@ -531,19 +531,17 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			 */
 
 			result = gst_pad_push(element->srcpad, srcbuf);
-			if(result != GST_FLOW_OK) {
-				g_mutex_unlock(element->control_lock);
+			if(result != GST_FLOW_OK)
 				goto done;
-			}
 		}
 	}
-	g_mutex_unlock(element->control_lock);
 
 	/*
 	 * done
 	 */
 
 done:
+	GST_OBJECT_UNLOCK(element);
 	gst_buffer_unref(sinkbuf);
 	gst_object_unref(element);
 	return result;
@@ -582,8 +580,6 @@ static void finalize(GObject *object)
 	element->sinkpad = NULL;
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
-	g_mutex_free(element->control_lock);
-	element->control_lock = NULL;
 	g_cond_free(element->control_available);
 	element->control_available = NULL;
 	g_cond_free(element->control_flushed);
@@ -729,7 +725,6 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->srcpad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
 
 	/* internal data */
-	element->control_lock = g_mutex_new();
 	element->control_available = g_cond_new();
 	element->control_flushed = g_cond_new();
 	element->control_buf = NULL;
