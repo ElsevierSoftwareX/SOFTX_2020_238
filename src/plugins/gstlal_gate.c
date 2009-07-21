@@ -427,7 +427,7 @@ done:
 static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
-	guint64 sinkbuf_samples;
+	guint64 sinkbuf_length;
 	guint64 start, length;
 	GstFlowReturn result = GST_FLOW_OK;
 
@@ -443,20 +443,20 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		goto done;
 	}
 
-	sinkbuf_samples = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
+	sinkbuf_length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
 
 	/*
 	 * loop over the contents of the input buffer.
 	 */
 
-	for(start = 0; start < sinkbuf_samples; start += length) {
+	for(start = 0; start < sinkbuf_length; start += length) {
 		gint state = -1;	/* initialize to silence warnings */
 
 		/*
 		 * find the next interval of continuous control state
 		 */
 
-		for(length = 0; start + length < sinkbuf_samples; length++) {
+		for(length = 0; start + length < sinkbuf_length; length++) {
 			GstClockTime t = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int(start + length, GST_SECOND, element->rate);
 
 			/*
