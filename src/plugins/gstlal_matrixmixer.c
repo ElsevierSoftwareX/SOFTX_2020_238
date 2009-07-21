@@ -252,7 +252,6 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(gst_pad_get_parent(pad));
-	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	int samples;
 	union {
 		gsl_matrix_float_view as_float;
@@ -407,7 +406,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 done:
-	gst_caps_unref(caps);
 	gst_buffer_unref(sinkbuf);
 	gst_object_unref(element);
 	return result;
