@@ -972,13 +972,16 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 	gpointer outbytes = NULL;
 	GstFlowReturn result;
 
+	GST_OBJECT_LOCK(adder);
+
 	/*
 	 * this is fatal
 	 */
 
 	if(G_UNLIKELY(!adder->func)) {
 		GST_ELEMENT_ERROR(adder, STREAM, FORMAT, (NULL), ("Unknown data received, not negotiated"));
-		return GST_FLOW_NOT_NEGOTIATED;
+		result = GST_FLOW_NOT_NEGOTIATED;
+		goto error;
 	}
 
 	/*
@@ -1009,7 +1012,8 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		
 		if(!gstlal_collect_pads_get_earliest_offsets(adder->collect, &earliest_input_offset, &earliest_input_offset_end, adder->rate, adder->segment.start)) {
 			GST_ERROR_OBJECT(adder, "cannot deduce input timestamp offset information");
-			return GST_FLOW_ERROR;
+			result = GST_FLOW_ERROR;
+			goto error;
 		}
 
 		/*
@@ -1028,7 +1032,8 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 
 		if((adder->offset != GST_BUFFER_OFFSET_NONE) && (earliest_input_offset < adder->offset)) {
 			GST_ERROR_OBJECT(adder, "detected time reversal in at least one input stream:  expected nothing earlier than offset %lu, found sample at offset %lu", adder->offset, earliest_input_offset);
-			return GST_FLOW_ERROR;
+			result = GST_FLOW_ERROR;
+			goto error;
 		}
 	} else {
 		/*
@@ -1186,7 +1191,9 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 * just to send it.
 		 */
 
+		GST_OBJECT_UNLOCK(adder);
 		gst_pad_push_event(adder->srcpad, event);
+		GST_OBJECT_LOCK(adder);
 		adder->segment_pending = FALSE;
 	}
 
@@ -1214,6 +1221,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 	 */
 
 	GST_LOG_OBJECT(adder, "pushing outbuf, timestamp %" GST_TIME_FORMAT ", offset %lu", GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(outbuf)), GST_BUFFER_OFFSET(outbuf));
+	GST_OBJECT_UNLOCK(adder);
 	return gst_pad_push(adder->srcpad, outbuf);
 
 	/*
@@ -1222,8 +1230,13 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 
 eos:
 	GST_DEBUG_OBJECT(adder, "no data available (EOS)");
+	GST_OBJECT_UNLOCK(adder);
 	gst_pad_push_event(adder->srcpad, gst_event_new_eos());
 	return GST_FLOW_UNEXPECTED;
+
+error:
+	GST_OBJECT_UNLOCK(adder);
+	return result;
 }
 
 
