@@ -424,8 +424,8 @@ done:
 static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
-	guint sinkbuf_samples;
-	guint start, length;
+	guint64 sinkbuf_samples;
+	guint64 start, length;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
