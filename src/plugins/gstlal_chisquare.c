@@ -388,7 +388,8 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	/*
-	 * replace the current matrix with the new one
+	 * replace the current matrix with the new one.  this consumes the
+	 * reference.
 	 */
 
 	g_mutex_lock(element->coefficients_lock);
@@ -451,7 +452,8 @@ static GstFlowReturn chain_chifacs(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	/*
-	 * replace the current matrix with the new one
+	 * replace the current chifacs vector with the new one.  this
+	 * consumes the reference.
 	 */
 
 	g_mutex_lock(element->coefficients_lock);
@@ -464,7 +466,8 @@ static GstFlowReturn chain_chifacs(GstPad *pad, GstBuffer *sinkbuf)
 
 	/* FIXME:  clear the caps on the snr and orthosnr pads to induce a
 	 * caps negotiation sequence when the next buffers arrive in order
-	 * to check the number of channels */
+	 * to check the number of channels;  for now we blindly assume
+	 * everything's OK */
 
 	/*
 	 * done
@@ -653,7 +656,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	for(sample = 0; sample < length; sample++) {
 		double *data = &((double *) GST_BUFFER_DATA(buf))[numchannels * sample];
 		const double *orthodata = &((const double *) GST_BUFFER_DATA(orthosnrbuf))[numorthochannels * sample];
-		for(channel = 0; channel < numchannels; channel+=2) {
+		for(channel = 0; channel < numchannels; channel += 2) {
 			complex double csnr = data[channel] + I * data[channel + 1];
 			double snr = cabs(csnr);
 			double arg = carg(csnr);
