@@ -261,7 +261,7 @@ static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 
 static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 {
-	GstAdder *adder = GST_ADDER(gst_pad_parent(pad));
+	GstAdder *adder = GST_ADDER(gst_pad_get_parent(pad));
 	GList *padlist = NULL;
 	GstStructure *structure = NULL;
 	const char *media_type;
