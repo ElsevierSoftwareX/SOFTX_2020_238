@@ -207,7 +207,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 
 static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 {
-	GstAdder *adder = GST_ADDER(GST_PAD_PARENT(pad));
+	GstAdder *adder = GST_ADDER(gst_pad_get_parent(pad));
 	GstCaps *result = NULL;
 	GstCaps *peercaps = NULL;
 	GstCaps *sinkcaps = NULL;
@@ -247,6 +247,7 @@ static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 	 */
 
 	GST_OBJECT_UNLOCK(adder);
+	gst_object_unref(adder);
 	return result;
 }
 
@@ -260,13 +261,15 @@ static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 
 static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 {
-	GstAdder *adder = GST_ADDER(GST_PAD_PARENT(pad));
+	GstAdder *adder = GST_ADDER(gst_pad_parent(pad));
 	GList *padlist = NULL;
 	GstStructure *structure = NULL;
 	const char *media_type;
 	gint width;
 	gint channels;
 	gboolean is_signed;
+
+	GST_OBJECT_LOCK(adder);
 
 	GST_LOG_OBJECT(adder, "setting caps on pad %s:%s to %" GST_PTR_FORMAT, GST_DEBUG_PAD_NAME(pad), caps);
 
@@ -278,13 +281,11 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 	/* FIXME, see if the other pads can accept the format. Also lock
 	 * the format on the other pads to this new format. */
 
-	GST_OBJECT_LOCK(adder);
 	for(padlist = GST_ELEMENT(adder)->pads; padlist; padlist = g_list_next(padlist)) {
 		GstPad *otherpad = GST_PAD(padlist->data);
 		if(otherpad != pad)
 			gst_caps_replace(&GST_PAD_CAPS(otherpad), caps);
 	}
-	GST_OBJECT_UNLOCK(adder);
 
 	/*
 	 * parse caps
@@ -349,18 +350,18 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 
 	adder->bytes_per_sample = (width / 8) * channels;
 
-	GST_OBJECT_LOCK(adder);
 	for(padlist = GST_ELEMENT(adder)->pads; padlist; padlist = g_list_next(padlist)) {
 		GstPad *pad = GST_PAD(padlist->data);
 		if(gst_pad_get_direction(pad) == GST_PAD_SINK)
 			gstlal_collect_pads_set_bytes_per_sample(pad, adder->bytes_per_sample);
 	}
-	GST_OBJECT_UNLOCK(adder);
 
 	/*
 	 * done
 	 */
 
+	GST_OBJECT_UNLOCK(adder);
+	gst_object_unref(adder);
 	return TRUE;
 
 	/*
@@ -369,6 +370,8 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 
 not_supported:
 	GST_DEBUG_OBJECT(adder, "unsupported format");
+	GST_OBJECT_UNLOCK(adder);
+	gst_object_unref(adder);
 	return FALSE;
 }
 
