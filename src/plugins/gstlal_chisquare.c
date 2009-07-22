@@ -623,11 +623,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	}
 
 	/*
-	 * FIXME:  rethink the collect pads system so that this doesn't
-	 * happen  (I think the second part already cannot happen because
-	 * we get the collect pads system to tell us the upper bound of
-	 * available offsets before asking for the buffers, but need to
-	 * check this)
+	 * Check for mis-aligned input buffers.  This can happen, but we
+	 * can't handle it.
 	 */
 
 	if(GST_BUFFER_OFFSET(buf) != GST_BUFFER_OFFSET(orthosnrbuf) || GST_BUFFER_OFFSET_END(buf) != GST_BUFFER_OFFSET_END(orthosnrbuf)) {
