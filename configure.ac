@@ -14,8 +14,7 @@ AC_CONFIG_FILES([ \
 	Makefile \
 	src/Makefile \
 	src/plugins/Makefile \
-	src/utilities/Makefile \
-	src/plugins/speexresample/Makefile \
+	src/utilities/Makefile
 ])
 
 
