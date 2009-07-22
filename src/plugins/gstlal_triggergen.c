@@ -175,7 +175,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	guint64 earliest_input_offset, earliest_input_offset_end;
 	GstBuffer *snrbuf = NULL;
 	GstBuffer *chisqbuf = NULL;
-	GstBuffer *srcbuf;
+	GstBuffer *srcbuf = NULL;
 	GstFlowReturn result;
 
 	/*
