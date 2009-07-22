@@ -641,8 +641,67 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 }
 
 
-/* FIXME:  how 'bout adding an event handler to handle flushing and eos by
- * sending any remaining data downstream? */
+/*
+ * event handler.
+ */
+
+
+static gboolean sink_event(GstPad *pad, GstEvent *event)
+{
+	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
+	gboolean result;
+
+	/*
+	 * handle events
+	 */
+
+	/* FIXME:  add flush handlers to clear out internal state before
+	 * new segment */
+
+	switch (GST_EVENT_TYPE(event)) {
+	case GST_EVENT_NEWSEGMENT: {
+		gboolean update;
+		gdouble rate;
+		gdouble applied_rate;
+		GstFormat format;
+		gint64 start, stop, position;
+
+		gst_event_parse_new_segment_full(event, &update, &rate, &applied_rate, &format, &start, &stop, &position);
+		gst_event_unref(event);
+
+		if(format == GST_FORMAT_TIME) {
+			guint64 delta_t = round(element->t_start * GST_SECOND);
+			start += delta_t;
+			stop += delta_t;
+			position += delta_t;	/* FIXME:  is this right? */
+		} else {
+			GST_ERROR_OBJECT(element, "segment format not supported");
+			result = FALSE;
+			break;
+		}
+
+		event = gst_event_new_new_segment_full(update, rate, applied_rate, format, start, stop, position);
+
+		gst_event_ref(event);
+		result = gst_pad_push_event(element->sumsquarespad, event);
+		result &= gst_pad_push_event(element->srcpad, event);
+
+		gst_segment_set_newsegment_full(&element->segment, update, rate, applied_rate, format, start, stop, position);
+		break;
+	}
+
+	default:
+		result = gst_pad_event_default(pad, event);
+		break;
+	}
+
+	/*
+	 * now chain to GstCollectPads handler to take care of the rest.
+	 */
+
+	gst_object_unref(element);
+	return result;
+}
 
 
 /*
@@ -737,55 +796,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
-		element->segment_start = GST_BUFFER_TIMESTAMP(sinkbuf);
+		element->segment.start = GST_BUFFER_TIMESTAMP(sinkbuf) + (guint64) round(element->t_start * GST_SECOND);
 		element->offset0 = GST_BUFFER_OFFSET(sinkbuf);
 		element->offset = 0;
-
-		/*
-		 * Push GAP buffers of zeros out both src pads to pad the
-		 * output streams.
-		 */
-
-		if(element->t_start) {
-			guint64 zero_pad_samples = round(element->t_start * element->sample_rate);
-
-#if 0
-			result = gst_pad_alloc_buffer(element->sumsquarespad, element->offset0 + element->offset, zero_pad_samples * sizeof(*element->U->data), GST_PAD_CAPS(element->sumsquarespad), &zeros);
-			if(result != GST_FLOW_OK)
-				goto done;
-			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
-			gst_buffer_copy_metadata(zeros, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
-			GST_BUFFER_FLAG_SET(zeros, GST_BUFFER_FLAG_GAP);
-			GST_BUFFER_OFFSET_END(zeros) = element->offset0 + element->offset + zero_pad_samples;
-			GST_BUFFER_TIMESTAMP(zeros) = element->segment_start + (GstClockTime) gst_util_uint64_scale_int(element->offset, GST_SECOND, element->sample_rate);
-			GST_BUFFER_DURATION(zeros) = gst_util_uint64_scale_int(element->offset + zero_pad_samples, GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(element->offset, GST_SECOND, element->sample_rate);
-
-			result = gst_pad_push(element->sumsquarespad, zeros);
-			if(result != GST_FLOW_OK)
-				goto done;
-
-			result = gst_pad_alloc_buffer(element->srcpad, element->offset0 + element->offset, num_templates(element) * zero_pad_samples * sizeof(*element->U->data), GST_PAD_CAPS(element->srcpad), &zeros);
-			if(result != GST_FLOW_OK)
-				goto done;
-			memset(GST_BUFFER_DATA(zeros), 0, GST_BUFFER_SIZE(zeros));
-			gst_buffer_copy_metadata(zeros, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
-			GST_BUFFER_FLAG_SET(zeros, GST_BUFFER_FLAG_GAP);
-			GST_BUFFER_OFFSET_END(zeros) = element->offset0 + element->offset + zero_pad_samples;
-			GST_BUFFER_TIMESTAMP(zeros) = element->segment_start + (GstClockTime) gst_util_uint64_scale_int(element->offset, GST_SECOND, element->sample_rate);
-			GST_BUFFER_DURATION(zeros) = gst_util_uint64_scale_int(element->offset + zero_pad_samples, GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(element->offset, GST_SECOND, element->sample_rate);
-
-			result = gst_pad_push(element->srcpad, zeros);
-			if(result != GST_FLOW_OK)
-				goto done;
-
-			/*
-			 * Update the output offset
-			 */
-
-			element->next_is_discontinuity = FALSE;
-#endif
-			element->offset += zero_pad_samples;
-		}
 
 		/*
 		 * Pad the adapter with enough 0s to accomodate the
@@ -885,7 +898,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			GST_BUFFER_FLAG_SET(orthogonal_snr_buf, GST_BUFFER_FLAG_DISCONT);
 		}
 		GST_BUFFER_OFFSET_END(orthogonal_snr_sum_squares_buf) = GST_BUFFER_OFFSET_END(orthogonal_snr_buf) = GST_BUFFER_OFFSET(orthogonal_snr_buf) + output_length;
-		GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) = GST_BUFFER_TIMESTAMP(orthogonal_snr_buf) = element->segment_start + (GstClockTime) gst_util_uint64_scale_int(element->offset, GST_SECOND, element->sample_rate);
+		GST_BUFFER_TIMESTAMP(orthogonal_snr_sum_squares_buf) = GST_BUFFER_TIMESTAMP(orthogonal_snr_buf) = element->segment.start + (GstClockTime) gst_util_uint64_scale_int(element->offset, GST_SECOND, element->sample_rate);
 		GST_BUFFER_DURATION(orthogonal_snr_sum_squares_buf) = GST_BUFFER_DURATION(orthogonal_snr_buf) = (GstClockTime) (gst_util_uint64_scale_int(element->offset + output_length, GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(element->offset, GST_SECOND, element->sample_rate));
 
 		/*
@@ -1124,6 +1137,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	/* configure sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
 	gst_pad_set_setcaps_function(pad, setcaps);
+	gst_pad_set_event_function(pad, sink_event);
 	gst_pad_set_chain_function(pad, chain);
 	gst_object_unref(pad);
 
@@ -1144,13 +1158,14 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	element->reference_psd_filename = NULL;
 	element->template_bank_filename = NULL;
+	element->sample_rate = 0;
 	element->t_start = DEFAULT_T_START;
 	element->t_end = DEFAULT_T_END;
 	element->t_total_duration = 0;
 	element->snr_length = DEFAULT_SNR_LENGTH;
 
 	element->next_is_discontinuity = FALSE;
-	element->segment_start = 0;
+	gst_segment_init(&element->segment, GST_FORMAT_TIME);
 	element->offset0 = 0;
 	element->offset = 0;
 

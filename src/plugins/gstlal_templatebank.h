@@ -77,7 +77,7 @@ typedef struct {
 	unsigned int snr_length;
 
 	gboolean next_is_discontinuity;
-	GstClockTime segment_start;
+	GstSegment segment;
 	guint64 offset0;
 	guint64 offset;
 
