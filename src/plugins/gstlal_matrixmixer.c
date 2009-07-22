@@ -181,6 +181,7 @@ static GstCaps *getcaps(GstPad *pad)
 	 * channels must match the number of rows in the mixing matrix.
 	 */
 
+	GST_OBJECT_LOCK(element);
 	if(element->mixmatrix_buf) {
 		GstCaps *matrixcaps = gst_caps_make_writable(gst_buffer_get_caps(element->mixmatrix_buf));
 		GstCaps *result;
@@ -193,6 +194,7 @@ static GstCaps *getcaps(GstPad *pad)
 		gst_caps_unref(matrixcaps);
 		sinkcaps = result;
 	}
+	GST_OBJECT_UNLOCK(element);
 
 	/*
 	 * done.
@@ -213,6 +215,8 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(gst_pad_get_parent(pad));
 	gboolean result = TRUE;
 
+	GST_OBJECT_LOCK(element);
+
 	/*
 	 * if we have a mixing matrix, set the number of output channels to
 	 * the number of columns in the mixing matrix and check if the
@@ -226,7 +230,9 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 		caps = gst_caps_make_writable(caps);
 
 		gst_caps_set_simple(caps, "channels", G_TYPE_INT, num_output_channels(element), NULL);
+		GST_OBJECT_UNLOCK(element);
 		result = gst_pad_set_caps(element->srcpad, caps);
+		GST_OBJECT_LOCK(element);
 
 		gst_caps_unref(caps);
 	}
@@ -235,6 +241,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 * done.
 	 */
 
+	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
 	return result;
 }
@@ -423,6 +430,8 @@ static gboolean setcaps_matrix(GstPad *pad, GstCaps *caps)
 	int width;
 	gboolean result = TRUE;
 
+	GST_OBJECT_LOCK(element);
+
 	media_type = gst_structure_get_name(structure);
 	gst_structure_get_int(structure, "width", &width);
 
@@ -457,6 +466,7 @@ static gboolean setcaps_matrix(GstPad *pad, GstCaps *caps)
 	 * done.
 	 */
 
+	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
 	return result;
 }
