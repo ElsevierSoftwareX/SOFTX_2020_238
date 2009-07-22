@@ -1,5 +1,5 @@
 /*
- * A \Chi^{2} element for the inspiral pipeline.
+ * A \chi^{2} element for the inspiral pipeline.
  *
  * Copyright (C) 2008  Kipp Cannon, Chad Hanna
  *
@@ -481,7 +481,7 @@ done:
 /*
  * ============================================================================
  *
- *                            \Chi^{2} Computation
+ *                            \chi^{2} Computation
  *
  * ============================================================================
  */
@@ -628,7 +628,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	}
 
 	/*
-	 * compute the \Chi^{2} values in-place in the input buffer
+	 * compute the \chi^{2} values in-place in the input buffer
 	 */
 	/* FIXME:  Assumes that the most important basis vectors are at the
 	 * beginning;  this is a sensible assumption */
@@ -667,7 +667,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 				double mixing_coefficient_re = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel);
 				double mixing_coefficient_im = gsl_matrix_get(&element->mixmatrix.matrix, ortho_channel, channel+1);
 				double mc = mixing_coefficient_re * cos_arg + mixing_coefficient_im * sin_arg;
-				data[channel] += pow((snr * mc - orthodata[ortho_channel]), 2.0);
+				data[channel] += pow(snr * mc - orthodata[ortho_channel], 2.0);
 			}
 			data[channel+1] = data[channel];
 		}
@@ -801,9 +801,9 @@ static GstStateChangeReturn change_state(GstElement *element, GstStateChange tra
 static void base_init(gpointer class)
 {
 	static GstElementDetails plugin_details = {
-		"Inspiral \\Chi^{2}",
+		"Inspiral \\chi^{2}",
 		"Filter",
-		"A \\Chi^{2} statistic for the inspiral pipeline",
+		"A \\chi^{2} statistic for the inspiral pipeline",
 		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chad Hanna <channa@ligo.caltech.edu>"
 	};
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
