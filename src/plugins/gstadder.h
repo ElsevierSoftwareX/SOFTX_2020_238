@@ -59,7 +59,7 @@ typedef struct _GstAdder {
 
 	/* stream format */
 	gint rate;
-	guint bytes_per_sample; /* = width / 8 * channels */
+	guint unit_size; /* = width / 8 * channels */
 
 	/* function to add samples */
 	GstAdderFunction func;

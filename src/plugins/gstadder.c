@@ -348,12 +348,12 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 	 * pre-calculate bytes / sample
 	 */
 
-	adder->bytes_per_sample = (width / 8) * channels;
+	adder->unit_size = (width / 8) * channels;
 
 	for(padlist = GST_ELEMENT(adder)->pads; padlist; padlist = g_list_next(padlist)) {
 		GstPad *pad = GST_PAD(padlist->data);
 		if(gst_pad_get_direction(pad) == GST_PAD_SINK)
-			gstlal_collect_pads_set_bytes_per_sample(pad, adder->bytes_per_sample);
+			gstlal_collect_pads_set_unit_size(pad, adder->unit_size);
 	}
 
 	/*
@@ -1044,7 +1044,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 */
 
 		earliest_input_offset = adder->offset == GST_BUFFER_OFFSET_NONE ? 0 : adder->offset;
-		earliest_input_offset_end = earliest_input_offset + gst_collect_pads_available(pads) / adder->bytes_per_sample;
+		earliest_input_offset_end = earliest_input_offset + gst_collect_pads_available(pads) / adder->unit_size;
 	}
 
 	/*
@@ -1072,7 +1072,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		if(adder->synchronous)
 			inbuf = gstlal_collect_pads_take_buffer(pads, data, earliest_input_offset_end, adder->rate, adder->segment.start);
 		else
-			inbuf = gst_collect_pads_take_buffer(pads, (GstCollectData *) data, length * adder->bytes_per_sample);
+			inbuf = gst_collect_pads_take_buffer(pads, (GstCollectData *) data, length * adder->unit_size);
 
 		/*
 		 * NULL means EOS.
@@ -1091,7 +1091,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 * starts now.
 		 */
 
-		gap = adder->synchronous ? (GST_BUFFER_OFFSET(inbuf) - earliest_input_offset) * adder->bytes_per_sample : 0;
+		gap = adder->synchronous ? (GST_BUFFER_OFFSET(inbuf) - earliest_input_offset) * adder->unit_size : 0;
 		len = GST_BUFFER_SIZE(inbuf);
 
 		/*
@@ -1110,7 +1110,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			 * */
 
 			GST_LOG_OBJECT(adder, "requesting output buffer of %lu samples", length);
-			result = gst_pad_alloc_buffer(adder->srcpad, earliest_input_offset, length * adder->bytes_per_sample, GST_PAD_CAPS(adder->srcpad), &outbuf);
+			result = gst_pad_alloc_buffer(adder->srcpad, earliest_input_offset, length * adder->unit_size, GST_PAD_CAPS(adder->srcpad), &outbuf);
 			if(result != GST_FLOW_OK) {
 				/* FIXME: handle failure */
 				outbuf = NULL;
@@ -1424,7 +1424,7 @@ static void gst_adder_init(GTypeInstance * object, gpointer class)
 	gst_collect_pads_set_function(adder->collect, GST_DEBUG_FUNCPTR(gst_adder_collected), adder);
 
 	adder->rate = 0;
-	adder->bytes_per_sample = 0;
+	adder->unit_size = 0;
 	adder->func = NULL;
 }
 

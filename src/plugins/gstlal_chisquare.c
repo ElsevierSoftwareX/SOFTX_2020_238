@@ -131,7 +131,7 @@ static size_t chifacs_element_size(const GSTLALChiSquare *element)
  */
 
 
-static void set_bytes_per_sample(GstPad *pad, GstCaps *caps)
+static void set_unit_size(GstPad *pad, GstCaps *caps)
 {
 	GstStructure *structure;
 	gint width, channels;
@@ -140,7 +140,7 @@ static void set_bytes_per_sample(GstPad *pad, GstCaps *caps)
 	gst_structure_get_int(structure, "width", &width);
 	gst_structure_get_int(structure, "channels", &channels);
 
-	gstlal_collect_pads_set_bytes_per_sample(pad, (width / 8) * channels);
+	gstlal_collect_pads_set_unit_size(pad, (width / 8) * channels);
 }
 
 
@@ -235,7 +235,7 @@ static gboolean setcaps_snr(GstPad *pad, GstCaps *caps)
 	 * set bytes per sample on collect pads object
 	 */
 
-	set_bytes_per_sample(pad, caps);
+	set_unit_size(pad, caps);
 
 	/*
 	 * extract rate
@@ -332,7 +332,7 @@ static gboolean setcaps_orthosnr(GstPad *pad, GstCaps *caps)
 	 * set bytes per sample on collect pads object
 	 */
 
-	set_bytes_per_sample(pad, caps);
+	set_unit_size(pad, caps);
 
 	/*
 	 * extract rate

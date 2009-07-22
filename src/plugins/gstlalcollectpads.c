@@ -120,7 +120,7 @@ GstLALCollectData *gstlal_collect_pads_add_pad_full(GstCollectPads *pads, GstPad
 	 * structure
 	 */
 
-	data->bytes_per_sample = 0;
+	data->unit_size = 0;
 
 	/*
 	 * FIXME: hacked way to override/extend the event function of
@@ -170,7 +170,7 @@ gboolean gstlal_collect_pads_remove_pad(GstCollectPads *pads, GstPad *pad)
  */
 
 
-void gstlal_collect_pads_set_bytes_per_sample(GstPad *pad, guint bytes_per_sample)
+void gstlal_collect_pads_set_unit_size(GstPad *pad, guint unit_size)
 {
 	/* FIXME:  the collect pads stores the address of the
 	 * GstCollectData object in the pad's element private.  this is
@@ -179,7 +179,25 @@ void gstlal_collect_pads_set_bytes_per_sample(GstPad *pad, guint bytes_per_sampl
 
 	g_return_if_fail(data != NULL);
 
-	data->bytes_per_sample = bytes_per_sample;
+	data->unit_size = unit_size;
+}
+
+
+/**
+ * Retrieve the number of bytes per sample on the given input stream.
+ */
+
+
+guint gstlal_collect_pads_get_unit_size(GstPad *pad)
+{
+	/* FIXME:  the collect pads stores the address of the
+	 * GstCollectData object in the pad's element private.  this is
+	 * undocumented behaviour, but we rely on it! */
+	GstLALCollectData *data = gst_pad_get_element_private(pad);
+
+	g_return_val_if_fail(data != NULL, -1);
+
+	return data->unit_size;
 }
 
 
@@ -317,7 +335,7 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 		 * check for uninitialized GstLALCollectData
 		 */
 
-		g_return_val_if_fail(data->bytes_per_sample != 0, FALSE);
+		g_return_val_if_fail(data->unit_size != 0, FALSE);
 
 		/*
 		 * check for EOS
@@ -356,7 +374,7 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 		 * output stream
 		 */
 
-		this_offset = (gint64) GST_BUFFER_OFFSET(buf) + data->as_gstcollectdata.pos / data->bytes_per_sample - offset_offset;
+		this_offset = (gint64) GST_BUFFER_OFFSET(buf) + data->as_gstcollectdata.pos / data->unit_size - offset_offset;
 
 		if(GST_BUFFER_OFFSET_END_IS_VALID(buf)) {
 			this_offset_end = (gint64) GST_BUFFER_OFFSET_END(buf) - offset_offset;
@@ -368,7 +386,7 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 			 * sample
 			 */
 
-			this_offset_end = (gint64) GST_BUFFER_OFFSET(buf) + GST_BUFFER_SIZE(buf) / data->bytes_per_sample - offset_offset;
+			this_offset_end = (gint64) GST_BUFFER_OFFSET(buf) + GST_BUFFER_SIZE(buf) / data->unit_size - offset_offset;
 		}
 		gst_buffer_unref(buf);
 
@@ -444,7 +462,7 @@ GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *pads, GstLALCollectDa
 		 * EOS
 		 */
 		return NULL;
-	dequeued_offset = GST_BUFFER_OFFSET(buf) + data->as_gstcollectdata.pos / data->bytes_per_sample - compute_offset_offset(buf, rate, output_timestamp_at_zero_offset);
+	dequeued_offset = GST_BUFFER_OFFSET(buf) + data->as_gstcollectdata.pos / data->unit_size - compute_offset_offset(buf, rate, output_timestamp_at_zero_offset);
 	gst_buffer_unref(buf);
 
 	/*
@@ -459,7 +477,7 @@ GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *pads, GstLALCollectDa
 	 * retrieve a buffer
 	 */
 
-	buf = gst_collect_pads_take_buffer(pads, (GstCollectData *) data, length * data->bytes_per_sample);
+	buf = gst_collect_pads_take_buffer(pads, (GstCollectData *) data, length * data->unit_size);
 	if(!buf)
 		/*
 		 * EOS or no data (probably impossible, because we would've
@@ -473,7 +491,7 @@ GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *pads, GstLALCollectDa
 
 	buf = gst_buffer_make_metadata_writable(buf);
 	GST_BUFFER_OFFSET(buf) = dequeued_offset;
-	GST_BUFFER_OFFSET_END(buf) = dequeued_offset + GST_BUFFER_SIZE(buf) / data->bytes_per_sample;
+	GST_BUFFER_OFFSET_END(buf) = dequeued_offset + GST_BUFFER_SIZE(buf) / data->unit_size;
 
 	return buf;
 }

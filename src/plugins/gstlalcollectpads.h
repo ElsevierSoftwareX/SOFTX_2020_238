@@ -50,10 +50,11 @@ typedef struct _GstLALCollectData {
 	GstPadEventFunction collect_event_func;
 
 	/*
-	 * number of bytes per sample (= width / 8 * channels)
+	 * size of one "unit", e.g. (multi-channel) audio sample, video
+	 * frame, etc.  For audio, = (sample width) / 8 * (channels).
 	 */
 
-	guint bytes_per_sample;
+	guint unit_size;
 } GstLALCollectData;
 
 
@@ -65,7 +66,8 @@ typedef struct _GstLALCollectData {
 GstLALCollectData *gstlal_collect_pads_add_pad(GstCollectPads *, GstPad *, guint);
 GstLALCollectData *gstlal_collect_pads_add_pad_full(GstCollectPads *, GstPad *, guint, GstCollectDataDestroyNotify);
 gboolean gstlal_collect_pads_remove_pad(GstCollectPads *, GstPad *);
-void gstlal_collect_pads_set_bytes_per_sample(GstPad *, guint);
+void gstlal_collect_pads_set_unit_size(GstPad *, guint);
+guint gstlal_collect_pads_get_unit_size(GstPad *);
 GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads);
 gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *, guint64 *, guint64 *, gint, GstClockTime);
 GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *, GstLALCollectData *, guint64, gint, GstClockTime);
