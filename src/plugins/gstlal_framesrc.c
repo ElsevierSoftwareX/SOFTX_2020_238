@@ -110,7 +110,7 @@ static void DestroyTimeSeries(void *series, LALTYPECODE type)
 		XLALDestroyREAL8TimeSeries(series);
 		break;
 	default:
-		/* probably means there isn't a series to free */
+		GST_ERROR("unsupported LAL type code (%d)", type);
 		break;
 	}
 }
@@ -142,6 +142,7 @@ static gint series_to_rate(const void *series, LALTYPECODE type)
 	}
 
 	default:
+		GST_ERROR("unsupported LAL type code (%d)", type);
 		return -1;
 	}
 }
@@ -150,12 +151,13 @@ static gint series_to_rate(const void *series, LALTYPECODE type)
 static GstCaps *series_to_caps(const char *instrument, const char *channel_name, const void *series, LALTYPECODE type)
 {
 	char units[100];
+	GstCaps *caps;
 
 	switch(type) {
 	case LAL_I4_TYPE_CODE: {
 		const INT4TimeSeries *local_series = series;
 		XLALUnitAsString(units, sizeof(units), &local_series->sampleUnits);
-		return gst_caps_new_simple(
+		caps = gst_caps_new_simple(
 			"audio/x-raw-int",
 			"rate", G_TYPE_INT, series_to_rate(series, type),
 			"channels", G_TYPE_INT, 1,
@@ -168,12 +170,13 @@ static GstCaps *series_to_caps(const char *instrument, const char *channel_name,
 			"units", G_TYPE_STRING, units,
 			NULL
 		);
+		break;
 	}
 
 	case LAL_S_TYPE_CODE: {
 		const REAL4TimeSeries *local_series = series;
 		XLALUnitAsString(units, 100, &local_series->sampleUnits);
-		return gst_caps_new_simple(
+		caps = gst_caps_new_simple(
 			"audio/x-raw-float",
 			"rate", G_TYPE_INT, series_to_rate(series, type),
 			"channels", G_TYPE_INT, 1,
@@ -184,12 +187,13 @@ static GstCaps *series_to_caps(const char *instrument, const char *channel_name,
 			"units", G_TYPE_STRING, units,
 			NULL
 		);
+		break;
 	}
 
 	case LAL_D_TYPE_CODE: {
 		const REAL8TimeSeries *local_series = series;
 		XLALUnitAsString(units, 100, &local_series->sampleUnits);
-		return gst_caps_new_simple(
+		caps = gst_caps_new_simple(
 			"audio/x-raw-float",
 			"rate", G_TYPE_INT, series_to_rate(series, type),
 			"channels", G_TYPE_INT, 1,
@@ -200,11 +204,21 @@ static GstCaps *series_to_caps(const char *instrument, const char *channel_name,
 			"units", G_TYPE_STRING, units,
 			NULL
 		);
+		break;
 	}
 
 	default:
-		return NULL;
+		GST_ERROR("unsupported LAL type code (%d)", type);
+		caps = NULL;
+		break;
 	}
+
+	if(caps)
+		GST_DEBUG("constructed caps:  %" GST_PTR_FORMAT, caps);
+	else
+		GST_ERROR("failure constructing caps");
+
+	return caps;
 }
 
 
@@ -248,7 +262,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 		break;
 
 	default:
-		GST_ERROR_OBJECT(element, "unsupported data type (LALTYPECODE=%d)", element->series_type);
+		GST_ERROR_OBJECT(element, "unsupported LAL type code (%d)", element->series_type);
 		return NULL;
 	}
 	input_buffer_offset = gst_util_uint64_scale_int(XLALGPSToINT8NS(&input_buffer_epoch) - basesrc->segment.start, (gint) round(1.0 / deltaT), GST_SECOND);
@@ -334,10 +348,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 			break;
 
 		default:
-			/*
-			 * impossible, would've been caught above
-			 */
-			
+			GST_ERROR_OBJECT(element, "unsupported LAL type code (%d)", element->series_type);
 			return NULL;
 		}
 
@@ -372,9 +383,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 		return XLALCutREAL8TimeSeries(element->input_buffer, start_sample - input_buffer_offset, length);
 
 	default:
-		/*
-		 * impossible, would've been caught above
-		 */
+		GST_ERROR_OBJECT(element, "unsupported LAL type code (%d)", element->series_type);
 		return NULL;
 	}
 }
@@ -401,6 +410,8 @@ enum property {
 static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
 {
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
+
+	GST_OBJECT_LOCK(element);
 
 	switch(id) {
 	case ARG_SRC_LOCATION:
@@ -435,12 +446,16 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		break;
 	}
 	}
+
+	GST_OBJECT_UNLOCK(element);
 }
 
 
 static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
 {
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
+
+	GST_OBJECT_LOCK(element);
 
 	switch(id) {
 	case ARG_SRC_LOCATION:
@@ -466,6 +481,8 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		break;
 	}
 	}
+
+	GST_OBJECT_UNLOCK(element);
 }
 
 
