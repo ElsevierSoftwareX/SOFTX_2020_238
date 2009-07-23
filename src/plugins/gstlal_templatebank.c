@@ -397,6 +397,7 @@ static GstFlowReturn push_mixer_matrix(GstPad *pad, gsl_matrix *matrix, GstClock
 	GstCaps *caps;
 	gboolean success;
 	GstFlowReturn result = GST_FLOW_OK;
+
 	/*
 	 * Negotiate the matrix size with the mixer.
 	 */
@@ -411,7 +412,7 @@ static GstFlowReturn push_mixer_matrix(GstPad *pad, gsl_matrix *matrix, GstClock
 	success = gst_pad_set_caps(pad, caps);
 	gst_caps_unref(caps);
 	if(!success) {
-		GST_ERROR("failure negotiating mixing matrix caps");
+		GST_ELEMENT_ERROR(GST_PAD_PARENT(pad), CORE, PAD, (NULL), ("%s: gst_pad_set_caps() failed", GST_PAD_NAME(pad)));
 		result = GST_FLOW_NOT_NEGOTIATED;
 		goto done;
 	}
@@ -422,7 +423,7 @@ static GstFlowReturn push_mixer_matrix(GstPad *pad, gsl_matrix *matrix, GstClock
 
 	result = gst_pad_alloc_buffer(pad, GST_BUFFER_OFFSET_NONE, matrix->size1 * matrix->size2 * sizeof(*matrix->data), GST_PAD_CAPS(pad), &buf);
 	if(result != GST_FLOW_OK) {
-		GST_ERROR("failure getting mixing matrix buffer");
+		GST_ELEMENT_ERROR(GST_PAD_PARENT(pad), CORE, PAD, (NULL), ("%s: gst_pad_alloc_buffer() failed (%d)", GST_PAD_NAME(pad), result));
 		goto done;
 	}
 
@@ -444,7 +445,7 @@ static GstFlowReturn push_mixer_matrix(GstPad *pad, gsl_matrix *matrix, GstClock
 
 	result = gst_pad_push(pad, buf);
 	if(result != GST_FLOW_OK) {
-		GST_ERROR("failure pushing mixing matrix");
+		GST_ELEMENT_ERROR(GST_PAD_PARENT(pad), CORE, PAD, (NULL), ("%s: gst_pad_push() failed (%d)", GST_PAD_NAME(pad), result));
 		goto done;
 	}
 
@@ -452,7 +453,7 @@ static GstFlowReturn push_mixer_matrix(GstPad *pad, gsl_matrix *matrix, GstClock
 	 * Done.
 	 */
 
-      done:
+done:
 	return result;
 }
 
@@ -483,7 +484,7 @@ static GstFlowReturn push_chifacs_vector(GstPad *pad, gsl_vector *vector, GstClo
 	success = gst_pad_set_caps(pad, caps);
 	gst_caps_unref(caps);
 	if(!success) {
-		GST_ERROR("failure negotiating chifacs vector caps");
+		GST_ELEMENT_ERROR(GST_PAD_PARENT(pad), CORE, PAD, (NULL), ("%s: gst_pad_set_caps() failed", GST_PAD_NAME(pad)));
 		result = GST_FLOW_NOT_NEGOTIATED;
 		goto done;
 	}
@@ -494,7 +495,7 @@ static GstFlowReturn push_chifacs_vector(GstPad *pad, gsl_vector *vector, GstClo
 
 	result = gst_pad_alloc_buffer(pad, GST_BUFFER_OFFSET_NONE, vector->size * sizeof(*vector->data), GST_PAD_CAPS(pad), &buf);
 	if(result != GST_FLOW_OK) {
-		GST_ERROR("failure getting chifacs vector buffer");
+		GST_ELEMENT_ERROR(GST_PAD_PARENT(pad), CORE, PAD, (NULL), ("%s: gst_pad_alloc_buffer() failed (%d)", GST_PAD_NAME(pad), result));
 		goto done;
 	}
 
@@ -516,7 +517,7 @@ static GstFlowReturn push_chifacs_vector(GstPad *pad, gsl_vector *vector, GstClo
 
 	result = gst_pad_push(pad, buf);
 	if(result != GST_FLOW_OK) {
-		GST_ERROR("failure pushing chifacs vector");
+		GST_ELEMENT_ERROR(GST_PAD_PARENT(pad), CORE, PAD, (NULL), ("%s: gst_pad_push() failed (%d)", GST_PAD_NAME(pad), result));
 		goto done;
 	}
 
@@ -524,7 +525,7 @@ static GstFlowReturn push_chifacs_vector(GstPad *pad, gsl_vector *vector, GstClo
 	 * Done.
 	 */
 
-      done:
+done:
 	return result;
 }
 
@@ -551,6 +552,8 @@ enum property {
 static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(object);
+
+	GST_OBJECT_LOCK(element);
 
 	switch (id) {
 	case ARG_TEMPLATE_BANK:
@@ -579,12 +582,16 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->snr_length = g_value_get_uint(value);
 		break;
 	}
+
+	GST_OBJECT_UNLOCK(element);
 }
 
 
 static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(object);
+
+	GST_OBJECT_LOCK(element);
 
 	switch (id) {
 	case ARG_TEMPLATE_BANK:
@@ -610,6 +617,8 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	case ARG_SNR_LENGTH:
 		g_value_set_uint(value, element->snr_length);
 	}
+
+	GST_OBJECT_UNLOCK(element);
 }
 
 
@@ -630,11 +639,12 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
-	gboolean result = TRUE;
-
-	element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
+	gboolean result;
 
 	result = gst_pad_set_caps(element->sumsquarespad, caps);
+
+	if(result)
+		element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 
 	gst_object_unref(element);
 	return result;
@@ -675,7 +685,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 			stop += delta_t;
 			position += delta_t;	/* FIXME:  is this right? */
 		} else {
-			GST_ERROR_OBJECT(element, "segment format not supported");
+			GST_ELEMENT_ERROR(element, CORE, NOT_IMPLEMENTED, (NULL), ("segment format not supported"));
 			result = FALSE;
 			break;
 		}
@@ -686,7 +696,8 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		result = gst_pad_push_event(element->sumsquarespad, event);
 		result &= gst_pad_push_event(element->srcpad, event);
 
-		gst_segment_set_newsegment_full(&element->segment, update, rate, applied_rate, format, start, stop, position);
+		if(result)
+			gst_segment_set_newsegment_full(&element->segment, update, rate, applied_rate, format, start, stop, position);
 		break;
 	}
 
@@ -715,6 +726,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GstFlowReturn result = GST_FLOW_OK;
 	int output_length;
 
+	GST_OBJECT_LOCK(element);
+
 	/*
 	 * Now that we know the sample rate, construct orthogonal basis for
 	 * the template bank if not already done.
@@ -738,9 +751,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		caps = gst_caps_make_writable(gst_buffer_get_caps(sinkbuf));
 		gst_caps_set_simple(caps, "channels", G_TYPE_INT, num_templates(element), NULL);
+		GST_OBJECT_UNLOCK(element);
 		success = gst_pad_set_caps(element->srcpad, caps);
+		GST_OBJECT_LOCK(element);
 		gst_caps_unref(caps);
 		if(success != TRUE) {
+			GST_ELEMENT_ERROR(element, CORE, NOT_IMPLEMENTED, (NULL), ("%s: failure setting caps", GST_PAD_NAME(element->srcpad)));
 			result = GST_FLOW_NOT_NEGOTIATED;
 			goto done;
 		}
@@ -749,16 +765,20 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Tell the mixer how to reconstruct the SNRs.
 		 */
 
+		GST_OBJECT_UNLOCK(element);
 		result = push_mixer_matrix(element->matrixpad, element->V, GST_BUFFER_TIMESTAMP(sinkbuf));
+		GST_OBJECT_LOCK(element);
 		if(result != GST_FLOW_OK)
 			goto done;
 
 		/*
-		 * Tell the \Chi^{2} element the significance of the
+		 * Tell the \chi^{2} element the significance of the
 		 * template components.
 		 */
 
+		GST_OBJECT_UNLOCK(element);
 		result = push_chifacs_vector(element->chifacspad, element->chifacs, GST_BUFFER_TIMESTAMP(sinkbuf));
+		GST_OBJECT_LOCK(element);
 		if(result != GST_FLOW_OK)
 			goto done;
 	}
@@ -792,7 +812,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		if(!GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf)) {
-			GST_ERROR_OBJECT(element, "buffer %p has invalid timestamp or offset", sinkbuf);
+			GST_ELEMENT_ERROR(element, STREAM, FAILED, (NULL), ("%s: buffer has invalid timestamp and/or offset", sinkbuf));
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
@@ -809,6 +829,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		zeros = gst_buffer_try_new_and_alloc((template_length(element) - 1) * sizeof(*element->U->data));
 		if(!zeros) {
+			GST_ELEMENT_ERROR(element, CORE, FAILED, (NULL), ("cannot allocate buffer"));
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
@@ -876,6 +897,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		result = gst_pad_alloc_buffer(element->sumsquarespad, element->offset0 + element->offset, output_length * sizeof(*orthogonal_snr_sum_squares.vector.data), GST_PAD_CAPS(element->sumsquarespad), &orthogonal_snr_sum_squares_buf);
 		if(result != GST_FLOW_OK) {
+			GST_ELEMENT_ERROR(element, CORE, PAD, (NULL), ("%s: cannot allocate buffer", GST_PAD_NAME(element->sumsquarespad)));
 			goto done;
 		}
 
@@ -883,6 +905,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		result = gst_pad_alloc_buffer(element->srcpad, element->offset0 + element->offset, num_templates(element) * output_length * sizeof(*orthogonal_snr.matrix.data), GST_PAD_CAPS(element->srcpad), &orthogonal_snr_buf);
 		if(result != GST_FLOW_OK) {
+			GST_ELEMENT_ERROR(element, CORE, PAD, (NULL), ("%s: cannot allocate buffer", GST_PAD_NAME(element->srcpad)));
 			gst_buffer_unref(orthogonal_snr_sum_squares_buf);
 			goto done;
 		}
@@ -909,13 +932,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		orthogonal_snr_sample = gsl_vector_alloc(orthogonal_snr.matrix.size2);
 		if(!orthogonal_snr_sample) {
-			GST_ERROR_OBJECT(element, "gsl_vector_new() failed");
+			GST_ELEMENT_ERROR(element, CORE, FAILED, (NULL), ("gsl_vector_alloc() failed"));
 			gst_buffer_unref(orthogonal_snr_sum_squares_buf);
 			gst_buffer_unref(orthogonal_snr_buf);
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
-		/* do the convolution */
+
 		convolva(element, output_length, chifacs_mean, orthogonal_snr_sample, &orthogonal_snr, &orthogonal_snr_sum_squares, S_sumsquares, &time_series);
 
 		gsl_vector_free(orthogonal_snr_sample);
@@ -924,15 +947,22 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Push the buffers downstream.
 		 */
 
+		GST_OBJECT_UNLOCK(element);
 		result = gst_pad_push(element->sumsquarespad, orthogonal_snr_sum_squares_buf);
+		GST_OBJECT_LOCK(element);
 		if(result != GST_FLOW_OK) {
+			GST_ELEMENT_ERROR(element, CORE, PAD, (NULL), ("%s: gst_pad_push() failed (%d)", GST_PAD_NAME(element->sumsquarespad), result));
 			gst_buffer_unref(orthogonal_snr_buf);
 			goto done;
 		}
 
+		GST_OBJECT_UNLOCK(element);
 		result = gst_pad_push(element->srcpad, orthogonal_snr_buf);
-		if(result != GST_FLOW_OK)
+		GST_OBJECT_LOCK(element);
+		if(result != GST_FLOW_OK) {
+			GST_ELEMENT_ERROR(element, CORE, PAD, (NULL), ("%s: gst_pad_push() failed (%d)", GST_PAD_NAME(element->srcpad), result));
 			goto done;
+		}
 
 		/*
 		 * Flush the data from the adapter that is no longer
@@ -949,6 +979,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 done:
+	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
 	return result;
 }
