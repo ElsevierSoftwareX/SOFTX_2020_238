@@ -275,7 +275,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		if(!element->mixmatrix_buf) {
 			/* mixing matrix didn't get set.  probably means
 			 * we're being disposed(). */
-			GST_ERROR_OBJECT(element, "no mixing matrix available");
+			GST_ELEMENT_ERROR(element, STREAM, FAILED, (NULL), ("mixing matrix not available"));
 			result = GST_FLOW_NOT_NEGOTIATED;
 			goto done;
 		}
@@ -286,7 +286,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(!(GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))) {
-		GST_ERROR_OBJECT(element, "cannot compute number of input samples:  invalid offset and/or end offset");
+		GST_ELEMENT_ERROR(element, STREAM, FAILED, (NULL), ("%p: buffer has invalid offset and/or end ofset", sinkbuf));
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
@@ -295,7 +295,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	case GSTLAL_MATRIXMIXER_FLOAT:
 		input_channels.as_float = gsl_matrix_float_view_array((float *) GST_BUFFER_DATA(sinkbuf), samples, num_input_channels(element));
 		if(input_channels.as_float.matrix.size1 * input_channels.as_float.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(sinkbuf)) {
-			GST_ERROR_OBJECT(element, "invalid input buffer:  size not divisible by the channel count");
+			GST_ELEMENT_ERROR(element, STREAM, FAILED, (NULL), ("%p: buffer size is not divisible into an integer number of samples", sinkbuf));
 			result = GST_FLOW_NOT_NEGOTIATED;
 			goto done;
 		}
@@ -304,7 +304,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	case GSTLAL_MATRIXMIXER_DOUBLE:
 		input_channels.as_double = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), samples, num_input_channels(element));
 		if(input_channels.as_double.matrix.size1 * input_channels.as_double.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(sinkbuf)) {
-			GST_ERROR_OBJECT(element, "invalid input buffer:  size not divisible by the channel count");
+			GST_ELEMENT_ERROR(element, STREAM, FAILED, (NULL), ("%p: buffer size is not divisible into an integer number of samples", sinkbuf));
 			result = GST_FLOW_NOT_NEGOTIATED;
 			goto done;
 		}
@@ -313,7 +313,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	case GSTLAL_MATRIXMIXER_COMPLEX_FLOAT:
 		input_channels.as_complex_float = gsl_matrix_complex_float_view_array((float *) GST_BUFFER_DATA(sinkbuf), samples, num_input_channels(element));
 		if(input_channels.as_complex_float.matrix.size1 * input_channels.as_complex_float.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(sinkbuf)) {
-			GST_ERROR_OBJECT(element, "invalid input buffer:  size not divisible by the channel count");
+			GST_ELEMENT_ERROR(element, STREAM, FAILED, (NULL), ("%p: buffer size is not divisible into an integer number of samples", sinkbuf));
 			result = GST_FLOW_NOT_NEGOTIATED;
 			goto done;
 		}
@@ -322,7 +322,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	case GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE:
 		input_channels.as_complex_double = gsl_matrix_complex_view_array((double *) GST_BUFFER_DATA(sinkbuf), samples, num_input_channels(element));
 		if(input_channels.as_complex_double.matrix.size1 * input_channels.as_complex_double.matrix.size2 * mixmatrix_element_size(element) != GST_BUFFER_SIZE(sinkbuf)) {
-			GST_ERROR_OBJECT(element, "invalid input buffer:  size not divisible by the channel count");
+			GST_ELEMENT_ERROR(element, STREAM, FAILED, (NULL), ("%p: buffer size is not divisible into an integer number of samples", sinkbuf));
 			result = GST_FLOW_NOT_NEGOTIATED;
 			goto done;
 		}
@@ -335,8 +335,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(sinkbuf), samples * num_output_channels(element) * mixmatrix_element_size(element), GST_PAD_CAPS(element->srcpad), &srcbuf);
-	if(result != GST_FLOW_OK)
+	if(result != GST_FLOW_OK) {
+		GST_ELEMENT_ERROR(element, CORE, PAD, (NULL), ("%s: gst_pad_alloc_buffer() failed (%d)", GST_PAD_NAME(element->srcpad), result));
 		goto done;
+	}
 	gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 
 	/*
@@ -393,8 +395,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GST_OBJECT_UNLOCK(element);
 	result = gst_pad_push(element->srcpad, srcbuf);
 	GST_OBJECT_LOCK(element);
-	if(result != GST_FLOW_OK)
+	if(result != GST_FLOW_OK) {
+		GST_ELEMENT_ERROR(element, CORE, PAD, (NULL), ("%s: gst_pad_push() failed (%d)", GST_PAD_NAME(element->srcpad), result));
 		goto done;
+	}
 
 	/*
 	 * Done
