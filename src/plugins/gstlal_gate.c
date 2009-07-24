@@ -183,11 +183,15 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 {
 	GSTLALGate *element = GSTLAL_GATE(object);
 
+	GST_OBJECT_LOCK(element);
+
 	switch(id) {
 	case ARG_THRESHOLD:
 		element->threshold = g_value_get_double(value);
 		break;
 	}
+
+	GST_OBJECT_UNLOCK(element);
 }
 
 
@@ -195,11 +199,15 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 {
 	GSTLALGate *element = GSTLAL_GATE(object);
 
+	GST_OBJECT_LOCK(element);
+
 	switch(id) {
 	case ARG_THRESHOLD:
 		g_value_set_double(value, element->threshold);
 		break;
 	}
+
+	GST_OBJECT_UNLOCK(element);
 }
 
 
@@ -288,39 +296,34 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 static GstCaps *sink_getcaps(GstPad * pad)
 {
 	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
-	GstCaps *result, *peercaps, *sinkcaps;
-
-	/*
-	 * get the allowed caps from the downstream peer
-	 */
-
-	peercaps = gst_pad_peer_get_caps(element->srcpad);
+	GstCaps *peercaps, *caps;
 
 	/*
 	 * get our own allowed caps.  use the fixed caps function to avoid
 	 * recursing back into this function.
 	 */
 
-	sinkcaps = gst_pad_get_fixed_caps_func(pad);
+	caps = gst_pad_get_fixed_caps_func(pad);
 
 	/*
-	 * if the peer has caps, intersect.  if the peer has no caps (or
-	 * there is no peer), use the allowed caps of this sinkpad.
+	 * get the allowed caps from the downstream peer if the peer has
+	 * caps, intersect without our own.
 	 */
 
+	peercaps = gst_pad_peer_get_caps(element->srcpad);
 	if(peercaps) {
-		result = gst_caps_intersect(peercaps, sinkcaps);
+		GstCaps *intersection = gst_caps_intersect(peercaps, caps);
 		gst_caps_unref(peercaps);
-		gst_caps_unref(sinkcaps);
-	} else
-		result = sinkcaps;
+		gst_caps_unref(caps);
+		caps = intersection;
+	}
 
 	/*
 	 * done
 	 */
 
 	gst_object_unref(element);
-	return result;
+	return caps;
 }
 
 
@@ -328,8 +331,8 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
 	GstStructure *structure;
-	gint width, channels;
-	gboolean result = TRUE;
+	gint rate, width, channels;
+	gboolean success = TRUE;
 
 	GST_OBJECT_LOCK(element);
 
@@ -338,13 +341,21 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	structure = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(structure, "rate", &element->rate))
-		result = FALSE;
+	if(!gst_structure_get_int(structure, "rate", &rate))
+		success = FALSE;
 	if(!gst_structure_get_int(structure, "width", &width))
-		result = FALSE;
+		success = FALSE;
 	if(!gst_structure_get_int(structure, "channels", &channels))
-		result = FALSE;
-	element->bytes_per_sample = width / 8 * channels;
+		success = FALSE;
+
+	/*
+	 * update the element metadata
+	 */
+
+	if(success) {
+		element->rate = rate;
+		element->bytes_per_sample = width / 8 * channels;
+	}
 
 	/*
 	 * done
@@ -352,7 +363,7 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 
 	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
-	return result;
+	return success;
 }
 
 
