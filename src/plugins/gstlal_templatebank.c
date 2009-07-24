@@ -643,8 +643,11 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 
 	result = gst_pad_set_caps(element->sumsquarespad, caps);
 
-	if(result)
+	if(result) {
+		GST_OBJECT_LOCK(element);
 		element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
+		GST_OBJECT_UNLOCK(element);
+	}
 
 	gst_object_unref(element);
 	return result;
@@ -659,7 +662,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 static gboolean sink_event(GstPad *pad, GstEvent *event)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
-	gboolean result;
+	gboolean success = TRUE;
 
 	/*
 	 * handle events
@@ -678,6 +681,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 
 		gst_event_parse_new_segment_full(event, &update, &rate, &applied_rate, &format, &start, &stop, &position);
 		gst_event_unref(event);
+		GST_ELEMENT_INFO(GST_PAD_PARENT(pad), CORE, EVENT, (NULL), ("%s: received new segment event with bounds %lu -- %lu (format = %s)", GST_PAD_NAME(pad), start, stop, gst_format_get_name(format)));
 
 		if(format == GST_FORMAT_TIME) {
 			guint64 delta_t = round(element->t_start * GST_SECOND);
@@ -686,23 +690,33 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 			position += delta_t;	/* FIXME:  is this right? */
 		} else {
 			GST_ELEMENT_ERROR(element, CORE, NOT_IMPLEMENTED, (NULL), ("segment format not supported"));
-			result = FALSE;
+			success = FALSE;
 			break;
 		}
 
+		GST_ELEMENT_INFO(GST_PAD_PARENT(pad), CORE, EVENT, (NULL), ("%s: forwarding new segment event with bounds %lu -- %lu (format = %s)", GST_PAD_NAME(pad), start, stop, gst_format_get_name(format)));
 		event = gst_event_new_new_segment_full(update, rate, applied_rate, format, start, stop, position);
 
 		gst_event_ref(event);
-		result = gst_pad_push_event(element->sumsquarespad, event);
-		result &= gst_pad_push_event(element->srcpad, event);
+		if(!gst_pad_push_event(element->sumsquarespad, event)) {
+			GST_ELEMENT_ERROR(GST_PAD_PARENT(pad), CORE, EVENT, (NULL), ("%s: new segment event failed", GST_PAD_NAME(element->sumsquarespad)));
+			success = FALSE;
+		}
+		if(!gst_pad_push_event(element->srcpad, event)) {
+			GST_ELEMENT_ERROR(GST_PAD_PARENT(pad), CORE, EVENT, (NULL), ("%s: new segment event failed", GST_PAD_NAME(element->srcpad)));
+			success = FALSE;
+		}
 
-		if(result)
+		if(success) {
+			GST_OBJECT_LOCK(element);
 			gst_segment_set_newsegment_full(&element->segment, update, rate, applied_rate, format, start, stop, position);
+			GST_OBJECT_UNLOCK(element);
+		}
 		break;
 	}
 
 	default:
-		result = gst_pad_event_default(pad, event);
+		success = gst_pad_event_default(pad, event);
 		break;
 	}
 
@@ -711,7 +725,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 	 */
 
 	gst_object_unref(element);
-	return result;
+	return success;
 }
 
 
@@ -816,7 +830,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
-		element->segment.start = GST_BUFFER_TIMESTAMP(sinkbuf) + (guint64) round(element->t_start * GST_SECOND);
+		element->segment.start = GST_BUFFER_TIMESTAMP(sinkbuf) + (GstClockTime) round(element->t_start * GST_SECOND);
 		element->offset0 = GST_BUFFER_OFFSET(sinkbuf);
 		element->offset = 0;
 
