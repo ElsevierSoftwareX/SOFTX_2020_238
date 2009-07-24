@@ -452,6 +452,8 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 
 	GSTLALWhiten *element = GSTLAL_WHITEN(object);
 
+	GST_OBJECT_LOCK(element);
+
 	switch (id) {
 	case ARG_PSDMODE:
 		element->psdmode = g_value_get_enum(value);
@@ -505,12 +507,16 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		element->reference_psd_filename = g_value_dup_string(value);
 		break;
 	}
+
+	GST_OBJECT_UNLOCK(element);
 }
 
 
 static void get_property(GObject * object, enum property id, GValue * value, GParamSpec * pspec)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(object);
+
+	GST_OBJECT_LOCK(element);
 
 	switch (id) {
 	case ARG_PSDMODE:
@@ -541,6 +547,8 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		g_value_set_string(value, element->reference_psd_filename);
 		break;
 	}
+
+	GST_OBJECT_UNLOCK(element);
 }
 
 
