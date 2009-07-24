@@ -545,11 +545,11 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 
 
 /*
- * getcaps()
+ * get_caps()
  */
 
 
-static GstCaps *getcaps(GstPad *pad)
+static GstCaps *get_caps(GstPad *pad)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	GstCaps *caps, *peercaps;
@@ -587,17 +587,19 @@ static GstCaps *getcaps(GstPad *pad)
 
 
 /*
- * setcaps()
+ * set_caps()
  */
 
 
-static gboolean setcaps(GstPad *pad, GstCaps *caps)
+static gboolean set_caps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	int sample_rate;
 	LALUnit sample_units;
 	char units[100];	/* FIXME:  argh, hard-coded length = BAD BAD BAD */
 	gboolean result = TRUE;
+
+	GST_OBJECT_LOCK(element);
 
 	/*
 	 * extract the sample rate, and check that it is allowed
@@ -637,7 +639,10 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	/* FIXME:  gstreamer doesn't like empty strings */
 	gst_caps_set_simple(caps, "units", G_TYPE_STRING, " "/*units*/, NULL);
 
+	GST_OBJECT_UNLOCK(element);
 	result = gst_pad_set_caps(element->srcpad, caps);
+	GST_OBJECT_LOCK(element);
+
 	gst_caps_unref(caps);
 
 	if(!result)
@@ -660,16 +665,11 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	}
 
 	/*
-	 * erase the contents of the adapter
-	 */
-
-	gst_adapter_clear(element->adapter);
-
-	/*
 	 * done
 	 */
 
 done:
+	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
 	return result;
 }
@@ -690,8 +690,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GstFlowReturn result = GST_FLOW_OK;
 	unsigned zero_pad = round(element->zero_pad_seconds * element->sample_rate);
 
+	GST_OBJECT_LOCK(element);
+
 	/*
-	 * Confirm that setcaps() has successfully configured everything
+	 * Confirm that set_caps() has successfully configured everything
 	 */
 
 	if(!element->window || !element->tail || !element->fwdplan || !element->revplan || !element->tdworkspace || !element->fdworkspace) {
@@ -909,6 +911,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 done:
+	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
 	return result;
 }
@@ -1050,8 +1053,8 @@ static void instance_init(GTypeInstance * object, gpointer class)
 
 	/* configure sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_getcaps_function(pad, getcaps);
-	gst_pad_set_setcaps_function(pad, setcaps);
+	gst_pad_set_getcaps_function(pad, get_caps);
+	gst_pad_set_setcaps_function(pad, set_caps);
 	gst_pad_set_chain_function(pad, chain);
 	gst_object_unref(pad);
 
