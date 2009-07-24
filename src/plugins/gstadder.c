@@ -169,7 +169,9 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 
 	switch (id) {
 	case ARG_SYNCHRONOUS:
+		GST_OBJECT_LOCK(adder);
 		adder->synchronous = g_value_get_boolean(value);
+		GST_OBJECT_UNLOCK(adder);
 		break;
 	}
 }
@@ -184,7 +186,9 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		/* FIXME:  on asynchronous --> synchronous transition, mark
 		 * all collect pad's offset_offsets as invalid to force a
 		 * resync */
+		GST_OBJECT_LOCK(adder);
 		g_value_set_boolean(value, adder->synchronous);
+		GST_OBJECT_UNLOCK(adder);
 		break;
 	}
 }
@@ -208,9 +212,8 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 {
 	GstAdder *adder = GST_ADDER(gst_pad_get_parent(pad));
-	GstCaps *result = NULL;
-	GstCaps *peercaps = NULL;
-	GstCaps *sinkcaps = NULL;
+	GstCaps *peercaps;
+	GstCaps *caps;
 
 	GST_OBJECT_LOCK(adder);
 
@@ -219,27 +222,22 @@ static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 	 * recursing back into this function.
 	 */
 
-	sinkcaps = gst_pad_get_fixed_caps_func(pad);
+	caps = gst_pad_get_fixed_caps_func(pad);
 
 	/*
-	 * get the allowed caps from the downstream peer
+	 * get the allowed caps from the downstream peer.
+	 * if the peer has caps, intersect.
 	 */
 
 	peercaps = gst_pad_peer_get_caps(adder->srcpad);
-
-	/*
-	 * if the peer has caps, intersect.  if the peer has no caps (or
-	 * there is no peer), use the allowed caps of this sinkpad.
-	 */
-
 	if(peercaps) {
-		GST_DEBUG_OBJECT(adder, "intersecting peer and template caps");
-		result = gst_caps_intersect(peercaps, sinkcaps);
+		GstCaps *result;
+		GST_DEBUG_OBJECT(adder, "intersecting " GST_PTR_FORMAT " and " GST_PTR_FORMAT, caps, peercaps);
+		result = gst_caps_intersect(peercaps, caps);
 		gst_caps_unref(peercaps);
-		gst_caps_unref(sinkcaps);
-	} else {
-		GST_DEBUG_OBJECT(adder, "no peer caps, using template caps");
-		result = sinkcaps;
+		gst_caps_unref(caps);
+		caps = result;
+		GST_DEBUG_OBJECT(adder, "intersection " GST_PTR_FORMAT, caps);
 	}
 
 	/*
@@ -248,7 +246,7 @@ static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 
 	GST_OBJECT_UNLOCK(adder);
 	gst_object_unref(adder);
-	return result;
+	return caps;
 }
 
 
@@ -269,9 +267,9 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 	gint channels;
 	gboolean is_signed;
 
-	GST_OBJECT_LOCK(adder);
-
 	GST_LOG_OBJECT(adder, "setting caps on pad %s:%s to %" GST_PTR_FORMAT, GST_DEBUG_PAD_NAME(pad), caps);
+
+	GST_OBJECT_LOCK(adder);
 
 	/*
 	 * loop over all of the element's pads (source and sink), and set
@@ -742,18 +740,20 @@ static gboolean gst_adder_src_event(GstPad * pad, GstEvent * event)
 		GstSeekFlags flags;
 		GstSeekType curtype;
 		gint64 cur;
+		gboolean flush;
 
 		/*
 		 * parse the seek parameters
 		 */
 
 		gst_event_parse_seek(event, &adder->segment.rate, NULL, &flags, &curtype, &cur, NULL, NULL);
+		flush = !!(flags & GST_SEEK_FLAG_FLUSH);
 
 		/*
 		 * is it a flushing seek?
 		 */
 
-		if(flags & GST_SEEK_FLAG_FLUSH) {
+		if(flush) {
 			/*
 			 * make sure we accept nothing more and return
 			 * WRONG_STATE
@@ -776,6 +776,12 @@ static gboolean gst_adder_src_event(GstPad * pad, GstEvent * event)
 
 		GST_OBJECT_LOCK(adder->collect);
 		adder->segment_pending = TRUE;
+		if(flush) {
+			/* Yes, we need to call _set_flushing again *WHEN* the streaming threads
+			 * have stopped so that the cookie gets properly updated. */
+			gst_collect_pads_set_flushing(adder->collect, TRUE);
+		}
+		adder->flush_stop_pending = flush;
 		GST_OBJECT_UNLOCK(adder->collect);
 
 		result = forward_event(adder, event);
@@ -829,7 +835,10 @@ static gboolean gst_adder_sink_event(GstPad * pad, GstEvent * event)
 		 * and downstream (using our source pad, the bastard!).
 		 */
 
+		GST_OBJECT_LOCK(adder->collect);
 		adder->segment_pending = TRUE;
+		adder->flush_stop_pending = FALSE;
+		GST_OBJECT_UNLOCK(adder->collect);
 		break;
 
 	default:
@@ -982,6 +991,11 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		GST_ELEMENT_ERROR(adder, STREAM, FORMAT, (NULL), ("Unknown data received, not negotiated"));
 		result = GST_FLOW_NOT_NEGOTIATED;
 		goto error;
+	}
+
+	if(adder->flush_stop_pending) {
+		gst_pad_push_event(adder->srcpad, gst_event_new_flush_stop());
+		adder->flush_stop_pending = FALSE;
 	}
 
 	/*

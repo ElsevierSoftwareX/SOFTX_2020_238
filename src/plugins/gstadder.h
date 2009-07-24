@@ -72,6 +72,9 @@ typedef struct _GstAdder {
 	gboolean segment_pending;
 	GstSegment segment;
 	guint64 offset;
+
+	/* src event handling */
+	gboolean flush_stop_pending;
 } GstAdder;
 
 
