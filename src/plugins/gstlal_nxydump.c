@@ -88,14 +88,14 @@
  */
 
 
-static int timestamp_to_sample_clipped(GstClockTime start, int samples, int sample_rate, GstClockTime t)
+static int timestamp_to_sample_clipped(GstClockTime start, int samples, int rate, GstClockTime t)
 {
 	if(t <= start)
 		return 0;
 	t -= start;
-	if(t >= gst_util_uint64_scale_int(samples, GST_SECOND, sample_rate))
+	if(t >= gst_util_uint64_scale_int(samples, GST_SECOND, rate))
 		return samples;
-	return gst_util_uint64_scale_int(t, sample_rate, GST_SECOND);
+	return gst_util_uint64_scale_int(t, rate, GST_SECOND);
 }
 
 
@@ -108,7 +108,7 @@ static int timestamp_to_sample_clipped(GstClockTime start, int samples, int samp
  */
 
 
-static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int sample_rate, int start, int stop)
+static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int rate, int start, int stop)
 {
 	GstFlowReturn result = GST_FLOW_OK;
 	GstBuffer *buf;
@@ -123,8 +123,8 @@ static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int sample
 	GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
 	GST_BUFFER_OFFSET_END(buf) = GST_BUFFER_OFFSET_NONE;
 	if(GST_BUFFER_TIMESTAMP_IS_VALID(buf))
-		GST_BUFFER_TIMESTAMP(buf) += (GstClockTime) gst_util_uint64_scale_int(start, GST_SECOND, sample_rate);
-	GST_BUFFER_DURATION(buf) = (GstClockTime) gst_util_uint64_scale_int(stop - start, GST_SECOND, sample_rate);
+		GST_BUFFER_TIMESTAMP(buf) += (GstClockTime) gst_util_uint64_scale_int(start, GST_SECOND, rate);
+	GST_BUFFER_DURATION(buf) = (GstClockTime) gst_util_uint64_scale_int(stop - start, GST_SECOND, rate);
 
 	result = gst_pad_push(pad, buf);
 	if(result != GST_FLOW_OK) {
@@ -142,7 +142,7 @@ static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int sample
  */
 
 
-static GstFlowReturn print_samples(GstBuffer *out, const double *samples, int channels, int sample_rate, int start, int stop)
+static GstFlowReturn print_samples(GstBuffer *out, const double *samples, int channels, int rate, int start, int stop)
 {
 	char *location = (char *) GST_BUFFER_DATA(out);
 	int i;
@@ -155,7 +155,7 @@ static GstFlowReturn print_samples(GstBuffer *out, const double *samples, int ch
 		 * The current time stamp
 		 */
 
-		GstClockTime t = GST_BUFFER_TIMESTAMP(out) + gst_util_uint64_scale_int(i - start, GST_SECOND, sample_rate);
+		GstClockTime t = GST_BUFFER_TIMESTAMP(out) + gst_util_uint64_scale_int(i - start, GST_SECOND, rate);
 
 		/*
 		 * Are we almost out of space?
@@ -297,7 +297,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	GSTLALNXYDump *element = GSTLAL_NXYDUMP(gst_pad_get_parent(pad));
 	gboolean result = TRUE;
 
-	element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
+	element->rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 	element->channels = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels"));
 
 	gst_object_unref(element);
@@ -336,8 +336,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf)) {
-		start = timestamp_to_sample_clipped(GST_BUFFER_TIMESTAMP(sinkbuf), samples, element->sample_rate, element->start_time);
-		stop = timestamp_to_sample_clipped(GST_BUFFER_TIMESTAMP(sinkbuf), samples, element->sample_rate, element->stop_time);
+		start = timestamp_to_sample_clipped(GST_BUFFER_TIMESTAMP(sinkbuf), samples, element->rate, element->start_time);
+		stop = timestamp_to_sample_clipped(GST_BUFFER_TIMESTAMP(sinkbuf), samples, element->rate, element->stop_time);
 	} else {
 		/* don't know the buffer's start time, go ahead and process
 		 * the whole thing */
@@ -351,7 +351,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP) || (stop == start)) {
-		result = push_gap(element->srcpad, sinkbuf, element->sample_rate, 0, samples);
+		result = push_gap(element->srcpad, sinkbuf, element->rate, 0, samples);
 		goto done;
 	}
 
@@ -360,7 +360,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(start) {
-		result = push_gap(element->srcpad, sinkbuf, element->sample_rate, 0,  start);
+		result = push_gap(element->srcpad, sinkbuf, element->rate, 0,  start);
 		if(result != GST_FLOW_OK)
 			goto done;
 	}
@@ -385,14 +385,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	gst_buffer_set_caps(srcbuf, GST_PAD_CAPS(element->srcpad));
 	gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS);
 	GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET_NONE;
-	GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + (GstClockTime) start * GST_SECOND / element->sample_rate;
-	GST_BUFFER_DURATION(srcbuf) = (GstClockTime) (stop - start) * GST_SECOND / element->sample_rate;
+	GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + (GstClockTime) start * GST_SECOND / element->rate;
+	GST_BUFFER_DURATION(srcbuf) = (GstClockTime) (stop - start) * GST_SECOND / element->rate;
 
 	/*
 	 * Print samples into output buffer.
 	 */
 
-	result = print_samples(srcbuf, (const double *) GST_BUFFER_DATA(sinkbuf), element->channels, element->sample_rate, start, stop);
+	result = print_samples(srcbuf, (const double *) GST_BUFFER_DATA(sinkbuf), element->channels, element->rate, start, stop);
 	if(result != GST_FLOW_OK) {
 		gst_buffer_unref(srcbuf);
 		goto done;
@@ -412,7 +412,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(stop < samples) {
-		result = push_gap(element->srcpad, sinkbuf, element->sample_rate, stop,  samples);
+		result = push_gap(element->srcpad, sinkbuf, element->rate, stop,  samples);
 		if(result != GST_FLOW_OK)
 			goto done;
 	}
@@ -549,7 +549,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->srcpad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
 
 	/* internal data */
-	element->sample_rate = 0;
+	element->rate = 0;
 	element->channels = 0;
 	element->start_time = 0;
 	element->stop_time = 0;
