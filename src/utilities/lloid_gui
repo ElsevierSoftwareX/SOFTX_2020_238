@@ -388,8 +388,11 @@ def mkcontrolsnksrc(pipeline, rate, progress_report = False, suffix = None):
 
 def mkLLOIDsingle(pipeline, instrument, detector, bank, injection_filename = None, progress_report = False, control_snksrc = None):
 	logname = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
+	if options.fake_data:
+		head = mkfakeLIGOsrc(pipeline, instrument, detector)
+	else:
+		head = mkframesrc(pipeline, instrument, detector)
 
-	head = mkframesrc(pipeline, instrument, detector)
 	if progress_report:
 		head = mkprogressreport(pipeline, head, "progress_src_%s" % logname)
 
@@ -510,6 +513,7 @@ def parse_command_line():
 	parser.add_option("--output", metavar = "filename", help = "Set the name of the output trigger file (required).")
 	parser.add_option("--template-bank", metavar = "filename", action = "append", help = "Set the name of the file from which to load the template bank (required).")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write an XML description of the as-built pipeline to this file (optional).")
+	parser.add_option("--fake-data", action = "store_true", help = "Use fake LIGO data")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
 	options, filenames = parser.parse_args()
