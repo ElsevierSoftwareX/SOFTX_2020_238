@@ -387,11 +387,11 @@ def mkcontrolsnksrc(pipeline, rate, progress_report = False, suffix = None):
 
 def mkLLOIDsingle(pipeline, instrument, detector, bank, fake_data = False, injection_filename = None, progress_report = False, control_snksrc = None):
 	logname = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
-	if options.fake_data:
+
+	if fake_data:
 		head = mkfakeLIGOsrc(pipeline, instrument, detector)
 	else:
 		head = mkframesrc(pipeline, instrument, detector)
-
 	if progress_report:
 		head = mkprogressreport(pipeline, head, "progress_src_%s" % logname)
 
