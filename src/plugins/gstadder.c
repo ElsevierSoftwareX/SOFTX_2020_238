@@ -167,13 +167,15 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 {
 	GstAdder *adder = GST_ADDER(object);
 
+	GST_OBJECT_LOCK(adder->collect);
+
 	switch (id) {
 	case ARG_SYNCHRONOUS:
-		GST_OBJECT_LOCK(adder);
 		adder->synchronous = g_value_get_boolean(value);
-		GST_OBJECT_UNLOCK(adder);
 		break;
 	}
+
+	GST_OBJECT_UNLOCK(adder->collect);
 }
 
 
@@ -181,16 +183,18 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 {
 	GstAdder *adder = GST_ADDER(object);
 
+	GST_OBJECT_LOCK(adder->collect);
+
 	switch (id) {
 	case ARG_SYNCHRONOUS:
 		/* FIXME:  on asynchronous --> synchronous transition, mark
 		 * all collect pad's offset_offsets as invalid to force a
 		 * resync */
-		GST_OBJECT_LOCK(adder);
 		g_value_set_boolean(value, adder->synchronous);
-		GST_OBJECT_UNLOCK(adder);
 		break;
 	}
+
+	GST_OBJECT_UNLOCK(adder->collect);
 }
 
 
@@ -215,7 +219,7 @@ static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 	GstCaps *peercaps;
 	GstCaps *caps;
 
-	GST_OBJECT_LOCK(adder);
+	GST_OBJECT_LOCK(adder->collect);
 
 	/*
 	 * get our own allowed caps.  use the fixed caps function to avoid
@@ -244,7 +248,7 @@ static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 	 * done
 	 */
 
-	GST_OBJECT_UNLOCK(adder);
+	GST_OBJECT_UNLOCK(adder->collect);
 	gst_object_unref(adder);
 	return caps;
 }
@@ -269,7 +273,7 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 
 	GST_LOG_OBJECT(adder, "setting caps on pad %s:%s to %" GST_PTR_FORMAT, GST_DEBUG_PAD_NAME(pad), caps);
 
-	GST_OBJECT_LOCK(adder);
+	GST_OBJECT_LOCK(adder->collect);
 
 	/*
 	 * loop over all of the element's pads (source and sink), and set
@@ -282,6 +286,8 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 	for(padlist = GST_ELEMENT(adder)->pads; padlist; padlist = g_list_next(padlist)) {
 		GstPad *otherpad = GST_PAD(padlist->data);
 		if(otherpad != pad)
+			/* don't use gst_pad_set_caps() because that would
+			 * recurse into this function */
 			gst_caps_replace(&GST_PAD_CAPS(otherpad), caps);
 	}
 
@@ -358,7 +364,7 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 	 * done
 	 */
 
-	GST_OBJECT_UNLOCK(adder);
+	GST_OBJECT_UNLOCK(adder->collect);
 	gst_object_unref(adder);
 	return TRUE;
 
@@ -368,7 +374,7 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 
 not_supported:
 	GST_DEBUG_OBJECT(adder, "unsupported format");
-	GST_OBJECT_UNLOCK(adder);
+	GST_OBJECT_UNLOCK(adder->collect);
 	gst_object_unref(adder);
 	return FALSE;
 }
@@ -981,8 +987,6 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 	gpointer outbytes = NULL;
 	GstFlowReturn result;
 
-	GST_OBJECT_LOCK(adder);
-
 	/*
 	 * this is fatal
 	 */
@@ -1205,9 +1209,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 * just to send it.
 		 */
 
-		GST_OBJECT_UNLOCK(adder);
 		gst_pad_push_event(adder->srcpad, event);
-		GST_OBJECT_LOCK(adder);
 		adder->segment_pending = FALSE;
 	}
 
@@ -1235,7 +1237,6 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 	 */
 
 	GST_LOG_OBJECT(adder, "pushing outbuf, timestamp %" GST_TIME_FORMAT ", offset %lu", GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(outbuf)), GST_BUFFER_OFFSET(outbuf));
-	GST_OBJECT_UNLOCK(adder);
 	return gst_pad_push(adder->srcpad, outbuf);
 
 	/*
@@ -1244,12 +1245,10 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 
 eos:
 	GST_DEBUG_OBJECT(adder, "no data available (EOS)");
-	GST_OBJECT_UNLOCK(adder);
 	gst_pad_push_event(adder->srcpad, gst_event_new_eos());
 	return GST_FLOW_UNEXPECTED;
 
 error:
-	GST_OBJECT_UNLOCK(adder);
 	return result;
 }
 
