@@ -197,9 +197,7 @@ static GstCaps *getcaps_snr(GstPad *pad)
 	 * intersect with the downstream peer's caps if known.
 	 */
 
-	GST_OBJECT_UNLOCK(element);
 	peercaps = gst_pad_peer_get_caps(element->srcpad);
-	GST_OBJECT_LOCK(element);
 	if(peercaps) {
 		GstCaps *result = gst_caps_intersect(peercaps, caps);
 		gst_caps_unref(caps);
@@ -239,6 +237,7 @@ static gboolean setcaps_snr(GstPad *pad, GstCaps *caps)
 	 * if that was successful, update our metadata
 	 */
 
+	GST_OBJECT_LOCK(element->collect);
 	GST_OBJECT_LOCK(element);
 	if(result) {
 		GstStructure *structure;
@@ -257,6 +256,7 @@ static gboolean setcaps_snr(GstPad *pad, GstCaps *caps)
 		gst_structure_get_int(structure, "rate", &element->rate);
 	}
 	GST_OBJECT_UNLOCK(element);
+	GST_OBJECT_UNLOCK(element->collect);
 
 	/*
 	 * done

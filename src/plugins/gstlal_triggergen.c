@@ -148,13 +148,13 @@ static gboolean gen_setcaps(GstPad *pad, GstCaps *caps)
 	GstStructure *structure;
 	gboolean result = TRUE;
 
-	GST_OBJECT_LOCK(element);
+	GST_OBJECT_LOCK(element->collect);
 
 	gen_set_unit_size(pad, caps);
 	structure = gst_caps_get_structure(caps, 0);
 	gst_structure_get_int(structure, "rate", &element->rate);
 
-	GST_OBJECT_UNLOCK(element);
+	GST_OBJECT_UNLOCK(element->collect);
 	gst_object_unref(element);
 	return result;
 }
