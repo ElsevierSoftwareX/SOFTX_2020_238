@@ -167,6 +167,9 @@ gboolean gstlal_collect_pads_remove_pad(GstCollectPads *pads, GstPad *pad)
 
 /**
  * Record the number of bytes per sample on the given input stream.
+ *
+ * Should be called with the GstCollectPads' lock held (i.e., from the
+ * collected() method).
  */
 
 
@@ -182,6 +185,9 @@ void gstlal_collect_pads_set_unit_size(GstPad *pad, guint unit_size)
 
 /**
  * Retrieve the number of bytes per sample on the given input stream.
+ *
+ * Should be called with the GstCollectPads' lock held (i.e., from the
+ * collected() method).
  */
 
 
@@ -198,6 +204,9 @@ guint gstlal_collect_pads_get_unit_size(GstPad *pad)
 /**
  * Compute the smallest segment that contains the segments of all pads.
  * The segments must be in the same format on all pads.
+ *
+ * Should be called with the GstCollectPads' lock held (i.e., from the
+ * collected() method).
  */
 
 
@@ -219,7 +228,7 @@ GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads)
 			segment = gst_segment_copy(&data->segment);
 			if(!segment) {
 				GST_ERROR_OBJECT(pads, "failure copying segment");
-				return NULL;
+				goto done;
 			}
 			continue;
 		}
@@ -231,7 +240,8 @@ GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads)
 		if(segment->format != data->segment.format || segment->applied_rate != data->segment.applied_rate) {
 			GST_ERROR_OBJECT(pads, "mismatch in segment format and/or applied rate");
 			gst_segment_free(segment);
-			return NULL;
+			segment = NULL;
+			goto done;
 		}
 
 		/*
@@ -244,6 +254,7 @@ GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads)
 			segment->stop = data->segment.stop;
 	}
 
+done:
 	return segment;
 }
 
@@ -271,6 +282,9 @@ GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads)
  *
  * Requires the collect pad's lock to be held (use from within the callback
  * handler).
+ *
+ * Should be called with the GstCollectPads' lock held (i.e., from the
+ * collected() method).
  */
 
 
@@ -426,6 +440,9 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
  * If the pad has no data available then NULL is returned, this indicates
  * EOS.  If the pad has data available but it is subsequent to the
  * requested interval then a zero-length buffer is returned.
+ *
+ * Should be called with the GstCollectPads' lock held (i.e., from the
+ * collected() method).
  */
 
 
