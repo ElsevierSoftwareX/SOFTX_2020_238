@@ -22,7 +22,7 @@
 #
 # =============================================================================
 #
-#				   Preamble
+#                                   Preamble
 #
 # =============================================================================
 #
@@ -45,7 +45,7 @@ from pylal.date import LIGOTimeGPS
 #
 # =============================================================================
 #
-#			      Pipeline Metadata
+#                              Pipeline Metadata
 #
 # =============================================================================
 #
@@ -87,7 +87,7 @@ class DetectorData(object):
 #
 # =============================================================================
 #
-#			      Pipeline Elements
+#                              Pipeline Elements
 #
 # =============================================================================
 #
@@ -149,7 +149,6 @@ def mkfakeLIGOsrc(pipeline, instrument, detectors):
 		filter1[idx].link(filter1[idx+1])
 	filter1[-1] = mktee(pipeline, filter1[-1])
 	scaledsrc1 = mkaudioamplify(pipeline, filter1[-1], 5.03407936516e-17)
-
 
 	fakesrc2 = mkgaussiansrc(pipeline, start, stop)
 	a2 = [9.17933667e-07, 1.83586733e-06, 9.17933667e-07]
@@ -386,7 +385,7 @@ def mkcontrolsnksrc(pipeline, rate, progress_report = False, suffix = None):
 	return snk, src
 
 
-def mkLLOIDsingle(pipeline, instrument, detector, bank, injection_filename = None, progress_report = False, control_snksrc = None):
+def mkLLOIDsingle(pipeline, instrument, detector, bank, fake_data = False, injection_filename = None, progress_report = False, control_snksrc = None):
 	logname = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 	if options.fake_data:
 		head = mkfakeLIGOsrc(pipeline, instrument, detector)
@@ -412,6 +411,9 @@ def mkLLOIDsingle(pipeline, instrument, detector, bank, injection_filename = Non
 
 	hoft = {max(rates): mktee(pipeline, head)}
 	for rate in sorted(rates)[:-1]:	# all but the highest rate
+		# FIXME:  the default quality is 4, we should try setting
+		# it higher (9?), but then the variance correction look-up
+		# table will need to be re-measured
 		hoft[rate] = mktee(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, mkaudioamplify(pipeline, hoft[max(rates)], math.sqrt(correction[rate] * float(max(rates)) / rate))), "audio/x-raw-float, rate=%d" % rate))
 
 	if control_snksrc is None:
@@ -443,7 +445,7 @@ def mkLLOIDsingle(pipeline, instrument, detector, bank, injection_filename = Non
 	chisq = mkcapsfilter(pipeline, chisq, "audio/x-raw-float, rate=%d" % max(rates))
 	if progress_report:
 		snr = mkprogressreport(pipeline, snr, "progress_snr_%s" % logname)
-		chisq = mkprogressreport(pipeline, chisq, "progress_chisquare_%s" % logname)
+		chisq = mkprogressreport(pipeline, chisq, "progress_chisq_%s" % logname)
 
 	#snr = mktee(pipeline, snr)
 	#mknxydumpsink(pipeline, mkqueue(pipeline, snr), "snr_%s.txt" % logname)
@@ -463,9 +465,9 @@ def mkLLOIDsingle(pipeline, instrument, detector, bank, injection_filename = Non
 #
 
 
-def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filename = None, progress_report = False):
+def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, fake_data = False, injection_filename = None, progress_report = False):
 	if len(banks) > 1:
-		raise ValueError, "only 1 bank supported yet"
+		raise ValueError, "only 1 template bank supported yet"
 
 	#nto1 = gst.element_factory_make("input-selector")
 	#nto1.set_property("select-all", True)
@@ -482,6 +484,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filenam
 				instrument,
 				detectors[instrument],
 				bank,
+				fake_data = fake_data,
 				injection_filename = injection_filename,
 				progress_report = progress_report,
 				control_snksrc = control_snksrc
@@ -493,7 +496,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, injection_filenam
 #
 # =============================================================================
 #
-#				 Command Line
+#                                 Command Line
 #
 # =============================================================================
 #
@@ -531,7 +534,7 @@ def parse_command_line():
 #
 # =============================================================================
 #
-#				     Main
+#                                     Main
 #
 # =============================================================================
 #
@@ -583,6 +586,7 @@ mkLLOIDmulti(
 		) for template_bank_filename in options.template_bank
 	],
 	trigger_filename = options.output,
+	fake_data = options.fake_data,
 	injection_filename = options.injections,
 	progress_report = options.verbose
 )
