@@ -641,7 +641,16 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
 	gboolean result;
 
+	/*
+	 * set the caps on the sum-of-squares stream
+	 */
+
+	/* FIXME:  should adjust the units */
 	result = gst_pad_set_caps(element->sumsquarespad, caps);
+
+	/*
+	 * if successful, record the sample rate
+	 */
 
 	if(result) {
 		GST_OBJECT_LOCK(element);
