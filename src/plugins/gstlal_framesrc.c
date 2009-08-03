@@ -125,26 +125,27 @@ static void DestroyTimeSeries(void *series, LALTYPECODE type)
 
 static gint series_to_rate(const void *series, LALTYPECODE type)
 {
+	double deltaT;
+
 	switch(type) {
-	case LAL_I4_TYPE_CODE: {
-		const INT4TimeSeries *local_series = series;
-		return round(1.0 / local_series->deltaT);
-	}
+	case LAL_I4_TYPE_CODE:
+		deltaT = ((const INT4TimeSeries *) series)->deltaT;
+		break;
 
-	case LAL_S_TYPE_CODE: {
-		const REAL4TimeSeries *local_series = series;
-		return round(1.0 / local_series->deltaT);
-	}
+	case LAL_S_TYPE_CODE:
+		deltaT = ((const REAL4TimeSeries *) series)->deltaT;
+		break;
 
-	case LAL_D_TYPE_CODE: {
-		const REAL8TimeSeries *local_series = series;
-		return round(1.0 / local_series->deltaT);
-	}
+	case LAL_D_TYPE_CODE:
+		deltaT = ((const REAL8TimeSeries *) series)->deltaT;
+		break;
 
 	default:
 		GST_ERROR("unsupported LAL type code (%d)", type);
 		return -1;
 	}
+
+	return round(1.0 / deltaT);
 }
 
 
@@ -641,6 +642,20 @@ static gboolean start(GstBaseSrc *object)
 	}
 
 	/*
+	 * Try setting the caps on the source pad.
+	 */
+
+	if(!gst_pad_set_caps(GST_BASE_SRC_PAD(object), series_to_caps(element->instrument, element->channel_name, element->input_buffer, element->series_type))) {
+		GST_ERROR_OBJECT(element, "unable to set caps on %s", GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
+		XLALFrClose(element->stream);
+		element->stream = NULL;
+		DestroyTimeSeries(element->input_buffer, element->series_type);
+		element->input_buffer = NULL;
+		element->series_type = -1;
+		return FALSE;
+	}
+
+	/*
 	 * Done
 	 */
 
@@ -678,7 +693,6 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 {
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(basesrc);
 	GstPad *srcpad = GST_BASE_SRC_PAD(basesrc);
-	GstCaps *caps;
 	GstFlowReturn result;
 
 	/*
@@ -705,9 +719,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			 */
 			return GST_FLOW_UNEXPECTED;
 		}
-		caps = series_to_caps(element->instrument, element->channel_name, chunk, element->series_type);
-		result = gst_pad_alloc_buffer_and_set_caps(srcpad, basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), caps, buffer);
-		gst_caps_unref(caps);
+		result = gst_pad_alloc_buffer(srcpad, basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(srcpad), buffer);
 		if(result != GST_FLOW_OK) {
 			XLALDestroyINT4TimeSeries(chunk);
 			return result;
@@ -740,9 +752,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			 */
 			return GST_FLOW_UNEXPECTED;
 		}
-		caps = series_to_caps(element->instrument, element->channel_name, chunk, element->series_type);
-		result = gst_pad_alloc_buffer_and_set_caps(srcpad, basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), caps, buffer);
-		gst_caps_unref(caps);
+		result = gst_pad_alloc_buffer(srcpad, basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(srcpad), buffer);
 		if(result != GST_FLOW_OK) {
 			XLALDestroyREAL4TimeSeries(chunk);
 			return result;
@@ -775,9 +785,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			 */
 			return GST_FLOW_UNEXPECTED;
 		}
-		caps = series_to_caps(element->instrument, element->channel_name, chunk, element->series_type);
-		result = gst_pad_alloc_buffer_and_set_caps(srcpad, basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), caps, buffer);
-		gst_caps_unref(caps);
+		result = gst_pad_alloc_buffer(srcpad, basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(srcpad), buffer);
 		if(result != GST_FLOW_OK) {
 			XLALDestroyREAL8TimeSeries(chunk);
 			return result;
