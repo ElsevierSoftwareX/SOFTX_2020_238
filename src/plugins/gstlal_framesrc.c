@@ -522,6 +522,7 @@ static gboolean start(GstBaseSrc *object)
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
 	FrCache *cache;
 	LIGOTimeGPS stream_start;
+	GstCaps *caps;
 
 	/*
 	 * Open frame stream.
@@ -638,6 +639,8 @@ static gboolean start(GstBaseSrc *object)
 
 	default:
 		GST_ERROR_OBJECT(element, "unsupported data type (LALTYPECODE=%d) for channel \"%s\"", element->series_type, element->full_channel_name);
+		XLALFrClose(element->stream);
+		element->stream = NULL;
 		return FALSE;
 	}
 
@@ -645,7 +648,18 @@ static gboolean start(GstBaseSrc *object)
 	 * Try setting the caps on the source pad.
 	 */
 
-	if(!gst_pad_set_caps(GST_BASE_SRC_PAD(object), series_to_caps(element->instrument, element->channel_name, element->input_buffer, element->series_type))) {
+	caps = series_to_caps(element->instrument, element->channel_name, element->input_buffer, element->series_type);
+	if(!caps) {
+		GST_ERROR_OBJECT(element, "unable to construct caps");
+		XLALFrClose(element->stream);
+		element->stream = NULL;
+		DestroyTimeSeries(element->input_buffer, element->series_type);
+		element->input_buffer = NULL;
+		element->series_type = -1;
+		return FALSE;
+	}
+	if(!gst_pad_set_caps(GST_BASE_SRC_PAD(object), caps)) {
+		gst_caps_unref(caps);
 		GST_ERROR_OBJECT(element, "unable to set caps on %s", GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
 		XLALFrClose(element->stream);
 		element->stream = NULL;
@@ -654,6 +668,7 @@ static gboolean start(GstBaseSrc *object)
 		element->series_type = -1;
 		return FALSE;
 	}
+	gst_caps_unref(caps);
 
 	/*
 	 * Done
