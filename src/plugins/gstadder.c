@@ -997,6 +997,10 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		goto error;
 	}
 
+	/*
+	 * forward flush-stop event
+	 */
+
 	if(adder->flush_stop_pending) {
 		gst_pad_push_event(adder->srcpad, gst_event_new_flush_stop());
 		adder->flush_stop_pending = FALSE;
@@ -1076,7 +1080,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 	 * loop over input pads, getting chunks of data from each in turn.
 	 */
 
-	GST_LOG_OBJECT(adder, "cycling through channels, offsets %lu--%lu available", earliest_input_offset, earliest_input_offset_end);
+	GST_LOG_OBJECT(adder, "cycling through channels, offsets [%lu, %lu) (@ %d Hz) relative to %lu ns available", earliest_input_offset, earliest_input_offset_end, adder->rate, adder->segment.start);
 	for(collected = pads->data; collected; collected = g_slist_next(collected)) {
 		GstLALCollectData *data = collected->data;
 		GstBuffer *inbuf;
@@ -1184,36 +1188,6 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		goto eos;
 
 	/*
-	 * precede the buffer with a new_segment event if one is pending
-	 */
-	/* FIXME, use rate/applied_rate as set on all sinkpads.  currently
-	 * we just set rate as received from last seek-event We could
-	 * potentially figure out the duration as well using the current
-	 * segment positions and the stated stop positions. */
-
-	if(adder->segment_pending) {
-		/* FIXME:  the segment start time is almost certainly
-		 * incorrect */
-		GstEvent *event = gst_event_new_new_segment_full(FALSE, adder->segment.rate, 1.0, GST_FORMAT_TIME, adder->segment.start, adder->segment.stop, output_timestamp_from_offset(adder, GST_BUFFER_OFFSET(outbuf)));
-
-		if(!event) {
-			/* FIXME:  failure getting event, do something
-			 * about it */
-		}
-
-		/*
-		 * gst_pad_push_event() returns a boolean indicating
-		 * whether or not the event was handled.  we ignore this.
-		 * whether or not the new segment event can be handled is
-		 * not our problem to worry about, our responsibility is
-		 * just to send it.
-		 */
-
-		gst_pad_push_event(adder->srcpad, event);
-		adder->segment_pending = FALSE;
-	}
-
-	/*
 	 * check for discontinuity.
 	 */
 
@@ -1231,6 +1205,36 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 	adder->offset = GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + length;
 	GST_BUFFER_TIMESTAMP(outbuf) = output_timestamp_from_offset(adder, GST_BUFFER_OFFSET(outbuf));
 	GST_BUFFER_DURATION(outbuf) = output_timestamp_from_offset(adder, GST_BUFFER_OFFSET_END(outbuf)) - GST_BUFFER_TIMESTAMP(outbuf);
+
+	/*
+	 * precede the buffer with a new_segment event if one is pending
+	 */
+	/* FIXME, use rate/applied_rate as set on all sinkpads.  currently
+	 * we just set rate as received from last seek-event We could
+	 * potentially figure out the duration as well using the current
+	 * segment positions and the stated stop positions. */
+
+	if(adder->segment_pending) {
+		/* FIXME:  the segment start time is almost certainly
+		 * incorrect */
+		GstEvent *event = gst_event_new_new_segment_full(FALSE, adder->segment.rate, 1.0, GST_FORMAT_TIME, adder->segment.start, adder->segment.stop, GST_BUFFER_TIMESTAMP(outbuf));
+
+		if(!event) {
+			/* FIXME:  failure getting event, do something
+			 * about it */
+		}
+
+		/*
+		 * gst_pad_push_event() returns a boolean indicating
+		 * whether or not the event was handled.  we ignore this.
+		 * whether or not the new segment event can be handled is
+		 * not our problem to worry about, our responsibility is
+		 * just to send it.
+		 */
+
+		gst_pad_push_event(adder->srcpad, event);
+		adder->segment_pending = FALSE;
+	}
 
 	/*
 	 * push the buffer downstream.
