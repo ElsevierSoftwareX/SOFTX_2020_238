@@ -151,13 +151,19 @@ static double control_sample_float64(const GSTLALGate *element, guint64 sample)
 }
 
 
+static gint control_get_state(GSTLALGate *element, guint64 offset)
+{
+	return fabs(element->control_sample_func(element, offset)) >= element->threshold;
+}
+
+
 static guint64 control_t_to_offset(GSTLALGate *element, GstClockTime t)
 {
 	GstClockTimeDiff delta_t = t - GST_BUFFER_TIMESTAMP(element->control_buf);
 	gint64 offset;
 
 	/* FIXME:  gst_util_uint64_scale_int() truncates instead of rounding */
-	offset = round(delta_t * ((double) element->control_rate / GST_SECOND));
+	offset = floor(delta_t * ((double) element->control_rate / GST_SECOND) + 0.5);
 	/*
 	offset = gst_util_uint64_scale_int(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
 	*/
@@ -166,12 +172,6 @@ static guint64 control_t_to_offset(GSTLALGate *element, GstClockTime t)
 		return GST_BUFFER_OFFSET_NONE;
 
 	return offset;
-}
-
-
-static gint control_get_state(GSTLALGate *element, guint64 offset)
-{
-	return fabs(element->control_sample_func(element, offset)) >= element->threshold;
 }
 
 
@@ -396,8 +396,6 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
 	GstFlowReturn result = GST_FLOW_OK;
 
-	GST_OBJECT_LOCK(element);
-
 	/*
 	 * check validity of timestamp and offsets
 	 */
@@ -413,6 +411,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * if there's already a buffer stored, wait for it to be flushed
 	 */
 
+	GST_OBJECT_LOCK(element);
 	while(element->control_buf)
 		g_cond_wait(element->control_flushed, GST_OBJECT_GET_LOCK(element));
 
@@ -428,13 +427,13 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	g_cond_signal(element->control_available);
+	GST_OBJECT_UNLOCK(element);
 
 	/*
 	 * done
 	 */
 
 done:
-	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
 	return result;
 }
@@ -451,8 +450,6 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	guint64 sinkbuf_length;
 	guint64 start, length;
 	GstFlowReturn result = GST_FLOW_OK;
-
-	GST_OBJECT_LOCK(element);
 
 	/*
 	 * check validity of timestamp and offsets
@@ -487,6 +484,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			 * wait for one that overlaps the input data
 			 */
 
+			GST_OBJECT_LOCK(element);
 			while(1) {
 				while(!element->control_buf)
 					g_cond_wait(element->control_available, GST_OBJECT_GET_LOCK(element));
@@ -495,6 +493,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 					break;
 				control_flush(element);
 			}
+			GST_OBJECT_UNLOCK(element);
 
 			/*
 			 * check the state of the control input
@@ -557,9 +556,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			 * push buffer down stream
 			 */
 
-			GST_OBJECT_UNLOCK(element);
 			result = gst_pad_push(element->srcpad, srcbuf);
-			GST_OBJECT_LOCK(element);
 			if(result != GST_FLOW_OK)
 				goto done;
 		}
@@ -570,7 +567,6 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 done:
-	GST_OBJECT_UNLOCK(element);
 	gst_buffer_unref(sinkbuf);
 	gst_object_unref(element);
 	return result;
