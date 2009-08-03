@@ -58,7 +58,7 @@ typedef struct _GSTLALGate {
 	GCond *control_available;
 	GCond *control_flushed;
 	GstBuffer *control_buf;
-	GstClockTime control_end;
+	guint64 control_length;
 	double (*control_sample_func)(const struct _GSTLALGate *, size_t);
 
 	double threshold;

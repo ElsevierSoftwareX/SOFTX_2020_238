@@ -89,7 +89,7 @@ static void control_flush(GSTLALGate *element)
 		gst_buffer_unref(element->control_buf);
 		element->control_buf = NULL;
 	}
-	element->control_end = GST_BUFFER_OFFSET_NONE;
+	element->control_length = GST_BUFFER_OFFSET_NONE;
 	g_cond_signal(element->control_flushed);
 }
 
@@ -103,65 +103,75 @@ static void control_flush(GSTLALGate *element)
  */
 
 
-static double control_sample_int8(const GSTLALGate *element, size_t sample)
+static double control_sample_int8(const GSTLALGate *element, guint64 sample)
 {
 	return ((const gint8 *) GST_BUFFER_DATA(element->control_buf))[sample];
 }
 
 
-static double control_sample_uint8(const GSTLALGate *element, size_t sample)
+static double control_sample_uint8(const GSTLALGate *element, guint64 sample)
 {
 	return ((const guint8 *) GST_BUFFER_DATA(element->control_buf))[sample];
 }
 
 
-static double control_sample_int16(const GSTLALGate *element, size_t sample)
+static double control_sample_int16(const GSTLALGate *element, guint64 sample)
 {
 	return ((const gint16 *) GST_BUFFER_DATA(element->control_buf))[sample];
 }
 
 
-static double control_sample_uint16(const GSTLALGate *element, size_t sample)
+static double control_sample_uint16(const GSTLALGate *element, guint64 sample)
 {
 	return ((const guint16 *) GST_BUFFER_DATA(element->control_buf))[sample];
 }
 
 
-static double control_sample_int32(const GSTLALGate *element, size_t sample)
+static double control_sample_int32(const GSTLALGate *element, guint64 sample)
 {
 	return ((const gint32 *) GST_BUFFER_DATA(element->control_buf))[sample];
 }
 
 
-static double control_sample_uint32(const GSTLALGate *element, size_t sample)
+static double control_sample_uint32(const GSTLALGate *element, guint64 sample)
 {
 	return ((const guint32 *) GST_BUFFER_DATA(element->control_buf))[sample];
 }
 
 
-static double control_sample_float32(const GSTLALGate *element, size_t sample)
+static double control_sample_float32(const GSTLALGate *element, guint64 sample)
 {
 	return ((const float *) GST_BUFFER_DATA(element->control_buf))[sample];
 }
 
 
-static double control_sample_float64(const GSTLALGate *element, size_t sample)
+static double control_sample_float64(const GSTLALGate *element, guint64 sample)
 {
 	return ((const double *) GST_BUFFER_DATA(element->control_buf))[sample];
 }
 
 
-static gint control_state(GSTLALGate *element, GstClockTime t)
+static guint64 control_t_to_offset(GSTLALGate *element, GstClockTime t)
 {
-	guint sample;
+	GstClockTimeDiff delta_t = t - GST_BUFFER_TIMESTAMP(element->control_buf);
+	gint64 offset;
 
-	if(t < GST_BUFFER_TIMESTAMP(element->control_buf) || element->control_end <= t)
-		/* t is outside the control buffer */
-		return -1;
+	/* FIXME:  gst_util_uint64_scale_int() truncates instead of rounding */
+	offset = round(delta_t * ((double) element->control_rate / GST_SECOND));
+	/*
+	offset = gst_util_uint64_scale_int(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
+	*/
 
-	sample = gst_util_uint64_scale_int(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
+	if(offset < 0 || element->control_length <= (guint64) offset)
+		return GST_BUFFER_OFFSET_NONE;
 
-	return fabs(element->control_sample_func(element, sample)) >= element->threshold;
+	return offset;
+}
+
+
+static gint control_get_state(GSTLALGate *element, guint64 offset)
+{
+	return fabs(element->control_sample_func(element, offset)) >= element->threshold;
 }
 
 
@@ -411,7 +421,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	element->control_buf = sinkbuf;
-	element->control_end = GST_BUFFER_TIMESTAMP(sinkbuf) + (GstClockTime) gst_util_uint64_scale_int(GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf), GST_SECOND, element->control_rate);
+	element->control_length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
 
 	/*
 	 * signal the buffer's availability
@@ -469,6 +479,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		for(length = 0; start + length < sinkbuf_length; length++) {
 			GstClockTime t = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int(start + length, GST_SECOND, element->rate);
+			guint64 control_offset;
 
 			/*
 			 * if there is no control buffer available or the input has
@@ -476,9 +487,13 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			 * wait for one that overlaps the input data
 			 */
 
-			while(!element->control_buf || t >= element->control_end) {
+			while(1) {
+				while(!element->control_buf)
+					g_cond_wait(element->control_available, GST_OBJECT_GET_LOCK(element));
+				control_offset = control_t_to_offset(element, t);
+				if(control_offset != GST_BUFFER_OFFSET_NONE)
+					break;
 				control_flush(element);
-				g_cond_wait(element->control_available, GST_OBJECT_GET_LOCK(element));
 			}
 
 			/*
@@ -490,8 +505,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 				 * the control state for this interval
 				 */
 
-				state = control_state(element, t);
-			} else if(control_state(element, t) != state)
+				state = control_get_state(element, control_offset);
+			} else if(control_get_state(element, control_offset) != state)
 				/*
 				 * control state has changed
 				 */
@@ -742,7 +757,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->control_available = g_cond_new();
 	element->control_flushed = g_cond_new();
 	element->control_buf = NULL;
-	element->control_end = GST_BUFFER_OFFSET_NONE;
+	element->control_length = GST_BUFFER_OFFSET_NONE;
 	element->control_sample_func = NULL;
 	element->threshold = DEFAULT_THRESHOLD;
 	element->rate = 0;
