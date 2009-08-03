@@ -562,8 +562,6 @@ static GstCaps *get_caps(GstPad *pad)
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	GstCaps *caps, *peercaps;
 
-	GST_OBJECT_LOCK(element);
-
 	/*
 	 * start by retrieving our own caps.  use get_fixed_caps_func() to
 	 * avoid recursing back into this function.
@@ -588,7 +586,6 @@ static GstCaps *get_caps(GstPad *pad)
 	 * done
 	 */
 
-	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
 	return caps;
 }
@@ -614,7 +611,6 @@ static gboolean set_caps(GstPad *pad, GstCaps *caps)
 	 */
 
 	sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
-
 	if((int) round(element->fft_length_seconds * sample_rate) & 1 || (int) round(element->zero_pad_seconds * sample_rate) & 1) {
 		GST_ERROR_OBJECT(element, "FFT length and/or Zero-padding is an odd number of samples (must be even)");
 		result = FALSE;
@@ -697,8 +693,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	GstFlowReturn result = GST_FLOW_OK;
 	unsigned zero_pad = round(element->zero_pad_seconds * element->sample_rate);
-
-	GST_OBJECT_LOCK(element);
 
 	/*
 	 * Confirm that set_caps() has successfully configured everything
@@ -919,7 +913,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 done:
-	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
 	return result;
 }
