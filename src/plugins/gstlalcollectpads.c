@@ -294,14 +294,10 @@ static gint64 compute_offset_offset(GstBuffer *buf, gint rate, GstClockTime outp
 	 * subtract buffer's offset from its offset in the output stream.
 	 */
 
-	/* FIXME:  the floating-point versions work better than the scale
-	 * functions, should I tell the gstreamer people? */
 	if(GST_BUFFER_TIMESTAMP(buf) >= output_timestamp_at_zero_offset)
-		return (gint64) round((double) (GST_BUFFER_TIMESTAMP(buf) - output_timestamp_at_zero_offset) * rate / GST_SECOND) - (gint64) GST_BUFFER_OFFSET(buf);
-		/*return (gint64) gst_util_uint64_scale_int(GST_BUFFER_TIMESTAMP(buf) - output_timestamp_at_zero_offset, rate, GST_SECOND) - (gint64) GST_BUFFER_OFFSET(buf);*/
+		return (gint64) gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(buf) - output_timestamp_at_zero_offset, rate, GST_SECOND) - (gint64) GST_BUFFER_OFFSET(buf);
 	else
-		return -(gint64) round((double) (output_timestamp_at_zero_offset - GST_BUFFER_TIMESTAMP(buf)) * rate / GST_SECOND) - (gint64) GST_BUFFER_OFFSET(buf);
-		/*return -(gint64) gst_util_uint64_scale_int(output_timestamp_at_zero_offset - GST_BUFFER_TIMESTAMP(buf), rate, GST_SECOND) - (gint64) GST_BUFFER_OFFSET(buf);*/
+		return -(gint64) gst_util_uint64_scale_int_round(output_timestamp_at_zero_offset - GST_BUFFER_TIMESTAMP(buf), rate, GST_SECOND) - (gint64) GST_BUFFER_OFFSET(buf);
 }
 
 
