@@ -159,17 +159,19 @@ static gint control_get_state(GSTLALGate *element, guint64 offset)
 
 static guint64 control_t_to_offset(GSTLALGate *element, GstClockTime t)
 {
-	GstClockTimeDiff delta_t = t - GST_BUFFER_TIMESTAMP(element->control_buf);
-	gint64 offset;
+	guint64 offset;
 
-	/* FIXME:  gst_util_uint64_scale_int() truncates instead of rounding */
-	offset = floor(delta_t * ((double) element->control_rate / GST_SECOND) + 0.5);
-	/*
-	offset = gst_util_uint64_scale_int(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
-	*/
-
-	if(offset < 0 || element->control_length <= (guint64) offset)
-		return GST_BUFFER_OFFSET_NONE;
+	if(G_UNLIKELY(t < GST_BUFFER_TIMESTAMP(element->control_buf))) {
+		/* t precedes start of buffer, but it might round to sample
+		 * offset 0 so check (but anything else is out-of-bounds) */
+		offset = gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(element->control_buf) - t, element->control_rate, GST_SECOND);
+		if(offset != 0)
+			return GST_BUFFER_OFFSET_NONE;
+	} else {
+		offset = gst_util_uint64_scale_int_round(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
+		if(offset >= element->control_length)
+			return GST_BUFFER_OFFSET_NONE;
+	}
 
 	return offset;
 }
@@ -240,10 +242,10 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
 	GstStructure *structure;
 	const gchar *media_type;
+	double (*control_sample_func)(const struct _GSTLALGate *, size_t) = NULL;
+	gint rate;
 	gint width;
-	gboolean result = TRUE;
-
-	GST_OBJECT_LOCK(element);
+	gboolean success = TRUE;
 
 	/*
 	 * parse caps
@@ -252,49 +254,57 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 	structure = gst_caps_get_structure(caps, 0);
 	media_type = gst_structure_get_name(structure);
 	if(!gst_structure_get_int(structure, "width", &width))
-		result = FALSE;
-	if(!gst_structure_get_int(structure, "rate", &element->control_rate))
-		result = FALSE;
+		success = FALSE;
+	if(!gst_structure_get_int(structure, "rate", &rate))
+		success = FALSE;
 	if(!strcmp(media_type, "audio/x-raw-float")) {
 		switch(width) {
 		case 32:
-			element->control_sample_func = control_sample_float32;
+			control_sample_func = control_sample_float32;
 			break;
 		case 64:
-			element->control_sample_func = control_sample_float64;
+			control_sample_func = control_sample_float64;
 			break;
 		default:
-			result = FALSE;
+			success = FALSE;
 			break;
 		}
 	} else if(!strcmp(media_type, "audio/x-raw-int")) {
 		gboolean is_signed = TRUE;
 		if(!gst_structure_get_boolean(structure, "signed", &is_signed))
-			result = FALSE;
+			success = FALSE;
 		switch(width) {
 		case 8:
-			element->control_sample_func = is_signed ? control_sample_int8 : control_sample_uint8;
+			control_sample_func = is_signed ? control_sample_int8 : control_sample_uint8;
 			break;
 		case 16:
-			element->control_sample_func = is_signed ? control_sample_int16 : control_sample_uint16;
+			control_sample_func = is_signed ? control_sample_int16 : control_sample_uint16;
 			break;
 		case 32:
-			element->control_sample_func = is_signed ? control_sample_int32 : control_sample_uint32;
+			control_sample_func = is_signed ? control_sample_int32 : control_sample_uint32;
 			break;
 		default:
-			result = FALSE;
+			success = FALSE;
 			break;
 		}
 	} else
-		result = FALSE;
+		success = FALSE;
+
+	/*
+	 * update element
+	 */
+
+	if(success) {
+		element->control_sample_func = control_sample_func;
+		element->control_rate = rate;
+	}
 
 	/*
 	 * done.
 	 */
 
-	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
-	return result;
+	return success;
 }
 
 
@@ -344,8 +354,6 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 	gint rate, width, channels;
 	gboolean success = TRUE;
 
-	GST_OBJECT_LOCK(element);
-
 	/*
 	 * parse caps
 	 */
@@ -371,7 +379,6 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 	 * done
 	 */
 
-	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
 	return success;
 }
@@ -411,9 +418,9 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * if there's already a buffer stored, wait for it to be flushed
 	 */
 
-	GST_OBJECT_LOCK(element);
+	g_mutex_lock(element->control_lock);
 	while(element->control_buf)
-		g_cond_wait(element->control_flushed, GST_OBJECT_GET_LOCK(element));
+		g_cond_wait(element->control_flushed, element->control_lock);
 
 	/*
 	 * store this buffer, extract some metadata
@@ -427,7 +434,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	g_cond_signal(element->control_available);
-	GST_OBJECT_UNLOCK(element);
+	g_mutex_unlock(element->control_lock);
 
 	/*
 	 * done
@@ -474,8 +481,9 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * find the next interval of continuous control state
 		 */
 
+		g_mutex_lock(element->control_lock);
 		for(length = 0; start + length < sinkbuf_length; length++) {
-			GstClockTime t = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int(start + length, GST_SECOND, element->rate);
+			GstClockTime t = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(start + length, GST_SECOND, element->rate);
 			guint64 control_offset;
 
 			/*
@@ -484,16 +492,14 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			 * wait for one that overlaps the input data
 			 */
 
-			GST_OBJECT_LOCK(element);
 			while(1) {
 				while(!element->control_buf)
-					g_cond_wait(element->control_available, GST_OBJECT_GET_LOCK(element));
+					g_cond_wait(element->control_available, element->control_lock);
 				control_offset = control_t_to_offset(element, t);
 				if(control_offset != GST_BUFFER_OFFSET_NONE)
 					break;
 				control_flush(element);
 			}
-			GST_OBJECT_UNLOCK(element);
 
 			/*
 			 * check the state of the control input
@@ -512,6 +518,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 				break;
 		}
+		g_mutex_unlock(element->control_lock);
 
 		/*
 		 * if the interval has non-zero length, build a buffer out
@@ -533,8 +540,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
 			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + start;
 			GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + length;
-			GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int(start, GST_SECOND, element->rate);
-			GST_BUFFER_DURATION(srcbuf) = gst_util_uint64_scale_int(start + length, GST_SECOND, element->rate) - gst_util_uint64_scale_int(start, GST_SECOND, element->rate);
+			GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(start, GST_SECOND, element->rate);
+			GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(start + length, GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(srcbuf);
 
 			/*
 			 * only the first subbuffer of a buffer flagged as
@@ -605,6 +612,8 @@ static void finalize(GObject *object)
 	element->sinkpad = NULL;
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
+	g_mutex_free(element->control_lock);
+	element->control_lock = NULL;
 	g_cond_free(element->control_available);
 	element->control_available = NULL;
 	g_cond_free(element->control_flushed);
@@ -750,6 +759,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->srcpad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
 
 	/* internal data */
+	element->control_lock = g_mutex_new();
 	element->control_available = g_cond_new();
 	element->control_flushed = g_cond_new();
 	element->control_buf = NULL;

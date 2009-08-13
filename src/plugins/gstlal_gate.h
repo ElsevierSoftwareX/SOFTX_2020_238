@@ -55,6 +55,7 @@ typedef struct _GSTLALGate {
 	GstPad *sinkpad;
 	GstPad *srcpad;
 
+	GMutex *control_lock;
 	GCond *control_available;
 	GCond *control_flushed;
 	GstBuffer *control_buf;
