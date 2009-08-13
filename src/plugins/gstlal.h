@@ -23,6 +23,7 @@
 #define __GSTLAL_H__
 
 
+#include <glib.h>
 #include <gst/gst.h>
 
 
@@ -62,6 +63,15 @@ LALUnit gstlal_lalStrainPerADCCount(void);
 LALUnit gstlal_lalStrainSquaredPerHertz(void);
 REAL8FrequencySeries *gstlal_read_reference_psd(const char *);
 REAL8FrequencySeries *gstlal_get_reference_psd(const char *, double, double, size_t);
+
+
+/*
+ * Debugging helpers
+ */
+
+
+#define GST_BUFFER_BOUNDARIES_FMT "[%" G_GUINT64_FORMAT " -- %" G_GUINT64_FORMAT ") = samples [%" G_GUINT64_FORMAT " -- %" G_GUINT64_FORMAT ")"
+#define GST_BUFFER_BOUNDARIES_ARGS(buf) GST_BUFFER_TIMESTAMP(buf), GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf), GST_BUFFER_OFFSET(buf), GST_BUFFER_OFFSET_END(buf)
 
 
 G_END_DECLS
