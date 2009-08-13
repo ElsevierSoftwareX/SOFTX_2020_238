@@ -604,8 +604,6 @@ static gboolean set_caps(GstPad *pad, GstCaps *caps)
 	char units[100];	/* FIXME:  argh, hard-coded length = BAD BAD BAD */
 	gboolean result = TRUE;
 
-	GST_OBJECT_LOCK(element);
-
 	/*
 	 * extract the sample rate, and check that it is allowed
 	 */
@@ -643,9 +641,7 @@ static gboolean set_caps(GstPad *pad, GstCaps *caps)
 	/* FIXME:  gstreamer doesn't like empty strings */
 	gst_caps_set_simple(caps, "units", G_TYPE_STRING, " "/*units*/, NULL);
 
-	GST_OBJECT_UNLOCK(element);
 	result = gst_pad_set_caps(element->srcpad, caps);
-	GST_OBJECT_LOCK(element);
 
 	gst_caps_unref(caps);
 
@@ -673,7 +669,6 @@ static gboolean set_caps(GstPad *pad, GstCaps *caps)
 	 */
 
 done:
-	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
 	return result;
 }
