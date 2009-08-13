@@ -62,6 +62,7 @@ typedef struct _GSTLALGate {
 	guint64 control_length;
 	double (*control_sample_func)(const struct _GSTLALGate *, size_t);
 
+	gboolean default_state;
 	double threshold;
 
 	gint rate;

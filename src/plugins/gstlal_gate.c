@@ -65,6 +65,7 @@
  */
 
 
+#define DEFAULT_STATE FALSE
 #define DEFAULT_THRESHOLD 0
 
 
@@ -157,21 +158,14 @@ static gint control_get_state(GSTLALGate *element, guint64 offset)
 }
 
 
-static guint64 control_t_to_offset(GSTLALGate *element, GstClockTime t)
+static gint64 control_t_to_offset(GSTLALGate *element, GstClockTime t)
 {
-	guint64 offset;
+	gint64 offset;
 
-	if(G_UNLIKELY(t < GST_BUFFER_TIMESTAMP(element->control_buf))) {
-		/* t precedes start of buffer, but it might round to sample
-		 * offset 0 so check (but anything else is out-of-bounds) */
-		offset = gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(element->control_buf) - t, element->control_rate, GST_SECOND);
-		if(offset != 0)
-			return GST_BUFFER_OFFSET_NONE;
-	} else {
-		offset = gst_util_uint64_scale_int_round(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
-		if(offset >= element->control_length)
-			return GST_BUFFER_OFFSET_NONE;
-	}
+	if(G_UNLIKELY(t < GST_BUFFER_TIMESTAMP(element->control_buf)))
+		offset = -(gint64) gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(element->control_buf) - t, element->control_rate, GST_SECOND);
+	else
+		offset = (gint64) gst_util_uint64_scale_int_round(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
 
 	return offset;
 }
@@ -187,7 +181,8 @@ static guint64 control_t_to_offset(GSTLALGate *element, GstClockTime t)
 
 
 enum property {
-	ARG_THRESHOLD = 1
+	ARG_DEFAULT_STATE = 1,
+	ARG_THRESHOLD
 };
 
 
@@ -198,6 +193,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
+	case ARG_DEFAULT_STATE:
+		element->default_state = g_value_get_boolean(value);
+		break;
+
 	case ARG_THRESHOLD:
 		element->threshold = g_value_get_double(value);
 		break;
@@ -214,6 +213,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
+	case ARG_DEFAULT_STATE:
+		g_value_set_boolean(value, element->default_state);
+		break;
+
 	case ARG_THRESHOLD:
 		g_value_set_double(value, element->threshold);
 		break;
@@ -484,19 +487,20 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		g_mutex_lock(element->control_lock);
 		for(length = 0; start + length < sinkbuf_length; length++) {
 			GstClockTime t = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(start + length, GST_SECOND, element->rate);
-			guint64 control_offset;
+			gint64 control_offset;
 
 			/*
-			 * if there is no control buffer available or the input has
-			 * advanced beyond its end, flush the control buffer and
-			 * wait for one that overlaps the input data
+			 * if there is no control buffer available or the
+			 * input has advanced beyond its end, flush the
+			 * control buffer and wait for one that overlaps
+			 * the input data
 			 */
 
 			while(1) {
 				while(!element->control_buf)
 					g_cond_wait(element->control_available, element->control_lock);
 				control_offset = control_t_to_offset(element, t);
-				if(control_offset != GST_BUFFER_OFFSET_NONE)
+				if(control_offset < (gint64) element->control_length)
 					break;
 				control_flush(element);
 			}
@@ -507,11 +511,11 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 			if(length == 0) {
 				/*
-				 * the control state for this interval
+				 * control state for this interval
 				 */
 
-				state = control_get_state(element, control_offset);
-			} else if(control_get_state(element, control_offset) != state)
+				state = control_offset < 0 ? element->default_state : control_get_state(element, control_offset);
+			} else if((control_offset < 0 ? element->default_state : control_get_state(element, control_offset)) != state)
 				/*
 				 * control state has changed
 				 */
@@ -724,6 +728,7 @@ static void class_init(gpointer class, gpointer class_data)
 	gobject_class->get_property = get_property;
 	gobject_class->finalize = finalize;
 
+	g_object_class_install_property(gobject_class, ARG_DEFAULT_STATE, g_param_spec_boolean("default-state", "Default State", "Control input state to assume when control input is not availabel", DEFAULT_STATE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_THRESHOLD, g_param_spec_double("threshold", "Threshold", "Control input threshold", 0, G_MAXDOUBLE, DEFAULT_THRESHOLD, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
