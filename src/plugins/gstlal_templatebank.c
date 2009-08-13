@@ -639,27 +639,24 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
-	gboolean result;
+	gboolean success;
 
 	/*
 	 * set the caps on the sum-of-squares stream
 	 */
 
 	/* FIXME:  should adjust the units */
-	result = gst_pad_set_caps(element->sumsquarespad, caps);
+	success = gst_pad_set_caps(element->sumsquarespad, caps);
 
 	/*
 	 * if successful, record the sample rate
 	 */
 
-	if(result) {
-		GST_OBJECT_LOCK(element);
+	if(success)
 		element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
-		GST_OBJECT_UNLOCK(element);
-	}
 
 	gst_object_unref(element);
-	return result;
+	return success;
 }
 
 
@@ -716,11 +713,8 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 			success = FALSE;
 		}
 
-		if(success) {
-			GST_OBJECT_LOCK(element);
+		if(success)
 			gst_segment_set_newsegment_full(&element->segment, update, rate, applied_rate, format, start, stop, position);
-			GST_OBJECT_UNLOCK(element);
-		}
 		break;
 	}
 
@@ -749,8 +743,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GstFlowReturn result = GST_FLOW_OK;
 	int output_length;
 
-	GST_OBJECT_LOCK(element);
-
 	/*
 	 * Now that we know the sample rate, construct orthogonal basis for
 	 * the template bank if not already done.
@@ -774,9 +766,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		caps = gst_caps_make_writable(gst_buffer_get_caps(sinkbuf));
 		gst_caps_set_simple(caps, "channels", G_TYPE_INT, num_templates(element), NULL);
-		GST_OBJECT_UNLOCK(element);
 		success = gst_pad_set_caps(element->srcpad, caps);
-		GST_OBJECT_LOCK(element);
 		gst_caps_unref(caps);
 		if(success != TRUE) {
 			GST_ELEMENT_ERROR(element, CORE, NOT_IMPLEMENTED, (NULL), ("%s: failure setting caps", GST_PAD_NAME(element->srcpad)));
@@ -788,9 +778,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Tell the mixer how to reconstruct the SNRs.
 		 */
 
-		GST_OBJECT_UNLOCK(element);
 		result = push_mixer_matrix(element->matrixpad, element->V, GST_BUFFER_TIMESTAMP(sinkbuf));
-		GST_OBJECT_LOCK(element);
 		if(result != GST_FLOW_OK)
 			goto done;
 
@@ -799,9 +787,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * template components.
 		 */
 
-		GST_OBJECT_UNLOCK(element);
 		result = push_chifacs_vector(element->chifacspad, element->chifacs, GST_BUFFER_TIMESTAMP(sinkbuf));
-		GST_OBJECT_LOCK(element);
 		if(result != GST_FLOW_OK)
 			goto done;
 	}
@@ -970,18 +956,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * Push the buffers downstream.
 		 */
 
-		GST_OBJECT_UNLOCK(element);
 		result = gst_pad_push(element->sumsquarespad, orthogonal_snr_sum_squares_buf);
-		GST_OBJECT_LOCK(element);
 		if(result != GST_FLOW_OK) {
 			GST_ELEMENT_ERROR(element, CORE, PAD, (NULL), ("%s: gst_pad_push() failed (%d)", GST_PAD_NAME(element->sumsquarespad), result));
 			gst_buffer_unref(orthogonal_snr_buf);
 			goto done;
 		}
 
-		GST_OBJECT_UNLOCK(element);
 		result = gst_pad_push(element->srcpad, orthogonal_snr_buf);
-		GST_OBJECT_LOCK(element);
 		if(result != GST_FLOW_OK) {
 			GST_ELEMENT_ERROR(element, CORE, PAD, (NULL), ("%s: gst_pad_push() failed (%d)", GST_PAD_NAME(element->srcpad), result));
 			goto done;
