@@ -728,7 +728,7 @@ static void class_init(gpointer class, gpointer class_data)
 	gobject_class->get_property = get_property;
 	gobject_class->finalize = finalize;
 
-	g_object_class_install_property(gobject_class, ARG_DEFAULT_STATE, g_param_spec_boolean("default-state", "Default State", "Control input state to assume when control input is not availabel", DEFAULT_STATE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_DEFAULT_STATE, g_param_spec_boolean("default-state", "Default State", "Control input state to assume when control input is not available", DEFAULT_STATE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_THRESHOLD, g_param_spec_double("threshold", "Threshold", "Control input threshold", 0, G_MAXDOUBLE, DEFAULT_THRESHOLD, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
