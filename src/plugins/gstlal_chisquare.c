@@ -225,21 +225,21 @@ static GstCaps *getcaps_snr(GstPad *pad)
 static gboolean setcaps_snr(GstPad *pad, GstCaps *caps)
 {
 	GSTLALChiSquare *element = GSTLAL_CHISQUARE(gst_pad_get_parent(pad));
-	gboolean result;
+	gboolean success;
 
 	/*
 	 * will the downstream peer will accept the caps?  (the output
 	 * stream has the same caps as the SNR input stream)
 	 */
 
-	result = gst_pad_set_caps(element->srcpad, caps);
+	success = gst_pad_set_caps(element->srcpad, caps);
 
 	/*
 	 * if that was successful, update our metadata
 	 */
 
 	GST_OBJECT_LOCK(element);
-	if(result) {
+	if(success) {
 		GstStructure *structure;
 
 		/*
@@ -262,7 +262,7 @@ static gboolean setcaps_snr(GstPad *pad, GstCaps *caps)
 	 */
 
 	gst_object_unref(element);
-	return result;
+	return success;
 }
 
 
@@ -347,7 +347,7 @@ static GstCaps *getcaps_orthosnr(GstPad *pad)
 static gboolean setcaps_orthosnr(GstPad *pad, GstCaps *caps)
 {
 	GSTLALChiSquare *element = GSTLAL_CHISQUARE(gst_pad_get_parent(pad));
-	gboolean result = TRUE;
+	gboolean success = TRUE;
 
 	/*
 	 * if we have a mixing matrix, intersect the caps with the source
@@ -372,7 +372,7 @@ static gboolean setcaps_orthosnr(GstPad *pad, GstCaps *caps)
 			gst_caps_unref(peercaps);
 			peercaps = tmpcaps;
 
-			result = !gst_caps_is_empty(peercaps);
+			success = !gst_caps_is_empty(peercaps);
 			gst_caps_unref(peercaps);
 		}
 	}
@@ -382,7 +382,7 @@ static gboolean setcaps_orthosnr(GstPad *pad, GstCaps *caps)
 	 * if everything OK, update our metadata
 	 */
 
-	if(result) {
+	if(success) {
 		GST_OBJECT_LOCK(element);
 		set_unit_size(pad, caps);
 		GST_OBJECT_UNLOCK(element);
@@ -393,7 +393,7 @@ static gboolean setcaps_orthosnr(GstPad *pad, GstCaps *caps)
 	 */
 
 	gst_object_unref(element);
-	return result;
+	return success;
 }
 
 
