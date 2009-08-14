@@ -167,7 +167,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 {
 	GstAdder *adder = GST_ADDER(object);
 
-	GST_OBJECT_LOCK(adder->collect);
+	GST_OBJECT_LOCK(adder);
 
 	switch (id) {
 	case ARG_SYNCHRONOUS:
@@ -175,7 +175,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		break;
 	}
 
-	GST_OBJECT_UNLOCK(adder->collect);
+	GST_OBJECT_UNLOCK(adder);
 }
 
 
@@ -183,7 +183,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 {
 	GstAdder *adder = GST_ADDER(object);
 
-	GST_OBJECT_LOCK(adder->collect);
+	GST_OBJECT_LOCK(adder);
 
 	switch (id) {
 	case ARG_SYNCHRONOUS:
@@ -194,7 +194,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		break;
 	}
 
-	GST_OBJECT_UNLOCK(adder->collect);
+	GST_OBJECT_UNLOCK(adder);
 }
 
 
@@ -215,17 +215,16 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 
 static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 {
-	GstAdder *adder = GST_ADDER(gst_pad_get_parent(pad));
+	GstAdder *adder = GST_ADDER(GST_PAD_PARENT(pad));
 	GstCaps *peercaps;
 	GstCaps *caps;
-
-	GST_OBJECT_LOCK(adder->collect);
 
 	/*
 	 * get our own allowed caps.  use the fixed caps function to avoid
 	 * recursing back into this function.
 	 */
 
+	GST_OBJECT_LOCK(adder);
 	caps = gst_pad_get_fixed_caps_func(pad);
 
 	/*
@@ -243,13 +242,12 @@ static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 		caps = result;
 		GST_DEBUG_OBJECT(adder, "intersection " GST_PTR_FORMAT, caps);
 	}
+	GST_OBJECT_UNLOCK(adder);
 
 	/*
 	 * done
 	 */
 
-	GST_OBJECT_UNLOCK(adder->collect);
-	gst_object_unref(adder);
 	return caps;
 }
 
@@ -263,7 +261,7 @@ static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 
 static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 {
-	GstAdder *adder = GST_ADDER(gst_pad_get_parent(pad));
+	GstAdder *adder = GST_ADDER(GST_PAD_PARENT(pad));
 	GList *padlist = NULL;
 	GstStructure *structure = NULL;
 	const char *media_type;
@@ -273,8 +271,6 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 
 	GST_LOG_OBJECT(adder, "setting caps on pad %s:%s to %" GST_PTR_FORMAT, GST_DEBUG_PAD_NAME(pad), caps);
 
-	GST_OBJECT_LOCK(adder->collect);
-
 	/*
 	 * loop over all of the element's pads (source and sink), and set
 	 * them all to the same format.
@@ -283,6 +279,7 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 	/* FIXME, see if the other pads can accept the format. Also lock
 	 * the format on the other pads to this new format. */
 
+	GST_OBJECT_LOCK(adder);
 	for(padlist = GST_ELEMENT(adder)->pads; padlist; padlist = g_list_next(padlist)) {
 		GstPad *otherpad = GST_PAD(padlist->data);
 		if(otherpad != pad)
@@ -290,6 +287,7 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 			 * recurse into this function */
 			gst_caps_replace(&GST_PAD_CAPS(otherpad), caps);
 	}
+	GST_OBJECT_UNLOCK(adder);
 
 	/*
 	 * parse caps
@@ -364,8 +362,6 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 	 * done
 	 */
 
-	GST_OBJECT_UNLOCK(adder->collect);
-	gst_object_unref(adder);
 	return TRUE;
 
 	/*
@@ -374,8 +370,6 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 
 not_supported:
 	GST_DEBUG_OBJECT(adder, "unsupported format");
-	GST_OBJECT_UNLOCK(adder->collect);
-	gst_object_unref(adder);
 	return FALSE;
 }
 
