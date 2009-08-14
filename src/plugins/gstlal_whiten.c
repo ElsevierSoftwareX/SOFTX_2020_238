@@ -599,6 +599,7 @@ static GstCaps *get_caps(GstPad *pad)
 static gboolean set_caps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
+	GstStructure *structure;
 	int sample_rate;
 	LALUnit sample_units;
 	char units[100];	/* FIXME:  argh, hard-coded length = BAD BAD BAD */
@@ -608,7 +609,8 @@ static gboolean set_caps(GstPad *pad, GstCaps *caps)
 	 * extract the sample rate, and check that it is allowed
 	 */
 
-	sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
+	structure = gst_caps_get_structure(caps, 0);
+	sample_rate = g_value_get_int(gst_structure_get_value(structure, "rate"));
 	if((int) round(element->fft_length_seconds * sample_rate) & 1 || (int) round(element->zero_pad_seconds * sample_rate) & 1) {
 		GST_ERROR_OBJECT(element, "FFT length and/or Zero-padding is an odd number of samples (must be even)");
 		result = FALSE;
@@ -619,7 +621,7 @@ static gboolean set_caps(GstPad *pad, GstCaps *caps)
 	 * extract the sample units
 	 */
 
-	if(!XLALParseUnitString(&sample_units, g_value_get_string(gst_structure_get_value(gst_caps_get_structure(caps, 0), "units")))) {
+	if(!XLALParseUnitString(&sample_units, g_value_get_string(gst_structure_get_value(structure, "units")))) {
 		GST_ERROR_OBJECT(element, "cannot parse units");
 		result = FALSE;
 		goto done;
