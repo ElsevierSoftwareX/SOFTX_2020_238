@@ -91,6 +91,7 @@ typedef struct {
 	 * single matrix multiplication.
 	 */
 
+	GMutex *mixmatrix_lock;
 	GCond *mixmatrix_available;
 	GstBuffer *mixmatrix_buf;
 	enum {
