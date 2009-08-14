@@ -148,13 +148,13 @@ static gboolean gen_setcaps(GstPad *pad, GstCaps *caps)
 	GstStructure *structure;
 	gboolean result = TRUE;
 
-	GST_OBJECT_LOCK(element->collect);
+	GST_OBJECT_LOCK(element);
 
 	gen_set_unit_size(pad, caps);
 	structure = gst_caps_get_structure(caps, 0);
 	gst_structure_get_int(structure, "rate", &element->rate);
 
-	GST_OBJECT_UNLOCK(element->collect);
+	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
 	return result;
 }
@@ -365,6 +365,7 @@ static void gen_set_property(GObject *object, enum gen_property id, const GValue
 {
 	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
 
+	GST_OBJECT_LOCK(element);
 	switch(id) {
 	case ARG_SNR_THRESH:
 		element->snr_thresh = g_value_get_double(value);
@@ -375,6 +376,7 @@ static void gen_set_property(GObject *object, enum gen_property id, const GValue
 		setup_bankfile_input(element, g_value_dup_string(value));
 		break;
 	}
+	GST_OBJECT_UNLOCK(element);
 }
 
 
@@ -382,6 +384,7 @@ static void gen_get_property(GObject * object, enum gen_property id, GValue * va
 {
 	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
 
+	GST_OBJECT_LOCK(element);
 	switch(id) {
 	case ARG_SNR_THRESH:
 		g_value_set_double(value,element->snr_thresh);
@@ -391,6 +394,7 @@ static void gen_get_property(GObject * object, enum gen_property id, GValue * va
 		g_value_set_string(value,element->bank_filename);
 		break;
 	}
+	GST_OBJECT_UNLOCK(element);
 }
 
 
@@ -636,12 +640,14 @@ static void xmlwriter_set_property(GObject * object, enum xmlwriter_property id,
 {
 	GSTLALTriggerXMLWriter *element = GSTLAL_TRIGGERXMLWRITER(object);
 
+	GST_OBJECT_LOCK(element);
 	switch(id) {
 	case ARG_LOCATION:
 		free(element->location);
 		element->location = g_value_dup_string(value);
 		break;
 	}
+	GST_OBJECT_UNLOCK(element);
 }
 
 
@@ -649,11 +655,13 @@ static void xmlwriter_get_property(GObject * object, enum xmlwriter_property id,
 {
 	GSTLALTriggerXMLWriter *element = GSTLAL_TRIGGERXMLWRITER(object);
 
+	GST_OBJECT_LOCK(element);
 	switch(id) {
 	case ARG_LOCATION:
 		g_value_set_string(value,element->location);
 		break;
 	}
+	GST_OBJECT_UNLOCK(element);
 }
 
 

@@ -170,6 +170,7 @@ static GstCaps *getcaps_snr(GstPad *pad)
 	 * avoid recursing back into this function.
 	 */
 
+	GST_OBJECT_LOCK(element);
 	caps = gst_pad_get_fixed_caps_func(pad);
 
 	/*
@@ -178,7 +179,7 @@ static GstCaps *getcaps_snr(GstPad *pad)
 	 * channels must match the number of columns in the mixing matrix.
 	 */
 
-	GST_OBJECT_LOCK(element->collect);
+	g_mutex_lock(element->coefficients_lock);
 	if(element->mixmatrix_buf) {
 		GstCaps *matrixcaps = gst_caps_make_writable(gst_buffer_get_caps(element->mixmatrix_buf));
 		GstCaps *result;
@@ -191,7 +192,7 @@ static GstCaps *getcaps_snr(GstPad *pad)
 		gst_caps_unref(matrixcaps);
 		caps = result;
 	}
-	GST_OBJECT_UNLOCK(element->collect);
+	g_mutex_unlock(element->coefficients_lock);
 
 	/*
 	 * intersect with the downstream peer's caps if known.
@@ -204,6 +205,7 @@ static GstCaps *getcaps_snr(GstPad *pad)
 		gst_caps_unref(peercaps);
 		caps = result;
 	}
+	GST_OBJECT_UNLOCK(element);
 
 	/*
 	 * done
@@ -236,7 +238,7 @@ static gboolean setcaps_snr(GstPad *pad, GstCaps *caps)
 	 * if that was successful, update our metadata
 	 */
 
-	GST_OBJECT_LOCK(element->collect);
+	GST_OBJECT_LOCK(element);
 	if(result) {
 		GstStructure *structure;
 
@@ -253,7 +255,7 @@ static gboolean setcaps_snr(GstPad *pad, GstCaps *caps)
 		structure = gst_caps_get_structure(caps, 0);
 		gst_structure_get_int(structure, "rate", &element->rate);
 	}
-	GST_OBJECT_UNLOCK(element->collect);
+	GST_OBJECT_UNLOCK(element);
 
 	/*
 	 * done
@@ -290,6 +292,7 @@ static GstCaps *getcaps_orthosnr(GstPad *pad)
 	 * avoid recursing back into this function.
 	 */
 
+	GST_OBJECT_LOCK(element);
 	caps = gst_pad_get_fixed_caps_func(pad);
 
 	/*
@@ -298,7 +301,7 @@ static GstCaps *getcaps_orthosnr(GstPad *pad)
 	 * channels must match the number of columns in the mixing matrix.
 	 */
 
-	GST_OBJECT_LOCK(element->collect);
+	g_mutex_lock(element->coefficients_lock);
 	if(element->mixmatrix_buf) {
 		GstCaps *matrixcaps = gst_caps_make_writable(gst_buffer_get_caps(element->mixmatrix_buf));
 		GstCaps *result;
@@ -311,7 +314,7 @@ static GstCaps *getcaps_orthosnr(GstPad *pad)
 		gst_caps_unref(matrixcaps);
 		caps = result;
 	}
-	GST_OBJECT_UNLOCK(element->collect);
+	g_mutex_unlock(element->coefficients_lock);
 
 	/*
 	 * intersect with the downstream peer's caps if known.
@@ -324,6 +327,7 @@ static GstCaps *getcaps_orthosnr(GstPad *pad)
 		gst_caps_unref(peercaps);
 		caps = result;
 	}
+	GST_OBJECT_UNLOCK(element);
 
 	/*
 	 * done
@@ -351,7 +355,7 @@ static gboolean setcaps_orthosnr(GstPad *pad, GstCaps *caps)
 	 * channel count.
 	 */
 
-	GST_OBJECT_LOCK(element->collect);
+	g_mutex_lock(element->coefficients_lock);
 	if(element->mixmatrix_buf) {
 		GstCaps *peercaps;
 
@@ -372,15 +376,17 @@ static gboolean setcaps_orthosnr(GstPad *pad, GstCaps *caps)
 			gst_caps_unref(peercaps);
 		}
 	}
+	g_mutex_unlock(element->coefficients_lock);
 
 	/*
 	 * if everything OK, update our metadata
 	 */
 
 	if(result) {
+		GST_OBJECT_LOCK(element);
 		set_unit_size(pad, caps);
+		GST_OBJECT_UNLOCK(element);
 	}
-	GST_OBJECT_UNLOCK(element->collect);
 
 	/*
 	 * done
