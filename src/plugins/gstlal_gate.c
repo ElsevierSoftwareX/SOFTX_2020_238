@@ -90,7 +90,6 @@ static void control_flush(GSTLALGate *element)
 		gst_buffer_unref(element->control_buf);
 		element->control_buf = NULL;
 	}
-	element->control_length = GST_BUFFER_OFFSET_NONE;
 	g_cond_signal(element->control_flushed);
 }
 
@@ -256,9 +255,9 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 
 	structure = gst_caps_get_structure(caps, 0);
 	media_type = gst_structure_get_name(structure);
-	if(!gst_structure_get_int(structure, "width", &width))
-		success = FALSE;
 	if(!gst_structure_get_int(structure, "rate", &rate))
+		success = FALSE;
+	if(!gst_structure_get_int(structure, "width", &width))
 		success = FALSE;
 	if(!strcmp(media_type, "audio/x-raw-float")) {
 		switch(width) {
@@ -273,7 +272,7 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 			break;
 		}
 	} else if(!strcmp(media_type, "audio/x-raw-int")) {
-		gboolean is_signed = TRUE;
+		gboolean is_signed;
 		if(!gst_structure_get_boolean(structure, "signed", &is_signed))
 			success = FALSE;
 		switch(width) {
@@ -370,12 +369,19 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 		success = FALSE;
 
 	/*
+	 * try setting caps on downstream element
+	 */
+
+	if(success)
+		success = gst_pad_set_caps(element->srcpad, caps);
+
+	/*
 	 * update the element metadata
 	 */
 
 	if(success) {
 		element->rate = rate;
-		element->bytes_per_sample = width / 8 * channels;
+		element->unit_size = width / 8 * channels;
 	}
 
 	/*
@@ -430,7 +436,6 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	element->control_buf = sinkbuf;
-	element->control_length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
 
 	/*
 	 * signal the buffer's availability
@@ -478,7 +483,11 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	for(start = 0; start < sinkbuf_length; start += length) {
-		gint state = -1;	/* initialize to silence warnings */
+		/*
+		 * -1 = unknown, 0 = off, 1 = on
+		 */
+
+		gint state = -1;
 
 		/*
 		 * find the next interval of continuous control state
@@ -500,7 +509,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 				while(!element->control_buf)
 					g_cond_wait(element->control_available, element->control_lock);
 				control_offset = control_t_to_offset(element, t);
-				if(control_offset < (gint64) element->control_length)
+				if(control_offset < (gint64) (GST_BUFFER_OFFSET_END(element->control_buf) - GST_BUFFER_OFFSET(element->control_buf)))
 					break;
 				control_flush(element);
 			}
@@ -530,7 +539,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		if(length) {
-			GstBuffer *srcbuf = gst_buffer_create_sub(sinkbuf, start * element->bytes_per_sample, length * element->bytes_per_sample);
+			GstBuffer *srcbuf = gst_buffer_create_sub(sinkbuf, start * element->unit_size, length * element->unit_size);
 			if(!srcbuf) {
 				GST_ERROR_OBJECT(element, "failure creating sub-buffer");
 				result = GST_FLOW_ERROR;
@@ -568,8 +577,10 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			 */
 
 			result = gst_pad_push(element->srcpad, srcbuf);
-			if(result != GST_FLOW_OK)
+			if(result != GST_FLOW_OK) {
+				GST_ELEMENT_ERROR(element, CORE, PAD, (NULL), ("%s: gst_pad_push() failed (%d)", GST_PAD_NAME(element->srcpad), result));
 				goto done;
+			}
 		}
 	}
 
@@ -768,11 +779,10 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->control_available = g_cond_new();
 	element->control_flushed = g_cond_new();
 	element->control_buf = NULL;
-	element->control_length = GST_BUFFER_OFFSET_NONE;
 	element->control_sample_func = NULL;
 	element->threshold = DEFAULT_THRESHOLD;
 	element->rate = 0;
-	element->bytes_per_sample = 0;
+	element->unit_size = 0;
 	element->control_rate = 0;
 }
 
