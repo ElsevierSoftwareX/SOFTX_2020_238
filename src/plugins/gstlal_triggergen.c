@@ -129,34 +129,31 @@ static SnglInspiralTable *new_event(SnglInspiralTable *dest, LIGOTimeGPS end_tim
  */
 
 
-static void gen_set_unit_size(GstPad *pad, GstCaps *caps)
-{
-	GstStructure *structure;
-	gint width, channels;
-
-	structure = gst_caps_get_structure(caps, 0);
-	gst_structure_get_int(structure, "width", &width);
-	gst_structure_get_int(structure, "channels", &channels);
-
-	gstlal_collect_pads_set_unit_size(pad, (width / 8) * channels);
-}
-
-
 static gboolean gen_setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(gst_pad_get_parent(pad));
 	GstStructure *structure;
-	gboolean result = TRUE;
+	gint rate, width, channels;
+	gboolean success = TRUE;
 
 	GST_OBJECT_LOCK(element);
 
-	gen_set_unit_size(pad, caps);
 	structure = gst_caps_get_structure(caps, 0);
-	gst_structure_get_int(structure, "rate", &element->rate);
+	if(!gst_structure_get_int(structure, "rate", &rate))
+		success = FALSE;
+	if(!gst_structure_get_int(structure, "width", &width))
+		success = FALSE;
+	if(!gst_structure_get_int(structure, "channels", &channels))
+		success = FALSE;
+
+	if(success) {
+		element->rate = rate;
+		gstlal_collect_pads_set_unit_size(pad, (width / 8) * channels);
+	}
 
 	GST_OBJECT_UNLOCK(element);
 	gst_object_unref(element);
-	return result;
+	return success;
 }
 
 

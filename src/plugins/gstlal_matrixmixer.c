@@ -155,24 +155,31 @@ static size_t mixmatrix_element_size(const GSTLALMatrixMixer *element)
 static GstCaps *getcaps(GstPad *pad)
 {
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(gst_pad_get_parent(pad));
-	GstCaps *sinkcaps;
+	GstCaps *caps;
 	GstCaps *peercaps;
 
 	/*
-	 * start by computing the intersection of our own allowed caps with
-	 * the peer's caps.  use get_fixed_caps_func() to avoid recursing
-	 * back into this function.
+	 * start by retrieving our own caps.  use get_fixed_caps_func() to
+	 * avoid recursing back into this function.
 	 */
 
-	/* FIXME:  shouldn't we be intersecting with the downstream peer? */
+	caps = gst_pad_get_fixed_caps_func(pad);
 
-	sinkcaps = gst_pad_get_fixed_caps_func(pad);
-	peercaps = gst_pad_peer_get_caps(pad);
+	/*
+	 * now compute the intersection of the caps with the downstream
+	 * peer's caps if known.
+	 */
+
+	peercaps = gst_pad_peer_get_caps(element->srcpad);
 	if(peercaps) {
-		GstCaps *result = gst_caps_intersect(peercaps, sinkcaps);
-		gst_caps_unref(sinkcaps);
+		GstCaps *result;
+		guint n;
+		for(n = 0; n < gst_caps_get_size(peercaps); n++)
+			gst_structure_remove_field(gst_caps_get_structure(peercaps, n), "channels");
+		result = gst_caps_intersect(peercaps, caps);
+		gst_caps_unref(caps);
 		gst_caps_unref(peercaps);
-		sinkcaps = result;
+		caps = result;
 	}
 
 	/*
@@ -189,10 +196,10 @@ static GstCaps *getcaps(GstPad *pad)
 
 		for(n = 0; n < gst_caps_get_size(matrixcaps); n++)
 			gst_structure_set(gst_caps_get_structure(matrixcaps, n), "channels", G_TYPE_INT, num_input_channels(element), NULL);
-		result = gst_caps_intersect(matrixcaps, sinkcaps);
-		gst_caps_unref(sinkcaps);
+		result = gst_caps_intersect(matrixcaps, caps);
+		gst_caps_unref(caps);
 		gst_caps_unref(matrixcaps);
-		sinkcaps = result;
+		caps = result;
 	}
 	g_mutex_unlock(element->mixmatrix_lock);
 
@@ -201,7 +208,7 @@ static GstCaps *getcaps(GstPad *pad)
 	 */
 
 	gst_object_unref(element);
-	return sinkcaps;
+	return caps;
 }
 
 
@@ -213,7 +220,7 @@ static GstCaps *getcaps(GstPad *pad)
 static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(gst_pad_get_parent(pad));
-	gboolean result = TRUE;
+	gboolean success = TRUE;
 
 	/*
 	 * if we have a mixing matrix, set the number of output channels to
@@ -229,7 +236,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 		caps = gst_caps_make_writable(caps);
 
 		gst_caps_set_simple(caps, "channels", G_TYPE_INT, num_output_channels(element), NULL);
-		result = gst_pad_set_caps(element->srcpad, caps);
+		success = gst_pad_set_caps(element->srcpad, caps);
 
 		gst_caps_unref(caps);
 	}
@@ -240,7 +247,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	gst_object_unref(element);
-	return result;
+	return success;
 }
 
 
