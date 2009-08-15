@@ -553,11 +553,11 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 
 
 /*
- * get_caps()
+ * getcaps()
  */
 
 
-static GstCaps *get_caps(GstPad *pad)
+static GstCaps *getcaps(GstPad *pad)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	GstCaps *caps, *peercaps;
@@ -592,18 +592,18 @@ static GstCaps *get_caps(GstPad *pad)
 
 
 /*
- * set_caps()
+ * setcaps()
  */
 
 
-static gboolean set_caps(GstPad *pad, GstCaps *caps)
+static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	GstStructure *structure;
 	int sample_rate;
 	LALUnit sample_units;
 	char units[100];	/* FIXME:  argh, hard-coded length = BAD BAD BAD */
-	gboolean result = TRUE;
+	gboolean success = TRUE;
 
 	/*
 	 * extract the sample rate, and check that it is allowed
@@ -613,8 +613,7 @@ static gboolean set_caps(GstPad *pad, GstCaps *caps)
 	sample_rate = g_value_get_int(gst_structure_get_value(structure, "rate"));
 	if((int) round(element->fft_length_seconds * sample_rate) & 1 || (int) round(element->zero_pad_seconds * sample_rate) & 1) {
 		GST_ERROR_OBJECT(element, "FFT length and/or Zero-padding is an odd number of samples (must be even)");
-		result = FALSE;
-		goto done;
+		success = FALSE;
 	}
 
 	/*
@@ -623,8 +622,7 @@ static gboolean set_caps(GstPad *pad, GstCaps *caps)
 
 	if(!XLALParseUnitString(&sample_units, g_value_get_string(gst_structure_get_value(structure, "units")))) {
 		GST_ERROR_OBJECT(element, "cannot parse units");
-		result = FALSE;
-		goto done;
+		success = FALSE;
 	}
 
 	/*
@@ -636,34 +634,26 @@ static gboolean set_caps(GstPad *pad, GstCaps *caps)
 	 * ref() it first to keep it valid.
 	 */
 
-	gst_caps_ref(caps);
-	caps = gst_caps_make_writable(caps);
-
-	XLALUnitAsString(units, sizeof(units), &lalDimensionlessUnit);
-	/* FIXME:  gstreamer doesn't like empty strings */
-	gst_caps_set_simple(caps, "units", G_TYPE_STRING, " "/*units*/, NULL);
-
-	result = gst_pad_set_caps(element->srcpad, caps);
-
-	gst_caps_unref(caps);
-
-	if(!result)
-		goto done;
+	if(success) {
+		gst_caps_ref(caps);
+		caps = gst_caps_make_writable(caps);
+		XLALUnitAsString(units, sizeof(units), &lalDimensionlessUnit);
+		/* FIXME:  gstreamer doesn't like empty strings */
+		gst_caps_set_simple(caps, "units", G_TYPE_STRING, " "/*units*/, NULL);
+		success = gst_pad_set_caps(element->srcpad, caps);
+		gst_caps_unref(caps);
+	}
 
 	/*
-	 * record the sample rate and units
+	 * record the sample rate and units, make a new Hann window, new
+	 * FFT plans, and workspaces
 	 */
 
-	element->sample_rate = sample_rate;
-	element->sample_units = sample_units;
-
-	/*
-	 * make a new Hann window, new FFT plans, and workspaces
-	 */
-
-	if(make_window_and_fft_plans(element)) {
-		result = FALSE;
-		goto done;
+	if(success) {
+		element->sample_rate = sample_rate;
+		element->sample_units = sample_units;
+		if(make_window_and_fft_plans(element))
+			success = FALSE;
 	}
 
 	/*
@@ -672,7 +662,7 @@ static gboolean set_caps(GstPad *pad, GstCaps *caps)
 
 done:
 	gst_object_unref(element);
-	return result;
+	return success;
 }
 
 
@@ -1051,8 +1041,8 @@ static void instance_init(GTypeInstance * object, gpointer class)
 
 	/* configure sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_getcaps_function(pad, get_caps);
-	gst_pad_set_setcaps_function(pad, set_caps);
+	gst_pad_set_getcaps_function(pad, getcaps);
+	gst_pad_set_setcaps_function(pad, setcaps);
 	gst_pad_set_chain_function(pad, chain);
 	gst_object_unref(pad);
 
