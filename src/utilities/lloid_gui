@@ -135,7 +135,7 @@ def mkiirfilter(pipeline, a, b):
 	pipeline.add(elem)
 	return elem
 
-def mkfakeLIGOsrc(pipeline, instrument, detectors):
+def mkfakeLIGOsrc(pipeline, instrument, detector):
 	start = float(options.gps_start_time)
 	stop = float(options.gps_stop_time)
 	fakesrc1 = mkgaussiansrc(pipeline, start, stop)
@@ -174,7 +174,7 @@ def mkfakeLIGOsrc(pipeline, instrument, detectors):
 	scaledsrc3.link(noiseadder)
 	scaledsrc4.link(noiseadder)
 	scaledsrc5 = mkaudioamplify(pipeline, noiseadder, 16384.**.5)
-	return mkcapsfilter(pipeline, scaledsrc5, "audio/x-raw-float, width=64, rate=16384, instrument=%s, channel_name=%s, units=strain" % (instrument, detectors[instrument].channel))
+	return mkcapsfilter(pipeline, scaledsrc5, "audio/x-raw-float, width=64, rate=16384, instrument=%s, channel_name=%s, units=strain" % (instrument, detector.channel))
 
 def mkprogressreport(pipeline, src, name):
 	elem = gst.element_factory_make("progressreport", name)
@@ -257,9 +257,14 @@ def mkbank(pipeline, src, bank, bank_fragment, reference_psd_filename, control_s
 	gate = gst.element_factory_make("lal_gate")
 	gate.set_property("threshold", bank.gate_threshold)
 	pipeline.add(gate)
-	mkqueue(pipeline, elem, pad_name = "src", max_size_bytes = 0, max_size_buffers = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000).link_pads("src", gate, "sink")
-	mkqueue(pipeline, control_src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000).link_pads("src", gate, "control")
-	orthosnr = mktee(pipeline, gate, pad_name = "src")
+	mkqueue(pipeline, elem, pad_name = "src").link_pads("src", gate, "sink")
+	mkqueue(pipeline, control_src).link_pads("src", gate, "control")
+	# FIXME:  teach the collectpads object not to wait for buffers on
+	# pads whose segments have not yet been reached by the input on the
+	# other pads.  then this large queue buffer will not be required
+	# because streaming can begin through the downstream adders without
+	# waiting for input from all upstream elements.
+	orthosnr = mktee(pipeline, mkqueue(pipeline, gate, pad_name = "src", max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000))
 
 	#mknxydumpsink(pipeline, mkqueue(pipeline, orthosnr), "orthosnr_%s.txt" % elem.get_name())
 
@@ -267,16 +272,16 @@ def mkbank(pipeline, src, bank, bank_fragment, reference_psd_filename, control_s
 	pipeline.add(snr)
 	mkqueue(pipeline, matrix).link_pads("src", snr, "matrix")
 	mkqueue(pipeline, orthosnr).link(snr)
-	snr = mktee(pipeline, mkresample(pipeline, snr, quality = 0))
+	snr = mktee(pipeline, snr)
 
 	chisq = gst.element_factory_make("lal_chisquare")
 	pipeline.add(chisq)
 	mkqueue(pipeline, matrix).link_pads("src", chisq, "matrix")
 	mkqueue(pipeline, elem, pad_name = "chifacs").link_pads("src", chisq, "chifacs")
-	mkqueue(pipeline, mkresample(pipeline, orthosnr, quality = 0)).link_pads("src", chisq, "orthosnr")
+	mkqueue(pipeline, orthosnr).link_pads("src", chisq, "orthosnr")
 	mkqueue(pipeline, snr).link_pads("src", chisq, "snr")
 
-	return snr, chisq
+	return mkresample(pipeline, snr, quality = 0), mkresample(pipeline, chisq, quality = 0)
 
 def mkfakesink(pipeline, src):
 	elem = gst.element_factory_make("fakesink")
@@ -468,6 +473,8 @@ def mkLLOIDsingle(pipeline, instrument, detector, bank, fake_data = False, injec
 def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, fake_data = False, injection_filename = None, progress_report = False):
 	if len(banks) > 1:
 		raise ValueError, "only 1 template bank supported yet"
+	if len(detectors) > 1:
+		raise ValueError, "only 1 instrument supported yet"
 
 	#nto1 = gst.element_factory_make("input-selector")
 	#nto1.set_property("select-all", True)
@@ -475,6 +482,12 @@ def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, fake_data = False
 	#mktriggerxmlwritersink(pipeline, nto1, trigger_filename)
 
 	for bank in banks:
+		# FIXME:  the adder will not allow streams from multiple
+		# instruments to be combined because their caps won't
+		# intersect.  find a way to remove the instrument property
+		# from the caps of the sum-of-squares streams before
+		# bringing them together in the adder.  perhaps using
+		# capssetter from the bad plugins?
 		control_snksrc = mkcontrolsnksrc(pipeline, min(bank.get_rates()), progress_report = progress_report)
 		#mknxydumpsink(pipeline, mkqueue(pipeline, control_snksrc[1]), "sumsquares_coinc.txt")
 
@@ -516,12 +529,16 @@ def parse_command_line():
 	parser.add_option("--output", metavar = "filename", help = "Set the name of the output trigger file (required).")
 	parser.add_option("--template-bank", metavar = "filename", action = "append", help = "Set the name of the file from which to load the template bank (required).")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write an XML description of the as-built pipeline to this file (optional).")
-	parser.add_option("--fake-data", action = "store_true", help = "Use fake LIGO data")
+	parser.add_option("--fake-data", action = "store_true", help = "Use fake LIGO data.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
 	options, filenames = parser.parse_args()
 
-	missing_options = [option for option in ("frame_cache", "gps_start_time", "gps_stop_time", "output", "template_bank") if getattr(options, option) is None]
+	required_options = ["gps_start_time", "gps_stop_time", "output", "template_bank"]
+	if not options.fake_data:
+		required_options += ["frame_cache"]
+
+	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
 
