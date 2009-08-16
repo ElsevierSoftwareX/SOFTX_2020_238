@@ -245,8 +245,7 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 	GstStructure *structure;
 	const gchar *media_type;
 	double (*control_sample_func)(const struct _GSTLALGate *, size_t) = NULL;
-	gint rate;
-	gint width;
+	gint rate, width;
 	gboolean success = TRUE;
 
 	/*
