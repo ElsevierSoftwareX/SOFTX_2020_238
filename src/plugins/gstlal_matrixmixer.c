@@ -164,6 +164,7 @@ static GstCaps *getcaps(GstPad *pad)
 	 */
 
 	caps = gst_pad_get_fixed_caps_func(pad);
+	GST_DEBUG_OBJECT(element, "our caps = %" GST_PTR_FORMAT, caps);
 
 	/*
 	 * now compute the intersection of the caps with the downstream
@@ -176,10 +177,12 @@ static GstCaps *getcaps(GstPad *pad)
 		guint n;
 		for(n = 0; n < gst_caps_get_size(peercaps); n++)
 			gst_structure_remove_field(gst_caps_get_structure(peercaps, n), "channels");
+		GST_DEBUG_OBJECT(element, "intersecting %" GST_PTR_FORMAT " with %" GST_PTR_FORMAT, caps, peercaps);
 		result = gst_caps_intersect(peercaps, caps);
 		gst_caps_unref(caps);
 		gst_caps_unref(peercaps);
 		caps = result;
+		GST_DEBUG_OBJECT(element, "intersection = %" GST_PTR_FORMAT, caps);
 	}
 
 	/*
@@ -196,10 +199,12 @@ static GstCaps *getcaps(GstPad *pad)
 
 		for(n = 0; n < gst_caps_get_size(matrixcaps); n++)
 			gst_structure_set(gst_caps_get_structure(matrixcaps, n), "channels", G_TYPE_INT, num_input_channels(element), NULL);
+		GST_DEBUG_OBJECT(element, "intersecting %" GST_PTR_FORMAT " with %" GST_PTR_FORMAT, caps, matrixcaps);
 		result = gst_caps_intersect(matrixcaps, caps);
 		gst_caps_unref(caps);
 		gst_caps_unref(matrixcaps);
 		caps = result;
+		GST_DEBUG_OBJECT(element, "intersection = %" GST_PTR_FORMAT, caps);
 	}
 	g_mutex_unlock(element->mixmatrix_lock);
 
@@ -223,22 +228,42 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	gboolean success = TRUE;
 
 	/*
-	 * if we have a mixing matrix, set the number of output channels to
-	 * the number of columns in the mixing matrix and check if the
-	 * downstream peer will accept the caps.  gst_caps_make_writable()
-	 * unref()s its argument so we have to ref() it first to keep it
-	 * valid.
+	 * if we have a mixing matrix the caps' media type and sample width
+	 * must be the same as the mixing matrix's, and the number of
+	 * channels must match the number of columns in the mixing matrix.
 	 */
 
 	g_mutex_lock(element->mixmatrix_lock);
-	if(element->mixmatrix_buf) {
-		gst_caps_ref(caps);
-		caps = gst_caps_make_writable(caps);
+	if(success && element->mixmatrix_buf) {
+		GstCaps *matrixcaps = gst_caps_make_writable(gst_buffer_get_caps(element->mixmatrix_buf));
+		GstCaps *result;
+		guint n;
 
-		gst_caps_set_simple(caps, "channels", G_TYPE_INT, num_output_channels(element), NULL);
-		success = gst_pad_set_caps(element->srcpad, caps);
+		for(n = 0; n < gst_caps_get_size(matrixcaps); n++)
+			gst_structure_set(gst_caps_get_structure(matrixcaps, n), "channels", G_TYPE_INT, num_input_channels(element), NULL);
+		result = gst_caps_intersect(matrixcaps, caps);
+		success = !gst_caps_is_empty(result);
+		gst_caps_unref(matrixcaps);
+		gst_caps_unref(result);
 
-		gst_caps_unref(caps);
+		/*
+		 * use the mixing matrix to set the number of output
+		 * channels to the number of columns in the mixing matrix
+		 * and check if the downstream peer will accept the caps.
+		 * gst_caps_make_writable() unref()s its argument so we
+		 * have to ref() it first to keep it valid.
+		 */
+
+		if(success) {
+			gst_caps_ref(caps);
+			caps = gst_caps_make_writable(caps);
+
+			for(n = 0; n < gst_caps_get_size(caps); n++)
+				gst_structure_set(gst_caps_get_structure(caps, n), "channels", G_TYPE_INT, num_output_channels(element), NULL);
+			GST_DEBUG_OBJECT(element, "trying to set " GST_PTR_FORMAT " on downstream peer", caps);
+			success = gst_pad_set_caps(element->srcpad, caps);
+			gst_caps_unref(caps);
+		}
 	}
 	g_mutex_unlock(element->mixmatrix_lock);
 
@@ -435,8 +460,8 @@ static gboolean setcaps_matrix(GstPad *pad, GstCaps *caps)
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(gst_pad_get_parent(pad));
 	GstStructure *structure = gst_caps_get_structure(caps, 0);
 	const char *media_type;
-	int width;
-	gboolean result = TRUE;
+	gint width;
+	gboolean success = TRUE;
 
 	media_type = gst_structure_get_name(structure);
 	gst_structure_get_int(structure, "width", &width);
@@ -450,7 +475,7 @@ static gboolean setcaps_matrix(GstPad *pad, GstCaps *caps)
 			element->data_type = GSTLAL_MATRIXMIXER_DOUBLE;
 			break;
 		default:
-			result = FALSE;
+			success = FALSE;
 			break;
 		}
 	} else if(!strcmp(media_type, "audio/x-raw-complex")) {
@@ -462,18 +487,18 @@ static gboolean setcaps_matrix(GstPad *pad, GstCaps *caps)
 			element->data_type = GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE;
 			break;
 		default:
-			result = FALSE;
+			success = FALSE;
 			break;
 		}
 	} else
-		result = FALSE;
+		success = FALSE;
 
 	/*
 	 * done.
 	 */
 
 	gst_object_unref(element);
-	return result;
+	return success;
 }
 
 
@@ -530,6 +555,12 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 		break;
 	}
 	g_cond_signal(element->mixmatrix_available);
+
+	/*
+	 * Force a renegotiation of the format on the sink pad
+	 */
+
+	gst_pad_set_caps(element->sinkpad, NULL);
 
 	/*
 	 * Done
