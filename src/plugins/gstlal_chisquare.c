@@ -127,24 +127,6 @@ static size_t chifacs_element_size(const GSTLALChiSquare *element)
 
 
 /*
- * parse caps, and set bytes per sample on collect pads object
- */
-
-
-static void set_unit_size(GstPad *pad, GstCaps *caps)
-{
-	GstStructure *structure;
-	gint width, channels;
-
-	structure = gst_caps_get_structure(caps, 0);
-	gst_structure_get_int(structure, "width", &width);
-	gst_structure_get_int(structure, "channels", &channels);
-
-	gstlal_collect_pads_set_unit_size(pad, (width / 8) * channels);
-}
-
-
-/*
  * ============================================================================
  *
  *                              Caps --- SNR Pad
@@ -225,37 +207,68 @@ static GstCaps *getcaps_snr(GstPad *pad)
 static gboolean setcaps_snr(GstPad *pad, GstCaps *caps)
 {
 	GSTLALChiSquare *element = GSTLAL_CHISQUARE(gst_pad_get_parent(pad));
-	gboolean success;
+	GstStructure *structure;
+	gint rate, width, channels;
+	gboolean success = TRUE;
+
+	/*
+	 * parse the caps
+	 */
+
+	GST_DEBUG_OBJECT(element, "(%s) trying %" GST_PTR_FORMAT "\n", GST_PAD_NAME(pad), caps);
+	structure = gst_caps_get_structure(caps, 0);
+	if(!gst_structure_get_int(structure, "rate", &rate))
+		success = FALSE;
+	if(!gst_structure_get_int(structure, "width", &width))
+		success = FALSE;
+	if(!gst_structure_get_int(structure, "channels", &channels))
+		success = FALSE;
+	GST_DEBUG_OBJECT(element, "(%s) %" GST_PTR_FORMAT " parse %s\n", GST_PAD_NAME(pad), caps, success ? "OK" : "FAILED");
+
+	/*
+	 * if we have a mixing matrix the caps' media type and sample width
+	 * must be the same as the mixing matrix's, and the number of
+	 * channels must match the number of columns in the mixing matrix.
+	 */
+
+	g_mutex_lock(element->coefficients_lock);
+	if(success && element->mixmatrix_buf) {
+		GstCaps *matrixcaps = gst_caps_make_writable(gst_buffer_get_caps(element->mixmatrix_buf));
+		GstCaps *result;
+		guint n;
+
+		for(n = 0; n < gst_caps_get_size(matrixcaps); n++)
+			gst_structure_set(gst_caps_get_structure(matrixcaps, n), "channels", G_TYPE_INT, num_snr_channels(element), NULL);
+		GST_DEBUG_OBJECT(element, "(%s) intersecting %" GST_PTR_FORMAT " with mix matrix caps %" GST_PTR_FORMAT "\n", GST_PAD_NAME(pad), caps, matrixcaps);
+		result = gst_caps_intersect(matrixcaps, caps);
+		GST_DEBUG_OBJECT(element, "(%s) result %" GST_PTR_FORMAT "\n", GST_PAD_NAME(pad), result);
+		success = !gst_caps_is_empty(result);
+		gst_caps_unref(matrixcaps);
+		gst_caps_unref(result);
+	}
+	g_mutex_unlock(element->coefficients_lock);
 
 	/*
 	 * will the downstream peer will accept the caps?  (the output
 	 * stream has the same caps as the SNR input stream)
 	 */
 
-	success = gst_pad_set_caps(element->srcpad, caps);
+	if(success) {
+		GST_DEBUG_OBJECT(element, "(%s) trying to set caps %" GST_PTR_FORMAT " on downstream peer\n", GST_PAD_NAME(pad), caps);
+		success = gst_pad_set_caps(element->srcpad, caps);
+		GST_DEBUG_OBJECT(element, "(%s) %s\n", GST_PAD_NAME(pad), success ? "accepted" : "rejected");
+	}
 
 	/*
 	 * if that was successful, update our metadata
 	 */
 
-	GST_OBJECT_LOCK(element);
 	if(success) {
-		GstStructure *structure;
-
-		/*
-		 * set bytes per sample on collect pads object
-		 */
-
-		set_unit_size(pad, caps);
-
-		/*
-		 * extract rate
-		 */
-
-		structure = gst_caps_get_structure(caps, 0);
-		gst_structure_get_int(structure, "rate", &element->rate);
+		GST_OBJECT_LOCK(element);
+		gstlal_collect_pads_set_unit_size(pad, (width / 8) * channels);
+		element->rate = rate;
+		GST_OBJECT_UNLOCK(element);
 	}
-	GST_OBJECT_UNLOCK(element);
 
 	/*
 	 * done
@@ -314,19 +327,31 @@ static GstCaps *getcaps_orthosnr(GstPad *pad)
 		gst_caps_unref(matrixcaps);
 		caps = result;
 	}
-	g_mutex_unlock(element->coefficients_lock);
 
 	/*
-	 * intersect with the downstream peer's caps if known.
+	 * intersect with the downstream peer's caps if known.  if we have
+	 * a mixing matrix, use it to set the number of orthogonal SNR
+	 * channels, otherwise allow any number
 	 */
 
 	peercaps = gst_pad_peer_get_caps(element->srcpad);
 	if(peercaps) {
-		GstCaps *result = gst_caps_intersect(peercaps, caps);
+		GstCaps *result;
+		guint n;
+
+		if(element->mixmatrix_buf) {
+			for(n = 0; n < gst_caps_get_size(peercaps); n++)
+				gst_structure_set(gst_caps_get_structure(peercaps, n), "channels", G_TYPE_INT, num_orthosnr_channels(element), NULL);
+		} else {
+			for(n = 0; n < gst_caps_get_size(peercaps); n++)
+				gst_structure_remove_field(gst_caps_get_structure(peercaps, n), "channels");
+		}
+		result = gst_caps_intersect(peercaps, caps);
 		gst_caps_unref(caps);
 		gst_caps_unref(peercaps);
 		caps = result;
 	}
+	g_mutex_unlock(element->coefficients_lock);
 	GST_OBJECT_UNLOCK(element);
 
 	/*
@@ -347,34 +372,40 @@ static GstCaps *getcaps_orthosnr(GstPad *pad)
 static gboolean setcaps_orthosnr(GstPad *pad, GstCaps *caps)
 {
 	GSTLALChiSquare *element = GSTLAL_CHISQUARE(gst_pad_get_parent(pad));
+	GstStructure *structure;
+	gint rate, width, channels;
 	gboolean success = TRUE;
 
 	/*
-	 * if we have a mixing matrix, intersect the caps with the source
-	 * pad's caps if known, using the mixing matrix size to convert the
-	 * channel count.
+	 * parse the caps
+	 */
+
+	structure = gst_caps_get_structure(caps, 0);
+	if(!gst_structure_get_int(structure, "rate", &rate))
+		success = FALSE;
+	if(!gst_structure_get_int(structure, "width", &width))
+		success = FALSE;
+	if(!gst_structure_get_int(structure, "channels", &channels))
+		success = FALSE;
+
+	/*
+	 * if we have a mixing matrix the caps' media type and sample width
+	 * must be the same as the mixing matrix's, and the number of
+	 * channels must match the number of columns in the mixing matrix.
 	 */
 
 	g_mutex_lock(element->coefficients_lock);
-	if(element->mixmatrix_buf) {
-		GstCaps *peercaps;
+	if(success && element->mixmatrix_buf) {
+		GstCaps *matrixcaps = gst_caps_make_writable(gst_buffer_get_caps(element->mixmatrix_buf));
+		GstCaps *result;
+		guint n;
 
-		peercaps = gst_pad_peer_get_caps(element->srcpad);
-
-		if(peercaps) {
-			GstCaps *tmpcaps;
-			guint n;
-
-			for(n = 0; n < gst_caps_get_size(peercaps); n++)
-				gst_structure_set(gst_caps_get_structure(peercaps, n), "channels", G_TYPE_INT, num_orthosnr_channels(element), NULL);
-
-			tmpcaps = gst_caps_intersect(peercaps, caps);
-			gst_caps_unref(peercaps);
-			peercaps = tmpcaps;
-
-			success = !gst_caps_is_empty(peercaps);
-			gst_caps_unref(peercaps);
-		}
+		for(n = 0; n < gst_caps_get_size(matrixcaps); n++)
+			gst_structure_set(gst_caps_get_structure(matrixcaps, n), "channels", G_TYPE_INT, num_orthosnr_channels(element), NULL);
+		result = gst_caps_intersect(matrixcaps, caps);
+		success = !gst_caps_is_empty(result);
+		gst_caps_unref(matrixcaps);
+		gst_caps_unref(result);
 	}
 	g_mutex_unlock(element->coefficients_lock);
 
@@ -384,7 +415,7 @@ static gboolean setcaps_orthosnr(GstPad *pad, GstCaps *caps)
 
 	if(success) {
 		GST_OBJECT_LOCK(element);
-		set_unit_size(pad, caps);
+		gstlal_collect_pads_set_unit_size(pad, (width / 8) * channels);
 		GST_OBJECT_UNLOCK(element);
 	}
 
@@ -437,17 +468,39 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 	/*
 	 * replace the current matrix with the new one.  this consumes the
 	 * reference.
+	 *
+	 * Note that if either the mixmatrix or chifacs buffers are
+	 * updated, it is required that both be updated.  in both cases, if
+	 * the buffer is not null then both buffers are unrefed and
+	 * NULL'ed, whichever finds their buffer already NULLed must be the
+	 * second of the pair to be updated and should not unref the other.
 	 */
 
-	if(element->mixmatrix_buf)
+	if(element->mixmatrix_buf) {
 		gst_buffer_unref(element->mixmatrix_buf);
+		if(element->chifacs_buf) {
+			gst_buffer_unref(element->chifacs_buf);
+			element->chifacs_buf = NULL;
+		}
+	}
 	element->mixmatrix_buf = sinkbuf;
 	element->mixmatrix = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
-	g_cond_signal(element->coefficients_available);
+	if(element->mixmatrix_buf && element->chifacs_buf)
+		g_cond_signal(element->coefficients_available);
 
-	/* FIXME:  clear the caps on the snr and orthosnr pads to induce a
-	 * caps negotiation sequence when the next buffers arrive in order
-	 * to check the number of channels */
+	/*
+	 * FIXME:  need to check for size consistency between chifacs and
+	 * mixmatrix.
+	 */
+
+	/*
+	 * clear the caps on the snr and orthosnr pads to induce a caps
+	 * negotiation sequence when the next buffers arrive in order to
+	 * check the number of channels
+	 */
+
+	gst_pad_set_caps(element->snrpad, NULL);
+	gst_pad_set_caps(element->orthosnrpad, NULL);
 
 	/*
 	 * done
@@ -500,18 +553,30 @@ static GstFlowReturn chain_chifacs(GstPad *pad, GstBuffer *sinkbuf)
 	/*
 	 * replace the current chifacs vector with the new one.  this
 	 * consumes the reference.
+	 *
+	 * Note that if either the mixmatrix or chifacs buffers are
+	 * updated, it is required that both be updated.  in both cases, if
+	 * the buffer is not null then both buffers are unrefed and
+	 * NULL'ed, whichever finds their buffer already NULLed must be the
+	 * second of the pair to be updated and should not unref the other.
 	 */
 
-	if(element->chifacs_buf)
+	if(element->chifacs_buf) {
 		gst_buffer_unref(element->chifacs_buf);
+		if(element->mixmatrix_buf) {
+			gst_buffer_unref(element->mixmatrix_buf);
+			element->mixmatrix_buf = NULL;
+		}
+	}
 	element->chifacs_buf = sinkbuf;
 	element->chifacs = gsl_vector_view_array((double *) GST_BUFFER_DATA(sinkbuf), cols);
-	g_cond_signal(element->coefficients_available);
+	if(element->mixmatrix_buf && element->chifacs_buf)
+		g_cond_signal(element->coefficients_available);
 
-	/* FIXME:  clear the caps on the snr and orthosnr pads to induce a
-	 * caps negotiation sequence when the next buffers arrive in order
-	 * to check the number of channels;  for now we blindly assume
-	 * everything's OK */
+	/*
+	 * FIXME:  need to check for size consistency between chifacs and
+	 * mixmatrix.
+	 */
 
 	/*
 	 * done
