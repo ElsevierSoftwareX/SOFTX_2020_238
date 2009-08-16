@@ -235,12 +235,12 @@ static GstCaps *gst_adder_sink_getcaps(GstPad * pad)
 	peercaps = gst_pad_peer_get_caps(adder->srcpad);
 	if(peercaps) {
 		GstCaps *result;
-		GST_DEBUG_OBJECT(adder, "intersecting " GST_PTR_FORMAT " and " GST_PTR_FORMAT, caps, peercaps);
+		GST_DEBUG_OBJECT(adder, "intersecting %" GST_PTR_FORMAT " and %" GST_PTR_FORMAT, caps, peercaps);
 		result = gst_caps_intersect(peercaps, caps);
 		gst_caps_unref(peercaps);
 		gst_caps_unref(caps);
 		caps = result;
-		GST_DEBUG_OBJECT(adder, "intersection " GST_PTR_FORMAT, caps);
+		GST_DEBUG_OBJECT(adder, "intersection %" GST_PTR_FORMAT, caps);
 	}
 	GST_OBJECT_UNLOCK(adder);
 
