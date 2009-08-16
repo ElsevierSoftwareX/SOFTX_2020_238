@@ -600,7 +600,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	GstStructure *structure;
-	int sample_rate;
+	gint rate;
 	LALUnit sample_units;
 	char units[100];	/* FIXME:  argh, hard-coded length = BAD BAD BAD */
 	gboolean success = TRUE;
@@ -610,8 +610,8 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	structure = gst_caps_get_structure(caps, 0);
-	sample_rate = g_value_get_int(gst_structure_get_value(structure, "rate"));
-	if((int) round(element->fft_length_seconds * sample_rate) & 1 || (int) round(element->zero_pad_seconds * sample_rate) & 1) {
+	rate = g_value_get_int(gst_structure_get_value(structure, "rate"));
+	if((int) round(element->fft_length_seconds * rate) & 1 || (int) round(element->zero_pad_seconds * rate) & 1) {
 		GST_ERROR_OBJECT(element, "FFT length and/or Zero-padding is an odd number of samples (must be even)");
 		success = FALSE;
 	}
@@ -650,7 +650,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	if(success) {
-		element->sample_rate = sample_rate;
+		element->sample_rate = rate;
 		element->sample_units = sample_units;
 		if(make_window_and_fft_plans(element))
 			success = FALSE;
