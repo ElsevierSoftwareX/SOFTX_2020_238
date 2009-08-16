@@ -639,21 +639,38 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
-	gboolean success;
+	GstStructure *structure;
+	gint rate;
+	gboolean success = TRUE;
 
 	/*
-	 * set the caps on the sum-of-squares stream
+	 * parse the caps
+	 */
+
+	structure = gst_caps_get_structure(caps, 0);
+	if(!gst_structure_get_int(structure, "rate", &rate))
+		success = FALSE;
+
+	/*
+	 * try setting the caps on the sum-of-squares src pad
 	 */
 
 	/* FIXME:  should adjust the units */
-	success = gst_pad_set_caps(element->sumsquarespad, caps);
+	if(success)
+		success = gst_pad_set_caps(element->sumsquarespad, caps);
+
+	/*
+	 * try setting the caps on the snr src pad
+	 */
+
+	/* FIXME:  code this up.  set the channels to [1,MAX] */
 
 	/*
 	 * if successful, record the sample rate
 	 */
 
 	if(success)
-		element->sample_rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
+		element->sample_rate = rate;
 
 	gst_object_unref(element);
 	return success;
