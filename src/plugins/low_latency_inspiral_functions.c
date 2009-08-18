@@ -482,7 +482,6 @@ int generate_bank_svd(
     if (verbose) fprintf(stderr, "template %zd M_chirp=%e\n",j, bankRow->chirpMass);
     }
 
-  /* SET THIS IN create_template_.. gsl_vector_set(*chifacs,i,sqrt(tmpltpower));*/
   if (verbose)     fprintf(stderr,"Doing the SVD \n");
 
   if(gstlal_gsl_linalg_SV_decomp_mod(U, V, S))
@@ -491,6 +490,8 @@ int generate_bank_svd(
         exit(1); 
     }
 
+  /* FIXME: check the templates to see that the snr-weighted tolerance is correct */
+  tolerance = 1. - (1. - tolerance)/gsl_vector_max(*chifacs);
   trim_matrix(U,V,S,tolerance);
   for (i = 0; i < (*S)->size; i++)
     for (j = 0; j < (*V)->size1; j++)
