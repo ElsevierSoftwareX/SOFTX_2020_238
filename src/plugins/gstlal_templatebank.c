@@ -704,13 +704,25 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 
 		gst_event_parse_new_segment_full(event, &update, &rate, &applied_rate, &format, &start, &stop, &position);
 		gst_event_unref(event);
-		GST_ELEMENT_INFO(GST_PAD_PARENT(pad), CORE, EVENT, (NULL), ("%s: received new segment event with bounds %lu -- %lu (format = %s)", GST_PAD_NAME(pad), start, stop, gst_format_get_name(format)));
+		GST_ELEMENT_INFO(GST_PAD_PARENT(pad), CORE, EVENT, (NULL), ("%s: received new segment event with bounds [%lu.%09lu ns -- %lu.%09lu ns) (format = %s)", GST_PAD_NAME(pad), start / GST_SECOND, start % GST_SECOND, stop / GST_SECOND, stop % GST_SECOND, gst_format_get_name(format)));
 
 		if(format == GST_FORMAT_TIME) {
 			gint64 delta_t = round(element->t_start * GST_SECOND);
-			start += delta_t;
-			stop += delta_t;
-			position += delta_t;	/* FIXME:  is this right? */
+			if(G_MAXINT64 - start < delta_t)
+				/* overflow, clip at max time */
+				start = G_MAXINT64;
+			else
+				start += delta_t;
+			if(G_MAXINT64 - stop < delta_t)
+				/* overflow, clip at max time */
+				stop = G_MAXINT64;
+			else
+				stop += delta_t;
+			if(G_MAXINT64 - position < delta_t)
+				/* overflow, clip at max time */
+				position = G_MAXINT64;
+			else
+				position += delta_t;	/* FIXME:  is this right? */
 		} else {
 			GST_ELEMENT_ERROR(element, CORE, NOT_IMPLEMENTED, (NULL), ("segment format not supported"));
 			success = FALSE;
