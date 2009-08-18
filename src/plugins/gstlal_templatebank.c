@@ -707,7 +707,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		GST_ELEMENT_INFO(GST_PAD_PARENT(pad), CORE, EVENT, (NULL), ("%s: received new segment event with bounds %lu -- %lu (format = %s)", GST_PAD_NAME(pad), start, stop, gst_format_get_name(format)));
 
 		if(format == GST_FORMAT_TIME) {
-			guint64 delta_t = round(element->t_start * GST_SECOND);
+			gint64 delta_t = round(element->t_start * GST_SECOND);
 			start += delta_t;
 			stop += delta_t;
 			position += delta_t;	/* FIXME:  is this right? */
