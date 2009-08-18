@@ -90,5 +90,40 @@ function test_simulation2wav() {
 		! filesink location="test_simulation2wav.wav" buffer-mode=2
 }
 
+function test_framesrc() {
+        gst-launch \
+                lal_framesrc \
+                        blocksize=$((16384*8*16)) \
+                        location="/home/kipp/gwf/cache" \
+                        instrument="H1" \
+                        channel-name="LSC-STRAIN" \
+                        num-buffers=1000 \
+                        name=framesrc \
+                ! lal_simulation xml-location="/home/dkeppel/lloid/HL-INJECTIONS_1_BNS_INJ-873247900-10.xml" \
+                ! audioresample ! audio/x-raw-float, rate=2048 \
+                ! progressreport \
+                ! fakesink
+}
 
-test_resampler_gaps
+function test_pipeline() {
+        gst-launch \
+                audiotestsrc wave=9 volume=1e-21 timestamp-offset=873247900000000000 num-buffers=10 \
+                ! audio/x-raw-float, width=64, rate=16384 \
+                ! audioresample ! audio/x-raw-float, rate=2048 \
+                ! progressreport \
+                ! fakesink
+}
+
+function test_fakeLIGO(){
+        ./LIGO_noise_test \
+                --frame-cache "/home/kipp/gwf/cache" \
+		--gps-start-time 800000000 \
+		--gps-stop-time 800000200 \
+                --instrument "H1" \
+                --output "fakeLIGOpsds.xml";
+        echo "</LIGO_LW>" >> fakeLIGOpsds.xml;
+        python ligo_lw_test_01.py
+}
+
+
+test_fakeLIGO
