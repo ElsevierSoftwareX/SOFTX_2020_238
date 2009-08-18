@@ -125,8 +125,6 @@ def mkiirfilter(pipeline, a, b):
 	return elem
 
 def mkfakeLIGOsrc(pipeline, instrument, detector):
-	start = float(options.gps_start_time)
-	stop = float(options.gps_stop_time)
 	fakesrc1 = mkfakesrc(pipeline, instrument, detector, volume = 1.0)
 	a1 = [1.87140685e-05, 3.74281370e-05, 1.87140685e-05]
 	b1 = [1., 1.98861643, -0.98869215]
