@@ -64,6 +64,10 @@
  */
 
 
+#define DEFAULT_START_TIME 0
+#define DEFAULT_STOP_TIME G_MAXUINT64
+
+
 /*
  * number bigger than the number of characters it takes to print the value
  * for one channel including white space, sign characters, etc.
@@ -88,14 +92,15 @@
  */
 
 
-static int timestamp_to_sample_clipped(GstClockTime start, int samples, int rate, GstClockTime t)
+static guint64 timestamp_to_sample_clipped(GstClockTime start, guint64 samples, int rate, GstClockTime t)
 {
-	if(t <= start)
+	guint64 offset;
+
+	if(t < start)
 		return 0;
-	t -= start;
-	if(t >= gst_util_uint64_scale_int(samples, GST_SECOND, rate))
-		return samples;
-	return gst_util_uint64_scale_int(t, rate, GST_SECOND);
+
+	offset = gst_util_uint64_scale_int_round(t - start, rate, GST_SECOND);
+	return (offset < samples) ? offset : samples;
 }
 
 
@@ -108,7 +113,7 @@ static int timestamp_to_sample_clipped(GstClockTime start, int samples, int rate
  */
 
 
-static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int rate, int start, int stop)
+static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int rate, guint64 start, guint64 stop)
 {
 	GstFlowReturn result = GST_FLOW_OK;
 	GstBuffer *buf;
@@ -122,9 +127,10 @@ static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int rate, 
 	gst_buffer_copy_metadata(buf, template, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 	GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
 	GST_BUFFER_OFFSET_END(buf) = GST_BUFFER_OFFSET_NONE;
-	if(GST_BUFFER_TIMESTAMP_IS_VALID(buf))
-		GST_BUFFER_TIMESTAMP(buf) += (GstClockTime) gst_util_uint64_scale_int(start, GST_SECOND, rate);
-	GST_BUFFER_DURATION(buf) = (GstClockTime) gst_util_uint64_scale_int(stop - start, GST_SECOND, rate);
+	if(GST_BUFFER_TIMESTAMP_IS_VALID(buf)) {
+		GST_BUFFER_TIMESTAMP(buf) += gst_util_uint64_scale_int_round(start, GST_SECOND, rate);
+		GST_BUFFER_DURATION(buf) = gst_util_uint64_scale_int_round(stop, GST_SECOND, rate) - gst_util_uint64_scale_int_round(start, GST_SECOND, rate);
+	}
 
 	result = gst_pad_push(pad, buf);
 	if(result != GST_FLOW_OK) {
@@ -142,10 +148,10 @@ static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int rate, 
  */
 
 
-static GstFlowReturn print_samples(GstBuffer *out, const double *samples, int channels, int rate, int start, int stop)
+static GstFlowReturn print_samples(GstBuffer *out, const double *samples, int channels, int rate, guint64 start, guint64 stop)
 {
 	char *location = (char *) GST_BUFFER_DATA(out);
-	int i;
+	guint64 i;
 	int j;
 
 	samples += channels * start;
@@ -155,13 +161,13 @@ static GstFlowReturn print_samples(GstBuffer *out, const double *samples, int ch
 		 * The current time stamp
 		 */
 
-		GstClockTime t = GST_BUFFER_TIMESTAMP(out) + gst_util_uint64_scale_int(i - start, GST_SECOND, rate);
+		GstClockTime t = GST_BUFFER_TIMESTAMP(out) + gst_util_uint64_scale_int_round(i - start, GST_SECOND, rate);
 
 		/*
 		 * Are we almost out of space?
 		 */
 
-		if((guint8 *) location + (channels + 1) * ASSUMED_BYTES_PER_CHANNEL >= GST_BUFFER_DATA(out) + GST_BUFFER_SIZE(out)) {
+		if((guint8 *) location - GST_BUFFER_DATA(out) + (channels + 1) * ASSUMED_BYTES_PER_CHANNEL >= GST_BUFFER_SIZE(out)) {
 			/*
 			 * Save offset of current location in buffer
 			 */
@@ -316,8 +322,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
 	GstBuffer *srcbuf;
 	GstFlowReturn result = GST_FLOW_OK;
-	int samples;
-	int start, stop;
+	guint64 samples;
+	guint64 start, stop;
 
 	/*
 	 * Measure the number of samples.
@@ -371,10 +377,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * later.
 	 */
 
-	srcbuf = gst_buffer_new_and_alloc((element->channels + 1) * (stop - start) * ASSUMED_BYTES_PER_CHANNEL);
-	if(!srcbuf) {
+	result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET_NONE, (element->channels + 1) * (stop - start) * ASSUMED_BYTES_PER_CHANNEL, GST_PAD_CAPS(element->srcpad), &srcbuf);
+	if(result != GST_FLOW_OK) {
 		GST_ERROR_OBJECT(element, "failure allocating output buffer");
-		result = GST_FLOW_ERROR;
 		goto done;
 	}
 
@@ -382,11 +387,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * Set metadata.
 	 */
 
-	gst_buffer_set_caps(srcbuf, GST_PAD_CAPS(element->srcpad));
 	gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS);
-	GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET_NONE;
-	GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + (GstClockTime) start * GST_SECOND / element->rate;
-	GST_BUFFER_DURATION(srcbuf) = (GstClockTime) (stop - start) * GST_SECOND / element->rate;
+	GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET_NONE;
+	GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(start, GST_SECOND, element->rate);
+	GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(stop, GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(srcbuf);
 
 	/*
 	 * Print samples into output buffer.
@@ -520,8 +524,8 @@ static void class_init(gpointer class, gpointer class_data)
 	gobject_class->finalize = finalize;
 
 	/* FIXME:  "string" is not the best type for these ... */
-	g_object_class_install_property(gobject_class, ARG_START_TIME, g_param_spec_int64("start-time", "Start time", "Start time in nanoseconds.", 0, G_MAXINT64, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_STOP_TIME, g_param_spec_int64("stop-time", "Stop time", "Stop time in seconds.", 0, G_MAXINT64, G_MAXINT64, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_START_TIME, g_param_spec_uint64("start-time", "Start time", "Start time in nanoseconds.", 0, G_MAXUINT64, DEFAULT_START_TIME, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_STOP_TIME, g_param_spec_uint64("stop-time", "Stop time", "Stop time in seconds.", 0, G_MAXUINT64, DEFAULT_STOP_TIME, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 
@@ -551,8 +555,8 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	/* internal data */
 	element->rate = 0;
 	element->channels = 0;
-	element->start_time = 0;
-	element->stop_time = 0;
+	element->start_time = DEFAULT_START_TIME;
+	element->stop_time = DEFAULT_STOP_TIME;
 }
 
 
