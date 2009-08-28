@@ -230,11 +230,11 @@ int generate_autocorrelation_bank(
    gsl_vector_view col;
    gsl_vector_view autocorr;
   
-   /* Calculates the product */ 
+   /* Calculates the product the autocorrelation function*/ 
 
   for (i=0; i<template->data->length; i++)
     {
-    complex double z = XLALCOMPLEX16Abs2(template->data->data[i]) * cexp(I*2*LAL_PI*i*base_sample_rate*(ATEMPS-1)/2);
+    complex double z = XLALCOMPLEX16Abs2(template->data->data[i]) * cexp(-I*LAL_TWOPI* (template->f0 + i*template->deltaF) * (ATEMPS-1)/2 / base_sample_rate);
     LAL_SET_COMPLEX(&template_product->data->data[i], creal(z), cimag(z));
     } 
 
