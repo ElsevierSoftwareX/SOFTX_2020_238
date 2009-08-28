@@ -55,9 +55,10 @@ int main()
   gsl_matrix *U = NULL;
   gsl_vector *S = NULL;
   gsl_matrix *V = NULL;
+  gsl_matrix *A = NULL;
   gsl_matrix *bank = NULL;
   gsl_vector *chifacs = NULL;
-  generate_bank_svd(&U,&S,&V,&chifacs,"../../examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml","/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", base_sample_rate,
+  generate_bank_svd(&U,&S,&V,&chifacs,&A,"../../examples/H1-TMPLTBANK_09_1.207-874000000-2048.xml","/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", base_sample_rate,
                     down_samp_fac,t_start,t_end,tmax,tolerance,vrb);
 
   fprintf(stderr,"U = %zd,%zd V = %zd,%zd S = %zd\n",U->size1,U->size2,V->size1,V->size2,S->size);

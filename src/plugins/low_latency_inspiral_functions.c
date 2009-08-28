@@ -22,6 +22,7 @@
 /* standard includes */
 #include <stdio.h>
 #include <math.h>
+#include <complex.h>
 
 /* glib/gstreamer includes */
 #include <glib.h>
@@ -66,6 +67,7 @@
 #include "gstlal_whiten.h"
 
 #define TEMPLATE_DURATION 128	/* seconds */
+#define ATEMPS 101
 
 #define LAL_CALL( function, statusptr ) \
   ((function),lal_errhandler(statusptr,#function,__FILE__,__LINE__,rcsid))
@@ -88,7 +90,7 @@ static double time_to_freq(double M, double time)
 
 static double freq_to_time(double M, double freq)
   {
-  /* This function gives the instantaneous frequency at a given time based
+  /* This function gives the time for a given frequency based
    * on the quadrupole approximation.  It is bound to be a bit off from other
    * template families so use it with caution 
    */
@@ -122,20 +124,250 @@ static void quadrupole_template(double M, double duration,
   }
 
 
+static double calculate_real_time_shift(
+			COMPLEX16FrequencySeries *template_reference,
+			COMPLEX16FrequencySeries *template,
+			COMPLEX16FrequencySeries *template_product, 
+			COMPLEX16TimeSeries *convolution,
+                        COMPLEX16FFTPlan *revplan,
+			double deltaT,
+			int column
+ 			) 
+ {
+   double real_max_conv;
+   double im_max_conv;
+   double real_tshift;
+   double im_tshift;
+   unsigned i;
+   
+   /* Calculates the product */ 
+
+  for (i=0; i<template->data->length; i++)
+    {
+    /*Real part*/
+    template_product->data->data[i].re = (template->data->data[i].re*template_reference->data->data[i].re) + (template->data->data[i].im*template_reference->data->data[i].im);
+    /*Imaginary part*/
+    template_product->data->data[i].im = (template->data->data[i].re*template_reference->data->data[i].im) - (template->data->data[i].im*template_reference->data->data[i].re);
+    } 
+
+  /* Inverse Fourier transform */
+ 
+  XLALCOMPLEX16FreqTimeFFT(convolution, template_product, revplan); // Error message?
 
 
-static int create_template_from_sngl_inspiral(
+  /* Looks for the peak */  
+  
+  real_max_conv = fabs(convolution->data->data[0].re);
+  im_max_conv = fabs(convolution->data->data[0].im);
+
+  /* Real part */
+  
+  //char buffer[100];
+  //sprintf(buffer, "real_convolution_%d.txt", column);
+  //FILE *realfile = fopen(buffer, "w");
+  for (i=0; i<convolution->data->length; i++)
+    {
+    /*if(realfile)
+      {
+      fprintf(realfile, "%u %e\n", i, convolution->data->data[i].re);
+      //fprintf(stderr, "%u %e\n", i, convolution->data->data[i].re);
+      }*/
+
+    if(fabs(convolution->data->data[i].re) > real_max_conv) 
+      {
+      real_max_conv=fabs(convolution->data->data[i].re);
+      real_tshift = 128-i*deltaT;
+      }
+    }
+  fprintf(stderr, "Real time shift %e\n", real_tshift);
+  //fflush(realfile);
+  //fclose(realfile);
+
+  /* Imaginary part */
+  
+  /*char imbuffer[100];
+  sprintf(imbuffer, "im_convolution_%d.txt", column);
+  FILE *imfile = fopen(imbuffer, "w");*/
+  for (i=0; i<convolution->data->length; i++)
+    {
+    /*if(imfile)
+      {
+      fprintf(imfile, "%u %e\n", i, convolution->data->data[i].re);
+      //fprintf(stderr, "%u %e\n", i, convolution->data->data[i].re);
+      }*/
+
+    if(fabs(convolution->data->data[i].im) > im_max_conv)
+      {
+      im_max_conv=fabs(convolution->data->data[i].im);
+      im_tshift = 128-i*deltaT;
+      }
+    }
+  fprintf(stderr, "Imag. time shift %e\n", im_tshift);
+  //fflush(imfile);
+  //fclose(imfile);
+
+  return real_tshift;
+ }
+
+
+
+int generate_autocorrelation_bank(
+			gsl_matrix *A,			
+			COMPLEX16FrequencySeries *template,
+			COMPLEX16FrequencySeries *template_product, 
+			COMPLEX16TimeSeries *autocorrelation,
+                        COMPLEX16FFTPlan *revplan,
+			int U_column,
+			double autocorr_numsamps,
+			double base_sample_rate
+ 			) 
+ {
+   double real_max;
+   double im_max;
+   int im_peak;
+   int real_peak;
+   unsigned i;
+   gsl_vector_view col;
+   gsl_vector_view autocorr;
+  
+   /* Calculates the product */ 
+
+  for (i=0; i<template->data->length; i++)
+    {
+    complex double z = XLALCOMPLEX16Abs2(template->data->data[i]) * cexp(I*2*LAL_PI*i*base_sample_rate*(ATEMPS-1)/2);
+    LAL_SET_COMPLEX(&template_product->data->data[i], creal(z), cimag(z));
+    } 
+
+
+  /* Inverse Fourier transform */
+ 
+  if(XLALCOMPLEX16FreqTimeFFT(autocorrelation, template_product, revplan)) 
+    return -1;
+  
+  /*
+   * Looks for the peak 
+   */  
+  
+  real_max = fabs(autocorrelation->data->data[0].re);
+  im_max = fabs(autocorrelation->data->data[0].im);
+
+
+  /* Real part */
+  
+  for (i=0; i<autocorrelation->data->length; i++)
+    {
+    if(fabs(autocorrelation->data->data[i].re) > real_max) 
+      {
+      real_max=fabs(autocorrelation->data->data[i].re);
+      real_peak = i;
+      }
+    }
+  fprintf(stderr, "Real peak %e\n", real_max);
+
+  if(real_max!=1) // Normalizes
+  {
+   for (i=0; i<autocorrelation->data->length; i++)
+     {
+      autocorrelation->data->data[i].re = autocorrelation->data->data[i].re/real_max;  
+     }
+  }
+
+
+ /* Imaginary part */
+  for (i=0; i<autocorrelation->data->length; i++)
+    {
+    if(fabs(autocorrelation->data->data[i].im) > im_max)
+      {
+      im_max=fabs(autocorrelation->data->data[i].im);
+      im_peak = i;
+      }
+    }
+  
+  if(im_max!=1) // Normalizes
+  {
+   for (i=0; i<autocorrelation->data->length; i++)
+     {
+      autocorrelation->data->data[i].im = autocorrelation->data->data[i].im/im_max;  
+     }
+  }
+
+  /* Prints the function  */
+
+  char buffer[50];
+  sprintf(buffer, "testing_autocorrelation_%d.txt", U_column);
+
+  FILE *file = fopen(buffer, "w");
+  if(file)
+  {
+    for (i=0; i<autocorrelation->data->length; i++)
+    {
+    fprintf(file, "%u %e\n", i, autocorrelation->data->data[i].re);
+    }
+    fflush(file);
+    fclose(file);
+  }
+
+
+
+  /*
+   * Creates the autocorrelation matrix
+   */
+
+  /* Real part only */
+  
+  col = gsl_matrix_column(A, U_column);
+  autocorr = gsl_vector_view_array_with_stride((double*) autocorrelation->data->data, 2, col.vector.size); // assuming the peak is in t=0
+  
+  fprintf(stderr, "Autocorrelation completed successfully!\n");
+
+  if (gsl_vector_memcpy(&col.vector, &autocorr.vector))
+   {
+   fprintf(stderr, "create autocorrelation matrix FAILED\n");
+   return -1;
+   }
+  
+
+
+  /* Prints the function from the bank */
+  
+  char buffer1[50];
+  sprintf(buffer1, "long_autocorrelation_from_bank_%d.txt", U_column);
+  FILE *acfile = fopen(buffer1 , "w");
+  if(acfile)
+  {
+    for (int k=0; k<autocorr_numsamps ; k++)
+      {
+      fprintf(acfile, "%i %e\n", k, gsl_vector_get(&col.vector, k) ); 
+      }
+    fprintf(stderr, "Autocorrelation written into file!\n");  
+  }
+  fclose(acfile);
+
+  return 0;
+}
+
+
+
+int create_template_from_sngl_inspiral(
                        InspiralTemplate *bankRow,
                        gsl_matrix *U, 
+		       gsl_matrix *A,
                        gsl_vector *chifacs,
                        int fsamp,
                        int downsampfac, 
                        double t_end,
-                       double t_total_duration, 
+                       double t_total_duration,
+		       double autocorr_numsamps,
+		       double tshift,
                        int U_column,
                        COMPLEX16TimeSeries *template_out,
+		       COMPLEX16TimeSeries *convolution,
+		       COMPLEX16TimeSeries *autocorrelation,
+		       COMPLEX16TimeSeries *short_autocorr,
+		       COMPLEX16FrequencySeries *template_product,
                        COMPLEX16FrequencySeries *fft_template,
 		       COMPLEX16FrequencySeries *fft_template_full,
+		       COMPLEX16FrequencySeries *fft_template_full_reference,
                        REAL8FFTPlan *fwdplan,
                        COMPLEX16FFTPlan *revplan,
                        REAL8FrequencySeries *psd
@@ -147,7 +379,7 @@ static int create_template_from_sngl_inspiral(
   double norm;
   gsl_vector_view col;
   gsl_vector_view tmplt;
-  /*fprintf(stderr, "fsamp %d downsampfac %d t_end %e t_total_duration %e\n", fsamp, downsampfac,t_end,t_total_duration); */
+  fprintf(stderr, "fsamp %d downsampfac %d t_end %e t_total_duration %e\n", fsamp, downsampfac,t_end,t_total_duration);
   SPAWaveform (bankRow, template_out->deltaT, fft_template);
  
   /*
@@ -158,7 +390,6 @@ static int create_template_from_sngl_inspiral(
     fprintf(stderr, "create_template_from_sngl_inspiral XLALWhitenCOMPLEX16FrequencySeries(fft_template,psd) FAILED\n");
     return -1;
     }
-  
   /* compute the quadrature phases now we need a complex frequency series that
    * is twice as large.  We'll store the negative frequency components that'll
    * give the sine and cosine phase */
@@ -173,13 +404,30 @@ static int create_template_from_sngl_inspiral(
     fft_template_full->data->data[fft_template->data->length - 1 - i].im = -2.0 * fft_template->data->data[i].im;
     }
 
- 
   memset(&fft_template_full->data->data[fft_template->data->length], 0, (fft_template_full->data->length - fft_template->data->length) * sizeof(*fft_template_full->data->data));
+
 
   if(XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan)) {
     fprintf(stderr, "create_template_from_sngl_inspiral XLALCOMPLEX16FreqTimeFFT(template_out, fft_template_full, revplan) FAILED\n");
     return -1;
     }
+
+ /* MIREIA */
+
+  bankRow->order = LAL_PNORDER_TWO; //bankRow???
+
+  if(tshift!=0)
+  {
+    //tshift = calculate_real_time_shift(fft_template_full_reference, fft_template_full, template_product, convolution, revplan, template_out->deltaT, U_column); // deltaT??
+
+    /*Boundaries*/
+    //if(gstlal_spa_chirp_time(bankRow->mass1+bankRow->mass2, bankRow->eta, 150.0, bankRow->order)>(t_end-tshift)) fprintf(stderr, "ERROR!! f>f_nyq !!! Tshift %e is too big!!\n", tshift);
+      //else fprintf(stderr, "COOL! Tshift inside the function %e \n", tshift);
+
+    /*Shifts the template*/
+    //XLALResizeCOMPLEX16TimeSeries(template_out, (int) round(tshift*fsamp), template_out->data->length);
+  }
+
 
   /*
    * Normalize the template.
@@ -202,6 +450,35 @@ static int create_template_from_sngl_inspiral(
 
   norm = sqrt(2 * downsampfac / XLALCOMPLEX16SequenceSumSquares(template_out->data, template_out->data->length - t_total_length, t_total_length));
 	
+	
+
+  /* Prints the real part of the template!!*/ 
+
+  /*char buffer[50];
+  sprintf(buffer, "conv_negative_unshifted_whitened_template_%d.txt", U_column);
+
+  FILE *file = fopen(buffer, "w");
+  if(file)
+  {
+    for (i=0; i<template_out->data->length; i++)
+    {
+    fprintf(file, "%e %e\n", i*(double)template_out->deltaT, template_out->data->data[i].re);
+    }
+    fflush(file);
+    fclose(file);
+  }*/
+
+
+
+ /* Autocorrelation
+  * */ 
+  fprintf(stderr, "doing autocorrelation\n");
+
+  if(generate_autocorrelation_bank(A, fft_template_full, template_product, autocorrelation, revplan, U_column, autocorr_numsamps, fsamp)<0)
+  	{
+	fprintf(stderr, "autocorrelation FAILED\n");
+	return -1;
+	}
 
   /*
    * Extract a piece of the template.
@@ -246,6 +523,7 @@ static int create_template_from_sngl_inspiral(
 
   return 0;
   }
+
 
 
 int compute_time_frequency_boundaries_from_bank(char * bank_name,
@@ -296,7 +574,7 @@ int compute_time_frequency_boundaries_from_bank(char * bank_name,
   if (minFreq > Nyquist) minFreq = Nyquist;
   if (verbose) fprintf(stderr,"Lowest LR frequency in the bank = %f minChirp = %f\n",minFreq,minChirpMass);
 
-  /* We need to start at time defined by the first frequency this could be a
+ /* We need to start at time defined by the first frequency this could be a
    * long time before coalescence if the nyquist frequency is low compared to 
    * the light ring frequency
    */
@@ -389,11 +667,14 @@ int gstlal_gsl_linalg_SV_decomp_mod(
 }
 
 
+
+
 int generate_bank_svd(
                       gsl_matrix **U, 
                       gsl_vector **S, 
 		      gsl_matrix **V,
                       gsl_vector **chifacs,
+		      gsl_matrix **A,
                       const char *xml_bank_filename,
 		      const char *reference_psd_filename,
                       int base_sample_rate,
@@ -404,14 +685,25 @@ int generate_bank_svd(
                       double tolerance,
 	              int verbose)
 {
-  InspiralTemplate *bankRow, *bankHead = NULL;
+  InspiralTemplate *bankRef = NULL, *bankRow, *bankHead = NULL;
   int numtemps = InspiralTmpltBankFromLIGOLw( &bankHead, xml_bank_filename,-1,-1);
+  double minChirpMass;
+  double jreference=0;
+  double tshift=1;
   size_t i, j;
   size_t numsamps = round((t_end - t_start) * base_sample_rate / down_samp_fac);
+  size_t autocorr_numsamps = ATEMPS;
   size_t full_numsamps = base_sample_rate*TEMPLATE_DURATION;
   COMPLEX16TimeSeries *template_out;
+  COMPLEX16TimeSeries *convolution=NULL;
+  COMPLEX16TimeSeries *autocorrelation=NULL;
+  COMPLEX16TimeSeries *short_autocorr=NULL; // WE DON'T NEED THIS!!!! DELETEEE! FIXME FIXME
   COMPLEX16FrequencySeries *fft_template;
   COMPLEX16FrequencySeries *fft_template_full;
+  COMPLEX16FrequencySeries *fft_template_full_reference=NULL;
+  COMPLEX16FrequencySeries *somethingelse=NULL;
+  COMPLEX16TimeSeries *template_reference=NULL;
+  COMPLEX16FrequencySeries *template_product=NULL;
 
   REAL8FrequencySeries *psd;
   REAL8FFTPlan *fwdplan;
@@ -426,6 +718,7 @@ int generate_bank_svd(
   
   /* There are twice as many waveforms as templates */
   *U = gsl_matrix_calloc(numsamps, 2 * numtemps);
+  *A = gsl_matrix_calloc(autocorr_numsamps, numtemps); 
 
   /* I have just computed chifacs for one of the quadratures...it should be
    * redundant */
@@ -451,12 +744,20 @@ int generate_bank_svd(
 
   /* create workspace vectors for the templates */
   template_out = XLALCreateCOMPLEX16TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, full_numsamps);
+  convolution = XLALCreateCOMPLEX16TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, full_numsamps);
+  autocorrelation = XLALCreateCOMPLEX16TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, full_numsamps);
+  short_autocorr = XLALCreateCOMPLEX16TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, autocorr_numsamps); 
+  template_reference = XLALCreateCOMPLEX16TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, full_numsamps);
   fft_template = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps / 2 + 1);
   fft_template_full = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps);
+  fft_template_full_reference = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps);
+  template_product = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps);
+  
+  
   /* get the reference psd */
   psd = gstlal_get_reference_psd(reference_psd_filename, template_out->f0, 1.0/TEMPLATE_DURATION, fft_template->data->length);
 
-  if (!template_out || !fft_template || !fft_template_full || !psd){
+  if (!template_out || !convolution || !template_reference || !fft_template || !fft_template_full || !fft_template_full_reference || !template_product || !psd){
     fprintf(stderr, "FAILED Allocating template or reading psd failed\n");
     exit(1);
     }
@@ -464,8 +765,8 @@ int generate_bank_svd(
 
   if (verbose) fprintf(stderr, "template_out->data->length %d fft_template->data->length %d fft_template_full->data->length %d \n",template_out->data->length, fft_template->data->length, fft_template_full->data->length);
 
-  /* create the templates in the bank */
-  for(bankRow = bankHead, j = 0; bankRow; bankRow = bankRow->next, j++)
+  /* "fix" the templates in the bank */
+  for(bankRow = bankHead; bankRow; bankRow = bankRow->next)
     {
     bankRow->fFinal = 0.95 * (base_sample_rate / 2.0 - 1); /*95% of Nyquist*/
     bankRow->fLower = 25.0;
@@ -474,12 +775,66 @@ int generate_bank_svd(
     /*bankRow->order = LAL_PNORDER_THREE_POINT_FIVE;*/
     bankRow->order = LAL_PNORDER_TWO;
     bankRow->signalAmplitude = 1.0;
- 
-    if(create_template_from_sngl_inspiral(bankRow, *U, *chifacs, base_sample_rate, down_samp_fac,t_end, t_total_duration, j, template_out, fft_template, fft_template_full, fwdplan, revplan, psd) < 0)
-      {
-      exit(1);
+    }
+
+  /* MIREIA */ 
+  
+
+  REAL8 minMass, mineta;
+  LALPNOrder minorder;
+
+  if(bankHead) {
+    minChirpMass = bankHead->chirpMass;
+    minMass = bankHead->mass1+bankHead->mass2;
+    mineta = bankHead->eta;
+    minorder = bankHead->order;
+    bankRef = bankHead;
+
+    for(bankRow = bankHead, j=0; bankRow; bankRow = bankRow->next, j++)
+      if(bankRow->chirpMass < minChirpMass) 
+        {
+	minChirpMass = bankRow->chirpMass;
+	minMass = bankRow->mass1+bankRow->mass2;
+	mineta = bankRow->eta;
+	minorder = bankRow->order;
+	bankRef = bankRow;
+	jreference = j;
+	}
+   }
+  
+
+  
+  /* create the reference template */
+
+  if(create_template_from_sngl_inspiral(bankRef, *U, *A, *chifacs, base_sample_rate, down_samp_fac, t_end, t_total_duration, autocorr_numsamps, 0, jreference, template_reference, convolution, autocorrelation, short_autocorr, template_product, fft_template, fft_template_full_reference, somethingelse, fwdplan, revplan, psd) < 0)
+    {
+    exit(1);
+    }
+  if (verbose)
+    {
+    fprintf(stderr, "Referece Template: M_chirp=%e\n", bankRef->chirpMass);
+    }
+
+  /* create the templates in the bank */
+  for(bankRow = bankHead, j = 0; bankRow; bankRow = bankRow->next, j++)
+    {
+
+    /* MIREIA */
+    
+    //double tshift = (gstlal_spa_chirp_time(minMass, mineta, 150.0, minorder))-(gstlal_spa_chirp_time((REAL8) bankRow->mass1+bankRow->mass2, (REAL8) bankRow->eta, 150.0, bankRow->order));
+    
+    if(j!=jreference)
+     { 
+       if(create_template_from_sngl_inspiral(bankRow, *U, *A, *chifacs, base_sample_rate, down_samp_fac,t_end, t_total_duration, autocorr_numsamps, tshift, j, template_out, convolution, autocorrelation, short_autocorr, template_product, fft_template, fft_template_full, fft_template_full_reference, fwdplan, revplan, psd) < 0)
+         {
+          exit(1);
+         }
+       if (verbose)
+         {
+          fprintf(stderr, "template %zd M_chirp=%e\n",j, bankRow->chirpMass);
+          //fprintf(stderr,"   Tshift (real) %g, Total mass %g\n " , tshift, bankRow->mass1+bankRow->mass2);
+         }
       }
-    if (verbose) fprintf(stderr, "template %zd M_chirp=%e\n",j, bankRow->chirpMass);
     }
 
   if (verbose)     fprintf(stderr,"Doing the SVD \n");
@@ -506,14 +861,23 @@ int generate_bank_svd(
 
   /* Destroy plans */
   g_mutex_lock(gstlal_fftw_lock);
+
   XLALDestroyREAL8FFTPlan(fwdplan);
+
   XLALDestroyCOMPLEX16FFTPlan(revplan);
   g_mutex_unlock(gstlal_fftw_lock);
 
   /* Destroy time/freq series */
   XLALDestroyCOMPLEX16FrequencySeries(fft_template);
   XLALDestroyCOMPLEX16FrequencySeries(fft_template_full);
+  XLALDestroyCOMPLEX16FrequencySeries(fft_template_full_reference);
+  XLALDestroyCOMPLEX16FrequencySeries(template_product);
   XLALDestroyCOMPLEX16TimeSeries(template_out);
+  XLALDestroyCOMPLEX16TimeSeries(convolution);
+  XLALDestroyCOMPLEX16TimeSeries(template_reference);
+  XLALDestroyCOMPLEX16TimeSeries(autocorrelation);
+  XLALDestroyCOMPLEX16TimeSeries(short_autocorr);
+
 
   /* free the template list */
   while(bankHead)
@@ -522,6 +886,7 @@ int generate_bank_svd(
     XLALFree(bankHead);
     bankHead = next;
     }
+
   return 0;
 }
 
@@ -704,6 +1069,7 @@ static int SPAWaveform (
       c0  = 3.0/(eta*128.0);
       break;
     default:
+      fprintf(stderr, "different LAL_PNORDER");
       break;
   }
 
@@ -830,6 +1196,7 @@ double gstlal_spa_chirp_time(REAL8 m, REAL8 eta, REAL8 fLower, LALPNOrder order)
       c0T = 5.0 * m * LAL_MTSUN_SI / (256.0 * eta);
       break;
     default:
+      fprintf(stderr, "ERROR!!!\n");
       break;
   }
 
