@@ -267,11 +267,11 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	switch(id) {
 	case ARG_START_TIME:
-		element->start_time = g_value_get_int64(value);
+		element->start_time = g_value_get_uint64(value);
 		break;
 
 	case ARG_STOP_TIME:
-		element->stop_time = g_value_get_int64(value);
+		element->stop_time = g_value_get_uint64(value);
 		break;
 	}
 }
@@ -283,11 +283,11 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	switch(id) {
 	case ARG_START_TIME:
-		g_value_set_int64(value, element->start_time);
+		g_value_set_uint64(value, element->start_time);
 		break;
 
 	case ARG_STOP_TIME:
-		g_value_set_int64(value, element->stop_time);
+		g_value_set_uint64(value, element->stop_time);
 		break;
 	}
 }
