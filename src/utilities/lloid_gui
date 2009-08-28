@@ -292,12 +292,20 @@ def mknxydumpsink(pipeline, src, filename):
 		# output for hardware injection @ 874107078.149271066
 		elem.set_property("start-time", 874107068000000000)
 		elem.set_property("stop-time", 874107088000000000)
+	elif True:
+		# output for impulse injection @ 873337860
+		elem.set_property("start-time", 873337850000000000)
+		elem.set_property("stop-time", 873337960000000000)
 	elif False:
 		# output for use with software injections:
 		# bns_injections.xml = 874107198.405080859, impulse =
 		# 874107189
 		elem.set_property("start-time", 874107188000000000)
 		elem.set_property("stop-time", 874107258000000000)
+	elif False:
+		# FIXME:  what's at this time?
+		elem.set_property("start-time", 873248110000000000)
+		elem.set_property("stop-time", 873248170000000000)
 	else:
 		# output to dump lots and lots of data (the whole cache)
 		elem.set_property("start-time", 873247860000000000)
