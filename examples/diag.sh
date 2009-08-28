@@ -125,5 +125,14 @@ function test_fakeLIGO(){
         python ligo_lw_test_01.py
 }
 
+function test_autochisq() {
+	gst-launch \
+		audiotestsrc wave=9 volume=1e-2 \
+		! audio/x-raw-float, width=64, rate=2048 \
+		! lalautochisq template-bank="../src/utilities/chirpmass-1.126557_H1-TMPLTBANK_02-873250008-2048-first.xml.gz" reference-psd="reference_psd.txt"\
+		! progressreport \
+		! fakesink
+}
 
-test_fakeLIGO
+test_autochisq
+
