@@ -226,7 +226,7 @@ def mkqueue(pipeline, src, pad_name = None, **properties):
 		src.link_pads(pad_name, elem, "sink")
 	return elem
 
-def mkbank(pipeline, src, bank, bank_fragment, reference_psd_filename, control_snk, control_src):
+def mkbank_oldchisq(pipeline, src, bank, bank_fragment, reference_psd_filename, control_snk, control_src):
 	elem = gst.element_factory_make("lal_templatebank")
 	elem.set_property("t-start", bank_fragment.start)
 	elem.set_property("t-end", bank_fragment.end)
@@ -269,6 +269,41 @@ def mkbank(pipeline, src, bank, bank_fragment, reference_psd_filename, control_s
 	mkqueue(pipeline, snr).link_pads("src", chisq, "snr")
 
 	return mkresample(pipeline, snr, quality = 0), mkresample(pipeline, chisq, quality = 0)
+
+def mkbank_newchisq(pipeline, src, bank, bank_fragment, reference_psd_filename, control_snk, control_src):
+	elem = gst.element_factory_make("lal_templatebank")
+	elem.set_property("t-start", bank_fragment.start)
+	elem.set_property("t-end", bank_fragment.end)
+	elem.set_property("t-total-duration", bank.filter_length)
+	elem.set_property("snr-length", bank_fragment.blocksize)
+	elem.set_property("template-bank", bank.template_bank_filename)
+	elem.set_property("reference-psd", reference_psd_filename)
+	pipeline.add(elem)
+	src.link(elem)
+
+	# chifacs not needed by new \chi^{2} element
+	mkfakesink(pipeline, mkqueue(pipeline, elem, pad_name = "chifacs"))
+
+	mkqueue(pipeline, mkresample(pipeline, elem, pad_name = "sumofsquares")).link(control_snk)
+
+	gate = gst.element_factory_make("lal_gate")
+	gate.set_property("threshold", bank.gate_threshold)
+	pipeline.add(gate)
+	mkqueue(pipeline, elem, pad_name = "src").link_pads("src", gate, "sink")
+	mkqueue(pipeline, control_src).link_pads("src", gate, "control")
+	# FIXME:  teach the collectpads object not to wait for buffers on
+	# pads whose segments have not yet been reached by the input on the
+	# other pads.  then this large queue buffer will not be required
+	# because streaming can begin through the downstream adders without
+	# waiting for input from all upstream elements.
+	orthosnr = mkqueue(pipeline, gate, pad_name = "src", max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000)
+
+	snr = gst.element_factory_make("lal_matrixmixer")
+	pipeline.add(snr)
+	mkqueue(pipeline, elem, pad_name = "matrix").link_pads("src", snr, "matrix")
+	orthosnr.link(snr)
+
+	return mkresample(pipeline, snr, quality = 0)
 
 def mkfakesink(pipeline, src):
 	elem = gst.element_factory_make("fakesink")
@@ -424,12 +459,13 @@ def mkLLOIDsingle(pipeline, instrument, detector, bank, fake_data = False, injec
 	snr.set_property("sync", True)
 	pipeline.add(snr)
 
-	chisq = gst.element_factory_make("lal_adder")
-	chisq.set_property("sync", True)
-	pipeline.add(chisq)
+	#chisq = gst.element_factory_make("lal_adder")
+	#chisq.set_property("sync", True)
+	#pipeline.add(chisq)
 
 	for bank_fragment in bank.bank_fragments:
-		bank_snr, bank_chisq = mkbank(
+		#bank_snr, bank_chisq = mkbank_oldchisq(
+		bank_snr = mkbank_newchisq(
 			pipeline,
 			mkqueue(pipeline, hoft[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000),
 			bank,
@@ -439,20 +475,28 @@ def mkLLOIDsingle(pipeline, instrument, detector, bank, fake_data = False, injec
 			control_snksrc[1]
 		)
 		mkqueue(pipeline, bank_snr).link(snr)
-		mkqueue(pipeline, bank_chisq).link(chisq)
+		#mkqueue(pipeline, bank_chisq).link(chisq)
 
 	snr = mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(rates))
-	chisq = mkcapsfilter(pipeline, chisq, "audio/x-raw-float, rate=%d" % max(rates))
+	#chisq = mkcapsfilter(pipeline, chisq, "audio/x-raw-float, rate=%d" % max(rates))
 	if progress_report:
 		snr = mkprogressreport(pipeline, snr, "progress_snr_%s" % logname)
-		chisq = mkprogressreport(pipeline, chisq, "progress_chisq_%s" % logname)
+		#chisq = mkprogressreport(pipeline, chisq, "progress_chisq_%s" % logname)
+
+	snr = mktee(pipeline, snr)
+	chisq = gst.element_factory_make("lalautochisq")
+	chisq.set_property("template-bank", bank.template_bank_filename)
+	chisq.set_property("reference-psd", detector.reference_psd_filename)
+	pipeline.add(chisq)
+	mkqueue(pipeline, snr).link(chisq)
 
 	#snr = mktee(pipeline, snr)
 	#mknxydumpsink(pipeline, mkqueue(pipeline, snr), "snr_%s.txt" % logname)
 	#chisq = mktee(pipeline, chisq)
 	#mknxydumpsink(pipeline, mkqueue(pipeline, chisq), "chisquare_%s.txt" % logname)
 
-	head = mktriggergen(pipeline, snr, chisq, bank.template_bank_filename, bank.snr_threshold)
+	#head = mktriggergen(pipeline, snr, chisq, bank.template_bank_filename, bank.snr_threshold)
+	head = mktriggergen(pipeline, mkqueue(pipeline, snr), chisq, bank.template_bank_filename, bank.snr_threshold)
 	if progress_report:
 		head = mkprogressreport(pipeline, head, "progress_xml_%s" % logname)
 
