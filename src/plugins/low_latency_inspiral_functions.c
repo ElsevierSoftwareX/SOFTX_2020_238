@@ -218,7 +218,7 @@ int generate_autocorrelation_bank(
 			COMPLEX16TimeSeries *autocorrelation,
                         COMPLEX16FFTPlan *revplan,
 			int U_column,
-			double autocorr_numsamps,
+			int autocorr_numsamps,
 			double base_sample_rate
  			) 
  {
@@ -234,7 +234,7 @@ int generate_autocorrelation_bank(
 
   for (i=0; i<template->data->length; i++)
     {
-    complex double z = XLALCOMPLEX16Abs2(template->data->data[i]) * cexp(-I*LAL_TWOPI* (template->f0 + i*template->deltaF) * (ATEMPS-1)/2 / base_sample_rate);
+    complex double z = XLALCOMPLEX16Abs2(template->data->data[i]) * cexp(-I*LAL_TWOPI* (template->f0 + i*template->deltaF) * (autocorr_numsamps-1)/2 / base_sample_rate);
     LAL_SET_COMPLEX(&template_product->data->data[i], creal(z), cimag(z));
     } 
 
@@ -292,7 +292,7 @@ int generate_autocorrelation_bank(
   }
 
   /* Prints the function  */
-
+#if 0
   char buffer[50];
   sprintf(buffer, "testing_autocorrelation_%d.txt", U_column);
 
@@ -306,7 +306,7 @@ int generate_autocorrelation_bank(
     fflush(file);
     fclose(file);
   }
-
+#endif
 
 
   /*
@@ -329,7 +329,7 @@ int generate_autocorrelation_bank(
 
 
   /* Prints the function from the bank */
-  
+#if 0
   char buffer1[50];
   sprintf(buffer1, "long_autocorrelation_from_bank_%d.txt", U_column);
   FILE *acfile = fopen(buffer1 , "w");
@@ -342,7 +342,7 @@ int generate_autocorrelation_bank(
     fprintf(stderr, "Autocorrelation written into file!\n");  
   }
   fclose(acfile);
-
+#endif
   return 0;
 }
 
@@ -357,7 +357,7 @@ int create_template_from_sngl_inspiral(
                        int downsampfac, 
                        double t_end,
                        double t_total_duration,
-		       double autocorr_numsamps,
+		       int autocorr_numsamps,
 		       double tshift,
                        int U_column,
                        COMPLEX16TimeSeries *template_out,
@@ -718,7 +718,7 @@ int generate_bank_svd(
   
   /* There are twice as many waveforms as templates */
   *U = gsl_matrix_calloc(numsamps, 2 * numtemps);
-  *A = gsl_matrix_calloc(autocorr_numsamps, numtemps); 
+  *A = gsl_matrix_calloc(autocorr_numsamps, numtemps);
 
   /* I have just computed chifacs for one of the quadratures...it should be
    * redundant */

@@ -65,7 +65,7 @@ int create_template_from_sngl_inspiral(
 		int downsampfac,
 		double t_end,
 		double t_total_duration,
-		double autocorr_numsamps,
+		int autocorr_numsamps,
 		double tshift,
 		int U_column,
 		COMPLEX16TimeSeries *template_out,
@@ -88,7 +88,7 @@ int generate_autocorrelation_bank(
 				  COMPLEX16TimeSeries *autocorrelation,
 				  COMPLEX16FFTPlan *revplan,
 				  int U_column,
-				  double autocorr_numsamps,
+				  int autocorr_numsamps,
 				  double base_sample_rate
 				  );
 
