@@ -85,6 +85,11 @@ struct _Gstlalautochisq
 
   gsl_matrix *A;
   GstAdapter *adapter;
+
+  GstClockTime t0;
+  guint64 offset0;
+  guint64 next_in_offset;
+  guint64 next_out_offset;
 };
 
 struct _GstlalautochisqClass 

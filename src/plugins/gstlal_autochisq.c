@@ -142,7 +142,7 @@ enum
 
 enum property
 {
-  ARG_TEMPLATE_BANK,
+  ARG_TEMPLATE_BANK = 1,
   ARG_REFERENCE_PSD
 };
 
@@ -251,8 +251,12 @@ gst_lalautochisq_init (Gstlalautochisq * filter,
   filter->t_start =  0;
   filter->t_end = 29;
   filter->t_total_duration = 29;
-
+  filter->adapter = NULL;
   filter->A = NULL;
+  filter->t0 = GST_CLOCK_TIME_NONE;
+  filter->offset0 = GST_BUFFER_OFFSET_NONE;
+  filter->next_in_offset = GST_BUFFER_OFFSET_NONE;
+  filter->next_out_offset = GST_BUFFER_OFFSET_NONE;
 }
 
 static void
@@ -605,11 +609,11 @@ static gboolean stop (GstBaseTransform *trans)
   Gstlalautochisq *element = GST_LAL_AUTOCHISQ(trans);
   g_object_unref(element->adapter);
   element->adapter = NULL;
-  
+
   if(element->A)
   {
-  gsl_matrix_free(element->A);
-  element->A = NULL;
+    gsl_matrix_free(element->A);
+    element->A = NULL;
   }
   return TRUE;
 }
@@ -637,11 +641,24 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
     gst_adapter_push(element->adapter, statebuf);
   }
 
+  /*
+   * timestamp and offset book-keeping.
+   *
+   * FIXME:  this should be done in an event handler
+   */
+
+  if(!GST_CLOCK_TIME_IS_VALID(element->t0)) {
+    element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
+    element->offset0 = GST_BUFFER_OFFSET(inbuf);
+    element->next_in_offset = element->offset0;
+    element->next_out_offset = element->offset0;
+  }
 
   /* * 
    * Adapter + chi squared test
    * */
 
+  element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
   gst_buffer_ref(inbuf);	/* don't let the adapter free it */
   gst_adapter_push(element->adapter, inbuf);
  
@@ -690,9 +707,20 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
     }
   gst_adapter_flush(element->adapter, outsamples * element->channels * sizeof(complex double));
 
-  /* FIXME: need to set buffer metadata correctly */
+  /*
+   * set output buffer's metadata
+   */
+
   GST_BUFFER_SIZE(outbuf) = outsamples * element->channels * sizeof(complex double);
-  GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + outsamples;
- 
+  GST_BUFFER_OFFSET(outbuf) = element->next_out_offset;
+  element->next_out_offset += outsamples;
+  GST_BUFFER_OFFSET_END(outbuf) = element->next_out_offset;
+  GST_BUFFER_TIMESTAMP(outbuf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(outbuf) - element->offset0, GST_SECOND, element->rate);
+  GST_BUFFER_DURATION(outbuf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(outbuf) - element->offset0, GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(outbuf);
+
+  /*
+   * done
+   */
+
   return GST_FLOW_OK;
 }
