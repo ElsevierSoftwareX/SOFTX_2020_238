@@ -196,7 +196,6 @@ static int generate_templates(Gstlalautochisq *element);
 static void
 gst_lalautochisq_base_init (gpointer gclass)
 {
-  fprintf(stderr, "open base init\n");
   GstElementClass *element_class = GST_ELEMENT_CLASS (gclass);
   GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS (gclass);
 
@@ -216,14 +215,12 @@ gst_lalautochisq_base_init (gpointer gclass)
   //transform_class->transform_caps = transform_caps;
   transform_class->transform = transform;
   transform_class->start = start;
-  fprintf(stderr, "close base init\n");
 }
 
 /* initialize the lal_autochisq's class */
 static void
 gst_lalautochisq_class_init (GstlalautochisqClass * klass)
 {
-  fprintf(stderr, "open class init\n");
   GObjectClass *gobject_class;
   GstBaseTransformClass *base_transform_class;
 
@@ -240,8 +237,6 @@ gst_lalautochisq_class_init (GstlalautochisqClass * klass)
   g_object_class_install_property (gobject_class, ARG_TEMPLATE_BANK, g_param_spec_string("template-bank", "XML Template Bank", "Name of LIGO Light Weight XML file containing inspiral template bank", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property(gobject_class, ARG_REFERENCE_PSD, g_param_spec_string("reference-psd", "Reference PSD", "Name of file from which to read a reference PSD", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  fprintf(stderr, "close class init\n");
 }
 
 /* initialize the new element
@@ -253,7 +248,6 @@ static void
 gst_lalautochisq_init (Gstlalautochisq * filter,
     GstlalautochisqClass * gclass)
 {
-  fprintf(stderr, "open init\n");
   filter->silent = FALSE;
   
   filter->reference_psd_filename = NULL;
@@ -265,16 +259,13 @@ gst_lalautochisq_init (Gstlalautochisq * filter,
   filter->t_total_duration = 29;
 
   filter->A = NULL;
-  fprintf(stderr, "close init\n");
 }
 
 static void
 gst_lalautochisq_set_property (GObject * object, enum property prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  fprintf(stderr, "set property\n");
   Gstlalautochisq *filter = GST_LAL_AUTOCHISQ (object);
-  fprintf(stderr, "inside set property\n");
   switch (prop_id) {
     case PROP_SILENT:
       filter->silent = g_value_get_boolean (value);
@@ -290,7 +281,6 @@ gst_lalautochisq_set_property (GObject * object, enum property prop_id,
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
-  fprintf(stderr, "close set property\n");
   }
 }
 
@@ -299,7 +289,6 @@ static void
 gst_lalautochisq_get_property (GObject * object, enum property prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  fprintf(stderr, "get property\n");
   Gstlalautochisq *filter = GST_LAL_AUTOCHISQ (object);
 
   switch (prop_id) {
@@ -334,19 +323,14 @@ static int generate_bank(
 		     double tolerance,
 		     int verbose)
 {
-
-  fprintf(stderr, "entering generate_bank\n");
-
   InspiralTemplate *bankRef = NULL, *bankRow, *bankHead=NULL;
-  
+
   fprintf(stderr, "before numtemps, address of the pointer %p\n", &bankHead);
   fprintf(stderr, "before numtemps, address of the xml file %p\n", &xml_bank_filename);
-  
+
   int numtemps = InspiralTmpltBankFromLIGOLw( &bankHead, xml_bank_filename, -1, -1);
-  fprintf(stderr, "after numtemps\n");
   double minChirpMass;
 
-  fprintf(stderr, "declaring stuff \n");
   double jreference=0;
   double tshift=1;
   size_t j;
@@ -367,8 +351,6 @@ static int generate_bank(
   REAL8FrequencySeries *psd;
   REAL8FFTPlan *fwdplan;
   COMPLEX16FFTPlan *revplan;
-
-  fprintf(stderr, "I'M INSIDE THE GENERATE BANK FUNCTION!\n");
 
   if (numtemps <= 0) {
     fprintf(stderr, "FAILED generate_ban() numtemps <= 0\n");
@@ -517,24 +499,11 @@ static int generate_templates(Gstlalautochisq *element)
   gsl_matrix *U;
   gsl_vector *chifacs;
 
-  /*fprintf(stderr, "ADJUSTING TIME\n");
-  if(element->t_start > element->t_total_duration)    // Adjusting the time
-  	element->t_start = element->t_total_duration;
-  if(element->t_end < element->t_start)
-  	element->t_end = element->t_start;
-  else if(element->t_end > element->t_total_duration)
-  	element->t_end = element->t_total_duration;*/
-
-  /*generate bank*/
-
-  fprintf(stderr, "ABOUT TO GENERATE BANK\n");
-
   generate_bank(&U, &chifacs, &element->A, element->template_bank_filename, element->reference_psd_filename, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / element->rate, element->t_start, element->t_end, element->t_total_duration, TOLERANCE, verbose);
 
   gsl_matrix_free(U);
   gsl_vector_free(chifacs);
 
-  fprintf(stderr, "BANK GENERATED!\n"); 
  /* FIXME: check for discontinuity? */
 
   return 0;
@@ -555,7 +524,6 @@ static int autocorrelation_samples(const Gstlalautochisq *element)
 static gboolean
 get_unit_size (GstBaseTransform * trans, GstCaps * caps, guint * size)
 {
-  fprintf(stderr, "unit size\n");
   GstStructure *str;
   gint channels;
  
@@ -582,7 +550,6 @@ set_caps (GstBaseTransform * trans, GstCaps * incaps, GstCaps * outcaps)
   gint rate;
   gint channels;
 
-  fprintf(stderr, "set caps\n"); 
   str = gst_caps_get_structure(incaps, 0);
   if(!gst_structure_get_int(str, "channels", &channels)) {
       g_print("No channels available!!\n");
@@ -640,10 +607,8 @@ set_caps (GstBaseTransform * trans, GstCaps * incaps, GstCaps * outcaps)
 
 static gboolean start (GstBaseTransform *trans)
 {
-  fprintf(stderr, "start\n");
   Gstlalautochisq *element = GST_LAL_AUTOCHISQ(trans);
-  element->adapter = gst_adapter_new(); // initialize the adapter?? 
-
+  element->adapter = gst_adapter_new();
   return TRUE;
 }
 
@@ -657,8 +622,6 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
   gint sample, channel;
   int insamples, outsamples;
   Gstlalautochisq *element = GST_LAL_AUTOCHISQ(trans);
- 
-  fprintf(stderr, "ABOUT TO START \n");
 
   /* Autocorrelation matrix
    * */
@@ -667,7 +630,6 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
     GstBuffer *statebuf;
 
     generate_templates(element);
-    fprintf(stderr, "AUTOCORRELATION MATRIX DONE!\n");
 
     statebuf = gst_buffer_new_and_alloc((autocorrelation_samples(element)-1)/2 * element->channels * sizeof(complex double));
     memset(GST_BUFFER_DATA(statebuf), 0, GST_BUFFER_SIZE(statebuf));
@@ -682,7 +644,6 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
   gst_buffer_ref(inbuf);	/* don't let the adapter free it */
   gst_adapter_push(element->adapter, inbuf);
  
-  fprintf(stderr, "number of channels %i\n", element->channels);
   /* Sizes of the buffers */
   insamples = gst_adapter_available(element->adapter) / (sizeof(complex double)*element->channels); // size of the incoming buffer
   outsamples = insamples - (autocorrelation_samples(element) - 1); // size of the outgoing buffer
@@ -743,8 +704,6 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
 static gboolean
 lal_autochisq_init (GstPlugin * lal_autochisq)
 {
-   fprintf(stderr, "STARTING...\n");
-
    /* debug category for fltering log messages
    *
    * exchange the string 'Template lal_autochisq' with your description
