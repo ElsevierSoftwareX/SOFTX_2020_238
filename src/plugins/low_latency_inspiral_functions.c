@@ -291,30 +291,12 @@ int generate_autocorrelation_bank(
      }
   }
 
-  /* Prints the function  */
-#if 0
-  char buffer[50];
-  sprintf(buffer, "testing_autocorrelation_%d.txt", U_column);
-
-  FILE *file = fopen(buffer, "w");
-  if(file)
-  {
-    for (i=0; i<autocorrelation->data->length; i++)
-    {
-    fprintf(file, "%u %e\n", i, autocorrelation->data->data[i].re);
-    }
-    fflush(file);
-    fclose(file);
-  }
-#endif
-
-
   /*
    * Creates the autocorrelation matrix
    */
 
   /* Real part only */
-  
+
   col = gsl_matrix_column(A, U_column);
   autocorr = gsl_vector_view_array_with_stride((double*) autocorrelation->data->data, 2, col.vector.size); // assuming the peak is in t=0
   
@@ -325,24 +307,7 @@ int generate_autocorrelation_bank(
    fprintf(stderr, "create autocorrelation matrix FAILED\n");
    return -1;
    }
-  
 
-
-  /* Prints the function from the bank */
-#if 0
-  char buffer1[50];
-  sprintf(buffer1, "long_autocorrelation_from_bank_%d.txt", U_column);
-  FILE *acfile = fopen(buffer1 , "w");
-  if(acfile)
-  {
-    for (int k=0; k<autocorr_numsamps ; k++)
-      {
-      fprintf(acfile, "%i %e\n", k, gsl_vector_get(&col.vector, k) ); 
-      }
-    fprintf(stderr, "Autocorrelation written into file!\n");  
-  }
-  fclose(acfile);
-#endif
   return 0;
 }
 
