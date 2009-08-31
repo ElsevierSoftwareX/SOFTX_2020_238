@@ -142,8 +142,6 @@ enum
 
 enum property
 {
-  PROP_0,
-  PROP_SILENT,
   ARG_TEMPLATE_BANK,
   ARG_REFERENCE_PSD
 };
@@ -228,14 +226,10 @@ gst_lalautochisq_class_init (GstlalautochisqClass * klass)
 
   gobject_class = (GObjectClass *) klass;
   base_transform_class = (GstBaseTransformClass *) klass;
-  
+
   gobject_class->set_property = gst_lalautochisq_set_property;
   gobject_class->get_property = gst_lalautochisq_get_property;
-  
-  g_object_class_install_property (gobject_class, PROP_SILENT,
-      g_param_spec_boolean ("silent", "Silent", "Produce verbose output ?",
-          FALSE, G_PARAM_READWRITE));
-  
+
   g_object_class_install_property (gobject_class, ARG_TEMPLATE_BANK, g_param_spec_string("template-bank", "XML Template Bank", "Name of LIGO Light Weight XML file containing inspiral template bank", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property(gobject_class, ARG_REFERENCE_PSD, g_param_spec_string("reference-psd", "Reference PSD", "Name of file from which to read a reference PSD", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
@@ -250,8 +244,6 @@ static void
 gst_lalautochisq_init (Gstlalautochisq * filter,
     GstlalautochisqClass * gclass)
 {
-  filter->silent = FALSE;
-  
   filter->reference_psd_filename = NULL;
   filter->template_bank_filename = NULL;
   filter->rate = 0;
@@ -269,9 +261,6 @@ gst_lalautochisq_set_property (GObject * object, enum property prop_id,
 {
   Gstlalautochisq *filter = GST_LAL_AUTOCHISQ (object);
   switch (prop_id) {
-    case PROP_SILENT:
-      filter->silent = g_value_get_boolean (value);
-      break;
     case ARG_TEMPLATE_BANK:
       free(filter->template_bank_filename);
       filter->template_bank_filename = g_value_dup_string(value);
@@ -294,9 +283,6 @@ gst_lalautochisq_get_property (GObject * object, enum property prop_id,
   Gstlalautochisq *filter = GST_LAL_AUTOCHISQ (object);
 
   switch (prop_id) {
-    case PROP_SILENT:
-      g_value_set_boolean (value, filter->silent);
-      break;
     case ARG_TEMPLATE_BANK:
       g_value_set_string(value, filter->template_bank_filename);
       break;

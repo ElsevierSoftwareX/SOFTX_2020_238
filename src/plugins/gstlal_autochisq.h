@@ -84,10 +84,7 @@ struct _Gstlalautochisq
   double t_total_duration;
 
   gsl_matrix *A;
-
   GstAdapter *adapter;
-
-  gboolean silent;
 };
 
 struct _GstlalautochisqClass 
