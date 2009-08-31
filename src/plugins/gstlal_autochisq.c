@@ -702,7 +702,7 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
        outsample[channel]=chisq/norm;
        }
     }
-  gst_adapter_flush(outsamples * element->channels * sizeof(complex double));
+  gst_adapter_flush(element->adapter, outsamples * element->channels * sizeof(complex double));
 
   /* FIXME: need to set buffer metadata correctly */
   GST_BUFFER_SIZE(outbuf) = outsamples * element->channels * sizeof(complex double);
