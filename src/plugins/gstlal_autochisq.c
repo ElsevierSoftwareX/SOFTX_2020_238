@@ -679,6 +679,7 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
    * Adapter + chi squared test
    * */
 
+  gst_buffer_ref(inbuf);	/* don't let the adapter free it */
   gst_adapter_push(element->adapter, inbuf);
  
   fprintf(stderr, "number of channels %i\n", element->channels);
