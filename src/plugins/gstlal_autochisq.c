@@ -449,8 +449,9 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
   int insamples, outsamples;
   Gstlalautochisq *element = GST_LAL_AUTOCHISQ(trans);
 
-  /* Autocorrelation matrix
-   * */
+  /*
+   * Autocorrelation matrix
+   */
 
   if(!element->A) {
     GstBuffer *statebuf;
@@ -475,9 +476,9 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
     element->next_out_offset = element->offset0;
   }
 
-  /* * 
+  /*
    * Adapter + chi squared test
-   * */
+   */
 
   element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
   gst_buffer_ref(inbuf);	/* don't let the adapter free it */
