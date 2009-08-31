@@ -301,199 +301,20 @@ gst_lalautochisq_get_property (GObject * object, enum property prop_id,
 
 /* GstElement vmethod implementations */
 
-static int generate_bank(
-		     gsl_matrix **U,
-		     gsl_vector **chifacs,
-		     gsl_matrix **A,
-		     const char *xml_bank_filename,
-		     const char *reference_psd_filename,
-		     int base_sample_rate,
-		     int down_samp_fac,
-		     double t_start,
-		     double t_end,
-		     double t_total_duration,
-		     double tolerance,
-		     int verbose)
-{
-  InspiralTemplate *bankRef = NULL, *bankRow, *bankHead=NULL;
-
-  fprintf(stderr, "before numtemps, address of the pointer %p\n", &bankHead);
-  fprintf(stderr, "before numtemps, address of the xml file %p\n", &xml_bank_filename);
-
-  int numtemps = InspiralTmpltBankFromLIGOLw( &bankHead, xml_bank_filename, -1, -1);
-  double minChirpMass;
-
-  double jreference=0;
-  double tshift=1;
-  size_t j;
-  size_t numsamps = round((t_end - t_start) * base_sample_rate / down_samp_fac);
-  size_t autocorr_numsamps = 50;
-  size_t full_numsamps = base_sample_rate*TEMPLATE_DURATION;
-  COMPLEX16TimeSeries *template_out;
-  COMPLEX16TimeSeries *convolution=NULL;
-  COMPLEX16TimeSeries *autocorrelation=NULL;
-  COMPLEX16TimeSeries *short_autocorr=NULL;
-  COMPLEX16FrequencySeries *fft_template;
-  COMPLEX16FrequencySeries *fft_template_full;
-  COMPLEX16FrequencySeries *fft_template_full_reference=NULL;
-  COMPLEX16FrequencySeries *somethingelse=NULL;
-  COMPLEX16TimeSeries *template_reference=NULL;
-  COMPLEX16FrequencySeries *template_product=NULL;
-
-  REAL8FrequencySeries *psd;
-  REAL8FFTPlan *fwdplan;
-  COMPLEX16FFTPlan *revplan;
-
-  if (numtemps <= 0) {
-    fprintf(stderr, "FAILED generate_ban() numtemps <= 0\n");
-    exit(1);
-    }
-
-  if (verbose) fprintf(stderr, "read %d template\n", numtemps);
-  
-  //fprintf(stderr, "t_end %e, t_start %e, numsamps %u\n", t_end, t_start, numsamps);
-
-  /* There are twice as many waveforms as templates  */
-
-  *U = gsl_matrix_calloc(numsamps, 2 * numtemps);
-  *A = gsl_matrix_calloc(autocorr_numsamps, numtemps);
-  *chifacs = gsl_vector_calloc(numtemps);
-  
-  g_mutex_lock(gstlal_fftw_lock);
-  fwdplan = XLALCreateForwardREAL8FFTPlan(full_numsamps, 0);
-  if (!fwdplan)
-    {
-    fprintf(stderr, "FAILED Generating the forward plan failed\n");
-    exit(1);
-    }
-  revplan = XLALCreateReverseCOMPLEX16FFTPlan(full_numsamps, 0);
-  if (!revplan)
-    {
-    fprintf(stderr, "FAILED Generating the reverse plan failed\n");
-    exit(1);
-    }
-  g_mutex_unlock(gstlal_fftw_lock);
-
- /* Create workspace vectors */
-  template_out = XLALCreateCOMPLEX16TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, full_numsamps);
-  convolution = XLALCreateCOMPLEX16TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, full_numsamps);
-  autocorrelation = XLALCreateCOMPLEX16TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, full_numsamps);
-  short_autocorr = XLALCreateCOMPLEX16TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, autocorr_numsamps);
-  template_reference = XLALCreateCOMPLEX16TimeSeries(NULL, &(LIGOTimeGPS) {0,0}, 0.0, 1.0 / base_sample_rate, &lalStrainUnit, full_numsamps);
-  fft_template = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps / 2 + 1);
-  fft_template_full = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps);
-  fft_template_full_reference = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps);
-  template_product = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps);
-
-
-  /* Get the reference psd */
-  psd = gstlal_get_reference_psd(reference_psd_filename, template_out->f0, 1.0/TEMPLATE_DURATION, fft_template->data->length);
-  
-  if (!template_out || !convolution || !template_reference || !fft_template || !fft_template_full || !fft_template_full_reference || !template_product || !psd){
-     fprintf(stderr, "FAILED Allocating template or reading psd failed\n");
-     exit(1);
-     }
-
-  if (verbose) fprintf(stderr, "template_out->data->length %d fft_template->data->length %d fft_template_full->data->length %d \n",template_out->data->length, fft_template->data->length, fft_template_full->data->length);
-
-  /* "fix" the templates in the bank */
-  for(bankRow = bankHead; bankRow; bankRow = bankRow->next)
-  {
-  bankRow->fFinal = 0.95 * (base_sample_rate / 2.0 - 1); // 95% of Nyquest
-  bankRow->fLower = 25.0;
-  bankRow->tSampling = base_sample_rate;
-  bankRow->fCutoff = bankRow->fFinal;
-  bankRow->order = LAL_PNORDER_TWO;
-  bankRow->signalAmplitude = 1.0;
-  }
-
-  REAL8 minMass, mineta;
-  LALPNOrder minorder;
-
-  if(bankHead) {
-    minChirpMass = bankHead->chirpMass;
-    minMass = bankHead->mass1+bankHead->mass2;
-    mineta = bankHead->eta;
-    minorder = bankHead->order;
-    bankRef= bankHead;
-
-    for(bankRow = bankHead, j=0; bankRow; bankRow = bankRow->next, j++)
-      if(bankRow->chirpMass < minChirpMass)
-        {
-	minChirpMass = bankRow->chirpMass;
-	minMass = bankRow->mass1+bankRow->mass2;
-	mineta = bankRow->eta;
-	minorder = bankRow->order;
-	bankRef = bankRow;
-	jreference = j;
-	}
-    }
-
-  if(create_template_from_sngl_inspiral(bankRef, *U, *A, *chifacs, base_sample_rate, down_samp_fac, t_end, t_total_duration, autocorr_numsamps, 0, jreference, template_reference, convolution, autocorrelation, short_autocorr, template_product, fft_template, fft_template_full_reference, somethingelse, fwdplan, revplan, psd) < 0)
-    {
-    exit(1);
-    }
-  if(verbose)
-    {
-    fprintf(stderr, "Reference Template: M_chirp=%e\n", bankRef->chirpMass);
-    }
-
-  /* creates the templates */
-  for (bankRow = bankHead, j=0; bankRow; bankRow = bankRow->next, j++)
-  {
-    if(j!=jreference)
-    {
-     if(create_template_from_sngl_inspiral(bankRef, *U, *A, *chifacs, base_sample_rate, down_samp_fac, t_end, t_total_duration, autocorr_numsamps, tshift, j, template_out, convolution, autocorrelation, short_autocorr, template_product, fft_template, fft_template_full, fft_template_full_reference, fwdplan, revplan, psd) < 0)
-       {
-       exit(1);
-       }
-     if(verbose)
-       {
-       fprintf(stderr, "template: M_chirp=%e\n", bankRow->chirpMass);
-       }
-     }
-   }
-  
-  /* Destroy!!! */
-
-  /* Destroy plans */
-  g_mutex_lock(gstlal_fftw_lock);
-  XLALDestroyREAL8FFTPlan(fwdplan);
-  XLALDestroyCOMPLEX16FFTPlan(revplan);
-  g_mutex_unlock(gstlal_fftw_lock);
-
-  /* Destroy time/freq series */
-  XLALDestroyCOMPLEX16FrequencySeries(fft_template);
-  XLALDestroyCOMPLEX16FrequencySeries(fft_template_full);
-  XLALDestroyCOMPLEX16FrequencySeries(fft_template_full_reference);
-  XLALDestroyCOMPLEX16FrequencySeries(template_product);
-  XLALDestroyCOMPLEX16TimeSeries(template_out);
-  XLALDestroyCOMPLEX16TimeSeries(convolution);
-  XLALDestroyCOMPLEX16TimeSeries(autocorrelation);
-  XLALDestroyCOMPLEX16TimeSeries(short_autocorr);
-  XLALDestroyCOMPLEX16TimeSeries(template_reference);
-
-  /* free the template list */
-  while(bankHead)
-      {
-      InspiralTemplate *next = bankHead->next;
-      XLALFree(bankHead);
-      bankHead = next;
-      }
-
-  return 0;
-}
-
 
 static int generate_templates(Gstlalautochisq *element)
 {
   int verbose = 1;
   gsl_matrix *U;
+  gsl_matrix *V;
+  gsl_vector *S;
   gsl_vector *chifacs;
 
-  generate_bank(&U, &chifacs, &element->A, element->template_bank_filename, element->reference_psd_filename, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / element->rate, element->t_start, element->t_end, element->t_total_duration, TOLERANCE, verbose);
+  generate_bank_svd(&U, &S, &V, &chifacs, &element->A, element->template_bank_filename, element->reference_psd_filename, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / element->rate, element->t_start, element->t_end, element->t_total_duration, TOLERANCE, verbose);
 
   gsl_matrix_free(U);
+  gsl_matrix_free(V);
+  gsl_vector_free(S);
   gsl_vector_free(chifacs);
 
  /* FIXME: check for discontinuity? */
