@@ -188,6 +188,7 @@ static gboolean set_caps (GstBaseTransform * trans, GstCaps * incaps, GstCaps * 
 //static GstCaps * transform_caps (GstBaseTransform * base_transform,
 //    GstPadDirection direction, GstCaps *caps);
 static gboolean start (GstBaseTransform *trans);
+static gboolean stop (GstBaseTransform *trans);
 static GstFlowReturn transform (GstBaseTransform * trans, GstBuffer * inbuf, GstBuffer * outbuf);
 static int generate_templates(Gstlalautochisq *element);
 
@@ -215,6 +216,7 @@ gst_lalautochisq_base_init (gpointer gclass)
   //transform_class->transform_caps = transform_caps;
   transform_class->transform = transform;
   transform_class->start = start;
+  transform_class->stop = stop;
 }
 
 /* initialize the lal_autochisq's class */
@@ -612,6 +614,19 @@ static gboolean start (GstBaseTransform *trans)
   return TRUE;
 }
 
+static gboolean stop (GstBaseTransform *trans)
+{
+  Gstlalautochisq *element = GST_LAL_AUTOCHISQ(trans);
+  g_object_unref(element->adapter);
+  element->adapter = NULL;
+  
+  if(element->A)
+  {
+  gsl_matrix_free(element->A);
+  element->A = NULL;
+  }
+  return TRUE;
+}
 /* chain function (transform)
  * this function does the actual processing
  */
