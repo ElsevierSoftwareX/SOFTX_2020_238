@@ -1,7 +1,7 @@
 /*
  * An interface to LALSimulation.  
  *
- * Copyright (C) 2008  Kipp Cannon, Chad Hanna
+ * Copyright (C) 2008  Kipp Cannon, Chad Hanna, Drew Keppel
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -219,8 +219,12 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 	REAL8 tmpREAL8;
 	LIGOTimeGPS hStartTime, hEndTime, injStartTime, injEndTime;
 	SimInspiralTable *thisSimInspiral;
+	SimBurst *thisSimBurst;
 	struct GSTLALInjectionCache *thisInjectionCacheElement;
 	struct GSTLALInjectionCache *previousInjectionCacheElement;
+	/* skip burst injections whose geocentre times are more than this many
+	 * seconds outside of the target time series */
+	const double injection_window = 100.0;
 
 	/*
 	 * calculate h segment boundaries, h = [hStartTime, hEndTime)
@@ -301,10 +305,13 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 				 * copy sim_inspiral entry into newInjectionCacheElement and set next and sim_inspiral->next to NULL
 				 */
 
-				memcpy(&(newInjectionCacheElement->sim_inspiral), thisSimInspiral, sizeof(*thisSimInspiral));
+				newInjectionCacheElement->sim_inspiral = calloc(1,sizeof *thisSimInspiral);
+				memcpy(newInjectionCacheElement->sim_inspiral, thisSimInspiral, sizeof(*thisSimInspiral));
 				newInjectionCacheElement->sim_inspiral_pointer = thisSimInspiral;
 				newInjectionCacheElement->next = NULL;
-				newInjectionCacheElement->sim_inspiral.next = NULL;
+				newInjectionCacheElement->sim_inspiral->next = NULL;
+				newInjectionCacheElement->sim_burst = NULL;
+				newInjectionCacheElement->sim_burst_pointer = NULL;
 
 				/*
 				 * create a response function, copy the double precision
@@ -359,7 +366,7 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 				/*LAL_CALL(LALFindChirpInjectSignals(&stat, series, sim_inspiral_head, response), &stat);*/
 				XLALClearErrno();
 				memset(&stat, 0, sizeof(stat));
-				LALFindChirpInjectSignals(&stat, series, &(newInjectionCacheElement->sim_inspiral), inspiral_response);
+				LALFindChirpInjectSignals(&stat, series, newInjectionCacheElement->sim_inspiral, inspiral_response);
 				XLALPrintInfo("%s(): done\n", func);
 
 				XLALDestroyCOMPLEX8FrequencySeries(inspiral_response);
@@ -399,6 +406,158 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 		thisSimInspiral = thisSimInspiral->next;
 	}
 
+	thisSimBurst = element->injection_document->sim_burst_table_head;
+	while(thisSimBurst) {
+		/*
+		 * scroll through cache searching for this injection
+		 */
+
+		thisInjectionCacheElement = element->injection_cache;
+		while(thisInjectionCacheElement) {
+			if(thisSimBurst == thisInjectionCacheElement->sim_burst_pointer)
+				break;
+			thisInjectionCacheElement = thisInjectionCacheElement->next;
+		}
+
+		/*
+		 * scroll to final burst injection in cache
+		 */
+
+		while(thisInjectionCacheElement) {
+			if(thisInjectionCacheElement->sim_burst_pointer) {
+				thisSimBurst = thisInjectionCacheElement->sim_burst_pointer;
+			}
+			thisInjectionCacheElement = thisInjectionCacheElement->next;
+			if(!thisInjectionCacheElement)
+				thisSimBurst = thisSimBurst->next;
+		}
+		if(!thisSimBurst)
+			continue;
+
+		/*
+		 * check whether injection segment intersects h
+		 */
+
+		if(XLALGPSDiff(&h->epoch, &thisSimBurst->time_geocent_gps) > injection_window || XLALGPSDiff(&thisSimBurst->time_geocent_gps, &h->epoch) > (h->data->length * h->deltaT + injection_window)) {
+			thisSimBurst = thisSimBurst->next;
+			continue;
+		}
+
+		/*
+		 * injection needs to be created if reach here
+		 */
+
+		{
+			double underflow_protection = 1.0;
+			/* to be deduced from the time series' channel name */
+			const LALDetector *detector;
+			/* FIXME:  fix the const entanglement so as to get rid of this */
+			LALDetector detector_copy;
+			/* + and x time series for injection waveform */
+			REAL8TimeSeries *hplus, *hcross;
+			/* injection time series as added to detector's */
+			REAL8TimeSeries *strain;
+			/* injection time series to be stored in cache */
+			REAL4TimeSeries *series = NULL;
+			unsigned i;
+
+			/*
+			 * create space for the new injection cache element
+			 */
+
+			struct GSTLALInjectionCache *newInjectionCacheElement = calloc(1,sizeof *thisInjectionCacheElement);
+
+			/*
+			 * copy sim_burst entry into newInjectionCacheElement and set next and sim_burst->next to NULL
+			 */
+
+			newInjectionCacheElement->sim_burst = calloc(1,sizeof *thisSimBurst);
+			memcpy(newInjectionCacheElement->sim_burst, thisSimBurst, sizeof(*thisSimBurst));
+			newInjectionCacheElement->sim_burst_pointer = thisSimBurst;
+			newInjectionCacheElement->next = NULL;
+			newInjectionCacheElement->sim_burst->next = NULL;
+			newInjectionCacheElement->sim_inspiral_pointer = NULL;
+			newInjectionCacheElement->sim_inspiral_pointer = NULL;
+
+			/* turn the first two characters of the channel name into a
+			 * detector */
+
+			detector = XLALInstrumentNameToLALDetector(h->name);
+			if(!detector)
+				XLAL_ERROR(func, XLAL_EFUNC);
+			XLALPrintInfo("%s(): channel name is '%s', instrument appears to be '%s'\n", func, h->name, detector->frDetector.prefix);
+			detector_copy = *detector;
+
+			/* construct the h+ and hx time series for the injection
+			 * waveform.  in the time series produced by this function,
+			 * t = 0 is the "time" of the injection. */
+
+			if(XLALGenerateSimBurst(&hplus, &hcross, newInjectionCacheElement->sim_burst, h->deltaT))
+				XLAL_ERROR(func, XLAL_EFUNC);
+
+			/* add the time of the injection at the geocentre to the
+			 * start times of the h+ and hx time series.  after this,
+	 		 * their epochs mark the start of those time series at the
+			 * geocentre. */
+
+			XLALGPSAddGPS(&hcross->epoch, &newInjectionCacheElement->sim_burst->time_geocent_gps);
+			XLALGPSAddGPS(&hplus->epoch, &newInjectionCacheElement->sim_burst->time_geocent_gps);
+
+			/* project the wave onto the detector to produce the strain
+			 * in the detector. */
+
+			strain = XLALSimDetectorStrainREAL8TimeSeries(hplus, hcross, newInjectionCacheElement->sim_burst->ra, newInjectionCacheElement->sim_burst->dec, newInjectionCacheElement->sim_burst->psi, &detector_copy);
+			XLALDestroyREAL8TimeSeries(hplus);
+			XLALDestroyREAL8TimeSeries(hcross);
+			if(!strain)
+				XLAL_ERROR(func, XLAL_EFUNC);
+
+			/*
+			 * convert the REAL8TimeSeries to a REAL4TimeSeries
+			 */
+
+			series = XLALCreateREAL4TimeSeries(strain->name, &strain->epoch, strain->f0, strain->deltaT, &strain->sampleUnits, strain->data->length);
+			if(!series)
+				XLAL_ERROR(func, XLAL_EFUNC);
+			underflow_protection = 1e-20;
+			for(i=0; i<strain->data->length; i++)
+				series->data->data[i] = (REAL4) (strain->data->data[i]/underflow_protection);
+			XLALDestroyREAL8TimeSeries(strain);
+
+			/*
+			 * add the injection wavefore and start and end times to the injection cache element
+			 */
+
+			newInjectionCacheElement->series = series;
+			newInjectionCacheElement->startTime = series->epoch;
+			newInjectionCacheElement->endTime = series->epoch;
+			XLALGPSAdd(&newInjectionCacheElement->endTime, series->data->length * series->deltaT);
+			newInjectionCacheElement->underflow_protection = underflow_protection;
+
+			/*
+			 * add this injection cache element to the end of the injection cache linked list
+			 */
+
+			thisInjectionCacheElement = element->injection_cache;
+			if(!thisInjectionCacheElement) {
+				element->injection_cache = newInjectionCacheElement;
+			}
+			else {
+				while(thisInjectionCacheElement->next)
+					thisInjectionCacheElement = thisInjectionCacheElement->next;
+				thisInjectionCacheElement->next = newInjectionCacheElement;
+			}
+
+			/* end if calculate injection */
+		}
+		
+		/*
+		 * continue loop over injections
+		 */
+
+		thisSimBurst = thisSimBurst->next;
+	}
+
 	/*
 	 * remove injections from cache if no longer needed
 	 */
@@ -406,7 +565,20 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 	previousInjectionCacheElement = NULL;
 	thisInjectionCacheElement = element->injection_cache;
 	while(thisInjectionCacheElement) {
-		if( XLALGPSCmp(&(thisInjectionCacheElement->endTime), &hStartTime) <= 0 ) {
+		unsigned int remove = 0;
+
+		if(thisInjectionCacheElement->sim_burst_pointer) {
+			if(XLALGPSDiff(&h->epoch, &thisInjectionCacheElement->sim_burst->time_geocent_gps) > injection_window || XLALGPSDiff(&thisInjectionCacheElement->sim_burst->time_geocent_gps, &h->epoch) > (h->data->length * h->deltaT + injection_window)) {
+				remove = 1;
+			}
+		}
+		else {
+			if( XLALGPSCmp(&(thisInjectionCacheElement->endTime), &hStartTime) <= 0 ) {
+				remove = 1;
+			}
+		}
+
+		if(remove) {
 			struct GSTLALInjectionCache *tmpInjectionCacheElement = thisInjectionCacheElement;
 			if(previousInjectionCacheElement)
 				previousInjectionCacheElement->next = thisInjectionCacheElement->next;
@@ -419,6 +591,10 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 			 */
 
 			XLALDestroyREAL4TimeSeries(tmpInjectionCacheElement->series);
+			if(tmpInjectionCacheElement->sim_inspiral)
+				free(tmpInjectionCacheElement->sim_inspiral);
+			if(tmpInjectionCacheElement->sim_burst)
+				free(tmpInjectionCacheElement->sim_burst);
 			free(tmpInjectionCacheElement);
 		}
 		else {
@@ -438,22 +614,10 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 
 static int add_xml_injections(REAL8TimeSeries *h, const GSTLALSimulation *element, const COMPLEX16FrequencySeries *response)
 {
-	static const char func[] = "add_xml_injections";
 	struct GSTLALInjectionCache *thisInjectionCacheElement;
 
 	/*
-	 * sim_burst
-	 */
-
-	if(element->injection_document->sim_burst_table_head) {
-		XLALPrintInfo("%s(): computing sim_burst injections ...\n", func);
-		if(XLALBurstInjectSignals(h, element->injection_document->sim_burst_table_head, response))
-			XLAL_ERROR(func, XLAL_EFUNC);
-		XLALPrintInfo("%s(): done\n", func);
-	}
-
-	/*
-	 * sim_inspiral: loop over calculated injections in injection cache
+	 * loop over calculated injections in injection cache
 	 */
 
 	thisInjectionCacheElement = element->injection_cache;

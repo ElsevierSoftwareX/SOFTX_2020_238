@@ -1,7 +1,7 @@
 /*
  * An interface to LALSimulation.  
  *
- * Copyright (C) 2008  Chad Hanna, Kipp Cannon
+ * Copyright (C) 2008  Chad Hanna, Kipp Cannon, Drew Keppel
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -55,8 +55,10 @@ struct GSTLALInjectionCache {
 	LIGOTimeGPS endTime;
 	REAL4TimeSeries *series;
 	double underflow_protection;
-	SimInspiralTable sim_inspiral;
+	SimInspiralTable *sim_inspiral;
         SimInspiralTable *sim_inspiral_pointer;
+	SimBurst *sim_burst;
+	SimBurst *sim_burst_pointer;
 	struct GSTLALInjectionCache *next;
 };
 
