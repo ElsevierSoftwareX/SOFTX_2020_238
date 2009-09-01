@@ -32,14 +32,6 @@
 #include <gsl/gsl_fft_halfcomplex.h>
 
 
-
-/*int generate_bank_svd(gsl_matrix **U, gsl_vector **S, gsl_matrix **V,
-                           gsl_vector **chifacs,
-                           char * bank_name, int base_sample_rate,
-                           int down_samp_fac, double t_start,
-                           double t_end, double tmax, double tolerance,
-                           int verbose);*/
-
 int generate_bank_and_svd(
                       gsl_matrix **U,
                       gsl_vector **S, 
@@ -69,7 +61,6 @@ int generate_bank(
                       double t_start,
                       double t_end, 
                       double tmax, 
-                      double tolerance,
                       int verbose);
 
 int create_template_from_sngl_inspiral(

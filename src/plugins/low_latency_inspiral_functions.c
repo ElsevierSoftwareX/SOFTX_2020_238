@@ -645,7 +645,6 @@ int generate_bank(
                       double t_start,
                       double t_end, 
                       double t_total_duration, 
-                      double tolerance,
 	              int verbose)
 {
   InspiralTemplate *bankRef = NULL, *bankRow, *bankHead = NULL;
@@ -846,7 +845,7 @@ int generate_bank_and_svd(
 	              int verbose)
 {
   size_t i, j;
-  int result = generate_bank(U, S, V, chifacs, A, xml_bank_filename, reference_psd_filename, base_sample_rate, down_samp_fac, t_start, t_end, t_total_duration, tolerance, verbose);
+  int result = generate_bank(U, S, V, chifacs, A, xml_bank_filename, reference_psd_filename, base_sample_rate, down_samp_fac, t_start, t_end, t_total_duration, verbose);
   if(result)
     return result;
 

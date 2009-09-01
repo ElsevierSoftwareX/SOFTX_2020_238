@@ -153,7 +153,6 @@ enum property
 #define DEFAULT_T_END 29 
 #define DEFAULT_SNR_LENGTH 2048 /* samples */
 #define TEMPLATE_SAMPLE_RATE 4096       /* Hertz */
-#define TOLERANCE 0.99
 #define TEMPLATE_DURATION 128 /*seconds*/
 
 /* the capabilities of the inputs and outputs.
@@ -310,7 +309,7 @@ static int generate_templates(Gstlalautochisq *element)
   gsl_vector *S;
   gsl_vector *chifacs;
 
-  generate_bank(&U, &S, &V, &chifacs, &element->A, element->template_bank_filename, element->reference_psd_filename, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / element->rate, element->t_start, element->t_end, element->t_total_duration, TOLERANCE, verbose);
+  generate_bank(&U, &S, &V, &chifacs, &element->A, element->template_bank_filename, element->reference_psd_filename, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / element->rate, element->t_start, element->t_end, element->t_total_duration, verbose);
 
   gsl_matrix_free(U);
   gsl_matrix_free(V);
