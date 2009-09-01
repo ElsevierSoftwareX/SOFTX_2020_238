@@ -305,15 +305,11 @@ static int generate_templates(Gstlalautochisq *element)
 {
   int verbose = 1;
   gsl_matrix *U;
-  gsl_matrix *V;
-  gsl_vector *S;
   gsl_vector *chifacs;
 
-  generate_bank(&U, &S, &V, &chifacs, &element->A, element->template_bank_filename, element->reference_psd_filename, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / element->rate, element->t_start, element->t_end, element->t_total_duration, verbose);
+  generate_bank(&U, &chifacs, &element->A, element->template_bank_filename, element->reference_psd_filename, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / element->rate, element->t_start, element->t_end, element->t_total_duration, verbose);
 
   gsl_matrix_free(U);
-  gsl_matrix_free(V);
-  gsl_vector_free(S);
   gsl_vector_free(chifacs);
 
  /* FIXME: check for discontinuity? */

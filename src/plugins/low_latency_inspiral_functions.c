@@ -634,8 +634,6 @@ int gstlal_gsl_linalg_SV_decomp_mod(
 
 int generate_bank(
                       gsl_matrix **U, 
-                      gsl_vector **S, 
-		      gsl_matrix **V,
                       gsl_vector **chifacs,
 		      gsl_matrix **A,
                       const char *xml_bank_filename,
@@ -845,7 +843,7 @@ int generate_bank_and_svd(
 	              int verbose)
 {
   size_t i, j;
-  int result = generate_bank(U, S, V, chifacs, A, xml_bank_filename, reference_psd_filename, base_sample_rate, down_samp_fac, t_start, t_end, t_total_duration, verbose);
+  int result = generate_bank(U, chifacs, A, xml_bank_filename, reference_psd_filename, base_sample_rate, down_samp_fac, t_start, t_end, t_total_duration, verbose);
   if(result)
     return result;
 

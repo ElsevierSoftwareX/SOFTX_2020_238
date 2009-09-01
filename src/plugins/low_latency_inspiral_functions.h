@@ -50,8 +50,6 @@ int generate_bank_and_svd(
 
 int generate_bank(
                       gsl_matrix **U,
-                      gsl_vector **S, 
-                      gsl_matrix **V,
                       gsl_vector **chifacs,
 		      gsl_matrix **A,
                       const char *xml_bank_filename,
