@@ -1,7 +1,7 @@
 /*
  * PSD Estimation and whitener
  *
- * Copyright (C) 2008  Kipp Cannon, Chad Hanna
+ * Copyright (C) 2008  Kipp Cannon, Chad Hanna, Drew Keppel
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -956,7 +956,7 @@ static void base_init(gpointer class)
 		"Whiten",
 		"Filter",
 		"A PSD estimator and time series whitener",
-		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chad Hanna <channa@ligo.caltech.edu>"
+		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chad Hanna <channa@ligo.caltech.edu>, Drew Keppel <dkeppel@ligo.caltech.edu>"
 	};
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
 
