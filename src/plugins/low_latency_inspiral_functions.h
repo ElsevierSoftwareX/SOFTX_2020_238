@@ -40,7 +40,23 @@
                            double t_end, double tmax, double tolerance,
                            int verbose);*/
 
-int generate_bank_svd(
+int generate_bank_and_svd(
+                      gsl_matrix **U,
+                      gsl_vector **S, 
+                      gsl_matrix **V,
+                      gsl_vector **chifacs,
+		      gsl_matrix **A,
+                      const char *xml_bank_filename,
+                      const char *reference_psd_filename,
+                      int base_sample_rate,
+                      int down_samp_fac, 
+                      double t_start,
+                      double t_end, 
+                      double tmax, 
+                      double tolerance,
+                      int verbose);
+
+int generate_bank(
                       gsl_matrix **U,
                       gsl_vector **S, 
                       gsl_matrix **V,

@@ -632,9 +632,7 @@ int gstlal_gsl_linalg_SV_decomp_mod(
 }
 
 
-
-
-int generate_bank_svd(
+int generate_bank(
                       gsl_matrix **U, 
                       gsl_vector **S, 
 		      gsl_matrix **V,
@@ -655,7 +653,7 @@ int generate_bank_svd(
   double minChirpMass;
   double jreference=0;
   double tshift=1;
-  size_t i, j;
+  size_t j;
   size_t numsamps = round((t_end - t_start) * base_sample_rate / down_samp_fac);
   size_t autocorr_numsamps = ATEMPS;
   size_t full_numsamps = base_sample_rate*TEMPLATE_DURATION;
@@ -802,8 +800,57 @@ int generate_bank_svd(
       }
     }
 
-  if (verbose)     fprintf(stderr,"Doing the SVD \n");
+  /* Destroy plans */
+  g_mutex_lock(gstlal_fftw_lock);
+  XLALDestroyREAL8FFTPlan(fwdplan);
+  XLALDestroyCOMPLEX16FFTPlan(revplan);
+  g_mutex_unlock(gstlal_fftw_lock);
 
+  /* Destroy time/freq series */
+  XLALDestroyCOMPLEX16FrequencySeries(fft_template);
+  XLALDestroyCOMPLEX16FrequencySeries(fft_template_full);
+  XLALDestroyCOMPLEX16FrequencySeries(fft_template_full_reference);
+  XLALDestroyCOMPLEX16FrequencySeries(template_product);
+  XLALDestroyCOMPLEX16TimeSeries(template_out);
+  XLALDestroyCOMPLEX16TimeSeries(convolution);
+  XLALDestroyCOMPLEX16TimeSeries(template_reference);
+  XLALDestroyCOMPLEX16TimeSeries(autocorrelation);
+  XLALDestroyCOMPLEX16TimeSeries(short_autocorr);
+
+  /* free the template list */
+  while(bankHead)
+    {
+    InspiralTemplate *next = bankHead->next;
+    XLALFree(bankHead);
+    bankHead = next;
+    }
+
+  /* done */
+  return 0;
+}
+
+int generate_bank_and_svd(
+                      gsl_matrix **U, 
+                      gsl_vector **S, 
+		      gsl_matrix **V,
+                      gsl_vector **chifacs,
+		      gsl_matrix **A,
+                      const char *xml_bank_filename,
+		      const char *reference_psd_filename,
+                      int base_sample_rate,
+                      int down_samp_fac, 
+                      double t_start,
+                      double t_end, 
+                      double t_total_duration, 
+                      double tolerance,
+	              int verbose)
+{
+  size_t i, j;
+  int result = generate_bank(U, S, V, chifacs, A, xml_bank_filename, reference_psd_filename, base_sample_rate, down_samp_fac, t_start, t_end, t_total_duration, tolerance, verbose);
+  if(result)
+    return result;
+
+  if (verbose) fprintf(stderr,"Doing the SVD \n");
   if(gstlal_gsl_linalg_SV_decomp_mod(U, V, S))
     {
     fprintf(stderr,"FAILED could not do SVD \n");
@@ -823,34 +870,6 @@ int generate_bank_svd(
     }
 
   if(verbose) fprintf(stderr, "%.16g s -- %.16g s: %zd orthogonal templates, V is %zdx%zd, U is %zdx%zd\n\n", t_start, t_end, (*U)->size1, (*V)->size1, (*V)->size2, (*U)->size1, (*U)->size2);
-
-  /* Destroy plans */
-  g_mutex_lock(gstlal_fftw_lock);
-
-  XLALDestroyREAL8FFTPlan(fwdplan);
-
-  XLALDestroyCOMPLEX16FFTPlan(revplan);
-  g_mutex_unlock(gstlal_fftw_lock);
-
-  /* Destroy time/freq series */
-  XLALDestroyCOMPLEX16FrequencySeries(fft_template);
-  XLALDestroyCOMPLEX16FrequencySeries(fft_template_full);
-  XLALDestroyCOMPLEX16FrequencySeries(fft_template_full_reference);
-  XLALDestroyCOMPLEX16FrequencySeries(template_product);
-  XLALDestroyCOMPLEX16TimeSeries(template_out);
-  XLALDestroyCOMPLEX16TimeSeries(convolution);
-  XLALDestroyCOMPLEX16TimeSeries(template_reference);
-  XLALDestroyCOMPLEX16TimeSeries(autocorrelation);
-  XLALDestroyCOMPLEX16TimeSeries(short_autocorr);
-
-
-  /* free the template list */
-  while(bankHead)
-    {
-    InspiralTemplate *next = bankHead->next;
-    XLALFree(bankHead);
-    bankHead = next;
-    }
 
   return 0;
 }
