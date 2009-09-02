@@ -340,7 +340,7 @@ static int svd_create(GSTLALTemplateBank *element, int sample_rate)
 	 * generate orthonormal template bank
 	 */
 
-	generate_bank_and_svdnk_and_svd(&element->U, &element->S, &element->V, &element->chifacs, &A, element->template_bank_filename, element->reference_psd_filename, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / sample_rate, element->t_start, element->t_end, element->t_total_duration, TOLERANCE, verbose);
+	generate_bank_and_svd(&element->U, &element->S, &element->V, &element->chifacs, &A, element->template_bank_filename, element->reference_psd_filename, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / sample_rate, element->t_start, element->t_end, element->t_total_duration, TOLERANCE, verbose);
 	gsl_matrix_free(A);
 
 	/* 
