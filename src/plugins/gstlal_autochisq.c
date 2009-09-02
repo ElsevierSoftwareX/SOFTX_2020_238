@@ -256,6 +256,7 @@ gst_lalautochisq_init (Gstlalautochisq * filter,
   filter->offset0 = GST_BUFFER_OFFSET_NONE;
   filter->next_in_offset = GST_BUFFER_OFFSET_NONE;
   filter->next_out_offset = GST_BUFFER_OFFSET_NONE;
+  gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter),TRUE);
 }
 
 static void
@@ -481,7 +482,7 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
  
   /* Sizes of the buffers */
   insamples = gst_adapter_available(element->adapter) / (sizeof(complex double)*element->channels); // size of the incoming buffer
-  outsamples = insamples - (autocorrelation_samples(element) - 1); // size of the outgoing buffer
+  outsamples = insamples - (autocorrelation_samples(element) - 2); // size of the outgoing buffer
 
   /* Checks if there are enough samples to do the chi-squared test */
   if(outsamples<=0)
@@ -493,7 +494,7 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
 
   /* Takes the required number of samples out of the adapter */
   indata = (complex double *)gst_adapter_peek(element->adapter, insamples * element->channels * sizeof(*indata));
-  
+
   /* Chi-squared test */
   for (sample=0; sample < outsamples; sample++)
     { 
@@ -503,6 +504,7 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
     for (channel=0; channel < element->channels; channel++) 
        {
        complex double snr = insample[(autocorrelation_samples(element)-1)/2*element->channels + channel];
+       double invsnrphase = cexp(-I*carg(snr));
        double chisq = 0;
        double norm = 0;
        int i;
@@ -510,14 +512,14 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
        for (i=0; i < autocorrelation_samples(element); i++)
 	  {
           complex double snrprev = insample[i*element->channels + channel];
-	  
+
 	  /* Chi-Squared */
-	  chisq += pow(gsl_matrix_get(element->A, i, channel)*snr-snrprev,2);
-	  
+	  chisq += pow(creal((gsl_matrix_get(element->A, i, channel)*snr-snrprev)*invsnrphase),2);
+
 	  /* Normalization */
 	  norm += 1 - pow(gsl_matrix_get(element->A, i, channel), 2);
 	  }
-       
+
        /* Populates the outgoing buffer */
        outsample[channel]=chisq/norm;
        }
