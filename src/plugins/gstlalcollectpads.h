@@ -44,12 +44,6 @@ typedef struct _GstLALCollectData {
 	GstCollectData as_gstcollectdata;
 
 	/*
-	 * event handler (chains to the original one)
-	 */
-
-	GstPadEventFunction collect_event_func;
-
-	/*
 	 * size of one "unit", e.g. (multi-channel) audio sample, video
 	 * frame, etc.  For audio, = (sample width) / 8 * (channels).
 	 */

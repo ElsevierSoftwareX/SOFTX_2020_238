@@ -41,53 +41,6 @@
 /*
  * ============================================================================
  *
- *                                   Events
- *
- * ============================================================================
- */
-
-
-/**
- * sink pad event handler.  this is hacked in as an override of the collect
- * pads object's own event handler so that we can detect new segments and
- * flush stop events arriving on sink pads.  the real event handling is
- * accomplished by chaining to the original event handler installed by the
- * collect pads object.
- */
-
-
-static gboolean gstlal_collect_pads_sink_event(GstPad *pad, GstEvent *event)
-{
-	/* FIXME:  the collect pads stores the address of the
-	 * GstCollectData object in the pad's element private.  this is
-	 * undocumented behaviour, but we rely on it! */
-	GstLALCollectData *data = gst_pad_get_element_private(pad);
-
-	g_return_val_if_fail(data != NULL, FALSE);
-
-	/*
-	 * handle events
-	 */
-
-	switch (GST_EVENT_TYPE(event)) {
-	case GST_EVENT_NEWSEGMENT:
-		break;
-
-	default:
-		break;
-	}
-
-	/*
-	 * now chain to GstCollectPads handler to take care of the rest.
-	 */
-
-	return data->collect_event_func(pad, event);
-}
-
-
-/*
- * ============================================================================
- *
  *                            Add/Remove Sink Pad
  *
  * ============================================================================
@@ -121,15 +74,6 @@ GstLALCollectData *gstlal_collect_pads_add_pad_full(GstCollectPads *pads, GstPad
 	 */
 
 	data->unit_size = 0;
-
-	/*
-	 * FIXME: hacked way to override/extend the event function of
-	 * GstCollectPads;  because it sets its own event function giving
-	 * the element (us) no access to events
-	 */
-
-	data->collect_event_func = (GstPadEventFunction) GST_PAD_EVENTFUNC(pad);
-	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(gstlal_collect_pads_sink_event));
 
 	/*
 	 * done
@@ -168,7 +112,7 @@ gboolean gstlal_collect_pads_remove_pad(GstCollectPads *pads, GstPad *pad)
 /**
  * Record the number of bytes per sample on the given input stream.
  *
- * Should be called with the GstCollectPads' lock held (i.e., from the
+ * Should be called with the GstCollectPads' lock held (e.g., from the
  * collected() method).
  */
 
