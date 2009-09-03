@@ -205,7 +205,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 * available input buffers.
 	 */
 
-	if(!gstlal_collect_pads_get_earliest_offsets(element->collect, &earliest_input_offset, &earliest_input_offset_end, element->rate, element->segment.start)) {
+	if(!gstlal_collect_pads_get_earliest_offsets(element->collect, &earliest_input_offset, &earliest_input_offset_end, element->segment.start, 0, element->rate)) {
 		GST_ERROR_OBJECT(element, "cannot deduce input timestamp offset information");
 		result = GST_FLOW_ERROR;
 		goto error;
@@ -235,8 +235,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 * get buffers upto the desired end offset.
 	 */
 
-	snrbuf = gstlal_collect_pads_take_buffer(pads, element->snrcollectdata, earliest_input_offset_end, element->rate, element->segment.start);
-	chisqbuf = gstlal_collect_pads_take_buffer(pads, element->chisqcollectdata, earliest_input_offset_end, element->rate, element->segment.start);
+	snrbuf = gstlal_collect_pads_take_buffer(pads, element->snrcollectdata, earliest_input_offset_end, element->segment.start, 0, element->rate);
+	chisqbuf = gstlal_collect_pads_take_buffer(pads, element->chisqcollectdata, earliest_input_offset_end, element->segment.start, 0, element->rate);
 
 	/*
 	 * NULL means EOS.

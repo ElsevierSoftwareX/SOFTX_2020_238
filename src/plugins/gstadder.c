@@ -1026,7 +1026,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 * real.
 		 */
 		
-		if(!gstlal_collect_pads_get_earliest_offsets(adder->collect, &earliest_input_offset, &earliest_input_offset_end, adder->rate, adder->segment.start)) {
+		if(!gstlal_collect_pads_get_earliest_offsets(adder->collect, &earliest_input_offset, &earliest_input_offset_end, adder->segment.start, 0, adder->rate)) {
 			GST_ERROR_OBJECT(adder, "cannot deduce input timestamp offset information");
 			result = GST_FLOW_ERROR;
 			goto error;
@@ -1086,7 +1086,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 */
 
 		if(adder->synchronous)
-			inbuf = gstlal_collect_pads_take_buffer(pads, data, earliest_input_offset_end, adder->rate, adder->segment.start);
+			inbuf = gstlal_collect_pads_take_buffer(pads, data, earliest_input_offset_end, adder->segment.start, 0, adder->rate);
 		else
 			inbuf = gst_collect_pads_take_buffer(pads, (GstCollectData *) data, length * adder->unit_size);
 

@@ -146,8 +146,9 @@ guint gstlal_collect_pads_get_unit_size(GstPad *pad)
 
 
 /**
- * Compute the smallest segment that contains the segments of all pads.
- * The segments must be in the same format on all pads.
+ * Compute the smallest segment that contains the segments (from the most
+ * recent newsegment events) of all pads.  The segments must be in the same
+ * format on all pads.
  *
  * Should be called with the GstCollectPads' lock held (i.e., from the
  * collected() method).
@@ -206,16 +207,18 @@ done:
 /**
  * Computes the earliest of the offsets and of the upper bounds of the
  * offsets spanned by the GstCollectPad's input buffers.  All offsets are
- * converted to their equivalent offsets in the output stream (if this
- * results in a negative offset, then it is replaced with 0).  Sets both
- * offsets to GST_BUFFER_OFFSET_NONE if one or more input buffers has
- * invalid offsets or all pads report EOS.  The return value is FALSE if at
- * least one input buffer had invalid offsets.  The calling code should
- * interpret this to indicate the presence of invalid input on at least one
- * pad.  The return value is TRUE if no input buffer had invalid offsets
- * (when all sink pads report EOS there are zero input buffers, the return
- * value is TRUE).
+ * expressed with respect to a "target" stream defined by t0, offset0 and
+ * rate.  The target stream has a unit rate (samples/second, frames/second,
+ * etc.) given by rate and its offset counter was offset0 when the stream's
+ * timestamp was t0.
  *
+ * Both offsets are set to GST_BUFFER_OFFSET_NONE if one or more input
+ * buffers has invalid offsets or all pads report EOS.  The return value is
+ * FALSE if at least one input buffer had invalid offsets.  The calling
+ * code should interpret this to indicate the presence of invalid input on
+ * at least one pad.  The return value is TRUE if no input buffer had
+ * invalid offsets (when all sink pads report EOS there are zero input
+ * buffers, the return value is TRUE).
  * Summary:
  *
  * condition   return value   offsets
@@ -224,38 +227,32 @@ done:
  * EOS         TRUE           GST_BUFFER_OFFSET_NONE
  * success     TRUE           >= 0
  *
- * Requires the collect pad's lock to be held (use from within the callback
- * handler).
- *
  * Should be called with the GstCollectPads' lock held (i.e., from the
  * collected() method).
  */
 
 
-static gint64 compute_offset_offset(GstBuffer *buf, gint rate, GstClockTime output_timestamp_at_zero_offset)
+static guint64 compute_target_offset(GstLALCollectData *data, GstBuffer *buf, GstClockTime t0, guint64 offset0, gint rate)
 {
-	/*
-	 * subtract buffer's offset from its offset in the output stream.
-	 */
-
-	if(GST_BUFFER_TIMESTAMP(buf) >= output_timestamp_at_zero_offset)
-		return (gint64) gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(buf) - output_timestamp_at_zero_offset, rate, GST_SECOND) - (gint64) GST_BUFFER_OFFSET(buf);
-	else
-		return -(gint64) gst_util_uint64_scale_int_round(output_timestamp_at_zero_offset - GST_BUFFER_TIMESTAMP(buf), rate, GST_SECOND) - (gint64) GST_BUFFER_OFFSET(buf);
+	GstClockTime t = GST_BUFFER_TIMESTAMP(buf) + gst_util_uint64_scale_int_round(data->as_gstcollectdata.pos / data->unit_size, GST_SECOND, rate);
+	return (t < t0) ? 0 : offset0 + gst_util_uint64_scale_int_round(t - t0, rate, GST_SECOND);
 }
 
 
-/* FIXME:  it would be nice not to have to pass in the rate and timestamp
- * metadata. */
+static guint64 compute_target_offset_end(GstLALCollectData *data, GstBuffer *buf, GstClockTime t0, guint64 offset0, gint rate)
+{
+	GstClockTime t = GST_BUFFER_TIMESTAMP(buf) + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END_IS_VALID(buf) ? GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf) : GST_BUFFER_SIZE(buf) / data->unit_size, GST_SECOND, rate);
+	return (t < t0) ? 0 : offset0 + gst_util_uint64_scale_int_round(t - t0, rate, GST_SECOND);
+}
 
 
-gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 *offset, guint64 *offset_end, gint rate, GstClockTime output_timestamp_at_zero_offset)
+gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 *offset, guint64 *offset_end, GstClockTime t0, guint64 offset0, gint rate)
 {
 	gboolean valid = FALSE;
 	GSList *collectdatalist = NULL;
 
 	/*
-	 * safety
+	 * initialize for loop
 	 */
 
 	*offset = *offset_end = G_MAXUINT64;
@@ -267,9 +264,7 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 	for(collectdatalist = pads->data; collectdatalist; collectdatalist = g_slist_next(collectdatalist)) {
 		GstLALCollectData *data = collectdatalist->data;
 		GstBuffer *buf;
-		gint64 offset_offset;
-		guint64 this_offset;
-		guint64 this_offset_end;
+		guint64 buf_offset, buf_offset_end;
 
 		/*
 		 * check for uninitialized GstLALCollectData
@@ -292,7 +287,7 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 		 */
 
 		if(!GST_BUFFER_OFFSET_IS_VALID(buf)) {
-			GST_LOG("%p: input buffer does not have valid offset\n", data);
+			GST_LOG("%p: input buffer does not have valid start/end offsets\n", data);
 			gst_buffer_unref(buf);
 			return FALSE;
 		}
@@ -304,36 +299,16 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 		}
 
 		/*
-		 * compute the next sub-buffer's start and end offsets
+		 * compute the start and end offsets in the target stream
 		 */
 
-		this_offset = GST_BUFFER_OFFSET(buf) + data->as_gstcollectdata.pos / data->unit_size;
-
-		if(GST_BUFFER_OFFSET_END_IS_VALID(buf))
-			this_offset_end = GST_BUFFER_OFFSET_END(buf);
-		else
-			/*
-			 * end offset is not valid, derive the end offset
-			 * from the start offset, buffer size, and unit
-			 * size
-			 */
-			this_offset_end = GST_BUFFER_OFFSET(buf) + GST_BUFFER_SIZE(buf) / data->unit_size;
-
-		/*
-		 * convert the start and end offsets to start and end
-		 * offsets in the output stream
-		 */
-
-		offset_offset = compute_offset_offset(buf, rate, output_timestamp_at_zero_offset);
-		this_offset = (offset_offset < 0 && this_offset < (guint64) -offset_offset) ? 0 : this_offset + offset_offset;
-		this_offset_end = (offset_offset < 0 && this_offset_end < (guint64) -offset_offset) ? 0 : this_offset_end + offset_offset;
-
-		GST_DEBUG_OBJECT(GST_PAD_PARENT(data->as_gstcollectdata.pad), "(%s): offset_offset = %ld, offset = %lu, offset_end = %lu, size = %u, unit_size = %d\n", GST_PAD_NAME(data->as_gstcollectdata.pad), offset_offset, GST_BUFFER_OFFSET(buf), GST_BUFFER_OFFSET_END(buf), GST_BUFFER_SIZE(buf), data->unit_size);
-		GST_DEBUG_OBJECT(GST_PAD_PARENT(data->as_gstcollectdata.pad), "(%s): this_offset = %lu, this_offset_end = %lu\n", GST_PAD_NAME(data->as_gstcollectdata.pad), this_offset, this_offset_end);
-
+		buf_offset = compute_target_offset(data, buf, t0, offset0, rate);
+		buf_offset_end = compute_target_offset_end(data, buf, t0, offset0, rate);
 		gst_buffer_unref(buf);
 
-		if(this_offset_end < this_offset) {
+		GST_DEBUG_OBJECT(GST_PAD_PARENT(data->as_gstcollectdata.pad), "(%s): offsets = [%lu, %lu)\n", GST_PAD_NAME(data->as_gstcollectdata.pad), buf_offset, buf_offset_end);
+
+		if(buf_offset_end < buf_offset) {
 			GST_LOG("%p: input buffer appears to have negative length\n", data);
 			return FALSE;
 		}
@@ -342,10 +317,10 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 		 * update the minima
 		 */
 
-		if(this_offset < *offset)
-			*offset = this_offset;
-		if(this_offset_end < *offset_end)
-			*offset_end = this_offset_end;
+		if(buf_offset < *offset)
+			*offset = buf_offset;
+		if(buf_offset_end < *offset_end)
+			*offset_end = buf_offset_end;
 
 		/*
 		 * with at least one valid pair of offsets, we can return
@@ -361,7 +336,7 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 
 	if(!valid)
 		*offset = *offset_end = GST_BUFFER_OFFSET_NONE;
-	GST_DEBUG("%p: rate = %d, t0 = %lu, offset = %lu, offset_end = %lu\n", pads, rate, output_timestamp_at_zero_offset, *offset, *offset_end);
+	GST_DEBUG("%p: t0 = %lu, offset0 = %lu, rate = %du, offsets = [%lu, %lu)\n", pads, t0, offset0, rate, *offset, *offset_end);
 
 	return TRUE;
 }
@@ -386,11 +361,11 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
  */
 
 
-GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *pads, GstLALCollectData *data, guint64 offset_end, gint rate, GstClockTime output_timestamp_at_zero_offset)
+GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *pads, GstLALCollectData *data, guint64 offset_end, GstClockTime t0, guint64 offset0, gint rate)
 {
 	GstBuffer *buf;
 	guint64 dequeued_offset;
-	guint64 length;
+	guint64 samples;
 
 	/*
 	 * check for uninitialized GstLALCollectData
@@ -410,23 +385,23 @@ GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *pads, GstLALCollectDa
 		 */
 		return NULL;
 	/* FIXME:  is a negative answer possible? */
-	dequeued_offset = (GST_BUFFER_OFFSET(buf) + data->as_gstcollectdata.pos / data->unit_size) + compute_offset_offset(buf, rate, output_timestamp_at_zero_offset);
+	dequeued_offset = compute_target_offset(data, buf, t0, offset0, rate);
 	gst_buffer_unref(buf);
 
 	/*
 	 * compute the number of samples to request from the queued buffer.
 	 * if the output stream has not yet advanced into the queued buffer
-	 * then set the length to 0 to return an empty buffer.
+	 * then set the number of samples to 0 to return an empty buffer.
 	 */
 
-	length = offset_end >= dequeued_offset ? offset_end - dequeued_offset : 0;
-	GST_DEBUG_OBJECT(GST_PAD_PARENT(data->as_gstcollectdata.pad), "(%s): dequeued offset = %lu, length = %lu\n", GST_PAD_NAME(data->as_gstcollectdata.pad), dequeued_offset, length);
+	samples = offset_end >= dequeued_offset ? offset_end - dequeued_offset : 0;
+	GST_DEBUG_OBJECT(GST_PAD_PARENT(data->as_gstcollectdata.pad), "(%s): dequeued offset = %lu, length = %lu\n", GST_PAD_NAME(data->as_gstcollectdata.pad), dequeued_offset, samples);
 
 	/*
 	 * retrieve a buffer
 	 */
 
-	buf = gst_collect_pads_take_buffer(pads, (GstCollectData *) data, length * data->unit_size);
+	buf = gst_collect_pads_take_buffer(pads, (GstCollectData *) data, samples * data->unit_size);
 	if(!buf)
 		/*
 		 * EOS or no data (probably impossible, because we would've
@@ -442,8 +417,8 @@ GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *pads, GstLALCollectDa
 	buf = gst_buffer_make_metadata_writable(buf);
 	GST_BUFFER_OFFSET(buf) = dequeued_offset;
 	GST_BUFFER_OFFSET_END(buf) = dequeued_offset + GST_BUFFER_SIZE(buf) / data->unit_size;
-	GST_BUFFER_TIMESTAMP(buf) = output_timestamp_at_zero_offset + gst_util_uint64_scale_int(GST_BUFFER_OFFSET(buf), GST_SECOND, rate);
-	GST_BUFFER_DURATION(buf) = gst_util_uint64_scale_int(GST_BUFFER_OFFSET_END(buf), GST_SECOND, rate) - gst_util_uint64_scale_int(GST_BUFFER_OFFSET(buf), GST_SECOND, rate);
+	GST_BUFFER_TIMESTAMP(buf) = t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - offset0, GST_SECOND, rate);
+	GST_BUFFER_DURATION(buf) = t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - offset0, GST_SECOND, rate) - GST_BUFFER_TIMESTAMP(buf);
 	GST_DEBUG_OBJECT(GST_PAD_PARENT(data->as_gstcollectdata.pad), "(%s): returning %lu -- %lu, %lu -- %lu\n", GST_PAD_NAME(data->as_gstcollectdata.pad), GST_BUFFER_OFFSET(buf), GST_BUFFER_OFFSET_END(buf), GST_BUFFER_TIMESTAMP(buf), GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf));
 
 	return buf;
