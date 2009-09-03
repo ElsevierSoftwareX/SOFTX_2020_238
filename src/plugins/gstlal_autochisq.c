@@ -445,7 +445,7 @@ static GstFlowReturn chisquared (GstBuffer *outbuf, Gstlalautochisq *element)
     for (channel=0; channel < element->channels; channel++) 
        {
        complex double snr = insample[(autocorrelation_samples(element)-1)/2*element->channels + channel];
-       double invsnrphase = cexp(-I*carg(snr));
+       complex double invsnrphase = cexp(-I*carg(snr));
        double chisq = 0;
        int i;
 
