@@ -52,6 +52,7 @@
 #include "low_latency_inspiral_functions.h"
 
 #include <gsl/gsl_matrix.h>
+#include <gsl/gsl_vector.h>
 
 
 G_BEGIN_DECLS
@@ -84,7 +85,9 @@ struct _Gstlalautochisq
   double t_total_duration;
 
   gsl_matrix *A;
+  gsl_vector *norm;
   GstAdapter *adapter;
+  gboolean adapter_is_empty;
 
   GstClockTime t0;
   guint64 offset0;
