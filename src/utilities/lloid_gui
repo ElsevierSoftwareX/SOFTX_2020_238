@@ -638,7 +638,7 @@ mkLLOIDmulti(
 				Bank.BankFragment(256, 5.0, 13.0),
 				Bank.BankFragment(128, 13.0, 29.0)
 			],
-			gate_threshold = 1.5,
+			gate_threshold = 3.0,
 			snr_threshold = 5.5
 		) for template_bank_filename in options.template_bank
 	],
