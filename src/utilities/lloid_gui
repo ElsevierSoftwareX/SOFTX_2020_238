@@ -117,51 +117,44 @@ def mkfakesrc(pipeline, instrument, detector, volume = 1e-20):
 	pipeline.add(elem)
 	return mkcapsfilter(pipeline, elem, "audio/x-raw-float, width=64, rate=16384, instrument=%s, channel_name=%s, units=strain" % (instrument, detector.channel))
 
-def mkiirfilter(pipeline, a, b):
+def mkiirfilter(pipeline, src, a, b):
 	elem = gst.element_factory_make("audioiirfilter")
 	elem.set_property("a", a)
 	elem.set_property("b", b)
 	pipeline.add(elem)
+	src.link(elem)
 	return elem
 
 def mkfakeLIGOsrc(pipeline, instrument, detector):
-	fakesrc1 = mkfakesrc(pipeline, instrument, detector, volume = 1.0)
-	a1 = [1.87140685e-05, 3.74281370e-05, 1.87140685e-05]
-	b1 = [1., 1.98861643, -0.98869215]
-	filter1 = []
+	head1 = mkfakesrc(pipeline, instrument, detector, volume = 1.0)
+	a = [1.87140685e-05, 3.74281370e-05, 1.87140685e-05]
+	b = [1., 1.98861643, -0.98869215]
 	for idx in range(14):
-		filter1.append(mkiirfilter(pipeline, a1, b1))
-	fakesrc1.link(filter1[0])
-	for idx in range(13):
-		filter1[idx].link(filter1[idx+1])
-	filter1[-1] = mktee(pipeline, filter1[-1])
-	scaledsrc1 = mkaudioamplify(pipeline, filter1[-1], 5.03407936516e-17)
+		head1 = mkiirfilter(pipeline, head1, a, b)
+	head1 = mkaudioamplify(pipeline, head1, 5.03407936516e-17)
 
-	fakesrc2 = mkfakesrc(pipeline, instrument, detector, volume = 1.0)
-	a2 = [9.17933667e-07, 1.83586733e-06, 9.17933667e-07]
-	b2 = [1., 1.99728828, -0.99729195]
-	filter2 = mkiirfilter(pipeline, a2, b2)
-	fakesrc2.link(filter2)
-	scaledsrc2 = mkaudioamplify(pipeline, filter2, 1.39238913312e-20)
+	head2 = mkfakesrc(pipeline, instrument, detector, volume = 1.0)
+	a = [9.17933667e-07, 1.83586733e-06, 9.17933667e-07]
+	b = [1., 1.99728828, -0.99729195]
+	head2 = mkiirfilter(pipeline, head2, a, b)
+	head2 = mkaudioamplify(pipeline, head2, 1.39238913312e-20)
 
-	fakesrc3 = mkfakesrc(pipeline, instrument, detector, volume = 1.0)
-	scaledsrc3 = mkaudioamplify(pipeline, fakesrc3, 2.16333076528e-23)
+	head3 = mkfakesrc(pipeline, instrument, detector, volume = 1.0)
+	head3 = mkaudioamplify(pipeline, head3, 2.16333076528e-23)
 
-	fakesrc4 = mkfakesrc(pipeline, instrument, detector, volume = 1.0)
-	a4 = [0.03780506, -0.03780506]
-	b4 = [1.0, -0.9243905]
-	filter4 = mkiirfilter(pipeline, a4, b4)
-	fakesrc4.link(filter4)
-	scaledsrc4 = mkaudioamplify(pipeline, filter4, 1.61077910675e-20)
+	head4 = mkfakesrc(pipeline, instrument, detector, volume = 1.0)
+	a = [0.03780506, -0.03780506]
+	b = [1.0, -0.9243905]
+	head4 = mkiirfilter(pipeline, head4, a, b)
+	head4 = mkaudioamplify(pipeline, head4, 1.61077910675e-20)
 
-	noiseadder = gst.element_factory_make("adder")
-	pipeline.add(noiseadder)
-	scaledsrc1.link(noiseadder)
-	scaledsrc2.link(noiseadder)
-	scaledsrc3.link(noiseadder)
-	scaledsrc4.link(noiseadder)
-	scaledsrc5 = mkaudioamplify(pipeline, noiseadder, 16384.**.5)
-	return scaledsrc5
+	head = gst.element_factory_make("adder")
+	pipeline.add(head)
+	head1.link(head)
+	head2.link(head)
+	head3.link(head)
+	head4.link(head)
+	return mkaudioamplify(pipeline, head, 16384.**.5)
 
 def mkprogressreport(pipeline, src, name):
 	elem = gst.element_factory_make("progressreport", name)
