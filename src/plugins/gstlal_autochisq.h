@@ -93,6 +93,7 @@ struct _Gstlalautochisq
   guint64 offset0;
   guint64 next_in_offset;
   guint64 next_out_offset;
+  gboolean need_discont;
 };
 
 struct _GstlalautochisqClass 
