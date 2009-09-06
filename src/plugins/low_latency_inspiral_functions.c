@@ -142,7 +142,7 @@ static double calculate_real_time_shift(
    
    /* Calculates the product */ 
 
-  for (i=0; i<template->data->length; i++)
+  for (i=0; i<template_product->data->length; i++)
     {
     /*Real part*/
     template_product->data->data[i].re = (template->data->data[i].re*template_reference->data->data[i].re) + (template->data->data[i].im*template_reference->data->data[i].im);
@@ -211,7 +211,7 @@ static double calculate_real_time_shift(
 
 
 
-int generate_autocorrelation_bank(
+static int generate_autocorrelation_bank(
 			gsl_matrix *A,			
 			COMPLEX16FrequencySeries *template,
 			COMPLEX16FrequencySeries *template_product, 
@@ -219,13 +219,11 @@ int generate_autocorrelation_bank(
                         COMPLEX16FFTPlan *revplan,
 			int U_column,
 			int autocorr_numsamps,
-			double base_sample_rate
+			double base_sample_rate,
+			int down_samp_fac
  			) 
- {
-   double real_max;
-   double im_max;
-   int im_peak;
-   int real_peak;
+{
+   double max;
    unsigned i;
    gsl_vector_view col;
    gsl_vector_view autocorr;
@@ -234,7 +232,7 @@ int generate_autocorrelation_bank(
 
   for (i=0; i<template->data->length; i++)
     {
-    complex double z = XLALCOMPLEX16Abs2(template->data->data[i]) * cexp(-I*LAL_TWOPI* (template->f0 + i*template->deltaF) * (autocorr_numsamps-1)/2 / base_sample_rate);
+    complex double z = XLALCOMPLEX16Abs2(template->data->data[i]) * cexp(-I*LAL_TWOPI* (template->f0 + i*template->deltaF) * (autocorr_numsamps-1)/2 / (base_sample_rate / down_samp_fac));
     LAL_SET_COMPLEX(&template_product->data->data[i], creal(z), cimag(z));
     } 
 
@@ -248,48 +246,16 @@ int generate_autocorrelation_bank(
    * Looks for the peak 
    */  
   
-  real_max = fabs(autocorrelation->data->data[0].re);
-  im_max = fabs(autocorrelation->data->data[0].im);
+  max = XLALCOMPLEX16Abs(autocorrelation->data->data[0]);
+  for (i=1; i<autocorrelation->data->length; i++)
+    if(XLALCOMPLEX16Abs(autocorrelation->data->data[i]) > max) 
+      max=XLALCOMPLEX16Abs(autocorrelation->data->data[i]);
 
-
-  /* Real part */
-  
-  for (i=0; i<autocorrelation->data->length; i++)
-    {
-    if(fabs(autocorrelation->data->data[i].re) > real_max) 
-      {
-      real_max=fabs(autocorrelation->data->data[i].re);
-      real_peak = i;
-      }
-    }
-  fprintf(stderr, "Real peak %e\n", real_max);
-
-  if(real_max!=1) // Normalizes
-  {
-   for (i=0; i<autocorrelation->data->length; i++)
-     {
-      autocorrelation->data->data[i].re = autocorrelation->data->data[i].re/real_max;  
-     }
-  }
-
-
- /* Imaginary part */
-  for (i=0; i<autocorrelation->data->length; i++)
-    {
-    if(fabs(autocorrelation->data->data[i].im) > im_max)
-      {
-      im_max=fabs(autocorrelation->data->data[i].im);
-      im_peak = i;
-      }
-    }
-  
-  if(im_max!=1) // Normalizes
-  {
-   for (i=0; i<autocorrelation->data->length; i++)
-     {
-      autocorrelation->data->data[i].im = autocorrelation->data->data[i].im/im_max;  
-     }
-  }
+  if(max!=1) // Normalizes
+   for (i=0; i<autocorrelation->data->length; i++) {
+     autocorrelation->data->data[i].re /= max;
+     autocorrelation->data->data[i].im /= max;
+   }
 
   /*
    * Creates the autocorrelation matrix
@@ -298,10 +264,7 @@ int generate_autocorrelation_bank(
   /* Real part only */
 
   col = gsl_matrix_column(A, U_column);
-  autocorr = gsl_vector_view_array_with_stride((double*) autocorrelation->data->data, 2, col.vector.size); // assuming the peak is in t=0
-  
-  fprintf(stderr, "Autocorrelation completed successfully!\n");
-
+  autocorr = gsl_vector_view_array_with_stride((double*) autocorrelation->data->data, 2 * down_samp_fac, col.vector.size);
   if (gsl_vector_memcpy(&col.vector, &autocorr.vector))
    {
    fprintf(stderr, "create autocorrelation matrix FAILED\n");
@@ -439,7 +402,7 @@ int create_template_from_sngl_inspiral(
   * */ 
   fprintf(stderr, "doing autocorrelation\n");
 
-  if(generate_autocorrelation_bank(A, fft_template_full, template_product, autocorrelation, revplan, U_column, autocorr_numsamps, fsamp)<0)
+  if(generate_autocorrelation_bank(A, fft_template_full, template_product, autocorrelation, revplan, U_column, autocorr_numsamps, fsamp, downsampfac)<0)
   	{
 	fprintf(stderr, "autocorrelation FAILED\n");
 	return -1;

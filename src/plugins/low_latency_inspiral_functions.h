@@ -86,18 +86,6 @@ int create_template_from_sngl_inspiral(
 		REAL8FrequencySeries *psd
 		);
 
-int generate_autocorrelation_bank(
-                                  gsl_matrix *A,
-				  COMPLEX16FrequencySeries *template,
-				  COMPLEX16FrequencySeries *template_product,
-				  COMPLEX16TimeSeries *autocorrelation,
-				  COMPLEX16FFTPlan *revplan,
-				  int U_column,
-				  int autocorr_numsamps,
-				  double base_sample_rate
-				  );
-
-
 int compute_time_frequency_boundaries_from_bank(char * bank_name,
                                                 double min_subtemplate_samples,
                                                 double base_sample_rate,
