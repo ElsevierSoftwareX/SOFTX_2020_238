@@ -111,11 +111,9 @@
 #include <lal/LALInspiral.h>
 
 
-
-
 /*
- *  * stuff from GSL
- *   */
+ * stuff from GSL
+ */
 
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_vector.h>
@@ -142,11 +140,7 @@ enum property
 
 /****** Parameters ********/
 
-#define DEFAULT_T_START 0
-#define DEFAULT_T_END 29 
-#define DEFAULT_SNR_LENGTH 2048 /* samples */
 #define TEMPLATE_SAMPLE_RATE 4096       /* Hertz */
-#define TEMPLATE_DURATION 128 /*seconds*/
 
 /* the capabilities of the inputs and outputs.
  *
@@ -426,10 +420,15 @@ static void set_metadata (Gstlalautochisq *element, GstBuffer *buf, guint64 outs
   }
 }
 
+static guint64 get_available_samples(Gstlalautochisq *element)
+{
+  return gst_adapter_available(element->adapter) / (element->channels * sizeof(complex double));
+}
+
 static GstFlowReturn chisquared (GstBuffer *outbuf, Gstlalautochisq *element)
 {
   /* Takes the required number of samples out of the adapter */
-  int insamples = gst_adapter_available(element->adapter) / (sizeof(complex double)*element->channels);
+  int insamples = get_available_samples(element);
   int outsamples = insamples - (autocorrelation_samples(element) - 1); // size of the outgoing buffer
   complex double *indata = (complex double *) gst_adapter_peek(element->adapter, insamples * element->channels * sizeof(*indata));
   complex double *outdata = (complex double *) GST_BUFFER_DATA(outbuf);
@@ -441,26 +440,42 @@ static GstFlowReturn chisquared (GstBuffer *outbuf, Gstlalautochisq *element)
   /* Chi-squared test */
   for (sample=0; sample < outsamples; sample++)
     { 
+#if 0
+    FILE *f;
+    /*if(element->next_out_offset + sample - element->offset0 == gst_util_uint64_scale_int_round(873248860010290169 - element->t0, element->rate, GST_SECOND))*/
+    if(element->next_out_offset + sample - element->offset0 == gst_util_uint64_scale_int_round(873248860025879030 - element->t0, element->rate, GST_SECOND))
+      f = fopen("dump.txt", "w");
+    else
+      f = NULL;
+#endif
+
     for (channel=0; channel < element->channels; channel++) 
        {
-       complex double snr = indata[(autocorrelation_samples(element)-1)/2 * element->channels + channel];
+       complex double *snrprev = indata;
+       complex double snr = indata[(autocorrelation_samples(element) - 1) / 2 * element->channels];
+       /* multiplying snr by this makes it purely real */
        complex double invsnrphase = cexp(-I*carg(snr));
        double chisq = 0;
        int i;
 
-       for (i=0; i < autocorrelation_samples(element); i++)
+       for (i=0; i < autocorrelation_samples(element); i++, snrprev++)
 	  {
-          complex double snrprev = indata[i*element->channels + channel];
-
-	  /* Chi-Squared */
-	  chisq += pow(creal((gsl_matrix_get(element->A, i, channel) * snr - snrprev) * invsnrphase), 2);
+#if 0
+if(f) {
+  GstClockTime t = element->t0 + gst_util_uint64_scale_int_round(element->next_out_offset - element->offset0 + sample - (autocorrelation_samples(element)-1)/2 + i, GST_SECOND, element->rate);
+  fprintf(f, "%.17g   %g %g   %g %g\n", t*1e-9, creal(*snrprev * invsnrphase), cimag(*snrprev * invsnrphase), creal(gsl_matrix_get(element->A, i, channel) * snr * invsnrphase), cimag(gsl_matrix_get(element->A, i, channel) * snr * invsnrphase));
+}
+#endif
+	  chisq += pow(creal((gsl_matrix_get(element->A, i, channel) * snr - *snrprev) * invsnrphase), 2);
 	  }
 
        /* Populates the outgoing buffer */
-       outdata[channel] = chisq / gsl_vector_get(element->norm, channel);
+       *(outdata++) = chisq / gsl_vector_get(element->norm, channel);
+       indata++;
        }
-    indata += element->channels;
-    outdata += element->channels;
+#if 0
+if(f) {fclose(f);}
+#endif
     }
   gst_adapter_flush(element->adapter, outsamples * element->channels * sizeof(*indata));
   set_metadata(element, outbuf, outsamples);
@@ -478,36 +493,35 @@ static GstFlowReturn set_gaps (Gstlalautochisq *element, GstBuffer *outbuf, int 
   int length_gap_out = length_gap_in - (autocorrelation_samples(element) - 1);
 
   if(length_gap_out <= 0) {
-    /* Push length_gap_in zeroes in the adapter */
+    /* push length_gap_in zeroes in the adapter and run normal \chi^{2}
+     * code */
+    /* FIXME:  if this is done enough times in a row eventually the adapter
+     * will be empty and element->adapter_empty should be set to TRUE to
+     * switch to a faster code path */
     push_zeros(element, length_gap_in);
-
-    /* Run chisquared test */
     return chisquared(outbuf, element);
   } else {
     GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
+    guint64 available_samples = get_available_samples(element);
     GstBuffer *buf;
     GstFlowReturn result;
-    int available_samples;
 
     /* Push length_A-1 zeroes into adapter  */
     push_zeros(element, autocorrelation_samples(element) - 1);
 
-    /* Run chisquared test to finish off adapter's contents and push
-     * downstream */
-    available_samples = gst_adapter_available(element->adapter) / (sizeof(complex double)*element->channels);
-    result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, (available_samples - (autocorrelation_samples(element) - 1)) * element->channels * sizeof(complex double), GST_PAD_CAPS(srcpad), &buf);
-    if(result!=GST_FLOW_OK) {
+    /* run normal \chi^{2} code to finish off adapter's contents, and
+     * manually push buffer downstream.  note:  set_gaps() is only called
+     * if element->adpater_empty is FALSE, so we know there is at least one
+     * sample in the adapter before the zeroes we just pushed in */
+    result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, available_samples * element->channels * sizeof(complex double), GST_PAD_CAPS(srcpad), &buf);
+    if(result!=GST_FLOW_OK)
       return result;
-    }
     result = chisquared(buf, element);
-    if(result!=GST_FLOW_OK) {
-      return result;
-    }
+    g_assert(result == GST_FLOW_OK);
     element->adapter_is_empty = TRUE;
     result = gst_pad_push(srcpad, buf);
-    if(result!=GST_FLOW_OK) {
+    if(result!=GST_FLOW_OK)
       return result;
-    }
 
     /* make outbuf a gap of length length_gap_out */
     GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
@@ -531,33 +545,37 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
    * Autocorrelation matrix
    */
 
-  if(!element->A) {
+  if(!element->A)
     generate_templates(element);
-
-    /* Pushes zeroes into the adapter */
-    push_zeros(element, (autocorrelation_samples(element)-1)/2);
-    element->adapter_is_empty = TRUE;
-  }
 
   /*
    * check for discontinuity
-   */
-
-  if(GST_BUFFER_OFFSET(inbuf) != element->next_in_offset) {
-    element->need_discont = TRUE;
-  }
-
-  /*
-   * timestamp and offset book-keeping.
    *
-   * FIXME:  this should be done in an event handler
+   * FIXME:  flush/pad adapter as needed
    */
 
-  if(!GST_CLOCK_TIME_IS_VALID(element->t0)) {
+  if(GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || element->need_discont || !GST_CLOCK_TIME_IS_VALID(element->t0)) {
+    /*
+     * push zeroes into the adapter
+     */
+
+    gst_adapter_flush(element->adapter, get_available_samples(element) * element->channels * sizeof(complex double));
+    push_zeros(element, (autocorrelation_samples(element) - 1) / 2);
+    element->adapter_is_empty = TRUE;
+
+    /*
+     * (re)sync timestamp and offset book-keeping
+     */
+
     element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
     element->offset0 = GST_BUFFER_OFFSET(inbuf);
-    element->next_in_offset = element->offset0;
     element->next_out_offset = element->offset0;
+
+    /*
+     * be sure to flag the next output buffer as a discontinuity
+     */
+
+    element->need_discont = TRUE;
   }
   element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
 
@@ -572,13 +590,13 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
     return chisquared(outbuf, element);
   } else if(element->adapter_is_empty) {
     /* base transform has given us an output buffer that is the same size
-     * as the input buffer, which is the size we need now.  make it a gap
-     * and send downstream. */
+     * as the input buffer, which is the size we need now.  all we have to
+     * do is make it a gap */
     GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
     memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
-    set_metadata(element, outbuf, GST_BUFFER_SIZE(outbuf) / (sizeof(complex double)*element->channels));
+    set_metadata(element, outbuf, GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf));
   } else {
-    return set_gaps (element, outbuf, GST_BUFFER_SIZE(inbuf) / (sizeof(complex double) * element->channels));
+    return set_gaps(element, outbuf, GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf));
   }
 
   return GST_FLOW_OK;
