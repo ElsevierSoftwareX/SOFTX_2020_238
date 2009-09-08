@@ -307,7 +307,7 @@ static int generate_templates(Gstlalautochisq *element)
      double norm = 0;
      int i;
 
-     for (i=0; i < autocorrelation_samples(element); i++)
+     for (i=0; i < (autocorrelation_samples(element)+1)/2; i++)
        norm += 1 - pow(gsl_matrix_get(element->A, i, channel), 2);
 
      gsl_vector_set(element->norm, channel, norm);
@@ -458,7 +458,7 @@ static GstFlowReturn chisquared (GstBuffer *outbuf, Gstlalautochisq *element)
        double chisq = 0;
        int i;
 
-       for (i=0; i < autocorrelation_samples(element); i++, snrprev+=element->channels)
+       for (i=0; i < (autocorrelation_samples(element)+1)/2; i++, snrprev+=element->channels)
 	  {
 #if 0
 if(f) {
