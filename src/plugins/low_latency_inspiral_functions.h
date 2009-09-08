@@ -37,7 +37,7 @@ int generate_bank_and_svd(
                       gsl_vector **S, 
                       gsl_matrix **V,
                       gsl_vector **chifacs,
-		      gsl_matrix **A,
+		      gsl_matrix_complex **A,
                       const char *xml_bank_filename,
                       const char *reference_psd_filename,
                       int base_sample_rate,
@@ -51,7 +51,7 @@ int generate_bank_and_svd(
 int generate_bank(
                       gsl_matrix **U,
                       gsl_vector **chifacs,
-		      gsl_matrix **A,
+		      gsl_matrix_complex **A,
                       const char *xml_bank_filename,
                       const char *reference_psd_filename,
                       int base_sample_rate,
@@ -60,31 +60,6 @@ int generate_bank(
                       double t_end, 
                       double tmax, 
                       int verbose);
-
-int create_template_from_sngl_inspiral(
-		InspiralTemplate *bankRow,
-		gsl_matrix *U,
-		gsl_matrix *A,
-		gsl_vector *chifacs,
-		int fsamp,
-		int downsampfac,
-		double t_end,
-		double t_total_duration,
-		int autocorr_numsamps,
-		double tshift,
-		int U_column,
-		COMPLEX16TimeSeries *template_out,
-		COMPLEX16TimeSeries *convolution, 
-		COMPLEX16TimeSeries *autocorrelation, 
-		COMPLEX16TimeSeries *short_autocorr,
-		COMPLEX16FrequencySeries *template_product,
-		COMPLEX16FrequencySeries *fft_template,
-		COMPLEX16FrequencySeries *fft_template_full,
-		COMPLEX16FrequencySeries *fft_template_full_reference,
-		REAL8FFTPlan *fwdplan,
-		COMPLEX16FFTPlan *revplan,
-		REAL8FrequencySeries *psd
-		);
 
 int compute_time_frequency_boundaries_from_bank(char * bank_name,
                                                 double min_subtemplate_samples,

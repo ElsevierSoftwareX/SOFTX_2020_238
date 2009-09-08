@@ -28,6 +28,8 @@
 #include <glib.h>
 
 /* gsl includes */
+#include <gsl/gsl_complex.h>
+#include <gsl/gsl_complex_math.h>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
@@ -67,7 +69,7 @@
 #include "gstlal_whiten.h"
 
 #define TEMPLATE_DURATION 128	/* seconds */
-#define ATEMPS 101
+#define ATEMPS 201
 
 #define LAL_CALL( function, statusptr ) \
   ((function),lal_errhandler(statusptr,#function,__FILE__,__LINE__,rcsid))
@@ -212,7 +214,7 @@ static double calculate_real_time_shift(
 
 
 static int generate_autocorrelation_bank(
-			gsl_matrix *A,			
+			gsl_matrix_complex *A,			
 			COMPLEX16FrequencySeries *template,
 			COMPLEX16FrequencySeries *template_product, 
 			COMPLEX16TimeSeries *autocorrelation,
@@ -225,8 +227,8 @@ static int generate_autocorrelation_bank(
 {
    double max;
    unsigned i;
-   gsl_vector_view col;
-   gsl_vector_view autocorr;
+   gsl_vector_complex_view col;
+   gsl_vector_complex_view autocorr;
   
    /* Calculates the product the autocorrelation function*/ 
 
@@ -241,45 +243,41 @@ static int generate_autocorrelation_bank(
  
   if(XLALCOMPLEX16FreqTimeFFT(autocorrelation, template_product, revplan)) 
     return -1;
-  
-  /*
-   * Looks for the peak 
-   */  
-  
-  max = XLALCOMPLEX16Abs(autocorrelation->data->data[0]);
-  for (i=1; i<autocorrelation->data->length; i++)
-    if(XLALCOMPLEX16Abs(autocorrelation->data->data[i]) > max) 
-      max=XLALCOMPLEX16Abs(autocorrelation->data->data[i]);
-
-  if(max!=1) // Normalizes
-   for (i=0; i<autocorrelation->data->length; i++) {
-     autocorrelation->data->data[i].re /= max;
-     autocorrelation->data->data[i].im /= max;
-   }
 
   /*
-   * Creates the autocorrelation matrix
+   * copy data into autocorrelation matrix
    */
 
-  /* Real part only */
+  col = gsl_matrix_complex_column(A, U_column);
+  autocorr = gsl_vector_complex_view_array_with_stride((double *) autocorrelation->data->data, down_samp_fac, col.vector.size);
+  gsl_vector_complex_memcpy(&col.vector, &autocorr.vector);
+  /* time-reverse the autocorrleation function.  this is only needed to
+   * make the complex part of the autocorrelation correct, the real part is
+   * symmetric about t=0. */
+  gsl_vector_complex_reverse(&col.vector);
+  
+  /*
+   * normalize the magnitude of the peak to 1.0.
+   */
 
-  col = gsl_matrix_column(A, U_column);
-  autocorr = gsl_vector_view_array_with_stride((double*) autocorrelation->data->data, 2 * down_samp_fac, col.vector.size);
-  if (gsl_vector_memcpy(&col.vector, &autocorr.vector))
-   {
-   fprintf(stderr, "create autocorrelation matrix FAILED\n");
-   return -1;
-   }
+  max = gsl_complex_abs(gsl_vector_complex_get(&col.vector, 0));
+  for (i=1; i<col.vector.size; i++)
+    if(gsl_complex_abs(gsl_vector_complex_get(&col.vector, i)) > max) 
+      max=gsl_complex_abs(gsl_vector_complex_get(&col.vector, i));
+
+  if(max!=1)
+   for (i=0; i<col.vector.size; i++)
+     gsl_vector_complex_set(&col.vector, i, gsl_complex_div_real(gsl_vector_complex_get(&col.vector, i), max));
 
   return 0;
 }
 
 
 
-int create_template_from_sngl_inspiral(
+static int create_template_from_sngl_inspiral(
                        InspiralTemplate *bankRow,
                        gsl_matrix *U, 
-		       gsl_matrix *A,
+		       gsl_matrix_complex *A,
                        gsl_vector *chifacs,
                        int fsamp,
                        int downsampfac, 
@@ -598,7 +596,7 @@ int gstlal_gsl_linalg_SV_decomp_mod(
 int generate_bank(
                       gsl_matrix **U, 
                       gsl_vector **chifacs,
-		      gsl_matrix **A,
+		      gsl_matrix_complex **A,
                       const char *xml_bank_filename,
 		      const char *reference_psd_filename,
                       int base_sample_rate,
@@ -641,7 +639,7 @@ int generate_bank(
   
   /* There are twice as many waveforms as templates */
   *U = gsl_matrix_calloc(numsamps, 2 * numtemps);
-  *A = gsl_matrix_calloc(autocorr_numsamps, numtemps);
+  *A = gsl_matrix_complex_calloc(autocorr_numsamps, numtemps);
 
   /* I have just computed chifacs for one of the quadratures...it should be
    * redundant */
@@ -794,7 +792,7 @@ int generate_bank_and_svd(
                       gsl_vector **S, 
 		      gsl_matrix **V,
                       gsl_vector **chifacs,
-		      gsl_matrix **A,
+		      gsl_matrix_complex **A,
                       const char *xml_bank_filename,
 		      const char *reference_psd_filename,
                       int base_sample_rate,

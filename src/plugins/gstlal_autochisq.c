@@ -115,6 +115,7 @@
  * stuff from GSL
  */
 
+#include <gsl/gsl_complex.h>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
@@ -122,6 +123,10 @@
 #include <gsl/gsl_blas.h>
 #include <gsl/gsl_fft_real.h>
 #include <gsl/gsl_fft_halfcomplex.h>
+static complex double GSL_COMPLEX_AS_COMPLEX(gsl_complex z)
+{
+  return GSL_REAL(z) + I * GSL_IMAG(z);
+}
 
 
 /* Filter signals and args */
@@ -308,7 +313,7 @@ static int generate_templates(Gstlalautochisq *element)
      int i;
 
      for (i=0; i < (autocorrelation_samples(element)+1)/2; i++)
-       norm += 1 - pow(gsl_matrix_get(element->A, i, channel), 2);
+       norm += 1 - pow(GSL_REAL(gsl_matrix_copmlex_get(element->A, i, channel)), 2);
 
      gsl_vector_set(element->norm, channel, norm);
      }
@@ -386,7 +391,7 @@ static gboolean stop (GstBaseTransform *trans)
   element->adapter = NULL;
 
   if(element->A) {
-    gsl_matrix_free(element->A);
+    gsl_matrix_complex_free(element->A);
     element->A = NULL;
   }
   if(element->norm) {
@@ -425,6 +430,23 @@ static guint64 get_available_samples(Gstlalautochisq *element)
   return gst_adapter_available(element->adapter) / (element->channels * sizeof(complex double));
 }
 
+
+static FILE *diag_dump_open(Gstlalautochisq *element, int sample, GstClockTime target)
+{
+  char filename[100];
+  if(element->next_out_offset + sample - element->offset0 != gst_util_uint64_scale_int_round(target - element->t0, element->rate, GST_SECOND))
+    return NULL;
+  sprintf(filename, "dump_autochisq_%lu.txt", (unsigned long) target);
+  return fopen(filename, "w");
+}
+static void diag_dump_close(FILE *f)
+{
+  if(f)
+    fclose(f);
+}
+
+
+
 static GstFlowReturn chisquared (GstBuffer *outbuf, Gstlalautochisq *element)
 {
   /* Takes the required number of samples out of the adapter */
@@ -441,12 +463,7 @@ static GstFlowReturn chisquared (GstBuffer *outbuf, Gstlalautochisq *element)
   for (sample=0; sample < outsamples; sample++)
     { 
 #if 0
-    FILE *f;
-    /*if(element->next_out_offset + sample - element->offset0 == gst_util_uint64_scale_int_round(873248860010290169 - element->t0, element->rate, GST_SECOND))*/
-    if(element->next_out_offset + sample - element->offset0 == gst_util_uint64_scale_int_round(873248860025879030 - element->t0, element->rate, GST_SECOND))
-      f = fopen("dump.txt", "w");
-    else
-      f = NULL;
+    FILE *f = diag_dump_open(element, sample, 873248860025879030);
 #endif
 
     for (channel=0; channel < element->channels; channel++) 
@@ -463,10 +480,10 @@ static GstFlowReturn chisquared (GstBuffer *outbuf, Gstlalautochisq *element)
 #if 0
 if(f) {
   GstClockTime t = element->t0 + gst_util_uint64_scale_int_round(element->next_out_offset - element->offset0 + sample - (autocorrelation_samples(element)-1)/2 + i, GST_SECOND, element->rate);
-  fprintf(f, "%.17g   %g %g   %g %g\n", t*1e-9, creal(*snrprev * invsnrphase), cimag(*snrprev * invsnrphase), creal(gsl_matrix_get(element->A, i, channel) * snr * invsnrphase), cimag(gsl_matrix_get(element->A, i, channel) * snr * invsnrphase));
+  fprintf(f, "%.17g   %g %g   %g %g\n", t*1e-9, creal(*snrprev * invsnrphase), cimag(*snrprev * invsnrphase), creal(GSL_COMPLEX_AS_COMPLEX(gsl_matrix_complex_get(element->A, i, channel)) * snr * invsnrphase), cimag(GSL_COMPLEX_AS_COMPLEX(gsl_matrix_complex_get(element->A, i, channel)) * snr * invsnrphase));
 }
 #endif
-	  chisq += pow(creal((gsl_matrix_get(element->A, i, channel) * snr - *snrprev) * invsnrphase), 2);
+	  chisq += pow(creal((GSL_COMPLEX_AS_COMPLEX(gsl_matrix_complex_get(element->A, i, channel)) * snr - *snrprev) * invsnrphase), 2);
 	  }
 
        /* Populates the outgoing buffer */
@@ -474,7 +491,7 @@ if(f) {
        indata++;
        }
 #if 0
-if(f) {fclose(f);}
+diag_dump_close(f);
 #endif
     }
   gst_adapter_flush(element->adapter, outsamples * element->channels * sizeof(*indata));

@@ -84,7 +84,7 @@ struct _Gstlalautochisq
   double t_end;
   double t_total_duration;
 
-  gsl_matrix *A;
+  gsl_matrix_complex *A;
   gsl_vector *norm;
   GstAdapter *adapter;
   gboolean adapter_is_empty;
