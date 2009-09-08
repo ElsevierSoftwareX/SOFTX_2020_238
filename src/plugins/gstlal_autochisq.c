@@ -313,7 +313,7 @@ static int generate_templates(Gstlalautochisq *element)
      int i;
 
      for (i=0; i < (autocorrelation_samples(element)+1)/2; i++)
-       norm += 1 - pow(GSL_REAL(gsl_matrix_copmlex_get(element->A, i, channel)), 2);
+       norm += 1 - pow(GSL_REAL(gsl_matrix_complex_get(element->A, i, channel)), 2);
 
      gsl_vector_set(element->norm, channel, norm);
      }
