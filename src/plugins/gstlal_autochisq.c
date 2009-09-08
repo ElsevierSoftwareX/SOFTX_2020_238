@@ -458,7 +458,7 @@ static GstFlowReturn chisquared (GstBuffer *outbuf, Gstlalautochisq *element)
        double chisq = 0;
        int i;
 
-       for (i=0; i < autocorrelation_samples(element); i++, snrprev++)
+       for (i=0; i < autocorrelation_samples(element); i++, snrprev+=element->channels)
 	  {
 #if 0
 if(f) {
