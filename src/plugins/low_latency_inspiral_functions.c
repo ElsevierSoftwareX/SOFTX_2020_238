@@ -69,7 +69,7 @@
 #include "gstlal_whiten.h"
 
 #define TEMPLATE_DURATION 128	/* seconds */
-#define ATEMPS 201
+#define ATEMPS 401
 
 #define LAL_CALL( function, statusptr ) \
   ((function),lal_errhandler(statusptr,#function,__FILE__,__LINE__,rcsid))
