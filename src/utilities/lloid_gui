@@ -333,8 +333,8 @@ def mknxydumpsink(pipeline, src, filename):
 		elem.set_property("stop-time", 874107258000000000)
 	elif False:
 		# FIXME:  what's at this time?
-		elem.set_property("start-time", 873248110000000000)
-		elem.set_property("stop-time", 873248170000000000)
+		elem.set_property("start-time", 873248760000000000)
+		elem.set_property("stop-time", 873248960000000000)
 	else:
 		# output to dump lots and lots of data (the whole cache)
 		elem.set_property("start-time", 873247860000000000)
@@ -414,20 +414,18 @@ def mkcontrolsnksrc(pipeline, rate, progress_report = False, suffix = None):
 	return snk, src
 
 
-def mkLLOIDsingle(pipeline, instrument, detector, bank, fake_data = False, injection_filename = None, progress_report = False, control_snksrc = None):
-	logname = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
-
+def mkLLOIDsrc(pipeline, instrument, detector, rates, fake_data = False, injection_filename = None, progress_report = False):
 	if fake_data:
 		head = mkfakeLIGOsrc(pipeline, instrument, detector)
 	else:
 		head = mkframesrc(pipeline, instrument, detector)
 	if progress_report:
-		head = mkprogressreport(pipeline, head, "progress_src_%s" % logname)
+		head = mkprogressreport(pipeline, head, "progress_src_%s" % instrument)
 
 	if injection_filename is not None:
 		head = mkinjections(pipeline, head, injection_filename)
 
-	rates = bank.get_rates()
+	head = mkwhiten(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % max(rates)))
 
 	correction = {
 		128: 1.03 / 0.93,
@@ -436,14 +434,18 @@ def mkLLOIDsingle(pipeline, instrument, detector, bank, fake_data = False, injec
 		2048: 1.03 / 1.03
 	}
 
-	head = mkwhiten(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % max(rates)))
-
 	hoft = {max(rates): mktee(pipeline, head)}
 	for rate in sorted(rates)[:-1]:	# all but the highest rate
 		# FIXME:  the default quality is 4, we should try setting
 		# it higher (9?), but then the variance correction look-up
 		# table will need to be re-measured
 		hoft[rate] = mktee(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, mkaudioamplify(pipeline, hoft[max(rates)], math.sqrt(correction[rate] * float(max(rates)) / rate))), "audio/x-raw-float, rate=%d" % rate))
+
+	return hoft
+
+
+def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, progress_report = False, control_snksrc = None):
+	logname = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 
 	if control_snksrc is None:
 		control_snksrc = mkcontrolsnksrc(pipeline, min(rates), progress_report = progress_report, suffix = logname)
@@ -461,7 +463,7 @@ def mkLLOIDsingle(pipeline, instrument, detector, bank, fake_data = False, injec
 		#bank_snr, bank_chisq = mkbank_oldchisq(
 		bank_snr = mkbank_newchisq(
 			pipeline,
-			mkqueue(pipeline, hoft[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000),
+			mkqueue(pipeline, hoftdict[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000),
 			bank,
 			bank_fragment,
 			detector.reference_psd_filename,
@@ -471,8 +473,8 @@ def mkLLOIDsingle(pipeline, instrument, detector, bank, fake_data = False, injec
 		mkqueue(pipeline, bank_snr).link(snr)
 		#mkqueue(pipeline, bank_chisq).link(chisq)
 
-	snr = mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(rates))
-	#chisq = mkcapsfilter(pipeline, chisq, "audio/x-raw-float, rate=%d" % max(rates))
+	snr = mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(bank.get_rates()))
+	#chisq = mkcapsfilter(pipeline, chisq, "audio/x-raw-float, rate=%d" % max(bank.get_rates()))
 	if progress_report:
 		snr = mkprogressreport(pipeline, snr, "progress_snr_%s" % logname)
 		#chisq = mkprogressreport(pipeline, chisq, "progress_chisq_%s" % logname)
@@ -490,7 +492,7 @@ def mkLLOIDsingle(pipeline, instrument, detector, bank, fake_data = False, injec
 	#mknxydumpsink(pipeline, mkqueue(pipeline, chisq), "chisquare_%s.txt" % logname)
 
 	#head = mktriggergen(pipeline, snr, chisq, bank.template_bank_filename, bank.snr_threshold)
-	head = mktriggergen(pipeline, mkqueue(pipeline, snr), chisq, bank.template_bank_filename, bank.snr_threshold)
+	head = mktriggergen(pipeline, mkqueue(pipeline, snr), mkqueue(pipeline, chisq), bank.template_bank_filename, bank.snr_threshold)
 	if progress_report:
 		head = mkprogressreport(pipeline, head, "progress_xml_%s" % logname)
 
@@ -504,39 +506,37 @@ def mkLLOIDsingle(pipeline, instrument, detector, bank, fake_data = False, injec
 
 
 def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, fake_data = False, injection_filename = None, progress_report = False):
-	if len(banks) > 1:
-		raise ValueError, "only 1 template bank supported yet"
 	if len(detectors) > 1:
 		raise ValueError, "only 1 instrument supported yet"
 
-	#nto1 = gst.element_factory_make("input-selector")
-	#nto1.set_property("select-all", True)
-	#pipeline.add(nto1)
-	#mktriggerxmlwritersink(pipeline, nto1, trigger_filename)
+	nto1 = gst.element_factory_make("input-selector")
+	nto1.set_property("select-all", True)
+	pipeline.add(nto1)
+	mktriggerxmlwritersink(pipeline, nto1, trigger_filename)
 
-	for bank in banks:
-		# FIXME:  the adder will not allow streams from multiple
-		# instruments to be combined because their caps won't
-		# intersect.  find a way to remove the instrument property
-		# from the caps of the sum-of-squares streams before
-		# bringing them together in the adder.  perhaps using
-		# capssetter from the bad plugins?
-		control_snksrc = mkcontrolsnksrc(pipeline, min(bank.get_rates()), progress_report = progress_report)
-		#mknxydumpsink(pipeline, mkqueue(pipeline, control_snksrc[1]), "sumsquares_coinc.txt")
-
-		for instrument in detectors:
+	# FIXME:  we can't do sum-of-squares coincidence across instruments
+	# because the adder will not allow streams from multiple
+	# instruments to be combined because their caps won't intersect.
+	# find a way to remove the instrument property from the caps of the
+	# sum-of-squares streams before bringing them together in the
+	# adder.  perhaps using capssetter from the bad plugins?  maybe
+	# that sort of metadata should be encoded in a tag instead of the
+	# stream "format"
+	for instrument in detectors:
+		rates = set(rate for bank in banks for rate in bank.get_rates())
+		hoftdict = mkLLOIDsrc(pipeline, instrument, detectors[instrument], rates, fake_data = fake_data, injection_filename = injection_filename, progress_report = progress_report)
+		for bank in banks:
+			control_snksrc = mkcontrolsnksrc(pipeline, min(bank.get_rates()), progress_report = progress_report, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
 			head = mkLLOIDsingle(
 				pipeline,
+				hoftdict,
 				instrument,
 				detectors[instrument],
 				bank,
-				fake_data = fake_data,
-				injection_filename = injection_filename,
 				progress_report = progress_report,
 				control_snksrc = control_snksrc
 			)
-			#mkqueue(pipeline, head).link(nto1)
-			mktriggerxmlwritersink(pipeline, head, trigger_filename)
+			mkqueue(pipeline, head).link(nto1)
 
 
 #
@@ -632,8 +632,9 @@ mkLLOIDmulti(
 				Bank.BankFragment(128, 13.0, 29.0)
 			],
 			gate_threshold = 3.0,
-			snr_threshold = 5.5
-		) for template_bank_filename in options.template_bank
+			snr_threshold = 5.5,
+			logname = "bank%d" % n
+		) for n, template_bank_filename in enumerate(options.template_bank)
 	],
 	trigger_filename = options.output,
 	fake_data = options.fake_data,
