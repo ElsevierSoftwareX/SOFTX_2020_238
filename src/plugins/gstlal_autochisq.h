@@ -58,16 +58,16 @@
 G_BEGIN_DECLS
 
 /* #defines don't like whitespacey bits */
-#define GST_TYPE_LAL_AUTOCHISQ \
-  (gst_lalautochisq_get_type())
+#define GSTLAL_AUTOCHISQ_TYPE \
+  (gstlal_autochisq_get_type())
 #define GST_LAL_AUTOCHISQ(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_LAL_AUTOCHISQ,Gstlalautochisq))
+  (G_TYPE_CHECK_INSTANCE_CAST((obj),GSTLAL_AUTOCHISQ_TYPE,Gstlalautochisq))
 #define GST_LAL_AUTOCHISQ_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_LAL_AUTOCHISQ,GstlalautochisqClass))
+  (G_TYPE_CHECK_CLASS_CAST((klass),GSTLAL_AUTOCHISQ_TYPE,GstlalautochisqClass))
 #define GST_IS_LAL_AUTOCHISQ(obj) \
-  (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_LAL_AUTOCHISQ))
+  (G_TYPE_CHECK_INSTANCE_TYPE((obj),GSTLAL_AUTOCHISQ_TYPE))
 #define GST_IS_LAL_AUTOCHISQ_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_LAL_AUTOCHISQ))
+  (G_TYPE_CHECK_CLASS_TYPE((klass),GSTLAL_AUTOCHISQ_TYPE))
 
 typedef struct _Gstlalautochisq      Gstlalautochisq;
 typedef struct _GstlalautochisqClass GstlalautochisqClass;
@@ -101,7 +101,7 @@ struct _GstlalautochisqClass
   GstBaseTransformClass parent_class;
 };
 
-GType gst_lalautochisq_get_type (void);
+GType gstlal_autochisq_get_type (void);
 
 G_END_DECLS
 

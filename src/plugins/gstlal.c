@@ -483,7 +483,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_triggerxmlwriter", GSTLAL_TRIGGERXMLWRITER_TYPE},
 		{"lal_gate", GSTLAL_GATE_TYPE},
 		{"lal_chisquare", GSTLAL_CHISQUARE_TYPE},
-		{"lal_autochisq", GST_TYPE_LAL_AUTOCHISQ},
+		{"lal_autochisq", GSTLAL_AUTOCHISQ_TYPE},
 		{NULL, 0},
 	};
 	struct {

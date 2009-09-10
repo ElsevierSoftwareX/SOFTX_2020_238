@@ -164,8 +164,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
     );
 
 
-GST_BOILERPLATE (Gstlalautochisq, gst_lalautochisq, GstBaseTransform,
-    GST_TYPE_BASE_TRANSFORM);
+GST_BOILERPLATE (Gstlalautochisq, gstlal_autochisq, GstBaseTransform, GST_TYPE_BASE_TRANSFORM);
 
 static void gst_lalautochisq_set_property (GObject * object, enum property prop_id, 
             const GValue * value, GParamSpec * pspec);
@@ -184,7 +183,7 @@ static int generate_templates(Gstlalautochisq *element);
 /* GObject vmethod implementations */
 
 static void
-gst_lalautochisq_base_init (gpointer gclass)
+gstlal_autochisq_base_init (gpointer gclass)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (gclass);
   GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS (gclass);
@@ -210,7 +209,7 @@ gst_lalautochisq_base_init (gpointer gclass)
 
 /* initialize the lal_autochisq's class */
 static void
-gst_lalautochisq_class_init (GstlalautochisqClass * klass)
+gstlal_autochisq_class_init (GstlalautochisqClass * klass)
 {
   GObjectClass *gobject_class;
   GstBaseTransformClass *base_transform_class;
@@ -232,7 +231,7 @@ gst_lalautochisq_class_init (GstlalautochisqClass * klass)
  * initialize instance structure
  */
 static void
-gst_lalautochisq_init (Gstlalautochisq * filter,
+gstlal_autochisq_init (Gstlalautochisq * filter,
     GstlalautochisqClass * gclass)
 {
   filter->reference_psd_filename = NULL;
