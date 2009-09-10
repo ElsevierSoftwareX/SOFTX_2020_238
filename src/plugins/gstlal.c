@@ -142,7 +142,7 @@ char *gstlal_build_full_channel_name(const char *instrument, const char *channel
  * Wrap a GstBuffer in a REAL8TimeSeries.  The time series's data->data
  * pointer points to the GstBuffer's own data, so this pointer must not be
  * free()ed.  That means it must be set to NULL before passing the time
- * series to the destroy function.
+ * series to the XLAL destroy function.
  *
  * Example:
  *
@@ -486,6 +486,19 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lalautochisq", GST_TYPE_LAL_AUTOCHISQ},
 		{NULL, 0},
 	};
+	struct {
+		const gchar *name;
+		GstTagFlag flag;
+		GType type;
+		const gchar *nick;
+		const gchar *blurb;
+		GstTagMergeFunc func;
+	} *tagarg, tagargs[] = {
+		{GSTLAL_TAG_INSTRUMENT, GST_TAG_FLAG_META, G_TYPE_STRING, "instrument", "The short name of the instrument or observatory where this data was recorded, e.g., \"H1\"", gst_tag_merge_strings_with_comma},
+		{GSTLAL_TAG_CHANNEL, GST_TAG_FLAG_META, G_TYPE_STRING, "channel name", "The name of this channel, e.g., \"LSC-STRAIN\"", gst_tag_merge_strings_with_comma},
+		{GSTLAL_TAG_UNITS, GST_TAG_FLAG_META, G_TYPE_STRING, "units", "The units for this channel (as encoded by LAL), e.g., \"FIXME\"", NULL},
+		{NULL,},
+	};
 
 	/*
 	 * Set the LAL debug level.
@@ -507,6 +520,13 @@ static gboolean plugin_init(GstPlugin *plugin)
 	for(element = elements; element->name; element++)
 		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->type))
 			return FALSE;
+
+	/*
+	 * Tell GStreamer about the custom tags.
+	 */
+
+	for(tagarg = tagargs; tagarg->name; tagarg++)
+		gst_tag_register(tagarg->name, tagarg->flag, tagarg->type, tagarg->nick, tagarg->blurb, tagarg->func);
 
 	/*
 	 * Done.

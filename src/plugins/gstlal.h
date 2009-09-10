@@ -45,6 +45,16 @@ G_BEGIN_DECLS
 
 
 /*
+ * Custom tags
+ */
+
+
+#define GSTLAL_TAG_INSTRUMENT "instrument"
+#define GSTLAL_TAG_CHANNEL "channel"
+#define GSTLAL_TAG_UNITS "units"
+
+
+/*
  * Data
  */
 
