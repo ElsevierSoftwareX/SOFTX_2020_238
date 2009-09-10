@@ -480,7 +480,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, progress_repor
 		#chisq = mkprogressreport(pipeline, chisq, "progress_chisq_%s" % logname)
 
 	snr = mktee(pipeline, snr)
-	chisq = gst.element_factory_make("lalautochisq")
+	chisq = gst.element_factory_make("lal_autochisq")
 	chisq.set_property("template-bank", bank.template_bank_filename)
 	chisq.set_property("reference-psd", detector.reference_psd_filename)
 	pipeline.add(chisq)
