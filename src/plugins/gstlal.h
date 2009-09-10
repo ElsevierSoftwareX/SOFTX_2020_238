@@ -68,7 +68,7 @@ extern GMutex *gstlal_fftw_lock;
 
 
 char *gstlal_build_full_channel_name(const char *, const char *);
-REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *);
+REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *, const char *, const char *, const char *);
 LALUnit gstlal_lalStrainPerADCCount(void);
 LALUnit gstlal_lalStrainSquaredPerHertz(void);
 REAL8FrequencySeries *gstlal_read_reference_psd(const char *);

@@ -166,9 +166,6 @@ static GstCaps *series_to_caps_and_taglist(const char *instrument, const char *c
 			"width", G_TYPE_INT, 32,
 			"depth", G_TYPE_INT, 32,
 			"signed", G_TYPE_BOOLEAN, TRUE,
-			"instrument", G_TYPE_STRING, instrument,
-			"channel_name", G_TYPE_STRING, channel_name,
-			"units", G_TYPE_STRING, units,
 			NULL
 		);
 		break;
@@ -183,9 +180,6 @@ static GstCaps *series_to_caps_and_taglist(const char *instrument, const char *c
 			"channels", G_TYPE_INT, 1,
 			"endianness", G_TYPE_INT, G_BYTE_ORDER,
 			"width", G_TYPE_INT, 32,
-			"instrument", G_TYPE_STRING, instrument,
-			"channel_name", G_TYPE_STRING, channel_name,
-			"units", G_TYPE_STRING, units,
 			NULL
 		);
 		break;
@@ -200,9 +194,6 @@ static GstCaps *series_to_caps_and_taglist(const char *instrument, const char *c
 			"channels", G_TYPE_INT, 1,
 			"endianness", G_TYPE_INT, G_BYTE_ORDER,
 			"width", G_TYPE_INT, 64,
-			"instrument", G_TYPE_STRING, instrument,
-			"channel_name", G_TYPE_STRING, channel_name,
-			"units", G_TYPE_STRING, units,
 			NULL
 		);
 		break;

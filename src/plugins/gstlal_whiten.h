@@ -87,8 +87,10 @@ typedef struct {
 
 	GstPad *srcpad;
 
-	int sample_rate;
+	char *instrument;
+	char *channel_name;
 	LALUnit sample_units;
+	int sample_rate;
 	gboolean next_is_discontinuity;
 	GstClockTime segment_start;
 	guint64 offset0;

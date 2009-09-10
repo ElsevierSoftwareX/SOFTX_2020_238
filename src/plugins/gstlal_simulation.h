@@ -80,6 +80,10 @@ typedef struct {
 		SimInspiralTable *sim_inspiral_table_head;
 	} *injection_document;
 
+	char *instrument;
+	char *channel_name;
+	char *units;
+
 	struct GSTLALInjectionCache *injection_cache;
 } GSTLALSimulation;
 

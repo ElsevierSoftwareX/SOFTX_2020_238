@@ -109,13 +109,20 @@ def mkcapsfilter(pipeline, src, caps):
 	src.link(elem)
 	return elem
 
+def mktaginject(pipeline, src, tags):
+	elem = gst.element_factory_make("taginject")
+	elem.set_property("tags", tags)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
 def mkfakesrc(pipeline, instrument, detector, volume = 1e-20):
 	elem = gst.element_factory_make("audiotestsrc")
 	elem.set_property("samplesperbuffer", detector.block_size / 8)
 	elem.set_property("wave", 9)
 	elem.set_property("volume", volume)
 	pipeline.add(elem)
-	return mkcapsfilter(pipeline, elem, "audio/x-raw-float, width=64, rate=16384, instrument=%s, channel_name=%s, units=strain" % (instrument, detector.channel))
+	return mktaginject(pipeline, mkcapsfilter(pipeline, elem, "audio/x-raw-float, width=64, rate=16384"), "instrument=%s,channel=%s,units=strain" % (instrument, detector.channel))
 
 def mkiirfilter(pipeline, src, a, b):
 	elem = gst.element_factory_make("audioiirfilter")

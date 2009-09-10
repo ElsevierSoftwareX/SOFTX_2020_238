@@ -727,6 +727,48 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 
 
 /*
+ * sink event()
+ */
+
+
+static gboolean sink_event(GstPad *pad, GstEvent *event)
+{
+	GSTLALSimulation *element = GSTLAL_SIMULATION(GST_PAD_PARENT(pad));
+	gboolean success;
+
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_TAG: {
+		GstTagList *taglist;
+		gchar *instrument, *channel_name, *units;
+		gst_event_parse_tag(event, &taglist);
+		success = gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
+		success &= gst_tag_list_get_string(taglist, GSTLAL_TAG_CHANNEL, &channel_name);
+		success &= gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units);
+		gst_tag_list_free(taglist);
+		if(!success)
+			GST_ERROR_OBJECT(element, "unable to parse instrument and/or channel and/or units from tag");
+		else {
+			g_free(element->instrument);
+			element->instrument = instrument;
+			g_free(element->channel_name);
+			element->channel_name = channel_name;
+			g_free(element->units);
+			element->units = units;
+			success = gst_pad_push_event(element->srcpad, event);
+		}
+		break;
+	}
+
+	default:
+		success = gst_pad_event_default(pad, event);
+		break;
+	}
+
+	return success;
+}
+
+
+/*
  * chain()
  */
 
@@ -761,7 +803,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 * Wrap buffer in a LAL REAL8TimeSeries.
 	 */
 
-	h = gstlal_REAL8TimeSeries_from_buffer(buf);
+	h = gstlal_REAL8TimeSeries_from_buffer(buf, element->instrument, element->channel_name, element->units);
 	if(!h) {
 		GST_ERROR_OBJECT(element, "failure wrapping buffer in REAL8TimeSeries");
 		gst_buffer_unref(buf);
@@ -842,6 +884,12 @@ static void finalize(GObject * object)
 	free(element->xml_location);
 	element->xml_location = NULL;
 	destroy_injection_document(element->injection_document);
+	g_free(element->instrument);
+	element->instrument = NULL;
+	g_free(element->channel_name);
+	element->channel_name = NULL;
+	g_free(element->units);
+	element->units = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -939,6 +987,7 @@ static void instance_init(GTypeInstance * object, gpointer class)
 
 	/* configure sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
+	gst_pad_set_event_function(pad, sink_event);
 	gst_pad_set_chain_function(pad, chain);
 	gst_object_unref(pad);
 
@@ -948,6 +997,9 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	/* internal data */
 	element->xml_location = NULL;
 	element->injection_document = NULL;
+	element->instrument = NULL;
+	element->channel_name = NULL;
+	element->units = NULL;
 }
 
 

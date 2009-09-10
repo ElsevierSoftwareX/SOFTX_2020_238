@@ -159,28 +159,28 @@ char *gstlal_build_full_channel_name(const char *instrument, const char *channel
  */
 
 
-REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf)
+REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf, const char *instrument, const char *channel_name, const char *units)
 {
 	GstCaps *caps = gst_buffer_get_caps(buf);
 	char *name;
 	double deltaT;
-	LALUnit units;
+	LALUnit lalunits;
 	int channels;
 	LIGOTimeGPS epoch;
 	size_t length;
 	REAL8TimeSeries *series = NULL;
 
 	/*
-	 * Retrieve the instrument, channel name, sample rate, units, and
-	 * number of channels from the caps.
+	 * Build the full channel name, parse the units, and retrieve the
+	 * sample rate and number of channels from the caps.
 	 */
 
-	name = gstlal_build_full_channel_name(gst_structure_get_string(gst_caps_get_structure(caps, 0), "instrument"), gst_structure_get_string(gst_caps_get_structure(caps, 0), "channel_name"));
-	deltaT = 1.0 / g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
-	if(!XLALParseUnitString(&units, gst_structure_get_string(gst_caps_get_structure(caps, 0), "units"))) {
+	name = gstlal_build_full_channel_name(instrument, channel_name);
+	if(!XLALParseUnitString(&lalunits, units)) {
 		GST_ERROR("failure parsing units");
 		goto done;
 	}
+	deltaT = 1.0 / g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
 	channels = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels"));
 	if(channels != 1) {
 		/* FIXME:  might do something like return an array of time
@@ -205,7 +205,7 @@ REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf)
 	 * Build a zero-length time series with the correct metadata
 	 */
 
-	series = XLALCreateREAL8TimeSeries(name, &epoch, 0.0, deltaT, &units, 0);
+	series = XLALCreateREAL8TimeSeries(name, &epoch, 0.0, deltaT, &lalunits, 0);
 	if(!series) {
 		GST_ERROR("XLALCreateREAL8TimeSeries() failed");
 		goto done;

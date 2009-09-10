@@ -601,8 +601,6 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	GstStructure *structure;
 	gint rate;
-	LALUnit sample_units;
-	char units[100];	/* FIXME:  argh, hard-coded length = BAD BAD BAD */
 	gboolean success = TRUE;
 
 	/*
@@ -617,32 +615,11 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	}
 
 	/*
-	 * extract the sample units
+	 * try setting the new caps on the downstream peer.
 	 */
 
-	if(!XLALParseUnitString(&sample_units, g_value_get_string(gst_structure_get_value(structure, "units")))) {
-		GST_ERROR_OBJECT(element, "cannot parse units");
-		success = FALSE;
-	}
-
-	/*
-	 * get a modifiable copy of the caps, set the caps' units to
-	 * dimensionless, and try setting the new caps on the downstream
-	 * peer.  if this succeeds, doing this here means we don't have to
-	 * do this repeatedly in the chain function.
-	 * gst_caps_make_writable() unref()s its argument so we have to
-	 * ref() it first to keep it valid.
-	 */
-
-	if(success) {
-		gst_caps_ref(caps);
-		caps = gst_caps_make_writable(caps);
-		XLALUnitAsString(units, sizeof(units), &lalDimensionlessUnit);
-		/* FIXME:  gstreamer doesn't like empty strings */
-		gst_caps_set_simple(caps, "units", G_TYPE_STRING, " "/*units*/, NULL);
+	if(success)
 		success = gst_pad_set_caps(element->srcpad, caps);
-		gst_caps_unref(caps);
-	}
 
 	/*
 	 * record the sample rate and units, make a new Hann window, new
@@ -651,7 +628,6 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 
 	if(success) {
 		element->sample_rate = rate;
-		element->sample_units = sample_units;
 		if(make_window_and_fft_plans(element))
 			success = FALSE;
 	}
@@ -665,8 +641,66 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 }
 
 
-/* FIXME:  add an event handler to handle flusing and eos (i.e. flush the
- * adapter and send the last bit of data downstream) */
+/*
+ * sink event()
+ *
+ * FIXME:  handle flusing and eos (i.e. flush the adapter and send the last
+ * bit of data downstream)
+ */
+
+
+static gboolean sink_event(GstPad *pad, GstEvent *event)
+{
+	GSTLALWhiten *element = GSTLAL_WHITEN(GST_PAD_PARENT(pad));
+	gboolean success;
+
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_TAG: {
+		GstTagList *taglist;
+		gchar *instrument, *channel_name, *units;
+		gchar dimensionless_units[100];	/* argh hard-coded length = BAD BAD BAD */
+		LALUnit sample_units;
+
+		gst_event_parse_tag(event, &taglist);
+		success = gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
+		success &= gst_tag_list_get_string(taglist, GSTLAL_TAG_CHANNEL, &channel_name);
+		success &= gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units);
+		if(!success) {
+			GST_ERROR_OBJECT(element, "unable to parse instrument and/or channel and/or units from tag");
+			break;
+		}
+
+		if(!XLALParseUnitString(&sample_units, units)) {
+			GST_ERROR_OBJECT(element, "cannot parse units");
+			success = FALSE;
+			break;
+		}
+		element->sample_units = sample_units;
+		g_free(units);
+
+		g_free(element->instrument);
+		element->instrument = instrument;
+		g_free(element->channel_name);
+		element->channel_name = channel_name;
+
+		/*
+		 * replace the units before sending tags downstream
+		 */
+
+		XLALUnitAsString(dimensionless_units, sizeof(dimensionless_units), &lalDimensionlessUnit);
+		/* FIXME:  gstreamer doesn't like empty strings */
+		gst_tag_list_add(taglist, GST_TAG_MERGE_REPLACE_ALL, GSTLAL_TAG_UNITS, " "/*dimensionless_units*/, NULL);
+		success &= gst_pad_push_event(element->srcpad, event);
+		break;
+	}
+
+	default:
+		success = gst_pad_event_default(pad, event);
+		break;
+	}
+
+	return success;
+}
 
 
 /*
@@ -937,6 +971,10 @@ static void finalize(GObject * object)
 	XLALCloseLIGOLwXMLFile(element->xml_stream);
 	free(element->reference_psd_filename);
 	XLALDestroyREAL8FrequencySeries(element->reference_psd);
+	g_free(element->instrument);
+	element->instrument = NULL;
+	g_free(element->channel_name);
+	element->channel_name = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -1042,6 +1080,7 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
 	gst_pad_set_getcaps_function(pad, getcaps);
 	gst_pad_set_setcaps_function(pad, setcaps);
+	gst_pad_set_event_function(pad, sink_event);
 	gst_pad_set_chain_function(pad, chain);
 	gst_object_unref(pad);
 
@@ -1057,8 +1096,10 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->zero_pad_seconds = DEFAULT_ZERO_PAD_SECONDS;
 	element->fft_length_seconds = DEFAULT_FFT_LENGTH_SECONDS;
 	element->psdmode = DEFAULT_PSDMODE;
-	element->sample_rate = 0;
+	element->instrument = NULL;
+	element->channel_name = NULL;
 	element->sample_units = lalDimensionlessUnit;
+	element->sample_rate = 0;
 	element->window = NULL;
 	element->fwdplan = NULL;
 	element->revplan = NULL;
