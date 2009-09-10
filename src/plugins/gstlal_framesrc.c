@@ -149,7 +149,7 @@ static gint series_to_rate(const void *series, LALTYPECODE type)
 }
 
 
-static GstCaps *series_to_caps(const char *instrument, const char *channel_name, const void *series, LALTYPECODE type)
+static GstCaps *series_to_caps_and_taglist(const char *instrument, const char *channel_name, const void *series, LALTYPECODE type, GstTagList **taglist)
 {
 	char units[100];
 	GstCaps *caps;
@@ -218,6 +218,13 @@ static GstCaps *series_to_caps(const char *instrument, const char *channel_name,
 		GST_DEBUG("constructed caps:  %" GST_PTR_FORMAT, caps);
 	else
 		GST_ERROR("failure constructing caps");
+
+	*taglist = gst_tag_list_new_full(
+		GSTLAL_TAG_INSTRUMENT, instrument,
+		GSTLAL_TAG_CHANNEL, channel_name,
+		GSTLAL_TAG_UNITS, units,
+		NULL
+	);
 
 	return caps;
 }
@@ -504,11 +511,15 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 static GstCaps *get_caps(GstBaseSrc *object)
 {
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
+	GstCaps *caps;
 
-	if(element->input_buffer)
-		return series_to_caps(element->instrument, element->channel_name, element->input_buffer, element->series_type);
-	else
-		return gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_SRC_PAD(object)));
+	if(element->input_buffer) {
+		GstTagList *taglist;
+		caps = series_to_caps_and_taglist(element->instrument, element->channel_name, element->input_buffer, element->series_type, &taglist);
+		gst_tag_list_free(taglist);
+	} else
+		caps = gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_SRC_PAD(object)));
+	return caps;
 }
 
 
@@ -523,6 +534,7 @@ static gboolean start(GstBaseSrc *object)
 	FrCache *cache;
 	LIGOTimeGPS stream_start;
 	GstCaps *caps;
+	GstTagList *taglist;
 
 	/*
 	 * Open frame stream.
@@ -648,7 +660,7 @@ static gboolean start(GstBaseSrc *object)
 	 * Try setting the caps on the source pad.
 	 */
 
-	caps = series_to_caps(element->instrument, element->channel_name, element->input_buffer, element->series_type);
+	caps = series_to_caps_and_taglist(element->instrument, element->channel_name, element->input_buffer, element->series_type, &taglist);
 	if(!caps) {
 		GST_ERROR_OBJECT(element, "unable to construct caps");
 		XLALFrClose(element->stream);
@@ -669,6 +681,20 @@ static gboolean start(GstBaseSrc *object)
 		return FALSE;
 	}
 	gst_caps_unref(caps);
+
+	/*
+	 * Transmit the tag list.
+	 */
+
+	if(!gst_pad_push_event(GST_BASE_SRC_PAD(object), gst_event_new_tag(taglist))) {
+		GST_ERROR_OBJECT(element, "unable to push tag list on %s", GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
+		XLALFrClose(element->stream);
+		element->stream = NULL;
+		DestroyTimeSeries(element->input_buffer, element->series_type);
+		element->input_buffer = NULL;
+		element->series_type = -1;
+		return FALSE;
+	}
 
 	/*
 	 * Done
