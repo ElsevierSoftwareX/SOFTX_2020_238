@@ -660,7 +660,6 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 * done
 	 */
 
-done:
 	gst_object_unref(element);
 	return success;
 }
