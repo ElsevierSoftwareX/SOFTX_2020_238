@@ -394,11 +394,9 @@ static int create_template_from_sngl_inspiral(
     fclose(file);
   }*/
 
-
-
- /* Autocorrelation
-  * */ 
-  fprintf(stderr, "doing autocorrelation\n");
+ /*
+  * Autocorrelation
+  */ 
 
   if(generate_autocorrelation_bank(A, fft_template_full, template_product, autocorrelation, revplan, U_column, autocorr_numsamps, fsamp, downsampfac)<0)
   	{
