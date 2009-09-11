@@ -87,8 +87,6 @@ typedef struct {
 
 	GstPad *srcpad;
 
-	char *instrument;
-	char *channel_name;
 	LALUnit sample_units;
 	int sample_rate;
 	gboolean next_is_discontinuity;

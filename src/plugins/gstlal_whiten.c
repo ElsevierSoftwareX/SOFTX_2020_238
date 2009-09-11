@@ -657,39 +657,33 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_TAG: {
 		GstTagList *taglist;
-		gchar *instrument, *channel_name, *units;
-		gchar dimensionless_units[100];	/* argh hard-coded length = BAD BAD BAD */
-		LALUnit sample_units;
+		gchar *units;
 
 		gst_event_parse_tag(event, &taglist);
-		success = gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
-		success &= gst_tag_list_get_string(taglist, GSTLAL_TAG_CHANNEL, &channel_name);
-		success &= gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units);
-		if(!success) {
-			GST_ERROR_OBJECT(element, "unable to parse instrument and/or channel and/or units from tag");
-			break;
+		if(gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units)) {
+			/*
+			 * tag list contains a units tag;  replace with
+			 * equivalent of "dimensionless" before sending
+			 * downstream
+			 */
+
+			LALUnit sample_units;
+
+			if(!XLALParseUnitString(&sample_units, units)) {
+				GST_ERROR_OBJECT(element, "cannot parse units");
+				sample_units = lalDimensionlessUnit;
+				success = FALSE;
+			} else {
+				gchar dimensionless_units[16];	/* argh hard-coded length = BAD BAD BAD */
+				XLALUnitAsString(dimensionless_units, sizeof(dimensionless_units), &lalDimensionlessUnit);
+				/* FIXME:  gstreamer doesn't like empty strings */
+				gst_tag_list_add(taglist, GST_TAG_MERGE_REPLACE_ALL, GSTLAL_TAG_UNITS, " "/*dimensionless_units*/, NULL);
+			}
+
+			g_free(units);
+			element->sample_units = sample_units;
 		}
 
-		if(!XLALParseUnitString(&sample_units, units)) {
-			GST_ERROR_OBJECT(element, "cannot parse units");
-			success = FALSE;
-			break;
-		}
-		element->sample_units = sample_units;
-		g_free(units);
-
-		g_free(element->instrument);
-		element->instrument = instrument;
-		g_free(element->channel_name);
-		element->channel_name = channel_name;
-
-		/*
-		 * replace the units before sending tags downstream
-		 */
-
-		XLALUnitAsString(dimensionless_units, sizeof(dimensionless_units), &lalDimensionlessUnit);
-		/* FIXME:  gstreamer doesn't like empty strings */
-		gst_tag_list_add(taglist, GST_TAG_MERGE_REPLACE_ALL, GSTLAL_TAG_UNITS, " "/*dimensionless_units*/, NULL);
 		success &= gst_pad_push_event(element->srcpad, event);
 		break;
 	}
@@ -971,10 +965,6 @@ static void finalize(GObject * object)
 	XLALCloseLIGOLwXMLFile(element->xml_stream);
 	free(element->reference_psd_filename);
 	XLALDestroyREAL8FrequencySeries(element->reference_psd);
-	g_free(element->instrument);
-	element->instrument = NULL;
-	g_free(element->channel_name);
-	element->channel_name = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -1096,8 +1086,6 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->zero_pad_seconds = DEFAULT_ZERO_PAD_SECONDS;
 	element->fft_length_seconds = DEFAULT_FFT_LENGTH_SECONDS;
 	element->psdmode = DEFAULT_PSDMODE;
-	element->instrument = NULL;
-	element->channel_name = NULL;
 	element->sample_units = lalDimensionlessUnit;
 	element->sample_rate = 0;
 	element->window = NULL;
