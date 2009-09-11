@@ -652,7 +652,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 static gboolean sink_event(GstPad *pad, GstEvent *event)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(GST_PAD_PARENT(pad));
-	gboolean success;
+	gboolean success = TRUE;
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_TAG: {
