@@ -512,14 +512,14 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, progress_repor
 #
 
 
-def mkLLOIDmulti(pipeline, detectors, banks, trigger_filename, fake_data = False, injection_filename = None, progress_report = False):
+def mkLLOIDmulti(pipeline, detectors, banks, output_filename, fake_data = False, injection_filename = None, progress_report = False):
 	if len(detectors) > 1:
 		raise ValueError, "only 1 instrument supported yet"
 
 	nto1 = gst.element_factory_make("input-selector")
 	nto1.set_property("select-all", True)
 	pipeline.add(nto1)
-	mktriggerxmlwritersink(pipeline, nto1, trigger_filename)
+	mktriggerxmlwritersink(pipeline, nto1, output_filename)
 
 	# FIXME:  we can't do sum-of-squares coincidence across instruments
 	# because the adder will not allow streams from multiple
@@ -643,7 +643,7 @@ mkLLOIDmulti(
 			logname = "bank%d" % n
 		) for n, template_bank_filename in enumerate(options.template_bank)
 	],
-	trigger_filename = options.output,
+	output_filename = options.output,
 	fake_data = options.fake_data,
 	injection_filename = options.injections,
 	progress_report = options.verbose
