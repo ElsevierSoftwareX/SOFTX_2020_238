@@ -122,7 +122,7 @@ def mkfakesrc(pipeline, instrument, detector, volume = 1e-20):
 	elem.set_property("wave", 9)
 	elem.set_property("volume", volume)
 	pipeline.add(elem)
-	return mktaginject(pipeline, mkcapsfilter(pipeline, elem, "audio/x-raw-float, width=64, rate=16384"), "instrument=%s,channel=%s,units=strain" % (instrument, detector.channel))
+	return mktaginject(pipeline, mkcapsfilter(pipeline, elem, "audio/x-raw-float, width=64, rate=16384"), "instrument=%s,channel-name=%s,units=strain" % (instrument, detector.channel))
 
 def mkiirfilter(pipeline, src, a, b):
 	elem = gst.element_factory_make("audioiirfilter")
@@ -455,7 +455,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, progress_repor
 	logname = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 
 	if control_snksrc is None:
-		control_snksrc = mkcontrolsnksrc(pipeline, min(rates), progress_report = progress_report, suffix = logname)
+		control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), progress_report = progress_report, suffix = logname)
 		#mknxydumpsink(pipeline, mkqueue(pipeline, control_snksrc[1]), "sumsquares_%s.txt" % logname)
 
 	snr = gst.element_factory_make("lal_adder")
@@ -516,10 +516,10 @@ def mkLLOIDmulti(pipeline, detectors, banks, output_filename, fake_data = False,
 	if len(detectors) > 1:
 		raise ValueError, "only 1 instrument supported yet"
 
-	nto1 = gst.element_factory_make("input-selector")
-	nto1.set_property("select-all", True)
-	pipeline.add(nto1)
-	mktriggerxmlwritersink(pipeline, nto1, output_filename)
+	#nto1 = gst.element_factory_make("input-selector")
+	#nto1.set_property("select-all", True)
+	#pipeline.add(nto1)
+	#mktriggerxmlwritersink(pipeline, nto1, output_filename)
 
 	# FIXME:  we can't do sum-of-squares coincidence across instruments
 	# because the adder will not allow streams from multiple
@@ -533,7 +533,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, output_filename, fake_data = False,
 		rates = set(rate for bank in banks for rate in bank.get_rates())
 		hoftdict = mkLLOIDsrc(pipeline, instrument, detectors[instrument], rates, fake_data = fake_data, injection_filename = injection_filename, progress_report = progress_report)
 		for bank in banks:
-			control_snksrc = mkcontrolsnksrc(pipeline, min(bank.get_rates()), progress_report = progress_report, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
+			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), progress_report = progress_report, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
 			head = mkLLOIDsingle(
 				pipeline,
 				hoftdict,
@@ -543,7 +543,8 @@ def mkLLOIDmulti(pipeline, detectors, banks, output_filename, fake_data = False,
 				progress_report = progress_report,
 				control_snksrc = control_snksrc
 			)
-			mkqueue(pipeline, head).link(nto1)
+			#mkqueue(pipeline, head).link(nto1)
+			mktriggerxmlwritersink(pipeline, head, output_filename.replace(".xml", "_%s.xml" % bank.logname))
 
 
 #
@@ -638,7 +639,7 @@ mkLLOIDmulti(
 				Bank.BankFragment(256, 5.0, 13.0),
 				Bank.BankFragment(128, 13.0, 29.0)
 			],
-			gate_threshold = 3.0,
+			gate_threshold = 2.0,
 			snr_threshold = 5.5,
 			logname = "bank%d" % n
 		) for n, template_bank_filename in enumerate(options.template_bank)
