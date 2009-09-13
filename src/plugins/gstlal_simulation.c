@@ -746,7 +746,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		success &= gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units);
 		gst_tag_list_free(taglist);
 		if(!success)
-			GST_ERROR_OBJECT(element, "unable to parse instrument and/or channel and/or units from tag");
+			GST_ERROR_OBJECT(element, "unable to parse %s and/or %s and/or %s from tags", GSTLAL_TAG_INSTRUMENT, GSTLAL_TAG_CHANNEL, GSTLAL_TAG_UNITS);
 		else {
 			g_free(element->instrument);
 			element->instrument = instrument;
