@@ -50,7 +50,7 @@ G_BEGIN_DECLS
 
 
 #define GSTLAL_TAG_INSTRUMENT "instrument"
-#define GSTLAL_TAG_CHANNEL "channel"
+#define GSTLAL_TAG_CHANNEL "channel-name"
 #define GSTLAL_TAG_UNITS "units"
 
 
