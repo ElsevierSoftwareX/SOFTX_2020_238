@@ -50,12 +50,11 @@ background_cursor = backgrounddb.cursor()
 injections_cursor = injectionsdb.cursor()
 
 
-print >>sys.stderr, "measuring parameter space boundaries ..."
-def f(cursor_a, cursor_b, col):
-	return cursor_a.execute("SELECT %s FROM sngl_inspiral" % col).fetchone()[0], cursor_b.execute("SELECT %s FROM sngl_inspiral" % col).fetchone()[0]
-
-
 if False:
+	print >>sys.stderr, "measuring parameter space boundaries ..."
+	def f(cursor_a, cursor_b, col):
+		return cursor_a.execute("SELECT %s FROM sngl_inspiral" % col).fetchone()[0], cursor_b.execute("SELECT %s FROM sngl_inspiral" % col).fetchone()[0]
+
 	minchisq = min(f(background_cursor, injections_cursor, "MIN(chisq)"))
 	maxchisq = max(f(background_cursor, injections_cursor, "MAX(chisq)"))
 	minsnr = min(f(background_cursor, injections_cursor, "MIN(snr)"))
@@ -89,12 +88,13 @@ else:
 def calc_likelihood(snr, chisq):
 	return likelihood[(snr, chisq)]
 
+backgrounddb.create_function("likelihood", 2, calc_likelihood)
 injectionsdb.create_function("likelihood", 2, calc_likelihood)
 
 
 print >>sys.stderr, "computing likelihood ratios ..."
-background_likelihoods = [likelihood[coords] for coords in background_cursor.execute("SELECT snr, chisq FROM sngl_inspiral")]
-injections_likelihoods =[vals[0] for vals in injections_cursor.execute("""
+background_likelihoods = [vals[0] for vals in background_cursor.execute("SELECT likelihood(snr, chisq) FROM sngl_inspiral")]
+injections_likelihoods = [vals[0] for vals in injections_cursor.execute("""
 SELECT
 	(SELECT
 		MAX(likelihood(sngl_inspiral.snr, sngl_inspiral.chisq))
@@ -126,10 +126,20 @@ print "inf in injections: ", (float("inf") in injections_likelihoods)
 
 
 def remove_infs(background_likelihoods, injections_likelihoods):
+	#
+	# find the largest non-inf likelihood
+	#
+
 	max = min(background_likelihoods)
 	for l in background_likelihoods + injections_likelihoods:
 		if l > max and l != float("inf"):
 			max = l
+
+	#
+	# assign something a bit larger than that to all the events that
+	# came out as "inf"
+	#
+
 	max += 100
 	for i in range(len(background_likelihoods)):
 		if background_likelihoods[i] == float("inf"):
@@ -153,7 +163,7 @@ fig.set_size_inches(165.0 / 25.4, 165.0 / 25.4 / ((1 + math.sqrt(5)) / 2))
 axes = fig.gca()
 axes.grid(True)
 axes.set_xlabel("Fraction of noise surviving")
-axes.set_ylabel(r"Fraction of injections surviving\\(of those that survive when all noise survives)")
+axes.set_ylabel(r"\begin{center}Fraction of injections surviving\\(of those that survive when all noise survives)\end{center}")
 
 print >>sys.stderr, "plotting ..."
 likelihoods = background_likelihoods + injections_likelihoods
