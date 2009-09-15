@@ -608,9 +608,11 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	structure = gst_caps_get_structure(caps, 0);
-	rate = g_value_get_int(gst_structure_get_value(structure, "rate"));
-	if((int) round(element->fft_length_seconds * rate) & 1 || (int) round(element->zero_pad_seconds * rate) & 1) {
-		GST_ERROR_OBJECT(element, "FFT length and/or Zero-padding is an odd number of samples (must be even)");
+	if(!gst_structure_get_int(structure, "rate", &rate)) {
+		GST_ERROR_OBJECT(element, "no rate in caps");
+		success = FALSE;
+	} else if((int) round(element->fft_length_seconds * rate) & 1 || (int) round(element->zero_pad_seconds * rate) & 1) {
+		GST_ERROR_OBJECT(element, "bad sample rate: FFT length and/or zero-padding is an odd number of samples (must be even)");
 		success = FALSE;
 	}
 
