@@ -333,10 +333,10 @@ static GstCaps *sink_getcaps(GstPad * pad)
 
 	peercaps = gst_pad_peer_get_caps(element->srcpad);
 	if(peercaps) {
-		GstCaps *intersection = gst_caps_intersect(peercaps, caps);
+		GstCaps *result = gst_caps_intersect(peercaps, caps);
 		gst_caps_unref(peercaps);
 		gst_caps_unref(caps);
-		caps = intersection;
+		caps = result;
 	}
 
 	/*
