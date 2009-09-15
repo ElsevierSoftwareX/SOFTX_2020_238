@@ -170,7 +170,7 @@ likelihoods = background_likelihoods + injections_likelihoods
 likelihoods.sort()
 x = map(fap, likelihoods)
 y = map(tap, likelihoods)
-axes.loglog(x, y)
+axes.semilogx(x, y)
 axes.set_xlim(min(x), max(x))
 axes.set_ylim(min(y), max(y))
 
