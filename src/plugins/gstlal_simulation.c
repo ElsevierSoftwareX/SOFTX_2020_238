@@ -731,6 +731,16 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
  */
 
 
+static gboolean taglist_extract_string(GSTLALSimulation *element, GstTagList *taglist, const char *tagname, gchar **dest)
+{
+	if(!gst_tag_list_get_string(taglist, tagname, dest)) {
+		GST_ERROR_OBJECT(element, "unable to parse \"%s\" from %" GST_PTR_FORMAT, tagname, taglist);
+		return FALSE;
+	}
+	return TRUE;
+}
+
+
 static gboolean sink_event(GstPad *pad, GstEvent *event)
 {
 	GSTLALSimulation *element = GSTLAL_SIMULATION(GST_PAD_PARENT(pad));
@@ -741,13 +751,11 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		GstTagList *taglist;
 		gchar *instrument, *channel_name, *units;
 		gst_event_parse_tag(event, &taglist);
-		success = gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
-		success &= gst_tag_list_get_string(taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
-		success &= gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units);
-		gst_tag_list_free(taglist);
-		if(!success)
-			GST_ERROR_OBJECT(element, "unable to parse \"%s\" and/or \"%s\" and/or \"%s\" from tags", GSTLAL_TAG_INSTRUMENT, GSTLAL_TAG_CHANNEL_NAME, GSTLAL_TAG_UNITS);
-		else {
+		success = taglist_extract_string(element, taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
+		success &= taglist_extract_string(element, taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
+		success &= taglist_extract_string(element, taglist, GSTLAL_TAG_UNITS, &units);
+		if(success) {
+			GST_DEBUG_OBJECT(element, "found tags \"%s\"=\"%s\" \"%s\"=\"%s\" \"%s\"=\"%s\"", GSTLAL_TAG_INSTRUMENT, instrument, GSTLAL_TAG_CHANNEL_NAME, channel_name, GSTLAL_TAG_UNITS, units);
 			g_free(element->instrument);
 			element->instrument = instrument;
 			g_free(element->channel_name);
@@ -755,6 +763,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 			g_free(element->units);
 			element->units = units;
 			success = gst_pad_push_event(element->srcpad, event);
+			/* FIXME:  flush the cache of injection timeseries */
 		}
 		break;
 	}
