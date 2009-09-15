@@ -734,7 +734,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 static gboolean taglist_extract_string(GSTLALSimulation *element, GstTagList *taglist, const char *tagname, gchar **dest)
 {
 	if(!gst_tag_list_get_string(taglist, tagname, dest)) {
-		GST_ERROR_OBJECT(element, "unable to parse \"%s\" from %" GST_PTR_FORMAT, tagname, taglist);
+		GST_WARNING_OBJECT(element, "unable to parse \"%s\" from %" GST_PTR_FORMAT, tagname, taglist);
 		return FALSE;
 	}
 	return TRUE;
@@ -806,6 +806,16 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
+	}
+
+	/*
+	 * If stream tags not sufficient, reduce to pass-through
+	 */
+
+	if(!element->instrument || !element->channel_name || !element->units) {
+		GST_ERROR_OBJECT(element, "stream metadata not available, cannot construct injections");
+		result = gst_pad_push(element->srcpad, buf);
+		goto done;
 	}
 
 	/*
