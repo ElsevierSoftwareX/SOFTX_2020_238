@@ -162,10 +162,12 @@ char *gstlal_build_full_channel_name(const char *instrument, const char *channel
 REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf, const char *instrument, const char *channel_name, const char *units)
 {
 	GstCaps *caps = gst_buffer_get_caps(buf);
-	char *name;
+	GstStructure *structure;
+	char *name = NULL;
+	gint rate;
+	gint channels;
 	double deltaT;
 	LALUnit lalunits;
-	int channels;
 	LIGOTimeGPS epoch;
 	size_t length;
 	REAL8TimeSeries *series = NULL;
@@ -180,14 +182,18 @@ REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf, const char *
 		GST_ERROR("failure parsing units");
 		goto done;
 	}
-	deltaT = 1.0 / g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
-	channels = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels"));
+	structure = gst_caps_get_structure(caps, 0);
+	if(!gst_structure_get_int(structure, "rate", &rate) || !gst_structure_get_int(structure, "channels", &channels)) {
+		GST_ERROR("cannot extract rate and/or channels from caps");
+		goto done;
+	}
 	if(channels != 1) {
 		/* FIXME:  might do something like return an array of time
 		 * series? */
 		GST_ERROR("cannot wrap multi-channel buffers in LAL time series");
 		goto done;
 	}
+	deltaT = 1.0 / rate;
 
 	/*
 	 * Retrieve the epoch from the time stamp and the length from the
@@ -495,7 +501,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		GstTagMergeFunc func;
 	} *tagarg, tagargs[] = {
 		{GSTLAL_TAG_INSTRUMENT, GST_TAG_FLAG_META, G_TYPE_STRING, "instrument", "The short name of the instrument or observatory where this data was recorded, e.g., \"H1\"", gst_tag_merge_strings_with_comma},
-		{GSTLAL_TAG_CHANNEL, GST_TAG_FLAG_META, G_TYPE_STRING, "channel name", "The name of this channel, e.g., \"LSC-STRAIN\"", gst_tag_merge_strings_with_comma},
+		{GSTLAL_TAG_CHANNEL_NAME, GST_TAG_FLAG_META, G_TYPE_STRING, "channel name", "The name of this channel, e.g., \"LSC-STRAIN\"", gst_tag_merge_strings_with_comma},
 		{GSTLAL_TAG_UNITS, GST_TAG_FLAG_META, G_TYPE_STRING, "units", "The units for this channel (as encoded by LAL), e.g., \"FIXME\"", NULL},
 		{NULL,},
 	};

@@ -212,7 +212,7 @@ static GstCaps *series_to_caps_and_taglist(const char *instrument, const char *c
 
 	*taglist = gst_tag_list_new_full(
 		GSTLAL_TAG_INSTRUMENT, instrument,
-		GSTLAL_TAG_CHANNEL, channel_name,
+		GSTLAL_TAG_CHANNEL_NAME, channel_name,
 		GSTLAL_TAG_UNITS, units,
 		NULL
 	);

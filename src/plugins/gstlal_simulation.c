@@ -742,11 +742,11 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		gchar *instrument, *channel_name, *units;
 		gst_event_parse_tag(event, &taglist);
 		success = gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
-		success &= gst_tag_list_get_string(taglist, GSTLAL_TAG_CHANNEL, &channel_name);
+		success &= gst_tag_list_get_string(taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
 		success &= gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units);
 		gst_tag_list_free(taglist);
 		if(!success)
-			GST_ERROR_OBJECT(element, "unable to parse %s and/or %s and/or %s from tags", GSTLAL_TAG_INSTRUMENT, GSTLAL_TAG_CHANNEL, GSTLAL_TAG_UNITS);
+			GST_ERROR_OBJECT(element, "unable to parse \"%s\" and/or \"%s\" and/or \"%s\" from tags", GSTLAL_TAG_INSTRUMENT, GSTLAL_TAG_CHANNEL_NAME, GSTLAL_TAG_UNITS);
 		else {
 			g_free(element->instrument);
 			element->instrument = instrument;
