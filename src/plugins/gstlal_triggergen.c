@@ -32,6 +32,7 @@
 
 
 #define DEFAULT_SNR_THRESH 5.5
+#define DEFAULT_MAX_GAP 0.01
 
 
 /*
@@ -69,20 +70,44 @@ static int setup_bankfile_input(GSTLALTriggerGen *element, char *bank_filename)
 	element->bank_filename = bank_filename;
 	element->num_templates = LALSnglInspiralTableFromLIGOLw(&bank, element->bank_filename, -1, -1);
 	element->bank = calloc(element->num_templates, sizeof(*element->bank));
-	if(!element->bank) {
-		/* FIXME:  free template bank */
-		return 0;
+	element->last_event = calloc(element->num_templates, sizeof(*element->last_event));
+	element->last_time = calloc(element->num_templates, sizeof(*element->last_time));
+	if(!bank || !element->bank || !element->last_event || !element->last_time) {
+		while(bank) {
+			SnglInspiralTable *next = bank->next;
+			free(bank);
+			bank = next;
+		}
+		free(element->bank);
+		element->bank = NULL;
+		free(element->last_event);
+		element->last_event = NULL;
+		free(element->last_time);
+		element->last_time = NULL;
+		return -1;
 	}
+
+	/*
+	 * copy the linked list of templates constructed by
+	 * LALSnglInspiralTableFromLIGOLw() into the template array.  the
+	 * end_time and snr are 0'ed so that when the templates are used to
+	 * initialize the last_event info those fields are set properly.
+	 * while we're at it, initialize the last_time array.
+	 */
 
 	for(i = 0; bank; i++) {
 		SnglInspiralTable *prev = bank;
 		element->bank[i] = *bank;
 		element->bank[i].next = NULL;
+		element->bank[i].end_time = (LIGOTimeGPS) {0, 0};
+		element->bank[i].snr = 0;
 		bank = bank->next;
 		free(prev);
+
+		element->last_time[i] = (LIGOTimeGPS) {0, 0};
 	}
 
-	return 0;
+	return element->num_templates;
 }
 
 
@@ -95,6 +120,14 @@ static void free_bankfile(GSTLALTriggerGen *element)
 	if(element->bank) {
 		free(element->bank);
 		element->bank = NULL;
+	}
+	if(element->last_event) {
+		free(element->last_event);
+		element->last_event = NULL;
+	}
+	if(element->last_time) {
+		free(element->last_time);
+		element->last_time = NULL;
 	}
 	element->num_templates = 0;
 }
@@ -181,6 +214,12 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 
 	if(element->segment_pending) {
 		GstEvent *event;
+
+		/*
+		 * update the segment boundary and timestamp book-keeping
+		 * information
+		 */
+
 		GstSegment *segment = gstlal_collect_pads_get_segment(element->collect);
 		if(!segment) {
 			/* FIXME:  failure getting bounding segment, do
@@ -188,14 +227,25 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		}
 		element->segment = *segment;
 		gst_segment_free(segment);
-		element->offset = GST_BUFFER_OFFSET_NONE;
+		element->next_input_offset = GST_BUFFER_OFFSET_NONE;
+		element->next_output_offset = 0;
+
+		/*
+		 * transmit the new-segment event downstream
+		 */
 
 		event = gst_event_new_new_segment_full(FALSE, element->segment.rate, 1.0, GST_FORMAT_TIME, element->segment.start, element->segment.stop, element->segment.start);
 		if(!event) {
-			/* FIXME:  failure getting event, do something
+			/* FIXME:  failure building event, do something
 			 * about it */
 		}
 		gst_pad_push_event(element->srcpad, event);
+
+		/*
+		 * reset the last inspiral event information
+		 */
+
+		memcpy(element->last_event, element->bank, element->num_templates * sizeof(*element->last_event));
 
 		element->segment_pending = FALSE;
 	}
@@ -225,8 +275,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 * capabilities here.
 	 */
 
-	if((element->offset != GST_BUFFER_OFFSET_NONE) && (earliest_input_offset < element->offset)) {
-		GST_ERROR_OBJECT(element, "detected time reversal in at least one input stream:  expected nothing earlier than offset %lu, found sample at offset %lu", element->offset, earliest_input_offset);
+	if((element->next_input_offset != GST_BUFFER_OFFSET_NONE) && (earliest_input_offset < element->next_input_offset)) {
+		GST_ERROR_OBJECT(element, "detected time reversal in at least one input stream:  expected nothing earlier than offset %lu, found sample at offset %lu", element->next_input_offset, earliest_input_offset);
 		result = GST_FLOW_ERROR;
 		goto error;
 	}
@@ -258,55 +308,108 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	}
 
 	/*
-	 * GAP --> no-op
+	 * GAP?
 	 */
 
 	if(GST_BUFFER_FLAG_IS_SET(snrbuf, GST_BUFFER_FLAG_GAP) || GST_BUFFER_FLAG_IS_SET(chisqbuf, GST_BUFFER_FLAG_GAP)) {
-		result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(snrbuf), 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
+		/*
+		 * GAP --> no-op
+		 */
+
+		result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
 		if(result != GST_FLOW_OK) {
 			/* FIXME: handle failure */
 		}
 		gst_buffer_copy_metadata(srcbuf, snrbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
+		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset;
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 	} else {
 		/*
-		 * Find events
+		 * !GAP --> find events
 		 */
 
-		LIGOTimeGPS epoch;
 		guint length = GST_BUFFER_OFFSET_END(snrbuf) - GST_BUFFER_OFFSET(snrbuf);
 		const double complex *snrdata = (const double complex *) GST_BUFFER_DATA(snrbuf);
 		const double complex *chisqdata = (const double complex *) GST_BUFFER_DATA(chisqbuf);
 		guint sample, channel;
-		SnglInspiralTable event;
+		SnglInspiralTable *head = NULL;
+		guint nevents = 0;
 
-		XLALINT8NSToGPS(&epoch, GST_BUFFER_TIMESTAMP(snrbuf));
-
-		event.snr = 0;
 		for(sample = 0; sample < length; sample++) {
+			LIGOTimeGPS t;
+			XLALINT8NSToGPS(&t, GST_BUFFER_TIMESTAMP(snrbuf));
+			XLALGPSAdd(&t, (double) sample / element->rate);
+
 			for(channel = 0; channel < element->num_templates; channel++) {
-				int index = sample * element->num_templates + channel;
-				if(cabs(snrdata[index]) > event.snr) {
-					LIGOTimeGPS t = epoch;
-					XLALGPSAdd(&t, (double) sample / element->rate);
-					new_event(&event, t, snrdata[index], chisqdata[index], channel, element);
+				if(cabs(*snrdata) >= element->snr_thresh) {
+					if(XLALGPSDiff(&t, &element->last_time[channel]) > element->max_gap) {
+						/*
+						 * New event.  prepend last
+						 * event to event list and
+						 * start a new one.
+						 */
+						if(element->last_event[channel].snr != 0) {
+							SnglInspiralTable *new = calloc(1, sizeof(*new));
+							*new = element->last_event[channel];
+							new->next = head;
+							head = new;
+							nevents++;
+						}
+						new_event(&element->last_event[channel], t, *snrdata, *chisqdata, channel, element);
+					} else if(cabs(*snrdata) > element->last_event[channel].snr) {
+						/*
+						 * Same event, higher SNR,
+						 * update
+						 */
+						new_event(&element->last_event[channel], t, *snrdata, *chisqdata, channel, element);
+					} else {
+						/*
+						 * Same event, not higher
+						 * SNR, do nothing
+						 */
+					}
+					element->last_time[channel] = t;
 				}
+
+				snrdata++;
+				chisqdata++;
 			}
 		}
 
-		if(event.snr > element->snr_thresh) {
-			result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(snrbuf), sizeof(event), GST_PAD_CAPS(element->srcpad), &srcbuf);
+		if(nevents) {
+			SnglInspiralTable *dest;
+
+			result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, nevents * sizeof(*head), GST_PAD_CAPS(element->srcpad), &srcbuf);
 			if(result != GST_FLOW_OK) {
 				/* FIXME: handle failure */
 			}
 			gst_buffer_copy_metadata(srcbuf, snrbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
-			memcpy(GST_BUFFER_DATA(srcbuf), &event, sizeof(event));
+			GST_BUFFER_OFFSET(srcbuf) = element->next_output_offset;
+			element->next_output_offset += nevents;
+			GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset;
+
+			/*
+			 * this loop puts them in the buffer in time order.
+			 * when loop terminates, dest points to first event
+			 * slot preceding the buffer, so the last event in
+			 * the buffer is at offset nevents not nevents-1
+			 */
+
+			for(dest = ((SnglInspiralTable *) GST_BUFFER_DATA(srcbuf)) + nevents - 1; head; dest--) {
+				SnglInspiralTable *next = head->next;
+				memcpy(dest, head, sizeof(*head));
+				dest->next = dest + 1;
+				free(head);
+				head = next;
+			}
+			dest[nevents].next = NULL;
 		} else {
-			result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET(snrbuf), 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
+			result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
 			if(result != GST_FLOW_OK) {
 				/* FIXME: handle failure */
 			}
 			gst_buffer_copy_metadata(srcbuf, snrbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
+			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset;
 			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 		}
 	}
@@ -315,13 +418,14 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 * Push event downstream
 	 */
 
-	if((element->offset == GST_BUFFER_OFFSET_NONE) || (element->offset != GST_BUFFER_OFFSET(srcbuf)))
+	if((element->next_input_offset == GST_BUFFER_OFFSET_NONE) || (element->next_input_offset != GST_BUFFER_OFFSET(srcbuf)))
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
+
+	element->next_input_offset = GST_BUFFER_OFFSET_END(snrbuf);
 
 	gst_buffer_unref(snrbuf);
 	gst_buffer_unref(chisqbuf);
 
-	element->offset = GST_BUFFER_OFFSET_END(srcbuf);
 	return gst_pad_push(element->srcpad, srcbuf);
 
 	/*
@@ -334,6 +438,8 @@ error:
 		gst_buffer_unref(snrbuf);
 	if(chisqbuf)
 		gst_buffer_unref(chisqbuf);
+	if(srcbuf)
+		gst_buffer_unref(srcbuf);
 	return result;
 
 eos:
@@ -354,7 +460,8 @@ eos:
 
 enum gen_property {
 	ARG_SNR_THRESH = 1, 
-	ARG_BANK_FILENAME
+	ARG_BANK_FILENAME,
+	ARG_MAX_GAP
 };
 
 
@@ -372,6 +479,10 @@ static void gen_set_property(GObject *object, enum gen_property id, const GValue
 		free_bankfile(element);
 		setup_bankfile_input(element, g_value_dup_string(value));
 		break;
+
+	case ARG_MAX_GAP:
+		element->max_gap = g_value_get_double(value);
+		break;
 	}
 	GST_OBJECT_UNLOCK(element);
 }
@@ -384,11 +495,15 @@ static void gen_get_property(GObject * object, enum gen_property id, GValue * va
 	GST_OBJECT_LOCK(element);
 	switch(id) {
 	case ARG_SNR_THRESH:
-		g_value_set_double(value,element->snr_thresh);
+		g_value_set_double(value, element->snr_thresh);
 		break;
 
 	case ARG_BANK_FILENAME:
-		g_value_set_string(value,element->bank_filename);
+		g_value_set_string(value, element->bank_filename);
+		break;
+
+	case ARG_MAX_GAP:
+		g_value_set_double(value, element->max_gap);
 		break;
 	}
 	GST_OBJECT_UNLOCK(element);
@@ -426,7 +541,8 @@ static GstStateChangeReturn gen_change_state(GstElement *element, GstStateChange
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		triggergen->segment_pending = TRUE;
 		gst_segment_init(&triggergen->segment, GST_FORMAT_UNDEFINED);
-		triggergen->offset = GST_BUFFER_OFFSET_NONE;
+		triggergen->next_input_offset = GST_BUFFER_OFFSET_NONE;
+		triggergen->next_output_offset = GST_BUFFER_OFFSET_NONE;
 		gst_collect_pads_start(triggergen->collect);
 		break;
 
@@ -518,6 +634,7 @@ static void gen_class_init(gpointer klass, gpointer class_data)
 
         g_object_class_install_property(gobject_class, ARG_BANK_FILENAME, g_param_spec_string("bank-filename", "Bank file name", "Path to XML file used to generate the template bank", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SNR_THRESH, g_param_spec_double("snr-thresh", "SNR Threshold", "SNR Threshold that determines a trigger", 0, G_MAXDOUBLE, DEFAULT_SNR_THRESH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_MAX_GAP, g_param_spec_double("max-gap", "Maximum below-threshold gap (seconds)", "If the SNR drops below threshold for less than this interval (in seconds) then it is not the start of a new event", 0, G_MAXDOUBLE, DEFAULT_MAX_GAP, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 
@@ -552,6 +669,9 @@ static void gen_instance_init(GTypeInstance *object, gpointer klass)
         element->bank = NULL;
 	element->num_templates = 0;
 	element->snr_thresh = DEFAULT_SNR_THRESH;
+	element->max_gap = DEFAULT_MAX_GAP;
+	element->last_event = NULL;
+	element->last_time = NULL;
 }
 
 

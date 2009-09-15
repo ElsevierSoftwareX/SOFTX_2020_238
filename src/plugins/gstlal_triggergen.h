@@ -73,7 +73,8 @@ typedef struct {
 
 	gboolean segment_pending;
 	GstSegment segment;
-	guint64 offset;
+	guint64 next_input_offset;
+	guint64 next_output_offset;
 
 	int rate;
 
@@ -81,6 +82,9 @@ typedef struct {
 	SnglInspiralTable *bank;
 	guint num_templates;
 	double snr_thresh;
+	double max_gap;
+	SnglInspiralTable *last_event;
+	LIGOTimeGPS *last_time;
 } GSTLALTriggerGen;
 
 
