@@ -657,7 +657,6 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 * try setting the caps on the sum-of-squares src pad
 	 */
 
-	/* FIXME:  should adjust the units */
 	if(success)
 		success = gst_pad_set_caps(element->sumsquarespad, caps);
 
