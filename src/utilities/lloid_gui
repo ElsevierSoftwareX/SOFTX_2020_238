@@ -482,9 +482,6 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, progress_repor
 
 	snr = mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(bank.get_rates()))
 	#chisq = mkcapsfilter(pipeline, chisq, "audio/x-raw-float, rate=%d" % max(bank.get_rates()))
-	if progress_report:
-		snr = mkprogressreport(pipeline, snr, "progress_snr_%s" % logname)
-		#chisq = mkprogressreport(pipeline, chisq, "progress_chisq_%s" % logname)
 
 	snr = mktee(pipeline, snr)
 	chisq = gst.element_factory_make("lal_autochisq")
