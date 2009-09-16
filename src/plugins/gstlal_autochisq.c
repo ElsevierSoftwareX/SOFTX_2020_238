@@ -110,7 +110,6 @@
 #include <lal/RealFFT.h>
 #include <lal/LALInspiral.h>
 
-
 /*
  * stuff from GSL
  */
@@ -119,10 +118,7 @@
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
-#include <gsl/gsl_linalg.h>
-#include <gsl/gsl_blas.h>
-#include <gsl/gsl_fft_real.h>
-#include <gsl/gsl_fft_halfcomplex.h>
+
 static complex double GSL_COMPLEX_AS_COMPLEX(gsl_complex z)
 {
   return GSL_REAL(z) + I * GSL_IMAG(z);
@@ -173,8 +169,6 @@ static void gst_lalautochisq_get_property (GObject * object, enum property prop_
 
 static gboolean get_unit_size (GstBaseTransform * trans, GstCaps * caps, guint * size);
 static gboolean set_caps (GstBaseTransform * trans, GstCaps * incaps, GstCaps * outcaps);
-//static GstCaps * transform_caps (GstBaseTransform * base_transform,
-//    GstPadDirection direction, GstCaps *caps);
 static gboolean start (GstBaseTransform *trans);
 static gboolean stop (GstBaseTransform *trans);
 static GstFlowReturn transform (GstBaseTransform * trans, GstBuffer * inbuf, GstBuffer * outbuf);
@@ -201,7 +195,6 @@ gstlal_autochisq_base_init (gpointer gclass)
 
   transform_class->get_unit_size = get_unit_size;
   transform_class->set_caps = set_caps;
-  //transform_class->transform_caps = transform_caps;
   transform_class->transform = transform;
   transform_class->start = start;
   transform_class->stop = stop;
@@ -355,11 +348,11 @@ set_caps (GstBaseTransform * trans, GstCaps * incaps, GstCaps * outcaps)
 
   str = gst_caps_get_structure(incaps, 0);
   if(!gst_structure_get_int(str, "channels", &channels)) {
-      g_print("No channels available!!\n");
+      GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
       return FALSE;
   }
   if(!gst_structure_get_int(str, "rate", &rate)) {
-      g_print("No channels available!!\n");
+      GST_DEBUG_OBJECT(element, "unable to parse rate from %" GST_PTR_FORMAT, incaps);
       return FALSE;
   }
  
