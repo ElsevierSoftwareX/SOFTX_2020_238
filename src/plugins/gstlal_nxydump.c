@@ -92,7 +92,7 @@
  */
 
 
-static guint64 timestamp_to_sample_clipped(GstClockTime start, guint64 samples, int rate, GstClockTime t)
+static guint64 timestamp_to_sample_clipped(GstClockTime start, guint64 samples, gint rate, GstClockTime t)
 {
 	guint64 offset;
 
@@ -113,7 +113,7 @@ static guint64 timestamp_to_sample_clipped(GstClockTime start, guint64 samples, 
  */
 
 
-static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, int rate, guint64 start, guint64 stop)
+static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, gint rate, guint64 start, guint64 stop)
 {
 	GstFlowReturn result = GST_FLOW_OK;
 	GstBuffer *buf;
@@ -301,13 +301,21 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALNXYDump *element = GSTLAL_NXYDUMP(gst_pad_get_parent(pad));
-	gboolean result = TRUE;
+	GstStructure *structure = gst_caps_get_structure(caps, 0);
+	gint rate, channels;
+	gboolean success = TRUE;
 
-	element->rate = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "rate"));
-	element->channels = g_value_get_int(gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels"));
+	success &= gst_structure_get_int(structure, "rate", &rate);
+	success &= gst_structure_get_int(structure, "channels", &channels);
+
+	if(success) {
+		element->rate = rate;
+		element->channels = channels;
+	} else
+		GST_DEBUG_OBJECT(element, "unable to extract rate and/or channels from caps %" GST_PTR_FORMAT, caps);
 
 	gst_object_unref(element);
-	return result;
+	return success;
 }
 
 
