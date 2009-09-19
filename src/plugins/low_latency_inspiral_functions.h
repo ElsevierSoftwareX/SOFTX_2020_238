@@ -21,6 +21,7 @@
  */
 
 #include <stdio.h>
+#include <glib.h>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
@@ -46,6 +47,7 @@ int generate_bank_and_svd(
                       double t_end, 
                       double tmax, 
                       double tolerance,
+		      GMutex *fftw_lock,
                       int verbose);
 
 int generate_bank(
@@ -59,6 +61,7 @@ int generate_bank(
                       double t_start,
                       double t_end, 
                       double tmax, 
+		      GMutex *fftw_lock,
                       int verbose);
 
 int compute_time_frequency_boundaries_from_bank(char * bank_name,

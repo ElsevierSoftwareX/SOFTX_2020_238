@@ -65,9 +65,7 @@
 #include <lal/LALInspiral.h>
 
 /* gstlal includes */
-#include "gstlal.h"
 #include "low_latency_inspiral_functions.h"
-#include "gstlal_whiten.h"
 
 #define TEMPLATE_DURATION 128	/* seconds */
 #define ATEMPS 401
@@ -629,7 +627,8 @@ int generate_bank(
                       int down_samp_fac, 
                       double t_start,
                       double t_end, 
-                      double t_total_duration, 
+                      double t_total_duration,
+		      GMutex *fftw_lock,
 	              int verbose)
 {
   InspiralTemplate *bankRef = NULL, *bankRow, *bankHead = NULL;
@@ -672,7 +671,7 @@ int generate_bank(
 
   /*fprintf(stderr,"U = %zd,%zd V = %zd,%zd S = %zd\n",(*U)->size1,(*U)->size2,(*V)->size1,(*V)->size2,(*S)->size);*/
 
-  g_mutex_lock(gstlal_fftw_lock);
+  g_mutex_lock(fftw_lock);
   fwdplan = XLALCreateForwardREAL8FFTPlan(full_numsamps, 0);
   if (!fwdplan)
     {
@@ -685,7 +684,7 @@ int generate_bank(
     fprintf(stderr, "FAILED Generating the reverse plan failed\n");
     exit(1);
     }
-  g_mutex_unlock(gstlal_fftw_lock);
+  g_mutex_unlock(fftw_lock);
 
 
   /* create workspace vectors for the templates */
@@ -780,10 +779,10 @@ int generate_bank(
     }
 
   /* Destroy plans */
-  g_mutex_lock(gstlal_fftw_lock);
+  g_mutex_lock(fftw_lock);
   XLALDestroyREAL8FFTPlan(fwdplan);
   XLALDestroyCOMPLEX16FFTPlan(revplan);
-  g_mutex_unlock(gstlal_fftw_lock);
+  g_mutex_unlock(fftw_lock);
 
   /* Destroy time/freq series */
   XLALDestroyCOMPLEX16FrequencySeries(fft_template);
@@ -823,10 +822,11 @@ int generate_bank_and_svd(
                       double t_end, 
                       double t_total_duration, 
                       double tolerance,
+		      GMutex *fftw_lock,
 	              int verbose)
 {
   size_t i, j;
-  int result = generate_bank(U, chifacs, A, xml_bank_filename, psd, base_sample_rate, down_samp_fac, t_start, t_end, t_total_duration, verbose);
+  int result = generate_bank(U, chifacs, A, xml_bank_filename, psd, base_sample_rate, down_samp_fac, t_start, t_end, t_total_duration, fftw_lock, verbose);
   if(result)
     return result;
 

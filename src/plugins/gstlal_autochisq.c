@@ -301,7 +301,7 @@ static int generate_templates(Gstlalautochisq *element)
 
   psd = gstlal_get_reference_psd(element->reference_psd_filename, 0.0, 1.0 / 32, 8192 * 32);
 
-  generate_bank(&U, &chifacs, &element->A, element->template_bank_filename, psd, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / element->rate, element->t_start, element->t_end, element->t_total_duration, verbose);
+  generate_bank(&U, &chifacs, &element->A, element->template_bank_filename, psd, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / element->rate, element->t_start, element->t_end, element->t_total_duration, gstlal_fftw_lock, verbose);
   gsl_matrix_free(U);
   gsl_vector_free(chifacs);
   XLALDestroyREAL8FrequencySeries(psd);
