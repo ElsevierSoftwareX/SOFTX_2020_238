@@ -24,8 +24,8 @@
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
-/*#include "gstlal.h"*/
 #include <lal/FindChirp.h>
+#include <lal/LALDatatypes.h>
 
 #include <gsl/gsl_blas.h>
 #include <gsl/gsl_fft_real.h>
@@ -39,7 +39,7 @@ int generate_bank_and_svd(
                       gsl_vector **chifacs,
 		      gsl_matrix_complex **A,
                       const char *xml_bank_filename,
-                      const char *reference_psd_filename,
+                      REAL8FrequencySeries *psd,
                       int base_sample_rate,
                       int down_samp_fac, 
                       double t_start,
@@ -53,7 +53,7 @@ int generate_bank(
                       gsl_vector **chifacs,
 		      gsl_matrix_complex **A,
                       const char *xml_bank_filename,
-                      const char *reference_psd_filename,
+                      REAL8FrequencySeries *psd,
                       int base_sample_rate,
                       int down_samp_fac, 
                       double t_start,

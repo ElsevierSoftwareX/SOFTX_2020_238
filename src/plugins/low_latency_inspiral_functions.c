@@ -35,6 +35,7 @@
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_linalg.h>
 #include <gsl/gsl_blas.h>
+#include <gsl/gsl_spline.h>
 
 /* LAL Includes */
 
@@ -211,6 +212,33 @@ static double calculate_real_time_shift(
   return real_tshift;
  }
 
+
+static REAL8FrequencySeries *interpolate_psd(const REAL8FrequencySeries *psd, double f0, double deltaF, unsigned length)
+{
+  double *f;
+  REAL8FrequencySeries *new;
+  gsl_spline *spline;
+  gsl_interp_accel *accel;
+  unsigned i;
+
+  /* create "x" co-ordinates (frequency values) */
+  f = malloc(psd->data->length * sizeof(*f));
+  for(i = 0; i < psd->data->length; i++)
+    f[i] = psd->f0 + i * psd->deltaF;
+
+  /* initialize interpolator */
+  spline = gsl_spline_alloc(gsl_interp_linear, psd->data->length);
+  accel = gsl_interp_accel_alloc();
+  gsl_spline_init(spline, f, psd->data->data, psd->data->length);
+
+  /* populate new PSD, note normalization adjustment for new bin size */
+  new = XLALCreateREAL8FrequencySeries(psd->name, &psd->epoch, f0, deltaF, &psd->sampleUnits, length);
+  for(i = 0; i < new->data->length; i++)
+    new->data->data[i] = gsl_spline_eval(spline, f0 + i * deltaF, accel) * deltaF / psd->deltaF;
+
+  /* done */
+  return new;
+}
 
 
 static int generate_autocorrelation_bank(
@@ -596,7 +624,7 @@ int generate_bank(
                       gsl_vector **chifacs,
 		      gsl_matrix_complex **A,
                       const char *xml_bank_filename,
-		      const char *reference_psd_filename,
+                      REAL8FrequencySeries *psd,
                       int base_sample_rate,
                       int down_samp_fac, 
                       double t_start,
@@ -624,7 +652,6 @@ int generate_bank(
   COMPLEX16TimeSeries *template_reference=NULL;
   COMPLEX16FrequencySeries *template_product=NULL;
 
-  REAL8FrequencySeries *psd;
   REAL8FFTPlan *fwdplan;
   COMPLEX16FFTPlan *revplan;
   
@@ -671,16 +698,12 @@ int generate_bank(
   fft_template_full = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps);
   fft_template_full_reference = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps);
   template_product = XLALCreateCOMPLEX16FrequencySeries(NULL, &(LIGOTimeGPS) {0,0}, 0, 1.0 / TEMPLATE_DURATION, &lalDimensionlessUnit, full_numsamps);
-  
-  
-  /* get the reference psd */
-  psd = gstlal_get_reference_psd(reference_psd_filename, template_out->f0, 1.0/TEMPLATE_DURATION, fft_template->data->length);
+  psd = interpolate_psd(psd, 0.0, 1.0 / TEMPLATE_DURATION, full_numsamps / 2 + 1);
 
   if (!template_out || !convolution || !template_reference || !fft_template || !fft_template_full || !fft_template_full_reference || !template_product || !psd){
-    fprintf(stderr, "FAILED Allocating template or reading psd failed\n");
+    fprintf(stderr, "FAILED Allocating workspaces\n");
     exit(1);
     }
-    
 
   if (verbose) fprintf(stderr, "template_out->data->length %d fft_template->data->length %d fft_template_full->data->length %d \n",template_out->data->length, fft_template->data->length, fft_template_full->data->length);
 
@@ -772,6 +795,7 @@ int generate_bank(
   XLALDestroyCOMPLEX16TimeSeries(template_reference);
   XLALDestroyCOMPLEX16TimeSeries(autocorrelation);
   XLALDestroyCOMPLEX16TimeSeries(short_autocorr);
+  XLALDestroyREAL8FrequencySeries(psd);
 
   /* free the template list */
   while(bankHead)
@@ -792,7 +816,7 @@ int generate_bank_and_svd(
                       gsl_vector **chifacs,
 		      gsl_matrix_complex **A,
                       const char *xml_bank_filename,
-		      const char *reference_psd_filename,
+		      REAL8FrequencySeries *psd,
                       int base_sample_rate,
                       int down_samp_fac, 
                       double t_start,
@@ -802,7 +826,7 @@ int generate_bank_and_svd(
 	              int verbose)
 {
   size_t i, j;
-  int result = generate_bank(U, chifacs, A, xml_bank_filename, reference_psd_filename, base_sample_rate, down_samp_fac, t_start, t_end, t_total_duration, verbose);
+  int result = generate_bank(U, chifacs, A, xml_bank_filename, psd, base_sample_rate, down_samp_fac, t_start, t_end, t_total_duration, verbose);
   if(result)
     return result;
 

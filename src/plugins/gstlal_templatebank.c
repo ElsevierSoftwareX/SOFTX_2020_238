@@ -54,6 +54,7 @@
 #include <lal/RealFFT.h>
 #include <lal/LALDatatypes.h>
 #include <lal/LALStdlib.h>
+#include <lal/FrequencySeries.h>
 
 /*
  * stuff from GSL
@@ -316,6 +317,7 @@ static int svd_create(GSTLALTemplateBank *element, int sample_rate)
 	unsigned i;
 	gsl_vector_view fp;
 	gsl_matrix_complex *A;
+	REAL8FrequencySeries *psd;
 
 	/*
 	 * be sure we don't leak memory
@@ -337,11 +339,25 @@ static int svd_create(GSTLALTemplateBank *element, int sample_rate)
 		element->t_end = element->t_total_duration;
 
 	/*
+	 * get the reference psd.  note hard-coded resolution of 1/32 Hz.
+	 */
+
+	psd = gstlal_get_reference_psd(element->reference_psd_filename, 0.0, 1.0 / 32, 8192 * 32);
+
+	/*
 	 * generate orthonormal template bank
 	 */
 
-	generate_bank_and_svd(&element->U, &element->S, &element->V, &element->chifacs, &A, element->template_bank_filename, element->reference_psd_filename, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / sample_rate, element->t_start, element->t_end, element->t_total_duration, TOLERANCE, verbose);
+	generate_bank_and_svd(&element->U, &element->S, &element->V, &element->chifacs, &A, element->template_bank_filename, psd, TEMPLATE_SAMPLE_RATE, TEMPLATE_SAMPLE_RATE / sample_rate, element->t_start, element->t_end, element->t_total_duration, TOLERANCE, verbose);
+
+	/*
+	 * clean up
+	 */
+
+	XLALDestroyREAL8FrequencySeries(psd);
+	psd = NULL;
 	gsl_matrix_complex_free(A);
+	A = NULL;
 
 	/* 
 	 * Compute the workspace for fft convolutions 
