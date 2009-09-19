@@ -551,7 +551,6 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
   /*
    * gap logic
    */
-fprintf(stderr, "%lu.%09lu\n", GST_BUFFER_TIMESTAMP(inbuf) / GST_SECOND, GST_BUFFER_TIMESTAMP(inbuf) % GST_SECOND);
 
   length = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
   if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
