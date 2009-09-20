@@ -87,7 +87,7 @@ struct _Gstlalautochisq
   gsl_matrix_complex *A;
   gsl_vector *norm;
   GstAdapter *adapter;
-  gboolean adapter_is_empty;
+  gint zeros_in_adapter;
 
   GstClockTime t0;
   guint64 offset0;

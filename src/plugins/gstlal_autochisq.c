@@ -375,7 +375,7 @@ static gboolean start (GstBaseTransform *trans)
 {
   Gstlalautochisq *element = GST_LAL_AUTOCHISQ(trans);
   element->adapter = gst_adapter_new();
-  element->adapter_is_empty = TRUE;
+  element->zeros_in_adapter = 0;
   element->t0 = GST_CLOCK_TIME_NONE;
   element->offset0 = GST_BUFFER_OFFSET_NONE;
   element->next_in_offset = GST_BUFFER_OFFSET_NONE;
@@ -404,10 +404,13 @@ static gboolean stop (GstBaseTransform *trans)
 static int push_zeros(Gstlalautochisq *element, int samples)
 {
   GstBuffer *zerobuf = gst_buffer_new_and_alloc(samples * element->channels * sizeof(complex double));
-  if(!zerobuf)
+  if(!zerobuf) {
+    GST_DEBUG_OBJECT(element, "failure allocating zero padding buffer");
     return -1;
+  }
   memset(GST_BUFFER_DATA(zerobuf), 0, GST_BUFFER_SIZE(zerobuf));
   gst_adapter_push(element->adapter, zerobuf);
+  element->zeros_in_adapter += samples;
   return 0;
 }
 
@@ -444,7 +447,6 @@ static void diag_dump_close(FILE *f)
   if(f)
     fclose(f);
 }
-
 
 
 static GstFlowReturn chisquared (GstBuffer *outbuf, Gstlalautochisq *element)
@@ -495,7 +497,11 @@ diag_dump_close(f);
 #endif
     }
   gst_adapter_flush(element->adapter, outsamples * element->channels * sizeof(*indata));
+  GST_BUFFER_FLAG_UNSET(outbuf, GST_BUFFER_FLAG_GAP);
   set_metadata(element, outbuf, outsamples);
+
+  if(outsamples > insamples - element->zeros_in_adapter)
+    element->zeros_in_adapter -= outsamples - (insamples - element->zeros_in_adapter);
 
   return GST_FLOW_OK;
 }
@@ -523,14 +529,14 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
    * FIXME:  flush/pad adapter as needed
    */
 
-  if(GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || element->need_discont || !GST_CLOCK_TIME_IS_VALID(element->t0)) {
+  if(GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0)) {
     /*
      * flush adapter, pad with zeros
      */
 
     gst_adapter_clear(element->adapter);
+    element->zeros_in_adapter = 0;
     push_zeros(element, (autocorrelation_samples(element) - 1) / 2);
-    element->adapter_is_empty = TRUE;
 
     /*
      * (re)sync timestamp and offset book-keeping
@@ -556,9 +562,9 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
   if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
     gst_buffer_ref(inbuf);	/* don't let the adapter free it */
     gst_adapter_push(element->adapter, inbuf);
-    element->adapter_is_empty = FALSE;
+    element->zeros_in_adapter = 0;
     result = chisquared(outbuf, element);
-  } else if(element->adapter_is_empty) {
+  } else if(element->zeros_in_adapter >= autocorrelation_samples(element) - 1) {
     /* base transform has given us an output buffer that is the same size
      * as the input buffer, which is the size we need now.  all we have to
      * do is make it a gap */
@@ -568,9 +574,6 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
     result = GST_FLOW_OK;
   } else if(length <= autocorrelation_samples(element) - 1) {
     /* push length zeroes in the adapter and run normal \chi^{2} code */
-    /* FIXME:  if this is done enough times in a row eventually the adapter
-     * will be empty and element->adapter_empty should be set to TRUE to
-     * switch to a faster code path */
     push_zeros(element, length);
     result = chisquared(outbuf, element);
   } else {
@@ -591,7 +594,6 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
       return result;
     result = chisquared(buf, element);
     g_assert(result == GST_FLOW_OK);
-    element->adapter_is_empty = TRUE;
     result = gst_pad_push(srcpad, buf);
     if(result != GST_FLOW_OK)
       return result;
