@@ -197,7 +197,7 @@ def mkresample(pipeline, src, pad_name = None, **properties):
 
 def mkwhiten(pipeline, src, output = None):
 	elem = gst.element_factory_make("lal_whiten")
-	elem.set_property("psd-mode", 1)
+	elem.set_property("psd-mode", 0)
 	elem.set_property("zero-pad", 0)
 	elem.set_property("fft-length", 8)
 	elem.set_property("average-samples", 64)
