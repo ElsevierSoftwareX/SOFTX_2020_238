@@ -65,7 +65,7 @@ function test_whiten() {
 	gst-launch \
 		audiotestsrc wave=9 volume=1e-2 \
 		! audio/x-raw-float, channels=1, width=64, rate=2048 \
-		! lal_whiten psd-mode=1 zero-pad=0 fft-length=8 median-samples=7 average-samples=128 \
+		! lal_whiten psd-mode=0 zero-pad=0 fft-length=8 median-samples=7 average-samples=128 \
 		! lal_nxydump start-time=0 stop-time=1200000000000 \
 		! progressreport \
 		! filesink location="dump.txt" buffer-mode=2
@@ -74,24 +74,22 @@ function test_whiten() {
 function test_simulation() {
 	gst-launch \
 		audiotestsrc wave=9 volume=1e-21 timestamp-offset=873247800000000000 \
-		! audio/x-raw-float, channels=1, width=64, rate=2048 \
-		! taginject tags="instrument=H1,channel-name=LSC-STRAIN,units=strain" \
-		! lal_simulation xml-location="/home/dkeppel/lloid/HL-INJECTIONS_1_BNS_INJ-873247900-10.xml" \
-		! audioamplify clipping-method=3 amplification=1e20 \
-		! lal_nxydump start-time=873247900000000000 stop-time=873247910000000000 \
-		! progressreport \
-		! filesink location="dump.txt" buffer-mode=2
+		! audio/x-raw-float, channels=1, width=64, rate=16384 \
+		! taginject tags="instrument=\"H1\",channel-name=\"LSC-STRAIN\",units=\"strain\"" \
+		! lal_simulation xml-location="HL-INJECTIONS_1_BNS_INJ-873247860-176894.xml" \
+		! fakesink sync=false
 }
 
 function test_simulation2wav() {
 	gst-launch \
-		audiotestsrc wave=9 volume=1e-21 timestamp-offset=873247900000000000 num-buffers=20 \
-		! audio/x-raw-float, channels=1, width=64, rate=2048 \
-		! taginject tags="instrument=H1,channel-name=LSC-STRAIN,units=strain" \
+		audiotestsrc wave=9 volume=1e-21 timestamp-offset=873247900000000000 num-buffers=160 \
+		! audio/x-raw-float, channels=1, width=64, rate=16384 \
+		! taginject tags="title=\"Inspiral Injections\",instrument=\"H1\",channel-name=\"LSC-STRAIN\",units=\"strain\"" \
 		! lal_simulation xml-location="/home/dkeppel/lloid/HL-INJECTIONS_1_BNS_INJ-873247900-10.xml" \
 		! progressreport \
 		! audioamplify clipping-method=3 amplification=1e20 \
 		! wavenc \
+		! id3mux write-v2=true \
 		! filesink location="test_simulation2wav.wav" buffer-mode=2
 }
 
@@ -142,4 +140,26 @@ function test_nto1() {
 		! queue ! nto1.
 }
 
-test_nto1
+function test_chisquare_gaps() {
+	gst-launch \
+		lal_gate name=gate threshold=0.7 \
+		! tee name=orig \
+		! lal_autochisq template-bank=test_bank.xml reference-psd=reference_psd.txt \
+		! lal_nxydump \
+		! queue ! filesink buffer-mode=2 location="dump_out.txt" \
+		audiotestsrc freq=.80 samplesperbuffer=128 num-buffers=32 \
+		! audio/x-raw-float, width=64, rate=2048 \
+		! tee name=control \
+		! gate.control \
+		audiotestsrc wave=9 samplesperbuffer=128 num-buffers=32 \
+		! audio/x-raw-float, channels=2, width=64, rate=2048 \
+		! gate.sink \
+		control. \
+		! lal_nxydump \
+		! queue ! filesink buffer-mode=2 location="dump_control.txt" \
+		orig. \
+		! lal_nxydump \
+		! queue ! filesink buffer-mode=2 location="dump_in.txt"
+}
+
+test_chisquare_gaps
