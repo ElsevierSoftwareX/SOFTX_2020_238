@@ -27,11 +27,7 @@
 #include <gst/base/gstadapter.h>
 
 
-#include <gsl/gsl_spline.h>
-
-
 #include <lal/LALDatatypes.h>
-#include <lal/LIGOLwXML.h>
 #include <lal/TimeFreqFFT.h>
 #include <lal/Units.h>
 
@@ -45,9 +41,8 @@ G_BEGIN_DECLS
 
 
 enum gstlal_psdmode_t {
-	GSTLAL_PSDMODE_INITIAL_LIGO_SRD,
 	GSTLAL_PSDMODE_RUNNING_AVERAGE,
-	GSTLAL_PSDMODE_REFERENCE
+	GSTLAL_PSDMODE_FIXED
 };
 
 
@@ -90,7 +85,7 @@ typedef struct {
 	LALUnit sample_units;
 	int sample_rate;
 	gboolean next_is_discontinuity;
-	GstClockTime segment_start;
+	GstClockTime t0;
 	guint64 offset0;
 	guint64 offset;
 
@@ -106,12 +101,6 @@ typedef struct {
 	REAL8TimeSeries *tdworkspace;
 	COMPLEX16FrequencySeries *fdworkspace;
 	REAL8Sequence *tail;
-
-	char *xml_filename;
-	LIGOLwXMLStream *xml_stream;
-
-	char *reference_psd_filename;
-	REAL8FrequencySeries *reference_psd;
 } GSTLALWhiten;
 
 

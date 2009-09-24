@@ -58,14 +58,10 @@
 #include <lal/TimeSeries.h>
 #include <lal/FrequencySeries.h>
 #include <lal/TimeFreqFFT.h>
-#include <lal/LALNoiseModels.h>
 #include <lal/Units.h>
 #include <lal/LALComplex.h>
 #include <lal/Window.h>
-#include <lal/LIGOLwXML.h>
-#include <lal/LIGOLwXMLArray.h>
 #include <lal/Units.h>
-#include <lal/TFTransform.h>	/* FIXME:  remove when XLALREAL8WindowTwoPointSpectralCorrelation() migrated to fft package */
 
 
 /*
@@ -93,7 +89,7 @@ static const LIGOTimeGPS GPS_ZERO = {0, 0};
 #define DEFAULT_FFT_LENGTH_SECONDS 8.0
 #define DEFAULT_AVERAGE_SAMPLES 32
 #define DEFAULT_MEDIAN_SAMPLES 9
-#define DEFAULT_PSDMODE GSTLAL_PSDMODE_INITIAL_LIGO_SRD
+#define DEFAULT_PSDMODE GSTLAL_PSDMODE_RUNNING_AVERAGE
 
 
 /*
@@ -116,9 +112,8 @@ GType gstlal_psdmode_get_type(void)
 
 	if(!type) {
 		static GEnumValue values[] = {
-			{GSTLAL_PSDMODE_INITIAL_LIGO_SRD, "GSTLAL_PSDMODE_INITIAL_LIGO_SRD", "Use Initial LIGO SRD for PSD"},
 			{GSTLAL_PSDMODE_RUNNING_AVERAGE, "GSTLAL_PSDMODE_RUNNING_AVERAGE", "Use running average for PSD"},
-			{GSTLAL_PSDMODE_REFERENCE, "GSTLAL_PSDMODE_REFERENCE", "Use reference spectrum for PSD"},
+			{GSTLAL_PSDMODE_FIXED, "GSTLAL_PSDMODE_FIXED", "Use fixed spectrum for PSD"},
 			{0, NULL, NULL}
 		};
 
@@ -244,6 +239,12 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 	}
 
 	/*
+	 * reset PSD regressor
+	 */
+
+	XLALPSDRegressorReset(element->psd_regressor);
+
+	/*
 	 * done
 	 */
 
@@ -260,46 +261,6 @@ static REAL8FrequencySeries *make_empty_psd(double f0, double deltaF, int length
 		GST_ERROR("XLALCreateREAL8FrequencySeries() failed");
 		XLALClearErrno();
 	}
-
-	return psd;
-}
-
-
-static REAL8FrequencySeries *make_iligo_psd(double f0, double deltaF, int length)
-{
-	REAL8FrequencySeries *psd = make_empty_psd(f0, deltaF, length);
-	unsigned i;
-
-	if(!psd)
-		return NULL;
-
-	/*
-	 * Use LAL's LIGO I PSD function to populate the frequency series.
-	 */
-
-	for(i = 0; i < psd->data->length; i++) {
-		psd->data->data[i] = XLALLIGOIPsd(psd->f0 + i * psd->deltaF) * (2 * psd->deltaF);
-
-		/*
-		 * Replace any infs with 0.  the whiten function that
-		 * applies the PSD treats a 0 in the PSD as an inf (it
-		 * zeros the bin instead of allowing a floating point
-		 * divide-by-zero error), so algebraically this works out.
-		 * More importantly, it allows an average over time to work
-		 * out (otherwise a bin at +inf stays there forever).
-		 */
-
-		if(isinf(psd->data->data[i]))
-			psd->data->data[i] = 0;
-	}
-
-	/*
-	 * Zero the DC and Nyquist components
-	 */
-
-	if(psd->f0 == 0)
-		psd->data->data[0] = 0;
-	psd->data->data[psd->data->length - 1] = 0;
 
 	return psd;
 }
@@ -332,54 +293,7 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 {
 	REAL8FrequencySeries *psd;
 
-	/*
-	 * Take this opportunity to retrieve the reference PSD.
-	 */
-
-	if(element->reference_psd_filename) {
-		/*
-		 * If a reference spectrum is not available, or the
-		 * reference spectrum does not match the current frequency
-		 * band and resolution, load a new reference spectrum.
-		 */
-
-		if(!element->reference_psd || element->reference_psd->f0 != element->fdworkspace->f0 || element->reference_psd->deltaF != element->fdworkspace->deltaF || element->reference_psd->data->length != element->fdworkspace->data->length) {
-			XLALDestroyREAL8FrequencySeries(element->reference_psd);
-			element->reference_psd = gstlal_get_reference_psd(element->reference_psd_filename, 0.0, element->fdworkspace->deltaF, element->fdworkspace->data->length);
-			if(!element->reference_psd) {
-				GST_ERROR_OBJECT(element, "gstlal_get_reference_psd() failed");
-				return NULL;
-			}
-			GST_INFO_OBJECT(element, "loaded reference PSD from \"%s\" with %d samples at %.16g Hz resolution spanning the frequency band %.16g Hz -- %.16g Hz", element->reference_psd_filename, element->reference_psd->data->length, element->reference_psd->deltaF, element->reference_psd->f0, element->reference_psd->f0 + (element->reference_psd->data->length - 1) * element->reference_psd->deltaF);
-		}
-
-		/*
-		 * If there's no data in the spectrum averager yet, use the
-		 * reference spectrum to initialize it.
-		 */
-
-		if(!element->psd_regressor->n_samples) {
-			if(XLALPSDRegressorSetPSD(element->psd_regressor, element->reference_psd, XLALPSDRegressorGetAverageSamples(element->psd_regressor))) {
-				GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
-				/*
-				 * erase the reference PSD to force this
-				 * code path to be tried again
-				 */
-				XLALDestroyREAL8FrequencySeries(element->reference_psd);
-				element->reference_psd = NULL;
-				XLALClearErrno();
-				return NULL;
-			}
-		}
-	}
-
 	switch(element->psdmode) {
-	case GSTLAL_PSDMODE_INITIAL_LIGO_SRD:
-		psd = make_iligo_psd(0.0, element->fdworkspace->deltaF, element->fdworkspace->data->length);
-		if(!psd)
-			return NULL;
-		break;
-
 	case GSTLAL_PSDMODE_RUNNING_AVERAGE:
 		if(!element->psd_regressor->n_samples) {
 			/*
@@ -391,7 +305,7 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 			if(!psd)
 				return NULL;
 			if(XLALPSDRegressorSetPSD(element->psd_regressor, psd, 1)) {
-				GST_ERROR("XLALPSDRegressorSetPSD() failed");
+				GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
 				XLALDestroyREAL8FrequencySeries(psd);
 				XLALClearErrno();
 				return NULL;
@@ -399,15 +313,15 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 		} else {
 			psd = XLALPSDRegressorGetPSD(element->psd_regressor);
 			if(!psd) {
-				GST_ERROR("XLALPSDRegressorGetPSD() failed");
+				GST_ERROR_OBJECT(element, "XLALPSDRegressorGetPSD() failed");
 				XLALClearErrno();
 				return NULL;
 			}
 		}
 		break;
 
-	case GSTLAL_PSDMODE_REFERENCE:
-		psd = XLALCutREAL8FrequencySeries(element->reference_psd, 0, element->reference_psd->data->length);
+	case GSTLAL_PSDMODE_FIXED:
+		psd = element->psd;
 		break;
 	}
 
@@ -442,9 +356,41 @@ enum property {
 	ARG_FFT_LENGTH,
 	ARG_AVERAGE_SAMPLES,
 	ARG_MEDIAN_SAMPLES,
-	ARG_XML_FILENAME,
-	ARG_REFERENCE_PSD
+	ARG_DELTA_F,
+	ARG_PSD
 };
+
+
+static gdouble *doubles_from_g_value_array(GValueArray *va, gdouble *dest)
+{
+	guint i;
+
+	if(!va)
+		return NULL;
+	if(!dest)
+		dest = g_new(gdouble, va->n_values);
+	if(!dest)
+		return NULL;
+	for(i = 0; i < va->n_values; i++)
+		dest[i] = g_value_get_double(g_value_array_get_nth(va, i));
+	return dest;
+}
+
+
+static GValueArray *g_value_array_from_doubles(gdouble *a, gint n)
+{
+	GValueArray *va;
+	gint i;
+
+	if(!a)
+		return NULL;
+	va = g_value_array_new(n);
+	if(!va)
+		return NULL;
+	for(i = 0; i < n; i++)
+		g_value_set_double(g_value_array_get_nth(va, i), a[i]);
+	return va;
+}
 
 
 static void set_property(GObject * object, enum property id, const GValue * value, GParamSpec * pspec)
@@ -475,37 +421,27 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		XLALPSDRegressorSetMedianSamples(element->psd_regressor, g_value_get_uint(value));
 		break;
 
-	case ARG_XML_FILENAME:
-		free(element->xml_filename);
-		if(element->xml_stream) {
-			XLALCloseLIGOLwXMLFile(element->xml_stream);
-			element->xml_stream = NULL;
-		}
-		element->xml_filename = g_value_dup_string(value);
-		if(element->xml_filename) {
-			element->xml_stream = XLALOpenLIGOLwXMLFile(element->xml_filename);
-			if(!element->xml_stream) {
-				GST_ERROR_OBJECT(element, "XLALOpenLIGOLwXMLFile() failed");
-				free(element->xml_filename);
-				element->xml_filename = NULL;
-				XLALClearErrno();
-			}
-		}
+	case ARG_DELTA_F:
+		/* read-only, should never get here */
 		break;
 
-	case ARG_REFERENCE_PSD:
-		/*
-		 * A reload of the reference PSD occurs when the PSD
-		 * filename is non-NULL and the PSD frequency series itself
-		 * is NULL, so we just set it up that way to induce a
-		 * reload
-		 */
-
-		XLALDestroyREAL8FrequencySeries(element->reference_psd);
-		element->reference_psd = NULL;
-		free(element->reference_psd_filename);
-		element->reference_psd_filename = g_value_dup_string(value);
+	case ARG_PSD: {
+		GValueArray *va = g_value_get_boxed(value);
+		/* FIXME:  deltaF? */
+		REAL8FrequencySeries *psd;
+		if(element->psd)
+			psd = make_empty_psd(0.0, element->psd->deltaF, va->n_values);
+		else
+			psd = make_empty_psd(0.0, 1.0, va->n_values);
+		doubles_from_g_value_array(va, psd->data->data);
+		if(XLALPSDRegressorSetPSD(element->psd_regressor, psd, XLALPSDRegressorGetAverageSamples(element->psd_regressor))) {
+			GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
+			XLALClearErrno();
+		}
+		XLALDestroyREAL8FrequencySeries(element->psd);
+		element->psd = psd;
 		break;
+	}
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -539,12 +475,18 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		g_value_set_uint(value, XLALPSDRegressorGetMedianSamples(element->psd_regressor));
 		break;
 
-	case ARG_XML_FILENAME:
-		g_value_set_string(value, element->xml_filename);
+	case ARG_DELTA_F:
+		if(element->psd)
+			g_value_set_double(value, element->psd->deltaF);
+		else
+			g_value_set_double(value, 0.0);
 		break;
 
-	case ARG_REFERENCE_PSD:
-		g_value_set_string(value, element->reference_psd_filename);
+	case ARG_PSD:
+		if(element->psd)
+			g_value_take_boxed(value, g_value_array_from_doubles(element->psd->data->data, element->psd->data->length));
+		else
+			g_value_take_boxed(value, g_value_array_new(0));
 		break;
 	}
 
@@ -628,7 +570,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 * FFT plans, and workspaces
 	 */
 
-	if(success) {
+	if(success && rate != element->sample_rate) {
 		element->sample_rate = rate;
 		if(make_window_and_fft_plans(element))
 			success = FALSE;
@@ -729,7 +671,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * be pushed downstream? */
 		gst_adapter_clear(element->adapter);
 		element->next_is_discontinuity = TRUE;
-		element->segment_start = GST_BUFFER_TIMESTAMP(sinkbuf);
+		element->t0 = GST_BUFFER_TIMESTAMP(sinkbuf);
 		element->offset0 = GST_BUFFER_OFFSET(sinkbuf);
 		element->offset = 0;
 	}
@@ -757,7 +699,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		memcpy(element->tdworkspace->data->data, gst_adapter_peek(element->adapter, element->tdworkspace->data->length * sizeof(*element->tdworkspace->data->data)), element->tdworkspace->data->length * sizeof(*element->tdworkspace->data->data));
-		XLALINT8NSToGPS(&element->tdworkspace->epoch, element->segment_start);
+		XLALINT8NSToGPS(&element->tdworkspace->epoch, element->t0);
 		XLALGPSAdd(&element->tdworkspace->epoch, (double) element->offset / element->sample_rate);
 
 		/*
@@ -786,22 +728,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
-		/* FIXME:  compare the new PSD to the old PSD and tell the
-		 * world about it if it has changed according to some
-		 * metric */
-		XLALDestroyREAL8FrequencySeries(element->psd);
-		element->psd = newpsd;
-		{
-		/* FIXME:  if more than one whitener is in the pipeline,
-		 * this counter is probably shared between them.  bad */
-		static int n = 0;
-		if(!(n++ % (XLALPSDRegressorGetAverageSamples(element->psd_regressor) / 2)) && element->xml_stream) {
-			GST_INFO_OBJECT(element, "writing PSD snapshot");
-			if(XLALWriteLIGOLwXMLArrayREAL8FrequencySeries(element->xml_stream, "Recorded by GSTLAL element lal_whiten", element->psd)) {
-				GST_ERROR_OBJECT(element, "XLALWriteLIGOLwXMLArrayREAL8FrequencySeries() failed");
-				XLALClearErrno();
-			}
-		}
+		if(newpsd != element->psd) {
+			/* FIXME:  compare the new PSD to the old PSD and
+			 * tell the world about it if it has changed
+			 * according to some metric */
+			XLALDestroyREAL8FrequencySeries(element->psd);
+			element->psd = newpsd;
 		}
 
 		/*
@@ -885,8 +817,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			element->next_is_discontinuity = FALSE;
 		}
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + element->tail->length;
-		GST_BUFFER_TIMESTAMP(srcbuf) = element->segment_start + gst_util_uint64_scale_int(element->offset + zero_pad, GST_SECOND, element->sample_rate);
-		GST_BUFFER_DURATION(srcbuf) = gst_util_uint64_scale_int(element->offset + zero_pad + element->tail->length, GST_SECOND, element->sample_rate) - gst_util_uint64_scale_int(element->offset + zero_pad, GST_SECOND, element->sample_rate);
+		GST_BUFFER_TIMESTAMP(srcbuf) = element->t0 + gst_util_uint64_scale_int_round(element->offset + zero_pad, GST_SECOND, element->sample_rate);
+		GST_BUFFER_DURATION(srcbuf) = element->t0 + gst_util_uint64_scale_int_round(element->offset + zero_pad + element->tail->length, GST_SECOND, element->sample_rate) - GST_BUFFER_TIMESTAMP(srcbuf);
 
 		/*
 		 * Copy the first half of the time series into the buffer,
@@ -963,10 +895,6 @@ static void finalize(GObject * object)
 	XLALDestroyREAL8TimeSeries(element->tdworkspace);
 	XLALDestroyCOMPLEX16FrequencySeries(element->fdworkspace);
 	XLALDestroyREAL8Sequence(element->tail);
-	free(element->xml_filename);
-	XLALCloseLIGOLwXMLFile(element->xml_stream);
-	free(element->reference_psd_filename);
-	XLALDestroyREAL8FrequencySeries(element->reference_psd);
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -1049,8 +977,10 @@ static void class_init(gpointer class, gpointer class_data)
 	g_object_class_install_property(gobject_class, ARG_FFT_LENGTH, g_param_spec_double("fft-length", "FFT length", "Total length of the FFT convolution in seconds", 0, G_MAXDOUBLE, DEFAULT_FFT_LENGTH_SECONDS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_AVERAGE_SAMPLES, g_param_spec_uint("average-samples", "Average samples", "Number of FFTs used in PSD average", 1, G_MAXUINT, DEFAULT_AVERAGE_SAMPLES, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_MEDIAN_SAMPLES, g_param_spec_uint("median-samples", "Median samples", "Number of FFTs used in PSD median history", 1, G_MAXUINT, DEFAULT_MEDIAN_SAMPLES, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_XML_FILENAME, g_param_spec_string("xml-filename", "XML Filename", "Name of file into which will be dumped PSD snapshots (null = disable).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_REFERENCE_PSD, g_param_spec_string("reference-psd", "Filename", "Name of text file from which to read reference spectrum (null = disable).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_DELTA_F, g_param_spec_double("delta-f", "Delta f", "PSD frequency resolution in Hz", 0, G_MAXDOUBLE, 0, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
+fprintf(stderr, "a\n");
+	g_object_class_install_property(gobject_class, ARG_PSD, g_param_spec_value_array("psd", "PSD", "Power spectral density (first bin is at 0 Hz, bin spacing is delta-f)", g_param_spec_double("bin", "Bin", "Power spectral density bin", -G_MAXDOUBLE, G_MAXDOUBLE, 1.0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS), G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+fprintf(stderr, "b\n");
 }
 
 
@@ -1082,7 +1012,7 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	/* internal data */
 	element->adapter = gst_adapter_new();
 	element->next_is_discontinuity = FALSE;
-	element->segment_start = 0;
+	element->t0 = 0;
 	element->offset0 = 0;
 	element->offset = 0;
 	element->zero_pad_seconds = DEFAULT_ZERO_PAD_SECONDS;
@@ -1098,10 +1028,6 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->tdworkspace = NULL;
 	element->fdworkspace = NULL;
 	element->tail = NULL;
-	element->xml_filename = NULL;
-	element->xml_stream = NULL;
-	element->reference_psd_filename = NULL;
-	element->reference_psd = NULL;
 }
 
 
