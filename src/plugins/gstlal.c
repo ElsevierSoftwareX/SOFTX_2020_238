@@ -251,15 +251,13 @@ LALUnit gstlal_lalStrainPerADCCount(void)
 
 
 /**
- * Return the LALUnit structure equal to "strain^2 / Hz".
+ * Return the LALUnit structure equal to "units^2 / Hz".
  */
 
 
-LALUnit gstlal_lalStrainSquaredPerHertz(void)
+LALUnit gstlal_lalUnitSquaredPerHertz(LALUnit unit)
 {
-	LALUnit unit;
-
-	return *XLALUnitMultiply(&unit, XLALUnitSquare(&unit, &lalStrainUnit), &lalSecondUnit);
+	return *XLALUnitMultiply(&unit, XLALUnitSquare(&unit, &unit), &lalSecondUnit);
 }
 
 
@@ -273,7 +271,7 @@ LALUnit gstlal_lalStrainSquaredPerHertz(void)
 REAL8FrequencySeries *gstlal_read_reference_psd(const char *filename)
 {
 	LIGOTimeGPS gps_zero = {0, 0};
-	LALUnit strain_squared_per_hertz = gstlal_lalStrainSquaredPerHertz();
+	LALUnit strain_squared_per_hertz = gstlal_lalUnitSquaredPerHertz(lalStrainUnit);
 	REAL8FrequencySeries *psd;
 	FILE *file;
 	unsigned i;
