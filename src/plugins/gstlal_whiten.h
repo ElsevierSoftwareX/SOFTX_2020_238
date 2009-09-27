@@ -87,7 +87,8 @@ typedef struct {
 	gboolean next_is_discontinuity;
 	GstClockTime t0;
 	guint64 offset0;
-	guint64 offset;
+	guint64 next_offset_in;
+	guint64 next_offset_out;
 
 	double zero_pad_seconds;
 	double fft_length_seconds;
