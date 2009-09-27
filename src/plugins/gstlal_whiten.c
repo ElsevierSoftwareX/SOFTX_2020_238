@@ -345,6 +345,67 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 }
 
 
+static gdouble *doubles_from_g_value_array(GValueArray *va, gdouble *dest)
+{
+	guint i;
+
+	if(!va)
+		return NULL;
+	if(!dest)
+		dest = g_new(gdouble, va->n_values);
+	if(!dest)
+		return NULL;
+	for(i = 0; i < va->n_values; i++)
+		dest[i] = g_value_get_double(g_value_array_get_nth(va, i));
+	return dest;
+}
+
+
+static GValueArray *g_value_array_from_doubles(gdouble *a, gint n)
+{
+	GValueArray *va;
+	GValue v = {0,};
+	gint i;
+	g_value_init(&v, G_TYPE_DOUBLE);
+
+	if(!a)
+		return NULL;
+	va = g_value_array_new(n);
+	if(!va)
+		return NULL;
+	for(i = 0; i < n; i++) {
+		g_value_set_double(&v, a[i]);
+		g_value_array_append(va, &v);
+	}
+	return va;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                                  Messages
+ *
+ * ============================================================================
+ */
+
+
+static GstMessage *psd_message_new(GSTLALWhiten *element, GstClockTime timestamp)
+{
+	GValueArray *va = g_value_array_from_doubles(element->psd->data->data, element->psd->data->length);
+	GstStructure *s = gst_structure_new(
+		"spectrum",
+		"timestamp", G_TYPE_UINT64, timestamp,
+		"delta-f", G_TYPE_DOUBLE, element->psd->deltaF,
+		"magnitude", G_TYPE_VALUE_ARRAY, va,
+		NULL
+	);
+	g_value_array_free(va);
+
+	return gst_message_new_element(GST_OBJECT(element), s);
+}
+
+
 /*
  * ============================================================================
  *
@@ -371,38 +432,6 @@ enum property {
 	ARG_DELTA_F,
 	ARG_PSD
 };
-
-
-static gdouble *doubles_from_g_value_array(GValueArray *va, gdouble *dest)
-{
-	guint i;
-
-	if(!va)
-		return NULL;
-	if(!dest)
-		dest = g_new(gdouble, va->n_values);
-	if(!dest)
-		return NULL;
-	for(i = 0; i < va->n_values; i++)
-		dest[i] = g_value_get_double(g_value_array_get_nth(va, i));
-	return dest;
-}
-
-
-static GValueArray *g_value_array_from_doubles(gdouble *a, gint n)
-{
-	GValueArray *va;
-	gint i;
-
-	if(!a)
-		return NULL;
-	va = g_value_array_new(n);
-	if(!va)
-		return NULL;
-	for(i = 0; i < n; i++)
-		g_value_set_double(g_value_array_get_nth(va, i), a[i]);
-	return va;
-}
 
 
 static void set_property(GObject * object, enum property id, const GValue * value, GParamSpec * pspec)
@@ -752,6 +781,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			 * according to some metric */
 			XLALDestroyREAL8FrequencySeries(element->psd);
 			element->psd = newpsd;
+
+			gst_element_post_message(GST_ELEMENT(element), psd_message_new(element, element->t0 + gst_util_uint64_scale_int_round(element->offset + zero_pad, GST_SECOND, element->sample_rate)));
 		}
 
 		/*
