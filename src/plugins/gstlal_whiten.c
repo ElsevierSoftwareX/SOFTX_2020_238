@@ -621,6 +621,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 			 * equivalent of "dimensionless" before sending
 			 * downstream
 			 */
+			/* FIXME:  probably shouldn't do this in-place */
 
 			LALUnit sample_units;
 
@@ -662,15 +663,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
 	GstFlowReturn result = GST_FLOW_OK;
 	unsigned zero_pad = round(element->zero_pad_seconds * element->sample_rate);
-
-	/*
-	 * Confirm that set_caps() has successfully configured everything
-	 */
-
-	if(!element->window || !element->tail || !element->fwdplan || !element->revplan || !element->tdworkspace || !element->fdworkspace) {
-		result = GST_FLOW_NOT_NEGOTIATED;
-		goto done;
-	}
 
 	/*
 	 * Push the incoming buffer into the adapter.  If the buffer is a
@@ -740,13 +732,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			goto done;
 		}
 		if(newpsd != element->psd) {
-			/* FIXME:  compare the new PSD to the old PSD and
-			 * tell the world about it if it has changed
-			 * according to some metric */
 			XLALDestroyREAL8FrequencySeries(element->psd);
 			element->psd = newpsd;
-
-			gst_element_post_message(GST_ELEMENT(element), psd_message_new(element, element->t0 + gst_util_uint64_scale_int_round(element->offset + zero_pad, GST_SECOND, element->sample_rate)));
+			gst_element_post_message(GST_ELEMENT(element), psd_message_new(element, XLALGPSToINT8NS(&element->psd->epoch)));
 		}
 
 		/*
@@ -804,7 +792,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		for(i = 0; i < element->tdworkspace->data->length; i++)
 			element->tdworkspace->data->data[i] *= element->tdworkspace->deltaT * sqrt(element->window->sumofsquares);
-		XLALUnitDivide(&element->tdworkspace->sampleUnits, &element->tdworkspace->sampleUnits, &lalHertzUnit);
+		/* normalization constant has units of seconds */
+		XLALUnitMultiply(&element->tdworkspace->sampleUnits, &element->tdworkspace->sampleUnits, &lalSecondUnit);
 
 		/*
 		 * Verify the result is dimensionless.
