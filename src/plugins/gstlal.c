@@ -102,6 +102,66 @@ GMutex *gstlal_fftw_lock;
 /*
  * ============================================================================
  *
+ *                          Messages and Properties
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * convert a GValueArray of doubles to an array of doubles.  if dest is
+ * NULL then new memory will be allocated otherwise the doubles are copied
+ * into the memory pointed to by dest, which must be large enough to hold
+ * them.  the return value is dest or the newly allocated address on
+ * success or NULL on failure.
+ */
+
+
+gdouble *gstlal_doubles_from_g_value_array(GValueArray *va, gdouble *dest)
+{
+	guint i;
+
+	if(!va)
+		return NULL;
+	if(!dest)
+		dest = g_new(gdouble, va->n_values);
+	if(!dest)
+		return NULL;
+	for(i = 0; i < va->n_values; i++)
+		dest[i] = g_value_get_double(g_value_array_get_nth(va, i));
+	return dest;
+}
+
+
+/*
+ * convert an array of doubles to a g_value_array.  the return value is the
+ * newly allocated GValueArray object.
+ */
+
+
+GValueArray *gstlal_g_value_array_from_doubles(const gdouble *src, gint n)
+{
+	GValueArray *va;
+	GValue v = {0,};
+	gint i;
+	g_value_init(&v, G_TYPE_DOUBLE);
+
+	if(!src)
+		return NULL;
+	va = g_value_array_new(n);
+	if(!va)
+		return NULL;
+	for(i = 0; i < n; i++) {
+		g_value_set_double(&v, src[i]);
+		g_value_array_append(va, &v);
+	}
+	return va;
+}
+
+
+/*
+ * ============================================================================
+ *
  *                             Utility Functions
  *
  * ============================================================================

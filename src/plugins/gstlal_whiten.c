@@ -345,42 +345,6 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 }
 
 
-static gdouble *doubles_from_g_value_array(GValueArray *va, gdouble *dest)
-{
-	guint i;
-
-	if(!va)
-		return NULL;
-	if(!dest)
-		dest = g_new(gdouble, va->n_values);
-	if(!dest)
-		return NULL;
-	for(i = 0; i < va->n_values; i++)
-		dest[i] = g_value_get_double(g_value_array_get_nth(va, i));
-	return dest;
-}
-
-
-static GValueArray *g_value_array_from_doubles(gdouble *a, gint n)
-{
-	GValueArray *va;
-	GValue v = {0,};
-	gint i;
-	g_value_init(&v, G_TYPE_DOUBLE);
-
-	if(!a)
-		return NULL;
-	va = g_value_array_new(n);
-	if(!va)
-		return NULL;
-	for(i = 0; i < n; i++) {
-		g_value_set_double(&v, a[i]);
-		g_value_array_append(va, &v);
-	}
-	return va;
-}
-
-
 /*
  * ============================================================================
  *
@@ -392,7 +356,7 @@ static GValueArray *g_value_array_from_doubles(gdouble *a, gint n)
 
 static GstMessage *psd_message_new(GSTLALWhiten *element, GstClockTime timestamp)
 {
-	GValueArray *va = g_value_array_from_doubles(element->psd->data->data, element->psd->data->length);
+	GValueArray *va = gstlal_g_value_array_from_doubles(element->psd->data->data, element->psd->data->length);
 	GstStructure *s = gst_structure_new(
 		"spectrum",
 		"timestamp", G_TYPE_UINT64, timestamp,
@@ -480,7 +444,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 			psd = make_empty_psd(0.0, element->psd->deltaF, va->n_values, element->sample_units);
 		else
 			psd = make_empty_psd(0.0, 1.0, va->n_values, element->sample_units);
-		doubles_from_g_value_array(va, psd->data->data);
+		gstlal_doubles_from_g_value_array(va, psd->data->data);
 		if(XLALPSDRegressorSetPSD(element->psd_regressor, psd, XLALPSDRegressorGetAverageSamples(element->psd_regressor))) {
 			GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
 			XLALClearErrno();
@@ -531,7 +495,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 
 	case ARG_PSD:
 		if(element->psd)
-			g_value_take_boxed(value, g_value_array_from_doubles(element->psd->data->data, element->psd->data->length));
+			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(element->psd->data->data, element->psd->data->length));
 		else
 			g_value_take_boxed(value, g_value_array_new(0));
 		break;
