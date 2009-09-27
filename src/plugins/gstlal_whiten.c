@@ -252,10 +252,10 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 }
 
 
-static REAL8FrequencySeries *make_empty_psd(double f0, double deltaF, int length)
+static REAL8FrequencySeries *make_empty_psd(double f0, double deltaF, int length, LALUnit sample_units)
 {
-	LALUnit strain_squared_per_hertz = gstlal_lalStrainSquaredPerHertz();
-	REAL8FrequencySeries *psd = XLALCreateREAL8FrequencySeries("PSD", &GPS_ZERO, f0, deltaF, &strain_squared_per_hertz, length);
+	LALUnit unit = gstlal_lalUnitSquaredPerHertz(sample_units);
+	REAL8FrequencySeries *psd = XLALCreateREAL8FrequencySeries("PSD", &GPS_ZERO, f0, deltaF, &unit, length);
 
 	if(!psd) {
 		GST_ERROR("XLALCreateREAL8FrequencySeries() failed");
@@ -268,17 +268,29 @@ static REAL8FrequencySeries *make_empty_psd(double f0, double deltaF, int length
 
 static REAL8FrequencySeries *make_psd_from_fseries(const COMPLEX16FrequencySeries *fseries)
 {
-	REAL8FrequencySeries *psd = make_empty_psd(fseries->f0, fseries->deltaF, fseries->data->length);
+	LALUnit unit;
+	REAL8FrequencySeries *psd;
 	unsigned i;
 
+	/*
+	 * reconstruct the time-domain sample units from the sample units
+	 * of the frequency series
+	 */
+
+	XLALUnitMultiply(&unit, &fseries->sampleUnits, &lalHertzUnit);
+
+	/*
+	 * build the PSD
+	 */
+
+	psd = make_empty_psd(fseries->f0, fseries->deltaF, fseries->data->length, unit);
 	if(!psd)
 		return NULL;
-
 	for(i = 0; i < psd->data->length; i++)
 		psd->data->data[i] = XLALCOMPLEX16Abs2(fseries->data->data[i]) * (2 * psd->deltaF);
 
 	/*
-	 * Zero the DC and Nyquist components
+	 * zero the DC and Nyquist components
 	 */
 
 	if(psd->f0 == 0)
@@ -407,10 +419,16 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 
 	case ARG_ZERO_PAD_SECONDS:
 		element->zero_pad_seconds = g_value_get_double(value);
+		/* FIXME:  if the value has changed, set sink pad's caps to
+		 * NULL to force renegotiation (== check that the rate is
+		 * still OK) */
 		break;
 
 	case ARG_FFT_LENGTH:
 		element->fft_length_seconds = g_value_get_double(value);
+		/* FIXME:  if the value has changed, set sink pad's caps to
+		 * NULL to force renegotiation (== check that the rate is
+		 * still OK) */
 		break;
 
 	case ARG_AVERAGE_SAMPLES:
@@ -430,9 +448,9 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		/* FIXME:  deltaF? */
 		REAL8FrequencySeries *psd;
 		if(element->psd)
-			psd = make_empty_psd(0.0, element->psd->deltaF, va->n_values);
+			psd = make_empty_psd(0.0, element->psd->deltaF, va->n_values, element->sample_units);
 		else
-			psd = make_empty_psd(0.0, 1.0, va->n_values);
+			psd = make_empty_psd(0.0, 1.0, va->n_values, element->sample_units);
 		doubles_from_g_value_array(va, psd->data->data);
 		if(XLALPSDRegressorSetPSD(element->psd_regressor, psd, XLALPSDRegressorGetAverageSamples(element->psd_regressor))) {
 			GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
@@ -570,7 +588,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	 * FFT plans, and workspaces
 	 */
 
-	if(success && rate != element->sample_rate) {
+	if(success && (rate != element->sample_rate)) {
 		element->sample_rate = rate;
 		if(make_window_and_fft_plans(element))
 			success = FALSE;
