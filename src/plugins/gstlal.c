@@ -50,6 +50,7 @@
  */
 
 
+#include <gsl/gsl_matrix.h>
 #include <gsl/gsl_spline.h>
 
 
@@ -108,7 +109,7 @@ GMutex *gstlal_fftw_lock;
  */
 
 
-/*
+/**
  * convert a GValueArray of doubles to an array of doubles.  if dest is
  * NULL then new memory will be allocated otherwise the doubles are copied
  * into the memory pointed to by dest, which must be large enough to hold
@@ -133,8 +134,8 @@ gdouble *gstlal_doubles_from_g_value_array(GValueArray *va, gdouble *dest)
 }
 
 
-/*
- * convert an array of doubles to a g_value_array.  the return value is the
+/**
+ * convert an array of doubles to a GValueArray.  the return value is the
  * newly allocated GValueArray object.
  */
 
@@ -153,6 +154,82 @@ GValueArray *gstlal_g_value_array_from_doubles(const gdouble *src, gint n)
 		return NULL;
 	for(i = 0; i < n; i++) {
 		g_value_set_double(&v, src[i]);
+		g_value_array_append(va, &v);
+	}
+	return va;
+}
+
+
+/**
+ * convert a GValueArray of GValueArrays of doubles to a GSL matrix.  the
+ * return value is the newly allocated matrix on success or NULL on
+ * failure.
+ */
+
+
+gsl_matrix *gstlal_gsl_matrix_from_g_value_array(GValueArray *va)
+{
+	gsl_matrix *matrix;
+	GValueArray *row;
+	guint rows, cols;
+	guint i;
+
+	if(!va)
+		return NULL;
+	rows = va->n_values;
+	if(!rows)
+		/* 0x0 matrix */
+		return gsl_matrix_alloc(0, 0);
+
+	row = g_value_get_boxed(g_value_array_get_nth(va, 0));
+	cols = row->n_values;
+	matrix = gsl_matrix_alloc(rows, cols);
+	if(!matrix)
+		/* allocation failure */
+		return NULL;
+	if(!gstlal_doubles_from_g_value_array(row, gsl_matrix_ptr(matrix, 0, 0))) {
+		/* row conversion failure */
+		gsl_matrix_free(matrix);
+		return NULL;
+	}
+	for(i = 1; i < rows; i++) {
+		row = g_value_get_boxed(g_value_array_get_nth(va, i));
+		if(row->n_values != cols) {
+			/* one of the rows has the wrong number of columns */
+			gsl_matrix_free(matrix);
+			return NULL;
+		}
+		if(!gstlal_doubles_from_g_value_array(row, gsl_matrix_ptr(matrix, i, 0))) {
+			/* row conversion failure */
+			gsl_matrix_free(matrix);
+			return NULL;
+		}
+	}
+
+	return matrix;
+}
+
+
+/**
+ * convert a gsl_matrix to a GValueArray of GValueArray of doubles.  the
+ * return value is the newly allocated GValueArray object.
+ */
+
+
+GValueArray *gstlal_g_value_array_from_gsl_matrix(const gsl_matrix *matrix)
+{
+	GValueArray *va;
+	GValue v = {0,};
+	guint i;
+	g_value_init(&v, G_TYPE_BOXED);
+
+	if(!matrix)
+		return NULL;
+	va = g_value_array_new(matrix->size1);
+	if(!va)
+		return NULL;
+	for(i = 0; i < matrix->size1; i++) {
+		g_value_take_boxed(&v, gstlal_g_value_array_from_doubles(gsl_matrix_const_ptr(matrix, i, 0), matrix->size2));
 		g_value_array_append(va, &v);
 	}
 	return va;

@@ -25,6 +25,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gsl/gsl_matrix.h>
 
 
 #include <lal/LALDatatypes.h>
@@ -67,8 +68,10 @@ extern GMutex *gstlal_fftw_lock;
  */
 
 
-GValueArray *gstlal_g_value_array_from_doubles(const gdouble *src, gint n);
-gdouble *gstlal_doubles_from_g_value_array(GValueArray *va, gdouble *dest);
+GValueArray *gstlal_g_value_array_from_doubles(const gdouble *, gint);
+gdouble *gstlal_doubles_from_g_value_array(GValueArray *, gdouble *);
+GValueArray *gstlal_g_value_array_from_gsl_matrix(const gsl_matrix *);
+gsl_matrix *gstlal_gsl_matrix_from_g_value_array(GValueArray *);
 char *gstlal_build_full_channel_name(const char *, const char *);
 REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *, const char *, const char *, const char *);
 LALUnit gstlal_lalStrainPerADCCount(void);
