@@ -68,7 +68,7 @@ function test_whiten() {
 		! lal_whiten psd-mode=0 zero-pad=0 fft-length=8 median-samples=7 average-samples=128 \
 		! lal_nxydump start-time=0 stop-time=1200000000000 \
 		! progressreport \
-		! filesink location="dump.txt" buffer-mode=2
+		! filesink buffer-mode=2 location="dump.txt"
 }
 
 function test_simulation() {
