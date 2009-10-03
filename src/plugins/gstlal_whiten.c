@@ -354,13 +354,15 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
  */
 
 
-static GstMessage *psd_message_new(GSTLALWhiten *element, GstClockTime timestamp)
+static GstMessage *psd_message_new(GSTLALWhiten *element, REAL8FrequencySeries *psd)
 {
-	GValueArray *va = gstlal_g_value_array_from_doubles(element->psd->data->data, element->psd->data->length);
+	GValueArray *va = gstlal_g_value_array_from_doubles(psd->data->data, psd->data->length);
+	char units[50];
 	GstStructure *s = gst_structure_new(
 		"spectrum",
-		"timestamp", G_TYPE_UINT64, timestamp,
-		"delta-f", G_TYPE_DOUBLE, element->psd->deltaF,
+		"timestamp", G_TYPE_UINT64, XLALGPSToINT8NS(&psd->epoch),
+		"delta-f", G_TYPE_DOUBLE, psd->deltaF,
+		"sample-units", G_TYPE_STRING, XLALUnitAsString(units, sizeof(units), &psd->sampleUnits),
 		"magnitude", G_TYPE_VALUE_ARRAY, va,
 		NULL
 	);
@@ -734,7 +736,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		if(newpsd != element->psd) {
 			XLALDestroyREAL8FrequencySeries(element->psd);
 			element->psd = newpsd;
-			gst_element_post_message(GST_ELEMENT(element), psd_message_new(element, XLALGPSToINT8NS(&element->psd->epoch)));
+			gst_element_post_message(GST_ELEMENT(element), psd_message_new(element, element->psd));
 		}
 
 		/*
