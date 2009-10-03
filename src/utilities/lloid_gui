@@ -40,7 +40,35 @@ pygst.require("0.10")
 import gst
 
 
-from pylal.date import LIGOTimeGPS
+gobject.threads_init()
+
+
+from glue.ligolw import array
+from glue.ligolw import utils
+from pylal import series as lalseries
+from pylal.datatypes import LALUnit
+from pylal.datatypes import LIGOTimeGPS
+from pylal.datatypes import REAL8FrequencySeries
+
+
+#
+# =============================================================================
+#
+#                                   Messages
+#
+# =============================================================================
+#
+
+
+def parse_spectrum_message(message):
+	return REAL8FrequencySeries(
+		name = "PSD",
+		epoch = LIGOTimeGPS(0, message.structure["timestamp"]),
+		f0 = 0.0,
+		deltaF = message.structure["delta-f"],
+		sampleUnits = LALUnit(message.structure["sample-units"]),
+		data = numpy.array(message.structure["magnitude"])
+	)
 
 
 #
@@ -546,53 +574,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, output_filename, fake_data = False,
 
 
 #
-# =============================================================================
-#
-#                                 Command Line
-#
-# =============================================================================
-#
-
-
-def parse_command_line():
-	parser = OptionParser(
-		version = "%prog ??",
-		usage = "%prog [options]",
-		description = "Stream-based inspiral analysis tool"
-	)
-	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache in which to find paths to .gwf frame files (required).")
-	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the GPS start time of the segment to analyze (required).")
-	parser.add_option("--gps-stop-time", metavar = "seconds", help = "Set the GPS stop time of the segment to analyze (required).")
-	parser.add_option("--injections", metavar = "filename", help = "Set the name of the file from which to load injections (optional).")
-	parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze (required).")
-	parser.add_option("--output", metavar = "filename", help = "Set the name of the output trigger file (required).")
-	parser.add_option("--template-bank", metavar = "filename", action = "append", help = "Set the name of the file from which to load the template bank (required).")
-	parser.add_option("--write-pipeline", metavar = "filename", help = "Write an XML description of the as-built pipeline to this file (optional).")
-	parser.add_option("--fake-data", action = "store_true", help = "Use fake LIGO data.")
-	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-
-	options, filenames = parser.parse_args()
-
-	required_options = ["gps_start_time", "gps_stop_time", "output", "template_bank"]
-	if not options.fake_data:
-		required_options += ["frame_cache"]
-
-	missing_options = [option for option in required_options if getattr(options, option) is None]
-	if missing_options:
-		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
-
-	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
-	options.gps_stop_time = LIGOTimeGPS(options.gps_stop_time)
-
-	return options, filenames
-
-
-#
-# =============================================================================
-#
-#                                     Main
-#
-# =============================================================================
+# LLOID Pipeline handler
 #
 
 
@@ -616,36 +598,177 @@ class LLOIDHandler(object):
 			self.mainloop.quit()
 		elif message.type == gst.MESSAGE_ELEMENT:
 			if message.structure.get_name() == "spectrum":
-				psd = numpy.array(message.structure["magnitude"])
-				f = numpy.arange(len(psd)) * message.structure["delta-f"]
+				psd = parse_spectrum_message(message)
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		version = "%prog ??",
+		usage = "%prog [options]",
+		description = "Stream-based inspiral analysis tool"
+	)
+	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache in which to find paths to .gwf frame files (required).")
+	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the GPS start time of the segment to analyze (required).")
+	parser.add_option("--gps-stop-time", metavar = "seconds", help = "Set the GPS stop time of the segment to analyze (required).")
+	parser.add_option("--injections", metavar = "filename", help = "Set the name of the file from which to load injections (optional).")
+	parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze (required).")
+	parser.add_option("--output", metavar = "filename", help = "Set the name of the output trigger file (required).")
+	parser.add_option("--reference-psd", metavar = "filename", default = "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", help = "Set the name of the PSD file to load.")
+	parser.add_option("--template-bank", metavar = "filename", action = "append", help = "Set the name of the file from which to load the template bank (required).")
+	parser.add_option("--write-pipeline", metavar = "filename", help = "Write an XML description of the as-built pipeline to this file (optional).")
+	parser.add_option("--fake-data", action = "store_true", help = "Use fake LIGO data.")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+
+	options, filenames = parser.parse_args()
+
+	required_options = ["gps_start_time", "gps_stop_time", "output", "template_bank", "reference_psd"]
+	if not options.fake_data:
+		required_options += ["frame_cache"]
+
+	missing_options = [option for option in required_options if getattr(options, option) is None]
+	if missing_options:
+		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+
+	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
+	options.gps_stop_time = LIGOTimeGPS(options.gps_stop_time)
+
+	return options, filenames
+
+
+#
+# =============================================================================
+#
+#                               PSD Measurement
+#
+# =============================================================================
+#
+
+
+def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, injection_filename = None, verbose = False):
+	class PSDHandler(object):
+		def __init__(self, mainloop, pipeline):
+			self.mainloop = mainloop
+			self.pipeline = pipeline
+
+			bus = pipeline.get_bus()
+			bus.add_signal_watch()
+			bus.connect("message", self.on_message)
+
+			self.psd = None
+
+		def on_message(self, bus, message):
+			if message.type == gst.MESSAGE_EOS:
+				self.pipeline.set_state(gst.STATE_NULL)
+				self.mainloop.quit()
+			elif message.type == gst.MESSAGE_ERROR:
+				gerr, dbgmsg = message.parse_error()
+				print >>sys.stderr, "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+				self.pipeline.set_state(gst.STATE_NULL)
+				self.mainloop.quit()
+			elif message.type == gst.MESSAGE_ELEMENT:
+				if message.structure.get_name() == "spectrum":
+					self.psd = parse_spectrum_message(message)
+
+	mainloop = gobject.MainLoop()
+
+	pipeline = gst.Pipeline("psd")
+	head = mkframesrc(pipeline, instrument, detector)
+	if verbose:
+		head = mkprogressreport(pipeline, head, "progress_src_%s" % instrument)
+	if injection_filename is not None:
+		head = mkinjections(pipeline, head, injection_filename)
+	mkfakesink(pipeline, mkwhiten(pipeline, mkcapsfilter(pipeline, mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % rate)))
+
+	handler = PSDHandler(mainloop, pipeline)
+
+	pipeline.set_state(gst.STATE_PAUSED)
+	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, gps_start_time.ns(), gst.SEEK_TYPE_SET, gps_stop_time.ns())
+	pipeline.set_state(gst.STATE_PLAYING)
+	mainloop.run()
+
+	return PSDHandler.psd
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# parse command line
+#
 
 
 options, filenames = parse_command_line()
 
-gobject.threads_init()
+
+#
+# construct pipeline metadata
+#
+
+
+# FIXME:  switch to XML-format PSD file when elements no longer do their
+# own parsing of the file
+#reference_psd = lalseries.parse_REAL8FrequencySeries(utils.load_filename(options.reference_psd, gz = (options.reference_psd or "stdin").endswith(".gz"), verbose = options.verbose))
+
+
+detectors = {
+	options.instrument: DetectorData(options.frame_cache, "LSC-STRAIN", reference_psd_filename = options.reference_psd)
+}
+
+
+banks = [
+	Bank(
+		template_bank_filename,
+		[
+			Bank.BankFragment(2048, 0.0, 1.0),
+			Bank.BankFragment(512, 1.0, 5.0),
+			Bank.BankFragment(256, 5.0, 13.0),
+			Bank.BankFragment(128, 13.0, 29.0)
+		],
+		gate_threshold = 2.0,
+		snr_threshold = 5.5,
+		logname = "bank%d" % n
+	) for n, template_bank_filename in enumerate(options.template_bank)
+]
+
+
+#
+# measure the PSD
+#
+
+
+#psd = measure_psd(
+#	options.instrument,
+#	detectors[options.instrument],
+#	options.gps_start_time,
+#	options.gps_stop_time,
+#	max(rate for bank in banks for rate in bank.get_rates()),
+#	injection_filename = options.injections,
+#	verbose = options.verbose
+#)
+
 
 pipeline = gst.Pipeline("lloid")
 mainloop = gobject.MainLoop()
 
 mkLLOIDmulti(
 	pipeline,
-	detectors = {
-		options.instrument: DetectorData(options.frame_cache, "LSC-STRAIN", reference_psd_filename = "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt")
-	},
-	banks = [
-		Bank(
-			template_bank_filename,
-			[
-				Bank.BankFragment(2048, 0.0, 1.0),
-				Bank.BankFragment(512, 1.0, 5.0),
-				Bank.BankFragment(256, 5.0, 13.0),
-				Bank.BankFragment(128, 13.0, 29.0)
-			],
-			gate_threshold = 2.0,
-			snr_threshold = 5.5,
-			logname = "bank%d" % n
-		) for n, template_bank_filename in enumerate(options.template_bank)
-	],
+	detectors = detectors,
+	banks = banks,
 	output_filename = options.output,
 	fake_data = options.fake_data,
 	injection_filename = options.injections,
