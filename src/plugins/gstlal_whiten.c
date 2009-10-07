@@ -337,6 +337,8 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 		break;
 	}
 
+	psd->epoch = element->tdworkspace->epoch;
+
 	/*
 	 * done
 	 */
