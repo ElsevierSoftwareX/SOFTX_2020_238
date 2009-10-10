@@ -43,6 +43,7 @@ import gst
 gobject.threads_init()
 
 
+from glue.ligolw import ligolw
 from glue.ligolw import array
 from glue.ligolw import utils
 from pylal import series as lalseries
@@ -677,6 +678,10 @@ def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, injec
 			elif message.type == gst.MESSAGE_ELEMENT:
 				if message.structure.get_name() == "spectrum":
 					self.psd = parse_spectrum_message(message)
+					#xmldoc = ligolw.Document()
+					#xmldoc.appendChild(ligolw.LIGO_LW())
+					#xmldoc.childNodes[-1].appendChild(lalseries.build_REAL8FrequencySeries(self.psd))
+					#utils.write_filename(xmldoc, "psds/psd_%d.xml.gz" % int(self.psd.epoch), gz = True, verbose = True)
 
 	mainloop = gobject.MainLoop()
 
