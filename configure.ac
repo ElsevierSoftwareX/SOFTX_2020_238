@@ -14,6 +14,7 @@ AC_CONFIG_FILES([ \
 	Makefile \
 	src/Makefile \
 	src/plugins/Makefile \
+	src/python/Makefile \
 	src/utilities/Makefile
 ])
 
@@ -36,6 +37,7 @@ AC_PROG_CC_STDC
 AC_PROG_INSTALL
 AC_PROG_LIBTOOL
 PKG_PROG_PKG_CONFIG()
+AM_PATH_PYTHON(2.4,,)
 
 
 #
