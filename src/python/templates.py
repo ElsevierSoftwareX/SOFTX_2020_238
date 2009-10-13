@@ -47,8 +47,16 @@ __date__ = "FIXME"
 
 class QuadraturePhase(object):
 	"""
-	A tool for generating the quadrature phase of a
-	real-valued template.
+	A tool for generating the quadrature phase of a real-valued
+	template.
+
+	Example:
+
+	>>> import numpy
+	>>> from pylal.datatypes import REAL8TimeSeries
+	>>> q = QuadraturePhase(128) # initialize for 128-sample templates
+	>>> in = REAL8TimeSeries(deltaT = 1.0 / 128, data = numpy.sin(numpy.arange(128, dtype = "double") * 2 * math.pi / 128)) # one cycle of sin(t)
+	>>> out = q.process(in) # sin(t) in real part, cos(t) in imaginary part
 	"""
 
 	def __init__(self, n):
