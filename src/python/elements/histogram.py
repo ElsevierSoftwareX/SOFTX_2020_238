@@ -51,14 +51,12 @@ class Histogram(gst.BaseTransform):
 		)
 	)
 
-
 	def __init__(self):
 		gst.BaseTransform.__init__(self)
 		self.in_rate = None
 		self.out_rate = None
 		self.out_width = None
 		self.out_height = None
-		self.fig = None
 		self.buf = numpy.zeros((0,), dtype = "double")
 
 	def do_set_caps(self, incaps, outcaps):
@@ -66,18 +64,13 @@ class Histogram(gst.BaseTransform):
 		self.out_rate = outcaps[0]["framerate"]
 		self.out_width = outcaps[0]["width"]
 		self.out_height = outcaps[0]["height"]
+		return True
+
+	def do_start(self):
 		self.t0 = None
 		self.offset0 = None
 		self.next_out_offset = None
 		return True
-
-	def do_start(self):
-		self.fig = figure.Figure()
-		FigureCanvas(self.fig)
-		self.fig.set_size_inches(self.out_width / float(self.fig.get_dpi()), self.out_height / float(self.fig.get_dpi()))
-
-	def do_stop(self):
-		self.fig = None
 
 	def do_get_unit_size(self, caps):
 		if caps[0].get_name() == "audio/x-raw-float":
@@ -95,7 +88,7 @@ class Histogram(gst.BaseTransform):
 			self.next_out_offset = 0
 
 		# append input to storage buffer
-		self.buf.append(numpy.frombuffer(inbuf.data, dtype = "double"))
+		numpy.append(self.buf, numpy.frombuffer(inbuf.data, dtype = "double"))
 
 		# number of samples required for output frame
 		N = int(round(self.in_rate / float(self.out_rate)))
@@ -115,7 +108,10 @@ class Histogram(gst.BaseTransform):
 					return gst.FLOW_CUSTOM_SUCCESS
 				return gst.FLOW_SUCCESS
 
-			axes = self.fig.gca(xlabel = "Amplitude", ylabel = "Count", title = "Histogram", rasterized = True)
+			fig = figure.Figure()
+			FigureCanvas(fig)
+			fig.set_size_inches(self.out_width / float(fig.get_dpi()), self.out_height / float(fig.get_dpi()))
+			axes = fig.gca(xlabel = "Amplitude", ylabel = "Count", title = "Histogram", rasterized = True)
 			axes.hist(self.buf[:N], bins = 100)
 
 			outdata = numpy.frombuffer(outbuf.data, dtype = "uint32")
@@ -123,22 +119,31 @@ class Histogram(gst.BaseTransform):
 			outbuf.timestamp = self.t0 + int(round((self.next_out_offset - self.offset0) / float(self.out_rate) * gst.SECOND))
 			outbuf.offset = self.next_out_offset
 
-			self.fig.clear()
 			del self.buf[:N]
 			frames += 1
 			self.next_out_offset += 1
+
+	def do_transform_caps(self, direction, caps):
+		if direction == gst.PAD_SRC:
+			# convert src pad's caps to sink pad's
+			return self.get_pad("sink").get_fixed_caps_func()
+		elif direction == gst.PAD_SINK:
+			# convert sink pad's caps to src pad's
+			return self.get_pad("src").get_fixed_caps_func()
+		raise ValueError
 
 	def do_transform_size(self, direction, caps, size, othercaps):
 		if direction == gst.PAD_SRC:
 			# assume 4 bytes per output pixel
 			return self.out_width * self.out_height * 4
-		# direction == gst.PAD_SINK
-		samples_per_frame = int(self.in_rate / float(self.out_rate))
-		if samples_per_frame <= len(self.buf):
-			# don't need any more data to build a frame
-			return 0
-		# assume 8 bytes per input sample
-		return (samples_per_frame - len(self.buf)) * 8
+		elif  direction == gst.PAD_SINK:
+			samples_per_frame = int(self.in_rate / float(self.out_rate))
+			if samples_per_frame <= len(self.buf):
+				# don't need any more data to build a frame
+				return 0
+			# assume 8 bytes per input sample
+			return (samples_per_frame - len(self.buf)) * 8
+		raise ValueError, direction
 
 
 gobject.type_register(Histogram)
