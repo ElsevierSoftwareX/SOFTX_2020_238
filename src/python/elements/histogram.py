@@ -88,7 +88,7 @@ class Histogram(gst.BaseTransform):
 			self.next_out_offset = 0
 
 		# append input to storage buffer
-		numpy.append(self.buf, numpy.frombuffer(inbuf.data, dtype = "double"))
+		self.buf = numpy.append(self.buf, numpy.frombuffer(inbuf, dtype = "double"))
 
 		# number of samples required for output frame
 		N = int(round(self.in_rate / float(self.out_rate)))
@@ -106,7 +106,7 @@ class Histogram(gst.BaseTransform):
 					# GST_FLOW_CUSTOM_SUCCESS.  figure
 					# out what the constant should be
 					return gst.FLOW_CUSTOM_SUCCESS
-				return gst.FLOW_SUCCESS
+				return gst.FLOW_OK
 
 			fig = figure.Figure()
 			FigureCanvas(fig)
@@ -114,12 +114,15 @@ class Histogram(gst.BaseTransform):
 			axes = fig.gca(xlabel = "Amplitude", ylabel = "Count", title = "Histogram", rasterized = True)
 			axes.hist(self.buf[:N], bins = 100)
 
-			outdata = numpy.frombuffer(outbuf.data, dtype = "uint32")
-			outdata[:] = numpy.zeros((len(outdata),), dtype = "uint32")
-			outbuf.timestamp = self.t0 + int(round((self.next_out_offset - self.offset0) / float(self.out_rate) * gst.SECOND))
+			# FIXME:  why do I need to put [0:N] explicitly on
+			# both outbuf and buffer(x)?
+			x = numpy.zeros((640 * 480,), dtype = "uint32")
+			N = len(outbuf)
+			outbuf[0:N] = buffer(x)[0:N]
+			outbuf.timestamp = self.t0 + int(round(float((self.next_out_offset - self.offset0) / self.out_rate) * gst.SECOND))
 			outbuf.offset = self.next_out_offset
 
-			del self.buf[:N]
+			self.buf = self.buf[N:]
 			frames += 1
 			self.next_out_offset += 1
 
@@ -134,15 +137,17 @@ class Histogram(gst.BaseTransform):
 
 	def do_transform_size(self, direction, caps, size, othercaps):
 		if direction == gst.PAD_SRC:
-			# assume 4 bytes per output pixel
-			return self.out_width * self.out_height * 4
-		elif  direction == gst.PAD_SINK:
+			# convert size on src pad to size on sink pad
 			samples_per_frame = int(self.in_rate / float(self.out_rate))
 			if samples_per_frame <= len(self.buf):
 				# don't need any more data to build a frame
 				return 0
 			# assume 8 bytes per input sample
 			return (samples_per_frame - len(self.buf)) * 8
+		elif direction == gst.PAD_SINK:
+			# convert size on sink pad to size on src pad
+			# assume 4 bytes per output pixel
+			return self.out_width * self.out_height * 4
 		raise ValueError, direction
 
 
