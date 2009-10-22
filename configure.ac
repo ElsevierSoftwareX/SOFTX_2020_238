@@ -15,6 +15,7 @@ AC_CONFIG_FILES([ \
 	src/Makefile \
 	src/plugins/Makefile \
 	src/python/Makefile \
+	src/python/elements/Makefile \
 	src/utilities/Makefile
 ])
 
