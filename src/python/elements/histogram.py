@@ -26,7 +26,7 @@ import gst
 class Histogram(gst.BaseTransform):
 	__gsttemplates__ = (
 		gst.PadTemplate("sink",
-			gst.PAD_SRC,
+			gst.PAD_SINK,
 			gst.PAD_ALWAYS,
 			gst.caps_from_string(
 				"audio/x-raw-float, " +
@@ -43,7 +43,7 @@ class Histogram(gst.BaseTransform):
 				"video/x-raw-rgb, " +
 				"width = (int) 640, " +
 				"height = (int) 480, " +
-				"framerate = (int) 1, " +
+				"framerate = (fraction) 1/10, " +
 				"bpp = (int) 32, " +
 				"depth = (int) 24, " +
 				"endianness = (int) BYTE_ORDER"
@@ -80,9 +80,9 @@ class Histogram(gst.BaseTransform):
 		self.fig = None
 
 	def do_get_unit_size(self, caps):
-		if caps[0].name == "audio/x-raw-float":
+		if caps[0].get_name() == "audio/x-raw-float":
 			return caps[0]["channels"] * caps[0]["width"] / 8
-		elif caps[0].name == "video/x-raw-rgb":
+		elif caps[0].get_name() == "video/x-raw-rgb":
 			return caps[0]["width"] * caps[0]["height"] * caps[0]["bpp"] / 8
 		else:
 			raise ValueError, caps
@@ -105,7 +105,7 @@ class Histogram(gst.BaseTransform):
 		while True:
 			if len(self.buf) < N:
 				# not enough data for an output frame
-				if not frames
+				if not frames:
 					# FIXME: should return
 					# GST_BASE_TRANSFORM_FLOW_DROPPED,
 					# don't know what that constant is,
