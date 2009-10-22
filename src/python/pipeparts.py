@@ -75,12 +75,12 @@ def parse_spectrum_message(message):
 #
 
 
-def mkframesrc(pipeline, instrument, detector):
+def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 1 * 8):
 	elem = gst.element_factory_make("lal_framesrc")
-	elem.set_property("blocksize", detector.block_size)
-	elem.set_property("location", detector.frame_cache)
+	elem.set_property("blocksize", blocksize)
+	elem.set_property("location", location)
 	elem.set_property("instrument", instrument)
-	elem.set_property("channel-name", detector.channel)
+	elem.set_property("channel-name", channel_name)
 	pipeline.add(elem)
 	return elem
 
@@ -98,13 +98,13 @@ def mktaginject(pipeline, src, tags):
 	src.link(elem)
 	return elem
 
-def mkfakesrc(pipeline, instrument, detector, volume = 1e-20):
+def mkfakesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 1 * 8, volume = 1e-20):
 	elem = gst.element_factory_make("audiotestsrc")
-	elem.set_property("samplesperbuffer", detector.block_size / 8)
+	elem.set_property("samplesperbuffer", blocksize / 8)
 	elem.set_property("wave", 9)
 	elem.set_property("volume", volume)
 	pipeline.add(elem)
-	return mktaginject(pipeline, mkcapsfilter(pipeline, elem, "audio/x-raw-float, width=64, rate=16384"), "instrument=%s,channel-name=%s,units=strain" % (instrument, detector.channel))
+	return mktaginject(pipeline, mkcapsfilter(pipeline, elem, "audio/x-raw-float, width=64, rate=16384"), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
 
 def mkiirfilter(pipeline, src, a, b):
 	elem = gst.element_factory_make("audioiirfilter")
@@ -114,24 +114,24 @@ def mkiirfilter(pipeline, src, a, b):
 	src.link(elem)
 	return elem
 
-def mkfakeLIGOsrc(pipeline, instrument, detector):
-	head1 = mkfakesrc(pipeline, instrument, detector, volume = 1.0)
+def mkfakeLIGOsrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 1 * 8):
+	head1 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 1.0)
 	a = [1.87140685e-05, 3.74281370e-05, 1.87140685e-05]
 	b = [1., 1.98861643, -0.98869215]
 	for idx in range(14):
 		head1 = mkiirfilter(pipeline, head1, a, b)
 	head1 = mkaudioamplify(pipeline, head1, 5.03407936516e-17)
 
-	head2 = mkfakesrc(pipeline, instrument, detector, volume = 1.0)
+	head2 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 1.0)
 	a = [9.17933667e-07, 1.83586733e-06, 9.17933667e-07]
 	b = [1., 1.99728828, -0.99729195]
 	head2 = mkiirfilter(pipeline, head2, a, b)
 	head2 = mkaudioamplify(pipeline, head2, 1.39238913312e-20)
 
-	head3 = mkfakesrc(pipeline, instrument, detector, volume = 1.0)
+	head3 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 1.0)
 	head3 = mkaudioamplify(pipeline, head3, 2.16333076528e-23)
 
-	head4 = mkfakesrc(pipeline, instrument, detector, volume = 1.0)
+	head4 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 1.0)
 	a = [0.03780506, -0.03780506]
 	b = [1.0, -0.9243905]
 	head4 = mkiirfilter(pipeline, head4, a, b)

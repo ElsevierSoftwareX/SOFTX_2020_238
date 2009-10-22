@@ -124,9 +124,9 @@ def mkcontrolsnksrc(pipeline, rate, progress_report = False, suffix = None):
 
 def mkLLOIDsrc(pipeline, instrument, detector, rates, fake_data = False, injection_filename = None, progress_report = False):
 	if fake_data:
-		head = pipeparts.mkfakeLIGOsrc(pipeline, instrument, detector)
+		head = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
 	else:
-		head = pipeparts.mkframesrc(pipeline, instrument, detector)
+		head = pipeparts.mkframesrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
 	if progress_report:
 		head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % instrument)
 
@@ -357,7 +357,7 @@ def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, injec
 	mainloop = gobject.MainLoop()
 
 	pipeline = gst.Pipeline("psd")
-	head = pipeparts.mkframesrc(pipeline, instrument, detector)
+	head = pipeparts.mkframesrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
 	if verbose:
 		head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % instrument)
 	if injection_filename is not None:
