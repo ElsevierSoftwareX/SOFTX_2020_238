@@ -6,8 +6,8 @@ matplotlib.rcParams.update({
 	"xtick.labelsize": 8.0,
 	"ytick.labelsize": 8.0,
 	"legend.fontsize": 8.0,
-	"figure.dpi": 200,
-	"savefig.dpi": 200,
+	"figure.dpi": 100,
+	"savefig.dpi": 100,
 	"text.usetex": True,
 	"path.simplify": True
 })
@@ -41,12 +41,17 @@ class Histogram(gst.BaseTransform):
 			gst.PAD_ALWAYS,
 			gst.caps_from_string(
 				"video/x-raw-rgb, " +
-				"width = (int) 640, " +
-				"height = (int) 480, " +
-				"framerate = (fraction) 1/10, " +
+				"width = (int) [1, MAX], " +
+				"height = (int) [1, MAX], " +
+				"framerate = (fraction) [0/1, MAX], " +
 				"bpp = (int) 32, " +
-				"depth = (int) 24, " +
-				"endianness = (int) BYTE_ORDER"
+				"depth = (int) 32, " +
+				"red_mask = (int) -16777216, " +
+				"green_mask = (int) 16711680, " +
+				"blue_mask = (int) 65280, " +
+				"alpha_mask = (int) 255, " +
+				#"endianness = (int) BYTE_ORDER"
+				"endianness = (int) 4321"
 			)
 		)
 	)
@@ -81,22 +86,34 @@ class Histogram(gst.BaseTransform):
 			raise ValueError, caps
 
 	def do_transform(self, inbuf, outbuf):
-		# update metadata
+		#
+		# make sure we have valid metadata
+		#
+
 		if self.t0 is None:
 			self.t0 = inbuf.timestamp
 			self.offset0 = 0
 			self.next_out_offset = 0
 
-		# append input to storage buffer
+		#
+		# append input to time series buffer
+		#
+
 		self.buf = numpy.append(self.buf, numpy.frombuffer(inbuf, dtype = "double"))
 
+		#
 		# number of samples required for output frame
-		N = int(round(self.in_rate / float(self.out_rate)))
+		#
 
+		samples_per_frame = int(round(self.in_rate / float(self.out_rate)))
+
+		#
 		# loop over output frames
+		#
+
 		frames = 0
 		while True:
-			if len(self.buf) < N:
+			if len(self.buf) < samples_per_frame:
 				# not enough data for an output frame
 				if not frames:
 					# FIXME: should return
@@ -108,21 +125,37 @@ class Histogram(gst.BaseTransform):
 					return gst.FLOW_CUSTOM_SUCCESS
 				return gst.FLOW_OK
 
+			#
+			# generate the histogram
+			#
+
 			fig = figure.Figure()
 			FigureCanvas(fig)
 			fig.set_size_inches(self.out_width / float(fig.get_dpi()), self.out_height / float(fig.get_dpi()))
 			axes = fig.gca(xlabel = "Amplitude", ylabel = "Count", title = "Histogram", rasterized = True)
-			axes.hist(self.buf[:N], bins = 100)
+			axes.hist(self.buf[:samples_per_frame], bins = 100)
 
-			# FIXME:  why do I need to put [0:N] explicitly on
-			# both outbuf and buffer(x)?
-			x = numpy.zeros((640 * 480,), dtype = "uint32")
-			N = len(outbuf)
-			outbuf[0:N] = buffer(x)[0:N]
+			#
+			# extract the pixel data
+			#
+
+			fig.canvas.draw()
+			rgba_buffer = fig.canvas.buffer_rgba(0, 0)
+			rgba_buffer_size = len(rgba_buffer)
+
+			#
+			# copy pixel data to output buffer and set metadata
+			#
+
+			outbuf[0:rgba_buffer_size] = rgba_buffer
 			outbuf.timestamp = self.t0 + int(round(float((self.next_out_offset - self.offset0) / self.out_rate) * gst.SECOND))
 			outbuf.offset = self.next_out_offset
 
-			self.buf = self.buf[N:]
+			#
+			# reset for next frame
+			#
+
+			self.buf = self.buf[samples_per_frame:]
 			frames += 1
 			self.next_out_offset += 1
 
@@ -138,7 +171,7 @@ class Histogram(gst.BaseTransform):
 	def do_transform_size(self, direction, caps, size, othercaps):
 		if direction == gst.PAD_SRC:
 			# convert size on src pad to size on sink pad
-			samples_per_frame = int(self.in_rate / float(self.out_rate))
+			samples_per_frame = int(round(float(self.in_rate / self.out_rate)))
 			if samples_per_frame <= len(self.buf):
 				# don't need any more data to build a frame
 				return 0
