@@ -1,3 +1,29 @@
+# Copyright (C) 2009  Kipp Cannon
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
 import matplotlib
 matplotlib.rcParams.update({
 	"font.size": 8.0,
@@ -21,6 +47,20 @@ import gobject
 import pygst
 pygst.require('0.10')
 import gst  
+
+
+__author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
+__version__ = "FIXME"
+__date__ = "FIXME"
+
+
+#
+# =============================================================================
+#
+#                                   Element
+#
+# =============================================================================
+#
 
 
 class Histogram(gst.BaseTransform):
@@ -50,19 +90,19 @@ class Histogram(gst.BaseTransform):
 				"green_mask = (int) 16711680, " +
 				"blue_mask = (int) 65280, " +
 				"alpha_mask = (int) 255, " +
-				#"endianness = (int) BYTE_ORDER"
 				"endianness = (int) 4321"
 			)
 		)
 	)
 
+
 	def __init__(self):
 		gst.BaseTransform.__init__(self)
 		self.in_rate = None
 		self.out_rate = None
-		self.out_width = None
-		self.out_height = None
-		self.buf = numpy.zeros((0,), dtype = "double")
+		self.out_width = 320	# default
+		self.out_height = 200	# default
+
 
 	def do_set_caps(self, incaps, outcaps):
 		self.in_rate = incaps[0]["rate"]
@@ -71,11 +111,14 @@ class Histogram(gst.BaseTransform):
 		self.out_height = outcaps[0]["height"]
 		return True
 
+
 	def do_start(self):
 		self.t0 = None
 		self.offset0 = None
 		self.next_out_offset = None
+		self.buf = numpy.zeros((0,), dtype = "double")
 		return True
+
 
 	def do_get_unit_size(self, caps):
 		if caps[0].get_name() == "audio/x-raw-float":
@@ -84,6 +127,7 @@ class Histogram(gst.BaseTransform):
 			return caps[0]["width"] * caps[0]["height"] * caps[0]["bpp"] / 8
 		else:
 			raise ValueError, caps
+
 
 	def do_transform(self, inbuf, outbuf):
 		#
@@ -132,7 +176,7 @@ class Histogram(gst.BaseTransform):
 			fig = figure.Figure()
 			FigureCanvas(fig)
 			fig.set_size_inches(self.out_width / float(fig.get_dpi()), self.out_height / float(fig.get_dpi()))
-			axes = fig.gca(xlabel = "Amplitude", ylabel = "Count", title = "Histogram", rasterized = True)
+			axes = fig.gca(xlabel = "Amplitude", ylabel = "Count", title = "Histogram", yscale = "log", rasterized = True)
 			axes.hist(self.buf[:samples_per_frame], bins = 100)
 
 			#
@@ -148,6 +192,7 @@ class Histogram(gst.BaseTransform):
 			#
 
 			outbuf[0:rgba_buffer_size] = rgba_buffer
+			outbuf.datasize = rgba_buffer_size
 			outbuf.timestamp = self.t0 + int(round(float((self.next_out_offset - self.offset0) / self.out_rate) * gst.SECOND))
 			outbuf.offset = self.next_out_offset
 
@@ -159,28 +204,53 @@ class Histogram(gst.BaseTransform):
 			frames += 1
 			self.next_out_offset += 1
 
+
 	def do_transform_caps(self, direction, caps):
 		if direction == gst.PAD_SRC:
+			#
 			# convert src pad's caps to sink pad's
+			#
+
 			return self.get_pad("sink").get_fixed_caps_func()
+
 		elif direction == gst.PAD_SINK:
+			#
 			# convert sink pad's caps to src pad's
+			#
+
 			return self.get_pad("src").get_fixed_caps_func()
+
 		raise ValueError
+
 
 	def do_transform_size(self, direction, caps, size, othercaps):
 		if direction == gst.PAD_SRC:
+			#
 			# convert size on src pad to size on sink pad
+			#
+
 			samples_per_frame = int(round(float(self.in_rate / self.out_rate)))
 			if samples_per_frame <= len(self.buf):
+				#
 				# don't need any more data to build a frame
+				#
+
 				return 0
+
+			#
 			# assume 8 bytes per input sample
+			#
+
 			return (samples_per_frame - len(self.buf)) * 8
+
 		elif direction == gst.PAD_SINK:
+			#
 			# convert size on sink pad to size on src pad
 			# assume 4 bytes per output pixel
+			#
+
 			return self.out_width * self.out_height * 4
+
 		raise ValueError, direction
 
 
