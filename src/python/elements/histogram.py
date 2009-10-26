@@ -39,7 +39,6 @@ matplotlib.rcParams.update({
 })
 from matplotlib import figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-import math
 import numpy
 
 
@@ -83,7 +82,7 @@ class Histogram(gst.BaseTransform):
 				"video/x-raw-rgb, " +
 				"width = (int) [1, MAX], " +
 				"height = (int) [1, MAX], " +
-				"framerate = (fraction) [0/1, MAX], " +
+				"framerate = (fraction) [0, MAX], " +
 				"bpp = (int) 32, " +
 				"depth = (int) 32, " +
 				"red_mask = (int) -16777216, " +
@@ -129,6 +128,49 @@ class Histogram(gst.BaseTransform):
 			raise ValueError, caps
 
 
+	def make_frame(self, samples, outbuf):
+		#
+		# generate histogram
+		#
+
+		fig = figure.Figure()
+		FigureCanvas(fig)
+		fig.set_size_inches(self.out_width / float(fig.get_dpi()), self.out_height / float(fig.get_dpi()))
+		axes = fig.gca(xlabel = "Amplitude", ylabel = "Count", title = "Histogram", yscale = "log", rasterized = True)
+		axes.hist(samples, bins = 100)
+
+		#
+		# extract pixel data
+		#
+
+		fig.canvas.draw()
+		rgba_buffer = fig.canvas.buffer_rgba(0, 0)
+		rgba_buffer_size = len(rgba_buffer)
+
+		#
+		# copy pixel data to output buffer
+		#
+
+		outbuf[0:rgba_buffer_size] = rgba_buffer
+		outbuf.datasize = rgba_buffer_size
+
+		#
+		# set metadata and advance output offset counter
+		#
+
+		outbuf.offset = self.next_out_offset
+		self.next_out_offset += 1
+		outbuf.offset_end = self.next_out_offset
+		outbuf.timestamp = self.t0 + int(round(float((outbuf.offset - self.offset0) / self.out_rate) * gst.SECOND))
+		outbuf.duration = self.t0 + int(round(float((outbuf.offset_end - self.offset0) / self.out_rate) * gst.SECOND)) - outbuf.timestamp
+
+		#
+		# done
+		#
+
+		return outbuf
+
+
 	def do_transform(self, inbuf, outbuf):
 		#
 		# make sure we have valid metadata
@@ -152,57 +194,30 @@ class Histogram(gst.BaseTransform):
 		samples_per_frame = int(round(self.in_rate / float(self.out_rate)))
 
 		#
-		# loop over output frames
+		# build output frame(s)
 		#
 
-		frames = 0
-		while True:
-			if len(self.buf) < samples_per_frame:
-				# not enough data for an output frame
-				if not frames:
-					# FIXME: should return
-					# GST_BASE_TRANSFORM_FLOW_DROPPED,
-					# don't know what that constant is,
-					# but I know it's #define'ed to
-					# GST_FLOW_CUSTOM_SUCCESS.  figure
-					# out what the constant should be
-					return gst.FLOW_CUSTOM_SUCCESS
-				return gst.FLOW_OK
+		if len(self.buf) < samples_per_frame:
+			# not enough data for output
+			# FIXME: should return
+			# GST_BASE_TRANSFORM_FLOW_DROPPED, don't know what
+			# that constant is, but I know it's #define'ed to
+			# GST_FLOW_CUSTOM_SUCCESS.  figure out what the
+			# constant should be
+			return gst.FLOW_CUSTOM_SUCCESS
 
-			#
-			# generate the histogram
-			#
-
-			fig = figure.Figure()
-			FigureCanvas(fig)
-			fig.set_size_inches(self.out_width / float(fig.get_dpi()), self.out_height / float(fig.get_dpi()))
-			axes = fig.gca(xlabel = "Amplitude", ylabel = "Count", title = "Histogram", yscale = "log", rasterized = True)
-			axes.hist(self.buf[:samples_per_frame], bins = 100)
-
-			#
-			# extract the pixel data
-			#
-
-			fig.canvas.draw()
-			rgba_buffer = fig.canvas.buffer_rgba(0, 0)
-			rgba_buffer_size = len(rgba_buffer)
-
-			#
-			# copy pixel data to output buffer and set metadata
-			#
-
-			outbuf[0:rgba_buffer_size] = rgba_buffer
-			outbuf.datasize = rgba_buffer_size
-			outbuf.timestamp = self.t0 + int(round(float((self.next_out_offset - self.offset0) / self.out_rate) * gst.SECOND))
-			outbuf.offset = self.next_out_offset
-
-			#
-			# reset for next frame
-			#
-
+		while len(self.buf) >= 2 * samples_per_frame:
+			flow_return, newoutbuf = self.get_pad("src").alloc_buffer(self.next_out_offset, self.out_width * self.out_height * 4, outbuf.caps)
+			self.get_pad("src").push(self.make_frame(self.buf[:samples_per_frame], newoutbuf))
 			self.buf = self.buf[samples_per_frame:]
-			frames += 1
-			self.next_out_offset += 1
+		self.make_frame(self.buf[:samples_per_frame], outbuf)
+		self.buf = self.buf[samples_per_frame:]
+
+		#
+		# done
+		#
+
+		return gst.FLOW_OK
 
 
 	def do_transform_caps(self, direction, caps):
@@ -224,32 +239,49 @@ class Histogram(gst.BaseTransform):
 
 
 	def do_transform_size(self, direction, caps, size, othercaps):
+		samples_per_frame = int(round(float(self.in_rate / self.out_rate)))
+
+		#
+		# assume 4 bytes per output pixel
+		#
+
+		bytes_per_frame = self.out_width * self.out_height * 4
+
 		if direction == gst.PAD_SRC:
 			#
-			# convert size on src pad to size on sink pad
+			# convert byte count on src pad to sample count on
+			# sink pad (minus samples we already have)
 			#
 
-			samples_per_frame = int(round(float(self.in_rate / self.out_rate)))
-			if samples_per_frame <= len(self.buf):
-				#
-				# don't need any more data to build a frame
-				#
+			samples = int(size / bytes_per_frame) * samples_per_frame - len(self.buf)
 
+			#
+			# convert to byte count on sink pad.  assume 8
+			# bytes per input sample
+			#
+
+			if samples <= 0:
 				return 0
-
-			#
-			# assume 8 bytes per input sample
-			#
-
-			return (samples_per_frame - len(self.buf)) * 8
+			return samples * 8
 
 		elif direction == gst.PAD_SINK:
 			#
-			# convert size on sink pad to size on src pad
-			# assume 4 bytes per output pixel
+			# convert byte count on sink pad plus samples we
+			# already have to frame count on src pad.  assume 8
+			# bytes per input sample
 			#
 
-			return self.out_width * self.out_height * 4
+			frames = (int(size / 8) + len(self.buf)) / samples_per_frame
+
+			#
+			# if there's enough for at least one frame, claim
+			# output size will be 1 frame.  additional buffers
+			# will be created as needed
+			#
+
+			if frames < 1:
+				return 0
+			return bytes_per_frame
 
 		raise ValueError, direction
 
