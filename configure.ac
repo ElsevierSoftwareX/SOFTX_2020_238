@@ -53,6 +53,16 @@ AX_CC_MAXOPT
 
 
 #
+# Check for FFTW
+#
+
+
+PKG_CHECK_MODULES([FFTW], [fftw3], , [echo "Not Found!" ; exit 1])
+AC_SUBST([FFTW_CFLAGS])
+AC_SUBST([FFTW_LIBS])
+
+
+#
 # Check for GStreamer 0.10
 #
 
