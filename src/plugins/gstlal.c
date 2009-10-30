@@ -222,10 +222,8 @@ GValueArray *gstlal_g_value_array_from_gsl_matrix(const gsl_matrix *matrix)
 	GValueArray *va;
 	GValue v = {0,};
 	guint i;
-	g_value_init(&v, G_TYPE_BOXED);
+	g_value_init(&v, G_TYPE_VALUE_ARRAY);
 
-	if(!matrix)
-		return NULL;
 	va = g_value_array_new(matrix->size1);
 	if(!va)
 		return NULL;
