@@ -541,7 +541,8 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 	case ARG_FIR_MATRIX:
 		g_mutex_lock(element->fir_matrix_lock);
-		g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix(element->fir_matrix));
+		if(element->fir_matrix)
+			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix(element->fir_matrix));
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
 
@@ -637,16 +638,16 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 		g_param_spec_value_array(
 			"fir-matrix",
 			"FIR Matrix",
-			"Array of impulse response vectors.  Number of filters (rows) in matrix sets number of output channels.  All filters must have the same length.",
+			"Array of impulse response vectors.  Number of vectors (rows) in matrix sets number of output channels.  All filters must have the same length.",
 			g_param_spec_value_array(
 				"response",
 				"Impulse Response",
-				"Array of coefficients.",
+				"Array of amplitudes.",
 				g_param_spec_double(
-					"coefficient",
-					"Coefficient",
-					"Impulse response coefficient",
-					-G_MAXDOUBLE, G_MAXDOUBLE, 1.0,
+					"amplitude",
+					"Amplitude",
+					"Impulse response sample",
+					-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
 					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 				),
 				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
