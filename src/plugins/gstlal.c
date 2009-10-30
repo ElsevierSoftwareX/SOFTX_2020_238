@@ -86,6 +86,7 @@
 #include <gstlal_gate.h>
 #include <gstlal_chisquare.h>
 #include <gstlal_autochisq.h>
+#include <gstlal_firbank.h>
 
 
 /*
@@ -625,6 +626,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_gate", GSTLAL_GATE_TYPE},
 		{"lal_chisquare", GSTLAL_CHISQUARE_TYPE},
 		{"lal_autochisq", GSTLAL_AUTOCHISQ_TYPE},
+		{"lal_firbank", GSTLAL_FIRBANK_TYPE},
 		{NULL, 0},
 	};
 	struct {
@@ -637,7 +639,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 	} *tagarg, tagargs[] = {
 		{GSTLAL_TAG_INSTRUMENT, GST_TAG_FLAG_META, G_TYPE_STRING, "instrument", "The short name of the instrument or observatory where this data was recorded, e.g., \"H1\"", gst_tag_merge_strings_with_comma},
 		{GSTLAL_TAG_CHANNEL_NAME, GST_TAG_FLAG_META, G_TYPE_STRING, "channel name", "The name of this channel, e.g., \"LSC-STRAIN\"", gst_tag_merge_strings_with_comma},
-		{GSTLAL_TAG_UNITS, GST_TAG_FLAG_META, G_TYPE_STRING, "units", "The units for this channel (as encoded by LAL), e.g., \"FIXME\"", NULL},
+		{GSTLAL_TAG_UNITS, GST_TAG_FLAG_META, G_TYPE_STRING, "units", "The units for this channel (as encoded by LAL), e.g., \"strain\".", NULL},
 		{NULL,},
 	};
 
