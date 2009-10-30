@@ -184,11 +184,12 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	"sink",
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
+/* FIXME:  BYTEORDER */
 	GST_STATIC_CAPS(
 		"audio/x-raw-float, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
-		"endianness = (int) BYTEORDER, " \
+		"endianness = (int) 1234, " \
 		"width = (int) 64"
 	)
 );
@@ -198,11 +199,12 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	"src",
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
+/* FIXME:  BYTEORDER */
 	GST_STATIC_CAPS(
 		"audio/x-raw-float, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) [1, MAX], " \
-		"endianness = (int) BYTEORDER, " \
+		"endianness = (int) 1234, " \
 		"width = (int) 64"
 	)
 );
@@ -619,9 +621,39 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 	gobject_class->get_property = get_property;
 	gobject_class->finalize = finalize;
 
-	g_object_class_install_property(gobject_class, ARG_BLOCK_LENGTH_FACTOR, g_param_spec_int("block-length-factor", "Convolution block size in multiples of the FIR size", "When using FFT convolutions, use this many times the number of samples in each FIR vector for the convolution block size.", 1, G_MAXINT, DEFAULT_BLOCK_LENGTH_FACTOR, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_FIR_MATRIX, g_param_spec_value_array("fir_matrix", "FIR Matrix", "Array of impulse response vectors.  Number of filters (rows) in matrix sets number of output channels.  All filters must have the same length.", g_param_spec_value_array("response", "Impulse Response", "Array of coefficients.", g_param_spec_double("coefficient", "Coefficient", "Impulse response coefficient", -G_MAXDOUBLE, G_MAXDOUBLE, 1.0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS), G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS), G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	
+	g_object_class_install_property(
+		gobject_class,
+		ARG_BLOCK_LENGTH_FACTOR,
+		g_param_spec_int(
+			"block-length-factor",
+			"Convolution block size in multiples of the FIR size",
+			"When using FFT convolutions, use this many times the number of samples in each FIR vector for the convolution block size.",
+			1, G_MAXINT, DEFAULT_BLOCK_LENGTH_FACTOR,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)
+		);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FIR_MATRIX,
+		g_param_spec_value_array(
+			"fir-matrix",
+			"FIR Matrix",
+			"Array of impulse response vectors.  Number of filters (rows) in matrix sets number of output channels.  All filters must have the same length.",
+			g_param_spec_value_array(
+				"response",
+				"Impulse Response",
+				"Array of coefficients.",
+				g_param_spec_double(
+					"coefficient",
+					"Coefficient",
+					"Impulse response coefficient",
+					-G_MAXDOUBLE, G_MAXDOUBLE, 1.0,
+					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+				),
+				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			),
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 }
 
 
