@@ -220,11 +220,13 @@ GST_BOILERPLATE(
 
 enum property {
 	ARG_BLOCK_LENGTH_FACTOR = 1,
-	ARG_FIR_MATRIX
+	ARG_FIR_MATRIX,
+	ARG_LATENCY
 };
 
 
 #define DEFAULT_BLOCK_LENGTH_FACTOR 4
+#define DEFAULT_LATENCY 0
 
 
 /*
@@ -514,6 +516,10 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 	}
 
+	case ARG_LATENCY:
+		element->latency = g_value_get_int(value);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -544,6 +550,10 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		if(element->fir_matrix)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix(element->fir_matrix));
 		g_mutex_unlock(element->fir_matrix_lock);
+		break;
+
+	case ARG_LATENCY:
+		g_value_set_int(value, element->latency);
 		break;
 
 	default:
@@ -630,8 +640,9 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 			"Convolution block size in multiples of the FIR size",
 			"When using FFT convolutions, use this many times the number of samples in each FIR vector for the convolution block size.",
 			1, G_MAXINT, DEFAULT_BLOCK_LENGTH_FACTOR,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)
-		);
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_FIR_MATRIX,
@@ -655,6 +666,17 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_LATENCY,
+		g_param_spec_int(
+			"latency",
+			"Latency",
+			"Impulse response latency in samples.",
+			0, G_MAXINT, DEFAULT_LATENCY,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 }
 
 
@@ -666,6 +688,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 static void gstlal_firbank_init(GSTLALFIRBank *filter, GSTLALFIRBankClass *kclass)
 {
 	filter->block_length_factor = DEFAULT_BLOCK_LENGTH_FACTOR;
+	filter->latency = DEFAULT_LATENCY;
 	filter->adapter = NULL;
 	filter->fir_matrix_lock = g_mutex_new();
 	filter->fir_matrix_available = g_cond_new();
