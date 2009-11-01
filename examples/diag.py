@@ -17,10 +17,17 @@ from gstlal import pipeparts
 #
 # =============================================================================
 #
-#                                     Main
+#                                  Pipelines
 #
 # =============================================================================
 #
+
+
+def test_histogram(pipeline):
+	head = pipeparts.mkprogressreport(pipeline, pipeparts.mkframesrc(pipeline, location = "/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache", instrument = "H1", channel_name = "LSC-STRAIN"), "src")
+	head = pipeparts.mkwhiten(pipeline, head)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogram(pipeline, head), "video/x-raw-rgb, width=640, height=480, framerate=1/4")
+	pipeparts.mkvideosink(pipeline, pipeparts.mkcolorspace(pipeline, head))
 
 
 #
@@ -36,7 +43,6 @@ class Handler(object):
 	def __init__(self, mainloop, pipeline):
 		self.mainloop = mainloop
 		self.pipeline = pipeline
-
 		bus = pipeline.get_bus()
 		bus.add_signal_watch()
 		bus.connect("message", self.on_message)
@@ -57,10 +63,8 @@ gobject.threads_init()
 mainloop = gobject.MainLoop()
 
 pipeline = gst.Pipeline("diag")
-head = pipeparts.mkprogressreport(pipeline, pipeparts.mkframesrc(pipeline, location = "/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache", instrument = "H1", channel_name = "LSC-STRAIN"), "src")
-head = pipeparts.mkwhiten(pipeline, head)
-head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogram(pipeline, head), "video/x-raw-rgb, width=640, height=480, framerate=1/4")
-pipeparts.mkvideosink(pipeline, pipeparts.mkcolorspace(pipeline, head))
+
+test_histogram(pipeline)
 
 handler = Handler(mainloop, pipeline)
 
