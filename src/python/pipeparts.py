@@ -34,6 +34,9 @@ pygst.require("0.10")
 import gst
 
 
+from elements import histogram
+
+
 from pylal import datatypes as laltypes
 
 
@@ -84,6 +87,7 @@ def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 *
 	pipeline.add(elem)
 	return elem
 
+
 def mkcapsfilter(pipeline, src, caps):
 	elem = gst.element_factory_make("capsfilter")
 	elem.set_property("caps", gst.Caps(caps))
@@ -91,12 +95,14 @@ def mkcapsfilter(pipeline, src, caps):
 	src.link(elem)
 	return elem
 
+
 def mktaginject(pipeline, src, tags):
 	elem = gst.element_factory_make("taginject")
 	elem.set_property("tags", tags)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
+
 
 def mkfakesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 1 * 8, volume = 1e-20):
 	elem = gst.element_factory_make("audiotestsrc")
@@ -106,6 +112,7 @@ def mkfakesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 
 	pipeline.add(elem)
 	return mktaginject(pipeline, mkcapsfilter(pipeline, elem, "audio/x-raw-float, width=64, rate=16384"), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
 
+
 def mkiirfilter(pipeline, src, a, b):
 	elem = gst.element_factory_make("audioiirfilter")
 	elem.set_property("a", a)
@@ -113,6 +120,7 @@ def mkiirfilter(pipeline, src, a, b):
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
+
 
 def mkfakeLIGOsrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 1 * 8):
 	head1 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 1.0)
@@ -145,11 +153,13 @@ def mkfakeLIGOsrc(pipeline, location, instrument, channel_name, blocksize = 1638
 	head4.link(head)
 	return mkaudioamplify(pipeline, head, 16384.**.5)
 
+
 def mkprogressreport(pipeline, src, name):
 	elem = gst.element_factory_make("progressreport", name)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
+
 
 def mkinjections(pipeline, src, filename):
 	elem = gst.element_factory_make("lal_simulation")
@@ -158,6 +168,7 @@ def mkinjections(pipeline, src, filename):
 	src.link(elem)
 	return elem
 
+
 def mkaudioamplify(pipeline, src, amplification):
 	elem = gst.element_factory_make("audioamplify")
 	elem.set_property("clipping-method", 3)
@@ -165,6 +176,7 @@ def mkaudioamplify(pipeline, src, amplification):
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
+
 
 def mkresample(pipeline, src, pad_name = None, **properties):
 	elem = gst.element_factory_make("audioresample")
@@ -178,6 +190,7 @@ def mkresample(pipeline, src, pad_name = None, **properties):
 		src.link_pads(pad_name, elem, "sink")
 	return elem
 
+
 def mkwhiten(pipeline, src):
 	elem = gst.element_factory_make("lal_whiten")
 	elem.set_property("psd-mode", 0)
@@ -189,6 +202,7 @@ def mkwhiten(pipeline, src):
 	src.link(elem)
 	return elem
 
+
 def mktee(pipeline, src, pad_name = None):
 	elem = gst.element_factory_make("tee")
 	pipeline.add(elem)
@@ -197,6 +211,7 @@ def mktee(pipeline, src, pad_name = None):
 	else:
 		src.link_pads(pad_name, elem, "sink")
 	return elem
+
 
 def mkqueue(pipeline, src, pad_name = None, **properties):
 	elem = gst.element_factory_make("queue")
@@ -208,6 +223,7 @@ def mkqueue(pipeline, src, pad_name = None, **properties):
 	else:
 		src.link_pads(pad_name, elem, "sink")
 	return elem
+
 
 def mkbank_oldchisq(pipeline, src, bank, bank_fragment, reference_psd_filename, control_snk, control_src):
 	elem = gst.element_factory_make("lal_templatebank")
@@ -253,6 +269,7 @@ def mkbank_oldchisq(pipeline, src, bank, bank_fragment, reference_psd_filename, 
 
 	return mkresample(pipeline, snr, quality = 0), mkresample(pipeline, chisq, quality = 0)
 
+
 def mkbank_newchisq(pipeline, src, bank, bank_fragment, reference_psd_filename, control_snk, control_src):
 	elem = gst.element_factory_make("lal_templatebank")
 	elem.set_property("t-start", bank_fragment.start)
@@ -288,12 +305,14 @@ def mkbank_newchisq(pipeline, src, bank, bank_fragment, reference_psd_filename, 
 
 	return mkresample(pipeline, snr, quality = 0)
 
+
 def mkfakesink(pipeline, src):
 	elem = gst.element_factory_make("fakesink")
 	elem.set_property("sync", False)
 	elem.set_property("preroll-queue-len", 1)
 	pipeline.add(elem)
 	src.link(elem)
+
 
 def mkfilesink(pipeline, src, filename):
 	elem = gst.element_factory_make("filesink")
@@ -303,6 +322,7 @@ def mkfilesink(pipeline, src, filename):
 	elem.set_property("location", filename)
 	pipeline.add(elem)
 	src.link(elem)
+
 
 def mknxydumpsink(pipeline, src, filename):
 	elem = gst.element_factory_make("lal_nxydump")
@@ -338,6 +358,7 @@ def mknxydumpsink(pipeline, src, filename):
 	#src.link(elem)
 	mkfilesink(pipeline, elem, filename)
 
+
 def mktriggergen(pipeline, snr, chisq, template_bank_filename, snr_threshold):
 	elem = gst.element_factory_make("lal_triggergen")
 	elem.set_property("bank-filename", template_bank_filename)
@@ -347,6 +368,7 @@ def mktriggergen(pipeline, snr, chisq, template_bank_filename, snr_threshold):
 	chisq.link(elem)
 	return elem
 
+
 def mktriggerxmlwritersink(pipeline, src, filename):
 	elem = gst.element_factory_make("lal_triggerxmlwriter")
 	elem.set_property("location", filename)
@@ -354,6 +376,28 @@ def mktriggerxmlwritersink(pipeline, src, filename):
 	elem.set_property("preroll-queue-len", 1)
 	pipeline.add(elem)
 	src.link(elem)
+
+
+def mkhistogram(pipeline, src):
+	elem = histogram.Histogram()
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
+def mkcolorspace(pipeline, src):
+	elem = gst.element_factory_make("ffmpegcolorspace")
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
+def mkvideosink(pipeline, src):
+	elem = gst.element_factory_make("autovideosink")
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
 
 def mkscopesink(pipeline, src):
 	elems = (
@@ -369,9 +413,9 @@ def mkscopesink(pipeline, src):
 	pipeline.add(*elems)
 	gst.element_link_many(mkqueue(pipeline, src), *elems)
 
+
 def mkplaybacksink(pipeline, src):
 	elems = (
-		gst.element_factory_make("adder"),
 		gst.element_factory_make("audioresample"),
 		gst.element_factory_make("audioconvert"),
 		gst.element_factory_make("capsfilter"),
