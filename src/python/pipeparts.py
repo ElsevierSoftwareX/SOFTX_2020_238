@@ -95,27 +95,23 @@ def mkiirfilter(pipeline, src, a, b):
 
 
 def mkfakeLIGOsrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 1 * 8):
-	head1 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 1.0)
+	head1 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 5.03407936516e-17)
 	a = [1.87140685e-05, 3.74281370e-05, 1.87140685e-05]
 	b = [1., 1.98861643, -0.98869215]
 	for idx in range(14):
 		head1 = mkiirfilter(pipeline, head1, a, b)
-	head1 = mkaudioamplify(pipeline, head1, 5.03407936516e-17)
 
-	head2 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 1.0)
+	head2 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 1.39238913312e-20)
 	a = [9.17933667e-07, 1.83586733e-06, 9.17933667e-07]
 	b = [1., 1.99728828, -0.99729195]
 	head2 = mkiirfilter(pipeline, head2, a, b)
-	head2 = mkaudioamplify(pipeline, head2, 1.39238913312e-20)
 
-	head3 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 1.0)
-	head3 = mkaudioamplify(pipeline, head3, 2.16333076528e-23)
+	head3 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 2.16333076528e-23)
 
-	head4 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 1.0)
+	head4 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 1.61077910675e-20)
 	a = [0.03780506, -0.03780506]
 	b = [1.0, -0.9243905]
 	head4 = mkiirfilter(pipeline, head4, a, b)
-	head4 = mkaudioamplify(pipeline, head4, 1.61077910675e-20)
 
 	head = gst.element_factory_make("adder")
 	pipeline.add(head)
