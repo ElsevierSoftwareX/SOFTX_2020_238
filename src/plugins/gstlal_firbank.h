@@ -76,7 +76,7 @@ typedef struct {
 	GstBaseTransform element;
 
 	gint block_length_factor;
-	gint latency;
+	gint64 latency;
 
 	gint rate;
 

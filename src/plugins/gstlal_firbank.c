@@ -151,8 +151,8 @@ static void set_metadata(GSTLALFIRBank *element, GstBuffer *buf, guint64 outsamp
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
-	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->rate);
-	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(buf);
+	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) + element->latency - element->offset0, GST_SECOND, element->rate);
+	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) + element->latency - element->offset0, GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(buf);
 	if(element->need_discont) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
@@ -245,6 +245,12 @@ static GstFlowReturn tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	gst_adapter_flush(element->adapter, output_length * sizeof(double));
 	if(output_length > input_length - element->zeros_in_adapter)
 		element->zeros_in_adapter -= output_length - (input_length - element->zeros_in_adapter);
+
+	/*
+	 * set buffer metadata
+	 */
+
+	set_metadata(element, outbuf, output_length);
 
 	/*
 	 * done
@@ -519,6 +525,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		/*
 		 * input is not 0s.
 		 */
+
 		gst_buffer_ref(inbuf);	/* don't let the adapter free it */
 		gst_adapter_push(element->adapter, inbuf);
 		element->zeros_in_adapter = 0;
@@ -531,6 +538,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * input buffer, which is the size we need now.  all we
 		 * have to do is make it a gap
 		 */
+
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		set_metadata(element, outbuf, GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf));
@@ -542,6 +550,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * that.  push length 0s into the adapter and run normal
 		 * filtering
 		 */
+
 		push_zeros(element, length);
 		result = tdfilter(element, outbuf);
 	} else {
@@ -550,6 +559,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * response, but the input is long enough to push us past
 		 * the end.
 		 */
+
 		GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
 		guint64 available_samples = get_available_samples(element);
 		GstBuffer *buf;
@@ -568,12 +578,12 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, available_samples * fir_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
 		if(result != GST_FLOW_OK)
-			return result;
+			goto done;
 		result = tdfilter(element, buf);
 		g_assert(result == GST_FLOW_OK);
 		result = gst_pad_push(srcpad, buf);
 		if(result != GST_FLOW_OK)
-			return result;
+			goto done;
 
 		/*
 		 * remainder of input produces 0s in output.  make outbuf a
@@ -586,6 +596,11 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		set_metadata(element, outbuf, length);
 	}
 
+	/*
+	 * done
+	 */
+
+done:
 	g_mutex_unlock(element->fir_matrix_lock);
 	return result;
 }
@@ -617,20 +632,28 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 
 	case ARG_FIR_MATRIX: {
+		int channels;
 		GValueArray *va = g_value_get_boxed(value);
 		g_mutex_lock(element->fir_matrix_lock);
 		if(element->fir_matrix) {
+			channels = fir_channels(element);
 			gsl_matrix_free(element->fir_matrix);
-			element->fir_matrix = NULL;
-		}
+		} else
+			channels = 0;
 		element->fir_matrix = gstlal_gsl_matrix_from_g_value_array(va);
+		if(fir_channels(element) != channels)
+			/*
+			 * number of channels has changed, force a caps
+			 * renegotiation
+			 */
+			 gst_pad_set_caps(GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(object)), NULL);
 		g_cond_signal(element->fir_matrix_available);
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
 	}
 
 	case ARG_LATENCY:
-		element->latency = g_value_get_int(value);
+		element->latency = g_value_get_int64(value);
 		break;
 
 	default:
@@ -666,7 +689,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		break;
 
 	case ARG_LATENCY:
-		g_value_set_int(value, element->latency);
+		g_value_set_int64(value, element->latency);
 		break;
 
 	default:
@@ -782,11 +805,11 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 	g_object_class_install_property(
 		gobject_class,
 		ARG_LATENCY,
-		g_param_spec_int(
+		g_param_spec_int64(
 			"latency",
 			"Latency",
-			"Impulse response latency in samples.",
-			0, G_MAXINT, DEFAULT_LATENCY,
+			"Filter latency in samples.",
+			G_MININT64, G_MAXINT64, DEFAULT_LATENCY,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
