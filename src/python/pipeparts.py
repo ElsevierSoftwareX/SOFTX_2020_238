@@ -197,7 +197,7 @@ def mkfirbank(pipeline, src, latency = None, fir_matrix = None):
 	elem = gst.element_factory_make("lal_firbank")
 	if latency is not None:
 		elem.set_property("latency", latency)
-	if firbank is not None:
+	if fir_matrix is not None:
 		elem.set_property("fir-matrix", fir_matrix)
 	pipeline.add(elem)
 	src.link(elem)
@@ -309,7 +309,7 @@ def mknxydumpsink(pipeline, src, filename):
 		# output for hardware injection @ 874107078.149271066
 		elem.set_property("start-time", 874107068000000000)
 		elem.set_property("stop-time", 874107088000000000)
-	elif True:
+	elif False:
 		# output for impulse injection @ 873337860
 		elem.set_property("start-time", 873337850000000000)
 		elem.set_property("stop-time", 873337960000000000)
@@ -323,10 +323,12 @@ def mknxydumpsink(pipeline, src, filename):
 		# FIXME:  what's at this time?
 		elem.set_property("start-time", 873248760000000000)
 		elem.set_property("stop-time", 873248960000000000)
-	else:
+	elif False:
 		# output to dump lots and lots of data (the whole cache)
 		elem.set_property("start-time", 873247860000000000)
 		elem.set_property("stop-time", 873424754000000000)
+	else:
+		pass
 	pipeline.add(elem)
 	src.link(elem)
 	# FIXME:  add bz2enc element from plugins-bad to compress text
