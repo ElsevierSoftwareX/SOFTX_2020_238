@@ -359,7 +359,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
 	guint n;
 
-	caps = gst_caps_make_writable(caps);
+	caps = gst_caps_copy(caps);
 
 	switch(direction) {
 	case GST_PAD_SRC:
