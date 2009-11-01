@@ -787,7 +787,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALTemplateBank *element = GSTLAL_TEMPLATEBANK(gst_pad_get_parent(pad));
 	GstFlowReturn result = GST_FLOW_OK;
-	int output_length;
 
 	/*
 	 * Now that we know the sample rate, construct orthogonal basis for
@@ -921,7 +920,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * negative result.
 		 */
 
-		output_length = (int) (gst_adapter_available(element->adapter) / sizeof(*time_series.vector.data)) - template_length(element) + 1;
+		int output_length = (int) (gst_adapter_available(element->adapter) / sizeof(*time_series.vector.data)) - template_length(element) + 1;
 
 		/*
 		 * Clip to the requested output length.  Quit the loop if
