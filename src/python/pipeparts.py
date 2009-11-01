@@ -193,6 +193,17 @@ def mkqueue(pipeline, src, pad_name = None, **properties):
 	return elem
 
 
+def mkfirbank(pipeline, src, latency = None, fir_matrix = None):
+	elem = gst.element_factory_make("lal_firbank")
+	if latency is not None:
+		elem.set_property("latency", latency)
+	if firbank is not None:
+		elem.set_property("fir-matrix", fir_matrix)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
 def mkbank_oldchisq(pipeline, src, bank, bank_fragment, reference_psd_filename, control_snk, control_src):
 	elem = gst.element_factory_make("lal_templatebank")
 	elem.set_property("t-start", bank_fragment.start)
