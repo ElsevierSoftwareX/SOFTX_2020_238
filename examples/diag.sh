@@ -43,7 +43,7 @@ function test_resampler_gaps() {
 		lal_gate name=gate threshold=0.7 \
 		! tee name=orig \
 		! audioresample gap-aware=true \
-		! audio/x-raw-float, width=64, rate=2048 \
+		! audio/x-raw-float, width=64, rate=16384 \
 		! lal_nxydump \
 		! queue ! filesink buffer-mode=2 location="dump_out.txt" \
 		audiotestsrc freq=15.8 samplesperbuffer=1024 num-buffers=8 \
@@ -51,7 +51,7 @@ function test_resampler_gaps() {
 		! tee name=control \
 		! gate.control \
 		audiotestsrc freq=256 samplesperbuffer=1024 num-buffers=128 \
-		! audio/x-raw-float, channels=1, width=64, rate=16384 \
+		! audio/x-raw-float, channels=1, width=64, rate=2048 \
 		! gate.sink \
 		control. \
 		! lal_nxydump \
@@ -162,4 +162,4 @@ function test_chisquare_gaps() {
 		! queue ! filesink buffer-mode=2 location="dump_in.txt"
 }
 
-test_chisquare_gaps
+test_resampler_gaps
