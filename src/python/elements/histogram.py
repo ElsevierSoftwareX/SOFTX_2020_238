@@ -45,7 +45,10 @@ import numpy
 import gobject
 import pygst
 pygst.require('0.10')
-import gst  
+import gst
+
+
+from pylal.datatypes import LALUnit
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -101,6 +104,9 @@ class Histogram(gst.BaseTransform):
 		self.out_rate = None
 		self.out_width = 320	# default
 		self.out_height = 200	# default
+		self.instrument = None
+		self.channel_name = None
+		self.sample_units = None
 
 
 	def do_set_caps(self, incaps, outcaps):
@@ -128,7 +134,29 @@ class Histogram(gst.BaseTransform):
 			raise ValueError, caps
 
 
+	def do_event(self, event):
+		if event.type == gst.EVENT_TAG:
+			taglist = event.parse_tag()
+			if "instrument" in taglist:
+				self.instrument = taglist["instrument"]
+			if "channel-name" in taglist:
+				self.channel_name = taglist["channel-name"]
+			if "units" in taglist:
+				self.sample_units = LALUnit(taglist["units"].strip())
+		return True
+
+
 	def make_frame(self, samples, outbuf):
+		#
+		# set metadata and advance output offset counter
+		#
+
+		outbuf.offset = self.next_out_offset
+		self.next_out_offset += 1
+		outbuf.offset_end = self.next_out_offset
+		outbuf.timestamp = self.t0 + int(round(float(int(outbuf.offset - self.offset0) / self.out_rate) * gst.SECOND))
+		outbuf.duration = self.t0 + int(round(float(int(outbuf.offset_end - self.offset0) / self.out_rate) * gst.SECOND)) - outbuf.timestamp
+
 		#
 		# generate histogram
 		#
@@ -136,8 +164,17 @@ class Histogram(gst.BaseTransform):
 		fig = figure.Figure()
 		FigureCanvas(fig)
 		fig.set_size_inches(self.out_width / float(fig.get_dpi()), self.out_height / float(fig.get_dpi()))
-		axes = fig.gca(xlabel = "Amplitude", ylabel = "Count", title = "Histogram", yscale = "log", rasterized = True)
-		axes.hist(samples, bins = 100)
+		axes = fig.gca(yscale = "log", rasterized = True)
+		axes.hist(samples, bins = 101)
+		if self.channel_name is not None:
+			xlabel = r"Channel %s" % self.channel_name
+		else:
+			xlabel = r"Amplitude"
+		if self.sample_units is not None:
+			xlabel += " (%s)" % (str(self.sample_units) or "dimensionless")
+		axes.set_xlabel(xlabel)
+		axes.set_ylabel(r"Count")
+		axes.set_title(r"%s (%.9g s --- %.9g s)" % (self.instrument or "Histogram", float(outbuf.timestamp) / gst.SECOND, float(outbuf.timestamp + outbuf.duration) / gst.SECOND))
 
 		#
 		# extract pixel data
@@ -153,16 +190,6 @@ class Histogram(gst.BaseTransform):
 
 		outbuf[0:rgba_buffer_size] = rgba_buffer
 		outbuf.datasize = rgba_buffer_size
-
-		#
-		# set metadata and advance output offset counter
-		#
-
-		outbuf.offset = self.next_out_offset
-		self.next_out_offset += 1
-		outbuf.offset_end = self.next_out_offset
-		outbuf.timestamp = self.t0 + int(round(float((outbuf.offset - self.offset0) / self.out_rate) * gst.SECOND))
-		outbuf.duration = self.t0 + int(round(float((outbuf.offset_end - self.offset0) / self.out_rate) * gst.SECOND)) - outbuf.timestamp
 
 		#
 		# done
