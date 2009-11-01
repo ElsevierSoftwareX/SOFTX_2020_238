@@ -151,8 +151,8 @@ static void set_metadata(GSTLALFIRBank *element, GstBuffer *buf, guint64 outsamp
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
-	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) + element->latency - element->offset0, GST_SECOND, element->rate);
-	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) + element->latency - element->offset0, GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(buf);
+	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->rate);
+	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(buf);
 	if(element->need_discont) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
@@ -197,11 +197,10 @@ static GstFlowReturn tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 		return GST_BASE_TRANSFORM_FLOW_DROPPED;
 
 	/*
-	 * wrap the adapter's contents in a GSL vector view.  to produce
-	 * output_length samples requires output_length + fir_length - 1
-	 * samples from the adapter.  note that the wrapper vector's length
-	 * is set to the fir_length length, not the length that has been
-	 * peeked at, so that inner products work properly.
+	 * wrap the adapter's contents in a GSL vector view.  note that the
+	 * wrapper vector's length is set to the fir_length length, not the
+	 * length that has been peeked at, so that inner products work
+	 * properly.
 	 */
 
 	input = gsl_vector_view_array((double *) gst_adapter_peek(element->adapter, input_length * sizeof(double)), fir_length(element));
@@ -244,6 +243,10 @@ static GstFlowReturn tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 
 	gst_adapter_flush(element->adapter, output_length * sizeof(double));
 	if(output_length > input_length - element->zeros_in_adapter)
+		/*
+		 * some trailing zeros have been flushed from the adapter
+		 */
+
 		element->zeros_in_adapter -= output_length - (input_length - element->zeros_in_adapter);
 
 	/*
@@ -493,12 +496,11 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	if(GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0)) {
 		/*
-		 * flush adapter, pad with zeros
+		 * flush adapter
 		 */
 
 		gst_adapter_clear(element->adapter);
 		element->zeros_in_adapter = 0;
-		push_zeros(element, (fir_length(element) - 1) / 2);
 
 		/*
 		 * (re)sync timestamp and offset book-keeping
@@ -506,7 +508,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
-		element->next_out_offset = element->offset0;
+		element->next_out_offset = element->offset0 + fir_length(element) - 1 - element->latency;
 
 		/*
 		 * be sure to flag the next output buffer as a discontinuity
