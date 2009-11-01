@@ -25,7 +25,6 @@
 
 
 import math
-import numpy
 
 
 import gobject
@@ -37,36 +36,9 @@ import gst
 from elements import histogram
 
 
-from pylal import datatypes as laltypes
-
-
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
 __version__ = "FIXME"
 __date__ = "FIXME"
-
-
-#
-# =============================================================================
-#
-#                                   Messages
-#
-# =============================================================================
-#
-
-
-def parse_spectrum_message(message):
-	"""
-	Parse a "spectrum" message from the lal_whiten element, return a
-	LAL REAL8FrequencySeries containing the strain spectral density.
-	"""
-	return laltypes.REAL8FrequencySeries(
-		name = "PSD",
-		epoch = laltypes.LIGOTimeGPS(0, message.structure["timestamp"]),
-		f0 = 0.0,
-		deltaF = message.structure["delta-f"],
-		sampleUnits = laltypes.LALUnit(message.structure["sample-units"]),
-		data = numpy.array(message.structure["magnitude"])
-	)
 
 
 #
