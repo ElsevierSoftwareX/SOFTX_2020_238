@@ -204,6 +204,15 @@ def mkfirbank(pipeline, src, latency = None, fir_matrix = None):
 	return elem
 
 
+def mksumsquares(pipeline, src, weights = None):
+	elem = gst.element_factory_make("lal_sumsquares")
+	if weights is not None:
+		elem.set_property("weights", weights)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
 def mkbank_oldchisq(pipeline, src, bank, bank_fragment, reference_psd_filename, control_snk, control_src):
 	elem = gst.element_factory_make("lal_templatebank")
 	elem.set_property("t-start", bank_fragment.start)
