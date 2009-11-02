@@ -397,10 +397,8 @@ static void finalize(GObject *object)
 
 	g_mutex_free(element->weights_lock);
 	element->weights_lock = NULL;
-	if(element->weights) {
-		g_free(element->weights);
-		element->weights = NULL;
-	}
+	g_free(element->weights);
+	element->weights = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
