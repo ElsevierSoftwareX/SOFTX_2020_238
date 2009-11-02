@@ -85,12 +85,12 @@ static GstFlowReturn sumsquares(GSTLALSumSquares *element, GstBuffer *inbuf, Gst
 	const double *src = (const double *) GST_BUFFER_DATA(inbuf);
 	double *dst = (double *) GST_BUFFER_DATA(outbuf);
 	double *dst_end = dst + (GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf));
-	gint channel;
 	double *weights;
 
 	if(element->weights)
 		weights = element->weights;
 	else {
+		gint channel;
 		weights = g_new(gdouble, element->channels);
 		for(channel = 0; channel < element->channels; channel++)
 			weights[channel] = 1.0;
@@ -98,9 +98,10 @@ static GstFlowReturn sumsquares(GSTLALSumSquares *element, GstBuffer *inbuf, Gst
 
 	for(; dst < dst_end; dst++) {
 		const double *src_end = src + element->channels;
+		const double *w = weights;
 		*dst = 0;
-		for(; src < src_end; src++)
-			*dst += weights[channel] * pow(*src, 2);
+		for(; src < src_end; w++, src++)
+			*dst += *w * pow(*src, 2);
 	}
 
 	if(!element->weights)
@@ -259,12 +260,12 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		return FALSE;
 	}
 
-	if(element->weights && (channels != element->channels)) {
+	if(!element->weights)
+		element->channels = channels;
+	else if(channels != element->channels) {
 		GST_DEBUG_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, element->channels, incaps);
 		return FALSE;
 	}
-
-	element->channels = channels;
 
 	return TRUE;
 }
@@ -279,10 +280,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 {
 	GSTLALSumSquares *element = GSTLAL_SUMSQUARES(trans);
 	GstFlowReturn result;
-
-	/*
-	 * gap logic
-	 */
 
 	if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
 		/*
