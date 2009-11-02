@@ -254,9 +254,10 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 
 static REAL8FrequencySeries *make_empty_psd(double f0, double deltaF, int length, LALUnit sample_units)
 {
-	LALUnit unit = gstlal_lalUnitSquaredPerHertz(sample_units);
-	REAL8FrequencySeries *psd = XLALCreateREAL8FrequencySeries("PSD", &GPS_ZERO, f0, deltaF, &unit, length);
+	REAL8FrequencySeries *psd;
 
+	sample_units = gstlal_lalUnitSquaredPerHertz(sample_units);
+	psd = XLALCreateREAL8FrequencySeries("PSD", &GPS_ZERO, f0, deltaF, &sample_units, length);
 	if(!psd) {
 		GST_ERROR("XLALCreateREAL8FrequencySeries() failed");
 		XLALClearErrno();
@@ -452,9 +453,10 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		if(XLALPSDRegressorSetPSD(element->psd_regressor, psd, XLALPSDRegressorGetAverageSamples(element->psd_regressor))) {
 			GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
 			XLALClearErrno();
+		} else {
+			XLALDestroyREAL8FrequencySeries(element->psd);
+			element->psd = psd;
 		}
-		XLALDestroyREAL8FrequencySeries(element->psd);
-		element->psd = psd;
 		break;
 	}
 	}
