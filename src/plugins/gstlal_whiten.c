@@ -639,7 +639,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 				gchar dimensionless_units[16];	/* argh hard-coded length = BAD BAD BAD */
 				XLALUnitAsString(dimensionless_units, sizeof(dimensionless_units), &lalDimensionlessUnit);
 				/* FIXME:  gstreamer doesn't like empty strings */
-				gst_tag_list_add(taglist, GST_TAG_MERGE_REPLACE_ALL, GSTLAL_TAG_UNITS, " "/*dimensionless_units*/, NULL);
+				gst_tag_list_add(taglist, GST_TAG_MERGE_REPLACE, GSTLAL_TAG_UNITS, " "/*dimensionless_units*/, NULL);
 			}
 
 			g_free(units);
