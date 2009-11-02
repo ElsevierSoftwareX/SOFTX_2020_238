@@ -415,17 +415,22 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 
 	s = gst_caps_get_structure(outcaps, 0);
 	if(!gst_structure_get_int(s, "channels", &channels)) {
-		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
+		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, outcaps);
 		return FALSE;
 	}
 	if(!gst_structure_get_int(s, "rate", &rate)) {
-		GST_DEBUG_OBJECT(element, "unable to parse rate from %" GST_PTR_FORMAT, incaps);
+		GST_DEBUG_OBJECT(element, "unable to parse rate from %" GST_PTR_FORMAT, outcaps);
 		return FALSE;
 	}
 
 	if(element->fir_matrix && (channels != fir_channels(element))) {
 		GST_DEBUG_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, fir_channels(element), outcaps);
 		return FALSE;
+	}
+
+	if(rate != element->rate) {
+		/* FIXME:  emit "rate-changed" signal like gstreamer's
+		 * audiofirfilter element does. */
 	}
 
 	element->rate = rate;
