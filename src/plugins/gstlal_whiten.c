@@ -980,13 +980,90 @@ static void class_init(gpointer class, gpointer class_data)
 	gobject_class->get_property = get_property;
 	gobject_class->finalize = finalize;
 
-	g_object_class_install_property(gobject_class, ARG_PSDMODE, g_param_spec_enum("psd-mode", "PSD mode", "PSD estimation mode", GSTLAL_PSDMODE_TYPE, DEFAULT_PSDMODE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_ZERO_PAD_SECONDS, g_param_spec_double("zero-pad", "Zero-padding", "Length of the zero-padding to include on both sides of the FFT in seconds", 0, G_MAXDOUBLE, DEFAULT_ZERO_PAD_SECONDS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_FFT_LENGTH, g_param_spec_double("fft-length", "FFT length", "Total length of the FFT convolution in seconds", 0, G_MAXDOUBLE, DEFAULT_FFT_LENGTH_SECONDS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_AVERAGE_SAMPLES, g_param_spec_uint("average-samples", "Average samples", "Number of FFTs used in PSD average", 1, G_MAXUINT, DEFAULT_AVERAGE_SAMPLES, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_MEDIAN_SAMPLES, g_param_spec_uint("median-samples", "Median samples", "Number of FFTs used in PSD median history", 1, G_MAXUINT, DEFAULT_MEDIAN_SAMPLES, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_DELTA_F, g_param_spec_double("delta-f", "Delta f", "PSD frequency resolution in Hz", 0, G_MAXDOUBLE, 0, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_PSD, g_param_spec_value_array("psd", "PSD", "Power spectral density (first bin is at 0 Hz, bin spacing is delta-f)", g_param_spec_double("bin", "Bin", "Power spectral density bin", -G_MAXDOUBLE, G_MAXDOUBLE, 1.0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS), G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(
+		gobject_class,
+		ARG_PSDMODE,
+		g_param_spec_enum(
+			"psd-mode",
+			"PSD mode",
+			"PSD estimation mode",
+			GSTLAL_PSDMODE_TYPE,
+			DEFAULT_PSDMODE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_ZERO_PAD_SECONDS,
+		g_param_spec_double(
+			"zero-pad",
+			"Zero-padding",
+			"Length of the zero-padding to include on both sides of the FFT in seconds",
+			0, G_MAXDOUBLE, DEFAULT_ZERO_PAD_SECONDS,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FFT_LENGTH,
+		g_param_spec_double(
+			"fft-length",
+			"FFT length",
+			"Total length of the FFT convolution in seconds",
+			0, G_MAXDOUBLE, DEFAULT_FFT_LENGTH_SECONDS,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_AVERAGE_SAMPLES,
+		g_param_spec_uint(
+			"average-samples",
+			"Average samples",
+			"Number of FFTs used in PSD average",
+			1, G_MAXUINT, DEFAULT_AVERAGE_SAMPLES,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_MEDIAN_SAMPLES,
+		g_param_spec_uint(
+			"median-samples",
+			"Median samples",
+			"Number of FFTs used in PSD median history",
+			1, G_MAXUINT, DEFAULT_MEDIAN_SAMPLES,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_DELTA_F,
+		g_param_spec_double(
+			"delta-f",
+			"Delta f",
+			"PSD frequency resolution in Hz",
+			0, G_MAXDOUBLE, 0,
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_PSD,
+		g_param_spec_value_array(
+			"psd",
+			"PSD",
+			"Power spectral density (first bin is at 0 Hz, bin spacing is delta-f)",
+			g_param_spec_double(
+				"bin",
+				"Bin",
+				"Power spectral density bin",
+				-G_MAXDOUBLE, G_MAXDOUBLE, 1.0,
+				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			),
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 }
 
 
