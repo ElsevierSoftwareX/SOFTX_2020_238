@@ -30,6 +30,18 @@ def test_histogram(pipeline):
 	pipeparts.mkvideosink(pipeline, pipeparts.mkcolorspace(pipeline, head))
 
 
+def test_sumsquares(pipeline):
+	head = gst.element_factory_make("audiotestsrc")
+	head.set_property("samplesperbuffer", 2048)
+	head.set_property("wave", 9)
+	head.set_property("volume", 1)
+	pipeline.add(head)
+	head = pipeparts.mkprogressreport(pipeline, pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=2048, channels=2"), "src")
+	head = pipeparts.mksumsquares(pipeline, head)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogram(pipeline, head), "video/x-raw-rgb, width=640, height=480, framerate=1/8")
+	pipeparts.mkvideosink(pipeline, pipeparts.mkcolorspace(pipeline, head))
+
+
 def test_firbank(pipeline):
 	head = gst.element_factory_make("audiotestsrc")
 	head.set_property("samplesperbuffer", 2048)
@@ -78,7 +90,7 @@ mainloop = gobject.MainLoop()
 
 pipeline = gst.Pipeline("diag")
 
-test_firbank(pipeline)
+test_sumsquares(pipeline)
 
 handler = Handler(mainloop, pipeline)
 
