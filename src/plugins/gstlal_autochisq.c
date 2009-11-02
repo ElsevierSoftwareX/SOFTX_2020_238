@@ -572,7 +572,7 @@ static GstFlowReturn transform (GstBaseTransform *trans, GstBuffer *inbuf, GstBu
     memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
     set_metadata(element, outbuf, GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf));
     result = GST_FLOW_OK;
-  } else if(length <= autocorrelation_samples(element) - 1) {
+  } else if(element->zeros_in_adapter + length < autocorrelation_samples(element)) {
     /* push length zeroes in the adapter and run normal \chi^{2} code */
     push_zeros(element, length);
     result = chisquared(outbuf, element);
