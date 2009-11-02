@@ -69,9 +69,11 @@ extern GMutex *gstlal_fftw_lock;
 
 
 GValueArray *gstlal_g_value_array_from_doubles(const gdouble *, gint);
-gdouble *gstlal_doubles_from_g_value_array(GValueArray *, gdouble *);
-GValueArray *gstlal_g_value_array_from_gsl_matrix(const gsl_matrix *);
+gdouble *gstlal_doubles_from_g_value_array(GValueArray *, gdouble *, gint *);
+gsl_vector *gstlal_gsl_vector_from_g_value_array(GValueArray *);
+GValueArray *gstlal_g_value_array_from_gsl_vector(const gsl_vector *);
 gsl_matrix *gstlal_gsl_matrix_from_g_value_array(GValueArray *);
+GValueArray *gstlal_g_value_array_from_gsl_matrix(const gsl_matrix *);
 char *gstlal_build_full_channel_name(const char *, const char *);
 REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *, const char *, const char *, const char *);
 LALUnit gstlal_lalStrainPerADCCount(void);

@@ -16,7 +16,8 @@ libgstlal_la_SOURCES = \
 	gstlal_gate.h gstlal_gate.c \
 	gstlal_chisquare.h gstlal_chisquare.c \
 	gstlal_autochisq.h gstlal_autochisq.c \
-	gstlal_firbank.h gstlal_firbank.c
+	gstlal_firbank.h gstlal_firbank.c \
+	gstlal_sumsquares.h gstlal_sumsquares.c
 libgstlal_la_CFLAGS = -O2 $(AM_CFLAGS) $(CFLAGS) ${gstreamer_CFLAGS} ${LAL_CFLAGS} ${GSL_CFLAGS} ${FFTW_CFLAGS}
 libgstlal_la_LIBADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS} ${FFTW_LIBS}
 libgstlal_la_LDFLAGS = ${GSTREAMER_PLUGIN_LDFLAGS}
@@ -38,7 +39,8 @@ test_program_SOURCES = test_program.c \
 	gstlal_gate.h gstlal_gate.c \
 	gstlal_chisquare.h gstlal_chisquare.c \
 	gstlal_autochisq.h gstlal_autochisq.c \
-	gstlal_firbank.h gstlal_firbank.c
+	gstlal_firbank.h gstlal_firbank.c \
+	gstlal_sumsquares.h gstlal_sumsquares.c
 test_program_CFLAGS = -g -O2 $(AM_CFLAGS) $(CFLAGS) ${gstreamer_CFLAGS} ${LAL_CFLAGS} ${GSL_CFLAGS} ${FFTW_CFLAGS}
 test_program_LDADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS} ${FFTW_LIBS}
 

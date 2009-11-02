@@ -87,6 +87,7 @@
 #include <gstlal_chisquare.h>
 #include <gstlal_autochisq.h>
 #include <gstlal_firbank.h>
+#include <gstlal_sumsquares.h>
 
 
 /*
@@ -119,7 +120,7 @@ GMutex *gstlal_fftw_lock;
  */
 
 
-gdouble *gstlal_doubles_from_g_value_array(GValueArray *va, gdouble *dest)
+gdouble *gstlal_doubles_from_g_value_array(GValueArray *va, gdouble *dest, gint *n)
 {
 	guint i;
 
@@ -129,6 +130,8 @@ gdouble *gstlal_doubles_from_g_value_array(GValueArray *va, gdouble *dest)
 		dest = g_new(gdouble, va->n_values);
 	if(!dest)
 		return NULL;
+	if(n)
+		*n = va->n_values;
 	for(i = 0; i < va->n_values; i++)
 		dest[i] = g_value_get_double(g_value_array_get_nth(va, i));
 	return dest;
@@ -162,6 +165,37 @@ GValueArray *gstlal_g_value_array_from_doubles(const gdouble *src, gint n)
 
 
 /**
+ * convert a GValueArray to a GSL vector.  the return value is the newly
+ * allocated vector on success or NULL on failure.
+ */
+
+
+gsl_vector *gstlal_gsl_vector_from_g_value_array(GValueArray *va)
+{
+	gsl_vector *vector = gsl_vector_alloc(va->n_values);
+	if(!vector)
+		return NULL;
+	if(!gstlal_doubles_from_g_value_array(va, gsl_vector_ptr(vector, 0), NULL)) {
+		gsl_vector_free(vector);
+		return NULL;
+	}
+	return vector;
+}
+
+
+/**
+ * convert a gsl_vector to a GValueArray of doubles.  the return value is
+ * the newly allocated GValueArray object.
+ */
+
+
+GValueArray *gstlal_g_value_array_from_gsl_vector(const gsl_vector *vector)
+{
+	return gstlal_g_value_array_from_doubles(gsl_vector_const_ptr(vector, 0), vector->size);
+}
+
+
+/**
  * convert a GValueArray of GValueArrays of doubles to a GSL matrix.  the
  * return value is the newly allocated matrix on success or NULL on
  * failure.
@@ -188,7 +222,7 @@ gsl_matrix *gstlal_gsl_matrix_from_g_value_array(GValueArray *va)
 	if(!matrix)
 		/* allocation failure */
 		return NULL;
-	if(!gstlal_doubles_from_g_value_array(row, gsl_matrix_ptr(matrix, 0, 0))) {
+	if(!gstlal_doubles_from_g_value_array(row, gsl_matrix_ptr(matrix, 0, 0), NULL)) {
 		/* row conversion failure */
 		gsl_matrix_free(matrix);
 		return NULL;
@@ -200,7 +234,7 @@ gsl_matrix *gstlal_gsl_matrix_from_g_value_array(GValueArray *va)
 			gsl_matrix_free(matrix);
 			return NULL;
 		}
-		if(!gstlal_doubles_from_g_value_array(row, gsl_matrix_ptr(matrix, i, 0))) {
+		if(!gstlal_doubles_from_g_value_array(row, gsl_matrix_ptr(matrix, i, 0), NULL)) {
 			/* row conversion failure */
 			gsl_matrix_free(matrix);
 			return NULL;
@@ -625,6 +659,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_chisquare", GSTLAL_CHISQUARE_TYPE},
 		{"lal_autochisq", GSTLAL_AUTOCHISQ_TYPE},
 		{"lal_firbank", GSTLAL_FIRBANK_TYPE},
+		{"lal_sumsquares", GSTLAL_SUMSQUARES_TYPE},
 		{NULL, 0},
 	};
 	struct {

@@ -449,7 +449,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 			psd = make_empty_psd(0.0, element->psd->deltaF, va->n_values, element->sample_units);
 		else
 			psd = make_empty_psd(0.0, 1.0, va->n_values, element->sample_units);
-		gstlal_doubles_from_g_value_array(va, psd->data->data);
+		gstlal_doubles_from_g_value_array(va, psd->data->data, NULL);
 		if(XLALPSDRegressorSetPSD(element->psd_regressor, psd, XLALPSDRegressorGetAverageSamples(element->psd_regressor))) {
 			GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
 			XLALClearErrno();
