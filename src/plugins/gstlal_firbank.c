@@ -640,14 +640,13 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
 	case ARG_FIR_MATRIX: {
 		int channels;
-		GValueArray *va = g_value_get_boxed(value);
 		g_mutex_lock(element->fir_matrix_lock);
 		if(element->fir_matrix) {
 			channels = fir_channels(element);
 			gsl_matrix_free(element->fir_matrix);
 		} else
 			channels = 0;
-		element->fir_matrix = gstlal_gsl_matrix_from_g_value_array(va);
+		element->fir_matrix = gstlal_gsl_matrix_from_g_value_array(g_value_get_boxed(value));
 		if(fir_channels(element) != channels)
 			/*
 			 * number of channels has changed, force a caps
@@ -692,6 +691,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		g_mutex_lock(element->fir_matrix_lock);
 		if(element->fir_matrix)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix(element->fir_matrix));
+		/* FIXME:  else? */
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
 
