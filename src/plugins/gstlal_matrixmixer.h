@@ -25,6 +25,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/base/gstbasetransform.h>
 
 
 #include <gsl/gsl_matrix.h>
@@ -46,16 +47,12 @@ G_BEGIN_DECLS
 
 
 typedef struct {
-	GstElementClass parent_class;
+	GstBaseTransformClass parent_class;
 } GSTLALMatrixMixerClass;
 
 
 typedef struct {
-	GstElement element;
-
-	GstPad *matrixpad;
-	GstPad *sinkpad;
-	GstPad *srcpad;
+	GstBaseTransform element;
 
 	/*
 	 * The mixer is controled using a matrix whose elements provide the
@@ -76,24 +73,18 @@ typedef struct {
 	 *
 	 *                3 -->  a31  a32  a33  a34  a35
 	 *
-	 * The matrix is passed into the element on the "matrix" sink pad
-	 * as a buffer containing the coefficients as double-precision
-	 * floats in row major order (normal "C" order, all the elements
-	 * for the first row followed by the elements for the second row,
-	 * and so on).  The matrix buffer's caps must have the "channels"
-	 * property set to the number of output channels (the number of
-	 * columns in the matrix).  With that information, the buffer's
-	 * size implies the number of rows in the matrix (the number of
-	 * input channels).
+	 * The matrix is provided to the element via the "matrix" property
+	 * as a GValueArray of rows, each row is a GValueArray containing
+	 * double-precision floats (the rows must all be the same size).
 	 *
-	 * The coefficient ordering is chosen so that the transformation of
-	 * an input buffer into an output buffer can be performed as a
-	 * single matrix multiplication.
+	 * The coefficient ordering and the manner in which they map input
+	 * channels to output channels is chosen so that the transformation
+	 * of an input buffer into an output buffer can be performed as a
+	 * single matrix-matrix multiplication.
 	 */
 
 	GMutex *mixmatrix_lock;
 	GCond *mixmatrix_available;
-	GstBuffer *mixmatrix_buf;
 	enum {
 		GSTLAL_MATRIXMIXER_FLOAT,
 		GSTLAL_MATRIXMIXER_DOUBLE,
@@ -101,10 +92,11 @@ typedef struct {
 		GSTLAL_MATRIXMIXER_COMPLEX_DOUBLE
 	} data_type;
 	union {
-		gsl_matrix_float_view as_float;
-		gsl_matrix_view as_double;
-		gsl_matrix_complex_float_view as_complex_float;
-		gsl_matrix_complex_view as_complex_double;
+		void *as_void;
+		gsl_matrix_float *as_float;
+		gsl_matrix *as_double;
+		gsl_matrix_complex_float *as_complex_float;
+		gsl_matrix_complex *as_complex_double;
 	} mixmatrix;
 } GSTLALMatrixMixer;
 
