@@ -56,6 +56,7 @@
 
 
 #include <math.h>
+#include <string.h>
 
 
 /*
@@ -124,12 +125,11 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	"sink",
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
-/* FIXME:  BYTEORDER */
 	GST_STATIC_CAPS(
 		"audio/x-raw-float, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) [1, MAX], " \
-		"endianness = (int) 1234, " \
+		"endianness = (int) BYTE_ORDER, " \
 		"width = (int) 64"
 	)
 );
@@ -139,12 +139,11 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	"src",
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
-/* FIXME:  BYTEORDER */
 	GST_STATIC_CAPS(
 		"audio/x-raw-float, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
-		"endianness = (int) 1234, " \
+		"endianness = (int) BYTE_ORDER, " \
 		"width = (int) 64"
 	)
 );
@@ -219,7 +218,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 			if(element->weights)
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", G_TYPE_INT, element->channels, NULL);
 			else
-				gst_structure_set(gst_caps_get_structure(caps, n), "channels", GST_TYPE_INT_RANGE, 0, G_MAXINT, NULL);
+				gst_structure_set(gst_caps_get_structure(caps, n), "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
 		}
 		break;
 
@@ -342,7 +341,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 			 * number of channels has changed, force a caps
 			 * renegotiation
 			 */
-			 gst_pad_set_caps(GST_BASE_TRANSFORM_SINK_PAD(GST_BASE_TRANSFORM(object)), NULL);
+			gst_pad_set_caps(GST_BASE_TRANSFORM_SINK_PAD(GST_BASE_TRANSFORM(object)), NULL);
 		g_mutex_unlock(element->weights_lock);
 		break;
 	}
