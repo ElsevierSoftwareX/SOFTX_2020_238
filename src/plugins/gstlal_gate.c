@@ -151,12 +151,6 @@ static double control_sample_float64(const GSTLALGate *element, guint64 sample)
 }
 
 
-static gint control_get_state(GSTLALGate *element, guint64 offset)
-{
-	return fabs(element->control_sample_func(element, offset)) >= element->threshold;
-}
-
-
 static gint64 control_t_to_offset(GSTLALGate *element, GstClockTime t)
 {
 	gint64 offset;
@@ -167,6 +161,31 @@ static gint64 control_t_to_offset(GSTLALGate *element, GstClockTime t)
 		offset = (gint64) gst_util_uint64_scale_int_round(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
 
 	return offset;
+}
+
+
+static gint control_get_state(GSTLALGate *element, GstClockTime t)
+{
+	gint64 offset;
+
+	/*
+	 * if there is no control buffer available or t is past the its
+	 * end, flush the control buffer and wait for one that overlaps the
+	 * input data
+	 */
+
+	while(1) {
+		while(!element->control_buf)
+			g_cond_wait(element->control_available, element->control_lock);
+		offset = control_t_to_offset(element, t);
+		if(offset < (gint64) (GST_BUFFER_OFFSET_END(element->control_buf) - GST_BUFFER_OFFSET(element->control_buf)))
+			break;
+		control_flush(element);
+	}
+
+	if(offset < 0)
+		return element->default_state;
+	return fabs(element->control_sample_func(element, offset)) >= element->threshold;
 }
 
 
@@ -296,8 +315,10 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	if(success) {
+		g_mutex_lock(element->control_lock);
 		element->control_sample_func = control_sample_func;
 		element->control_rate = rate;
+		g_mutex_unlock(element->control_lock);
 	}
 
 	/*
@@ -494,36 +515,14 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		g_mutex_lock(element->control_lock);
 		for(length = 0; start + length < sinkbuf_length; length++) {
-			GstClockTime t = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(start + length, GST_SECOND, element->rate);
-			gint64 control_offset;
-
-			/*
-			 * if there is no control buffer available or the
-			 * input has advanced beyond its end, flush the
-			 * control buffer and wait for one that overlaps
-			 * the input data
-			 */
-
-			while(1) {
-				while(!element->control_buf)
-					g_cond_wait(element->control_available, element->control_lock);
-				control_offset = control_t_to_offset(element, t);
-				if(control_offset < (gint64) (GST_BUFFER_OFFSET_END(element->control_buf) - GST_BUFFER_OFFSET(element->control_buf)))
-					break;
-				control_flush(element);
-			}
-
-			/*
-			 * check the state of the control input
-			 */
-
-			if(length == 0) {
+			gint state_now = control_get_state(element, GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(start + length, GST_SECOND, element->rate));
+			if(length == 0)
 				/*
-				 * control state for this interval
+				 * state for this interval
 				 */
 
-				state = control_offset < 0 ? element->default_state : control_get_state(element, control_offset);
-			} else if((control_offset < 0 ? element->default_state : control_get_state(element, control_offset)) != state)
+				state = state_now;
+			else if(state != state_now)
 				/*
 				 * control state has changed
 				 */
