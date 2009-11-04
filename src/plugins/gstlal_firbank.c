@@ -513,7 +513,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
-		element->next_out_offset = element->offset0 + fir_length(element) - 1 - element->latency;
+		element->next_out_offset = element->offset0 + fir_length(element) - 1 + element->latency;
 
 		/*
 		 * be sure to flag the next output buffer as a discontinuity
