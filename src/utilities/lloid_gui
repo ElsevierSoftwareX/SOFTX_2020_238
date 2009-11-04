@@ -164,26 +164,17 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, progress_repor
 	snr.set_property("sync", True)
 	pipeline.add(snr)
 
-	#chisq = gst.element_factory_make("lal_adder")
-	#chisq.set_property("sync", True)
-	#pipeline.add(chisq)
-
 	for bank_fragment in bank.bank_fragments:
-		#bank_snr, bank_chisq = pipeparts.mkbank_oldchisq(
-		bank_snr = pipeparts.mkbank_newchisq(
+		pipeparts.mkLLOIDbranch(
 			pipeline,
 			pipeparts.mkqueue(pipeline, hoftdict[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000),
 			bank,
 			bank_fragment,
-			detector.reference_psd_filename,
 			control_snksrc[0],
 			control_snksrc[1]
-		)
-		pipeparts.mkqueue(pipeline, bank_snr).link(snr)
-		#pipeparts.mkqueue(pipeline, bank_chisq).link(chisq)
+		).link(snr)
 
 	snr = pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(bank.get_rates()))
-	#chisq = pipeparts.mkcapsfilter(pipeline, chisq, "audio/x-raw-float, rate=%d" % max(bank.get_rates()))
 
 	snr = pipeparts.mktee(pipeline, snr)
 	chisq = gst.element_factory_make("lal_autochisq")
@@ -194,11 +185,8 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, progress_repor
 
 	#snr = pipeparts.mktee(pipeline, snr)
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, snr), "snr_%s.txt" % logname)
-	#chisq = pipeparts.mktee(pipeline, chisq)
-	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, chisq), "chisquare_%s.txt" % logname)
 
-	#head = pipeparts.mktriggergen(pipeline, snr, chisq, bank.template_bank_filename, bank.snr_threshold)
-	head = pipeparts.mktriggergen(pipeline, pipeparts.mkqueue(pipeline, snr), pipeparts.mkqueue(pipeline, chisq), bank.template_bank_filename, bank.snr_threshold)
+	head = pipeparts.mktriggergen(pipeline, pipeparts.mkqueue(pipeline, snr), chisq, bank.template_bank_filename, bank.snr_threshold)
 	if progress_report:
 		head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % logname)
 
@@ -220,14 +208,6 @@ def mkLLOIDmulti(pipeline, detectors, banks, output_filename, fake_data = False,
 	#pipeline.add(nto1)
 	#pipeparts.mktriggerxmlwritersink(pipeline, nto1, output_filename)
 
-	# FIXME:  we can't do sum-of-squares coincidence across instruments
-	# because the adder will not allow streams from multiple
-	# instruments to be combined because their caps won't intersect.
-	# find a way to remove the instrument property from the caps of the
-	# sum-of-squares streams before bringing them together in the
-	# adder.  perhaps using capssetter from the bad plugins?  maybe
-	# that sort of metadata should be encoded in a tag instead of the
-	# stream "format"
 	for instrument in detectors:
 		rates = set(rate for bank in banks for rate in bank.get_rates())
 		hoftdict = mkLLOIDsrc(pipeline, instrument, detectors[instrument], rates, fake_data = fake_data, injection_filename = injection_filename, progress_report = progress_report)

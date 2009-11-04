@@ -213,85 +213,37 @@ def mksumsquares(pipeline, src, weights = None):
 	return elem
 
 
-def mkbank_oldchisq(pipeline, src, bank, bank_fragment, reference_psd_filename, control_snk, control_src):
-	elem = gst.element_factory_make("lal_templatebank")
-	elem.set_property("t-start", bank_fragment.start)
-	elem.set_property("t-end", bank_fragment.end)
-	elem.set_property("t-total-duration", bank.filter_length)
-	elem.set_property("snr-length", bank_fragment.blocksize)
-	elem.set_property("template-bank", bank.template_bank_filename)
-	elem.set_property("reference-psd", reference_psd_filename)
+def mkmatrixmixer(pipeline, src, matrix = None):
+	elem = gst.element_factory_make("lal_matrixmixer")
+	if matrix is not None:
+		elem.set_property("matrix", matrix)
 	pipeline.add(elem)
 	src.link(elem)
+	return elem
 
-	matrix = mktee(pipeline, elem, pad_name = "matrix")
 
-	mkqueue(pipeline, mkresample(pipeline, elem, pad_name = "sumofsquares")).link(control_snk)
+def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
+	# FIXME:  latency, fir_matrix
+	src = mktee(pipeline, mkfirbank(pipeline, src, latency = None, fir_matrix = None))
 
-	gate = gst.element_factory_make("lal_gate")
-	gate.set_property("threshold", bank.gate_threshold)
-	pipeline.add(gate)
-	mkqueue(pipeline, elem, pad_name = "src").link_pads("src", gate, "sink")
-	mkqueue(pipeline, control_src).link_pads("src", gate, "control")
+	# FIXME:  weights
+	mkresample(pipeline, mkqueue(pipeline, mksumsquares(pipeline, src, weights = None))).link(control_snk)
+
+	elem = gst.element_factory_make("lal_gate")
+	elem.set_property("threshold", bank.gate_threshold)
+	pipeline.add(elem)
+	mkqueue(pipeline, src).link_pads("src", elem, "sink")
+	mkqueue(pipeline, control_src).link_pads("src", elem, "control")
+
 	# FIXME:  teach the collectpads object not to wait for buffers on
 	# pads whose segments have not yet been reached by the input on the
 	# other pads.  then this large queue buffer will not be required
 	# because streaming can begin through the downstream adders without
 	# waiting for input from all upstream elements.
-	orthosnr = mktee(pipeline, mkqueue(pipeline, gate, pad_name = "src", max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000))
+	src = mkqueue(pipeline, elem, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000)
 
-	#mknxydumpsink(pipeline, mkqueue(pipeline, orthosnr), "orthosnr_%s.txt" % elem.get_name())
-
-	snr = gst.element_factory_make("lal_matrixmixer")
-	pipeline.add(snr)
-	mkqueue(pipeline, matrix).link_pads("src", snr, "matrix")
-	mkqueue(pipeline, orthosnr).link(snr)
-	snr = mktee(pipeline, snr)
-
-	chisq = gst.element_factory_make("lal_chisquare")
-	pipeline.add(chisq)
-	mkqueue(pipeline, matrix).link_pads("src", chisq, "matrix")
-	mkqueue(pipeline, elem, pad_name = "chifacs").link_pads("src", chisq, "chifacs")
-	mkqueue(pipeline, orthosnr).link_pads("src", chisq, "orthosnr")
-	mkqueue(pipeline, snr).link_pads("src", chisq, "snr")
-
-	return mkresample(pipeline, snr, quality = 0), mkresample(pipeline, chisq, quality = 0)
-
-
-def mkbank_newchisq(pipeline, src, bank, bank_fragment, reference_psd_filename, control_snk, control_src):
-	elem = gst.element_factory_make("lal_templatebank")
-	elem.set_property("t-start", bank_fragment.start)
-	elem.set_property("t-end", bank_fragment.end)
-	elem.set_property("t-total-duration", bank.filter_length)
-	elem.set_property("snr-length", bank_fragment.blocksize)
-	elem.set_property("template-bank", bank.template_bank_filename)
-	elem.set_property("reference-psd", reference_psd_filename)
-	pipeline.add(elem)
-	src.link(elem)
-
-	# chifacs not needed by new \chi^{2} element
-	mkfakesink(pipeline, mkqueue(pipeline, elem, pad_name = "chifacs"))
-
-	mkqueue(pipeline, mkresample(pipeline, elem, pad_name = "sumofsquares")).link(control_snk)
-
-	gate = gst.element_factory_make("lal_gate")
-	gate.set_property("threshold", bank.gate_threshold)
-	pipeline.add(gate)
-	mkqueue(pipeline, elem, pad_name = "src").link_pads("src", gate, "sink")
-	mkqueue(pipeline, control_src).link_pads("src", gate, "control")
-	# FIXME:  teach the collectpads object not to wait for buffers on
-	# pads whose segments have not yet been reached by the input on the
-	# other pads.  then this large queue buffer will not be required
-	# because streaming can begin through the downstream adders without
-	# waiting for input from all upstream elements.
-	orthosnr = mkqueue(pipeline, gate, pad_name = "src", max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000)
-
-	snr = gst.element_factory_make("lal_matrixmixer")
-	pipeline.add(snr)
-	mkqueue(pipeline, elem, pad_name = "matrix").link_pads("src", snr, "matrix")
-	orthosnr.link(snr)
-
-	return mkresample(pipeline, snr, quality = 0)
+	# FIXME:  matrix
+	return mkresample(pipeline, mkmatrixmixer(pipeline, src, matrix = None), quality = 0)
 
 
 def mkfakesink(pipeline, src):
