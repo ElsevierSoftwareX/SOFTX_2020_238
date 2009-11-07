@@ -678,6 +678,7 @@ static void gstlal_matrixmixer_class_init(GSTLALMatrixMixerClass *klass)
 				"coefficients",
 				"Coefficients",
 				"Coefficients.",
+				/* FIXME:  allow other types */
 				g_param_spec_double(
 					"coefficient",
 					"Coefficient",
