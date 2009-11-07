@@ -452,7 +452,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 		g_cond_wait(element->control_flushed, element->control_lock);
 
 	/*
-	 * store this buffer, extract some metadata
+	 * store this buffer
 	 */
 
 	element->control_buf = sinkbuf;
