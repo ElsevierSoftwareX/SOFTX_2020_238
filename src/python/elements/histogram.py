@@ -115,7 +115,7 @@ class Histogram(gst.BaseTransform):
 		self.t0 = None
 		self.offset0 = None
 		self.next_out_offset = None
-		self.buf = numpy.zeros((0,), dtype = "double")
+		self.buf = numpy.zeros((0, 1), dtype = "double")
 		return True
 
 
@@ -203,7 +203,7 @@ class Histogram(gst.BaseTransform):
 		# append input to time series buffer
 		#
 
-		self.buf = numpy.append(self.buf, pipeio.array_from_audio_buffer(inbuf))
+		self.buf = numpy.concatenate((self.buf, pipeio.array_from_audio_buffer(inbuf)))
 
 		#
 		# number of samples required for output frame
@@ -259,37 +259,30 @@ class Histogram(gst.BaseTransform):
 	def do_transform_size(self, direction, caps, size, othercaps):
 		samples_per_frame = int(round(float(self.in_rate / self.out_rate)))
 
-		#
-		# assume 4 bytes per output pixel
-		#
-
-		bytes_per_frame = self.out_width * self.out_height * 4
-
 		if direction == gst.PAD_SRC:
 			#
 			# convert byte count on src pad to sample count on
 			# sink pad (minus samples we already have)
 			#
 
+			bytes_per_frame = caps[0]["width"] * caps[0]["height"] * caps[0]["bpp"] / 8
 			samples = int(size / bytes_per_frame) * samples_per_frame - len(self.buf)
 
 			#
-			# convert to byte count on sink pad.  assume 8
-			# bytes per input sample
+			# convert to byte count on sink pad.
 			#
 
 			if samples <= 0:
 				return 0
-			return samples * 8
+			return samples * (othercaps[0]["width"] // 8) * othercaps[0]["channels"]
 
 		elif direction == gst.PAD_SINK:
 			#
 			# convert byte count on sink pad plus samples we
-			# already have to frame count on src pad.  assume 8
-			# bytes per input sample
+			# already have to frame count on src pad.
 			#
 
-			frames = (int(size / 8) + len(self.buf)) / samples_per_frame
+			frames = (int(size * 8 / caps[0]["width"]) // caps[0]["channels"] + len(self.buf)) / samples_per_frame
 
 			#
 			# if there's enough for at least one frame, claim
@@ -299,7 +292,9 @@ class Histogram(gst.BaseTransform):
 
 			if frames < 1:
 				return 0
-			return bytes_per_frame
+			# FIXME:  why is othercaps not the *other* caps?
+			return self.out_width * self.out_height * 4
+			return othercaps[0]["width"] * othercaps[0]["height"] * othercaps[0]["bpp"] / 8
 
 		raise ValueError, direction
 
