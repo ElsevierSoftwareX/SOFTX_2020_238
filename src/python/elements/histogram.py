@@ -48,7 +48,7 @@ pygst.require('0.10')
 import gst
 
 
-from pylal.datatypes import LALUnit
+from gstlal import pipeio
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -136,13 +136,10 @@ class Histogram(gst.BaseTransform):
 
 	def do_event(self, event):
 		if event.type == gst.EVENT_TAG:
-			taglist = event.parse_tag()
-			if "instrument" in taglist:
-				self.instrument = taglist["instrument"]
-			if "channel-name" in taglist:
-				self.channel_name = taglist["channel-name"]
-			if "units" in taglist:
-				self.sample_units = LALUnit(taglist["units"].strip())
+			tags = pipeio.parse_framesrc_tags(event.parse_tag())
+			self.instrument = tags["instrument"]
+			self.channel_name = tags["channel-name"]
+			self.sample_units = tags["sample-units"]
 		return True
 
 

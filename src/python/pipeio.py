@@ -57,3 +57,32 @@ def parse_spectrum_message(message):
 		sampleUnits = laltypes.LALUnit(message.structure["sample-units"]),
 		data = numpy.array(message.structure["magnitude"])
 	)
+
+
+#
+# =============================================================================
+#
+#                                     Tags
+#
+# =============================================================================
+#
+
+
+def parse_framesrc_tags(taglist):
+	if "instrument" in taglist:
+		instrument = taglist["instrument"]
+	else:
+		instrument = None
+	if "channel-name" in taglist:
+		channel_name = taglist["channel-name"]
+	else:
+		channel_name = None
+	if "units" in taglist:
+		sample_units = laltypes.LALUnit(taglist["units"].strip())
+	else:
+		sample_units = None
+	return {
+		"instrument": instrument,
+		"channel-name": channel_name,
+		"sample-units": sample_units
+	}
