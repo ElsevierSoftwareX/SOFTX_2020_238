@@ -85,7 +85,7 @@ typedef struct {
 
 	gint rate;
 	GstAdapter *adapter;
-	gint zeros_in_adapter;
+	guint zeros_in_adapter;
 
 	/*
 	 * filter info
