@@ -33,7 +33,7 @@ pygst.require("0.10")
 import gst
 
 
-from elements import histogram
+from elements import channelgram, histogram
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -322,6 +322,13 @@ def mktriggerxmlwritersink(pipeline, src, filename):
 
 def mkhistogram(pipeline, src):
 	elem = histogram.Histogram()
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
+def mkchannelgram(pipeline, src):
+	elem = channelgram.Channelgram()
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
