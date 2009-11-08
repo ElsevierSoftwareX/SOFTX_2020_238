@@ -743,6 +743,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	/*
 	 * gap logic
+	 *
+	 * FIXME:  gap handling with frequency-domain filtering is probably
+	 * busted
 	 */
 
 	length = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
