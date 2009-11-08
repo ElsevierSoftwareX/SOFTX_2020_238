@@ -45,12 +45,16 @@
 #define __GST_LAL_FIRBANK_H__
 
 
+#include <complex.h>
+
+
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
 
 
+#include <fftw3.h>
 #include <gsl/gsl_matrix.h>
 
 
@@ -75,18 +79,37 @@ typedef struct {
 typedef struct {
 	GstBaseTransform element;
 
-	gint block_length_factor;
-	gint64 latency;
+	/*
+	 * input stream
+	 */
 
 	gint rate;
-
 	GstAdapter *adapter;
 	gint zeros_in_adapter;
+
+	/*
+	 * filter info
+	 */
 
 	GMutex *fir_matrix_lock;
 	GCond *fir_matrix_available;
 	gsl_matrix *fir_matrix;
-	gsl_matrix_complex *fir_matrix_fd;
+	gint64 latency;
+
+	/*
+	 * FFT work space
+	 */
+
+	gint block_length_factor;
+	complex double *fir_matrix_fd;
+	complex double *input_fd;
+	complex double *workspace_fd;
+	fftw_plan in_plan;
+	fftw_plan out_plan;
+
+	/*
+	 * timestamp book-keeping
+	 */
 
 	GstClockTime t0;
 	guint64 offset0;
