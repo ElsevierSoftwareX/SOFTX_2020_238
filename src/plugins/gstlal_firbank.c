@@ -255,7 +255,7 @@ static void free_fft_workspace(GSTLALFIRBank *element)
 static GstFlowReturn tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 {
 	int i;
-	int input_length;
+	int available_length;
 	int output_length;
 	gsl_vector_view input;
 	gsl_matrix_view output;
@@ -266,8 +266,8 @@ static GstFlowReturn tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	 * in the adapter then we can produce 1 output sample, not 0.
 	 */
 
-	input_length = get_available_samples(element);
-	output_length = input_length - fir_length(element) + 1;
+	available_length = get_available_samples(element);
+	output_length = available_length - fir_length(element) + 1;
 	if(output_length <= 0)
 		return GST_BASE_TRANSFORM_FLOW_DROPPED;
 
@@ -278,7 +278,7 @@ static GstFlowReturn tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	 * properly.
 	 */
 
-	input = gsl_vector_view_array((double *) gst_adapter_peek(element->adapter, input_length * sizeof(double)), fir_length(element));
+	input = gsl_vector_view_array((double *) gst_adapter_peek(element->adapter, available_length * sizeof(double)), fir_length(element));
 
 	/*
 	 * wrap output buffer in a GSL matrix view.
@@ -317,12 +317,12 @@ static GstFlowReturn tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	 */
 
 	gst_adapter_flush(element->adapter, output_length * sizeof(double));
-	if(output_length > input_length - element->zeros_in_adapter)
+	if(output_length > available_length - element->zeros_in_adapter)
 		/*
 		 * some trailing zeros have been flushed from the adapter
 		 */
 
-		element->zeros_in_adapter -= output_length - (input_length - element->zeros_in_adapter);
+		element->zeros_in_adapter -= output_length - (available_length - element->zeros_in_adapter);
 
 	/*
 	 * set buffer metadata
@@ -349,8 +349,10 @@ static GstFlowReturn fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	int i;
 	int fft_block_stride;
 	int fft_blocks;
+	int available_length;
 	int input_length;
 	int output_length;
+	int filter_length_fd;
 	double *input;
 	gsl_vector_view workspace;
 
@@ -359,13 +361,14 @@ static GstFlowReturn fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	 * adapter?
 	 */
 
-	input_length = get_available_samples(element);
-	if(input_length < fft_block_length(element))
+	available_length = get_available_samples(element);
+	if(available_length < fft_block_length(element))
 		return GST_BASE_TRANSFORM_FLOW_DROPPED;
 	fft_block_stride = fft_block_length(element) - fir_length(element) + 1;
-	fft_blocks = (input_length - fft_block_length(element)) / fft_block_stride + 1;
+	fft_blocks = (available_length - fft_block_length(element)) / fft_block_stride + 1;
 	input_length = (fft_blocks - 1) * fft_block_stride + fft_block_length(element);
 	output_length = input_length - fir_length(element) + 1;
+	filter_length_fd = fft_block_length(element) / 2 + 1;
 
 	/*
 	 * retrieve input samples
@@ -391,7 +394,7 @@ static GstFlowReturn fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 		int j;
 
 		/*
-		 * wrap output buffer in a GSL matrix view.
+		 * wrap one block of output buffer in a GSL matrix view.
 		 */
 
 		output = gsl_matrix_view_array(((double *) GST_BUFFER_DATA(outbuf)) + i * fft_block_stride * fir_channels(element), fft_block_stride, fir_channels(element));
@@ -417,7 +420,7 @@ static GstFlowReturn fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 			 * time-domain
 			 */
 
-			for(k = 0; k < fft_block_length(element) / 2 + 1; k++)
+			for(k = 0; k < filter_length_fd; k++)
 				element->workspace_fd[k] = element->input_fd[k] * *(filter++);
 			fftw_execute(element->out_plan);
 
@@ -440,12 +443,12 @@ static GstFlowReturn fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	 */
 
 	gst_adapter_flush(element->adapter, output_length * sizeof(double));
-	if(output_length > input_length - element->zeros_in_adapter)
+	if(output_length > available_length - element->zeros_in_adapter)
 		/*
 		 * some trailing zeros have been flushed from the adapter
 		 */
 
-		element->zeros_in_adapter -= output_length - (input_length - element->zeros_in_adapter);
+		element->zeros_in_adapter -= output_length - (available_length - element->zeros_in_adapter);
 
 	/*
 	 * set buffer metadata
