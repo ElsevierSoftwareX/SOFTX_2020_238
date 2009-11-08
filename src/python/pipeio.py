@@ -38,6 +38,36 @@ __date__ = "FIXME"
 #
 # =============================================================================
 #
+#                                   Buffers
+#
+# =============================================================================
+#
+
+
+def array_from_audio_buffer(buf):
+	caps = buf.caps[0]
+	name = caps.get_name()
+	if name == "audio/x-raw-float":
+		dtype = "f%d" % (caps["width"] / 8)
+	elif name == "audio/x-raw-int":
+		if caps["signed"]:
+			dtype = "i%d" % (caps["width"] / 8)
+		else:
+			dtype = "s%d" % (caps["width"] / 8)
+	elif name == "audio/x-raw-complex":
+		dtype = "c%d" % (caps["width"] / 8)
+	else:
+		raise ValueError, dtype
+	channels = caps["channels"]
+
+	a = numpy.frombuffer(buf, dtype = dtype)
+
+	return numpy.reshape(a, (len(a) / channels, channels))
+
+
+#
+# =============================================================================
+#
 #                                   Messages
 #
 # =============================================================================

@@ -49,6 +49,7 @@ import gst
 
 
 from gstlal import pipeio
+from gstlal.elements import matplotlibcaps
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -82,17 +83,10 @@ class Histogram(gst.BaseTransform):
 			gst.PAD_SRC,
 			gst.PAD_ALWAYS,
 			gst.caps_from_string(
-				"video/x-raw-rgb, " +
+				matplotlibcaps + ", " +
 				"width = (int) [1, MAX], " +
 				"height = (int) [1, MAX], " +
-				"framerate = (fraction) [0, MAX], " +
-				"bpp = (int) 32, " +
-				"depth = (int) 32, " +
-				"red_mask = (int) -16777216, " +
-				"green_mask = (int) 16711680, " +
-				"blue_mask = (int) 65280, " +
-				"alpha_mask = (int) 255, " +
-				"endianness = (int) 4321"
+				"framerate = (fraction) [0, MAX]"
 			)
 		)
 	)
@@ -209,7 +203,7 @@ class Histogram(gst.BaseTransform):
 		# append input to time series buffer
 		#
 
-		self.buf = numpy.append(self.buf, numpy.frombuffer(inbuf, dtype = "double"))
+		self.buf = numpy.append(self.buf, pipeio.array_from_audio_buffer(inbuf))
 
 		#
 		# number of samples required for output frame
