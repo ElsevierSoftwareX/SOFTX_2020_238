@@ -44,24 +44,24 @@ __date__ = "FIXME"
 #
 
 
-def array_from_audio_buffer(buf):
-	caps = buf.caps[0]
-	name = caps.get_name()
+def numpy_dtype_from_caps(caps):
+	struct = caps[0]
+	name = struct.get_name()
 	if name == "audio/x-raw-float":
-		dtype = "f%d" % (caps["width"] / 8)
+		return "f%d" % (struct["width"] / 8)
 	elif name == "audio/x-raw-int":
-		if caps["signed"]:
-			dtype = "i%d" % (caps["width"] / 8)
+		if struct["signed"]:
+			return "i%d" % (struct["width"] / 8)
 		else:
-			dtype = "s%d" % (caps["width"] / 8)
+			return "s%d" % (struct["width"] / 8)
 	elif name == "audio/x-raw-complex":
-		dtype = "c%d" % (caps["width"] / 8)
-	else:
-		raise ValueError, dtype
-	channels = caps["channels"]
+		return "c%d" % (struct["width"] / 8)
+	raise ValueError, name
 
-	a = numpy.frombuffer(buf, dtype = dtype)
 
+def array_from_audio_buffer(buf):
+	channels = buf.caps[0]["channels"]
+	a = numpy.frombuffer(buf, dtype = numpy_dtype_from_caps(buf.caps))
 	return numpy.reshape(a, (len(a) / channels, channels))
 
 
