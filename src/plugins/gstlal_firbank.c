@@ -97,7 +97,7 @@
  */
 
 
-static int fir_channels(const GSTLALFIRBank *element)
+static unsigned fir_channels(const GSTLALFIRBank *element)
 {
 	return element->fir_matrix->size1;
 }
@@ -108,7 +108,7 @@ static int fir_channels(const GSTLALFIRBank *element)
  */
 
 
-static int fir_length(const GSTLALFIRBank *element)
+static unsigned fir_length(const GSTLALFIRBank *element)
 {
 	return element->fir_matrix->size2;
 }
@@ -119,7 +119,7 @@ static int fir_length(const GSTLALFIRBank *element)
  */
 
 
-static int fft_block_length(const GSTLALFIRBank *element)
+static unsigned fft_block_length(const GSTLALFIRBank *element)
 {
 	return fir_length(element) * element->block_length_factor;
 }
@@ -130,7 +130,7 @@ static int fft_block_length(const GSTLALFIRBank *element)
  */
 
 
-static int push_zeros(GSTLALFIRBank *element, int samples)
+static int push_zeros(GSTLALFIRBank *element, unsigned samples)
 {
 	GstBuffer *zerobuf = gst_buffer_new_and_alloc(samples * fir_channels(element) * sizeof(double));
 	if(!zerobuf) {
@@ -182,14 +182,14 @@ static guint64 get_available_samples(GSTLALFIRBank *element)
 
 static int create_fft_workspace(GSTLALFIRBank *element)
 {
-	int i;
-	int length_fd = fft_block_length(element) / 2 + 1;
-
-	g_mutex_lock(gstlal_fftw_lock);
+	unsigned i;
+	unsigned length_fd = fft_block_length(element) / 2 + 1;
 
 	/*
 	 * frequency-domain input
 	 */
+
+	g_mutex_lock(gstlal_fftw_lock);
 
 	element->input_fd = (complex double *) fftw_malloc(length_fd * sizeof(*element->input_fd));
 	element->in_plan = fftw_plan_dft_r2c_1d(fft_block_length(element), (double *) element->input_fd, element->input_fd, FFTW_MEASURE);
@@ -203,14 +203,18 @@ static int create_fft_workspace(GSTLALFIRBank *element)
 
 	/*
 	 * loop over filters.  copy each time-domain filter to input_fd,
-	 * zero-pad, transform to frequency domain, and save.  the
-	 * frequency-domain filters are pre-scaled by 1/n and conjugated to
-	 * save those operations inside the fitlering loop.
+	 * zero-pad, transform to frequency domain, and save in
+	 * fir_matrix_fd.  the frequency-domain filters are pre-scaled by
+	 * 1/n and conjugated to save those operations inside the filtering
+	 * loop.
 	 */
 
 	element->fir_matrix_fd = (complex double *) fftw_malloc(fir_channels(element) * length_fd * sizeof(*element->fir_matrix_fd));
+
+	g_mutex_unlock(gstlal_fftw_lock);
+
 	for(i = 0; i < fir_channels(element); i++) {
-		int j;
+		unsigned j;
 		memset(element->input_fd, 0, length_fd * sizeof(*element->input_fd));
 		for(j = 0; j < fir_length(element); j++)
 			((double *) element->input_fd)[j] = gsl_matrix_get(element->fir_matrix, i, j) / fft_block_length(element);
@@ -223,7 +227,6 @@ static int create_fft_workspace(GSTLALFIRBank *element)
 	 * done
 	 */
 
-	g_mutex_unlock(gstlal_fftw_lock);
 	return 0;
 }
 
@@ -254,9 +257,9 @@ static void free_fft_workspace(GSTLALFIRBank *element)
 
 static GstFlowReturn tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 {
-	int i;
-	int available_length;
-	int output_length;
+	unsigned i;
+	unsigned available_length;
+	unsigned output_length;
 	gsl_vector_view input;
 	gsl_matrix_view output;
 
@@ -346,13 +349,13 @@ static GstFlowReturn tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 
 static GstFlowReturn fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 {
-	int i;
-	int fft_block_stride;
-	int fft_blocks;
-	int available_length;
-	int input_length;
-	int output_length;
-	int filter_length_fd;
+	unsigned i;
+	unsigned fft_block_stride;
+	unsigned fft_blocks;
+	unsigned available_length;
+	unsigned input_length;
+	unsigned output_length;
+	unsigned filter_length_fd;
 	double *input;
 	gsl_vector_view workspace;
 
@@ -378,8 +381,8 @@ static GstFlowReturn fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 
 	/*
 	 * wrap workspace (as real numbers) in a GSL vector view.  note
-	 * that vector is fft_block_stride in length to affect the
-	 * requisite transient clipping
+	 * that vector has length fft_block_stride to affect the requisite
+	 * transient clipping
 	 */
 
 	workspace = gsl_vector_view_array((double *) element->workspace_fd, fft_block_stride);
@@ -391,10 +394,10 @@ static GstFlowReturn fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	for(i = 0; i < fft_blocks; i++) {
 		gsl_matrix_view output;
 		complex double *filter;
-		int j;
+		unsigned j;
 
 		/*
-		 * wrap one block of output buffer in a GSL matrix view.
+		 * wrap this block of output buffer in a GSL matrix view
 		 */
 
 		output = gsl_matrix_view_array(((double *) GST_BUFFER_DATA(outbuf)) + i * fft_block_stride * fir_channels(element), fft_block_stride, fir_channels(element));
@@ -413,21 +416,15 @@ static GstFlowReturn fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 
 		filter = element->fir_matrix_fd;
 		for(j = 0; j < fir_channels(element); j++) {
-			int k;
-
 			/*
 			 * multiply input by filter, transform to
-			 * time-domain
+			 * time-domain, copy to output
 			 */
 
+			unsigned k;
 			for(k = 0; k < filter_length_fd; k++)
 				element->workspace_fd[k] = element->input_fd[k] * *(filter++);
 			fftw_execute(element->out_plan);
-
-			/*
-			 * copy to output
-			 */
-
 			gsl_matrix_set_col(&output.matrix, j, &workspace.vector);
 		}
 
@@ -623,6 +620,60 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 
 
 /*
+ * transform_size()
+ */
+
+
+static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
+{
+	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
+	guint unit_size;
+	guint other_unit_size;
+
+	if(!get_unit_size(trans, caps, &unit_size))
+		return FALSE;
+	if(size % unit_size) {
+		GST_DEBUG_OBJECT(element, "size not a multiple of %u", unit_size);
+		return FALSE;
+	}
+	if(!get_unit_size(trans, othercaps, &other_unit_size))
+		return FALSE;
+
+	switch(direction) {
+	case GST_PAD_SRC:
+		/*
+		 * just keep the sample count the same
+		 */
+
+		*othersize = (size / unit_size) * other_unit_size;
+		break;
+
+	case GST_PAD_SINK:
+		/*
+		 * upper bound of sample count on source pad is input
+		 * sample count plus the number of samples in the adapter
+		 * minus the impulse response length of the filters (-1
+		 * because if there's 1 impulse response of data then we
+		 * can generate 1 sample, not 0)
+		 */
+
+		*othersize = size / unit_size + get_available_samples(element);
+		if(*othersize > fir_length(element) - 1)
+			*othersize = (*othersize - (guint) fir_length(element) + 1) * other_unit_size;
+		else
+			*othersize = 0;
+		break;
+
+	case GST_PAD_UNKNOWN:
+		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+
+/*
  * set_caps()
  */
 
@@ -644,7 +695,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		return FALSE;
 	}
 
-	if(element->fir_matrix && (channels != fir_channels(element))) {
+	if(element->fir_matrix && (channels != (gint) fir_channels(element))) {
 		GST_DEBUG_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, fir_channels(element), outcaps);
 		return FALSE;
 	}
@@ -764,10 +815,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	} else if(element->zeros_in_adapter >= fir_length(element) - 1) {
 		/*
 		 * input is 0s and we are past the tail of the impulse
-		 * response so output is all 0s.  base transform has given
-		 * us an output buffer that has the same unit count as the
-		 * input buffer, which is the size we need now.  all we
-		 * have to do is make it a gap
+		 * response so output is all 0s.  output is a gap with the
+		 * same number of samples as in the input.
 		 */
 
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
@@ -871,7 +920,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 
 	case ARG_FIR_MATRIX: {
-		int channels;
+		unsigned channels;
 		g_mutex_lock(element->fir_matrix_lock);
 		if(element->fir_matrix) {
 			channels = fir_channels(element);
@@ -994,6 +1043,7 @@ static void gstlal_firbank_base_init(gpointer gclass)
 	transform_class->set_caps = set_caps;
 	transform_class->transform = transform;
 	transform_class->transform_caps = transform_caps;
+	transform_class->transform_size = transform_size;
 	transform_class->start = start;
 	transform_class->stop = stop;
 }
