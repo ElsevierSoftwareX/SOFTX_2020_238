@@ -44,15 +44,15 @@ def test_sumsquares(pipeline):
 
 def test_firbank(pipeline):
 	head = gst.element_factory_make("audiotestsrc")
-	head.set_property("samplesperbuffer", 2048)
+	head.set_property("samplesperbuffer", 32)
 	head.set_property("wave", 0)	# sin(t)
-	head.set_property("freq", 256.0)
+	head.set_property("freq", 300.0)
 	pipeline.add(head)
 
 	head = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, width=64, rate=2048"))
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "dump_in.txt")
 
-	head = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, head), latency = 2, fir_matrix = [[0.0, 0.0, 1.0, 0.0, 0.0]])
+	head = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, head), latency = -2, fir_matrix = [[0.0, 0.0, 1.0, 0.0, 0.0]])
 	pipeparts.mknxydumpsink(pipeline, head, "dump_out.txt")
 
 
@@ -90,7 +90,7 @@ mainloop = gobject.MainLoop()
 
 pipeline = gst.Pipeline("diag")
 
-test_sumsquares(pipeline)
+test_firbank(pipeline)
 
 handler = Handler(mainloop, pipeline)
 
