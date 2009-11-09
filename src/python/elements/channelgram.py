@@ -162,12 +162,19 @@ class Channelgram(gst.BaseTransform):
 		fig.set_size_inches(self.out_width / float(fig.get_dpi()), self.out_height / float(fig.get_dpi()))
 		axes = fig.gca(rasterized = True)
 		x, y = map(lambda n: numpy.arange(n + 1, dtype = "double"), samples.shape)
-		x, y = numpy.meshgrid(x / self.in_rate + float(outbuf.timestamp) / gst.SECOND, y - 0.5)
+		x = x / self.in_rate + float(outbuf.timestamp) / gst.SECOND
+		y -= 0.5
+		xlim = x[0], x[-1]
+		ylim = y[0], y[-1]
+		yticks = range(len(y) - 1)
+		x, y = numpy.meshgrid(x, y)
 		axes.pcolormesh(x, y, samples.transpose(), cmap = colourmap.gray)
+		axes.set_xlim(xlim)
+		axes.set_ylim(ylim)
+		axes.set_yticks(yticks)
 		axes.set_title(r"Amplitude of %s, %s" % (self.instrument or "Unknown Instrument", self.channel_name or "Unknown Channel"))
 		axes.set_xlabel(r"Time (s)")
 		axes.set_ylabel(r"Channel Number")
-		axes.set_yticks(range(len(y) - 1))
 
 		#
 		# extract pixel data
