@@ -363,18 +363,18 @@ def mkscopesink(pipeline, src):
 	gst.element_link_many(mkqueue(pipeline, src), *elems)
 
 
-def mkplaybacksink(pipeline, src):
+def mkplaybacksink(pipeline, src, amplification = 0.1):
 	elems = (
-		gst.element_factory_make("audioresample"),
 		gst.element_factory_make("audioconvert"),
 		gst.element_factory_make("capsfilter"),
+		gst.element_factory_make("audioresample"),
 		gst.element_factory_make("audioamplify"),
 		gst.element_factory_make("audioconvert"),
 		gst.element_factory_make("queue"),
 		gst.element_factory_make("alsasink")
 	)
-	elems[3].set_property("caps", gst.Caps("audio/x-raw-float, width=32"))
-	elems[4].set_property("amplification", 5e-2)
-	elems[6].set_property("max-size-time", 3000000000)
+	elems[1].set_property("caps", gst.Caps("audio/x-raw-float, width=64"))
+	elems[3].set_property("amplification", amplification)
+	elems[5].set_property("max-size-time", 1 * gst.SECOND)
 	pipeline.add(*elems)
 	gst.element_link_many(*elems)
