@@ -348,21 +348,6 @@ def mkvideosink(pipeline, src):
 	return elem
 
 
-def mkscopesink(pipeline, src):
-	elems = (
-		gst.element_factory_make("lal_multiscope"),
-		gst.element_factory_make("ffmpegcolorspace"),
-		gst.element_factory_make("cairotimeoverlay"),
-		gst.element_factory_make("autovideosink")
-	)
-	elems[0].set_property("trace-duration", 4.0)
-	elems[0].set_property("frame-interval", 1.0 / 16)
-	elems[0].set_property("average-interval", 32.0)
-	elems[0].set_property("do-timestamp", False)
-	pipeline.add(*elems)
-	gst.element_link_many(mkqueue(pipeline, src), *elems)
-
-
 def mkplaybacksink(pipeline, src, amplification = 0.1):
 	elems = (
 		gst.element_factory_make("audioconvert"),

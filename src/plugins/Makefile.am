@@ -6,7 +6,6 @@ libgstlal_la_SOURCES = \
 	low_latency_inspiral_functions.h low_latency_inspiral_functions.c \
 	gstlal_templatebank.h gstlal_templatebank.c \
 	gstlal_matrixmixer.h gstlal_matrixmixer.c \
-	gstlal_multiscope.h gstlal_multiscope.c \
 	gstlal_simulation.h gstlal_simulation.c \
 	gstlal_whiten.h gstlal_whiten.c \
 	gstlal_nxydump.h gstlal_nxydump.c \
@@ -29,7 +28,6 @@ test_program_SOURCES = test_program.c \
 	low_latency_inspiral_functions.h low_latency_inspiral_functions.c \
 	gstlal_templatebank.h gstlal_templatebank.c \
 	gstlal_matrixmixer.h gstlal_matrixmixer.c \
-	gstlal_multiscope.h gstlal_multiscope.c \
 	gstlal_simulation.h gstlal_simulation.c \
 	gstlal_whiten.h gstlal_whiten.c \
 	gstlal_nxydump.h gstlal_nxydump.c \
