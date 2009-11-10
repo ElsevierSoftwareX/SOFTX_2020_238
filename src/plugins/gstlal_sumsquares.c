@@ -71,7 +71,6 @@
 #include "gstlal_sumsquares.h"
 
 
-
 /*
  * ============================================================================
  *
@@ -100,8 +99,7 @@ static GstFlowReturn sumsquares(GSTLALSumSquares *element, GstBuffer *inbuf, Gst
 	for(; dst < dst_end; dst++) {
 		const double *src_end = src + element->channels;
 		const double *w = weights;
-		*dst = 0;
-		for(; src < src_end; w++, src++)
+		for(*dst = 0; src < src_end; w++, src++)
 			*dst += *w * pow(*src, 2);
 	}
 
