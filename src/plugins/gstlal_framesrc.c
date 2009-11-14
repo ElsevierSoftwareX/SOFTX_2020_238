@@ -217,6 +217,11 @@ static GstCaps *series_to_caps_and_taglist(const char *instrument, const char *c
 		NULL
 	);
 
+	if(*taglist)
+		GST_DEBUG("constructed taglist: %" GST_PTR_FORMAT, *taglist);
+	else
+		GST_ERROR("failure constructing taglist");
+
 	return caps;
 }
 
@@ -677,15 +682,8 @@ static gboolean start(GstBaseSrc *object)
 	 * Transmit the tag list.
 	 */
 
-	if(!gst_pad_push_event(GST_BASE_SRC_PAD(object), gst_event_new_tag(taglist))) {
-		GST_ERROR_OBJECT(element, "unable to push tag list on %s", GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
-		XLALFrClose(element->stream);
-		element->stream = NULL;
-		DestroyTimeSeries(element->input_buffer, element->series_type);
-		element->input_buffer = NULL;
-		element->series_type = -1;
-		return FALSE;
-	}
+	if(!gst_pad_push_event(GST_BASE_SRC_PAD(object), gst_event_new_tag(taglist)))
+		GST_ERROR_OBJECT(element, "unable to push taglist %" GST_PTR_FORMAT " on %s", taglist, GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
 
 	/*
 	 * Done
