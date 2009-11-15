@@ -125,12 +125,7 @@ class Channelgram(gst.BaseTransform):
 
 
 	def do_get_unit_size(self, caps):
-		if caps[0].get_name() == "audio/x-raw-float":
-			return caps[0]["channels"] * caps[0]["width"] / 8
-		elif caps[0].get_name() == "video/x-raw-rgb":
-			return caps[0]["width"] * caps[0]["height"] * caps[0]["bpp"] / 8
-		else:
-			raise ValueError, caps
+		return pipeio.get_unit_size(caps)
 
 
 	def do_event(self, event):

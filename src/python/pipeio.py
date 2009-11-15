@@ -44,6 +44,16 @@ __date__ = "FIXME"
 #
 
 
+def get_unit_size(caps):
+	struct = caps[0]
+	name = struct.get_name()
+	if name in ("audio/x-raw-float", "audio/x-raw-int"):
+		return struct["channels"] * struct["width"] / 8
+	elif name == "video/x-raw-rgb":
+		return struct["width"] * struct["height"] * struct["bpp"] / 8
+	raise ValueError, caps
+
+
 def numpy_dtype_from_caps(caps):
 	struct = caps[0]
 	name = struct.get_name()
