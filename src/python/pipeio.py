@@ -60,8 +60,8 @@ def numpy_dtype_from_caps(caps):
 
 
 def array_from_audio_buffer(buf):
-	channels = buf.caps[0]["channels"]
 	a = numpy.frombuffer(buf, dtype = numpy_dtype_from_caps(buf.caps))
+	channels = buf.caps[0]["channels"]
 	return numpy.reshape(a, (len(a) / channels, channels))
 
 
@@ -84,7 +84,7 @@ def parse_spectrum_message(message):
 		epoch = laltypes.LIGOTimeGPS(0, message.structure["timestamp"]),
 		f0 = 0.0,
 		deltaF = message.structure["delta-f"],
-		sampleUnits = laltypes.LALUnit(message.structure["sample-units"]),
+		sampleUnits = laltypes.LALUnit(message.structure["sample-units"].strip()),
 		data = numpy.array(message.structure["magnitude"])
 	)
 
