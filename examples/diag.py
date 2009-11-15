@@ -23,11 +23,37 @@ from gstlal import pipeparts
 #
 
 
+def play_asq(pipeline):
+	head = pipeparts.mkprogressreport(pipeline, pipeparts.mkframesrc(pipeline, location = "/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache", instrument = "H1", channel_name = "LSC-AS_Q"), "src")
+	head = pipeparts.mkaudiochebband(pipeline, head, 40, 2500)
+	pipeparts.mkplaybacksink(pipeline, head, amplification=3e-2)
+
+
+def play_hoft(pipeline):
+	head = pipeparts.mkprogressreport(pipeline, pipeparts.mkframesrc(pipeline, location = "/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache", instrument = "H1", channel_name = "LSC-STRAIN"), "src")
+	head = pipeparts.mkaudiochebband(pipeline, head, 45, 2500)
+	pipeparts.mkplaybacksink(pipeline, head, amplification=3e16)
+
+
 def test_histogram(pipeline):
 	head = pipeparts.mkprogressreport(pipeline, pipeparts.mkframesrc(pipeline, location = "/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache", instrument = "H1", channel_name = "LSC-STRAIN"), "src")
 	head = pipeparts.mkwhiten(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogram(pipeline, head), "video/x-raw-rgb, width=640, height=480, framerate=1/4")
 	pipeparts.mkvideosink(pipeline, pipeparts.mkcolorspace(pipeline, head))
+
+
+def test_channelgram(pipeline):
+	head = pipeparts.mkprogressreport(pipeline, pipeparts.mkframesrc(pipeline, location = "/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache", instrument = "H1", channel_name = "LSC-STRAIN"), "src")
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head), "audio/x-raw-float, rate=1024")
+
+	#head = pipeparts.mkwhiten(pipeline, head)
+
+	head = tee = pipeparts.mktee(pipeline, head)
+	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 5)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, head), "video/x-raw-rgb, width=640, height=480, framerate=4/1")
+	pipeparts.mkvideosink(pipeline, pipeparts.mkcolorspace(pipeline, pipeparts.mkqueue(pipeline, head, max_size_buffers = 5)))
+
+	pipeparts.mkplaybacksink(pipeline, pipeparts.mkaudiochebband(pipeline, tee, 40, 500), amplification = 3e16)
 
 
 def test_sumsquares(pipeline):
@@ -90,7 +116,7 @@ mainloop = gobject.MainLoop()
 
 pipeline = gst.Pipeline("diag")
 
-test_firbank(pipeline)
+test_channelgram(pipeline)
 
 handler = Handler(mainloop, pipeline)
 
