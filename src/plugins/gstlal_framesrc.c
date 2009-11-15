@@ -327,12 +327,12 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 		 * a user-supplied value.
 		 */
 
-		GST_LOG_OBJECT(element, "read %g seconds of channel %s at %d%.09u\n", input_buffer_length * deltaT, element->full_channel_name, input_buffer_epoch.gpsSeconds, input_buffer_epoch.gpsNanoSeconds);
+		GST_LOG_OBJECT(element, "reading %lu samples (%g seconds) of channel %s at %d.%09u s failed: %s", input_buffer_length, input_buffer_length * deltaT, element->full_channel_name, input_buffer_epoch.gpsSeconds, input_buffer_epoch.gpsNanoSeconds);
 		switch(element->series_type) {
 		case LAL_I4_TYPE_CODE:
 			new_input_buffer = XLALFrReadINT4TimeSeries(element->stream, element->full_channel_name, &input_buffer_epoch, input_buffer_length * deltaT, 0);
 			if(!new_input_buffer) {
-				GST_ERROR_OBJECT(element, "XLALFrReadINT4TimeSeries() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+				GST_ERROR_OBJECT(element, "XLALFrReadINT4TimeSeries() %lu samples (%g seconds) of channel %s at %d.%09u s failed: %s", input_buffer_length, input_buffer_length * deltaT, element->full_channel_name, input_buffer_epoch.gpsSeconds, input_buffer_epoch.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
 				XLALClearErrno();
 				return NULL;
 			}
@@ -342,7 +342,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 		case LAL_S_TYPE_CODE:
 			new_input_buffer = XLALFrReadREAL4TimeSeries(element->stream, element->full_channel_name, &input_buffer_epoch, input_buffer_length * deltaT, 0);
 			if(!new_input_buffer) {
-				GST_ERROR_OBJECT(element, "XLALFrReadREAL4TimeSeries() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+				GST_ERROR_OBJECT(element, "XLALFrReadREAL4TimeSeries() %lu samples (%g seconds) of channel %s at %d.%09u s failed: %s", input_buffer_length, input_buffer_length * deltaT, element->full_channel_name, input_buffer_epoch.gpsSeconds, input_buffer_epoch.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
 				XLALClearErrno();
 				return NULL;
 			}
@@ -352,7 +352,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 		case LAL_D_TYPE_CODE:
 			new_input_buffer = XLALFrReadREAL8TimeSeries(element->stream, element->full_channel_name, &input_buffer_epoch, input_buffer_length * deltaT, 0);
 			if(!new_input_buffer) {
-				GST_ERROR_OBJECT(element, "XLALFrReadREAL8TimeSeries() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+				GST_ERROR_OBJECT(element, "XLALFrReadREAL8TimeSeries() %lu samples (%g seconds) of channel %s at %d.%09u s failed: %s", input_buffer_length, input_buffer_length * deltaT, element->full_channel_name, input_buffer_epoch.gpsSeconds, input_buffer_epoch.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
 				XLALClearErrno();
 				return NULL;
 			}
