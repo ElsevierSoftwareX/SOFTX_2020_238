@@ -46,7 +46,7 @@ def test_channelgram(pipeline):
 	head = pipeparts.mkprogressreport(pipeline, pipeparts.mkframesrc(pipeline, location = "/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache", instrument = "H1", channel_name = "LSC-STRAIN"), "src")
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head), "audio/x-raw-float, rate=1024")
 
-	#head = pipeparts.mkwhiten(pipeline, head)
+	head = pipeparts.mkwhiten(pipeline, head)
 
 	head = tee = pipeparts.mktee(pipeline, head)
 	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 5)
