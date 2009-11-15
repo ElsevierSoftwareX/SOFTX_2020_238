@@ -97,22 +97,26 @@
  */
 
 
-static void DestroyTimeSeries(void *series, LALTYPECODE type)
+static void replace_input_buffer(GSTLALFrameSrc *element, void *new_input_buffer, LALTYPECODE new_series_type)
 {
-	switch(type) {
-	case LAL_I4_TYPE_CODE:
-		XLALDestroyINT4TimeSeries(series);
-		break;
-	case LAL_S_TYPE_CODE:
-		XLALDestroyREAL4TimeSeries(series);
-		break;
-	case LAL_D_TYPE_CODE:
-		XLALDestroyREAL8TimeSeries(series);
-		break;
-	default:
-		GST_ERROR("unsupported LAL type code (%d)", type);
-		break;
+	if(element->input_buffer) {
+		switch(element->series_type) {
+		case LAL_I4_TYPE_CODE:
+			XLALDestroyINT4TimeSeries(element->input_buffer);
+			break;
+		case LAL_S_TYPE_CODE:
+			XLALDestroyREAL4TimeSeries(element->input_buffer);
+			break;
+		case LAL_D_TYPE_CODE:
+			XLALDestroyREAL8TimeSeries(element->input_buffer);
+			break;
+		default:
+			GST_ERROR("unsupported LAL type code (%d)", element->series_type);
+			break;
+		}
 	}
+	element->input_buffer = new_input_buffer;
+	element->series_type = new_series_type;
 }
 
 
@@ -365,8 +369,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 		 * buffer with the new one
 		 */
 
-		DestroyTimeSeries(element->input_buffer, element->series_type);
-		element->input_buffer = new_input_buffer;
+		replace_input_buffer(element, new_input_buffer, element->series_type);
 	}
 
 	/*
@@ -665,9 +668,7 @@ static gboolean start(GstBaseSrc *object)
 		GST_ERROR_OBJECT(element, "unable to construct caps");
 		XLALFrClose(element->stream);
 		element->stream = NULL;
-		DestroyTimeSeries(element->input_buffer, element->series_type);
-		element->input_buffer = NULL;
-		element->series_type = -1;
+		replace_input_buffer(element, NULL, -1);
 		return FALSE;
 	}
 	if(!gst_pad_set_caps(GST_BASE_SRC_PAD(object), caps)) {
@@ -675,9 +676,7 @@ static gboolean start(GstBaseSrc *object)
 		GST_ERROR_OBJECT(element, "unable to set caps on %s", GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
 		XLALFrClose(element->stream);
 		element->stream = NULL;
-		DestroyTimeSeries(element->input_buffer, element->series_type);
-		element->input_buffer = NULL;
-		element->series_type = -1;
+		replace_input_buffer(element, NULL, -1);
 		return FALSE;
 	}
 	gst_caps_unref(caps);
@@ -710,9 +709,7 @@ static gboolean stop(GstBaseSrc *object)
 		XLALFrClose(element->stream);
 		element->stream = NULL;
 	}
-	DestroyTimeSeries(element->input_buffer, element->series_type);
-	element->input_buffer = NULL;
-	element->series_type = -1;
+	replace_input_buffer(element, NULL, -1);
 
 	return TRUE;
 }
@@ -934,9 +931,7 @@ static void finalize(GObject *object)
 		XLALFrClose(element->stream);
 		element->stream = NULL;
 	}
-	DestroyTimeSeries(element->input_buffer, element->series_type);
-	element->input_buffer = NULL;
-	element->series_type = -1;
+	replace_input_buffer(element, NULL, -1);
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
