@@ -263,12 +263,15 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
 	return mkresample(pipeline, mkmatrixmixer(pipeline, src, matrix = None), quality = 0)
 
 
-def mkfakesink(pipeline, src):
+def mkfakesink(pipeline, src, pad = None):
 	elem = gst.element_factory_make("fakesink")
 	elem.set_property("sync", False)
 	elem.set_property("preroll-queue-len", 1)
 	pipeline.add(elem)
-	src.link(elem)
+	if pad is not None:
+		src.link_pads(pad, elem, "sink")
+	else:
+		src.link(elem)
 
 
 def mkfilesink(pipeline, src, filename):
