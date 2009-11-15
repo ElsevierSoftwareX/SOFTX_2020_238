@@ -137,6 +137,16 @@ def mkinjections(pipeline, src, filename):
 	return elem
 
 
+def mkaudiochebband(pipeline, src, lower_frequency, upper_frequency, poles = 8):
+	elem = gst.element_factory_make("audiochebband")
+	elem.set_property("lower-frequency", lower_frequency)
+	elem.set_property("upper-frequency", upper_frequency)
+	elem.set_property("poles", poles)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
 def mkaudioamplify(pipeline, src, amplification):
 	elem = gst.element_factory_make("audioamplify")
 	elem.set_property("clipping-method", 3)
@@ -358,14 +368,14 @@ def mkplaybacksink(pipeline, src, amplification = 0.1):
 	elems = (
 		gst.element_factory_make("audioconvert"),
 		gst.element_factory_make("capsfilter"),
-		gst.element_factory_make("audioresample"),
 		gst.element_factory_make("audioamplify"),
+		gst.element_factory_make("audioresample"),
 		gst.element_factory_make("audioconvert"),
 		gst.element_factory_make("queue"),
 		gst.element_factory_make("alsasink")
 	)
 	elems[1].set_property("caps", gst.Caps("audio/x-raw-float, width=64"))
-	elems[3].set_property("amplification", amplification)
+	elems[2].set_property("amplification", amplification)
 	elems[5].set_property("max-size-time", 1 * gst.SECOND)
 	pipeline.add(*elems)
 	gst.element_link_many(src, *elems)
