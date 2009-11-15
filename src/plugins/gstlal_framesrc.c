@@ -731,7 +731,6 @@ static gboolean stop(GstBaseSrc *object)
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(basesrc);
-	GstPad *srcpad = GST_BASE_SRC_PAD(basesrc);
 	GstFlowReturn result;
 
 	/*
@@ -758,7 +757,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			 */
 			return GST_FLOW_UNEXPECTED;
 		}
-		result = gst_pad_alloc_buffer(srcpad, basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(srcpad), buffer);
+		result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
 		if(result != GST_FLOW_OK) {
 			XLALDestroyINT4TimeSeries(chunk);
 			return result;
@@ -791,7 +790,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			 */
 			return GST_FLOW_UNEXPECTED;
 		}
-		result = gst_pad_alloc_buffer(srcpad, basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(srcpad), buffer);
+		result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
 		if(result != GST_FLOW_OK) {
 			XLALDestroyREAL4TimeSeries(chunk);
 			return result;
@@ -824,7 +823,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			 */
 			return GST_FLOW_UNEXPECTED;
 		}
-		result = gst_pad_alloc_buffer(srcpad, basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(srcpad), buffer);
+		result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
 		if(result != GST_FLOW_OK) {
 			XLALDestroyREAL8TimeSeries(chunk);
 			return result;
