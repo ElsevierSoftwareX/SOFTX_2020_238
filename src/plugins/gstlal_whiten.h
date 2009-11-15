@@ -24,6 +24,7 @@
 
 
 #include <gst/gst.h>
+#include <gst/base/gstbasetransform.h>
 #include <gst/base/gstadapter.h>
 
 
@@ -71,16 +72,18 @@ GType gstlal_psdmode_get_type(void);
 
 
 typedef struct {
-	GstElementClass parent_class;
+	GstBaseTransformClass parent_class;
 } GSTLALWhitenClass;
 
 
 typedef struct {
-	GstElement element;
+	GstBaseTransform element;
+
+	double zero_pad_seconds;
+	double fft_length_seconds;
+	enum gstlal_psdmode_t psdmode;
 
 	GstAdapter *adapter;
-
-	GstPad *srcpad;
 
 	LALUnit sample_units;
 	int sample_rate;
@@ -89,10 +92,6 @@ typedef struct {
 	guint64 offset0;
 	guint64 next_offset_in;
 	guint64 next_offset_out;
-
-	double zero_pad_seconds;
-	double fft_length_seconds;
-	enum gstlal_psdmode_t psdmode;
 
 	REAL8Window *window;
 	REAL8FFTPlan *fwdplan;

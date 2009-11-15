@@ -43,6 +43,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/base/gstbasetransform.h>
 #include <gst/base/gstadapter.h>
 
 
@@ -127,25 +128,34 @@ GType gstlal_psdmode_get_type(void)
 /*
  * ============================================================================
  *
- *                                Support Code
+ *                                 Utilities
  *
  * ============================================================================
  */
+
+
+static int fft_length(const GSTLALWhiten *element)
+{
+	return round(element->fft_length_seconds * element->sample_rate);
+}
+
+
+static int zero_pad_length(const GSTLALWhiten *element)
+{
+	return round(element->zero_pad_seconds * element->sample_rate);
+}
 
 
 static void reset_workspace_metadata(GSTLALWhiten *element)
 {
 	element->tdworkspace->deltaT = (double) 1.0 / element->sample_rate;
 	element->tdworkspace->sampleUnits = element->sample_units;
-	element->fdworkspace->deltaF = (double) 1.0 / (element->tdworkspace->deltaT * element->window->data->length);
+	element->fdworkspace->deltaF = (double) 1.0 / (element->tdworkspace->deltaT * fft_length(element));
 }
 
 
 static int make_window_and_fft_plans(GSTLALWhiten *element)
 {
-	int fft_length = round(element->fft_length_seconds * element->sample_rate);
-	int zero_pad = round(element->zero_pad_seconds * element->sample_rate);
-
 	/*
 	 * build a Hann window with zero-padding.  both fft_length and
 	 * zero_pad are an even number of samples (enforced in the caps
@@ -168,14 +178,14 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 	 */
 
 	XLALDestroyREAL8Window(element->window);
-	element->window = XLALCreateHannREAL8Window(fft_length - 2 * zero_pad + 1);
+	element->window = XLALCreateHannREAL8Window(fft_length(element) - 2 * zero_pad_length(element) + 1);
 	if(!element->window) {
-		GST_ERROR_OBJECT(element, "failure creating Hann window");
+		GST_ERROR_OBJECT(element, "failure creating Hann window: %s", XLALErrorString(XLALGetBaseErrno()));
 		XLALClearErrno();
 		return -1;
 	}
-	if(!XLALResizeREAL8Sequence(element->window->data, -zero_pad, fft_length)) {
-		GST_ERROR_OBJECT(element, "failure resizing Hann window");
+	if(!XLALResizeREAL8Sequence(element->window->data, -zero_pad_length(element), fft_length(element))) {
+		GST_ERROR_OBJECT(element, "failure resizing Hann window: %s", XLALErrorString(XLALGetBaseErrno()));
 		XLALDestroyREAL8Window(element->window);
 		element->window = NULL;
 		XLALClearErrno();
@@ -187,9 +197,9 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 	 */
 
 	XLALDestroyREAL8Sequence(element->tail);
-	element->tail = XLALCreateREAL8Sequence(element->window->data->length / 2 - zero_pad);
+	element->tail = XLALCreateREAL8Sequence(fft_length(element) / 2 - zero_pad_length(element));
 	if(!element->tail) {
-		GST_ERROR_OBJECT(element, "failure allocating tail buffer");
+		GST_ERROR_OBJECT(element, "failure allocating tail buffer: %s", XLALErrorString(XLALGetBaseErrno()));
 		XLALClearErrno();
 		return -1;
 	}
@@ -203,12 +213,12 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 	XLALDestroyREAL8FFTPlan(element->fwdplan);
 	XLALDestroyREAL8FFTPlan(element->revplan);
 
-	element->fwdplan = XLALCreateForwardREAL8FFTPlan(element->window->data->length, 1);
-	element->revplan = XLALCreateReverseREAL8FFTPlan(element->window->data->length, 1);
+	element->fwdplan = XLALCreateForwardREAL8FFTPlan(fft_length(element), 1);
+	element->revplan = XLALCreateReverseREAL8FFTPlan(fft_length(element), 1);
 	g_mutex_unlock(gstlal_fftw_lock);
 
 	if(!element->fwdplan || !element->revplan) {
-		GST_ERROR_OBJECT(element, "failure creating FFT plans");
+		GST_ERROR_OBJECT(element, "failure creating FFT plans: %s", XLALErrorString(XLALGetBaseErrno()));
 		g_mutex_lock(gstlal_fftw_lock);
 		XLALDestroyREAL8FFTPlan(element->fwdplan);
 		XLALDestroyREAL8FFTPlan(element->revplan);
@@ -224,16 +234,16 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 	 */
 
 	XLALDestroyREAL8TimeSeries(element->tdworkspace);
-	element->tdworkspace = XLALCreateREAL8TimeSeries(NULL, &GPS_ZERO, 0.0, (double) 1.0 / element->sample_rate, &element->sample_units, element->window->data->length);
+	element->tdworkspace = XLALCreateREAL8TimeSeries(NULL, &GPS_ZERO, 0.0, (double) 1.0 / element->sample_rate, &element->sample_units, fft_length(element));
 	if(!element->tdworkspace) {
-		GST_ERROR_OBJECT(element, "failure creating time-domain workspace");
+		GST_ERROR_OBJECT(element, "failure creating time-domain workspace: %s", XLALErrorString(XLALGetBaseErrno()));
 		XLALClearErrno();
 		return -1;
 	}
 	XLALDestroyCOMPLEX16FrequencySeries(element->fdworkspace);
-	element->fdworkspace = XLALCreateCOMPLEX16FrequencySeries(NULL, &GPS_ZERO, 0.0, (double) 1.0 / (element->tdworkspace->deltaT * element->window->data->length), &lalDimensionlessUnit, element->window->data->length / 2 + 1);
+	element->fdworkspace = XLALCreateCOMPLEX16FrequencySeries(NULL, &GPS_ZERO, 0.0, (double) 1.0 / (element->tdworkspace->deltaT * fft_length(element)), &lalDimensionlessUnit, fft_length(element) / 2 + 1);
 	if(!element->fdworkspace) {
-		GST_ERROR_OBJECT(element, "failure creating frequency-domain workspace");
+		GST_ERROR_OBJECT(element, "failure creating frequency-domain workspace: %s", XLALErrorString(XLALGetBaseErrno()));
 		XLALClearErrno();
 		return -1;
 	}
@@ -252,6 +262,12 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 }
 
 
+static unsigned get_available_samples(GSTLALWhiten *element)
+{
+	return gst_adapter_available(element->adapter) / sizeof(*element->tdworkspace->data->data);
+}
+
+
 static REAL8FrequencySeries *make_empty_psd(double f0, double deltaF, int length, LALUnit sample_units)
 {
 	REAL8FrequencySeries *psd;
@@ -259,7 +275,7 @@ static REAL8FrequencySeries *make_empty_psd(double f0, double deltaF, int length
 	sample_units = gstlal_lalUnitSquaredPerHertz(sample_units);
 	psd = XLALCreateREAL8FrequencySeries("PSD", &GPS_ZERO, f0, deltaF, &sample_units, length);
 	if(!psd) {
-		GST_ERROR("XLALCreateREAL8FrequencySeries() failed");
+		GST_ERROR("XLALCreateREAL8FrequencySeries() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 		XLALClearErrno();
 	}
 
@@ -318,7 +334,7 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 			if(!psd)
 				return NULL;
 			if(XLALPSDRegressorSetPSD(element->psd_regressor, psd, 1)) {
-				GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
+				GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 				XLALDestroyREAL8FrequencySeries(psd);
 				XLALClearErrno();
 				return NULL;
@@ -326,7 +342,7 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 		} else {
 			psd = XLALPSDRegressorGetPSD(element->psd_regressor);
 			if(!psd) {
-				GST_ERROR_OBJECT(element, "XLALPSDRegressorGetPSD() failed");
+				GST_ERROR_OBJECT(element, "XLALPSDRegressorGetPSD() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 				XLALClearErrno();
 				return NULL;
 			}
@@ -348,15 +364,6 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 }
 
 
-/*
- * ============================================================================
- *
- *                                  Messages
- *
- * ============================================================================
- */
-
-
 static GstMessage *psd_message_new(GSTLALWhiten *element, REAL8FrequencySeries *psd)
 {
 	GValueArray *va = gstlal_g_value_array_from_doubles(psd->data->data, psd->data->length);
@@ -375,21 +382,248 @@ static GstMessage *psd_message_new(GSTLALWhiten *element, REAL8FrequencySeries *
 }
 
 
+static void set_metadata(GSTLALWhiten *element, GstBuffer *buf, guint64 outsamples)
+{
+	GST_BUFFER_SIZE(buf) = outsamples * sizeof(*element->tdworkspace->data->data);
+	GST_BUFFER_OFFSET(buf) = element->next_offset_out;
+	element->next_offset_out += outsamples;
+	GST_BUFFER_OFFSET_END(buf) = element->next_offset_out;
+	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->sample_rate);
+	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->sample_rate) - GST_BUFFER_TIMESTAMP(buf);
+	if(element->next_is_discontinuity) {
+		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
+		element->next_is_discontinuity = FALSE;
+	}
+}
+
+
+static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
+{
+	guint64 zero_pad = zero_pad_length(element);
+	double *dst = (double *) GST_BUFFER_DATA(outbuf);
+	unsigned block_number;
+
+	/*
+	 * check for no-op
+	 */
+
+	if(get_available_samples(element) < element->tdworkspace->data->length - 2 * zero_pad)
+		return GST_BASE_TRANSFORM_FLOW_DROPPED;
+
+	/*
+	 * Iterate over the available data
+	 */
+
+	for(block_number = 0; get_available_samples(element) >= element->tdworkspace->data->length - 2 * zero_pad; block_number++) {
+		REAL8FrequencySeries *newpsd;
+		unsigned i;
+
+		/*
+		 * Reset the workspace's metadata that gets modified
+		 * through each iteration of this loop.
+		 */
+
+		reset_workspace_metadata(element);
+
+		/*
+		 * Copy data from adapter into time-domain workspace.  No
+		 * need to explicitly zero-pad the time series because the
+		 * window function will do it for us.
+		 *
+		 * Note:  the time series' epoch is set to the timestamp of
+		 * the data taken from the adapter, not the timestamp of
+		 * the start of the series (which is zero_pad samples
+		 * earlier).
+		 */
+
+		memcpy(element->tdworkspace->data->data + zero_pad * sizeof(*element->tdworkspace->data->data), gst_adapter_peek(element->adapter, (element->tdworkspace->data->length - 2 * zero_pad) * sizeof(*element->tdworkspace->data->data)), (element->tdworkspace->data->length - 2 * zero_pad) * sizeof(*element->tdworkspace->data->data));
+		XLALINT8NSToGPS(&element->tdworkspace->epoch, element->t0);
+		XLALGPSAdd(&element->tdworkspace->epoch, (double) (element->next_offset_out - element->offset0) / element->sample_rate);
+
+		/*
+		 * Transform to frequency domain
+		 */
+
+		if(!XLALUnitaryWindowREAL8Sequence(element->tdworkspace->data, element->window)) {
+			GST_ERROR_OBJECT(element, "XLALUnitaryWindowREAL8Sequence() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+			XLALClearErrno();
+			return GST_FLOW_ERROR;
+		}
+		if(XLALREAL8TimeFreqFFT(element->fdworkspace, element->tdworkspace, element->fwdplan)) {
+			GST_ERROR_OBJECT(element, "XLALREAL8TimeFreqFFT() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+			XLALClearErrno();
+			return GST_FLOW_ERROR;
+		}
+
+		/*
+		 * Retrieve the PSD.
+		 */
+
+		newpsd = get_psd(element);
+		if(!newpsd)
+			return GST_FLOW_ERROR;
+		if(newpsd != element->psd) {
+			XLALDestroyREAL8FrequencySeries(element->psd);
+			element->psd = newpsd;
+			gst_element_post_message(GST_ELEMENT(element), psd_message_new(element, element->psd));
+		}
+
+		/*
+		 * Add frequency domain data to spectrum averager
+		 */
+
+		if(XLALPSDRegressorAdd(element->psd_regressor, element->fdworkspace)) {
+			GST_ERROR_OBJECT(element, "XLALPSDRegressorAdd() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+			XLALClearErrno();
+			return GST_FLOW_ERROR;
+		}
+
+		/*
+		 * Whiten.  After this, the frequency bins should be unit
+		 * variance zero mean complex Gaussian random variables.
+		 * They are *not* independent random variables because the
+		 * source time series data was windowed before conversion
+		 * to the frequency domain.
+		 */
+
+		if(!XLALWhitenCOMPLEX16FrequencySeries(element->fdworkspace, element->psd)) {
+			GST_ERROR_OBJECT(element, "XLALWhitenCOMPLEX16FrequencySeries() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+			XLALClearErrno();
+			return GST_FLOW_ERROR;
+		}
+
+		/*
+		 * Transform to time domain.
+		 */
+
+		if(XLALREAL8FreqTimeFFT(element->tdworkspace, element->fdworkspace, element->revplan)) {
+			GST_ERROR_OBJECT(element, "XLALREAL8FreqTimeFFT() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+			XLALClearErrno();
+			return GST_FLOW_ERROR;
+		}
+
+		/* 
+		 * Normalize the time series.
+		 *
+		 * After inverse transforming the frequency series to the
+		 * time domain, the variance of the time series is
+		 *
+		 * <x_{j}^{2}> = w_{j}^{2} / (\Delta t^{2} \sigma^{2})
+		 *
+		 * where \sigma^{2} is the sum-of-squares of the window
+		 * function, \sigma^{2} = \sum_{j} w_{j}^{2}
+		 *
+		 * The time series has a j-dependent variance, but we
+		 * normalize it so that the variance is 1 in the middle of
+		 * the window.
+		 */
+
+		for(i = 0; i < element->tdworkspace->data->length; i++)
+			element->tdworkspace->data->data[i] *= element->tdworkspace->deltaT * sqrt(element->window->sumofsquares);
+		/* normalization constant has units of seconds */
+		XLALUnitMultiply(&element->tdworkspace->sampleUnits, &element->tdworkspace->sampleUnits, &lalSecondUnit);
+
+		/*
+		 * Verify the result is dimensionless.
+		 */
+
+		if(XLALUnitCompare(&lalDimensionlessUnit, &element->tdworkspace->sampleUnits)) {
+			char units[100];
+			XLALUnitAsString(units, sizeof(units), &element->tdworkspace->sampleUnits);
+			GST_ERROR_OBJECT(element, "whitening process failed to produce dimensionless time series: result has units \"%s\"", units);
+			return GST_FLOW_ERROR;
+		}
+
+		/*
+		 * Copy the first half of the time series minus the
+		 * zero_pad into the output buffer, removing the zero_pad
+		 * from the start, and adding the contents of the tail.
+		 * When we add the two time series (the first half of the
+		 * piece we have just whitened and the contents of the tail
+		 * buffer), we do so overlapping the Hann windows so that
+		 * the sum of the windows is 1.
+		 */
+
+		for(i = 0; i < element->tail->length; i++)
+			dst[i] = element->tdworkspace->data->data[zero_pad + i] + element->tail->data[i];
+
+		/*
+		 * Save the second half of time series data minus the final
+		 * zero_pad in the tail
+		 */
+
+		memcpy(element->tail->data, &element->tdworkspace->data->data[zero_pad + element->tail->length], element->tail->length * sizeof(*element->tail->data));
+
+		/*
+		 * flush the adapter, advance the output pointer
+		 */
+
+		gst_adapter_flush(element->adapter, element->tail->length * sizeof(*element->tdworkspace->data->data));
+		dst += element->tail->length;
+	}
+
+	set_metadata(element, outbuf, dst - (double *) GST_BUFFER_DATA(outbuf));
+
+	return GST_FLOW_OK;
+}
+
+
 /*
  * ============================================================================
  *
- *                             GStreamer Element
+ *                           GStreamer Boiler Plate
  *
  * ============================================================================
  */
 
 
-/* FIXME:  try rewriting this as a subclass of the base transform class */
+static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
+	"sink",
+	GST_PAD_SINK,
+	GST_PAD_ALWAYS,
+	GST_STATIC_CAPS(
+		"audio/x-raw-float, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) 1, " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) 64"
+	)
+);
 
 
-/*
- * Properties
- */
+static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
+	"src",
+	GST_PAD_SRC,
+	GST_PAD_ALWAYS,
+	GST_STATIC_CAPS(
+		"audio/x-raw-float, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) 1, " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) 64"
+	)
+);
+
+
+static GstStaticPadTemplate psd_factory = GST_STATIC_PAD_TEMPLATE(
+	"psd",
+	GST_PAD_SRC,
+	GST_PAD_REQUEST,
+	GST_STATIC_CAPS(
+		"audio/x-raw-float, " \
+		"delta-f = (double) [0, MAX], " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) 64"
+	)
+);
+
+
+GST_BOILERPLATE(
+	GSTLALWhiten,
+	gstlal_whiten,
+	GstBaseTransform,
+	GST_TYPE_BASE_TRANSFORM
+);
 
 
 enum property {
@@ -401,6 +635,253 @@ enum property {
 	ARG_DELTA_F,
 	ARG_PSD
 };
+
+
+/*
+ * ============================================================================
+ *
+ *                     GstBaseTransform Method Overrides
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * get_unit_size()
+ */
+
+
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
+{
+	GstStructure *str;
+	gint channels;
+
+	str = gst_caps_get_structure(caps, 0);
+	if(!gst_structure_get_int(str, "channels", &channels)) {
+		GST_DEBUG_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
+		return FALSE;
+	}
+
+	*size = sizeof(double) * channels;
+
+	return TRUE;
+}
+
+
+/*
+ * set_caps()
+ */
+
+
+static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps)
+{
+	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
+	GstStructure *s;
+	gint channels;
+	gint rate;
+	gboolean success = TRUE;
+
+	/*
+	 * extract the channel count and sample rate, and check that they
+	 * are allowed
+	 */
+
+	s = gst_caps_get_structure(incaps, 0);
+	if(!gst_structure_get_int(s, "channels", &channels)) {
+		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
+		return FALSE;
+	}
+	if(!gst_structure_get_int(s, "rate", &rate)) {
+		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
+		success = FALSE;
+	} else if((int) round(element->fft_length_seconds * rate) & 1 || (int) round(element->zero_pad_seconds * rate) & 1) {
+		GST_ERROR_OBJECT(element, "bad sample rate: FFT length and/or zero-padding is an odd number of samples (must be even)");
+		success = FALSE;
+	}
+
+	/*
+	 * record the sample rate, make a new Hann window, new FFT plans,
+	 * and workspaces
+	 */
+
+	if(success && (rate != element->sample_rate)) {
+		element->sample_rate = rate;
+		if(make_window_and_fft_plans(element))
+			success = FALSE;
+	}
+
+	/*
+	 * done
+	 */
+
+	return success;
+}
+
+
+/*
+ * event()
+ *
+ * FIXME:  handle flusing and eos (i.e. flush the adapter and send the last
+ * bit of data downstream)
+ */
+
+
+static gboolean event(GstBaseTransform *trans, GstEvent *event)
+{
+	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
+
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_TAG: {
+		GstTagList *taglist;
+		gchar *units;
+
+		gst_event_parse_tag(event, &taglist);
+		if(gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units)) {
+			/*
+			 * tag list contains a units tag;  replace with
+			 * equivalent of "dimensionless" before sending
+			 * downstream
+			 */
+			/* FIXME:  probably shouldn't do this in-place */
+
+			LALUnit sample_units;
+
+			if(!XLALParseUnitString(&sample_units, units)) {
+				GST_ERROR_OBJECT(element, "cannot parse units");
+				sample_units = lalDimensionlessUnit;
+			} else {
+				gchar dimensionless_units[16];	/* argh hard-coded length = BAD BAD BAD */
+				XLALUnitAsString(dimensionless_units, sizeof(dimensionless_units), &lalDimensionlessUnit);
+				/* FIXME:  gstreamer doesn't like empty strings */
+				gst_tag_list_add(taglist, GST_TAG_MERGE_REPLACE, GSTLAL_TAG_UNITS, " "/*dimensionless_units*/, NULL);
+			}
+
+			g_free(units);
+			element->sample_units = sample_units;
+		}
+
+		gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(trans), event);
+		return FALSE;	/* don't forward the event (we did it) */
+	}
+
+	default:
+		return TRUE;	/* forward the event */
+	}
+}
+
+
+/*
+ * transform_size()
+ */
+
+
+static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
+{
+	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
+	guint quantum = fft_length(element) / 2 - zero_pad_length(element);
+	guint unit_size;
+	guint other_unit_size;
+
+	if(!get_unit_size(trans, caps, &unit_size))
+		return FALSE;
+	if(size % unit_size) {
+		GST_DEBUG_OBJECT(element, "size not a multiple of %u", unit_size);
+		return FALSE;
+	}
+	if(!get_unit_size(trans, othercaps, &other_unit_size))
+		return FALSE;
+
+	switch(direction) {
+	case GST_PAD_SRC:
+		/*
+		 * just keep the sample count the same
+		 */
+
+		*othersize = (size / unit_size) * other_unit_size;
+		break;
+
+	case GST_PAD_SINK:
+		/*
+		 * upper bound of sample count on source pad is input
+		 * sample count plus the number of samples in the adapter
+		 * rounded down to an integer multiple of 1/2 the fft
+		 * quantum but only if there's enough data for at least 1
+		 * full fft.
+		 */
+
+		*othersize = (size / unit_size + get_available_samples(element)) / quantum;
+		if(*othersize >= 2)
+			*othersize = (*othersize - 1) * quantum * other_unit_size;
+		else
+			*othersize = 0;
+		break;
+
+	case GST_PAD_UNKNOWN:
+		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+
+/*
+ * transform()
+ */
+
+
+static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
+{
+	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
+	GstFlowReturn result = GST_FLOW_OK;
+
+	/*
+	 * If the incoming buffer is a discontinuity, clear the adapter and
+	 * reset the clock
+	 */
+
+	if((GST_BUFFER_OFFSET(inbuf) != element->next_offset_in) || GST_BUFFER_IS_DISCONT(inbuf)) {
+		gst_adapter_clear(element->adapter);
+		element->next_is_discontinuity = TRUE;
+		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
+		element->offset0 = GST_BUFFER_OFFSET(inbuf);
+		element->next_offset_out = GST_BUFFER_OFFSET(inbuf);
+	}
+	element->next_offset_in = GST_BUFFER_OFFSET_END(inbuf);
+
+	/*
+	 * Push the incoming buffer into the adapter
+	 */
+
+	gst_buffer_ref(inbuf);	/* don't let the adapter free it */
+	gst_adapter_push(element->adapter, inbuf);
+
+	/*
+	 * Process adapter contents into output buffer
+	 */
+
+	result = whiten(element, outbuf);
+
+	/*
+	 * Done
+	 */
+
+	return result;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                          GObject Method Overrides
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * set_property()
+ */
 
 
 static void set_property(GObject * object, enum property id, const GValue * value, GParamSpec * pspec)
@@ -451,7 +932,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 			psd = make_empty_psd(0.0, 1.0, va->n_values, element->sample_units);
 		gstlal_doubles_from_g_value_array(va, psd->data->data, NULL);
 		if(XLALPSDRegressorSetPSD(element->psd_regressor, psd, XLALPSDRegressorGetAverageSamples(element->psd_regressor))) {
-			GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed");
+			GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
 		} else {
 			XLALDestroyREAL8FrequencySeries(element->psd);
@@ -463,6 +944,11 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 
 	GST_OBJECT_UNLOCK(element);
 }
+
+
+/*
+ * get_property()
+ */
 
 
 static void get_property(GObject * object, enum property id, GValue * value, GParamSpec * pspec)
@@ -512,378 +998,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 
 
 /*
- * getcaps()
- */
-
-
-static GstCaps *getcaps(GstPad *pad)
-{
-	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
-	GstCaps *caps, *peercaps;
-
-	/*
-	 * start by retrieving our own caps.  use get_fixed_caps_func() to
-	 * avoid recursing back into this function.
-	 */
-
-	caps = gst_pad_get_fixed_caps_func(pad);
-
-	/*
-	 * now compute the intersection of the caps with the downstream
-	 * peer's caps if known.
-	 */
-
-	peercaps = gst_pad_peer_get_caps(element->srcpad);
-	if(peercaps) {
-		GstCaps *result = gst_caps_intersect(peercaps, caps);
-		gst_caps_unref(caps);
-		gst_caps_unref(peercaps);
-		caps = result;
-	}
-
-	/*
-	 * done
-	 */
-
-	gst_object_unref(element);
-	return caps;
-}
-
-
-/*
- * setcaps()
- */
-
-
-static gboolean setcaps(GstPad *pad, GstCaps *caps)
-{
-	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
-	GstStructure *structure;
-	gint rate;
-	gboolean success = TRUE;
-
-	/*
-	 * extract the sample rate, and check that it is allowed
-	 */
-
-	structure = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(structure, "rate", &rate)) {
-		GST_ERROR_OBJECT(element, "no rate in caps");
-		success = FALSE;
-	} else if((int) round(element->fft_length_seconds * rate) & 1 || (int) round(element->zero_pad_seconds * rate) & 1) {
-		GST_ERROR_OBJECT(element, "bad sample rate: FFT length and/or zero-padding is an odd number of samples (must be even)");
-		success = FALSE;
-	}
-
-	/*
-	 * try setting the new caps on the downstream peer.
-	 */
-
-	if(success)
-		success = gst_pad_set_caps(element->srcpad, caps);
-
-	/*
-	 * record the sample rate and units, make a new Hann window, new
-	 * FFT plans, and workspaces
-	 */
-
-	if(success && (rate != element->sample_rate)) {
-		element->sample_rate = rate;
-		if(make_window_and_fft_plans(element))
-			success = FALSE;
-	}
-
-	/*
-	 * done
-	 */
-
-	gst_object_unref(element);
-	return success;
-}
-
-
-/*
- * sink event()
- *
- * FIXME:  handle flusing and eos (i.e. flush the adapter and send the last
- * bit of data downstream)
- */
-
-
-static gboolean sink_event(GstPad *pad, GstEvent *event)
-{
-	GSTLALWhiten *element = GSTLAL_WHITEN(GST_PAD_PARENT(pad));
-	gboolean success = TRUE;
-
-	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_TAG: {
-		GstTagList *taglist;
-		gchar *units;
-
-		gst_event_parse_tag(event, &taglist);
-		if(gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units)) {
-			/*
-			 * tag list contains a units tag;  replace with
-			 * equivalent of "dimensionless" before sending
-			 * downstream
-			 */
-			/* FIXME:  probably shouldn't do this in-place */
-
-			LALUnit sample_units;
-
-			if(!XLALParseUnitString(&sample_units, units)) {
-				GST_ERROR_OBJECT(element, "cannot parse units");
-				sample_units = lalDimensionlessUnit;
-				success = FALSE;
-			} else {
-				gchar dimensionless_units[16];	/* argh hard-coded length = BAD BAD BAD */
-				XLALUnitAsString(dimensionless_units, sizeof(dimensionless_units), &lalDimensionlessUnit);
-				/* FIXME:  gstreamer doesn't like empty strings */
-				gst_tag_list_add(taglist, GST_TAG_MERGE_REPLACE, GSTLAL_TAG_UNITS, " "/*dimensionless_units*/, NULL);
-			}
-
-			g_free(units);
-			element->sample_units = sample_units;
-		}
-
-		success &= gst_pad_push_event(element->srcpad, event);
-		break;
-	}
-
-	default:
-		success = gst_pad_event_default(pad, event);
-		break;
-	}
-
-	return success;
-}
-
-
-/*
- * chain()
- */
-
-
-static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
-{
-	GSTLALWhiten *element = GSTLAL_WHITEN(gst_pad_get_parent(pad));
-	GstFlowReturn result = GST_FLOW_OK;
-	unsigned zero_pad = round(element->zero_pad_seconds * element->sample_rate);
-
-	/*
-	 * Push the incoming buffer into the adapter.  If the buffer is a
-	 * discontinuity, first clear the adapter and reset the clock
-	 */
-
-	if(!GST_CLOCK_TIME_IS_VALID(element->t0) || GST_BUFFER_IS_DISCONT(sinkbuf)) {
-		/* FIXME:  if there is tail data left over, maybe it should
-		 * be pushed downstream? */
-		gst_adapter_clear(element->adapter);
-		element->next_is_discontinuity = TRUE;
-		element->t0 = GST_BUFFER_TIMESTAMP(sinkbuf);
-		element->offset0 = GST_BUFFER_OFFSET(sinkbuf);
-		element->next_offset_out = GST_BUFFER_OFFSET(sinkbuf);
-	}
-	element->next_offset_in = GST_BUFFER_OFFSET_END(sinkbuf);
-	gst_adapter_push(element->adapter, sinkbuf);
-
-	/*
-	 * Iterate over the available data
-	 */
-
-	while(gst_adapter_available(element->adapter) >= element->tdworkspace->data->length * sizeof(*element->tdworkspace->data->data)) {
-		REAL8FrequencySeries *newpsd;
-		GstBuffer *srcbuf;
-		unsigned i;
-
-		/*
-		 * Reset the workspace's metadata that gets modified
-		 * through each iteration of this loop.
-		 */
-
-		reset_workspace_metadata(element);
-
-		/*
-		 * Copy data from adapter into time-domain workspace.
-		 */
-
-		memcpy(element->tdworkspace->data->data, gst_adapter_peek(element->adapter, element->tdworkspace->data->length * sizeof(*element->tdworkspace->data->data)), element->tdworkspace->data->length * sizeof(*element->tdworkspace->data->data));
-		XLALINT8NSToGPS(&element->tdworkspace->epoch, element->t0);
-		XLALGPSAdd(&element->tdworkspace->epoch, (double) (element->next_offset_out - element->offset0) / element->sample_rate);
-
-		/*
-		 * Transform to frequency domain
-		 */
-
-		if(!XLALUnitaryWindowREAL8Sequence(element->tdworkspace->data, element->window)) {
-			GST_ERROR_OBJECT(element, "XLALUnitaryWindowREAL8Sequence() failed");
-			result = GST_FLOW_ERROR;
-			XLALClearErrno();
-			goto done;
-		}
-		if(XLALREAL8TimeFreqFFT(element->fdworkspace, element->tdworkspace, element->fwdplan)) {
-			GST_ERROR_OBJECT(element, "XLALREAL8TimeFreqFFT() failed");
-			result = GST_FLOW_ERROR;
-			XLALClearErrno();
-			goto done;
-		}
-
-		/*
-		 * Retrieve the PSD.
-		 */
-
-		newpsd = get_psd(element);
-		if(!newpsd) {
-			result = GST_FLOW_ERROR;
-			goto done;
-		}
-		if(newpsd != element->psd) {
-			XLALDestroyREAL8FrequencySeries(element->psd);
-			element->psd = newpsd;
-			gst_element_post_message(GST_ELEMENT(element), psd_message_new(element, element->psd));
-		}
-
-		/*
-		 * Add frequency domain data to spectrum averager
-		 */
-
-		if(XLALPSDRegressorAdd(element->psd_regressor, element->fdworkspace)) {
-			GST_ERROR_OBJECT(element, "XLALPSDRegressorAdd() failed");
-			result = GST_FLOW_ERROR;
-			XLALClearErrno();
-			goto done;
-		}
-
-		/*
-		 * Whiten.  After this, the frequency bins should be unit
-		 * variance zero mean complex Gaussian random variables.
-		 * They are *not* independent random variables because the
-		 * source time series data was windowed before conversion
-		 * to the frequency domain.
-		 */
-
-		if(!XLALWhitenCOMPLEX16FrequencySeries(element->fdworkspace, element->psd)) {
-			GST_ERROR_OBJECT(element, "XLALWhitenCOMPLEX16FrequencySeries() failed");
-			result = GST_FLOW_ERROR;
-			XLALClearErrno();
-			goto done;
-		}
-
-		/*
-		 * Transform to time domain.
-		 */
-
-		if(XLALREAL8FreqTimeFFT(element->tdworkspace, element->fdworkspace, element->revplan)) {
-			GST_ERROR_OBJECT(element, "XLALREAL8FreqTimeFFT() failed");
-			result = GST_FLOW_ERROR;
-			XLALClearErrno();
-			goto done;
-		}
-
-		/* 
-		 * Normalize the time series.
-		 *
-		 * After inverse transforming the frequency series to the
-		 * time domain, the variance of the time series is
-		 *
-		 * <x_{j}^{2}> = w_{j}^{2} / (\Delta t^{2} \sigma^{2})
-		 *
-		 * where \sigma^{2} is the sum-of-squares of the window
-		 * function, \sigma^{2} = \sum_{j} w_{j}^{2}
-		 *
-		 * The time series has a j-dependent variance, but we
-		 * normalize it so that the variance is 1 in the middle of
-		 * the window.
-		 */
-
-		for(i = 0; i < element->tdworkspace->data->length; i++)
-			element->tdworkspace->data->data[i] *= element->tdworkspace->deltaT * sqrt(element->window->sumofsquares);
-		/* normalization constant has units of seconds */
-		XLALUnitMultiply(&element->tdworkspace->sampleUnits, &element->tdworkspace->sampleUnits, &lalSecondUnit);
-
-		/*
-		 * Verify the result is dimensionless.
-		 */
-
-		if(XLALUnitCompare(&lalDimensionlessUnit, &element->tdworkspace->sampleUnits)) {
-			char units[100];
-			XLALUnitAsString(units, sizeof(units), &element->tdworkspace->sampleUnits);
-			GST_ERROR_OBJECT(element, "whitening process failed to produce dimensionless time series: result has units \"%s\"", units);
-			result = GST_FLOW_ERROR;
-			goto done;
-		}
-
-		/*
-		 * Get a buffer from the downstream peer.
-		 */
-
-		result = gst_pad_alloc_buffer(element->srcpad, element->next_offset_out + zero_pad, element->tail->length * sizeof(*element->tdworkspace->data->data), GST_PAD_CAPS(element->srcpad), &srcbuf);
-		if(result != GST_FLOW_OK)
-			goto done;
-		if(element->next_is_discontinuity) {
-			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
-			element->next_is_discontinuity = FALSE;
-		}
-		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + element->tail->length;
-		GST_BUFFER_TIMESTAMP(srcbuf) = element->t0 + gst_util_uint64_scale_int_round(element->next_offset_out - element->offset0 + zero_pad, GST_SECOND, element->sample_rate);
-		GST_BUFFER_DURATION(srcbuf) = element->t0 + gst_util_uint64_scale_int_round(element->next_offset_out - element->offset0 + zero_pad + element->tail->length, GST_SECOND, element->sample_rate) - GST_BUFFER_TIMESTAMP(srcbuf);
-
-		/*
-		 * Copy the first half of the time series into the buffer,
-		 * removing the zero_pad from the start, and adding the
-		 * contents of the tail.  When we add the two time series
-		 * (the first half of the piece we have just whitened and
-		 * the contents of the tail buffer), we do so overlapping
-		 * the Hann windows so that the sum of the windows is 1.
-		 */
-
-		for(i = 0; i < element->tail->length; i++)
-			((double *) GST_BUFFER_DATA(srcbuf))[i] = element->tdworkspace->data->data[zero_pad + i] + element->tail->data[i];
-
-		/*
-		 * Push the buffer downstream
-		 */
-
-		result = gst_pad_push(element->srcpad, srcbuf);
-		if(result != GST_FLOW_OK)
-			goto done;
-
-		/*
-		 * Save the second half of time series data minus the final
-		 * zero_pad in the tail
-		 */
-
-		memcpy(element->tail->data, &element->tdworkspace->data->data[zero_pad + element->tail->length], element->tail->length * sizeof(*element->tail->data));
-
-		/*
-		 * Flush the adapter and advance the sample count and
-		 * adapter clock
-		 */
-
-		gst_adapter_flush(element->adapter, element->tail->length * sizeof(*element->tdworkspace->data->data));
-		element->next_offset_out += element->tail->length;
-	}
-
-	/*
-	 * Done
-	 */
-
-done:
-	gst_object_unref(element);
-	return result;
-}
-
-
-/*
- * Parent class.
- */
-
-
-static GstElementClass *parent_class = NULL;
-
-
-/*
- * Instance finalize function.  See ???
+ * finalize()
  */
 
 
@@ -892,7 +1007,6 @@ static void finalize(GObject * object)
 	GSTLALWhiten *element = GSTLAL_WHITEN(object);
 
 	g_object_unref(element->adapter);
-	gst_object_unref(element->srcpad);
 	XLALDestroyREAL8Window(element->window);
 	g_mutex_lock(gstlal_fftw_lock);
 	XLALDestroyREAL8FFTPlan(element->fwdplan);
@@ -909,72 +1023,41 @@ static void finalize(GObject * object)
 
 
 /*
- * Base init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GBaseInitFunc
+ * base_init()
  */
 
 
-static void base_init(gpointer class)
+static void gstlal_whiten_base_init(gpointer gclass)
 {
-	static GstElementDetails plugin_details = {
-		"Whiten",
-		"Filter",
-		"A PSD estimator and time series whitener",
-		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chad Hanna <channa@ligo.caltech.edu>, Drew Keppel <dkeppel@ligo.caltech.edu>"
-	};
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
+	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
 
-	gst_element_class_set_details(element_class, &plugin_details);
+	gst_element_class_set_details_simple(element_class, "Whiten", "Filter/Audio", "A PSD estimator and time series whitener.", "Kipp Cannon <kcannon@ligo.caltech.edu>, Chad Hanna <channa@ligo.caltech.edu>, Drew Keppel <dkeppel@ligo.caltech.edu>");
 
-	gst_element_class_add_pad_template(
-		element_class,
-		gst_pad_template_new(
-			"sink",
-			GST_PAD_SINK,
-			GST_PAD_ALWAYS,
-			gst_caps_new_simple(
-				"audio/x-raw-float",
-				"rate", GST_TYPE_INT_RANGE, 1, G_MAXINT,
-				"channels", G_TYPE_INT, 1,
-				"endianness", G_TYPE_INT, G_BYTE_ORDER,
-				"width", G_TYPE_INT, 64,
-				NULL
-			)
-		)
-	);
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&psd_factory));
 
-	gst_element_class_add_pad_template(
-		element_class,
-		gst_pad_template_new(
-			"src",
-			GST_PAD_SRC,
-			GST_PAD_ALWAYS,
-			gst_caps_new_simple(
-				"audio/x-raw-float",
-				"rate", GST_TYPE_INT_RANGE, 1, G_MAXINT,
-				"channels", G_TYPE_INT, 1,
-				"endianness", G_TYPE_INT, G_BYTE_ORDER,
-				"width", G_TYPE_INT, 64,
-				NULL
-			)
-		)
-	);
+	transform_class->get_unit_size = get_unit_size;
+	transform_class->set_caps = set_caps;
+	transform_class->event = event;
+	transform_class->transform_size = transform_size;
+	transform_class->transform = transform;
 }
 
 
 /*
- * Class init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
+ * class_init()
  */
 
 
-static void class_init(gpointer class, gpointer class_data)
+static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 {
-	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
+	GObjectClass *gobject_class;
+	GstBaseTransformClass *base_transform_class;
 
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
+	gobject_class = (GObjectClass *) klass;
+	base_transform_class = (GstBaseTransformClass *) klass;
 
 	gobject_class->set_property = set_property;
 	gobject_class->get_property = get_property;
@@ -1068,31 +1151,12 @@ static void class_init(gpointer class, gpointer class_data)
 
 
 /*
- * Instance init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GInstanceInitFunc
+ * init()
  */
 
 
-static void instance_init(GTypeInstance * object, gpointer class)
+static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *kclass)
 {
-	GSTLALWhiten *element = GSTLAL_WHITEN(object);
-	GstPad *pad;
-
-	gst_element_create_all_pads(GST_ELEMENT(element));
-
-	/* configure sink pad */
-	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_getcaps_function(pad, getcaps);
-	gst_pad_set_setcaps_function(pad, setcaps);
-	gst_pad_set_event_function(pad, sink_event);
-	gst_pad_set_chain_function(pad, chain);
-	gst_object_unref(pad);
-
-	/* retrieve (and ref) src pad */
-	element->srcpad = gst_element_get_static_pad(GST_ELEMENT(object), "src");
-
-	/* internal data */
 	element->adapter = gst_adapter_new();
 	element->next_is_discontinuity = FALSE;
 	element->t0 = GST_CLOCK_TIME_NONE;
@@ -1112,28 +1176,4 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->tdworkspace = NULL;
 	element->fdworkspace = NULL;
 	element->tail = NULL;
-}
-
-
-/*
- * gstlal_whiten_get_type().
- */
-
-
-GType gstlal_whiten_get_type(void)
-{
-	static GType type = 0;
-
-	if(!type) {
-		static const GTypeInfo info = {
-			.class_size = sizeof(GSTLALWhitenClass),
-			.class_init = class_init,
-			.base_init = base_init,
-			.instance_size = sizeof(GSTLALWhiten),
-			.instance_init = instance_init,
-		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_whiten", &info, 0);
-	}
-
-	return type;
 }
