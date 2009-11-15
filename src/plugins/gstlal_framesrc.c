@@ -279,7 +279,6 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 		GST_ERROR_OBJECT(element, "unsupported LAL type code (%d)", element->series_type);
 		return NULL;
 	}
-	input_buffer_offset = gst_util_uint64_scale_int_round(XLALGPSToINT8NS(&input_buffer_epoch) - basesrc->segment.start, (gint) round(1.0 / deltaT), GST_SECOND);
 
 	/*
 	 * segment length (now that we know the sample rate)
@@ -298,6 +297,15 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 		GST_ERROR_OBJECT(element, "requested interval lies outside input domain");
 		return NULL;
 	}
+
+	/*
+	 * location of input buffer w.r.t. segment
+	 */
+
+	if(XLALGPSToINT8NS(&input_buffer_epoch) >= basesrc->segment.start)
+		input_buffer_offset = gst_util_uint64_scale_int_round(XLALGPSToINT8NS(&input_buffer_epoch) - basesrc->segment.start, (gint) round(1.0 / deltaT), GST_SECOND);
+	else
+		input_buffer_offset = -gst_util_uint64_scale_int_round(basesrc->segment.start - XLALGPSToINT8NS(&input_buffer_epoch), (gint) round(1.0 / deltaT), GST_SECOND);
 
 	/*
 	 * does the requested interval start in the input buffer?  if not,
@@ -880,8 +888,11 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 	 */
 
 	if(XLALFrSeek(element->stream, &epoch)) {
-		GST_WARNING_OBJECT(element, "XLALFrSeek() to GPS time %d.%09d s failed: %s", epoch.gpsSeconds, epoch.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
+		GST_ERROR_OBJECT(element, "XLALFrSeek() to %d.%09u s failed: %s", epoch.gpsSeconds, epoch.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
 		XLALClearErrno();
+		/* FIXME:  can't return error or gstreamer stops working (!?) */
+		/*return FALSE;*/
+		GST_ERROR_OBJECT(element, "ignoring previous XLALFrSeek() failure (FIXME)");
 	}
 
 	/*
