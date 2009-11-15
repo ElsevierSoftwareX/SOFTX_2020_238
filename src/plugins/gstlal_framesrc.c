@@ -247,49 +247,53 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 	 */
 
 	switch(element->series_type) {
-	case LAL_I4_TYPE_CODE:
-		deltaT = ((INT4TimeSeries *) element->input_buffer)->deltaT;
-		input_buffer_epoch = ((INT4TimeSeries *) element->input_buffer)->epoch;
-		input_buffer_length = ((INT4TimeSeries *) element->input_buffer)->data->length;
+	case LAL_I4_TYPE_CODE: {
+		INT4TimeSeries *input_buffer = element->input_buffer;
+		deltaT = input_buffer->deltaT;
+		input_buffer_epoch = input_buffer->epoch;
+		input_buffer_length = input_buffer->data->length;
 		break;
+	}
 
-	case LAL_S_TYPE_CODE:
-		deltaT = ((REAL4TimeSeries *) element->input_buffer)->deltaT;
-		input_buffer_epoch = ((REAL4TimeSeries *) element->input_buffer)->epoch;
-		input_buffer_length = ((REAL4TimeSeries *) element->input_buffer)->data->length;
+	case LAL_S_TYPE_CODE: {
+		REAL4TimeSeries *input_buffer = element->input_buffer;
+		deltaT = input_buffer->deltaT;
+		input_buffer_epoch = input_buffer->epoch;
+		input_buffer_length = input_buffer->data->length;
 		break;
+	}
 
-	case LAL_D_TYPE_CODE:
-		deltaT = ((REAL8TimeSeries *) element->input_buffer)->deltaT;
-		input_buffer_epoch = ((REAL8TimeSeries *) element->input_buffer)->epoch;
-		input_buffer_length = ((REAL8TimeSeries *) element->input_buffer)->data->length;
+	case LAL_D_TYPE_CODE: {
+		REAL8TimeSeries *input_buffer = element->input_buffer;
+		deltaT = input_buffer->deltaT;
+		input_buffer_epoch = input_buffer->epoch;
+		input_buffer_length = input_buffer->data->length;
 		break;
+	}
 
 	default:
 		GST_ERROR_OBJECT(element, "unsupported LAL type code (%d)", element->series_type);
 		return NULL;
 	}
-	input_buffer_offset = gst_util_uint64_scale_int(XLALGPSToINT8NS(&input_buffer_epoch) - basesrc->segment.start, (gint) round(1.0 / deltaT), GST_SECOND);
+	input_buffer_offset = gst_util_uint64_scale_int_round(XLALGPSToINT8NS(&input_buffer_epoch) - basesrc->segment.start, (gint) round(1.0 / deltaT), GST_SECOND);
 
 	/*
 	 * segment length (now that we know the sample rate)
 	 */
 
 	if(GST_CLOCK_TIME_IS_VALID(basesrc->segment.stop))
-		segment_length = gst_util_uint64_scale_int(basesrc->segment.stop - basesrc->segment.start, (gint) round(1.0 / deltaT), GST_SECOND);
+		segment_length = gst_util_uint64_scale_int_round(basesrc->segment.stop - basesrc->segment.start, (gint) round(1.0 / deltaT), GST_SECOND);
 	else
 		segment_length = G_MAXUINT64;
 
 	/*
-	 * clip the requested interval to the segment
+	 * check for EOF
 	 */
 
 	if(start_sample >= segment_length) {
 		GST_ERROR_OBJECT(element, "requested interval lies outside input domain");
 		return NULL;
 	}
-	if(segment_length - start_sample < length)
-		length = segment_length - start_sample;
 
 	/*
 	 * does the requested interval start in the input buffer?  if not,
@@ -324,7 +328,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 		case LAL_I4_TYPE_CODE:
 			new_input_buffer = XLALFrReadINT4TimeSeries(element->stream, element->full_channel_name, &input_buffer_epoch, input_buffer_length * deltaT, 0);
 			if(!new_input_buffer) {
-				GST_ERROR_OBJECT(element, "XLALFrReadINT4TimeSeries() failed");
+				GST_ERROR_OBJECT(element, "XLALFrReadINT4TimeSeries() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 				XLALClearErrno();
 				return NULL;
 			}
@@ -334,7 +338,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 		case LAL_S_TYPE_CODE:
 			new_input_buffer = XLALFrReadREAL4TimeSeries(element->stream, element->full_channel_name, &input_buffer_epoch, input_buffer_length * deltaT, 0);
 			if(!new_input_buffer) {
-				GST_ERROR_OBJECT(element, "XLALFrReadREAL4TimeSeries() failed");
+				GST_ERROR_OBJECT(element, "XLALFrReadREAL4TimeSeries() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 				XLALClearErrno();
 				return NULL;
 			}
@@ -344,7 +348,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 		case LAL_D_TYPE_CODE:
 			new_input_buffer = XLALFrReadREAL8TimeSeries(element->stream, element->full_channel_name, &input_buffer_epoch, input_buffer_length * deltaT, 0);
 			if(!new_input_buffer) {
-				GST_ERROR_OBJECT(element, "XLALFrReadREAL8TimeSeries() failed");
+				GST_ERROR_OBJECT(element, "XLALFrReadREAL8TimeSeries() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 				XLALClearErrno();
 				return NULL;
 			}
@@ -538,14 +542,14 @@ static gboolean start(GstBaseSrc *object)
 
 	cache = XLALFrImportCache(element->location);
 	if(!cache) {
-		GST_ERROR_OBJECT(element, "XLALFrImportCache() failed");
+		GST_ERROR_OBJECT(element, "XLALFrImportCache() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 		XLALClearErrno();
 		return FALSE;
 	}
 	element->stream = XLALFrCacheOpen(cache);
 	XLALFrDestroyCache(cache);
 	if(!element->stream) {
-		GST_ERROR_OBJECT(element, "XLALFrCacheOpen() failed");
+		GST_ERROR_OBJECT(element, "XLALFrCacheOpen() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 		XLALClearErrno();
 		return FALSE;
 	}
@@ -565,7 +569,7 @@ static gboolean start(GstBaseSrc *object)
 	/* FIXME:  series_type should not be an unsigned type if negative
 	 * values are used to indicate failure */
 	if((int) element->series_type < 0) {
-		GST_ERROR_OBJECT(element, "XLALFrGetTimeSeriesType() failed");
+		GST_ERROR_OBJECT(element, "XLALFrGetTimeSeriesType() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 		XLALFrClose(element->stream);
 		element->stream = NULL;
 		XLALClearErrno();
@@ -585,14 +589,14 @@ static gboolean start(GstBaseSrc *object)
 	case LAL_I4_TYPE_CODE:
 		element->input_buffer = XLALCreateINT4TimeSeries(element->full_channel_name, &stream_start, 0.0, 0.0, &lalDimensionlessUnit, 0);
 		if(!element->input_buffer) {
-			GST_ERROR_OBJECT(element, "XLALCreateINT4TimeSeries() failed");
+			GST_ERROR_OBJECT(element, "XLALCreateINT4TimeSeries() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 			XLALFrClose(element->stream);
 			element->stream = NULL;
 			XLALClearErrno();
 			return FALSE;
 		}
 		if(XLALFrGetINT4TimeSeriesMetadata(element->input_buffer, element->stream)) {
-			GST_ERROR_OBJECT(element, "XLALFrGetINT4TimeSeriesMetadata() failed");
+			GST_ERROR_OBJECT(element, "XLALFrGetINT4TimeSeriesMetadata() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 			XLALDestroyINT4TimeSeries(element->input_buffer);
 			element->input_buffer = NULL;
 			XLALFrClose(element->stream);
@@ -606,14 +610,14 @@ static gboolean start(GstBaseSrc *object)
 	case LAL_S_TYPE_CODE:
 		element->input_buffer = XLALCreateREAL4TimeSeries(element->full_channel_name, &stream_start, 0.0, 0.0, &lalDimensionlessUnit, 0);
 		if(!element->input_buffer) {
-			GST_ERROR_OBJECT(element, "XLALCreateREAL4TimeSeries() failed");
+			GST_ERROR_OBJECT(element, "XLALCreateREAL4TimeSeries() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 			XLALFrClose(element->stream);
 			element->stream = NULL;
 			XLALClearErrno();
 			return FALSE;
 		}
 		if(XLALFrGetREAL4TimeSeriesMetadata(element->input_buffer, element->stream)) {
-			GST_ERROR_OBJECT(element, "XLALFrGetREAL4TimeSeriesMetadata() failed");
+			GST_ERROR_OBJECT(element, "XLALFrGetREAL4TimeSeriesMetadata() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 			XLALDestroyREAL4TimeSeries(element->input_buffer);
 			element->input_buffer = NULL;
 			XLALFrClose(element->stream);
@@ -627,14 +631,14 @@ static gboolean start(GstBaseSrc *object)
 	case LAL_D_TYPE_CODE:
 		element->input_buffer = XLALCreateREAL8TimeSeries(element->full_channel_name, &stream_start, 0.0, 0.0, &lalDimensionlessUnit, 0);
 		if(!element->input_buffer) {
-			GST_ERROR_OBJECT(element, "XLALCreateREAL8TimeSeries() failed");
+			GST_ERROR_OBJECT(element, "XLALCreateREAL8TimeSeries() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 			XLALFrClose(element->stream);
 			element->stream = NULL;
 			XLALClearErrno();
 			return FALSE;
 		}
 		if(XLALFrGetREAL8TimeSeriesMetadata(element->input_buffer, element->stream)) {
-			GST_ERROR_OBJECT(element, "XLALFrGetREAL8TimeSeriesMetadata() failed");
+			GST_ERROR_OBJECT(element, "XLALFrGetREAL8TimeSeriesMetadata() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 			XLALDestroyREAL8TimeSeries(element->input_buffer);
 			element->input_buffer = NULL;
 			XLALFrClose(element->stream);
@@ -879,7 +883,7 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 	 */
 
 	if(XLALFrSeek(element->stream, &epoch)) {
-		GST_WARNING_OBJECT(element, "XLALFrSeek() to GPS time %d.%09d s failed", epoch.gpsSeconds, epoch.gpsNanoSeconds);
+		GST_WARNING_OBJECT(element, "XLALFrSeek() to GPS time %d.%09d s failed: %s", epoch.gpsSeconds, epoch.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
 		XLALClearErrno();
 	}
 
