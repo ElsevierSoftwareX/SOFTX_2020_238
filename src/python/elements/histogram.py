@@ -74,9 +74,23 @@ class Histogram(gst.BaseTransform):
 			gst.caps_from_string(
 				"audio/x-raw-float, " +
 				"rate = (int) [1, MAX], " +
-				"channels = (int) 1, " +
+				"channels = (int) [1, MAX], " +
 				"endianness = (int) BYTE_ORDER, " +
-				"width = (int) 64"
+				"width = (int) {32, 64};" +
+				"audio/x-raw-int, " +
+				"rate = (int) [1, MAX], " +
+				"channels = (int) [1, MAX], " +
+				"endianness = (int) BYTE_ORDER, " +
+				"width = (int) 32," +
+				"depth = (int) 32," +
+				"signed = (bool) {true, false}; " +
+				"audio/x-raw-int, " +
+				"rate = (int) [1, MAX], " +
+				"channels = (int) [1, MAX], " +
+				"endianness = (int) BYTE_ORDER, " +
+				"width = (int) 64," +
+				"depth = (int) 64," +
+				"signed = (bool) {true, false}"
 			)
 		),
 		gst.PadTemplate("src",
@@ -94,6 +108,7 @@ class Histogram(gst.BaseTransform):
 
 	def __init__(self):
 		gst.BaseTransform.__init__(self)
+		self.channels = None
 		self.in_rate = None
 		self.out_rate = None
 		self.out_width = 320	# default
@@ -104,6 +119,10 @@ class Histogram(gst.BaseTransform):
 
 
 	def do_set_caps(self, incaps, outcaps):
+		channels = incaps[0]["channels"]
+		if channels != self.channels:
+			self.buf = numpy.zeros((0, channels), dtype = pipeio.numpy_dtype_from_caps(incaps))
+		self.channels = channels
 		self.in_rate = incaps[0]["rate"]
 		self.out_rate = outcaps[0]["framerate"]
 		self.out_width = outcaps[0]["width"]
@@ -115,7 +134,6 @@ class Histogram(gst.BaseTransform):
 		self.t0 = None
 		self.offset0 = None
 		self.next_out_offset = None
-		self.buf = numpy.zeros((0, 1), dtype = "double")
 		return True
 
 
