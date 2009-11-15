@@ -742,30 +742,56 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 			 * equivalent of "dimensionless" before sending
 			 * downstream
 			 */
-			/* FIXME:  probably shouldn't do this in-place */
 
 			LALUnit sample_units;
 
 			if(!XLALParseUnitString(&sample_units, units)) {
 				GST_ERROR_OBJECT(element, "cannot parse units");
 				sample_units = lalDimensionlessUnit;
+				/*
+				 * re-use the event
+				 */
+
+				gst_event_ref(event);
 			} else {
 				gchar dimensionless_units[16];	/* argh hard-coded length = BAD BAD BAD */
 				XLALUnitAsString(dimensionless_units, sizeof(dimensionless_units), &lalDimensionlessUnit);
+
+				/*
+				 * create a new event with a new taglist
+				 * object (don't corrupt the original
+				 * event, 'cause we don't own it)
+				 */
+
+				taglist = gst_tag_list_copy(taglist);
 				/* FIXME:  gstreamer doesn't like empty strings */
 				gst_tag_list_add(taglist, GST_TAG_MERGE_REPLACE, GSTLAL_TAG_UNITS, " "/*dimensionless_units*/, NULL);
+				event = gst_event_new_tag(taglist);
 			}
 
 			g_free(units);
 			element->sample_units = sample_units;
 		}
 
+		/*
+		 * consumes the reference count
+		 */
+
 		gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(trans), event);
-		return FALSE;	/* don't forward the event (we did it) */
+
+		/*
+		 * don't forward the event (we did it)
+		 */
+
+		return FALSE;
 	}
 
 	default:
-		return TRUE;	/* forward the event */
+		/*
+		 * forward the event
+		 */
+
+		return TRUE;
 	}
 }
 
