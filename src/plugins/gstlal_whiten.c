@@ -855,9 +855,13 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 		}
 
 		/*
-		 * consumes the reference count
+		 * gst_pad_push_event() consumes the reference count
 		 */
 
+		if(element->psd_pad) {
+			gst_event_ref(event);
+			gst_pad_push_event(element->psd_pad, event);
+		}
 		gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(trans), event);
 
 		/*
@@ -868,6 +872,15 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 	}
 
 	default:
+		/*
+		 * gst_pad_push_event() consumes the reference count
+		 */
+
+		if(element->psd_pad) {
+			gst_event_ref(event);
+			gst_pad_push_event(element->psd_pad, event);
+		}
+
 		/*
 		 * forward the event
 		 */
