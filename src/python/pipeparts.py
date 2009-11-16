@@ -33,7 +33,7 @@ pygst.require("0.10")
 import gst
 
 
-from elements import channelgram, histogram
+from elements import channelgram, histogram, spectrum
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -340,6 +340,13 @@ def mktriggerxmlwritersink(pipeline, src, filename):
 	src.link(elem)
 
 
+def mkchannelgram(pipeline, src):
+	elem = channelgram.Channelgram()
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
 def mkhistogram(pipeline, src):
 	elem = histogram.Histogram()
 	pipeline.add(elem)
@@ -347,10 +354,13 @@ def mkhistogram(pipeline, src):
 	return elem
 
 
-def mkchannelgram(pipeline, src):
-	elem = channelgram.Channelgram()
+def mkspectrumplot(pipeline, src, pad = None):
+	elem = spectrum.Spectrum()
 	pipeline.add(elem)
-	src.link(elem)
+	if pad is not None:
+		src.link_pads(pad, elem, "sink")
+	else:
+		src.link(elem)
 	return elem
 
 
@@ -362,6 +372,7 @@ def mkcolorspace(pipeline, src):
 
 
 def mkvideosink(pipeline, src):
+	src = mkcolorspace(pipeline, src)
 	elem = gst.element_factory_make("autovideosink")
 	pipeline.add(elem)
 	src.link(elem)

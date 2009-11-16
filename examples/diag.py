@@ -38,8 +38,8 @@ def play_hoft(pipeline):
 def test_histogram(pipeline):
 	head = pipeparts.mkprogressreport(pipeline, pipeparts.mkframesrc(pipeline, location = "/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache", instrument = "H1", channel_name = "LSC-STRAIN"), "src")
 	head = pipeparts.mkwhiten(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogram(pipeline, head), "video/x-raw-rgb, width=640, height=480, framerate=1/4")
-	pipeparts.mkvideosink(pipeline, pipeparts.mkcolorspace(pipeline, head))
+	pipeparts.mkvideosink(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkspectrumplot(pipeline, head, pad = "psd"), "video/x-raw-rgb, width=640, height=480")))
+	pipeparts.mkvideosink(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogram(pipeline, head), "video/x-raw-rgb, width=640, height=480, framerate=1/4")))
 
 
 def test_channelgram(pipeline):
@@ -116,7 +116,7 @@ mainloop = gobject.MainLoop()
 
 pipeline = gst.Pipeline("diag")
 
-test_channelgram(pipeline)
+test_histogram(pipeline)
 
 handler = Handler(mainloop, pipeline)
 
