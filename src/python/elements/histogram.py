@@ -169,16 +169,11 @@ class Histogram(gst.BaseTransform):
 		FigureCanvas(fig)
 		fig.set_size_inches(self.out_width / float(fig.get_dpi()), self.out_height / float(fig.get_dpi()))
 		axes = fig.gca(yscale = "log", rasterized = True)
-		axes.hist(samples, bins = 101)
-		if self.channel_name is not None:
-			xlabel = r"Channel %s" % self.channel_name
-		else:
-			xlabel = r"Amplitude"
-		if self.sample_units is not None:
-			xlabel += " (%s)" % (str(self.sample_units) or "dimensionless")
-		axes.set_xlabel(xlabel)
+		axes.hist(samples, bins = 101, histtype = "step")
+		axes.grid(True)
+		axes.set_xlabel(r"Amplitude (%s)" % ((self.sample_units is not None) and (str(self.sample_units) or "dimensionless") or "unkown units"))
 		axes.set_ylabel(r"Count")
-		axes.set_title(r"%s (%.9g s --- %.9g s)" % (self.instrument or "Histogram", float(outbuf.timestamp) / gst.SECOND, float(outbuf.timestamp + outbuf.duration) / gst.SECOND))
+		axes.set_title(r"%s, %s (%.9g s --- %.9g s)" % (self.instrument or "Unknown Instrument", self.channel_name or "Unknown Channel", float(outbuf.timestamp) / gst.SECOND, float(outbuf.timestamp + outbuf.duration) / gst.SECOND))
 
 		#
 		# extract pixel data
