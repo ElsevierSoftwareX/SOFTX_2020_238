@@ -139,11 +139,11 @@ class Spectrum(gst.BaseTransform):
 		f = numpy.arange(len(data[0]), dtype = "double") * self.delta_f
 
 		for psd in data[:]:
-			axes.loglog(f, psd)
+			axes.loglog(f, psd, alpha = 0.7)
 
 		axes.grid(True)
 		axes.set_xlim((30, 3000))
-		axes.set_title(r"Spectral Density Function of %s, %s" % (self.instrument or "Unknown Instrument", self.channel_name or "Unknown Channel"))
+		axes.set_title(r"Spectral Density of %s, %s at %.9g s" % (self.instrument or "Unknown Instrument", self.channel_name or "Unknown Channel", float(inbuf.timestamp) / gst.SECOND))
 		axes.set_xlabel(r"Frequency (Hz)")
 		axes.set_ylabel(r"Spectral Density (FIXME)")
 
@@ -220,9 +220,10 @@ class Spectrum(gst.BaseTransform):
 			# one frame on source pad
 			#
 
-			import sys
-			print >>sys.stderr, "caps = %s" % str(caps)
-			print >>sys.stderr, "othercaps = %s" % str(othercaps)
+			# FIXME:  figure out whats wrong with this function
+			#import sys
+			#print >>sys.stderr, "caps = %s" % str(caps)
+			#print >>sys.stderr, "othercaps = %s" % str(othercaps)
 			return 640*480*4
 			return othercaps[0]["width"] * othercaps[0]["height"] * othercaps[0]["bpp"] // 8
 
