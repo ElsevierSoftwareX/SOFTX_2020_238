@@ -56,7 +56,7 @@ class QuadraturePhase(object):
 	>>> from pylal.datatypes import REAL8TimeSeries
 	>>> q = QuadraturePhase(128) # initialize for 128-sample templates
 	>>> input = REAL8TimeSeries(deltaT = 1.0 / 128, data = numpy.cos(numpy.arange(128, dtype = "double") * 2 * numpy.pi / 128)) # one cycle of cos(t)
-	>>> output = q.process(input) # cos(t) in real part, sin(t) in imaginary part
+	>>> output = q(input) # output has cos(t) in real part, sin(t) in imaginary part
 	"""
 
 	def __init__(self, n):
@@ -70,7 +70,7 @@ class QuadraturePhase(object):
 		self.in_fseries = lalfft.prepare_fseries_for_real8tseries(laltypes.REAL8TimeSeries(deltaT = 1.0, data = numpy.zeros((n,), dtype = "double")))
 		self.out_fseries = lalfft.prepare_fseries_for_complex16tseries(laltypes.COMPLEX16TimeSeries(deltaT = 1.0, data = numpy.zeros((n,), dtype = "cdouble")))
 
-	def process(self, tseries):
+	def __call__(self, tseries):
 		"""
 		Transform the real-valued time series stored in tseries
 		into a complex-valued time series.  The return value is a
@@ -86,13 +86,7 @@ class QuadraturePhase(object):
 
 		#
 		# copy into expanded frequency series to generate an
-		# imaginary component.  after setting the DC and Nyquist
-		# components to zero, the components of the input frequency
-		# series (which are the non-negative frequency components)
-		# are doubled, conjugated, and copied into the negative
-		# frequency components of the output frequency series.  the
-		# positive frequency components of the output frequency
-		# series are zeroed.
+		# imaginary component.
 		#
 
 		self.out_fseries.name = self.in_fseries.name
@@ -100,10 +94,21 @@ class QuadraturePhase(object):
 		self.out_fseries.f0 = self.in_fseries.f0
 		self.out_fseries.deltaF = self.in_fseries.deltaF
 		self.out_fseries.sampleUnits = self.in_fseries.sampleUnits
-		indata = self.in_fseries.data
-		indata[0] = indata[-1] = 0
-		# FIXME:  this turns cos into -sin
-		self.out_fseries.data = numpy.concatenate((2 * numpy.conj(indata[::-1]), numpy.zeros((self.n - len(indata),), dtype = "cdouble")))
+
+		# positive frequencies include Nyquist bin if n is even
+		have_nyquist = not (self.n % 2)
+
+		positive_frequencies = self.in_fseries.data
+		positive_frequencies[0] = 0	# set DC to zero
+		if have_nyquist:
+			positive_frequencies[-1] = 0	# set Nyquist to 0
+		#negative_frequencies = numpy.conj(positive_frequencies[::-1])
+		zeros = numpy.zeros((len(positive_frequencies),), dtype = "cdouble")
+		if have_nyquist:
+			# complex transform never includes positive Nyquist
+			positive_frequencies = positive_frequencies[:-1]
+
+		self.out_fseries.data = numpy.concatenate((zeros, 2 * positive_frequencies[1:]))
 
 		#
 		# transform to complex time series
