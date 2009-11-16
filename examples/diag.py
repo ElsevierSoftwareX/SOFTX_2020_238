@@ -51,7 +51,7 @@ def test_channelgram(pipeline):
 	head = tee = pipeparts.mktee(pipeline, head)
 	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 5)
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, head), "video/x-raw-rgb, width=640, height=480, framerate=4/1")
-	pipeparts.mkvideosink(pipeline, pipeparts.mkcolorspace(pipeline, pipeparts.mkqueue(pipeline, head, max_size_buffers = 5)))
+	pipeparts.mkvideosink(pipeline, pipeparts.mkqueue(pipeline, head, max_size_buffers = 5))
 
 	pipeparts.mkplaybacksink(pipeline, pipeparts.mkaudiochebband(pipeline, tee, 40, 500), amplification = 3e16)
 
@@ -64,8 +64,7 @@ def test_sumsquares(pipeline):
 	pipeline.add(head)
 	head = pipeparts.mkprogressreport(pipeline, pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=2048, channels=2"), "src")
 	head = pipeparts.mksumsquares(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogram(pipeline, head), "video/x-raw-rgb, width=640, height=480, framerate=1/8")
-	pipeparts.mkvideosink(pipeline, pipeparts.mkcolorspace(pipeline, head))
+	pipeparts.mkvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogram(pipeline, head), "video/x-raw-rgb, width=640, height=480, framerate=1/8"))
 
 
 def test_firbank(pipeline):
