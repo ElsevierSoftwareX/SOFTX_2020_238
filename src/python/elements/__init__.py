@@ -31,7 +31,8 @@ __date__ = "FIXME"
 
 __all__ = [
 	"channelgram",
-	"histogram"
+	"histogram",
+	"spectrum"
 ]
 
 
