@@ -169,7 +169,8 @@ class Histogram(gst.BaseTransform):
 		FigureCanvas(fig)
 		fig.set_size_inches(self.out_width / float(fig.get_dpi()), self.out_height / float(fig.get_dpi()))
 		axes = fig.gca(yscale = "log", rasterized = True)
-		axes.hist(samples, bins = 101, histtype = "step")
+		for channel in numpy.transpose(samples)[:]:
+			axes.hist(channel, bins = 101, histtype = "step")
 		axes.grid(True)
 		axes.set_xlabel(r"Amplitude (%s)" % ((self.sample_units is not None) and (str(self.sample_units) or "dimensionless") or "unkown units"))
 		axes.set_ylabel(r"Count")
