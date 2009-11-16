@@ -83,6 +83,8 @@ typedef struct {
 	double fft_length_seconds;
 	enum gstlal_psdmode_t psdmode;
 
+	GstPad *psd_pad;
+
 	GstAdapter *adapter;
 
 	LALUnit sample_units;

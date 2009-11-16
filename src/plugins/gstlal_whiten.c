@@ -382,6 +382,37 @@ static GstMessage *psd_message_new(GSTLALWhiten *element, REAL8FrequencySeries *
 }
 
 
+static GstFlowReturn push_psd(GstPad *psd_pad, const REAL8FrequencySeries *psd)
+{
+	GstBuffer *buffer;
+	GstFlowReturn result;
+	GstCaps *caps = gst_caps_new_simple(
+		"audio/x-raw-float",
+		"channels", G_TYPE_INT, 1,
+		"delta-f", G_TYPE_DOUBLE, psd->deltaF,
+		"endianness", G_TYPE_INT, G_BYTE_ORDER,
+		"width", G_TYPE_INT, 64
+	);
+
+	gst_pad_set_caps(psd_pad, caps);
+	gst_caps_unref(caps);
+
+	result = gst_pad_alloc_buffer(psd_pad, GST_BUFFER_OFFSET_NONE, psd->data->length * sizeof(*psd->data->data), GST_PAD_CAPS(psd_pad), &buffer);
+	if(result != GST_FLOW_OK)
+		return result;
+
+	memcpy(GST_BUFFER_DATA(buffer), psd->data->data, GST_BUFFER_SIZE(buffer));
+
+	GST_BUFFER_OFFSET_END(buffer) = GST_BUFFER_OFFSET_NONE;
+	GST_BUFFER_TIMESTAMP(buffer) = XLALGPSToINT8NS(&psd->epoch);
+	GST_BUFFER_DURATION(buffer) = GST_CLOCK_TIME_NONE;
+
+	result = gst_pad_push(psd_pad, buffer);
+
+	return result;
+}
+
+
 static void set_metadata(GSTLALWhiten *element, GstBuffer *buf, guint64 outsamples)
 {
 	GST_BUFFER_SIZE(buf) = outsamples * sizeof(*element->tdworkspace->data->data);
@@ -402,13 +433,6 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 	guint64 zero_pad = zero_pad_length(element);
 	double *dst = (double *) GST_BUFFER_DATA(outbuf);
 	unsigned block_number;
-
-	/*
-	 * check for no-op
-	 */
-
-	if(get_available_samples(element) < element->tdworkspace->data->length - 2 * zero_pad)
-		return GST_BASE_TRANSFORM_FLOW_DROPPED;
 
 	/*
 	 * Iterate over the available data
@@ -466,6 +490,11 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 			XLALDestroyREAL8FrequencySeries(element->psd);
 			element->psd = newpsd;
 			gst_element_post_message(GST_ELEMENT(element), psd_message_new(element, element->psd));
+			if(element->psd_pad) {
+				GstFlowReturn result = push_psd(element->psd_pad, element->psd);
+				if(result != GST_FLOW_OK)
+					return result;
+			}
 		}
 
 		/*
@@ -562,9 +591,60 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		dst += element->tail->length;
 	}
 
+	/*
+	 * check for no-op
+	 */
+
+	if(!block_number)
+		return GST_BASE_TRANSFORM_FLOW_DROPPED;
+
+	/*
+	 * set output metadata
+	 */
+
 	set_metadata(element, outbuf, dst - (double *) GST_BUFFER_DATA(outbuf));
 
+	/*
+	 * done
+	 */
+
 	return GST_FLOW_OK;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                                  PSD Pad
+ *
+ * ============================================================================
+ */
+
+
+static GstPad *request_new_pad(GstElement *element, GstPadTemplate *template, const gchar *name)
+{
+	GstPad *pad = gst_pad_new_from_template(template, name);
+
+	gst_pad_use_fixed_caps(pad);
+
+	gst_element_add_pad(element, pad);
+	gst_object_ref(pad);	/* for the reference in GSTLALWhiten */
+	GSTLAL_WHITEN(element)->psd_pad = pad;
+
+	return pad;
+}
+
+
+static void release_pad(GstElement *element, GstPad *pad)
+{
+	GSTLALWhiten *whiten = GSTLAL_WHITEN(element);
+
+	if(pad != whiten->psd_pad)
+		/* !?  don't know about this pad ... */
+		return;
+
+	gst_object_unref(pad);
+	whiten->psd_pad = NULL;
 }
 
 
@@ -611,6 +691,7 @@ static GstStaticPadTemplate psd_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_REQUEST,
 	GST_STATIC_CAPS(
 		"audio/x-raw-float, " \
+		"channels = (int) 1, " \
 		"delta-f = (double) [0, MAX], " \
 		"endianness = (int) BYTE_ORDER, " \
 		"width = (int) 64"
@@ -1032,6 +1113,8 @@ static void finalize(GObject * object)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(object);
 
+	if(element->psd_pad)
+		gst_object_unref(element->psd_pad);
 	g_object_unref(element->adapter);
 	XLALDestroyREAL8Window(element->window);
 	g_mutex_lock(gstlal_fftw_lock);
@@ -1064,11 +1147,11 @@ static void gstlal_whiten_base_init(gpointer gclass)
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&psd_factory));
 
-	transform_class->get_unit_size = get_unit_size;
-	transform_class->set_caps = set_caps;
-	transform_class->event = event;
-	transform_class->transform_size = transform_size;
-	transform_class->transform = transform;
+	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->event = GST_DEBUG_FUNCPTR(event);
+	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
+	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
 }
 
 
@@ -1079,15 +1162,15 @@ static void gstlal_whiten_base_init(gpointer gclass)
 
 static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 {
-	GObjectClass *gobject_class;
-	GstBaseTransformClass *base_transform_class;
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 
-	gobject_class = (GObjectClass *) klass;
-	base_transform_class = (GstBaseTransformClass *) klass;
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
-	gobject_class->set_property = set_property;
-	gobject_class->get_property = get_property;
-	gobject_class->finalize = finalize;
+	element_class->request_new_pad = GST_DEBUG_FUNCPTR(request_new_pad);
+	element_class->release_pad = GST_DEBUG_FUNCPTR(release_pad);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -1181,8 +1264,9 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
  */
 
 
-static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *kclass)
+static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *klass)
 {
+	element->psd_pad = NULL;
 	element->adapter = gst_adapter_new();
 	element->next_is_discontinuity = FALSE;
 	element->t0 = GST_CLOCK_TIME_NONE;
