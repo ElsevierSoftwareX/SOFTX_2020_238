@@ -244,8 +244,8 @@ def mkmatrixmixer(pipeline, src, matrix = None):
 
 
 def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
-	# FIXME:  latency, fir_matrix
-	src = mktee(pipeline, mkfirbank(pipeline, src, latency = None, fir_matrix = None))
+	# FIXME:  latency?
+	src = mktee(pipeline, mkfirbank(pipeline, src, latency = int(bank_fragment.start * bank_fragment.rate), fir_matrix = bank_fragment.orthogonal_template_bank))
 
 	# FIXME:  weights
 	mkresample(pipeline, mkqueue(pipeline, mksumsquares(pipeline, src, weights = None))).link(control_snk)
@@ -259,8 +259,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
 	# waiting for input from all upstream elements.
 	src = mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000)
 
-	# FIXME:  matrix
-	return mkresample(pipeline, mkmatrixmixer(pipeline, src, matrix = None), quality = 0)
+	return mkresample(pipeline, mkmatrixmixer(pipeline, src, matrix = bank_fragment.mix_matrix), quality = 0)
 
 
 def mkfakesink(pipeline, src, pad = None):
