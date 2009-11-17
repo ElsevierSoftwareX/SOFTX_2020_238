@@ -45,6 +45,7 @@ gobject.threads_init()
 
 from glue.ligolw import ligolw
 from glue.ligolw import array
+from glue.ligolw import lsctables
 from glue.ligolw import utils
 from pylal import series as lalseries
 from pylal.datatypes import LALUnit
@@ -54,6 +55,7 @@ from pylal.datatypes import REAL8FrequencySeries
 
 from gstlal import pipeio
 from gstlal import pipeparts
+from gstlal import cbc_template_fir
 
 
 #
@@ -67,22 +69,50 @@ from gstlal import pipeparts
 
 class Bank(object):
 	class BankFragment(object):
-		def __init__(self, rate, start, end, blocksize = None):
+		def __init__(self, rate, start, end):
 			self.rate = rate
 			self.start = start
 			self.end = end
-			self.blocksize = blocksize
-			if self.blocksize is None:
-				# default = 1 second
-				self.blocksize = self.rate
 
-	def __init__(self, template_bank_filename, bank_fragments, gate_threshold, snr_threshold, logname = None):
-		self.template_bank_filename = template_bank_filename
+		def set_template_bank(self, template_bank, tolerance, verbose = False):
+			if verbose:
+				print >>sys.stderr, "\t%d templates of %d samples" % template_bank.shape
+
+			self.orthogonal_template_bank, self.singular_values, self.mix_matrix, self.chifacs = cbc_template_fir.decompose_templates(template_bank, tolerance)
+
+			if verbose:
+				print >>sys.stderr, "\tidentified %d components of %d samples" % self.orthogonal_template_bank.shape
+
+	def __init__(self, template_bank_filename, psd, bank_fragments, gate_threshold, snr_threshold, tolerance, logname = None, verbose = False):
+		self.template_bank_filename = template_bank_filename	# FIXME:  remove when not needed by chisq element
 		self.bank_fragments = bank_fragments
 		self.filter_length = max(fragment.end for fragment in bank_fragments)
 		self.gate_threshold = gate_threshold
 		self.snr_threshold = snr_threshold
 		self.logname = logname
+
+		sample_rate = max(bank_fragment.rate for bank_fragment in bank_fragments)
+		template_duration = 2**math.ceil(math.log(self.filter_length * sample_rate, 2)) / sample_rate	# round up to power of 2 count of samples
+		flow = 40.0	# Hz
+
+		template_bank = cbc_template_fir.generate_templates(lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName), psd, flow, sample_rate, template_duration, verbose = verbose)
+
+		n = template_bank.shape[1]	# number of samples in template
+		for i, bank_fragment in enumerate(self.bank_fragments):
+			if verbose:
+				print >>sys.stderr, "constructing template decomposition %d of %d:  %g s ... %g s" % (i + 1, len(bank_fragments), -bank_fragment.end, -bank_fragment.start)
+
+			# start and end times are measured *backwards* from
+			# template end;  subtract from n to convert to
+			# start and end index;  end:start is the slice to
+			# extract (argh!  Chad!)
+			start = n - int(bank_fragment.start * sample_rate)
+			end = n - int(bank_fragment.end * sample_rate)
+			stride = int(sample_rate / bank_fragment.rate)
+
+			# extract every stride-th sample, multiply by
+			# stride to maintain inner product normalization
+			bank_fragment.set_template_bank(template_bank[:, end:start:stride] * stride, tolerance, verbose = verbose)
 
 	def get_rates(self):
 		return set(bank_fragment.rate for bank_fragment in self.bank_fragments)
@@ -175,6 +205,8 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, progress_repor
 		).link(snr)
 
 	snr = pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(bank.get_rates()))
+	pipeparts.mkvideosink(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, snr), "video/x-raw-rgb, width=800, height=600, framerate=4/1"), max_size_buffers = 5))
+	return
 
 	snr = pipeparts.mktee(pipeline, snr)
 	chisq = gst.element_factory_make("lal_autochisq")
@@ -223,7 +255,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, output_filename, fake_data = False,
 				control_snksrc = control_snksrc
 			)
 			#pipeparts.mkqueue(pipeline, head).link(nto1)
-			pipeparts.mktriggerxmlwritersink(pipeline, head, output_filename.replace(".xml", "_%s.xml" % bank.logname))
+			#pipeparts.mktriggerxmlwritersink(pipeline, head, output_filename.replace(".xml", "_%s.xml" % bank.logname))
 
 
 #
@@ -275,7 +307,7 @@ def parse_command_line():
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the file from which to load injections (optional).")
 	parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze (required).")
 	parser.add_option("--output", metavar = "filename", help = "Set the name of the output trigger file (required).")
-	parser.add_option("--reference-psd", metavar = "filename", default = "/home/channa/cvs/lsware/gstlal/examples/reference_psd.txt", help = "Set the name of the PSD file to load.")
+	parser.add_option("--reference-psd", metavar = "filename", default = "/home/kipp/Development/gstlal/examples/reference_psd.xml.gz", help = "Set the name of the PSD file to load.")
 	parser.add_option("--template-bank", metavar = "filename", action = "append", help = "Set the name of the file from which to load the template bank (required).")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write an XML description of the as-built pipeline to this file (optional).")
 	parser.add_option("--fake-data", action = "store_true", help = "Use fake LIGO data.")
@@ -377,9 +409,7 @@ options, filenames = parse_command_line()
 #
 
 
-# FIXME:  switch to XML-format PSD file when elements no longer do their
-# own parsing of the file
-#reference_psd = lalseries.parse_REAL8FrequencySeries(utils.load_filename(options.reference_psd, gz = (options.reference_psd or "stdin").endswith(".gz"), verbose = options.verbose))
+reference_psd = lalseries.parse_REAL8FrequencySeries(utils.load_filename(options.reference_psd, gz = (options.reference_psd or "stdin").endswith(".gz"), verbose = options.verbose))
 
 
 detectors = {
@@ -390,6 +420,7 @@ detectors = {
 banks = [
 	Bank(
 		template_bank_filename,
+		reference_psd,
 		[
 			Bank.BankFragment(2048, 0.0, 1.0),
 			Bank.BankFragment(512, 1.0, 5.0),
@@ -398,7 +429,9 @@ banks = [
 		],
 		gate_threshold = 2.0,
 		snr_threshold = 5.5,
-		logname = "bank%d" % n
+		tolerance = 0.97,
+		logname = "bank%d" % n,
+		verbose = options.verbose
 	) for n, template_bank_filename in enumerate(options.template_bank)
 ]
 
