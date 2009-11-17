@@ -120,7 +120,8 @@ static int num_input_channels(const GSTLALMatrixMixer *element)
 		return element->mixmatrix.as_complex_double->size1;
 
 	default:
-		return 0;
+		g_assert_not_reached();
+		return -1;
 	}
 }
 
@@ -141,7 +142,8 @@ static int num_output_channels(const GSTLALMatrixMixer *element)
 		return element->mixmatrix.as_complex_double->size2;
 
 	default:
-		return 0;
+		g_assert_not_reached();
+		return -1;
 	}
 }
 
@@ -371,31 +373,35 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		/*
 		 * sink pad's format is the same as the source pad's except
 		 * it can have any number of channels or, if the mixing
-		 * matrix is known, the number of channels must match its
-		 * size
+		 * matrix is known, the number of channels must equal the
+		 * number of rows in the matrix
 		 */
 
+		g_mutex_lock(element->mixmatrix_lock);
 		for(n = 0; n < gst_caps_get_size(caps); n++) {
 			if(element->mixmatrix.as_void)
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", G_TYPE_INT, num_input_channels(element), NULL);
 			else
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
 		}
+		g_mutex_unlock(element->mixmatrix_lock);
 		break;
 
 	case GST_PAD_SINK:
 		/*
 		 * source pad's format is the same as the sink pad's except
 		 * it can have any number of channels or, if the mixing
-		 * matrix is known, the number of channels must match its
-		 * size
+		 * matrix is known, the number of channels must equal the
+		 * number of columns in the matrix
 		 */
 
+		g_mutex_lock(element->mixmatrix_lock);
 		for(n = 0; n < gst_caps_get_size(caps); n++)
 			if(element->mixmatrix.as_void)
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", G_TYPE_INT, num_output_channels(element), NULL);
 			else
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
+		g_mutex_unlock(element->mixmatrix_lock);
 		break;
 
 	case GST_PAD_UNKNOWN:
@@ -506,7 +512,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		result = GST_FLOW_OK;
 	}
-
 	g_mutex_unlock(element->mixmatrix_lock);
 
 	/*
@@ -552,7 +557,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 			data_type = -1;
 		}
 		/* FIXME:  allow different data types */
-		data_type = GSTLAL_MATRIXMIXER_DOUBLE;
+		element->data_type = GSTLAL_MATRIXMIXER_DOUBLE;
 		element->mixmatrix.as_double = gstlal_gsl_matrix_from_g_value_array(g_value_get_boxed(value));
 		/*
 		 * if the data format or number of channels has changed,
