@@ -28,6 +28,7 @@ import math
 import cmath
 import numpy
 from scipy import interpolate
+from scipy import linalg
 import sys
 
 
@@ -54,6 +55,9 @@ __date__ = "FIXME"
 
 
 def interpolate_psd(psd, deltaF):
+	# FIXME:  maybe better to do linear interpolation in log-log
+	# co-ordinates to provide power-law transitions between samples;
+	# hard to make it work at DC.
 	data = psd.data
 	interp = interpolate.interp1d(psd.f0 + numpy.arange(len(data)) * psd.deltaF, data, bounds_error = False)
 	return laltypes.REAL8FrequencySeries(
@@ -106,7 +110,54 @@ def generate_templates(template_table, psd, f_low, sample_rate, duration, verbos
 
 		data *= cmath.sqrt(2 / numpy.dot(data, numpy.conj(data)))
 
-		template_bank[(2 * i + 0), :] = numpy.real(data)
-		template_bank[(2 * i + 1), :] = numpy.imag(data)
+		template_bank[(2 * i + 0), :] = data.real
+		template_bank[(2 * i + 1), :] = data.imag
 
 	return template_bank
+
+
+def decompose_templates(template_bank, tolerance):
+	#
+	# sum-of-squares for each template (row).
+	#
+
+	chifacs = (template_bank * template_bank).sum(1)
+
+	#
+	# adjust tolerance according to local norm
+	#
+
+	tolerance = 1 - (1 - tolerance) / chifacs.max()
+
+	#
+	# S.V.D.
+	#
+
+	U, s, Vh = linalg.svd(template_bank.T)
+
+	#
+	# determine component count
+	#
+
+	residual = numpy.sqrt((s * s).cumsum() / numpy.dot(s, s))
+	n = residual.searchsorted(tolerance) + 1
+
+	#
+	# clip decomposition
+	#
+
+	U = U[:,:n]
+	s = s[:n]
+	Vh = Vh[:,:n]
+
+	#
+	# pre-scale Vh by s
+	#
+
+	Vh *= s
+
+	#
+	# done.
+	#
+
+	return U.T, s, Vh.T, chifacs
