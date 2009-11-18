@@ -81,9 +81,9 @@ class Bank(object):
 			self.orthogonal_template_bank, self.singular_values, self.mix_matrix, self.chifacs = cbc_template_fir.decompose_templates(template_bank, tolerance)
 
 			if verbose:
-				print >>sys.stderr, "\tidentified %d components of %d samples" % self.orthogonal_template_bank.shape
+				print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
 
-	def __init__(self, template_bank_filename, psd, bank_fragments, gate_threshold, snr_threshold, tolerance, logname = None, verbose = False):
+	def __init__(self, template_bank_filename, psd, bank_fragments, gate_threshold, snr_threshold, tolerance, autocorrelation_length = None, logname = None, verbose = False):
 		self.template_bank_filename = template_bank_filename	# FIXME:  remove when not needed by chisq element
 		self.bank_fragments = bank_fragments
 		self.filter_length = max(fragment.end for fragment in bank_fragments)
@@ -95,7 +95,7 @@ class Bank(object):
 		template_duration = 2**math.ceil(math.log(self.filter_length * sample_rate, 2)) / sample_rate	# round up to power of 2 count of samples
 		flow = 40.0	# Hz
 
-		template_bank = cbc_template_fir.generate_templates(lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName), psd, flow, sample_rate, template_duration, verbose = verbose)
+		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName), psd, flow, sample_rate, template_duration, autocorrelation_length = autocorrelation_length, verbose = verbose)
 
 		n = template_bank.shape[1]	# number of samples in template
 		for i, bank_fragment in enumerate(self.bank_fragments):
@@ -430,6 +430,7 @@ banks = [
 		gate_threshold = 2.0,
 		snr_threshold = 5.5,
 		tolerance = 0.97,
+		autocorrelation_length = 201,
 		logname = "bank%d" % n,
 		verbose = options.verbose
 	) for n, template_bank_filename in enumerate(options.template_bank)
