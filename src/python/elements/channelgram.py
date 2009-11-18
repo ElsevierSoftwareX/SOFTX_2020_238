@@ -67,6 +67,43 @@ __date__ = "FIXME"
 #
 
 
+class ArrayQueue(list):
+	class Element(object):
+		def __init__(self, buf):
+			self.offset = buf.offset
+			self.offset_end = buf.offset_end
+			if bool(buf.flags & gst.BUFFER_FLAG_GAP):
+				self.data = numpy.zeros((self.offset_end - self.offset, buf.caps[0]["channels"]), dtype = pipeio.numpy_dtype_from_caps(buf.caps))
+			else:
+				self.data = pipeio.array_from_audio_buffer(buf)
+
+		def __len__(self):
+			return self.data.shape[0]
+
+		def extract(self, n):
+			extracted = self.data[:n,:]
+			self.data = self.data[n:]
+			self.offset += extracted.shape[0]
+			return extracted
+
+	def append(self, buf):
+		list.append(self, ArrayQueue.Element(buf))
+
+	def __len__(self):
+		if not list.__len__(self):
+			return 0
+		return self[-1].offset_end - self[0].offset
+
+	def extract(self, n):
+		data = []
+		while n > 0 and self:
+			data.append(self[0].extract(n))
+			n -= data[-1].shape[0]
+			if not len(self[0]):
+				del self[0]
+		return numpy.concatenate(data)
+
+
 def yticks(min, max, n):
 	delta = float(max - min) / n
 	return sorted(set(min + int(round(delta * i)) for i in range(n + 1)))
@@ -125,11 +162,11 @@ class Channelgram(gst.BaseTransform):
 
 
 	def do_set_caps(self, incaps, outcaps):
+		self.in_rate = incaps[0]["rate"]
 		channels = incaps[0]["channels"]
 		if channels != self.channels:
-			self.buf = numpy.zeros((0, channels), dtype = pipeio.numpy_dtype_from_caps(incaps))
+			self.queue = ArrayQueue()
 		self.channels = channels
-		self.in_rate = incaps[0]["rate"]
 		self.out_rate = outcaps[0]["framerate"]
 		self.out_width = outcaps[0]["width"]
 		self.out_height = outcaps[0]["height"]
@@ -222,13 +259,16 @@ class Channelgram(gst.BaseTransform):
 			self.next_out_offset = 0
 
 		#
-		# append input to time series buffer
+		# append input to queue
 		#
 
-		self.buf = numpy.concatenate((self.buf, pipeio.array_from_audio_buffer(inbuf)))
+		self.queue.append(inbuf)
 
 		#
 		# number of samples required for output frame
+		#
+		# FIXME:  if this isn't really an integer the output
+		# timestamps drift wrt the input timestamps
 		#
 
 		samples_per_frame = int(round(self.in_rate / float(self.out_rate)))
@@ -237,7 +277,7 @@ class Channelgram(gst.BaseTransform):
 		# build output frame(s)
 		#
 
-		if len(self.buf) < samples_per_frame:
+		if len(self.queue) < samples_per_frame:
 			# not enough data for output
 			# FIXME: should return
 			# GST_BASE_TRANSFORM_FLOW_DROPPED, don't know what
@@ -246,12 +286,10 @@ class Channelgram(gst.BaseTransform):
 			# constant should be
 			return gst.FLOW_CUSTOM_SUCCESS
 
-		while len(self.buf) >= 2 * samples_per_frame:
+		while len(self.queue) >= 2 * samples_per_frame:
 			flow_return, newoutbuf = self.get_pad("src").alloc_buffer(self.next_out_offset, self.out_width * self.out_height * 4, outbuf.caps)
-			self.get_pad("src").push(self.make_frame(self.buf[:samples_per_frame], newoutbuf))
-			self.buf = self.buf[samples_per_frame:]
-		self.make_frame(self.buf[:samples_per_frame], outbuf)
-		self.buf = self.buf[samples_per_frame:]
+			self.get_pad("src").push(self.make_frame(self.queue.extract(samples_per_frame), newoutbuf))
+		self.make_frame(self.queue.extract(samples_per_frame), outbuf)
 
 		#
 		# done
@@ -279,7 +317,7 @@ class Channelgram(gst.BaseTransform):
 
 
 	def do_transform_size(self, direction, caps, size, othercaps):
-		samples_per_frame = int(round(float(self.in_rate / self.out_rate)))
+		samples_per_frame = int(round(self.in_rate / float(self.out_rate)))
 
 		if direction == gst.PAD_SRC:
 			#
@@ -288,7 +326,7 @@ class Channelgram(gst.BaseTransform):
 			#
 
 			bytes_per_frame = caps[0]["width"] * caps[0]["height"] * caps[0]["bpp"] / 8
-			samples = int(size / bytes_per_frame) * samples_per_frame - len(self.buf)
+			samples = int(size / bytes_per_frame) * samples_per_frame - len(self.queue)
 
 			#
 			# convert to byte count on sink pad.
@@ -304,7 +342,7 @@ class Channelgram(gst.BaseTransform):
 			# already have to frame count on src pad.
 			#
 
-			frames = (int(size * 8 / caps[0]["width"]) // caps[0]["channels"] + len(self.buf)) / samples_per_frame
+			frames = (int(size * 8 / caps[0]["width"]) // caps[0]["channels"] + len(self.queue)) / samples_per_frame
 
 			#
 			# if there's enough for at least one frame, claim
