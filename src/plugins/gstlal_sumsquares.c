@@ -100,7 +100,7 @@ static GstFlowReturn sumsquares(GSTLALSumSquares *element, GstBuffer *inbuf, Gst
 		const double *src_end = src + element->channels;
 		const double *w = weights;
 		for(*dst = 0; src < src_end; w++, src++)
-			*dst += *w * pow(*src, 2);
+			*dst += pow(*w * *src, 2);
 	}
 
 	if(!element->weights)
@@ -212,12 +212,14 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		 * equal the number of weights
 		 */
 
+		g_mutex_lock(element->weights_lock);
 		for(n = 0; n < gst_caps_get_size(caps); n++) {
 			if(element->weights)
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", G_TYPE_INT, element->channels, NULL);
 			else
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
 		}
+		g_mutex_unlock(element->weights_lock);
 		break;
 
 	case GST_PAD_SINK:
