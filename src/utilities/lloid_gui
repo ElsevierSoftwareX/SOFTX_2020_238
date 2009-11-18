@@ -80,6 +80,8 @@ class Bank(object):
 
 			self.orthogonal_template_bank, self.singular_values, self.mix_matrix, self.chifacs = cbc_template_fir.decompose_templates(template_bank, tolerance)
 
+			self.sum_of_squares_weights = self.singular_values * math.sqrt(self.chifacs.mean() / numpy.dot(self.singular_values, self.singular_values))
+
 			if verbose:
 				print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
 
