@@ -244,11 +244,9 @@ def mkmatrixmixer(pipeline, src, matrix = None):
 
 
 def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
-	# FIXME:  latency?
 	src = mktee(pipeline, mkfirbank(pipeline, src, latency = int(bank_fragment.start * bank_fragment.rate), fir_matrix = bank_fragment.orthogonal_template_bank))
 
-	# FIXME:  weights
-	mkresample(pipeline, mkqueue(pipeline, mksumsquares(pipeline, src, weights = None))).link(control_snk)
+	mkresample(pipeline, mkqueue(pipeline, mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights))).link(control_snk)
 
 	src = mkgate(pipeline, mkqueue(pipeline, src), control = mkqueue(pipeline, control_src), threshold = bank.gate_threshold)
 
