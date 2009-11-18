@@ -761,9 +761,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 */
 
 	g_mutex_lock(element->fir_matrix_lock);
-	while(!element->fir_matrix) {
+	while(!element->fir_matrix)
 		g_cond_wait(element->fir_matrix_available, element->fir_matrix_lock);
-	}
 
 	/*
 	 * check for discontinuity
@@ -933,7 +932,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 			 * number of channels has changed, force a caps
 			 * renegotiation
 			 */
-			 gst_pad_set_caps(GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(object)), NULL);
+			gst_pad_set_caps(GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(object)), NULL);
 
 		/*
 		 * invalidate frequency-domain filters
