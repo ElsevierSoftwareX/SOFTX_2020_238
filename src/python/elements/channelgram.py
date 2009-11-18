@@ -67,6 +67,11 @@ __date__ = "FIXME"
 #
 
 
+def yticks(min, max, n):
+	delta = float(max - min) / n
+	return sorted(set(min + int(round(delta * i)) for i in range(n + 1)))
+
+
 class Channelgram(gst.BaseTransform):
 	__gsttemplates__ = (
 		gst.PadTemplate("sink",
@@ -175,12 +180,11 @@ class Channelgram(gst.BaseTransform):
 		y -= 0.5
 		xlim = x[0], x[-1]
 		ylim = y[0], y[-1]
-		yticks = range(len(y) - 1)
 		x, y = numpy.meshgrid(x, y)
 		axes.pcolormesh(x, y, samples.transpose(), cmap = colourmap.gray)
 		axes.set_xlim(xlim)
 		axes.set_ylim(ylim)
-		axes.set_yticks(yticks)
+		axes.set_yticks(yticks(0, samples.shape[1] - 1, 20))
 		axes.set_title(r"Amplitude of %s, %s" % (self.instrument or "Unknown Instrument", self.channel_name or "Unknown Channel"))
 		axes.set_xlabel(r"Time (s)")
 		axes.set_ylabel(r"Channel Number")
