@@ -141,3 +141,22 @@ class QuadraturePhase(object):
 		#
 
 		return tseries
+
+
+def normalized_autocorrelation(fseries, revplan):
+	data = fseries.data
+	fseries = laltypes.COMPLEX16FrequencySeries(
+		name = fseries.name,
+		epoch = fseries.epoch,
+		f0 = fseries.f0,
+		deltaF = fseries.deltaF,
+		sampleUnits = fseries.sampleUnits,
+		data = data * numpy.conj(data)
+	)
+	tseries = laltypes.COMPLEX16TimeSeries(
+		data = numpy.empty((len(data),), dtype = "cdouble")
+	)
+	lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, fseries, revplan)
+	data = tseries.data
+	tseries.data = data / data[0]
+	return tseries
