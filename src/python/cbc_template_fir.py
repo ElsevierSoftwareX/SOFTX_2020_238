@@ -84,7 +84,7 @@ def generate_template(template_bank_row, f_low, sample_rate, duration, order = 7
 	)
 
 
-def generate_templates(template_table, psd, f_low, sample_rate, duration, verbose = False):
+def generate_templates(template_table, psd, f_low, sample_rate, duration, autocorrelation_length = None, verbose = False):
 	length = int(sample_rate * duration)
 
 	psd = interpolate_psd(psd, 1.0 / duration)
@@ -95,6 +95,12 @@ def generate_templates(template_table, psd, f_low, sample_rate, duration, verbos
 	)
 
 	template_bank = numpy.zeros((2 * len(template_table), int(sample_rate * duration)), dtype = "double")
+	if autocorrelation_length is not None:
+		if not (autocorrelation_length % 2):
+			raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
+		autocorrelation_bank = numpy.zeros((len(template_table), autocorrelation_length), dtype = "cdouble")
+	else:
+		autocorrelation_bank = None
 
 	for i, row in enumerate(template_table):
 		if verbose:
@@ -104,7 +110,13 @@ def generate_templates(template_table, psd, f_low, sample_rate, duration, verbos
 
 		lalfft.XLALWhitenCOMPLEX16FrequencySeries(fseries, psd)
 
-		lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, templates.add_quadrature_phase(fseries, length), revplan)
+		fseries = templates.add_quadrature_phase(fseries, length)
+
+		if autocorrelation_bank is not None:
+			autocorrelation = templates.normalized_autocorrelation(fseries, revplan).data
+			autocorrelation_bank[i, :] = numpy.concatenate((autocorrelation[-(autocorrelation_length // 2):], autocorrelation[:(autocorrelation_length // 2  + 1)]))
+
+		lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, fseries, revplan)
 
 		data = tseries.data
 
@@ -113,7 +125,7 @@ def generate_templates(template_table, psd, f_low, sample_rate, duration, verbos
 		template_bank[(2 * i + 0), :] = data.real
 		template_bank[(2 * i + 1), :] = data.imag
 
-	return template_bank
+	return template_bank, autocorrelation_bank
 
 
 def decompose_templates(template_bank, tolerance):
