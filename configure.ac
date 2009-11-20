@@ -98,7 +98,7 @@ AC_SUBST([liboil_LIBS])
 #
 
 
-PKG_CHECK_MODULES([LAL], [lal lalframe lalmetaio lalsupport], , [echo "Not Found!" ; exit 1])
+PKG_CHECK_MODULES([LAL], [lal lalframe lalmetaio lalsupport lalburst], , [echo "Not Found!" ; exit 1])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
 
