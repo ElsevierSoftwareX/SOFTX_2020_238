@@ -58,13 +58,11 @@ typedef struct {
 	char *instrument;
 	char *channel_name;
 	char *full_channel_name;
+	gint rate;
 
 	FrStream *stream;
 	LALTYPECODE series_type;
 	LALUnit units;
-
-	int input_buffer_duration;
-	void *input_buffer;
 } GSTLALFrameSrc;
 
 
