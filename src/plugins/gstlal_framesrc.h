@@ -59,6 +59,7 @@ typedef struct {
 	char *channel_name;
 	char *full_channel_name;
 	gint rate;
+	gint width;
 
 	FrStream *stream;
 	LALTYPECODE series_type;

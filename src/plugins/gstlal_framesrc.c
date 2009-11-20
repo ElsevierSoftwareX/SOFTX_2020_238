@@ -376,7 +376,7 @@ static gboolean start(GstBaseSrc *object)
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
 	FrCache *cache;
 	LIGOTimeGPS stream_start;
-	gint rate;
+	gint rate, width;
 	GstCaps *caps;
 	GstTagList *taglist;
 
@@ -446,6 +446,7 @@ static gboolean start(GstBaseSrc *object)
 			return FALSE;
 		}
 		rate = round(1.0 / series->deltaT);
+		width = 32;
 		caps = series_to_caps_and_taglist(element->instrument, element->channel_name, element->units, rate, element->series_type, &taglist);
 		XLALDestroyINT4TimeSeries(series);
 		break;
@@ -469,6 +470,7 @@ static gboolean start(GstBaseSrc *object)
 			return FALSE;
 		}
 		rate = round(1.0 / series->deltaT);
+		width = 32;
 		caps = series_to_caps_and_taglist(element->instrument, element->channel_name, element->units, rate, element->series_type, &taglist);
 		XLALDestroyREAL4TimeSeries(series);
 		break;
@@ -492,6 +494,7 @@ static gboolean start(GstBaseSrc *object)
 			return FALSE;
 		}
 		rate = round(1.0 / series->deltaT);
+		width = 64;
 		caps = series_to_caps_and_taglist(element->instrument, element->channel_name, element->units, rate, element->series_type, &taglist);
 		XLALDestroyREAL8TimeSeries(series);
 		break;
@@ -535,6 +538,7 @@ static gboolean start(GstBaseSrc *object)
 	 */
 
 	element->rate = rate;
+	element->width = width;
 
 	return TRUE;
 }
@@ -766,11 +770,11 @@ gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 			break;
 
 		case GST_FORMAT_BYTES:
-			timestamp = basesrc->segment.start + gst_util_uint64_scale_int_round(src_value, GST_SECOND, 8 * element->rate);
+			timestamp = basesrc->segment.start + gst_util_uint64_scale_int_round(src_value, GST_SECOND, element->width / 8 * element->rate);
 			break;
 
 		case GST_FORMAT_BUFFERS:
-			timestamp = basesrc->segment.start + gst_util_uint64_scale_int_round(src_value, gst_base_src_get_blocksize(basesrc) * GST_SECOND, 8 * element->rate);
+			timestamp = basesrc->segment.start + gst_util_uint64_scale_int_round(src_value, gst_base_src_get_blocksize(basesrc) * GST_SECOND, element->width / 8 * element->rate);
 			break;
 
 		case GST_FORMAT_PERCENT:
@@ -788,11 +792,11 @@ gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 			break;
 
 		case GST_FORMAT_BYTES:
-			dest_value = gst_util_uint64_scale_int_round(timestamp - basesrc->segment.start, 8 * element->rate, GST_SECOND);
+			dest_value = gst_util_uint64_scale_int_round(timestamp - basesrc->segment.start, element->width / 8 * element->rate, GST_SECOND);
 			break;
 
 		case GST_FORMAT_BUFFERS:
-			dest_value = gst_util_uint64_scale_int_round(timestamp - basesrc->segment.start, 8 * element->rate, gst_base_src_get_blocksize(basesrc) * GST_SECOND);
+			dest_value = gst_util_uint64_scale_int_round(timestamp - basesrc->segment.start, element->width / 8 * element->rate, gst_base_src_get_blocksize(basesrc) * GST_SECOND);
 			break;
 
 		case GST_FORMAT_PERCENT:
@@ -964,6 +968,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->channel_name = NULL;
 	element->full_channel_name = NULL;
 	element->rate = 0;
+	element->width = 0;
 	element->stream = NULL;
 	element->units = DEFAULT_UNITS_UNIT;
 	element->series_type = -1;
