@@ -929,7 +929,7 @@ static void class_init(gpointer class, gpointer class_data)
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
-	g_object_class_install_property(gobject_class, ARG_SRC_LOCATION, g_param_spec_string("location", "Location", "Path to LAL cache file (see LSCdataFind for more information).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_SRC_LOCATION, g_param_spec_string("location", "Location", "Path to LAL cache file (see ligo_data_find for more information).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_INSTRUMENT, g_param_spec_string("instrument", "Instrument", "Instrument name (e.g., \"H1\").", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_CHANNEL_NAME, g_param_spec_string("channel-name", "Channel name", "Channel name (e.g., \"LSC-STRAIN\").", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_UNITS, g_param_spec_string("units", "Units", "Units string parsable by LAL's Units code (e.g., \"strain\" or \"counts\"). null or an empty string means dimensionless.", DEFAULT_UNITS_STRING, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
