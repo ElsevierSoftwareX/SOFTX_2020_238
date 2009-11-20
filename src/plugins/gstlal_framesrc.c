@@ -70,6 +70,14 @@
 
 
 /*
+ * Parent class.
+ */
+
+
+static GstBaseSrcClass *parent_class = NULL;
+
+
+/*
  * ========================================================================
  *
  *                                 Parameters
@@ -174,8 +182,7 @@ static GstCaps *series_to_caps_and_taglist(const char *instrument, const char *c
 
 
 /*
- * Retrieve a chunk of data from the series buffer, loading more data if
- * needed.
+ * Retrieve a chunk of data.
  */
 
 
@@ -732,20 +739,102 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 
 
 /*
+ * query
+ */
+
+
+gboolean query(GstBaseSrc *basesrc, GstQuery *query)
+{
+	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(basesrc);
+
+	switch(GST_QUERY_TYPE(query)) {
+	case GST_QUERY_FORMATS:
+		gst_query_set_formats(query, 5, GST_FORMAT_DEFAULT, GST_FORMAT_BYTES, GST_FORMAT_TIME, GST_FORMAT_BUFFERS, GST_FORMAT_PERCENT);
+		break;
+
+	case GST_QUERY_CONVERT: {
+		GstFormat src_format, dest_format;
+		gint64 src_value, dest_value;
+		guint64 timestamp;
+
+		gst_query_parse_convert(query, &src_format, &src_value, &dest_format, &dest_value);
+
+		switch(src_format) {
+		case GST_FORMAT_DEFAULT:
+		case GST_FORMAT_TIME:
+			timestamp = src_value;
+			break;
+
+		case GST_FORMAT_BYTES:
+			timestamp = basesrc->segment.start + gst_util_uint64_scale_int_round(src_value, GST_SECOND, 8 * element->rate);
+			break;
+
+		case GST_FORMAT_BUFFERS:
+			timestamp = basesrc->segment.start + gst_util_uint64_scale_int_round(src_value, gst_base_src_get_blocksize(basesrc) * GST_SECOND, 8 * element->rate);
+			break;
+
+		case GST_FORMAT_PERCENT:
+			timestamp = basesrc->segment.start + gst_util_uint64_scale_int_round(basesrc->segment.stop - basesrc->segment.start, src_value, 100);
+			break;
+
+		default:
+			g_assert_not_reached();
+			return FALSE;
+		}
+		switch(dest_format) {
+		case GST_FORMAT_DEFAULT:
+		case GST_FORMAT_TIME:
+			dest_value = timestamp;
+			break;
+
+		case GST_FORMAT_BYTES:
+			dest_value = gst_util_uint64_scale_int_round(timestamp - basesrc->segment.start, 8 * element->rate, GST_SECOND);
+			break;
+
+		case GST_FORMAT_BUFFERS:
+			dest_value = gst_util_uint64_scale_int_round(timestamp - basesrc->segment.start, 8 * element->rate, gst_base_src_get_blocksize(basesrc) * GST_SECOND);
+			break;
+
+		case GST_FORMAT_PERCENT:
+			dest_value = gst_util_uint64_scale_int_round(timestamp - basesrc->segment.start, 100, basesrc->segment.stop - basesrc->segment.start);
+			break;
+
+		default:
+			g_assert_not_reached();
+			return FALSE;
+		}
+
+		gst_query_set_convert(query, src_format, src_value, dest_format, dest_value);
+
+		break;
+	}
+
+	default:
+		return parent_class->query(basesrc, query);
+	}
+
+	return TRUE;
+}
+
+
+/*
+ * check_get_range()
+ */
+
+
+gboolean check_get_range(GstBaseSrc *basesrc)
+{
+	return TRUE;
+}
+
+
+/*
  * ============================================================================
  *
  *                                Type Support
  *
  * ============================================================================
  */
-
-
-/*
- * Parent class.
- */
-
-
-static GstBaseSrcClass *parent_class = NULL;
 
 
 /*
@@ -832,9 +921,9 @@ static void class_init(gpointer class, gpointer class_data)
 
 	parent_class = g_type_class_ref(GST_TYPE_BASE_SRC);
 
-	gobject_class->set_property = set_property;
-	gobject_class->get_property = get_property;
-	gobject_class->finalize = finalize;
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	g_object_class_install_property(gobject_class, ARG_SRC_LOCATION, g_param_spec_string("location", "Location", "Path to LAL cache file (see LSCdataFind for more information).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 	g_object_class_install_property(gobject_class, ARG_SRC_INSTRUMENT, g_param_spec_string("instrument", "Instrument", "Instrument name (e.g., \"H1\").", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
@@ -845,11 +934,13 @@ static void class_init(gpointer class, gpointer class_data)
 	 * GstBaseSrc method overrides
 	 */
 
-	gstbasesrc_class->start = start;
-	gstbasesrc_class->stop = stop;
-	gstbasesrc_class->create = create;
-	gstbasesrc_class->is_seekable = is_seekable;
-	gstbasesrc_class->do_seek = do_seek;
+	gstbasesrc_class->start = GST_DEBUG_FUNCPTR(start);
+	gstbasesrc_class->stop = GST_DEBUG_FUNCPTR(stop);
+	gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
+	gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
+	gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
+	gstbasesrc_class->query = GST_DEBUG_FUNCPTR(query);
+	gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
 }
 
 
