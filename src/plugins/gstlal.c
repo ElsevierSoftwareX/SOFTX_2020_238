@@ -136,7 +136,6 @@ gdouble *gstlal_doubles_from_g_value_array(GValueArray *va, gdouble *dest, gint 
 	return dest;
 }
 
-
 /**
  * convert an array of doubles to a GValueArray.  the return value is the
  * newly allocated GValueArray object.
@@ -191,6 +190,43 @@ gsl_vector *gstlal_gsl_vector_from_g_value_array(GValueArray *va)
 GValueArray *gstlal_g_value_array_from_gsl_vector(const gsl_vector *vector)
 {
 	return gstlal_g_value_array_from_doubles(gsl_vector_const_ptr(vector, 0), vector->size);
+}
+
+
+/**
+ * convert a GValueArray to a GSL complex vector.  the return value is the
+ * newly allocated vector on success or NULL on failure.  Note:
+ * glib/gobject don't support complex floats, so the data is assumed to be
+ * stored as a GValueArray of doubles packed as real,imag,real,imag,...
+ */
+
+
+/* FIXME:  update when glib has a complex type */
+gsl_vector_complex *gstlal_gsl_vector_complex_from_g_value_array(GValueArray *va)
+{
+	gsl_vector_complex *vector = gsl_vector_complex_alloc(va->n_values / 2);
+	if(!vector)
+		return NULL;
+	if(!gstlal_doubles_from_g_value_array(va, (double *) gsl_vector_complex_ptr(vector, 0), NULL)) {
+		gsl_vector_complex_free(vector);
+		return NULL;
+	}
+	return vector;
+}
+
+
+/**
+ * convert a gsl_vector_complex to a GValueArray of doubles.  the return
+ * value is the newly allocated GValueArray object.  Note:  glib/gobject
+ * don't support complex floats, so the data is assumed to be stored as a
+ * GValueArray of doubles packed as real,imag,real,imag,...
+ */
+
+
+/* FIXME:  update when glib has a complex type */
+GValueArray *gstlal_g_value_array_from_gsl_vector_complex(const gsl_vector_complex *vector)
+{
+	return gstlal_g_value_array_from_doubles((const double *) gsl_vector_complex_const_ptr(vector, 0), vector->size * 2);
 }
 
 
@@ -262,6 +298,86 @@ GValueArray *gstlal_g_value_array_from_gsl_matrix(const gsl_matrix *matrix)
 		return NULL;
 	for(i = 0; i < matrix->size1; i++) {
 		g_value_take_boxed(&v, gstlal_g_value_array_from_doubles(gsl_matrix_const_ptr(matrix, i, 0), matrix->size2));
+		g_value_array_append(va, &v);
+	}
+	return va;
+}
+
+
+/**
+ * convert a GValueArray of GValueArrays of doubles to a GSL complex
+ * matrix.  the return value is the newly allocated matrix on success or
+ * NULL on failure.  Note:  glib/gobject don't support complex floats, so
+ * the data is assumed to be stored as rows (GValueArrays) packed as
+ * real,imag,real,imag,...
+ */
+
+
+/* FIXME:  update when glib has a complex type */
+gsl_matrix_complex *gstlal_gsl_matrix_complex_from_g_value_array(GValueArray *va)
+{
+	gsl_matrix_complex *matrix;
+	GValueArray *row;
+	guint rows, cols;
+	guint i;
+
+	if(!va)
+		return NULL;
+	rows = va->n_values;
+	if(!rows)
+		/* 0x0 matrix */
+		return gsl_matrix_complex_alloc(0, 0);
+
+	row = g_value_get_boxed(g_value_array_get_nth(va, 0));
+	cols = row->n_values;
+	matrix = gsl_matrix_complex_alloc(rows, cols / 2);
+	if(!matrix)
+		/* allocation failure */
+		return NULL;
+	if(!gstlal_doubles_from_g_value_array(row, (double *) gsl_matrix_complex_ptr(matrix, 0, 0), NULL)) {
+		/* row conversion failure */
+		gsl_matrix_complex_free(matrix);
+		return NULL;
+	}
+	for(i = 1; i < rows; i++) {
+		row = g_value_get_boxed(g_value_array_get_nth(va, i));
+		if(row->n_values != cols) {
+			/* one of the rows has the wrong number of columns */
+			gsl_matrix_complex_free(matrix);
+			return NULL;
+		}
+		if(!gstlal_doubles_from_g_value_array(row, (double *) gsl_matrix_complex_ptr(matrix, i, 0), NULL)) {
+			/* row conversion failure */
+			gsl_matrix_complex_free(matrix);
+			return NULL;
+		}
+	}
+
+	return matrix;
+}
+
+
+/**
+ * convert a gsl_matrix_complex to a GValueArray of GValueArray of doubles.
+ * the return value is the newly allocated GValueArray object.  Note:
+ * glib/gobject don't support complex floats, so the data is assumed to be
+ * stored as rows (GValueArrays) packed as real,imag,real,imag,...
+ */
+
+
+/* FIXME:  update when glib has a complex type */
+GValueArray *gstlal_g_value_array_from_gsl_matrix_complex(const gsl_matrix_complex *matrix)
+{
+	GValueArray *va;
+	GValue v = {0,};
+	guint i;
+	g_value_init(&v, G_TYPE_VALUE_ARRAY);
+
+	va = g_value_array_new(matrix->size1);
+	if(!va)
+		return NULL;
+	for(i = 0; i < matrix->size1; i++) {
+		g_value_take_boxed(&v, gstlal_g_value_array_from_doubles((const double *) gsl_matrix_complex_const_ptr(matrix, i, 0), matrix->size2 * 2));
 		g_value_array_append(va, &v);
 	}
 	return va;
