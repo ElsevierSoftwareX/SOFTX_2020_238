@@ -115,6 +115,11 @@ class Channelgram(gst.BaseTransform):
 			gst.PAD_SINK,
 			gst.PAD_ALWAYS,
 			gst.caps_from_string(
+				"audio/x-raw-complex, " +
+				"rate = (int) [1, MAX], " +
+				"channels = (int) [1, MAX], " +
+				"endianness = (int) BYTE_ORDER, " +
+				"width = (int) {64, 128};" +
 				"audio/x-raw-float, " +
 				"rate = (int) [1, MAX], " +
 				"channels = (int) [1, MAX], " +
@@ -218,7 +223,18 @@ class Channelgram(gst.BaseTransform):
 		xlim = x[0], x[-1]
 		ylim = y[0], y[-1]
 		x, y = numpy.meshgrid(x, y)
-		axes.pcolormesh(x, y, samples.transpose(), cmap = colourmap.gray)
+		if samples.dtype.kine == "c":
+			#
+			# complex data
+			#
+
+			axes.pcolormesh(x, y, numpy.abs(samples.transpose()), cmap = colourmap.gray)
+		else:
+			#
+			# real data
+			#
+
+			axes.pcolormesh(x, y, samples.transpose(), cmap = colourmap.gray)
 		axes.set_xlim(xlim)
 		axes.set_ylim(ylim)
 		axes.set_yticks(yticks(0, samples.shape[1] - 1, 20))
