@@ -20,20 +20,6 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * Alternatively, the contents of this file may be used under the GNU
- * Lesser General Public License Version 2.1 (the "LGPL"), in which case
- * the following provisions apply instead of the ones mentioned above:
- *
- * This library is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Library General Public License as published
- * by the Free Software Foundation; either version 2 of the License, or (at
- * your option) any later version.
- *
- * This library is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
- *
  * You should have received a copy of the GNU Library General Public
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307,
@@ -85,7 +71,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_STATIC_CAPS(
 		"audio/x-raw-float, " \
 		"rate = (int) [1, MAX], " \
-		"channels = (int) [1, MAX], " \
+		"channels = (int) [2, MAX], " \
 		"endianness = (int) BYTE_ORDER, " \
 		"width = (int) {32, 64}; " \
 		"audio/x-raw-complex, " \
@@ -104,7 +90,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_STATIC_CAPS(
 		"audio/x-raw-float, " \
 		"rate = (int) [1, MAX], " \
-		"channels = (int) [1, MAX], " \
+		"channels = (int) [2, MAX], " \
 		"endianness = (int) BYTE_ORDER, " \
 		"width = (int) {32, 64}; " \
 		"audio/x-raw-complex, " \
@@ -160,30 +146,43 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
 
 
 /*
- * set_caps()
+ * transform_caps()
  */
 
 
-static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps)
+static gint scale_int(gint x, double factor, gint min, gint max)
 {
-	GSTLALToggleComplex *element = GSTLAL_TOGGLECOMPLEX(trans);
-
-	if(element->incaps)
-		gst_caps_unref(element->incaps);
-	element->incaps = incaps;
-	gst_caps_ref(element->incaps);
-	if(element->outcaps)
-		gst_caps_unref(element->outcaps);
-	element->outcaps = outcaps;
-	gst_caps_ref(element->outcaps);
-
-	return TRUE;
+	if(factor >= 1)
+		return x < max / factor ? x * factor : max;
+	return x > min / factor ? x * factor : min;
 }
 
 
-/*
- * transform_caps()
- */
+static GValue *g_value_scale_int(const GValue *src, GValue *dst, double factor)
+{
+	if(G_VALUE_HOLDS_INT(src)) {
+		g_value_init(dst, G_TYPE_INT);
+		g_value_set_int(dst, scale_int(g_value_get_int(src), factor, 1, G_MAXINT));
+	} else if(GST_VALUE_HOLDS_INT_RANGE(src)) {
+		g_value_init(dst, GST_TYPE_INT_RANGE);
+		gst_value_set_int_range(dst, scale_int(gst_value_get_int_range_min(src), factor, 1, G_MAXINT), scale_int(gst_value_get_int_range_max(src), factor, 1, G_MAXINT));
+	} else if(GST_VALUE_HOLDS_LIST(src)) {
+		guint i;
+		g_value_init(dst, GST_TYPE_LIST);
+		for(i = 0; i < gst_value_list_get_size(src); i++) {
+			GValue x = {0};
+			gst_value_init_and_copy(&x, gst_value_list_get_value(src, i));
+			g_assert(G_VALUE_HOLDS_INT(&x));
+			g_value_set_int(&x, scale_int(g_value_get_int(&x), factor, 1, G_MAXINT));
+			gst_value_list_append_value(dst, &x);
+			g_value_unset(&x);
+		}
+	} else {
+		g_assert_not_reached();
+		return NULL;
+	}
+	return dst;
+}
 
 
 static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps)
@@ -198,29 +197,26 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		for(n = 0; n < gst_caps_get_size(caps); n++) {
 			GstStructure *str = gst_caps_get_structure(caps, n);
 			const gchar *name;
-			gint channels;
-			gint width;
-			if(!gst_structure_get_int(str, "channels", &channels)) {
-				GST_DEBUG_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
-				goto error;
-			}
-			if(!gst_structure_get_int(str, "width", &width)) {
-				GST_DEBUG_OBJECT(trans, "unable to parse width from %" GST_PTR_FORMAT, caps);
-				goto error;
-			}
+			GValue channels = {0};
+			GValue width = {0};
 			name = gst_structure_get_name(str);
 			if(name && !strcmp(name, "audio/x-raw-float")) {
+				/* FIXME: should confirm that the channel count is even */
 				gst_structure_set_name(str, "audio/x-raw-complex");
-				gst_structure_set(str, "channels", G_TYPE_INT, channels / 2, NULL);
-				gst_structure_set(str, "width", G_TYPE_INT, width * 2, NULL);
+				g_value_scale_int(gst_structure_get_value(str, "channels"), &channels, 0.5);
+				g_value_scale_int(gst_structure_get_value(str, "width"), &width, 2.0);
 			} else if(name && !strcmp(name, "audio/x-raw-complex")) {
 				gst_structure_set_name(str, "audio/x-raw-float");
-				gst_structure_set(str, "channels", G_TYPE_INT, channels * 2, NULL);
-				gst_structure_set(str, "width", G_TYPE_INT, width / 2, NULL);
+				g_value_scale_int(gst_structure_get_value(str, "channels"), &channels, 2.0);
+				g_value_scale_int(gst_structure_get_value(str, "width"), &width, 0.5);
 			} else {
 				GST_DEBUG_OBJECT(trans, "unrecognized format %s in %" GST_PTR_FORMAT, name ? name : "(NULL)", caps);
 				goto error;
 			}
+			gst_structure_set_value(str, "channels", &channels);
+			gst_structure_set_value(str, "width", &width);
+			g_value_unset(&channels);
+			g_value_unset(&width);
 		}
 		break;
 
@@ -233,7 +229,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 
 error:
 	gst_caps_unref(caps);
-	return NULL;
+	return GST_CAPS_NONE;
 }
 
 
@@ -294,24 +290,6 @@ GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *input, g
 
 
 /*
- * finalize()
- */
-
-
-static void finalize(GObject *object)
-{
-	GSTLALToggleComplex *element = GSTLAL_TOGGLECOMPLEX(object);
-
-	if(element->incaps)
-		gst_caps_unref(element->incaps);
-	if(element->outcaps)
-		gst_caps_unref(element->outcaps);
-
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
-
-
-/*
  * base_init()
  */
 
@@ -327,7 +305,6 @@ static void gstlal_togglecomplex_base_init(gpointer gclass)
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 
 	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
-	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
 	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
 	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
 	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
@@ -341,9 +318,6 @@ static void gstlal_togglecomplex_base_init(gpointer gclass)
 
 static void gstlal_togglecomplex_class_init(GSTLALToggleComplexClass *klass)
 {
-	GObjectClass *gobject_class = (GObjectClass *) klass;
-
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 }
 
 
@@ -352,9 +326,9 @@ static void gstlal_togglecomplex_class_init(GSTLALToggleComplexClass *klass)
  */
 
 
-static void gstlal_togglecomplex_init(GSTLALToggleComplex *filter, GSTLALToggleComplexClass *kclass)
+static void gstlal_togglecomplex_init(GSTLALToggleComplex *element, GSTLALToggleComplexClass *kclass)
 {
-	gst_base_transform_set_in_place(GST_BASE_TRANSFORM(filter), TRUE);
-	gst_base_transform_set_qos_enabled(GST_BASE_TRANSFORM(filter), TRUE);
-	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);
+	gst_base_transform_set_in_place(GST_BASE_TRANSFORM(element), TRUE);
+	gst_base_transform_set_qos_enabled(GST_BASE_TRANSFORM(element), TRUE);
+	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }
