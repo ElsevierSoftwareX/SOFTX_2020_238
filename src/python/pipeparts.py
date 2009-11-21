@@ -33,6 +33,7 @@ pygst.require("0.10")
 import gst
 
 
+import pipeio
 from elements import channelgram, histogram, spectrum
 
 
@@ -50,7 +51,9 @@ __date__ = "FIXME"
 #
 
 
-def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 1 * 8):
+def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 8 * 1):
+	# default blocksize is 1 second of double precision floats at
+	# 16384 Hz, e.g., h(t)
 	elem = gst.element_factory_make("lal_framesrc")
 	elem.set_property("blocksize", blocksize)
 	elem.set_property("location", location)
@@ -76,7 +79,9 @@ def mktaginject(pipeline, src, tags):
 	return elem
 
 
-def mkfakesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 1 * 8, volume = 1e-20):
+def mkfakesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 8 * 1, volume = 1e-20):
+	# default blocksize is 1 second of double precision floats at
+	# 16384 Hz, e.g., h(t)
 	elem = gst.element_factory_make("audiotestsrc")
 	elem.set_property("samplesperbuffer", blocksize / 8)
 	elem.set_property("wave", 9)
@@ -94,7 +99,9 @@ def mkiirfilter(pipeline, src, a, b):
 	return elem
 
 
-def mkfakeLIGOsrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 1 * 8):
+def mkfakeLIGOsrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 8 * 1):
+	# default blocksize is 1 second of double precision floats at
+	# 16384 Hz, e.g., h(t)
 	head1 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 5.03407936516e-17)
 	a = [1.87140685e-05, 3.74281370e-05, 1.87140685e-05]
 	b = [1., 1.98861643, -0.98869215]
@@ -243,6 +250,16 @@ def mkmatrixmixer(pipeline, src, matrix = None):
 	return elem
 
 
+def mkautochisq(pipeline, src, autocorrelation_matrix = None):
+	elem = gst.element_factory_make("lal_autochisq")
+	if autocorrelation_matrix is not None:
+		elem.set_property("autocorrelation-matrix", pipeio.repack_complex_array_to_real(autocorrelation_matrix))
+		elem.set_property("latency", -((autocorrelation_matrix.shape[1] - 1) / 2))
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
 def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
 	src = mktee(pipeline, mkfirbank(pipeline, src, latency = int(bank_fragment.start * bank_fragment.rate), fir_matrix = bank_fragment.orthogonal_template_bank))
 
@@ -366,6 +383,45 @@ def mkcolorspace(pipeline, src):
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
+
+
+def mktheoraenc(pipeline, src, **kwargs):
+	elem = gst.element_factory_make("theoraenc")
+	for key, value in kwargs.items():
+		elem.set_property(key, value)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
+def mkoggmux(pipeline, src):
+	elem = gst.element_factory_make("oggmux")
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
+def mkogmvideosink(pipeline, src, filename):
+	# FIXME:  can't get oggmux to work, seems to get confused by a
+	# spurious EOS from the framesrc on startup.
+	src = mkcolorspace(pipeline, src)
+
+	elem = gst.element_factory_make("ffenc_mpeg4")
+	pipeline.add(elem)
+	src.link(elem)
+	src = elem
+
+	elem = gst.element_factory_make("avimux")
+	pipeline.add(elem)
+	src.link(elem)
+	src = elem
+
+	mkfilesink(pipeline, src, filename)
+	return
+
+	src = mkcolorspace(pipeline, src)
+	src = mkcapsfilter(pipeline, src, "video/x-raw-yuv, format=(fourcc)I420")
+	mkfilesink(pipeline, mkoggmux(pipeline, mktheoraenc(pipeline, src, border = 2)), filename)
 
 
 def mkvideosink(pipeline, src):
