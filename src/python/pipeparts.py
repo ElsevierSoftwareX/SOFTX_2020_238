@@ -250,6 +250,13 @@ def mkmatrixmixer(pipeline, src, matrix = None):
 	return elem
 
 
+def mktogglecomplex(pipeline, src):
+	elem = gst.element_factory_make("lal_togglecomplex")
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
 def mkautochisq(pipeline, src, autocorrelation_matrix = None):
 	elem = gst.element_factory_make("lal_autochisq")
 	if autocorrelation_matrix is not None:
