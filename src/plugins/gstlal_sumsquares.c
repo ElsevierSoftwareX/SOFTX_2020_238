@@ -235,7 +235,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 	case GST_PAD_UNKNOWN:
 		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
 		gst_caps_unref(caps);
-		return NULL;
+		return GST_CAPS_NONE;
 	}
 
 	return caps;
