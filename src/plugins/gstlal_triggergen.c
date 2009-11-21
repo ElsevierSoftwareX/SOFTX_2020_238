@@ -133,7 +133,7 @@ static void free_bankfile(GSTLALTriggerGen *element)
 }
 
 
-static SnglInspiralTable *new_event(SnglInspiralTable *dest, LIGOTimeGPS end_time, double complex z, double complex chisq, int channel, GSTLALTriggerGen *element)
+static SnglInspiralTable *new_event(SnglInspiralTable *dest, LIGOTimeGPS end_time, double complex z, double chisq, int channel, GSTLALTriggerGen *element)
 {
 	double xi;
 
@@ -141,7 +141,7 @@ static SnglInspiralTable *new_event(SnglInspiralTable *dest, LIGOTimeGPS end_tim
 
 	dest->snr = cabs(z);
 	dest->coa_phase = carg(z);
-	dest->chisq = creal(chisq) + cimag(chisq);
+	dest->chisq = chisq;
 	dest->chisq_dof = 1;
 	dest->end_time = end_time;
 	dest->end_time_gmst = XLALGreenwichMeanSiderealTime(&end_time);
@@ -330,7 +330,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 
 		guint length = GST_BUFFER_OFFSET_END(snrbuf) - GST_BUFFER_OFFSET(snrbuf);
 		const double complex *snrdata = (const double complex *) GST_BUFFER_DATA(snrbuf);
-		const double complex *chisqdata = (const double complex *) GST_BUFFER_DATA(chisqbuf);
+		const double *chisqdata = (const double *) GST_BUFFER_DATA(chisqbuf);
 		guint sample, channel;
 		SnglInspiralTable *head = NULL;
 		guint nevents = 0;
@@ -568,7 +568,7 @@ static void gen_base_init(gpointer g_class)
 	static GstElementDetails plugin_details = {
 		"Trigger Generator",
 		"Filter",
-		"SNRs in Triggers out",
+		"SNR and \chi^{2} in, Triggers out",
 		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chad Hanna <channa@ligo.caltech.edu>"
 	};
 
@@ -582,11 +582,11 @@ static void gen_base_init(gpointer g_class)
 			GST_PAD_SINK,
 			GST_PAD_ALWAYS,
 			gst_caps_from_string(
-				"audio/x-raw-float, " \
+				"audio/x-raw-complex, " \
 				"rate = (int) [1, MAX], " \
 				"channels = (int) [1, MAX], " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 64"
+				"width = (int) 128"
 			)
 		)
 	);
