@@ -93,6 +93,7 @@ typedef struct {
 	GstSegment segment;
 	guint64 next_input_offset;
 	guint64 next_output_offset;
+	guint64 next_output_timestamp;
 
 	int rate;
 

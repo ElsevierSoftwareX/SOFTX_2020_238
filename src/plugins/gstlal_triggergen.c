@@ -245,6 +245,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	GstBuffer *snrbuf = NULL;
 	GstBuffer *chisqbuf = NULL;
 	GstBuffer *srcbuf = NULL;
+	guint64 snr_t_end;
+	guint64 chisq_t_end;
 	GstFlowReturn result;
 
 	/*
@@ -268,6 +270,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		gst_segment_free(segment);
 		element->next_input_offset = GST_BUFFER_OFFSET_NONE;
 		element->next_output_offset = 0;
+		element->next_output_timestamp = element->segment.start;
 
 		/*
 		 * transmit the new-segment event downstream
@@ -332,26 +335,27 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 */
 
 	if(!snrbuf || !chisqbuf) {
-		if(snrbuf)
+		if(snrbuf) {
 			gst_buffer_unref(snrbuf);
-		if(chisqbuf)
+			snrbuf = NULL;
+		}
+		if(chisqbuf) {
 			gst_buffer_unref(chisqbuf);
+			chisqbuf = NULL;
+		}
 		goto eos;
 	}
 
 	/*
-	 * Check for mis-aligned input buffers.  This can happen, but we
-	 * can't handle it.
+	 * Compute end times
 	 */
 
-	if(GST_BUFFER_OFFSET(snrbuf) != GST_BUFFER_OFFSET(chisqbuf) || GST_BUFFER_OFFSET_END(snrbuf) != GST_BUFFER_OFFSET_END(chisqbuf)) {
-		GST_ERROR_OBJECT(element, "misaligned buffer boundaries:  requested offsets upto %lu, got snr offsets %lu--%lu and \\chi^{2} offsets %lu--%lu", earliest_input_offset_end, GST_BUFFER_OFFSET(snrbuf), GST_BUFFER_OFFSET_END(snrbuf), GST_BUFFER_OFFSET(chisqbuf), GST_BUFFER_OFFSET_END(chisqbuf));
-		result = GST_FLOW_ERROR;
-		goto error;
-	}
+	snr_t_end = GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf);
+	chisq_t_end = GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf);
 
 	/*
-	 * GAP?
+	 * Construct output buffer.  timestamp is earliest of the two input
+	 * timestamps, and end time is last of the two input end times.
 	 */
 
 	if(GST_BUFFER_FLAG_IS_SET(snrbuf, GST_BUFFER_FLAG_GAP) || GST_BUFFER_FLAG_IS_SET(chisqbuf, GST_BUFFER_FLAG_GAP)) {
@@ -363,7 +367,6 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		if(result != GST_FLOW_OK) {
 			/* FIXME: handle failure */
 		}
-		gst_buffer_copy_metadata(srcbuf, snrbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset;
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 	} else {
@@ -371,16 +374,28 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		 * !GAP --> find events
 		 */
 
-		guint length = GST_BUFFER_OFFSET_END(snrbuf) - GST_BUFFER_OFFSET(snrbuf);
 		const double complex *snrdata = (const double complex *) GST_BUFFER_DATA(snrbuf);
 		const double *chisqdata = (const double *) GST_BUFFER_DATA(chisqbuf);
+		guint64 t0;
+		guint64 length;
 		guint sample, channel;
 		SnglInspiralTable *head = NULL;
 		guint nevents = 0;
 
+		length = GST_BUFFER_OFFSET_END(snrbuf) > GST_BUFFER_OFFSET_END(chisqbuf) ? GST_BUFFER_OFFSET_END(chisqbuf) : GST_BUFFER_OFFSET_END(snrbuf);
+		if(GST_BUFFER_OFFSET(snrbuf) > GST_BUFFER_OFFSET(chisqbuf)) {
+			t0 = GST_BUFFER_TIMESTAMP(snrbuf);
+			chisqdata += (GST_BUFFER_OFFSET(snrbuf) - GST_BUFFER_OFFSET(chisqbuf)) * element->num_templates * sizeof(*chisqdata);
+			length -= GST_BUFFER_OFFSET(snrbuf);
+		} else {
+			t0 = GST_BUFFER_TIMESTAMP(chisqbuf);
+			snrdata += (GST_BUFFER_OFFSET(chisqbuf) - GST_BUFFER_OFFSET(snrbuf)) * element->num_templates * sizeof(*snrdata);
+			length -= GST_BUFFER_OFFSET(chisqbuf);
+		}
+
 		for(sample = 0; sample < length; sample++) {
 			LIGOTimeGPS t;
-			XLALINT8NSToGPS(&t, GST_BUFFER_TIMESTAMP(snrbuf));
+			XLALINT8NSToGPS(&t, t0);
 			XLALGPSAdd(&t, (double) sample / element->rate);
 
 			for(channel = 0; channel < element->num_templates; channel++) {
@@ -426,7 +441,6 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 			if(result != GST_FLOW_OK) {
 				/* FIXME: handle failure */
 			}
-			gst_buffer_copy_metadata(srcbuf, snrbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 			GST_BUFFER_OFFSET(srcbuf) = element->next_output_offset;
 			element->next_output_offset += nevents;
 			GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset;
@@ -451,20 +465,23 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 			if(result != GST_FLOW_OK) {
 				/* FIXME: handle failure */
 			}
-			gst_buffer_copy_metadata(srcbuf, snrbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset;
 			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 		}
 	}
 
 	/*
-	 * Push event downstream
+	 * Push buffer downstream
 	 */
 
-	if((element->next_input_offset == GST_BUFFER_OFFSET_NONE) || (element->next_input_offset != GST_BUFFER_OFFSET(srcbuf)))
+	GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(snrbuf) <= GST_BUFFER_TIMESTAMP(chisqbuf) ? GST_BUFFER_TIMESTAMP(snrbuf) : GST_BUFFER_TIMESTAMP(chisqbuf);
+	GST_BUFFER_DURATION(srcbuf) = (snr_t_end >= chisq_t_end ? snr_t_end : chisq_t_end) - GST_BUFFER_TIMESTAMP(srcbuf);
+
+	if((element->next_input_offset == GST_BUFFER_OFFSET_NONE) || (element->next_output_timestamp != GST_BUFFER_TIMESTAMP(srcbuf)))
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
 
-	element->next_input_offset = GST_BUFFER_OFFSET_END(snrbuf);
+	element->next_input_offset = GST_BUFFER_OFFSET_END(snrbuf) <= GST_BUFFER_OFFSET_END(chisqbuf) ? GST_BUFFER_OFFSET_END(snrbuf) : GST_BUFFER_OFFSET_END(chisqbuf);
+	element->next_output_timestamp = GST_BUFFER_TIMESTAMP(srcbuf) + GST_BUFFER_DURATION(srcbuf);
 
 	gst_buffer_unref(snrbuf);
 	gst_buffer_unref(chisqbuf);
