@@ -162,7 +162,7 @@ static void set_metadata(GSTLALAutoChiSq *element, GstBuffer *buf, guint64 outsa
 
 static guint64 get_available_samples(GSTLALAutoChiSq *element)
 {
-	return gst_adapter_available(element->adapter) / sizeof(complex double);
+	return gst_adapter_available(element->adapter) / (autocorrelation_channels(element) * sizeof(complex double));
 }
 
 
@@ -218,15 +218,15 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	 */
 
 	available_length = get_available_samples(element);
-	output_length = available_length - autocorrelation_length(element) + 1;
-	if(output_length <= 0)
+	if(available_length < autocorrelation_length(element))
 		return GST_BASE_TRANSFORM_FLOW_DROPPED;
+	output_length = available_length - autocorrelation_length(element) + 1;
 
 	/*
 	 * compute output samples
 	 */
 
-	input = (complex double *) gst_adapter_peek(element->adapter, available_length * sizeof(complex double));
+	input = (complex double *) gst_adapter_peek(element->adapter, available_length * channels * sizeof(complex double));
 	output = (double *) GST_BUFFER_DATA(outbuf);
 
 	for(output_sample = 0; output_sample < output_length; output_sample++) {
@@ -234,7 +234,7 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 
 		for(channel = 0; channel < channels; channel++) {
 			complex double *indata = input;
-			complex double snr = input[(autocorrelation_length(element) - 1) / 2 * channels];
+			complex double snr = input[(autocorrelation_length(element) - 1 - element->latency) * channels];
 			/* multiplying snr by this makes it purely real */
 			complex double invsnrphase = cexp(-I*carg(snr));
 			double chisq = 0;
@@ -252,7 +252,7 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	 * flush the data from the adapter
 	 */
 
-	gst_adapter_flush(element->adapter, output_length * sizeof(complex double));
+	gst_adapter_flush(element->adapter, output_length * channels * sizeof(complex double));
 	if(output_length > available_length - element->zeros_in_adapter)
 		/*
 		 * some trailing zeros have been flushed from the adapter
