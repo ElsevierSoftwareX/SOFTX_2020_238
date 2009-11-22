@@ -256,9 +256,9 @@ static GstFlowReturn tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	 */
 
 	available_length = get_available_samples(element);
-	output_length = available_length - fir_length(element) + 1;
-	if(output_length <= 0)
+	if(available_length <= fir_length(element) + 1)
 		return GST_BASE_TRANSFORM_FLOW_DROPPED;
+	output_length = available_length - fir_length(element) + 1;
 
 	/*
 	 * wrap the adapter's contents in a GSL vector view.  note that the
