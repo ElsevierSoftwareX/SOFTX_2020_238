@@ -801,7 +801,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		/*
 		 * input is 0s and we are past the tail of the impulse
 		 * response so output is all 0s.  output is a gap with the
-		 * same number of samples as in the input.
+		 * same number of samples as the input
 		 */
 
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
@@ -822,12 +822,13 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		/*
 		 * input is 0s, we are not yet past the tail of the impulse
 		 * response, but the input is long enough to push us past
-		 * the end.
+		 * the end.  this code path also handles the case of the
+		 * first buffer being a gap, in which case
+		 * available_samples is 0
 		 */
 
 		GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
 		guint64 available_samples = get_available_samples(element);
-		GstBuffer *buf;
 
 		/*
 		 * push (FIR-length - 1) 0s into adapter
@@ -841,14 +842,18 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * and manually push buffer downstream.
 		 */
 
-		result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, available_samples * fir_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
-		if(result != GST_FLOW_OK)
-			goto done;
-		result = filter(element, buf);
-		g_assert(result == GST_FLOW_OK);
-		result = gst_pad_push(srcpad, buf);
-		if(result != GST_FLOW_OK)
-			goto done;
+		if(available_samples) {
+			GstBuffer *buf;
+
+			result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, available_samples * fir_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
+			if(result != GST_FLOW_OK)
+				goto done;
+			result = filter(element, buf);
+			g_assert(result == GST_FLOW_OK);
+			result = gst_pad_push(srcpad, buf);
+			if(result != GST_FLOW_OK)
+				goto done;
+		}
 
 		/*
 		 * remainder of input produces 0s in output.  make outbuf a
