@@ -267,7 +267,6 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 	const char *media_type;
 	gint width;
 	gint channels;
-	gboolean is_signed;
 
 	GST_LOG_OBJECT(adder, "setting caps on pad %s:%s to %" GST_PTR_FORMAT, GST_DEBUG_PAD_NAME(pad), caps);
 
@@ -297,11 +296,11 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 	media_type = gst_structure_get_name(structure);
 	gst_structure_get_int(structure, "rate", &adder->rate);
 	gst_structure_get_int(structure, "channels", &channels);
+	gst_structure_get_int(structure, "width", &width);
 	if(!strcmp(media_type, "audio/x-raw-int")) {
+		gboolean is_signed;
 		GST_DEBUG_OBJECT(adder, "gst_adder_setcaps() sets adder to format int");
-		gst_structure_get_int(structure, "width", &width);
 		gst_structure_get_boolean(structure, "signed", &is_signed);
-
 		switch (width) {
 		case 8:
 			adder->func = is_signed ? add_int8 : add_uint8;
@@ -317,8 +316,6 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 		}
 	} else if(!strcmp(media_type, "audio/x-raw-float")) {
 		GST_DEBUG_OBJECT(adder, "gst_adder_setcaps() sets adder to format float");
-		gst_structure_get_int(structure, "width", &width);
-
 		switch (width) {
 		case 32:
 			adder->func = add_float32;
@@ -331,8 +328,6 @@ static gboolean gst_adder_setcaps(GstPad * pad, GstCaps * caps)
 		}
 	} else if(!strcmp(media_type, "audio/x-raw-complex")) {
 		GST_DEBUG_OBJECT(adder, "gst_adder_setcaps() sets adder to format complex");
-		gst_structure_get_int(structure, "width", &width);
-
 		switch (width) {
 		case 64:
 			adder->func = add_complex64;
