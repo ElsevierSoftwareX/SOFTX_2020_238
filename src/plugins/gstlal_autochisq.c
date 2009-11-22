@@ -234,7 +234,7 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 
 		for(channel = 0; channel < channels; channel++) {
 			complex double *indata = input;
-			complex double snr = input[(autocorrelation_length(element) - 1 - element->latency) * channels];
+			complex double snr = input[(autocorrelation_length(element) - 1 + element->latency) * channels];
 			/* multiplying snr by this makes it purely real */
 			complex double invsnrphase = cexp(-I*carg(snr));
 			double chisq = 0;
@@ -581,7 +581,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
-		element->next_out_offset = element->offset0 + autocorrelation_length(element) - 1 + element->latency;	/* FIXME:  correct? */
+		element->next_out_offset = element->offset0 + autocorrelation_length(element) - 1 + element->latency;
 
 		/*
 		 * be sure to flag the next output buffer as a discontinuity
@@ -609,7 +609,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		/*
 		 * input is 0s and we are past the tail of the impulse
 		 * response so output is all 0s.  output is a gap with the
-		 * same number of samples as in the input.
+		 * same number of samples as the input.
 		 */
 
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
@@ -630,12 +630,13 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		/*
 		 * input is 0s, we are not yet past the tail of the impulse
 		 * response, but the input is long enough to push us past
-		 * the end.
+		 * the end.  this code path also handles the case of the
+		 * first buffer being a gap, in which case
+		 * available_samples is 0
 		 */
 
 		GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
 		guint64 available_samples = get_available_samples(element);
-		GstBuffer *buf;
 
 		/*
 		 * push (correlation-length - 1) 0s into adapter
@@ -649,14 +650,18 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * and manually push buffer downstream.
 		 */
 
-		result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, available_samples * autocorrelation_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
-		if(result != GST_FLOW_OK)
-			goto done;
-		result = filter(element, buf);
-		g_assert(result == GST_FLOW_OK);
-		result = gst_pad_push(srcpad, buf);
-		if(result != GST_FLOW_OK)
-			goto done;
+		if(available_samples) {
+			GstBuffer *buf;
+
+			result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, available_samples * autocorrelation_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
+			if(result != GST_FLOW_OK)
+				goto done;
+			result = filter(element, buf);
+			g_assert(result == GST_FLOW_OK);
+			result = gst_pad_push(srcpad, buf);
+			if(result != GST_FLOW_OK)
+				goto done;
+		}
 
 		/*
 		 * remainder of input produces 0s in output.  make outbuf a
@@ -727,6 +732,15 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		element->autocorrelation_norm = compute_autocorrelation_norm(element);
 
 		/*
+		 * check for invalid latency
+		 */
+
+		if(-element->latency >= (gint) autocorrelation_length(element)) {
+			GST_ERROR_OBJECT(object, "invalid latency %ld, must be in (%u, 0]", element->latency, -(gint) autocorrelation_length(element));
+			element->latency = -(autocorrelation_length(element) - 1);
+		}
+
+		/*
 		 * signal availability of new autocorrelation vectors
 		 */
 
@@ -735,9 +749,16 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 	}
 
-	case ARG_LATENCY:
-		element->latency = g_value_get_int64(value);
+	case ARG_LATENCY: {
+		gint64 latency = g_value_get_int64(value);
+		g_mutex_lock(element->autocorrelation_lock);
+		if(element->autocorrelation_matrix && -latency >= (gint) autocorrelation_length(element))
+			GST_ERROR_OBJECT(object, "invalid latency %ld, must be in (%u, 0]", latency, -(gint) autocorrelation_length(element));
+		else
+			element->latency = latency;
+		g_mutex_unlock(element->autocorrelation_lock);
 		break;
+	}
 
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -879,8 +900,8 @@ static void gstlal_autochisq_class_init(GSTLALAutoChiSqClass *klass)
 		g_param_spec_int64(
 			"latency",
 			"Latency",
-			"Filter latency in samples.",
-			0, G_MAXINT64, DEFAULT_LATENCY,
+			"Filter latency in samples.  Must be in (-autocorrelation length, 0].",
+			G_MININT64, 0, DEFAULT_LATENCY,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
