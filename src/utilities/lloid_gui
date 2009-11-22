@@ -215,10 +215,6 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, progress_repor
 	#pipeparts.mkvideosink(pipeline, head)
 	#return
 
-	pipeparts.mkfakesink(pipeline, pipeparts.mkqueue(pipeline, snr))
-	pipeparts.mkfakesink(pipeline, chisq)
-	return
-
 	head = pipeparts.mktriggergen(pipeline, pipeparts.mkqueue(pipeline, snr), chisq, bank.template_bank_filename, bank.snr_threshold)
 	if progress_report:
 		head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % logname)
@@ -255,7 +251,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, output_filename, fake_data = False,
 				control_snksrc = control_snksrc
 			)
 			#pipeparts.mkqueue(pipeline, head).link(nto1)
-			#pipeparts.mktriggerxmlwritersink(pipeline, head, output_filename.replace(".xml", "_%s.xml" % bank.logname))
+			pipeparts.mktriggerxmlwritersink(pipeline, head, output_filename.replace(".xml", "_%s.xml" % bank.logname))
 
 
 #
