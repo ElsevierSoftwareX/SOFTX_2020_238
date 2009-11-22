@@ -1,3 +1,42 @@
+/*
+ * Copyright (C) 2009 Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna
+ * <chad.hanna@ligo.caltech.edu>
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject to
+ * the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * You should have received a copy of the GNU Library General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307,
+ * USA.
+ */
+
+
+/*
+ * ============================================================================
+ *
+ *                                  Preamble
+ *
+ * ============================================================================
+ */
+
+
 #include <complex.h>
 #include <math.h>
 #include <glib.h>
@@ -289,11 +328,15 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	chisqbuf = gstlal_collect_pads_take_buffer(pads, element->chisqcollectdata, earliest_input_offset_end, element->segment.start, 0, element->rate);
 
 	/*
-	 * NULL means EOS.
+	 * NULL means EOS.  EOS on one means our EOS.
 	 */
 
 	if(!snrbuf || !chisqbuf) {
-		/* FIXME:  handle EOS */
+		if(snrbuf)
+			gst_buffer_unref(snrbuf);
+		if(chisqbuf)
+			gst_buffer_unref(chisqbuf);
+		goto eos;
 	}
 
 	/*
@@ -568,7 +611,7 @@ static void gen_base_init(gpointer g_class)
 	static GstElementDetails plugin_details = {
 		"Trigger Generator",
 		"Filter",
-		"SNR and \chi^{2} in, Triggers out",
+		"SNR and \\chi^{2} in, Triggers out",
 		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chad Hanna <channa@ligo.caltech.edu>"
 	};
 
@@ -627,14 +670,44 @@ static void gen_class_init(gpointer klass, gpointer class_data)
 	GstElementClass *gstelement_class = GST_ELEMENT_CLASS(klass);
 
         gen_parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
-	gobject_class->set_property = gen_set_property;
-	gobject_class->get_property = gen_get_property;
-        gobject_class->finalize = gen_finalize;
-	gstelement_class->change_state = gen_change_state;
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(gen_set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(gen_get_property);
+        gobject_class->finalize = GST_DEBUG_FUNCPTR(gen_finalize);
+	gstelement_class->change_state = GST_DEBUG_FUNCPTR(gen_change_state);
 
-        g_object_class_install_property(gobject_class, ARG_BANK_FILENAME, g_param_spec_string("bank-filename", "Bank file name", "Path to XML file used to generate the template bank", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_SNR_THRESH, g_param_spec_double("snr-thresh", "SNR Threshold", "SNR Threshold that determines a trigger", 0, G_MAXDOUBLE, DEFAULT_SNR_THRESH, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_MAX_GAP, g_param_spec_double("max-gap", "Maximum below-threshold gap (seconds)", "If the SNR drops below threshold for less than this interval (in seconds) then it is not the start of a new event", 0, G_MAXDOUBLE, DEFAULT_MAX_GAP, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+        g_object_class_install_property(
+		gobject_class,
+		ARG_BANK_FILENAME,
+		g_param_spec_string(
+			"bank-filename",
+			"Bank file name",
+			"Path to XML file used to generate the template bank",
+			NULL,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SNR_THRESH,
+		g_param_spec_double(
+			"snr-thresh",
+			"SNR Threshold",
+			"SNR Threshold that determines a trigger",
+			0, G_MAXDOUBLE, DEFAULT_SNR_THRESH,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_MAX_GAP,
+		g_param_spec_double(
+			"max-gap",
+			"Maximum below-threshold gap (seconds)",
+			"If the SNR drops below threshold for less than this interval (in seconds) then it is not the start of a new event",
+			0, G_MAXDOUBLE, DEFAULT_MAX_GAP,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 }
 
 
@@ -645,17 +718,19 @@ static void gen_instance_init(GTypeInstance *object, gpointer klass)
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
 	element->collect = gst_collect_pads_new();
-	gst_collect_pads_set_function(element->collect, gen_collected, element);
+	gst_collect_pads_set_function(element->collect, GST_DEBUG_FUNCPTR(gen_collected), element);
 
         /* configure snr pad */
         pad = gst_element_get_static_pad(GST_ELEMENT(element), "snr");
-        gst_pad_set_setcaps_function(pad, gen_setcaps);
+        gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(gen_setcaps));
+	gst_pad_use_fixed_caps(pad);
 	element->snrcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->snrcollectdata));
 	element->snrpad = pad;
 
 	/* configure chisquare pad */
         pad = gst_element_get_static_pad(GST_ELEMENT(element), "chisquare");
-        gst_pad_set_setcaps_function(pad, gen_setcaps);
+        gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(gen_setcaps));
+	gst_pad_use_fixed_caps(pad);
 	element->chisqcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->chisqcollectdata));
 	element->chisqpad = pad;
 
@@ -817,13 +892,23 @@ static void xmlwriter_class_init(gpointer klass, gpointer class_data)
 	GstBaseSinkClass *gstbasesink_class = GST_BASE_SINK_CLASS(klass);
 
         xmlwriter_parent_class = g_type_class_ref(GST_TYPE_BASE_SINK);
-	gobject_class->set_property = xmlwriter_set_property;
-	gobject_class->get_property = xmlwriter_get_property;
-	gstbasesink_class->start = xmlwriter_start;
-	gstbasesink_class->stop = xmlwriter_stop;
-	gstbasesink_class->render = xmlwriter_render;
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(xmlwriter_set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(xmlwriter_get_property);
+	gstbasesink_class->start = GST_DEBUG_FUNCPTR(xmlwriter_start);
+	gstbasesink_class->stop = GST_DEBUG_FUNCPTR(xmlwriter_stop);
+	gstbasesink_class->render = GST_DEBUG_FUNCPTR(xmlwriter_render);
 
-        g_object_class_install_property(gobject_class, ARG_LOCATION, g_param_spec_string("location", "filename", "Path to output file", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+        g_object_class_install_property(
+		gobject_class,
+		ARG_LOCATION,
+		g_param_spec_string(
+			"location",
+			"filename",
+			"Path to output file",
+			NULL,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 }
 
 
