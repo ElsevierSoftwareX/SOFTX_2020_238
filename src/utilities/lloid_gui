@@ -121,12 +121,11 @@ class Bank(object):
 
 
 class DetectorData(object):
-	def __init__(self, frame_cache, channel, reference_psd_filename, block_size = 16384 * 16 * 8):
+	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 1):
 		self.frame_cache = frame_cache
 		self.channel = channel
-		self.reference_psd_filename = reference_psd_filename
-		# default block_size = 16384 samples/second * 16 seconds *
-		# 8 bytes/sample
+		# default block_size = 16384 samples/second * 8
+		# bytes/sample * 1 second
 		self.block_size = block_size
 
 
@@ -206,24 +205,23 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, progress_repor
 			control_snksrc[1]
 		).link(snr)
 
-	snr = pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(bank.get_rates()))
-	pipeparts.mkvideosink(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, snr), "video/x-raw-rgb, width=800, height=600, framerate=4/1"), max_size_buffers = 5))
-	return
+	snr = pipeparts.mktogglecomplex(pipeline, pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(bank.get_rates())))
 
 	snr = pipeparts.mktee(pipeline, snr)
-	chisq = gst.element_factory_make("lal_autochisq")
-	chisq.set_property("template-bank", bank.template_bank_filename)
-	chisq.set_property("reference-psd", detector.reference_psd_filename)
-	pipeline.add(chisq)
-	pipeparts.mkqueue(pipeline, snr).link(chisq)
+	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr), autocorrelation_matrix = bank.autocorrelation_bank)
 
-	#snr = pipeparts.mktee(pipeline, snr)
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, snr), "snr_%s.txt" % logname)
+	#head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, snr), "video/x-raw-rgb, width=640, height=480, framerate=2/1")
+	#pipeparts.mkvideosink(pipeline, head)
+	#return
+
+	pipeparts.mkfakesink(pipeline, pipeparts.mkqueue(pipeline, snr))
+	pipeparts.mkfakesink(pipeline, chisq)
+	return
 
 	head = pipeparts.mktriggergen(pipeline, pipeparts.mkqueue(pipeline, snr), chisq, bank.template_bank_filename, bank.snr_threshold)
 	if progress_report:
 		head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % logname)
-
 	return head
 
 
@@ -415,7 +413,7 @@ reference_psd = lalseries.parse_REAL8FrequencySeries(utils.load_filename(options
 
 
 detectors = {
-	options.instrument: DetectorData(options.frame_cache, "LSC-STRAIN", reference_psd_filename = options.reference_psd)
+	options.instrument: DetectorData(options.frame_cache, "LSC-STRAIN")
 }
 
 
