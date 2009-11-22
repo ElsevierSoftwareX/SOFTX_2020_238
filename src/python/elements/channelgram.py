@@ -223,7 +223,7 @@ class Channelgram(gst.BaseTransform):
 		xlim = x[0], x[-1]
 		ylim = y[0], y[-1]
 		x, y = numpy.meshgrid(x, y)
-		if samples.dtype.kine == "c":
+		if samples.dtype.kind == "c":
 			#
 			# complex data
 			#
