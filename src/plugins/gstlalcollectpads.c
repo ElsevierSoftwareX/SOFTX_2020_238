@@ -146,8 +146,8 @@ guint gstlal_collect_pads_get_unit_size(GstPad *pad)
 
 
 /**
- * Compute the smallest segment that contains the segments (from the most
- * recent newsegment events) of all pads.  The segments must be in the same
+ * Compute the smallest segment that contains the segments from the most
+ * recent newsegment events of all pads.  The segments must be in the same
  * format on all pads.
  *
  * Should be called with the GstCollectPads' lock held (i.e., from the
