@@ -261,7 +261,7 @@ def mkautochisq(pipeline, src, autocorrelation_matrix = None):
 	elem = gst.element_factory_make("lal_autochisq")
 	if autocorrelation_matrix is not None:
 		elem.set_property("autocorrelation-matrix", pipeio.repack_complex_array_to_real(autocorrelation_matrix))
-		elem.set_property("latency", (autocorrelation_matrix.shape[1] - 1) / 2)
+		elem.set_property("latency", -(autocorrelation_matrix.shape[1] - 1) / 2)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
