@@ -547,8 +547,8 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		 * function, \sigma^{2} = \sum_{j} w_{j}^{2}
 		 *
 		 * The time series has a j-dependent variance, but we
-		 * normalize it so that the variance is 1 in the middle of
-		 * the window.
+		 * normalize it so that the variance is 1 where w_{j} = 1
+		 * in the middle of the window.
 		 */
 
 		for(i = 0; i < element->tdworkspace->data->length; i++)
@@ -801,9 +801,8 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	s = gst_caps_get_structure(incaps, 0);
 	if(!gst_structure_get_int(s, "channels", &channels)) {
 		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
-		return FALSE;
-	}
-	if(!gst_structure_get_int(s, "rate", &rate)) {
+		success = FALSE;
+	} else if(!gst_structure_get_int(s, "rate", &rate)) {
 		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
 		success = FALSE;
 	} else if((int) round(element->fft_length_seconds * rate) & 1 || (int) round(element->zero_pad_seconds * rate) & 1) {
@@ -1052,12 +1051,20 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		element->psdmode = g_value_get_enum(value);
 		break;
 
-	case ARG_ZERO_PAD_SECONDS:
-		element->zero_pad_seconds = g_value_get_double(value);
-		/* FIXME:  if the value has changed, set sink pad's caps to
-		 * NULL to force renegotiation (== check that the rate is
-		 * still OK) */
+	case ARG_ZERO_PAD_SECONDS: {
+		double zero_pad_seconds = g_value_get_double(value);
+		if(zero_pad_seconds != element->zero_pad_seconds) {
+			/*
+			 * set sink pad's caps to NULL to force
+			 * renegotiation == check that the rate is still
+			 * OK, and rebuild windows and FFT plans
+			 */
+
+			gst_pad_set_caps(GST_BASE_TRANSFORM_SINK_PAD(GST_BASE_TRANSFORM(object)), NULL);
+		}
+		element->zero_pad_seconds = zero_pad_seconds;
 		break;
+	}
 
 	case ARG_FFT_LENGTH: {
 		double fft_length_seconds = g_value_get_double(value);
