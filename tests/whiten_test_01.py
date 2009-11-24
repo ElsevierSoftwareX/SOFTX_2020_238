@@ -62,6 +62,44 @@ def whiten_test_01a(pipeline):
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01a_out.txt")
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "whiten_test_01a_in.txt")
 
+	#
+	# done
+	#
+
+	return pipeline
+
+
+#
+# does the whitener turn coloured Gaussian noise into zero-mean,
+# unit-variance stationary white Gaussian noise?
+#
+
+
+def whiten_test_01b(pipeline):
+	#
+	# try changing these.  test should still work!
+	#
+
+	rate = 2048	# Hz
+	zero_pad = 0.0		# seconds
+	fft_length = 2.0	# seconds
+	buffer_length = 1.0	# seconds
+	test_duration = 100.0	# seconds
+
+	#
+	# build pipeline
+	#
+
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudiotestsrc(pipeline, wave = 5, blocksize = 8 * int(buffer_length * rate), volume = 1, num_buffers = int(test_duration / buffer_length)), "audio/x-raw-float, width=64, rate=%d" % rate)
+	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 0, zero_pad = zero_pad, fft_length = fft_length)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01b_out.txt")
+
+	#
+	# done
+	#
+
+	return pipeline
+
 
 #
 # =============================================================================
@@ -93,13 +131,17 @@ class Handler(object):
 
 gobject.threads_init()
 
+
 mainloop = gobject.MainLoop()
-
 pipeline = gst.Pipeline("whiten_test_01a")
-
-whiten_test_01a(pipeline)
-
-handler = Handler(mainloop, pipeline)
-
+handler = Handler(mainloop, whiten_test_01a(pipeline))
 pipeline.set_state(gst.STATE_PLAYING)
 mainloop.run()
+
+
+mainloop = gobject.MainLoop()
+pipeline = gst.Pipeline("whiten_test_01b")
+handler = Handler(mainloop, whiten_test_01b(pipeline))
+pipeline.set_state(gst.STATE_PLAYING)
+mainloop.run()
+
