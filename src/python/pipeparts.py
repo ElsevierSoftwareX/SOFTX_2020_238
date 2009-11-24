@@ -79,15 +79,18 @@ def mktaginject(pipeline, src, tags):
 	return elem
 
 
+def mkaudiotestsrc(pipeline, **kwargs):
+	elem = gst.element_factory_make("audiotestsrc")
+	for key, value in kwargs.items():
+		elem.set_property(key.replace("_", "-"), value)
+	pipeline.add(elem)
+	return elem
+
+
 def mkfakesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 8 * 1, volume = 1e-20):
 	# default blocksize is 1 second of double precision floats at
 	# 16384 Hz, e.g., h(t)
-	elem = gst.element_factory_make("audiotestsrc")
-	elem.set_property("samplesperbuffer", blocksize / 8)
-	elem.set_property("wave", 9)
-	elem.set_property("volume", volume)
-	pipeline.add(elem)
-	return mktaginject(pipeline, mkcapsfilter(pipeline, elem, "audio/x-raw-float, width=64, rate=16384"), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
+	return mktaginject(pipeline, mkcapsfilter(pipeline, mkaudiotestsrc(pipeline, samplesperbuffer = blocksize / 8, wave = 9, volume = volume), "audio/x-raw-float, width=64, rate=16384"), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
 
 
 def mkiirfilter(pipeline, src, a, b):
@@ -176,13 +179,13 @@ def mkresample(pipeline, src, pad_name = None, **properties):
 	return elem
 
 
-def mkwhiten(pipeline, src):
+def mkwhiten(pipeline, src, psd_mode = 0, zero_pad = 0, fft_length = 8, average_samples = 64, median_samples = 7):
 	elem = gst.element_factory_make("lal_whiten")
-	elem.set_property("psd-mode", 0)
-	elem.set_property("zero-pad", 0)
-	elem.set_property("fft-length", 8)
-	elem.set_property("average-samples", 64)
-	elem.set_property("median-samples", 7)
+	elem.set_property("psd-mode", psd_mode)
+	elem.set_property("zero-pad", zero_pad)
+	elem.set_property("fft-length", fft_length)
+	elem.set_property("average-samples", average_samples)
+	elem.set_property("median-samples", median_samples)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
@@ -305,32 +308,35 @@ def mkfilesink(pipeline, src, filename):
 	src.link(elem)
 
 
-def mknxydumpsink(pipeline, src, filename):
+def mknxydumpsink(pipeline, src, filename, segment = None):
 	elem = gst.element_factory_make("lal_nxydump")
-	if False:
-		# output for hardware injection @ 874107078.149271066
-		elem.set_property("start-time", 874107068000000000)
-		elem.set_property("stop-time", 874107088000000000)
-	elif False:
-		# output for impulse injection @ 873337860
-		elem.set_property("start-time", 873337850000000000)
-		elem.set_property("stop-time", 873337960000000000)
-	elif False:
-		# output for use with software injections:
-		# bns_injections.xml = 874107198.405080859, impulse =
-		# 874107189
-		elem.set_property("start-time", 874107188000000000)
-		elem.set_property("stop-time", 874107258000000000)
-	elif False:
-		# FIXME:  what's at this time?
-		elem.set_property("start-time", 873248760000000000)
-		elem.set_property("stop-time", 873248960000000000)
-	elif False:
-		# output to dump lots and lots of data (the whole cache)
-		elem.set_property("start-time", 873247860000000000)
-		elem.set_property("stop-time", 873424754000000000)
-	else:
-		pass
+	if segment is not None:
+		elem.set_property("start-time", segment[0].ns())
+		elem.set_property("stop-time", segment[1].ns())
+	#if False:
+	#	# output for hardware injection @ 874107078.149271066
+	#	elem.set_property("start-time", 874107068000000000)
+	#	elem.set_property("stop-time", 874107088000000000)
+	#elif False:
+	#	# output for impulse injection @ 873337860
+	#	elem.set_property("start-time", 873337850000000000)
+	#	elem.set_property("stop-time", 873337960000000000)
+	#elif False:
+	#	# output for use with software injections:
+	#	# bns_injections.xml = 874107198.405080859, impulse =
+	#	# 874107189
+	#	elem.set_property("start-time", 874107188000000000)
+	#	elem.set_property("stop-time", 874107258000000000)
+	#elif False:
+	#	# FIXME:  what's at this time?
+	#	elem.set_property("start-time", 873248760000000000)
+	#	elem.set_property("stop-time", 873248960000000000)
+	#elif False:
+	#	# output to dump lots and lots of data (the whole cache)
+	#	elem.set_property("start-time", 873247860000000000)
+	#	elem.set_property("stop-time", 873424754000000000)
+	#else:
+	#	pass
 	pipeline.add(elem)
 	src.link(elem)
 	# FIXME:  add bz2enc element from plugins-bad to compress text
