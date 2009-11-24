@@ -619,6 +619,32 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 /*
  * ============================================================================
  *
+ *                                  Signals
+ *
+ * ============================================================================
+ */
+
+
+enum gstlal_whiten_signal {
+	SIGNAL_DELTA_F_CHANGED,
+	NUM_SIGNALS
+};
+
+
+static guint signals[NUM_SIGNALS] = {0, };
+
+
+static void delta_f_changed(GstElement *element, gdouble delta_f, void *data)
+{
+	/* FIXME:  what if this fails?  should that be indicated somehow?
+	 * return non-void? */
+	make_window_and_fft_plans(GSTLAL_WHITEN(element));
+}
+
+
+/*
+ * ============================================================================
+ *
  *                                  PSD Pad
  *
  * ============================================================================
@@ -718,6 +744,7 @@ enum property {
 	ARG_AVERAGE_SAMPLES,
 	ARG_MEDIAN_SAMPLES,
 	ARG_DELTA_F,
+	ARG_F_NYQUIST,
 	ARG_PSD
 };
 
@@ -789,10 +816,15 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	 * and workspaces
 	 */
 
-	if(success && (rate != element->sample_rate)) {
+	if(success && (rate != element->sample_rate))
 		element->sample_rate = rate;
-		if(make_window_and_fft_plans(element))
-			success = FALSE;
+	if(success) {
+		/*
+		 * let everybody know the PSD resolution and/or Nyquist has
+		 * changed
+		 */
+
+		g_signal_emit(G_OBJECT(trans), signals[SIGNAL_DELTA_F_CHANGED], 0, 1.0 / element->fft_length_seconds, NULL);
 	}
 
 	/*
@@ -1027,12 +1059,20 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		 * still OK) */
 		break;
 
-	case ARG_FFT_LENGTH:
-		element->fft_length_seconds = g_value_get_double(value);
-		/* FIXME:  if the value has changed, set sink pad's caps to
-		 * NULL to force renegotiation (== check that the rate is
-		 * still OK) */
+	case ARG_FFT_LENGTH: {
+		double fft_length_seconds = g_value_get_double(value);
+		if(fft_length_seconds != element->fft_length_seconds) {
+			/*
+			 * set sink pad's caps to NULL to force
+			 * renegotiation == check that the rate is still
+			 * OK, and rebuild windows and FFT plans
+			 */
+
+			gst_pad_set_caps(GST_BASE_TRANSFORM_SINK_PAD(GST_BASE_TRANSFORM(object)), NULL);
+		}
+		element->fft_length_seconds = fft_length_seconds;
 		break;
+	}
 
 	case ARG_AVERAGE_SAMPLES:
 		XLALPSDRegressorSetAverageSamples(element->psd_regressor, g_value_get_uint(value));
@@ -1043,21 +1083,20 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		break;
 
 	case ARG_DELTA_F:
-		/* read-only, should never get here */
+	case ARG_F_NYQUIST:
+		/* read-only */
+		g_assert_not_reached();
 		break;
 
 	case ARG_PSD: {
 		GValueArray *va = g_value_get_boxed(value);
-		/* FIXME:  deltaF? */
 		REAL8FrequencySeries *psd;
-		if(element->psd)
-			psd = make_empty_psd(0.0, element->psd->deltaF, va->n_values, element->sample_units);
-		else
-			psd = make_empty_psd(0.0, 1.0, va->n_values, element->sample_units);
+		psd = make_empty_psd(0.0, 1.0 / element->fft_length_seconds, va->n_values, element->sample_units);
 		gstlal_doubles_from_g_value_array(va, psd->data->data, NULL);
 		if(XLALPSDRegressorSetPSD(element->psd_regressor, psd, XLALPSDRegressorGetAverageSamples(element->psd_regressor))) {
 			GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
+			XLALDestroyREAL8FrequencySeries(psd);
 		} else {
 			XLALDestroyREAL8FrequencySeries(element->psd);
 			element->psd = psd;
@@ -1103,10 +1142,11 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		break;
 
 	case ARG_DELTA_F:
-		if(element->psd)
-			g_value_set_double(value, element->psd->deltaF);
-		else
-			g_value_set_double(value, 0.0);
+		g_value_set_double(value, 1.0 / element->fft_length_seconds);
+		break;
+
+	case ARG_F_NYQUIST:
+		g_value_set_double(value, element->sample_rate / 2.0);
 		break;
 
 	case ARG_PSD:
@@ -1158,7 +1198,7 @@ static void gstlal_whiten_base_init(gpointer gclass)
 	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
 	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
 
-	gst_element_class_set_details_simple(element_class, "Whiten", "Filter/Audio", "A PSD estimator and time series whitener.", "Kipp Cannon <kcannon@ligo.caltech.edu>, Chad Hanna <channa@ligo.caltech.edu>, Drew Keppel <dkeppel@ligo.caltech.edu>");
+	gst_element_class_set_details_simple(element_class, "Whiten", "Filter/Audio", "A PSD estimator and time series whitener.", "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>, Drew Keppel <dkeppel@ligo.caltech.edu>");
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
@@ -1188,6 +1228,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 
 	element_class->request_new_pad = GST_DEBUG_FUNCPTR(request_new_pad);
 	element_class->release_pad = GST_DEBUG_FUNCPTR(release_pad);
+	klass->delta_f_changed = GST_DEBUG_FUNCPTR(delta_f_changed);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -1258,11 +1299,22 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
+		ARG_F_NYQUIST,
+		g_param_spec_double(
+			"f-nyquist",
+			"Nyquist Frequency",
+			"Nyquist frequency in Hz",
+			0, G_MAXDOUBLE, 0,
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
 		ARG_PSD,
 		g_param_spec_value_array(
 			"psd",
 			"PSD",
-			"Power spectral density (first bin is at 0 Hz, bin spacing is delta-f)",
+			"Power spectral density (first bin is at 0 Hz, last bin is at f-nyquist, bin spacing is delta-f)",
 			g_param_spec_double(
 				"bin",
 				"Bin",
@@ -1272,6 +1324,23 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 			),
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
+	);
+
+
+	signals[SIGNAL_DELTA_F_CHANGED] = g_signal_new(
+		"delta-f-changed",
+		G_TYPE_FROM_CLASS(klass),
+		G_SIGNAL_RUN_FIRST,
+		G_STRUCT_OFFSET(
+			GSTLALWhitenClass,
+			delta_f_changed
+		),
+		NULL,
+		NULL,
+		g_cclosure_marshal_VOID__DOUBLE,
+		G_TYPE_NONE,
+		1,
+		G_TYPE_DOUBLE
 	);
 }
 
