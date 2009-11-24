@@ -351,6 +351,10 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 
 	case GSTLAL_PSDMODE_FIXED:
 		psd = element->psd;
+		if(!psd) {
+			GST_ERROR_OBJECT(element, "mode %s requires PSD", g_enum_get_value(G_ENUM_CLASS(g_type_class_peek(GSTLAL_PSDMODE_TYPE)), GSTLAL_PSDMODE_FIXED)->value_name);
+			return NULL;
+		}
 		break;
 	}
 
