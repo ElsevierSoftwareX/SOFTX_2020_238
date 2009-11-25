@@ -52,8 +52,8 @@ def firbank_test_01a(pipeline):
 	fir_matrix[0, latency] = 1.0
 
 	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = fir_matrix, latency = -latency)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "firbank_test_01a_out.txt")
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "firbank_test_01a_in.txt")
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "firbank_test_01a_out.dump")
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "firbank_test_01a_in.dump")
 
 	#
 	# done
