@@ -54,12 +54,12 @@ def whiten_test_01a(pipeline):
 	# build pipeline
 	#
 
-	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, gap_threshold = 2)
+	head = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration)
 	head = tee = pipeparts.mktee(pipeline, head)
 	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 1, zero_pad = zero_pad, fft_length = fft_length)
 	head.connect_after("delta-f-changed", delta_f_changed, None)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01a_out.txt")
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "whiten_test_01a_in.txt")
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01a_out.dump")
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "whiten_test_01a_in.dump")
 
 	#
 	# done
@@ -89,9 +89,9 @@ def whiten_test_01b(pipeline):
 	# build pipeline
 	#
 
-	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, gap_threshold = 2)
+	head = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration)
 	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 0, zero_pad = zero_pad, fft_length = fft_length)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01b_out.txt")
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01b_out.dump")
 
 	#
 	# done
