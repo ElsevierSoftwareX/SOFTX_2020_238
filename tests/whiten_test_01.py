@@ -1,17 +1,16 @@
-#!/usr/bin/python
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
 
 
 import numpy
 import sys
-
-
-import gobject
-import pygst
-pygst.require("0.10")
-import gst
-
-
 from gstlal import pipeparts
+import test_common
 
 
 #
@@ -55,10 +54,10 @@ def whiten_test_01a(pipeline):
 	# build pipeline
 	#
 
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudiotestsrc(pipeline, wave = 5, blocksize = 8 * int(buffer_length * rate), volume = 1, num_buffers = int(test_duration / buffer_length)), "audio/x-raw-float, width=64, rate=%d" % rate)
+	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, gap_threshold = 2)
 	head = tee = pipeparts.mktee(pipeline, head)
 	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 1, zero_pad = zero_pad, fft_length = fft_length)
-	gobject.add_emission_hook(head, "delta-f-changed", delta_f_changed, None)
+	head.connect_after("delta-f-changed", delta_f_changed, None)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01a_out.txt")
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "whiten_test_01a_in.txt")
 
@@ -90,7 +89,7 @@ def whiten_test_01b(pipeline):
 	# build pipeline
 	#
 
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudiotestsrc(pipeline, wave = 5, blocksize = 8 * int(buffer_length * rate), volume = 1, num_buffers = int(test_duration / buffer_length)), "audio/x-raw-float, width=64, rate=%d" % rate)
+	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, gap_threshold = 2)
 	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 0, zero_pad = zero_pad, fft_length = fft_length)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01b_out.txt")
 
@@ -110,38 +109,6 @@ def whiten_test_01b(pipeline):
 #
 
 
-class Handler(object):
-	def __init__(self, mainloop, pipeline):
-		self.mainloop = mainloop
-		self.pipeline = pipeline
-		bus = pipeline.get_bus()
-		bus.add_signal_watch()
-		bus.connect("message", self.on_message)
-
-	def on_message(self, bus, message):
-		if message.type == gst.MESSAGE_EOS:
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
-		elif message.type == gst.MESSAGE_ERROR:
-			gerr, dbgmsg = message.parse_error()
-			print >>sys.stderr, "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
-
-
-gobject.threads_init()
-
-
-mainloop = gobject.MainLoop()
-pipeline = gst.Pipeline("whiten_test_01a")
-handler = Handler(mainloop, whiten_test_01a(pipeline))
-pipeline.set_state(gst.STATE_PLAYING)
-mainloop.run()
-
-
-mainloop = gobject.MainLoop()
-pipeline = gst.Pipeline("whiten_test_01b")
-handler = Handler(mainloop, whiten_test_01b(pipeline))
-pipeline.set_state(gst.STATE_PLAYING)
-mainloop.run()
+test_common.build_and_run(whiten_test_01a, "whiten_test_01a")
+test_common.build_and_run(whiten_test_01b, "whiten_test_01b")
 
