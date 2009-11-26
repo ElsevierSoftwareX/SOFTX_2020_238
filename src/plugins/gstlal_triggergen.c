@@ -670,16 +670,16 @@ static void gen_base_init(gpointer g_class)
 
 static void gen_class_init(gpointer klass, gpointer class_data)
 {
-        GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstElementClass *gstelement_class = GST_ELEMENT_CLASS(klass);
 
-        gen_parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
+	gen_parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(gen_set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(gen_get_property);
-        gobject_class->finalize = GST_DEBUG_FUNCPTR(gen_finalize);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(gen_finalize);
 	gstelement_class->change_state = GST_DEBUG_FUNCPTR(gen_change_state);
 
-        g_object_class_install_property(
+	g_object_class_install_property(
 		gobject_class,
 		ARG_BANK_FILENAME,
 		g_param_spec_string(
@@ -717,23 +717,23 @@ static void gen_class_init(gpointer klass, gpointer class_data)
 
 static void gen_instance_init(GTypeInstance *object, gpointer klass)
 {
-        GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
-        GstPad *pad;
+	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
+	GstPad *pad;
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
 	element->collect = gst_collect_pads_new();
 	gst_collect_pads_set_function(element->collect, GST_DEBUG_FUNCPTR(gen_collected), element);
 
-        /* configure snr pad */
-        pad = gst_element_get_static_pad(GST_ELEMENT(element), "snr");
-        gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(gen_setcaps));
+	/* configure snr pad */
+	pad = gst_element_get_static_pad(GST_ELEMENT(element), "snr");
+	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(gen_setcaps));
 	gst_pad_use_fixed_caps(pad);
 	element->snrcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->snrcollectdata));
 	element->snrpad = pad;
 
 	/* configure chisquare pad */
-        pad = gst_element_get_static_pad(GST_ELEMENT(element), "chisquare");
-        gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(gen_setcaps));
+	pad = gst_element_get_static_pad(GST_ELEMENT(element), "chisquare");
+	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(gen_setcaps));
 	gst_pad_use_fixed_caps(pad);
 	element->chisqcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->chisqcollectdata));
 	element->chisqpad = pad;
@@ -742,10 +742,10 @@ static void gen_instance_init(GTypeInstance *object, gpointer klass)
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
 	element->srcpad = pad;
 
-        /* internal data */
+	/* internal data */
 	element->rate = 0;
 	element->bank_filename = NULL;
-        element->bank = NULL;
+	element->bank = NULL;
 	element->num_templates = 0;
 	element->snr_thresh = DEFAULT_SNR_THRESH;
 	element->max_gap = DEFAULT_MAX_GAP;
@@ -756,20 +756,20 @@ static void gen_instance_init(GTypeInstance *object, gpointer klass)
 
 GType gstlal_triggergen_get_type(void)
 {
-        static GType type = 0;
+	static GType type = 0;
 
-        if(!type) {
-                static const GTypeInfo info = {
-                        .class_size = sizeof(GSTLALTriggerGenClass),
-                        .class_init = gen_class_init,
-                        .base_init = gen_base_init,
-                        .instance_size = sizeof(GSTLALTriggerGen),
-                        .instance_init = gen_instance_init,
-                };
-                type = g_type_register_static(GST_TYPE_ELEMENT, "lal_triggergen", &info, 0);
-        }
+	if(!type) {
+		static const GTypeInfo info = {
+			class_size = sizeof(GSTLALTriggerGenClass),
+			.class_init = gen_class_init,
+			.base_init = gen_base_init,
+			.instance_size = sizeof(GSTLALTriggerGen),
+			.instance_init = gen_instance_init,
+		};
+		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_triggergen", &info, 0);
+	}
 
-        return type;
+	return type;
 }
 
 
@@ -892,17 +892,17 @@ static void xmlwriter_base_init(gpointer g_class)
 
 static void xmlwriter_class_init(gpointer klass, gpointer class_data)
 {
-        GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstBaseSinkClass *gstbasesink_class = GST_BASE_SINK_CLASS(klass);
 
-        xmlwriter_parent_class = g_type_class_ref(GST_TYPE_BASE_SINK);
+	xmlwriter_parent_class = g_type_class_ref(GST_TYPE_BASE_SINK);
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(xmlwriter_set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(xmlwriter_get_property);
 	gstbasesink_class->start = GST_DEBUG_FUNCPTR(xmlwriter_start);
 	gstbasesink_class->stop = GST_DEBUG_FUNCPTR(xmlwriter_stop);
 	gstbasesink_class->render = GST_DEBUG_FUNCPTR(xmlwriter_render);
 
-        g_object_class_install_property(
+	g_object_class_install_property(
 		gobject_class,
 		ARG_LOCATION,
 		g_param_spec_string(
@@ -918,7 +918,7 @@ static void xmlwriter_class_init(gpointer klass, gpointer class_data)
 
 static void xmlwriter_instance_init(GTypeInstance *object, gpointer klass)
 {
-        GSTLALTriggerXMLWriter *element = GSTLAL_TRIGGERXMLWRITER(object);
+	GSTLALTriggerXMLWriter *element = GSTLAL_TRIGGERXMLWRITER(object);
 
 	/*
 	 * Internal data
@@ -931,18 +931,18 @@ static void xmlwriter_instance_init(GTypeInstance *object, gpointer klass)
 
 GType gstlal_triggerxmlwriter_get_type(void)
 {
-        static GType type = 0;
+	static GType type = 0;
 
-        if(!type) {
-                static const GTypeInfo info = {
-                        .class_size = sizeof(GSTLALTriggerXMLWriterClass),
-                        .class_init = xmlwriter_class_init,
-                        .base_init = xmlwriter_base_init,
-                        .instance_size = sizeof(GSTLALTriggerXMLWriter),
-                        .instance_init = xmlwriter_instance_init,
-                };
-                type = g_type_register_static(GST_TYPE_BASE_SINK, "lal_triggerxmlwriter", &info, 0);
-        }
+	if(!type) {
+		static const GTypeInfo info = {
+			.class_size = sizeof(GSTLALTriggerXMLWriterClass),
+			.class_init = xmlwriter_class_init,
+			.base_init = xmlwriter_base_init,
+			.instance_size = sizeof(GSTLALTriggerXMLWriter),
+			.instance_init = xmlwriter_instance_init,
+		};
+		type = g_type_register_static(GST_TYPE_BASE_SINK, "lal_triggerxmlwriter", &info, 0);
+	}
 
-        return type;
+	return type;
 }
