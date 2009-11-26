@@ -385,7 +385,7 @@ not_supported:
 
 static GstClockTime output_timestamp_from_offset(const GstAdder *adder, guint64 offset)
 {
-	return adder->segment.start + gst_util_uint64_scale_int(offset, GST_SECOND, adder->rate);
+	return adder->segment.start + gst_util_uint64_scale_int_round(offset, GST_SECOND, adder->rate);
 }
 
 
