@@ -1129,16 +1129,10 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			outbytes = GST_BUFFER_DATA(outbuf);
 
 			/*
-			 * buffer is empty until something goes in it
-			 */
-
-			GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
-
-			/*
 			 * if the input buffer isn't a gap and has non-zero
 			 * length copy it into the output buffer and mark
 			 * as non-empty, otherwise memset the new output
-			 * buffer to 0
+			 * buffer to 0 and flag it as a gap
 			 */
 
 			if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) && len) {
@@ -1150,6 +1144,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			} else {
 				GST_LOG_OBJECT(adder, "channel %p: zeroing %d bytes from data %p", data, GST_BUFFER_SIZE(outbuf), GST_BUFFER_DATA(inbuf));
 				memset(outbytes, 0, GST_BUFFER_SIZE(outbuf));
+				GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 			}
 		} else {
 			/*
