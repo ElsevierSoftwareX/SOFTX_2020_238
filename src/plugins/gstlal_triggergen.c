@@ -311,19 +311,6 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		goto eos;
 
 	/*
-	 * don't let time go backwards.  in principle we could be smart and
-	 * handle this, but the audiorate element can be used to correct
-	 * screwed up time series so there is no point in re-inventing its
-	 * capabilities here.
-	 */
-
-	if((element->next_input_offset != GST_BUFFER_OFFSET_NONE) && (earliest_input_offset < element->next_input_offset)) {
-		GST_ERROR_OBJECT(element, "detected time reversal in at least one input stream:  expected nothing earlier than offset %lu, found sample at offset %lu", element->next_input_offset, earliest_input_offset);
-		result = GST_FLOW_ERROR;
-		goto error;
-	}
-
-	/*
 	 * get buffers upto the desired end offset.
 	 */
 
@@ -385,11 +372,11 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		length = GST_BUFFER_OFFSET_END(snrbuf) > GST_BUFFER_OFFSET_END(chisqbuf) ? GST_BUFFER_OFFSET_END(chisqbuf) : GST_BUFFER_OFFSET_END(snrbuf);
 		if(GST_BUFFER_OFFSET(snrbuf) > GST_BUFFER_OFFSET(chisqbuf)) {
 			t0 = GST_BUFFER_TIMESTAMP(snrbuf);
-			chisqdata += (GST_BUFFER_OFFSET(snrbuf) - GST_BUFFER_OFFSET(chisqbuf)) * element->num_templates * sizeof(*chisqdata);
+			chisqdata += (GST_BUFFER_OFFSET(snrbuf) - GST_BUFFER_OFFSET(chisqbuf)) * element->num_templates;
 			length -= GST_BUFFER_OFFSET(snrbuf);
 		} else {
 			t0 = GST_BUFFER_TIMESTAMP(chisqbuf);
-			snrdata += (GST_BUFFER_OFFSET(chisqbuf) - GST_BUFFER_OFFSET(snrbuf)) * element->num_templates * sizeof(*snrdata);
+			snrdata += (GST_BUFFER_OFFSET(chisqbuf) - GST_BUFFER_OFFSET(snrbuf)) * element->num_templates;
 			length -= GST_BUFFER_OFFSET(chisqbuf);
 		}
 
@@ -474,8 +461,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 * Push buffer downstream
 	 */
 
-	GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(snrbuf) <= GST_BUFFER_TIMESTAMP(chisqbuf) ? GST_BUFFER_TIMESTAMP(snrbuf) : GST_BUFFER_TIMESTAMP(chisqbuf);
-	GST_BUFFER_DURATION(srcbuf) = (snr_t_end >= chisq_t_end ? snr_t_end : chisq_t_end) - GST_BUFFER_TIMESTAMP(srcbuf);
+	GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(snrbuf) >= GST_BUFFER_TIMESTAMP(chisqbuf) ? GST_BUFFER_TIMESTAMP(snrbuf) : GST_BUFFER_TIMESTAMP(chisqbuf);
+	GST_BUFFER_DURATION(srcbuf) = (snr_t_end <= chisq_t_end ? snr_t_end : chisq_t_end) - GST_BUFFER_TIMESTAMP(srcbuf);
 
 	if((element->next_input_offset == GST_BUFFER_OFFSET_NONE) || (element->next_output_timestamp != GST_BUFFER_TIMESTAMP(srcbuf)))
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
