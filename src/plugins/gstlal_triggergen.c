@@ -760,7 +760,7 @@ GType gstlal_triggergen_get_type(void)
 
 	if(!type) {
 		static const GTypeInfo info = {
-			class_size = sizeof(GSTLALTriggerGenClass),
+			.class_size = sizeof(GSTLALTriggerGenClass),
 			.class_init = gen_class_init,
 			.base_init = gen_base_init,
 			.instance_size = sizeof(GSTLALTriggerGen),
