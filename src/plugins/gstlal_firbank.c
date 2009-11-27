@@ -118,7 +118,7 @@ static unsigned fft_block_length(const GSTLALFIRBank *element)
 
 static int push_zeros(GSTLALFIRBank *element, unsigned samples)
 {
-	GstBuffer *zerobuf = gst_buffer_new_and_alloc(samples * fir_channels(element) * sizeof(double));
+	GstBuffer *zerobuf = gst_buffer_new_and_alloc(samples * sizeof(double));
 	if(!zerobuf) {
 		GST_DEBUG_OBJECT(element, "failure allocating zero-pad buffer");
 		return -1;
@@ -135,7 +135,7 @@ static int push_zeros(GSTLALFIRBank *element, unsigned samples)
  */
 
 
-static void set_metadata(GSTLALFIRBank *element, GstBuffer *buf, guint64 outsamples)
+static void set_metadata(GSTLALFIRBank *element, GstBuffer *buf, guint64 outsamples, gboolean gap)
 {
 	GST_BUFFER_SIZE(buf) = outsamples * fir_channels(element) * sizeof(double);
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
@@ -147,6 +147,10 @@ static void set_metadata(GSTLALFIRBank *element, GstBuffer *buf, guint64 outsamp
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
 	}
+	if(gap)
+		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
+	else
+		GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_GAP);
 }
 
 
@@ -317,7 +321,7 @@ static GstFlowReturn tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	 * set buffer metadata
 	 */
 
-	set_metadata(element, outbuf, output_length);
+	set_metadata(element, outbuf, output_length, FALSE);
 
 	/*
 	 * done
@@ -437,7 +441,7 @@ static GstFlowReturn fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	 * set buffer metadata
 	 */
 
-	set_metadata(element, outbuf, output_length);
+	set_metadata(element, outbuf, output_length, FALSE);
 
 	/*
 	 * done
@@ -587,12 +591,14 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		 * equal the number of FIR filters.
 		 */
 
+		g_mutex_lock(element->fir_matrix_lock);
 		for(n = 0; n < gst_caps_get_size(caps); n++) {
 			if(element->fir_matrix)
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", G_TYPE_INT, fir_channels(element), NULL);
 			else
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", GST_TYPE_INT_RANGE, 0, G_MAXINT, NULL);
 		}
+		g_mutex_unlock(element->fir_matrix_lock);
 		break;
 
 	case GST_PAD_UNKNOWN:
@@ -737,7 +743,7 @@ static gboolean stop(GstBaseTransform *trans)
 
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
-	gint length;
+	guint64 length;
 	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
 	GstFlowReturn result;
 
@@ -804,9 +810,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * same number of samples as the input
 		 */
 
-		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
-		set_metadata(element, outbuf, GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf));
+		set_metadata(element, outbuf, GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf), TRUE);
 		result = GST_FLOW_OK;
 	} else if(element->zeros_in_adapter + length < fir_length(element)) {
 		/*
@@ -860,10 +865,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * gap whose size matches the remainder of the input gap
 		 */
 
-		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 		GST_BUFFER_SIZE(outbuf) = length * fir_channels(element) * sizeof(double);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
-		set_metadata(element, outbuf, length);
+		set_metadata(element, outbuf, length, TRUE);
 	}
 
 	/*
