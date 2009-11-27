@@ -140,7 +140,7 @@ static int push_zeros(GSTLALAutoChiSq *element, unsigned samples)
  */
 
 
-static void set_metadata(GSTLALAutoChiSq *element, GstBuffer *buf, guint64 outsamples)
+static void set_metadata(GSTLALAutoChiSq *element, GstBuffer *buf, guint64 outsamples, gboolean gap)
 {
 	GST_BUFFER_SIZE(buf) = outsamples * autocorrelation_channels(element) * sizeof(double);
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
@@ -152,6 +152,10 @@ static void set_metadata(GSTLALAutoChiSq *element, GstBuffer *buf, guint64 outsa
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
 	}
+	if(gap)
+		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
+	else
+		GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_GAP);
 }
 
 
@@ -264,7 +268,7 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	 * set buffer metadata
 	 */
 
-	set_metadata(element, outbuf, output_length);
+	set_metadata(element, outbuf, output_length, FALSE);
 
 	/*
 	 * done
@@ -612,9 +616,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * same number of samples as the input.
 		 */
 
-		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
-		set_metadata(element, outbuf, GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf));
+		set_metadata(element, outbuf, GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf), TRUE);
 		result = GST_FLOW_OK;
 	} else if(element->zeros_in_adapter + length < autocorrelation_length(element)) {
 		/*
@@ -668,10 +671,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * gap whose size matches the remainder of the input gap
 		 */
 
-		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 		GST_BUFFER_SIZE(outbuf) = length * autocorrelation_channels(element) * sizeof(double);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
-		set_metadata(element, outbuf, length);
+		set_metadata(element, outbuf, length, TRUE);
 	}
 
 	/*
