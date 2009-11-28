@@ -245,8 +245,6 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	GstBuffer *snrbuf = NULL;
 	GstBuffer *chisqbuf = NULL;
 	GstBuffer *srcbuf = NULL;
-	guint64 snr_t_end;
-	guint64 chisq_t_end;
 	GstFlowReturn result;
 
 	/*
@@ -332,13 +330,6 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		}
 		goto eos;
 	}
-
-	/*
-	 * Compute end times
-	 */
-
-	snr_t_end = GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf);
-	chisq_t_end = GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf);
 
 	/*
 	 * Construct output buffer.  timestamp is earliest of the two input
@@ -461,8 +452,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 * Push buffer downstream
 	 */
 
-	GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(snrbuf) >= GST_BUFFER_TIMESTAMP(chisqbuf) ? GST_BUFFER_TIMESTAMP(snrbuf) : GST_BUFFER_TIMESTAMP(chisqbuf);
-	GST_BUFFER_DURATION(srcbuf) = (snr_t_end <= chisq_t_end ? snr_t_end : chisq_t_end) - GST_BUFFER_TIMESTAMP(srcbuf);
+	GST_BUFFER_TIMESTAMP(srcbuf) = MAX(GST_BUFFER_TIMESTAMP(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf));
+	GST_BUFFER_DURATION(srcbuf) = MIN(GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf)) - GST_BUFFER_TIMESTAMP(srcbuf);
 
 	if((element->next_input_offset == GST_BUFFER_OFFSET_NONE) || (element->next_output_timestamp != GST_BUFFER_TIMESTAMP(srcbuf)))
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
