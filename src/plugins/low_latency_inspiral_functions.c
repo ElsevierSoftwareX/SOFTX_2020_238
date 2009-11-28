@@ -466,7 +466,8 @@ static int create_template_from_sngl_inspiral(
 
 
   /*
-   * Compute the \Chi^2 factor.
+   * Compute the \chi^2 factor --- the square magnitude of the imginary
+   * part of the template
    */
 
   gsl_vector_set(chifacs,U_column,pow(gsl_blas_dnrm2(&col.vector),2.0));
