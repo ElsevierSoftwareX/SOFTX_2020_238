@@ -310,12 +310,12 @@ static GstFlowReturn tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	 */
 
 	gst_adapter_flush(element->adapter, output_length * sizeof(double));
-	if(output_length > available_length - element->zeros_in_adapter)
+	if(element->zeros_in_adapter > available_length - output_length)
 		/*
 		 * some trailing zeros have been flushed from the adapter
 		 */
 
-		element->zeros_in_adapter -= output_length - (available_length - element->zeros_in_adapter);
+		element->zeros_in_adapter = available_length - output_length;
 
 	/*
 	 * set buffer metadata
@@ -430,12 +430,12 @@ static GstFlowReturn fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	 */
 
 	gst_adapter_flush(element->adapter, output_length * sizeof(double));
-	if(output_length > available_length - element->zeros_in_adapter)
+	if(element->zeros_in_adapter > available_length - output_length)
 		/*
 		 * some trailing zeros have been flushed from the adapter
 		 */
 
-		element->zeros_in_adapter -= output_length - (available_length - element->zeros_in_adapter);
+		element->zeros_in_adapter = available_length - output_length;
 
 	/*
 	 * set buffer metadata

@@ -238,12 +238,20 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 
 		for(channel = 0; channel < channels; channel++) {
 			complex double *indata = input;
-			complex double snr = input[(autocorrelation_length(element) - 1 + element->latency) * channels];
+			complex double snr = input[((gint) autocorrelation_length(element) - 1 + element->latency) * channels];
 			/* multiplying snr by this makes it purely real */
 			complex double invsnrphase = cexp(-I*carg(snr));
 			double chisq = 0;
 			unsigned autocorrelation_sample;
 
+			/* FIXME:  this loop uses only the first half of
+			 * the autocorrelation vector;  this choice should
+			 * be made by the application through an
+			 * appropriate choice of vector and latency, not
+			 * done here */
+			/* FIXME:  this loop uses only the real component
+			 * of the autocorrelation;  is this correct?  can
+			 * the application choose? */
 			for (autocorrelation_sample = 0; autocorrelation_sample < (autocorrelation_length(element)+1)/2; autocorrelation_sample++, indata += channels)
 				chisq += pow(creal((GSL_COMPLEX_AS_COMPLEX(gsl_matrix_complex_get(element->autocorrelation_matrix, channel, autocorrelation_sample)) * snr - *indata) * invsnrphase), 2);
 
@@ -257,12 +265,12 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	 */
 
 	gst_adapter_flush(element->adapter, output_length * channels * sizeof(complex double));
-	if(output_length > available_length - element->zeros_in_adapter)
+	if(element->zeros_in_adapter > available_length - output_length)
 		/*
 		 * some trailing zeros have been flushed from the adapter
 		 */
 
-		element->zeros_in_adapter -= output_length - (available_length - element->zeros_in_adapter);
+		element->zeros_in_adapter = available_length - output_length;
 
 	/*
 	 * set buffer metadata
@@ -362,7 +370,7 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
 		return FALSE;
 	}
 
-	*size = width * channels / 8;
+	*size = width / 8 * channels;
 
 	return TRUE;
 }
@@ -459,7 +467,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		 */
 
 		*othersize = size / unit_size + get_available_samples(element);
-		if(*othersize > autocorrelation_length(element) - 1)
+		if(*othersize >= autocorrelation_length(element))
 			*othersize = (*othersize - (guint) autocorrelation_length(element) + 1) * other_unit_size;
 		else
 			*othersize = 0;
@@ -552,8 +560,8 @@ static gboolean stop(GstBaseTransform *trans)
 
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
-	gint length;
 	GSTLALAutoChiSq *element = GSTLAL_AUTOCHISQ(trans);
+	guint64 length;
 	GstFlowReturn result;
 
 	/*
@@ -840,7 +848,13 @@ static void gstlal_autochisq_base_init(gpointer gclass)
 	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
 	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
 
-	gst_element_class_set_details_simple(element_class, "Autocorrelation \\chi^{2}", "Filter/Audio", "Computes the chisquared time series from a filter's autocorrelation", "Mireia Crispin Ortuzar <mcrispin@caltech.edu>");
+	gst_element_class_set_details_simple(
+		element_class,
+		"Autocorrelation \\chi^{2}",
+		"Filter/Audio",
+		"Computes the chisquared time series from a filter's autocorrelation",
+		"Kipp Cannon <kipp.cannon@ligo.org>, Mireia Crispin Ortuzar <mcrispin@caltech.edu>, Chad Hanna <chad.hanna@ligo.org>"
+	);
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
