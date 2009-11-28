@@ -776,6 +776,8 @@ static gboolean xmlwriter_start(GstBaseSink *sink)
 	LALStatus status;
 	memset(&status, 0, sizeof(status));
 
+	g_assert(element->location != NULL);
+
 	element->xml = XLALOpenLIGOLwXMLFile(element->location);
 	LALBeginLIGOLwXMLTable(&status, element->xml, sngl_inspiral_table);
 
