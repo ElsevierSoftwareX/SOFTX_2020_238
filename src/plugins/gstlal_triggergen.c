@@ -359,7 +359,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		SnglInspiralTable *head = NULL;
 		guint nevents = 0;
 
-		length = GST_BUFFER_OFFSET_END(snrbuf) > GST_BUFFER_OFFSET_END(chisqbuf) ? GST_BUFFER_OFFSET_END(chisqbuf) : GST_BUFFER_OFFSET_END(snrbuf);
+		length = MIN(GST_BUFFER_OFFSET_END(snrbuf), GST_BUFFER_OFFSET_END(chisqbuf));
 		if(GST_BUFFER_OFFSET(snrbuf) > GST_BUFFER_OFFSET(chisqbuf)) {
 			t0 = GST_BUFFER_TIMESTAMP(snrbuf);
 			chisqdata += (GST_BUFFER_OFFSET(snrbuf) - GST_BUFFER_OFFSET(chisqbuf)) * element->num_templates;
