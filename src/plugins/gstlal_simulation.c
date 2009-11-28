@@ -982,11 +982,21 @@ static void class_init(gpointer class, gpointer class_data)
 
 	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
 
-	gobject_class->set_property = set_property;
-	gobject_class->get_property = get_property;
-	gobject_class->finalize = finalize;
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
-	g_object_class_install_property(gobject_class, ARG_XML_LOCATION, g_param_spec_string("xml-location", "XML Location", "Name of LIGO Light Weight XML file containing list(s) of software injections", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(
+		gobject_class,
+		ARG_XML_LOCATION,
+		g_param_spec_string(
+			"xml-location",
+			"XML Location",
+			"Name of LIGO Light Weight XML file containing list(s) of software injections",
+			NULL,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 }
 
 
@@ -1006,8 +1016,8 @@ static void instance_init(GTypeInstance * object, gpointer class)
 
 	/* configure sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_event_function(pad, sink_event);
-	gst_pad_set_chain_function(pad, chain);
+	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
+	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
 	gst_object_unref(pad);
 
 	/* retrieve (and ref) src pad */

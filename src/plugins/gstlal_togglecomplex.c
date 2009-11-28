@@ -299,7 +299,13 @@ static void gstlal_togglecomplex_base_init(gpointer gclass)
 	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
 	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
 
-	gst_element_class_set_details_simple(element_class, "Toggle Complex", "Filter/Audio", "Replace float caps with complex (with half the channels), complex with float (with twice the channels).", "Kipp Cannon <kipp.cannon@ligo.org>");
+	gst_element_class_set_details_simple(
+		element_class,
+		"Toggle Complex",
+		"Filter/Audio",
+		"Replace float caps with complex (with half the channels), complex with float (with twice the channels).",
+		"Kipp Cannon <kipp.cannon@ligo.org>"
+	);
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));

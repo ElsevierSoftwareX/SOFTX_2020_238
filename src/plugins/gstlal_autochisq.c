@@ -862,11 +862,7 @@ static void gstlal_autochisq_base_init(gpointer gclass)
 
 static void gstlal_autochisq_class_init(GSTLALAutoChiSqClass *klass)
 {
-	GObjectClass *gobject_class;
-	GstBaseTransformClass *base_transform_class;
-
-	gobject_class = (GObjectClass *) klass;
-	base_transform_class = (GstBaseTransformClass *) klass;
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);

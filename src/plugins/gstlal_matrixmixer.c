@@ -634,10 +634,10 @@ static void gstlal_matrixmixer_base_init(gpointer gclass)
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 
-	transform_class->get_unit_size = get_unit_size;
-	transform_class->set_caps = set_caps;
-	transform_class->transform = transform;
-	transform_class->transform_caps = transform_caps;
+	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
+	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 }
 
 
@@ -648,15 +648,11 @@ static void gstlal_matrixmixer_base_init(gpointer gclass)
 
 static void gstlal_matrixmixer_class_init(GSTLALMatrixMixerClass *klass)
 {
-	GObjectClass *gobject_class;
-	GstBaseTransformClass *base_transform_class;
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
-	gobject_class = (GObjectClass *) klass;
-	base_transform_class = (GstBaseTransformClass *) klass;
-
-	gobject_class->set_property = set_property;
-	gobject_class->get_property = get_property;
-	gobject_class->finalize = finalize;
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	g_object_class_install_property(
 		gobject_class,

@@ -1006,9 +1006,9 @@ static void class_init(gpointer klass, gpointer class_data)
 
 	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
 
-	gobject_class->finalize = finalize;
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
-	gstelement_class->change_state = change_state;
+	gstelement_class->change_state = GST_DEBUG_FUNCPTR(change_state);
 }
 
 
@@ -1026,29 +1026,29 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
 	element->collect = gst_collect_pads_new();
-	gst_collect_pads_set_function(element->collect, collected, element);
+	gst_collect_pads_set_function(element->collect, GST_DEBUG_FUNCPTR(collected), element);
 
 	/* configure (and ref) matrix pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "matrix");
-	gst_pad_set_chain_function(pad, chain_matrix);
+	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain_matrix));
 	element->matrixpad = pad;
 
 	/* configure (and ref) chifacs pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "chifacs");
-	gst_pad_set_chain_function(pad, chain_chifacs);
+	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain_chifacs));
 	element->chifacspad = pad;
 
 	/* configure (and ref) orthogonal SNR sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "orthosnr");
-	gst_pad_set_getcaps_function(pad, getcaps_orthosnr);
-	gst_pad_set_setcaps_function(pad, setcaps_orthosnr);
+	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps_orthosnr));
+	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(setcaps_orthosnr));
 	element->orthosnrcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->orthosnrcollectdata));
 	element->orthosnrpad = pad;
 
 	/* configure (and ref) SNR sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "snr");
-	gst_pad_set_getcaps_function(pad, getcaps_snr);
-	gst_pad_set_setcaps_function(pad, setcaps_snr);
+	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps_snr));
+	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(setcaps_snr));
 	element->snrcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->snrcollectdata));
 	element->snrpad = pad;
 

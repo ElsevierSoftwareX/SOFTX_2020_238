@@ -164,14 +164,19 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
 {
 	GstStructure *str;
 	gint channels;
+	gint width;
 
 	str = gst_caps_get_structure(caps, 0);
 	if(!gst_structure_get_int(str, "channels", &channels)) {
 		GST_DEBUG_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
 		return FALSE;
 	}
+	if(!gst_structure_get_int(str, "width", &width)) {
+		GST_DEBUG_OBJECT(trans, "unable to parse width from %" GST_PTR_FORMAT, caps);
+		return FALSE;
+	}
 
-	*size = sizeof(double) * channels;
+	*size = width / 8 * channels;
 
 	return TRUE;
 }
@@ -248,6 +253,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	if(!element->weights)
 		element->channels = channels;
 	else if(channels != element->channels) {
+		/* FIXME:  perhaps emit a "channel-count-changed" signal? */
 		GST_DEBUG_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, element->channels, incaps);
 		return FALSE;
 	}
@@ -404,10 +410,10 @@ static void gstlal_sumsquares_base_init(gpointer gclass)
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 
-	transform_class->get_unit_size = get_unit_size;
-	transform_class->set_caps = set_caps;
-	transform_class->transform = transform;
-	transform_class->transform_caps = transform_caps;
+	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
+	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 }
 
 
@@ -418,15 +424,11 @@ static void gstlal_sumsquares_base_init(gpointer gclass)
 
 static void gstlal_sumsquares_class_init(GSTLALSumSquaresClass *klass)
 {
-	GObjectClass *gobject_class;
-	GstBaseTransformClass *base_transform_class;
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
-	gobject_class = (GObjectClass *) klass;
-	base_transform_class = (GstBaseTransformClass *) klass;
-
-	gobject_class->set_property = set_property;
-	gobject_class->get_property = get_property;
-	gobject_class->finalize = finalize;
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	g_object_class_install_property(
 		gobject_class,

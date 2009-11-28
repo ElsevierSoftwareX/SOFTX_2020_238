@@ -1205,7 +1205,13 @@ static void gstlal_whiten_base_init(gpointer gclass)
 	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
 	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
 
-	gst_element_class_set_details_simple(element_class, "Whiten", "Filter/Audio", "A PSD estimator and time series whitener.", "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>, Drew Keppel <dkeppel@ligo.caltech.edu>");
+	gst_element_class_set_details_simple(
+		element_class,
+		"Whiten",
+		"Filter/Audio",
+		"A PSD estimator and time series whitener.",
+		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>, Drew Keppel <dkeppel@ligo.caltech.edu>"
+	);
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
