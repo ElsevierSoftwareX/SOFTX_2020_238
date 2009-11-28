@@ -408,7 +408,7 @@ def mkoggmux(pipeline, src):
 	return elem
 
 
-def mkogmvideosink(pipeline, src, filename):
+def mkogmvideosink(pipeline, src, filename, verbose = False):
 	# FIXME:  can't get oggmux to work, seems to get confused by a
 	# spurious EOS from the framesrc on startup.
 	src = mkcolorspace(pipeline, src)
@@ -422,6 +422,9 @@ def mkogmvideosink(pipeline, src, filename):
 	pipeline.add(elem)
 	src.link(elem)
 	src = elem
+
+	if verbose:
+		src = mkprogressreport(pipeline, src, filename)
 
 	mkfilesink(pipeline, src, filename)
 	return
