@@ -266,9 +266,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		}
 		element->segment = *segment;
 		gst_segment_free(segment);
-		element->next_input_offset = GST_BUFFER_OFFSET_NONE;
 		element->next_output_offset = 0;
-		element->next_output_timestamp = element->segment.start;
+		element->next_output_timestamp = GST_CLOCK_TIME_NONE;
 
 		/*
 		 * transmit the new-segment event downstream
@@ -455,10 +454,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	GST_BUFFER_TIMESTAMP(srcbuf) = MAX(GST_BUFFER_TIMESTAMP(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf));
 	GST_BUFFER_DURATION(srcbuf) = MIN(GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf)) - GST_BUFFER_TIMESTAMP(srcbuf);
 
-	if((element->next_input_offset == GST_BUFFER_OFFSET_NONE) || (element->next_output_timestamp != GST_BUFFER_TIMESTAMP(srcbuf)))
+	if(element->next_output_timestamp != GST_BUFFER_TIMESTAMP(srcbuf))
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
-
-	element->next_input_offset = GST_BUFFER_OFFSET_END(snrbuf) <= GST_BUFFER_OFFSET_END(chisqbuf) ? GST_BUFFER_OFFSET_END(snrbuf) : GST_BUFFER_OFFSET_END(chisqbuf);
 	element->next_output_timestamp = GST_BUFFER_TIMESTAMP(srcbuf) + GST_BUFFER_DURATION(srcbuf);
 
 	gst_buffer_unref(snrbuf);
@@ -579,8 +576,8 @@ static GstStateChangeReturn gen_change_state(GstElement *element, GstStateChange
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		triggergen->segment_pending = TRUE;
 		gst_segment_init(&triggergen->segment, GST_FORMAT_UNDEFINED);
-		triggergen->next_input_offset = GST_BUFFER_OFFSET_NONE;
 		triggergen->next_output_offset = GST_BUFFER_OFFSET_NONE;
+		triggergen->next_output_timestamp = GST_CLOCK_TIME_NONE;
 		gst_collect_pads_start(triggergen->collect);
 		break;
 
