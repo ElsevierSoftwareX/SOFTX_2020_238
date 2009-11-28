@@ -339,12 +339,6 @@ def mknxydumpsink(pipeline, src, filename, segment = None):
 	#	pass
 	pipeline.add(elem)
 	src.link(elem)
-	# FIXME:  add bz2enc element from plugins-bad to compress text
-	# streams.
-	#src = elem
-	#elem = gst.element_factory_make("bz2enc")
-	#pipeline.add(elem)
-	#src.link(elem)
 	mkfilesink(pipeline, elem, filename)
 
 
