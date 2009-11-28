@@ -84,9 +84,10 @@ class Bank(object):
 
 			if verbose:
 				print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
+				print >>sys.stderr, "\tsum-of-squares expectation value is %g" % self.chifacs.mean()
 
-	def __init__(self, template_bank_filename, psd, bank_fragments, gate_threshold, snr_threshold, tolerance, autocorrelation_length = None, logname = None, verbose = False):
-		self.template_bank_filename = template_bank_filename	# FIXME:  remove when not needed by chisq element
+	def __init__(self, template_bank_filename, psd, bank_fragments, gate_threshold, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
+		self.template_bank_filename = template_bank_filename	# FIXME:  remove when not needed by trigger generator element
 		self.bank_fragments = bank_fragments
 		self.filter_length = max(fragment.end for fragment in bank_fragments)
 		self.gate_threshold = gate_threshold
@@ -94,10 +95,8 @@ class Bank(object):
 		self.logname = logname
 
 		sample_rate = max(bank_fragment.rate for bank_fragment in bank_fragments)
-		template_duration = 2**math.ceil(math.log(self.filter_length * sample_rate, 2)) / sample_rate	# round up to power of 2 count of samples
-		flow = 40.0	# Hz
 
-		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName), psd, flow, sample_rate, template_duration, autocorrelation_length = autocorrelation_length, verbose = verbose)
+		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName), psd, flow, sample_rate, self.filter_length, autocorrelation_length = autocorrelation_length, verbose = verbose)
 
 		n = template_bank.shape[1]	# number of samples in template
 		for i, bank_fragment in enumerate(self.bank_fragments):
@@ -108,13 +107,14 @@ class Bank(object):
 			# template end;  subtract from n to convert to
 			# start and end index;  end:start is the slice to
 			# extract (argh!  Chad!)
-			start = n - int(bank_fragment.start * sample_rate)
-			end = n - int(bank_fragment.end * sample_rate)
-			stride = int(sample_rate / bank_fragment.rate)
+			start = n - int(round(bank_fragment.start * sample_rate))
+			end = n - int(round(bank_fragment.end * sample_rate))
+			stride = int(round(sample_rate / bank_fragment.rate))
 
 			# extract every stride-th sample, multiply by
-			# stride to maintain inner product normalization
-			bank_fragment.set_template_bank(template_bank[:, end:start:stride] * stride, tolerance, verbose = verbose)
+			# \sqrt{stride} to maintain inner product
+			# normalization
+			bank_fragment.set_template_bank(template_bank[:, end:start:stride] * math.sqrt(stride), tolerance, verbose = verbose)
 
 	def get_rates(self):
 		return set(bank_fragment.rate for bank_fragment in self.bank_fragments)
@@ -204,6 +204,8 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, progress_repor
 			control_snksrc[0],
 			control_snksrc[1]
 		).link(snr)
+
+	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1], max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000), "control_%s.dump" % bank.logname)
 
 	snr = pipeparts.mktogglecomplex(pipeline, pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(bank.get_rates())))
 
@@ -426,7 +428,8 @@ banks = [
 		gate_threshold = 2.0,
 		snr_threshold = 5.5,
 		tolerance = 0.97,
-		autocorrelation_length = 201,
+		flow = 40.0,	# Hz
+		autocorrelation_length = 201,	# samples
 		logname = "bank%d" % n,
 		verbose = options.verbose
 	) for n, template_bank_filename in enumerate(options.template_bank)

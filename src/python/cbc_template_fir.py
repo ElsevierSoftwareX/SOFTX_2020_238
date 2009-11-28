@@ -70,7 +70,7 @@ def interpolate_psd(psd, deltaF):
 
 
 def generate_template(template_bank_row, f_low, sample_rate, duration, order = 7, end_freq = "light_ring"):
-	z = numpy.empty(int(sample_rate * duration), "cdouble")
+	z = numpy.empty(int(round(sample_rate * duration)), "cdouble")
 
 	spawaveform.waveform(template_bank_row.mass1, template_bank_row.mass2, order, 1.0 / duration, 1.0 / sample_rate, f_low, spawaveform.ffinal(template_bank_row.mass1, template_bank_row.mass2, end_freq), z)
 
@@ -85,16 +85,19 @@ def generate_template(template_bank_row, f_low, sample_rate, duration, order = 7
 
 
 def generate_templates(template_table, psd, f_low, sample_rate, duration, autocorrelation_length = None, verbose = False):
-	length = int(sample_rate * duration)
+	length = int(round(duration * sample_rate))
 
-	psd = interpolate_psd(psd, 1.0 / duration)
+	working_duration = 2**math.ceil(math.log((duration + 32.0) * sample_rate, 2)) / sample_rate	# add 32 seconds for PSD ringing, round up to power of 2 count of samples
+	working_length = int(round(working_duration * sample_rate))
 
-	revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(length, 1)
+	psd = interpolate_psd(psd, 1.0 / working_duration)
+
+	revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1)
 	tseries = laltypes.COMPLEX16TimeSeries(
-		data = numpy.zeros((length,), dtype = "cdouble")
+		data = numpy.zeros((working_length,), dtype = "cdouble")
 	)
 
-	template_bank = numpy.zeros((2 * len(template_table), int(sample_rate * duration)), dtype = "double")
+	template_bank = numpy.zeros((2 * len(template_table), length), dtype = "double")
 	if autocorrelation_length is not None:
 		if not (autocorrelation_length % 2):
 			raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
@@ -106,21 +109,50 @@ def generate_templates(template_table, psd, f_low, sample_rate, duration, autoco
 		if verbose:
 			print >>sys.stderr, "generating template %d/%d:  m1 = %g, m2 = %g" % (i + 1, len(template_table), row.mass1, row.mass2)
 
-		fseries = generate_template(row, f_low, sample_rate, duration)
+		#
+		# generate "cosine" component of frequency-domain template
+		#
+
+		fseries = generate_template(row, f_low, sample_rate, working_duration)
+
+		#
+		# whiten and add quadrature phase ("sine" component)
+		#
 
 		lalfft.XLALWhitenCOMPLEX16FrequencySeries(fseries, psd)
+		fseries = templates.add_quadrature_phase(fseries, working_length)
 
-		fseries = templates.add_quadrature_phase(fseries, length)
+		#
+		# compute time-domain autocorrelation function
+		#
 
 		if autocorrelation_bank is not None:
 			autocorrelation = templates.normalized_autocorrelation(fseries, revplan).data
 			autocorrelation_bank[i, :] = numpy.concatenate((autocorrelation[-(autocorrelation_length // 2):], autocorrelation[:(autocorrelation_length // 2  + 1)]))
 
+		#
+		# transform template to time domain
+		#
+
 		lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, fseries, revplan)
 
-		data = tseries.data
+		#
+		# extract the portion to be used for filtering
+		#
+
+		data = tseries.data[-length:]
+
+		#
+		# normalize so that inner product of template with itself
+		# is 2
+		#
 
 		data *= cmath.sqrt(2 / numpy.dot(data, numpy.conj(data)))
+
+		#
+		# copy real and imaginary parts into adjacent (real-valued)
+		# rows of template bank
+		#
 
 		template_bank[(2 * i + 0), :] = data.real
 		template_bank[(2 * i + 1), :] = data.imag
