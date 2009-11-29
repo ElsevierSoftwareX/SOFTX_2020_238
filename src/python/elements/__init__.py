@@ -31,9 +31,15 @@ __date__ = "FIXME"
 
 __all__ = [
 	"channelgram",
+	"check_timestamps",
 	"histogram",
 	"spectrum"
 ]
+
+
+#
+# GstCaps description of matplotlib's agg backend's pixel format
+#
 
 
 matplotlibcaps = (
