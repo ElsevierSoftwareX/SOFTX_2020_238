@@ -86,6 +86,14 @@
 
 
 /*
+ * parameters
+ */
+
+
+#define CHI2_USES_REAL_ONLY FALSE
+
+
+/*
  * ============================================================================
  *
  *                                 Utilities
@@ -182,21 +190,14 @@ static gsl_vector *compute_autocorrelation_norm(GSTLALAutoChiSq *element)
 
 	for(channel = 0; channel < autocorrelation_channels(element); channel++) {
 		gsl_vector_complex_view row = gsl_matrix_complex_row(element->autocorrelation_matrix, channel);
+#if CHI2_USES_REAL_ONLY
+		g_assert_not_reached();	/* this case needs to be implemented */
+#else
 		gsl_vector_set(norm, channel, autocorrelation_length(element) - pow(gsl_blas_dznrm2(&row.vector), 2));
+#endif
 	}
 
 	return norm;
-}
-
-
-/*
- * convert gsl_complex to complex double
- */
-
-
-static complex double GSL_COMPLEX_AS_COMPLEX(gsl_complex z)
-{
-	return GSL_REAL(z) + I * GSL_IMAG(z);
 }
 
 
@@ -208,54 +209,101 @@ static complex double GSL_COMPLEX_AS_COMPLEX(gsl_complex z)
 static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 {
 	unsigned channels = autocorrelation_channels(element);
-	unsigned output_sample;
 	unsigned available_length;
 	unsigned output_length;
-	complex double *input;
+	const complex double *input;
 	double *output;
+	double *output_end;
 
 	/*
-	 * how many samples can we construct from the contents of the
-	 * adapter?  the +1 is because when there is 1 correlation-length
-	 * of data in the adapter then we can produce 1 output sample, not
-	 * 0.
+	 * do we have enough data to do anything?
 	 */
 
 	available_length = get_available_samples(element);
 	if(available_length < autocorrelation_length(element))
 		return GST_BASE_TRANSFORM_FLOW_DROPPED;
-	output_length = available_length - autocorrelation_length(element) + 1;
 
 	/*
-	 * compute output samples
+	 * initialize pointers.  the +1 in output_length is because when
+	 * there is 1 correlation-length of data in the adapter then we can
+	 * produce 1 output sample, not 0.
 	 */
 
 	input = (complex double *) gst_adapter_peek(element->adapter, available_length * channels * sizeof(complex double));
 	output = (double *) GST_BUFFER_DATA(outbuf);
+	output_length = available_length - autocorrelation_length(element) + 1;
+	output_end = output + output_length * channels;
 
-	for(output_sample = 0; output_sample < output_length; output_sample++) {
+	/*
+	 * compute output samples.  note:  we assume that gsl_complex can
+	 * be aliased to complex double.  I think it says somewhere in the
+	 * documentation that this is true.
+	 */
+
+	/* check the autocorrelation matrix' packing */
+	g_assert(element->autocorrelation_matrix->tda == autocorrelation_length(element));
+
+	while(output < output_end) {
+		const complex double *autocorrelation = (complex double *) gsl_matrix_complex_const_ptr(element->autocorrelation_matrix, 0, 0);
 		unsigned channel;
 
 		for(channel = 0; channel < channels; channel++) {
-			complex double *indata = input;
-			complex double snr = input[((gint) autocorrelation_length(element) - 1 + element->latency) * channels];
-			/* multiplying snr by this makes it purely real */
-			complex double invsnrphase = cexp(-I*carg(snr));
-			double chisq = 0;
-			unsigned autocorrelation_sample;
+			/*
+			 * start of input data block to be used for this
+			 * output sample
+			 */
 
-			/* FIXME:  this loop uses only the first half of
-			 * the autocorrelation vector;  this choice should
-			 * be made by the application through an
-			 * appropriate choice of vector and latency, not
-			 * done here */
-			/* FIXME:  this loop uses only the real component
-			 * of the autocorrelation;  is this correct?  can
-			 * the application choose? */
-			for (autocorrelation_sample = 0; autocorrelation_sample < (autocorrelation_length(element)+1)/2; autocorrelation_sample++, indata += channels)
-				chisq += pow(creal((GSL_COMPLEX_AS_COMPLEX(gsl_matrix_complex_get(element->autocorrelation_matrix, channel, autocorrelation_sample)) * snr - *indata) * invsnrphase), 2);
+			const complex double *indata = input;
+
+			/*
+			 * the input sample by which the autocorrelation
+			 * funcion will be scaled
+			 */
+
+			complex double snr = input[((gint) autocorrelation_length(element) - 1 + element->latency) * channels];
+
+			/*
+			 * multiplying snr by this makes it real
+			 */
+
+			complex double invsnrphase = cexp(-I*carg(snr));
+
+			/*
+			 * end of this channel's row in the autocorrelation
+			 * matrix
+			 */
+
+			const complex double *autocorrelation_end = autocorrelation + autocorrelation_length(element);
+
+			/*
+			 * \chi^{2} sum
+			 */
+
+			double chisq;
+
+			/*
+			 * compute \sum_{i} (A_{i} * \rho_{0} - \rho_{i})^{2}
+			 */
+
+			for(chisq = 0; autocorrelation < autocorrelation_end; autocorrelation++, indata += channels) {
+				complex double z = (*autocorrelation * snr - *indata) * invsnrphase;
+#if CHI2_USES_REAL_ONLY
+				chisq += pow(creal(z), 2);
+#else
+				chisq += pow(creal(z), 2) + pow(cimag(z), 2);
+#endif
+			}
+
+			/*
+			 * record \chi^{2} sum, advance to next output sample
+			 */
 
 			*(output++) = chisq / gsl_vector_get(element->autocorrelation_norm, channel);
+
+			/*
+			 * advance to next input sample
+			 */
+
 			input++;
 		}
 	}
