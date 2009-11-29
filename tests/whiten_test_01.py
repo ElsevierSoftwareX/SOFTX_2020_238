@@ -11,7 +11,7 @@ import numpy
 import sys
 from gstlal import pipeparts
 import test_common
-from check_timestamps import mkchecktimestamps
+from gstlal.elements.check_timestamps import mkchecktimestamps
 
 
 #
