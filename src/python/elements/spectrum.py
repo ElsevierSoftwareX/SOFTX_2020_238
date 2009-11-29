@@ -231,3 +231,13 @@ class Spectrum(gst.BaseTransform):
 
 
 gobject.type_register(Spectrum)
+
+
+def mkspectrumplot(pipeline, src, pad = None):
+	elem = Spectrum()
+	pipeline.add(elem)
+	if pad is not None:
+		src.link_pads(pad, elem, "sink")
+	else:
+		src.link(elem)
+	return elem

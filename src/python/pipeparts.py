@@ -34,7 +34,10 @@ import gst
 
 
 import pipeio
-from elements import channelgram, histogram, spectrum
+from elements.channelgram import mkchannelgram
+from elements.check_timestamps import mkchecktimestamps
+from elements.histogram import mkhistogram
+from elements.spectrum import mkspectrumplot
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -359,30 +362,6 @@ def mktriggerxmlwritersink(pipeline, src, filename):
 	elem.set_property("preroll-queue-len", 1)
 	pipeline.add(elem)
 	src.link(elem)
-
-
-def mkchannelgram(pipeline, src):
-	elem = channelgram.Channelgram()
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
-
-
-def mkhistogram(pipeline, src):
-	elem = histogram.Histogram()
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
-
-
-def mkspectrumplot(pipeline, src, pad = None):
-	elem = spectrum.Spectrum()
-	pipeline.add(elem)
-	if pad is not None:
-		src.link_pads(pad, elem, "sink")
-	else:
-		src.link(elem)
-	return elem
 
 
 def mkcolorspace(pipeline, src):

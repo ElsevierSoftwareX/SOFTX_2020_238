@@ -376,3 +376,10 @@ class Channelgram(gst.BaseTransform):
 
 
 gobject.type_register(Channelgram)
+
+
+def mkchannelgram(pipeline, src):
+	elem = Channelgram()
+	pipeline.add(elem)
+	src.link(elem)
+	return elem

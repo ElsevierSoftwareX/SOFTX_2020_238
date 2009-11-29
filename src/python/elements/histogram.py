@@ -309,3 +309,10 @@ class Histogram(gst.BaseTransform):
 
 
 gobject.type_register(Histogram)
+
+
+def mkhistogram(pipeline, src):
+	elem = Histogram()
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
