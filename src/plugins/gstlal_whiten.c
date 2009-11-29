@@ -887,7 +887,12 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 
 			g_free(units);
 			element->sample_units = sample_units;
-		}
+		} else
+			/*
+			 * re-use the event
+			 */
+
+			gst_event_ref(event);
 
 		/*
 		 * gst_pad_push_event() consumes the reference count
