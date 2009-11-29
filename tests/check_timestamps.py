@@ -140,17 +140,17 @@ class CheckTimeStamps(gst.BaseTransform):
 		#
 
 		if buf.timestamp != self.next_timestamp:
-			print >>sys.stderr, "%s: got timestamp %s expected %s" % (self.name, printable_timestamp(buf.timestamp), printable_timestamp(self.next_timestamp))
+			print >>sys.stderr, "%s: got timestamp %s expected %s" % (self.get_property("name"), printable_timestamp(buf.timestamp), printable_timestamp(self.next_timestamp))
 		if buf.offset != self.next_offset:
-			print >>sys.stderr, "%s: got offset %d expected %d" % (self.name, buf.offset, self.next_offset)
+			print >>sys.stderr, "%s: got offset %d expected %d" % (self.get_property("name"), buf.offset, self.next_offset)
 
 		expected_offset = self.offset0 + (buf.timestamp - self.t0) * self.rate // gst.SECOND
 		if buf.offset != expected_offset:
-			print >>sys.stderr, "%s: timestamp/offset mismatch:  buffer's timestamp %s corresponds to offset %d, got %d" % (self.name, printable_timestamp(buf.timestamp), expected_offset, buf.offset)
+			print >>sys.stderr, "%s: timestamp/offset mismatch:  buffer's timestamp %s corresponds to offset %d, got %d" % (self.get_property("name"), printable_timestamp(buf.timestamp), expected_offset, buf.offset)
 
 		length = buf.offset_end - buf.offset
 		if buf.size != length * (self.width // 8 * self.channels):
-			print >>sys.stderr, "%s: buffer length %d corresponds to size %d, got %d" % (self.name, length, length * (self.width // 8 * self.channels), buf.size)
+			print >>sys.stderr, "%s: buffer length %d corresponds to size %d, got %d" % (self.get_property("name"), length, length * (self.width // 8 * self.channels), buf.size)
 
 		#
 		# reset for next buffer
@@ -168,7 +168,7 @@ gobject.type_register(CheckTimeStamps)
 def mkchecktimestamps(pipeline, src, name = None):
 	elem = CheckTimeStamps()
 	if name is not None:
-		elem.set_propert("name", name)
+		elem.set_property("name", name)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
