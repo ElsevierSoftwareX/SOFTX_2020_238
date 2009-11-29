@@ -832,25 +832,28 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * available_samples is 0
 		 */
 
-		GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
-		guint64 available_samples = get_available_samples(element);
+		guint64 non_zero_samples = get_available_samples(element) - element->zeros_in_adapter;
 
 		/*
-		 * push (FIR-length - 1) 0s into adapter
+		 * push (FIR-length - zeros-in-adapter - 1) 0s into adapter
+		 * to allow previous non-zero data to be finished off.
+		 * push_zeros() modifies zeros_in_adapter so update length
+		 * first
 		 */
 
-		push_zeros(element, fir_length(element) - 1);
-		length -= fir_length(element) - 1;
+		length -= fir_length(element) - element->zeros_in_adapter - 1;
+		push_zeros(element, fir_length(element) - element->zeros_in_adapter - 1);
 
 		/*
 		 * run normal filter code to finish off adapter's contents,
 		 * and manually push buffer downstream.
 		 */
 
-		if(available_samples) {
+		if(non_zero_samples) {
+			GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
 			GstBuffer *buf;
 
-			result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, available_samples * fir_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
+			result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, non_zero_samples * fir_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
 			if(result != GST_FLOW_OK)
 				goto done;
 			result = filter(element, buf);
