@@ -144,9 +144,9 @@ class CheckTimeStamps(gst.BaseTransform):
 		if buf.offset != self.next_offset:
 			print >>sys.stderr, "%s: got offset %d expected %d" % (self.get_property("name"), buf.offset, self.next_offset)
 
-		expected_offset = self.offset0 + (buf.timestamp - self.t0) * self.rate // gst.SECOND
+		expected_offset = self.offset0 + int(round((buf.timestamp - self.t0) * float(self.rate) / gst.SECOND))
 		if buf.offset != expected_offset:
-			print >>sys.stderr, "%s: timestamp/offset mismatch:  buffer's timestamp %s corresponds to offset %d, got %d" % (self.get_property("name"), printable_timestamp(buf.timestamp), expected_offset, buf.offset)
+			print >>sys.stderr, "%s: timestamp/offset mismatch:  at a rate of %d samples/s buffer's timestamp %s corresponds to offset %d, got %d" % (self.get_property("name"), self.rate, printable_timestamp(buf.timestamp), expected_offset, buf.offset)
 
 		length = buf.offset_end - buf.offset
 		if buf.size != length * (self.width // 8 * self.channels):
