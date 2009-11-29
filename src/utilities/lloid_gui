@@ -189,7 +189,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, progress_repor
 
 	if control_snksrc is None:
 		control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), progress_report = progress_report, suffix = logname)
-		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "sumsquares_%s.txt" % logname)
+	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1], max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000), "control_%s.dump" % bank.logname)
 
 	snr = gst.element_factory_make("lal_adder")
 	snr.set_property("sync", True)
@@ -204,8 +204,6 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, progress_repor
 			control_snksrc[0],
 			control_snksrc[1]
 		).link(snr)
-
-	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1], max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000), "control_%s.dump" % bank.logname)
 
 	snr = pipeparts.mktogglecomplex(pipeline, pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(bank.get_rates())))
 
