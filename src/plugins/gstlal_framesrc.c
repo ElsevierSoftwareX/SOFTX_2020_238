@@ -586,7 +586,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	case LAL_I4_TYPE_CODE: {
 		INT4TimeSeries *chunk;
 		if(gst_base_src_get_blocksize(basesrc) % sizeof(*chunk->data->data)) {
-			GST_ERROR_OBJECT(element, "block size not an integer multiple of the sample size");
+			GST_ERROR_OBJECT(element, "block size (%u) not an integer multiple of the sample size (%u)", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
 			return GST_FLOW_ERROR;
 		}
 		chunk = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data));
@@ -601,9 +601,10 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			XLALDestroyINT4TimeSeries(chunk);
 			return result;
 		}
-		if(basesrc->offset != GST_BUFFER_OFFSET(*buffer)) {
+		if(basesrc->offset != GST_BUFFER_OFFSET(*buffer) || chunk->data->length * sizeof(*chunk->data->data) != GST_BUFFER_SIZE(*buffer)) {
 			/* FIXME:  didn't get the buffer offset we asked
 			 * for, do something about it */
+			GST_FIXME_OBJECT(element, "gst_pad_alloc_buffer() didn't give us the offset we asked for.  do something about it, but what?");
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
@@ -619,7 +620,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	case LAL_S_TYPE_CODE: {
 		REAL4TimeSeries *chunk;
 		if(gst_base_src_get_blocksize(basesrc) % sizeof(*chunk->data->data)) {
-			GST_ERROR_OBJECT(element, "block size not an integer multiple of the sample size");
+			GST_ERROR_OBJECT(element, "block size (%u) not an integer multiple of the sample size (%u)", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
 			return GST_FLOW_ERROR;
 		}
 		chunk = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data));
@@ -634,9 +635,10 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			XLALDestroyREAL4TimeSeries(chunk);
 			return result;
 		}
-		if(basesrc->offset != GST_BUFFER_OFFSET(*buffer)) {
+		if(basesrc->offset != GST_BUFFER_OFFSET(*buffer) || chunk->data->length * sizeof(*chunk->data->data) != GST_BUFFER_SIZE(*buffer)) {
 			/* FIXME:  didn't get the buffer offset we asked
 			 * for, do something about it */
+			GST_FIXME_OBJECT(element, "gst_pad_alloc_buffer() didn't give us the offset we asked for.  do something about it, but what?");
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
@@ -652,7 +654,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	case LAL_D_TYPE_CODE: {
 		REAL8TimeSeries *chunk;
 		if(gst_base_src_get_blocksize(basesrc) % sizeof(*chunk->data->data)) {
-			GST_ERROR_OBJECT(element, "block size not an integer multiple of the sample size");
+			GST_ERROR_OBJECT(element, "block size (%u) not an integer multiple of the sample size (%u)", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
 			return GST_FLOW_ERROR;
 		}
 		chunk = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data));
@@ -667,9 +669,10 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			XLALDestroyREAL8TimeSeries(chunk);
 			return result;
 		}
-		if(basesrc->offset != GST_BUFFER_OFFSET(*buffer)) {
+		if(basesrc->offset != GST_BUFFER_OFFSET(*buffer) || chunk->data->length * sizeof(*chunk->data->data) != GST_BUFFER_SIZE(*buffer)) {
 			/* FIXME:  didn't get the buffer offset we asked
 			 * for, do something about it */
+			GST_FIXME_OBJECT(element, "gst_pad_alloc_buffer() didn't give us the offset we asked for.  do something about it, but what?");
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
@@ -730,7 +733,7 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 		XLALClearErrno();
 		/* FIXME:  can't return error or gstreamer stops working (!?) */
 		/*return FALSE;*/
-		GST_ERROR_OBJECT(element, "ignoring previous XLALFrSeek() failure (FIXME)");
+		GST_FIXME_OBJECT(element, "ignoring previous XLALFrSeek() failure (FIXME)");
 	}
 
 	/*
