@@ -80,10 +80,19 @@ class ArrayQueue(list):
 		def __len__(self):
 			return self.data.shape[0]
 
+		def flush(self, n):
+			if n > self.data.shape[0]:
+				n = self.data.shape[0]
+			self.data = self.data[n:,:]
+			self.offset += n
+			return n
+
+		def get(self, n):
+			return self.data[:n,:]
+
 		def extract(self, n):
-			extracted = self.data[:n,:]
-			self.data = self.data[n:]
-			self.offset += extracted.shape[0]
+			extracted = self.get(n)
+			self.flush(n)
 			return extracted
 
 	def append(self, buf):
@@ -94,14 +103,27 @@ class ArrayQueue(list):
 			return 0
 		return self[-1].offset_end - self[0].offset
 
-	def extract(self, n):
-		data = []
+	def flush(self, n):
+		flushed = n
 		while n > 0 and self:
-			data.append(self[0].extract(n))
-			n -= data[-1].shape[0]
+			n -= self[0].flush(n)
 			if not len(self[0]):
 				del self[0]
+		return flushed - n
+
+	def get(self, n):
+		data = []
+		for i in self:
+			data.append(i.get(n))
+			n -= data[-1].shape[0]
+			if not n:
+				break
 		return numpy.concatenate(data)
+
+	def extract(self, n):
+		extracted = self.get(n)
+		self.flush(extracted.shape[0])
+		return extracted
 
 
 def yticks(min, max, n):
