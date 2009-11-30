@@ -32,12 +32,12 @@ gobject.threads_init()
 #
 
 
-def test_src(pipeline, buffer_length = 1.0, rate = 2048, test_duration = 10.0):
-	return pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudiotestsrc(pipeline, wave = 5, blocksize = 8 * int(buffer_length * rate), volume = 1, num_buffers = int(test_duration / buffer_length)), "audio/x-raw-float, width=64, rate=%d" % rate)
+def test_src(pipeline, buffer_length = 1.0, rate = 2048, test_duration = 10.0, wave = 5, freq = 0):
+	return pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudiotestsrc(pipeline, wave = wave, freq = freq, blocksize = 8 * int(buffer_length * rate), volume = 1, num_buffers = int(test_duration / buffer_length)), "audio/x-raw-float, width=64, rate=%d" % rate)
 
 
-def gapped_test_src(pipeline, buffer_length = 1.0, rate = 2048, test_duration = 10.0, gap_frequency = None, gap_threshold = None, control_dump_filename = None):
-	src = test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration)
+def gapped_test_src(pipeline, buffer_length = 1.0, rate = 2048, test_duration = 10.0, wave = 5, freq = 0, gap_frequency = None, gap_threshold = None, control_dump_filename = None):
+	src = test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, wave = wave, freq = freq)
 	if gap_frequency is None:
 		return src
 	control = pipeparts.mkcapsfilter(pipeline, pipeparts.mkaudiotestsrc(pipeline, wave = 0, freq = gap_frequency, blocksize = 8 * int(buffer_length * rate), volume = 1, num_buffers = int(test_duration / buffer_length)), "audio/x-raw-float, width=64, rate=%d" % rate)
