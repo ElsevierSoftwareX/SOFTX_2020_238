@@ -49,6 +49,7 @@ def channelgram_test_01a(pipeline):
 	#
 
 	head = test_common.gapped_test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, wave = wave, freq = freq, gap_frequency = gap_frequency, gap_threshold = gap_threshold)
+	head = pipeparts.mkprogressreport(pipeline, head, "src")
 	head = pipeparts.mkchannelgram(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, "video/x-raw-rgb, width=%d, height=%d, framerate=%s" % (width, height, framerate))
 	pipeparts.mkogmvideosink(pipeline, pipeparts.mkqueue(pipeline, head), "channelgram_test_01a_out.avi")
