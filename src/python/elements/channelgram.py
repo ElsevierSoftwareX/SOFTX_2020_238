@@ -70,6 +70,8 @@ __date__ = "FIXME"
 class ArrayQueue(list):
 	class Element(object):
 		def __init__(self, buf):
+			self.timestamp = buf.timestamp
+			self.duration = buf.duration
 			self.offset = buf.offset
 			self.offset_end = buf.offset_end
 			if bool(buf.flags & gst.BUFFER_FLAG_GAP):
@@ -84,16 +86,19 @@ class ArrayQueue(list):
 			if n > self.data.shape[0]:
 				n = self.data.shape[0]
 			self.data = self.data[n:,:]
+			delta_t = self.duration * float(n) / (self.offset_end - self.offset)
+			self.timestamp += delta_t
+			self.duration -= delta_t
 			self.offset += n
 			return n
 
 		def get(self, n):
-			return self.data[:n,:]
+			return self.data[:n,:], self.timestamp
 
 		def extract(self, n):
-			extracted = self.get(n)
+			extracted, timestamp = self.get(n)
 			self.flush(n)
-			return extracted
+			return extracted, timestamp
 
 	def append(self, buf):
 		list.append(self, ArrayQueue.Element(buf))
@@ -112,18 +117,22 @@ class ArrayQueue(list):
 		return flushed - n
 
 	def get(self, n):
+		if self:
+			timestamp = self[0].timestamp
+		else:
+			timestamp = None
 		data = []
 		for i in self:
-			data.append(i.get(n))
+			data.append(i.get(n)[0])
 			n -= data[-1].shape[0]
 			if not n:
 				break
-		return numpy.concatenate(data)
+		return numpy.concatenate(data), timestamp
 
 	def extract(self, n):
-		extracted = self.get(n)
+		extracted, timestamp = self.get(n)
 		self.flush(extracted.shape[0])
-		return extracted
+		return extracted, timestamp
 
 
 def yticks(min, max, n):
@@ -181,8 +190,9 @@ class Channelgram(gst.BaseTransform):
 		self.channels = None
 		self.in_rate = None
 		self.out_rate = None
-		self.out_width = 320	# default
-		self.out_height = 200	# default
+		self.out_width = 320	# default, pixels
+		self.out_height = 200	# default, pixels
+		self.plot_width = None	# seconds, None = 1/framerate
 		self.instrument = None
 		self.channel_name = None
 		self.sample_units = None
@@ -220,7 +230,7 @@ class Channelgram(gst.BaseTransform):
 		return True
 
 
-	def make_frame(self, samples, outbuf):
+	def make_frame(self, samples, samples_timestamp, outbuf):
 		#
 		# set metadata and advance output offset counter
 		#
@@ -240,7 +250,7 @@ class Channelgram(gst.BaseTransform):
 		fig.set_size_inches(self.out_width / float(fig.get_dpi()), self.out_height / float(fig.get_dpi()))
 		axes = fig.gca(rasterized = True)
 		x, y = map(lambda n: numpy.arange(n + 1, dtype = "double"), samples.shape)
-		x = x / self.in_rate + float(outbuf.timestamp) / gst.SECOND
+		x = x / self.in_rate + float(samples_timestamp) / gst.SECOND
 		y -= 0.5
 		xlim = x[0], x[-1]
 		ylim = y[0], y[-1]
@@ -303,13 +313,18 @@ class Channelgram(gst.BaseTransform):
 		self.queue.append(inbuf)
 
 		#
-		# number of samples required for output frame
+		# number of samples required for output frame, and the
+		# number of samples flushed per output frame
 		#
-		# FIXME:  if this isn't really an integer the output
-		# timestamps drift wrt the input timestamps
+		# FIXME:  if the number flushed isn't really an integer the
+		# output timestamps drift wrt the input timestamps
 		#
 
-		samples_per_frame = int(round(self.in_rate / float(self.out_rate)))
+		samples_flushed_per_frame = int(round(self.in_rate / float(self.out_rate)))
+		if self.plot_width is not None:
+			samples_per_frame = int(round(self.plot_width * self.in_rate))
+		else:
+			samples_per_frame = samples_flushed_per_frame
 
 		#
 		# build output frame(s)
@@ -326,8 +341,12 @@ class Channelgram(gst.BaseTransform):
 
 		while len(self.queue) >= 2 * samples_per_frame:
 			flow_return, newoutbuf = self.get_pad("src").alloc_buffer(self.next_out_offset, self.out_width * self.out_height * 4, outbuf.caps)
-			self.get_pad("src").push(self.make_frame(self.queue.extract(samples_per_frame), newoutbuf))
-		self.make_frame(self.queue.extract(samples_per_frame), outbuf)
+			samples, timestamp = self.queue.get(samples_per_frame)
+			self.queue.flush(samples_flushed_per_frame)
+			self.get_pad("src").push(self.make_frame(samples, timestamp, newoutbuf))
+		samples, timestamp = self.queue.get(samples_per_frame)
+		self.queue.flush(samples_flushed_per_frame)
+		self.make_frame(samples, timestamp, outbuf)
 
 		#
 		# done
