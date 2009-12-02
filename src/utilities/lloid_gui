@@ -399,40 +399,6 @@ options, filenames = parse_command_line()
 
 
 #
-# construct pipeline metadata
-#
-
-
-reference_psd = lalseries.parse_REAL8FrequencySeries(utils.load_filename(options.reference_psd, gz = (options.reference_psd or "stdin").endswith(".gz"), verbose = options.verbose))
-
-
-detectors = {
-	options.instrument: DetectorData(options.frame_cache, "LSC-STRAIN")
-}
-
-
-banks = [
-	Bank(
-		template_bank_filename,
-		reference_psd,
-		[
-			Bank.BankFragment(2048, 0.0, 1.0),
-			Bank.BankFragment(512, 1.0, 5.0),
-			Bank.BankFragment(256, 5.0, 13.0),
-			Bank.BankFragment(128, 13.0, 29.0)
-		],
-		gate_threshold = 2.0,
-		snr_threshold = 5.5,
-		tolerance = 0.97,
-		flow = 40.0,	# Hz
-		autocorrelation_length = 201,	# samples
-		logname = "bank%d" % n,
-		verbose = options.verbose
-	) for n, template_bank_filename in enumerate(options.template_bank)
-]
-
-
-#
 # measure the PSD
 #
 
@@ -446,6 +412,40 @@ banks = [
 #	injection_filename = options.injections,
 #	verbose = options.verbose
 #)
+
+
+psd = lalseries.parse_REAL8FrequencySeries(utils.load_filename(options.reference_psd, gz = (options.reference_psd or "stdin").endswith(".gz"), verbose = options.verbose))
+
+
+#
+# construct pipeline metadata
+#
+
+
+detectors = {
+	options.instrument: DetectorData(options.frame_cache, "LSC-STRAIN")
+}
+
+
+banks = [
+	Bank(
+		template_bank_filename,
+		psd,
+		[
+			Bank.BankFragment(2048, 0.0, 1.0),
+			Bank.BankFragment(512, 1.0, 5.0),
+			Bank.BankFragment(256, 5.0, 13.0),
+			Bank.BankFragment(128, 13.0, 29.0)
+		],
+		gate_threshold = 2.0,
+		snr_threshold = 5.5,
+		tolerance = 0.9995,
+		flow = 40.0,	# Hz
+		autocorrelation_length = 201,	# samples
+		logname = "bank%d" % n,
+		verbose = options.verbose
+	) for n, template_bank_filename in enumerate(options.template_bank)
+]
 
 
 pipeline = gst.Pipeline("lloid")
