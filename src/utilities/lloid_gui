@@ -44,13 +44,10 @@ gobject.threads_init()
 
 
 from glue.ligolw import ligolw
-from glue.ligolw import array
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from pylal import series as lalseries
-from pylal.datatypes import LALUnit
 from pylal.datatypes import LIGOTimeGPS
-from pylal.datatypes import REAL8FrequencySeries
 
 
 from gstlal import pipeio
@@ -65,6 +62,15 @@ from gstlal import cbc_template_fir
 #
 # =============================================================================
 #
+
+
+class DetectorData(object):
+	# default block_size = 16384 samples/second * 8 bytes/sample * 8
+	# second
+	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 8):
+		self.frame_cache = frame_cache
+		self.channel = channel
+		self.block_size = block_size
 
 
 class Bank(object):
@@ -120,15 +126,6 @@ class Bank(object):
 		return set(bank_fragment.rate for bank_fragment in self.bank_fragments)
 
 
-class DetectorData(object):
-	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 1):
-		self.frame_cache = frame_cache
-		self.channel = channel
-		# default block_size = 16384 samples/second * 8
-		# bytes/sample * 1 second
-		self.block_size = block_size
-
-
 #
 # =============================================================================
 #
@@ -139,33 +136,92 @@ class DetectorData(object):
 
 
 #
-# LLOID for one instrument
+# sum-of-squares aggregator
 #
 
 
-def mkcontrolsnksrc(pipeline, rate, progress_report = False, suffix = None):
+def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None):
 	snk = gst.element_factory_make("lal_adder")
 	snk.set_property("sync", True)
 	pipeline.add(snk)
 	src = pipeparts.mkcapsfilter(pipeline, snk, "audio/x-raw-float, rate=%d" % rate)
-	if progress_report:
+	if verbose:
 		src = pipeparts.mkprogressreport(pipeline, src, "progress_sumsquares%s" % (suffix and "_%s" % suffix or ""))
 	src = pipeparts.mktee(pipeline, src)
 	return snk, src
 
 
-def mkLLOIDsrc(pipeline, instrument, detector, rates, fake_data = False, injection_filename = None, progress_report = False):
+#
+# data source
+#
+
+
+def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, fake_data = False, injection_filename = None, verbose = False):
+	#
+	# data source and progress report
+	#
+
 	if fake_data:
 		head = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
 	else:
 		head = pipeparts.mkframesrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
-	if progress_report:
+	if verbose:
 		head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % instrument)
+
+	#
+	# optional injections
+	#
 
 	if injection_filename is not None:
 		head = pipeparts.mkinjections(pipeline, head, injection_filename)
 
-	head = pipeparts.mkwhiten(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % max(rates)))
+	#
+	# down-sample to highest of target sample rates.  note:  there is
+	# no check that this is, infact, *down*-sampling.  if the source
+	# time series has a lower sample rate this will up-sample the data.
+	# up-sampling will probably interact poorly with the whitener as it
+	# will likely add (possibly significant) numerical noise when it
+	# amplifies the non-existant high-frequency components
+	#
+
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, head)), "audio/x-raw-float, rate=%d" % max(rates))
+
+	#
+	# whiten
+	#
+
+	if psd is not None:
+		#
+		# use fixed PSD
+		#
+
+		head = pipeparts.mkwhiten(pipeline, head, psd_mode = 1)
+
+		#
+		# install signal handler to retrieve \Delta f when it is
+		# known, resample the user-supplied PSD, and install it
+		# into the whitener.  n is the number of frequency bins
+		#
+
+		def delta_f_changed(elem, delta_f, psd):
+			n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
+			psd = cbc_template_fir.interpolate_psd(psd, delta_f)
+			elem.set_property("psd", psd.data[:n])
+
+		head.connect_after("delta-f-changed", delta_f_changed, psd)
+	else:
+		#
+		# use running average PSD
+		#
+
+		head = pipeparts.mkwhiten(pipeline, head)
+	head = pipeparts.mknofakedisconts(pipeline, head)	# FIXME:  remove after basetransform behaviour fixed
+
+	#
+	# down-sample whitened time series to remaining target sample rates
+	# while applying an amplitude correction to adjust for low-pass
+	# filter roll-off
+	#
 
 	correction = {
 		128: 1.03 / 0.93,
@@ -174,26 +230,49 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, fake_data = False, injecti
 		2048: 1.03 / 1.03
 	}
 
-	hoft = {max(rates): pipeparts.mktee(pipeline, head)}
-	for rate in sorted(rates)[:-1]:	# all but the highest rate
+	head = {max(rates): pipeparts.mktee(pipeline, head)}
+	for rate in sorted(rates, reverse = True)[1:]:	# all but the highest rate
 		# FIXME:  the default quality is 4, we should try setting
 		# it higher (9?), but then the variance correction look-up
 		# table will need to be re-measured
-		hoft[rate] = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkaudioamplify(pipeline, hoft[max(rates)], math.sqrt(correction[rate] * float(max(rates)) / rate))), "audio/x-raw-float, rate=%d" % rate))
+		source_rate = max(rates)
+		head[rate] = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkaudioamplify(pipeline, head[source_rate], math.sqrt(correction[rate] * float(source_rate) / rate))), "audio/x-raw-float, rate=%d" % rate))
 
-	return hoft
+	#
+	# done.  return value is a dictionary of tee elements indexed by
+	# sample rate
+	#
+
+	return head
 
 
-def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, progress_report = False, control_snksrc = None):
+#
+# one instrument, one template bank
+#
+
+
+def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = False, control_snksrc = None):
 	logname = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 
+	#
+	# construct sum-of-squares aggregator if needed
+	#
+
 	if control_snksrc is None:
-		control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), progress_report = progress_report, suffix = logname)
+		control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = logname)
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1], max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000), "control_%s.dump" % bank.logname)
+
+	#
+	# snr aggregator
+	#
 
 	snr = gst.element_factory_make("lal_adder")
 	snr.set_property("sync", True)
 	pipeline.add(snr)
+
+	#
+	# loop over template bank slices
+	#
 
 	for bank_fragment in bank.bank_fragments:
 		pipeparts.mkLLOIDbranch(
@@ -205,51 +284,72 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, progress_repor
 			control_snksrc[1]
 		).link(snr)
 
-	snr = pipeparts.mktogglecomplex(pipeline, pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(bank.get_rates())))
+	#
+	# snr and \chi^{2}
+	#
 
-	snr = pipeparts.mktee(pipeline, snr)
+	snr = pipeparts.mktee(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(bank.get_rates()))))
 	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr), autocorrelation_matrix = bank.autocorrelation_bank, latency = -(bank.autocorrelation_bank.shape[1] - 1) / 2)
-
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, snr), "snr_%s.txt" % logname)
 	#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000)), "video/x-raw-rgb, width=640, height=480, framerate=4/1"), "channelgram.avi", verbose = True)
 
+	#
+	# trigger generator and progress report
+	#
+
 	head = pipeparts.mktriggergen(pipeline, pipeparts.mkqueue(pipeline, snr), chisq, bank.template_bank_filename, bank.snr_threshold)
-	if progress_report:
+	if verbose:
 		head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % logname)
+
+	#
+	# done
+	#
+
 	return head
 
 
 #
-# LLOID for multiple instruments with coincidence applied at the orthogonal
-# sum-of-squares stage (using an adder)
+# many instruments, many template banks
 #
 
 
-def mkLLOIDmulti(pipeline, detectors, banks, output_filename, fake_data = False, injection_filename = None, progress_report = False):
+def mkLLOIDmulti(pipeline, detectors, banks, psd, output_filename, fake_data = False, injection_filename = None, verbose = False):
 	if len(detectors) > 1:
 		raise ValueError, "only 1 instrument supported yet"
+
+	#
+	# xml stream aggregator
+	#
 
 	#nto1 = gst.element_factory_make("input-selector")
 	#nto1.set_property("select-all", True)
 	#pipeline.add(nto1)
 	#pipeparts.mktriggerxmlwritersink(pipeline, nto1, output_filename)
 
+	#
+	# loop over instruments and template banks
+	#
+
 	for instrument in detectors:
 		rates = set(rate for bank in banks for rate in bank.get_rates())
-		hoftdict = mkLLOIDsrc(pipeline, instrument, detectors[instrument], rates, fake_data = fake_data, injection_filename = injection_filename, progress_report = progress_report)
+		hoftdict = mkLLOIDsrc(pipeline, instrument, detectors[instrument], rates, psd = psd, fake_data = fake_data, injection_filename = injection_filename, verbose = verbose)
 		for bank in banks:
-			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), progress_report = progress_report, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
+			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
 			head = mkLLOIDsingle(
 				pipeline,
 				hoftdict,
 				instrument,
 				detectors[instrument],
 				bank,
-				progress_report = progress_report,
+				verbose = verbose,
 				control_snksrc = control_snksrc
 			)
 			#pipeparts.mkqueue(pipeline, head).link(nto1)
 			pipeparts.mktriggerxmlwritersink(pipeline, head, output_filename.replace(".xml", "_%s.xml" % bank.logname))
+
+	#
+	# done
+	#
 
 
 #
@@ -258,9 +358,10 @@ def mkLLOIDmulti(pipeline, detectors, banks, output_filename, fake_data = False,
 
 
 class LLOIDHandler(object):
-	def __init__(self, mainloop, pipeline):
+	def __init__(self, mainloop, pipeline, verbose = False):
 		self.mainloop = mainloop
 		self.pipeline = pipeline
+		self.verbose = verbose
 
 		bus = pipeline.get_bus()
 		bus.add_signal_watch()
@@ -295,27 +396,31 @@ def parse_command_line():
 		usage = "%prog [options]",
 		description = "Stream-based inspiral analysis tool"
 	)
-	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache in which to find paths to .gwf frame files (required).")
-	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the GPS start time of the segment to analyze (required).")
-	parser.add_option("--gps-stop-time", metavar = "seconds", help = "Set the GPS stop time of the segment to analyze (required).")
-	parser.add_option("--injections", metavar = "filename", help = "Set the name of the file from which to load injections (optional).")
-	parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze (required).")
-	parser.add_option("--output", metavar = "filename", help = "Set the name of the output trigger file (required).")
-	parser.add_option("--reference-psd", metavar = "filename", default = "/home/kipp/Development/gstlal/examples/reference_psd.xml.gz", help = "Set the name of the PSD file to load.")
-	parser.add_option("--template-bank", metavar = "filename", action = "append", help = "Set the name of the file from which to load the template bank (required).")
-	parser.add_option("--write-pipeline", metavar = "filename", help = "Write an XML description of the as-built pipeline to this file (optional).")
-	parser.add_option("--fake-data", action = "store_true", help = "Use fake LIGO data.")
-	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data is used in which case it must not be set.")
+	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
+	parser.add_option("--gps-stop-time", metavar = "seconds", help = "Set the stop time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
+	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
+	parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
+	parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
+	parser.add_option("--output", metavar = "filename", help = "Set the name of the LIGO light-weight XML output file (required).")
+	parser.add_option("--reference-psd", metavar = "filename", help = "Instead of measuring the noise spectrum, load the spectrum from this LIGO light-weight XML file (optional).")
+	parser.add_option("--template-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).  This option can be given multiple times to process multiple template banks in parallel.")
+	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a GStreamer XML description of the as-built pipeline to this file (optional).")
+	parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (optional).  This option has no effect if --reference-psd is used.")
+	parser.add_option("--fake-data", action = "store_true", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 	options, filenames = parser.parse_args()
 
-	required_options = ["gps_start_time", "gps_stop_time", "output", "template_bank", "reference_psd"]
+	required_options = ["gps_start_time", "gps_stop_time", "output", "template_bank"]
 	if not options.fake_data:
 		required_options += ["frame_cache"]
 
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+	if options.fake_data and options.frame_cache is not None:
+		raise ValueError, "cannot set --frame-cache with --fake-data"
 
 	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
 	options.gps_stop_time = LIGOTimeGPS(options.gps_stop_time)
@@ -332,11 +437,12 @@ def parse_command_line():
 #
 
 
-def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, injection_filename = None, verbose = False):
+def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, fake_data = False, injection_filename = None, verbose = False):
 	class PSDHandler(object):
-		def __init__(self, mainloop, pipeline):
+		def __init__(self, mainloop, pipeline, verbose = False):
 			self.mainloop = mainloop
 			self.pipeline = pipeline
+			self.verbose = verbose
 
 			bus = pipeline.get_bus()
 			bus.add_signal_watch()
@@ -356,22 +462,21 @@ def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, injec
 			elif message.type == gst.MESSAGE_ELEMENT:
 				if message.structure.get_name() == "spectrum":
 					self.psd = pipeio.parse_spectrum_message(message)
-					#xmldoc = ligolw.Document()
-					#xmldoc.appendChild(ligolw.LIGO_LW())
-					#xmldoc.childNodes[-1].appendChild(lalseries.build_REAL8FrequencySeries(self.psd))
-					#utils.write_filename(xmldoc, "psds/psd_%d.xml.gz" % int(self.psd.epoch), gz = True, verbose = True)
 
 	mainloop = gobject.MainLoop()
 
 	pipeline = gst.Pipeline("psd")
-	head = pipeparts.mkframesrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
+	if fake_data:
+		head = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
+	else:
+		head = pipeparts.mkframesrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
 	if verbose:
-		head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % instrument)
+		head = pipeparts.mkprogressreport(pipeline, head, "Measuring PSD is %s" % instrument)
 	if injection_filename is not None:
 		head = pipeparts.mkinjections(pipeline, head, injection_filename)
 	pipeparts.mkfakesink(pipeline, pipeparts.mkwhiten(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % rate)))
 
-	handler = PSDHandler(mainloop, pipeline)
+	handler = PSDHandler(mainloop, pipeline, verbose = verbose)
 
 	pipeline.set_state(gst.STATE_PAUSED)
 	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, gps_start_time.ns(), gst.SEEK_TYPE_SET, gps_stop_time.ns())
@@ -379,6 +484,12 @@ def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, injec
 	mainloop.run()
 
 	return PSDHandler.psd
+
+
+def write_psd(filename, psd, verbose = False):
+	xmldoc = ligolw.Document()
+	xmldoc.appendChild(ligolw.LIGO_LW()).appendChild(lalseries.build_REAL8FrequencySeries(psd))
+	utils.write_filename(xmldoc, filename, gz = (filename or "stdout").endswith(".gz"), verbose = options.verbose)
 
 
 #
@@ -399,32 +510,30 @@ options, filenames = parse_command_line()
 
 
 #
-# measure the PSD
-#
-
-
-#psd = measure_psd(
-#	options.instrument,
-#	detectors[options.instrument],
-#	options.gps_start_time,
-#	options.gps_stop_time,
-#	max(rate for bank in banks for rate in bank.get_rates()),
-#	injection_filename = options.injections,
-#	verbose = options.verbose
-#)
-
-
-psd = lalseries.parse_REAL8FrequencySeries(utils.load_filename(options.reference_psd, gz = (options.reference_psd or "stdin").endswith(".gz"), verbose = options.verbose))
-
-
-#
-# construct pipeline metadata
+# construct pipeline metadata and measure the PSD
 #
 
 
 detectors = {
-	options.instrument: DetectorData(options.frame_cache, "LSC-STRAIN")
+	options.instrument: DetectorData(options.frame_cache, options.channel_name)
 }
+
+
+if options.reference_psd is not None:
+	psd = lalseries.parse_REAL8FrequencySeries(utils.load_filename(options.reference_psd, gz = (options.reference_psd or "stdin").endswith(".gz"), verbose = options.verbose))
+else:
+	psd = measure_psd(
+		options.instrument,
+		detectors[options.instrument],
+		options.gps_start_time,
+		options.gps_stop_time,
+		2048,	# Hz;  must not be less than highest bank fragment sample rate (see below)
+		fake_data = options.fake_data,
+		injection_filename = options.injections,
+		verbose = options.verbose
+	)
+	if options.write_psd is not None:
+		write_psd(options.write_psd, psd, verbose = options.verbose)
 
 
 banks = [
@@ -448,6 +557,11 @@ banks = [
 ]
 
 
+#
+# build pipeline
+#
+
+
 pipeline = gst.Pipeline("lloid")
 mainloop = gobject.MainLoop()
 
@@ -455,18 +569,30 @@ mkLLOIDmulti(
 	pipeline,
 	detectors = detectors,
 	banks = banks,
+	psd = psd,
 	output_filename = options.output,
 	fake_data = options.fake_data,
 	injection_filename = options.injections,
-	progress_report = options.verbose
+	verbose = options.verbose
 )
 
 if options.write_pipeline is not None:
 	gst.xml_write_file(pipeline, file(options.write_pipeline, "w"))
 
-handler = LLOIDHandler(mainloop, pipeline)
+handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
+
+
+#
+# process requested segment
+#
+
 
 pipeline.set_state(gst.STATE_PAUSED)
 pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, options.gps_start_time.ns(), gst.SEEK_TYPE_SET, options.gps_stop_time.ns())
 pipeline.set_state(gst.STATE_PLAYING)
 mainloop.run()
+
+
+#
+# done
+#
