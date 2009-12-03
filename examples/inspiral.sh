@@ -1,5 +1,6 @@
 ./lloid_gui \
 	--frame-cache "/home/kipp/gwf/cache" \
+	--reference-psd "/home/kipp/Development/gstlal/examples/reference_psd.xml.gz"
 	--gps-start-time 873247860.0 \
 	--gps-stop-time 873424754.0 \
 	--instrument "H1" \
