@@ -24,9 +24,6 @@
 #
 
 
-import sys
-
-
 import gobject
 import pygst
 pygst.require('0.10')
@@ -64,11 +61,6 @@ class NoFakeDisconts(gst.BaseTransform):
 			)
 		)
 	)
-
-
-	def __init__(self):
-		gst.BaseTransform.__init__(self)
-		self.set_passthrough(True)
 
 
 	def do_start(self):
