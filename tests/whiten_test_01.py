@@ -49,7 +49,7 @@ def whiten_test_01a(pipeline):
 	zero_pad = 0.0		# seconds
 	fft_length = 2.0	# seconds
 	buffer_length = 1.0	# seconds
-	test_duration = 10.0	# seconds
+	test_duration = 50.0	# seconds
 
 	#
 	# build pipeline
