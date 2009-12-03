@@ -140,10 +140,10 @@ class CheckTimeStamps(gst.BaseTransform):
 		# initialize timestamp book-keeping
 		#
 
-		if self.t0 is None or bool(buf.flags & gst.BUFFER_FLAG_DISCONT):
+		if self.t0 is None or buf.flag_is_set(gst.BUFFER_FLAG_DISCONT):
 			if self.t0 is None:
 				print >>sys.stderr, "%s: initial timestamp = %s, offset = %d" % (self.get_property("name"), printable_timestamp(buf.timestamp), buf.offset)
-			elif bool(buf.flags & gst.BUFFER_FLAG_DISCONT):
+			elif buf.flag_is_set(gst.BUFFER_FLAG_DISCONT):
 				print >>sys.stderr, "%s: discontinuity:  timestamp = %s, offset = %d;  would have been %s, %d" % (self.get_property("name"), printable_timestamp(buf.timestamp), buf.offset, printable_timestamp(self.next_timestamp), self.next_offset)
 			self.next_timestamp = self.t0 = buf.timestamp
 			self.next_offset = self.offset0 = buf.offset
