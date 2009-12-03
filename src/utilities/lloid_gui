@@ -290,7 +290,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 
 	snr = pipeparts.mktee(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(bank.get_rates()))))
 	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr), autocorrelation_matrix = bank.autocorrelation_bank, latency = -(bank.autocorrelation_bank.shape[1] - 1) / 2)
-	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, snr), "snr_%s.txt" % logname)
+	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, snr), "snr_%s.dump" % logname)
 	#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000)), "video/x-raw-rgb, width=640, height=480, framerate=4/1"), "channelgram.avi", verbose = True)
 
 	#
