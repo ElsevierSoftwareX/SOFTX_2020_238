@@ -10,8 +10,9 @@
 import numpy
 import sys
 from gstlal import pipeparts
-import test_common
+from gstlal.pipeparts import gst
 from gstlal.elements.check_timestamps import mkchecktimestamps
+import test_common
 
 
 #
@@ -47,7 +48,7 @@ def whiten_test_01a(pipeline):
 
 	rate = 2048	# Hz
 	zero_pad = 0.0		# seconds
-	fft_length = 2.0	# seconds
+	fft_length = 4.0	# seconds
 	buffer_length = 1.0	# seconds
 	test_duration = 50.0	# seconds
 
@@ -61,7 +62,7 @@ def whiten_test_01a(pipeline):
 	head.connect_after("delta-f-changed", delta_f_changed, None)
 	head = mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01a_out.dump")
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "whiten_test_01a_in.dump")
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee, max_size_time = int(fft_length * gst.SECOND)), "whiten_test_01a_in.dump")
 
 	#
 	# done
