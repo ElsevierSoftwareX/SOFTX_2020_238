@@ -24,6 +24,7 @@
 #
 
 
+import sys
 import gobject
 import pygst
 pygst.require('0.10')
@@ -71,10 +72,15 @@ class NoFakeDisconts(gst.BaseTransform):
 
 	def do_transform_ip(self, buf):
 		if self.next_offset is not None:
+			before = buf.flag_is_set(gst.BUFFER_FLAG_DISCONT)
 			if buf.offset != self.next_offset or buf.timestamp != self.next_timestamp:
 				buf.flag_set(gst.BUFFER_FLAG_DISCONT)
+				if not before:
+					print >>sys.stderr, "%s: set discontinuity flag at %d.%09d" % (self.get_property("name"), buf.timestamp // 1000000000, buf.timestamp % 1000000000)
 			else:
 				buf.flag_unset(gst.BUFFER_FLAG_DISCONT)
+				if before:
+					print >>sys.stderr, "%s: cleared discontinuity flag at %d.%09d" % (self.get_property("name"), buf.timestamp // 1000000000, buf.timestamp % 1000000000)
 
 		self.next_offset = buf.offset_end
 		self.next_timestamp = buf.timestamp + buf.duration
