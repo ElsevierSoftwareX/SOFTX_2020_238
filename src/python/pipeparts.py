@@ -298,7 +298,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
 def mkfakesink(pipeline, src, pad = None):
 	elem = gst.element_factory_make("fakesink")
 	elem.set_property("sync", False)
-	elem.set_property("preroll-queue-len", 1)
+	elem.set_property("async", False)
 	pipeline.add(elem)
 	if pad is not None:
 		src.link_pads(pad, elem, "sink")
@@ -309,7 +309,7 @@ def mkfakesink(pipeline, src, pad = None):
 def mkfilesink(pipeline, src, filename):
 	elem = gst.element_factory_make("filesink")
 	elem.set_property("sync", False)
-	elem.set_property("preroll-queue-len", 1)
+	elem.set_property("async", False)
 	elem.set_property("buffer-mode", 2)
 	elem.set_property("location", filename)
 	pipeline.add(elem)
@@ -364,7 +364,7 @@ def mktriggerxmlwritersink(pipeline, src, filename):
 	elem = gst.element_factory_make("lal_triggerxmlwriter")
 	elem.set_property("location", filename)
 	elem.set_property("sync", False)
-	elem.set_property("preroll-queue-len", 1)
+	elem.set_property("async", False)
 	pipeline.add(elem)
 	src.link(elem)
 
