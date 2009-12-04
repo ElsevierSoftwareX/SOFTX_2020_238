@@ -319,7 +319,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 	#
 
 	for bank_fragment in bank.bank_fragments:
-		pipeparts.mkLLOIDbranch(
+		mkLLOIDbranch(
 			pipeline,
 			pipeparts.mkqueue(pipeline, hoftdict[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000),
 			bank,
@@ -515,7 +515,7 @@ def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, fake_
 	else:
 		head = pipeparts.mkframesrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
 	if verbose:
-		head = pipeparts.mkprogressreport(pipeline, head, "Measuring PSD is %s" % instrument)
+		head = pipeparts.mkprogressreport(pipeline, head, "Measuring PSD in %s" % instrument)
 	if injection_filename is not None:
 		head = pipeparts.mkinjections(pipeline, head, injection_filename)
 	pipeparts.mkfakesink(pipeline, pipeparts.mkwhiten(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % rate)))
@@ -533,7 +533,7 @@ def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, fake_
 def write_psd(filename, psd, verbose = False):
 	xmldoc = ligolw.Document()
 	xmldoc.appendChild(ligolw.LIGO_LW()).appendChild(lalseries.build_REAL8FrequencySeries(psd))
-	utils.write_filename(xmldoc, filename, gz = (filename or "stdout").endswith(".gz"), verbose = options.verbose)
+	utils.write_filename(xmldoc, filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose)
 
 
 #
