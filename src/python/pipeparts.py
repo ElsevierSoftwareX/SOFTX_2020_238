@@ -276,25 +276,6 @@ def mkautochisq(pipeline, src, autocorrelation_matrix = None, latency = 0):
 	return elem
 
 
-def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
-	src = mktee(pipeline, mkfirbank(pipeline, src, latency = int(bank_fragment.start * bank_fragment.rate), fir_matrix = bank_fragment.orthogonal_template_bank))
-
-	mkchecktimestamps(pipeline, mkresample(pipeline, mkqueue(pipeline, mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights))), name = "timestamps_%s_%d_%d_after_sumsquare_resampler" % (bank.logname, bank_fragment.start, bank_fragment.end)).link(control_snk)
-
-	src = mkgate(pipeline, mkqueue(pipeline, src), control = mkqueue(pipeline, control_src), threshold = bank.gate_threshold)
-
-	# FIXME:  teach the collectpads object not to wait for buffers on
-	# pads whose segments have not yet been reached by the input on the
-	# other pads.  then this large queue buffer will not be required
-	# because streaming can begin through the downstream adders without
-	# waiting for input from all upstream elements.
-	src = mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000)
-
-	src = mkresample(pipeline, mkmatrixmixer(pipeline, src, matrix = bank_fragment.mix_matrix), quality = 0)
-	src = mkchecktimestamps(pipeline, src, name = "timestamps_%s_%d_%d_after_snr_resampler" % (bank.logname, bank_fragment.start, bank_fragment.end))
-	return src
-
-
 def mkfakesink(pipeline, src, pad = None):
 	elem = gst.element_factory_make("fakesink")
 	elem.set_property("sync", False)

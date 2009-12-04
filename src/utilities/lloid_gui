@@ -251,6 +251,50 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, fake_data = Fa
 #
 
 
+def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
+	#
+	# FIR filter bank
+	#
+
+	src = pipeparts.mktee(pipeline, pipeparts.mkfirbank(pipeline, src, latency = int(bank_fragment.start * bank_fragment.rate), fir_matrix = bank_fragment.orthogonal_template_bank))
+
+	#
+	# compute weighted sum-of-squares, feed to sum-of-squares
+	# aggregator
+	#
+
+	pipeparts.mkchecktimestamps(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights))), name = "timestamps_%s_%d_%d_after_sumsquare_resampler" % (bank.logname, bank_fragment.start, bank_fragment.end)).link(control_snk)
+
+	#
+	# use sum-of-squares aggregate as gate control for orthogonal SNRs
+	#
+
+	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src), control = pipeparts.mkqueue(pipeline, control_src), threshold = bank.gate_threshold)
+
+	#
+	# buffer orthogonal SNRs
+	#
+	# FIXME:  teach the collectpads object not to wait for buffers on
+	# pads whose segments have not yet been reached by the input on the
+	# other pads.  then this large queue buffer will not be required
+	# because streaming can begin through the downstream adders without
+	# waiting for input from all upstream elements.
+	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000)
+
+	#
+	# reconstruct physical SNRs
+	#
+
+	src = pipeparts.mkresample(pipeline, pipeparts.mkmatrixmixer(pipeline, src, matrix = bank_fragment.mix_matrix), quality = 0)
+
+	#
+	# done
+	#
+
+	src = pipeparts.mkchecktimestamps(pipeline, src, name = "timestamps_%s_%d_%d_after_snr_resampler" % (bank.logname, bank_fragment.start, bank_fragment.end))
+	return src
+
+
 def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = False, control_snksrc = None):
 	logname = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 
@@ -260,7 +304,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 
 	if control_snksrc is None:
 		control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = logname)
-	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1], max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000), "control_%s.dump" % bank.logname)
+	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % bank.logname)
 
 	#
 	# snr aggregator
@@ -291,7 +335,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 	snr = pipeparts.mktee(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(bank.get_rates()))))
 	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr), autocorrelation_matrix = bank.autocorrelation_bank, latency = -(bank.autocorrelation_bank.shape[1] - 1) / 2)
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, snr), "snr_%s.dump" % logname)
-	#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000)), "video/x-raw-rgb, width=640, height=480, framerate=4/1"), "channelgram.avi", verbose = True)
+	#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr)), "video/x-raw-rgb, width=640, height=480, framerate=4/1"), "channelgram.avi", verbose = True)
 
 	#
 	# trigger generator and progress report
