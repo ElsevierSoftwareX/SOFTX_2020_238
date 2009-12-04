@@ -88,6 +88,7 @@
 #include <gstlal_firbank.h>
 #include <gstlal_sumsquares.h>
 #include <gstlal_togglecomplex.h>
+#include <gstlal_nofakedisconts.h>
 
 
 /*
@@ -776,6 +777,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_firbank", GSTLAL_FIRBANK_TYPE},
 		{"lal_sumsquares", GSTLAL_SUMSQUARES_TYPE},
 		{"lal_togglecomplex", GSTLAL_TOGGLECOMPLEX_TYPE},
+		{"lal_nofakedisconts", GSTLAL_NOFAKEDISCONTS_TYPE},
 		{NULL, 0},
 	};
 	struct {

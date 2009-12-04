@@ -37,7 +37,6 @@ import pipeio
 from elements.channelgram import mkchannelgram
 from elements.check_timestamps import mkchecktimestamps
 from elements.histogram import mkhistogram
-from elements.nofakedisconts import mknofakedisconts
 from elements.spectrum import mkspectrumplot
 
 
@@ -214,6 +213,13 @@ def mkqueue(pipeline, src, pad_name = None, **properties):
 		src.link(elem)
 	else:
 		src.link_pads(pad_name, elem, "sink")
+	return elem
+
+
+def mknofakedisconts(pipeline, src):
+	elem = gst.element_factory_make("lal_nofakedisconts")
+	pipeline.add(elem)
+	src.link(elem)
 	return elem
 
 

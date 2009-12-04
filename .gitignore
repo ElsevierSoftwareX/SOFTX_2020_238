@@ -29,6 +29,8 @@ src/plugins/libgstlal_la-gstlal_gate.lo
 src/plugins/libgstlal_la-gstlal_gate.o
 src/plugins/libgstlal_la-gstlal_matrixmixer.lo
 src/plugins/libgstlal_la-gstlal_matrixmixer.o
+src/plugins/libgstlal_la-gstlal_nofakedisconts.lo
+src/plugins/libgstlal_la-gstlal_nofakedisconts.o
 src/plugins/libgstlal_la-gstlal_nxydump.lo
 src/plugins/libgstlal_la-gstlal_nxydump.o
 src/plugins/libgstlal_la-gstlal_simulation.lo
