@@ -12,6 +12,7 @@ import sys
 from gstlal import pipeparts
 from gstlal.pipeparts import gst
 from gstlal.elements.check_timestamps import mkchecktimestamps
+from gstlal.elements.nofakedisconts import mknofakedisconts
 import test_common
 
 
@@ -60,6 +61,7 @@ def whiten_test_01a(pipeline):
 	head = tee = pipeparts.mktee(pipeline, head)
 	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 1, zero_pad = zero_pad, fft_length = fft_length)
 	head.connect_after("delta-f-changed", delta_f_changed, None)
+	head = mknofakedisconts(pipeline, head)
 	head = mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01a_out.dump")
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee, max_size_time = int(fft_length * gst.SECOND)), "whiten_test_01a_in.dump")
