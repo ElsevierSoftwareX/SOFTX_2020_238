@@ -77,6 +77,7 @@ class Handler(object):
 
 
 def build_and_run(pipelinefunc, name):
+	print >>sys.stderr, "=== Running Test %s ===" % name
 	mainloop = gobject.MainLoop()
 	pipeline = gst.Pipeline(name)
 	handler = Handler(mainloop, pipelinefunc(pipeline))
