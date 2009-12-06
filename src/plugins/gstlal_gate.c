@@ -90,16 +90,17 @@ static void control_flush(GSTLALGate *element)
 		gst_buffer_unref(element->control_buf);
 		element->control_buf = NULL;
 	}
-	g_cond_signal(element->control_flushed);
+	g_cond_signal(element->control_availability);
 }
 
 
 /*
- * return the state of the control input at the given timestamp.  the
- * return value is < 0 for times outside the interval spanned by the
- * currently-queued control buffer, 0 if the control buffer is < the
- * threshold at the given time, and > 0 if the control buffer is >= the
- * threshold at the given time.
+ * return the state of the control input at the given timestamp.  these
+ * functions must be called with the control lock held.  the return value
+ * is < 0 for times outside the interval spanned by the currently-queued
+ * control buffer, 0 if the control buffer is < the threshold at the given
+ * time, and > 0 if the control buffer is >= the threshold at the given
+ * time.
  */
 
 
@@ -151,41 +152,49 @@ static double control_sample_float64(const GSTLALGate *element, guint64 sample)
 }
 
 
-static gint64 control_t_to_offset(GSTLALGate *element, GstClockTime t)
-{
-	gint64 offset;
-
-	if(G_UNLIKELY(t < GST_BUFFER_TIMESTAMP(element->control_buf)))
-		offset = -(gint64) gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(element->control_buf) - t, element->control_rate, GST_SECOND);
-	else
-		offset = (gint64) gst_util_uint64_scale_int_round(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
-
-	return offset;
-}
-
-
 static gint control_get_state(GSTLALGate *element, GstClockTime t)
 {
-	gint64 offset;
-
-	/*
-	 * if there is no control buffer available or t is past the its
-	 * end, flush the control buffer and wait for one that overlaps the
-	 * input data
-	 */
-
 	while(1) {
-		while(!element->control_buf)
-			g_cond_wait(element->control_available, element->control_lock);
-		offset = control_t_to_offset(element, t);
-		if(offset < (gint64) (GST_BUFFER_OFFSET_END(element->control_buf) - GST_BUFFER_OFFSET(element->control_buf)))
-			break;
-		control_flush(element);
-	}
+		guint64 offset;
 
-	if(offset < 0)
-		return element->default_state;
-	return fabs(element->control_sample_func(element, offset)) >= element->threshold;
+		/*
+		 * wait for a control buffer if we don't have one
+		 */
+
+		while(!element->control_buf && !element->sink_eos) {
+			GST_DEBUG_OBJECT(element, "waiting for control buffer");
+			g_cond_wait(element->control_availability, element->control_lock);
+		}
+
+		/*
+		 * if we are at EOS on sink pad or the requested time
+		 * precedes the interval spanned by the control buffer
+		 * return the default state
+		 */
+
+		if(G_UNLIKELY(element->sink_eos || t < GST_BUFFER_TIMESTAMP(element->control_buf))) {
+			GST_DEBUG_OBJECT(element, "end-of-stream or control buffer is for the future, using default control state");
+			return element->default_state;
+		}
+
+		/*
+		 * compute the sample offset within the control buffer, if
+		 * it's past the end flush and wait for the next
+		 */
+
+		offset = gst_util_uint64_scale_int_round(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
+		if(offset >= GST_BUFFER_OFFSET_END(element->control_buf) - GST_BUFFER_OFFSET(element->control_buf)) {
+			GST_DEBUG_OBJECT(element, "control buffer too old, flushing");
+			control_flush(element);
+			continue;
+		}
+
+		/*
+		 * retrieve the control state at the given offset
+		 */
+
+		return fabs(element->control_sample_func(element, offset)) >= element->threshold;
+	}
 }
 
 
@@ -247,14 +256,14 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 /*
  * ============================================================================
  *
- *                                    Caps
+ *                                Control Pad
  *
  * ============================================================================
  */
 
 
 /*
- * control pad
+ * setcaps()
  */
 
 
@@ -331,7 +340,122 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 
 
 /*
- * sink pad
+ * chain()
+ */
+
+
+static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
+{
+	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
+	GstFlowReturn result = GST_FLOW_OK;
+
+	/*
+	 * check validity of timestamp and offsets
+	 */
+
+	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
+		GST_ERROR_OBJECT(element, "error in control stream: buffer has invalid timestamp and/or offset");
+		gst_buffer_unref(sinkbuf);
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+
+	/*
+	 * if there's already a buffer stored, wait for it to be flushed
+	 */
+
+	g_mutex_lock(element->control_lock);
+	while(element->control_buf) {
+		GST_DEBUG_OBJECT(element, "waiting for previous control buffer to be flushed");
+		g_cond_wait(element->control_availability, element->control_lock);
+	}
+
+	/*
+	 * if we're at eos on sink pad, discard
+	 */
+
+	if(element->sink_eos) {
+		GST_DEBUG_OBJECT(element, "sink is at end-of-stream, discarding control buffer");
+		gst_buffer_unref(sinkbuf);
+		result = GST_FLOW_UNEXPECTED;
+		goto done;
+	}
+
+	/*
+	 * store this buffer
+	 */
+
+	element->control_buf = sinkbuf;
+
+	/*
+	 * signal the buffer's availability
+	 */
+
+	GST_DEBUG_OBJECT(element, "new control buffer available");
+	g_cond_signal(element->control_availability);
+	g_mutex_unlock(element->control_lock);
+
+	/*
+	 * done
+	 */
+
+done:
+	gst_object_unref(element);
+	return result;
+}
+
+
+/*
+ * event()
+ */
+
+
+static gboolean control_event(GstPad *pad, GstEvent *event)
+{
+	GSTLALGate *element = GSTLAL_GATE(GST_PAD_PARENT(pad));
+
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_NEWSEGMENT:
+		g_mutex_lock(element->control_lock);
+		GST_DEBUG_OBJECT(pad, "new segment;  flushing any old control buffer");
+		control_flush(element);
+		g_mutex_unlock(element->control_lock);
+		break;
+
+	case GST_EVENT_EOS:
+		g_mutex_lock(element->control_lock);
+		while(element->control_buf) {
+			GST_DEBUG_OBJECT(pad, "end-of-stream;  waiting for last control buffer to be flushed");
+			g_cond_wait(element->control_availability, element->control_lock);
+		}
+		GST_DEBUG_OBJECT(pad, "end-of-stream;  last control buffer flushed");
+		g_mutex_unlock(element->control_lock);
+		break;
+
+	default:
+		break;
+	}
+
+	/*
+	 * events on arriving on control pad are not forwarded
+	 */
+
+	gst_event_unref(event);
+	return TRUE;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                                  Sink Pad
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * getcaps()
  */
 
 
@@ -367,6 +491,11 @@ static GstCaps *sink_getcaps(GstPad * pad)
 	gst_object_unref(element);
 	return caps;
 }
+
+
+/*
+ * setcaps()
+ */
 
 
 static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
@@ -414,68 +543,7 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 
 
 /*
- * ============================================================================
- *
- *                                   Chain
- *
- * ============================================================================
- */
-
-
-/*
- * control pad
- */
-
-
-static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
-{
-	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
-	GstFlowReturn result = GST_FLOW_OK;
-
-	/*
-	 * check validity of timestamp and offsets
-	 */
-
-	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
-		GST_ERROR_OBJECT(element, "error in control stream: buffer has invalid timestamp and/or offset");
-		gst_buffer_unref(sinkbuf);
-		result = GST_FLOW_ERROR;
-		goto done;
-	}
-
-	/*
-	 * if there's already a buffer stored, wait for it to be flushed
-	 */
-
-	g_mutex_lock(element->control_lock);
-	while(element->control_buf)
-		g_cond_wait(element->control_flushed, element->control_lock);
-
-	/*
-	 * store this buffer
-	 */
-
-	element->control_buf = sinkbuf;
-
-	/*
-	 * signal the buffer's availability
-	 */
-
-	g_cond_signal(element->control_available);
-	g_mutex_unlock(element->control_lock);
-
-	/*
-	 * done
-	 */
-
-done:
-	gst_object_unref(element);
-	return result;
-}
-
-
-/*
- * sink pad
+ * chain()
  */
 
 
@@ -594,6 +662,73 @@ done:
 
 
 /*
+ * event()
+ */
+
+
+static gboolean sink_event(GstPad *pad, GstEvent *event)
+{
+	GSTLALGate *element = GSTLAL_GATE(GST_PAD_PARENT(pad));
+
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_NEWSEGMENT:
+		g_mutex_lock(element->control_lock);
+		GST_DEBUG_OBJECT(pad, "new segment;  clearing internal end-of-stream flag");
+		element->sink_eos = FALSE;
+		g_mutex_unlock(element->control_lock);
+		break;
+
+	case GST_EVENT_EOS:
+		g_mutex_lock(element->control_lock);
+		GST_DEBUG_OBJECT(pad, "end-of-stream;  setting internal end-of-stream flag and flushing control buffer");
+		element->sink_eos = TRUE;
+		control_flush(element);
+		g_mutex_unlock(element->control_lock);
+		break;
+
+	default:
+		break;
+	}
+
+	/*
+	 * sink events are forwarded to src pad
+	 */
+
+	return gst_pad_push_event(element->srcpad, event);
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                                 Source Pad
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * event()
+ *
+ * push event on control and sink pads.  the default event handler just
+ * picks one of the two at random, but we should send it to both.
+ */
+
+
+static gboolean src_event(GstPad *pad, GstEvent *event)
+{
+	GSTLALGate *element = GSTLAL_GATE(GST_PAD_PARENT(pad));
+	gboolean success = TRUE;
+
+	gst_event_ref(event);
+	success &= gst_pad_push_event(element->sinkpad, event);
+	success &= gst_pad_push_event(element->controlpad, event);
+
+	return success;
+}
+
+
+/*
  * ============================================================================
  *
  *                                Type Support
@@ -627,10 +762,8 @@ static void finalize(GObject *object)
 	element->srcpad = NULL;
 	g_mutex_free(element->control_lock);
 	element->control_lock = NULL;
-	g_cond_free(element->control_available);
-	element->control_available = NULL;
-	g_cond_free(element->control_flushed);
-	element->control_flushed = NULL;
+	g_cond_free(element->control_availability);
+	element->control_availability = NULL;
 	if(element->control_buf) {
 		gst_buffer_unref(element->control_buf);
 		element->control_buf = NULL;
@@ -780,6 +913,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "control");
 	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(control_setcaps));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(control_chain));
+	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(control_event));
 	element->controlpad = pad;
 
 	/* configure (and ref) sink pad */
@@ -787,15 +921,18 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(sink_getcaps));
 	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(sink_setcaps));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(sink_chain));
+	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
 	element->sinkpad = pad;
 
 	/* retrieve (and ref) src pad */
-	element->srcpad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
+	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
+	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(src_event));
+	element->srcpad = pad;
 
 	/* internal data */
 	element->control_lock = g_mutex_new();
-	element->control_available = g_cond_new();
-	element->control_flushed = g_cond_new();
+	element->control_availability = g_cond_new();
+	element->sink_eos = FALSE;
 	element->control_buf = NULL;
 	element->control_sample_func = NULL;
 	element->threshold = DEFAULT_THRESHOLD;
