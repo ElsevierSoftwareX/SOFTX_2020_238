@@ -156,7 +156,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None):
 #
 
 
-def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, fake_data = False, injection_filename = None, verbose = False):
+def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length = 8, fake_data = False, injection_filename = None, verbose = False):
 	#
 	# data source and progress report
 	#
@@ -195,7 +195,7 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, fake_data = Fa
 		# use fixed PSD
 		#
 
-		head = pipeparts.mkwhiten(pipeline, head, psd_mode = 1)
+		head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, psd_mode = 1)
 
 		#
 		# install signal handler to retrieve \Delta f when it is
@@ -214,7 +214,7 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, fake_data = Fa
 		# use running average PSD
 		#
 
-		head = pipeparts.mkwhiten(pipeline, head)
+		head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length)
 	head = pipeparts.mknofakedisconts(pipeline, head)	# FIXME:  remove after basetransform behaviour fixed
 
 	#
@@ -280,7 +280,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
 	# other pads.  then this large queue buffer will not be required
 	# because streaming can begin through the downstream adders without
 	# waiting for input from all upstream elements.
-	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000)
+	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND)
 
 	#
 	# reconstruct physical SNRs
@@ -324,7 +324,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 	for bank_fragment in bank.bank_fragments:
 		mkLLOIDbranch(
 			pipeline,
-			pipeparts.mkqueue(pipeline, hoftdict[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * 1000000000),
+			pipeparts.mkqueue(pipeline, hoftdict[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND),
 			bank,
 			bank_fragment,
 			control_snksrc[0],
@@ -360,7 +360,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 #
 
 
-def mkLLOIDmulti(pipeline, detectors, banks, psd, output_filename, fake_data = False, injection_filename = None, verbose = False):
+def mkLLOIDmulti(pipeline, detectors, banks, psd, output_filename, psd_fft_length = 8, fake_data = False, injection_filename = None, verbose = False):
 	if len(detectors) > 1:
 		raise ValueError, "only 1 instrument supported yet"
 
@@ -379,7 +379,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, output_filename, fake_data = F
 
 	for instrument in detectors:
 		rates = set(rate for bank in banks for rate in bank.get_rates())
-		hoftdict = mkLLOIDsrc(pipeline, instrument, detectors[instrument], rates, psd = psd, fake_data = fake_data, injection_filename = injection_filename, verbose = verbose)
+		hoftdict = mkLLOIDsrc(pipeline, instrument, detectors[instrument], rates, psd = psd, psd_fft_length = psd_fft_length, fake_data = fake_data, injection_filename = injection_filename, verbose = verbose)
 		for bank in banks:
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
 			head = mkLLOIDsingle(
@@ -484,7 +484,11 @@ def parse_command_line():
 #
 
 
-def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, fake_data = False, injection_filename = None, verbose = False):
+def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, fake_data = False, injection_filename = None, psd_fft_length = 8, verbose = False):
+	#
+	# pipeline handler for PSD measurement
+	#
+
 	class PSDHandler(object):
 		def __init__(self, mainloop, pipeline, verbose = False):
 			self.mainloop = mainloop
@@ -510,6 +514,18 @@ def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, fake_
 				if message.structure.get_name() == "spectrum":
 					self.psd = pipeio.parse_spectrum_message(message)
 
+	#
+	# 8 FFT-lengths is just a ball-parky estimate of how much data is
+	# needed for a good PSD.
+	#
+
+	if float(gps_stop_time - gps_start_time) < 8 * psd_fft_length:
+		raise ValueError, "segment [%s s, %s s) too short" % (gps_start_time, gps_stop_time)
+
+	#
+	# build pipeline
+	#
+
 	mainloop = gobject.MainLoop()
 
 	pipeline = gst.Pipeline("psd")
@@ -521,16 +537,27 @@ def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, fake_
 		head = pipeparts.mkprogressreport(pipeline, head, "Measuring PSD in %s" % instrument)
 	if injection_filename is not None:
 		head = pipeparts.mkinjections(pipeline, head, injection_filename)
-	pipeparts.mkfakesink(pipeline, pipeparts.mkwhiten(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % rate)))
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % rate)
+	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 3)
+	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, average_samples = int(round(float(gps_stop_time - gps_start_time) / (psd_fft_length / 2) - 1)))
+	pipeparts.mkfakesink(pipeline, head)
 
 	handler = PSDHandler(mainloop, pipeline, verbose = verbose)
+
+	#
+	# process segment
+	#
 
 	pipeline.set_state(gst.STATE_PAUSED)
 	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, gps_start_time.ns(), gst.SEEK_TYPE_SET, gps_stop_time.ns())
 	pipeline.set_state(gst.STATE_PLAYING)
 	mainloop.run()
 
-	return PSDHandler.psd
+	#
+	# done
+	#
+
+	return handler.psd
 
 
 def write_psd(filename, psd, verbose = False):
@@ -561,6 +588,9 @@ options, filenames = parse_command_line()
 #
 
 
+psd_fft_length = 8
+
+
 detectors = {
 	options.instrument: DetectorData(options.frame_cache, options.channel_name)
 }
@@ -574,7 +604,8 @@ else:
 		detectors[options.instrument],
 		options.gps_start_time,
 		options.gps_stop_time,
-		2048,	# Hz;  must not be less than highest bank fragment sample rate (see below)
+		2 * 2048,	# Hz;  must not be less than highest bank fragment sample rate (see below)
+		psd_fft_length = psd_fft_length,
 		fake_data = options.fake_data,
 		injection_filename = options.injections,
 		verbose = options.verbose
@@ -618,6 +649,7 @@ mkLLOIDmulti(
 	banks = banks,
 	psd = psd,
 	output_filename = options.output,
+	psd_fft_length = psd_fft_length,
 	fake_data = options.fake_data,
 	injection_filename = options.injections,
 	verbose = options.verbose
