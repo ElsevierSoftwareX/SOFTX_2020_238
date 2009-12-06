@@ -65,7 +65,7 @@ def interpolate_psd(psd, deltaF):
 		epoch = psd.epoch,
 		f0 = psd.f0,
 		deltaF = deltaF,
-		data = interp(psd.f0 + numpy.arange(int(len(data) * psd.deltaF / deltaF)) * deltaF)
+		data = interp(psd.f0 + numpy.arange(round(len(data) * psd.deltaF / deltaF)) * deltaF) * (deltaF / psd.deltaF)
 	)
 
 
