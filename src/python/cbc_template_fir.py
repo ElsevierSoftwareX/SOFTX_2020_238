@@ -27,8 +27,6 @@
 import math
 import cmath
 import numpy
-from scipy import fftpack
-from scipy import integrate
 from scipy import interpolate
 from scipy import linalg
 import sys
@@ -65,22 +63,24 @@ def interpolate_psd(psd, deltaF):
 		return psd
 
 	#
-	# interpolate PSD by clipping/zero-padding Fourier transform of
-	# amplitude spectrum
+	# interpolate PSD by clipping/zero-padding time-domain impulse
+	# response of equivalent whitening filter
 	#
 
+	#from scipy import fftpack
 	#psd_data = psd.data
 	#x = numpy.zeros((len(psd_data) * 2 - 2,), dtype = "double")
-	#x[0] = psd_data[0]
-	#x[1::2] = psd_data[1:]
-	#x = fftpack.irfft(x**.5)
+	#psd_data = numpy.where(psd_data, psd_data, float("inf"))
+	#x[0] = 1 / psd_data[0]**.5
+	#x[1::2] = 1 / psd_data[1:]**.5
+	#x = fftpack.irfft(x)
 	#if deltaF < psd.deltaF:
 	#	x *= numpy.cos(numpy.arange(len(x)) * math.pi / (len(x) + 1))**2
 	#	x = numpy.concatenate((x[:(len(x) / 2)], numpy.zeros((int(round(len(x) * psd.deltaF / deltaF)) - len(x),), dtype = "double"), x[(len(x) / 2):]))
 	#else:
 	#	x = numpy.concatenate((x[:(int(round(len(x) * psd.deltaF / deltaF)) / 2)], x[-(int(round(len(x) * psd.deltaF / deltaF)) / 2):]))
 	#	x *= numpy.cos(numpy.arange(len(x)) * math.pi / (len(x) + 1))**2
-	#x = fftpack.rfft(x)**2
+	#x = 1 / fftpack.rfft(x)**2
 	#psd_data = numpy.concatenate(([x[0]], x[1::2]))
 
 	#
