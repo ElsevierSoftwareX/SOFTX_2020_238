@@ -295,6 +295,11 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
 	# done
 	#
 
+	# FIXME:  find a way to use less memory without this hack
+	del bank_fragment.orthogonal_template_bank
+	del bank_fragment.sum_of_squares_weights
+	del bank_fragment.mix_matrix
+
 	return src
 
 
@@ -338,6 +343,8 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 
 	snr = pipeparts.mktee(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(bank.get_rates()))))
 	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr), autocorrelation_matrix = bank.autocorrelation_bank, latency = -(bank.autocorrelation_bank.shape[1] - 1) / 2)
+	# FIXME:  find a way to use less memory without this hack
+	del bank.autocorrelation_bank
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, snr), "snr_%s.dump" % logname)
 	#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr)), "video/x-raw-rgb, width=640, height=480, framerate=4/1"), "channelgram.avi", verbose = True)
 
