@@ -910,7 +910,7 @@ static void base_init(gpointer class)
 		"Inspiral \\chi^{2}",
 		"Filter",
 		"A \\chi^{2} statistic for the inspiral pipeline",
-		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chad Hanna <channa@ligo.caltech.edu>"
+		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
 	};
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
 

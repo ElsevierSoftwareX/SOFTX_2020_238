@@ -2,7 +2,7 @@
  * Copyright (C) 1999,2000 Erik Walthinsen <omega@cse.ogi.edu>
  *                    2001 Thomas <thomas@apestaart.org>
  *               2005,2006 Wim Taymans <wim@fluendo.com>
- *               2008 Kipp Cannon <kcannon@ligo.caltech.edu>
+ *               2008 Kipp Cannon <kipp.cannon@ligo.org>
  *
  * adder.c: Adder element, N in, one out, samples are added
  *

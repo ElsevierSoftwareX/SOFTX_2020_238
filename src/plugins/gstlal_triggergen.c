@@ -604,7 +604,7 @@ static void gen_base_init(gpointer g_class)
 		"Trigger Generator",
 		"Filter",
 		"SNR and \\chi^{2} in, Triggers out",
-		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chad Hanna <channa@ligo.caltech.edu>"
+		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
 	};
 
 	GstElementClass *element_class = GST_ELEMENT_CLASS(g_class);
@@ -860,7 +860,7 @@ static void xmlwriter_base_init(gpointer g_class)
 		"Trigger XML Writer",
 		"Sink/File",
 		"Writes LAL's SnglInspiralTable C structures to an XML file",
-		"Kipp Cannon <kcannon@ligo.caltech.edu>, Chad Hanna <channa@ligo.caltech.edu>"
+		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
 	};
 
 	GstElementClass *element_class = GST_ELEMENT_CLASS(g_class);

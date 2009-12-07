@@ -1,7 +1,7 @@
 /* GStreamer
  * Copyright (C) 1999,2000 Erik Walthinsen <omega@cse.ogi.edu>
  *                    2000 Wim Taymans <wtay@chello.be>
- *                    2008 Kipp Cannon <kcannon@ligo.caltech.edu>
+ *                    2008 Kipp Cannon <kipp.cannon@ligo.org>
  *
  * gstadder.h: Header for GstAdder element
  *

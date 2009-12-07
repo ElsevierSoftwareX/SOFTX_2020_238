@@ -2,7 +2,7 @@
  * Custom GstCollectPads class to assist with combining input streams
  * synchronously
  *
- * Copyright (C) 2008 Kipp Cannon <kcannon@ligo.caltech.edu>
+ * Copyright (C) 2008 Kipp Cannon <kipp.cannon@ligo.org>
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Library General Public License as published
