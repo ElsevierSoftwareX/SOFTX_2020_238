@@ -322,14 +322,15 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 	#
 
 	for bank_fragment in bank.bank_fragments:
-		mkLLOIDbranch(
+		branch_snr = mkLLOIDbranch(
 			pipeline,
 			pipeparts.mkqueue(pipeline, hoftdict[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND),
 			bank,
 			bank_fragment,
 			control_snksrc[0],
 			control_snksrc[1]
-		).link(snr)
+		)
+		branch_snr.link(snr)
 
 	#
 	# snr and \chi^{2}
