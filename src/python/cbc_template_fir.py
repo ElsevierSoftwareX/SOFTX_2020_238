@@ -27,6 +27,8 @@
 import math
 import cmath
 import numpy
+from scipy import fftpack
+from scipy import integrate
 from scipy import interpolate
 from scipy import linalg
 import sys
@@ -55,17 +57,55 @@ __date__ = "FIXME"
 
 
 def interpolate_psd(psd, deltaF):
-	# FIXME:  maybe better to do linear interpolation in log-log
-	# co-ordinates to provide power-law transitions between samples;
-	# hard to make it work at DC.
-	data = psd.data
-	interp = interpolate.interp1d(psd.f0 + numpy.arange(len(data)) * psd.deltaF, data, bounds_error = False)
+	#
+	# interpolate PSD by clipping/zero-padding Fourier transform of
+	# amplitude spectrum
+	#
+
+	#psd_data = psd.data
+	#x = numpy.zeros((len(psd_data) * 2 - 2,), dtype = "double")
+	#x[0] = psd_data[0]
+	#x[1::2] = psd_data[1:]
+	#x = fftpack.irfft(x**.5)
+	#if deltaF < psd.deltaF:
+	#	x *= numpy.cos(numpy.arange(len(x)) * math.pi / (len(x) + 1))**2
+	#	x = numpy.concatenate((x[:(len(x) / 2)], numpy.zeros((int(round(len(x) * psd.deltaF / deltaF)) - len(x),), dtype = "double"), x[(len(x) / 2):]))
+	#else:
+	#	x = numpy.concatenate((x[:(int(round(len(x) * psd.deltaF / deltaF)) / 2)], x[-(int(round(len(x) * psd.deltaF / deltaF)) / 2):]))
+	#	x *= numpy.cos(numpy.arange(len(x)) * math.pi / (len(x) + 1))**2
+	#x = fftpack.rfft(x)**2
+	#psd_data = numpy.concatenate(([x[0]], x[1::2]))
+
+	#
+	# interpolate PSD with linear interpolator
+	#
+
+	#psd_data = psd.data
+	#f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
+	#interp = interpolate.interp1d(f, psd_data, bounds_error = False)
+	#f = psd.f0 + numpy.arange(round(len(psd_data) * psd.deltaF / deltaF)) * deltaF
+	#psd_data = interp(f)
+
+	#
+	# interpolate log(PSD) with cubic spline
+	#
+
+	psd_data = psd.data
+	f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
+	interp = interpolate.splrep(f, numpy.log(psd_data), s = 0)
+	f = psd.f0 + numpy.arange(round(len(psd_data) * psd.deltaF / deltaF)) * deltaF
+	psd_data = numpy.exp(interpolate.splev(f, interp, der = 0))
+
+	#
+	# return result
+	#
+
 	return laltypes.REAL8FrequencySeries(
 		name = psd.name,
 		epoch = psd.epoch,
 		f0 = psd.f0,
 		deltaF = deltaF,
-		data = interp(psd.f0 + numpy.arange(round(len(data) * psd.deltaF / deltaF)) * deltaF) * (deltaF / psd.deltaF)
+		data = psd_data
 	)
 
 
@@ -87,8 +127,8 @@ def generate_template(template_bank_row, f_low, sample_rate, duration, order = 7
 def generate_templates(template_table, psd, f_low, sample_rate, duration, autocorrelation_length = None, verbose = False):
 	length = int(round(duration * sample_rate))
 
-	working_duration = 2**math.ceil(math.log((duration + 32.0) * sample_rate, 2)) / sample_rate	# add 32 seconds for PSD ringing, round up to power of 2 count of samples
-	working_length = int(round(working_duration * sample_rate))
+	working_length = int(round(2**math.ceil(math.log(length + round(32.0 * sample_rate), 2))))	# add 32 seconds for PSD ringing, round up to power of 2 count of samples
+	working_duration = float(working_length) / sample_rate
 
 	psd = interpolate_psd(psd, 1.0 / working_duration)
 
