@@ -69,6 +69,7 @@
 #include <gst/audio/audio.h>
 #include "gstadder.h"
 #include <gstlalcollectpads.h>
+#include <gstlal.h>
 
 
 #define GST_CAT_DEFAULT gst_adder_debug
@@ -1042,7 +1043,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 */
 
 		if((adder->offset != GST_BUFFER_OFFSET_NONE) && (earliest_input_offset < adder->offset)) {
-			GST_ERROR_OBJECT(adder, "detected time reversal in at least one input stream:  expected nothing earlier than offset %lu, found sample at offset %lu", adder->offset, earliest_input_offset);
+			GST_ERROR_OBJECT(adder, "detected time reversal in at least one input stream:  expected nothing earlier than offset %" G_GUINT64_FORMAT ", found sample at offset %" G_GUINT64_FORMAT, adder->offset, earliest_input_offset);
 			result = GST_FLOW_ERROR;
 			goto error;
 		}
@@ -1069,7 +1070,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 	 * loop over input pads, getting chunks of data from each in turn.
 	 */
 
-	GST_LOG_OBJECT(adder, "cycling through channels, offsets [%lu, %lu) (@ %d Hz) relative to %lu ns available", earliest_input_offset, earliest_input_offset_end, adder->rate, adder->segment.start);
+	GST_LOG_OBJECT(adder, "cycling through channels, offsets [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ") (@ %d Hz) relative to %" GST_TIME_SECONDS_FORMAT " available", earliest_input_offset, earliest_input_offset_end, adder->rate, GST_TIME_SECONDS_ARGS(adder->segment.start));
 	for(collected = pads->data; collected; collected = g_slist_next(collected)) {
 		GstLALCollectData *data = collected->data;
 		GstBuffer *inbuf;
@@ -1120,7 +1121,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			 * and figure out a different way to check for EOS
 			 * */
 
-			GST_LOG_OBJECT(adder, "requesting output buffer of %lu samples", length);
+			GST_LOG_OBJECT(adder, "requesting output buffer of %" G_GUINT64_FORMAT " samples", length);
 			result = gst_pad_alloc_buffer(adder->srcpad, earliest_input_offset, length * adder->unit_size, GST_PAD_CAPS(adder->srcpad), &outbuf);
 			if(result != GST_FLOW_OK) {
 				/* FIXME: handle failure */
@@ -1224,7 +1225,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 	 * push the buffer downstream.
 	 */
 
-	GST_LOG_OBJECT(adder, "pushing outbuf, timestamp %" GST_TIME_FORMAT ", offset %lu", GST_TIME_ARGS(GST_BUFFER_TIMESTAMP(outbuf)), GST_BUFFER_OFFSET(outbuf));
+	GST_LOG_OBJECT(adder, "pushing outbuf, timestamp %" GST_TIME_SECONDS_FORMAT ", offset %" G_GUINT64_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(outbuf)), GST_BUFFER_OFFSET(outbuf));
 	return gst_pad_push(adder->srcpad, outbuf);
 
 	/*
