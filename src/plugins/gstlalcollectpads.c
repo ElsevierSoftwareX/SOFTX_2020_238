@@ -35,7 +35,8 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstcollectpads.h>
-#include "gstlalcollectpads.h"
+#include <gstlalcollectpads.h>
+#include <gstlal.h>
 
 
 /*
@@ -419,7 +420,7 @@ GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *pads, GstLALCollectDa
 	GST_BUFFER_OFFSET_END(buf) = dequeued_offset + GST_BUFFER_SIZE(buf) / data->unit_size;
 	GST_BUFFER_TIMESTAMP(buf) = t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - offset0, GST_SECOND, rate);
 	GST_BUFFER_DURATION(buf) = t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - offset0, GST_SECOND, rate) - GST_BUFFER_TIMESTAMP(buf);
-	GST_DEBUG_OBJECT(GST_PAD_PARENT(data->as_gstcollectdata.pad), "(%s): returning %lu -- %lu, %lu -- %lu\n", GST_PAD_NAME(data->as_gstcollectdata.pad), GST_BUFFER_OFFSET(buf), GST_BUFFER_OFFSET_END(buf), GST_BUFFER_TIMESTAMP(buf), GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf));
+	GST_DEBUG_OBJECT(GST_PAD_PARENT(data->as_gstcollectdata.pad), "(%s): returning %" GST_BUFFER_BOUNDARIES_FORMAT "\n", GST_PAD_NAME(data->as_gstcollectdata.pad), GST_BUFFER_BOUNDARIES_ARGS(buf));
 
 	return buf;
 }
