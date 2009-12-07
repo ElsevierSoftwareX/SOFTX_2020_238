@@ -58,6 +58,13 @@ __date__ = "FIXME"
 
 def interpolate_psd(psd, deltaF):
 	#
+	# no-op?
+	#
+
+	if deltaF == psd.deltaF:
+		return psd
+
+	#
 	# interpolate PSD by clipping/zero-padding Fourier transform of
 	# amplitude spectrum
 	#
@@ -87,10 +94,13 @@ def interpolate_psd(psd, deltaF):
 	#psd_data = interp(f)
 
 	#
-	# interpolate log(PSD) with cubic spline
+	# interpolate log(PSD) with cubic spline.  note that the PSD is
+	# clipped at 1e-300 to prevent nan's in the interpolator (which
+	# doesn't seem to like the occasional sample being -inf)
 	#
 
 	psd_data = psd.data
+	psd_data = numpy.where(psd_data, psd_data, 1e-300)
 	f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
 	interp = interpolate.splrep(f, numpy.log(psd_data), s = 0)
 	f = psd.f0 + numpy.arange(round(len(psd_data) * psd.deltaF / deltaF)) * deltaF
@@ -105,6 +115,7 @@ def interpolate_psd(psd, deltaF):
 		epoch = psd.epoch,
 		f0 = psd.f0,
 		deltaF = deltaF,
+		sampleUnits = psd.sampleUnits,
 		data = psd_data
 	)
 
