@@ -162,7 +162,7 @@ static gint control_get_state(GSTLALGate *element, GstClockTime t)
 		 */
 
 		while(!element->control_buf && !element->control_eos) {
-			GST_DEBUG_OBJECT(element, "waiting for control buffer");
+			GST_DEBUG_OBJECT(element, "waiting for control buffer for %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(t));
 			g_cond_wait(element->control_availability, element->control_lock);
 		}
 
