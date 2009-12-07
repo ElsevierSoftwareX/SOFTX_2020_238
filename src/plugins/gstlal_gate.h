@@ -57,6 +57,7 @@ typedef struct _GSTLALGate {
 
 	GMutex *control_lock;
 	GCond *control_availability;
+	gboolean control_eos;
 	gboolean sink_eos;
 	GstBuffer *control_buf;
 	double (*control_sample_func)(const struct _GSTLALGate *, size_t);

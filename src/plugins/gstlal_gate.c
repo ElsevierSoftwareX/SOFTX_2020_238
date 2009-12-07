@@ -90,7 +90,7 @@ static void control_flush(GSTLALGate *element)
 		gst_buffer_unref(element->control_buf);
 		element->control_buf = NULL;
 	}
-	g_cond_signal(element->control_availability);
+	g_cond_broadcast(element->control_availability);
 }
 
 
@@ -161,7 +161,7 @@ static gint control_get_state(GSTLALGate *element, GstClockTime t)
 		 * wait for a control buffer if we don't have one
 		 */
 
-		while(!element->control_buf && !element->sink_eos) {
+		while(!element->control_buf && !element->control_eos) {
 			GST_DEBUG_OBJECT(element, "waiting for control buffer");
 			g_cond_wait(element->control_availability, element->control_lock);
 		}
@@ -172,7 +172,7 @@ static gint control_get_state(GSTLALGate *element, GstClockTime t)
 		 * return the default state
 		 */
 
-		if(G_UNLIKELY(element->sink_eos || t < GST_BUFFER_TIMESTAMP(element->control_buf))) {
+		if(G_UNLIKELY(element->control_eos || t < GST_BUFFER_TIMESTAMP(element->control_buf))) {
 			GST_DEBUG_OBJECT(element, "end-of-stream or control buffer is for the future, using default control state");
 			return element->default_state;
 		}
@@ -378,6 +378,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 		GST_DEBUG_OBJECT(element, "sink is at end-of-stream, discarding control buffer");
 		gst_buffer_unref(sinkbuf);
 		result = GST_FLOW_UNEXPECTED;
+		g_mutex_unlock(element->control_lock);
 		goto done;
 	}
 
@@ -392,7 +393,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	GST_DEBUG_OBJECT(element, "new control buffer available");
-	g_cond_signal(element->control_availability);
+	g_cond_broadcast(element->control_availability);
 	g_mutex_unlock(element->control_lock);
 
 	/*
@@ -417,18 +418,21 @@ static gboolean control_event(GstPad *pad, GstEvent *event)
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT:
 		g_mutex_lock(element->control_lock);
-		GST_DEBUG_OBJECT(pad, "new segment;  flushing any old control buffer");
+		GST_DEBUG_OBJECT(pad, "new segment;  clearing internal end-of-stream flag and flushing any old control buffer");
+		element->control_eos = FALSE;
 		control_flush(element);
 		g_mutex_unlock(element->control_lock);
 		break;
 
 	case GST_EVENT_EOS:
 		g_mutex_lock(element->control_lock);
-		while(element->control_buf) {
-			GST_DEBUG_OBJECT(pad, "end-of-stream;  waiting for last control buffer to be flushed");
-			g_cond_wait(element->control_availability, element->control_lock);
+		if(element->sink_eos) {
+			GST_DEBUG_OBJECT(pad, "end-of-stream;  sink is at end-of-stream, flushing last control buffer");
+			control_flush(element);
 		}
-		GST_DEBUG_OBJECT(pad, "end-of-stream;  last control buffer flushed");
+		GST_DEBUG_OBJECT(pad, "end-of-stream;  last control buffer flushed, setting internal end-of-stream flag");
+		element->control_eos = TRUE;
+		g_cond_broadcast(element->control_availability);
 		g_mutex_unlock(element->control_lock);
 		break;
 
@@ -932,6 +936,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	/* internal data */
 	element->control_lock = g_mutex_new();
 	element->control_availability = g_cond_new();
+	element->control_eos = FALSE;
 	element->sink_eos = FALSE;
 	element->control_buf = NULL;
 	element->control_sample_func = NULL;
