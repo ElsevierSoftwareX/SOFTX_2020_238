@@ -486,7 +486,7 @@ static GstFlowReturn chain_matrix(GstPad *pad, GstBuffer *sinkbuf)
 	element->mixmatrix_buf = sinkbuf;
 	element->mixmatrix = gsl_matrix_view_array((double *) GST_BUFFER_DATA(sinkbuf), rows, cols);
 	if(element->mixmatrix_buf && element->chifacs_buf)
-		g_cond_signal(element->coefficients_available);
+		g_cond_broadcast(element->coefficients_available);
 
 	/*
 	 * FIXME:  need to check for size consistency between chifacs and
@@ -571,7 +571,7 @@ static GstFlowReturn chain_chifacs(GstPad *pad, GstBuffer *sinkbuf)
 	element->chifacs_buf = sinkbuf;
 	element->chifacs = gsl_vector_view_array((double *) GST_BUFFER_DATA(sinkbuf), cols);
 	if(element->mixmatrix_buf && element->chifacs_buf)
-		g_cond_signal(element->coefficients_available);
+		g_cond_broadcast(element->coefficients_available);
 
 	/*
 	 * FIXME:  need to check for size consistency between chifacs and

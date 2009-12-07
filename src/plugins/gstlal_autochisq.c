@@ -805,7 +805,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		 * signal availability of new autocorrelation vectors
 		 */
 
-		g_cond_signal(element->autocorrelation_available);
+		g_cond_broadcast(element->autocorrelation_available);
 		g_mutex_unlock(element->autocorrelation_lock);
 		break;
 	}

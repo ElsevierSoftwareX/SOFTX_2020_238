@@ -942,7 +942,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		 * signal availability of new time-domain filters
 		 */
 
-		g_cond_signal(element->fir_matrix_available);
+		g_cond_broadcast(element->fir_matrix_available);
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
 	}

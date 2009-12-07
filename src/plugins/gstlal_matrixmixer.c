@@ -553,7 +553,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 			gst_pad_set_caps(GST_BASE_TRANSFORM_SINK_PAD(GST_BASE_TRANSFORM(object)), NULL);
 		if(data_type != element->data_type || num_output_channels(element) != out_channels)
 			gst_pad_set_caps(GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(object)), NULL);
-		g_cond_signal(element->mixmatrix_available);
+		g_cond_broadcast(element->mixmatrix_available);
 		g_mutex_unlock(element->mixmatrix_lock);
 		break;
 	}
