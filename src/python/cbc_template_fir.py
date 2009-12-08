@@ -141,7 +141,8 @@ def generate_templates(template_table, psd, f_low, sample_rate, duration, autoco
 	working_length = int(round(2**math.ceil(math.log(length + round(32.0 * sample_rate), 2))))	# add 32 seconds for PSD ringing, round up to power of 2 count of samples
 	working_duration = float(working_length) / sample_rate
 
-	psd = interpolate_psd(psd, 1.0 / working_duration)
+	if psd is not None:
+		psd = interpolate_psd(psd, 1.0 / working_duration)
 
 	revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1)
 	tseries = laltypes.COMPLEX16TimeSeries(
@@ -170,7 +171,8 @@ def generate_templates(template_table, psd, f_low, sample_rate, duration, autoco
 		# whiten and add quadrature phase ("sine" component)
 		#
 
-		lalfft.XLALWhitenCOMPLEX16FrequencySeries(fseries, psd)
+		if psd is not None:
+			lalfft.XLALWhitenCOMPLEX16FrequencySeries(fseries, psd)
 		fseries = templates.add_quadrature_phase(fseries, working_length)
 
 		#
