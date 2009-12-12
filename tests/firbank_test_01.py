@@ -49,10 +49,10 @@ def firbank_test_01a(pipeline):
 	head = tee = pipeparts.mktee(pipeline, head)
 
 	fir_matrix = numpy.zeros((1, fir_length), dtype = "double")
-	middle = (fir_length - 1) / 2
-	fir_matrix[0, middle] = 1.0
+	latency = -(fir_length - 1) / 2
+	fir_matrix[0, (fir_matrix.shape[1] - 1) + latency] = 1.0
 
-	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = fir_matrix, latency = -middle)
+	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = fir_matrix, latency = latency)
 	head = mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "firbank_test_01a_out.dump")
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "firbank_test_01a_in.dump")
