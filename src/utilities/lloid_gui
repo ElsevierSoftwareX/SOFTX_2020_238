@@ -256,7 +256,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
 	# FIR filter bank
 	#
 
-	src = pipeparts.mktee(pipeline, pipeparts.mkfirbank(pipeline, src, latency = int(bank_fragment.start * bank_fragment.rate), fir_matrix = bank_fragment.orthogonal_template_bank))
+	src = pipeparts.mktee(pipeline, pipeparts.mkfirbank(pipeline, src, latency = -int(bank_fragment.start * bank_fragment.rate), fir_matrix = bank_fragment.orthogonal_template_bank))
 
 	#
 	# compute weighted sum-of-squares, feed to sum-of-squares
