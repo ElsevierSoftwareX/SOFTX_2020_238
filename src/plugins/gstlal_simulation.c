@@ -175,6 +175,7 @@ static struct injection_document *load_injection_document(const char *filename, 
 		new->has_sim_burst_table = 0;
 		new->sim_burst_table_head = NULL;
 		/*success = 0;*/
+		XLALClearErrno();
 	} else if(new->has_sim_burst_table) {
 		XLALClearErrno();
 		new->sim_burst_table_head = XLALSimBurstTableFromLIGOLw(filename, &start, &end);
@@ -196,6 +197,7 @@ static struct injection_document *load_injection_document(const char *filename, 
 		new->has_sim_inspiral_table = 0;
 		new->sim_inspiral_table_head = NULL;
 		/*success = 0;*/
+		XLALClearErrno();
 	} else if(new->has_sim_inspiral_table) {
 		new->sim_inspiral_table_head = NULL;
 		if(SimInspiralTableFromLIGOLw(&new->sim_inspiral_table_head, filename, start.gpsSeconds - 1, end.gpsSeconds + 1) < 0) {
