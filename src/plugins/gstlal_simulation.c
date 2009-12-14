@@ -170,7 +170,12 @@ static struct injection_document *load_injection_document(const char *filename, 
 	 */
 
 	new->has_sim_burst_table = XLALLIGOLwHasTable(filename, "sim_burst");
-	if(new->has_sim_burst_table) {
+	if(new->has_sim_burst_table < 0) {
+		/* FIXME:  handle failure */
+		new->has_sim_burst_table = 0;
+		new->sim_burst_table_head = NULL;
+		success = 0;
+	} else if(new->has_sim_burst_table) {
 		XLALClearErrno();
 		new->sim_burst_table_head = XLALSimBurstTableFromLIGOLw(filename, &start, &end);
 		if(XLALGetBaseErrno()) {
@@ -186,7 +191,12 @@ static struct injection_document *load_injection_document(const char *filename, 
 	 */
 
 	new->has_sim_inspiral_table = XLALLIGOLwHasTable(filename, "sim_inspiral");
-	if(new->has_sim_inspiral_table) {
+	if(new->has_sim_inspiral_table < 0) {
+		/* FIXME:  handle failure */
+		new->has_sim_inspiral_table = 0;
+		new->sim_inspiral_table_head = NULL;
+		success = 0;
+	} else if(new->has_sim_inspiral_table) {
 		new->sim_inspiral_table_head = NULL;
 		if(SimInspiralTableFromLIGOLw(&new->sim_inspiral_table_head, filename, start.gpsSeconds - 1, end.gpsSeconds + 1) < 0) {
 			XLALPrintError("%s(): failure reading sim_inspiral table from \"%s\"\n", func, filename);
