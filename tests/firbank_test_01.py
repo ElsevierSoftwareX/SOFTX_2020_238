@@ -40,6 +40,7 @@ def firbank_test_01a(pipeline):
 	buffer_length = 1.0	# seconds
 	test_duration = 10.0	# seconds
 	fir_length = 21	# samples
+	latency = (fir_length - 1) / 2	# samples, in [0, fir_length)
 
 	#
 	# build pipeline
@@ -49,8 +50,7 @@ def firbank_test_01a(pipeline):
 	head = tee = pipeparts.mktee(pipeline, head)
 
 	fir_matrix = numpy.zeros((1, fir_length), dtype = "double")
-	latency = -(fir_length - 1) / 2
-	fir_matrix[0, (fir_matrix.shape[1] - 1) + latency] = 1.0
+	fir_matrix[0, (fir_matrix.shape[1] - 1) - latency] = 1.0
 
 	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = fir_matrix, latency = latency)
 	head = mkchecktimestamps(pipeline, head)
