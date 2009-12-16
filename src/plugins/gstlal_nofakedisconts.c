@@ -136,13 +136,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 			if(!is_discont) {
 				buf = gst_buffer_make_metadata_writable(buf);
 				GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
-				fprintf(stderr, "%s: set missing discontinuity flag\n", gst_element_get_name(element));
+				fprintf(stderr, "%s: set missing discontinuity flag at %" GST_TIME_SECONDS_FORMAT "\n", gst_element_get_name(element), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buf)));
 			}
 		} else {
 			if(is_discont) {
 				buf = gst_buffer_make_metadata_writable(buf);
 				GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_DISCONT);
-				fprintf(stderr, "%s: cleared improper discontinuity flag\n", gst_element_get_name(element));
+				fprintf(stderr, "%s: cleared improper discontinuity flag at %" GST_TIME_SECONDS_FORMAT "\n", gst_element_get_name(element), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buf)));
 			}
 		}
 	}
