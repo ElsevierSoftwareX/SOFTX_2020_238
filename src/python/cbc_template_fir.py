@@ -213,12 +213,21 @@ def generate_templates(template_table, psd, f_low, sample_rate, duration, autoco
 	return template_bank, autocorrelation_bank
 
 
-def decompose_templates(template_bank, tolerance):
+def decompose_templates(template_bank, tolerance, identity = False):
 	#
 	# sum-of-squares for each template (row).
 	#
 
 	chifacs = (template_bank * template_bank).sum(1)
+
+	#
+	# this turns this function into a no-op:  the output "basis
+	# vectors" are exactly the input templates and the reconstruction
+	# matrix is the identity matrix
+	#
+
+	if identity:
+		return template_bank, numpy.ones(template_bank.shape[0], dtype = "double"), numpy.identity(template_bank.shape[0], dtype = "double"), chifacs
 
 	#
 	# adjust tolerance according to local norm
@@ -237,24 +246,18 @@ def decompose_templates(template_bank, tolerance):
 	#
 
 	residual = numpy.sqrt((s * s).cumsum() / numpy.dot(s, s))
-	n = residual.searchsorted(tolerance) + 1
+	n = min(residual.searchsorted(tolerance) + 1, len(s))
 
 	#
-	# clip decomposition
+	# clip decomposition, pre-multiply Vh by s
 	#
 
 	U = U[:,:n]
+	Vh = numpy.dot(numpy.diag(s), Vh)[:n,:]
 	s = s[:n]
-	Vh = Vh[:,:n]
-
-	#
-	# pre-scale Vh by s
-	#
-
-	Vh *= s
 
 	#
 	# done.
 	#
 
-	return U.T, s, Vh.T, chifacs
+	return U.T, s, Vh, chifacs
