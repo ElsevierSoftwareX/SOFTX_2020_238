@@ -184,7 +184,7 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 	# amplifies the non-existant high-frequency components
 	#
 
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, head)), "audio/x-raw-float, rate=%d" % max(rates))
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, head), quality = 9), "audio/x-raw-float, rate=%d" % max(rates))
 
 	#
 	# whiten
@@ -223,6 +223,8 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 	# filter roll-off
 	#
 
+	# FIXME:  re-measure these, we've changed the quality of the
+	# resampler since these were measured.
 	correction = {
 		128: 1.03 / 0.93,
 		256: 1.03 / 0.93,
@@ -232,17 +234,16 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 
 	head = {max(rates): pipeparts.mktee(pipeline, head)}
 	for rate in sorted(rates, reverse = True)[1:]:	# all but the highest rate
-		# FIXME:  the default quality is 4, we should try setting
-		# it higher (9?), but then the variance correction look-up
-		# table will need to be re-measured
 		source_rate = max(rates)
-		head[rate] = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkaudioamplify(pipeline, head[source_rate], math.sqrt(correction[rate] * float(source_rate) / rate))), "audio/x-raw-float, rate=%d" % rate))
+		head[rate] = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkaudioamplify(pipeline, head[source_rate], math.sqrt(correction[rate] * float(source_rate) / rate)), quality = 9), "audio/x-raw-float, rate=%d" % rate))
 
 	#
 	# done.  return value is a dictionary of tee elements indexed by
 	# sample rate
 	#
 
+	#for rate, elem in head.items():
+	#	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, elem), "src_%d.dump" % rate)
 	return head
 
 
@@ -256,14 +257,18 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
 	# FIR filter bank
 	#
 
-	src = pipeparts.mktee(pipeline, pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)), fir_matrix = bank_fragment.orthogonal_template_bank))
+	# FIXME:  why the -1?  without it the pieces don't match but I
+	# don't understand where this offset comes from.  it might really
+	# need to be here, or it might be a symptom of a bug elsewhere.
+	# figure this out.
+	src = pipeparts.mktee(pipeline, pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank))
 
 	#
 	# compute weighted sum-of-squares, feed to sum-of-squares
 	# aggregator
 	#
 
-	pipeparts.mkchecktimestamps(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights))), name = "timestamps_%s_%d_%d_after_sumsquare_resampler" % (bank.logname, bank_fragment.start, bank_fragment.end)).link(control_snk)
+	pipeparts.mkchecktimestamps(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights)), quality = 9), name = "timestamps_%s_%d_%d_after_sumsquare_resampler" % (bank.logname, bank_fragment.start, bank_fragment.end)).link(control_snk)
 
 	#
 	# use sum-of-squares aggregate as gate control for orthogonal SNRs
@@ -287,7 +292,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
 	#
 
 	src = pipeparts.mkmatrixmixer(pipeline, src, matrix = bank_fragment.mix_matrix)
-	src = pipeparts.mkresample(pipeline, src, quality = 0)
+	src = pipeparts.mkresample(pipeline, src, quality = 9)
 	src = pipeparts.mknofakedisconts(pipeline, src)	# FIXME:  remove after basetransform behaviour fixed
 	src = pipeparts.mkchecktimestamps(pipeline, src, name = "timestamps_%s_%d_%d_after_snr_resampler" % (bank.logname, bank_fragment.start, bank_fragment.end))
 
@@ -335,6 +340,8 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 			control_snksrc[0],
 			control_snksrc[1]
 		)
+		#branch_snr = pipeparts.mktee(pipeline, branch_snr)
+		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, branch_snr), "snr_%s_%02d.dump" % (logname, bank_fragment.start))
 		branch_snr.link(snr)
 
 	#
@@ -345,7 +352,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr), autocorrelation_matrix = bank.autocorrelation_bank, latency = -(bank.autocorrelation_bank.shape[1] - 1) / 2)
 	# FIXME:  find a way to use less memory without this hack
 	del bank.autocorrelation_bank
-	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, snr), "snr_%s.dump" % logname)
+	#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % logname)
 	#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr)), "video/x-raw-rgb, width=640, height=480, framerate=4/1"), "channelgram.avi", verbose = True)
 
 	#
@@ -524,7 +531,8 @@ def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, fake_
 
 	#
 	# 8 FFT-lengths is just a ball-parky estimate of how much data is
-	# needed for a good PSD.
+	# needed for a good PSD, this isn't a requirement of the code (the
+	# code requires a minimum of 1)
 	#
 
 	if float(gps_stop_time - gps_start_time) < 8 * psd_fft_length:
@@ -545,7 +553,7 @@ def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, fake_
 		head = pipeparts.mkprogressreport(pipeline, head, "Measuring PSD in %s" % instrument)
 	if injection_filename is not None:
 		head = pipeparts.mkinjections(pipeline, head, injection_filename)
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head), "audio/x-raw-float, rate=%d" % rate)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % rate)
 	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 3)
 	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, average_samples = int(round(float(gps_stop_time - gps_start_time) / (psd_fft_length / 2) - 1)))
 	pipeparts.mkfakesink(pipeline, head)
