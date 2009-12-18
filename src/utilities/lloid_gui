@@ -285,7 +285,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
 	# other pads.  then this large queue buffer will not be required
 	# because streaming can begin through the downstream adders without
 	# waiting for input from all upstream elements.
-	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = int(math.ceil(bank.filter_length - bank_fragment.start)) * gst.SECOND)
+	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND)
 
 	#
 	# reconstruct physical SNRs
