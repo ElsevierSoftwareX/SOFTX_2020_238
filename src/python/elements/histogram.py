@@ -174,7 +174,7 @@ class Histogram(gst.BaseTransform):
 		axes.grid(True)
 		axes.set_xlabel(r"Amplitude (%s)" % ((self.sample_units is not None) and (str(self.sample_units) or "dimensionless") or "unkown units"))
 		axes.set_ylabel(r"Count")
-		axes.set_title(r"%s, %s (%.9g s --- %.9g s)" % (self.instrument or "Unknown Instrument", self.channel_name or "Unknown Channel", float(outbuf.timestamp) / gst.SECOND, float(outbuf.timestamp + outbuf.duration) / gst.SECOND))
+		axes.set_title(r"%s, %s (%.9g s -- %.9g s)" % (self.instrument or "Unknown Instrument", self.channel_name or "Unknown Channel", float(outbuf.timestamp) / gst.SECOND, float(outbuf.timestamp + outbuf.duration) / gst.SECOND))
 
 		#
 		# extract pixel data
