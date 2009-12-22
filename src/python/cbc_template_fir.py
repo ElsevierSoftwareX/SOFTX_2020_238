@@ -181,7 +181,7 @@ def generate_templates(template_table, psd, f_low, sample_rate, duration, autoco
 
 		if autocorrelation_bank is not None:
 			autocorrelation = templates.normalized_autocorrelation(fseries, revplan).data
-			autocorrelation_bank[i, :] = numpy.concatenate((autocorrelation[-(autocorrelation_length // 2):], autocorrelation[:(autocorrelation_length // 2  + 1)]))
+			autocorrelation_bank[i, ::-1] = numpy.concatenate((autocorrelation[-(autocorrelation_length // 2):], autocorrelation[:(autocorrelation_length // 2  + 1)]))
 
 		#
 		# transform template to time domain
