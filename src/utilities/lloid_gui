@@ -43,6 +43,7 @@ import gst
 gobject.threads_init()
 
 
+from glue import segmentsUtils
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
@@ -117,9 +118,15 @@ class Bank(object):
 			end = n - int(round(bank_fragment.end * sample_rate))
 			stride = int(round(sample_rate / bank_fragment.rate))
 
-			# extract every stride-th sample, multiply by
+			# extract every stride-th sample.  we multiply by
 			# \sqrt{stride} to maintain inner product
-			# normalization
+			# normalization so that the templates still appear
+			# to be unit vectors at the reduced sample rate.
+			# note that the svd returns unit basis vectors
+			# regardless so this factor has no effect on the
+			# normalization of the basis vectors used for
+			# filtering but it ensures that the chifacs values
+			# have the correct relative normalization.
 			bank_fragment.set_template_bank(template_bank[:, end:start:stride] * math.sqrt(stride), tolerance, verbose = verbose)
 
 	def get_rates(self):
@@ -156,7 +163,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None):
 #
 
 
-def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length = 8, fake_data = False, injection_filename = None, verbose = False):
+def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length = 8, fake_data = False, injection_filename = None, verbose = False, nxydump_segment = None):
 	#
 	# data source and progress report
 	#
@@ -184,7 +191,8 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 	# amplifies the non-existant high-frequency components
 	#
 
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, head), quality = 9), "audio/x-raw-float, rate=%d" % max(rates))
+	source_rate = max(rates)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, head), quality = 9), "audio/x-raw-float, rate=%d" % source_rate)
 
 	#
 	# whiten
@@ -220,10 +228,22 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 	#
 	# down-sample whitened time series to remaining target sample rates
 	# while applying an amplitude correction to adjust for low-pass
-	# filter roll-off
+	# filter roll-off.  we also scale by \sqrt{original rate / new
+	# rate}.  this is done to preserve the square magnitude of the time
+	# series --- the inner product of the time series with itself.
+	# really what we want is for
+	#
+	#	\int v_{1}(t) v_{2}(t) \diff t
+	#		\approx \sum v_{1}(t) v_{2}(t) \Delta t
+	#
+	# to be preserved across different sample rates, i.e. for different
+	# \Delta t.  what we do is rescale the time series and ignore
+	# \Delta t, so we put 1/2 factor of the ratio of the \Delta t's
+	# into the h(t) time series here, and another 1/2 factor into the
+	# template later.
 	#
 
-	# FIXME:  re-measure these, we've changed the quality of the
+	# FIXME:  re-measure these;  we've changed the quality of the
 	# resampler since these were measured.
 	correction = {
 		128: 1.03 / 0.93,
@@ -232,9 +252,8 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 		2048: 1.03 / 1.03
 	}
 
-	head = {max(rates): pipeparts.mktee(pipeline, head)}
+	head = {source_rate: pipeparts.mktee(pipeline, head)}
 	for rate in sorted(rates, reverse = True)[1:]:	# all but the highest rate
-		source_rate = max(rates)
 		head[rate] = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkaudioamplify(pipeline, head[source_rate], math.sqrt(correction[rate] * float(source_rate) / rate)), quality = 9), "audio/x-raw-float, rate=%d" % rate))
 
 	#
@@ -243,7 +262,7 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 	#
 
 	#for rate, elem in head.items():
-	#	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, elem), "src_%d.dump" % rate)
+	#	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, elem), "src_%d.dump" % rate, segment = nxydump_segment)
 	return head
 
 
@@ -262,6 +281,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
 	# need to be here, or it might be a symptom of a bug elsewhere.
 	# figure this out.
 	src = pipeparts.mktee(pipeline, pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank))
+	#pipeparts.mkvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogram(pipeline, src), "video/x-raw-rgb, width=640, height=480, framerate=1/4"))
 
 	#
 	# compute weighted sum-of-squares, feed to sum-of-squares
@@ -308,7 +328,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
 	return src
 
 
-def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = False, control_snksrc = None):
+def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = False, control_snksrc = None, nxydump_segment = None):
 	logname = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 
 	#
@@ -317,7 +337,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 
 	if control_snksrc is None:
 		control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = logname)
-	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % bank.logname)
+	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % bank.logname, segment = nxydump_segment)
 
 	#
 	# snr aggregator
@@ -341,7 +361,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 			control_snksrc[1]
 		)
 		#branch_snr = pipeparts.mktee(pipeline, branch_snr)
-		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, branch_snr), "snr_%s_%02d.dump" % (logname, bank_fragment.start))
+		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, branch_snr), "snr_%s_%02d.dump" % (logname, bank_fragment.start), segment = nxydump_segment)
 		branch_snr.link(snr)
 
 	#
@@ -352,7 +372,9 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr), autocorrelation_matrix = bank.autocorrelation_bank, latency = -(bank.autocorrelation_bank.shape[1] - 1) / 2)
 	# FIXME:  find a way to use less memory without this hack
 	del bank.autocorrelation_bank
-	#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % logname)
+	#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % logname, segment = nxydump_segment)
+	#chisq = pipeparts.mktee(pipeline, chisq)
+	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, chisq), "chisq_%s.dump" % logname, segment = nxydump_segment)
 	#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr)), "video/x-raw-rgb, width=640, height=480, framerate=4/1"), "channelgram.avi", verbose = True)
 
 	#
@@ -375,7 +397,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 #
 
 
-def mkLLOIDmulti(pipeline, detectors, banks, psd, output_filename, psd_fft_length = 8, fake_data = False, injection_filename = None, verbose = False):
+def mkLLOIDmulti(pipeline, detectors, banks, psd, output_filename, psd_fft_length = 8, fake_data = False, injection_filename = None, verbose = False, nxydump_segment = None):
 	if len(detectors) > 1:
 		raise ValueError, "only 1 instrument supported yet"
 
@@ -394,7 +416,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, output_filename, psd_fft_lengt
 
 	for instrument in detectors:
 		rates = set(rate for bank in banks for rate in bank.get_rates())
-		hoftdict = mkLLOIDsrc(pipeline, instrument, detectors[instrument], rates, psd = psd, psd_fft_length = psd_fft_length, fake_data = fake_data, injection_filename = injection_filename, verbose = verbose)
+		hoftdict = mkLLOIDsrc(pipeline, instrument, detectors[instrument], rates, psd = psd, psd_fft_length = psd_fft_length, fake_data = fake_data, injection_filename = injection_filename, verbose = verbose, nxydump_segment = nxydump_segment)
 		for bank in banks:
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
 			head = mkLLOIDsingle(
@@ -404,7 +426,8 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, output_filename, psd_fft_lengt
 				detectors[instrument],
 				bank,
 				verbose = verbose,
-				control_snksrc = control_snksrc
+				control_snksrc = control_snksrc,
+				nxydump_segment = nxydump_segment
 			)
 			#pipeparts.mkqueue(pipeline, head).link(nto1)
 			pipeparts.mktriggerxmlwritersink(pipeline, head, output_filename.replace(".xml", "_%s.xml" % bank.logname))
@@ -464,6 +487,7 @@ def parse_command_line():
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
 	parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
 	parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
+	parser.add_option("--nxydump-segment", metavar = "start:stop", default = ":", help = "Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time.")
 	parser.add_option("--output", metavar = "filename", help = "Set the name of the LIGO light-weight XML output file (required).")
 	parser.add_option("--reference-psd", metavar = "filename", help = "Instead of measuring the noise spectrum, load the spectrum from this LIGO light-weight XML file (optional).")
 	parser.add_option("--template-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).  This option can be given multiple times to process multiple template banks in parallel.")
@@ -486,6 +510,7 @@ def parse_command_line():
 
 	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
 	options.gps_stop_time = LIGOTimeGPS(options.gps_stop_time)
+	options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
 
 	return options, filenames
 
@@ -640,7 +665,7 @@ banks = [
 			Bank.BankFragment(256, 5.0, 13.0),
 			Bank.BankFragment(128, 13.0, 29.0)
 		],
-		gate_threshold = 2.0,
+		gate_threshold = 1.6,
 		snr_threshold = 5.5,
 		tolerance = 0.9995,
 		flow = 40.0,	# Hz
@@ -668,7 +693,8 @@ mkLLOIDmulti(
 	psd_fft_length = psd_fft_length,
 	fake_data = options.fake_data,
 	injection_filename = options.injections,
-	verbose = options.verbose
+	verbose = options.verbose,
+	nxydump_segment = options.nxydump_segment
 )
 
 if options.write_pipeline is not None:
