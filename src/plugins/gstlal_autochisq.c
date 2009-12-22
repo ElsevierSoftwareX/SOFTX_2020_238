@@ -155,7 +155,7 @@ static guint64 get_available_samples(GSTLALAutoChiSq *element)
 
 
 /*
- * update autocorrelation norms
+ * compute autocorrelation norms --- the expectation value in noise
  */
 
 
@@ -167,9 +167,13 @@ static gsl_vector *compute_autocorrelation_norm(GSTLALAutoChiSq *element)
 	for(channel = 0; channel < autocorrelation_channels(element); channel++) {
 		gsl_vector_complex_view row = gsl_matrix_complex_row(element->autocorrelation_matrix, channel);
 #if CHI2_USES_REAL_ONLY
-		g_assert_not_reached();	/* this case needs to be implemented */
+		unsigned sample;
+		double n = 0;
+		for(sample = 0; sample < row.vector.size; sample++)
+			n += 1 - pow(GSL_REAL(gsl_vector_complex_get(&row.vector, sample)), 2);
+		gsl_vector_set(norm, channel, n);
 #else
-		gsl_vector_set(norm, channel, autocorrelation_length(element) - pow(gsl_blas_dznrm2(&row.vector), 2));
+		gsl_vector_set(norm, channel, 2 * autocorrelation_length(element) - pow(gsl_blas_dznrm2(&row.vector), 2));
 #endif
 	}
 
