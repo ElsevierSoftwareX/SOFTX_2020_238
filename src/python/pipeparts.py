@@ -33,6 +33,9 @@ pygst.require("0.10")
 import gst
 
 
+from glue import segments
+
+
 import pipeio
 from elements.channelgram import mkchannelgram
 from elements.check_timestamps import mkchecktimestamps
@@ -306,32 +309,10 @@ def mkfilesink(pipeline, src, filename):
 def mknxydumpsink(pipeline, src, filename, segment = None):
 	elem = gst.element_factory_make("lal_nxydump")
 	if segment is not None:
-		elem.set_property("start-time", segment[0].ns())
-		elem.set_property("stop-time", segment[1].ns())
-	#if False:
-	#	# output for hardware injection @ 874107078.149271066
-	#	elem.set_property("start-time", 874107068000000000)
-	#	elem.set_property("stop-time", 874107088000000000)
-	#elif False:
-	#	# output for impulse injection @ 873337860
-	#	elem.set_property("start-time", 873337850000000000)
-	#	elem.set_property("stop-time", 873337960000000000)
-	#elif False:
-	#	# output for use with software injections:
-	#	# bns_injections.xml = 874107198.405080859, impulse =
-	#	# 874107189
-	#	elem.set_property("start-time", 874107188000000000)
-	#	elem.set_property("stop-time", 874107258000000000)
-	#elif False:
-	#	# FIXME:  what's at this time?
-	#	elem.set_property("start-time", 873248760000000000)
-	#	elem.set_property("stop-time", 873248960000000000)
-	#elif False:
-	#	# output to dump lots and lots of data (the whole cache)
-	#	elem.set_property("start-time", 873247860000000000)
-	#	elem.set_property("stop-time", 873424754000000000)
-	#else:
-	#	pass
+		if type(segment[0]) is not segments.infinity:
+			elem.set_property("start-time", segment[0].ns())
+		if type(segment[1]) is not segments.infinity:
+			elem.set_property("stop-time", segment[1].ns())
 	pipeline.add(elem)
 	src.link(elem)
 	mkfilesink(pipeline, elem, filename)
