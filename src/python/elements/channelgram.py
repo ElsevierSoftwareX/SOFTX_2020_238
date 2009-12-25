@@ -141,6 +141,18 @@ def yticks(min, max, n):
 
 
 class Channelgram(gst.BaseTransform):
+	__gproperties__ = {
+		"plot-width": (
+			gobject.TYPE_DOUBLE,
+			"seconds",
+			"Width of the plot in seconds, 0 = 1/framerate",
+			0.0,	# min
+			gobject.G_MAXDOUBLE,	# max
+			0.0,	# default
+			gobject.PARAM_READWRITE
+		)
+	}
+
 	__gsttemplates__ = (
 		gst.PadTemplate("sink",
 			gst.PAD_SINK,
@@ -192,10 +204,23 @@ class Channelgram(gst.BaseTransform):
 		self.out_rate = None
 		self.out_width = 320	# default, pixels
 		self.out_height = 200	# default, pixels
-		self.plot_width = None	# seconds, None = 1/framerate
+		self.plot_width = 0.0	# seconds, 0 = 1/framerate
 		self.instrument = None
 		self.channel_name = None
 		self.sample_units = None
+
+
+	def do_get_property(self, property):
+		if property.name == "plot-width":
+			return self.plot_width
+		raise AttributeError, "unknown property \"%s\"" % property.name
+
+
+	def do_set_property(self, property, value):
+		if property.name == "plot-width":
+			self.plot_width = value
+		else:
+			raise AttributeError, "unknown property \"%s\"" % property.name
 
 
 	def do_set_caps(self, incaps, outcaps):
@@ -321,7 +346,7 @@ class Channelgram(gst.BaseTransform):
 		#
 
 		samples_flushed_per_frame = int(round(self.in_rate / float(self.out_rate)))
-		if self.plot_width is not None:
+		if self.plot_width != 0.0:
 			samples_per_frame = int(round(self.plot_width * self.in_rate))
 		else:
 			samples_per_frame = samples_flushed_per_frame
@@ -419,8 +444,10 @@ class Channelgram(gst.BaseTransform):
 gobject.type_register(Channelgram)
 
 
-def mkchannelgram(pipeline, src):
+def mkchannelgram(pipeline, src, **kwargs):
 	elem = Channelgram()
+	for name, value in kwargs.items():
+		elem.set_property(name, value)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
