@@ -57,3 +57,4 @@ src/utilities/Makefile
 src/utilities/Makefile.in
 tests/Makefile
 tests/Makefile.in
+tests/test_common.pyc
