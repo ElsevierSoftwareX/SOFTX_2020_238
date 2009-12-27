@@ -59,11 +59,13 @@ typedef struct _GSTLALGate {
 	GCond *control_availability;
 	gboolean control_eos;
 	gboolean sink_eos;
-	GstBuffer *control_buf;
-	double (*control_sample_func)(const struct _GSTLALGate *, size_t);
+	GQueue *control_queue;
+	gdouble (*control_sample_func)(const gpointer, guint64);
 
 	gboolean default_state;
-	double threshold;
+	gdouble threshold;
+	gint64 attack_length;
+	gint64 hold_length;
 
 	gint rate;
 	gint unit_size;

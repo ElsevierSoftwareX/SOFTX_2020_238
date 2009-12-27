@@ -67,6 +67,8 @@
 
 #define DEFAULT_STATE FALSE
 #define DEFAULT_THRESHOLD 0
+#define DEFAULT_ATTACK_LENGTH 0
+#define DEFAULT_HOLD_LENGTH 0
 
 
 /*
@@ -79,6 +81,39 @@
 
 
 /*
+ * add sample counts to a timestamp
+ */
+
+
+static GstClockTime timestamp_add_offset(GstClockTime t, gint64 offset, gint rate)
+{
+	if(offset >= 0)
+		return t + gst_util_uint64_scale_int_round(offset, GST_SECOND, rate);
+	return t - gst_util_uint64_scale_int_round(-offset, GST_SECOND, rate);
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                            Control Buffer Queue
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * gst_buffer_unref() wrapper for use with g_list_foreach()
+ */
+
+
+static void g_list_foreach_gst_buffer_unref(gpointer data, gpointer not_used)
+{
+	gst_buffer_unref(GST_BUFFER(data));
+}
+
+
+/*
  * unref the control buffer, signal it being flushed.  must be called with
  * the control lock held.
  */
@@ -86,10 +121,8 @@
 
 static void control_flush(GSTLALGate *element)
 {
-	if(element->control_buf) {
-		gst_buffer_unref(element->control_buf);
-		element->control_buf = NULL;
-	}
+	g_queue_foreach(element->control_queue, g_list_foreach_gst_buffer_unref, NULL);
+	g_queue_clear(element->control_queue);
 	g_cond_broadcast(element->control_availability);
 }
 
@@ -104,67 +137,69 @@ static void control_flush(GSTLALGate *element)
  */
 
 
-static double control_sample_int8(const GSTLALGate *element, guint64 sample)
+static gdouble control_sample_int8(const gpointer data, guint64 offset)
 {
-	return ((const gint8 *) GST_BUFFER_DATA(element->control_buf))[sample];
+	return ((const gint8 *) data)[offset];
 }
 
 
-static double control_sample_uint8(const GSTLALGate *element, guint64 sample)
+static gdouble control_sample_uint8(const gpointer data, guint64 offset)
 {
-	return ((const guint8 *) GST_BUFFER_DATA(element->control_buf))[sample];
+	return ((const guint8 *) data)[offset];
 }
 
 
-static double control_sample_int16(const GSTLALGate *element, guint64 sample)
+static gdouble control_sample_int16(const gpointer data, guint64 offset)
 {
-	return ((const gint16 *) GST_BUFFER_DATA(element->control_buf))[sample];
+	return ((const gint16 *) data)[offset];
 }
 
 
-static double control_sample_uint16(const GSTLALGate *element, guint64 sample)
+static gdouble control_sample_uint16(const gpointer data, guint64 offset)
 {
-	return ((const guint16 *) GST_BUFFER_DATA(element->control_buf))[sample];
+	return ((const guint16 *) data)[offset];
 }
 
 
-static double control_sample_int32(const GSTLALGate *element, guint64 sample)
+static gdouble control_sample_int32(const gpointer data, guint64 offset)
 {
-	return ((const gint32 *) GST_BUFFER_DATA(element->control_buf))[sample];
+	return ((const gint32 *) data)[offset];
 }
 
 
-static double control_sample_uint32(const GSTLALGate *element, guint64 sample)
+static gdouble control_sample_uint32(const gpointer data, guint64 offset)
 {
-	return ((const guint32 *) GST_BUFFER_DATA(element->control_buf))[sample];
+	return ((const guint32 *) data)[offset];
 }
 
 
-static double control_sample_float32(const GSTLALGate *element, guint64 sample)
+static gdouble control_sample_float32(const gpointer data, guint64 offset)
 {
-	return ((const float *) GST_BUFFER_DATA(element->control_buf))[sample];
+	return ((const float *) data)[offset];
 }
 
 
-static double control_sample_float64(const GSTLALGate *element, guint64 sample)
+static gdouble control_sample_float64(const gpointer data, guint64 offset)
 {
-	return ((const double *) GST_BUFFER_DATA(element->control_buf))[sample];
+	return ((const double *) data)[offset];
 }
 
 
-static gint control_get_state(GSTLALGate *element, GstClockTime t)
+static gint control_get_state(GSTLALGate *element, GstClockTime tmin, GstClockTime tmax)
 {
 	while(1) {
-		guint64 offset;
+		GstBuffer *control_buf;
+		guint64 offsetmin, offsetmax;
 
 		/*
 		 * wait for a control buffer if we don't have one
 		 */
 
-		while(!element->control_buf && !element->control_eos) {
-			GST_DEBUG_OBJECT(element, "waiting for control buffer for %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(t));
+		while(g_queue_is_empty(element->control_queue) && !element->control_eos) {
+			GST_DEBUG_OBJECT(element, "waiting for control buffer for %" GST_TIME_SECONDS_FORMAT " -- %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(tmin), GST_TIME_SECONDS_ARGS(tmax));
 			g_cond_wait(element->control_availability, element->control_lock);
 		}
+		control_buf = g_queue_peek_head(element->control_queue);
 
 		/*
 		 * if we are at EOS on sink pad or the requested time
@@ -172,18 +207,19 @@ static gint control_get_state(GSTLALGate *element, GstClockTime t)
 		 * return the default state
 		 */
 
-		if(G_UNLIKELY(element->control_eos || t < GST_BUFFER_TIMESTAMP(element->control_buf))) {
+		if(G_UNLIKELY(element->control_eos || tmin < GST_BUFFER_TIMESTAMP(control_buf))) {
 			GST_DEBUG_OBJECT(element, "end-of-stream or control buffer is for the future, using default control state");
 			return element->default_state;
 		}
 
 		/*
-		 * compute the sample offset within the control buffer, if
+		 * compute the sample offset within the control buffer;  if
 		 * it's past the end flush and wait for the next
 		 */
 
-		offset = gst_util_uint64_scale_int_round(t - GST_BUFFER_TIMESTAMP(element->control_buf), element->control_rate, GST_SECOND);
-		if(offset >= GST_BUFFER_OFFSET_END(element->control_buf) - GST_BUFFER_OFFSET(element->control_buf)) {
+		offsetmin = gst_util_uint64_scale_int_round(tmin - GST_BUFFER_TIMESTAMP(control_buf), element->control_rate, GST_SECOND);
+		offsetmax = gst_util_uint64_scale_int_round(tmax - GST_BUFFER_TIMESTAMP(control_buf), element->control_rate, GST_SECOND);
+		if(offsetmin >= GST_BUFFER_OFFSET_END(control_buf) - GST_BUFFER_OFFSET(control_buf)) {
 			GST_DEBUG_OBJECT(element, "control buffer too old, flushing");
 			control_flush(element);
 			continue;
@@ -193,7 +229,7 @@ static gint control_get_state(GSTLALGate *element, GstClockTime t)
 		 * retrieve the control state at the given offset
 		 */
 
-		return fabs(element->control_sample_func(element, offset)) >= element->threshold;
+		return fabs(element->control_sample_func(GST_BUFFER_DATA(control_buf), offsetmin)) >= element->threshold;
 	}
 }
 
@@ -209,7 +245,9 @@ static gint control_get_state(GSTLALGate *element, GstClockTime t)
 
 enum property {
 	ARG_DEFAULT_STATE = 1,
-	ARG_THRESHOLD
+	ARG_THRESHOLD,
+	ARG_ATTACK_LENGTH,
+	ARG_HOLD_LENGTH
 };
 
 
@@ -226,6 +264,14 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	case ARG_THRESHOLD:
 		element->threshold = g_value_get_double(value);
+		break;
+
+	case ARG_ATTACK_LENGTH:
+		element->attack_length = g_value_get_int64(value);
+		break;
+
+	case ARG_HOLD_LENGTH:
+		element->hold_length = g_value_get_int64(value);
 		break;
 	}
 
@@ -246,6 +292,14 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case ARG_THRESHOLD:
 		g_value_set_double(value, element->threshold);
+		break;
+
+	case ARG_ATTACK_LENGTH:
+		g_value_set_int64(value, element->attack_length);
+		break;
+
+	case ARG_HOLD_LENGTH:
+		g_value_set_int64(value, element->hold_length);
 		break;
 	}
 
@@ -272,7 +326,7 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
 	GstStructure *structure;
 	const gchar *media_type;
-	double (*control_sample_func)(const struct _GSTLALGate *, size_t) = NULL;
+	gdouble (*control_sample_func)(const gpointer, guint64) = NULL;
 	gint rate, width;
 	gboolean success = TRUE;
 
@@ -325,6 +379,7 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 
 	if(success) {
 		g_mutex_lock(element->control_lock);
+		control_flush(element);
 		element->control_sample_func = control_sample_func;
 		element->control_rate = rate;
 		g_mutex_unlock(element->control_lock);
@@ -365,7 +420,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	g_mutex_lock(element->control_lock);
-	while(element->control_buf) {
+	while(!g_queue_is_empty(element->control_queue)) {
 		GST_DEBUG_OBJECT(element, "waiting for previous control buffer to be flushed");
 		g_cond_wait(element->control_availability, element->control_lock);
 	}
@@ -386,7 +441,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * store this buffer
 	 */
 
-	element->control_buf = sinkbuf;
+	g_queue_push_head(element->control_queue, sinkbuf);
 
 	/*
 	 * signal the buffer's availability
@@ -430,7 +485,7 @@ static gboolean control_event(GstPad *pad, GstEvent *event)
 			GST_DEBUG_OBJECT(pad, "end-of-stream;  sink is at end-of-stream, flushing last control buffer");
 			control_flush(element);
 		}
-		GST_DEBUG_OBJECT(pad, "end-of-stream;  last control buffer flushed, setting internal end-of-stream flag");
+		GST_DEBUG_OBJECT(pad, "end-of-stream;  setting internal end-of-stream flag");
 		element->control_eos = TRUE;
 		g_cond_broadcast(element->control_availability);
 		g_mutex_unlock(element->control_lock);
@@ -587,7 +642,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		g_mutex_lock(element->control_lock);
 		for(length = 0; start + length < sinkbuf_length; length++) {
-			gint state_now = control_get_state(element, GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(start + length, GST_SECOND, element->rate));
+			gint state_now = control_get_state(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) (start + length) - element->attack_length, element->rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) (start + length) + element->hold_length, element->rate));
 			if(length == 0)
 				/*
 				 * state for this interval
@@ -768,9 +823,11 @@ static void finalize(GObject *object)
 	element->control_lock = NULL;
 	g_cond_free(element->control_availability);
 	element->control_availability = NULL;
-	if(element->control_buf) {
-		gst_buffer_unref(element->control_buf);
-		element->control_buf = NULL;
+	if(element->control_queue) {
+		g_queue_foreach(element->control_queue, g_list_foreach_gst_buffer_unref, NULL);
+		g_queue_clear(element->control_queue);
+		g_queue_free(element->control_queue);
+		element->control_queue = NULL;
 	}
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
@@ -896,6 +953,28 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_ATTACK_LENGTH,
+		g_param_spec_int64(
+			"attack-length",
+			"Attack",
+			"Number of samples ahead of negative-to-positive threshold crossing to include in output.",
+			G_MININT64, G_MAXINT64, DEFAULT_ATTACK_LENGTH,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_HOLD_LENGTH,
+		g_param_spec_int64(
+			"hold-length",
+			"Hold",
+			"Number of samples following positive-to-negative threshold crossing to include in output.",
+			G_MININT64, G_MAXINT64, DEFAULT_HOLD_LENGTH,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 }
 
 
@@ -938,9 +1017,11 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->control_availability = g_cond_new();
 	element->control_eos = FALSE;
 	element->sink_eos = FALSE;
-	element->control_buf = NULL;
+	element->control_queue = g_queue_new();
 	element->control_sample_func = NULL;
 	element->threshold = DEFAULT_THRESHOLD;
+	element->attack_length = DEFAULT_ATTACK_LENGTH;
+	element->hold_length = DEFAULT_HOLD_LENGTH;
 	element->rate = 0;
 	element->unit_size = 0;
 	element->control_rate = 0;
