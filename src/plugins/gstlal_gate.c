@@ -94,46 +94,8 @@ static GstClockTime timestamp_add_offset(GstClockTime t, gint64 offset, gint rat
 
 
 /*
- * ============================================================================
- *
- *                            Control Buffer Queue
- *
- * ============================================================================
- */
-
-
-/*
- * gst_buffer_unref() wrapper for use with g_list_foreach()
- */
-
-
-static void g_list_foreach_gst_buffer_unref(gpointer data, gpointer not_used)
-{
-	gst_buffer_unref(GST_BUFFER(data));
-}
-
-
-/*
- * unref the control buffer, signal it being flushed.  must be called with
- * the control lock held.
- */
-
-
-static void control_flush(GSTLALGate *element)
-{
-	g_queue_foreach(element->control_queue, g_list_foreach_gst_buffer_unref, NULL);
-	g_queue_clear(element->control_queue);
-	g_cond_broadcast(element->control_availability);
-}
-
-
-/*
- * return the state of the control input at the given timestamp.  these
- * functions must be called with the control lock held.  the return value
- * is < 0 for times outside the interval spanned by the currently-queued
- * control buffer, 0 if the control buffer is < the threshold at the given
- * time, and > 0 if the control buffer is >= the threshold at the given
- * time.
+ * array type cast macros:  interpret contents of an array as various C
+ * types, retrieve value at given offset and cast to double-precision float
  */
 
 
@@ -185,52 +147,141 @@ static gdouble control_sample_float64(const gpointer data, guint64 offset)
 }
 
 
+/*
+ * ============================================================================
+ *
+ *                            Control Buffer Queue
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * gst_buffer_unref() wrapper for use with g_list_foreach()
+ */
+
+
+static void g_list_foreach_gst_buffer_unref(gpointer data, gpointer not_used)
+{
+	gst_buffer_unref(GST_BUFFER(data));
+}
+
+
+/*
+ * unref the control buffer, signal it being flushed.  must be called with
+ * the control lock held
+ */
+
+
+static void control_flush(GSTLALGate *element)
+{
+	g_queue_foreach(element->control_queue, g_list_foreach_gst_buffer_unref, NULL);
+	g_queue_clear(element->control_queue);
+	g_cond_broadcast(element->control_availability);
+}
+
+
+/*
+ * wait for the control queue to span the requested interval.  must be
+ * called with the control lock held
+ */
+
+
+static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstClockTime tmax)
+{
+	GstBuffer *buf;
+
+	/*
+	 * wait for queue head to advance to the desired time
+	 */
+
+	buf = g_queue_peek_head(element->control_queue);
+	while((!buf || (GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf) < tmax)) && !element->control_eos) {
+		GST_DEBUG_OBJECT(element, "waiting for control to advance to %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(tmax));
+		g_cond_wait(element->control_availability, element->control_lock);
+		buf = g_queue_peek_head(element->control_queue);
+	}
+
+	/*
+	 * flush old data from queue tail
+	 */
+
+	GST_DEBUG_OBJECT(element, "flushing control queue to %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(tmin));
+	buf = g_queue_peek_tail(element->control_queue);
+	while(buf && (GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf) <= tmin)) {
+		g_queue_pop_tail(element->control_queue);
+		gst_buffer_unref(buf);
+		buf = g_queue_peek_tail(element->control_queue);
+	}
+}
+
+
+/*
+ * return the state of the control input over a range of timestamps.  must
+ * be called with the control lock held.
+ *
+ * the return value is < 0 if there is no control data for the times
+ * requested, or 0 if control data is available for (at least part of) the
+ * times requested and is less than the threshold everywhere therein, or >
+ * 0 if control data is available for (at least part of) the times
+ * requested and is greather than or equal to the threshold for at least 1
+ * sample therein.
+ */
+
+
+struct g_list_for_each_gst_buffer_peak_data {
+	GSTLALGate *element;
+	GstClockTime tmin, tmax;
+	gdouble peak;
+};
+
+
+static void g_list_for_each_gst_buffer_peak(gpointer data, gpointer user_data)
+{
+	GstBuffer *buf = GST_BUFFER(data);
+	GSTLALGate *element = ((struct g_list_for_each_gst_buffer_peak_data *) user_data)->element;
+	GstClockTime tmin = ((struct g_list_for_each_gst_buffer_peak_data *) user_data)->tmin;
+	GstClockTime tmax = ((struct g_list_for_each_gst_buffer_peak_data *) user_data)->tmax;
+	guint64 offset, last;
+	guint64 length = GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
+
+	if(tmin <= GST_BUFFER_TIMESTAMP(buf))
+		offset = 0;
+	else {
+		offset = gst_util_uint64_scale_int_round(tmin - GST_BUFFER_TIMESTAMP(buf), element->control_rate, GST_SECOND);
+		if(offset >= length)
+			return;
+	}
+
+	if(tmax < GST_BUFFER_TIMESTAMP(buf))
+		return;
+	last = gst_util_uint64_scale_int_round(tmax - GST_BUFFER_TIMESTAMP(buf), element->control_rate, GST_SECOND);
+	if(last == offset)
+		/* always test at least one sample */
+		last++;
+	else if(last > length)
+		last = length;
+
+	for(; offset < last; offset++) {
+		gdouble val = fabs(element->control_sample_func(GST_BUFFER_DATA(buf), offset));
+		if(val > ((struct g_list_for_each_gst_buffer_peak_data *) user_data)->peak)
+			((struct g_list_for_each_gst_buffer_peak_data *) user_data)->peak = val;
+	}
+}
+
+
 static gint control_get_state(GSTLALGate *element, GstClockTime tmin, GstClockTime tmax)
 {
-	while(1) {
-		GstBuffer *control_buf;
-		guint64 offsetmin, offsetmax;
+	struct g_list_for_each_gst_buffer_peak_data data = {
+		.element = element,
+		.tmin = tmin,
+		.tmax = tmax,
+		.peak = -1
+	};
 
-		/*
-		 * wait for a control buffer if we don't have one
-		 */
+	g_queue_foreach(element->control_queue, g_list_for_each_gst_buffer_peak, &data);
 
-		while(g_queue_is_empty(element->control_queue) && !element->control_eos) {
-			GST_DEBUG_OBJECT(element, "waiting for control buffer for %" GST_TIME_SECONDS_FORMAT " -- %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(tmin), GST_TIME_SECONDS_ARGS(tmax));
-			g_cond_wait(element->control_availability, element->control_lock);
-		}
-		control_buf = g_queue_peek_head(element->control_queue);
-
-		/*
-		 * if we are at EOS on sink pad or the requested time
-		 * precedes the interval spanned by the control buffer
-		 * return the default state
-		 */
-
-		if(G_UNLIKELY(element->control_eos || tmin < GST_BUFFER_TIMESTAMP(control_buf))) {
-			GST_DEBUG_OBJECT(element, "end-of-stream or control buffer is for the future, using default control state");
-			return element->default_state;
-		}
-
-		/*
-		 * compute the sample offset within the control buffer;  if
-		 * it's past the end flush and wait for the next
-		 */
-
-		offsetmin = gst_util_uint64_scale_int_round(tmin - GST_BUFFER_TIMESTAMP(control_buf), element->control_rate, GST_SECOND);
-		offsetmax = gst_util_uint64_scale_int_round(tmax - GST_BUFFER_TIMESTAMP(control_buf), element->control_rate, GST_SECOND);
-		if(offsetmin >= GST_BUFFER_OFFSET_END(control_buf) - GST_BUFFER_OFFSET(control_buf)) {
-			GST_DEBUG_OBJECT(element, "control buffer too old, flushing");
-			control_flush(element);
-			continue;
-		}
-
-		/*
-		 * retrieve the control state at the given offset
-		 */
-
-		return fabs(element->control_sample_func(GST_BUFFER_DATA(control_buf), offsetmin)) >= element->threshold;
-	}
+	return data.peak >= element->threshold ? +1 : data.peak >= 0 ? 0 : -1;
 }
 
 
@@ -409,7 +460,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
-		GST_ERROR_OBJECT(element, "error in control stream: buffer has invalid timestamp and/or offset");
+		GST_ERROR_OBJECT(element, "error in control stream: buffer does not have valid timestamp and/or offset");
 		gst_buffer_unref(sinkbuf);
 		result = GST_FLOW_ERROR;
 		goto done;
@@ -420,10 +471,13 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	g_mutex_lock(element->control_lock);
+	/* FIXME:  find new way to prevent ram exhaustion */
+	/*
 	while(!g_queue_is_empty(element->control_queue)) {
 		GST_DEBUG_OBJECT(element, "waiting for previous control buffer to be flushed");
 		g_cond_wait(element->control_availability, element->control_lock);
 	}
+	*/
 
 	/*
 	 * if we're at eos on sink pad, discard
@@ -473,7 +527,7 @@ static gboolean control_event(GstPad *pad, GstEvent *event)
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT:
 		g_mutex_lock(element->control_lock);
-		GST_DEBUG_OBJECT(pad, "new segment;  clearing internal end-of-stream flag and flushing any old control buffer");
+		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag and flushing queue");
 		element->control_eos = FALSE;
 		control_flush(element);
 		g_mutex_unlock(element->control_lock);
@@ -482,10 +536,10 @@ static gboolean control_event(GstPad *pad, GstEvent *event)
 	case GST_EVENT_EOS:
 		g_mutex_lock(element->control_lock);
 		if(element->sink_eos) {
-			GST_DEBUG_OBJECT(pad, "end-of-stream;  sink is at end-of-stream, flushing last control buffer");
+			GST_DEBUG_OBJECT(pad, "end-of-stream;  sink is at end-of-stream, flushing queue");
 			control_flush(element);
 		}
-		GST_DEBUG_OBJECT(pad, "end-of-stream;  setting internal end-of-stream flag");
+		GST_DEBUG_OBJECT(pad, "end-of-stream;  setting end-of-stream flag");
 		element->control_eos = TRUE;
 		g_cond_broadcast(element->control_availability);
 		g_mutex_unlock(element->control_lock);
@@ -613,6 +667,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	guint64 start, length;
 	GstFlowReturn result = GST_FLOW_OK;
 
+	g_mutex_lock(element->control_lock);
+
 	/*
 	 * check validity of timestamp and offsets
 	 */
@@ -622,8 +678,19 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
+	if(element->attack_length + element->hold_length < 0) {
+		GST_ERROR_OBJECT(element, "attack-length + hold-length < 0");
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
 
 	sinkbuf_length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
+
+	/*
+	 * wait for control queue to span the necessary interval
+	 */
+
+	control_get_interval(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), -element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), sinkbuf_length + element->attack_length, element->rate));
 
 	/*
 	 * loop over the contents of the input buffer.
@@ -640,9 +707,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * find the next interval of continuous control state
 		 */
 
-		g_mutex_lock(element->control_lock);
 		for(length = 0; start + length < sinkbuf_length; length++) {
-			gint state_now = control_get_state(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) (start + length) - element->attack_length, element->rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) (start + length) + element->hold_length, element->rate));
+			gint state_now = control_get_state(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) (start + length) - element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) (start + length) + element->attack_length, element->rate));
 			if(length == 0)
 				/*
 				 * state for this interval
@@ -656,7 +722,6 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 				break;
 		}
-		g_mutex_unlock(element->control_lock);
 
 		/*
 		 * if the interval has non-zero length, build a buffer out
@@ -714,6 +779,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 done:
+	g_mutex_unlock(element->control_lock);
 	gst_buffer_unref(sinkbuf);
 	gst_object_unref(element);
 	return result;
@@ -937,7 +1003,7 @@ static void class_init(gpointer class, gpointer class_data)
 		g_param_spec_boolean(
 			"default-state",
 			"Default State",
-			"Control input state to assume when control input is not available",
+			"Control state to assume when control input is not available",
 			DEFAULT_STATE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
@@ -948,7 +1014,7 @@ static void class_init(gpointer class, gpointer class_data)
 		g_param_spec_double(
 			"threshold",
 			"Threshold",
-			"Control input threshold",
+			"Control threshold",
 			0, G_MAXDOUBLE, DEFAULT_THRESHOLD,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
