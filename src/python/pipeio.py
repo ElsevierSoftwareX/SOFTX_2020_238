@@ -86,7 +86,7 @@ def repack_real_array_to_complex(input):
 def get_unit_size(caps):
 	struct = caps[0]
 	name = struct.get_name()
-	if name in ("audio/x-raw-float", "audio/x-raw-int"):
+	if name in ("audio/x-raw-complex", "audio/x-raw-float", "audio/x-raw-int"):
 		return struct["channels"] * struct["width"] / 8
 	elif name == "video/x-raw-rgb":
 		return struct["width"] * struct["height"] * struct["bpp"] / 8
@@ -148,13 +148,13 @@ def parse_spectrum_message(message):
 
 
 def parse_framesrc_tags(taglist):
-	if "instrument" in taglist:
+	try:
 		instrument = taglist["instrument"]
-	else:
+	except KeyError:
 		instrument = None
-	if "channel-name" in taglist:
+	try:
 		channel_name = taglist["channel-name"]
-	else:
+	except KeyError:
 		channel_name = None
 	if "units" in taglist:
 		sample_units = laltypes.LALUnit(taglist["units"].strip())
