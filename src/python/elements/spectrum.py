@@ -104,8 +104,7 @@ class Spectrum(gst.BaseTransform):
 
 
 	def do_set_caps(self, incaps, outcaps):
-		channels = incaps[0]["channels"]
-		self.channels = channels
+		self.channels = incaps[0]["channels"]
 		self.delta_f = incaps[0]["delta-f"]
 		self.out_width = outcaps[0]["width"]
 		self.out_height = outcaps[0]["height"]
