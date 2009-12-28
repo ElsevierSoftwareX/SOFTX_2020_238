@@ -271,7 +271,7 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 #
 
 
-def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
+def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src, gate_attack_length, gate_hold_length):
 	#
 	# FIR filter bank
 	#
@@ -294,8 +294,8 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src):
 	# use sum-of-squares aggregate as gate control for orthogonal SNRs
 	#
 
-	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src), control = pipeparts.mkqueue(pipeline, control_src), threshold = bank.gate_threshold)
-	#src = pipeparts.mkchecktimestamps(pipeline, src, name = "timestamps_%s_%d_%d_after_gate" % (bank.logname, bank_fragment.start, bank_fragment.end))
+	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src), control = pipeparts.mkqueue(pipeline, control_src), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length)
+	src = pipeparts.mkchecktimestamps(pipeline, src, name = "timestamps_%s_%d_%d_after_gate" % (bank.logname, bank_fragment.start, bank_fragment.end))
 
 	#
 	# buffer orthogonal SNRs
@@ -332,6 +332,14 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 	logname = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 
 	#
+	# parameters
+	#
+
+	output_rate = max(bank.get_rates())
+	autocorrelation_length = bank.autocorrelation_bank.shape[1]
+	autocorrelation_latency = -(autocorrelation_length - 1) / 2
+
+	#
 	# construct sum-of-squares aggregator if needed
 	#
 
@@ -358,7 +366,9 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 			bank,
 			bank_fragment,
 			control_snksrc[0],
-			control_snksrc[1]
+			control_snksrc[1],
+			int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),
+			int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate)))
 		)
 		#branch_snr = pipeparts.mktee(pipeline, branch_snr)
 		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, branch_snr), "snr_%s_%02d.dump" % (logname, bank_fragment.start), segment = nxydump_segment)
@@ -368,8 +378,8 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 	# snr and \chi^{2}
 	#
 
-	snr = pipeparts.mktee(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % max(bank.get_rates()))))
-	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr), autocorrelation_matrix = bank.autocorrelation_bank, latency = -(bank.autocorrelation_bank.shape[1] - 1) / 2)
+	snr = pipeparts.mktee(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % output_rate)))
+	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr), autocorrelation_matrix = bank.autocorrelation_bank, latency = autocorrelation_latency)
 	# FIXME:  find a way to use less memory without this hack
 	del bank.autocorrelation_bank
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % logname, segment = nxydump_segment)
@@ -665,7 +675,7 @@ banks = [
 			Bank.BankFragment(256, 5.0, 13.0),
 			Bank.BankFragment(128, 13.0, 29.0)
 		],
-		gate_threshold = 1.6,
+		gate_threshold = 2.0,
 		snr_threshold = 5.5,
 		tolerance = 0.9995,
 		flow = 40.0,	# Hz
