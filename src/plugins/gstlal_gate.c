@@ -34,6 +34,7 @@
  */
 
 
+#include <complex.h>
 #include <math.h>
 #include <stdlib.h>
 
@@ -144,6 +145,18 @@ static gdouble control_sample_float32(const gpointer data, guint64 offset)
 static gdouble control_sample_float64(const gpointer data, guint64 offset)
 {
 	return fabs(((const double *) data)[offset]);
+}
+
+
+static gdouble control_sample_complex64(const gpointer data, guint64 offset)
+{
+	return cabsf(((const float complex *) data)[offset]);
+}
+
+
+static gdouble control_sample_complex128(const gpointer data, guint64 offset)
+{
+	return cabs(((const double complex *) data)[offset]);
 }
 
 
@@ -413,6 +426,18 @@ static gboolean control_setcaps(GstPad *pad, GstCaps *caps)
 			break;
 		case 64:
 			control_sample_func = control_sample_float64;
+			break;
+		default:
+			success = FALSE;
+			break;
+		}
+	} else if(!strcmp(media_type, "audio/x-raw-complex")) {
+		switch(width) {
+		case 64:
+			control_sample_func = control_sample_complex64;
+			break;
+		case 128:
+			control_sample_func = control_sample_complex128;
 			break;
 		default:
 			success = FALSE;
@@ -924,19 +949,19 @@ static void finalize(GObject *object)
 
 #define CAPS \
 	"audio/x-raw-int, " \
-	"rate = (int) [ 1, MAX ], " \
-	"channels = (int) [ 1, MAX ], " \
+	"rate = (int) [1, MAX], " \
+	"channels = (int) [1, MAX], " \
 	"endianness = (int) BYTE_ORDER, " \
 	"width = (int) {8, 16, 32, 64}, " \
-	"signed = (boolean) {true, false} ; " \
+	"signed = (boolean) {true, false}; " \
 	"audio/x-raw-float, " \
-	"rate = (int) [ 1, MAX ], " \
-	"channels = (int) [ 1, MAX ], " \
+	"rate = (int) [1, MAX], " \
+	"channels = (int) [1, MAX], " \
 	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {32, 64} ; " \
+	"width = (int) {32, 64}; " \
 	"audio/x-raw-complex, " \
-	"rate = (int) [ 1, MAX ], " \
-	"channels = (int) [ 1, MAX ], " \
+	"rate = (int) [1, MAX], " \
+	"channels = (int) [1, MAX], " \
 	"endianness = (int) BYTE_ORDER, " \
 	"width = (int) {64, 128}"
 
@@ -961,16 +986,21 @@ static void base_init(gpointer class)
 			GST_PAD_ALWAYS,
 			gst_caps_from_string(
 				"audio/x-raw-int, " \
-				"rate = (int) [ 1, MAX ], " \
+				"rate = (int) [1, MAX], " \
 				"channels = (int) 1, " \
 				"endianness = (int) BYTE_ORDER, " \
 				"width = (int) {8, 16, 32, 64}, " \
 				"signed = (boolean) {true, false} ; " \
 				"audio/x-raw-float, " \
-				"rate = (int) [ 1, MAX ], " \
+				"rate = (int) [1, MAX], " \
 				"channels = (int) 1, " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {32, 64}"
+				"width = (int) {32, 64};" \
+				"audio/x-raw-complex, " \
+				"rate = (int) [1, MAX], " \
+				"channels = (int) 1, " \
+				"endianness = (int) BYTE_ORDER, " \
+				"width = (int) {64, 128}"
 			)
 		)
 	);
