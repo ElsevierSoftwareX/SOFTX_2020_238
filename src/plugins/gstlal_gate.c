@@ -244,6 +244,7 @@ static void g_list_for_each_gst_buffer_peak(gpointer data, gpointer user_data)
 	GstClockTime tmax = ((struct g_list_for_each_gst_buffer_peak_data *) user_data)->tmax;
 	guint64 offset, last;
 	guint64 length = GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
+	gdouble peak = -1;
 
 	if(tmin <= GST_BUFFER_TIMESTAMP(buf))
 		offset = 0;
@@ -262,11 +263,19 @@ static void g_list_for_each_gst_buffer_peak(gpointer data, gpointer user_data)
 	else if(last > length)
 		last = length;
 
-	for(; offset < last; offset++) {
-		gdouble val = fabs(element->control_sample_func(GST_BUFFER_DATA(buf), offset));
-		if(val > ((struct g_list_for_each_gst_buffer_peak_data *) user_data)->peak)
-			((struct g_list_for_each_gst_buffer_peak_data *) user_data)->peak = val;
+	if(!GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP)) {
+		for(; offset < last; offset++) {
+			gdouble val = fabs(element->control_sample_func(GST_BUFFER_DATA(buf), offset));
+			if(val > peak)
+				peak = val;
+		}
+	} else if(offset != last) {
+		/* treat gaps as buffers of 0 */
+		peak = 0.0;
 	}
+
+	if(peak > ((struct g_list_for_each_gst_buffer_peak_data *) user_data)->peak)
+		((struct g_list_for_each_gst_buffer_peak_data *) user_data)->peak = peak;
 }
 
 
