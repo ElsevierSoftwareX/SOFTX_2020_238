@@ -189,29 +189,35 @@ static void control_flush(GSTLALGate *element)
 
 static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstClockTime tmax)
 {
-	GstBuffer *buf;
+	while(1) {
+		GstBuffer *buf;
 
-	/*
-	 * wait for queue head to advance to the desired time
-	 */
+		/*
+		 * flush old data from tail
+		 */
 
-	buf = g_queue_peek_head(element->control_queue);
-	while((!buf || (GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf) < tmax)) && !element->control_eos) {
+		buf = g_queue_peek_tail(element->control_queue);
+		while(buf && (GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf) <= tmin)) {
+			GST_DEBUG_OBJECT(element, "flushing control queue to %" GST_TIME_SECONDS_FORMAT, GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf));
+			g_queue_pop_tail(element->control_queue);
+			gst_buffer_unref(buf);
+			buf = g_queue_peek_tail(element->control_queue);
+		}
+
+		/*
+		 * has head advanced far enough, or are we at EOS?
+		 */
+
+		buf = g_queue_peek_head(element->control_queue);
+		if((buf && (GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf) >= tmax)) || element->control_eos)
+			return;
+
+		/*
+		 * no, wait for buffer to arrive
+		 */
+
 		GST_DEBUG_OBJECT(element, "waiting for control to advance to %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(tmax));
 		g_cond_wait(element->control_availability, element->control_lock);
-		buf = g_queue_peek_head(element->control_queue);
-	}
-
-	/*
-	 * flush old data from queue tail
-	 */
-
-	GST_DEBUG_OBJECT(element, "flushing control queue to %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(tmin));
-	buf = g_queue_peek_tail(element->control_queue);
-	while(buf && (GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf) <= tmin)) {
-		g_queue_pop_tail(element->control_queue);
-		gst_buffer_unref(buf);
-		buf = g_queue_peek_tail(element->control_queue);
 	}
 }
 
