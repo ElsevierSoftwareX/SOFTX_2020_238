@@ -101,7 +101,7 @@ static GstClockTime timestamp_add_offset(GstClockTime t, gint64 offset, gint rat
 
 static gdouble control_sample_int8(const gpointer data, guint64 offset)
 {
-	return ((const gint8 *) data)[offset];
+	return abs(((const gint8 *) data)[offset]);
 }
 
 
@@ -113,7 +113,7 @@ static gdouble control_sample_uint8(const gpointer data, guint64 offset)
 
 static gdouble control_sample_int16(const gpointer data, guint64 offset)
 {
-	return ((const gint16 *) data)[offset];
+	return abs(((const gint16 *) data)[offset]);
 }
 
 
@@ -125,7 +125,7 @@ static gdouble control_sample_uint16(const gpointer data, guint64 offset)
 
 static gdouble control_sample_int32(const gpointer data, guint64 offset)
 {
-	return ((const gint32 *) data)[offset];
+	return abs(((const gint32 *) data)[offset]);
 }
 
 
@@ -137,13 +137,13 @@ static gdouble control_sample_uint32(const gpointer data, guint64 offset)
 
 static gdouble control_sample_float32(const gpointer data, guint64 offset)
 {
-	return ((const float *) data)[offset];
+	return fabsf(((const float *) data)[offset]);
 }
 
 
 static gdouble control_sample_float64(const gpointer data, guint64 offset)
 {
-	return ((const double *) data)[offset];
+	return fabs(((const double *) data)[offset]);
 }
 
 
@@ -263,19 +263,19 @@ static void g_list_for_each_gst_buffer_peak(gpointer data, gpointer user_data)
 	if(tmax < GST_BUFFER_TIMESTAMP(buf))
 		return;
 	last = gst_util_uint64_scale_int_round(tmax - GST_BUFFER_TIMESTAMP(buf), element->control_rate, GST_SECOND);
-	if(last == offset)
+	if(last <= offset)
 		/* always test at least one sample */
-		last++;
+		last = offset + 1;
 	else if(last > length)
 		last = length;
 
 	if(!GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP)) {
 		for(; offset < last; offset++) {
-			gdouble val = fabs(element->control_sample_func(GST_BUFFER_DATA(buf), offset));
+			gdouble val = element->control_sample_func(GST_BUFFER_DATA(buf), offset);
 			if(val > peak)
 				peak = val;
 		}
-	} else if(offset != last) {
+	} else {
 		/* treat gaps as buffers of 0 */
 		peak = 0.0;
 	}
@@ -482,7 +482,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	/*
-	 * if there's already a buffer stored, wait for it to be flushed
+	 * if there's already control data, wait for it to be flushed
 	 */
 
 	g_mutex_lock(element->control_lock);
