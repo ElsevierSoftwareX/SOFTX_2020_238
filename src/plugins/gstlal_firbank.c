@@ -442,7 +442,7 @@ static GstFlowReturn fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 
 
 /*
- * select a filtering algorithm.  call 
+ * select a filtering algorithm.
  */
 
 
@@ -723,6 +723,36 @@ static gboolean stop(GstBaseTransform *trans)
 	g_object_unref(element->adapter);
 	element->adapter = NULL;
 	return TRUE;
+}
+
+
+/*
+ * event()
+ */
+
+
+static gboolean event(GstBaseTransform *trans, GstEvent *event)
+{
+	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
+
+	switch(GST_EVENT_TYPE(event)) {
+	case GST_EVENT_NEWSEGMENT: {
+		gboolean update;
+		gdouble rate;
+		GstFormat format;
+		gint64 start, stop, position;
+
+		gst_event_parse_new_segment(event, &update, &rate, &format, &start, &stop, &position);
+
+		event = gst_event_new_new_segment(update, rate, format, start, stop, position);
+
+		gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(trans), event);
+		return FALSE;
+	}
+
+	default:
+		return TRUE;
+	}
 }
 
 
@@ -1033,6 +1063,7 @@ static void gstlal_firbank_base_init(gpointer gclass)
 	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
 	transform_class->start = GST_DEBUG_FUNCPTR(start);
 	transform_class->stop = GST_DEBUG_FUNCPTR(stop);
+	transform_class->event = GST_DEBUG_FUNCPTR(event);
 }
 
 
