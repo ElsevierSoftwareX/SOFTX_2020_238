@@ -209,19 +209,6 @@ class Channelgram(gst.BaseTransform):
 		self.sample_units = None
 
 
-	def do_get_property(self, property):
-		if property.name == "plot-width":
-			return self.plot_width
-		raise AttributeError, "unknown property \"%s\"" % property.name
-
-
-	def do_set_property(self, property, value):
-		if property.name == "plot-width":
-			self.plot_width = value
-		else:
-			raise AttributeError, "unknown property \"%s\"" % property.name
-
-
 	def do_set_caps(self, incaps, outcaps):
 		self.in_rate = incaps[0]["rate"]
 		channels = incaps[0]["channels"]
