@@ -713,7 +713,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * check validity of timestamp and offsets
 	 */
 
-	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
+	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
 		GST_ERROR_OBJECT(element, "error in input stream: buffer has invalid timestamp and/or offset");
 		result = GST_FLOW_ERROR;
 		goto done;
