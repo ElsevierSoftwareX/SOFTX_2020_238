@@ -526,7 +526,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	if(element->sink_eos) {
 		GST_DEBUG_OBJECT(element, "sink is at end-of-stream, discarding control buffer");
 		gst_buffer_unref(sinkbuf);
-		result = GST_FLOW_UNEXPECTED;
+		result = GST_FLOW_OK;
 		g_mutex_unlock(element->control_lock);
 		goto done;
 	}
