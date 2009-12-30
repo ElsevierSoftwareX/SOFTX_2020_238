@@ -85,9 +85,9 @@ def mktaginject(pipeline, src, tags):
 	return elem
 
 
-def mkaudiotestsrc(pipeline, **kwargs):
+def mkaudiotestsrc(pipeline, **properties):
 	elem = gst.element_factory_make("audiotestsrc")
-	for name, value in kwargs.items():
+	for name, value in properties.items():
 		elem.set_property(name.replace("_", "-"), value)
 	pipeline.add(elem)
 	return elem
@@ -238,6 +238,15 @@ def mkfirbank(pipeline, src, latency = None, fir_matrix = None):
 	return elem
 
 
+def mkreblock(pipeline, src, **properties):
+	elem = gst.element_factory_make("lal_reblock")
+	for name, value in properties.items():
+		elem.set_property(name.replace("_", "-"), value)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
 def mksumsquares(pipeline, src, weights = None):
 	elem = gst.element_factory_make("lal_sumsquares")
 	if weights is not None:
@@ -247,7 +256,7 @@ def mksumsquares(pipeline, src, weights = None):
 	return elem
 
 
-def mkgate(pipeline, src, threshold = None, control = None, **kwargs):
+def mkgate(pipeline, src, threshold = None, control = None, **properties):
 	elem = gst.element_factory_make("lal_gate")
 	if threshold is not None:
 		elem.set_property("threshold", threshold)
@@ -255,7 +264,7 @@ def mkgate(pipeline, src, threshold = None, control = None, **kwargs):
 	src.link_pads("src", elem, "sink")
 	if control is not None:
 		control.link_pads("src", elem, "control")
-	for name, value in kwargs.items():
+	for name, value in properties.items():
 		elem.set_property(name.replace("_", "-"), value)
 	return elem
 
@@ -346,9 +355,9 @@ def mkcolorspace(pipeline, src):
 	return elem
 
 
-def mktheoraenc(pipeline, src, **kwargs):
+def mktheoraenc(pipeline, src, **properties):
 	elem = gst.element_factory_make("theoraenc")
-	for name, value in kwargs.items():
+	for name, value in properties.items():
 		elem.set_property(name.replace("_", "-"), value)
 	pipeline.add(elem)
 	src.link(elem)
