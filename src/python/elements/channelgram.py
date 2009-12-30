@@ -47,6 +47,7 @@ import gobject
 import pygst
 pygst.require('0.10')
 import gst
+from gst.extend.pygobject import gproperty
 
 
 from gstlal import pipeio
@@ -141,17 +142,15 @@ def yticks(min, max, n):
 
 
 class Channelgram(gst.BaseTransform):
-	__gproperties__ = {
-		"plot-width": (
-			gobject.TYPE_DOUBLE,
-			"seconds",
-			"Width of the plot in seconds, 0 = 1/framerate",
-			0.0,	# min
-			gobject.G_MAXDOUBLE,	# max
-			0.0,	# default
-			gobject.PARAM_READWRITE
-		)
-	}
+	gproperty(
+		gobject.TYPE_DOUBLE,
+		"plot-width",
+		"Width of the plot in seconds, 0 = 1/framerate",
+		0.0,	# min
+		gobject.G_MAXDOUBLE,	# max
+		0.0,	# default
+		readable = True, writable = True
+	)
 
 	__gsttemplates__ = (
 		gst.PadTemplate("sink",
