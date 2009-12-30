@@ -33,6 +33,8 @@ src/plugins/libgstlal_la-gstlal_nofakedisconts.lo
 src/plugins/libgstlal_la-gstlal_nofakedisconts.o
 src/plugins/libgstlal_la-gstlal_nxydump.lo
 src/plugins/libgstlal_la-gstlal_nxydump.o
+src/plugins/libgstlal_la-gstlal_reblock.lo
+src/plugins/libgstlal_la-gstlal_reblock.o
 src/plugins/libgstlal_la-gstlal_simulation.lo
 src/plugins/libgstlal_la-gstlal_simulation.o
 src/plugins/libgstlal_la-gstlal_sumsquares.lo
