@@ -235,10 +235,9 @@ static void free_fft_workspace(GSTLALFIRBank *element)
  */
 
 
-static GstFlowReturn tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
+static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned available_length)
 {
 	unsigned i;
-	unsigned available_length;
 	unsigned output_length;
 	gsl_vector_view input;
 	gsl_matrix_view output;
@@ -249,9 +248,8 @@ static GstFlowReturn tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	 * in the adapter then we can produce 1 output sample, not 0.
 	 */
 
-	available_length = get_available_samples(element);
 	if(available_length < fir_length(element))
-		return GST_BASE_TRANSFORM_FLOW_DROPPED;
+		return 0;
 	output_length = available_length - fir_length(element) + 1;
 
 	/*
@@ -296,28 +294,10 @@ static GstFlowReturn tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	}
 
 	/*
-	 * flush the data from the adapter
-	 */
-
-	gst_adapter_flush(element->adapter, output_length * sizeof(double));
-	if(element->zeros_in_adapter > available_length - output_length)
-		/*
-		 * some trailing zeros have been flushed from the adapter
-		 */
-
-		element->zeros_in_adapter = available_length - output_length;
-
-	/*
-	 * set buffer metadata
-	 */
-
-	set_metadata(element, outbuf, output_length, FALSE);
-
-	/*
 	 * done
 	 */
 
-	return GST_FLOW_OK;
+	return output_length;
 }
 
 
@@ -327,12 +307,11 @@ static GstFlowReturn tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
  */
 
 
-static GstFlowReturn fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
+static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned available_length)
 {
 	unsigned i;
 	unsigned fft_block_stride;
 	unsigned fft_blocks;
-	unsigned available_length;
 	unsigned input_length;
 	unsigned output_length;
 	unsigned filter_length_fd;
@@ -344,9 +323,8 @@ static GstFlowReturn fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	 * adapter?
 	 */
 
-	available_length = get_available_samples(element);
 	if(available_length < fft_block_length(element))
-		return GST_BASE_TRANSFORM_FLOW_DROPPED;
+		return 0;
 	fft_block_stride = fft_block_length(element) - fir_length(element) + 1;
 	fft_blocks = (available_length - fft_block_length(element)) / fft_block_stride + 1;
 	input_length = (fft_blocks - 1) * fft_block_stride + fft_block_length(element);
@@ -416,6 +394,60 @@ static GstFlowReturn fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	}
 
 	/*
+	 * done
+	 */
+
+	return output_length;
+}
+
+
+/*
+ * filtering algorithm front-end
+ */
+
+
+static GstFlowReturn filter(GSTLALFIRBank *element, GstBuffer *outbuf, gboolean time_domain)
+{
+	unsigned available_length;
+	unsigned output_length;
+
+	/*
+	 * how much data is available?
+	 */
+
+	available_length = get_available_samples(element);
+
+	/*
+	 * run filtering code
+	 */
+
+	if(time_domain) {
+		/*
+		 * use time-domain filter implementation
+		 */
+
+		output_length = tdfilter(element, outbuf, available_length);
+	} else {
+		/*
+		 * use frequency-domain filter implementation;  start by
+		 * building frequency-domain filters if we don't have them
+		 * yet
+		 */
+
+		if(!element->fir_matrix_fd)
+			create_fft_workspace(element);
+
+		output_length = fdfilter(element, outbuf, available_length);
+	}
+
+	/*
+	 * output produced?
+	 */
+
+	if(!output_length)
+		return GST_BASE_TRANSFORM_FLOW_DROPPED;
+
+	/*
 	 * flush the data from the adapter
 	 */
 
@@ -438,28 +470,6 @@ static GstFlowReturn fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	 */
 
 	return GST_FLOW_OK;
-}
-
-
-/*
- * select a filtering algorithm.
- */
-
-
-static GstFlowReturn filter(GSTLALFIRBank *element, GstBuffer *outbuf)
-{
-#if 0
-	return tdfilter(element, outbuf);
-#else
-	/*
-	 * get frequency-domain filters if needed
-	 */
-
-	if(!element->fir_matrix_fd)
-		create_fft_workspace(element);
-
-	return fdfilter(element, outbuf);
-#endif
 }
 
 
@@ -822,7 +832,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		gst_buffer_ref(inbuf);	/* don't let the adapter free it */
 		gst_adapter_push(element->adapter, inbuf);
 		element->zeros_in_adapter = 0;
-		result = filter(element, outbuf);
+		result = filter(element, outbuf, FALSE);
 	} else if(element->zeros_in_adapter >= fir_length(element) - 1) {
 		/*
 		 * input is 0s and we are past the tail of the impulse
@@ -842,7 +852,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		push_zeros(element, length);
-		result = filter(element, outbuf);
+		result = filter(element, outbuf, FALSE);
 	} else {
 		/*
 		 * input is 0s, we are not yet past the tail of the impulse
@@ -876,7 +886,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, non_zero_samples * fir_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
 			if(result != GST_FLOW_OK)
 				goto done;
-			result = filter(element, buf);
+			result = filter(element, buf, FALSE);
 			g_assert(result == GST_FLOW_OK);
 			result = gst_pad_push(srcpad, buf);
 			if(result != GST_FLOW_OK)
