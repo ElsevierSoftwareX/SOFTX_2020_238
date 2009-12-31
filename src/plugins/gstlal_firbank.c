@@ -476,6 +476,31 @@ static GstFlowReturn filter(GSTLALFIRBank *element, GstBuffer *outbuf, gboolean 
 /*
  * ============================================================================
  *
+ *                                  Signals
+ *
+ * ============================================================================
+ */
+
+
+enum gstlal_firbank_signal {
+	SIGNAL_RATE_CHANGED,
+	NUM_SIGNALS
+};
+
+
+static guint signals[NUM_SIGNALS] = {0, };
+
+
+static void rate_changed(GstElement *element, gint rate, void *data)
+{
+	/* FIXME: send updated segment downstream?  because latency now
+	 * means something different */
+}
+
+
+/*
+ * ============================================================================
+ *
  *                           GStreamer Boiler Plate
  *
  * ============================================================================
@@ -676,30 +701,27 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	GstStructure *s;
 	gint rate;
 	gint channels;
+	gboolean success = TRUE;
 
 	s = gst_caps_get_structure(outcaps, 0);
 	if(!gst_structure_get_int(s, "channels", &channels)) {
 		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, outcaps);
-		return FALSE;
-	}
-	if(!gst_structure_get_int(s, "rate", &rate)) {
+		success = FALSE;
+	} else if(!gst_structure_get_int(s, "rate", &rate)) {
 		GST_DEBUG_OBJECT(element, "unable to parse rate from %" GST_PTR_FORMAT, outcaps);
-		return FALSE;
-	}
-
-	if(element->fir_matrix && (channels != (gint) fir_channels(element))) {
+		success = FALSE;
+	} else if(element->fir_matrix && (channels != (gint) fir_channels(element))) {
 		GST_DEBUG_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, fir_channels(element), outcaps);
-		return FALSE;
+		success = FALSE;
 	}
 
-	if(rate != element->rate) {
-		/* FIXME:  emit "rate-changed" signal like gstreamer's
-		 * audiofirfilter element does. */
+	if(success) {
+		if(rate != element->rate)
+			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, rate, NULL);
+		element->rate = rate;
 	}
 
-	element->rate = rate;
-
-	return TRUE;
+	return success;
 }
 
 
@@ -979,6 +1001,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
 	case ARG_LATENCY:
 		element->latency = g_value_get_int64(value);
+		/* FIXME:  send updated segment downstream? */
 		break;
 
 	default:
@@ -1090,6 +1113,8 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
+	klass->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
+
 	g_object_class_install_property(
 		gobject_class,
 		ARG_BLOCK_LENGTH_FACTOR,
@@ -1134,6 +1159,22 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 			G_MININT64, G_MAXINT64, DEFAULT_LATENCY,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
+	);
+
+	signals[SIGNAL_RATE_CHANGED] = g_signal_new(
+		"rate-changed",
+		G_TYPE_FROM_CLASS(klass),
+		G_SIGNAL_RUN_FIRST,
+		G_STRUCT_OFFSET(
+			GSTLALFIRBankClass,
+			rate_changed
+		),
+		NULL,
+		NULL,
+		g_cclosure_marshal_VOID__INT,
+		G_TYPE_NONE,
+		1,
+		G_TYPE_INT
 	);
 }
 
