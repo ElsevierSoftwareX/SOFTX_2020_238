@@ -322,6 +322,9 @@ static gint control_get_state(GSTLALGate *element, GstClockTime tmin, GstClockTi
  */
 
 
+/* FIXME:  add "leaky" property to drop buffers instead of generating gaps */
+
+
 enum property {
 	ARG_DEFAULT_STATE = 1,
 	ARG_THRESHOLD,
