@@ -68,13 +68,14 @@
 #define DEFAULT_START_TIME 0
 #define DEFAULT_STOP_TIME G_MAXUINT64
 
+
 /*
  * the maximum number of characters it takes to print a timestamp.
  * G_MAXUINT64 / GST_SECOND = 11 digits left of the decimal place, plus 1
  * decimal point, plus 9 digits right of the decimal place.
  */
 
-#define MAX_BYTES_PER_TIMESTAMP 21
+#define MAX_CHARS_PER_TIMESTAMP 21
 
 /*
  * the maximum number of characters it takes to print the value for one
@@ -83,7 +84,7 @@
  * columns
  */
 
-#define MAX_BYTES_PER_COLUMN 23 + 1
+#define MAX_CHARS_PER_COLUMN 23 + 1
 
 /*
  * a newline is sometimes two characters.
@@ -184,7 +185,7 @@ static GstFlowReturn print_samples(GstBuffer *out, const double *samples, int ch
 		 * Saftey check.
 		 */
 
-		g_assert((guint8 *) location - GST_BUFFER_DATA(out) + MAX_BYTES_PER_TIMESTAMP + channels * MAX_BYTES_PER_COLUMN + MAX_EXTRA_BYTES_PER_LINE <= GST_BUFFER_SIZE(out));
+		g_assert((guint8 *) location - GST_BUFFER_DATA(out) + MAX_CHARS_PER_TIMESTAMP + channels * MAX_CHARS_PER_COLUMN + MAX_EXTRA_BYTES_PER_LINE <= GST_BUFFER_SIZE(out));
 
 		/*
 		 * Print the time.
@@ -367,7 +368,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * later.
 	 */
 
-	result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET_NONE, (stop - start) * (MAX_BYTES_PER_TIMESTAMP + element->channels * MAX_BYTES_PER_COLUMN + MAX_EXTRA_BYTES_PER_LINE), GST_PAD_CAPS(element->srcpad), &srcbuf);
+	result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET_NONE, (stop - start) * (MAX_CHARS_PER_TIMESTAMP + element->channels * MAX_CHARS_PER_COLUMN + MAX_EXTRA_BYTES_PER_LINE), GST_PAD_CAPS(element->srcpad), &srcbuf);
 	if(result != GST_FLOW_OK) {
 		GST_ERROR_OBJECT(element, "failure allocating output buffer");
 		goto done;
