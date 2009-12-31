@@ -203,7 +203,7 @@ class Channelgram(gst.BaseTransform):
 		self.out_rate = None
 		self.out_width = 320	# default, pixels
 		self.out_height = 200	# default, pixels
-		self.plot_width = 0.0	# seconds, 0 = 1/framerate
+		self.set_property("plot-width", 0.0)	# seconds, 0 = 1/framerate
 		self.instrument = None
 		self.channel_name = None
 		self.sample_units = None
@@ -332,8 +332,9 @@ class Channelgram(gst.BaseTransform):
 		#
 
 		samples_flushed_per_frame = int(round(self.in_rate / float(self.out_rate)))
-		if self.plot_width != 0.0:
-			samples_per_frame = int(round(self.plot_width * self.in_rate))
+		plot_width = self.get_property("plot-width")
+		if plot_width != 0.0:
+			samples_per_frame = int(round(plot_width * self.in_rate))
 		else:
 			samples_per_frame = samples_flushed_per_frame
 
