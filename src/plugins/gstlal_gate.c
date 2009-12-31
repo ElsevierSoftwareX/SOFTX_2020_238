@@ -318,6 +318,23 @@ static gint control_get_state(GSTLALGate *element, GstClockTime tmin, GstClockTi
 /*
  * ============================================================================
  *
+ *                                  Signals
+ *
+ * ============================================================================
+ */
+
+
+/* FIXME:  add a rate-changed signal to allow applications to adjust
+ * attack-length & hold-length */
+
+
+/* FIXME:  add start & stop signals to allow things to happen at gap
+ * boundaries */
+
+
+/*
+ * ============================================================================
+ *
  *                                 Properties
  *
  * ============================================================================
@@ -777,6 +794,9 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		/*
 		 * if the interval has non-zero length and should not be
 		 * leaked, build a buffer out of it and push down stream.
+		 *
+		 * FIXME:  discont flags are not handled correctly when
+		 * leaking buffers
 		 */
 
 		if(length && (state > 0 || !element->leaky)) {
