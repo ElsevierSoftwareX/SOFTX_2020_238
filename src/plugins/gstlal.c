@@ -75,7 +75,6 @@
 
 #include <gstlal.h>
 #include <gstlal_framesrc.h>
-#include <gstlal_templatebank.h>
 #include <gstlal_matrixmixer.h>
 #include <gstlal_simulation.h>
 #include <gstlal_whiten.h>
@@ -764,7 +763,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 		GType type;
 	} *element, elements[] = {
 		{"lal_framesrc", GSTLAL_FRAMESRC_TYPE},
-		{"lal_templatebank", GSTLAL_TEMPLATEBANK_TYPE},
 		{"lal_matrixmixer", GSTLAL_MATRIXMIXER_TYPE},
 		{"lal_simulation", GSTLAL_SIMULATION_TYPE},
 		{"lal_whiten", GSTLAL_WHITEN_TYPE},

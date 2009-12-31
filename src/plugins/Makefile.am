@@ -4,7 +4,6 @@ libgstlal_la_SOURCES = \
 	gstlal.h gstlal.c \
 	gstlal_framesrc.h gstlal_framesrc.c \
 	low_latency_inspiral_functions.h low_latency_inspiral_functions.c \
-	gstlal_templatebank.h gstlal_templatebank.c \
 	gstlal_matrixmixer.h gstlal_matrixmixer.c \
 	gstlal_simulation.h gstlal_simulation.c \
 	gstlal_whiten.h gstlal_whiten.c \
