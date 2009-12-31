@@ -70,6 +70,7 @@
 #define DEFAULT_THRESHOLD 0
 #define DEFAULT_ATTACK_LENGTH 0
 #define DEFAULT_HOLD_LENGTH 0
+#define DEFAULT_LEAKY FALSE
 
 
 /*
@@ -96,7 +97,8 @@ static GstClockTime timestamp_add_offset(GstClockTime t, gint64 offset, gint rat
 
 /*
  * array type cast macros:  interpret contents of an array as various C
- * types, retrieve value at given offset and cast to double-precision float
+ * types, retrieve value at given offset, compute magnitude, and cast to
+ * double-precision float
  */
 
 
@@ -322,14 +324,12 @@ static gint control_get_state(GSTLALGate *element, GstClockTime tmin, GstClockTi
  */
 
 
-/* FIXME:  add "leaky" property to drop buffers instead of generating gaps */
-
-
 enum property {
 	ARG_DEFAULT_STATE = 1,
 	ARG_THRESHOLD,
 	ARG_ATTACK_LENGTH,
-	ARG_HOLD_LENGTH
+	ARG_HOLD_LENGTH,
+	ARG_LEAKY
 };
 
 
@@ -354,6 +354,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	case ARG_HOLD_LENGTH:
 		element->hold_length = g_value_get_int64(value);
+		break;
+
+	case ARG_LEAKY:
+		element->leaky = g_value_get_boolean(value);
 		break;
 	}
 
@@ -382,6 +386,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case ARG_HOLD_LENGTH:
 		g_value_set_int64(value, element->hold_length);
+		break;
+
+	case ARG_LEAKY:
+		g_value_set_boolean(value, element->leaky);
 		break;
 	}
 
@@ -767,11 +775,11 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 
 		/*
-		 * if the interval has non-zero length, build a buffer out
-		 * of it and push down stream.
+		 * if the interval has non-zero length and should not be
+		 * leaked, build a buffer out of it and push down stream.
 		 */
 
-		if(length) {
+		if(length && (state > 0 || !element->leaky)) {
 			GstBuffer *srcbuf = gst_buffer_create_sub(sinkbuf, start * element->unit_size, length * element->unit_size);
 			if(!srcbuf) {
 				GST_ERROR_OBJECT(element, "failure creating sub-buffer");
@@ -1089,6 +1097,17 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_LEAKY,
+		g_param_spec_boolean(
+			"leaky",
+			"Leaky",
+			"Drop buffers instead of forwarding gaps.",
+			DEFAULT_LEAKY,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 }
 
 
@@ -1136,6 +1155,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->threshold = DEFAULT_THRESHOLD;
 	element->attack_length = DEFAULT_ATTACK_LENGTH;
 	element->hold_length = DEFAULT_HOLD_LENGTH;
+	element->leaky = DEFAULT_LEAKY;
 	element->rate = 0;
 	element->unit_size = 0;
 	element->control_rate = 0;

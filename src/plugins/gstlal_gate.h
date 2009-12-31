@@ -66,6 +66,7 @@ typedef struct _GSTLALGate {
 	gdouble threshold;
 	gint64 attack_length;
 	gint64 hold_length;
+	gboolean leaky;
 
 	gint rate;
 	gint unit_size;
