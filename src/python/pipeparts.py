@@ -59,7 +59,7 @@ __date__ = "FIXME"
 
 def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 8 * 1):
 	# default blocksize is 1 second of double precision floats at
-	# 16384 Hz, e.g., h(t)
+	# 16384 Hz, e.g., LIGO h(t)
 	elem = gst.element_factory_make("lal_framesrc")
 	elem.set_property("blocksize", blocksize)
 	elem.set_property("location", location)
@@ -348,6 +348,13 @@ def mktriggerxmlwritersink(pipeline, src, filename):
 	src.link(elem)
 
 
+def mkwavenc(pipeline, src):
+	elem = gst.element_factory_make("wavenc")
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
 def mkcolorspace(pipeline, src):
 	elem = gst.element_factory_make("ffmpegcolorspace")
 	pipeline.add(elem)
@@ -364,6 +371,15 @@ def mktheoraenc(pipeline, src, **properties):
 	return elem
 
 
+def mkmpeg4enc(pipeline, src, **properties):
+	elem = gst.element_factory_make("ffenc_mpeg4")
+	for name, value in properties.items():
+		elem.set_property(name.replace("_", "-"), value)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
 def mkoggmux(pipeline, src):
 	elem = gst.element_factory_make("oggmux")
 	pipeline.add(elem)
@@ -371,30 +387,43 @@ def mkoggmux(pipeline, src):
 	return elem
 
 
-def mkogmvideosink(pipeline, src, filename, verbose = False):
-	# FIXME:  can't get oggmux to work, seems to get confused by a
-	# spurious EOS from the framesrc on startup.
-	src = mkcolorspace(pipeline, src)
-
-	elem = gst.element_factory_make("ffenc_mpeg4")
-	pipeline.add(elem)
-	src.link(elem)
-	src = elem
-
+def mkavimux(pipeline, src):
 	elem = gst.element_factory_make("avimux")
 	pipeline.add(elem)
 	src.link(elem)
-	src = elem
+	return elem
 
+
+def mkaudioconvert(pipeline, src, caps_string = None):
+	elem = gst.element_factory_make("audioconvert")
+	pipeline.add(elem)
+	src.link(elem)
+	src = elem
+	if caps_string is not None:
+		src = mkcapsfilter(pipeline, src, caps_string)
+	return src
+
+
+def mkflacenc(pipeline, src, quality = 0, **properties):
+	elem = gst.element_factory_make("flacenc")
+	elem.set_property("quality", quality)
+	for name, value in properties.items():
+		elem.set_property(name, value)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
+def mkogmvideosink(pipeline, videosrc, filename, audiosrc = None, verbose = False):
+	src = mkcolorspace(pipeline, videosrc)
+	src = mkcapsfilter(pipeline, src, "video/x-raw-yuv, format=(fourcc)I420")
+	src = mktheoraenc(pipeline, src, border = 2, quality = 48, quick = False)
+	src = mkoggmux(pipeline, src)
+	if audiosrc is not None:
+		mkflacenc(pipeline, mkcapsfilter(pipeline, mkaudioconvert(pipeline, audiosrc), "audio/x-raw-int, width=32, depth=24")).link(src)
 	if verbose:
 		src = mkprogressreport(pipeline, src, filename)
-
 	mkfilesink(pipeline, src, filename)
-	return
-
-	src = mkcolorspace(pipeline, src)
-	src = mkcapsfilter(pipeline, src, "video/x-raw-yuv, format=(fourcc)I420")
-	mkfilesink(pipeline, mkoggmux(pipeline, mktheoraenc(pipeline, src, border = 2)), filename)
 
 
 def mkvideosink(pipeline, src):
