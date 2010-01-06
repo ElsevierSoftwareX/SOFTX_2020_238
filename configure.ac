@@ -13,6 +13,7 @@ AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_FILES([ \
 	Makefile \
 	src/Makefile \
+	src/lib/Makefile \
 	src/plugins/Makefile \
 	src/python/Makefile \
 	src/python/elements/Makefile \
