@@ -1,3 +1,19 @@
+/*
+ * adapted from Robert Davies' "qf" source code
+ *
+ *	http://www.robertnz.net/ftp/qf.tar.gz
+ *
+ * implementing the algorithm described in
+ *
+ * (1973) Numerical inversion of a characteristic function.  Biometrika  60
+ * 415-417
+ *
+ * and
+ *
+ * (1980) The distribution of a linear combination of chi-squared random
+ * variables.  Applied Statistics  29 323-333
+ */
+
 #include <stdlib.h>
 #include <math.h>
 #include <malloc.h>
