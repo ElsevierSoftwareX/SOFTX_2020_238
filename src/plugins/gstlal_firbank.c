@@ -44,8 +44,9 @@
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
-#include "gstlal.h"
-#include "gstlal_firbank.h"
+#include <gstlal.h>
+#include <gstlal_plugins.h>
+#include <gstlal_firbank.h>
 
 
 /*

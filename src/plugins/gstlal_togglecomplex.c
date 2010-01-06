@@ -42,7 +42,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-#include "gstlal_togglecomplex.h"
+#include <gstlal_togglecomplex.h>
 
 
 /*

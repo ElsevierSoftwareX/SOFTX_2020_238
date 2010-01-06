@@ -47,8 +47,8 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-#include "gstlal.h"
-#include "gstlal_sumsquares.h"
+#include <gstlal.h>
+#include <gstlal_sumsquares.h>
 
 
 /*

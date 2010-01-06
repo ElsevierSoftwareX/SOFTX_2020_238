@@ -71,6 +71,7 @@
 
 
 #include <gstlal.h>
+#include <gstlal_plugins.h>
 #include <gstlal_whiten.h>
 
 
