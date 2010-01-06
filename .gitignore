@@ -8,6 +8,12 @@ configure
 libtool
 src/Makefile
 src/Makefile.in
+src/lib/.deps/
+src/lib/.libs/
+src/lib/gstlal.loT
+src/lib/libgstlal.la
+src/lib/libgstlal_la-gstlal.lo
+src/lib/libgstlal_la-gstlal.o
 src/plugins/.deps/
 src/plugins/.libs/
 src/plugins/Makefile
