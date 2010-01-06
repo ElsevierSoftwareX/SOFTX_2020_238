@@ -1,1 +1,1 @@
-SUBDIRS = plugins python utilities
+SUBDIRS = lib plugins python utilities
