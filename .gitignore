@@ -14,6 +14,8 @@ src/lib/gstlal.loT
 src/lib/libgstlal.la
 src/lib/libgstlal_la-gstlal.lo
 src/lib/libgstlal_la-gstlal.o
+src/lib/libgstlal_la-gstlal_cdf_weighted_chisq_P.lo
+src/lib/libgstlal_la-gstlal_cdf_weighted_chisq_P.o
 src/plugins/.deps/
 src/plugins/.libs/
 src/plugins/Makefile
