@@ -1,5 +1,26 @@
 /*
- * adapted from Robert Davies' "qf" source code
+ * Copyright (C) Robert Davies
+ * with modifications
+ * Copyright (C) 2010  Kipp Cannon
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+
+/*
+ * This code is adapted from Robert Davies' "qf" source code
  *
  *	http://www.robertnz.net/ftp/qf.tar.gz
  *
@@ -14,22 +35,44 @@
  * variables.  Applied Statistics  29 323-333
  */
 
+
+/*
+ * ============================================================================
+ *
+ *                                  Preamble
+ *
+ * ============================================================================
+ */
+
+
 #include <stdlib.h>
 #include <math.h>
 #include <malloc.h>
 #include <setjmp.h>
+
+
 #include <gstlal_cdf_weighted_chisq_P.h>
+
 
 #define TRUE  1
 #define FALSE 0
-
 #define PI 3.1415926535897932384626433832795028841968
-#define LOG2_OVER_8 .0866433975699931636771540151822720710094	/*  ln(2) / 8  */
+#define LOG2_OVER_8 .0866433975699931636771540151822720710094	/* ln(2) / 8 */
+
+
+/*
+ * ============================================================================
+ *
+ *                             Internal Functions
+ *
+ * ============================================================================
+ */
 
 
 /*
  * count number of calls to errbd, truncation, cfe
  */
+
 
 static void counter(jmp_buf env, int *count, int lim)
 {
@@ -41,6 +84,7 @@ static void counter(jmp_buf env, int *count, int lim)
 /*
  * if (first) log(1 + x) ; else  log(1 + x) - x
  */
+
 
 static double log1(double x, int first)
 {
@@ -67,6 +111,7 @@ static double log1(double x, int first)
  * find bound on tail probability using mgf, cutoff point returned to *xconst
  */
 
+
 static double errbd(double u, double *xconst, jmp_buf env, int *count, int lim, double var, const double *A, const double *noncent, const int *dof, int N)
 {
 	double sum;
@@ -92,21 +137,22 @@ static double errbd(double u, double *xconst, jmp_buf env, int *count, int lim, 
  * find ctff so that p(qf > ctff) < acc if upn > 0, p(qf < ctff) < acc otherwise
  */
 
+
 static double ctff(double acc, double upn, jmp_buf env, int *count, int lim, double var, const double *A, const double *noncent, const int *dof, int N, double Amin, double Amax, double mean)
 {
 	double u, xconst, c2;
 	double c1 = mean;
-	double u1 = 0.0;
-	double rb = 2.0 * ((upn > 0.0) ? Amax : Amin);
+	double u1 = 0;
+	double rb = 2 * ((upn > 0) ? Amax : Amin);
 
-	for(; errbd(u = upn / (1.0 + upn * rb), &c2, env, count, lim, var, A, noncent, dof, N) > acc; upn *= 2) {
+	for(; errbd(u = upn / (1 + upn * rb), &c2, env, count, lim, var, A, noncent, dof, N) > acc; upn *= 2) {
 		u1 = upn;
 		c1 = c2;
 	}
 
 	for(u = (c1 - mean) / (c2 - mean); u < 0.9; u = (c1 - mean) / (c2 - mean)) {
-		u = (u1 + upn) / 2.0;
-		if(errbd(u / (1.0 + u * rb), &xconst, env, count, lim, var, A, noncent, dof, N) > acc) {
+		u = (u1 + upn) / 2;
+		if(errbd(u / (1 + u * rb), &xconst, env, count, lim, var, A, noncent, dof, N) > acc) {
 			u1 = u;
 			c1 = xconst;
 		} else {
@@ -122,6 +168,7 @@ static double ctff(double acc, double upn, jmp_buf env, int *count, int lim, dou
 /*
  * bound integration error due to truncation at u
  */
+
 
 static double truncation(double u, double var_plus_tausq, jmp_buf env, int *count, int lim, const double *A, const double *noncent, const int *dof, int N)
 {
@@ -165,15 +212,16 @@ static double truncation(double u, double var_plus_tausq, jmp_buf env, int *coun
  * find u such that truncation(u) <= acc and truncation(u / ~1.09) > acc
  */
 
+
 static double findu(double u, double var, double acc, jmp_buf env, int *count, int lim, const double *A, const double *noncent, const int *dof, int N)
 {
 	static const double factors[] = {
-		4.0,	/* 4^{1} */
-		2.0,	/* 4^{0.5} */
+		4,	/* 4^{1} */
+		2,	/* 4^{0.5} */
 		1.41421356237309504880,	/* 4^{.25} */
 		1.18920711500272106671, /* 4^{.125} */
 		1.09050773266525765920, /* 4^{.0625} */
-		0.0	/* end */
+		0	/* end */
 	};
 	int i;
 
@@ -201,8 +249,9 @@ static double findu(double u, double var, double acc, jmp_buf env, int *count, i
 
 
 /*
- * carry out integration with nterm terms, at stepsize delta_u.  if !mainx multiply integrand by 1.0-exp(-0.5*tausq*u^2)
+ * carry out integration with nterm terms, at stepsize delta_u.  if !mainx multiply integrand by 1-exp(-0.5*tausq*u^2)
  */
+
 
 static double integrate(int nterm, double delta_u, double var, double tausq, int mainx, const double *A, const double *noncent, const int *dof, double c, int N, double *absolute_sum, const int *index)
 {
@@ -212,17 +261,17 @@ static double integrate(int nterm, double delta_u, double var, double tausq, int
 
 	for(k = nterm; k >= 0; k--) {
 		double u = (k + 0.5) * delta_u;
-		double sum1 = -2.0 * u * c;
+		double sum1 = -2 * u * c;
 		double sum2 = fabs(sum1);
 		double sum3 = -var * pow(u, 2);
 		double x;
 		for(j = 0; j < N; j++) {
 			double y;
 			double z;
-			x = 2.0 * u * A[index[j]];
+			x = 2 * u * A[index[j]];
 			y = pow(x, 2);
 			sum3 -= 0.5 * dof[index[j]] * log1(y, TRUE);
-			y = noncent[index[j]] * x / (1.0 + y);
+			y = noncent[index[j]] * x / (1 + y);
 			z = dof[index[j]] * atan(x) + y;
 			sum1 += z;
 			sum2 += fabs(z);
@@ -230,7 +279,7 @@ static double integrate(int nterm, double delta_u, double var, double tausq, int
 		}
 		x = inpi * exp(sum3 / 2) / u;
 		if(!mainx)
-			x *= 1.0 - exp(-0.5 * tausq * pow(u, 2));
+			x *= 1 - exp(-0.5 * tausq * pow(u, 2));
 		sum1 = sin(sum1 / 2) * x;
 		sum2 *= x / 2;
 		integral += sum1;
@@ -282,6 +331,7 @@ static int *order(const double *A, int N)
  * used when df is evaluated at x
  */
 
+
 static double cfe(double x, jmp_buf env, int *count, int lim, const double *A, const double *noncent, const int *dof, int N, int *index)
 {
 	double axl, sxl, sum;
@@ -309,10 +359,19 @@ static double cfe(double x, jmp_buf env, int *count, int lim, const double *A, c
 	}
 
 	/* double precision floats overflow at ~2^{1024} */
-	if(sum >= 4096.0)
+	if(sum >= 4096)
 		return nan("");
 	return pow(2, sum / 4) / (PI * pow(axl, 2));
 }
+
+
+/*
+ * ============================================================================
+ *
+ *                                Exported API
+ *
+ * ============================================================================
+ */
 
 
 /**
@@ -320,6 +379,7 @@ static double cfe(double x, jmp_buf env, int *count, int lim, const double *A, c
  * of non-central chi-squared random variables.  Returns the value of the
  * cumulative distribution function at c or NaN on failure.
  */
+
 
 double gstlal_cdf_weighted_chisq_P(
 	/* coefficient of j-th \chi^{2} variable */
@@ -393,7 +453,7 @@ double gstlal_cdf_weighted_chisq_P(
 		goto done;
 	}
 	for(j = 0; j < N; j++)
-		if(dof[j] < 0 || noncent[j] < 0.0) {
+		if(dof[j] < 0 || noncent[j] < 0) {
 			fault_local = 3;
 			goto done;
 		}
@@ -444,7 +504,7 @@ double gstlal_cdf_weighted_chisq_P(
 	 * does convergence factor help?
 	 */
 
-	if(c != 0.0 && ((-Amin > Amax ? -Amin : Amax) > 0.07 * stddev)) {
+	if(c != 0 && ((-Amin > Amax ? -Amin : Amax) > 0.07 * stddev)) {
 		double tausq = accuracy / 4 / cfe(c, env, &count, lim, A, noncent, dof, N, index);
 		if(!isnan(tausq) && truncation(utx, var + tausq, env, &count, lim, A, noncent, dof, N) < accuracy / 5) {
 			var += tausq;
@@ -470,16 +530,16 @@ double gstlal_cdf_weighted_chisq_P(
 		double d1 = ctff(accuracy, +4.5 / stddev, env, &count, lim, var, A, noncent, dof, N, Amin, Amax, mean) - c;
 		double d2 = c - ctff(accuracy, -4.5 / stddev, env, &count, lim, var, A, noncent, dof, N, Amin, Amax, mean);
 
-		if(d1 < 0.0) {
-			result = 1.0;
+		if(d1 < 0) {
+			result = 1;
 			goto done;
 		}
-		if(d2 < 0.0) {
-			result = 0.0;
+		if(d2 < 0) {
+			result = 0;
 			goto done;
 		}
 
-		delta_u = 2.0 * PI / ((d1 > d2) ? d1 : d2);
+		delta_u = 2 * PI / ((d1 > d2) ? d1 : d2);
 
 		/*
 		 * calculate number of terms required for main and
@@ -487,7 +547,7 @@ double gstlal_cdf_weighted_chisq_P(
 		 */
 
 		xnt = utx / delta_u;
-		xntm = 3.0 / sqrt(accuracy);
+		xntm = 3 / sqrt(accuracy);
 		if(xnt <= xntm * 1.5)
 			break;
 		if(xntm > xlim) {
@@ -504,7 +564,7 @@ double gstlal_cdf_weighted_chisq_P(
 		double delta_u = utx / nterms;
 		double tausq;
 
-		x = 2.0 * PI / delta_u;
+		x = 2 * PI / delta_u;
 		if(x <= fabs(c))
 			break;
 
@@ -549,7 +609,7 @@ double gstlal_cdf_weighted_chisq_P(
 		fault_local = 1;
 		goto done;
 	}
-	integral += integrate(nterms, delta_u, var, 0.0, TRUE, A, noncent, dof, c, N, &absolute_sum, index);
+	integral += integrate(nterms, delta_u, var, 0, TRUE, A, noncent, dof, c, N, &absolute_sum, index);
 	trace_local.number_of_integrations++;
 	trace_local.number_of_terms += nterms + 1;
 	}
@@ -562,7 +622,7 @@ double gstlal_cdf_weighted_chisq_P(
 	 * radix 8 or 16 machines
 	 */
 
-	x = absolute_sum + accuracy / 10.0;
+	x = absolute_sum + accuracy / 10;
 	for(j = 8; j; j /= 2)
 		if(j * x == j * absolute_sum) {
 			fault_local = 2;
