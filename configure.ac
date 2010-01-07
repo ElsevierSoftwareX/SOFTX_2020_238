@@ -40,7 +40,7 @@ AC_PROG_CC_STDC
 AC_PROG_INSTALL
 AC_PROG_LIBTOOL
 PKG_PROG_PKG_CONFIG()
-AM_PATH_PYTHON(2.4,,)
+AM_PATH_PYTHON([2.4],,)
 
 
 #
@@ -55,11 +55,19 @@ AX_CC_MAXOPT
 
 
 #
+# Check for math library
+#
+
+
+AC_CHECK_LIB([m], [main], , [AC_MSG_ERROR([Not found!])])
+
+
+#
 # Check for FFTW
 #
 
 
-PKG_CHECK_MODULES([FFTW], [fftw3], , [echo "Not Found!" ; exit 1])
+PKG_CHECK_MODULES([FFTW], [fftw3], , [AC_MSG_ERROR([Not found!])])
 AC_SUBST([FFTW_CFLAGS])
 AC_SUBST([FFTW_LIBS])
 
@@ -71,7 +79,7 @@ AC_SUBST([FFTW_LIBS])
 
 AC_SUBST([GSTREAMER_RELEASE], [0.10])
 AC_SUBST([MIN_GSTREAMER_VERSION], [0.10.0])
-PKG_CHECK_MODULES([gstreamer], [gstreamer-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-base-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION}], , [echo "Not Found!" ; exit 1])
+PKG_CHECK_MODULES([gstreamer], [gstreamer-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-base-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION}], , [AC_MSG_ERROR([Not found!])])
 AC_SUBST([gstreamer_CFLAGS])
 AC_SUBST([gstreamer_LIBS])
 AC_SUBST([plugindir], [${libdir}/gstreamer-${GSTREAMER_RELEASE}])
@@ -90,7 +98,7 @@ AC_SUBST([GSTREAMER_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-re
 
 AC_SUBST([LIBOIL_RELEASE], [0.3])
 AC_SUBST([MIN_LIBOIL_VERSION], [0.3.14])
-PKG_CHECK_MODULES([liboil], [liboil-${LIBOIL_RELEASE} >= ${MIN_LIBOIL_VERSION}], , [echo "Not Found!" ; exit 1])
+PKG_CHECK_MODULES([liboil], [liboil-${LIBOIL_RELEASE} >= ${MIN_LIBOIL_VERSION}], , [AC_MSG_ERROR([Not found!])])
 AC_SUBST([liboil_CFLAGS])
 AC_SUBST([liboil_LIBS])
 
@@ -100,7 +108,7 @@ AC_SUBST([liboil_LIBS])
 #
 
 
-PKG_CHECK_MODULES([LAL], [lal lalframe lalmetaio lalsupport lalburst], , [echo "Not Found!" ; exit 1])
+PKG_CHECK_MODULES([LAL], [lal lalframe lalmetaio lalsupport lalburst], , [AC_MSG_ERROR([Not found!])])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
 
