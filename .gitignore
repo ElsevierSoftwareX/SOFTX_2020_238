@@ -59,10 +59,16 @@ src/plugins/libgstlal_la-gstlalcollectpads.lo
 src/plugins/libgstlal_la-gstlalcollectpads.o
 src/plugins/libgstlal_la-low_latency_inspiral_functions.lo
 src/plugins/libgstlal_la-low_latency_inspiral_functions.o
+src/python/.deps/
+src/python/.libs/
+src/python/_misc.la
+src/python/_misc_la-misc.lo
+src/python/_misc_la-misc.o
 src/python/Makefile
 src/python/Makefile.in
 src/python/elements/Makefile
 src/python/elements/Makefile.in
+src/python/misc.loT
 src/utilities/Makefile
 src/utilities/Makefile.in
 tests/Makefile
