@@ -76,7 +76,7 @@
 
 static void counter(jmp_buf env, int *count, int lim)
 {
-	if(++*count > lim)
+	if(++*count > lim && lim >= 0)
 		longjmp(env, 1);
 }
 
@@ -394,7 +394,7 @@ double gstlal_cdf_weighted_chisq_P(
 	double var,
 	/* point at which distribution is to be evaluated */
 	double c,
-	/* maximum number of terms in integration */
+	/* maximum number of terms in integration;  < 0 --> no limit */
 	int lim,
 	/* maximum error */
 	double accuracy,
@@ -412,7 +412,7 @@ double gstlal_cdf_weighted_chisq_P(
 {
 	int j;
 	int count = 0;
-	double xlim = lim;
+	int nterm_limit = lim;
 	double xnt;
 	double utx;
 	double delta_u;
@@ -429,11 +429,6 @@ double gstlal_cdf_weighted_chisq_P(
 	int fault_local = 0;
 	jmp_buf env;
 
-	if(setjmp(env)) {
-		fault_local = 4;
-		goto done;
-	}
-
 	/*
 	 * construct look-up table for sorted coefficients
 	 */
@@ -448,6 +443,11 @@ double gstlal_cdf_weighted_chisq_P(
 	 * check input
 	 */
 
+	if(setjmp(env)) {
+		fault_local = 4;
+		goto done;
+	}
+
 	if(N < 0) {
 		fault_local = 3;
 		goto done;
@@ -459,7 +459,9 @@ double gstlal_cdf_weighted_chisq_P(
 		}
 
 	/*
-	 * find mean & std. dev. of distribution, and max and min of A,
+	 * find mean & std. dev. of distribution, and max and min of A.
+	 * iterate over A in increasing order of coefficient magnitude to
+	 * help with numerical accuracy
 	 */
 
 	stddev = var;
@@ -550,7 +552,7 @@ double gstlal_cdf_weighted_chisq_P(
 		xntm = 3 / sqrt(accuracy);
 		if(xnt <= xntm * 1.5)
 			break;
-		if(xntm > xlim) {
+		if(nterm_limit <= 0 && lim >= 0) {
 			fault_local = 1;
 			goto done;
 		}
@@ -582,7 +584,7 @@ double gstlal_cdf_weighted_chisq_P(
 		 */
 
 		integral += integrate(nterms, delta_u, var, tausq, FALSE, A, noncent, dof, c, N, &absolute_sum, index);
-		xlim -= xntm;
+		nterm_limit -= nterms;
 		var += tausq;
 		trace_local.number_of_integrations++;
 		trace_local.number_of_terms += nterms + 1;
@@ -605,7 +607,7 @@ double gstlal_cdf_weighted_chisq_P(
 	{
 	int nterms = round(xnt);
 
-	if(xnt > xlim) {
+	if(nterm_limit < nterms && lim >= 0) {
 		fault_local = 1;
 		goto done;
 	}
