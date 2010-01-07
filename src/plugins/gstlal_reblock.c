@@ -47,7 +47,6 @@
  */
 
 
-#include <gstlal.h>
 #include <gstlal_reblock.h>
 
 

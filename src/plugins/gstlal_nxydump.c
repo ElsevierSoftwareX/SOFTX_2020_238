@@ -52,7 +52,6 @@
  */
 
 
-#include <gstlal.h>
 #include <gstlal_nxydump.h>
 
 

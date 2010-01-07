@@ -32,7 +32,6 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gsl/gsl_matrix.h>
-#include <gstlal.h>
 #include <gstlal_triggergen.h>
 #include <gst/base/gstbasesink.h>
 #include <lal/Date.h>

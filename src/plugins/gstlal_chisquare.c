@@ -64,7 +64,6 @@
  */
 
 
-#include <gstlal.h>
 #include <gstlalcollectpads.h>
 #include <gstlal_chisquare.h>
 
