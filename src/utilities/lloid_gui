@@ -54,6 +54,25 @@ from pylal.datatypes import LIGOTimeGPS
 from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import cbc_template_fir
+from gstlal import misc as gstlalmisc
+
+
+#
+# =============================================================================
+#
+#                                  Utilities
+#
+# =============================================================================
+#
+
+
+#
+# sum-of-squares false alarm probability
+#
+
+
+def sum_of_squares_threshold_from_fap(fap, coefficients):
+	return gstlalmisc.cdf_weighted_chisq_Pinv(coefficients, numpy.zeros(coefficients.shape, dtype = "double"), numpy.ones(coefficients.shape, dtype = "int"), 0.0, 1.0 - fap, -1, fap / 16.0)
 
 
 #
@@ -93,11 +112,10 @@ class Bank(object):
 				print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
 				print >>sys.stderr, "\tsum-of-squares expectation value is %g" % self.chifacs.mean()
 
-	def __init__(self, template_bank_filename, psd, bank_fragments, gate_threshold, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
+	def __init__(self, template_bank_filename, psd, bank_fragments, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
 		self.template_bank_filename = template_bank_filename	# FIXME:  remove when not needed by trigger generator element
 		self.bank_fragments = bank_fragments
 		self.filter_length = max(fragment.end for fragment in bank_fragments)
-		self.gate_threshold = gate_threshold
 		self.snr_threshold = snr_threshold
 		self.logname = logname
 
@@ -128,6 +146,10 @@ class Bank(object):
 			# filtering but it ensures that the chifacs values
 			# have the correct relative normalization.
 			bank_fragment.set_template_bank(template_bank[:, end:start:stride] * math.sqrt(stride), tolerance, verbose = verbose)
+
+		self.gate_threshold = sum_of_squares_threshold_from_fap(gate_fap, numpy.array([weight**2 for bank_fragment in self.bank_fragments for weight in bank_fragment.sum_of_squares_weights], dtype = "double"))
+		if verbose:
+			print >>sys.stderr, "sum-of-squares threshold for false-alarm probability of %.16g:  %.16g" % (gate_fap, self.gate_threshold)
 
 	def get_rates(self):
 		return set(bank_fragment.rate for bank_fragment in self.bank_fragments)
@@ -678,7 +700,7 @@ banks = [
 			Bank.BankFragment(256, 5.0, 13.0),
 			Bank.BankFragment(128, 13.0, 29.0)
 		],
-		gate_threshold = 2.0,
+		gate_fap = 1e-4,
 		snr_threshold = 5.5,
 		tolerance = 0.9995,
 		flow = 40.0,	# Hz
