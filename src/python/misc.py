@@ -26,9 +26,36 @@
 #
 
 
+from scipy import optimize
+
+
 #
 # import all symbols from _misc
 #
 
 
 from _misc import *
+
+
+#
+# =============================================================================
+#
+#                                    Extras
+#
+# =============================================================================
+#
+
+
+#
+# inverse of cdf_weighted_chisq_P()
+#
+
+
+def cdf_weighted_chisq_Pinv(A, noncent, dof, var, P, lim, accuracy):
+	func = lambda x: cdf_weighted_chisq_P(A, noncent, dof, var, x, lim, accuracy) - P
+	lo = 0.0
+	hi = 1.0
+	while func(hi) < 0:
+		lo = hi
+		hi *= 8
+	return optimize.brentq(func, lo, hi, xtol = accuracy * 4)
