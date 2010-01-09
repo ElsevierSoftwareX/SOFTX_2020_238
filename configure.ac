@@ -13,6 +13,7 @@ AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_FILES([ \
 	Makefile \
 	src/Makefile \
+	src/lib/gstlal.pc \
 	src/lib/Makefile \
 	src/plugins/Makefile \
 	src/python/Makefile \
@@ -23,12 +24,13 @@ AC_CONFIG_FILES([ \
 
 
 #
-# Documentation boilerplate
+# Extra directories
 #
 
 
 AC_SUBST([docdir], [${datadir}/doc])
 AC_SUBST([pkgdocdir], [${docdir}/${PACKAGE_NAME}-${PACKAGE_VERSION}])
+AC_SUBST([pkgconfigdir],[${libdir}/pkgconfig])
 
 
 #

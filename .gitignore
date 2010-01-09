@@ -13,4 +13,5 @@ config.log
 config.status
 configure
 libtool
+src/lib/gstlal.pc
 tests/test_common.pyc

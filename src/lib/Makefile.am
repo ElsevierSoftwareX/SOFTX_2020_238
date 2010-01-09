@@ -1,5 +1,5 @@
 pkginclude_HEADERS = gstlal.h
-
+pkgconfig_DATA = gstlal.pc
 lib_LTLIBRARIES = libgstlal.la
 
 libgstlal_la_SOURCES = gstlal.c gstlal.h gstlal_cdf_weighted_chisq_P.c gstlal_cdf_weighted_chisq_P.h
