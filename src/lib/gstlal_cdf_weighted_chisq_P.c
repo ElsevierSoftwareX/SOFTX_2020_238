@@ -89,7 +89,7 @@ static void counter(jmp_buf env, int *count, int lim)
 static double log1(double x, int first)
 {
 	if(fabs(x) > 0.1) {
-		return (first ? log(1 + x) : (log(1 + x) - x));
+		return first ? log(1 + x) : (log(1 + x) - x);
 	} else {
 		double s, s1, term, y, k;
 		y = x / (2 + x);
@@ -235,7 +235,7 @@ static double findu(double u, double var, double acc, jmp_buf env, int *count, i
 	} else while(truncation(u / factors[0], var, env, count, lim, A, noncent, dof, N) <= acc)
 		u /= factors[0];
 
-	/* <-- u is not less than and not more than a factor of 4 bigger
+	/* <-- u is not less than, and not more than a factor of 4 bigger
 	 * than the desired value */
 
 	/* remove successively smaller factors from u as long as it remains
@@ -249,7 +249,8 @@ static double findu(double u, double var, double acc, jmp_buf env, int *count, i
 
 
 /*
- * carry out integration with nterm terms, at stepsize delta_u.  if !mainx multiply integrand by 1-exp(-0.5*tausq*u^2)
+ * carry out integration with (nterm + 1) terms, at stepsize delta_u.  if
+ * !mainx multiply integrand by 1-exp(-0.5*tausq*u^2)
  */
 
 
@@ -291,7 +292,8 @@ static double integrate(int nterm, double delta_u, double var, double tausq, int
 
 
 /*
- * sort A in increasing order by absolute value
+ * construct a look-up table giving the indexes of the elements of A sorted
+ * in increasing order by absolute value
  */
 
 
@@ -338,7 +340,7 @@ static double cfe(double x, jmp_buf env, int *count, int lim, const double *A, c
 	int j;
 	counter(env, count, lim);
 	axl = fabs(x);
-	sxl = (x > 0) ? 1 : -1;
+	sxl = (x > 0) ? +1 : -1;
 	sum = 0;
 	for(j = 0; j < N; j++) {
 		int i = index[j];
@@ -506,7 +508,7 @@ double gstlal_cdf_weighted_chisq_P(
 	 * does convergence factor help?
 	 */
 
-	if(c != 0 && ((-Amin > Amax ? -Amin : Amax) > 0.07 * stddev)) {
+	if(c != 0 && N > 0 && fabs(A[index[N-1]]) > 0.07 * stddev) {
 		double tausq = accuracy / 4 / cfe(c, env, &count, lim, A, noncent, dof, N, index);
 		if(!isnan(tausq) && truncation(utx, var + tausq, env, &count, lim, A, noncent, dof, N) < accuracy / 5) {
 			var += tausq;
