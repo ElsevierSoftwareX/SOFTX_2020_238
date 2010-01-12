@@ -1,6 +1,6 @@
 rm -f output_H1_bank*.xml
 
-./lloid_gui \
+./gstlal_inspiral \
 	--frame-cache "/home/kipp/scratch_local/874100000-20000/cache/874100000-20000.cache" \
 	--gps-start-time 874106900.0 \
 	--gps-stop-time 874107300.0 \
