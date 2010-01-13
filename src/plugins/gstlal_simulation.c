@@ -646,11 +646,11 @@ static int add_xml_injections(REAL8TimeSeries *h, const GSTLALSimulation *elemen
 
 		/* set start indexes */
 		if(Delta_epoch >= 0) {
-			i = floor(Delta_epoch / h->deltaT + 0.5);
+			i = round(Delta_epoch / h->deltaT);
 			j = 0;
 		} else {
 			i = 0;
-			j = floor(-Delta_epoch / h->deltaT + 0.5);
+			j = round(-Delta_epoch / h->deltaT);
 		}
 
 		/* add injection to h */
@@ -673,17 +673,12 @@ static REAL8TimeSeries *compute_strain(double right_ascension, double declinatio
 {
 	REAL8TimeSeries *hplus = NULL;
 	REAL8TimeSeries *hcross = NULL;
-	if(XLALSimInspiralPN(&hplus, &hcross, tc, phic, deltaT, m1, m2, fmin, r, i, order)) {
-		REAL8TimeSeries *strain = XLALSimDetectorStrainREAL8TimeSeries(hplus, hcross, right_ascension, declination, psi, detector);
-		XLALDestroyREAL8TimeSeries(hplus);
-		XLALDestroyREAL8TimeSeries(hcross);
-		return strain;
-	} else {
-		XLALDestroyREAL8TimeSeries(hplus);
-		XLALDestroyREAL8TimeSeries(hcross);
-		return NULL;
-	}
-
+	REAL8TimeSeries *strain = NULL;
+	if(XLALSimInspiralPN(&hplus, &hcross, tc, phic, deltaT, m1, m2, fmin, r, i, order))
+		strain = XLALSimDetectorStrainREAL8TimeSeries(hplus, hcross, right_ascension, declination, psi, detector);
+	XLALDestroyREAL8TimeSeries(hplus);
+	XLALDestroyREAL8TimeSeries(hcross);
+	return strain;
 }
 
 
@@ -697,6 +692,7 @@ static REAL8TimeSeries *compute_strain(double right_ascension, double declinatio
 
 
 /* FIXME:  re-write this as a subclass of the base transform class */
+/* FIXME:  or maybe as a source element, and let the adder do the mixing work */
 
 
 /*
