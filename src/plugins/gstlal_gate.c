@@ -206,18 +206,23 @@ static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstCloc
 {
 	while(1) {
 		GstBuffer *buf;
+		gboolean flushed;
 
 		/*
 		 * flush old data from tail
 		 */
 
 		buf = g_queue_peek_tail(element->control_queue);
+		flushed = FALSE;
 		while(buf && (GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf) <= tmin)) {
 			GST_DEBUG_OBJECT(element, "flushing control queue to %" GST_TIME_SECONDS_FORMAT, GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf));
 			g_queue_pop_tail(element->control_queue);
 			gst_buffer_unref(buf);
+			flushed = TRUE;
 			buf = g_queue_peek_tail(element->control_queue);
 		}
+		if(flushed)
+			g_cond_broadcast(element->control_availability);
 
 		/*
 		 * has head advanced far enough, or are we at EOS?
@@ -535,17 +540,19 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	/*
-	 * if there's already control data, wait for it to be flushed
+	 * if there's already enough control data wait for it to be flushed
 	 */
 
 	g_mutex_lock(element->control_lock);
-	/* FIXME:  find new way to prevent ram exhaustion */
-	/*
-	while(!g_queue_is_empty(element->control_queue)) {
-		GST_DEBUG_OBJECT(element, "waiting for previous control buffer to be flushed");
-		g_cond_wait(element->control_availability, element->control_lock);
-	}
-	*/
+	/* FIXME:  check that this is right */
+	/*while(!g_queue_is_empty(element->control_queue)) {
+		Gstbuffer *head = g_queue_peek_head(element->control_queue);
+		Gstbuffer *tail = g_queue_peek_tail(element->control_queue);
+		if(gst_util_uint64_scale_int(GST_BUFFER_OFFSET_END(head) - (GST_BUFFER_OFFSET_END(tail) + 1), element->rate, element->control_rate) >= element->attack_length + element->hold_length) {
+			GST_DEBUG_OBJECT(element, "waiting for previous control buffer to be flushed");
+			g_cond_wait(element->control_availability, element->control_lock);
+		}
+	}*/
 
 	/*
 	 * if we're at eos on sink pad, discard
