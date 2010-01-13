@@ -545,30 +545,31 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	GstStructure *s;
 	gint rate;
 	gint channels;
+	gboolean success = TRUE;
 
 	s = gst_caps_get_structure(incaps, 0);
 	if(!gst_structure_get_int(s, "channels", &channels)) {
 		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
-		return FALSE;
+		success = FALSE;
 	}
 	if(!gst_structure_get_int(s, "rate", &rate)) {
 		GST_DEBUG_OBJECT(element, "unable to parse rate from %" GST_PTR_FORMAT, incaps);
-		return FALSE;
+		success = FALSE;
 	}
 
 	if(element->autocorrelation_matrix && (channels != (gint) autocorrelation_channels(element))) {
 		GST_DEBUG_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, autocorrelation_channels(element), incaps);
-		return FALSE;
+		success = FALSE;
 	}
 
-	if(rate != element->rate) {
-		/* FIXME:  emit "rate-changed" signal like gstreamer's
-		 * audiofirfilter element does. */
+	if(success) {
+		if(rate != element->rate) {
+			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, rate, NULL);
+		}
+		element->rate = rate;
 	}
 
-	element->rate = rate;
-
-	return TRUE;
+	return success;
 }
 
 
