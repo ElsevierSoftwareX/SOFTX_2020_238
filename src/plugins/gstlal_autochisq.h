@@ -71,6 +71,8 @@ G_BEGIN_DECLS
 
 typedef struct {
 	GstBaseTransformClass parent_class;
+
+	void (*rate_changed)(GstElement *, gint, void *);
 } GSTLALAutoChiSqClass;
 
 

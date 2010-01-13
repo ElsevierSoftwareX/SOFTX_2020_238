@@ -317,6 +317,30 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 /*
  * ============================================================================
  *
+ *                                  Signals
+ *
+ * ============================================================================
+ */
+
+
+enum gstlal_autochisq_signal {
+	SIGNAL_RATE_CHANGED,
+	NUM_SIGNALS
+};
+
+
+static guint signals[NUM_SIGNALS] = {0, };
+
+
+static void rate_changed(GstElement *element, gint rate, void *data)
+{
+	/* FIXME;  send updated segment event downstream? */
+}
+
+
+/*
+ * ============================================================================
+ *
  *                           GStreamer Boiler Plate
  *
  * ============================================================================
@@ -913,6 +937,8 @@ static void gstlal_autochisq_class_init(GSTLALAutoChiSqClass *klass)
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
+	klass->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
+
 	g_object_class_install_property(
 		gobject_class,
 		ARG_AUTOCORRELATION_MATRIX,
@@ -947,6 +973,22 @@ static void gstlal_autochisq_class_init(GSTLALAutoChiSqClass *klass)
 			G_MININT64, 0, DEFAULT_LATENCY,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
+	);
+
+	signals[SIGNAL_RATE_CHANGED] = g_signal_new(
+		"rate-changed",
+		G_TYPE_FROM_CLASS(klass),
+		G_SIGNAL_RUN_FIRST,
+		G_STRUCT_OFFSET(
+			GSTLALAutoChiSqClass,
+			rate_changed
+		),
+		NULL,
+		NULL,
+		g_cclosure_marshal_VOID__INT,
+		G_TYPE_NONE,
+		1,
+		G_TYPE_INT
 	);
 }
 
