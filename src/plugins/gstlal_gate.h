@@ -66,6 +66,7 @@ typedef struct _GSTLALGate {
 	GQueue *control_queue;
 	gdouble (*control_sample_func)(const gpointer, guint64);
 
+	gboolean emit_signals;
 	gboolean default_state;
 	gboolean last_state;
 	gdouble threshold;

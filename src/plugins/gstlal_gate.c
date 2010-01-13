@@ -66,6 +66,7 @@
  */
 
 
+#define DEFAULT_EMIT_SIGNALS FALSE
 #define DEFAULT_DEFAULT_STATE FALSE
 #define DEFAULT_THRESHOLD 0
 #define DEFAULT_ATTACK_LENGTH 0
@@ -368,7 +369,8 @@ static void stop(GstElement *element, guint64 timestamp, void *data)
 
 
 enum property {
-	ARG_DEFAULT_STATE = 1,
+	ARG_EMIT_SIGNALS = 1,
+	ARG_DEFAULT_STATE,
 	ARG_THRESHOLD,
 	ARG_ATTACK_LENGTH,
 	ARG_HOLD_LENGTH,
@@ -383,6 +385,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
+	case ARG_EMIT_SIGNALS:
+		element->emit_signals = g_value_get_boolean(value);
+		break;
+
 	case ARG_DEFAULT_STATE:
 		element->default_state = g_value_get_boolean(value);
 		break;
@@ -415,6 +421,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
+	case ARG_EMIT_SIGNALS:
+		g_value_set_boolean(value, element->emit_signals);
+		break;
+
 	case ARG_DEFAULT_STATE:
 		g_value_set_boolean(value, element->default_state);
 		break;
@@ -841,7 +851,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		if(!length)
 			continue;
 		timestamp = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), start, sinkbuf_length);
-		if(state != element->last_state) {
+		if(element->emit_signals && state != element->last_state) {
 			g_signal_emit(G_OBJECT(element), signals[state > 0 ? SIGNAL_START : SIGNAL_STOP], 0, timestamp, NULL);
 			element->last_state = state;
 		}
@@ -1127,6 +1137,17 @@ static void class_init(gpointer klass, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
+		ARG_EMIT_SIGNALS,
+		g_param_spec_boolean(
+			"emit-signals",
+			"Emit signals",
+			"Emit start and stop signals (rate-changed is always emited).",
+			DEFAULT_EMIT_SIGNALS,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
 		ARG_DEFAULT_STATE,
 		g_param_spec_boolean(
 			"default-state",
@@ -1270,6 +1291,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->sink_eos = FALSE;
 	element->control_queue = g_queue_new();
 	element->control_sample_func = NULL;
+	element->emit_signals = DEFAULT_EMIT_SIGNALS;
 	element->default_state = DEFAULT_DEFAULT_STATE;
 	element->last_state = FALSE;
 	element->threshold = DEFAULT_THRESHOLD;
