@@ -47,8 +47,8 @@ typedef struct {
 	GstElementClass parent_class;
 
 	void (*rate_changed)(GstElement *, gint, void *);
-	void (*start)(GstElement *, gint, void *);
-	void (*stop)(GstElement *, gint, void *);
+	void (*start)(GstElement *, guint64, void *);
+	void (*stop)(GstElement *, guint64, void *);
 } GSTLALGateClass;
 
 

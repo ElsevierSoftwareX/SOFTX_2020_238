@@ -346,13 +346,13 @@ static void rate_changed(GstElement *element, gint rate, void *data)
 }
 
 
-static void start(GstElement *element, gint rate, void *data)
+static void start(GstElement *element, guint64 timestamp, void *data)
 {
 	/* FIXME:  do something? */
 }
 
 
-static void stop(GstElement *element, gint rate, void *data)
+static void stop(GstElement *element, guint64 timestamp, void *data)
 {
 	/* FIXME:  do something? */
 }
@@ -795,6 +795,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	for(start = 0; start < sinkbuf_length; start += length) {
+		GstClockTime timestamp;
+
 		/*
 		 * -1 = unknown, 0 = off, 1 = on
 		 */
@@ -838,8 +840,9 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		if(!length)
 			continue;
+		timestamp = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), start, sinkbuf_length);
 		if(state != element->last_state) {
-			g_signal_emit(G_OBJECT(element), signals[state > 0 ? SIGNAL_START : SIGNAL_STOP], 0, /*FIXME*/element->rate, NULL);
+			g_signal_emit(G_OBJECT(element), signals[state > 0 ? SIGNAL_START : SIGNAL_STOP], 0, timestamp, NULL);
 			element->last_state = state;
 		}
 		if(state > 0 || !element->leaky) {
@@ -857,7 +860,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
 			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + start;
 			GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET(srcbuf) + length;
-			GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), start, sinkbuf_length);
+			GST_BUFFER_TIMESTAMP(srcbuf) = timestamp;
 			GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), start + length, sinkbuf_length) - GST_BUFFER_TIMESTAMP(srcbuf);
 
 			/*
@@ -1203,10 +1206,10 @@ static void class_init(gpointer klass, gpointer class_data)
 		),
 		NULL,
 		NULL,
-		g_cclosure_marshal_VOID__INT,
+		gst_marshal_VOID__INT64,
 		G_TYPE_NONE,
 		1,
-		G_TYPE_INT
+		G_TYPE_UINT64
 	);
 	signals[SIGNAL_STOP] = g_signal_new(
 		"stop",
@@ -1218,10 +1221,10 @@ static void class_init(gpointer klass, gpointer class_data)
 		),
 		NULL,
 		NULL,
-		g_cclosure_marshal_VOID__INT,
+		gst_marshal_VOID__INT64,
 		G_TYPE_NONE,
 		1,
-		G_TYPE_INT
+		G_TYPE_UINT64
 	);
 }
 
