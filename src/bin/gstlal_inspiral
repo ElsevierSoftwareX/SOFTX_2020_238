@@ -433,17 +433,14 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 
 
 def mkLLOIDmulti(pipeline, detectors, banks, psd, output_filename, psd_fft_length = 8, fake_data = False, injection_filename = None, verbose = False, nxydump_segment = None):
-	if len(detectors) > 1:
-		raise ValueError, "only 1 instrument supported yet"
-
 	#
 	# xml stream aggregator
 	#
 
-	#nto1 = gst.element_factory_make("input-selector")
-	#nto1.set_property("select-all", True)
-	#pipeline.add(nto1)
-	#pipeparts.mktriggerxmlwritersink(pipeline, nto1, output_filename)
+	nto1 = gst.element_factory_make("input-selector")
+	nto1.set_property("select-all", True)
+	pipeline.add(nto1)
+	pipeparts.mktriggerxmlwritersink(pipeline, nto1, output_filename)
 
 	#
 	# loop over instruments and template banks
@@ -464,8 +461,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, output_filename, psd_fft_lengt
 				control_snksrc = control_snksrc,
 				nxydump_segment = nxydump_segment
 			)
-			#pipeparts.mkqueue(pipeline, head).link(nto1)
-			pipeparts.mktriggerxmlwritersink(pipeline, head, output_filename.replace(".xml", "_%s.xml" % bank.logname))
+			pipeparts.mkqueue(pipeline, head).link(nto1)
 
 	#
 	# done
@@ -533,7 +529,7 @@ def parse_command_line():
 
 	options, filenames = parser.parse_args()
 
-	required_options = ["gps_start_time", "gps_stop_time", "output", "template_bank"]
+	required_options = ["gps_start_time", "gps_end_time", "output", "template_bank"]
 	if not options.fake_data:
 		required_options += ["frame_cache"]
 
@@ -544,7 +540,7 @@ def parse_command_line():
 		raise ValueError, "cannot set --frame-cache with --fake-data"
 
 	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
-	options.gps_stop_time = LIGOTimeGPS(options.gps_stop_time)
+	options.gps_end_time = LIGOTimeGPS(options.gps_end_time)
 	options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
 
 	return options, filenames
@@ -559,7 +555,7 @@ def parse_command_line():
 #
 
 
-def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, fake_data = False, injection_filename = None, psd_fft_length = 8, verbose = False):
+def measure_psd(instrument, detector, gps_start_time, gps_end_time, rate, fake_data = False, injection_filename = None, psd_fft_length = 8, verbose = False):
 	#
 	# pipeline handler for PSD measurement
 	#
@@ -595,8 +591,8 @@ def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, fake_
 	# code requires a minimum of 1)
 	#
 
-	if float(gps_stop_time - gps_start_time) < 8 * psd_fft_length:
-		raise ValueError, "segment [%s s, %s s) too short" % (gps_start_time, gps_stop_time)
+	if float(gps_end_time - gps_start_time) < 8 * psd_fft_length:
+		raise ValueError, "segment [%s s, %s s) too short" % (gps_start_time, gps_end_time)
 
 	#
 	# build pipeline
@@ -615,7 +611,7 @@ def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, fake_
 		head = pipeparts.mkinjections(pipeline, head, injection_filename)
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % rate)
 	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 3)
-	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, average_samples = int(round(float(gps_stop_time - gps_start_time) / (psd_fft_length / 2) - 1)))
+	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, average_samples = int(round(float(gps_end_time - gps_start_time) / (psd_fft_length / 2) - 1)))
 	pipeparts.mkfakesink(pipeline, head)
 
 	handler = PSDHandler(mainloop, pipeline, verbose = verbose)
@@ -625,7 +621,7 @@ def measure_psd(instrument, detector, gps_start_time, gps_stop_time, rate, fake_
 	#
 
 	pipeline.set_state(gst.STATE_PAUSED)
-	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, gps_start_time.ns(), gst.SEEK_TYPE_SET, gps_stop_time.ns())
+	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, gps_start_time.ns(), gst.SEEK_TYPE_SET, gps_end_time.ns())
 	pipeline.set_state(gst.STATE_PLAYING)
 	mainloop.run()
 
@@ -679,7 +675,7 @@ else:
 		options.instrument,
 		detectors[options.instrument],
 		options.gps_start_time,
-		options.gps_stop_time,
+		options.gps_end_time,
 		2 * 2048,	# Hz;  must not be less than highest bank fragment sample rate (see below)
 		psd_fft_length = psd_fft_length,
 		fake_data = options.fake_data,
@@ -744,7 +740,7 @@ handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
 
 
 pipeline.set_state(gst.STATE_PAUSED)
-pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, options.gps_start_time.ns(), gst.SEEK_TYPE_SET, options.gps_stop_time.ns())
+pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, options.gps_start_time.ns(), gst.SEEK_TYPE_SET, options.gps_end_time.ns())
 pipeline.set_state(gst.STATE_PLAYING)
 mainloop.run()
 

@@ -1,19 +1,18 @@
 rm -f output_H1_bank*.xml
 
-./gstlal_inspiral \
+gstlal_inspiral \
 	--frame-cache "/home/kipp/scratch_local/874100000-20000/cache/874100000-20000.cache" \
 	--gps-start-time 874106900.0 \
 	--gps-end-time 874107300.0 \
 	--instrument "H1" \
 	--output "output_H1.xml" \
-	--template-bank=/home/kipp/Development/gstlal/examples/H1-TMPLTBANK_02-873250008-2048.xml.gz \
+	--template-bank=/home/kipp/Development/gstlal/examples/H1-TMPLTBANK_{02,03}-873250008-2048.xml.gz \
 	--reference-psd "measured_psd.xml.gz" \
 	--verbose
 
 #python /home/kipp/Development/gstlal/examples/extract_channel.py 386 387 <snr_H1_bank0.dump >snr_H1_bank0.dump.new && mv -f snr_H1_bank0.dump.new snr_H1_bank0.dump
 #python /home/kipp/Development/gstlal/examples/extract_channel.py 193 <chisq_H1_bank0.dump >chisq_H1_bank0.dump.new && mv -f chisq_H1_bank0.dump.new chisq_H1_bank0.dump
 
-ligolw_add --verbose --output output_H1.xml output_H1_bank*.xml
 ligolw_sicluster --verbose --cluster-window 10.0 output_H1.xml
 python /home/kipp/Development/gstlal/examples/dump_triggers.py output_H1.xml >triggers.dump
 
