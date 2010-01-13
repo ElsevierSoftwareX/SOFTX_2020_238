@@ -66,7 +66,7 @@
  */
 
 
-#define DEFAULT_STATE FALSE
+#define DEFAULT_DEFAULT_STATE FALSE
 #define DEFAULT_THRESHOLD 0
 #define DEFAULT_ATTACK_LENGTH 0
 #define DEFAULT_HOLD_LENGTH 0
@@ -329,12 +329,33 @@ static gint control_get_state(GSTLALGate *element, GstClockTime tmin, GstClockTi
  */
 
 
-/* FIXME:  add a rate-changed signal to allow applications to adjust
- * attack-length & hold-length */
+enum gstlal_gate_signal {
+	SIGNAL_RATE_CHANGED,
+	SIGNAL_START,
+	SIGNAL_STOP,
+	NUM_SIGNALS
+};
 
 
-/* FIXME:  add start & stop signals to allow things to happen at gap
- * boundaries */
+static guint signals[NUM_SIGNALS] = {0, };
+
+
+static void rate_changed(GstElement *element, gint rate, void *data)
+{
+	/* FIXME:  do something? */
+}
+
+
+static void start(GstElement *element, gint rate, void *data)
+{
+	/* FIXME:  do something? */
+}
+
+
+static void stop(GstElement *element, gint rate, void *data)
+{
+	/* FIXME:  do something? */
+}
 
 
 /*
@@ -546,12 +567,12 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	g_mutex_lock(element->control_lock);
 	/* FIXME:  check that this is right */
 	/*while(!g_queue_is_empty(element->control_queue)) {
-		Gstbuffer *head = g_queue_peek_head(element->control_queue);
-		Gstbuffer *tail = g_queue_peek_tail(element->control_queue);
-		if(gst_util_uint64_scale_int(GST_BUFFER_OFFSET_END(head) - (GST_BUFFER_OFFSET_END(tail) + 1), element->rate, element->control_rate) >= element->attack_length + element->hold_length) {
-			GST_DEBUG_OBJECT(element, "waiting for previous control buffer to be flushed");
-			g_cond_wait(element->control_availability, element->control_lock);
-		}
+		GstBuffer *head = g_queue_peek_head(element->control_queue);
+		GstBuffer *tail = g_queue_peek_tail(element->control_queue);
+		if((gint64) gst_util_uint64_scale_int(GST_BUFFER_OFFSET_END(head) - GST_BUFFER_OFFSET_END(tail), element->rate, element->control_rate) < element->attack_length + element->hold_length + 1)
+			break;
+		GST_DEBUG_OBJECT(element, "waiting for space in control queue");
+		g_cond_wait(element->control_availability, element->control_lock);
 	}*/
 
 	/*
@@ -717,6 +738,8 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	if(success) {
+		if(rate != element->rate)
+			g_signal_emit(G_OBJECT(element), signals[SIGNAL_RATE_CHANGED], 0, rate, NULL);
 		element->rate = rate;
 		element->unit_size = width / 8 * channels;
 	}
@@ -799,6 +822,13 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 
 		/*
+		 * apply default state if needed
+		 */
+
+		if(state < 0)
+			state = element->default_state;
+
+		/*
 		 * if the interval has non-zero length and should not be
 		 * leaked, build a buffer out of it and push down stream.
 		 *
@@ -806,7 +836,13 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * leaking buffers
 		 */
 
-		if(length && (state > 0 || !element->leaky)) {
+		if(!length)
+			continue;
+		if(state != element->last_state) {
+			g_signal_emit(G_OBJECT(element), signals[state > 0 ? SIGNAL_START : SIGNAL_STOP], 0, /*FIXME*/element->rate, NULL);
+			element->last_state = state;
+		}
+		if(state > 0 || !element->leaky) {
 			GstBuffer *srcbuf = gst_buffer_create_sub(sinkbuf, start * element->unit_size, length * element->unit_size);
 			if(!srcbuf) {
 				GST_ERROR_OBJECT(element, "failure creating sub-buffer");
@@ -878,6 +914,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		g_mutex_lock(element->control_lock);
 		GST_DEBUG_OBJECT(pad, "new segment;  clearing internal end-of-stream flag");
 		element->sink_eos = FALSE;
+		element->last_state = FALSE;
 		g_mutex_unlock(element->control_lock);
 		break;
 
@@ -1070,15 +1107,20 @@ static void base_init(gpointer class)
  */
 
 
-static void class_init(gpointer class, gpointer class_data)
+static void class_init(gpointer klass, gpointer class_data)
 {
-	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GSTLALGateClass *gstlal_gate_class = GSTLAL_GATE_CLASS(klass);
 
 	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	gstlal_gate_class->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
+	gstlal_gate_class->start = GST_DEBUG_FUNCPTR(start);
+	gstlal_gate_class->stop = GST_DEBUG_FUNCPTR(stop);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -1087,7 +1129,7 @@ static void class_init(gpointer class, gpointer class_data)
 			"default-state",
 			"Default State",
 			"Control state to assume when control input is not available",
-			DEFAULT_STATE,
+			DEFAULT_DEFAULT_STATE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
@@ -1135,6 +1177,52 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+
+	signals[SIGNAL_RATE_CHANGED] = g_signal_new(
+		"rate-changed",
+		G_TYPE_FROM_CLASS(klass),
+		G_SIGNAL_RUN_FIRST,
+		G_STRUCT_OFFSET(
+			GSTLALGateClass,
+			rate_changed
+		),
+		NULL,
+		NULL,
+		g_cclosure_marshal_VOID__INT,
+		G_TYPE_NONE,
+		1,
+		G_TYPE_INT
+	);
+	signals[SIGNAL_START] = g_signal_new(
+		"start",
+		G_TYPE_FROM_CLASS(klass),
+		G_SIGNAL_RUN_FIRST,
+		G_STRUCT_OFFSET(
+			GSTLALGateClass,
+			start
+		),
+		NULL,
+		NULL,
+		g_cclosure_marshal_VOID__INT,
+		G_TYPE_NONE,
+		1,
+		G_TYPE_INT
+	);
+	signals[SIGNAL_STOP] = g_signal_new(
+		"stop",
+		G_TYPE_FROM_CLASS(klass),
+		G_SIGNAL_RUN_FIRST,
+		G_STRUCT_OFFSET(
+			GSTLALGateClass,
+			stop
+		),
+		NULL,
+		NULL,
+		g_cclosure_marshal_VOID__INT,
+		G_TYPE_NONE,
+		1,
+		G_TYPE_INT
+	);
 }
 
 
@@ -1145,7 +1233,7 @@ static void class_init(gpointer class, gpointer class_data)
  */
 
 
-static void instance_init(GTypeInstance *object, gpointer class)
+static void instance_init(GTypeInstance *object, gpointer klass)
 {
 	GSTLALGate *element = GSTLAL_GATE(object);
 	GstPad *pad;
@@ -1179,6 +1267,8 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->sink_eos = FALSE;
 	element->control_queue = g_queue_new();
 	element->control_sample_func = NULL;
+	element->default_state = DEFAULT_DEFAULT_STATE;
+	element->last_state = FALSE;
 	element->threshold = DEFAULT_THRESHOLD;
 	element->attack_length = DEFAULT_ATTACK_LENGTH;
 	element->hold_length = DEFAULT_HOLD_LENGTH;

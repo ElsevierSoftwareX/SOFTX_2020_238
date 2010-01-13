@@ -45,6 +45,10 @@ G_BEGIN_DECLS
 
 typedef struct {
 	GstElementClass parent_class;
+
+	void (*rate_changed)(GstElement *, gint, void *);
+	void (*start)(GstElement *, gint, void *);
+	void (*stop)(GstElement *, gint, void *);
 } GSTLALGateClass;
 
 
@@ -63,6 +67,7 @@ typedef struct _GSTLALGate {
 	gdouble (*control_sample_func)(const gpointer, guint64);
 
 	gboolean default_state;
+	gboolean last_state;
 	gdouble threshold;
 	gint64 attack_length;
 	gint64 hold_length;
