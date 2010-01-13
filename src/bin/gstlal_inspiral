@@ -518,7 +518,7 @@ def parse_command_line():
 	)
 	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data is used in which case it must not be set.")
 	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
-	parser.add_option("--gps-stop-time", metavar = "seconds", help = "Set the stop time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
+	parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
 	parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
 	parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
