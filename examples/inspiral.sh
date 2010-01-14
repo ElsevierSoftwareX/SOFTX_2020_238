@@ -8,6 +8,7 @@ gstlal_inspiral \
 	--output "output_H1.xml" \
 	--template-bank=/home/kipp/Development/gstlal/examples/H1-TMPLTBANK_{02,03}-873250008-2048.xml.gz \
 	--reference-psd "measured_psd.xml.gz" \
+	--comment "most super-duper awsomest test" \
 	--verbose
 
 #python /home/kipp/Development/gstlal/examples/extract_channel.py 386 387 <snr_H1_bank0.dump >snr_H1_bank0.dump.new && mv -f snr_H1_bank0.dump.new snr_H1_bank0.dump
