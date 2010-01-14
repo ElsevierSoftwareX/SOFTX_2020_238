@@ -96,9 +96,10 @@ typedef struct {
 
 	int rate;
 
+	GMutex *bank_lock;
 	char *bank_filename;
 	SnglInspiralTable *bank;
-	guint num_templates;
+	gint num_templates;
 	double snr_thresh;
 	double max_gap;
 	SnglInspiralTable *last_event;

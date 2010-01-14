@@ -32,8 +32,9 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gsl/gsl_matrix.h>
-#include <gstlal_triggergen.h>
 #include <gst/base/gstbasesink.h>
+#include <gstlal.h>
+#include <gstlal_triggergen.h>
 #include <lal/Date.h>
 #include <lal/LIGOMetadataTables.h>
 #include <lal/LIGOLwXML.h>
@@ -120,7 +121,9 @@ static int setup_bankfile_input(GSTLALTriggerGen *element, char *bank_filename)
 	 * LALSnglInspiralTableFromLIGOLw() into the template array.  the
 	 * end_time and snr are 0'ed so that when the templates are used to
 	 * initialize the last_event info those fields are set properly.
-	 * while we're at it, initialize the last_time array.
+	 * also sigmasq is 0'ed to "disable" effective distance calculation
+	 * unless explicit values are provided.  while we're at it,
+	 * initialize the last_time array.
 	 */
 
 	for(i = 0; bank; i++) {
@@ -129,8 +132,14 @@ static int setup_bankfile_input(GSTLALTriggerGen *element, char *bank_filename)
 		element->bank[i].next = NULL;
 		element->bank[i].end_time = (LIGOTimeGPS) {0, 0};
 		element->bank[i].snr = 0;
+		element->bank[i].sigmasq = 0;
 		bank = bank->next;
 		free(prev);
+
+		/* fix some buggered columns.  sigh. */
+		element->bank[i].mtotal = element->bank[i].mass1 + element->bank[i].mass2;
+		element->bank[i].mchirp = mchirp(element->bank[i].mass1, element->bank[i].mass2);
+		element->bank[i].eta = eta(element->bank[i].mass1, element->bank[i].mass2);
 
 		element->last_time[i] = (LIGOTimeGPS) {0, 0};
 	}
@@ -141,22 +150,14 @@ static int setup_bankfile_input(GSTLALTriggerGen *element, char *bank_filename)
 
 static void free_bankfile(GSTLALTriggerGen *element)
 {
-	if(element->bank_filename) {
-		free(element->bank_filename);
-		element->bank_filename = NULL;
-	}
-	if(element->bank) {
-		free(element->bank);
-		element->bank = NULL;
-	}
-	if(element->last_event) {
-		free(element->last_event);
-		element->last_event = NULL;
-	}
-	if(element->last_time) {
-		free(element->last_time);
-		element->last_time = NULL;
-	}
+	free(element->bank_filename);
+	element->bank_filename = NULL;
+	free(element->bank);
+	element->bank = NULL;
+	free(element->last_event);
+	element->last_event = NULL;
+	free(element->last_time);
+	element->last_time = NULL;
 	element->num_templates = 0;
 }
 
@@ -273,7 +274,9 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		 * reset the last inspiral event information
 		 */
 
+		g_mutex_lock(element->bank_lock);
 		memcpy(element->last_event, element->bank, element->num_templates * sizeof(*element->last_event));
+		g_mutex_unlock(element->bank_lock);
 
 		element->segment_pending = FALSE;
 	}
@@ -344,7 +347,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		const double *chisqdata = (const double *) GST_BUFFER_DATA(chisqbuf);
 		guint64 t0;
 		guint64 length;
-		guint sample, channel;
+		guint sample;
+		gint channel;
 		SnglInspiralTable *head = NULL;
 		guint nevents = 0;
 
@@ -359,6 +363,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 			length -= GST_BUFFER_OFFSET(chisqbuf);
 		}
 
+		g_mutex_lock(element->bank_lock);
 		for(sample = 0; sample < length; sample++) {
 			LIGOTimeGPS t;
 			XLALINT8NSToGPS(&t, t0);
@@ -399,6 +404,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 				chisqdata++;
 			}
 		}
+		g_mutex_unlock(element->bank_lock);
 
 		if(nevents) {
 			SnglInspiralTable *dest;
@@ -485,7 +491,8 @@ eos:
 enum gen_property {
 	ARG_SNR_THRESH = 1, 
 	ARG_BANK_FILENAME,
-	ARG_MAX_GAP
+	ARG_MAX_GAP,
+	ARG_SIGMASQ
 };
 
 
@@ -500,12 +507,37 @@ static void gen_set_property(GObject *object, enum gen_property id, const GValue
 		break;
 
 	case ARG_BANK_FILENAME:
+		g_mutex_lock(element->bank_lock);
 		free_bankfile(element);
 		setup_bankfile_input(element, g_value_dup_string(value));
+		g_mutex_unlock(element->bank_lock);
 		break;
 
 	case ARG_MAX_GAP:
 		element->max_gap = g_value_get_double(value);
+		break;
+
+	case ARG_SIGMASQ: {
+		g_mutex_lock(element->bank_lock);
+		if(element->bank) {
+			gint length;
+			double *sigmasq = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &length);
+			if(element->num_templates != length)
+				GST_ERROR_OBJECT(element, "vector length (%d) does not match number of templates (%d)", length, element->num_templates);
+			else
+				while(length--) {
+					element->bank[length].sigmasq = sigmasq[length];
+					if(element->last_event)
+						element->last_event[length].sigmasq = sigmasq[length];
+				}
+			g_free(sigmasq);
+		}
+		g_mutex_unlock(element->bank_lock);
+		break;
+	}
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
 	GST_OBJECT_UNLOCK(element);
@@ -523,11 +555,31 @@ static void gen_get_property(GObject * object, enum gen_property id, GValue * va
 		break;
 
 	case ARG_BANK_FILENAME:
+		g_mutex_lock(element->bank_lock);
 		g_value_set_string(value, element->bank_filename);
+		g_mutex_unlock(element->bank_lock);
 		break;
 
 	case ARG_MAX_GAP:
 		g_value_set_double(value, element->max_gap);
+		break;
+
+	case ARG_SIGMASQ: {
+		g_mutex_lock(element->bank_lock);
+		if(element->bank) {
+			double sigmasq[element->num_templates];
+			gint i;
+			for(i = 0; i < element->num_templates; i++)
+				sigmasq[i] = element->bank[i].sigmasq;
+			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(sigmasq, element->num_templates));
+		} else
+			g_value_take_boxed(value, g_value_array_new(0));
+		g_mutex_unlock(element->bank_lock);
+		break;
+	}
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
 	GST_OBJECT_UNLOCK(element);
@@ -549,6 +601,8 @@ static GstElementClass *gen_parent_class = NULL;
 static void gen_finalize(GObject *object)
 {
 	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
+	g_mutex_free(element->bank_lock);
+	element->bank_lock = NULL;
 	free_bankfile(element);
 	G_OBJECT_CLASS(gen_parent_class)->finalize(object);
 }
@@ -662,7 +716,7 @@ static void gen_class_init(gpointer klass, gpointer class_data)
 		g_param_spec_string(
 			"bank-filename",
 			"Bank file name",
-			"Path to XML file used to generate the template bank",
+			"Path to XML file used to generate the template bank.  Setting this property resets sigma to a vector of 0s.",
 			NULL,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
@@ -673,7 +727,7 @@ static void gen_class_init(gpointer klass, gpointer class_data)
 		g_param_spec_double(
 			"snr-thresh",
 			"SNR Threshold",
-			"SNR Threshold that determines a trigger",
+			"SNR Threshold that determines a trigger.",
 			0, G_MAXDOUBLE, DEFAULT_SNR_THRESH,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
@@ -684,8 +738,25 @@ static void gen_class_init(gpointer klass, gpointer class_data)
 		g_param_spec_double(
 			"max-gap",
 			"Maximum below-threshold gap (seconds)",
-			"If the SNR drops below threshold for less than this interval (in seconds) then it is not the start of a new event",
+			"If the SNR drops below threshold for less than this interval (in seconds) then it is not the start of a new event.",
 			0, G_MAXDOUBLE, DEFAULT_MAX_GAP,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SIGMASQ,
+		g_param_spec_value_array(
+			"sigmasq",
+			"\\sigma^{2} factors",
+			"Vector of \\sigma^{2} factors.",
+			g_param_spec_double(
+				"sigmasq",
+				"\\sigma^{2}",
+				"\\sigma^{2} factor",
+				-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			),
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
@@ -720,6 +791,7 @@ static void gen_instance_init(GTypeInstance *object, gpointer klass)
 	element->srcpad = pad;
 
 	/* internal data */
+	element->bank_lock = g_mutex_new();
 	element->rate = 0;
 	element->bank_filename = NULL;
 	element->bank = NULL;
