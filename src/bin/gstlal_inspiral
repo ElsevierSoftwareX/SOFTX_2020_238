@@ -49,6 +49,7 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils
 from pylal import series as lalseries
 from pylal.datatypes import LIGOTimeGPS
+from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspiral_from_buffer
 
 
 from gstlal import pipeio
@@ -432,7 +433,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 #
 
 
-def mkLLOIDmulti(pipeline, detectors, banks, psd, output_filename, psd_fft_length = 8, fake_data = False, injection_filename = None, verbose = False, nxydump_segment = None):
+def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, fake_data = False, injection_filename = None, verbose = False, nxydump_segment = None):
 	#
 	# xml stream aggregator
 	#
@@ -440,7 +441,6 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, output_filename, psd_fft_lengt
 	nto1 = gst.element_factory_make("input-selector")
 	nto1.set_property("select-all", True)
 	pipeline.add(nto1)
-	pipeparts.mktriggerxmlwritersink(pipeline, nto1, output_filename)
 
 	#
 	# loop over instruments and template banks
@@ -466,6 +466,8 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, output_filename, psd_fft_lengt
 	#
 	# done
 	#
+
+	return nto1
 
 
 #
@@ -708,19 +710,32 @@ banks = [
 
 
 #
+# build output document
+#
+
+
+xmldoc = ligolw.Document()
+xmldoc.appendChild(ligolw.LIGO_LW())
+sngl_inspiral_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
+
+
+sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))
+
+
+#
 # build pipeline
 #
 
 
-pipeline = gst.Pipeline("lloid")
+pipeline = gst.Pipeline("gstlal_inspiral")
 mainloop = gobject.MainLoop()
 
-mkLLOIDmulti(
+
+src = mkLLOIDmulti(
 	pipeline,
 	detectors = detectors,
 	banks = banks,
 	psd = psd,
-	output_filename = options.output,
 	psd_fft_length = psd_fft_length,
 	fake_data = options.fake_data,
 	injection_filename = options.injections,
@@ -728,8 +743,16 @@ mkLLOIDmulti(
 	nxydump_segment = options.nxydump_segment
 )
 
+def appsink_new_buffer(elem, sngl_inspiral_table):
+	for row in sngl_inspiral_from_buffer(elem.get_property("last-buffer")):
+		sngl_inspiral_table.append(row)
+
+pipeparts.mkappsink(pipeline, src, caps = gst.Caps("application/x-lal-snglinspiral")).connect_after("new-buffer", appsink_new_buffer, sngl_inspiral_table)
+
+
 if options.write_pipeline is not None:
 	gst.xml_write_file(pipeline, file(options.write_pipeline, "w"))
+
 
 handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
 
@@ -743,6 +766,18 @@ pipeline.set_state(gst.STATE_PAUSED)
 pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, options.gps_start_time.ns(), gst.SEEK_TYPE_SET, options.gps_end_time.ns())
 pipeline.set_state(gst.STATE_PLAYING)
 mainloop.run()
+
+
+#
+# write trigger file
+#
+
+
+for row in sngl_inspiral_table:
+	row.event_id = sngl_inspiral_table.get_next_id()
+
+
+utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)
 
 
 #
