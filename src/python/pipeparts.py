@@ -450,13 +450,15 @@ def mkplaybacksink(pipeline, src, amplification = 0.1):
 	gst.element_link_many(src, *elems)
 
 
-def mkappsink(pipeline, src):
+def mkappsink(pipeline, src, **properties):
 	elem = gst.element_factory_make("appsink")
 	elem.set_property("sync", False)
 	elem.set_property("async", False)
 	elem.set_property("emit-signals", True)
 	elem.set_property("max-buffers", 1)
 	elem.set_property("drop", True)
+	for name, value in properties.items():
+		elem.set_property(name, value)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
