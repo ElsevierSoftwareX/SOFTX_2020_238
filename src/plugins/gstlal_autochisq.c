@@ -704,7 +704,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		/*
 		 * push (correlation-length - zeros-in-adapter - 1) 0s into
 		 * adapter to allow previous non-zero data to be finished
-		 * off.  push_zeros() modifies zeros_in_adapter to update
+		 * off.  push_zeros() modifies zeros_in_adapter so update
 		 * length first.
 		 */
 
