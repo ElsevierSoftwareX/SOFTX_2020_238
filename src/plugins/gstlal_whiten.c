@@ -863,7 +863,7 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 			LALUnit sample_units;
 
 			if(!XLALParseUnitString(&sample_units, units)) {
-				GST_ERROR_OBJECT(element, "cannot parse units");
+				GST_ERROR_OBJECT(element, "cannot parse units \"%s\"", units);
 				sample_units = lalDimensionlessUnit;
 				/*
 				 * re-use the event
