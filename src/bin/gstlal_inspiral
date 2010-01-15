@@ -43,6 +43,7 @@ import gst
 gobject.threads_init()
 
 
+from glue import segments
 from glue import segmentsUtils
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
@@ -75,6 +76,58 @@ from gstlal import misc as gstlalmisc
 
 def sum_of_squares_threshold_from_fap(fap, coefficients):
 	return gstlalmisc.cdf_weighted_chisq_Pinv(coefficients, numpy.zeros(coefficients.shape, dtype = "double"), numpy.ones(coefficients.shape, dtype = "int"), 0.0, 1.0 - fap, -1, fap / 16.0)
+
+
+#
+# add metadata to an xml document in the style of lalapps_inspiral
+#
+
+
+def add_cbc_metadata(xmldoc, process, seg):
+	#
+	# add entry to filter table
+	#
+
+	try:
+		tbl = lsctables.table.get_table(xmldoc, lsctables.FilterTable.tableName)
+	except ValueError:
+		tbl = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.FilterTable))
+	tbl.sync_next_id()
+	row = tbl.RowType()
+	row.process_id = process.process_id
+	row.program = process.program
+	row.start_time = int(seg[0])
+	row.filter_name = None # FIXME
+	row.filter_id = tbl.get_next_id()
+	row.param_set = None # FIXME
+	row.comment = process.comment
+	tbl.append(row)
+
+	#
+	# add entries to search_summvars table
+	#
+
+	try:
+		tbl = lsctables.table.get_table(xmldoc, lsctables.SearchSummVarsTable.tableName)
+	except ValueError:
+		tbl = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SearchSummVarsTable))
+	tbl.sync_next_id()
+	# FIXME
+
+	#
+	# add entries to summ_value table
+	#
+
+	try:
+		tbl = lsctables.table.get_table(xmldoc, lsctables.SummValueTable.tableName)
+	except ValueError:
+		tbl = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SummValueTable))
+	tbl.sync_next_id()
+	# FIXME
+
+	#
+	# done
+	#
 
 
 #
@@ -751,6 +804,7 @@ else:
 	xmldoc.appendChild(ligolw.LIGO_LW())
 process = ligolw_process.append_process(xmldoc, program = "gstlal_inspiral", comment = options.comment, ifos = set([options.instrument]))
 ligolw_process.append_process_params(xmldoc, process, process_params)
+add_cbc_metadata(xmldoc, process, segments.segment(options.gps_start_time, options.gps_end_time))
 try:
 	sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 except ValueError:
