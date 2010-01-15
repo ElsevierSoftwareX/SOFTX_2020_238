@@ -794,6 +794,9 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 	sinkbuf_length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
 
+	if(GST_BUFFER_IS_DISCONT(sinkbuf))
+		element->need_discont = TRUE;
+
 	/*
 	 * wait for control queue to span the necessary interval
 	 */
@@ -843,9 +846,6 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		/*
 		 * if the interval has non-zero length and should not be
 		 * leaked, build a buffer out of it and push down stream.
-		 *
-		 * FIXME:  discont flags are not handled correctly when
-		 * leaking buffers
 		 */
 
 		if(!length)
@@ -874,11 +874,13 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), start + length, sinkbuf_length) - GST_BUFFER_TIMESTAMP(srcbuf);
 
 			/*
-			 * only the first subbuffer of a buffer flagged as
-			 * a discontinuity is a discontinuity.
+			 * is a discontinuity pending?
 			 */
 
-			if(start)
+			if(element->need_discont) {
+				GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
+				element->need_discont = FALSE;
+			} else
 				GST_BUFFER_FLAG_UNSET(srcbuf, GST_BUFFER_FLAG_DISCONT);
 
 			/*
@@ -898,6 +900,13 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 				GST_ELEMENT_ERROR(element, CORE, PAD, (NULL), ("%s: gst_pad_push() failed (%d)", GST_PAD_NAME(element->srcpad), result));
 				goto done;
 			}
+		} else {
+			/*
+			 * skipping an interval with non-zero length, next
+			 * buffer must be a discont
+			 */
+
+			element->need_discont = TRUE;
 		}
 	}
 
@@ -928,6 +937,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		GST_DEBUG_OBJECT(pad, "new segment;  clearing internal end-of-stream flag");
 		element->sink_eos = FALSE;
 		element->last_state = FALSE;
+		element->need_discont = TRUE;
 		g_mutex_unlock(element->control_lock);
 		break;
 
@@ -1301,6 +1311,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->rate = 0;
 	element->unit_size = 0;
 	element->control_rate = 0;
+	element->need_discont = FALSE;
 }
 
 

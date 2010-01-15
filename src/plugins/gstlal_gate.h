@@ -77,6 +77,7 @@ typedef struct _GSTLALGate {
 	gint rate;
 	gint unit_size;
 	gint control_rate;
+	gboolean need_discont;
 } GSTLALGate;
 
 
