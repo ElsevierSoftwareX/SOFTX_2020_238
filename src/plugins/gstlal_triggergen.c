@@ -251,8 +251,9 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 
 		GstSegment *segment = gstlal_collect_pads_get_segment(element->collect);
 		if(!segment) {
-			/* FIXME:  failure getting bounding segment, do
-			 * something about it */
+			GST_ERROR_OBJECT(element, "unable to retrieve bounding segment");
+			result = GST_FLOW_ERROR;
+			goto error;
 		}
 		element->segment = *segment;
 		gst_segment_free(segment);
@@ -265,8 +266,9 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 
 		event = gst_event_new_new_segment_full(FALSE, element->segment.rate, 1.0, GST_FORMAT_TIME, element->segment.start, element->segment.stop, element->segment.start);
 		if(!event) {
-			/* FIXME:  failure building event, do something
-			 * about it */
+			GST_ERROR_OBJECT(element, "unable to create new segment event");
+			result = GST_FLOW_ERROR;
+			goto error;
 		}
 		gst_pad_push_event(element->srcpad, event);
 
@@ -333,9 +335,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		 */
 
 		result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
-		if(result != GST_FLOW_OK) {
-			/* FIXME: handle failure */
-		}
+		if(result != GST_FLOW_OK)
+			goto error;
 		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset;
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 	} else {
@@ -411,7 +412,12 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 
 			result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, nevents * sizeof(*head), GST_PAD_CAPS(element->srcpad), &srcbuf);
 			if(result != GST_FLOW_OK) {
-				/* FIXME: handle failure */
+				while(head) {
+					SnglInspiralTable *next = head->next;
+					free(head);
+					head = next;
+				}
+				goto error;
 			}
 			GST_BUFFER_OFFSET(srcbuf) = element->next_output_offset;
 			element->next_output_offset += nevents;
@@ -434,9 +440,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 			dest[nevents].next = NULL;
 		} else {
 			result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
-			if(result != GST_FLOW_OK) {
-				/* FIXME: handle failure */
-			}
+			if(result != GST_FLOW_OK)
+				goto error;
 			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset;
 			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 		}
@@ -531,7 +536,8 @@ static void gen_set_property(GObject *object, enum gen_property id, const GValue
 						element->last_event[length].sigmasq = sigmasq[length];
 				}
 			g_free(sigmasq);
-		}
+		} else
+			GST_WARNING_OBJECT(element, "must set template bank before setting sigmasq");
 		g_mutex_unlock(element->bank_lock);
 		break;
 	}
@@ -572,8 +578,10 @@ static void gen_get_property(GObject * object, enum gen_property id, GValue * va
 			for(i = 0; i < element->num_templates; i++)
 				sigmasq[i] = element->bank[i].sigmasq;
 			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(sigmasq, element->num_templates));
-		} else
+		} else {
+			GST_WARNING_OBJECT(element, "no template bank");
 			g_value_take_boxed(value, g_value_array_new(0));
+		}
 		g_mutex_unlock(element->bank_lock);
 		break;
 	}
