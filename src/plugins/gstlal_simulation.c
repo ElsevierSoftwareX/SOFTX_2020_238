@@ -712,7 +712,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 
 	switch (id) {
 	case ARG_XML_LOCATION:
-		free(element->xml_location);
+		g_free(element->xml_location);
 		element->xml_location = g_value_dup_string(value);
 		destroy_injection_document(element->injection_document);
 		element->injection_document = NULL;
@@ -906,7 +906,7 @@ static void finalize(GObject * object)
 
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
-	free(element->xml_location);
+	g_free(element->xml_location);
 	element->xml_location = NULL;
 	destroy_injection_document(element->injection_document);
 	g_free(element->instrument);

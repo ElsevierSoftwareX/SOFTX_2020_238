@@ -150,7 +150,7 @@ static int setup_bankfile_input(GSTLALTriggerGen *element, char *bank_filename)
 
 static void free_bankfile(GSTLALTriggerGen *element)
 {
-	free(element->bank_filename);
+	g_free(element->bank_filename);
 	element->bank_filename = NULL;
 	free(element->bank);
 	element->bank = NULL;
@@ -890,7 +890,7 @@ static void xmlwriter_set_property(GObject * object, enum xmlwriter_property id,
 	GST_OBJECT_LOCK(element);
 	switch(id) {
 	case ARG_LOCATION:
-		free(element->location);
+		g_free(element->location);
 		element->location = g_value_dup_string(value);
 		break;
 	}
