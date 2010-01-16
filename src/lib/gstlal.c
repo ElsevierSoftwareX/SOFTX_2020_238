@@ -370,8 +370,8 @@ GValueArray *gstlal_g_value_array_from_gsl_matrix_complex(const gsl_matrix_compl
  * "LSC-STRAIN" into "H1:LSC-STRAIN".  If either instrument or channel_name
  * is NULL, then the corresponding part of the result is left blank and the
  * colon is omited.  The return value is NULL on failure or a
- * newly-allocated string.   The calling code should free() the string when
- * finished with it.
+ * newly-allocated string.   The calling code should g_free() the string
+ * when finished with it.
  */
 
 
@@ -385,7 +385,7 @@ char *gstlal_build_full_channel_name(const char *instrument, const char *channel
 	if(channel_name)
 		len += strlen(channel_name);
 
-	full_channel_name = malloc(len * sizeof(*full_channel_name));
+	full_channel_name = g_malloc(len * sizeof(*full_channel_name));
 	if(!full_channel_name)
 		return NULL;
 
@@ -489,7 +489,7 @@ REAL8TimeSeries *gstlal_REAL8TimeSeries_from_buffer(GstBuffer *buf, const char *
 
 done:
 	gst_caps_unref(caps);
-	free(name);
+	g_free(name);
 	return series;
 }
 
