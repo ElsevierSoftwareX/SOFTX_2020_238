@@ -114,7 +114,7 @@ static GstCaps *series_to_caps_and_taglist(const char *instrument, const char *c
 	XLALUnitAsString(units, sizeof(units), &sampleUnits);
 
 	switch(type) {
-	case LAL_I4_TYPE_CODE: {
+	case LAL_I4_TYPE_CODE:
 		caps = gst_caps_new_simple(
 			"audio/x-raw-int",
 			"rate", G_TYPE_INT, rate,
@@ -126,9 +126,8 @@ static GstCaps *series_to_caps_and_taglist(const char *instrument, const char *c
 			NULL
 		);
 		break;
-	}
 
-	case LAL_S_TYPE_CODE: {
+	case LAL_S_TYPE_CODE:
 		caps = gst_caps_new_simple(
 			"audio/x-raw-float",
 			"rate", G_TYPE_INT, rate,
@@ -138,9 +137,8 @@ static GstCaps *series_to_caps_and_taglist(const char *instrument, const char *c
 			NULL
 		);
 		break;
-	}
 
-	case LAL_D_TYPE_CODE: {
+	case LAL_D_TYPE_CODE:
 		caps = gst_caps_new_simple(
 			"audio/x-raw-float",
 			"rate", G_TYPE_INT, rate,
@@ -150,7 +148,6 @@ static GstCaps *series_to_caps_and_taglist(const char *instrument, const char *c
 			NULL
 		);
 		break;
-	}
 
 	default:
 		GST_ERROR("unsupported LAL type code (%d)", type);
@@ -186,7 +183,7 @@ static GstCaps *series_to_caps_and_taglist(const char *instrument, const char *c
  */
 
 
-static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 length)
+static void *read_series(GSTLALFrameSrc *element, guint64 offset, guint64 length)
 {
 	GstBaseSrc *basesrc = GST_BASE_SRC(element);
 	guint64 segment_length;
@@ -206,18 +203,18 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 	 * check for EOF, clip requested length to segment
 	 */
 
-	if(start_sample >= segment_length) {
+	if(offset >= segment_length) {
 		GST_ERROR_OBJECT(element, "requested interval lies outside input domain");
 		return NULL;
 	}
-	if(segment_length - start_sample < length)
-		length = segment_length - start_sample;
+	if(segment_length - offset < length)
+		length = segment_length - offset;
 
 	/*
 	 * convert the start sample to a start time
 	 */
 
-	XLALINT8NSToGPS(&start_time, basesrc->segment.start + gst_util_uint64_scale_int_round(start_sample, GST_SECOND, element->rate));
+	XLALINT8NSToGPS(&start_time, basesrc->segment.start + gst_util_uint64_scale_int_round(offset, GST_SECOND, element->rate));
 
 	/*
 	 * load the buffer
@@ -227,7 +224,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 start_sample, guint64 
 	 * value.
 	 */
 
-	GST_LOG_OBJECT(element, "reading %lu samples (%g seconds) of channel %s at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds);
+	GST_LOG_OBJECT(element, "reading %lu samples (%g seconds) of channel %s at %d.%09u s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds);
 	switch(element->series_type) {
 	case LAL_I4_TYPE_CODE:
 		series = XLALFrReadINT4TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
@@ -294,21 +291,21 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	switch(id) {
 	case ARG_SRC_LOCATION:
-		free(element->location);
+		g_free(element->location);
 		element->location = g_value_dup_string(value);
 		break;
 
 	case ARG_SRC_INSTRUMENT:
-		free(element->instrument);
+		g_free(element->instrument);
 		element->instrument = g_value_dup_string(value);
-		free(element->full_channel_name);
+		g_free(element->full_channel_name);
 		element->full_channel_name = gstlal_build_full_channel_name(element->instrument, element->channel_name);
 		break;
 
 	case ARG_SRC_CHANNEL_NAME:
-		free(element->channel_name);
+		g_free(element->channel_name);
 		element->channel_name = g_value_dup_string(value);
-		free(element->full_channel_name);
+		g_free(element->full_channel_name);
 		element->full_channel_name = gstlal_build_full_channel_name(element->instrument, element->channel_name);
 		break;
 
@@ -853,13 +850,13 @@ static void finalize(GObject *object)
 {
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
 
-	free(element->location);
+	g_free(element->location);
 	element->location = NULL;
-	free(element->instrument);
+	g_free(element->instrument);
 	element->instrument = NULL;
-	free(element->channel_name);
+	g_free(element->channel_name);
 	element->channel_name = NULL;
-	free(element->full_channel_name);
+	g_free(element->full_channel_name);
 	element->full_channel_name = NULL;
 	if(element->stream) {
 		XLALFrClose(element->stream);
