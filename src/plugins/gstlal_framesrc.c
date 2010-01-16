@@ -224,12 +224,12 @@ static void *read_series(GSTLALFrameSrc *element, guint64 offset, guint64 length
 	 * value.
 	 */
 
-	GST_LOG_OBJECT(element, "reading %lu samples (%g seconds) of channel %s at %d.%09u s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds);
+	GST_LOG_OBJECT(element, "reading %lu samples (%g seconds) of channel \"%s\" at %d.%09u s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds);
 	switch(element->series_type) {
 	case LAL_I4_TYPE_CODE:
 		series = XLALFrReadINT4TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
 		if(!series) {
-			GST_ERROR_OBJECT(element, "XLALFrReadINT4TimeSeries() %lu samples (%g seconds) of channel %s at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
+			GST_ERROR_OBJECT(element, "XLALFrReadINT4TimeSeries() %lu samples (%g seconds) of channel \"%s\" at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
 			return NULL;
 		}
@@ -238,7 +238,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 offset, guint64 length
 	case LAL_S_TYPE_CODE:
 		series = XLALFrReadREAL4TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
 		if(!series) {
-			GST_ERROR_OBJECT(element, "XLALFrReadREAL4TimeSeries() %lu samples (%g seconds) of channel %s at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
+			GST_ERROR_OBJECT(element, "XLALFrReadREAL4TimeSeries() %lu samples (%g seconds) of channel \"%s\" at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
 			return NULL;
 		}
@@ -247,7 +247,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 offset, guint64 length
 	case LAL_D_TYPE_CODE:
 		series = XLALFrReadREAL8TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
 		if(!series) {
-			GST_ERROR_OBJECT(element, "XLALFrReadREAL8TimeSeries() %lu samples (%g seconds) of channel %s at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
+			GST_ERROR_OBJECT(element, "XLALFrReadREAL8TimeSeries() %lu samples (%g seconds) of channel \"%s\" at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
 			return NULL;
 		}
@@ -424,6 +424,7 @@ static gboolean start(GstBaseSrc *object)
 	 * value.
 	 */
 
+	taglist = NULL;
 	switch(element->series_type) {
 	case LAL_I4_TYPE_CODE: {
 		INT4TimeSeries *series = XLALCreateINT4TimeSeries(element->full_channel_name, &stream_start, 0.0, 0.0, &lalDimensionlessUnit, 0);
@@ -516,7 +517,7 @@ static gboolean start(GstBaseSrc *object)
 	}
 	if(!gst_pad_set_caps(GST_BASE_SRC_PAD(object), caps)) {
 		gst_caps_unref(caps);
-		GST_ERROR_OBJECT(element, "unable to set caps on %s", GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
+		GST_ERROR_OBJECT(element, "unable to set caps %" GST_PTR_FORMAT " on %s", caps, GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
 		XLALFrClose(element->stream);
 		element->stream = NULL;
 		return FALSE;
@@ -527,7 +528,7 @@ static gboolean start(GstBaseSrc *object)
 	 * Transmit the tag list.
 	 */
 
-	if(!gst_pad_push_event(GST_BASE_SRC_PAD(object), gst_event_new_tag(taglist)))
+	if(taglist && !gst_pad_push_event(GST_BASE_SRC_PAD(object), gst_event_new_tag(taglist)))
 		GST_ERROR_OBJECT(element, "unable to push taglist %" GST_PTR_FORMAT " on %s", taglist, GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
 
 	/*
@@ -583,7 +584,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	case LAL_I4_TYPE_CODE: {
 		INT4TimeSeries *chunk;
 		if(gst_base_src_get_blocksize(basesrc) % sizeof(*chunk->data->data)) {
-			GST_ERROR_OBJECT(element, "block size (%u) not an integer multiple of the sample size (%u)", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
+			GST_ERROR_OBJECT(element, "block size %u is not an integer multiple of the sample size %u", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
 			return GST_FLOW_ERROR;
 		}
 		chunk = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data));
@@ -617,7 +618,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	case LAL_S_TYPE_CODE: {
 		REAL4TimeSeries *chunk;
 		if(gst_base_src_get_blocksize(basesrc) % sizeof(*chunk->data->data)) {
-			GST_ERROR_OBJECT(element, "block size (%u) not an integer multiple of the sample size (%u)", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
+			GST_ERROR_OBJECT(element, "block size %u is not an integer multiple of the sample size %u", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
 			return GST_FLOW_ERROR;
 		}
 		chunk = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data));
@@ -651,7 +652,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	case LAL_D_TYPE_CODE: {
 		REAL8TimeSeries *chunk;
 		if(gst_base_src_get_blocksize(basesrc) % sizeof(*chunk->data->data)) {
-			GST_ERROR_OBJECT(element, "block size (%u) not an integer multiple of the sample size (%u)", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
+			GST_ERROR_OBJECT(element, "block size %u is not an integer multiple of the sample size %u", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
 			return GST_FLOW_ERROR;
 		}
 		chunk = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data));
@@ -929,10 +930,50 @@ static void class_init(gpointer class, gpointer class_data)
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
-	g_object_class_install_property(gobject_class, ARG_SRC_LOCATION, g_param_spec_string("location", "Location", "Path to LAL cache file (see ligo_data_find for more information).", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_SRC_INSTRUMENT, g_param_spec_string("instrument", "Instrument", "Instrument name (e.g., \"H1\").", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_SRC_CHANNEL_NAME, g_param_spec_string("channel-name", "Channel name", "Channel name (e.g., \"LSC-STRAIN\").", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-	g_object_class_install_property(gobject_class, ARG_SRC_UNITS, g_param_spec_string("units", "Units", "Units string parsable by LAL's Units code (e.g., \"strain\" or \"counts\"). null or an empty string means dimensionless.", DEFAULT_UNITS_STRING, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SRC_LOCATION,
+		g_param_spec_string(
+			"location",
+			"Location",
+			"Path to LAL cache file (see ligo_data_find for more information).",
+			NULL,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SRC_INSTRUMENT,
+		g_param_spec_string(
+			"instrument",
+			"Instrument",
+			"Instrument name (e.g., \"H1\").",
+			NULL,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SRC_CHANNEL_NAME,
+		g_param_spec_string(
+			"channel-name",
+			"Channel name",
+			"Channel name (e.g., \"LSC-STRAIN\").",
+			NULL,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SRC_UNITS,
+		g_param_spec_string(
+			"units",
+			"Units",
+			"Units string parsable by LAL's Units code (e.g., \"strain\" or \"counts\"). null or an empty string means dimensionless.",
+			DEFAULT_UNITS_STRING,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 
 	/*
 	 * GstBaseSrc method overrides
