@@ -219,8 +219,9 @@ def mkqueue(pipeline, src, pad_name = None, **properties):
 	return elem
 
 
-def mknofakedisconts(pipeline, src):
+def mknofakedisconts(pipeline, src, silent = True):
 	elem = gst.element_factory_make("lal_nofakedisconts")
+	elem.set_property("silent", silent)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
