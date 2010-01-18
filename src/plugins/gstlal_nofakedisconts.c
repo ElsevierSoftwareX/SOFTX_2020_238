@@ -47,6 +47,60 @@
 
 
 /*
+ * parameters
+ */
+
+
+#define DEFAULT_SILENT FALSE
+
+
+/*
+ * ========================================================================
+ *
+ *                                 Properties
+ *
+ * ========================================================================
+ */
+
+
+enum property {
+	ARG_SILENT = 1
+};
+
+
+static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
+{
+	GSTLALNoFakeDisconts *element = GSTLAL_NOFAKEDISCONTS(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch(id) {
+	case ARG_SILENT:
+		element->silent = g_value_get_boolean(value);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
+
+
+static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
+{
+	GSTLALNoFakeDisconts *element = GSTLAL_NOFAKEDISCONTS(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch(id) {
+	case ARG_SILENT:
+		g_value_set_boolean(value, element->silent);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
+
+
+/*
  * ============================================================================
  *
  *                                  Sink Pad
@@ -136,13 +190,15 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 			if(!is_discont) {
 				buf = gst_buffer_make_metadata_writable(buf);
 				GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
-				fprintf(stderr, "%s: set missing discontinuity flag at %" GST_TIME_SECONDS_FORMAT "\n", gst_element_get_name(element), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buf)));
+				if(!element->silent)
+					fprintf(stderr, "%s: set missing discontinuity flag at %" GST_TIME_SECONDS_FORMAT "\n", gst_element_get_name(element), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buf)));
 			}
 		} else {
 			if(is_discont) {
 				buf = gst_buffer_make_metadata_writable(buf);
 				GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_DISCONT);
-				fprintf(stderr, "%s: cleared improper discontinuity flag at %" GST_TIME_SECONDS_FORMAT "\n", gst_element_get_name(element), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buf)));
+				if(!element->silent)
+					fprintf(stderr, "%s: cleared improper discontinuity flag at %" GST_TIME_SECONDS_FORMAT "\n", gst_element_get_name(element), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buf)));
 			}
 		}
 	}
@@ -249,7 +305,21 @@ static void class_init(gpointer klass, gpointer class_data)
 
 	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
 
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SILENT,
+		g_param_spec_boolean(
+			"silent",
+			"Silent",
+			"Don't print a message when alterning the flags in a buffer.",
+			DEFAULT_SILENT,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 }
 
 
@@ -280,6 +350,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	/* internal data */
 	element->next_offset = GST_BUFFER_OFFSET_NONE;
 	element->next_timestamp = GST_CLOCK_TIME_NONE;
+	element->silent = DEFAULT_SILENT;
 }
 
 

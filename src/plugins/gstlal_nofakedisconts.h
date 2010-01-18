@@ -55,6 +55,7 @@ typedef struct _GSTLALNoFakeDisconts {
 
 	guint64 next_offset;
 	guint64 next_timestamp;
+	gboolean silent;
 } GSTLALNoFakeDisconts;
 
 
