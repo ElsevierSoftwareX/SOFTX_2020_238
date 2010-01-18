@@ -1,7 +1,6 @@
 #!/usr/bin/python
 #
-# $Id$
-#
+# Copyright (C) 2010  Kipp Cannon, Chad Hanna
 # Copyright (C) 2009  Kipp Cannon, Chad Hanna
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -84,6 +83,27 @@ def sum_of_squares_threshold_from_fap(fap, coefficients):
 
 
 def add_cbc_metadata(xmldoc, process, seg):
+	#
+	# add entry to search_summary table
+	#
+
+	try:
+		tbl = lsctables.table.get_table(xmldoc, lsctables.SearchSummaryTable.tableName)
+	except ValueError:
+		tbl = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SearchSummaryTable))
+	row = tbl.RowType()
+	row.process_id = process.process_id
+	row.shared_object = None # FIXME
+	row.lalwrapper_cvs_tag = None # FIXME
+	row.lal_cvs_tag = None # FIXME
+	row.comment = process.comment
+	row.set_ifos(process.get_ifos())
+	row.set_in(seg) # FIXME
+	row.set_out(seg) # FIXME
+	row.nevents = None # FIXME
+	row.nnodes = 1
+	tbl.append(row)
+
 	#
 	# add entry to filter table
 	#
@@ -285,11 +305,13 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 		#
 		# install signal handler to retrieve \Delta f when it is
 		# known, resample the user-supplied PSD, and install it
-		# into the whitener.  n is the number of frequency bins
+		# into the whitener.
 		#
 
 		def delta_f_changed(elem, delta_f, psd):
+			# get number of frequency bins
 			n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
+			# interpolate and install PSD
 			psd = cbc_template_fir.interpolate_psd(psd, delta_f)
 			elem.set_property("psd", psd.data[:n])
 
@@ -316,8 +338,8 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 	# to be preserved across different sample rates, i.e. for different
 	# \Delta t.  what we do is rescale the time series and ignore
 	# \Delta t, so we put 1/2 factor of the ratio of the \Delta t's
-	# into the h(t) time series here, and another 1/2 factor into the
-	# template later.
+	# into the h(t) time series here, and, later, another 1/2 factor
+	# into the template when it gets downsampled.
 	#
 
 	# FIXME:  re-measure these;  we've changed the quality of the
@@ -348,17 +370,17 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 #
 
 
-def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src, gate_attack_length, gate_hold_length):
+def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src), gate_attack_length, gate_hold_length):
 	logname = "%s_%d_%d" % (bank.logname, bank_fragment.start, bank_fragment.end)
 
 	#
 	# FIR filter bank
 	#
-
 	# FIXME:  why the -1?  without it the pieces don't match but I
 	# don't understand where this offset comes from.  it might really
 	# need to be here, or it might be a symptom of a bug elsewhere.
 	# figure this out.
+
 	src = pipeparts.mktee(pipeline, pipeparts.mkreblock(pipeline, pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank)))
 	#pipeparts.mkvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogram(pipeline, src), "video/x-raw-rgb, width=640, height=480, framerate=1/4"))
 	#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, src), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "orthosnr_channelgram_%s.ogv" % logname, verbose = True)
@@ -385,6 +407,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src, 
 	# other pads.  then this large queue buffer will not be required
 	# because streaming can begin through the downstream adders without
 	# waiting for input from all upstream elements.
+
 	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = int(math.ceil(bank.filter_length - bank_fragment.end)) * gst.SECOND)
 
 	#
@@ -399,16 +422,15 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_snk, control_src, 
 	#
 	# done
 	#
-
 	# FIXME:  find a way to use less memory without this hack
+
 	del bank_fragment.orthogonal_template_bank
 	del bank_fragment.sum_of_squares_weights
 	del bank_fragment.mix_matrix
-
 	return src
 
 
-def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = False, control_snksrc = None, nxydump_segment = None):
+def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, control_snksrc, verbose = False, nxydump_segment = None):
 	logname = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 
 	#
@@ -418,14 +440,6 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 	output_rate = max(bank.get_rates())
 	autocorrelation_length = bank.autocorrelation_bank.shape[1]
 	autocorrelation_latency = -(autocorrelation_length - 1) / 2
-
-	#
-	# construct sum-of-squares aggregator if needed
-	#
-
-	if control_snksrc is None:
-		control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = logname)
-	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % bank.logname, segment = nxydump_segment)
 
 	#
 	# snr aggregator
@@ -445,8 +459,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 			pipeparts.mkqueue(pipeline, hoftdict[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND),
 			bank,
 			bank_fragment,
-			control_snksrc[0],
-			control_snksrc[1],
+			control_snksrc,
 			int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),
 			int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate)))
 		)
@@ -455,17 +468,22 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, verbose = Fals
 		branch_snr.link(snr)
 
 	#
-	# snr and \chi^{2}
+	# snr
 	#
 
 	snr = pipeparts.mktee(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % output_rate)))
-	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr), autocorrelation_matrix = bank.autocorrelation_bank, latency = autocorrelation_latency)
-	# FIXME:  find a way to use less memory without this hack
-	del bank.autocorrelation_bank
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % logname, segment = nxydump_segment)
+	#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % logname, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[output_rate], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
+
+	#
+	# \chi^{2}
+	#
+
+	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr), autocorrelation_matrix = bank.autocorrelation_bank, latency = autocorrelation_latency)
 	#chisq = pipeparts.mktee(pipeline, chisq)
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, chisq), "chisq_%s.dump" % logname, segment = nxydump_segment)
-	#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % logname, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[output_rate], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
+	# FIXME:  find a way to use less memory without this hack
+	del bank.autocorrelation_bank
 
 	#
 	# trigger generator and progress report
@@ -505,14 +523,15 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, fake_data 
 		hoftdict = mkLLOIDsrc(pipeline, instrument, detectors[instrument], rates, psd = psd, psd_fft_length = psd_fft_length, fake_data = fake_data, injection_filename = injection_filename, verbose = verbose, nxydump_segment = nxydump_segment)
 		for bank in banks:
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
+			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % bank.logname, segment = nxydump_segment)
 			head = mkLLOIDsingle(
 				pipeline,
 				hoftdict,
 				instrument,
 				detectors[instrument],
 				bank,
+				control_snksrc,
 				verbose = verbose,
-				control_snksrc = control_snksrc,
 				nxydump_segment = nxydump_segment
 			)
 			pipeparts.mkqueue(pipeline, head).link(nto1)
@@ -615,18 +634,21 @@ def parse_command_line():
 	required_options = ["gps_start_time", "gps_end_time", "output", "template_bank"]
 	if not options.fake_data:
 		required_options += ["frame_cache"]
+	elif options.frame_cache is not None:
+		raise ValueError, "cannot set --frame-cache with --fake-data"
 
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
-	if options.fake_data and options.frame_cache is not None:
-		raise ValueError, "cannot set --frame-cache with --fake-data"
 
 	process_params = make_process_params(options)
 
 	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
 	options.gps_end_time = LIGOTimeGPS(options.gps_end_time)
+	options.seg = segments.segment(options.gps_start_time, options.gps_end_time)
 	options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
+
+	options.psd_fft_length = 8	# seconds
 
 	return options, filenames, process_params
 
@@ -640,7 +662,7 @@ def parse_command_line():
 #
 
 
-def measure_psd(instrument, detector, gps_start_time, gps_end_time, rate, fake_data = False, injection_filename = None, psd_fft_length = 8, verbose = False):
+def measure_psd(instrument, detector, seg, rate, fake_data = False, injection_filename = None, psd_fft_length = 8, verbose = False):
 	#
 	# pipeline handler for PSD measurement
 	#
@@ -676,8 +698,8 @@ def measure_psd(instrument, detector, gps_start_time, gps_end_time, rate, fake_d
 	# code requires a minimum of 1)
 	#
 
-	if float(gps_end_time - gps_start_time) < 8 * psd_fft_length:
-		raise ValueError, "segment [%s s, %s s) too short" % (gps_start_time, gps_end_time)
+	if float(abs(seg)) < 8 * psd_fft_length:
+		raise ValueError, "segment %s too short" % str(seg)
 
 	#
 	# build pipeline
@@ -695,8 +717,8 @@ def measure_psd(instrument, detector, gps_start_time, gps_end_time, rate, fake_d
 	if injection_filename is not None:
 		head = pipeparts.mkinjections(pipeline, head, injection_filename)
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % rate)
-	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 3)
-	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, average_samples = int(round(float(gps_end_time - gps_start_time) / (psd_fft_length / 2) - 1)))
+	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 8)
+	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, average_samples = int(round(float(abs(seg)) / (psd_fft_length / 2) - 1)))
 	pipeparts.mkfakesink(pipeline, head)
 
 	handler = PSDHandler(mainloop, pipeline, verbose = verbose)
@@ -706,7 +728,7 @@ def measure_psd(instrument, detector, gps_start_time, gps_end_time, rate, fake_d
 	#
 
 	pipeline.set_state(gst.STATE_PAUSED)
-	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, gps_start_time.ns(), gst.SEEK_TYPE_SET, gps_end_time.ns())
+	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, seg[0].ns(), gst.SEEK_TYPE_SET, seg[1].ns())
 	pipeline.set_state(gst.STATE_PLAYING)
 	mainloop.run()
 
@@ -745,9 +767,6 @@ options, filenames, process_params = parse_command_line()
 #
 
 
-psd_fft_length = 8
-
-
 detectors = {
 	options.instrument: DetectorData(options.frame_cache, options.channel_name)
 }
@@ -759,10 +778,9 @@ else:
 	psd = measure_psd(
 		options.instrument,
 		detectors[options.instrument],
-		options.gps_start_time,
-		options.gps_end_time,
+		options.seg,
 		2 * 2048,	# Hz;  must not be less than highest bank fragment sample rate (see below)
-		psd_fft_length = psd_fft_length,
+		psd_fft_length = options.psd_fft_length,
 		fake_data = options.fake_data,
 		injection_filename = options.injections,
 		verbose = options.verbose
@@ -802,16 +820,16 @@ if options.injections is not None:
 else:
 	xmldoc = ligolw.Document()
 	xmldoc.appendChild(ligolw.LIGO_LW())
-process = ligolw_process.append_process(xmldoc, program = "gstlal_inspiral", comment = options.comment, ifos = set([options.instrument]))
+process = ligolw_process.append_process(xmldoc, program = "gstlal_inspiral", comment = options.comment, ifos = set(detectors))
 ligolw_process.append_process_params(xmldoc, process, process_params)
-add_cbc_metadata(xmldoc, process, segments.segment(options.gps_start_time, options.gps_end_time))
+add_cbc_metadata(xmldoc, process, options.seg)
 try:
 	sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 except ValueError:
 	sngl_inspiral_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
 
 
-sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))
+sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))	# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
 sngl_inspiral_table.sync_next_id()
 
 
@@ -823,13 +841,12 @@ sngl_inspiral_table.sync_next_id()
 pipeline = gst.Pipeline("gstlal_inspiral")
 mainloop = gobject.MainLoop()
 
-
 src = mkLLOIDmulti(
 	pipeline,
 	detectors = detectors,
 	banks = banks,
 	psd = psd,
-	psd_fft_length = psd_fft_length,
+	psd_fft_length = options.psd_fft_length,
 	fake_data = options.fake_data,
 	injection_filename = options.injections,
 	verbose = options.verbose,
@@ -856,7 +873,7 @@ handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
 
 
 pipeline.set_state(gst.STATE_PAUSED)
-pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, options.gps_start_time.ns(), gst.SEEK_TYPE_SET, options.gps_end_time.ns())
+pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, options.seg[0].ns(), gst.SEEK_TYPE_SET, options.seg[1].ns())
 pipeline.set_state(gst.STATE_PLAYING)
 mainloop.run()
 
