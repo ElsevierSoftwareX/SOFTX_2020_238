@@ -91,10 +91,26 @@ static double effective_distance(double snr, double sigmasq)
 }
 
 
+static void free_bankfile(GSTLALTriggerGen *element)
+{
+	g_free(element->bank_filename);
+	element->bank_filename = NULL;
+	free(element->bank);
+	element->bank = NULL;
+	free(element->last_event);
+	element->last_event = NULL;
+	free(element->last_time);
+	element->last_time = NULL;
+	element->num_templates = 0;
+}
+
+
 static int setup_bankfile_input(GSTLALTriggerGen *element, char *bank_filename)
 {
 	SnglInspiralTable *bank = NULL;
 	int i;
+
+	free_bankfile(element);
 
 	element->bank_filename = bank_filename;
 	element->num_templates = LALSnglInspiralTableFromLIGOLw(&bank, element->bank_filename, -1, -1);
@@ -118,47 +134,45 @@ static int setup_bankfile_input(GSTLALTriggerGen *element, char *bank_filename)
 
 	/*
 	 * copy the linked list of templates constructed by
-	 * LALSnglInspiralTableFromLIGOLw() into the template array.  the
-	 * end_time and snr are 0'ed so that when the templates are used to
-	 * initialize the last_event info those fields are set properly.
-	 * also sigmasq is 0'ed to "disable" effective distance calculation
-	 * unless explicit values are provided.  while we're at it,
-	 * initialize the last_time array.
+	 * LALSnglInspiralTableFromLIGOLw() into the template array.
 	 */
 
 	for(i = 0; bank; i++) {
-		SnglInspiralTable *prev = bank;
+		SnglInspiralTable *next = bank->next;
 		element->bank[i] = *bank;
 		element->bank[i].next = NULL;
-		element->bank[i].end_time = (LIGOTimeGPS) {0, 0};
+		free(bank);
+		bank = next;
+
+		/*
+		 * initialize data in template.  the end_time and snr are
+		 * 0'ed so that when the templates are used to initialize
+		 * the last_event info those fields are set properly.
+		 * sigmasq is 0'ed to "disable" effective distance
+		 * calculation unless a vector of values are provided via
+		 * the sigmasq element property.
+		 */
+
+		XLALGPSSetREAL8(&element->bank[i].end_time, 0);
 		element->bank[i].snr = 0;
 		element->bank[i].sigmasq = 0;
-		bank = bank->next;
-		free(prev);
 
-		/* fix some buggered columns.  sigh. */
+		/*
+		 * fix some buggered columns.  sigh.
+		 */
+
 		element->bank[i].mtotal = element->bank[i].mass1 + element->bank[i].mass2;
 		element->bank[i].mchirp = mchirp(element->bank[i].mass1, element->bank[i].mass2);
 		element->bank[i].eta = eta(element->bank[i].mass1, element->bank[i].mass2);
+
+		/*
+		 * initialize the last_time array, too
+		 */
 
 		element->last_time[i] = (LIGOTimeGPS) {0, 0};
 	}
 
 	return element->num_templates;
-}
-
-
-static void free_bankfile(GSTLALTriggerGen *element)
-{
-	g_free(element->bank_filename);
-	element->bank_filename = NULL;
-	free(element->bank);
-	element->bank = NULL;
-	free(element->last_event);
-	element->last_event = NULL;
-	free(element->last_time);
-	element->last_time = NULL;
-	element->num_templates = 0;
 }
 
 
@@ -337,6 +351,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
 		if(result != GST_FLOW_OK)
 			goto error;
+		g_assert(GST_PAD_CAPS(element->srcpad) == GST_BUFFER_CAPS(srcbuf));
 		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset;
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 	} else {
@@ -410,7 +425,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		if(nevents) {
 			SnglInspiralTable *dest;
 
-			result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, nevents * sizeof(*head), GST_PAD_CAPS(element->srcpad), &srcbuf);
+			result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, nevents * sizeof(*dest), GST_PAD_CAPS(element->srcpad), &srcbuf);
 			if(result != GST_FLOW_OK) {
 				while(head) {
 					SnglInspiralTable *next = head->next;
@@ -419,6 +434,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 				}
 				goto error;
 			}
+			g_assert(GST_PAD_CAPS(element->srcpad) == GST_BUFFER_CAPS(srcbuf));
 			GST_BUFFER_OFFSET(srcbuf) = element->next_output_offset;
 			element->next_output_offset += nevents;
 			GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset;
@@ -442,6 +458,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 			result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
 			if(result != GST_FLOW_OK)
 				goto error;
+			g_assert(GST_PAD_CAPS(element->srcpad) == GST_BUFFER_CAPS(srcbuf));
 			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset;
 			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 		}
@@ -513,7 +530,6 @@ static void gen_set_property(GObject *object, enum gen_property id, const GValue
 
 	case ARG_BANK_FILENAME:
 		g_mutex_lock(element->bank_lock);
-		free_bankfile(element);
 		setup_bankfile_input(element, g_value_dup_string(value));
 		g_mutex_unlock(element->bank_lock);
 		break;
