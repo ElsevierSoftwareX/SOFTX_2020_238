@@ -978,12 +978,17 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		} else
 			channels = 0;
 		element->fir_matrix = gstlal_gsl_matrix_from_g_value_array(g_value_get_boxed(value));
-		if(fir_channels(element) != channels)
-			/*
-			 * number of channels has changed, force a caps
-			 * renegotiation
-			 */
+
+		/*
+		 * if the number of channels has changed, force a caps
+		 * renegotiation
+		 */
+
+		if(fir_channels(element) != channels) {
+			/* FIXME:  is this right? */
 			gst_pad_set_caps(GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(object)), NULL);
+			/*gst_base_transform_reconfigure(GST_BASE_TRANSFORM(object));*/
+		}
 
 		/*
 		 * invalidate frequency-domain filters

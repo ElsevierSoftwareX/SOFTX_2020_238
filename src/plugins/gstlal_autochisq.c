@@ -786,8 +786,11 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		 * renegotiation
 		 */
 
-		if(autocorrelation_channels(element) != channels)
+		if(autocorrelation_channels(element) != channels) {
+			/* FIXME:  is this right? */
 			gst_pad_set_caps(GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(object)), NULL);
+			/*gst_base_transform_reconfigure(GST_BASE_TRANSFORM(object));*/
+		}
 
 		/*
 		 * compute norms

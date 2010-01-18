@@ -533,14 +533,23 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		/* FIXME:  allow different data types */
 		element->data_type = GSTLAL_MATRIXMIXER_DOUBLE;
 		element->mixmatrix.as_double = gstlal_gsl_matrix_from_g_value_array(g_value_get_boxed(value));
+
 		/*
 		 * if the data format or number of channels has changed,
 		 * force a caps renegotiation
 		 */
-		if(data_type != element->data_type || num_input_channels(element) != in_channels)
+
+		if(data_type != element->data_type || num_input_channels(element) != in_channels) {
+			/* FIXME:  is this right? */
 			gst_pad_set_caps(GST_BASE_TRANSFORM_SINK_PAD(GST_BASE_TRANSFORM(object)), NULL);
-		if(data_type != element->data_type || num_output_channels(element) != out_channels)
+			/*gst_base_transform_reconfigure(GST_BASE_TRANSFORM(object));*/
+		}
+		if(data_type != element->data_type || num_output_channels(element) != out_channels) {
+			/* FIXME:  is this right? */
 			gst_pad_set_caps(GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(object)), NULL);
+			/*gst_base_transform_reconfigure(GST_BASE_TRANSFORM(object));*/
+		}
+
 		g_cond_broadcast(element->mixmatrix_available);
 		g_mutex_unlock(element->mixmatrix_lock);
 		break;

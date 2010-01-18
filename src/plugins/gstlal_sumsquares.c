@@ -318,12 +318,18 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		} else
 			channels = 0;
 		element->weights = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &element->channels);
-		if(element->channels != channels)
-			/*
-			 * number of channels has changed, force a caps
-			 * renegotiation
-			 */
+
+		/*
+		 * if the number of channels has changed, force a caps
+		 * renegotiation
+		 */
+
+		if(element->channels != channels) {
+			/* FIXME:  is this right? */
 			gst_pad_set_caps(GST_BASE_TRANSFORM_SINK_PAD(GST_BASE_TRANSFORM(object)), NULL);
+			/*gst_base_transform_reconfigure(GST_BASE_TRANSFORM(object));*/
+		}
+
 		g_mutex_unlock(element->weights_lock);
 		break;
 	}
