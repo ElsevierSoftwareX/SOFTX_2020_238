@@ -176,7 +176,7 @@ static int setup_bankfile_input(GSTLALTriggerGen *element, char *bank_filename)
 }
 
 
-static SnglInspiralTable *new_event(SnglInspiralTable *dest, LIGOTimeGPS end_time, double complex z, double chisq, int channel, GSTLALTriggerGen *element)
+static SnglInspiralTable *record_inspiral_event(SnglInspiralTable *dest, LIGOTimeGPS end_time, double complex z, double chisq, int channel, GSTLALTriggerGen *element)
 {
 	double xi;
 
@@ -400,13 +400,13 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 							head = new;
 							nevents++;
 						}
-						new_event(&element->last_event[channel], t, *snrdata, *chisqdata, channel, element);
+						record_inspiral_event(&element->last_event[channel], t, *snrdata, *chisqdata, channel, element);
 					} else if(cabs(*snrdata) > element->last_event[channel].snr) {
 						/*
 						 * Same event, higher SNR,
 						 * update
 						 */
-						new_event(&element->last_event[channel], t, *snrdata, *chisqdata, channel, element);
+						record_inspiral_event(&element->last_event[channel], t, *snrdata, *chisqdata, channel, element);
 					} else {
 						/*
 						 * Same event, not higher
