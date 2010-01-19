@@ -306,7 +306,7 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 		buf_offset_end = compute_target_offset_end(data, buf, t0, offset0, rate);
 		gst_buffer_unref(buf);
 
-		GST_DEBUG_OBJECT(GST_PAD_PARENT(data->as_gstcollectdata.pad), "(%s): offsets = [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")\n", GST_PAD_NAME(data->as_gstcollectdata.pad), buf_offset, buf_offset_end);
+		GST_DEBUG_OBJECT(GST_PAD_PARENT(data->as_gstcollectdata.pad), "(%s): offsets = [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", GST_PAD_NAME(data->as_gstcollectdata.pad), buf_offset, buf_offset_end);
 
 		if(buf_offset_end < buf_offset) {
 			GST_LOG("%p: input buffer appears to have negative length\n", data);
@@ -336,7 +336,7 @@ gboolean gstlal_collect_pads_get_earliest_offsets(GstCollectPads *pads, guint64 
 
 	if(!valid)
 		*offset = *offset_end = GST_BUFFER_OFFSET_NONE;
-	GST_DEBUG("%p: t0 = %" GST_TIME_SECONDS_FORMAT ", offset0 = %" G_GUINT64_FORMAT ", rate = %d, offsets = [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")\n", pads, GST_TIME_SECONDS_ARGS(t0), offset0, rate, *offset, *offset_end);
+	GST_DEBUG("%p: t0 = %" GST_TIME_SECONDS_FORMAT ", offset0 = %" G_GUINT64_FORMAT ", rate = %d, offsets = [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", pads, GST_TIME_SECONDS_ARGS(t0), offset0, rate, *offset, *offset_end);
 
 	return TRUE;
 }
@@ -395,7 +395,7 @@ GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *pads, GstLALCollectDa
 	 */
 
 	samples = offset_end >= dequeued_offset ? offset_end - dequeued_offset : 0;
-	GST_DEBUG_OBJECT(GST_PAD_PARENT(data->as_gstcollectdata.pad), "(%s): dequeued offset = %" G_GUINT64_FORMAT ", length = %" G_GUINT64_FORMAT "\n", GST_PAD_NAME(data->as_gstcollectdata.pad), dequeued_offset, samples);
+	GST_DEBUG_OBJECT(GST_PAD_PARENT(data->as_gstcollectdata.pad), "(%s): dequeued offset = %" G_GUINT64_FORMAT ", length = %" G_GUINT64_FORMAT, GST_PAD_NAME(data->as_gstcollectdata.pad), dequeued_offset, samples);
 
 	/*
 	 * retrieve a buffer
@@ -419,7 +419,7 @@ GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *pads, GstLALCollectDa
 	GST_BUFFER_OFFSET_END(buf) = dequeued_offset + GST_BUFFER_SIZE(buf) / data->unit_size;
 	GST_BUFFER_TIMESTAMP(buf) = t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - offset0, GST_SECOND, rate);
 	GST_BUFFER_DURATION(buf) = t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - offset0, GST_SECOND, rate) - GST_BUFFER_TIMESTAMP(buf);
-	GST_DEBUG_OBJECT(GST_PAD_PARENT(data->as_gstcollectdata.pad), "(%s): returning %" GST_BUFFER_BOUNDARIES_FORMAT "\n", GST_PAD_NAME(data->as_gstcollectdata.pad), GST_BUFFER_BOUNDARIES_ARGS(buf));
+	GST_DEBUG_OBJECT(GST_PAD_PARENT(data->as_gstcollectdata.pad), "(%s): returning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_PAD_NAME(data->as_gstcollectdata.pad), GST_BUFFER_BOUNDARIES_ARGS(buf));
 
 	return buf;
 }
