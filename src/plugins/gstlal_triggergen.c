@@ -312,8 +312,10 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 * check for EOS
 	 */
 
-	if(earliest_input_offset == GST_BUFFER_OFFSET_NONE)
+	if(earliest_input_offset == GST_BUFFER_OFFSET_NONE) {
+		GST_DEBUG_OBJECT(element, "gstlal_collect_pads_get_earliest_offsets() says we are at EOS");
 		goto eos;
+	}
 
 	/*
 	 * get buffers upto the desired end offset.
@@ -330,11 +332,13 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		if(snrbuf) {
 			gst_buffer_unref(snrbuf);
 			snrbuf = NULL;
-		}
+		} else
+			GST_DEBUG_OBJECT(element, "snr pad is at EOS");
 		if(chisqbuf) {
 			gst_buffer_unref(chisqbuf);
 			chisqbuf = NULL;
-		}
+		} else
+			GST_DEBUG_OBJECT(element, "chisq pad is at EOS");
 		goto eos;
 	}
 
@@ -348,6 +352,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		 * GAP --> no-op
 		 */
 
+		GST_DEBUG_OBJECT(element, "input is gap, sending gap downstream");
 		result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
 		if(result != GST_FLOW_OK)
 			goto error;
@@ -379,6 +384,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 			length -= GST_BUFFER_OFFSET(chisqbuf);
 		}
 
+		GST_DEBUG_OBJECT(element, "searching %" G_GUINT64_FORMAT " samples at %" GST_TIME_SECONDS_FORMAT " for events", length, GST_TIME_SECONDS_ARGS(t0));
 		g_mutex_lock(element->bank_lock);
 		for(sample = 0; sample < length; sample++) {
 			LIGOTimeGPS t;
@@ -425,6 +431,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		if(nevents) {
 			SnglInspiralTable *dest;
 
+			GST_DEBUG_OBJECT(element, "found %d events", nevents);
 			result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, nevents * sizeof(*dest), GST_PAD_CAPS(element->srcpad), &srcbuf);
 			if(result != GST_FLOW_OK) {
 				while(head) {
@@ -455,6 +462,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 			}
 			dest[nevents].next = NULL;
 		} else {
+			GST_DEBUG_OBJECT(element, "found 0 events, sending gap downstream");
 			result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
 			if(result != GST_FLOW_OK)
 				goto error;
@@ -478,6 +486,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	gst_buffer_unref(snrbuf);
 	gst_buffer_unref(chisqbuf);
 
+	GST_DEBUG_OBJECT(element, "output spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
 	return gst_pad_push(element->srcpad, srcbuf);
 
 	/*
@@ -495,7 +504,7 @@ error:
 	return result;
 
 eos:
-	GST_DEBUG_OBJECT(element, "no data available (EOS)");
+	GST_DEBUG_OBJECT(element, "sending EOS event downstream");
 	gst_pad_push_event(element->srcpad, gst_event_new_eos());
 	return GST_FLOW_UNEXPECTED;
 }
