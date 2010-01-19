@@ -356,6 +356,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
 		if(result != GST_FLOW_OK)
 			goto error;
+		g_assert(GST_BUFFER_CAPS(srcbuf) != NULL);
 		g_assert(GST_PAD_CAPS(element->srcpad) == GST_BUFFER_CAPS(srcbuf));
 		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset;
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
@@ -441,6 +442,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 				}
 				goto error;
 			}
+			g_assert(GST_BUFFER_CAPS(srcbuf) != NULL);
 			g_assert(GST_PAD_CAPS(element->srcpad) == GST_BUFFER_CAPS(srcbuf));
 			GST_BUFFER_OFFSET(srcbuf) = element->next_output_offset;
 			element->next_output_offset += nevents;
@@ -466,6 +468,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 			result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
 			if(result != GST_FLOW_OK)
 				goto error;
+			g_assert(GST_BUFFER_CAPS(srcbuf) != NULL);
 			g_assert(GST_PAD_CAPS(element->srcpad) == GST_BUFFER_CAPS(srcbuf));
 			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset;
 			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
@@ -684,7 +687,7 @@ static void gen_base_init(gpointer g_class)
 	};
 
 	GstElementClass *element_class = GST_ELEMENT_CLASS(g_class);
-	gst_element_class_set_details (element_class, &plugin_details);
+	gst_element_class_set_details(element_class, &plugin_details);
 
 	gst_element_class_add_pad_template(
 		element_class,
@@ -749,7 +752,7 @@ static void gen_class_init(gpointer klass, gpointer class_data)
 		g_param_spec_string(
 			"bank-filename",
 			"Bank file name",
-			"Path to XML file used to generate the template bank.  Setting this property resets sigma to a vector of 0s.",
+			"Path to XML file used to generate the template bank.  Setting this property resets sigmasq to a vector of 0s.",
 			NULL,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
@@ -821,6 +824,12 @@ static void gen_instance_init(GTypeInstance *object, gpointer klass)
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
+	gst_pad_use_fixed_caps(pad);
+	{
+	GstCaps *caps = gst_caps_copy(gst_pad_get_pad_template_caps(pad));
+	gst_pad_set_caps(pad, caps);
+	gst_caps_unref(caps);
+	}
 	element->srcpad = pad;
 
 	/* internal data */
@@ -958,7 +967,7 @@ static void xmlwriter_base_init(gpointer g_class)
 	};
 
 	GstElementClass *element_class = GST_ELEMENT_CLASS(g_class);
-	gst_element_class_set_details (element_class, &plugin_details);
+	gst_element_class_set_details(element_class, &plugin_details);
 
 	gst_element_class_add_pad_template(
 		element_class,
