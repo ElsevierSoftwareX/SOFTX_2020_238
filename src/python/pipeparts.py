@@ -335,7 +335,9 @@ def mktriggergen(pipeline, snr, chisq, template_bank_filename, snr_threshold):
 	elem.set_property("bank-filename", template_bank_filename)
 	elem.set_property("snr-thresh", snr_threshold)
 	pipeline.add(elem)
-	snr.link_pads("src", elem, "snr")
+	# snr is complex and chisq is real so the correct source and sink
+	# pads will be selected automatically
+	snr.link(elem)
 	chisq.link(elem)
 	return elem
 
