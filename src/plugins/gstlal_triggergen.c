@@ -489,7 +489,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	gst_buffer_unref(snrbuf);
 	gst_buffer_unref(chisqbuf);
 
-	GST_DEBUG_OBJECT(element, "output spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
+	GST_DEBUG_OBJECT(element, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
 	return gst_pad_push(element->srcpad, srcbuf);
 
 	/*
