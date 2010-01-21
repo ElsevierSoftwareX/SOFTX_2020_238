@@ -189,7 +189,7 @@ class GstLalInspiralNode(pipeline.AnalysisNode):
 		if self.output_cache:
 			raise AttributeError, "cannot change attributes after computing output cache"
 		pipeline.AnalysisNode.set_ifo(self, instrument)
-		self.add_var_opt("instrument", self.__ifo)
+		self.add_var_opt("instrument", instrument)
 		for optvalue in self.job()._AnalysisJob__cp.items("gstlal_inspiral_%s" % instrument):
 			self.add_var_arg("--%s %s" % optvalue)
 
