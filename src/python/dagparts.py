@@ -171,6 +171,7 @@ class GstLalInspiralJob(pipeline.CondorDAGJob, pipeline.AnalysisJob):
 		self.add_ini_opts(config_parser, "gstlal_inspiral")
 		self.set_stdout_file(os.path.join(power.get_out_dir(config_parser), "gstlal_inspiral-$(cluster)-$(process).out"))
 		self.set_stderr_file(os.path.join(power.get_out_dir(config_parser), "gstlal_inspiral-$(cluster)-$(process).err"))
+		self.add_condor_cmd("getenv", "True")
 		self.set_sub_file("gstlal_inspiral.sub")
 
 
