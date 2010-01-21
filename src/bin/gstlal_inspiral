@@ -50,7 +50,7 @@ from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
 from pylal import series as lalseries
 from pylal.datatypes import LIGOTimeGPS
-from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspiral_from_buffer
+from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
 
 from gstlal import pipeio
@@ -91,18 +91,18 @@ def add_cbc_metadata(xmldoc, process, seg):
 		tbl = lsctables.table.get_table(xmldoc, lsctables.SearchSummaryTable.tableName)
 	except ValueError:
 		tbl = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SearchSummaryTable))
-	row = tbl.RowType()
-	row.process_id = process.process_id
-	row.shared_object = None # FIXME
-	row.lalwrapper_cvs_tag = None # FIXME
-	row.lal_cvs_tag = None # FIXME
-	row.comment = process.comment
-	row.set_ifos(process.get_ifos())
-	row.set_in(seg) # FIXME
-	row.set_out(seg) # FIXME
-	row.nevents = None # FIXME
-	row.nnodes = 1
-	tbl.append(row)
+	search_summary = tbl.RowType()
+	search_summary.process_id = process.process_id
+	search_summary.shared_object = None # FIXME
+	search_summary.lalwrapper_cvs_tag = None # FIXME
+	search_summary.lal_cvs_tag = None # FIXME
+	search_summary.comment = process.comment
+	search_summary.set_ifos(process.get_ifos())
+	search_summary.set_in(seg) # FIXME
+	search_summary.set_out(seg) # FIXME
+	search_summary.nevents = None # FIXME
+	search_summary.nnodes = 1
+	tbl.append(search_summary)
 
 	#
 	# add entry to filter table
@@ -148,6 +148,8 @@ def add_cbc_metadata(xmldoc, process, seg):
 	#
 	# done
 	#
+
+	return search_summary
 
 
 #
@@ -641,6 +643,7 @@ def parse_command_line():
 	if missing_options:
 		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
 
+	# do this before converting option types
 	process_params = make_process_params(options)
 
 	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
@@ -739,6 +742,10 @@ def measure_psd(instrument, detector, seg, rate, fake_data = False, injection_fi
 	return handler.psd
 
 
+def read_psd(filename, verbose = False):
+	return lalseries.parse_REAL8FrequencySeries(utils.load_filename(filename, gz = (filename or "stdin").endswith(".gz"), verbose = verbose))
+
+
 def write_psd(filename, psd, verbose = False):
 	xmldoc = ligolw.Document()
 	xmldoc.appendChild(ligolw.LIGO_LW()).appendChild(lalseries.build_REAL8FrequencySeries(psd))
@@ -773,7 +780,7 @@ detectors = {
 
 
 if options.reference_psd is not None:
-	psd = lalseries.parse_REAL8FrequencySeries(utils.load_filename(options.reference_psd, gz = (options.reference_psd or "stdin").endswith(".gz"), verbose = options.verbose))
+	psd = read_psd(options.reference_psd, verbose = options.verbose)
 else:
 	psd = measure_psd(
 		options.instrument,
@@ -822,10 +829,11 @@ else:
 	xmldoc.appendChild(ligolw.LIGO_LW())
 process = ligolw_process.append_process(xmldoc, program = "gstlal_inspiral", comment = options.comment, ifos = set(detectors))
 ligolw_process.append_process_params(xmldoc, process, process_params)
-add_cbc_metadata(xmldoc, process, options.seg)
+search_summary = add_cbc_metadata(xmldoc, process, options.seg)
 try:
 	sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 except ValueError:
+	# FIXME:  argh, ugly
 	sngl_inspiral_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
 
 
@@ -854,15 +862,13 @@ src = mkLLOIDmulti(
 )
 
 def appsink_new_buffer(elem, sngl_inspiral_table):
-	for row in sngl_inspiral_from_buffer(elem.get_property("last-buffer")):
+	for row in sngl_inspirals_from_buffer(elem.get_property("last-buffer")):
 		sngl_inspiral_table.append(row)
 
 pipeparts.mkappsink(pipeline, src, caps = gst.Caps("application/x-lal-snglinspiral")).connect_after("new-buffer", appsink_new_buffer, sngl_inspiral_table)
 
-
 if options.write_pipeline is not None:
 	gst.xml_write_file(pipeline, file(options.write_pipeline, "w"))
-
 
 handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
 
@@ -883,10 +889,11 @@ mainloop.run()
 #
 
 
+sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
 for row in sngl_inspiral_table:
 	row.process_id = process.process_id
 	row.event_id = sngl_inspiral_table.get_next_id()
-
+search_summary.nevents = len(sngl_inspiral_table)
 ligolw_process.set_process_end_time(process)
 
 utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)
