@@ -189,6 +189,7 @@ class GstLalInspiralNode(pipeline.AnalysisNode):
 		if self.output_cache:
 			raise AttributeError, "cannot change attributes after computing output cache"
 		pipeline.AnalysisNode.set_ifo(self, instrument)
+		self.add_var_opt("instrument", self.__ifo)
 		for optvalue in self.job()._AnalysisJob__cp.items("gstlal_inspiral_%s" % instrument):
 			self.add_var_arg("--%s %s" % optvalue)
 
@@ -196,7 +197,7 @@ class GstLalInspiralNode(pipeline.AnalysisNode):
 		if self.output_cache:
 			raise AttributeError, "cannot change attributes after computing output cache"
 		self.__usertag = tag
-		self.add_var_opt("user-tag", self.__usertag)
+		self.add_var_opt("comment", self.__usertag)
 
 	def get_user_tag(self):
 		return self.__usertag
