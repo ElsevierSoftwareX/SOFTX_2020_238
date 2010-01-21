@@ -113,6 +113,12 @@ def make_coinc_branch(dag, datafinds, seglists, time_slides, tag, do_injections 
 	trigger_nodes = gstlaldagparts.make_single_instrument_stage(dag, datafinds, seglists, tag, inspinjnodes = injnodes, verbose = verbose)
 
 	#
+	# ligolw_sicluster
+	#
+
+	trigger_nodes = gstlaldagparts.make_sicluster_fragment(dag, trigger_nodes, "%s" % tag, verbose = verbose)
+
+	#
 	# coincidence analysis
 	#
 
