@@ -1,7 +1,7 @@
 SUBDIRS = elements
 INCLUDES = -I$(top_srcdir)/src/lib
 
-pkgpython_PYTHON = __init__.py cbc_template_fir.py misc.py pipeio.py pipeparts.py templates.py
+pkgpython_PYTHON = __init__.py cbc_template_fir.py dagparts.py misc.py pipeio.py pipeparts.py templates.py
 
 pkgpyexec_LTLIBRARIES = _misc.la
 

@@ -1,1 +1,1 @@
-bin_SCRIPTS = gstlal_inspiral
+bin_SCRIPTS = gstlal_inspiral gstlal_inspiral_pipe
