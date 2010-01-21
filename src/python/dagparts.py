@@ -220,7 +220,7 @@ class GstLalInspiralNode(pipeline.AnalysisNode):
 			if None in (self.get_start(), self.get_end(), self.get_ifo(), self.__usertag):
 				raise ValueError, "start time, end time, ifo, or user tag has not been set"
 			seg = segments.segment(LIGOTimeGPS(self.get_start()), LIGOTimeGPS(self.get_end()))
-			self.set_output("%s-INSPIRAL_%s-%d-%d.xml.gz" % (self.get_ifo(), self.__usertag, int(self.get_start()), int(self.get_end()) - int(self.get_start())))
+			self.set_output("triggers/%s-INSPIRAL_%s-%d-%d.xml.gz" % (self.get_ifo(), self.__usertag, int(self.get_start()), int(self.get_end()) - int(self.get_start())))
 		return self._AnalysisNode__output
 
 	def set_injection_file(self, file):
