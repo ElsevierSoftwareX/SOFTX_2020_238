@@ -68,11 +68,12 @@ def parse_command_line():
 	parser.add_option("-f", "--config-file", metavar = "filename", help = "Use this configuration file (required).")
 	parser.add_option("-l", "--log-path", metavar = "path", help = "Make condor put log files in this directory (required).")
 	parser.add_option("-t", "--time-slides", metavar = "filename", help = "Load time-slide vectors from this XML file (required).")
+	parser.add_option("--vetoes", metavar = "filename", help = "Load veto segments from this XML file (required).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
 	options, filenames = parser.parse_args()
 
-	required_options = ["log_path", "config_file", "time_slides"]
+	required_options = ["log_path", "config_file", "time_slides", "vetoes"]
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError, "missing required options %s" % (sorted("--%s" % option.replace("_", "-") for option in missing_options))
@@ -89,7 +90,7 @@ def parse_command_line():
 #
 
 
-def make_coinc_branch(dag, datafinds, seglists, time_slides, tag, do_injections = False, verbose = False):
+def make_coinc_branch(dag, datafinds, seglists, time_slides, vetoes_cache, tag, do_injections = False, verbose = False):
 	#
 	# injection job
 	#
@@ -135,10 +136,10 @@ def make_coinc_branch(dag, datafinds, seglists, time_slides, tag, do_injections 
 		tisi_cache = set([time_slides_cache_entry])
 		nodes = set()
 		for seg, parents, cache in power.group_coinc_parents(trigger_nodes, these_time_slides, verbose = verbose):
-			preserve_cache = inj_cache | tisi_cache
+			preserve_cache = inj_cache | tisi_cache | vetoes_cache
 			if not options.injections:
 				preserve_cache |= cache
-			nodes |= power.make_lladd_fragment(dag, parents | injnodes, "%s_%d" % (tag, n), segment = seg, input_cache = cache | inj_cache, extra_input_cache = tisi_cache, preserve_cache = preserve_cache)
+			nodes |= power.make_lladd_fragment(dag, parents | injnodes, "%s_%d" % (tag, n), segment = seg, input_cache = cache | inj_cache, extra_input_cache = tisi_cache | vetoes_cache, preserve_cache = preserve_cache)
 
 		#
 		# ligolw_thinca
@@ -254,6 +255,8 @@ dag.set_dag_file(basename)
 
 seglists = segments.segmentlistdict((instrument, segmentsUtils.fromsegwizard(file(config_parser.get("input", "segments_%s" % instrument))).coalesce()) for instrument in set(s.strip() for s in config_parser.get("pipeline", "ifos").split(",")))
 
+vetoes_cache = set([CacheEntry(None, None, None, "file://localhost" + os.path.abspath(options.vetoes))])
+
 
 #
 # Using time slide information, construct segment lists describing times
@@ -294,7 +297,7 @@ datafinds = power.make_datafind_stage(dag, background_seglists, verbose = option
 #
 
 
-coinc_nodes = make_coinc_branch(dag, datafinds, background_seglists, background_time_slides, config_parser.get("pipeline", "user_tag"), do_injections = options.injections, verbose = options.verbose)
+coinc_nodes = make_coinc_branch(dag, datafinds, background_seglists, background_time_slides, vetoes_cache, config_parser.get("pipeline", "user_tag"), do_injections = options.injections, verbose = options.verbose)
 
 
 #
