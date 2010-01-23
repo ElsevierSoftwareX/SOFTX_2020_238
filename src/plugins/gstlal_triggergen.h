@@ -82,6 +82,7 @@ typedef struct {
 	GstElement element;
 
 	GstCollectPads *collect;
+	GstPadEventFunction collect_event;
 
 	GstPad *snrpad;
 	GstLALCollectData *snrcollectdata;
@@ -90,6 +91,7 @@ typedef struct {
 	GstPad *srcpad;
 
 	gboolean segment_pending;
+	gboolean flush_stop_pending;
 	GstSegment segment;
 	guint64 next_output_offset;
 	guint64 next_output_timestamp;
@@ -98,6 +100,8 @@ typedef struct {
 
 	GMutex *bank_lock;
 	char *bank_filename;
+	gchar *instrument;
+	gchar *channel_name;
 	SnglInspiralTable *bank;
 	gint num_templates;
 	double snr_thresh;
