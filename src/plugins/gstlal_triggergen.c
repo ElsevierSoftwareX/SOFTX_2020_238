@@ -512,7 +512,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 * check for EOS
 	 */
 
-	if(!GST_CLOCK_TIME_IS_VALID(earliest_input_t_start))
+	if(!GST_CLOCK_TIME_IS_VALID(earliest_input_t_start)) {
 		GST_DEBUG_OBJECT(element, "gstlal_collect_pads_get_earliest_times() says we are at EOS");
 		goto eos;
 	}

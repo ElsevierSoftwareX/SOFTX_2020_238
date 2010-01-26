@@ -304,7 +304,7 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 		buf_t_end = compute_t_end(data, buf, rate);
 		gst_buffer_unref(buf);
 
-		GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "(%s): time = [%" GST_CLOCK_TIME_FORMAT " s, %" GST_CLOCK_TIME " s)\n", GST_PAD_NAME(data->as_gstcollectdata.pad), GST_CLOCK_TIME_ARGS(buf_t_start), GST_CLOCK_TIME_ARGS(buf_t_end));
+		GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "(%s): time = [%" GST_TIME_SECONDS_FORMAT " s, %" GST_TIME_SECONDS_FORMAT " s)\n", GST_PAD_NAME(data->as_gstcollectdata.pad), GST_TIME_SECONDS_ARGS(buf_t_start), GST_TIME_SECONDS_ARGS(buf_t_end));
 
 		if(buf_t_end < buf_t_start) {
 			GST_LOG("%p: input buffer appears to have negative length\n", data);
@@ -334,7 +334,7 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 
 	if(!valid)
 		*t_start = *t_end = GST_CLOCK_TIME_NONE;
-	GST_DEBUG("%p: time = [%" GST_CLOCK_TIME_FORMAT " s, %" GST_CLOCK_TIME_FORMAT " s)\n", pads, GST_CLOCK_TIME_ARGS(*t_start), GST_CLOCK_TIME_ARGS(*t_end));
+	GST_DEBUG("%p: time = [%" GST_TIME_SECONDS_FORMAT " s, %" GST_TIME_SECONDS_FORMAT " s)\n", pads, GST_TIME_SECONDS_ARGS(*t_start), GST_TIME_SECONDS_ARGS(*t_end));
 
 	return TRUE;
 }
@@ -418,7 +418,7 @@ GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *pads, GstLALCollectDa
 	GST_BUFFER_TIMESTAMP(buf) = t_start;
 	GST_BUFFER_DURATION(buf) = gst_util_uint64_scale_int_round(units, GST_SECOND, rate);
 
-	GST_DEBUG_OBJECT(GST_PAD_PARENT(data->as_gstcollectdata.pad), "(%s): returning [%" GST_CLOCK_TIME_FORMAT " s, %" GST_CLOCK_TIME_FORMAT " s)\n", GST_PAD_NAME(data->as_gstcollectdata.pad), GST_CLOCK_TIME_ARGS(GST_BUFFER_TIMESTAMP(buf)), GST_CLOCK_TIME_ARGS(GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf)));
+	GST_DEBUG_OBJECT(GST_PAD_PARENT(data->as_gstcollectdata.pad), "(%s): returning [%" GST_TIME_SECONDS_FORMAT " s, %" GST_TIME_SECONDS_FORMAT " s)\n", GST_PAD_NAME(data->as_gstcollectdata.pad), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buf)), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf)));
 
 	return buf;
 }
