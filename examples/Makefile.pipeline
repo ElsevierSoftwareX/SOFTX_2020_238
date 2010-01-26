@@ -6,7 +6,7 @@ segments :
 
 dag :
 	mkdir noninjections
-	pushd noninjections && rm -f vetoes.xml.gz ; ligolw_segments --verbose --output vetoes.xml.gz --name vetoes --insert-from-segwizard={H1,H2,L1,V1}=/dev/null && ligolw_tisi --verbose --instrument H1=0:0:0 --instrument H2=0:0:0 --instrument L1=-89.26990816987241548050:89.26990816987241548050:1.78539816339744830961 time_slides.xml.gz && gstlal_inspiral_pipe --verbose --config-file ../gstlal_inspiral.ini --log-path $(TMPDIR) --time-slides time_slides.xml.gz --vetoes vetoes.xml.gz ; popd
+	pushd noninjections && rm -f vetoes.xml.gz ; ligolw_segments --verbose --output vetoes.xml.gz --name vetoes --insert-from-segwizard={H1,H2,L1,V1}=/dev/null && ligolw_tisi --verbose --instrument L1=0:0:0 --instrument H1=-201.24611797498108:+201.24611797498108:20.124611797498108 --instrument H2=-201.24611797498108:+201.24611797498108:20.124611797498108 time_slides.xml.gz && gstlal_inspiral_pipe --verbose --config-file ../gstlal_inspiral.ini --log-path $(TMPDIR) --time-slides time_slides.xml.gz --vetoes vetoes.xml.gz ; popd
 
 
 realclean :
