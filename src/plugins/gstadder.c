@@ -1046,7 +1046,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		earliest_input_offset = gst_util_uint64_scale_int_round(t_start - adder->segment.start, adder->rate, GST_SECOND);
 		earliest_input_offset_end = gst_util_uint64_scale_int_round(t_end - adder->segment.start, adder->rate, GST_SECOND);
 
-		if((adder->offset != GST_BUFFER_OFFSET_NONE) && (earliest_input_offset < adder->offset)) {
+		if(earliest_input_offset < adder->offset) {
 			GST_ERROR_OBJECT(adder, "detected time reversal in at least one input stream:  expected nothing earlier than offset %" G_GUINT64_FORMAT ", found sample at offset %" G_GUINT64_FORMAT, adder->offset, earliest_input_offset);
 			result = GST_FLOW_ERROR;
 			goto error;
