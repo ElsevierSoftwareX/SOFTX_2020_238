@@ -601,10 +601,10 @@ done:
 static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 {
 	GSTLALChiSquare *element = GSTLAL_CHISQUARE(user_data);
-	guint64 earliest_input_offset, earliest_input_offset_end;
+	GstClockTime earliest_input_t_start, earliest_input_t_end;
 	guint sample, length;
-	GstBuffer *buf;
-	GstBuffer *orthosnrbuf;
+	GstBuffer *buf = NULL;
+	GstBuffer *orthosnrbuf = NULL;
 	gint dof;
 	gint ortho_channel, numorthochannels;
 	gint channel, numchannels;
@@ -622,8 +622,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			 * something about it */
 		}
 		element->segment = *segment;
+		element->offset = 0;
 		gst_segment_free(segment);
-		element->offset = GST_BUFFER_OFFSET_NONE;
 
 		event = gst_event_new_new_segment_full(FALSE, element->segment.rate, 1.0, GST_FORMAT_TIME, element->segment.start, element->segment.stop, element->segment.start);
 		if(!event) {
@@ -640,7 +640,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 * available input buffers.
 	 */
 
-	if(!gstlal_collect_pads_get_earliest_offsets(element->collect, &earliest_input_offset, &earliest_input_offset_end, element->segment.start, 0, element->rate)) {
+	if(!gstlal_collect_pads_get_earliest_times(element->collect, &earliest_input_t_start, &earliest_input_t_end, element->rate)) {
 		GST_ERROR_OBJECT(element, "cannot deduce input timestamp offset information");
 		goto error;
 	}
@@ -649,8 +649,43 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 * check for EOS
 	 */
 
-	if(earliest_input_offset == GST_BUFFER_OFFSET_NONE)
+	if(!GST_CLOCK_TIME_IS_VALID(earliest_input_t_start))
 		goto eos;
+
+	/*
+	 * get buffers upto the desired end offset.
+	 */
+
+	buf = gstlal_collect_pads_take_buffer(pads, element->snrcollectdata, earliest_input_t_end, element->rate);
+	orthosnrbuf = gstlal_collect_pads_take_buffer(pads, element->orthosnrcollectdata, earliest_input_t_end, element->rate);
+
+	if(!buf || !orthosnrbuf) {
+		/*
+		 * NULL means EOS.
+		 */
+		if(buf)
+			gst_buffer_unref(buf);
+		if(orthosnrbuf)
+			gst_buffer_unref(orthosnrbuf);
+		goto eos;
+	}
+
+	buf = gst_buffer_make_metadata_writable(buf);
+	GST_BUFFER_OFFSET(buf) = gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(buf) - element->segment.start, element->rate, GST_SECOND);
+	GST_BUFFER_OFFSET_END(buf) = gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf) - element->segment.start, element->rate, GST_SECOND);
+	orthosnrbuf = gst_buffer_make_metadata_writable(orthosnrbuf);
+	GST_BUFFER_OFFSET(orthosnrbuf) = gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(orthosnrbuf) - element->segment.start, element->rate, GST_SECOND);
+	GST_BUFFER_OFFSET_END(orthosnrbuf) = gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(orthosnrbuf) + GST_BUFFER_DURATION(orthosnrbuf) - element->segment.start, element->rate, GST_SECOND);
+
+	/*
+	 * Check for mis-aligned input buffers.  This can happen, but we
+	 * can't handle it.
+	 */
+
+	if(GST_BUFFER_OFFSET(buf) != GST_BUFFER_OFFSET(orthosnrbuf) || GST_BUFFER_OFFSET_END(buf) != GST_BUFFER_OFFSET_END(orthosnrbuf)) {
+		GST_ERROR_OBJECT(element, "misaligned buffer boundaries:  got snr offsets [%lu, %lu) and ortho snr offsets [%lu, %lu)", GST_BUFFER_OFFSET(buf), GST_BUFFER_OFFSET_END(buf), GST_BUFFER_OFFSET(orthosnrbuf), GST_BUFFER_OFFSET_END(orthosnrbuf));
+		goto error;
+	}
 
 	/*
 	 * don't let time go backwards.  in principle we could be smart and
@@ -659,35 +694,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 * capabilities here.
 	 */
 
-	if((element->offset != GST_BUFFER_OFFSET_NONE) && (earliest_input_offset < element->offset)) {
-		GST_ERROR_OBJECT(element, "detected time reversal in at least one input stream:  expected nothing earlier than offset %lu, found sample at offset %lu", element->offset, earliest_input_offset);
-		goto error;
-	}
-
-	/*
-	 * get buffers upto the desired end offset.
-	 */
-
-	buf = gstlal_collect_pads_take_buffer(pads, element->snrcollectdata, earliest_input_offset_end, element->segment.start, 0, element->rate);
-	orthosnrbuf = gstlal_collect_pads_take_buffer(pads, element->orthosnrcollectdata, earliest_input_offset_end, element->segment.start, 0, element->rate);
-
-	/*
-	 * NULL means EOS.
-	 */
- 
-	if(!buf || !orthosnrbuf) {
-		/* FIXME:  handle EOS */
-	}
-
-	/*
-	 * Check for mis-aligned input buffers.  This can happen, but we
-	 * can't handle it.
-	 */
-
-	if(GST_BUFFER_OFFSET(buf) != GST_BUFFER_OFFSET(orthosnrbuf) || GST_BUFFER_OFFSET_END(buf) != GST_BUFFER_OFFSET_END(orthosnrbuf)) {
-		gst_buffer_unref(buf);
-		gst_buffer_unref(orthosnrbuf);
-		GST_ERROR_OBJECT(element, "misaligned buffer boundaries:  requested offsets upto %lu, got snr offsets %lu--%lu and ortho snr offsets %lu--%lu", earliest_input_offset_end, GST_BUFFER_OFFSET(buf), GST_BUFFER_OFFSET_END(buf), GST_BUFFER_OFFSET(orthosnrbuf), GST_BUFFER_OFFSET_END(orthosnrbuf));
+	if(GST_BUFFER_OFFSET(buf) < element->offset) {
+		GST_ERROR_OBJECT(element, "detected time reversal in at least one input stream:  expected nothing earlier than offset %lu, found sample at offset %lu", element->offset, GST_BUFFER_OFFSET(buf));
 		goto error;
 	}
 
@@ -701,7 +709,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 * check for discontinuity
 	 */
 
-	if((element->offset == GST_BUFFER_OFFSET_NONE) || (element->offset != GST_BUFFER_OFFSET(buf)))
+	if(element->offset != GST_BUFFER_OFFSET(buf))
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 
 	/*
@@ -794,6 +802,10 @@ eos:
 	return GST_FLOW_UNEXPECTED;
 
 error:
+	if(buf)
+		gst_buffer_unref(buf);
+	if(orthosnrbuf)
+		gst_buffer_unref(orthosnrbuf);
 	return GST_FLOW_ERROR;
 }
 
@@ -875,7 +887,7 @@ static GstStateChangeReturn change_state(GstElement *element, GstStateChange tra
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		chisquare->segment_pending = TRUE;
 		gst_segment_init(&chisquare->segment, GST_FORMAT_UNDEFINED);
-		chisquare->offset = GST_BUFFER_OFFSET_NONE;
+		chisquare->offset = 0;
 		gst_collect_pads_start(chisquare->collect);
 		break;
 

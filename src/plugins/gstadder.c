@@ -971,6 +971,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 {
 	GstAdder *adder = GST_ADDER(user_data);
 	GSList *collected = NULL;
+	GstClockTime t_start, t_end;
 	guint64 earliest_input_offset, earliest_input_offset_end;
 	guint64 length;
 	GstBuffer *outbuf = NULL;
@@ -1007,8 +1008,8 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			 * something about it */
 		}
 		adder->segment = *segment;
+		adder->offset = 0;
 		gst_segment_free(segment);
-		adder->offset = GST_BUFFER_OFFSET_NONE;
 	}
 
 	/*
@@ -1022,7 +1023,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 * real.
 		 */
 		
-		if(!gstlal_collect_pads_get_earliest_offsets(adder->collect, &earliest_input_offset, &earliest_input_offset_end, adder->segment.start, 0, adder->rate)) {
+		if(!gstlal_collect_pads_get_earliest_times(adder->collect, &t_start, &t_end, adder->rate)) {
 			GST_ERROR_OBJECT(adder, "cannot deduce input timestamp offset information");
 			result = GST_FLOW_ERROR;
 			goto error;
@@ -1032,7 +1033,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 * check for EOS
 		 */
 
-		if(earliest_input_offset == GST_BUFFER_OFFSET_NONE)
+		if(!GST_CLOCK_TIME_IS_VALID(t_start))
 			goto eos;
 
 		/*
@@ -1041,6 +1042,9 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 * used to correct screwed up time series so there is no
 		 * point in re-inventing its capabilities here.
 		 */
+
+		earliest_input_offset = gst_util_uint64_scale_int_round(t_start - adder->segment.start, adder->rate, GST_SECOND);
+		earliest_input_offset_end = gst_util_uint64_scale_int_round(t_end - adder->segment.start, adder->rate, GST_SECOND);
 
 		if((adder->offset != GST_BUFFER_OFFSET_NONE) && (earliest_input_offset < adder->offset)) {
 			GST_ERROR_OBJECT(adder, "detected time reversal in at least one input stream:  expected nothing earlier than offset %" G_GUINT64_FORMAT ", found sample at offset %" G_GUINT64_FORMAT, adder->offset, earliest_input_offset);
@@ -1055,7 +1059,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 * we'll figure out later when no pads produce buffers.
 		 */
 
-		earliest_input_offset = adder->offset == GST_BUFFER_OFFSET_NONE ? 0 : adder->offset;
+		earliest_input_offset = adder->offset;
 		earliest_input_offset_end = earliest_input_offset + gst_collect_pads_available(pads) / adder->unit_size;
 	}
 
@@ -1082,7 +1086,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 */
 
 		if(adder->synchronous)
-			inbuf = gstlal_collect_pads_take_buffer(pads, data, earliest_input_offset_end, adder->segment.start, 0, adder->rate);
+			inbuf = gstlal_collect_pads_take_buffer(pads, data, t_end, adder->rate);
 		else
 			inbuf = gst_collect_pads_take_buffer(pads, (GstCollectData *) data, length * adder->unit_size);
 
@@ -1103,7 +1107,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 * starts now.
 		 */
 
-		gap = adder->synchronous ? (GST_BUFFER_OFFSET(inbuf) - earliest_input_offset) * adder->unit_size : 0;
+		gap = adder->synchronous ? (gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(inbuf) - adder->segment.start, adder->rate, GST_SECOND) - earliest_input_offset) * adder->unit_size : 0;
 		len = GST_BUFFER_SIZE(inbuf);
 
 		/*
@@ -1119,7 +1123,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			 * sort of screwed.  a code re-organization could
 			 * fix it:  request buffer before entering the loop
 			 * and figure out a different way to check for EOS
-			 * */
+			 */
 
 			GST_LOG_OBJECT(adder, "requesting output buffer of %" G_GUINT64_FORMAT " samples", length);
 			result = gst_pad_alloc_buffer(adder->srcpad, earliest_input_offset, length * adder->unit_size, GST_PAD_CAPS(adder->srcpad), &outbuf);
@@ -1176,7 +1180,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 	 * check for discontinuity.
 	 */
 
-	if((adder->offset == GST_BUFFER_OFFSET_NONE) || (adder->offset != GST_BUFFER_OFFSET(outbuf)))
+	if(adder->offset != GST_BUFFER_OFFSET(outbuf))
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_DISCONT);
 
 	/*
@@ -1334,7 +1338,7 @@ static GstStateChangeReturn gst_adder_change_state(GstElement * element, GstStat
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
 		adder->segment_pending = TRUE;
 		gst_segment_init(&adder->segment, GST_FORMAT_UNDEFINED);
-		adder->offset = GST_BUFFER_OFFSET_NONE;
+		adder->offset = 0;
 		gst_collect_pads_start(adder->collect);
 		break;
 

@@ -425,7 +425,7 @@ static gboolean snr_event(GstPad *pad, GstEvent *event)
 static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 {
 	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(user_data);
-	guint64 earliest_input_offset, earliest_input_offset_end;
+	GstClockTime earliest_input_t_start, earliest_input_t_end;
 	GstBuffer *snrbuf = NULL;
 	GstBuffer *chisqbuf = NULL;
 	GstBuffer *srcbuf = NULL;
@@ -502,7 +502,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 * available input buffers.
 	 */
 
-	if(!gstlal_collect_pads_get_earliest_offsets(element->collect, &earliest_input_offset, &earliest_input_offset_end, element->segment.start, 0, element->rate)) {
+	if(!gstlal_collect_pads_get_earliest_times(element->collect, &earliest_input_t_start, &earliest_input_t_end, element->rate)) {
 		GST_ERROR_OBJECT(element, "cannot deduce input timestamp offset information");
 		result = GST_FLOW_ERROR;
 		goto error;
@@ -512,17 +512,17 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 * check for EOS
 	 */
 
-	if(earliest_input_offset == GST_BUFFER_OFFSET_NONE) {
-		GST_DEBUG_OBJECT(element, "gstlal_collect_pads_get_earliest_offsets() says we are at EOS");
+	if(!GST_CLOCK_TIME_IS_VALID(earliest_input_t_start))
+		GST_DEBUG_OBJECT(element, "gstlal_collect_pads_get_earliest_times() says we are at EOS");
 		goto eos;
 	}
 
 	/*
-	 * get buffers upto the desired end offset.
+	 * get buffers upto the desired end time.
 	 */
 
-	snrbuf = gstlal_collect_pads_take_buffer(pads, element->snrcollectdata, earliest_input_offset_end, element->segment.start, 0, element->rate);
-	chisqbuf = gstlal_collect_pads_take_buffer(pads, element->chisqcollectdata, earliest_input_offset_end, element->segment.start, 0, element->rate);
+	snrbuf = gstlal_collect_pads_take_buffer(pads, element->snrcollectdata, earliest_input_t_end, element->rate);
+	chisqbuf = gstlal_collect_pads_take_buffer(pads, element->chisqcollectdata, earliest_input_t_end, element->rate);
 
 	/*
 	 * NULL means EOS.  EOS on one means our EOS.
@@ -574,16 +574,15 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		SnglInspiralTable *head = NULL;
 		guint nevents = 0;
 
-		length = MIN(GST_BUFFER_OFFSET_END(snrbuf), GST_BUFFER_OFFSET_END(chisqbuf));
-		if(GST_BUFFER_OFFSET(snrbuf) > GST_BUFFER_OFFSET(chisqbuf)) {
-			t0 = GST_BUFFER_TIMESTAMP(snrbuf);
-			chisqdata += (GST_BUFFER_OFFSET(snrbuf) - GST_BUFFER_OFFSET(chisqbuf)) * element->num_templates;
-			length -= GST_BUFFER_OFFSET(snrbuf);
+		length = MIN(GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf));
+		if(GST_BUFFER_TIMESTAMP(snrbuf) > GST_BUFFER_TIMESTAMP(chisqbuf)) {
+			length -= t0 = GST_BUFFER_TIMESTAMP(snrbuf);
+			chisqdata += gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(snrbuf) - GST_BUFFER_TIMESTAMP(chisqbuf), element->rate, GST_SECOND) * element->num_templates;
 		} else {
-			t0 = GST_BUFFER_TIMESTAMP(chisqbuf);
-			snrdata += (GST_BUFFER_OFFSET(chisqbuf) - GST_BUFFER_OFFSET(snrbuf)) * element->num_templates;
-			length -= GST_BUFFER_OFFSET(chisqbuf);
+			length -= t0 = GST_BUFFER_TIMESTAMP(chisqbuf);
+			snrdata += gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(chisqbuf) - GST_BUFFER_TIMESTAMP(snrbuf), element->rate, GST_SECOND) * element->num_templates;
 		}
+		length = gst_util_uint64_scale_int_round(length, element->rate, GST_SECOND);
 
 		GST_DEBUG_OBJECT(element, "searching %" G_GUINT64_FORMAT " samples at %" GST_TIME_SECONDS_FORMAT " for events", length, GST_TIME_SECONDS_ARGS(t0));
 		g_mutex_lock(element->bank_lock);
