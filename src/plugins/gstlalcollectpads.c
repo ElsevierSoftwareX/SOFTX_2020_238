@@ -280,7 +280,7 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 
 		buf = gst_collect_pads_peek(pads, (GstCollectData *) data);
 		if(!buf) {
-			GST_LOG("%p: EOS\n", data);
+			GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "EOS");
 			continue;
 		}
 
@@ -289,13 +289,13 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 		 */
 
 		if(!GST_BUFFER_OFFSET_IS_VALID(buf)) {
-			GST_LOG("%p: input buffer does not have a valid offset\n", data);
+			GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "input buffer does not have a valid offset");
 			gst_buffer_unref(buf);
 			return FALSE;
 		}
 
 		if(!GST_BUFFER_TIMESTAMP_IS_VALID(buf)) {
-			GST_LOG("%p: input buffer does not have a valid timestamp\n", data);
+			GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "input buffer does not have a valid timestamp");
 			gst_buffer_unref(buf);
 			return FALSE;
 		}
@@ -311,7 +311,7 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 		GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "(%s): time = [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")\n", GST_PAD_NAME(((GstCollectData *) data)->pad), GST_TIME_SECONDS_ARGS(buf_t_start), GST_TIME_SECONDS_ARGS(buf_t_end));
 
 		if(buf_t_end < buf_t_start) {
-			GST_LOG("%p: input buffer appears to have negative length\n", data);
+			GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "input buffer appears to have negative length");
 			return FALSE;
 		}
 
@@ -338,7 +338,7 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 
 	if(!valid)
 		*t_start = *t_end = GST_CLOCK_TIME_NONE;
-	GST_DEBUG("%p: time = [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")\n", pads, GST_TIME_SECONDS_ARGS(*t_start), GST_TIME_SECONDS_ARGS(*t_end));
+	GST_DEBUG_OBJECT(pads, "found [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(*t_start), GST_TIME_SECONDS_ARGS(*t_end));
 
 	return TRUE;
 }
