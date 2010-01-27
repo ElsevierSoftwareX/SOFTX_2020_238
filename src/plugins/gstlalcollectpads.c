@@ -163,6 +163,9 @@ GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads)
 	GSList *collectdatalist = NULL;
 	GstSegment *segment = NULL;
 
+	g_return_val_if_fail(pads != NULL, NULL);
+	g_return_val_if_fail(GST_IS_COLLECT_PADS(pads), NULL);
+
 	for(collectdatalist = pads->data; collectdatalist; collectdatalist = g_slist_next(collectdatalist)) {
 		/* really a pointer to a GstLALCollectData object, casting
 		 * to GstCollectData */
@@ -257,7 +260,13 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 	 * initilize
 	 */
 
+	g_return_val_if_fail(t_start != NULL, FALSE);
+	g_return_val_if_fail(t_end != NULL, FALSE);
+
 	*t_start = *t_end = G_MAXUINT64;
+
+	g_return_val_if_fail(pads != NULL, FALSE);
+	g_return_val_if_fail(GST_IS_COLLECT_PADS(pads), FALSE);
 
 	/*
 	 * loop over sink pads
@@ -371,9 +380,12 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 	guint64 units;
 
 	/*
-	 * check for uninitialized GstLALCollectData
+	 * checks
 	 */
 
+	g_return_val_if_fail(pads != NULL, NULL);
+	g_return_val_if_fail(GST_IS_COLLECT_PADS(pads), NULL);
+	g_return_val_if_fail(data != NULL, NULL);
 	g_return_val_if_fail(data->unit_size != 0, NULL);
 
 	/*
