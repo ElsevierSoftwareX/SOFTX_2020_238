@@ -29,7 +29,9 @@ import numpy
 
 from pylal import datatypes as laltypes
 from pylal import lalfft
-
+from pylal import spawaveform
+from glue.ligolw import lsctables
+from glue.ligolw import utils
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
 __version__ = "FIXME"
@@ -160,3 +162,85 @@ def normalized_autocorrelation(fseries, revplan):
 	data = tseries.data
 	tseries.data = data / data[0]
 	return tseries
+
+
+def break_up_template_bank( template_bank_filename, 
+			    flow = 64, 
+			    fhigh = 2048,
+			    padding = 0.9 ):
+	"""
+	The function break_up_template_bank splits a template bank up by times
+	for which different sampling rates are appropriate.
+	"""
+	# Round a number up to the nearest power of 2
+	def ceil_pow_2( number ):
+		return 2**(numpy.ceil(numpy.log2( number )))
+
+	# We only allow sample rates that are powers of two.
+	#
+	# h(t) is sampled at 16384Hz, which sets the upper limit
+	# and advligo will likely not reach below 10Hz, which 
+	# sets the lower limit (32Hz = ceil_pow_2(2*10)Hz )
+	#
+	allowed_rates = [32,64,128,256,512,1024,2048,4096,8192,16384]
+
+	# Load template bank mass params
+	template_bank_table = (
+		lsctables.table.get_table(
+			utils.load_filename(
+				template_bank_filename,
+				gz=template_bank_filename.endswith("gz") ),
+			"sngl_inspiral") )
+        mass1 = template_bank_table.get_column('mass1') 
+        mass2 = template_bank_table.get_column('mass2') 
+
+	#
+	# Readjust the allowed_rates to fit with the template bank
+	#
+	ffinal_max = max(spawaveform.ffinal(m1,m2,'schwarz_isco') for m1,m2 in zip(mass1,mass2) )
+	ffinal_max = min(fhigh,ffinal_max)
+	ffinal_max = min(allowed_rates[-1],ffinal_max)
+
+	sample_rate_max = ceil_pow_2( 2*(1./padding)* ffinal_max )
+	sample_rate_min = ceil_pow_2( 2*(1./padding)* flow )
+
+	allowed_rates = allowed_rates[allowed_rates.index(sample_rate_min):allowed_rates.index(sample_rate_max)]  # excludes sample_rate_max
+	
+	#
+	# Split up templates by time
+	#
+
+	# FIXME: what happens if padding*sample_rate_min/2 == flow?
+
+	
+	longest_chirp = max(spawaveform.chirptime(m1,m2,7,flow,sample_rate_max/2) for m1,m2 in zip(mass1,mass2)) 
+	time_partition = [ longest_chirp ]		
+	for rate in allowed_rates:
+		longest_chirp = max(spawaveform.chirptime(m1,m2,7,padding*rate/2,sample_rate_max/2) for m1,m2 in zip(mass1,mass2)) 
+		time_partition.append( longest_chirp )
+
+
+	#
+	# SVD needs more sample points than templates.
+	# Reject some sampling_rates if the templates don't
+	# spend enough time there
+	#
+	# allowed_rates = [64,128,256,512,1024,2048]
+	# time_partition = [100,25,10,4,1,0.01,0.001]
+
+	num_templates = len(mass1)
+	for rate,begin,end in zip(allowed_rates,time_partition[1:],time_partition[:-1]):
+		if (end-begin)*rate < num_templates:
+			allowed_rates.remove(rate)
+			time_partition.remove(begin)
+	
+
+	time_partition.append(0)
+	allowed_rates.append(sample_rate_max)
+
+	time_partition.reverse()
+	allowed_rates.reverse()
+
+	print  zip(allowed_rates,time_partition[:-1],time_partition[1:])
+
+	return zip(allowed_rates,time_partition[:-1],time_partition[1:])

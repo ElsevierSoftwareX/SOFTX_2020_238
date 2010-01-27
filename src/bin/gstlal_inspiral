@@ -10,7 +10,7 @@
 #
 # This program is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# MERCHANTABLITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
 # Public License for more details.
 #
 # You should have received a copy of the GNU General Public License along
@@ -57,7 +57,7 @@ from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import cbc_template_fir
 from gstlal import misc as gstlalmisc
-
+from gstlal import templates
 
 #
 # =============================================================================
@@ -152,6 +152,12 @@ def add_cbc_metadata(xmldoc, process, seg):
 	return search_summary
 
 
+
+
+
+
+
+
 #
 # =============================================================================
 #
@@ -195,7 +201,7 @@ class Bank(object):
 		self.filter_length = max(fragment.end for fragment in bank_fragments)
 		self.snr_threshold = snr_threshold
 		self.logname = logname
-
+ 
 		sample_rate = max(bank_fragment.rate for bank_fragment in bank_fragments)
 
 		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName), psd, flow, sample_rate, self.filter_length, autocorrelation_length = autocorrelation_length, verbose = verbose)
@@ -804,12 +810,9 @@ banks = [
 	Bank(
 		template_bank_filename,
 		psd,
-		[
-			Bank.BankFragment(2048, 0.0, 1.0),
-			Bank.BankFragment(512, 1.0, 5.0),
-			Bank.BankFragment(256, 5.0, 13.0),
-			Bank.BankFragment(128, 13.0, 29.0)
-		],
+		[ Bank.BankFragment(rate,begin,end) 
+		  for rate,begin,end in
+		  templates.break_up_template_bank(template_bank_filename,options.flow)],
 		gate_fap = options.ortho_gate_fap,
 		snr_threshold = options.snr_threshold,
 		tolerance = options.svd_tolerance,
