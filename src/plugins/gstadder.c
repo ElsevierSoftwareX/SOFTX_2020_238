@@ -1086,7 +1086,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 		 */
 
 		if(adder->synchronous)
-			inbuf = gstlal_collect_pads_take_buffer(pads, data, t_end, adder->rate);
+			inbuf = gstlal_collect_pads_take_buffer_sync(pads, data, t_end, adder->rate);
 		else
 			inbuf = gst_collect_pads_take_buffer(pads, (GstCollectData *) data, length * adder->unit_size);
 

@@ -64,7 +64,7 @@ void gstlal_collect_pads_set_unit_size(GstPad *, guint);
 guint gstlal_collect_pads_get_unit_size(GstPad *);
 GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads);
 gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *, GstClockTime *, GstClockTime *, gint);
-GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *, GstLALCollectData *, GstClockTime, gint);
+GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *, GstLALCollectData *, GstClockTime, gint);
 
 
 G_END_DECLS

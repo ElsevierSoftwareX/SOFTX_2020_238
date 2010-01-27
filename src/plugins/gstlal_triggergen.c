@@ -521,8 +521,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 * get buffers upto the desired end time.
 	 */
 
-	snrbuf = gstlal_collect_pads_take_buffer(pads, element->snrcollectdata, earliest_input_t_end, element->rate);
-	chisqbuf = gstlal_collect_pads_take_buffer(pads, element->chisqcollectdata, earliest_input_t_end, element->rate);
+	snrbuf = gstlal_collect_pads_take_buffer_sync(pads, element->snrcollectdata, earliest_input_t_end, element->rate);
+	chisqbuf = gstlal_collect_pads_take_buffer_sync(pads, element->chisqcollectdata, earliest_input_t_end, element->rate);
 
 	/*
 	 * NULL means EOS.  EOS on one means our EOS.

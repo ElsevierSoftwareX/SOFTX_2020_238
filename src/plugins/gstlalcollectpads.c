@@ -363,7 +363,7 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
  */
 
 
-GstBuffer *gstlal_collect_pads_take_buffer(GstCollectPads *pads, GstLALCollectData *data, GstClockTime t_end, gint rate)
+GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALCollectData *data, GstClockTime t_end, gint rate)
 {
 	GstBuffer *buf;
 	guint64 offset;
