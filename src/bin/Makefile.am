@@ -1,1 +1,1 @@
-bin_SCRIPTS = gstlal_inspiral gstlal_inspiral_pipe
+bin_SCRIPTS = gstlal_inspiral gstlal_inspiral_pipe gstlal_spectrum_movie

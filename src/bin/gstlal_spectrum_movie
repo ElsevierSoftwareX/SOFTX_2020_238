@@ -1,0 +1,193 @@
+#!/usr/bin/python
+#
+# Copyright (C) 2010  Kipp Cannon
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import math
+import numpy
+from optparse import OptionParser
+import sys
+
+
+import gobject
+import pygst
+pygst.require("0.10")
+import gst
+
+
+gobject.threads_init()
+
+
+from glue import segments
+from pylal.datatypes import LIGOTimeGPS
+
+
+from gstlal import pipeparts
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		version = "%prog ??",
+		usage = "%prog [options]",
+		description = "Stream-based inspiral analysis tool"
+	)
+	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data is used in which case it must not be set.")
+	parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
+	parser.add_option("--channel-name", metavar = "name", help = "Set the name of the channel to process, e.g. \"LSC-STRAIN\" (required).")
+	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
+	parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
+	parser.add_option("--psd-fft-length", metavar = "seconds", type = "float", default = 2.0, help = "Set the length of the FFT windows used to measure the PSD (optional).")
+	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).  The default is 2.0.")
+	parser.add_option("--output", metavar = "filename", help = "Set the name of the movie file to write (required).")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+	options, filenames = parser.parse_args()
+
+	required_options = ["gps_start_time", "gps_end_time", "instrument", "channel_name", "output"]
+	missing_options = [option for option in required_options if getattr(options, option) is None]
+	if missing_options:
+		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+
+	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
+	options.gps_end_time = LIGOTimeGPS(options.gps_end_time)
+	options.seg = segments.segment(options.gps_start_time, options.gps_end_time)
+
+	return options, filenames
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+def measure_psd(frame_cache, instrument, channel_name, seg, rate, psd_fft_length, injection_filename = None, verbose = False):
+	#
+	# pipeline handler for PSD measurement
+	#
+
+	class PSDHandler(object):
+		def __init__(self, mainloop, pipeline, verbose = False):
+			self.mainloop = mainloop
+			self.pipeline = pipeline
+			self.verbose = verbose
+
+			bus = pipeline.get_bus()
+			bus.add_signal_watch()
+			bus.connect("message", self.on_message)
+
+			self.psd = None
+
+		def on_message(self, bus, message):
+			if message.type == gst.MESSAGE_EOS:
+				self.pipeline.set_state(gst.STATE_NULL)
+				self.mainloop.quit()
+			elif message.type == gst.MESSAGE_ERROR:
+				gerr, dbgmsg = message.parse_error()
+				print >>sys.stderr, "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+				self.pipeline.set_state(gst.STATE_NULL)
+				self.mainloop.quit()
+
+	#
+	# build pipeline
+	#
+
+	mainloop = gobject.MainLoop()
+
+	pipeline = gst.Pipeline("psd")
+	head = pipeparts.mkframesrc(pipeline, instrument = instrument, location = frame_cache, channel_name = channel_name)
+	if verbose:
+		head = pipeparts.mkprogressreport(pipeline, head, "Reading")
+	if injection_filename is not None:
+		head = pipeparts.mkinjections(pipeline, head, injection_filename)
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % rate)
+	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, average_samples = int(round(float(abs(seg)) / (psd_fft_length / 2) - 1)))
+	pipeparts.mkfakesink(pipeline, head)
+	head = pipeparts.mkqueue(pipeline, head, pad_name = "mean-psd", max_size_buffers = 8)
+
+	head = pipeparts.mkspectrumplot(pipeline, head)
+	head = pipeparts.mkcapsfilter(pipeline, head, "video/x-raw-rgb, width=768, height=320")
+	head = pipeparts.mkcolorspace(pipeline, head)
+	pipeparts.mkvideosink(pipeline, head)
+
+	handler = PSDHandler(mainloop, pipeline, verbose = verbose)
+
+	#
+	# process segment
+	#
+
+	pipeline.set_state(gst.STATE_PAUSED)
+	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, seg[0].ns(), gst.SEEK_TYPE_SET, seg[1].ns())
+	pipeline.set_state(gst.STATE_PLAYING)
+	mainloop.run()
+
+	#
+	# done
+	#
+
+	return handler.psd
+
+
+#
+# parse command line
+#
+
+
+options, filenames = parse_command_line()
+
+
+#
+# construct and run pipeline
+#
+
+
+psd = measure_psd(
+	options.frame_cache,
+	options.instrument,
+	options.channel_name,
+	options.seg,
+	8192,	# Hz
+	options.psd_fft_length,
+	injection_filename = options.injections,
+	verbose = options.verbose
+)
+
+
+#
+# done
+#
