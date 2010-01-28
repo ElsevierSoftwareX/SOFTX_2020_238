@@ -356,6 +356,7 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 		128: 1.03 / 0.93,
 		256: 1.03 / 0.93,
 		512: 1.03 / 0.93,
+		1024: 1.03 / 1.03,
 		2048: 1.03 / 1.03
 	}
 
@@ -812,7 +813,7 @@ banks = [
 		psd,
 		[ Bank.BankFragment(rate,begin,end) 
 		  for rate,begin,end in
-		  templates.break_up_template_bank(template_bank_filename,options.flow)],
+		  templates.time_frequency_boundaries(template_bank_filename,flow=options.flow)],
 		gate_fap = options.ortho_gate_fap,
 		snr_threshold = options.snr_threshold,
 		tolerance = options.svd_tolerance,
@@ -853,6 +854,7 @@ sngl_inspiral_table.sync_next_id()
 #
 
 
+
 pipeline = gst.Pipeline("gstlal_inspiral")
 mainloop = gobject.MainLoop()
 
@@ -884,7 +886,6 @@ handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
 # process requested segment
 #
 
-
 pipeline.set_state(gst.STATE_PAUSED)
 pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, options.seg[0].ns(), gst.SEEK_TYPE_SET, options.seg[1].ns())
 pipeline.set_state(gst.STATE_PLAYING)
@@ -894,6 +895,9 @@ mainloop.run()
 #
 # write output file
 #
+
+if options.verbose:
+	print >> sys.stderr, "Writing output"
 
 
 sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
