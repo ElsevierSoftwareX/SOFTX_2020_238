@@ -33,6 +33,7 @@ from pylal import spawaveform
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 
+
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
 __version__ = "FIXME"
 __date__ = "FIXME"
@@ -164,20 +165,23 @@ def normalized_autocorrelation(fseries, revplan):
 	return tseries
 
 
-def time_frequency_boundaries( template_bank_filename, 
-			       segment_samples_max = 2048,
-			       flow = 64, 
-			       sample_rate_max = 2048,
-			       padding = 0.9 ):
+def time_frequency_boundaries(
+	template_bank_filename, 
+	segment_samples_max = 2048,
+	flow = 64, 
+	sample_rate_max = 2048,
+	padding = 0.9
+):
 	"""
-	The function time_frequency_boundaries splits a template bank up by times
-	for which different sampling rates are appropriate.  The function returns
-	a list of 3-tuples of the form (rate,begin,end) where rate is the sampling 
-	rate and begin/end mark the boundaries during which the given rate is 
-	guaranteed to be appropriate (no template exceeds a frequency of padding*Nyquist
-	during these times and no lower sampling rate would work).  For computational
-	purposes, no time interval exceeds max_samples_per_segment.  The same rate may
-	therefore apply to more than one segment.
+	The function time_frequency_boundaries splits a template bank up by
+	times for which different sampling rates are appropriate.  The
+	function returns a list of 3-tuples of the form (rate,begin,end)
+	where rate is the sampling rate and begin/end mark the boundaries
+	during which the given rate is guaranteed to be appropriate (no
+	template exceeds a frequency of padding*Nyquist during these times
+	and no lower sampling rate would work).  For computational
+	purposes, no time interval exceeds max_samples_per_segment.  The
+	same rate may therefore apply to more than one segment.
 	"""
 	# Round a number up to the nearest power of 2
 	def ceil_pow_2( number ):
