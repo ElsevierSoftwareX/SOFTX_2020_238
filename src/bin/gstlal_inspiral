@@ -10,7 +10,7 @@
 #
 # This program is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# MERCHANTABLITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
 # Public License for more details.
 #
 # You should have received a copy of the GNU General Public License along
@@ -57,7 +57,7 @@ from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import cbc_template_fir
 from gstlal import misc as gstlalmisc
-
+from gstlal import templates
 
 #
 # =============================================================================
@@ -152,6 +152,12 @@ def add_cbc_metadata(xmldoc, process, seg):
 	return search_summary
 
 
+
+
+
+
+
+
 #
 # =============================================================================
 #
@@ -195,7 +201,7 @@ class Bank(object):
 		self.filter_length = max(fragment.end for fragment in bank_fragments)
 		self.snr_threshold = snr_threshold
 		self.logname = logname
-
+ 
 		sample_rate = max(bank_fragment.rate for bank_fragment in bank_fragments)
 
 		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName), psd, flow, sample_rate, self.filter_length, autocorrelation_length = autocorrelation_length, verbose = verbose)
@@ -350,6 +356,7 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 		128: 1.03 / 0.93,
 		256: 1.03 / 0.93,
 		512: 1.03 / 0.93,
+		1024: 1.03 / 1.03,
 		2048: 1.03 / 1.03
 	}
 
@@ -804,12 +811,9 @@ banks = [
 	Bank(
 		template_bank_filename,
 		psd,
-		[
-			Bank.BankFragment(2048, 0.0, 1.0),
-			Bank.BankFragment(512, 1.0, 5.0),
-			Bank.BankFragment(256, 5.0, 13.0),
-			Bank.BankFragment(128, 13.0, 29.0)
-		],
+		[ Bank.BankFragment(rate,begin,end) 
+		  for rate,begin,end in
+		  templates.time_frequency_boundaries(template_bank_filename,flow=options.flow)],
 		gate_fap = options.ortho_gate_fap,
 		snr_threshold = options.snr_threshold,
 		tolerance = options.svd_tolerance,
@@ -850,6 +854,7 @@ sngl_inspiral_table.sync_next_id()
 #
 
 
+
 pipeline = gst.Pipeline("gstlal_inspiral")
 mainloop = gobject.MainLoop()
 
@@ -881,7 +886,6 @@ handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
 # process requested segment
 #
 
-
 pipeline.set_state(gst.STATE_PAUSED)
 pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, options.seg[0].ns(), gst.SEEK_TYPE_SET, options.seg[1].ns())
 pipeline.set_state(gst.STATE_PLAYING)
@@ -891,6 +895,7 @@ mainloop.run()
 #
 # write output file
 #
+
 
 
 sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
