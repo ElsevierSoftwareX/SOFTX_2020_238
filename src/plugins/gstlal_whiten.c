@@ -495,8 +495,8 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 			XLALDestroyREAL8FrequencySeries(element->psd);
 			element->psd = newpsd;
 			gst_element_post_message(GST_ELEMENT(element), psd_message_new(element, element->psd));
-			if(element->psd_pad) {
-				GstFlowReturn result = push_psd(element->psd_pad, element->psd);
+			if(element->mean_psd_pad) {
+				GstFlowReturn result = push_psd(element->mean_psd_pad, element->psd);
 				if(result != GST_FLOW_OK)
 					return result;
 			}
@@ -660,7 +660,7 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *template, co
 
 	gst_element_add_pad(element, pad);
 	gst_object_ref(pad);	/* for the reference in GSTLALWhiten */
-	GSTLAL_WHITEN(element)->psd_pad = pad;
+	GSTLAL_WHITEN(element)->mean_psd_pad = pad;
 
 	return pad;
 }
@@ -670,12 +670,12 @@ static void release_pad(GstElement *element, GstPad *pad)
 {
 	GSTLALWhiten *whiten = GSTLAL_WHITEN(element);
 
-	if(pad != whiten->psd_pad)
+	if(pad != whiten->mean_psd_pad)
 		/* !?  don't know about this pad ... */
 		return;
 
 	gst_object_unref(pad);
-	whiten->psd_pad = NULL;
+	whiten->mean_psd_pad = NULL;
 }
 
 
@@ -717,7 +717,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 
 
 static GstStaticPadTemplate psd_factory = GST_STATIC_PAD_TEMPLATE(
-	"psd",
+	"mean-psd",
 	GST_PAD_SRC,
 	GST_PAD_REQUEST,
 	GST_STATIC_CAPS(
@@ -746,7 +746,7 @@ enum property {
 	ARG_MEDIAN_SAMPLES,
 	ARG_DELTA_F,
 	ARG_F_NYQUIST,
-	ARG_PSD
+	ARG_MEAN_PSD
 };
 
 
@@ -899,9 +899,9 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 		 * gst_pad_push_event() consumes the reference count
 		 */
 
-		if(element->psd_pad) {
+		if(element->mean_psd_pad) {
 			gst_event_ref(event);
-			gst_pad_push_event(element->psd_pad, event);
+			gst_pad_push_event(element->mean_psd_pad, event);
 		}
 		gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(trans), event);
 
@@ -917,9 +917,9 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 		 * gst_pad_push_event() consumes the reference count
 		 */
 
-		if(element->psd_pad) {
+		if(element->mean_psd_pad) {
 			gst_event_ref(event);
-			gst_pad_push_event(element->psd_pad, event);
+			gst_pad_push_event(element->mean_psd_pad, event);
 		}
 
 		/*
@@ -1101,7 +1101,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		g_assert_not_reached();
 		break;
 
-	case ARG_PSD: {
+	case ARG_MEAN_PSD: {
 		GValueArray *va = g_value_get_boxed(value);
 		REAL8FrequencySeries *psd;
 		psd = make_empty_psd(0.0, 1.0 / element->fft_length_seconds, va->n_values, element->sample_units);
@@ -1162,7 +1162,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		g_value_set_double(value, element->sample_rate / 2.0);
 		break;
 
-	case ARG_PSD:
+	case ARG_MEAN_PSD:
 		if(element->psd)
 			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(element->psd->data->data, element->psd->data->length));
 		else
@@ -1183,8 +1183,8 @@ static void finalize(GObject * object)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(object);
 
-	if(element->psd_pad)
-		gst_object_unref(element->psd_pad);
+	if(element->mean_psd_pad)
+		gst_object_unref(element->mean_psd_pad);
 	g_object_unref(element->adapter);
 	XLALDestroyREAL8Window(element->window);
 	g_mutex_lock(gstlal_fftw_lock);
@@ -1329,11 +1329,11 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_PSD,
+		ARG_MEAN_PSD,
 		g_param_spec_value_array(
-			"psd",
-			"PSD",
-			"Power spectral density (first bin is at 0 Hz, last bin is at f-nyquist, bin spacing is delta-f)",
+			"mean-psd",
+			"Mean PSD",
+			"Mean power spectral density being used to whiten the data.  First bin is at 0 Hz, last bin is at f-nyquist, bin spacing is delta-f.",
 			g_param_spec_double(
 				"bin",
 				"Bin",
@@ -1371,7 +1371,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 
 static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *klass)
 {
-	element->psd_pad = NULL;
+	element->mean_psd_pad = NULL;
 	element->adapter = gst_adapter_new();
 	element->next_is_discontinuity = FALSE;
 	element->t0 = GST_CLOCK_TIME_NONE;

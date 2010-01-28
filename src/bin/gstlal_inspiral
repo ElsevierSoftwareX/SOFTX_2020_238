@@ -321,7 +321,7 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 			n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
 			# interpolate and install PSD
 			psd = cbc_template_fir.interpolate_psd(psd, delta_f)
-			elem.set_property("psd", psd.data[:n])
+			elem.set_property("mean-psd", psd.data[:n])
 
 		head.connect_after("delta-f-changed", delta_f_changed, psd)
 	else:
