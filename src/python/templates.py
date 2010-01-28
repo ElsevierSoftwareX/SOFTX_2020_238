@@ -243,8 +243,8 @@ def time_frequency_boundaries( template_bank_filename,
 	num_templates = len(mass1)
 	# FIXME: there are undoubtedly some dangerous corner cases here
 	if not 2*num_templates < segment_samples_max:
-		#cluster fuck
-		return "you are an asshole"
+		# FIXME this is bad
+		return (None,None,None)
 
 	for rate,begin,end in zip(allowed_rates,time_partition[:-1],time_partition[1:]):
 		segment_samples = (end-begin)*rate
