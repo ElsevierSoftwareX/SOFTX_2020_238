@@ -211,7 +211,6 @@ def time_frequency_boundaries( template_bank_filename,
 	sample_rate_max = min(ceil_pow_2( 2*(1./padding)* ffinal_max ),ceil_pow_2(sample_rate_max))
 	sample_rate_min = ceil_pow_2( 2*(1./padding)* flow )
 	
-	print sample_rate_min,sample_rate_max
 
 	allowed_rates = allowed_rates[allowed_rates.index(sample_rate_min):allowed_rates.index(sample_rate_max)]  # excludes sample_rate_max
 	
@@ -270,7 +269,4 @@ def time_frequency_boundaries( template_bank_filename,
 				index += 1
 
 				
-	for rate,begin,end in zip(allowed_rates,time_partition[:-1],time_partition[1:]):
-		print rate,begin,end
-
 	return zip(allowed_rates,time_partition[:-1],time_partition[1:])
