@@ -24,6 +24,8 @@
 #
 
 
+import bisect
+import math
 import matplotlib
 matplotlib.rcParams.update({
 	"font.size": 8.0,
@@ -86,7 +88,8 @@ class Spectrum(gst.BaseTransform):
 			gst.caps_from_string(
 				matplotlibcaps + ", " +
 				"width = (int) [1, MAX], " +
-				"height = (int) [1, MAX]"
+				"height = (int) [1, MAX], " +
+				"framerate = (fraction) [0/1, 2147483647/1]"
 			)
 		)
 	)
@@ -94,6 +97,8 @@ class Spectrum(gst.BaseTransform):
 
 	def __init__(self):
 		gst.BaseTransform.__init__(self)
+		self.get_pad("sink").use_fixed_caps()
+		self.get_pad("src").use_fixed_caps()
 		self.channels = None
 		self.delta_f = None
 		self.out_width = 320	# default
@@ -137,11 +142,15 @@ class Spectrum(gst.BaseTransform):
 		data = numpy.transpose(pipeio.array_from_audio_buffer(inbuf))
 		f = numpy.arange(len(data[0]), dtype = "double") * self.delta_f
 
+		fmin, fmax = 30.0, 3000.0
+		imin = bisect.bisect_left(f, fmin)
+		imax = bisect.bisect_right(f, fmax)
+
 		for psd in data[:]:
-			axes.loglog(f, psd, alpha = 0.7)
+			axes.loglog(f[imin:imax], psd[imin:imax], alpha = 0.7)
 
 		axes.grid(True)
-		axes.set_xlim((30, 3000))
+		axes.set_xlim((fmin, fmax))
 		axes.set_title(r"Spectral Density of %s, %s at %.9g s" % (self.instrument or "Unknown Instrument", self.channel_name or "Unknown Channel", float(inbuf.timestamp) / gst.SECOND))
 		axes.set_xlabel(r"Frequency (Hz)")
 		axes.set_ylabel(r"Spectral Density (FIXME)")
@@ -182,16 +191,16 @@ class Spectrum(gst.BaseTransform):
 			# convert src pad's caps to sink pad's
 			#
 
-			return self.get_pad("sink").get_fixed_caps_func()
+			return self.get_pad("sink").get_allowed_caps()
 
 		elif direction == gst.PAD_SINK:
 			#
 			# convert sink pad's caps to src pad's
 			#
 
-			return self.get_pad("src").get_fixed_caps_func()
+			return self.get_pad("src").get_allowed_caps()
 
-		raise ValueError
+		raise ValueError, direction
 
 
 	def do_transform_size(self, direction, caps, size, othercaps):
@@ -219,11 +228,9 @@ class Spectrum(gst.BaseTransform):
 			# one frame on source pad
 			#
 
-			# FIXME:  figure out whats wrong with this function
-			#import sys
-			#print >>sys.stderr, "caps = %s" % str(caps)
-			#print >>sys.stderr, "othercaps = %s" % str(othercaps)
-			return 640*480*4
+			# FIXME:  figure out whats wrong with this
+			# function, why is othercaps not right!?
+			othercaps = self.get_pad("src").get_allowed_caps()
 			return othercaps[0]["width"] * othercaps[0]["height"] * othercaps[0]["bpp"] // 8
 
 		raise ValueError, direction
