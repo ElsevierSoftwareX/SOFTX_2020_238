@@ -113,6 +113,20 @@ PKG_CHECK_MODULES([liboil], [liboil-${LIBOIL_RELEASE} >= ${MIN_LIBOIL_VERSION}],
 AC_SUBST([liboil_CFLAGS])
 AC_SUBST([liboil_LIBS])
 
+#
+# Check for NumPy
+#
+
+AX_PYTHON_MODULE(numpy, fatal)
+NUMPY_CFLAGS="-I${PYTHON_SITE_PKG}/numpy/core/include"
+old_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS ${PYTHON_CPPFLAGS} ${NUMPY_CFLAGS}"
+AC_CHECK_HEADER([numpy/arrayobject.h],
+	[PYTHON_CPPFLAGS="${PYTHON_CPPFLAGS} ${NUMPY_CFLAGS}"],
+	[AC_MSG_ERROR([Numpy extension header not found])],
+	[#include "Python.h"])
+CFLAGS="$old_CFLAGS"
+
 
 #
 # Check for LAL
