@@ -209,7 +209,7 @@ def time_frequency_boundaries(
 	# Adjust the allowed_rates to fit with the template bank
 	#
 	ffinal_max = max(spawaveform.ffinal(m1,m2,'schwarz_isco') for m1,m2 in zip(mass1,mass2) )
-	ffinal_max = min(allowed_rates[-1],ffinal_max)
+	ffinal_max = min(padding*allowed_rates[-1]/2,ffinal_max)
 
 	# FIXME: output sample_rate_max may be bigger than input 
 	sample_rate_max = min(ceil_pow_2( 2*(1./padding)* ffinal_max ),ceil_pow_2(sample_rate_max))
