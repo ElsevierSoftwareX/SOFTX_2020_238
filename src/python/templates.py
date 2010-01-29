@@ -194,8 +194,8 @@ def time_frequency_boundaries(
 				template_bank_filename,
 				gz=template_bank_filename.endswith("gz") ),
 			"sngl_inspiral") )
-        mass1 = template_bank_table.get_column('mass1')
-        mass2 = template_bank_table.get_column('mass2')
+	mass1 = template_bank_table.get_column('mass1')
+	mass2 = template_bank_table.get_column('mass2')
 
 	# We only allow sample rates that are powers of two.
 	#
