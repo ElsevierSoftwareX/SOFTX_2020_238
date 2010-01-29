@@ -26,7 +26,7 @@
 
 import numpy
 
-
+import sys
 from pylal import datatypes as laltypes
 from pylal import lalfft
 from pylal import spawaveform
@@ -171,6 +171,7 @@ def time_frequency_boundaries(
 	flow = 64,
 	sample_rate_max = 2048,
 	padding = 0.9
+	verbose = False
 ):
 	"""
 	The function time_frequency_boundaries splits a template bank up by
@@ -240,6 +241,8 @@ def time_frequency_boundaries(
 			time_freq_boundaries.append((rate,accum_time,accum_time+(1./rate)*segment_samples))
 			accum_time += (1./rate)*segment_samples
 
-	print "Time freq boundaries: ",time_freq_boundaries
+	if verbose:
+		print>> sys.stderr, "Time freq boundaries: "
+		print>> sys.stderr, time_freq_boundaries
 
 	return time_freq_boundaries
