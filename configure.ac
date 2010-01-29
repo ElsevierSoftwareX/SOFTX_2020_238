@@ -9,6 +9,7 @@ AC_COPYRIGHT([Copyright (C) 2008 Kipp C. Cannon])
 # top-level directory of the source tree
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
 AC_CONFIG_AUX_DIR([gnuscripts])
+AC_CONFIG_AUX_DIR([gnuscripts])
 AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_FILES([ \
 	Makefile \
@@ -50,7 +51,7 @@ PKG_PROG_PKG_CONFIG()
 
 
 AM_PATH_PYTHON([2.4],,)
-AC_PYTHON_DEVEL()
+AX_PYTHON_DEVEL()
 
 
 #
