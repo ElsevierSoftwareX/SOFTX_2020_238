@@ -69,6 +69,8 @@ def parse_command_line():
 	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 	parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 	parser.add_option("--psd-fft-length", metavar = "seconds", type = "float", default = 2.0, help = "Set the length of the FFT windows used to measure the PSD (optional).")
+	parser.add_option("--average-length", metavar = "seconds", type = "float", default = 64.0, help = "Set the time scale for the running mean (optional).  Default = 64.0.")
+	parser.add_option("--median-samples", metavar = "samples", type = "int", default = 5, help = "Set the number of samples in the median history (optional).  Default = 5.")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).  The default is 2.0.")
 	parser.add_option("--output", metavar = "filename", help = "Set the name of the movie file to write (required).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
@@ -90,45 +92,44 @@ def parse_command_line():
 #
 # =============================================================================
 #
-#                                     Main
+#                                   Pipeline
 #
 # =============================================================================
 #
 
 
-def measure_psd(frame_cache, instrument, channel_name, seg, rate, psd_fft_length, injection_filename = None, verbose = False):
-	#
-	# pipeline handler for PSD measurement
-	#
+#
+# pipeline handler for PSD measurement
+#
 
-	class PSDHandler(object):
-		def __init__(self, mainloop, pipeline, verbose = False):
-			self.mainloop = mainloop
-			self.pipeline = pipeline
-			self.verbose = verbose
 
-			bus = pipeline.get_bus()
-			bus.add_signal_watch()
-			bus.connect("message", self.on_message)
+class Handler(object):
+	def __init__(self, mainloop, pipeline, verbose = False):
+		self.mainloop = mainloop
+		self.pipeline = pipeline
+		self.verbose = verbose
 
-			self.psd = None
+		bus = pipeline.get_bus()
+		bus.add_signal_watch()
+		bus.connect("message", self.on_message)
 
-		def on_message(self, bus, message):
-			if message.type == gst.MESSAGE_EOS:
-				self.pipeline.set_state(gst.STATE_NULL)
-				self.mainloop.quit()
-			elif message.type == gst.MESSAGE_ERROR:
-				gerr, dbgmsg = message.parse_error()
-				print >>sys.stderr, "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
-				self.pipeline.set_state(gst.STATE_NULL)
-				self.mainloop.quit()
+	def on_message(self, bus, message):
+		if message.type == gst.MESSAGE_EOS:
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
+		elif message.type == gst.MESSAGE_ERROR:
+			gerr, dbgmsg = message.parse_error()
+			print >>sys.stderr, "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
 
-	#
-	# build pipeline
-	#
 
-	mainloop = gobject.MainLoop()
+#
+# build pipeline
+#
 
+
+def build_pipeline(frame_cache, instrument, channel_name, rate, psd_fft_length, average_length, median_samples, injection_filename = None, verbose = False):
 	pipeline = gst.Pipeline("psd")
 	head = pipeparts.mkframesrc(pipeline, instrument = instrument, location = frame_cache, channel_name = channel_name)
 	if verbose:
@@ -136,31 +137,25 @@ def measure_psd(frame_cache, instrument, channel_name, seg, rate, psd_fft_length
 	if injection_filename is not None:
 		head = pipeparts.mkinjections(pipeline, head, injection_filename)
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % rate)
-	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, average_samples = int(round(float(abs(seg)) / (psd_fft_length / 2) - 1)))
+	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, average_samples = int(round(average_length / (psd_fft_length / 2) - 1)), median_samples = median_samples)
 	pipeparts.mkfakesink(pipeline, head)
-	head = pipeparts.mkqueue(pipeline, head, pad_name = "mean-psd", max_size_buffers = 8)
+	head = pipeparts.mkqueue(pipeline, head, pad_name = "mean-psd", max_size_buffers = 4)
 
 	head = pipeparts.mkspectrumplot(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, head, "video/x-raw-rgb, width=768, height=320")
 	head = pipeparts.mkcolorspace(pipeline, head)
 	pipeparts.mkvideosink(pipeline, head)
 
-	handler = PSDHandler(mainloop, pipeline, verbose = verbose)
+	return pipeline
 
-	#
-	# process segment
-	#
 
-	pipeline.set_state(gst.STATE_PAUSED)
-	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, seg[0].ns(), gst.SEEK_TYPE_SET, seg[1].ns())
-	pipeline.set_state(gst.STATE_PLAYING)
-	mainloop.run()
-
-	#
-	# done
-	#
-
-	return handler.psd
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
 
 
 #
@@ -176,16 +171,32 @@ options, filenames = parse_command_line()
 #
 
 
-psd = measure_psd(
+mainloop = gobject.MainLoop()
+
+pipeline = build_pipeline(
 	options.frame_cache,
 	options.instrument,
 	options.channel_name,
-	options.seg,
 	8192,	# Hz
 	options.psd_fft_length,
+	options.average_length,
+	options.median_samples,
 	injection_filename = options.injections,
 	verbose = options.verbose
 )
+
+handler = Handler(mainloop, pipeline, verbose = options.verbose)
+
+
+#
+# process segment
+#
+
+
+pipeline.set_state(gst.STATE_PAUSED)
+pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, options.seg[0].ns(), gst.SEEK_TYPE_SET, options.seg[1].ns())
+pipeline.set_state(gst.STATE_PLAYING)
+mainloop.run()
 
 
 #
