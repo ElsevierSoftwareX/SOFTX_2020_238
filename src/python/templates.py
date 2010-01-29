@@ -167,7 +167,7 @@ def normalized_autocorrelation(fseries, revplan):
 
 def time_frequency_boundaries(
 	template_bank_filename, 
-	segment_samples_max = 2048,
+	segment_samples = 4096,
 	flow = 64, 
 	sample_rate_max = 2048,
 	padding = 0.9
@@ -187,14 +187,6 @@ def time_frequency_boundaries(
 	def ceil_pow_2( number ):
 		return 2**(numpy.ceil(numpy.log2( number )))
 
-	# We only allow sample rates that are powers of two.
-	#
-	# h(t) is sampled at 16384Hz, which sets the upper limit
-	# and advligo will likely not reach below 10Hz, which 
-	# sets the lower limit (32Hz = ceil_pow_2(2*10)Hz )
-	#
-	allowed_rates = [32,64,128,256,512,1024,2048,4096,8192,16384]
-
 	# Load template bank mass params
 	template_bank_table = (
 		lsctables.table.get_table(
@@ -205,72 +197,49 @@ def time_frequency_boundaries(
         mass1 = template_bank_table.get_column('mass1') 
         mass2 = template_bank_table.get_column('mass2') 
 
+	# We only allow sample rates that are powers of two.
+	#
+	# h(t) is sampled at 16384Hz, which sets the upper limit
+	# and advligo will likely not reach below 10Hz, which 
+	# sets the lower limit (32Hz = ceil_pow_2(2*10)Hz )
+	#
+	allowed_rates = [32,64,128,256,512,1024,2048,4096,8192,16384]
+
 	#
 	# Adjust the allowed_rates to fit with the template bank
 	#
 	ffinal_max = max(spawaveform.ffinal(m1,m2,'schwarz_isco') for m1,m2 in zip(mass1,mass2) )
 	ffinal_max = min(padding*allowed_rates[-1]/2,ffinal_max)
 
-	# FIXME: output sample_rate_max may be bigger than input 
-	sample_rate_max = min(ceil_pow_2( 2*(1./padding)* ffinal_max ),ceil_pow_2(sample_rate_max))
-	sample_rate_min = ceil_pow_2( 2*(1./padding)* flow )
-	
+	# Refine the list of allowed rates
+	while allowed_rates[-1] > min(2*ffinal_max/padding,sample_rate_max):
+		allowed_rates.pop(-1)
 
-	allowed_rates = allowed_rates[allowed_rates.index(sample_rate_min):allowed_rates.index(sample_rate_max)]  # excludes sample_rate_max
-	
+	sample_rate_min = ceil_pow_2( 2*(1./padding)* flow )
+	while allowed_rates[0] < sample_rate_min:
+		allowed_rates.pop(0)
+
 	#
 	# Split up templates by time
 	#
 
 	# FIXME: what happens if padding*sample_rate_min/2 == flow?
-	longest_chirp = max(spawaveform.chirptime(m1,m2,7,flow,sample_rate_max/2) for m1,m2 in zip(mass1,mass2)) 
-	time_partition = [ longest_chirp ]		
+	# Best to look at high rates first
+	allowed_rates.reverse()
+	time_freq_boundaries = [(sample_rate_max,0,(1./sample_rate_max)*segment_samples)]
+	accum_time = (1./sample_rate_max)*segment_samples
 	for rate in allowed_rates:
 		longest_chirp = max(spawaveform.chirptime(m1,m2,7,padding*rate/2,sample_rate_max/2) for m1,m2 in zip(mass1,mass2)) 
-		time_partition.append( longest_chirp )
+		print "longest chirp",longest_chirp
+		print "accum time",accum_time
+		if longest_chirp < accum_time:
+			allowed_rates.remove(rate)
+			continue
+		while accum_time <= longest_chirp:
+			segment_num = len(time_freq_boundaries)
+			time_freq_boundaries.append((rate,accum_time,accum_time+(1./rate)*segment_samples))
+			accum_time += (1./rate)*segment_samples
 
-	time_partition.append(0)
-	allowed_rates.append(sample_rate_max)
+	print "Time freq boundaries: ",time_freq_boundaries
 
-	time_partition.reverse()
-	allowed_rates.reverse()
-
-	#
-	# SVD needs more sample points than templates.
-	# Reject some sampling_rates if the templates don't
-	# spend enough time there
-	# e.g.
-	# allowed_rates = [64,128,256,512,1024,2048]
-	# time_partition = [100,25,10,4,1,0.01,0.001]
-
-
-	num_templates = len(mass1)
-	# FIXME: there are undoubtedly some dangerous corner cases here
-	if not 2*num_templates < segment_samples_max:
-		# FIXME this is bad
-		return (None,None,None)
-
-	for rate,begin,end in zip(allowed_rates,time_partition[:-1],time_partition[1:]):
-		segment_samples = (end-begin)*rate
-		if segment_samples < 2*num_templates:
-			allowed_rates.remove(rate/2) #FIXME: danger at right edge of list
-			time_partition.remove(end)
-
-	# Check that no time segment is excessively long.
-	# If it is, chop it up into the minimal number of 
-	# equal-sized bits that satisfy the smallness
-	# requirement
-	for rate,begin,end in zip(allowed_rates,time_partition[:-1],time_partition[1:]):
-		segment_samples = (end-begin)*rate
-		if segment_samples > segment_samples_max:
-			num_segments = numpy.ceil(float(segment_samples)/segment_samples_max)
-			increment = float(end-begin)/num_segments
-			start_index = time_partition.index(begin) 
-			index = 1
-			while index < num_segments:
-				allowed_rates.insert(start_index,rate)
-				time_partition.insert(start_index+index,begin+index*increment)
-				index += 1
-
-				
-	return zip(allowed_rates,time_partition[:-1],time_partition[1:])
+	return time_freq_boundaries
