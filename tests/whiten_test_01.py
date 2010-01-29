@@ -11,8 +11,6 @@ import numpy
 import sys
 from gstlal import pipeparts
 from gstlal.pipeparts import gst
-from gstlal.elements.check_timestamps import mkchecktimestamps
-from gstlal.elements.nofakedisconts import mknofakedisconts
 import test_common
 
 
@@ -41,7 +39,7 @@ def whiten_test_01a(pipeline):
 
 	def delta_f_changed(elem, delta_f, ignored):
 		n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
-		elem.set_property("psd", numpy.zeros((n,), dtype="double") + 2.0 * delta_f)
+		elem.set_property("mean-psd", numpy.zeros((n,), dtype="double") + 2.0 * delta_f)
 
 	#
 	# try changing these.  test should still work!
@@ -61,8 +59,8 @@ def whiten_test_01a(pipeline):
 	head = tee = pipeparts.mktee(pipeline, head)
 	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 1, zero_pad = zero_pad, fft_length = fft_length)
 	head.connect_after("delta-f-changed", delta_f_changed, None)
-	head = mknofakedisconts(pipeline, head)
-	head = mkchecktimestamps(pipeline, head)
+	head = pipeparts.mknofakedisconts(pipeline, head)
+	head = pipeparts.mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01a_out.dump")
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee, max_size_time = int(fft_length * gst.SECOND)), "whiten_test_01a_in.dump")
 
@@ -95,7 +93,7 @@ def whiten_test_01b(pipeline):
 	#
 
 	head = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration)
-	head = mkchecktimestamps(pipeline, pipeparts.mkwhiten(pipeline, head, psd_mode = 0, zero_pad = zero_pad, fft_length = fft_length))
+	head = pipeparts.mkchecktimestamps(pipeline, pipeparts.mkwhiten(pipeline, head, psd_mode = 0, zero_pad = zero_pad, fft_length = fft_length))
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01b_out.dump")
 
 	#
