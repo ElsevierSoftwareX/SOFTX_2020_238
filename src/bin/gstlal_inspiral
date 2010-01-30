@@ -203,7 +203,7 @@ class Bank(object):
 		self.bank_fragments = [Bank.BankFragment(rate,begin,end) for rate,begin,end in time_freq_boundaries]
 		for i, bank_fragment in enumerate(self.bank_fragments):
 			if verbose:
-				print >>sys.stderr, "constructing template decomposition %d of %d:  %g s ... %g s" % (i + 1, len(bank_fragments), -bank_fragment.end, -bank_fragment.start)
+				print >>sys.stderr, "constructing template decomposition %d of %d:  %g s ... %g s" % (i + 1, len(self.bank_fragments), -bank_fragment.end, -bank_fragment.start)
 			bank_fragment.set_template_bank(template_bank[i], tolerance, verbose = verbose)
 
 		self.gate_threshold = sum_of_squares_threshold_from_fap(gate_fap, numpy.array([weight**2 for bank_fragment in self.bank_fragments for weight in bank_fragment.sum_of_squares_weights], dtype = "double"))
