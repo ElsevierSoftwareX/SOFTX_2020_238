@@ -239,6 +239,13 @@ def time_frequency_boundaries(
 			time_freq_boundaries.append((rate,accum_time,accum_time+(1./rate)*segment_samples))
 			accum_time += (1./rate)*segment_samples
 
+	longest_chirp = max(spawaveform.chirptime(m1,m2,7,flow,sample_rate_max/2) for m1,m2 in zip(mass1,mass2))
+	rate = allowed_rates[-1]
+	while accum_time <= longest_chirp:
+		segment_num = len(time_freq_boundaries)
+		time_freq_boundaries.append((rate,accum_time,accum_time+(1./rate)*segment_samples))
+		accum_time += (1./rate)*segment_samples
+
 	if verbose:
 		print>> sys.stderr, "Time freq boundaries: "
 		print>> sys.stderr, time_freq_boundaries
