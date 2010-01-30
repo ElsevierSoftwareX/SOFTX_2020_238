@@ -231,8 +231,6 @@ def time_frequency_boundaries(
 	accum_time = (1./sample_rate_max)*segment_samples
 	for rate in allowed_rates:
 		longest_chirp = max(spawaveform.chirptime(m1,m2,7,padding*rate/2,sample_rate_max/2) for m1,m2 in zip(mass1,mass2))
-		print "longest chirp",longest_chirp
-		print "accum time",accum_time
 		if longest_chirp < accum_time:
 			allowed_rates.remove(rate)
 			continue
