@@ -170,7 +170,7 @@ def time_frequency_boundaries(
 	segment_samples = 4096,
 	flow = 64,
 	sample_rate_max = 2048,
-	padding = 0.9
+	padding = 0.9,
 	verbose = False
 ):
 	"""
