@@ -73,8 +73,6 @@ GType gstlal_psdmode_get_type(void);
 
 typedef struct {
 	GstBaseTransformClass parent_class;
-
-	void (*delta_f_changed)(GstElement *, gdouble, void *);
 } GSTLALWhitenClass;
 
 

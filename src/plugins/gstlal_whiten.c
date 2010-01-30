@@ -626,20 +626,11 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
  */
 
 
-enum gstlal_whiten_signal {
-	SIGNAL_DELTA_F_CHANGED,
-	NUM_SIGNALS
-};
-
-
-static guint signals[NUM_SIGNALS] = {0, };
-
-
-static void delta_f_changed(GstElement *element, gdouble delta_f, void *data)
+static void delta_f_changed(GObject *object, GParamSpec *pspec, gpointer user_data)
 {
 	/* FIXME:  what if this fails?  should that be indicated somehow?
 	 * return non-void? */
-	make_window_and_fft_plans(GSTLAL_WHITEN(element));
+	make_window_and_fft_plans(GSTLAL_WHITEN(object));
 }
 
 
@@ -816,15 +807,14 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	 * and workspaces
 	 */
 
-	if(success && (rate != element->sample_rate))
+	if(success && (rate != element->sample_rate)) {
 		element->sample_rate = rate;
-	if(success) {
+
 		/*
-		 * let everybody know the PSD resolution and/or Nyquist has
-		 * changed
+		 * let everybody know the PSD Nyquist has changed
 		 */
 
-		g_signal_emit(G_OBJECT(trans), signals[SIGNAL_DELTA_F_CHANGED], 0, 1.0 / element->fft_length_seconds, NULL);
+		g_object_notify(G_OBJECT(trans), "f-nyquist");
 	}
 
 	/*
@@ -1247,7 +1237,6 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 
 	element_class->request_new_pad = GST_DEBUG_FUNCPTR(request_new_pad);
 	element_class->release_pad = GST_DEBUG_FUNCPTR(release_pad);
-	klass->delta_f_changed = GST_DEBUG_FUNCPTR(delta_f_changed);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -1344,23 +1333,6 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
-
-
-	signals[SIGNAL_DELTA_F_CHANGED] = g_signal_new(
-		"delta-f-changed",
-		G_TYPE_FROM_CLASS(klass),
-		G_SIGNAL_RUN_FIRST,
-		G_STRUCT_OFFSET(
-			GSTLALWhitenClass,
-			delta_f_changed
-		),
-		NULL,
-		NULL,
-		g_cclosure_marshal_VOID__DOUBLE,
-		G_TYPE_NONE,
-		1,
-		G_TYPE_DOUBLE
-	);
 }
 
 
@@ -1371,6 +1343,8 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 
 static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *klass)
 {
+	g_signal_connect(G_OBJECT(element), "notify::f-nyquist", G_CALLBACK(delta_f_changed), NULL);
+
 	element->mean_psd_pad = NULL;
 	element->adapter = gst_adapter_new();
 	element->next_is_discontinuity = FALSE;

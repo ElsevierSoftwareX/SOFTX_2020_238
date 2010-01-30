@@ -311,14 +311,15 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 		# into the whitener.
 		#
 
-		def delta_f_changed(elem, delta_f, psd):
-			# get number of frequency bins
+		def f_nyquist_changed(elem, pspec, psd):
+			# get frequency resolution and number of bins
+			delta_f = elem.get_property("delta-f")
 			n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
 			# interpolate and install PSD
 			psd = cbc_template_fir.interpolate_psd(psd, delta_f)
 			elem.set_property("mean-psd", psd.data[:n])
 
-		head.connect_after("delta-f-changed", delta_f_changed, psd)
+		head.connect_after("notify::f-nyquist", f_nyquist_changed, psd)
 	else:
 		#
 		# use running average PSD

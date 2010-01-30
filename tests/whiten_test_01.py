@@ -37,7 +37,8 @@ def whiten_test_01a(pipeline):
 	# frequency changes
 	#
 
-	def delta_f_changed(elem, delta_f, ignored):
+	def f_nyquist_changed(elem, pspec, ignored):
+		delta_f = elem.get_property("delta-f")
 		n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
 		elem.set_property("mean-psd", numpy.zeros((n,), dtype="double") + 2.0 * delta_f)
 
@@ -58,7 +59,7 @@ def whiten_test_01a(pipeline):
 	head = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration)
 	head = tee = pipeparts.mktee(pipeline, head)
 	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 1, zero_pad = zero_pad, fft_length = fft_length)
-	head.connect_after("delta-f-changed", delta_f_changed, None)
+	head.connect_after("notify::f-nyquist", f_nyquist_changed, None)
 	head = pipeparts.mknofakedisconts(pipeline, head)
 	head = pipeparts.mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01a_out.dump")
