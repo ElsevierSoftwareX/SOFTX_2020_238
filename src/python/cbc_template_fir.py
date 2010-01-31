@@ -135,11 +135,14 @@ def generate_template(template_bank_row, f_low, sample_rate, duration, order = 7
 	)
 
 
-def generate_templates(template_table, psd, f_low, sample_rate, duration, autocorrelation_length = None, verbose = False):
-	length = int(round(duration * sample_rate))
+def generate_templates(template_table, psd, f_low, time_freq_boundaries, autocorrelation_length = None, verbose = False):
+	sample_rate_max = max(rate for rate,begin,end in time_freq_boundaries)
+	duration = max(end for rate,begin,end in time_freq_boundaries)
+	length_max = int(round(duration * sample_rate_max))
+	length = int(round(sum(rate*(end-begin) for rate,begin,end in time_freq_boundaries)))
 
-	working_length = int(round(2**math.ceil(math.log(length + round(32.0 * sample_rate), 2))))	# add 32 seconds for PSD ringing, round up to power of 2 count of samples
-	working_duration = float(working_length) / sample_rate
+	working_length = int(round(2**math.ceil(math.log(length_max + round(32.0 * sample_rate_max), 2))))	# add 32 seconds for PSD ringing, round up to power of 2 count of samples
+	working_duration = float(working_length) / sample_rate_max
 
 	if psd is not None:
 		psd = interpolate_psd(psd, 1.0 / working_duration)
@@ -149,7 +152,7 @@ def generate_templates(template_table, psd, f_low, sample_rate, duration, autoco
 		data = numpy.zeros((working_length,), dtype = "cdouble")
 	)
 
-	template_bank = numpy.zeros((2 * len(template_table), length), dtype = "double")
+	# Check parity of autocorrelation length
 	if autocorrelation_length is not None:
 		if not (autocorrelation_length % 2):
 			raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
@@ -157,6 +160,10 @@ def generate_templates(template_table, psd, f_low, sample_rate, duration, autoco
 	else:
 		autocorrelation_bank = None
 
+	# Have one template bank for each bank_fragment
+	template_bank = [numpy.zeros((2 * len(template_table), int(round(rate*(end-begin)))), dtype = "double") for rate,begin,end in time_freq_boundaries]
+
+	# Generate each template, downsampling as we go to save memory
 	for i, row in enumerate(template_table):
 		if verbose:
 			print >>sys.stderr, "generating template %d/%d:  m1 = %g, m2 = %g" % (i + 1, len(template_table), row.mass1, row.mass2)
@@ -165,7 +172,7 @@ def generate_templates(template_table, psd, f_low, sample_rate, duration, autoco
 		# generate "cosine" component of frequency-domain template
 		#
 
-		fseries = generate_template(row, f_low, sample_rate, working_duration)
+		fseries = generate_template(row, f_low, sample_rate_max, working_duration)
 
 		#
 		# whiten and add quadrature phase ("sine" component)
@@ -193,7 +200,7 @@ def generate_templates(template_table, psd, f_low, sample_rate, duration, autoco
 		# extract the portion to be used for filtering
 		#
 
-		data = tseries.data[-length:]
+		data = tseries.data[-length_max:]
 
 		#
 		# normalize so that inner product of template with itself
@@ -207,8 +214,30 @@ def generate_templates(template_table, psd, f_low, sample_rate, duration, autoco
 		# rows of template bank
 		#
 
-		template_bank[(2 * i + 0), :] = data.real
-		template_bank[(2 * i + 1), :] = data.imag
+		for frag_num,frag_params in enumerate(time_freq_boundaries):
+			# start and end times are measured *backwards* from
+			# template end;  subtract from n to convert to
+			# start and end index;  end:start is the slice to
+			# extract (argh!  Chad!)
+			rate = frag_params[0]
+			begin = frag_params[1]
+			end = frag_params[2]
+
+			begin_index = length_max - int(round(begin * sample_rate_max))
+			end_index = length_max - int(round(end * sample_rate_max))
+			stride = int(round(sample_rate_max / rate))
+
+			# extract every stride-th sample.  we multiply by
+			# \sqrt{stride} to maintain inner product
+			# normalization so that the templates still appear
+			# to be unit vectors at the reduced sample rate.
+			# note that the svd returns unit basis vectors
+			# regardless so this factor has no effect on the
+			# normalization of the basis vectors used for
+			# filtering but it ensures that the chifacs values
+			# have the correct relative normalization.
+			template_bank[frag_num][(2*i+0),:] = data.real[end_index:begin_index:stride] * math.sqrt(stride)
+			template_bank[frag_num][(2*i+1),:] = data.imag[end_index:begin_index:stride] * math.sqrt(stride)
 
 	return template_bank, autocorrelation_bank
 

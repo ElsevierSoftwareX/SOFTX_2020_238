@@ -190,40 +190,21 @@ class Bank(object):
 				print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
 				print >>sys.stderr, "\tsum-of-squares expectation value is %g" % self.chifacs.mean()
 
-	def __init__(self, template_bank_filename, psd, bank_fragments, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
+	def __init__(self, template_bank_filename, psd, time_freq_boundaries, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
 		self.template_bank_filename = template_bank_filename	# FIXME:  remove when not needed by trigger generator element
-		self.bank_fragments = bank_fragments
-		self.filter_length = max(fragment.end for fragment in bank_fragments)
+		self.filter_length = max(end for rate,begin,end in time_freq_boundaries)
 		self.snr_threshold = snr_threshold
 		self.logname = logname
 
-		sample_rate = max(bank_fragment.rate for bank_fragment in bank_fragments)
+		template_bank_table = lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName)
+		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(template_bank_table, psd, flow, time_freq_boundaries, autocorrelation_length = autocorrelation_length, verbose = verbose)
 
-		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName), psd, flow, sample_rate, self.filter_length, autocorrelation_length = autocorrelation_length, verbose = verbose)
-
-		n = template_bank.shape[1]	# number of samples in template
+		# Assign template banks to fragments
+		self.bank_fragments = [Bank.BankFragment(rate,begin,end) for rate,begin,end in time_freq_boundaries]
 		for i, bank_fragment in enumerate(self.bank_fragments):
 			if verbose:
-				print >>sys.stderr, "constructing template decomposition %d of %d:  %g s ... %g s" % (i + 1, len(bank_fragments), -bank_fragment.end, -bank_fragment.start)
-
-			# start and end times are measured *backwards* from
-			# template end;  subtract from n to convert to
-			# start and end index;  end:start is the slice to
-			# extract (argh!  Chad!)
-			start = n - int(round(bank_fragment.start * sample_rate))
-			end = n - int(round(bank_fragment.end * sample_rate))
-			stride = int(round(sample_rate / bank_fragment.rate))
-
-			# extract every stride-th sample.  we multiply by
-			# \sqrt{stride} to maintain inner product
-			# normalization so that the templates still appear
-			# to be unit vectors at the reduced sample rate.
-			# note that the svd returns unit basis vectors
-			# regardless so this factor has no effect on the
-			# normalization of the basis vectors used for
-			# filtering but it ensures that the chifacs values
-			# have the correct relative normalization.
-			bank_fragment.set_template_bank(template_bank[:, end:start:stride] * math.sqrt(stride), tolerance, verbose = verbose)
+				print >>sys.stderr, "constructing template decomposition %d of %d:  %g s ... %g s" % (i + 1, len(self.bank_fragments), -bank_fragment.end, -bank_fragment.start)
+			bank_fragment.set_template_bank(template_bank[i], tolerance, verbose = verbose)
 
 		self.gate_threshold = sum_of_squares_threshold_from_fap(gate_fap, numpy.array([weight**2 for bank_fragment in self.bank_fragments for weight in bank_fragment.sum_of_squares_weights], dtype = "double"))
 		if verbose:
@@ -807,7 +788,7 @@ banks = [
 	Bank(
 		template_bank_filename,
 		psd,
-		[Bank.BankFragment(rate, begin, end) for rate, begin, end in templates.time_frequency_boundaries(template_bank_filename, flow = options.flow)],
+		templates.time_frequency_boundaries(template_bank_filename, flow = options.flow,verbose=options.verbose),
 		gate_fap = options.ortho_gate_fap,
 		snr_threshold = options.snr_threshold,
 		tolerance = options.svd_tolerance,
