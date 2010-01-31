@@ -442,7 +442,12 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, control_snksrc
 	for bank_fragment in bank.bank_fragments:
 		branch_snr = mkLLOIDbranch(
 			pipeline,
-			pipeparts.mkqueue(pipeline, hoftdict[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND),
+			# FIXME:  the size isn't ideal:  the correct value
+			# depends on how much data is accumulated in the
+			# firbank element, and the value here is only
+			# approximate and not tied to the fir bank
+			# parameters so might not work if those change
+			pipeparts.mkqueue(pipeline, hoftdict[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = 4 * int(math.ceil(bank.filter_length)) * gst.SECOND),
 			bank,
 			bank_fragment,
 			control_snksrc,
