@@ -31,7 +31,7 @@ import math
 import numpy
 from optparse import OptionParser
 import sys
-
+import os.path
 
 import gobject
 import pygst
@@ -631,6 +631,10 @@ def parse_command_line():
 		required_options += ["frame_cache"]
 	elif options.frame_cache is not None:
 		raise ValueError, "cannot set --frame-cache with --fake-data"
+
+	# FIXME: should also check for read permissions
+	if not os.path.exists(options.template_bank):
+		raise SystemExit, "Template bank file %s does not exist." % options.template_bank
 
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
