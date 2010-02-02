@@ -633,8 +633,9 @@ def parse_command_line():
 		raise ValueError, "cannot set --frame-cache with --fake-data"
 
 	# FIXME: should also check for read permissions
-	if not os.path.exists(options.template_bank):
-		raise SystemExit, "Template bank file %s does not exist." % options.template_bank
+	for bankname in options.template_bank:
+		if not os.path.exists(bankname):
+			raise SystemExit, "Template bank file %s does not exist." % bankname
 
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
