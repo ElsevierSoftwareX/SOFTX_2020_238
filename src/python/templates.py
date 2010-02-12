@@ -167,13 +167,9 @@ def normalized_autocorrelation(fseries, revplan):
 
 def time_frequency_boundaries(
 	template_bank_filename,
-	segment_samples = { 16384:2048, 8192:2048, 4096:2048,
-			    2048:2048,  1024:2048, 512:2048,
-			    256:4096,  128:8192,  64:8192,
-			    32:8192},
 	flow = 64,
-	sample_rate_max = 2048,
-	padding = 0.9,
+	fhigh = 900,
+	padding = 1.1,
 	verbose = False
 ):
 	"""
@@ -191,8 +187,43 @@ def time_frequency_boundaries(
 	sampled at 1024Hz will be exactly 2s in duration.
 	"""
 	# Round a number up to the nearest power of 2
+	# FIXME: change to integer arithmetic
 	def ceil_pow_2( number ):
 		return 2**(numpy.ceil(numpy.log2( number )))
+
+	#
+	#
+	# Determine a set of sampling rates to use.
+	#
+	#
+
+	# We only allow sample rates that are powers of two.
+	# h(t) is sampled at 16384Hz, which sets the upper limit
+	# and advligo will likely not reach below 10Hz, which
+	# sets the lower limit (32Hz = ceil_pow_2(2*10)Hz )
+	allowed_rates = [16384,8192,4096,2048,1024,512,128,64,32]
+
+	# How many sample points should be included in a chunk
+	# for a given sample rate, sample_rate:segment_samples
+	segment_samples = { 16384:2048, 8192:2048, 4096:2048, 2048:2048,
+			    1024:2048, 512:2048, 256:4096,  128:8192,
+			    64:8192, 32:8192}
+
+	# Remove too-small and too-big sample rates.
+	# Independent of how we interpret the template bank (e.g.
+	# SPA vs IMRSA) since flow, fhigh are passed as args
+	sample_rate_min = ceil_pow_2( 2 * padding * flow )
+	sample_rate_max = ceil_pow_2( 2 * padding * fhigh )
+	while allowed_rates[-1] < sample_rate_min:
+		allowed_rates.pop(-1)
+	while allowed_rates[0] > sample_rate_max:
+		allowed_rates.pop(0)
+
+	#
+	#
+	# Find times when these sampling rates are OK to use
+	#
+	#
 
 	# Load template bank mass params
 	template_bank_table = (
@@ -204,53 +235,23 @@ def time_frequency_boundaries(
 	mass1 = template_bank_table.get_column('mass1')
 	mass2 = template_bank_table.get_column('mass2')
 
-	# We only allow sample rates that are powers of two.
-	#
-	# h(t) is sampled at 16384Hz, which sets the upper limit
-	# and advligo will likely not reach below 10Hz, which
-	# sets the lower limit (32Hz = ceil_pow_2(2*10)Hz )
-	#
-	allowed_rates = [32,64,128,256,512,1024,2048,4096,8192,16384]
-
-	#
-	# Adjust the allowed_rates to fit with the template bank
-	#
-	ffinal_max = max(spawaveform.ffinal(m1,m2,'schwarz_isco') for m1,m2 in zip(mass1,mass2) )
-	ffinal_max = min(padding*allowed_rates[-1]/2,ffinal_max)
-
-	# Refine the list of allowed rates
-	while allowed_rates[-1] > min(2*ffinal_max/padding,sample_rate_max):
-		allowed_rates.pop(-1)
-
-	sample_rate_min = ceil_pow_2( 2*(1./padding)* flow )
-	while allowed_rates[0] < sample_rate_min:
-		allowed_rates.pop(0)
-
-	#
-	# Split up templates by time
-	#
-
-	# FIXME: what happens if padding*sample_rate_min/2 == flow?
-	# Best to look at high rates first
-	allowed_rates.reverse()
-	time_freq_boundaries = [(sample_rate_max,0,(1./sample_rate_max)*segment_samples[sample_rate_max])]
-	accum_time = (1./sample_rate_max)*segment_samples[sample_rate_max]
+	# Break up templates in time and frequency
+	time_freq_boundaries = []
+	accum_time = 0
 	for rate in allowed_rates:
-		longest_chirp = max(spawaveform.chirptime(m1,m2,7,padding*rate/2,sample_rate_max/2) for m1,m2 in zip(mass1,mass2))
+		if rate > sample_rate_min:
+			this_flow = float(rate)/(2*padding)
+		else:
+			this_flow = flow
+
+		longest_chirp = max(spawaveform.chirptime(m1,m2,7,this_flow,fhigh) for m1,m2 in zip(mass1,mass2))
 		if longest_chirp < accum_time:
 			allowed_rates.remove(rate)
 			continue
+
 		while accum_time <= longest_chirp:
-			segment_num = len(time_freq_boundaries)
 			time_freq_boundaries.append((rate,accum_time,accum_time+(1./rate)*segment_samples[rate]))
 			accum_time += (1./rate)*segment_samples[rate]
-
-	longest_chirp = max(spawaveform.chirptime(m1,m2,7,flow,sample_rate_max/2) for m1,m2 in zip(mass1,mass2))
-	rate = allowed_rates[-1]
-	while accum_time <= longest_chirp:
-		segment_num = len(time_freq_boundaries)
-		time_freq_boundaries.append((rate,accum_time,accum_time+(1./rate)*segment_samples[rate]))
-		accum_time += (1./rate)*segment_samples[rate]
 
 	if verbose:
 		print>> sys.stderr, "Time freq boundaries: "
