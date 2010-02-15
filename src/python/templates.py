@@ -238,17 +238,25 @@ def time_frequency_boundaries(
 	# Break up templates in time and frequency
 	time_freq_boundaries = []
 	accum_time = 0
+	# For each allowed rate, determine the greatest amount of time any
+	# template in the bank spends above rate/(4*padding) -- a safe estimate
+	# for the rate at which the next lowest sampling rate would work.
 	for rate in allowed_rates:
+		# flow is probably > rate/(4*padding)
 		if rate > sample_rate_min:
-			this_flow = float(rate)/(2*padding)
+			this_flow = float(rate)/(4*padding)
 		else:
 			this_flow = flow
 
 		longest_chirp = max(spawaveform.chirptime(m1,m2,7,this_flow,fhigh) for m1,m2 in zip(mass1,mass2))
+		# Do the previously-determined segments already cover this band?
+		# If so, omit this sampling rate and move on to the next one.
 		if longest_chirp < accum_time:
 			allowed_rates.remove(rate)
 			continue
 
+		# Add time segments at the current sampling rate until we have
+		# completely reached past the longest chirp
 		while accum_time <= longest_chirp:
 			time_freq_boundaries.append((rate,accum_time,accum_time+(1./rate)*segment_samples[rate]))
 			accum_time += (1./rate)*segment_samples[rate]
