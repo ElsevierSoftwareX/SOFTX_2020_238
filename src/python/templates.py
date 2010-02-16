@@ -25,7 +25,6 @@
 
 
 import numpy
-import copy
 
 import sys
 from pylal import datatypes as laltypes
@@ -204,11 +203,11 @@ def time_frequency_boundaries(
 	# sets the lower limit (32Hz = ceil_pow_2(2*10)Hz )
 	allowed_rates = [16384,8192,4096,2048,1024,512,256,128,64,32]
 
-	# How many sample points should be included in a chunk
-	# for a given sample rate, sample_rate:segment_samples
-	segment_samples = { 16384:2048, 8192:2048, 4096:2048, 2048:2048,
-			    1024:2048, 512:2048, 256:2048,  128:2048,
-			    64:8192, 32:8192}
+	# How many sample points should be included in a chunk?
+	# We need to balance the need to have few chunks with the
+	# need to have small chunks.
+	segment_samples_max = 8192
+	segment_samples_min = 2048
 
 	# Remove too-small and too-big sample rates.
 	# Independent of how we interpret the template bank (e.g.
@@ -236,34 +235,41 @@ def time_frequency_boundaries(
 	mass1 = template_bank_table.get_column('mass1')
 	mass2 = template_bank_table.get_column('mass2')
 
-	# Break up templates in time and frequency
-	time_freq_boundaries = []
-	accum_time = 0
+	# Break up templates in time and frequency.
+	#
 	# For each allowed sampling rate with associated Nyquist frequency fN,
 	# determine the greatest amount of time any template in the bank spends
 	# between fN/2 and fhigh.
 	# fN/2 is given by sampling_rate/4 and is the next lowest Nyquist frequency
 	# We pad this so that we only start a new lower frequency sampling rate
 	# when all the waveforms are a fraction (padding-1) below the fN/2.
-	for rate in copy.copy(allowed_rates):
-		# flow is probably > sample_rate_min/(4*padding)
-		if rate > sample_rate_min:
-			this_flow = float(rate)/(4*padding)
-		else:
-			this_flow = flow
-
+	time_freq_boundaries = []
+	accum_time = 0
+	for rate in allowed_rates:
+		# Compute chirp times for all templates
+		this_flow = max( float(rate)/(4*padding), flow )
 		longest_chirp = max(spawaveform.chirptime(m1,m2,7,this_flow,fhigh) for m1,m2 in zip(mass1,mass2))
-		# Do the previously-determined segments already cover this band?
-		# If so, omit this sampling rate and move on to the next one.
-		if longest_chirp < accum_time:
-			allowed_rates.remove(rate)
-			continue
 
-		# Add time segments at the current sampling rate until we have
-		# completely reached past the longest chirp
-		while accum_time <= longest_chirp:
-			time_freq_boundaries.append((rate,accum_time,accum_time+(1./rate)*segment_samples[rate]))
-			accum_time += (1./rate)*segment_samples[rate]
+		# Do the previously-determined segments already cover this band?
+		# If so, skip this sampling rate and move on to the next lower one.
+		if longest_chirp > accum_time:
+			# How many small/large blocks are needed to cover this band?
+			number_large_blocks = numpy.floor( (longest_chirp - accum_time)/segment_samples_max )
+			number_small_blocks = (numpy.ceil( (longest_chirp - accum_time)/segment_samples_min ) -
+					       number_large_blocks * segment_samples_max / segment_samples_min )
+
+			# Add small blocks first, since the templates change more rapidly
+			# here and therefore there are more components in the SVD.
+			if number_small_blocks > 0:
+				time_freq_boundaries.append((rate,
+							     accum_time,
+							     accum_time+float(number_small_blocks*segment_samples_min)/rate))
+				accum_time += (1./rate)*number_small_blocks*segment_samples_min
+
+			# Now add the big blocks
+			while accum_time <= longest_chirp:
+				time_freq_boundaries.append((rate,accum_time,accum_time+(1./rate)*segment_samples_max))
+				accum_time += (1./rate)*segment_samples_max
 
 	if verbose:
 		print>> sys.stderr, "Time freq boundaries: "
