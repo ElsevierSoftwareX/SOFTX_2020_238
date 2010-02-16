@@ -25,6 +25,7 @@
 
 
 import numpy
+import copy
 
 import sys
 from pylal import datatypes as laltypes
@@ -238,10 +239,13 @@ def time_frequency_boundaries(
 	# Break up templates in time and frequency
 	time_freq_boundaries = []
 	accum_time = 0
-	# For each allowed rate, determine the greatest amount of time any
-	# template in the bank spends above rate/(4*padding) -- a safe estimate
-	# for the frequency at which the next lowest sampling rate would work.
-	for rate in allowed_rates[:]:
+	# For each allowed sampling rate with associated Nyquist frequency fN,
+	# determine the greatest amount of time any template in the bank spends
+	# between fN/2 and fhigh.
+	# fN/2 is given by sampling_rate/4 and is the next lowest Nyquist frequency
+	# We pad this so that we only start a new lower frequency sampling rate
+	# when all the waveforms are a fraction (padding-1) below the fN/2.
+	for rate in copy.copy(allowed_rates):
 		# flow is probably > sample_rate_min/(4*padding)
 		if rate > sample_rate_min:
 			this_flow = float(rate)/(4*padding)
