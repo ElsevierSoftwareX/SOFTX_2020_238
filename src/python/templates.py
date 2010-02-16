@@ -167,7 +167,7 @@ def normalized_autocorrelation(fseries, revplan):
 
 def time_frequency_boundaries(
 	template_bank_filename,
-	flow = 64,
+	flow = 40,
 	fhigh = 900,
 	padding = 1.1,
 	verbose = False
@@ -201,12 +201,12 @@ def time_frequency_boundaries(
 	# h(t) is sampled at 16384Hz, which sets the upper limit
 	# and advligo will likely not reach below 10Hz, which
 	# sets the lower limit (32Hz = ceil_pow_2(2*10)Hz )
-	allowed_rates = [16384,8192,4096,2048,1024,512,128,64,32]
+	allowed_rates = [16384,8192,4096,2048,1024,512,256,128,64,32]
 
 	# How many sample points should be included in a chunk
 	# for a given sample rate, sample_rate:segment_samples
 	segment_samples = { 16384:2048, 8192:2048, 4096:2048, 2048:2048,
-			    1024:2048, 512:2048, 256:4096,  128:8192,
+			    1024:2048, 512:2048, 256:2048,  128:2048,
 			    64:8192, 32:8192}
 
 	# Remove too-small and too-big sample rates.
@@ -240,9 +240,9 @@ def time_frequency_boundaries(
 	accum_time = 0
 	# For each allowed rate, determine the greatest amount of time any
 	# template in the bank spends above rate/(4*padding) -- a safe estimate
-	# for the rate at which the next lowest sampling rate would work.
-	for rate in allowed_rates:
-		# flow is probably > rate/(4*padding)
+	# for the frequency at which the next lowest sampling rate would work.
+	for rate in allowed_rates[:]:
+		# flow is probably > sample_rate_min/(4*padding)
 		if rate > sample_rate_min:
 			this_flow = float(rate)/(4*padding)
 		else:
