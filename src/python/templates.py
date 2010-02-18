@@ -245,7 +245,7 @@ def time_frequency_boundaries(
 						  - number_large_blocks*segment_samples_max/segment_samples_min)
 
 			# Add small blocks first, since the templates change more rapidly
-			# near the end of the tepmlate and therefore have more significant
+			# near the end of the template and therefore have more significant
 			# components in the SVD.
 			exponent = 0
 			while number_small_blocks > 0:
