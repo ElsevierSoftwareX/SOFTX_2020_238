@@ -330,11 +330,12 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 	# FIXME:  re-measure these;  we've changed the quality of the
 	# resampler since these were measured.
 	correction = {
-		128: 1.03 / 0.93,
-		256: 1.03 / 0.93,
-		512: 1.03 / 0.93,
-		1024: 1.03 / 1.03,
-		2048: 1.03 / 1.03
+		64: 1 / 0.961,
+		128: 1 / 0.961,
+		256: 1 / 0.962,
+		512: 1 / 0.962,
+		1024: 1 / 0.962,
+		2048: 1 / 0.999
 	}
 
 	head = {source_rate: pipeparts.mktee(pipeline, head)}
