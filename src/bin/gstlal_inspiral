@@ -68,6 +68,26 @@ from gstlal import templates
 # =============================================================================
 #
 
+#
+# Read Approximant
+#
+
+def read_approximant(xmlfile):
+        xmldoc=utils.load_filename(xmlfile, gz = (xmlfile or "stdin").endswith(".gz"))
+        approximant=ligolw_process.get_process_params(xmldoc, "tmpltbank", "--approximant")
+        #approximant=approximant[0].lstrip("u") #FIXME:Should not need to remove u, where is it coming from?
+        approximant=approximant[0]
+        print approximant
+
+        supported_approximants=[u'FindChirpSP', u'IMRPhenomB']
+        print supported_approximants
+        if approximant not in supported_approximants:
+                print approximant
+                raise ValueError, "unsupported approximant"
+        else:
+                pass
+        return approximant
+
 
 #
 # sum-of-squares false alarm probability
@@ -197,7 +217,7 @@ class Bank(object):
 		self.logname = logname
 
 		template_bank_table = lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName)
-		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(template_bank_table, psd, flow, time_freq_boundaries, autocorrelation_length = autocorrelation_length, verbose = verbose)
+		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(template_bank_table, read_approximant(template_bank_filename), psd, flow, time_freq_boundaries, autocorrelation_length = autocorrelation_length, verbose = verbose)
 
 		# Assign template banks to fragments
 		self.bank_fragments = [Bank.BankFragment(rate,begin,end) for rate,begin,end in time_freq_boundaries]
