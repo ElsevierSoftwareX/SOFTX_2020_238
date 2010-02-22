@@ -105,7 +105,7 @@ def check_ffinal(xmlfile):
 
 def max_ffinal(xmlfile, check_ffinal_return):
 	if check_ffinal_return==1:
-		xmldoc=utils.load_filename(xmlfile, gz = (xmlfile or "stdin").endswith(".gz")
+		xmldoc=utils.load_filename(xmlfile, gz = (xmlfile or "stdin").endswith(".gz"))
         	sngl_inspiral_table=ligolw.table.get_table(xmldoc, "sngl_inspiral")
 		sngl_inspiral_table.sort(lambda a,b: cmp(a.ffinal,b.ffinal)
 		print sngl_inspiral_table[0].ffinal
