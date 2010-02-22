@@ -127,7 +127,7 @@ def generate_template(template_bank_row, approximant, f_low, sample_rate, durati
 	elif approximant=="IMRPhenomB":
 		spawaveform.imrwaveform(temlate_bank_row.mass1, template_bank_row.mass2, 1.0/duration, f_low, z, template_bank_row.chi)
 	else:
-		raise ValueError "Unsupported approximant given"
+		raise ValueError, "Unsupported approximant given"
 
 	return laltypes.COMPLEX16FrequencySeries(
 		name = "template",
