@@ -97,7 +97,7 @@ def check_ffinal(xmlfile):
 	sngl_inspiral_table=ligolw.table.get_table(xmldoc, "sngl_inspiral")
 	frows=[(frows.append(row.ffinal)) for row in sngl_inspiral_table]
 	if frows[0] == 0.0:
-		raise ValueError "ffinal column needs to be populated"
+		raise ValueError, "ffinal column needs to be populated"
 	return 1
 #
 #determine max final frequency (ffinal)
@@ -111,7 +111,7 @@ def max_ffinal(xmlfile, check_ffinal_return):
 		print sngl_inspiral_table[0].ffinal
 		return sngl_inspiral_table[0].ffinal
 	else:
-		raise ValueError "ffinal column must be populated"
+		raise ValueError, "ffinal column must be populated"
 
 #
 # sum-of-squares false alarm probability
