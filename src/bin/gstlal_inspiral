@@ -88,6 +88,30 @@ def read_approximant(xmlfile):
                 pass
         return approximant
 
+#
+#check final frequency is populated and return a list of the final frequencies
+#
+
+def check_ffinal(xmlfile):
+	xmldoc=utils.load_filename(xmlfile, gz = (xmlfile or "stdin").endswith(".gz")
+	sngl_inspiral_table=ligolw.table.get_table(xmldoc, "sngl_inspiral")
+	frows=[(frows.append(row.ffinal)) for row in sngl_inspiral_table]
+	if frows[0] == 0.0:
+		raise ValueError "ffinal column needs to be populated"
+	return 1
+#
+#determine max final frequency (ffinal)
+#
+
+def max_ffinal(xmlfile, check_ffinal_return):
+	if check_ffinal_return==1:
+		xmldoc=utils.load_filename(xmlfile, gz = (xmlfile or "stdin").endswith(".gz")
+        	sngl_inspiral_table=ligolw.table.get_table(xmldoc, "sngl_inspiral")
+		sngl_inspiral_table.sort(lambda a,b: cmp(a.ffinal,b.ffinal)
+		print sngl_inspiral_table[0].ffinal
+		return sngl_inspiral_table[0].ffinal
+	else:
+		raise ValueError "ffinal column must be populated"
 
 #
 # sum-of-squares false alarm probability
@@ -819,7 +843,7 @@ banks = [
 	Bank(
 		template_bank_filename,
 		psd,
-		templates.time_frequency_boundaries(template_bank_filename, flow = options.flow,verbose=options.verbose),
+		templates.time_frequency_boundaries(template_bank_filename, fhigh=max_ffinal(template_bank_filename, check_ffinal(template_bank_filename)), flow = options.flow,verbose=options.verbose),
 		gate_fap = options.ortho_gate_fap,
 		snr_threshold = options.snr_threshold,
 		tolerance = options.svd_tolerance,
