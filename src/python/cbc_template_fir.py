@@ -272,7 +272,7 @@ def decompose_templates(template_bank, tolerance, identity = False):
 	# S.V.D.
 	#
 
-	U, s, Vh = linalg.svd(template_bank.T)
+	U, s, Vh = spawaveform.svd(template_bank.T,mod=True,inplace=True)
 
 	#
 	# determine component count
