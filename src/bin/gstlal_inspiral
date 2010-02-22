@@ -95,7 +95,7 @@ def read_approximant(xmlfile):
 def check_ffinal(xmlfile):
 	xmldoc=utils.load_filename(xmlfile, gz = (xmlfile or "stdin").endswith(".gz"))
 	sngl_inspiral_table=lsctables.table.get_table(xmldoc, "sngl_inspiral")
-	frow=[]
+	frows=[]
 	frows=[(frows.append(row.f_final)) for row in sngl_inspiral_table]
 	if frows[0] == 0.0:
 		raise ValueError, "ffinal column needs to be populated"
