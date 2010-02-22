@@ -93,7 +93,7 @@ def read_approximant(xmlfile):
 #
 
 def check_ffinal(xmlfile):
-	xmldoc=utils.load_filename(xmlfile, gz = (xmlfile or "stdin").endswith(".gz")
+	xmldoc=utils.load_filename(xmlfile, gz = (xmlfile or "stdin").endswith(".gz"))
 	sngl_inspiral_table=ligolw.table.get_table(xmldoc, "sngl_inspiral")
 	frows=[(frows.append(row.ffinal)) for row in sngl_inspiral_table]
 	if frows[0] == 0.0:
