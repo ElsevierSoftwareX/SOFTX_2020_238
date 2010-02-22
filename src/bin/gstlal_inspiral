@@ -109,7 +109,7 @@ def max_ffinal(xmlfile, check_ffinal_return):
 		xmldoc=utils.load_filename(xmlfile, gz = (xmlfile or "stdin").endswith(".gz"))
         	sngl_inspiral_table=ligolw.table.get_table(xmldoc, "sngl_inspiral")
 		sngl_inspiral_table.sort(lambda a,b: cmp(a.ffinal,b.ffinal))
-		return sngl_inspiral_table[0].f_final
+		return sngl_inspiral_table[len(sngl_inspiral_table)-1].f_final
 	else:
 		raise ValueError, "ffinal column must be populated"
 
