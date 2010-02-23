@@ -72,46 +72,28 @@ from gstlal import templates
 # Read Approximant
 #
 
-def read_approximant(xmlfile):
-        xmldoc=utils.load_filename(xmlfile, gz = (xmlfile or "stdin").endswith(".gz"))
+def read_approximant(xmldoc):
         approximant=ligolw_process.get_process_params(xmldoc, "tmpltbank", "--approximant")
-        #approximant=approximant[0].lstrip("u") #FIXME:Should not need to remove u, where is it coming from?
         approximant=approximant[0]
-        print approximant
 
         supported_approximants=[u'FindChirpSP', u'IMRPhenomB']
-        print supported_approximants
         if approximant not in supported_approximants:
-                print approximant
-                raise ValueError, "unsupported approximant"
-        else:
-                pass
+                raise ValueError, "unsupported approximant %s"% approximant
         return approximant
 
 #
 #check final frequency is populated and return a list of the final frequencies
 #
 
-def check_ffinal(xmlfile):
-	xmldoc=utils.load_filename(xmlfile, gz = (xmlfile or "stdin").endswith(".gz"))
+def check_ffinal_and_find_max_ffinal(xmldoc):
 	sngl_inspiral_table=lsctables.table.get_table(xmldoc, "sngl_inspiral")
 	frows=[]
 	frows=[(frows.append(row.f_final)) for row in sngl_inspiral_table]
 	if frows[0] == 0.0:
-		raise ValueError, "ffinal column needs to be populated"
-	return 1
-#
-#determine max final frequency (ffinal)
-#
-
-def max_ffinal(xmlfile, check_ffinal_return):
-	if check_ffinal_return==1:
-		xmldoc=utils.load_filename(xmlfile, gz = (xmlfile or "stdin").endswith(".gz"))
-        	sngl_inspiral_table=lsctables.table.get_table(xmldoc, "sngl_inspiral")
+		raise ValueError, "f_final column needs to be populated"
+	if sngl_inspiral_table=1:
 		sngl_inspiral_table.sort(lambda a,b: cmp(a.f_final,b.f_final))
 		return sngl_inspiral_table[len(sngl_inspiral_table)-1].f_final
-	else:
-		raise ValueError, "ffinal column must be populated"
 
 #
 # sum-of-squares false alarm probability
@@ -241,7 +223,8 @@ class Bank(object):
 		self.logname = logname
 
 		template_bank_table = lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName)
-		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(template_bank_table, read_approximant(template_bank_filename), psd, flow, time_freq_boundaries, autocorrelation_length = autocorrelation_length, verbose = verbose)
+		template_bank_process_table = lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose =verbose), lsctables.ProcessParamsTable.tableName)
+		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(template_bank_table, read_approximant(template_bank_process_table), psd, flow, time_freq_boundaries, autocorrelation_length = autocorrelation_length, verbose = verbose)
 
 		# Assign template banks to fragments
 		self.bank_fragments = [Bank.BankFragment(rate,begin,end) for rate,begin,end in time_freq_boundaries]
@@ -666,8 +649,8 @@ def parse_command_line():
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a GStreamer XML description of the as-built pipeline to this file (optional).")
 	parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (optional).  This option has no effect if --reference-psd is used.")
 	parser.add_option("--fake-data", action = "store_true", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
-	parser.add_option("--SVD-samples-max", metavar ="number", type="float", default = 8192.0 , help="Set the max number of samples in the SVD")
-	parser.add_option("--SVD-samples-min", metavar ="number", type="float", default = 2048.0, help="Set the min number of samples in the SVD")
+	parser.add_option("--svd-samples-max", metavar ="number", type="float", default = 8192.0 , help="Set the max number of samples in the SVD")
+	parser.add_option("--svd-samples-min", metavar ="number", type="float", default = 2048.0, help="Set the min number of samples in the SVD")
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
@@ -845,7 +828,7 @@ banks = [
 	Bank(
 		template_bank_filename,
 		psd,
-		templates.time_frequency_boundaries(template_bank_filename, SVD_samples_max=options.SVD_samples_max, SVD_samples_min=options.SVD_samples_min, fhigh=max_ffinal(template_bank_filename, check_ffinal(template_bank_filename)), flow = options.flow,verbose=options.verbose),
+		templates.time_frequency_boundaries(template_bank_filename, SVD_samples_max=options.SVD_samples_max, SVD_samples_min=options.SVD_samples_min, fhigh=check_ffinal_and_find_max(), flow = options.flow,verbose=options.verbose),
 		gate_fap = options.ortho_gate_fap,
 		snr_threshold = options.snr_threshold,
 		tolerance = options.svd_tolerance,
