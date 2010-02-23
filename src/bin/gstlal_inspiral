@@ -234,7 +234,7 @@ class Bank(object):
 				print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
 				print >>sys.stderr, "\tsum-of-squares expectation value is %g" % self.chifacs.mean()
 
-	def __init__(self, template_bank_filename, appproximant, psd, time_freq_boundaries, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
+	def __init__(self, template_bank_filename, psd, time_freq_boundaries, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
 		self.template_bank_filename = template_bank_filename	# FIXME:  remove when not needed by trigger generator element
 		self.filter_length = max(end for rate,begin,end in time_freq_boundaries)
 		self.snr_threshold = snr_threshold
@@ -666,6 +666,7 @@ def parse_command_line():
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a GStreamer XML description of the as-built pipeline to this file (optional).")
 	parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (optional).  This option has no effect if --reference-psd is used.")
 	parser.add_option("--fake-data", action = "store_true", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
+	parser.add_option("--autocorrelation-length", metavar ="number", type="int", default = 201 , help="Set the number of samples in the SVD")
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
@@ -848,7 +849,7 @@ banks = [
 		snr_threshold = options.snr_threshold,
 		tolerance = options.svd_tolerance,
 		flow = options.flow,
-		autocorrelation_length = 201,	# samples
+		autocorrelation_length = options.autocorrelation_length,	# samples
 		logname = "bank%d" % n,
 		verbose = options.verbose
 	) for n, template_bank_filename in enumerate(options.template_bank)
