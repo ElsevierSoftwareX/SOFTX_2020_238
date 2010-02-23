@@ -666,7 +666,8 @@ def parse_command_line():
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a GStreamer XML description of the as-built pipeline to this file (optional).")
 	parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (optional).  This option has no effect if --reference-psd is used.")
 	parser.add_option("--fake-data", action = "store_true", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
-	parser.add_option("--autocorrelation-length", metavar ="number", type="int", default = 201 , help="Set the number of samples in the SVD")
+	parser.add_option("--SVD-samples-max", metavar ="number", type="float", default = 8192.0 , help="Set the max number of samples in the SVD")
+	parser.add_option("--SVD-samples-min", metavar ="number", type="float", default = 2048.0, help="Set the min number of samples in the SVD")
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
@@ -844,7 +845,7 @@ banks = [
 	Bank(
 		template_bank_filename,
 		psd,
-		templates.time_frequency_boundaries(template_bank_filename, fhigh=max_ffinal(template_bank_filename, check_ffinal(template_bank_filename)), flow = options.flow,verbose=options.verbose),
+		templates.time_frequency_boundaries(template_bank_filename, SVD_samples_max=options.SVD_samples_max, SVD_samples_min=options.SVD_samples_min, fhigh=max_ffinal(template_bank_filename, check_ffinal(template_bank_filename)), flow = options.flow,verbose=options.verbose),
 		gate_fap = options.ortho_gate_fap,
 		snr_threshold = options.snr_threshold,
 		tolerance = options.svd_tolerance,
