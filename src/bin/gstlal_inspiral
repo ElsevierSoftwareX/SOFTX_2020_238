@@ -224,7 +224,7 @@ class Bank(object):
 
 		template_bank_table = lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName)
 		template_bank_process_table = lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose =verbose), lsctables.ProcessParamsTable.tableName)
-		templates.time_frequency_boundaries(template_bank_table, flow = options.flow,verbose=options.verbose)
+		templates.time_frequency_boundaries(template_bank_table, SVD_samples_max=options.svd_samples_max, SVD_samples_min=options.svd_samples_min, fhigh=check_ffinal_and_find_max(template_bank_table), flow = options.flow,verbose=options.verbose)
 		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(template_bank_table, read_approximant(template_bank_process_table), psd, flow, time_freq_boundaries, autocorrelation_length = autocorrelation_length, verbose = verbose)
 
 		# Assign template banks to fragments
@@ -829,10 +829,6 @@ banks = [
 	Bank(
 		template_bank_filename,
 		psd,
-<<<<<<< HEAD:src/bin/gstlal_inspiral
-		templates.time_frequency_boundaries(template_bank_filename, SVD_samples_max=options.SVD_samples_max, SVD_samples_min=options.SVD_samples_min, fhigh=check_ffinal_and_find_max(), flow = options.flow,verbose=options.verbose),
-=======
->>>>>>> 098fd888542a4d6e97eb5d547c55e498defae8ba:src/bin/gstlal_inspiral
 		gate_fap = options.ortho_gate_fap,
 		snr_threshold = options.snr_threshold,
 		tolerance = options.svd_tolerance,
