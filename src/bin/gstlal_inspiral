@@ -190,13 +190,14 @@ class Bank(object):
 				print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
 				print >>sys.stderr, "\tsum-of-squares expectation value is %g" % self.chifacs.mean()
 
-	def __init__(self, template_bank_filename, psd, time_freq_boundaries, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
+	def __init__(self, template_bank_filename, psd,  gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
 		self.template_bank_filename = template_bank_filename	# FIXME:  remove when not needed by trigger generator element
 		self.filter_length = max(end for rate,begin,end in time_freq_boundaries)
 		self.snr_threshold = snr_threshold
 		self.logname = logname
 
 		template_bank_table = lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName)
+		templates.time_frequency_boundaries(template_bank_table, flow = options.flow,verbose=options.verbose),
 		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(template_bank_table, psd, flow, time_freq_boundaries, autocorrelation_length = autocorrelation_length, verbose = verbose)
 
 		# Assign template banks to fragments
@@ -799,7 +800,6 @@ banks = [
 	Bank(
 		template_bank_filename,
 		psd,
-		templates.time_frequency_boundaries(template_bank_filename, flow = options.flow,verbose=options.verbose),
 		gate_fap = options.ortho_gate_fap,
 		snr_threshold = options.snr_threshold,
 		tolerance = options.svd_tolerance,
