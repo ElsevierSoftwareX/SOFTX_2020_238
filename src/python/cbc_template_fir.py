@@ -139,7 +139,7 @@ def generate_template(template_bank_row, approximant, f_low, sample_rate, durati
 	)
 
 
-def generate_templates(template_table, psd, f_low, time_freq_boundaries, autocorrelation_length = None, verbose = False):
+def generate_templates(template_table, approximant, psd, f_low, time_freq_boundaries, autocorrelation_length = None, verbose = False):
 	sample_rate_max = max(rate for rate,begin,end in time_freq_boundaries)
 	duration = max(end for rate,begin,end in time_freq_boundaries)
 	length_max = int(round(duration * sample_rate_max))
@@ -176,7 +176,7 @@ def generate_templates(template_table, psd, f_low, time_freq_boundaries, autocor
 		# generate "cosine" component of frequency-domain template
 		#
 
-		fseries = generate_template(row, f_low, sample_rate_max, working_duration)
+		fseries = generate_template(row, approximant, f_low, sample_rate_max, working_duration)
 
 		#
 		# whiten and add quadrature phase ("sine" component)
