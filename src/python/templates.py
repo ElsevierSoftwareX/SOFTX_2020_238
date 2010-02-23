@@ -167,6 +167,8 @@ def normalized_autocorrelation(fseries, revplan):
 
 def time_frequency_boundaries(
 	template_bank_filename,
+	SVD_samples_max=8192.0,
+	SVD_samples_min=2048.0,
 	flow = 40,
 	fhigh = 900,
 	padding = 1.1,
@@ -220,8 +222,8 @@ def time_frequency_boundaries(
 	# How many sample points should be included in a chunk?
 	# We need to balance the need to have few chunks with the
 	# need to have small chunks.
-	segment_samples_max = 8192.0
-	segment_samples_min = 2048.0
+	segment_samples_max = SVD_samples_max
+	segment_samples_min = SVD_samples_min
 
 	# For each allowed sampling rate with associated Nyquist frequency fN,
 	# determine the greatest amount of time any template in the bank spends
