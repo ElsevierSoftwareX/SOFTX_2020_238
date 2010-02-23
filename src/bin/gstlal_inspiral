@@ -850,7 +850,7 @@ banks = [
 		snr_threshold = options.snr_threshold,
 		tolerance = options.svd_tolerance,
 		flow = options.flow,
-		autocorrelation_length = autocorrelation_length,	# samples
+		autocorrelation_length = 201,	# samples
 		logname = "bank%d" % n,
 		verbose = options.verbose
 	) for n, template_bank_filename in enumerate(options.template_bank)
