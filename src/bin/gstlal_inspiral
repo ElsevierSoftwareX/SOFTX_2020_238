@@ -68,6 +68,29 @@ from gstlal import templates
 # =============================================================================
 #
 
+#
+# Read Approximant
+#
+
+def read_approximant(xmldoc):
+        approximant=ligolw_process.get_process_params(xmldoc, "tmpltbank", "--approximant")
+        approximant=approximant[0]
+
+        supported_approximants=[u'FindChirpSP', u'IMRPhenomB']
+        if approximant not in supported_approximants:
+                raise ValueError, "unsupported approximant %s"% approximant
+        return approximant
+
+#
+#check final frequency is populated and return the max final frequency
+#
+
+def check_ffinal_and_find_max_ffinal(xmldoc):
+	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+	f_final=sngl_inspiral_table.getColumnByName("f_final")
+	if not all(f_final):
+		raise ValueError, "f_final column not populated"
+	return max(f_final)
 
 #
 # sum-of-squares false alarm probability
@@ -198,7 +221,10 @@ class Bank(object):
 		self.snr_threshold = snr_threshold
 		self.logname = logname
 
-		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(template_bank_table, psd, flow, time_freq_boundaries, autocorrelation_length = autocorrelation_length, verbose = verbose)
+		template_bank_table = lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName)
+		template_bank_process_table = lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose =verbose), lsctables.ProcessParamsTable.tableName)
+		templates.time_frequency_boundaries(template_bank_table, fhigh=check_ffinal_and_find_max(template_bank_table), flow = options.flow,verbose=options.verbose)
+		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(template_bank_table, read_approximant(template_bank_process_table), psd, flow, time_freq_boundaries, autocorrelation_length = autocorrelation_length, verbose = verbose)
 
 		# Assign template banks to fragments
 		self.bank_fragments = [Bank.BankFragment(rate,begin,end) for rate,begin,end in time_freq_boundaries]
@@ -814,9 +840,19 @@ for n, filename in enumerate(options.template_bank):
 			verbose = options.verbose),
 		lsctables.SnglInspiralTable.tableName )
 
+<<<<<<< HEAD:src/bin/gstlal_inspiral
 	# Choose how to break up templates in time
 	time_freq_bounds = templates.time_frequency_boundaries(
 		template_bank_table,
+=======
+banks = [
+	Bank(
+		template_bank_filename,
+		psd,
+		gate_fap = options.ortho_gate_fap,
+		snr_threshold = options.snr_threshold,
+		tolerance = options.svd_tolerance,
+>>>>>>> IMRSA_template_bank_generation:src/bin/gstlal_inspiral
 		flow = options.flow,
 		verbose=options.verbose)
 
@@ -840,7 +876,6 @@ for n, filename in enumerate(options.template_bank):
 	# FIXME: remove this loop when no longer needed
 	# by trigger generator element.
 	banks[n].set_template_bank_filename(filename)
-
 
 #
 # build output document
