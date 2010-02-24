@@ -840,19 +840,9 @@ for n, filename in enumerate(options.template_bank):
 			verbose = options.verbose),
 		lsctables.SnglInspiralTable.tableName )
 
-<<<<<<< HEAD:src/bin/gstlal_inspiral
 	# Choose how to break up templates in time
 	time_freq_bounds = templates.time_frequency_boundaries(
 		template_bank_table,
-=======
-banks = [
-	Bank(
-		template_bank_filename,
-		psd,
-		gate_fap = options.ortho_gate_fap,
-		snr_threshold = options.snr_threshold,
-		tolerance = options.svd_tolerance,
->>>>>>> IMRSA_template_bank_generation:src/bin/gstlal_inspiral
 		flow = options.flow,
 		verbose=options.verbose)
 
