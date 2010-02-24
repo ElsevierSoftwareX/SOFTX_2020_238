@@ -845,7 +845,7 @@ for n, filename in enumerate(options.template_bank):
 	# Choose how to break up templates in time
 	time_freq_bounds = templates.time_frequency_boundaries(
 		lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
-		fhigh=check_ffinal_and_find_max_ffinal(template_bank_table)
+		fhigh=check_ffinal_and_find_max_ffinal(template_bank_table),
 		flow = options.flow,
 		verbose=options.verbose)
 	xmldoc=utils.load_filename(filename, gz = (filename or "stdin").endswith(".gz"))
