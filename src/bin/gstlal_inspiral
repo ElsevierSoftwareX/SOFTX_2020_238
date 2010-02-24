@@ -223,7 +223,7 @@ class Bank(object):
 
 		template_bank_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 		template_bank_process_table = lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName)
-		templates.time_frequency_boundaries(template_bank_table, fhigh=check_ffinal_and_find_max(template_bank_table), flow = options.flow,verbose=options.verbose)
+		templates.time_frequency_boundaries(template_bank_table, fhigh=check_ffinal_and_find_max_ffinal(template_bank_table), flow = options.flow,verbose=options.verbose)
 		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(template_bank_table, read_approximant(template_bank_process_table), psd, flow, time_freq_boundaries, autocorrelation_length = autocorrelation_length, verbose = verbose)
 
 		# Assign template banks to fragments
