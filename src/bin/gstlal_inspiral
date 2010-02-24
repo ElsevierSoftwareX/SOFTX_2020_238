@@ -82,18 +82,15 @@ def read_approximant(xmldoc):
         return approximant
 
 #
-#check final frequency is populated and return a list of the final frequencies
+#check final frequency is populated and return the max final frequency
 #
 
 def check_ffinal_and_find_max_ffinal(xmldoc):
-	sngl_inspiral_table=lsctables.table.get_table(xmldoc, "sngl_inspiral")
-	frows=[]
-	frows=[(frows.append(row.f_final)) for row in sngl_inspiral_table]
-	if frows[0] == 0.0:
-		raise ValueError, "f_final column needs to be populated"
-	if sngl_inspiral_table=1:
-		sngl_inspiral_table.sort(lambda a,b: cmp(a.f_final,b.f_final))
-		return sngl_inspiral_table[len(sngl_inspiral_table)-1].f_final
+	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+	f_final=sngl_inspiral_table.getColumnByName("f_final")
+	if not all(f_final):
+		raise ValueError, "f_final column not populated"
+	return max(f_final)
 
 #
 # sum-of-squares false alarm probability
