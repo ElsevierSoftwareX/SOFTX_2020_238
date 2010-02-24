@@ -166,7 +166,7 @@ def normalized_autocorrelation(fseries, revplan):
 
 
 def time_frequency_boundaries(
-	template_bank_filename,
+	template_bank_table,
 	flow = 40,
 	fhigh = 900,
 	padding = 1.1,
@@ -208,12 +208,6 @@ def time_frequency_boundaries(
 	#
 
 	# Load template bank mass params
-	template_bank_table = (
-		lsctables.table.get_table(
-			utils.load_filename(
-				template_bank_filename,
-				gz=template_bank_filename.endswith("gz") ),
-			"sngl_inspiral") )
 	mass1 = template_bank_table.get_column('mass1')
 	mass2 = template_bank_table.get_column('mass2')
 
