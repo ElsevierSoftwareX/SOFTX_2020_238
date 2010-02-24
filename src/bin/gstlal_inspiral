@@ -213,7 +213,7 @@ class Bank(object):
 				print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
 				print >>sys.stderr, "\tsum-of-squares expectation value is %g" % self.chifacs.mean()
 
-	def __init__(self, template_bank_table, psd, time_freq_boundaries, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
+	def __init__(self, xmldoc, psd, time_freq_boundaries, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
 		# FIXME: remove template_bank_filename when no longer needed
 		# by trigger generator element
 		self.template_bank_filename = None
@@ -221,8 +221,8 @@ class Bank(object):
 		self.snr_threshold = snr_threshold
 		self.logname = logname
 
-		template_bank_table = lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName)
-		template_bank_process_table = lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose =verbose), lsctables.ProcessParamsTable.tableName)
+		template_bank_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+		template_bank_process_table = lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName)
 		templates.time_frequency_boundaries(template_bank_table, fhigh=check_ffinal_and_find_max(template_bank_table), flow = options.flow,verbose=options.verbose)
 		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(template_bank_table, read_approximant(template_bank_process_table), psd, flow, time_freq_boundaries, autocorrelation_length = autocorrelation_length, verbose = verbose)
 
@@ -845,12 +845,13 @@ for n, filename in enumerate(options.template_bank):
 		template_bank_table,
 		flow = options.flow,
 		verbose=options.verbose)
+	xmldoc=utils.load_filename(template_bank_filename, gz = (filename or "stdin").endswith(".gz"), verbose = verbose)
 
 	# Generate templates, perform SVD, get orthogonal basis
 	# and store as Bank object
 	banks.append(
 		Bank(
-			template_bank_table,
+			xmldoc,
 			psd,
 			time_freq_bounds,
 			gate_fap = options.ortho_gate_fap,
