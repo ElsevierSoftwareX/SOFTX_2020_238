@@ -845,7 +845,7 @@ for n, filename in enumerate(options.template_bank):
 		template_bank_table,
 		flow = options.flow,
 		verbose=options.verbose)
-	xmldoc=utils.load_filename(template_bank_filename, gz = (filename or "stdin").endswith(".gz"), verbose = verbose)
+	xmldoc=utils.load_filename(filename, gz = (filename or "stdin").endswith(".gz"), verbose = verbose)
 
 	# Generate templates, perform SVD, get orthogonal basis
 	# and store as Bank object
