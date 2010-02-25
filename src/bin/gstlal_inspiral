@@ -73,13 +73,13 @@ from gstlal import templates
 #
 
 def read_approximant(xmldoc):
-        approximant=ligolw_process.get_process_params(xmldoc, "tmpltbank", "--approximant")
-        approximant=approximant[0]
+       approximant=ligolw_process.get_process_params(xmldoc, "tmpltbank", "--approximant")
+       approximant=approximant[0]
 
-        supported_approximants=[u'FindChirpSP', u'IMRPhenomB']
-        if approximant not in supported_approximants:
-                raise ValueError, "unsupported approximant %s"% approximant
-        return approximant
+       supported_approximants=[u'FindChirpSP', u'IMRPhenomB']
+       if approximant not in supported_approximants:
+               raise ValueError, "unsupported approximant %s"% approximant
+       return approximant
 
 #
 #check final frequency is populated and return the max final frequency
@@ -220,6 +220,7 @@ class Bank(object):
 		self.filter_length = max(end for rate,begin,end in time_freq_boundaries)
 		self.snr_threshold = snr_threshold
 		self.logname = logname
+
 		# Generate downsampled templates
 		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(
 			lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
@@ -870,6 +871,7 @@ for n, filename in enumerate(options.template_bank):
 	# FIXME: remove this loop when no longer needed
 	# by trigger generator element.
 	banks[n].set_template_bank_filename(filename)
+
 
 #
 # build output document
