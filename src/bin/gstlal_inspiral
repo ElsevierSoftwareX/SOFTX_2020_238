@@ -223,7 +223,7 @@ class Bank(object):
 		# Generate downsampled templates
 		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(
 			lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
-			read_approximant(lsctables.table.get_table(bank_xmldoc,lsctables.ProcessParamsTable.tableName)),
+			read_approximant(bank_xmldoc),
 			psd,
 			flow,
 			time_freq_boundaries,
@@ -845,7 +845,7 @@ for n, filename in enumerate(options.template_bank):
 	# Choose how to break up templates in time
 	time_freq_bounds = templates.time_frequency_boundaries(
 		lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
-		fhigh=check_ffinal_and_find_max_ffinal(lsctables.table.get_table(bank_xmldoc,lsctables.SnglInspiralTable.tableName)),
+		fhigh=check_ffinal_and_find_max_ffinal(bank_xmldoc),
 		flow = options.flow,
 		verbose=options.verbose)
 	xmldoc=utils.load_filename(filename, gz = (filename or "stdin").endswith(".gz"))
