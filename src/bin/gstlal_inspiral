@@ -222,7 +222,7 @@ class Bank(object):
 		self.logname = logname
 
  		# Generate downsampled templates
- 		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(
+		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(
 			lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
 			read_approximant(bank_xmldoc),
 			psd,
