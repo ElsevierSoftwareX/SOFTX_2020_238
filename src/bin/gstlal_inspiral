@@ -245,6 +245,10 @@ class Bank(object):
 	def get_rates(self):
 		return set(bank_fragment.rate for bank_fragment in self.bank_fragments)
 
+	# FIXME: remove set_template_bank_filename when no longer needed
+	# by trigger generator element
+	def set_template_bank_filename(self,name):
+		self.template_bank_filename = name
 
 #
 # =============================================================================
