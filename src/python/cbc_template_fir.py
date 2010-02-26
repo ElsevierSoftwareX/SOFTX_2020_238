@@ -122,6 +122,7 @@ def interpolate_psd(psd, deltaF):
 
 def generate_template(template_bank_row, approximant, f_low, sample_rate, duration, order = 7, end_freq = "light_ring"):
 	z = numpy.empty(int(round(sample_rate * duration)), "cdouble")
+
 	if approximant=="FindChirpSP":
 		spawaveform.waveform(template_bank_row.mass1, template_bank_row.mass2, order, 1.0 / duration, 1.0 / sample_rate, f_low, spawaveform.ffinal(template_bank_row.mass1, template_bank_row.mass2, end_freq), z)
 	elif approximant=="IMRPhenomB":
