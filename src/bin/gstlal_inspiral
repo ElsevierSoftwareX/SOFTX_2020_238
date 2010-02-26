@@ -250,6 +250,7 @@ class Bank(object):
 	def set_template_bank_filename(self,name):
 		self.template_bank_filename = name
 
+
 #
 # =============================================================================
 #
