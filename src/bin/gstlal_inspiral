@@ -213,7 +213,7 @@ class Bank(object):
 				print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
 				print >>sys.stderr, "\tsum-of-squares expectation value is %g" % self.chifacs.mean()
 
-	def __init__(self, bank_xmldoc, psd,  gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
+	def __init__(self, bank_xmldoc, psd, time_freq_boundaries, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
 		# FIXME: remove template_bank_filename when no longer needed
 		# by trigger generator element
 		self.template_bank_filename = None
