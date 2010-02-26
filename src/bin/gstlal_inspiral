@@ -219,10 +219,13 @@ class Bank(object):
 		self.snr_threshold = snr_threshold
 		self.logname = logname
 
-		template_bank_table = lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName)
-		template_bank_process_table = lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose =verbose), lsctables.ProcessParamsTable.tableName)
-		templates.time_frequency_boundaries(template_bank_table, fhigh=check_ffinal_and_find_max(template_bank_table), flow = options.flow,verbose=options.verbose)
-		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(template_bank_table, read_approximant(template_bank_process_table), psd, flow, time_freq_boundaries, autocorrelation_length = autocorrelation_length, verbose = verbose)
+ 		# Generate downsampled templates
+ 		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(
+ 			lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
+			read_approximant(bank_xmldoc),
+ 			psd,
+ 			flow,
+ 			time_freq_boundaries,
 
 		# Assign template banks to fragments
 		self.bank_fragments = [Bank.BankFragment(rate,begin,end) for rate,begin,end in time_freq_boundaries]
@@ -819,20 +822,46 @@ else:
 	if options.write_psd is not None:
 		write_psd(options.write_psd, psd, verbose = options.verbose)
 
+#
+# Make template banks
+#
 
-banks = [
-	Bank(
-		template_bank_filename,
-		psd,
-		gate_fap = options.ortho_gate_fap,
-		snr_threshold = options.snr_threshold,
-		tolerance = options.svd_tolerance,
+banks = []
+for n, filename in enumerate(options.template_bank):
+	# Open template bank file
+	bank_xmldoc = utils.load_filename(
+		filename,
+		gz = (filename or "stdin").endswith(".gz"),
+		verbose = options.verbose)
+
+	# Choose how to break up templates in time
+	time_freq_bounds = templates.time_frequency_boundaries(
+		lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
+		fhigh=check_ffinal_and_find_max_ffinal(bank_xmldoc),
 		flow = options.flow,
-		autocorrelation_length = 201,	# samples
-		logname = "bank%d" % n,
-		verbose = options.verbose
-	) for n, template_bank_filename in enumerate(options.template_bank)
-]
+		verbose=options.verbose)
+
+	# Generate templates, perform SVD, get orthogonal basis
+	# and store as Bank object
+	banks.append(
+		Bank(
+			bank_xmldoc,
+			psd,
+			time_freq_bounds,
+			gate_fap = options.ortho_gate_fap,
+			snr_threshold = options.snr_threshold,
+			tolerance = options.svd_tolerance,
+			flow = options.flow,
+			autocorrelation_length = 201,	# samples
+			logname = "bank%d" % n,
+			verbose = options.verbose
+		        )
+		)
+
+	# FIXME: remove this loop when no longer needed
+	# by trigger generator element.
+	banks[n].set_template_bank_filename(filename)
+
 
 #
 # build output document
