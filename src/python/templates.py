@@ -214,8 +214,10 @@ def time_frequency_boundaries(
 	# How many sample points should be included in a chunk?
 	# We need to balance the need to have few chunks with the
 	# need to have small chunks.
-	segment_samples_max = SVD_samples_max
-	segment_samples_min = SVD_samples_min
+	segment_samples_max = 8192.0
+	segment_samples_min = max(ceil_pow_2( 2*len(mass1) ),1024)
+	if segment_samples_min >= segment_samples_max:
+		raise ValueError("The input template bank must have fewer than 4096 templates."
 
 	# For each allowed sampling rate with associated Nyquist frequency fN,
 	# determine the greatest amount of time any template in the bank spends
