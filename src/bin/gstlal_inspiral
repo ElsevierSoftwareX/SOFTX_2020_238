@@ -225,7 +225,9 @@ class Bank(object):
 			read_approximant(bank_xmldoc),
  			psd,
  			flow,
- 			time_freq_boundaries,
+			time_freq_boundaries,
+			autocorrelation_length = autocorrelation_length,
+			verbose = verbose)
 
 		# Assign template banks to fragments
 		self.bank_fragments = [Bank.BankFragment(rate,begin,end) for rate,begin,end in time_freq_boundaries]
