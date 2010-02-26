@@ -217,7 +217,7 @@ def time_frequency_boundaries(
 	segment_samples_max = 8192.0
 	segment_samples_min = max(ceil_pow_2( 2*len(mass1) ),1024)
 	if segment_samples_min >= segment_samples_max:
-		raise ValueError("The input template bank must have fewer than 4096 templates."
+		raise ValueError("The input template bank must have fewer than 4096 templates.")
 
 	# For each allowed sampling rate with associated Nyquist frequency fN,
 	# determine the greatest amount of time any template in the bank spends
