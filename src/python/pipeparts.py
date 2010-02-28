@@ -108,7 +108,7 @@ def mkiirfilter(pipeline, src, a, b):
 	return elem
 
 
-def mkfakeLIGOsrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 8 * 1):
+def mkfakeLIGOsrc(pipeline, location = None, instrument = None, channel_name = None, blocksize = 16384 * 8 * 1):
 	# default blocksize is 1 second of double precision floats at
 	# 16384 Hz, e.g., h(t)
 	head1 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 5.03407936516e-17)
@@ -129,7 +129,8 @@ def mkfakeLIGOsrc(pipeline, location, instrument, channel_name, blocksize = 1638
 	b = [1.0, -0.9243905]
 	head4 = mkiirfilter(pipeline, head4, a, b)
 
-	head = gst.element_factory_make("adder")
+	head = gst.element_factory_make("lal_adder")
+	head.set_property("sync", True)
 	pipeline.add(head)
 	head1.link(head)
 	head2.link(head)
