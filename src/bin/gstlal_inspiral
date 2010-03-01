@@ -68,6 +68,29 @@ from gstlal import templates
 # =============================================================================
 #
 
+#
+# Read Approximant
+#
+
+def read_approximant(xmldoc):
+	approximant=ligolw_process.get_process_params(xmldoc, "tmpltbank", "--approximant")
+	approximant=approximant[0]
+
+	supported_approximants=[u'FindChirpSP', u'IMRPhenomB']
+	if approximant not in supported_approximants:
+		raise ValueError, "unsupported approximant %s"% approximant
+	return approximant
+
+#
+#check final frequency is populated and return the max final frequency
+#
+
+def check_ffinal_and_find_max_ffinal(xmldoc):
+	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+	f_final=sngl_inspiral_table.getColumnByName("f_final")
+	if not all(f_final):
+		raise ValueError, "f_final column not populated"
+	return max(f_final)
 
 #
 # sum-of-squares false alarm probability
@@ -201,6 +224,7 @@ class Bank(object):
 		# Generate downsampled templates
 		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(
 			lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
+			read_approximant(bank_xmldoc),
 			psd,
 			flow,
 			time_freq_boundaries,
@@ -822,6 +846,7 @@ for n, filename in enumerate(options.template_bank):
 	# Choose how to break up templates in time
 	time_freq_bounds = templates.time_frequency_boundaries(
 		lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
+		fhigh=check_ffinal_and_find_max_ffinal(bank_xmldoc),
 		flow = options.flow,
 		verbose=options.verbose)
 

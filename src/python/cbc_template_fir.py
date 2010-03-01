@@ -120,10 +120,16 @@ def interpolate_psd(psd, deltaF):
 	)
 
 
-def generate_template(template_bank_row, f_low, sample_rate, duration, order = 7, end_freq = "light_ring"):
+def generate_template(template_bank_row, approximant, f_low, sample_rate, duration, order = 7, end_freq = "light_ring"):
 	z = numpy.empty(int(round(sample_rate * duration)), "cdouble")
 
 	spawaveform.waveform(template_bank_row.mass1, template_bank_row.mass2, order, 1.0 / duration, 1.0 / sample_rate, f_low, spawaveform.ffinal(template_bank_row.mass1, template_bank_row.mass2, end_freq), z)
+	if approximant=="FindChirpSP":
+		spawaveform.waveform(template_bank_row.mass1, template_bank_row.mass2, order, 1.0 / duration, 1.0 / sample_rate, f_low, spawaveform.ffinal(template_bank_row.mass1, template_bank_row.mass2, end_freq), z)
+	elif approximant=="IMRPhenomB":
+		spawaveform.imrwaveform(template_bank_row.mass1, template_bank_row.mass2, 1.0/duration, f_low, z, template_bank_row.chi)
+	else:
+		raise ValueError, "Unsupported approximant given"
 
 	return laltypes.COMPLEX16FrequencySeries(
 		name = "template",
@@ -135,7 +141,7 @@ def generate_template(template_bank_row, f_low, sample_rate, duration, order = 7
 	)
 
 
-def generate_templates(template_table, psd, f_low, time_freq_boundaries, autocorrelation_length = None, verbose = False):
+def generate_templates(template_table, approximant, psd, f_low, time_freq_boundaries, autocorrelation_length = None, verbose = False):
 	sample_rate_max = max(rate for rate,begin,end in time_freq_boundaries)
 	duration = max(end for rate,begin,end in time_freq_boundaries)
 	length_max = int(round(duration * sample_rate_max))
@@ -172,7 +178,7 @@ def generate_templates(template_table, psd, f_low, time_freq_boundaries, autocor
 		# generate "cosine" component of frequency-domain template
 		#
 
-		fseries = generate_template(row, f_low, sample_rate_max, working_duration)
+		fseries = generate_template(row, approximant, f_low, sample_rate_max, working_duration)
 
 		#
 		# whiten and add quadrature phase ("sine" component)
