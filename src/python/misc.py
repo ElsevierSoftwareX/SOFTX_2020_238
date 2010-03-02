@@ -65,13 +65,10 @@ def cdf_weighted_chisq_Pinv(A, noncent, dof, var, P, lim, accuracy):
 #
 
 
-def max_stat_thresh(coeffs, fap, samp_tol=1000.0):
+def max_stat_thresh(coeffs, fap, samp_tol=100.0):
 	num = int(samp_tol/ fap)
 	out = numpy.zeros(num) 
-	for c in coeffs:
-		r = scipy.randn(num)
-		v = c*r**2
-		out += v
+	for c in coeffs: out += c*scipy.randn(num)**2
 	out.sort()
-	p = numpy.cumsum(out) / numpy.sum(out)
+	p = numpy.cumsum(out)/numpy.sum(out)
         return out[len(p[p>fap])]
