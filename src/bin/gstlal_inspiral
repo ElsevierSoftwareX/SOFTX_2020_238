@@ -75,7 +75,8 @@ from gstlal import templates
 
 
 def sum_of_squares_threshold_from_fap(fap, coefficients):
-	return gstlalmisc.cdf_weighted_chisq_Pinv(coefficients, numpy.zeros(coefficients.shape, dtype = "double"), numpy.ones(coefficients.shape, dtype = "int"), 0.0, 1.0 - fap, -1, fap / 16.0)
+	return gstlalmisc.max_stat_thresh(coefficients, fap)
+	#return gstlalmisc.cdf_weighted_chisq_Pinv(coefficients, numpy.zeros(coefficients.shape, dtype = "double"), numpy.ones(coefficients.shape, dtype = "int"), 0.0, 1.0 - fap, -1, fap / 16.0)
 
 
 #
@@ -178,13 +179,13 @@ class Bank(object):
 			self.start = start
 			self.end = end
 
-		def set_template_bank(self, template_bank, tolerance, verbose = False):
+		def set_template_bank(self, template_bank, tolerance, snr_thresh, verbose = False):
 			if verbose:
 				print >>sys.stderr, "\t%d templates of %d samples" % template_bank.shape
 
 			self.orthogonal_template_bank, self.singular_values, self.mix_matrix, self.chifacs = cbc_template_fir.decompose_templates(template_bank, tolerance)
 
-			self.sum_of_squares_weights = self.singular_values * math.sqrt(self.chifacs.mean() / numpy.dot(self.singular_values, self.singular_values))
+			self.sum_of_squares_weights = math.sqrt(self.chifacs.mean() * misc.ss_coeffs(self.singular_values,snr_thresh))
 
 			if verbose:
 				print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
@@ -212,7 +213,7 @@ class Bank(object):
 		for i, bank_fragment in enumerate(self.bank_fragments):
 			if verbose:
 				print >>sys.stderr, "constructing template decomposition %d of %d:  %g s ... %g s" % (i + 1, len(self.bank_fragments), -bank_fragment.end, -bank_fragment.start)
-			bank_fragment.set_template_bank(template_bank[i], tolerance, verbose = verbose)
+			bank_fragment.set_template_bank(template_bank[i], tolerance, self.snr_threshold, verbose = verbose)
 
 		self.gate_threshold = sum_of_squares_threshold_from_fap(gate_fap, numpy.array([weight**2 for bank_fragment in self.bank_fragments for weight in bank_fragment.sum_of_squares_weights], dtype = "double"))
 		if verbose:
