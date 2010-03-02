@@ -208,7 +208,7 @@ class Bank(object):
 
 			self.orthogonal_template_bank, self.singular_values, self.mix_matrix, self.chifacs = cbc_template_fir.decompose_templates(template_bank, tolerance)
 
-			self.sum_of_squares_weights = math.sqrt(self.chifacs.mean() * misc.ss_coeffs(self.singular_values,snr_thresh))
+			self.sum_of_squares_weights = numpy.sqrt(self.chifacs.mean() * gstlalmisc.ss_coeffs(self.singular_values,snr_thresh))
 
 			if verbose:
 				print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
