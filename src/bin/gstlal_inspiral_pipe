@@ -96,7 +96,7 @@ def make_coinc_branch(dag, datafinds, seglists, time_slides, vetoes_cache, tag, 
 	#
 
 	if options.injections:
-		injnodes = power.make_inspinj_fragment(dag, seglists.extent_all(), tag, 0.0)
+		injnodes = gstlaldagparts.make_inspinj_fragment(dag, seglists.extent_all(), tag, 0.0)
 	else:
 		injnodes = set()
 
@@ -316,7 +316,7 @@ coinc_nodes = make_coinc_branch(dag, datafinds, background_seglists, background_
 
 dag.write_sub_files()
 dag.write_dag()
-
+dag.write_script()
 
 #
 # write a message telling the user that the DAG has been written
