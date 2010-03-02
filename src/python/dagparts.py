@@ -100,9 +100,10 @@ class InspInjJob(pipeline.CondorDAGJob):
 		self.set_sub_file("lalapps_inspinj.sub")
 
 
-class InspInjNode(pipeline.CondorDAGNode):
+class InspInjNode(pipeline.CondorDAGNode, pipeline.AnalysisNode):
 	def __init__(self, job):
 		pipeline.CondorDAGNode.__init__(self, job)
+		pipeline.AnalysisNode.__init__(self)
 		self.__usertag = None
 		self.output_cache = []
 
@@ -130,6 +131,9 @@ class InspInjNode(pipeline.CondorDAGNode):
 
 	def get_end(self):
 		return self.get_opts().get("macrogpsendtime", None)
+
+	def get_ifo(self):
+		return "H1H2L1V1"
 
 	def get_output_cache(self):
 		"""
@@ -398,7 +402,7 @@ def init_job_types(config_parser, job_types = ("inspinj", "gstlalinspiral", "ins
 
 	# lalapps_binj
 	if "inspinj" in job_types:
-		injspinjjob = InspInjJob(config_parser)
+		inspinjjob = InspInjJob(config_parser)
 
 	# gstlal_inspiral
 	if "gstlalinspiral" in job_types:
@@ -495,27 +499,20 @@ def make_gstlalinspiral_fragment(dag, parents, instrument, seg, tag, framecache,
 	return set([node])
 
 
-def make_inspinj_fragment(dag, seg, tag, offset, flow = None, fhigh = None):
+def make_inspinj_fragment(dag, seg, tag, offset):
 	# FIXME:  this function is still broken
 
 	# one injection every time-step / pi seconds
-	period = float(binjjob.get_opts()["time-step"]) / math.pi
+	period = float(inspinjjob.get_opts()["time-step"]) / math.pi
 
 	# adjust start time to be commensurate with injection period
 	start = seg[0] - seg[0] % period + period * offset
 
-	node = BurstInjNode(binjjob)
+	node = InspInjNode(inspinjjob)
 	node.set_start(start)
 	node.set_end(seg[1])
-	if flow is not None:
-		node.set_name("lalapps_binj_%d_%d" % (int(start), int(flow)))
-	else:
-		node.set_name("lalapps_binj_%d" % int(start))
+	node.set_name("lalapps_inspinj_%d" % int(start))
 	node.set_user_tag(tag)
-	if flow is not None:
-		node.add_macro("macroflow", flow)
-	if fhigh is not None:
-		node.add_macro("macrofhigh", fhigh)
 	node.add_macro("macroseed", int(time.time() + start))
 	dag.add_node(node)
 	return set([node])
@@ -587,7 +584,7 @@ def make_multiinspinj_fragment(dag, seg, tag):
 	flow = float(powerjob.get_opts()["low-freq-cutoff"])
 	fhigh = flow + float(powerjob.get_opts()["bandwidth"])
 
-	nodes = make_binj_fragment(dag, seg, tag, 0.0, flow, fhigh)
+	nodes = make_inspinj_fragment(dag, seg, tag, 0.0, flow, fhigh)
 	return make_lladd_fragment(dag, nodes, tag)
 
 
