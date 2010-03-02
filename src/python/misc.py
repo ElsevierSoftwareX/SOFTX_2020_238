@@ -72,3 +72,12 @@ def max_stat_thresh(coeffs, fap, samp_tol=100.0):
 	out.sort()
 	p = numpy.cumsum(out)/numpy.sum(out)
         return out[len(p[p>fap])]
+
+#
+# Function to compute the optimal quadratic statistic coefficients given 
+# singular values S and a desired signal size amp
+# 
+
+def ss_coeffs(S, amp=5.5):
+	return 1.0 / (1.0 + len(S) * S**-2  * amp**-2 )
+	
