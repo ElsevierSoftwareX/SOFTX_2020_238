@@ -27,7 +27,7 @@
 
 
 from scipy import optimize
-
+import numpy, scipy
 
 #
 # import all symbols from _misc
@@ -59,3 +59,19 @@ def cdf_weighted_chisq_Pinv(A, noncent, dof, var, P, lim, accuracy):
 		lo = hi
 		hi *= 8
 	return optimize.brentq(func, lo, hi, xtol = accuracy * 4)
+
+#
+# Function to compute the threshold at a fixed FAR for weighted \chi^2
+#
+
+
+def max_stat_thresh(coeffs, fap, samp_tol=1000.0):
+	num = int(samp_tol/ fap)
+	out = numpy.zeros(num) 
+	for c in coeffs:
+		r = scipy.randn(num)
+		v = c*r**2
+		out += v
+	out.sort()
+	p = numpy.cumsum(out) / numpy.sum(out)
+        return out[len(p[p>fap])]
