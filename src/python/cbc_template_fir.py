@@ -216,7 +216,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_freq_bounda
 
 		sigma = abs(numpy.dot(data, numpy.conj(data)))
 		data *= cmath.sqrt(2 / sigma)
-		sigmasq.append(sigma)
+		sigmasq.append(2. * sigma)
 
 		#
 		# copy real and imaginary parts into adjacent (real-valued)
