@@ -331,10 +331,11 @@ def mknxydumpsink(pipeline, src, filename, segment = None):
 	mkfilesink(pipeline, elem, filename)
 
 
-def mktriggergen(pipeline, snr, chisq, template_bank_filename, snr_threshold):
+def mktriggergen(pipeline, snr, chisq, template_bank_filename, snr_threshold, sigmasq):
 	elem = gst.element_factory_make("lal_triggergen")
 	elem.set_property("bank-filename", template_bank_filename)
 	elem.set_property("snr-thresh", snr_threshold)
+	elem.set_property("sigmasq", sigmasq)
 	pipeline.add(elem)
 	# snr is complex and chisq is real so the correct source and sink
 	# pads will be selected automatically

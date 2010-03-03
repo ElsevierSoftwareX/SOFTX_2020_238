@@ -169,6 +169,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_freq_bounda
 	# Have one template bank for each bank_fragment
 	template_bank = [numpy.zeros((2 * len(template_table), int(round(rate*(end-begin)))), dtype = "double") for rate,begin,end in time_freq_boundaries]
 
+	sigmasq = []
 	# Generate each template, downsampling as we go to save memory
 	for i, row in enumerate(template_table):
 		if verbose:
@@ -213,7 +214,9 @@ def generate_templates(template_table, approximant, psd, f_low, time_freq_bounda
 		# is 2
 		#
 
-		data *= cmath.sqrt(2 / numpy.dot(data, numpy.conj(data)))
+		sigma = abs(numpy.dot(data, numpy.conj(data)))
+		data *= cmath.sqrt(2 / sigma)
+		sigmasq.append(sigma)
 
 		#
 		# copy real and imaginary parts into adjacent (real-valued)
@@ -245,7 +248,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_freq_bounda
 			template_bank[frag_num][(2*i+0),:] = data.real[end_index:begin_index:stride] * math.sqrt(stride)
 			template_bank[frag_num][(2*i+1),:] = data.imag[end_index:begin_index:stride] * math.sqrt(stride)
 
-	return template_bank, autocorrelation_bank
+	return template_bank, autocorrelation_bank, sigmasq
 
 
 def decompose_templates(template_bank, tolerance, identity = False):
