@@ -79,5 +79,5 @@ def max_stat_thresh(coeffs, fap, samp_tol=100.0):
 #
 
 def ss_coeffs(S, amp=5.5):
-	return 1.0 / (1.0 + len(S) * S**-2  * amp**-2 )
+	return S**2 / (S**2 + len(S) / amp**2 )
 	
