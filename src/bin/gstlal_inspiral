@@ -223,7 +223,7 @@ class Bank(object):
 		self.logname = logname
 
 		# Generate downsampled templates
-		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(
+		template_bank, self.autocorrelation_bank, self.sigmasq = cbc_template_fir.generate_templates(
 			lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
 			read_approximant(bank_xmldoc),
 			psd,
@@ -519,7 +519,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, control_snksrc
 	# trigger generator and progress report
 	#
 
-	head = pipeparts.mktriggergen(pipeline, pipeparts.mkqueue(pipeline, snr), chisq, bank.template_bank_filename, bank.snr_threshold)
+	head = pipeparts.mktriggergen(pipeline, pipeparts.mkqueue(pipeline, snr), chisq, bank.template_bank_filename, bank.snr_threshold, bank.sigmasq)
 	if verbose:
 		head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % logname)
 
