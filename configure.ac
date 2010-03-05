@@ -84,6 +84,16 @@ AC_SUBST([FFTW_LIBS])
 
 
 #
+# Check for NDS2
+#
+
+
+PKG_CHECK_MODULES([NDS2], [nds2-client], , [AC_MSG_ERROR([Not found!])])
+AC_SUBST([NDS2_CFLAGS])
+AC_SUBST([NDS2_LIBS])
+
+
+#
 # Check for GStreamer 0.10
 #
 
