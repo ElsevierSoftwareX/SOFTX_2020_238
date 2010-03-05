@@ -5,6 +5,7 @@ plugin_LTLIBRARIES = libgstlal.la
 libgstlal_la_SOURCES = \
 	gstlal_plugins.h gstlal.c \
 	gstlal_framesrc.h gstlal_framesrc.c \
+	gstlal_nds2_framesrc.h gstlal_nds2_framesrc.c \
 	low_latency_inspiral_functions.h low_latency_inspiral_functions.c \
 	gstlal_matrixmixer.h gstlal_matrixmixer.c \
 	gstlal_simulation.h gstlal_simulation.c \

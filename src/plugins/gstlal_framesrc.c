@@ -749,7 +749,7 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
  */
 
 
-gboolean query(GstBaseSrc *basesrc, GstQuery *query)
+static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 {
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(basesrc);
 
@@ -828,7 +828,7 @@ gboolean query(GstBaseSrc *basesrc, GstQuery *query)
  */
 
 
-gboolean check_get_range(GstBaseSrc *basesrc)
+static gboolean check_get_range(GstBaseSrc *basesrc)
 {
 	return TRUE;
 }
