@@ -55,7 +55,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_STATIC_CAPS(
 		"audio/x-raw-float, " \
 		"rate = (int) [1, MAX], " \
-		"channels = (int) [1, MAX], " \
+		"channels = (int) [1, MAX], "\
 		"endianness = (int) BYTE_ORDER, " \
 		"width = (int) {32,64}; " \
 		"audio/x-raw-int, " \
@@ -106,13 +106,6 @@ GST_BOILERPLATE(
 );
 
 
-enum property {
-   ARG_DELAY = 1,
-   ARG_SILENT,
-};
-#define DEFAULT_DELAY 0
-
-
 /*
  * ============================================================================
  *
@@ -122,8 +115,18 @@ enum property {
  */
 
 
+enum property {
+   ARG_DELAY = 1,
+   ARG_SILENT,
+};
+
+#define DEFAULT_DELAY 0
+
 /*
- * get_unit_size()
+ * get_unit_size() stores the size (in bytes) of a single sample
+ * from a single channel in the buffer.
+ * The "width" of a buffer is equal to the total number of channels
+ * times the number of bits per channel.
  */
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
 {
@@ -146,7 +149,11 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
 }
 
 
-
+/*
+ * When the caps on an element's pads a finally set, this function is called.
+ * We use this opportunity to record the chosen sampling rate and the unit
+ * size.
+ */
 static gboolean set_caps(GstBaseTransform *trans,
 			 GstCaps *incaps,
 			 GstCaps *outcaps)
@@ -159,19 +166,45 @@ static gboolean set_caps(GstBaseTransform *trans,
       /* size of unit sample */
       get_unit_size(trans,incaps,&element->unit_size);
 
+      if ( !element->silent)
+      {
+	    fprintf(stderr,"lal_delay incaps set = %s\n",gst_caps_to_string(incaps));
+	    fprintf(stderr,"lal_delay outcaps set = %s\n",gst_caps_to_string(outcaps));
+      }
+
+
       return TRUE;
 }
 
 
+/*
+ * In addition to handling buffers, elements also handle events.
+ * These events change how the element behaves, e.g., an EOS event
+ * tells the element to stop reading buffers.  The event() function
+ * is called whenever an event is passed to an element.  Return
+ * FALSE to override the parent class event handling.
+ */
 static gboolean event(GstBaseTransform *trans, GstEvent *event)
 {
+
+      GSTLALDelay *element = GSTLAL_DELAY( trans );
+
+      if ( !element->silent )
+      {
+	    fprintf(stderr,"lal_delay received signal %s\n",
+		    gst_event_type_get_name(GST_EVENT_TYPE(event)));
+      }
+
       return TRUE; //FIXME
 }
 
 
 
 /*
- * set up output buffer
+ * When an input buffer is received, prepare_output_buffer is called.
+ * This function allows you to map an output buffer to a given
+ * input buffer.  In this case, we use this function to set the
+ * size of the output buffer.
  */
 static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans,
 					   GstBuffer *inbuf,
@@ -212,6 +245,12 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans,
 }
 
 
+/*
+ * The transform function actually does the heavy lifting on buffers.
+ * Given an input buffer and an output buffer (the latter of which is
+ * set in prepare_output_buffer), determine what data actually gets put
+ * into the output buffer.
+ */
 static GstFlowReturn transform( GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
       GSTLALDelay *element = GSTLAL_DELAY(trans);
@@ -224,7 +263,7 @@ static GstFlowReturn transform( GstBaseTransform *trans, GstBuffer *inbuf, GstBu
       {
 	    if ( !element->silent )
 	    {
-		  fprintf(stderr,"skip %ld to %ld, pass nothing (rate %d)\n",
+		  fprintf(stderr,"skip %ld to %ld, let nothing through (rate %d)\n",
 			  GST_BUFFER_TIMESTAMP(inbuf),
 			  GST_BUFFER_TIMESTAMP(inbuf)+GST_BUFFER_DURATION(inbuf),
 			  element->rate);
@@ -251,7 +290,7 @@ static GstFlowReturn transform( GstBaseTransform *trans, GstBuffer *inbuf, GstBu
 
 	    if ( !element->silent )
 	    {
-		  fprintf(stderr,"skip %ld to %ld, pass %ld to %ld (rate %d)\n",
+		  fprintf(stderr,"skip %ld to %ld, let %ld to %ld through (rate %d)\n",
 			  GST_BUFFER_TIMESTAMP(inbuf),
 			  GST_BUFFER_TIMESTAMP(inbuf) + delaytime,
 			  GST_BUFFER_TIMESTAMP(outbuf),
@@ -267,6 +306,13 @@ static GstFlowReturn transform( GstBaseTransform *trans, GstBuffer *inbuf, GstBu
       else
 	 /* pass entire buffer */
       {
+	    if ( !element->silent )
+	    {
+		  fprintf(stderr,"let everything through %ld to %ld (rate %d)\n",
+			  GST_BUFFER_TIMESTAMP(inbuf),
+			  GST_BUFFER_TIMESTAMP(inbuf) + GST_BUFFER_DURATION(inbuf),
+			  element->rate);
+	    }
 	    result = GST_FLOW_OK;
       }
 
