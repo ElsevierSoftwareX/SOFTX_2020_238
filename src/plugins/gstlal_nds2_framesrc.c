@@ -48,19 +48,6 @@
 
 
 /*
- * stuff from LAL
- */
-
-
-#include <lal/Date.h>
-#include <lal/LALDatatypes.h>
-#include <lal/FrameStream.h>
-#include <lal/LALFrameIO.h>
-#include <lal/Units.h>
-#include <lal/TimeSeries.h>
-
-
-/*
  * our own stuff
  */
 
@@ -86,7 +73,7 @@ static GstBaseSrcClass *parent_class = NULL;
  */
 
 
-static const char* DEFAULT_HOST = "marble.ligo-wa.caltech.edu";
+static const char* DEFAULT_HOST = "ldas-pcdev1.ligo.caltech.edu";
 static const int DEFAULT_PORT = 31200;
 static const char* DEFAULT_REQUESTED_CHANNEL_NAME = "H1:DMT-STRAIN";
 
@@ -155,11 +142,18 @@ static int connect_daq(GSTLALNDS2FrameSrc* element)
 
 static int set_channel_for_channelname(GSTLALNDS2FrameSrc *element)
 {
-    daq_channel_t channels[MAX_CHANNELS];
+    daq_channel_t* channels = calloc(MAX_CHANNELS, sizeof(daq_channel_t));
+    if (!channels)
+    {
+        GST_ERROR_OBJECT(element, "malloc");
+        return FALSE;
+    }
+    
     int nchannels_received;
-    int retval = daq_recv_channels(element->daq, channels, sizeof(channels)/sizeof(*channels), &nchannels_received);
+    int retval = daq_recv_channels(element->daq, channels, MAX_CHANNELS, &nchannels_received);
     if (retval)
     {
+        free(channels);
         GST_ERROR_OBJECT(element, "daq_recv_channels: error %d", retval);
         return FALSE;
     }
@@ -171,12 +165,14 @@ static int set_channel_for_channelname(GSTLALNDS2FrameSrc *element)
             daq_channel_t* found_channel = malloc(sizeof(daq_channel_t));
             if (!found_channel)
             {
+                free(channels);
                 GST_ERROR_OBJECT(element, "malloc");
                 return FALSE;
             }
             
             *found_channel = *channel;
-            element->daq_channel = channel;
+            free(channels);
+            element->daq_channel = found_channel;
             return TRUE;
         }
     
@@ -281,8 +277,7 @@ static GstCaps *caps_for_channel(GSTLALNDS2FrameSrc* element)
 
 
 enum property {
-    ARG_SRC_HOST,
-    ARG_SRC_PORT,
+    ARG_SRC_HOST = 1,
 	ARG_SRC_REQUESTED_CHANNEL_NAME
 };
 
@@ -379,7 +374,7 @@ static gboolean start(GstBaseSrc *object)
     
     // Request online data.
     {
-        int retval = daq_request_online(element->daq);
+        int retval = daq_request_data(element->daq, 0, 1000000000, 1);
         if (retval)
         {
             disconnect_and_free_daq(element);
@@ -546,10 +541,11 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
  */
 
 
+
 /*
 static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 {
-	GSTLALNDS2FrameSrc *element = GSTLAL_NDS2_FRAMESRC(basesrc);
+    GSTLALNDS2FrameSrc *element = GSTLAL_NDS2_FRAMESRC(basesrc);
 
 	switch(GST_QUERY_TYPE(query)) {
 	case GST_QUERY_FORMATS:
@@ -622,6 +618,8 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 */
 
 
+
+
 /*
  * check_get_range()
  */
@@ -629,7 +627,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 
 static gboolean check_get_range(GstBaseSrc *basesrc)
 {
-	return FALSE;
+	return TRUE;
 }
 
 
@@ -696,8 +694,8 @@ static void base_init(gpointer class)
 				"rate = (int) [1, MAX], " \
 				"channels = (int) 1, " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) [16, 32, 64], " \
-				"depth = (int) [16, 32, 64], " \
+				"width = (int) {16, 32, 64}, " \
+				"depth = (int) {16, 32, 64}, " \
 				"signed = (boolean) true"
 			)
 		)
@@ -727,7 +725,7 @@ static void class_init(gpointer class, gpointer class_data)
 		gobject_class,
 		ARG_SRC_HOST,
 		g_param_spec_string(
-			"host",
+			"nds2-host",
 			"Host",
 			"NDS2 remote host domain name or IP address",
 			DEFAULT_HOST,
@@ -757,6 +755,9 @@ static void class_init(gpointer class, gpointer class_data)
 	//gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
 	//gstbasesrc_class->query = GST_DEBUG_FUNCPTR(query);
 	gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
+    
+    // Start up NDS2
+    daq_startup();
 }
 
 
@@ -774,13 +775,19 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	gst_pad_use_fixed_caps(GST_BASE_SRC_PAD(basesrc));
 
-    element->host = DEFAULT_HOST;
+    element->host = g_malloc(strlen(DEFAULT_HOST)+1);
+    strcpy(element->host, DEFAULT_HOST);
+    
     element->port = DEFAULT_PORT;
-	element->requested_channel_name = DEFAULT_REQUESTED_CHANNEL_NAME;
+    
+	element->requested_channel_name = g_malloc(strlen(DEFAULT_REQUESTED_CHANNEL_NAME));
+    strcpy(element->requested_channel_name, DEFAULT_REQUESTED_CHANNEL_NAME);
+    
     element->daq = NULL;
     element->daq_channel = NULL;
 
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
+    gst_base_src_set_live(GST_BASE_SRC(object), TRUE);
 }
 
 
