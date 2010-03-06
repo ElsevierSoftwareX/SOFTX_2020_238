@@ -30,6 +30,8 @@
 #include <lal/LALDatatypes.h>
 #include <lal/Units.h>
 
+#include <daqc.h>
+
 
 G_BEGIN_DECLS
 
@@ -54,16 +56,12 @@ typedef struct {
 typedef struct {
 	GstBaseSrc basesrc;
 
-	char *location;
-	char *instrument;
-	char *channel_name;
-	char *full_channel_name;
-	gint rate;
-	gint width;
-
-	FrStream *stream;
-	LALTYPECODE series_type;
-	LALUnit units;
+    char* host;
+    int port;
+	char* requested_channel_name;
+    
+    daq_t* daq;
+    daq_channel_t* daq_channel;
 } GSTLALNDS2FrameSrc;
 
 
