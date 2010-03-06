@@ -55,9 +55,20 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_STATIC_CAPS(
 		"audio/x-raw-float, " \
 		"rate = (int) [1, MAX], " \
-		"channels = (int) 1, " \
+		"channels = (int) [1, MAX], " \
 		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 64"
+		"width = (int) {32,64}; " \
+		"audio/x-raw-int, " \
+                "rate = (int) [1, MAX], " \
+		"channels = (int) [1, MAX], " \
+                "endianness = (int) BYTE_ORDER, " \
+                "width = (int) {8,16,32,64}, " \
+		"signed = (boolean) {true,false}; " \
+		"audio/x-raw-complex, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) [1, MAX], " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) {64,128}" \
 	)
 );
 
@@ -69,9 +80,20 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_STATIC_CAPS(
 		"audio/x-raw-float, " \
 		"rate = (int) [1, MAX], " \
-		"channels = (int) 1, " \
+		"channels = (int) [1, MAX], " \
 		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 64"
+		"width = (int) {32,64};"
+		"audio/x-raw-int, " \
+                "rate = (int) [1, MAX], " \
+		"channels = (int) [1, MAX], " \
+                "endianness = (int) BYTE_ORDER, " \
+                "width = (int) {8,16,32,64}, " \
+		"signed = (boolean) {true,false}; " \
+		"audio/x-raw-complex, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) [1, MAX], " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) {64,128}"
 			)
 );
 
@@ -140,19 +162,11 @@ static gboolean set_caps(GstBaseTransform *trans,
       return TRUE;
 }
 
-/*
+
 static gboolean event(GstBaseTransform *trans, GstEvent *event)
 {
-      GSTLALDelay *element = GSTLAL_DELAY(trans);
-
-      if ( event->type == GST_EVENT_NEWSEGMENT )
-      {
-	    return TRUE; //FIXME fix segment boundaries
-      }
-
-      return TRUE;
+      return TRUE; //FIXME
 }
-*/
 
 
 
@@ -354,6 +368,7 @@ gstlal_delay_base_init(gpointer gclass)
 	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
 	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
 	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->event = GST_DEBUG_FUNCPTR(event);
 
 }
 
