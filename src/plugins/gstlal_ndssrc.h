@@ -1,5 +1,5 @@
 /*
- *  NDS2-based frame src element
+ *  NDS-based src element
  *
  *  Copyright (C) 2008  Leo Singer
  *
@@ -19,16 +19,12 @@
  */
 
 
-#ifndef __GSTLAL_NDS2_FRAMESRC_H__
-#define __GSTLAL_NDS2_FRAMESRC_H__
+#ifndef __GSTLAL_NDSSRC_H__
+#define __GSTLAL_NDSSRC_H__
 
 
 #include <gst/gst.h>
 #include <gst/base/gstpushsrc.h>
-
-#include <lal/FrameStream.h>
-#include <lal/LALDatatypes.h>
-#include <lal/Units.h>
 
 #include <daqc.h>
 
@@ -36,21 +32,21 @@
 G_BEGIN_DECLS
 
 
-#define GSTLAL_NDS2_FRAMESRC_TYPE \
-	(gstlal_nds2_framesrc_get_type())
-#define GSTLAL_NDS2_FRAMESRC(obj) \
-	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_NDS2_FRAMESRC_TYPE, GSTLALNDS2FrameSrc))
-#define GSTLAL_NDS2_FRAMESRC_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_NDS2_FRAMESRC_TYPE, GSTLALNDS2FrameSrcClass))
-#define GST_IS_GSTLAL_NDS2_FRAMESRC(obj) \
-	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_NDS2_FRAMESRC_TYPE))
-#define GST_IS_GSTLAL_NDS2_FRAMESRC_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_NDS2_FRAMESRC_TYPE))
+#define GSTLAL_NDSSRC_TYPE \
+	(gstlal_ndssrc_get_type())
+#define GSTLAL_NDSSRC(obj) \
+	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_NDSSRC_TYPE, GSTLALNDSSrc))
+#define GSTLAL_NDSSRC_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_NDSSRC_TYPE, GSTLALNDSSrcClass))
+#define GST_IS_GSTLAL_NDSSRC(obj) \
+	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_NDSSRC_TYPE))
+#define GST_IS_GSTLAL_NDSSRC_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_NDSSRC_TYPE))
 
 
 typedef struct {
 	GstBaseSrcClass parent_class;
-} GSTLALNDS2FrameSrcClass;
+} GSTLALNDSSrcClass;
 
 
 typedef struct {
@@ -62,13 +58,13 @@ typedef struct {
     
     daq_t* daq;
     daq_channel_t* daq_channel;
-} GSTLALNDS2FrameSrc;
+} GSTLALNDSSrc;
 
 
-GType gstlal_nds2_framesrc_get_type(void);
+GType gstlal_ndssrc_get_type(void);
 
 
 G_END_DECLS
 
 
-#endif	/* __GSTLAL_NDS2_FRAMESRC_H__ */
+#endif	/* __GSTLAL_NDSSRC_H__ */

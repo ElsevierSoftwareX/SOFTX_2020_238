@@ -1,5 +1,5 @@
 /*
- * NDS2-based frame src element
+ * NDS-based src element
  *
  * Copyright (C) 2008  Leo Singer
  *
@@ -53,7 +53,7 @@
 
 
 #include <gstlal.h>
-#include <gstlal_nds2_framesrc.h>
+#include <gstlal_ndssrc.h>
 #include <daqc_internal.h>
 
 
@@ -89,7 +89,7 @@ static const char* DEFAULT_REQUESTED_CHANNEL_NAME = "H1:DMT-STRAIN";
 
 
 // Disconnect from NDS2 server and free daq and daq_channel resources.
-static void disconnect_and_free_daq(GSTLALNDS2FrameSrc* element)
+static void disconnect_and_free_daq(GSTLALNDSSrc* element)
 {
     if (element->daq)
     {
@@ -111,7 +111,7 @@ static void disconnect_and_free_daq(GSTLALNDS2FrameSrc* element)
 
 
 // Connect to NDS2 server.
-static int connect_daq(GSTLALNDS2FrameSrc* element)
+static int connect_daq(GSTLALNDSSrc* element)
 {
     if (!element->daq)
     {
@@ -141,7 +141,7 @@ static int connect_daq(GSTLALNDS2FrameSrc* element)
  * Set channel by looking up channelname on NDS2 channel list.
  */
 
-static int set_channel_for_channelname(GSTLALNDS2FrameSrc *element)
+static int set_channel_for_channelname(GSTLALNDSSrc *element)
 {
     daq_channel_t* channels = calloc(MAX_CHANNELS, sizeof(daq_channel_t));
     if (!channels)
@@ -189,7 +189,7 @@ static int set_channel_for_channelname(GSTLALNDS2FrameSrc *element)
  */
 
 
-static GstCaps *caps_for_channel(GSTLALNDS2FrameSrc* element)
+static GstCaps *caps_for_channel(GSTLALNDSSrc* element)
 {
 	GstCaps *caps = NULL;
 
@@ -285,7 +285,7 @@ enum property {
 
 static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
 {
-	GSTLALNDS2FrameSrc *element = GSTLAL_NDS2_FRAMESRC(object);
+	GSTLALNDSSrc *element = GSTLAL_NDSSRC(object);
 
 	GST_OBJECT_LOCK(element);
 
@@ -308,7 +308,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
 {
-	GSTLALNDS2FrameSrc *element = GSTLAL_NDS2_FRAMESRC(object);
+	GSTLALNDSSrc *element = GSTLAL_NDSSRC(object);
 
 	GST_OBJECT_LOCK(element);
 
@@ -342,7 +342,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 static gboolean start(GstBaseSrc *object)
 {
-	GSTLALNDS2FrameSrc *element = GSTLAL_NDS2_FRAMESRC(object);
+	GSTLALNDSSrc *element = GSTLAL_NDSSRC(object);
     
     // Connect to NDS2 server.
     if (!connect_daq(element))
@@ -438,7 +438,7 @@ static gboolean start(GstBaseSrc *object)
 
 static gboolean stop(GstBaseSrc *object)
 {
-	GSTLALNDS2FrameSrc *element = GSTLAL_NDS2_FRAMESRC(object);
+	GSTLALNDSSrc *element = GSTLAL_NDSSRC(object);
     
     disconnect_and_free_daq(element);
     
@@ -453,7 +453,7 @@ static gboolean stop(GstBaseSrc *object)
 
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
-    GSTLALNDS2FrameSrc *element = GSTLAL_NDS2_FRAMESRC(basesrc);
+    GSTLALNDSSrc *element = GSTLAL_NDSSRC(basesrc);
     
     {
         int retval = daq_recv_next(element->daq);
@@ -510,7 +510,7 @@ static gboolean is_seekable(GstBaseSrc *object)
 #if 0
 static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 {
-	GSTLALNDS2FrameSrc *element = GSTLAL_NDS2_FRAMESRC(basesrc);
+	GSTLALNDSSrc *element = GSTLAL_NDSSRC(basesrc);
 	LIGOTimeGPS epoch;
 
 	/*
@@ -554,7 +554,7 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 /*
 static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 {
-    GSTLALNDS2FrameSrc *element = GSTLAL_NDS2_FRAMESRC(basesrc);
+    GSTLALNDSSrc *element = GSTLAL_NDSSRC(basesrc);
 
 	switch(GST_QUERY_TYPE(query)) {
 	case GST_QUERY_FORMATS:
@@ -656,7 +656,7 @@ static gboolean check_get_range(GstBaseSrc *basesrc)
 
 static void finalize(GObject *object)
 {
-	GSTLALNDS2FrameSrc *element = GSTLAL_NDS2_FRAMESRC(object);
+	GSTLALNDSSrc *element = GSTLAL_NDSSRC(object);
 
 	g_free(element->host);
     element->host = NULL;
@@ -678,9 +678,9 @@ static void finalize(GObject *object)
 static void base_init(gpointer class)
 {
 	static const GstElementDetails plugin_details = {
-		"NDS2 Frame Source",
+		"NDS Source",
 		"Source",
-		"NDS2-based frame src element",
+		"NDS-based src element",
 		"Leo Singer <leo.singer@ligo.org>"
 	};
 	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
@@ -734,9 +734,9 @@ static void class_init(gpointer class, gpointer class_data)
 		gobject_class,
 		ARG_SRC_HOST,
 		g_param_spec_string(
-			"nds2-host",
+			"host",
 			"Host",
-			"NDS2 remote host domain name or IP address",
+			"NDS1 or NDS2 remote host name or IP address",
 			DEFAULT_HOST,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
@@ -780,7 +780,7 @@ static void class_init(gpointer class, gpointer class_data)
 static void instance_init(GTypeInstance *object, gpointer class)
 {
 	GstBaseSrc *basesrc = GST_BASE_SRC(object);
-	GSTLALNDS2FrameSrc *element = GSTLAL_NDS2_FRAMESRC(object);
+	GSTLALNDSSrc *element = GSTLAL_NDSSRC(object);
 
 	gst_pad_use_fixed_caps(GST_BASE_SRC_PAD(basesrc));
 
@@ -805,19 +805,19 @@ static void instance_init(GTypeInstance *object, gpointer class)
  */
 
 
-GType gstlal_nds2_framesrc_get_type(void)
+GType gstlal_ndssrc_get_type(void)
 {
 	static GType type = 0;
 
 	if(!type) {
 		static const GTypeInfo info = {
-			.class_size = sizeof(GSTLALNDS2FrameSrcClass),
+			.class_size = sizeof(GSTLALNDSSrcClass),
 			.class_init = class_init,
 			.base_init = base_init,
-			.instance_size = sizeof(GSTLALNDS2FrameSrc),
+			.instance_size = sizeof(GSTLALNDSSrc),
 			.instance_init = instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_BASE_SRC, "lal_nds2_framesrc", &info, 0);
+		type = g_type_register_static(GST_TYPE_BASE_SRC, "ndssrc", &info, 0);
 	}
 
 	return type;
