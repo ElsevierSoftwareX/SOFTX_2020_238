@@ -147,7 +147,7 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-PKG_CHECK_MODULES([LAL], [lal lalframe lalmetaio lalsupport lalburst], , [AC_MSG_ERROR([Not found!])])
+PKG_CHECK_MODULES([LAL], [lal lalframe lalmetaio lalsupport lalburst lalinspiral], , [AC_MSG_ERROR([Not found!])])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
 
