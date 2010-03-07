@@ -88,12 +88,13 @@ static const char* DEFAULT_REQUESTED_CHANNEL_NAME = "H1:DMT-STRAIN";
  */
 
 
-// Disconnect from NDS2 server and free daq and daq_channel resources.
+// Disconnect from NDS server and free daq and daq_channel resources.
 static void disconnect_and_free_daq(GSTLALNDSSrc* element)
 {
     if (element->daq)
     {
         {
+            GST_INFO_OBJECT(element, "daq_disconnect");
             int retval = daq_disconnect(element->daq);
             if (retval)
                 GST_ERROR_OBJECT(element, "daq_disconnect: %d", retval);
@@ -110,7 +111,7 @@ static void disconnect_and_free_daq(GSTLALNDSSrc* element)
 }
 
 
-// Connect to NDS2 server.
+// Connect to NDS server.
 static int connect_daq(GSTLALNDSSrc* element)
 {
     if (!element->daq)
@@ -122,6 +123,7 @@ static int connect_daq(GSTLALNDSSrc* element)
             return FALSE;
         }
         
+        GST_INFO_OBJECT(element, "daq_connect: connecting to %s:%d", element->host, element->port);
         int retval = daq_connect(daq, element->host, element->port, nds_v2);
         if (retval)
         {
@@ -138,7 +140,7 @@ static int connect_daq(GSTLALNDSSrc* element)
 
 
 /*
- * Set channel by looking up channelname on NDS2 channel list.
+ * Set channel by looking up channelname on NDS channel list.
  */
 
 static int set_channel_for_channelname(GSTLALNDSSrc *element)
@@ -151,6 +153,8 @@ static int set_channel_for_channelname(GSTLALNDSSrc *element)
     }
     
     int nchannels_received;
+    
+    GST_INFO_OBJECT(element, "daq_recv_channel_list");
     int retval = daq_recv_channel_list(element->daq, channels, MAX_CHANNELS, &nchannels_received, 0, cOnline);
     if (retval)
     {
@@ -250,11 +254,11 @@ static GstCaps *caps_for_channel(GSTLALNDSSrc* element)
 		);
 		break;
     
-    // TODO: there is one more NDS2 daq datatype: _32bit_complex.  Should this
+    // TODO: there is one more NDS daq datatype: _32bit_complex.  Should this
     // be a two-channel audio/x-raw-float?
 
 	default:
-		GST_ERROR_OBJECT(element, "unsupported NDS2 data_type: %d", element->daq_channel->data_type);
+		GST_ERROR_OBJECT(element, "unsupported NDS data_type: %d", element->daq_channel->data_type);
 		break;
 	}
     
@@ -344,7 +348,7 @@ static gboolean start(GstBaseSrc *object)
 {
 	GSTLALNDSSrc *element = GSTLAL_NDSSRC(object);
     
-    // Connect to NDS2 server.
+    // Connect to NDS server.
     if (!connect_daq(element))
         return FALSE;
     
@@ -355,15 +359,9 @@ static gboolean start(GstBaseSrc *object)
         return FALSE;
     }
     
-    // Set channel.
-    if (!set_channel_for_channelname(element))
-    {
-        disconnect_and_free_daq(element);
-        return FALSE;
-    }
-    
     // Request channel.
     {
+        GST_INFO_OBJECT(element, "daq_request_channel_from_chanlist");
         int retval = daq_request_channel_from_chanlist(element->daq, element->daq_channel);
         if (retval)
         {
@@ -375,11 +373,12 @@ static gboolean start(GstBaseSrc *object)
     
     // Request online data.
     {
+        GST_INFO_OBJECT(element, "daq_request_data");
         int retval = daq_request_data(element->daq, 0, 0, 1);
         if (retval)
         {
             disconnect_and_free_daq(element);
-            GST_ERROR_OBJECT(element, "daq_request_online: error %d", retval);
+            GST_ERROR_OBJECT(element, "daq_request_data: error %d", retval);
             return FALSE;
         }
     }
@@ -456,6 +455,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
     GSTLALNDSSrc *element = GSTLAL_NDSSRC(basesrc);
     
     {
+        GST_INFO_OBJECT(element, "daq_recv_next");
         int retval = daq_recv_next(element->daq);
         if (retval)
         {
@@ -464,6 +464,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         }
     }
     
+    GST_INFO_OBJECT(element, "daq_get_data_length");
     int data_length = daq_get_data_length(element->daq, element->daq_channel->name);
     
     {
@@ -472,6 +473,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         return result;
     }
     
+    GST_INFO_OBJECT(element, "daq_get_channel_data");
     if (!daq_get_channel_data(element->daq, element->daq_channel->name, (char*)GST_BUFFER_DATA(*buffer)))
     {
         GST_ERROR_OBJECT(element, "daq_get_channel_data: error");
@@ -620,7 +622,7 @@ static void class_init(gpointer class, gpointer class_data)
 		g_param_spec_string(
 			"requested-channel-name",
 			"Requested channel name",
-			"Name of the desired NDS2 channel.",
+			"Name of the desired NDS channel.",
 			DEFAULT_REQUESTED_CHANNEL_NAME,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
@@ -636,7 +638,7 @@ static void class_init(gpointer class, gpointer class_data)
 	gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
 	gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
     
-    // Start up NDS2
+    // Start up NDS
     daq_startup();
 }
 
