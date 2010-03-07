@@ -31,7 +31,7 @@ import math
 import numpy
 from optparse import OptionParser
 import sys
-
+import os.path
 
 import gobject
 import pygst
@@ -68,6 +68,29 @@ from gstlal import templates
 # =============================================================================
 #
 
+#
+# Read Approximant
+#
+
+def read_approximant(xmldoc):
+	approximant=ligolw_process.get_process_params(xmldoc, "tmpltbank", "--approximant")
+	approximant=approximant[0]
+
+	supported_approximants=[u'FindChirpSP', u'IMRPhenomB']
+	if approximant not in supported_approximants:
+		raise ValueError, "unsupported approximant %s"% approximant
+	return approximant
+
+#
+#check final frequency is populated and return the max final frequency
+#
+
+def check_ffinal_and_find_max_ffinal(xmldoc):
+	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+	f_final=sngl_inspiral_table.getColumnByName("f_final")
+	if not all(f_final):
+		raise ValueError, "f_final column not populated"
+	return max(f_final)
 
 #
 # sum-of-squares false alarm probability
@@ -75,7 +98,8 @@ from gstlal import templates
 
 
 def sum_of_squares_threshold_from_fap(fap, coefficients):
-	return gstlalmisc.cdf_weighted_chisq_Pinv(coefficients, numpy.zeros(coefficients.shape, dtype = "double"), numpy.ones(coefficients.shape, dtype = "int"), 0.0, 1.0 - fap, -1, fap / 16.0)
+	return gstlalmisc.max_stat_thresh(coefficients, fap)
+	#return gstlalmisc.cdf_weighted_chisq_Pinv(coefficients, numpy.zeros(coefficients.shape, dtype = "double"), numpy.ones(coefficients.shape, dtype = "int"), 0.0, 1.0 - fap, -1, fap / 16.0)
 
 
 #
@@ -178,33 +202,42 @@ class Bank(object):
 			self.start = start
 			self.end = end
 
-		def set_template_bank(self, template_bank, tolerance, verbose = False):
+		def set_template_bank(self, template_bank, tolerance, snr_thresh, verbose = False):
 			if verbose:
 				print >>sys.stderr, "\t%d templates of %d samples" % template_bank.shape
 
 			self.orthogonal_template_bank, self.singular_values, self.mix_matrix, self.chifacs = cbc_template_fir.decompose_templates(template_bank, tolerance)
 
-			self.sum_of_squares_weights = self.singular_values * math.sqrt(self.chifacs.mean() / numpy.dot(self.singular_values, self.singular_values))
+			self.sum_of_squares_weights = numpy.sqrt(self.chifacs.mean() * gstlalmisc.ss_coeffs(self.singular_values,snr_thresh))
 
 			if verbose:
 				print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
 				print >>sys.stderr, "\tsum-of-squares expectation value is %g" % self.chifacs.mean()
 
-	def __init__(self, template_bank_filename, psd, time_freq_boundaries, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
-		self.template_bank_filename = template_bank_filename	# FIXME:  remove when not needed by trigger generator element
+	def __init__(self, bank_xmldoc, psd, time_freq_boundaries, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
+		# FIXME: remove template_bank_filename when no longer needed
+		# by trigger generator element
+		self.template_bank_filename = None
 		self.filter_length = max(end for rate,begin,end in time_freq_boundaries)
 		self.snr_threshold = snr_threshold
 		self.logname = logname
 
-		template_bank_table = lsctables.table.get_table(utils.load_filename(template_bank_filename, gz = (template_bank_filename or "stdin").endswith(".gz"), verbose = verbose), lsctables.SnglInspiralTable.tableName)
-		template_bank, self.autocorrelation_bank = cbc_template_fir.generate_templates(template_bank_table, psd, flow, time_freq_boundaries, autocorrelation_length = autocorrelation_length, verbose = verbose)
+		# Generate downsampled templates
+		template_bank, self.autocorrelation_bank, self.sigmasq = cbc_template_fir.generate_templates(
+			lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
+			read_approximant(bank_xmldoc),
+			psd,
+			flow,
+			time_freq_boundaries,
+			autocorrelation_length = autocorrelation_length,
+			verbose = verbose)
 
 		# Assign template banks to fragments
 		self.bank_fragments = [Bank.BankFragment(rate,begin,end) for rate,begin,end in time_freq_boundaries]
 		for i, bank_fragment in enumerate(self.bank_fragments):
 			if verbose:
 				print >>sys.stderr, "constructing template decomposition %d of %d:  %g s ... %g s" % (i + 1, len(self.bank_fragments), -bank_fragment.end, -bank_fragment.start)
-			bank_fragment.set_template_bank(template_bank[i], tolerance, verbose = verbose)
+			bank_fragment.set_template_bank(template_bank[i], tolerance, self.snr_threshold, verbose = verbose)
 
 		self.gate_threshold = sum_of_squares_threshold_from_fap(gate_fap, numpy.array([weight**2 for bank_fragment in self.bank_fragments for weight in bank_fragment.sum_of_squares_weights], dtype = "double"))
 		if verbose:
@@ -212,6 +245,11 @@ class Bank(object):
 
 	def get_rates(self):
 		return set(bank_fragment.rate for bank_fragment in self.bank_fragments)
+
+	# FIXME: remove set_template_bank_filename when no longer needed
+	# by trigger generator element
+	def set_template_bank_filename(self,name):
+		self.template_bank_filename = name
 
 
 #
@@ -330,11 +368,12 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 	# FIXME:  re-measure these;  we've changed the quality of the
 	# resampler since these were measured.
 	correction = {
-		128: 1.03 / 0.93,
-		256: 1.03 / 0.93,
-		512: 1.03 / 0.93,
-		1024: 1.03 / 1.03,
-		2048: 1.03 / 1.03
+		64: 1 / 0.961,
+		128: 1 / 0.961,
+		256: 1 / 0.962,
+		512: 1 / 0.962,
+		1024: 1 / 0.962,
+		2048: 1 / 0.999
 	}
 
 	head = {source_rate: pipeparts.mktee(pipeline, head)}
@@ -480,7 +519,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, control_snksrc
 	# trigger generator and progress report
 	#
 
-	head = pipeparts.mktriggergen(pipeline, pipeparts.mkqueue(pipeline, snr), chisq, bank.template_bank_filename, bank.snr_threshold)
+	head = pipeparts.mktriggergen(pipeline, pipeparts.mkqueue(pipeline, snr), chisq, bank.template_bank_filename, bank.snr_threshold, bank.sigmasq)
 	if verbose:
 		head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % logname)
 
@@ -631,6 +670,11 @@ def parse_command_line():
 		required_options += ["frame_cache"]
 	elif options.frame_cache is not None:
 		raise ValueError, "cannot set --frame-cache with --fake-data"
+
+	# FIXME: should also check for read permissions
+	for bankname in options.template_bank:
+		if not os.path.exists(bankname):
+			raise SystemExit, "Template bank file %s does not exist." % bankname
 
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
@@ -788,21 +832,45 @@ else:
 	if options.write_psd is not None:
 		write_psd(options.write_psd, psd, verbose = options.verbose)
 
+#
+# Make template banks
+#
 
-banks = [
-	Bank(
-		template_bank_filename,
-		psd,
-		templates.time_frequency_boundaries(template_bank_filename, flow = options.flow,verbose=options.verbose),
-		gate_fap = options.ortho_gate_fap,
-		snr_threshold = options.snr_threshold,
-		tolerance = options.svd_tolerance,
+banks = []
+for n, filename in enumerate(options.template_bank):
+	# Open template bank file
+	bank_xmldoc = utils.load_filename(
+		filename,
+		gz = (filename or "stdin").endswith(".gz"),
+		verbose = options.verbose)
+
+	# Choose how to break up templates in time
+	time_freq_bounds = templates.time_frequency_boundaries(
+		lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
+		fhigh=check_ffinal_and_find_max_ffinal(bank_xmldoc),
 		flow = options.flow,
-		autocorrelation_length = 201,	# samples
-		logname = "bank%d" % n,
-		verbose = options.verbose
-	) for n, template_bank_filename in enumerate(options.template_bank)
-]
+		verbose=options.verbose)
+
+	# Generate templates, perform SVD, get orthogonal basis
+	# and store as Bank object
+	banks.append(
+		Bank(
+			bank_xmldoc,
+			psd,
+			time_freq_bounds,
+			gate_fap = options.ortho_gate_fap,
+			snr_threshold = options.snr_threshold,
+			tolerance = options.svd_tolerance,
+			flow = options.flow,
+			autocorrelation_length = 201,	# samples
+			logname = "bank%d" % n,
+			verbose = options.verbose
+		        )
+		)
+
+	# FIXME: remove this loop when no longer needed
+	# by trigger generator element.
+	banks[n].set_template_bank_filename(filename)
 
 
 #

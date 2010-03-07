@@ -120,10 +120,16 @@ def interpolate_psd(psd, deltaF):
 	)
 
 
-def generate_template(template_bank_row, f_low, sample_rate, duration, order = 7, end_freq = "light_ring"):
+def generate_template(template_bank_row, approximant, f_low, sample_rate, duration, order = 7, end_freq = "light_ring"):
 	z = numpy.empty(int(round(sample_rate * duration)), "cdouble")
 
 	spawaveform.waveform(template_bank_row.mass1, template_bank_row.mass2, order, 1.0 / duration, 1.0 / sample_rate, f_low, spawaveform.ffinal(template_bank_row.mass1, template_bank_row.mass2, end_freq), z)
+	if approximant=="FindChirpSP":
+		spawaveform.waveform(template_bank_row.mass1, template_bank_row.mass2, order, 1.0 / duration, 1.0 / sample_rate, f_low, spawaveform.ffinal(template_bank_row.mass1, template_bank_row.mass2, end_freq), z)
+	elif approximant=="IMRPhenomB":
+		spawaveform.imrwaveform(template_bank_row.mass1, template_bank_row.mass2, 1.0/duration, f_low, z, template_bank_row.chi)
+	else:
+		raise ValueError, "Unsupported approximant given"
 
 	return laltypes.COMPLEX16FrequencySeries(
 		name = "template",
@@ -135,7 +141,7 @@ def generate_template(template_bank_row, f_low, sample_rate, duration, order = 7
 	)
 
 
-def generate_templates(template_table, psd, f_low, time_freq_boundaries, autocorrelation_length = None, verbose = False):
+def generate_templates(template_table, approximant, psd, f_low, time_freq_boundaries, autocorrelation_length = None, verbose = False):
 	sample_rate_max = max(rate for rate,begin,end in time_freq_boundaries)
 	duration = max(end for rate,begin,end in time_freq_boundaries)
 	length_max = int(round(duration * sample_rate_max))
@@ -163,6 +169,7 @@ def generate_templates(template_table, psd, f_low, time_freq_boundaries, autocor
 	# Have one template bank for each bank_fragment
 	template_bank = [numpy.zeros((2 * len(template_table), int(round(rate*(end-begin)))), dtype = "double") for rate,begin,end in time_freq_boundaries]
 
+	sigmasq = []
 	# Generate each template, downsampling as we go to save memory
 	for i, row in enumerate(template_table):
 		if verbose:
@@ -172,7 +179,7 @@ def generate_templates(template_table, psd, f_low, time_freq_boundaries, autocor
 		# generate "cosine" component of frequency-domain template
 		#
 
-		fseries = generate_template(row, f_low, sample_rate_max, working_duration)
+		fseries = generate_template(row, approximant, f_low, sample_rate_max, working_duration)
 
 		#
 		# whiten and add quadrature phase ("sine" component)
@@ -207,7 +214,9 @@ def generate_templates(template_table, psd, f_low, time_freq_boundaries, autocor
 		# is 2
 		#
 
-		data *= cmath.sqrt(2 / numpy.dot(data, numpy.conj(data)))
+		sigma = abs(numpy.dot(data, numpy.conj(data)))
+		data *= cmath.sqrt(2 / sigma)
+		sigmasq.append(2. * sigma)
 
 		#
 		# copy real and imaginary parts into adjacent (real-valued)
@@ -239,7 +248,7 @@ def generate_templates(template_table, psd, f_low, time_freq_boundaries, autocor
 			template_bank[frag_num][(2*i+0),:] = data.real[end_index:begin_index:stride] * math.sqrt(stride)
 			template_bank[frag_num][(2*i+1),:] = data.imag[end_index:begin_index:stride] * math.sqrt(stride)
 
-	return template_bank, autocorrelation_bank
+	return template_bank, autocorrelation_bank, sigmasq
 
 
 def decompose_templates(template_bank, tolerance, identity = False):
@@ -268,7 +277,7 @@ def decompose_templates(template_bank, tolerance, identity = False):
 	# S.V.D.
 	#
 
-	U, s, Vh = linalg.svd(template_bank.T)
+	U, s, Vh = spawaveform.svd(template_bank.T,mod=True,inplace=True)
 
 	#
 	# determine component count

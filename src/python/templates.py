@@ -166,85 +166,104 @@ def normalized_autocorrelation(fseries, revplan):
 
 
 def time_frequency_boundaries(
-	template_bank_filename,
-	segment_samples = 4096,
-	flow = 64,
-	sample_rate_max = 2048,
-	padding = 0.9,
+	template_bank_table,
+	flow = 40,
+	fhigh = 900,
+	padding = 1.1,
 	verbose = False
 ):
 	"""
 	The function time_frequency_boundaries splits a template bank up by
-	times for which different sampling rates are appropriate.  The
-	function returns a list of 3-tuples of the form (rate,begin,end)
+	times for which different sampling rates are appropriate.
+
+	The function returns a list of 3-tuples of the form (rate,begin,end)
 	where rate is the sampling rate and begin/end mark the boundaries
 	during which the given rate is guaranteed to be appropriate (no
-	template exceeds a frequency of padding*Nyquist during these times
-	and no lower sampling rate would work).  For computational
-	purposes, no time interval exceeds max_samples_per_segment.  The
-	same rate may therefore apply to more than one segment.
+	template exceeds a frequency of Nyquist/padding during these times).
 	"""
 	# Round a number up to the nearest power of 2
+	# FIXME: change to integer arithmetic
 	def ceil_pow_2( number ):
 		return 2**(numpy.ceil(numpy.log2( number )))
 
-	# Load template bank mass params
-	template_bank_table = (
-		lsctables.table.get_table(
-			utils.load_filename(
-				template_bank_filename,
-				gz=template_bank_filename.endswith("gz") ),
-			"sngl_inspiral") )
-	mass1 = template_bank_table.get_column('mass1')
-	mass2 = template_bank_table.get_column('mass2')
+	#
+	# DETERMINE A SET OF ALLOWED SAMPLE RATES
+	#
 
-	# We only allow sample rates that are powers of two.
-	#
-	# h(t) is sampled at 16384Hz, which sets the upper limit
-	# and advligo will likely not reach below 10Hz, which 
-	# sets the lower limit (32Hz = ceil_pow_2(2*10)Hz )
-	#
-	allowed_rates = [32,64,128,256,512,1024,2048,4096,8192,16384]
+	# We only allow sample rates that are powers of two.  The upper limit
+	# is set by the sampling rate for h(t), which is 16384Hz.  The lower
+	# limit is set arbitrarily to be 32Hz.
+	allowed_rates = [16384,8192,4096,2048,1024,512,256,128,64,32]
 
-	#
-	# Adjust the allowed_rates to fit with the template bank
-	#
-	ffinal_max = max(spawaveform.ffinal(m1,m2,'schwarz_isco') for m1,m2 in zip(mass1,mass2) )
-	ffinal_max = min(padding*allowed_rates[-1]/2,ffinal_max)
-
-	# Refine the list of allowed rates
-	while allowed_rates[-1] > min(2*ffinal_max/padding,sample_rate_max):
+	# Remove too-small and too-big sample rates base on input params.
+	sample_rate_min = ceil_pow_2( 2 * padding * flow )
+	sample_rate_max = ceil_pow_2( 2 * padding * fhigh )
+	while allowed_rates[-1] < sample_rate_min:
 		allowed_rates.pop(-1)
-
-	sample_rate_min = ceil_pow_2( 2*(1./padding)* flow )
-	while allowed_rates[0] < sample_rate_min:
+	while allowed_rates[0] > sample_rate_max:
 		allowed_rates.pop(0)
 
 	#
-	# Split up templates by time
+	# FIND TIMES WHEN THESE SAMPLE RATES ARE OK TO USE
 	#
 
-	# FIXME: what happens if padding*sample_rate_min/2 == flow?
-	# Best to look at high rates first
-	allowed_rates.reverse()
-	time_freq_boundaries = [(sample_rate_max,0,(1./sample_rate_max)*segment_samples)]
-	accum_time = (1./sample_rate_max)*segment_samples
-	for rate in allowed_rates:
-		longest_chirp = max(spawaveform.chirptime(m1,m2,7,padding*rate/2,sample_rate_max/2) for m1,m2 in zip(mass1,mass2))
-		if longest_chirp < accum_time:
-			allowed_rates.remove(rate)
-			continue
-		while accum_time <= longest_chirp:
-			segment_num = len(time_freq_boundaries)
-			time_freq_boundaries.append((rate,accum_time,accum_time+(1./rate)*segment_samples))
-			accum_time += (1./rate)*segment_samples
+	# Load template bank mass params
+	mass1 = template_bank_table.get_column('mass1')
+	mass2 = template_bank_table.get_column('mass2')
 
-	longest_chirp = max(spawaveform.chirptime(m1,m2,7,flow,sample_rate_max/2) for m1,m2 in zip(mass1,mass2))
-	rate = allowed_rates[-1]
-	while accum_time <= longest_chirp:
-		segment_num = len(time_freq_boundaries)
-		time_freq_boundaries.append((rate,accum_time,accum_time+(1./rate)*segment_samples))
-		accum_time += (1./rate)*segment_samples
+	# How many sample points should be included in a chunk?
+	# We need to balance the need to have few chunks with the
+	# need to have small chunks.
+	# We choose the min size such that the template matrix is
+	# has its time dimension at least as large as its template dimension.
+	# The max size is chosen based on experience, which shows that
+	# SVDs of matrices bigger than m x 8192 are very slow.
+	segment_samples_max = 8192.0
+	segment_samples_min = max(ceil_pow_2( 2*len(mass1) ),1024)
+	if segment_samples_min >= segment_samples_max:
+		raise ValueError("The input template bank must have fewer than 4096 templates.")
+
+	# For each allowed sampling rate with associated Nyquist frequency fN,
+	# determine the greatest amount of time any template in the bank spends
+	# between fN/2 and fhigh.
+	# fN/2 is given by sampling_rate/4 and is the next lowest Nyquist frequency
+	# We pad this so that we only start a new lower frequency sampling rate
+	# when all the waveforms are a fraction (padding-1) below the fN/2.
+	time_freq_boundaries = []
+	accum_time = 0
+	for rate in allowed_rates:
+		this_flow = max( float(rate)/(4*padding), flow )
+		longest_chirp = max(spawaveform.chirptime(m1,m2,7,this_flow,fhigh) for m1,m2 in zip(mass1,mass2))
+
+		# Do any of the templates go beyond the accumulated time?
+		# If so, we need to add some blocks at this sampling rate.
+		# If not, we can skip this sampling rate and move on to the next lower one.
+		if longest_chirp > accum_time:
+			# How many small/large blocks are needed to cover this band?
+			number_large_blocks = int(numpy.floor( rate*(longest_chirp-accum_time) / segment_samples_max ))
+			number_small_blocks = int(numpy.ceil( rate*(longest_chirp-accum_time) / segment_samples_min )
+						  - number_large_blocks*segment_samples_max/segment_samples_min)
+
+			# Add small blocks first, since the templates change more rapidly
+			# near the end of the template and therefore have more significant
+			# components in the SVD.
+			exponent = 0
+			while number_small_blocks > 0:
+				if number_small_blocks % 2 == 1:
+					time_freq_boundaries.append((rate,
+								     accum_time,
+								     accum_time+float(2**exponent)*segment_samples_min/rate))
+					accum_time += float(2**exponent)*segment_samples_min/rate
+				exponent += 1
+				number_small_blocks = number_small_blocks >> 1 # bit shift to right, dropping LSB
+
+
+			# Now add the big blocks
+			for idx in range(number_large_blocks):
+				time_freq_boundaries.append((rate,
+							     accum_time,
+							     accum_time+(1./rate)*segment_samples_max))
+				accum_time += (1./rate)*segment_samples_max
 
 	if verbose:
 		print>> sys.stderr, "Time freq boundaries: "
