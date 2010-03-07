@@ -51,11 +51,13 @@ from _misc import *
 #
 
 
+import sys
 def cdf_weighted_chisq_Pinv(A, noncent, dof, var, P, lim, accuracy):
 	func = lambda x: cdf_weighted_chisq_P(A, noncent, dof, var, x, lim, accuracy) - P
 	lo = 0.0
 	hi = 1.0
 	while func(hi) < 0:
 		lo = hi
-		hi *= 8
+		hi *= 2
+		print >>sys.stderr, lo, hi
 	return optimize.brentq(func, lo, hi, xtol = accuracy * 4)
