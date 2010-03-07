@@ -73,7 +73,7 @@ static GstBaseSrcClass *parent_class = NULL;
  */
 
 
-static const char* DEFAULT_HOST = "ldas-pcdev1.ligo.caltech.edu";
+static const char* DEFAULT_HOST = "marble.ligo-wa.caltech.edu";
 static const int DEFAULT_PORT = 31200;
 static const char* DEFAULT_REQUESTED_CHANNEL_NAME = "H1:DMT-STRAIN";
 
@@ -150,7 +150,7 @@ static int set_channel_for_channelname(GSTLALNDS2FrameSrc *element)
     }
     
     int nchannels_received;
-    int retval = daq_recv_channels(element->daq, channels, MAX_CHANNELS, &nchannels_received);
+    int retval = daq_recv_channel_list(element->daq, channels, MAX_CHANNELS, &nchannels_received, 0, cOnline);
     if (retval)
     {
         free(channels);
@@ -374,7 +374,7 @@ static gboolean start(GstBaseSrc *object)
     
     // Request online data.
     {
-        int retval = daq_request_data(element->daq, 0, 1000000000, 1);
+        int retval = daq_request_data(element->daq, 0, 0, 1);
         if (retval)
         {
             disconnect_and_free_daq(element);
@@ -382,7 +382,7 @@ static gboolean start(GstBaseSrc *object)
             return FALSE;
         }
     }
-        
+    
     {
         GstCaps* caps = caps_for_channel(element);
         if(!caps) {
