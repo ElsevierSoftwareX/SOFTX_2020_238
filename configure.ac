@@ -88,7 +88,11 @@ AC_SUBST([FFTW_LIBS])
 #
 
 
-PKG_CHECK_MODULES([NDS2], [nds2-client], , [AC_MSG_ERROR([Not found!])])
+PKG_CHECK_MODULES([NDS2], [nds2-client], [HAVE_NDS2="yes"], [AC_MSG_WARN([Not found!]) ; HAVE_NDS2="no"])
+AM_CONDITIONAL([COND_NDS2], [test "${HAVE_NDS2}" == "yes"])
+if test "${HAVE_NDS2}" == "yes" ; then
+	AC_DEFINE([HAVE_NDS2], 1)
+fi
 AC_SUBST([NDS2_CFLAGS])
 AC_SUBST([NDS2_LIBS])
 

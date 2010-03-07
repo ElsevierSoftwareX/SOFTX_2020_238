@@ -76,7 +76,6 @@
 #include <gstlal.h>
 #include <gstlal_plugins.h>
 #include <gstlal_framesrc.h>
-#include <gstlal_ndssrc.h>
 #include <gstlal_matrixmixer.h>
 #include <gstlal_simulation.h>
 #include <gstlal_whiten.h>
@@ -92,6 +91,10 @@
 #include <gstlal_nofakedisconts.h>
 #include <gstlal_reblock.h>
 #include <gstlal_delay.h>
+#ifdef HAVE_NDS2
+#include <gstlal_ndssrc.h>
+#endif
+
 
 /*
  * ============================================================================
@@ -121,7 +124,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 		GType type;
 	} *element, elements[] = {
 		{"lal_framesrc", GSTLAL_FRAMESRC_TYPE},
-		{"ndssrc", GSTLAL_NDSSRC_TYPE},
 		{"lal_matrixmixer", GSTLAL_MATRIXMIXER_TYPE},
 		{"lal_simulation", GSTLAL_SIMULATION_TYPE},
 		{"lal_whiten", GSTLAL_WHITEN_TYPE},
@@ -138,6 +140,9 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_nofakedisconts", GSTLAL_NOFAKEDISCONTS_TYPE},
 		{"lal_reblock", GSTLAL_REBLOCK_TYPE},
 		{"lal_delay", GSTLAL_DELAY_TYPE},
+#ifdef HAVE_NDS2
+		{"ndssrc", GSTLAL_NDSSRC_TYPE},
+#endif
 		{NULL, 0},
 	};
 	struct {
