@@ -54,6 +54,7 @@
 
 #include <gstlal.h>
 #include <gstlal_nds2_framesrc.h>
+#include <daqc_internal.h>
 
 
 /*
@@ -476,6 +477,14 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         GST_ERROR_OBJECT(element, "daq_get_channel_data: error");
         return GST_FLOW_ERROR;
     }
+    
+    // TODO: Ask John Zweizig how to get timestamp and duration of block; this
+    // struct is part of an obsolete interface according to Doxygen documentation
+    guint64 nsamples = data_length / element->daq_channel->bps;
+    basesrc->offset += nsamples;
+    GST_BUFFER_OFFSET_END(*buffer) = basesrc->offset;
+    GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * element->daq->tb->gps + element->daq->tb->gpsn;
+    GST_BUFFER_DURATION(*buffer) = round(GST_SECOND * nsamples / element->daq_channel->rate);
     
     return GST_FLOW_OK;
 }
