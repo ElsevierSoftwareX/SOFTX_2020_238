@@ -80,6 +80,7 @@ static const int DEFAULT_PORT = 31200;
 static const char* DEFAULT_REQUESTED_CHANNEL_NAME = "H1:DMT-STRAIN";
 
 
+// Can J. Zweizig add this to NDS library?
 static const char* daq_strerror(int errornum)
 {
     switch (errornum)
@@ -142,6 +143,9 @@ static const char* daq_strerror(int errornum)
 }
 
 
+#define DAQ_GST_ERROR_OBJECT(element, msg, errnum) GST_ERROR_OBJECT((element), "%s: error %d: %s", (msg), (errnum), daq_strerror(errnum))
+
+
 /*
  * ========================================================================
  *
@@ -149,6 +153,7 @@ static const char* daq_strerror(int errornum)
  *
  * ========================================================================
  */
+
 
 
 // Disconnect from NDS server and free daq and daq_channel resources.
@@ -160,7 +165,7 @@ static void disconnect_and_free_daq(GSTLALNDSSrc* element)
             GST_INFO_OBJECT(element, "daq_disconnect");
             int retval = daq_disconnect(element->daq);
             if (retval)
-                GST_ERROR_OBJECT(element, "daq_disconnect: %s", daq_strerror(retval));
+                DAQ_GST_ERROR_OBJECT(element, "daq_disconnect", retval);
         }
         free(element->daq);
         element->daq = NULL;
@@ -191,7 +196,7 @@ static int connect_daq(GSTLALNDSSrc* element)
         if (retval)
         {
             free(daq);
-            GST_ERROR_OBJECT(element, "daq_connect: %s", daq_strerror(retval));
+            DAQ_GST_ERROR_OBJECT(element, "daq_connect", retval);
             return FALSE;
         }
         
@@ -222,7 +227,7 @@ static int set_channel_for_channelname(GSTLALNDSSrc *element)
     if (retval)
     {
         free(channels);
-        GST_ERROR_OBJECT(element, "daq_recv_channels: %s", daq_strerror(retval));
+        DAQ_GST_ERROR_OBJECT(element, "daq_recv_channels", retval);
         return FALSE;
     }
     
@@ -429,7 +434,7 @@ static gboolean start(GstBaseSrc *object)
         if (retval)
         {
             disconnect_and_free_daq(element);
-            GST_ERROR_OBJECT(element, "daq_request_channel_from_chanlist: %s", daq_strerror(retval));
+            DAQ_GST_ERROR_OBJECT(element, "daq_request_channel_from_chanlist", retval);
             return FALSE;
         }
     }
@@ -441,7 +446,7 @@ static gboolean start(GstBaseSrc *object)
         if (retval)
         {
             disconnect_and_free_daq(element);
-            GST_ERROR_OBJECT(element, "daq_request_data: %s", daq_strerror(retval));
+            DAQ_GST_ERROR_OBJECT(element, "daq_request_data", retval);
             return FALSE;
         }
     }
@@ -522,7 +527,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         int retval = daq_recv_next(element->daq);
         if (retval)
         {
-            GST_ERROR_OBJECT(element, "daq_recv_next: %s", daq_strerror(retval));
+            DAQ_GST_ERROR_OBJECT(element, "daq_recv_next", retval);
             return GST_FLOW_ERROR;
         }
     }
