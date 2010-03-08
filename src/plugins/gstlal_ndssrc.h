@@ -1,5 +1,6 @@
 /*
  *  NDS-based src element
+ *  see https://www.lsc-group.phys.uwm.edu/daswg/wiki/NetworkDataServer2
  *
  *  Copyright (C) 2008  Leo Singer
  *
