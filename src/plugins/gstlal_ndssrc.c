@@ -55,6 +55,7 @@
 #include <gstlal.h>
 #include <gstlal_ndssrc.h>
 #include <daqc_internal.h>
+#include <daqc_response.h>
 
 
 /*
@@ -79,6 +80,68 @@ static const int DEFAULT_PORT = 31200;
 static const char* DEFAULT_REQUESTED_CHANNEL_NAME = "H1:DMT-STRAIN";
 
 
+static const char* daq_strerror(int errornum)
+{
+    switch (errornum)
+    {
+        case DAQD_OK:
+            return "OK";
+        case DAQD_ERROR:
+            return "unspecified error";
+        case DAQD_NOT_CONFIGURED:
+            return "not configured";
+        case DAQD_INVALID_IP_ADDRESS:
+            return "invalid IP address";
+        case DAQD_INVALID_CHANNEL_NAME:
+            return "invalid channel name";
+        case DAQD_SOCKET:
+            return "socket";
+        case DAQD_SETSOCKOPT:
+            return "setsockopt";
+        case DAQD_CONNECT:
+            return "connect";
+        case DAQD_BUSY:
+            return "busy";
+        case DAQD_MALLOC:
+            return "malloc";
+        case DAQD_WRITE:
+            return "write";
+        case DAQD_VERSION_MISMATCH:
+            return "version mismatch";
+        case DAQD_NO_SUCH_NET_WRITER:
+            return "no such net writer";
+        case DAQD_NOT_FOUND:
+            return "not found";
+        case DAQD_GETPEERNAME:
+            return "getpeername";
+        case DAQD_DUP:
+            return "dup";
+        case DAQD_INVALID_CHANNEL_DATA_RATE:
+            return "invalid channel data rate";
+        case DAQD_SHUTDOWN:
+            return "shutdown";
+        case DAQD_NO_TRENDER:
+            return "no trender";
+        case DAQD_NO_MAIN:
+            return "no main";
+        case DAQD_NO_OFFLINE:
+            return "no offline";
+        case DAQD_THREAD_CREATE:
+            return "thread create";
+        case DAQD_TOO_MANY_CHANNELS:
+            return "too many channels";
+        case DAQD_COMMAND_SYNTAX:
+            return "command syntax";
+        case DAQD_SASL:
+            return "sasl";
+        case DAQD_NOT_SUPPORTED:
+            return "not supported";
+        default:
+            return "unknown error";
+    }
+}
+
+
 /*
  * ========================================================================
  *
@@ -97,7 +160,7 @@ static void disconnect_and_free_daq(GSTLALNDSSrc* element)
             GST_INFO_OBJECT(element, "daq_disconnect");
             int retval = daq_disconnect(element->daq);
             if (retval)
-                GST_ERROR_OBJECT(element, "daq_disconnect: %d", retval);
+                GST_ERROR_OBJECT(element, "daq_disconnect: %s", daq_strerror(retval));
         }
         free(element->daq);
         element->daq = NULL;
@@ -128,7 +191,7 @@ static int connect_daq(GSTLALNDSSrc* element)
         if (retval)
         {
             free(daq);
-            GST_ERROR_OBJECT(element, "daq_connect: error %d", retval);
+            GST_ERROR_OBJECT(element, "daq_connect: %s", daq_strerror(retval));
             return FALSE;
         }
         
@@ -159,7 +222,7 @@ static int set_channel_for_channelname(GSTLALNDSSrc *element)
     if (retval)
     {
         free(channels);
-        GST_ERROR_OBJECT(element, "daq_recv_channels: error %d", retval);
+        GST_ERROR_OBJECT(element, "daq_recv_channels: %s", daq_strerror(retval));
         return FALSE;
     }
     
@@ -265,7 +328,7 @@ static GstCaps *caps_for_channel(GSTLALNDSSrc* element)
     if (caps)
         gst_caps_set_simple(caps,
             "rate", G_TYPE_INT, (int)(element->daq_channel->rate),
-            NULL);    
+            NULL);
     
     return caps;
 }
@@ -366,7 +429,7 @@ static gboolean start(GstBaseSrc *object)
         if (retval)
         {
             disconnect_and_free_daq(element);
-            GST_ERROR_OBJECT(element, "daq_request_channel_from_chanlist: error %d", retval);
+            GST_ERROR_OBJECT(element, "daq_request_channel_from_chanlist: %s", daq_strerror(retval));
             return FALSE;
         }
     }
@@ -378,7 +441,7 @@ static gboolean start(GstBaseSrc *object)
         if (retval)
         {
             disconnect_and_free_daq(element);
-            GST_ERROR_OBJECT(element, "daq_request_data: error %d", retval);
+            GST_ERROR_OBJECT(element, "daq_request_data: %s", daq_strerror(retval));
             return FALSE;
         }
     }
@@ -459,7 +522,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         int retval = daq_recv_next(element->daq);
         if (retval)
         {
-            GST_ERROR_OBJECT(element, "daq_recv_next: error %d", retval);
+            GST_ERROR_OBJECT(element, "daq_recv_next: %s", daq_strerror(retval));
             return GST_FLOW_ERROR;
         }
     }
