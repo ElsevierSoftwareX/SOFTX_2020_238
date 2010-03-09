@@ -532,29 +532,59 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         }
     }
     
-    GST_INFO_OBJECT(element, "daq_get_data_length");
-    int data_length = daq_get_data_length(element->daq, element->daq_channel->name);
+    int bytes_per_sample;
+    int data_length;
+    int rate;
+    GST_INFO_OBJECT(element, "daq_get_channel_status");
+    {
+        chan_req_t* chan_req = daq_get_channel_status(element->daq, element->daq_channel->name);
+        if (!chan_req)
+        {
+            GST_ERROR_OBJECT(element, "daq_get_channel_status: error");
+            return GST_FLOW_ERROR;
+        }
+        bytes_per_sample = data_type_size(chan_req->data_type);
+        data_length = chan_req->status;
+        rate = chan_req->rate;
+        if (chan_req->rate != (double)rate)
+        {
+            GST_ERROR_OBJECT(element, "non-integer sample rate not supported (%f != %d)", chan_req->rate, rate);
+            return GST_FLOW_ERROR;
+        }
+        if (data_length < 0)
+        {
+            DAQ_GST_ERROR_OBJECT(element, "daq channel status", -data_length);
+            return GST_FLOW_ERROR;
+        }
+        if (data_length % bytes_per_sample != 0)
+        {
+            GST_ERROR_OBJECT(element, "daq buffer length is not multiple of data type length");
+            return GST_FLOW_ERROR;
+        }
+    }
     
     {
-    GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, data_length, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
-    if (result != GST_FLOW_OK)
-        return result;
+        GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, data_length, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
+        if (result != GST_FLOW_OK)
+            return result;
     }
     
     GST_INFO_OBJECT(element, "daq_get_channel_data");
     if (!daq_get_channel_data(element->daq, element->daq_channel->name, (char*)GST_BUFFER_DATA(*buffer)))
     {
+        gst_buffer_unref(buffer);
+        *buffer = NULL;
         GST_ERROR_OBJECT(element, "daq_get_channel_data: error");
         return GST_FLOW_ERROR;
     }
     
     // TODO: Ask John Zweizig how to get timestamp and duration of block; this
     // struct is part of an obsolete interface according to Doxygen documentation
-    guint64 nsamples = data_length / element->daq_channel->bps;
+    guint64 nsamples = data_length / bytes_per_sample;
     basesrc->offset += nsamples;
     GST_BUFFER_OFFSET_END(*buffer) = basesrc->offset;
     GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * element->daq->tb->gps + element->daq->tb->gpsn;
-    GST_BUFFER_DURATION(*buffer) = round(GST_SECOND * nsamples / element->daq_channel->rate);
+    GST_BUFFER_DURATION(*buffer) = GST_SECOND * nsamples / rate;
     
     return GST_FLOW_OK;
 }
