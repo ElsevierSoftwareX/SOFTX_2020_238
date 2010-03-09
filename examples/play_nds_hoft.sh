@@ -18,7 +18,7 @@ gst-launch \
 		amplification=2e+17 \
 	! progressreport \
 		update-freq=2 \
-    ! adder \
-    ! audiorate \
+	! adder \
+	! audiorate \
 	! audioconvert \
 	! autoaudiosink
