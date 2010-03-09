@@ -1,14 +1,21 @@
-segments :
-	segwizard S4 V11 H1 -ADC_OVERFLOW -INJECTION_BURST -INJECTION_INSPIRAL -INJECTION_PULSTART -INJECTION_STOCHASTIC -JET -OUTSIDE_S4 -PRELOCKLOSS_30 -RDS_C04_LX_HFHTDIFF_GT_10_PERCENT -SEISMIC_0D9_1D1 >S4H1segments.txt
-	segwizard S4 V11 H2 -ADC_OVERFLOW -INJECTION_BURST -INJECTION_INSPIRAL -INJECTION_PULSTART -INJECTION_STOCHASTIC -JET -OUTSIDE_S4 -PRELOCKLOSS_30 -RDS_C04_LX_HFHTDIFF_GT_10_PERCENT -SEISMIC_0D9_1D1 -WIND_OVER_30MPH >S4H2segments.txt
-	segwizard S4 V11 L1 -ADC_OVERFLOW -INJECTION_BURST -INJECTION_INSPIRAL -INJECTION_PULSTART -INJECTION_STOCHASTIC -NO_DATA -NO_RDS -OUT_OF_LOCK -OUTSIDE_S4 -PRELOCKLOSS_30 -RDS_C04_LX_HFHTDIFF_GT_10_PERCENT >S4L1segments.txt
+START = 871147814
+STOP = 875232014
+INJ = 1 2 3 4 5 6 7 8 9 10
 
+segments :
+	ligolw_segment_query --segment-url=ldbd://metaserver.phy.syr.edu:30015 -q --gps-start-time $(START) --gps-end-time $(STOP) --include-segments=L1:Science,L1:Injection,H1:Science,H1:Injection,H2:Science,H2:Injection > segments.xml
 
 dag :
 	mkdir noninjections
 	pushd noninjections && rm -f vetoes.xml.gz ; ligolw_segments --verbose --output vetoes.xml.gz --name vetoes --insert-from-segwizard={H1,H2,L1,V1}=/dev/null && ligolw_tisi --verbose --instrument L1=0:0:0 --instrument H1=-201.24611797498108:+201.24611797498108:20.124611797498108 --instrument H2=-201.24611797498108:+201.24611797498108:20.124611797498108 time_slides.xml.gz && gstlal_inspiral_pipe --verbose --config-file ../gstlal_inspiral.ini --log-path $(TMPDIR) --time-slides time_slides.xml.gz --vetoes vetoes.xml.gz ; popd
+	for n in $(INJ) ; do \
+		mkdir injections$${n} ; \
+		pushd injections$${n} && rm -f vetoes.xml.gz ; ligolw_segments --verbose --output vetoes.xml.gz --name vetoes --insert-from-segwizard={H1,H2,L1,V1}=/dev/null && ligolw_tisi --verbose --instrument L1=0:0:0 --instrument H1=-201.24611797498108:+201.24611797498108:20.124611797498108 --instrument H2=-201.24611797498108:+201.24611797498108:20.124611797498108 time_slides.xml.gz && gstlal_inspiral_pipe --verbose --config-file ../gstlal_inspiral.ini --log-path $(TMPDIR) --time-slides time_slides.xml.gz --vetoes vetoes.xml.gz --injections; popd ; \
+	done
 
 
 realclean :
-	rm -Rvf injections
+	for n in $(INJ) ; do \
+		rm -Rvf injections$${n} ; \
+	done
 	rm -Rvf noninjections
