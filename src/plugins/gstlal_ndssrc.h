@@ -56,7 +56,7 @@ typedef struct {
     char* host;
     int port;
 	char* requested_channel_name;
-    
+
     daq_t* daq;
     daq_channel_t* daq_channel;
 } GSTLALNDSSrc;

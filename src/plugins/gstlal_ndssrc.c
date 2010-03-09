@@ -170,7 +170,7 @@ static void disconnect_and_free_daq(GSTLALNDSSrc* element)
         free(element->daq);
         element->daq = NULL;
     }
-    
+
     if (element->daq_channel)
     {
         free(element->daq_channel);
@@ -190,7 +190,7 @@ static int connect_daq(GSTLALNDSSrc* element)
             GST_ERROR_OBJECT(element, "malloc");
             return FALSE;
         }
-        
+
         GST_INFO_OBJECT(element, "daq_connect: connecting to %s:%d", element->host, element->port);
         int retval = daq_connect(daq, element->host, element->port, nds_v2);
         if (retval)
@@ -199,7 +199,7 @@ static int connect_daq(GSTLALNDSSrc* element)
             DAQ_GST_ERROR_OBJECT(element, "daq_connect", retval);
             return FALSE;
         }
-        
+
         element->daq = daq;
     }
     return TRUE;
@@ -219,9 +219,9 @@ static int set_channel_for_channelname(GSTLALNDSSrc *element)
         GST_ERROR_OBJECT(element, "malloc");
         return FALSE;
     }
-    
+
     int nchannels_received;
-    
+
     GST_INFO_OBJECT(element, "daq_recv_channel_list");
     int retval = daq_recv_channel_list(element->daq, channels, MAX_CHANNELS, &nchannels_received, 0, cOnline);
     if (retval)
@@ -230,7 +230,7 @@ static int set_channel_for_channelname(GSTLALNDSSrc *element)
         DAQ_GST_ERROR_OBJECT(element, "daq_recv_channels", retval);
         return FALSE;
     }
-    
+
     daq_channel_t* channel;
     for (channel = channels; channel < &channels[nchannels_received]; channel++)
         if (!strcmp(channel->name, element->requested_channel_name))
@@ -242,13 +242,13 @@ static int set_channel_for_channelname(GSTLALNDSSrc *element)
                 GST_ERROR_OBJECT(element, "malloc");
                 return FALSE;
             }
-            
+
             *found_channel = *channel;
             free(channels);
             element->daq_channel = found_channel;
             return TRUE;
         }
-    
+
     GST_ERROR_OBJECT(element, "channel not found: %s", element->requested_channel_name);
     return FALSE;
 }
@@ -321,7 +321,7 @@ static GstCaps *caps_for_channel(GSTLALNDSSrc* element)
 			NULL
 		);
 		break;
-    
+
     // TODO: there is one more NDS daq datatype: _32bit_complex.  Should this
     // be a two-channel audio/x-raw-float?
 
@@ -329,12 +329,12 @@ static GstCaps *caps_for_channel(GSTLALNDSSrc* element)
 		GST_ERROR_OBJECT(element, "unsupported NDS data_type: %d", element->daq_channel->data_type);
 		break;
 	}
-    
+
     if (caps)
         gst_caps_set_simple(caps,
             "rate", G_TYPE_INT, (int)(element->daq_channel->rate),
             NULL);
-    
+
     return caps;
 }
 
@@ -362,7 +362,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-    
+
 	case ARG_SRC_HOST:
 		g_free(element->host);
 		element->host = g_value_dup_string(value);
@@ -388,7 +388,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	case ARG_SRC_HOST:
 		g_value_set_string(value, element->host);
 		break;
-    
+
 	case ARG_SRC_REQUESTED_CHANNEL_NAME:
 		g_value_set_string(value, element->requested_channel_name);
 		break;
@@ -415,18 +415,18 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 static gboolean start(GstBaseSrc *object)
 {
 	GSTLALNDSSrc *element = GSTLAL_NDSSRC(object);
-    
+
     // Connect to NDS server.
     if (!connect_daq(element))
         return FALSE;
-    
+
     // Select channel using requested_channel_name property.
     if (!set_channel_for_channelname(element))
     {
         disconnect_and_free_daq(element);
         return FALSE;
     }
-    
+
     // Request channel.
     {
         GST_INFO_OBJECT(element, "daq_request_channel_from_chanlist");
@@ -438,7 +438,7 @@ static gboolean start(GstBaseSrc *object)
             return FALSE;
         }
     }
-    
+
     // Request online data.
     {
         GST_INFO_OBJECT(element, "daq_request_data");
@@ -450,7 +450,7 @@ static gboolean start(GstBaseSrc *object)
             return FALSE;
         }
     }
-    
+
     {
         GstCaps* caps = caps_for_channel(element);
         if(!caps) {
@@ -458,7 +458,7 @@ static gboolean start(GstBaseSrc *object)
             GST_ERROR_OBJECT(element, "unable to construct caps");
             return FALSE;
         }
-        
+
         /*
          * Try setting the caps on the source pad.
          */
@@ -474,7 +474,7 @@ static gboolean start(GstBaseSrc *object)
         /*
          * Transmit the tag list.
          */
-        
+
         GstTagList* taglist = gst_tag_list_new_full(
             GSTLAL_TAG_CHANNEL_NAME, element->daq_channel->name,
             NULL);
@@ -484,7 +484,7 @@ static gboolean start(GstBaseSrc *object)
             GST_ERROR_OBJECT(element, "unable to create taglist");
             return FALSE;
         }
-        
+
         if (!gst_pad_push_event(GST_BASE_SRC_PAD(object), gst_event_new_tag(taglist)))
         {
             gst_tag_list_free(taglist);
@@ -506,9 +506,9 @@ static gboolean start(GstBaseSrc *object)
 static gboolean stop(GstBaseSrc *object)
 {
 	GSTLALNDSSrc *element = GSTLAL_NDSSRC(object);
-    
+
     disconnect_and_free_daq(element);
-    
+
 	return TRUE;
 }
 
@@ -521,7 +521,7 @@ static gboolean stop(GstBaseSrc *object)
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
     GSTLALNDSSrc *element = GSTLAL_NDSSRC(basesrc);
-    
+
     {
         GST_INFO_OBJECT(element, "daq_recv_next");
         int retval = daq_recv_next(element->daq);
@@ -531,7 +531,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
             return GST_FLOW_ERROR;
         }
     }
-    
+
     int bytes_per_sample;
     int data_length;
     int rate;
@@ -562,13 +562,13 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
             return GST_FLOW_ERROR;
         }
     }
-    
+
     {
         GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, data_length, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
         if (result != GST_FLOW_OK)
             return result;
     }
-    
+
     GST_INFO_OBJECT(element, "daq_get_channel_data");
     if (!daq_get_channel_data(element->daq, element->daq_channel->name, (char*)GST_BUFFER_DATA(*buffer)))
     {
@@ -577,7 +577,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         GST_ERROR_OBJECT(element, "daq_get_channel_data: error");
         return GST_FLOW_ERROR;
     }
-    
+
     // TODO: Ask John Zweizig how to get timestamp and duration of block; this
     // struct is part of an obsolete interface according to Doxygen documentation
     guint64 nsamples = data_length / bytes_per_sample;
@@ -585,7 +585,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
     GST_BUFFER_OFFSET_END(*buffer) = basesrc->offset;
     GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * element->daq->tb->gps + element->daq->tb->gpsn;
     GST_BUFFER_DURATION(*buffer) = GST_SECOND * nsamples / rate;
-    
+
     return GST_FLOW_OK;
 }
 
@@ -735,7 +735,7 @@ static void class_init(gpointer class, gpointer class_data)
 	gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
 	gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
 	gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
-    
+
     // Start up NDS
     daq_startup();
 }
@@ -757,12 +757,12 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
     element->host = g_malloc(strlen(DEFAULT_HOST)+1);
     strcpy(element->host, DEFAULT_HOST);
-    
+
     element->port = DEFAULT_PORT;
-    
+
 	element->requested_channel_name = g_malloc(strlen(DEFAULT_REQUESTED_CHANNEL_NAME));
     strcpy(element->requested_channel_name, DEFAULT_REQUESTED_CHANNEL_NAME);
-    
+
     element->daq = NULL;
     element->daq_channel = NULL;
 
