@@ -453,6 +453,7 @@ static gboolean start(GstBaseSrc *object)
                 gst_util_uint64_scale_int(object->segment.start, 1, GST_SECOND),
                 gst_util_uint64_scale_int_ceil(object->segment.stop, 1, GST_SECOND),
                 1);
+            retval = daq_request_data(element->daq, 952146958, 952146958+60, 60);
         }
         
         if (retval)
@@ -535,7 +536,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 {
     GSTLALNDSSrc *element = GSTLAL_NDSSRC(basesrc);
 
-    //if (!element->buffer_waiting) {
+    if (!element->buffer_waiting) {
         GST_INFO_OBJECT(element, "daq_recv_next");
         int retval = daq_recv_next(element->daq);
         if (retval)
@@ -543,7 +544,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
             DAQ_GST_ERROR_OBJECT(element, "daq_recv_next", retval);
             return GST_FLOW_ERROR;
         }
-    //}
+    }
 
     int bytes_per_sample;
     int data_length;
@@ -611,6 +612,8 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 static gboolean is_seekable(GstBaseSrc *basesrc)
 {
+    return FALSE;
+    /*
     GSTLALNDSSrc *element = GSTLAL_NDSSRC(basesrc);
     
     // If no NDS connection exists, assume that the channel is not seekable.
@@ -631,6 +634,7 @@ static gboolean is_seekable(GstBaseSrc *basesrc)
     }
     
     return FALSE;
+     */
 }
 
 
@@ -642,6 +646,7 @@ static gboolean is_seekable(GstBaseSrc *basesrc)
 
 static gboolean do_seek(GstBaseSrc *basesrc, GstSegment* segment)
 {
+    /*
     GSTLALNDSSrc *element = GSTLAL_NDSSRC(basesrc);
     
     if (element->daq)
@@ -670,7 +675,7 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment* segment)
         }
         element->buffer_waiting = TRUE;
     }
-    
+    */
     return TRUE;
 }
 
