@@ -313,6 +313,9 @@ static gboolean push_new_caps(GSTLALNDSSrc* element)
 
 static gboolean ensure_availableChannels(GSTLALNDSSrc* element)
 {
+    if (!element->daq)
+        return FALSE;
+    
     if (element->availableChannels)
         return TRUE;
     else {
@@ -401,7 +404,8 @@ static gboolean ensure_channelSelected(GSTLALNDSSrc *element)
 enum property {
     ARG_SRC_HOST = 1,
 	ARG_SRC_CHANNEL_NAME,
-    ARG_SRC_CHANNEL_TYPE
+    ARG_SRC_CHANNEL_TYPE,
+    ARG_SRC_AVAILABLE_CHANNEL_NAMES
 };
 
 
@@ -464,7 +468,21 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
     case ARG_SRC_CHANNEL_TYPE:
         g_value_set_enum(value, element->channelType);
         break;
-
+    
+    case ARG_SRC_AVAILABLE_CHANNEL_NAMES:
+        {
+            int nchannels = 0;
+            if (ensure_availableChannels(element))
+                nchannels = element->countAvailableChannels;
+            
+            // TODO: implement proper error checking here
+            char** channel_names = calloc(nchannels+1, sizeof(char*));
+            int i;
+            for (i = 0; i < nchannels; i ++)
+                channel_names[i] = strdup(element->availableChannels[i].name);
+            channel_names[i] = NULL;
+            g_value_set_boxed(value, channel_names);
+        }
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -782,6 +800,17 @@ static void class_init(gpointer class, gpointer class_data)
             GSTLAL_TYPE_NDSSRC_CHANTYPE,
             cUnknown,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+        )
+    );
+    g_object_class_install_property(
+        gobject_class,
+        ARG_SRC_AVAILABLE_CHANNEL_NAMES,
+        g_param_spec_boxed(
+            "available-channel-names",
+            "Available channel names",
+            "Array of all currently available channel names of the currently selected channel type.",
+            G_TYPE_STRV,
+            G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
         )
     );
 
