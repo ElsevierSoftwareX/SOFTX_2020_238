@@ -223,7 +223,7 @@ static int set_channel_for_channelname(GSTLALNDSSrc *element)
     int nchannels_received;
 
     GST_INFO_OBJECT(element, "daq_recv_channel_list");
-    int retval = daq_recv_channel_list(element->daq, channels, MAX_CHANNELS, &nchannels_received, 0, cOnline);
+    int retval = daq_recv_channel_list(element->daq, channels, MAX_CHANNELS, &nchannels_received, 0, cUnknown);
     if (retval)
     {
         free(channels);
@@ -439,16 +439,29 @@ static gboolean start(GstBaseSrc *object)
         }
     }
 
-    // Request online data.
+    // Request data.
     {
         GST_INFO_OBJECT(element, "daq_request_data");
-        int retval = daq_request_data(element->daq, 0, 0, 1);
+        int retval = 0;
+        if (element->daq_channel->type == cOnline)
+        {
+            gst_base_src_set_live(object, TRUE);
+            retval = daq_request_data(element->daq, 0, 0, 1);
+        } else {
+            gst_base_src_set_live(object, FALSE);
+            retval = daq_request_data(element->daq, 
+                gst_util_uint64_scale_int(object->segment.start, 1, GST_SECOND),
+                gst_util_uint64_scale_int_ceil(object->segment.stop, 1, GST_SECOND),
+                1);
+        }
+        
         if (retval)
         {
             disconnect_and_free_daq(element);
             DAQ_GST_ERROR_OBJECT(element, "daq_request_data", retval);
             return FALSE;
         }
+        element->buffer_waiting = TRUE;
     }
 
     {
@@ -522,7 +535,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 {
     GSTLALNDSSrc *element = GSTLAL_NDSSRC(basesrc);
 
-    {
+    //if (!element->buffer_waiting) {
         GST_INFO_OBJECT(element, "daq_recv_next");
         int retval = daq_recv_next(element->daq);
         if (retval)
@@ -530,7 +543,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
             DAQ_GST_ERROR_OBJECT(element, "daq_recv_next", retval);
             return GST_FLOW_ERROR;
         }
-    }
+    //}
 
     int bytes_per_sample;
     int data_length;
@@ -572,7 +585,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
     GST_INFO_OBJECT(element, "daq_get_channel_data");
     if (!daq_get_channel_data(element->daq, element->daq_channel->name, (char*)GST_BUFFER_DATA(*buffer)))
     {
-        gst_buffer_unref(buffer);
+        gst_buffer_unref(*buffer);
         *buffer = NULL;
         GST_ERROR_OBJECT(element, "daq_get_channel_data: error");
         return GST_FLOW_ERROR;
@@ -586,6 +599,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
     GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * element->daq->tb->gps + element->daq->tb->gpsn;
     GST_BUFFER_DURATION(*buffer) = GST_SECOND * nsamples / rate;
 
+    element->buffer_waiting = FALSE;
     return GST_FLOW_OK;
 }
 
@@ -595,9 +609,69 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
  */
 
 
-static gboolean is_seekable(GstBaseSrc *object)
+static gboolean is_seekable(GstBaseSrc *basesrc)
 {
-	return FALSE;
+    GSTLALNDSSrc *element = GSTLAL_NDSSRC(basesrc);
+    
+    // If no NDS connection exists, assume that the channel is not seekable.
+    if (element->daq)
+    {
+        chan_req_t* chan_req = daq_get_channel_status(element->daq, element->daq_channel->name);
+        if (chan_req)
+        {
+            if (chan_req->type == cOnline)
+            {
+                return TRUE;
+            }
+        } else {
+            GST_ERROR_OBJECT(element, "daq_get_channel_status: error");
+        }
+    } else {
+        GST_WARNING_OBJECT(element, "assuming channel is not seekable because NDS is not connected");
+    }
+    
+    return FALSE;
+}
+
+
+
+/*
+ * do_seek()
+ */
+
+
+static gboolean do_seek(GstBaseSrc *basesrc, GstSegment* segment)
+{
+    GSTLALNDSSrc *element = GSTLAL_NDSSRC(basesrc);
+    
+    if (element->daq)
+    {
+        chan_req_t* chan_req = daq_get_channel_status(element->daq, element->daq_channel->name);
+        if (chan_req)
+        {
+            if (chan_req->type == cOnline)
+            {
+                GST_ERROR_OBJECT(element, "channel is 'online', seek not allowed");
+                return FALSE;
+            }
+        } else {
+            GST_ERROR_OBJECT(element, "daq_get_channel_status: error");
+            return FALSE;
+        }
+        
+        int retval = daq_request_data(element->daq, 
+                                  gst_util_uint64_scale_int(segment->start, 1, GST_SECOND),
+                                  gst_util_uint64_scale_int_ceil(segment->stop, 1, GST_SECOND),
+                                  1);
+        if (retval)
+        {
+            DAQ_GST_ERROR_OBJECT(element, "daq_request_data", retval);
+            return FALSE;
+        }
+        element->buffer_waiting = TRUE;
+    }
+    
+    return TRUE;
 }
 
 
@@ -734,6 +808,7 @@ static void class_init(gpointer class, gpointer class_data)
 	gstbasesrc_class->stop = GST_DEBUG_FUNCPTR(stop);
 	gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
 	gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
+    gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
 	gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
 
     // Start up NDS
@@ -765,9 +840,9 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
     element->daq = NULL;
     element->daq_channel = NULL;
+    element->buffer_waiting = FALSE;
 
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
-    gst_base_src_set_live(GST_BASE_SRC(object), TRUE);
 }
 
 

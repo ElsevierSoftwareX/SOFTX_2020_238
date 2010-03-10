@@ -59,6 +59,7 @@ typedef struct {
 
     daq_t* daq;
     daq_channel_t* daq_channel;
+    gboolean buffer_waiting;
 } GSTLALNDSSrc;
 
 
