@@ -55,11 +55,15 @@ typedef struct {
 
     char* host;
     int port;
-	char* requested_channel_name;
 
     daq_t* daq;
-    daq_channel_t* daq_channel;
-    gboolean buffer_waiting;
+    gboolean needs_seek;
+    
+    char* channelName;
+    enum chantype channelType;
+    daq_channel_t* availableChannels;
+    int countAvailableChannels;
+    
 } GSTLALNDSSrc;
 
 
