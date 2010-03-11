@@ -2,13 +2,13 @@
 # The 'adder' element is included as a hack to throw away GPS time stamps; otherwise
 # the autoaudiosink won't play
 
-HOST="ldas-pcdev1.ligo.caltech.edu"
+HOST="marble.ligo-wa.caltech.edu"
 REQUESTED_CHANNEL_NAME="H1:DMT-STRAIN"
 
-gst-launch --gst-debug="gstlal:4" \
+gst-launch \
 	ndssrc \
         host="${HOST}" \
-        requested-channel-name="${REQUESTED_CHANNEL_NAME}" \
+        channel-name="${REQUESTED_CHANNEL_NAME}" \
 	! audiochebband \
 		lower-frequency=45 \
 		upper-frequency=2500 \
