@@ -58,12 +58,12 @@ typedef struct {
 
     daq_t* daq;
     gboolean needs_seek;
-    
+
     char* channelName;
     enum chantype channelType;
     daq_channel_t* availableChannels;
     int countAvailableChannels;
-    
+
 } GSTLALNDSSrc;
 
 

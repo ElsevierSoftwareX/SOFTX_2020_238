@@ -90,7 +90,7 @@ gstlal_ndssrc_chantype_get_type (void)
         {cTestPoint, "Test point", "test-point"},
         {0, NULL, NULL},
     };
-    
+
     if (G_UNLIKELY (chantype_type == 0)) {
         chantype_type = g_enum_register_static ("GSTLALNDSSrcChanType",
                                                           chantype_values);
@@ -268,28 +268,28 @@ static GstCaps *caps_for_channel(GSTLALNDSSrc* element)
 static gboolean push_new_caps(GSTLALNDSSrc* element)
 {
     GstBaseSrc* object = GST_BASE_SRC(element);
-    
+
     GstCaps* caps = caps_for_channel(element);
     if(!caps) {
         GST_ERROR_OBJECT(element, "unable to construct caps");
         return FALSE;
     }
-    
+
     /*
      * Try setting the caps on the source pad.
      */
-    
+
     if(!gst_pad_set_caps(GST_BASE_SRC_PAD(object), caps)) {
         gst_caps_unref(caps);
         GST_ERROR_OBJECT(element, "unable to set caps %" GST_PTR_FORMAT " on %s", caps, GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
         return FALSE;
     }
     gst_caps_unref(caps);
-    
+
     /*
      * Transmit the tag list.
      */
-    
+
     GstTagList* taglist = gst_tag_list_new_full(
                                                 GSTLAL_TAG_CHANNEL_NAME, element->daq->chan_req_list->name,
                                                 NULL);
@@ -298,14 +298,14 @@ static gboolean push_new_caps(GSTLALNDSSrc* element)
         GST_ERROR_OBJECT(element, "unable to create taglist");
         return FALSE;
     }
-    
+
     if (!gst_pad_push_event(GST_BASE_SRC_PAD(object), gst_event_new_tag(taglist)))
     {
         gst_tag_list_free(taglist);
         GST_ERROR_OBJECT(element, "unable to push taglist %" GST_PTR_FORMAT " on %s", taglist, GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
         return FALSE;
     }
-    
+
     return TRUE;
 }
 
@@ -315,7 +315,7 @@ static gboolean ensure_availableChannels(GSTLALNDSSrc* element)
 {
     if (!element->daq)
         return FALSE;
-    
+
     if (element->availableChannels)
         return TRUE;
     else {
@@ -445,7 +445,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
         }
         element->channelType = g_value_get_enum(value);
     }
-    
+
 	GST_OBJECT_UNLOCK(element);
 }
 
@@ -464,17 +464,17 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	case ARG_SRC_CHANNEL_NAME:
 		g_value_set_string(value, element->channelName);
 		break;
-            
+
     case ARG_SRC_CHANNEL_TYPE:
         g_value_set_enum(value, element->channelType);
         break;
-    
+
     case ARG_SRC_AVAILABLE_CHANNEL_NAMES:
         {
             int nchannels = 0;
             if (ensure_availableChannels(element))
                 nchannels = element->countAvailableChannels;
-            
+
             // TODO: implement proper error checking here
             char** channel_names = calloc(nchannels+1, sizeof(char*));
             int i;
@@ -543,7 +543,7 @@ static gboolean stop(GstBaseSrc *object)
         free(element->daq);
         element->daq = NULL;
     }
-    
+
     if (element->availableChannels)
     {
         free(element->availableChannels);
@@ -569,7 +569,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         GST_ERROR_OBJECT(element, "failed to select channel");
         return TRUE;
     }
-    
+
     int retval;
     if (element->needs_seek)
     {
@@ -589,13 +589,13 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
             GST_INFO_OBJECT(element, "daq_request_data (offline): [%lld, %lld)", start_time, stop_time);
             retval = daq_request_data(element->daq, start_time, stop_time, 10);
         }
-        
+
         if (retval)
         {
             DAQ_GST_ERROR_OBJECT(element, "daq_request_data", retval);
             return FALSE;
         }
-        
+
         element->needs_seek = FALSE;
     } else {
         GST_INFO_OBJECT(element, "daq_recv_next");
@@ -606,11 +606,11 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
             return FALSE;
         }
     }
-    
+
     int bytes_per_sample = data_type_size(element->daq->chan_req_list->data_type);
     int data_length = element->daq->chan_req_list->status;
     int rate = element->daq->chan_req_list->rate;
-    
+
     if (element->daq->chan_req_list->rate != (double)rate)
     {
         GST_ERROR_OBJECT(element, "non-integer sample rate not supported (%f != %d)", element->daq->chan_req_list->rate, rate);
@@ -621,15 +621,15 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         GST_ERROR_OBJECT(element, "daq buffer length is not multiple of data type length");
         return GST_FLOW_ERROR;
     }
-    
+
     {
         GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, data_length, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
         if (result != GST_FLOW_OK)
             return result;
     }
-    
+
     memcpy((char*)GST_BUFFER_DATA(*buffer), element->daq->tb->data + element->daq->chan_req_list->offset, data_length);
-    
+
     // TODO: Ask John Zweizig how to get timestamp and duration of block; this
     // struct is part of an obsolete interface according to Doxygen documentation
     guint64 nsamples = data_length / bytes_per_sample;
@@ -767,7 +767,7 @@ static void class_init(gpointer class, gpointer class_data)
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
-    
+
 	g_object_class_install_property(
 		gobject_class,
 		ARG_SRC_HOST,
@@ -852,11 +852,11 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	element->channelName = g_malloc(strlen(DEFAULT_CHANNEL_NAME));
     strcpy(element->channelName, DEFAULT_CHANNEL_NAME);
-    
+
     element->channelType = cUnknown;
     element->availableChannels = NULL;
     element->countAvailableChannels = 0;
-    
+
     element->daq = NULL;
     element->needs_seek = TRUE;
 
