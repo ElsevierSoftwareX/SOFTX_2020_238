@@ -2,7 +2,7 @@ INCLUDES = -I$(top_srcdir)/src/lib
 
 plugin_LTLIBRARIES = libgstlal.la
 
-if COND_NDS2
+if COND_NDS
 NDSSRC_SOURCES = gstlal_ndssrc.h gstlal_ndssrc.c
 else
 NDSSRC_SOURCES =
@@ -29,8 +29,8 @@ libgstlal_la_SOURCES = \
 	gstlal_reblock.h gstlal_reblock.c \
 	gstlal_delay.h gstlal_delay.c \
 	$(NDSSRC_SOURCES)
-libgstlal_la_CFLAGS = -O2 $(AM_CFLAGS) $(CFLAGS) ${gstreamer_CFLAGS} ${LAL_CFLAGS} ${GSL_CFLAGS} ${FFTW_CFLAGS} ${NDS2_CFLAGS}
-libgstlal_la_LIBADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS} ${FFTW_LIBS} ${NDS2_LIBS} $(top_srcdir)/src/lib/libgstlal.la
+libgstlal_la_CFLAGS = -O2 $(AM_CFLAGS) $(CFLAGS) ${gstreamer_CFLAGS} ${LAL_CFLAGS} ${GSL_CFLAGS} ${FFTW_CFLAGS} ${NDS_CFLAGS}
+libgstlal_la_LIBADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS} ${FFTW_LIBS} ${NDS_LIBS} $(top_srcdir)/src/lib/libgstlal.la
 libgstlal_la_LDFLAGS = ${GSTREAMER_PLUGIN_LDFLAGS}
 
 noinst_HEADERS = gstlal_plugins.h

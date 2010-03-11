@@ -1,5 +1,6 @@
 /*
  *  NDS-based src element
+ *  see https://www.lsc-group.phys.uwm.edu/daswg/wiki/NetworkDataServer2
  *
  *  Copyright (C) 2008  Leo Singer
  *
@@ -54,10 +55,15 @@ typedef struct {
 
     char* host;
     int port;
-	char* requested_channel_name;
-    
+
     daq_t* daq;
-    daq_channel_t* daq_channel;
+    gboolean needs_seek;
+
+    char* channelName;
+    enum chantype channelType;
+    daq_channel_t* availableChannels;
+    int countAvailableChannels;
+
 } GSTLALNDSSrc;
 
 
