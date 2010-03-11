@@ -40,6 +40,7 @@ from glue import segments
 from glue import pipeline
 from glue.lal import CacheEntry
 from pylal.datatypes import LIGOTimeGPS
+from pylal import ligolw_tisi
 from pylal import llwapp
 from lalapps import power
 
@@ -461,7 +462,7 @@ def compute_segment_lists(seglists, offset_vectors, min_segment_length, verbose 
 	remove_too_short_segments(seglists, min_segment_length)
 
 	# extract the segments that are coincident under the time slides
-	seglists = llwapp.get_coincident_segmentlistdict(seglists, offset_vectors)
+	seglists = llwapp.get_coincident_segmentlistdict(seglists, ligolw_tisi.time_slide_component_vectors(offset_vectors, 2))
 
 	# again remove too-short segments
 	remove_too_short_segments(seglists, min_segment_length)
