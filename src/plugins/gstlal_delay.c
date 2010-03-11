@@ -258,7 +258,7 @@ static GstFlowReturn transform( GstBaseTransform *trans, GstBuffer *inbuf, GstBu
       guint delaysize = element->unit_size*element->delay;
       guint64 delaytime;
 
-      if ( GST_BUFFER_SIZE(inbuf) < delaysize )
+      if ( GST_BUFFER_SIZE(inbuf) <= delaysize )
 	 /* drop entire buffer */
       {
 	    if ( !element->silent )
