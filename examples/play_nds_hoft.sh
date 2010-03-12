@@ -9,6 +9,7 @@ gst-launch \
 	ndssrc \
         host="${HOST}" \
         channel-name="${REQUESTED_CHANNEL_NAME}" \
+    ! queue min-threshold-time=16000000000 \
 	! audiochebband \
 		lower-frequency=45 \
 		upper-frequency=2500 \
@@ -16,8 +17,6 @@ gst-launch \
 	! audioamplify \
 		clipping-method=3 \
 		amplification=2e+17 \
-	! progressreport \
-		update-freq=2 \
 	! adder \
 	! audiorate \
 	! audioconvert \
