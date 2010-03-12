@@ -587,7 +587,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
             if (stop_time > 9999999999)
                 stop_time = 9999999999;
             GST_INFO_OBJECT(element, "daq_request_data (offline): [%lld, %lld)", start_time, stop_time);
-            retval = daq_request_data(element->daq, start_time, stop_time, 10);
+            retval = daq_request_data(element->daq, start_time, stop_time, 16);
         }
 
         if (retval)
