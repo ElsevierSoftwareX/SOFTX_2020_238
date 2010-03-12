@@ -88,19 +88,28 @@ AC_SUBST([FFTW_LIBS])
 #
 
 
-AC_ARG_WITH([nds],
-    [AS_HELP_STRING([--with-nds],
-        [include NDS source element @<:@default=check@:>@])],
-    [],
-    [with_nds=check])
-
-
-AS_IF([test "x$with_nds" != xno],
-    [PKG_CHECK_MODULES([NDS], [nds2-client], [HAVE_NDS="yes"], [AC_MSG_WARN([Not found!]) ; HAVE_NDS="no"])], [])
-AM_CONDITIONAL([COND_NDS], [test "${HAVE_NDS}" == "yes"])
-if test "${HAVE_NDS}" == "yes" ; then
-	AC_DEFINE([HAVE_NDS], 1)
-fi
+AC_ARG_WITH(
+	[nds],
+	[AS_HELP_STRING([--with-nds], [include NDS source element @<:@default=check@:>@])],
+	[],
+	[with_nds=check]
+)
+AS_IF(
+	[test "x$with_nds" != "xno"],
+	[PKG_CHECK_MODULES(
+		[NDS],
+		[nds2-client],
+		[AC_DEFINE([HAVE_NDS], [1], [Define if you have nds2-client])
+		HAVE_NDS="yes"],
+		[HAVE_NDS="no"
+		AS_IF(
+			[test "x$with_nds" != "xcheck"],
+			[AC_MSG_ERROR([Not found!])],
+			[AC_MSG_WARN([Not found!])]
+		)]
+	)]
+)
+AM_CONDITIONAL([COND_NDS], [test "x${HAVE_NDS}" == "xyes"])
 AC_SUBST([NDS_CFLAGS])
 AC_SUBST([NDS_LIBS])
 
