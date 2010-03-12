@@ -587,7 +587,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
             if (stop_time > 9999999999)
                 stop_time = 9999999999;
             GST_INFO_OBJECT(element, "daq_request_data (offline): [%lld, %lld)", start_time, stop_time);
-            retval = daq_request_data(element->daq, start_time, stop_time, 10);
+            retval = daq_request_data(element->daq, start_time, stop_time, 16);
         }
 
         if (retval)
@@ -610,6 +610,8 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
     int bytes_per_sample = data_type_size(element->daq->chan_req_list->data_type);
     int data_length = element->daq->chan_req_list->status;
     int rate = element->daq->chan_req_list->rate;
+    guint64 nsamples = data_length / bytes_per_sample;
+    GST_INFO_OBJECT(element, "received segment [%d, %d)", element->daq->tb->gps, element->daq->tb->gps + nsamples / rate);
 
     if (element->daq->chan_req_list->rate != (double)rate)
     {
@@ -632,7 +634,6 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
     // TODO: Ask John Zweizig how to get timestamp and duration of block; this
     // struct is part of an obsolete interface according to Doxygen documentation
-    guint64 nsamples = data_length / bytes_per_sample;
     basesrc->offset += nsamples;
     GST_BUFFER_OFFSET_END(*buffer) = basesrc->offset;
     GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * element->daq->tb->gps + element->daq->tb->gpsn;
