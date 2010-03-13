@@ -165,7 +165,7 @@ def normalized_autocorrelation(fseries, revplan):
 	return tseries
 
 
-def time_frequency_boundaries(
+def time_slices(
 	mass1,
 	mass2,
 	flow = 40,
