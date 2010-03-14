@@ -166,7 +166,8 @@ def normalized_autocorrelation(fseries, revplan):
 
 
 def time_frequency_boundaries(
-	template_bank_table,
+	mass1,
+	mass2,
 	flow = 40,
 	fhigh = 900,
 	padding = 1.1,
@@ -206,10 +207,6 @@ def time_frequency_boundaries(
 	#
 	# FIND TIMES WHEN THESE SAMPLE RATES ARE OK TO USE
 	#
-
-	# Load template bank mass params
-	mass1 = template_bank_table.get_column('mass1')
-	mass2 = template_bank_table.get_column('mass2')
 
 	# How many sample points should be included in a chunk?
 	# We need to balance the need to have few chunks with the

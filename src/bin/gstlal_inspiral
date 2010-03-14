@@ -844,9 +844,13 @@ for n, filename in enumerate(options.template_bank):
 		gz = (filename or "stdin").endswith(".gz"),
 		verbose = options.verbose)
 
+	# Get sngl inspiral table
+	bank_sngl_table = lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName )
+
 	# Choose how to break up templates in time
 	time_freq_bounds = templates.time_frequency_boundaries(
-		lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
+		bank_sngl_table.get_column('mass1'),
+		bank_sngl_table.get_column('mass2'),
 		fhigh=check_ffinal_and_find_max_ffinal(bank_xmldoc),
 		flow = options.flow,
 		verbose=options.verbose)
