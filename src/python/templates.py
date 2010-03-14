@@ -266,4 +266,4 @@ def time_slices(
 		print>> sys.stderr, "Time freq boundaries: "
 		print>> sys.stderr, time_freq_boundaries
 
-	return time_freq_boundaries
+	return numpy.array(time_freq_boundaries,dtype=[('rate','int'),('begin','float'),('end','float')])

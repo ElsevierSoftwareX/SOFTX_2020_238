@@ -214,11 +214,11 @@ class Bank(object):
 				print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
 				print >>sys.stderr, "\tsum-of-squares expectation value is %g" % self.chifacs.mean()
 
-	def __init__(self, bank_xmldoc, psd, time_freq_boundaries, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
+	def __init__(self, bank_xmldoc, psd, time_slices, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
 		# FIXME: remove template_bank_filename when no longer needed
 		# by trigger generator element
 		self.template_bank_filename = None
-		self.filter_length = max(end for rate,begin,end in time_freq_boundaries)
+		self.filter_length = max(time_slices['end'])
 		self.snr_threshold = snr_threshold
 		self.logname = logname
 
@@ -228,12 +228,12 @@ class Bank(object):
 			read_approximant(bank_xmldoc),
 			psd,
 			flow,
-			time_freq_boundaries,
+			time_slices,
 			autocorrelation_length = autocorrelation_length,
 			verbose = verbose)
 
 		# Assign template banks to fragments
-		self.bank_fragments = [Bank.BankFragment(rate,begin,end) for rate,begin,end in time_freq_boundaries]
+		self.bank_fragments = [Bank.BankFragment(rate,begin,end) for rate,begin,end in time_slices]
 		for i, bank_fragment in enumerate(self.bank_fragments):
 			if verbose:
 				print >>sys.stderr, "constructing template decomposition %d of %d:  %g s ... %g s" % (i + 1, len(self.bank_fragments), -bank_fragment.end, -bank_fragment.start)

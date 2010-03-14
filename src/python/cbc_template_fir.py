@@ -141,11 +141,11 @@ def generate_template(template_bank_row, approximant, f_low, sample_rate, durati
 	)
 
 
-def generate_templates(template_table, approximant, psd, f_low, time_freq_boundaries, autocorrelation_length = None, verbose = False):
-	sample_rate_max = max(rate for rate,begin,end in time_freq_boundaries)
-	duration = max(end for rate,begin,end in time_freq_boundaries)
+def generate_templates(template_table, approximant, psd, f_low, time_slices, autocorrelation_length = None, verbose = False):
+	sample_rate_max = max(time_slices['rate'])
+	duration = max(time_slices['end'])
 	length_max = int(round(duration * sample_rate_max))
-	length = int(round(sum(rate*(end-begin) for rate,begin,end in time_freq_boundaries)))
+	length = int(round(sum(rate*(end-begin) for rate,begin,end in time_slices)))
 
 	working_length = int(round(2**math.ceil(math.log(length_max + round(32.0 * sample_rate_max), 2))))	# add 32 seconds for PSD ringing, round up to power of 2 count of samples
 	working_duration = float(working_length) / sample_rate_max
@@ -167,7 +167,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_freq_bounda
 		autocorrelation_bank = None
 
 	# Have one template bank for each bank_fragment
-	template_bank = [numpy.zeros((2 * len(template_table), int(round(rate*(end-begin)))), dtype = "double") for rate,begin,end in time_freq_boundaries]
+	template_bank = [numpy.zeros((2 * len(template_table), int(round(rate*(end-begin)))), dtype = "double") for rate,begin,end in time_slices]
 
 	sigmasq = []
 	# Generate each template, downsampling as we go to save memory
@@ -223,18 +223,14 @@ def generate_templates(template_table, approximant, psd, f_low, time_freq_bounda
 		# rows of template bank
 		#
 
-		for frag_num,frag_params in enumerate(time_freq_boundaries):
+		for frag_num,slice in enumerate(time_slices):
 			# start and end times are measured *backwards* from
 			# template end;  subtract from n to convert to
 			# start and end index;  end:start is the slice to
 			# extract (argh!  Chad!)
-			rate = frag_params[0]
-			begin = frag_params[1]
-			end = frag_params[2]
-
-			begin_index = length_max - int(round(begin * sample_rate_max))
-			end_index = length_max - int(round(end * sample_rate_max))
-			stride = int(round(sample_rate_max / rate))
+			begin_index = length_max - int(round(slice['begin'] * sample_rate_max))
+			end_index = length_max - int(round(slice['end'] * sample_rate_max))
+			stride = int(round(sample_rate_max / slice['rate']))
 
 			# extract every stride-th sample.  we multiply by
 			# \sqrt{stride} to maintain inner product
