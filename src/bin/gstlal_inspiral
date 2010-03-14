@@ -849,8 +849,7 @@ for n, filename in enumerate(options.template_bank):
 
 	# Choose how to break up templates in time
 	time_freq_bounds = templates.time_slices(
-		bank_sngl_table.get_column('mass1'),
-		bank_sngl_table.get_column('mass2'),
+		zip(bank_sngl_table.get_column('mass1'),bank_sngl_table.get_column('mass2')),
 		fhigh=check_ffinal_and_find_max_ffinal(bank_xmldoc),
 		flow = options.flow,
 		verbose=options.verbose)
