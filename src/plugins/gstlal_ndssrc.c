@@ -93,14 +93,34 @@ gstlal_ndssrc_chantype_get_type (void)
 
     if (G_UNLIKELY (chantype_type == 0)) {
         chantype_type = g_enum_register_static ("GSTLALNDSSrcChanType",
-                                                          chantype_values);
+                                                chantype_values);
     }
     return chantype_type;
 }
 
 
+#define GSTLAL_TYPE_NDSSRC_NDS_VERSION (gstlal_ndssrc_nds_version_get_type())
+static GType
+gstlal_ndssrc_nds_version_get_type (void)
+{
+    static GType nds_version_type = 0;
+    static const GEnumValue nds_version_values[] = {
+        {nds_v1, "NDS Version 1", "v1"},
+        {nds_v2, "NDS Version 2", "v2"},
+        {0, NULL, NULL},
+    };
+
+    if (G_UNLIKELY (nds_version_type == 0)) {
+        nds_version_type = g_enum_register_static ("GSTLALNDSSrcNDSVersionType",
+                                                nds_version_values);
+    }
+    return nds_version_type;
+}
+
+
 static const char* DEFAULT_HOST = "marble.ligo-wa.caltech.edu";
 static const int DEFAULT_PORT = 31200;
+static const enum nds_version DEFAULT_VERSION = nds_v2;
 static const char* DEFAULT_CHANNEL_NAME = "H1:DMT-STRAIN";
 
 
@@ -403,7 +423,9 @@ static gboolean ensure_channelSelected(GSTLALNDSSrc *element)
 
 enum property {
     ARG_SRC_HOST = 1,
-	ARG_SRC_CHANNEL_NAME,
+	ARG_SRC_PORT,
+    ARG_SRC_VERSION,
+    ARG_SRC_CHANNEL_NAME,
     ARG_SRC_CHANNEL_TYPE,
     ARG_SRC_AVAILABLE_CHANNEL_NAMES
 };
@@ -419,6 +441,14 @@ static void set_property(GObject *object, enum property id, const GValue *value,
     {
 		g_free(element->host);
 		element->host = g_value_dup_string(value);
+    }
+    if (id == ARG_SRC_PORT)
+    {
+        element->port = g_value_get_int(value);
+    }
+    if (id == ARG_SRC_VERSION)
+    {
+        element->version = g_value_get_enum(value);
     }
     if (id == ARG_SRC_CHANNEL_NAME || id == ARG_SRC_CHANNEL_TYPE)
     {
@@ -460,6 +490,14 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	case ARG_SRC_HOST:
 		g_value_set_string(value, element->host);
 		break;
+
+    case ARG_SRC_PORT:
+        g_value_set_int(value, element->port);
+        break;
+
+    case ARG_SRC_VERSION:
+        g_value_set_enum(value, element->version);
+        break;
 
 	case ARG_SRC_CHANNEL_NAME:
 		g_value_set_string(value, element->channelName);
@@ -611,7 +649,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
     int data_length = element->daq->chan_req_list->status;
     int rate = element->daq->chan_req_list->rate;
     guint64 nsamples = data_length / bytes_per_sample;
-    GST_INFO_OBJECT(element, "received segment [%d, %d)", element->daq->tb->gps, element->daq->tb->gps + nsamples / rate);
+    GST_INFO_OBJECT(element, "received segment [%u, %llu)", element->daq->tb->gps, element->daq->tb->gps + nsamples / rate);
 
     if (element->daq->chan_req_list->rate != (double)rate)
     {
@@ -780,6 +818,31 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+    g_object_class_install_property(
+        gobject_class,
+        ARG_SRC_PORT,
+        g_param_spec_int(
+            "port",
+            "Port",
+            "NDS1 or NDS2 remote host port",
+            1,
+            65535,
+            DEFAULT_PORT,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+        )
+    );
+    g_object_class_install_property(
+        gobject_class,
+        ARG_SRC_VERSION,
+        g_param_spec_enum(
+            "nds-version",
+            "NDS version",
+            "NDS protocol version",
+            GSTLAL_TYPE_NDSSRC_NDS_VERSION,
+            DEFAULT_VERSION,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+        )
+    );
 	g_object_class_install_property(
 		gobject_class,
 		ARG_SRC_CHANNEL_NAME,
@@ -850,6 +913,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
     strcpy(element->host, DEFAULT_HOST);
 
     element->port = DEFAULT_PORT;
+    element->version = DEFAULT_VERSION;
 
 	element->channelName = g_malloc(strlen(DEFAULT_CHANNEL_NAME));
     strcpy(element->channelName, DEFAULT_CHANNEL_NAME);

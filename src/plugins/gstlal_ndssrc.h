@@ -54,7 +54,8 @@ typedef struct {
 	GstBaseSrc basesrc;
 
     char* host;
-    int port;
+    gint port;
+    enum nds_version version;
 
     daq_t* daq;
     gboolean needs_seek;
