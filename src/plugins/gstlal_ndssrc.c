@@ -549,7 +549,7 @@ static gboolean start(GstBaseSrc *object)
         GST_ERROR_OBJECT(element, "out of memory");
     else {
         GST_INFO_OBJECT(element, "daq_connect");
-        int retval = daq_connect(daq, element->host, element->port, nds_v2);
+        int retval = daq_connect(daq, element->host, element->port, element->version);
         if (retval)
             DAQ_GST_ERROR_OBJECT(element, "daq_connect", retval);
         else {
