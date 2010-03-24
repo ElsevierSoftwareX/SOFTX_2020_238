@@ -118,10 +118,8 @@ gstlal_ndssrc_nds_version_get_type (void)
 }
 
 
-static const char* DEFAULT_HOST = "marble.ligo-wa.caltech.edu";
 static const int DEFAULT_PORT = 31200;
 static const enum nds_version DEFAULT_VERSION = nds_v2;
-static const char* DEFAULT_CHANNEL_NAME = "H1:DMT-STRAIN";
 
 
 // Can J. Zweizig add this to NDS library?
@@ -375,6 +373,12 @@ static gboolean ensure_availableChannels(GSTLALNDSSrc* element)
 
 static gboolean ensure_channelSelected(GSTLALNDSSrc *element)
 {
+    if (!element->channelName)
+    {
+        GST_ERROR_OBJECT(element, "required property `channel-name' not specified");
+        return FALSE;
+    }
+
     if (element->daq->num_chan_request > 0)
         return TRUE;
     else {
@@ -543,6 +547,12 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 static gboolean start(GstBaseSrc *object)
 {
 	GSTLALNDSSrc *element = GSTLAL_NDSSRC(object);
+
+    if (!element->host)
+    {
+        GST_ERROR_OBJECT(element, "required property `host' not specified");
+        return FALSE;
+    }
 
     daq_t* daq = malloc(sizeof(daq_t));
     if (!daq)
@@ -814,7 +824,7 @@ static void class_init(gpointer class, gpointer class_data)
 			"host",
 			"Host",
 			"NDS1 or NDS2 remote host name or IP address",
-			DEFAULT_HOST,
+			NULL,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
@@ -850,7 +860,7 @@ static void class_init(gpointer class, gpointer class_data)
 			"channel-name",
 			"Channel name",
 			"Name of the desired NDS channel.",
-			DEFAULT_CHANNEL_NAME,
+			NULL,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
@@ -909,19 +919,13 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	gst_pad_use_fixed_caps(GST_BASE_SRC_PAD(basesrc));
 
-    element->host = g_malloc(strlen(DEFAULT_HOST)+1);
-    strcpy(element->host, DEFAULT_HOST);
-
+    element->host = NULL;
     element->port = DEFAULT_PORT;
     element->version = DEFAULT_VERSION;
-
-	element->channelName = g_malloc(strlen(DEFAULT_CHANNEL_NAME));
-    strcpy(element->channelName, DEFAULT_CHANNEL_NAME);
-
+	element->channelName = NULL;
     element->channelType = cUnknown;
     element->availableChannels = NULL;
     element->countAvailableChannels = 0;
-
     element->daq = NULL;
     element->needs_seek = TRUE;
 
