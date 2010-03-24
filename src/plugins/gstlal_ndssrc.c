@@ -618,14 +618,40 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         return TRUE;
     }
 
+    guint rate = element->daq->chan_req_list->rate;
+    int bytes_per_sample = data_type_size(element->daq->chan_req_list->data_type);
+
+    if (element->daq->chan_req_list->rate != (double)rate)
+    {
+        GST_ERROR_OBJECT(element, "non-integer sample rate not supported (%f != %u)", element->daq->chan_req_list->rate, rate);
+        return GST_FLOW_ERROR;
+    }
+
     int retval;
     if (element->needs_seek)
     {
+        gulong blocksize = gst_base_src_get_blocksize(basesrc);
+        int stride_seconds;
+
+        if (blocksize == G_MAXULONG)
+            stride_seconds = 1;
+        else
+        {
+            gulong bytes_per_sec = GST_SECOND * rate * bytes_per_sample;
+            if (blocksize % bytes_per_sec != 0)
+            {
+                GST_ERROR_OBJECT(element, "property `blocksize' must correspond to an integer number of seconds");
+                return GST_FLOW_ERROR;
+            }
+
+            stride_seconds = blocksize / bytes_per_sec;
+        }
+
         if (element->daq->chan_req_list->type == cOnline)
         {
             //gst_base_src_set_live(object, TRUE);
             GST_INFO_OBJECT(element, "daq_request_data (online)");
-            retval = daq_request_data(element->daq, 0, 0, 1);
+            retval = daq_request_data(element->daq, 0, 0, stride_seconds);
         } else {
             //gst_base_src_set_live(object, FALSE);
             gint64 start_time = gst_util_uint64_scale_int(basesrc->segment.start, 1, GST_SECOND);
@@ -635,7 +661,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
             if (stop_time > 9999999999)
                 stop_time = 9999999999;
             GST_INFO_OBJECT(element, "daq_request_data (offline): [%lld, %lld)", start_time, stop_time);
-            retval = daq_request_data(element->daq, start_time, stop_time, 16);
+            retval = daq_request_data(element->daq, start_time, stop_time, stride_seconds);
         }
 
         if (retval)
@@ -655,17 +681,10 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         }
     }
 
-    int bytes_per_sample = data_type_size(element->daq->chan_req_list->data_type);
     int data_length = element->daq->chan_req_list->status;
-    int rate = element->daq->chan_req_list->rate;
     guint64 nsamples = data_length / bytes_per_sample;
     GST_INFO_OBJECT(element, "received segment [%u, %llu)", element->daq->tb->gps, element->daq->tb->gps + nsamples / rate);
 
-    if (element->daq->chan_req_list->rate != (double)rate)
-    {
-        GST_ERROR_OBJECT(element, "non-integer sample rate not supported (%f != %d)", element->daq->chan_req_list->rate, rate);
-        return GST_FLOW_ERROR;
-    }
     if (data_length % bytes_per_sample != 0)
     {
         GST_ERROR_OBJECT(element, "daq buffer length is not multiple of data type length");
@@ -928,6 +947,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
     element->countAvailableChannels = 0;
     element->daq = NULL;
     element->needs_seek = TRUE;
+    basesrc->blocksize = G_MAXULONG;
 
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
     gst_base_src_set_live(GST_BASE_SRC(object), TRUE);

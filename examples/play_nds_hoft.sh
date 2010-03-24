@@ -3,13 +3,12 @@
 # the autoaudiosink won't play
 
 HOST="marble.ligo-wa.caltech.edu"
-REQUESTED_CHANNEL_NAME="H1:DMT-STRAIN"
+REQUESTED_CHANNEL_NAME="H1:LSC-DARM_ERR"
 
 gst-launch \
 	ndssrc \
         host="${HOST}" \
         channel-name="${REQUESTED_CHANNEL_NAME}" \
-    ! queue min-threshold-time=16000000000 \
 	! audiochebband \
 		lower-frequency=45 \
 		upper-frequency=2500 \
