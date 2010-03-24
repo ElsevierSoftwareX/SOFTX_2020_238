@@ -558,7 +558,7 @@ static gboolean start(GstBaseSrc *object)
     if (!daq)
         GST_ERROR_OBJECT(element, "out of memory");
     else {
-        GST_INFO_OBJECT(element, "daq_connect");
+        GST_INFO_OBJECT(element, "daq_connect(daq_t*, \"%s\", %d, %d)", element->host, element->port, element->version);
         int retval = daq_connect(daq, element->host, element->port, element->version);
         if (retval)
             DAQ_GST_ERROR_OBJECT(element, "daq_connect", retval);
@@ -637,7 +637,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
             stride_seconds = 1;
         else
         {
-            gulong bytes_per_sec = GST_SECOND * rate * bytes_per_sample;
+            gulong bytes_per_sec = rate * bytes_per_sample;
             if (blocksize % bytes_per_sec != 0)
             {
                 GST_ERROR_OBJECT(element, "property `blocksize' must correspond to an integer number of seconds");
@@ -650,7 +650,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         if (element->daq->chan_req_list->type == cOnline)
         {
             //gst_base_src_set_live(object, TRUE);
-            GST_INFO_OBJECT(element, "daq_request_data (online)");
+            GST_INFO_OBJECT(element, "daq_request_data(daq_t*, 0, 0, %d)", stride_seconds);
             retval = daq_request_data(element->daq, 0, 0, stride_seconds);
         } else {
             //gst_base_src_set_live(object, FALSE);
@@ -660,7 +660,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
                 start_time = 600000000;
             if (stop_time > 9999999999)
                 stop_time = 9999999999;
-            GST_INFO_OBJECT(element, "daq_request_data (offline): [%lld, %lld)", start_time, stop_time);
+            GST_INFO_OBJECT(element, "daq_request_data(daq_t*, %lld, %lld, %d)", start_time, stop_time, stride_seconds);
             retval = daq_request_data(element->daq, start_time, stop_time, stride_seconds);
         }
 
