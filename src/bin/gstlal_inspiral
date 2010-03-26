@@ -872,30 +872,61 @@ for n, filename in enumerate(options.template_bank):
 	# by trigger generator element.
 	banks[n].set_template_bank_filename(filename)
 
+class Data(object):
+	def __init__(self, options):
+		self.xmldoc = None
+		self.output = options.output
+		self.seg = options.seg
+		self.injections = options.injections
+		self.comment = options.comment
+		self.verbose = options.verbose
+		self.sngl_inspiral_table = None
+		self.seg = options.seg
+		self.injection_file = options.injections
+		self.output = options.output
+		self.connection = None
 
-#
-# build output document
-#
+	def prepare_output_file(self):
+		xmldoc = ligolw.Document()
+		xmldoc.appendChild(ligolw.LIGO_LW())
+		self.process = ligolw_process.append_process(xmldoc, program = "gstlal_inspiral", comment = self.comment, ifos = set(detectors))
+		ligolw_process.append_process_params(xmldoc, self.process, process_params)
+		search_summary = add_cbc_metadata(xmldoc, self.process, self.seg)
+		# FIXME:  argh, ugly
+		sngl_inspiral_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
 
+		sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))	# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
 
-if options.injections is not None:
-	xmldoc = utils.load_filename(options.injections, gz = (options.injections or "stdin").endswith(".gz"), verbose = options.verbose)
-else:
-	xmldoc = ligolw.Document()
-	xmldoc.appendChild(ligolw.LIGO_LW())
-process = ligolw_process.append_process(xmldoc, program = "gstlal_inspiral", comment = options.comment, ifos = set(detectors))
-ligolw_process.append_process_params(xmldoc, process, process_params)
-search_summary = add_cbc_metadata(xmldoc, process, options.seg)
-try:
-	sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
-except ValueError:
-	# FIXME:  argh, ugly
-	sngl_inspiral_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
+		if self.output.endswith('.sqlite'):
+			from glue.ligolw.utils import ligolw_sqlite
+			self.connection = ligolw_sqlite.setup(self.output)
+			ligolw_sqlite.insert_from_xmldoc(self.connection, xmldoc, preserve_ids = False, verbose = self.verbose)
+			if self.injection_file is not None:
+				utils.load_filename(self.injection_file, gz = (injection_file or "stdin").endswith(".gz"), verbose = self.verbose)
+			from glue.ligolw import dbtables
+			self.xmldoc = dbtables.get_xml(self.connection)
+			self.sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
+		else:
+			from glue.ligolw.utils import ligolw_add
+			self.xmldoc = xmldoc
+			self.sngl_inspiral_table = sngl_inspiral_table
+			if self.injection_file is not None:
+				ligolw_add.ligolw_add(self.xmldoc, [self.injection_file], verbose = self.verbose)
+				utils.load_filename(self.injection_file, gz = (injection_file or "stdin").endswith(".gz"), verbose = self.verbose)
 
-
-sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))	# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
-sngl_inspiral_table.sync_next_id()
-
+	def write_output_file(self):
+		if self.connection:
+			from pylal.date import XLALUTCToGPS
+			import time
+			self.connection.cursor().execute('UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)')
+			self.connection.cursor().execute('UPDATE process SET end_time = ?', (XLALUTCToGPS(time.gmtime()).seconds,))
+			self.connection.commit()
+		else:
+			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
+			search_summary = lsctables.table.get_table(self.xmldoc, lsctables.SearchSummaryTable.tableName)
+			search_summary.nevents = len(self.sngl_inspiral_table)
+			ligolw_process.set_process_end_time(self.process)
+			utils.write_filename(self.xmldoc, self.output, gz = (self.output or "stdout").endswith(".gz"), verbose = self.verbose)
 
 #
 # build pipeline
@@ -917,11 +948,21 @@ src = mkLLOIDmulti(
 	nxydump_segment = options.nxydump_segment
 )
 
-def appsink_new_buffer(elem, sngl_inspiral_table):
-	for row in sngl_inspirals_from_buffer(elem.get_property("last-buffer")):
-		sngl_inspiral_table.append(row)
+#
+# build output document
+#
 
-pipeparts.mkappsink(pipeline, src, caps = gst.Caps("application/x-lal-snglinspiral")).connect_after("new-buffer", appsink_new_buffer, sngl_inspiral_table)
+data = Data(options)
+data.prepare_output_file()
+
+def appsink_new_buffer(elem, data):
+	for row in sngl_inspirals_from_buffer(elem.get_property("last-buffer")):
+		row.process_id = data.process.process_id
+		row.event_id = data.sngl_inspiral_table.get_next_id()
+		data.sngl_inspiral_table.append(row)
+	if data.connection: data.connection.commit()
+
+pipeparts.mkappsink(pipeline, src, caps = gst.Caps("application/x-lal-snglinspiral")).connect_after("new-buffer", appsink_new_buffer, data)
 
 if options.write_pipeline is not None:
 	gst.xml_write_file(pipeline, file(options.write_pipeline, "w"))
@@ -945,15 +986,7 @@ mainloop.run()
 #
 
 
-sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
-for row in sngl_inspiral_table:
-	row.process_id = process.process_id
-	row.event_id = sngl_inspiral_table.get_next_id()
-search_summary.nevents = len(sngl_inspiral_table)
-ligolw_process.set_process_end_time(process)
-
-utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)
-
+data.write_output_file()
 
 #
 # done
