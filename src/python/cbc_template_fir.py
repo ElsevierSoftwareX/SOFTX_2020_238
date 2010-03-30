@@ -120,12 +120,16 @@ def interpolate_psd(psd, deltaF):
 	)
 
 
-def generate_template(template_bank_row, approximant, f_low, sample_rate, duration, order = 7, end_freq = "light_ring"):
+def generate_template(template_bank_row, approximant, sample_rate, duration, f_low, f_high, order = 7):
+	"""
+	Generate a single frequency-domain template, which
+	 (1) is band-limited between f_low and f_high,
+	 (2) has an IFFT which is duration seconds long and
+	 (3) has an IFFT which is sampled at sample_rate Hz
+	"""
 	z = numpy.empty(int(round(sample_rate * duration)), "cdouble")
-
-	spawaveform.waveform(template_bank_row.mass1, template_bank_row.mass2, order, 1.0 / duration, 1.0 / sample_rate, f_low, spawaveform.ffinal(template_bank_row.mass1, template_bank_row.mass2, end_freq), z)
 	if approximant=="FindChirpSP":
-		spawaveform.waveform(template_bank_row.mass1, template_bank_row.mass2, order, 1.0 / duration, 1.0 / sample_rate, f_low, spawaveform.ffinal(template_bank_row.mass1, template_bank_row.mass2, end_freq), z)
+		spawaveform.waveform(template_bank_row.mass1, template_bank_row.mass2, order, 1.0 / duration, 1.0 / sample_rate, f_low, f_high, z)
 	elif approximant=="IMRPhenomB":
 		spawaveform.imrwaveform(template_bank_row.mass1, template_bank_row.mass2, 1.0/duration, f_low, z, template_bank_row.chi)
 	else:
@@ -142,17 +146,26 @@ def generate_template(template_bank_row, approximant, f_low, sample_rate, durati
 
 
 def generate_templates(template_table, approximant, psd, f_low, time_slices, autocorrelation_length = None, verbose = False):
+	"""
+	Generate a bank of templates, which are
+	 (1) broken up into time slice,
+	 (2) optimally down-sampled in each time slice and
+	 (3) whitened with the given psd.
+	"""
 	sample_rate_max = max(time_slices['rate'])
 	duration = max(time_slices['end'])
 	length_max = int(round(duration * sample_rate_max))
 	length = int(round(sum(rate*(end-begin) for rate,begin,end in time_slices)))
 
-	working_length = int(round(2**math.ceil(math.log(length_max + round(32.0 * sample_rate_max), 2))))	# add 32 seconds for PSD ringing, round up to power of 2 count of samples
+	# Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples
+	working_length = int(round(2**math.ceil(math.log(length_max + round(32.0 * sample_rate_max), 2))))
 	working_duration = float(working_length) / sample_rate_max
 
+	# Give the PSD the same frequency spacing as the waveforms we are about to generate
 	if psd is not None:
 		psd = interpolate_psd(psd, 1.0 / working_duration)
 
+	# Generate a plan for IFFTing the waveform and make space for the time-domain waveform
 	revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1)
 	tseries = laltypes.COMPLEX16TimeSeries(
 		data = numpy.zeros((working_length,), dtype = "cdouble")
@@ -166,10 +179,13 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	else:
 		autocorrelation_bank = None
 
-	# Have one template bank for each bank_fragment
+	# Have one template bank for each time_slice
 	template_bank = [numpy.zeros((2 * len(template_table), int(round(rate*(end-begin)))), dtype = "double") for rate,begin,end in time_slices]
 
+	# Store the original normalization of the waveform.  After whitening, the waveforms
+	# are normalized.  Use the sigmasq factors to get back the original waveform.
 	sigmasq = []
+
 	# Generate each template, downsampling as we go to save memory
 	for i, row in enumerate(template_table):
 		if verbose:
@@ -179,7 +195,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		# generate "cosine" component of frequency-domain template
 		#
 
-		fseries = generate_template(row, approximant, f_low, sample_rate_max, working_duration)
+		fseries = generate_template(row, approximant, sample_rate_max, working_duration, f_low, sample_rate_max / (2*1.1))
 
 		#
 		# whiten and add quadrature phase ("sine" component)
