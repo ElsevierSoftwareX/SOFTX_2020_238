@@ -899,7 +899,7 @@ class Data(object):
 
 		if self.output.endswith('.sqlite'):
 			from glue.ligolw.utils import ligolw_sqlite
-			self.connection = ligolw_sqlite.setup(self.output)
+			self.connection = ligolw_sqlite.setup(self.output, check_same_thread=False)
 			ligolw_sqlite.insert_from_xmldoc(self.connection, xmldoc, preserve_ids = False, verbose = self.verbose)
 			if self.injection_file is not None:
 				utils.load_filename(self.injection_file, gz = (injection_file or "stdin").endswith(".gz"), verbose = self.verbose)
@@ -912,7 +912,7 @@ class Data(object):
 			self.sngl_inspiral_table = sngl_inspiral_table
 			if self.injection_file is not None:
 				ligolw_add.ligolw_add(self.xmldoc, [self.injection_file], verbose = self.verbose)
-				utils.load_filename(self.injection_file, gz = (injection_file or "stdin").endswith(".gz"), verbose = self.verbose)
+				utils.load_filename(self.injection_file, gz = (self.injection_file or "stdin").endswith(".gz"), verbose = self.verbose)
 
 	def write_output_file(self):
 		if self.connection:
