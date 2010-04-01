@@ -615,7 +615,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
     if (!ensure_channelSelected(element))
     {
         GST_ERROR_OBJECT(element, "failed to select channel");
-        return TRUE;
+        return GST_FLOW_ERROR;
     }
 
     guint rate = element->daq->chan_req_list->rate;
@@ -667,7 +667,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         if (retval)
         {
             DAQ_GST_ERROR_OBJECT(element, "daq_request_data", retval);
-            return FALSE;
+            return GST_FLOW_ERROR;
         }
 
         element->needs_seek = FALSE;
@@ -677,7 +677,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         if (retval < 0)
         {
             DAQ_GST_ERROR_OBJECT(element, "daq_recv_next", retval);
-            return FALSE;
+            return GST_FLOW_ERROR;
         }
     }
 
