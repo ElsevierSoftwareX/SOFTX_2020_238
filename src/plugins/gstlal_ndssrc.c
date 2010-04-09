@@ -122,69 +122,6 @@ static const int DEFAULT_PORT = 31200;
 static const enum nds_version DEFAULT_VERSION = nds_v2;
 
 
-// Can J. Zweizig add this to NDS library?
-static const char* daq_strerror(int errornum)
-{
-    switch (errornum)
-    {
-        case DAQD_OK:
-            return "OK";
-        case DAQD_ERROR:
-            return "unspecified error";
-        case DAQD_NOT_CONFIGURED:
-            return "not configured";
-        case DAQD_INVALID_IP_ADDRESS:
-            return "invalid IP address";
-        case DAQD_INVALID_CHANNEL_NAME:
-            return "invalid channel name";
-        case DAQD_SOCKET:
-            return "socket";
-        case DAQD_SETSOCKOPT:
-            return "setsockopt";
-        case DAQD_CONNECT:
-            return "connect";
-        case DAQD_BUSY:
-            return "busy";
-        case DAQD_MALLOC:
-            return "malloc";
-        case DAQD_WRITE:
-            return "write";
-        case DAQD_VERSION_MISMATCH:
-            return "version mismatch";
-        case DAQD_NO_SUCH_NET_WRITER:
-            return "no such net writer";
-        case DAQD_NOT_FOUND:
-            return "not found";
-        case DAQD_GETPEERNAME:
-            return "getpeername";
-        case DAQD_DUP:
-            return "dup";
-        case DAQD_INVALID_CHANNEL_DATA_RATE:
-            return "invalid channel data rate";
-        case DAQD_SHUTDOWN:
-            return "shutdown";
-        case DAQD_NO_TRENDER:
-            return "no trender";
-        case DAQD_NO_MAIN:
-            return "no main";
-        case DAQD_NO_OFFLINE:
-            return "no offline";
-        case DAQD_THREAD_CREATE:
-            return "thread create";
-        case DAQD_TOO_MANY_CHANNELS:
-            return "too many channels";
-        case DAQD_COMMAND_SYNTAX:
-            return "command syntax";
-        case DAQD_SASL:
-            return "sasl";
-        case DAQD_NOT_SUPPORTED:
-            return "not supported";
-        default:
-            return "unknown error";
-    }
-}
-
-
 #define DAQ_GST_ERROR_OBJECT(element, msg, errnum) GST_ERROR_OBJECT((element), "%s: error %d: %s", (msg), (errnum), daq_strerror(errnum))
 
 
