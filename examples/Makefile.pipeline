@@ -1,9 +1,12 @@
 START = 871147814
 STOP = 875232014
 INJ = 1 2 3 4 5 6 7 8 9 10
+IFOS = H1 L1 V1
 
-segments :
-	ligolw_segment_query --segment-url=ldbd://metaserver.phy.syr.edu:30015 -q --gps-start-time $(START) --gps-end-time $(STOP) --include-segments=L1:Science,L1:Injection,H1:Science,H1:Injection,H2:Science,H2:Injection > segments.xml
+segments : $(IFOS:%=segments.%.xml)
+
+segments.%.xml :
+	ligolw_segment_query --segment-url=ldbd://metaserver.phy.syr.edu:30015 -q --gps-start-time $(START) --gps-end-time $(STOP) --include-segments=$*:Science,$*:Injection > $@    
 
 dag :
 	mkdir noninjections
@@ -19,3 +22,5 @@ realclean :
 		rm -Rvf injections$${n} ; \
 	done
 	rm -Rvf noninjections
+
+.PHONY : segments $(%=segments.%.xml)
