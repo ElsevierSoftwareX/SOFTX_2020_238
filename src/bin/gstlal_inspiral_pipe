@@ -43,7 +43,8 @@ from glue.lal import CacheEntry
 from pylal import ligolw_tisi
 from lalapps import power
 from gstlal import dagparts as gstlaldagparts
-
+import glue.ligolw.utils
+import glue.ligolw.utils.segments
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
 __date__ = "" #FIXME
@@ -253,7 +254,8 @@ dag.set_dag_file(basename)
 #
 
 
-seglists = segments.segmentlistdict((instrument, segmentsUtils.fromsegwizard(file(config_parser.get("input", "segments_%s" % instrument))).coalesce()) for instrument in set(s.strip() for s in config_parser.get("pipeline", "ifos").split(",")))
+seglists = glue.ligolw.utils.segments.segmenttable_get_by_name(
+	glue.ligolw.utils.load_filename(config_parser.get("input", "segments")), "RESULT")
 
 vetoes_cache = set([CacheEntry(None, None, None, "file://localhost" + os.path.abspath(options.vetoes))])
 

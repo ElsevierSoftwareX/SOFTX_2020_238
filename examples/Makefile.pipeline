@@ -1,14 +1,19 @@
 START = 871147814
 STOP = 875232014
 INJ = 1 2 3 4 5 6 7 8 9 10
-IFOS = H1 L1 V1
+IFOS = H1 H2 L1
 
-segments : $(IFOS:%=segments.%.xml)
+all : dag
 
 segments.%.xml :
-	ligolw_segment_query --segment-url=ldbd://metaserver.phy.syr.edu:30015 -q --gps-start-time $(START) --gps-end-time $(STOP) --include-segments=$*:Science,$*:Injection > $@    
+	ligolw_segment_query --segment-url=ldbd://metaserver.phy.syr.edu:30015 -q \
+		--gps-start-time $(START) --gps-end-time $(STOP) \
+		--include-segments=$*:Science,$*:Injection > $@    
 
-dag :
+segments.xml : $(IFOS:%=segments.%.xml)
+	ligolw_add $^ > $@
+
+dag : segments.xml
 	mkdir noninjections
 	pushd noninjections && rm -f vetoes.xml.gz ; ligolw_segments --verbose --output vetoes.xml.gz --name vetoes --insert-from-segwizard={H1,H2,L1,V1}=/dev/null && ligolw_tisi --verbose --instrument L1=0:0:0 --instrument H1=-201.24611797498108:+201.24611797498108:20.124611797498108 --instrument H2=-201.24611797498108:+201.24611797498108:20.124611797498108 time_slides.xml.gz && gstlal_inspiral_pipe --verbose --config-file ../gstlal_inspiral.ini --log-path $(TMPDIR) --time-slides time_slides.xml.gz --vetoes vetoes.xml.gz ; popd
 	for n in $(INJ) ; do \
@@ -23,4 +28,3 @@ realclean :
 	done
 	rm -Rvf noninjections
 
-.PHONY : segments $(%=segments.%.xml)
