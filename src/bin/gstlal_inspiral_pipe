@@ -39,8 +39,8 @@ from optparse import OptionParser
 from glue import pipeline
 from glue import segments
 from glue.lal import CacheEntry
-from glue import ligolw.utils
-from glue import ligolw.utils.segments
+import glue.ligolw.utils as utils
+import glue.ligolw.utils.segments as ligolw_segments
 from pylal import ligolw_tisi
 from lalapps import power
 from gstlal import dagparts as gstlaldagparts
@@ -253,7 +253,7 @@ dag.set_dag_file(basename)
 #
 
 
-seglists = ligolw.utils.segments.segmenttable_get_by_name(ligolw.utils.load_filename(config_parser.get("input", "segments")), "RESULT")
+seglists = ligolw_segments.segmenttable_get_by_name(utils.load_filename(config_parser.get("input", "segments")), "RESULT")
 
 vetoes_cache = set([CacheEntry(None, None, None, "file://localhost" + os.path.abspath(options.vetoes))])
 
