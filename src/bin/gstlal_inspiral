@@ -32,6 +32,7 @@ import numpy
 from optparse import OptionParser
 import sys
 import os.path
+import os
 
 import gobject
 import pygst
@@ -657,7 +658,7 @@ def parse_command_line():
 	parser.add_option("--template-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).  This option can be given multiple times to process multiple template banks in parallel.")
 	parser.add_option("--ortho-gate-fap", metavar = "probability", type = "float", default = 1e-2, help = "Set the orthogonal SNR projection gate false-alarm probability (default = 1e-2).")
 	parser.add_option("--snr-threshold", metavar = "SNR", type = "float", default = 5.5, help = "Set the SNR threshold (default = 5.5).")
-	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a GStreamer XML description of the as-built pipeline to this file (optional).")
+	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 	parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (optional).  This option has no effect if --reference-psd is used.")
 	parser.add_option("--fake-data", action = "store_true", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
@@ -967,8 +968,18 @@ def appsink_new_buffer(elem, data):
 
 pipeparts.mkappsink(pipeline, src, caps = gst.Caps("application/x-lal-snglinspiral")).connect_after("new-buffer", appsink_new_buffer, data)
 
+#
+# Write the pipeline to a dot file.
+# This option needs the environment variable GST_DEBUG_DUMP_DOT_DIR
+# to be set. There are several choices for the "details"
+# (second argument). DEBUG_GRAPH_SHOW_ALL is the most verbose.
+#
 if options.write_pipeline is not None:
-	gst.xml_write_file(pipeline, file(options.write_pipeline, "w"))
+	if "GST_DEBUG_DUMP_DOT_DIR" not in os.environ.keys():
+		os.environ["GST_DEBUG_DUMP_DOT_DIR"] = os.getcwd()
+	gst.DEBUG_BIN_TO_DOT_FILE( pipeline, gst.DEBUG_GRAPH_SHOW_ALL, options.write_pipeline)
+	if options.verbose:
+		print >> sys.stderr, "Wrote pipeline to %s" % (os.environ["GST_DEBUG_DUMP_DOT_DIR"] + "/" + options.write_pipeline + ".dot",)
 
 handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
 
