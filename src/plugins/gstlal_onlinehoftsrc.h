@@ -28,7 +28,6 @@
 
 #include <lal/FrameStream.h>
 #include <lal/LALDatatypes.h>
-#include <lal/Units.h>
 
 
 G_BEGIN_DECLS
@@ -52,18 +51,14 @@ typedef struct {
 
 
 typedef struct {
-	GstBaseSrc basesrc;
+	GstPushSrc basesrc;
 
-	char *location;
 	char *instrument;
-	char *channel_name;
-	char *full_channel_name;
 	gint rate;
 	gint width;
 
 	FrStream *stream;
 	LALTYPECODE series_type;
-	LALUnit units;
 } GSTLALOnlineHoftSrc;
 
 

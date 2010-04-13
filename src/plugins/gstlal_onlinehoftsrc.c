@@ -74,7 +74,7 @@
  */
 
 
-static GstBaseSrcClass *parent_class = NULL;
+static GstPushSrcClass *parent_class = NULL;
 
 
 /*
@@ -84,10 +84,6 @@ static GstBaseSrcClass *parent_class = NULL;
  *
  * ========================================================================
  */
-
-
-#define DEFAULT_UNITS_STRING "strain"
-#define DEFAULT_UNITS_UNIT lalStrainUnit
 
 
 /*
@@ -183,6 +179,7 @@ static GstCaps *series_to_caps_and_taglist(const char *instrument, const char *c
  */
 
 
+#if 0
 static void *read_series(GSTLALOnlineHoftSrc *element, guint64 offset, guint64 length)
 {
 	GstBaseSrc *basesrc = GST_BASE_SRC(element);
@@ -264,6 +261,8 @@ static void *read_series(GSTLALOnlineHoftSrc *element, guint64 offset, guint64 l
 
 	return series;
 }
+#endif
+
 
 
 /*
@@ -276,10 +275,7 @@ static void *read_series(GSTLALOnlineHoftSrc *element, guint64 offset, guint64 l
 
 
 enum property {
-	ARG_SRC_LOCATION = 1,
-	ARG_SRC_INSTRUMENT,
-	ARG_SRC_CHANNEL_NAME,
-	ARG_SRC_UNITS
+	ARG_SRC_INSTRUMENT = 1
 };
 
 
@@ -290,33 +286,11 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case ARG_SRC_LOCATION:
-		g_free(element->location);
-		element->location = g_value_dup_string(value);
-		break;
-
 	case ARG_SRC_INSTRUMENT:
 		g_free(element->instrument);
 		element->instrument = g_value_dup_string(value);
-		g_free(element->full_channel_name);
-		element->full_channel_name = gstlal_build_full_channel_name(element->instrument, element->channel_name);
 		break;
 
-	case ARG_SRC_CHANNEL_NAME:
-		g_free(element->channel_name);
-		element->channel_name = g_value_dup_string(value);
-		g_free(element->full_channel_name);
-		element->full_channel_name = gstlal_build_full_channel_name(element->instrument, element->channel_name);
-		break;
-
-	case ARG_SRC_UNITS: {
-		const char *units = g_value_get_string(value);
-		if(!units || !strlen(units))
-			element->units = lalDimensionlessUnit;
-		else
-			XLALParseUnitString(&element->units, units);
-		break;
-	}
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -330,24 +304,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case ARG_SRC_LOCATION:
-		g_value_set_string(value, element->location);
-		break;
-
 	case ARG_SRC_INSTRUMENT:
 		g_value_set_string(value, element->instrument);
 		break;
 
-	case ARG_SRC_CHANNEL_NAME:
-		g_value_set_string(value, element->channel_name);
-		break;
-
-	case ARG_SRC_UNITS: {
-		char units[100];
-		XLALUnitAsString(units, sizeof(units), &element->units);
-		g_value_set_string(value, units);
-		break;
-	}
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -367,7 +327,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
  * start()
  */
 
-
+#if 0
 static gboolean start(GstBaseSrc *object)
 {
 	GSTLALOnlineHoftSrc *element = GSTLAL_ONLINEHOFTSRC(object);
@@ -559,6 +519,7 @@ static gboolean stop(GstBaseSrc *object)
 
 	return TRUE;
 }
+#endif
 
 
 /*
@@ -566,6 +527,13 @@ static gboolean stop(GstBaseSrc *object)
  */
 
 
+static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
+{
+    return GST_FLOW_ERROR; /// TODO
+}
+
+
+#if 0
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
 	GSTLALOnlineHoftSrc *element = GSTLAL_ONLINEHOFTSRC(basesrc);
@@ -690,6 +658,8 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	return GST_FLOW_OK;
 }
+#endif
+
 
 
 /*
@@ -708,6 +678,14 @@ static gboolean is_seekable(GstBaseSrc *object)
  */
 
 
+static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
+{
+    /// TODO
+    return FALSE;
+}
+
+
+#if 0
 static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 {
 	GSTLALOnlineHoftSrc *element = GSTLAL_ONLINEHOFTSRC(basesrc);
@@ -742,6 +720,8 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 	basesrc->offset = 0;
 	return TRUE;
 }
+#endif
+
 
 
 /*
@@ -749,6 +729,7 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
  */
 
 
+#if 0
 static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 {
 	GSTLALOnlineHoftSrc *element = GSTLAL_ONLINEHOFTSRC(basesrc);
@@ -821,6 +802,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 
 	return TRUE;
 }
+#endif
 
 
 /*
@@ -828,10 +810,12 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
  */
 
 
+#if 0
 static gboolean check_get_range(GstBaseSrc *basesrc)
 {
 	return TRUE;
 }
+#endif
 
 
 /*
@@ -852,18 +836,8 @@ static void finalize(GObject *object)
 {
 	GSTLALOnlineHoftSrc *element = GSTLAL_ONLINEHOFTSRC(object);
 
-	g_free(element->location);
-	element->location = NULL;
 	g_free(element->instrument);
 	element->instrument = NULL;
-	g_free(element->channel_name);
-	element->channel_name = NULL;
-	g_free(element->full_channel_name);
-	element->full_channel_name = NULL;
-	if(element->stream) {
-		XLALFrClose(element->stream);
-		element->stream = NULL;
-	}
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -899,14 +873,7 @@ static void base_init(gpointer class)
 				"rate = (int) [1, MAX], " \
 				"channels = (int) 1, " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {32, 64}; " \
-				"audio/x-raw-int, " \
-				"rate = (int) [1, MAX], " \
-				"channels = (int) 1, " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 32, " \
-				"depth = (int) 32, " \
-				"signed = (boolean) true"
+				"width = (int) {32, 64} " \
 			)
 		)
 	);
@@ -925,23 +892,12 @@ static void class_init(gpointer class, gpointer class_data)
 	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
 	GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS(class);
 
-	parent_class = g_type_class_ref(GST_TYPE_BASE_SRC);
+	parent_class = g_type_class_ref(GST_TYPE_PUSH_SRC);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
-	g_object_class_install_property(
-		gobject_class,
-		ARG_SRC_LOCATION,
-		g_param_spec_string(
-			"location",
-			"Location",
-			"Path to LAL cache file (see ligo_data_find for more information).",
-			NULL,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-		)
-	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_SRC_INSTRUMENT,
@@ -953,40 +909,18 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
-	g_object_class_install_property(
-		gobject_class,
-		ARG_SRC_CHANNEL_NAME,
-		g_param_spec_string(
-			"channel-name",
-			"Channel name",
-			"Channel name (e.g., \"LSC-STRAIN\").",
-			NULL,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-		)
-	);
-	g_object_class_install_property(
-		gobject_class,
-		ARG_SRC_UNITS,
-		g_param_spec_string(
-			"units",
-			"Units",
-			"Units string parsable by LAL's Units code (e.g., \"strain\" or \"counts\"). null or an empty string means dimensionless.",
-			DEFAULT_UNITS_STRING,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-		)
-	);
 
 	/*
 	 * GstBaseSrc method overrides
 	 */
 
-	gstbasesrc_class->start = GST_DEBUG_FUNCPTR(start);
-	gstbasesrc_class->stop = GST_DEBUG_FUNCPTR(stop);
+	//gstbasesrc_class->start = GST_DEBUG_FUNCPTR(start);
+	//gstbasesrc_class->stop = GST_DEBUG_FUNCPTR(stop);
 	gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
 	gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
 	gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
-	gstbasesrc_class->query = GST_DEBUG_FUNCPTR(query);
-	gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
+	//gstbasesrc_class->query = GST_DEBUG_FUNCPTR(query);
+	//gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
 }
 
 
@@ -1005,14 +939,10 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	gst_pad_use_fixed_caps(GST_BASE_SRC_PAD(basesrc));
 
 	basesrc->offset = 0;
-	element->location = NULL;
 	element->instrument = NULL;
-	element->channel_name = NULL;
-	element->full_channel_name = NULL;
 	element->rate = 0;
 	element->width = 0;
 	element->stream = NULL;
-	element->units = DEFAULT_UNITS_UNIT;
 	element->series_type = -1;
 
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
@@ -1036,7 +966,7 @@ GType gstlal_onlinehoftsrc_get_type(void)
 			.instance_size = sizeof(GSTLALOnlineHoftSrc),
 			.instance_init = instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_BASE_SRC, "lal_onlinehoftsrc", &info, 0);
+		type = g_type_register_static(GST_TYPE_PUSH_SRC, "lal_onlinehoftsrc", &info, 0);
 	}
 
 	return type;
