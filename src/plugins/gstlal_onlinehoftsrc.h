@@ -1,7 +1,7 @@
 /*
  * LAL online h(t) src element
  *
- * Copyright (C) 2008  Kipp C. Cannon
+ * Copyright (C) 2008  Leo Singer
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
