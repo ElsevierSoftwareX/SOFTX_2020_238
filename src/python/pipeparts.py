@@ -69,6 +69,17 @@ def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 *
 	return elem
 
 
+def mkndssrc(pipeline, host, instrument, channel_name, blocksize = 16384 * 8 * 1):
+	# default blocksize is 1 second of double precision floats at
+	# 16384 Hz, e.g., LIGO h(t)
+	elem = gst.element_factory_make("ndssrc")
+	elem.set_property("blocksize", blocksize)
+	elem.set_property("host", host)
+	elem.set_property("channel-name", "%s:%s" % (instrument, channel_name))
+	pipeline.add(elem)
+	return elem
+
+
 def mkcapsfilter(pipeline, src, caps):
 	elem = gst.element_factory_make("capsfilter")
 	elem.set_property("caps", gst.Caps(caps))
