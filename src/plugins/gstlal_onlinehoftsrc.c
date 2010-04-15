@@ -52,6 +52,7 @@
 
 #include <lal/LALDatatypes.h>
 #include <lal/Aggregation.h>
+#include <lal/XLALError.h>
 
 
 /*
@@ -141,11 +142,17 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
     
     LIGOTimeGPS timeGPS = { (element->gps_remainder) << 4, 0};
     
+    GST_INFO_OBJECT(element, "XLALAggregationStrainDataWait(\"%s\", %d, 16, 32)", element->instrument, timeGPS.gpsSeconds);
     REAL8TimeSeries* series
         = XLALAggregationStrainDataWait(element->instrument, &timeGPS, 16, 32);
     
+    ++(element->gps_remainder);
+    
     if (!series)
+    {
+        GST_ERROR_OBJECT(element, "XLALAggregationStrainDataWait: %s", XLALErrorString(xlalErrno));
         return GST_FLOW_ERROR;
+    }
     
     size_t data_size = series->data->length * sizeof(*series->data->data);
     
@@ -313,7 +320,17 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	basesrc->offset = 0;
 	element->instrument = NULL;
-    element->gps_remainder = 0; // TODO: should set to current time
+    
+    LIGOTimeGPS time_now;
+    GST_INFO_OBJECT(element, "XLALGPSTimeNow");
+    /* get current gps time */
+    if (XLALGPSTimeNow(&time_now) == NULL)
+    {
+        /* failed to get current time */
+        GST_ERROR_OBJECT(element, "XLALGPSTimeNow: %s", XLALErrorString(xlalErrno));
+        element->gps_remainder = 0;
+    }
+    element->gps_remainder = ((guint32)time_now.gpsSeconds) >> 4;
 
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
 }
