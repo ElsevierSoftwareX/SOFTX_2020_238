@@ -51,9 +51,6 @@ typedef struct {
 	GstPushSrc basesrc;
 
 	char *instrument;
-	gint rate;
-	gint width;
-    
     guint32 gps_remainder;
 } GSTLALOnlineHoftSrc;
 
