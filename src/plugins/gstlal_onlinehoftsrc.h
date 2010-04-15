@@ -26,9 +26,6 @@
 #include <gst/gst.h>
 #include <gst/base/gstpushsrc.h>
 
-#include <lal/FrameStream.h>
-#include <lal/LALDatatypes.h>
-
 
 G_BEGIN_DECLS
 
@@ -46,7 +43,7 @@ G_BEGIN_DECLS
 
 
 typedef struct {
-	GstBaseSrcClass parent_class;
+	GstPushSrcClass parent_class;
 } GSTLALOnlineHoftSrcClass;
 
 
@@ -56,9 +53,8 @@ typedef struct {
 	char *instrument;
 	gint rate;
 	gint width;
-
-	FrStream *stream;
-	LALTYPECODE series_type;
+    
+    guint32 gps_remainder;
 } GSTLALOnlineHoftSrc;
 
 

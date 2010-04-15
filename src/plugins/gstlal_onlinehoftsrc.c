@@ -52,12 +52,8 @@
  */
 
 
-#include <lal/Date.h>
 #include <lal/LALDatatypes.h>
-#include <lal/FrameStream.h>
-#include <lal/LALFrameIO.h>
-#include <lal/Units.h>
-#include <lal/TimeSeries.h>
+#include <lal/Aggregation.h>
 
 
 /*
@@ -85,6 +81,7 @@ static GstPushSrcClass *parent_class = NULL;
  * ========================================================================
  */
 
+static const guint8 gps_modulus_depth = 4;
 
 /*
  * ========================================================================
@@ -529,7 +526,34 @@ static gboolean stop(GstBaseSrc *object)
 
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
-    return GST_FLOW_ERROR; /// TODO
+	GSTLALOnlineHoftSrc *element = GSTLAL_ONLINEHOFTSRC(basesrc);
+    
+    LIGOTimeGPS timeGPS = { (element->gps_remainder) << 4, 0};
+    
+    REAL8TimeSeries* series
+        = XLALAggregationStrainDataWait(element->instrument, &timeGPS, 16, 32);
+    
+    if (!series)
+        return GST_FLOW_ERROR;
+    
+    size_t data_size = series->data->length * sizeof(*series->data->data);
+    
+    GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, data_size, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
+    
+    if (result != GST_FLOW_OK)
+    {
+        XLALDestroyREAL8TimeSeries(series);
+        return result;
+    }
+    
+    memcpy((char*)GST_BUFFER_DATA(*buffer), series->data->data, data_size);
+    basesrc->offset += series->data->length;
+    GST_BUFFER_OFFSET_END(*buffer) = basesrc->offset;
+    GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * series->epoch.gpsSeconds + series->epoch.gpsNanoSeconds;
+    GST_BUFFER_DURATION(*buffer) = series->data->length * series->deltaT * GST_SECOND;
+    XLALDestroyREAL8TimeSeries(series);
+    
+    return GST_FLOW_OK; /// TODO
 }
 
 
@@ -680,8 +704,10 @@ static gboolean is_seekable(GstBaseSrc *object)
 
 static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 {
-    /// TODO
-    return FALSE;
+	GSTLALOnlineHoftSrc *element = GSTLAL_ONLINEHOFTSRC(basesrc);
+    
+    element->gps_remainder = ((guint32) (segment->start / GST_SECOND)) >> 4;
+    return TRUE;
 }
 
 
@@ -870,10 +896,10 @@ static void base_init(gpointer class)
 			GST_PAD_ALWAYS,
 			gst_caps_from_string(
 				"audio/x-raw-float, " \
-				"rate = (int) [1, MAX], " \
+				"rate = (int) 16384, " \
 				"channels = (int) 1, " \
 				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) {32, 64} " \
+				"width = (int) 64 " \
 			)
 		)
 	);
@@ -940,10 +966,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	basesrc->offset = 0;
 	element->instrument = NULL;
-	element->rate = 0;
-	element->width = 0;
-	element->stream = NULL;
-	element->series_type = -1;
+    element->gps_remainder = 0; // TODO: should set to current time
 
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
 }
