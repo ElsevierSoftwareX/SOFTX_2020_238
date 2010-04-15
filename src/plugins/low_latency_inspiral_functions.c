@@ -38,7 +38,6 @@
 #include <gsl/gsl_spline.h>
 
 /* LAL Includes */
-
 #include <lal/LALDatatypes.h>
 #include <lal/LALStdlib.h>
 #include <lal/Date.h>
@@ -55,7 +54,7 @@
 #include <lal/LIGOMetadataTables.h>
 #include <lal/LIGOMetadataUtils.h>
 #include <lal/LIGOLwXML.h>
-#include <lal/LIGOLwXMLRead.h>
+#include <lal/LIGOLwXMLInspiralRead.h>
 #include <lal/FindChirpTD.h>
 #include <lal/FindChirp.h>
 #include <lal/LALError.h>
