@@ -585,7 +585,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	case LAL_I4_TYPE_CODE: {
 		INT4TimeSeries *chunk;
 		if(gst_base_src_get_blocksize(basesrc) % sizeof(*chunk->data->data)) {
-			GST_ERROR_OBJECT(element, "block size %u is not an integer multiple of the sample size %u", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
+			GST_ERROR_OBJECT(element, "block size %lu is not an integer multiple of the sample size %lu", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
 			return GST_FLOW_ERROR;
 		}
 		chunk = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data));
@@ -619,7 +619,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	case LAL_S_TYPE_CODE: {
 		REAL4TimeSeries *chunk;
 		if(gst_base_src_get_blocksize(basesrc) % sizeof(*chunk->data->data)) {
-			GST_ERROR_OBJECT(element, "block size %u is not an integer multiple of the sample size %u", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
+			GST_ERROR_OBJECT(element, "block size %lu is not an integer multiple of the sample size %lu", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
 			return GST_FLOW_ERROR;
 		}
 		chunk = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data));
@@ -653,7 +653,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	case LAL_D_TYPE_CODE: {
 		REAL8TimeSeries *chunk;
 		if(gst_base_src_get_blocksize(basesrc) % sizeof(*chunk->data->data)) {
-			GST_ERROR_OBJECT(element, "block size %u is not an integer multiple of the sample size %u", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
+			GST_ERROR_OBJECT(element, "block size %lu is not an integer multiple of the sample size %lu", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
 			return GST_FLOW_ERROR;
 		}
 		chunk = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data));
