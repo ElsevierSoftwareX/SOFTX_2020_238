@@ -221,7 +221,7 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans,
 	guint insize = (guint) size;
 
 	if ( !element->silent && delaysize > 0 )
-	   fprintf(stderr,"needed %ld, received %d (rate %d)\n",delaysize,insize,element->rate);
+	   fprintf(stderr,"needed %u, received %d (rate %d)\n",delaysize,insize,element->rate);
 
 	if ( insize <= delaysize )
 	   /* ignore this buffer */
