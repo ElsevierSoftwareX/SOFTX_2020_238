@@ -1141,7 +1141,7 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			 */
 
 			if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) && len) {
-				GST_LOG_OBJECT(adder, "channel %p: copying %d bytes from data %p", data, len, GST_BUFFER_DATA(inbuf));
+				GST_LOG_OBJECT(adder, "channel %p: copying %zd bytes from data %p", data, len, GST_BUFFER_DATA(inbuf));
 				memset(outbytes, 0, gap);
 				memcpy(outbytes + gap, GST_BUFFER_DATA(inbuf), len);
 				memset(outbytes + gap + len, 0, GST_BUFFER_SIZE(outbuf) - len - gap);
@@ -1159,11 +1159,11 @@ static GstFlowReturn gst_adder_collected(GstCollectPads * pads, gpointer user_da
 			 */
 
 			if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) && len) {
-				GST_LOG_OBJECT(adder, "channel %p: mixing %d bytes from data %p", data, len, GST_BUFFER_DATA(inbuf));
+				GST_LOG_OBJECT(adder, "channel %p: mixing %zd bytes from data %p", data, len, GST_BUFFER_DATA(inbuf));
 				adder->func(outbytes + gap, GST_BUFFER_DATA(inbuf), len);
 				GST_BUFFER_FLAG_UNSET(outbuf, GST_BUFFER_FLAG_GAP);
 			} else
-				GST_LOG_OBJECT(adder, "channel %p: skipping %d bytes from data %p", data, len, GST_BUFFER_DATA(inbuf));
+				GST_LOG_OBJECT(adder, "channel %p: skipping %zd bytes from data %p", data, len, GST_BUFFER_DATA(inbuf));
 		}
 
 		gst_buffer_unref(inbuf);
