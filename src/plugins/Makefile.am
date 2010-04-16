@@ -28,6 +28,7 @@ libgstlal_la_SOURCES = \
 	gstlal_nofakedisconts.h gstlal_nofakedisconts.c \
 	gstlal_reblock.h gstlal_reblock.c \
 	gstlal_delay.h gstlal_delay.c \
+	gstlal_iirbank.h gstlal_iirbank.c \
 	$(NDSSRC_SOURCES)
 libgstlal_la_CFLAGS = -O2 $(AM_CFLAGS) $(CFLAGS) ${gstreamer_CFLAGS} ${LAL_CFLAGS} ${GSL_CFLAGS} ${FFTW_CFLAGS} ${NDS_CFLAGS}
 libgstlal_la_LIBADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS} ${FFTW_LIBS} ${NDS_LIBS} $(top_srcdir)/src/lib/libgstlal.la

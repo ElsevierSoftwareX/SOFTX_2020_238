@@ -91,6 +91,7 @@
 #include <gstlal_nofakedisconts.h>
 #include <gstlal_reblock.h>
 #include <gstlal_delay.h>
+#include <gstlal_iirbank.h>
 #ifdef HAVE_NDS
 #include <gstlal_ndssrc.h>
 #endif
@@ -140,6 +141,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_nofakedisconts", GSTLAL_NOFAKEDISCONTS_TYPE},
 		{"lal_reblock", GSTLAL_REBLOCK_TYPE},
 		{"lal_delay", GSTLAL_DELAY_TYPE},
+		{"lal_iirbank", GSTLAL_IIRBANK_TYPE},
 #ifdef HAVE_NDS
 		{"ndssrc", GSTLAL_NDSSRC_TYPE},
 #endif
