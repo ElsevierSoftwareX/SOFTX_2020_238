@@ -42,6 +42,8 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy
 
 
+import pygtk
+pygtk.require("2.0")
 import gobject
 import pygst
 pygst.require('0.10')
