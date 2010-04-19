@@ -25,6 +25,7 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstpushsrc.h>
+#include <onlinehoft.h>
 
 
 G_BEGIN_DECLS
@@ -50,8 +51,8 @@ typedef struct {
 typedef struct {
 	GstPushSrc basesrc;
 
-	char *instrument;
-    guint32 gps_remainder;
+	char* instrument;
+    onlinehoft_tracker_t* tracker;
 } GSTLALOnlineHoftSrc;
 
 

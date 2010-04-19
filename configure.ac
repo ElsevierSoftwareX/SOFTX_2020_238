@@ -170,6 +170,17 @@ AC_SUBST([LAL_LIBS])
 
 
 #
+# Check for onlinehoft
+#
+
+
+PKG_CHECK_MODULES([ONLINEHOFT], [onlinehoft], , [AC_MSG_ERROR([Not found!])])
+AC_SUBST([ONLINEHOFT_CFLAGS])
+AC_SUBST([ONLINEHOFT_LIBS])
+
+
+
+#
 # Check for GSL
 #
 

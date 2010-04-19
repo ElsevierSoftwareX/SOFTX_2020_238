@@ -46,16 +46,6 @@
 
 
 /*
- * stuff from LAL
- */
-
-
-#include <lal/LALDatatypes.h>
-#include <lal/Aggregation.h>
-#include <lal/XLALError.h>
-
-
-/*
  * our own stuff
  */
 
@@ -97,6 +87,8 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case ARG_SRC_INSTRUMENT:
 		g_free(element->instrument);
 		element->instrument = g_value_dup_string(value);
+        onlinehoft_destroy(element->tracker);
+        element->tracker = onlinehoft_create(element->instrument);
 		break;
 
 	}
@@ -140,38 +132,25 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 {
 	GSTLALOnlineHoftSrc *element = GSTLAL_ONLINEHOFTSRC(basesrc);
     
-    LIGOTimeGPS timeGPS = { (element->gps_remainder) << 4, 0};
+    FrVect* frVect = onlinehoft_next_vect(element->tracker);
+    if (!frVect) return GST_FLOW_ERROR;
     
-    GST_INFO_OBJECT(element, "XLALAggregationStrainDataWait(\"%s\", %d, 16, 32)", element->instrument, timeGPS.gpsSeconds);
-    REAL8TimeSeries* series
-        = XLALAggregationStrainDataWait(element->instrument, &timeGPS, 16, 32);
-    
-    ++(element->gps_remainder);
-    
-    if (!series)
-    {
-        GST_ERROR_OBJECT(element, "XLALAggregationStrainDataWait: %s", XLALErrorString(xlalErrno));
-        return GST_FLOW_ERROR;
-    }
-    
-    size_t data_size = series->data->length * sizeof(*series->data->data);
-    
-    GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, data_size, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
+    GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, frVect->nBytes, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
     
     if (result != GST_FLOW_OK)
     {
-        XLALDestroyREAL8TimeSeries(series);
+        FrVectFree(frVect);
         return result;
     }
     
-    memcpy((char*)GST_BUFFER_DATA(*buffer), series->data->data, data_size);
-    basesrc->offset += series->data->length;
+    memcpy((char*)GST_BUFFER_DATA(*buffer), frVect->data, frVect->nBytes);
+    basesrc->offset += frVect->nData;
     GST_BUFFER_OFFSET_END(*buffer) = basesrc->offset;
-    GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * series->epoch.gpsSeconds + series->epoch.gpsNanoSeconds;
-    GST_BUFFER_DURATION(*buffer) = series->data->length * series->deltaT * GST_SECOND;
-    XLALDestroyREAL8TimeSeries(series);
+    GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * frVect->GTime;
+    GST_BUFFER_DURATION(*buffer) = frVect->nData * frVect->dx[0] * GST_SECOND;
+    FrVectFree(frVect);
     
-    return GST_FLOW_OK; /// TODO
+    return GST_FLOW_OK;
 }
 
 
@@ -196,8 +175,12 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 {
 	GSTLALOnlineHoftSrc *element = GSTLAL_ONLINEHOFTSRC(basesrc);
     
-    element->gps_remainder = ((guint32) (segment->start / GST_SECOND)) >> 4;
-    return TRUE;
+    if (element->tracker == NULL)
+        return FALSE;
+    if (onlinehoft_seek(element->tracker, segment->start / GST_SECOND) || segment->start == 0)
+        return TRUE;
+    else
+        return FALSE;
 }
 
 
@@ -222,6 +205,8 @@ static void finalize(GObject *object)
 
 	g_free(element->instrument);
 	element->instrument = NULL;
+    onlinehoft_destroy(element->tracker);
+    element->tracker = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -320,18 +305,8 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	basesrc->offset = 0;
 	element->instrument = NULL;
+    element->tracker = NULL;
     
-    LIGOTimeGPS time_now;
-    GST_INFO_OBJECT(element, "XLALGPSTimeNow");
-    /* get current gps time */
-    if (XLALGPSTimeNow(&time_now) == NULL)
-    {
-        /* failed to get current time */
-        GST_ERROR_OBJECT(element, "XLALGPSTimeNow: %s", XLALErrorString(xlalErrno));
-        element->gps_remainder = 0;
-    }
-    element->gps_remainder = ((guint32)time_now.gpsSeconds) >> 4;
-
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
 }
 
