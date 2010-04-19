@@ -45,6 +45,11 @@ import gst
 gobject.threads_init()
 
 
+try:
+	all
+except NameError:
+	# Python < 2.5 compatibility
+	from glue.iterutils import all
 from glue import segments
 from glue import segmentsUtils
 from glue.ligolw import ligolw
