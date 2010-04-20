@@ -149,7 +149,7 @@ AC_SUBST([liboil_LIBS])
 #
 
 AX_PYTHON_MODULE(numpy, fatal)
-NUMPY_CFLAGS="-I${PYTHON_SITE_PKG}/numpy/core/include"
+NUMPY_CFLAGS=-I`$PYTHON -c "import numpy;print (numpy.get_include());"`
 old_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS ${PYTHON_CPPFLAGS} ${NUMPY_CFLAGS}"
 AC_CHECK_HEADER([numpy/arrayobject.h],
