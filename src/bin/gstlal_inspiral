@@ -290,13 +290,15 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None):
 #
 
 
-def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length = 8, fake_data = False, injection_filename = None, verbose = False, nxydump_segment = None):
+def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, verbose = False, nxydump_segment = None):
 	#
 	# data source and progress report
 	#
 
 	if fake_data:
 		head = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
+	elif online_data:
+		head = pipeparts.mkndssrc(pipeline, instrument = instrument, blocksize = detector.block_size, host = "marble.ligo-wa.caltech.edu", channel_name = detector.channel)
 	else:
 		head = pipeparts.mkframesrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
 	if verbose:
@@ -543,7 +545,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, control_snksrc
 #
 
 
-def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, fake_data = False, injection_filename = None, verbose = False, nxydump_segment = None):
+def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, verbose = False, nxydump_segment = None):
 	#
 	# xml stream aggregator
 	#
@@ -558,7 +560,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, fake_data 
 
 	for instrument in detectors:
 		rates = set(rate for bank in banks for rate in bank.get_rates())
-		hoftdict = mkLLOIDsrc(pipeline, instrument, detectors[instrument], rates, psd = psd, psd_fft_length = psd_fft_length, fake_data = fake_data, injection_filename = injection_filename, verbose = verbose, nxydump_segment = nxydump_segment)
+		hoftdict = mkLLOIDsrc(pipeline, instrument, detectors[instrument], rates, psd = psd, psd_fft_length = psd_fft_length, fake_data = fake_data, online_data = online_data, injection_filename = injection_filename, verbose = verbose, nxydump_segment = nxydump_segment)
 		for bank in banks:
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
 			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % bank.logname, segment = nxydump_segment)
@@ -634,7 +636,7 @@ def make_process_params(options):
 	# optional options
 	#
 
-	for option in ("frame_cache", "injections", "flow", "svd_tolerance", "reference_psd", "ortho_gate_fap", "snr_threshold", "write_pipeline", "write_psd", "fake_data", "comment", "verbose"):
+	for option in ("frame_cache", "injections", "flow", "svd_tolerance", "reference_psd", "ortho_gate_fap", "snr_threshold", "write_pipeline", "write_psd", "fake_data", "online_data", "comment", "verbose"):
 		if getattr(options, option) is not None:
 			params[option] = getattr(options, option)
 
@@ -651,7 +653,8 @@ def parse_command_line():
 		usage = "%prog [options]",
 		description = "Stream-based inspiral analysis tool"
 	)
-	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data is used in which case it must not be set.")
+	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
+	parser.add_option("--online-data", action = "store_true", help = "Use online DMT-STRAIN instead of a frame file (optional).")
 	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 	parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
@@ -660,7 +663,7 @@ def parse_command_line():
 	parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
 	parser.add_option("--svd-tolerance", metavar = "match", type = "float", default = 0.9995, help = "Set the SVD reconstruction tolerance (default = 0.9995).")
 	parser.add_option("--nxydump-segment", metavar = "start:stop", default = ":", help = "Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time.")
-	parser.add_option("--output", metavar = "filename", help = "Set the name of the LIGO light-weight XML output file (required).")
+	parser.add_option("--output", metavar = "filename", help = "Set the name of the LIGO light-weight XML output file *.{xml,xml.gz} or an SQLite database *.sqlite (required).")
 	parser.add_option("--reference-psd", metavar = "filename", help = "Instead of measuring the noise spectrum, load the spectrum from this LIGO light-weight XML file (optional).")
 	parser.add_option("--template-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).  This option can be given multiple times to process multiple template banks in parallel.")
 	parser.add_option("--ortho-gate-fap", metavar = "probability", type = "float", default = 1e-2, help = "Set the orthogonal SNR projection gate false-alarm probability (default = 1e-2).")
@@ -673,11 +676,17 @@ def parse_command_line():
 
 	options, filenames = parser.parse_args()
 
-	required_options = ["gps_start_time", "gps_end_time", "instrument", "channel_name", "output", "template_bank"]
-	if not options.fake_data:
+	required_options = ["instrument", "channel_name", "output", "template_bank"]
+	if not (options.fake_data or options.online_data):
 		required_options += ["frame_cache"]
 	elif options.frame_cache is not None:
-		raise ValueError, "cannot set --frame-cache with --fake-data"
+		raise ValueError, "cannot set --frame-cache with --fake-data or --online-data"
+
+	if options.online_data and options.fake_data:
+		raise ValueError, "cannot set --online-data with --fake-data"
+
+	if not options.online_data:
+		required_options += ["gps_start_time", "gps_end_time"]
 
 	# FIXME: should also check for read permissions
 	for bankname in options.template_bank:
@@ -690,6 +699,13 @@ def parse_command_line():
 
 	# do this before converting option types
 	process_params = make_process_params(options)
+
+	if options.online_data:
+		# Start and stop time are ignored by the ndssrc element
+		# if online data is selected, but we set gps_start_time
+		# and gps_stop_time to neutral values.
+		options.gps_start_time = gst.CLOCK_TIME_NONE
+		options.gps_end_time = gst.CLCOK_TIME_NONE
 
 	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
 	options.gps_end_time = LIGOTimeGPS(options.gps_end_time)
@@ -710,7 +726,7 @@ def parse_command_line():
 #
 
 
-def measure_psd(instrument, detector, seg, rate, fake_data = False, injection_filename = None, psd_fft_length = 8, verbose = False):
+def measure_psd(instrument, detector, seg, rate, fake_data = False, online_data = False, injection_filename = None, psd_fft_length = 8, verbose = False):
 	#
 	# pipeline handler for PSD measurement
 	#
@@ -758,6 +774,8 @@ def measure_psd(instrument, detector, seg, rate, fake_data = False, injection_fi
 	pipeline = gst.Pipeline("psd")
 	if fake_data:
 		head = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
+	elif online_data:
+		pipeparts.mkndssrc(pipeline, instrument = instrument, blocksize = detector.block_size, host = "marble.ligo-wa.caltech.edu", channel_name = detector.channel)
 	else:
 		head = pipeparts.mkframesrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
 	if verbose:
@@ -826,6 +844,8 @@ detectors = {
 
 if options.reference_psd is not None:
 	psd = read_psd(options.reference_psd, verbose = options.verbose)
+elif options.online_data:
+	psd = None
 else:
 	psd = measure_psd(
 		options.instrument,
@@ -834,6 +854,7 @@ else:
 		2 * 2048,	# Hz;  must not be less than highest bank fragment sample rate (see below)
 		psd_fft_length = options.psd_fft_length,
 		fake_data = options.fake_data,
+		online_data = options.online_data,
 		injection_filename = options.injections,
 		verbose = options.verbose
 	)
@@ -876,8 +897,8 @@ for n, filename in enumerate(options.template_bank):
 			autocorrelation_length = 201,	# samples
 			logname = "bank%d" % n,
 			verbose = options.verbose
-		        )
 		)
+	)
 
 	# FIXME: remove this loop when no longer needed
 	# by trigger generator element.
@@ -954,6 +975,7 @@ src = mkLLOIDmulti(
 	psd = psd,
 	psd_fft_length = options.psd_fft_length,
 	fake_data = options.fake_data,
+	online_data = options.online_data,
 	injection_filename = options.injections,
 	verbose = options.verbose,
 	nxydump_segment = options.nxydump_segment
