@@ -216,7 +216,7 @@ static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstCloc
 		buf = g_queue_peek_tail(element->control_queue);
 		flushed = FALSE;
 		while(buf && (GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf) <= tmin)) {
-			GST_DEBUG_OBJECT(element, "flushing control queue to %" GST_TIME_SECONDS_FORMAT, GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf));
+			GST_DEBUG_OBJECT(element, "flushing control queue to %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf)));
 			g_queue_pop_tail(element->control_queue);
 			gst_buffer_unref(buf);
 			flushed = TRUE;

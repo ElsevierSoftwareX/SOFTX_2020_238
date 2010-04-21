@@ -165,8 +165,8 @@ def normalized_autocorrelation(fseries, revplan):
 	return tseries
 
 
-def time_frequency_boundaries(
-	template_bank_filename,
+def time_slices(
+	m1m2pairs,
 	flow = 40,
 	fhigh = 900,
 	padding = 1.1,
@@ -207,21 +207,17 @@ def time_frequency_boundaries(
 	# FIND TIMES WHEN THESE SAMPLE RATES ARE OK TO USE
 	#
 
-	# Load template bank mass params
-	template_bank_table = (
-		lsctables.table.get_table(
-			utils.load_filename(
-				template_bank_filename,
-				gz=template_bank_filename.endswith("gz") ),
-			"sngl_inspiral") )
-	mass1 = template_bank_table.get_column('mass1')
-	mass2 = template_bank_table.get_column('mass2')
-
 	# How many sample points should be included in a chunk?
 	# We need to balance the need to have few chunks with the
 	# need to have small chunks.
+	# We choose the min size such that the template matrix is
+	# has its time dimension at least as large as its template dimension.
+	# The max size is chosen based on experience, which shows that
+	# SVDs of matrices bigger than m x 8192 are very slow.
 	segment_samples_max = 8192.0
-	segment_samples_min = 2048.0
+	segment_samples_min = max(ceil_pow_2( 2*len(m1m2pairs) ),1024)
+	if segment_samples_min >= segment_samples_max:
+		raise ValueError("The input template bank must have fewer than 4096 templates.")
 
 	# For each allowed sampling rate with associated Nyquist frequency fN,
 	# determine the greatest amount of time any template in the bank spends
@@ -233,7 +229,7 @@ def time_frequency_boundaries(
 	accum_time = 0
 	for rate in allowed_rates:
 		this_flow = max( float(rate)/(4*padding), flow )
-		longest_chirp = max(spawaveform.chirptime(m1,m2,7,this_flow,fhigh) for m1,m2 in zip(mass1,mass2))
+		longest_chirp = max(spawaveform.chirptime(m1,m2,7,this_flow,fhigh) for m1,m2 in m1m2pairs )
 
 		# Do any of the templates go beyond the accumulated time?
 		# If so, we need to add some blocks at this sampling rate.
@@ -269,4 +265,4 @@ def time_frequency_boundaries(
 		print>> sys.stderr, "Time freq boundaries: "
 		print>> sys.stderr, time_freq_boundaries
 
-	return time_freq_boundaries
+	return numpy.array(time_freq_boundaries,dtype=[('rate','int'),('begin','float'),('end','float')])

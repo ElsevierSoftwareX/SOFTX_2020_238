@@ -4,6 +4,8 @@
 import sys
 
 
+import pygtk
+pygtk.require("2.0")
 import gobject
 import pygst
 pygst.require("0.10")

@@ -9,7 +9,7 @@ AC_COPYRIGHT([Copyright (C) 2008 Kipp C. Cannon])
 # top-level directory of the source tree
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
 AC_CONFIG_AUX_DIR([gnuscripts])
-AC_CONFIG_AUX_DIR([gnuscripts])
+AC_CONFIG_MACRO_DIR([gnuscripts])
 AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_FILES([ \
 	Makefile \
@@ -84,6 +84,37 @@ AC_SUBST([FFTW_LIBS])
 
 
 #
+# Check for NDS2
+#
+
+
+AC_ARG_WITH(
+	[nds],
+	[AS_HELP_STRING([--with-nds], [include NDS source element @<:@default=check@:>@])],
+	[],
+	[with_nds=check]
+)
+AS_IF(
+	[test "x$with_nds" != "xno"],
+	[PKG_CHECK_MODULES(
+		[NDS],
+		[nds2-client],
+		[AC_DEFINE([HAVE_NDS], [1], [Define if you have nds2-client])
+		HAVE_NDS="yes"],
+		[HAVE_NDS="no"
+		AS_IF(
+			[test "x$with_nds" != "xcheck"],
+			[AC_MSG_ERROR([Not found!])],
+			[AC_MSG_WARN([Not found!])]
+		)]
+	)]
+)
+AM_CONDITIONAL([COND_NDS], [test "x${HAVE_NDS}" == "xyes"])
+AC_SUBST([NDS_CFLAGS])
+AC_SUBST([NDS_LIBS])
+
+
+#
 # Check for GStreamer 0.10
 #
 
@@ -118,7 +149,7 @@ AC_SUBST([liboil_LIBS])
 #
 
 AX_PYTHON_MODULE(numpy, fatal)
-NUMPY_CFLAGS="-I${PYTHON_SITE_PKG}/numpy/core/include"
+NUMPY_CFLAGS=-I`$PYTHON -c "import numpy;print (numpy.get_include());"`
 old_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS ${PYTHON_CPPFLAGS} ${NUMPY_CFLAGS}"
 AC_CHECK_HEADER([numpy/arrayobject.h],
@@ -133,7 +164,7 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-PKG_CHECK_MODULES([LAL], [lal lalframe lalmetaio lalsupport lalburst], , [AC_MSG_ERROR([Not found!])])
+PKG_CHECK_MODULES([LAL], [lal lalframe lalmetaio lalsupport lalburst lalinspiral], , [AC_MSG_ERROR([Not found!])])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
 

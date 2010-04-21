@@ -25,6 +25,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
 
 
@@ -60,8 +61,12 @@ G_BEGIN_DECLS
  */
 
 
+GValueArray *gstlal_g_value_array_from_ints(const gint *, gint);
+gint *gstlal_ints_from_g_value_array(GValueArray *, gint *, gint *);
 GValueArray *gstlal_g_value_array_from_doubles(const gdouble *, gint);
 gdouble *gstlal_doubles_from_g_value_array(GValueArray *, gdouble *, gint *);
+gsl_vector_int *gstlal_gsl_vector_int_from_g_value_array(GValueArray *);
+GValueArray *gstlal_g_value_array_from_gsl_vector_int(const gsl_vector_int *);
 gsl_vector *gstlal_gsl_vector_from_g_value_array(GValueArray *);
 GValueArray *gstlal_g_value_array_from_gsl_vector(const gsl_vector *);
 gsl_matrix *gstlal_gsl_matrix_from_g_value_array(GValueArray *);

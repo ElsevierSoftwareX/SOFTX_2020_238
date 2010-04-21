@@ -38,7 +38,7 @@
 #include <lal/Date.h>
 #include <lal/LIGOMetadataTables.h>
 #include <lal/LIGOLwXML.h>
-#include <lal/LIGOLwXMLRead.h>
+#include <lal/LIGOLwXMLInspiralRead.h>
 #include <lal/LALStdlib.h>
 
 
@@ -193,8 +193,10 @@ static SnglInspiralTable *record_inspiral_event(SnglInspiralTable *dest, LIGOTim
 	 * templates with what we know about the data stream
 	 */
 
-	snprintf(dest->ifo, LIGOMETA_IFO_MAX * sizeof(*dest->ifo), element->instrument);
-	snprintf(dest->channel, LIGOMETA_CHANNEL_MAX * sizeof(*dest->channel), element->channel_name);
+	strncpy(dest->ifo, element->instrument, LIGOMETA_IFO_MAX * sizeof(*dest->ifo));
+	dest->ifo[LIGOMETA_IFO_MAX - 1] = 0;
+	strncpy(dest->channel, element->channel_name, LIGOMETA_CHANNEL_MAX * sizeof(*dest->channel));
+	dest->channel[LIGOMETA_CHANNEL_MAX - 1] = 0;
 
 	/*
 	 * fill in the rest of the information
