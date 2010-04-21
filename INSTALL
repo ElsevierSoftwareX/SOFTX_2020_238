@@ -288,11 +288,12 @@ Installing the Software
     $ ./autogen.sh --noconfigure && ./configure --prefix=/path/to/local && make -j install
     $ popd
     
-    Note:  ignore warnings about "failed to install schema", these appear to be harmless.
+    .. NOTE:: Ignore warnings about "failed to install schema", these appear 
+              to be harmless.
     
-    On CentOS, building gst-plugins-bad may fail while building the plugin
-    ``apexsink``.  If this occurs, you can configure gst-plugins-bad with
-    the flag ``--disable-apexsink`` to skip it.
+    .. NOTE:: On CentOS, building gst-plugins-bad may fail while building the 
+              plugin ``apexsink``.  If this occurs, you can configure 
+              gst-plugins-bad with the flag ``--disable-apexsink`` to skip it.
  
  4. Install gstlal with::
     
