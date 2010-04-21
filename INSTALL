@@ -149,12 +149,12 @@ these three software packages into your ``/path/to/local`` prefix::
   
   $ tar -xzf pygobject-2.14.2.tar.gz
   $ pushd pygobject-2.14.2
-  $ CFLAGS="-Wl,-rpath -Wl,/path/to/local/lib" ./configure --prefix=/path/to/local && make install
+  $ ./configure --disable-glibtest --prefix=/path/to/local && make install
   $ popd
   
   $ tar -xzf pygtk-2.8.6.tar.gz
   $ pushd pygtk-2.8.6
-  $ CFLAGS="-Wl,-rpath -Wl,/path/to/local/lib" ./configure --prefix=/path/to/local && make install
+  $ ./configure --disable-glibtest --prefix=/path/to/local && make install
   $ popd
 
 
