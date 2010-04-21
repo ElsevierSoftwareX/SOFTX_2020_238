@@ -103,6 +103,36 @@ static unsigned fft_block_length(const GSTLALFIRBank *element)
 
 
 /*
+ * the number of samples from the start of one FFT block to the next, also
+ * the number of samples produced from each FFT block
+ */
+
+
+static unsigned fft_block_stride(const GSTLALFIRBank *element)
+{
+	return fft_block_length(element) - fir_length(element) + 1;
+}
+
+
+/*
+ * number of samples that must be available to compute at least n output
+ * samples
+ */
+
+
+static guint64 minimum_input_length(const GSTLALFIRBank *element, guint64 n)
+{
+	if(element->time_domain)
+		return n + fir_length(element) - 1;
+	else {
+		guint64 stride = fft_block_stride(element);
+		guint64 blocks = (n + stride - 1) / stride;
+		return (blocks - 1) * stride + fft_block_length(element);
+	}
+}
+
+
+/*
  * construct a buffer of zeros and push into adapter
  */
 
@@ -153,6 +183,13 @@ static void set_metadata(GSTLALFIRBank *element, GstBuffer *buf, guint64 outsamp
 static guint64 get_available_samples(GSTLALFIRBank *element)
 {
 	return gst_adapter_available(element->adapter) / sizeof(double);
+}
+
+
+static guint64 get_available_nonzero_samples(GSTLALFIRBank *element)
+{
+	guint64 available_samples = get_available_samples(element);
+	return available_samples > element->zeros_in_adapter ? available_samples - element->zeros_in_adapter : 0;
 }
 
 
@@ -253,6 +290,8 @@ static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ava
 		return 0;
 	output_length = available_length - fir_length(element) + 1;
 
+	g_assert(GST_BUFFER_SIZE(outbuf) >= output_length * fir_channels(element) * sizeof(double));
+
 	/*
 	 * wrap the adapter's contents in a GSL vector view.  note that the
 	 * wrapper vector's length is set to the fir_length length, not the
@@ -310,13 +349,14 @@ static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ava
 
 static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned available_length)
 {
-	unsigned i;
-	unsigned fft_block_stride;
-	unsigned fft_blocks;
+	unsigned stride;
+	unsigned blocks;
 	unsigned input_length;
 	unsigned output_length;
 	unsigned filter_length_fd;
 	double *input;
+	double *output_end;
+	gsl_matrix_view output;
 	gsl_vector_view workspace;
 
 	/*
@@ -326,11 +366,13 @@ static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ava
 
 	if(available_length < fft_block_length(element))
 		return 0;
-	fft_block_stride = fft_block_length(element) - fir_length(element) + 1;
-	fft_blocks = (available_length - fft_block_length(element)) / fft_block_stride + 1;
-	input_length = (fft_blocks - 1) * fft_block_stride + fft_block_length(element);
-	output_length = input_length - fir_length(element) + 1;
+	stride = fft_block_stride(element);
+	blocks = (available_length - fft_block_length(element)) / stride + 1;
+	output_length = blocks * stride;
+	input_length = output_length + fir_length(element) - 1;
 	filter_length_fd = fft_block_length(element) / 2 + 1;
+
+	output_length = MIN(output_length, GST_BUFFER_SIZE(outbuf) / (fir_channels(element) * sizeof(double)));
 
 	/*
 	 * retrieve input samples
@@ -341,25 +383,32 @@ static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ava
 	/*
 	 * wrap workspace (as real numbers) in a GSL vector view.  note
 	 * that vector has length fft_block_stride to affect the requisite
-	 * transient clipping
+	 * overlap
 	 */
 
-	workspace = gsl_vector_view_array((double *) element->workspace_fd, fft_block_stride);
+	workspace = gsl_vector_view_array((double *) element->workspace_fd, stride);
+
+	/*
+	 * wrap first block of output buffer in a GSL matrix view
+	 */
+
+	output = gsl_matrix_view_array(((double *) GST_BUFFER_DATA(outbuf)), stride, fir_channels(element));
+	output_end = output.matrix.data + output_length * fir_channels(element);
 
 	/*
 	 * loop over FFT blocks
 	 */
 
-	for(i = 0; i < fft_blocks; i++) {
-		gsl_matrix_view output;
+	while(output.matrix.data < output_end) {
 		complex double *filter;
 		unsigned j;
 
 		/*
-		 * wrap this block of output buffer in a GSL matrix view
+		 * clip the output to the output buffer's length
 		 */
 
-		output = gsl_matrix_view_array(((double *) GST_BUFFER_DATA(outbuf)) + i * fft_block_stride * fir_channels(element), fft_block_stride, fir_channels(element));
+		if(output_end - output.matrix.data < stride * fir_channels(element))
+			workspace.vector.size = output.matrix.size1 = (output_end - output.matrix.data) / fir_channels(element);
 
 		/*
 		 * copy a block-length of data to input workspace and
@@ -377,7 +426,13 @@ static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ava
 		for(j = 0; j < fir_channels(element); j++) {
 			/*
 			 * multiply input by filter, transform to
-			 * time-domain, copy to output
+			 * time-domain, copy to output.  note that the
+			 * workspace view and the output matrix view are
+			 * only stride samples long, thus the end of the
+			 * real workspace is not copied.  the
+			 * frequency-domain filters are constructed so that
+			 * the wrap-around transient lives in that part of
+			 * the work space in the time domain.
 			 */
 
 			unsigned k;
@@ -388,10 +443,11 @@ static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ava
 		}
 
 		/*
-		 * advance to next FFT block
+		 * advance to next block
 		 */
 
-		input += fft_block_stride;
+		input += stride;
+		output.matrix.data += stride * fir_channels(element);
 	}
 
 	/*
@@ -407,7 +463,7 @@ static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ava
  */
 
 
-static GstFlowReturn filter(GSTLALFIRBank *element, GstBuffer *outbuf, gboolean time_domain)
+static GstFlowReturn filter(GSTLALFIRBank *element, GstBuffer *outbuf)
 {
 	unsigned available_length;
 	unsigned output_length;
@@ -422,7 +478,7 @@ static GstFlowReturn filter(GSTLALFIRBank *element, GstBuffer *outbuf, gboolean 
 	 * run filtering code
 	 */
 
-	if(time_domain) {
+	if(element->time_domain) {
 		/*
 		 * use time-domain filter implementation
 		 */
@@ -475,6 +531,27 @@ static GstFlowReturn filter(GSTLALFIRBank *element, GstBuffer *outbuf, gboolean 
 
 
 /*
+ * run filter code on adapter's contents putting result into a newly
+ * allocated buffer, and push buffer downstream.
+ */
+
+
+GstFlowReturn filter_and_push(GSTLALFIRBank *element, guint64 length)
+{
+	GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
+	GstBuffer *buf;
+	GstFlowReturn result;
+
+	result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, length * fir_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
+	if(result != GST_FLOW_OK)
+		return result;
+	result = filter(element, buf);
+	g_assert(result == GST_FLOW_OK);
+	return gst_pad_push(srcpad, buf);
+}
+
+
+/*
  * ============================================================================
  *
  *                                  Signals
@@ -509,7 +586,7 @@ static void rate_changed(GstElement *element, gint rate, void *data)
 
 
 static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
-	"sink",
+	GST_BASE_TRANSFORM_SINK_NAME,
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
@@ -523,7 +600,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 
 
 static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
-	"src",
+	GST_BASE_TRANSFORM_SRC_NAME,
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
@@ -545,12 +622,14 @@ GST_BOILERPLATE(
 
 
 enum property {
-	ARG_BLOCK_LENGTH_FACTOR = 1,
+	ARG_TIME_DOMAIN = 1,
+	ARG_BLOCK_LENGTH_FACTOR,
 	ARG_FIR_MATRIX,
 	ARG_LATENCY
 };
 
 
+#define DEFAULT_TIME_DOMAIN FALSE
 #define DEFAULT_BLOCK_LENGTH_FACTOR 4
 #define DEFAULT_LATENCY 0
 
@@ -622,7 +701,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 			if(element->fir_matrix)
 				gst_structure_set(gst_caps_get_structure(caps, n), "channels", G_TYPE_INT, fir_channels(element), NULL);
 			else
-				gst_structure_set(gst_caps_get_structure(caps, n), "channels", GST_TYPE_INT_RANGE, 0, G_MAXINT, NULL);
+				gst_structure_set(gst_caps_get_structure(caps, n), "channels", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
 		}
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
@@ -660,26 +739,34 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	switch(direction) {
 	case GST_PAD_SRC:
 		/*
-		 * just keep the sample count the same
+		 * number of input bytes required to produce an output
+		 * buffer of (at least) the requested size
 		 */
 
-		*othersize = (size / unit_size) * other_unit_size;
+		*othersize = minimum_input_length(element, size / unit_size);
+		if(*othersize <= get_available_samples(element))
+			*othersize = 0;
+		else
+			*othersize = (*othersize - get_available_samples(element)) * other_unit_size;
 		break;
 
 	case GST_PAD_SINK:
 		/*
-		 * upper bound of sample count on source pad is input
-		 * sample count plus the number of samples in the adapter
-		 * minus the impulse response length of the filters (-1
-		 * because if there's 1 impulse response of data then we
-		 * can generate 1 sample, not 0)
+		 * number of output bytes to be generated by the receipt of
+		 * an input buffer of the given size.
 		 */
 
 		*othersize = size / unit_size + get_available_samples(element);
-		if(*othersize > fir_length(element) - 1)
-			*othersize = (*othersize - (guint) fir_length(element) + 1) * other_unit_size;
-		else
+		if(*othersize < minimum_input_length(element, 1))
 			*othersize = 0;
+		else if(element->time_domain)
+			/* + 1 because when we have one FIR-length of
+			 * samples we can compute 1 output sample, not 0 */
+			*othersize = (*othersize - (guint) fir_length(element) + 1) * other_unit_size;
+		else {
+			guint64 blocks = (*othersize - fft_block_length(element)) / fft_block_stride(element) + 1;
+			*othersize = (blocks * fft_block_stride(element)) * other_unit_size;
+		}
 		break;
 
 	case GST_PAD_UNKNOWN:
@@ -777,6 +864,8 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 
 		gst_event_parse_new_segment(event, &update, &rate, &format, &start, &stop, &position);
 
+		/* FIXME:  use latency, sample rate, and FIR length to compute output segment */
+
 		event = gst_event_new_new_segment(update, rate, format, start, stop, position);
 
 		gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(trans), event);
@@ -796,26 +885,30 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
-	guint64 length;
+	guint64 in_length;
+	guint64 adapter_length;
+	guint64 nonzero_samples;
 	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
 	GstFlowReturn result;
 
 	/*
 	 * wait for FIR matrix
-	 * FIXME:  add a way to get out of this loop
 	 */
 
 	g_mutex_lock(element->fir_matrix_lock);
-	while(!element->fir_matrix)
+	while(!element->fir_matrix) {
 		g_cond_wait(element->fir_matrix_available, element->fir_matrix_lock);
+		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
+			result = GST_FLOW_WRONG_STATE;
+			goto done;
+		}
+	}
 
 	/*
 	 * check for discontinuity
-	 *
-	 * FIXME:  instead of reseting, flush/pad adapter as needed
 	 */
 
-	if(GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0)) {
+	if(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0)) {
 		/*
 		 * flush adapter
 		 */
@@ -841,12 +934,11 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	/*
 	 * gap logic
-	 *
-	 * FIXME:  gap handling with frequency-domain filtering is probably
-	 * busted
 	 */
 
-	length = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
+	in_length = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
+	adapter_length = get_available_samples(element);
+	nonzero_samples = get_available_nonzero_samples(element);
 	if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
 		/*
 		 * input is not 0s.
@@ -855,75 +947,90 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		gst_buffer_ref(inbuf);	/* don't let the adapter free it */
 		gst_adapter_push(element->adapter, inbuf);
 		element->zeros_in_adapter = 0;
-		result = filter(element, outbuf, FALSE);
-	} else if(element->zeros_in_adapter >= fir_length(element) - 1) {
+		result = filter(element, outbuf);
+	} else if(!nonzero_samples) {
 		/*
-		 * input is 0s and we are past the tail of the impulse
-		 * response so output is all 0s.  output is a gap with the
-		 * same number of samples as the input
+		 * input is 0s and adapter has no non-zero samples in it so
+		 * output is all 0s.  the output nominally has the same
+		 * number of samples as the input unless we are still in
+		 * the start-up transient at the beginning of the stream
 		 */
 
+		if(adapter_length < fir_length(element) - 1) {
+			/*
+			 * input has not yet advanced beyond the start-up
+			 * transient.  initialize adapter's contents by
+			 * consuming input samples.  if there are no input
+			 * samples left then we produce no output
+			 */
+
+			guint64 zeros = MIN(in_length, fir_length(element) - 1 - adapter_length);
+			push_zeros(element, zeros);
+			in_length -= zeros;
+			if(!in_length) {
+				result = GST_BASE_TRANSFORM_FLOW_DROPPED;
+				goto done;
+			}
+		}
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
-		set_metadata(element, outbuf, GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf), TRUE);
+		set_metadata(element, outbuf, in_length, TRUE);
 		result = GST_FLOW_OK;
-	} else if(element->zeros_in_adapter + length < fir_length(element)) {
+	} else if(adapter_length + in_length <= minimum_input_length(element, nonzero_samples)) {
 		/*
-		 * input is 0s, we are not yet past the tail of the impulse
-		 * response and the input is not long enough to change
-		 * that.  push length 0s into the adapter and run normal
-		 * filtering
+		 * input is 0s, adapter has at least 1 non-zero sample in
+		 * it, but not enough input samples are available to
+		 * consume the non-zero samples from the adapter and still
+		 * have data left over:  output will be single buffer
+		 * computed normally.  the buffer might be dropped if we
+		 * don't have enough samples to compute anything
 		 */
 
-		push_zeros(element, length);
-		result = filter(element, outbuf, FALSE);
+		push_zeros(element, in_length);
+		result = filter(element, outbuf);
 	} else {
 		/*
-		 * input is 0s, we are not yet past the tail of the impulse
-		 * response, but the input is long enough to push us past
-		 * the end.  this code path also handles the case of the
-		 * first buffer being a gap, in which case
-		 * available_samples is 0
+		 * input is 0s, adapter has at least 1 non-zero sample in
+		 * it, and enough input samples are available to consume
+		 * the non-zero samples from the adapter and still have
+		 * data left over:  output will be two buffers, the first
+		 * computed normally to consume the non-zero samples, the
+		 * second a gap buffer
 		 */
-
-		guint64 non_zero_samples = get_available_samples(element) - element->zeros_in_adapter;
 
 		/*
-		 * push (FIR-length - zeros-in-adapter - 1) 0s into adapter
-		 * to allow previous non-zero data to be finished off.
-		 * push_zeros() modifies zeros_in_adapter so update length
-		 * first
+		 * push enough zeros into the adapter to allow the
+		 * filtering code to consume the non-zero samples
 		 */
 
-		length -= fir_length(element) - element->zeros_in_adapter - 1;
-		push_zeros(element, fir_length(element) - element->zeros_in_adapter - 1);
+		guint64 zeros = minimum_input_length(element, nonzero_samples) - adapter_length;
+		push_zeros(element, zeros);
+		in_length -= zeros;
 
 		/*
-		 * run normal filter code to finish off adapter's contents,
-		 * and manually push buffer downstream.
+		 * generate the first output buffer and push downstream
 		 */
 
-		if(non_zero_samples) {
-			GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
-			GstBuffer *buf;
-
-			result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, non_zero_samples * fir_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
+		if(element->time_domain) {
+			result = filter_and_push(element, nonzero_samples);
 			if(result != GST_FLOW_OK)
 				goto done;
-			result = filter(element, buf, FALSE);
-			g_assert(result == GST_FLOW_OK);
-			result = gst_pad_push(srcpad, buf);
+		} else {
+			/* FIXME:  the boundary between the two buffers should be
+			 * set to where the zeros actually start, not where the FFT
+			 * block boundary occurs */
+
+			result = filter_and_push(element, nonzero_samples);
 			if(result != GST_FLOW_OK)
 				goto done;
 		}
 
 		/*
-		 * remainder of input produces 0s in output.  make outbuf a
-		 * gap whose size matches the remainder of the input gap
+		 * generate the second, gap, buffer
 		 */
 
-		GST_BUFFER_SIZE(outbuf) = length * fir_channels(element) * sizeof(double);
+		GST_BUFFER_SIZE(outbuf) = in_length * fir_channels(element) * sizeof(double);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
-		set_metadata(element, outbuf, length, TRUE);
+		set_metadata(element, outbuf, in_length, TRUE);
 	}
 
 	/*
@@ -957,6 +1064,19 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
+	case ARG_TIME_DOMAIN:
+		g_mutex_lock(element->fir_matrix_lock);
+		element->time_domain = g_value_get_boolean(value);
+		if(element->time_domain) {
+			/*
+			 * invalidate frequency-domain filters
+			 */
+
+			free_fft_workspace(element);
+		}
+		g_mutex_unlock(element->fir_matrix_lock);
+		break;
+
 	case ARG_BLOCK_LENGTH_FACTOR:
 		g_mutex_lock(element->fir_matrix_lock);
 		element->block_length_factor = g_value_get_int(value);
@@ -1031,6 +1151,10 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
+	case ARG_TIME_DOMAIN:
+		g_value_set_boolean(value, element->time_domain);
+		break;
+
 	case ARG_BLOCK_LENGTH_FACTOR:
 		g_value_set_int(value, element->block_length_factor);
 		break;
@@ -1065,6 +1189,23 @@ static void finalize(GObject *object)
 {
 	GSTLALFIRBank *element = GSTLAL_FIRBANK(object);
 
+	/*
+	 * wake up any threads that are waiting for the fir matrix to
+	 * become available;  since we are being finalized the element
+	 * state should be NULL causing those threads to bail out
+	 */
+
+	/* FIXME:  waking them up and then freeing the mutex is probably a
+	 * race condition that could lead to a memory problem */
+
+	g_mutex_lock(element->fir_matrix_lock);
+	g_cond_broadcast(element->fir_matrix_available);
+	g_mutex_unlock(element->fir_matrix_lock);
+
+	/*
+	 * free resources
+	 */
+
 	g_mutex_free(element->fir_matrix_lock);
 	element->fir_matrix_lock = NULL;
 	g_cond_free(element->fir_matrix_available);
@@ -1073,8 +1214,11 @@ static void finalize(GObject *object)
 		gsl_matrix_free(element->fir_matrix);
 		element->fir_matrix = NULL;
 	}
-
 	free_fft_workspace(element);
+
+	/*
+	 * chain to parent class' finalize() method
+	 */
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -1121,6 +1265,17 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 
 	klass->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
 
+	g_object_class_install_property(
+		gobject_class,
+		ARG_TIME_DOMAIN,
+		g_param_spec_boolean(
+			"time-domain",
+			"Use time-domain convolution",
+			"Set to true to use time-domain (a.k.a. direct) convolution, set to false to use FFT-based convolution.  FFT-based convolution is usually significantly faster than time-domain convolution but incurs a higher processing latency and requires more RAM.",
+			DEFAULT_TIME_DOMAIN,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_BLOCK_LENGTH_FACTOR,
@@ -1195,6 +1350,7 @@ static void gstlal_firbank_init(GSTLALFIRBank *filter, GSTLALFIRBankClass *kclas
 	filter->block_length_factor = DEFAULT_BLOCK_LENGTH_FACTOR;
 	filter->latency = DEFAULT_LATENCY;
 	filter->adapter = NULL;
+	filter->time_domain = DEFAULT_TIME_DOMAIN;
 	filter->fir_matrix_lock = g_mutex_new();
 	filter->fir_matrix_available = g_cond_new();
 	filter->fir_matrix = NULL;
