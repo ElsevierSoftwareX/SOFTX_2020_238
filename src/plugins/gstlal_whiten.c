@@ -1005,16 +1005,12 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	element->next_offset_in = GST_BUFFER_OFFSET_END(inbuf);
 
 	/*
-	 * Push the incoming buffer into the adapter
+	 * Push the incoming buffer into the adapter.  Process adapter
+	 * contents into output buffer
 	 */
 
 	gst_buffer_ref(inbuf);	/* don't let the adapter free it */
 	gst_adapter_push(element->adapter, inbuf);
-
-	/*
-	 * Process adapter contents into output buffer
-	 */
-
 	result = whiten(element, outbuf);
 
 	/*
