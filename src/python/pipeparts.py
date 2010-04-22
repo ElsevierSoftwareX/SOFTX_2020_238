@@ -167,7 +167,7 @@ def mkfakeadvLIGOsrc(pipeline, location = None, instrument = None, channel_name 
 	head2 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 1.2e-20)
 	a = [6.686792E-7, 1.3373584E-6, 6.686792E-7]
 	b = [1.0, 1.9982744, -0.9982772]
-	for idx in range(3)
+	for idx in range(3):
 		head2 = mkiirfilter(pipeline, head2, a, b)
 	head3 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 4e-22)
 	head3 = mkiirfilter(pipeline, head3, a, b)
