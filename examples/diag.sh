@@ -73,19 +73,20 @@ function test_whiten() {
 
 function test_simulation() {
 	gst-launch \
-		audiotestsrc wave=9 volume=1e-21 timestamp-offset=873247800000000000 \
+		audiotestsrc wave=9 volume=1e-21 timestamp-offset=874107195000000000 num-buffers=5 samplesperbuffer=16384 \
 		! audio/x-raw-float, channels=1, width=64, rate=16384 \
 		! taginject tags="instrument=\"H1\",channel-name=\"LSC-STRAIN\",units=\"strain\"" \
-		! lal_simulation xml-location="HL-INJECTIONS_1_BNS_INJ-873247860-176894.xml" \
-		! fakesink sync=false
+		! lal_simulation xml-location="bns_injections.xml" \
+		! audioamplify clipping-method=3 amplification=1e20 \
+		! adder ! audioconvert ! autoaudiosink
 }
 
 function test_simulation2wav() {
 	gst-launch \
-		audiotestsrc wave=9 volume=1e-21 timestamp-offset=873247900000000000 num-buffers=160 \
+		audiotestsrc wave=9 volume=1e-21 timestamp-offset=874107195000000000 num-buffers=5 samplesperbuffer=16384 \
 		! audio/x-raw-float, channels=1, width=64, rate=16384 \
 		! taginject tags="title=\"Inspiral Injections\",instrument=\"H1\",channel-name=\"LSC-STRAIN\",units=\"strain\"" \
-		! lal_simulation xml-location="/home/dkeppel/lloid/HL-INJECTIONS_1_BNS_INJ-873247900-10.xml" \
+		! lal_simulation xml-location="bns_injections.xml" \
 		! progressreport \
 		! audioamplify clipping-method=3 amplification=1e20 \
 		! wavenc \

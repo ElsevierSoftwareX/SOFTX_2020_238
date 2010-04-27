@@ -79,6 +79,19 @@ def mkndssrc(pipeline, host, instrument, channel_name, blocksize = 16384 * 8 * 1
 	return elem
 
 
+def mkonlinehoftsrc(pipeline, instrument):
+	# This function lacks the "channel_name" argument because with the
+	# online h(t) source "onlinehoftsrc" knows the channel names that are needed
+	# for each instrument.
+	#
+	# It also lacks the "blocksize" argument because the blocksize for an
+	# "onlinehoftsrc" is not adjustable.
+	elem = gst.element_factory_make("lal_onlinehoftsrc")
+	elem.set_property("instrument", instrument)
+	pipeline.add(elem)
+	return elem
+
+
 def mkcapsfilter(pipeline, src, caps):
 	elem = gst.element_factory_make("capsfilter")
 	elem.set_property("caps", gst.Caps(caps))
@@ -110,6 +123,8 @@ def mkfakesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 
 
 
 def mkiirfilter(pipeline, src, a, b):
+	# convention is z = \exp(-i 2 \pi f / f_{\rm sampling})
+	# H(z) = (\sum_{j=0}^{N} a_j z^{-j}) / (\sum_{j=0}^{N} (-1)^{j} b_j z^{-j})
 	elem = gst.element_factory_make("audioiirfilter")
 	elem.set_property("a", a)
 	elem.set_property("b", b)
@@ -135,6 +150,9 @@ def mkfakeLIGOsrc(pipeline, location = None, instrument = None, channel_name = N
 	head3 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 2.16333076528e-23)
 
 	head4 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 1.61077910675e-20)
+	a = [0.5591789, 0.5591789]
+	b = [1., -0.1183578]
+	head4 = mkiirfilter(pipeline, head4, a, b)
 	a = [0.03780506, -0.03780506]
 	b = [1.0, -0.9243905]
 	head4 = mkiirfilter(pipeline, head4, a, b)
@@ -146,6 +164,51 @@ def mkfakeLIGOsrc(pipeline, location = None, instrument = None, channel_name = N
 	head2.link(head)
 	head3.link(head)
 	head4.link(head)
+	return mkaudioamplify(pipeline, head, 16384.**.5)
+
+
+def mkfakeadvLIGOsrc(pipeline, location = None, instrument = None, channel_name = None, blocksize = 16384 * 8 * 1):
+	# default blocksize is 1 second of double precision floats at
+	# 16384 Hz, e.g., h(t)
+	# creates noise with approximate PSD of ZERO DET, high P. in http://lhocds.ligo-wa.caltech.edu:8000/advligo/AdvLIGO_noise_curves
+	head1 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 4e-18)
+	a = [1.951516E-6, 3.903032E-6, 1.951516E-6]
+	b = [1., 1.9970651, -0.99707294]
+	for idx in range(20):
+		head1 = mkiirfilter(pipeline, head1, a, b)
+
+	head2 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 1.2e-20)
+	a = [6.686792E-7, 1.3373584E-6, 6.686792E-7]
+	b = [1.0, 1.9982744, -0.9982772]
+	for idx in range(3):
+		head2 = mkiirfilter(pipeline, head2, a, b)
+	head3 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 4e-22)
+	head3 = mkiirfilter(pipeline, head3, a, b)
+
+	head4 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 3.6e-24)
+
+	head5 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 3.12e-23)
+	a = [8.003242E-4, 8.003242E-4]
+	b = [1.0, 0.99843043]
+	head5 = mkiirfilter(pipeline, head5, a, b)
+
+	head6 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 5.36e-20)
+	a = [0.5591789, 0.5591789]
+	b = [1., -0.1183578]
+	head6 = mkiirfilter(pipeline, head6, a, b)
+	a = [4.2278392E-4, -4.2278392E-4]
+	b = [1.0, -0.9992149]
+	head6 = mkiirfilter(pipeline, head6, a, b)
+
+	head = gst.element_factory_make("lal_adder")
+	head.set_property("sync", True)
+	pipeline.add(head)
+	head1.link(head)
+	head2.link(head)
+	head3.link(head)
+	head4.link(head)
+	head5.link(head)
+	head6.link(head)
 	return mkaudioamplify(pipeline, head, 16384.**.5)
 
 

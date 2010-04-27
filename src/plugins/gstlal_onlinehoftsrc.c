@@ -42,7 +42,7 @@
 
 
 #include <gst/gst.h>
-#include <gst/base/gstpushsrc.h>
+#include <gst/base/gstbasesrc.h>
 
 
 /*
@@ -59,7 +59,7 @@
  */
 
 
-static GstPushSrcClass *parent_class = NULL;
+static GstBaseSrcClass *parent_class = NULL;
 
 
 
@@ -87,8 +87,9 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case ARG_SRC_INSTRUMENT:
 		g_free(element->instrument);
 		element->instrument = g_value_dup_string(value);
-        onlinehoft_destroy(element->tracker);
-        element->tracker = onlinehoft_create(element->instrument);
+		onlinehoft_destroy(element->tracker);
+		element->tracker = NULL;
+		element->needs_seek = TRUE;
 		break;
 
 	}
@@ -131,28 +132,87 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
 	GSTLALOnlineHoftSrc *element = GSTLAL_ONLINEHOFTSRC(basesrc);
-    
-    FrVect* frVect = onlinehoft_next_vect(element->tracker);
-    if (!frVect) return GST_FLOW_ERROR;
-    
-    GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, frVect->nBytes, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
-    
-    if (result != GST_FLOW_OK)
-    {
-        FrVectFree(frVect);
-        return result;
-    }
-    
-    memcpy((char*)GST_BUFFER_DATA(*buffer), frVect->data, frVect->nBytes);
-    basesrc->offset += frVect->nData;
-    GST_BUFFER_OFFSET_END(*buffer) = basesrc->offset;
-    GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * frVect->GTime;
-    GST_BUFFER_DURATION(*buffer) = frVect->nData * frVect->dx[0] * GST_SECOND;
-    FrVectFree(frVect);
-    
-    return GST_FLOW_OK;
+
+	// If the online h(t) tracker has not been created (e.g. if the instrument
+	// property has been changed), then try to create it.
+	if (!element->tracker)
+	{
+		GST_INFO_OBJECT(element, "onlinehoft_create(\"%s\")", element->instrument);
+		element->tracker = onlinehoft_create(element->instrument);
+
+		if (!element->tracker)
+		{
+			GST_ERROR_OBJECT(element, "onlinehoft_create(\"%s\")", element->instrument);
+			return GST_FLOW_ERROR;
+		}
+
+		// Send new instrument tag
+		if (!gst_pad_push_event(
+			GST_BASE_SRC_PAD(basesrc),
+			gst_event_new_tag(
+				gst_tag_list_new_full(
+					GSTLAL_TAG_INSTRUMENT, element->instrument,
+					GSTLAL_TAG_CHANNEL_NAME, onlinehoft_get_channelname(element->tracker),
+					NULL
+				)
+			)
+		)) {
+			GST_ERROR_OBJECT(element, "Failed to push taglist");
+		}
+	}
+
+	if (element->needs_seek)
+	{
+		// Do seek
+		guint32 seek_start_seconds = basesrc->segment.start / GST_SECOND;
+		GST_INFO_OBJECT(element, "onlinehoft_seek(tracker, %u)", seek_start_seconds);
+		onlinehoft_seek(element->tracker, seek_start_seconds);
+		element->needs_seek = FALSE;
+	}
+
+	FrVect* frVect = onlinehoft_next_vect(element->tracker);
+	if (!frVect) return GST_FLOW_ERROR;
+
+	GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, frVect->nBytes, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
+
+	if (result != GST_FLOW_OK)
+	{
+		FrVectFree(frVect);
+		return result;
+	}
+
+	memcpy((char*)GST_BUFFER_DATA(*buffer), frVect->data, frVect->nBytes);
+	basesrc->offset += frVect->nData;
+	GST_BUFFER_OFFSET_END(*buffer) = basesrc->offset;
+	GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * frVect->GTime;
+	GST_BUFFER_DURATION(*buffer) = frVect->nData * frVect->dx[0] * GST_SECOND;
+	FrVectFree(frVect);
+
+	if (onlinehoft_was_discontinuous(element->tracker))
+	{
+		GST_INFO_OBJECT(element, "discontinuity");
+		GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
+	}
+
+	GST_INFO_OBJECT(element, "pushed frame spanning [%u, %u)",
+		(guint) frVect->GTime,
+		(guint) frVect->GTime + 16
+	);
+
+	return GST_FLOW_OK;
 }
 
+
+
+/*
+ * check_get_range()
+ */
+
+
+static gboolean check_get_range(GstBaseSrc *object)
+{
+	return TRUE;
+}
 
 
 /*
@@ -174,13 +234,9 @@ static gboolean is_seekable(GstBaseSrc *object)
 static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 {
 	GSTLALOnlineHoftSrc *element = GSTLAL_ONLINEHOFTSRC(basesrc);
-    
-    if (element->tracker == NULL)
-        return FALSE;
-    if (onlinehoft_seek(element->tracker, segment->start / GST_SECOND) || segment->start == 0)
-        return TRUE;
-    else
-        return FALSE;
+	GST_INFO_OBJECT(element, "in do_seek: %u", segment->start / GST_SECOND);
+	element->needs_seek = TRUE;
+	return TRUE;
 }
 
 
@@ -205,8 +261,8 @@ static void finalize(GObject *object)
 
 	g_free(element->instrument);
 	element->instrument = NULL;
-    onlinehoft_destroy(element->tracker);
-    element->tracker = NULL;
+	onlinehoft_destroy(element->tracker);
+	element->tracker = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -261,7 +317,7 @@ static void class_init(gpointer class, gpointer class_data)
 	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
 	GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS(class);
 
-	parent_class = g_type_class_ref(GST_TYPE_PUSH_SRC);
+	parent_class = g_type_class_ref(GST_TYPE_BASE_SRC);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
@@ -285,6 +341,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
 	gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
+	gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
 	gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
 }
 
@@ -305,8 +362,12 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	basesrc->offset = 0;
 	element->instrument = NULL;
-    element->tracker = NULL;
-    
+	element->tracker = NULL;
+	element->needs_seek = FALSE;
+
+	gst_base_src_set_live(basesrc, TRUE);
+	gst_base_src_set_blocksize(basesrc, 16384 * 16 * 8);
+	gst_base_src_set_do_timestamp(basesrc, FALSE);
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
 }
 
@@ -328,7 +389,7 @@ GType gstlal_onlinehoftsrc_get_type(void)
 			.instance_size = sizeof(GSTLALOnlineHoftSrc),
 			.instance_init = instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_PUSH_SRC, "lal_onlinehoftsrc", &info, 0);
+		type = g_type_register_static(GST_TYPE_BASE_SRC, "lal_onlinehoftsrc", &info, 0);
 	}
 
 	return type;
