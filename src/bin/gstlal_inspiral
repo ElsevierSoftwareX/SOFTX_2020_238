@@ -298,7 +298,7 @@ def mkLLOIDsrc(pipeline, instrument, detector, rates, psd = None, psd_fft_length
 	if fake_data:
 		head = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
 	elif online_data:
-		head = pipeparts.mkndssrc(pipeline, instrument = instrument, blocksize = detector.block_size, host = "marble.ligo-wa.caltech.edu", channel_name = detector.channel)
+		head = pipeparts.mkonlinehoftsrc(pipeline, instrument = instrument)
 	else:
 		head = pipeparts.mkframesrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
 	if verbose:
@@ -676,7 +676,7 @@ def parse_command_line():
 
 	options, filenames = parser.parse_args()
 
-	required_options = ["instrument", "channel_name", "output", "template_bank"]
+	required_options = ["instrument", "output", "template_bank", "gps_start_time"]
 	if not (options.fake_data or options.online_data):
 		required_options += ["frame_cache"]
 	elif options.frame_cache is not None:
@@ -686,7 +686,7 @@ def parse_command_line():
 		raise ValueError, "cannot set --online-data with --fake-data"
 
 	if not options.online_data:
-		required_options += ["gps_start_time", "gps_end_time"]
+		required_options += ["channel_name", "gps_end_time"]
 
 	# FIXME: should also check for read permissions
 	for bankname in options.template_bank:
@@ -701,11 +701,9 @@ def parse_command_line():
 	process_params = make_process_params(options)
 
 	if options.online_data:
-		# Start and stop time are ignored by the ndssrc element
-		# if online data is selected, but we set gps_start_time
-		# and gps_stop_time to neutral values.
-		options.gps_start_time = gst.CLOCK_TIME_NONE
-		options.gps_end_time = gst.CLCOK_TIME_NONE
+		# Stop time is ignored by the onlinehoftsrc element
+		# if online data is selected, set gps_stop_time to a neutral value.
+		options.gps_end_time = gst.CLOCK_TIME_NONE
 
 	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
 	options.gps_end_time = LIGOTimeGPS(options.gps_end_time)
@@ -775,7 +773,7 @@ def measure_psd(instrument, detector, seg, rate, fake_data = False, online_data 
 	if fake_data:
 		head = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
 	elif online_data:
-		pipeparts.mkndssrc(pipeline, instrument = instrument, blocksize = detector.block_size, host = "marble.ligo-wa.caltech.edu", channel_name = detector.channel)
+		pipeparts.mkonlinehoftsrc(pipeline, instrument = instrument)
 	else:
 		head = pipeparts.mkframesrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
 	if verbose:
