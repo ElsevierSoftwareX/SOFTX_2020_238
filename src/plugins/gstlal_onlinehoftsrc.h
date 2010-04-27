@@ -24,7 +24,7 @@
 
 
 #include <gst/gst.h>
-#include <gst/base/gstpushsrc.h>
+#include <gst/base/gstbasesrc.h>
 #include <onlinehoft.h>
 
 
@@ -44,15 +44,16 @@ G_BEGIN_DECLS
 
 
 typedef struct {
-	GstPushSrcClass parent_class;
+	GstBaseSrcClass parent_class;
 } GSTLALOnlineHoftSrcClass;
 
 
 typedef struct {
-	GstPushSrc basesrc;
+	GstBaseSrc basesrc;
 
 	char* instrument;
-    onlinehoft_tracker_t* tracker;
+	onlinehoft_tracker_t* tracker;
+	gboolean needs_seek;
 } GSTLALOnlineHoftSrc;
 
 

@@ -31,5 +31,7 @@ onlinehoft_tracker_t* onlinehoft_create(const char* ifo);
 uint32_t onlinehoft_seek(onlinehoft_tracker_t* tracker, uint32_t gpsSeconds);
 void onlinehoft_destroy(onlinehoft_tracker_t* tracker);
 FrVect* onlinehoft_next_vect(onlinehoft_tracker_t* tracker);
+const char* onlinehoft_get_channelname(const onlinehoft_tracker_t* tracker);
+int onlinehoft_was_discontinuous(const onlinehoft_tracker_t* tracker);
 
 #endif
