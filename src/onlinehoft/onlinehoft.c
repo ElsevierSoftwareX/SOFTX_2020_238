@@ -332,12 +332,12 @@ FrVect* onlinehoft_next_vect(onlinehoft_tracker_t* tracker)
 
 	// If GPS start time is wrong, return NULL
 	{
-		uint32_t expected_gps_start = tracker->gpsRemainder << 4;
+		uint32_t expected_gps_start = (tracker->gpsRemainder-1) << 4;
 		uint32_t retrieved_gps_start = (uint32_t)vect->GTime;
 		if (expected_gps_start != retrieved_gps_start)
 		{
 			FrVectFree(vect);
-			fprintf(stderr, "onlinehoft_next_vect: expected timestamp %d, but got %d",
+			fprintf(stderr, "onlinehoft_next_vect: expected timestamp %d, but got %d\n",
 					expected_gps_start, retrieved_gps_start);
 			return NULL;
 		}
@@ -350,7 +350,7 @@ FrVect* onlinehoft_next_vect(onlinehoft_tracker_t* tracker)
 		if (expected_nsamples != retrieved_nsamples)
 		{
 			FrVectFree(vect);
-			fprintf(stderr, "onlinehoft_next_vect: expected %d samples, but got %d",
+			fprintf(stderr, "onlinehoft_next_vect: expected %d samples, but got %d\n",
 					expected_nsamples, retrieved_nsamples);
 			return NULL;
 		}
