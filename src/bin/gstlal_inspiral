@@ -676,16 +676,16 @@ def parse_command_line():
 
 	options, filenames = parser.parse_args()
 
+	if sum(1 for option in ('frame_cache', 'fake_data', 'online_data') if getattr(options, option) is not None) != 1:
+		raise ValueError, "must provide exactly one of --frame-cache, --fake-data, --online-data"
+
 	required_options = ["instrument", "output", "template_bank", "gps_start_time"]
-	if not (options.fake_data or options.online_data):
-		required_options += ["frame_cache"]
-	elif options.frame_cache is not None:
-		raise ValueError, "cannot set --frame-cache with --fake-data or --online-data"
 
-	if options.online_data and options.fake_data:
-		raise ValueError, "cannot set --online-data with --fake-data"
-
-	if not options.online_data:
+	if options.online_data:
+		if options.gps_end_time is not None:
+			raise ValueError, "--gps-end-time not allowed with --online-data"
+		options.gps_end_time = gst.CLOCK_TIME_NONE
+	else:
 		required_options += ["channel_name", "gps_end_time"]
 
 	# FIXME: should also check for read permissions
@@ -699,11 +699,6 @@ def parse_command_line():
 
 	# do this before converting option types
 	process_params = make_process_params(options)
-
-	if options.online_data:
-		# Stop time is ignored by the onlinehoftsrc element
-		# if online data is selected, set gps_stop_time to a neutral value.
-		options.gps_end_time = gst.CLOCK_TIME_NONE
 
 	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
 	options.gps_end_time = LIGOTimeGPS(options.gps_end_time)
