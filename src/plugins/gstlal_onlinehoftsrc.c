@@ -241,6 +241,69 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 
 
 
+static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
+{
+	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(basesrc);
+
+	switch (GST_QUERY_TYPE(query))
+	{
+		case GST_QUERY_FORMATS: {
+			gst_query_set_formats(query, 4, GST_FORMAT_DEFAULT, GST_FORMAT_BYTES, GST_FORMAT_TIME, GST_FORMAT_BUFFERS);
+			return TRUE;
+		} break;
+
+		case GST_QUERY_CONVERT: {
+			GstFormat src_format, dest_format;
+			gint64 src_value, dest_value;
+			guint64 num = 1, den = 1;
+			
+			gst_query_parse_convert(query, &src_format, &src_value, &dest_format, &dest_value);
+			
+			switch (src_format)
+			{
+				case GST_FORMAT_DEFAULT:
+				case GST_FORMAT_TIME:
+					break;
+				case GST_FORMAT_BYTES:
+					den *= (8 /*bytes per sample*/) * (16384 /*samples per second*/);
+					num *= (GST_SECOND /*nanoseconds per second*/);
+					break;
+				case GST_FORMAT_BUFFERS:
+					num *= (16 /*seconds per buffer*/) * (GST_SECOND /*nanoseconds per second*/);
+					break;
+				default:
+					g_assert_not_reached();
+					return FALSE;
+			}
+			switch (dest_format)
+			{
+				case GST_FORMAT_DEFAULT:
+				case GST_FORMAT_TIME:
+					break;
+				case GST_FORMAT_BYTES:
+					num *= (8 /*bytes per sample*/) * (16384 /*samples per second*/);
+					den *= (GST_SECOND /*nanoseconds per second*/);
+					break;
+				case GST_FORMAT_BUFFERS:
+					den *= (16 /*seconds per buffer*/) * (GST_SECOND /*nanoseconds per second*/);
+					break;
+				default:
+					g_assert_not_reached();
+					return FALSE;
+			}
+			
+			dest_value = gst_util_uint64_scale_int_round(src_value, num, den);
+			gst_query_set_convert(query, src_format, src_value, dest_format, dest_value);
+			return TRUE;
+		} break;
+
+		default:
+			return parent_class->query(basesrc, query);
+	}
+}
+	
+
+
 /*
  * ============================================================================
  *
@@ -343,6 +406,7 @@ static void class_init(gpointer class, gpointer class_data)
 	gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
 	gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
 	gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
+	gstbasesrc_class->query = GST_DEBUG_FUNCPTR(query);
 }
 
 
