@@ -244,8 +244,6 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 
 static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 {
-	GSTLALOnlineHoftSrc *element = GSTLAL_ONLINEHOFTSRC(basesrc);
-
 	switch (GST_QUERY_TYPE(query))
 	{
 		case GST_QUERY_FORMATS: {
