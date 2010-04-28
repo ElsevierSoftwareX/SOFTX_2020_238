@@ -181,11 +181,12 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		return result;
 	}
 
-	memcpy((char*)GST_BUFFER_DATA(*buffer), frVect->data, frVect->nBytes);
-	basesrc->offset += frVect->nData;
-	GST_BUFFER_OFFSET_END(*buffer) = basesrc->offset;
-	GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * frVect->GTime;
-	GST_BUFFER_DURATION(*buffer) = frVect->nData * frVect->dx[0] * GST_SECOND;
+	guint32 gps_start_time = (guint32)frVect->GTime;
+	memcpy((char*)GST_BUFFER_DATA(*buffer), frVect->data, 16 * 16384 * 8);
+	GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * gps_start_time;
+	GST_BUFFER_OFFSET(*buffer) = 16384 * gps_start_time;
+	GST_BUFFER_OFFSET_END(*buffer) = 16384 * (gps_start_time + 16);
+	GST_BUFFER_DURATION(*buffer) = 16 * GST_SECOND;
 	FrVectFree(frVect);
 
 	if (onlinehoft_was_discontinuous(element->tracker))
@@ -195,8 +196,8 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	}
 
 	GST_INFO_OBJECT(element, "pushed frame spanning [%u, %u)",
-		(guint) frVect->GTime,
-		(guint) frVect->GTime + 16
+		gps_start_time,
+		gps_start_time + 16
 	);
 
 	return GST_FLOW_OK;

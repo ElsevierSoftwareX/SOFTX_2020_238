@@ -318,6 +318,36 @@ FrVect* onlinehoft_next_vect(onlinehoft_tracker_t* tracker)
 	if (!frFile) return NULL;
 	FrVect* vect = FrFileIGetVect(frFile, tracker->channelname, ((tracker->gpsRemainder-1) << 4), 16);
 	FrFileIEnd(frFile);
+
+	// If FrFileIGetVect failed, return NULL
+	if (!vect) return vect;
+
+	// If GPS start time is wrong, return NULL
+	{
+		uint32_t expected_gps_start = tracker->gpsRemainder << 4;
+		uint32_t retrieved_gps_start = (uint32_t)vect->GTime;
+		if (expected_gps_start != retrieved_gps_start)
+		{
+			FrVectFree(vect);
+			fprintf(stderr, "onlinehoft_next_vect: expected timestamp %d, but got %d",
+					expected_gps_start, retrieved_gps_start);
+			return NULL;
+		}
+	}
+
+	// If duration is wrong, return NULL
+	{
+		uint32_t expected_nsamples = 16 * 16384;
+		uint32_t retrieved_nsamples = vect->nData[0];
+		if (expected_nsamples != retrieved_nsamples)
+		{
+			FrVectFree(vect);
+			fprintf(stderr, "onlinehoft_next_vect: expected %d samples, but got %d",
+					expected_nsamples, retrieved_nsamples);
+			return NULL;
+		}
+	}
+
 	tracker->was_discontinuous = (tracker->gpsRemainder != (tracker->lastReadGpsRemainder+1));
 	tracker->lastReadGpsRemainder = tracker->gpsRemainder;
 	return vect;
