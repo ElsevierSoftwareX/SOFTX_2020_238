@@ -271,7 +271,7 @@ static FrFile* _onlinehoft_next_file(onlinehoft_tracker_t* tracker)
 	do {
 		LIGOTimeGPS time_now;
 		while (XLALGPSTimeNow(&time_now)
-			&& (tracker->gpsRemainder << 4) + tracker->minLatency > time_now.gpsSeconds)
+			&& (tracker->gpsRemainder << 4) + tracker->minLatency > (uint32_t)time_now.gpsSeconds)
 			sleep(1);
 
 		char* filename;
