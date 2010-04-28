@@ -2,7 +2,7 @@
 # The 'adder' element is included as a hack to throw away GPS time stamps; otherwise
 # the autoaudiosink won't play
 
-gst-launch --seek=`lalapps_tconvert now -12 hours`000000000 \
+gst-launch --seek=`lalapps_tconvert now`000000000 \
 	lal_onlinehoftsrc \
         instrument=H1 \
 	! queue min-threshold-buffers=2 \
