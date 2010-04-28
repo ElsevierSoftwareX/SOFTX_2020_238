@@ -1013,9 +1013,9 @@ handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
 
 pipeline.set_state(gst.STATE_PAUSED)
 if options.online_data:
-	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_SEGMENT, gst.SEEK_TYPE_SET, options.seg[0].ns(), gst.SEEK_TYPE_NONE, -1)
+	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, options.seg[0].ns(), gst.SEEK_TYPE_NONE, -1)
 else:
-	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_SEGMENT, gst.SEEK_TYPE_SET, options.seg[0].ns(), gst.SEEK_TYPE_SET, options.seg[1].ns())
+	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, options.seg[0].ns(), gst.SEEK_TYPE_SET, options.seg[1].ns())
 pipeline.set_state(gst.STATE_PLAYING)
 mainloop.run()
 
