@@ -99,6 +99,8 @@ static double freq_to_time(double M, double freq)
   }
 
 
+#if 0
+/* unused functions */
 static void quadrupole_template(double M, double duration,
                           REAL8TimeSeries *template)
   {
@@ -208,6 +210,7 @@ static double calculate_real_time_shift(
 
   return real_tshift;
  }
+#endif
 
 
 static REAL8FrequencySeries *interpolate_psd(const REAL8FrequencySeries *psd, double f0, double deltaF, unsigned length)

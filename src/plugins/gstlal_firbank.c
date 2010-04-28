@@ -766,8 +766,6 @@ static gboolean stop(GstBaseTransform *trans)
 
 static gboolean event(GstBaseTransform *trans, GstEvent *event)
 {
-	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
-
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT: {
 		gboolean update;
