@@ -26,6 +26,8 @@
 #include <errno.h>
 #include <assert.h>
 #include <ctype.h>
+#include <stdio.h>
+#include <unistd.h>
 
 typedef struct {
 	int was_discontinuous;
@@ -102,7 +104,7 @@ static uint32_t _onlinehoft_poll_era(onlinehoft_tracker_t* tracker, uint16_t era
 	errno = 0;
 	size_t nameprefix_len = strlen(tracker->nameprefix);
 	size_t namesuffix_len = strlen(tracker->namesuffix);
-	while (dp = readdir(dirp))
+	while ((dp = readdir(dirp)))
 	{
 		// check to see if the current directory entry starts with the nameprefix
 		if (strncmp(tracker->nameprefix, dp->d_name, nameprefix_len))
@@ -166,7 +168,7 @@ static uint32_t _onlinehoft_poll(onlinehoft_tracker_t* tracker)
 
 	struct dirent* dp;
 	size_t nameprefix_len = strlen(tracker->nameprefix);
-	while (dp = readdir(dirp))
+	while ((dp = readdir(dirp)))
 	{
 		if (strncmp(tracker->nameprefix, dp->d_name, nameprefix_len))
 			continue;
@@ -338,7 +340,7 @@ FrVect* onlinehoft_next_vect(onlinehoft_tracker_t* tracker)
 	// If duration is wrong, return NULL
 	{
 		uint32_t expected_nsamples = 16 * 16384;
-		uint32_t retrieved_nsamples = vect->nData[0];
+		uint32_t retrieved_nsamples = vect->nx[0];
 		if (expected_nsamples != retrieved_nsamples)
 		{
 			FrVectFree(vect);
