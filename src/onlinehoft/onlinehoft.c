@@ -18,6 +18,12 @@
  * along with this library.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+
+/* enable safe printf routines */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <dirent.h>
 #include <FrameL.h>
 #include <FrVect.h>
