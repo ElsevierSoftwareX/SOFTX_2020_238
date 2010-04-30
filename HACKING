@@ -64,9 +64,6 @@ Caveats
 
 * All Pythonic elements are currently lumped under a single plugin, "python".
 
-* It appears that there is no way to set element metadata, such as author,
-  nickname, etc.
-
 
 Tips and tricks
 ---------------
