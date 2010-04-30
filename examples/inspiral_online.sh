@@ -9,4 +9,4 @@ GST_DEBUG=3 gstlal_inspiral \
 	--reference-psd "reference_psd.xml.gz" \
 	--write-pipeline "inspiral_online" \
 	--comment "lloid rrocks" \
-	--verbose
+	--verbose 2>&1 | tee inspiral_online.log
