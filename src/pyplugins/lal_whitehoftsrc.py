@@ -59,9 +59,7 @@ class lal_whitehoftsrc(gst.Bin):
 		gobject.TYPE_UINT64,
 		'samplesperbuffer',
 		'Number of samples in each outgoing buffer',
-		0, # min
-		2**64-1, # max
-		16384, # default
+		0, gobject.G_MAXULONG, 16384, # min, max, default
 		readable=True, writable=True
 	)
 
@@ -85,7 +83,6 @@ class lal_whitehoftsrc(gst.Bin):
 		)
 		self.add_many(*elems)
 		gst.element_link_many(*elems)
-		elems[1].get_static_pad('sink')
 		self.add_pad(gst.GhostPad('src', elems[1].get_static_pad('src')))
 		self.__src = elems[0]
 	__init__ = with_construct_properties(__init__)
