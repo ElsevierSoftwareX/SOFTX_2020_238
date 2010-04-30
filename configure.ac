@@ -20,6 +20,7 @@ AC_CONFIG_FILES([ \
 	src/onlinehoft/Makefile \
 	src/plugins/Makefile \
 	src/python/Makefile \
+	src/pyplugins/Makefile \
 	src/python/elements/Makefile \
 	src/utilities/Makefile \
 	tests/Makefile

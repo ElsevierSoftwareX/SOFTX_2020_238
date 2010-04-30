@@ -1,1 +1,1 @@
-SUBDIRS = lib onlinehoft plugins python bin utilities
+SUBDIRS = lib onlinehoft plugins pyplugins python bin utilities
