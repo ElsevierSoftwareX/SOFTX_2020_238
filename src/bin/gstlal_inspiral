@@ -718,7 +718,7 @@ def parse_command_line():
 	if options.gps_end_time is None:
 		effective_gps_end_time = LIGOTimeGPS(999999999) # should be gobject.G_MAXINT, but somewhere along the line we have an integer overflow error
 	else:
-		effective_gps_end_time = LIGOTimeGPS(optiongs.gps_end_time)
+		effective_gps_end_time = LIGOTimeGPS(options.gps_end_time)
 
 	options.seg = segments.segment(effective_gps_start_time, effective_gps_end_time)
 	options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
