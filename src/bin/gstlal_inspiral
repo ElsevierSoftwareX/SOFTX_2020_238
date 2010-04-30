@@ -983,6 +983,23 @@ class Data(object):
 #
 
 
+#
+# Write the pipeline to a dot file.
+# This option needs the environment variable GST_DEBUG_DUMP_DOT_DIR
+# to be set. There are several choices for the "details"
+# (second argument). DEBUG_GRAPH_SHOW_ALL is the most verbose.
+#
+def maybe_dump_dot(pipeline, stage):
+	if options.write_pipeline is not None:
+		filestem = '%s.%s' % (options.write_pipeline, stage)
+		filename = '%s.dot' % filestem
+		if "GST_DEBUG_DUMP_DOT_DIR" in os.environ.keys():
+			gst.DEBUG_BIN_TO_DOT_FILE( pipeline, gst.DEBUG_GRAPH_SHOW_ALL, filestem)
+			print >> sys.stderr, "Wrote pipeline to", os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], filename)
+		else:
+			print >> sys.stderr, "***Could not write pipeline, please set GST_DEBUG_DUMP_DOT_DIR in your environment"
+
+
 pipeline = gst.Pipeline("gstlal_inspiral")
 mainloop = gobject.MainLoop()
 
@@ -1017,19 +1034,6 @@ def appsink_new_buffer(elem, data):
 
 pipeparts.mkappsink(pipeline, src, caps = gst.Caps("application/x-lal-snglinspiral")).connect_after("new-buffer", appsink_new_buffer, data)
 
-#
-# Write the pipeline to a dot file.
-# This option needs the environment variable GST_DEBUG_DUMP_DOT_DIR
-# to be set. There are several choices for the "details"
-# (second argument). DEBUG_GRAPH_SHOW_ALL is the most verbose.
-#
-if options.write_pipeline is not None:
-	if "GST_DEBUG_DUMP_DOT_DIR" not in os.environ.keys():
-		os.environ["GST_DEBUG_DUMP_DOT_DIR"] = os.getcwd()
-	gst.DEBUG_BIN_TO_DOT_FILE( pipeline, gst.DEBUG_GRAPH_SHOW_ALL, options.write_pipeline)
-	if options.verbose:
-		print >> sys.stderr, "Wrote pipeline to %s" % (os.environ["GST_DEBUG_DUMP_DOT_DIR"] + "/" + options.write_pipeline + ".dot",)
-
 handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
 
 
@@ -1038,7 +1042,9 @@ handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
 #
 
 
+maybe_dump_dot(pipeline, "READY_OR_NULL")
 pipeline.set_state(gst.STATE_PAUSED)
+maybe_dump_dot(pipeline, "PAUSED")
 
 if options.gps_start_time is None:
 	seek_start_type = gst.SEEK_TYPE_NONE
@@ -1057,6 +1063,7 @@ else:
 pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, seek_start_type, seek_start_time, seek_stop_type, seek_stop_time)
 
 pipeline.set_state(gst.STATE_PLAYING)
+maybe_dump_dot(pipeline, "PLAYING")
 mainloop.run()
 
 
