@@ -164,7 +164,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	if (element->needs_seek)
 	{
 		// Do seek
-		guint32 seek_start_seconds = basesrc->segment.start / GST_SECOND;
+		guint64 seek_start_seconds = basesrc->segment.start / GST_SECOND;
 		GST_INFO_OBJECT(element, "onlinehoft_seek(tracker, %u)", seek_start_seconds);
 		onlinehoft_seek(element->tracker, seek_start_seconds);
 		element->needs_seek = FALSE;
@@ -181,7 +181,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		return result;
 	}
 
-	guint32 gps_start_time = (guint32)frVect->GTime;
+	guint64 gps_start_time = (guint64)frVect->GTime;
 	memcpy((char*)GST_BUFFER_DATA(*buffer), frVect->data, 16 * 16384 * 8);
 	GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * gps_start_time;
 	GST_BUFFER_OFFSET(*buffer) = 16384 * gps_start_time;

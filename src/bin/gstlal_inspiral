@@ -115,7 +115,7 @@ def sum_of_squares_threshold_from_fap(fap, coefficients):
 #
 
 
-def add_cbc_metadata(xmldoc, process, seg):
+def add_cbc_metadata(xmldoc, process, seg_in, seg_out):
 	#
 	# add entry to search_summary table
 	#
@@ -131,8 +131,8 @@ def add_cbc_metadata(xmldoc, process, seg):
 	search_summary.lal_cvs_tag = None # FIXME
 	search_summary.comment = process.comment
 	search_summary.set_ifos(process.get_ifos())
-	search_summary.set_in(seg) # FIXME
-	search_summary.set_out(seg) # FIXME
+	search_summary.set_in(seg_in)
+	search_summary.set_out(seg_out)
 	search_summary.nevents = None # FIXME
 	search_summary.nnodes = 1
 	tbl.append(search_summary)
@@ -149,7 +149,7 @@ def add_cbc_metadata(xmldoc, process, seg):
 	row = tbl.RowType()
 	row.process_id = process.process_id
 	row.program = process.program
-	row.start_time = int(seg[0])
+	row.start_time = int(seg_in[0])
 	row.filter_name = None # FIXME
 	row.filter_id = tbl.get_next_id()
 	row.param_set = None # FIXME
@@ -688,14 +688,13 @@ def parse_command_line():
 	if sum(1 for option in ('frame_cache', 'fake_data', 'online_data') if getattr(options, option) is not None) != 1:
 		raise ValueError, "must provide exactly one of --frame-cache, --fake-data, --online-data"
 
-	required_options = ["instrument", "output", "template_bank", "gps_start_time"]
+	required_options = ["instrument", "output", "template_bank"]
+
+	if options.frame_cache:
+		required_options += ["channel_name", "gps_start_time", "gps_end_time"]
 
 	if options.online_data:
-		if options.gps_end_time is not None:
-			raise ValueError, "--gps-end-time not allowed with --online-data"
-		options.gps_end_time = sys.maxint # should equal INT32_MAX, because LIGOTimeGPS seconds field is a 32-bit signed integer
-	else:
-		required_options += ["channel_name", "gps_end_time"]
+		required_options += ["reference_psd"]
 
 	# FIXME: should also check for read permissions
 	for bankname in options.template_bank:
@@ -709,9 +708,19 @@ def parse_command_line():
 	# do this before converting option types
 	process_params = make_process_params(options)
 
-	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
-	options.gps_end_time = LIGOTimeGPS(options.gps_end_time)
-	options.seg = segments.segment(options.gps_start_time, options.gps_end_time)
+	# If --gps-start-time is not specified, assume "beginning of time"
+	if options.gps_start_time is None:
+		effective_gps_start_time = LIGOTimeGPS(0) # FIXME: should be gobject.G_MININT, but somewhere along the line we have an integer overflow error
+	else:
+		effective_gps_start_time = LIGOTimeGPS(options.gps_start_time)
+
+	# If --gps-end-time is not specified, assume "end of time"
+	if options.gps_end_time is None:
+		effective_gps_end_time = LIGOTimeGPS(999999999) # FIXME: should be gobject.G_MAXINT, but somewhere along the line we have an integer overflow error
+	else:
+		effective_gps_end_time = LIGOTimeGPS(options.gps_end_time)
+
+	options.seg = segments.segment(effective_gps_start_time, effective_gps_end_time)
 	options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
 
 	options.psd_fft_length = 8	# seconds
@@ -846,8 +855,6 @@ detectors = {
 
 if options.reference_psd is not None:
 	psd = read_psd(options.reference_psd, verbose = options.verbose)
-elif options.online_data:
-	psd = None
 else:
 	psd = measure_psd(
 		options.instrument,
@@ -911,6 +918,7 @@ class Data(object):
 		self.xmldoc = None
 		self.output = options.output
 		self.seg = options.seg
+		self.out_seg = options.out_seg
 		self.injections = options.injections
 		self.comment = options.comment
 		self.verbose = options.verbose
@@ -925,7 +933,7 @@ class Data(object):
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		self.process = ligolw_process.append_process(xmldoc, program = "gstlal_inspiral", comment = self.comment, ifos = set(detectors))
 		ligolw_process.append_process_params(xmldoc, self.process, process_params)
-		search_summary = add_cbc_metadata(xmldoc, self.process, self.seg)
+		search_summary = add_cbc_metadata(xmldoc, self.process, self.seg, self.out_seg)
 		# FIXME:  argh, ugly
 		sngl_inspiral_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
 
@@ -933,11 +941,17 @@ class Data(object):
 
 		if self.output.endswith('.sqlite'):
 			from glue.ligolw.utils import ligolw_sqlite
-			self.connection = ligolw_sqlite.setup(self.output, check_same_thread=False)
-			ligolw_sqlite.insert_from_xmldoc(self.connection, xmldoc, preserve_ids = False, verbose = self.verbose)
-			if self.injection_file is not None:
-				utils.load_filename(self.injection_file, gz = (injection_file or "stdin").endswith(".gz"), verbose = self.verbose)
 			from glue.ligolw import dbtables
+			self.connection = ligolw_sqlite.setup(self.output, check_same_thread=False)
+			# setup id remapping
+			dbtables.idmap_create(self.connection)
+			dbtables.DBTable.append = dbtables.DBTable._remapping_append
+			dbtables.idmap_sync(self.connection)
+			ligolw_sqlite.insert_from_xmldoc(self.connection, xmldoc, preserve_ids = False, verbose = self.verbose)
+			xmldoc.unlink()
+			if self.injection_file is not None:
+				ligolw_sqlite.insert_from_url(self.connection, self.injection_file, preserve_ids = False, verbose = self.verbose)
+				#utils.load_filename(self.injection_file, gz = (injection_file or "stdin").endswith(".gz"), verbose = self.verbose).unlink()
 			self.xmldoc = dbtables.get_xml(self.connection)
 			self.sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
 		else:
@@ -950,11 +964,13 @@ class Data(object):
 
 	def write_output_file(self):
 		if self.connection:
+			from glue.ligolw import dbtables
 			from pylal.date import XLALUTCToGPS
 			import time
 			self.connection.cursor().execute('UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)')
 			self.connection.cursor().execute('UPDATE process SET end_time = ?', (XLALUTCToGPS(time.gmtime()).seconds,))
 			self.connection.commit()
+			dbtables.build_indexes(self.connection, options.verbose)
 		else:
 			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
 			search_summary = lsctables.table.get_table(self.xmldoc, lsctables.SearchSummaryTable.tableName)
@@ -965,6 +981,23 @@ class Data(object):
 #
 # build pipeline
 #
+
+
+#
+# Write the pipeline to a dot file.
+# This option needs the environment variable GST_DEBUG_DUMP_DOT_DIR
+# to be set. There are several choices for the "details"
+# (second argument). DEBUG_GRAPH_SHOW_ALL is the most verbose.
+#
+def maybe_dump_dot(pipeline, stage):
+	if options.write_pipeline is not None:
+		filestem = '%s.%s' % (options.write_pipeline, stage)
+		filename = '%s.dot' % filestem
+		if "GST_DEBUG_DUMP_DOT_DIR" in os.environ.keys():
+			gst.DEBUG_BIN_TO_DOT_FILE( pipeline, gst.DEBUG_GRAPH_SHOW_ALL, filestem)
+			print >> sys.stderr, "Wrote pipeline to", os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], filename)
+		else:
+			print >> sys.stderr, "***Could not write pipeline, please set GST_DEBUG_DUMP_DOT_DIR in your environment"
 
 
 pipeline = gst.Pipeline("gstlal_inspiral")
@@ -987,30 +1020,19 @@ src = mkLLOIDmulti(
 # build output document
 #
 
+options.out_seg = segments.segment(options.seg[0]+max([b.filter_length for b in banks]), options.seg[1]) #FIXME make better outseg def.
 data = Data(options)
 data.prepare_output_file()
 
 def appsink_new_buffer(elem, data):
 	for row in sngl_inspirals_from_buffer(elem.get_property("last-buffer")):
-		row.process_id = data.process.process_id
-		row.event_id = data.sngl_inspiral_table.get_next_id()
-		data.sngl_inspiral_table.append(row)
+		if (row.end_time + 1e-9*row.end_time_ns) in data.out_seg:
+			row.process_id = data.process.process_id
+			row.event_id = data.sngl_inspiral_table.get_next_id()
+			data.sngl_inspiral_table.append(row)
 	if data.connection: data.connection.commit()
 
 pipeparts.mkappsink(pipeline, src, caps = gst.Caps("application/x-lal-snglinspiral")).connect_after("new-buffer", appsink_new_buffer, data)
-
-#
-# Write the pipeline to a dot file.
-# This option needs the environment variable GST_DEBUG_DUMP_DOT_DIR
-# to be set. There are several choices for the "details"
-# (second argument). DEBUG_GRAPH_SHOW_ALL is the most verbose.
-#
-if options.write_pipeline is not None:
-	if "GST_DEBUG_DUMP_DOT_DIR" not in os.environ.keys():
-		os.environ["GST_DEBUG_DUMP_DOT_DIR"] = os.getcwd()
-	gst.DEBUG_BIN_TO_DOT_FILE( pipeline, gst.DEBUG_GRAPH_SHOW_ALL, options.write_pipeline)
-	if options.verbose:
-		print >> sys.stderr, "Wrote pipeline to %s" % (os.environ["GST_DEBUG_DUMP_DOT_DIR"] + "/" + options.write_pipeline + ".dot",)
 
 handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
 
@@ -1020,12 +1042,28 @@ handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
 #
 
 
+maybe_dump_dot(pipeline, "READY_OR_NULL")
 pipeline.set_state(gst.STATE_PAUSED)
-if options.online_data:
-	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, options.gps_start_time.ns(), gst.SEEK_TYPE_NONE, -1)
+maybe_dump_dot(pipeline, "PAUSED")
+
+if options.gps_start_time is None:
+	seek_start_type = gst.SEEK_TYPE_NONE
+	seek_start_time = -1 # gst.CLOCK_TIME_NONE is exported as unsigned, should have been signed
 else:
-	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, options.seg[0].ns(), gst.SEEK_TYPE_SET, options.seg[1].ns())
+	seek_start_type = gst.SEEK_TYPE_SET
+	seek_start_time = options.seg[0].ns()
+
+if options.gps_end_time is None:
+	seek_stop_type = gst.SEEK_TYPE_NONE
+	seek_stop_time = -1 # gst.CLOCK_TIME_NONE is exported as unsigned, should have been signed
+else:
+	seek_stop_type = gst.SEEK_TYPE_SET
+	seek_stop_time = options.seg[1].ns()
+
+pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, seek_start_type, seek_start_time, seek_stop_type, seek_stop_time)
+
 pipeline.set_state(gst.STATE_PLAYING)
+maybe_dump_dot(pipeline, "PLAYING")
 mainloop.run()
 
 
