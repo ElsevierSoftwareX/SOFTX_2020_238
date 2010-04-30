@@ -580,7 +580,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, fake_data 
 				nxydump_segment = nxydump_segment
 			)
 			if needs_input_selector:
-				pipeparts.mkqueue(pipeline, head)#.link(nto1)
+				pipeparts.mkqueue(pipeline, head).link(nto1)
 
 	#
 	# done
