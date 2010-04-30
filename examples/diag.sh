@@ -118,7 +118,7 @@ function test_fakeLIGO(){
 from pylab import *; \
 import sys; \
 a=loadtxt(sys.stdin); \
-loglog(abs(fft(a[:,1]*hanning(a.shape[0])))); \
+loglog(abs(fft(a[:,1]*hanning(a.shape[0])))/16384**.5); \
 xlabel('frequency [Hz]'); \
 ylabel('ASD [1/sqrt(Hz)]'); \
 title('lal_fakeligosrc 1-second ASD'); \
