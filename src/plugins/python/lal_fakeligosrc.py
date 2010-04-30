@@ -27,7 +27,7 @@
 from gstlal.pipeutil import *
 
 
-__author__ = "Leo Singer <leo.singer@ligo.org>"
+__author__ = "Drew Keppel <drew.keppel@ligo.org>"
 __version__ = "FIXME"
 __date__ = "FIXME"
 
