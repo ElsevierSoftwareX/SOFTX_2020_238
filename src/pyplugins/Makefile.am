@@ -6,4 +6,4 @@ INCLUDES = -I$(top_srcdir)/src/lib
 # on e.g. CentOS.
 pkgpythondir = $(plugindir)/python
 
-pkgpython_PYTHON = lal_whitehoftsrc.py
+pkgpython_PYTHON = lal_whitehoftsrc.py lal_fakeligosrc.py
