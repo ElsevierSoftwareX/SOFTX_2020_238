@@ -110,14 +110,19 @@ function test_framesrc() {
 }
 
 function test_fakeLIGO(){
-        ./LIGO_noise_test \
-                --frame-cache "/home/kipp/gwf/cache" \
-		--gps-start-time 800000000 \
-		--gps-stop-time 800000200 \
-                --instrument "H1" \
-                --output "fakeLIGOpsds.xml";
-        echo "</LIGO_LW>" >> fakeLIGOpsds.xml;
-        python ligo_lw_test_01.py
+	gst-launch -q lal_fakeligosrc instrument="H1" channel-name="LSC-STRAIN" \
+		! lal_nxydump start-time=0 stop-time=2000000000 \
+		! filesink location="/dev/stdout" \
+	| head -n 16384 \
+	| python -c "\
+from pylab import *; \
+import sys; \
+a=loadtxt(sys.stdin); \
+loglog(abs(fft(a[:,1]*hanning(a.shape[0])))); \
+xlabel('frequency [Hz]'); \
+ylabel('ASD [1/sqrt(Hz)]'); \
+title('lal_fakeligosrc 1-second ASD'); \
+show()"
 }
 
 function test_autochisq() {
