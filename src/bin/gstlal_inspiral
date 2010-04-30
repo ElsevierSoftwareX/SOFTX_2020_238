@@ -934,11 +934,17 @@ class Data(object):
 
 		if self.output.endswith('.sqlite'):
 			from glue.ligolw.utils import ligolw_sqlite
-			self.connection = ligolw_sqlite.setup(self.output, check_same_thread=False)
-			ligolw_sqlite.insert_from_xmldoc(self.connection, xmldoc, preserve_ids = False, verbose = self.verbose)
-			if self.injection_file is not None:
-				utils.load_filename(self.injection_file, gz = (injection_file or "stdin").endswith(".gz"), verbose = self.verbose)
 			from glue.ligolw import dbtables
+			self.connection = ligolw_sqlite.setup(self.output, check_same_thread=False)
+			# setup id remapping
+			dbtables.idmap_create(self.connection)
+			dbtables.DBTable.append = dbtables.DBTable._remapping_append
+			dbtables.idmap_sync(self.connection)
+			ligolw_sqlite.insert_from_xmldoc(self.connection, xmldoc, preserve_ids = False, verbose = self.verbose)
+			xmldoc.unlink()
+			if self.injection_file is not None:
+				ligolw_sqlite.insert_from_url(self.connection, self.injection_file, preserve_ids = False, verbose = self.verbose)
+				#utils.load_filename(self.injection_file, gz = (injection_file or "stdin").endswith(".gz"), verbose = self.verbose).unlink()
 			self.xmldoc = dbtables.get_xml(self.connection)
 			self.sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
 		else:
@@ -951,11 +957,13 @@ class Data(object):
 
 	def write_output_file(self):
 		if self.connection:
+			from glue.ligolw import dbtables
 			from pylal.date import XLALUTCToGPS
 			import time
 			self.connection.cursor().execute('UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)')
 			self.connection.cursor().execute('UPDATE process SET end_time = ?', (XLALUTCToGPS(time.gmtime()).seconds,))
 			self.connection.commit()
+			dbtables.build_indexes(self.connection, options.verbose)
 		else:
 			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
 			search_summary = lsctables.table.get_table(self.xmldoc, lsctables.SearchSummaryTable.tableName)
