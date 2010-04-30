@@ -37,8 +37,8 @@
 
 typedef struct {
 	int was_discontinuous;
-	uint32_t lastReadGpsRemainder;
-	uint32_t gpsRemainder;
+	uint64_t lastReadGpsRemainder;
+	uint64_t gpsRemainder;
 	uint32_t minLatency;
 	char* dirprefix; // e.g. "/archive/frames/online/hoft"
 	char* ifo; // e.g. H1
@@ -58,7 +58,7 @@ static const onlinehoft_tracker_t _onlinehoft_trackers[] =
 };
 
 
-static int _onlinehoft_uint32fromstring(const char* const begin, const char* const end, uint32_t* result)
+static int _onlinehoft_uint64fromstring(const char* const begin, const char* const end, uint64_t* result)
 {
 	const char* ptr;
 	*result = 0;
@@ -88,7 +88,7 @@ static int _onlinehoft_uint16fromstring2(const char* const begin, uint16_t* resu
 }
 
 
-static uint32_t _onlinehoft_poll_era(onlinehoft_tracker_t* tracker, uint16_t era)
+static uint64_t _onlinehoft_poll_era(onlinehoft_tracker_t* tracker, uint16_t era)
 {
 	// Compute the name of the directory for the given era.
 	char* dirname = NULL;
@@ -104,7 +104,7 @@ static uint32_t _onlinehoft_poll_era(onlinehoft_tracker_t* tracker, uint16_t era
 	if (!dirp)
 		return 0;
 
-	uint32_t gpsRemainder = UINT32_MAX;
+	uint64_t gpsRemainder = UINT64_MAX;
 
 	struct dirent* dp;
 	errno = 0;
@@ -129,11 +129,11 @@ static uint32_t _onlinehoft_poll_era(onlinehoft_tracker_t* tracker, uint16_t era
 		if (strncmp(tracker->namesuffix, delimptr, namesuffix_len)) continue;
 
 		// Try to extract GPS time from name stem, or go to enxt entry
-		uint32_t gpsTime;
-		if (!_onlinehoft_uint32fromstring(namestem, delimptr, &gpsTime))
+		uint64_t gpsTime;
+		if (!_onlinehoft_uint64fromstring(namestem, delimptr, &gpsTime))
 			continue;
 
-		uint32_t newGpsRemainder = gpsTime >> 4;
+		uint64_t newGpsRemainder = gpsTime >> 4;
 
 		// If GPS time is older than current gpsRemainder, go to next entry
 		if (newGpsRemainder < tracker->gpsRemainder)
@@ -145,20 +145,20 @@ static uint32_t _onlinehoft_poll_era(onlinehoft_tracker_t* tracker, uint16_t era
 
 	closedir(dirp);
 
-	if (gpsRemainder == UINT32_MAX)
+	if (gpsRemainder == UINT64_MAX)
 		return 0;
 	else
 		return gpsRemainder;
 }
 
 
-static uint16_t _onlinehoft_era_for_remainder(uint32_t remainder)
+static uint16_t _onlinehoft_era_for_remainder(uint64_t remainder)
 {
 	return (remainder << 4) / 100000;
 }
 
 
-static uint32_t _onlinehoft_poll(onlinehoft_tracker_t* tracker)
+static uint64_t _onlinehoft_poll(onlinehoft_tracker_t* tracker)
 {
 	// Try to open the directory listing.
 	DIR* dirp = opendir(tracker->dirprefix);
@@ -203,7 +203,7 @@ static uint32_t _onlinehoft_poll(onlinehoft_tracker_t* tracker)
 	uint16_t era;
 	for (era = earliestEra; era < latestEra; era++)
 	{
-		uint32_t newRemainder = _onlinehoft_poll_era(tracker, era);
+		uint64_t newRemainder = _onlinehoft_poll_era(tracker, era);
 		if (newRemainder)
 			return newRemainder;
 	}
@@ -271,7 +271,7 @@ static FrFile* _onlinehoft_next_file(onlinehoft_tracker_t* tracker)
 	do {
 		LIGOTimeGPS time_now;
 		while (XLALGPSTimeNow(&time_now)
-			&& (tracker->gpsRemainder << 4) + tracker->minLatency > (uint32_t)time_now.gpsSeconds)
+			&& (tracker->gpsRemainder << 4) + tracker->minLatency > (uint64_t)time_now.gpsSeconds)
 			sleep(1);
 
 		char* filename;
@@ -291,7 +291,7 @@ static FrFile* _onlinehoft_next_file(onlinehoft_tracker_t* tracker)
 		} else if (errno != ENOENT) {
 			++tracker->gpsRemainder;
 		} else {
-			uint32_t newRemainder;
+			uint64_t newRemainder;
 			while (!(newRemainder = _onlinehoft_poll(tracker)))
 				sleep(8);
 			// Poll directory again because the frame builder could have been
@@ -309,7 +309,7 @@ static FrFile* _onlinehoft_next_file(onlinehoft_tracker_t* tracker)
 }
 
 
-uint32_t onlinehoft_seek(onlinehoft_tracker_t* tracker, uint32_t gpsSeconds)
+uint64_t onlinehoft_seek(onlinehoft_tracker_t* tracker, uint64_t gpsSeconds)
 {
 	if (!tracker) return 0;
 
@@ -332,8 +332,8 @@ FrVect* onlinehoft_next_vect(onlinehoft_tracker_t* tracker)
 
 	// If GPS start time is wrong, return NULL
 	{
-		uint32_t expected_gps_start = (tracker->gpsRemainder-1) << 4;
-		uint32_t retrieved_gps_start = (uint32_t)vect->GTime;
+		uint64_t expected_gps_start = (tracker->gpsRemainder-1) << 4;
+		uint64_t retrieved_gps_start = (uint64_t)vect->GTime;
 		if (expected_gps_start != retrieved_gps_start)
 		{
 			FrVectFree(vect);
