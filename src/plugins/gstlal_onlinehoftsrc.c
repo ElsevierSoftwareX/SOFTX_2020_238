@@ -164,7 +164,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	if (element->needs_seek)
 	{
 		// Do seek
-		guint32 seek_start_seconds = basesrc->segment.start / GST_SECOND;
+		guint64 seek_start_seconds = basesrc->segment.start / GST_SECOND;
 		GST_INFO_OBJECT(element, "onlinehoft_seek(tracker, %u)", seek_start_seconds);
 		onlinehoft_seek(element->tracker, seek_start_seconds);
 		element->needs_seek = FALSE;
@@ -181,11 +181,12 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		return result;
 	}
 
-	memcpy((char*)GST_BUFFER_DATA(*buffer), frVect->data, frVect->nBytes);
-	basesrc->offset += frVect->nData;
-	GST_BUFFER_OFFSET_END(*buffer) = basesrc->offset;
-	GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * frVect->GTime;
-	GST_BUFFER_DURATION(*buffer) = frVect->nData * frVect->dx[0] * GST_SECOND;
+	guint64 gps_start_time = (guint64)frVect->GTime;
+	memcpy((char*)GST_BUFFER_DATA(*buffer), frVect->data, 16 * 16384 * 8);
+	GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * gps_start_time;
+	GST_BUFFER_OFFSET(*buffer) = 16384 * gps_start_time;
+	GST_BUFFER_OFFSET_END(*buffer) = 16384 * (gps_start_time + 16);
+	GST_BUFFER_DURATION(*buffer) = 16 * GST_SECOND;
 	FrVectFree(frVect);
 
 	if (onlinehoft_was_discontinuous(element->tracker))
@@ -195,8 +196,8 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	}
 
 	GST_INFO_OBJECT(element, "pushed frame spanning [%u, %u)",
-		(guint) frVect->GTime,
-		(guint) frVect->GTime + 16
+		gps_start_time,
+		gps_start_time + 16
 	);
 
 	return GST_FLOW_OK;
@@ -239,6 +240,67 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 	return TRUE;
 }
 
+
+
+static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
+{
+	switch (GST_QUERY_TYPE(query))
+	{
+		case GST_QUERY_FORMATS: {
+			gst_query_set_formats(query, 4, GST_FORMAT_DEFAULT, GST_FORMAT_BYTES, GST_FORMAT_TIME, GST_FORMAT_BUFFERS);
+			return TRUE;
+		} break;
+
+		case GST_QUERY_CONVERT: {
+			GstFormat src_format, dest_format;
+			gint64 src_value, dest_value;
+			guint64 num = 1, den = 1;
+			
+			gst_query_parse_convert(query, &src_format, &src_value, &dest_format, &dest_value);
+			
+			switch (src_format)
+			{
+				case GST_FORMAT_DEFAULT:
+				case GST_FORMAT_TIME:
+					break;
+				case GST_FORMAT_BYTES:
+					den *= (8 /*bytes per sample*/) * (16384 /*samples per second*/);
+					num *= (GST_SECOND /*nanoseconds per second*/);
+					break;
+				case GST_FORMAT_BUFFERS:
+					num *= (16 /*seconds per buffer*/) * (GST_SECOND /*nanoseconds per second*/);
+					break;
+				default:
+					g_assert_not_reached();
+					return FALSE;
+			}
+			switch (dest_format)
+			{
+				case GST_FORMAT_DEFAULT:
+				case GST_FORMAT_TIME:
+					break;
+				case GST_FORMAT_BYTES:
+					num *= (8 /*bytes per sample*/) * (16384 /*samples per second*/);
+					den *= (GST_SECOND /*nanoseconds per second*/);
+					break;
+				case GST_FORMAT_BUFFERS:
+					den *= (16 /*seconds per buffer*/) * (GST_SECOND /*nanoseconds per second*/);
+					break;
+				default:
+					g_assert_not_reached();
+					return FALSE;
+			}
+			
+			dest_value = gst_util_uint64_scale_int_round(src_value, num, den);
+			gst_query_set_convert(query, src_format, src_value, dest_format, dest_value);
+			return TRUE;
+		} break;
+
+		default:
+			return parent_class->query(basesrc, query);
+	}
+}
+	
 
 
 /*
@@ -343,6 +405,7 @@ static void class_init(gpointer class, gpointer class_data)
 	gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
 	gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
 	gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
+	gstbasesrc_class->query = GST_DEBUG_FUNCPTR(query);
 }
 
 
