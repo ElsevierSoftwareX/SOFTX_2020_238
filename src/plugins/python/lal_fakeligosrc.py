@@ -45,7 +45,7 @@ class lal_fakeligosrc(gst.Bin):
 	__gstdetails__ = (
 		'Fake LIGO Source',
 		'Source',
-		'generate simulated enhanced LIGO h(t)',
+		'generate simulated initial LIGO h(t)',
 		__author__
 	)
 
@@ -57,16 +57,42 @@ class lal_fakeligosrc(gst.Bin):
 		readable=True, writable=True
 	)
 
+	gproperty(
+		gobject.TYPE_STRING,
+		'instrument',
+		'Instrument name (e.g., "H1")',
+		None,
+		readable=True, writable=True
+	)
+
+	gproperty(
+		gobject.TYPE_STRING,
+		'channel-name',
+		'Channel name (e.g., "LSC-STRAIN")',
+		None,
+		readable=True, writable=True
+	)
+
 	def do_set_property(self, prop, val):
 		if prop.name == 'blocksize':
 			for src in self.__srcs:
 				src.set_property('samplesperbuffer', val / 8)
+		elif prop.name == 'instrument':
+			self.__instrument = val
+			self.__taginject = 'instrument=%s,channel-name=%s,units=strain' % (self.__instrument, self.__channel_name)
+		elif prop.name == 'channel-name':
+			self.__channel_name = val
+			self.__taginject = 'instrument=%s,channel-name=%s,units=strain' % (self.__instrument, self.__channel_name)
 		else:
 			super(lal_fakeligosrc, self).set_property(prop.name, val)
 
 	def do_get_property(self, prop):
 		if prop.name == 'blocksize':
 			return self.__srcs[0].get_property('samplesperbuffer') * 8
+		elif prop.name == 'instrument':
+			return self.__instrument
+		elif prop.name == 'channel-name':
+			return self.__channel_name
 		else:
 			return super(lal_fakeligosrc, self).get_property(prop.name)
 
@@ -75,6 +101,8 @@ class lal_fakeligosrc(gst.Bin):
 
 		# List to store source elements
 		self.__srcs = []
+		self.__channel_name = ''
+		self.__instrument = ''
 
 		# Build first filter chain
 		elems1 = [mkelem('lal_whitehoftsrc', {'volume': 5.03407936516e-17, 'samplesperbuffer': 16384})]
@@ -94,7 +122,8 @@ class lal_fakeligosrc(gst.Bin):
 			mkelem('audioiirfilter', {'a': (0.5591789, 0.5591789), 'b': (1., -0.1183578)}),
 			mkelem('audioiirfilter', {'a': (0.03780506, -0.03780506), 'b': (1.0, -0.9243905)})]
 
-		elem5 = [mkelem('lal_adder', {'sync': True}), mkelem('audioamplify', {'clipping-method': 3, 'amplification': 16384.**.5})]
+		elem5 = [mkelem('lal_adder', {'sync': True}), mkelem('audioamplify', {'clipping-method': 3, 'amplification': 16384.**.5}), mkelem('taginject')]
+		self.__taginject = elem5[-1]
 		self.add_many(*elem5)
 		gst.element_link_many(*elem5)
 
