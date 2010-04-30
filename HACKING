@@ -1,0 +1,57 @@
+=================
+Hacking on gstlal
+=================
+
+This file is meant as a starting point for gstlal development.  Eventually, it
+will be filled with wisdom contributed by all of the developers.  Right now,
+I am just using it to document my proposed strategy of writing elements in 
+Python first, and then converting them to C as time permits.
+
+GStreamer fully supports Python elements in all GStreamer-enabled applications.
+Here is how it works:
+
+1. GStreamer looks in each directory on the plugin path (a combination of 
+   $GST_PLUGIN_PATH, $GST_PLUGIN_SYSTEM_PATH, ~/.gstreamer-0.10/plugins)
+   for a subdirectory named "python".
+
+2. For each "python" directory, it looks for all files ending in ".py".
+
+3. For each ".py" file, it attempts to import that file as a module in a
+   subinterpreter.
+
+4. If successful, it looks for a module-level variable '__gstelementfactory__'.
+   If it is defined, it should be a tuple consisting of the element name, 
+   the rank for autoplugging, and the Python class that implements the element.
+   This usually looks something like::
+   
+     __gstelementfactory__ = ('lal_foobarmux', gst.RANK_NONE, lal_foobarmux)
+
+5. If this variable exists, then GStreamer registers the element.  It is now
+   a card-carrying member of your plugin registry, and can be used in any
+   context where elements can normally used: you can use it in gst-launch
+   invocations, you can gst-inspect it, or even use it from any native C
+   gstreamer application.
+
+
+Caveats
+-------
+
+* All Pythonic elements are currently lumped under a single plugin, "python".
+
+* It appears that there is no way to set element metadata, such as author,
+  nickname, etc.
+
+
+Tips and tricks
+---------------
+
+Notice that in the source release the Python elements are in the directory
+"src/plugins/python".  Rest assured that they will be installed into your 
+prefix in the normal place "lib/gstreamer-0.10/python".  However, if you are
+hacking on one of these elements, you can set the ``GST_PLUGIN_PATH``
+environment variable to "src/plugins" in order to avoid having to
+``make install`` every time you want to test a change.  Here's how::
+  
+  $ cd src/plugins
+  $ export GST_PLUGIN_PATH=$PWD
+
