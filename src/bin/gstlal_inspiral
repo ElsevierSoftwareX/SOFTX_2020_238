@@ -688,14 +688,13 @@ def parse_command_line():
 	if sum(1 for option in ('frame_cache', 'fake_data', 'online_data') if getattr(options, option) is not None) != 1:
 		raise ValueError, "must provide exactly one of --frame-cache, --fake-data, --online-data"
 
-	required_options = ["instrument", "output", "template_bank", "gps_start_time"]
+	required_options = ["instrument", "output", "template_bank"]
+
+	if options.frame_cache:
+		required_options += ["channel_name", "gps_start_time", "gps_end_time"]
 
 	if options.online_data:
-		if options.gps_end_time is not None:
-			raise ValueError, "--gps-end-time not allowed with --online-data"
-		options.gps_end_time = sys.maxint # should equal INT32_MAX, because LIGOTimeGPS seconds field is a 32-bit signed integer
-	else:
-		required_options += ["channel_name", "gps_end_time"]
+		required_options += ["reference_psd"]
 
 	# FIXME: should also check for read permissions
 	for bankname in options.template_bank:
@@ -709,9 +708,19 @@ def parse_command_line():
 	# do this before converting option types
 	process_params = make_process_params(options)
 
-	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
-	options.gps_end_time = LIGOTimeGPS(options.gps_end_time)
-	options.seg = segments.segment(options.gps_start_time, options.gps_end_time)
+	# If --gps-start-time is not specified, assume "beginning of time"
+	if options.gps_start_time is None:
+		effective_gps_start_time = LIGOTimeGPS(0) # should be gobject.G_MININT, but somewhere along the line we have an integer overflow error
+	else:
+		effective_gps_start_time = LIGOTimeGPS(options.gps_start_time)
+
+	# If --gps-end-time is not specified, assume "end of time"
+	if options.gps_end_time is None:
+		effective_gps_end_time = LIGOTimeGPS(999999999) # should be gobject.G_MAXINT, but somewhere along the line we have an integer overflow error
+	else:
+		effective_gps_end_time = LIGOTimeGPS(optiongs.gps_end_time)
+
+	options.seg = segments.segment(effective_gps_start_time, effective_gps_end_time)
 	options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
 
 	options.psd_fft_length = 8	# seconds
@@ -846,8 +855,6 @@ detectors = {
 
 if options.reference_psd is not None:
 	psd = read_psd(options.reference_psd, verbose = options.verbose)
-elif options.online_data:
-	psd = None
 else:
 	psd = measure_psd(
 		options.instrument,
@@ -1021,10 +1028,23 @@ handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
 
 
 pipeline.set_state(gst.STATE_PAUSED)
-if options.online_data:
-	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, options.gps_start_time.ns(), gst.SEEK_TYPE_NONE, -1)
+
+if options.gps_start_time is None:
+	seek_start_type = gst.SEEK_TYPE_NONE
+	seek_start_time = -1 # gst.CLOCK_TIME_NONE is exported as unsigned, should have been signed
 else:
-	pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, options.seg[0].ns(), gst.SEEK_TYPE_SET, options.seg[1].ns())
+	seek_start_type = gst.SEEK_TYPE_SET
+	seek_start_time = options.seg[0].ns()
+
+if options.gps_end_time is None:
+	seek_stop_type = gst.SEEK_TYPE_NONE
+	seek_stop_time = -1 # gst.CLOCK_TIME_NONE is exported as unsigned, should have been signed
+else:
+	seek_stop_type = gst.SEEK_TYPE_SET
+	seek_stop_time = options.seg[1].ns()
+
+pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, seek_start_type, seek_start_time, seek_stop_type, seek_stop_time)
+
 pipeline.set_state(gst.STATE_PLAYING)
 mainloop.run()
 
