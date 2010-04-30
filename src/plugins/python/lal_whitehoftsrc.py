@@ -42,6 +42,14 @@ __date__ = "FIXME"
 
 
 class lal_whitehoftsrc(gst.Bin):
+
+	__gstdetails__ = (
+		'White Noise Source',
+		'Source',
+		'generate white noise',
+		__author__
+	)
+
 	gproperty(
 		gobject.TYPE_UINT64,
 		'samplesperbuffer',
@@ -49,6 +57,7 @@ class lal_whitehoftsrc(gst.Bin):
 		0, gobject.G_MAXULONG, 16384, # min, max, default
 		readable=True, writable=True
 	)
+
 	gproperty(
 		gobject.TYPE_DOUBLE,
 		'volume',
@@ -70,7 +79,7 @@ class lal_whitehoftsrc(gst.Bin):
 			return super(lal_whitehoftsrc, self).get_property(prop.name)
 
 	def __init__(self):
-		gst.Bin.__init__(self)
+		super(lal_whitehoftsrc, self).__init__()
 		elems = (
 			mkelem('audiotestsrc', {'wave': 9, 'samplesperbuffer': 16384}),
 			mkelem('capsfilter', {'caps': gst.Caps('audio/x-raw-float, width=64, rate=16384')})

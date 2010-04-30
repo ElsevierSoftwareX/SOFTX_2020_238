@@ -25,14 +25,7 @@
 
 
 import sys
-
-
-import pygtk
-pygtk.require("2.0")
-import gobject
-import pygst
-pygst.require('0.10')
-import gst
+from gstlal.pipeutil import *
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -53,7 +46,14 @@ def printable_timestamp(timestamp):
 	return "%d.%09d" % (timestamp // gst.SECOND, timestamp % gst.SECOND)
 
 
-class CheckTimeStamps(gst.BaseTransform):
+class lal_checktimestamps(gst.BaseTransform):
+	__gstdetails__ = (
+		'Timestamp Checker Pass-Through Element',
+		'Generic',
+		'check to make sure that timestamps increase as expected',
+		__author__
+	)
+
 	__gsttemplates__ = (
 		gst.PadTemplate("sink",
 			gst.PAD_SINK,
@@ -119,9 +119,8 @@ class CheckTimeStamps(gst.BaseTransform):
 
 
 	def __init__(self):
-		gst.BaseTransform.__init__(self)
+		super(lal_checktimestamps, self).__init__()
 		self.set_passthrough(True)
-
 
 	def do_set_caps(self, incaps, outcaps):
 		self.unit_size = incaps[0]["width"] // 8 * incaps[0]["channels"]
@@ -181,13 +180,8 @@ class CheckTimeStamps(gst.BaseTransform):
 		return gst.FLOW_OK
 
 
-gobject.type_register(CheckTimeStamps)
 
 
-def mkchecktimestamps(pipeline, src, name = None):
-	elem = CheckTimeStamps()
-	if name is not None:
-		elem.set_property("name", name)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+# Register element class
+gobject.type_register(lal_checktimestamps)
+__gstelementfactory__ = ('lal_checktimestamps', gst.RANK_NONE, lal_checktimestamps)

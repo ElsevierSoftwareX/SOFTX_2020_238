@@ -42,6 +42,13 @@ __date__ = "FIXME"
 
 
 class lal_fakeligosrc(gst.Bin):
+	__gstdetails__ = (
+		'Fake LIGO Source',
+		'Source',
+		'generate simulated enhanced LIGO h(t)',
+		__author__
+	)
+
 	gproperty(
 		gobject.TYPE_UINT64,
 		'blocksize',
@@ -55,16 +62,16 @@ class lal_fakeligosrc(gst.Bin):
 			for src in self.__srcs:
 				src.set_property('samplesperbuffer', val / 8)
 		else:
-			super(lal_whitehoftsrc, self).set_property(prop.name, val)
+			super(lal_fakeligosrc, self).set_property(prop.name, val)
 
 	def do_get_property(self, prop):
 		if prop.name == 'blocksize':
 			return self.__srcs[0].get_property('samplesperbuffer') * 8
 		else:
-			return super(lal_whitehoftsrc, self).get_property(prop.name)
+			return super(lal_fakeligosrc, self).get_property(prop.name)
 
 	def __init__(self):
-		gst.Bin.__init__(self)
+		super(lal_fakeligosrc, self).__init__()
 
 		# List to store source elements
 		self.__srcs = []

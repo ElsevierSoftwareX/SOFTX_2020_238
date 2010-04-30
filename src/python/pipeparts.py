@@ -37,7 +37,6 @@ from glue import segments
 
 import pipeio
 from elements.channelgram import mkchannelgram
-from elements.check_timestamps import mkchecktimestamps
 from elements.histogram import mkhistogram
 from elements.spectrum import mkspectrumplot
 
@@ -546,6 +545,14 @@ def mkappsink(pipeline, src, **properties):
 	elem.set_property("drop", True)
 	for name, value in properties.items():
 		elem.set_property(name, value)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+def mkchecktimestamps(pipeline, src, name = None):
+	elem = gst.element_factory_make("lal_checktimestamps")
+	if name is not None:
+		elem.set_property("name", name)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
