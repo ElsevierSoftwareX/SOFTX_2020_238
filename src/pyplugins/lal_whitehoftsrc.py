@@ -24,13 +24,7 @@
 #
 
 
-import pygtk
-pygtk.require("2.0")
-import gobject
-import pygst
-pygst.require('0.10')
-import gst
-from gst.extend.pygobject import gproperty, with_construct_properties
+from gstlal.pipeutil import *
 
 
 __author__ = "Leo Singer <leo.singer@ligo.org>"
@@ -45,13 +39,6 @@ __date__ = "FIXME"
 #
 # =============================================================================
 #
-
-
-def mkelem(elemname, props={}):
-	elem = gst.element_factory_make(elemname)
-	for (k, v) in props.iteritems():
-		elem.set_property(k, v)
-	return elem
 
 
 class lal_whitehoftsrc(gst.Bin):
