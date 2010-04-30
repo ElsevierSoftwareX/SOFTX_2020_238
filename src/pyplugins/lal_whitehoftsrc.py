@@ -49,15 +49,22 @@ class lal_whitehoftsrc(gst.Bin):
 		0, gobject.G_MAXULONG, 16384, # min, max, default
 		readable=True, writable=True
 	)
+	gproperty(
+		gobject.TYPE_DOUBLE,
+		'volume',
+		'Volume of test signal',
+		0, 1, 0.8, # min, max, default
+		readable=True, writable=True
+	)
 
 	def do_set_property(self, prop, val):
-		if prop.name == 'samplesperbuffer':
+		if prop.name in ('samplesperbuffer', 'volume'):
 			self.__src.set_property(prop.name, val)
 		else:
 			super(lal_whitehoftsrc, self).set_property(prop.name, val)
 
 	def do_get_property(self, prop):
-		if prop.name == 'samplesperbuffer':
+		if prop.name in ('samplesperbuffer', 'volume'):
 			return self.__src.get_property(prop.name)
 		else:
 			return super(lal_whitehoftsrc, self).get_property(prop.name)
