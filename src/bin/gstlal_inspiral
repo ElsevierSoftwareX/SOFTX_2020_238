@@ -710,13 +710,13 @@ def parse_command_line():
 
 	# If --gps-start-time is not specified, assume "beginning of time"
 	if options.gps_start_time is None:
-		effective_gps_start_time = LIGOTimeGPS(0) # should be gobject.G_MININT, but somewhere along the line we have an integer overflow error
+		effective_gps_start_time = LIGOTimeGPS(0) # FIXME: should be gobject.G_MININT, but somewhere along the line we have an integer overflow error
 	else:
 		effective_gps_start_time = LIGOTimeGPS(options.gps_start_time)
 
 	# If --gps-end-time is not specified, assume "end of time"
 	if options.gps_end_time is None:
-		effective_gps_end_time = LIGOTimeGPS(999999999) # should be gobject.G_MAXINT, but somewhere along the line we have an integer overflow error
+		effective_gps_end_time = LIGOTimeGPS(999999999) # FIXME: should be gobject.G_MAXINT, but somewhere along the line we have an integer overflow error
 	else:
 		effective_gps_end_time = LIGOTimeGPS(options.gps_end_time)
 
