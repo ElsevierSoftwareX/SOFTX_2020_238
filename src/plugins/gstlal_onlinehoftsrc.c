@@ -173,7 +173,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	FrVect* frVect = onlinehoft_next_vect(element->tracker);
 	if (!frVect) return GST_FLOW_ERROR;
 
-	GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, frVect->nBytes, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
+	GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, 16 * 16384 * 8, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
 
 	if (result != GST_FLOW_OK)
 	{
