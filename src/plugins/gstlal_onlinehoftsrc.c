@@ -173,7 +173,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	FrVect* frVect = onlinehoft_next_vect(element->tracker);
 	if (!frVect) return GST_FLOW_ERROR;
 
-	GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, frVect->nBytes, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
+	GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, 16 * 16384 * 8, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
 
 	if (result != GST_FLOW_OK)
 	{
@@ -428,7 +428,6 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->tracker = NULL;
 	element->needs_seek = FALSE;
 
-	gst_base_src_set_live(basesrc, TRUE);
 	gst_base_src_set_blocksize(basesrc, 16384 * 16 * 8);
 	gst_base_src_set_do_timestamp(basesrc, FALSE);
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
