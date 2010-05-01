@@ -125,6 +125,22 @@ title('lal_fakeligosrc 1-second ASD'); \
 show()"
 }
 
+function test_fakeAdvLIGO(){
+	gst-launch -q lal_fakeadvligosrc instrument="H1" channel-name="LSC-STRAIN" \
+		! lal_nxydump start-time=0 stop-time=2000000000 \
+		! filesink location="/dev/stdout" \
+	| head -n 16384 \
+	| python -c "\
+from pylab import *; \
+import sys; \
+a=loadtxt(sys.stdin); \
+loglog(abs(fft(a[:,1]*hanning(a.shape[0])))/16384**.5); \
+xlabel('frequency [Hz]'); \
+ylabel('ASD [1/sqrt(Hz)]'); \
+title('lal_fakeadvligosrc 1-second ASD'); \
+show()"
+}
+
 function test_autochisq() {
 	gst-launch \
 		audiotestsrc wave=9 volume=1e-2 \
