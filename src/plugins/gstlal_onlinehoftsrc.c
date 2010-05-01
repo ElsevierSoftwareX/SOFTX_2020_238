@@ -428,7 +428,6 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->tracker = NULL;
 	element->needs_seek = FALSE;
 
-	gst_base_src_set_live(basesrc, TRUE);
 	gst_base_src_set_blocksize(basesrc, 16384 * 16 * 8);
 	gst_base_src_set_do_timestamp(basesrc, FALSE);
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
