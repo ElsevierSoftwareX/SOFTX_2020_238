@@ -293,10 +293,9 @@ def mkqueue(pipeline, src, pad_name = None, **properties):
 	return elem
 
 
-def mkdelay(pipeline, src, delay = 0, silent = True):
+def mkdelay(pipeline, src, delay = 0):
 	elem = gst.element_factory_make("lal_delay")
 	elem.set_property("delay",delay)
-	elem.set_property("silent",silent)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
