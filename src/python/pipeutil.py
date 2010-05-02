@@ -98,7 +98,8 @@ def mkelems_in_bin(bin, *pipedesc):
 	audiotestsrc wave=9 ! audioresample
 	"""
 	elems = [mkelem(*elemdesc) for elemdesc in pipedesc]
-	bin.add_many(*elems)
+	for elem in elems:
+		bin.add(elem)
 	if len(elems) > 1:
 		gst.element_link_many(*elems)
 	return elems
