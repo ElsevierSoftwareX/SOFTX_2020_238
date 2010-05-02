@@ -47,8 +47,43 @@ from gst.extend.pygobject import gproperty, with_construct_properties
 #
 
 
+def gstlal_element_register(clazz):
+	"""Class decorator for registering a Python element.  Note that decorator
+	syntax was extended from functions to classes in Python 2.6, so until 2.6
+	becomes the norm we have to invoke this as a function instead of by
+	saying:
+	
+	@gstlal_element_register
+	class foo(gst.Element):
+		...
+	"""
+	from inspect import getmodule
+	gobject.type_register(clazz)
+	getmodule(clazz).__gstelementfactory__ = (clazz.__name__, gst.RANK_NONE, clazz)
+	return clazz
+
+
 def mkelem(elemname, props={}):
+	"""Instantiate an element named elemname and optionally set some of its 
+	properties from the dictionary props."""
 	elem = gst.element_factory_make(elemname)
 	for (k, v) in props.iteritems():
 		elem.set_property(k, v)
 	return elem
+
+
+def mkelems_in_bin(bin, *pipedesc):
+	"""Create an array of elements from a list of tuples, add them to a bin,
+	link them sequentially, and return the list.  Example:
+	
+	mkelem(bin, ('audiotestsrc', {'wave':9}), ('audioresample'))
+	
+	is equivalent to
+	
+	audiotestsrc wave=9 ! audioresample
+	"""
+	elems = [mkelem(*elemdesc) for elemdesc in pipedesc]
+	bin.add_many(*elems)
+	if len(elems) > 1:
+		gst.element_link_many(*elems)
+	return elems

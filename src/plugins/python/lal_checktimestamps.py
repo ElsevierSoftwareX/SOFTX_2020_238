@@ -183,5 +183,4 @@ class lal_checktimestamps(gst.BaseTransform):
 
 
 # Register element class
-gobject.type_register(lal_checktimestamps)
-__gstelementfactory__ = ('lal_checktimestamps', gst.RANK_NONE, lal_checktimestamps)
+gstlal_element_register(lal_checktimestamps)
