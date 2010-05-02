@@ -300,7 +300,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 			return parent_class->query(basesrc, query);
 	}
 }
-	
+
 
 
 /*
