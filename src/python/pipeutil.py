@@ -13,6 +13,15 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""
+
+Boilerplate code, shorthand, and utility functions for creating GStreamer
+elements and pipelines.
+
+"""
+__author__       = "Leo Singer <leo.singer@ligo.org>"
+__organization__ = ["LIGO", "California Institute of Technology"]
+__copyright__    = "Copyright 2010, Leo Singer"
 
 
 #
@@ -51,11 +60,17 @@ def gstlal_element_register(clazz):
 	"""Class decorator for registering a Python element.  Note that decorator
 	syntax was extended from functions to classes in Python 2.6, so until 2.6
 	becomes the norm we have to invoke this as a function instead of by
-	saying:
+	saying::
+
+		@gstlal_element_register
+		class foo(gst.Element):
+			...
 	
-	@gstlal_element_register
-	class foo(gst.Element):
-		...
+	Until then, you have to do::
+
+		class foo(gst.Element):
+			...
+		gstlal_element_register(foo)
 	"""
 	from inspect import getmodule
 	gobject.type_register(clazz)
