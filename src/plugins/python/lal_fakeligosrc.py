@@ -77,8 +77,9 @@ class lal_fakeligosrc(gst.Bin):
 
 	def do_set_property(self, prop, val):
 		if prop.name == 'blocksize':
-			for src in self.__srcs:
-				src.set_property('samplesperbuffer', val / 8)
+			# Set property on all sources
+			for elem in self.iterate_sources():
+				elem.set_property('samplesperbuffer', val / 8)
 		elif prop.name == 'instrument':
 			self.__instrument = val
 			self.__taginject = 'instrument=%s,channel-name=%s,units=strain' % (self.__instrument, self.__channel_name)
@@ -91,7 +92,8 @@ class lal_fakeligosrc(gst.Bin):
 
 	def do_get_property(self, prop):
 		if prop.name == 'blocksize':
-			return self.__srcs[0].get_property('samplesperbuffer') * 8
+			# Retrieve value of property from first source element
+			return self.iterate_sources().next().get_property('samplesperbuffer') * 8
 		elif prop.name == 'instrument':
 			return self.__instrument
 		elif prop.name == 'channel-name':
@@ -100,12 +102,21 @@ class lal_fakeligosrc(gst.Bin):
 			return super(lal_fakeligosrc, self).get_property(prop.name)
 
 
+	def do_send_event(self, event):
+		"""Override send_event so that SEEK events go straight to the source
+		elements, bypassing the filter chains.  This makes it so that the
+		entire bin can be SEEKed even before it is added to a pipeline."""
+		if event.type == gst.EVENT_SEEK:
+			for elem in self.iterate_sources():
+				elem.send_event(event)
+		else:
+			super(lal_fakeligosrc, self).send_event(event)
+
+
 	@with_construct_properties
 	def __init__(self):
 		super(lal_fakeligosrc, self).__init__()
 
-		# List to store source elements
-		self.__srcs = []
 		self.__channel_name = ''
 		self.__instrument = ''
 
@@ -138,7 +149,6 @@ class lal_fakeligosrc(gst.Bin):
 
 		for chain in chains:
 			chain[-1].link(outputchain[0])
-			self.__srcs.append(chain[0])
 
 		self.__taginject = outputchain[-1]
 		self.add_pad(gst.GhostPad('src', outputchain[-1].get_static_pad('src')))
