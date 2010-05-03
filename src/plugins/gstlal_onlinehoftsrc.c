@@ -212,7 +212,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 static gboolean check_get_range(GstBaseSrc *object)
 {
-	return TRUE;
+	return FALSE;
 }
 
 
