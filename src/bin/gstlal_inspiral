@@ -27,6 +27,11 @@
 #
 
 
+try:
+	import sqlite3
+except ImportError:
+        # pre 2.5.x
+	from pysqlite2 import dbapi2 as sqlite3
 import math
 import numpy
 from optparse import OptionParser
@@ -443,7 +448,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# because streaming can begin through the downstream adders without
 	# waiting for input from all upstream elements.
 
-	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = int(math.ceil(bank.filter_length - bank_fragment.end)) * gst.SECOND)
+	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND )
 
 	#
 	# reconstruct physical SNRs
@@ -496,7 +501,15 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, control_snksrc
 			# firbank element, and the value here is only
 			# approximate and not tied to the fir bank
 			# parameters so might not work if those change
-			pipeparts.mkqueue(pipeline, hoftdict[bank_fragment.rate], max_size_bytes = 0, max_size_buffers = 0, max_size_time = 4 * int(math.ceil(bank.filter_length)) * gst.SECOND),
+			pipeparts.mkqueue(
+				pipeline,
+				pipeparts.mkdelay(
+					pipeline,
+					hoftdict[bank_fragment.rate],
+					delay = int(round( (bank.filter_length - bank_fragment.end)*bank_fragment.rate )) ),
+				max_size_bytes = 0,
+				max_size_buffers = 0,
+				max_size_time = 4 * int(math.ceil(bank.filter_length)) * gst.SECOND),
 			bank,
 			bank_fragment,
 			control_snksrc,
@@ -682,6 +695,7 @@ def parse_command_line():
 	parser.add_option("--fake-data", action = "store_true", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 
 	options, filenames = parser.parse_args()
 
@@ -915,6 +929,7 @@ for n, filename in enumerate(options.template_bank):
 
 class Data(object):
 	def __init__(self, options):
+		self.tmp_space = options.tmp_space
 		self.xmldoc = None
 		self.output = options.output
 		self.seg = options.seg
@@ -942,7 +957,8 @@ class Data(object):
 		if self.output.endswith('.sqlite'):
 			from glue.ligolw.utils import ligolw_sqlite
 			from glue.ligolw import dbtables
-			self.connection = ligolw_sqlite.setup(self.output, check_same_thread=False)
+			self.working_filename = dbtables.get_connection_filename(self.output, tmp_path = self.tmp_space, verbose = self.verbose)
+			self.connection = sqlite3.connect(self.working_filename, check_same_thread=False)
 			# setup id remapping
 			dbtables.idmap_create(self.connection)
 			dbtables.DBTable.append = dbtables.DBTable._remapping_append
@@ -971,6 +987,7 @@ class Data(object):
 			self.connection.cursor().execute('UPDATE process SET end_time = ?', (XLALUTCToGPS(time.gmtime()).seconds,))
 			self.connection.commit()
 			dbtables.build_indexes(self.connection, options.verbose)
+			dbtables.put_connection_filename(self.output, self.working_filename, verbose = self.verbose)
 		else:
 			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
 			search_summary = lsctables.table.get_table(self.xmldoc, lsctables.SearchSummaryTable.tableName)
