@@ -212,7 +212,9 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 static gboolean check_get_range(GstBaseSrc *object)
 {
-	return FALSE;
+	// FIXME: This element doesn't really support random access, so we should 
+	// return FALSE here, but it seems like gstlal_inspiral doesn't like that
+	return TRUE;
 }
 
 
