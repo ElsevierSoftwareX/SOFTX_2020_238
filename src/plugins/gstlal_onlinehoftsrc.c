@@ -241,6 +241,8 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 	if (segment->flags & GST_SEEK_FLAG_KEY_UNIT)
 	{
 		segment->start = gst_util_uint64_scale(gst_util_uint64_scale(segment->start, 1, 16 * GST_SECOND), 16 * GST_SECOND, 1);
+		segment->last_stop = gst_util_uint64_scale(gst_util_uint64_scale(segment->last_stop, 1, 16 * GST_SECOND), 16 * GST_SECOND, 1);
+		segment->time = gst_util_uint64_scale(gst_util_uint64_scale(segment->time, 1, 16 * GST_SECOND), 16 * GST_SECOND, 1);
 		segment->stop = gst_util_uint64_scale_ceil(gst_util_uint64_scale_ceil(segment->stop, 1, 16 * GST_SECOND), 16 * GST_SECOND, 1);
 		GST_INFO_OBJECT(basesrc, "do_seek modified key unit seek segment: [%ld, %ld)", segment->start, segment->stop);
 	}
