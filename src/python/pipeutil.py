@@ -33,17 +33,19 @@ __copyright__    = "Copyright 2010, Leo Singer"
 #
 
 
+# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
 pygtk.require("2.0")
-del pygtk
-
 import gobject
-
+gobject.threads_init()
 import pygst
 pygst.require('0.10')
+import gst
+
+# Shouldn't need pygtk or pygst
+del pygtk
 del pygst
 
-import gst
 from gst.extend.pygobject import gproperty, with_construct_properties
 
 

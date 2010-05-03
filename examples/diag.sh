@@ -110,35 +110,11 @@ function test_framesrc() {
 }
 
 function test_fakeLIGO(){
-	gst-launch -q lal_fakeligosrc instrument="H1" channel-name="LSC-STRAIN" \
-		! lal_nxydump start-time=0 stop-time=2000000000 \
-		! filesink location="/dev/stdout" \
-	| head -n 16384 \
-	| python -c "\
-from pylab import *; \
-import sys; \
-a=loadtxt(sys.stdin); \
-loglog(abs(fft(a[:,1]*hanning(a.shape[0])))/16384**.5); \
-xlabel('frequency [Hz]'); \
-ylabel('ASD [1/sqrt(Hz)]'); \
-title('lal_fakeligosrc 1-second ASD'); \
-show()"
+	python plot_fakeligosrcpsd.py lal_fakeligosrc
 }
 
 function test_fakeAdvLIGO(){
-	gst-launch -q lal_fakeadvligosrc instrument="H1" channel-name="LSC-STRAIN" \
-		! lal_nxydump start-time=0 stop-time=2000000000 \
-		! filesink location="/dev/stdout" \
-	| head -n 16384 \
-	| python -c "\
-from pylab import *; \
-import sys; \
-a=loadtxt(sys.stdin); \
-loglog(abs(fft(a[:,1]*hanning(a.shape[0])))/16384**.5); \
-xlabel('frequency [Hz]'); \
-ylabel('ASD [1/sqrt(Hz)]'); \
-title('lal_fakeadvligosrc 1-second ASD'); \
-show()"
+	python plot_fakeligosrcpsd.py lal_fakeadvligosrc
 }
 
 function test_autochisq() {
