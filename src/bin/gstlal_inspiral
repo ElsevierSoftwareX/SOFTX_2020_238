@@ -1042,7 +1042,7 @@ handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
 #
 
 
-maybe_dump_dot(pipeline, "READY_OR_NULL")
+maybe_dump_dot(pipeline, "NULL")
 pipeline.set_state(gst.STATE_PAUSED)
 maybe_dump_dot(pipeline, "PAUSED")
 
@@ -1060,7 +1060,10 @@ else:
 	seek_stop_type = gst.SEEK_TYPE_SET
 	seek_stop_time = options.seg[1].ns()
 
-pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, seek_start_type, seek_start_time, seek_stop_type, seek_stop_time)
+pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME),
+	gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT,
+	seek_start_type, seek_start_time,
+	seek_stop_type, seek_stop_time)
 
 pipeline.set_state(gst.STATE_PLAYING)
 maybe_dump_dot(pipeline, "PLAYING")
