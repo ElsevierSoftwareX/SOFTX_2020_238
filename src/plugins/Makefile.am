@@ -1,3 +1,4 @@
+SUBDIRS = python
 INCLUDES = -I$(top_srcdir)/src/lib -I$(top_srcdir)/src/onlinehoft
 
 plugin_LTLIBRARIES = libgstlal.la

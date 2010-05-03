@@ -19,6 +19,7 @@ AC_CONFIG_FILES([ \
 	src/lib/Makefile \
 	src/onlinehoft/Makefile \
 	src/plugins/Makefile \
+	src/plugins/python/Makefile \
 	src/python/Makefile \
 	src/python/elements/Makefile \
 	src/utilities/Makefile \

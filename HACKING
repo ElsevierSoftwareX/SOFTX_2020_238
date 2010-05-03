@@ -1,0 +1,80 @@
+=================
+Hacking on gstlal
+=================
+
+
+This file is meant as a starting point for gstlal development.  Eventually, it
+will be filled with wisdom contributed by all of the developers.  Right now,
+I am just using it to document my proposed strategy of writing elements in 
+Python first, and then converting them to C as time permits.
+
+
+Writing elements in Python
+==========================
+
+GStreamer fully supports Python elements in all GStreamer-enabled applications.
+
+Advantages:
+
+* Develop elements in Python first, to get the logic right, then port them to C
+  when time permits and performance demands its.
+
+* Write less boilerplate code: it is easier to write a class in Python than in
+  native C under glib/gobject.
+
+* Avoid writing code to handle common error conditions (out of memory, failed to
+  push tags, type mismatch, etc.).  PyGST checks return values generates
+  exceptions.
+
+* Take advantage of Python's powerful introspection, collection data types,
+  string processing, and database handling within your elements.
+
+* Create beautiful realtime plots.  Embed matplotlib code directly in elements
+  to build interactive visualizations: spectrum analyzers, digital storage 
+  oscilloscopes, pulse count analyzers, histograms -- whatever you can dream up!
+
+
+Here is how it works:
+
+1. GStreamer looks in each directory on the plugin path (a combination of 
+   $GST_PLUGIN_PATH, $GST_PLUGIN_SYSTEM_PATH, ~/.gstreamer-0.10/plugins)
+   for a subdirectory named "python".
+
+2. For each "python" directory, it looks for all files ending in ".py".
+
+3. For each ".py" file, it attempts to import that file as a module in a
+   subinterpreter.
+
+4. If successful, it looks for a module-level variable '__gstelementfactory__'.
+   If it is defined, it should be a tuple consisting of the element name, 
+   the rank for autoplugging, and the Python class that implements the element.
+   This usually looks something like::
+   
+     __gstelementfactory__ = ('lal_foobarmux', gst.RANK_NONE, lal_foobarmux)
+
+5. If this variable exists, then GStreamer registers the element.  It is now
+   a card-carrying member of your plugin registry, and can be used in any
+   context where elements can normally used: you can use it in gst-launch
+   invocations, you can gst-inspect it, or even use it from any native C
+   gstreamer application.
+
+
+Caveats
+-------
+
+* All Pythonic elements are currently lumped under a single plugin, "python".
+
+
+Tips and tricks
+---------------
+
+Notice that in the source release the Python elements are in the directory
+"src/plugins/python".  Rest assured that they will be installed into your 
+prefix in the normal place "lib/gstreamer-0.10/python".  However, if you are
+hacking on one of these elements, you can set the ``GST_PLUGIN_PATH``
+environment variable to "src/plugins" in order to avoid having to
+``make install`` every time you want to test a change.  Here's how::
+  
+  $ cd src/plugins
+  $ export GST_PLUGIN_PATH=$PWD
+

@@ -212,6 +212,8 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 static gboolean check_get_range(GstBaseSrc *object)
 {
+	// FIXME: This element doesn't really support random access, so we should 
+	// return FALSE here, but it seems like gstlal_inspiral doesn't like that
 	return TRUE;
 }
 
@@ -235,11 +237,28 @@ static gboolean is_seekable(GstBaseSrc *object)
 static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 {
 	GSTLALOnlineHoftSrc *element = GSTLAL_ONLINEHOFTSRC(basesrc);
+
+	GST_INFO_OBJECT(basesrc, "do_seek got segment: [%ld, %ld)", segment->start, segment->stop);
+
+	if (segment->flags & GST_SEEK_FLAG_KEY_UNIT)
+	{
+		segment->start = gst_util_uint64_scale(gst_util_uint64_scale(segment->start, 1, 16 * GST_SECOND), 16 * GST_SECOND, 1);
+		segment->last_stop = gst_util_uint64_scale(gst_util_uint64_scale(segment->last_stop, 1, 16 * GST_SECOND), 16 * GST_SECOND, 1);
+		segment->time = gst_util_uint64_scale(gst_util_uint64_scale(segment->time, 1, 16 * GST_SECOND), 16 * GST_SECOND, 1);
+		segment->stop = gst_util_uint64_scale_ceil(gst_util_uint64_scale_ceil(segment->stop, 1, 16 * GST_SECOND), 16 * GST_SECOND, 1);
+		GST_INFO_OBJECT(basesrc, "do_seek modified key unit seek segment: [%ld, %ld)", segment->start, segment->stop);
+	}
+
 	GST_INFO_OBJECT(element, "in do_seek: %u", segment->start / GST_SECOND);
 	element->needs_seek = TRUE;
 	return TRUE;
 }
 
+
+
+/*
+ * query()
+ */
 
 
 static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
@@ -291,7 +310,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 					return FALSE;
 			}
 			
-			dest_value = gst_util_uint64_scale_int_round(src_value, num, den);
+			dest_value = gst_util_uint64_scale(src_value, num, den);
 			gst_query_set_convert(query, src_format, src_value, dest_format, dest_value);
 			return TRUE;
 		} break;
@@ -300,7 +319,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 			return parent_class->query(basesrc, query);
 	}
 }
-	
+
 
 
 /*

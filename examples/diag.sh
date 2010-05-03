@@ -110,14 +110,11 @@ function test_framesrc() {
 }
 
 function test_fakeLIGO(){
-        ./LIGO_noise_test \
-                --frame-cache "/home/kipp/gwf/cache" \
-		--gps-start-time 800000000 \
-		--gps-stop-time 800000200 \
-                --instrument "H1" \
-                --output "fakeLIGOpsds.xml";
-        echo "</LIGO_LW>" >> fakeLIGOpsds.xml;
-        python ligo_lw_test_01.py
+	python plot_fakeligosrcpsd.py lal_fakeligosrc
+}
+
+function test_fakeAdvLIGO(){
+	python plot_fakeligosrcpsd.py lal_fakeadvligosrc
 }
 
 function test_autochisq() {
