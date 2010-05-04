@@ -211,7 +211,7 @@ procedure on a fresh Mac box.)  Every time you see a command starting with
   $ sudo port install python26
   $ sudo port install python_select
   $ sudo python_select python26
-  $ sudo port install fftw-3 fftw-3-single py26-numpy py26-scipy py26-matplotlib liboil glib2 py26-gobject py26-gtk git-core
+  $ sudo port install wget fftw-3 fftw-3-single py26-numpy py26-scipy py26-matplotlib liboil glib2 py26-gobject py26-gtk git-core
  
 
 Mac OS X Environment
