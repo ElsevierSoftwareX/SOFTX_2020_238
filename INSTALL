@@ -257,7 +257,7 @@ system.  Building gstreamer from git clone on Debian lenny (the current stable
 release, the OS found on the Atlas cluster) will require you to install
 
  * ≥liboil-0.3.14.tar.gz
- * ≥glib-2.18.4.tar.gz
+ * ≥glib-2.20.5.tar.gz
  * ≥pygobject-2.14.2.tar.gz
  * ≥pygtk-2.8.6.tar.gz
 
@@ -266,7 +266,7 @@ these three software packages into your ``/path/to/local`` prefix::
 
   $ cd /path/to/local/src
   $ wget http://liboil.freedesktop.org/download/liboil-0.3.14.tar.gz
-  $ wget http://ftp.gnome.org/pub/GNOME/sources/glib/2.18/glib-2.18.4.tar.gz
+  $ wget http://ftp.gnome.org/pub/GNOME/sources/glib/2.20/glib-2.20.5.tar.gz
   $ wget http://ftp.gnome.org/pub/GNOME/sources/pygobject/2.14/pygobject-2.14.2.tar.gz
   $ wget http://ftp.gnome.org/pub/GNOME/sources/pygtk/2.8/pygtk-2.8.6.tar.gz
   $ tar -xzf liboil-0.3.14.tar.gz
@@ -274,8 +274,8 @@ these three software packages into your ``/path/to/local`` prefix::
   $ ./configure --prefix=/path/to/local && make install
   $ popd
   
-  $ tar -xzf glib-2.18.4.tar.gz
-  $ pushd glib-2.18.4
+  $ tar -xzf glib-2.20.5.tar.gz
+  $ pushd glib-2.20.5
   $ ./configure --prefix=/path/to/local && make install
   $ popd
   
