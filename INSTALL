@@ -1,0 +1,540 @@
+================================
+gstlal Installation Instructions
+================================
+
+
+.. contents:: Table of Contents
+
+
+Overview
+========
+
+gstlal is a project that links together LAL and its associated libraries with 
+GStreamer and so requires all of those tools to be installed, including the 
+normally optional development-related components.  Once the dependencies are 
+installed, the installation of gstlal itself should be very simple.
+
+
+
+Preparing the Filesystem
+========================
+
+The following is the filesystem layout I (Kipp) use.  Of course other 
+arrangements are possible, and you are welcome to experiment, but if you have 
+problems please try this arrangement before reporting problems.
+
+The top level directory is ``local/`` in which is found a normal collection of 
+unix install directorys: ``bin/``, ``lib/``, etc..  The ``/path/to/local/`` will
+be used as the install prefix for all software components.  Also in ``local/`` 
+is a directory named ``src/``, and this is where we will keep the source code 
+for the software.  For reference the tree looks like this, but do not try to 
+make this by hand, it will be constructed for you as you download and install 
+softare::
+
+  local/
+    bin/
+    include/
+    lib/
+    ... and so on ...
+    src/
+      gst-plugins-bad/
+      gst-plugins-base/
+      gst-plugins-good/
+      gst-python/
+      gstlal/
+      gstreamer/
+      lalsuite/
+        glue/
+        lal/
+        lalapps/
+        lalburst/
+        lalframe/
+        lalmetaio/
+        pylal/
+        ... and so on ...
+
+Prepare the filesystem by doing the following.  Choose where you want ``local/``
+to go (I put it in my home directory, but you might prefer to be more organized 
+than that), then in that directory type::
+
+  $ mkdir local
+  $ mkdir local/src
+
+The rest of the tree will be created as software is downloaded and installed.
+
+
+
+Preparing the Environment
+=========================
+
+Disable the system-wide lscsoft installation by doing::
+
+  $ cd ${HOME}
+  $ touch .nolscsoft
+
+then, on Debian systems, manually re-enable libframe and libmetaio by adding::
+
+  export PKG_CONFIG_PATH="/opt/lscsoft/libframe/lib/pkgconfig:${PKG_CONFIG_PATH}"
+  export PKG_CONFIG_PATH="/opt/lscsoft/libmetaio/lib/pkgconfig:${PKG_CONFIG_PATH}"
+
+to ``${HOME}/.bash_profile``, or wherever you set variables like this.  On 
+RedHat derived systems like CentOS, use ``lib64/`` instead of ``lib/`` in these 
+two paths.  Log out of your account and log back in again and confirm that 
+``pkg-config`` returns the correct directories for these two libraries with::
+
+  $ pkg-config --cflags libframe libmetaio -I/opt/lscsoft/libmetaio/include -I/opt/lscsoft/libframe/include
+
+
+Debian **ONLY** Instructions
+----------------------------
+
+Skip this section **UNLESS** you are on a Debian system.
+
+Now create the environment setup script for the software to be installed in your
+home directory with::
+
+  $ cd /path/to/local/
+  $ cat >environment.sh <<_EOF_
+  export PATH="/path/to/local/bin:\${PATH}"
+  export PKG_CONFIG_PATH="/path/to/local/lib/pkgconfig:\${PKG_CONFIG_PATH}"
+  export PYTHONPATH="/path/to/local/lib/python2.5/site-packages:\${PYTHONPATH}"
+  _EOF_
+
+If your system is older the ``python2.5`` part of the paths might need to be 
+replaced with ``python2.4``, or if it's newer you might need to change it to 
+``python2.6``.  So, take a look at your system and figure this out.
+
+Once you have constructed ``environment.sh`` with those four environment variables in it::
+
+  $ source /path/to/local/environment.sh
+
+You will need to do this everytime you wish to use or do development work with 
+the software.  It might make sense to put this in your login scripts (but 
+remember you have done this, if you choose to).
+
+Now continue to the section `Downloading and Installing Dependencies`_.
+
+
+CentOS **ONLY** Instructions
+----------------------------
+
+Skip this section **UNLESS** you are on a CentOS or Red Hat system.
+
+Now create the environment setup script for the software to be installed in your
+home directory with::
+
+  $ cd /path/to/local/
+  $ cat >environment.sh <<_EOF_
+  export PATH="/path/to/local/bin:\${PATH}"
+  export PKG_CONFIG_PATH="/path/to/local/lib/pkgconfig:/usr/lib64/pkgconfig"
+  export PYTHONPATH="/path/to/local/lib64/python2.4/site-packages:/path/to/local/lib/python2.4/site-packages:\${PYTHONPATH}"
+  _EOF_
+
+Once you have constructed ``environment.sh`` with those four environment variables in it::
+
+  $ source /path/to/local/environment.sh
+
+You will need to do this everytime you wish to use or do development work with 
+the software.  It might make sense to put this in your login scripts (but 
+remember you have done this, if you choose to).
+
+
+Additional CentOS Dependencies
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+CentOS requires a few extra packages because GStreamer depends on newer versions
+of GNU Autotools and the lexer 'flex'.  Before proceeding, you will need to 
+install source releases of the following packages.
+
+You can use the latest stable release for each of these, but for the sake of 
+convenience we have added URL shortcuts to download versions that we have tested.
+
+ * m4:        http://ftp.gnu.org/gnu/m4/m4-1.4.14.tar.gz
+ * autoconf:  http://ftp.gnu.org/gnu/autoconf/autoconf-2.65.tar.gz
+ * automake:  http://ftp.gnu.org/gnu/automake/automake-1.11.tar.gz
+ * gettext:   http://ftp.gnu.org/pub/gnu/gettext/gettext-0.17.tar.gz
+ * libtool:   http://ftp.gnu.org/gnu/libtool/libtool-2.2.6b.tar.gz
+ * flex:      http://prdownloads.sourceforge.net/flex/flex-2.5.35.tar.gz?download
+ * pkgconfig: http://pkgconfig.freedesktop.org/releases/pkg-config-0.23.tar.gz
+
+Installing each of these using the standard recipe: download, extract, enter
+the directory, configure, and make install::
+    
+  $ cd /path/to/local/src
+  $ wget *url*
+  $ tar xzvf *tarball name*
+  $ pushd *directory*
+  $ ./configure --prefix=/path/to/local && make install
+  $ popd
+
+Now continue to the section `Downloading and Installing Dependencies`_.
+
+
+Mac OS X **ONLY** Instructions
+------------------------------
+
+Skip this section **UNLESS** you are on a Mac OS X system.
+
+Note: the Mac OS instructions are known to be incomplete; there may be some
+MacPorts packages that are required but not listed.  If you discover this is
+the case, please email <leo.singer@lig.org>.
+
+Additional Mac OS X Dependencies
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The preferred method of getting Mac OS X build dependencies is MacPorts, a 
+free, source-based package manager for Mac OS.
+
+The following instructions assume that you have a fresh installation of Leopard
+or Snow Leopard.  These instructions should work on most systems, except if you 
+have another package manager (such as Fink) installed.
+
+To install MacPorts, first install Xcode from the Developer CD that came with
+your computer, or from the Mac OS developer site <http://developer.apple.com>.
+
+Next, download the latest MacPorts release for your system from
+<http://www.macports.org/install.php>.  Make sure that you select the installer
+package (.pkg) that matches your operating system: Leopard or Snow Leopard.
+
+Run the installer to set up the MacPorts package manager.  Then start a new shell.
+To make sure that MacPorts is installed, run the following command::
+   
+   $ port help
+
+You should not get an error message.  If you now have the Port command, proceed.
+
+Now, we asre going to use MacPorts to get the prerequisites for GStreamer, 
+lalsuite, and gstlal.  (Note: this is a partial list; I need to test the 
+procedure on a fresh Mac box.)  Every time you see a command starting with
+`sudo`, you may be prompted for your login password.  Run the following commands::
+    
+  $ sudo port install python26
+  $ sudo port install python_select
+  $ sudo python_select python26
+  $ sudo port install wget fftw-3 fftw-3-single py26-numpy py26-scipy py26-matplotlib liboil glib2 py26-gobject py26-gtk git-core
+ 
+
+Mac OS X Environment
+~~~~~~~~~~~~~~~~~~~~
+
+Now create the environment setup script for the software to be installed in your
+home directory with::
+
+  $ cd /path/to/local/
+  $ cat >environment.sh <<_EOF_
+  export PATH="/path/to/local/bin:\${PATH}"
+  export PKG_CONFIG_PATH="/path/to/local/lib/pkgconfig:\$(python-config --prefix)/lib/pkgconfig:\${PKG_CONFIG_PATH}"
+  export PYTHONPATH="/path/to/local/lib/python2.6/site-packages:\${PYTHONPATH}"
+  _EOF_
+
+Once you have constructed ``environment.sh`` with those four environment variables in it::
+
+  $ source /path/to/local/environment.sh
+
+You will need to do this everytime you wish to use or do development work with 
+the software.  It might make sense to put this in your login scripts (but 
+remember you have done this, if you choose to).
+
+After you have set up your Mac OS X dependencies and your Mac OS X environment 
+script, skip the section "Downloading and Installing Dependencies" and continue 
+to the section `Downloading the Software`_.
+
+.. NOTE:: When you reach the "gstlal Installation" step, configure GStreamer 
+          with ``CFLAGS="-g"``.
+
+
+Downloading and Installing Dependencies
+=======================================
+
+As we develop gstlal we sometimes find and fix bugs in and add new features to 
+gstreamer itself.  Using gstlal requires a version of gstreamer that has our 
+patches included, so in the instructions below we will be using the head of 
+gstreamer's master branch, not an official source release (we do not expect to 
+work this way in the long run, this is a start-up transient).  Because, for now,
+we will be using the newest version of gstreamer available, some of the software
+dependencies might be a little ahead of what is provided by your operating 
+system.  Building gstreamer from git clone on Debian lenny (the current stable 
+release, the OS found on the Atlas cluster) will require you to install
+
+ * ≥liboil-0.3.14.tar.gz
+ * ≥glib-2.20.5.tar.gz
+ * ≥pygobject-2.14.2.tar.gz
+ * ≥pygtk-2.8.6.tar.gz
+
+in your home directory.  The following instructions will download and install 
+these three software packages into your ``/path/to/local`` prefix::
+
+  $ cd /path/to/local/src
+  $ wget http://liboil.freedesktop.org/download/liboil-0.3.14.tar.gz
+  $ wget http://ftp.gnome.org/pub/GNOME/sources/glib/2.20/glib-2.20.5.tar.gz
+  $ wget http://ftp.gnome.org/pub/GNOME/sources/pygobject/2.14/pygobject-2.14.2.tar.gz
+  $ wget http://ftp.gnome.org/pub/GNOME/sources/pygtk/2.8/pygtk-2.8.6.tar.gz
+  $ tar -xzf liboil-0.3.14.tar.gz
+  $ pushd liboil-0.3.14
+  $ ./configure --prefix=/path/to/local && make install
+  $ popd
+  
+  $ tar -xzf glib-2.20.5.tar.gz
+  $ pushd glib-2.20.5
+  $ ./configure --prefix=/path/to/local && make install
+  $ popd
+  
+  $ tar -xzf pygobject-2.14.2.tar.gz
+  $ pushd pygobject-2.14.2
+  $ ./configure --disable-glibtest --prefix=/path/to/local && make install
+  $ popd
+  
+  $ tar -xzf pygtk-2.8.6.tar.gz
+  $ pushd pygtk-2.8.6
+  $ ./configure --disable-glibtest --prefix=/path/to/local && make install
+  $ popd
+
+
+
+(Optional) NDS Support
+======================
+
+gstlal includes an optional source element for retrieving live data from an NDS 
+server. To enable NDS support, ensure that you have the NDS2 client installed 
+before building gstlal. This requires you to install
+
+ * ≥nds2-client-0.5.2.tar.gz
+
+To support Kerberos authentication, you will need to make sure that your system 
+has libsasl2 and the gssapi module for libsasl2. In Debian these are the packages
+
+ * libsasl2-dev
+ * libsasl2-modules-gssapi-mit
+
+To install the NDS client library, run the following commands::
+
+  $ wget http://ldas-jobs.ligo.caltech.edu/~jzweizig/nds2-release/nds2-client-0.5.2.tar.gz
+  $ tar -xzf nds2-client-0.5.2.tar.gz
+  $ pushd nds2-client-0.5.2
+  $ ./configure --prefix=/path/to/local && make install
+  $ popd
+
+
+
+Downloading the Software
+========================
+
+The following will clone the GStreamer source trees giving you read-only access::
+
+  $ cd /path/to/local/src/
+  $ git clone git://anongit.freedesktop.org/git/gstreamer/gst-plugins-bad
+  $ git clone git://anongit.freedesktop.org/git/gstreamer/gst-plugins-base
+  $ git clone git://anongit.freedesktop.org/git/gstreamer/gst-plugins-good
+  $ git clone git://anongit.freedesktop.org/git/gstreamer/gst-python
+  $ git clone git://anongit.freedesktop.org/git/gstreamer/gstreamer
+
+The following will clone the gstlal source tree giving you read-only access::
+
+  $ cd /path/to/local/src/
+  $ git clone git://ligo-vcs.phys.uwm.edu/gstlal.git
+
+*OR*, those with ligo.org credentials can obtain a read-write clone of the 
+gstlal source tree by using::
+
+  $ cd /path/to/local/src/
+  $ git clone ssh://albert.einstein@ligo-vcs.phys.uwm.edu/usr/local/git/gstlal.git
+
+You must also clone lalsuite by following the instructions on the LAL project page.
+
+
+Patching gst-plugins-base
+=========================
+
+To improve performance, some of the example pipelines provided with gstlal use 
+an experimental patch that adds gap support to gstreamer's stock audioresample 
+element.  We are in the process of preparing the patch for inclusion in the 
+upstream source tree but the patch is not ready yet.  To use the programs 
+included in gstlal you will need to apply the audioresample patch to your 
+gst-plugins-base source tree locally::
+
+  $ cd /path/to/local/src
+  $ pushd gst-plugins-base
+  $ wget https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal/audioresample.patch
+  $ patch -p1 <audioresample.patch
+  $ popd
+
+
+
+
+Patching gst-plugins-bad
+========================
+
+Our pipelines get bitten by a long-standing bug in the glib library (166020).  
+I have opened a new bug report with a patch to gst-plugins-bad to work around 
+the problem (607513), but hopefully progress can be made on fixing the real 
+problem in glib.  In the meantime, you need to apply the patch locally to 
+eliminate some segfaults from the input-selector element.
+
+The patch was briefly accepted into the main source tree but was found to 
+create lock-ups in totem, the Gnome media player, and so because a release is 
+pending the patch has been reverted.  git can be used to retrieve and re-apply 
+the original patch locally to allow our pipelines to work::
+
+  $ cd /path/to/local/src
+  $ pushd gst-plugins-bad
+  $ git cherry-pick 7e067615ffb5614f068f7753c10dde99afe49c3c
+  $ popd
+
+
+
+Patching gst-python
+===================
+
+Skip this section and continue to `Installing the Software`_ **UNLESS** your 
+system is running Mac OS X or CentOS.
+
+The current source release of gst-python fails to locate libpython, the library
+against which Python shared objects must be linked.  A workaround has been 
+proposed to the GStreamer developers, but is under review.  The bug report is 
+at <https://bugzilla.gnome.org/show_bug.cgi?id=616553>.  As a temporary 
+workaround, you can apply the proposed patch.
+
+If you are on Mac OS::
+  
+  $ cd /path/to/local/src
+  $ pushd gst-python
+  $ wget https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal/gst-python.mac.patch
+  $ git apply gst-python.mac.patch
+
+And if you are on CentOS::
+  
+  $ cd /path/to/local/src
+  $ pushd gst-python
+  $ wget https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal/gst-python.centos.patch
+  $ git apply gst-python.centos.patch
+
+
+Installing the Software
+=======================
+
+ 1. Change to your ``src`` directory::
+    
+    $ cd /path/to/local/src
+
+ 2. Install the components of lalsuite in the order glue, lal, lalframe, 
+    lalmetaio, lalburst, lalinspiral, lalpulsar, lalstochastic, lalapps, 
+    pylal, using:
+    
+    * ``$ pushd lalsuite``
+    
+      - For C components::
+        
+        $ pushd directory
+        $ ./00boot && ./configure --prefix=/path/to/local && make -j install
+        $ popd
+      
+      - For Python components::
+        
+        $ pushd directory
+        $ python setup.py install --prefix=/path/to/local
+        $ popd
+      
+    * ``$ popd``
+      
+    * *do not* set any environment variables except as instructed above,
+    * *do not* source any "user-env" scripts.
+ 
+ 3. Install the components of gstreamer in the order gstreamer, 
+    gst-plugins-base, gst-plugins-good, gst-plugins-bad, gst-python, using::
+    
+    $ pushd directory
+    $ ./autogen.sh --noconfigure && ./configure --prefix=/path/to/local && make -j install
+    $ popd
+    
+    .. NOTE:: Ignore warnings about "failed to install schema", these appear 
+              to be harmless.
+    
+    .. NOTE:: On CentOS, building gst-plugins-bad may fail while building the 
+              plugin ``apexsink``.  If this occurs, you can configure 
+              gst-plugins-bad with the flag ``--disable-apexsink`` to skip it.
+ 
+ 4. Install gstlal with::
+    
+    $ pushd gstlal
+    $ ./00init.sh && ./configure --prefix=/path/to/local && make -j install
+    $ popd
+
+
+
+Verifying the Installation
+==========================
+
+To check that each component is installed correctly, do the following.
+
+.. NOTE::  Do not run these commands from inside any of the respective source 
+           trees as the presence of files in those directories with names 
+           matching those referred to in these commands will confuse the tests.
+
+glue
+----
+
+  ::
+  
+  $ python -c "from glue import segments ; print segments.__file__"
+  
+  should not produce an error, and should print a filename located in the 
+  ``/path/to/local/`` directory tree.
+
+
+pylal
+-----
+  
+  ::
+  
+  $ python -c "from pylal import datatypes ; print datatypes.__file__"
+  
+  should not produce an error, and should print a filename located in the 
+  ``/path/to/local/`` directory tree, and::
+  
+  $ ldd /path/to/local/lib*/python*/site-packages/pylal/xlal/fft.so
+  
+  should not produce an error, and should show that ``liblal.so.0`` is provided by 
+  a file located in the ``/path/to/local`` directory tree.
+
+
+gstreamer
+---------
+  
+  ::
+  
+  $ which gst-inspect
+  
+  should print ``/path/to/local/bin/gst-inspect``, and::
+  
+  $ gst-inspect coreelements
+  
+  should indicate that the Filename is in ``/path/to/local/lib/...`` .  To test for 
+  the audioresampler's gap-aware patch::
+  
+  $ gst-inspect audioresample
+  
+  should list ``gap-aware`` under ``Element Properties``.
+
+
+gstlal
+------
+  
+  ::
+  
+  $ gst-inspect gstlal
+  
+  should report information on the gstlal plugin, showing a Filename in the 
+  ``/path/to/local/lib/...`` tree, and there should be several elements provided
+  by the plugin; and::
+  
+  $ ldd /path/to/local/lib/libgstlal.so
+  
+  should not produce an error, and should show that ``libgstbase-0.10.so.0``, 
+  ``libgstreamer-0.10.so.0``, ``libgobject-2.0.so.0``, ``libgmodule-2.0.so.0``, 
+  ``libgthread-2.0.so.0`` and ``libglib-2.0.so.0`` are all provided by files 
+  located in the ``/path/to/local`` directory tree; and::
+  
+  $ python -c "from gstlal import pipeparts ; print pipeparts.__file__"
+  
+  should not produce an error, and should print a filename located in the 
+  ``/path/to/local/`` directory tree.

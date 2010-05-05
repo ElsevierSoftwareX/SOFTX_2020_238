@@ -670,6 +670,8 @@ static int add_xml_injections(REAL8TimeSeries *h, const GSTLALSimulation *elemen
 }
 
 
+#if 0
+/* unused function */
 static REAL8TimeSeries *compute_strain(double right_ascension, double declination, double psi, LALDetector * detector, LIGOTimeGPS * tc, double phic, double deltaT, double m1, double m2, double fmin, double r, double i, int order)
 {
 	REAL8TimeSeries *hplus = NULL;
@@ -681,6 +683,7 @@ static REAL8TimeSeries *compute_strain(double right_ascension, double declinatio
 	XLALDestroyREAL8TimeSeries(hcross);
 	return strain;
 }
+#endif
 
 
 /*
