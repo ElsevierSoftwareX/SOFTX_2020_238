@@ -1,10 +1,10 @@
 rm -f output_H1_fake.sqlite
 
-GST_DEBUG=3 gstlal_inspiral \
+gstlal_inspiral \
 	--fake-data \
 	--instrument "H1" \
-	--output "output_H1_fake.sqlite" \
-	--gps-start-time `lalapps_tconvert now` \
+	--output "output_H1_fake.xml" \
+	--gps-start-time 957115711 \
 	--template-bank=banks/1-split_bank-H1-TMPLTBANK_DATAFIND-871157768-2048.xml.gz \
 	--reference-psd "reference_psd.xml.gz" \
 	--write-pipeline "inspiral_fake" \
