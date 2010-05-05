@@ -107,10 +107,12 @@ class lal_fakeligosrc(gst.Bin):
 		elements, bypassing the filter chains.  This makes it so that the
 		entire bin can be SEEKed even before it is added to a pipeline."""
 		if event.type == gst.EVENT_SEEK:
+			success = True
 			for elem in self.iterate_sources():
-				elem.send_event(event)
+				success &= elem.send_event(event)
+			return success
 		else:
-			super(lal_fakeligosrc, self).send_event(event)
+			return super(lal_fakeligosrc, self).send_event(event)
 
 
 	@with_construct_properties
