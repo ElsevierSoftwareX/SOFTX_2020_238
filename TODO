@@ -9,6 +9,3 @@ TODO
 * Add programmable data quality mask support to lal_onlinehoftsrc: if data
   quality vector does not satisfy a user-specified bitmask, a gap should be
   inserted.
-
-* Deploy online search on a CentOS machine.  Currently there is a CentOS-
-  specific performance problem.
