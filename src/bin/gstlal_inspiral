@@ -300,7 +300,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 	#
 
 	if fake_data:
-		head = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
+		head = pipeparts.mkfakeLIGOsrc(pipeline, blocksize = detector.block_size)
 	elif online_data:
 		head = pipeparts.mkonlinehoftsrc(pipeline, instrument = instrument)
 	else:
@@ -311,6 +311,8 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 	if not head.send_event(seekevent):
 		raise RuntimeError, "Element %s did not handle seek event" % head.get_name()
 
+	if fake_data:
+		head = pipeparts.mktaginject(pipeline, head, 'instrument=%s,channel-name=%s,units=strain' % (instrument, detector.channel))
 	if verbose:
 		head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % instrument)
 

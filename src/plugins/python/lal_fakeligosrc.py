@@ -58,34 +58,12 @@ class lal_fakeligosrc(gst.Bin):
 		readable=True, writable=True
 	)
 
-	gproperty(
-		gobject.TYPE_STRING,
-		'instrument',
-		'Instrument name (e.g., "H1")',
-		None,
-		readable=True, writable=True
-	)
-
-	gproperty(
-		gobject.TYPE_STRING,
-		'channel-name',
-		'Channel name (e.g., "LSC-STRAIN")',
-		None,
-		readable=True, writable=True
-	)
-
 
 	def do_set_property(self, prop, val):
 		if prop.name == 'blocksize':
 			# Set property on all sources
 			for elem in self.iterate_sources():
 				elem.set_property('samplesperbuffer', val / 8)
-		elif prop.name == 'instrument':
-			self.__instrument = val
-			self.__taginject = 'instrument=%s,channel-name=%s,units=strain' % (self.__instrument, self.__channel_name)
-		elif prop.name == 'channel-name':
-			self.__channel_name = val
-			self.__taginject = 'instrument=%s,channel-name=%s,units=strain' % (self.__instrument, self.__channel_name)
 		else:
 			super(lal_fakeligosrc, self).set_property(prop.name, val)
 
@@ -94,10 +72,6 @@ class lal_fakeligosrc(gst.Bin):
 		if prop.name == 'blocksize':
 			# Retrieve value of property from first source element
 			return self.iterate_sources().next().get_property('samplesperbuffer') * 8
-		elif prop.name == 'instrument':
-			return self.__instrument
-		elif prop.name == 'channel-name':
-			return self.__channel_name
 		else:
 			return super(lal_fakeligosrc, self).get_property(prop.name)
 
@@ -118,9 +92,6 @@ class lal_fakeligosrc(gst.Bin):
 	@with_construct_properties
 	def __init__(self):
 		super(lal_fakeligosrc, self).__init__()
-
-		self.__channel_name = ''
-		self.__instrument = ''
 
 		# Build first filter chain
 		chains = (
@@ -145,14 +116,12 @@ class lal_fakeligosrc(gst.Bin):
 		outputchain = mkelems_in_bin(self,
 			('lal_adder', {'sync': True}),
 			('audioamplify', {'clipping-method': 3, 'amplification': 16384.**.5}),
-			('capsfilter', {'caps': gst.Caps('audio/x-raw-float, width=64, rate=16384')}),
-			('taginject',)
+			('capsfilter', {'caps': gst.Caps('audio/x-raw-float, width=64, rate=16384')})
 		)
 
 		for chain in chains:
 			chain[-1].link(outputchain[0])
 
-		self.__taginject = outputchain[-1]
 		self.add_pad(gst.GhostPad('src', outputchain[-1].get_static_pad('src')))
 
 
