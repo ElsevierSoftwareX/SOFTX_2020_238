@@ -47,10 +47,10 @@ function test_up_resampler_gaps() {
 		! lal_nxydump \
 		! queue ! filesink buffer-mode=2 location="dump_out.txt" \
 		audiotestsrc freq=15.8 samplesperbuffer=1024 num-buffers=8 \
-		! audio/x-raw-float, width=64, rate=1024 \
+		! audio/x-raw-float, width=64, rate=2048 \
 		! tee name=control \
 		! gate.control \
-		audiotestsrc freq=256 samplesperbuffer=1024 num-buffers=128 \
+		audiotestsrc freq=256 wave=pink-noise samplesperbuffer=1024 num-buffers=8 \
 		! audio/x-raw-float, channels=1, width=64, rate=2048 \
 		! gate.sink \
 		control. \
@@ -73,7 +73,7 @@ function test_down_resampler_gaps() {
 		! audio/x-raw-float, width=64, rate=32768 \
 		! tee name=control \
 		! gate.control \
-		audiotestsrc freq=256 samplesperbuffer=1024 num-buffers=128 \
+		audiotestsrc freq=256 wave=pink-noise samplesperbuffer=1024 num-buffers=128 \
 		! audio/x-raw-float, channels=1, width=64, rate=32768 \
 		! gate.sink \
 		control. \
