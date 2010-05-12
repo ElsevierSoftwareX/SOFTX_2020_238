@@ -63,7 +63,7 @@ class lal_fakeligosrc(gst.Bin):
 		'instrument',
 		'Instrument name (e.g., "H1")',
 		None,
-		readable=True, writable=True
+		readable=False, writable=True
 	)
 
 	gproperty(
@@ -71,7 +71,7 @@ class lal_fakeligosrc(gst.Bin):
 		'channel-name',
 		'Channel name (e.g., "LSC-STRAIN")',
 		None,
-		readable=True, writable=True
+		readable=False, writable=True
 	)
 
 
@@ -80,12 +80,10 @@ class lal_fakeligosrc(gst.Bin):
 			# Set property on all sources
 			for elem in self.iterate_sources():
 				elem.set_property('samplesperbuffer', val / 8)
-		elif prop.name == 'instrument':
-			self.__instrument = val
-			self.__taginject = 'instrument=%s,channel-name=%s,units=strain' % (self.__instrument, self.__channel_name)
-		elif prop.name == 'channel-name':
-			self.__channel_name = val
-			self.__taginject = 'instrument=%s,channel-name=%s,units=strain' % (self.__instrument, self.__channel_name)
+		elif prop.name in ('instrument', 'channel-name'):
+			self.__tags[prop.name] = val
+			tagstring = ','.join('%s="%s"' % kv for kv in self.__tags.iteritems())
+			self.__taginject.set_property('tags', tagstring)
 		else:
 			super(lal_fakeligosrc, self).set_property(prop.name, val)
 
@@ -94,10 +92,6 @@ class lal_fakeligosrc(gst.Bin):
 		if prop.name == 'blocksize':
 			# Retrieve value of property from first source element
 			return self.iterate_sources().next().get_property('samplesperbuffer') * 8
-		elif prop.name == 'instrument':
-			return self.__instrument
-		elif prop.name == 'channel-name':
-			return self.__channel_name
 		else:
 			return super(lal_fakeligosrc, self).get_property(prop.name)
 
@@ -119,8 +113,7 @@ class lal_fakeligosrc(gst.Bin):
 	def __init__(self):
 		super(lal_fakeligosrc, self).__init__()
 
-		self.__channel_name = ''
-		self.__instrument = ''
+		self.__tags = {'units':'strain'}
 
 		# Build first filter chain
 		chains = (
