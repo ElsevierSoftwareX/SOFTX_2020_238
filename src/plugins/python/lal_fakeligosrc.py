@@ -50,29 +50,29 @@ class lal_fakeligosrc(gst.Bin):
 		__author__
 	)
 
-	gproperty(
-		gobject.TYPE_UINT64,
-		'blocksize',
-		'Number of samples in each outgoing buffer',
-		0, gobject.G_MAXULONG, 16384 * 8 * 1, # min, max, default
-		readable=True, writable=True
-	)
-
-	gproperty(
-		gobject.TYPE_STRING,
-		'instrument',
-		'Instrument name (e.g., "H1")',
-		None,
-		readable=False, writable=True
-	)
-
-	gproperty(
-		gobject.TYPE_STRING,
-		'channel-name',
-		'Channel name (e.g., "LSC-STRAIN")',
-		None,
-		readable=False, writable=True
-	)
+	__gproperties__ = {
+		'blocksize': (
+			gobject.TYPE_UINT64,
+			'blocksize',
+			'Number of samples in each outgoing buffer',
+			0, gobject.G_MAXULONG, 16384 * 8 * 1, # min, max, default
+			gobject.PARAM_WRITABLE
+		),
+		'instrument': (
+			gobject.TYPE_STRING,
+			'instrument',
+			'Instrument name (e.g., "H1")',
+			None,
+			gobject.PARAM_WRITABLE
+		),
+		'channel-name': (
+			gobject.TYPE_STRING,
+			'channel-name',
+			'Channel name (e.g., "LSC-STRAIN")',
+			None,
+			gobject.PARAM_WRITABLE
+		)
+	}
 
 
 	def do_set_property(self, prop, val):
@@ -84,16 +84,6 @@ class lal_fakeligosrc(gst.Bin):
 			self.__tags[prop.name] = val
 			tagstring = ','.join('%s="%s"' % kv for kv in self.__tags.iteritems())
 			self.__taginject.set_property('tags', tagstring)
-		else:
-			super(lal_fakeligosrc, self).set_property(prop.name, val)
-
-
-	def do_get_property(self, prop):
-		if prop.name == 'blocksize':
-			# Retrieve value of property from first source element
-			return self.iterate_sources().next().get_property('samplesperbuffer') * 8
-		else:
-			return super(lal_fakeligosrc, self).get_property(prop.name)
 
 
 	def do_send_event(self, event):
@@ -109,7 +99,6 @@ class lal_fakeligosrc(gst.Bin):
 			return super(lal_fakeligosrc, self).send_event(event)
 
 
-	@with_construct_properties
 	def __init__(self):
 		super(lal_fakeligosrc, self).__init__()
 
