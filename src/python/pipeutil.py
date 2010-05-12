@@ -46,8 +46,6 @@ import gst
 del pygtk
 del pygst
 
-from gst.extend.pygobject import gproperty, with_construct_properties
-
 
 #
 # =============================================================================
