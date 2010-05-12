@@ -129,14 +129,14 @@ def mkiirfilter(pipeline, src, a, b):
 	return elem
 
 
-def mkfakeLIGOsrc(pipeline, blocksize=16384 * 8 * 1):
-	head = mkelem('lal_fakeligosrc', {'blocksize': blocksize})
+def mkfakeLIGOsrc(pipeline, location=None, instrument=None, channel_name=None, blocksize=16384 * 8 * 1):
+	head = mkelem('lal_fakeligosrc', {'instrument': instrument, 'channel-name': channel_name, 'blocksize': blocksize})
 	pipeline.add(head)
 	return head
 
 
-def mkfakeadvLIGOsrc(pipeline, blocksize=16384 * 8 * 1):
-	head = mkelem('lal_fakeadvligosrc', {'blocksize': blocksize})
+def mkfakeadvLIGOsrc(pipeline, location=None, instrument=None, channel_name=None, blocksize=16384 * 8 * 1):
+	head = mkelem('lal_fakeadvligosrc', {'instrument': instrument, 'channel-name': channel_name, 'blocksize': blocksize})
 	pipeline.add(head)
 	return head
 

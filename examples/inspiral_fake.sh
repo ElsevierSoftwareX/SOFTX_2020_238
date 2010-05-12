@@ -1,6 +1,6 @@
 rm -f output_H1_fake.sqlite
 
-GST_DEBUG=3 gstlal_inspiral \
+gstlal_inspiral \
 	--fake-data \
 	--instrument "H1" \
 	--output "output_H1_fake.xml" \

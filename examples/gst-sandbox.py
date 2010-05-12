@@ -16,31 +16,31 @@ import gst
 del pygtk
 del pygst
 
-gps_start_time = 956858656
-
-seekevent = gst.event_new_seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT,
-	gst.SEEK_TYPE_SET, 0, gst.SEEK_TYPE_SET, 1000 * gst.SECOND)
+gps_start_time = 956858656+1
 
 # Create a new source element
-src = gst.element_factory_make('lal_fakeligosrc')
+src = gst.element_factory_make('lal_onlinehoftsrc')
 src.set_property('instrument', 'H1')
-src.set_property('channel-name', 'LSC-STRAIN')
-
-if src.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
-	raise RuntimeError, "Element %s did not want to enter ready state" % src.get_name()
-if not src.send_event(seekevent):
-	raise RuntimeError, "Element %s did not handle seek event" % src.get_name()
 
 # Create a new sink element
-sink = gst.element_factory_make('filesink')
-sink.set_property('location', '/dev/null')
+sink = gst.element_factory_make('fakesink')
 
 # Construct pipeline
 pipeline = gst.Pipeline()
 pipeline.add_many(src, sink)
 gst.element_link_many(src, sink)
 
+# Play pipeline
+print "Setting state to PAUSED:", pipeline.set_state(gst.STATE_PAUSED)
+print pipeline.get_state()
+
+# Seek the source
+print "Seeking:", src.seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT,
+	gst.SEEK_TYPE_SET, gps_start_time * gst.SECOND,
+	gst.SEEK_TYPE_NONE, -1)
+
 print "Setting state to PLAYING:", pipeline.set_state(gst.STATE_PLAYING)
+print pipeline.get_state()
 
 # Start runloop
 mainloop = gobject.MainLoop()
