@@ -195,7 +195,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 	}
 
-	GST_INFO_OBJECT(element, "pushed frame spanning [%u, %u)",
+	GST_INFO_OBJECT(element, "pushed frame spanning [%llu, %llu)",
 		gps_start_time,
 		gps_start_time + 16
 	);

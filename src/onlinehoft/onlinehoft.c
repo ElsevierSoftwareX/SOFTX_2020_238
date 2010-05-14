@@ -34,6 +34,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <inttypes.h>
 
 typedef struct {
 	int was_discontinuous;
@@ -275,7 +276,7 @@ static FrFile* _onlinehoft_next_file(onlinehoft_tracker_t* tracker)
 			sleep(1);
 
 		char* filename;
-		if (asprintf(&filename, "%s/%s%u/%s%d%s",
+		if (asprintf(&filename, "%s/%s%u/%s%" PRIu64 "%s",
 				 tracker->dirprefix, tracker->nameprefix,
 				 _onlinehoft_era_for_remainder(tracker->gpsRemainder),
 				 tracker->nameprefix, tracker->gpsRemainder << 4, tracker->namesuffix) < 1)
