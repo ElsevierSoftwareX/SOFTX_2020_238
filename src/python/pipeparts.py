@@ -24,9 +24,6 @@
 #
 
 
-import math
-
-
 from pipeutil import *
 
 from glue import segments
