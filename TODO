@@ -9,3 +9,18 @@ TODO
 * Add programmable data quality mask support to lal_onlinehoftsrc: if data
   quality vector does not satisfy a user-specified bitmask, a gap should be
   inserted.
+
+* The orthogonal SNR gate trigger rate is way too high; the requested false
+  alarm probability results in a threshold that does not divide the orthogonal
+  SNR signal distribution correctly.  Find out why.
+
+* Divide the gstlal_inspiral pipeline into smaller reusable components,
+  possibly creating new element classes in Python.
+
+* Add the ability to pre-compute the SVD and load it from a file.
+
+* Add base classes for Matplotlib-based visualization elements.
+
+* Make first-class element plugins for commonly used visualization elements.
+
+* Add the "restrict" keyword wherever possible in C code.
