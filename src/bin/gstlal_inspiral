@@ -367,35 +367,16 @@ def mkLLOIDsrc(pipeline, seekevent, instrument, detector, rates, psd = None, psd
 	#
 	# down-sample whitened time series to remaining target sample rates
 	# while applying an amplitude correction to adjust for low-pass
-	# filter roll-off.  we also scale by \sqrt{original rate / new
-	# rate}.  this is done to preserve the square magnitude of the time
-	# series --- the inner product of the time series with itself.
-	# really what we want is for
+	# filter roll-off.  By design, the input to the orthogonal filter
+	# banks is pre-whitened, so it is unit variance over short periods of time.
+	# However, resampling it reduces the variance by a small, sample rate
+	# dependent factor.  The audioamplify element applies a correction factor
+	# that restores the input's unit variance.
 	#
-	#	\int v_{1}(t) v_{2}(t) \diff t
-	#		\approx \sum v_{1}(t) v_{2}(t) \Delta t
-	#
-	# to be preserved across different sample rates, i.e. for different
-	# \Delta t.  what we do is rescale the time series and ignore
-	# \Delta t, so we put 1/2 factor of the ratio of the \Delta t's
-	# into the h(t) time series here, and, later, another 1/2 factor
-	# into the template when it gets downsampled.
-	#
-
-	# FIXME:  re-measure these;  we've changed the quality of the
-	# resampler since these were measured.
-	correction = {
-		64: 1 / 0.961,
-		128: 1 / 0.961,
-		256: 1 / 0.962,
-		512: 1 / 0.962,
-		1024: 1 / 0.962,
-		2048: 1 / 0.999
-	}
 
 	head = {source_rate: pipeparts.mktee(pipeline, head)}
 	for rate in sorted(rates, reverse = True)[1:]:	# all but the highest rate
-		head[rate] = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkaudioamplify(pipeline, head[source_rate], math.sqrt(correction[rate] * float(source_rate) / rate)), quality = 9), "audio/x-raw-float, rate=%d" % rate))
+		head[rate] = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkaudioamplify(pipeline, head[source_rate], 1/math.sqrt(pipeparts.audioresample_variance_gain(9, source_rate, rate))), quality = 9), "audio/x-raw-float, rate=%d" % rate))
 
 	#
 	# done.  return value is a dictionary of tee elements indexed by
