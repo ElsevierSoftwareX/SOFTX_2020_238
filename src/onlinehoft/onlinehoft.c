@@ -348,43 +348,108 @@ uint64_t onlinehoft_seek(onlinehoft_tracker_t* tracker, uint64_t gpsSeconds)
 }
 
 
-FrVect* onlinehoft_next_vect(onlinehoft_tracker_t* tracker)
+FrVect* onlinehoft_next_vect(onlinehoft_tracker_t* tracker, uint16_t* segment_mask)
 {
 	if (!tracker) return NULL;
 
+	// Open frame file, or return NULL
 	FrFile* frFile = _onlinehoft_next_file(tracker);
 	if (!frFile) return NULL;
-	FrVect* vect = FrFileIGetVect(frFile, tracker->ifodesc->channelname, ((tracker->gpsRemainder-1) << 4), 16);
+
+	// Compute start time
+	uint64_t tstart = (tracker->gpsRemainder - 1) << 4;
+
+	// Get data, data quality, and state vectors
+	FrVect* vect = FrFileIGetVect(frFile, tracker->ifodesc->channelname, tstart, 16);
+	FrVect* state_vect = FrFileIGetVect(frFile, tracker->ifodesc->state_channelname, tstart, 16);
+	FrVect* dq_vect = FrFileIGetVect(frFile, tracker->ifodesc->dq_channelname, tstart, 16);
+
+	// Close frame file
 	FrFileIEnd(frFile);
 
-	// If FrFileIGetVect failed, return NULL
-	if (!vect) return vect;
+	// Check to make certain that all the vectors are valid.
+	FrVect* vects[] = {vect, state_vect, dq_vect};
+	uint64_t expected_gps_start = (tracker->gpsRemainder-1) << 4;
 
-	// If GPS start time is wrong, return NULL
+	unsigned char i;
+	for (i = 0 ; i < 2 ; i ++)
 	{
-		uint64_t expected_gps_start = (tracker->gpsRemainder-1) << 4;
-		uint64_t retrieved_gps_start = (uint64_t)vect->GTime;
-		if (expected_gps_start != retrieved_gps_start)
+		const char* names[] = {tracker->ifodesc->channelname, tracker->ifodesc->state_channelname, tracker->ifodesc->dq_channelname};
+		static const unsigned int rates[] = {16384, 16, 1};
+		static const FRVECTTYPES vecttypes[] = {FR_VECT_8R, FR_VECT_4R, FR_VECT_4S};
+
+		FrVect* theVect = vects[i];
+		unsigned int rate = rates[i];
+
+		// Check that theVect is non-NULL
+		if (!theVect)
 		{
+			fprintf(stderr, "onlinehoft_next_vect: %s: was NULL vector\n", names[i]);
 			FrVectFree(vect);
-			fprintf(stderr, "onlinehoft_next_vect: expected timestamp %lu, but got %lu\n",
-					expected_gps_start, retrieved_gps_start);
+			FrVectFree(dq_vect);
+			FrVectFree(state_vect);
 			return NULL;
 		}
-	}
 
-	// If duration is wrong, return NULL
-	{
-		uint32_t expected_nsamples = 16 * 16384;
-		uint32_t retrieved_nsamples = vect->nx[0];
+		// Check that type is what it is spec'ed to be
+		if (vecttypes[i] != theVect->type)
+		{
+			fprintf(stderr, "onlinehoft_next_vect:%s: expected FrameL data type %d, but got %d\n",
+				names[i], vecttypes[i], theVect->type);
+			FrVectFree(vect);
+			FrVectFree(dq_vect);
+			FrVectFree(state_vect);
+			return NULL;
+		}
+
+		// Check that GPS start time is what was requested
+		if ((double)expected_gps_start != theVect->GTime)
+		{
+			fprintf(stderr, "onlinehoft_next_vect: %s: expected timestamp %f, but got %f\n",
+				names[i], (double)expected_gps_start, theVect->GTime);
+			FrVectFree(vect);
+			FrVectFree(dq_vect);
+			FrVectFree(state_vect);
+			return NULL;
+		}
+
+		// Check that received number of samplse is correct
+		uint32_t expected_nsamples = rate * 16;
+		uint32_t retrieved_nsamples = theVect->nx[0];
 		if (expected_nsamples != retrieved_nsamples)
 		{
+			fprintf(stderr, "onlinehoft_next_vect: %s: expected %u samples, but got %u\n",
+				names[i], expected_nsamples, retrieved_nsamples);
 			FrVectFree(vect);
-			fprintf(stderr, "onlinehoft_next_vect: expected %u samples, but got %u\n",
-					expected_nsamples, retrieved_nsamples);
+			FrVectFree(dq_vect);
+			FrVectFree(state_vect);
 			return NULL;
 		}
 	}
+
+	// Compute a 16-bit data quality mask.  Each bit corresponds to data quality
+	// over 1 second.
+	*segment_mask = 0;
+	for (i = 0 ; i < 16 ; i ++)
+	{
+		uint8_t dq_value = ((uint32_t*)dq_vect->data)[i] & 0xFF;
+		if ((dq_value & tracker->dq_require) == tracker->dq_require &&
+			((~dq_value) & tracker->dq_deny) == tracker->dq_deny)
+		{
+			unsigned short j;
+			for (j = i*16 ; j < (i+1)*16 ; j ++)
+			{
+				uint8_t state_value = ((uint32_t) ((float*)state_vect->data)[j]) & 0xFF;
+				if ((state_value & tracker->state_require) != tracker->state_require ||
+					((~state_value) & tracker->state_deny) != tracker->state_deny)
+					break;
+			}
+			*segment_mask |= (0x01 << i);
+		}
+	}
+
+	FrVectFree(dq_vect);
+	FrVectFree(state_vect);
 
 	tracker->was_discontinuous = (tracker->gpsRemainder != (tracker->lastReadGpsRemainder+1));
 	tracker->lastReadGpsRemainder = tracker->gpsRemainder;

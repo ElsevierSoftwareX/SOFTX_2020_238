@@ -170,34 +170,96 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		element->needs_seek = FALSE;
 	}
 
-	FrVect* frVect = onlinehoft_next_vect(element->tracker);
+	uint16_t segment_mask;
+	FrVect* frVect = onlinehoft_next_vect(element->tracker, &segment_mask);
 	if (!frVect) return GST_FLOW_ERROR;
 
-	GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, 16 * 16384 * 8, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
-
-	if (result != GST_FLOW_OK)
-	{
-		FrVectFree(frVect);
-		return result;
-	}
+	GST_INFO_OBJECT(element, "segment_mask=0x%02X", segment_mask);
 
 	guint64 gps_start_time = (guint64)frVect->GTime;
-	memcpy((char*)GST_BUFFER_DATA(*buffer), frVect->data, 16 * 16384 * 8);
-	GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * gps_start_time;
-	GST_BUFFER_OFFSET(*buffer) = 16384 * gps_start_time;
-	GST_BUFFER_OFFSET_END(*buffer) = 16384 * (gps_start_time + 16);
-	GST_BUFFER_DURATION(*buffer) = 16 * GST_SECOND;
-	FrVectFree(frVect);
 
-	if (onlinehoft_was_discontinuous(element->tracker))
+	gboolean was_nongap = segment_mask & 1;
+	gboolean is_discontinuous = onlinehoft_was_discontinuous(element->tracker);
+	uint8_t segment_num, last_segment_num;
+	for (segment_num = 1, last_segment_num = 0; segment_num < 16; segment_num++)
 	{
-		GST_INFO_OBJECT(element, "discontinuity");
-		GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
+		segment_mask >>= 1;
+		gboolean is_nongap = segment_mask & 1;
+		if (is_nongap ^ was_nongap)
+		{
+			// Push buffer [last_segment_num, segment_num)
+			guint64 offset = 16384 * (gps_start_time + last_segment_num);
+			gint size = 16384 * (segment_num - last_segment_num) * sizeof(double);
+			GstBuffer* buf;
+			GstFlowReturn result = gst_pad_alloc_buffer(
+				GST_BASE_SRC_PAD(basesrc), offset, size,
+				GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), &buf);
+			if (result != GST_FLOW_OK)
+			{
+				FrVectFree(frVect);
+				return result;
+			}
+			memcpy(GST_BUFFER_DATA(buf), &((double*)frVect->data)[16384 * last_segment_num], size);
+			GST_BUFFER_OFFSET(buf) = offset;
+			GST_BUFFER_OFFSET_END(buf) = 16384 * (gps_start_time + segment_num);
+			GST_BUFFER_DURATION(buf) = GST_SECOND * (segment_num - last_segment_num);
+			GST_BUFFER_TIMESTAMP(buf) = GST_SECOND *  (gps_start_time + last_segment_num);
+			if (!was_nongap)
+			{
+				GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
+				GST_INFO_OBJECT(element, "Setting GST_BUFFER_FLAG_GAP");
+			}
+			if (is_discontinuous)
+			{
+				GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
+				is_discontinuous = FALSE;
+			}
+			GST_INFO_OBJECT(element, "pushing frame spanning [%llu, %llu) (extra frame because of change in data quality)",
+				gps_start_time + last_segment_num,
+				gps_start_time + segment_num
+			);
+			result = gst_pad_push(GST_BASE_SRC_PAD(basesrc), buf);
+			if (result != GST_FLOW_OK)
+				return result;
+
+			last_segment_num = segment_num;
+		}
+		was_nongap = is_nongap;
 	}
 
-	GST_INFO_OBJECT(element, "pushed frame spanning [%llu, %llu)",
-		gps_start_time,
-		gps_start_time + 16
+	{
+		// create buffer [last_segment_num, segment_num) to return
+		guint64 offset = 16384 * (gps_start_time + last_segment_num);
+		gint size = 16384 * (segment_num - last_segment_num) * sizeof(double);
+		GstBuffer* buf;
+		GstFlowReturn result = gst_pad_alloc_buffer(
+			GST_BASE_SRC_PAD(basesrc), offset, size,
+			GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), &buf);
+		if (result != GST_FLOW_OK)
+		{
+			FrVectFree(frVect);
+			return result;
+		}
+		memcpy(GST_BUFFER_DATA(buf), &((double*)frVect->data)[16384 * last_segment_num], size);
+		GST_BUFFER_OFFSET(buf) = offset;
+		GST_BUFFER_OFFSET_END(buf) = 16384 * (gps_start_time + segment_num);
+		GST_BUFFER_DURATION(buf) = GST_SECOND * (segment_num - last_segment_num);
+		GST_BUFFER_TIMESTAMP(buf) = GST_SECOND *  (gps_start_time + last_segment_num);
+		if (!was_nongap)
+		{
+			GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
+			GST_INFO_OBJECT(element, "Setting GST_BUFFER_FLAG_GAP");
+		}
+		if (is_discontinuous)
+			GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
+		*buffer = buf;
+	}
+
+	FrVectFree(frVect);
+
+	GST_INFO_OBJECT(element, "pushing frame spanning [%llu, %llu)",
+		gps_start_time + last_segment_num,
+		gps_start_time + segment_num
 	);
 
 	return GST_FLOW_OK;
