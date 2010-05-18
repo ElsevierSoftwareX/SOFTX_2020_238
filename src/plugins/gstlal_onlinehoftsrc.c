@@ -72,8 +72,54 @@ static GstBaseSrcClass *parent_class = NULL;
  */
 
 
+static GType
+gstlal_onlinehoftsrc_state_flags_get_type (void)
+{
+    static GType tp = 0;
+    static const GFlagsValue values[] = {
+		{ONLINEHOFT_STATE_SCI, "operator set to go to science mode", "SCI"},
+		{ONLINEHOFT_STATE_CON, "conlog unsets this bit for non-harmless epics changes", "CON"},
+		{ONLINEHOFT_STATE_UP, "set by locking scripts", "UP"},
+		{ONLINEHOFT_STATE_NOTINJ, "injections unset this bit", "NOTINJ"},
+		{ONLINEHOFT_STATE_EXC, "unauthorized excitations cause this bit to be unset", "EXC"},
+        {0, NULL, NULL},
+    };
+	
+    if (G_UNLIKELY (tp == 0)) {
+        tp = g_flags_register_static ("GSTLALOnlineHoftSrcStateFlags", values);
+    }
+    return tp;
+}
+
+
+static GType
+gstlal_onlinehoftsrc_dq_flags_get_type (void)
+{
+    static GType tp = 0;
+    static const GFlagsValue values[] = {
+		{ONLINEHOFT_DQ_SCIENCE, "SV_SCIENCE & LIGHT", "SCIENCE"},
+		{ONLINEHOFT_DQ_INJECTION, "Injection: same as statevector", "INJECTION"},
+		{ONLINEHOFT_DQ_UP, "SV_UP & LIGHT", "UP"},
+		{ONLINEHOFT_DQ_CALIBRATED, "SV_UP & LIGHT & (not TRANSIENT)", "CALIBRATED"},
+		{ONLINEHOFT_DQ_BADGAMMA, "alibration is bad (outside 0.8 < gamma < 1.2)", "BADGAMMA"},
+		{ONLINEHOFT_DQ_LIGHT, "Light in the arms ok", "LIGHT"},
+		{ONLINEHOFT_DQ_MISSING, "Indication that data was dropped in DMT (currently not implemented)", "MISING"},
+        {0, NULL, NULL},
+    };
+	
+    if (G_UNLIKELY (tp == 0)) {
+        tp = g_flags_register_static ("GSTLALOnlineHoftSrcDataQualityFlags", values);
+    }
+    return tp;
+}
+
+
 enum property {
-	ARG_SRC_INSTRUMENT = 1
+	ARG_INSTRUMENT = 1,
+	ARG_STATE_REQUIRE,
+	ARG_STATE_DENY,
+	ARG_DQ_REQUIRE,
+	ARG_DQ_DENY
 };
 
 
@@ -84,14 +130,35 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case ARG_SRC_INSTRUMENT:
+	case ARG_INSTRUMENT:
 		g_free(element->instrument);
 		element->instrument = g_value_dup_string(value);
 		onlinehoft_destroy(element->tracker);
 		element->tracker = NULL;
 		element->needs_seek = TRUE;
 		break;
-
+	case ARG_STATE_REQUIRE:
+		element->state_require = g_value_get_flags(value);
+		if (element->tracker)
+			onlinehoft_set_state_require_mask(element->tracker, element->state_require);
+		break;
+	case ARG_STATE_DENY:
+		element->state_deny = g_value_get_flags(value);
+		if (element->tracker)
+			onlinehoft_set_state_deny_mask(element->tracker, element->state_deny);
+		break;
+	case ARG_DQ_REQUIRE:
+		element->dq_require = g_value_get_flags(value);
+		if (element->tracker)
+			onlinehoft_set_dq_require_mask(element->tracker, element->dq_require);
+		break;
+	case ARG_DQ_DENY:
+		element->dq_deny = g_value_get_flags(value);
+		if (element->tracker)
+			onlinehoft_set_dq_deny_mask(element->tracker, element->dq_deny);
+		break;
+	default:
+		g_assert_not_reached();
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -105,10 +172,23 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case ARG_SRC_INSTRUMENT:
+	case ARG_INSTRUMENT:
 		g_value_set_string(value, element->instrument);
 		break;
-
+	case ARG_STATE_REQUIRE:
+		g_value_set_flags(value, element->state_require);
+		break;
+	case ARG_STATE_DENY:
+		g_value_set_flags(value, element->state_deny);
+		break;
+	case ARG_DQ_REQUIRE:
+		g_value_set_flags(value, element->dq_require);
+		break;
+	case ARG_DQ_DENY:
+		g_value_set_flags(value, element->dq_deny);
+		break;
+	default:
+		g_assert_not_reached();
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -145,6 +225,11 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			GST_ERROR_OBJECT(element, "onlinehoft_create(\"%s\")", element->instrument);
 			return GST_FLOW_ERROR;
 		}
+
+		onlinehoft_set_state_require_mask(element->tracker, element->state_require);
+		onlinehoft_set_state_deny_mask(element->tracker, element->state_deny);
+		onlinehoft_set_dq_require_mask(element->tracker, element->dq_require);
+		onlinehoft_set_dq_deny_mask(element->tracker, element->dq_deny);
 
 		// Send new instrument tag
 		if (!gst_pad_push_event(
@@ -468,12 +553,38 @@ static void class_init(gpointer class, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_SRC_INSTRUMENT,
+		ARG_INSTRUMENT,
 		g_param_spec_string(
 			"instrument",
 			"Instrument",
 			"Instrument name (e.g., \"H1\").",
 			NULL,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_STATE_REQUIRE,
+		g_param_spec_flags(
+			"state-require",
+			"State Required Bitmask",
+			"State vector flags that must be true",
+			gstlal_onlinehoftsrc_state_flags_get_type(),
+			ONLINEHOFT_STATE_DEFAULT_REQUIRE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_DQ_REQUIRE,
+		g_param_spec_flags(
+			"data-quality-require",
+			"Data Quality Required Bitmask",
+			"Data quality flags that must be true",
+			gstlal_onlinehoftsrc_dq_flags_get_type(),
+			ONLINEHOFT_DQ_DEFAULT_REQUIRE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
@@ -508,6 +619,10 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->instrument = NULL;
 	element->tracker = NULL;
 	element->needs_seek = FALSE;
+	element->state_require = ONLINEHOFT_STATE_DEFAULT_REQUIRE;
+	element->state_deny = ONLINEHOFT_STATE_DEFAULT_DENY;
+	element->dq_require = ONLINEHOFT_DQ_DEFAULT_REQUIRE;
+	element->dq_deny = ONLINEHOFT_DQ_DEFAULT_DENY;
 
 	gst_base_src_set_blocksize(basesrc, 16384 * 16 * 8);
 	gst_base_src_set_do_timestamp(basesrc, FALSE);

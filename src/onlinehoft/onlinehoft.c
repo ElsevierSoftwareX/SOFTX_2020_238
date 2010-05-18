@@ -273,6 +273,54 @@ onlinehoft_tracker_t* onlinehoft_create(const char* ifo)
 }
 
 
+void onlinehoft_set_state_require_mask(onlinehoft_tracker_t* tracker, uint8_t mask)
+{
+	tracker->state_require = mask;
+}
+
+
+void onlinehoft_set_state_deny_mask(onlinehoft_tracker_t* tracker, uint8_t mask)
+{
+	tracker->state_deny = mask;
+}
+
+
+void onlinehoft_set_dq_require_mask(onlinehoft_tracker_t* tracker, uint8_t mask)
+{
+	tracker->dq_require = mask;
+}
+
+
+void onlinehoft_set_dq_deny_mask(onlinehoft_tracker_t* tracker, uint8_t mask)
+{
+	tracker->dq_deny = mask;
+}
+
+
+uint8_t onlinehoft_get_state_require_mask(const onlinehoft_tracker_t* tracker)
+{
+	return tracker->state_require;
+}
+
+
+uint8_t onlinehoft_get_state_deny_mask(const onlinehoft_tracker_t* tracker)
+{
+	return tracker->state_deny;
+}
+
+
+uint8_t onlinehoft_get_dq_require_mask(const onlinehoft_tracker_t* tracker)
+{
+	return tracker->dq_require;
+}
+
+
+uint8_t onlinehoft_get_dq_deny_mask(const onlinehoft_tracker_t* tracker)
+{
+	return tracker->dq_deny;
+}
+
+
 void onlinehoft_set_masks(onlinehoft_tracker_t* tracker,
 	uint8_t state_require, uint8_t state_deny, uint8_t dq_require, uint8_t dq_deny)
 {

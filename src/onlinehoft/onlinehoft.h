@@ -25,6 +25,7 @@
 #ifndef _ONLINEHOFT_H
 #define _ONLINEHOFT_H
 
+// Opaque structure type
 struct onlinehoft_tracker;
 typedef struct onlinehoft_tracker onlinehoft_tracker_t;
 
@@ -47,22 +48,36 @@ typedef struct onlinehoft_tracker onlinehoft_tracker_t;
 // Data quality flags
 #define ONLINEHOFT_DQ_SCIENCE    ((uint8_t) 0x01) // SV_SCIENCE & LIGHT
 #define ONLINEHOFT_DQ_INJECTION  ((uint8_t) 0x02) // Injection: same as statevector
-#define ONLINEHOFT_DQ_UP         ((uint8_t) 0x04) // Injection: same as statevector
+#define ONLINEHOFT_DQ_UP         ((uint8_t) 0x04) // SV_UP & LIGHT
 #define ONLINEHOFT_DQ_CALIBRATED ((uint8_t) 0x08) // SV_UP & LIGHT & (not TRANSIENT)
 #define ONLINEHOFT_DQ_BADGAMMA   ((uint8_t) 0x10) // Calibration is bad (outside 0.8 < gamma < 1.2)
 #define ONLINEHOFT_DQ_LIGHT      ((uint8_t) 0x20) // Light in the arms ok
 #define ONLINEHOFT_DQ_MISSING    ((uint8_t) 0x30) // Indication that data was dropped in DMT (currently not implemented)
 
 #define ONLINEHOFT_DQ_DEFAULT_REQUIRE (ONLINEHOFT_DQ_SCIENCE | ONLINEHOFT_DQ_UP | ONLINEHOFT_DQ_CALIBRATED | ONLINEHOFT_DQ_LIGHT)
-
 #define ONLINEHOFT_DQ_DEFAULT_DENY (ONLINEHOFT_DQ_BADGAMMA)
 
 
+// Creation and destruction
 onlinehoft_tracker_t* onlinehoft_create(const char* ifo);
-void onlinehoft_set_masks(onlinehoft_tracker_t* tracker,
-	uint8_t state_require, uint8_t state_deny, uint8_t dq_require, uint8_t dq_deny);
-uint64_t onlinehoft_seek(onlinehoft_tracker_t* tracker, uint64_t gpsSeconds);
 void onlinehoft_destroy(onlinehoft_tracker_t* tracker);
+
+// Setters for data quality masks
+void onlinehoft_set_state_require_mask(onlinehoft_tracker_t* tracker, uint8_t mask);
+void onlinehoft_set_state_deny_mask(onlinehoft_tracker_t* tracker, uint8_t mask);
+void onlinehoft_set_dq_require_mask(onlinehoft_tracker_t* tracker, uint8_t mask);
+void onlinehoft_set_dq_deny_mask(onlinehoft_tracker_t* tracker, uint8_t mask);
+
+// Getters for data quality masks
+uint8_t onlinehoft_get_state_require_mask(const onlinehoft_tracker_t* tracker);
+uint8_t onlinehoft_get_state_deny_mask(const onlinehoft_tracker_t* tracker);
+uint8_t onlinehoft_get_dq_require_mask(const onlinehoft_tracker_t* tracker);
+uint8_t onlinehoft_get_dq_deny_mask(const onlinehoft_tracker_t* tracker);
+
+// Seeking
+uint64_t onlinehoft_seek(onlinehoft_tracker_t* tracker, uint64_t gpsSeconds);
+
+// Data retrieval
 FrVect* onlinehoft_next_vect(onlinehoft_tracker_t* tracker, uint16_t* segment_mask);
 const char* onlinehoft_get_channelname(const onlinehoft_tracker_t* tracker);
 int onlinehoft_was_discontinuous(const onlinehoft_tracker_t* tracker);

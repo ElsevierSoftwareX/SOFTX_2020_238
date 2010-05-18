@@ -54,6 +54,9 @@ typedef struct {
 	char* instrument;
 	onlinehoft_tracker_t* tracker;
 	gboolean needs_seek;
+
+	// Data quality and state vector bit masks
+	guint state_require, state_deny, dq_require, dq_deny;
 } GSTLALOnlineHoftSrc;
 
 
