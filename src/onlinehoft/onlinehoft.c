@@ -36,26 +36,36 @@
 #include <unistd.h>
 #include <inttypes.h>
 
+#include "onlinehoft.h"
+
+
 typedef struct {
+	char* ifo; // e.g. H1
+	char* nameprefix; // e.g. "H-H1_DMT_C00_L2-"
+	char* namesuffix; // e.g. "-16.gwf"
+	char* channelname; // e.g. "H1:DMT-STRAIN"
+} _ifodesc_t;
+
+
+struct onlinehoft_tracker {
 	int was_discontinuous;
 	uint64_t lastReadGpsRemainder;
 	uint64_t gpsRemainder;
 	uint32_t minLatency;
 	char* dirprefix; // e.g. "/archive/frames/online/hoft"
-	char* ifo; // e.g. H1
-	char* nameprefix; // e.g. "H-H1_DMT_C00_L2-"
-	char* namesuffix; // e.g. "-16.gwf"
-	char* channelname; // e.g. "H1:DMT-STRAIN"
-} onlinehoft_tracker_t;
+	uint8_t state_require, state_deny, dq_require, dq_deny;
+	const _ifodesc_t* ifodesc;
+};
 
 
-static const onlinehoft_tracker_t _onlinehoft_trackers[] =
+static const _ifodesc_t _ifodescs[] =
 {
-	{1, 0, 0, 90, 0, "H1", "H-H1_DMT_C00_L2-", "-16.gwf", "H1:DMT-STRAIN"},
-	{1, 0, 0, 90, 0, "H2", "H-H2_DMT_C00_L2-", "-16.gwf", "H2:DMT-STRAIN"},
-	{1, 0, 0, 90, 0, "L1", "L-L1_DMT_C00_L2-", "-16.gwf", "L1:DMT-STRAIN"},
-	{1, 0, 0, 90, 0, "V1", "V-V1_DMT_HREC-",   "-16.gwf", "V1:h_16384Hz"},
-	{0, 0, 0, 0, 0, 0, 0, 0, 0}
+	{"H1", "H-H1_DMT_C00_L2-", "-16.gwf", "H1:DMT-STRAIN"},
+	{"H2", "H-H2_DMT_C00_L2-", "-16.gwf", "H2:DMT-STRAIN"},
+	{"L1", "L-L1_DMT_C00_L2-", "-16.gwf", "L1:DMT-STRAIN"},
+	/* sorry, we don't have any specs about VIRGO data quality flags yet! */
+	/*{"V1", "V-V1_DMT_HREC-",   "-16.gwf", "V1:h_16384Hz"},*/
+	{NULL, NULL, NULL, NULL}
 };
 
 
@@ -93,7 +103,7 @@ static uint64_t _onlinehoft_poll_era(onlinehoft_tracker_t* tracker, uint16_t era
 {
 	// Compute the name of the directory for the given era.
 	char* dirname = NULL;
-	asprintf(&dirname, "%s/%s%u", tracker->dirprefix, tracker->nameprefix, era);
+	asprintf(&dirname, "%s/%s%u", tracker->dirprefix, tracker->ifodesc->nameprefix, era);
 
 	// This should never happen, unless we run out of memory.
 	if (!dirname)
@@ -109,12 +119,12 @@ static uint64_t _onlinehoft_poll_era(onlinehoft_tracker_t* tracker, uint16_t era
 
 	struct dirent* dp;
 	errno = 0;
-	size_t nameprefix_len = strlen(tracker->nameprefix);
-	size_t namesuffix_len = strlen(tracker->namesuffix);
+	size_t nameprefix_len = strlen(tracker->ifodesc->nameprefix);
+	size_t namesuffix_len = strlen(tracker->ifodesc->namesuffix);
 	while ((dp = readdir(dirp)))
 	{
 		// check to see if the current directory entry starts with the nameprefix
-		if (strncmp(tracker->nameprefix, dp->d_name, nameprefix_len))
+		if (strncmp(tracker->ifodesc->nameprefix, dp->d_name, nameprefix_len))
 			continue;
 
 		// Cut off name prefix, leaving stem (e.g. "955484688-16.gwf")
@@ -127,7 +137,7 @@ static uint64_t _onlinehoft_poll_era(onlinehoft_tracker_t* tracker, uint16_t era
 		if (!delimptr) continue;
 
 		// If rest of name does not match namesuffix, go to next entry
-		if (strncmp(tracker->namesuffix, delimptr, namesuffix_len)) continue;
+		if (strncmp(tracker->ifodesc->namesuffix, delimptr, namesuffix_len)) continue;
 
 		// Try to extract GPS time from name stem, or go to enxt entry
 		uint64_t gpsTime;
@@ -174,10 +184,10 @@ static uint64_t _onlinehoft_poll(onlinehoft_tracker_t* tracker)
 	uint16_t latestEra = 0;
 
 	struct dirent* dp;
-	size_t nameprefix_len = strlen(tracker->nameprefix);
+	size_t nameprefix_len = strlen(tracker->ifodesc->nameprefix);
 	while ((dp = readdir(dirp)))
 	{
-		if (strncmp(tracker->nameprefix, dp->d_name, nameprefix_len))
+		if (strncmp(tracker->ifodesc->nameprefix, dp->d_name, nameprefix_len))
 			continue;
 
 		const char* namestem = &dp->d_name[nameprefix_len];
@@ -213,13 +223,13 @@ static uint64_t _onlinehoft_poll(onlinehoft_tracker_t* tracker)
 }
 
 
-static const onlinehoft_tracker_t* _onlinehoft_find(const char* ifo)
+static const _ifodesc_t* _onlinehoft_find(const char* ifo)
 {
 	if (!ifo)
 		return NULL;
 
-	const onlinehoft_tracker_t* orig;
-	for (orig = _onlinehoft_trackers; orig->ifo; orig++)
+	const _ifodesc_t* orig;
+	for (orig = _ifodescs; orig->ifo; orig++)
 		if (!strcmp(orig->ifo, ifo))
 			return orig;
 
@@ -229,7 +239,7 @@ static const onlinehoft_tracker_t* _onlinehoft_find(const char* ifo)
 
 onlinehoft_tracker_t* onlinehoft_create(const char* ifo)
 {
-	const onlinehoft_tracker_t* orig = _onlinehoft_find(ifo);
+	const _ifodesc_t* orig = _onlinehoft_find(ifo);
 	if (!orig) return NULL;
 
 	char* onlinehoftdir = getenv("ONLINEHOFT");
@@ -237,8 +247,6 @@ onlinehoft_tracker_t* onlinehoft_create(const char* ifo)
 
 	onlinehoft_tracker_t* tracker = calloc(1, sizeof(onlinehoft_tracker_t));
 	if (!tracker) return NULL;
-
-	memcpy(tracker, orig, sizeof(onlinehoft_tracker_t));
 
 	if (asprintf(&tracker->dirprefix, "%s/%s", onlinehoftdir, ifo) < 1)
 	{
@@ -250,7 +258,26 @@ onlinehoft_tracker_t* onlinehoft_create(const char* ifo)
 	if (XLALGPSTimeNow(&time_now))
 		tracker->gpsRemainder = ((time_now.gpsSeconds - tracker->minLatency) >> 4);
 
+	tracker->was_discontinuous = 1;
+	tracker->lastReadGpsRemainder = 0;
+	tracker->minLatency = 90;
+	tracker->ifodesc = orig;
+	tracker->state_require = ONLINEHOFT_STATE_DEFAULT_REQUIRE;
+	tracker->state_deny = ONLINEHOFT_STATE_DEFAULT_DENY;
+	tracker->dq_require = ONLINEHOFT_DQ_DEFAULT_REQUIRE;
+	tracker->dq_deny = ONLINEHOFT_DQ_DEFAULT_DENY;
+
 	return tracker;
+}
+
+
+void onlinehoft_set_masks(onlinehoft_tracker_t* tracker,
+	uint8_t state_require, uint8_t state_deny, uint8_t dq_require, uint8_t dq_deny)
+{
+	tracker->state_require = state_require;
+	tracker->state_deny = state_deny;
+	tracker->dq_require = dq_require;
+	tracker->dq_deny = dq_deny;
 }
 
 
@@ -277,9 +304,9 @@ static FrFile* _onlinehoft_next_file(onlinehoft_tracker_t* tracker)
 
 		char* filename;
 		if (asprintf(&filename, "%s/%s%u/%s%" PRIu64 "%s",
-				 tracker->dirprefix, tracker->nameprefix,
+				 tracker->dirprefix, tracker->ifodesc->nameprefix,
 				 _onlinehoft_era_for_remainder(tracker->gpsRemainder),
-				 tracker->nameprefix, tracker->gpsRemainder << 4, tracker->namesuffix) < 1)
+				 tracker->ifodesc->nameprefix, tracker->gpsRemainder << 4, tracker->ifodesc->namesuffix) < 1)
 		return NULL;
 
 		frFile = NULL;
@@ -325,7 +352,7 @@ FrVect* onlinehoft_next_vect(onlinehoft_tracker_t* tracker)
 
 	FrFile* frFile = _onlinehoft_next_file(tracker);
 	if (!frFile) return NULL;
-	FrVect* vect = FrFileIGetVect(frFile, tracker->channelname, ((tracker->gpsRemainder-1) << 4), 16);
+	FrVect* vect = FrFileIGetVect(frFile, tracker->ifodesc->channelname, ((tracker->gpsRemainder-1) << 4), 16);
 	FrFileIEnd(frFile);
 
 	// If FrFileIGetVect failed, return NULL
@@ -338,7 +365,7 @@ FrVect* onlinehoft_next_vect(onlinehoft_tracker_t* tracker)
 		if (expected_gps_start != retrieved_gps_start)
 		{
 			FrVectFree(vect);
-			fprintf(stderr, "onlinehoft_next_vect: expected timestamp %d, but got %d\n",
+			fprintf(stderr, "onlinehoft_next_vect: expected timestamp %lu, but got %lu\n",
 					expected_gps_start, retrieved_gps_start);
 			return NULL;
 		}
@@ -351,7 +378,7 @@ FrVect* onlinehoft_next_vect(onlinehoft_tracker_t* tracker)
 		if (expected_nsamples != retrieved_nsamples)
 		{
 			FrVectFree(vect);
-			fprintf(stderr, "onlinehoft_next_vect: expected %d samples, but got %d\n",
+			fprintf(stderr, "onlinehoft_next_vect: expected %u samples, but got %u\n",
 					expected_nsamples, retrieved_nsamples);
 			return NULL;
 		}
@@ -365,7 +392,7 @@ FrVect* onlinehoft_next_vect(onlinehoft_tracker_t* tracker)
 
 const char* onlinehoft_get_channelname(const onlinehoft_tracker_t* tracker)
 {
-	return &tracker->channelname[3];
+	return &tracker->ifodesc->channelname[3];
 }
 
 
