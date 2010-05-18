@@ -511,7 +511,23 @@ static void base_init(gpointer class)
 		element_class,
 		"Online h(t) Source",
 		"Source",
-		"LAL online h(t) source",
+		"Online calibrated h(t) source, implementing the S6 specification described on\n"
+		"<https://www.lsc-group.phys.uwm.edu/daswg/wiki/S6OnlineGroup/CalibratedData>.\n"
+		"\n"
+		"The environment variable ONLINEHOFT must be set and must point to the online\n"
+		"frames directory, which has subfolders for H1, H2, L1, V1, ... .\n"
+		"\n"
+		"Online frames are 16 seconds in duration, and start on 16 second boundaries.\n"
+		"They contain up to three channels:\n"
+		" - IFO:DMT-STRAIN (16384 Hz), online calibrated h(t)\n"
+		" - IFO:DMT-STATE_VECTOR (16 Hz), state vector\n"
+		" - IFO:DMT-DATA_QUALITY_VECTOR (1 Hz), data quality flags\n"
+		"\n"
+		"This element features user-programmable data vetos at 1 second resolution.\n"
+		"Gaps (GStreamer buffers marked as containing neutral data) will be created\n"
+		"whenever the state vector mask and data quality mask flag properties are\n"
+		"not met."
+		,
 		"Leo Singer <leo.singer@ligo.org>"
 	);
 
