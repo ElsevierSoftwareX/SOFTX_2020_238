@@ -321,16 +321,6 @@ uint8_t onlinehoft_get_dq_deny_mask(const onlinehoft_tracker_t* tracker)
 }
 
 
-void onlinehoft_set_masks(onlinehoft_tracker_t* tracker,
-	uint8_t state_require, uint8_t state_deny, uint8_t dq_require, uint8_t dq_deny)
-{
-	tracker->state_require = state_require;
-	tracker->state_deny = state_deny;
-	tracker->dq_require = dq_require;
-	tracker->dq_deny = dq_deny;
-}
-
-
 void onlinehoft_destroy(onlinehoft_tracker_t* tracker)
 {
 	if (tracker)
