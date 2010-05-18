@@ -413,7 +413,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 	switch (GST_QUERY_TYPE(query))
 	{
 		case GST_QUERY_FORMATS: {
-			gst_query_set_formats(query, 4, GST_FORMAT_DEFAULT, GST_FORMAT_BYTES, GST_FORMAT_TIME, GST_FORMAT_BUFFERS);
+			gst_query_set_formats(query, 4, GST_FORMAT_DEFAULT, GST_FORMAT_BYTES, GST_FORMAT_TIME);
 			return TRUE;
 		} break;
 
@@ -433,9 +433,6 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 					den *= (8 /*bytes per sample*/) * (16384 /*samples per second*/);
 					num *= (GST_SECOND /*nanoseconds per second*/);
 					break;
-				case GST_FORMAT_BUFFERS:
-					num *= (16 /*seconds per buffer*/) * (GST_SECOND /*nanoseconds per second*/);
-					break;
 				default:
 					g_assert_not_reached();
 					return FALSE;
@@ -448,9 +445,6 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 				case GST_FORMAT_BYTES:
 					num *= (8 /*bytes per sample*/) * (16384 /*samples per second*/);
 					den *= (GST_SECOND /*nanoseconds per second*/);
-					break;
-				case GST_FORMAT_BUFFERS:
-					den *= (16 /*seconds per buffer*/) * (GST_SECOND /*nanoseconds per second*/);
 					break;
 				default:
 					g_assert_not_reached();
