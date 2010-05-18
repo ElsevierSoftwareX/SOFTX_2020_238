@@ -72,8 +72,54 @@ static GstBaseSrcClass *parent_class = NULL;
  */
 
 
+static GType
+gstlal_onlinehoftsrc_state_flags_get_type (void)
+{
+    static GType tp = 0;
+    static const GFlagsValue values[] = {
+		{ONLINEHOFT_STATE_SCI, "operator set to go to science mode", "SCI"},
+		{ONLINEHOFT_STATE_CON, "conlog unsets this bit for non-harmless epics changes", "CON"},
+		{ONLINEHOFT_STATE_UP, "set by locking scripts", "UP"},
+		{ONLINEHOFT_STATE_NOTINJ, "injections unset this bit", "NOTINJ"},
+		{ONLINEHOFT_STATE_EXC, "unauthorized excitations cause this bit to be unset", "EXC"},
+        {0, NULL, NULL},
+    };
+	
+    if (G_UNLIKELY (tp == 0)) {
+        tp = g_flags_register_static ("GSTLALOnlineHoftSrcStateFlags", values);
+    }
+    return tp;
+}
+
+
+static GType
+gstlal_onlinehoftsrc_dq_flags_get_type (void)
+{
+    static GType tp = 0;
+    static const GFlagsValue values[] = {
+		{ONLINEHOFT_DQ_SCIENCE, "SV_SCIENCE & LIGHT", "SCIENCE"},
+		{ONLINEHOFT_DQ_INJECTION, "Injection: same as statevector", "INJECTION"},
+		{ONLINEHOFT_DQ_UP, "SV_UP & LIGHT", "UP"},
+		{ONLINEHOFT_DQ_CALIBRATED, "SV_UP & LIGHT & (not TRANSIENT)", "CALIBRATED"},
+		{ONLINEHOFT_DQ_BADGAMMA, "alibration is bad (outside 0.8 < gamma < 1.2)", "BADGAMMA"},
+		{ONLINEHOFT_DQ_LIGHT, "Light in the arms ok", "LIGHT"},
+		{ONLINEHOFT_DQ_MISSING, "Indication that data was dropped in DMT (currently not implemented)", "MISING"},
+        {0, NULL, NULL},
+    };
+	
+    if (G_UNLIKELY (tp == 0)) {
+        tp = g_flags_register_static ("GSTLALOnlineHoftSrcDataQualityFlags", values);
+    }
+    return tp;
+}
+
+
 enum property {
-	ARG_SRC_INSTRUMENT = 1
+	ARG_INSTRUMENT = 1,
+	ARG_STATE_REQUIRE,
+	ARG_STATE_DENY,
+	ARG_DQ_REQUIRE,
+	ARG_DQ_DENY
 };
 
 
@@ -84,14 +130,35 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case ARG_SRC_INSTRUMENT:
+	case ARG_INSTRUMENT:
 		g_free(element->instrument);
 		element->instrument = g_value_dup_string(value);
 		onlinehoft_destroy(element->tracker);
 		element->tracker = NULL;
 		element->needs_seek = TRUE;
 		break;
-
+	case ARG_STATE_REQUIRE:
+		element->state_require = g_value_get_flags(value);
+		if (element->tracker)
+			onlinehoft_set_state_require_mask(element->tracker, element->state_require);
+		break;
+	case ARG_STATE_DENY:
+		element->state_deny = g_value_get_flags(value);
+		if (element->tracker)
+			onlinehoft_set_state_deny_mask(element->tracker, element->state_deny);
+		break;
+	case ARG_DQ_REQUIRE:
+		element->dq_require = g_value_get_flags(value);
+		if (element->tracker)
+			onlinehoft_set_dq_require_mask(element->tracker, element->dq_require);
+		break;
+	case ARG_DQ_DENY:
+		element->dq_deny = g_value_get_flags(value);
+		if (element->tracker)
+			onlinehoft_set_dq_deny_mask(element->tracker, element->dq_deny);
+		break;
+	default:
+		g_assert_not_reached();
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -105,10 +172,23 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case ARG_SRC_INSTRUMENT:
+	case ARG_INSTRUMENT:
 		g_value_set_string(value, element->instrument);
 		break;
-
+	case ARG_STATE_REQUIRE:
+		g_value_set_flags(value, element->state_require);
+		break;
+	case ARG_STATE_DENY:
+		g_value_set_flags(value, element->state_deny);
+		break;
+	case ARG_DQ_REQUIRE:
+		g_value_set_flags(value, element->dq_require);
+		break;
+	case ARG_DQ_DENY:
+		g_value_set_flags(value, element->dq_deny);
+		break;
+	default:
+		g_assert_not_reached();
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -146,6 +226,11 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			return GST_FLOW_ERROR;
 		}
 
+		onlinehoft_set_state_require_mask(element->tracker, element->state_require);
+		onlinehoft_set_state_deny_mask(element->tracker, element->state_deny);
+		onlinehoft_set_dq_require_mask(element->tracker, element->dq_require);
+		onlinehoft_set_dq_deny_mask(element->tracker, element->dq_deny);
+
 		// Send new instrument tag
 		if (!gst_pad_push_event(
 			GST_BASE_SRC_PAD(basesrc),
@@ -170,34 +255,96 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		element->needs_seek = FALSE;
 	}
 
-	FrVect* frVect = onlinehoft_next_vect(element->tracker);
+	uint16_t segment_mask;
+	FrVect* frVect = onlinehoft_next_vect(element->tracker, &segment_mask);
 	if (!frVect) return GST_FLOW_ERROR;
 
-	GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, 16 * 16384 * 8, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
-
-	if (result != GST_FLOW_OK)
-	{
-		FrVectFree(frVect);
-		return result;
-	}
+	GST_INFO_OBJECT(element, "segment_mask=0x%02X", segment_mask);
 
 	guint64 gps_start_time = (guint64)frVect->GTime;
-	memcpy((char*)GST_BUFFER_DATA(*buffer), frVect->data, 16 * 16384 * 8);
-	GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * gps_start_time;
-	GST_BUFFER_OFFSET(*buffer) = 16384 * gps_start_time;
-	GST_BUFFER_OFFSET_END(*buffer) = 16384 * (gps_start_time + 16);
-	GST_BUFFER_DURATION(*buffer) = 16 * GST_SECOND;
-	FrVectFree(frVect);
 
-	if (onlinehoft_was_discontinuous(element->tracker))
+	gboolean was_nongap = segment_mask & 1;
+	gboolean is_discontinuous = onlinehoft_was_discontinuous(element->tracker);
+	uint8_t segment_num, last_segment_num;
+	for (segment_num = 1, last_segment_num = 0; segment_num < 16; segment_num++)
 	{
-		GST_INFO_OBJECT(element, "discontinuity");
-		GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
+		segment_mask >>= 1;
+		gboolean is_nongap = segment_mask & 1;
+		if (is_nongap ^ was_nongap)
+		{
+			// Push buffer [last_segment_num, segment_num)
+			guint64 offset = 16384 * (gps_start_time + last_segment_num);
+			gint size = 16384 * (segment_num - last_segment_num) * sizeof(double);
+			GstBuffer* buf;
+			GstFlowReturn result = gst_pad_alloc_buffer(
+				GST_BASE_SRC_PAD(basesrc), offset, size,
+				GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), &buf);
+			if (result != GST_FLOW_OK)
+			{
+				FrVectFree(frVect);
+				return result;
+			}
+			memcpy(GST_BUFFER_DATA(buf), &((double*)frVect->data)[16384 * last_segment_num], size);
+			GST_BUFFER_OFFSET(buf) = offset;
+			GST_BUFFER_OFFSET_END(buf) = 16384 * (gps_start_time + segment_num);
+			GST_BUFFER_DURATION(buf) = GST_SECOND * (segment_num - last_segment_num);
+			GST_BUFFER_TIMESTAMP(buf) = GST_SECOND *  (gps_start_time + last_segment_num);
+			if (!was_nongap)
+			{
+				GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
+				GST_INFO_OBJECT(element, "Setting GST_BUFFER_FLAG_GAP");
+			}
+			if (is_discontinuous)
+			{
+				GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
+				is_discontinuous = FALSE;
+			}
+			GST_INFO_OBJECT(element, "pushing frame spanning [%llu, %llu) (extra frame because of change in data quality)",
+				gps_start_time + last_segment_num,
+				gps_start_time + segment_num
+			);
+			result = gst_pad_push(GST_BASE_SRC_PAD(basesrc), buf);
+			if (result != GST_FLOW_OK)
+				return result;
+
+			last_segment_num = segment_num;
+		}
+		was_nongap = is_nongap;
 	}
 
-	GST_INFO_OBJECT(element, "pushed frame spanning [%llu, %llu)",
-		gps_start_time,
-		gps_start_time + 16
+	{
+		// create buffer [last_segment_num, segment_num) to return
+		guint64 offset = 16384 * (gps_start_time + last_segment_num);
+		gint size = 16384 * (segment_num - last_segment_num) * sizeof(double);
+		GstBuffer* buf;
+		GstFlowReturn result = gst_pad_alloc_buffer(
+			GST_BASE_SRC_PAD(basesrc), offset, size,
+			GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), &buf);
+		if (result != GST_FLOW_OK)
+		{
+			FrVectFree(frVect);
+			return result;
+		}
+		memcpy(GST_BUFFER_DATA(buf), &((double*)frVect->data)[16384 * last_segment_num], size);
+		GST_BUFFER_OFFSET(buf) = offset;
+		GST_BUFFER_OFFSET_END(buf) = 16384 * (gps_start_time + segment_num);
+		GST_BUFFER_DURATION(buf) = GST_SECOND * (segment_num - last_segment_num);
+		GST_BUFFER_TIMESTAMP(buf) = GST_SECOND *  (gps_start_time + last_segment_num);
+		if (!was_nongap)
+		{
+			GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
+			GST_INFO_OBJECT(element, "Setting GST_BUFFER_FLAG_GAP");
+		}
+		if (is_discontinuous)
+			GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
+		*buffer = buf;
+	}
+
+	FrVectFree(frVect);
+
+	GST_INFO_OBJECT(element, "pushing frame spanning [%llu, %llu)",
+		gps_start_time + last_segment_num,
+		gps_start_time + segment_num
 	);
 
 	return GST_FLOW_OK;
@@ -266,7 +413,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 	switch (GST_QUERY_TYPE(query))
 	{
 		case GST_QUERY_FORMATS: {
-			gst_query_set_formats(query, 4, GST_FORMAT_DEFAULT, GST_FORMAT_BYTES, GST_FORMAT_TIME, GST_FORMAT_BUFFERS);
+			gst_query_set_formats(query, 4, GST_FORMAT_DEFAULT, GST_FORMAT_BYTES, GST_FORMAT_TIME);
 			return TRUE;
 		} break;
 
@@ -286,9 +433,6 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 					den *= (8 /*bytes per sample*/) * (16384 /*samples per second*/);
 					num *= (GST_SECOND /*nanoseconds per second*/);
 					break;
-				case GST_FORMAT_BUFFERS:
-					num *= (16 /*seconds per buffer*/) * (GST_SECOND /*nanoseconds per second*/);
-					break;
 				default:
 					g_assert_not_reached();
 					return FALSE;
@@ -301,9 +445,6 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 				case GST_FORMAT_BYTES:
 					num *= (8 /*bytes per sample*/) * (16384 /*samples per second*/);
 					den *= (GST_SECOND /*nanoseconds per second*/);
-					break;
-				case GST_FORMAT_BUFFERS:
-					den *= (16 /*seconds per buffer*/) * (GST_SECOND /*nanoseconds per second*/);
 					break;
 				default:
 					g_assert_not_reached();
@@ -364,7 +505,23 @@ static void base_init(gpointer class)
 		element_class,
 		"Online h(t) Source",
 		"Source",
-		"LAL online h(t) source",
+		"Online calibrated h(t) source, implementing the S6 specification described on\n"
+		"<https://www.lsc-group.phys.uwm.edu/daswg/wiki/S6OnlineGroup/CalibratedData>.\n"
+		"\n"
+		"The environment variable ONLINEHOFT must be set and must point to the online\n"
+		"frames directory, which has subfolders for H1, H2, L1, V1, ... .\n"
+		"\n"
+		"Online frames are 16 seconds in duration, and start on 16 second boundaries.\n"
+		"They contain up to three channels:\n"
+		" - IFO:DMT-STRAIN (16384 Hz), online calibrated h(t)\n"
+		" - IFO:DMT-STATE_VECTOR (16 Hz), state vector\n"
+		" - IFO:DMT-DATA_QUALITY_VECTOR (1 Hz), data quality flags\n"
+		"\n"
+		"This element features user-programmable data vetos at 1 second resolution.\n"
+		"Gaps (GStreamer buffers marked as containing neutral data) will be created\n"
+		"whenever the state vector mask and data quality mask flag properties are\n"
+		"not met."
+		,
 		"Leo Singer <leo.singer@ligo.org>"
 	);
 
@@ -406,12 +563,64 @@ static void class_init(gpointer class, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_SRC_INSTRUMENT,
+		ARG_INSTRUMENT,
 		g_param_spec_string(
 			"instrument",
 			"Instrument",
 			"Instrument name (e.g., \"H1\").",
 			NULL,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_STATE_REQUIRE,
+		g_param_spec_flags(
+			"state-require",
+			"State Required Bitmask",
+			"State vector flags that must be TRUE",
+			gstlal_onlinehoftsrc_state_flags_get_type(),
+			ONLINEHOFT_STATE_DEFAULT_REQUIRE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_STATE_DENY,
+		g_param_spec_flags(
+			"state-deny",
+			"State Denied Bitmask",
+			"State vector flags that must be FALSE",
+			gstlal_onlinehoftsrc_state_flags_get_type(),
+			ONLINEHOFT_STATE_DEFAULT_DENY,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_DQ_REQUIRE,
+		g_param_spec_flags(
+			"data-quality-require",
+			"Data Quality Required Bitmask",
+			"Data quality flags that must be TRUE",
+			gstlal_onlinehoftsrc_dq_flags_get_type(),
+			ONLINEHOFT_DQ_DEFAULT_REQUIRE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_DQ_DENY,
+		g_param_spec_flags(
+			"data-quality-deny",
+			"Data Quality Deny Bitmask",
+			"Data quality flags that must be FALSE",
+			gstlal_onlinehoftsrc_dq_flags_get_type(),
+			ONLINEHOFT_DQ_DEFAULT_DENY,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
@@ -446,6 +655,10 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->instrument = NULL;
 	element->tracker = NULL;
 	element->needs_seek = FALSE;
+	element->state_require = ONLINEHOFT_STATE_DEFAULT_REQUIRE;
+	element->state_deny = ONLINEHOFT_STATE_DEFAULT_DENY;
+	element->dq_require = ONLINEHOFT_DQ_DEFAULT_REQUIRE;
+	element->dq_deny = ONLINEHOFT_DQ_DEFAULT_DENY;
 
 	gst_base_src_set_blocksize(basesrc, 16384 * 16 * 8);
 	gst_base_src_set_do_timestamp(basesrc, FALSE);

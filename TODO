@@ -6,10 +6,6 @@ TODO
 
 * Verify that all elements support gaps.
 
-* Add programmable data quality mask support to lal_onlinehoftsrc: if data
-  quality vector does not satisfy a user-specified bitmask, a gap should be
-  inserted.
-
 * The orthogonal SNR gate trigger rate is way too high; the requested false
   alarm probability results in a threshold that does not divide the orthogonal
   SNR signal distribution correctly.  Find out why.
