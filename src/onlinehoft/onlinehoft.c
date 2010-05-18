@@ -44,6 +44,8 @@ typedef struct {
 	char* nameprefix; // e.g. "H-H1_DMT_C00_L2-"
 	char* namesuffix; // e.g. "-16.gwf"
 	char* channelname; // e.g. "H1:DMT-STRAIN"
+	char* state_channelname; // e.g. "H1:DMT-STATE_VECTOR"
+	char* dq_channelname; // e.g. "H1:DMT-DATA_QUALITY_VECTOR"
 } _ifodesc_t;
 
 
@@ -60,12 +62,12 @@ struct onlinehoft_tracker {
 
 static const _ifodesc_t _ifodescs[] =
 {
-	{"H1", "H-H1_DMT_C00_L2-", "-16.gwf", "H1:DMT-STRAIN"},
-	{"H2", "H-H2_DMT_C00_L2-", "-16.gwf", "H2:DMT-STRAIN"},
-	{"L1", "L-L1_DMT_C00_L2-", "-16.gwf", "L1:DMT-STRAIN"},
+	{"H1", "H-H1_DMT_C00_L2-", "-16.gwf", "H1:DMT-STRAIN", "H1:DMT-STATE_VECTOR", "H1:DMT-DATA_QUALITY_VECTOR"},
+	{"H2", "H-H2_DMT_C00_L2-", "-16.gwf", "H2:DMT-STRAIN", "H2:DMT-STATE_VECTOR", "H2:DMT-DATA_QUALITY_VECTOR"},
+	{"L1", "L-L1_DMT_C00_L2-", "-16.gwf", "L1:DMT-STRAIN", "L1:DMT-STATE_VECTOR", "L1:DMT-DATA_QUALITY_VECTOR"},
 	/* sorry, we don't have any specs about VIRGO data quality flags yet! */
-	/*{"V1", "V-V1_DMT_HREC-",   "-16.gwf", "V1:h_16384Hz"},*/
-	{NULL, NULL, NULL, NULL}
+	/*{"V1", "V-V1_DMT_HREC-",   "-16.gwf", "V1:h_16384Hz", NULL, "V1:Hrec_Veto_dataQuality"},*/
+	{NULL, NULL, NULL, NULL, NULL, NULL}
 };
 
 
