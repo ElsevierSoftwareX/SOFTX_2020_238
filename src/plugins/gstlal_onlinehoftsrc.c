@@ -569,9 +569,22 @@ static void class_init(gpointer class, gpointer class_data)
 		g_param_spec_flags(
 			"state-require",
 			"State Required Bitmask",
-			"State vector flags that must be true",
+			"State vector flags that must be TRUE",
 			gstlal_onlinehoftsrc_state_flags_get_type(),
 			ONLINEHOFT_STATE_DEFAULT_REQUIRE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_STATE_DENY,
+		g_param_spec_flags(
+			"state-deny",
+			"State Denied Bitmask",
+			"State vector flags that must be FALSE",
+			gstlal_onlinehoftsrc_state_flags_get_type(),
+			ONLINEHOFT_STATE_DEFAULT_DENY,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
@@ -582,9 +595,22 @@ static void class_init(gpointer class, gpointer class_data)
 		g_param_spec_flags(
 			"data-quality-require",
 			"Data Quality Required Bitmask",
-			"Data quality flags that must be true",
+			"Data quality flags that must be TRUE",
 			gstlal_onlinehoftsrc_dq_flags_get_type(),
 			ONLINEHOFT_DQ_DEFAULT_REQUIRE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_DQ_DENY,
+		g_param_spec_flags(
+			"data-quality-deny",
+			"Data Quality Deny Bitmask",
+			"Data quality flags that must be FALSE",
+			gstlal_onlinehoftsrc_dq_flags_get_type(),
+			ONLINEHOFT_DQ_DEFAULT_DENY,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
