@@ -245,9 +245,28 @@ static gboolean push_new_caps(GSTLALNDSSrc* element)
      * Transmit the tag list.
      */
 
-    GstTagList* taglist = gst_tag_list_new_full(
-                                                GSTLAL_TAG_CHANNEL_NAME, element->daq->chan_req_list->name,
-                                                NULL);
+    GstTagList* taglist;
+    {
+        char* full_channel_name = strdup(element->daq->chan_req_list->name);
+        char* instrument;
+        char* channel_name = strchr(full_channel_name, ':');
+        if (channel_name)
+        {
+            instrument = full_channel_name;
+            *(channel_name++) = '\0';
+        } else {
+            channel_name = full_channel_name;
+            instrument = NULL;
+        }
+
+        taglist = gst_tag_list_new_full(
+            GSTLAL_TAG_CHANNEL_NAME, channel_name,
+            GSTLAL_TAG_INSTRUMENT, instrument,
+            NULL);
+
+        free(full_channel_name);
+    }
+
     if (!taglist)
     {
         GST_ERROR_OBJECT(element, "unable to create taglist");
@@ -720,15 +739,15 @@ static void finalize(GObject *object)
 
 static void base_init(gpointer class)
 {
-	static const GstElementDetails plugin_details = {
+	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
+
+	gst_element_class_set_details_simple(
+		element_class,
 		"NDS Source",
 		"Source",
 		"NDS-based src element",
 		"Leo Singer <leo.singer@ligo.org>"
-	};
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
-
-	gst_element_class_set_details(element_class, &plugin_details);
+	);
 
 	gst_element_class_add_pad_template(
 		element_class,

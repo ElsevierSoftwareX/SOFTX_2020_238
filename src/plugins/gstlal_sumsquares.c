@@ -96,7 +96,7 @@ static GstFlowReturn sumsquares(GSTLALSumSquares *element, GstBuffer *inbuf, Gst
 
 
 static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
-	"sink",
+	GST_BASE_TRANSFORM_SINK_NAME,
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
@@ -110,7 +110,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 
 
 static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
-	"src",
+	GST_BASE_TRANSFORM_SRC_NAME,
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
@@ -432,7 +432,7 @@ static void gstlal_sumsquares_class_init(GSTLALSumSquaresClass *klass)
 		g_param_spec_value_array(
 			"weights",
 			"Weights",
-			"Vector of weights to use in sum.  If no vector is provided weights of 1.0 are assumed, otherwise the number of input channels must equal the vector length.",
+			"Vector of weights to use in sum.  If no vector is provided weights of 1.0 are assumed, otherwise the number of input channels must equal the vector length.  The incoming channels are first multiplied by the weights, then squared, then summed.",
 			g_param_spec_double(
 				"weight",
 				"Weight",

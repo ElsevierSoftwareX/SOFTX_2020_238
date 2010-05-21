@@ -53,7 +53,7 @@ def add_quadrature_phase(fseries, n):
 	From the Fourier transform of a real-valued function of time,
 	compute and return the Fourier transform of the complex-valued
 	function of time whose real component is the original time series
-	and whose imaginary component is the quandrature phase of the real
+	and whose imaginary component is the quadrature phase of the real
 	part.  fseries is a LAL COMPLEX16FrequencySeries and n is the
 	number of samples in the original time series.
 	"""

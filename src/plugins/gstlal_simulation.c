@@ -670,6 +670,8 @@ static int add_xml_injections(REAL8TimeSeries *h, const GSTLALSimulation *elemen
 }
 
 
+#if 0
+/* unused function */
 static REAL8TimeSeries *compute_strain(double right_ascension, double declination, double psi, LALDetector * detector, LIGOTimeGPS * tc, double phic, double deltaT, double m1, double m2, double fmin, double r, double i, int order)
 {
 	REAL8TimeSeries *hplus = NULL;
@@ -681,6 +683,7 @@ static REAL8TimeSeries *compute_strain(double right_ascension, double declinatio
 	XLALDestroyREAL8TimeSeries(hcross);
 	return strain;
 }
+#endif
 
 
 /*
@@ -930,15 +933,15 @@ static void finalize(GObject * object)
 
 static void base_init(gpointer class)
 {
-	static GstElementDetails plugin_details = {
+	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
+
+	gst_element_class_set_details_simple(
+		element_class,
 		"Simulation",
 		"Filter",
 		"An injection routine",
 		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
-	};
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
-
-	gst_element_class_set_details(element_class, &plugin_details);
+	);
 
 	gst_element_class_add_pad_template(
 		element_class,

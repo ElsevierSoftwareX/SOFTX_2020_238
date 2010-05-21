@@ -24,20 +24,13 @@
 #
 
 
-import math
-
-
-import pygst
-pygst.require("0.10")
-import gst
-
+from pipeutil import *
 
 from glue import segments
 
 
 import pipeio
 from elements.channelgram import mkchannelgram
-from elements.check_timestamps import mkchecktimestamps
 from elements.histogram import mkhistogram
 from elements.spectrum import mkspectrumplot
 
@@ -79,6 +72,19 @@ def mkndssrc(pipeline, host, instrument, channel_name, blocksize = 16384 * 8 * 1
 	return elem
 
 
+def mkonlinehoftsrc(pipeline, instrument):
+	# This function lacks the "channel_name" argument because with the
+	# online h(t) source "onlinehoftsrc" knows the channel names that are needed
+	# for each instrument.
+	#
+	# It also lacks the "blocksize" argument because the blocksize for an
+	# "onlinehoftsrc" is not adjustable.
+	elem = gst.element_factory_make("lal_onlinehoftsrc")
+	elem.set_property("instrument", instrument)
+	pipeline.add(elem)
+	return elem
+
+
 def mkcapsfilter(pipeline, src, caps):
 	elem = gst.element_factory_make("capsfilter")
 	elem.set_property("caps", gst.Caps(caps))
@@ -110,6 +116,8 @@ def mkfakesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 
 
 
 def mkiirfilter(pipeline, src, a, b):
+	# convention is z = \exp(-i 2 \pi f / f_{\rm sampling})
+	# H(z) = (\sum_{j=0}^{N} a_j z^{-j}) / (\sum_{j=0}^{N} (-1)^{j} b_j z^{-j})
 	elem = gst.element_factory_make("audioiirfilter")
 	elem.set_property("a", a)
 	elem.set_property("b", b)
@@ -118,35 +126,16 @@ def mkiirfilter(pipeline, src, a, b):
 	return elem
 
 
-def mkfakeLIGOsrc(pipeline, location = None, instrument = None, channel_name = None, blocksize = 16384 * 8 * 1):
-	# default blocksize is 1 second of double precision floats at
-	# 16384 Hz, e.g., h(t)
-	head1 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 5.03407936516e-17)
-	a = [1.87140685e-05, 3.74281370e-05, 1.87140685e-05]
-	b = [1., 1.98861643, -0.98869215]
-	for idx in range(14):
-		head1 = mkiirfilter(pipeline, head1, a, b)
-
-	head2 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 1.39238913312e-20)
-	a = [9.17933667e-07, 1.83586733e-06, 9.17933667e-07]
-	b = [1., 1.99728828, -0.99729195]
-	head2 = mkiirfilter(pipeline, head2, a, b)
-
-	head3 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 2.16333076528e-23)
-
-	head4 = mkfakesrc(pipeline, location = location, instrument = instrument, channel_name = channel_name, blocksize = blocksize, volume = 1.61077910675e-20)
-	a = [0.03780506, -0.03780506]
-	b = [1.0, -0.9243905]
-	head4 = mkiirfilter(pipeline, head4, a, b)
-
-	head = gst.element_factory_make("lal_adder")
-	head.set_property("sync", True)
+def mkfakeLIGOsrc(pipeline, location=None, instrument=None, channel_name=None, blocksize=16384 * 8 * 1):
+	head = mkelem('lal_fakeligosrc', {'instrument': instrument, 'channel-name': channel_name, 'blocksize': blocksize})
 	pipeline.add(head)
-	head1.link(head)
-	head2.link(head)
-	head3.link(head)
-	head4.link(head)
-	return mkaudioamplify(pipeline, head, 16384.**.5)
+	return head
+
+
+def mkfakeadvLIGOsrc(pipeline, location=None, instrument=None, channel_name=None, blocksize=16384 * 8 * 1):
+	head = mkelem('lal_fakeadvligosrc', {'instrument': instrument, 'channel-name': channel_name, 'blocksize': blocksize})
+	pipeline.add(head)
+	return head
 
 
 def mkprogressreport(pipeline, src, name):
@@ -230,10 +219,9 @@ def mkqueue(pipeline, src, pad_name = None, **properties):
 	return elem
 
 
-def mkdelay(pipeline, src, delay = 0, silent = True):
+def mkdelay(pipeline, src, delay = 0):
 	elem = gst.element_factory_make("lal_delay")
 	elem.set_property("delay",delay)
-	elem.set_property("silent",silent)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
@@ -483,6 +471,14 @@ def mkappsink(pipeline, src, **properties):
 	elem.set_property("drop", True)
 	for name, value in properties.items():
 		elem.set_property(name, value)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+def mkchecktimestamps(pipeline, src, name = None):
+	elem = gst.element_factory_make("lal_checktimestamps")
+	if name is not None:
+		elem.set_property("name", name)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem

@@ -348,7 +348,7 @@ static void rate_changed(GstElement *element, gint rate, void *data)
 
 
 static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
-	"sink",
+	GST_BASE_TRANSFORM_SINK_NAME,
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
@@ -362,7 +362,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 
 
 static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
-	"src",
+	GST_BASE_TRANSFORM_SRC_NAME,
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(

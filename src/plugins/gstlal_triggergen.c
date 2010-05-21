@@ -885,15 +885,15 @@ static GstStateChangeReturn gen_change_state(GstElement *element, GstStateChange
 
 static void gen_base_init(gpointer g_class)
 {
-	static GstElementDetails plugin_details = {
+	GstElementClass *element_class = GST_ELEMENT_CLASS(g_class);
+
+	gst_element_class_set_details_simple(
+		element_class,
 		"Trigger Generator",
 		"Filter",
 		"SNR and \\chi^{2} in, Triggers out",
 		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
-	};
-
-	GstElementClass *element_class = GST_ELEMENT_CLASS(g_class);
-	gst_element_class_set_details(element_class, &plugin_details);
+	);
 
 	gst_element_class_add_pad_template(
 		element_class,
@@ -1173,15 +1173,15 @@ static GstBaseSink *xmlwriter_parent_class = NULL;
 
 static void xmlwriter_base_init(gpointer g_class)
 {
-	static GstElementDetails plugin_details = {
+	GstElementClass *element_class = GST_ELEMENT_CLASS(g_class);
+
+	gst_element_class_set_details_simple(
+		element_class,
 		"Trigger XML Writer",
 		"Sink/File",
 		"Writes LAL's SnglInspiralTable C structures to an XML file",
 		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
-	};
-
-	GstElementClass *element_class = GST_ELEMENT_CLASS(g_class);
-	gst_element_class_set_details(element_class, &plugin_details);
+	);
 
 	gst_element_class_add_pad_template(
 		element_class,
