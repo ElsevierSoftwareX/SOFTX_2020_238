@@ -53,10 +53,11 @@ import pylab
 
 # Plot diagonal grid
 t0 = max(gps_duration, running_duration)
-for t in range(-t0, t0, 900):
-	pylab.plot((0, t0), (t, t+t0), color='#cccccc')
+for t in range(-t0, t0, t0 / 20):
+	lines = pylab.plot((0, t0), (t, t+t0), color='#cccccc')
+lines[0].set_label('constant lag')
 
-for k, v in trends.iteritems():
+for k, v in sorted(trends.iteritems()):
 	data = pylab.array(v)
 	pylab.plot(data[:,0], data[:,1] - gps_start_time, label=k)
 
