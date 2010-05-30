@@ -190,8 +190,6 @@ class directory_poller(object):
 
 						print >>sys.stderr, "lal_onlinehoftsrc: %s: late or missing file suspected" % filepath
 						if self.top_cache is None:
-							self.top_cache = dir_cache_top(self.top, self.nameprefix)
-							
 							try:
 								cache = dir_cache_top(self.top, self.nameprefix)
 							except OSError, (err, strerror):
@@ -318,17 +316,31 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 
 	def do_start(self):
 		"""GstBaseSrc->start virtual method"""
-		self.__needs_seek = False
+		self.__last_successful_gps_end = None
+
+		# Look up instrument
 		instrument = self.get_property('instrument')
 		if instrument not in ifodescs:
 			self.error("unknown instrument: %s" % instrument)
 			return False
 		self.__ifodesc = ifodescs[instrument]
+
+		# Create instance of directory_poller
 		self.__poller = directory_poller(
 			os.path.join(os.getenv('ONLINEHOFT'), instrument),
 			self.__ifodesc.nameprefix, self.__ifodesc.namesuffix
 		)
-		self.__last_successful_gps_end = None
+
+		# Send tags
+		taglist = gst.TagList()
+		taglist["instrument"] = instrument
+		taglist["channel-name"] = self.__ifodesc.channelname.split(":")[-1]
+
+		if not self.send_event(gst.event_new_tag(taglist)):
+			self.error("tags rejected")
+			return False
+
+		# Done! OK to start playing now.
 		return True
 
 
@@ -336,6 +348,7 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		"""GstBaseSrc->stop virtual method"""
 		self.__ifodesc = None
 		self.__poller = None
+		self.__needs_seek = False
 		return True
 
 
