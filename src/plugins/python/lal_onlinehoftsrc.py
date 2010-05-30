@@ -173,7 +173,7 @@ class directory_poller(object):
 			try:
 				# Attempt to open the file.
 				fd = os.open(filepath, os.O_RDONLY)
-			except OSError as (err, strerror):
+			except OSError, (err, strerror):
 				# Opening the file failed.
 				if err == errno.ENOENT:
 					# Opening the file failed because it did not exist.
@@ -194,7 +194,7 @@ class directory_poller(object):
 							
 							try:
 								cache = dir_cache_top(self.top, self.nameprefix)
-							except OSError as (err, strerror):
+							except OSError, (err, strerror):
 								print >>sys.stderr, "lal_onlinehoftsrc: %s: %s" % (self.top, strerror)
 								time.sleep(self.timeout)
 								continue
