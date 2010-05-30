@@ -13,15 +13,30 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""
 
+Online calibrated h(t) source, implementing the S6 specification described on 
+<https://www.lsc-group.phys.uwm.edu/daswg/wiki/S6OnlineGroup/CalibratedData>.
 
-#
-# =============================================================================
-#
-#                                   Preamble
-#
-# =============================================================================
-#
+The environment variable ONLINEHOFT must be set and must point to the online
+frames directory, which has subfolders for H1, H2, L1, V1, ... .
+
+Online frames are 16 seconds in duration, and start on 16 second boundaries.
+They contain up to three channels:
+ - IFO:DMT-STRAIN (16384 Hz), online calibrated h(t)
+ - IFO:DMT-STATE_VECTOR (16 Hz), state vector
+ - IFO:DMT-DATA_QUALITY_VECTOR (1 Hz), data quality flags
+
+This element features user-programmable data vetos at 1 second resolution.
+Gaps (GStreamer buffers marked as containing neutral data) will be created
+whenever the state vector mask and data quality mask flag properties are
+not met.
+
+"""
+__author__ = "Leo Singer <leo.singer@ligo.org>"
+__version__ = "FIXME"
+__date__ = "FIXME"
+
 
 
 import errno
@@ -40,14 +55,24 @@ from gstlal.pipeutil import *
 from gst.extend.pygobject import gproperty, with_construct_properties
 
 
-__author__ = "Leo Singer <leo.singer@ligo.org>"
-__version__ = "FIXME"
-__date__ = "FIXME"
-
-
 def gps_now():
 	import pylal.xlal.date
 	return pylal.xlal.date.XLALUTCToGPS(time.gmtime())
+
+
+def safe_getvect(filename, channel, start, duration, fs):
+	"""Ultra-paranoid frame reading function."""
+	from pylal.Fr import frgetvect1d
+	vect_data, vect_start, vect_x0, vect_df, vect_unit_x, vect_unit_y = frgetvect1d(filename, channel, start, duration)
+	if vect_start != start:
+		raise ValueError, "channel %s: expected start time %d, but got %f" % (channel, start, vec_start)
+	if vect_x0 != 0:
+		raise ValueError, "channel %s: expected offset 0, but got %f" % (channel, vect_x0)
+	if vect_df != 1.0 / fs:
+		raise ValueError, "channel %s: expected sample rate %d, but got %f" % (channel, fs, 1.0 / vect_df)
+	if len(vect_data) != duration * fs:
+		raise ValueError, "channel %s: expected %d samples, but got %d" % (channel, duration * fs, len(vect_data))
+	return vect_data
 
 
 class dir_cache(object):
@@ -105,6 +130,9 @@ class dir_cache_epoch(dir_cache):
 
 
 class directory_poller(object):
+	"""Iterate over file descriptors from a directory tree of GPS-timestamped
+	files, like the $ONLINEHOFT or $ONLINEDQ directories on LSC clusters.
+	"""
 
 	def __init__(self, top, nameprefix, namesuffix):
 		self.top = top
@@ -218,25 +246,10 @@ ifodescs = {
 class lal_onlinehoftsrc(gst.BaseSrc):
 
 	__gstdetails__ = (
-"Online h(t) Source",
-"Source",
-"""Online calibrated h(t) source, implementing the S6 specification described on
-<https://www.lsc-group.phys.uwm.edu/daswg/wiki/S6OnlineGroup/CalibratedData>.
-
-The environment variable ONLINEHOFT must be set and must point to the online
-frames directory, which has subfolders for H1, H2, L1, V1, ... .
-
-Online frames are 16 seconds in duration, and start on 16 second boundaries.
-They contain up to three channels:
- - IFO:DMT-STRAIN (16384 Hz), online calibrated h(t)
- - IFO:DMT-STATE_VECTOR (16 Hz), state vector
- - IFO:DMT-DATA_QUALITY_VECTOR (1 Hz), data quality flags
-
-This element features user-programmable data vetos at 1 second resolution.
-Gaps (GStreamer buffers marked as containing neutral data) will be created
-whenever the state vector mask and data quality mask flag properties are
-not met.""",
-__author__
+		"Online h(t) Source",
+		"Source",
+		__doc__,
+		__author__
 	)
 	gproperty(
 		gobject.TYPE_STRING,
@@ -297,6 +310,7 @@ __author__
 
 
 	def do_start(self):
+		"""GstBaseSrc->start virtual method"""
 		self.__needs_seek = False
 		instrument = self.get_property('instrument')
 		if instrument not in ifodescs:
@@ -311,50 +325,41 @@ __author__
 
 
 	def do_stop(self):
+		"""GstBaseSrc->stop virtual method"""
 		self.__ifodesc = None
 		self.__poller = None
 		return True
 
 
-	@staticmethod
-	def safe_getvect(filename, channel, start, duration, fs):
-		from pylal.Fr import frgetvect1d
-		vect_data, vect_start, vect_x0, vect_df, vect_unit_x, vect_unit_y = frgetvect1d(filename, channel, start, duration)
-		if vect_start != start:
-			raise ValueError, "channel %s: expected start time %d, but got %f" % (channel, start, vec_start)
-		if vect_x0 != 0:
-			raise ValueError, "channel %s: expected offset 0, but got %f" % (channel, vect_x0)
-		if vect_df != 1.0 / fs:
-			raise ValueError, "channel %s: expected sample rate %d, but got %f" % (channel, fs, 1.0 / vect_df)
-		if len(vect_data) != duration * fs:
-			raise ValueError, "channel %s: expected %d samples, but got %d" % (channel, duration * fs, len(vect_data))
-		return vect_data
-
-
 	def do_check_get_range(self):
+		"""GstBaseSrc->check_get_range virtual method"""
 		return True
 
 
 	def do_is_seekable(self):
+		"""GstBaseSrc->is_seekable virtual method"""
 		return True
 
 
 	def do_do_seek(self, segment):
+		"""GstBaseSrc->do_seek virtual method"""
 		if segment.flags & gst.SEEK_FLAG_KEY_UNIT:
-			start = gst.util_uint64_scale(gst.util_uint64_scale(segment.start, 1, 16 * gst.SECOND), 16 * gst.SECOND, 1)
-			last_stop = gst.util_uint64_scale(gst.util_uint64_scale(segment.last_stop, 1, 16 * gst.SECOND), 16 * gst.SECOND, 1)
-			time = gst.util_uint64_scale(gst.util_uint64_scale(segment.time, 1, 16 * gst.SECOND), 16 * gst.SECOND, 1)
-			stop = gst.util_uint64_scale_ceil(gst.util_uint64_scale_ceil(segment.stop, 1, 16 * gst.SECOND), 16 * gst.SECOND, 1)
-			if start > gobject.G_MAXLONG:
+			# If necessary, extend the segment to the nearest "key frame",
+			# playback can only start or stop on boundaries of 16 seconds.
+			print segment.start, segment.stop
+			if segment.start == -1:
 				start = -1
 				start_seek_type = gst.SEEK_TYPE_NONE
 			else:
+				start = gst.util_uint64_scale(gst.util_uint64_scale(segment.start, 1, 16 * gst.SECOND), 16 * gst.SECOND, 1)
 				start_seek_type = gst.SEEK_TYPE_SET
-			if stop > gobject.G_MAXLONG:
+			if segment.stop == -1:
 				stop = -1
 				stop_seek_type = gst.SEEK_TYPE_NONE
 			else:
+				stop = gst.util_uint64_scale_ceil(gst.util_uint64_scale_ceil(segment.stop, 1, 16 * gst.SECOND), 16 * gst.SECOND, 1)
 				stop_seek_type = gst.SEEK_TYPE_SET
+			print start, stop
 			segment.set_seek(segment.rate, segment.format, segment.flags, start_seek_type, start, stop_seek_type, stop)
 		self.__seek_time = (segment.start / gst.SECOND / 16) * 16
 		self.__needs_seek = True
@@ -362,29 +367,35 @@ __author__
 
 
 	def do_create(self, offset, size):
+		"""GstBaseSrc->create virtual method"""
+
+		# Seek if needed.
 		if self.__needs_seek:
 			self.__poller.time = self.__seek_time
 			self.__needs_seek = False
+
+		# Loop over available buffers until we reach one that is not corrupted.
 		success = False
 		while not success:
 			(gps_start, fd) = self.__poller.next()
 			try:
 				filename = "/dev/fd/%d" % fd
-				hoft_array = self.safe_getvect(filename, self.__ifodesc.channelname, gps_start, 16, 16384)
+				hoft_array = safe_getvect(filename, self.__ifodesc.channelname, gps_start, 16, 16384)
 				os.lseek(fd, 0, os.SEEK_SET)
-				state_array = self.safe_getvect(filename, self.__ifodesc.state_channelname, gps_start, 16, 16)
+				state_array = safe_getvect(filename, self.__ifodesc.state_channelname, gps_start, 16, 16)
 				os.lseek(fd, 0, os.SEEK_SET)
-				dq_array = self.safe_getvect(filename, self.__ifodesc.dq_channelname, gps_start, 16, 1)
+				dq_array = safe_getvect(filename, self.__ifodesc.dq_channelname, gps_start, 16, 1)
 				success = True
 			except Exception as e:
 				self.warning(str(e))
 			finally:
 				os.close(fd)
 
+		# Look up our src pad and its caps.
 		pad = self.src_pads().next()
 		caps = pad.get_property('caps')
 
-		# Compute segment mask
+		# Compute "good data" segment mask.
 		dq_require = int(self.get_property('data-quality-require'))
 		dq_deny = int(self.get_property('data-quality-deny'))
 		state_require = int(self.get_property('state-require'))
@@ -399,6 +410,8 @@ __author__
 
 		self.info('good data mask is ' + ''.join([str(x) for x in segment_mask.astype('int')]))
 
+		# Loop over 1-second chunks in current buffer, and push extra buffers
+		# as needed when a transition betwen gap and nongap has to occur.
 		was_nongap = segment_mask[0]
 		last_segment_num = 0
 		for segment_num, is_nongap in enumerate(segment_mask):
@@ -415,14 +428,15 @@ __author__
 				buf.timestamp = gst.SECOND * (gps_start + last_segment_num)
 				if not was_nongap:
 					buf.flag_set(gst.BUFFER_FLAG_GAP)
-					self.info("Setting GST_BUFFER_FLAG_GAP")
-				self.info("pushing frame spanning [%u, %u) (extra frame because of change in data quality)"
-					% (gps_start + last_segment_num, gps_start + segment_num))
+				self.info("pushing buffer spanning [%u, %u) (nongap=%d, extra frame)"
+					% (gps_start + last_segment_num, gps_start + segment_num, was_nongap))
 				result = pad.push(buf)
 				if result != gst.FLOW_OK:
 					return (retval, None)
 				last_segment_num = segment_num
 			was_nongap = is_nongap
+
+		# Finish off current frame.
 		segment_num = 16
 		offset = 16384 * (gps_start + last_segment_num)
 		size = 16384 * (segment_num - last_segment_num) * 8
@@ -436,9 +450,10 @@ __author__
 		buf.timestamp = gst.SECOND * (gps_start + last_segment_num)
 		if not was_nongap:
 			buf.flag_set(gst.BUFFER_FLAG_GAP)
-			self.info("Setting GST_BUFFER_FLAG_GAP")
-		self.info("pushing frame spanning [%u, %u)"
-			% (gps_start + last_segment_num, gps_start + segment_num))
+		self.info("pushing buffer spanning [%u, %u) (nongap=%d)"
+			% (gps_start + last_segment_num, gps_start + segment_num, was_nongap))
+
+		# Don't need to push this buffer, just return it.
 		return (gst.FLOW_OK, buf)
 
 
