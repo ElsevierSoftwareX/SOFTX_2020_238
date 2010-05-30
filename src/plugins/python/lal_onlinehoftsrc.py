@@ -391,9 +391,9 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 				try:
 					filename = "/dev/fd/%d" % fd
 					hoft_array = safe_getvect(filename, self.__ifodesc.channelname, gps_start, 16, 16384)
-					os.lseek(fd, 0, os.SEEK_SET)
+					os.lseek(fd, 0, 0) # FIXME: use os.SEEK_SET (added to API in Python 2.5) for last argument
 					state_array = safe_getvect(filename, self.__ifodesc.state_channelname, gps_start, 16, 16)
-					os.lseek(fd, 0, os.SEEK_SET)
+					os.lseek(fd, 0, 0) # FIXME: use os.SEEK_SET (added to API in Python 2.5) for last argument
 					dq_array = safe_getvect(filename, self.__ifodesc.dq_channelname, gps_start, 16, 1)
 				finally:
 					os.close(fd)
