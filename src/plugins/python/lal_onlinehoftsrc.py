@@ -32,6 +32,8 @@ Gaps (GStreamer buffers marked as containing neutral data) will be created
 whenever the state vector mask and data quality mask flag properties are
 not met.
 
+Gaps will also be created whenever an anticipated frame file is missing.
+
 """
 __author__ = "Leo Singer <leo.singer@ligo.org>"
 __version__ = "FIXME"
