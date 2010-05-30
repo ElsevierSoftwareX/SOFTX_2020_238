@@ -156,6 +156,10 @@ class directory_poller(object):
 	time = property(get_time, set_time)
 
 
+	def __iter__(self):
+		return self
+
+
 	def next(self):
 		fd = None
 		while fd is None:
@@ -375,9 +379,7 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 			self.__needs_seek = False
 
 		# Loop over available buffers until we reach one that is not corrupted.
-		success = False
-		while not success:
-			(gps_start, fd) = self.__poller.next()
+		for (gps_start, fd) in self.__poller:
 			try:
 				filename = "/dev/fd/%d" % fd
 				hoft_array = safe_getvect(filename, self.__ifodesc.channelname, gps_start, 16, 16384)
@@ -385,9 +387,10 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 				state_array = safe_getvect(filename, self.__ifodesc.state_channelname, gps_start, 16, 16)
 				os.lseek(fd, 0, os.SEEK_SET)
 				dq_array = safe_getvect(filename, self.__ifodesc.dq_channelname, gps_start, 16, 1)
-				success = True
 			except Exception as e:
 				self.warning(str(e))
+			else:
+				break
 			finally:
 				os.close(fd)
 
