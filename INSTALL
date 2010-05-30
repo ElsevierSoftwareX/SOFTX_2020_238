@@ -385,8 +385,19 @@ the original patch locally to allow our pipelines to work::
 Patching gst-python
 ===================
 
-Skip this section and continue to `Installing the Software`_ **UNLESS** your 
-system is running Mac OS X or CentOS.
+The current source release of gst-python has not yet been updated with some
+functions that have been recently added to the GStreamer API.  We have an open
+bug report at <https://bugzilla.gnome.org/show_bug.cgi?id=620067> for adding
+some of the functions that we need.  In the mean time you can download the
+patch from Gnome's Bugzilla and apply it to your gst-python source tree::
+
+  $ cd /path/to/local/src
+  $ pushd gst-python
+  $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=162291 -o gst-python.defs.patch
+  $ git apply gst-python.defs.patch
+
+Skip the rest of this section and continue to `Installing the Software`_
+**UNLESS** your system is running Mac OS X or CentOS.
 
 The current source release of gst-python fails to locate libpython, the library
 against which Python shared objects must be linked.  A workaround has been 
