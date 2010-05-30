@@ -163,8 +163,7 @@ class directory_poller(object):
 
 
 	def next(self):
-		fd = None
-		while fd is None:
+		while True:
 			epoch = self.time / 100000
 			epoch_path = os.path.join(self.top, "%s%u" % (self.nameprefix, epoch))
 			filename = "%s%d%s" % (self.nameprefix, self.time, self.namesuffix)
@@ -182,61 +181,82 @@ class directory_poller(object):
 						# a bit and then try again.
 						print >>sys.stderr, "lal_onlinehoftsrc: sleeping because requested time is too new"
 						time.sleep(self.timeout)
-						continue
 					else:
 						# The requested time is old enough that it is possible that
 						# there is a missing file.  Look through the directory tree
 						# to find the next available file.
 
 						print >>sys.stderr, "lal_onlinehoftsrc: %s: late or missing file suspected" % filepath
-						if self.top_cache is None:
-							try:
-								cache = dir_cache_top(self.top, self.nameprefix)
-							except OSError, (err, strerror):
-								print >>sys.stderr, "lal_onlinehoftsrc: %s: %s" % (self.top, strerror)
-								time.sleep(self.timeout)
-								continue
-							else:
-								self.top_cache = cache
-						else:
-							self.top_cache.refresh()
 
-						new_file_found = False
-						for other_epoch in self.top_cache.items[bisect.bisect_left(self.top_cache.items, epoch):]:
-							if other_epoch not in self.epoch_caches.keys():
+						# We need to scan the directory tree successfully twice
+						# in succession to avoid a race condition where the
+						# frame builder writes files faster than we move through
+						# the directory tree.
+						num_tries_remaining = 2
+						while num_tries_remaining > 0:
+
+							# Try to get the top level directory listing,
+							# and refresh it if its mtime has changed.
+							if self.top_cache is None:
 								try:
-									cache = dir_cache_epoch(self.top, self.nameprefix, self.namesuffix, other_epoch)
-								except OSError:
-									continue
+									cache = dir_cache_top(self.top, self.nameprefix)
+								except OSError, (err, strerror):
+									# We couldn't read the top level directory.
+									# This is very bad, so let's complain about
+									# it, sleep for a moment, and then go back
+									# to the outer loop.
+									print >>sys.stderr, "lal_onlinehoftsrc: %s: %s" % (self.top, strerror)
+									time.sleep(self.timeout)
+									break
 								else:
-									self.epoch_caches[other_epoch] = cache
+									self.top_cache = cache
 							else:
-								cache = self.epoch_caches[other_epoch]
-							idx = bisect.bisect_left(cache.items, self.time)
-							if idx >= len(cache.items):
-								continue
-							else:
-								if self.time != cache.items[idx]:
-									print >>sys.stderr, "lal_onlinehoftsrc: files skipped" 
-									self.time = cache.items[idx]
-								new_file_found = True
-								break
+								self.top_cache.refresh()
 
-						if not new_file_found:
-							print >>sys.stderr, "lal_onlinehoftsrc: files are very late"
-							time.sleep(self.timeout)
-						continue
+							# Loop over the epochs until we find a file that
+							# is at least as new as the anticipated GPS time.
+							new_file_found = False
+							for other_epoch in self.top_cache.items[bisect.bisect_left(self.top_cache.items, epoch):]:
+								if other_epoch not in self.epoch_caches.keys():
+									try:
+										cache = dir_cache_epoch(self.top, self.nameprefix, self.namesuffix, other_epoch)
+									except OSError:
+										continue
+									else:
+										self.epoch_caches[other_epoch] = cache
+								else:
+									cache = self.epoch_caches[other_epoch]
+								idx = bisect.bisect_left(cache.items, self.time)
+								if idx < len(cache.items):
+									if self.time == cache.items[idx]:
+										# The file that we wanted has just appeared,
+										# so we can try to read it right away.
+										# Go back to outer loop.
+										num_tries_remaining = 0
+									else:
+										num_tries_remaining -= 1
+										if num_tries_remaining == 0:
+											# We have found a new file a second time,
+											# so go back to outer loop.
+											print >>sys.stderr, "lal_onlinehoftsrc: files skipped" 
+											self.time = cache.items[idx]
+									# Go back to outer loop.
+									new_file_found = True
+									break
+							if not new_file_found:
+								num_tries_remaining = 2
+								print >>sys.stderr, "lal_onlinehoftsrc: files are very late"
+								time.sleep(self.timeout)
 				else:
 					# Opening file failed for some reason *other* than that it did
 					# not exist, so we assume that we will never be able to open it.
 					# Print an error message and try the next file.
 					self.time += self.stride
 					print >>sys.stderr, "lal_onlinehoftsrc: %s: %s" % (filepath, strerror)
-					continue
 			else:
 				# Opening the file succeeded, so return the new file descriptor.
 				self.time += self.stride
-		return ((self.time - self.stride), fd)
+				return ((self.time - self.stride), fd)
 
 
 ifodesc = namedtuple("ifodesc", "ifo nameprefix namesuffix channelname state_channelname dq_channelname")
