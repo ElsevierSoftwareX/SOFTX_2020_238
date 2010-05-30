@@ -36,7 +36,7 @@ not met.
 __author__ = "Leo Singer <leo.singer@ligo.org>"
 __version__ = "FIXME"
 __date__ = "FIXME"
-
+__all__ = ("lal_onlinehoftsrc", "directory_poller")
 
 
 import errno
