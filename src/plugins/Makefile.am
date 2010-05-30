@@ -1,5 +1,5 @@
 SUBDIRS = python
-INCLUDES = -I$(top_srcdir)/src/lib -I$(top_srcdir)/src/onlinehoft
+INCLUDES = -I$(top_srcdir)/src/lib
 
 plugin_LTLIBRARIES = libgstlal.la
 
@@ -32,7 +32,7 @@ libgstlal_la_SOURCES = \
 	gstlal_iirbank.h gstlal_iirbank.c \
 	$(NDSSRC_SOURCES)
 libgstlal_la_CFLAGS = -O2 $(AM_CFLAGS) $(CFLAGS) ${gstreamer_CFLAGS} ${LAL_CFLAGS} ${GSL_CFLAGS} ${FFTW_CFLAGS} ${NDS_CFLAGS}
-libgstlal_la_LIBADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS} ${FFTW_LIBS} ${NDS_LIBS} $(top_srcdir)/src/lib/libgstlal.la $(top_srcdir)/src/onlinehoft/libonlinehoft.la
+libgstlal_la_LIBADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS} ${FFTW_LIBS} ${NDS_LIBS} $(top_srcdir)/src/lib/libgstlal.la
 libgstlal_la_LDFLAGS = ${GSTREAMER_PLUGIN_LDFLAGS}
 
 noinst_HEADERS = gstlal_plugins.h
