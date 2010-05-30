@@ -1,9 +1,14 @@
 INCLUDES = -I$(top_srcdir)/src/lib
 
-# This is a trick taken from the gst-python automake setup.
-# All of the Python scripts will be installed under the exec dir,
-# which prevents the module from getting spread across lib and lib64
-# on e.g. CentOS.
+# Put these Python scripts into the plugin directory under "python" so that
+# GStreamer sees them.
 pkgpythondir = $(plugindir)/python
+pkgpyexecdir = $(pkgpythondir)
 
-pkgpython_PYTHON = lal_checktimestamps.py lal_fakeadvligosrc.py lal_fakeligosrc.py
+pkgpython_PYTHON = lal_checktimestamps.py lal_fakeadvligosrc.py lal_fakeligosrc.py lal_onlinehoftsrc.py
+
+pkgpyexec_LTLIBRARIES = _onlinehoftsrc.la
+
+_onlinehoftsrc_la_SOURCES = _onlinehoftsrc.c
+_onlinehoftsrc_la_CPPFLAGS = $(PYTHON_CPPFLAGS) $(pygobject_CFLAGS)
+_onlinehoftsrc_la_LDFLAGS = -module $(PYTHON_LDFLAGS) $(pygobject_LIBS)
