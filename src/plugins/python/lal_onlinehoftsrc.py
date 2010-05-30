@@ -57,7 +57,7 @@ from gst.extend.pygobject import gproperty, with_construct_properties
 
 def gps_now():
 	import pylal.xlal.date
-	return pylal.xlal.date.XLALUTCToGPS(time.gmtime())
+	return int(pylal.xlal.date.XLALUTCToGPS(time.gmtime()))
 
 
 def safe_getvect(filename, channel, start, duration, fs):
