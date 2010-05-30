@@ -383,9 +383,10 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 
 		# Loop over available buffers until we reach one that is not corrupted.
 		for (gps_start, fd) in self.__poller:
-			# It would be more elegant to merge this try-finally and try-except-else
-			# block into a single try-except-else-finally block, but this was
-			# added in Python 2.5 (see PEP 341). 
+			# FIXME: Merge this try-finally and try-except-else block into a
+			# single try-except-else-finally block.  Unified try-except-finally
+			# statements were added in Python 2.5 (see PEP 341).  CentOS still
+			# ships with Python 2.4.
 			try:
 				try:
 					filename = "/dev/fd/%d" % fd
