@@ -225,6 +225,7 @@ class directory_poller(object):
 								break
 
 						if not new_file_found:
+							print >>sys.stderr, "lal_onlinehoftsrc: files are very late"
 							time.sleep(self.timeout)
 						continue
 				else:
@@ -245,7 +246,7 @@ ifodesc = namedtuple("ifodesc", "ifo nameprefix namesuffix channelname state_cha
 ifodescs = {
 	"H1": ifodesc("H1", "H-H1_DMT_C00_L2-", "-16.gwf", "H1:DMT-STRAIN", "H1:DMT-STATE_VECTOR", "H1:DMT-DATA_QUALITY_VECTOR"),
 	"H2": ifodesc("H2", "H-H2_DMT_C00_L2-", "-16.gwf", "H2:DMT-STRAIN", "H2:DMT-STATE_VECTOR", "H2:DMT-DATA_QUALITY_VECTOR"),
-	"H3": ifodesc("L1", "L-L1_DMT_C00_L2-", "-16.gwf", "L1:DMT-STRAIN", "L1:DMT-STATE_VECTOR", "L1:DMT-DATA_QUALITY_VECTOR")
+	"L1": ifodesc("L1", "L-L1_DMT_C00_L2-", "-16.gwf", "L1:DMT-STRAIN", "L1:DMT-STATE_VECTOR", "L1:DMT-DATA_QUALITY_VECTOR")
 }
 
 
@@ -353,7 +354,6 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		if segment.flags & gst.SEEK_FLAG_KEY_UNIT:
 			# If necessary, extend the segment to the nearest "key frame",
 			# playback can only start or stop on boundaries of 16 seconds.
-			print segment.start, segment.stop
 			if segment.start == -1:
 				start = -1
 				start_seek_type = gst.SEEK_TYPE_NONE
@@ -366,7 +366,6 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 			else:
 				stop = gst.util_uint64_scale_ceil(gst.util_uint64_scale_ceil(segment.stop, 1, 16 * gst.SECOND), 16 * gst.SECOND, 1)
 				stop_seek_type = gst.SEEK_TYPE_SET
-			print start, stop
 			segment.set_seek(segment.rate, segment.format, segment.flags, start_seek_type, start, stop_seek_type, stop)
 		self.__seek_time = (segment.start / gst.SECOND / 16) * 16
 		self.__needs_seek = True
@@ -384,19 +383,23 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 
 		# Loop over available buffers until we reach one that is not corrupted.
 		for (gps_start, fd) in self.__poller:
+			# It would be more elegant to merge this try-finally and try-except-else
+			# block into a single try-except-else-finally block, but this was
+			# added in Python 2.5 (see PEP 341). 
 			try:
-				filename = "/dev/fd/%d" % fd
-				hoft_array = safe_getvect(filename, self.__ifodesc.channelname, gps_start, 16, 16384)
-				os.lseek(fd, 0, os.SEEK_SET)
-				state_array = safe_getvect(filename, self.__ifodesc.state_channelname, gps_start, 16, 16)
-				os.lseek(fd, 0, os.SEEK_SET)
-				dq_array = safe_getvect(filename, self.__ifodesc.dq_channelname, gps_start, 16, 1)
+				try:
+					filename = "/dev/fd/%d" % fd
+					hoft_array = safe_getvect(filename, self.__ifodesc.channelname, gps_start, 16, 16384)
+					os.lseek(fd, 0, os.SEEK_SET)
+					state_array = safe_getvect(filename, self.__ifodesc.state_channelname, gps_start, 16, 16)
+					os.lseek(fd, 0, os.SEEK_SET)
+					dq_array = safe_getvect(filename, self.__ifodesc.dq_channelname, gps_start, 16, 1)
+				finally:
+					os.close(fd)
 			except Exception as e:
 				self.warning(str(e))
 			else:
 				break
-			finally:
-				os.close(fd)
 
 		# Look up our src pad and its caps.
 		pad = self.src_pads().next()
@@ -419,7 +422,6 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		# If necessary, create gap for skipped frames.
 		if self.__last_successful_gps_end is not None and self.__last_successful_gps_end != gps_start:
 			offset = 16384 * self.__last_successful_gps_end
-			print gps_start, self.__last_successful_gps_end, (gps_start - self.__last_successful_gps_end)
 			size = 16384 * (gps_start - self.__last_successful_gps_end) * 8
 			(retval, buf) = pad.alloc_buffer(offset, size, caps)
 			if retval != gst.FLOW_OK:
