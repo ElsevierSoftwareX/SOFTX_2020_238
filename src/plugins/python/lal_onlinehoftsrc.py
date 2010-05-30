@@ -397,7 +397,7 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 					dq_array = safe_getvect(filename, self.__ifodesc.dq_channelname, gps_start, 16, 1)
 				finally:
 					os.close(fd)
-			except Exception as e:
+			except Exception, e:
 				self.warning(str(e))
 			else:
 				break
