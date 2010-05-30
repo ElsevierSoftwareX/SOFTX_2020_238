@@ -325,6 +325,7 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 			os.path.join(os.getenv('ONLINEHOFT'), instrument),
 			self.__ifodesc.nameprefix, self.__ifodesc.namesuffix
 		)
+		self.__last_successful_gps_end = None
 		return True
 
 
@@ -377,6 +378,7 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		if self.__needs_seek:
 			self.__poller.time = self.__seek_time
 			self.__needs_seek = False
+			self.__last_successful_gps_end = None
 
 		# Loop over available buffers until we reach one that is not corrupted.
 		for (gps_start, fd) in self.__poller:
@@ -410,9 +412,28 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 			(dq_array & dq_require == dq_require) & 
 			(~dq_array & dq_deny == dq_deny)
 		)
-
 		self.info('good data mask is ' + ''.join([str(x) for x in segment_mask.astype('int')]))
 
+		# If necessary, create gap for skipped frames.
+		if self.__last_successful_gps_end is not None and self.__last_successful_gps_end != gps_start:
+			offset = 16384 * self.__last_successful_gps_end
+			print gps_start, self.__last_successful_gps_end, (gps_start - self.__last_successful_gps_end)
+			size = 16384 * (gps_start - self.__last_successful_gps_end) * 8
+			(retval, buf) = pad.alloc_buffer(offset, size, caps)
+			if retval != gst.FLOW_OK:
+				return (retval, None)
+			buf.offset = offset
+			buf.offset_end = 16384 * gps_start
+			buf.duration = gst.SECOND * (gps_start - self.__last_successful_gps_end)
+			buf.timestamp = gst.SECOND * self.__last_successful_gps_end
+			buf.flag_set(gst.BUFFER_FLAG_GAP)
+			self.warning("pushing buffer spanning [%u, %u) (nongap=1, SKIPPED frames)"
+				% (self.__last_successful_gps_end, gps_start))
+			result = pad.push(buf)
+			if result != gst.FLOW_OK:
+				return (retval, None)
+		self.__last_successful_gps_end = gps_start + 16
+			
 		# Loop over 1-second chunks in current buffer, and push extra buffers
 		# as needed when a transition betwen gap and nongap has to occur.
 		was_nongap = segment_mask[0]
