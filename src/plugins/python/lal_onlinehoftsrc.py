@@ -45,13 +45,9 @@ __version__ = "FIXME"
 __date__ = "FIXME"
 
 
-#
-# =============================================================================
-#
-#                                   Element
-#
-# =============================================================================
-#
+def gps_now():
+	import pylal.xlal.date
+	return pylal.xlal.date.XLALUTCToGPS(time.gmtime())
 
 
 class dir_cache(object):
@@ -132,12 +128,6 @@ class directory_poller(object):
 	time = property(get_time, set_time)
 
 
-	@staticmethod
-	def gps_now():
-		import pylal.xlal.date
-		return pylal.xlal.date.XLALUTCToGPS(time.gmtime())
-
-
 	def next(self):
 		fd = None
 		while fd is None:
@@ -153,7 +143,7 @@ class directory_poller(object):
 				# Opening the file failed.
 				if err == errno.ENOENT:
 					# Opening the file failed because it did not exist.
-					if self.gps_now() - self.time < self.latency:
+					if gps_now() - self.time < self.latency:
 						# The requested time is too recent, so just wait
 						# a bit and then try again.
 						print >>sys.stderr, "lal_onlinehoftsrc: sleeping because requested time is too new"
@@ -271,16 +261,16 @@ __author__
 	)
 	gproperty(
 		DQFlags,
-		"data-quality-deny",
-		"Data quality flags that must be FALSE",
-		DQ_BADGAMMA,
+		"data-quality-require",
+		"Data quality flags that must be TRUE",
+		DQ_SCIENCE | DQ_UP | DQ_CALIBRATED | DQ_LIGHT,
 		construct=True
 	)
 	gproperty(
 		DQFlags,
-		"data-quality-require",
-		"Data quality flags that must be TRUE",
-		DQ_SCIENCE | DQ_UP | DQ_CALIBRATED | DQ_LIGHT,
+		"data-quality-deny",
+		"Data quality flags that must be FALSE",
+		DQ_BADGAMMA,
 		construct=True
 	)
 	__gsttemplates__ = (
@@ -349,12 +339,23 @@ __author__
 		return True
 
 
-	def do_seek(self, segment):
+	def do_do_seek(self, segment):
 		if segment.flags & gst.SEEK_FLAG_KEY_UNIT:
-			segment.start = gst.util_uint64_scale(gst.util_uint64_scale(segment.start, 1, 16 * gst.SECOND), 16 * gst.SECOND, 1)
-			segment.last_stop = gst.util_uint64_scale(gst.util_uint64_scale(segment.last_stop, 1, 16 * gst.SECOND), 16 * gst.SECOND, 1)
-			segment.time = gst.util_uint64_scale(gst.util_uint64_scale(segment.time, 1, 16 * GST_SECOND), 16 * gst.SECOND, 1)
-			segment.stop = gst.util_uint64_scale_ceil(gst.util_uint64_scale_ceil(segment.stop, 1, 16 * gst.SECOND), 16 * gst.SECOND, 1)
+			start = gst.util_uint64_scale(gst.util_uint64_scale(segment.start, 1, 16 * gst.SECOND), 16 * gst.SECOND, 1)
+			last_stop = gst.util_uint64_scale(gst.util_uint64_scale(segment.last_stop, 1, 16 * gst.SECOND), 16 * gst.SECOND, 1)
+			time = gst.util_uint64_scale(gst.util_uint64_scale(segment.time, 1, 16 * gst.SECOND), 16 * gst.SECOND, 1)
+			stop = gst.util_uint64_scale_ceil(gst.util_uint64_scale_ceil(segment.stop, 1, 16 * gst.SECOND), 16 * gst.SECOND, 1)
+			if start > gobject.G_MAXLONG:
+				start = -1
+				start_seek_type = gst.SEEK_TYPE_NONE
+			else:
+				start_seek_type = gst.SEEK_TYPE_SET
+			if stop > gobject.G_MAXLONG:
+				stop = -1
+				stop_seek_type = gst.SEEK_TYPE_NONE
+			else:
+				stop_seek_type = gst.SEEK_TYPE_SET
+			segment.set_seek(segment.rate, segment.format, segment.flags, start_seek_type, start, stop_seek_type, stop)
 		self.__seek_time = (segment.start / gst.SECOND / 16) * 16
 		self.__needs_seek = True
 		return True
@@ -381,19 +382,90 @@ __author__
 				os.close(fd)
 
 		pad = self.src_pads().next()
-		offset = gps_start * 16384
-		blocksize = 8 * 16 * 16384
-		(retval, buf) = pad.alloc_buffer(offset, blocksize, pad.get_property('caps'))
+		caps = pad.get_property('caps')
+
+		# Compute segment mask
+		dq_require = int(self.get_property('data-quality-require'))
+		dq_deny = int(self.get_property('data-quality-deny'))
+		state_require = int(self.get_property('state-require'))
+		state_deny = int(self.get_property('state-deny'))
+		state_array = state_array.astype(int).reshape((16, 16))
+		segment_mask = (
+			(state_array & state_require == state_require).all(1) &
+			(~state_array & state_deny == state_deny).all(1) &
+			(dq_array & dq_require == dq_require) & 
+			(~dq_array & dq_deny == dq_deny)
+		)
+
+		self.info('good data mask is ' + ''.join([str(x) for x in segment_mask.astype('int')]))
+
+		was_nongap = segment_mask[0]
+		last_segment_num = 0
+		for segment_num, is_nongap in enumerate(segment_mask):
+			if is_nongap ^ was_nongap:
+				offset = 16384 * (gps_start + last_segment_num)
+				size = 16384 * (segment_num - last_segment_num) * 8
+				(retval, buf) = pad.alloc_buffer(offset, size, caps)
+				if retval != gst.FLOW_OK:
+					return (retval, None)
+				buf[0:size] = hoft_array[(16384*last_segment_num):(16384*segment_num)].data
+				buf.offset = offset
+				buf.offset_end = 16384 * (gps_start + segment_num)
+				buf.duration = gst.SECOND * (segment_num - last_segment_num)
+				buf.timestamp = gst.SECOND * (gps_start + last_segment_num)
+				if not was_nongap:
+					buf.flag_set(gst.BUFFER_FLAG_GAP)
+					self.info("Setting GST_BUFFER_FLAG_GAP")
+				self.info("pushing frame spanning [%u, %u) (extra frame because of change in data quality)"
+					% (gps_start + last_segment_num, gps_start + segment_num))
+				result = pad.push(buf)
+				if result != gst.FLOW_OK:
+					return (retval, None)
+				last_segment_num = segment_num
+			was_nongap = is_nongap
+		segment_num = 16
+		offset = 16384 * (gps_start + last_segment_num)
+		size = 16384 * (segment_num - last_segment_num) * 8
+		(retval, buf) = pad.alloc_buffer(offset, size, caps)
 		if retval != gst.FLOW_OK:
 			return (retval, None)
-
-		buf[0:blocksize] = hoft_array.data
-		buf.duration = 16 * gst.SECOND
-		buf.timestamp = gps_start * gst.SECOND
+		buf[0:size] = hoft_array[(16384*last_segment_num):(16384*segment_num)].data
 		buf.offset = offset
-		buf.offset_end = offset + 16 * 16384
-		self.info("pushed frame %u" % gps_start)
+		buf.offset_end = 16384 * (gps_start + segment_num)
+		buf.duration = gst.SECOND * (segment_num - last_segment_num)
+		buf.timestamp = gst.SECOND * (gps_start + last_segment_num)
+		if not was_nongap:
+			buf.flag_set(gst.BUFFER_FLAG_GAP)
+			self.info("Setting GST_BUFFER_FLAG_GAP")
+		self.info("pushing frame spanning [%u, %u)"
+			% (gps_start + last_segment_num, gps_start + segment_num))
 		return (gst.FLOW_OK, buf)
+
 
 # Register element class
 gstlal_element_register(lal_onlinehoftsrc)
+
+
+if __name__ == '__main__':
+	# Pipeline to demonstrate a veto kicking in.
+	# Conlog says:
+	#
+	# H1-1792  19771 s    959175240- 959195011   2010 05/29 13:33:45 - 05/29 19:03:16 utc
+	# H1-1793  13342 s    959196562- 959209904   2010 05/29 19:29:07 - 05/29 23:11:29 utc
+	#
+	# so after a few frames you'll see gaps start appearing, then about a hundred
+	# frames later you'll see data again.
+	#
+	pipeline = gst.Pipeline("lal_onlinehoftsrc_example")
+	elems = mkelems_in_bin(pipeline,
+		("lal_onlinehoftsrc", {"instrument":"H1"}),
+		("progressreport",),
+		("fakesink",)
+	)
+	print elems[0].set_state(gst.STATE_READY)
+	if not elems[0].seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_KEY_UNIT,
+		gst.SEEK_TYPE_SET, (959195011 - 16*3)*gst.SECOND, gst.SEEK_TYPE_NONE, -1):
+		raise RuntimeError, "Seek failed"
+	print pipeline.set_state(gst.STATE_PLAYING)
+	mainloop = gobject.MainLoop()
+	mainloop.run()
