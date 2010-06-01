@@ -74,6 +74,18 @@ class lal_fakeligosrc(gst.Bin):
 		)
 	}
 
+	__gsttemplates__ = (
+		gst.PadTemplate("src",
+			gst.PAD_SRC, gst.PAD_ALWAYS,
+			gst.caps_from_string("""
+				audio/x-raw-float,
+				channels = (int) 1,
+				endianness = (int) BYTE_ORDER,
+				width = (int) 64,
+				rate = (int) 16384
+			""")
+		),
+	)
 
 	def do_set_property(self, prop, val):
 		if prop.name == 'blocksize':
@@ -127,7 +139,6 @@ class lal_fakeligosrc(gst.Bin):
 		outputchain = mkelems_in_bin(self,
 			('lal_adder', {'sync': True}),
 			('audioamplify', {'clipping-method': 3, 'amplification': 16384.**.5}),
-			('capsfilter', {'caps': gst.Caps('audio/x-raw-float, width=64, rate=16384')}),
 			('taginject',)
 		)
 
@@ -135,7 +146,7 @@ class lal_fakeligosrc(gst.Bin):
 			chain[-1].link(outputchain[0])
 
 		self.__taginject = outputchain[-1]
-		self.add_pad(gst.GhostPad('src', outputchain[-1].get_static_pad('src')))
+		self.add_pad(gst.ghost_pad_new_from_template('src', outputchain[-1].get_static_pad('src'), self.__gsttemplates__[0]))
 
 
 
