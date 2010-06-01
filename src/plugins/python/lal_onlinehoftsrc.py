@@ -142,8 +142,8 @@ class directory_poller(object):
 		self.namesuffix = namesuffix
 		self.__time = 0
 		self.stride = 16
-		self.latency = 60
-		self.timeout = 1
+		self.latency = 70
+		self.timeout = 2
 		self.top_cache = None
 		self.epoch_caches = {}
 
@@ -197,21 +197,19 @@ class directory_poller(object):
 
 							# Try to get the top level directory listing,
 							# and refresh it if its mtime has changed.
-							if self.top_cache is None:
-								try:
-									cache = dir_cache_top(self.top, self.nameprefix)
-								except OSError, (err, strerror):
-									# We couldn't read the top level directory.
-									# This is very bad, so let's complain about
-									# it, sleep for a moment, and then go back
-									# to the outer loop.
-									print >>sys.stderr, "lal_onlinehoftsrc: %s: %s" % (self.top, strerror)
-									time.sleep(self.timeout)
-									break
+							try:
+								if self.top_cache is None:
+									self.top_cache = dir_cache_top(self.top, self.nameprefix)
 								else:
-									self.top_cache = cache
-							else:
-								self.top_cache.refresh()
+									self.top_cache.refresh()
+							except OSError, (err, strerror):
+								# We couldn't read the top level directory.
+								# This is very bad, so let's complain about
+								# it, sleep for a moment, and then go back
+								# to the outer loop.
+								print >>sys.stderr, "lal_onlinehoftsrc: %s: %s" % (self.top, strerror)
+								time.sleep(self.timeout)
+								break
 
 							# Loop over the epochs until we find a file that
 							# is at least as new as the anticipated GPS time.
@@ -220,12 +218,17 @@ class directory_poller(object):
 								if other_epoch not in self.epoch_caches.keys():
 									try:
 										cache = dir_cache_epoch(self.top, self.nameprefix, self.namesuffix, other_epoch)
-									except OSError:
+									except OSError, (err, strerror):
+										print >>sys.stderr, "lal_onlinehoftsrc: %s: %s" % (self.top, strerror)
 										continue
-									else:
-										self.epoch_caches[other_epoch] = cache
+									self.epoch_caches[other_epoch] = cache
 								else:
 									cache = self.epoch_caches[other_epoch]
+									try:
+										cache.refresh()
+									except OSError, (err, strerror):
+										print >>sys.stderr, "lal_onlinehoftsrc: %s: %s" % (self.top, strerror)
+										continue
 								idx = bisect.bisect_left(cache.items, self.time)
 								if idx < len(cache.items):
 									if self.time == cache.items[idx]:
