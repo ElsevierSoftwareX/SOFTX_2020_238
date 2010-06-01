@@ -393,7 +393,7 @@ patch from Gnome's Bugzilla and apply it to your gst-python source tree::
 
   $ cd /path/to/local/src
   $ pushd gst-python
-  $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=162291 -o gst-python.defs.patch
+  $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=162291 -O gst-python.defs.patch
   $ git apply gst-python.defs.patch
 
 Skip the rest of this section and continue to `Installing the Software`_
