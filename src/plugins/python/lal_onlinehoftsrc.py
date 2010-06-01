@@ -335,6 +335,7 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		self.set_do_timestamp(False)
 		self.set_format(gst.FORMAT_TIME)
 		self.src_pads().next().use_fixed_caps()
+		self.__needs_seek = False
 
 
 	def do_start(self):
