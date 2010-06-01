@@ -91,7 +91,7 @@ def mkelems_in_bin(bin, *pipedesc):
 	"""Create an array of elements from a list of tuples, add them to a bin,
 	link them sequentially, and return the list.  Example:
 	
-	mkelem(bin, ('audiotestsrc', {'wave':9}), ('audioresample'))
+	mkelem(bin, ('audiotestsrc', {'wave':9}), ('audioresample',))
 	
 	is equivalent to
 	
