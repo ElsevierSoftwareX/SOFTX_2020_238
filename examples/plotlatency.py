@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 """
 Plot latency from progressreport elements in GStreamer pipelines.
 
