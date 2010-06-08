@@ -17,7 +17,6 @@ AC_CONFIG_FILES([ \
 	src/bin/Makefile \
 	src/lib/gstlal.pc \
 	src/lib/Makefile \
-	src/onlinehoft/Makefile \
 	src/plugins/Makefile \
 	src/plugins/python/Makefile \
 	src/python/Makefile \
@@ -133,6 +132,14 @@ AC_MSG_NOTICE([If you have chosen to install the software in a location not incl
 	
 to your GST_PLUGIN_PATH environment variable.])
 AC_SUBST([GSTREAMER_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\).*"])
+
+
+#
+# Check for PyGObject
+#
+PKG_CHECK_MODULES([pygobject], [pygobject-2.0], , [AC_MSG_ERROR([Not found!])])
+AC_SUBST([pygobject_CFLAGS])
+AC_SUBST([pygobject_LIBS])
 
 
 #
