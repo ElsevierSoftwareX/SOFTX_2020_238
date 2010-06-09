@@ -289,7 +289,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 	#
 	# data source and progress report
 	#
-	print detector
+	print detector.block_size
 	if fake_data:
 		head = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
 	elif online_data:
