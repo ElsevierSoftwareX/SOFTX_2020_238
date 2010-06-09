@@ -82,6 +82,7 @@
 #include <gstlal_nxydump.h>
 #include <gstadder.h>
 #include <gstlal_triggergen.h>
+#include <gstlal_triggerxmlwriter.h>
 #include <gstlal_gate.h>
 #include <gstlal_chisquare.h>
 #include <gstlal_autochisq.h>
