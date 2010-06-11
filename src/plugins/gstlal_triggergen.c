@@ -889,7 +889,13 @@ static void gen_base_init(gpointer g_class)
 		element_class,
 		"Trigger Generator",
 		"Filter",
-		"SNR and \\chi^{2} in, Triggers out",
+		"Produce sngl_inspiral records from SNR and chi squared.\n"
+		"A trigger is recorded for every instant at which the absolute value of the SNR\n" \
+		"is greater than snr-thresh, and also greater than at all of the max_gap seconds\n" \
+		"of data that come before and after.  snr-thresh and max_gap are properties of\n" \
+		"this element.\n" \
+		"\n" \
+		"The maximum possible trigger rate is (1/max_gap) Hz per template.\n", \
 		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
 	);
 
