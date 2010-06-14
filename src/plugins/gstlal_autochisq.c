@@ -67,7 +67,7 @@
 
 
 #define CHI2_USES_REAL_ONLY FALSE
-#define DEFAULT_SNR_THRESH 5.5
+#define DEFAULT_SNR_THRESH 0
 
 
 /*
