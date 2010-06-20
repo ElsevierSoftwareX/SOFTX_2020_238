@@ -20,6 +20,7 @@ libgstlal_la_SOURCES = \
 	gstlalcollectpads.h gstlalcollectpads.c \
 	gstadder.h gstadder.c \
 	gstlal_triggergen.h gstlal_triggergen.c \
+	gstlal_triggerxmlwriter.h gstlal_triggerxmlwriter.c \
 	gstlal_gate.h gstlal_gate.c \
 	gstlal_chisquare.h gstlal_chisquare.c \
 	gstlal_autochisq.h gstlal_autochisq.c \
