@@ -388,9 +388,10 @@ def mkLLOIDsrc(pipeline, seekevent, instrument, detector, rates, psd = None, psd
 	# that restores the input's unit variance.
 	#
 
+	quality = 9
 	head = {source_rate: pipeparts.mktee(pipeline, head)}
 	for rate in sorted(rates, reverse = True)[1:]:	# all but the highest rate
-		head[rate] = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkaudioamplify(pipeline, head[source_rate], 1/math.sqrt(pipeparts.audioresample_variance_gain(9, source_rate, rate))), quality = 9), "audio/x-raw-float, rate=%d" % rate))
+		head[rate] = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkaudioamplify(pipeline, head[source_rate], 1/math.sqrt(pipeparts.audioresample_variance_gain(quality, source_rate, rate))), quality = quality), "audio/x-raw-float, rate=%d" % rate))
 
 	#
 	# done.  return value is a dictionary of tee elements indexed by
