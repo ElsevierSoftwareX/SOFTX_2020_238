@@ -220,6 +220,13 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	GSTLALCoinc* coinc = GSTLAL_COINC(user_data);
 
 
+	if (GST_ELEMENT(coinc)->numsinkpads < 2)
+	{
+		GST_ERROR_OBJECT(coinc, "not enough sink pads, 2 required but only %d are present", GST_ELEMENT(coinc)->numsinkpads < 2);
+		return GST_FLOW_ERROR;
+	}
+
+
 	/*
 	 * Pick the pad from which to pop the next buffer.  Choose the pad for
 	 * which the last received end time is the earliest, and only accept
@@ -581,7 +588,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	GSTLALCoinc *coinc = GSTLAL_COINC(object);
 
 	gst_element_create_all_pads(GST_ELEMENT(coinc));
-	//coinc->srcpad = gst_element_get_static_pad(GST_ELEMENT(coinc), "src");
+	coinc->srcpad = gst_element_get_static_pad(GST_ELEMENT(coinc), "src");
 
 	coinc->collect = gst_collect_pads_new();
 	gst_collect_pads_set_function(coinc->collect, GST_DEBUG_FUNCPTR(collected), coinc);
