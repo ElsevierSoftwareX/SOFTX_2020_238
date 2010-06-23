@@ -208,6 +208,12 @@ static gboolean sngl_inspiral_equal(gconstpointer v1, gconstpointer v2)
 }
 
 
+static gboolean sngl_inspiral_handle_empty(gpointer key, gpointer value, gpointer user_data)
+{
+	return *((SnglInspiralTable**)value) == NULL;
+}
+
+
 /* Resize a GArray to a multiple of n */
 static void g_array_size_to_next_multiple(GArray* array, gint n)
 {
@@ -294,10 +300,15 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		g_hash_table_iter_init(&iter, hash);
 		while (g_hash_table_iter_next(&iter, (gpointer*)&key, (gpointer*)&val))
 		{
-			SnglInspiralTable* dest_sngl = g_hash_table_lookup(dest_hash, key);
-			if (dest_sngl)
-				val = sngl_inspiral_merge(val, dest_sngl);
-			g_hash_table_insert(dest_hash, val, val);
+			SnglInspiralTable** dest_sngl_handle = g_hash_table_lookup(dest_hash, key);
+			if (dest_sngl_handle)
+			{
+				*dest_sngl_handle = sngl_inspiral_merge(val, *dest_sngl_handle);
+			} else {
+				dest_sngl_handle = g_malloc(sizeof(SnglInspiralTable*));
+				*dest_sngl_handle = val;
+				g_hash_table_insert(dest_hash, g_memdup(val, sizeof(*val)), dest_sngl_handle);
+			}
 		}
 	}
 
@@ -339,101 +350,116 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 	 */
 	
+	GHashTableIter iter;
+	SnglInspiralTable* key;
+	SnglInspiralTable** val_handle;
+	GArray* outarray = g_array_new(FALSE, TRUE, sizeof(SnglInspiralTable));
+
+	g_hash_table_iter_init(&iter, dest_hash);
+	while (g_hash_table_iter_next(&iter, (gpointer*)&key, (gpointer*)&val_handle))
 	{
-		GHashTableIter iter;
-		SnglInspiralTable* key;
-		SnglInspiralTable* val;
-		GArray* outarray = g_array_new(FALSE, TRUE, sizeof(SnglInspiralTable));
+		SnglInspiralTable* val = *val_handle;
+		SnglInspiralTable* earliest_sngl = NULL;
+		SnglInspiralTable* latest_sngl;
+		GstClockTime earliest_time;
+		GstClockTime latest_time;
+		GstClockTime latest_seen_time;
+		guint numtriggers = 0;
 
-		g_hash_table_iter_init(&iter, dest_hash);
-		while (g_hash_table_iter_next(&iter, (gpointer*)&key, (gpointer*)&val))
-		{
-			/* Remove key-value pair, because the key is also one of the elements
-			 * in the linked list in the value. */
-			g_hash_table_iter_remove(&iter);
+		do {
+			/* Update late end of running list. */
+			++numtriggers;
+			latest_sngl = val;
+			SnglInspiralTable* next_val = val->next;
+			latest_time = XLALGPSToINT8NS(&latest_sngl->end_time);
+			if (latest_sngl->next) /* this IS NOT the last entry in the list */
+				latest_seen_time = latest_time;
+			else /* this IS the last entry in the list */
+				latest_seen_time = data->last_end_time;
 
-			SnglInspiralTable* earliest_sngl = NULL;
-			SnglInspiralTable* latest_sngl;
-			GstClockTime earliest_time;
-			GstClockTime latest_time;
-			GstClockTime latest_seen_time;
-			guint numtriggers = 0;
+			/* Update early end of running list. */
+			if (earliest_sngl == NULL)
+			{
+				earliest_sngl = latest_sngl;
+				earliest_time = latest_time;
+			}
 
-			do {
-				/* Update late end of running list. */
-				++numtriggers;
-				latest_sngl = val;
-				latest_time = XLALGPSToINT8NS(&latest_sngl->end_time);
-				if (latest_sngl->next) /* this IS NOT the last entry in the list */
-					latest_seen_time = latest_time;
-				else /* this IS the last entry in the list */
-					latest_seen_time = data->last_end_time;
+			/* If necessary, enforce both of the running list's conditions. */
+			if (latest_seen_time - earliest_time > coinc->dt)
+			{
+				SnglInspiralTable* end_sngl;
+				if (latest_time - earliest_time > coinc->dt)
+					/* emit all but last trigger as coincidence */
+					end_sngl = latest_sngl;
+				else
+					/* emit all triggers as coincidence */
+					end_sngl = latest_sngl->next;
 
-				/* Update early end of running list. */
-				if (earliest_sngl == NULL)
+				/* create coincidence records and discard unneeded triggers */
+				SnglInspiralTable* head_sngl = earliest_sngl;
+				GST_INFO_OBJECT(coinc, "start coincidence, condition 1");
+				while (head_sngl != end_sngl)
 				{
-					earliest_sngl = latest_sngl;
-					earliest_time = latest_time;
-				}
+					GST_INFO_OBJECT(coinc,
+						"ifo=%s end_time.gpsSeconds=%d end_time.gpsNanoSeconds=%d",
+						head_sngl->ifo, head_sngl->end_time.gpsSeconds,
+						head_sngl->end_time.gpsNanoSeconds);
 
-				/* If necessary, enforce both of the running list's conditions. */
-				if (latest_seen_time - earliest_time > coinc->dt)
-				{
-					SnglInspiralTable* end_sngl;
-					if (latest_time - earliest_time > coinc->dt)
-						/* emit all but last trigger as coincidence */
-						end_sngl = latest_sngl;
-					else
-						/* emit all triggers as coincidence */
-						end_sngl = latest_sngl->next;
+					g_array_append_val(outarray, head_sngl);
 
-					/* create coincidence records and discard unneeded triggers */
-					SnglInspiralTable* head_sngl = earliest_sngl;
-					while (head_sngl != end_sngl)
+					SnglInspiralTable* next_sngl = head_sngl->next;
+					GstClockTime head_time = XLALGPSToINT8NS(&head_sngl->end_time);
+					if (latest_seen_time - head_time > coinc->dt)
 					{
-						g_array_append_val(outarray, head_sngl);
-
-						SnglInspiralTable* next_sngl = head_sngl->next;
-						GstClockTime head_time = XLALGPSToINT8NS(&head_sngl->end_time);
-						if (latest_seen_time - head_time > coinc->dt)
-						{
-							earliest_sngl = next_sngl;
-							if (earliest_sngl)
-								earliest_time = XLALGPSToINT8NS(&earliest_sngl->end_time);
-							head_sngl->next = NULL;
-							g_free(head_sngl);
-						}
-						head_sngl = next_sngl;
-						--numtriggers;
-					}
-
-					/* resize output array to a multiple of numsinkpads */
-					g_array_size_to_next_multiple(outarray, GST_ELEMENT(coinc)->numsinkpads);
-				} else if (numtriggers >= GST_ELEMENT(coinc)->numsinkpads) {
-					/* all detectors are present, form a coincidence. */
-					SnglInspiralTable* head_sngl = earliest_sngl;
-					SnglInspiralTable* end_sngl = latest_sngl->next;
-					while (head_sngl != end_sngl)
-					{
-						g_array_append_val(outarray, head_sngl);
-						SnglInspiralTable* next_sngl = head_sngl->next;
+						earliest_sngl = next_sngl;
+						if (earliest_sngl)
+							earliest_time = XLALGPSToINT8NS(&earliest_sngl->end_time);
 						head_sngl->next = NULL;
 						g_free(head_sngl);
-						head_sngl = next_sngl;
 					}
-					earliest_sngl = latest_sngl = NULL;
-					numtriggers = 0;
+					head_sngl = next_sngl;
+					--numtriggers;
 				}
+				GST_INFO_OBJECT(coinc, "end coincidence");
 
-				/* Take next value in list. */
-				val = val->next;
-			} while (val != NULL);
+				/* resize output array to a multiple of numsinkpads */
+				g_array_size_to_next_multiple(outarray, GST_ELEMENT(coinc)->numsinkpads);
+			} else if (numtriggers >= GST_ELEMENT(coinc)->numsinkpads) {
+				g_assert(numtriggers == GST_ELEMENT(coinc)->numsinkpads);
+				/* all detectors are present, form a coincidence. */
+				SnglInspiralTable* head_sngl = earliest_sngl;
+				SnglInspiralTable* end_sngl = latest_sngl->next;
+				GST_INFO_OBJECT(coinc, "start coincidence, condition 2");
+				while (head_sngl != end_sngl)
+				{
+					GST_INFO_OBJECT(coinc,
+						"ifo=%s end_time.gpsSeconds=%d end_time.gpsNanoSeconds=%d",
+						head_sngl->ifo, head_sngl->end_time.gpsSeconds,
+						head_sngl->end_time.gpsNanoSeconds);
 
-			/* put back linked list after we have eaten up as many triggers as we can. */
-			/* FIXME is this safe to do while iterating? */
-			if (earliest_sngl)
-				g_hash_table_insert(dest_hash, earliest_sngl, earliest_sngl);
-		}
+					g_array_append_val(outarray, head_sngl);
+					SnglInspiralTable* next_sngl = head_sngl->next;
+					head_sngl->next = NULL;
+					g_free(head_sngl);
+					head_sngl = next_sngl;
+				}
+				GST_INFO_OBJECT(coinc, "end coincidence");
+				earliest_sngl = latest_sngl = NULL;
+				numtriggers = 0;
+			}
+
+			/* Take next value in list. */
+			val = next_val;
+		} while (val != NULL);
+
+		/* put back linked list after we have eaten up as many triggers as we can. */
+		*val_handle = earliest_sngl;
+	}
+
+	/* wipe out null entries in hashtable */
+	g_hash_table_foreach_remove(dest_hash, sngl_inspiral_handle_empty, NULL);
+
+	GST_INFO_OBJECT(coinc, "found %d coincidences", outarray->len);
 
 	guint64 siz = outarray->len * g_array_get_element_size(outarray);
 
@@ -447,7 +473,6 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 	// TODO set timestamps, offsets, etc.
 	/* Generate outgoing buffer. */
-	GstBuffer* buf;
 	GstFlowReturn retval = gst_pad_alloc_buffer(coinc->srcpad, 0, siz, GST_PAD_CAPS(coinc->srcpad), &buf);
 	if (retval != GST_FLOW_OK)
 		return retval;
@@ -457,7 +482,6 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	g_array_unref(outarray);
 
 	return gst_pad_push(coinc->srcpad, buf);
-	}
 
 }
 
@@ -469,17 +493,17 @@ static void finalize(GObject *object)
 	/* destroy hashtable and its contents */
 	GHashTableIter iter;
 	SnglInspiralTable* key;
-	SnglInspiralTable* val;
+	SnglInspiralTable** val;
 	g_hash_table_iter_init(&iter, coinc->trigger_sequence_hash);
 	while (g_hash_table_iter_next(&iter, (gpointer*)&key, (gpointer*)&val))
 	{
 		g_hash_table_iter_remove(&iter);
-		while (val != NULL)
+		while (*val != NULL)
 		{
-			SnglInspiralTable* next = val->next;
-			val->next = NULL;
-			g_free(val);
-			val = next;
+			SnglInspiralTable* next = (*val)->next;
+			(*val)->next = NULL;
+			g_free(*val);
+			*val = next;
 		}
 	}
 	g_hash_table_unref(coinc->trigger_sequence_hash);
@@ -593,7 +617,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	coinc->collect = gst_collect_pads_new();
 	gst_collect_pads_set_function(coinc->collect, GST_DEBUG_FUNCPTR(collected), coinc);
 
-	coinc->trigger_sequence_hash = g_hash_table_new(sngl_inspiral_hash, sngl_inspiral_equal);
+	coinc->trigger_sequence_hash = g_hash_table_new_full(sngl_inspiral_hash, sngl_inspiral_equal, g_free, g_free);
 }
 
 
