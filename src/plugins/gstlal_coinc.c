@@ -221,6 +221,25 @@ static void g_array_size_to_next_multiple(GArray* array, gint n)
 }
 
 
+static GstClockTime find_earliest_collectdata(GSTLALCoinc* coinc, GstCoincCollectData** data)
+{
+	GstClockTime min_last_end_time = GST_CLOCK_TIME_NONE;
+	GSList* slist;
+	
+	for (slist = coinc->collect->data; slist; slist = g_slist_next(slist))
+	{
+		GstCoincCollectData* this_data = slist->data;
+		if (this_data->last_end_time < min_last_end_time)
+		{
+			min_last_end_time = this_data->last_end_time;
+			*data = this_data;
+		}
+	}
+
+	return min_last_end_time;
+}
+
+
 static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 {
 	GSTLALCoinc* coinc = GSTLAL_COINC(user_data);
@@ -239,21 +258,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 * data from that pad.
 	 */
 	GstCoincCollectData* data = NULL;
-	{
-		GSList* slist;
-		GstClockTime min_last_end_time = GST_CLOCK_TIME_NONE;
-
-		for (slist = coinc->collect->data; slist; slist = g_slist_next(slist))
-		{
-			GstCoincCollectData* this_data = slist->data;
-			if (this_data->last_end_time < min_last_end_time)
-			{
-				min_last_end_time = this_data->last_end_time;
-				data = this_data;
-			}
-		}
-	}
-	if (!data) return GST_FLOW_OK;
+	GstClockTime min_last_end_time = find_earliest_collectdata(coinc, &data);
+	g_assert(data);
 
 
 	/* Take a buffer from that pad, if one is available, else return. */
@@ -484,15 +490,19 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			ptr->next = NULL;
 	}
 
-	// TODO set timestamps, offsets, etc.
 	/* Generate outgoing buffer. */
-	GstFlowReturn retval = gst_pad_alloc_buffer(coinc->srcpad, 0, siz, GST_PAD_CAPS(coinc->srcpad), &buf);
+	GstFlowReturn retval = gst_pad_alloc_buffer(coinc->srcpad, GST_BUFFER_OFFSET_NONE, siz, GST_PAD_CAPS(coinc->srcpad), &buf);
 	if (retval != GST_FLOW_OK)
 		return retval;
 	memcpy(GST_BUFFER_DATA(buf), outarray->data, siz);
-
+	
 	/* Free output array */
 	g_array_unref(outarray);
+
+	GST_BUFFER_TIMESTAMP(buf) = min_last_end_time - coinc->dt;
+	GST_BUFFER_DURATION(buf) = find_earliest_collectdata(coinc, &data) - min_last_end_time;
+	GST_BUFFER_OFFSET(buf) = GST_BUFFER_OFFSET_NONE;
+	GST_BUFFER_OFFSET_END(buf) = GST_BUFFER_OFFSET_NONE;
 
 	return gst_pad_push(coinc->srcpad, buf);
 
