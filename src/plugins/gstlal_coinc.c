@@ -388,25 +388,39 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			if (latest_seen_time - earliest_time > coinc->dt)
 			{
 				SnglInspiralTable* end_sngl;
+				int numtriggers_to_emit;
 				if (latest_time - earliest_time > coinc->dt)
+				{
 					/* emit all but last trigger as coincidence */
 					end_sngl = latest_sngl;
-				else
+					numtriggers_to_emit = numtriggers - 1;
+				} else {
 					/* emit all triggers as coincidence */
 					end_sngl = latest_sngl->next;
+					numtriggers_to_emit = numtriggers;
+				}
 
-				/* create coincidence records and discard unneeded triggers */
+				/* create coincidence records */
+				if (numtriggers_to_emit > 1)
+				{
+					SnglInspiralTable* head_sngl = earliest_sngl;
+					GST_INFO_OBJECT(coinc, "start coincidence");
+					for (head_sngl = earliest_sngl; head_sngl != end_sngl; head_sngl = head_sngl->next, --numtriggers)
+					{
+						GST_INFO_OBJECT(coinc,
+							"ifo=%s end_time=%d.%08d seconds",
+							head_sngl->ifo, head_sngl->end_time.gpsSeconds,
+							head_sngl->end_time.gpsNanoSeconds);
+						
+						g_array_append_val(outarray, head_sngl);
+					}
+					GST_INFO_OBJECT(coinc, "end coincidence");
+				}
+
+				/* discard unneeded triggers */
 				SnglInspiralTable* head_sngl = earliest_sngl;
-				GST_INFO_OBJECT(coinc, "start coincidence, condition 1");
 				while (head_sngl != end_sngl)
 				{
-					GST_INFO_OBJECT(coinc,
-						"ifo=%s end_time.gpsSeconds=%d end_time.gpsNanoSeconds=%d",
-						head_sngl->ifo, head_sngl->end_time.gpsSeconds,
-						head_sngl->end_time.gpsNanoSeconds);
-
-					g_array_append_val(outarray, head_sngl);
-
 					SnglInspiralTable* next_sngl = head_sngl->next;
 					GstClockTime head_time = XLALGPSToINT8NS(&head_sngl->end_time);
 					if (latest_seen_time - head_time > coinc->dt)
@@ -420,7 +434,6 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 					head_sngl = next_sngl;
 					--numtriggers;
 				}
-				GST_INFO_OBJECT(coinc, "end coincidence");
 
 				/* resize output array to a multiple of numsinkpads */
 				g_array_size_to_next_multiple(outarray, GST_ELEMENT(coinc)->numsinkpads);
@@ -429,11 +442,11 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 				/* all detectors are present, form a coincidence. */
 				SnglInspiralTable* head_sngl = earliest_sngl;
 				SnglInspiralTable* end_sngl = latest_sngl->next;
-				GST_INFO_OBJECT(coinc, "start coincidence, condition 2");
+				GST_INFO_OBJECT(coinc, "start coincidence");
 				while (head_sngl != end_sngl)
 				{
 					GST_INFO_OBJECT(coinc,
-						"ifo=%s end_time.gpsSeconds=%d end_time.gpsNanoSeconds=%d",
+						"ifo=%s end_time=%d.%08d seconds",
 						head_sngl->ifo, head_sngl->end_time.gpsSeconds,
 						head_sngl->end_time.gpsNanoSeconds);
 
@@ -459,7 +472,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	/* wipe out null entries in hashtable */
 	g_hash_table_foreach_remove(dest_hash, sngl_inspiral_handle_empty, NULL);
 
-	GST_INFO_OBJECT(coinc, "found %d coincidences", outarray->len);
+	GST_INFO_OBJECT(coinc, "found %d coincident triggers", outarray->len);
 
 	guint64 siz = outarray->len * g_array_get_element_size(outarray);
 
