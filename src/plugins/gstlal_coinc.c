@@ -245,6 +245,14 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	GSTLALCoinc* coinc = GSTLAL_COINC(user_data);
 
 
+	if (gst_collect_pads_available(pads) == 0)
+	{
+		/* No data to be read, must be EOS */
+		gst_pad_push_event(coinc->srcpad, gst_event_new_eos());
+		return GST_FLOW_UNEXPECTED;
+	}
+
+
 	if (GST_ELEMENT(coinc)->numsinkpads < 2)
 	{
 		GST_ERROR_OBJECT(coinc, "not enough sink pads, 2 required but only %d are present", GST_ELEMENT(coinc)->numsinkpads < 2);
