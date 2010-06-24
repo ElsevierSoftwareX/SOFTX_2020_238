@@ -425,8 +425,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 							"ifo=%s end_time=%d.%08d seconds",
 							head_sngl->ifo, head_sngl->end_time.gpsSeconds,
 							head_sngl->end_time.gpsNanoSeconds);
-						
-						g_array_append_val(outarray, head_sngl);
+
+						g_array_append_vals(outarray, head_sngl, 1);
 					}
 					GST_INFO_OBJECT(coinc, "end coincidence");
 				}
@@ -464,7 +464,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 						head_sngl->ifo, head_sngl->end_time.gpsSeconds,
 						head_sngl->end_time.gpsNanoSeconds);
 
-					g_array_append_val(outarray, head_sngl);
+					g_array_append_vals(outarray, head_sngl, 1);
 					SnglInspiralTable* next_sngl = head_sngl->next;
 					head_sngl->next = NULL;
 					g_free(head_sngl);
