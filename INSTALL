@@ -355,7 +355,7 @@ gst-plugins-base source tree locally::
   $ cd /path/to/local/src
   $ pushd gst-plugins-base
   $ wget https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal/audioresample.patch
-  $ patch -p1 <audioresample.patch
+  $ git apply audioresample.patch
   $ popd
 
 
