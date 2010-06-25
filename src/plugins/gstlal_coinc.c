@@ -165,7 +165,13 @@ static SnglInspiralTable* sngl_inspiral_merge(SnglInspiralTable* lhs, SnglInspir
 	if (lhs == NULL) return rhs;
 	if (rhs == NULL) return lhs;
 
-	SnglInspiralTable* top = sngl_inspiral_le(lhs, rhs) ? lhs : rhs;
+	if (!sngl_inspiral_le(lhs, rhs))
+	{
+		void* tmp = lhs;
+		lhs = rhs;
+		rhs = tmp;
+	}
+	SnglInspiralTable* top = lhs;
 
 	do {
 		SnglInspiralTable* head;
