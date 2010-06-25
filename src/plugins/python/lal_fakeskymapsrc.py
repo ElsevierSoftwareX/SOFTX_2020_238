@@ -42,7 +42,7 @@ class lal_fakeskymapsrc(gst.BaseSrc):
 		gst.PadTemplate("src",
 			gst.PAD_SRC, gst.PAD_ALWAYS,
 			gst.caps_from_string("""
-				application/x-raw-float,
+				audio/x-raw-float,
 				channels = (int) 4,
 				endianness = (int) BYTE_ORDER,
 				width = (int) 64
