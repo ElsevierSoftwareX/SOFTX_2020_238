@@ -38,6 +38,13 @@ class lal_fakeskymapsrc(gst.BaseSrc):
 		__doc__,
 		__author__
 	)
+	gproperty(
+		gobject.TYPE_BOOLEAN,
+		"regular-grid",
+		"Set to TRUE to use a regular grid spanning the entire globe",
+		True,
+		construct=True
+	)
 	__gsttemplates__ = (
 		gst.PadTemplate("src",
 			gst.PAD_SRC, gst.PAD_ALWAYS,
@@ -56,6 +63,7 @@ class lal_fakeskymapsrc(gst.BaseSrc):
 		self.set_do_timestamp(False)
 		self.set_format(gst.FORMAT_TIME)
 		self.src_pads().next().use_fixed_caps()
+		self.set_property("regular-grid", True)
 
 
 	def do_start(self):
@@ -83,15 +91,23 @@ class lal_fakeskymapsrc(gst.BaseSrc):
 		# Look up our src pad
 		pad = self.src_pads().next()
 
-		# Create a random number of random pixels
-		npixels = numpy.random.randint(20000)
-		theta = numpy.random.uniform(0.0, numpy.pi, (1, npixels))
-		phi = numpy.random.uniform(0.0, 2*numpy.pi, (1, npixels))
-		span = numpy.random.uniform(0.0, 1.0, (1, npixels)) # FIXME what is a typical pixel span?
-		logp = numpy.random.uniform(-5.0, 5.0, (1, npixels))
+		if self.get_property("regular-grid"):
+			npoints = 100
+			npixels = npoints ** 2
+			theta = numpy.arange(float(npoints)) / npoints * numpy.pi
+			phi = numpy.arange(2 * float(npoints)) / npoints * numpy.pi
+			span = numpy.pi / npoints
+			logp = numpy.random.randn(npoints, npoints)
+			skymap_array = numpy.hstack( (theta, phi, numpy.array((span,) * npixels), logp.flatten()) )
+		else:
+			npixels = numpy.random.randint(20000)
+			theta = numpy.random.uniform(0.0, numpy.pi, (1, npixels))
+			phi = numpy.random.uniform(0.0, 2*numpy.pi, (1, npixels))
+			span = numpy.random.uniform(0.0, 1.0, (1, npixels)) # FIXME what is a typical pixel span?
+			logp = numpy.random.uniform(-5.0, 5.0, (1, npixels))
 
-		# Concatenate all the arrays
-		skymap_array = numpy.hstack( (theta, phi, span, logp) )
+			# Concatenate all the arrays
+			skymap_array = numpy.hstack( (theta, phi, span, logp) )
 
 		# Get raw binary data from Numpy array
 		skymap_buffer = skymap_array.data
