@@ -93,12 +93,13 @@ class lal_fakeskymapsrc(gst.BaseSrc):
 
 		if self.get_property("regular-grid"):
 			npoints = 100
-			npixels = npoints ** 2
-			theta = numpy.arange(float(npoints)) / npoints * numpy.pi
-			phi = numpy.arange(2 * float(npoints)) / npoints * numpy.pi
+			npixels = 2 * npoints ** 2
+			th = numpy.arange(float(npoints)) / npoints * numpy.pi
+			ph = numpy.arange(2 * float(npoints)) / npoints * numpy.pi
+			thth, phph = numpy.meshgrid(th, ph)
+			logp = numpy.random.randn(*thth.shape)
 			span = numpy.pi / npoints
-			logp = numpy.random.randn(npoints, npoints)
-			skymap_array = numpy.hstack( (theta, phi, numpy.array((span,) * npixels), logp.flatten()) )
+			skymap_array = numpy.column_stack( (thth.flatten(), phph.flatten(), numpy.array((span,) * npixels), logp.flatten()) )
 		else:
 			npixels = numpy.random.randint(20000)
 			theta = numpy.random.uniform(0.0, numpy.pi, (1, npixels))
