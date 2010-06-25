@@ -81,7 +81,6 @@
 #include <gstlal_whiten.h>
 #include <gstlal_nxydump.h>
 #include <gstadder.h>
-#include <gstlal_coinc.h>
 #include <gstlal_triggergen.h>
 #include <gstlal_triggerxmlwriter.h>
 #include <gstlal_gate.h>
@@ -132,7 +131,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_whiten", GSTLAL_WHITEN_TYPE},
 		{"lal_nxydump", GSTLAL_NXYDUMP_TYPE},
 		{"lal_adder", GST_TYPE_ADDER},
-		{"lal_coinc", GSTLAL_COINC_TYPE},
 		{"lal_triggergen", GSTLAL_TRIGGERGEN_TYPE},
 		{"lal_triggerxmlwriter", GSTLAL_TRIGGERXMLWRITER_TYPE},
 		{"lal_gate", GSTLAL_GATE_TYPE},
