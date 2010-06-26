@@ -812,7 +812,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		 */
 
 		if(-element->latency >= (gint) autocorrelation_length(element)) {
-			GST_ERROR_OBJECT(object, "invalid latency %ld, must be in (%u, 0]", element->latency, -(gint) autocorrelation_length(element));
+			GST_ERROR_OBJECT(object, "invalid latency %lld, must be in (%u, 0]", element->latency, -(gint) autocorrelation_length(element));
 			element->latency = -(autocorrelation_length(element) - 1);
 		}
 
@@ -829,7 +829,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		gint64 latency = g_value_get_int64(value);
 		g_mutex_lock(element->autocorrelation_lock);
 		if(element->autocorrelation_matrix && -latency >= (gint) autocorrelation_length(element))
-			GST_ERROR_OBJECT(object, "invalid latency %ld, must be in (%u, 0]", latency, -(gint) autocorrelation_length(element));
+			GST_ERROR_OBJECT(object, "invalid latency %lld, must be in (%u, 0]", latency, -(gint) autocorrelation_length(element));
 		else
 			element->latency = latency;
 		g_mutex_unlock(element->autocorrelation_lock);
