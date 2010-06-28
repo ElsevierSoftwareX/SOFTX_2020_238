@@ -38,7 +38,7 @@ function test_resampler() {
 		! queue ! lal_nxydump ! filesink buffer-mode=2 location="dump_out.txt"
 }
 
-function test_resampler_gaps() {
+function test_up_resampler_gaps() {
 	gst-launch \
 		lal_gate name=gate threshold=0.7 \
 		! tee name=orig \
@@ -47,11 +47,34 @@ function test_resampler_gaps() {
 		! lal_nxydump \
 		! queue ! filesink buffer-mode=2 location="dump_out.txt" \
 		audiotestsrc freq=15.8 samplesperbuffer=1024 num-buffers=8 \
-		! audio/x-raw-float, width=64, rate=1024 \
+		! audio/x-raw-float, width=64, rate=2048 \
 		! tee name=control \
 		! gate.control \
-		audiotestsrc freq=256 samplesperbuffer=1024 num-buffers=128 \
+		audiotestsrc freq=256 wave=pink-noise samplesperbuffer=1024 num-buffers=8 \
 		! audio/x-raw-float, channels=1, width=64, rate=2048 \
+		! gate.sink \
+		control. \
+		! lal_nxydump \
+		! queue ! filesink buffer-mode=2 location="dump_control.txt" \
+		orig. \
+		! lal_nxydump \
+		! queue ! filesink buffer-mode=2 location="dump_in.txt"
+}
+
+function test_down_resampler_gaps() {
+	gst-launch \
+		lal_gate name=gate threshold=0.7 \
+		! tee name=orig \
+		! audioresample gap-aware=true \
+		! audio/x-raw-float, width=64, rate=16384 \
+		! lal_nxydump \
+		! queue ! filesink buffer-mode=2 location="dump_out.txt" \
+		audiotestsrc freq=15.8 samplesperbuffer=1024 num-buffers=128 \
+		! audio/x-raw-float, width=64, rate=32768 \
+		! tee name=control \
+		! gate.control \
+		audiotestsrc freq=256 wave=pink-noise samplesperbuffer=1024 num-buffers=128 \
+		! audio/x-raw-float, channels=1, width=64, rate=32768 \
 		! gate.sink \
 		control. \
 		! lal_nxydump \
@@ -73,19 +96,20 @@ function test_whiten() {
 
 function test_simulation() {
 	gst-launch \
-		audiotestsrc wave=9 volume=1e-21 timestamp-offset=873247800000000000 \
+		audiotestsrc wave=9 volume=1e-21 timestamp-offset=874107195000000000 num-buffers=5 samplesperbuffer=16384 \
 		! audio/x-raw-float, channels=1, width=64, rate=16384 \
 		! taginject tags="instrument=\"H1\",channel-name=\"LSC-STRAIN\",units=\"strain\"" \
-		! lal_simulation xml-location="HL-INJECTIONS_1_BNS_INJ-873247860-176894.xml" \
-		! fakesink sync=false
+		! lal_simulation xml-location="bns_injections.xml" \
+		! audioamplify clipping-method=3 amplification=1e20 \
+		! adder ! audioconvert ! autoaudiosink
 }
 
 function test_simulation2wav() {
 	gst-launch \
-		audiotestsrc wave=9 volume=1e-21 timestamp-offset=873247900000000000 num-buffers=160 \
+		audiotestsrc wave=9 volume=1e-21 timestamp-offset=874107195000000000 num-buffers=5 samplesperbuffer=16384 \
 		! audio/x-raw-float, channels=1, width=64, rate=16384 \
 		! taginject tags="title=\"Inspiral Injections\",instrument=\"H1\",channel-name=\"LSC-STRAIN\",units=\"strain\"" \
-		! lal_simulation xml-location="/home/dkeppel/lloid/HL-INJECTIONS_1_BNS_INJ-873247900-10.xml" \
+		! lal_simulation xml-location="bns_injections.xml" \
 		! progressreport \
 		! audioamplify clipping-method=3 amplification=1e20 \
 		! wavenc \
@@ -109,14 +133,11 @@ function test_framesrc() {
 }
 
 function test_fakeLIGO(){
-        ./LIGO_noise_test \
-                --frame-cache "/home/kipp/gwf/cache" \
-		--gps-start-time 800000000 \
-		--gps-stop-time 800000200 \
-                --instrument "H1" \
-                --output "fakeLIGOpsds.xml";
-        echo "</LIGO_LW>" >> fakeLIGOpsds.xml;
-        python ligo_lw_test_01.py
+	python plot_fakeligosrcpsd.py lal_fakeligosrc
+}
+
+function test_fakeAdvLIGO(){
+	python plot_fakeligosrcpsd.py lal_fakeadvligosrc
 }
 
 function test_autochisq() {
@@ -162,4 +183,4 @@ function test_chisquare_gaps() {
 		! queue ! filesink buffer-mode=2 location="dump_in.txt"
 }
 
-test_resampler_gaps
+test_down_resampler_gaps

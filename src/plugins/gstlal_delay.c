@@ -49,7 +49,7 @@
 
 
 static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
-	"sink",
+	GST_BASE_TRANSFORM_SINK_NAME,
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
@@ -74,7 +74,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 
 
 static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
-	"src",
+	GST_BASE_TRANSFORM_SRC_NAME,
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
@@ -116,8 +116,7 @@ GST_BOILERPLATE(
 
 
 enum property {
-   ARG_DELAY = 1,
-   ARG_SILENT,
+   ARG_DELAY = 1
 };
 
 #define DEFAULT_DELAY 0
@@ -166,37 +165,9 @@ static gboolean set_caps(GstBaseTransform *trans,
       /* size of unit sample */
       get_unit_size(trans,incaps,&element->unit_size);
 
-      if ( !element->silent)
-      {
-	    fprintf(stderr,"lal_delay incaps set = %s\n",gst_caps_to_string(incaps));
-	    fprintf(stderr,"lal_delay outcaps set = %s\n",gst_caps_to_string(outcaps));
-      }
-
-
       return TRUE;
 }
 
-
-/*
- * In addition to handling buffers, elements also handle events.
- * These events change how the element behaves, e.g., an EOS event
- * tells the element to stop reading buffers.  The event() function
- * is called whenever an event is passed to an element.  Return
- * FALSE to override the parent class event handling.
- */
-static gboolean event(GstBaseTransform *trans, GstEvent *event)
-{
-
-      GSTLALDelay *element = GSTLAL_DELAY( trans );
-
-      if ( !element->silent )
-      {
-	    fprintf(stderr,"lal_delay received signal %s\n",
-		    gst_event_type_get_name(GST_EVENT_TYPE(event)));
-      }
-
-      return TRUE; //FIXME
-}
 
 
 
@@ -219,9 +190,6 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans,
 	/* delay params  */
 	guint delaysize = (guint) element->delay*element->unit_size;
 	guint insize = (guint) size;
-
-	if ( !element->silent && delaysize > 0 )
-	   fprintf(stderr,"needed %u, received %d (rate %d)\n",delaysize,insize,element->rate);
 
 	if ( insize <= delaysize )
 	   /* ignore this buffer */
@@ -261,15 +229,7 @@ static GstFlowReturn transform( GstBaseTransform *trans, GstBuffer *inbuf, GstBu
       if ( GST_BUFFER_SIZE(inbuf) <= delaysize )
 	 /* drop entire buffer */
       {
-	    if ( !element->silent )
-	    {
-		  fprintf(stderr,"skip %ld to %ld, let nothing through (rate %d)\n",
-			  GST_BUFFER_TIMESTAMP(inbuf),
-			  GST_BUFFER_TIMESTAMP(inbuf)+GST_BUFFER_DURATION(inbuf),
-			  element->rate);
-	    }
 	    element->delay -= GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
-
 	    result = GST_BASE_TRANSFORM_FLOW_DROPPED;
       }
       else if ( 0 < element->delay )
@@ -288,16 +248,6 @@ static GstFlowReturn transform( GstBaseTransform *trans, GstBuffer *inbuf, GstBu
 	    GST_BUFFER_SIZE(outbuf) = GST_BUFFER_SIZE(inbuf) - delaysize;
 	    GST_BUFFER_FLAG_SET(outbuf,GST_BUFFER_FLAG_DISCONT);
 
-	    if ( !element->silent )
-	    {
-		  fprintf(stderr,"skip %ld to %ld, let %ld to %ld through (rate %d)\n",
-			  GST_BUFFER_TIMESTAMP(inbuf),
-			  GST_BUFFER_TIMESTAMP(inbuf) + delaytime,
-			  GST_BUFFER_TIMESTAMP(outbuf),
-			  GST_BUFFER_TIMESTAMP(outbuf) + GST_BUFFER_DURATION(outbuf),
-			  element->rate);
-	    }
-
 	    /* never come back */
 	    element->delay = 0;
 
@@ -306,13 +256,6 @@ static GstFlowReturn transform( GstBaseTransform *trans, GstBuffer *inbuf, GstBu
       else
 	 /* pass entire buffer */
       {
-	    if ( !element->silent )
-	    {
-		  fprintf(stderr,"let everything through %ld to %ld (rate %d)\n",
-			  GST_BUFFER_TIMESTAMP(inbuf),
-			  GST_BUFFER_TIMESTAMP(inbuf) + GST_BUFFER_DURATION(inbuf),
-			  element->rate);
-	    }
 	    result = GST_FLOW_OK;
       }
 
@@ -347,11 +290,6 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	      element->delay = g_value_get_uint64(value);
 	      break;
 	  }
-	case ARG_SILENT:
-	  {
-		element->silent = g_value_get_boolean(value);
-	  break;
-	  }
 
 	default:
 	  G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -375,10 +313,6 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	{
 	case ARG_DELAY:
 	  g_value_set_uint64(value, element->delay);
-	  break;
-
-	case ARG_SILENT:
-	  g_value_set_boolean(value, element->silent);
 	  break;
 
 	default:
@@ -414,7 +348,6 @@ gstlal_delay_base_init(gpointer gclass)
 	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
 	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
 	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
-	transform_class->event = GST_DEBUG_FUNCPTR(event);
 
 }
 
@@ -442,15 +375,6 @@ static void gstlal_delay_class_init(GSTLALDelayClass *klass)
 					);
 
 
-	g_object_class_install_property(
-		gobject_class,
-		ARG_SILENT,
-		g_param_spec_boolean(
-			"silent",
-			"Verbosity of element",
-			"Shut up element!",
-			TRUE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS ) );
-
 }
 
 
@@ -460,5 +384,4 @@ static void gstlal_delay_class_init(GSTLALDelayClass *klass)
 static void gstlal_delay_init(GSTLALDelay *filter, GSTLALDelayClass *kclass)
 {
       filter->delay = DEFAULT_DELAY;
-      filter->silent = TRUE;
 }

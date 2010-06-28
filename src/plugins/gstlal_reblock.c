@@ -368,15 +368,15 @@ static void finalize(GObject *object)
 
 static void base_init(gpointer class)
 {
-	static GstElementDetails plugin_details = {
+	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
+
+	gst_element_class_set_details_simple(
+		element_class,
 		"Reblock",
 		"Filter",
 		"Chop audio buffers into smaller pieces",
 		"Kipp Cannon <kipp.cannon@ligo.org>"
-	};
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
-
-	gst_element_class_set_details(element_class, &plugin_details);
+	);
 
 	gst_element_class_add_pad_template(
 		element_class,

@@ -917,15 +917,15 @@ static GstStateChangeReturn change_state(GstElement *element, GstStateChange tra
 
 static void base_init(gpointer class)
 {
-	static GstElementDetails plugin_details = {
+	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
+
+	gst_element_class_set_details_simple(
+		element_class,
 		"Inspiral \\chi^{2}",
 		"Filter",
 		"A \\chi^{2} statistic for the inspiral pipeline",
 		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
-	};
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
-
-	gst_element_class_set_details(element_class, &plugin_details);
+	);
 
 	gst_element_class_add_pad_template(
 		element_class,

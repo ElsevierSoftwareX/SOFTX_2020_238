@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2009 Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna
- * <chad.hanna@ligo.caltech.edu>
+ * Copyright (C) 2009 Leo Singer <leo.singer@ligo.org>
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the
@@ -37,14 +36,12 @@
  */
 
 
-#ifndef __GSTLAL_TRIGGERGEN_H__
-#define __GSTLAL_TRIGGERGEN_H__
+#ifndef __GSTLAL_COINC_H__
+#define __GSTLAL_COINC_H__
 
 
 #include <gst/gst.h>
 #include <gst/base/gstcollectpads.h>
-#include <gstlalcollectpads.h>
-#include <lal/LIGOMetadataTables.h>
 
 
 G_BEGIN_DECLS
@@ -53,66 +50,42 @@ G_BEGIN_DECLS
 /*
  * ============================================================================
  *
- *                             Trigger Generator
+ *                            Coincidence Generator
  *
  * ============================================================================
  */
 
 
-#define GSTLAL_TRIGGERGEN_TYPE \
-	(gstlal_triggergen_get_type())
-#define GSTLAL_TRIGGERGEN(obj) \
-	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_TRIGGERGEN_TYPE, GSTLALTriggerGen))
-#define GSTLAL_TRIGGERGEN_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_TRIGGERGEN_TYPE, GSTLALTriggerGenClass))
-#define GST_IS_GSTLAL_TRIGGERGEN(obj) \
-	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_TRIGGERGEN_TYPE))
-#define GST_IS_GSTLAL_TRIGGERGEN_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_TRIGGERGEN_TYPE))
+#define GSTLAL_COINC_TYPE \
+	(gstlal_coinc_get_type())
+#define GSTLAL_COINC(obj) \
+	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_COINC_TYPE, GSTLALCoinc))
+#define GSTLAL_COINC_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_COINC_TYPE, GSTLALCoincClass))
+#define GST_IS_GSTLAL_COINC(obj) \
+	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_COINC_TYPE))
+#define GST_IS_GSTLAL_COINC_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_COINC_TYPE))
 
 
 typedef struct {
 	GstElementClass parent_class;
-} GSTLALTriggerGenClass;
+} GSTLALCoincClass;
 
 
 typedef struct {
 	GstElement element;
-
 	GstCollectPads *collect;
-	GstPadEventFunction collect_event;
-
-	GstPad *snrpad;
-	GstLALCollectData *snrcollectdata;
-	GstPad *chisqpad;
-	GstLALCollectData *chisqcollectdata;
-	GstPad *srcpad;
-
-	gboolean segment_pending;
-	gboolean flush_stop_pending;
-	GstSegment segment;
-	guint64 next_output_offset;
-	guint64 next_output_timestamp;
-
-	int rate;
-
-	GMutex *bank_lock;
-	char *bank_filename;
-	gchar *instrument;
-	gchar *channel_name;
-	SnglInspiralTable *bank;
-	gint num_templates;
-	double snr_thresh;
-	double max_gap;
-	SnglInspiralTable *last_event;
-	LIGOTimeGPS *last_time;
-} GSTLALTriggerGen;
+	GstPad* srcpad;
+	GHashTable* trigger_sequence_hash;
+	guint64 dt;
+} GSTLALCoinc;
 
 
-GType gstlal_triggergen_get_type(void);
+GType gstlal_coinc_get_type(void);
 
 
 G_END_DECLS
 
 
-#endif	/* __GSTLAL_TRIGGERGEN_H__ */
+#endif	/* __GSTLAL_COINC_H__ */
