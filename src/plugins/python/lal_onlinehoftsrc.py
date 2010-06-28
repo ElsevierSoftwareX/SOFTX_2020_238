@@ -20,6 +20,9 @@ Online calibrated h(t) source, following conventions established in S6.
 The LIGO online frames are described at
 <https://www.lsc-group.phys.uwm.edu/daswg/wiki/S6OnlineGroup/CalibratedData>.
 
+The Virgo online frames are described at
+<https://workarea.ego-gw.it/ego2/virgo/data-analysis/calibration-reconstruction/online-h-t-reconstruction-hrec>.
+
 The environment variable ONLINEHOFT must be set and must point to the online
 frames directory, which has subfolders for H1, H2, L1, V1, ... .
 
