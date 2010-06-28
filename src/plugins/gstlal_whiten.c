@@ -656,7 +656,7 @@ static void delta_f_changed(GObject *object, GParamSpec *pspec, gpointer user_da
 	GSTLALWhiten *element = GSTLAL_WHITEN(object);
 
 	/*
-	 * build/re-build work space
+	 * (re)build work space
 	 */
 
 	free_workspace(element);
@@ -718,8 +718,8 @@ static void release_pad(GstElement *element, GstPad *pad)
 		/* !?  don't know about this pad ... */
 		return;
 
-	gst_object_unref(pad);
 	whiten->mean_psd_pad = NULL;
+	gst_object_unref(pad);
 }
 
 
@@ -856,15 +856,16 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	}
 
 	/*
-	 * record the sample rate, make a new Hann window, new FFT plans,
-	 * and workspaces
+	 * record the sample rate
 	 */
 
 	if(success && (rate != element->sample_rate)) {
 		element->sample_rate = rate;
 
 		/*
-		 * let everybody know the PSD Nyquist has changed
+		 * let everybody know the PSD's Nyquist has changed.  this
+		 * triggers the building of a new Hann window, new FFT
+		 * plans, and new workspaces
 		 */
 
 		g_object_notify(G_OBJECT(trans), "f-nyquist");
