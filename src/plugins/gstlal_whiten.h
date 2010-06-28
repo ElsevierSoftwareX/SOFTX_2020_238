@@ -79,29 +79,49 @@ typedef struct {
 typedef struct {
 	GstBaseTransform element;
 
-	double zero_pad_seconds;
-	double fft_length_seconds;
-	enum gstlal_psdmode_t psdmode;
-
-	GstPad *mean_psd_pad;
+	/*
+	 * I/O
+	 */
 
 	GstAdapter *adapter;
+	GstPad *mean_psd_pad;
+
+	/*
+	 * time stamp book-keeping
+	 */
 
 	LALUnit sample_units;
-	int sample_rate;
-	gboolean next_is_discontinuity;
+	gint sample_rate;
+	gboolean need_discont;
 	GstClockTime t0;
 	guint64 offset0;
 	guint64 next_offset_in;
 	guint64 next_offset_out;
 
+	/*
+	 * PSD estimation parameters
+	 */
+
+	double zero_pad_seconds;
+	double fft_length_seconds;
+	enum gstlal_psdmode_t psdmode;
+
+	/*
+	 * work space
+	 */
+
 	REAL8Window *window;
 	REAL8FFTPlan *fwdplan;
 	REAL8FFTPlan *revplan;
-	LALPSDRegressor *psd_regressor;
-	REAL8FrequencySeries *psd;
 	REAL8TimeSeries *tdworkspace;
 	COMPLEX16FrequencySeries *fdworkspace;
+
+	/*
+	 * PSD state
+	 */
+
+	LALPSDRegressor *psd_regressor;
+	REAL8FrequencySeries *psd;
 	REAL8Sequence *tail;
 } GSTLALWhiten;
 

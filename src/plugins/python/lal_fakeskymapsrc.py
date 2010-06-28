@@ -111,7 +111,7 @@ class lal_fakeskymapsrc(gst.BaseSrc):
 			skymap_array = numpy.hstack( (theta, phi, span, logp) )
 
 		# Get raw binary data from Numpy array
-		skymap_buffer = skymap_array.data
+		skymap_buffer = numpy.ascontiguousarray(skymap_array, dtype='f8').data
 
 		# Allocate a new buffer
 		(retval, buf) = pad.alloc_buffer(npixels, len(skymap_buffer), pad.get_property("caps"))
