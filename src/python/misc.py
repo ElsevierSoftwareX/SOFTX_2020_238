@@ -72,8 +72,7 @@ def max_stat_thresh(coeffs, fap, samp_tol=100.0):
 	out = numpy.zeros(num)
 	for c in coeffs: out += c*scipy.randn(num)**2
 	out.sort()
-	p = numpy.cumsum(out)/numpy.sum(out)
-        return out[len(p[p>fap])]
+	return out[-int(samp_tol)]
 
 #
 # Function to compute the optimal quadratic statistic coefficients given

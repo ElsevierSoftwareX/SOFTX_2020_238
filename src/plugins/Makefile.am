@@ -1,5 +1,5 @@
 SUBDIRS = python
-INCLUDES = -I$(top_srcdir)/src/lib -I$(top_srcdir)/src/onlinehoft
+INCLUDES = -I$(top_srcdir)/src/lib
 
 plugin_LTLIBRARIES = libgstlal.la
 
@@ -12,7 +12,6 @@ endif
 libgstlal_la_SOURCES = \
 	gstlal_plugins.h gstlal.c \
 	gstlal_framesrc.h gstlal_framesrc.c \
-	gstlal_onlinehoftsrc.h gstlal_onlinehoftsrc.c \
 	low_latency_inspiral_functions.h low_latency_inspiral_functions.c \
 	gstlal_matrixmixer.h gstlal_matrixmixer.c \
 	gstlal_simulation.h gstlal_simulation.c \
@@ -20,7 +19,9 @@ libgstlal_la_SOURCES = \
 	gstlal_nxydump.h gstlal_nxydump.c \
 	gstlalcollectpads.h gstlalcollectpads.c \
 	gstadder.h gstadder.c \
+	gstlal_coinc.h gstlal_coinc.c \
 	gstlal_triggergen.h gstlal_triggergen.c \
+	gstlal_triggerxmlwriter.h gstlal_triggerxmlwriter.c \
 	gstlal_gate.h gstlal_gate.c \
 	gstlal_chisquare.h gstlal_chisquare.c \
 	gstlal_autochisq.h gstlal_autochisq.c \
@@ -33,7 +34,7 @@ libgstlal_la_SOURCES = \
 	gstlal_iirbank.h gstlal_iirbank.c \
 	$(NDSSRC_SOURCES)
 libgstlal_la_CFLAGS = -O2 $(AM_CFLAGS) $(CFLAGS) ${gstreamer_CFLAGS} ${LAL_CFLAGS} ${GSL_CFLAGS} ${FFTW_CFLAGS} ${NDS_CFLAGS}
-libgstlal_la_LIBADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS} ${FFTW_LIBS} ${NDS_LIBS} $(top_srcdir)/src/lib/libgstlal.la $(top_srcdir)/src/onlinehoft/libonlinehoft.la
+libgstlal_la_LIBADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS} ${FFTW_LIBS} ${NDS_LIBS} $(top_srcdir)/src/lib/libgstlal.la
 libgstlal_la_LDFLAGS = ${GSTREAMER_PLUGIN_LDFLAGS}
 
 noinst_HEADERS = gstlal_plugins.h

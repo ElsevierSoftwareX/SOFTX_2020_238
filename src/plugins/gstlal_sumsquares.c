@@ -432,7 +432,7 @@ static void gstlal_sumsquares_class_init(GSTLALSumSquaresClass *klass)
 		g_param_spec_value_array(
 			"weights",
 			"Weights",
-			"Vector of weights to use in sum.  If no vector is provided weights of 1.0 are assumed, otherwise the number of input channels must equal the vector length.",
+			"Vector of weights to use in sum.  If no vector is provided weights of 1.0 are assumed, otherwise the number of input channels must equal the vector length.  The incoming channels are first multiplied by the weights, then squared, then summed.",
 			g_param_spec_double(
 				"weight",
 				"Weight",

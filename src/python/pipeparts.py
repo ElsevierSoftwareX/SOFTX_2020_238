@@ -24,9 +24,6 @@
 #
 
 
-import math
-
-
 from pipeutil import *
 
 from glue import segments
@@ -297,11 +294,12 @@ def mktogglecomplex(pipeline, src):
 	return elem
 
 
-def mkautochisq(pipeline, src, autocorrelation_matrix = None, latency = 0):
+def mkautochisq(pipeline, src, autocorrelation_matrix = None, latency = 0, snr_thresh=0):
 	elem = gst.element_factory_make("lal_autochisq")
 	if autocorrelation_matrix is not None:
 		elem.set_property("autocorrelation-matrix", pipeio.repack_complex_array_to_real(autocorrelation_matrix))
 		elem.set_property("latency", latency)
+		elem.set_property("snr-thresh", snr_thresh)
 	pipeline.add(elem)
 	src.link(elem)
 	elem = mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed

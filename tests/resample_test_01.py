@@ -11,7 +11,6 @@ import numpy
 import sys
 from gstlal import pipeparts
 import test_common
-from gstlal.elements.check_timestamps import mkchecktimestamps
 
 
 #
@@ -55,7 +54,7 @@ def resample_test_01a(pipeline):
 	head = tee = pipeparts.mktee(pipeline, head)
 
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw-float, rate=%d" % out_rate)
-	head = mkchecktimestamps(pipeline, head)
+	head = pipeparts.mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "resample_test_01a_out.dump")
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "resample_test_01a_in.dump")
 
@@ -98,13 +97,13 @@ def resample_test_01b(pipeline):
 	head = tee = pipeparts.mktee(pipeline, head)
 
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw-float, rate=%d" % out_rate)
-	head = mkchecktimestamps(pipeline, head)
+	head = pipeparts.mkchecktimestamps(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw-float, rate=%d" % in_rate)
-	head = mkchecktimestamps(pipeline, head)
+	head = pipeparts.mkchecktimestamps(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw-float, rate=%d" % out_rate)
-	head = mkchecktimestamps(pipeline, head)
+	head = pipeparts.mkchecktimestamps(pipeline, head)
 	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw-float, rate=%d" % in_rate)
-	head = mkchecktimestamps(pipeline, head)
+	head = pipeparts.mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "resample_test_01b_out.dump")
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "resample_test_01b_in.dump")
 

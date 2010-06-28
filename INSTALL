@@ -211,7 +211,7 @@ procedure on a fresh Mac box.)  Every time you see a command starting with
   $ sudo port install python26
   $ sudo port install python_select
   $ sudo python_select python26
-  $ sudo port install wget fftw-3 fftw-3-single py26-numpy py26-scipy py26-matplotlib liboil glib2 py26-gobject py26-gtk git-core
+  $ sudo port install wget fftw-3 fftw-3-single py26-numpy py26-scipy py26-matplotlib liboil glib2 py26-gobject py26-gtk git-core gsl
  
 
 Mac OS X Environment
@@ -355,7 +355,7 @@ gst-plugins-base source tree locally::
   $ cd /path/to/local/src
   $ pushd gst-plugins-base
   $ wget https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal/audioresample.patch
-  $ patch -p1 <audioresample.patch
+  $ git apply audioresample.patch
   $ popd
 
 
@@ -385,8 +385,19 @@ the original patch locally to allow our pipelines to work::
 Patching gst-python
 ===================
 
-Skip this section and continue to `Installing the Software`_ **UNLESS** your 
-system is running Mac OS X or CentOS.
+The current source release of gst-python has not yet been updated with some
+functions that have been recently added to the GStreamer API.  We have an open
+bug report at <https://bugzilla.gnome.org/show_bug.cgi?id=620067> for adding
+some of the functions that we need.  In the mean time you can download the
+patch from Gnome's Bugzilla and apply it to your gst-python source tree::
+
+  $ cd /path/to/local/src
+  $ pushd gst-python
+  $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=162291 -O gst-python.defs.patch
+  $ git apply gst-python.defs.patch
+
+Skip the rest of this section and continue to `Installing the Software`_
+**UNLESS** your system is running Mac OS X or CentOS.
 
 The current source release of gst-python fails to locate libpython, the library
 against which Python shared objects must be linked.  A workaround has been 

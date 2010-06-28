@@ -67,6 +67,7 @@
 
 
 #define CHI2_USES_REAL_ONLY FALSE
+#define DEFAULT_SNR_THRESH 0
 
 
 /*
@@ -242,43 +243,48 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 
 			complex double snr = input[((gint) autocorrelation_length(element) - 1 + element->latency) * channels];
 
-			/*
-			 * multiplying snr by this makes it real
-			 */
+			if (cabs(snr) >= element->snr_thresh)
+			{
+				/*
+				 * multiplying snr by this makes it real
+				 */
 
-			complex double invsnrphase = cexp(-I*carg(snr));
+				complex double invsnrphase = cexp(-I*carg(snr));
 
-			/*
-			 * end of this channel's row in the autocorrelation
-			 * matrix
-			 */
+				/*
+				 * end of this channel's row in the autocorrelation
+				 * matrix
+				 */
 
-			const complex double *autocorrelation_end = autocorrelation + autocorrelation_length(element);
+				const complex double *autocorrelation_end = autocorrelation + autocorrelation_length(element);
 
-			/*
-			 * \chi^{2} sum
-			 */
+				/*
+				 * \chi^{2} sum
+				 */
 
-			double chisq;
+				double chisq;
 
-			/*
-			 * compute \sum_{i} (A_{i} * \rho_{0} - \rho_{i})^{2}
-			 */
+				/*
+				 * compute \sum_{i} (A_{i} * \rho_{0} - \rho_{i})^{2}
+				 */
 
-			for(chisq = 0; autocorrelation < autocorrelation_end; autocorrelation++, indata += channels) {
-				complex double z = (*autocorrelation * snr - *indata) * invsnrphase;
+				for(chisq = 0; autocorrelation < autocorrelation_end; autocorrelation++, indata += channels) {
+					complex double z = (*autocorrelation * snr - *indata) * invsnrphase;
 #if CHI2_USES_REAL_ONLY
-				chisq += pow(creal(z), 2);
+					chisq += pow(creal(z), 2);
 #else
-				chisq += pow(creal(z), 2) + pow(cimag(z), 2);
+					chisq += pow(creal(z), 2) + pow(cimag(z), 2);
 #endif
+				}
+
+				/*
+				 * record \chi^{2} sum, advance to next output sample
+				 */
+
+				*(output++) = chisq / gsl_vector_get(element->autocorrelation_norm, channel);
+			} else {
+				*(output++) = 0;
 			}
-
-			/*
-			 * record \chi^{2} sum, advance to next output sample
-			 */
-
-			*(output++) = chisq / gsl_vector_get(element->autocorrelation_norm, channel);
 
 			/*
 			 * advance to next input sample
@@ -385,7 +391,8 @@ GST_BOILERPLATE(
 
 enum property {
 	ARG_AUTOCORRELATION_MATRIX = 1,
-	ARG_LATENCY
+	ARG_LATENCY,
+	ARG_SNR_THRESH
 };
 
 
@@ -829,6 +836,10 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 	}
 
+	case ARG_SNR_THRESH:
+		element->snr_thresh = g_value_get_double(value);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -860,6 +871,10 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 	case ARG_LATENCY:
 		g_value_set_int64(value, element->latency);
+		break;
+
+	case ARG_SNR_THRESH:
+		g_value_set_double(value, element->snr_thresh);
 		break;
 
 	default:
@@ -978,6 +993,17 @@ static void gstlal_autochisq_class_init(GSTLALAutoChiSqClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SNR_THRESH,
+		g_param_spec_double(
+			"snr-thresh",
+			"SNR Threshold",
+			"SNR Threshold that determines a trigger.",
+			0, G_MAXDOUBLE, DEFAULT_SNR_THRESH,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 
 	signals[SIGNAL_RATE_CHANGED] = g_signal_new(
 		"rate-changed",
@@ -1010,5 +1036,6 @@ static void gstlal_autochisq_init(GSTLALAutoChiSq *filter, GSTLALAutoChiSqClass 
 	filter->autocorrelation_available = g_cond_new();
 	filter->autocorrelation_matrix = NULL;
 	filter->autocorrelation_norm = NULL;
+	filter->snr_thresh = DEFAULT_SNR_THRESH;
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);
 }

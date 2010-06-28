@@ -11,7 +11,6 @@ import numpy
 import sys
 from gstlal import pipeparts
 import test_common
-from gstlal.elements.check_timestamps import mkchecktimestamps
 
 
 #
@@ -53,7 +52,7 @@ def firbank_test_01a(pipeline):
 	fir_matrix[0, (fir_matrix.shape[1] - 1) - latency] = 1.0
 
 	head = pipeparts.mkfirbank(pipeline, head, fir_matrix = fir_matrix, latency = latency)
-	head = mkchecktimestamps(pipeline, head)
+	head = pipeparts.mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "firbank_test_01a_out.dump")
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "firbank_test_01a_in.dump")
 
