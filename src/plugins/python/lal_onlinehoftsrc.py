@@ -15,7 +15,9 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
-Online calibrated h(t) source, implementing the S6 specification described on 
+Online calibrated h(t) source, following conventions established in S6.
+
+The LIGO online frames are described at
 <https://www.lsc-group.phys.uwm.edu/daswg/wiki/S6OnlineGroup/CalibratedData>.
 
 The environment variable ONLINEHOFT must be set and must point to the online
@@ -267,7 +269,8 @@ ifodesc = namedtuple("ifodesc", "ifo nameprefix namesuffix channelname state_cha
 ifodescs = {
 	"H1": ifodesc("H1", "H-H1_DMT_C00_L2-", "-16.gwf", "H1:DMT-STRAIN", "H1:DMT-STATE_VECTOR", "H1:DMT-DATA_QUALITY_VECTOR"),
 	"H2": ifodesc("H2", "H-H2_DMT_C00_L2-", "-16.gwf", "H2:DMT-STRAIN", "H2:DMT-STATE_VECTOR", "H2:DMT-DATA_QUALITY_VECTOR"),
-	"L1": ifodesc("L1", "L-L1_DMT_C00_L2-", "-16.gwf", "L1:DMT-STRAIN", "L1:DMT-STATE_VECTOR", "L1:DMT-DATA_QUALITY_VECTOR")
+	"L1": ifodesc("L1", "L-L1_DMT_C00_L2-", "-16.gwf", "L1:DMT-STRAIN", "L1:DMT-STATE_VECTOR", "L1:DMT-DATA_QUALITY_VECTOR"),
+	"V1": ifodesc("V1", "V-V1_DMT_HREC-", "-16.gwf", "V1:h_16384Hz", None, "V1:Hrec_Veto_dataQuality")
 }
 
 
@@ -314,6 +317,13 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		DQ_BADGAMMA,
 		construct=True
 	)
+	gproperty(
+		VirgoDQFlags,
+		"virgo-data-quality",
+		"Data quality value that must be present in Virgo data",
+		VIRGO_DQ_12,
+		construct=True
+	)
 	__gsttemplates__ = (
 		gst.PadTemplate("src",
 			gst.PAD_SRC, gst.PAD_ALWAYS,
@@ -321,11 +331,29 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 				audio/x-raw-float,
 				channels = (int) 1,
 				endianness = (int) BYTE_ORDER,
-				width = (int) 64,
+				width = (int) {32, 64},
 				rate = (int) 16384
 			""")
 		),
 	)
+
+
+	__float32_caps = gst.caps_from_string("""
+		audio/x-raw-float,
+		channels = (int) 1,
+		endianness = (int) BYTE_ORDER,
+		width = (int) 32,
+		rate = (int) 16384
+	""")
+
+
+	__float64_caps = gst.caps_from_string("""
+		audio/x-raw-float,
+		channels = (int) 1,
+		endianness = (int) BYTE_ORDER,
+		width = (int) 64,
+		rate = (int) 16384
+	""")
 
 
 	@with_construct_properties
@@ -428,8 +456,9 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 				try:
 					filename = "/dev/fd/%d" % fd
 					hoft_array = safe_getvect(filename, self.__ifodesc.channelname, gps_start, 16, 16384)
-					os.lseek(fd, 0, 0) # FIXME: use os.SEEK_SET (added to API in Python 2.5) for last argument
-					state_array = safe_getvect(filename, self.__ifodesc.state_channelname, gps_start, 16, 16)
+					if self.__ifodesc.ifo != 'V1':
+						os.lseek(fd, 0, 0) # FIXME: use os.SEEK_SET (added to API in Python 2.5) for last argument
+						state_array = safe_getvect(filename, self.__ifodesc.state_channelname, gps_start, 16, 16)
 					os.lseek(fd, 0, 0) # FIXME: use os.SEEK_SET (added to API in Python 2.5) for last argument
 					dq_array = safe_getvect(filename, self.__ifodesc.dq_channelname, gps_start, 16, 1)
 				finally:
@@ -441,26 +470,35 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 
 		# Look up our src pad and its caps.
 		pad = self.src_pads().next()
-		caps = pad.get_property('caps')
+		if hoft_array.dtype.name == 'float64':
+			caps = self.__float64_caps
+		elif hoft_array.dtype.name == 'float32':
+			caps = self.__float32_caps
+		else:
+			self.error("h(t) channel has unrecognized dtype %s" % hoft_array.dtype.name)
+			return (gst.FLOW_ERROR, None)
 
 		# Compute "good data" segment mask.
-		dq_require = int(self.get_property('data-quality-require'))
-		dq_deny = int(self.get_property('data-quality-deny'))
-		state_require = int(self.get_property('state-require'))
-		state_deny = int(self.get_property('state-deny'))
-		state_array = state_array.astype(int).reshape((16, 16))
-		segment_mask = (
-			(state_array & state_require == state_require).all(1) &
-			(~state_array & state_deny == state_deny).all(1) &
-			(dq_array & dq_require == dq_require) & 
-			(~dq_array & dq_deny == dq_deny)
-		)
+		if self.__ifodesc.ifo == "V1":
+			segment_mask = (dq_array == self.get_property('virgo-data-quality'))
+		else:
+			dq_require = int(self.get_property('data-quality-require'))
+			dq_deny = int(self.get_property('data-quality-deny'))
+			state_require = int(self.get_property('state-require'))
+			state_deny = int(self.get_property('state-deny'))
+			state_array = state_array.astype(int).reshape((16, 16))
+			segment_mask = (
+				(state_array & state_require == state_require).all(1) &
+				(~state_array & state_deny == state_deny).all(1) &
+				(dq_array & dq_require == dq_require) & 
+				(~dq_array & dq_deny == dq_deny)
+			)
 		self.info('good data mask is ' + ''.join([str(x) for x in segment_mask.astype('int')]))
 
 		# If necessary, create gap for skipped frames.
 		if self.__last_successful_gps_end is not None and self.__last_successful_gps_end != gps_start:
 			offset = 16384 * self.__last_successful_gps_end
-			size = 16384 * (gps_start - self.__last_successful_gps_end) * 8
+			size = len(hoft_array.data)
 			(retval, buf) = pad.alloc_buffer(offset, size, caps)
 			if retval != gst.FLOW_OK:
 				return (retval, None)
@@ -483,11 +521,12 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		for segment_num, is_nongap in enumerate(segment_mask):
 			if is_nongap ^ was_nongap:
 				offset = 16384 * (gps_start + last_segment_num)
-				size = 16384 * (segment_num - last_segment_num) * 8
+				hoft_data = hoft_array[(16384*last_segment_num):(16384*segment_num)].data
+				size = len(hoft_data)
 				(retval, buf) = pad.alloc_buffer(offset, size, caps)
 				if retval != gst.FLOW_OK:
 					return (retval, None)
-				buf[0:size] = hoft_array[(16384*last_segment_num):(16384*segment_num)].data
+				buf[0:size] = hoft_data
 				buf.offset = offset
 				buf.offset_end = 16384 * (gps_start + segment_num)
 				buf.duration = gst.SECOND * (segment_num - last_segment_num)
@@ -505,11 +544,12 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		# Finish off current frame.
 		segment_num = 16
 		offset = 16384 * (gps_start + last_segment_num)
-		size = 16384 * (segment_num - last_segment_num) * 8
+		hoft_data = hoft_array[(16384*last_segment_num):(16384*segment_num)].data
+		size = len(hoft_data)
 		(retval, buf) = pad.alloc_buffer(offset, size, caps)
 		if retval != gst.FLOW_OK:
 			return (retval, None)
-		buf[0:size] = hoft_array[(16384*last_segment_num):(16384*segment_num)].data
+		buf[0:size] = hoft_data
 		buf.offset = offset
 		buf.offset_end = 16384 * (gps_start + segment_num)
 		buf.duration = gst.SECOND * (segment_num - last_segment_num)

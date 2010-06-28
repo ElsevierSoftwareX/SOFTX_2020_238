@@ -63,10 +63,30 @@ dq_flags_get_type (void)
 }
 
 
+static GType
+virgo_dq_flags_get_type (void)
+{
+    static GType tp = 0;
+    static const GEnumValue values[] = {
+		{0, "VIRGO_DQ_0", "ITF not locked or bad data"},
+		{4, "VIRGO_DQ_4", "ITF locked but h(t) reconstruction bad"},
+		{8, "VIRGO_DQ_8", "ITF locked and h(t) reconstruction OK"},
+		{12, "VIRGO_DQ_12", "ITF locked, h(t) reconstruction OK, science mode OK and a few CAT2 veto OK like no saturation of the main channels (Pr_B1_ACq, Coil saturation and SSFS) + ITF locked since 300seconds and ITF locked for the next 10 seconds"},
+        {0, NULL, NULL},
+    };
+	
+    if (G_UNLIKELY (tp == 0)) {
+        tp = g_enum_register_static ("GSTLALOnlineHoftSrcVirgoDataQualityFlags", values);
+    }
+    return tp;
+}
+
+
 void init_onlinehoftsrc(void)
 {
 	pygobject_init(-1, -1, -1);
 	PyObject* mod = Py_InitModule("_onlinehoftsrc", NULL);
 	pyg_flags_add(mod, "StateFlags", "", state_flags_get_type());
 	pyg_flags_add(mod, "DQFlags", "", dq_flags_get_type());
+	pyg_enum_add(mod, "VirgoDQFlags", "", virgo_dq_flags_get_type());
 }
