@@ -97,7 +97,7 @@ class lal_fakeskymapsrc(gst.BaseSrc):
 			th = numpy.arange(float(npoints)) / npoints * numpy.pi
 			ph = numpy.arange(2 * float(npoints)) / npoints * numpy.pi
 			thth, phph = numpy.meshgrid(th, ph)
-			logp = numpy.random.randn(*thth.shape)
+			logp = numpy.random.randn(*thth.shape) + 10 * numpy.exp(-0.5 * ((thth - numpy.pi/4)**2 + (phph - numpy.pi + 0.5 * numpy.pi * numpy.sin(self.__last_time_end * numpy.pi / gst.SECOND))**2) / .1**2)
 			span = numpy.pi / npoints
 			skymap_array = numpy.column_stack( (thth.flatten(), phph.flatten(), numpy.array((span,) * npixels), logp.flatten()) )
 		else:
