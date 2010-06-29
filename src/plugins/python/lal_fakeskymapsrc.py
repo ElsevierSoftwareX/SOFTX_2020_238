@@ -121,6 +121,7 @@ class lal_fakeskymapsrc(gst.BaseSrc):
 			return (retval, None)
 
 		# Set buffeer metadata
+		self.__last_time_end += int(numpy.random.random() * 0.125 * gst.SECOND)
 		buf.timestamp = self.__last_time_end
 		buf.duration = gst.CLOCK_TIME_NONE
 		buf.offset = self.__last_offset_end
