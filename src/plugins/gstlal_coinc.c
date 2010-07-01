@@ -155,7 +155,7 @@ static GstStateChangeReturn change_state(GstElement *element, GstStateChange tra
 
 static gboolean sngl_inspiral_le(SnglInspiralTable* lhs, SnglInspiralTable* rhs)
 {
-	return XLALGPSCmp(&lhs->end_time, &rhs->end_time) < 0;
+	return XLALGPSCmp(&lhs->end_time, &rhs->end_time) <= 0;
 }
 
 
@@ -165,7 +165,13 @@ static SnglInspiralTable* sngl_inspiral_merge(SnglInspiralTable* lhs, SnglInspir
 	if (lhs == NULL) return rhs;
 	if (rhs == NULL) return lhs;
 
-	SnglInspiralTable* top = sngl_inspiral_le(lhs, rhs) ? lhs : rhs;
+	if (!sngl_inspiral_le(lhs, rhs))
+	{
+		void* tmp = lhs;
+		lhs = rhs;
+		rhs = tmp;
+	}
+	SnglInspiralTable* top = lhs;
 
 	do {
 		SnglInspiralTable* head;
@@ -190,20 +196,21 @@ static guint sngl_inspiral_hash(gconstpointer v)
 {
 	const SnglInspiralTable * const sngl = v;
 
-	// Because the template parameters are sampled numerically, *any* mass
-	// parameter is almost guaranteed to uniquely specify a template.  The
-	// choice of mass1 as the hash key is completely arbitrary.
-	return g_double_hash(&sngl->mass1);
+	/* Because the template parameters are sampled numerically, *any* mass
+	 * parameter is almost guaranteed to uniquely specify a template.  The
+	 * choice of mass1 as the hash key is completely arbitrary.
+	 */
+	return sngl->mass1 * 0.01 * G_MAXUINT;
 }
 
 
-// Equality function for storing SnglInspiralTable pointers in a GHashTable
+/* Equality function for storing SnglInspiralTable pointers in a GHashTable */
 static gboolean sngl_inspiral_equal(gconstpointer v1, gconstpointer v2)
 {
 	const SnglInspiralTable * const sngl1 = v1;
 	const SnglInspiralTable * const sngl2 = v2;
 
-	// FIXME Check equality on other relevant parameters here.
+	/* FIXME Check equality on other relevant parameters here. */
 	return sngl1->mass1 == sngl2->mass1 && sngl1->mass2 == sngl2->mass2;
 }
 
@@ -221,22 +228,23 @@ static void g_array_size_to_next_multiple(GArray* array, gint n)
 }
 
 
-static GstClockTime find_earliest_collectdata(GSTLALCoinc* coinc, GstCoincCollectData** data)
+static GstCoincCollectData* find_earliest_collectdata(GSTLALCoinc* coinc)
 {
 	GstClockTime min_last_end_time = GST_CLOCK_TIME_NONE;
+	GstCoincCollectData* data = NULL;
 	GSList* slist;
-	
+
 	for (slist = coinc->collect->data; slist; slist = g_slist_next(slist))
 	{
 		GstCoincCollectData* this_data = slist->data;
 		if (this_data->last_end_time < min_last_end_time)
 		{
 			min_last_end_time = this_data->last_end_time;
-			*data = this_data;
+			data = this_data;
 		}
 	}
 
-	return min_last_end_time;
+	return data;
 }
 
 
@@ -244,36 +252,31 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 {
 	GSTLALCoinc* coinc = GSTLAL_COINC(user_data);
 
-
+	/* Assure that we have enough sink pads. */
 	if (GST_ELEMENT(coinc)->numsinkpads < 2)
 	{
 		GST_ERROR_OBJECT(coinc, "not enough sink pads, 2 required but only %d are present", GST_ELEMENT(coinc)->numsinkpads < 2);
 		return GST_FLOW_ERROR;
 	}
 
-
 	/*
 	 * Pick the pad from which to pop the next buffer.  Choose the pad for
 	 * which the last received end time is the earliest, and only accept
 	 * data from that pad.
 	 */
-	GstCoincCollectData* data = NULL;
-	GstClockTime min_last_end_time = find_earliest_collectdata(coinc, &data);
+	GstCoincCollectData* data = find_earliest_collectdata(coinc);
 	g_assert(data);
+	GstClockTime timestamp = data->last_end_time;
 
 
 	/* Take a buffer from that pad, if one is available, else return. */
 	GstBuffer* buf = gst_collect_pads_pop(coinc->collect, &data->gstcollectdata);
-	if (!buf) return GST_FLOW_OK;
-
-
-	data->last_end_time = GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
-
-
-	/* Collate sngl_inspiral records from that buffer according to template. */
-	GHashTable* hash = g_hash_table_new(sngl_inspiral_hash, sngl_inspiral_equal);
-	g_assert(hash);
+	if (buf)
 	{
+		data->last_end_time = GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
+
+		/* Collate sngl_inspiral records from that buffer according to template. */
+		GHashTable* hash = g_hash_table_new_full(sngl_inspiral_hash, sngl_inspiral_equal, NULL, g_free);
 		const SnglInspiralTable* sngl = (const SnglInspiralTable*) GST_BUFFER_DATA(buf);
 		const SnglInspiralTable* const sngl_end = (const SnglInspiralTable* const) (GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf));
 
@@ -282,53 +285,62 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			SnglInspiralTable* sngl_copy = g_memdup(sngl, sizeof(*sngl));
 			sngl_copy->next = NULL;
 
-			SnglInspiralTable* sngl_head = g_hash_table_lookup(hash, sngl_copy);
-			if (sngl_head)
-				sngl_head->next = sngl_copy;
-			else
-				g_hash_table_insert(hash, (gpointer)sngl_copy, (gpointer)sngl_copy);
+			SnglInspiralTable** val_handle = g_hash_table_lookup(hash, sngl_copy);
+			if (val_handle)
+			{
+				val_handle[1]->next = sngl_copy;
+				val_handle[1] = sngl_copy;
+			} else {
+				val_handle = g_malloc(sizeof(SnglInspiralTable*) * 2);
+				val_handle[0] = val_handle[1] = sngl_copy;
+				g_hash_table_insert(hash, (gpointer)sngl_copy, (gpointer)val_handle);
+			}
 		}
-	}
 
+		/* Unref input buffer. */
+		gst_buffer_unref(buf);
 
-	/* Unref input buffer. */
-	gst_buffer_unref(buf);
-
-
-	GHashTable* dest_hash = coinc->trigger_sequence_hash;
-
-	/* Merge input records with currently buffered records. */
-	{
+		/* Merge input records with currently buffered records. */
 		GHashTableIter iter;
 		SnglInspiralTable* key;
-		SnglInspiralTable* val;
-
+		SnglInspiralTable** val_handle;
+		GHashTable* dest_hash = coinc->trigger_sequence_hash;
 		g_hash_table_iter_init(&iter, hash);
-		while (g_hash_table_iter_next(&iter, (gpointer*)&key, (gpointer*)&val))
+		while (g_hash_table_iter_next(&iter, (gpointer*)&key, (gpointer*)&val_handle))
 		{
 			SnglInspiralTable** dest_sngl_handle = g_hash_table_lookup(dest_hash, key);
 			if (dest_sngl_handle)
 			{
-				*dest_sngl_handle = sngl_inspiral_merge(val, *dest_sngl_handle);
+				*dest_sngl_handle = sngl_inspiral_merge(*val_handle, *dest_sngl_handle);
 			} else {
 				dest_sngl_handle = g_malloc(sizeof(SnglInspiralTable*));
-				*dest_sngl_handle = val;
-				g_hash_table_insert(dest_hash, g_memdup(val, sizeof(*val)), dest_sngl_handle);
+				*dest_sngl_handle = *val_handle;
+				g_hash_table_insert(dest_hash, g_memdup(*val_handle, sizeof(**val_handle)), dest_sngl_handle);
 			}
 		}
+
+		/* Unref input hashtable. */
+		g_hash_table_unref(hash);
 	}
 
-
-	/* Unref input hashtable. */
-	g_hash_table_unref(hash);
-
+	GstClockTime last_seen_time;
+	gboolean eos;
+	if (pads->eospads == GST_ELEMENT(coinc)->numsinkpads)
+	{
+		/* No data to be read, must be EOS */
+		eos = TRUE;
+		last_seen_time = GST_CLOCK_TIME_NONE;
+	} else {
+		eos = FALSE;
+		data = find_earliest_collectdata(coinc);
+		last_seen_time = data->last_end_time;
+	}
 
 	/* Group each template's trigger stream into coincident groups.
 
 	 Here's the strategy for each template:
 
 	 Maintain a running list of consecutive triggers from all detectors.
-	 mkchecktimestamps
 	 We assume that the coincidence window is larger than the minimum time
 	 between tirggers from a given detector.
 
@@ -336,52 +348,34 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 	 At the end of every subsequent iteration, the list must satisfy the
 	 following two conditions:
-	 
+
 	  1. Let t1 = the minimum of all the trigger times.
 	     Let t2 = the maximum of all the trigger times, or the latest analyzed time, whichever is smaller.
 	     (t2 - t1) must be less than dt.
 
 	  2. If there are N detectors, there must be fewer than N elements in the list.
 
-	 The update proceeds as follows.
-
-	 if not( (condition 1 satisfied) and (condition 2 satisfied) ):
-		 if (condition 1 not satisfied):
-			if (num triggers in list == 2):
-			   drop zeroth element of list
-	        else:
-			   emit all but the last element as a coincidence
-		 else: // condition 2 not satisfied:
-			emit all N triggers as a coincidence
-
 	 */
-	
+
 	GHashTableIter iter;
 	SnglInspiralTable* key;
 	SnglInspiralTable** val_handle;
+	GHashTable* dest_hash = coinc->trigger_sequence_hash;
 	GArray* outarray = g_array_new(FALSE, TRUE, sizeof(SnglInspiralTable));
 
 	g_hash_table_iter_init(&iter, dest_hash);
 	while (g_hash_table_iter_next(&iter, (gpointer*)&key, (gpointer*)&val_handle))
 	{
-		SnglInspiralTable* val = *val_handle;
+		SnglInspiralTable* latest_sngl = *val_handle;
 		SnglInspiralTable* earliest_sngl = NULL;
-		SnglInspiralTable* latest_sngl;
 		GstClockTime earliest_time;
 		GstClockTime latest_time;
-		GstClockTime latest_seen_time;
 		guint numtriggers = 0;
 
 		do {
 			/* Update late end of running list. */
 			++numtriggers;
-			latest_sngl = val;
-			SnglInspiralTable* next_val = val->next;
 			latest_time = XLALGPSToINT8NS(&latest_sngl->end_time);
-			if (latest_sngl->next) /* this IS NOT the last entry in the list */
-				latest_seen_time = latest_time;
-			else /* this IS the last entry in the list */
-				latest_seen_time = data->last_end_time;
 
 			/* Update early end of running list. */
 			if (earliest_sngl == NULL)
@@ -390,86 +384,91 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 				earliest_time = latest_time;
 			}
 
-			/* If necessary, enforce both of the running list's conditions. */
-			if (latest_seen_time - earliest_time > coinc->dt)
+			SnglInspiralTable* next_latest_sngl;
+			if (latest_time >= last_seen_time)
 			{
-				SnglInspiralTable* end_sngl;
-				int numtriggers_to_emit;
-				if (latest_time - earliest_time > coinc->dt)
-				{
-					/* emit all but last trigger as coincidence */
-					end_sngl = latest_sngl;
-					numtriggers_to_emit = numtriggers - 1;
-				} else {
-					/* emit all triggers as coincidence */
-					end_sngl = latest_sngl->next;
-					numtriggers_to_emit = numtriggers;
-				}
+				/* we don't have enough data to process this trigger yet */
+				next_latest_sngl = NULL;
+			} else {
+				next_latest_sngl = latest_sngl->next;
 
-				/* create coincidence records */
-				if (numtriggers_to_emit > 1)
-				{
-					SnglInspiralTable* head_sngl = earliest_sngl;
-					GST_INFO_OBJECT(coinc, "start coincidence");
-					for (head_sngl = earliest_sngl; head_sngl != end_sngl; head_sngl = head_sngl->next, --numtriggers)
+				/* If necessary, enforce both of the running list's conditions. */
+				if (latest_time - earliest_time > coinc->dt) {
+					/* create coincidence records */
+					if (numtriggers > 2)
 					{
-						GST_INFO_OBJECT(coinc,
-							"ifo=%s end_time=%d.%08d seconds",
-							head_sngl->ifo, head_sngl->end_time.gpsSeconds,
-							head_sngl->end_time.gpsNanoSeconds);
-						
-						g_array_append_val(outarray, head_sngl);
+						SnglInspiralTable* head_sngl;
+						for (head_sngl = earliest_sngl; head_sngl != latest_sngl; head_sngl = head_sngl->next)
+							g_array_append_vals(outarray, head_sngl, 1);
+
+						/* resize output array to a multiple of numsinkpads */
+						g_array_size_to_next_multiple(outarray, GST_ELEMENT(coinc)->numsinkpads);
 					}
-					GST_INFO_OBJECT(coinc, "end coincidence");
-				}
 
-				/* discard unneeded triggers */
-				SnglInspiralTable* head_sngl = earliest_sngl;
-				while (head_sngl != end_sngl)
-				{
-					SnglInspiralTable* next_sngl = head_sngl->next;
-					GstClockTime head_time = XLALGPSToINT8NS(&head_sngl->end_time);
-					if (latest_seen_time - head_time > coinc->dt)
+					/* forget triggers that are no longer relevant */
+					while (latest_time - earliest_time > coinc->dt)
 					{
+						SnglInspiralTable* next_sngl = earliest_sngl->next;
+						earliest_sngl->next = NULL;
+						g_free(earliest_sngl);
 						earliest_sngl = next_sngl;
-						if (earliest_sngl)
-							earliest_time = XLALGPSToINT8NS(&earliest_sngl->end_time);
+						earliest_time = XLALGPSToINT8NS(&earliest_sngl->end_time);
+						g_assert(numtriggers > 0);
+						--numtriggers;
+					}
+				} else if (numtriggers >= GST_ELEMENT(coinc)->numsinkpads) {
+					/* all detectors are present, form a coincidence. */
+					SnglInspiralTable* head_sngl;
+					if (numtriggers > 1)
+					{
+						for (head_sngl = earliest_sngl; head_sngl != next_latest_sngl; head_sngl = head_sngl->next)
+							g_array_append_vals(outarray, head_sngl, 1);
+					}
+
+					head_sngl = earliest_sngl;
+					while (head_sngl != next_latest_sngl)
+					{
+						SnglInspiralTable* next_sngl = head_sngl->next;
 						head_sngl->next = NULL;
 						g_free(head_sngl);
+						head_sngl = next_sngl;
+						g_assert(numtriggers > 0);
+						--numtriggers;
 					}
-					head_sngl = next_sngl;
-					--numtriggers;
+					earliest_sngl = NULL;
 				}
 
-				/* resize output array to a multiple of numsinkpads */
-				g_array_size_to_next_multiple(outarray, GST_ELEMENT(coinc)->numsinkpads);
-			} else if (numtriggers >= GST_ELEMENT(coinc)->numsinkpads) {
-				g_assert(numtriggers == GST_ELEMENT(coinc)->numsinkpads);
-				/* all detectors are present, form a coincidence. */
-				SnglInspiralTable* head_sngl = earliest_sngl;
-				SnglInspiralTable* end_sngl = latest_sngl->next;
-				GST_INFO_OBJECT(coinc, "start coincidence");
-				while (head_sngl != end_sngl)
+				if (earliest_sngl && (next_latest_sngl == NULL || (GstClockTime)XLALGPSToINT8NS(&next_latest_sngl->end_time) >= last_seen_time) && latest_time + coinc->dt < last_seen_time)
 				{
-					GST_INFO_OBJECT(coinc,
-						"ifo=%s end_time=%d.%08d seconds",
-						head_sngl->ifo, head_sngl->end_time.gpsSeconds,
-						head_sngl->end_time.gpsNanoSeconds);
+					SnglInspiralTable* head_sngl;
+					/* create coincidence records */
+					if (numtriggers > 1)
+					{
+						for (head_sngl = earliest_sngl; head_sngl != next_latest_sngl; head_sngl = head_sngl->next)
+							g_array_append_vals(outarray, head_sngl, 1);
 
-					g_array_append_val(outarray, head_sngl);
-					SnglInspiralTable* next_sngl = head_sngl->next;
-					head_sngl->next = NULL;
-					g_free(head_sngl);
-					head_sngl = next_sngl;
+						/* resize output array to a multiple of numsinkpads */
+						g_array_size_to_next_multiple(outarray, GST_ELEMENT(coinc)->numsinkpads);
+					}
+
+					/* forget triggers that are no longer relevant */
+					head_sngl = earliest_sngl;
+					while (head_sngl != next_latest_sngl)
+					{
+						SnglInspiralTable* next_sngl = head_sngl->next;
+						head_sngl->next = NULL;
+						g_free(head_sngl);
+						head_sngl = next_sngl;
+						g_assert(numtriggers > 0);
+						--numtriggers;
+					}
+					earliest_sngl = NULL;
 				}
-				GST_INFO_OBJECT(coinc, "end coincidence");
-				earliest_sngl = latest_sngl = NULL;
-				numtriggers = 0;
 			}
 
 			/* Take next value in list. */
-			val = next_val;
-		} while (val != NULL);
+			latest_sngl = next_latest_sngl;
+		} while (latest_sngl != NULL);
 
 		/* put back linked list after we have eaten up as many triggers as we can. */
 		*val_handle = earliest_sngl;
@@ -480,32 +479,42 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 	GST_INFO_OBJECT(coinc, "found %d coincident triggers", outarray->len);
 
-	guint64 siz = outarray->len * g_array_get_element_size(outarray);
-
-	/* wipe out next fields in case someone tries to dereference them */
+	GstFlowReturn retval;
+	if (eos && outarray->len == 0)
 	{
-		SnglInspiralTable* ptr = (SnglInspiralTable*)outarray->data;
-		SnglInspiralTable* end = &ptr[outarray->len];
-		for (; ptr < end; ptr++)
-			ptr->next = NULL;
+		g_array_free(outarray, TRUE);
+		retval = GST_FLOW_UNEXPECTED;
+	} else {
+		guint64 siz = outarray->len * sizeof(SnglInspiralTable);
+
+		/* wipe out next fields in case someone tries to dereference them */
+		{
+			SnglInspiralTable* ptr = (SnglInspiralTable*)outarray->data;
+			SnglInspiralTable* end = &ptr[outarray->len];
+			for (; ptr < end; ptr++)
+				ptr->next = NULL;
+		}
+
+		/* Generate outgoing buffer. */
+		retval = gst_pad_alloc_buffer(coinc->srcpad, GST_BUFFER_OFFSET_NONE, siz, GST_PAD_CAPS(coinc->srcpad), &buf);
+		if (retval == GST_FLOW_OK)
+		{
+			memcpy(GST_BUFFER_DATA(buf), outarray->data, siz);
+			g_array_free(outarray, TRUE);
+			GST_BUFFER_TIMESTAMP(buf) = timestamp - coinc->dt;
+			GST_BUFFER_DURATION(buf) = last_seen_time - timestamp;
+			GST_BUFFER_OFFSET(buf) = GST_BUFFER_OFFSET_NONE;
+			GST_BUFFER_OFFSET_END(buf) = GST_BUFFER_OFFSET_NONE;
+			retval = gst_pad_push(coinc->srcpad, buf);
+		} else {
+			GST_ERROR_OBJECT(coinc, "Failed to push buffer");
+		}
 	}
 
-	/* Generate outgoing buffer. */
-	GstFlowReturn retval = gst_pad_alloc_buffer(coinc->srcpad, GST_BUFFER_OFFSET_NONE, siz, GST_PAD_CAPS(coinc->srcpad), &buf);
-	if (retval != GST_FLOW_OK)
-		return retval;
-	memcpy(GST_BUFFER_DATA(buf), outarray->data, siz);
-	
-	/* Free output array */
-	g_array_unref(outarray);
+	if (eos)
+		retval = gst_pad_push_event(coinc->srcpad, gst_event_new_eos());
 
-	GST_BUFFER_TIMESTAMP(buf) = min_last_end_time - coinc->dt;
-	GST_BUFFER_DURATION(buf) = find_earliest_collectdata(coinc, &data) - min_last_end_time;
-	GST_BUFFER_OFFSET(buf) = GST_BUFFER_OFFSET_NONE;
-	GST_BUFFER_OFFSET_END(buf) = GST_BUFFER_OFFSET_NONE;
-
-	return gst_pad_push(coinc->srcpad, buf);
-
+	return retval;
 }
 
 
