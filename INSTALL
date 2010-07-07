@@ -355,7 +355,7 @@ gst-plugins-base source tree locally::
   $ cd /path/to/local/src
   $ pushd gst-plugins-base
   $ wget https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal/audioresample.patch
-  $ patch -p1 <audioresample.patch
+  $ git apply audioresample.patch
   $ popd
 
 
@@ -384,6 +384,17 @@ the original patch locally to allow our pipelines to work::
 
 Patching gst-python
 ===================
+
+The current source release of gst-python has a bug in which the wrong version of
+pygobject is imported when loading Python plugins.  We have an open bug report
+at <https://bugzilla.gnome.org/show_bug.cgi?id=623105> for fixing this.  In the
+mean time you can download the patch from Gnome's Bugzilla and apply it to your
+gst-python source tree::
+
+  $ cd /path/to/local/src
+  $ pushd gst-python
+  $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=164869 -O gst-python.plugins.patch
+  $ git apply gst-python.plugins.patch
 
 The current source release of gst-python has not yet been updated with some
 functions that have been recently added to the GStreamer API.  We have an open

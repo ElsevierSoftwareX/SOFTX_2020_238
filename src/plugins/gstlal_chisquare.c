@@ -683,7 +683,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 */
 
 	if(GST_BUFFER_OFFSET(buf) != GST_BUFFER_OFFSET(orthosnrbuf) || GST_BUFFER_OFFSET_END(buf) != GST_BUFFER_OFFSET_END(orthosnrbuf)) {
-		GST_ERROR_OBJECT(element, "misaligned buffer boundaries:  got snr offsets [%lu, %lu) and ortho snr offsets [%lu, %lu)", GST_BUFFER_OFFSET(buf), GST_BUFFER_OFFSET_END(buf), GST_BUFFER_OFFSET(orthosnrbuf), GST_BUFFER_OFFSET_END(orthosnrbuf));
+		GST_ERROR_OBJECT(element, "misaligned buffer boundaries:  got snr offsets [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ") and ortho snr offsets [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", GST_BUFFER_OFFSET(buf), GST_BUFFER_OFFSET_END(buf), GST_BUFFER_OFFSET(orthosnrbuf), GST_BUFFER_OFFSET_END(orthosnrbuf));
 		goto error;
 	}
 
@@ -695,7 +695,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 */
 
 	if(GST_BUFFER_OFFSET(buf) < element->offset) {
-		GST_ERROR_OBJECT(element, "detected time reversal in at least one input stream:  expected nothing earlier than offset %lu, found sample at offset %lu", element->offset, GST_BUFFER_OFFSET(buf));
+		GST_ERROR_OBJECT(element, "detected time reversal in at least one input stream:  expected nothing earlier than offset %" G_GUINT64_FORMAT ", found sample at offset %" G_GUINT64_FORMAT, element->offset, GST_BUFFER_OFFSET(buf));
 		goto error;
 	}
 

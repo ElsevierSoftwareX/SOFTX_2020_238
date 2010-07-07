@@ -78,6 +78,7 @@ typedef struct {
 	 * filter info
 	 */
 
+	gboolean time_domain;
 	GMutex *fir_matrix_lock;
 	GCond *fir_matrix_available;
 	gsl_matrix *fir_matrix;

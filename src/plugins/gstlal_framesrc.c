@@ -224,12 +224,12 @@ static void *read_series(GSTLALFrameSrc *element, guint64 offset, guint64 length
 	 * value.
 	 */
 
-	GST_LOG_OBJECT(element, "reading %lu samples (%g seconds) of channel \"%s\" at %d.%09u s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds);
+	GST_LOG_OBJECT(element, "reading %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds);
 	switch(element->series_type) {
 	case LAL_I4_TYPE_CODE:
 		series = XLALFrReadINT4TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
 		if(!series) {
-			GST_ERROR_OBJECT(element, "XLALFrReadINT4TimeSeries() %lu samples (%g seconds) of channel \"%s\" at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
+			GST_ERROR_OBJECT(element, "XLALFrReadINT4TimeSeries() %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
 			return NULL;
 		}
@@ -238,7 +238,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 offset, guint64 length
 	case LAL_S_TYPE_CODE:
 		series = XLALFrReadREAL4TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
 		if(!series) {
-			GST_ERROR_OBJECT(element, "XLALFrReadREAL4TimeSeries() %lu samples (%g seconds) of channel \"%s\" at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
+			GST_ERROR_OBJECT(element, "XLALFrReadREAL4TimeSeries() %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
 			return NULL;
 		}
@@ -247,7 +247,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 offset, guint64 length
 	case LAL_D_TYPE_CODE:
 		series = XLALFrReadREAL8TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
 		if(!series) {
-			GST_ERROR_OBJECT(element, "XLALFrReadREAL8TimeSeries() %lu samples (%g seconds) of channel \"%s\" at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
+			GST_ERROR_OBJECT(element, "XLALFrReadREAL8TimeSeries() %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
 			return NULL;
 		}
