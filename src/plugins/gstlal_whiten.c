@@ -147,25 +147,35 @@ static int zero_pad_length(const GSTLALWhiten *element)
 }
 
 
-static void reset_workspace_metadata(GSTLALWhiten *element)
+static unsigned get_available_samples(GSTLALWhiten *element)
 {
-	element->tdworkspace->deltaT = (double) 1.0 / element->sample_rate;
-	element->tdworkspace->sampleUnits = element->sample_units;
-	element->fdworkspace->deltaF = (double) 1.0 / (element->tdworkspace->deltaT * fft_length(element));
+	return gst_adapter_available(element->adapter) / sizeof(*element->tdworkspace->data->data);
 }
 
 
-static int make_window_and_fft_plans(GSTLALWhiten *element)
+/*
+ * work space
+ */
+
+
+static int make_workspace(GSTLALWhiten *element)
 {
+	REAL8Window *window = NULL;
+	REAL8FFTPlan *fwdplan = NULL;
+	REAL8FFTPlan *revplan = NULL;
+	REAL8TimeSeries *tdworkspace = NULL;
+	COMPLEX16FrequencySeries *fdworkspace = NULL;
+
 	/*
-	 * build a Hann window with zero-padding.  both fft_length and
-	 * zero_pad are an even number of samples (enforced in the caps
-	 * negotiation phase).  we need a Hann window with an odd number of
-	 * samples so that there is a middle sample (= 1) to overlap the
-	 * end sample (= 0) of the next window.  we achieve this by adding
-	 * 1 to the length of the envelope, and then clipping the last
-	 * sample.  the result is a sequence of windows that fit together
-	 * as shown below:
+	 * construct FFT plans and build a Hann window with zero-padding.
+	 * both fft_length and zero_pad are an even number of samples
+	 * (enforced in the caps negotiation phase).  we need a Hann window
+	 * with an odd number of samples so that there is a middle sample
+	 * (= 1) to overlap the end sample (= 0) of the next window.  we
+	 * achieve this by adding 1 to the length of the envelope, and then
+	 * clipping the last sample.  the result is a sequence of windows
+	 * that fit together as shown below:
+	 *
 	 *
 	 * 1.0 --------A-------B-------C-------
 	 *     ------A---A---B---B---C---C-----
@@ -178,95 +188,96 @@ static int make_window_and_fft_plans(GSTLALWhiten *element)
 	 * the windows is identically 1 everywhere.
 	 */
 
-	XLALDestroyREAL8Window(element->window);
-	element->window = XLALCreateHannREAL8Window(fft_length(element) - 2 * zero_pad_length(element) + 1);
-	if(!element->window) {
+	window = XLALCreateHannREAL8Window(fft_length(element) - 2 * zero_pad_length(element) + 1);
+	if(!window) {
 		GST_ERROR_OBJECT(element, "failure creating Hann window: %s", XLALErrorString(XLALGetBaseErrno()));
-		XLALClearErrno();
-		return -1;
+		goto error;
 	}
-	if(!XLALResizeREAL8Sequence(element->window->data, -zero_pad_length(element), fft_length(element))) {
+	if(!XLALResizeREAL8Sequence(window->data, -zero_pad_length(element), fft_length(element))) {
 		GST_ERROR_OBJECT(element, "failure resizing Hann window: %s", XLALErrorString(XLALGetBaseErrno()));
-		XLALDestroyREAL8Window(element->window);
-		element->window = NULL;
-		XLALClearErrno();
-		return -1;
+		goto error;
 	}
 
 	/*
-	 * allocate a tail buffer
-	 */
-
-	XLALDestroyREAL8Sequence(element->tail);
-	element->tail = XLALCreateREAL8Sequence(fft_length(element) / 2 - zero_pad_length(element));
-	if(!element->tail) {
-		GST_ERROR_OBJECT(element, "failure allocating tail buffer: %s", XLALErrorString(XLALGetBaseErrno()));
-		XLALClearErrno();
-		return -1;
-	}
-	memset(element->tail->data, 0, element->tail->length * sizeof(*element->tail->data));
-
-	/*
-	 * construct FFT plans
+	 * build FFT plans
 	 */
 
 	g_mutex_lock(gstlal_fftw_lock);
-	XLALDestroyREAL8FFTPlan(element->fwdplan);
-	XLALDestroyREAL8FFTPlan(element->revplan);
-
-	element->fwdplan = XLALCreateForwardREAL8FFTPlan(fft_length(element), 1);
-	element->revplan = XLALCreateReverseREAL8FFTPlan(fft_length(element), 1);
+	fwdplan = XLALCreateForwardREAL8FFTPlan(fft_length(element), 1);
+	revplan = XLALCreateReverseREAL8FFTPlan(fft_length(element), 1);
 	g_mutex_unlock(gstlal_fftw_lock);
-
-	if(!element->fwdplan || !element->revplan) {
+	if(!fwdplan || !revplan) {
 		GST_ERROR_OBJECT(element, "failure creating FFT plans: %s", XLALErrorString(XLALGetBaseErrno()));
-		g_mutex_lock(gstlal_fftw_lock);
-		XLALDestroyREAL8FFTPlan(element->fwdplan);
-		XLALDestroyREAL8FFTPlan(element->revplan);
-		g_mutex_unlock(gstlal_fftw_lock);
-		element->fwdplan = NULL;
-		element->revplan = NULL;
-		XLALClearErrno();
-		return -1;
+		goto error;
 	}
 
 	/*
-	 * construct work spaces
+	 * construct work space vectors
 	 */
 
-	XLALDestroyREAL8TimeSeries(element->tdworkspace);
-	element->tdworkspace = XLALCreateREAL8TimeSeries(NULL, &GPS_ZERO, 0.0, (double) 1.0 / element->sample_rate, &element->sample_units, fft_length(element));
-	if(!element->tdworkspace) {
-		GST_ERROR_OBJECT(element, "failure creating time-domain workspace: %s", XLALErrorString(XLALGetBaseErrno()));
-		XLALClearErrno();
-		return -1;
+	tdworkspace = XLALCreateREAL8TimeSeries(NULL, &GPS_ZERO, 0.0, (double) 1.0 / element->sample_rate, &element->sample_units, fft_length(element));
+	if(!tdworkspace) {
+		GST_ERROR_OBJECT(element, "failure creating time-domain workspace vector: %s", XLALErrorString(XLALGetBaseErrno()));
+		goto error;
 	}
-	XLALDestroyCOMPLEX16FrequencySeries(element->fdworkspace);
-	element->fdworkspace = XLALCreateCOMPLEX16FrequencySeries(NULL, &GPS_ZERO, 0.0, (double) 1.0 / (element->tdworkspace->deltaT * fft_length(element)), &lalDimensionlessUnit, fft_length(element) / 2 + 1);
-	if(!element->fdworkspace) {
-		GST_ERROR_OBJECT(element, "failure creating frequency-domain workspace: %s", XLALErrorString(XLALGetBaseErrno()));
-		XLALClearErrno();
-		return -1;
+	fdworkspace = XLALCreateCOMPLEX16FrequencySeries(NULL, &GPS_ZERO, 0.0, (double) 1.0 / (tdworkspace->deltaT * fft_length(element)), &lalDimensionlessUnit, fft_length(element) / 2 + 1);
+	if(!fdworkspace) {
+		GST_ERROR_OBJECT(element, "failure creating frequency-domain workspace vector: %s", XLALErrorString(XLALGetBaseErrno()));
+		goto error;
 	}
-
-	/*
-	 * reset PSD regressor
-	 */
-
-	XLALPSDRegressorReset(element->psd_regressor);
 
 	/*
 	 * done
 	 */
 
+	element->window = window;
+	element->fwdplan = fwdplan;
+	element->revplan = revplan;
+	element->tdworkspace = tdworkspace;
+	element->fdworkspace = fdworkspace;
 	return 0;
+
+error:
+	XLALDestroyREAL8Window(window);
+	g_mutex_lock(gstlal_fftw_lock);
+	XLALDestroyREAL8FFTPlan(fwdplan);
+	XLALDestroyREAL8FFTPlan(revplan);
+	g_mutex_unlock(gstlal_fftw_lock);
+	XLALDestroyREAL8TimeSeries(tdworkspace);
+	XLALDestroyCOMPLEX16FrequencySeries(fdworkspace);
+	XLALClearErrno();
+	return -1;
 }
 
 
-static unsigned get_available_samples(GSTLALWhiten *element)
+static void reset_workspace_metadata(GSTLALWhiten *element)
 {
-	return gst_adapter_available(element->adapter) / sizeof(*element->tdworkspace->data->data);
+	element->tdworkspace->deltaT = (double) 1.0 / element->sample_rate;
+	element->tdworkspace->sampleUnits = element->sample_units;
+	element->fdworkspace->deltaF = (double) 1.0 / (element->tdworkspace->deltaT * fft_length(element));
 }
+
+
+static void free_workspace(GSTLALWhiten *element)
+{
+	XLALDestroyREAL8Window(element->window);
+	element->window = NULL;
+	g_mutex_lock(gstlal_fftw_lock);
+	XLALDestroyREAL8FFTPlan(element->fwdplan);
+	element->fwdplan = NULL;
+	XLALDestroyREAL8FFTPlan(element->revplan);
+	element->revplan = NULL;
+	g_mutex_unlock(gstlal_fftw_lock);
+	XLALDestroyREAL8TimeSeries(element->tdworkspace);
+	element->tdworkspace = NULL;
+	XLALDestroyCOMPLEX16FrequencySeries(element->fdworkspace);
+	element->fdworkspace = NULL;
+}
+
+
+/*
+ * psd-related
+ */
 
 
 static REAL8FrequencySeries *make_empty_psd(double f0, double deltaF, int length, LALUnit sample_units)
@@ -373,6 +384,11 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 }
 
 
+/*
+ * psd I/O
+ */
+
+
 static GstMessage *psd_message_new(GSTLALWhiten *element, REAL8FrequencySeries *psd)
 {
 	GValueArray *va = gstlal_g_value_array_from_doubles(psd->data->data, psd->data->length);
@@ -422,6 +438,11 @@ static GstFlowReturn push_psd(GstPad *psd_pad, const REAL8FrequencySeries *psd)
 }
 
 
+/*
+ * output buffer
+ */
+
+
 static void set_metadata(GSTLALWhiten *element, GstBuffer *buf, guint64 outsamples)
 {
 	GST_BUFFER_SIZE(buf) = outsamples * sizeof(*element->tdworkspace->data->data);
@@ -430,9 +451,9 @@ static void set_metadata(GSTLALWhiten *element, GstBuffer *buf, guint64 outsampl
 	GST_BUFFER_OFFSET_END(buf) = element->next_offset_out;
 	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->sample_rate);
 	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->sample_rate) - GST_BUFFER_TIMESTAMP(buf);
-	if(element->next_is_discontinuity) {
+	if(element->need_discont) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
-		element->next_is_discontinuity = FALSE;
+		element->need_discont = FALSE;
 	}
 }
 
@@ -632,9 +653,37 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 
 static void delta_f_changed(GObject *object, GParamSpec *pspec, gpointer user_data)
 {
-	/* FIXME:  what if this fails?  should that be indicated somehow?
-	 * return non-void? */
-	make_window_and_fft_plans(GSTLAL_WHITEN(object));
+	GSTLALWhiten *element = GSTLAL_WHITEN(object);
+
+	/*
+	 * (re)build work space
+	 */
+
+	free_workspace(element);
+	if(make_workspace(element) < 0) {
+		/* FIXME:  should this be indicated somehow?  return
+		 * non-void? */
+	}
+
+	/*
+	 * allocate a tail buffer
+	 */
+
+	XLALDestroyREAL8Sequence(element->tail);
+	element->tail = XLALCreateREAL8Sequence(fft_length(element) / 2 - zero_pad_length(element));
+	if(!element->tail) {
+		GST_ERROR_OBJECT(element, "failure allocating tail buffer: %s", XLALErrorString(XLALGetBaseErrno()));
+		XLALClearErrno();
+		/* FIXME:  should this be indicated somehow?  return
+		 * non-void? */
+	} else
+		memset(element->tail->data, 0, element->tail->length * sizeof(*element->tail->data));
+
+	/*
+	 * reset PSD regressor
+	 */
+
+	XLALPSDRegressorReset(element->psd_regressor);
 }
 
 
@@ -669,8 +718,8 @@ static void release_pad(GstElement *element, GstPad *pad)
 		/* !?  don't know about this pad ... */
 		return;
 
-	gst_object_unref(pad);
 	whiten->mean_psd_pad = NULL;
+	gst_object_unref(pad);
 }
 
 
@@ -807,15 +856,16 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	}
 
 	/*
-	 * record the sample rate, make a new Hann window, new FFT plans,
-	 * and workspaces
+	 * record the sample rate
 	 */
 
 	if(success && (rate != element->sample_rate)) {
 		element->sample_rate = rate;
 
 		/*
-		 * let everybody know the PSD Nyquist has changed
+		 * let everybody know the PSD's Nyquist has changed.  this
+		 * triggers the building of a new Hann window, new FFT
+		 * plans, and new workspaces
 		 */
 
 		g_object_notify(G_OBJECT(trans), "f-nyquist");
@@ -997,7 +1047,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	if((GST_BUFFER_OFFSET(inbuf) != element->next_offset_in) || GST_BUFFER_IS_DISCONT(inbuf)) {
 		gst_adapter_clear(element->adapter);
-		element->next_is_discontinuity = TRUE;
+		element->need_discont = TRUE;
 		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
 		element->next_offset_out = GST_BUFFER_OFFSET(inbuf);
@@ -1176,16 +1226,15 @@ static void finalize(GObject * object)
 	if(element->mean_psd_pad)
 		gst_object_unref(element->mean_psd_pad);
 	g_object_unref(element->adapter);
-	XLALDestroyREAL8Window(element->window);
-	g_mutex_lock(gstlal_fftw_lock);
-	XLALDestroyREAL8FFTPlan(element->fwdplan);
-	XLALDestroyREAL8FFTPlan(element->revplan);
-	g_mutex_unlock(gstlal_fftw_lock);
+	element->adapter = NULL;
 	XLALPSDRegressorFree(element->psd_regressor);
+	element->psd_regressor = NULL;
 	XLALDestroyREAL8FrequencySeries(element->psd);
-	XLALDestroyREAL8TimeSeries(element->tdworkspace);
-	XLALDestroyCOMPLEX16FrequencySeries(element->fdworkspace);
+	element->psd = NULL;
 	XLALDestroyREAL8Sequence(element->tail);
+	element->tail = NULL;
+
+	free_workspace(element);
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -1347,7 +1396,7 @@ static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *klass)
 
 	element->mean_psd_pad = NULL;
 	element->adapter = gst_adapter_new();
-	element->next_is_discontinuity = FALSE;
+	element->need_discont = FALSE;
 	element->t0 = GST_CLOCK_TIME_NONE;
 	element->offset0 = GST_BUFFER_OFFSET_NONE;
 	element->next_offset_in = GST_BUFFER_OFFSET_NONE;

@@ -97,7 +97,7 @@ class lal_fakeskymapsrc(gst.BaseSrc):
 			th = numpy.arange(float(npoints)) / npoints * numpy.pi
 			ph = numpy.arange(2 * float(npoints)) / npoints * numpy.pi
 			thth, phph = numpy.meshgrid(th, ph)
-			logp = numpy.random.randn(*thth.shape)
+			logp = numpy.random.randn(*thth.shape) + 10 * numpy.exp(-0.5 * ((thth - numpy.pi/4)**2 + (phph - numpy.pi + 0.5 * numpy.pi * numpy.sin(self.__last_time_end * numpy.pi / gst.SECOND))**2) / .1**2)
 			span = numpy.pi / npoints
 			skymap_array = numpy.column_stack( (thth.flatten(), phph.flatten(), numpy.array((span,) * npixels), logp.flatten()) )
 		else:
@@ -111,7 +111,7 @@ class lal_fakeskymapsrc(gst.BaseSrc):
 			skymap_array = numpy.hstack( (theta, phi, span, logp) )
 
 		# Get raw binary data from Numpy array
-		skymap_buffer = skymap_array.data
+		skymap_buffer = numpy.ascontiguousarray(skymap_array, dtype='f8').data
 
 		# Allocate a new buffer
 		(retval, buf) = pad.alloc_buffer(npixels, len(skymap_buffer), pad.get_property("caps"))
@@ -121,6 +121,7 @@ class lal_fakeskymapsrc(gst.BaseSrc):
 			return (retval, None)
 
 		# Set buffeer metadata
+		self.__last_time_end += int(numpy.random.random() * 0.125 * gst.SECOND)
 		buf.timestamp = self.__last_time_end
 		buf.duration = gst.CLOCK_TIME_NONE
 		buf.offset = self.__last_offset_end
