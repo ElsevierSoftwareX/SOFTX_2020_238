@@ -27,7 +27,7 @@ __author__ = "Leo Singer <leo.singer@ligo.org>"
 
 from gstlal.pipeutil import *
 from gst.extend.pygobject import gproperty, with_construct_properties
-import numpy
+from numpy import *
 
 
 class lal_fakeskymapsrc(gst.BaseSrc):
@@ -94,25 +94,44 @@ class lal_fakeskymapsrc(gst.BaseSrc):
 		if self.get_property("regular-grid"):
 			npoints = 100
 			npixels = 2 * npoints ** 2
-			th = numpy.arange(float(npoints)) / npoints * numpy.pi
-			ph = numpy.arange(2 * float(npoints)) / npoints * numpy.pi
-			thth, phph = numpy.meshgrid(th, ph)
-			logp = numpy.random.randn(*thth.shape) + 10 * numpy.exp(-0.5 * ((thth - numpy.pi/4)**2 + (phph - numpy.pi + 0.5 * numpy.pi * numpy.sin(self.__last_time_end * numpy.pi / gst.SECOND))**2) / .1**2)
-			logp = -logp ** 2 # Square logp and negate it to make it bounded on [-inf, 0).  Note: not necessarily normalized!
-			span = numpy.pi / npoints
-			skymap_array = numpy.column_stack( (thth.flatten(), phph.flatten(), numpy.array((span,) * npixels), logp.flatten()) )
+			span = pi / npoints
+			th = arange(float(npoints)) / npoints * pi
+			ph = arange(2 * float(npoints)) / npoints * pi
+			thth, phph = meshgrid(th, ph)
+
+			# Calculate the coordinates of an animated ball
+			# that will bounce in the Northern hemisphere,
+			# first east, then west, then repeat.
+			center_ph = pi + 0.5 * pi * sin(self.__last_time_end * pi / gst.SECOND)
+			center_th = pi/4
+			center_sigma = pi/20 # Ball should have a half-width at half-maximum of center_sigma
+
+			# Build the animated ball.
+			logp = -1 + exp(- (0.5 / center_sigma**2) ** ((thth - center_th)**2 + (phph - center_ph)**2))
+
+			# Make it large and negative in a few places, and close to zero in most places.
+			logp -= exp(0.1*abs(random.randn(*thth.shape)))
+
+			# Normalize logp.
+			logp -= log(sum(exp(logp.flatten()) * span**2))
+
+			skymap_array = column_stack( (thth.flatten(), phph.flatten(), array((span,) * npixels), logp.flatten()) )
+
+			# Prune out pixels with low probability
+			skymap_array = skymap_array[skymap_array[:,-1] > -2.9, :]
+			npixels = skymap_array.shape[0]
 		else:
-			npixels = numpy.random.randint(20000)
-			theta = numpy.random.uniform(0.0, numpy.pi, (1, npixels))
-			phi = numpy.random.uniform(0.0, 2*numpy.pi, (1, npixels))
-			span = numpy.random.uniform(0.0, 1.0, (1, npixels)) # FIXME what is a typical pixel span?
-			logp = numpy.random.uniform(-5.0, 5.0, (1, npixels))
+			npixels = random.randint(20000)
+			theta = random.uniform(0.0, pi, (1, npixels))
+			phi = random.uniform(0.0, 2*pi, (1, npixels))
+			span = random.uniform(0.0, 1.0, (1, npixels)) # FIXME what is a typical pixel span?
+			logp = random.uniform(-5.0, 5.0, (1, npixels))
 
 			# Concatenate all the arrays
-			skymap_array = numpy.hstack( (theta, phi, span, logp) )
+			skymap_array = hstack( (theta, phi, span, logp) )
 
 		# Get raw binary data from Numpy array
-		skymap_buffer = numpy.ascontiguousarray(skymap_array, dtype='f8').data
+		skymap_buffer = ascontiguousarray(skymap_array, dtype='f8').data
 
 		# Allocate a new buffer
 		(retval, buf) = pad.alloc_buffer(npixels, len(skymap_buffer), pad.get_property("caps"))
@@ -122,7 +141,7 @@ class lal_fakeskymapsrc(gst.BaseSrc):
 			return (retval, None)
 
 		# Set buffeer metadata
-		self.__last_time_end += int(numpy.random.random() * 0.125 * gst.SECOND)
+		self.__last_time_end += int(random.random() * 0.125 * gst.SECOND)
 		buf.timestamp = self.__last_time_end
 		buf.duration = gst.CLOCK_TIME_NONE
 		buf.offset = self.__last_offset_end
