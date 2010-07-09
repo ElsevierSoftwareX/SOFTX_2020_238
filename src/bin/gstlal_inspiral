@@ -381,21 +381,17 @@ def mkLLOIDsrc(pipeline, seekevent, instrument, detector, rates, psd = None, psd
 	# into the h(t) time series here, and, later, another 1/2 factor
 	# into the template when it gets downsampled.
 	#
+	# By design, the input to the orthogonal filter
+	# banks is pre-whitened, so it is unit variance over short periods of time.
+	# However, resampling it reduces the variance by a small, sample rate
+	# dependent factor.  The audioamplify element applies a correction factor
+	# that restores the input's unit variance.
+	#
 
-	# FIXME:  re-measure these;  we've changed the quality of the
-	# resampler since these were measured.
-	correction = {
-		64: 1 / 0.961,
-		128: 1 / 0.961,
-		256: 1 / 0.962,
-		512: 1 / 0.962,
-		1024: 1 / 0.962,
-		2048: 1 / 0.999
-	}
-
+	quality = 9
 	head = {source_rate: pipeparts.mktee(pipeline, head)}
 	for rate in sorted(rates, reverse = True)[1:]:	# all but the highest rate
-		head[rate] = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkaudioamplify(pipeline, head[source_rate], math.sqrt(correction[rate] * float(source_rate) / rate)), quality = 9), "audio/x-raw-float, rate=%d" % rate))
+		head[rate] = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkaudioamplify(pipeline, head[source_rate], 1/math.sqrt(pipeparts.audioresample_variance_gain(quality, source_rate, rate))), quality = quality), "audio/x-raw-float, rate=%d" % rate))
 
 	#
 	# done.  return value is a dictionary of tee elements indexed by
