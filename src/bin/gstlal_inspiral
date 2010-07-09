@@ -301,7 +301,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 		raise RuntimeError, "Element %s did not want to enter ready state" % head.get_name()
 	if not head.send_event(seekevent):
 		raise RuntimeError, "Element %s did not handle seek event" % head.get_name()
-
+	head = pipeparts.mkaudioconvert(pipeline, head)
 	if verbose:
 		head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % instrument)
 
