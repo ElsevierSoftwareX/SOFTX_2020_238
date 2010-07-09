@@ -293,30 +293,34 @@ static gboolean ensure_availableChannels(GSTLALNDSSrc* element)
     if (element->availableChannels)
         return TRUE;
     else {
-        daq_channel_t* channels = calloc(MAX_CHANNELS, sizeof(daq_channel_t));
-        if (!channels)
-            GST_ERROR_OBJECT(element, "out of memory");
-        else {
-            int nchannels_received;
-            GST_INFO_OBJECT(element, "daq_recv_channel_list");
-            int retval = daq_recv_channel_list(element->daq, channels, MAX_CHANNELS, &nchannels_received, 0, element->channelType);
-            if (retval)
-                DAQ_GST_ERROR_OBJECT(element, "daq_recv_channel_list", retval);
-            else {
-                if (nchannels_received > 0)
-                {
-                    daq_channel_t* new_channels = realloc(channels, sizeof(daq_channel_t)*MAX_CHANNELS);
-                    if (!new_channels)
-                        GST_ERROR_OBJECT(element, "out of memory");
-                    else {
-                        element->availableChannels = new_channels;
-                        element->countAvailableChannels = nchannels_received;
-                        return TRUE;
-                    }
-                }
-            }
-            free(channels);
-        }
+		int nchannels_received;
+		int retval;
+
+		GST_INFO_OBJECT(element, "daq_recv_channel_list");
+		retval = daq_recv_channel_list(element->daq, NULL, 0, &nchannels_received, 0, element->channelType);
+
+		if (retval)
+			DAQ_GST_ERROR_OBJECT(element, "daq_recv_channel_list", retval);
+		else {
+			daq_channel_t* channels = calloc(nchannels_received, sizeof(daq_channel_t));
+			if (!channels)
+				GST_ERROR_OBJECT(element, "out of memory");
+			else {
+				GST_INFO_OBJECT(element, "daq_recv_channel_list");
+				int old_nchannels_received = nchannels_received;
+				int retval = daq_recv_channel_list(element->daq, channels, old_nchannels_received, &nchannels_received, 0, element->channelType);
+				if (retval)
+					DAQ_GST_ERROR_OBJECT(element, "daq_recv_channel_list", retval);
+				else if (old_nchannels_received != nchannels_received)
+					GST_ERROR_OBJECT(element, "daq_recv_channel_list reported %d channels available, but then returned %d", old_nchannels_received, nchannels_received);
+				else {
+					element->availableChannels = channels;
+					element->countAvailableChannels = nchannels_received;
+					return TRUE;
+				}
+				free(channels);
+			}
+		}
     }
     return FALSE;
 }
