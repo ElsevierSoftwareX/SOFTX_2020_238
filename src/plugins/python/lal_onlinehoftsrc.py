@@ -409,6 +409,25 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		return True
 
 
+	def do_query(self, query):
+		"""GstBaseSrc->query virtual method"""
+
+		if query.type == gst.QUERY_FORMATS:
+			query.set_formats(gst.FORMAT_DEFAULT, gst.FORMAT_TIME)
+			return True
+		elif query.type == gst.QUERY_CONVERT:
+			src_format, src_value, dest_format, dest_value = query.parse_convert()
+			if src_format not in (gst.FORMAT_DEFAULT, gst.FORMAT_TIME):
+				return False
+			if dest_format not in (gst.FORMAT_DEFAULT, gst.FORMAT_TIME):
+				return False
+			dest_value = src_value
+			query.set_convert(src_format, src_value, dest_format, dest_value)
+			return True
+		else:
+			return gst.BaseSrc.do_query(self, query)
+
+
 	def do_create(self, offset, size):
 		"""GstBaseSrc->create virtual method"""
 

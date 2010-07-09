@@ -126,7 +126,7 @@ home directory with::
   $ cd /path/to/local/
   $ cat >environment.sh <<_EOF_
   export PATH="/path/to/local/bin:\${PATH}"
-  export PKG_CONFIG_PATH="/path/to/local/lib/pkgconfig:/usr/lib64/pkgconfig"
+  export PKG_CONFIG_PATH="/path/to/local/lib/pkgconfig:\${PKG_CONFIG_PATH}"
   export PYTHONPATH="/path/to/local/lib64/python2.4/site-packages:/path/to/local/lib/python2.4/site-packages:\${PYTHONPATH}"
   _EOF_
 
@@ -157,14 +157,26 @@ convenience we have added URL shortcuts to download versions that we have tested
  * flex:      http://prdownloads.sourceforge.net/flex/flex-2.5.35.tar.gz?download
  * pkgconfig: http://pkgconfig.freedesktop.org/releases/pkg-config-0.23.tar.gz
 
-Installing each of these using the standard recipe: download, extract, enter
-the directory, configure, and make install::
+Installing each of these **except** pkgconfig using the standard recipe:
+download, extract, enter the directory, configure, and make install::
     
   $ cd /path/to/local/src
   $ wget *url*
   $ tar xzvf *tarball name*
   $ pushd *directory*
-  $ ./configure --prefix=/path/to/local && make install
+  $ ./configure --prefix=/path/to/local && make -j install
+  $ popd
+
+When you get to pkgconfig, follow a slightly modified recipe.  Although you need
+to upprade pkgconfig in order to build GStreamer, you need your new pkgconfig
+installation to pick up the system-level .pc path.  To do this, install
+pkgconfig using the following incantation::
+
+  $ cd /path/to/local/src
+  $ wget http://pkgconfig.freedesktop.org/releases/pkg-config-0.23.tar.gz
+  $ tar xzvf pkg-config-0.23.tar.gz
+  $ pushd pkg-config-0.23
+  $ ./configure --prefix=/path/to/local --with-pc-path=/usr/lib64/pkgconfig && make -j install
   $ popd
 
 Now continue to the section `Downloading and Installing Dependencies`_.
@@ -211,7 +223,7 @@ procedure on a fresh Mac box.)  Every time you see a command starting with
   $ sudo port install python26
   $ sudo port install python_select
   $ sudo python_select python26
-  $ sudo port install wget fftw-3 fftw-3-single py26-numpy py26-scipy py26-matplotlib liboil glib2 py26-gobject py26-gtk git-core gsl
+  $ sudo port install wget fftw-3 fftw-3-single py26-numpy py26-scipy py26-matplotlib liboil glib2 py26-gobject py26-gtk git-core gsl libframe metaio
  
 
 Mac OS X Environment
