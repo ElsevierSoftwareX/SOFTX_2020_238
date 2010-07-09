@@ -89,6 +89,14 @@ class lal_skymaprenderer(gst.BaseTransform):
 		construct=True
 	)
 
+	gproperty(
+		gobject.TYPE_BOOLEAN,
+		"colormap",
+		'Set to TRUE for colored map, FALSE for grayscale)',
+		True,
+		construct=True
+	)
+
 	__gsttemplates__ = (
 		gst.PadTemplate("sink",
 			gst.PAD_SINK,
@@ -117,6 +125,7 @@ class lal_skymaprenderer(gst.BaseTransform):
 		self.out_height = 300   # default, pixels
 		self.out_width = 600    # default, pixels
 		self.set_property("entire-sky", True)
+		self.set_property("colormap", True)
 
 	def do_get_unit_size(self, caps):
 		return pipeio.get_unit_size(caps)
@@ -167,11 +176,16 @@ class lal_skymaprenderer(gst.BaseTransform):
 		phi_vertices = phi_vertices.T
 		theta_vertices = numpy.array([theta-span/2, theta+span/2, theta+span/2, theta-span/2])
 		theta_vertices = theta_vertices.T
-		colormap = matplotlib.colorbar.ColorbarBase(cax, norm=colors.Normalize(vmin=logp.min(), vmax=logp.max()), cmap=cm.jet)
+
+		# Allow for jet or gray colormap
+		if (self.get_property("colormap")):
+			colormap = matplotlib.colorbar.ColorbarBase(cax, norm=colors.Normalize(vmin=logp.min(), vmax=logp.max()), cmap=cm.jet)
+		else:
+			colormap = matplotlib.colorbar.ColorbarBase(cax, norm=colors.Normalize(vmin=logp.min(), vmax=logp.max()), cmap=cm.gray)
 
 		# Fill polygons with logp
 		for i in range(len(logp)):
-			map = axes.fill(phi_vertices[i], theta_vertices[i], facecolor=colormap.to_rgba(logp[i]), edgecolor='none')
+			axes.fill(phi_vertices[i], theta_vertices[i], facecolor=colormap.to_rgba(logp[i]), edgecolor='none')
 		axes.set_title(r"Signal Candidate Probability Distribution")
 		axes.set_xlabel(r"Geographic Latitude (radians)")
 		axes.set_ylabel(r"Geographic Longitude (radians)")
