@@ -25,8 +25,10 @@
 #
 
 
+from gstlal.pipeutil import *
 from gstlal import pipeparts
 from gstlal import cbc_template_fir
+import math
 
 
 #
