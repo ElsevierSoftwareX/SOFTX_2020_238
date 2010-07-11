@@ -59,7 +59,6 @@ from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals
 
 
 from gstlal import pipeio
-from gstlal import pipeparts
 from gstlal import cbc_template_fir
 from gstlal import misc as gstlalmisc
 from gstlal import templates
@@ -458,11 +457,14 @@ def measure_psd(instrument, seekevent, detector, seg, rate, fake_data = False, o
 	mainloop = gobject.MainLoop()
 
 	pipeline = gst.Pipeline("psd")
-	head = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data=fake_data, online_data=online_data, injection_filename = injection_filename, verbose=verbose)
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = 9), "audio/x-raw-float, rate=%d" % rate)
-	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 8)
-	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, average_samples = int(round(float(abs(seg)) / (psd_fft_length / 2) - 1)))
-	pipeparts.mkfakesink(pipeline, head)
+	mkelems_fast(pipeline,
+		mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data=fake_data, online_data=online_data, injection_filename = injection_filename, verbose=verbose),
+		"audioresample", {"gap-aware": True, "quality": 9},
+		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % rate)},
+		"queue", {"max-size-buffers": 8},
+		"lal_whiten", {"psd-mode": 0, "zero-pad": 0, "fft-length": psd_fft_length, "average-samples": int(round(float(abs(seg)) / (psd_fft_length / 2) - 1)), "median-samples": 7},
+		"fakesink"
+	)
 
 	handler = PSDHandler(mainloop, pipeline, verbose = verbose)
 
@@ -721,7 +723,7 @@ def appsink_new_buffer(elem, data):
 			data.sngl_inspiral_table.append(row)
 	if data.connection: data.connection.commit()
 
-pipeparts.mkappsink(pipeline, src, caps = gst.Caps("application/x-lal-snglinspiral")).connect_after("new-buffer", appsink_new_buffer, data)
+mkelems_fast(pipeline, src, "appsink", {"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})[-1].connect_after("new-buffer", appsink_new_buffer, data)
 
 handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
 

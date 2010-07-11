@@ -26,9 +26,36 @@
 
 
 from gstlal.pipeutil import *
-from gstlal import pipeparts
+from gstlal import pipeio
 from gstlal import cbc_template_fir
 import math
+
+
+def mkelems_fast(bin, *pipedesc):
+	elems = []
+	elem = None
+	for arg in pipedesc:
+		if isinstance(arg, dict):
+			for tup in arg.iteritems():
+				elem.set_property(*tup)
+		else:
+			if elem is not None:
+				if elem.get_parent() is None:
+					bin.add(elem)
+				if len(elems) > 0:
+					elems[-1].link(elem)
+				elems.append(elem)
+			if isinstance(arg, gst.Element):
+				elem = arg
+			else:
+				elem = gst.element_factory_make(arg)
+	if elem is not None:
+		if elem.get_parent() is None:
+			bin.add(elem)
+		if len(elems) > 0:
+			elems[-1].link(elem)
+		elems.append(elem)
+	return elems
 
 
 #
@@ -46,14 +73,16 @@ import math
 
 
 def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None):
-	snk = gst.element_factory_make("lal_adder")
-	snk.set_property("sync", True)
-	pipeline.add(snk)
-	src = pipeparts.mkcapsfilter(pipeline, snk, "audio/x-raw-float, rate=%d" % rate)
+	args = (
+		"lal_adder", {"sync": True},
+		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % rate)}
+	)
 	if verbose:
-		src = pipeparts.mkprogressreport(pipeline, src, "progress_sumsquares%s" % (suffix and "_%s" % suffix or ""))
-	src = pipeparts.mktee(pipeline, src)
-	return snk, src
+		args += ("progressreport", {"name": "progress_sumsquares%s" % (suffix and "_%s" % suffix or "")})
+	args += ("tee",)
+
+	elems = mkelems_fast(pipeline, *args)
+	return elems[0], elems[-1]
 
 
 #
@@ -65,29 +94,29 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 	# data source and progress report
 	#
 	print detector.block_size
+
 	if fake_data:
-		head = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
+		args = ("lal_fakeligosrc", {"instrument": instrument, "channel-name": detector.channel, "blocksize": detector.block_size})
 	elif online_data:
-		head = pipeparts.mkonlinehoftsrc(pipeline, instrument = instrument)
+		args = ("lal_onlinehoftsrc", {"instrument": instrument})
 	else:
-		head = pipeparts.mkframesrc(pipeline, instrument = instrument, blocksize = detector.block_size, location = detector.frame_cache, channel_name = detector.channel)
+		args = ("lal_framesrc", {"instrument": instrument, "blocksize": detector.block_size, "location": detector.frame_cache, "channel-name": detector.channel})
+	args += ("audioconvert",)
 
-	if head.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
-		raise RuntimeError, "Element %s did not want to enter ready state" % head.get_name()
-	if not head.send_event(seekevent):
-		raise RuntimeError, "Element %s did not handle seek event" % head.get_name()
-	head = pipeparts.mkaudioconvert(pipeline, head)
 	if verbose:
-		head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % instrument)
-
-	#
-	# optional injections
-	#
+		args += ("progressreport", {"name": "progress_src_%s" % instrument})
 
 	if injection_filename is not None:
-		head = pipeparts.mkinjections(pipeline, head, injection_filename)
+		args += ("lal_simulation", {"xml-location": injection_filename})
 
-	return head
+	elems = mkelems_fast(pipeline, *args)
+	
+	if elems[0].set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
+		raise RuntimeError, "Element %s did not want to enter ready state" % elems[0].get_name()
+	if not elems[0].send_event(seekevent):
+		raise RuntimeError, "Element %s did not handle seek event" % elems[0].get_name()
+
+	return elems[-1]
 
 
 def mkLLOIDsrc(pipeline, seekevent, instrument, detector, rates, psd = None, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, verbose = False, nxydump_segment = None):
@@ -103,7 +132,12 @@ def mkLLOIDsrc(pipeline, seekevent, instrument, detector, rates, psd = None, psd
 	#
 
 	source_rate = max(rates)
-	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, head), quality = 9), "audio/x-raw-float, rate=%d" % source_rate)
+	head = mkelems_fast(pipeline,
+		head,
+		"queue",
+		"audioresample", {"gap-aware": True, "quality": 9},
+		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % source_rate)}
+	)[-1]
 
 	#
 	# whiten
@@ -114,7 +148,7 @@ def mkLLOIDsrc(pipeline, seekevent, instrument, detector, rates, psd = None, psd
 		# use fixed PSD
 		#
 
-		head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, psd_mode = 1)
+		head = mkelems_fast(pipeline, head, "lal_whiten", {"fft-length": psd_fft_length, "psd-mode": 1, "zero-pad": 0, "average-samples": 64, "median-samples": 7})[-1]
 
 		#
 		# install signal handler to retrieve \Delta f when it is
@@ -136,9 +170,9 @@ def mkLLOIDsrc(pipeline, seekevent, instrument, detector, rates, psd = None, psd
 		# use running average PSD
 		#
 
-		head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length)
-	head = pipeparts.mknofakedisconts(pipeline, head)	# FIXME:  remove after basetransform behaviour fixed
-
+		head = mkelems_fast(pipeline, head, "lal_whiten", {"fft-length": psd_fft_length, "psd-mode": 0, "zero-pad": 0, "average-samples": 64, "median-samples": 7})[-1]
+	head = mkelems_fast("lal_nofakedisconts", head, {"silent": True})[-1]
+	
 	#
 	# down-sample whitened time series to remaining target sample rates
 	# while applying an amplitude correction to adjust for low-pass
@@ -164,9 +198,15 @@ def mkLLOIDsrc(pipeline, seekevent, instrument, detector, rates, psd = None, psd
 	#
 
 	quality = 9
-	head = {source_rate: pipeparts.mktee(pipeline, head)}
+	head = {source_rate: mkelems_fast(pipeline, head, "tee")[-1]}
 	for rate in sorted(rates, reverse = True)[1:]:	# all but the highest rate
-		head[rate] = pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkaudioamplify(pipeline, head[source_rate], 1/math.sqrt(pipeparts.audioresample_variance_gain(quality, source_rate, rate))), quality = quality), "audio/x-raw-float, rate=%d" % rate))
+		head[rate] = mkelems_fast(pipeline,
+			head,
+			"audioamplify", {"clipping-method": 3, "amplification": 1/math.sqrt(pipeparts.audioresample_variance_gain(quality, source_rate, rate))},
+			"audioresample", {"gap-aware": True, "quality": quality},
+			"capsfilter", {"caps", gst.Caps("audio/x-raw-float, rate=%d" % rate)},
+			"tee"
+		)[-1]
 
 	#
 	# done.  return value is a dictionary of tee elements indexed by
@@ -194,7 +234,12 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# need to be here, or it might be a symptom of a bug elsewhere.
 	# figure this out.
 
-	src = pipeparts.mktee(pipeline, pipeparts.mkreblock(pipeline, pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank)))
+	src = mkelems_fast(pipeline,
+		src,
+		"lal_firbank", {"latency": -int(round(bank_fragment.start * bank_fragment.rate)) - 1, "fir-matrix": bank_fragment.orthogonal_template_bank},
+		"lal_reblock",
+		"tee"
+	)[-1]
 	#pipeparts.mkvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogram(pipeline, src), "video/x-raw-rgb, width=640, height=480, framerate=1/4"))
 	#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, src), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "orthosnr_channelgram_%s.ogv" % logname, verbose = True)
 
@@ -203,34 +248,48 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# aggregator
 	#
 
-	pipeparts.mkchecktimestamps(pipeline, pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights)), quality = 9), name = "timestamps_%s_after_sumsquare_resampler" % logname).link(control_snk)
+	mkelems_fast(pipeline,
+		src,
+		"lal_sumsquares", {"weights": bank_fragment.sum_of_squares_weights},
+		"queue",
+		"audioresample", {"gap-aware": True, "quality": 9},
+		"lal_checktimestamps", {"name": "timestamps_%s_after_sumsquare_resampler" % logname},
+		control_snk
+	)
 
 	#
 	# use sum-of-squares aggregate as gate control for orthogonal SNRs
 	#
 
-	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src), control = pipeparts.mkqueue(pipeline, control_src), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length)
-	src = pipeparts.mkchecktimestamps(pipeline, src, name = "timestamps_%s_after_gate" % logname)
+	elems = mkelems_fast(pipeline,
+		"lal_gate", {"threshold": bank.gate_threshold, "attack-length": gate_attack_length, "hold-length": gate_hold_length},
+		"lal_checktimestamps", {"name": "timestamps_%s_after_gate" % logname}
 
-	#
-	# buffer orthogonal SNRs
-	#
-	# FIXME:  teach the collectpads object not to wait for buffers on
-	# pads whose segments have not yet been reached by the input on the
-	# other pads.  then this large queue buffer will not be required
-	# because streaming can begin through the downstream adders without
-	# waiting for input from all upstream elements.
+		#
+		# buffer orthogonal SNRs
+		#
+		# FIXME:  teach the collectpads object not to wait for buffers on
+		# pads whose segments have not yet been reached by the input on the
+		# other pads.  then this large queue buffer will not be required
+		# because streaming can begin through the downstream adders without
+		# waiting for input from all upstream elements.
 
-	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND )
+		"queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": gst.SECOND},
+		
+		#
+		# reconstruct physical SNRs
+		#
 
-	#
-	# reconstruct physical SNRs
-	#
+		"lal_matrixmixer", {"matrix": bank_fragment.mix_matrix},
+		"audioresample", {"gap-aware": True, "quality": 9},
+		"lal_nofakedisconts", {"silent": True}, # FIXME:  remove after basetransform behaviour fixed
+		"lal_checktimestamps", {"name": "timestamps_%s_after_snr_resampler" % logname}
+	)
 
-	src = pipeparts.mkmatrixmixer(pipeline, src, matrix = bank_fragment.mix_matrix)
-	src = pipeparts.mkresample(pipeline, src, quality = 9)
-	src = pipeparts.mknofakedisconts(pipeline, src)	# FIXME:  remove after basetransform behaviour fixed
-	src = pipeparts.mkchecktimestamps(pipeline, src, name = "timestamps_%s_after_snr_resampler" % logname)
+
+	mkelems_fast(pipeline, src, "queue")[-1].link_pads("src", elems[0], "sink")
+	mkelems_fast(pipeline, control_src, "queue")[-1].link_pads("src", elems[0], "control")
+	
 
 	#
 	# done
@@ -240,7 +299,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	del bank_fragment.orthogonal_template_bank
 	del bank_fragment.sum_of_squares_weights
 	del bank_fragment.mix_matrix
-	return src
+	return elems[-1]
 
 
 def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, control_snksrc, verbose = False, nxydump_segment = None):
@@ -258,9 +317,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, control_snksrc
 	# snr aggregator
 	#
 
-	snr = gst.element_factory_make("lal_adder")
-	snr.set_property("sync", True)
-	pipeline.add(snr)
+	snr = mkelems_fast(pipeline, "lal_adder", {"sync": True})[-1]
 
 	#
 	# loop over template bank slices
@@ -274,15 +331,11 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, control_snksrc
 			# firbank element, and the value here is only
 			# approximate and not tied to the fir bank
 			# parameters so might not work if those change
-			pipeparts.mkqueue(
-				pipeline,
-				pipeparts.mkdelay(
-					pipeline,
-					hoftdict[bank_fragment.rate],
-					delay = int(round( (bank.filter_length - bank_fragment.end)*bank_fragment.rate )) ),
-				max_size_bytes = 0,
-				max_size_buffers = 0,
-				max_size_time = 4 * int(math.ceil(bank.filter_length)) * gst.SECOND),
+			mkelems_fast(pipeline,
+				hoftdict[bank_fragment.rate],
+				"lal_delay", {"delay": int(round( (bank.filter_length - bank_fragment.end)*bank_fragment.rate ))},
+				"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": 4 * int(math.ceil(bank.filter_length)) * gst.SECOND}
+			)[-1],
 			bank,
 			bank_fragment,
 			control_snksrc,
@@ -297,7 +350,12 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, control_snksrc
 	# snr
 	#
 
-	snr = pipeparts.mktee(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % output_rate)))
+	snr = mkelems_fast(pipeline,
+		snr,
+		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % output_rate)},
+		"lal_togglecomplex",
+		"tee"
+	)[-1]
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % logname, segment = nxydump_segment)
 	#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % logname, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[output_rate], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
 
@@ -305,7 +363,11 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, control_snksrc
 	# \chi^{2}
 	#
 
-	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr), autocorrelation_matrix = bank.autocorrelation_bank, latency = autocorrelation_latency, snr_thresh=bank.snr_threshold)
+	chisq = mkelems_fast(pipeline,
+		snr,
+		"queue",
+		"lal_autochisq", {"autocorrelation-matrix": pipeio.repack_complex_array_to_real(bank.autocorrelation_bank), "latency": autocorrelation_latency, "snr-thresh": bank.snr_threshold}
+	)[-1]
 	#chisq = pipeparts.mktee(pipeline, chisq)
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, chisq), "chisq_%s.dump" % logname, segment = nxydump_segment)
 	# FIXME:  find a way to use less memory without this hack
@@ -315,9 +377,13 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, control_snksrc
 	# trigger generator and progress report
 	#
 
-	head = pipeparts.mktriggergen(pipeline, pipeparts.mkqueue(pipeline, snr), chisq, bank.template_bank_filename, bank.snr_threshold, bank.sigmasq)
+	head = mkelems_fast(pipeline,
+		chisq,
+		"lal_triggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq},
+	)[-1]
+	mkelems_fast(pipeline, snr, "queue", head)
 	if verbose:
-		head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % logname)
+		head = mkelems_fast(pipeline, head, "progressreport", {"name": "progress_xml_%s" % logname})[-1]
 
 	#
 	# done
@@ -341,9 +407,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	# in this special (and very high priority) case.
 	needs_input_selector = (len(detectors) * len(banks) > 1)
 	if needs_input_selector:
-		nto1 = gst.element_factory_make("input-selector")
-		nto1.set_property("select-all", True)
-		pipeline.add(nto1)
+		nto1 = mkelems_fast(pipeline, "input-selector", {"select-all": True})[-1]
 
 	#
 	# loop over instruments and template banks
@@ -366,7 +430,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 				nxydump_segment = nxydump_segment
 			)
 			if needs_input_selector:
-				pipeparts.mkqueue(pipeline, head).link(nto1)
+				mkelems_fast(pipeline, head, "queue", nto1)
 
 	#
 	# done
@@ -375,4 +439,4 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	if needs_input_selector:
 		return nto1
 	else:
-		return pipeparts.mkqueue(pipeline, head)
+		return mkelems_fast(pipeline, head, "queue")
