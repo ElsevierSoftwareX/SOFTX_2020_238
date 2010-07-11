@@ -22,11 +22,12 @@ __author__ = "Leo Singer <leo.singer@ligo.org>"
 
 
 from gstlal.pipeutil import *
-from gstlal import matplotlibhelper
 from gstlal import pipeio
+from gstlal import matplotlibhelper
 
 
-class lal_timeseriesplotter(gst.BaseTransform):
+class lal_timeseriesplotter(matplotlibhelper.BaseMatplotlibTransform):
+
 
 	__gstdetails__ = (
 		"Time series renderer",
@@ -65,7 +66,7 @@ class lal_timeseriesplotter(gst.BaseTransform):
 		)
 	}
 	__gsttemplates__ = (
-		matplotlibhelper.padtemplate,
+		matplotlibhelper.BaseMatplotlibTransform.__gsttemplates__,
 		gst.PadTemplate("sink",
 			gst.PAD_SINK, gst.PAD_ALWAYS,
 			gst.caps_from_string("""
@@ -76,12 +77,6 @@ class lal_timeseriesplotter(gst.BaseTransform):
 			""")
 		)
 	)
-
-
-	def __init__(self):
-		super(lal_timeseriesplotter, self).__init__()
-		self.figure = matplotlibhelper.figure()
-		self.axes = self.figure.gca()
 
 
 	def do_set_property(self, prop, val):
@@ -131,23 +126,6 @@ class lal_timeseriesplotter(gst.BaseTransform):
 
 		# Done!
 		return gst.FLOW_OK
-
-
-	def do_transform_caps(self, direction, caps):
-		"""GstBaseTransform->transform_caps virtual method."""
-		if direction == gst.PAD_SRC:
-			return self.get_pad("sink").get_fixed_caps_func()
-		elif direction == gst.PAD_SINK:
-			return self.get_pad("src").get_fixed_caps_func()
-		raise ValueError
-
-
-	def do_transform_size(self, direction, caps, size, othercaps):
-		"""GstBaseTransform->transform_size virtual method."""
-		if direction == gst.PAD_SINK:
-			return pipeio.get_unit_size(self.get_pad("src").get_caps())
-		else:
-			raise ValueError, direction
 
 
 # Register element class
