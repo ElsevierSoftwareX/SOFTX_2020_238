@@ -26,6 +26,7 @@
 
 
 from gstlal.pipeutil import *
+from gstlal import pipeparts
 from gstlal import pipeio
 from gstlal import cbc_template_fir
 import math
@@ -171,7 +172,7 @@ def mkLLOIDsrc(pipeline, seekevent, instrument, detector, rates, psd = None, psd
 		#
 
 		head = mkelems_fast(pipeline, head, "lal_whiten", {"fft-length": psd_fft_length, "psd-mode": 0, "zero-pad": 0, "average-samples": 64, "median-samples": 7})[-1]
-	head = mkelems_fast("lal_nofakedisconts", head, {"silent": True})[-1]
+	head = mkelems_fast(pipeline, head, "lal_nofakedisconts", {"silent": True})[-1]
 	
 	#
 	# down-sample whitened time series to remaining target sample rates
@@ -201,10 +202,10 @@ def mkLLOIDsrc(pipeline, seekevent, instrument, detector, rates, psd = None, psd
 	head = {source_rate: mkelems_fast(pipeline, head, "tee")[-1]}
 	for rate in sorted(rates, reverse = True)[1:]:	# all but the highest rate
 		head[rate] = mkelems_fast(pipeline,
-			head,
+			head[source_rate],
 			"audioamplify", {"clipping-method": 3, "amplification": 1/math.sqrt(pipeparts.audioresample_variance_gain(quality, source_rate, rate))},
 			"audioresample", {"gap-aware": True, "quality": quality},
-			"capsfilter", {"caps", gst.Caps("audio/x-raw-float, rate=%d" % rate)},
+			"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % rate)},
 			"tee"
 		)[-1]
 
@@ -263,7 +264,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 
 	elems = mkelems_fast(pipeline,
 		"lal_gate", {"threshold": bank.gate_threshold, "attack-length": gate_attack_length, "hold-length": gate_hold_length},
-		"lal_checktimestamps", {"name": "timestamps_%s_after_gate" % logname}
+		"lal_checktimestamps", {"name": "timestamps_%s_after_gate" % logname},
 
 		#
 		# buffer orthogonal SNRs
@@ -439,4 +440,4 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	if needs_input_selector:
 		return nto1
 	else:
-		return mkelems_fast(pipeline, head, "queue")
+		return mkelems_fast(pipeline, head, "queue")[-1]
