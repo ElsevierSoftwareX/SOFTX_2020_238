@@ -46,15 +46,9 @@ class PipelineTestFixture(unittest.TestCase):
 			self.mainloop.quit()
 
 	def tearDown(self):
-		msg_tupl = self.msg_tupl
-		pipeline = self.pipeline
-		self.msg_tupl = None
-		self.bus = None
-		self.mainloop = None
-		self.pipeline = None
 		try:
-			if pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
+			if self.pipeline.set_state(gst.STATE_NULL) != gst.STATE_CHANGE_SUCCESS:
 				raise RuntimeError, "Pipeline did not enter NULL state"
 		finally:
-			if msg_tupl is not None:
-				raise RuntimeError, "last GStreamer error (%s:%d '%s'): %s" % msg_tupl
+			if self.msg_tupl is not None:
+				raise RuntimeError, "last GStreamer error (%s:%d '%s'): %s" % self.msg_tupl
