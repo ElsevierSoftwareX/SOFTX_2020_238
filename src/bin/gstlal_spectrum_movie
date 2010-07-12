@@ -199,7 +199,7 @@ head = build_source(
 )
 head = build_pipeline(
 	pipeline,
-	head
+	head,
 	options.psd_fft_length,
 	options.average_length,
 	options.median_samples,
