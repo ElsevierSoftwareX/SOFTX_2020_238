@@ -120,8 +120,8 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 	return elems[-1]
 
 
-def mkLLOIDsrc(pipeline, seekevent, instrument, detector, rates, psd = None, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, verbose = False, nxydump_segment = None):
-	head = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data=fake_data, online_data=online_data, injection_filename = injection_filename, verbose=verbose)
+def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8):
+	"""Build pipeline stage to whiten and downsample h(t)."""
 
 	#
 	# down-sample to highest of target sample rates.  note:  there is
@@ -133,23 +133,22 @@ def mkLLOIDsrc(pipeline, seekevent, instrument, detector, rates, psd = None, psd
 	#
 
 	source_rate = max(rates)
-	head = mkelems_fast(pipeline,
-		head,
-		"queue",
+	elems = mkelems_fast(pipeline,
+		src,
+		"queue", # FIXME: I think we can remove this queue.
 		"audioresample", {"gap-aware": True, "quality": 9},
-		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % source_rate)}
-	)[-1]
+		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % source_rate)},
+		"lal_whiten", {"fft-length": psd_fft_length, "zero-pad": 0, "average-samples": 64, "median-samples": 7},
+		"lal_nofakedisconts", {"silent": True},
+		"tee"
+	)
 
-	#
-	# whiten
-	#
-
-	if psd is not None:
-		#
+	if psd is None:
+		# use running average PSD
+		elems[-3].set_property("psd-mode", 0)
+	else:
 		# use fixed PSD
-		#
-
-		head = mkelems_fast(pipeline, head, "lal_whiten", {"fft-length": psd_fft_length, "psd-mode": 1, "zero-pad": 0, "average-samples": 64, "median-samples": 7})[-1]
+		elems[-3].set_property("psd-mode", 1)
 
 		#
 		# install signal handler to retrieve \Delta f when it is
@@ -165,14 +164,7 @@ def mkLLOIDsrc(pipeline, seekevent, instrument, detector, rates, psd = None, psd
 			psd = cbc_template_fir.interpolate_psd(psd, delta_f)
 			elem.set_property("mean-psd", psd.data[:n])
 
-		head.connect_after("notify::f-nyquist", f_nyquist_changed, psd)
-	else:
-		#
-		# use running average PSD
-		#
-
-		head = mkelems_fast(pipeline, head, "lal_whiten", {"fft-length": psd_fft_length, "psd-mode": 0, "zero-pad": 0, "average-samples": 64, "median-samples": 7})[-1]
-	head = mkelems_fast(pipeline, head, "lal_nofakedisconts", {"silent": True})[-1]
+		elems[-3].connect_after("notify::f-nyquist", f_nyquist_changed, psd)
 	
 	#
 	# down-sample whitened time series to remaining target sample rates
@@ -199,10 +191,10 @@ def mkLLOIDsrc(pipeline, seekevent, instrument, detector, rates, psd = None, psd
 	#
 
 	quality = 9
-	head = {source_rate: mkelems_fast(pipeline, head, "tee")[-1]}
+	head = {source_rate: elems[-1]}
 	for rate in sorted(rates, reverse = True)[1:]:	# all but the highest rate
 		head[rate] = mkelems_fast(pipeline,
-			head[source_rate],
+			elems[-1],
 			"audioamplify", {"clipping-method": 3, "amplification": 1/math.sqrt(pipeparts.audioresample_variance_gain(quality, source_rate, rate))},
 			"audioresample", {"gap-aware": True, "quality": quality},
 			"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % rate)},
@@ -416,7 +408,8 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 
 	for instrument in detectors:
 		rates = set(rate for bank in banks for rate in bank.get_rates())
-		hoftdict = mkLLOIDsrc(pipeline, seekevent, instrument, detectors[instrument], rates, psd = psd, psd_fft_length = psd_fft_length, fake_data = fake_data, online_data = online_data, injection_filename = injection_filename, verbose = verbose, nxydump_segment = nxydump_segment)
+		head = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data=fake_data, online_data=online_data, injection_filename=injection_filename, verbose=verbose)
+		hoftdict = mkLLOIDsrc(pipeline, head, rates, psd=psd, psd_fft_length=psd_fft_length)
 		for bank in banks:
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
 			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % bank.logname, segment = nxydump_segment)
