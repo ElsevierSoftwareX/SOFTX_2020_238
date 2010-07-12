@@ -78,17 +78,10 @@ class lal_skymaprenderer(matplotlibhelper.BaseMatplotlibTransform):
 		)
 	)
 
+	def __init__(self):
+		super(lal_skymaprenderer, self).__init__() 
+		self.cax, kw = matplotlib.colorbar.make_axes(self.axes)
 
-	def do_get_unit_size(self, caps):
-		return pipeio.get_unit_size(caps)
-
-
-	def do_set_caps(self, incaps, outcaps):
-		channels = incaps[0]["channels"]
-		self.channels = channels
-		self.out_width = outcaps[0]["width"]
-		self.out_height = outcaps[0]["height"]
-		return True
 
 
 	def do_transform(self, inbuf, outbuf):
@@ -109,9 +102,9 @@ class lal_skymaprenderer(matplotlibhelper.BaseMatplotlibTransform):
 		logp = skymap_array[:,3]
 
 
-		# Build plot
-		cax, kw = matplotlib.colorbar.make_axes(self.axes)
-
+		# Clear old axes
+		self.cax.cla()
+		self.axes.cla()
 
 		# Specify vertices of polygons
 		phi_vertices = numpy.array([phi-span/2, phi-span/2, phi+span/2, phi+span/2])
@@ -121,7 +114,7 @@ class lal_skymaprenderer(matplotlibhelper.BaseMatplotlibTransform):
 
 
 		# Make ColorbarBase object
-		colormap = matplotlib.colorbar.ColorbarBase(cax, norm=colors.Normalize(vmin=logp.min(), vmax=logp.max()), cmap=cm.jet)
+		colormap = matplotlib.colorbar.ColorbarBase(self.cax, norm=colors.Normalize(vmin=logp.min(), vmax=logp.max()), cmap=cm.jet)
 
 
 		# Fill polygons with logp
@@ -146,23 +139,6 @@ class lal_skymaprenderer(matplotlibhelper.BaseMatplotlibTransform):
 		# Done
 		return gst.FLOW_OK
 
-
-	def do_transform_caps(self, direction, caps):
-		if direction == gst.PAD_SRC:
-			#
-			# convert src pad's caps to sink pad's
-			#
-
-			return self.get_pad("sink").get_fixed_caps_func()
-
-		elif direction == gst.PAD_SINK:
-			#
-			# convert sink pad's caps to src pad's
-			#
-
-			return self.get_pad("src").get_fixed_caps_func()
-
-		raise ValueError
 
 
 # Register element class
