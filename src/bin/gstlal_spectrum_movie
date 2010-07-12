@@ -199,8 +199,7 @@ head = build_pipeline(
 )
 build_sink(
 	pipeline,
-	head,
-	verbose = options.verbose
+	head
 )
 
 handler = Handler(mainloop, pipeline, verbose = options.verbose)
