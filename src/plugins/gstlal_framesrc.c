@@ -183,7 +183,7 @@ static GstCaps *series_to_caps_and_taglist(const char *instrument, const char *c
  */
 
 
-static void *read_series(GSTLALFrameSrc *element, guint64 offset, guint64 length)
+static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint64 length, void** out_series)
 {
 	GstBaseSrc *basesrc = GST_BASE_SRC(element);
 	guint64 segment_length;
@@ -205,7 +205,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 offset, guint64 length
 
 	if(offset >= segment_length) {
 		GST_ERROR_OBJECT(element, "requested interval lies outside input domain");
-		return NULL;
+		return GST_FLOW_ERROR;
 	}
 	if(segment_length - offset < length)
 		length = segment_length - offset;
@@ -231,7 +231,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 offset, guint64 length
 		if(!series) {
 			GST_ERROR_OBJECT(element, "XLALFrReadINT4TimeSeries() %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
-			return NULL;
+			return GST_FLOW_ERROR;
 		}
 		break;
 
@@ -240,7 +240,7 @@ static void *read_series(GSTLALFrameSrc *element, guint64 offset, guint64 length
 		if(!series) {
 			GST_ERROR_OBJECT(element, "XLALFrReadREAL4TimeSeries() %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
-			return NULL;
+			return GST_FLOW_ERROR;
 		}
 		break;
 
@@ -249,20 +249,21 @@ static void *read_series(GSTLALFrameSrc *element, guint64 offset, guint64 length
 		if(!series) {
 			GST_ERROR_OBJECT(element, "XLALFrReadREAL8TimeSeries() %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
-			return NULL;
+			return GST_FLOW_ERROR;
 		}
 		break;
 
 	default:
 		GST_ERROR_OBJECT(element, "unsupported LAL type code (%d)", element->series_type);
-		return NULL;
+		return GST_FLOW_ERROR;
 	}
 
 	/*
 	 * done
 	 */
 
-	return series;
+	*out_series = series;
+	return GST_FLOW_OK;
 }
 
 
@@ -588,13 +589,9 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			GST_ERROR_OBJECT(element, "block size %lu is not an integer multiple of the sample size %lu", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
 			return GST_FLOW_ERROR;
 		}
-		chunk = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data));
-		if(!chunk) {
-			/*
-			 * EOS
-			 */
-			return GST_FLOW_UNEXPECTED;
-		}
+		result = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data), &chunk);
+		if (result != GST_FLOW_OK)
+			return result;
 		result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
 		if(result != GST_FLOW_OK) {
 			XLALDestroyINT4TimeSeries(chunk);
@@ -622,13 +619,9 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			GST_ERROR_OBJECT(element, "block size %lu is not an integer multiple of the sample size %lu", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
 			return GST_FLOW_ERROR;
 		}
-		chunk = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data));
-		if(!chunk) {
-			/*
-			 * EOS
-			 */
-			return GST_FLOW_UNEXPECTED;
-		}
+		result = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data), &chunk);
+		if (result != GST_FLOW_OK)
+			return result;
 		result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
 		if(result != GST_FLOW_OK) {
 			XLALDestroyREAL4TimeSeries(chunk);
@@ -656,13 +649,9 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			GST_ERROR_OBJECT(element, "block size %lu is not an integer multiple of the sample size %lu", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
 			return GST_FLOW_ERROR;
 		}
-		chunk = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data));
-		if(!chunk) {
-			/*
-			 * EOS
-			 */
-			return GST_FLOW_UNEXPECTED;
-		}
+		result = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data), &chunk);
+		if (result != GST_FLOW_OK)
+			return result;
 		result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
 		if(result != GST_FLOW_OK) {
 			XLALDestroyREAL8TimeSeries(chunk);
