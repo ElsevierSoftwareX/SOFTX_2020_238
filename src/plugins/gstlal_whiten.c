@@ -651,7 +651,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
  */
 
 
-static void delta_f_changed(GObject *object, GParamSpec *pspec, gpointer user_data)
+static void f_nyquist_changed(GObject *object, GParamSpec *pspec, gpointer user_data)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(object);
 
@@ -1392,7 +1392,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 
 static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *klass)
 {
-	g_signal_connect(G_OBJECT(element), "notify::f-nyquist", G_CALLBACK(delta_f_changed), NULL);
+	g_signal_connect(G_OBJECT(element), "notify::f-nyquist", G_CALLBACK(f_nyquist_changed), NULL);
 
 	element->mean_psd_pad = NULL;
 	element->adapter = gst_adapter_new();
