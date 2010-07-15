@@ -94,7 +94,6 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 	#
 	# data source and progress report
 	#
-	print detector.block_size
 
 	if fake_data:
 		args = ("lal_fakeligosrc", {"instrument": instrument, "channel-name": detector.channel, "blocksize": detector.block_size})
