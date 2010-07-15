@@ -6,7 +6,7 @@ IFOS = H1 H2 L1
 all : dag
 
 segments.%.xml :
-	ligolw_segment_query --segment-url=ldbd://metaserver.phy.syr.edu:30015 -q \
+	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q \
 		--gps-start-time $(START) --gps-end-time $(STOP) \
 		--include-segments=$*:Science,$*:Injection > $@
 	ligolw_segments_compat $@
