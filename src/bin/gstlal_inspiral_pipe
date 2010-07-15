@@ -43,6 +43,7 @@ import glue.ligolw.utils as utils
 import glue.ligolw.utils.segments as ligolw_segments
 from pylal import ligolw_tisi
 from lalapps import power
+from pylal.datatypes import LIGOTimeGPS
 from gstlal import dagparts as gstlaldagparts
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -272,6 +273,21 @@ background_seglists = segments.segmentlistdict()
 for filename in [options.time_slides]:
 	cache_entry = CacheEntry(None, None, None, "file://localhost" + os.path.abspath(filename))
 	background_time_slides[cache_entry] = ligolw_tisi.load_time_slides(filename, verbose = options.verbose, gz = filename.endswith(".gz")).values()
+
+	# Convert all time slide values to LIGOTimeGPS (which is a fixed width integer time format)
+	# because otherwise segmentlistdict.offsets.clear() introduces nanosecond-scale
+	# errors through inconsistent rounding.
+	#
+	# FIXME: come up with a better solution to this.  Make ligolw_tisi produce
+	# integer nanosecond offsets?  Fix rounding issue in segmentlistdict.offsets.clear()?
+	#
+	# See PR 3434.
+
+	for v1 in background_time_slides.values():
+		for v2 in v1:
+			for k in v2.iterkeys():
+				v2[k] = LIGOTimeGPS(v2[k])
+
 	background_seglists |= gstlaldagparts.compute_segment_lists(seglists, background_time_slides[cache_entry], min_segment_length, verbose = options.verbose)
 
 
