@@ -24,6 +24,9 @@ if options.hour not in (0, 8, 16):
 gps_start_time = gpstime.GpsSecondsFromPyUTC(gpstime.mkUTC(
 	options.year, options.month, options.day, options.hour, 0, 0))
 
+tmpdir = os.getenv("TMPDIR")
+if tmpdir is None:
+	raise RuntimeError("Environment variable TMPDIR must be set to point to a local directory")
 
 
 # Make job subdir
@@ -38,12 +41,13 @@ os.chdir(dirname)
 # Build submit files and DAG
 
 submit_file_tail = r"""
+log = %(tmpdir)s/8hourly.%(logname)s.log
 universe = vanilla
 executable = /usr/bin/env
 notification = never
 getenv = True
 queue 1
-"""
+""" % {"tmpdir": tmpdir, "logname": dirname}
 
 
 print >>open("ligo_data_find.sub", "w"), r"""
