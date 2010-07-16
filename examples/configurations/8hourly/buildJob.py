@@ -112,6 +112,7 @@ arguments = gstlal_inspiral \
 	--reference-psd reference_psd.xml.gz \
 	--gps-start-time $(macro_gps_start_time) \
 	--gps-end-time $(macro_gps_end_time) \
+	--template-bank tmpltbank.xml.gz \
 	--output gstlal_inspiral.$(macro_instrument).sqlite
 
 output = gstlal_inspiral.$(macro_instrument).out
@@ -127,8 +128,7 @@ arguments = gstlal_reference_psd \
 	--instrument $(macro_instrument) \
 	--write-psd reference_psd.$(macro_instrument).xml.gz \
 	--gps-start-time $(macro_gps_start_time) \
-	--gps-end-time $(macro_gps_end_time) \
-	--template-bank tmpltbank.xml.gz
+	--gps-end-time $(macro_gps_end_time)
 
 output = reference_psd.$(macro_instrument).out
 error = reference_psd.$(macro_instrument).err
