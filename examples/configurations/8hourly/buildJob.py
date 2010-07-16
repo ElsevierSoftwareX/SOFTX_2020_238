@@ -42,7 +42,7 @@ universe = vanilla
 executable = /usr/bin/env
 notification = never
 getenv = True
-queue = 1
+queue 1
 """
 
 
