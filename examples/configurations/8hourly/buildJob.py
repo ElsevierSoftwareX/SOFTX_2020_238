@@ -140,11 +140,11 @@ print >>open("8hourly.dag", "w"), (
 
 	JOB lalapps_tmpltbank lalapps_tmpltbank.sub
 	VARS lalapps_tmpltbank macro_comment="%(comment)s" macro_tmpltbank_start_time="%(tmpltbank_start_time)d" macro_tmpltbank_end_time="%(tmpltbank_end_time)d"
-	PARENT lalapps_tmpltbank ligo_data_find
+	PARENT ligo_data_find CHILD lalapps_tmpltbank
 
 	JOB prune_duplicate_mass_pairs prune_duplicate_mass_pairs.sub
 	VARS prune_duplicate_mass_pairs macro_comment="%(comment)s" macro_tmpltbank_start_time="%(tmpltbank_start_time)d" macro_tmpltbank_duration="%(tmpltbank_duration)d"
-	PARENT prune_duplicate_mass_pairs lalapps_tmpltbank
+	PARENT lalapps_tmpltbank CHILD prune_duplicate_mass_pairs
 	""".replace("\t","")
 
 	+ "".join(
@@ -155,7 +155,7 @@ print >>open("8hourly.dag", "w"), (
 
 		JOB gstlal_inspiral.%(i)s gstlal_inspiral.sub
 		VARS gstlal_inspiral.%(i)s macro_instrument="%(i)s" macro_comment="%%(comment)s" macro_gps_start_time="%%(gps_start_time)d" macro_gps_end_time="%%(gps_end_time)d"
-		PARENT gstlal_inspiral.%(i)s gstlal_reference_psd.%(i)s prune_duplicate_mass_pairs
+		PARENT gstlal_reference_psd.%(i)s prune_duplicate_mass_pairs CHILD gstlal_inspiral.%(i)s
 		""".replace("\t","") % args for args in (
 			{"i":"H1","s":958739939,"e":958743539},
 			{"i":"L1","s":958744974,"e":958747374}
