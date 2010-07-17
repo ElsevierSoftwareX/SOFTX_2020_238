@@ -53,7 +53,7 @@ queue 1
 print >>open("ligo_data_find.sub", "w"), r"""
 arguments = ligo_data_find \
 	-o H -t H1_DMT_C00_L2 -u file -l \
-	-s $(macro_tmpltbank_start_time) -e $(macro_tmpltbank_end_time)
+	-s 958739936 -e 958743552
 
 output = ligo_data_find.out
 error = ligo_data_find.err
@@ -140,7 +140,6 @@ print >>open("8hourly.dag", "w"), (
 
 	"""
 	JOB ligo_data_find ligo_data_find.sub
-	VARS ligo_data_find macro_tmpltbank_start_time="%(tmpltbank_start_time)d" macro_tmpltbank_end_time="%(tmpltbank_end_time)d"
 
 	JOB lalapps_tmpltbank lalapps_tmpltbank.sub
 	VARS lalapps_tmpltbank macro_comment="%(comment)s" macro_tmpltbank_start_time="%(tmpltbank_start_time)d" macro_tmpltbank_end_time="%(tmpltbank_end_time)d"
