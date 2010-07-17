@@ -155,7 +155,7 @@ print >>open("8hourly.dag", "w"), (
 		"""
 
 		JOB gstlal_reference_psd.%(i)s gstlal_reference_psd.sub
-		VARS gstlal_reference_psd.%(i)s macro_gps_start_time="%(s)d" macro_gps_end_time="%(e)d"
+		VARS gstlal_reference_psd.%(i)s macro_instrument="%(i)s" macro_gps_start_time="%(s)d" macro_gps_end_time="%(e)d"
 
 		JOB gstlal_inspiral.%(i)s gstlal_inspiral.sub
 		VARS gstlal_inspiral.%(i)s macro_instrument="%(i)s" macro_comment="%%(comment)s" macro_gps_start_time="%%(gps_start_time)d" macro_gps_end_time="%%(gps_end_time)d"
