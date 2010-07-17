@@ -94,7 +94,7 @@ error = lalapps_tmpltbank.err
 
 
 print >>open("prune_duplicate_mass_pairs.sub", "w"), r"""
-arguments = ../prune_duplicate_mass_pairs.py \
+arguments = ../../../prune_duplicate_mass_pairs.py \
 	H1-TMPLTBANK_$(macro_comment)-$(macro_tmpltbank_start_time)-$(macro_tmpltbank_duration).xml.gz tmpltbank.xml.gz
 
 output = prune_duplicate_mass_pairs.out
@@ -109,7 +109,7 @@ arguments = gstlal_inspiral \
 	--online-data \
 	--comment $(macro_comment) \
 	--instrument $(macro_instrument) \
-	--reference-psd reference_psd.xml.gz \
+	--reference-psd reference_psd.$(macro_instrument).xml.gz \
 	--gps-start-time $(macro_gps_start_time) \
 	--gps-end-time $(macro_gps_end_time) \
 	--template-bank tmpltbank.xml.gz \
