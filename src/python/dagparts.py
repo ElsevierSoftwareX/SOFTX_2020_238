@@ -37,6 +37,7 @@ import time
 
 from glue import iterutils
 from glue import segments
+from glue import segmentsUtils
 from glue import pipeline
 from glue.lal import CacheEntry
 from pylal.datatypes import LIGOTimeGPS
@@ -358,6 +359,10 @@ class ThincaNode(pipeline.CondorDAGNode):
 			# run on any node
 			self.add_macro("macrominram", 0)
 
+	def add_trigger_seg(self, seg):
+		self.add_var_opt("trig-start-time", seg[0])
+		self.add_var_opt("trig-end-time", seg[1])
+
 	def add_file_arg(self, filename):
 		raise NotImplementedError
 
@@ -570,6 +575,28 @@ def make_thinca_fragment(dag, parents, tag, verbose = False):
 		nodes.add(node)
 	return nodes
 
+def make_thinca_fragment_maxextent(dag, parents, tag, verbose = False):
+	input_cache = power.collect_output_caches(parents)
+	nodes = set()
+	for i, (cache,parent) in enumerate(input_cache):
+		node = ThincaNode(thincajob)
+		outseg = [0,0]
+		if i > 0: prev_seg = input_cache[i-1][0].segment
+		else: prev_seg = segments.segment(0,0)
+		if i < len(input_cache) - 1: next_seg = input_cache[i+1][0].segment
+		else: next_seg = segments.segment(0,0)
+		current_seg = cache.segment
+		if not current_seg.disjoint(prev_seg): outseg[0] = current_seg[0]
+		if not current_seg.disjoint(next_seg): outseg[1] = current_seg[1]
+		node.add_var_opt("coinc-end-time-segment",segmentsUtils.to_range_strings(segments.segmentlist([outseg])))
+		node.add_input_cache([cache])
+		node.add_parent(parent)
+		seg = power.cache_span(node.get_input_cache())
+		node.set_name("ligolw_thinca_%s_%d_%d" % (tag, int(seg[0]), int(abs(seg))))
+		node.add_macro("macrocomment", tag)
+		dag.add_node(node)
+		nodes.add(node)
+	return nodes
 
 #
 # =============================================================================
@@ -635,6 +662,7 @@ def make_single_instrument_stage(dag, datafinds, seglistdict, tag, inspinjnodes 
 
 			# find the datafind job this job is going to need
 			dfnodes = set([node for node in datafinds if (node.get_ifo() == instrument) and (seg in segments.segment(node.get_start(), node.get_end()))])
+			print len(dfnodes), seg
 			if len(dfnodes) != 1:
 				raise ValueError, "error, not exactly 1 datafind is suitable for trigger generator job at %s in %s" % (str(seg), instrument)
 
@@ -643,3 +671,37 @@ def make_single_instrument_stage(dag, datafinds, seglistdict, tag, inspinjnodes 
 
 	# done
 	return nodes
+
+def breakupsegs(seg, maxextent, overlap):
+	# setup the output
+	seglist = segments.segmentlist()
+
+	# Handle the trivial case
+	if not maxextent or abs(seg) <= maxextent:
+		seglist.append(seg)
+		return out
+
+	# Handle the first segment to output
+	seglist.append(segments.segment([seg[0], seg[0]+maxextent]))
+
+	# Work out how many segments
+	pieces = int(abs(seg) / (maxextent - overlap))
+
+	# add segments
+	for p in range(1, pieces):
+		seglist.append(segments.segment([seg[0]+p*(maxextent - overlap), seg[0] + (p)*(maxextent - overlap) + maxextent ]))
+
+	# handle last segment
+	if seglist.extent()[1] > seg[1]: seglist.pop(-1)
+	if abs(seglist.extent()) < abs(seg): seglist.append(segments.segment([seg[1] - maxextent, seg[1]]))
+
+	# Thats it!
+	return seglist
+
+
+def breakupseglists(seglists, maxextent, overlap):
+	for instrument, seglist in seglists.iteritems():
+		newseglist = segments.segmentlist()
+	        for bigseg in seglist:
+			newseglist.extend(breakupsegs(bigseg, maxextent, overlap))
+	        seglists[instrument] = newseglist
