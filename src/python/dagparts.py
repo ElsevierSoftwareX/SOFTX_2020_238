@@ -588,7 +588,7 @@ def make_thinca_fragment_maxextent(dag, parents, tag, verbose = False):
 		current_seg = cache.segment
 		if not current_seg.disjoint(prev_seg): outseg[0] = current_seg[0]
 		if not current_seg.disjoint(next_seg): outseg[1] = current_seg[1]
-		node.add_var_opt("coinc-end-time-segment",segmentsUtils.to_range_strings(segments.segmentlist([outseg])))
+		node.add_var_opt("coinc-end-time-segment",segmentsUtils.to_range_strings(segments.segmentlist([outseg]))[0])
 		node.add_input_cache([cache])
 		node.add_parent(parent)
 		seg = power.cache_span(node.get_input_cache())
@@ -662,7 +662,6 @@ def make_single_instrument_stage(dag, datafinds, seglistdict, tag, inspinjnodes 
 
 			# find the datafind job this job is going to need
 			dfnodes = set([node for node in datafinds if (node.get_ifo() == instrument) and (seg in segments.segment(node.get_start(), node.get_end()))])
-			print len(dfnodes), seg
 			if len(dfnodes) != 1:
 				raise ValueError, "error, not exactly 1 datafind is suitable for trigger generator job at %s in %s" % (str(seg), instrument)
 
@@ -671,6 +670,7 @@ def make_single_instrument_stage(dag, datafinds, seglistdict, tag, inspinjnodes 
 
 	# done
 	return nodes
+
 
 def breakupsegs(seg, maxextent, overlap):
 	# setup the output
