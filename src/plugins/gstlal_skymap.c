@@ -190,15 +190,18 @@ void gst_skymap_coinc_collectdata_destroy(GstSkymapCoincCollectData* collectdata
 }
 
 
-gint snr_collectdata_is_instrument(const GSList* slist, const gchar* instrument)
+gint snr_collectdata_is_instrument(const GstSkymapSnrCollectData* collectdata, const gchar* instrument)
 {
-	return strcmp( ((const GstSkymapSnrCollectData*)(slist->data))->instrument, instrument );
+	if (collectdata->instrument == NULL)
+		return -1;
+	else
+		return strcmp(collectdata->instrument, instrument);
 }
 
 
-gint snr_collectdata_is_pad(const GSList* slist, const GstPad* pad)
+gint snr_collectdata_is_pad(const GstCollectData* collectdata, const GstPad* pad)
 {
-	if (slist->data == pad)
+	if (collectdata->pad == pad)
 		return 0;
 	else
 		return -1;
@@ -221,8 +224,10 @@ static gboolean snr_event(GstPad *pad, GstEvent *event)
 			{
 				GST_ELEMENT_ERROR(element, CORE, TAG, ("two pads provided tags designating the instrument \"%s\"", instrument), (NULL));
 				g_free(instrument);
-			} else
-				((GstSkymapSnrCollectData*)g_slist_find_custom((GSList*)(element->snr_collectdatas), pad, (GCompareFunc)snr_collectdata_is_pad))->instrument = instrument;
+			} else {
+				GSList* found_item = g_slist_find_custom((GSList*)(element->snr_collectdatas), pad, (GCompareFunc)snr_collectdata_is_pad);
+				((GstSkymapSnrCollectData*)found_item)->instrument = instrument;
+			}
 		}
 	}
 
@@ -259,6 +264,9 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 	data->skymapcollectdata.last_end_time = 0;
 
 	/* FIXME: check to make sure caps match all the other snr pads. */
+
+	/* Add this collectdata to the list. */
+	skymap->snr_collectdatas = g_slist_prepend(skymap->snr_collectdatas, data);
 
 	/* Hack to override the event function used by the collectpads. */
 	skymap->collect_event = (GstPadEventFunction) GST_PAD_EVENTFUNC(pad);
