@@ -278,12 +278,6 @@ bad_pad:
 }
 
 
-//void ghr_value_equal(gpointer* key, gpointer* value, gpointer* user_data)
-//{
-//	return (value == user_data);
-//}
-
-
 static void release_pad(GstElement *element, GstPad *pad)
 {
 	GSTLALSkymap* skymap = GSTLAL_SKYMAP(element);
