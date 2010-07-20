@@ -108,7 +108,6 @@ def make_coinc_branch(dag, datafinds, seglists, time_slides, vetoes_cache, tag, 
 		for datafindnode in datafinds:
 			datafindnode.add_parent(injnode)
 
-
 	#
 	# trigger generator jobs
 	#
@@ -307,8 +306,10 @@ for filename in [options.time_slides]:
 # datafinds
 #
 
+
 datafinds = power.make_datafind_stage(dag, background_seglists, verbose = options.verbose)
 gstlaldagparts.breakupseglists(background_seglists, min_segment_length,gstlal_inspiral_overlap)
+
 
 #
 # build analysis branch
