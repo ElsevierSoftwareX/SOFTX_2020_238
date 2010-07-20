@@ -244,10 +244,7 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 {
 	GSTLALSkymap* skymap = GSTLAL_SKYMAP(element);
 
-	if (name == NULL)
-		name = "sink%d";
-
-	GstPad* pad = gst_pad_new_from_template(templ, name);
+	GstPad* pad = gst_pad_new_from_template(templ, NULL);
 	if (!pad) return pad;
 
 	if (!gst_element_add_pad(element, pad)) goto bad_pad;
