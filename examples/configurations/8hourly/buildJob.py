@@ -174,9 +174,9 @@ print >>open("8hourly.dag", "w"), (
 			{"i":"L1","s":958744974,"e":958747374}
 		)
 	)
-	+ "JOB gstlal_8hourly_plots gstlal_8hourly_plots.sub\nPARENT "
-	+ "".join(["gstlal_inspiral.%s" %(i,) for i in ("H1","L1")])
-	+ "CHILD gstlal_8hourly_plots\nJOB gstlal_inspiral_page gstlal_inspiral_page.sub\nPARENT gstlal_8hourly_plots CHILD gstlal_inspiral_page"
+	+ "\nJOB gstlal_8hourly_plots gstlal_8hourly_plots.sub\nPARENT "
+	+ " ".join(["gstlal_inspiral.%s" %(i,) for i in ("H1","L1")])
+	+ " CHILD gstlal_8hourly_plots\n\nJOB gstlal_inspiral_page gstlal_inspiral_page.sub\nPARENT gstlal_8hourly_plots CHILD gstlal_inspiral_page"
 	
 ) % {
 	"comment": "GSTLAL_8HOURLY",
