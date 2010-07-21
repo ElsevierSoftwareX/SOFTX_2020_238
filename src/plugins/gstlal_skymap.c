@@ -220,13 +220,13 @@ static gboolean snr_event(GstPad *pad, GstEvent *event)
 
 		if (gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &instrument))
 		{
-			if (g_slist_find_custom((GSList*)(element->snr_collectdatas), instrument, (GCompareFunc)snr_collectdata_is_instrument))
+			if (g_slist_find_custom(element->snr_collectdatas, instrument, (GCompareFunc)snr_collectdata_is_instrument))
 			{
 				GST_ELEMENT_ERROR(element, CORE, TAG, ("two pads provided tags designating the instrument \"%s\"", instrument), (NULL));
 				g_free(instrument);
 			} else {
-				GSList* found_item = g_slist_find_custom((GSList*)(element->snr_collectdatas), pad, (GCompareFunc)snr_collectdata_is_pad);
-				((GstSkymapSnrCollectData*)found_item)->instrument = instrument;
+				GSList* found_item = g_slist_find_custom(element->snr_collectdatas, pad, (GCompareFunc)snr_collectdata_is_pad);
+				((GstSkymapSnrCollectData*)(found_item->data))->instrument = instrument;
 			}
 		}
 	}
@@ -407,17 +407,39 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		g_assert(data);
 
 		GstBuffer* buf = gst_collect_pads_pop(pads, (GstCollectData*)data);
-		GstClockTime last_end_time = GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
-
-		if (data == (GstSkymapCollectData*)(skymap->coinc_collectdata))
+		if (buf)
 		{
-			g_assert(((GstSkymapCoincCollectData*)(skymap->coinc_collectdata))->last_buffer == NULL);
-			((GstSkymapCoincCollectData*)(skymap->coinc_collectdata))->last_buffer = buf;
-		} else {
-			gst_adapter_push( ((GstSkymapSnrCollectData*)data)->adapter, buf );
-		}
+			GstClockTime last_end_time = GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
 
-		data->last_end_time = last_end_time;
+			if (data == (GstSkymapCollectData*)(skymap->coinc_collectdata))
+			{
+				GST_INFO_OBJECT(skymap, "popping coinc buffer");
+				g_assert(((GstSkymapCoincCollectData*)(skymap->coinc_collectdata))->last_buffer == NULL);
+				((GstSkymapCoincCollectData*)(skymap->coinc_collectdata))->last_buffer = buf;
+			} else {
+				GST_INFO_OBJECT(skymap, "popping SNR buffer");
+				gst_adapter_push( ((GstSkymapSnrCollectData*)data)->adapter, buf );
+			}
+
+			data->last_end_time = last_end_time;
+		} else {
+			GST_INFO_OBJECT(skymap, "no buffer to pop");
+		}
+	}
+
+	/* Determine sample rate. */
+	int rate;
+	{
+		GstCaps* caps = GST_PAD_CAPS(((GstCollectData*)(skymap->snr_collectdatas->data))->pad);
+		g_assert(caps);
+		GstStructure* structure = gst_caps_get_structure(caps, 0);
+		g_assert(structure);
+		if(!gst_structure_get_int(structure, "rate", &rate))
+		{
+			/* FIXME: is there any way to recover from this? */
+			GST_ELEMENT_ERROR(skymap, STREAM, DECODE, ("Pad caps did not provide sample rate"), (NULL));
+			return GST_FLOW_ERROR;
+		}
 	}
 
 	{
@@ -453,36 +475,45 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 			/* Make sure that all pads have enough data present to analyze this coinc. */
 			{
-				GstSkymapSnrCollectData* collectdata = (GstSkymapSnrCollectData*)skymap->snr_collectdatas;
-				for (; collectdata; collectdata = (GstSkymapSnrCollectData*)g_slist_next(collectdata))
+				GSList* slist;
+				for (slist = skymap->snr_collectdatas; slist; slist = g_slist_next(slist))
 				{
+					GstSkymapSnrCollectData* collectdata = (GstSkymapSnrCollectData*)(slist->data);
 					const SnglInspiralTable* found_sngl = NULL;
 					for (ptr = head; ptr < end; ptr++)
+					{
 						if (strcmp(ptr->ifo, collectdata->instrument) == 0)
+						{
 							found_sngl = ptr;
+							break;
+						}
+					}
 					GstClockTime start_time;
 					GstClockTime stop_time;
 					if (found_sngl)
 					{
-						GstClockTime trigger_time = XLALGPSToINT8NS(&ptr->end_time);
+						GstClockTime trigger_time = XLALGPSToINT8NS(&found_sngl->end_time);
 						/* FIXME: badness if trigger_time < skymap->trigger_present_padding */
 						start_time = trigger_time - skymap->trigger_present_padding;
 						stop_time = trigger_time + skymap->trigger_present_padding;
 					} else {
+						g_assert_not_reached();
 						start_time = min_start_time;
 						stop_time = max_stop_time;
 					}
 
 					if (((GstSkymapCollectData*)collectdata)->last_end_time < stop_time)
 					{
+						GST_INFO_OBJECT(skymap, "nothing to do right now");
 						processed = FALSE;
 						break;
 					} else {
 						guint64 adapter_distance;
 						GstClockTime adapter_start_time = gst_adapter_prev_timestamp(collectdata->adapter, &adapter_distance);
-						GstClockTime adapter_pos_time = adapter_start_time + adapter_distance / (skymap->ntemplates * 16);
+						GstClockTime adapter_pos_time = adapter_start_time + gst_util_uint64_scale(adapter_distance, GST_SECOND, skymap->ntemplates * 16 * rate);
 						if (adapter_pos_time > start_time)
 						{
+							g_assert_not_reached(); /* This can only happen if the start time of the data that we have on hand is too *late* to process the coinc.  There is no way to recover from this if the input is time-ordered. */
 							processed = FALSE;
 							break;
 						}
@@ -515,21 +546,9 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 					skymap->wanalysis.n_detectors = nchannels;
 
 					/* Set rate. */
-					int rate;
-					{
-						GstCaps* caps = GST_PAD_CAPS(((GstCollectData*)(skymap->snr_collectdatas))->pad);
-						g_assert(caps);
-						GstStructure* structure = gst_caps_get_structure(caps, 0);
-						g_assert(structure);
-						if(!gst_structure_get_int(structure, "rate", &rate))
-						{
-							/* FIXME: is there any way to recover from this? */
-							GST_ELEMENT_ERROR(skymap, STREAM, DECODE, ("Pad caps did not provide sample rate"), (NULL));
-							return GST_FLOW_ERROR;
-						}
-					}
+					skymap->wanalysis.rate = rate;
 
-					size_t xSw_nsamples = (max_stop_time - min_start_time) * rate;
+					size_t xSw_nsamples = gst_util_uint64_scale_ceil(max_stop_time - min_start_time, rate, GST_SECOND);
 					double* xSw_reals = g_malloc(sizeof(double) * xSw_nsamples * nchannels);
 					double* xSw_imags = g_malloc(sizeof(double) * xSw_nsamples * nchannels);
 
@@ -537,23 +556,30 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 					fill_with_nans(xSw_reals, xSw_nsamples * nchannels);
 					fill_with_nans(xSw_imags, xSw_nsamples * nchannels);
 
-					GstSkymapSnrCollectData* collectdata = (GstSkymapSnrCollectData*)skymap->snr_collectdatas;
+					GSList* slist;
 					int ichannel;
-					for (ichannel = 0; collectdata; collectdata = (GstSkymapSnrCollectData*)g_slist_next(collectdata), ichannel++)
+					for (ichannel = 0, slist = skymap->snr_collectdatas; slist; slist = g_slist_next(slist), ichannel++)
 					{
+						GstSkymapSnrCollectData* collectdata = (GstSkymapSnrCollectData*)(slist->data);
 						const SnglInspiralTable* found_sngl = NULL;
 						for (ptr = head; ptr < end; ptr++)
+						{
 							if (strcmp(ptr->ifo, collectdata->instrument) == 0)
+							{
 								found_sngl = ptr;
+								break;
+							}
+						}
 						GstClockTime start_time;
 						GstClockTime stop_time;
 						if (found_sngl)
 						{
-							GstClockTime trigger_time = XLALGPSToINT8NS(&ptr->end_time);
+							GstClockTime trigger_time = XLALGPSToINT8NS(&found_sngl->end_time);
 							/* FIXME: badness if trigger_time < skymap->trigger_present_padding */
 							start_time = trigger_time - skymap->trigger_present_padding;
 							stop_time = trigger_time + skymap->trigger_present_padding;
 						} else {
+							g_assert_not_reached(); /* FIXME: delete this assert when partial coincs are supported. */
 							start_time = min_start_time;
 							stop_time = max_stop_time;
 						}
@@ -580,9 +606,11 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 						/* Calculate indices to retrieve from adapter. */
 						guint64 adapter_distance;
 						GstClockTime adapter_start_time = gst_adapter_prev_timestamp(collectdata->adapter, &adapter_distance);
-						GstClockTime adapter_pos_time = adapter_start_time + adapter_distance / (skymap->ntemplates * 16);
-						guint64 adapter_offset_bytes = (start_time - adapter_pos_time) * rate * skymap->ntemplates * 16;
-						guint64 adapter_offset_end_bytes = (stop_time - adapter_pos_time) * rate * skymap->ntemplates * 16;
+						GstClockTime adapter_pos_time = adapter_start_time + gst_util_uint64_scale(adapter_distance, GST_SECOND, skymap->ntemplates * 16 * rate);
+						guint64 adapter_offset = gst_util_uint64_scale(start_time - adapter_pos_time, rate, GST_SECOND);
+						guint64 adapter_offset_end = gst_util_uint64_scale(stop_time - adapter_pos_time, rate, GST_SECOND);
+						guint64 adapter_offset_bytes = adapter_offset * skymap->ntemplates * 16;
+						guint64 adapter_offset_end_bytes = adapter_offset_end * skymap->ntemplates * 16;
 						guint64 adapter_size_bytes = adapter_offset_end_bytes - adapter_offset_bytes;
 
 						/* Copy data from adapter. */
@@ -593,8 +621,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 						/* De-interleave real and imaginary parts, and convert from SNR to match. */
 						{
 							int i;
-							int n = (stop_time - start_time) * rate;
-							int xSw_offset = (start_time - min_start_time) * rate;
+							int n = adapter_offset_end - adapter_offset;
+							int xSw_offset = gst_util_uint64_scale(start_time - min_start_time, rate, GST_SECOND);
 							for (i = 0; i < n; i ++)
 							{
 								xSw_real[i + xSw_offset] = adapter_bytes[2*i] * found_sngl->eff_distance;
@@ -672,15 +700,16 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	if (((GstSkymapCoincCollectData*)(skymap->coinc_collectdata))->last_buffer == NULL)
 	{
 		GstClockTime last_end_time = ((GstSkymapCollectData*)(skymap->coinc_collectdata))->last_end_time;
-		GstSkymapSnrCollectData* collectdata = (GstSkymapSnrCollectData*)skymap->snr_collectdatas;
-		for (; collectdata; collectdata = (GstSkymapSnrCollectData*)g_slist_next(collectdata))
+		GSList* slist;
+		for (slist = skymap->snr_collectdatas; slist; slist = g_slist_next(slist))
 		{
+			GstSkymapSnrCollectData* collectdata = (GstSkymapSnrCollectData*)(slist->data);
 			guint64 adapter_distance;
 			GstClockTime adapter_start_time = gst_adapter_prev_timestamp(collectdata->adapter, &adapter_distance);
-			GstClockTime adapter_pos_time = adapter_start_time + adapter_distance / (skymap->ntemplates * 16);
+			GstClockTime adapter_pos_time = adapter_start_time + gst_util_uint64_scale(adapter_distance, GST_SECOND, skymap->ntemplates * 16 * rate);
 			GstClockTimeDiff diff = last_end_time - skymap->dt - adapter_pos_time;
 			if (diff > 0)
-				gst_adapter_flush(collectdata->adapter, diff * (skymap->ntemplates * 16));
+				gst_adapter_flush(collectdata->adapter, gst_util_uint64_scale(diff, skymap->ntemplates * rate, GST_SECOND) * 16);
 		}
 	}
 

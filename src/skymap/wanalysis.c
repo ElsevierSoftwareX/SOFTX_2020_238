@@ -17,7 +17,6 @@ void analysis_default_construct(analysis* a)
 {
     a->n_detectors = 0;
     a->rate = 0;
-    a->wSw = 0;
     a->n_directions = 0;
     a->directions = 0;
     a->min_t = log(0);
@@ -115,8 +114,6 @@ analysis* analysis_example(void)
     
     a->rate = 512; // Hz
     
-    a->wSw = (double*) a->p_realloc(0, sizeof(double) * a->n_detectors);
-
     a->min_t = 0.4; // seconds at earth barycenter
     a->max_t = 0.6;
 

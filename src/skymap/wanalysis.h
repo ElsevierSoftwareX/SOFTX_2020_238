@@ -26,7 +26,7 @@ typedef struct
     // Matched filter normalization
     // Waveform * NoiseCovariance^{-1} * Waveform
 
-    double* wSw;
+    double wSw[XLALSKYMAP_N];
     
     // Time series unnormalized matched filter
     // Data * NoiseCovariance^{-1} * Waveform
