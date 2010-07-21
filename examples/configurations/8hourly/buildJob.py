@@ -134,7 +134,17 @@ output = reference_psd.$(macro_instrument).out
 error = reference_psd.$(macro_instrument).err
 """ + submit_file_tail
 
+print >>open("gstlal_8hourly_plots.sub", "w"), r"""
+arguments = gstlal_8hourly_plots --glob *.sqlite
+output = gstlal_8hourly_plots.out
+error = gstlal_8hourly_plots.err
+""" + submit_file_tail
 
+print >>open("gstlal_inspiral_page.sub", "w"), r"""
+arguments = gstlal_inspiral_page
+output = gstlal_inspiral_page.out
+error = gstlal_inspiral_page.err
+""" + submit_file_tail
 
 print >>open("8hourly.dag", "w"), (
 
@@ -164,7 +174,10 @@ print >>open("8hourly.dag", "w"), (
 			{"i":"L1","s":958744974,"e":958747374}
 		)
 	)
-
+	+ "JOB gstlal_8hourly_plots gstlal_8hourly_plots.sub\nPARENT "
+	+ "".join(["gstlal_inspiral.%s" %(i,) for i in ("H1","L1")])
+	+ "CHILD gstlal_8hourly_plots\nJOB gstlal_inspiral_page gstlal_inspiral_page.sub\nPARENT gstlal_8hourly_plots CHILD gstlal_inspiral_page"
+	
 ) % {
 	"comment": "GSTLAL_8HOURLY",
 	"tmpltbank_start_time": 958740096,
