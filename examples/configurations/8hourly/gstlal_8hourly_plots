@@ -1,0 +1,163 @@
+#
+# Copyright (C) 2010  Erin Kara
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#
+
+try:
+        import sqlite3
+except ImportError:
+        # pre 2.5.x
+        from pysqlite2 import dbapi2 as sqlite3
+
+from optparse import OptionParser
+from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import dbtables
+from glue.ligolw import utils
+from glue.ligolw import table
+from glue import segmentsUtils
+
+from pylal import db_thinca_rings 
+from pylal import llwapp
+from pylal import rate
+from pylal import SimInspiralUtils
+from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
+from pylal import git_version
+from pylal import spawaveform
+from pylal.followup_page import *
+
+import sys
+import os
+import subprocess
+from numpy import *
+import math
+import matplotlib
+from matplotlib import colors
+from matplotlib import cm
+matplotlib.use('Agg')
+import pylab
+from pylab import *
+
+
+__author__ = "Erin Kara <ekara@ligo.caltech.edu>"
+__version__ = "git id %s" % git_version.id
+__date__ = git_version.date
+
+##############################################################
+# Main Code
+##############################################################
+
+
+def parse_command_line():
+	parser = OptionParser(version = "%prog CVS $Id$", usage = "%prog [options] [file ...]", description = "%prog computes mass/mass upperlimit")
+	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
+
+	opts, filenames = parser.parse_args()
+
+	if not filenames:
+		print >>sys.stderr, "must specify at least one database file"
+		sys.exit(1)
+	return opts, filenames
+
+
+opts,databases = parse_command_line()
+
+args = []
+for f in databases:
+	# Connect with SQLite
+	working_filename = dbtables.get_connection_filename(f, tmp_path=opts.tmp_space, verbose = opts.verbose)
+	connection = sqlite3.connect(working_filename)
+	dbtables.DBTable_set_connection(connection)
+
+
+	# Select Parameters from sngl_inspiral table
+	params = connection.cursor().execute("SELECT mass1, mass2, snr, chisq, mchirp, end_time, eff_distance FROM sngl_inspiral").fetchall()
+	ifo = f.strip("gstlal_inspiral..sqlite")	
+
+
+	# Plot m1 vs m2
+	pylab.figure(1)
+	pylab.clf()
+	snr = [c[2] for c in params]
+	plot=pylab.scatter([c[0] for c in params], [c[1] for c in params], c=snr, vmin=min(snr), vmax=max(snr), edgecolor=None)
+	cbar = pylab.colorbar(plot)
+	cbar.update_bruteforce(plot)
+	cbar.ax.set_ylabel("SNR")
+	pylab.xlabel("mass1")
+	pylab.ylabel("mass2")
+	pylab.title("mass1 vs. mass2 for %s" % ifo)
+	pylab.grid(True)
+	pylab.savefig("/archive/home/ekara/public_html/cbcpage/m1_m2_%s" % ifo)
+
+
+	# Plot SNR vs ChiSq
+	pylab.figure(2)
+	pylab.clf()
+	mchirp = [c[4] for c in params]
+	pylab.xscale('log')
+	pylab.yscale('log')
+	plot = pylab.scatter([c[2] for c in params], [c[3] for c in params], c=mchirp, vmin=min(mchirp), vmax=max(mchirp), edgecolor=None)
+	cbar = pylab.colorbar(plot)
+	cbar.update_bruteforce(plot)
+	cbar.ax.set_ylabel("mchirp")
+	pylab.xlabel("SNR")
+	pylab.ylabel("ChiSq")
+	pylab.title("SNR vs. ChiSq for %s" %ifo)
+	pylab.grid(True)
+	pylab.savefig("/archive/home/ekara/public_html/cbcpage/snr_chisq_%s" %ifo)
+
+
+	# Plot SNR vs end_time
+	pylab.figure(3)
+	pylab.clf()
+	pylab.semilogy([c[5] for c in params], [c[2] for c in params], 'or')	
+	pylab.xlabel("end_time")
+	pylab.ylabel("SNR")
+	pylab.title("SNR vs end_time for %s" %ifo)
+	pylab.grid(True)
+	pylab.savefig("/archive/home/ekara/public_html/cbcpage/snr_endtime_%s" %ifo)
+
+
+	# Plot SNR vs D_eff
+	pylab.figure(4)
+	pylab.clf()
+	pylab.loglog([c[2] for c in params], [c[6] for c in params], 'or')
+	pylab.xlabel("SNR")
+	pylab.ylabel("eff_distance")
+	pylab.title("eff_distance vs SNR for %s" %ifo)
+	pylab.grid(True)
+	pylab.savefig("/archive/home/ekara/public_html/cbcpage/snr_effdistance_%s" %ifo)
+
+
+	# Select gps times for top ten SNR values from each database
+	max_triggers = 10
+	top_triggers = connection.cursor().execute("SELECT end_time + (end_time_ns*1e-9) FROM sngl_inspiral ORDER BY snr DESC LIMIT %d" % max_triggers)
+	gps_times = [c[0] for c in top_triggers]	
+	for row in gps_times:
+		args.append("%s:%f" % (ifo, row))
+
+	
+	# Close connection to SQLite	
+	dbtables.discard_connection_filename(f, working_filename, verbose = opts.verbose)
+	dbtables.DBTable_set_connection(None)
+
+
+# Open subprocess to make create a dag from top 20 triggers
+cmd = "lalapps_followup_pipe -g " + ",".join(args)
+process = subprocess.Popen(cmd, shell=True) 
+
