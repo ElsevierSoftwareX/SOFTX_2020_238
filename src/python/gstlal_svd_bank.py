@@ -63,7 +63,7 @@ def read_approximant(xmldoc):
 	approximant=ligolw_process.get_process_params(xmldoc, "tmpltbank", "--approximant")
 	approximant=approximant[0]
 
-	supported_approximants=[u'FindChirpSP', u'IMRPhenomB']
+	supported_approximants=[u'FindChirpSP', u'TaylorF2', u'IMRPhenomB']
 	if approximant not in supported_approximants:
 		raise ValueError, "unsupported approximant %s"% approximant
 	return approximant
