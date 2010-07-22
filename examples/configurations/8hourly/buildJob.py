@@ -72,7 +72,7 @@ arguments = lalapps_tmpltbank \
 	--enable-high-pass 30.0 --high-pass-order 8 \
 	--strain-high-pass-order 8 \
 	--minimum-mass 1.2 --maximum-mass 1.6 \
-	--approximant FindChirpSP --order twoPN \
+	--approximant TaylorF2 --order twoPN \
 	--standard-candle \
 	--calibrated-data real_8 \
 	--candle-mass1 1.4 --candle-mass2 1.4 \
