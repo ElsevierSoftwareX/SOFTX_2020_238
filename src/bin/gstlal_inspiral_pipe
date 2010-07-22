@@ -91,7 +91,7 @@ def parse_command_line():
 #
 
 
-def make_coinc_branch(dag, datafinds, seglists, time_slides, vetoes_cache, tag, do_injections = False, extentlimit=0, verbose = False):
+def make_coinc_branch(dag, datafinds, seglists, time_slides, vetoes_cache, tag, do_injections = False, extentlimit = None, verbose = False):
 	#
 	# injection job
 	#
@@ -136,7 +136,7 @@ def make_coinc_branch(dag, datafinds, seglists, time_slides, vetoes_cache, tag, 
 
 		tisi_cache = set([time_slides_cache_entry])
 		nodes = set()
-		for seg, parents, cache in power.group_coinc_parents(trigger_nodes, these_time_slides, extentlimit=extentlimit, verbose = verbose):
+		for seg, parents, cache in power.group_coinc_parents(trigger_nodes, these_time_slides, extentlimit = extentlimit, verbose = verbose):
 			preserve_cache = inj_cache | tisi_cache | vetoes_cache
 			if not options.injections:
 				preserve_cache |= cache
@@ -148,8 +148,10 @@ def make_coinc_branch(dag, datafinds, seglists, time_slides, vetoes_cache, tag, 
 
 		if verbose:
 			print >>sys.stderr, "building thinca jobs ..."
-		if extentlimit == 0: coinc_nodes |= gstlaldagparts.make_thinca_fragment(dag, nodes, "%s_%d" % (tag, n), verbose = verbose)
-		else: coinc_nodes |= gstlaldagparts.make_thinca_fragment_maxextent(dag, nodes, "%s_%d" % (tag, n), verbose = verbose)
+		if extentlimit is None:
+			coinc_nodes |= gstlaldagparts.make_thinca_fragment(dag, nodes, "%s_%d" % (tag, n), verbose = verbose)
+		else:
+			coinc_nodes |= gstlaldagparts.make_thinca_fragment_maxextent(dag, nodes, "%s_%d" % (tag, n), verbose = verbose)
 		if verbose:
 			print >>sys.stderr, "done %s %d/%d" % (tag, n + 1, len(time_slides))
 
@@ -269,7 +271,7 @@ vetoes_cache = set([CacheEntry(None, None, None, "file://localhost" + os.path.ab
 if options.verbose:
 	print >>sys.stderr, "computing segments for which gstlal_inspiral jobs are required ..."
 min_segment_length = config_parser.getfloat("pipeline", "min_segment_length")
-gstlal_inspiral_overlap = float(config_parser.get("pipeline", "gstlal_inspiral_overlap"))
+gstlal_inspiral_overlap = config_parser.getfloat("pipeline", "gstlal_inspiral_overlap")
 background_time_slides = {}
 background_seglists = segments.segmentlistdict()
 for filename in [options.time_slides]:
@@ -308,14 +310,14 @@ for filename in [options.time_slides]:
 
 
 datafinds = power.make_datafind_stage(dag, background_seglists, verbose = options.verbose)
-gstlaldagparts.breakupseglists(background_seglists, min_segment_length,gstlal_inspiral_overlap)
+gstlaldagparts.breakupseglists(background_seglists, min_segment_length, gstlal_inspiral_overlap)
 
 
 #
 # build analysis branch
 #
 
-extentlimit = float(config_parser.get("pipeline", "max_cafe_extent"))
+extentlimit = config_parser.getfloat("pipeline", "max_cafe_extent")
 
 coinc_nodes = make_coinc_branch(dag, datafinds, background_seglists, background_time_slides, vetoes_cache, config_parser.get("pipeline", "user_tag"), do_injections = options.injections, extentlimit = extentlimit, verbose = options.verbose)
 
