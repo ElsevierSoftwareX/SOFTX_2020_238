@@ -94,7 +94,7 @@ error = lalapps_tmpltbank.err
 
 
 print >>open("prune_duplicate_mass_pairs.sub", "w"), r"""
-arguments = ../../../prune_duplicate_mass_pairs.py \
+arguments = gstlal_prune_duplicate_mass_pairs \
 	H1-TMPLTBANK_$(macro_comment)-$(macro_tmpltbank_start_time)-$(macro_tmpltbank_duration).xml.gz tmpltbank.xml.gz
 
 output = prune_duplicate_mass_pairs.out
