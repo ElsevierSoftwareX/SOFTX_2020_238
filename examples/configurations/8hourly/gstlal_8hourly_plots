@@ -68,7 +68,7 @@ def parse_command_line():
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--glob", help="bash glob pattern")
 	opts, filenames = parser.parse_args()
-	filenames.extend(glob.glob(options.glob))
+	if opts.glob: filenames.extend(glob.glob(opts.glob))
 
 	if not filenames:
 		print >>sys.stderr, "must specify at least one database file"
