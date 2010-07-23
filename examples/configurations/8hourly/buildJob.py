@@ -94,7 +94,7 @@ error = lalapps_tmpltbank.err
 
 
 print >>open("prune_duplicate_mass_pairs.sub", "w"), r"""
-arguments = ../../../prune_duplicate_mass_pairs.py \
+arguments = gstlal_prune_duplicate_mass_pairs \
 	H1-TMPLTBANK_$(macro_comment)-$(macro_tmpltbank_start_time)-$(macro_tmpltbank_duration).xml.gz tmpltbank.xml.gz
 
 output = prune_duplicate_mass_pairs.out
@@ -184,5 +184,5 @@ print >>open("8hourly.dag", "w"), (
 	"tmpltbank_end_time": 958742144,
 	"tmpltbank_duration": 2048,
 	"gps_start_time": gps_start_time,
-	"gps_end_time": gps_start_time + 3600
+	"gps_end_time": gps_start_time + 3600 * 8.5
 }
