@@ -171,5 +171,5 @@ print >>open("8hourly.dag", "w"), (
 	"tmpltbank_end_time": 958742144,
 	"tmpltbank_duration": 2048,
 	"gps_start_time": gps_start_time,
-	"gps_end_time": gps_start_time + 3600
+	"gps_end_time": gps_start_time + 3600 * 8.5
 }
