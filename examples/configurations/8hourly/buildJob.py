@@ -72,7 +72,7 @@ arguments = lalapps_tmpltbank \
 	--enable-high-pass 30.0 --high-pass-order 8 \
 	--strain-high-pass-order 8 \
 	--minimum-mass 1.2 --maximum-mass 1.6 \
-	--approximant FindChirpSP --order twoPN \
+	--approximant TaylorF2 --order twoPN \
 	--standard-candle \
 	--calibrated-data real_8 \
 	--candle-mass1 1.4 --candle-mass2 1.4 \
@@ -94,7 +94,7 @@ error = lalapps_tmpltbank.err
 
 
 print >>open("prune_duplicate_mass_pairs.sub", "w"), r"""
-arguments = ../../../prune_duplicate_mass_pairs.py \
+arguments = gstlal_prune_duplicate_mass_pairs \
 	H1-TMPLTBANK_$(macro_comment)-$(macro_tmpltbank_start_time)-$(macro_tmpltbank_duration).xml.gz tmpltbank.xml.gz
 
 output = prune_duplicate_mass_pairs.out
