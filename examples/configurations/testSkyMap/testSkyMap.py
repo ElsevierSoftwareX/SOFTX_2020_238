@@ -85,7 +85,7 @@ class TestSkymap(object):
 		skymap = mkelems_fast(self.pipeline,
 			"lal_skymap",
 			{
-				"bank-filename": "../examples/banks/test_bank.xml"
+				"bank-filename": "../../banks/test_bank.xml"
 			}
 		)[-1]
 
