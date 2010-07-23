@@ -50,7 +50,6 @@ from matplotlib import colors
 from matplotlib import cm
 matplotlib.use('Agg')
 import pylab
-from pylab import *
 import glob
 
 __author__ = "Erin Kara <ekara@ligo.caltech.edu>"
