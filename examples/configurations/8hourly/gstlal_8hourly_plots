@@ -66,7 +66,9 @@ def parse_command_line():
 	parser = OptionParser(version = "%prog CVS $Id$", usage = "%prog [options] [file ...]", description = "%prog computes mass/mass upperlimit")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("-f", "--followups", type = int, help = "Specify the number of followups from each detector to run in the followup pipeline.  If None then no followups are done.")
 	parser.add_option("--glob", help="bash glob pattern")
+	
 	opts, filenames = parser.parse_args()
 	if opts.glob: filenames.extend(glob.glob(opts.glob))
 
@@ -103,7 +105,7 @@ for f in databases:
 	pylab.ylabel("mass2")
 	pylab.title("mass1 vs. mass2 for %s" % ifo)
 	pylab.grid(True)
-	pylab.savefig("/archive/home/ekara/public_html/cbcpage/m1_m2_%s" % ifo)
+	pylab.savefig("m1_m2_%s" % ifo)
 
 
 	# Plot SNR vs ChiSq
@@ -120,7 +122,7 @@ for f in databases:
 	pylab.ylabel("ChiSq")
 	pylab.title("SNR vs. ChiSq for %s" %ifo)
 	pylab.grid(True)
-	pylab.savefig("/archive/home/ekara/public_html/cbcpage/snr_chisq_%s" %ifo)
+	pylab.savefig("snr_chisq_%s" %ifo)
 
 
 	# Plot SNR vs end_time
@@ -131,7 +133,7 @@ for f in databases:
 	pylab.ylabel("SNR")
 	pylab.title("SNR vs end_time for %s" %ifo)
 	pylab.grid(True)
-	pylab.savefig("/archive/home/ekara/public_html/cbcpage/snr_endtime_%s" %ifo)
+	pylab.savefig("snr_endtime_%s" %ifo)
 
 
 	# Plot SNR vs D_eff
@@ -142,15 +144,16 @@ for f in databases:
 	pylab.ylabel("eff_distance")
 	pylab.title("eff_distance vs SNR for %s" %ifo)
 	pylab.grid(True)
-	pylab.savefig("/archive/home/ekara/public_html/cbcpage/snr_effdistance_%s" %ifo)
+	pylab.savefig("snr_effdistance_%s" %ifo)
 
 
 	# Select gps times for top ten SNR values from each database
-	max_triggers = 10
-	top_triggers = connection.cursor().execute("SELECT end_time + (end_time_ns*1e-9) FROM sngl_inspiral ORDER BY snr DESC LIMIT %d" % max_triggers)
-	gps_times = [c[0] for c in top_triggers]	
-	for row in gps_times:
-		args.append("%s:%f" % (ifo, row))
+	max_triggers = opts.followups
+	if (max_triggers != None):
+		top_triggers = connection.cursor().execute("SELECT end_time + (end_time_ns*1e-9) FROM sngl_inspiral ORDER BY snr DESC LIMIT %d" % max_triggers)
+		gps_times = [c[0] for c in top_triggers]	
+		for row in gps_times:
+			args.append("%s:%f" % (ifo, row))
 
 	
 	# Close connection to SQLite	
@@ -159,6 +162,7 @@ for f in databases:
 
 
 # Open subprocess to make create a dag from top 20 triggers
-cmd = "lalapps_followup_pipe -g " + ",".join(args)
-process = subprocess.Popen(cmd, shell=True) 
+if (max_triggers != None):
+	cmd = "lalapps_followup_pipe -g " + ",".join(args)
+	process = subprocess.Popen(cmd, shell=True) 
 
