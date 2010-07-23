@@ -18,6 +18,7 @@
 
 
 import sys, os
+from optparse import OptionParser
 from glue import cbcwebpage, lal
 from pylal import git_version
 from pylal.followup_page import *
@@ -30,6 +31,16 @@ __date__ = git_version.date
 #######################################################################
 # Main Code
 #######################################################################
+
+
+parser = OptionParser(version = "%prog CVS $Id$")
+parser.add_option("-f", "--followups", action="store_true", default=False, help="Enable followup pipeline output.  Disabled by default.")
+opts,args = parser.parse_args()
+
+
+if len(args) > 0:
+	raise RuntimeError("Did not understand extra command line arguments: %r" % args)
+
 
 
 # Make an instance of cbcpage
@@ -62,40 +73,36 @@ snr_deff.add_table(cbcwebpage.image_glob("snr_effdistance_L1.png"), "snr_deff_L1
 
 
 # Parse the cache.
-try:
+if opts.followups:
 	coinc_info, cache = cache_parser("followup_pipe.cache")
-except ValueError:
-	sys.exit(0)
-	
-# Loop over different "searches" like full data, etc.
-for search, coincs in coinc_info.items():
-	events = []
+
+	# Loop over different "searches" like full data, etc.
+	for search, coincs in coinc_info.items():
+		events = []
 
 
-	# pull out the events and sort them
-	for coinc in coincs:
-		events.append(Coinc(coinc, search, cache))
-	events.sort(key=lambda x: x.rank)
+		# pull out the events and sort them
+		for coinc in coincs:
+			events.append(Coinc(coinc, search, cache))
+		events.sort(key=lambda x: x.rank)
 
 
-	# loop over the followed up events
-	for event in events:
-		print >>sys.stderr, "processing coinc@%s in %s" % (event.coinctime, search)
-		key = (str(event.coinctime))
-		page.add_subpage(key,"my new page",link_text=key)
-		#section for param table
-		if search.lower() != "gps_only": event.write_param_table(page.subpages[key])
-		#section for qscans
-		event.add_htqscan(page.subpages[key])
-		#section for seismic qscans
-		event.add_seismicqscan(page.subpages[key])
-		#section for rds qscans (CVT)
-		event.add_rdsqscan(page.subpages[key])
-		#dq
-		event.add_dq(page.subpages[key])
+		# loop over the followed up events
+		for event in events:
+			print >>sys.stderr, "processing coinc@%s in %s" % (event.coinctime, search)
+			key = (str(event.coinctime))
+			page.add_subpage(key,"my new page",link_text=key)
+			#section for param table
+			if search.lower() != "gps_only": event.write_param_table(page.subpages[key])
+			#section for qscans
+			event.add_htqscan(page.subpages[key])
+			#section for seismic qscans
+			event.add_seismicqscan(page.subpages[key])
+			#section for rds qscans (CVT)
+			event.add_rdsqscan(page.subpages[key])
+			#dq
+			event.add_dq(page.subpages[key])
 
 
 # write the page to disk
 page.write()
-
-
