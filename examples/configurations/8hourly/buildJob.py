@@ -32,7 +32,8 @@ if tmpdir is None:
 # Make job subdir
 
 dirname = "%04d-%02d-%02dT%02d" % (options.year, options.month, options.day, options.hour)
-os.mkdir(dirname)
+if not os.path.exists(dirname):
+	os.mkdir(dirname)
 os.chdir(dirname)
 
 
