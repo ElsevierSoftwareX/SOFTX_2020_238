@@ -1,0 +1,1296 @@
+JOB testSkyMap_000_000 testSkyMap.sub
+VARS testSkyMap_000_000 ra_deg="000" codec_deg="000"
+JOB testSkyMap_000_010 testSkyMap.sub
+VARS testSkyMap_000_010 ra_deg="000" codec_deg="010"
+JOB testSkyMap_000_020 testSkyMap.sub
+VARS testSkyMap_000_020 ra_deg="000" codec_deg="020"
+JOB testSkyMap_000_030 testSkyMap.sub
+VARS testSkyMap_000_030 ra_deg="000" codec_deg="030"
+JOB testSkyMap_000_040 testSkyMap.sub
+VARS testSkyMap_000_040 ra_deg="000" codec_deg="040"
+JOB testSkyMap_000_050 testSkyMap.sub
+VARS testSkyMap_000_050 ra_deg="000" codec_deg="050"
+JOB testSkyMap_000_060 testSkyMap.sub
+VARS testSkyMap_000_060 ra_deg="000" codec_deg="060"
+JOB testSkyMap_000_070 testSkyMap.sub
+VARS testSkyMap_000_070 ra_deg="000" codec_deg="070"
+JOB testSkyMap_000_080 testSkyMap.sub
+VARS testSkyMap_000_080 ra_deg="000" codec_deg="080"
+JOB testSkyMap_000_090 testSkyMap.sub
+VARS testSkyMap_000_090 ra_deg="000" codec_deg="090"
+JOB testSkyMap_000_100 testSkyMap.sub
+VARS testSkyMap_000_100 ra_deg="000" codec_deg="100"
+JOB testSkyMap_000_110 testSkyMap.sub
+VARS testSkyMap_000_110 ra_deg="000" codec_deg="110"
+JOB testSkyMap_000_120 testSkyMap.sub
+VARS testSkyMap_000_120 ra_deg="000" codec_deg="120"
+JOB testSkyMap_000_130 testSkyMap.sub
+VARS testSkyMap_000_130 ra_deg="000" codec_deg="130"
+JOB testSkyMap_000_140 testSkyMap.sub
+VARS testSkyMap_000_140 ra_deg="000" codec_deg="140"
+JOB testSkyMap_000_150 testSkyMap.sub
+VARS testSkyMap_000_150 ra_deg="000" codec_deg="150"
+JOB testSkyMap_000_160 testSkyMap.sub
+VARS testSkyMap_000_160 ra_deg="000" codec_deg="160"
+JOB testSkyMap_000_170 testSkyMap.sub
+VARS testSkyMap_000_170 ra_deg="000" codec_deg="170"
+JOB testSkyMap_010_000 testSkyMap.sub
+VARS testSkyMap_010_000 ra_deg="010" codec_deg="000"
+JOB testSkyMap_010_010 testSkyMap.sub
+VARS testSkyMap_010_010 ra_deg="010" codec_deg="010"
+JOB testSkyMap_010_020 testSkyMap.sub
+VARS testSkyMap_010_020 ra_deg="010" codec_deg="020"
+JOB testSkyMap_010_030 testSkyMap.sub
+VARS testSkyMap_010_030 ra_deg="010" codec_deg="030"
+JOB testSkyMap_010_040 testSkyMap.sub
+VARS testSkyMap_010_040 ra_deg="010" codec_deg="040"
+JOB testSkyMap_010_050 testSkyMap.sub
+VARS testSkyMap_010_050 ra_deg="010" codec_deg="050"
+JOB testSkyMap_010_060 testSkyMap.sub
+VARS testSkyMap_010_060 ra_deg="010" codec_deg="060"
+JOB testSkyMap_010_070 testSkyMap.sub
+VARS testSkyMap_010_070 ra_deg="010" codec_deg="070"
+JOB testSkyMap_010_080 testSkyMap.sub
+VARS testSkyMap_010_080 ra_deg="010" codec_deg="080"
+JOB testSkyMap_010_090 testSkyMap.sub
+VARS testSkyMap_010_090 ra_deg="010" codec_deg="090"
+JOB testSkyMap_010_100 testSkyMap.sub
+VARS testSkyMap_010_100 ra_deg="010" codec_deg="100"
+JOB testSkyMap_010_110 testSkyMap.sub
+VARS testSkyMap_010_110 ra_deg="010" codec_deg="110"
+JOB testSkyMap_010_120 testSkyMap.sub
+VARS testSkyMap_010_120 ra_deg="010" codec_deg="120"
+JOB testSkyMap_010_130 testSkyMap.sub
+VARS testSkyMap_010_130 ra_deg="010" codec_deg="130"
+JOB testSkyMap_010_140 testSkyMap.sub
+VARS testSkyMap_010_140 ra_deg="010" codec_deg="140"
+JOB testSkyMap_010_150 testSkyMap.sub
+VARS testSkyMap_010_150 ra_deg="010" codec_deg="150"
+JOB testSkyMap_010_160 testSkyMap.sub
+VARS testSkyMap_010_160 ra_deg="010" codec_deg="160"
+JOB testSkyMap_010_170 testSkyMap.sub
+VARS testSkyMap_010_170 ra_deg="010" codec_deg="170"
+JOB testSkyMap_020_000 testSkyMap.sub
+VARS testSkyMap_020_000 ra_deg="020" codec_deg="000"
+JOB testSkyMap_020_010 testSkyMap.sub
+VARS testSkyMap_020_010 ra_deg="020" codec_deg="010"
+JOB testSkyMap_020_020 testSkyMap.sub
+VARS testSkyMap_020_020 ra_deg="020" codec_deg="020"
+JOB testSkyMap_020_030 testSkyMap.sub
+VARS testSkyMap_020_030 ra_deg="020" codec_deg="030"
+JOB testSkyMap_020_040 testSkyMap.sub
+VARS testSkyMap_020_040 ra_deg="020" codec_deg="040"
+JOB testSkyMap_020_050 testSkyMap.sub
+VARS testSkyMap_020_050 ra_deg="020" codec_deg="050"
+JOB testSkyMap_020_060 testSkyMap.sub
+VARS testSkyMap_020_060 ra_deg="020" codec_deg="060"
+JOB testSkyMap_020_070 testSkyMap.sub
+VARS testSkyMap_020_070 ra_deg="020" codec_deg="070"
+JOB testSkyMap_020_080 testSkyMap.sub
+VARS testSkyMap_020_080 ra_deg="020" codec_deg="080"
+JOB testSkyMap_020_090 testSkyMap.sub
+VARS testSkyMap_020_090 ra_deg="020" codec_deg="090"
+JOB testSkyMap_020_100 testSkyMap.sub
+VARS testSkyMap_020_100 ra_deg="020" codec_deg="100"
+JOB testSkyMap_020_110 testSkyMap.sub
+VARS testSkyMap_020_110 ra_deg="020" codec_deg="110"
+JOB testSkyMap_020_120 testSkyMap.sub
+VARS testSkyMap_020_120 ra_deg="020" codec_deg="120"
+JOB testSkyMap_020_130 testSkyMap.sub
+VARS testSkyMap_020_130 ra_deg="020" codec_deg="130"
+JOB testSkyMap_020_140 testSkyMap.sub
+VARS testSkyMap_020_140 ra_deg="020" codec_deg="140"
+JOB testSkyMap_020_150 testSkyMap.sub
+VARS testSkyMap_020_150 ra_deg="020" codec_deg="150"
+JOB testSkyMap_020_160 testSkyMap.sub
+VARS testSkyMap_020_160 ra_deg="020" codec_deg="160"
+JOB testSkyMap_020_170 testSkyMap.sub
+VARS testSkyMap_020_170 ra_deg="020" codec_deg="170"
+JOB testSkyMap_030_000 testSkyMap.sub
+VARS testSkyMap_030_000 ra_deg="030" codec_deg="000"
+JOB testSkyMap_030_010 testSkyMap.sub
+VARS testSkyMap_030_010 ra_deg="030" codec_deg="010"
+JOB testSkyMap_030_020 testSkyMap.sub
+VARS testSkyMap_030_020 ra_deg="030" codec_deg="020"
+JOB testSkyMap_030_030 testSkyMap.sub
+VARS testSkyMap_030_030 ra_deg="030" codec_deg="030"
+JOB testSkyMap_030_040 testSkyMap.sub
+VARS testSkyMap_030_040 ra_deg="030" codec_deg="040"
+JOB testSkyMap_030_050 testSkyMap.sub
+VARS testSkyMap_030_050 ra_deg="030" codec_deg="050"
+JOB testSkyMap_030_060 testSkyMap.sub
+VARS testSkyMap_030_060 ra_deg="030" codec_deg="060"
+JOB testSkyMap_030_070 testSkyMap.sub
+VARS testSkyMap_030_070 ra_deg="030" codec_deg="070"
+JOB testSkyMap_030_080 testSkyMap.sub
+VARS testSkyMap_030_080 ra_deg="030" codec_deg="080"
+JOB testSkyMap_030_090 testSkyMap.sub
+VARS testSkyMap_030_090 ra_deg="030" codec_deg="090"
+JOB testSkyMap_030_100 testSkyMap.sub
+VARS testSkyMap_030_100 ra_deg="030" codec_deg="100"
+JOB testSkyMap_030_110 testSkyMap.sub
+VARS testSkyMap_030_110 ra_deg="030" codec_deg="110"
+JOB testSkyMap_030_120 testSkyMap.sub
+VARS testSkyMap_030_120 ra_deg="030" codec_deg="120"
+JOB testSkyMap_030_130 testSkyMap.sub
+VARS testSkyMap_030_130 ra_deg="030" codec_deg="130"
+JOB testSkyMap_030_140 testSkyMap.sub
+VARS testSkyMap_030_140 ra_deg="030" codec_deg="140"
+JOB testSkyMap_030_150 testSkyMap.sub
+VARS testSkyMap_030_150 ra_deg="030" codec_deg="150"
+JOB testSkyMap_030_160 testSkyMap.sub
+VARS testSkyMap_030_160 ra_deg="030" codec_deg="160"
+JOB testSkyMap_030_170 testSkyMap.sub
+VARS testSkyMap_030_170 ra_deg="030" codec_deg="170"
+JOB testSkyMap_040_000 testSkyMap.sub
+VARS testSkyMap_040_000 ra_deg="040" codec_deg="000"
+JOB testSkyMap_040_010 testSkyMap.sub
+VARS testSkyMap_040_010 ra_deg="040" codec_deg="010"
+JOB testSkyMap_040_020 testSkyMap.sub
+VARS testSkyMap_040_020 ra_deg="040" codec_deg="020"
+JOB testSkyMap_040_030 testSkyMap.sub
+VARS testSkyMap_040_030 ra_deg="040" codec_deg="030"
+JOB testSkyMap_040_040 testSkyMap.sub
+VARS testSkyMap_040_040 ra_deg="040" codec_deg="040"
+JOB testSkyMap_040_050 testSkyMap.sub
+VARS testSkyMap_040_050 ra_deg="040" codec_deg="050"
+JOB testSkyMap_040_060 testSkyMap.sub
+VARS testSkyMap_040_060 ra_deg="040" codec_deg="060"
+JOB testSkyMap_040_070 testSkyMap.sub
+VARS testSkyMap_040_070 ra_deg="040" codec_deg="070"
+JOB testSkyMap_040_080 testSkyMap.sub
+VARS testSkyMap_040_080 ra_deg="040" codec_deg="080"
+JOB testSkyMap_040_090 testSkyMap.sub
+VARS testSkyMap_040_090 ra_deg="040" codec_deg="090"
+JOB testSkyMap_040_100 testSkyMap.sub
+VARS testSkyMap_040_100 ra_deg="040" codec_deg="100"
+JOB testSkyMap_040_110 testSkyMap.sub
+VARS testSkyMap_040_110 ra_deg="040" codec_deg="110"
+JOB testSkyMap_040_120 testSkyMap.sub
+VARS testSkyMap_040_120 ra_deg="040" codec_deg="120"
+JOB testSkyMap_040_130 testSkyMap.sub
+VARS testSkyMap_040_130 ra_deg="040" codec_deg="130"
+JOB testSkyMap_040_140 testSkyMap.sub
+VARS testSkyMap_040_140 ra_deg="040" codec_deg="140"
+JOB testSkyMap_040_150 testSkyMap.sub
+VARS testSkyMap_040_150 ra_deg="040" codec_deg="150"
+JOB testSkyMap_040_160 testSkyMap.sub
+VARS testSkyMap_040_160 ra_deg="040" codec_deg="160"
+JOB testSkyMap_040_170 testSkyMap.sub
+VARS testSkyMap_040_170 ra_deg="040" codec_deg="170"
+JOB testSkyMap_050_000 testSkyMap.sub
+VARS testSkyMap_050_000 ra_deg="050" codec_deg="000"
+JOB testSkyMap_050_010 testSkyMap.sub
+VARS testSkyMap_050_010 ra_deg="050" codec_deg="010"
+JOB testSkyMap_050_020 testSkyMap.sub
+VARS testSkyMap_050_020 ra_deg="050" codec_deg="020"
+JOB testSkyMap_050_030 testSkyMap.sub
+VARS testSkyMap_050_030 ra_deg="050" codec_deg="030"
+JOB testSkyMap_050_040 testSkyMap.sub
+VARS testSkyMap_050_040 ra_deg="050" codec_deg="040"
+JOB testSkyMap_050_050 testSkyMap.sub
+VARS testSkyMap_050_050 ra_deg="050" codec_deg="050"
+JOB testSkyMap_050_060 testSkyMap.sub
+VARS testSkyMap_050_060 ra_deg="050" codec_deg="060"
+JOB testSkyMap_050_070 testSkyMap.sub
+VARS testSkyMap_050_070 ra_deg="050" codec_deg="070"
+JOB testSkyMap_050_080 testSkyMap.sub
+VARS testSkyMap_050_080 ra_deg="050" codec_deg="080"
+JOB testSkyMap_050_090 testSkyMap.sub
+VARS testSkyMap_050_090 ra_deg="050" codec_deg="090"
+JOB testSkyMap_050_100 testSkyMap.sub
+VARS testSkyMap_050_100 ra_deg="050" codec_deg="100"
+JOB testSkyMap_050_110 testSkyMap.sub
+VARS testSkyMap_050_110 ra_deg="050" codec_deg="110"
+JOB testSkyMap_050_120 testSkyMap.sub
+VARS testSkyMap_050_120 ra_deg="050" codec_deg="120"
+JOB testSkyMap_050_130 testSkyMap.sub
+VARS testSkyMap_050_130 ra_deg="050" codec_deg="130"
+JOB testSkyMap_050_140 testSkyMap.sub
+VARS testSkyMap_050_140 ra_deg="050" codec_deg="140"
+JOB testSkyMap_050_150 testSkyMap.sub
+VARS testSkyMap_050_150 ra_deg="050" codec_deg="150"
+JOB testSkyMap_050_160 testSkyMap.sub
+VARS testSkyMap_050_160 ra_deg="050" codec_deg="160"
+JOB testSkyMap_050_170 testSkyMap.sub
+VARS testSkyMap_050_170 ra_deg="050" codec_deg="170"
+JOB testSkyMap_060_000 testSkyMap.sub
+VARS testSkyMap_060_000 ra_deg="060" codec_deg="000"
+JOB testSkyMap_060_010 testSkyMap.sub
+VARS testSkyMap_060_010 ra_deg="060" codec_deg="010"
+JOB testSkyMap_060_020 testSkyMap.sub
+VARS testSkyMap_060_020 ra_deg="060" codec_deg="020"
+JOB testSkyMap_060_030 testSkyMap.sub
+VARS testSkyMap_060_030 ra_deg="060" codec_deg="030"
+JOB testSkyMap_060_040 testSkyMap.sub
+VARS testSkyMap_060_040 ra_deg="060" codec_deg="040"
+JOB testSkyMap_060_050 testSkyMap.sub
+VARS testSkyMap_060_050 ra_deg="060" codec_deg="050"
+JOB testSkyMap_060_060 testSkyMap.sub
+VARS testSkyMap_060_060 ra_deg="060" codec_deg="060"
+JOB testSkyMap_060_070 testSkyMap.sub
+VARS testSkyMap_060_070 ra_deg="060" codec_deg="070"
+JOB testSkyMap_060_080 testSkyMap.sub
+VARS testSkyMap_060_080 ra_deg="060" codec_deg="080"
+JOB testSkyMap_060_090 testSkyMap.sub
+VARS testSkyMap_060_090 ra_deg="060" codec_deg="090"
+JOB testSkyMap_060_100 testSkyMap.sub
+VARS testSkyMap_060_100 ra_deg="060" codec_deg="100"
+JOB testSkyMap_060_110 testSkyMap.sub
+VARS testSkyMap_060_110 ra_deg="060" codec_deg="110"
+JOB testSkyMap_060_120 testSkyMap.sub
+VARS testSkyMap_060_120 ra_deg="060" codec_deg="120"
+JOB testSkyMap_060_130 testSkyMap.sub
+VARS testSkyMap_060_130 ra_deg="060" codec_deg="130"
+JOB testSkyMap_060_140 testSkyMap.sub
+VARS testSkyMap_060_140 ra_deg="060" codec_deg="140"
+JOB testSkyMap_060_150 testSkyMap.sub
+VARS testSkyMap_060_150 ra_deg="060" codec_deg="150"
+JOB testSkyMap_060_160 testSkyMap.sub
+VARS testSkyMap_060_160 ra_deg="060" codec_deg="160"
+JOB testSkyMap_060_170 testSkyMap.sub
+VARS testSkyMap_060_170 ra_deg="060" codec_deg="170"
+JOB testSkyMap_070_000 testSkyMap.sub
+VARS testSkyMap_070_000 ra_deg="070" codec_deg="000"
+JOB testSkyMap_070_010 testSkyMap.sub
+VARS testSkyMap_070_010 ra_deg="070" codec_deg="010"
+JOB testSkyMap_070_020 testSkyMap.sub
+VARS testSkyMap_070_020 ra_deg="070" codec_deg="020"
+JOB testSkyMap_070_030 testSkyMap.sub
+VARS testSkyMap_070_030 ra_deg="070" codec_deg="030"
+JOB testSkyMap_070_040 testSkyMap.sub
+VARS testSkyMap_070_040 ra_deg="070" codec_deg="040"
+JOB testSkyMap_070_050 testSkyMap.sub
+VARS testSkyMap_070_050 ra_deg="070" codec_deg="050"
+JOB testSkyMap_070_060 testSkyMap.sub
+VARS testSkyMap_070_060 ra_deg="070" codec_deg="060"
+JOB testSkyMap_070_070 testSkyMap.sub
+VARS testSkyMap_070_070 ra_deg="070" codec_deg="070"
+JOB testSkyMap_070_080 testSkyMap.sub
+VARS testSkyMap_070_080 ra_deg="070" codec_deg="080"
+JOB testSkyMap_070_090 testSkyMap.sub
+VARS testSkyMap_070_090 ra_deg="070" codec_deg="090"
+JOB testSkyMap_070_100 testSkyMap.sub
+VARS testSkyMap_070_100 ra_deg="070" codec_deg="100"
+JOB testSkyMap_070_110 testSkyMap.sub
+VARS testSkyMap_070_110 ra_deg="070" codec_deg="110"
+JOB testSkyMap_070_120 testSkyMap.sub
+VARS testSkyMap_070_120 ra_deg="070" codec_deg="120"
+JOB testSkyMap_070_130 testSkyMap.sub
+VARS testSkyMap_070_130 ra_deg="070" codec_deg="130"
+JOB testSkyMap_070_140 testSkyMap.sub
+VARS testSkyMap_070_140 ra_deg="070" codec_deg="140"
+JOB testSkyMap_070_150 testSkyMap.sub
+VARS testSkyMap_070_150 ra_deg="070" codec_deg="150"
+JOB testSkyMap_070_160 testSkyMap.sub
+VARS testSkyMap_070_160 ra_deg="070" codec_deg="160"
+JOB testSkyMap_070_170 testSkyMap.sub
+VARS testSkyMap_070_170 ra_deg="070" codec_deg="170"
+JOB testSkyMap_080_000 testSkyMap.sub
+VARS testSkyMap_080_000 ra_deg="080" codec_deg="000"
+JOB testSkyMap_080_010 testSkyMap.sub
+VARS testSkyMap_080_010 ra_deg="080" codec_deg="010"
+JOB testSkyMap_080_020 testSkyMap.sub
+VARS testSkyMap_080_020 ra_deg="080" codec_deg="020"
+JOB testSkyMap_080_030 testSkyMap.sub
+VARS testSkyMap_080_030 ra_deg="080" codec_deg="030"
+JOB testSkyMap_080_040 testSkyMap.sub
+VARS testSkyMap_080_040 ra_deg="080" codec_deg="040"
+JOB testSkyMap_080_050 testSkyMap.sub
+VARS testSkyMap_080_050 ra_deg="080" codec_deg="050"
+JOB testSkyMap_080_060 testSkyMap.sub
+VARS testSkyMap_080_060 ra_deg="080" codec_deg="060"
+JOB testSkyMap_080_070 testSkyMap.sub
+VARS testSkyMap_080_070 ra_deg="080" codec_deg="070"
+JOB testSkyMap_080_080 testSkyMap.sub
+VARS testSkyMap_080_080 ra_deg="080" codec_deg="080"
+JOB testSkyMap_080_090 testSkyMap.sub
+VARS testSkyMap_080_090 ra_deg="080" codec_deg="090"
+JOB testSkyMap_080_100 testSkyMap.sub
+VARS testSkyMap_080_100 ra_deg="080" codec_deg="100"
+JOB testSkyMap_080_110 testSkyMap.sub
+VARS testSkyMap_080_110 ra_deg="080" codec_deg="110"
+JOB testSkyMap_080_120 testSkyMap.sub
+VARS testSkyMap_080_120 ra_deg="080" codec_deg="120"
+JOB testSkyMap_080_130 testSkyMap.sub
+VARS testSkyMap_080_130 ra_deg="080" codec_deg="130"
+JOB testSkyMap_080_140 testSkyMap.sub
+VARS testSkyMap_080_140 ra_deg="080" codec_deg="140"
+JOB testSkyMap_080_150 testSkyMap.sub
+VARS testSkyMap_080_150 ra_deg="080" codec_deg="150"
+JOB testSkyMap_080_160 testSkyMap.sub
+VARS testSkyMap_080_160 ra_deg="080" codec_deg="160"
+JOB testSkyMap_080_170 testSkyMap.sub
+VARS testSkyMap_080_170 ra_deg="080" codec_deg="170"
+JOB testSkyMap_090_000 testSkyMap.sub
+VARS testSkyMap_090_000 ra_deg="090" codec_deg="000"
+JOB testSkyMap_090_010 testSkyMap.sub
+VARS testSkyMap_090_010 ra_deg="090" codec_deg="010"
+JOB testSkyMap_090_020 testSkyMap.sub
+VARS testSkyMap_090_020 ra_deg="090" codec_deg="020"
+JOB testSkyMap_090_030 testSkyMap.sub
+VARS testSkyMap_090_030 ra_deg="090" codec_deg="030"
+JOB testSkyMap_090_040 testSkyMap.sub
+VARS testSkyMap_090_040 ra_deg="090" codec_deg="040"
+JOB testSkyMap_090_050 testSkyMap.sub
+VARS testSkyMap_090_050 ra_deg="090" codec_deg="050"
+JOB testSkyMap_090_060 testSkyMap.sub
+VARS testSkyMap_090_060 ra_deg="090" codec_deg="060"
+JOB testSkyMap_090_070 testSkyMap.sub
+VARS testSkyMap_090_070 ra_deg="090" codec_deg="070"
+JOB testSkyMap_090_080 testSkyMap.sub
+VARS testSkyMap_090_080 ra_deg="090" codec_deg="080"
+JOB testSkyMap_090_090 testSkyMap.sub
+VARS testSkyMap_090_090 ra_deg="090" codec_deg="090"
+JOB testSkyMap_090_100 testSkyMap.sub
+VARS testSkyMap_090_100 ra_deg="090" codec_deg="100"
+JOB testSkyMap_090_110 testSkyMap.sub
+VARS testSkyMap_090_110 ra_deg="090" codec_deg="110"
+JOB testSkyMap_090_120 testSkyMap.sub
+VARS testSkyMap_090_120 ra_deg="090" codec_deg="120"
+JOB testSkyMap_090_130 testSkyMap.sub
+VARS testSkyMap_090_130 ra_deg="090" codec_deg="130"
+JOB testSkyMap_090_140 testSkyMap.sub
+VARS testSkyMap_090_140 ra_deg="090" codec_deg="140"
+JOB testSkyMap_090_150 testSkyMap.sub
+VARS testSkyMap_090_150 ra_deg="090" codec_deg="150"
+JOB testSkyMap_090_160 testSkyMap.sub
+VARS testSkyMap_090_160 ra_deg="090" codec_deg="160"
+JOB testSkyMap_090_170 testSkyMap.sub
+VARS testSkyMap_090_170 ra_deg="090" codec_deg="170"
+JOB testSkyMap_100_000 testSkyMap.sub
+VARS testSkyMap_100_000 ra_deg="100" codec_deg="000"
+JOB testSkyMap_100_010 testSkyMap.sub
+VARS testSkyMap_100_010 ra_deg="100" codec_deg="010"
+JOB testSkyMap_100_020 testSkyMap.sub
+VARS testSkyMap_100_020 ra_deg="100" codec_deg="020"
+JOB testSkyMap_100_030 testSkyMap.sub
+VARS testSkyMap_100_030 ra_deg="100" codec_deg="030"
+JOB testSkyMap_100_040 testSkyMap.sub
+VARS testSkyMap_100_040 ra_deg="100" codec_deg="040"
+JOB testSkyMap_100_050 testSkyMap.sub
+VARS testSkyMap_100_050 ra_deg="100" codec_deg="050"
+JOB testSkyMap_100_060 testSkyMap.sub
+VARS testSkyMap_100_060 ra_deg="100" codec_deg="060"
+JOB testSkyMap_100_070 testSkyMap.sub
+VARS testSkyMap_100_070 ra_deg="100" codec_deg="070"
+JOB testSkyMap_100_080 testSkyMap.sub
+VARS testSkyMap_100_080 ra_deg="100" codec_deg="080"
+JOB testSkyMap_100_090 testSkyMap.sub
+VARS testSkyMap_100_090 ra_deg="100" codec_deg="090"
+JOB testSkyMap_100_100 testSkyMap.sub
+VARS testSkyMap_100_100 ra_deg="100" codec_deg="100"
+JOB testSkyMap_100_110 testSkyMap.sub
+VARS testSkyMap_100_110 ra_deg="100" codec_deg="110"
+JOB testSkyMap_100_120 testSkyMap.sub
+VARS testSkyMap_100_120 ra_deg="100" codec_deg="120"
+JOB testSkyMap_100_130 testSkyMap.sub
+VARS testSkyMap_100_130 ra_deg="100" codec_deg="130"
+JOB testSkyMap_100_140 testSkyMap.sub
+VARS testSkyMap_100_140 ra_deg="100" codec_deg="140"
+JOB testSkyMap_100_150 testSkyMap.sub
+VARS testSkyMap_100_150 ra_deg="100" codec_deg="150"
+JOB testSkyMap_100_160 testSkyMap.sub
+VARS testSkyMap_100_160 ra_deg="100" codec_deg="160"
+JOB testSkyMap_100_170 testSkyMap.sub
+VARS testSkyMap_100_170 ra_deg="100" codec_deg="170"
+JOB testSkyMap_110_000 testSkyMap.sub
+VARS testSkyMap_110_000 ra_deg="110" codec_deg="000"
+JOB testSkyMap_110_010 testSkyMap.sub
+VARS testSkyMap_110_010 ra_deg="110" codec_deg="010"
+JOB testSkyMap_110_020 testSkyMap.sub
+VARS testSkyMap_110_020 ra_deg="110" codec_deg="020"
+JOB testSkyMap_110_030 testSkyMap.sub
+VARS testSkyMap_110_030 ra_deg="110" codec_deg="030"
+JOB testSkyMap_110_040 testSkyMap.sub
+VARS testSkyMap_110_040 ra_deg="110" codec_deg="040"
+JOB testSkyMap_110_050 testSkyMap.sub
+VARS testSkyMap_110_050 ra_deg="110" codec_deg="050"
+JOB testSkyMap_110_060 testSkyMap.sub
+VARS testSkyMap_110_060 ra_deg="110" codec_deg="060"
+JOB testSkyMap_110_070 testSkyMap.sub
+VARS testSkyMap_110_070 ra_deg="110" codec_deg="070"
+JOB testSkyMap_110_080 testSkyMap.sub
+VARS testSkyMap_110_080 ra_deg="110" codec_deg="080"
+JOB testSkyMap_110_090 testSkyMap.sub
+VARS testSkyMap_110_090 ra_deg="110" codec_deg="090"
+JOB testSkyMap_110_100 testSkyMap.sub
+VARS testSkyMap_110_100 ra_deg="110" codec_deg="100"
+JOB testSkyMap_110_110 testSkyMap.sub
+VARS testSkyMap_110_110 ra_deg="110" codec_deg="110"
+JOB testSkyMap_110_120 testSkyMap.sub
+VARS testSkyMap_110_120 ra_deg="110" codec_deg="120"
+JOB testSkyMap_110_130 testSkyMap.sub
+VARS testSkyMap_110_130 ra_deg="110" codec_deg="130"
+JOB testSkyMap_110_140 testSkyMap.sub
+VARS testSkyMap_110_140 ra_deg="110" codec_deg="140"
+JOB testSkyMap_110_150 testSkyMap.sub
+VARS testSkyMap_110_150 ra_deg="110" codec_deg="150"
+JOB testSkyMap_110_160 testSkyMap.sub
+VARS testSkyMap_110_160 ra_deg="110" codec_deg="160"
+JOB testSkyMap_110_170 testSkyMap.sub
+VARS testSkyMap_110_170 ra_deg="110" codec_deg="170"
+JOB testSkyMap_120_000 testSkyMap.sub
+VARS testSkyMap_120_000 ra_deg="120" codec_deg="000"
+JOB testSkyMap_120_010 testSkyMap.sub
+VARS testSkyMap_120_010 ra_deg="120" codec_deg="010"
+JOB testSkyMap_120_020 testSkyMap.sub
+VARS testSkyMap_120_020 ra_deg="120" codec_deg="020"
+JOB testSkyMap_120_030 testSkyMap.sub
+VARS testSkyMap_120_030 ra_deg="120" codec_deg="030"
+JOB testSkyMap_120_040 testSkyMap.sub
+VARS testSkyMap_120_040 ra_deg="120" codec_deg="040"
+JOB testSkyMap_120_050 testSkyMap.sub
+VARS testSkyMap_120_050 ra_deg="120" codec_deg="050"
+JOB testSkyMap_120_060 testSkyMap.sub
+VARS testSkyMap_120_060 ra_deg="120" codec_deg="060"
+JOB testSkyMap_120_070 testSkyMap.sub
+VARS testSkyMap_120_070 ra_deg="120" codec_deg="070"
+JOB testSkyMap_120_080 testSkyMap.sub
+VARS testSkyMap_120_080 ra_deg="120" codec_deg="080"
+JOB testSkyMap_120_090 testSkyMap.sub
+VARS testSkyMap_120_090 ra_deg="120" codec_deg="090"
+JOB testSkyMap_120_100 testSkyMap.sub
+VARS testSkyMap_120_100 ra_deg="120" codec_deg="100"
+JOB testSkyMap_120_110 testSkyMap.sub
+VARS testSkyMap_120_110 ra_deg="120" codec_deg="110"
+JOB testSkyMap_120_120 testSkyMap.sub
+VARS testSkyMap_120_120 ra_deg="120" codec_deg="120"
+JOB testSkyMap_120_130 testSkyMap.sub
+VARS testSkyMap_120_130 ra_deg="120" codec_deg="130"
+JOB testSkyMap_120_140 testSkyMap.sub
+VARS testSkyMap_120_140 ra_deg="120" codec_deg="140"
+JOB testSkyMap_120_150 testSkyMap.sub
+VARS testSkyMap_120_150 ra_deg="120" codec_deg="150"
+JOB testSkyMap_120_160 testSkyMap.sub
+VARS testSkyMap_120_160 ra_deg="120" codec_deg="160"
+JOB testSkyMap_120_170 testSkyMap.sub
+VARS testSkyMap_120_170 ra_deg="120" codec_deg="170"
+JOB testSkyMap_130_000 testSkyMap.sub
+VARS testSkyMap_130_000 ra_deg="130" codec_deg="000"
+JOB testSkyMap_130_010 testSkyMap.sub
+VARS testSkyMap_130_010 ra_deg="130" codec_deg="010"
+JOB testSkyMap_130_020 testSkyMap.sub
+VARS testSkyMap_130_020 ra_deg="130" codec_deg="020"
+JOB testSkyMap_130_030 testSkyMap.sub
+VARS testSkyMap_130_030 ra_deg="130" codec_deg="030"
+JOB testSkyMap_130_040 testSkyMap.sub
+VARS testSkyMap_130_040 ra_deg="130" codec_deg="040"
+JOB testSkyMap_130_050 testSkyMap.sub
+VARS testSkyMap_130_050 ra_deg="130" codec_deg="050"
+JOB testSkyMap_130_060 testSkyMap.sub
+VARS testSkyMap_130_060 ra_deg="130" codec_deg="060"
+JOB testSkyMap_130_070 testSkyMap.sub
+VARS testSkyMap_130_070 ra_deg="130" codec_deg="070"
+JOB testSkyMap_130_080 testSkyMap.sub
+VARS testSkyMap_130_080 ra_deg="130" codec_deg="080"
+JOB testSkyMap_130_090 testSkyMap.sub
+VARS testSkyMap_130_090 ra_deg="130" codec_deg="090"
+JOB testSkyMap_130_100 testSkyMap.sub
+VARS testSkyMap_130_100 ra_deg="130" codec_deg="100"
+JOB testSkyMap_130_110 testSkyMap.sub
+VARS testSkyMap_130_110 ra_deg="130" codec_deg="110"
+JOB testSkyMap_130_120 testSkyMap.sub
+VARS testSkyMap_130_120 ra_deg="130" codec_deg="120"
+JOB testSkyMap_130_130 testSkyMap.sub
+VARS testSkyMap_130_130 ra_deg="130" codec_deg="130"
+JOB testSkyMap_130_140 testSkyMap.sub
+VARS testSkyMap_130_140 ra_deg="130" codec_deg="140"
+JOB testSkyMap_130_150 testSkyMap.sub
+VARS testSkyMap_130_150 ra_deg="130" codec_deg="150"
+JOB testSkyMap_130_160 testSkyMap.sub
+VARS testSkyMap_130_160 ra_deg="130" codec_deg="160"
+JOB testSkyMap_130_170 testSkyMap.sub
+VARS testSkyMap_130_170 ra_deg="130" codec_deg="170"
+JOB testSkyMap_140_000 testSkyMap.sub
+VARS testSkyMap_140_000 ra_deg="140" codec_deg="000"
+JOB testSkyMap_140_010 testSkyMap.sub
+VARS testSkyMap_140_010 ra_deg="140" codec_deg="010"
+JOB testSkyMap_140_020 testSkyMap.sub
+VARS testSkyMap_140_020 ra_deg="140" codec_deg="020"
+JOB testSkyMap_140_030 testSkyMap.sub
+VARS testSkyMap_140_030 ra_deg="140" codec_deg="030"
+JOB testSkyMap_140_040 testSkyMap.sub
+VARS testSkyMap_140_040 ra_deg="140" codec_deg="040"
+JOB testSkyMap_140_050 testSkyMap.sub
+VARS testSkyMap_140_050 ra_deg="140" codec_deg="050"
+JOB testSkyMap_140_060 testSkyMap.sub
+VARS testSkyMap_140_060 ra_deg="140" codec_deg="060"
+JOB testSkyMap_140_070 testSkyMap.sub
+VARS testSkyMap_140_070 ra_deg="140" codec_deg="070"
+JOB testSkyMap_140_080 testSkyMap.sub
+VARS testSkyMap_140_080 ra_deg="140" codec_deg="080"
+JOB testSkyMap_140_090 testSkyMap.sub
+VARS testSkyMap_140_090 ra_deg="140" codec_deg="090"
+JOB testSkyMap_140_100 testSkyMap.sub
+VARS testSkyMap_140_100 ra_deg="140" codec_deg="100"
+JOB testSkyMap_140_110 testSkyMap.sub
+VARS testSkyMap_140_110 ra_deg="140" codec_deg="110"
+JOB testSkyMap_140_120 testSkyMap.sub
+VARS testSkyMap_140_120 ra_deg="140" codec_deg="120"
+JOB testSkyMap_140_130 testSkyMap.sub
+VARS testSkyMap_140_130 ra_deg="140" codec_deg="130"
+JOB testSkyMap_140_140 testSkyMap.sub
+VARS testSkyMap_140_140 ra_deg="140" codec_deg="140"
+JOB testSkyMap_140_150 testSkyMap.sub
+VARS testSkyMap_140_150 ra_deg="140" codec_deg="150"
+JOB testSkyMap_140_160 testSkyMap.sub
+VARS testSkyMap_140_160 ra_deg="140" codec_deg="160"
+JOB testSkyMap_140_170 testSkyMap.sub
+VARS testSkyMap_140_170 ra_deg="140" codec_deg="170"
+JOB testSkyMap_150_000 testSkyMap.sub
+VARS testSkyMap_150_000 ra_deg="150" codec_deg="000"
+JOB testSkyMap_150_010 testSkyMap.sub
+VARS testSkyMap_150_010 ra_deg="150" codec_deg="010"
+JOB testSkyMap_150_020 testSkyMap.sub
+VARS testSkyMap_150_020 ra_deg="150" codec_deg="020"
+JOB testSkyMap_150_030 testSkyMap.sub
+VARS testSkyMap_150_030 ra_deg="150" codec_deg="030"
+JOB testSkyMap_150_040 testSkyMap.sub
+VARS testSkyMap_150_040 ra_deg="150" codec_deg="040"
+JOB testSkyMap_150_050 testSkyMap.sub
+VARS testSkyMap_150_050 ra_deg="150" codec_deg="050"
+JOB testSkyMap_150_060 testSkyMap.sub
+VARS testSkyMap_150_060 ra_deg="150" codec_deg="060"
+JOB testSkyMap_150_070 testSkyMap.sub
+VARS testSkyMap_150_070 ra_deg="150" codec_deg="070"
+JOB testSkyMap_150_080 testSkyMap.sub
+VARS testSkyMap_150_080 ra_deg="150" codec_deg="080"
+JOB testSkyMap_150_090 testSkyMap.sub
+VARS testSkyMap_150_090 ra_deg="150" codec_deg="090"
+JOB testSkyMap_150_100 testSkyMap.sub
+VARS testSkyMap_150_100 ra_deg="150" codec_deg="100"
+JOB testSkyMap_150_110 testSkyMap.sub
+VARS testSkyMap_150_110 ra_deg="150" codec_deg="110"
+JOB testSkyMap_150_120 testSkyMap.sub
+VARS testSkyMap_150_120 ra_deg="150" codec_deg="120"
+JOB testSkyMap_150_130 testSkyMap.sub
+VARS testSkyMap_150_130 ra_deg="150" codec_deg="130"
+JOB testSkyMap_150_140 testSkyMap.sub
+VARS testSkyMap_150_140 ra_deg="150" codec_deg="140"
+JOB testSkyMap_150_150 testSkyMap.sub
+VARS testSkyMap_150_150 ra_deg="150" codec_deg="150"
+JOB testSkyMap_150_160 testSkyMap.sub
+VARS testSkyMap_150_160 ra_deg="150" codec_deg="160"
+JOB testSkyMap_150_170 testSkyMap.sub
+VARS testSkyMap_150_170 ra_deg="150" codec_deg="170"
+JOB testSkyMap_160_000 testSkyMap.sub
+VARS testSkyMap_160_000 ra_deg="160" codec_deg="000"
+JOB testSkyMap_160_010 testSkyMap.sub
+VARS testSkyMap_160_010 ra_deg="160" codec_deg="010"
+JOB testSkyMap_160_020 testSkyMap.sub
+VARS testSkyMap_160_020 ra_deg="160" codec_deg="020"
+JOB testSkyMap_160_030 testSkyMap.sub
+VARS testSkyMap_160_030 ra_deg="160" codec_deg="030"
+JOB testSkyMap_160_040 testSkyMap.sub
+VARS testSkyMap_160_040 ra_deg="160" codec_deg="040"
+JOB testSkyMap_160_050 testSkyMap.sub
+VARS testSkyMap_160_050 ra_deg="160" codec_deg="050"
+JOB testSkyMap_160_060 testSkyMap.sub
+VARS testSkyMap_160_060 ra_deg="160" codec_deg="060"
+JOB testSkyMap_160_070 testSkyMap.sub
+VARS testSkyMap_160_070 ra_deg="160" codec_deg="070"
+JOB testSkyMap_160_080 testSkyMap.sub
+VARS testSkyMap_160_080 ra_deg="160" codec_deg="080"
+JOB testSkyMap_160_090 testSkyMap.sub
+VARS testSkyMap_160_090 ra_deg="160" codec_deg="090"
+JOB testSkyMap_160_100 testSkyMap.sub
+VARS testSkyMap_160_100 ra_deg="160" codec_deg="100"
+JOB testSkyMap_160_110 testSkyMap.sub
+VARS testSkyMap_160_110 ra_deg="160" codec_deg="110"
+JOB testSkyMap_160_120 testSkyMap.sub
+VARS testSkyMap_160_120 ra_deg="160" codec_deg="120"
+JOB testSkyMap_160_130 testSkyMap.sub
+VARS testSkyMap_160_130 ra_deg="160" codec_deg="130"
+JOB testSkyMap_160_140 testSkyMap.sub
+VARS testSkyMap_160_140 ra_deg="160" codec_deg="140"
+JOB testSkyMap_160_150 testSkyMap.sub
+VARS testSkyMap_160_150 ra_deg="160" codec_deg="150"
+JOB testSkyMap_160_160 testSkyMap.sub
+VARS testSkyMap_160_160 ra_deg="160" codec_deg="160"
+JOB testSkyMap_160_170 testSkyMap.sub
+VARS testSkyMap_160_170 ra_deg="160" codec_deg="170"
+JOB testSkyMap_170_000 testSkyMap.sub
+VARS testSkyMap_170_000 ra_deg="170" codec_deg="000"
+JOB testSkyMap_170_010 testSkyMap.sub
+VARS testSkyMap_170_010 ra_deg="170" codec_deg="010"
+JOB testSkyMap_170_020 testSkyMap.sub
+VARS testSkyMap_170_020 ra_deg="170" codec_deg="020"
+JOB testSkyMap_170_030 testSkyMap.sub
+VARS testSkyMap_170_030 ra_deg="170" codec_deg="030"
+JOB testSkyMap_170_040 testSkyMap.sub
+VARS testSkyMap_170_040 ra_deg="170" codec_deg="040"
+JOB testSkyMap_170_050 testSkyMap.sub
+VARS testSkyMap_170_050 ra_deg="170" codec_deg="050"
+JOB testSkyMap_170_060 testSkyMap.sub
+VARS testSkyMap_170_060 ra_deg="170" codec_deg="060"
+JOB testSkyMap_170_070 testSkyMap.sub
+VARS testSkyMap_170_070 ra_deg="170" codec_deg="070"
+JOB testSkyMap_170_080 testSkyMap.sub
+VARS testSkyMap_170_080 ra_deg="170" codec_deg="080"
+JOB testSkyMap_170_090 testSkyMap.sub
+VARS testSkyMap_170_090 ra_deg="170" codec_deg="090"
+JOB testSkyMap_170_100 testSkyMap.sub
+VARS testSkyMap_170_100 ra_deg="170" codec_deg="100"
+JOB testSkyMap_170_110 testSkyMap.sub
+VARS testSkyMap_170_110 ra_deg="170" codec_deg="110"
+JOB testSkyMap_170_120 testSkyMap.sub
+VARS testSkyMap_170_120 ra_deg="170" codec_deg="120"
+JOB testSkyMap_170_130 testSkyMap.sub
+VARS testSkyMap_170_130 ra_deg="170" codec_deg="130"
+JOB testSkyMap_170_140 testSkyMap.sub
+VARS testSkyMap_170_140 ra_deg="170" codec_deg="140"
+JOB testSkyMap_170_150 testSkyMap.sub
+VARS testSkyMap_170_150 ra_deg="170" codec_deg="150"
+JOB testSkyMap_170_160 testSkyMap.sub
+VARS testSkyMap_170_160 ra_deg="170" codec_deg="160"
+JOB testSkyMap_170_170 testSkyMap.sub
+VARS testSkyMap_170_170 ra_deg="170" codec_deg="170"
+JOB testSkyMap_180_000 testSkyMap.sub
+VARS testSkyMap_180_000 ra_deg="180" codec_deg="000"
+JOB testSkyMap_180_010 testSkyMap.sub
+VARS testSkyMap_180_010 ra_deg="180" codec_deg="010"
+JOB testSkyMap_180_020 testSkyMap.sub
+VARS testSkyMap_180_020 ra_deg="180" codec_deg="020"
+JOB testSkyMap_180_030 testSkyMap.sub
+VARS testSkyMap_180_030 ra_deg="180" codec_deg="030"
+JOB testSkyMap_180_040 testSkyMap.sub
+VARS testSkyMap_180_040 ra_deg="180" codec_deg="040"
+JOB testSkyMap_180_050 testSkyMap.sub
+VARS testSkyMap_180_050 ra_deg="180" codec_deg="050"
+JOB testSkyMap_180_060 testSkyMap.sub
+VARS testSkyMap_180_060 ra_deg="180" codec_deg="060"
+JOB testSkyMap_180_070 testSkyMap.sub
+VARS testSkyMap_180_070 ra_deg="180" codec_deg="070"
+JOB testSkyMap_180_080 testSkyMap.sub
+VARS testSkyMap_180_080 ra_deg="180" codec_deg="080"
+JOB testSkyMap_180_090 testSkyMap.sub
+VARS testSkyMap_180_090 ra_deg="180" codec_deg="090"
+JOB testSkyMap_180_100 testSkyMap.sub
+VARS testSkyMap_180_100 ra_deg="180" codec_deg="100"
+JOB testSkyMap_180_110 testSkyMap.sub
+VARS testSkyMap_180_110 ra_deg="180" codec_deg="110"
+JOB testSkyMap_180_120 testSkyMap.sub
+VARS testSkyMap_180_120 ra_deg="180" codec_deg="120"
+JOB testSkyMap_180_130 testSkyMap.sub
+VARS testSkyMap_180_130 ra_deg="180" codec_deg="130"
+JOB testSkyMap_180_140 testSkyMap.sub
+VARS testSkyMap_180_140 ra_deg="180" codec_deg="140"
+JOB testSkyMap_180_150 testSkyMap.sub
+VARS testSkyMap_180_150 ra_deg="180" codec_deg="150"
+JOB testSkyMap_180_160 testSkyMap.sub
+VARS testSkyMap_180_160 ra_deg="180" codec_deg="160"
+JOB testSkyMap_180_170 testSkyMap.sub
+VARS testSkyMap_180_170 ra_deg="180" codec_deg="170"
+JOB testSkyMap_190_000 testSkyMap.sub
+VARS testSkyMap_190_000 ra_deg="190" codec_deg="000"
+JOB testSkyMap_190_010 testSkyMap.sub
+VARS testSkyMap_190_010 ra_deg="190" codec_deg="010"
+JOB testSkyMap_190_020 testSkyMap.sub
+VARS testSkyMap_190_020 ra_deg="190" codec_deg="020"
+JOB testSkyMap_190_030 testSkyMap.sub
+VARS testSkyMap_190_030 ra_deg="190" codec_deg="030"
+JOB testSkyMap_190_040 testSkyMap.sub
+VARS testSkyMap_190_040 ra_deg="190" codec_deg="040"
+JOB testSkyMap_190_050 testSkyMap.sub
+VARS testSkyMap_190_050 ra_deg="190" codec_deg="050"
+JOB testSkyMap_190_060 testSkyMap.sub
+VARS testSkyMap_190_060 ra_deg="190" codec_deg="060"
+JOB testSkyMap_190_070 testSkyMap.sub
+VARS testSkyMap_190_070 ra_deg="190" codec_deg="070"
+JOB testSkyMap_190_080 testSkyMap.sub
+VARS testSkyMap_190_080 ra_deg="190" codec_deg="080"
+JOB testSkyMap_190_090 testSkyMap.sub
+VARS testSkyMap_190_090 ra_deg="190" codec_deg="090"
+JOB testSkyMap_190_100 testSkyMap.sub
+VARS testSkyMap_190_100 ra_deg="190" codec_deg="100"
+JOB testSkyMap_190_110 testSkyMap.sub
+VARS testSkyMap_190_110 ra_deg="190" codec_deg="110"
+JOB testSkyMap_190_120 testSkyMap.sub
+VARS testSkyMap_190_120 ra_deg="190" codec_deg="120"
+JOB testSkyMap_190_130 testSkyMap.sub
+VARS testSkyMap_190_130 ra_deg="190" codec_deg="130"
+JOB testSkyMap_190_140 testSkyMap.sub
+VARS testSkyMap_190_140 ra_deg="190" codec_deg="140"
+JOB testSkyMap_190_150 testSkyMap.sub
+VARS testSkyMap_190_150 ra_deg="190" codec_deg="150"
+JOB testSkyMap_190_160 testSkyMap.sub
+VARS testSkyMap_190_160 ra_deg="190" codec_deg="160"
+JOB testSkyMap_190_170 testSkyMap.sub
+VARS testSkyMap_190_170 ra_deg="190" codec_deg="170"
+JOB testSkyMap_200_000 testSkyMap.sub
+VARS testSkyMap_200_000 ra_deg="200" codec_deg="000"
+JOB testSkyMap_200_010 testSkyMap.sub
+VARS testSkyMap_200_010 ra_deg="200" codec_deg="010"
+JOB testSkyMap_200_020 testSkyMap.sub
+VARS testSkyMap_200_020 ra_deg="200" codec_deg="020"
+JOB testSkyMap_200_030 testSkyMap.sub
+VARS testSkyMap_200_030 ra_deg="200" codec_deg="030"
+JOB testSkyMap_200_040 testSkyMap.sub
+VARS testSkyMap_200_040 ra_deg="200" codec_deg="040"
+JOB testSkyMap_200_050 testSkyMap.sub
+VARS testSkyMap_200_050 ra_deg="200" codec_deg="050"
+JOB testSkyMap_200_060 testSkyMap.sub
+VARS testSkyMap_200_060 ra_deg="200" codec_deg="060"
+JOB testSkyMap_200_070 testSkyMap.sub
+VARS testSkyMap_200_070 ra_deg="200" codec_deg="070"
+JOB testSkyMap_200_080 testSkyMap.sub
+VARS testSkyMap_200_080 ra_deg="200" codec_deg="080"
+JOB testSkyMap_200_090 testSkyMap.sub
+VARS testSkyMap_200_090 ra_deg="200" codec_deg="090"
+JOB testSkyMap_200_100 testSkyMap.sub
+VARS testSkyMap_200_100 ra_deg="200" codec_deg="100"
+JOB testSkyMap_200_110 testSkyMap.sub
+VARS testSkyMap_200_110 ra_deg="200" codec_deg="110"
+JOB testSkyMap_200_120 testSkyMap.sub
+VARS testSkyMap_200_120 ra_deg="200" codec_deg="120"
+JOB testSkyMap_200_130 testSkyMap.sub
+VARS testSkyMap_200_130 ra_deg="200" codec_deg="130"
+JOB testSkyMap_200_140 testSkyMap.sub
+VARS testSkyMap_200_140 ra_deg="200" codec_deg="140"
+JOB testSkyMap_200_150 testSkyMap.sub
+VARS testSkyMap_200_150 ra_deg="200" codec_deg="150"
+JOB testSkyMap_200_160 testSkyMap.sub
+VARS testSkyMap_200_160 ra_deg="200" codec_deg="160"
+JOB testSkyMap_200_170 testSkyMap.sub
+VARS testSkyMap_200_170 ra_deg="200" codec_deg="170"
+JOB testSkyMap_210_000 testSkyMap.sub
+VARS testSkyMap_210_000 ra_deg="210" codec_deg="000"
+JOB testSkyMap_210_010 testSkyMap.sub
+VARS testSkyMap_210_010 ra_deg="210" codec_deg="010"
+JOB testSkyMap_210_020 testSkyMap.sub
+VARS testSkyMap_210_020 ra_deg="210" codec_deg="020"
+JOB testSkyMap_210_030 testSkyMap.sub
+VARS testSkyMap_210_030 ra_deg="210" codec_deg="030"
+JOB testSkyMap_210_040 testSkyMap.sub
+VARS testSkyMap_210_040 ra_deg="210" codec_deg="040"
+JOB testSkyMap_210_050 testSkyMap.sub
+VARS testSkyMap_210_050 ra_deg="210" codec_deg="050"
+JOB testSkyMap_210_060 testSkyMap.sub
+VARS testSkyMap_210_060 ra_deg="210" codec_deg="060"
+JOB testSkyMap_210_070 testSkyMap.sub
+VARS testSkyMap_210_070 ra_deg="210" codec_deg="070"
+JOB testSkyMap_210_080 testSkyMap.sub
+VARS testSkyMap_210_080 ra_deg="210" codec_deg="080"
+JOB testSkyMap_210_090 testSkyMap.sub
+VARS testSkyMap_210_090 ra_deg="210" codec_deg="090"
+JOB testSkyMap_210_100 testSkyMap.sub
+VARS testSkyMap_210_100 ra_deg="210" codec_deg="100"
+JOB testSkyMap_210_110 testSkyMap.sub
+VARS testSkyMap_210_110 ra_deg="210" codec_deg="110"
+JOB testSkyMap_210_120 testSkyMap.sub
+VARS testSkyMap_210_120 ra_deg="210" codec_deg="120"
+JOB testSkyMap_210_130 testSkyMap.sub
+VARS testSkyMap_210_130 ra_deg="210" codec_deg="130"
+JOB testSkyMap_210_140 testSkyMap.sub
+VARS testSkyMap_210_140 ra_deg="210" codec_deg="140"
+JOB testSkyMap_210_150 testSkyMap.sub
+VARS testSkyMap_210_150 ra_deg="210" codec_deg="150"
+JOB testSkyMap_210_160 testSkyMap.sub
+VARS testSkyMap_210_160 ra_deg="210" codec_deg="160"
+JOB testSkyMap_210_170 testSkyMap.sub
+VARS testSkyMap_210_170 ra_deg="210" codec_deg="170"
+JOB testSkyMap_220_000 testSkyMap.sub
+VARS testSkyMap_220_000 ra_deg="220" codec_deg="000"
+JOB testSkyMap_220_010 testSkyMap.sub
+VARS testSkyMap_220_010 ra_deg="220" codec_deg="010"
+JOB testSkyMap_220_020 testSkyMap.sub
+VARS testSkyMap_220_020 ra_deg="220" codec_deg="020"
+JOB testSkyMap_220_030 testSkyMap.sub
+VARS testSkyMap_220_030 ra_deg="220" codec_deg="030"
+JOB testSkyMap_220_040 testSkyMap.sub
+VARS testSkyMap_220_040 ra_deg="220" codec_deg="040"
+JOB testSkyMap_220_050 testSkyMap.sub
+VARS testSkyMap_220_050 ra_deg="220" codec_deg="050"
+JOB testSkyMap_220_060 testSkyMap.sub
+VARS testSkyMap_220_060 ra_deg="220" codec_deg="060"
+JOB testSkyMap_220_070 testSkyMap.sub
+VARS testSkyMap_220_070 ra_deg="220" codec_deg="070"
+JOB testSkyMap_220_080 testSkyMap.sub
+VARS testSkyMap_220_080 ra_deg="220" codec_deg="080"
+JOB testSkyMap_220_090 testSkyMap.sub
+VARS testSkyMap_220_090 ra_deg="220" codec_deg="090"
+JOB testSkyMap_220_100 testSkyMap.sub
+VARS testSkyMap_220_100 ra_deg="220" codec_deg="100"
+JOB testSkyMap_220_110 testSkyMap.sub
+VARS testSkyMap_220_110 ra_deg="220" codec_deg="110"
+JOB testSkyMap_220_120 testSkyMap.sub
+VARS testSkyMap_220_120 ra_deg="220" codec_deg="120"
+JOB testSkyMap_220_130 testSkyMap.sub
+VARS testSkyMap_220_130 ra_deg="220" codec_deg="130"
+JOB testSkyMap_220_140 testSkyMap.sub
+VARS testSkyMap_220_140 ra_deg="220" codec_deg="140"
+JOB testSkyMap_220_150 testSkyMap.sub
+VARS testSkyMap_220_150 ra_deg="220" codec_deg="150"
+JOB testSkyMap_220_160 testSkyMap.sub
+VARS testSkyMap_220_160 ra_deg="220" codec_deg="160"
+JOB testSkyMap_220_170 testSkyMap.sub
+VARS testSkyMap_220_170 ra_deg="220" codec_deg="170"
+JOB testSkyMap_230_000 testSkyMap.sub
+VARS testSkyMap_230_000 ra_deg="230" codec_deg="000"
+JOB testSkyMap_230_010 testSkyMap.sub
+VARS testSkyMap_230_010 ra_deg="230" codec_deg="010"
+JOB testSkyMap_230_020 testSkyMap.sub
+VARS testSkyMap_230_020 ra_deg="230" codec_deg="020"
+JOB testSkyMap_230_030 testSkyMap.sub
+VARS testSkyMap_230_030 ra_deg="230" codec_deg="030"
+JOB testSkyMap_230_040 testSkyMap.sub
+VARS testSkyMap_230_040 ra_deg="230" codec_deg="040"
+JOB testSkyMap_230_050 testSkyMap.sub
+VARS testSkyMap_230_050 ra_deg="230" codec_deg="050"
+JOB testSkyMap_230_060 testSkyMap.sub
+VARS testSkyMap_230_060 ra_deg="230" codec_deg="060"
+JOB testSkyMap_230_070 testSkyMap.sub
+VARS testSkyMap_230_070 ra_deg="230" codec_deg="070"
+JOB testSkyMap_230_080 testSkyMap.sub
+VARS testSkyMap_230_080 ra_deg="230" codec_deg="080"
+JOB testSkyMap_230_090 testSkyMap.sub
+VARS testSkyMap_230_090 ra_deg="230" codec_deg="090"
+JOB testSkyMap_230_100 testSkyMap.sub
+VARS testSkyMap_230_100 ra_deg="230" codec_deg="100"
+JOB testSkyMap_230_110 testSkyMap.sub
+VARS testSkyMap_230_110 ra_deg="230" codec_deg="110"
+JOB testSkyMap_230_120 testSkyMap.sub
+VARS testSkyMap_230_120 ra_deg="230" codec_deg="120"
+JOB testSkyMap_230_130 testSkyMap.sub
+VARS testSkyMap_230_130 ra_deg="230" codec_deg="130"
+JOB testSkyMap_230_140 testSkyMap.sub
+VARS testSkyMap_230_140 ra_deg="230" codec_deg="140"
+JOB testSkyMap_230_150 testSkyMap.sub
+VARS testSkyMap_230_150 ra_deg="230" codec_deg="150"
+JOB testSkyMap_230_160 testSkyMap.sub
+VARS testSkyMap_230_160 ra_deg="230" codec_deg="160"
+JOB testSkyMap_230_170 testSkyMap.sub
+VARS testSkyMap_230_170 ra_deg="230" codec_deg="170"
+JOB testSkyMap_240_000 testSkyMap.sub
+VARS testSkyMap_240_000 ra_deg="240" codec_deg="000"
+JOB testSkyMap_240_010 testSkyMap.sub
+VARS testSkyMap_240_010 ra_deg="240" codec_deg="010"
+JOB testSkyMap_240_020 testSkyMap.sub
+VARS testSkyMap_240_020 ra_deg="240" codec_deg="020"
+JOB testSkyMap_240_030 testSkyMap.sub
+VARS testSkyMap_240_030 ra_deg="240" codec_deg="030"
+JOB testSkyMap_240_040 testSkyMap.sub
+VARS testSkyMap_240_040 ra_deg="240" codec_deg="040"
+JOB testSkyMap_240_050 testSkyMap.sub
+VARS testSkyMap_240_050 ra_deg="240" codec_deg="050"
+JOB testSkyMap_240_060 testSkyMap.sub
+VARS testSkyMap_240_060 ra_deg="240" codec_deg="060"
+JOB testSkyMap_240_070 testSkyMap.sub
+VARS testSkyMap_240_070 ra_deg="240" codec_deg="070"
+JOB testSkyMap_240_080 testSkyMap.sub
+VARS testSkyMap_240_080 ra_deg="240" codec_deg="080"
+JOB testSkyMap_240_090 testSkyMap.sub
+VARS testSkyMap_240_090 ra_deg="240" codec_deg="090"
+JOB testSkyMap_240_100 testSkyMap.sub
+VARS testSkyMap_240_100 ra_deg="240" codec_deg="100"
+JOB testSkyMap_240_110 testSkyMap.sub
+VARS testSkyMap_240_110 ra_deg="240" codec_deg="110"
+JOB testSkyMap_240_120 testSkyMap.sub
+VARS testSkyMap_240_120 ra_deg="240" codec_deg="120"
+JOB testSkyMap_240_130 testSkyMap.sub
+VARS testSkyMap_240_130 ra_deg="240" codec_deg="130"
+JOB testSkyMap_240_140 testSkyMap.sub
+VARS testSkyMap_240_140 ra_deg="240" codec_deg="140"
+JOB testSkyMap_240_150 testSkyMap.sub
+VARS testSkyMap_240_150 ra_deg="240" codec_deg="150"
+JOB testSkyMap_240_160 testSkyMap.sub
+VARS testSkyMap_240_160 ra_deg="240" codec_deg="160"
+JOB testSkyMap_240_170 testSkyMap.sub
+VARS testSkyMap_240_170 ra_deg="240" codec_deg="170"
+JOB testSkyMap_250_000 testSkyMap.sub
+VARS testSkyMap_250_000 ra_deg="250" codec_deg="000"
+JOB testSkyMap_250_010 testSkyMap.sub
+VARS testSkyMap_250_010 ra_deg="250" codec_deg="010"
+JOB testSkyMap_250_020 testSkyMap.sub
+VARS testSkyMap_250_020 ra_deg="250" codec_deg="020"
+JOB testSkyMap_250_030 testSkyMap.sub
+VARS testSkyMap_250_030 ra_deg="250" codec_deg="030"
+JOB testSkyMap_250_040 testSkyMap.sub
+VARS testSkyMap_250_040 ra_deg="250" codec_deg="040"
+JOB testSkyMap_250_050 testSkyMap.sub
+VARS testSkyMap_250_050 ra_deg="250" codec_deg="050"
+JOB testSkyMap_250_060 testSkyMap.sub
+VARS testSkyMap_250_060 ra_deg="250" codec_deg="060"
+JOB testSkyMap_250_070 testSkyMap.sub
+VARS testSkyMap_250_070 ra_deg="250" codec_deg="070"
+JOB testSkyMap_250_080 testSkyMap.sub
+VARS testSkyMap_250_080 ra_deg="250" codec_deg="080"
+JOB testSkyMap_250_090 testSkyMap.sub
+VARS testSkyMap_250_090 ra_deg="250" codec_deg="090"
+JOB testSkyMap_250_100 testSkyMap.sub
+VARS testSkyMap_250_100 ra_deg="250" codec_deg="100"
+JOB testSkyMap_250_110 testSkyMap.sub
+VARS testSkyMap_250_110 ra_deg="250" codec_deg="110"
+JOB testSkyMap_250_120 testSkyMap.sub
+VARS testSkyMap_250_120 ra_deg="250" codec_deg="120"
+JOB testSkyMap_250_130 testSkyMap.sub
+VARS testSkyMap_250_130 ra_deg="250" codec_deg="130"
+JOB testSkyMap_250_140 testSkyMap.sub
+VARS testSkyMap_250_140 ra_deg="250" codec_deg="140"
+JOB testSkyMap_250_150 testSkyMap.sub
+VARS testSkyMap_250_150 ra_deg="250" codec_deg="150"
+JOB testSkyMap_250_160 testSkyMap.sub
+VARS testSkyMap_250_160 ra_deg="250" codec_deg="160"
+JOB testSkyMap_250_170 testSkyMap.sub
+VARS testSkyMap_250_170 ra_deg="250" codec_deg="170"
+JOB testSkyMap_260_000 testSkyMap.sub
+VARS testSkyMap_260_000 ra_deg="260" codec_deg="000"
+JOB testSkyMap_260_010 testSkyMap.sub
+VARS testSkyMap_260_010 ra_deg="260" codec_deg="010"
+JOB testSkyMap_260_020 testSkyMap.sub
+VARS testSkyMap_260_020 ra_deg="260" codec_deg="020"
+JOB testSkyMap_260_030 testSkyMap.sub
+VARS testSkyMap_260_030 ra_deg="260" codec_deg="030"
+JOB testSkyMap_260_040 testSkyMap.sub
+VARS testSkyMap_260_040 ra_deg="260" codec_deg="040"
+JOB testSkyMap_260_050 testSkyMap.sub
+VARS testSkyMap_260_050 ra_deg="260" codec_deg="050"
+JOB testSkyMap_260_060 testSkyMap.sub
+VARS testSkyMap_260_060 ra_deg="260" codec_deg="060"
+JOB testSkyMap_260_070 testSkyMap.sub
+VARS testSkyMap_260_070 ra_deg="260" codec_deg="070"
+JOB testSkyMap_260_080 testSkyMap.sub
+VARS testSkyMap_260_080 ra_deg="260" codec_deg="080"
+JOB testSkyMap_260_090 testSkyMap.sub
+VARS testSkyMap_260_090 ra_deg="260" codec_deg="090"
+JOB testSkyMap_260_100 testSkyMap.sub
+VARS testSkyMap_260_100 ra_deg="260" codec_deg="100"
+JOB testSkyMap_260_110 testSkyMap.sub
+VARS testSkyMap_260_110 ra_deg="260" codec_deg="110"
+JOB testSkyMap_260_120 testSkyMap.sub
+VARS testSkyMap_260_120 ra_deg="260" codec_deg="120"
+JOB testSkyMap_260_130 testSkyMap.sub
+VARS testSkyMap_260_130 ra_deg="260" codec_deg="130"
+JOB testSkyMap_260_140 testSkyMap.sub
+VARS testSkyMap_260_140 ra_deg="260" codec_deg="140"
+JOB testSkyMap_260_150 testSkyMap.sub
+VARS testSkyMap_260_150 ra_deg="260" codec_deg="150"
+JOB testSkyMap_260_160 testSkyMap.sub
+VARS testSkyMap_260_160 ra_deg="260" codec_deg="160"
+JOB testSkyMap_260_170 testSkyMap.sub
+VARS testSkyMap_260_170 ra_deg="260" codec_deg="170"
+JOB testSkyMap_270_000 testSkyMap.sub
+VARS testSkyMap_270_000 ra_deg="270" codec_deg="000"
+JOB testSkyMap_270_010 testSkyMap.sub
+VARS testSkyMap_270_010 ra_deg="270" codec_deg="010"
+JOB testSkyMap_270_020 testSkyMap.sub
+VARS testSkyMap_270_020 ra_deg="270" codec_deg="020"
+JOB testSkyMap_270_030 testSkyMap.sub
+VARS testSkyMap_270_030 ra_deg="270" codec_deg="030"
+JOB testSkyMap_270_040 testSkyMap.sub
+VARS testSkyMap_270_040 ra_deg="270" codec_deg="040"
+JOB testSkyMap_270_050 testSkyMap.sub
+VARS testSkyMap_270_050 ra_deg="270" codec_deg="050"
+JOB testSkyMap_270_060 testSkyMap.sub
+VARS testSkyMap_270_060 ra_deg="270" codec_deg="060"
+JOB testSkyMap_270_070 testSkyMap.sub
+VARS testSkyMap_270_070 ra_deg="270" codec_deg="070"
+JOB testSkyMap_270_080 testSkyMap.sub
+VARS testSkyMap_270_080 ra_deg="270" codec_deg="080"
+JOB testSkyMap_270_090 testSkyMap.sub
+VARS testSkyMap_270_090 ra_deg="270" codec_deg="090"
+JOB testSkyMap_270_100 testSkyMap.sub
+VARS testSkyMap_270_100 ra_deg="270" codec_deg="100"
+JOB testSkyMap_270_110 testSkyMap.sub
+VARS testSkyMap_270_110 ra_deg="270" codec_deg="110"
+JOB testSkyMap_270_120 testSkyMap.sub
+VARS testSkyMap_270_120 ra_deg="270" codec_deg="120"
+JOB testSkyMap_270_130 testSkyMap.sub
+VARS testSkyMap_270_130 ra_deg="270" codec_deg="130"
+JOB testSkyMap_270_140 testSkyMap.sub
+VARS testSkyMap_270_140 ra_deg="270" codec_deg="140"
+JOB testSkyMap_270_150 testSkyMap.sub
+VARS testSkyMap_270_150 ra_deg="270" codec_deg="150"
+JOB testSkyMap_270_160 testSkyMap.sub
+VARS testSkyMap_270_160 ra_deg="270" codec_deg="160"
+JOB testSkyMap_270_170 testSkyMap.sub
+VARS testSkyMap_270_170 ra_deg="270" codec_deg="170"
+JOB testSkyMap_280_000 testSkyMap.sub
+VARS testSkyMap_280_000 ra_deg="280" codec_deg="000"
+JOB testSkyMap_280_010 testSkyMap.sub
+VARS testSkyMap_280_010 ra_deg="280" codec_deg="010"
+JOB testSkyMap_280_020 testSkyMap.sub
+VARS testSkyMap_280_020 ra_deg="280" codec_deg="020"
+JOB testSkyMap_280_030 testSkyMap.sub
+VARS testSkyMap_280_030 ra_deg="280" codec_deg="030"
+JOB testSkyMap_280_040 testSkyMap.sub
+VARS testSkyMap_280_040 ra_deg="280" codec_deg="040"
+JOB testSkyMap_280_050 testSkyMap.sub
+VARS testSkyMap_280_050 ra_deg="280" codec_deg="050"
+JOB testSkyMap_280_060 testSkyMap.sub
+VARS testSkyMap_280_060 ra_deg="280" codec_deg="060"
+JOB testSkyMap_280_070 testSkyMap.sub
+VARS testSkyMap_280_070 ra_deg="280" codec_deg="070"
+JOB testSkyMap_280_080 testSkyMap.sub
+VARS testSkyMap_280_080 ra_deg="280" codec_deg="080"
+JOB testSkyMap_280_090 testSkyMap.sub
+VARS testSkyMap_280_090 ra_deg="280" codec_deg="090"
+JOB testSkyMap_280_100 testSkyMap.sub
+VARS testSkyMap_280_100 ra_deg="280" codec_deg="100"
+JOB testSkyMap_280_110 testSkyMap.sub
+VARS testSkyMap_280_110 ra_deg="280" codec_deg="110"
+JOB testSkyMap_280_120 testSkyMap.sub
+VARS testSkyMap_280_120 ra_deg="280" codec_deg="120"
+JOB testSkyMap_280_130 testSkyMap.sub
+VARS testSkyMap_280_130 ra_deg="280" codec_deg="130"
+JOB testSkyMap_280_140 testSkyMap.sub
+VARS testSkyMap_280_140 ra_deg="280" codec_deg="140"
+JOB testSkyMap_280_150 testSkyMap.sub
+VARS testSkyMap_280_150 ra_deg="280" codec_deg="150"
+JOB testSkyMap_280_160 testSkyMap.sub
+VARS testSkyMap_280_160 ra_deg="280" codec_deg="160"
+JOB testSkyMap_280_170 testSkyMap.sub
+VARS testSkyMap_280_170 ra_deg="280" codec_deg="170"
+JOB testSkyMap_290_000 testSkyMap.sub
+VARS testSkyMap_290_000 ra_deg="290" codec_deg="000"
+JOB testSkyMap_290_010 testSkyMap.sub
+VARS testSkyMap_290_010 ra_deg="290" codec_deg="010"
+JOB testSkyMap_290_020 testSkyMap.sub
+VARS testSkyMap_290_020 ra_deg="290" codec_deg="020"
+JOB testSkyMap_290_030 testSkyMap.sub
+VARS testSkyMap_290_030 ra_deg="290" codec_deg="030"
+JOB testSkyMap_290_040 testSkyMap.sub
+VARS testSkyMap_290_040 ra_deg="290" codec_deg="040"
+JOB testSkyMap_290_050 testSkyMap.sub
+VARS testSkyMap_290_050 ra_deg="290" codec_deg="050"
+JOB testSkyMap_290_060 testSkyMap.sub
+VARS testSkyMap_290_060 ra_deg="290" codec_deg="060"
+JOB testSkyMap_290_070 testSkyMap.sub
+VARS testSkyMap_290_070 ra_deg="290" codec_deg="070"
+JOB testSkyMap_290_080 testSkyMap.sub
+VARS testSkyMap_290_080 ra_deg="290" codec_deg="080"
+JOB testSkyMap_290_090 testSkyMap.sub
+VARS testSkyMap_290_090 ra_deg="290" codec_deg="090"
+JOB testSkyMap_290_100 testSkyMap.sub
+VARS testSkyMap_290_100 ra_deg="290" codec_deg="100"
+JOB testSkyMap_290_110 testSkyMap.sub
+VARS testSkyMap_290_110 ra_deg="290" codec_deg="110"
+JOB testSkyMap_290_120 testSkyMap.sub
+VARS testSkyMap_290_120 ra_deg="290" codec_deg="120"
+JOB testSkyMap_290_130 testSkyMap.sub
+VARS testSkyMap_290_130 ra_deg="290" codec_deg="130"
+JOB testSkyMap_290_140 testSkyMap.sub
+VARS testSkyMap_290_140 ra_deg="290" codec_deg="140"
+JOB testSkyMap_290_150 testSkyMap.sub
+VARS testSkyMap_290_150 ra_deg="290" codec_deg="150"
+JOB testSkyMap_290_160 testSkyMap.sub
+VARS testSkyMap_290_160 ra_deg="290" codec_deg="160"
+JOB testSkyMap_290_170 testSkyMap.sub
+VARS testSkyMap_290_170 ra_deg="290" codec_deg="170"
+JOB testSkyMap_300_000 testSkyMap.sub
+VARS testSkyMap_300_000 ra_deg="300" codec_deg="000"
+JOB testSkyMap_300_010 testSkyMap.sub
+VARS testSkyMap_300_010 ra_deg="300" codec_deg="010"
+JOB testSkyMap_300_020 testSkyMap.sub
+VARS testSkyMap_300_020 ra_deg="300" codec_deg="020"
+JOB testSkyMap_300_030 testSkyMap.sub
+VARS testSkyMap_300_030 ra_deg="300" codec_deg="030"
+JOB testSkyMap_300_040 testSkyMap.sub
+VARS testSkyMap_300_040 ra_deg="300" codec_deg="040"
+JOB testSkyMap_300_050 testSkyMap.sub
+VARS testSkyMap_300_050 ra_deg="300" codec_deg="050"
+JOB testSkyMap_300_060 testSkyMap.sub
+VARS testSkyMap_300_060 ra_deg="300" codec_deg="060"
+JOB testSkyMap_300_070 testSkyMap.sub
+VARS testSkyMap_300_070 ra_deg="300" codec_deg="070"
+JOB testSkyMap_300_080 testSkyMap.sub
+VARS testSkyMap_300_080 ra_deg="300" codec_deg="080"
+JOB testSkyMap_300_090 testSkyMap.sub
+VARS testSkyMap_300_090 ra_deg="300" codec_deg="090"
+JOB testSkyMap_300_100 testSkyMap.sub
+VARS testSkyMap_300_100 ra_deg="300" codec_deg="100"
+JOB testSkyMap_300_110 testSkyMap.sub
+VARS testSkyMap_300_110 ra_deg="300" codec_deg="110"
+JOB testSkyMap_300_120 testSkyMap.sub
+VARS testSkyMap_300_120 ra_deg="300" codec_deg="120"
+JOB testSkyMap_300_130 testSkyMap.sub
+VARS testSkyMap_300_130 ra_deg="300" codec_deg="130"
+JOB testSkyMap_300_140 testSkyMap.sub
+VARS testSkyMap_300_140 ra_deg="300" codec_deg="140"
+JOB testSkyMap_300_150 testSkyMap.sub
+VARS testSkyMap_300_150 ra_deg="300" codec_deg="150"
+JOB testSkyMap_300_160 testSkyMap.sub
+VARS testSkyMap_300_160 ra_deg="300" codec_deg="160"
+JOB testSkyMap_300_170 testSkyMap.sub
+VARS testSkyMap_300_170 ra_deg="300" codec_deg="170"
+JOB testSkyMap_310_000 testSkyMap.sub
+VARS testSkyMap_310_000 ra_deg="310" codec_deg="000"
+JOB testSkyMap_310_010 testSkyMap.sub
+VARS testSkyMap_310_010 ra_deg="310" codec_deg="010"
+JOB testSkyMap_310_020 testSkyMap.sub
+VARS testSkyMap_310_020 ra_deg="310" codec_deg="020"
+JOB testSkyMap_310_030 testSkyMap.sub
+VARS testSkyMap_310_030 ra_deg="310" codec_deg="030"
+JOB testSkyMap_310_040 testSkyMap.sub
+VARS testSkyMap_310_040 ra_deg="310" codec_deg="040"
+JOB testSkyMap_310_050 testSkyMap.sub
+VARS testSkyMap_310_050 ra_deg="310" codec_deg="050"
+JOB testSkyMap_310_060 testSkyMap.sub
+VARS testSkyMap_310_060 ra_deg="310" codec_deg="060"
+JOB testSkyMap_310_070 testSkyMap.sub
+VARS testSkyMap_310_070 ra_deg="310" codec_deg="070"
+JOB testSkyMap_310_080 testSkyMap.sub
+VARS testSkyMap_310_080 ra_deg="310" codec_deg="080"
+JOB testSkyMap_310_090 testSkyMap.sub
+VARS testSkyMap_310_090 ra_deg="310" codec_deg="090"
+JOB testSkyMap_310_100 testSkyMap.sub
+VARS testSkyMap_310_100 ra_deg="310" codec_deg="100"
+JOB testSkyMap_310_110 testSkyMap.sub
+VARS testSkyMap_310_110 ra_deg="310" codec_deg="110"
+JOB testSkyMap_310_120 testSkyMap.sub
+VARS testSkyMap_310_120 ra_deg="310" codec_deg="120"
+JOB testSkyMap_310_130 testSkyMap.sub
+VARS testSkyMap_310_130 ra_deg="310" codec_deg="130"
+JOB testSkyMap_310_140 testSkyMap.sub
+VARS testSkyMap_310_140 ra_deg="310" codec_deg="140"
+JOB testSkyMap_310_150 testSkyMap.sub
+VARS testSkyMap_310_150 ra_deg="310" codec_deg="150"
+JOB testSkyMap_310_160 testSkyMap.sub
+VARS testSkyMap_310_160 ra_deg="310" codec_deg="160"
+JOB testSkyMap_310_170 testSkyMap.sub
+VARS testSkyMap_310_170 ra_deg="310" codec_deg="170"
+JOB testSkyMap_320_000 testSkyMap.sub
+VARS testSkyMap_320_000 ra_deg="320" codec_deg="000"
+JOB testSkyMap_320_010 testSkyMap.sub
+VARS testSkyMap_320_010 ra_deg="320" codec_deg="010"
+JOB testSkyMap_320_020 testSkyMap.sub
+VARS testSkyMap_320_020 ra_deg="320" codec_deg="020"
+JOB testSkyMap_320_030 testSkyMap.sub
+VARS testSkyMap_320_030 ra_deg="320" codec_deg="030"
+JOB testSkyMap_320_040 testSkyMap.sub
+VARS testSkyMap_320_040 ra_deg="320" codec_deg="040"
+JOB testSkyMap_320_050 testSkyMap.sub
+VARS testSkyMap_320_050 ra_deg="320" codec_deg="050"
+JOB testSkyMap_320_060 testSkyMap.sub
+VARS testSkyMap_320_060 ra_deg="320" codec_deg="060"
+JOB testSkyMap_320_070 testSkyMap.sub
+VARS testSkyMap_320_070 ra_deg="320" codec_deg="070"
+JOB testSkyMap_320_080 testSkyMap.sub
+VARS testSkyMap_320_080 ra_deg="320" codec_deg="080"
+JOB testSkyMap_320_090 testSkyMap.sub
+VARS testSkyMap_320_090 ra_deg="320" codec_deg="090"
+JOB testSkyMap_320_100 testSkyMap.sub
+VARS testSkyMap_320_100 ra_deg="320" codec_deg="100"
+JOB testSkyMap_320_110 testSkyMap.sub
+VARS testSkyMap_320_110 ra_deg="320" codec_deg="110"
+JOB testSkyMap_320_120 testSkyMap.sub
+VARS testSkyMap_320_120 ra_deg="320" codec_deg="120"
+JOB testSkyMap_320_130 testSkyMap.sub
+VARS testSkyMap_320_130 ra_deg="320" codec_deg="130"
+JOB testSkyMap_320_140 testSkyMap.sub
+VARS testSkyMap_320_140 ra_deg="320" codec_deg="140"
+JOB testSkyMap_320_150 testSkyMap.sub
+VARS testSkyMap_320_150 ra_deg="320" codec_deg="150"
+JOB testSkyMap_320_160 testSkyMap.sub
+VARS testSkyMap_320_160 ra_deg="320" codec_deg="160"
+JOB testSkyMap_320_170 testSkyMap.sub
+VARS testSkyMap_320_170 ra_deg="320" codec_deg="170"
+JOB testSkyMap_330_000 testSkyMap.sub
+VARS testSkyMap_330_000 ra_deg="330" codec_deg="000"
+JOB testSkyMap_330_010 testSkyMap.sub
+VARS testSkyMap_330_010 ra_deg="330" codec_deg="010"
+JOB testSkyMap_330_020 testSkyMap.sub
+VARS testSkyMap_330_020 ra_deg="330" codec_deg="020"
+JOB testSkyMap_330_030 testSkyMap.sub
+VARS testSkyMap_330_030 ra_deg="330" codec_deg="030"
+JOB testSkyMap_330_040 testSkyMap.sub
+VARS testSkyMap_330_040 ra_deg="330" codec_deg="040"
+JOB testSkyMap_330_050 testSkyMap.sub
+VARS testSkyMap_330_050 ra_deg="330" codec_deg="050"
+JOB testSkyMap_330_060 testSkyMap.sub
+VARS testSkyMap_330_060 ra_deg="330" codec_deg="060"
+JOB testSkyMap_330_070 testSkyMap.sub
+VARS testSkyMap_330_070 ra_deg="330" codec_deg="070"
+JOB testSkyMap_330_080 testSkyMap.sub
+VARS testSkyMap_330_080 ra_deg="330" codec_deg="080"
+JOB testSkyMap_330_090 testSkyMap.sub
+VARS testSkyMap_330_090 ra_deg="330" codec_deg="090"
+JOB testSkyMap_330_100 testSkyMap.sub
+VARS testSkyMap_330_100 ra_deg="330" codec_deg="100"
+JOB testSkyMap_330_110 testSkyMap.sub
+VARS testSkyMap_330_110 ra_deg="330" codec_deg="110"
+JOB testSkyMap_330_120 testSkyMap.sub
+VARS testSkyMap_330_120 ra_deg="330" codec_deg="120"
+JOB testSkyMap_330_130 testSkyMap.sub
+VARS testSkyMap_330_130 ra_deg="330" codec_deg="130"
+JOB testSkyMap_330_140 testSkyMap.sub
+VARS testSkyMap_330_140 ra_deg="330" codec_deg="140"
+JOB testSkyMap_330_150 testSkyMap.sub
+VARS testSkyMap_330_150 ra_deg="330" codec_deg="150"
+JOB testSkyMap_330_160 testSkyMap.sub
+VARS testSkyMap_330_160 ra_deg="330" codec_deg="160"
+JOB testSkyMap_330_170 testSkyMap.sub
+VARS testSkyMap_330_170 ra_deg="330" codec_deg="170"
+JOB testSkyMap_340_000 testSkyMap.sub
+VARS testSkyMap_340_000 ra_deg="340" codec_deg="000"
+JOB testSkyMap_340_010 testSkyMap.sub
+VARS testSkyMap_340_010 ra_deg="340" codec_deg="010"
+JOB testSkyMap_340_020 testSkyMap.sub
+VARS testSkyMap_340_020 ra_deg="340" codec_deg="020"
+JOB testSkyMap_340_030 testSkyMap.sub
+VARS testSkyMap_340_030 ra_deg="340" codec_deg="030"
+JOB testSkyMap_340_040 testSkyMap.sub
+VARS testSkyMap_340_040 ra_deg="340" codec_deg="040"
+JOB testSkyMap_340_050 testSkyMap.sub
+VARS testSkyMap_340_050 ra_deg="340" codec_deg="050"
+JOB testSkyMap_340_060 testSkyMap.sub
+VARS testSkyMap_340_060 ra_deg="340" codec_deg="060"
+JOB testSkyMap_340_070 testSkyMap.sub
+VARS testSkyMap_340_070 ra_deg="340" codec_deg="070"
+JOB testSkyMap_340_080 testSkyMap.sub
+VARS testSkyMap_340_080 ra_deg="340" codec_deg="080"
+JOB testSkyMap_340_090 testSkyMap.sub
+VARS testSkyMap_340_090 ra_deg="340" codec_deg="090"
+JOB testSkyMap_340_100 testSkyMap.sub
+VARS testSkyMap_340_100 ra_deg="340" codec_deg="100"
+JOB testSkyMap_340_110 testSkyMap.sub
+VARS testSkyMap_340_110 ra_deg="340" codec_deg="110"
+JOB testSkyMap_340_120 testSkyMap.sub
+VARS testSkyMap_340_120 ra_deg="340" codec_deg="120"
+JOB testSkyMap_340_130 testSkyMap.sub
+VARS testSkyMap_340_130 ra_deg="340" codec_deg="130"
+JOB testSkyMap_340_140 testSkyMap.sub
+VARS testSkyMap_340_140 ra_deg="340" codec_deg="140"
+JOB testSkyMap_340_150 testSkyMap.sub
+VARS testSkyMap_340_150 ra_deg="340" codec_deg="150"
+JOB testSkyMap_340_160 testSkyMap.sub
+VARS testSkyMap_340_160 ra_deg="340" codec_deg="160"
+JOB testSkyMap_340_170 testSkyMap.sub
+VARS testSkyMap_340_170 ra_deg="340" codec_deg="170"
+JOB testSkyMap_350_000 testSkyMap.sub
+VARS testSkyMap_350_000 ra_deg="350" codec_deg="000"
+JOB testSkyMap_350_010 testSkyMap.sub
+VARS testSkyMap_350_010 ra_deg="350" codec_deg="010"
+JOB testSkyMap_350_020 testSkyMap.sub
+VARS testSkyMap_350_020 ra_deg="350" codec_deg="020"
+JOB testSkyMap_350_030 testSkyMap.sub
+VARS testSkyMap_350_030 ra_deg="350" codec_deg="030"
+JOB testSkyMap_350_040 testSkyMap.sub
+VARS testSkyMap_350_040 ra_deg="350" codec_deg="040"
+JOB testSkyMap_350_050 testSkyMap.sub
+VARS testSkyMap_350_050 ra_deg="350" codec_deg="050"
+JOB testSkyMap_350_060 testSkyMap.sub
+VARS testSkyMap_350_060 ra_deg="350" codec_deg="060"
+JOB testSkyMap_350_070 testSkyMap.sub
+VARS testSkyMap_350_070 ra_deg="350" codec_deg="070"
+JOB testSkyMap_350_080 testSkyMap.sub
+VARS testSkyMap_350_080 ra_deg="350" codec_deg="080"
+JOB testSkyMap_350_090 testSkyMap.sub
+VARS testSkyMap_350_090 ra_deg="350" codec_deg="090"
+JOB testSkyMap_350_100 testSkyMap.sub
+VARS testSkyMap_350_100 ra_deg="350" codec_deg="100"
+JOB testSkyMap_350_110 testSkyMap.sub
+VARS testSkyMap_350_110 ra_deg="350" codec_deg="110"
+JOB testSkyMap_350_120 testSkyMap.sub
+VARS testSkyMap_350_120 ra_deg="350" codec_deg="120"
+JOB testSkyMap_350_130 testSkyMap.sub
+VARS testSkyMap_350_130 ra_deg="350" codec_deg="130"
+JOB testSkyMap_350_140 testSkyMap.sub
+VARS testSkyMap_350_140 ra_deg="350" codec_deg="140"
+JOB testSkyMap_350_150 testSkyMap.sub
+VARS testSkyMap_350_150 ra_deg="350" codec_deg="150"
+JOB testSkyMap_350_160 testSkyMap.sub
+VARS testSkyMap_350_160 ra_deg="350" codec_deg="160"
+JOB testSkyMap_350_170 testSkyMap.sub
+VARS testSkyMap_350_170 ra_deg="350" codec_deg="170"
