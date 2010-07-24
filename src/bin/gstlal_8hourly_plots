@@ -23,6 +23,7 @@ except ImportError:
         from pysqlite2 import dbapi2 as sqlite3
 
 from optparse import OptionParser
+from glue import segments
 from glue.ligolw import dbtables
 from pylal import git_version
 
@@ -60,12 +61,29 @@ def parse_command_line():
 
 opts,databases = parse_command_line()
 
+
+import os
+from glue.segmentdb import query_engine
+from glue.segmentdb import segmentdb_utils
+connection = segmentdb_utils.setup_database(os.getenv('S6_SEGMENT_SERVER'))
+engine = query_engine.LdbdQueryEngine(connection)
+
+
+def get_science_segments(ifo, start_time, end_time):
+	segdefs = segmentdb_utils.expand_version_number(engine, (ifo, 'DMT-SCIENCE', 1, start_time, end_time, 0, 0) )
+	return segmentdb_utils.query_segments(engine, 'segment', segdefs)
+
+
 args = []
 for f in databases:
 	# Connect with SQLite
 	working_filename = dbtables.get_connection_filename(f, tmp_path=opts.tmp_space, verbose = opts.verbose)
 	connection = sqlite3.connect(working_filename)
 	dbtables.DBTable_set_connection(connection)
+
+
+	# Get input start and end time
+	in_start_time, in_end_time = connection.execute("SELECT in_start_time, in_end_time FROM search_summary LIMIT 1").fetchone()
 
 
 	# Select Parameters from sngl_inspiral table
@@ -76,6 +94,9 @@ for f in databases:
 	)
 	ifo = f.strip("gstlal_inspiral..sqlite")
 
+	# Look up science segments
+	science_segments = get_science_segments(ifo, in_start_time, in_end_time)[0]
+	non_science_segments = segments.segmentlist([segments.segment(in_start_time, in_end_time)]) - science_segments
 
 	# Plot m1 vs m2
 	pylab.clf()
@@ -105,6 +126,8 @@ for f in databases:
 	# Plot SNR vs end_time
 	pylab.clf()
 	pylab.semilogy(params['end_time'], params['snr'], 'or')
+	for seg in non_science_segments:
+		pylab.axvspan(seg[0], seg[1], facecolor='0.75')
 	pylab.axis("tight")
 	pylab.xlabel("end_time")
 	pylab.ylabel("SNR")
