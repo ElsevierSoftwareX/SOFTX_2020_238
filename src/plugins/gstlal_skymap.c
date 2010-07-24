@@ -249,6 +249,11 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 {
 	GSTLALSkymap* skymap = GSTLAL_SKYMAP(element);
 
+	/* FIXME: by passing NULL as the name for the new pad, we'll get pad names
+	   like pad0, pad1, ..., padN.  We would probably prefer
+	   to get sink0, sink1, ..., sinkN, but we'd have to build the string
+	   ourselves.
+	 */
 	GstPad* pad = gst_pad_new_from_template(templ, NULL);
 	if (!pad) return pad;
 
