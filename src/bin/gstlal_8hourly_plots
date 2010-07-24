@@ -23,28 +23,10 @@ except ImportError:
         from pysqlite2 import dbapi2 as sqlite3
 
 from optparse import OptionParser
-from glue import segments
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
 from glue.ligolw import dbtables
-from glue.ligolw import utils
-from glue.ligolw import table
-from glue import segmentsUtils
-
-from pylal import db_thinca_rings 
-from pylal import llwapp
-from pylal import rate
-from pylal import SimInspiralUtils
-from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 from pylal import git_version
-from pylal import spawaveform
-from pylal.followup_page import *
 
-import sys
-import os
 import subprocess
-from numpy import *
-import math
 import matplotlib
 from matplotlib import colors
 from matplotlib import cm
@@ -72,8 +54,7 @@ def parse_command_line():
 	if opts.glob: filenames.extend(glob.glob(opts.glob))
 
 	if not filenames:
-		print >>sys.stderr, "must specify at least one database file"
-		sys.exit(1)
+		raise RuntimeError("must specify at least one database file")
 	return opts, filenames
 
 
@@ -88,17 +69,18 @@ for f in databases:
 
 
 	# Select Parameters from sngl_inspiral table
-	params = connection.cursor().execute("SELECT mass1, mass2, snr, chisq, mchirp, end_time, eff_distance FROM sngl_inspiral").fetchall()
-	ifo = f.strip("gstlal_inspiral..sqlite")	
+	field_names = "mass1,mass2,snr,chisq,mchirp,end_time,eff_distance"
+	params = pylab.array(
+		connection.cursor().execute("SELECT %s FROM sngl_inspiral" % field_names).fetchall(),
+		dtype=[(field_name,float) for field_name in field_names.split(',')]
+	)
+	ifo = f.strip("gstlal_inspiral..sqlite")
 
 
 	# Plot m1 vs m2
 	pylab.clf()
-	snr = [c[2] for c in params]
-	plot=pylab.scatter([c[0] for c in params], [c[1] for c in params], c=snr, vmin=min(snr), vmax=max(snr), edgecolor=None)
-	cbar = pylab.colorbar(plot)
-	cbar.update_bruteforce(plot)
-	cbar.ax.set_ylabel("SNR")
+	plot=pylab.scatter(params['mass1'], params['mass2'], c=params['snr'], edgecolor=None)
+	pylab.colorbar().set_label("SNR")
 	pylab.xlabel("mass1")
 	pylab.ylabel("mass2")
 	pylab.title("mass1 vs. mass2 for %s" % ifo)
@@ -108,13 +90,11 @@ for f in databases:
 
 	# Plot SNR vs ChiSq
 	pylab.clf()
-	mchirp = [c[4] for c in params]
 	pylab.xscale('log')
 	pylab.yscale('log')
-	plot = pylab.scatter([c[2] for c in params], [c[3] for c in params], c=mchirp, vmin=min(mchirp), vmax=max(mchirp), edgecolor=None)
-	cbar = pylab.colorbar(plot)
-	cbar.update_bruteforce(plot)
-	cbar.ax.set_ylabel("mchirp")
+	pylab.scatter(params['snr'], params['chisq'], c=params['mchirp'], edgecolor=None)
+	pylab.axis("tight")
+	pylab.colorbar(plot).set_label("mchirp")
 	pylab.xlabel("SNR")
 	pylab.ylabel("ChiSq")
 	pylab.title("SNR vs. ChiSq for %s" %ifo)
@@ -124,7 +104,8 @@ for f in databases:
 
 	# Plot SNR vs end_time
 	pylab.clf()
-	pylab.semilogy([c[5] for c in params], [c[2] for c in params], 'or')	
+	pylab.semilogy(params['end_time'], params['snr'], 'or')
+	pylab.axis("tight")
 	pylab.xlabel("end_time")
 	pylab.ylabel("SNR")
 	pylab.title("SNR vs end_time for %s" %ifo)
@@ -134,7 +115,7 @@ for f in databases:
 
 	# Plot SNR vs D_eff
 	pylab.clf()
-	pylab.loglog([c[2] for c in params], [c[6] for c in params], 'or')
+	pylab.loglog(params['snr'], params['eff_distance'], 'or')
 	pylab.xlabel("SNR")
 	pylab.ylabel("eff_distance")
 	pylab.title("eff_distance vs SNR for %s" %ifo)
