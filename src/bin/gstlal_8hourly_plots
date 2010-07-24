@@ -74,6 +74,11 @@ def get_science_segments(ifo, start_time, end_time):
 	return segmentdb_utils.query_segments(engine, 'segment', segdefs)
 
 
+def get_hwinj_segments(ifo, start_time, end_time):
+	segdefs = segmentdb_utils.expand_version_number(engine, (ifo, 'DMT-INJECTION_INSPIRAL', 1, start_time, end_time, 0, 0) )
+	return segmentdb_utils.query_segments(engine, 'segment', segdefs)
+
+
 args = []
 for f in databases:
 	# Connect with SQLite
@@ -97,6 +102,9 @@ for f in databases:
 	# Look up science segments
 	science_segments = get_science_segments(ifo, in_start_time, in_end_time)[0]
 	non_science_segments = segments.segmentlist([segments.segment(in_start_time, in_end_time)]) - science_segments
+
+	# Look up hwinj segments
+	hwinj_segments = get_hwinj_segments(ifo, in_start_time, in_end_time)[0]
 
 	# Plot m1 vs m2
 	pylab.clf()
@@ -128,6 +136,8 @@ for f in databases:
 	pylab.semilogy(params['end_time'], params['snr'], 'or')
 	for seg in non_science_segments:
 		pylab.axvspan(seg[0], seg[1], facecolor='0.75')
+	for seg in hwinj_segments:
+		pylab.axvspan(seg[0], seg[1], facecolor='blue', edgecolor='none')
 	pylab.axis("tight")
 	pylab.xlabel("end_time")
 	pylab.ylabel("SNR")
