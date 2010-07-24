@@ -42,7 +42,6 @@ os.chdir(dirname)
 
 submit_file_tail = r"""
 log = %(tmpdir)s/8hourly.%(logname)s.log
-universe = vanilla
 executable = /usr/bin/env
 notification = never
 getenv = True
@@ -51,6 +50,7 @@ queue 1
 
 
 print >>open("ligo_data_find.sub", "w"), r"""
+universe = vanilla
 arguments = ligo_data_find \
 	-o H -t H1_DMT_C00_L2 -u file -l \
 	-s 958739936 -e 958743552
@@ -62,6 +62,7 @@ error = ligo_data_find.err
 
 
 print >>open("lalapps_tmpltbank.sub", "w"), r"""
+universe = vanilla
 arguments = lalapps_tmpltbank \
 	--verbose \
 	--user-tag $(macro_comment) \
@@ -94,6 +95,7 @@ error = lalapps_tmpltbank.err
 
 
 print >>open("prune_duplicate_mass_pairs.sub", "w"), r"""
+universe = vanilla
 arguments = gstlal_prune_duplicate_mass_pairs \
 	H1-TMPLTBANK_$(macro_comment)-$(macro_tmpltbank_start_time)-$(macro_tmpltbank_duration).xml.gz tmpltbank.xml.gz
 
@@ -104,6 +106,7 @@ error = prune_duplicate_mass_pairs.err
 
 
 print >>open("gstlal_inspiral.sub", "w"), r"""
+universe = vanilla
 arguments = gstlal_inspiral \
 	--verbose \
 	--online-data \
@@ -122,6 +125,7 @@ error = gstlal_inspiral.$(macro_instrument).err
 
 
 print >>open("gstlal_reference_psd.sub", "w"), r"""
+universe = vanilla
 arguments = gstlal_reference_psd \
 	--verbose \
 	--online-data \
@@ -135,12 +139,14 @@ error = reference_psd.$(macro_instrument).err
 """ + submit_file_tail
 
 print >>open("gstlal_8hourly_plots.sub", "w"), r"""
+universe = local
 arguments = gstlal_8hourly_plots --glob *.sqlite
 output = gstlal_8hourly_plots.out
 error = gstlal_8hourly_plots.err
 """ + submit_file_tail
 
 print >>open("gstlal_inspiral_page.sub", "w"), r"""
+universe = vanilla
 arguments = gstlal_inspiral_page
 output = gstlal_inspiral_page.out
 error = gstlal_inspiral_page.err
