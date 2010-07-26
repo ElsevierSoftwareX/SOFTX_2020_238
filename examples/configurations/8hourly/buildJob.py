@@ -172,6 +172,11 @@ print >>open("8hourly.dag", "w"), (
 	JOB prune_duplicate_mass_pairs prune_duplicate_mass_pairs.sub
 	VARS prune_duplicate_mass_pairs macro_comment="%(comment)s" macro_tmpltbank_start_time="%(tmpltbank_start_time)d" macro_tmpltbank_duration="%(tmpltbank_duration)d"
 	PARENT lalapps_tmpltbank CHILD prune_duplicate_mass_pairs
+
+	JOB gstlal_8hourly_plots gstlal_8hourly_plots.sub
+
+	JOB gstlal_inspiral_page gstlal_inspiral_page.sub
+	PARENT gstlal_8hourly_plots CHILD gstlal_inspiral_page
 	""".replace("\t","")
 
 	+ "".join(
@@ -186,16 +191,13 @@ print >>open("8hourly.dag", "w"), (
 		
 		JOB gstlal_plotlatency.%(i)s gstlal_plotlatency.sub
 		VARS gstlal_plotlatency.%(i)s macro_instrument="%(i)s"
-		PARENT gstlal_inspiral.%(i)s CHILD gstlal_plotlatency.%(i)s
+		PARENT gstlal_inspiral.%(i)s CHILD gstlal_plotlatency.%(i)s gstlal_8hourly_plots
+		PARENT gstlal_plotlatency.%(i)s CHILD gstlal_inspiral_page
 		""".replace("\t","") % args for args in (
 			{"i":"H1","s":958739939,"e":958743539},
 			{"i":"L1","s":958744974,"e":958747374}
 		)
 	)
-	+ "\nJOB gstlal_8hourly_plots gstlal_8hourly_plots.sub\nPARENT "
-	+ " ".join(["gstlal_inspiral.%s" %(i,) for i in ("H1","L1")])
-	+ " CHILD gstlal_8hourly_plots\n\nJOB gstlal_inspiral_page gstlal_inspiral_page.sub\nPARENT gstlal_8hourly_plots CHILD gstlal_inspiral_page"
-	
 ) % {
 	"comment": "GSTLAL_8HOURLY",
 	"tmpltbank_start_time": 958740096,
