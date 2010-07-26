@@ -51,6 +51,11 @@ page = cbcwebpage.cbcpage(title="gstlal 8-hour Job Page")
 correlations = page.add_subpage("correlations","Correlations","Correlations")
 
 
+perf = correlations.add_section("perf", "Performance")
+perf.add_table(cbcwebpage.image_glob("gstlal_inspiral.H1.out.png"), "perf_H1", "H1 Performance")
+perf.add_table(cbcwebpage.image_glob("gstlal_inspiral.L1.out.png"), "perf_L1", "L1 Performance")
+
+
 snr_chisq = correlations.add_section("snr_chisq_H1","Chisq SNR for H1 Triggers")
 snr_chisq.add_table(cbcwebpage.image_glob("snr_chisq_H1.png"), "snr_chisq_H1", "Chisq vs. SNR for H1 Triggers")
 snr_chisq.add_table(cbcwebpage.image_glob("snr_chisq_L1.png"), "snr_chisq_L1", "Chisq vs. SNR for L1 Triggers")

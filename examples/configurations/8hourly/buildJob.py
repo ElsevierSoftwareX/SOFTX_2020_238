@@ -146,6 +146,13 @@ output = gstlal_8hourly_plots.out
 error = gstlal_8hourly_plots.err
 """ + submit_file_tail
 
+print >>open("gstlal_plotlatency.sub", "w"), r"""
+universe = vanilla
+arguments = gstlal_plotlatency --disable-legend gstlal_inspiral.$(macro_instrument).out gstlal_inspiral.$(macro_instrument).out.png
+output = gstlal_plotlatency.$(macro_instrument).out
+error = gstlal_plotlatency.$(macro_instrument).err
+""" + submit_file_tail
+
 print >>open("gstlal_inspiral_page.sub", "w"), r"""
 universe = vanilla
 arguments = gstlal_inspiral_page
@@ -176,6 +183,10 @@ print >>open("8hourly.dag", "w"), (
 		JOB gstlal_inspiral.%(i)s gstlal_inspiral.sub
 		VARS gstlal_inspiral.%(i)s macro_instrument="%(i)s" macro_comment="%%(comment)s" macro_gps_start_time="%%(gps_start_time)d" macro_gps_end_time="%%(gps_end_time)d"
 		PARENT gstlal_reference_psd.%(i)s prune_duplicate_mass_pairs CHILD gstlal_inspiral.%(i)s
+		
+		JOB gstlal_plotlatency.%(i)s gstlal_plotlatency.sub
+		VARS gstlal_plotlatency.%(i)s macro_instrument="%(i)s"
+		PARENT gstlal_inspiral.%(i)s CHILD gstlal_plotlatency.%(i)s
 		""".replace("\t","") % args for args in (
 			{"i":"H1","s":958739939,"e":958743539},
 			{"i":"L1","s":958744974,"e":958747374}
