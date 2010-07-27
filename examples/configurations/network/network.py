@@ -21,6 +21,7 @@ from gstlal.gstlal_reference_psd import read_psd
 from gstlal import lloidparts
 from gstlal.pipeutil import gst, gobject
 from gstlal.lloidparts import mkelems_fast
+import sys
 
 
 # FIXME: This class, or something like it, occurs in many of our pipelines.
