@@ -67,6 +67,10 @@ snr_endtime = correlations.add_section("snr_endtime","SNR Time Series for Trigge
 snr_endtime.add_table(cbcwebpage.image_glob("snr_endtime_*.png"), "snr_endtime", "SNR vs. end_time for Triggers")
 
 
+trigrate = correlations.add_section("trigrate","Net Trigger Rate")
+trigrate.add_table(cbcwebpage.image_glob("triggerrate_*.png"), "trigrate", "Net Trigger Rate")
+
+
 snr_deff = correlations.add_section("snr_deff", "Effective Distace vs. SNR for Triggers")
 snr_deff.add_table(cbcwebpage.image_glob("snr_effdistance_*.png"), "snr_deff", "Effective Distace vs. SNR for Triggers")
 

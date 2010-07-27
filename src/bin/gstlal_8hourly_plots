@@ -92,10 +92,9 @@ for f in databases:
 
 
 	# Select Parameters from sngl_inspiral table
-	field_names = "mass1,mass2,snr,chisq,mchirp,end_time,eff_distance"
 	params = pylab.array(
-		connection.cursor().execute("SELECT %s FROM sngl_inspiral" % field_names).fetchall(),
-		dtype=[(field_name,float) for field_name in field_names.split(',')]
+		connection.cursor().execute("SELECT mass1,mass2,snr,chisq,mchirp,end_time+end_time_ns*1.0e-9 as end_time,eff_distance FROM sngl_inspiral").fetchall(),
+		dtype=[(field_name,float) for field_name in "mass1,mass2,snr,chisq,mchirp,end_time,eff_distance".split(',')]
 	)
 	ifo = f.strip("gstlal_inspiral..sqlite")
 
@@ -144,6 +143,21 @@ for f in databases:
 	pylab.title("SNR vs end_time for %s" %ifo)
 	pylab.grid(True)
 	pylab.savefig("snr_endtime_%s" %ifo)
+
+
+	# Plot net trigger rate
+	pylab.clf()
+	pylab.yscale('log')
+	pylab.hist(params['end_time'], bins=pylab.arange(in_start_time, in_end_time, 60), histtype='bar', color='r')
+	for seg in non_science_segments:
+		pylab.axvspan(seg[0], seg[1], facecolor='0.75')
+	pylab.axis("tight")
+	pylab.ylim(0.1, 1.0e5)
+	pylab.xlabel("end_time")
+	pylab.ylabel("Triggers/minute")
+	pylab.title("Net trigger rate vs end_time for %s" %ifo)
+	pylab.grid(True)
+	pylab.savefig("triggerrate_%s" %ifo)
 
 
 	# Plot SNR vs D_eff
