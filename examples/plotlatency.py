@@ -8,10 +8,13 @@ __author__ = "Leo Singer <leo.singer@ligo.org>"
 
 
 # Use OptionParser to generate help line, otherwise this is kind of pointless
-from optparse import OptionParser
+from optparse import OptionParser, Option
 (options, args) = OptionParser(
-	usage='%prog filename',
-	description='Plot latency from progressreport elements in GStreamer pipelines'
+	usage='%prog [options] filename [image filename]',
+	description='Plot latency from progressreport elements in GStreamer pipelines',
+	option_list=[
+		Option('--disable-legend', action='store_true', default=False, help='Disable figure legend.'),
+	]
 ).parse_args()
 
 
@@ -24,6 +27,12 @@ else:
 	import sys
 	file = sys.stdin
 	filename = '/dev/stdin'
+
+# If a second argument is given, use it as the filename to write to.
+if len(args) > 1:
+	out_filename = args[1]
+else:
+	out_filename = None
 
 
 # Regex matching "progress_(??:??:??) ????????? seconds"
@@ -49,6 +58,9 @@ gps_duration = gps_end_time - gps_start_time
 running_duration = max(trend[-1][0] for trend in trends.values())
 
 # Plot
+if out_filename is not None:
+	import matplotlib
+	matplotlib.use('Agg')
 import pylab
 
 # Plot diagonal grid
@@ -64,10 +76,12 @@ for k, v in sorted(trends.iteritems()):
 pylab.xlim((0, running_duration))
 pylab.ylim((0, gps_duration))
 pylab.gca().set_aspect('equal')
-
-pylab.legend(loc='lower right')
+if not options.disable_legend:
+	pylab.legend(loc='lower right')
 pylab.xlabel('running time (seconds)')
 pylab.ylabel('stream time - %d (seconds)' % gps_start_time)
 pylab.title('Progress report for %s' % filename)
-pylab.show()
-
+if out_filename is None:
+	pylab.show()
+else:
+	pylab.savefig(out_filename)
