@@ -1,5 +1,5 @@
 FILES = \
-	H1-TMPLTBANK_GSTLAL_8HOURLY-958740096-2048.xml.gz \
+	H1-TMPLTBANK_LLOID_S6_ONLINE-958740096-2048.xml.gz \
 	tmpltbank.xml.gz \
 	reference_psd.H1.xml.gz \
 	reference_psd.L1.xml.gz \
@@ -15,7 +15,7 @@ clean:
 ligo_data_find.out:
 	ligo_data_find -o H -t H1_DMT_C00_L2 -u file -l -s 958739936 -e 958743552 > $@
 
-H1-TMPLTBANK_GSTLAL_8HOURLY-958740096-2048.xml.gz: ligo_data_find.out
+H1-TMPLTBANK_LLOID_S6_ONLINE-958740096-2048.xml.gz: ligo_data_find.out
 	lalapps_tmpltbank \
 		--verbose \
 		--user-tag LLOID_S6_ONLINE \
@@ -41,7 +41,7 @@ H1-TMPLTBANK_GSTLAL_8HOURLY-958740096-2048.xml.gz: ligo_data_find.out
 		--min-total-mass 2.4 --max-total-mass 3.2 \
 		--write-compress --spectrum-type median
 
-tmpltbank.xml.gz: H1-TMPLTBANK_GSTLAL_8HOURLY-958740096-2048.xml.gz
+tmpltbank.xml.gz: H1-TMPLTBANK_LLOID_S6_ONLINE-958740096-2048.xml.gz
 	gstlal_prune_duplicate_mass_pairs $< $@
 
 reference_psd.H1.xml.gz:
