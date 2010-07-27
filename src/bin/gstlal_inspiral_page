@@ -52,27 +52,27 @@ correlations = page.add_subpage("correlations","Correlations","Correlations")
 
 
 perf = correlations.add_section("perf", "Performance")
-perf.add_table(cbcwebpage.image_glob("gstlal_inspiral.*.out.png"), "perf", "Single Detector Performance")
+perf.add_table(cbcwebpage.image_glob("gstlal_inspiral.*.out.png", width=400), "perf", "Single Detector Performance")
 
 
 snr_chisq = correlations.add_section("snr_chisq","Chisq SNR for Triggers")
-snr_chisq.add_table(cbcwebpage.image_glob("snr_chisq_*.png"), "snr_chisq", "Chisq vs. SNR for Triggers")
+snr_chisq.add_table(cbcwebpage.image_glob("snr_chisq_*.png", width=400), "snr_chisq", "Chisq vs. SNR for Triggers")
 
 
 m1m2 = correlations.add_section("m1_m2","Mass Distribution for Triggers")
-m1m2.add_table(cbcwebpage.image_glob("m1_m2_*.png"), "m1_m2_H1", "mass1 vs. mass2 for Triggers")
+m1m2.add_table(cbcwebpage.image_glob("m1_m2_*.png", width=400), "m1_m2_H1", "mass1 vs. mass2 for Triggers")
 
 
 snr_endtime = correlations.add_section("snr_endtime","SNR Time Series for Triggers")
-snr_endtime.add_table(cbcwebpage.image_glob("snr_endtime_*.png"), "snr_endtime", "SNR vs. end_time for Triggers")
+snr_endtime.add_table(cbcwebpage.image_glob("snr_endtime_*.png", width=400), "snr_endtime", "SNR vs. end_time for Triggers")
 
 
 trigrate = correlations.add_section("trigrate","Net Trigger Rate")
-trigrate.add_table(cbcwebpage.image_glob("triggerrate_*.png"), "trigrate", "Net Trigger Rate")
+trigrate.add_table(cbcwebpage.image_glob("triggerrate_*.png", width=400), "trigrate", "Net Trigger Rate")
 
 
 snr_deff = correlations.add_section("snr_deff", "Effective Distace vs. SNR for Triggers")
-snr_deff.add_table(cbcwebpage.image_glob("snr_effdistance_*.png"), "snr_deff", "Effective Distace vs. SNR for Triggers")
+snr_deff.add_table(cbcwebpage.image_glob("snr_effdistance_*.png", width=400), "snr_deff", "Effective Distace vs. SNR for Triggers")
 
 
 
