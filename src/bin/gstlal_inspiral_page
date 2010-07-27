@@ -52,28 +52,23 @@ correlations = page.add_subpage("correlations","Correlations","Correlations")
 
 
 perf = correlations.add_section("perf", "Performance")
-perf.add_table(cbcwebpage.image_glob("gstlal_inspiral.H1.out.png"), "perf_H1", "H1 Performance")
-perf.add_table(cbcwebpage.image_glob("gstlal_inspiral.L1.out.png"), "perf_L1", "L1 Performance")
+perf.add_table(cbcwebpage.image_glob("gstlal_inspiral.*.out.png"), "perf", "Single Detector Performance")
 
 
-snr_chisq = correlations.add_section("snr_chisq_H1","Chisq SNR for H1 Triggers")
-snr_chisq.add_table(cbcwebpage.image_glob("snr_chisq_H1.png"), "snr_chisq_H1", "Chisq vs. SNR for H1 Triggers")
-snr_chisq.add_table(cbcwebpage.image_glob("snr_chisq_L1.png"), "snr_chisq_L1", "Chisq vs. SNR for L1 Triggers")
+snr_chisq = correlations.add_section("snr_chisq","Chisq SNR for Triggers")
+snr_chisq.add_table(cbcwebpage.image_glob("snr_chisq_*.png"), "snr_chisq", "Chisq vs. SNR for Triggers")
 
 
-m1m2 = correlations.add_section("m1_m2_H1","Mass Distribution for H1 Triggers")
-m1m2.add_table(cbcwebpage.image_glob("m1_m2_H1.png"), "m1_m2_H1", "mass1 vs. mass2 for H1 Triggers")
-m1m2.add_table(cbcwebpage.image_glob("m1_m2_L1.png"), "m1_m2_L1", "mass1 vs. mass2 for L1 Triggers")
+m1m2 = correlations.add_section("m1_m2","Mass Distribution for Triggers")
+m1m2.add_table(cbcwebpage.image_glob("m1_m2_*.png"), "m1_m2_H1", "mass1 vs. mass2 for Triggers")
 
 
-snr_endtime = correlations.add_section("snr_endtime_H1","SNR Time Series for H1 Triggers")
-snr_endtime.add_table(cbcwebpage.image_glob("snr_endtime_H1.png"), "nr_endtime_H1", "SNR vs. end_time for H1 Triggers")
-snr_endtime.add_table(cbcwebpage.image_glob("snr_endtime_L1.png"), "snr_endtime_L1", "SNR vs. end_time for H1 Triggers")
+snr_endtime = correlations.add_section("snr_endtime","SNR Time Series for Triggers")
+snr_endtime.add_table(cbcwebpage.image_glob("snr_endtime_*.png"), "snr_endtime", "SNR vs. end_time for Triggers")
 
 
-snr_deff = correlations.add_section("snr_deff_H1", "Effective Distace vs. SNR for H1 Triggers")
-snr_deff.add_table(cbcwebpage.image_glob("snr_effdistance_H1.png"), "snr_deff_H1", "Effective Distace vs. SNR for H1 Triggers")
-snr_deff.add_table(cbcwebpage.image_glob("snr_effdistance_L1.png"), "snr_deff_L1", "Effective Distace vs. SNR for L1 Triggers")
+snr_deff = correlations.add_section("snr_deff", "Effective Distace vs. SNR for Triggers")
+snr_deff.add_table(cbcwebpage.image_glob("snr_effdistance_*.png"), "snr_deff", "Effective Distace vs. SNR for Triggers")
 
 
 
