@@ -15,4 +15,4 @@ configure
 libtool
 src/lib/gstlal.pc
 src/plugins/python/*.pyc
-tests/test_common.pyc
+tests/*.pyc

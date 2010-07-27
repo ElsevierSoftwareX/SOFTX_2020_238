@@ -106,12 +106,9 @@ static GstBaseSrcClass *parent_class = NULL;
  */
 
 
-static GstCaps *series_to_caps_and_taglist(const char *instrument, const char *channel_name, LALUnit sampleUnits, gint rate, LALTYPECODE type, GstTagList **taglist)
+static GstCaps *series_to_caps(gint rate, LALTYPECODE type)
 {
-	char units[100];
 	GstCaps *caps;
-
-	XLALUnitAsString(units, sizeof(units), &sampleUnits);
 
 	switch(type) {
 	case LAL_I4_TYPE_CODE:
@@ -159,20 +156,6 @@ static GstCaps *series_to_caps_and_taglist(const char *instrument, const char *c
 		GST_DEBUG("constructed caps:  %" GST_PTR_FORMAT, caps);
 	else
 		GST_ERROR("failure constructing caps");
-
-	if(taglist) {
-		*taglist = gst_tag_list_new_full(
-			GSTLAL_TAG_INSTRUMENT, instrument,
-			GSTLAL_TAG_CHANNEL_NAME, channel_name,
-			GSTLAL_TAG_UNITS, units,
-			NULL
-		);
-
-		if(*taglist)
-			GST_DEBUG("constructed taglist: %" GST_PTR_FORMAT, *taglist);
-		else
-			GST_ERROR("failure constructing taglist");
-	}
 
 	return caps;
 }
@@ -375,7 +358,12 @@ static gboolean start(GstBaseSrc *object)
 	LIGOTimeGPS stream_start;
 	gint rate, width;
 	GstCaps *caps;
-	GstTagList *taglist;
+
+	/*
+	 * Make a note to push tags before emitting next frame.
+	 */
+
+	element->need_tags = TRUE;
 
 	/*
 	 * Open frame stream.
@@ -424,7 +412,6 @@ static gboolean start(GstBaseSrc *object)
 	 * value.
 	 */
 
-	taglist = NULL;
 	switch(element->series_type) {
 	case LAL_I4_TYPE_CODE: {
 		INT4TimeSeries *series = XLALCreateINT4TimeSeries(element->full_channel_name, &stream_start, 0.0, 0.0, &lalDimensionlessUnit, 0);
@@ -445,7 +432,7 @@ static gboolean start(GstBaseSrc *object)
 		}
 		rate = round(1.0 / series->deltaT);
 		width = 32;
-		caps = series_to_caps_and_taglist(element->instrument, element->channel_name, element->units, rate, element->series_type, &taglist);
+		caps = series_to_caps(rate, element->series_type);
 		XLALDestroyINT4TimeSeries(series);
 		break;
 	}
@@ -469,7 +456,7 @@ static gboolean start(GstBaseSrc *object)
 		}
 		rate = round(1.0 / series->deltaT);
 		width = 32;
-		caps = series_to_caps_and_taglist(element->instrument, element->channel_name, element->units, rate, element->series_type, &taglist);
+		caps = series_to_caps(rate, element->series_type);
 		XLALDestroyREAL4TimeSeries(series);
 		break;
 	}
@@ -493,7 +480,7 @@ static gboolean start(GstBaseSrc *object)
 		}
 		rate = round(1.0 / series->deltaT);
 		width = 64;
-		caps = series_to_caps_and_taglist(element->instrument, element->channel_name, element->units, rate, element->series_type, &taglist);
+		caps = series_to_caps(rate, element->series_type);
 		XLALDestroyREAL8TimeSeries(series);
 		break;
 	}
@@ -523,14 +510,6 @@ static gboolean start(GstBaseSrc *object)
 		return FALSE;
 	}
 	gst_caps_unref(caps);
-
-	/*
-	 * Transmit the tag list.
-	 */
-
-	if(taglist && !gst_pad_push_event(GST_BASE_SRC_PAD(object), gst_event_new_tag(taglist)))
-		GST_ERROR_OBJECT(element, "unable to push taglist %" GST_PTR_FORMAT " on %s", taglist, GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
-	taglist = NULL;	/* gst_event_new_tag() took ownership */
 
 	/*
 	 * Done
@@ -570,6 +549,43 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 {
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(basesrc);
 	GstFlowReturn result;
+
+	/*
+	 * Push tag list if we haven't already
+	 */
+
+	if (element->need_tags) {
+		GstEvent *evt;
+		GstTagList *taglist;
+		char units[100];
+		XLALUnitAsString(units, sizeof(units), &element->units);
+
+		taglist = gst_tag_list_new_full(
+			GSTLAL_TAG_INSTRUMENT, element->instrument,
+			GSTLAL_TAG_CHANNEL_NAME, element->channel_name,
+			GSTLAL_TAG_UNITS, units,
+			NULL
+		);
+
+		if (!taglist) {
+			GST_ELEMENT_ERROR(element, CORE, TAG, ("failure constructing taglist"), (NULL));
+			return GST_FLOW_ERROR;
+		}
+
+		evt = gst_event_new_tag(taglist);
+
+		if (!evt) {
+			GST_ELEMENT_ERROR(element, CORE, TAG, ("failure constructing tag event"), (NULL));
+			return GST_FLOW_ERROR;
+		}
+
+		if (!gst_pad_push_event(GST_BASE_SRC_PAD(basesrc), evt)) {
+			GST_ELEMENT_ERROR(element, CORE, TAG, ("failure pusing tag event"), (NULL));
+			return GST_FLOW_ERROR;
+		}
+
+		element->need_tags = FALSE;
+	}
 
 	/*
 	 * Just in case
@@ -1016,6 +1032,13 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->series_type = -1;
 
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
+
+	/*
+	 * Make a note to push tags before emitting next frame.
+	 */
+
+	element->need_tags = TRUE;
+
 }
 
 
