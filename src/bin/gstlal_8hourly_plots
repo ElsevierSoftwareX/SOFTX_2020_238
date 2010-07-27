@@ -148,7 +148,7 @@ for f in databases:
 	# Plot net trigger rate
 	pylab.clf()
 	pylab.yscale('log')
-	pylab.hist(params['end_time'], bins=pylab.arange(in_start_time, in_end_time, 60), histtype='bar', color='r')
+	pylab.hist(params['end_time'], bins=pylab.arange(in_start_time, in_end_time, 60), histtype='bar')
 	for seg in non_science_segments:
 		pylab.axvspan(seg[0], seg[1], facecolor='0.75')
 	pylab.axis("tight")
