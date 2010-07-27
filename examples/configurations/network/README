@@ -1,0 +1,14 @@
+===============================
+S6 Online Network Configuration
+===============================
+
+This directory contains all the files related to the online S6 detector network configuration.
+The Makefile here will build all of the data files that are needed to launch the pipeline.
+The Python script "network.py" constructs and runs the GStreamer pipeline itself.
+
+To get started, build all of the data files by typing
+$ make -j all
+
+and then start the pipeline by typing
+$ ./network.py -i H1 -i L1 -s 962380814 -e 962381114
+
