@@ -591,8 +591,7 @@ static void base_init(gpointer g_class)
 			GST_PAD_SINK,
 			GST_PAD_REQUEST,
 			gst_caps_from_string(
-				"application/x-lal-snglinspiral," \
-				"channels = (int) 1"
+				"application/x-lal-snglinspiral"
 			)
 		)
 	);
