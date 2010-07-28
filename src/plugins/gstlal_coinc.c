@@ -87,12 +87,7 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 {
 	GSTLALCoinc* coinc = GSTLAL_COINC(element);
 
-	if (name == NULL)
-		name = "sink%d";
-
-	GstPad* pad = gst_pad_new_from_template(templ, name);
-	if (!pad) return pad;
-
+	GstPad* pad = gst_pad_new_from_template(templ, g_strdup_printf("sink%d", coinc->padcounter++));
 	if (!gst_element_add_pad(element, pad)) goto bad_pad;
 
 	gst_pad_use_fixed_caps(pad);
@@ -647,6 +642,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 
 	coinc->collect = gst_collect_pads_new();
 	gst_collect_pads_set_function(coinc->collect, GST_DEBUG_FUNCPTR(collected), coinc);
+	coinc->padcounter = 0;
 
 	coinc->trigger_sequence_hash = g_hash_table_new_full(sngl_inspiral_hash, sngl_inspiral_equal, g_free, g_free);
 }
