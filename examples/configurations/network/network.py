@@ -70,7 +70,6 @@ for ifo in opts.instrument:
 		pipeline,
 		hoftdict,
 		ifo,
-		None,
 		bank,
 		lloidparts.mkcontrolsnksrc(pipeline, max(rates)),
 	)
