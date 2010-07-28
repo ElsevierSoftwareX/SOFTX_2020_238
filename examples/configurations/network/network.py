@@ -58,7 +58,14 @@ seekevent = gst.event_new_seek(
 )
 
 
-for ifo in opts.instrument:
+coincstage = mkelems_fast(
+	pipeline,
+	"lal_coinc",
+	"fakesink"
+)
+
+
+for i_ifo, ifo in enumerate(opts.instrument):
 	bank = read_bank("bank.%s.pickle" % ifo)
 	bank.logname = ifo # FIXME This is only need to give elements names, that should be automatic.
 	psd = read_psd("reference_psd.%s.xml.gz" % ifo)
@@ -66,14 +73,8 @@ for ifo in opts.instrument:
 
 	basicsrc = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, ifo, None, online_data=True)
 	hoftdict = lloidparts.mkLLOIDsrc(pipeline, basicsrc, rates, psd=psd, psd_fft_length=opts.psd_fft_length)
-	head = lloidparts.mkLLOIDsingle(
-		pipeline,
-		hoftdict,
-		ifo,
-		bank,
-		lloidparts.mkcontrolsnksrc(pipeline, max(rates)),
-	)
-	mkelems_fast(pipeline, head, "fakesink")
+	branch = lloidparts.mkLLOIDsingle(pipeline, hoftdict, ifo, bank, lloidparts.mkcontrolsnksrc(pipeline, max(rates)))
+	branch.link_pads("src", coincstage[0], "sink%d" % i_ifo)
 
 
 pipeline.set_state(gst.STATE_PLAYING)
