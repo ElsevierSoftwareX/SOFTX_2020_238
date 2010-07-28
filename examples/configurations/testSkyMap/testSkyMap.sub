@@ -1,7 +1,7 @@
 
 arguments = $(ra_deg) $(codec_deg)
-output = testSkyMap_$(ra_deg)-$(codec_deg).out
-error = testSkyMap_$(ra_deg)-$(codec_deg).err
+output = testSkyMap_$(ra_deg)_$(codec_deg).out
+error = testSkyMap_$(ra_deg)_$(codec_deg).err
 
 log = /usr1/ekara/skymap.log
 universe = vanilla
