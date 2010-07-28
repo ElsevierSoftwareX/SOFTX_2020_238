@@ -58,11 +58,9 @@ seekevent = gst.event_new_seek(
 )
 
 
-coincstage = mkelems_fast(
-	pipeline,
-	"lal_coinc",
-	"fakesink"
-)
+coinc = mkelems_fast(pipeline, "lal_coinc")[-1]
+skymap = mkelems_fast(pipeline, coinc, "lal_skymap")[-1]
+mkelems_fast(pipeline, skymap, "fakesink")
 
 
 for ifo in opts.instrument:
@@ -73,8 +71,10 @@ for ifo in opts.instrument:
 
 	basicsrc = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, ifo, None, online_data=True)
 	hoftdict = lloidparts.mkLLOIDsrc(pipeline, basicsrc, rates, psd=psd, psd_fft_length=opts.psd_fft_length)
-	branch = lloidparts.mkLLOIDsingle(pipeline, hoftdict, ifo, bank, lloidparts.mkcontrolsnksrc(pipeline, max(rates)))
-	branch.link_pads("src", coincstage[0], "sink%d")
+	snr_tee = lloidparts.mkLLOIDhoftToSnr(pipeline, hoftdict, ifo, bank, lloidparts.mkcontrolsnksrc(pipeline, max(rates)))
+	triggers = lloidparts.mkLLOIDsnrToTriggers(pipeline, snr_tee, bank)
+	triggers.link_pads("src", coinc, "sink%d")
+	mkelems_fast(pipeline, snr_tee, "queue", skymap)
 
 
 pipeline.set_state(gst.STATE_PLAYING)
