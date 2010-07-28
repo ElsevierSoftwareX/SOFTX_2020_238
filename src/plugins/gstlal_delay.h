@@ -50,9 +50,6 @@
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
 
-#include <gsl/gsl_matrix.h>
-#include <gsl/gsl_vector.h>
-
 
 G_BEGIN_DECLS
 #define GSTLAL_DELAY_TYPE \
@@ -77,12 +74,9 @@ typedef struct
 typedef struct
 {
    GstBaseTransform element;  /* parent class */
-   GstAdapter *adapter;       /* adapter for manipulating input buffer */
    guint64 delay;             /* amount of incoming data to drop (in samples) */
    gint rate;                /* sampling rate */
    guint unit_size;           /* unit size */
-   gboolean silent;           /* silent option */
-
 } GSTLALDelay;
 
 
