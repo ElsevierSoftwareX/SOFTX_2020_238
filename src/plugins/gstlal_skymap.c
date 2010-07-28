@@ -220,7 +220,8 @@ static gboolean snr_event(GstPad *pad, GstEvent *event)
 
 		if (gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &instrument))
 		{
-			if (g_slist_find_custom(element->snr_collectdatas, instrument, (GCompareFunc)snr_collectdata_is_instrument))
+			GSList* found_same_named_pad = g_slist_find_custom(element->snr_collectdatas, instrument, (GCompareFunc)snr_collectdata_is_instrument);
+			if (found_same_named_pad && ((GstCollectData*)(found_same_named_pad->data))->pad != pad)
 			{
 				GST_ELEMENT_ERROR(element, CORE, TAG, ("two pads provided tags designating the instrument \"%s\"", instrument), (NULL));
 				g_free(instrument);

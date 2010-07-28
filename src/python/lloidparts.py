@@ -302,7 +302,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	return elems[-1]
 
 
-def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, control_snksrc, verbose = False, nxydump_segment = None):
+def mkLLOIDsingle(pipeline, hoftdict, instrument, bank, control_snksrc, verbose = False, nxydump_segment = None):
 	logname = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 
 	#
@@ -423,7 +423,6 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 				pipeline,
 				hoftdict,
 				instrument,
-				detectors[instrument],
 				bank,
 				control_snksrc,
 				verbose = verbose,
