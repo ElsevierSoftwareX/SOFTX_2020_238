@@ -140,7 +140,8 @@ for f in databases:
 		pylab.axvspan(seg[0], seg[1], facecolor='0.75')
 	for seg in hwinj_segments:
 		pylab.axvspan(seg[0], seg[1], facecolor='blue', edgecolor='none')
-	pylab.axis("tight")
+	pylab.xlim(in_start_time, in_end_time)
+	pylab.ylim(params['snr'].min(), params['snr'].max())
 	pylab.xlabel("end_time")
 	pylab.ylabel("SNR")
 	pylab.title("SNR vs end_time for %s" %ifo)
@@ -155,7 +156,8 @@ for f in databases:
 		pylab.hist(params['end_time'], bins=pylab.arange(in_start_time, in_end_time, 60), histtype='bar')
 	for seg in non_science_segments:
 		pylab.axvspan(seg[0], seg[1], facecolor='0.75')
-	pylab.axis("tight")
+	pylab.xlim(in_start_time, in_end_time)
+	pylab.ylim(1, 10**pylab.ceil(pylab.log10(params['snr'].max())))
 	pylab.ylim(0.1, 1.0e5)
 	pylab.xlabel("end_time")
 	pylab.ylabel("Triggers/minute")
