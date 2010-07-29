@@ -9,6 +9,7 @@ opts, args = OptionParser(
 		Option("--instrument", "-i", metavar="IFO", action="append", help="Instruments to analyze."),
 		Option("--gps-start-time", "-s", metavar="INT", type="int", help="GPS time at which to start analysis."),
 		Option("--gps-end-time", "-e", metavar="INT", type="int", help="GPS time at which to end analysis."),
+		Option("--template-bank", metavar="FILE", help="Name of template bank file."),
 	]
 ).parse_args()
 
@@ -59,7 +60,7 @@ seekevent = gst.event_new_seek(
 
 
 coinc = mkelems_fast(pipeline, "lal_coinc")[-1]
-skymap = mkelems_fast(pipeline, coinc, "lal_skymap")[-1]
+skymap = mkelems_fast(pipeline, coinc, "lal_skymap", {"bank-filename": opts.template_bank})[-1]
 mkelems_fast(pipeline, skymap, "fakesink")
 
 
