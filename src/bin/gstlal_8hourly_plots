@@ -107,8 +107,9 @@ for f in databases:
 
 	# Plot m1 vs m2
 	pylab.clf()
-	plot=pylab.scatter(params['mass1'], params['mass2'], c=params['snr'], edgecolor=None)
-	pylab.colorbar().set_label("SNR")
+	if len(params) > 0:
+		plot=pylab.scatter(params['mass1'], params['mass2'], c=params['snr'], edgecolor=None)
+		pylab.colorbar().set_label("SNR")
 	pylab.xlabel("mass1")
 	pylab.ylabel("mass2")
 	pylab.title("mass1 vs. mass2 for %s" % ifo)
@@ -120,9 +121,10 @@ for f in databases:
 	pylab.clf()
 	pylab.xscale('log')
 	pylab.yscale('log')
-	pylab.scatter(params['snr'], params['chisq'], c=params['mchirp'], edgecolor=None)
-	pylab.axis("tight")
-	pylab.colorbar(plot).set_label("mchirp")
+	if len(params) > 0:
+		pylab.scatter(params['snr'], params['chisq'], c=params['mchirp'], edgecolor=None)
+		pylab.axis("tight")
+		pylab.colorbar(plot).set_label("mchirp")
 	pylab.xlabel("SNR")
 	pylab.ylabel("ChiSq")
 	pylab.title("SNR vs. ChiSq for %s" %ifo)
@@ -132,7 +134,8 @@ for f in databases:
 
 	# Plot SNR vs end_time
 	pylab.clf()
-	pylab.semilogy(params['end_time'], params['snr'], 'or')
+	if len(params) > 0:
+		pylab.semilogy(params['end_time'], params['snr'], 'or')
 	for seg in non_science_segments:
 		pylab.axvspan(seg[0], seg[1], facecolor='0.75')
 	for seg in hwinj_segments:
@@ -148,7 +151,8 @@ for f in databases:
 	# Plot net trigger rate
 	pylab.clf()
 	pylab.yscale('log')
-	pylab.hist(params['end_time'], bins=pylab.arange(in_start_time, in_end_time, 60), histtype='bar')
+	if len(params) > 0:
+		pylab.hist(params['end_time'], bins=pylab.arange(in_start_time, in_end_time, 60), histtype='bar')
 	for seg in non_science_segments:
 		pylab.axvspan(seg[0], seg[1], facecolor='0.75')
 	pylab.axis("tight")
@@ -162,7 +166,8 @@ for f in databases:
 
 	# Plot SNR vs D_eff
 	pylab.clf()
-	pylab.loglog(params['snr'], params['eff_distance'], 'or')
+	if len(params) > 0:
+		pylab.loglog(params['snr'], params['eff_distance'], 'or')
 	pylab.xlabel("SNR")
 	pylab.ylabel("eff_distance")
 	pylab.title("eff_distance vs SNR for %s" %ifo)
