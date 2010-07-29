@@ -124,6 +124,7 @@ class lal_stripchart(matplotlibhelper.BaseMatplotlibTransform):
 			self.axes.xaxis.cla() # FIXME: Matplotlib leaks callback refs without this
 			self.axes.yaxis.cla() # FIXME: Matplotlib leaks callback refs without this
 			self.line2D = self.axes.plot(numpy.zeros(val))[0]
+			self.axes.set_xlim(0, val)
 
 
 	def do_get_property(self, prop):
@@ -154,27 +155,33 @@ class lal_stripchart(matplotlibhelper.BaseMatplotlibTransform):
 		nsamples_to_take = long(self.__incaps[0]["rate"] / float(framerate))
 		nbytes_to_take = nsamples_to_take * sink_unit_size
 
+		sinkpad = self.sink_pads().next()
+		srcpad = self.src_pads().next()
+
+		any_frames = False
 		inbuf = self.__adapter.take_buffer(nbytes_to_take)
-		if inbuf is None:
+		while inbuf is not None:
+			any_frames = True
+			self.line2D.set_ydata(numpy.concatenate(
+				(
+					self.line2D.get_ydata()[nsamples_to_take:],
+					array_from_audio_buffer(inbuf, self.__incaps).flatten()
+				)
+			))
+			inbuf = self.__adapter.take_buffer(nbytes_to_take)
+			if inbuf is not None:
+				buf = gst.buffer_new_and_alloc(outbuf.size)
+				buf.caps = outbuf.caps
+				matplotlibhelper.render(self.figure, buf)
+				retval = srcpad.push(buf)
+				if retval != gst.FLOW_OK:
+					return retval
+
+		if any_frames:
+			matplotlibhelper.render(self.figure, outbuf)
+			return gst.FLOW_OK
+		else:
 			return gst.FLOW_CUSTOM_SUCCESS
-
-		self.line2D.set_ydata(numpy.concatenate(
-			(
-				self.line2D.get_ydata()[nsamples_to_take:],
-				array_from_audio_buffer(inbuf, self.__incaps).flatten()
-			)
-		))
-
-		# Render to output buffer.
-		matplotlibhelper.render(self.figure, outbuf)
-
-		# Copy timing information to output buffer.
-		#outbuf.duration = gst.CLOCK_TIME_NONE
-		#outbuf.offset = inbuf.offset
-		#outbuf.offset_end = inbuf.offset_end
-
-		# Done!
-		return gst.FLOW_OK
 
 
 # Register element class
