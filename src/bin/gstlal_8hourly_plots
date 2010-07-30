@@ -28,8 +28,6 @@ from glue.ligolw import dbtables
 
 import subprocess
 import matplotlib
-from matplotlib import colors
-from matplotlib import cm
 matplotlib.use('Agg')
 import pylab
 import glob
