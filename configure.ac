@@ -17,6 +17,7 @@ AC_CONFIG_FILES([ \
 	src/bin/Makefile \
 	src/lib/gstlal.pc \
 	src/lib/Makefile \
+	src/skymap/Makefile \
 	src/plugins/Makefile \
 	src/plugins/python/Makefile \
 	src/python/Makefile \

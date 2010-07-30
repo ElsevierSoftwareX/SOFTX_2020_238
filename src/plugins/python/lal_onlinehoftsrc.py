@@ -440,6 +440,25 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		return True
 
 
+	def do_query(self, query):
+		"""GstBaseSrc->query virtual method"""
+
+		if query.type == gst.QUERY_FORMATS:
+			query.set_formats(gst.FORMAT_DEFAULT, gst.FORMAT_TIME)
+			return True
+		elif query.type == gst.QUERY_CONVERT:
+			src_format, src_value, dest_format, dest_value = query.parse_convert()
+			if src_format not in (gst.FORMAT_DEFAULT, gst.FORMAT_TIME):
+				return False
+			if dest_format not in (gst.FORMAT_DEFAULT, gst.FORMAT_TIME):
+				return False
+			dest_value = src_value
+			query.set_convert(src_format, src_value, dest_format, dest_value)
+			return True
+		else:
+			return gst.BaseSrc.do_query(self, query)
+
+
 	def do_create(self, offset, size):
 		"""GstBaseSrc->create virtual method"""
 
@@ -501,10 +520,9 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		# If necessary, create gap for skipped frames.
 		if self.__last_successful_gps_end is not None and self.__last_successful_gps_end != gps_start:
 			offset = 16384 * self.__last_successful_gps_end
-			size = len(hoft_array.data)
-			(retval, buf) = pad.alloc_buffer(offset, size, caps)
-			if retval != gst.FLOW_OK:
-				return (retval, None)
+			size = 16384 * (gps_start - self.__last_successful_gps_end) * len(hoft_array.data[:1].data)
+			buf = gst.buffer_new_and_alloc(size)
+			buf.caps = caps
 			buf.offset = offset
 			buf.offset_end = 16384 * gps_start
 			buf.duration = gst.SECOND * (gps_start - self.__last_successful_gps_end)
@@ -526,9 +544,8 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 				offset = 16384 * (gps_start + last_segment_num)
 				hoft_data = hoft_array[(16384*last_segment_num):(16384*segment_num)].data
 				size = len(hoft_data)
-				(retval, buf) = pad.alloc_buffer(offset, size, caps)
-				if retval != gst.FLOW_OK:
-					return (retval, None)
+				buf = gst.buffer_new_and_alloc(size)
+				buf.caps = caps
 				buf[0:size] = hoft_data
 				buf.offset = offset
 				buf.offset_end = 16384 * (gps_start + segment_num)
@@ -549,9 +566,8 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		offset = 16384 * (gps_start + last_segment_num)
 		hoft_data = hoft_array[(16384*last_segment_num):(16384*segment_num)].data
 		size = len(hoft_data)
-		(retval, buf) = pad.alloc_buffer(offset, size, caps)
-		if retval != gst.FLOW_OK:
-			return (retval, None)
+		buf = gst.buffer_new_and_alloc(size)
+		buf.caps = caps
 		buf[0:size] = hoft_data
 		buf.offset = offset
 		buf.offset_end = 16384 * (gps_start + segment_num)

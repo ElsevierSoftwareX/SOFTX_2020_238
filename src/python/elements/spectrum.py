@@ -25,36 +25,12 @@
 
 
 import bisect
-import math
-import matplotlib
-matplotlib.rcParams.update({
-	"font.size": 8.0,
-	"axes.titlesize": 10.0,
-	"axes.labelsize": 10.0,
-	"xtick.labelsize": 8.0,
-	"ytick.labelsize": 8.0,
-	"legend.fontsize": 8.0,
-	"figure.dpi": 100,
-	"savefig.dpi": 100,
-	"text.usetex": True,
-	"path.simplify": True
-})
-from matplotlib import figure
-from matplotlib import cm as colourmap
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy
 
 
-import pygtk
-pygtk.require("2.0")
-import gobject
-import pygst
-pygst.require('0.10')
-import gst
-
-
+from gstlal.pipeutil import *
+from gstlal import matplotlibhelper
 from gstlal import pipeio
-from gstlal.elements import matplotlibcaps
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -71,7 +47,7 @@ __date__ = "FIXME"
 #
 
 
-class Spectrum(gst.BaseTransform):
+class Spectrum(matplotlibhelper.BaseMatplotlibTransform):
 	__gsttemplates__ = (
 		gst.PadTemplate("sink",
 			gst.PAD_SINK,
@@ -84,27 +60,14 @@ class Spectrum(gst.BaseTransform):
 				"width = (int) 64"
 			)
 		),
-		gst.PadTemplate("src",
-			gst.PAD_SRC,
-			gst.PAD_ALWAYS,
-			gst.caps_from_string(
-				matplotlibcaps + ", " +
-				"width = (int) [1, MAX], " +
-				"height = (int) [1, MAX], " +
-				"framerate = (fraction) [0/1, 2147483647/1]"
-			)
-		)
+		matplotlibhelper.BaseMatplotlibTransform.__gsttemplates__
 	)
 
 
 	def __init__(self):
-		gst.BaseTransform.__init__(self)
-		self.get_pad("sink").use_fixed_caps()
-		self.get_pad("src").use_fixed_caps()
+		super(Spectrum, self).__init__()
 		self.channels = None
 		self.delta_f = None
-		self.out_width = 320	# default
-		self.out_height = 200	# default
 		self.instrument = None
 		self.channel_name = None
 		self.sample_units = None
@@ -113,13 +76,7 @@ class Spectrum(gst.BaseTransform):
 	def do_set_caps(self, incaps, outcaps):
 		self.channels = incaps[0]["channels"]
 		self.delta_f = incaps[0]["delta-f"]
-		self.out_width = outcaps[0]["width"]
-		self.out_height = outcaps[0]["height"]
 		return True
-
-
-	def do_get_unit_size(self, caps):
-		return pipeio.get_unit_size(caps)
 
 
 	def do_event(self, event):
@@ -136,10 +93,8 @@ class Spectrum(gst.BaseTransform):
 		# generate spectrum plot
 		#
 
-		fig = figure.Figure()
-		FigureCanvas(fig)
-		fig.set_size_inches(self.out_width / float(fig.get_dpi()), self.out_height / float(fig.get_dpi()))
-		axes = fig.gca(rasterized = True)
+		axes = self.axes
+		axes.clear()
 
 		data = numpy.transpose(pipeio.array_from_audio_buffer(inbuf))
 		f = numpy.arange(len(data[0]), dtype = "double") * self.delta_f
@@ -158,19 +113,10 @@ class Spectrum(gst.BaseTransform):
 		axes.set_ylabel(r"Spectral Density (FIXME)")
 
 		#
-		# extract pixel data
-		#
-
-		fig.canvas.draw()
-		rgba_buffer = fig.canvas.buffer_rgba(0, 0)
-		rgba_buffer_size = len(rgba_buffer)
-
-		#
 		# copy pixel data to output buffer
 		#
 
-		outbuf[0:rgba_buffer_size] = rgba_buffer
-		outbuf.datasize = rgba_buffer_size
+		matplotlibhelper.render(self.figure, outbuf)
 
 		#
 		# set metadata on output buffer
@@ -185,24 +131,6 @@ class Spectrum(gst.BaseTransform):
 		#
 
 		return gst.FLOW_OK
-
-
-	def do_transform_caps(self, direction, caps):
-		if direction == gst.PAD_SRC:
-			#
-			# convert src pad's caps to sink pad's
-			#
-
-			return self.get_pad("sink").get_allowed_caps()
-
-		elif direction == gst.PAD_SINK:
-			#
-			# convert sink pad's caps to src pad's
-			#
-
-			return self.get_pad("src").get_allowed_caps()
-
-		raise ValueError, direction
 
 
 	def do_transform_size(self, direction, caps, size, othercaps):
@@ -224,18 +152,8 @@ class Spectrum(gst.BaseTransform):
 				return 0
 			return 1
 
-		elif direction == gst.PAD_SINK:
-			#
-			# any buffer on sink pad is turned into exactly
-			# one frame on source pad
-			#
-
-			# FIXME:  figure out whats wrong with this
-			# function, why is othercaps not right!?
-			othercaps = self.get_pad("src").get_allowed_caps()
-			return othercaps[0]["width"] * othercaps[0]["height"] * othercaps[0]["bpp"] // 8
-
-		raise ValueError, direction
+		else:
+			return super(Spectrum, self).do_transform_size(direction, caps, size, othercaps)
 
 
 gobject.type_register(Spectrum)

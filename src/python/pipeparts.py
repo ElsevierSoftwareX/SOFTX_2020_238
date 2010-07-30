@@ -485,3 +485,104 @@ def mkchecktimestamps(pipeline, src, name = None):
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
+
+
+def audioresample_variance_gain(quality, num, den):
+	"""Calculate the output gain of GStreamer's stock audioresample element.
+	
+	The audioresample element has a frequency response of unity "almost" all the
+	way up the Nyquist frequency.  However, for an input of unit variance
+	Gaussian noise, the output will have a variance very slighly less than 1.
+	The return value is the variance that the filter will produce for a given
+	"quality" setting and sample rate.
+
+	@param den The denomenator of the ratio of the input and output sample rates
+	@param num The numerator of the ratio of the input and output sample rates
+	@return The variance of the output signal for unit variance input
+
+	The following example shows how to apply the correction factor using an
+	audioamplify element.
+
+	>>> from gstlal.pipeutil import *
+	>>> from gstlal.pipeparts import audioresample_variance_gain
+	>>> import gstlal.pipeio as pipeio
+	>>> import numpy
+	>>> nsamples = 2 ** 17
+	>>> num = 2
+	>>> den = 1
+	>>> def handoff_handler(element, buffer, pad, (quality, filt_len, num, den)):
+	...		out_latency = numpy.ceil(float(den) / num * filt_len)
+	...		buf = pipeio.array_from_audio_buffer(buffer).flatten()
+	...		std = numpy.std(buf[out_latency:-out_latency])
+	...		print "quality=%2d, filt_len=%3d, num=%d, den=%d, stdev=%.2f" % (
+	...			quality, filt_len, num, den, std)
+	... 
+	>>> for quality in range(11):
+	...		pipeline = gst.Pipeline()
+	...		correction = 1/numpy.sqrt(audioresample_variance_gain(quality, num, den))
+	...		elems = mkelems_in_bin(pipeline,
+	...			('audiotestsrc', {'wave':'gaussian-noise','volume':1}),
+	...			('capsfilter', {'caps':gst.Caps('audio/x-raw-float,width=64,rate=%d' % num)}),
+	...			('audioresample', {'quality':quality}),
+	...			('capsfilter', {'caps':gst.Caps('audio/x-raw-float,width=64,rate=%d' % den)}),
+	...			('audioamplify', {'amplification':correction,'clipping-method':'none'}),
+	...			('fakesink', {'signal-handoffs':True, 'num-buffers':1})
+	...		)
+	...		filt_len = elems[2].get_property('filter-length')
+	...		elems[0].set_property('samplesperbuffer', 2 * filt_len + nsamples)
+	...		if elems[-1].connect_after('handoff', handoff_handler, (quality, filt_len, num, den)) < 1:
+	...			raise RuntimeError
+	...		try:
+	...			if pipeline.set_state(gst.STATE_PLAYING) is not gst.STATE_CHANGE_ASYNC:
+	...				raise RuntimeError
+	...			if not pipeline.get_bus().poll(gst.MESSAGE_EOS, -1):
+	...				raise RuntimeError
+	...		finally:
+	...			if pipeline.set_state(gst.STATE_NULL) is not gst.STATE_CHANGE_SUCCESS:
+	...				raise RuntimeError
+	... 
+	quality= 0, filt_len=  8, num=2, den=1, stdev=1.00
+	quality= 1, filt_len= 16, num=2, den=1, stdev=1.00
+	quality= 2, filt_len= 32, num=2, den=1, stdev=1.00
+	quality= 3, filt_len= 48, num=2, den=1, stdev=1.00
+	quality= 4, filt_len= 64, num=2, den=1, stdev=1.00
+	quality= 5, filt_len= 80, num=2, den=1, stdev=1.00
+	quality= 6, filt_len= 96, num=2, den=1, stdev=1.00
+	quality= 7, filt_len=128, num=2, den=1, stdev=1.00
+	quality= 8, filt_len=160, num=2, den=1, stdev=1.00
+	quality= 9, filt_len=192, num=2, den=1, stdev=1.00
+	quality=10, filt_len=256, num=2, den=1, stdev=1.00
+	"""
+
+	# These constants were measured with 2**22 samples.
+
+	if num > den: # downsampling
+		return den * (
+			0.7224862140943990596,
+			0.7975021342935247892,
+			0.8547537598970208483,
+			0.8744072146753004704,
+			0.9075294214410336568,
+			0.9101523813406768859,
+			0.9280549396020538744,
+			0.9391809530012216189,
+			0.9539276644089494939,
+			0.9623083437067311285,
+			0.9684700588501590213
+			)[quality] / num
+	elif num < den: # upsampling
+		return (
+			0.7539740617648067467,
+			0.8270076656536116122,
+			0.8835072979478705291,
+			0.8966758456219333651,
+			0.9253434087537378838,
+			0.9255866674042573239,
+			0.9346487800036394900,
+			0.9415331868209220190,
+			0.9524608799160205752,
+			0.9624372769883490220,
+			0.9704505626409354324
+			)[quality]
+	else: # no change in sample rate
+		return 1

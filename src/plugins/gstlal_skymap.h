@@ -36,12 +36,14 @@
  */
 
 
-#ifndef __GSTLAL_COINC_H__
-#define __GSTLAL_COINC_H__
+#ifndef __GSTLAL_SKYMAP_H__
+#define __GSTLAL_SKYMAP_H__
 
 
 #include <gst/gst.h>
 #include <gst/base/gstcollectpads.h>
+#include <lal/LIGOMetadataTables.h>
+#include "wanalysis.h"
 
 
 G_BEGIN_DECLS
@@ -56,37 +58,55 @@ G_BEGIN_DECLS
  */
 
 
-#define GSTLAL_COINC_TYPE \
-	(gstlal_coinc_get_type())
-#define GSTLAL_COINC(obj) \
-	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_COINC_TYPE, GSTLALCoinc))
-#define GSTLAL_COINC_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_COINC_TYPE, GSTLALCoincClass))
-#define GST_IS_GSTLAL_COINC(obj) \
-	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_COINC_TYPE))
-#define GST_IS_GSTLAL_COINC_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_COINC_TYPE))
+#define GSTLAL_SKYMAP_TYPE \
+	(gstlal_skymap_get_type())
+#define GSTLAL_SKYMAP(obj) \
+	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_SKYMAP_TYPE, GSTLALSkymap))
+#define GSTLAL_SKYMAP_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_SKYMAP_TYPE, GSTLALSkymapClass))
+#define GST_IS_GSTLAL_SKYMAP(obj) \
+	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_SKYMAP_TYPE))
+#define GST_IS_GSTLAL_SKYMAP_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_SKYMAP_TYPE))
 
 
 typedef struct {
 	GstElementClass parent_class;
-} GSTLALCoincClass;
+} GSTLALSkymapClass;
 
 
 typedef struct {
 	GstElement element;
+
+	/* collectpads */
 	GstCollectPads *collect;
+	GstPadEventFunction collect_event;
+
+	/* pads & collectdatas */
 	GstPad* srcpad;
-	GHashTable* trigger_sequence_hash;
+	GstCollectData* coinc_collectdata;
+	GSList* snr_collectdatas;
+
+	/* timing */
 	guint64 dt;
-	guint padcounter;
-} GSTLALCoinc;
+	guint64 trigger_present_padding;
+	guint64 trigger_absent_padding;
+
+	/* template bank */
+	GMutex *bank_lock;
+	char *bank_filename;
+	SnglInspiralTable *bank;
+	int ntemplates;
+
+	/* analysis */
+	analysis wanalysis;
+} GSTLALSkymap;
 
 
-GType gstlal_coinc_get_type(void);
+GType gstlal_skymap_get_type(void);
 
 
 G_END_DECLS
 
 
-#endif	/* __GSTLAL_COINC_H__ */
+#endif	/* __GSTLAL_SKYMAP_H__ */
