@@ -16,7 +16,6 @@ elems = mkelems_fast(pipeline,
 	"lal_onlinehoftsrc", {"instrument": "L1"},
 	"audioresample", {"gap-aware": True},
 	"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=2048,width=64")},
-	"fakesink",
 	"lal_stripchart", {"samplesperbuffer": 2048*8, "y-min": -1e-16, "y-max": 1e-16},
 	"capsfilter", {"caps": gst.Caps("video/x-raw-rgb,width=1200,height=200,framerate=16/1")},
 	"ximagesink"
