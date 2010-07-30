@@ -34,7 +34,6 @@
 
 #include <glib.h>
 #include <gst/gst.h>
-#include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
 #include <gstlal.h>
 #include <gstlal_delay.h>
@@ -357,7 +356,7 @@ gstlal_delay_base_init(gpointer gclass)
  */
 static void gstlal_delay_class_init(GSTLALDelayClass *klass)
 {
-       GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
@@ -371,9 +370,8 @@ static void gstlal_delay_class_init(GSTLALDelayClass *klass)
 			"Amount of data (in samples) to ignore at front of stream.",
 			0, G_MAXUINT64, DEFAULT_DELAY,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-				   )
-					);
-
+		)
+	);
 
 }
 

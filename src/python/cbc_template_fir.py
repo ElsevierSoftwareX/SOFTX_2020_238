@@ -128,7 +128,7 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 	 (3) has an IFFT which is sampled at sample_rate Hz
 	"""
 	z = numpy.empty(int(round(sample_rate * duration)), "cdouble")
-	if approximant=="FindChirpSP":
+	if approximant=="FindChirpSP" or approximant=="TaylorF2":
 		spawaveform.waveform(template_bank_row.mass1, template_bank_row.mass2, order, 1.0 / duration, 1.0 / sample_rate, f_low, f_high, z)
 	elif approximant=="IMRPhenomB":
 		spawaveform.imrwaveform(template_bank_row.mass1, template_bank_row.mass2, 1.0/duration, f_low, z, template_bank_row.chi)

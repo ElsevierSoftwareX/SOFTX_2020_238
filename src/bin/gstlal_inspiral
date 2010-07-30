@@ -27,13 +27,6 @@
 #
 
 
-try:
-	import sqlite3
-except ImportError:
-        # pre 2.5.x
-	from pysqlite2 import dbapi2 as sqlite3
-import math
-import numpy
 from optparse import OptionParser
 import sys
 import os.path
@@ -42,143 +35,17 @@ import os
 from gstlal.pipeutil import *
 from gstlal.lloidparts import *
 
-try:
-	all
-except NameError:
-	# Python < 2.5 compatibility
-	from glue.iterutils import all
 from glue import segments
 from glue import segmentsUtils
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
-from glue.ligolw import utils
-from glue.ligolw.utils import process as ligolw_process
-from pylal import series as lalseries
 from pylal.datatypes import LIGOTimeGPS
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
 
+from gstlal import ligolw_output
 from gstlal import pipeio
-from gstlal import cbc_template_fir
-from gstlal import misc as gstlalmisc
 from gstlal import templates
-
-
-#
-# =============================================================================
-#
-#                                  Utilities
-#
-# =============================================================================
-#
-
-#
-# Read Approximant
-#
-
-def read_approximant(xmldoc):
-	approximant=ligolw_process.get_process_params(xmldoc, "tmpltbank", "--approximant")
-	approximant=approximant[0]
-
-	supported_approximants=[u'FindChirpSP', u'IMRPhenomB']
-	if approximant not in supported_approximants:
-		raise ValueError, "unsupported approximant %s"% approximant
-	return approximant
-
-#
-#check final frequency is populated and return the max final frequency
-#
-
-def check_ffinal_and_find_max_ffinal(xmldoc):
-	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
-	f_final=sngl_inspiral_table.getColumnByName("f_final")
-	if not all(f_final):
-		raise ValueError, "f_final column not populated"
-	return max(f_final)
-
-#
-# sum-of-squares false alarm probability
-#
-
-
-def sum_of_squares_threshold_from_fap(fap, coefficients):
-	return gstlalmisc.max_stat_thresh(coefficients, fap)
-	#return gstlalmisc.cdf_weighted_chisq_Pinv(coefficients, numpy.zeros(coefficients.shape, dtype = "double"), numpy.ones(coefficients.shape, dtype = "int"), 0.0, 1.0 - fap, -1, fap / 16.0)
-
-
-#
-# add metadata to an xml document in the style of lalapps_inspiral
-#
-
-
-def add_cbc_metadata(xmldoc, process, seg_in, seg_out):
-	#
-	# add entry to search_summary table
-	#
-
-	try:
-		tbl = lsctables.table.get_table(xmldoc, lsctables.SearchSummaryTable.tableName)
-	except ValueError:
-		tbl = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SearchSummaryTable))
-	search_summary = tbl.RowType()
-	search_summary.process_id = process.process_id
-	search_summary.shared_object = None # FIXME
-	search_summary.lalwrapper_cvs_tag = None # FIXME
-	search_summary.lal_cvs_tag = None # FIXME
-	search_summary.comment = process.comment
-	search_summary.set_ifos(process.get_ifos())
-	search_summary.set_in(seg_in)
-	search_summary.set_out(seg_out)
-	search_summary.nevents = None # FIXME
-	search_summary.nnodes = 1
-	tbl.append(search_summary)
-
-	#
-	# add entry to filter table
-	#
-
-	try:
-		tbl = lsctables.table.get_table(xmldoc, lsctables.FilterTable.tableName)
-	except ValueError:
-		tbl = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.FilterTable))
-	tbl.sync_next_id()
-	row = tbl.RowType()
-	row.process_id = process.process_id
-	row.program = process.program
-	row.start_time = int(seg_in[0])
-	row.filter_name = None # FIXME
-	row.filter_id = tbl.get_next_id()
-	row.param_set = None # FIXME
-	row.comment = process.comment
-	tbl.append(row)
-
-	#
-	# add entries to search_summvars table
-	#
-
-	try:
-		tbl = lsctables.table.get_table(xmldoc, lsctables.SearchSummVarsTable.tableName)
-	except ValueError:
-		tbl = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SearchSummVarsTable))
-	tbl.sync_next_id()
-	# FIXME
-
-	#
-	# add entries to summ_value table
-	#
-
-	try:
-		tbl = lsctables.table.get_table(xmldoc, lsctables.SummValueTable.tableName)
-	except ValueError:
-		tbl = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SummValueTable))
-	tbl.sync_next_id()
-	# FIXME
-
-	#
-	# done
-	#
-
-	return search_summary
+from gstlal.gstlal_svd_bank import build_bank
+from gstlal.gstlal_reference_psd import *
 
 
 #
@@ -197,63 +64,6 @@ class DetectorData(object):
 		self.frame_cache = frame_cache
 		self.channel = channel
 		self.block_size = block_size
-
-
-class Bank(object):
-	class BankFragment(object):
-		def __init__(self, rate, start, end):
-			self.rate = rate
-			self.start = start
-			self.end = end
-
-		def set_template_bank(self, template_bank, tolerance, snr_thresh, verbose = False):
-			if verbose:
-				print >>sys.stderr, "\t%d templates of %d samples" % template_bank.shape
-
-			self.orthogonal_template_bank, self.singular_values, self.mix_matrix, self.chifacs = cbc_template_fir.decompose_templates(template_bank, tolerance)
-
-			self.sum_of_squares_weights = numpy.sqrt(self.chifacs.mean() * gstlalmisc.ss_coeffs(self.singular_values,snr_thresh))
-
-			if verbose:
-				print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
-				print >>sys.stderr, "\tsum-of-squares expectation value is %g" % self.chifacs.mean()
-
-	def __init__(self, bank_xmldoc, psd, time_slices, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
-		# FIXME: remove template_bank_filename when no longer needed
-		# by trigger generator element
-		self.template_bank_filename = None
-		self.filter_length = max(time_slices['end'])
-		self.snr_threshold = snr_threshold
-		self.logname = logname
-
-		# Generate downsampled templates
-		template_bank, self.autocorrelation_bank, self.sigmasq = cbc_template_fir.generate_templates(
-			lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName ),
-			read_approximant(bank_xmldoc),
-			psd,
-			flow,
-			time_slices,
-			autocorrelation_length = autocorrelation_length,
-			verbose = verbose)
-
-		# Assign template banks to fragments
-		self.bank_fragments = [Bank.BankFragment(rate,begin,end) for rate,begin,end in time_slices]
-		for i, bank_fragment in enumerate(self.bank_fragments):
-			if verbose:
-				print >>sys.stderr, "constructing template decomposition %d of %d:  %g s ... %g s" % (i + 1, len(self.bank_fragments), -bank_fragment.end, -bank_fragment.start)
-			bank_fragment.set_template_bank(template_bank[i], tolerance, self.snr_threshold, verbose = verbose)
-
-		self.gate_threshold = sum_of_squares_threshold_from_fap(gate_fap, numpy.array([weight**2 for bank_fragment in self.bank_fragments for weight in bank_fragment.sum_of_squares_weights], dtype = "double"))
-		if verbose:
-			print >>sys.stderr, "sum-of-squares threshold for false-alarm probability of %.16g:  %.16g" % (gate_fap, self.gate_threshold)
-
-	def get_rates(self):
-		return set(bank_fragment.rate for bank_fragment in self.bank_fragments)
-
-	# FIXME: remove set_template_bank_filename when no longer needed
-	# by trigger generator element
-	def set_template_bank_filename(self,name):
-		self.template_bank_filename = name
 
 
 #
@@ -303,30 +113,6 @@ class LLOIDHandler(object):
 #
 
 
-def make_process_params(options):
-	params = {}
-
-	#
-	# required options
-	#
-
-	for option in ("gps_start_time", "gps_end_time", "instrument", "channel_name", "output"):
-		params[option] = getattr(options, option)
-	# FIXME:  what about template_bank?
-
-	#
-	# optional options
-	#
-
-	for option in ("frame_cache", "injections", "flow", "svd_tolerance", "reference_psd", "ortho_gate_fap", "snr_threshold", "write_pipeline", "write_psd", "fake_data", "online_data", "comment", "verbose"):
-		if getattr(options, option) is not None:
-			params[option] = getattr(options, option)
-
-	#
-	# done
-	#
-
-	return list(ligolw_process.process_params_from_dict(params))
 
 
 def parse_command_line():
@@ -380,7 +166,7 @@ def parse_command_line():
 		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
 
 	# do this before converting option types
-	process_params = make_process_params(options)
+	process_params = ligolw_output.make_process_params(options)
 
 	# If --gps-start-time is not specified, assume "beginning of time"
 	if options.gps_start_time is None:
@@ -400,95 +186,6 @@ def parse_command_line():
 	options.psd_fft_length = 8	# seconds
 
 	return options, filenames, process_params
-
-
-#
-# =============================================================================
-#
-#                               PSD Measurement
-#
-# =============================================================================
-#
-
-
-def measure_psd(instrument, seekevent, detector, seg, rate, fake_data = False, online_data = False, injection_filename = None, psd_fft_length = 8, verbose = False):
-	#
-	# pipeline handler for PSD measurement
-	#
-
-	class PSDHandler(object):
-		def __init__(self, mainloop, pipeline, verbose = False):
-			self.mainloop = mainloop
-			self.pipeline = pipeline
-			self.verbose = verbose
-
-			bus = pipeline.get_bus()
-			bus.add_signal_watch()
-			bus.connect("message", self.on_message)
-
-			self.psd = None
-
-		def on_message(self, bus, message):
-			if message.type == gst.MESSAGE_EOS:
-				self.pipeline.set_state(gst.STATE_NULL)
-				self.mainloop.quit()
-			elif message.type == gst.MESSAGE_ERROR:
-				gerr, dbgmsg = message.parse_error()
-				self.pipeline.set_state(gst.STATE_NULL)
-				self.mainloop.quit()
-				sys.exit("GStreamer error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
-			elif message.type == gst.MESSAGE_ELEMENT:
-				if message.structure.get_name() == "spectrum":
-					self.psd = pipeio.parse_spectrum_message(message)
-
-	#
-	# 8 FFT-lengths is just a ball-parky estimate of how much data is
-	# needed for a good PSD, this isn't a requirement of the code (the
-	# code requires a minimum of 1)
-	#
-
-	if float(abs(seg)) < 8 * psd_fft_length:
-		raise ValueError, "segment %s too short" % str(seg)
-
-	#
-	# build pipeline
-	#
-
-	mainloop = gobject.MainLoop()
-	pipeline = gst.Pipeline("psd")
-	handler = PSDHandler(mainloop, pipeline, verbose = verbose)
-
-	mkelems_fast(pipeline,
-		mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data=fake_data, online_data=online_data, injection_filename = injection_filename, verbose=verbose),
-		"audioresample", {"gap-aware": True, "quality": 9},
-		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % rate)},
-		"queue", {"max-size-buffers": 8},
-		"lal_whiten", {"psd-mode": 0, "zero-pad": 0, "fft-length": psd_fft_length, "average-samples": int(round(float(abs(seg)) / (psd_fft_length / 2) - 1)), "median-samples": 7},
-		"fakesink"
-	)
-
-	#
-	# process segment
-	#
-
-	pipeline.set_state(gst.STATE_PLAYING)
-	mainloop.run()
-
-	#
-	# done
-	#
-
-	return handler.psd
-
-
-def read_psd(filename, verbose = False):
-	return lalseries.parse_REAL8FrequencySeries(utils.load_filename(filename, gz = (filename or "stdin").endswith(".gz"), verbose = verbose))
-
-
-def write_psd(filename, psd, verbose = False):
-	xmldoc = ligolw.Document()
-	xmldoc.appendChild(ligolw.LIGO_LW()).appendChild(lalseries.build_REAL8FrequencySeries(psd))
-	utils.write_filename(xmldoc, filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose)
 
 
 #
@@ -560,112 +257,14 @@ else:
 # Make template banks
 #
 
-banks = []
-for n, filename in enumerate(options.template_bank):
-	# Open template bank file
-	bank_xmldoc = utils.load_filename(
-		filename,
-		gz = (filename or "stdin").endswith(".gz"),
-		verbose = options.verbose)
+banks = [
+	build_bank(filename, psd, options.flow, options.ortho_gate_fap, options.snr_threshold, options.svd_tolerance, options.verbose)
+	for filename in options.template_bank
+]
+for n, bank in enumerate(banks):
+	bank.logname = "bank%d" % n
 
-	# Get sngl inspiral table
-	bank_sngl_table = lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName )
 
-	# Choose how to break up templates in time
-	time_freq_bounds = templates.time_slices(
-		zip(bank_sngl_table.get_column('mass1'),bank_sngl_table.get_column('mass2')),
-		fhigh=check_ffinal_and_find_max_ffinal(bank_xmldoc),
-		flow = options.flow,
-		verbose=options.verbose)
-
-	# Generate templates, perform SVD, get orthogonal basis
-	# and store as Bank object
-	banks.append(
-		Bank(
-			bank_xmldoc,
-			psd,
-			time_freq_bounds,
-			gate_fap = options.ortho_gate_fap,
-			snr_threshold = options.snr_threshold,
-			tolerance = options.svd_tolerance,
-			flow = options.flow,
-			autocorrelation_length = 201,	# samples
-			logname = "bank%d" % n,
-			verbose = options.verbose
-		)
-	)
-
-	# FIXME: remove this loop when no longer needed
-	# by trigger generator element.
-	banks[n].set_template_bank_filename(filename)
-
-class Data(object):
-	def __init__(self, options):
-		self.tmp_space = options.tmp_space
-		self.xmldoc = None
-		self.output = options.output
-		self.seg = options.seg
-		self.out_seg = options.out_seg
-		self.injections = options.injections
-		self.comment = options.comment
-		self.verbose = options.verbose
-		self.sngl_inspiral_table = None
-		self.seg = options.seg
-		self.injection_file = options.injections
-		self.output = options.output
-		self.connection = None
-
-	def prepare_output_file(self):
-		xmldoc = ligolw.Document()
-		xmldoc.appendChild(ligolw.LIGO_LW())
-		self.process = ligolw_process.append_process(xmldoc, program = "gstlal_inspiral", comment = self.comment, ifos = set(detectors))
-		ligolw_process.append_process_params(xmldoc, self.process, process_params)
-		search_summary = add_cbc_metadata(xmldoc, self.process, self.seg, self.out_seg)
-		# FIXME:  argh, ugly
-		sngl_inspiral_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
-
-		sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))	# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
-
-		if self.output.endswith('.sqlite'):
-			from glue.ligolw.utils import ligolw_sqlite
-			from glue.ligolw import dbtables
-			self.working_filename = dbtables.get_connection_filename(self.output, tmp_path = self.tmp_space, verbose = self.verbose)
-			self.connection = sqlite3.connect(self.working_filename, check_same_thread=False)
-			# setup id remapping
-			dbtables.idmap_create(self.connection)
-			dbtables.DBTable.append = dbtables.DBTable._remapping_append
-			dbtables.idmap_sync(self.connection)
-			ligolw_sqlite.insert_from_xmldoc(self.connection, xmldoc, preserve_ids = False, verbose = self.verbose)
-			xmldoc.unlink()
-			if self.injection_file is not None:
-				ligolw_sqlite.insert_from_url(self.connection, self.injection_file, preserve_ids = False, verbose = self.verbose)
-				#utils.load_filename(self.injection_file, gz = (injection_file or "stdin").endswith(".gz"), verbose = self.verbose).unlink()
-			self.xmldoc = dbtables.get_xml(self.connection)
-			self.sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
-		else:
-			from glue.ligolw.utils import ligolw_add
-			self.xmldoc = xmldoc
-			self.sngl_inspiral_table = sngl_inspiral_table
-			if self.injection_file is not None:
-				ligolw_add.ligolw_add(self.xmldoc, [self.injection_file], verbose = self.verbose)
-				utils.load_filename(self.injection_file, gz = (self.injection_file or "stdin").endswith(".gz"), verbose = self.verbose)
-
-	def write_output_file(self):
-		if self.connection:
-			from glue.ligolw import dbtables
-			from pylal.date import XLALUTCToGPS
-			import time
-			self.connection.cursor().execute('UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)')
-			self.connection.cursor().execute('UPDATE process SET end_time = ?', (XLALUTCToGPS(time.gmtime()).seconds,))
-			self.connection.commit()
-			dbtables.build_indexes(self.connection, options.verbose)
-			dbtables.put_connection_filename(self.output, self.working_filename, verbose = self.verbose)
-		else:
-			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
-			search_summary = lsctables.table.get_table(self.xmldoc, lsctables.SearchSummaryTable.tableName)
-			search_summary.nevents = len(self.sngl_inspiral_table)
-			ligolw_process.set_process_end_time(self.process)
-			utils.write_filename(self.xmldoc, self.output, gz = (self.output or "stdout").endswith(".gz"), verbose = self.verbose)
 
 #
 # build pipeline
@@ -712,8 +311,8 @@ src = mkLLOIDmulti(
 #
 
 options.out_seg = segments.segment(options.seg[0]+max([b.filter_length for b in banks]), options.seg[1]) #FIXME make better outseg def.
-data = Data(options)
-data.prepare_output_file()
+data = ligolw_output.Data(options, detectors)
+data.prepare_output_file(process_params)
 
 def appsink_new_buffer(elem, data):
 	for row in sngl_inspirals_from_buffer(elem.get_property("last-buffer")):
