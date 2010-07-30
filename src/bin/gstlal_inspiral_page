@@ -20,12 +20,9 @@
 import sys, os
 from optparse import OptionParser
 from glue import cbcwebpage, lal
-from pylal import git_version
 from pylal.followup_page import *
 
 __author__ = "Erin Kara <ekara@ligo.caltech.edu>"
-__version__ = "git id %s" % git_version.id
-__date__ = git_version.date
 
 
 #######################################################################
