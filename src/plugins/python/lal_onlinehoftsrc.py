@@ -502,7 +502,7 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 
 		# Compute "good data" segment mask.
 		if self.__ifodesc.ifo == "V1":
-			segment_mask = (dq_array == self.get_property('virgo-data-quality'))
+			segment_mask = (dq_array >= int(self.get_property('virgo-data-quality')))
 		else:
 			dq_require = int(self.get_property('data-quality-require'))
 			dq_deny = int(self.get_property('data-quality-deny'))
