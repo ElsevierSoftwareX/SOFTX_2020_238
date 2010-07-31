@@ -103,7 +103,7 @@ for f in databases:
 	# Plot m1 vs m2
 	pylab.clf()
 	if len(params) > 0:
-		plot=pylab.scatter(params['mass1'], params['mass2'], c=params['snr'], edgecolor=None)
+		pylab.scatter(params['mass1'], params['mass2'], c=params['snr'], edgecolor=None)
 		pylab.colorbar().set_label("SNR")
 	pylab.xlabel("mass1")
 	pylab.ylabel("mass2")
@@ -119,7 +119,7 @@ for f in databases:
 	if len(params) > 0:
 		pylab.scatter(params['snr'], params['chisq'], c=params['mchirp'], edgecolor=None)
 		pylab.axis("tight")
-		pylab.colorbar(plot).set_label("mchirp")
+		pylab.colorbar().set_label("mchirp")
 	pylab.xlabel("SNR")
 	pylab.ylabel("ChiSq")
 	pylab.title("SNR vs. ChiSq for %s" %ifo)
