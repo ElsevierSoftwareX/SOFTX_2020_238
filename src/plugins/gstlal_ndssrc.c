@@ -631,15 +631,15 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         }
 
         element->needs_seek = FALSE;
-    } else {
-        GST_INFO_OBJECT(element, "daq_recv_next");
-        retval = -daq_recv_next(element->daq);
-        if (retval < 0)
-        {
-            DAQ_GST_ERROR_OBJECT(element, "daq_recv_next", retval);
-            return GST_FLOW_ERROR;
-        }
     }
+
+	GST_INFO_OBJECT(element, "daq_recv_next");
+	retval = -daq_recv_next(element->daq);
+	if (retval < 0)
+	{
+		DAQ_GST_ERROR_OBJECT(element, "daq_recv_next", retval);
+		return GST_FLOW_ERROR;
+	}
 
     int data_length = element->daq->chan_req_list->status;
     guint64 nsamples = data_length / bytes_per_sample;
