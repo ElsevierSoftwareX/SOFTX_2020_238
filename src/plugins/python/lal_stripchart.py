@@ -24,6 +24,7 @@ __author__ = "Leo Singer <leo.singer@ligo.org>"
 from gstlal.pipeutil import *
 from gstlal import pipeio
 from gstlal import matplotlibhelper
+from matplotlib.transforms import Bbox
 import numpy
 
 
@@ -114,7 +115,7 @@ class lal_stripchart(matplotlibhelper.BaseMatplotlibTransform):
 	def do_set_property(self, prop, val):
 		"""gobject->set_property virtual method."""
 		if prop.name == 'y-autoscale':
-			self.axes.set_autoscaley_on(val)
+			self.__y_autoscale = val
 		elif prop.name == 'y-min':
 			self.axes.set_ylim(val, self.axes.get_ylim()[1])
 		elif prop.name == 'y-max':
@@ -130,7 +131,7 @@ class lal_stripchart(matplotlibhelper.BaseMatplotlibTransform):
 	def do_get_property(self, prop):
 		"""gobject->get_property virtual method."""
 		if prop.name == 'y-autoscale':
-			return self.axes.get_autoscaley_on()
+			return self.__y_autoscale
 		elif prop.name == 'y-min':
 			return self.axes.get_ylim()[0]
 		elif prop.name == 'y-max':
@@ -196,7 +197,13 @@ class lal_stripchart(matplotlibhelper.BaseMatplotlibTransform):
 			if samples_to_pop > samplesperbuffer:
 				inbuf = inbuf.create_sub((samples_to_pop - samplesperbuffer) * self.__in_unit_size, samplesperbuffer * self.__in_unit_size)
 			data = array_from_audio_buffer(inbuf, self.__incaps).flatten()
-			self.line2D.set_ydata(numpy.concatenate( (self.line2D.get_ydata()[len(data):], data) ))
+			data = numpy.concatenate( (self.line2D.get_ydata()[len(data):], data) )
+			if self.__y_autoscale:
+				min = data.min()
+				max = data.max()
+				diff = max - min
+				self.axes.set_ylim(min - 0.1 * diff, max + 0.1 * diff)
+			self.line2D.set_ydata(data)
 
 			last_offset_to_pop = self.__last_offset_to_pop()
 			if last_offset_to_pop <= self.__last_in_offset_end:
