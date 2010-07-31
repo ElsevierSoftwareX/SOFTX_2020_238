@@ -637,7 +637,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	retval = -daq_recv_next(element->daq);
 	if (retval < 0)
 	{
-		DAQ_GST_ERROR_OBJECT(element, "daq_recv_next", retval);
+		DAQ_GST_ERROR_OBJECT(element, "daq_recv_next", -retval);
 		return GST_FLOW_ERROR;
 	}
 
