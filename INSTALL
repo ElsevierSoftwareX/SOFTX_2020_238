@@ -126,7 +126,7 @@ home directory with::
   $ cd /path/to/local/
   $ cat >environment.sh <<_EOF_
   export PATH="/path/to/local/bin:\${PATH}"
-  export PKG_CONFIG_PATH="/path/to/local/lib/pkgconfig:/usr/lib64/pkgconfig"
+  export PKG_CONFIG_PATH="/path/to/local/lib/pkgconfig:\${PKG_CONFIG_PATH}"
   export PYTHONPATH="/path/to/local/lib64/python2.4/site-packages:/path/to/local/lib/python2.4/site-packages:\${PYTHONPATH}"
   _EOF_
 
@@ -157,14 +157,26 @@ convenience we have added URL shortcuts to download versions that we have tested
  * flex:      http://prdownloads.sourceforge.net/flex/flex-2.5.35.tar.gz?download
  * pkgconfig: http://pkgconfig.freedesktop.org/releases/pkg-config-0.23.tar.gz
 
-Installing each of these using the standard recipe: download, extract, enter
-the directory, configure, and make install::
+Installing each of these **except** pkgconfig using the standard recipe:
+download, extract, enter the directory, configure, and make install::
     
   $ cd /path/to/local/src
   $ wget *url*
   $ tar xzvf *tarball name*
   $ pushd *directory*
-  $ ./configure --prefix=/path/to/local && make install
+  $ ./configure --prefix=/path/to/local && make -j install
+  $ popd
+
+When you get to pkgconfig, follow a slightly modified recipe.  Although you need
+to upprade pkgconfig in order to build GStreamer, you need your new pkgconfig
+installation to pick up the system-level .pc path.  To do this, install
+pkgconfig using the following incantation::
+
+  $ cd /path/to/local/src
+  $ wget http://pkgconfig.freedesktop.org/releases/pkg-config-0.23.tar.gz
+  $ tar xzvf pkg-config-0.23.tar.gz
+  $ pushd pkg-config-0.23
+  $ ./configure --prefix=/path/to/local --with-pc-path=/usr/lib64/pkgconfig && make -j install
   $ popd
 
 Now continue to the section `Downloading and Installing Dependencies`_.
@@ -211,7 +223,7 @@ procedure on a fresh Mac box.)  Every time you see a command starting with
   $ sudo port install python26
   $ sudo port install python_select
   $ sudo python_select python26
-  $ sudo port install wget fftw-3 fftw-3-single py26-numpy py26-scipy py26-matplotlib liboil glib2 py26-gobject py26-gtk git-core gsl
+  $ sudo port install wget fftw-3 fftw-3-single py26-numpy py26-scipy py26-matplotlib liboil glib2 py26-gobject py26-gtk git-core gsl libframe metaio
  
 
 Mac OS X Environment
@@ -355,7 +367,7 @@ gst-plugins-base source tree locally::
   $ cd /path/to/local/src
   $ pushd gst-plugins-base
   $ wget https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal/audioresample.patch
-  $ patch -p1 <audioresample.patch
+  $ git apply audioresample.patch
   $ popd
 
 
@@ -385,28 +397,43 @@ the original patch locally to allow our pipelines to work::
 Patching gst-python
 ===================
 
-Skip this section and continue to `Installing the Software`_ **UNLESS** your 
-system is running Mac OS X or CentOS.
+The current source release of gst-python has some bugs that have not yet been
+fixed.  We have proposed some workarounds to the GStreamer developers, but they
+are still under review.  In the mean time you can apply the patches yourself.
+Here are the bug reports:
 
-The current source release of gst-python fails to locate libpython, the library
-against which Python shared objects must be linked.  A workaround has been 
-proposed to the GStreamer developers, but is under review.  The bug report is 
-at <https://bugzilla.gnome.org/show_bug.cgi?id=616553>.  As a temporary 
-workaround, you can apply the proposed patch.
+ * `623105 <https://bugzilla.gnome.org/show_bug.cgi?id=623105>`_ gstpythonplugin.c does not import user's gobject module
+ * `620067 <https://bugzilla.gnome.org/show_bug.cgi?id=620067>`_ Add bindings gst.util_uint64_scale_ceil and friends
+ * `625660 <https://bugzilla.gnome.org/show_bug.cgi?id=625660>`_ gstpythonplugin: fails to refresh plugin registry when installed Python plugins change
+ * `616553 <https://bugzilla.gnome.org/show_bug.cgi?id=616553>`_ Configuring gst-python on Mac OS fails: "checking for libraries required to embed python"
+ 
+The following patches are **required on ALL systems**::
 
-If you are on Mac OS::
-  
   $ cd /path/to/local/src
   $ pushd gst-python
-  $ wget https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal/gst-python.mac.patch
-  $ git apply gst-python.mac.patch
+  $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=164869 -O gst-python.plugins.patch
+  $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=162291 -O gst-python.defs.patch
+  $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=166837 -O gst-python.path.patch
+  $ git apply gst-python.plugins.patch
+  $ git apply gst-python.defs.patch
+  $ git apply gst-python.path.patch
+  $ popd
 
-And if you are on CentOS::
-  
+And the following patch is **required on CentOS**::
+
   $ cd /path/to/local/src
   $ pushd gst-python
   $ wget https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal/gst-python.centos.patch
   $ git apply gst-python.centos.patch
+  $ popd
+
+And the following patch is **required on Mac OS**::
+
+  $ cd /path/to/local/src
+  $ pushd gst-python
+  $ wget https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal/gst-python.mac.patch
+  $ git apply gst-python.mac.patch
+  $ popd
 
 
 Installing the Software
@@ -449,9 +476,33 @@ Installing the Software
     .. NOTE:: Ignore warnings about "failed to install schema", these appear 
               to be harmless.
     
-    .. NOTE:: On CentOS, building gst-plugins-bad may fail while building the 
-              plugin ``apexsink``.  If this occurs, you can configure 
-              gst-plugins-bad with the flag ``--disable-apexsink`` to skip it.
+    .. NOTE:: Occasionally, a few of the libraries provided by ``gst-plugins-good``
+              and ``gst-plugins-bad`` will fail to build because compiler warnings
+              that occur on only certain (usually older) versions of gcc.
+              Because the GStreamer build system is set up to report warnings as
+              errors, the installation process cannot procede if this occurs.
+
+              Often, we don't need the broken plugins anyway, so in most cases
+              you can disable them.
+              
+              For example, to disable ``apexsink``, you might search for the
+              configure flag as follows::
+              
+                $ cd gst-plugins-bad
+                $ ./configure --help | grep apexsink
+                  --disable-apexsink           disable AirPort Express Wireless sink: apexsink
+              
+              Noticing that ``--disable-apexsink`` turns off this broken feature,
+              you would re-configure and then install the package this way::
+              
+                $ ./configure --prefix=/path/to/local --disable-apexsink && make -j install
+              
+              At the time of this writing, the following plugins may fail to
+              compile on CentOS:
+              
+               * ``imagefreeze`` in ``gst-plugins-good``
+               * ``apexsink`` in ``gst-plugins-bad``
+               * ``frei0r`` in ``gst-plugins-bad``
  
  4. Install gstlal with::
     

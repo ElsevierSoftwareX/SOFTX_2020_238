@@ -1,0 +1,108 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2010  Kipp Cannon, Chad Hanna, Leo Singer
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# parse command line
+#
+
+# FIXME: Move some common options to a module.
+from optparse import OptionParser
+from glue import segments
+from pylal.datatypes import LIGOTimeGPS
+
+parser = OptionParser(
+	version = "%prog ??",
+	usage = "%prog [options]",
+	description = "Stream-based inspiral analysis tool"
+)
+parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
+parser.add_option("--online-data", action = "store_true", help = "Use online DMT-STRAIN instead of a frame file (optional).")
+parser.add_option("--fake-data", action = "store_true", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
+parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
+parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
+parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
+parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
+parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
+parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (required).")
+parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+options, filenames = parser.parse_args()
+
+if sum(1 for option in ('frame_cache', 'fake_data', 'online_data') if getattr(options, option) is not None) != 1:
+	raise ValueError, "must provide exactly one of --frame-cache, --fake-data, --online-data"
+
+required_options = ["instrument", "gps_start_time", "gps_end_time", "write_psd"]
+
+if options.frame_cache:
+	required_options += ["channel_name"]
+
+missing_options = [option for option in required_options if getattr(options, option) is None]
+if missing_options:
+	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+
+options.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
+
+options.psd_fft_length = 8	# seconds
+
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+
+from gstlal.gstlal_reference_psd import *
+from gstlal.pipeutil import gst
+
+
+# FIXME: This is a silly class.
+class DetectorData(object):
+	# default block_size = 16384 samples/second * 8 bytes/sample * 8
+	# second
+	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 8):
+		self.frame_cache = frame_cache
+		self.channel = channel
+		self.block_size = block_size
+
+
+write_psd(
+	options.write_psd,
+	measure_psd(
+		options.instrument,
+		gst.event_new_seek(
+			1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_KEY_UNIT,
+			gst.SEEK_TYPE_SET, options.seg[0].ns(),
+			gst.SEEK_TYPE_SET, options.seg[1].ns()
+		),
+		DetectorData(options.frame_cache, options.channel_name),
+		options.seg,
+		2 * 2048,	# Hz;  must not be less than highest bank fragment sample rate (see below)
+		psd_fft_length = options.psd_fft_length,
+		fake_data = options.fake_data,
+		online_data = options.online_data,
+		injection_filename = options.injections,
+		verbose = options.verbose
+	),
+	verbose=options.verbose
+)

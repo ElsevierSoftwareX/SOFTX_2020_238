@@ -30,15 +30,7 @@ from optparse import OptionParser
 import sys
 
 
-import pygtk
-pygtk.require("2.0")
-import gobject
-import pygst
-pygst.require("0.10")
-import gst
-
-
-gobject.threads_init()
+from gstlal.pipeutil import *
 
 
 from glue import segments
@@ -199,7 +191,7 @@ head = build_source(
 )
 head = build_pipeline(
 	pipeline,
-	head
+	head,
 	options.psd_fft_length,
 	options.average_length,
 	options.median_samples,
@@ -207,8 +199,7 @@ head = build_pipeline(
 )
 build_sink(
 	pipeline,
-	head,
-	verbose = options.verbose
+	head
 )
 
 handler = Handler(mainloop, pipeline, verbose = options.verbose)

@@ -43,6 +43,7 @@ import glue.ligolw.utils as utils
 import glue.ligolw.utils.segments as ligolw_segments
 from pylal import ligolw_tisi
 from lalapps import power
+from pylal.datatypes import LIGOTimeGPS
 from gstlal import dagparts as gstlaldagparts
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -95,7 +96,7 @@ def make_coinc_branch(dag, datafinds, seglists, time_slides, vetoes_cache, tag, 
 	# injection job
 	#
 
-	if options.injections:
+	if do_injections:
 		injnodes = gstlaldagparts.make_inspinj_fragment(dag, seglists.extent_all(), tag, 0.0)
 	else:
 		injnodes = set()
@@ -136,10 +137,7 @@ def make_coinc_branch(dag, datafinds, seglists, time_slides, vetoes_cache, tag, 
 		tisi_cache = set([time_slides_cache_entry])
 		nodes = set()
 		for seg, parents, cache in power.group_coinc_parents(trigger_nodes, these_time_slides, verbose = verbose):
-			preserve_cache = inj_cache | tisi_cache | vetoes_cache
-			if not options.injections:
-				preserve_cache |= cache
-			nodes |= power.make_lladd_fragment(dag, parents | injnodes, "%s_%d" % (tag, n), segment = seg, input_cache = cache | inj_cache, extra_input_cache = tisi_cache | vetoes_cache, preserve_cache = preserve_cache)
+			nodes |= power.make_lladd_fragment(dag, parents | injnodes, "%s_%d" % (tag, n), segment = seg, input_cache = cache | inj_cache, extra_input_cache = tisi_cache | vetoes_cache, remove_input = False, preserve_cache = inj_cache | tisi_cache | vetoes_cache)
 
 		#
 		# ligolw_thinca
@@ -272,6 +270,21 @@ background_seglists = segments.segmentlistdict()
 for filename in [options.time_slides]:
 	cache_entry = CacheEntry(None, None, None, "file://localhost" + os.path.abspath(filename))
 	background_time_slides[cache_entry] = ligolw_tisi.load_time_slides(filename, verbose = options.verbose, gz = filename.endswith(".gz")).values()
+
+	# Convert all time slide values to LIGOTimeGPS (which is a fixed width integer time format)
+	# because otherwise segmentlistdict.offsets.clear() introduces nanosecond-scale
+	# errors through inconsistent rounding.
+	#
+	# FIXME: come up with a better solution to this.  Make ligolw_tisi produce
+	# integer nanosecond offsets?  Fix rounding issue in segmentlistdict.offsets.clear()?
+	#
+	# See PR 3434.
+
+	for v1 in background_time_slides.values():
+		for v2 in v1:
+			for k in v2.iterkeys():
+				v2[k] = LIGOTimeGPS(v2[k])
+
 	background_seglists |= gstlaldagparts.compute_segment_lists(seglists, background_time_slides[cache_entry], min_segment_length, verbose = options.verbose)
 
 

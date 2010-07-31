@@ -1,1 +1,1 @@
-SUBDIRS = lib onlinehoft plugins python bin utilities
+SUBDIRS = lib skymap plugins python bin utilities

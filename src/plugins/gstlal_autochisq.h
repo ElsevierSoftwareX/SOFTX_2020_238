@@ -106,6 +106,12 @@ typedef struct {
 	guint64 next_in_offset;
 	guint64 next_out_offset;
 	gboolean need_discont;
+
+	/*
+	 * Conditional evaluation
+	 */
+	double snr_thresh;
+
 } GSTLALAutoChiSq;
 
 

@@ -42,10 +42,8 @@
 
 
 #include <gst/gst.h>
-#include <gst/base/gstbasesink.h>
 #include <gst/base/gstcollectpads.h>
 #include <gstlalcollectpads.h>
-#include <lal/LIGOLwXML.h>
 #include <lal/LIGOMetadataTables.h>
 
 
@@ -112,42 +110,6 @@ typedef struct {
 
 
 GType gstlal_triggergen_get_type(void);
-
-
-/*
- * ============================================================================
- *
- *                             Trigger XML Writer
- *
- * ============================================================================
- */
-
-
-#define GSTLAL_TRIGGERXMLWRITER_TYPE \
-	(gstlal_triggerxmlwriter_get_type())
-#define GSTLAL_TRIGGERXMLWRITER(obj) \
-	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_TRIGGERXMLWRITER_TYPE, GSTLALTriggerXMLWriter))
-#define GSTLAL_TRIGGERXMLWRITER_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_TRIGGERXMLWRITER_TYPE, GSTLALTriggerXMLWriterClass))
-#define GST_IS_GSTLAL_TRIGGERXMLWRITER(obj) \
-	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_TRIGGERXMLWRITER_TYPE))
-#define GST_IS_GSTLAL_TRIGGERXMLWRITER_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_TRIGGERXMLWRITER_TYPE))
-
-
-typedef struct {
-	GstBaseSinkClass parent_class;
-} GSTLALTriggerXMLWriterClass;
-
-
-typedef struct {
-	GstBaseSink element;
-	char *location;
-	LIGOLwXMLStream *xml;
-} GSTLALTriggerXMLWriter;
-
-
-GType gstlal_triggerxmlwriter_get_type(void);
 
 
 G_END_DECLS

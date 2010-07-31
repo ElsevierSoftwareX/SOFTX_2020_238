@@ -60,6 +60,7 @@ typedef struct {
 	char *full_channel_name;
 	gint rate;
 	gint width;
+	gboolean need_tags;
 
 	FrStream *stream;
 	LALTYPECODE series_type;

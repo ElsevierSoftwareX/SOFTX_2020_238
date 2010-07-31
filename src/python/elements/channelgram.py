@@ -24,36 +24,14 @@
 #
 
 
-import matplotlib
-matplotlib.rcParams.update({
-	"font.size": 8.0,
-	"axes.titlesize": 10.0,
-	"axes.labelsize": 10.0,
-	"xtick.labelsize": 8.0,
-	"ytick.labelsize": 8.0,
-	"legend.fontsize": 8.0,
-	"figure.dpi": 100,
-	"savefig.dpi": 100,
-	"text.usetex": True,
-	"path.simplify": True
-})
-from matplotlib import figure
 from matplotlib import cm as colourmap
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy
 
 
-import pygtk
-pygtk.require("2.0")
-import gobject
-import pygst
-pygst.require('0.10')
-import gst
-from gst.extend.pygobject import gproperty
-
-
+from gstlal.pipeutil import *
+from gstlal import matplotlibhelper
 from gstlal import pipeio
-from gstlal.elements import matplotlibcaps
+from gst.extend.pygobject import gproperty
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -143,7 +121,7 @@ def yticks(min, max, n):
 	return sorted(set(min + int(round(delta * i)) for i in range(n + 1)))
 
 
-class Channelgram(gst.BaseTransform):
+class Channelgram(matplotlibhelper.BaseMatplotlibTransform):
 	gproperty(
 		gobject.TYPE_DOUBLE,
 		"plot-width",
@@ -185,26 +163,15 @@ class Channelgram(gst.BaseTransform):
 				"signed = (bool) {true, false}"
 			)
 		),
-		gst.PadTemplate("src",
-			gst.PAD_SRC,
-			gst.PAD_ALWAYS,
-			gst.caps_from_string(
-				matplotlibcaps + ", " +
-				"width = (int) [1, MAX], " +
-				"height = (int) [1, MAX], " +
-				"framerate = (fraction) [0, MAX]"
-			)
-		)
+		matplotlibhelper.BaseMatplotlibTransform.__gsttemplates__
 	)
 
 
 	def __init__(self):
-		gst.BaseTransform.__init__(self)
+		super(Channelgram, self).__init__()
 		self.channels = None
 		self.in_rate = None
 		self.out_rate = None
-		self.out_width = 320	# default, pixels
-		self.out_height = 200	# default, pixels
 		self.set_property("plot-width", 0.0)	# seconds, 0 = 1/framerate
 		self.instrument = None
 		self.channel_name = None
@@ -218,8 +185,6 @@ class Channelgram(gst.BaseTransform):
 			self.queue = ArrayQueue()
 		self.channels = channels
 		self.out_rate = outcaps[0]["framerate"]
-		self.out_width = outcaps[0]["width"]
-		self.out_height = outcaps[0]["height"]
 		return True
 
 
@@ -228,10 +193,6 @@ class Channelgram(gst.BaseTransform):
 		self.offset0 = None
 		self.next_out_offset = None
 		return True
-
-
-	def do_get_unit_size(self, caps):
-		return pipeio.get_unit_size(caps)
 
 
 	def do_event(self, event):
@@ -258,10 +219,8 @@ class Channelgram(gst.BaseTransform):
 		# generate pseudocolor plot
 		#
 
-		fig = figure.Figure()
-		FigureCanvas(fig)
-		fig.set_size_inches(self.out_width / float(fig.get_dpi()), self.out_height / float(fig.get_dpi()))
-		axes = fig.gca(rasterized = True)
+		axes = self.axes
+		axes.clear()
 		x, y = map(lambda n: numpy.arange(n + 1, dtype = "double"), samples.shape)
 		x = x / self.in_rate + float(samples_timestamp) / gst.SECOND
 		y -= 0.5
@@ -288,19 +247,10 @@ class Channelgram(gst.BaseTransform):
 		axes.set_ylabel(r"Channel Number")
 
 		#
-		# extract pixel data
-		#
-
-		fig.canvas.draw()
-		rgba_buffer = fig.canvas.buffer_rgba(0, 0)
-		rgba_buffer_size = len(rgba_buffer)
-
-		#
 		# copy pixel data to output buffer
 		#
 
-		outbuf[0:rgba_buffer_size] = rgba_buffer
-		outbuf.datasize = rgba_buffer_size
+		matplotlibhelper.render(self.figure, outbuf)
 
 		#
 		# done
@@ -354,7 +304,7 @@ class Channelgram(gst.BaseTransform):
 			return gst.FLOW_CUSTOM_SUCCESS
 
 		while len(self.queue) >= 2 * samples_per_frame:
-			flow_return, newoutbuf = self.get_pad("src").alloc_buffer(self.next_out_offset, self.out_width * self.out_height * 4, outbuf.caps)
+			flow_return, newoutbuf = self.get_pad("src").alloc_buffer(self.next_out_offset, outbuf.size, outbuf.caps)
 			samples, timestamp = self.queue.get(samples_per_frame)
 			self.queue.flush(samples_flushed_per_frame)
 			self.get_pad("src").push(self.make_frame(samples, timestamp, newoutbuf))
@@ -367,24 +317,6 @@ class Channelgram(gst.BaseTransform):
 		#
 
 		return gst.FLOW_OK
-
-
-	def do_transform_caps(self, direction, caps):
-		if direction == gst.PAD_SRC:
-			#
-			# convert src pad's caps to sink pad's
-			#
-
-			return self.get_pad("sink").get_fixed_caps_func()
-
-		elif direction == gst.PAD_SINK:
-			#
-			# convert sink pad's caps to src pad's
-			#
-
-			return self.get_pad("src").get_fixed_caps_func()
-
-		raise ValueError
 
 
 	def do_transform_size(self, direction, caps, size, othercaps):
@@ -408,26 +340,7 @@ class Channelgram(gst.BaseTransform):
 			return samples * (othercaps[0]["width"] // 8) * othercaps[0]["channels"]
 
 		elif direction == gst.PAD_SINK:
-			#
-			# convert byte count on sink pad plus samples we
-			# already have to frame count on src pad.
-			#
-
-			frames = (int(size * 8 / caps[0]["width"]) // caps[0]["channels"] + len(self.queue)) / samples_per_frame
-
-			#
-			# if there's enough for at least one frame, claim
-			# output size will be 1 frame.  additional buffers
-			# will be created as needed
-			#
-
-			if frames < 1:
-				return 0
-			# FIXME:  why is othercaps not the *other* caps?
-			return self.out_width * self.out_height * 4
-			return othercaps[0]["width"] * othercaps[0]["height"] * othercaps[0]["bpp"] / 8
-
-		raise ValueError, direction
+			return super(Channelgram, self).do_transform_size(direction, caps, size, othercaps)
 
 
 gobject.type_register(Channelgram)
