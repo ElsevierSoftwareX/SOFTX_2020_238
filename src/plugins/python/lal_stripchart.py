@@ -142,46 +142,80 @@ class lal_stripchart(matplotlibhelper.BaseMatplotlibTransform):
 	def do_set_caps(self, incaps, outcaps):
 		self.__incaps = incaps
 		self.__outcaps = outcaps
+		self.__in_t0 = gst.CLOCK_TIME_NONE
+		self.__in_offset0 = gst.BUFFER_OFFSET_NONE
+		self.__last_in_offset_end = gst.BUFFER_OFFSET_NONE
+		self.__last_out_offset_end = gst.BUFFER_OFFSET_NONE
+		self.__in_rate = incaps[0]["rate"]
+		self.__in_unit_size = pipeio.get_unit_size(incaps)
+		self.__framerate = outcaps[0]["framerate"]
 		return True
+
+
+	def __last_offset_to_pop(self):
+		return gst.util_uint64_scale(
+			self.__last_out_offset_end,
+			self.__framerate.denom * self.__in_rate,
+			self.__framerate.num) + self.__in_offset0
+
+
+	def __render(self, buf, samples_popped):
+		matplotlibhelper.render(self.figure, buf)
+		buf.offset = self.__last_out_offset_end
+		self.__last_out_offset_end += 1
+		buf.offset_end = self.__last_out_offset_end
+		buf.timestamp = gst.util_uint64_scale(self.__last_in_offset_end - self.__in_offset0, gst.SECOND, self.__in_rate) + self.__in_t0
+		self.__last_in_offset_end += samples_popped
+		buf.duration = gst.util_uint64_scale(self.__last_in_offset_end - self.__in_offset0, gst.SECOND, self.__in_rate) + self.__in_t0 - buf.timestamp
 
 
 	def do_transform(self, inbuf, outbuf):
 		"""GstBaseTransform->transform virtual method."""
 
+		samplesperbuffer = self.get_property("samplesperbuffer")
+
+		if self.__in_t0 == gst.CLOCK_TIME_NONE:
+			self.__in_t0 = inbuf.timestamp
+			self.__in_offset0 = inbuf.offset
+			self.__last_in_offset_end = inbuf.offset
+			self.__last_out_offset_end = 0
+
 		self.__adapter.push(inbuf)
 
-		sink_unit_size = pipeio.get_unit_size(self.__incaps)
-		framerate = self.__outcaps[0]["framerate"]
-		nsamples_to_take = long(self.__incaps[0]["rate"] / float(framerate))
-		nbytes_to_take = nsamples_to_take * sink_unit_size
-
-		sinkpad = self.sink_pads().next()
-		srcpad = self.src_pads().next()
-
-		any_frames = False
-		inbuf = self.__adapter.take_buffer(nbytes_to_take)
-		while inbuf is not None:
-			any_frames = True
-			self.line2D.set_ydata(numpy.concatenate(
-				(
-					self.line2D.get_ydata()[nsamples_to_take:],
-					array_from_audio_buffer(inbuf, self.__incaps).flatten()
-				)
-			))
-			inbuf = self.__adapter.take_buffer(nbytes_to_take)
-			if inbuf is not None:
-				buf = gst.buffer_new_and_alloc(outbuf.size)
-				buf.caps = outbuf.caps
-				matplotlibhelper.render(self.figure, buf)
-				retval = srcpad.push(buf)
-				if retval != gst.FLOW_OK:
-					return retval
-
-		if any_frames:
-			matplotlibhelper.render(self.figure, outbuf)
-			return gst.FLOW_OK
-		else:
+		last_offset_to_pop = self.__last_offset_to_pop()
+		if last_offset_to_pop <= self.__last_in_offset_end:
+			self.__last_out_offset_end += 1
 			return gst.FLOW_CUSTOM_SUCCESS
+		new_samples_to_pop = last_offset_to_pop - self.__last_in_offset_end
+		inbuf = self.__adapter.take_buffer(new_samples_to_pop * self.__in_unit_size)
+		if inbuf is None:
+			return gst.FLOW_CUSTOM_SUCCESS
+
+		while True:
+			samples_to_pop = new_samples_to_pop
+			if samples_to_pop > samplesperbuffer:
+				inbuf = inbuf.create_sub((samples_to_pop - samplesperbuffer) * self.__in_unit_size, samplesperbuffer * self.__in_unit_size)
+			data = array_from_audio_buffer(inbuf, self.__incaps).flatten()
+			self.line2D.set_ydata(numpy.concatenate( (self.line2D.get_ydata()[len(data):], data) ))
+
+			last_offset_to_pop = self.__last_offset_to_pop()
+			if last_offset_to_pop <= self.__last_in_offset_end:
+				self.__last_out_offset_end += 1
+				break
+			new_samples_to_pop = last_offset_to_pop - self.__last_in_offset_end
+			inbuf = self.__adapter.take_buffer(new_samples_to_pop * self.__in_unit_size)
+			if inbuf is None:
+				break
+
+			buf = gst.buffer_new_and_alloc(outbuf.size)
+			buf.caps = outbuf.caps
+			self.__render(buf, samples_to_pop)
+			retval = self.src_pads().next().push(buf)
+			if retval != gst.FLOW_OK:
+				return retval
+
+		self.__render(outbuf, samples_to_pop)
+		return gst.FLOW_OK
 
 
 # Register element class
