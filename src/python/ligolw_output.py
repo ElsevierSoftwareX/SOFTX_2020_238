@@ -203,7 +203,7 @@ class Data(object):
 			self.connection.cursor().execute('UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)')
 			self.connection.cursor().execute('UPDATE process SET end_time = ?', (XLALUTCToGPS(time.gmtime()).seconds,))
 			self.connection.commit()
-			dbtables.build_indexes(self.connection, options.verbose)
+			dbtables.build_indexes(self.connection, self.verbose)
 			dbtables.put_connection_filename(self.output, self.working_filename, verbose = self.verbose)
 		else:
 			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
