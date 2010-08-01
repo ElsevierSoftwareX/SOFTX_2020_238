@@ -105,6 +105,7 @@ gstlal_ndssrc_nds_version_get_type (void)
 {
     static GType nds_version_type = 0;
     static const GEnumValue nds_version_values[] = {
+		{nds_try, "Automatic", "auto"},
         {nds_v1, "NDS Version 1", "v1"},
         {nds_v2, "NDS Version 2", "v2"},
         {0, NULL, NULL},
@@ -119,7 +120,7 @@ gstlal_ndssrc_nds_version_get_type (void)
 
 
 static const int DEFAULT_PORT = 31200;
-static const enum nds_version DEFAULT_VERSION = nds_v2;
+static const enum nds_version DEFAULT_VERSION = nds_try;
 
 
 #define DAQ_GST_ERROR_OBJECT(element, msg, errnum) GST_ERROR_OBJECT((element), "%s: error %d: %s", (msg), (errnum), daq_strerror(errnum))
