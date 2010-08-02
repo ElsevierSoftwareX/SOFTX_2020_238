@@ -31,6 +31,7 @@
 #include <math.h>
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/base/gstadapter.h>
 #include <gsl/gsl_matrix.h>
 #include <gstlal.h>
 #include <gstlal_triggergen.h>
@@ -59,7 +60,12 @@
 
 
 #define DEFAULT_SNR_THRESH 5.5
-#define DEFAULT_MAX_GAP 0.01
+#define DEFAULT_MAX_GAP 1.0
+
+enum trigger_algorithm {
+	MAX_OVER_THRESHOLD = 1,
+	BOUNDED_LATENCY
+};
 
 
 /*
@@ -215,6 +221,394 @@ static SnglInspiralTable *record_inspiral_event(SnglInspiralTable *dest, LIGOTim
 	return dest;
 }
 
+static int push_zeros(GSTLALTriggerGen *element, GstAdapter *adapter, GstBuffer *inbuf)
+{
+
+	/*
+	 * Function to push zeros into the specified adapter
+	 * useful when there are gaps
+	 */
+
+	guint bytes = GST_BUFFER_SIZE(inbuf);
+	GstBuffer *zerobuf = gst_buffer_new_and_alloc(bytes);
+	if(!zerobuf) {
+		GST_DEBUG_OBJECT(element, "failure allocating zero-pad buffer");
+		return -1;
+	}
+	GST_BUFFER_TIMESTAMP(zerobuf) = GST_BUFFER_TIMESTAMP(inbuf);
+	GST_BUFFER_DURATION(zerobuf) = GST_BUFFER_DURATION(inbuf);
+	memset(GST_BUFFER_DATA(zerobuf), 0, GST_BUFFER_SIZE(zerobuf));
+	gst_adapter_push(adapter, zerobuf);
+	return 0;
+}
+
+static GstClockTime snr_bytes_to_time(GSTLALTriggerGen *element, guint bytes)
+{
+
+	/*
+	 * Converts snr bytes to time.  Relies on snr being complex double
+	 * but this is the *only* thing that is supported now
+	 */
+
+	return (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, bytes, element->num_templates * sizeof(complex double) * element->rate);
+}
+
+static guint snr_time_to_bytes(GSTLALTriggerGen *element, GstClockTime time)
+{
+
+	/*
+	 * Converts snr time to bytes.  Relies on snr being complex double
+	 * but this is the *only* thing that is supported now
+	 */
+
+	return (guint) gst_util_uint64_scale_int_round(time, element->rate, GST_SECOND) * element->num_templates * sizeof(complex double);
+}
+
+static GstClockTime chisq_bytes_to_time(GSTLALTriggerGen *element, guint bytes)
+{
+
+	/*
+	 * Converts chisq bytes to time.  Relies on chisq being double
+	 * but this is the *only* thing that is supported now
+	 */
+
+	return (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, bytes, element->num_templates * sizeof(double) * element->rate);
+}
+
+static guint chisq_time_to_bytes(GSTLALTriggerGen *element, GstClockTime time)
+{
+
+	/*
+	 * Converts chisq time to bytes.  Relies on chisq being double
+	 * but this is the *only* thing that is supported now
+	 */
+
+	return (guint) gst_util_uint64_scale_int_round(time, element->rate, GST_SECOND) * element->num_templates * sizeof(double);
+}
+
+static GstClockTime available_snr_time(GSTLALTriggerGen *element)
+{
+
+	/*
+	 * convenience function to get available snr time
+	 * rather than bytes from the snr adapter.
+	 */
+
+	return snr_bytes_to_time(element, gst_adapter_available (element->snradapter));
+}
+
+static GstClockTime available_chisq_time(GSTLALTriggerGen *element)
+{
+
+	/*
+	 * convenience function to get available chisq time
+	 * rather than bytes from the chisq adapter.
+	 */
+
+	return chisq_bytes_to_time(element, gst_adapter_available (element->chisqadapter));
+}
+
+static GstBuffer * take_chisq_buffer_set_metadata(GSTLALTriggerGen *element, guint bytes)
+{
+
+	/*
+	 * Convenience function to pull a chisq buffer from the adapter
+	 * and set the metadata.
+	 */
+
+	guint64 dist;
+	GstClockTime time = gst_adapter_prev_timestamp(element->chisqadapter,&dist);
+	GstBuffer *buf = gst_adapter_take_buffer(element->chisqadapter, bytes);
+	GST_BUFFER_TIMESTAMP(buf) = time + chisq_bytes_to_time(element,dist);
+	GST_BUFFER_DURATION(buf) = chisq_bytes_to_time(element, bytes);
+	return buf;
+}
+
+static GstBuffer * take_snr_buffer_set_metadata(GSTLALTriggerGen *element, guint bytes)
+{
+
+	/*
+	 * Convenience function to pull a snr buffer from the adapter
+	 * and set the metadata.
+	 */
+
+	guint64 dist;
+	GstClockTime time = gst_adapter_prev_timestamp(element->snradapter,&dist);
+	GstBuffer *buf = gst_adapter_take_buffer(element->snradapter, bytes);
+	GST_BUFFER_TIMESTAMP(buf) = time + snr_bytes_to_time(element,dist);
+	GST_BUFFER_DURATION(buf) = snr_bytes_to_time(element, bytes);
+	return buf;
+}
+
+static void take_snr_chisq_buffers(GSTLALTriggerGen *element, GstClockTime time, GstBuffer **snrbuf, GstBuffer **chisqbuf)
+{
+
+	/*
+	 * Convenience functions to pull out snr and chisq buffers in a way
+	 * that keeps them lined up
+	 * FIXME Right now we pull out exactly twice the number of chisq bytes so that
+	 * the adapters stay in sync. Relies on complex double being twice the size of double
+	 */
+
+	/* round up to nearest sample */
+	guint snrbytes = (guint) ceil(snr_time_to_bytes(element,time) / element->num_templates / sizeof(complex double)) * element->num_templates * sizeof(complex double);
+	guint chisqbytes = snrbytes / 2;
+	snrbytes = chisqbytes * 2;
+
+	*snrbuf = take_snr_buffer_set_metadata(element, snrbytes);
+	*chisqbuf = take_chisq_buffer_set_metadata(element, chisqbytes);
+	return;
+}
+
+static GstFlowReturn align_adapters(GSTLALTriggerGen *element)
+{
+
+	/*
+	 * Function to align the snr and chisq adapters
+	 * This is necessary because the snr and chisq time
+	 * series often show up first with different time stamps
+	 * When this happens we discard the non overlapping bit
+	 * After this initial occurance it should never be a
+	 * problem again unless there are discontinuities because
+	 * of how the data is pulled from the adapters
+	 * FIXME handle discontinuities appropriately someday too
+	 */
+
+	if ( !element->align_adapters ) return GST_FLOW_OK;
+	{ /* for scope */
+		GstClockTime snrtime = gst_adapter_prev_timestamp(element->snradapter, NULL);
+		GstClockTime chisqtime = gst_adapter_prev_timestamp(element->chisqadapter, NULL);
+		GstBuffer *buf;
+		if (snrtime < chisqtime) {
+			guint snr_bytes = snr_time_to_bytes(element, chisqtime - snrtime);
+			if (snr_bytes - snr_bytes / sizeof(complex double) / element->num_templates * sizeof(complex double) * element->num_templates)
+				return GST_FLOW_ERROR;
+			buf = gst_adapter_take_buffer(element->snradapter, snr_bytes);
+			gst_buffer_unref(buf); /*useless*/
+		}
+		if (chisqtime < snrtime) {
+			guint chisq_bytes = snr_time_to_bytes(element, snrtime - chisqtime);
+			if (chisq_bytes - chisq_bytes / sizeof(double) / element->num_templates * sizeof(double) * element->num_templates)
+				return GST_FLOW_ERROR;
+			buf = gst_adapter_take_buffer(element->chisqadapter, chisq_bytes);
+			gst_buffer_unref(buf); /*useless*/
+		}
+		element->align_adapters = FALSE;
+		return GST_FLOW_OK;
+	}
+}
+
+static void fix_snr_chisq_timestamps(GSTLALTriggerGen *element, GstBuffer *snrbuf, GstBuffer *chisqbuf)
+{
+
+	/*
+	 * In the bounded latency mode we actually pull buffers from the adapter
+	 * with timesamps that preceed the triggers, this fixes the timestamps
+	 */
+
+	GST_BUFFER_TIMESTAMP(snrbuf) += GST_BUFFER_DURATION(snrbuf);
+	GST_BUFFER_TIMESTAMP(chisqbuf) += GST_BUFFER_DURATION(chisqbuf);
+	return;
+}
+
+/*
+ * ============================================================================
+ *
+ * 			       Triggering algorithms
+ *
+ * ============================================================================
+ */
+
+
+static guint max_over_threshold(GSTLALTriggerGen *element, GstBuffer *snrbuf, GstBuffer *chisqbuf, GstBuffer *srcbuf, SnglInspiralTable **headptr)
+{
+
+	/*
+	 * A verbatim copy of the original triggering algorithm
+	 */
+
+	const double complex *snrdata = (const double complex *) GST_BUFFER_DATA(snrbuf);
+	const double *chisqdata = (const double *) GST_BUFFER_DATA(chisqbuf);
+	guint64 t0;
+	guint64 length;
+	guint sample;
+	gint channel;
+	SnglInspiralTable *head = NULL;
+	guint nevents = 0;
+
+	length = MIN(GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf));
+	if(GST_BUFFER_TIMESTAMP(snrbuf) > GST_BUFFER_TIMESTAMP(chisqbuf)) {
+		length -= t0 = GST_BUFFER_TIMESTAMP(snrbuf);
+		chisqdata += gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(snrbuf) - GST_BUFFER_TIMESTAMP(chisqbuf), element->rate, GST_SECOND) * element->num_templates;
+	} else {
+		length -= t0 = GST_BUFFER_TIMESTAMP(chisqbuf);
+		snrdata += gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(chisqbuf) - GST_BUFFER_TIMESTAMP(snrbuf), element->rate, GST_SECOND) * element->num_templates;
+	}
+	length = gst_util_uint64_scale_int_round(length, element->rate, GST_SECOND);
+
+	GST_DEBUG_OBJECT(element, "searching %" G_GUINT64_FORMAT " samples at %" GST_TIME_SECONDS_FORMAT " for events", length, GST_TIME_SECONDS_ARGS(t0));
+	g_mutex_lock(element->bank_lock);
+	for(sample = 0; sample < length; sample++) {
+		LIGOTimeGPS t;
+		XLALINT8NSToGPS(&t, t0);
+		XLALGPSAdd(&t, (double) sample / element->rate);
+
+		for(channel = 0; channel < element->num_templates; channel++) {
+			if(cabs(*snrdata) >= element->snr_thresh) {
+				if(XLALGPSDiff(&t, &element->last_time[channel]) > element->max_gap) {
+					/*
+					 * New event.  prepend last
+					 * event to event list and
+					 * start a new one.
+					 */
+					if(element->last_event[channel].snr != 0) {
+						SnglInspiralTable *new = calloc(1, sizeof(*new));
+						*new = element->last_event[channel];
+						new->next = head;
+						head = new;
+						nevents++;
+					}
+					record_inspiral_event(&element->last_event[channel], t, *snrdata, *chisqdata, channel, element);
+				} else if(cabs(*snrdata) > element->last_event[channel].snr) {
+					/*
+					 * Same event, higher SNR,
+					 * update
+					 */
+					record_inspiral_event(&element->last_event[channel], t, *snrdata, *chisqdata, channel, element);
+				} else {
+					/*
+					 * Same event, not higher
+					 * SNR, do nothing
+					 */
+				}
+				element->last_time[channel] = t;
+			}
+
+			snrdata++;
+			chisqdata++;
+		}
+	}
+	g_mutex_unlock(element->bank_lock);
+	*headptr = head;
+	return nevents;
+}
+
+static int higher_adjacent_snr(GSTLALTriggerGen *element, const double complex *leftsnr, const double complex *rightsnr, double complex snr, gint channel, guint sample, guint64 length)
+{
+
+	/*
+	 * A function to search nearby snr buffers for an event with higher snr
+	 * as soon as one is found it returns
+	 */
+
+	guint samp;
+	for (samp = sample; samp < length; samp++) {
+		if ( cabs(*(leftsnr+channel)) > cabs(snr) ) return 1;
+		leftsnr+= element->num_templates;
+	}
+
+	for (samp = 0; samp < sample; samp++) {
+		if ( cabs(*(rightsnr+channel)) > cabs(snr) ) return 1;
+		rightsnr += element->num_templates;
+	}
+	/* Nothing higher found */
+	return 0;
+}
+
+
+static guint bounded_latency(GSTLALTriggerGen *element, GstBuffer *snrbuf, GstBuffer *chisqbuf, GstBuffer *srcbuf, SnglInspiralTable **headptr)
+{
+
+	/*
+	 * Triggering algorithm with bounded latency that allows buffers to be outputted
+	 * which only contain triggers within the buffer timestamps
+ 	 * this is needed for efficient realtime coincidence algorithms.
+	 */
+
+	/*
+	 * Because of careful adapter alignment it is safe to get the length this way
+	 * guint64 length = gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(snrbuf), element->rate, GST_SECOND);
+	 * or the way done below:
+	 */
+
+	guint64 length = GST_BUFFER_SIZE(snrbuf) / sizeof(complex double) / element->num_templates;
+
+	/*
+	 * Pointer arithmetic to define three buffer regions, we'll identify triggers in the middle
+	 * Peeks are okay, we want them to remain in the adapters
+	 */
+
+	const double complex *leftsnrdata = (const double complex *) GST_BUFFER_DATA(snrbuf);
+	const double complex *centersnrdata = (const double complex *) gst_adapter_peek(element->snradapter, 2 * GST_BUFFER_SIZE(snrbuf));
+	const double *centerchisqdata = (const double *) gst_adapter_peek(element->chisqadapter, 2 * GST_BUFFER_SIZE(chisqbuf));
+	const double complex *rightsnrdata = centersnrdata + GST_BUFFER_SIZE(snrbuf)/sizeof(double complex);
+
+	/* FIXME if someday chisq is used in thresholding you might need this
+         * const double *leftchisqdata = (const double *) GST_BUFFER_DATA(chisqbuf);
+	 * const double *rightchisqdata = centerchisqdata + GST_BUFFER_SIZE(chisqbuf);
+         */
+
+	guint64 t0 = GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf);
+	guint sample;
+	gint channel;
+	SnglInspiralTable *head = NULL;
+	guint nevents = 0;
+	double complex *maxsnr = NULL;
+	double *maxchisq = NULL;
+	guint *maxsample = NULL;
+
+	/* see if we can do the calculation */
+	if (!leftsnrdata || !centersnrdata || !centerchisqdata || !rightsnrdata) {
+		/* FIXME, what do we do, do we crash? */
+		*headptr = head;
+		return nevents;
+	}
+
+
+	/* FIXME make array to store the max part of element instance for performance */
+	maxsnr = (double complex *) calloc(element->num_templates, sizeof(double complex));
+	maxchisq = (double *) calloc(element->num_templates, sizeof(double));
+	maxsample = (guint *) calloc(element->num_templates, sizeof(guint));
+
+	GST_DEBUG_OBJECT(element, "searching %" G_GUINT64_FORMAT " samples at %" GST_TIME_SECONDS_FORMAT " for events", length, GST_TIME_SECONDS_ARGS(t0));
+	g_mutex_lock(element->bank_lock);
+
+	/* Find maxima */
+	for(sample = 0; sample < length; sample++) {
+		for(channel = 0; channel < element->num_templates; channel++) {
+			if(cabs(*centersnrdata) >= element->snr_thresh && cabs(*centersnrdata) > cabs(maxsnr[channel])) {
+				maxsnr[channel] = *centersnrdata;
+				maxchisq[channel] = *centerchisqdata;
+				maxsample[channel] = sample;
+			}
+		centersnrdata++;
+		centerchisqdata++;
+		}
+	}
+
+	/* Decide if there are any events to keep */
+	for(channel = 0; channel < element->num_templates; channel++) {
+		if ( maxsnr[channel] && !higher_adjacent_snr(element, leftsnrdata, rightsnrdata, maxsnr[channel], channel, maxsample[channel], length) ) {
+			nevents++;
+			/* Record a new event */
+			LIGOTimeGPS t;
+			XLALINT8NSToGPS(&t, t0);
+			XLALGPSAdd(&t, (double) maxsample[channel] / element->rate);
+			record_inspiral_event(&element->last_event[channel], t, maxsnr[channel], maxchisq[channel], channel, element);
+			SnglInspiralTable *new = calloc(1, sizeof(*new));
+			*new = element->last_event[channel];
+			new->next = head;
+			head = new;
+		}
+	}
+
+	g_mutex_unlock(element->bank_lock);
+	free(maxsnr);
+	free(maxchisq);
+	free(maxsample);
+	*headptr = head;
+	return nevents;
+}
 
 /*
  * ============================================================================
@@ -422,6 +816,89 @@ static gboolean snr_event(GstPad *pad, GstEvent *event)
  */
 
 
+static GstFlowReturn prepare_gap_buffer(GSTLALTriggerGen *element, GstBuffer **srcbuf)
+{
+
+	/*
+	 * A verbatim copy of the code used to prepare a gap buffer
+	 */
+
+	GstFlowReturn result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, 0, GST_PAD_CAPS(element->srcpad), srcbuf);
+	if(result != GST_FLOW_OK)
+		return result;
+	g_assert(GST_BUFFER_CAPS(*srcbuf) != NULL);
+	g_assert(GST_PAD_CAPS(element->srcpad) == GST_BUFFER_CAPS(*srcbuf));
+	GST_BUFFER_OFFSET(*srcbuf) = GST_BUFFER_OFFSET_END(*srcbuf) = element->next_output_offset;
+	GST_BUFFER_FLAG_SET(*srcbuf, GST_BUFFER_FLAG_GAP);
+	return result;
+}
+
+
+static GstFlowReturn prepare_trigger_buffer(GSTLALTriggerGen *element, GstBuffer **srcbuf, SnglInspiralTable **headptr, guint nevents)
+{
+
+	/*
+	 * A verbatim copy of the code used to prepare a trigger buffer
+	 */
+
+	SnglInspiralTable *dest;
+	SnglInspiralTable *head = *headptr;
+	GstFlowReturn result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, nevents * sizeof(*dest), GST_PAD_CAPS(element->srcpad), srcbuf);
+	GST_DEBUG_OBJECT(element, "found %d events", nevents);
+	if(result != GST_FLOW_OK) {
+		while(head) {
+			SnglInspiralTable *next = head->next;
+			free(head);
+			head = next;
+		}
+		return result;
+	}
+	g_assert(GST_BUFFER_CAPS(*srcbuf) != NULL);
+	g_assert(GST_PAD_CAPS(element->srcpad) == GST_BUFFER_CAPS(*srcbuf));
+	GST_BUFFER_OFFSET(*srcbuf) = element->next_output_offset;
+	element->next_output_offset += nevents;
+	GST_BUFFER_OFFSET_END(*srcbuf) = element->next_output_offset;
+
+	/*
+	 * this loop puts them in the buffer in time order.
+	 * when loop terminates, dest points to first event
+	 * slot preceding the buffer, so the last event in
+	 * the buffer is at offset nevents not nevents-1
+	 */
+
+	for(dest = ((SnglInspiralTable *) GST_BUFFER_DATA(*srcbuf)) + nevents - 1; head; dest--) {
+		SnglInspiralTable *next = head->next;
+		memcpy(dest, head, sizeof(*head));
+		dest->next = dest + 1;
+		free(head);
+		head = next;
+	}
+	dest[nevents].next = NULL;
+	return result;
+}
+
+static GstFlowReturn push_buffer(GSTLALTriggerGen *element, GstBuffer *srcbuf, GstBuffer *snrbuf, GstBuffer *chisqbuf)
+{
+
+	/*
+	 * A verbatim copy of the code used to push buffers
+	 */
+
+	GST_BUFFER_TIMESTAMP(srcbuf) = MAX(GST_BUFFER_TIMESTAMP(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf));
+	GST_BUFFER_DURATION(srcbuf) = MIN(GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf)) - GST_BUFFER_TIMESTAMP(srcbuf);
+
+	if(element->next_output_timestamp != GST_BUFFER_TIMESTAMP(srcbuf)) {
+		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
+	}
+	element->next_output_timestamp = GST_BUFFER_TIMESTAMP(srcbuf) + GST_BUFFER_DURATION(srcbuf);
+
+	gst_buffer_unref(snrbuf);
+	gst_buffer_unref(chisqbuf);
+
+	GST_DEBUG_OBJECT(element, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
+	return gst_pad_push(element->srcpad, srcbuf);
+}
+
 static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 {
 	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(user_data);
@@ -430,6 +907,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	GstBuffer *chisqbuf = NULL;
 	GstBuffer *srcbuf = NULL;
 	GstFlowReturn result;
+	guint nevents = 0;
 
 	/*
 	 * check for uninitialized stream
@@ -547,149 +1025,99 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 * timestamps, and end time is last of the two input end times.
 	 */
 
-	if(GST_BUFFER_FLAG_IS_SET(snrbuf, GST_BUFFER_FLAG_GAP) || GST_BUFFER_FLAG_IS_SET(chisqbuf, GST_BUFFER_FLAG_GAP)) {
-		/*
-		 * GAP --> no-op
-		 */
-
-		GST_DEBUG_OBJECT(element, "input is gap, sending gap downstream");
-		result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
-		if(result != GST_FLOW_OK)
-			goto error;
-		g_assert(GST_BUFFER_CAPS(srcbuf) != NULL);
-		g_assert(GST_PAD_CAPS(element->srcpad) == GST_BUFFER_CAPS(srcbuf));
-		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset;
-		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
-	} else {
-		/*
-		 * !GAP --> find events
-		 */
-
-		const double complex *snrdata = (const double complex *) GST_BUFFER_DATA(snrbuf);
-		const double *chisqdata = (const double *) GST_BUFFER_DATA(chisqbuf);
-		guint64 t0;
-		guint64 length;
-		guint sample;
-		gint channel;
-		SnglInspiralTable *head = NULL;
-		guint nevents = 0;
-
-		length = MIN(GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf));
-		if(GST_BUFFER_TIMESTAMP(snrbuf) > GST_BUFFER_TIMESTAMP(chisqbuf)) {
-			length -= t0 = GST_BUFFER_TIMESTAMP(snrbuf);
-			chisqdata += gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(snrbuf) - GST_BUFFER_TIMESTAMP(chisqbuf), element->rate, GST_SECOND) * element->num_templates;
-		} else {
-			length -= t0 = GST_BUFFER_TIMESTAMP(chisqbuf);
-			snrdata += gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(chisqbuf) - GST_BUFFER_TIMESTAMP(snrbuf), element->rate, GST_SECOND) * element->num_templates;
-		}
-		length = gst_util_uint64_scale_int_round(length, element->rate, GST_SECOND);
-
-		GST_DEBUG_OBJECT(element, "searching %" G_GUINT64_FORMAT " samples at %" GST_TIME_SECONDS_FORMAT " for events", length, GST_TIME_SECONDS_ARGS(t0));
-		g_mutex_lock(element->bank_lock);
-		for(sample = 0; sample < length; sample++) {
-			LIGOTimeGPS t;
-			XLALINT8NSToGPS(&t, t0);
-			XLALGPSAdd(&t, (double) sample / element->rate);
-
-			for(channel = 0; channel < element->num_templates; channel++) {
-				if(cabs(*snrdata) >= element->snr_thresh) {
-					if(XLALGPSDiff(&t, &element->last_time[channel]) > element->max_gap) {
-						/*
-						 * New event.  prepend last
-						 * event to event list and
-						 * start a new one.
-						 */
-						if(element->last_event[channel].snr != 0) {
-							SnglInspiralTable *new = calloc(1, sizeof(*new));
-							*new = element->last_event[channel];
-							new->next = head;
-							head = new;
-							nevents++;
-						}
-						record_inspiral_event(&element->last_event[channel], t, *snrdata, *chisqdata, channel, element);
-					} else if(cabs(*snrdata) > element->last_event[channel].snr) {
-						/*
-						 * Same event, higher SNR,
-						 * update
-						 */
-						record_inspiral_event(&element->last_event[channel], t, *snrdata, *chisqdata, channel, element);
-					} else {
-						/*
-						 * Same event, not higher
-						 * SNR, do nothing
-						 */
-					}
-					element->last_time[channel] = t;
-				}
-
-				snrdata++;
-				chisqdata++;
-			}
-		}
-		g_mutex_unlock(element->bank_lock);
-
-		if(nevents) {
-			SnglInspiralTable *dest;
-
-			GST_DEBUG_OBJECT(element, "found %d events", nevents);
-			result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, nevents * sizeof(*dest), GST_PAD_CAPS(element->srcpad), &srcbuf);
-			if(result != GST_FLOW_OK) {
-				while(head) {
-					SnglInspiralTable *next = head->next;
-					free(head);
-					head = next;
-				}
-				goto error;
-			}
-			g_assert(GST_BUFFER_CAPS(srcbuf) != NULL);
-			g_assert(GST_PAD_CAPS(element->srcpad) == GST_BUFFER_CAPS(srcbuf));
-			GST_BUFFER_OFFSET(srcbuf) = element->next_output_offset;
-			element->next_output_offset += nevents;
-			GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset;
+	if (element->algorithm==MAX_OVER_THRESHOLD) {
+		if(GST_BUFFER_FLAG_IS_SET(snrbuf, GST_BUFFER_FLAG_GAP) || GST_BUFFER_FLAG_IS_SET(chisqbuf, GST_BUFFER_FLAG_GAP)) {
 
 			/*
-			 * this loop puts them in the buffer in time order.
-			 * when loop terminates, dest points to first event
-			 * slot preceding the buffer, so the last event in
-			 * the buffer is at offset nevents not nevents-1
+			 * GAP --> no-op
 			 */
 
-			for(dest = ((SnglInspiralTable *) GST_BUFFER_DATA(srcbuf)) + nevents - 1; head; dest--) {
-				SnglInspiralTable *next = head->next;
-				memcpy(dest, head, sizeof(*head));
-				dest->next = dest + 1;
-				free(head);
-				head = next;
-			}
-			dest[nevents].next = NULL;
-		} else {
-			GST_DEBUG_OBJECT(element, "found 0 events, sending gap downstream");
-			result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
-			if(result != GST_FLOW_OK)
+			GST_DEBUG_OBJECT(element, "input is gap, sending gap downstream");
+			result = prepare_gap_buffer(element, &srcbuf);
+			if (result != GST_FLOW_OK)
 				goto error;
-			g_assert(GST_BUFFER_CAPS(srcbuf) != NULL);
-			g_assert(GST_PAD_CAPS(element->srcpad) == GST_BUFFER_CAPS(srcbuf));
-			GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset;
-			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
+		} else {
+			SnglInspiralTable *head = NULL;
+			nevents = max_over_threshold(element, snrbuf, chisqbuf, srcbuf, &head);
+			if(nevents) {
+
+				result = prepare_trigger_buffer(element, &srcbuf, &head, nevents);
+				if(result != GST_FLOW_OK)
+					goto error;
+			} else {
+				GST_DEBUG_OBJECT(element, "found 0 events, sending gap downstream");
+				result = prepare_gap_buffer(element, &srcbuf);
+				if (result != GST_FLOW_OK)
+					goto error;
+			}
+		}
+
+		/*
+		 * Push buffer downstream
+		 */
+
+		result = push_buffer(element, srcbuf, snrbuf, chisqbuf);
+	}
+
+	if (element->algorithm == BOUNDED_LATENCY) {
+
+		SnglInspiralTable *head = NULL;
+		double max_gap = ceil(element->max_gap * element->rate) / element->rate;
+
+		if (GST_BUFFER_FLAG_IS_SET(snrbuf, GST_BUFFER_FLAG_GAP) || GST_BUFFER_FLAG_IS_SET(chisqbuf, GST_BUFFER_FLAG_GAP)) {
+
+			/*
+			 * Buffer is GAP, push zeros
+			 */
+			push_zeros(element, element->snradapter, snrbuf);
+			push_zeros(element, element->chisqadapter, chisqbuf);
+		}
+		else {
+
+			/*
+			 * Buffer is not a gap
+			 * Push buffers into adapters
+			 */
+			gst_adapter_push(element->snradapter, snrbuf);
+			gst_adapter_push(element->chisqadapter, chisqbuf);
+		}
+
+		result = align_adapters(element);
+		if (result != GST_FLOW_OK)
+			goto error;
+
+		if (available_snr_time(element) <= 3 * max_gap * GST_SECOND || available_chisq_time(element) <= 3 * max_gap * GST_SECOND) {
+			goto wait;
+		}
+
+		while (available_snr_time(element) > 3 * max_gap * GST_SECOND && available_chisq_time(element) > 3 * max_gap * GST_SECOND) {
+
+			/* FIXME, is it okay to reuse snrbuf since ownership was taken? */
+			take_snr_chisq_buffers(element, max_gap*GST_SECOND, &snrbuf, &chisqbuf);
+			nevents = bounded_latency(element, snrbuf, chisqbuf, srcbuf, &head);
+			/* We actually record triggers one buffer ahead of snrbuf */
+			fix_snr_chisq_timestamps(element, snrbuf, chisqbuf);
+
+			if(nevents) {
+				result = prepare_trigger_buffer(element, &srcbuf, &head, nevents);
+				if(result != GST_FLOW_OK)
+					goto error;
+			} else {
+				GST_DEBUG_OBJECT(element, "found 0 events, sending gap downstream");
+				result = prepare_gap_buffer(element, &srcbuf);
+				if (result != GST_FLOW_OK)
+					goto error;
+			}
+
+			/*
+			 * Push buffer downstream
+			 */
+
+			result = push_buffer(element, srcbuf, snrbuf, chisqbuf);
 		}
 	}
 
-	/*
-	 * Push buffer downstream
-	 */
-
-	GST_BUFFER_TIMESTAMP(srcbuf) = MAX(GST_BUFFER_TIMESTAMP(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf));
-	GST_BUFFER_DURATION(srcbuf) = MIN(GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf)) - GST_BUFFER_TIMESTAMP(srcbuf);
-
-	if(element->next_output_timestamp != GST_BUFFER_TIMESTAMP(srcbuf))
-		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
-	element->next_output_timestamp = GST_BUFFER_TIMESTAMP(srcbuf) + GST_BUFFER_DURATION(srcbuf);
-
-	gst_buffer_unref(snrbuf);
-	gst_buffer_unref(chisqbuf);
-
-	GST_DEBUG_OBJECT(element, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
-	return gst_pad_push(element->srcpad, srcbuf);
+	return result;
 
 	/*
 	 * Errors
@@ -704,6 +1132,9 @@ error:
 	if(srcbuf)
 		gst_buffer_unref(srcbuf);
 	return result;
+
+wait:
+	return GST_FLOW_OK;
 
 eos:
 	GST_DEBUG_OBJECT(element, "sending EOS event downstream");
@@ -722,10 +1153,11 @@ eos:
 
 
 enum gen_property {
-	ARG_SNR_THRESH = 1, 
+	ARG_SNR_THRESH = 1,
 	ARG_BANK_FILENAME,
 	ARG_MAX_GAP,
-	ARG_SIGMASQ
+	ARG_SIGMASQ,
+	ARG_ALGORITHM
 };
 
 
@@ -768,6 +1200,10 @@ static void gen_set_property(GObject *object, enum gen_property id, const GValue
 		g_mutex_unlock(element->bank_lock);
 		break;
 	}
+
+	case ARG_ALGORITHM:
+		element->algorithm = g_value_get_int(value);
+		break;
 
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
@@ -813,6 +1249,10 @@ static void gen_get_property(GObject * object, enum gen_property id, GValue * va
 		break;
 	}
 
+	case ARG_ALGORITHM:
+		g_value_set_int(value, element->algorithm);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -844,6 +1284,8 @@ static void gen_finalize(GObject *object)
 	g_free(element->channel_name);
 	element->channel_name = NULL;
 	G_OBJECT_CLASS(gen_parent_class)->finalize(object);
+	g_object_unref(element->snradapter);
+	g_object_unref(element->chisqadapter);
 }
 
 
@@ -1006,6 +1448,17 @@ static void gen_class_init(gpointer klass, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_ALGORITHM,
+		g_param_spec_int(
+			"algorithm",
+			"Triggering algorithm",
+			"1) max over threshold algorithm. 2) bounded latency (max every max-gap seconds)",
+			1, 2, MAX_OVER_THRESHOLD,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 }
 
 
@@ -1024,6 +1477,7 @@ static void gen_instance_init(GTypeInstance *object, gpointer klass)
 	gst_pad_use_fixed_caps(pad);
 	element->snrcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->snrcollectdata));
 	element->snrpad = pad;
+	element->snradapter = gst_adapter_new();
 
 	/* configure chisquare pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "chisquare");
@@ -1031,6 +1485,7 @@ static void gen_instance_init(GTypeInstance *object, gpointer klass)
 	gst_pad_use_fixed_caps(pad);
 	element->chisqcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->chisqcollectdata));
 	element->chisqpad = pad;
+	element->chisqadapter = gst_adapter_new();
 
 	/* FIXME: hacked way to override/extend the event function of
 	 * GstCollectpads */
@@ -1060,6 +1515,8 @@ static void gen_instance_init(GTypeInstance *object, gpointer klass)
 	element->max_gap = DEFAULT_MAX_GAP;
 	element->last_event = NULL;
 	element->last_time = NULL;
+	element->algorithm = BOUNDED_LATENCY;//MAX_OVER_THRESHOLD;
+	element->align_adapters = TRUE;
 }
 
 
