@@ -45,12 +45,12 @@ def parse_command_line():
 	parser.add_option("-s", "--start-time", metavar = "path", help = "Indicate GPS start_time. Default is start of S6 run.")
 	parser.add_option("-e", "--end-time", metavar = "path", help = "Indicate GPS end_time. Default is current time")
 
-	opts, args = parser.parse_args()
+	opts, args = parser.parse_args()		
 
 	if not opts.start_time:
-		opts.start_time = 631154013 # FIXME: s6 start time?
-	if not opts.end_time:
-		opts.end_time =	gpstime.GpsSecondsFromPyUTC(time.time())
+		opts.start_time = 631154013 # FIXME: s6 start time? 
+	if not opts.end_time:	
+		opts.end_time =	gpstime.GpsSecondsFromPyUTC(time.time()) 
 	return opts, args
 
 opts, args = parse_command_line()
@@ -59,7 +59,7 @@ print opts.start_time, opts.end_time
 def make_sim_inspiral_table(filename):
 	from glue.ligolw import utils
 	from glue.ligolw import lsctables
-
+	
 	# load file from url (temporarily from filename)
 	#injection_xmldoc = utils.load_url(url_name)
 	injection_xmldoc = utils.load_filename(filename)
@@ -71,7 +71,7 @@ def make_sim_inspiral_table(filename):
 
 # Function that returns segments within start and end time for given ifo
 def get_science_segments(ifo, start_time, end_time):
-	segdefs = segmentdb_utils.expand_version_number(engine, (ifo, 'DMT-SCIENCE', 1, start_time, end_time, 0, 0))
+	segdefs = segmentdb_utils.expand_version_number(engine, (ifo, 'DMT-SCIENCE', 1, start_time, end_time, 0, 0)) 
 	return segmentdb_utils.query_segments(engine, 'segment', segdefs)
 
 
@@ -90,11 +90,12 @@ ifos = ["H1", "L1", "V1"]
 for ifo in ifos:
 
 	# Get SimInspiralTable and end-time column from url file
-	sim_inspiral = make_sim_inspiral_table(url_name)
+	sim_inspiral = make_sim_inspiral_table(url_name) 
 
 
 	# Make new sim_inspiral table for detected injections
 	filtered_sim_inspiral = table.new_from_template(sim_inspiral)
+		
 
 	# Query segment database at specified GPS times
 	science_segments = get_science_segments(ifo, int(opts.start_time), int(opts.end_time))[0]
@@ -112,9 +113,10 @@ for ifo in ifos:
 		if segments.segment((end_time - 64),(end_time + 64)) in science_segments:
 			filtered_sim_inspiral.append(row)
 
-
-	# Write table to xml file
+	
+	# Write table to xml file	
 	fileobj = open("%s_hw_inj.xml" % ifo, "w")
 	filtered_sim_inspiral.write(fileobj)
+	
 
 
