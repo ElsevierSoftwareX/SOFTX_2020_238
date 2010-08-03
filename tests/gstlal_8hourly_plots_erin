@@ -51,7 +51,7 @@ def parse_command_line():
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("-f", "--followups", type = int, help = "Specify the number of followups from each detector to run in the followup pipeline.  If None then no followups are done.")
 	parser.add_option("--glob", help="bash glob pattern")
-	
+
 	opts, filenames = parser.parse_args()
 	if opts.glob: filenames.extend(glob.glob(opts.glob))
 
@@ -97,7 +97,7 @@ def make_both(arg):
 # Main
 ########################################################
 
-	
+
 args = []
 for f in databases:
 	# Connect with SQLite
@@ -116,7 +116,7 @@ for f in databases:
 		dtype=[(field_name,float) for field_name in "mass1,mass2,snr,chisq,mchirp,end_time,eff_distance".split(',')]
 	)
 	ifo = f.strip("gstlal_inspiral..sqlite")
-	
+
 	# Look up science segments
 	science_segments = get_science_segments(ifo, in_start_time, in_end_time)[0]
 	non_science_segments = segments.segmentlist([segments.segment(in_start_time, in_end_time)]) - science_segments
@@ -200,12 +200,12 @@ for f in databases:
 	max_triggers = opts.followups
 	if (max_triggers != None):
 		top_triggers = connection.cursor().execute("SELECT end_time + (end_time_ns*1e-9) FROM sngl_inspiral ORDER BY snr DESC LIMIT %d" % max_triggers)
-		gps_times = [c[0] for c in top_triggers]	
+		gps_times = [c[0] for c in top_triggers]
 		for row in gps_times:
 			args.append("%s:%f" % (ifo, row))
 
 
-	# Get parameters from SimInspiral Table	
+	# Get parameters from SimInspiral Table
 	inj = pylab.array(
 		connection.cursor().execute("SELECT geocent_end_time, mass1, mass2, mchirp, distance, latitude, longitude, eff_dist_h, eff_dist_l FROM sim_inspiral").fetchall(),
 		dtype=[(field_name, float) for field_name in "geocent_end_time,mass1,mass2,mchirp,distance,latitude,longitude,eff_dist_h,eff_dist_l".split(',')]
@@ -217,8 +217,8 @@ for f in databases:
 		if (inj[j]['mchirp'] < 1.4):
 			trigger_time = int(inj[j]['geocent_end_time'])
 			inj_mchirp = inj['mchirp']
-		
-	
+
+
 		# Get the range of sngl_inspiral data 60 seconds before and after injection
 		background_mchirp = []
 		background_snr = []
@@ -231,12 +231,12 @@ for f in databases:
 			if ((params[i]['end_time'] > trigger_time-1) and (params[i]['end_time'] < trigger_time+1)):
 				mchirp.append(params[i]['mchirp'])
 				snr.append(params[i]['snr'])
-		total_snr = [min(snr), max(snr)]	
+		total_snr = [min(snr), max(snr)]
 		mchirp_line = numpy.empty(len(total_snr))
 		mchirp_line.fill(inj_mchirp)
 
 
-		# Plot Recovered Mchirp vs. SNR for each trigger and each detector	
+		# Plot Recovered Mchirp vs. SNR for each trigger and each detector
 		pylab.figure()
 		pylab.plot(background_snr, background_mchirp, 'xb', snr, mchirp, 'xr', total_snr, mchirp_line, 'k')
 		pylab.legend(('Within 60 seconds of Injection', 'Within 2 seconds of Injection', 'Injected Mchirp: %f' % inj_mchirp), 'upper right')
@@ -251,8 +251,8 @@ for f in databases:
 		H1_inj = inj
 	else:
 		L1_inj = inj
-		
-	# Close connection to SQLite	
+
+	# Close connection to SQLite
 	dbtables.discard_connection_filename(f, working_filename, verbose = opts.verbose)
 	dbtables.DBTable_set_connection(None)
 
@@ -276,6 +276,6 @@ pylab.savefig('hw_inj_plot.png')
 # Open subprocess to make create a dag from top 20 triggers
 if (max_triggers != None):
 	cmd = "lalapps_followup_pipe -g " + ",".join(args)
-	process = subprocess.Popen(cmd, shell=True) 
+	process = subprocess.Popen(cmd, shell=True)
 
 
