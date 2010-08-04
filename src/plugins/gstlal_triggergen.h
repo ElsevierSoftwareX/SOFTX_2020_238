@@ -43,7 +43,6 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstcollectpads.h>
-#include <gst/base/gstadapter.h>
 #include <gstlalcollectpads.h>
 #include <lal/LIGOMetadataTables.h>
 
@@ -84,16 +83,13 @@ typedef struct {
 	GstPadEventFunction collect_event;
 
 	GstPad *snrpad;
-	GstAdapter *snradapter;
 	GstLALCollectData *snrcollectdata;
 	GstPad *chisqpad;
-	GstAdapter *chisqadapter;
 	GstLALCollectData *chisqcollectdata;
 	GstPad *srcpad;
 
 	gboolean segment_pending;
 	gboolean flush_stop_pending;
-	gboolean align_adapters;
 	GstSegment segment;
 	guint64 next_output_offset;
 	guint64 next_output_timestamp;
@@ -110,7 +106,6 @@ typedef struct {
 	double max_gap;
 	SnglInspiralTable *last_event;
 	LIGOTimeGPS *last_time;
-	int algorithm;
 } GSTLALTriggerGen;
 
 
