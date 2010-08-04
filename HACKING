@@ -77,4 +77,4 @@ environment variable to "src/plugins" in order to avoid having to
   
   $ cd src/plugins
   $ export GST_PLUGIN_PATH=$PWD
-
+ 
