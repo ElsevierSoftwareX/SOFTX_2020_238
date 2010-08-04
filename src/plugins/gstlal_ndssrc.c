@@ -608,7 +608,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
             stride_seconds = blocksize / bytes_per_sec;
         }
 
-        if (element->daq->chan_req_list->type == cOnline)
+        if (element->channelType == cOnline)
         {
             //gst_base_src_set_live(object, TRUE);
             GST_INFO_OBJECT(element, "daq_request_data(daq_t*, 0, 0, %d)", stride_seconds);
