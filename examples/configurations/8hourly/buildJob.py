@@ -73,6 +73,7 @@ if options.hour not in (0, 8, 16):
 
 gps_start_time = gpstime.GpsSecondsFromPyUTC(gpstime.mkUTC(
 	options.year, options.month, options.day, options.hour, 0, 0))
+gps_end_time = gps_start_time + int(8.5 * 3600)
 
 tmpdir = os.getenv("TMPDIR")
 if tmpdir is None:
@@ -159,6 +160,22 @@ gstlal_reference_psd_sub = EnvCondorJob(r"""gstlal_reference_psd
 	--gps-end-time $(macro_gps_end_time)""",
 	"reference_psd.$(macro_instrument)")
 
+ligolw_segment_query_sub = EnvCondorJob(r"""ligolw_segment_query
+	--query-segments
+	--database
+	--gps-start-time $(macro_gps_start_time)
+	--gps-end-time $(macro_gps_end_time)
+	--include-segments $(macro_instrument):DMT-SCIENCE:1
+	--output-file science_segments.$(macro_instrument).xml""",
+	"ligolw_segment_query.$(macro_instrument)")
+ligolw_segment_query_sub.set_universe("local") # FIXME: Find out how to query segdb from cluster node.
+
+ligolw_sqlite_sub = EnvCondorJob(r"""ligolw_sqlite
+	--database gstlal_inspiral.$(macro_instrument)
+	science_segments.$(macro_instrument).xml
+	/archive/home/jveitch/public_html/S6inj/HL-INJECTIONS_S6_ALL.xml""",
+	"ligolw_sqlite.$(macro_instrument)")
+
 gstlal_8hourly_plots_sub = EnvCondorJob("gstlal_8hourly_plots --glob *.sqlite")
 gstlal_8hourly_plots_sub.set_universe("local")
 
@@ -217,10 +234,29 @@ for ifo, props in ifodict.iteritems():
 			"macro_comment": comment,
 			"macro_instrument": ifo,
 			"macro_gps_start_time": gps_start_time,
-			"macro_gps_end_time": gps_start_time + 3600 * 8.5,
+			"macro_gps_end_time": gps_end_time,
 		},
 		parents = (gstlal_reference_psd_node, gstlal_prune_duplicate_mass_pairs_node),
 		children = (gstlal_8hourly_plots_node,))
+
+	ligolw_segment_query_node = makeNode(dag, ligolw_segment_query_sub,
+		name = "ligolw_segment_query.%s" % ifo,
+		macros = {
+			"macro_instrument": ifo,
+			"macro_gps_start_time": gps_start_time,
+			"macro_gps_end_time": gps_end_time,
+		},
+		parents = (gstlal_inspiral_node,)
+	)
+
+	ligolw_sqlite_node = makeNode(dag, ligolw_sqlite_sub,
+		name = "ligolw_sqlite.%s" % ifo,
+		macros = {
+			"macro_instrument": ifo
+		},
+		parents = (gstlal_inspiral_node, ligolw_segment_query_node,),
+		children = (gstlal_8hourly_plots_node,),
+	)
 
 	gstlal_plotlatency_node = makeNode(dag, gstlal_plotlatency_sub,
 		name = "gstlal_plotlatency.%s" % ifo,
