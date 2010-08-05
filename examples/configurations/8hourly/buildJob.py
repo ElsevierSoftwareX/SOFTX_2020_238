@@ -171,7 +171,7 @@ ligolw_segment_query_sub = EnvCondorJob(r"""ligolw_segment_query
 ligolw_segment_query_sub.set_universe("local") # FIXME: Find out how to query segdb from cluster node.
 
 ligolw_sqlite_sub = EnvCondorJob(r"""ligolw_sqlite
-	--database gstlal_inspiral.$(macro_instrument)
+	--database gstlal_inspiral.$(macro_instrument).sqlite
 	science_segments.$(macro_instrument).xml
 	/archive/home/jveitch/public_html/S6inj/HL-INJECTIONS_S6_ALL.xml""",
 	"ligolw_sqlite.$(macro_instrument)")
