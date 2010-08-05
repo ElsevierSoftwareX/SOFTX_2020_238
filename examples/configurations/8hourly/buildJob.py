@@ -177,7 +177,6 @@ ligolw_sqlite_sub = EnvCondorJob(r"""ligolw_sqlite
 	"ligolw_sqlite.$(macro_instrument)")
 
 gstlal_8hourly_plots_sub = EnvCondorJob("gstlal_8hourly_plots --glob *.sqlite")
-gstlal_8hourly_plots_sub.set_universe("local")
 
 gstlal_plotlatency_sub = EnvCondorJob("""gstlal_plotlatency
 	--disable-legend
