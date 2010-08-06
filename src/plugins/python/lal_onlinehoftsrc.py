@@ -359,6 +359,7 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		taglist = gst.TagList()
 		taglist["instrument"] = instrument
 		taglist["channel-name"] = self.__ifodesc.channelname.split(":")[-1]
+		taglist["units"] = "strain"
 
 		if not self.send_event(gst.event_new_tag(taglist)):
 			self.error("tags rejected")
