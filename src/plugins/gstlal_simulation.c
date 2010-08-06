@@ -741,49 +741,29 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
  */
 
 
-static gboolean taglist_extract_string(GSTLALSimulation *element, GstTagList *taglist, const char *tagname, gchar **dest)
-{
-	if(!gst_tag_list_get_string(taglist, tagname, dest)) {
-		GST_WARNING_OBJECT(element, "unable to parse \"%s\" from %" GST_PTR_FORMAT, tagname, taglist);
-		return FALSE;
-	}
-	return TRUE;
-}
-
-
 static gboolean sink_event(GstPad *pad, GstEvent *event)
 {
 	GSTLALSimulation *element = GSTLAL_SIMULATION(GST_PAD_PARENT(pad));
-	gboolean success;
 
-	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_TAG: {
+	if (GST_EVENT_TYPE(event) == GST_EVENT_TAG) {
 		GstTagList *taglist;
-		gchar *instrument, *channel_name, *units;
+		gchar *tagvalue;
 		gst_event_parse_tag(event, &taglist);
-		success = taglist_extract_string(element, taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
-		success &= taglist_extract_string(element, taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
-		success &= taglist_extract_string(element, taglist, GSTLAL_TAG_UNITS, &units);
-		if(success) {
-			GST_DEBUG_OBJECT(element, "found tags \"%s\"=\"%s\" \"%s\"=\"%s\" \"%s\"=\"%s\"", GSTLAL_TAG_INSTRUMENT, instrument, GSTLAL_TAG_CHANNEL_NAME, channel_name, GSTLAL_TAG_UNITS, units);
+		if (gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &tagvalue)) {
 			g_free(element->instrument);
-			element->instrument = instrument;
-			g_free(element->channel_name);
-			element->channel_name = channel_name;
-			g_free(element->units);
-			element->units = units;
-			success = gst_pad_push_event(element->srcpad, event);
-			/* FIXME:  flush the cache of injection timeseries */
+			element->instrument = tagvalue;
 		}
-		break;
+		if (gst_tag_list_get_string(taglist, GSTLAL_TAG_CHANNEL_NAME, &tagvalue)) {
+			g_free(element->channel_name);
+			element->channel_name = tagvalue;
+		}
+		if (gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &tagvalue)) {
+			g_free(element->units);
+			element->units = tagvalue;
+		}
 	}
 
-	default:
-		success = gst_pad_event_default(pad, event);
-		break;
-	}
-
-	return success;
+	return gst_pad_event_default(pad, event);
 }
 
 
