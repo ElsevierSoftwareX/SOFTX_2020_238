@@ -760,6 +760,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		if (gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &tagvalue)) {
 			g_free(element->units);
 			element->units = tagvalue;
+			/* FIXME:  flush the cache of injection timeseries */
 		}
 	}
 
