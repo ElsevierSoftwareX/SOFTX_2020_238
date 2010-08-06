@@ -88,18 +88,6 @@ for f in databases:
 	).fetchall())
 
 
-	# Plot m1 vs m2
-	pylab.clf()
-	if len(params) > 0:
-		pylab.scatter(params['mass1'], params['mass2'], c=params['snr'], edgecolor=None)
-		pylab.colorbar().set_label("SNR")
-	pylab.xlabel("mass1")
-	pylab.ylabel("mass2")
-	pylab.title("mass1 vs. mass2 for %s" % ifo)
-	pylab.grid(True)
-	pylab.savefig("m1_m2_%s" % ifo)
-
-
 	# Plot SNR vs ChiSq
 	pylab.clf()
 	if len(params) > 0:
