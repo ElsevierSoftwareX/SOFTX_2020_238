@@ -171,6 +171,11 @@ class Data(object):
 
 		sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))	# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
 
+		# Add injections table if necessary
+		if self.injection_file is not None:
+			from glue.ligolw.utils import ligolw_add
+			ligolw_add.ligolw_add(xmldoc, [self.injection_file], verbose = self.verbose)
+
 		if self.output.endswith('.sqlite'):
 			from glue.ligolw.utils import ligolw_sqlite
 			from glue.ligolw import dbtables
@@ -182,18 +187,11 @@ class Data(object):
 			dbtables.idmap_sync(self.connection)
 			ligolw_sqlite.insert_from_xmldoc(self.connection, xmldoc, preserve_ids = False, verbose = self.verbose)
 			xmldoc.unlink()
-			if self.injection_file is not None:
-				ligolw_sqlite.insert_from_url(self.connection, self.injection_file, preserve_ids = False, verbose = self.verbose)
-				#utils.load_filename(self.injection_file, gz = (injection_file or "stdin").endswith(".gz"), verbose = self.verbose).unlink()
 			self.xmldoc = dbtables.get_xml(self.connection)
 			self.sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
 		else:
-			from glue.ligolw.utils import ligolw_add
 			self.xmldoc = xmldoc
 			self.sngl_inspiral_table = sngl_inspiral_table
-			if self.injection_file is not None:
-				ligolw_add.ligolw_add(self.xmldoc, [self.injection_file], verbose = self.verbose)
-				utils.load_filename(self.injection_file, gz = (self.injection_file or "stdin").endswith(".gz"), verbose = self.verbose)
 
 	def write_output_file(self):
 		if self.connection:
