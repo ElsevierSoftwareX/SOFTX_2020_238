@@ -56,6 +56,10 @@ snr_chisq = correlations.add_section("snr_chisq","Chisq SNR for Triggers", open_
 snr_chisq.add_table(cbcwebpage.image_glob("snr_chisq_*.png", width=400), "snr_chisq", "Chisq vs. SNR for Triggers")
 
 
+eff_snr_chisq = correlations.add_section("eff_snr_chisq","Chisq Effective SNR for Triggers", open_by_default=True)
+eff_snr_chisq.add_table(cbcwebpage.image_glob("eff_snr_chisq_*.png", width=400), "snr_chisq", "Chisq vs. Effective SNR for Triggers")
+
+
 m1m2 = correlations.add_section("m1_m2","Mass Distribution for Triggers", open_by_default=True)
 m1m2.add_table(cbcwebpage.image_glob("m1_m2_*.png", width=400), "m1_m2_H1", "mass1 vs. mass2 for Triggers")
 
