@@ -102,17 +102,27 @@ for f in databases:
 
 	# Plot SNR vs ChiSq
 	pylab.clf()
-	pylab.xscale('log')
-	pylab.yscale('log')
 	if len(params) > 0:
-		pylab.scatter(params['snr'], params['chisq'], c=params['mchirp'], edgecolor=None)
-		pylab.axis("tight")
-		pylab.colorbar().set_label("mchirp")
+		pylab.hexbin(params['snr'], params['chisq'], xscale='log', yscale='log', bins='log')
+		pylab.colorbar().set_label("number of triggers")
 	pylab.xlabel("SNR")
 	pylab.ylabel("ChiSq")
-	pylab.title("SNR vs. ChiSq for %s" %ifo)
+	pylab.title("SNR vs. ChiSq for %s triggers" %ifo)
 	pylab.grid(True)
 	pylab.savefig("snr_chisq_%s" %ifo)
+
+
+	# Plot Effective SNR vs ChiSq
+	pylab.clf()
+	if len(params) > 0:
+		eff_snr = params['snr'] * (params['chisq']/398.0 * (1 + params['snr'] ** 2 / 250.0)) ** -0.25
+		pylab.hexbin(eff_snr, params['chisq'], xscale='log', yscale='log', bins='log')
+		pylab.colorbar().set_label("number of triggers")
+	pylab.xlabel("Effective SNR")
+	pylab.ylabel("ChiSq")
+	pylab.title("Effective SNR vs. ChiSq for %s triggers" %ifo)
+	pylab.grid(True)
+	pylab.savefig("eff_snr_chisq_%s" %ifo)
 
 
 	# Plot SNR vs end_time
