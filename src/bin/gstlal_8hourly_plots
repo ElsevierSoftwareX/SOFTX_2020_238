@@ -105,6 +105,7 @@ for f in databases:
 	if len(params) > 0:
 		pylab.hexbin(params['snr'], params['chisq'], xscale='log', yscale='log', bins='log')
 		pylab.colorbar().set_label("number of triggers")
+		pylab.axis("tight")
 	pylab.xlabel("SNR")
 	pylab.ylabel("ChiSq")
 	pylab.title("SNR vs. ChiSq for %s triggers" %ifo)
@@ -118,6 +119,7 @@ for f in databases:
 		eff_snr = params['snr'] * (params['chisq']/398.0 * (1 + params['snr'] ** 2 / 250.0)) ** -0.25
 		pylab.hexbin(eff_snr, params['chisq'], xscale='log', yscale='log', bins='log')
 		pylab.colorbar().set_label("number of triggers")
+		pylab.axis("tight")
 	pylab.xlabel("Effective SNR")
 	pylab.ylabel("ChiSq")
 	pylab.title("Effective SNR vs. ChiSq for %s triggers" %ifo)
