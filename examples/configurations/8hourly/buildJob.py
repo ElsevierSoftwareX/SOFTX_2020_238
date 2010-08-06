@@ -62,7 +62,9 @@ def makeNode(dag, job, name=None, macros=None, parents=None, children=None):
 
 date_parts = ("year", "month", "day", "hour")
 options, args = OptionParser(
-	option_list = [Option("--"+s, type="int") for s in date_parts]
+	option_list = [Option("--"+s, type="int") for s in date_parts] + [
+		Option("--enable-injections", default=False, action="store_true")
+	]
 ).parse_args()
 
 for s in date_parts:
@@ -186,6 +188,21 @@ gstlal_plotlatency_sub = EnvCondorJob("""gstlal_plotlatency
 
 gstlal_inspiral_page_sub = EnvCondorJob("gstlal_inspiral_page")
 
+if options.enable_injections:
+	lalapps_inspinj_sub = EnvCondorJob(r"""lalapps_inspinj
+		--gps-start-time $(macro_gps_start_time)
+		--gps-end-time $(macro_gps_end_time)
+		--t-distr uniform --time-step 1800
+		--d-distr uniform --min-distance 8000 --max-distance 8000
+		--l-distr fixed --latitude 20 --longitude 80
+		--i-distr fixed --fixed-inc 0
+		--m-distr componentMass --min-mtotal 2.8 --max-mtotal 2.8
+		--min-mass1 1.4 --max-mass1 1.4 --min-mass2 1.4 --max-mass2 1.4
+		--waveform IMRPhenomBpseudoFourPN --f-lower 10 --disable-spin
+		--user-tag $(macro_comment) --output swinj.xml""")
+
+	gstlal_inspiral_sub.add_arg("--injections swinj.xml")
+	ligolw_sqlite_sub.add_arg("swinj.xml")
 
 
 # Construct DAG nodes
@@ -217,6 +234,14 @@ gstlal_prune_duplicate_mass_pairs_node = makeNode(dag,
 gstlal_8hourly_plots_node = makeNode(dag, gstlal_8hourly_plots_sub)
 
 gstlal_inspiral_page_node = makeNode(dag, gstlal_inspiral_page_sub, parents=(gstlal_8hourly_plots_node,))
+
+if options.enable_injections:
+	lalapps_inspinj_node = makeNode(dag, lalapps_inspinj_sub,
+		macros = {
+		"macro_comment": comment,
+		"macro_gps_start_time": gps_start_time + 900,
+		"macro_gps_end_time": gps_end_time,
+	})
 
 for ifo, props in ifodict.iteritems():
 	gstlal_reference_psd_node = makeNode(dag, gstlal_reference_psd_sub,
@@ -262,6 +287,9 @@ for ifo, props in ifodict.iteritems():
 		macros = {"macro_instrument": ifo},
 		parents = (gstlal_inspiral_node,),
 		children = (gstlal_inspiral_page_node,))
+
+	if options.enable_injections:
+		gstlal_inspiral_node.add_parent(lalapps_inspinj_node)
 
 
 
