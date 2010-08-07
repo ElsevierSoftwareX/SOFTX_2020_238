@@ -45,35 +45,20 @@ page = cbcwebpage.cbcpage(title="gstlal 8-hour Job Page")
 
 
 # Section for Correlations between sngl_inspiral parameters
-correlations = page.add_subpage("correlations","Correlations","Correlations")
+subpage = page.add_subpage("sngl","Single Detector Overview","Single Detector Overview")
 
 
-perf = correlations.add_section("perf", "Performance", open_by_default=True)
-perf.add_table(cbcwebpage.image_glob("gstlal_inspiral.*.out.png", width=400), "perf", "Single Detector Performance")
+sect = subpage.add_section("perf", "Performance", open_by_default=True)
+sect.add_table(cbcwebpage.image_glob("gstlal_inspiral.*.out.png", width=400), "Single Detector Progress")
+sect.add_table(cbcwebpage.image_glob("triggerrate_*.png", width=400), "Net Trigger Rate")
 
 
-snr_chisq = correlations.add_section("snr_chisq","Chisq SNR for Triggers", open_by_default=True)
-snr_chisq.add_table(cbcwebpage.image_glob("snr_chisq_*.png", width=400), "snr_chisq", "Chisq vs. SNR for Triggers")
-
-
-eff_snr_chisq = correlations.add_section("eff_snr_chisq","Chisq Effective SNR for Triggers", open_by_default=True)
-eff_snr_chisq.add_table(cbcwebpage.image_glob("eff_snr_chisq_*.png", width=400), "snr_chisq", "Chisq vs. Effective SNR for Triggers")
-
-
-snr_endtime = correlations.add_section("snr_endtime","SNR Time Series for Triggers",open_by_default=True)
-snr_endtime.add_table(cbcwebpage.image_glob("snr_endtime_*.png", width=400), "snr_endtime", "SNR vs. end_time for Triggers")
-
-
-eff_snr_endtime = correlations.add_section("eff_snr_endtime","Effective SNR Time Series for Triggers",open_by_default=True)
-eff_snr_endtime.add_table(cbcwebpage.image_glob("eff_snr_endtime_*.png", width=400), "eff_snr_endtime", "Effective SNR vs. end_time for Triggers")
-
-
-trigrate = correlations.add_section("trigrate","Net Trigger Rate", open_by_default=True)
-trigrate.add_table(cbcwebpage.image_glob("triggerrate_*.png", width=400), "trigrate", "Net Trigger Rate")
-
-
-snr_deff = correlations.add_section("snr_deff", "Effective Distace vs. SNR for Triggers", open_by_default=True)
-snr_deff.add_table(cbcwebpage.image_glob("snr_effdistance_*.png", width=400), "snr_deff", "Effective Distace vs. SNR for Triggers")
+sect = subpage.add_section("trig", "Single Detector Trigger Distribution", open_by_default=True)
+sect.add_table(cbcwebpage.image_glob("snr_chisq_*.png", width=400), "Chi Squared vs. SNR")
+sect.add_table(cbcwebpage.image_glob("eff_snr_chisq_*.png", width=400), "Chi Squared vs. Effective SNR")
+sect.add_table(cbcwebpage.image_glob("snr_endtime_*.png", width=400), "SNR vs. End Time")
+sect.add_table(cbcwebpage.image_glob("eff_snr_endtime_*.png", width=400), "Effective SNR vs. End Time")
+sect.add_table(cbcwebpage.image_glob("snr_effdistance_*.png", width=400), "Effective Distance vs. SNR")
 
 
 
