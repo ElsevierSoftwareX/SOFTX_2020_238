@@ -17,10 +17,8 @@
 #
 
 
-import sys, os
 from optparse import OptionParser
-from glue import cbcwebpage, lal
-from pylal.followup_page import *
+from glue import cbcwebpage
 
 __author__ = "Erin Kara <ekara@ligo.caltech.edu>"
 
@@ -64,6 +62,9 @@ sect.add_table(cbcwebpage.image_glob("snr_effdistance_*.png", width=400), "Effec
 
 # Parse the cache.
 if opts.followups:
+	import sys
+	from pylal.followup_page import *
+
 	coinc_info, cache = cache_parser("followup_pipe.cache")
 
 	# Loop over different "searches" like full data, etc.
