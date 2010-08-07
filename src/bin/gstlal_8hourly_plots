@@ -133,6 +133,23 @@ for f in databases:
 	pylab.savefig("snr_endtime_%s" %ifo)
 
 
+	# Plot Effective SNR vs end_time
+	pylab.clf()
+	if len(params) > 0:
+		pylab.semilogy(params['end_time'], eff_snr, 'or')
+	for seg in non_science_segments:
+		pylab.axvspan(seg[0], seg[1], facecolor='0.75')
+	for t in hwinj_times:
+		pylab.axvline(t, color='blue')
+	pylab.xlim(in_start_time, in_end_time)
+	pylab.ylim(1, 100)
+	pylab.xlabel("end_time")
+	pylab.ylabel("Effective SNR")
+	pylab.title("Effective SNR vs end_time for %s" %ifo)
+	pylab.grid(True)
+	pylab.savefig("eff_snr_endtime_%s" %ifo)
+
+
 	# Plot net trigger rate
 	pylab.clf()
 	pylab.yscale('log')
