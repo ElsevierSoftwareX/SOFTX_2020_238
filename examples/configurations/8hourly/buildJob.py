@@ -199,10 +199,10 @@ if options.enable_injections:
 		--m-distr componentMass --min-mtotal 2.8 --max-mtotal 2.8
 		--min-mass1 1.4 --max-mass1 1.4 --min-mass2 1.4 --max-mass2 1.4
 		--waveform IMRPhenomBpseudoFourPN --f-lower 10 --disable-spin
-		--user-tag $(macro_comment) --output swinj.xml""")
+		--user-tag $(macro_comment) --output swinj.xml.gz""")
 
-	gstlal_inspiral_sub.add_arg("--injections swinj.xml")
-	ligolw_sqlite_sub.add_arg("swinj.xml")
+	gstlal_inspiral_sub.add_arg("--injections swinj.xml.gz")
+	ligolw_sqlite_sub.add_arg("swinj.xml.gz")
 
 
 # Construct DAG nodes
