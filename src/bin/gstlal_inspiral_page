@@ -47,16 +47,16 @@ subpage = page.add_subpage("sngl","Single Detector Overview","Single Detector Ov
 
 
 sect = subpage.add_section("perf", "Performance", open_by_default=True)
-sect.add_table(cbcwebpage.image_glob("gstlal_inspiral.*.out.png", width=400), "Single Detector Progress")
-sect.add_table(cbcwebpage.image_glob("triggerrate_*.png", width=400), "Net Trigger Rate")
+sect.add_table(cbcwebpage.image_glob("gstlal_inspiral.*.out.png", width=360), "Single Detector Progress")
+sect.add_table(cbcwebpage.image_glob("triggerrate_*.png", width=360), "Net Trigger Rate")
 
 
 sect = subpage.add_section("trig", "Single Detector Trigger Distribution", open_by_default=True)
-sect.add_table(cbcwebpage.image_glob("snr_chisq_*.png", width=400), "Chi Squared vs. SNR")
-sect.add_table(cbcwebpage.image_glob("eff_snr_chisq_*.png", width=400), "Chi Squared vs. Effective SNR")
-sect.add_table(cbcwebpage.image_glob("snr_endtime_*.png", width=400), "SNR vs. End Time")
-sect.add_table(cbcwebpage.image_glob("eff_snr_endtime_*.png", width=400), "Effective SNR vs. End Time")
-sect.add_table(cbcwebpage.image_glob("snr_effdistance_*.png", width=400), "Effective Distance vs. SNR")
+sect.add_table(cbcwebpage.image_glob("snr_chisq_*.png", width=360), "Chi Squared vs. SNR")
+sect.add_table(cbcwebpage.image_glob("eff_snr_chisq_*.png", width=360), "Chi Squared vs. Effective SNR")
+sect.add_table(cbcwebpage.image_glob("snr_endtime_*.png", width=360), "SNR vs. End Time")
+sect.add_table(cbcwebpage.image_glob("eff_snr_endtime_*.png", width=360), "Effective SNR vs. End Time")
+sect.add_table(cbcwebpage.image_glob("snr_effdistance_*.png", width=360), "Effective Distance vs. SNR")
 
 
 
