@@ -202,7 +202,6 @@ if options.enable_injections:
 		--user-tag $(macro_comment) --output swinj.xml.gz""")
 
 	gstlal_inspiral_sub.add_arg("--injections swinj.xml.gz")
-	ligolw_sqlite_sub.add_arg("swinj.xml.gz")
 
 
 # Construct DAG nodes
