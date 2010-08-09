@@ -245,6 +245,8 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 	 * done
 	 */
 
+	/* FIXME: Can XLALFrRead?????TimeSeries can return NULL on success? */
+
 	*out_series = series;
 	return GST_FLOW_OK;
 }
