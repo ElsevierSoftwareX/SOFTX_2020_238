@@ -388,7 +388,7 @@ def mkLLOIDsnrToTriggers(pipeline, snr_tee, bank, verbose = False, nxydump_segme
 
 	head = mkelems_fast(pipeline,
 		chisq,
-		"lal_triggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq},
+		"lal_triggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq, "algorithm": 1, "max-gap": 0.01},
 	)[-1]
 	mkelems_fast(pipeline, snr_tee, "queue", head)
 	if verbose:
