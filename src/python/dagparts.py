@@ -37,6 +37,7 @@ import time
 
 from glue import iterutils
 from glue import segments
+from glue import segmentsUtils
 from glue import pipeline
 from glue.lal import CacheEntry
 from pylal.datatypes import LIGOTimeGPS
@@ -571,6 +572,30 @@ def make_thinca_fragment(dag, parents, tag, verbose = False):
 	return nodes
 
 
+def make_thinca_fragment_maxextent(dag, parents, tag, verbose = False):
+	input_cache = power.collect_output_caches(parents)
+	nodes = set()
+	for i, (cache,parent) in enumerate(input_cache):
+		node = ThincaNode(thincajob)
+		seg = cache.segment
+		if i > 0 and not seg.disjoint(input_cache[i-1][0].segment):
+			lo = input_cache[i-1][0].segment[1]
+		else:
+			lo = segments.NegInfinity
+		if i < len(input_cache) - 1 and not seg.disjoint(input_cache[i+1][0].segment):
+			hi = input_cache[i+1][0].segment[0]
+		else:
+			hi = segments.PosInfinity
+		node.add_var_opt("coinc-end-time-segment",segmentsUtils.to_range_strings(segments.segmentlist([segments.segment(lo, hi)]))[0])
+		node.add_input_cache([cache])
+		node.add_parent(parent)
+		seg = power.cache_span(node.get_input_cache())
+		node.set_name("ligolw_thinca_%s_%d_%d" % (tag, int(seg[0]), int(abs(seg))))
+		node.add_macro("macrocomment", tag)
+		dag.add_node(node)
+		nodes.add(node)
+	return nodes
+
 #
 # =============================================================================
 #
@@ -643,3 +668,26 @@ def make_single_instrument_stage(dag, datafinds, seglistdict, tag, inspinjnodes 
 
 	# done
 	return nodes
+
+
+def breakupsegs(seg, maxextent, overlap):
+	if maxextent <= 0:
+		raise ValueError, "maxextent must be positive, not %s" % repr(maxextent)
+
+	seglist = segments.segmentlist()
+
+	while abs(seg) > maxextent:
+		seglist.append(segments.segment(seg[0], seg[0] + maxextent))
+		seg = segments.segment(seglist[-1][1] - overlap, seg[1])
+
+	seglist.append(seg)
+
+	return seglist
+
+
+def breakupseglists(seglists, maxextent, overlap):
+	for instrument, seglist in seglists.iteritems():
+		newseglist = segments.segmentlist()
+	        for bigseg in seglist:
+			newseglist.extend(breakupsegs(bigseg, maxextent, overlap))
+	        seglists[instrument] = newseglist
