@@ -460,7 +460,7 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 
 		# Look up our src pad and its caps.
 		pad = self.src_pads().next()
-		caps = pad.get_property('caps')
+		caps = pad.get_caps_reffed()
 
 		# Compute "good data" segment mask.
 		dq_require = int(self.get_property('data-quality-require'))
@@ -480,9 +480,8 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		if self.__last_successful_gps_end is not None and self.__last_successful_gps_end != gps_start:
 			offset = 16384 * self.__last_successful_gps_end
 			size = 16384 * (gps_start - self.__last_successful_gps_end) * 8
-			(retval, buf) = pad.alloc_buffer(offset, size, caps)
-			if retval != gst.FLOW_OK:
-				return (retval, None)
+			buf = gst.buffer_new_and_alloc(size)
+			buf.caps = caps
 			buf.offset = offset
 			buf.offset_end = 16384 * gps_start
 			buf.duration = gst.SECOND * (gps_start - self.__last_successful_gps_end)
@@ -503,9 +502,8 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 			if is_nongap ^ was_nongap:
 				offset = 16384 * (gps_start + last_segment_num)
 				size = 16384 * (segment_num - last_segment_num) * 8
-				(retval, buf) = pad.alloc_buffer(offset, size, caps)
-				if retval != gst.FLOW_OK:
-					return (retval, None)
+				buf = gst.buffer_new_and_alloc(size)
+				buf.caps = caps
 				buf[0:size] = hoft_array[(16384*last_segment_num):(16384*segment_num)].data
 				buf.offset = offset
 				buf.offset_end = 16384 * (gps_start + segment_num)
@@ -525,9 +523,8 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		segment_num = 16
 		offset = 16384 * (gps_start + last_segment_num)
 		size = 16384 * (segment_num - last_segment_num) * 8
-		(retval, buf) = pad.alloc_buffer(offset, size, caps)
-		if retval != gst.FLOW_OK:
-			return (retval, None)
+		buf = gst.buffer_new_and_alloc(size)
+		buf.caps = caps
 		buf[0:size] = hoft_array[(16384*last_segment_num):(16384*segment_num)].data
 		buf.offset = offset
 		buf.offset_end = 16384 * (gps_start + segment_num)

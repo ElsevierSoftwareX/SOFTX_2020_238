@@ -96,7 +96,7 @@ def make_coinc_branch(dag, datafinds, seglists, time_slides, vetoes_cache, tag, 
 	# injection job
 	#
 
-	if options.injections:
+	if do_injections:
 		injnodes = gstlaldagparts.make_inspinj_fragment(dag, seglists.extent_all(), tag, 0.0)
 	else:
 		injnodes = set()
@@ -136,11 +136,8 @@ def make_coinc_branch(dag, datafinds, seglists, time_slides, vetoes_cache, tag, 
 
 		tisi_cache = set([time_slides_cache_entry])
 		nodes = set()
-		for seg, parents, cache in power.group_coinc_parents(trigger_nodes, these_time_slides, extentlimit = extentlimit, verbose = verbose):
-			preserve_cache = inj_cache | tisi_cache | vetoes_cache
-			if not options.injections:
-				preserve_cache |= cache
-			nodes |= power.make_lladd_fragment(dag, parents | injnodes, "%s_%d" % (tag, n), segment = seg, input_cache = cache | inj_cache, extra_input_cache = tisi_cache | vetoes_cache, preserve_cache = preserve_cache)
+		for seg, parents, cache in power.group_coinc_parents(trigger_nodes, these_time_slides, verbose = verbose):
+			nodes |= power.make_lladd_fragment(dag, parents | injnodes, "%s_%d" % (tag, n), segment = seg, input_cache = cache | inj_cache, extra_input_cache = tisi_cache | vetoes_cache, remove_input = False, preserve_cache = inj_cache | tisi_cache | vetoes_cache)
 
 		#
 		# ligolw_thinca
