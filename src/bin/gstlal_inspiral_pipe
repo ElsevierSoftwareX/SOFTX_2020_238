@@ -136,7 +136,7 @@ def make_coinc_branch(dag, datafinds, seglists, time_slides, vetoes_cache, tag, 
 
 		tisi_cache = set([time_slides_cache_entry])
 		nodes = set()
-		for seg, parents, cache in power.group_coinc_parents(trigger_nodes, these_time_slides, verbose = verbose):
+		for seg, parents, cache, clipseg in power.group_coinc_parents(trigger_nodes, these_time_slides, verbose = verbose):
 			nodes |= power.make_lladd_fragment(dag, parents | injnodes, "%s_%d" % (tag, n), segment = seg, input_cache = cache | inj_cache, extra_input_cache = tisi_cache | vetoes_cache, remove_input = False, preserve_cache = inj_cache | tisi_cache | vetoes_cache)
 
 		#
