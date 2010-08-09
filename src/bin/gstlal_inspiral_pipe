@@ -317,7 +317,10 @@ gstlaldagparts.breakupseglists(background_seglists, min_segment_length, gstlal_i
 # build analysis branch
 #
 
-extentlimit = config_parser.getfloat("pipeline", "max_cafe_extent")
+if config_parser.has_option("pipeline", "max_cafe_extent"):
+	extentlimit = config_parser.getfloat("pipeline", "max_cafe_extent")
+else:
+	extentlimit = None
 
 coinc_nodes = make_coinc_branch(dag, datafinds, background_seglists, background_time_slides, vetoes_cache, config_parser.get("pipeline", "user_tag"), do_injections = options.injections, extentlimit = extentlimit, verbose = options.verbose)
 

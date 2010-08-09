@@ -571,26 +571,22 @@ def make_thinca_fragment(dag, parents, tag, verbose = False):
 		nodes.add(node)
 	return nodes
 
+
 def make_thinca_fragment_maxextent(dag, parents, tag, verbose = False):
 	input_cache = power.collect_output_caches(parents)
 	nodes = set()
 	for i, (cache,parent) in enumerate(input_cache):
 		node = ThincaNode(thincajob)
-		outseg = [0,0]
-		if i > 0:
-			prev_seg = input_cache[i-1][0].segment
+		seg = cache.segment
+		if i > 0 and not seg.disjoint(input_cache[i-1][0].segment):
+			lo = input_cache[i-1][0].segment[1]
 		else:
-			prev_seg = segments.segment(0,0)
-		if i < len(input_cache) - 1:
-			next_seg = input_cache[i+1][0].segment
+			lo = segments.NegInfinity
+		if i < len(input_cache) - 1 and not seg.disjoint(input_cache[i+1][0].segment):
+			hi = input_cache[i+1][0].segment[0]
 		else:
-			next_seg = segments.segment(0,0)
-		current_seg = cache.segment
-		if not current_seg.disjoint(prev_seg):
-			outseg[0] = current_seg[0]
-		if not current_seg.disjoint(next_seg):
-			outseg[1] = current_seg[1]
-		node.add_var_opt("coinc-end-time-segment",segmentsUtils.to_range_strings(segments.segmentlist([outseg]))[0])
+			hi = segments.PosInfinity
+		node.add_var_opt("coinc-end-time-segment",segmentsUtils.to_range_strings(segments.segmentlist([segments.segment(lo, hi)]))[0])
 		node.add_input_cache([cache])
 		node.add_parent(parent)
 		seg = power.cache_span(node.get_input_cache())
@@ -675,31 +671,17 @@ def make_single_instrument_stage(dag, datafinds, seglistdict, tag, inspinjnodes 
 
 
 def breakupsegs(seg, maxextent, overlap):
-	# setup the output
+	if maxextent <= 0:
+		raise ValueError, "maxextent must be positive, not %s" % repr(maxextent)
+
 	seglist = segments.segmentlist()
 
-	# Handle the trivial case
-	if not maxextent or abs(seg) <= maxextent:
-		seglist.append(seg)
-		return seglist
+	while abs(seg) > maxextent:
+		seglist.append(segments.segment(seg[0], seg[0] + maxextent))
+		seg = segments.segment(seglist[-1][1] - overlap, seg[1])
 
-	# Handle the first segment to output
-	seglist.append(segments.segment([seg[0], seg[0]+maxextent]))
+	seglist.append(seg)
 
-	# Work out how many segments
-	pieces = int(abs(seg) / (maxextent - overlap))
-
-	# add segments
-	for p in range(1, pieces):
-		seglist.append(segments.segment([seg[0]+p*(maxextent - overlap), seg[0] + (p)*(maxextent - overlap) + maxextent ]))
-
-	# handle last segment
-	if seglist.extent()[1] > seg[1]:
-		seglist.pop(-1)
-	if abs(seglist.extent()) < abs(seg):
-		seglist.append(segments.segment([seg[1] - maxextent, seg[1]]))
-
-	# Thats it!
 	return seglist
 
 
