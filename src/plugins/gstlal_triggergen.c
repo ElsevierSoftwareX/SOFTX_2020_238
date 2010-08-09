@@ -1074,11 +1074,11 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 			 */
 			push_zeros(element, element->snradapter, snrbuf);
 			push_zeros(element, element->chisqadapter, chisqbuf);
-		
+
 			/*
 			 * We are done with snr and chisq buffers
 			 */
-		
+
 			gst_buffer_unref(snrbuf);
 			gst_buffer_unref(chisqbuf);
 		}
