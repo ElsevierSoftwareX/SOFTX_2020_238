@@ -15,16 +15,12 @@ from glue import cbcwebpage, lal
 
 def parse_command_line():
 	parser = OptionParser()
-	parser.add_option("-b", "--bg-interval", type = float, help = "Choose background time interval around the hardware injection [default: 300 seconds]")
-	parser.add_option("-m", "--macro-fg-interval", type = float, help = "Choose macro-foreground time interval around the hardware injection [default: 1 second]")
-	parser.add_option("-f", "--fg-interval", type = float, help = "Choose foreground time interval around the hardware injection [default: 0.01 seconds]")
+	parser.add_option("-b", "--bg-interval", type = float, default = 300, help = "Choose background time interval around the hardware injection [default: 300 seconds]")
+	parser.add_option("-m", "--macro-fg-interval", type = float, default = 1, help = "Choose macro-foreground time interval around the hardware injection [default: 1 second]")
+	parser.add_option("-f", "--fg-interval", type = float, default = 0.001, help = "Choose foreground time interval around the hardware injection [default: 0.01 seconds]")
 	parser.add_option("-l", "--low-mass", default=True, help = "Find only injections of low-mass binaries with mchirp <= 1.392881 [default]")
 
 	opts, filenames = parser.parse_args()
-	
-	if not opts.bg_interval: opts.bg_interval = 300
-	if not opts.macro_fg_interval: opts.macro_fg_interval = 1
-	if not opts.fg_interval: opts.fg_interval = 0.001
 	
 	if not filenames:
 		raise RuntimeError("Must specify at least one database file.")
