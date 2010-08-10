@@ -124,8 +124,6 @@ for f in databases:
 	for t in hwinj_times:
 		pylab.axvline(t, color='blue')
 	pylab.xlim(in_start_time, in_end_time)
-	if len(params) > 0:
-		pylab.ylim(params['snr'].min(), params['snr'].max())
 	pylab.xlabel("end_time")
 	pylab.ylabel("SNR")
 	pylab.title("SNR vs end_time for %s" %ifo)
