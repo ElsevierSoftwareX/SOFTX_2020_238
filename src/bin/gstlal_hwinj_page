@@ -1,18 +1,8 @@
 #!/usr/bin/env python
 __author__ = "Erin Kara <ekara@ligo.caltech.edu>"
 
-try:
-	import sqlite3
-except ImportError:
-	# pre 2.5.x
-	from pysqlite2 import dbapi2 as sqlite3
-import matplotlib
-import pylab
+
 from optparse import Option, OptionParser
-from glue.ligolw import dbtables
-from glue import cbcwebpage, lal
-
-
 opts, databases = OptionParser(
 	option_list = [
 		Option("-b", "--bg-interval", type = float, default = 300, help = "Choose background time interval around the hardware injection [default: 300 seconds]"),
@@ -21,6 +11,17 @@ opts, databases = OptionParser(
 		Option("-l", "--low-mass", default=True, help = "Find only injections of low-mass binaries with mchirp <= 1.392881 [default]"),
 	]
 ).parse_args()
+
+
+try:
+	import sqlite3
+except ImportError:
+	# pre 2.5.x
+	from pysqlite2 import dbapi2 as sqlite3
+import matplotlib
+import pylab
+from glue.ligolw import dbtables
+from glue import cbcwebpage, lal
 
 
 sim_inspiral_sci_query = """
