@@ -302,7 +302,10 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	return elems[-1]
 
 
-def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, control_snksrc, verbose = False, nxydump_segment = None):
+def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbose = False, nxydump_segment = None):
+	"""Build pipeline fragment that converts h(t) to SNR."""
+	# FIXME: The last two parameters are either used only for logging, or only in commented out code.
+
 	logname = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 
 	#
@@ -350,21 +353,35 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, control_snksrc
 	# snr
 	#
 
-	snr = mkelems_fast(pipeline,
+	return mkelems_fast(pipeline,
 		snr,
 		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % output_rate)},
 		"lal_togglecomplex",
 		"tee"
 	)[-1]
-	#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % logname, segment = nxydump_segment)
-	#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % logname, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[output_rate], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
+
+
+def mkLLOIDsnrToTriggers(pipeline, snr_tee, bank, verbose = False, nxydump_segment = None, logname = None):
+	"""Build pipeline fragment that converts single detector SNR into triggers."""
+	# FIXME: The last three parameters are either used only for logging, or only in commented out code.
+
+	#
+	# parameters
+	#
+
+	output_rate = max(bank.get_rates())
+	autocorrelation_length = bank.autocorrelation_bank.shape[1]
+	autocorrelation_latency = -(autocorrelation_length - 1) / 2
+
+	#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr_tee)), "snr_%s.dump" % logname, segment = nxydump_segment)
+	#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr_tee), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % logname, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[output_rate], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
 
 	#
 	# \chi^{2}
 	#
 
 	chisq = mkelems_fast(pipeline,
-		snr,
+		snr_tee,
 		"queue",
 		"lal_autochisq", {"autocorrelation-matrix": pipeio.repack_complex_array_to_real(bank.autocorrelation_bank), "latency": autocorrelation_latency, "snr-thresh": bank.snr_threshold}
 	)[-1]
@@ -381,7 +398,7 @@ def mkLLOIDsingle(pipeline, hoftdict, instrument, detector, bank, control_snksrc
 		chisq,
 		"lal_triggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq},
 	)[-1]
-	mkelems_fast(pipeline, snr, "queue", head)
+	mkelems_fast(pipeline, snr_tee, "queue", head)
 	if verbose:
 		head = mkelems_fast(pipeline, head, "progressreport", {"name": "progress_xml_%s" % logname})[-1]
 
@@ -419,15 +436,22 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 		for bank in banks:
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
 			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % bank.logname, segment = nxydump_segment)
-			head = mkLLOIDsingle(
+			snr_tee = mkLLOIDhoftToSnr(
 				pipeline,
 				hoftdict,
 				instrument,
-				detectors[instrument],
 				bank,
 				control_snksrc,
 				verbose = verbose,
 				nxydump_segment = nxydump_segment
+			)
+			head = mkLLOIDsnrToTriggers(
+				pipeline,
+				snr_tee,
+				bank,
+				verbose = verbose,
+				nxydump_segment = nxydump_segment,
+				logname = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 			)
 			if needs_input_selector:
 				mkelems_fast(pipeline, head, "queue", nto1)
