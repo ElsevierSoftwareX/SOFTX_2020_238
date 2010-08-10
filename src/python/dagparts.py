@@ -379,6 +379,94 @@ class ThincaNode(pipeline.CondorDAGNode):
 		raise NotImplementedError
 
 
+class RunSqliteJob(pipeline.CondorDAGJob):
+	"""
+        A lalapps_run_sqlite job used by the gstlal pipeline. The static
+        options are read from the [lalapps_run_sqlite] section in the ini
+        file.  The stdout and stderr from the job are directed to the logs
+        directory.  The job runs in the universe specified in the ini file.
+        The path to the executable is determined from the ini file.
+	"""
+        def __init__(self, config_parser):
+                """
+                config_parser = ConfigParser object
+                """
+                pipeline.CondorDAGJob.__init__(self, power.get_universe(config_parser), power.get_executable(config_parser, "lalapps_run_sqlite"))
+                self.add_ini_opts(config_parser, "lalapps_run_sqlite")
+                self.set_stdout_file(os.path.join(power.get_out_dir(config_parser), "lalapps_run_sqlite-$(cluster)-$(process).out"))
+                self.set_stderr_file(os.path.join(power.get_out_dir(config_parser), "lalapps_run_sqlite-$(cluster)-$(process).err"))
+		self.add_condor_cmd("getenv", "True")
+                self.set_sub_file("lalapps_run_sqlite.sub")
+
+
+class RunSqliteNode(pipeline.CondorDAGNode):
+        def __init__(self, *args):
+                pipeline.CondorDAGNode.__init__(self, *args)
+		self.input_cache = []
+		self.output_cache = self.input_cache
+
+	def add_input_cache(self, cache):
+		self.input_cache.extend(cache)
+
+	def get_output_cache(self):
+		return self.output_cache	
+
+
+class SqliteToXMLJob(pipeline.CondorDAGJob):
+        """
+        A ligolw_sqlite job used by the gstlal pipeline. The static
+        options are read from the [ligolw_sqlite] section in the ini
+        file.  The stdout and stderr from the job are directed to the logs
+        directory.  The job runs in the universe specified in the ini file.
+        The path to the executable is determined from the ini file.
+        """
+        def __init__(self, config_parser):
+                """
+                config_parser = ConfigParser object
+                """
+                pipeline.CondorDAGJob.__init__(self, power.get_universe(config_parser), power.get_executable(config_parser, "ligolw_sqlite"))
+                self.add_ini_opts(config_parser, "sqlitetoxml")
+                self.set_stdout_file(os.path.join(power.get_out_dir(config_parser), "ligolw_sqlite-$(cluster)-$(process).out"))
+                self.set_stderr_file(os.path.join(power.get_out_dir(config_parser), "ligolw_sqlite-$(cluster)-$(process).err"))
+                self.add_condor_cmd("getenv", "True")
+                self.set_sub_file("ligolw_sqlitetoxml.sub")
+
+
+class SqliteToXMLNode(pipeline.CondorDAGNode):
+        def __init__(self, *args):
+                pipeline.CondorDAGNode.__init__(self, *args)
+                self.input_cache = []
+                self.output_cache = []
+
+        def add_input_cache(self, cache):
+                if self.output_cache:
+                        raise AttributeError, "cannot change attributes after computing output cache"
+                self.input_cache.extend(cache)
+
+        def add_file_arg(self, filename):
+                raise NotImplementedError
+
+        def set_output(self, filename):
+                if self.output_cache:
+                        raise AttributeError, "cannot change attributes after computing output cache"
+                self.add_macro("macrodatabase", filename)
+		self.add_macro("macroextract", filename.replace(".sqlite", ".xml.gz"))
+	
+        def get_input_cache(self):
+                return self.input_cache
+
+        def get_output_cache(self):
+                if not self.output_cache:
+                        self.output_cache = [power.make_cache_entry(self.input_cache, None, self.get_opts()["macroextract"])]
+                return self.output_cache
+
+        def get_output_files(self):
+                raise NotImplementedError
+
+        def get_output(self):
+                raise NotImplementedError
+
+
 #
 # =============================================================================
 #
@@ -400,11 +488,11 @@ siclusterjob = None
 thincajob = None
 
 
-def init_job_types(config_parser, job_types = ("inspinj", "gstlalinspiral", "inspinjfind", "sicluster", "thinca")):
+def init_job_types(config_parser, job_types = ("inspinj", "gstlalinspiral", "inspinjfind", "sicluster", "thinca", "runsqlite", "sqlitetoxml")):
 	"""
 	Construct definitions of the submit files.
 	"""
-	global inspinjjob, gstlalinspiraljob, inspinjfindjob, siclusterjob, thincajob
+	global inspinjjob, gstlalinspiraljob, inspinjfindjob, siclusterjob, thincajob, runsqlitejob, sqlitetoxmljob
 
 	# lalapps_binj
 	if "inspinj" in job_types:
@@ -435,6 +523,14 @@ def init_job_types(config_parser, job_types = ("inspinj", "gstlalinspiral", "ins
 		thincajob.files_per_thinca = get_files_per_thinca(config_parser)
 		if thincajob.files_per_thinca < 1:
 			raise ValueError, "files_per_thinca < 1"
+	
+	# lalapps_run_sqlite
+	if "runsqlite" in job_types:
+		runsqlitejob = RunSqliteJob(config_parser)
+
+	# ligolw_sqlite
+	if "sqlitetoxml" in job_types:
+		sqlitetoxmljob = SqliteToXMLJob(config_parser)
 
 
 #
@@ -597,6 +693,35 @@ def make_thinca_fragment_maxextent(dag, parents, tag, verbose = False):
 		dag.add_node(node)
 		nodes.add(node)
 	return nodes
+
+
+def make_runsqlite_fragment(dag, parents, tag, verbose = False):
+	input_cache = power.collect_output_caches(parents)
+        nodes = set()
+        for cache_entry, parent in input_cache:
+                node = RunSqliteNode(runsqlitejob)
+		node.add_input_cache([cache_entry])
+                node.add_parent(parent)
+                node.set_name("lalapps_run_sqlite_%s_%d" % (tag, len(nodes)))
+		[node.add_file_arg(f.path()) for f in parent.get_output_cache()]
+                dag.add_node(node)
+                nodes.add(node)
+        return nodes
+
+
+def make_sqlitetoxml_fragment(dag, parents, tag, verbose = False):
+        input_cache = power.collect_output_caches(parents)
+        nodes = set()
+        for cache_entry, parent in input_cache:
+                node = SqliteToXMLNode(sqlitetoxmljob)
+                node.add_input_cache([cache_entry])
+                node.add_parent(parent)
+                node.set_name("ligolw_sqlitetoxml_%s_%d" % (tag, len(nodes)))
+                node.set_output(cache_entry.path())
+                dag.add_node(node)
+                nodes.add(node)
+        return nodes
+
 
 #
 # =============================================================================
