@@ -1,0 +1,256 @@
+#!/usr/bin/env python
+
+try:
+	import sqlite3
+except ImportError:
+	# pre 2.5.x
+	from pysqlite2 import dbapi2 as sqlite3
+import matplotlib
+import pylab
+from optparse import OptionParser
+from glue.ligolw import dbtables
+from pylal import git_version
+from glue import cbcwebpage, lal
+
+__author__ = "Erin Kara <ekara@ligo.caltech.edu>"
+__version__ = "git id %s" % git_version.id
+__date__ = git_version.date
+
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("-b", "--bg-interval", type = float, help = "Choose background time interval around the hardware injection [default: 300 seconds]")
+	parser.add_option("-m", "--macro-fg-interval", type = float, help = "Choose macro-foreground time interval around the hardware injection [default: 1 second]")
+	parser.add_option("-f", "--fg-interval", type = float, help = "Choose foreground time interval around the hardware injection [default: 0.01 seconds]")
+	parser.add_option("-l", "--low-mass", default=True, help = "Find only injections of low-mass binaries with mchirp <= 1.392881 [default]")
+
+	opts, filenames = parser.parse_args()
+	
+	if not opts.bg_interval: opts.bg_interval = 300
+	if not opts.macro_fg_interval: opts.macro_fg_interval = 1
+	if not opts.fg_interval: opts.fg_interval = 0.001
+	
+	if not filenames:
+		raise RuntimeError("Must specify at least one database file.")
+	return opts, filenames
+
+opts,databases = parse_command_line()
+
+sim_inspiral_sci_query = """
+	SELECT geocent_end_time+geocent_end_time_ns*1e-9 AS end_time_s, sim_inspiral.mchirp, simulation_id
+		FROM sim_inspiral
+		INNER JOIN segment
+		WHERE mchirp <= :mchirp
+		AND end_time_s
+		BETWEEN start_time AND end_time 
+	"""
+
+filtered_sngl_inspiral_query = """
+	SELECT sngl_inspiral.snr, sngl_inspiral.chisq, sngl_inspiral.mchirp,
+		sngl_inspiral.end_time+sngl_inspiral.end_time_ns*1e-9 AS end_time_s
+		FROM sngl_inspiral
+		INNER JOIN sim_inspiral
+		WHERE simulation_id=:id
+		AND end_time_s
+		BETWEEN geocent_end_time + geocent_end_time_ns*1e-9 - :time_interval
+		AND geocent_end_time + geocent_end_time_ns * 1e-9 + :time_interval
+	"""
+
+bg_plot_kwargs = {
+	'linestyle' : 'none',
+	'marker' : '+',
+	'markeredgecolor' : '0.5',
+	'label' : 'Injection Time $\pm$ %.0f s' % opts.bg_interval
+}
+
+macro_fg_plot_kwargs = {
+	'linestyle' : 'none',
+	'marker' : 'x',
+	'markeredgecolor' : 'r',
+	'label' : 'Injection Time $\pm$ %.0f s' % opts.macro_fg_interval
+}
+
+fg_plot_kwargs = {
+	'linestyle' : 'none',
+	'marker' : 'o',
+	'markeredgecolor' : 'b',
+	'markerfacecolor' : 'none',
+	'label' : 'Injection Time $\pm$ %.3f s' % opts.fg_interval
+}
+
+legend_kwargs = {
+	'loc' : 'upper right',
+	'prop' : matplotlib.font_manager.FontProperties(size='small')
+}
+
+def no_plot():
+	pylab.axes(axisbg='0.75')
+	pylab.text(0.5, 0.5, "%s not in science mode\nat time of injection: %.0f" %(ifo,injection_time), verticalalignment='center', horizontalalignment='center', color='r')
+	
+
+# Make a webpage to be filled with hardware injection information
+webpage = cbcwebpage.cbcpage(title="gstlal Hardware Injection Page")
+
+
+injection_set = set()
+for f in databases:
+
+	# Connect with SQLite
+	working_filename = dbtables.get_connection_filename(f)
+	connection = sqlite3.connect(working_filename)
+	dbtables.DBTable_set_connection(connection)
+
+	if opts.low_mass: mchirp = 1.392881 # FIXME: Instead of hardcoding, get max from tmpltbank
+	else: mchirp = 16 # FIXME: All injections are under 16 Msun
+
+	# Query HW injections that occured during science segments
+	sim_inspiral_science = connection.cursor().execute(sim_inspiral_sci_query, {"mchirp":mchirp}).fetchall()
+	for row in sim_inspiral_science:
+		injection_set.add(row)
+
+
+	# Close connection to SQLite
+	dbtables.discard_connection_filename(f, working_filename)
+	dbtables.DBTable_set_connection(None)
+
+
+# Make a subpage for each injection
+subpages = []
+for row in injection_set:
+	id= str(row[2])	
+	id = id.strip("sim_inspiral:simulation_id:")
+	hw_inj = webpage.add_subpage("injection_%s" %id, "Simulation ID: %s" %id, "Simulation ID: %s" %id)
+	subpages.append(hw_inj)
+
+
+for subpage in subpages:
+	
+	
+	for row in injection_set:
+		injection_time = row[0]
+		injection_mchirp = row[1]
+		id= str(row[2])
+	
+		sngl_det_plots = subpage.add_section("sngl_det_plots", "Hardware Injection Plots for Single Detector Pipeline")
+		
+		for f in databases:
+			
+			ifo = f.strip("gstlal_inspiral..sqlite")
+
+			working_filename = dbtables.get_connection_filename(f)
+			connection = sqlite3.connect(working_filename)
+			dbtables.DBTable_set_connection(connection)
+
+			science_seg = connection.cursor().execute(sim_inspiral_sci_query, {"mchirp":mchirp}).fetchall()
+			to_plot = False
+			if injection_time in [c[0] for c in science_seg]:
+					to_plot = True
+			
+			if to_plot:
+
+				# Query sngl_inspiral table
+				filtered_sngl_inspiral_bg = pylab.array(
+					connection.cursor().execute(
+						filtered_sngl_inspiral_query, {"time_interval":opts.bg_interval, "id":id}).fetchall(),
+					dtype=[(field_name,float) for field_name in "snr,chisq,mchirp,end_time_s".split(',')]
+				)
+				filtered_sngl_inspiral_macro_fg = pylab.array(
+					connection.cursor().execute(
+						filtered_sngl_inspiral_query, {"time_interval":opts.macro_fg_interval, "id":id}).fetchall(),
+					dtype=[(field_name,float) for field_name in "snr,chisq,mchirp,end_time_s".split(',')]
+				)
+				filtered_sngl_inspiral_fg = pylab.array(
+					connection.cursor().execute(
+						filtered_sngl_inspiral_query, {"time_interval":opts.fg_interval, "id":id}).fetchall(),
+					dtype=[(field_name,float) for field_name in "snr,chisq,mchirp,end_time_s".split(',')]
+				)		
+
+			# Plot ChiSq vs. SNR from filtered_sngl_inspiral
+			pylab.clf()	
+			if to_plot:
+				pylab.plot(filtered_sngl_inspiral_bg['snr'], filtered_sngl_inspiral_bg['chisq'], **bg_plot_kwargs)
+				pylab.plot(filtered_sngl_inspiral_macro_fg['snr'], filtered_sngl_inspiral_macro_fg['chisq'], **macro_fg_plot_kwargs)
+				pylab.plot(filtered_sngl_inspiral_fg['snr'], filtered_sngl_inspiral_fg['chisq'], **fg_plot_kwargs)
+				pylab.legend(**legend_kwargs)
+				pylab.title("ChiSq vs. SNR at %s" % ifo)
+				pylab.xlabel("SNR")
+				pylab.ylabel("ChiSq")
+				pylab.grid(True)
+			else:
+				no_plot()
+			pylab.savefig("hwinj_snr_chisq_%.0f_%s.png" %(injection_time,ifo))
+
+			# Plot Mchirp vs. end_time from filtered_sngl_inspiral
+			pylab.clf()
+			if to_plot:
+				pylab.axvline(x=injection_time, label = 'Injection Time: %.0f' % injection_time, color='g')
+				pylab.axhline(y=injection_mchirp, label='Injected Mchirp: %.2f $\mathrm{M_\odot}$' %injection_mchirp, color='b')
+				pylab.plot(filtered_sngl_inspiral_bg['end_time_s'], filtered_sngl_inspiral_bg['mchirp'], **bg_plot_kwargs)
+				pylab.plot(filtered_sngl_inspiral_macro_fg['end_time_s'], filtered_sngl_inspiral_macro_fg['mchirp'], **macro_fg_plot_kwargs)
+				pylab.plot(filtered_sngl_inspiral_fg['end_time_s'], filtered_sngl_inspiral_fg['mchirp'], **fg_plot_kwargs)
+				pylab.ylim(ymin=min(filtered_sngl_inspiral_bg['mchirp']))
+				pylab.xlim(injection_time - opts.bg_interval, injection_time + opts.bg_interval)	
+				pylab.legend(**legend_kwargs)
+				pylab.title("Mchirp vs. end_time at %s" % ifo)
+				pylab.ylabel("Mchirp ($\mathrm{M_\odot}$)")
+				pylab.xlabel("end_time (GPS seconds)")
+				pylab.grid(True)
+			else:
+				no_plot()
+			pylab.savefig("hwinj_mchirp_endtime_%.0f_%s.png" %(injection_time,ifo))
+			
+
+			# Plot SNR vs. end_time from filtered_sngl_inspiral
+			pylab.clf()
+			if to_plot:
+				pylab.axvline(x=injection_time, label = 'Injection Time: %.0f' % injection_time, color='g')
+				pylab.plot(filtered_sngl_inspiral_bg['end_time_s'], filtered_sngl_inspiral_bg['snr'], **bg_plot_kwargs)
+				pylab.plot(filtered_sngl_inspiral_macro_fg['end_time_s'], filtered_sngl_inspiral_macro_fg['snr'], **macro_fg_plot_kwargs)
+				pylab.plot(filtered_sngl_inspiral_fg['end_time_s'], filtered_sngl_inspiral_fg['snr'], **fg_plot_kwargs)
+				pylab.xlim(injection_time - opts.bg_interval, injection_time + opts.bg_interval)
+				pylab.ylim(ymin=min(filtered_sngl_inspiral_bg['snr']))
+				pylab.legend(**legend_kwargs)
+				pylab.title("SNR vs. end_time at %s" % ifo)
+				pylab.ylabel("SNR")
+				pylab.xlabel("end_time (GPS seconds)")
+				pylab.grid(True)
+			else:
+				no_plot()
+			pylab.savefig("hwinj_snr_endtime_%.0f_%s.png" %(injection_time,ifo))
+
+
+			# Plot Mchirp vs. SNR from filtered_sngl_inspiral
+			pylab.clf()
+			if to_plot:
+				pylab.axvline(x=injection_mchirp, label='Injected Mchirp: %.2f $\mathrm{M_\odot}$' %injection_mchirp, color='b')
+				pylab.plot(filtered_sngl_inspiral_bg['mchirp'], filtered_sngl_inspiral_bg['snr'], **bg_plot_kwargs)
+				pylab.plot(filtered_sngl_inspiral_macro_fg['mchirp'], filtered_sngl_inspiral_macro_fg['snr'], **macro_fg_plot_kwargs)
+				pylab.plot(filtered_sngl_inspiral_fg['mchirp'], filtered_sngl_inspiral_fg['snr'], **fg_plot_kwargs)
+				xmin = min(filtered_sngl_inspiral_bg['mchirp'])
+				xmax = max(filtered_sngl_inspiral_bg['mchirp'])
+				pylab.xlim(xmin, xmax)
+				ymin = min(filtered_sngl_inspiral_bg['snr'])
+				ymax = max(filtered_sngl_inspiral_bg['snr'])
+				pylab.ylim(ymin, ymax)
+				pylab.legend(**legend_kwargs)
+				pylab.title("Mchirp vs. SNR at %s" % ifo)
+				pylab.ylabel("SNR")
+				pylab.xlabel("Mchirp ($\mathrm{M_\odot}$)")
+				pylab.grid(True)
+			else:
+				no_plot()
+			pylab.savefig("hwinj_mchirp_snr_%.0f_%s.png" %(injection_time,ifo))
+					
+
+			# Close connection to SQLite
+			dbtables.discard_connection_filename(f, working_filename)
+			dbtables.DBTable_set_connection(None)
+
+				
+		sngl_det_plots.add_table(cbcwebpage.image_glob("hwinj_snr_chisq_%.0f_*.png" % injection_time, width=400), "hwinj_snr_chisq", "SNR vs. ChiSq")
+		sngl_det_plots.add_table(cbcwebpage.image_glob("hwinj_mchirp_endtime_%.0f_*.png" %injection_time, width=400), "hwinj_mchirp_endtime", "Mchirp vs end_time")
+		sngl_det_plots.add_table(cbcwebpage.image_glob("hwinj_snr_endtime_%.0f_*.png" %injection_time, width=400), "hwinj_snr_endtime", "SNR vs. end_time")
+		sngl_det_plots.add_table(cbcwebpage.image_glob("hwinj_mchirp_snr_%.0f_*.png" %injection_time, width=400), "hwinj_snr_mchirp", "Mchirp vs. SNR") 
+
+
+# write the page to disk
+webpage.write()
