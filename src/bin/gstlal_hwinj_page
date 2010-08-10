@@ -235,10 +235,10 @@ for subpage in subpages:
 			dbtables.DBTable_set_connection(None)
 
 				
-		sngl_det_plots.add_table(cbcwebpage.image_glob("hwinj_snr_chisq_%.0f_*.png" % injection_time, width=400), "hwinj_snr_chisq", "SNR vs. ChiSq")
-		sngl_det_plots.add_table(cbcwebpage.image_glob("hwinj_mchirp_endtime_%.0f_*.png" %injection_time, width=400), "hwinj_mchirp_endtime", "Mchirp vs end_time")
-		sngl_det_plots.add_table(cbcwebpage.image_glob("hwinj_snr_endtime_%.0f_*.png" %injection_time, width=400), "hwinj_snr_endtime", "SNR vs. end_time")
-		sngl_det_plots.add_table(cbcwebpage.image_glob("hwinj_mchirp_snr_%.0f_*.png" %injection_time, width=400), "hwinj_snr_mchirp", "Mchirp vs. SNR") 
+		sngl_det_plots.add_table(cbcwebpage.image_glob("hwinj_snr_chisq_%.0f_*.png" % injection_time, width=360), "hwinj_snr_chisq", "SNR vs. ChiSq")
+		sngl_det_plots.add_table(cbcwebpage.image_glob("hwinj_mchirp_endtime_%.0f_*.png" %injection_time, width=360), "hwinj_mchirp_endtime", "Mchirp vs end_time")
+		sngl_det_plots.add_table(cbcwebpage.image_glob("hwinj_snr_endtime_%.0f_*.png" %injection_time, width=360), "hwinj_snr_endtime", "SNR vs. end_time")
+		sngl_det_plots.add_table(cbcwebpage.image_glob("hwinj_mchirp_snr_%.0f_*.png" %injection_time, width=360), "hwinj_snr_mchirp", "Mchirp vs. SNR") 
 
 
 # write the page to disk
