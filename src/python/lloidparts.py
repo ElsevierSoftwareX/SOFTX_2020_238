@@ -353,7 +353,7 @@ def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbo
 	)[-1]
 
 
-def mkLLOIDsnrToTriggers(pipeline, snr_tee, bank, verbose = False, nxydump_segment = None, logname = None):
+def mkLLOIDsnrToTriggers(pipeline, snr_tee, bank, lal_triggergen_algorithm=1, lal_triggergen_max_gap=0.01, verbose = False, nxydump_segment = None, logname = None):
 	"""Build pipeline fragment that converts single detector SNR into triggers."""
 	# FIXME: The last three parameters are either used only for logging, or only in commented out code.
 
@@ -388,7 +388,7 @@ def mkLLOIDsnrToTriggers(pipeline, snr_tee, bank, verbose = False, nxydump_segme
 
 	head = mkelems_fast(pipeline,
 		chisq,
-		"lal_triggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq, "algorithm": 1, "max-gap": 0.01},
+		"lal_triggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq, "algorithm": lal_triggergen_algorithm, "max-gap": lal_triggergen_max_gap},
 	)[-1]
 	mkelems_fast(pipeline, snr_tee, "queue", head)
 	if verbose:
