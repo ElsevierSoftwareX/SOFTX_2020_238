@@ -22,8 +22,6 @@ def parse_command_line():
 
 	opts, filenames = parser.parse_args()
 	
-	if not filenames:
-		raise RuntimeError("Must specify at least one database file.")
 	return opts, filenames
 
 opts,databases = parse_command_line()
