@@ -15,6 +15,6 @@ print >>open('index.html', 'w'), """
 """
 
 print >>open('index_list.html', 'w'), "<html><body>" + "".join([
-	'<a target="contentframe" href="%(dir)s/index_correlations.html">%(dir)s</a><br />' % {'dir':subdirname} for subdirname in glob.glob('????-??-??T??')]
+	'<a target="contentframe" href="%(dir)s/index_sngl.html">%(dir)s</a><br />' % {'dir':subdirname} for subdirname in glob.glob('????-??-??T??')]
 ) + "</body><html>"
 
