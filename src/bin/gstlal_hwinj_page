@@ -8,23 +8,20 @@ except ImportError:
 	from pysqlite2 import dbapi2 as sqlite3
 import matplotlib
 import pylab
-from optparse import OptionParser
+from optparse import Option, OptionParser
 from glue.ligolw import dbtables
 from glue import cbcwebpage, lal
 
 
-def parse_command_line():
-	parser = OptionParser()
-	parser.add_option("-b", "--bg-interval", type = float, default = 300, help = "Choose background time interval around the hardware injection [default: 300 seconds]")
-	parser.add_option("-m", "--macro-fg-interval", type = float, default = 1, help = "Choose macro-foreground time interval around the hardware injection [default: 1 second]")
-	parser.add_option("-f", "--fg-interval", type = float, default = 0.001, help = "Choose foreground time interval around the hardware injection [default: 0.01 seconds]")
-	parser.add_option("-l", "--low-mass", default=True, help = "Find only injections of low-mass binaries with mchirp <= 1.392881 [default]")
+opts, databases = OptionParser(
+	option_list = [
+		Option("-b", "--bg-interval", type = float, default = 300, help = "Choose background time interval around the hardware injection [default: 300 seconds]"),
+		Option("-m", "--macro-fg-interval", type = float, default = 1, help = "Choose macro-foreground time interval around the hardware injection [default: 1 second]"),
+		Option("-f", "--fg-interval", type = float, default = 0.001, help = "Choose foreground time interval around the hardware injection [default: 0.01 seconds]"),
+		Option("-l", "--low-mass", default=True, help = "Find only injections of low-mass binaries with mchirp <= 1.392881 [default]"),
+	]
+).parse_args()
 
-	opts, filenames = parser.parse_args()
-	
-	return opts, filenames
-
-opts,databases = parse_command_line()
 
 sim_inspiral_sci_query = """
 	SELECT geocent_end_time+geocent_end_time_ns*1e-9 AS end_time_s, sim_inspiral.mchirp, simulation_id
