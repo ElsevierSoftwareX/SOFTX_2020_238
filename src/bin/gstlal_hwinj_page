@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+__author__ = "Erin Kara <ekara@ligo.caltech.edu>"
+__version__ = "git id %s" % git_version.id
+__date__ = git_version.date
+
 
 try:
 	import sqlite3
@@ -12,9 +16,6 @@ from glue.ligolw import dbtables
 from pylal import git_version
 from glue import cbcwebpage, lal
 
-__author__ = "Erin Kara <ekara@ligo.caltech.edu>"
-__version__ = "git id %s" % git_version.id
-__date__ = git_version.date
 
 def parse_command_line():
 	parser = OptionParser()
