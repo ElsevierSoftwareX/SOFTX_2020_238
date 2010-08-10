@@ -119,7 +119,7 @@ for subpage in subpages:
 		injection_mchirp = row[1]
 		id= str(row[2])
 	
-		sngl_det_plots = subpage.add_section("sngl_det_plots", "Hardware Injection Plots for Single Detector Pipeline")
+		sngl_det_plots = subpage.add_section("sngl_det_plots", "Hardware Injection Plots for Single Detector Pipeline", open_by_default=True)
 		
 		for f in databases:
 			
