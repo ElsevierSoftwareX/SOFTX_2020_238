@@ -271,6 +271,13 @@ for n, bank in enumerate(banks):
 #
 
 
+# If we are using online data, then use a running PSD estimate.
+# FIXME: this is a hacky way to set it.  We should give the user direct
+# control over this setting.
+if options.online_data:
+	psd = None
+
+
 #
 # Write the pipeline to a dot file.
 # This option needs the environment variable GST_DEBUG_DUMP_DOT_DIR
