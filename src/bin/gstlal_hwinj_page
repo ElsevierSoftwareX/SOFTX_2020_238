@@ -100,7 +100,7 @@ for f in databases:
 	dbtables.DBTable_set_connection(connection)
 
 	if opts.low_mass: mchirp = 1.392881 # FIXME: Instead of hardcoding, get max from tmpltbank
-	else: mchirp = 16 # FIXME: All injections are under 16 Msun, silly
+	else: mchirp = 16 # FIXME: All injections are under 16 Msun
 
 	# Query HW injections that occured during science segments
 	sim_inspiral_science = connection.cursor().execute(sim_inspiral_sci_query, {"mchirp":mchirp}).fetchall()
