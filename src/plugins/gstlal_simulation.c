@@ -116,7 +116,8 @@ static struct injection_document *load_injection_document(const char *filename, 
 	static const char func[] = "load_injection_document";
 	int success = 1;
 	struct injection_document *new;
-
+	int nrows; 
+	
 	if(!filename) {
 		XLALPrintError("%s(): filename not set\n");
 		XLAL_ERROR_NULL(func, XLAL_EFAULT);
@@ -126,7 +127,7 @@ static struct injection_document *load_injection_document(const char *filename, 
 	 * allocate the document
 	 */
 
-	new = malloc(sizeof(*new));
+	new = calloc(1, sizeof(*new));
 	if(!new) {
 		XLALPrintError("%s(): malloc() failed\n", func);
 		XLAL_ERROR_NULL(func, XLAL_ENOMEM);
@@ -199,12 +200,16 @@ static struct injection_document *load_injection_document(const char *filename, 
 		success = 0;
 	} else if(new->has_sim_inspiral_table) {
 		new->sim_inspiral_table_head = NULL;
-		if(SimInspiralTableFromLIGOLw(&new->sim_inspiral_table_head, filename, start.gpsSeconds - 1, end.gpsSeconds + 1) < 0) {
+		nrows = SimInspiralTableFromLIGOLw(&new->sim_inspiral_table_head, filename, start.gpsSeconds - 1, end.gpsSeconds + 1);
+		if(nrows < 0) {
 			XLALPrintError("%s(): failure reading sim_inspiral table from \"%s\"\n", func, filename);
 			new->sim_inspiral_table_head = NULL;
 			success = 0;
-		} else
+		} else {
+			/* FIXME no rows found raises an error we don't care about, but why ? */
 			XLALPrintInfo("%s(): found sim_inspiral table\n", func);
+			XLALClearErrno();
+		}		
 	} else
 		new->sim_inspiral_table_head = NULL;
 
@@ -1020,6 +1025,7 @@ static void instance_init(GTypeInstance * object, gpointer class)
 	element->instrument = NULL;
 	element->channel_name = NULL;
 	element->units = NULL;
+	element->injection_cache = NULL;
 }
 
 
