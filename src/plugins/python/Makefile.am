@@ -5,7 +5,7 @@ INCLUDES = -I$(top_srcdir)/src/lib
 pkgpythondir = $(plugindir)/python
 pkgpyexecdir = $(pkgpythondir)
 
-pkgpython_PYTHON = lal_checktimestamps.py lal_fakeadvligosrc.py lal_fakeligosrc.py lal_fakeskymapsrc.py lal_faketriggersrc.py lal_onlinehoftsrc.py lal_numpy_functiongenerator.py lal_stripchart.py lal_timeseriesplotter.py lal_skymaprenderer.py
+pkgpython_PYTHON = lal_checktimestamps.py lal_coincselector.py lal_fakeadvligosrc.py lal_fakeligosrc.py lal_fakeskymapsrc.py lal_faketriggersrc.py lal_onlinehoftsrc.py lal_numpy_functiongenerator.py lal_stripchart.py lal_timeseriesplotter.py lal_skymaprenderer.py
 
 pkgpyexec_LTLIBRARIES = _onlinehoftsrc.la
 
