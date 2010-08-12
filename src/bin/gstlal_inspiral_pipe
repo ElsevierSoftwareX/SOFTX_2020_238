@@ -115,12 +115,6 @@ def make_coinc_branch(dag, datafinds, seglists, time_slides, vetoes_cache, tag, 
 	trigger_nodes = gstlaldagparts.make_single_instrument_stage(dag, datafinds, seglists, tag, inspinjnodes = injnodes, verbose = verbose)
 
 	#
-	# ligolw_sicluster
-	#
-
-	trigger_nodes = gstlaldagparts.make_sicluster_fragment(dag, trigger_nodes, "%s" % tag, verbose = verbose)
-
-	#
 	# coincidence analysis
 	#
 
@@ -152,6 +146,22 @@ def make_coinc_branch(dag, datafinds, seglists, time_slides, vetoes_cache, tag, 
 		if verbose:
 			print >>sys.stderr, "done %s %d/%d" % (tag, n + 1, len(time_slides))
 
+		#
+		# ligolw_sqlite
+		#
+
+		if verbose:
+			print >>sys.stderr, "building sqlite jobs ..."
+		coinc_nodes = power.make_sqlite_fragment(dag, coinc_nodes, tag, verbose = verbose)
+
+		#
+		# lalapps_run_sqlite 
+		#
+		
+                if verbose:
+                        print >>sys.stderr, "building lalapps_run_sqlite jobs ..."
+                coinc_nodes = gstlaldagparts.make_runsqlite_fragment(dag, coinc_nodes, tag, verbose = verbose)
+
 	#
 	# ligolw_inspinjfind
 	#
@@ -159,15 +169,9 @@ def make_coinc_branch(dag, datafinds, seglists, time_slides, vetoes_cache, tag, 
 	if do_injections:
 		if verbose:
 			print >>sys.stderr, "building inspinjfind jobs ..."
+		coinc_nodes = gstlaldagparts.make_sqlitetoxml_fragment(dag, coinc_nodes, tag, verbose = verbose)
 		coinc_nodes = gstlaldagparts.make_inspinjfind_fragment(dag, coinc_nodes, tag, verbose = verbose)
-
-	#
-	# ligolw_sqlite
-	#
-
-	if verbose:
-		print >>sys.stderr, "building sqlite jobs ..."
-	coinc_nodes = power.make_sqlite_fragment(dag, coinc_nodes, tag, verbose = verbose)
+		coinc_nodes = power.make_sqlite_fragment(dag, coinc_nodes, tag+"inspinjfind", verbose = verbose)
 
 	#
 	# done
@@ -217,7 +221,7 @@ config_parser.read(options.config_file)
 
 
 power.init_job_types(config_parser, job_types = ("datafind", "lladd", "sqlite"))
-gstlaldagparts.init_job_types(config_parser, job_types = ("inspinj", "gstlalinspiral", "inspinjfind", "sicluster", "thinca"))
+gstlaldagparts.init_job_types(config_parser, job_types = ("inspinj", "gstlalinspiral", "inspinjfind", "thinca", "runsqlite", "sqlitetoxml"))
 
 
 #
