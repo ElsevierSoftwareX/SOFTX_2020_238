@@ -259,7 +259,8 @@ dag.set_dag_file(basename)
 
 
 seglists = ligolw_segments.segmenttable_get_by_name(utils.load_filename(config_parser.get("input", "segments")), "RESULT")
-seglists.contract(float(config_parser.get("pipeline", "pad_data")))
+if config_parser.has_option("pipeline", "pad_data"):
+	seglists.contract(float(config_parser.get("pipeline", "pad_data")))
 vetoes_cache = set([CacheEntry(None, None, None, "file://localhost" + os.path.abspath(options.vetoes))])
 
 
