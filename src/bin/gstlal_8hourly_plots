@@ -104,7 +104,7 @@ for f in databases:
 	# Plot Effective SNR vs ChiSq
 	pylab.clf()
 	if len(params) > 0:
-		eff_snr = params['snr'] * (params['chisq']/398.0 * (1 + params['snr'] ** 2 / 250.0)) ** -0.25
+		eff_snr = params['snr'] * (4.0 * params['chisq'] * (1 + params['snr'] ** 2 / 250.0)) ** -0.25
 		pylab.hexbin(eff_snr, params['chisq'], xscale='log', yscale='log', bins='log')
 		pylab.colorbar().set_label("number of triggers")
 		pylab.axis("tight")
