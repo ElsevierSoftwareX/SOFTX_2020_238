@@ -79,12 +79,12 @@ for ifo in opts.instrument:
 	basicsrc = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, ifo, None, online_data=True)
 	hoftdict = lloidparts.mkLLOIDsrc(pipeline, basicsrc, rates, psd=psd, psd_fft_length=opts.psd_fft_length)
 	snr_tee = lloidparts.mkLLOIDhoftToSnr(pipeline, hoftdict, ifo, bank, lloidparts.mkcontrolsnksrc(pipeline, max(rates)))
-	triggers = lloidparts.mkLLOIDsnrToTriggers(pipeline, snr_tee, bank, lal_triggergen_algorithm=1, lal_triggergen_max_gap=0.1)
+	triggers = lloidparts.mkLLOIDsnrToTriggers(pipeline, snr_tee, bank, lal_triggergen_algorithm=2, lal_triggergen_max_gap=1.0)
 	triggers_tee = mkelems_fast(pipeline, triggers, "tee")[-1]
 	# output a database for each detector
-	data[ifo] = ligolw_output.Data([ifo], tmp_space=None, output=ifo+"-"+opts.output, seg=seg, out_seg=seg, injections=None, comment="", verbose=True)
-	data[ifo].prepare_output_file(ligolw_output.make_process_params(opts))
-	mkelems_fast(pipeline, triggers_tee, "appsink", {"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})[-1].connect_after("new-buffer", ligolw_output.appsink_new_buffer, data[ifo])
+	#data[ifo] = ligolw_output.Data([ifo], tmp_space=None, output=ifo+"-"+opts.output, seg=seg, out_seg=seg, injections=None, comment="", verbose=True)
+	#data[ifo].prepare_output_file(ligolw_output.make_process_params(opts))
+	#mkelems_fast(pipeline, triggers_tee, "appsink", {"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})[-1].connect_after("new-buffer", ligolw_output.appsink_new_buffer, data[ifo])
 	triggers_tee.link_pads("src%d", coinc, "sink%d")
 	#mkelems_fast(pipeline, snr_tee, "queue", skymap)
 
