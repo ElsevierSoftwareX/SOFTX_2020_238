@@ -263,6 +263,7 @@ class Data(object):
 				masses.append([row.mass1, row.mass2])
 				ids.append(row.event_id)
 				snrs.append(row.snr)
+				ifos.append(row.ifo)
 				times.append(row.end_time+row.end_time_ns/1.0e9)
 
 		# check if we need to insert a coincidence record
