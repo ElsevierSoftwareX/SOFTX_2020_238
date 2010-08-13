@@ -165,7 +165,7 @@ class Data(object):
 
 		if len(self.detectors) > 1:
 
-			# 
+			#
 			# Coinc tables
 			#
 
@@ -196,7 +196,7 @@ class Data(object):
 			CoincDef.coinc_def_id = coinc_definer.get_next_id()
 			self.coinc_def_id = CoincDef.coinc_def_id
 			coinc_definer.append(CoincDef)
-	
+
 
 		# Add injections table if necessary
 		if self.injections is not None:
@@ -285,7 +285,7 @@ class Data(object):
 				cemrow.table_name = lsctables.SnglInspiralTable.tableName
 				cemrow.event_id = ceid
 				cemtab.append(cemrow)
-			
+
 			citab = self.coinc_inspiral_table
 			cirow = citab.RowType()
 			cirow.coinc_event_id = row.coinc_event_id
@@ -301,9 +301,9 @@ class Data(object):
 			citab.append(cirow)
 
 
-			
-			
-		
+
+
+
 
 def appsink_new_buffer(elem, data):
 	buf = elem.get_property("last-buffer")
