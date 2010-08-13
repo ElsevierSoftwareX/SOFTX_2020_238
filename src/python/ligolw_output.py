@@ -134,7 +134,7 @@ def make_process_params(options):
 	for key in options.__dict__:
 		if getattr(options, key) is not None:
 			opt = getattr(options, key, "")
-			if type(opt) == type(list()): opt = ",".join(opt)
+			if isinstance(opt,list): opt = ",".join(opt)
 			params[key] = opt
 
 	return list(ligolw_process.process_params_from_dict(params))
