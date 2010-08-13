@@ -251,6 +251,7 @@ class Data(object):
 
 	def insert_group_records(self, rows):
 		masses = []
+		chirpmasses = []
 		ids = []
 		snrs = []
 		times = []
@@ -261,6 +262,7 @@ class Data(object):
 				row.event_id = self.sngl_inspiral_table.get_next_id()
 				self.sngl_inspiral_table.append(row)
 				masses.append([row.mass1, row.mass2])
+				chirpmasses.append([row.mchirp])
 				ids.append(row.event_id)
 				snrs.append(row.snr)
 				ifos.append(row.ifo)
@@ -296,7 +298,7 @@ class Data(object):
 			cirow.combined_far = None #FIXME
 			# FIXME Arithmetic mean of total mass and chirpmass?
 			cirow.mass = numpy.mean([m1+m2 for m1,m2 in masses])
-			cirow.mchirp = numpy.mean([mchirp(m1,m2) for m1,m2 in masses])
+			cirow.mchirp = numpy.mean(chirpmasses)
 			gps = lal.LIGOTimeGPS(min(times))
 			cirow.end_time, cirow.end_time_ns = gps.seconds, gps.nanoseconds
 			citab.append(cirow)
