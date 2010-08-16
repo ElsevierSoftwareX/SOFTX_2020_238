@@ -1,0 +1,40 @@
+<html> 
+	<head> 
+		<title>gstlal_inspiral online network pipeline</title> 
+                <script type="text/javascript" src="assets/jquery-1.4.2.min.js"></script>
+                <script type="text/javascript" src="assets/report.js"></script>
+		<script type="text/javascript">
+		// This function must set up all canvases
+			function init(){
+				setInterval("draw('online.png','online')",1000);
+			}
+			function draw(imgsrc,canvasid) {
+				var img = new Image();
+				var ctx = document.getElementById(canvasid).getContext('2d');
+				img.onload = function(){
+					ctx.drawImage(img,0,0);
+					ctx.beginPath();
+				}
+			img.src = imgsrc + '?' + (new Date()).getTime();
+			return True
+			}
+		</script> 
+		<style type="text/css"> 
+			canvas { border: 2px solid black; }
+		</style> 
+	</head> 
+	<body onload="init()">
+
+		<header>
+		<h1> gstlal_inspiral online coincidence network </h2>
+		</header>
+
+		<section>
+		<h1 id="heading1">SNR vs Time</h1>
+			<figure id="fig1">
+				<canvas id="online" width=800 height=600></canvas>
+			</figure>
+		</section>
+
+	</body> 
+</html> 
