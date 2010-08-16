@@ -318,18 +318,9 @@ src = mkLLOIDmulti(
 #
 
 options.out_seg = segments.segment(options.seg[0]+max([b.filter_length for b in banks]), options.seg[1]) #FIXME make better outseg def.
-data = ligolw_output.Data(options, detectors)
+data = ligolw_output.Data(detectors, options)
 data.prepare_output_file(process_params)
-
-def appsink_new_buffer(elem, data):
-	for row in sngl_inspirals_from_buffer(elem.get_property("last-buffer")):
-		if (row.end_time + 1e-9*row.end_time_ns) in data.out_seg:
-			row.process_id = data.process.process_id
-			row.event_id = data.sngl_inspiral_table.get_next_id()
-			data.sngl_inspiral_table.append(row)
-	if data.connection: data.connection.commit()
-
-mkelems_fast(pipeline, src, "appsink", {"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})[-1].connect_after("new-buffer", appsink_new_buffer, data)
+mkelems_fast(pipeline, src, "appsink", {"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})[-1].connect_after("new-buffer", ligolw_output.appsink_new_buffer, data)
 
 
 
