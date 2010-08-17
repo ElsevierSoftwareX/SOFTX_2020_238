@@ -18,59 +18,9 @@ Select interesting coincidences based on estimated false alarm rates.
 """
 __author__ = "Leo Singer <leo.singer@ligo.org>"
 
-# FIXME: Pick which sngl_inspiral field to hijack.
-# Currently I am using rsqveto_duration to store per-detector IFAR.
 
 from gstlal.pipeutil import *
-import pylal.xlal.datatypes.snglinspiraltable as sngl
-
-
-def net_ifar(ifars, dt):
-	"""Compute net inverse false alarm rate (IFAR) from individual detector IFARs."""
-	net_ifar = dt
-	for ifar in ifars:
-		net_ifar *= (ifar / dt)
-	return net_ifar
-
-
-def sngl_inspiral_is_nil(row):
-	for c in buffer(row)[:-4]:
-		if ord(c):
-			return False
-	return True
-
-
-def sngl_inspiral_groups_from_buffer(buf):
-	"""Extract (possibly multi-channel) SnglInspiralTable records from a buffer."""
-	rows = sngl.from_buffer(buf)
-	caps = buf.caps[0]
-	if caps.hasattr('channels'):
-		stride = caps['channels']
-	else:
-		stride = 1
-	for i in range(len(rows) / nchannels):
-		yield tuple(row for row in rows[i*stride:i*stride+stride] if sngl_inspiral_is_nil(row))
-
-
-nil_sngl_buffer = buffer(sngl.SnglInspiralTable())
-
-
-def sngl_inspiral_groups_to_buffer(buf, groups):
-	"""Convert (possibly multi-channel) SnglInspiralTable to a buffer."""
-	caps = buf.caps[0]
-	if caps.hasattr('channels'):
-		stride = caps['channels']
-	else:
-		stride = 1
-	ngroups = 0
-	for i_group, group in enumerate(row, groups):
-		ngroups += 1
-		for i_row, row in enumerate(group):
-			data = buffer(row)
-			buf.data[(i_group * stride + i_row) * len(data):(i_group * stride + i_row + 1) * len(data)] = data
-		for i_row in range(len(group), stride):
-			buf.data[(i_group * stride + i_row) * len(data):(i_group * stride + i_row + 1) * len(data)] = nil_sngl_buffer
-	buf.size = ngroups * stride * len(nil_sngl_buffer)
+from gstlal.pipeio import net_ifar, sngl_inspiral_groups_from_buffer, sngl_inspiral_groups_to_buffer
 
 
 class lal_coincselector(gst.BaseTransform):
@@ -115,7 +65,9 @@ class lal_coincselector(gst.BaseTransform):
 
 
 	def do_transform(self, inbuf, outbuf):
-		min_ifar = self.get_property('min-ifar')
+		# FIXME: Pick which sngl_inspiral field to hijack.
+		# Currently I am using rsqveto_duration to store per-detector IFAR.
+		min_ifar = float(self.get_property('min-ifar'))
 		dt = float(self.get_property('dt'))
 		sngl_inspiral_groups_to_buffer(outbuf,
 			(group for group in sngl_inspiral_groups_from_buffer(inbuf)
