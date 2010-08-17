@@ -64,11 +64,25 @@ class lal_coincselector(gst.BaseTransform):
 	)
 
 
+	def do_set_property(self, prop, val):
+		if prop.name == 'min-ifar':
+			self.__min_ifar = val
+		elif prop.name == 'dt':
+			self.__dt = val
+
+
+	def do_get_property(self, prop):
+		if prop.name == 'min-ifar':
+			return self.__min_ifar
+		elif prop.name == 'dt':
+			return self.__dt
+
+
 	def do_transform(self, inbuf, outbuf):
 		# FIXME: Pick which sngl_inspiral field to hijack.
 		# Currently I am using rsqveto_duration to store per-detector IFAR.
-		min_ifar = float(self.get_property('min-ifar'))
-		dt = float(self.get_property('dt'))
+		min_ifar = float(self.__min_ifar)
+		dt = float(self.__dt)
 		sngl_inspiral_groups_to_buffer(outbuf,
 			(group for group in sngl_inspiral_groups_from_buffer(inbuf)
 			if net_ifar((row.rsqveto_duration for row in sngl_group), dt) >= min_ifar))
