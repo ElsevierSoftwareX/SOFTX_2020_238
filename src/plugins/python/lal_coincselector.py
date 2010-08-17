@@ -85,7 +85,7 @@ class lal_coincselector(gst.BaseTransform):
 		dt = float(self.__dt)
 		sngl_inspiral_groups_to_buffer(outbuf,
 			(group for group in sngl_inspiral_groups_from_buffer(inbuf)
-			if net_ifar((row.rsqveto_duration for row in sngl_group), dt) >= min_ifar))
+			if net_ifar((row.rsqveto_duration for row in group), dt) >= min_ifar))
 		return gst.FLOW_OK
 
 
