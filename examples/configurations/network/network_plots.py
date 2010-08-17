@@ -16,6 +16,8 @@ from glue import segmentsUtils
 from pylal import db_thinca_rings
 from pylal import llwapp
 
+from gstlal.ligolw_output import effective_snr
+
 import matplotlib
 matplotlib.use('Agg')
 import pylab
@@ -28,17 +30,22 @@ path = '/archive/home/channa/public_html/gstlal_inspiral_online/'
 connection = sqlite3.connect(sys.argv[1])
 dbtables.DBTable_set_connection(connection)
 
+f = pylab.figure()
+
 while True:
-	f = pylab.figure()
+	f.clf()
 	snrs = {}
 	times = {}
 	chisqs = {}
 	lines = []
 	labels = []
+	effsnrs = {}
 	for snr, chisq, t, ifo in connection.cursor().execute('SELECT snr, chisq, end_time+end_time_ns*1e-9, ifo FROM sngl_inspiral'):
 		snrs.setdefault(ifo,[]).append(snr)
 		times.setdefault(ifo,[]).append(t)
 		chisqs.setdefault(ifo,[]).append(chisq)
+		effsnrs.setdefault(ifo,[]).append(effective_snr(snr,chisq))
+		
 	pylab.subplot(211)
 	csnrs = {}
 	ctimes = {}
@@ -56,12 +63,23 @@ while True:
 
 	pylab.subplot(212)
 	for ifo in times.keys():
-		pylab.loglog(snrs[ifo], chisqs[ifo],'.', label=ifo)
-	pylab.ylabel('chisquared')
-	pylab.xlabel('SNR')
+		lines.append(pylab.semilogy(times[ifo], effsnrs[ifo],'.', label=ifo))
+		labels.append(ifo)
+		#pylab.loglog(snrs[ifo], chisqs[ifo],'.', label=ifo)
+	pylab.ylabel('Effective SNR')
+	pylab.xlabel('Time')
 	pylab.figlegend(lines,labels,"upper right")
 	pylab.savefig(path+'online.png')
 	f.clf()
+
+	pylab.subplot(121)
+	for ifo in times.keys():
+		pylab.loglog(snrs[ifo], chisqs[ifo],'.', label=ifo)
+	pylab.ylabel('Effective SNR')
+	pylab.xlabel('Time')
+	#pylab.figlegend(lines,labels,"upper right")
+	pylab.savefig(path+'snr_chisq.png')
+		
 	time.sleep(5)
 
 	
