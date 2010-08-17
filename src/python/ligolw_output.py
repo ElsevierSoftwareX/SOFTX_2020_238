@@ -269,7 +269,7 @@ class Data(object):
 				masses.append([row.mass1, row.mass2])
 				chirpmasses.append([row.mchirp])
 				ids.append(row.event_id)
-				snrs.append(row.snr)
+				snrs.append(effective_snr(row.snr,row.chisq))
 				ifos.append(row.ifo)
 				times.append(row.end_time+row.end_time_ns/1.0e9)
 
