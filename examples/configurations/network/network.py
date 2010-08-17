@@ -95,7 +95,7 @@ for ifo in opts.instrument:
 # FIXME make some of these kw args options
 data['all'] = ligolw_output.Data(opts.instrument, tmp_space=None, output="".join(opts.instrument)+"-"+opts.output, seg=seg, out_seg=seg, injections=None, comment="", verbose=True)
 data['all'].prepare_output_file(ligolw_output.make_process_params(opts))
-mkelems_fast(pipeline, coinc, "appsink", {"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})[-1].connect_after("new-buffer", ligolw_output.appsink_new_buffer, data['all'])
+mkelems_fast(pipeline, coinc, "lal_coincselector", "appsink", {"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})[-1].connect_after("new-buffer", ligolw_output.appsink_new_buffer, data['all'])
 
 #
 # Ready set go!
