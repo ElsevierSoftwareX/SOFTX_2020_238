@@ -147,7 +147,7 @@ def sngl_inspiral_groups_from_buffer(buf):
 		stride = caps['channels']
 	else:
 		stride = 1
-	for i in range(len(rows) / nchannels):
+	for i in range(len(rows) / stride):
 		yield tuple(row for row in rows[i*stride:i*stride+stride] if sngl_inspiral_is_nil(row))
 
 
@@ -162,7 +162,7 @@ def sngl_inspiral_groups_to_buffer(buf, groups):
 	else:
 		stride = 1
 	ngroups = 0
-	for i_group, group in enumerate(row, groups):
+	for i_group, group in enumerate(groups):
 		ngroups += 1
 		for i_row, row in enumerate(group):
 			data = buffer(row)
