@@ -136,6 +136,7 @@ def mkLLOIDsrc(pipeline, seekevent, instrument, detector, rates, psd = None, psd
 		head,
 		"queue",
 		"audioresample", {"gap-aware": True, "quality": 9},
+		"lal_nofakedisconts", {"silent": True},
 		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % source_rate)}
 	)[-1]
 
@@ -204,6 +205,7 @@ def mkLLOIDsrc(pipeline, seekevent, instrument, detector, rates, psd = None, psd
 			head[source_rate],
 			"audioamplify", {"clipping-method": 3, "amplification": 1/math.sqrt(pipeparts.audioresample_variance_gain(quality, source_rate, rate))},
 			"audioresample", {"gap-aware": True, "quality": quality},
+			"lal_nofakedisconts", {"silent": True},
 			"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % rate)},
 			"tee"
 		)[-1]
@@ -253,6 +255,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		"lal_sumsquares", {"weights": bank_fragment.sum_of_squares_weights},
 		"queue",
 		"audioresample", {"gap-aware": True, "quality": 9},
+		"lal_nofakedisconts", {"silent": True},
 		"lal_checktimestamps", {"name": "timestamps_%s_after_sumsquare_resampler" % logname},
 		control_snk
 	)
