@@ -66,5 +66,7 @@ bank.%.pickle: reference_psd.%.xml.gz tmpltbank.xml.gz
 	gstlal_svd_bank \
 		--verbose \
 		--template-bank tmpltbank.xml.gz \
+		--ortho-gate-fap 0.01 \
+		--snr-threshold 3 \
 		--reference-psd $< \
 		--write-bank $@

@@ -13,6 +13,10 @@ AC_CONFIG_MACRO_DIR([gnuscripts])
 AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_FILES([ \
 	Makefile \
+	src/data/Makefile \
+	src/data/www/Makefile \
+	src/data/www/assets/Makefile \
+	src/data/www/assets/fancybox/Makefile \
 	src/Makefile \
 	src/bin/Makefile \
 	src/lib/gstlal.pc \

@@ -1,1 +1,1 @@
-SUBDIRS = lib skymap plugins python bin utilities
+SUBDIRS = data lib skymap plugins python bin utilities

@@ -567,8 +567,11 @@ static guint bounded_latency(GSTLALTriggerGen *element, GstBuffer *snrbuf, GstBu
 
 	/* FIXME make array to store the max part of element instance for performance */
 	if (!element->maxsnr) element->maxsnr = (double complex *) calloc(element->num_templates, sizeof(double complex));
+	else memset(element->maxsnr, 0.0, element->num_templates * sizeof(double complex));
 	if (!element->maxchisq) element->maxchisq = (double *) calloc(element->num_templates, sizeof(double));
+	else memset(element->maxchisq, 0.0, element->num_templates * sizeof(double));
 	if (!element->maxsample) element->maxsample = (guint *) calloc(element->num_templates, sizeof(guint));
+	else memset(element->maxsample, 0.0, element->num_templates * sizeof(guint));
 	maxsnr = element->maxsnr;
 	maxchisq = element->maxchisq;
 	maxsample = element->maxsample;

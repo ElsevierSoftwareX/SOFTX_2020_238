@@ -1,0 +1,66 @@
+h1, h2, h3, header, footer, article, section, hgroup, nav, figure, figcaption {
+	display: block;
+	font-family: sans-serif;
+}
+body {
+	margin: 0pt;
+	padding: 0pt;
+	border-left: 1in solid #dddddd;
+	border-right: 1in solid #dddddd;
+	min-width: 880px;
+}
+header {
+	background-color: #995555;
+	color: white;
+	padding: 2em;
+	margin-bottom: 3em;
+	text-align: center;
+}
+figure img {
+	width: 400px;
+	background: #dddddd;
+	display: inline;
+	padding: 3pt;
+	border: 1pt solid gray;
+}
+section {
+	counter-increment: section;
+}
+section h1 {
+	font-size: 18pt;
+	width: 100%;
+	color: #aa0517;
+	border-bottom: 2pt solid #aa0517;
+	cursor: pointer;
+}
+section p, section figure {
+	margin-left: 4em;
+	margin-right: 4em;
+}
+section h1:before {
+	background-color: #aa0517;
+	color: white;
+	content: "Section " counters(section, ".") ".";
+	margin-right: 1em;
+	padding-left: 1em;
+	padding-right: 1em;
+	font-weight: bold;
+}
+figure {
+	counter-increment: figure;
+	margin-bottom: 2em;
+	white-space: nowrap;
+}
+figure figcaption {
+	border-top: 1pt solid gray;
+	cursor: pointer;
+}
+figure figcaption:before {
+	color: white;
+	background-color: gray;
+	padding-left: 1em;
+	padding-right: 1em;
+	margin-right: 1em;
+	content: "Figure " counters(section, ".") "." counter(figure) ".";
+	font-weight: bold;
+}
