@@ -5,48 +5,79 @@
                 <script type="text/javascript" src="assets/report.js"></script>
 		<script type="text/javascript">
 		// This function must set up all canvases
-			var online_interval1
-			var online_interval2
-			function init(){
-				online_interval1 = setInterval("draw('online.png','online1',400,300,'CLICK TO ZOOM')",1000);
-				online_interval2 = setInterval("draw('online.png','online2',400,300,'CLICK TO ZOOM')",1000);
+			var speed = 6141
+			function init(canvas_init_list){
+				for (var i=0; i < canvas_init_list.length; i++) {
+					imgsrc=canvas_init_list[i][1]
+					canvasid=canvas_init_list[i][0]
+					var cnvs = draw(imgsrc,canvasid,400,300,'CLICK TO ZOOM')
+					drawstr = "draw('" + imgsrc + "','" + canvasid + "',400,300,'CLICK TO ZOOM')";
+					cnvs.interval = setInterval(drawstr,speed);
+					cnvs.zoomin = 'False';
+				}
+				load_table('div1')
+				setInterval("load_table('div1')", 30000)
 			}
 			function draw(imgsrc,canvasid,w,h,txt) {
 				var img = new Image();
+				imgsrct = imgsrc + '?' + (new Date()).getTime();
 				var cnvs = document.getElementById(canvasid);
 				var ctx = cnvs.getContext('2d');
 				cnvs.height=h;
 				cnvs.width=w;
 				img.onload = function(){
 					ctx.drawImage(img,0,0,w,h);
-					//ctx.beginPath();
-					//ctx.font = "bold 12px sans-serif";
-					//ctx.fillText(txt, w-130, 15);
+					ctx.beginPath();
+					ctx.font = "bold 12px sans-serif";
+					ctx.fillText(txt, 5, 15);
 				}
-				img.src = imgsrc + '?' + (new Date()).getTime();
+				img.src = imgsrct
+				cnvs.imgsrc = imgsrc
+				return cnvs
 			}
-			function zoom(imgsrc,canvasid) {
+			function unzoom(figureid) {
+				cnvslist = document.getElementById(figureid).getElementsByTagName("canvas");
+				// clear this figures canvases interval and draw them small
+				for (var i=0; i<cnvslist.length; i++) {
+					//get pointer to current element:
+					var cnvs=cnvslist[i];
+					clearInterval(cnvs.interval);
+					draw(cnvs.imgsrc,cnvs.id,400,300,'CLICK TO ZOOM');
+					sstr= "draw('" + cnvs.imgsrc + "','" + cnvs.id + "',400,300,'CLICK TO ZOOM')";
+					cnvs.interval = setInterval(sstr,speed);
+					cnvs.zoomin = 'False'
+				}
+			}
+			function zoom(figureid,canvasid) {
 				var cnvs = document.getElementById(canvasid);
-				clearInterval(online_interval1)
-				clearInterval(online_interval2)
-				if (cnvs.width == 800) {
-					online_interval1 = setInterval("draw('online.png','online1',400,300,'CLICK TO ZOOM')",1000);
-					online_interval2 = setInterval("draw('online.png','online2',400,300,'CLICK TO ZOOM')",1000);
+				if (cnvs.zoomin == 'True') {
+					unzoom(figureid);
+					return;
 				}
-				else {
-					draw('online.png','online2',0,0,'CLICK TO ZOOM')
-					draw('online.png','online1',800,600,'CLICK TO ZOOM')
-					//var sstr= "draw(" + imgsrc + "," + canvasid + ",0.75*window.innerWidth, 0.75*window.innerHeight,'CLICK TO UNZOOM')"
-					var sstr= "draw('online.png','online1',800,600,'CLICK TO ZOOM')"
-					online_interval1 = setInterval(sstr,1000);
+				var cnvslist = document.getElementById(figureid).getElementsByTagName("canvas");
+				
+				// clear this figures canvases interval and draw them small
+				for (var i=0; i<cnvslist.length; i++) {
+					//get pointer to current element:
+					var c=cnvslist[i];
+					clearInterval(c.interval);
+					draw(c.imgsrc,c.id,0,0,'CLICK TO ZOOM');
 				}
+				var sstr= "draw('" + cnvs.imgsrc + "','" + cnvs.id + "',800,600,'CLICK TO UN-ZOOM')";
+				cnvs.zoomin = 'True';
+				draw(cnvs.imgsrc,cnvs.id,800,600,'CLICK TO UN-ZOOM');
+				cnvs.interval = setInterval(sstr,speed);
 			}
+			function load_table(divid) {
+				document.getElementById(divid).innerHTML = "<iframe width=800 height=300 src='test.html'></iframe>";
+				}
+
 		</script> 
 		<style type="text/css"> 
 			canvas { border: 2px solid black; }
 		</style> 
-	</head> 
-	<body onload="init()">
+	</head>
+	<body onload="init([['snr_vs_time', 'snr_vs_time.png'],['effsnr_vs_time','effsnr_vs_time.png'], ['chisq_vs_snr','chisq_vs_snr.png'], ['H1snr_hist','H1snr_hist.png'],['L1snr_hist','L1snr_hist.png'], ['H1effsnr_hist','H1effsnr_hist.png'],['L1effsnr_hist','L1effsnr_hist.png']])">
 
 		<header>
 		<h1> gstlal_inspiral online coincidence network </h2>
@@ -55,9 +86,30 @@
 		<section>
 		<h1 id="heading1">SNR vs Time</h1>
 			<figure id="fig1">
-				<canvas id="online1" onclick=zoom('online.png','online1')></canvas>
-				<canvas id="online2" onclick=zoom('online.png','online2')></canvas>
+				<canvas id="snr_vs_time" onclick=zoom('fig1','snr_vs_time')></canvas>
+				<canvas id="effsnr_vs_time" onclick=zoom('fig1','effsnr_vs_time')></canvas>
 			</figure>
+		</section>
+		<section>
+		<h1 id="heading2">Chi-squared</h1>
+			<figure id="fig2">
+				<canvas id="chisq_vs_snr" onclick=zoom('fig2','chisq_vs_snr')></canvas>
+			</figure>
+		</section>
+		<section>
+		<h1 id="heading3">SNR hist</h1>
+			<figure id="fig3">
+				<canvas id="H1snr_hist" onclick=zoom('fig3','H1snr_hist')></canvas>
+				<canvas id="L1snr_hist" onclick=zoom('fig3','L1snr_hist')></canvas>
+			</figure>
+			<figure id="fig4">
+				<canvas id="H1effsnr_hist" onclick=zoom('fig3','H1effsnr_hist')></canvas>
+				<canvas id="L1effsnr_hist" onclick=zoom('fig3','L1effsnr_hist')></canvas>
+			</figure>
+		</section>
+		<section>
+		<h1 id="heading3">Loudest table</h1>
+			<div id="div1"></div>
 		</section>
 
 	</body> 
