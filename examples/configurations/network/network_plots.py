@@ -60,7 +60,7 @@ while True:
 	labels = []
 	effsnrs = {}
 
-	# only do the loudest query every 5 waits 
+	# only do the loudest query every 5 waits
 	if (cnt % 6) == 0: to_table(path+'test.html', ["end_time", "end_time_ns", "snr", "ifos", "mchirp", "mass"], connection.cursor().execute('SELECT end_time, end_time_ns, snr, ifos, mchirp, mass FROM coinc_inspiral ORDER BY snr DESC LIMIT 10').fetchall())
 
 	for snr, chisq, t, ifo in connection.cursor().execute('SELECT snr, chisq, end_time+end_time_ns*1e-9, ifo FROM sngl_inspiral'):
@@ -68,7 +68,7 @@ while True:
 		times.setdefault(ifo,[]).append(t)
 		chisqs.setdefault(ifo,[]).append(chisq)
 		effsnrs.setdefault(ifo,[]).append(effective_snr(snr,chisq))
-		
+
 	#
 	# snr vs time
 	#
@@ -81,7 +81,7 @@ while True:
 		ctimes.setdefault(ifo,[]).append(t)
 	for ifo in ctimes.keys():
 		lines.append(pylab.semilogy(ctimes[ifo], csnrs[ifo],'.', label=ifo))
-		labels.append(ifo)	
+		labels.append(ifo)
 	for ifo in times.keys():
 		lines.append(pylab.semilogy(times[ifo], snrs[ifo],'.', label=ifo))
 		labels.append(ifo)
@@ -94,19 +94,19 @@ while True:
 
 	#
 	# SNR histogram
-	#	
+	#
 
 	for ifo in times.keys():
-		pylab.subplot(111)		
+		pylab.subplot(111)
 		pylab.hist(snrs[ifo],25)
 		pylab.xlabel(ifo + ' SNR')
 		pylab.ylabel('Count')
 		pylab.savefig(path+ifo+'tmpsnr_hist.png')
 		shutil.move(path+ifo+'tmpsnr_hist.png',path+ifo+'snr_hist.png')
 		f.clf()
-	
+
 	for ifo in times.keys():
-		pylab.subplot(111)		
+		pylab.subplot(111)
 		pylab.hist(effsnrs[ifo],25)
 		pylab.xlabel(ifo + ' effective SNR')
 		pylab.ylabel('Count')
@@ -146,6 +146,6 @@ while True:
 	cnt += 1
 	time.sleep(wait)
 
-	
+
 connection.close()
 
