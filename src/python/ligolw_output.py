@@ -52,6 +52,9 @@ from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals
 def mchirp(m1,m2):
 	return (m1+m2)**(0.6) / (m1*m2)**(0.2)
 
+#FIXME put this somewhere else, and tune it with software injections
+def effective_snr(snr, chisq):
+	return snr * (4.0 * chisq * (1 + snr ** 2 / 250.0)) ** -0.25
 
 #
 # add metadata to an xml document in the style of lalapps_inspiral
@@ -222,6 +225,8 @@ class Data(object):
 				self.coinc_event_map = lsctables.table.get_table(self.xmldoc, lsctables.CoincMapTable.tableName)
 				self.time_slide_table = lsctables.table.get_table(self.xmldoc, lsctables.TimeSlideTable.tableName)
 				self.coinc_definer = lsctables.table.get_table(self.xmldoc, lsctables.CoincDefTable.tableName)
+				# FIXME add snr index for quick loudest event tables
+				self.connection.cursor().execute("CREATE INDEX snrix ON coinc_inspiral(snr)")
 		else:
 			self.xmldoc = xmldoc
 			self.sngl_inspiral_table = sngl_inspiral_table
