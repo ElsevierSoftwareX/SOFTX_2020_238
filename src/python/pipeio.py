@@ -132,15 +132,20 @@ def net_ifar(ifars, dt):
 	return net_ifar
 
 
-def sngl_inspiral_is_nil(row):
+def sngl_inspiral_is_non_nil(row):
 	for c in buffer(row)[:-4]:
 		if ord(c):
-			return False
-	return True
+			return True
+	return False
+
+
+nil_sngl_buffer = buffer(sngl.SnglInspiralTable())
 
 
 def sngl_inspiral_groups_from_buffer(buf):
 	"""Extract (possibly multi-channel) SnglInspiralTable records from a buffer."""
+	if buf.size < len(nil_sngl_buffer):
+		return
 	rows = sngl.from_buffer(buf)
 	caps = buf.caps[0]
 	if 'channels' in caps.keys():
@@ -148,10 +153,7 @@ def sngl_inspiral_groups_from_buffer(buf):
 	else:
 		stride = 1
 	for i in range(len(rows) / stride):
-		yield tuple(row for row in rows[i*stride:i*stride+stride] if sngl_inspiral_is_nil(row))
-
-
-nil_sngl_buffer = buffer(sngl.SnglInspiralTable())
+		yield tuple(row for row in rows[i*stride:i*stride+stride] if sngl_inspiral_is_non_nil(row))
 
 
 def sngl_inspiral_groups_to_buffer(buf, groups):
@@ -166,9 +168,9 @@ def sngl_inspiral_groups_to_buffer(buf, groups):
 		ngroups += 1
 		for i_row, row in enumerate(group):
 			data = buffer(row)
-			buf.data[(i_group * stride + i_row) * len(data):(i_group * stride + i_row + 1) * len(data)] = data
+			buf[(i_group * stride + i_row) * len(data):(i_group * stride + i_row + 1) * len(data)] = data
 		for i_row in range(len(group), stride):
-			buf.data[(i_group * stride + i_row) * len(data):(i_group * stride + i_row + 1) * len(data)] = nil_sngl_buffer
+			buf[(i_group * stride + i_row) * len(nil_sngl_buffer):(i_group * stride + i_row + 1) * len(nil_sngl_buffer)] = nil_sngl_buffer
 	buf.size = ngroups * stride * len(nil_sngl_buffer)
 
 
