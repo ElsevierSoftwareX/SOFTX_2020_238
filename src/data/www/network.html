@@ -5,18 +5,41 @@
                 <script type="text/javascript" src="assets/report.js"></script>
 		<script type="text/javascript">
 		// This function must set up all canvases
+			var online_interval1
+			var online_interval2
 			function init(){
-				setInterval("draw('online.png','online')",1000);
+				online_interval1 = setInterval("draw('online.png','online1',400,300,'CLICK TO ZOOM')",1000);
+				online_interval2 = setInterval("draw('online.png','online2',400,300,'CLICK TO ZOOM')",1000);
 			}
-			function draw(imgsrc,canvasid) {
+			function draw(imgsrc,canvasid,w,h,txt) {
 				var img = new Image();
-				var ctx = document.getElementById(canvasid).getContext('2d');
+				var cnvs = document.getElementById(canvasid);
+				var ctx = cnvs.getContext('2d');
+				cnvs.height=h;
+				cnvs.width=w;
 				img.onload = function(){
-					ctx.drawImage(img,0,0);
-					ctx.beginPath();
+					ctx.drawImage(img,0,0,w,h);
+					//ctx.beginPath();
+					//ctx.font = "bold 12px sans-serif";
+					//ctx.fillText(txt, w-130, 15);
 				}
-			img.src = imgsrc + '?' + (new Date()).getTime();
-			return True
+				img.src = imgsrc + '?' + (new Date()).getTime();
+			}
+			function zoom(imgsrc,canvasid) {
+				var cnvs = document.getElementById(canvasid);
+				clearInterval(online_interval1)
+				clearInterval(online_interval2)
+				if (cnvs.width == 800) {
+					online_interval1 = setInterval("draw('online.png','online1',400,300,'CLICK TO ZOOM')",1000);
+					online_interval2 = setInterval("draw('online.png','online2',400,300,'CLICK TO ZOOM')",1000);
+				}
+				else {
+					draw('online.png','online2',0,0,'CLICK TO ZOOM')
+					draw('online.png','online1',800,600,'CLICK TO ZOOM')
+					//var sstr= "draw(" + imgsrc + "," + canvasid + ",0.75*window.innerWidth, 0.75*window.innerHeight,'CLICK TO UNZOOM')"
+					var sstr= "draw('online.png','online1',800,600,'CLICK TO ZOOM')"
+					online_interval1 = setInterval(sstr,1000);
+				}
 			}
 		</script> 
 		<style type="text/css"> 
@@ -32,7 +55,8 @@
 		<section>
 		<h1 id="heading1">SNR vs Time</h1>
 			<figure id="fig1">
-				<canvas id="online" width=800 height=600></canvas>
+				<canvas id="online1" onclick=zoom('online.png','online1')></canvas>
+				<canvas id="online2" onclick=zoom('online.png','online2')></canvas>
 			</figure>
 		</section>
 
