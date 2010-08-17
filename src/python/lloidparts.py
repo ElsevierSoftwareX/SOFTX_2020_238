@@ -231,6 +231,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	src = mkelems_fast(pipeline,
 		src,
 		"lal_firbank", {"latency": -int(round(bank_fragment.start * bank_fragment.rate)) - 1, "fir-matrix": bank_fragment.orthogonal_template_bank},
+		"lal_nofakedisconts", {"silent": True},
 		"lal_reblock",
 		"tee"
 	)[-1]
@@ -332,6 +333,7 @@ def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbo
 			mkelems_fast(pipeline,
 				hoftdict[bank_fragment.rate],
 				"lal_delay", {"delay": int(round( (bank.filter_length - bank_fragment.end)*bank_fragment.rate ))},
+				"lal_nofakedisconts", {"silent": True},
 				"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": 4 * int(math.ceil(bank.filter_length)) * gst.SECOND}
 			)[-1],
 			bank,
