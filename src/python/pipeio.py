@@ -143,7 +143,7 @@ def sngl_inspiral_groups_from_buffer(buf):
 	"""Extract (possibly multi-channel) SnglInspiralTable records from a buffer."""
 	rows = sngl.from_buffer(buf)
 	caps = buf.caps[0]
-	if caps.hasattr('channels'):
+	if 'channels' in caps.keys():
 		stride = caps['channels']
 	else:
 		stride = 1
@@ -157,7 +157,7 @@ nil_sngl_buffer = buffer(sngl.SnglInspiralTable())
 def sngl_inspiral_groups_to_buffer(buf, groups):
 	"""Convert (possibly multi-channel) SnglInspiralTable to a buffer."""
 	caps = buf.caps[0]
-	if caps.hasattr('channels'):
+	if 'channels' in caps.keys():
 		stride = caps['channels']
 	else:
 		stride = 1
