@@ -23,7 +23,7 @@ from gstlal.pipeutil import *
 from gstlal.pipeio import net_ifar, sngl_inspiral_groups_from_buffer, sngl_inspiral_groups_to_buffer
 
 
-class lal_coincselector(gst.BaseTransform):
+class lal_coincselector(gst.Element):
 	__gstdetails__ = (
 		'Coincidence Selector',
 		'Generic',
@@ -64,6 +64,16 @@ class lal_coincselector(gst.BaseTransform):
 	)
 
 
+	def __init__(self):
+		super(lal_coincselector, self).__init__()
+		self.create_all_pads()
+		self.__srcpad = self.get_static_pad('src')
+		self.__sinkpad = self.get_static_pad('sink')
+		self.__srcpad.use_fixed_caps() # FIXME: better to use proxycaps
+		self.__sinkpad.use_fixed_caps() # FIXME: better to use proxycaps
+		self.__sinkpad.set_chain_function(self.chain)
+
+
 	def do_set_property(self, prop, val):
 		if prop.name == 'min-ifar':
 			self.__min_ifar = val
@@ -78,13 +88,19 @@ class lal_coincselector(gst.BaseTransform):
 			return self.__dt
 
 
-	def do_transform(self, inbuf, outbuf):
+	def chain(self, pad, inbuf):
 		# FIXME: Pick which sngl_inspiral field to hijack.
-		# Currently I am using rsqveto_duration to store per-detector IFAR.
-		sngl_inspiral_groups_to_buffer(outbuf,
-			(group for group in sngl_inspiral_groups_from_buffer(inbuf)
-			if net_ifar((row.rsqveto_duration for row in group), float(self.__dt)) >= float(self.__min_ifar)))
-		return gst.FLOW_OK
+		# Currently I am using alpha to store per-detector IFAR.
+		buf = sngl_inspiral_groups_to_buffer(
+			(group for group in sngl_inspiral_groups_from_buffer(inbuf) if net_ifar((row.alpha for row in group), float(self.__dt)) >= float(self.__min_ifar)),
+			inbuf.caps[0]['channels'])
+		buf.offset = inbuf.offset
+		buf.offset_end = inbuf.offset_end
+		buf.timestamp = inbuf.timestamp
+		buf.duration = inbuf.duration
+		buf.caps = inbuf.caps
+		# FIXME: copy flags too
+		return self.__srcpad.push(inbuf)
 
 
 # Register element class

@@ -29,6 +29,7 @@ import numpy
 
 from pylal import datatypes as laltypes
 import pylal.xlal.datatypes.snglinspiraltable as sngl
+from gstlal.pipeutil import gst
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -156,22 +157,19 @@ def sngl_inspiral_groups_from_buffer(buf):
 		yield tuple(row for row in rows[i*stride:i*stride+stride] if sngl_inspiral_is_non_nil(row))
 
 
-def sngl_inspiral_groups_to_buffer(buf, groups):
-	"""Convert (possibly multi-channel) SnglInspiralTable to a buffer."""
-	caps = buf.caps[0]
-	if 'channels' in caps.keys():
-		stride = caps['channels']
-	else:
-		stride = 1
-	ngroups = 0
+def sngl_inspiral_groups_to_buffer(groups, stride):
+	"""Convert (possibly multi-channel) SnglInspiralTable records to a buffer."""
+	data = ''
 	for i_group, group in enumerate(groups):
 		ngroups += 1
 		for i_row, row in enumerate(group):
-			data = buffer(row)
-			buf[(i_group * stride + i_row) * len(data):(i_group * stride + i_row + 1) * len(data)] = data
+			data += buffer(row)
 		for i_row in range(len(group), stride):
-			buf[(i_group * stride + i_row) * len(nil_sngl_buffer):(i_group * stride + i_row + 1) * len(nil_sngl_buffer)] = nil_sngl_buffer
-	buf.size = ngroups * stride * len(nil_sngl_buffer)
+			data += nil_sngl_buffer
+	buf = gst.buffer_new_and_alloc(len(data))
+	if len(data) > 0:
+		buf[0:len(data)] = data
+	return buf
 
 
 #
