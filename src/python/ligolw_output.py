@@ -121,25 +121,11 @@ def add_cbc_metadata(xmldoc, process, seg_in, seg_out):
 def make_process_params(options):
 	params = {}
 
-	#
-	# required options
-	#
-
-	for option in ("gps_start_time", "gps_end_time", "instrument", "channel_name", "output"):
-		params[option] = getattr(options, option)
-	# FIXME:  what about template_bank?
-
-	#
-	# optional options
-	#
-
-	for option in ("frame_cache", "injections", "flow", "svd_tolerance", "reference_psd", "ortho_gate_fap", "snr_threshold", "write_pipeline", "write_psd", "fake_data", "online_data", "comment", "verbose"):
-		if getattr(options, option) is not None:
-			params[option] = getattr(options, option)
-
-	#
-	# done
-	#
+	for key in options.__dict__:
+		if getattr(options, key) is not None:
+			opt = getattr(options, key, "")
+			if isinstance(opt,list): opt = ",".join(opt)
+			params[key] = opt
 
 	return list(ligolw_process.process_params_from_dict(params))
 
