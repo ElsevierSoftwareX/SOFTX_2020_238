@@ -161,11 +161,10 @@ def sngl_inspiral_groups_to_buffer(groups, stride):
 	"""Convert (possibly multi-channel) SnglInspiralTable records to a buffer."""
 	data = ''
 	for i_group, group in enumerate(groups):
-		ngroups += 1
 		for i_row, row in enumerate(group):
-			data += buffer(row)
+			data += str(buffer(row))
 		for i_row in range(len(group), stride):
-			data += nil_sngl_buffer
+			data += str(nil_sngl_buffer)
 	buf = gst.buffer_new_and_alloc(len(data))
 	if len(data) > 0:
 		buf[0:len(data)] = data
