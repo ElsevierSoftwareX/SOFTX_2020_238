@@ -77,7 +77,7 @@
 			canvas { border: 2px solid black; }
 		</style> 
 	</head>
-	<body onload="init([['snr_vs_time', 'snr_vs_time.png'],['effsnr_vs_time','effsnr_vs_time.png'], ['chisq_vs_snr','chisq_vs_snr.png'], ['H1snr_hist','H1snr_hist.png'],['L1snr_hist','L1snr_hist.png'], ['H1effsnr_hist','H1effsnr_hist.png'],['L1effsnr_hist','L1effsnr_hist.png']])">
+	<body onload="init([['snr_vs_time', 'snr_vs_time.png'],['effsnr_vs_time','effsnr_vs_time.png'], ['chisq_vs_snr','chisq_vs_snr.png'], ['H1snr_hist','H1snr_hist.png'],['L1snr_hist','L1snr_hist.png'], ['H1effsnr_hist','H1effsnr_hist.png'],['L1effsnr_hist','L1effsnr_hist.png'], ['H1,L1effsnr_vs_effsnr','H1,L1effsnr_vs_effsnr.png']])">
 
 		<header>
 		<h1> gstlal_inspiral online coincidence network </h2>
@@ -94,6 +94,7 @@
 		<h1 id="heading2">Chi-squared</h1>
 			<figure id="fig2">
 				<canvas id="chisq_vs_snr" onclick=zoom('fig2','chisq_vs_snr')></canvas>
+				<canvas id="H1,L1effsnr_vs_effsnr" onclick=zoom('fig2','H1,L1effsnr_vs_effsnr')></canvas>
 			</figure>
 		</section>
 		<section>
