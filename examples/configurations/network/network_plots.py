@@ -143,6 +143,30 @@ while True:
 	shutil.move(path+'tmpchisq_vs_snr.png',path+'chisq_vs_snr.png')
 	f.clf()
 
+	#
+	# Effective snr scatter plot
+	#
+
+	Aeffsnrs = {}
+	Beffsnrs = {}
+	# FIXME don't hardcode ifos, don't do the join this way
+	query = 'SELECT h1.ifo, l1.ifo, h1.snr, h1.chisq, l1.snr, l1.chisq FROM sngl_inspiral AS h1 JOIN coinc_event_map mapA ON h1.event_id == mapA.event_id JOIN coinc_event_map AS mapB ON mapA.coinc_event_id == mapB.coinc_event_id JOIN sngl_inspiral AS l1 on mapB.event_id == l1.event_id WHERE h1.ifo < l1.ifo AND mapA.table_name=="sngl_inspiral:table" AND mapA.table_name="sngl_inspiral:table"'
+
+	for h1ifo, l1ifo, h1snr, h1chisq, l1snr, l1chisq in connection.cursor().execute(query):
+		ifo = h1ifo+","+l1ifo
+		Aeffsnrs.setdefault(ifo,[]).append(effective_snr(h1snr, h1chisq))
+		Beffsnrs.setdefault(ifo,[]).append(effective_snr(l1snr, l1chisq))
+
+	pylab.subplot(111)
+	for ifo in Aeffsnrs.keys():
+		pylab.loglog(Aeffsnrs[ifo], Beffsnrs[ifo],'.', label=ifo)
+		pylab.xlabel('Effective SNR %s' % (ifo.split(',')[0],))
+		pylab.ylabel('Effective SNR %s' % (ifo.split(',')[1],))
+		pylab.figlegend(lines,labels,"upper right")
+		pylab.savefig(path+ifo+'effsnr_vs_effsnr.png')
+		shutil.move(path+ifo+'effsnr_vs_effsnr.png',path+ifo+'effsnr_vs_effsnr.png')
+		f.clf()
+
 	cnt += 1
 	time.sleep(wait)
 

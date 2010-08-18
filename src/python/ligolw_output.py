@@ -226,7 +226,7 @@ class Data(object):
 				self.time_slide_table = lsctables.table.get_table(self.xmldoc, lsctables.TimeSlideTable.tableName)
 				self.coinc_definer = lsctables.table.get_table(self.xmldoc, lsctables.CoincDefTable.tableName)
 				# FIXME add snr index for quick loudest event tables
-				self.connection.cursor().execute("CREATE INDEX snrix ON coinc_inspiral(snr)")
+				self.connection.cursor().execute("CREATE INDEX IF NOT EXISTS snrix ON coinc_inspiral(snr)")
 		else:
 			self.xmldoc = xmldoc
 			self.sngl_inspiral_table = sngl_inspiral_table
@@ -269,7 +269,7 @@ class Data(object):
 				masses.append([row.mass1, row.mass2])
 				chirpmasses.append([row.mchirp])
 				ids.append(row.event_id)
-				snrs.append(row.snr)
+				snrs.append(effective_snr(row.snr,row.chisq))
 				ifos.append(row.ifo)
 				times.append(row.end_time+row.end_time_ns/1.0e9)
 
