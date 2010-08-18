@@ -69,6 +69,31 @@ def mkelems_fast(bin, *pipedesc):
 
 
 #
+# LLOID Pipeline handler
+#
+
+
+class LLOIDHandler(object):
+	def __init__(self, mainloop, pipeline):
+		self.mainloop = mainloop
+		self.pipeline = pipeline
+
+		bus = pipeline.get_bus()
+		bus.add_signal_watch()
+		bus.connect("message", self.on_message)
+
+	def on_message(self, bus, message):
+		if message.type == gst.MESSAGE_EOS:
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
+		elif message.type == gst.MESSAGE_ERROR:
+			gerr, dbgmsg = message.parse_error()
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
+			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
+
+
+#
 # sum-of-squares aggregator
 #
 
