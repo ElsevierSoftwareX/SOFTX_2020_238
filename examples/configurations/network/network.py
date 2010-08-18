@@ -17,7 +17,6 @@ opts, args = OptionParser(
 
 opts.psd_fft_length = 8
 
-
 from gstlal.gstlal_svd_bank import read_bank
 from gstlal.gstlal_reference_psd import read_psd
 from gstlal import lloidparts
@@ -27,7 +26,10 @@ from gstlal import ligolw_output
 from glue import segments
 from pylal.datatypes import LIGOTimeGPS
 import sys
+import os
 
+output_prefix=os.path.split(opts.output)[0]
+output_name=os.path.split(opts.output)[1]
 
 # FIXME: This class, or something like it, occurs in many of our pipelines.
 # Maybe we could put a generalized version of it in a library?
@@ -93,7 +95,7 @@ for ifo in opts.instrument:
 #
 
 # FIXME make some of these kw args options
-data['all'] = ligolw_output.Data(opts.instrument, tmp_space=None, output="".join(opts.instrument)+"-"+opts.output, seg=seg, out_seg=seg, injections=None, comment="", verbose=True)
+data['all'] = ligolw_output.Data(opts.instrument, tmp_space=None, output=os.path.join(output_prefix,"".join(opts.instrument)+"-"+output_name), seg=seg, out_seg=seg, injections=None, comment="", verbose=True)
 data['all'].prepare_output_file(ligolw_output.make_process_params(opts))
 mkelems_fast(pipeline, coinc, "appsink", {"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})[-1].connect_after("new-buffer", ligolw_output.appsink_new_buffer, data['all'])
 
