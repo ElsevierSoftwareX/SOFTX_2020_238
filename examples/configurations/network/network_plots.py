@@ -50,38 +50,57 @@ def to_table(fname, names, tuplist):
 	f.close()
 
 cnt = 0
-wait = 10
+wait = 5
+#FIXME use glue
+lastid = 0
+ids = []
+snrs = {}
+times = {}
+chisqs = {}
+lines = []
+labels = []
+effsnrs = {}
+Aeffsnrs = {}
+Beffsnrs = {}
+
 while True:
 	f.clf()
-	snrs = {}
-	times = {}
-	chisqs = {}
-	lines = []
-	labels = []
-	effsnrs = {}
 
+	#
+	# Table of loudest events
 	# only do the loudest query every 5 waits
+	#
+
 	if (cnt % 6) == 0: to_table(path+'test.html', ["end_time", "end_time_ns", "snr", "ifos", "mchirp", "mass"], connection.cursor().execute('SELECT end_time, end_time_ns, snr, ifos, mchirp, mass FROM coinc_inspiral ORDER BY snr DESC LIMIT 10').fetchall())
 
-	for snr, chisq, t, ifo in connection.cursor().execute('SELECT snr, chisq, end_time+end_time_ns*1e-9, ifo FROM sngl_inspiral'):
-		snrs.setdefault(ifo,[]).append(snr)
-		times.setdefault(ifo,[]).append(t)
-		chisqs.setdefault(ifo,[]).append(chisq)
-		effsnrs.setdefault(ifo,[]).append(effective_snr(snr,chisq))
+	# FIXME don't hardcode ifos, don't do the join this way
+	# FIXME cant rely on time, somehow has ids too
+	start = time.time()
+	query = 'SELECT coinc_inspiral.rowid, snglA.ifo, snglB.ifo, snglA.end_time+snglA.end_time_ns/1e9, snglB.end_time+snglB.end_time_ns/1e9, snglA.snr, snglA.chisq, snglB.snr, snglB.chisq FROM coinc_inspiral JOIN coinc_event_map AS mapA on mapA.coinc_event_id == coinc_inspiral.coinc_event_id JOIN coinc_event_map as mapB on mapB.coinc_event_id == mapA.coinc_event_id JOIN sngl_inspiral AS snglA ON snglA.event_id == mapA.event_id JOIN sngl_inspiral AS snglB ON snglB.event_id == mapB.event_id WHERE mapA.table_name == "sngl_inspiral:table" AND coinc_inspiral.rowid > ?;'
+	
+	for id, h1ifo, l1ifo, h1time, l1time, h1snr, h1chisq, l1snr, l1chisq in connection.cursor().execute(query,(lastid,)):
+		ifo = h1ifo+","+l1ifo
+		Aeffsnrs.setdefault(ifo,[]).append(effective_snr(h1snr, h1chisq))
+		Beffsnrs.setdefault(ifo,[]).append(effective_snr(l1snr, l1chisq))
+		snrs.setdefault(h1ifo,[]).append(h1snr)
+		snrs.setdefault(l1ifo,[]).append(l1snr)
+		times.setdefault(h1ifo,[]).append(h1time)
+		times.setdefault(l1ifo,[]).append(l1time)
+		chisqs.setdefault(h1ifo,[]).append(h1chisq)
+		chisqs.setdefault(l1ifo,[]).append(l1chisq)
+		effsnrs.setdefault(h1ifo,[]).append(effective_snr(h1snr,h1chisq))
+		effsnrs.setdefault(l1ifo,[]).append(effective_snr(l1snr,l1chisq))
+		ids.append(id)
 
+	stop = time.time()
+	print stop-start
+	lastid = max(ids)
+	print lastid
 	#
 	# snr vs time
 	#
 
 	pylab.subplot(111)
-	csnrs = {}
-	ctimes = {}
-	for snr, t, ifo in connection.cursor().execute('SELECT snr, end_time+end_time_ns*1e-9, ifos FROM coinc_inspiral'):
-		csnrs.setdefault(ifo,[]).append(snr)
-		ctimes.setdefault(ifo,[]).append(t)
-	for ifo in ctimes.keys():
-		lines.append(pylab.semilogy(ctimes[ifo], csnrs[ifo],'.', label=ifo))
-		labels.append(ifo)
 	for ifo in times.keys():
 		lines.append(pylab.semilogy(times[ifo], snrs[ifo],'.', label=ifo))
 		labels.append(ifo)
@@ -92,6 +111,22 @@ while True:
 	shutil.move(path+'tmpsnr_vs_time.png',path+'snr_vs_time.png')
 	f.clf()
 
+	#
+	# effective snr vs time
+	#
+
+	pylab.subplot(111)
+	for ifo in times.keys():
+		lines.append(pylab.semilogy(times[ifo], effsnrs[ifo],'.', label=ifo))
+		labels.append(ifo)
+	pylab.ylabel('Effective SNR')
+	pylab.xlabel('Time')
+	pylab.figlegend(lines,labels,"upper right")
+	pylab.savefig(path+'tmpeffsnr_vs_time.png')
+	shutil.move(path+'tmpeffsnr_vs_time.png',path+'effsnr_vs_time.png')
+
+	f.clf()
+	
 	#
 	# SNR histogram
 	#
@@ -115,22 +150,6 @@ while True:
 		f.clf()
 
 	#
-	# effective snr vs time
-	#
-
-	pylab.subplot(111)
-	for ifo in times.keys():
-		lines.append(pylab.semilogy(times[ifo], effsnrs[ifo],'.', label=ifo))
-		labels.append(ifo)
-	pylab.ylabel('Effective SNR')
-	pylab.xlabel('Time')
-	pylab.figlegend(lines,labels,"upper right")
-	pylab.savefig(path+'tmpeffsnr_vs_time.png')
-	shutil.move(path+'tmpeffsnr_vs_time.png',path+'effsnr_vs_time.png')
-
-	f.clf()
-
-	#
 	# Chisq vs snr
 	#
 	pylab.subplot(111)
@@ -146,16 +165,6 @@ while True:
 	#
 	# Effective snr scatter plot
 	#
-
-	Aeffsnrs = {}
-	Beffsnrs = {}
-	# FIXME don't hardcode ifos, don't do the join this way
-	query = 'SELECT h1.ifo, l1.ifo, h1.snr, h1.chisq, l1.snr, l1.chisq FROM sngl_inspiral AS h1 JOIN coinc_event_map mapA ON h1.event_id == mapA.event_id JOIN coinc_event_map AS mapB ON mapA.coinc_event_id == mapB.coinc_event_id JOIN sngl_inspiral AS l1 on mapB.event_id == l1.event_id WHERE h1.ifo < l1.ifo AND mapA.table_name=="sngl_inspiral:table" AND mapA.table_name="sngl_inspiral:table"'
-
-	for h1ifo, l1ifo, h1snr, h1chisq, l1snr, l1chisq in connection.cursor().execute(query):
-		ifo = h1ifo+","+l1ifo
-		Aeffsnrs.setdefault(ifo,[]).append(effective_snr(h1snr, h1chisq))
-		Beffsnrs.setdefault(ifo,[]).append(effective_snr(l1snr, l1chisq))
 
 	pylab.subplot(111)
 	for ifo in Aeffsnrs.keys():
