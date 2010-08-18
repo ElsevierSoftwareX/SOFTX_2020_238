@@ -32,6 +32,7 @@ import os
 
 from gstlal.pipeutil import *
 from gstlal.lloidparts import *
+from gstlal.pipeio import sngl_inspiral_groups_from_buffer
 
 from glue import segments
 from glue import segmentsUtils
@@ -41,7 +42,6 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
 from pylal.datatypes import LIGOTimeGPS
-from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
 
 #
@@ -262,16 +262,15 @@ class Data(object):
 		times = []
 		ifos = []
 		for row in rows:
-			if row.end_time != 0:
-				row.process_id = self.process.process_id
-				row.event_id = self.sngl_inspiral_table.get_next_id()
-				self.sngl_inspiral_table.append(row)
-				masses.append([row.mass1, row.mass2])
-				chirpmasses.append([row.mchirp])
-				ids.append(row.event_id)
-				snrs.append(effective_snr(row.snr,row.chisq))
-				ifos.append(row.ifo)
-				times.append(row.end_time+row.end_time_ns/1.0e9)
+			row.process_id = self.process.process_id
+			row.event_id = self.sngl_inspiral_table.get_next_id()
+			self.sngl_inspiral_table.append(row)
+			masses.append([row.mass1, row.mass2])
+			chirpmasses.append([row.mchirp])
+			ids.append(row.event_id)
+			snrs.append(effective_snr(row.snr,row.chisq))
+			ifos.append(row.ifo)
+			times.append(row.end_time+row.end_time_ns/1.0e9)
 
 		# check if we need to insert a coincidence record
 		if len(ids) > 1:
@@ -314,10 +313,7 @@ class Data(object):
 
 
 def appsink_new_buffer(elem, data):
-	buf = elem.get_property("last-buffer")
-	numtmps = len(data.detectors)
-	rows = sngl_inspirals_from_buffer(buf)
 	# if it is a multi detector pipeline then it means these are coincidence records
-	for groups in [rows[i*numtmps:i*numtmps+numtmps] for i, x in enumerate(rows[::numtmps])]:
-		data.insert_group_records(groups)
+	for group in sngl_inspiral_groups_from_buffer(elem.get_property("last-buffer")):
+		data.insert_group_records(group)
 	if data.connection: data.connection.commit()
