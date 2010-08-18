@@ -225,8 +225,12 @@ class Data(object):
 				self.coinc_event_map = lsctables.table.get_table(self.xmldoc, lsctables.CoincMapTable.tableName)
 				self.time_slide_table = lsctables.table.get_table(self.xmldoc, lsctables.TimeSlideTable.tableName)
 				self.coinc_definer = lsctables.table.get_table(self.xmldoc, lsctables.CoincDefTable.tableName)
-				# FIXME add snr index for quick loudest event tables
+				# FIXME add snr index for quick loudest event tables, drop these later?
 				self.connection.cursor().execute("CREATE INDEX snrix ON coinc_inspiral(snr)")
+				self.connection.cursor().execute('CREATE INDEX snglid ON sngl_inspiral(event_id)')
+				self.connection.cursor().execute('CREATE INDEX coincid ON coinc_inspiral(coinc_event_id)')
+				self.connection.cursor().execute('CREATE INDEX mapid ON coinc_event_map(event_id)')
+				self.connection.cursor().execute('CREATE INDEX mapcoincid ON coinc_event_map(coinc_event_id)')
 		else:
 			self.xmldoc = xmldoc
 			self.sngl_inspiral_table = sngl_inspiral_table
