@@ -503,13 +503,11 @@ static int higher_adjacent_snr(GSTLALTriggerGen *element, const double complex *
 
 	guint samp;
 	for (samp = sample; samp < length; samp++) {
-		if ( cabs(*(leftsnr+channel)) > cabs(snr) ) return 1;
-		leftsnr+= element->num_templates;
+		if ( cabs(leftsnr[samp * element->num_templates + channel]) >= cabs(snr) ) return 1;
 	}
 
 	for (samp = 0; samp < sample; samp++) {
-		if ( cabs(*(rightsnr+channel)) > cabs(snr) ) return 1;
-		rightsnr += element->num_templates;
+		if ( cabs(rightsnr[samp * element->num_templates + channel]) >= cabs(snr) ) return 1;
 	}
 	/* Nothing higher found */
 	return 0;
