@@ -60,31 +60,38 @@ class lal_faketriggersrc(gst.BaseSrc):
 		construct=True # FIXME if gst.extend.pygobject provided gst.PARAM_MUTABLE_READY it would be a good idea to set this here
 	)
 	gproperty(
-		gobject.TYPE_ULONG,
+		gobject.TYPE_UINT64,
 		"min-waiting-time",
 		"Minimum waiting time between per-template triggers (nanoseconds)",
-		0, gobject.G_MAXULONG, 500 * gst.MSECOND,
+		0, gst.CLOCK_TIME_NONE, 500 * gst.MSECOND,
 		construct=True # FIXME if gst.extend.pygobject provided gst.PARAM_MUTABLE_READY it would be a good idea to set this here
 	)
 	gproperty(
-		gobject.TYPE_ULONG,
+		gobject.TYPE_UINT64,
 		"max-waiting-time",
 		"Minimum waiting time between per-template triggers (nanoseconds)",
-		0, gobject.G_MAXULONG, 1 * gst.SECOND,
+		0, gst.CLOCK_TIME_NONE, 1 * gst.SECOND,
 		construct=True # FIXME if gst.extend.pygobject provided gst.PARAM_MUTABLE_READY it would be a good idea to set this here
 	)
 	gproperty(
-		gobject.TYPE_ULONG,
+		gobject.TYPE_UINT64,
 		"buffer-duration",
 		"Duration of each buffer (nanoseconds)",
-		1, gobject.G_MAXULONG, 4 * gst.SECOND,
+		1, gst.CLOCK_TIME_NONE, 4 * gst.SECOND,
 		construct=True # FIXME if gst.extend.pygobject provided gst.PARAM_MUTABLE_READY it would be a good idea to set this here
 	)
 	gproperty(
-		gobject.TYPE_ULONG,
+		gobject.TYPE_UINT64,
 		"start-time",
 		"Time from which to start playback (nanoseconds)",
-		0, gobject.G_MAXULONG, 0,
+		0, gst.CLOCK_TIME_NONE, 0,
+		construct=True # FIXME if gst.extend.pygobject provided gst.PARAM_MUTABLE_READY it would be a good idea to set this here
+	)
+	gproperty(
+		gobject.TYPE_UINT64,
+		"duration",
+		"Duration for which to produce triggers (nanoseconds)",
+		0, gst.CLOCK_TIME_NONE, 20 * gst.SECOND,
 		construct=True # FIXME if gst.extend.pygobject provided gst.PARAM_MUTABLE_READY it would be a good idea to set this here
 	)
 	__gsttemplates__ = (
@@ -134,8 +141,8 @@ class lal_faketriggersrc(gst.BaseSrc):
 		]
 
 		start_time = self.get_property("start-time")
-		#duration = self.get_property("duration")
-		end_time = start_time + 20 * gst.SECOND
+		duration = self.get_property("duration")
+		end_time = start_time + duration
 		min_waiting_time = self.get_property("min-waiting-time")
 		max_waiting_time = self.get_property("max-waiting-time")
 
