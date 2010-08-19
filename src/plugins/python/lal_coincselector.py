@@ -34,7 +34,7 @@ class lal_coincselector(gst.Element):
 	__gproperties__ = {
 		'min-ifar': (
 			gobject.TYPE_UINT64,
-			'min-ifar',
+			'Minimum net inverse false alarm rate (IFAR)',
 			'Minimum network IFAR (inverse false alarm rate, also known as extrapolated waiting time) in nanoseconds.  Coincidences with an estimated IFAR less than this value will be dropped.',
 			0, gst.CLOCK_TIME_NONE, 3600 * gst.SECOND,
 			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
@@ -48,7 +48,7 @@ class lal_coincselector(gst.Element):
 		),
 		'dt': ( # FIXME: could the coinc and coincselector elements share this piece of information?
 			gobject.TYPE_UINT64,
-			'dt',
+			'Coincidence window',
 			'Coincidence window in nanoseconds.',
 			0, gst.CLOCK_TIME_NONE, 50 * gst.MSECOND,
 			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
