@@ -205,7 +205,7 @@ class lal_coincselector(gst.Element):
 				top = self.__queue.top
 
 			if inbuf.timestamp > top.end_time:
-				retval = self.process_coincs(self, pad, inbuf)
+				retval = self.process_coincs(pad, inbuf)
 				if retval != gst.FLOW_OK:
 					return retval
 				top = self.__queue.top
@@ -215,7 +215,7 @@ class lal_coincselector(gst.Element):
 				# Currently I am using alpha to store per-detector IFAR.
 				coinc = SnglCoinc(group, net_ifar((row.alpha for row in group), float(self.__dt)))
 				if coinc.time > top.end_time:
-					retval = self.process_coincs(self, pad, inbuf)
+					retval = self.process_coincs(pad, inbuf)
 					if retval != gst.FLOW_OK:
 						return retval
 					top = self.__queue.top
@@ -223,7 +223,7 @@ class lal_coincselector(gst.Element):
 					top.coinc_list.append(coinc)
 
 			if inbuf.timestamp + inbuf.duration > top.end_time:
-				retval = self.process_coincs(self, pad, inbuf)
+				retval = self.process_coincs(pad, inbuf)
 				if retval != gst.FLOW_OK:
 					return retval
 
