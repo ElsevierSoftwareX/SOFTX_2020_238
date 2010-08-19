@@ -39,6 +39,13 @@ class lal_coincselector(gst.Element):
 			0, gst.CLOCK_TIME_NONE, 3600 * gst.SECOND,
 			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
 		),
+		'min-waiting-time': (
+			gobject.TYPE_UINT64,
+			'Minimum waiting time',
+			'Minimum waiting time between coincidences (nanoseconds).',
+			0, gst.CLOCK_TIME_NONE, gst.SECOND,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
 		'dt': ( # FIXME: could the coinc and coincselector elements share this piece of information?
 			gobject.TYPE_UINT64,
 			'dt',
@@ -78,6 +85,8 @@ class lal_coincselector(gst.Element):
 	def do_set_property(self, prop, val):
 		if prop.name == 'min-ifar':
 			self.__min_ifar = val
+		elif prop.name == 'min-waiting-time':
+			self.__min_waiting_time = val
 		elif prop.name == 'dt':
 			self.__dt = val
 
@@ -85,6 +94,8 @@ class lal_coincselector(gst.Element):
 	def do_get_property(self, prop):
 		if prop.name == 'min-ifar':
 			return self.__min_ifar
+		elif prop.name == 'min-waiting-time':
+			return self.__min_waiting_time
 		elif prop.name == 'dt':
 			return self.__dt
 
