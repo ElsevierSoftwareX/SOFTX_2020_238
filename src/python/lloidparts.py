@@ -30,6 +30,7 @@ from gstlal import pipeparts
 from gstlal import pipeio
 from gstlal import cbc_template_fir
 import math
+import sys
 
 
 def mkelems_fast(bin, *pipedesc):
