@@ -91,7 +91,7 @@ class SnglCoinc(object):
 	def __init__(self, sngl_group, ifar):
 		self.sngl_group = sngl_group
 		self.ifar = ifar
-		self.time = min(row.end_time * gst.SECOND + row.end_time_ns)
+		self.time = min(row.end_time * gst.SECOND + row.end_time_ns for row in sngl_group)
 
 
 class lal_coincselector(gst.Element):
