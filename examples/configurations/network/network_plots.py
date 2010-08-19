@@ -50,7 +50,7 @@ def to_table(fname, names, tuplist):
 	f.close()
 
 cnt = 0
-wait = 5
+wait = 5.0
 #FIXME use glue
 lastid = 0
 ids = []
@@ -92,21 +92,16 @@ while True:
 		effsnrs.setdefault(l1ifo,[]).append(effective_snr(l1snr,l1chisq))
 		ids.append(id)
 
-	stop = time.time()
-	print stop-start
 	lastid = max(ids)
-	print lastid
 	#
 	# snr vs time
 	#
 
 	pylab.subplot(111)
 	for ifo in times.keys():
-		lines.append(pylab.semilogy(times[ifo], snrs[ifo],'.', label=ifo))
-		labels.append(ifo)
+		lines.append(pylab.semilogy(numpy.array(times[ifo]), numpy.array(snrs[ifo]),'.', label=ifo))
 	pylab.xlabel('Time')
 	pylab.ylabel('SNR')
-	pylab.figlegend(lines,labels,"upper right")
 	pylab.savefig(path+'tmpsnr_vs_time.png')
 	shutil.move(path+'tmpsnr_vs_time.png',path+'snr_vs_time.png')
 	f.clf()
@@ -117,11 +112,9 @@ while True:
 
 	pylab.subplot(111)
 	for ifo in times.keys():
-		lines.append(pylab.semilogy(times[ifo], effsnrs[ifo],'.', label=ifo))
-		labels.append(ifo)
+		lines.append(pylab.semilogy(numpy.array(times[ifo]), numpy.array(effsnrs[ifo]),'.', label=ifo))
 	pylab.ylabel('Effective SNR')
 	pylab.xlabel('Time')
-	pylab.figlegend(lines,labels,"upper right")
 	pylab.savefig(path+'tmpeffsnr_vs_time.png')
 	shutil.move(path+'tmpeffsnr_vs_time.png',path+'effsnr_vs_time.png')
 
@@ -133,7 +126,7 @@ while True:
 
 	for ifo in times.keys():
 		pylab.subplot(111)
-		pylab.hist(snrs[ifo],25)
+		pylab.hist(numpy.array(snrs[ifo]),25)
 		pylab.xlabel(ifo + ' SNR')
 		pylab.ylabel('Count')
 		pylab.savefig(path+ifo+'tmpsnr_hist.png')
@@ -142,7 +135,7 @@ while True:
 
 	for ifo in times.keys():
 		pylab.subplot(111)
-		pylab.hist(effsnrs[ifo],25)
+		pylab.hist(numpy.array(effsnrs[ifo]),25)
 		pylab.xlabel(ifo + ' effective SNR')
 		pylab.ylabel('Count')
 		pylab.savefig(path+ifo+'tmpeffsnr_hist.png')
@@ -154,10 +147,9 @@ while True:
 	#
 	pylab.subplot(111)
 	for ifo in times.keys():
-		pylab.loglog(snrs[ifo], chisqs[ifo],'.', label=ifo)
+		pylab.loglog(numpy.array(snrs[ifo]), numpy.array(chisqs[ifo]),'.', label=ifo)
 	pylab.ylabel('Chi-squared')
 	pylab.xlabel('SNR')
-	pylab.figlegend(lines,labels,"upper right")
 	pylab.savefig(path+'tmpchisq_vs_snr.png')
 	shutil.move(path+'tmpchisq_vs_snr.png',path+'chisq_vs_snr.png')
 	f.clf()
@@ -168,16 +160,17 @@ while True:
 
 	pylab.subplot(111)
 	for ifo in Aeffsnrs.keys():
-		pylab.loglog(Aeffsnrs[ifo], Beffsnrs[ifo],'.', label=ifo)
+		pylab.loglog(numpy.array(Aeffsnrs[ifo]), numpy.array(Beffsnrs[ifo]),'.', label=ifo)
 		pylab.xlabel('Effective SNR %s' % (ifo.split(',')[0],))
 		pylab.ylabel('Effective SNR %s' % (ifo.split(',')[1],))
-		pylab.figlegend(lines,labels,"upper right")
 		pylab.savefig(path+ifo+'effsnr_vs_effsnr.png')
 		shutil.move(path+ifo+'effsnr_vs_effsnr.png',path+ifo+'effsnr_vs_effsnr.png')
 		f.clf()
+	stop = time.time()
 
 	cnt += 1
-	time.sleep(wait)
+	if (stop - start) < wait: time.sleep(wait - (stop-start))
+	print time.time()-start
 
 
 connection.close()
