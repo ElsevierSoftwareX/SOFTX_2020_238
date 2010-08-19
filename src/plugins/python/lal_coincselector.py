@@ -183,7 +183,7 @@ class lal_coincselector(gst.Element):
 						coinc = other_coinc
 				if all(x.ifar >= coinc.ifar for x in self.__queue.oldest.coinc_list if coinc.time - x.time < self.__min_waiting_time) and all(x.ifar >= coinc.ifar for x in self.__queue.newest.coinc_list if x.time - coinc.time < self.__min_waiting_time):
 					rows = coinc.sngl_group
-			outbuf = sngl_inspiral_groups_to_buffer(rows, inbuf[0]['channels'])
+			outbuf = sngl_inspiral_groups_to_buffer(rows, inbuf.caps[0]['channels'])
 			outbuf.timestamp = self.__queue.middle.timestamp
 			outbuf.duration = self.__queue.middle.duration
 			outbuf.offset = gst.BUFFER_OFFSET_NONE
