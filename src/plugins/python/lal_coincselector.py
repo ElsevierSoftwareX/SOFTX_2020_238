@@ -227,6 +227,8 @@ class lal_coincselector(gst.Element):
 				if retval != gst.FLOW_OK:
 					return retval
 
+			return gst.FLOW_OK
+
 		except:
 			self.error(traceback.format_exc())
 			return gst.FLOW_ERROR
