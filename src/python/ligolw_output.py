@@ -23,12 +23,7 @@ try:
 except ImportError:
         # pre 2.5.x
 	from pysqlite2 import dbapi2 as sqlite3
-import math
 import numpy
-from optparse import OptionParser
-import sys
-import os.path
-import os
 
 from gstlal.pipeio import sngl_inspiral_groups_from_buffer
 
