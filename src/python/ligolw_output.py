@@ -49,9 +49,6 @@ from pylal.datatypes import LIGOTimeGPS
 #
 
 
-def mchirp(m1,m2):
-	return (m1+m2)**(0.6) / (m1*m2)**(0.2)
-
 #FIXME put this somewhere else, and tune it with software injections
 def effective_snr(snr, chisq):
 	return snr * (4.0 * chisq * (1 + snr ** 2 / 250.0)) ** -0.25
