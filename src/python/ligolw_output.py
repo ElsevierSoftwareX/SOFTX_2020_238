@@ -23,19 +23,10 @@ try:
 except ImportError:
         # pre 2.5.x
 	from pysqlite2 import dbapi2 as sqlite3
-import math
 import numpy
-from optparse import OptionParser
-import sys
-import os.path
-import os
 
-from gstlal.pipeutil import *
-from gstlal.lloidparts import *
 from gstlal.pipeio import sngl_inspiral_groups_from_buffer
 
-from glue import segments
-from glue import segmentsUtils
 from glue import lal
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
@@ -48,9 +39,6 @@ from pylal.datatypes import LIGOTimeGPS
 # Utilities
 #
 
-
-def mchirp(m1,m2):
-	return (m1+m2)**(0.6) / (m1*m2)**(0.2)
 
 #FIXME put this somewhere else, and tune it with software injections
 def effective_snr(snr, chisq):
