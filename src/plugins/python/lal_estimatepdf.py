@@ -13,6 +13,12 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""
+Accumulate triggers, histogram them, and use the histogram to assign FAR values.
+Triggers that come before the histogram is populated to min_hist_len are marked
+with a FAR of inf.
+"""
+__author__ = "Nickolas Fotopoulos <nickolas.fotopoulos@ligo.org>"
 
 
 #
@@ -36,8 +42,6 @@ from scipy import integrate
 
 from pylal import rate
 from pylal.xlal.datatypes import snglinspiraltable
-
-__author__ = "Nickolas Fotopoulos <nickolas.fotopoulos@ligo.org>"
 
 
 #
@@ -126,7 +130,7 @@ class lal_estimatepdf(gst.BaseTransform):
 	__gstdetails__ = (
 		'Trigger statistic PDF Estimation Element',
 		'Generic',
-		'Accumulate triggers, histogram them, and use the histogram to assign FAR values; triggers that come before the histogram is populated to min_hist_len are marked with a FAR of inf.',
+		__doc__,
 		__author__
 	)
 
