@@ -27,8 +27,6 @@ import numpy
 
 from gstlal.pipeio import sngl_inspiral_groups_from_buffer
 
-from glue import segments
-from glue import segmentsUtils
 from glue import lal
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
