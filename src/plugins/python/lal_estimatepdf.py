@@ -37,10 +37,7 @@ from scipy import integrate
 from pylal import rate
 from pylal.xlal.datatypes import snglinspiraltable
 
-
 __author__ = "Nickolas Fotopoulos <nickolas.fotopoulos@ligo.org>"
-__version__ = "FIXME"
-__date__ = "FIXME"
 
 
 #
@@ -102,7 +99,8 @@ class MovingHistogram(object):
 		FIXME: This may by slow with a deque. Must profile.
 		FIXME: This is a super naive livetime estimation.
 		"""
-		return self.hist[self.bins[stat]:].sum() / (self.timestamps[-1] - self.timestamps[0])
+		# Reminder: timestamps are in ns, FAR is in Hz
+		return self.hist[self.bins[stat]:].sum() / (self.timestamps[-1] - self.timestamps[0]) * gst.SECOND
 
 	@classmethod
 	def random_gaussian(cls, bins, max_hist_len, start_time=0, rate_Hz=1):
@@ -128,7 +126,7 @@ class lal_estimatepdf(gst.BaseTransform):
 	__gstdetails__ = (
 		'Trigger statistic PDF Estimation Element',
 		'Generic',
-		'Accumulate triggers, histogram them, and use the histogram to assign FAR values',
+		'Accumulate triggers, histogram them, and use the histogram to assign FAR values; triggers that come before the histogram is populated to min_hist_len are marked with a FAR of inf.',
 		__author__
 	)
 
@@ -207,7 +205,7 @@ class lal_estimatepdf(gst.BaseTransform):
 				temp_trig = held.popleft()
 				temp_hist = moving_hist_dict.get(trigger_template(temp_trig))
 				assert temp_hist is not None  # temp_trig should already have passed through FAR assignment
-				temp_hist.update(trigger_stat(temp_trig))
+				temp_hist.update(trigger_time(temp_trig), trigger_stat(temp_trig))
 
 			# hold current trigger to be incorporated into future histograms
 			held.append(trig)
@@ -217,10 +215,10 @@ class lal_estimatepdf(gst.BaseTransform):
 			if moving_hist is None:
 				moving_hist = moving_hist_dict.setdefault(trigger_template(trig), self._defaulthist())
 			if len(moving_hist) >= min_hist_len:
-				trig.beta = moving_hist.get_far(trigger_stat(trig))
+				trig.alpha = moving_hist.get_far(trigger_stat(trig))
 			else:
-				trig.beta = float("NaN")  # FIXME: discard trig
-
+				trig.alpha = float("inf")  # FIXME: discard trig
+			print trig.alpha
 		#
 		# done
 		#
