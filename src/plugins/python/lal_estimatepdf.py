@@ -153,21 +153,21 @@ class lal_estimatepdf(gst.BaseTransform):
 
 	gproperty(
 		gobject.TYPE_UINT64,
-		"min_hist_len",
+		"min-history-length",
 		"The minimum number of triggers to include in the histogram",
 		0, gst.CLOCK_TIME_NONE, 100,
 		construct=True
 	)
 	gproperty(
 		gobject.TYPE_UINT64,
-		"max_hist_len",
+		"max-history-length",
 		"The maximum number of triggers to include in the histogram",
 		0, gst.CLOCK_TIME_NONE, 100,
 		construct=True
 	)
 	gproperty(
 		gobject.TYPE_UINT64,
-		"min_trigger_age",
+		"min-trigger-age",
 		"The minimum age of a trigger before it can enter the histogram in nanoseconds",
 		0, gst.CLOCK_TIME_NONE, 10 * gst.SECOND,
 		construct=True
@@ -193,12 +193,12 @@ class lal_estimatepdf(gst.BaseTransform):
 		return True
 
 	def _defaulthist(self):
-		return MovingHistogram.random_gaussian(self.bins, self.get_property("max_hist_len"))
+		return MovingHistogram.random_gaussian(self.bins, self.get_property("max-history-length"))
 
 	def do_transform_ip(self, buf):
-		min_trigger_age = self.get_property("min_trigger_age")
-		min_hist_len = self.get_property("min_hist_len")
-		max_hist_len = self.get_property("max_hist_len")
+		min_trigger_age = self.get_property("min-trigger-age")
+		min_hist_len = self.get_property("min-history-length")
+		max_hist_len = self.get_property("max-history-length")
 		held = self.held_triggers
 		moving_hist_dict = self.moving_hist_dict
 		trigs = snglinspiraltable.from_buffer(buf)
