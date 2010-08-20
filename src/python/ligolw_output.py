@@ -198,11 +198,7 @@ class Data(object):
 			from glue.ligolw import dbtables
 			self.working_filename = dbtables.get_connection_filename(self.output, tmp_path = self.tmp_space, verbose = self.verbose)
 			self.connection = sqlite3.connect(self.working_filename, check_same_thread=False)
-			# setup id remapping
-			dbtables.idmap_create(self.connection)
-			dbtables.DBTable.append = dbtables.DBTable._remapping_append
-			dbtables.idmap_sync(self.connection)
-			ligolw_sqlite.insert_from_xmldoc(self.connection, xmldoc, preserve_ids = False, verbose = self.verbose)
+			ligolw_sqlite.insert_from_xmldoc(self.connection, xmldoc, preserve_ids = True, verbose = self.verbose)
 			xmldoc.unlink()
 			self.xmldoc = dbtables.get_xml(self.connection)
 			self.sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
