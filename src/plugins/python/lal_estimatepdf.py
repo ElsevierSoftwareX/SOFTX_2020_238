@@ -222,7 +222,6 @@ class lal_estimatepdf(gst.BaseTransform):
 				trig.alpha = moving_hist.get_far(trigger_stat(trig))
 			else:
 				trig.alpha = float("inf")  # FIXME: discard trig
-			print trig.alpha
 		#
 		# done
 		#
