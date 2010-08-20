@@ -202,7 +202,7 @@ class lal_estimatepdf(gst.BaseTransform):
 		held = self.held_triggers
 		moving_hist_dict = self.moving_hist_dict
 		trigs = snglinspiraltable.from_buffer(buf)
-		for trig in trigs:
+		for i, trig in enumerate(trigs):
 			# update moving histogram with held triggers that are old enough
 			min_time = trigger_time(trig) - min_trigger_age
 			while len(held) > 0 and trigger_time(held[0]) < min_time:
@@ -222,6 +222,11 @@ class lal_estimatepdf(gst.BaseTransform):
 				trig.alpha = moving_hist.get_far(trigger_stat(trig))
 			else:
 				trig.alpha = float("inf")  # FIXME: discard trig
+
+			# write back to buffer
+			data = buffer(trig)
+			datasize = len(data)
+			buf[i*datasize:(i+1)*datasize] = data
 		#
 		# done
 		#
