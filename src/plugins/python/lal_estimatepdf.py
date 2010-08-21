@@ -76,8 +76,8 @@ class MovingHistogram(object):
 		self.bins = bins
 		self.max_hist_len = max_hist_len
 
-		self.hist_ind = collections.deque(maxlen=max_hist_len)
-		self.timestamps = collections.deque(maxlen=max_hist_len)
+		self.hist_ind = collections.deque()
+		self.timestamps = collections.deque()
 		self.hist = np.zeros(len(bins), dtype=float)
 		self.occupancy = 0
 
@@ -90,11 +90,12 @@ class MovingHistogram(object):
 		"""
 		ind = self.bins[stat]
 		self.hist[ind] += 1
-		# If you append to the right and the deque is full, then the left element will be removed.
 		if len(self) >= self.max_hist_len:
 			self.hist[self.hist_ind[0]] -= 1
 		self.hist_ind.append(ind)
 		self.timestamps.append(timestamp)
+		self.hist_ind.popleft() # FIXME: deques can work as ring buffers in Python > 2.6
+		self.timestamps.popleft() # FIXME: deques can work as ring buffers in Python > 2.6
 
 	def get_far(self, stat):
 		"""
