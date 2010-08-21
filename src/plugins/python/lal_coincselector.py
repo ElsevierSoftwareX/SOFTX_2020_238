@@ -14,7 +14,12 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
-Select interesting coincidences based on estimated false alarm rates.
+Select interesting coincidences based on estimated false alarm rates (FAR).
+
+Note that although we store FAR in Hz as double precision in the
+sngl_inspiral table's alpha column, this element's adjustable properties
+are inverse FAR, or IFAR, in nanoseconds, so that they are directly comparable
+with GStreamer timestamps.
 """
 __author__ = "Leo Singer <leo.singer@ligo.org>"
 
@@ -216,8 +221,8 @@ class lal_coincselector(gst.Element):
 
 			for group in sngl_inspiral_groups_from_buffer(inbuf):
 				# FIXME: Pick which sngl_inspiral field to hijack.
-				# Currently I am using alpha to store per-detector IFAR.
-				coinc = SnglCoinc(group, net_ifar((row.alpha for row in group), float(self.__dt)))
+				# Currently I am using alpha to store per-detector FAR.
+				coinc = SnglCoinc(group, net_ifar((float(gst.SECOND) / row.alpha for row in group), float(self.__dt)))
 				if coinc.time > top.end_time:
 					retval = self.process_coincs(pad, inbuf)
 					if retval != gst.FLOW_OK:
