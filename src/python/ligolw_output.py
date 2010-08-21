@@ -164,7 +164,7 @@ class Data(object):
 		if self.output.endswith('.sqlite'):
 			from glue.ligolw.utils import ligolw_sqlite
 			from glue.ligolw import dbtables
-			self.working_filename = dbtables.get_connection_filename(self.output, tmp_path = self.tmp_space, verbose = self.verbose)
+			self.working_filename = dbtables.get_connection_filename(self.output, tmp_path = self.tmp_space, verbose = self.verbose, replace_file = True)
 			self.connection = sqlite3.connect(self.working_filename, check_same_thread=False)
 			ligolw_sqlite.insert_from_xmldoc(self.connection, xmldoc, preserve_ids = True, verbose = self.verbose)
 			xmldoc.unlink()
