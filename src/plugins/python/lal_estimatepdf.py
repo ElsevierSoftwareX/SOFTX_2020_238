@@ -109,7 +109,9 @@ class MovingHistogram(object):
 		# FIXME: This is a super naive livetime estimation.
 		livetime = self.timestamps[-1] - self.timestamps[0]
 
-		return count / livetime * gst.SECOND
+		# FIXME FIXME FIXME: adding 1 to count to guarantee non-zero FARs, with
+		# a minum of (1/livetime), but this can really screw up FARs in the tail!
+		return (count + 1) / livetime * gst.SECOND
 
 	@classmethod
 	def random_gaussian(cls, bins, max_hist_len, start_time=0, rate_Hz=1):
