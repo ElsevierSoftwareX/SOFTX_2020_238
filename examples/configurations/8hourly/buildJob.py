@@ -97,7 +97,7 @@ os.chdir(dirname)
 tmpltbank_start_time = 958740096
 tmpltbank_end_time = 958742144
 tmpltbank_duration = 2048
-comment = "GSTLAL_8HOURLY"
+comment = dirname
 
 ifodict = {
 	"H1": {"reference_psd_start_time": 958739939, "reference_psd_end_time": 958743539},

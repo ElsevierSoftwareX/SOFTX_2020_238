@@ -14,9 +14,11 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
+
 Time series plotter.  Renders time series from any number of input streams.
 This element demonstrates how to recycle a Figure object in order to render
 a sequence of similar plots very rapidly.
+
 """
 __author__ = "Leo Singer <leo.singer@ligo.org>"
 

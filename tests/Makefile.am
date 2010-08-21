@@ -2,7 +2,6 @@ EXTRA_DIST = firbank_test_01.py fixtures.py plots_test_01.py resample_test_01.py
 
 check :
 	python test_coinc.py
-	python test_skymap.py
 	python firbank_test_01.py
 	python plots_test_01.py
 	python resample_test_01.py

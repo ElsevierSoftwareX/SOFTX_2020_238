@@ -28,6 +28,8 @@ import numpy
 
 
 from pylal import datatypes as laltypes
+import pylal.xlal.datatypes.snglinspiraltable as sngl
+from gstlal.pipeutil import gst
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -112,6 +114,61 @@ def array_from_audio_buffer(buf):
 	channels = buf.caps[0]["channels"]
 	a = numpy.frombuffer(buf, dtype = numpy_dtype_from_caps(buf.caps))
 	return a.reshape((len(a) / channels, channels))
+
+
+#
+# =============================================================================
+#
+#                          SnglInspiralTable buffers
+#
+# =============================================================================
+#
+
+
+def net_ifar(ifars, dt):
+	"""Compute net inverse false alarm rate (IFAR) from individual detector IFARs."""
+	net_ifar = dt
+	for ifar in ifars:
+		net_ifar *= (ifar / dt)
+	return net_ifar
+
+
+def sngl_inspiral_is_non_nil(row):
+	for c in buffer(row)[:-4]:
+		if ord(c):
+			return True
+	return False
+
+
+nil_sngl_buffer = buffer(sngl.SnglInspiralTable())
+
+
+def sngl_inspiral_groups_from_buffer(buf):
+	"""Extract (possibly multi-channel) SnglInspiralTable records from a buffer."""
+	if buf.size < len(nil_sngl_buffer):
+		return
+	rows = sngl.from_buffer(buf)
+	caps = buf.caps[0]
+	if 'channels' in caps.keys():
+		stride = caps['channels']
+	else:
+		stride = 1
+	for i in range(len(rows) / stride):
+		yield tuple(row for row in rows[i*stride:i*stride+stride] if sngl_inspiral_is_non_nil(row))
+
+
+def sngl_inspiral_groups_to_buffer(groups, stride):
+	"""Convert (possibly multi-channel) SnglInspiralTable records to a buffer."""
+	data = ''
+	for i_group, group in enumerate(groups):
+		for i_row, row in enumerate(group):
+			data += str(buffer(row))
+		for i_row in range(len(group), stride):
+			data += str(nil_sngl_buffer)
+	buf = gst.buffer_new_and_alloc(len(data))
+	if len(data) > 0:
+		buf[0:len(data)] = data
+	return buf
 
 
 #

@@ -23,34 +23,22 @@ try:
 except ImportError:
         # pre 2.5.x
 	from pysqlite2 import dbapi2 as sqlite3
-import math
 import numpy
-from optparse import OptionParser
-import sys
-import os.path
-import os
 
-from gstlal.pipeutil import *
-from gstlal.lloidparts import *
+from gstlal.pipeio import sngl_inspiral_groups_from_buffer
 
-from glue import segments
-from glue import segmentsUtils
 from glue import lal
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
 from pylal.datatypes import LIGOTimeGPS
-from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
 
 #
 # Utilities
 #
 
-
-def mchirp(m1,m2):
-	return (m1+m2)**(0.6) / (m1*m2)**(0.2)
 
 #FIXME put this somewhere else, and tune it with software injections
 def effective_snr(snr, chisq):
@@ -140,7 +128,7 @@ def make_process_params(options):
 			if isinstance(opt,list): opt = ",".join(opt)
 			params[key] = opt
 
-	return list(ligolw_process.process_params_from_dict(params))
+	return params
 
 class Data(object):
 	def __init__(self, detectors, options=None, **kwargs):
@@ -158,8 +146,7 @@ class Data(object):
 	def prepare_output_file(self, process_params):
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
-		self.process = ligolw_process.append_process(xmldoc, program = "gstlal_inspiral", comment = self.comment, ifos = set(self.detectors))
-		ligolw_process.append_process_params(xmldoc, self.process, process_params)
+		self.process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", process_params, comment = self.comment, ifos = set(self.detectors))
 		search_summary = add_cbc_metadata(xmldoc, self.process, self.seg, self.out_seg)
 		# FIXME:  argh, ugly
 		sngl_inspiral_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
@@ -209,13 +196,9 @@ class Data(object):
 		if self.output.endswith('.sqlite'):
 			from glue.ligolw.utils import ligolw_sqlite
 			from glue.ligolw import dbtables
-			self.working_filename = dbtables.get_connection_filename(self.output, tmp_path = self.tmp_space, verbose = self.verbose)
+			self.working_filename = dbtables.get_connection_filename(self.output, tmp_path = self.tmp_space, verbose = self.verbose, replace_file = True)
 			self.connection = sqlite3.connect(self.working_filename, check_same_thread=False)
-			# setup id remapping
-			dbtables.idmap_create(self.connection)
-			dbtables.DBTable.append = dbtables.DBTable._remapping_append
-			dbtables.idmap_sync(self.connection)
-			ligolw_sqlite.insert_from_xmldoc(self.connection, xmldoc, preserve_ids = False, verbose = self.verbose)
+			ligolw_sqlite.insert_from_xmldoc(self.connection, xmldoc, preserve_ids = True, verbose = self.verbose)
 			xmldoc.unlink()
 			self.xmldoc = dbtables.get_xml(self.connection)
 			self.sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
@@ -266,16 +249,15 @@ class Data(object):
 		times = []
 		ifos = []
 		for row in rows:
-			if row.end_time != 0:
-				row.process_id = self.process.process_id
-				row.event_id = self.sngl_inspiral_table.get_next_id()
-				self.sngl_inspiral_table.append(row)
-				masses.append([row.mass1, row.mass2])
-				chirpmasses.append([row.mchirp])
-				ids.append(row.event_id)
-				snrs.append(effective_snr(row.snr,row.chisq))
-				ifos.append(row.ifo)
-				times.append(row.end_time+row.end_time_ns/1.0e9)
+			row.process_id = self.process.process_id
+			row.event_id = self.sngl_inspiral_table.get_next_id()
+			self.sngl_inspiral_table.append(row)
+			masses.append([row.mass1, row.mass2])
+			chirpmasses.append([row.mchirp])
+			ids.append(row.event_id)
+			snrs.append(effective_snr(row.snr,row.chisq))
+			ifos.append(row.ifo)
+			times.append(row.end_time+row.end_time_ns/1.0e9)
 
 		# check if we need to insert a coincidence record
 		if len(ids) > 1:
@@ -318,10 +300,7 @@ class Data(object):
 
 
 def appsink_new_buffer(elem, data):
-	buf = elem.get_property("last-buffer")
-	numtmps = len(data.detectors)
-	rows = sngl_inspirals_from_buffer(buf)
 	# if it is a multi detector pipeline then it means these are coincidence records
-	for groups in [rows[i*numtmps:i*numtmps+numtmps] for i, x in enumerate(rows[::numtmps])]:
-		data.insert_group_records(groups)
+	for group in sngl_inspiral_groups_from_buffer(elem.get_property("last-buffer")):
+		data.insert_group_records(group)
 	if data.connection: data.connection.commit()
