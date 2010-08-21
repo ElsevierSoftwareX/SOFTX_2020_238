@@ -179,7 +179,7 @@ class lal_coincselector(gst.Element):
 
 	def process_coincs(self, pad, inbuf): # FIXME: not a very informative name for this method.
 		if self.__queue.is_full():
-			rows = []
+			rows = ()
 			coinc_list = self.__queue.middle.coinc_list
 			if len(coinc_list) > 0:
 				coinc = coinc_list[0]
@@ -187,7 +187,7 @@ class lal_coincselector(gst.Element):
 					if other_coinc.ifar < coinc.ifar:
 						coinc = other_coinc
 				if all(x.ifar >= coinc.ifar for x in self.__queue.oldest.coinc_list if coinc.time - x.time < self.__min_waiting_time) and all(x.ifar >= coinc.ifar for x in self.__queue.newest.coinc_list if x.time - coinc.time < self.__min_waiting_time):
-					rows = coinc.sngl_group
+					rows = (coinc.sngl_group,)
 			outbuf = sngl_inspiral_groups_to_buffer(rows, inbuf.caps[0]['channels'])
 			outbuf.timestamp = self.__queue.middle.timestamp
 			outbuf.duration = self.__queue.middle.duration
