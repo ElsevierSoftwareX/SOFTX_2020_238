@@ -187,7 +187,10 @@ class lal_estimatepdf(gst.BaseTransform):
 		self.sink_pads().next().use_fixed_caps()
 		for prop in self.props:
 			self.set_property(prop.name, prop.default_value)
-		self.bins = rate.LinearBins(3, 6, 1000)
+		# FIXME: using linear bins imposes a minimum and maximum SNR.  If
+		# a trigger has SNR that is greater than or less than this value, then
+		# pylal.rate will actually raise an IndexError!
+		self.bins = rate.LinearBins(3, 6000, 1000000)
 
 		# have one moving hist per template
 		self.moving_hist_dict = {}  # FIXME: replace with a defaultdict in Python 2.5
