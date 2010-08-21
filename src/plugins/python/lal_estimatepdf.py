@@ -100,12 +100,15 @@ class MovingHistogram(object):
 		"""
 		Return the FAR (false-alarm rate) of the given stat based on the
 		contents of the histogram.
-		FIXME: This may by slow with a deque. Must profile.
-		FIXME: This is a super naive livetime estimation.
 		"""
 		# Reminder: timestamps are in ns, FAR is in Hz
+
+		# FIXME: This may by slow with a deque. Must profile.
 		count = self.hist[self.bins[stat]:].sum()
+
+		# FIXME: This is a super naive livetime estimation.
 		livetime = self.timestamps[-1] - self.timestamps[0]
+
 		return count / livetime * gst.SECOND
 
 	@classmethod
