@@ -496,7 +496,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		{
 			memcpy(GST_BUFFER_DATA(buf), outarray->data, siz);
 			g_array_free(outarray, TRUE);
-			GST_BUFFER_TIMESTAMP(buf) = timestamp - coinc->dt;
+			GST_BUFFER_TIMESTAMP(buf) = timestamp;
 			GST_BUFFER_DURATION(buf) = last_seen_time - timestamp;
 			GST_BUFFER_OFFSET(buf) = GST_BUFFER_OFFSET_NONE;
 			GST_BUFFER_OFFSET_END(buf) = GST_BUFFER_OFFSET_NONE;

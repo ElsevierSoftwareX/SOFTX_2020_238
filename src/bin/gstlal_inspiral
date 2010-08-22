@@ -42,7 +42,6 @@ from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals
 
 
 from gstlal import ligolw_output
-from gstlal import pipeio
 from gstlal import templates
 from gstlal.gstlal_svd_bank import build_bank
 from gstlal.gstlal_reference_psd import *
@@ -64,44 +63,6 @@ class DetectorData(object):
 		self.frame_cache = frame_cache
 		self.channel = channel
 		self.block_size = block_size
-
-
-#
-# =============================================================================
-#
-#                              Pipeline Elements
-#
-# =============================================================================
-#
-
-
-#
-# LLOID Pipeline handler
-#
-
-
-class LLOIDHandler(object):
-	def __init__(self, mainloop, pipeline, verbose = False):
-		self.mainloop = mainloop
-		self.pipeline = pipeline
-		self.verbose = verbose
-
-		bus = pipeline.get_bus()
-		bus.add_signal_watch()
-		bus.connect("message", self.on_message)
-
-	def on_message(self, bus, message):
-		if message.type == gst.MESSAGE_EOS:
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
-		elif message.type == gst.MESSAGE_ERROR:
-			gerr, dbgmsg = message.parse_error()
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
-			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
-		elif message.type == gst.MESSAGE_ELEMENT:
-			if message.structure.get_name() == "spectrum":
-				psd = pipeio.parse_spectrum_message(message)
 
 
 #
@@ -271,6 +232,13 @@ for n, bank in enumerate(banks):
 #
 
 
+# If we are using online data, then use a running PSD estimate.
+# FIXME: this is a hacky way to set it.  We should give the user direct
+# control over this setting.
+if options.online_data:
+	psd = None
+
+
 #
 # Write the pipeline to a dot file.
 # This option needs the environment variable GST_DEBUG_DUMP_DOT_DIR
@@ -290,7 +258,7 @@ def maybe_dump_dot(pipeline, stage):
 
 pipeline = gst.Pipeline("gstlal_inspiral")
 mainloop = gobject.MainLoop()
-handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
+handler = LLOIDHandler(mainloop, pipeline)
 
 src = mkLLOIDmulti(
 	pipeline,

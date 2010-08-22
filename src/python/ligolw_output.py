@@ -23,23 +23,11 @@ try:
 except ImportError:
         # pre 2.5.x
 	from pysqlite2 import dbapi2 as sqlite3
-import math
-import numpy
-from optparse import OptionParser
-import sys
-import os.path
-import os
 
-from gstlal.pipeutil import *
-from gstlal.lloidparts import *
-
-from glue import segments
-from glue import segmentsUtils
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
-from pylal.datatypes import LIGOTimeGPS
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
 
@@ -121,27 +109,13 @@ def add_cbc_metadata(xmldoc, process, seg_in, seg_out):
 def make_process_params(options):
 	params = {}
 
-	#
-	# required options
-	#
+	for key in options.__dict__:
+		if getattr(options, key) is not None:
+			opt = getattr(options, key, "")
+			if isinstance(opt,list): opt = ",".join(opt)
+			params[key] = opt
 
-	for option in ("gps_start_time", "gps_end_time", "instrument", "channel_name", "output"):
-		params[option] = getattr(options, option)
-	# FIXME:  what about template_bank?
-
-	#
-	# optional options
-	#
-
-	for option in ("frame_cache", "injections", "flow", "svd_tolerance", "reference_psd", "ortho_gate_fap", "snr_threshold", "write_pipeline", "write_psd", "fake_data", "online_data", "comment", "verbose"):
-		if getattr(options, option) is not None:
-			params[option] = getattr(options, option)
-
-	#
-	# done
-	#
-
-	return list(ligolw_process.process_params_from_dict(params))
+	return params
 
 class Data(object):
 	def __init__(self, options, detectors):
@@ -163,13 +137,17 @@ class Data(object):
 	def prepare_output_file(self, process_params):
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
-		self.process = ligolw_process.append_process(xmldoc, program = "gstlal_inspiral", comment = self.comment, ifos = set(self.detectors))
-		ligolw_process.append_process_params(xmldoc, self.process, process_params)
+		self.process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", process_params, comment = self.comment, ifos = set(self.detectors))
 		search_summary = add_cbc_metadata(xmldoc, self.process, self.seg, self.out_seg)
 		# FIXME:  argh, ugly
 		sngl_inspiral_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
 
 		sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))	# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
+
+		# Add injections table if necessary
+		if self.injection_file is not None:
+			from glue.ligolw.utils import ligolw_add
+			ligolw_add.ligolw_add(xmldoc, [self.injection_file], verbose = self.verbose)
 
 		if self.output.endswith('.sqlite'):
 			from glue.ligolw.utils import ligolw_sqlite
@@ -182,18 +160,11 @@ class Data(object):
 			dbtables.idmap_sync(self.connection)
 			ligolw_sqlite.insert_from_xmldoc(self.connection, xmldoc, preserve_ids = False, verbose = self.verbose)
 			xmldoc.unlink()
-			if self.injection_file is not None:
-				ligolw_sqlite.insert_from_url(self.connection, self.injection_file, preserve_ids = False, verbose = self.verbose)
-				#utils.load_filename(self.injection_file, gz = (injection_file or "stdin").endswith(".gz"), verbose = self.verbose).unlink()
 			self.xmldoc = dbtables.get_xml(self.connection)
 			self.sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
 		else:
-			from glue.ligolw.utils import ligolw_add
 			self.xmldoc = xmldoc
 			self.sngl_inspiral_table = sngl_inspiral_table
-			if self.injection_file is not None:
-				ligolw_add.ligolw_add(self.xmldoc, [self.injection_file], verbose = self.verbose)
-				utils.load_filename(self.injection_file, gz = (self.injection_file or "stdin").endswith(".gz"), verbose = self.verbose)
 
 	def write_output_file(self):
 		if self.connection:
@@ -203,7 +174,7 @@ class Data(object):
 			self.connection.cursor().execute('UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)')
 			self.connection.cursor().execute('UPDATE process SET end_time = ?', (XLALUTCToGPS(time.gmtime()).seconds,))
 			self.connection.commit()
-			dbtables.build_indexes(self.connection, options.verbose)
+			dbtables.build_indexes(self.connection, self.verbose)
 			dbtables.put_connection_filename(self.output, self.working_filename, verbose = self.verbose)
 		else:
 			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
