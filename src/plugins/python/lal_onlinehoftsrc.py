@@ -351,7 +351,7 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 			self.set_live(val)
 			if val:
 				self.seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_KEY_UNIT,
-						gst.SEEK_TYPE_SET, gps_now() * gst.SECOND,
+						gst.SEEK_TYPE_SET, (gps_now() - 70) * gst.SECOND,
 						gst.SEEK_TYPE_NONE, -1)
 
 
