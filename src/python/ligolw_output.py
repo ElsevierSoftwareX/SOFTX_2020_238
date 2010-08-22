@@ -23,23 +23,11 @@ try:
 except ImportError:
         # pre 2.5.x
 	from pysqlite2 import dbapi2 as sqlite3
-import math
-import numpy
-from optparse import OptionParser
-import sys
-import os.path
-import os
 
-from gstlal.pipeutil import *
-from gstlal.lloidparts import *
-
-from glue import segments
-from glue import segmentsUtils
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
-from pylal.datatypes import LIGOTimeGPS
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
 
