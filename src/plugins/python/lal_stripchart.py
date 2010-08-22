@@ -120,6 +120,8 @@ class lal_stripchart(matplotlibhelper.BaseMatplotlibTransform):
 			self.axes.set_ylim(val, self.axes.get_ylim()[1])
 		elif prop.name == 'y-max':
 			self.axes.set_ylim(self.axes.get_ylim()[0], val)
+		elif prop.name == 'title':
+			self.axes.set_title(val)
 		elif prop.name == 'samplesperbuffer':
 			self.axes.lines = []
 			self.axes.xaxis.cla() # FIXME: Matplotlib leaks callback refs without this
