@@ -87,4 +87,5 @@ mkelems_fast(pipeline, coinc, "lal_coincselector", {"min-ifar": 0}, "progressrep
 pipeline.set_state(gst.STATE_PLAYING)
 gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS, "network")
 mainloop.run()
-data.write_output_file()
+for datafile in data.itervalues():
+	datafile.write_output_file()
