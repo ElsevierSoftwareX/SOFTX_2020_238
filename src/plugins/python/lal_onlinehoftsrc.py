@@ -59,7 +59,6 @@ except:
 	# Pre-Python 2.6 compatibility.
 	from gstlal.namedtuple import namedtuple
 from gstlal.pipeutil import *
-from gst.extend.pygobject import gproperty, with_construct_properties
 
 
 def gps_now():
@@ -184,14 +183,14 @@ class directory_poller(object):
 					if gps_now() - self.time < self.latency:
 						# The requested time is too recent, so just wait
 						# a bit and then try again.
-						print >>sys.stderr, "lal_onlinehoftsrc: sleeping because requested time is too new"
+						gst.warning("lal_onlinehoftsrc: sleeping because requested time is too new")
 						time.sleep(self.timeout)
 					else:
 						# The requested time is old enough that it is possible that
 						# there is a missing file.  Look through the directory tree
 						# to find the next available file.
 
-						print >>sys.stderr, "lal_onlinehoftsrc: %s: late or missing file suspected" % filepath
+						gst.warning("lal_onlinehoftsrc: %s: late or missing file suspected" % filepath)
 
 						# We need to scan the directory tree successfully twice
 						# in succession to avoid a race condition where the
@@ -246,14 +245,14 @@ class directory_poller(object):
 										if num_tries_remaining == 0:
 											# We have found a new file a second time,
 											# so go back to outer loop.
-											print >>sys.stderr, "lal_onlinehoftsrc: files skipped" 
+											gst.warning("lal_onlinehoftsrc: files skipped")
 											self.time = cache.items[idx]
 									# Go back to outer loop.
 									new_file_found = True
 									break
 							if not new_file_found:
 								num_tries_remaining = 2
-								print >>sys.stderr, "lal_onlinehoftsrc: files are very late"
+								gst.warning("lal_onlinehoftsrc: files are very late")
 								time.sleep(self.timeout)
 				else:
 					# Opening file failed for some reason *other* than that it did
@@ -285,48 +284,57 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		__doc__,
 		__author__
 	)
-	gproperty(
-		gobject.TYPE_STRING,
-		"instrument",
-		'Instrument name (e.g., "H1")',
-		None,
-		construct=True
-	)
-	gproperty(
-		StateFlags,
-		"state-require",
-		"State vector flags that must be TRUE",
-		STATE_SCI | STATE_CON | STATE_UP | STATE_EXC,
-		construct=True
-	)
-	gproperty(
-		StateFlags,
-		"state-deny",
-		"State vector flags that must be FALSE",
-		0,
-		construct=True
-	)
-	gproperty(
-		DQFlags,
-		"data-quality-require",
-		"Data quality flags that must be TRUE",
-		DQ_SCIENCE | DQ_UP | DQ_CALIBRATED | DQ_LIGHT,
-		construct=True
-	)
-	gproperty(
-		DQFlags,
-		"data-quality-deny",
-		"Data quality flags that must be FALSE",
-		DQ_BADGAMMA,
-		construct=True
-	)
-	gproperty(
-		VirgoDQFlags,
-		"virgo-data-quality",
-		"Data quality value that must be present in Virgo data",
-		VIRGO_DQ_12,
-		construct=True
-	)
+	__gproperties__ = {
+		"instrument": (
+			gobject.TYPE_STRING,
+			"instrument",
+			'Instrument name (e.g., "H1")',
+			None,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"state-require": (
+			StateFlags,
+			"state-require",
+			"State vector flags that must be TRUE",
+			STATE_SCI | STATE_CON | STATE_UP | STATE_EXC,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"state-deny": (
+			StateFlags,
+			"state-deny",
+			"State vector flags that must be FALSE",
+			0,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"data-quality-require": (
+			DQFlags,
+			"data-quality-require",
+			"Data quality flags that must be TRUE",
+			DQ_SCIENCE | DQ_UP | DQ_CALIBRATED | DQ_LIGHT,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"data-quality-deny": (
+			DQFlags,
+			"data-quality-deny",
+			"Data quality flags that must be FALSE",
+			DQ_BADGAMMA,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"virgo-data-quality": (
+			VirgoDQFlags,
+			"virgo-data-quality",
+			"Data quality value that must be present in Virgo data",
+			VIRGO_DQ_12,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"is-live": (
+			gobject.TYPE_BOOLEAN,
+			"is-live",
+			"Whether to act as a live source, starting playback from current GPS time",
+			False,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		)
+	}
 	__gsttemplates__ = (
 		gst.PadTemplate("src",
 			gst.PAD_SRC, gst.PAD_ALWAYS,
@@ -359,7 +367,6 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 	""")
 
 
-	@with_construct_properties
 	def __init__(self):
 		super(lal_onlinehoftsrc, self).__init__()
 		self.set_property('blocksize', 16384 * 16 * 8)
@@ -369,26 +376,39 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		self.__needs_seek = False
 
 
+	def do_set_property(self, prop, val):
+		setattr(self, '_' + prop.name.replace('-', '_'), val)
+		if prop.name == 'is-live':
+			self.set_live(val)
+			if val:
+				self.seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_KEY_UNIT,
+						gst.SEEK_TYPE_SET, (gps_now() - 70) * gst.SECOND,
+						gst.SEEK_TYPE_NONE, -1)
+
+
+	def do_get_property(self, prop):
+		return getattr(self, '_' + prop.name.replace('-', '_'))
+
+
 	def do_start(self):
 		"""GstBaseSrc->start virtual method"""
 		self.__last_successful_gps_end = None
 
 		# Look up instrument
-		instrument = self.get_property('instrument')
-		if instrument not in ifodescs:
-			self.error("unknown instrument: %s" % instrument)
+		if self._instrument not in ifodescs:
+			self.error("unknown instrument: %s" % self._instrument)
 			return False
-		self.__ifodesc = ifodescs[instrument]
+		self.__ifodesc = ifodescs[self._instrument]
 
 		# Create instance of directory_poller
 		self.__poller = directory_poller(
-			os.path.join(os.getenv('ONLINEHOFT'), instrument),
+			os.path.join(os.getenv('ONLINEHOFT'), self._instrument),
 			self.__ifodesc.nameprefix, self.__ifodesc.namesuffix
 		)
 
 		# Send tags
 		taglist = gst.TagList()
-		taglist["instrument"] = instrument
+		taglist["instrument"] = self._instrument
 		taglist["channel-name"] = self.__ifodesc.channelname.split(":")[-1]
 		taglist["units"] = "strain" # FIXME: can we get this value from the frame file itself?
 
@@ -503,12 +523,12 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 
 		# Compute "good data" segment mask.
 		if self.__ifodesc.ifo == "V1":
-			segment_mask = (dq_array >= int(self.get_property('virgo-data-quality')))
+			segment_mask = (dq_array >= int(self._virgo_data_quality))
 		else:
-			dq_require = int(self.get_property('data-quality-require'))
-			dq_deny = int(self.get_property('data-quality-deny'))
-			state_require = int(self.get_property('state-require'))
-			state_deny = int(self.get_property('state-deny'))
+			dq_require = int(self._data_quality_require)
+			dq_deny = int(self._data_quality_deny)
+			state_require = int(self._state_require)
+			state_deny = int(self._state_deny)
 			state_array = state_array.astype(int).reshape((16, 16))
 			segment_mask = (
 				(state_array & state_require == state_require).all(1) &
