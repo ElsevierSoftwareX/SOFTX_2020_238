@@ -190,7 +190,7 @@ class lal_estimatepdf(gst.BaseTransform):
 		# FIXME: using linear bins imposes a minimum and maximum SNR.  If
 		# a trigger has SNR that is greater than or less than this value, then
 		# pylal.rate will actually raise an IndexError!
-		self.bins = rate.LinearBins(3, 6000, 1000000)
+		self.bins = rate.LinearBins(3, 10000, 1000000)
 
 		# have one moving hist per template
 		self.moving_hist_dict = {}  # FIXME: replace with a defaultdict in Python 2.5
