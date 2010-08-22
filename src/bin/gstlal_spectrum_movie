@@ -31,6 +31,7 @@ import sys
 
 
 from gstlal.pipeutil import *
+from lloidparts import LLOIDHandler
 
 
 from glue import segments
@@ -92,32 +93,6 @@ def parse_command_line():
 #
 # =============================================================================
 #
-
-
-#
-# pipeline handler for PSD measurement
-#
-
-
-class Handler(object):
-	def __init__(self, mainloop, pipeline, verbose = False):
-		self.mainloop = mainloop
-		self.pipeline = pipeline
-		self.verbose = verbose
-
-		bus = pipeline.get_bus()
-		bus.add_signal_watch()
-		bus.connect("message", self.on_message)
-
-	def on_message(self, bus, message):
-		if message.type == gst.MESSAGE_EOS:
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
-		elif message.type == gst.MESSAGE_ERROR:
-			gerr, dbgmsg = message.parse_error()
-			print >>sys.stderr, "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
 
 
 #
@@ -202,7 +177,7 @@ build_sink(
 	head
 )
 
-handler = Handler(mainloop, pipeline, verbose = options.verbose)
+handler = LLOIDHandler(mainloop, pipeline, verbose = options.verbose)
 
 
 #
