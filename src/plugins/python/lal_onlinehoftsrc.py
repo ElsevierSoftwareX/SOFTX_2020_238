@@ -178,14 +178,14 @@ class directory_poller(object):
 					if gps_now() - self.time < self.latency:
 						# The requested time is too recent, so just wait
 						# a bit and then try again.
-						print >>sys.stderr, "lal_onlinehoftsrc: sleeping because requested time is too new"
+						gst.warning("lal_onlinehoftsrc: sleeping because requested time is too new")
 						time.sleep(self.timeout)
 					else:
 						# The requested time is old enough that it is possible that
 						# there is a missing file.  Look through the directory tree
 						# to find the next available file.
 
-						print >>sys.stderr, "lal_onlinehoftsrc: %s: late or missing file suspected" % filepath
+						gst.warning("lal_onlinehoftsrc: %s: late or missing file suspected" % filepath)
 
 						# We need to scan the directory tree successfully twice
 						# in succession to avoid a race condition where the
@@ -240,14 +240,14 @@ class directory_poller(object):
 										if num_tries_remaining == 0:
 											# We have found a new file a second time,
 											# so go back to outer loop.
-											print >>sys.stderr, "lal_onlinehoftsrc: files skipped" 
+											gst.warning("lal_onlinehoftsrc: files skipped")
 											self.time = cache.items[idx]
 									# Go back to outer loop.
 									new_file_found = True
 									break
 							if not new_file_found:
 								num_tries_remaining = 2
-								print >>sys.stderr, "lal_onlinehoftsrc: files are very late"
+								gst.warning("lal_onlinehoftsrc: files are very late")
 								time.sleep(self.timeout)
 				else:
 					# Opening file failed for some reason *other* than that it did
