@@ -48,24 +48,6 @@ from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals
 #
 # =============================================================================
 #
-#                              Pipeline Metadata
-#
-# =============================================================================
-#
-
-
-class DetectorData(object):
-	# default block_size = 16384 samples/second * 8 bytes/sample * 8
-	# second
-	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 8):
-		self.frame_cache = frame_cache
-		self.channel = channel
-		self.block_size = block_size
-
-
-#
-# =============================================================================
-#
 #                                 Command Line
 #
 # =============================================================================
@@ -82,6 +64,7 @@ def parse_command_line():
 	)
 	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
 	parser.add_option("--online-data", action = "store_true", help = "Use online DMT-STRAIN instead of a frame file (optional).")
+	parser.add_option("--fake-data", action = "store_true", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
 	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 	parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
@@ -97,7 +80,6 @@ def parse_command_line():
 	parser.add_option("--snr-threshold", metavar = "SNR", type = "float", default = 5.5, help = "Set the SNR threshold (default = 5.5).")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 	parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (optional).  This option has no effect if --reference-psd is used.")
-	parser.add_option("--fake-data", action = "store_true", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")

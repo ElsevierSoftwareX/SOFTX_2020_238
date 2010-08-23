@@ -63,6 +63,24 @@ def mkelems_fast(bin, *pipedesc):
 #
 # =============================================================================
 #
+#                              Pipeline Metadata
+#
+# =============================================================================
+#
+
+
+class DetectorData(object):
+	# default block_size = 16384 samples/second * 8 bytes/sample * 8
+	# second
+	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 8):
+		self.frame_cache = frame_cache
+		self.channel = channel
+		self.block_size = block_size
+
+
+#
+# =============================================================================
+#
 #                              Pipeline Elements
 #
 # =============================================================================
