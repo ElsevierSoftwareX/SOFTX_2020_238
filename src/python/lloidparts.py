@@ -275,7 +275,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		"queue",
 		"audioresample", {"gap-aware": True, "quality": 9},
 		"lal_nofakedisconts", {"silent": True},
-		"lal_checktimestamps", {"name": "timestamps_%s_after_sumsquare_resampler" % logname},
+		#"lal_checktimestamps", {"name": "timestamps_%s_after_sumsquare_resampler" % logname},
 		control_snk
 	)
 
@@ -285,7 +285,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 
 	elems = mkelems_fast(pipeline,
 		"lal_gate", {"threshold": bank.gate_threshold, "attack-length": gate_attack_length, "hold-length": gate_hold_length},
-		"lal_checktimestamps", {"name": "timestamps_%s_after_gate" % logname},
+		#"lal_checktimestamps", {"name": "timestamps_%s_after_gate" % logname},
 
 		#
 		# buffer orthogonal SNRs
@@ -305,7 +305,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		"lal_matrixmixer", {"matrix": bank_fragment.mix_matrix},
 		"audioresample", {"gap-aware": True, "quality": 9},
 		"lal_nofakedisconts", {"silent": True}, # FIXME:  remove after basetransform behaviour fixed
-		"lal_checktimestamps", {"name": "timestamps_%s_after_snr_resampler" % logname}
+		#"lal_checktimestamps", {"name": "timestamps_%s_after_snr_resampler" % logname}
 	)
 
 
