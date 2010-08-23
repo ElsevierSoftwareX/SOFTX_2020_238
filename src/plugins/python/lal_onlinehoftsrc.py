@@ -435,7 +435,7 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 
 	def do_is_seekable(self):
 		"""GstBaseSrc->is_seekable virtual method"""
-		return True
+		return not(self._is_live)
 
 
 	def do_do_seek(self, segment):
