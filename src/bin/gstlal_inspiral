@@ -27,24 +27,22 @@
 #
 
 
-from optparse import OptionParser
+import pygtk
+pygtk.require('2.0')
+import pygst
+pygst.require('0.10')
+import gstoption
+from gstlal.option import OptionParser
+
 import sys
 import os.path
 import os
-
-from gstlal.pipeutil import *
-from gstlal.lloidparts import *
 
 from glue import segments
 from glue import segmentsUtils
 from pylal.datatypes import LIGOTimeGPS
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
-
-from gstlal import ligolw_output
-from gstlal import templates
-from gstlal.gstlal_svd_bank import build_bank
-from gstlal.gstlal_reference_psd import *
 
 
 #
@@ -164,6 +162,19 @@ def parse_command_line():
 
 
 options, filenames, process_params = parse_command_line()
+
+
+#
+# Import everything that depends on GStreamer
+#
+
+
+from gstlal.pipeutil import *
+from gstlal.lloidparts import *
+from gstlal import ligolw_output
+from gstlal import templates
+from gstlal.gstlal_svd_bank import build_bank
+from gstlal.gstlal_reference_psd import *
 
 
 #
