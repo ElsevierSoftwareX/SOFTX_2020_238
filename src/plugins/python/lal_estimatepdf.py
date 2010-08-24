@@ -90,11 +90,10 @@ class MovingHistogram(object):
 		ind = self.bins[stat]
 		self.hist[ind] += 1
 		if len(self) >= self.max_hist_len:
-			self.hist[self.hist_ind[0]] -= 1
+			self.hist[self.hist_ind.popleft()] -= 1
+            self.timestamps.popleft() # FIXME: deques can work as ring buffers in Python > 2.6
 		self.hist_ind.append(ind)
 		self.timestamps.append(timestamp)
-		self.hist_ind.popleft() # FIXME: deques can work as ring buffers in Python > 2.6
-		self.timestamps.popleft() # FIXME: deques can work as ring buffers in Python > 2.6
 
 	def get_far(self, stat):
 		"""
