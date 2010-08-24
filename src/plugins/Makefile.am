@@ -21,6 +21,7 @@ libgstlal_la_SOURCES = \
 	gstadder.h gstadder.c \
 	gstlal_coinc.h gstlal_coinc.c \
 	gstlal_skymap.h gstlal_skymap.c \
+	gstlal_gap_trigger_veto.h gstlal_gap_trigger_veto.c \
 	gstlal_triggergen.h gstlal_triggergen.c \
 	gstlal_triggerxmlwriter.h gstlal_triggerxmlwriter.c \
 	gstlal_gate.h gstlal_gate.c \
