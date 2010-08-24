@@ -79,7 +79,6 @@ class MovingHistogram(object):
 		self.hist_ind = collections.deque()
 		self.timestamps = collections.deque()
 		self.hist = np.zeros(len(bins), dtype=float)
-		self.occupancy = 0
 
 	def __len__(self):
 		return len(self.hist_ind)
