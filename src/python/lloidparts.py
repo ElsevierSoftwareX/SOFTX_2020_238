@@ -78,6 +78,13 @@ class DetectorData(object):
 		self.block_size = block_size
 
 
+def appsink_new_buffer(elem, data):
+	# if it is a multi detector pipeline then it means these are coincidence records
+	for group in pipeio.sngl_inspiral_groups_from_buffer(elem.get_property("last-buffer")):
+		data.insert_group_records(group)
+	if data.connection: data.connection.commit()
+
+
 #
 # =============================================================================
 #

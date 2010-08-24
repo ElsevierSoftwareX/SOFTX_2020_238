@@ -25,8 +25,6 @@ except ImportError:
 	from pysqlite2 import dbapi2 as sqlite3
 import numpy
 
-from gstlal.pipeio import sngl_inspiral_groups_from_buffer
-
 from glue import lal
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
@@ -292,14 +290,3 @@ class Data(object):
 			gps = lal.LIGOTimeGPS(min(times))
 			cirow.end_time, cirow.end_time_ns = gps.seconds, gps.nanoseconds
 			citab.append(cirow)
-
-
-
-
-
-
-def appsink_new_buffer(elem, data):
-	# if it is a multi detector pipeline then it means these are coincidence records
-	for group in sngl_inspiral_groups_from_buffer(elem.get_property("last-buffer")):
-		data.insert_group_records(group)
-	if data.connection: data.connection.commit()
