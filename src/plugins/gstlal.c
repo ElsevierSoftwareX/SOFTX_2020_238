@@ -83,6 +83,7 @@
 #include <gstadder.h>
 #include <gstlal_coinc.h>
 #include <gstlal_skymap.h>
+#include <gstlal_gap_trigger_veto.h>
 #include <gstlal_triggergen.h>
 #include <gstlal_triggerxmlwriter.h>
 #include <gstlal_gate.h>
@@ -135,6 +136,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_adder", GST_TYPE_ADDER},
 		{"lal_coinc", GSTLAL_COINC_TYPE},
 		{"lal_skymap", GSTLAL_SKYMAP_TYPE},
+		{"lal_gap_trigger_veto", GSTLAL_GAP_TRIGGER_VETO_TYPE},
 		{"lal_triggergen", GSTLAL_TRIGGERGEN_TYPE},
 		{"lal_triggerxmlwriter", GSTLAL_TRIGGERXMLWRITER_TYPE},
 		{"lal_gate", GSTLAL_GATE_TYPE},
