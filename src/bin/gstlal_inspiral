@@ -41,6 +41,7 @@ import os
 from glue import segments
 from glue import segmentsUtils
 from pylal.datatypes import LIGOTimeGPS
+from gstlal import ligolw_output
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
 
@@ -153,7 +154,6 @@ options, filenames, process_params = parse_command_line()
 
 from gstlal.pipeutil import *
 from gstlal.lloidparts import *
-from gstlal import ligolw_output
 from gstlal import templates
 from gstlal.gstlal_svd_bank import build_bank
 from gstlal.gstlal_reference_psd import *
