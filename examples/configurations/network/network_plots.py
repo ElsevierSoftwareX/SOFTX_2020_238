@@ -6,15 +6,8 @@ except ImportError:
         # pre 2.5.x
         from pysqlite2 import dbapi2 as sqlite3
 
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
 from glue.ligolw import dbtables
-from glue.ligolw import utils
-from glue.ligolw import table
 from glue import segmentsUtils
-
-from pylal import db_thinca_rings
-from pylal import llwapp
 
 from gstlal.ligolw_output import effective_snr
 
