@@ -41,6 +41,12 @@ from glue.ligolw.utils import process as ligolw_process
 def effective_snr(snr, chisq):
 	return snr * (4.0 * chisq * (1 + snr ** 2 / 250.0)) ** -0.25
 
+def combined_effective_snr(sngls):
+	retval = 0
+	for sngl in sngls:
+		retval += effective_snr(sngl.snr, sngl.chisq)**2
+	return numpy.sqrt(retval)
+
 #
 # add metadata to an xml document in the style of lalapps_inspiral
 #

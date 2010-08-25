@@ -26,6 +26,7 @@ __author__ = "Leo Singer <leo.singer@ligo.org>"
 
 from gstlal.pipeutil import *
 from gstlal.pipeio import net_ifar, sngl_inspiral_groups_from_buffer, sngl_inspiral_groups_to_buffer
+from gstlal.ligolw_output import combined_effective_snr
 try:
 	all
 except NameError:
@@ -93,9 +94,9 @@ class CoincBlock(object):
 
 
 class SnglCoinc(object):
-	def __init__(self, sngl_group, ifar):
+	def __init__(self, sngl_group, stat):
 		self.sngl_group = sngl_group
-		self.ifar = ifar
+		self.stat = stat
 		self.time = min(row.end_time * gst.SECOND + row.end_time_ns for row in sngl_group)
 
 
@@ -107,11 +108,18 @@ class lal_coincselector(gst.Element):
 		__author__
 	)
 	__gproperties__ = {
-		'min-ifar': (
-			gobject.TYPE_UINT64,
-			'Minimum net inverse false alarm rate (IFAR)',
-			'Minimum network IFAR (inverse false alarm rate, also known as extrapolated waiting time) in nanoseconds.  Coincidences with an estimated IFAR less than this value will be dropped.',
-			0, gst.CLOCK_TIME_NONE, 3600 * gst.SECOND,
+		#'min-ifar': (
+		#	gobject.TYPE_UINT64,
+		#	'Minimum net inverse false alarm rate (IFAR)',
+		#	'Minimum network IFAR (inverse false alarm rate, also known as extrapolated waiting time) in nanoseconds.  Coincidences with an estimated IFAR less than this value will be dropped.',
+		#	0, gst.CLOCK_TIME_NONE, 3600 * gst.SECOND,
+		#	gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		#),
+		'min-combined-eff-snr': (
+			gobject.TYPE_DOUBLE,
+			'Minimum combined effective SNR',
+			'Minimum value of combined effective SNR (RMS effective SNR across all detectors).  Coincidences with a combined effective SNR less than this value will be dropped.',
+			0, gobject.G_MAXDOUBLE, 15,
 			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
 		),
 		'min-waiting-time': (
@@ -160,8 +168,10 @@ class lal_coincselector(gst.Element):
 
 
 	def do_set_property(self, prop, val):
-		if prop.name == 'min-ifar':
-			self.__min_ifar = val
+		#if prop.name == 'min-ifar':
+		#	self.__min_stat = val
+		if prop.name == 'min-combined-eff-snr':
+			self.__min_stat = val
 		elif prop.name == 'min-waiting-time':
 			self.__min_waiting_time = val
 		elif prop.name == 'dt':
@@ -169,8 +179,10 @@ class lal_coincselector(gst.Element):
 
 
 	def do_get_property(self, prop):
-		if prop.name == 'min-ifar':
-			return self.__min_ifar
+		#if prop.name == 'min-ifar':
+		#	return self.__min_stat
+		if prop.name == 'min-combined-eff-snr':
+			return self.__min_stat
 		elif prop.name == 'min-waiting-time':
 			return self.__min_waiting_time
 		elif prop.name == 'dt':
@@ -184,9 +196,9 @@ class lal_coincselector(gst.Element):
 			if len(coinc_list) > 0:
 				coinc = coinc_list[0]
 				for other_coinc in coinc_list[1:]:
-					if other_coinc.ifar < coinc.ifar:
+					if other_coinc.stat > coinc.stat:
 						coinc = other_coinc
-				if all(x.ifar >= coinc.ifar for x in self.__queue.oldest.coinc_list if coinc.time - x.time < self.__min_waiting_time) and all(x.ifar >= coinc.ifar for x in self.__queue.newest.coinc_list if x.time - coinc.time < self.__min_waiting_time):
+				if all(x.stat < coinc.stat for x in self.__queue.oldest.coinc_list if coinc.time - x.time < self.__min_waiting_time) and all(x.stat < coinc.stat for x in self.__queue.newest.coinc_list if x.time - coinc.time < self.__min_waiting_time):
 					rows = (coinc.sngl_group,)
 			outbuf = sngl_inspiral_groups_to_buffer(rows, inbuf.caps[0]['channels'])
 			outbuf.timestamp = self.__queue.middle.timestamp
@@ -222,13 +234,15 @@ class lal_coincselector(gst.Element):
 			for group in sngl_inspiral_groups_from_buffer(inbuf):
 				# FIXME: Pick which sngl_inspiral field to hijack.
 				# Currently I am using alpha to store per-detector FAR.
-				coinc = SnglCoinc(group, net_ifar((float(gst.SECOND) / row.alpha for row in group), float(self.__dt)))
+				# stat = net_ifar((float(gst.SECOND) / row.alpha for row in group), float(self.__dt))
+				stat = combined_effective_snr(coinc.sngl_group)
+				coinc = SnglCoinc(group, stat)
 				if coinc.time > top.end_time:
 					retval = self.process_coincs(pad, inbuf)
 					if retval != gst.FLOW_OK:
 						return retval
 					top = self.__queue.top
-				if coinc.ifar < self.__min_ifar:
+				if coinc.stat > self.__min_stat:
 					top.coinc_list.append(coinc)
 
 			if inbuf.timestamp + inbuf.duration > top.end_time:
