@@ -37,7 +37,7 @@ swinj.xml:
 		--min-mtotal 2.4 \
 		--max-mtotal 3.2 \
 		--i-distr uniform \
-		--waveform IMRPhenomBpseudoFourPN \
+		--waveform GeneratePPNtwoPN \
 		--f-lower 10.0 \
 		--disable-spin \
 		--verbose
