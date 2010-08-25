@@ -134,7 +134,7 @@ def net_ifar(ifars, dt):
 
 
 def sngl_inspiral_is_non_nil(row):
-	for c in buffer(row)[:-4]:
+	for c in buffer(row)[:-8]:
 		if ord(c):
 			return True
 	return False
