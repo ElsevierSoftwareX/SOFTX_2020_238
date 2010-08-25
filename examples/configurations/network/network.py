@@ -76,7 +76,7 @@ for ifo in opts.instrument:
 # FIXME make some of these kw args options
 data['all'] = ligolw_output.Data(opts.instrument, tmp_space=None, output=os.path.join(output_prefix,"".join(opts.instrument)+"-"+output_name), seg=seg, out_seg=seg, injections=None, comment="", verbose=True)
 data['all'].prepare_output_file(ligolw_output.make_process_params(opts))
-mkelems_fast(pipeline, coinc, "lal_coincselector", {"min-ifar": 0}, "progressreport", {"name": "progress_out"}, "appsink", {"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})[-1].connect_after("new-buffer", lloidparts.appsink_new_buffer, data['all'])
+mkelems_fast(pipeline, coinc, "lal_coincselector", "progressreport", {"name": "progress_out"}, "appsink", {"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})[-1].connect_after("new-buffer", lloidparts.appsink_new_buffer, data['all'])
 
 #
 # Ready set go!
