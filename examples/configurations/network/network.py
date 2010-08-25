@@ -52,6 +52,7 @@ data = {}
 for ifo in opts.instrument:
 	bank = read_bank("bank.%s.pickle" % ifo)
 	bank.logname = ifo # FIXME This is only need to give elements names, that should be automatic.
+	rates = bank.get_rates()
 
 	basicsrc = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, ifo, None, online_data=True)
 	basicsrc = mkelems_fast(pipeline, basicsrc, "progressreport", {"name": "progress_src_%s" % ifo})[-1]
