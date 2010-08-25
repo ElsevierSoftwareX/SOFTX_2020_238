@@ -7,6 +7,7 @@ opts, args = OptionParser(
 	option_list =
 	[
 		Option("--instrument", "-i", metavar="IFO", action="append", help="Instruments to analyze."),
+		Option("--injections", metavar="FILE.xml", help="Injection filename (a la lalapps_inspinj)"),
 		Option("--gps-start-time", "-s", metavar="INT", type="int", help="GPS time at which to start analysis."),
 		Option("--gps-end-time", "-e", metavar="INT", type="int", help="GPS time at which to end analysis."),
 		Option("--template-bank", metavar="FILE", help="Name of template bank file."),
@@ -54,7 +55,7 @@ for ifo in opts.instrument:
 	bank.logname = ifo # FIXME This is only need to give elements names, that should be automatic.
 	rates = bank.get_rates()
 
-	basicsrc = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, ifo, None, online_data=True)
+	basicsrc = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, ifo, None, online_data=True, injection_filename=opts.injections)
 	basicsrc = mkelems_fast(pipeline, basicsrc, "progressreport", {"name": "progress_src_%s" % ifo})[-1]
 	hoftdict = lloidparts.mkLLOIDsrc(pipeline, basicsrc, rates, psd_fft_length=opts.psd_fft_length)
 	snr_tee = lloidparts.mkLLOIDhoftToSnr(pipeline, hoftdict, ifo, bank, lloidparts.mkcontrolsnksrc(pipeline, max(rates)))

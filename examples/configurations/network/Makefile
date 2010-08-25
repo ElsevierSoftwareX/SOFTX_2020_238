@@ -7,13 +7,40 @@ FILES = \
 	bank.H1.pickle \
 	bank.L1.pickle \
 	bank.V1.pickle \
-	ligo_data_find.out
+	ligo_data_find.out \
+	swinj.xml
 
 all: $(FILES)
 
 .PHONY: clean
 clean:
 	rm -f $(FILES)
+
+# Injections go from July through October 1 00:00 UTC
+swinj.xml:
+	lalapps_inspinj \
+		--output $@ \
+		--user-tag LLOID_S6_ONLINE \
+		--gps-start-time 961977615 \
+		--gps-end-time 969926415 \
+		--t-distr fixed \
+		--time-step 900 \
+		--d-distr volume \
+		--min-distance 50e3 \
+		--max-distance 75e3 \
+		--l-distr random \
+		--m-distr componentMass \
+		--min-mass1 1.2 \
+		--max-mass1 1.6 \
+		--min-mass2 1.2 \
+		--max-mass2 1.6 \
+		--min-mtotal 2.4 \
+		--max-mtotal 3.2 \
+		--i-distr uniform \
+		--waveform IMRPhenomBpseudoFourPN \
+		--f-lower 10.0 \
+		--disable-spin \
+		--verbose
 
 ligo_data_find.out:
 	ligo_data_find -o H -t H1_DMT_C00_L2 -u file -l -s 958739936 -e 958743552 > $@
