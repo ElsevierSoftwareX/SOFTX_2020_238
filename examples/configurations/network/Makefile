@@ -3,8 +3,11 @@ FILES = \
 	tmpltbank.xml.gz \
 	reference_psd.H1.xml.gz \
 	reference_psd.L1.xml.gz \
+	reference_psd.V1.xml.gz \
 	bank.H1.pickle \
-	bank.L1.pickle
+	bank.L1.pickle \
+	bank.V1.pickle \
+	ligo_data_find.out
 
 all: $(FILES)
 
@@ -62,11 +65,19 @@ reference_psd.L1.xml.gz:
 		--gps-start-time 958744974 \
 		--gps-end-time 958747374
 
+reference_psd.V1.xml.gz:
+	gstlal_reference_psd \
+		--verbose \
+		--online-data \
+		--instrument V1 \
+		--write-psd $@ \
+		--gps-start-time 966704415 \
+		--gps-end-time 966711615
+
 bank.%.pickle: reference_psd.%.xml.gz tmpltbank.xml.gz
 	gstlal_svd_bank \
 		--verbose \
 		--template-bank tmpltbank.xml.gz \
 		--ortho-gate-fap 0.01 \
-		--snr-threshold 3 \
 		--reference-psd $< \
 		--write-bank $@
