@@ -31,14 +31,11 @@ __author__ = "Nickolas Fotopoulos <nickolas.fotopoulos@ligo.org>"
 
 
 import collections
-import random
 import sys
 
 from gstlal.pipeutil import *
 from gst.extend.pygobject import gproperty
 import numpy as np
-from scipy import special
-from scipy import integrate
 
 from pylal import rate
 from pylal.xlal.datatypes import snglinspiraltable
@@ -79,7 +76,6 @@ class MovingHistogram(object):
 		self.hist_ind = collections.deque()
 		self.timestamps = collections.deque()
 		self.hist = np.zeros(len(bins), dtype=float)
-		self.occupancy = 0
 
 	def __len__(self):
 		return len(self.hist_ind)
@@ -91,11 +87,10 @@ class MovingHistogram(object):
 		ind = self.bins[stat]
 		self.hist[ind] += 1
 		if len(self) >= self.max_hist_len:
-			self.hist[self.hist_ind[0]] -= 1
+			self.hist[self.hist_ind.popleft()] -= 1
+			self.timestamps.popleft() # FIXME: deques can work as ring buffers in Python > 2.6
 		self.hist_ind.append(ind)
 		self.timestamps.append(timestamp)
-		self.hist_ind.popleft() # FIXME: deques can work as ring buffers in Python > 2.6
-		self.timestamps.popleft() # FIXME: deques can work as ring buffers in Python > 2.6
 
 	def get_far(self, stat):
 		"""
@@ -114,21 +109,6 @@ class MovingHistogram(object):
 		# a minum of (1/livetime), but this can really screw up FARs in the tail!
 		return (count + 1) / livetime * gst.SECOND
 
-	@classmethod
-	def random_gaussian(cls, bins, max_hist_len, start_time=0, rate_Hz=1):
-		"""
-		Return a new MovingHistogram seeded with values from a Gaussian.
-		"""
-		# set the lower boundary at rho^2=9
-		sqrt_2 = np.sqrt(2)
-		const = integrate.quad(lambda x: np.exp(-x*x / 2), 3, np.inf)[0] / np.sqrt(2 * np.pi)
-		new = cls(bins, max_hist_len)
-		# seed histogram
-		for i in xrange(new.max_hist_len):
-			# generate numbers from a Gaussian truncated at rho = 3
-			rand_num = sqrt_2 * special.erfinv(1 - const * (random.uniform(0, 1) + 1))
-			new.update(start_time + i / rate_Hz, rand_num)
-		return new
 
 #
 # Main element
@@ -193,7 +173,7 @@ class lal_estimatepdf(gst.BaseTransform):
 		self.bins = rate.LinearBins(3, 10000, 1000000)
 
 		# have one moving hist per template
-		self.moving_hist_dict = {}  # FIXME: replace with a defaultdict in Python 2.5
+		self.moving_hist_dict = {}
 		self.held_triggers = collections.deque()
 
 	def do_start(self):
@@ -202,9 +182,6 @@ class lal_estimatepdf(gst.BaseTransform):
 		self.next_offset = None
 		self.next_timestamp = None
 		return True
-
-	def _defaulthist(self):
-		return MovingHistogram.random_gaussian(self.bins, self.get_property("max-history-length"))
 
 	def do_transform_ip(self, buf):
 		min_trigger_age = self.get_property("min-trigger-age")
@@ -228,7 +205,7 @@ class lal_estimatepdf(gst.BaseTransform):
 			# assign FAR
 			moving_hist = moving_hist_dict.get(trigger_template(trig))
 			if moving_hist is None:
-				moving_hist = moving_hist_dict.setdefault(trigger_template(trig), self._defaulthist())
+				moving_hist = moving_hist_dict.setdefault(trigger_template(trig), MovingHistogram(self.bins, max_hist_len))
 			if len(moving_hist) >= min_hist_len:
 				trig.alpha = moving_hist.get_far(trigger_stat(trig))
 			else:
