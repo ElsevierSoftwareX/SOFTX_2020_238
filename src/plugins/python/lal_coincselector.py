@@ -235,7 +235,7 @@ class lal_coincselector(gst.Element):
 				# FIXME: Pick which sngl_inspiral field to hijack.
 				# Currently I am using alpha to store per-detector FAR.
 				# stat = net_ifar((float(gst.SECOND) / row.alpha for row in group), float(self.__dt))
-				stat = combined_effective_snr(coinc.sngl_group)
+				stat = combined_effective_snr(group)
 				coinc = SnglCoinc(group, stat)
 				if coinc.time > top.end_time:
 					retval = self.process_coincs(pad, inbuf)
