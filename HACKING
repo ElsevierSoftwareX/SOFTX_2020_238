@@ -3,11 +3,51 @@ Hacking on gstlal
 =================
 
 
-This file is meant as a starting point for gstlal development.  Eventually, it
-will be filled with wisdom contributed by all of the developers.  Right now,
-I am just using it to document my proposed strategy of writing elements in 
-Python first, and then converting them to C as time permits.
+This file is meant as a starting point for gstlal development.
 
+
+Handling errors in element plugins
+==================================
+
+If you are developing a GStreamer element, you should know of at least three
+different ways to handle error conditions, and when to use each of them.
+
+* Logging subsystem: ``GST_ERROR_OBJECT``, ``GST_WARNING_OBJECT``, ``GST_INFO_OBJECT``
+  
+  Use these macros to produce informative text of varying levels of urgency.
+  These should be used when you want to inform the user or other developers of
+  unusual, but not irrecoverable or dangerous, conditions.
+
+  For example, if you are writing a chain() routine, the following idiom is
+  customary::
+  
+    res = gst_pad_push (GST_BASE_TRANSFORM_SRC_PAD (resample), outbuf);
+    
+	if (G_UNLIKELY (res != GST_FLOW_OK))
+      GST_WARNING_OBJECT (resample, "Failed to push drain: %s", gst_flow_get_name (res));
+	return res;
+
+  See <http://library.gnome.org/devel/gstreamer/unstable/gstreamer-GstInfo.html>.
+
+* GError error reporting: ``GST_ELEMENT_ERROR``
+  
+  Use this macro to report a fatal error.  Calling GST_ELEMENT_ERROR will bring
+  the pipeline to a screeching halt, and a GstMessage of type GST_MESSAGE_ERROR
+  will be sent to the application via the bus.
+
+  An example invocation::
+    
+	GST_ELEMENT_ERROR(element, RESOURCE, SEEK, ("XLALFrSeek() to %d.%09u s failed", epoch.gpsSeconds, epoch.gpsNanoSeconds), ("%s", XLALErrorString(XLALGetBaseErrno())));
+
+  See <http://www.gstreamer.net/data/doc/gstreamer/head/gstreamer/html/gstreamer-GstGError.html>.
+
+* Glib assertions: ``g_assert``, etc.
+  
+  Use these macros to check for programming errors only.  Assertions are useful
+  for checking preconditions, but should not be used for everyday error reporting.
+  An assertion ulimately results in a call to ``abort()``.
+
+  See <http://library.gnome.org/devel/glib/stable/glib-Testing.html>.
 
 Writing elements in Python
 ==========================
