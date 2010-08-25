@@ -18,7 +18,6 @@ opts, args = OptionParser(
 opts.psd_fft_length = 8
 
 from gstlal.gstlal_svd_bank import read_bank
-from gstlal.gstlal_reference_psd import read_psd
 from gstlal import lloidparts
 from gstlal.pipeutil import gst, gobject
 from gstlal.lloidparts import mkelems_fast
@@ -53,12 +52,10 @@ data = {}
 for ifo in opts.instrument:
 	bank = read_bank("bank.%s.pickle" % ifo)
 	bank.logname = ifo # FIXME This is only need to give elements names, that should be automatic.
-	psd = read_psd("reference_psd.%s.xml.gz" % ifo)
-	rates = bank.get_rates()
 
 	basicsrc = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, ifo, None, online_data=True)
 	basicsrc = mkelems_fast(pipeline, basicsrc, "progressreport", {"name": "progress_src_%s" % ifo})[-1]
-	hoftdict = lloidparts.mkLLOIDsrc(pipeline, basicsrc, rates, psd=psd, psd_fft_length=opts.psd_fft_length)
+	hoftdict = lloidparts.mkLLOIDsrc(pipeline, basicsrc, rates, psd_fft_length=opts.psd_fft_length)
 	snr_tee = lloidparts.mkLLOIDhoftToSnr(pipeline, hoftdict, ifo, bank, lloidparts.mkcontrolsnksrc(pipeline, max(rates)))
 	triggers = lloidparts.mkLLOIDsnrToTriggers(pipeline, snr_tee, bank, lal_triggergen_algorithm=2, lal_triggergen_max_gap=1.0)
 	triggers = mkelems_fast(pipeline, triggers, "lal_estimatepdf")[-1]
