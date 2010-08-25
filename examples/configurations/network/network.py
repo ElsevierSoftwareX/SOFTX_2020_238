@@ -59,7 +59,6 @@ for ifo in opts.instrument:
 	hoftdict = lloidparts.mkLLOIDsrc(pipeline, basicsrc, rates, psd_fft_length=opts.psd_fft_length)
 	snr_tee = lloidparts.mkLLOIDhoftToSnr(pipeline, hoftdict, ifo, bank, lloidparts.mkcontrolsnksrc(pipeline, max(rates)))
 	triggers = lloidparts.mkLLOIDsnrToTriggers(pipeline, snr_tee, bank, lal_triggergen_algorithm=2, lal_triggergen_max_gap=1.0)
-	triggers = mkelems_fast(pipeline, triggers, "lal_estimatepdf")[-1]
 	triggers = mkelems_fast(pipeline, triggers, "progressreport", {"name": "progress_trig_%s" % ifo})[-1]
 	triggers_tee = mkelems_fast(pipeline, triggers, "tee")[-1]
 	# output a database for each detector
