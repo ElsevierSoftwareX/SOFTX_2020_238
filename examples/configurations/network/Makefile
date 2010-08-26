@@ -26,8 +26,8 @@ swinj.xml:
 		--t-distr fixed \
 		--time-step 300 \
 		--d-distr volume \
-		--min-distance 50e3 \
-		--max-distance 75e3 \
+		--min-distance 5e3 \
+		--max-distance 10e3 \
 		--l-distr random \
 		--m-distr componentMass \
 		--min-mass1 1.2 \
