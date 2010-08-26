@@ -2,7 +2,8 @@ $(document).ready(function(){
 	$("head").append(
 		'<link rel="stylesheet" type="text/css" href="assets/report.css" />' +
 		'<link rel="stylesheet" type="text/css" href="assets/fancybox/jquery.fancybox-1.3.1.css" />' +
-		'<script type="text/javascript" src="assets/fancybox/jquery.fancybox-1.3.1.pack.js" />'
+		'<script type="text/javascript" src="assets/fancybox/jquery.fancybox-1.3.1.pack.js" />' +
+		'<script type="text/javascript" src="assets/autoupdate.js" />'
 	);
 	$("section h1").toggle(
 		function () {
@@ -16,4 +17,5 @@ $(document).ready(function(){
 	);
 	$("section h1").attr("title", "Click to hide the contents of this section.");
 	$("figure img").fancybox();
+	$("img.autoupdating").autoupdate();
 });
