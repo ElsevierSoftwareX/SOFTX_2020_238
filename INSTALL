@@ -411,9 +411,9 @@ The following patches are **required on ALL systems**::
 
   $ cd /path/to/local/src
   $ pushd gst-python
-  $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=164869 -O gst-python.plugins.patch
+  $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=168845 -O gst-python.plugins.patch
   $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=162291 -O gst-python.defs.patch
-  $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=166837 -O gst-python.path.patch
+  $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=168846 -O gst-python.path.patch
   $ git apply gst-python.plugins.patch
   $ git apply gst-python.defs.patch
   $ git apply gst-python.path.patch
