@@ -1,28 +1,45 @@
 #!/usr/bin/python
-import sys
 try:
 	import sqlite3
 except ImportError:
 	# pre 2.5.x
 	from pysqlite2 import dbapi2 as sqlite3
 
+import os
+import sys
+import shutil
+import time
+import numpy
+import optparse
+
+import matplotlib
+matplotlib.use('Agg')
+import pylab
 from glue.ligolw import dbtables
 from glue import segmentsUtils
 
 from gstlal.ligolw_output import effective_snr
 
-import matplotlib
-matplotlib.use('Agg')
-import pylab
-import sys
-import shutil
-import time
-import numpy
 
-path = '/archive/home/channa/public_html/gstlal_inspiral_online/'
+parser = optparse.OptionParser(usage="%prog --www-path /path --input suffix.sqlite ifo1 ifo2 ...")
+parser.add_option("--input", "-i", help="suffix of input file (should end in .sqlite)")
+parser.add_option("--www-path", "-p", help="path in which to base webpage")
+opts, args = parser.parse_args()
 
-connection = sqlite3.connect(sys.argv[1])
+if len(args) == 0 or opts.www_path is None:
+    parser.print_usage()
+    sys.exit()
+
+# FIXME: use network.py's algorithm for filename determination; it is not well
+# described
+input_path=os.path.split(opts.input)[0]
+input_name=os.path.split(opts.input)[1]
+input_filename = os.path.join(input_path, "".join(args) + "-" + input_name)
+
+connection = sqlite3.connect(input_filename)
 dbtables.DBTable_set_connection(connection)
+
+os.chdir(opts.www_path)
 
 f = pylab.figure()
 
@@ -64,7 +81,7 @@ while True:
 	# only do the loudest query every 5 waits
 	#
 
-	if (cnt % 6) == 0: to_table(path+'test.html', ["end_time", "end_time_ns", "snr", "ifos", "mchirp", "mass"], connection.cursor().execute('SELECT end_time, end_time_ns, snr, ifos, mchirp, mass FROM coinc_inspiral ORDER BY snr DESC LIMIT 10').fetchall())
+	if (cnt % 6) == 0: to_table('test.html' , ["end_time", "end_time_ns", "snr", "ifos", "mchirp", "mass"], connection.cursor().execute('SELECT end_time, end_time_ns, snr, ifos, mchirp, mass FROM coinc_inspiral ORDER BY snr DESC LIMIT 10').fetchall())
 
 	# FIXME don't hardcode ifos, don't do the join this way
 	# FIXME cant rely on time, somehow has ids too
@@ -95,8 +112,8 @@ while True:
 		lines.append(pylab.semilogy(numpy.array(times[ifo]), numpy.array(snrs[ifo]),'.', label=ifo))
 	pylab.xlabel('Time')
 	pylab.ylabel('SNR')
-	pylab.savefig(path+'tmpsnr_vs_time.png')
-	shutil.move(path+'tmpsnr_vs_time.png',path+'snr_vs_time.png')
+	pylab.savefig('tmpsnr_vs_time.png')
+	shutil.move('tmpsnr_vs_time.png', 'snr_vs_time.png')
 	f.clf()
 
 	#
@@ -108,8 +125,8 @@ while True:
 		lines.append(pylab.semilogy(numpy.array(times[ifo]), numpy.array(effsnrs[ifo]),'.', label=ifo))
 	pylab.ylabel('Effective SNR')
 	pylab.xlabel('Time')
-	pylab.savefig(path+'tmpeffsnr_vs_time.png')
-	shutil.move(path+'tmpeffsnr_vs_time.png',path+'effsnr_vs_time.png')
+	pylab.savefig('tmpeffsnr_vs_time.png')
+	shutil.move('tmpeffsnr_vs_time.png','effsnr_vs_time.png')
 
 	f.clf()
 	
@@ -122,8 +139,8 @@ while True:
 		pylab.hist(numpy.array(snrs[ifo]),25)
 		pylab.xlabel(ifo + ' SNR')
 		pylab.ylabel('Count')
-		pylab.savefig(path+ifo+'tmpsnr_hist.png')
-		shutil.move(path+ifo+'tmpsnr_hist.png',path+ifo+'snr_hist.png')
+		pylab.savefig(ifo+'tmpsnr_hist.png')
+		shutil.move(ifo+'tmpsnr_hist.png',ifo+'snr_hist.png')
 		f.clf()
 
 	for ifo in times.keys():
@@ -131,8 +148,8 @@ while True:
 		pylab.hist(numpy.array(effsnrs[ifo]),25)
 		pylab.xlabel(ifo + ' effective SNR')
 		pylab.ylabel('Count')
-		pylab.savefig(path+ifo+'tmpeffsnr_hist.png')
-		shutil.move(path+ifo+'tmpeffsnr_hist.png',path+ifo+'effsnr_hist.png')
+		pylab.savefig(ifo+'tmpeffsnr_hist.png')
+		shutil.move(ifo+'tmpeffsnr_hist.png',ifo+'effsnr_hist.png')
 		f.clf()
 
 	#
@@ -143,8 +160,8 @@ while True:
 		pylab.loglog(numpy.array(snrs[ifo]), numpy.array(chisqs[ifo]),'.', label=ifo)
 	pylab.ylabel('Chi-squared')
 	pylab.xlabel('SNR')
-	pylab.savefig(path+'tmpchisq_vs_snr.png')
-	shutil.move(path+'tmpchisq_vs_snr.png',path+'chisq_vs_snr.png')
+	pylab.savefig('tmpchisq_vs_snr.png')
+	shutil.move('tmpchisq_vs_snr.png','chisq_vs_snr.png')
 	f.clf()
 
 	#
@@ -156,8 +173,8 @@ while True:
 		pylab.loglog(numpy.array(Aeffsnrs[ifo]), numpy.array(Beffsnrs[ifo]),'.', label=ifo)
 		pylab.xlabel('Effective SNR %s' % (ifo.split(',')[0],))
 		pylab.ylabel('Effective SNR %s' % (ifo.split(',')[1],))
-		pylab.savefig(path+ifo+'effsnr_vs_effsnr.png')
-		shutil.move(path+ifo+'effsnr_vs_effsnr.png',path+ifo+'effsnr_vs_effsnr.png')
+		pylab.savefig(ifo+'effsnr_vs_effsnr.png')
+		shutil.move(ifo+'effsnr_vs_effsnr.png',ifo+'effsnr_vs_effsnr.png')
 		f.clf()
 	stop = time.time()
 
