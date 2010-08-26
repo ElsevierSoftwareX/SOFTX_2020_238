@@ -15,17 +15,33 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
-Online calibrated h(t) source, implementing the S6 specification described on 
+Online calibrated h(t) source, following conventions established in S6.
+
+The LIGO online frames are described at
 <https://www.lsc-group.phys.uwm.edu/daswg/wiki/S6OnlineGroup/CalibratedData>.
+
+The Virgo online frames are described at
+<https://workarea.ego-gw.it/ego2/virgo/data-analysis/calibration-reconstruction/online-h-t-reconstruction-hrec>.
 
 The environment variable ONLINEHOFT must be set and must point to the online
 frames directory, which has subfolders for H1, H2, L1, V1, ... .
 
-Online frames are 16 seconds in duration, and start on 16 second boundaries.
+LIGO online frames are 16 seconds in duration, and start on 16 second boundaries.
 They contain up to three channels:
  - IFO:DMT-STRAIN (16384 Hz), online calibrated h(t)
  - IFO:DMT-STATE_VECTOR (16 Hz), state vector
  - IFO:DMT-DATA_QUALITY_VECTOR (1 Hz), data quality flags
+
+Virgo online frames, on the other hand, consist of the following channels:
+ - IFO:h_16384Hz (16384 Hz), online calibrated h(t)
+ - IFO:Hrec_Veto_dataQuality (1 Hz), data quality flags.
+Also not that LIGO produces double precision h(t), whereas Virgo produces
+single precision h(t).  In order to be able to use fixed caps, this element
+always casts h(t) to double precision.
+
+In the future, this element may produce single precision h(t) when instrument=V1,
+so it would be prudent to put an "audioconvert" element directly downstream of
+this element if your pipelines can only operate on double precision buffers.
 
 This element features user-programmable data vetos at 1 second resolution.
 Gaps (GStreamer buffers marked as containing neutral data) will be created
@@ -47,6 +63,7 @@ import os.path
 import sys
 import time
 import bisect
+import numpy
 from _onlinehoftsrc import *
 try:
 	from collections import namedtuple
@@ -266,7 +283,8 @@ ifodesc = namedtuple("ifodesc", "ifo nameprefix namesuffix channelname state_cha
 ifodescs = {
 	"H1": ifodesc("H1", "H-H1_DMT_C00_L2-", "-16.gwf", "H1:DMT-STRAIN", "H1:DMT-STATE_VECTOR", "H1:DMT-DATA_QUALITY_VECTOR"),
 	"H2": ifodesc("H2", "H-H2_DMT_C00_L2-", "-16.gwf", "H2:DMT-STRAIN", "H2:DMT-STATE_VECTOR", "H2:DMT-DATA_QUALITY_VECTOR"),
-	"L1": ifodesc("L1", "L-L1_DMT_C00_L2-", "-16.gwf", "L1:DMT-STRAIN", "L1:DMT-STATE_VECTOR", "L1:DMT-DATA_QUALITY_VECTOR")
+	"L1": ifodesc("L1", "L-L1_DMT_C00_L2-", "-16.gwf", "L1:DMT-STRAIN", "L1:DMT-STATE_VECTOR", "L1:DMT-DATA_QUALITY_VECTOR"),
+	"V1": ifodesc("V1", "V-V1_DMT_HREC-", "-16.gwf", "V1:h_16384Hz", None, "V1:Hrec_Veto_dataQuality"),
 }
 
 
@@ -312,6 +330,13 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 			"data-quality-deny",
 			"Data quality flags that must be FALSE",
 			DQ_BADGAMMA,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"virgo-data-quality": (
+			VirgoDQFlags,
+			"virgo-data-quality",
+			"Data quality value that must be present in Virgo data",
+			VIRGO_DQ_12,
 			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
 		),
 		"is-live": (
@@ -468,8 +493,13 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 				try:
 					filename = "/dev/fd/%d" % fd
 					hoft_array = safe_getvect(filename, self.__ifodesc.channelname, gps_start, 16, 16384)
-					os.lseek(fd, 0, 0) # FIXME: use os.SEEK_SET (added to API in Python 2.5) for last argument
-					state_array = safe_getvect(filename, self.__ifodesc.state_channelname, gps_start, 16, 16)
+					# FIXME: cast to double because Virgo produces single precision data.
+					# We could instead allow this element to push buffers with different caps
+					# according to whether h(t) is single precision or double precision.
+					hoft_array = hoft_array.astype(numpy.float64)
+					if self.__ifodesc.ifo != 'V1':
+						os.lseek(fd, 0, 0) # FIXME: use os.SEEK_SET (added to API in Python 2.5) for last argument
+						state_array = safe_getvect(filename, self.__ifodesc.state_channelname, gps_start, 16, 16)
 					os.lseek(fd, 0, 0) # FIXME: use os.SEEK_SET (added to API in Python 2.5) for last argument
 					dq_array = safe_getvect(filename, self.__ifodesc.dq_channelname, gps_start, 16, 1)
 				finally:
@@ -484,17 +514,20 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		caps = pad.get_caps_reffed()
 
 		# Compute "good data" segment mask.
-		dq_require = int(self._data_quality_require)
-		dq_deny = int(self._data_quality_deny)
-		state_require = int(self._state_require)
-		state_deny = int(self._state_deny)
-		state_array = state_array.astype(int).reshape((16, 16))
-		segment_mask = (
-			(state_array & state_require == state_require).all(1) &
-			(~state_array & state_deny == state_deny).all(1) &
-			(dq_array & dq_require == dq_require) & 
-			(~dq_array & dq_deny == dq_deny)
-		)
+		if self.__ifodesc.ifo == "V1":
+			segment_mask = (dq_array >= int(self._virgo_data_quality))
+		else:
+			dq_require = int(self._data_quality_require)
+			dq_deny = int(self._data_quality_deny)
+			state_require = int(self._state_require)
+			state_deny = int(self._state_deny)
+			state_array = state_array.astype(int).reshape((16, 16))
+			segment_mask = (
+				(state_array & state_require == state_require).all(1) &
+				(~state_array & state_deny == state_deny).all(1) &
+				(dq_array & dq_require == dq_require) & 
+				(~dq_array & dq_deny == dq_deny)
+			)
 		self.info('good data mask is ' + ''.join([str(x) for x in segment_mask.astype('int')]))
 
 		# If necessary, create gap for skipped frames.
