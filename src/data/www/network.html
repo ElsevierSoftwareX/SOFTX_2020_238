@@ -15,8 +15,8 @@
 					cnvs.interval = setInterval(drawstr,speed);
 					cnvs.zoomin = 'False';
 				}
-				load_table('div1')
-				setInterval("load_table('div1')", 30000)
+				load_table('#div1', 'loudest.html')
+				setInterval("load_table('#div1', 'loudest.html')", 30000)
 			}
 			function draw(imgsrc,canvasid,w,h,txt) {
 				var img = new Image();
@@ -68,11 +68,13 @@
 				draw(cnvs.imgsrc,cnvs.id,800,600,'CLICK TO UN-ZOOM');
 				cnvs.interval = setInterval(sstr,speed);
 			}
-			function load_table(divid) {
-				document.getElementById(divid).innerHTML = "<iframe width=800 height=300 src='test.html'></iframe>";
-				}
-
-		</script> 
+			function load_table(divid, url) {
+				$.get(url, function(data) {
+					$(divid).html(data);
+					window.setTimeout(load_table, 10000);
+				});
+			}
+		</script>
 		<style type="text/css"> 
 			canvas { border: 2px solid black; }
 		</style> 
