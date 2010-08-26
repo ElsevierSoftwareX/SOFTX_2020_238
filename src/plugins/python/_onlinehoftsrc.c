@@ -74,7 +74,7 @@ virgo_dq_flags_get_type (void)
 		{12, "VIRGO_DQ_12", "ITF locked, h(t) reconstruction OK, science mode OK and a few CAT2 veto OK like no saturation of the main channels (Pr_B1_ACq, Coil saturation and SSFS) + ITF locked since 300seconds and ITF locked for the next 10 seconds"},
         {0, NULL, NULL},
     };
-	
+
     if (G_UNLIKELY (tp == 0)) {
         tp = g_enum_register_static ("GSTLALOnlineHoftSrcVirgoDataQualityFlags", values);
     }
