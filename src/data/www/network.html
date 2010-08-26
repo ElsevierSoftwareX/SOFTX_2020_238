@@ -1,72 +1,12 @@
-<html> 
-	<head> 
+<html>
+	<head>
 		<title>gstlal_inspiral online network pipeline</title> 
                 <script type="text/javascript" src="assets/jquery-1.4.2.min.js"></script>
                 <script type="text/javascript" src="assets/report.js"></script>
 		<script type="text/javascript">
-		// This function must set up all canvases
-			var speed = 6141
 			function init(canvas_init_list){
-				for (var i=0; i < canvas_init_list.length; i++) {
-					imgsrc=canvas_init_list[i][1]
-					canvasid=canvas_init_list[i][0]
-					var cnvs = draw(imgsrc,canvasid,400,300,'CLICK TO ZOOM')
-					drawstr = "draw('" + imgsrc + "','" + canvasid + "',400,300,'CLICK TO ZOOM')";
-					cnvs.interval = setInterval(drawstr,speed);
-					cnvs.zoomin = 'False';
-				}
 				load_table('#div1', 'loudest.html')
 				setInterval("load_table('#div1', 'loudest.html')", 30000)
-			}
-			function draw(imgsrc,canvasid,w,h,txt) {
-				var img = new Image();
-				imgsrct = imgsrc + '?' + (new Date()).getTime();
-				var cnvs = document.getElementById(canvasid);
-				var ctx = cnvs.getContext('2d');
-				cnvs.height=h;
-				cnvs.width=w;
-				img.onload = function(){
-					ctx.drawImage(img,0,0,w,h);
-					ctx.beginPath();
-					ctx.font = "bold 12px sans-serif";
-					ctx.fillText(txt, 5, 15);
-				}
-				img.src = imgsrct
-				cnvs.imgsrc = imgsrc
-				return cnvs
-			}
-			function unzoom(figureid) {
-				cnvslist = document.getElementById(figureid).getElementsByTagName("canvas");
-				// clear this figures canvases interval and draw them small
-				for (var i=0; i<cnvslist.length; i++) {
-					//get pointer to current element:
-					var cnvs=cnvslist[i];
-					clearInterval(cnvs.interval);
-					draw(cnvs.imgsrc,cnvs.id,400,300,'CLICK TO ZOOM');
-					sstr= "draw('" + cnvs.imgsrc + "','" + cnvs.id + "',400,300,'CLICK TO ZOOM')";
-					cnvs.interval = setInterval(sstr,speed);
-					cnvs.zoomin = 'False'
-				}
-			}
-			function zoom(figureid,canvasid) {
-				var cnvs = document.getElementById(canvasid);
-				if (cnvs.zoomin == 'True') {
-					unzoom(figureid);
-					return;
-				}
-				var cnvslist = document.getElementById(figureid).getElementsByTagName("canvas");
-				
-				// clear this figures canvases interval and draw them small
-				for (var i=0; i<cnvslist.length; i++) {
-					//get pointer to current element:
-					var c=cnvslist[i];
-					clearInterval(c.interval);
-					draw(c.imgsrc,c.id,0,0,'CLICK TO ZOOM');
-				}
-				var sstr= "draw('" + cnvs.imgsrc + "','" + cnvs.id + "',800,600,'CLICK TO UN-ZOOM')";
-				cnvs.zoomin = 'True';
-				draw(cnvs.imgsrc,cnvs.id,800,600,'CLICK TO UN-ZOOM');
-				cnvs.interval = setInterval(sstr,speed);
 			}
 			function load_table(divid, url) {
 				$.get(url, function(data) {
@@ -75,9 +15,9 @@
 				});
 			}
 		</script>
-		<style type="text/css"> 
+		<style type="text/css">
 			canvas { border: 2px solid black; }
-		</style> 
+		</style>
 	</head>
 	<body onload="init([['snr_vs_time', 'snr_vs_time.png'],['effsnr_vs_time','effsnr_vs_time.png'], ['chisq_vs_snr','chisq_vs_snr.png'], ['H1snr_hist','H1snr_hist.png'],['L1snr_hist','L1snr_hist.png'], ['H1effsnr_hist','H1effsnr_hist.png'],['L1effsnr_hist','L1effsnr_hist.png'], ['H1,L1effsnr_vs_effsnr','H1,L1effsnr_vs_effsnr.png']])">
 
@@ -88,26 +28,26 @@
 		<section>
 		<h1 id="heading1">SNR vs Time</h1>
 			<figure id="fig1">
-				<canvas id="snr_vs_time" onclick=zoom('fig1','snr_vs_time')></canvas>
-				<canvas id="effsnr_vs_time" onclick=zoom('fig1','effsnr_vs_time')></canvas>
+				<img class="autoupdating" src="snr_vs_time.png">
+				<img class="autoupdating" src="effsnr_vs_time.png">
 			</figure>
 		</section>
 		<section>
 		<h1 id="heading2">Chi-squared</h1>
 			<figure id="fig2">
-				<canvas id="chisq_vs_snr" onclick=zoom('fig2','chisq_vs_snr')></canvas>
-				<canvas id="H1,L1effsnr_vs_effsnr" onclick=zoom('fig2','H1,L1effsnr_vs_effsnr')></canvas>
+				<img class="autoupdating" src="chisq_vs_snr.png">
+				<img class="autoupdating" src="H1,L1effsnr_vs_effsnr.png">
 			</figure>
 		</section>
 		<section>
 		<h1 id="heading3">SNR hist</h1>
 			<figure id="fig3">
-				<canvas id="H1snr_hist" onclick=zoom('fig3','H1snr_hist')></canvas>
-				<canvas id="L1snr_hist" onclick=zoom('fig3','L1snr_hist')></canvas>
+				<img class="autoupdating" src="H1snr_hist.png">
+				<img class="autoupdating" src="L1snr_hist.png">
 			</figure>
 			<figure id="fig4">
-				<canvas id="H1effsnr_hist" onclick=zoom('fig4','H1effsnr_hist')></canvas>
-				<canvas id="L1effsnr_hist" onclick=zoom('fig4','L1effsnr_hist')></canvas>
+				<img class="autoupdating" src="H1effsnr_hist.png">
+				<img class="autoupdating" src="L1effsnr_hist.png">
 			</figure>
 		</section>
 		<section>
@@ -115,5 +55,5 @@
 			<div id="div1"></div>
 		</section>
 
-	</body> 
-</html> 
+	</body>
+</html>
