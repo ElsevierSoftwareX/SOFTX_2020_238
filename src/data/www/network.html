@@ -5,8 +5,10 @@
                 <script type="text/javascript" src="assets/report.js"></script>
 		<script type="text/javascript">
 			function init(canvas_init_list){
-				load_table('#div1', 'loudest.html')
-				setInterval("load_table('#div1', 'loudest.html')", 30000)
+				load_table('#page_time_table', 'page_time.html')
+				setInterval("load_table('#page_time_table', 'page_time.html')", 5000)
+				load_table('#loudest_table', 'loudest.html')
+				setInterval("load_table('#loudest_table', 'loudest.html')", 30000)
 			}
 			function load_table(divid, url) {
 				$.get(url, function(data) {
@@ -24,6 +26,11 @@
 		<header>
 		<h1> gstlal_inspiral online coincidence network </h2>
 		</header>
+
+		<section>
+		<h1 id="overview">Overview</h1>
+			<div id="page_time_table"></div>
+		</section>
 
 		<section>
 		<h1 id="heading1">SNR vs Time</h1>
@@ -52,7 +59,7 @@
 		</section>
 		<section>
 		<h1 id="heading3">Loudest table</h1>
-			<div id="div1"></div>
+			<div id="loudest_table"></div>
 		</section>
 
 	</body>
