@@ -43,6 +43,7 @@ def parse_command_line():
 	parser = OptionParser(version = "%prog CVS $Id$", usage = "%prog [options] [file ...]", description = "%prog computes mass/mass upperlimit")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("--disable-segments", action = "store_true", help = "Disable segment and injection queries.")
 	parser.add_option("-f", "--followups", type = int, help = "Specify the number of followups from each detector to run in the followup pipeline.  If None then no followups are done.")
 	parser.add_option("--glob", help="bash glob pattern")
 	
@@ -76,16 +77,17 @@ for f in databases:
 	)
 	ifo = f.strip("gstlal_inspiral..sqlite")
 
-	# Look up science segments
-	science_segments = segments.segmentlist(connection.cursor().execute("SELECT start_time, end_time FROM segment").fetchall())
-	non_science_segments = segments.segmentlist([segments.segment(in_start_time, in_end_time)]) - science_segments
+	if not opts.disable_segments:
+		# Look up science segments
+		science_segments = segments.segmentlist(connection.cursor().execute("SELECT start_time, end_time FROM segment").fetchall())
+		non_science_segments = segments.segmentlist([segments.segment(in_start_time, in_end_time)]) - science_segments
 
-	# Look up hwinj segments
-	hwinj_times = pylab.array(connection.cursor().execute("""
-		SELECT geocent_end_time + geocent_end_time_ns*1.0e-9 AS geocent_end_time_s
-		FROM sim_inspiral INNER JOIN segment
-		WHERE geocent_end_time_s BETWEEN start_time AND end_time"""
-	).fetchall())
+		# Look up hwinj segments
+		hwinj_times = pylab.array(connection.cursor().execute("""
+			SELECT geocent_end_time + geocent_end_time_ns*1.0e-9 AS geocent_end_time_s
+			FROM sim_inspiral INNER JOIN segment
+			WHERE geocent_end_time_s BETWEEN start_time AND end_time"""
+		).fetchall())
 
 
 	# Plot SNR vs ChiSq
@@ -119,10 +121,11 @@ for f in databases:
 	pylab.clf()
 	if len(params) > 0:
 		pylab.semilogy(params['end_time'], params['snr'], 'or')
-	for seg in non_science_segments:
-		pylab.axvspan(seg[0], seg[1], facecolor='0.75')
-	for t in hwinj_times:
-		pylab.axvline(t, color='blue')
+	if not opts.disable_segments:
+		for seg in non_science_segments:
+			pylab.axvspan(seg[0], seg[1], facecolor='0.75')
+		for t in hwinj_times:
+			pylab.axvline(t, color='blue')
 	pylab.xlim(in_start_time, in_end_time)
 	pylab.xlabel("end_time")
 	pylab.ylabel("SNR")
@@ -135,10 +138,11 @@ for f in databases:
 	pylab.clf()
 	if len(params) > 0:
 		pylab.semilogy(params['end_time'], eff_snr, 'or')
-	for seg in non_science_segments:
-		pylab.axvspan(seg[0], seg[1], facecolor='0.75')
-	for t in hwinj_times:
-		pylab.axvline(t, color='blue')
+	if not opts.disable_segments:
+		for seg in non_science_segments:
+			pylab.axvspan(seg[0], seg[1], facecolor='0.75')
+		for t in hwinj_times:
+			pylab.axvline(t, color='blue')
 	pylab.xlim(in_start_time, in_end_time)
 	pylab.ylim(1, 100)
 	pylab.xlabel("end_time")
@@ -153,8 +157,9 @@ for f in databases:
 	pylab.yscale('log')
 	if len(params) > 0:
 		pylab.hist(params['end_time'], bins=pylab.arange(in_start_time, in_end_time, 60), histtype='bar')
-	for seg in non_science_segments:
-		pylab.axvspan(seg[0], seg[1], facecolor='0.75')
+	if not opts.disable_segments:
+		for seg in non_science_segments:
+			pylab.axvspan(seg[0], seg[1], facecolor='0.75')
 	pylab.xlim(in_start_time, in_end_time)
 	pylab.ylim(0.1, 1.0e5)
 	pylab.xlabel("end_time")
