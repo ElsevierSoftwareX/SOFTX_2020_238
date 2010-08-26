@@ -9,12 +9,12 @@ import os
 import sys
 import shutil
 import time
-import numpy
 import optparse
 
-import matplotlib
-matplotlib.use('Agg')
-import pylab
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+axis_pos = (0.1, 0.1, 0.8, 0.8)
+import numpy
 from glue.ligolw import dbtables
 from glue import segmentsUtils
 
@@ -40,8 +40,6 @@ connection = sqlite3.connect(input_filename)
 dbtables.DBTable_set_connection(connection)
 
 os.chdir(opts.www_path)
-
-f = pylab.figure()
 
 def row(f,tup):
 	f.write('<tr>')
@@ -74,14 +72,12 @@ Aeffsnrs = {}
 Beffsnrs = {}
 
 while True:
-	f.clf()
-
 	#
 	# Table of loudest events
 	# only do the loudest query every 5 waits
 	#
 
-	if (cnt % 6) == 0: to_table('test.html' , ["end_time", "end_time_ns", "snr", "ifos", "mchirp", "mass"], connection.cursor().execute('SELECT end_time, end_time_ns, snr, ifos, mchirp, mass FROM coinc_inspiral ORDER BY snr DESC LIMIT 10').fetchall())
+	if (cnt % 6) == 0: to_table('loudest.html' , ["end_time", "end_time_ns", "snr", "ifos", "mchirp", "mass"], connection.cursor().execute('SELECT end_time, end_time_ns, snr, ifos, mchirp, mass FROM coinc_inspiral ORDER BY snr DESC LIMIT 10').fetchall())
 
 	# FIXME don't hardcode ifos, don't do the join this way
 	# FIXME cant rely on time, somehow has ids too
@@ -107,81 +103,95 @@ while True:
 	# snr vs time
 	#
 
-	pylab.subplot(111)
-	for ifo in times.keys():
-		lines.append(pylab.semilogy(numpy.array(times[ifo]), numpy.array(snrs[ifo]),'.', label=ifo))
-	pylab.xlabel('Time')
-	pylab.ylabel('SNR')
-	pylab.savefig('tmpsnr_vs_time.png')
+	fig = Figure()
+	ax = fig.add_axes(axis_pos)
+	for ifo in times.iterkeys():
+		ax.semilogy(times[ifo], snrs[ifo],'.', label=ifo)
+	ax.set_xlabel('Time')
+	ax.set_ylabel('SNR')
+	canvas = FigureCanvas(fig)
+	canvas.print_figure('tmpsnr_vs_time.png')
+	del fig, ax, canvas
 	shutil.move('tmpsnr_vs_time.png', 'snr_vs_time.png')
-	f.clf()
 
 	#
 	# effective snr vs time
 	#
 
-	pylab.subplot(111)
-	for ifo in times.keys():
-		lines.append(pylab.semilogy(numpy.array(times[ifo]), numpy.array(effsnrs[ifo]),'.', label=ifo))
-	pylab.ylabel('Effective SNR')
-	pylab.xlabel('Time')
-	pylab.savefig('tmpeffsnr_vs_time.png')
-	shutil.move('tmpeffsnr_vs_time.png','effsnr_vs_time.png')
+	fig = Figure()
+	ax = fig.add_axes(axis_pos)
+	for ifo in times.iterkeys():
+		ax.semilogy(times[ifo], effsnrs[ifo],'.', label=ifo)
+	ax.set_ylabel('Effective SNR')
+	ax.set_xlabel('Time')
+	canvas = FigureCanvas(fig)
+	canvas.print_figure('tmpeffsnr_vs_time.png')
+	del fig, ax, canvas
+	shutil.move('tmpeffsnr_vs_time.png', 'effsnr_vs_time.png')
 
-	f.clf()
-	
-	#
-	# SNR histogram
-	#
+	for ifo in times.iterkeys():
+		#
+		# SNR histogram
+		#
 
-	for ifo in times.keys():
-		pylab.subplot(111)
-		pylab.hist(numpy.array(snrs[ifo]),25)
-		pylab.xlabel(ifo + ' SNR')
-		pylab.ylabel('Count')
-		pylab.savefig(ifo+'tmpsnr_hist.png')
-		shutil.move(ifo+'tmpsnr_hist.png',ifo+'snr_hist.png')
-		f.clf()
+		fig = Figure()
+		ax = fig.add_axes(axis_pos)
+		ax.hist(snrs[ifo], 25)
+		ax.set_xlabel(ifo + ' SNR')
+		ax.set_ylabel('Count')
+		canvas = FigureCanvas(fig)
+		canvas.print_figure(ifo+'tmpsnr_hist.png')
+		del fig, ax, canvas
+		shutil.move(ifo+'tmpsnr_hist.png', ifo+'snr_hist.png')
 
-	for ifo in times.keys():
-		pylab.subplot(111)
-		pylab.hist(numpy.array(effsnrs[ifo]),25)
-		pylab.xlabel(ifo + ' effective SNR')
-		pylab.ylabel('Count')
-		pylab.savefig(ifo+'tmpeffsnr_hist.png')
-		shutil.move(ifo+'tmpeffsnr_hist.png',ifo+'effsnr_hist.png')
-		f.clf()
+		#
+		# Effective SNR histogram
+		#
+
+		fig = Figure()
+		ax = fig.add_axes(axis_pos)
+		ax.hist(effsnrs[ifo], 25)
+		ax.set_xlabel(ifo + ' effective SNR')
+		ax.set_ylabel('Count')
+		canvas = FigureCanvas(fig)
+		canvas.print_figure(ifo+'tmpeffsnr_hist.png')
+		del fig, ax, canvas
+		shutil.move(ifo+'tmpeffsnr_hist.png', ifo+'effsnr_hist.png')
+
+	for ifo in Aeffsnrs.iterkeys():
+		#
+		# Effective snr scatter plot
+		#
+
+		fig = Figure()
+		ax = fig.add_axes(axis_pos)
+		ax.loglog(Aeffsnrs[ifo], Beffsnrs[ifo], '.', label=ifo)
+		ax.set_xlabel('Effective SNR %s' % (ifo.split(',')[0],))
+		ax.set_ylabel('Effective SNR %s' % (ifo.split(',')[1],))
+		canvas = FigureCanvas(fig)
+		canvas.print_figure(ifo+'effsnr_vs_effsnr.png')
+		del fig, ax, canvas
+		shutil.move(ifo+'effsnr_vs_effsnr.png', ifo+'effsnr_vs_effsnr.png')
 
 	#
 	# Chisq vs snr
 	#
-	pylab.subplot(111)
-	for ifo in times.keys():
-		pylab.loglog(numpy.array(snrs[ifo]), numpy.array(chisqs[ifo]),'.', label=ifo)
-	pylab.ylabel('Chi-squared')
-	pylab.xlabel('SNR')
-	pylab.savefig('tmpchisq_vs_snr.png')
+	fig = Figure()
+	ax = fig.add_axes(axis_pos)
+	for ifo in times.iterkeys():
+		ax.loglog(snrs[ifo], chisqs[ifo], '.', label=ifo)
+	ax.set_ylabel('Chi-squared')
+	ax.set_xlabel('SNR')
+	canvas = FigureCanvas(fig)
+	canvas.print_figure('tmpchisq_vs_snr.png')
+	del fig, ax, canvas
 	shutil.move('tmpchisq_vs_snr.png','chisq_vs_snr.png')
-	f.clf()
 
-	#
-	# Effective snr scatter plot
-	#
-
-	pylab.subplot(111)
-	for ifo in Aeffsnrs.keys():
-		pylab.loglog(numpy.array(Aeffsnrs[ifo]), numpy.array(Beffsnrs[ifo]),'.', label=ifo)
-		pylab.xlabel('Effective SNR %s' % (ifo.split(',')[0],))
-		pylab.ylabel('Effective SNR %s' % (ifo.split(',')[1],))
-		pylab.savefig(ifo+'effsnr_vs_effsnr.png')
-		shutil.move(ifo+'effsnr_vs_effsnr.png',ifo+'effsnr_vs_effsnr.png')
-		f.clf()
 	stop = time.time()
 
 	cnt += 1
 	if (stop - start) < wait: time.sleep(wait - (stop-start))
 	print time.time()-start
-
 
 connection.close()
 
