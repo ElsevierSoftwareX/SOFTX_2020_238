@@ -24,7 +24,7 @@ swinj.xml:
 		--gps-start-time 961977615 \
 		--gps-end-time 969926415 \
 		--t-distr fixed \
-		--time-step 900 \
+		--time-step 300 \
 		--d-distr volume \
 		--min-distance 50e3 \
 		--max-distance 75e3 \
