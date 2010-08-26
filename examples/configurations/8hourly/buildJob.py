@@ -102,6 +102,7 @@ comment = dirname
 ifodict = {
 	"H1": {"reference_psd_start_time": 958739939, "reference_psd_end_time": 958743539},
 	"L1": {"reference_psd_start_time": 958744974, "reference_psd_end_time": 958747374},
+	"V1": {"reference_psd_start_time": 966704415, "reference_psd_end_time": 966711615},
 }
 
 logfile = tempfile.mkstemp(prefix = "8hourly.%s" % dirname, suffix = '.log', dir = tmpdir)[1]
