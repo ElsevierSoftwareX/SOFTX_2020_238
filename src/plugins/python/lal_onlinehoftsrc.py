@@ -272,7 +272,7 @@ ifodescs = {
 	"H1": ifodesc("H1", "H-H1_DMT_C00_L2-", "-16.gwf", "H1:DMT-STRAIN", "H1:DMT-STATE_VECTOR", "H1:DMT-DATA_QUALITY_VECTOR"),
 	"H2": ifodesc("H2", "H-H2_DMT_C00_L2-", "-16.gwf", "H2:DMT-STRAIN", "H2:DMT-STATE_VECTOR", "H2:DMT-DATA_QUALITY_VECTOR"),
 	"L1": ifodesc("L1", "L-L1_DMT_C00_L2-", "-16.gwf", "L1:DMT-STRAIN", "L1:DMT-STATE_VECTOR", "L1:DMT-DATA_QUALITY_VECTOR"),
-	"V1": ifodesc("V1", "V-V1_DMT_HREC-", "-16.gwf", "V1:h_16384Hz", None, "V1:Hrec_Veto_dataQuality")
+	"V1": ifodesc("V1", "V-V1_DMT_HREC-", "-16.gwf", "V1:h_16384Hz", None, "V1:Hrec_Veto_dataQuality"),
 }
 
 
