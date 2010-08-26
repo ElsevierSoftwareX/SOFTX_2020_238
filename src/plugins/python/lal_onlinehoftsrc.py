@@ -26,11 +26,22 @@ The Virgo online frames are described at
 The environment variable ONLINEHOFT must be set and must point to the online
 frames directory, which has subfolders for H1, H2, L1, V1, ... .
 
-Online frames are 16 seconds in duration, and start on 16 second boundaries.
+LIGO online frames are 16 seconds in duration, and start on 16 second boundaries.
 They contain up to three channels:
  - IFO:DMT-STRAIN (16384 Hz), online calibrated h(t)
  - IFO:DMT-STATE_VECTOR (16 Hz), state vector
  - IFO:DMT-DATA_QUALITY_VECTOR (1 Hz), data quality flags
+
+Virgo online frames, on the other hand, consist of the following channels:
+ - IFO:h_16384Hz (16384 Hz), online calibrated h(t)
+ - IFO:Hrec_Veto_dataQuality (1 Hz), data quality flags.
+Also not that LIGO produces double precision h(t), whereas Virgo produces
+single precision h(t).  In order to be able to use fixed caps, this element
+always casts h(t) to double precision.
+
+In the future, this element may produce single precision h(t) when instrument=V1,
+so it would be prudent to put an "audioconvert" element directly downstream of
+this element if your pipelines can only operate on double precision buffers.
 
 This element features user-programmable data vetos at 1 second resolution.
 Gaps (GStreamer buffers marked as containing neutral data) will be created
@@ -52,6 +63,7 @@ import os.path
 import sys
 import time
 import bisect
+import numpy
 from _onlinehoftsrc import *
 try:
 	from collections import namedtuple
@@ -342,29 +354,11 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 				audio/x-raw-float,
 				channels = (int) 1,
 				endianness = (int) BYTE_ORDER,
-				width = (int) {32, 64},
+				width = (int) 64,
 				rate = (int) 16384
 			""")
 		),
 	)
-
-
-	__float32_caps = gst.caps_from_string("""
-		audio/x-raw-float,
-		channels = (int) 1,
-		endianness = (int) BYTE_ORDER,
-		width = (int) 32,
-		rate = (int) 16384
-	""")
-
-
-	__float64_caps = gst.caps_from_string("""
-		audio/x-raw-float,
-		channels = (int) 1,
-		endianness = (int) BYTE_ORDER,
-		width = (int) 64,
-		rate = (int) 16384
-	""")
 
 
 	def __init__(self):
@@ -499,6 +493,10 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 				try:
 					filename = "/dev/fd/%d" % fd
 					hoft_array = safe_getvect(filename, self.__ifodesc.channelname, gps_start, 16, 16384)
+					# FIXME: cast to double because Virgo produces single precision data.
+					# We could instead allow this element to push buffers with different caps
+					# according to whether h(t) is single precision or double precision.
+					hoft_array = hoft_array.astype(numpy.float64)
 					if self.__ifodesc.ifo != 'V1':
 						os.lseek(fd, 0, 0) # FIXME: use os.SEEK_SET (added to API in Python 2.5) for last argument
 						state_array = safe_getvect(filename, self.__ifodesc.state_channelname, gps_start, 16, 16)
@@ -513,13 +511,7 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 
 		# Look up our src pad and its caps.
 		pad = self.src_pads().next()
-		if hoft_array.dtype.name == 'float64':
-			caps = self.__float64_caps
-		elif hoft_array.dtype.name == 'float32':
-			caps = self.__float32_caps
-		else:
-			self.error("h(t) channel has unrecognized dtype %s" % hoft_array.dtype.name)
-			return (gst.FLOW_ERROR, None)
+		caps = pad.get_caps_reffed()
 
 		# Compute "good data" segment mask.
 		if self.__ifodesc.ifo == "V1":
@@ -541,7 +533,7 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		# If necessary, create gap for skipped frames.
 		if self.__last_successful_gps_end is not None and self.__last_successful_gps_end != gps_start:
 			offset = 16384 * self.__last_successful_gps_end
-			size = 16384 * (gps_start - self.__last_successful_gps_end) * len(hoft_array.data[:1].data)
+			size = 16384 * (gps_start - self.__last_successful_gps_end) * 8
 			buf = gst.buffer_new_and_alloc(size)
 			buf.caps = caps
 			buf.offset = offset
@@ -563,11 +555,10 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		for segment_num, is_nongap in enumerate(segment_mask):
 			if is_nongap ^ was_nongap:
 				offset = 16384 * (gps_start + last_segment_num)
-				hoft_data = hoft_array[(16384*last_segment_num):(16384*segment_num)].data
-				size = len(hoft_data)
+				size = 16384 * (segment_num - last_segment_num) * 8
 				buf = gst.buffer_new_and_alloc(size)
 				buf.caps = caps
-				buf[0:size] = hoft_data
+				buf[0:size] = hoft_array[(16384*last_segment_num):(16384*segment_num)].data
 				buf.offset = offset
 				buf.offset_end = 16384 * (gps_start + segment_num)
 				buf.duration = gst.SECOND * (segment_num - last_segment_num)
@@ -585,11 +576,10 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		# Finish off current frame.
 		segment_num = 16
 		offset = 16384 * (gps_start + last_segment_num)
-		hoft_data = hoft_array[(16384*last_segment_num):(16384*segment_num)].data
-		size = len(hoft_data)
+		size = 16384 * (segment_num - last_segment_num) * 8
 		buf = gst.buffer_new_and_alloc(size)
 		buf.caps = caps
-		buf[0:size] = hoft_data
+		buf[0:size] = hoft_array[(16384*last_segment_num):(16384*segment_num)].data
 		buf.offset = offset
 		buf.offset_end = 16384 * (gps_start + segment_num)
 		buf.duration = gst.SECOND * (segment_num - last_segment_num)
