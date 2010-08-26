@@ -240,8 +240,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		gst_buffer_ref(sinkbuf);	/* we'll unref it again later */
 		result = gst_pad_push(element->srcpad, sinkbuf);
-		if(result != GST_FLOW_OK)
-			GST_ELEMENT_ERROR(element, CORE, PAD, (NULL), ("%s: gst_pad_push() failed (%d)", GST_PAD_NAME(element->srcpad), result));
+		if(G_UNLIKELY(result != GST_FLOW_OK))
+			GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name (result));
 		goto done;
 	} else {
 		guint64 n = (GST_BUFFER_DURATION(sinkbuf) + element->block_duration - 1) / element->block_duration;	/* ciel */
@@ -288,8 +288,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		result = gst_pad_push(element->srcpad, srcbuf);
-		if(result != GST_FLOW_OK) {
-			GST_ELEMENT_ERROR(element, CORE, PAD, (NULL), ("%s: gst_pad_push() failed (%d)", GST_PAD_NAME(element->srcpad), result));
+		if(G_UNLIKELY(result != GST_FLOW_OK)) {
+			GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name (result));
 			goto done;
 		}
 	}

@@ -721,6 +721,9 @@ static void finalize(GObject *object)
 	gst_object_unref(element->collect);
 	element->collect = NULL;
 
+	gst_object_unref(element->srcpad);
+	element->srcpad = NULL;
+
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
