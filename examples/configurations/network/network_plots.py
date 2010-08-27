@@ -12,6 +12,7 @@ import pytz
 import shutil
 import sys
 import time
+import stat
 from tempfile import mkstemp
 
 import matplotlib
@@ -66,8 +67,9 @@ def array_from_cursor(cursor):
 
 def savefig(fname):
 	"""Wraps pylab.savefig, but replaces the destination file atomically and destroys the plotting state."""
-	fid, path = mkstemp(suffix = fname)
+	fid, path = mkstemp(suffix = fname, dir = '.')
 	pylab.savefig(path)
+	os.chmod(path, stat.S_IRGRP | stat.S_IRUSR | stat.S_IROTH)
 	os.rename(path, fname)
 	os.close(fid)
 	pylab.clf()
@@ -108,7 +110,7 @@ while True:
 		((date.XLALUTCToGPS(now_dt.timetuple()).seconds, now_dt.strftime(fmt),
 		now_dt.astimezone(tz_dict["H"]).strftime(fmt),
 		now_dt.astimezone(tz_dict["L"]).strftime(fmt),
-		now_dt.astimezone(tz_dict["V"]).strftime(fmt))))
+		now_dt.astimezone(tz_dict["V"]).strftime(fmt)),))
 
 	# Make single detector plots.
 	for ifo, db in trigdbs:
