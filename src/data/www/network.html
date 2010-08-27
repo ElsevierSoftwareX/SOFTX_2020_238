@@ -4,7 +4,7 @@
                 <script type="text/javascript" src="assets/jquery-1.4.2.min.js"></script>
                 <script type="text/javascript" src="assets/report.js"></script>
 		<script type="text/javascript">
-			function init(canvas_init_list){
+			function init(){
 				load_table('#page_time_table', 'page_time.html')
 				setInterval("load_table('#page_time_table', 'page_time.html')", 5000)
 				load_table('#loudest_table', 'loudest.html')
@@ -21,7 +21,7 @@
 			canvas { border: 2px solid black; }
 		</style>
 	</head>
-	<body onload="init([['snr_vs_time', 'snr_vs_time.png'],['effsnr_vs_time','effsnr_vs_time.png'], ['chisq_vs_snr','chisq_vs_snr.png'], ['H1snr_hist','H1snr_hist.png'],['L1snr_hist','L1snr_hist.png'], ['H1effsnr_hist','H1effsnr_hist.png'],['L1effsnr_hist','L1effsnr_hist.png'], ['H1,L1effsnr_vs_effsnr','H1,L1effsnr_vs_effsnr.png']])">
+	<body onload="init()">
 
 		<header>
 		<h1> gstlal_inspiral online coincidence network </h2>
