@@ -1,5 +1,6 @@
 <html>
 	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 		<title>gstlal_inspiral online network summary</title> 
                 <script type="text/javascript" src="assets/jquery-1.4.2.min.js"></script>
                 <script type="text/javascript" src="assets/report.js"></script>
@@ -36,7 +37,35 @@
 		</section>
 
 		<section>
-			<h1>Single-detector triggers</h1>
+			<h1>Single detector triggers — by detector</h1>
+			<p>These figures include the past 10 000 triggers from each detector.</p>
+			<figure>
+				<img class="autoupdating" src="H1_snr_end_time.png" />
+				<img class="autoupdating" src="L1_snr_end_time.png" />
+				<img class="autoupdating" src="V1_snr_end_time.png" />
+				<figcaption>SNR versus end time for each detector.</figcaption>
+			</figure>
+			<figure>
+				<img class="autoupdating" src="H1_eff_snr_end_time.png" />
+				<img class="autoupdating" src="L1_eff_snr_end_time.png" />
+				<img class="autoupdating" src="V1_eff_snr_end_time.png" />
+				<figcaption>Effective SNR versus end time for each detector.</figcaption>
+			</figure>
+			<figure>
+				<img class="autoupdating" src="H1_chisq_snr.png" />
+				<img class="autoupdating" src="L1_chisq_snr.png" />
+				<img class="autoupdating" src="V1_chisq_snr.png" />
+				<figcaption>Chi squared versus SNR for each detector.</figcaption>
+			</figure>
+			<figure>
+				<img class="autoupdating" src="H1_chisq_eff_snr.png" />
+				<img class="autoupdating" src="L1_chisq_eff_snr.png" />
+				<img class="autoupdating" src="V1_chisq_eff_snr.png" />
+				<figcaption>Chi squared versus effective SNR for each detector.</figcaption>
+			</figure>
+		</section>
+		<section>
+			<h1>Single detector triggers — overlayed</h1>
 			<figure id="fig1">
 				<img class="autoupdating" src="snr_vs_time.png">
 				<img class="autoupdating" src="effsnr_vs_time.png">

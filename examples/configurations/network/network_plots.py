@@ -12,11 +12,16 @@ import pytz
 import shutil
 import sys
 import time
+from tempfile import mkstemp
 
+import matplotlib
+matplotlib.use('agg')
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+import pylab
 axis_pos = (0.1, 0.1, 0.8, 0.8)
 import numpy
+import math
 from pylal import date
 
 from gstlal.ligolw_output import effective_snr
@@ -40,29 +45,40 @@ if len(args) == 0 or opts.www_path is None:
 
 # FIXME: use network.py's algorithm for filename determination; it is not well
 # described
-input_path, input_name = os.path.split(opts.input)[0]
+input_path, input_name = os.path.split(opts.input)
 coincdb = sqlite3.connect(os.path.join(input_path, "".join(args) + "-" + input_name))
 trigdbs = tuple( (ifo, sqlite3.connect(os.path.join(input_path, ifo + "-" + input_name))) for ifo in args)
+alldbs = tuple(x[1] for x in trigdbs) + (coincdb,)
+
+# Attach some functions to all databases
+for db in alldbs:
+	db.create_function("eff_snr", 2, effective_snr)
+	db.create_function("sqrt", 1, math.sqrt)
+	db.create_function("square", 1, lambda x: x * x)
 
 
+
+# Convenience routines
+
+def array_from_cursor(cursor):
+	"""Get a Numpy array with named columns from an sqlite query cursor."""
+	return numpy.array(cursor.fetchall(), dtype=[(desc[0], float) for desc in cursor.description])
+
+def savefig(fname):
+	"""Wraps pylab.savefig, but replaces the destination file atomically and destroys the plotting state."""
+	fid, path = mkstemp(suffix = fname)
+	pylab.savefig(path)
+	os.rename(path, fname)
+	os.close(fid)
+	pylab.clf()
 
 os.chdir(opts.www_path)
 
-def row(f,tup):
-	f.write('<tr>')
-	for c in tup:
-		f.write('<td>%s</td>' % (str(c),))
-	f.write('<tr>\n')
-
-def to_table(fname, names, tuplist):
-	f = open(fname,"w")
-	#f.write('<head><link rel="stylesheet" type="text/css" href="assets/report.css" /></head>')
-	f.write('<table border=1>\n')
-	row(f,names)
-	for tup in tuplist:
-		row(f, tup)
-	f.write('</table>')
-	f.close()
+def to_table(fname, headings, rows):
+	print >>open(fname, 'w'), '<!DOCTYPE html><html><body><table><tr>%s</tr>%s</table></body></html>' % (
+		''.join('<th>%s</th>' % heading for heading in headings),
+		''.join('<tr>%s</tr>' % ''.join('<td>%s</td>' % column for column in row) for row in rows)
+	)
 
 cnt = 0
 wait = 5.0
@@ -79,7 +95,8 @@ Aeffsnrs = {}
 Beffsnrs = {}
 
 tz_dict = {"UTC": pytz.timezone("UTC"), "H": pytz.timezone("US/Pacific"), "L": pytz.timezone("US/Central"), "V": pytz.timezone("Europe/Rome")}
-fmt = "%Y-%m-%d %H:%M:%S"
+fmt = "%Y-%m-%d %T"
+ifostyle = {"H1": {"color": "red", "label": "H1"}, "L1": {"color": "green", "label": "L1"}, "V1": {"color": "purple", "label": "V1"}}
 
 while True:
 	start = time.time()
@@ -87,11 +104,42 @@ while True:
 	# Table saying what time various things have happened
 	#
 	now_dt = datetime.datetime.now(tz_dict["UTC"])
-	to_table("page_time.html", ["GPS", "UTC", "Hanford", "Livingston", "Virgo"],
-		[(date.XLALUTCToGPS(now_dt.timetuple()).seconds, now_dt.strftime(fmt),
+	to_table("page_time.html", ("GPS", "UTC", "Hanford", "Livingston", "Virgo"),
+		((date.XLALUTCToGPS(now_dt.timetuple()).seconds, now_dt.strftime(fmt),
 		now_dt.astimezone(tz_dict["H"]).strftime(fmt),
 		now_dt.astimezone(tz_dict["L"]).strftime(fmt),
-		now_dt.astimezone(tz_dict["V"]).strftime(fmt))])
+		now_dt.astimezone(tz_dict["V"]).strftime(fmt))))
+
+	# Make single detector plots.
+	for ifo, db in trigdbs:
+		params = array_from_cursor(db.execute("""
+				SELECT snr,chisq,eff_snr(snr,chisq) as eff_snr,end_time+end_time_ns*1e-9 as end_time
+				FROM sngl_inspiral ORDER BY event_id DESC LIMIT 10000
+			"""))
+
+		pylab.loglog(params['snr'], params['chisq'], '.', **ifostyle[ifo])
+		pylab.xlabel(r"$\rho$")
+		pylab.ylabel(r"$\chi^2$")
+		pylab.title(r"$\chi^2$ vs. $\rho$ for %s" % ifo)
+		savefig('%s_chisq_snr.png' % ifo)
+
+		pylab.loglog(params['eff_snr'], params['chisq'], '.', **ifostyle[ifo])
+		pylab.xlabel(r"$\rho_\mathrm{eff}$")
+		pylab.ylabel(r"$\chi^2$")
+		pylab.title(r"$\chi^2$ vs. $\rho_\mathrm{eff}$ for %s" % ifo)
+		savefig('%s_chisq_eff_snr.png' % ifo)
+
+		pylab.semilogy(params['end_time'], params['snr'], '.', **ifostyle[ifo])
+		pylab.xlabel("End time")
+		pylab.ylabel(r"$\rho$")
+		pylab.title(r"$\rho$ vs. end time for %s" % ifo)
+		savefig('%s_snr_end_time.png' % ifo)
+
+		pylab.semilogy(params['end_time'], params['eff_snr'], '.', **ifostyle[ifo])
+		pylab.xlabel("End time")
+		pylab.ylabel(r"$\rho_\mathrm{eff}$")
+		pylab.title(r"$\rho_\mathrm{eff}$ vs. end time for %s" % ifo)
+		savefig('%s_eff_snr_end_time.png' % ifo)
 
 	#
 	# Table of loudest events

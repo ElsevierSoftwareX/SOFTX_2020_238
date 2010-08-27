@@ -64,3 +64,18 @@ figure figcaption:before {
 	content: "Figure " counters(section, ".") "." counter(figure) ".";
 	font-weight: bold;
 }
+table {
+	border-collapse: collapse;
+	margin: 2em;
+}
+td, th {
+	margin: 0px;
+}
+td {
+	font-family: monospace;
+	border: 1pt solid gray;
+}
+th {
+	border: 2pt solid gray;
+	font-weight: bold;
+}
