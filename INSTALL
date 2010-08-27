@@ -402,8 +402,6 @@ fixed.  We have proposed some workarounds to the GStreamer developers, but they
 are still under review.  In the mean time you can apply the patches yourself.
 Here are the bug reports:
 
- * `623105 <https://bugzilla.gnome.org/show_bug.cgi?id=623105>`_ gstpythonplugin.c does not import user's gobject module
- * `620067 <https://bugzilla.gnome.org/show_bug.cgi?id=620067>`_ Add bindings gst.util_uint64_scale_ceil and friends
  * `625660 <https://bugzilla.gnome.org/show_bug.cgi?id=625660>`_ gstpythonplugin: fails to refresh plugin registry when installed Python plugins change
  * `616553 <https://bugzilla.gnome.org/show_bug.cgi?id=616553>`_ Configuring gst-python on Mac OS fails: "checking for libraries required to embed python"
  
@@ -411,11 +409,7 @@ The following patches are **required on ALL systems**::
 
   $ cd /path/to/local/src
   $ pushd gst-python
-  $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=168845 -O gst-python.plugins.patch
-  $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=162291 -O gst-python.defs.patch
   $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=168846 -O gst-python.path.patch
-  $ git apply gst-python.plugins.patch
-  $ git apply gst-python.defs.patch
   $ git apply gst-python.path.patch
   $ popd
 
