@@ -119,6 +119,9 @@ while True:
 				FROM sngl_inspiral ORDER BY event_id DESC LIMIT 10000
 			"""))
 
+		# Make per-detector plots
+		pylab.figure(1)
+
 		pylab.loglog(params['snr'], params['chisq'], '.', **ifostyle[ifo])
 		pylab.xlabel(r"$\rho$")
 		pylab.ylabel(r"$\chi^2$")
@@ -142,6 +145,45 @@ while True:
 		pylab.ylabel(r"$\rho_\mathrm{eff}$")
 		pylab.title(r"$\rho_\mathrm{eff}$ vs. end time for %s" % ifo)
 		savefig('%s_eff_snr_end_time.png' % ifo)
+
+		# Make overlayed versions
+		pylab.figure(2)
+		pylab.loglog(params['snr'], params['chisq'], '.', **ifostyle[ifo])
+		pylab.figure(3)
+		pylab.loglog(params['eff_snr'], params['chisq'], '.', **ifostyle[ifo])
+		pylab.figure(4)
+		pylab.semilogy(params['end_time'], params['snr'], '.', **ifostyle[ifo])
+		pylab.figure(5)
+		pylab.semilogy(params['end_time'], params['eff_snr'], '.', **ifostyle[ifo])		
+
+	# Save overlayed versions
+	pylab.figure(2)
+	pylab.legend()
+	pylab.xlabel(r"$\rho$")
+	pylab.ylabel(r"$\chi^2$")
+	pylab.title(r"$\chi^2$ vs. $\rho$")
+	savefig("overlayed_chisq_snr.png")
+
+	pylab.figure(3)
+	pylab.legend()
+	pylab.xlabel(r"$\rho_\mathrm{eff}$")
+	pylab.ylabel(r"$\chi^2$")
+	pylab.title(r"$\chi^2$ vs. $\rho_\mathrm{eff}$")
+	savefig("overlayed_chisq_eff_snr.png")
+
+	pylab.figure(4)
+	pylab.legend()
+	pylab.xlabel("End time")
+	pylab.ylabel(r"$\rho$")
+	pylab.title(r"$\rho$ vs. end time")
+	savefig("overlayed_snr_end_time.png")
+
+	pylab.figure(5)
+	pylab.legend()
+	pylab.xlabel("End time")
+	pylab.ylabel(r"$\rho_\mathrm{eff}$")
+	pylab.title(r"$\rho_\mathrm{eff}$ vs. end time")
+	savefig("overlayed_eff_snr_end_time.png")
 
 	#
 	# Table of loudest events
