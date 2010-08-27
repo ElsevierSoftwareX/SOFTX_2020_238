@@ -17,10 +17,7 @@ from tempfile import mkstemp
 
 import matplotlib
 matplotlib.use('agg')
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import pylab
-axis_pos = (0.1, 0.1, 0.8, 0.8)
 import numpy
 import math
 from pylal import date
@@ -121,6 +118,18 @@ while True:
 
 		# Make per-detector plots
 		pylab.figure(1)
+	
+		pylab.hist(params['snr'], 25, log=True)
+		pylab.xlabel(r"$\rho$")
+		pylab.ylabel("Count")
+		pylab.title(r"$\rho$ histogram for %s" % ifo)
+		savefig("%s_hist_snr.png" % ifo)
+
+		pylab.hist(params['eff_snr'], 25, log=True)
+		pylab.xlabel(r"$\rho_\mathrm{eff}$")
+		pylab.ylabel("Count")
+		pylab.title(r"$\rho_\mathrm{eff}$ histogram for %s" % ifo)
+		savefig("%s_hist_eff_snr.png" % ifo)
 
 		pylab.loglog(params['snr'], params['chisq'], '.', **ifostyle[ifo])
 		pylab.xlabel(r"$\rho$")
@@ -185,6 +194,28 @@ while True:
 	pylab.title(r"$\rho_\mathrm{eff}$ vs. end time")
 	savefig("overlayed_eff_snr_end_time.png")
 
+	# Make multiple detector plots.
+	params = array_from_cursor(coincdb.execute("""
+			SELECT
+			sqrt(sum(square(snr))) as combined_snr,
+			sqrt(sum(square(eff_snr(snr, chisq)))) as combined_eff_snr,
+			avg(end_time + 1e-9 * end_time_ns) as avg_end_time,
+			count(*) as count_ifos
+			FROM sngl_inspiral INNER JOIN coinc_event_map USING (event_id) GROUP BY coinc_event_id
+		"""))
+
+	pylab.semilogy(params['avg_end_time'], params['combined_snr'], '.')
+	pylab.xlabel('Mean end time')
+	pylab.ylabel(r"Combined SNR, $\sqrt{\sum\rho^2}$")
+	pylab.title('Combined SNR versus end time')
+	savefig('combined_snr_end_time.png')
+
+	pylab.semilogy(params['avg_end_time'], params['combined_eff_snr'], '.')
+	pylab.xlabel('Mean end time')
+	pylab.ylabel('Combined effective SNR')
+	pylab.title('Combined effective SNR versus end time')
+	savefig('combined_eff_snr_end_time.png')
+
 	#
 	# Table of loudest events
 	# only do the loudest query every 5 waits
@@ -211,93 +242,6 @@ while True:
 		ids.append(id)
 
 	lastid = max(ids)
-	#
-	# snr vs time
-	#
-
-	fig = Figure()
-	ax = fig.add_axes(axis_pos)
-	for ifo in times.iterkeys():
-		ax.semilogy(times[ifo], snrs[ifo],'.', label=ifo)
-	ax.set_xlabel('Time')
-	ax.set_ylabel('SNR')
-	canvas = FigureCanvas(fig)
-	canvas.print_figure('tmpsnr_vs_time.png')
-	del fig, ax, canvas
-	shutil.move('tmpsnr_vs_time.png', 'snr_vs_time.png')
-
-	#
-	# effective snr vs time
-	#
-
-	fig = Figure()
-	ax = fig.add_axes(axis_pos)
-	for ifo in times.iterkeys():
-		ax.semilogy(times[ifo], effsnrs[ifo],'.', label=ifo)
-	ax.set_ylabel('Effective SNR')
-	ax.set_xlabel('Time')
-	canvas = FigureCanvas(fig)
-	canvas.print_figure('tmpeffsnr_vs_time.png')
-	del fig, ax, canvas
-	shutil.move('tmpeffsnr_vs_time.png', 'effsnr_vs_time.png')
-
-	for ifo in times.iterkeys():
-		#
-		# SNR histogram
-		#
-
-		fig = Figure()
-		ax = fig.add_axes(axis_pos)
-		ax.hist(snrs[ifo], 25)
-		ax.set_xlabel(ifo + ' SNR')
-		ax.set_ylabel('Count')
-		canvas = FigureCanvas(fig)
-		canvas.print_figure(ifo+'tmpsnr_hist.png')
-		del fig, ax, canvas
-		shutil.move(ifo+'tmpsnr_hist.png', ifo+'snr_hist.png')
-
-		#
-		# Effective SNR histogram
-		#
-
-		fig = Figure()
-		ax = fig.add_axes(axis_pos)
-		ax.hist(effsnrs[ifo], 25)
-		ax.set_xlabel(ifo + ' effective SNR')
-		ax.set_ylabel('Count')
-		canvas = FigureCanvas(fig)
-		canvas.print_figure(ifo+'tmpeffsnr_hist.png')
-		del fig, ax, canvas
-		shutil.move(ifo+'tmpeffsnr_hist.png', ifo+'effsnr_hist.png')
-
-	for ifo in Aeffsnrs.iterkeys():
-		#
-		# Effective snr scatter plot
-		#
-
-		fig = Figure()
-		ax = fig.add_axes(axis_pos)
-		ax.loglog(Aeffsnrs[ifo], Beffsnrs[ifo], '.', label=ifo)
-		ax.set_xlabel('Effective SNR %s' % (ifo.split(',')[0],))
-		ax.set_ylabel('Effective SNR %s' % (ifo.split(',')[1],))
-		canvas = FigureCanvas(fig)
-		canvas.print_figure(ifo+'effsnr_vs_effsnr.png')
-		del fig, ax, canvas
-		shutil.move(ifo+'effsnr_vs_effsnr.png', ifo+'effsnr_vs_effsnr.png')
-
-	#
-	# Chisq vs snr
-	#
-	fig = Figure()
-	ax = fig.add_axes(axis_pos)
-	for ifo in times.iterkeys():
-		ax.loglog(snrs[ifo], chisqs[ifo], '.', label=ifo)
-	ax.set_ylabel('Chi-squared')
-	ax.set_xlabel('SNR')
-	canvas = FigureCanvas(fig)
-	canvas.print_figure('tmpchisq_vs_snr.png')
-	del fig, ax, canvas
-	shutil.move('tmpchisq_vs_snr.png','chisq_vs_snr.png')
 
 	stop = time.time()
 
