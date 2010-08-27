@@ -17,8 +17,6 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 axis_pos = (0.1, 0.1, 0.8, 0.8)
 import numpy
-from glue.ligolw import dbtables
-from glue import segmentsUtils
 from pylal import date
 
 from gstlal.ligolw_output import effective_snr
@@ -33,14 +31,17 @@ if len(args) == 0 or opts.www_path is None:
     parser.print_usage()
     sys.exit()
 
+
+
+# Open databases
+
 # FIXME: use network.py's algorithm for filename determination; it is not well
 # described
-input_path=os.path.split(opts.input)[0]
-input_name=os.path.split(opts.input)[1]
-input_filename = os.path.join(input_path, "".join(args) + "-" + input_name)
+input_path, input_name = os.path.split(opts.input)[0]
+coincdb = sqlite3.connect(os.path.join(input_path, "".join(args) + "-" + input_name))
+trigdbs = tuple( (ifo, sqlite3.connect(os.path.join(input_path, ifo + "-" + input_name))) for ifo in args)
 
-connection = sqlite3.connect(input_filename)
-dbtables.DBTable_set_connection(connection)
+
 
 os.chdir(opts.www_path)
 
@@ -94,13 +95,13 @@ while True:
 	# only do the loudest query every 5 waits
 	#
 
-	if (cnt % 6) == 0: to_table('loudest.html' , ["end_time", "end_time_ns", "snr", "ifos", "mchirp", "mass"], connection.cursor().execute('SELECT end_time, end_time_ns, snr, ifos, mchirp, mass FROM coinc_inspiral ORDER BY snr DESC LIMIT 10').fetchall())
+	if (cnt % 6) == 0: to_table('loudest.html' , ["end_time", "end_time_ns", "snr", "ifos", "mchirp", "mass"], coincdb.cursor().execute('SELECT end_time, end_time_ns, snr, ifos, mchirp, mass FROM coinc_inspiral ORDER BY snr DESC LIMIT 10').fetchall())
 
 	# FIXME don't hardcode ifos, don't do the join this way
 	# FIXME cant rely on time, somehow has ids too
 	query = 'SELECT coinc_inspiral.rowid, snglA.ifo, snglB.ifo, snglA.end_time+snglA.end_time_ns/1e9, snglB.end_time+snglB.end_time_ns/1e9, snglA.snr, snglA.chisq, snglB.snr, snglB.chisq FROM coinc_inspiral JOIN coinc_event_map AS mapA on mapA.coinc_event_id == coinc_inspiral.coinc_event_id JOIN coinc_event_map as mapB on mapB.coinc_event_id == mapA.coinc_event_id JOIN sngl_inspiral AS snglA ON snglA.event_id == mapA.event_id JOIN sngl_inspiral AS snglB ON snglB.event_id == mapB.event_id WHERE mapA.table_name == "sngl_inspiral:table" AND coinc_inspiral.rowid > ?;'
 	
-	for id, h1ifo, l1ifo, h1time, l1time, h1snr, h1chisq, l1snr, l1chisq in connection.cursor().execute(query,(lastid,)):
+	for id, h1ifo, l1ifo, h1time, l1time, h1snr, h1chisq, l1snr, l1chisq in coincdb.cursor().execute(query,(lastid,)):
 		ifo = h1ifo+","+l1ifo
 		Aeffsnrs.setdefault(ifo,[]).append(effective_snr(h1snr, h1chisq))
 		Beffsnrs.setdefault(ifo,[]).append(effective_snr(l1snr, l1chisq))
@@ -208,6 +209,3 @@ while True:
 	cnt += 1
 	if (stop - start) < wait: time.sleep(wait - (stop-start))
 	print time.time()-start
-
-connection.close()
-
