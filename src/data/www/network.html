@@ -1,6 +1,6 @@
 <html>
 	<head>
-		<title>gstlal_inspiral online network pipeline</title> 
+		<title>gstlal_inspiral online network summary</title> 
                 <script type="text/javascript" src="assets/jquery-1.4.2.min.js"></script>
                 <script type="text/javascript" src="assets/report.js"></script>
 		<script type="text/javascript">
@@ -29,37 +29,45 @@
 
 		<section>
 		<h1 id="overview">Overview</h1>
-			<div id="page_time_table"></div>
+			<figure>
+				<div id="page_time_table"></div>
+				<figcaption>Time of last figure update</figcaption>
+			</figure>
 		</section>
 
 		<section>
-		<h1 id="heading1">SNR vs Time</h1>
+			<h1>Single-detector triggers</h1>
 			<figure id="fig1">
 				<img class="autoupdating" src="snr_vs_time.png">
 				<img class="autoupdating" src="effsnr_vs_time.png">
+				<figcaption>SNR vs time</figcaption>
 			</figure>
-		</section>
-		<section>
-		<h1 id="heading2">Chi-squared</h1>
 			<figure id="fig2">
 				<img class="autoupdating" src="chisq_vs_snr.png">
-				<img class="autoupdating" src="H1,L1effsnr_vs_effsnr.png">
+				<figcaption>Chi-square vs SNR</figcaption>
 			</figure>
-		</section>
-		<section>
-		<h1 id="heading3">SNR hist</h1>
 			<figure id="fig3">
 				<img class="autoupdating" src="H1snr_hist.png">
 				<img class="autoupdating" src="L1snr_hist.png">
+				<figcaption>SNR histograms</figcaption>
 			</figure>
 			<figure id="fig4">
 				<img class="autoupdating" src="H1effsnr_hist.png">
 				<img class="autoupdating" src="L1effsnr_hist.png">
+				<figcaption>Effective SNR histograms</figcaption>
 			</figure>
 		</section>
 		<section>
-		<h1 id="heading3">Loudest table</h1>
-			<div id="loudest_table"></div>
+			<h1>Multi-detector coincidences</h1>
+			<figure>
+				<!--<img class="autoupdating" src="H1,L1snr_vs_snr.png">-->
+				<img class="autoupdating" src="H1,L1effsnr_vs_effsnr.png">
+				<figcaption>SNR vs SNR</figcaption>
+			</figure>
+			<figure>
+				<div id="loudest_table"></div>
+				<figcaption>Table of loudest coincident triggers</figcaption>
+			</figure>
 		</section>
 
 	</body>
