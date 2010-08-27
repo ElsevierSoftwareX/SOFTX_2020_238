@@ -22,6 +22,9 @@ from pylal import date
 from gstlal.ligolw_output import effective_snr
 
 
+
+# Parse command line options
+
 parser = optparse.OptionParser(usage="%prog --www-path /path --input suffix.sqlite ifo1 ifo2 ...")
 parser.add_option("--input", "-i", help="suffix of input file (should end in .sqlite)")
 parser.add_option("--www-path", "-p", help="path in which to base webpage")
