@@ -16,6 +16,10 @@ $(document).ready(function(){
 		}
 	);
 	$("section h1").attr("title", "Click to hide the contents of this section.");
-	$("figure img").fancybox();
-	$("img.autoupdating").autoupdate();
+	$("figure").each(function() {
+		 var rel = 'gallery' + Math.random();
+		 $(this).find("img").wrap(function() {return '<a href="' + $(this).attr('src') + '" rel="' + rel + '" />';});
+	});
+	$("figure a").fancybox({'cyclic': true, 'autoScale': true, 'transitionIn': 'elastic', 'transitionOut': 'elastic', 'changeFade': 100});
+	$("img.autoupdating").autoupdate({'interval': 8000});
 });
