@@ -96,6 +96,12 @@ tz_dict = {"UTC": pytz.timezone("UTC"), "H": pytz.timezone("US/Pacific"), "L": p
 fmt = "%Y-%m-%d %T"
 ifostyle = {"H1": {"color": "red", "label": "H1"}, "L1": {"color": "green", "label": "L1"}, "V1": {"color": "purple", "label": "V1"}}
 
+
+# Write process params stuff options
+to_table('processes.html', ('command line',),
+	coincdb.execute("SELECT program || ' ' || group_concat(param || ' ' || value, ' ') FROM process_params GROUP BY process_id").fetchall())
+
+
 while True:
 	start = time.time()
 	#

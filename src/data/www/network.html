@@ -12,6 +12,7 @@
 				});
 			}
 			$(document).ready(function() {
+				load_table('#page_processes', 'processes.html')
 				load_table('#page_time_table', 'page_time.html')
 				setInterval("load_table('#page_time_table', 'page_time.html')", 5000)
 				load_table('#page_trigcount', 'trigcount.html')
@@ -43,6 +44,10 @@
 				<span id="page_coinccount" display="inline"></span>
 				<span id="page_trigcount" display="inline"></span>
 				<figcaption>Cumulative number of coincidences and triggers since start of run</figcaption>
+			</figure>
+			<figure>
+				<div id="page_processes"></div>
+				<figcaption>Processes</figcaption>
 			</figure>
 			<p>See the <a href="network.png">pipeline graph as a PNG</a> or <a href="network.pdf">as a PDF</a>.</p>
 		</section>
