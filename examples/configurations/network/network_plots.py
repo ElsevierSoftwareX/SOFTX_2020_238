@@ -20,6 +20,7 @@ import pylab
 import numpy
 import math
 from pylal import date
+from glue.ligolw import utils, lsctables
 
 from gstlal.ligolw_output import effective_snr
 
@@ -70,8 +71,6 @@ def savefig(fname):
 	os.close(fid)
 	pylab.clf()
 
-os.chdir(opts.www_path)
-
 def to_table(fname, headings, rows):
 	print >>open(fname, 'w'), '<!DOCTYPE html><html><body><table><tr>%s</tr>%s</table></body></html>' % (
 		''.join('<th>%s</th>' % heading for heading in headings),
@@ -101,6 +100,31 @@ ifostyle = {"H1": {"color": "red", "label": "H1"}, "L1": {"color": "green", "lab
 to_table('processes.html', ('command line',),
 	coincdb.execute("SELECT program || ' ' || group_concat(param || ' ' || value, ' ') FROM process_params GROUP BY process_id").fetchall())
 
+# Save directory that we were in
+old_path = os.getcwd()
+
+# Change to input path to read template bank
+os.chdir(input_path)
+
+# Plot template bank parameters
+template_bank_filename = coincdb.execute("SELECT value FROM process_params WHERE param = '--template-bank' LIMIT 1").fetchall()[0][0]
+xmldoc = utils.load_filename(template_bank_filename, gz = template_bank_filename.endswith(".gz"))
+table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+
+os.chdir(old_path)
+os.chdir(opts.www_path)
+
+pylab.plot(table.get_column('mass1'), table.get_column('mass2'), '.k')
+pylab.xlabel('$m_1$ (solar masses)')
+pylab.ylabel('$m_2$ (solar masses)')
+pylab.title('Template placement by componenent mass')
+savefig('tmpltbank_m1_m2.png')
+
+pylab.plot(table.get_column('mchirp'), table.get_column('mtotal'), '.k')
+pylab.xlabel('Chirp mass $\mathcal{M}_\mathrm{chirp}$ (solar masses)')
+pylab.ylabel('Total mass $M$ (solar masses)')
+pylab.title('Template placement by chirp mass and total mass')
+savefig('tmpltbank_mchirp_mtotal.png')
 
 while True:
 	start = time.time()
