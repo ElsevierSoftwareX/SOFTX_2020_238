@@ -20,6 +20,6 @@ $(document).ready(function(){
 		 var rel = 'gallery' + Math.random();
 		 $(this).find("img").wrap(function() {return '<a href="' + $(this).attr('src') + '" rel="' + rel + '" />';});
 	});
-	$("figure a").fancybox({'cyclic': true, 'autoScale': true, 'transitionIn': 'elastic', 'transitionOut': 'elastic', 'changeFade': 100});
+	$("figure a:has(img)").fancybox({'cyclic': true, 'autoScale': true, 'transitionIn': 'elastic', 'transitionOut': 'elastic', 'changeFade': 100});
 	$("img.autoupdating").autoupdate({'interval': 8000});
 });
