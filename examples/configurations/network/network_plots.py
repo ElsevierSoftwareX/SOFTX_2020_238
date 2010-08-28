@@ -214,6 +214,9 @@ while True:
 	pylab.title('Combined effective SNR versus end time')
 	savefig('combined_eff_snr_end_time.png')
 
+	to_table("trigcount.html", [ifo for ifo, db in trigdbs],
+		[[db.execute("SELECT count(*) FROM sngl_inspiral").fetchall()[0][0] for ifo, db in trigdbs]])
+
 	to_table("coinccount.html", ("ifos", "count"),
 		coincdb.execute("SELECT count(*) as n, ifos FROM coinc_inspiral GROUP BY ifos ORDER BY n DESC").fetchall())
 

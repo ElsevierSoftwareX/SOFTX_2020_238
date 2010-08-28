@@ -14,6 +14,8 @@
 			$(document).ready(function() {
 				load_table('#page_time_table', 'page_time.html')
 				setInterval("load_table('#page_time_table', 'page_time.html')", 5000)
+				load_table('#page_trigcount', 'trigcount.html')
+				setInterval("load_table('#page_trigcount', 'trigcount.html')", 10000)
 				load_table('#page_coinccount', 'coinccount.html')
 				setInterval("load_table('#page_coinccount', 'coinccount.html')", 10000)
 				load_table('#loudest_table', 'loudest.html')
@@ -39,6 +41,10 @@
 			<figure>
 				<div id="page_coinccount"></div>
 				<figcaption>Cumulative number of coincidences since start of run</figcaption>
+			</figure>
+			<figure>
+				<div id="page_trigcount"></div>
+				<figcaption>Cumulative number of triggers since start of run</figcaption>
 			</figure>
 		</section>
 
