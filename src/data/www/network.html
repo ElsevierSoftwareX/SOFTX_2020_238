@@ -5,24 +5,26 @@
                 <script type="text/javascript" src="assets/jquery-1.4.2.min.js"></script>
                 <script type="text/javascript" src="assets/report.js"></script>
 		<script type="text/javascript">
-			function init(){
-				load_table('#page_time_table', 'page_time.html')
-				setInterval("load_table('#page_time_table', 'page_time.html')", 5000)
-				load_table('#loudest_table', 'loudest.html')
-				setInterval("load_table('#loudest_table', 'loudest.html')", 30000)
-			}
 			function load_table(divid, url) {
 				$.get(url, function(data) {
 					$(divid).html(data);
 					window.setTimeout(load_table, 10000);
 				});
 			}
+			$(document).ready(function() {
+				load_table('#page_time_table', 'page_time.html')
+				setInterval("load_table('#page_time_table', 'page_time.html')", 5000)
+				load_table('#page_coinccount', 'coinccount.html')
+				setInterval("load_table('#page_coinccount', 'coinccount.html')", 10000)
+				load_table('#loudest_table', 'loudest.html')
+				setInterval("load_table('#loudest_table', 'loudest.html')", 10000)
+			});
 		</script>
 		<style type="text/css">
 			figure img {width: 240px !important}
 		</style>
 	</head>
-	<body onload="init()">
+	<body>
 
 		<header>
 			<h1>gstlal_inspiral online coincidence network</h1>
@@ -33,6 +35,10 @@
 			<figure>
 				<div id="page_time_table"></div>
 				<figcaption>Time of last figure update</figcaption>
+			</figure>
+			<figure>
+				<div id="page_coinccount"></div>
+				<figcaption>Accumulated coincidence count since start of run</figcaption>
 			</figure>
 		</section>
 
