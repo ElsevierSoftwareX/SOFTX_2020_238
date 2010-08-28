@@ -24,6 +24,7 @@
 		</script>
 		<style type="text/css">
 			figure img {width: 240px !important}
+			#page_coinccount table, #page_trigcount table {display: inline-table}
 		</style>
 	</head>
 	<body>
@@ -39,12 +40,9 @@
 				<figcaption>Time of last figure update</figcaption>
 			</figure>
 			<figure>
-				<div id="page_coinccount"></div>
-				<figcaption>Cumulative number of coincidences since start of run</figcaption>
-			</figure>
-			<figure>
-				<div id="page_trigcount"></div>
-				<figcaption>Cumulative number of triggers since start of run</figcaption>
+				<span id="page_coinccount" display="inline"></span>
+				<span id="page_trigcount" display="inline"></span>
+				<figcaption>Cumulative number of coincidences and triggers since start of run</figcaption>
 			</figure>
 		</section>
 
