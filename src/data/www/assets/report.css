@@ -3,6 +3,9 @@ h1, h2, h3, header, footer, article, section, hgroup, nav, figure, figcaption {
 	font-family: sans-serif;
 }
 body {
+	font-family: sans-serif;
+}
+body {
 	margin: 0pt;
 	padding: 0pt;
 	border-left: 1in solid #dddddd;
