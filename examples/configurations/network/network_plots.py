@@ -9,7 +9,6 @@ import datetime
 import optparse
 import os
 import pytz
-import shutil
 import sys
 import time
 import stat
@@ -197,51 +196,37 @@ while True:
 	# Make multiple detector plots.
 	params = array_from_cursor(coincdb.execute("""
 			SELECT
+			avg(end_time + 1e-9 * end_time_ns) as mean_end_time,
 			sqrt(sum(square(snr))) as combined_snr,
-			sqrt(sum(square(eff_snr(snr, chisq)))) as combined_eff_snr,
-			avg(end_time + 1e-9 * end_time_ns) as avg_end_time,
-			count(*) as count_ifos
+			sqrt(sum(square(eff_snr(snr, chisq)))) as combined_eff_snr
 			FROM sngl_inspiral INNER JOIN coinc_event_map USING (event_id) GROUP BY coinc_event_id
 		"""))
 
-	pylab.semilogy(params['avg_end_time'], params['combined_snr'], '.')
+	pylab.semilogy(params['mean_end_time'], params['combined_snr'], '.')
 	pylab.xlabel('Mean end time')
 	pylab.ylabel(r"Combined SNR, $\sqrt{\sum\rho^2}$")
 	pylab.title('Combined SNR versus end time')
 	savefig('combined_snr_end_time.png')
 
-	pylab.semilogy(params['avg_end_time'], params['combined_eff_snr'], '.')
+	pylab.semilogy(params['mean_end_time'], params['combined_eff_snr'], '.')
 	pylab.xlabel('Mean end time')
 	pylab.ylabel('Combined effective SNR')
 	pylab.title('Combined effective SNR versus end time')
 	savefig('combined_eff_snr_end_time.png')
 
-	#
-	# Table of loudest events
-	# only do the loudest query every 5 waits
-	#
+	#to_table("loudest.html", params.dtype.names, params[:10])
 
-	if (cnt % 6) == 0: to_table('loudest.html' , ["end_time", "end_time_ns", "snr", "ifos", "mchirp", "mass"], coincdb.cursor().execute('SELECT end_time, end_time_ns, snr, ifos, mchirp, mass FROM coinc_inspiral ORDER BY snr DESC LIMIT 10').fetchall())
-
-	# FIXME don't hardcode ifos, don't do the join this way
-	# FIXME cant rely on time, somehow has ids too
-	query = 'SELECT coinc_inspiral.rowid, snglA.ifo, snglB.ifo, snglA.end_time+snglA.end_time_ns/1e9, snglB.end_time+snglB.end_time_ns/1e9, snglA.snr, snglA.chisq, snglB.snr, snglB.chisq FROM coinc_inspiral JOIN coinc_event_map AS mapA on mapA.coinc_event_id == coinc_inspiral.coinc_event_id JOIN coinc_event_map as mapB on mapB.coinc_event_id == mapA.coinc_event_id JOIN sngl_inspiral AS snglA ON snglA.event_id == mapA.event_id JOIN sngl_inspiral AS snglB ON snglB.event_id == mapB.event_id WHERE mapA.table_name == "sngl_inspiral:table" AND coinc_inspiral.rowid > ?;'
-	
-	for id, h1ifo, l1ifo, h1time, l1time, h1snr, h1chisq, l1snr, l1chisq in coincdb.cursor().execute(query,(lastid,)):
-		ifo = h1ifo+","+l1ifo
-		Aeffsnrs.setdefault(ifo,[]).append(effective_snr(h1snr, h1chisq))
-		Beffsnrs.setdefault(ifo,[]).append(effective_snr(l1snr, l1chisq))
-		snrs.setdefault(h1ifo,[]).append(h1snr)
-		snrs.setdefault(l1ifo,[]).append(l1snr)
-		times.setdefault(h1ifo,[]).append(h1time)
-		times.setdefault(l1ifo,[]).append(l1time)
-		chisqs.setdefault(h1ifo,[]).append(h1chisq)
-		chisqs.setdefault(l1ifo,[]).append(l1chisq)
-		effsnrs.setdefault(h1ifo,[]).append(effective_snr(h1snr,h1chisq))
-		effsnrs.setdefault(l1ifo,[]).append(effective_snr(l1snr,l1chisq))
-		ids.append(id)
-
-	lastid = max(ids)
+	to_table("loudest.html", ("end_time", "combined_snr", "combined_eff_snr", "ifos", "mchirp", "mtotal"),
+		coincdb.execute("""
+			SELECT
+			coinc_inspiral.end_time + 1e-9 * coinc_inspiral.end_time_ns,
+			sqrt(sum(square(sngl_inspiral.snr))) as combined_snr,
+			sqrt(sum(square(eff_snr(sngl_inspiral.snr, chisq)))) as combined_eff_snr,
+			ifos,
+			coinc_inspiral.mchirp,
+			mtotal
+			FROM sngl_inspiral INNER JOIN coinc_event_map USING (event_id) INNER JOIN coinc_inspiral USING (coinc_event_id) GROUP BY coinc_event_id ORDER BY ifo ASC, combined_eff_snr DESC LIMIT 10
+		""").fetchall())
 
 	stop = time.time()
 
