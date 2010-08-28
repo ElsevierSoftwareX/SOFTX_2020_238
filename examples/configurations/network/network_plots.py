@@ -214,8 +214,6 @@ while True:
 	pylab.title('Combined effective SNR versus end time')
 	savefig('combined_eff_snr_end_time.png')
 
-	#to_table("loudest.html", params.dtype.names, params[:10])
-
 	to_table("loudest.html", ("end_time", "combined_snr", "combined_eff_snr", "ifos", "mchirp", "mtotal"),
 		coincdb.execute("""
 			SELECT
