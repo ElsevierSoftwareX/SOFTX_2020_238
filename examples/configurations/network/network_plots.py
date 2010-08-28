@@ -23,6 +23,7 @@ from pylal import date
 from glue.ligolw import utils, lsctables
 
 from gstlal.ligolw_output import effective_snr
+from gstlal.gstlal_svd_bank import read_bank
 
 
 
@@ -106,7 +107,10 @@ old_path = os.getcwd()
 # Change to input path to read template bank
 os.chdir(input_path)
 
-# Plot template bank parameters
+# Read orthogonal template banks
+bankdict = dict((ifo, read_bank('bank.%s.pickle' % ifo)) for ifo in args)
+
+# Read template bank parameters
 template_bank_filename = coincdb.execute("SELECT value FROM process_params WHERE param = '--template-bank' LIMIT 1").fetchall()[0][0]
 xmldoc = utils.load_filename(template_bank_filename, gz = template_bank_filename.endswith(".gz"))
 table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
@@ -125,6 +129,28 @@ pylab.xlabel('Chirp mass $\mathcal{M}_\mathrm{chirp}$ (solar masses)')
 pylab.ylabel('Total mass $M$ (solar masses)')
 pylab.title('Template placement by chirp mass and total mass')
 savefig('tmpltbank_mchirp_mtotal.png')
+
+for ifo, bank in bankdict.iteritems():
+	ntemplates = 0
+	for bf in bank.bank_fragments:
+		next_ntemplates = ntemplates + bf.orthogonal_template_bank.shape[0]
+		pylab.pcolor(
+			pylab.arange(bf.orthogonal_template_bank.shape[1], 0, -1) / float(bf.rate) + bf.start,
+			pylab.arange(ntemplates, next_ntemplates),
+			pylab.log10(abs(bf.orthogonal_template_bank))
+		)
+		pylab.text(bf.end + bank.filter_length / 30, ntemplates + 0.5 * bf.orthogonal_template_bank.shape[0], '%d Hz' % bf.rate, size='x-small')
+		ntemplates = next_ntemplates
+
+	pylab.colorbar().set_label('$\mathrm{log}_{10} |u_{i}(t)|$')
+	pylab.xlabel(r"Time $t$ until coalescence (seconds)")
+	pylab.ylabel(r"Basis index $i$")
+	pylab.title(r"%s orthonormal basis templates $u_{i}(t)$" % ifo)
+	savefig('%s_orthobank.png' % ifo)
+
+# Free some memory
+# FIXME: scope these things so that they get released automatically.
+del xmldoc, table, bankdict, bank
 
 while True:
 	start = time.time()
