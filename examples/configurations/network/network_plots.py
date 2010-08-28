@@ -97,10 +97,6 @@ fmt = "%Y-%m-%d %T"
 ifostyle = {"H1": {"color": "red", "label": "H1"}, "L1": {"color": "green", "label": "L1"}, "V1": {"color": "purple", "label": "V1"}}
 
 
-# Write process params stuff options
-to_table('processes.html', ('command line',),
-	coincdb.execute("SELECT program || ' ' || group_concat(param || ' ' || value, ' ') FROM process_params GROUP BY process_id").fetchall())
-
 # Save directory that we were in
 old_path = os.getcwd()
 
@@ -151,6 +147,15 @@ for ifo, bank in bankdict.iteritems():
 # Free some memory
 # FIXME: scope these things so that they get released automatically.
 del xmldoc, table, bankdict, bank
+
+# Write process params stuff options
+
+# FIXME: This is not compatible with the ancient version of sqlite that is on CentOS.
+#to_table('processes.html', ('command line',),
+#	coincdb.execute("SELECT program || ' ' || group_concat(param || ' ' || value, ' ') FROM process_params GROUP BY process_id").fetchall())
+
+to_table('processes.html', ('command line',),
+	((('network.py ' + ' '.join(zip(*coincdb.execute("SELECT param || ' ' || value FROM process_params").fetchall())[0])),),))
 
 while True:
 	start = time.time()
