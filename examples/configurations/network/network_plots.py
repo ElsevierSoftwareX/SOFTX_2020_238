@@ -232,13 +232,13 @@ while True:
 			FROM sngl_inspiral INNER JOIN coinc_event_map USING (event_id) GROUP BY coinc_event_id
 		"""))
 
-	pylab.semilogy(params['mean_end_time'], params['combined_snr'], '.')
+	pylab.semilogy(params['mean_end_time'], params['combined_snr'], '.k')
 	pylab.xlabel('Mean end time')
 	pylab.ylabel(r"Combined SNR, $\sqrt{\sum\rho^2}$")
 	pylab.title('Combined SNR versus end time')
 	savefig('combined_snr_end_time.png')
 
-	pylab.semilogy(params['mean_end_time'], params['combined_eff_snr'], '.')
+	pylab.semilogy(params['mean_end_time'], params['combined_eff_snr'], '.k')
 	pylab.xlabel('Mean end time')
 	pylab.ylabel('Combined effective SNR')
 	pylab.title('Combined effective SNR versus end time')
