@@ -249,7 +249,7 @@ while True:
 		pylab.title(r"$\rho_\mathrm{eff}$ vs. end time for %s" % ifo)
 		savefig('%s_eff_snr_end_time.png' % ifo)
 
-		# Make overlayed versions
+		# Make overlaid versions
 		pylab.figure(2)
 		pylab.loglog(params['snr'], params['chisq'], '.', **ifostyle[ifo])
 		pylab.figure(3)
@@ -259,7 +259,7 @@ while True:
 		pylab.figure(5)
 		pylab.semilogy(params['end_time'], params['eff_snr'], '.', **ifostyle[ifo])		
 
-	# Save overlayed versions
+	# Save overlaid versions
 	pylab.figure(2)
 	pylab.legend()
 	pylab.xlabel(r"$\rho$")
