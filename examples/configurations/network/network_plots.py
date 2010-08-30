@@ -80,15 +80,24 @@ def to_table(fname, headings, rows):
 		''.join('<tr>%s</tr>' % ''.join('<td>%s</td>' % column for column in row) for row in rows)
 	)
 
+# time conversion
+gps_start_time = int(coincdb.execute("SELECT value FROM process_params WHERE param='--gps-start-time' AND program='gstlal_inspiral'").fetchone()[0])
+gps_end_time = int(coincdb.execute("SELECT value FROM process_params WHERE param='--gps-end-time' AND program='gstlal_inspiral'").fetchone()[0])
 tz_dict = {"UTC": pytz.timezone("UTC"), "H": pytz.timezone("US/Pacific"), "L": pytz.timezone("US/Central"), "V": pytz.timezone("Europe/Rome")}
 tz_fmt = "%Y-%m-%d %T"
-dt_row_headers = ("GPS", "UTC", "Hanford", "Livingston", "Virgo")
+dt_row_headers = ("GPS", "UTC", "Hanford", "Livingston", "Virgo", "Seconds since analysis start", "Seconds until analysis end")
 def dt_to_rows(dt):
-	return ((date.XLALUTCToGPS(dt.timetuple()).seconds,
-	        dt.strftime(tz_fmt),
+	"""
+	Generate rows suitable for to_table based on a given datetime object.
+	"""
+	assert dt.tzinfo == tz_dict["UTC"]
+	as_gps_int = date.XLALUTCToGPS(dt.timetuple()).seconds
+	return ((str(as_gps_int), dt.strftime(tz_fmt),
 	        dt.astimezone(tz_dict["H"]).strftime(tz_fmt),
 	        dt.astimezone(tz_dict["L"]).strftime(tz_fmt),
-	        dt.astimezone(tz_dict["V"]).strftime(tz_fmt)),)
+	        dt.astimezone(tz_dict["V"]).strftime(tz_fmt),
+	        str(as_gps_int - gps_start_time),
+	        str(gps_end_time - as_gps_int)),)
 
 cnt = 0
 wait = 5.0
