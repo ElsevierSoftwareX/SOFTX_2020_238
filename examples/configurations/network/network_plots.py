@@ -182,8 +182,8 @@ del xmldoc, table, bankdict
 #to_table('processes.html', ('command line',),
 #	coincdb.execute("SELECT program || ' ' || group_concat(param || ' ' || value, ' ') FROM process_params GROUP BY process_id").fetchall())
 
-to_table('processes.html', ('command line',),
-	((('network.py ' + ' '.join(zip(*coincdb.execute("SELECT param || ' ' || value FROM process_params").fetchall())[0])),),))
+to_table('processes.html', ('program', 'command-line arguments'),
+    ((program, " ".join(" ".join(tup) for tup in coincdb.execute("SELECT param, value FROM process_params WHERE program=?", program))) for program in coincdb.execute("SELECT program FROM process ORDER BY start_time")))
 
 while True:
 	start = time.time()
