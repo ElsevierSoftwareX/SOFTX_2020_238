@@ -102,7 +102,8 @@ ifostyle = {"H1": {"color": "red", "label": "H1"}, "L1": {"color": "green", "lab
 old_path = os.getcwd()
 
 # Change to input path to read template bank
-os.chdir(input_path)
+if input_path != '':
+	os.chdir(input_path)
 
 # Read orthogonal template banks
 bankdict = dict((ifo, read_bank('bank.%s.pickle' % ifo)) for ifo in args)
