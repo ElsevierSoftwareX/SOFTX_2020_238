@@ -32,6 +32,7 @@ from gstlal.gstlal_svd_bank import read_bank
 parser = optparse.OptionParser(usage="%prog --www-path /path --input suffix.sqlite ifo1 ifo2 ...")
 parser.add_option("--input", "-i", help="suffix of input file (should end in .sqlite)")
 parser.add_option("--www-path", "-p", help="path in which to base webpage")
+parser.add_option("--skip-slow-plots", "-s", action="store_true", default=False, help="skip plotting the plots that take a long time")
 opts, args = parser.parse_args()
 
 if len(args) == 0 or opts.www_path is None:
@@ -126,27 +127,29 @@ pylab.ylabel('Total mass $M$ (solar masses)')
 pylab.title('Template placement by chirp mass and total mass')
 savefig('tmpltbank_mchirp_mtotal.png')
 
-for ifo, bank in bankdict.iteritems():
-	ntemplates = 0
-	for bf in bank.bank_fragments:
-		next_ntemplates = ntemplates + bf.orthogonal_template_bank.shape[0]
-		pylab.pcolor(
-			pylab.arange(bf.orthogonal_template_bank.shape[1], 0, -1) / float(bf.rate) + bf.start,
-			pylab.arange(ntemplates, next_ntemplates),
-			pylab.log10(abs(bf.orthogonal_template_bank))
-		)
-		pylab.text(bf.end + bank.filter_length / 30, ntemplates + 0.5 * bf.orthogonal_template_bank.shape[0], '%d Hz' % bf.rate, size='x-small')
-		ntemplates = next_ntemplates
+if not opts.skip_slow_plots:
+	for ifo, bank in bankdict.iteritems():
+		ntemplates = 0
+		for bf in bank.bank_fragments:
+			next_ntemplates = ntemplates + bf.orthogonal_template_bank.shape[0]
+			pylab.pcolor(
+				pylab.arange(bf.orthogonal_template_bank.shape[1], 0, -1) / float(bf.rate) + bf.start,
+				pylab.arange(ntemplates, next_ntemplates),
+				pylab.log10(abs(bf.orthogonal_template_bank))
+			)
+			pylab.text(bf.end + bank.filter_length / 30, ntemplates + 0.5 * bf.orthogonal_template_bank.shape[0], '%d Hz' % bf.rate, size='x-small')
+			ntemplates = next_ntemplates
 
-	pylab.colorbar().set_label('$\mathrm{log}_{10} |u_{i}(t)|$')
-	pylab.xlabel(r"Time $t$ until coalescence (seconds)")
-	pylab.ylabel(r"Basis index $i$")
-	pylab.title(r"%s orthonormal basis templates $u_{i}(t)$" % ifo)
-	savefig('%s_orthobank.png' % ifo)
+		pylab.colorbar().set_label('$\mathrm{log}_{10} |u_{i}(t)|$')
+		pylab.xlabel(r"Time $t$ until coalescence (seconds)")
+		pylab.ylabel(r"Basis index $i$")
+		pylab.title(r"%s orthonormal basis templates $u_{i}(t)$" % ifo)
+		savefig('%s_orthobank.png' % ifo)
+	del bank
 
 # Free some memory
 # FIXME: scope these things so that they get released automatically.
-del xmldoc, table, bankdict, bank
+del xmldoc, table, bankdict
 
 # Write process params stuff options
 
