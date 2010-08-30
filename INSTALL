@@ -473,30 +473,12 @@ Installing the Software
     .. NOTE:: Occasionally, a few of the libraries provided by ``gst-plugins-good``
               and ``gst-plugins-bad`` will fail to build because compiler warnings
               that occur on only certain (usually older) versions of gcc.
-              Because the GStreamer build system is set up to report warnings as
-              errors, the installation process cannot procede if this occurs.
 
-              Often, we don't need the broken plugins anyway, so in most cases
-              you can disable them.
-              
-              For example, to disable ``apexsink``, you might search for the
-              configure flag as follows::
-              
-                $ cd gst-plugins-bad
-                $ ./configure --help | grep apexsink
-                  --disable-apexsink           disable AirPort Express Wireless sink: apexsink
-              
-              Noticing that ``--disable-apexsink`` turns off this broken feature,
-              you would re-configure and then install the package this way::
-              
-                $ ./configure --prefix=/path/to/local --disable-apexsink && make -j install
-              
-              At the time of this writing, the following plugins may fail to
-              compile on CentOS:
-              
-               * ``imagefreeze`` in ``gst-plugins-good``
-               * ``apexsink`` in ``gst-plugins-bad``
-               * ``frei0r`` in ``gst-plugins-bad``
+              The ``'<variable>' may be used uninitialized in this function`` warning
+              appears to be highly dependent on compiler version.  If you have
+              trouble building some of the GStreamer plugins, try setting the
+              environment variable ``CFLAGS="-Wno-uninitialized`` and re-running
+              ``configure`` and ``make install``.
  
  4. Install gstlal with::
     
