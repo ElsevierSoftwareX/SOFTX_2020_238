@@ -5,27 +5,39 @@
                 <script type="text/javascript" src="assets/jquery-1.4.2.min.js"></script>
                 <script type="text/javascript" src="assets/report.js"></script>
 		<script type="text/javascript">
-			function load_table(divid, url) {
-				$.get(url, function(data) {
-					$(divid).html(data);
-					window.setTimeout(load_table, 10000);
-				});
+
+			function init_autorefreshing_table(table_name, timeout) {
+				// Extract the element from the DOM once and reuse it in
+				// load_table.
+				var elem = $('#' + table_name + '_table')[0];
+				var url = table_name + '.html';
+				function load_table() {
+				// Recursively call this function with a timout.
+				// It's like a setInterval, but starts counting after each
+				// load is complete.
+					$.get(url, function(data) {
+						elem.innerHTML = data;
+					});
+					window.setTimeout(load_table, timeout);
+				}
+				load_table();
 			}
 			$(document).ready(function() {
-				load_table('#page_processes', 'processes.html')
-				load_table('#page_time_table', 'page_time.html')
-				setInterval("load_table('#page_time_table', 'page_time.html')", 5000)
-				load_table('#page_trigcount', 'trigcount.html')
-				setInterval("load_table('#page_trigcount', 'trigcount.html')", 10000)
-				load_table('#page_coinccount', 'coinccount.html')
-				setInterval("load_table('#page_coinccount', 'coinccount.html')", 10000)
-				load_table('#loudest_table', 'loudest.html')
-				setInterval("load_table('#loudest_table', 'loudest.html')", 10000)
+				// load processes table once
+				processes_table = $('#processes_table')[0]
+				$.get('processes.html', function(data) {
+					processes_table.innerHTML = data; })
+
+				// set up other tables to load every ten seconds
+				init_autorefreshing_table('loudest', 10000);
+				init_autorefreshing_table('page_time', 10000);
+				init_autorefreshing_table('trigcount', 10000);
+				init_autorefreshing_table('coinccount', 10000);
 			});
 		</script>
 		<style type="text/css">
 			figure img {width: 240px !important}
-			#page_coinccount table, #page_trigcount table {display: inline-table}
+			#coinccount table, #trigcount table {display: inline-table}
 		</style>
 	</head>
 	<body>
@@ -41,12 +53,12 @@
 				<figcaption>Time of last figure update</figcaption>
 			</figure>
 			<figure>
-				<span id="page_coinccount" display="inline"></span>
-				<span id="page_trigcount" display="inline"></span>
+				<span id="coinccount_table" display="inline"></span>
+				<span id="trigcount_table" display="inline"></span>
 				<figcaption>Cumulative number of coincidences and triggers since start of run</figcaption>
 			</figure>
 			<figure>
-				<div id="page_processes"></div>
+				<div id="processes_table"></div>
 				<figcaption>Processes</figcaption>
 			</figure>
 			<p>See the <a href="network.png">pipeline graph as a PNG</a> or <a href="network.pdf">as a PDF</a>.</p>
