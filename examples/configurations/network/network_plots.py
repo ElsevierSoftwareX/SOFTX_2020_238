@@ -74,7 +74,7 @@ def savefig(fname):
 	pylab.clf()
 
 def to_table(fname, headings, rows):
-	print >>open(fname, 'w'), '<!DOCTYPE html><html><body><table><tr>%s</tr>%s</table></body></html>' % (
+	print >>open(fname, 'w'), '<table><tr>%s</tr>%s</table>' % (
 		''.join('<th>%s</th>' % heading for heading in headings),
 		''.join('<tr>%s</tr>' % ''.join('<td>%s</td>' % column for column in row) for row in rows)
 	)
