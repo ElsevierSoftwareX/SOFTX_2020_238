@@ -31,6 +31,8 @@
 				// set up other tables to load every ten seconds
 				init_autorefreshing_table('loudest', 10000);
 				init_autorefreshing_table('page_time', 10000);
+				init_autorefreshing_table('trig_time', 10000);
+				init_autorefreshing_table('coinc_time', 10000);
 				init_autorefreshing_table('trigcount', 10000);
 				init_autorefreshing_table('coinccount', 10000);
 			});
@@ -50,12 +52,20 @@
 			<h1>Overview</h1>
 			<figure>
 				<div id="page_time_table"></div>
-				<figcaption>Time of last figure update</figcaption>
+				<figcaption>Time of last page refresh</figcaption>
 			</figure>
 			<figure>
-				<span id="coinccount_table" display="inline"></span>
+				<div id="trig_time_table"></div>
+				<figcaption>Time of last trigger in databases</figcaption>
+			</figure>
+			<figure>
+				<div id="coinc_time_table"></div>
+				<figcaption>Time of last coinc in database</figcaption>
+			</figure>
+			<figure>
 				<span id="trigcount_table" display="inline"></span>
-				<figcaption>Cumulative number of coincidences and triggers since start of run</figcaption>
+				<span id="coinccount_table" display="inline"></span>
+				<figcaption>Cumulative number of triggers and coincidences since start of run</figcaption>
 			</figure>
 			<figure>
 				<div id="processes_table"></div>

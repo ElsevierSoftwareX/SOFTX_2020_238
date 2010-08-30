@@ -20,6 +20,7 @@ import pylab
 import numpy
 import math
 from pylal import date
+from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 from glue.ligolw import utils, lsctables
 
 from gstlal.ligolw_output import effective_snr
@@ -172,6 +173,24 @@ while True:
 		now_dt.astimezone(tz_dict["H"]).strftime(fmt),
 		now_dt.astimezone(tz_dict["L"]).strftime(fmt),
 		now_dt.astimezone(tz_dict["V"]).strftime(fmt)),))
+
+	last_trig_gps = 0
+	for db in alldbs:
+		last_trig_gps = max(last_trig_gps, db.execute("SELECT end_time FROM sngl_inspiral ORDER BY end_time DESC LIMIT 1;").fetchone()[0])
+	last_trig_dt = datetime.datetime(*date.XLALGPSToUTC(LIGOTimeGPS(last_trig_gps))[:6], tzinfo=tz_dict["UTC"])
+	to_table("trig_time.html", ("GPS", "UTC", "Hanford", "Livingston", "Virgo"),
+		((last_trig_gps, last_trig_dt.strftime(fmt),
+		last_trig_dt.astimezone(tz_dict["H"]).strftime(fmt),
+		last_trig_dt.astimezone(tz_dict["L"]).strftime(fmt),
+		last_trig_dt.astimezone(tz_dict["V"]).strftime(fmt)),))
+
+	last_coinc_gps, = coincdb.execute("SELECT end_time FROM coinc_inspiral ORDER BY end_time DESC LIMIT 1;").fetchone()
+	last_coinc_dt = datetime.datetime(*date.XLALGPSToUTC(LIGOTimeGPS(last_coinc_gps))[:6], tzinfo=tz_dict["UTC"])
+	to_table("coinc_time.html", ("GPS", "UTC", "Hanford", "Livingston", "Virgo"),
+		((last_coinc_gps, last_coinc_dt.strftime(fmt),
+		last_coinc_dt.astimezone(tz_dict["H"]).strftime(fmt),
+		last_coinc_dt.astimezone(tz_dict["L"]).strftime(fmt),
+		last_coinc_dt.astimezone(tz_dict["V"]).strftime(fmt)),))
 
 	# Make single detector plots.
 	for ifo, db in trigdbs:
