@@ -50,6 +50,9 @@ coinc_elems = mkelems_fast(pipeline, "lal_coinc", "progressreport", {"name": "pr
 
 seg = segments.segment(LIGOTimeGPS(opts.gps_start_time), LIGOTimeGPS(opts.gps_end_time))
 data = {}
+data['all'] = ligolw_output.Data(opts.instrument, tmp_space=None, output=os.path.join(output_prefix,"".join(opts.instrument)+"-"+output_name), seg=seg, out_seg=seg, injections=opts.injections, comment="", verbose=True)
+data['all'].prepare_output_file(ligolw_output.make_process_params(opts))
+
 for ifo in opts.instrument:
 	bank = read_bank("bank.%s.pickle" % ifo)
 	bank.logname = ifo # FIXME This is only need to give elements names, that should be automatic.
@@ -74,8 +77,6 @@ for ifo in opts.instrument:
 #
 
 # FIXME make some of these kw args options
-data['all'] = ligolw_output.Data(opts.instrument, tmp_space=None, output=os.path.join(output_prefix,"".join(opts.instrument)+"-"+output_name), seg=seg, out_seg=seg, injections=None, comment="", verbose=True)
-data['all'].prepare_output_file(ligolw_output.make_process_params(opts))
 pipeparts.mkappsink(pipeline, coinc_elems[-1]).connect_after("new-buffer", lloidparts.appsink_new_buffer, data['all'])
 
 #
