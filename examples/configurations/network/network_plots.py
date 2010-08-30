@@ -140,6 +140,12 @@ pylab.ylabel('$m_2$ (solar masses)')
 pylab.title('Template placement by componenent mass')
 savefig('tmpltbank_m1_m2.png')
 
+pylab.plot(table.get_column('tau0'), table.get_column('tau3'), '.k')
+pylab.xlabel(r'$\tau_0$ (solar masses)')
+pylab.ylabel(r'$\tau_3$ (solar masses)')
+pylab.title('Template placement by tau0, tau3')
+savefig('tmpltbank_tau0_tau3.png')
+
 pylab.plot(table.get_column('mchirp'), table.get_column('mtotal'), '.k')
 pylab.xlabel('Chirp mass $\mathcal{M}_\mathrm{chirp}$ (solar masses)')
 pylab.ylabel('Total mass $M$ (solar masses)')
