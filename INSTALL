@@ -394,42 +394,6 @@ the original patch locally to allow our pipelines to work::
 
 
 
-Patching gst-python
-===================
-
-The current source release of gst-python has some bugs that have not yet been
-fixed.  We have proposed some workarounds to the GStreamer developers, but they
-are still under review.  In the mean time you can apply the patches yourself.
-Here are the bug reports:
-
- * `625660 <https://bugzilla.gnome.org/show_bug.cgi?id=625660>`_ gstpythonplugin: fails to refresh plugin registry when installed Python plugins change
- * `616553 <https://bugzilla.gnome.org/show_bug.cgi?id=616553>`_ Configuring gst-python on Mac OS fails: "checking for libraries required to embed python"
- 
-The following patches are **required on ALL systems**::
-
-  $ cd /path/to/local/src
-  $ pushd gst-python
-  $ wget http://bugzilla-attachments.gnome.org/attachment.cgi?id=168846 -O gst-python.path.patch
-  $ git apply gst-python.path.patch
-  $ popd
-
-And the following patch is **required on CentOS**::
-
-  $ cd /path/to/local/src
-  $ pushd gst-python
-  $ wget https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal/gst-python.centos.patch
-  $ git apply gst-python.centos.patch
-  $ popd
-
-And the following patch is **required on Mac OS**::
-
-  $ cd /path/to/local/src
-  $ pushd gst-python
-  $ wget https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal/gst-python.mac.patch
-  $ git apply gst-python.mac.patch
-  $ popd
-
-
 Installing the Software
 =======================
 
@@ -479,6 +443,23 @@ Installing the Software
               trouble building some of the GStreamer plugins, try setting the
               environment variable ``CFLAGS="-Wno-uninitialized`` and re-running
               ``configure`` and ``make install``.
+    
+    .. IMPORTANT:: At configure time, ``gst-python`` needs to know the directory in
+              which the Python shared library, libpython2.x, is installed on
+              your system.  The rules it uses to locate libpython are known not
+              to work perfectly on CentOS and Mac OS.  You can specify this
+              directory explicitly, if necessary.
+              
+              If you are installing on a 64-bit CentOS machine (e.g., the CIT cluster),
+              you must configure ``gst-python`` with::
+              
+                $ ./configure --prefix=/path/to/local --with-libpython-dir=/usr/lib64
+             
+             And if you are installing on a Mac and you want to use the Python
+             interpreter that comes with MacPorts, you must configure ``gst-python``
+             with::
+             
+               $ ./configure --prefix=/path/to/local --with-libpython-dir=/opt/local/lib
  
  4. Install gstlal with::
     
