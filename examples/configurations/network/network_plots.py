@@ -80,6 +80,16 @@ def to_table(fname, headings, rows):
 		''.join('<tr>%s</tr>' % ''.join('<td>%s</td>' % column for column in row) for row in rows)
 	)
 
+tz_dict = {"UTC": pytz.timezone("UTC"), "H": pytz.timezone("US/Pacific"), "L": pytz.timezone("US/Central"), "V": pytz.timezone("Europe/Rome")}
+tz_fmt = "%Y-%m-%d %T"
+dt_row_headers = ("GPS", "UTC", "Hanford", "Livingston", "Virgo")
+def dt_to_rows(dt):
+	return ((date.XLALUTCToGPS(dt.timetuple()).seconds,
+	        dt.strftime(tz_fmt),
+	        dt.astimezone(tz_dict["H"]).strftime(tz_fmt),
+	        dt.astimezone(tz_dict["L"]).strftime(tz_fmt),
+	        dt.astimezone(tz_dict["V"]).strftime(tz_fmt)),)
+
 cnt = 0
 wait = 5.0
 #FIXME use glue
@@ -94,8 +104,6 @@ effsnrs = {}
 Aeffsnrs = {}
 Beffsnrs = {}
 
-tz_dict = {"UTC": pytz.timezone("UTC"), "H": pytz.timezone("US/Pacific"), "L": pytz.timezone("US/Central"), "V": pytz.timezone("Europe/Rome")}
-fmt = "%Y-%m-%d %T"
 ifostyle = {"H1": {"color": "red", "label": "H1"}, "L1": {"color": "green", "label": "L1"}, "V1": {"color": "purple", "label": "V1"}}
 
 
@@ -168,29 +176,17 @@ while True:
 	# Table saying what time various things have happened
 	#
 	now_dt = datetime.datetime.now(tz_dict["UTC"])
-	to_table("page_time.html", ("GPS", "UTC", "Hanford", "Livingston", "Virgo"),
-		((date.XLALUTCToGPS(now_dt.timetuple()).seconds, now_dt.strftime(fmt),
-		now_dt.astimezone(tz_dict["H"]).strftime(fmt),
-		now_dt.astimezone(tz_dict["L"]).strftime(fmt),
-		now_dt.astimezone(tz_dict["V"]).strftime(fmt)),))
+	to_table("page_time.html", dt_row_headers, dt_to_rows(now_dt))
 
 	last_trig_gps = 0
 	for db in alldbs:
 		last_trig_gps = max(last_trig_gps, db.execute("SELECT end_time FROM sngl_inspiral ORDER BY end_time DESC LIMIT 1;").fetchone()[0])
 	last_trig_dt = datetime.datetime(*date.XLALGPSToUTC(LIGOTimeGPS(last_trig_gps))[:6], tzinfo=tz_dict["UTC"])
-	to_table("trig_time.html", ("GPS", "UTC", "Hanford", "Livingston", "Virgo"),
-		((last_trig_gps, last_trig_dt.strftime(fmt),
-		last_trig_dt.astimezone(tz_dict["H"]).strftime(fmt),
-		last_trig_dt.astimezone(tz_dict["L"]).strftime(fmt),
-		last_trig_dt.astimezone(tz_dict["V"]).strftime(fmt)),))
+	to_table("trig_time.html", dt_row_headers, dt_to_rows(last_trig_dt))
 
 	last_coinc_gps, = coincdb.execute("SELECT end_time FROM coinc_inspiral ORDER BY end_time DESC LIMIT 1;").fetchone()
 	last_coinc_dt = datetime.datetime(*date.XLALGPSToUTC(LIGOTimeGPS(last_coinc_gps))[:6], tzinfo=tz_dict["UTC"])
-	to_table("coinc_time.html", ("GPS", "UTC", "Hanford", "Livingston", "Virgo"),
-		((last_coinc_gps, last_coinc_dt.strftime(fmt),
-		last_coinc_dt.astimezone(tz_dict["H"]).strftime(fmt),
-		last_coinc_dt.astimezone(tz_dict["L"]).strftime(fmt),
-		last_coinc_dt.astimezone(tz_dict["V"]).strftime(fmt)),))
+	to_table("coinc_time.html", dt_row_headers, dt_to_rows(last_coinc_dt))
 
 	# Make single detector plots.
 	for ifo, db in trigdbs:
