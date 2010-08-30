@@ -265,28 +265,28 @@ while True:
 	pylab.xlabel(r"$\rho$")
 	pylab.ylabel(r"$\chi^2$")
 	pylab.title(r"$\chi^2$ vs. $\rho$")
-	savefig("overlayed_chisq_snr.png")
+	savefig("overlaid_chisq_snr.png")
 
 	pylab.figure(3)
 	pylab.legend()
 	pylab.xlabel(r"$\rho_\mathrm{eff}$")
 	pylab.ylabel(r"$\chi^2$")
 	pylab.title(r"$\chi^2$ vs. $\rho_\mathrm{eff}$")
-	savefig("overlayed_chisq_eff_snr.png")
+	savefig("overlaid_chisq_eff_snr.png")
 
 	pylab.figure(4)
 	pylab.legend()
 	pylab.xlabel("End time")
 	pylab.ylabel(r"$\rho$")
 	pylab.title(r"$\rho$ vs. end time")
-	savefig("overlayed_snr_end_time.png")
+	savefig("overlaid_snr_end_time.png")
 
 	pylab.figure(5)
 	pylab.legend()
 	pylab.xlabel("End time")
 	pylab.ylabel(r"$\rho_\mathrm{eff}$")
 	pylab.title(r"$\rho_\mathrm{eff}$ vs. end time")
-	savefig("overlayed_eff_snr_end_time.png")
+	savefig("overlaid_eff_snr_end_time.png")
 
 	# Make multiple detector plots.
 	params = array_from_cursor(coincdb.execute("""
