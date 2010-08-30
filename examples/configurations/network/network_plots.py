@@ -178,11 +178,6 @@ if not opts.skip_slow_plots:
 del xmldoc, table, bankdict
 
 # Write process params stuff options
-
-# FIXME: This is not compatible with the ancient version of sqlite that is on CentOS.
-#to_table('processes.html', ('command line',),
-#	coincdb.execute("SELECT program || ' ' || group_concat(param || ' ' || value, ' ') FROM process_params GROUP BY process_id").fetchall())
-
 to_table('processes.html', ('program', 'command-line arguments'),
     ((program, " ".join(" ".join(tup) for tup in coincdb.execute("SELECT param, value FROM process_params WHERE program=?", program))) for program in coincdb.execute("SELECT program FROM process ORDER BY start_time")))
 
