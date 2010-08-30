@@ -31,6 +31,8 @@
 				// set up other tables to load every ten seconds
 				init_autorefreshing_table('loudest', 10000);
 				init_autorefreshing_table('page_time', 10000);
+				init_autorefreshing_table('trig_time', 10000);
+				init_autorefreshing_table('coinc_time', 10000);
 				init_autorefreshing_table('trigcount', 10000);
 				init_autorefreshing_table('coinccount', 10000);
 			});
@@ -50,12 +52,20 @@
 			<h1>Overview</h1>
 			<figure>
 				<div id="page_time_table"></div>
-				<figcaption>Time of last figure update</figcaption>
+				<figcaption>Time of last plot generation</figcaption>
 			</figure>
 			<figure>
-				<span id="coinccount_table" display="inline"></span>
+				<div id="trig_time_table"></div>
+				<figcaption>Time of last trigger in databases</figcaption>
+			</figure>
+			<figure>
+				<div id="coinc_time_table"></div>
+				<figcaption>Time of last coinc in database</figcaption>
+			</figure>
+			<figure>
 				<span id="trigcount_table" display="inline"></span>
-				<figcaption>Cumulative number of coincidences and triggers since start of run</figcaption>
+				<span id="coinccount_table" display="inline"></span>
+				<figcaption>Cumulative number of triggers and coincidences since start of run</figcaption>
 			</figure>
 			<figure>
 				<div id="processes_table"></div>
@@ -68,14 +78,15 @@
 			<h1>Template bank parameters</h1>
 			<figure>
 				<img src="tmpltbank_m1_m2.png">
+				<img src="tmpltbank_tau0_tau3.png">
 				<img src="tmpltbank_mchirp_mtotal.png">
-				<figcaption>From left: template placement by component mass, and by chirp mass and total mass.</figcaption>
+				<figcaption>From left: template placement by component mass, by tau0, tau3, and by chirp mass and total mass</figcaption>
 			</figure>
 			<figure>
 				<img src="H1_orthobank.png">
 				<img src="L1_orthobank.png">
 				<img src="V1_orthobank.png">
-				<figcaption>Orthogonal decomposition of template bank, by detector: basis templates.</figcaption>
+				<figcaption>Orthogonal decomposition of template bank, by detector: basis templates</figcaption>
 			</figure>
 		</section>
 
@@ -84,7 +95,7 @@
 			<figure>
 				<img class="autoupdating" src="combined_snr_end_time.png">
 				<img class="autoupdating" src="combined_eff_snr_end_time.png">
-				<figcaption>Time series cof combined SNR</figcaption>
+				<figcaption>Time series of combined SNR</figcaption>
 			</figure>
 			<figure>
 				<div id="loudest_table"></div>
@@ -94,29 +105,29 @@
 
 		<section>
 			<h1>Trigger distributions — by detector</h1>
-			<p>These figures include the past 10 000 triggers from each detector.</p>
+			<p>These figures include the past 10 000 triggers from each detector</p>
 			<figure>
 				<img class="autoupdating" src="H1_hist_snr.png" />
 				<img class="autoupdating" src="L1_hist_snr.png" />
 				<img class="autoupdating" src="V1_hist_snr.png" />
-				<figcaption>SNR histograms for each detector.</figcaption>
+				<figcaption>SNR histograms for each detector</figcaption>
 			</figure>
 			<figure>
 				<img class="autoupdating" src="H1_hist_eff_snr.png" />
 				<img class="autoupdating" src="L1_hist_eff_snr.png" />
 				<img class="autoupdating" src="V1_hist_eff_snr.png" />
-				<figcaption>SNR histograms for each detector.</figcaption>
+				<figcaption>SNR histograms for each detector</figcaption>
 			</figure>
 		</section>
 
 		<section>
-			<h1>Triggers — overlayed</h1>
+			<h1>Triggers — overlaid</h1>
 			<p>These figures include the past 10 000 triggers from each detector.</p>
 			<figure id="fig1">
-				<img class="autoupdating" src="overlayed_snr_end_time.png" />
-				<img class="autoupdating" src="overlayed_eff_snr_end_time.png" />
-				<img class="autoupdating" src="overlayed_chisq_snr.png" />
-				<img class="autoupdating" src="overlayed_chisq_eff_snr.png" />
+				<img class="autoupdating" src="overlaid_snr_end_time.png" />
+				<img class="autoupdating" src="overlaid_eff_snr_end_time.png" />
+				<img class="autoupdating" src="overlaid_chisq_snr.png" />
+				<img class="autoupdating" src="overlaid_chisq_eff_snr.png" />
 				<figcaption>All triggers from all detectors.  From
 				left: SNR versus time, SNR versus end time, chi squared versus
 				SNR, and chi squared versus effective SNR.  Color associations
@@ -126,30 +137,30 @@
 
 		<section>
 			<h1>Triggers — by detector</h1>
-			<p>These figures include the past 10 000 triggers from each detector.</p>
+			<p>These figures include the past 10 000 triggers from each detector</p>
 			<figure>
 				<img class="autoupdating" src="H1_snr_end_time.png" />
 				<img class="autoupdating" src="L1_snr_end_time.png" />
 				<img class="autoupdating" src="V1_snr_end_time.png" />
-				<figcaption>SNR versus end time for each detector.</figcaption>
+				<figcaption>SNR versus end time for each detector</figcaption>
 			</figure>
 			<figure>
 				<img class="autoupdating" src="H1_eff_snr_end_time.png" />
 				<img class="autoupdating" src="L1_eff_snr_end_time.png" />
 				<img class="autoupdating" src="V1_eff_snr_end_time.png" />
-				<figcaption>Effective SNR versus end time for each detector.</figcaption>
+				<figcaption>Effective SNR versus end time for each detector</figcaption>
 			</figure>
 			<figure>
 				<img class="autoupdating" src="H1_chisq_snr.png" />
 				<img class="autoupdating" src="L1_chisq_snr.png" />
 				<img class="autoupdating" src="V1_chisq_snr.png" />
-				<figcaption>Chi squared versus SNR for each detector.</figcaption>
+				<figcaption>Chi squared versus SNR for each detector</figcaption>
 			</figure>
 			<figure>
 				<img class="autoupdating" src="H1_chisq_eff_snr.png" />
 				<img class="autoupdating" src="L1_chisq_eff_snr.png" />
 				<img class="autoupdating" src="V1_chisq_eff_snr.png" />
-				<figcaption>Chi squared versus effective SNR for each detector.</figcaption>
+				<figcaption>Chi squared versus effective SNR for each detector</figcaption>
 			</figure>
 		</section>
 
