@@ -112,9 +112,6 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 		if not (xml_location is None) ^ (sqlite_location is None):
 			self.error("must set xml_location or sqlite_location")
 			return False
-		if (sqlite_location is not None) and (tmp_space is None):
-			self.error("if sqlite_location is provided, must provide tmp_space")
-			return False
 
 		start_time = self.get_property("start-time")
 		duration = self.get_property("duration")
