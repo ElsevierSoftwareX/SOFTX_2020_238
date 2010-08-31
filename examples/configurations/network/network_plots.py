@@ -25,6 +25,7 @@ from glue.ligolw import utils, lsctables
 
 from gstlal.ligolw_output import effective_snr
 from gstlal.gstlal_svd_bank import read_bank
+from gstlal.gstlal_reference_psd import read_psd
 
 
 
@@ -112,6 +113,10 @@ old_path = os.getcwd()
 if input_path != '':
 	os.chdir(input_path)
 
+# Read reference PSDs
+# FIXME: figure out a way not to have to hard-code this.
+psds = [(ifo, read_psd('reference_psd.%s.xml.gz' % ifo)) for ifo in args]
+
 # Read orthogonal template banks
 bankdict = dict((ifo, read_bank('bank.%s.pickle' % ifo)) for ifo in args)
 
@@ -162,9 +167,36 @@ for ifo, bank in bankdict.iteritems():
 	savefig('%s_orthobank.png' % ifo)
 del bank
 
+for ifo, psd in psds:
+	pylab.loglog(
+		pylab.arange(len(psd.data))*psd.deltaF + psd.f0,
+		pylab.sqrt(psd.data),
+		**ifostyle[ifo]
+	)
+	pylab.xlim(10, 2048);
+	pylab.ylim(1e-23, 1e-18);
+	pylab.xlabel("Frequency (Hz)")
+	pylab.ylabel(r"Amplitude spectral density ($1/\sqrt{\mathrm{Hz}}$)")
+	pylab.title(r"%s $h(t)$ spectrum used for singular value decomposition" % ifo)
+	savefig('%s_asd.png' % ifo)
+for ifo, psd in psds:
+	pylab.loglog(
+		pylab.arange(len(psd.data))*psd.deltaF + psd.f0,
+		pylab.sqrt(psd.data),
+		**ifostyle[ifo]
+	)
+	pylab.xlim(10, 2048);
+	pylab.ylim(1e-23, 1e-18);
+pylab.xlabel("Frequency (Hz)")
+pylab.ylabel(r"Amplitude spectral density ($1/\sqrt{\mathrm{Hz}}$)")
+pylab.title(r"$h(t)$ spectrum used for singular value decomposition")
+pylab.legend()
+savefig('asd.png')
+del psd
+
 # Free some memory
 # FIXME: scope these things so that they get released automatically.
-del xmldoc, table, bankdict
+del xmldoc, table, bankdict, psds
 
 # Write process params stuff options
 to_table('processes.html', ('program', 'command-line arguments'),
