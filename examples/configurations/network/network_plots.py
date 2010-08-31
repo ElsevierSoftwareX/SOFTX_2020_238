@@ -99,19 +99,7 @@ def dt_to_rows(dt):
 	        str(as_gps_int - gps_start_time),
 	        str(gps_end_time - as_gps_int)),)
 
-cnt = 0
 wait = 5.0
-#FIXME use glue
-lastid = 0
-ids = []
-snrs = {}
-times = {}
-chisqs = {}
-lines = []
-labels = []
-effsnrs = {}
-Aeffsnrs = {}
-Beffsnrs = {}
 
 ifostyle = {"H1": {"color": "red", "label": "H1"}, "L1": {"color": "green", "label": "L1"}, "V1": {"color": "purple", "label": "V1"}}
 hist_ifostyle = {"H1": {"facecolor": "red", "label": "H1"}, "L1": {"facecolor": "green", "label": "L1"}, "V1": {"facecolor": "purple", "label": "V1"}}
@@ -326,6 +314,5 @@ while True:
 
 	stop = time.time()
 
-	cnt += 1
 	if (stop - start) < wait: time.sleep(wait - (stop-start))
 	print time.time()-start
