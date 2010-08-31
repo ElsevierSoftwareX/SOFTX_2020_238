@@ -250,12 +250,7 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 {
 	GSTLALSkymap* skymap = GSTLAL_SKYMAP(element);
 
-	/* FIXME: by passing NULL as the name for the new pad, we'll get pad names
-	   like pad0, pad1, ..., padN.  We would probably prefer
-	   to get sink0, sink1, ..., sinkN, but we'd have to build the string
-	   ourselves.
-	 */
-	GstPad* pad = gst_pad_new_from_template(templ, NULL);
+	GstPad* pad = gst_pad_new_from_template(templ, g_strdup_printf("sink%d", skymap->padcounter++));
 	if (!pad) return pad;
 
 	if (!gst_element_add_pad(element, pad)) goto bad_pad;
@@ -539,6 +534,12 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 						const SnglInspiralTable* found_sngl = NULL;
 						for (ptr = head; ptr < end; ptr++)
 						{
+							if (G_UNLIKELY(!(collectdata->instrument)))
+							{
+								/* FIXME should clean up some state here, but we can't recover from this error. */
+								GST_ELEMENT_ERROR(skymap, CORE, TAG, ("one or mor SNR pads never recieved an 'instrument' tag"), (NULL));
+								return GST_FLOW_ERROR;
+							}
 							if (strcmp(ptr->ifo, collectdata->instrument) == 0)
 							{
 								found_sngl = ptr;
@@ -866,6 +867,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->bank_filename = NULL;
 	element->ntemplates = 0;
 	element->bank = NULL;
+	element->padcounter = 0;
 
 	/* Initialize wanalysis. */
 	analysis_default_construct(&element->wanalysis);

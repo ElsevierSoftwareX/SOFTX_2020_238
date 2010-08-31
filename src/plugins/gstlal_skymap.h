@@ -86,6 +86,7 @@ typedef struct {
 	GstPad* srcpad;
 	GstCollectData* coinc_collectdata;
 	GSList* snr_collectdatas;
+	guint padcounter;
 
 	/* timing */
 	guint64 dt;
