@@ -49,6 +49,13 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 		construct=True # FIXME if gst.extend.pygobject provided gst.PARAM_MUTABLE_READY it would be a good idea to set this here
 	)
 	gproperty(
+		gobject.TYPE_STRING,
+		"sqlite-location",
+		"Name of LIGO Light Weight SQLite file containing list of templates",
+		None,
+		construct=True # FIXME if gst.extend.pygobject provided gst.PARAM_MUTABLE_READY it would be a good idea to set this here
+	)
+	gproperty(
 		gobject.TYPE_UINT64,
 		"buffer-duration",
 		"Duration of each buffer (nanoseconds)",
@@ -67,6 +74,13 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 		"duration",
 		"Duration for which to produce triggers (nanoseconds)",
 		0, gst.CLOCK_TIME_NONE, gst.CLOCK_TIME_NONE,
+		construct=True # FIXME if gst.extend.pygobject provided gst.PARAM_MUTABLE_READY it would be a good idea to set this here
+	)
+	gproperty(
+		gobject.TYPE_STRING,
+		"tmp-space",
+		"Directory in which to temporarily store work",
+		None,
 		construct=True # FIXME if gst.extend.pygobject provided gst.PARAM_MUTABLE_READY it would be a good idea to set this here
 	)
 	__gsttemplates__ = (
@@ -93,8 +107,13 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 		"""GstBaseSrc->start virtual method"""
 
 		xml_location = self.get_property("xml-location")
-		if xml_location is None:
-			self.error("xml-location property is unset, cannot load template bank")
+		tmp_space = self.get_property("tmp-space")
+		sqlite_location = self.get_property("sqlite-location")
+		if not (xml_location is None) ^ (sqlite_location is None):
+			self.error("must set xml_location or sqlite_location")
+			return False
+		if (sqlite_location is not None) and (tmp_space is None):
+			self.error("if sqlite_location is provided, must provide tmp_space")
 			return False
 
 		start_time = self.get_property("start-time")
@@ -105,8 +124,20 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 		# override SnglInspiralTable to create rows of type SnglInspiralTable
 		lsctables.SnglInspiralTable.RowType = SnglInspiralTable
 
-		# read triggers
-		doc = utils.load_filename(xml_location, gz=xml_location.endswith(".gz"))
+		# XML
+		if xml_location is not None:
+			doc = utils.load_filename(xml_location, gz=xml_location.endswith(".gz"))
+		else:
+			try:
+					import sqlite3
+			except ImportError:
+					# pre 2.5.x
+					from pysqlite2 import dbapi2 as sqlite3
+			from glue.ligolw import dbtables
+			working_filename = dbtables.get_connection_filename(sqlite_location, tmp_path=tmp_space, verbose=True)
+			connection = sqlite3.connect(working_filename)
+			dbtables.DBTable_set_connection(connection)
+			doc = dbtables.get_xml(connection)
 
 		# FIXME: extract segment info
 		if start_time == gst.CLOCK_TIME_NONE or end_time == gst.CLOCK_TIME_NONE:
