@@ -29,6 +29,7 @@ from glue import lal
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
+from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
 
 
@@ -46,6 +47,10 @@ def combined_effective_snr(sngls):
 	for sngl in sngls:
 		retval += effective_snr(sngl.snr, sngl.chisq)**2
 	return numpy.sqrt(retval)
+
+class MetadataContentHandler(ligolw.FilteringLIGOLWContentHandler):
+	def __init__(self, xmldoc):
+		ligolw.FilteringLIGOLWContentHandler.__init__(self, xmldoc, lambda name, attrs: not lsctables.IsTableProperties(lsctables.SnglInspiralTable, name, attrs))
 
 #
 # add metadata to an xml document in the style of lalapps_inspiral
@@ -111,9 +116,9 @@ def add_cbc_metadata(xmldoc, process, seg_in, seg_out):
 	try:
 		tbl = lsctables.table.get_table(xmldoc, lsctables.SummValueTable.tableName)
 	except ValueError:
-		tbl = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SummValueTable))
+		# FIXME: hardcoded column names for compatibility with lalapps_tmpltbank
+		tbl = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SummValueTable, columns=["program", "process_id", "start_time", "start_time_ns", "end_time", "end_time_ns", "ifo", "name", "value", "comment", "summ_value_id"]))
 	tbl.sync_next_id()
-	# FIXME
 
 	#
 	# done
@@ -134,11 +139,8 @@ def make_process_params(options):
 	return params
 
 class Data(object):
-	def __init__(self, detectors, options=None, **kwargs):
+	def __init__(self, detectors, process_params, options=None, **kwargs):
 		self.detectors = detectors
-		self.sngl_inspiral_table = None
-		self.xmldoc = None
-		self.connection = None
 
 		for key in ["tmp_space", "output", "seg", "out_seg", "injections", "comment", "verbose"]:
 			# keyword arguments take precedence over options
@@ -146,11 +148,33 @@ class Data(object):
 			elif options and hasattr(options, key): setattr(self, key, getattr(options,key))
 			else: raise AttributeError("must supply %s via options or key word argument" % (key,))
 
-	def prepare_output_file(self, process_params):
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		self.process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", process_params, comment = self.comment, ifos = set(self.detectors))
 		search_summary = add_cbc_metadata(xmldoc, self.process, self.seg, self.out_seg)
+
+		# Add injections table if necessary
+		if self.injections is not None:
+			ligolw_add.ligolw_add(xmldoc, [self.injections], verbose = self.verbose)
+
+		# copy tmpltbank metadata
+		tmpltbank_filenames = []
+		for name, value in process_params.iteritems():
+			if name == "template_bank":
+				tmpltbank_filenames = value.split(",")
+				break
+		ligolw_add.ligolw_add(xmldoc, tmpltbank_filenames, verbose=self.verbose, contenthandler=MetadataContentHandler)
+
+		self.xmldoc = xmldoc
+		self.connection = None
+		self.sngl_inspiral_table = None
+
+	def prepare_output_file(self):
+		"""
+		Split this function from initialization to separate XML and DB stuff
+		"""
+		xmldoc = self.xmldoc
+
 		# FIXME:  argh, ugly
 		sngl_inspiral_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
 
@@ -189,13 +213,6 @@ class Data(object):
 			CoincDef.coinc_def_id = coinc_definer.get_next_id()
 			self.coinc_def_id = CoincDef.coinc_def_id
 			coinc_definer.append(CoincDef)
-
-
-		# Add injections table if necessary
-		if self.injections is not None:
-			from glue.ligolw.utils import ligolw_add
-			ligolw_add.ligolw_add(xmldoc, [self.injections], verbose = self.verbose)
-
 		if self.output.endswith('.sqlite'):
 			from glue.ligolw.utils import ligolw_sqlite
 			from glue.ligolw import dbtables

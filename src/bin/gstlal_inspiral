@@ -279,8 +279,8 @@ src = mkLLOIDmulti(
 #
 
 options.out_seg = segments.segment(options.seg[0]+max([b.filter_length for b in banks]), options.seg[1]) #FIXME make better outseg def.
-data = ligolw_output.Data(detectors, options)
-data.prepare_output_file(process_params)
+data = ligolw_output.Data(detectors, process_params, options)
+data.prepare_output_file()
 mkelems_fast(pipeline, src, "appsink", {"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})[-1].connect_after("new-buffer", appsink_new_buffer, data)
 
 

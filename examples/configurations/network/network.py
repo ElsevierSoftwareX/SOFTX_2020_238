@@ -51,8 +51,13 @@ if opts.output is not None:
 	output_name=os.path.split(opts.output)[1]
 	seg = segments.segment(LIGOTimeGPS(opts.gps_start_time), LIGOTimeGPS(opts.gps_end_time))
 	data = {}
-	data['all'] = ligolw_output.Data(opts.instrument, tmp_space=None, output=os.path.join(output_prefix,"".join(opts.instrument)+"-"+output_name), seg=seg, out_seg=seg, injections=opts.injections, comment="", verbose=True)
-	data['all'].prepare_output_file(ligolw_output.make_process_params(opts))
+	data['all'] = ligolw_output.Data(opts.instrument, ligolw_output.make_process_params(opts), tmp_space=None, output=os.path.join(output_prefix,"".join(opts.instrument)+"-"+output_name), seg=seg, out_seg=seg, injections=opts.injections, comment="", verbose=True)
+	for ifo in opts.instrument:
+		data[ifo] = ligolw_output.Data([ifo], ligolw_output.make_process_params(opts), tmp_space=None, output=ifo+"-"+opts.output, seg=seg, out_seg=seg, injections=None, comment="", verbose=True)
+
+	# NB: To mix XML and sqlite, must call prepare_output_file() after all
+	# instances of Data have been initialized.
+	data['all'].prepare_output_file()
 else:
 	mkelems_fast(pipeline, coinc_elems[-1], "fakesink", {"sync": False, "async": False})
 
@@ -71,8 +76,7 @@ for ifo in opts.instrument:
 	triggers_tee.link_pads("src%d", coinc_elems[0], "sink%d")
 	# output a database for each detector
 	if opts.output is not None:
-		data[ifo] = ligolw_output.Data([ifo], tmp_space=None, output=ifo+"-"+opts.output, seg=seg, out_seg=seg, injections=None, comment="", verbose=True)
-		data[ifo].prepare_output_file(ligolw_output.make_process_params(opts))
+		data[ifo].prepare_output_file()
 		pipeparts.mkappsink(pipeline, triggers_tee).connect_after("new-buffer", lloidparts.appsink_new_buffer, data[ifo])
 	#mkelems_fast(pipeline, snr_tee, "queue", skymap)
 
