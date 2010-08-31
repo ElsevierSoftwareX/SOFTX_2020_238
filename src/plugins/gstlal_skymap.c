@@ -539,6 +539,12 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 						const SnglInspiralTable* found_sngl = NULL;
 						for (ptr = head; ptr < end; ptr++)
 						{
+							if (G_UNLIKELY(!(collectdata->instrument)))
+							{
+								/* FIXME should clean up some state here, but we can't recover from this error. */
+								GST_ELEMENT_ERROR(skymap, CORE, TAG, ("one or mor SNR pads never recieved an 'instrument' tag"), (NULL));
+								return GST_FLOW_ERROR;
+							}
 							if (strcmp(ptr->ifo, collectdata->instrument) == 0)
 							{
 								found_sngl = ptr;
