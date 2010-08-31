@@ -114,6 +114,7 @@ Aeffsnrs = {}
 Beffsnrs = {}
 
 ifostyle = {"H1": {"color": "red", "label": "H1"}, "L1": {"color": "green", "label": "L1"}, "V1": {"color": "purple", "label": "V1"}}
+hist_ifostyle = {"H1": {"facecolor": "red", "label": "H1"}, "L1": {"facecolor": "green", "label": "L1"}, "V1": {"facecolor": "purple", "label": "V1"}}
 
 
 # Save directory that we were in
@@ -213,13 +214,13 @@ while True:
 		# Make per-detector plots
 		pylab.figure(1)
 	
-		pylab.hist(params['snr'], 25, log=True, **ifostyle[ifo])
+		pylab.hist(params['snr'], 25, log=True, **hist_ifostyle[ifo])
 		pylab.xlabel(r"$\rho$")
 		pylab.ylabel("Count")
 		pylab.title(r"$\rho$ histogram for %s" % ifo)
 		savefig("%s_hist_snr.png" % ifo)
 
-		pylab.hist(params['eff_snr'], 25, log=True, **ifostyle[ifo])
+		pylab.hist(params['eff_snr'], 25, log=True, **hist_ifostyle[ifo])
 		pylab.xlabel(r"$\rho_\mathrm{eff}$")
 		pylab.ylabel("Count")
 		pylab.title(r"$\rho_\mathrm{eff}$ histogram for %s" % ifo)
