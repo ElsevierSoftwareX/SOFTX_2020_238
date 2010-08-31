@@ -196,11 +196,11 @@ while True:
 	last_trig_gps = 0
 	for db in alldbs:
 		last_trig_gps = max(last_trig_gps, db.execute("SELECT end_time FROM sngl_inspiral ORDER BY end_time DESC LIMIT 1;").fetchone()[0])
-	last_trig_dt = datetime.datetime(*date.XLALGPSToUTC(LIGOTimeGPS(last_trig_gps))[:6], tzinfo=tz_dict["UTC"])
+	last_trig_dt = datetime.datetime(*date.XLALGPSToUTC(LIGOTimeGPS(last_trig_gps))[:6] + (0, tz_dict["UTC"]))
 	to_table("trig_time.html", dt_row_headers, dt_to_rows(last_trig_dt))
 
 	last_coinc_gps, = coincdb.execute("SELECT end_time FROM coinc_inspiral ORDER BY end_time DESC LIMIT 1;").fetchone()
-	last_coinc_dt = datetime.datetime(*date.XLALGPSToUTC(LIGOTimeGPS(last_coinc_gps))[:6], tzinfo=tz_dict["UTC"])
+	last_coinc_dt = datetime.datetime(*date.XLALGPSToUTC(LIGOTimeGPS(last_coinc_gps))[:6] + (0, tz_dict["UTC"]))
 	to_table("coinc_time.html", dt_row_headers, dt_to_rows(last_coinc_dt))
 
 	# Make single detector plots.
