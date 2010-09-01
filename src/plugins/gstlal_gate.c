@@ -30,7 +30,7 @@
 
 
 /*
- * struff from the C library
+ * stuff from the C library
  */
 
 
@@ -55,6 +55,10 @@
 
 #include <gstlal.h>
 #include <gstlal_gate.h>
+
+
+#define GST_CAT_DEFAULT gstlal_gate_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 /*
@@ -1333,6 +1337,7 @@ GType gstlal_gate_get_type(void)
 			.instance_init = instance_init,
 		};
 		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_gate", &info, 0);
+		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "gate", 0, "gate element");
 	}
 
 	return type;
