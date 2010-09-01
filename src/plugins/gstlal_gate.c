@@ -319,6 +319,7 @@ static gint control_get_state(GSTLALGate *element, GstClockTime tmin, GstClockTi
 		.peak = -1
 	};
 
+	GST_DEBUG_OBJECT(element, "looping over %u buffers to check control state", g_queue_get_length(element->control_queue));
 	g_queue_foreach(element->control_queue, g_list_for_each_gst_buffer_peak, &data);
 
 	return data.peak >= element->threshold ? +1 : data.peak >= 0 ? 0 : -1;
