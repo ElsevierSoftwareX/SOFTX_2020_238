@@ -30,7 +30,7 @@
 
 
 /*
- * struff from the C library
+ * stuff from the C library
  */
 
 
