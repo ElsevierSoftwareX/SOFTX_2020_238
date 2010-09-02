@@ -23,16 +23,23 @@ import bisect
 
 from gstlal.pipeutil import *
 from gst.extend.pygobject import gproperty
-from pylal.xlal.datatypes.snglinspiraltable import SnglInspiralTable
 from glue import iterutils
 from glue.ligolw import table
 from glue.ligolw import lsctables
 from glue.ligolw import utils
-from glue.segments import segment
+from glue.segments import segment, segmentlist
+from pylal import llwapp
+from pylal.xlal.datatypes.snglinspiraltable import SnglInspiralTable
 
 
 def trigger_time(trig):
 	return trig.end_time * gst.SECOND + trig.end_time_ns
+
+def LIGOTimeGPS_to_ns(gps):
+	return gps.seconds * gst.SECOND + gps.nanoseconds
+
+def seglist_seconds_to_ns(seglist):
+	return segmentlist([(LIGOTimeGPS_to_ns(s), LIGOTimeGPS_to_ns(e)) for (s, e) in seglist])
 
 class lal_ligolwtriggersrc(gst.BaseSrc):
 	__gstdetails__ = (
@@ -116,12 +123,11 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 		start_time = self.get_property("start-time")
 		duration = self.get_property("duration")
 		end_time = start_time + duration
-		requested_seg = segment(start_time, end_time)
 
 		# override SnglInspiralTable to create rows of type SnglInspiralTable
 		lsctables.SnglInspiralTable.RowType = SnglInspiralTable
 
-		# XML
+		# load XML document
 		if xml_location is not None:
 			doc = utils.load_filename(xml_location, gz=xml_location.endswith(".gz"))
 		else:
@@ -136,10 +142,15 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 			dbtables.DBTable_set_connection(connection)
 			doc = dbtables.get_xml(connection)
 
-		# FIXME: extract segment info
-		if start_time == gst.CLOCK_TIME_NONE or end_time == gst.CLOCK_TIME_NONE:
-			#seglistdict = llwapp.segmentlistdict_fromsearchsummary(doc)
-			raise NotImplementedError
+		# handle live time and start/end autodetection
+		# CHECKME: is the union of the seglistdict a sensible thing to use?
+		seglistdict = llwapp.segmentlistdict_fromsearchsummary(doc)
+		self.live_segs = seglist_seconds_to_ns(seglistdict.union(seglistdict.iterkeys()))
+		if start_time == gst.CLOCK_TIME_NONE:
+			start_time = self.live_segs[0][0]
+		if duration == gst.CLOCK_TIME_NONE:
+			end_time = self.live_segs[-1][1]
+		requested_seg = segment(start_time, end_time)
 
 		# read triggers
 		trigs = table.get_table(doc, lsctables.SnglInspiralTable.tableName)
@@ -175,6 +186,7 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 	def do_create(self, offset, size):
 		"""GstBaseSrc->create virtual method"""
 
+		pad = self.src_pads().next()
 		buffer_duration = self.get_property("buffer-duration")
 		timestamp = self.__last_time
 
@@ -183,10 +195,31 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 			self.src_pads().next().push_event(gst.event_new_eos())
 			return (gst.FLOW_UNEXPECTED, None)
 
+		# decide on buffer end time, ignoring gaps for the moment
 		end_time = timestamp + buffer_duration
 		if end_time > self.__stream_end_time:
 			end_time = self.__stream_end_time
-			buffer_duration = end_time - timestamp
+
+		# handle gaps
+		gaps = segmentlist([segment(timestamp, end_time)]) - self.live_segs
+		if abs(gaps) > 0:
+			if gaps[0][0] == timestamp:  # we're standing on a gap, so push a gap
+				retval, buf = pad.alloc_buffer(0, 0, pad.get_property("caps"))
+				if retval != gst.FLOW_OK:
+					return (retval, None)
+				buf.offset = buf.offset_end = self.__ntriggers
+				buf.duration = gaps[0][1] - timestamp
+				buf.timestamp = timestamp
+				buf.flag_set(gst.BUFFER_FLAG_GAP)
+				self.warning("pushing a gap spanning [%u, %u)" % (timestamp, gaps[0][1]))
+				retval = pad.push(buf)
+				if retval != gst.FLOW_OK:
+					return (retval, None)
+				timestamp = gaps[0][1]  # start buffer at end of gap
+			else:  # shorten the buffer to avoid spanning non-gap and gap
+				end_time = gaps[0][0]
+		buffer_duration = end_time - timestamp
+		# If the entire buffer spanned a gap, then the rest of this method will create a zero-length buffer and push that. I hope that's harmless.
 
 		# Select triggers
 		start_ind = bisect.bisect_left(self.__time_trig_tuples, (timestamp,))
@@ -195,8 +228,7 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 
 		# create output buffer
 		rowsize = len(buffer(SnglInspiralTable()))
-		pad = self.src_pads().next()
-		(retval, buf) = pad.alloc_buffer(0, rowsize * num_trigs, pad.get_property("caps")) # TODO set offset
+		(retval, buf) = pad.alloc_buffer(0, rowsize * num_trigs, pad.get_property("caps"))
 
 		if retval != gst.FLOW_OK:
 			return (retval, None)
@@ -212,8 +244,6 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 		buf.offset = self.__ntriggers
 		self.__ntriggers += num_trigs
 		buf.offset_end = self.__ntriggers
-
-		# FIXME: add gap info
 
 		self.__last_time = end_time
 		return (gst.FLOW_OK, buf)
