@@ -223,7 +223,7 @@ procedure on a fresh Mac box.)  Every time you see a command starting with
   $ sudo port install python26
   $ sudo port install python_select
   $ sudo python_select python26
-  $ sudo port install wget fftw-3 fftw-3-single py26-numpy py26-scipy py26-matplotlib liboil glib2 py26-gobject py26-gtk git-core gsl libframe metaio
+  $ sudo port install wget fftw-3 fftw-3-single py26-numpy py26-scipy py26-matplotlib glib2 py26-gobject py26-gtk git-core gsl libframe metaio
  
 
 Mac OS X Environment
@@ -268,7 +268,6 @@ dependencies might be a little ahead of what is provided by your operating
 system.  Building gstreamer from git clone on Debian lenny (the current stable 
 release, the OS found on the Atlas cluster) will require you to install
 
- * ≥liboil-0.3.14.tar.gz
  * ≥glib-2.20.5.tar.gz
  * ≥pygobject-2.14.2.tar.gz
  * ≥pygtk-2.8.6.tar.gz
@@ -277,15 +276,9 @@ in your home directory.  The following instructions will download and install
 these three software packages into your ``/path/to/local`` prefix::
 
   $ cd /path/to/local/src
-  $ wget http://liboil.freedesktop.org/download/liboil-0.3.14.tar.gz
   $ wget http://ftp.gnome.org/pub/GNOME/sources/glib/2.20/glib-2.20.5.tar.gz
   $ wget http://ftp.gnome.org/pub/GNOME/sources/pygobject/2.14/pygobject-2.14.2.tar.gz
   $ wget http://ftp.gnome.org/pub/GNOME/sources/pygtk/2.8/pygtk-2.8.6.tar.gz
-  $ tar -xzf liboil-0.3.14.tar.gz
-  $ pushd liboil-0.3.14
-  $ ./configure --prefix=/path/to/local && make install
-  $ popd
-  
   $ tar -xzf glib-2.20.5.tar.gz
   $ pushd glib-2.20.5
   $ ./configure --prefix=/path/to/local && make install

@@ -176,17 +176,6 @@ AC_SUBST([pygobject_LIBS])
 
 
 #
-# Check for liboil 0.3
-#
-
-
-AC_SUBST([LIBOIL_RELEASE], [0.3])
-AC_SUBST([MIN_LIBOIL_VERSION], [0.3.14])
-PKG_CHECK_MODULES([liboil], [liboil-${LIBOIL_RELEASE} >= ${MIN_LIBOIL_VERSION}], , [AC_MSG_ERROR([Not found!])])
-AC_SUBST([liboil_CFLAGS])
-AC_SUBST([liboil_LIBS])
-
-#
 # Check for NumPy
 #
 
