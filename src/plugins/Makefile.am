@@ -19,6 +19,7 @@ libgstlal_la_SOURCES = \
 	gstlal_nxydump.h gstlal_nxydump.c \
 	gstlalcollectpads.h gstlalcollectpads.c \
 	gstadder.h gstadder.c \
+	gstlal_multiplier.h gstlal_multiplier.c \
 	gstlal_coinc.h gstlal_coinc.c \
 	gstlal_skymap.h gstlal_skymap.c \
 	gstlal_gap_trigger_veto.h gstlal_gap_trigger_veto.c \
