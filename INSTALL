@@ -434,7 +434,7 @@ Installing the Software
               The ``'<variable>' may be used uninitialized in this function`` warning
               appears to be highly dependent on compiler version.  If you have
               trouble building some of the GStreamer plugins, try setting the
-              environment variable ``CFLAGS="-Wno-uninitialized`` and re-running
+              environment variable ``CFLAGS="-Wno-uninitialized"`` and re-running
               ``configure`` and ``make install``.
     
     .. IMPORTANT:: At configure time, ``gst-python`` needs to know the directory in
