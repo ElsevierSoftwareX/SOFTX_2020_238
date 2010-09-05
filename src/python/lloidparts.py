@@ -409,6 +409,43 @@ def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbo
 	)[-1]
 
 
+def mkLLOIDhoftToSnr2(pipeline, hoftdict, bank):
+	"""Build pipeline fragment that converts h(t) to SNR, but unconditional SNR reconstruction."""
+
+	output_rate = max(bank.get_rates())
+	autocorrelation_length = bank.autocorrelation_bank.shape[1]
+	autocorrelation_latency = -(autocorrelation_length - 1) / 2
+
+	#
+	# snr aggregator
+	#
+
+	elems = mkelems_fast(pipeline,
+		"lal_adder", {"sync": True},
+		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % output_rate)},
+		"lal_togglecomplex",
+		"tee")
+
+	#
+	# loop over template bank slices
+	#
+
+	for bank_fragment in bank.bank_fragments:
+		mkelems_fast(pipeline,
+			hoftdict[bank_fragment.rate],
+			"lal_delay", {"delay": int(round( (bank.filter_length - bank_fragment.end)*bank_fragment.rate ))},
+			"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": long(math.ceil(2 * bank.filter_length * gst.SECOND))},
+			"lal_firbank", {"latency": -int(round(bank_fragment.start * bank_fragment.rate)) - 1, "fir-matrix": bank_fragment.orthogonal_template_bank, "block-length-factor": 2},
+			"lal_nofakedisconts", {"silent": True},
+			"lal_reblock",
+			"lal_matrixmixer", {"matrix": bank_fragment.mix_matrix},
+			"audioresample", {"gap-aware": True, "quality": 9},
+			"lal_nofakedisconts", {"silent": True}, # FIXME:  remove after basetransform behaviour fixed
+			"queue", {"max-size-time": 2, "max-size-bytes": 0, "max-size-buffers": 0},
+			elems[0])
+	return elems[-1]
+
+
 def mkLLOIDsnrToTriggers(pipeline, snr_tee, bank, lal_triggergen_algorithm=1, lal_triggergen_max_gap=0.01, verbose = False, nxydump_segment = None, logname = None):
 	"""Build pipeline fragment that converts single detector SNR into triggers."""
 	# FIXME: The last three parameters are either used only for logging, or only in commented out code.
