@@ -30,8 +30,6 @@ import sys
 from pylal import datatypes as laltypes
 from pylal import lalfft
 from pylal import spawaveform
-from glue.ligolw import lsctables
-from glue.ligolw import utils
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
