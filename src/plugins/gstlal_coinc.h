@@ -79,6 +79,7 @@ typedef struct {
 	GstPad* srcpad;
 	GHashTable* trigger_sequence_hash;
 	guint64 dt;
+	guint padcounter;
 } GSTLALCoinc;
 
 

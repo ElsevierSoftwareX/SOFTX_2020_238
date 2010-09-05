@@ -28,7 +28,6 @@ import math
 import cmath
 import numpy
 from scipy import interpolate
-from scipy import linalg
 import sys
 
 

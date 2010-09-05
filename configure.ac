@@ -18,6 +18,7 @@ AC_CONFIG_FILES([ \
 	src/lib/gstlal.pc \
 	src/lib/Makefile \
 	src/skymap/Makefile \
+	src/cairovis/Makefile \
 	src/plugins/Makefile \
 	src/plugins/python/Makefile \
 	src/python/Makefile \
@@ -117,6 +118,37 @@ AC_SUBST([NDS_LIBS])
 
 
 #
+# Check for cairo
+#
+
+
+AC_ARG_WITH(
+	[cairo],
+	[AS_HELP_STRING([--with-cairo], [include cairo visualization elements @<:@default=check@:>@])],
+	[],
+	[with_cairo=check]
+)
+AS_IF(
+	[test "x$with_cairo" != "xno"],
+	[PKG_CHECK_MODULES(
+		[cairo],
+		[cairo],
+		[AC_DEFINE([HAVE_CAIRO], [1], [Define if you have cairo])
+		HAVE_CAIRO="yes"],
+		[HAVE_CAIRO="no"
+		AS_IF(
+			[test "x$with_cairo" != "xcheck"],
+			[AC_MSG_ERROR([Not found!])],
+			[AC_MSG_WARN([Not found!])]
+		)]
+	)]
+)
+AM_CONDITIONAL([COND_CAIRO], [test "x${HAVE_CAIRO}" == "xyes"])
+AC_SUBST([cairo_CFLAGS])
+AC_SUBST([cairo_LIBS])
+
+
+#
 # Check for GStreamer 0.10
 #
 
@@ -142,17 +174,6 @@ PKG_CHECK_MODULES([pygobject], [pygobject-2.0], , [AC_MSG_ERROR([Not found!])])
 AC_SUBST([pygobject_CFLAGS])
 AC_SUBST([pygobject_LIBS])
 
-
-#
-# Check for liboil 0.3
-#
-
-
-AC_SUBST([LIBOIL_RELEASE], [0.3])
-AC_SUBST([MIN_LIBOIL_VERSION], [0.3.14])
-PKG_CHECK_MODULES([liboil], [liboil-${LIBOIL_RELEASE} >= ${MIN_LIBOIL_VERSION}], , [AC_MSG_ERROR([Not found!])])
-AC_SUBST([liboil_CFLAGS])
-AC_SUBST([liboil_LIBS])
 
 #
 # Check for NumPy

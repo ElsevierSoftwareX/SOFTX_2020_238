@@ -37,6 +37,7 @@ import time
 
 from glue import iterutils
 from glue import segments
+from glue import segmentsUtils
 from glue import pipeline
 from glue.lal import CacheEntry
 from pylal.datatypes import LIGOTimeGPS
@@ -374,6 +375,94 @@ class ThincaNode(pipeline.CondorDAGNode):
 		raise NotImplementedError
 
 
+class RunSqliteJob(pipeline.CondorDAGJob):
+	"""
+        A lalapps_run_sqlite job used by the gstlal pipeline. The static
+        options are read from the [lalapps_run_sqlite] section in the ini
+        file.  The stdout and stderr from the job are directed to the logs
+        directory.  The job runs in the universe specified in the ini file.
+        The path to the executable is determined from the ini file.
+	"""
+        def __init__(self, config_parser):
+                """
+                config_parser = ConfigParser object
+                """
+                pipeline.CondorDAGJob.__init__(self, power.get_universe(config_parser), power.get_executable(config_parser, "lalapps_run_sqlite"))
+                self.add_ini_opts(config_parser, "lalapps_run_sqlite")
+                self.set_stdout_file(os.path.join(power.get_out_dir(config_parser), "lalapps_run_sqlite-$(cluster)-$(process).out"))
+                self.set_stderr_file(os.path.join(power.get_out_dir(config_parser), "lalapps_run_sqlite-$(cluster)-$(process).err"))
+		self.add_condor_cmd("getenv", "True")
+                self.set_sub_file("lalapps_run_sqlite.sub")
+
+
+class RunSqliteNode(pipeline.CondorDAGNode):
+        def __init__(self, *args):
+                pipeline.CondorDAGNode.__init__(self, *args)
+		self.input_cache = []
+		self.output_cache = self.input_cache
+
+	def add_input_cache(self, cache):
+		self.input_cache.extend(cache)
+
+	def get_output_cache(self):
+		return self.output_cache	
+
+
+class SqliteToXMLJob(pipeline.CondorDAGJob):
+        """
+        A ligolw_sqlite job used by the gstlal pipeline. The static
+        options are read from the [ligolw_sqlite] section in the ini
+        file.  The stdout and stderr from the job are directed to the logs
+        directory.  The job runs in the universe specified in the ini file.
+        The path to the executable is determined from the ini file.
+        """
+        def __init__(self, config_parser):
+                """
+                config_parser = ConfigParser object
+                """
+                pipeline.CondorDAGJob.__init__(self, power.get_universe(config_parser), power.get_executable(config_parser, "ligolw_sqlite"))
+                self.add_ini_opts(config_parser, "sqlitetoxml")
+                self.set_stdout_file(os.path.join(power.get_out_dir(config_parser), "ligolw_sqlite-$(cluster)-$(process).out"))
+                self.set_stderr_file(os.path.join(power.get_out_dir(config_parser), "ligolw_sqlite-$(cluster)-$(process).err"))
+                self.add_condor_cmd("getenv", "True")
+                self.set_sub_file("ligolw_sqlitetoxml.sub")
+
+
+class SqliteToXMLNode(pipeline.CondorDAGNode):
+        def __init__(self, *args):
+                pipeline.CondorDAGNode.__init__(self, *args)
+                self.input_cache = []
+                self.output_cache = []
+
+        def add_input_cache(self, cache):
+                if self.output_cache:
+                        raise AttributeError, "cannot change attributes after computing output cache"
+                self.input_cache.extend(cache)
+
+        def add_file_arg(self, filename):
+                raise NotImplementedError
+
+        def set_output(self, filename):
+                if self.output_cache:
+                        raise AttributeError, "cannot change attributes after computing output cache"
+                self.add_macro("macrodatabase", filename)
+		self.add_macro("macroextract", filename.replace(".sqlite", ".xml.gz"))
+	
+        def get_input_cache(self):
+                return self.input_cache
+
+        def get_output_cache(self):
+                if not self.output_cache:
+                        self.output_cache = [power.make_cache_entry(self.input_cache, None, self.get_opts()["macroextract"])]
+                return self.output_cache
+
+        def get_output_files(self):
+                raise NotImplementedError
+
+        def get_output(self):
+                raise NotImplementedError
+
+
 #
 # =============================================================================
 #
@@ -395,11 +484,11 @@ siclusterjob = None
 thincajob = None
 
 
-def init_job_types(config_parser, job_types = ("inspinj", "gstlalinspiral", "inspinjfind", "sicluster", "thinca")):
+def init_job_types(config_parser, job_types = ("inspinj", "gstlalinspiral", "inspinjfind", "sicluster", "thinca", "runsqlite", "sqlitetoxml")):
 	"""
 	Construct definitions of the submit files.
 	"""
-	global inspinjjob, gstlalinspiraljob, inspinjfindjob, siclusterjob, thincajob
+	global inspinjjob, gstlalinspiraljob, inspinjfindjob, siclusterjob, thincajob, runsqlitejob, sqlitetoxmljob
 
 	# lalapps_binj
 	if "inspinj" in job_types:
@@ -430,6 +519,14 @@ def init_job_types(config_parser, job_types = ("inspinj", "gstlalinspiral", "ins
 		thincajob.files_per_thinca = get_files_per_thinca(config_parser)
 		if thincajob.files_per_thinca < 1:
 			raise ValueError, "files_per_thinca < 1"
+	
+	# lalapps_run_sqlite
+	if "runsqlite" in job_types:
+		runsqlitejob = RunSqliteJob(config_parser)
+
+	# ligolw_sqlite
+	if "sqlitetoxml" in job_types:
+		sqlitetoxmljob = SqliteToXMLJob(config_parser)
 
 
 #
@@ -571,6 +668,58 @@ def make_thinca_fragment(dag, parents, tag, verbose = False):
 	return nodes
 
 
+def make_runsqlite_fragment(dag, parents, tag, verbose = False):
+	input_cache = power.collect_output_caches(parents)
+        nodes = set()
+        for cache_entry, parent in input_cache:
+                node = RunSqliteNode(runsqlitejob)
+		node.add_input_cache([cache_entry])
+                node.add_parent(parent)
+                node.set_name("lalapps_run_sqlite_%s_%d" % (tag, len(nodes)))
+		[node.add_file_arg(f.path()) for f in parent.get_output_cache()]
+                dag.add_node(node)
+                nodes.add(node)
+        return nodes
+
+
+def make_sqlitetoxml_fragment(dag, parents, tag, verbose = False):
+        input_cache = power.collect_output_caches(parents)
+        nodes = set()
+        for cache_entry, parent in input_cache:
+                node = SqliteToXMLNode(sqlitetoxmljob)
+                node.add_input_cache([cache_entry])
+                node.add_parent(parent)
+                node.set_name("ligolw_sqlitetoxml_%s_%d" % (tag, len(nodes)))
+                node.set_output(cache_entry.path())
+                dag.add_node(node)
+                nodes.add(node)
+        return nodes
+
+
+def make_thinca_fragment_maxextent(dag, parents, tag, verbose = False):
+	input_cache = power.collect_output_caches(parents)
+	nodes = set()
+	for i, (cache,parent) in enumerate(input_cache):
+		node = ThincaNode(thincajob)
+		seg = cache.segment
+		if i > 0 and not seg.disjoint(input_cache[i-1][0].segment):
+			lo = input_cache[i-1][0].segment[1]
+		else:
+			lo = segments.NegInfinity
+		if i < len(input_cache) - 1 and not seg.disjoint(input_cache[i+1][0].segment):
+			hi = input_cache[i+1][0].segment[0]
+		else:
+			hi = segments.PosInfinity
+		node.add_var_opt("coinc-end-time-segment",segmentsUtils.to_range_strings(segments.segmentlist([segments.segment(lo, hi)]))[0])
+		node.add_input_cache([cache])
+		node.add_parent(parent)
+		seg = power.cache_span(node.get_input_cache())
+		node.set_name("ligolw_thinca_%s_%d_%d" % (tag, int(seg[0]), int(abs(seg))))
+		node.add_macro("macrocomment", tag)
+		dag.add_node(node)
+		nodes.add(node)
+	return nodes
+
 #
 # =============================================================================
 #
@@ -643,3 +792,26 @@ def make_single_instrument_stage(dag, datafinds, seglistdict, tag, inspinjnodes 
 
 	# done
 	return nodes
+
+
+def breakupsegs(seg, maxextent, overlap):
+	if maxextent <= 0:
+		raise ValueError, "maxextent must be positive, not %s" % repr(maxextent)
+
+	seglist = segments.segmentlist()
+
+	while abs(seg) > maxextent:
+		seglist.append(segments.segment(seg[0], seg[0] + maxextent))
+		seg = segments.segment(seglist[-1][1] - overlap, seg[1])
+
+	seglist.append(seg)
+
+	return seglist
+
+
+def breakupseglists(seglists, maxextent, overlap):
+	for instrument, seglist in seglists.iteritems():
+		newseglist = segments.segmentlist()
+	        for bigseg in seglist:
+			newseglist.extend(breakupsegs(bigseg, maxextent, overlap))
+	        seglists[instrument] = newseglist
