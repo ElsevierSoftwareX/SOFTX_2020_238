@@ -48,6 +48,7 @@ ligo_data_find.out:
 H1-TMPLTBANK_LLOID_S6_ONLINE-958740096-2048.xml.gz: ligo_data_find.out
 	lalapps_tmpltbank \
 		--verbose \
+		--disable-compute-moments \
 		--user-tag LLOID_S6_ONLINE \
 		--gps-start-time 958740096 \
 		--gps-end-time 958742144 \
