@@ -95,6 +95,124 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 }
 
 
+static void draw_major_tick(cairo_t *cr, double x)
+{
+	cairo_move_to(cr, x, -8);
+	cairo_line_to(cr, x, 8);
+}
+
+
+static void draw_minor_tick(cairo_t *cr, double x)
+{
+	cairo_move_to(cr, x, 0);
+	cairo_line_to(cr, x, 4);
+}
+
+
+static void draw_axis(cairo_t *cr, double devicemax, double datamin, double datamax, gboolean is_log)
+{
+	int ntick, nmintick, nmaxtick, nsubtick;
+	double scalefactor = devicemax / (datamax - datamin);
+	double x;
+
+	/* Draws a horizontal axis with tick marks, labels, and automagically placed
+	 * tick marks.  datamin and datamax are the dataspace limits of the plot.
+	 * If is_log is set to TRUE, then it is expected that datamin and datamax
+	 * are actually the base-10 logarithms of the dataspace limits.
+	 *
+	 * The tick placement algorithm for logarthmic scales draws all major ticks
+	 * that are at integer powers of 10.  FIXME: this algorithm could be made a
+	 * lot smarter.
+	 *
+	 * The tick placement algorithm for linear scales can pick ticks that are
+	 * spaced by powers of ten, or doubled or halved powers of ten.
+	 */
+	if (is_log)
+	{
+		nmintick = ceil(datamin);
+		nmaxtick = floor(datamax);
+
+		/* Place major ticks. */
+		for (ntick = nmintick; ntick <= nmaxtick; ntick++)
+		{
+			double x = (ntick - datamin) * scalefactor;
+			draw_major_tick(cr, x);
+		}
+
+		/* Place minor ticks. */
+		nmintick = floor(datamin);
+		nmaxtick = ceil(datamax);
+		for (ntick = nmintick; ntick <= nmaxtick; ntick++)
+		{
+			for (nsubtick = 2; nsubtick < 10; nsubtick++)
+			{
+				x = (log10(nsubtick) + ntick - datamin) * scalefactor;
+				if (x > 0 && x < devicemax)
+					draw_minor_tick(cr, x);
+			}
+		}
+	} else /* !(is_log) */ {
+		/* Set this number to a tick interval (in pixels) that looks pleasing to the eye. */
+		double desired_pixel_interval = 100;
+
+		/* Intervals between ticks in data space */
+		double interval = desired_pixel_interval / scalefactor;
+
+		/* Propose tick intervals that is rounded to the nearest power of 10,
+			* and also intervals that are double and half that. */
+		double rounded_interval = pow(10.0, rint(log10(interval)));
+		double doubled_interval = 2.0 * rounded_interval;
+		double halved_interval = 0.5 * rounded_interval;
+
+		double rounded_diff = fabs(rounded_interval - interval);
+		double doubled_diff = fabs(doubled_interval - interval);
+		double halved_diff = fabs(rounded_interval - interval);
+
+		/* Pick the interval that is closest to the desired interval. */
+		if (rounded_diff < doubled_diff)
+		{
+			if (rounded_diff < halved_diff)
+				interval = rounded_interval;
+			else
+				interval = halved_interval;
+		} else if (doubled_diff < halved_diff)
+			interval = doubled_interval;
+		else
+			interval = halved_diff;
+
+		datamin /= interval;
+		datamax /= interval;
+		scalefactor *= interval;
+
+		nmintick = ceil(datamin);
+		nmaxtick = floor(datamax);
+
+		/* Place major ticks. */
+		for (ntick = nmintick; ntick <= nmaxtick; ntick++)
+		{
+			x = (ntick - datamin) * scalefactor;
+			draw_major_tick(cr, x);
+		}
+
+		/* Place minor ticks. */
+		nmintick = floor(datamin);
+		nmaxtick = ceil(datamax);
+		for (ntick = nmintick; ntick <= nmaxtick; ntick++)
+		{
+			for (nsubtick = 1; nsubtick < 10; nsubtick++)
+			{
+				x = (0.1 * nsubtick + ntick - datamin) * scalefactor;
+				if (x > 0 && x < devicemax)
+				{
+					draw_minor_tick(cr, x);
+				}
+			}
+		}
+	}
+	cairo_stroke(cr);
+}
+
+
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
 	CairoVisLineSeries *lineseries = CAIROVIS_LINESERIES(trans);
@@ -172,7 +290,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	/* Determine font metrics, which governs the layout of the plot */
 	cairo_set_font_size(cr, 12.0);
 	cairo_font_extents(cr, &font_extents);
-	padding = 3.0 * font_extents.ascent;
+	padding = 5.0 * font_extents.ascent;
 	padded_width = width - 2 * padding;
 	padded_height = height - 2 * padding;
 
@@ -196,23 +314,36 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	if (lineseries->ylabel)
 	{
 		cairo_text_extents(cr, lineseries->ylabel, &text_extents);
-		cairo_move_to(cr, 2.0 * font_extents.ascent, 0.5 * (height + text_extents.width));
+		cairo_move_to(cr, 1.0 * font_extents.ascent, 0.5 * (height + text_extents.width));
 		cairo_save(cr);
 		cairo_rotate(cr, -M_PI_2);
 		cairo_show_text(cr, lineseries->ylabel);
 		cairo_restore(cr);
 	}
 
-	/* Draw frame, and clip all further drawing inside it. */
-	cairo_translate(cr, padding, padding);
+	/* Flip & translate transformation so that bottom left corner is origin */
+	cairo_translate(cr, padding, height - padding);
+	cairo_scale(cr, 1.0, -1.0);
+
+	/* Render x-axis tick marks */
+	draw_axis(cr, padded_width, xmin, xmax, xlog);
+
+	/* Render y-axis tick marks */
+	cairo_save(cr);
+	cairo_rotate(cr, M_PI_2);
+	cairo_scale(cr, 1.0, -1.0);
+	draw_axis(cr, padded_height, ymin, ymax, ylog);
+	cairo_restore(cr);
+
+	/* Draw axes frame, and clip all further drawing inside it */
 	cairo_rectangle(cr, 0, 0, padded_width, padded_height);
 	cairo_stroke_preserve(cr);
 	cairo_clip(cr);
 
 	/* Build transformation for data to user space */
 	cairo_save(cr);
-	cairo_scale(cr, padded_width / (xmax - xmin), padded_height / (ymin - ymax));
-	cairo_translate(cr, -xmin, -ymax);
+	cairo_scale(cr, padded_width / (xmax - xmin), padded_height / (ymax - ymin));
+	cairo_translate(cr, -xmin, -ymin);
 
 	gboolean was_finite = FALSE;
 	for (i = 0; i < nsamples; i ++)
@@ -228,7 +359,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		was_finite = is_finite;
 	}
 
+	/* Jump back to device space */
 	cairo_restore(cr);
+
+	/* Stroke the line series */
 	cairo_stroke(cr);
 
 	/* Discard Cairo context, surface */
