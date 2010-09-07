@@ -64,9 +64,9 @@ H1-TMPLTBANK_LLOID_S6_ONLINE-958740096-2048.xml.gz: ligo_data_find.out
 		--space Tau0Tau3 --number-of-segments 15 \
 		--minimal-match 0.98 --candle-snr 8 --debug-level 33 --high-pass-attenuation 0.1 \
 		--min-high-freq-cutoff SchwarzISCO --max-high-freq-cutoff SchwarzISCO \
-		--segment-length 524288 \
+		--segment-length 1048576 \
 		--low-frequency-cutoff 40.0 --pad-data 8 --num-freq-cutoffs 1 \
-		--sample-rate 2048 --high-frequency-cutoff 921.6 --resample-filter ldas \
+		--sample-rate 4096 --high-frequency-cutoff 1843.2 --resample-filter ldas \
 		--strain-high-pass-atten 0.1 --strain-high-pass-freq 30 \
 		--min-total-mass 2.4 --max-total-mass 3.2 \
 		--write-compress --spectrum-type median
