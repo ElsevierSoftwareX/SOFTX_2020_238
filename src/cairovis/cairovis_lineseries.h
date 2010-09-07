@@ -47,8 +47,10 @@ typedef struct {
 typedef struct _CairoVisLineSeries {
 	GstElement element;
 
+	/* Pads */
 	GstPad *sinkpad, *srcpad;
 
+	/* Properties */
 	int xscale, yscale;
 	gchar *title, *xlabel, *ylabel;
 	gboolean xautoscale, yautoscale;
