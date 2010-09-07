@@ -104,13 +104,14 @@ static void draw_major_tick(cairo_t *cr, double x)
 
 static void draw_minor_tick(cairo_t *cr, double x)
 {
-	cairo_move_to(cr, x, 0);
+	cairo_move_to(cr, x, -4);
 	cairo_line_to(cr, x, 4);
 }
 
 
-static void draw_axis(cairo_t *cr, double devicemax, double datamin, double datamax, gboolean is_log)
+static void draw_axis(cairo_t *cr, double devicemax, double datamin, double datamax, gboolean is_log, gboolean is_horizontal)
 {
+	cairo_text_extents_t extents;
 	int ntick, nmintick, nmaxtick, nsubtick;
 	double scalefactor = devicemax / (datamax - datamin);
 	double x;
@@ -129,6 +130,21 @@ static void draw_axis(cairo_t *cr, double devicemax, double datamin, double data
 	 */
 	if (is_log)
 	{
+
+		nmintick = floor(datamin);
+		nmaxtick = ceil(datamax);
+
+		/* Place minor ticks. */
+		for (ntick = nmintick; ntick <= nmaxtick; ntick++)
+		{
+			for (nsubtick = 2; nsubtick < 10; nsubtick++)
+			{
+				x = (log10(nsubtick) + ntick - datamin) * scalefactor;
+				if (x > 0 && x < devicemax)
+					draw_minor_tick(cr, x);
+			}
+		}
+
 		nmintick = ceil(datamin);
 		nmaxtick = floor(datamax);
 
@@ -139,18 +155,33 @@ static void draw_axis(cairo_t *cr, double devicemax, double datamin, double data
 			draw_major_tick(cr, x);
 		}
 
-		/* Place minor ticks. */
-		nmintick = floor(datamin);
-		nmaxtick = ceil(datamax);
+		/* Stroke tick marks. */
+		cairo_stroke(cr);
+
+		/* Place major tick labels. */
 		for (ntick = nmintick; ntick <= nmaxtick; ntick++)
 		{
-			for (nsubtick = 2; nsubtick < 10; nsubtick++)
+			x = (ntick - datamin) * scalefactor;
+			cairo_move_to(cr, x, -16);
+			gchar *text = g_strdup_printf("10%d", ntick);
+			cairo_text_extents(cr, text, &extents);
+			g_free(text);
+			text = g_strdup_printf("%d", ntick);
+			cairo_save(cr);
+			cairo_identity_matrix(cr);
+			if (is_horizontal)
 			{
-				x = (log10(nsubtick) + ntick - datamin) * scalefactor;
-				if (x > 0 && x < devicemax)
-					draw_minor_tick(cr, x);
+				cairo_rel_move_to(cr, - 0.5 * extents.width, extents.height);
+			} else {
+				cairo_rel_move_to(cr, -extents.width, 0.5 * extents.height);
 			}
+			cairo_show_text(cr, "10");
+			cairo_rel_move_to(cr, 0, -0.5 * extents.height);
+			cairo_show_text(cr, text);
+			g_free(text);
+			cairo_restore(cr);
 		}
+
 	} else /* !(is_log) */ {
 		/* Set this number to a tick interval (in pixels) that looks pleasing to the eye. */
 		double desired_pixel_interval = 100;
@@ -184,19 +215,10 @@ static void draw_axis(cairo_t *cr, double devicemax, double datamin, double data
 		datamax /= interval;
 		scalefactor *= interval;
 
-		nmintick = ceil(datamin);
-		nmaxtick = floor(datamax);
-
-		/* Place major ticks. */
-		for (ntick = nmintick; ntick <= nmaxtick; ntick++)
-		{
-			x = (ntick - datamin) * scalefactor;
-			draw_major_tick(cr, x);
-		}
-
-		/* Place minor ticks. */
 		nmintick = floor(datamin);
 		nmaxtick = ceil(datamax);
+
+		/* Place minor ticks. */
 		for (ntick = nmintick; ntick <= nmaxtick; ntick++)
 		{
 			for (nsubtick = 1; nsubtick < 10; nsubtick++)
@@ -208,8 +230,41 @@ static void draw_axis(cairo_t *cr, double devicemax, double datamin, double data
 				}
 			}
 		}
+
+		nmintick = ceil(datamin);
+		nmaxtick = floor(datamax);
+
+		/* Place major ticks. */
+		for (ntick = nmintick; ntick <= nmaxtick; ntick++)
+		{
+			x = (ntick - datamin) * scalefactor;
+			draw_major_tick(cr, x);
+		}
+
+		/* Stroke tick marks. */
+		cairo_stroke(cr);
+
+		/* Place major tick labels. */
+		for (ntick = nmintick; ntick <= nmaxtick; ntick++)
+		{
+			x = (ntick - datamin) * scalefactor;
+			cairo_move_to(cr, x, -16);
+			gchar *text = g_strdup_printf("%g", ntick * interval);
+			cairo_text_extents(cr, text, &extents);
+			cairo_save(cr);
+			cairo_identity_matrix(cr);
+			if (is_horizontal)
+			{
+				cairo_rel_move_to(cr, - 0.5 * extents.width, extents.height);
+			} else {
+				cairo_rel_move_to(cr, -extents.width, 0.5 * extents.height);
+			}
+			cairo_show_text(cr, text);
+			g_free(text);
+			cairo_restore(cr);
+		}
 	}
-	cairo_stroke(cr);
+
 }
 
 
@@ -325,14 +380,15 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	cairo_translate(cr, padding, height - padding);
 	cairo_scale(cr, 1.0, -1.0);
 
+
 	/* Render x-axis tick marks */
-	draw_axis(cr, padded_width, xmin, xmax, xlog);
+	draw_axis(cr, padded_width, xmin, xmax, xlog, TRUE);
 
 	/* Render y-axis tick marks */
 	cairo_save(cr);
 	cairo_rotate(cr, M_PI_2);
 	cairo_scale(cr, 1.0, -1.0);
-	draw_axis(cr, padded_height, ymin, ymax, ylog);
+	draw_axis(cr, padded_height, ymin, ymax, ylog, FALSE);
 	cairo_restore(cr);
 
 	/* Draw axes frame, and clip all further drawing inside it */
