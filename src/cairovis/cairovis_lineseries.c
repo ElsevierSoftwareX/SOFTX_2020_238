@@ -19,6 +19,8 @@
 
 #include <cairovis_lineseries.h>
 
+#include <gst/video/video.h>
+
 #include <cairo.h>
 #include <math.h>
 
@@ -46,52 +48,20 @@ scale_type_get_type (void)
 }
 
 
-static gboolean caps_get_dimensions(GstBaseTransform *trans, GstCaps *caps, gint *width, gint *height)
+static void fixate(GstPad *pad, GstCaps *caps)
 {
-	GstStructure *structure = gst_caps_get_structure(caps, 0);
+	GstStructure *structure;
 
-	if (!structure) {
-		GST_ELEMENT_WARNING(trans, CORE, CAPS, ("failed to get structure from caps"), (NULL));
-		return FALSE;
-	}
-	if (!gst_structure_get_int(structure, "width", width)) {
-		GST_ELEMENT_WARNING(trans, CORE, CAPS, ("caps did not provide 'width' field"), (NULL));
-		return FALSE;
-	}
-	if (!gst_structure_get_int(structure, "height", height)) {
-		GST_ELEMENT_WARNING(trans, CORE, CAPS, ("caps did not provide 'height' field"), (NULL));
-		return FALSE;
-	}
+	/* Get the zeroth structure. */
+	structure = gst_caps_get_structure(caps, 0);
 
-	return TRUE;
-}
+	/* Throw away all but the zeroth structure. */
+	gst_caps_truncate(caps);
 
-
-static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps)
-{
-	if (direction == GST_PAD_SINK)
-		return gst_pad_get_fixed_caps_func(GST_BASE_TRANSFORM_SRC_PAD(trans));
-	else
-		return gst_pad_get_fixed_caps_func(GST_BASE_TRANSFORM_SINK_PAD(trans));
-}
-
-
-static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
-{
-	if (direction == GST_PAD_SINK)
-	{
-		gint width, height;
-		if (!caps_get_dimensions(trans, GST_PAD_CAPS(GST_BASE_TRANSFORM_SRC_PAD(trans)), &width, &height))
-		{
-			GST_ELEMENT_ERROR(trans, CORE, CAPS, ("parsing caps failed"), (NULL));
-			return FALSE;
-		}
-
-		*othersize = width * height * 4;
-		return TRUE;
-	} else {
-		return FALSE;
-	}
+	/* Fill in some default fields that we will need. */
+	gst_structure_fixate_field_nearest_int(structure, "width", 640);
+	gst_structure_fixate_field_nearest_int(structure, "height", 480);
+	gst_structure_fixate_field_nearest_fraction(structure, "framerate", 30, 1);
 }
 
 
@@ -268,9 +238,11 @@ static void draw_axis(cairo_t *cr, double devicemax, double datamin, double data
 }
 
 
-static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
+static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 {
-	CairoVisLineSeries *lineseries = CAIROVIS_LINESERIES(trans);
+	CairoVisLineSeries *lineseries = CAIROVIS_LINESERIES(gst_pad_get_parent(pad));
+	GstFlowReturn result = GST_FLOW_ERROR;
+	GstBuffer *outbuf;
 	gint width, height;
 
 	/* Determine number of samples, data pointer */
@@ -327,9 +299,33 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		ymax = log10(ymax);
 	}
 
+	/* Negotiate caps if necessary */
+	if (G_UNLIKELY(GST_PAD_CAPS(lineseries->srcpad) == NULL))
+	{
+		GstCaps *caps = gst_pad_get_allowed_caps(lineseries->srcpad);
+		if (gst_caps_is_empty(caps))
+		{
+			gst_caps_unref(caps);
+			GST_WARNING_OBJECT(lineseries, "intersected caps is empty");
+			goto done;
+		}
+		caps = gst_caps_make_writable(caps);
+		gst_pad_fixate_caps(lineseries->srcpad, caps);
+		gst_pad_set_caps(lineseries->srcpad, caps);
+		gst_caps_unref(caps);
+	}
+
 	/* Determine width and height of destination */
-	if (!caps_get_dimensions(trans, GST_BUFFER_CAPS(outbuf), &width, &height))
-		return GST_FLOW_ERROR;
+	if (G_UNLIKELY(!gst_video_get_size(lineseries->srcpad, &width, &height)))
+		goto done;
+
+	/* Determine width and height of destination */
+	result = gst_pad_alloc_buffer_and_set_caps(lineseries->srcpad, GST_BUFFER_OFFSET_NONE, 4 * width * height, GST_PAD_CAPS(lineseries->srcpad), &outbuf);
+	if (result != GST_FLOW_OK)
+	{
+		GST_WARNING_OBJECT(lineseries, "Failed to alloc buffer: %s", gst_flow_get_name (result));
+		goto done;
+	}
 
 	/* Create Cairo surface, context */
 	surf = cairo_image_surface_create_for_data(GST_BUFFER_DATA(outbuf), CAIRO_FORMAT_RGB24, width, height, width*4);
@@ -428,8 +424,12 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	/* Copy buffer flags and timestamps */
 	gst_buffer_copy_metadata(outbuf, inbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS);
 
+	result = gst_pad_push(lineseries->srcpad, outbuf);
+
 	/* Done! */
-	return GST_FLOW_OK;
+done:
+	gst_object_unref(lineseries);
+	return result;
 }
 
 
@@ -442,7 +442,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
  */
 
 
-static GstBaseTransformClass *parent_class = NULL;
+static GstElementClass *parent_class = NULL;
 
 
 enum property {
@@ -566,6 +566,11 @@ static void finalize(GObject *object)
 	g_free(element->ylabel);
 	element->ylabel = NULL;
 
+	gst_object_unref(element->sinkpad);
+	element->sinkpad = NULL;
+	gst_object_unref(element->srcpad);
+	element->srcpad = NULL;
+	
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
@@ -601,18 +606,7 @@ static void base_init(gpointer class)
 			"src",
 			GST_PAD_SRC,
 			GST_PAD_ALWAYS,
-			gst_caps_from_string(
-				"video/x-raw-rgb," \
-				"bpp        = (int) 32, " \
-				"endianness = (int) BIG_ENDIAN, " \
-				"depth      = (int) 24, " \
-				"red-mask   = (int) 0x0000FF00, " \
-				"green-mask = (int) 0x00FF0000, " \
-				"blue-mask  = (int) 0xFF000000, " \
-				"width      = (int) [1, MAX], " \
-				"height     = (int) [1, MAX], " \
-				"framerate  = (fraction) [0, MAX]"
-			)
+			gst_caps_from_string(GST_VIDEO_CAPS_BGRx)
 		)
 	);
 }
@@ -621,13 +615,10 @@ static void base_init(gpointer class)
 static void class_init(gpointer class, gpointer class_data)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
-	GstBaseTransformClass *basetransform_class = GST_BASE_TRANSFORM_CLASS(class);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
 
 	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
 
-	basetransform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
-	basetransform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
-	basetransform_class->transform = GST_DEBUG_FUNCPTR(transform);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
@@ -761,6 +752,20 @@ static void class_init(gpointer class, gpointer class_data)
 static void instance_init(GTypeInstance *object, gpointer class)
 {
 	CairoVisLineSeries *element = CAIROVIS_LINESERIES(object);
+	GstPad *pad;
+
+	gst_element_create_all_pads(GST_ELEMENT(element));
+
+	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
+	gst_pad_use_fixed_caps(pad);
+	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
+	element->sinkpad = pad;
+
+	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
+	gst_pad_use_fixed_caps(pad);
+	gst_pad_set_fixatecaps_function(pad, GST_DEBUG_FUNCPTR(fixate));
+	element->srcpad = pad;
+
 	element->title = NULL;
 	element->xlabel = NULL;
 	element->ylabel = NULL;
@@ -779,7 +784,7 @@ GType cairovis_lineseries_get_type(void)
 			.instance_size = sizeof(CairoVisLineSeries),
 			.instance_init = instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_BASE_TRANSFORM, "cairovis_lineseries", &info, 0);
+		type = g_type_register_static(GST_TYPE_ELEMENT, "cairovis_lineseries", &info, 0);
 	}
 
 	return type;
