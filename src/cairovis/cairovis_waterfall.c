@@ -181,6 +181,10 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 
 		cairovis_draw_axes(base, cr, width, height);
 
+		/* Let plot fill in from the right. */
+		/* FIXME: it would be better to handle this with the axes limits. */
+		cairo_translate(cr, history_samples - desired_samples, 0);
+
 		/* Draw pixels */
 		if (has_pixels)
 		{
