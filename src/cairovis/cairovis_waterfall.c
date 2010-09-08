@@ -96,17 +96,17 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 
 		/* FIXME: check my timestamp math here; it's probably not perfect */
 		guint64 desired_offset = gst_util_uint64_scale_int_round(element->frame_number, fpsd * element->rate, fpsn);
-		if (history_samples > desired_offset)
+		if (history_samples < desired_offset)
 			desired_offset -= history_samples;
 		else
 			desired_offset = 0;
-		guint64 desired_offset_end = gst_util_uint64_scale_int_round(element->frame_number + 1, fpsd * element->rate, fpsn);
+		guint64 desired_offset_end = gst_util_uint64_scale_int_round(element->frame_number, fpsd * element->rate, fpsn);
 		guint64 desired_samples = desired_offset_end - desired_offset;
 		guint64 desired_bytes = desired_samples * stride_bytes;
 
 		GST_INFO_OBJECT(element, "we want offsets %llu through %llu", desired_offset, desired_offset_end);
 
-		if (element->last_offset_end > desired_offset)
+		if (element->last_offset_end < desired_offset)
 		{
 			guint flush_samples = desired_offset - element->last_offset_end;
 			if (flush_samples > available_samples)
@@ -116,6 +116,10 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 			available_samples -= flush_samples;
 			available_bytes -= flush_bytes;
 			element->last_offset_end += flush_samples;
+		} else if (element->last_offset_end > desired_offset) {
+			GST_INFO_OBJECT(element, "sink pad has not yet advanced far enough to draw frame %llu", element->frame_number);
+			result = GST_FLOW_OK;
+			goto done;
 		}
 
 		if (available_samples < desired_samples)
