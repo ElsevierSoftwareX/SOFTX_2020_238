@@ -213,9 +213,9 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 		/* Copy buffer flags and timestamps */
 		/* FIXME: do this right, just putting in some empty values for now */
 		gst_buffer_copy_metadata(outbuf, inbuf, GST_BUFFER_COPY_FLAGS);
-		GST_BUFFER_OFFSET(outbuf) = GST_BUFFER_OFFSET_NONE;
-		GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_NONE;
-		GST_BUFFER_TIMESTAMP(outbuf) = GST_CLOCK_TIME_NONE;
+		GST_BUFFER_OFFSET(outbuf) = element->frame_number;
+		GST_BUFFER_OFFSET_END(outbuf) = element->frame_number + 1;
+		GST_BUFFER_TIMESTAMP(outbuf) = gst_util_uint64_scale_round(desired_offset_end, GST_SECOND, element->rate) + element->t0;
 		GST_BUFFER_DURATION(outbuf) = GST_CLOCK_TIME_NONE;
 
 		result = gst_pad_push(base->srcpad, outbuf);
