@@ -48,7 +48,9 @@
  */
 
 
+#include <cairovis_base.h>
 #include <cairovis_lineseries.h>
+#include <cairovis_waterfall.h>
 
 
 /*
@@ -66,7 +68,9 @@ static gboolean plugin_init(GstPlugin *plugin)
 		const gchar *name;
 		GType type;
 	} *element, elements[] = {
+		{"cairovis_base", CAIROVIS_BASE_TYPE},
 		{"cairovis_lineseries", CAIROVIS_LINESERIES_TYPE},
+		{"cairovis_waterfall", CAIROVIS_WATERFALL_TYPE},
 		{NULL, 0},
 	};
 	struct {

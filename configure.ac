@@ -172,6 +172,18 @@ AC_SUBST([GSTREAMER_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-re
 
 
 #
+# Check for GStreamer Video Library 0.10
+#
+
+
+AC_SUBST([GSTREAMER_VIDEO_RELEASE], [0.10])
+AC_SUBST([MIN_GSTREAMER_VIDEO_VERSION], [0.10.0])
+PKG_CHECK_MODULES([gstreamer_video], [gstreamer-video-${GSTREAMER_VIDEO_RELEASE} >= ${MIN_GSTREAMER_VIDEO_VERSION}], , [AC_MSG_ERROR([Not found!])])
+AC_SUBST([gstreamer_video_CFLAGS])
+AC_SUBST([gstreamer_video_LIBS])
+
+
+#
 # Check for PyGObject
 #
 PKG_CHECK_MODULES([pygobject], [pygobject-2.0], , [AC_MSG_ERROR([Not found!])])

@@ -187,6 +187,7 @@ class directory_poller(object):
 
 			try:
 				# Attempt to open the file.
+				gst.info("attempting to open %s" % filepath)
 				fd = os.open(filepath, os.O_RDONLY)
 			except OSError, (err, strerror):
 				# Opening the file failed.

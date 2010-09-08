@@ -23,7 +23,9 @@
 
 #include <glib.h>
 #include <gst/gst.h>
-#include <gst/base/gstbasetransform.h>
+
+#include "cairovis_base.h"
+
 
 G_BEGIN_DECLS
 
@@ -41,17 +43,15 @@ G_BEGIN_DECLS
 
 
 typedef struct {
-	GstBaseTransformClass parent_class;
+	CairoVisBaseClass parent_class;
 } CairoVisLineSeriesClass;
 
 
 typedef struct _CairoVisLineSeries {
-	GstBaseTransform element;
+	CairoVisBase element;
 
-	int xscale, yscale;
-	gchar *title, *xlabel, *ylabel;
-	gboolean xautoscale, yautoscale;
-	gdouble xmin, xmax, ymin, ymax;
+	/* Pads */
+	GstPad *sinkpad;
 } CairoVisLineSeries;
 
 
