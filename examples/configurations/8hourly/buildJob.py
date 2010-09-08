@@ -116,6 +116,7 @@ ligo_data_find_sub = EnvCondorJob(r"""ligo_data_find
 
 lalapps_tmpltbank_sub = EnvCondorJob(r"""lalapps_tmpltbank
 	--verbose
+	--disable-compute-moments
 	--user-tag $(macro_comment)
 	--gps-start-time $(macro_tmpltbank_start_time)
 	--gps-end-time $(macro_tmpltbank_end_time)
