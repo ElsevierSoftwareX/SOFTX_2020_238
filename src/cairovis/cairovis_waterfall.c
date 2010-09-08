@@ -91,7 +91,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 
 	/* FIXME: This doesn't really have to be an infinite loop. */
 	while (TRUE) {
-		GST_INFO_OBJECT(element, "checking to see if we have enough data to draw frame %u", element->frame_number);
+		GST_INFO_OBJECT(element, "checking to see if we have enough data to draw frame %llu", element->frame_number);
 		GST_INFO_OBJECT(element, "rate=%d, framerate=%d/%d", element->rate, fpsn, fpsd);
 
 		/* FIXME: check my timestamp math here; it's probably not perfect */
@@ -120,12 +120,12 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 
 		if (available_samples < desired_samples)
 		{
-			GST_INFO_OBJECT(element, "not enough data to draw frame %u", element->frame_number);
+			GST_INFO_OBJECT(element, "not enough data to draw frame %llu", element->frame_number);
 			result = GST_FLOW_OK;
 			goto done;
 		}
 
-		GST_INFO_OBJECT(element, "preparing to draw frame %u", element->frame_number);
+		GST_INFO_OBJECT(element, "preparing to draw frame %llu", element->frame_number);
 
 		result = cairovis_base_buffer_surface_alloc(base, &outbuf, &surf, &width, &height);
 
@@ -180,7 +180,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 		/* Draw pixels */
 		if (has_pixels)
 		{
-			GST_INFO_OBJECT(element, "painting pixels for frame %u", element->frame_number);
+			GST_INFO_OBJECT(element, "painting pixels for frame %llu", element->frame_number);
 			double invzspan = 1.0 / (element->zmax - element->zmin);
 			for (i = 0; i < npixels; i ++)
 			{
