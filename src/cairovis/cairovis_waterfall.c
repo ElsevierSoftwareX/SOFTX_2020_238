@@ -51,6 +51,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 	gint width, height;
 	cairo_surface_t *surf;
 	cairo_t *cr;
+	const double *data;
+	guint i;
 
 	if (base->xscale || base->yscale)
 	{
@@ -138,21 +140,11 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 
 		cr = cairo_create(surf);
 
-		guint i;
-		guint npixels;
-		const double *data;
-		guint32 *pixdata;
-		gboolean has_pixels = (desired_samples > 0);
-
-		/* Draw data */
-		if (has_pixels)
-		{
-			npixels = desired_samples * element->nchannels;
+		guint npixels = desired_samples * element->nchannels;
+		if (desired_samples > 0)
 			data = (const double*) gst_adapter_peek(element->adapter, desired_bytes);
-			pixdata = g_malloc(npixels * sizeof(guint32));
-		} else {
-			GST_INFO_OBJECT(element, "not getting any pixels");
-		}
+		else
+			data = NULL;
 		
 		/* Determine x-axis limits */
 		if (base->xautoscale) {
@@ -167,7 +159,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 		}
 
 		/* Determine z-axis limits */
-		if (element->zautoscale && has_pixels) {
+		if (element->zautoscale && data) {
 			element->zmin = INFINITY;
 			element->zmax = -INFINITY;
 			for (i = 0; i < npixels; i ++)
@@ -186,9 +178,10 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 		cairo_translate(cr, history_samples - desired_samples, 0);
 
 		/* Draw pixels */
-		if (has_pixels)
+		if (data)
 		{
 			GST_INFO_OBJECT(element, "painting pixels for frame %llu", element->frame_number);
+			guint32 *pixdata = g_malloc(npixels * sizeof(guint32));
 			double invzspan = 1.0 / (element->zmax - element->zmin);
 			for (i = 0; i < npixels; i ++)
 			{
@@ -203,7 +196,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 				guint8 graylevel = 0xFF * x;
 				pixdata[i] = (guint32)graylevel << 16;
 			}
-			cairo_surface_t *pixsurf = cairo_image_surface_create_for_data(pixdata, CAIRO_FORMAT_RGB24, element->nchannels, desired_samples, element->nchannels * 4);
+			cairo_surface_t *pixsurf = cairo_image_surface_create_for_data((unsigned char *)pixdata, CAIRO_FORMAT_RGB24, element->nchannels, desired_samples, element->nchannels * 4);
 			cairo_rotate(cr, M_PI_2);
 			cairo_scale(cr, 1.0, -1.0);
 			cairo_set_source_surface(cr, pixsurf, 0, 0);
