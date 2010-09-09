@@ -363,7 +363,6 @@ static void base_init(gpointer class)
 static void class_init(gpointer class, gpointer class_data)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
 
 	parent_class = g_type_class_ref(CAIROVIS_BASE_TYPE);
 
