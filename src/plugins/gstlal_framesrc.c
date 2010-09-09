@@ -607,7 +607,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			GST_ERROR_OBJECT(element, "block size %lu is not an integer multiple of the sample size %lu", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
 			return GST_FLOW_ERROR;
 		}
-		result = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data), &chunk);
+		result = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data), (void**)&chunk);
 		if (result != GST_FLOW_OK)
 			return result;
 		result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
@@ -637,7 +637,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			GST_ERROR_OBJECT(element, "block size %lu is not an integer multiple of the sample size %lu", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
 			return GST_FLOW_ERROR;
 		}
-		result = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data), &chunk);
+		result = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data), (void**)&chunk);
 		if (result != GST_FLOW_OK)
 			return result;
 		result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
@@ -667,7 +667,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			GST_ERROR_OBJECT(element, "block size %lu is not an integer multiple of the sample size %lu", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
 			return GST_FLOW_ERROR;
 		}
-		result = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data), &chunk);
+		result = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data), (void**)&chunk);
 		if (result != GST_FLOW_OK)
 			return result;
 		result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
