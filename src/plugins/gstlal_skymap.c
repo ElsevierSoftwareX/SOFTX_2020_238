@@ -584,7 +584,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 						/* Set per-channel analysis parameters. */
 						skymap->wanalysis.detectors[ichannel] = analysis_identify_detector(collectdata->instrument);
-						skymap->wanalysis.wSw[ichannel] = found_sngl->eff_distance;
+						skymap->wanalysis.wSw[ichannel] = found_sngl->sigmasq;
 						skymap->wanalysis.min_ts[ichannel] = 1.0e-9 * start_time - min_t;
 						skymap->wanalysis.max_ts[ichannel] = 1.0e-9 * stop_time - min_t;
 						skymap->wanalysis.xSw_real[ichannel] = xSw_real;
@@ -598,8 +598,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 						unsigned int i;
 						for (i = 0; i < xSw_nsamples; i ++)
 						{
-							xSw_real[i] = adapter_bytes[adapter_stride*i + bank_index*2] * found_sngl->eff_distance;
-							xSw_imag[i] = adapter_bytes[adapter_stride*i + bank_index*2 + 1] * found_sngl->eff_distance;
+							xSw_real[i] = adapter_bytes[adapter_stride*i + bank_index*2] * sqrt(found_sngl->sigmasq);
+							xSw_imag[i] = adapter_bytes[adapter_stride*i + bank_index*2 + 1] * sqrt(found_sngl->sigmasq);
 						}
 
 						/* Free data that was copied from adapter. */
@@ -857,7 +857,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->collect_event = NULL;
 	gst_collect_pads_set_function(element->collect, GST_DEBUG_FUNCPTR(collected), element);
 
-	element->coinc_collectdata = gst_collect_pads_add_pad_full(element->collect, gst_element_get_static_pad(GST_ELEMENT(element), "sink"), sizeof(GstSkymapCoincCollectData), gst_skymap_coinc_collectdata_destroy);
+	element->coinc_collectdata = gst_collect_pads_add_pad_full(element->collect, gst_element_get_static_pad(GST_ELEMENT(element), "sink"), sizeof(GstSkymapCoincCollectData), (GstCollectDataDestroyNotify*)gst_skymap_coinc_collectdata_destroy);
 	((GstSkymapCoincCollectData*)(element->coinc_collectdata))->last_buffer = NULL;
 	((GstSkymapCollectData*)(element->coinc_collectdata))->last_end_time = 0;
 	element->snr_collectdatas = NULL;
