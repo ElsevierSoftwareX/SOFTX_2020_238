@@ -584,7 +584,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 						/* Set per-channel analysis parameters. */
 						skymap->wanalysis.detectors[ichannel] = analysis_identify_detector(collectdata->instrument);
-						skymap->wanalysis.wSw[ichannel] = found_sngl->eff_distance;
+						skymap->wanalysis.wSw[ichannel] = found_sngl->sigmasq;
 						skymap->wanalysis.min_ts[ichannel] = 1.0e-9 * start_time - min_t;
 						skymap->wanalysis.max_ts[ichannel] = 1.0e-9 * stop_time - min_t;
 						skymap->wanalysis.xSw_real[ichannel] = xSw_real;
@@ -598,8 +598,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 						unsigned int i;
 						for (i = 0; i < xSw_nsamples; i ++)
 						{
-							xSw_real[i] = adapter_bytes[adapter_stride*i + bank_index*2] * found_sngl->eff_distance;
-							xSw_imag[i] = adapter_bytes[adapter_stride*i + bank_index*2 + 1] * found_sngl->eff_distance;
+							xSw_real[i] = adapter_bytes[adapter_stride*i + bank_index*2] * found_sngl->sigmasq;
+							xSw_imag[i] = adapter_bytes[adapter_stride*i + bank_index*2 + 1] * found_sngl->sigmasq;
 						}
 
 						/* Free data that was copied from adapter. */
