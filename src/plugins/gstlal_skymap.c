@@ -598,8 +598,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 						unsigned int i;
 						for (i = 0; i < xSw_nsamples; i ++)
 						{
-							xSw_real[i] = adapter_bytes[adapter_stride*i + bank_index*2] * found_sngl->sigmasq;
-							xSw_imag[i] = adapter_bytes[adapter_stride*i + bank_index*2 + 1] * found_sngl->sigmasq;
+							xSw_real[i] = adapter_bytes[adapter_stride*i + bank_index*2] * sqrt(found_sngl->sigmasq);
+							xSw_imag[i] = adapter_bytes[adapter_stride*i + bank_index*2 + 1] * sqrt(found_sngl->sigmasq);
 						}
 
 						/* Free data that was copied from adapter. */
