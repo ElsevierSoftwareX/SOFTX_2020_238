@@ -203,7 +203,9 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 				guint8 graylevel = 0xFF * x;
 				pixdata[i] = (guint32)graylevel << 16;
 			}
-			cairo_surface_t *pixsurf = cairo_image_surface_create_for_data(pixdata, CAIRO_FORMAT_RGB24, desired_samples, element->nchannels, desired_samples * 4);
+			cairo_surface_t *pixsurf = cairo_image_surface_create_for_data(pixdata, CAIRO_FORMAT_RGB24, element->nchannels, desired_samples, element->nchannels * 4);
+			cairo_rotate(cr, M_PI_2);
+			cairo_scale(cr, 1.0, -1.0);
 			cairo_set_source_surface(cr, pixsurf, 0, 0);
 			cairo_paint(cr);
 			cairo_surface_destroy(pixsurf);
