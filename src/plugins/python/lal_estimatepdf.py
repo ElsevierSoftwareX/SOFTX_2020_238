@@ -57,8 +57,9 @@ from pylal.xlal.datatypes import snglinspiraltable
 def trigger_time(trig):
 	return trig.end_time * gst.SECOND + trig.end_time_ns
 
-def trigger_template(trig):
-	return trig.mchirp
+hist_mchirp_bins = rate.ATanBins(1.1, 1.40, 40)
+def trigger_hist_group(trig):
+	return hist_mchirp_bins[trig.mchirp]
 
 def trigger_stat(trig):
 	return trig.snr
@@ -92,6 +93,14 @@ class MovingHistogram(object):
 		self.hist_ind.append(ind)
 		self.timestamps.append(timestamp)
 
+	def get_count(self, stat):
+		# FIXME: This may by slow with a deque. Must profile.
+		return self.hist[self.bins[stat]:].sum()
+
+	def get_livetime(self):
+		# FIXME: This is a super naive livetime estimation.
+		return self.timestamps[-1] - self.timestamps[0]
+
 	def get_far(self, stat):
 		"""
 		Return the FAR (false-alarm rate) of the given stat based on the
@@ -99,15 +108,9 @@ class MovingHistogram(object):
 		"""
 		# Reminder: timestamps are in ns, FAR is in Hz
 
-		# FIXME: This may by slow with a deque. Must profile.
-		count = self.hist[self.bins[stat]:].sum()
-
-		# FIXME: This is a super naive livetime estimation.
-		livetime = self.timestamps[-1] - self.timestamps[0]
-
 		# FIXME FIXME FIXME: adding 1 to count to guarantee non-zero FARs, with
 		# a minum of (1/livetime), but this can really screw up FARs in the tail!
-		return (count + 1) / livetime * gst.SECOND
+		return (self.get_count(stat) + 1) / self.get_livetime() * gst.SECOND
 
 
 #
@@ -170,7 +173,7 @@ class lal_estimatepdf(gst.BaseTransform):
 		# FIXME: using linear bins imposes a minimum and maximum SNR.  If
 		# a trigger has SNR that is greater than or less than this value, then
 		# pylal.rate will actually raise an IndexError!
-		self.bins = rate.LinearBins(3, 10000, 1000000)
+		self.bins = rate.ATanBins(5, 6, 1000)
 
 		# have one moving hist per template
 		self.moving_hist_dict = {}
@@ -195,7 +198,7 @@ class lal_estimatepdf(gst.BaseTransform):
 			min_time = trigger_time(trig) - min_trigger_age
 			while len(held) > 0 and trigger_time(held[0]) < min_time:
 				temp_trig = held.popleft()
-				temp_hist = moving_hist_dict.get(trigger_template(temp_trig))
+				temp_hist = moving_hist_dict.get(trigger_hist_group(temp_trig))
 				assert temp_hist is not None  # temp_trig should already have passed through FAR assignment
 				temp_hist.update(trigger_time(temp_trig), trigger_stat(temp_trig))
 
@@ -203,11 +206,12 @@ class lal_estimatepdf(gst.BaseTransform):
 			held.append(trig)
 
 			# assign FAR
-			moving_hist = moving_hist_dict.get(trigger_template(trig))
+			moving_hist = moving_hist_dict.get(trigger_hist_group(trig))
 			if moving_hist is None:
-				moving_hist = moving_hist_dict.setdefault(trigger_template(trig), MovingHistogram(self.bins, max_hist_len))
+				moving_hist = moving_hist_dict.setdefault(trigger_hist_group(trig), MovingHistogram(self.bins, max_hist_len))
 			if len(moving_hist) >= min_hist_len:
 				trig.alpha = moving_hist.get_far(trigger_stat(trig))
+				#print >>sys.stderr, trigger_time(trig), trigger_stat(trig), trig.alpha
 			else:
 				trig.alpha = float("inf")  # FIXME: discard trig
 
