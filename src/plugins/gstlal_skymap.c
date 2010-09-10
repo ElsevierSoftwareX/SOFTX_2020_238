@@ -857,7 +857,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->collect_event = NULL;
 	gst_collect_pads_set_function(element->collect, GST_DEBUG_FUNCPTR(collected), element);
 
-	element->coinc_collectdata = gst_collect_pads_add_pad_full(element->collect, gst_element_get_static_pad(GST_ELEMENT(element), "sink"), sizeof(GstSkymapCoincCollectData), (GstCollectDataDestroyNotify*)gst_skymap_coinc_collectdata_destroy);
+	element->coinc_collectdata = gst_collect_pads_add_pad_full(element->collect, gst_element_get_static_pad(GST_ELEMENT(element), "sink"), sizeof(GstSkymapCoincCollectData), (GstCollectDataDestroyNotify)gst_skymap_coinc_collectdata_destroy);
 	((GstSkymapCoincCollectData*)(element->coinc_collectdata))->last_buffer = NULL;
 	((GstSkymapCollectData*)(element->coinc_collectdata))->last_end_time = 0;
 	element->snr_collectdatas = NULL;
