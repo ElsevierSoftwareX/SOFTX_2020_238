@@ -410,18 +410,18 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 			if (data == (GstSkymapCollectData*)(skymap->coinc_collectdata))
 			{
-				GST_INFO_OBJECT(skymap, "popping coinc buffer");
+				GST_DEBUG_OBJECT(skymap, "popping coinc buffer");
 				g_assert(((GstSkymapCoincCollectData*)(skymap->coinc_collectdata))->last_buffer == NULL);
 				if (GST_BUFFER_SIZE(buf) > 0)
 					((GstSkymapCoincCollectData*)(skymap->coinc_collectdata))->last_buffer = buf;
 				else
 					gst_buffer_unref(buf);
 			} else {
-				GST_INFO_OBJECT(skymap, "popping SNR buffer");
+				GST_DEBUG_OBJECT(skymap, "popping SNR buffer");
 				gst_adapter_push( ((GstSkymapSnrCollectData*)data)->adapter, buf );
 			}
 		} else {
-			GST_INFO_OBJECT(skymap, "no buffer to pop");
+			GST_DEBUG_OBJECT(skymap, "no buffer to pop");
 		}
 	}
 
@@ -482,7 +482,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 				if (((GstSkymapCollectData*)collectdata)->last_end_time < max_stop_time)
 				{
-					GST_INFO_OBJECT(skymap, "nothing to do right now");
+					GST_DEBUG_OBJECT(skymap, "nothing to do right now");
 					processed = FALSE;
 					break;
 				} /* else {
@@ -693,7 +693,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			if (last_end_time > last_untouchable_time)
 			{
 				guint64 flushable_samples = gst_util_uint64_scale(last_end_time - last_untouchable_time, rate, GST_SECOND);
-				GST_INFO_OBJECT(skymap, "flushing adapters");
+				GST_DEBUG_OBJECT(skymap, "flushing adapters");
 				gst_adapter_flush(collectdata->adapter, flushable_samples * adapter_stride_bytes);
 			}
 		}
