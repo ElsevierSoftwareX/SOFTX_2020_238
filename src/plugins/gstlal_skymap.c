@@ -28,6 +28,10 @@
 #include <math.h>
 
 
+#define GST_CAT_DEFAULT gstlal_skymap_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
 static GstElementClass *parent_class = NULL;
 
 
@@ -890,6 +894,7 @@ GType gstlal_skymap_get_type(void)
 			.instance_init = instance_init,
 		};
 		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_skymap", &info, 0);
+		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "skymap", 0, "skymap element");
 	}
 
 	return type;
