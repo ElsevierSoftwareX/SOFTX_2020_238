@@ -49,6 +49,7 @@ different ways to handle error conditions, and when to use each of them.
 
   See <http://library.gnome.org/devel/glib/stable/glib-Testing.html>.
 
+
 Writing elements in Python
 ==========================
 
