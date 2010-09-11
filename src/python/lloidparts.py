@@ -154,7 +154,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 		args += ("lal_simulation", {"xml-location": injection_filename})
 
 	elems = mkelems_fast(pipeline, *args)
-	
+
 	if elems[0].set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
 		raise RuntimeError, "Element %s did not want to enter ready state" % elems[0].get_name()
 	if not elems[0].send_event(seekevent):
@@ -209,7 +209,7 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8):
 			elem.set_property("mean-psd", psd.data[:n])
 
 		elems[-3].connect_after("notify::f-nyquist", f_nyquist_changed, psd)
-	
+
 	#
 	# down-sample whitened time series to remaining target sample rates
 	# while applying an amplitude correction to adjust for low-pass
@@ -315,7 +315,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		# waiting for input from all upstream elements.
 
 		"queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": gst.SECOND},
-		
+
 		#
 		# reconstruct physical SNRs
 		#
@@ -329,7 +329,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 
 	mkelems_fast(pipeline, src, "queue")[-1].link_pads("src", elems[0], "sink")
 	mkelems_fast(pipeline, control_src, "queue")[-1].link_pads("src", elems[0], "control")
-	
+
 
 	#
 	# done
