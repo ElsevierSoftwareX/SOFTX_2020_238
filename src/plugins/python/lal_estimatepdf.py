@@ -37,6 +37,7 @@ from gstlal.pipeutil import *
 from gst.extend.pygobject import gproperty
 import numpy as np
 
+from glue.segments import segment, segmentlist, NegInfinity
 from pylal import rate
 from pylal.xlal.datatypes import snglinspiraltable
 
@@ -78,6 +79,11 @@ class MovingHistogram(object):
 		self.timestamps = collections.deque()
 		self.hist = np.zeros(len(bins), dtype=float)
 
+		# Performance note: We can either track gaps or non-gaps. As we expect
+		# a duty cycle greater than 50% (in number of buffers), I choose to
+		# track gaps.
+		self.gaps = segmentlist()
+
 	def __len__(self):
 		return len(self.hist_ind)
 
@@ -93,13 +99,31 @@ class MovingHistogram(object):
 		self.hist_ind.append(ind)
 		self.timestamps.append(timestamp)
 
+	def add_gap(self, gap):
+		"""
+		Store the gap segment. Also, do housekeeping to clean up old gap
+		segments.
+		"""
+		self.gaps |= segmentlist([gap])
+		self.gaps -= segmentlist([segment(NegInfinity, self.timestamps[0])])
+
 	def get_count(self, stat):
 		# FIXME: This may by slow with a deque. Must profile.
+		# FIXME FIXME FIXME: adding 1 to count to guarantee non-zero FARs, with
+		# a minimum of (1/livetime), but this can really screw up FARs in the
+		# tail!
 		return self.hist[self.bins[stat]:].sum()
 
 	def get_livetime(self):
+		"""
+		Return the approximate livetime represented in the current histogram.
+		It is estimated as being the whole stretch from the oldest to newest
+		triggers except where gaps have been registered as dead time. Gaps
+		newer than min_trigger_age are irrelevant.
+		"""
 		# FIXME: This is a super naive livetime estimation.
-		return self.timestamps[-1] - self.timestamps[0]
+		naive_seg = segmentlist([segment(self.timestamps[0], self.timestamps[-1])])
+		return abs(naive_seg - self.gaps)
 
 	def get_far(self, stat):
 		"""
@@ -107,9 +131,6 @@ class MovingHistogram(object):
 		contents of the histogram.
 		"""
 		# Reminder: timestamps are in ns, FAR is in Hz
-
-		# FIXME FIXME FIXME: adding 1 to count to guarantee non-zero FARs, with
-		# a minum of (1/livetime), but this can really screw up FARs in the tail!
 		return (self.get_count(stat) + 1) / self.get_livetime() * gst.SECOND
 
 
@@ -168,8 +189,10 @@ class lal_estimatepdf(gst.BaseTransform):
 		super(lal_estimatepdf, self).__init__()
 		self.src_pads().next().use_fixed_caps()
 		self.sink_pads().next().use_fixed_caps()
+		self.set_gap_aware(True)
 		for prop in self.props:
 			self.set_property(prop.name, prop.default_value)
+
 		# FIXME: using linear bins imposes a minimum and maximum SNR.  If
 		# a trigger has SNR that is greater than or less than this value, then
 		# pylal.rate will actually raise an IndexError!
@@ -187,6 +210,13 @@ class lal_estimatepdf(gst.BaseTransform):
 		return True
 
 	def do_transform_ip(self, buf):
+		if buf.flag_is_set(gst.BUFFER_FLAG_GAP):
+			gap = segment(buf.timestamp, buf.timestamp + buf.duration)
+			# pass gap information into each histogram
+			for hist in self.moving_hist_dict.itervalues():
+				hist.add_gap(gap)
+			return gst.FLOW_OK
+
 		min_trigger_age = self.get_property("min-trigger-age")
 		min_hist_len = self.get_property("min-history-length")
 		max_hist_len = self.get_property("max-history-length")
@@ -224,8 +254,6 @@ class lal_estimatepdf(gst.BaseTransform):
 		#
 
 		return gst.FLOW_OK
-
-
 
 
 # Register element class
