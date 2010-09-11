@@ -501,6 +501,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 			if (processed)
 			{
+				GST_INFO_OBJECT(skymap, "starting sky localization");
 				/* Build skymap. */
 				{
 					/* Make sure we don't have more than the supported number of channels. */
@@ -653,6 +654,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 					/* TODO: emit coinc event right before emitting buffer. */
 
 					/* Push buffer. */
+					GST_INFO_OBJECT(skymap, "completed sky localization");
 					result = gst_pad_push(skymap->srcpad, outbuf);
 					if (result != GST_FLOW_OK)
 						return result;
