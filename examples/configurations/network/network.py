@@ -11,7 +11,7 @@ opts, args = OptionParser(
 		Option("--gps-start-time", "-s", metavar="INT", type="int", help="GPS time at which to start analysis."),
 		Option("--gps-end-time", "-e", metavar="INT", type="int", help="GPS time at which to end analysis."),
 		Option("--template-bank", metavar="FILE", help="Name of template bank file."),
-		Option("--output", metavar="FILE", help="Name of output file. (.xml .xml.gz or .sqlite)"),
+		Option("--output", metavar="FILE.{xml,xml.gz,sqlite}", help="Name of output file.  If not provided, then the output stage will be omitted."),
 	]
 ).parse_args()
 
@@ -28,8 +28,6 @@ from pylal.datatypes import LIGOTimeGPS
 import sys
 import os
 
-output_prefix=os.path.split(opts.output)[0]
-output_name=os.path.split(opts.output)[1]
 
 pipeline = gst.Pipeline()
 mainloop = gobject.MainLoop()
@@ -48,10 +46,15 @@ coinc_elems = mkelems_fast(pipeline, "lal_coinc", "progressreport", {"name": "pr
 #mkelems_fast(pipeline, skymap, "fakesink")
 #mkelems_fast(pipeline, coinc, "fakesink")
 
-seg = segments.segment(LIGOTimeGPS(opts.gps_start_time), LIGOTimeGPS(opts.gps_end_time))
-data = {}
-data['all'] = ligolw_output.Data(opts.instrument, tmp_space=None, output=os.path.join(output_prefix,"".join(opts.instrument)+"-"+output_name), seg=seg, out_seg=seg, injections=opts.injections, comment="", verbose=True)
-data['all'].prepare_output_file(ligolw_output.make_process_params(opts))
+if opts.output is not None:
+	output_prefix=os.path.split(opts.output)[0]
+	output_name=os.path.split(opts.output)[1]
+	seg = segments.segment(LIGOTimeGPS(opts.gps_start_time), LIGOTimeGPS(opts.gps_end_time))
+	data = {}
+	data['all'] = ligolw_output.Data(opts.instrument, tmp_space=None, output=os.path.join(output_prefix,"".join(opts.instrument)+"-"+output_name), seg=seg, out_seg=seg, injections=opts.injections, comment="", verbose=True)
+	data['all'].prepare_output_file(ligolw_output.make_process_params(opts))
+else:
+	mkelems_fast(pipeline, coinc_elems[-1], "fakesink", {"sync": False, "async": False})
 
 for ifo in opts.instrument:
 	bank = read_bank("bank.%s.pickle" % ifo)
@@ -65,11 +68,12 @@ for ifo in opts.instrument:
 	triggers = lloidparts.mkLLOIDsnrToTriggers(pipeline, snr_tee, bank, lal_triggergen_algorithm=2, lal_triggergen_max_gap=1.0)
 	triggers = mkelems_fast(pipeline, triggers, "progressreport", {"name": "progress_trig_%s" % ifo})[-1]
 	triggers_tee = mkelems_fast(pipeline, triggers, "tee")[-1]
-	# output a database for each detector
-	data[ifo] = ligolw_output.Data([ifo], tmp_space=None, output=ifo+"-"+opts.output, seg=seg, out_seg=seg, injections=None, comment="", verbose=True)
-	data[ifo].prepare_output_file(ligolw_output.make_process_params(opts))
-	pipeparts.mkappsink(pipeline, triggers_tee).connect_after("new-buffer", lloidparts.appsink_new_buffer, data[ifo])
 	triggers_tee.link_pads("src%d", coinc_elems[0], "sink%d")
+	# output a database for each detector
+	if opts.output is not None:
+		data[ifo] = ligolw_output.Data([ifo], tmp_space=None, output=ifo+"-"+opts.output, seg=seg, out_seg=seg, injections=None, comment="", verbose=True)
+		data[ifo].prepare_output_file(ligolw_output.make_process_params(opts))
+		pipeparts.mkappsink(pipeline, triggers_tee).connect_after("new-buffer", lloidparts.appsink_new_buffer, data[ifo])
 	#mkelems_fast(pipeline, snr_tee, "queue", skymap)
 
 #
@@ -77,7 +81,8 @@ for ifo in opts.instrument:
 #
 
 # FIXME make some of these kw args options
-pipeparts.mkappsink(pipeline, coinc_elems[-1]).connect_after("new-buffer", lloidparts.appsink_new_buffer, data['all'])
+if opts.output is not None:
+	pipeparts.mkappsink(pipeline, coinc_elems[-1]).connect_after("new-buffer", lloidparts.appsink_new_buffer, data['all'])
 
 #
 # Ready set go!
@@ -86,5 +91,7 @@ pipeparts.mkappsink(pipeline, coinc_elems[-1]).connect_after("new-buffer", lloid
 pipeline.set_state(gst.STATE_PLAYING)
 gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS, "network")
 mainloop.run()
-for datafile in data.itervalues():
-	datafile.write_output_file()
+
+if opts.output is not None:
+	for datafile in data.itervalues():
+		datafile.write_output_file()
