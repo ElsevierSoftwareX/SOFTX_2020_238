@@ -28,6 +28,10 @@
 #include <math.h>
 
 
+#define GST_CAT_DEFAULT gstlal_skymap_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
 static GstElementClass *parent_class = NULL;
 
 
@@ -406,18 +410,18 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 			if (data == (GstSkymapCollectData*)(skymap->coinc_collectdata))
 			{
-				GST_INFO_OBJECT(skymap, "popping coinc buffer");
+				GST_DEBUG_OBJECT(skymap, "popping coinc buffer");
 				g_assert(((GstSkymapCoincCollectData*)(skymap->coinc_collectdata))->last_buffer == NULL);
 				if (GST_BUFFER_SIZE(buf) > 0)
 					((GstSkymapCoincCollectData*)(skymap->coinc_collectdata))->last_buffer = buf;
 				else
 					gst_buffer_unref(buf);
 			} else {
-				GST_INFO_OBJECT(skymap, "popping SNR buffer");
+				GST_DEBUG_OBJECT(skymap, "popping SNR buffer");
 				gst_adapter_push( ((GstSkymapSnrCollectData*)data)->adapter, buf );
 			}
 		} else {
-			GST_INFO_OBJECT(skymap, "no buffer to pop");
+			GST_DEBUG_OBJECT(skymap, "no buffer to pop");
 		}
 	}
 
@@ -478,7 +482,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 				if (((GstSkymapCollectData*)collectdata)->last_end_time < max_stop_time)
 				{
-					GST_INFO_OBJECT(skymap, "nothing to do right now");
+					GST_DEBUG_OBJECT(skymap, "nothing to do right now");
 					processed = FALSE;
 					break;
 				} /* else {
@@ -497,6 +501,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 			if (processed)
 			{
+				GST_INFO_OBJECT(skymap, "starting sky localization");
 				/* Build skymap. */
 				{
 					/* Make sure we don't have more than the supported number of channels. */
@@ -649,6 +654,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 					/* TODO: emit coinc event right before emitting buffer. */
 
 					/* Push buffer. */
+					GST_INFO_OBJECT(skymap, "completed sky localization");
 					result = gst_pad_push(skymap->srcpad, outbuf);
 					if (result != GST_FLOW_OK)
 						return result;
@@ -689,7 +695,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			if (last_end_time > last_untouchable_time)
 			{
 				guint64 flushable_samples = gst_util_uint64_scale(last_end_time - last_untouchable_time, rate, GST_SECOND);
-				GST_INFO_OBJECT(skymap, "flushing adapters");
+				GST_DEBUG_OBJECT(skymap, "flushing adapters");
 				gst_adapter_flush(collectdata->adapter, flushable_samples * adapter_stride_bytes);
 			}
 		}
@@ -890,6 +896,7 @@ GType gstlal_skymap_get_type(void)
 			.instance_init = instance_init,
 		};
 		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_skymap", &info, 0);
+		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "skymap", 0, "skymap element");
 	}
 
 	return type;
