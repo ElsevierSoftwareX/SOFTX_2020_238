@@ -49,6 +49,33 @@ different ways to handle error conditions, and when to use each of them.
 
   See <http://library.gnome.org/devel/glib/stable/glib-Testing.html>.
 
+
+Queues
+======
+
+One of the trickiest parts of constructing complicated GStreamer pipelines is
+placement of queues.  Queues are useful for temporarily storing buffers when
+hooking together pipeline sections that have different latencies.
+
+There are three different queue elements that come with GStreamer: ``queue``,
+``queue2``, and ``multiqueue``.
+
+* ``queue`` is the simplest: it has an adjustable minimum and maximum size.
+
+* ``queue2`` is similar to ``queue``, but can spool data to a temporary file.
+
+* ``multiqueue`` is the most sophisticated.  It can be used for queuing multiple
+   streams simultaneously.
+
+It is sometimes difficult to decide when queues are necessary.  Here are a few
+different situations in which queues can be helpful:
+
+* On the source pads of a ``tee``: the ``tee`` element pushes buffers on each
+  source pad in sequence, so if it is important that the processing downstream
+  of the tee occurs in parallel, you have to insert queues so that the tee can
+  send its buffer to all pads immediately.
+
+
 Writing elements in Python
 ==========================
 
