@@ -14,6 +14,7 @@ from optparse import OptionParser, Option
 	description='Plot latency from progressreport elements in GStreamer pipelines',
 	option_list=[
 		Option('--disable-legend', action='store_true', default=False, help='Disable figure legend.'),
+		Option('--source-name', help='Name of the progress reports from which to calculate latency.'),
 	]
 ).parse_args()
 
@@ -62,6 +63,27 @@ if out_filename is not None:
 	import matplotlib
 	matplotlib.use('Agg')
 import pylab
+
+if options.source_name:
+	from scipy.interpolate import interp1d
+	pylab.subplot(1,2,1)
+	source_trend = trends[options.source_name]
+	source_data = pylab.array(source_trend)
+	source_data_interp = interp1d(source_data[:,0], source_data[:,1], bounds_error=True)
+	for k, v in sorted(trends.iteritems()):
+		if k == options.source_name: continue
+		data = pylab.array(v)
+		data = data[data[:,0] < source_data[:,0].max(), :]
+		latencies = data[:,1] - source_data_interp(data[:,0])
+		#latencies = pylab.ma.array(latencies, mask=pylab.isfinite(latencies))
+		#latencies[latencies < 0] = float('nan')
+		h = pylab.hist(latencies, label=k, bins=pylab.arange(pylab.floor(latencies.min()),pylab.ceil(latencies.max())), normed=True, cumulative=0, histtype='step')
+		#pylab.xlim(-1, h[0][pylab.searchsorted(h[1], 0.1)])
+		#pylab.xlim(0, 200)
+	pylab.legend()
+	pylab.xlabel('Latency (seconds)')
+	pylab.ylabel('Fraction')
+	pylab.subplot(1,2,2)
 
 # Plot diagonal grid
 t0 = max(gps_duration, running_duration)
