@@ -1103,7 +1103,9 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 			 */
 
 			gst_adapter_push(element->snradapter, snrbuf);
+			snrbuf = NULL;
 			gst_adapter_push(element->chisqadapter, chisqbuf);
+			chisqbuf = NULL;
 		}
 
 		result = align_adapters(element);
@@ -1118,7 +1120,6 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 
 		while (available_snr_time(element) > 3 * max_gap * GST_SECOND && available_chisq_time(element) > 3 * max_gap * GST_SECOND) {
 
-			/* FIXME, is it okay to reuse snrbuf since ownership was taken? */
 			take_snr_chisq_buffers(element, max_gap*GST_SECOND, &snrbuf, &chisqbuf);
 			nevents = bounded_latency(element, snrbuf, chisqbuf, srcbuf, &head);
 			/* We actually record triggers one buffer ahead of snrbuf */
