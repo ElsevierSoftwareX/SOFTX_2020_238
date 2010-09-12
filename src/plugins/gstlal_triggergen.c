@@ -1038,21 +1038,27 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 
 			GST_DEBUG_OBJECT(element, "input is gap, sending gap downstream");
 			result = prepare_gap_buffer(element, &srcbuf);
-			if (result != GST_FLOW_OK)
+			if (result != GST_FLOW_OK) {
+				GST_ERROR_OBJECT(element, "prepare_gap_buffer() failed");
 				goto error;
+			}
 		} else {
 			SnglInspiralTable *head = NULL;
 			nevents = max_over_threshold(element, snrbuf, chisqbuf, srcbuf, &head);
 			if(nevents) {
 
 				result = prepare_trigger_buffer(element, &srcbuf, &head, nevents);
-				if(result != GST_FLOW_OK)
+				if(result != GST_FLOW_OK) {
+					GST_ERROR_OBJECT(element, "prepare_trigger_buffer() failed");
 					goto error;
+				}
 			} else {
 				GST_DEBUG_OBJECT(element, "found 0 events, sending gap downstream");
 				result = prepare_gap_buffer(element, &srcbuf);
-				if (result != GST_FLOW_OK)
+				if (result != GST_FLOW_OK) {
+					GST_ERROR_OBJECT(element, "prepare_gap_buffer() failed");
 					goto error;
+				}
 			}
 		}
 
@@ -1097,8 +1103,10 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		}
 
 		result = align_adapters(element);
-		if (result != GST_FLOW_OK)
+		if (result != GST_FLOW_OK) {
+			GST_ERROR_OBJECT(element, "align_adapters() failed");
 			goto error;
+		}
 
 		if (available_snr_time(element) <= 3 * max_gap * GST_SECOND || available_chisq_time(element) <= 3 * max_gap * GST_SECOND) {
 			goto wait;
@@ -1114,13 +1122,17 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 
 			if(nevents) {
 				result = prepare_trigger_buffer(element, &srcbuf, &head, nevents);
-				if(result != GST_FLOW_OK)
+				if(result != GST_FLOW_OK) {
+					GST_ERROR_OBJECT(element, "prepare_trigger_buffer() failed");
 					goto error;
+				}
 			} else {
 				GST_DEBUG_OBJECT(element, "found 0 events, sending gap downstream");
 				result = prepare_gap_buffer(element, &srcbuf);
-				if (result != GST_FLOW_OK)
+				if (result != GST_FLOW_OK) {
+					GST_ERROR_OBJECT(element, "prepare_gap_buffer() failed");
 					goto error;
+				}
 			}
 
 			/*
