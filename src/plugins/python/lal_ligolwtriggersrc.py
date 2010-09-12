@@ -51,14 +51,14 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 	gproperty(
 		gobject.TYPE_STRING,
 		"xml-location",
-		"Name of LIGO Light Weight XML file containing list of templates",
+		"Name of LIGO Light Weight XML file containing single-detector triggers",
 		None,
 		construct=True # FIXME if gst.extend.pygobject provided gst.PARAM_MUTABLE_READY it would be a good idea to set this here
 	)
 	gproperty(
 		gobject.TYPE_STRING,
 		"sqlite-location",
-		"Name of LIGO Light Weight SQLite file containing list of templates",
+		"Name of LIGO Light Weight SQLite file containing single-detector triggers",
 		None,
 		construct=True # FIXME if gst.extend.pygobject provided gst.PARAM_MUTABLE_READY it would be a good idea to set this here
 	)
