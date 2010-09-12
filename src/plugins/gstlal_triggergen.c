@@ -1081,7 +1081,9 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 			 */
 
 			gst_buffer_unref(snrbuf);
+			snrbuf = NULL;
 			gst_buffer_unref(chisqbuf);
+			chisqbuf = NULL;
 		}
 		else {
 
