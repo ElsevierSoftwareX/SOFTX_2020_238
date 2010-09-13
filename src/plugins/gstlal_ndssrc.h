@@ -2,7 +2,7 @@
  *  NDS-based src element
  *  see https://www.lsc-group.phys.uwm.edu/daswg/wiki/NetworkDataServer2
  *
- *  Copyright (C) 2008  Leo Singer
+ *  Copyright (C) 2009  Leo Singer
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
