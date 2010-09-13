@@ -378,15 +378,14 @@ static GstFlowReturn align_adapters(GSTLALTriggerGen *element)
 	{ /* for scope */
 		GstClockTime snrtime = gst_adapter_prev_timestamp(element->snradapter, NULL);
 		GstClockTime chisqtime = gst_adapter_prev_timestamp(element->chisqadapter, NULL);
-		GstBuffer *buf;
 		if (snrtime < chisqtime) {
 			guint snr_bytes = snr_time_to_bytes(element, chisqtime - snrtime);
 			if (snr_bytes - snr_bytes / sizeof(complex double) / element->num_templates * sizeof(complex double) * element->num_templates) {
 				GST_ERROR_OBJECT(element, "%u was not a multiple of %u bytes", snr_bytes, (unsigned int) (sizeof(complex double) * element->num_templates));
 				return GST_FLOW_ERROR;
 			}
-			buf = gst_adapter_take_buffer(element->snradapter, snr_bytes);
-			gst_buffer_unref(buf); /*useless*/
+			if (snr_bytes > 0)
+				gst_adapter_flush(element->snradapter, snr_bytes);
 		}
 		if (chisqtime < snrtime) {
 			guint chisq_bytes = snr_time_to_bytes(element, snrtime - chisqtime);
@@ -394,8 +393,8 @@ static GstFlowReturn align_adapters(GSTLALTriggerGen *element)
 				GST_ERROR_OBJECT(element, "%u was not a multiple of %u bytes", chisq_bytes, (unsigned int) (sizeof(double) * element->num_templates));
 				return GST_FLOW_ERROR;
 			}
-			buf = gst_adapter_take_buffer(element->chisqadapter, chisq_bytes);
-			gst_buffer_unref(buf); /*useless*/
+			if (chisq_bytes > 0)
+				gst_adapter_flush(element->chisqadapter, chisq_bytes);
 		}
 		element->align_adapters = FALSE;
 		return GST_FLOW_OK;
