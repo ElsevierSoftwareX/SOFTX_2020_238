@@ -745,6 +745,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		GST_BUFFER_SIZE(outbuf) = length * autocorrelation_channels(element) * sizeof(double);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		set_metadata(element, outbuf, length, TRUE);
+		result = GST_FLOW_OK;
 	}
 
 	/*
