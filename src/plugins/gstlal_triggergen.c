@@ -1027,6 +1027,22 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	}
 
 	/*
+	 * Drop zero size buffers.  align_adapters can only do its job once buffers
+	 * have appeared on both pads.  This is kind of ugly; I wish that this was
+	 * not necessary.
+	 */
+
+	if (GST_BUFFER_SIZE(snrbuf) == 0 || GST_BUFFER_SIZE(chisqbuf) == 0)
+	{
+		GST_WARNING_OBJECT(element, "either snr or chisq pad provided a zero sized buffer; dropping both");
+		gst_buffer_unref(snrbuf);
+		snrbuf = NULL;
+		gst_buffer_unref(chisqbuf);
+		chisqbuf = NULL;
+		return GST_FLOW_OK;
+	}
+
+	/*
 	 * Construct output buffer.  timestamp is earliest of the two input
 	 * timestamps, and end time is last of the two input end times.
 	 */
