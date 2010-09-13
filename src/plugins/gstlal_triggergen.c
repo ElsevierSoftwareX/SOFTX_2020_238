@@ -235,7 +235,7 @@ static int push_zeros(GSTLALTriggerGen *element, GstAdapter *adapter, GstBuffer 
 		GST_DEBUG_OBJECT(element, "failure allocating zero-pad buffer");
 		return -1;
 	}
-	gst_adapter_copy_metadata(zerobuf, inbuf, GST_BUFFER_COPY_TIMESTAMPS | GST_BUFFER_COPY_CAPS);
+	gst_buffer_copy_metadata(zerobuf, inbuf, GST_BUFFER_COPY_TIMESTAMPS | GST_BUFFER_COPY_CAPS);
 	memset(GST_BUFFER_DATA(zerobuf), 0, GST_BUFFER_SIZE(zerobuf));
 	gst_adapter_push(adapter, zerobuf);
 	return 0;
