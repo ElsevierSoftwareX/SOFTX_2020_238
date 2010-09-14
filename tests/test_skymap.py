@@ -67,7 +67,7 @@ class TestSkymap(PipelineTestFixture):
 			s = sngl.SnglInspiralTable()
 			s.end_time = mid_time
 			s.end_time_ns = long(500 * gst.MSECOND + random.random() * 2 * gst.MSECOND)
-			s.eff_distance = 1.0
+			s.sigmasq = 1.0
 			s.ifo = ifo
 			s.mass1 = 1.758074
 			s.mass2 = 1.124539
