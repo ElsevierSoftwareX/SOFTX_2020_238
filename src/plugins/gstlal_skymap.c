@@ -683,6 +683,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	if (((GstSkymapCoincCollectData*)(skymap->coinc_collectdata))->last_buffer == NULL)
 	{
 		GstClockTime last_end_time = ((GstSkymapCollectData*)(skymap->coinc_collectdata))->last_end_time;
+		GstClockTime last_untouchable_time = last_end_time + skymap->dt + skymap->trigger_present_padding + skymap->trigger_absent_padding;
 		GSList* slist;
 		for (slist = skymap->snr_collectdatas; slist; slist = g_slist_next(slist))
 		{
@@ -691,11 +692,11 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			GstClockTime adapter_start_time = gst_adapter_prev_timestamp(collectdata->adapter, &adapter_distance_bytes);
 			guint64 adapter_distance = adapter_distance_bytes / adapter_stride_bytes;
 			GstClockTime adapter_pos_time = adapter_start_time + gst_util_uint64_scale(adapter_distance, GST_SECOND, rate);
-			GstClockTime last_untouchable_time = adapter_pos_time + skymap->dt + skymap->trigger_present_padding + skymap->trigger_absent_padding;
-			if (last_end_time > last_untouchable_time)
+			if (last_untouchable_time >= adapter_start_time && adapter_pos_time > last_untouchable_time)
 			{
-				guint64 flushable_samples = gst_util_uint64_scale(last_end_time - last_untouchable_time, rate, GST_SECOND);
-				GST_DEBUG_OBJECT(skymap, "flushing adapters");
+				guint64 flushable_samples = gst_util_uint64_scale(adapter_pos_time - last_untouchable_time, rate, GST_SECOND);
+				guint64 available_samples = gst_adapter_available(collectdata->adapter) / adapter_stride_bytes;
+				GST_INFO_OBJECT(skymap, "flushing adapter; it contain %llu samples, will flush %llu: adapter_pos_time=%llu, last_end_time=%llu, last_untouchable_time=%llu", available_samples, flushable_samples, adapter_pos_time, last_end_time, last_untouchable_time);
 				gst_adapter_flush(collectdata->adapter, flushable_samples * adapter_stride_bytes);
 			}
 		}
