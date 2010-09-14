@@ -215,6 +215,7 @@ class lal_faketriggersrc(gst.BaseSrc):
 				sngl.coa_phase = 0
 				sngl.chisq = 1
 				sngl.chisq_dof = 1
+				sngl.sigmasq = 1.0
 				new_triggers.append(sngl)
 			if len(new_triggers) > 0:
 				triggers_by_template.append(new_triggers)
