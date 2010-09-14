@@ -78,7 +78,7 @@ class TestSkymap(PipelineTestFixture):
 		buf.offset_end = gst.BUFFER_OFFSET_NONE
 
 		self.assertEqual(appsrc.emit("push-buffer", buf), gst.FLOW_OK)
-		print appsink.emit("pull-buffer")
+		buf = appsink.emit("pull-buffer")
 
 		# TODO Wire up appsrc and appsink with test data
 		#appsink.connect_after('new-buffer', self.coinc_new_buffer, None)
