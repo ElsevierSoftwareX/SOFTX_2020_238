@@ -527,6 +527,10 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 					/* Set rate. */
 					skymap->wanalysis.rate = rate;
 
+					/* Set min and max time. */
+					skymap->wanalysis.min_t = 0;
+					skymap->wanalysis.max_t = 1.0e-9 * (max_stop_time - min_start_time);
+
 					size_t xSw_nsamples = gst_util_uint64_scale_ceil(max_stop_time - min_start_time, rate, GST_SECOND);
 					double* xSw_reals = g_malloc(sizeof(double) * xSw_nsamples * nchannels);
 					double* xSw_imags = g_malloc(sizeof(double) * xSw_nsamples * nchannels);
@@ -583,18 +587,14 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 						guint64 adapter_offset = gst_util_uint64_scale_round(min_start_time - adapter_start_time, rate, GST_SECOND) - adapter_distance;
 
-						double min_t = 1.0e-9 * (gst_util_uint64_scale_round(adapter_offset + adapter_distance, GST_SECOND, rate) + adapter_start_time);
-						skymap->wanalysis.min_t = 0;
-						skymap->wanalysis.max_t = 1.0e-9 * (gst_util_uint64_scale_round(adapter_offset + adapter_distance + xSw_nsamples, GST_SECOND, rate) + adapter_start_time) - min_t;
-
 						/* Set per-channel analysis parameters. */
 						skymap->wanalysis.detectors[ichannel] = analysis_identify_detector(collectdata->instrument);
 						skymap->wanalysis.wSw[ichannel] = found_sngl->sigmasq;
-						skymap->wanalysis.min_ts[ichannel] = 1.0e-9 * start_time - min_t;
-						skymap->wanalysis.max_ts[ichannel] = 1.0e-9 * stop_time - min_t;
+						skymap->wanalysis.min_ts[ichannel] = 1.0e-9 * (start_time - min_start_time);
+						skymap->wanalysis.max_ts[ichannel] = 1.0e-9 * (stop_time - min_start_time);
 						skymap->wanalysis.xSw_real[ichannel] = xSw_real;
 						skymap->wanalysis.xSw_imag[ichannel] = xSw_imag;
-						
+
 						/* Copy data from adapter. */
 						double* adapter_bytes = g_malloc(adapter_stride_bytes * xSw_nsamples);
 						gst_adapter_copy(collectdata->adapter, (void*)adapter_bytes, adapter_offset * adapter_stride_bytes, xSw_nsamples * adapter_stride_bytes);
