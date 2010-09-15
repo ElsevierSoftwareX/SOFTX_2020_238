@@ -226,8 +226,9 @@ def plotskymap(fig, theta, phi, logp, gpstime, arrival_times=None, inj_lon_lat=N
 			m.plot(x, y, ',k')
 
 	# Draw injection point, if provided
-	inj_x, inj_y = m(degrees(inj_lon_lat[0]), degrees(inj_lon_lat[1]))
-	m.plot(inj_x, inj_y, '+k', markersize=20, markeredgewidth=1)
+	if inj_lon_lat is not None:
+		inj_x, inj_y = m(degrees(inj_lon_lat[0]), degrees(inj_lon_lat[1]))
+		m.plot(inj_x, inj_y, '+k', markersize=20, markeredgewidth=1)
 
 	# Add labels
 	ax.set_title('Candidate log probability distribution')
