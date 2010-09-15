@@ -234,13 +234,15 @@ while True:
 		# Make per-detector plots
 		pylab.figure(1)
 
-		pylab.hist(params['snr'], 25, cumulative=-1, log=True, **hist_ifostyle[ifo])
+		if len(params) > 0:
+			pylab.hist(params['snr'], 25, cumulative=-1, log=True, **hist_ifostyle[ifo])
 		pylab.xlabel(plots.labels['snr'])
 		pylab.ylabel("Count")
 		pylab.title(r"$\rho$ histogram for %s" % ifo)
 		savefig("%s_hist_snr.png" % ifo)
 
-		pylab.hist(params['eff_snr'], 25, cumulative=-1, log=True, **hist_ifostyle[ifo])
+		if len(params) > 0:
+			pylab.hist(params['eff_snr'], 25, cumulative=-1, log=True, **hist_ifostyle[ifo])
 		pylab.xlabel(plots.labels['eff_snr'])
 		pylab.ylabel("Count")
 		pylab.title(r"$\rho_\mathrm{eff}$ histogram for %s" % ifo)
