@@ -233,7 +233,7 @@ while True:
 
 		# Make per-detector plots
 		pylab.figure(1)
-	
+
 		pylab.hist(params['snr'], 25, cumulative=-1, log=True, **hist_ifostyle[ifo])
 		pylab.xlabel(plots.labels['snr'])
 		pylab.ylabel("Count")
@@ -278,7 +278,7 @@ while True:
 		pylab.figure(4)
 		pylab.semilogy(params['end_time'], params['snr'], '.', **ifostyle[ifo])
 		pylab.figure(5)
-		pylab.semilogy(params['end_time'], params['eff_snr'], '.', **ifostyle[ifo])		
+		pylab.semilogy(params['end_time'], params['eff_snr'], '.', **ifostyle[ifo])
 
 	# Save overlaid versions
 	pylab.figure(2)
