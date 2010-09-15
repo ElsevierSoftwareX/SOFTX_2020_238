@@ -39,8 +39,13 @@ labels = {
 	'mchirp': r"chirp mass, $\mathcal{M}_\mathrm{chirp}$ (%s)" % units['msun'],
 	'mass1': r"component mass 1, $M_1$ (%s)" % units['msun'],
 	'mass2': r"component mass 2, $M_2$ (%s)" % units['msun'],
+	'snr': r"SNR $\rho$",
+	'eff_snr': r"effective SNR $\rho_\mathrm{eff}$",
+	'combined_snr': r"combined SNR, $\sqrt{\sum\rho^2}$",
+	'combined_eff_snr': r"combined effective SNR, $\sqrt{\sum\rho_\mathrm{eff}^2}$",
+	'chisq': r"$\chi^2$",
 	'tau0': r"$\tau0$", # FIXME: what does this parameter actually represent?
-	'tau3': r"$\tau3$", # FIXME: what does this parameter actually represent?
+	'tau3': r"$\tau3$", # FIXME: what does this parameter actually represent
 }
 
 
