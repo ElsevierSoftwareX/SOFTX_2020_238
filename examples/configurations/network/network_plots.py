@@ -211,7 +211,7 @@ while True:
 	to_table("page_time.html", dt_row_headers, dt_to_rows(now_dt))
 
 	last_trig_gps = 0
-	for db in alldbs:
+	for ifo, db in trigdbs:
 		last_trig_gps = max(last_trig_gps, db.execute("SELECT end_time FROM sngl_inspiral ORDER BY end_time DESC LIMIT 1;").fetchone()[0])
 	last_trig_dt = datetime.datetime(*date.XLALGPSToUTC(LIGOTimeGPS(last_trig_gps))[:6] + (0, tz_dict["UTC"]))
 	to_table("trig_time.html", dt_row_headers, dt_to_rows(last_trig_dt))
