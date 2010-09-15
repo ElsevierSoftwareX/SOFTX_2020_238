@@ -188,7 +188,7 @@ def plotskymap(fig, theta, phi, logp, gpstime, arrival_times=None, inj_lon_lat=N
 	# Rotate the coordinate grid; Basemap is too stupid to correctly handle a
 	# scalar field that must wrap around the edge of the map.
 	# FIXME: Find a mapping library that isn't a toy.
-	gridshift = (sidereal_time // 360 + 1) * 360 + 180
+	gridshift = (sidereal_time // 360) * 360 + 180
 	lats_grid, dummy = shiftgrid(gridshift, lats_grid, lons_grid[0,:], start=False)
 	logp_grid, dummy = shiftgrid(gridshift, logp_grid, lons_grid[0,:], start=False)
 	lons_grid, dummy = shiftgrid(gridshift, lons_grid, lons_grid[0,:], start=False)
