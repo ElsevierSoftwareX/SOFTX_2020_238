@@ -527,6 +527,10 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 					/* Set rate. */
 					skymap->wanalysis.rate = rate;
 
+					/* Set min and max time. */
+					skymap->wanalysis.min_t = 0;
+					skymap->wanalysis.max_t = 1.0e-9 * (max_stop_time - min_start_time);
+
 					size_t xSw_nsamples = gst_util_uint64_scale_ceil(max_stop_time - min_start_time, rate, GST_SECOND);
 					double* xSw_reals = g_malloc(sizeof(double) * xSw_nsamples * nchannels);
 					double* xSw_imags = g_malloc(sizeof(double) * xSw_nsamples * nchannels);
@@ -583,18 +587,14 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 						guint64 adapter_offset = gst_util_uint64_scale_round(min_start_time - adapter_start_time, rate, GST_SECOND) - adapter_distance;
 
-						double min_t = 1.0e-9 * (gst_util_uint64_scale_round(adapter_offset + adapter_distance, GST_SECOND, rate) + adapter_start_time);
-						skymap->wanalysis.min_t = 0;
-						skymap->wanalysis.max_t = 1.0e-9 * (gst_util_uint64_scale_round(adapter_offset + adapter_distance + xSw_nsamples, GST_SECOND, rate) + adapter_start_time) - min_t;
-
 						/* Set per-channel analysis parameters. */
 						skymap->wanalysis.detectors[ichannel] = analysis_identify_detector(collectdata->instrument);
 						skymap->wanalysis.wSw[ichannel] = found_sngl->sigmasq;
-						skymap->wanalysis.min_ts[ichannel] = 1.0e-9 * start_time - min_t;
-						skymap->wanalysis.max_ts[ichannel] = 1.0e-9 * stop_time - min_t;
+						skymap->wanalysis.min_ts[ichannel] = 1.0e-9 * (start_time - min_start_time);
+						skymap->wanalysis.max_ts[ichannel] = 1.0e-9 * (stop_time - min_start_time);
 						skymap->wanalysis.xSw_real[ichannel] = xSw_real;
 						skymap->wanalysis.xSw_imag[ichannel] = xSw_imag;
-						
+
 						/* Copy data from adapter. */
 						double* adapter_bytes = g_malloc(adapter_stride_bytes * xSw_nsamples);
 						gst_adapter_copy(collectdata->adapter, (void*)adapter_bytes, adapter_offset * adapter_stride_bytes, xSw_nsamples * adapter_stride_bytes);
@@ -691,12 +691,17 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			guint64 adapter_distance_bytes;
 			GstClockTime adapter_start_time = gst_adapter_prev_timestamp(collectdata->adapter, &adapter_distance_bytes);
 			guint64 adapter_distance = adapter_distance_bytes / adapter_stride_bytes;
-			GstClockTime adapter_pos_time = adapter_start_time + gst_util_uint64_scale(adapter_distance, GST_SECOND, rate);
-			if (last_untouchable_time >= adapter_start_time && adapter_pos_time > last_untouchable_time)
+			guint64 available_samples = gst_adapter_available(collectdata->adapter) / adapter_stride_bytes;
+			GstClockTime adapter_earliest_time = adapter_start_time + gst_util_uint64_scale(adapter_distance, GST_SECOND, rate);
+			GstClockTime adapter_latest_time = adapter_start_time + gst_util_uint64_scale(adapter_distance + available_samples, GST_SECOND, rate);
+			if (last_untouchable_time >= adapter_latest_time)
 			{
-				guint64 flushable_samples = gst_util_uint64_scale(adapter_pos_time - last_untouchable_time, rate, GST_SECOND);
-				guint64 available_samples = gst_adapter_available(collectdata->adapter) / adapter_stride_bytes;
-				GST_INFO_OBJECT(skymap, "flushing adapter; it contain %llu samples, will flush %llu: adapter_pos_time=%llu, last_end_time=%llu, last_untouchable_time=%llu", available_samples, flushable_samples, adapter_pos_time, last_end_time, last_untouchable_time);
+				guint64 flush_to_time;
+				if (last_untouchable_time > adapter_latest_time)
+					flush_to_time = adapter_latest_time;
+				else
+					flush_to_time = last_untouchable_time;
+				guint64 flushable_samples = gst_util_uint64_scale(flush_to_time - adapter_earliest_time, rate, GST_SECOND);
 				gst_adapter_flush(collectdata->adapter, flushable_samples * adapter_stride_bytes);
 			}
 		}
