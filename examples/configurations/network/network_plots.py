@@ -26,6 +26,7 @@ from glue.ligolw import utils, lsctables
 from gstlal.ligolw_output import effective_snr
 from gstlal.gstlal_svd_bank import read_bank
 from gstlal.gstlal_reference_psd import read_psd
+from gstlal import plots
 
 
 
@@ -129,20 +130,20 @@ os.chdir(old_path)
 os.chdir(opts.www_path)
 
 pylab.plot(table.get_column('mass1'), table.get_column('mass2'), '.k')
-pylab.xlabel('$m_1$ (solar masses)')
-pylab.ylabel('$m_2$ (solar masses)')
+pylab.xlabel(plots.labels['mass1'])
+pylab.ylabel(plots.labels['mass2'])
 pylab.title('Template placement by componenent mass')
 savefig('tmpltbank_m1_m2.png')
 
 pylab.plot(table.get_column('tau0'), table.get_column('tau3'), '.k')
-pylab.xlabel(r'$\tau_0$ (solar masses)')
-pylab.ylabel(r'$\tau_3$ (solar masses)')
+pylab.xlabel(plots.labels['tau0'])
+pylab.ylabel(plots.labels['tau3'])
 pylab.title('Template placement by tau0, tau3')
 savefig('tmpltbank_tau0_tau3.png')
 
 pylab.plot(table.get_column('mchirp'), table.get_column('mtotal'), '.k')
-pylab.xlabel('Chirp mass $\mathcal{M}_\mathrm{chirp}$ (solar masses)')
-pylab.ylabel('Total mass $M$ (solar masses)')
+pylab.xlabel(plots.labels['mchirp'])
+pylab.ylabel(plots.labels['mtotal'])
 pylab.title('Template placement by chirp mass and total mass')
 savefig('tmpltbank_mchirp_mtotal.png')
 
@@ -232,38 +233,38 @@ while True:
 		pylab.figure(1)
 	
 		pylab.hist(params['snr'], 25, cumulative=-1, log=True, **hist_ifostyle[ifo])
-		pylab.xlabel(r"$\rho$")
+		pylab.xlabel(plots.labels['snr'])
 		pylab.ylabel("Count")
 		pylab.title(r"$\rho$ histogram for %s" % ifo)
 		savefig("%s_hist_snr.png" % ifo)
 
 		pylab.hist(params['eff_snr'], 25, cumulative=-1, log=True, **hist_ifostyle[ifo])
-		pylab.xlabel(r"$\rho_\mathrm{eff}$")
+		pylab.xlabel(plots.labels['eff_snr'])
 		pylab.ylabel("Count")
 		pylab.title(r"$\rho_\mathrm{eff}$ histogram for %s" % ifo)
 		savefig("%s_hist_eff_snr.png" % ifo)
 
 		pylab.loglog(params['snr'], params['chisq'], '.', **ifostyle[ifo])
-		pylab.xlabel(r"$\rho$")
-		pylab.ylabel(r"$\chi^2$")
+		pylab.xlabel(plots.labels['snr'])
+		pylab.ylabel(plots.labels['chisq'])
 		pylab.title(r"$\chi^2$ vs. $\rho$ for %s" % ifo)
 		savefig('%s_chisq_snr.png' % ifo)
 
 		pylab.loglog(params['eff_snr'], params['chisq'], '.', **ifostyle[ifo])
-		pylab.xlabel(r"$\rho_\mathrm{eff}$")
-		pylab.ylabel(r"$\chi^2$")
+		pylab.xlabel(plots.labels['eff_snr'])
+		pylab.ylabel(plots.labels['chisq'])
 		pylab.title(r"$\chi^2$ vs. $\rho_\mathrm{eff}$ for %s" % ifo)
 		savefig('%s_chisq_eff_snr.png' % ifo)
 
 		pylab.semilogy(params['end_time'], params['snr'], '.', **ifostyle[ifo])
 		pylab.xlabel("End time")
-		pylab.ylabel(r"$\rho$")
+		pylab.ylabel(plots.labels['snr'])
 		pylab.title(r"$\rho$ vs. end time for %s" % ifo)
 		savefig('%s_snr_end_time.png' % ifo)
 
 		pylab.semilogy(params['end_time'], params['eff_snr'], '.', **ifostyle[ifo])
 		pylab.xlabel("End time")
-		pylab.ylabel(r"$\rho_\mathrm{eff}$")
+		pylab.ylabel(plots.labels['eff_snr'])
 		pylab.title(r"$\rho_\mathrm{eff}$ vs. end time for %s" % ifo)
 		savefig('%s_eff_snr_end_time.png' % ifo)
 
@@ -280,29 +281,29 @@ while True:
 	# Save overlaid versions
 	pylab.figure(2)
 	pylab.legend()
-	pylab.xlabel(r"$\rho$")
-	pylab.ylabel(r"$\chi^2$")
+	pylab.xlabel(plots.labels['snr'])
+	pylab.ylabel(plots.labels['chisq'])
 	pylab.title(r"$\chi^2$ vs. $\rho$")
 	savefig("overlaid_chisq_snr.png")
 
 	pylab.figure(3)
 	pylab.legend()
-	pylab.xlabel(r"$\rho_\mathrm{eff}$")
-	pylab.ylabel(r"$\chi^2$")
+	pylab.xlabel(plots.labels['eff_snr'])
+	pylab.ylabel(plots.labels['chisq'])
 	pylab.title(r"$\chi^2$ vs. $\rho_\mathrm{eff}$")
 	savefig("overlaid_chisq_eff_snr.png")
 
 	pylab.figure(4)
 	pylab.legend()
 	pylab.xlabel("End time")
-	pylab.ylabel(r"$\rho$")
+	pylab.ylabel(plots.labels['snr'])
 	pylab.title(r"$\rho$ vs. end time")
 	savefig("overlaid_snr_end_time.png")
 
 	pylab.figure(5)
 	pylab.legend()
 	pylab.xlabel("End time")
-	pylab.ylabel(r"$\rho_\mathrm{eff}$")
+	pylab.ylabel(plots.labels['eff_snr'])
 	pylab.title(r"$\rho_\mathrm{eff}$ vs. end time")
 	savefig("overlaid_eff_snr_end_time.png")
 
@@ -317,13 +318,13 @@ while True:
 
 	pylab.semilogy(params['mean_end_time'], params['combined_snr'], '.k')
 	pylab.xlabel('Mean end time')
-	pylab.ylabel(r"Combined SNR, $\sqrt{\sum\rho^2}$")
+	pylab.ylabel(plots.labels['combined_snr'])
 	pylab.title('Combined SNR versus end time')
 	savefig('combined_snr_end_time.png')
 
 	pylab.semilogy(params['mean_end_time'], params['combined_eff_snr'], '.k')
 	pylab.xlabel('Mean end time')
-	pylab.ylabel('Combined effective SNR')
+	pylab.ylabel(plots.labels['combined_eff_snr'])
 	pylab.title('Combined effective SNR versus end time')
 	savefig('combined_eff_snr_end_time.png')
 
