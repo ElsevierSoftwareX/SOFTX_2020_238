@@ -117,3 +117,118 @@ def plotpsd(in_filename, out_filename=None):
 	else:
 		pylab.savefig(out_filename)
 	pylab.close()
+
+
+def plotskymap(fig, theta, phi, logp, gpstime, arrival_times=None, inj_lon_lat=None):
+	"""Draw a skymap as produced by the lal_skymap element.
+	arrival_times should be a dictionary with keys being IFO names
+	(e.g. 'H1', 'L1', 'V1', ...) and values being double precision GPS arrival
+	at each IFO.
+
+	If inj_lon_at is set to a celestial Dec/RA tuple in radians, then the
+	injection point of origin will be marked with a cross.
+
+	Currently, lal_skymap generates a grid of 450x900 points, and this code
+	relies on that.  It could be generalized to handle any rectangular grid,
+	but the pcolormesh method that is used here is really only finally tuned for
+	quadrilateral meshes.
+	"""
+
+
+	# Some imports that are only useful for this function
+
+	from math import atan2, acos, asin, degrees, sqrt, pi
+	from mpl_toolkits.basemap import Basemap, shiftgrid
+	import numpy as np
+	from pylal.xlal import constants
+	from pylal.xlal import tools
+	from pylal.datatypes import LIGOTimeGPS
+	from pylal.date import XLALGreenwichMeanSiderealTime
+	from glue.iterutils import choices
+
+
+	# Some useful functions
+
+	def location_for_site(prefix):
+		"""Get the Cartesian (WGS84) coordinates of a site, given its prefix
+		(h for Hanford, l for Livingston...)."""
+		# Dictionary mapping detector site prefixes to nick names
+		matching_detectors = [x for x in tools.cached_detector.values() if x.prefix.startswith(prefix)]
+		if len(matching_detectors) > 1:
+			raise ValueError("Found more than one matching detector: %s" % prefix)
+		if len(matching_detectors) == 0:
+			raise ValueError("Found no matching detectors: %s" % prefix)
+		return matching_detectors[0].location
+
+	def cart2spherical(cart):
+		"""Convert a Cartesian vector to spherical polar azimuth (phi) and elevation (theta) in radians."""
+		return atan2(cart[1], cart[0]), acos(cart[2] / sqrt(np.dot(cart, cart)))
+
+
+	def spherical2latlon(spherical):
+		"""Converts spherical polar coordinates in radians to latitude, longitude in degrees."""
+		return degrees(spherical[0]), 90 - degrees(spherical[1])
+
+
+	# Get figure axes.
+	ax = fig.gca()
+
+	# Initialize map; draw gridlines and map boundary.
+	m = Basemap(projection='moll', lon_0=0, lat_0=0, ax=ax)
+	m.drawparallels(np.arange(-45,46,45), linewidth=0.5, labels=[1, 0, 0, 0], labelstyle="+/-")
+	m.drawmeridians(np.arange(-180,180,90), linewidth=0.5)
+	m.drawmapboundary()
+
+	# lal_skymap outputs geographic coordinates; convert to celestial here.
+	sidereal_time = np.mod(XLALGreenwichMeanSiderealTime(LIGOTimeGPS(gpstime)) * constants.LAL_180_PI, 360)
+	lons_grid = sidereal_time + phi.reshape(450, 900) * constants.LAL_180_PI
+	lats_grid = 90 - theta.reshape(450, 900) * constants.LAL_180_PI
+	logp_grid = logp.reshape(450, 900)
+
+	# Rotate the coordinate grid; Basemap is too stupid to correctly handle a
+	# scalar field that must wrap around the edge of the map.
+	# FIXME: Find a mapping library that isn't a toy.
+	gridshift = (sidereal_time // 360 + 1) * 360 + 180
+	lats_grid, dummy = shiftgrid(gridshift, lats_grid, lons_grid[0,:], start=False)
+	logp_grid, dummy = shiftgrid(gridshift, logp_grid, lons_grid[0,:], start=False)
+	lons_grid, dummy = shiftgrid(gridshift, lons_grid, lons_grid[0,:], start=False)
+
+	# Transform from longitude/latitude to selected projection.
+	x, y = m(lons_grid, lats_grid)
+
+	# Draw log probability distribution
+	pc = m.pcolormesh(x, y, logp_grid, vmin=logp[np.isfinite(logp)].min())
+	cb = fig.colorbar(pc, shrink=0.5)
+	cb.set_label('log relative probability')
+	cb.cmap.set_under(alpha=0)
+
+	# Draw mode of probability distribution
+	maxidx = logp_grid.flatten().argmax()
+	m.plot(x.flatten()[maxidx], y.flatten()[maxidx], '*', markerfacecolor='white', markersize=10)
+
+	# Draw time delay loci, if arrival times were provided.
+	if arrival_times is not None:
+		for sites in choices(arrival_times.keys(), 2):
+			site0_location = location_for_site(sites[0])
+			site1_location = location_for_site(sites[1])
+			site_separation = site0_location - site1_location
+			site_distance_seconds = sqrt(np.dot(site_separation, site_separation)) / constants.LAL_C_SI
+			lon, lat = spherical2latlon(cart2spherical(site_separation))
+			site0_toa = arrival_times[sites[0]]
+			site1_toa = arrival_times[sites[1]]
+			radius = acos((site1_toa - site0_toa) / site_distance_seconds) * 180 / pi
+			# Sigh.  Basemap is too stupid to be able to draw circles that wrap around
+			# the dateline.  We'll just grab the points it generated, and plot it as
+			# a dense scatter point series.
+			poly = m.tissot(lon + sidereal_time, lat, radius, 1000, facecolor='none')
+			poly.remove()
+			x, y = zip(*poly.xy)
+			m.plot(x, y, ',k')
+
+	# Draw injection point, if provided
+	inj_x, inj_y = m(degrees(inj_lon_lat[0]), degrees(inj_lon_lat[1]))
+	m.plot(inj_x, inj_y, '+k', markersize=20, markeredgewidth=1)
+
+	# Add labels
+	ax.set_title('Candidate log probability distribution')
+	ax.set_xlabel('RA/dec, J2000.  White star marks the mode of the PDF.\nBlack lines represent time delay solution loci for each pair of detectors.', fontsize=10)
