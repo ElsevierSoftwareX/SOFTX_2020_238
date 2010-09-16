@@ -23,7 +23,7 @@ channel 1:    phi: geographical polar azimuthal coordinate, phi (radians)
 channel 2:   span: length of point (radian)
 channel 3: log(P): probability associated with point
 """
-__author__ = "Erin Kara <erin.kara@ligo.org>"
+__author__ = "Erin Kara <erin.kara@ligo.org>, Leo Singer <leo.singer@ligo.org>"
 __version__ = "FIXME"
 __date__ = "FIXME"
 
@@ -40,6 +40,7 @@ import numpy
 from gstlal.pipeutil import *
 from gstlal import pipeio
 from gstlal import matplotlibhelper
+from gstlal.plots import plotskymap
 
 import matplotlib
 from matplotlib import cm
@@ -79,8 +80,8 @@ class lal_skymaprenderer(matplotlibhelper.BaseMatplotlibTransform):
 	)
 
 	def __init__(self):
-		super(lal_skymaprenderer, self).__init__() 
-		self.cax, kw = matplotlib.colorbar.make_axes(self.axes)
+		super(lal_skymaprenderer, self).__init__()
+		del self.axes
 
 
 
@@ -101,32 +102,40 @@ class lal_skymaprenderer(matplotlibhelper.BaseMatplotlibTransform):
 		span = skymap_array[:,2]
 		logp = skymap_array[:,3]
 
+		gpstime = 1.0e-9 * (inbuf.timestamp + 0.5 * inbuf.duration)
 
-		# Clear old axes
-		self.cax.cla()
-		self.axes.cla()
+		if 0:
+			# This version works for sparse skymaps, but is slow for dense
+			# skymaps.  FIXME: move to plots module, and add a property to
+			# switch betweent the two modes.
 
-		# Specify vertices of polygons
-		phi_vertices = numpy.array([phi-span/2, phi-span/2, phi+span/2, phi+span/2])
-		phi_vertices = phi_vertices.T
-		theta_vertices = numpy.array([theta-span/2, theta+span/2, theta+span/2, theta-span/2])
-		theta_vertices = theta_vertices.T
+			# Clear old axes
+			self.cax.cla()
+			self.axes.cla()
+
+			# Specify vertices of polygons
+			phi_vertices = numpy.array([phi-span/2, phi-span/2, phi+span/2, phi+span/2])
+			phi_vertices = phi_vertices.T
+			theta_vertices = numpy.array([theta-span/2, theta+span/2, theta+span/2, theta-span/2])
+			theta_vertices = theta_vertices.T
 
 
-		# Make ColorbarBase object
-		colormap = matplotlib.colorbar.ColorbarBase(self.cax, norm=colors.Normalize(vmin=logp.min(), vmax=logp.max()), cmap=cm.jet)
+			# Make ColorbarBase object
+			colormap = matplotlib.colorbar.ColorbarBase(self.cax, norm=colors.Normalize(vmin=logp.min(), vmax=logp.max()), cmap=cm.jet)
 
 
-		# Fill polygons with logp
-		for i in range(len(logp)):
-			self.axes.fill(phi_vertices[i], theta_vertices[i], facecolor=colormap.to_rgba(logp[i]), edgecolor='none')
-		self.axes.set_title(r"Signal Candidate Probability Distribution")
-		self.axes.set_xlabel(r"Geographic Latitude (radians)")
-		self.axes.set_ylabel(r"Geographic Longitude (radians)")
+			# Fill polygons with logp
+			for i in range(len(logp)):
+				self.axes.fill(phi_vertices[i], theta_vertices[i], facecolor=colormap.to_rgba(logp[i]), edgecolor='none')
+			self.axes.set_title(r"Signal Candidate Probability Distribution")
+			self.axes.set_xlabel(r"Geographic Latitude (radians)")
+			self.axes.set_ylabel(r"Geographic Longitude (radians)")
 
+		plotskymap(self.figure, theta, phi, logp, gpstime)
 
 		# Render to output buffer
 		matplotlibhelper.render(self.figure, outbuf)
+		self.figure.clf()
 
 
 		# Set buffer metadata
