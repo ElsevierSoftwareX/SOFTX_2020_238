@@ -189,7 +189,7 @@ class lal_coincselector(gst.Element):
 			return self.__dt
 
 
-	def process_coincs(self, pad, inbuf): # FIXME: not a very informative name for this method.
+	def process_coincs(self, pad, caps): # FIXME: not a very informative name for this method.
 		if self.__queue.is_full():
 			rows = ()
 			coinc_list = self.__queue.middle.coinc_list
@@ -200,12 +200,12 @@ class lal_coincselector(gst.Element):
 						coinc = other_coinc
 				if all(x.stat < coinc.stat for x in self.__queue.oldest.coinc_list if coinc.time - x.time < self.__min_waiting_time) and all(x.stat < coinc.stat for x in self.__queue.newest.coinc_list if x.time - coinc.time < self.__min_waiting_time):
 					rows = (coinc.sngl_group,)
-			outbuf = sngl_inspiral_groups_to_buffer(rows, inbuf.caps[0]['channels'])
+			outbuf = sngl_inspiral_groups_to_buffer(rows, caps[0]['channels'])
 			outbuf.timestamp = self.__queue.middle.timestamp
 			outbuf.duration = self.__queue.middle.duration
 			outbuf.offset = gst.BUFFER_OFFSET_NONE
 			outbuf.offset_end = gst.BUFFER_OFFSET_NONE
-			outbuf.caps = inbuf.caps
+			outbuf.caps = caps
 			retval = self.__srcpad.push(outbuf)
 		else:
 			retval = gst.FLOW_OK
@@ -226,7 +226,7 @@ class lal_coincselector(gst.Element):
 				top = self.__queue.top
 
 			if inbuf.timestamp > top.end_time:
-				retval = self.process_coincs(pad, inbuf)
+				retval = self.process_coincs(pad, inbuf.caps)
 				if retval != gst.FLOW_OK:
 					return retval
 				top = self.__queue.top
@@ -238,7 +238,7 @@ class lal_coincselector(gst.Element):
 				stat = combined_effective_snr(group)
 				coinc = SnglCoinc(group, stat)
 				if coinc.time > top.end_time:
-					retval = self.process_coincs(pad, inbuf)
+					retval = self.process_coincs(pad, inbuf.caps)
 					if retval != gst.FLOW_OK:
 						return retval
 					top = self.__queue.top
@@ -246,7 +246,7 @@ class lal_coincselector(gst.Element):
 					top.coinc_list.append(coinc)
 
 			if inbuf.timestamp + inbuf.duration > top.end_time:
-				retval = self.process_coincs(pad, inbuf)
+				retval = self.process_coincs(pad, inbuf.caps)
 				if retval != gst.FLOW_OK:
 					return retval
 
