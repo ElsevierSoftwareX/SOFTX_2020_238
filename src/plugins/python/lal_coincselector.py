@@ -55,12 +55,17 @@ class TriQueue(object):
 			and self.__middle is None
 			and self.__newest is None)
 
-
 	def is_full(self):
 		"""Determine if the queue is full."""
 		return (self.__oldest is not None
 			and self.__middle is not None
 			and self.__newest is not None)
+
+	def flush(self):
+		"""Throw away contents of queue."""
+		self.__oldest = None
+		self.__middle = None
+		self.__newest = None
 
 	@property
 	def top(self):
@@ -189,28 +194,42 @@ class lal_coincselector(gst.Element):
 			return self.__dt
 
 
-	def process_coincs(self, pad, caps): # FIXME: not a very informative name for this method.
-		if self.__queue.is_full():
-			rows = ()
-			coinc_list = self.__queue.middle.coinc_list
-			if len(coinc_list) > 0:
-				coinc = coinc_list[0]
-				for other_coinc in coinc_list[1:]:
-					if other_coinc.stat > coinc.stat:
-						coinc = other_coinc
-				if all(x.stat < coinc.stat for x in self.__queue.oldest.coinc_list if coinc.time - x.time < self.__min_waiting_time) and all(x.stat < coinc.stat for x in self.__queue.newest.coinc_list if x.time - coinc.time < self.__min_waiting_time):
-					rows = (coinc.sngl_group,)
-			outbuf = sngl_inspiral_groups_to_buffer(rows, caps[0]['channels'])
-			outbuf.timestamp = self.__queue.middle.timestamp
-			outbuf.duration = self.__queue.middle.duration
-			outbuf.offset = gst.BUFFER_OFFSET_NONE
-			outbuf.offset_end = gst.BUFFER_OFFSET_NONE
-			outbuf.caps = caps
-			retval = self.__srcpad.push(outbuf)
-		else:
-			retval = gst.FLOW_OK
+	def process_coincs(self, pad, caps, latest_seen_time): # FIXME: not a very informative name for this method.
 		top = self.__queue.top
-		self.__queue.add(CoincBlock(top.timestamp + top.duration, top.duration))
+		while latest_seen_time >= top.timestamp + top.duration:
+			if self.__queue.is_full():
+				if len(self.__queue.oldest.coinc_list) + len(self.__queue.middle.coinc_list) + len(self.__queue.newest.coinc_list) == 0:
+					outbuf = gst.buffer_new_and_alloc(0)
+					outbuf.timestamp = top.timestamp + top.duration
+					outbuf.duration = latest_seen_time - outbuf.timestamp
+					outbuf.offset = gst.BUFFER_OFFSET_NONE
+					outbuf.offset_end = gst.BUFFER_OFFSET_NONE
+					outbuf.caps = caps
+					retval = self.__srcpad.push(outbuf)
+					self.__queue.flush()
+					self.__queue.add(CoincBlock(latest_seen_time, self.__min_waiting_time))
+					return gst.FLOW_OK
+				else:
+					rows = ()
+					coinc_list = self.__queue.middle.coinc_list
+					if len(coinc_list) > 0:
+						coinc = coinc_list[0]
+						for other_coinc in coinc_list[1:]:
+							if other_coinc.stat > coinc.stat:
+								coinc = other_coinc
+						if all(x.stat < coinc.stat for x in self.__queue.oldest.coinc_list if coinc.time - x.time < self.__min_waiting_time) and all(x.stat < coinc.stat for x in self.__queue.newest.coinc_list if x.time - coinc.time < self.__min_waiting_time):
+							rows = (coinc.sngl_group,)
+					outbuf = sngl_inspiral_groups_to_buffer(rows, caps[0]['channels'])
+					outbuf.timestamp = self.__queue.middle.timestamp
+					outbuf.duration = self.__queue.middle.duration
+					outbuf.offset = gst.BUFFER_OFFSET_NONE
+					outbuf.offset_end = gst.BUFFER_OFFSET_NONE
+					outbuf.caps = caps
+					retval = self.__srcpad.push(outbuf)
+			else:
+				retval = gst.FLOW_OK
+			top = self.__queue.top
+			self.__queue.add(CoincBlock(top.timestamp + self.__min_waiting_time, self.__min_waiting_time))
 		return retval
 
 
@@ -226,7 +245,7 @@ class lal_coincselector(gst.Element):
 				top = self.__queue.top
 
 			if inbuf.timestamp > top.end_time:
-				retval = self.process_coincs(pad, inbuf.caps)
+				retval = self.process_coincs(pad, inbuf.caps, inbuf.timestamp)
 				if retval != gst.FLOW_OK:
 					return retval
 				top = self.__queue.top
@@ -238,7 +257,7 @@ class lal_coincselector(gst.Element):
 				stat = combined_effective_snr(group)
 				coinc = SnglCoinc(group, stat)
 				if coinc.time > top.end_time:
-					retval = self.process_coincs(pad, inbuf.caps)
+					retval = self.process_coincs(pad, inbuf.caps, coinc.time)
 					if retval != gst.FLOW_OK:
 						return retval
 					top = self.__queue.top
@@ -246,7 +265,7 @@ class lal_coincselector(gst.Element):
 					top.coinc_list.append(coinc)
 
 			if inbuf.timestamp + inbuf.duration > top.end_time:
-				retval = self.process_coincs(pad, inbuf.caps)
+				retval = self.process_coincs(pad, inbuf.caps, inbuf.timestamp + inbuf.duration)
 				if retval != gst.FLOW_OK:
 					return retval
 
