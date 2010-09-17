@@ -27,9 +27,12 @@ from glue import iterutils
 from glue.ligolw import table
 from glue.ligolw import lsctables
 from glue.ligolw import utils
+from glue.ligolw.utils import segments as ligolw_segments
 from glue.segments import segment, segmentlist
 from pylal import llwapp
 from pylal.xlal.datatypes.snglinspiraltable import SnglInspiralTable
+from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
+lsctables.LIGOTimeGPS = LIGOTimeGPS
 
 
 def trigger_time(trig):
@@ -59,6 +62,13 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 		gobject.TYPE_STRING,
 		"sqlite-location",
 		"Name of LIGO Light Weight SQLite file containing single-detector triggers",
+		None,
+		construct=True # FIXME if gst.extend.pygobject provided gst.PARAM_MUTABLE_READY it would be a good idea to set this here
+	)
+	gproperty(
+		gobject.TYPE_STRING,
+		"veto-segments-name",
+		"Name of veto definer whose vetoes should be applied",
 		None,
 		construct=True # FIXME if gst.extend.pygobject provided gst.PARAM_MUTABLE_READY it would be a good idea to set this here
 	)
@@ -127,6 +137,16 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 		# override SnglInspiralTable to create rows of type SnglInspiralTable
 		lsctables.SnglInspiralTable.RowType = SnglInspiralTable
 
+		# work around lack of nanosecond support in DQ segments
+		del lsctables.SegmentTable.validcolumns["start_time_ns"]
+		del lsctables.SegmentTable.validcolumns["end_time_ns"]
+		def get_segment(self):
+			"""
+			Return the segment described by this row.
+			"""
+			return segment(lsctables.LIGOTimeGPS(self.start_time, 0), lsctables.LIGOTimeGPS(self.end_time, 0))
+		lsctables.Segment.get = get_segment
+
 		# load XML document
 		if xml_location is not None:
 			doc = utils.load_filename(xml_location, gz=xml_location.endswith(".gz"))
@@ -150,13 +170,20 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 			start_time = self.live_segs[0][0]
 		if duration == gst.CLOCK_TIME_NONE:
 			end_time = self.live_segs[-1][1]
-		requested_seg = segment(start_time, end_time)
 
 		# read triggers
 		trigs = table.get_table(doc, lsctables.SnglInspiralTable.tableName)
 
+		# incorporate vetoes
+		veto_segments_name = self.get_property("veto-segments-name")
+		if veto_segments_name is not None:
+			veto_segdict = ligolw_segments.segmenttable_get_by_name(doc, veto_segments_name)
+			assert len(veto_segdict) == 1  # we only support single-IFO docs
+			veto_segments = seglist_seconds_to_ns(veto_segdict[veto_segdict.keys()[0]].coalesce())
+			self.live_segs -= veto_segments
+
 		# pack times and triggers together as a list of tuples
-		self.__time_trig_tuples = [(trigger_time(trig), trig) for trig in trigs if trigger_time(trig) in requested_seg]
+		self.__time_trig_tuples = [(trigger_time(trig), trig) for trig in trigs if trigger_time(trig) in self.live_segs]
 		self.__time_trig_tuples.sort()
 
 		self.__last_time = start_time
