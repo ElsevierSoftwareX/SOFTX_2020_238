@@ -200,7 +200,7 @@ def plotskymap(fig, theta, phi, logp, gpstime, arrival_times=None, inj_lon_lat=N
 	pc = m.pcolormesh(x, y, logp_grid, vmin=logp[np.isfinite(logp)].min())
 	cb = fig.colorbar(pc, shrink=0.5)
 	cb.set_label('log relative probability')
-	cb.cmap.set_under(alpha=0)
+	cb.cmap.set_under('1.0', alpha=0.0)
 
 	# Draw mode of probability distribution
 	maxidx = logp_grid.flatten().argmax()
