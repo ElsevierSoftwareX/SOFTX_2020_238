@@ -70,19 +70,18 @@ def trigger_stat(trig):
 #
 
 class MovingHistogram(object):
-	def __init__(self, bins, max_hist_len):
+	def __init__(self, bins, max_hist_len, gaps=None):
 		super(MovingHistogram, self).__init__()
 		self.bins = bins
+		if gaps is not None:
+			self.gaps = gaps
+		else:
+			self.gaps = segmentlist()
 		self.max_hist_len = max_hist_len
 
 		self.hist_ind = collections.deque()
 		self.timestamps = collections.deque()
 		self.hist = np.zeros(len(bins), dtype=float)
-
-		# Performance note: We can either track gaps or non-gaps. As we expect
-		# a duty cycle greater than 50% (in number of buffers), I choose to
-		# track gaps.
-		self.gaps = segmentlist()
 
 	def __len__(self):
 		return len(self.hist_ind)
@@ -99,14 +98,6 @@ class MovingHistogram(object):
 		self.hist_ind.append(ind)
 		self.timestamps.append(timestamp)
 
-	def add_gap(self, gap):
-		"""
-		Store the gap segment. Also, do housekeeping to clean up old gap
-		segments.
-		"""
-		self.gaps |= segmentlist([gap])
-		self.gaps -= segmentlist([segment(NegInfinity, self.timestamps[0])])
-
 	def get_count(self, stat):
 		# FIXME: This may by slow with a deque. Must profile.
 		# FIXME FIXME FIXME: adding 1 to count to guarantee non-zero FARs, with
@@ -116,7 +107,8 @@ class MovingHistogram(object):
 
 	def get_livetime(self):
 		"""
-		Return the approximate livetime represented in the current histogram.
+		Return the approximate livetime represented in the current histogram
+		in ns.
 		It is estimated as being the whole stretch from the oldest to newest
 		triggers except where gaps have been registered as dead time. Gaps
 		newer than min_trigger_age are irrelevant.
@@ -192,15 +184,15 @@ class lal_estimatepdf(gst.BaseTransform):
 		self.set_gap_aware(True)
 		for prop in self.props:
 			self.set_property(prop.name, prop.default_value)
-
-		# FIXME: using linear bins imposes a minimum and maximum SNR.  If
-		# a trigger has SNR that is greater than or less than this value, then
-		# pylal.rate will actually raise an IndexError!
 		self.bins = rate.ATanBins(5, 6, 1000)
 
 		# have one moving hist per template
 		self.moving_hist_dict = {}
 		self.held_triggers = collections.deque()
+
+		# Implementation note: in order to not have massive duplication of
+		# gap segments, we keep track of it outside of the MovingHistograms.
+		self.gaps = segmentlist()
 
 	def do_start(self):
 		self.t0 = None
@@ -211,10 +203,7 @@ class lal_estimatepdf(gst.BaseTransform):
 
 	def do_transform_ip(self, buf):
 		if buf.flag_is_set(gst.BUFFER_FLAG_GAP):
-			gap = segment(buf.timestamp, buf.timestamp + buf.duration)
-			# pass gap information into each histogram
-			for hist in self.moving_hist_dict.itervalues():
-				hist.add_gap(gap)
+			self.gaps |= segmentlist([segment(buf.timestamp, buf.timestamp + buf.duration)])
 			return gst.FLOW_OK
 
 		min_trigger_age = self.get_property("min-trigger-age")
@@ -238,10 +227,10 @@ class lal_estimatepdf(gst.BaseTransform):
 			# assign FAR
 			moving_hist = moving_hist_dict.get(trigger_hist_group(trig))
 			if moving_hist is None:
-				moving_hist = moving_hist_dict.setdefault(trigger_hist_group(trig), MovingHistogram(self.bins, max_hist_len))
+				moving_hist = moving_hist_dict.setdefault(trigger_hist_group(trig), MovingHistogram(self.bins, max_hist_len, self.gaps))
 			if len(moving_hist) >= min_hist_len:
 				trig.alpha = moving_hist.get_far(trigger_stat(trig))
-				#print >>sys.stderr, trigger_time(trig), trigger_stat(trig), trig.alpha
+				#print >>sys.stderr, trigger_time(trig), trigger_stat(trig), trig.alpha, moving_hist.get_livetime()
 			else:
 				trig.alpha = float("inf")  # FIXME: discard trig
 
@@ -249,6 +238,13 @@ class lal_estimatepdf(gst.BaseTransform):
 			data = buffer(trig)
 			datasize = len(data)
 			buf[i*datasize:(i+1)*datasize] = data
+
+		# Possible FIXME: The gaps list grows without bound. If we move to
+		# very long-running jobs, we will need to prune it. For online DQ,
+		# we tend not to have many vetoes.
+		# oldest_trig = min(hist.timestamps[0] for hist in moving_hist_dict.itervalues())
+		# self.gaps -= segmentlist([segment(NegInfinity, oldest_trig)])
+
 		#
 		# done
 		#
