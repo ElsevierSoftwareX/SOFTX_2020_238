@@ -71,9 +71,20 @@ def savefig(fname):
 	"""Wraps pylab.savefig, but replaces the destination file atomically and destroys the plotting state."""
 	fid, path = mkstemp(suffix = fname, dir = '.')
 	pylab.savefig(path)
+
+	# also save a thumbnail with 1/2 the DPI
+	base, ext = os.path.splitext(fname)
+	thumb_fname = base + "_thumb" + ext
+	thumb_fid, thumb_path = mkstemp(suffix = thumb_fname, dir = '.')
+	pylab.savefig(thumb_path, dpi=matplotlib.rcParams["savefig.dpi"] // 2)
+
+	# move them into place
 	os.chmod(path, stat.S_IRGRP | stat.S_IRUSR | stat.S_IROTH)
 	os.rename(path, fname)
 	os.close(fid)
+	os.chmod(thumb_path, stat.S_IRGRP | stat.S_IRUSR | stat.S_IROTH)
+	os.rename(thumb_path, thumb_fname)
+	os.close(thumb_fid)
 	pylab.clf()
 
 def to_table(fname, headings, rows):
