@@ -87,13 +87,13 @@ for bank_fragment in bank.bank_fragments:
 		snr_elems[0],
 	)
 
-# Seek to just before impulse; be paranoid and pad by two template lengths before and after.
+# Seek to just before impulse; be paranoid and pad by 1.5 template lengths before and after.
 
 src_elems[0].set_state(gst.STATE_READY)
 src_elems[0].send_event(gst.event_new_seek(
 	1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_NONE,
-	gst.SEEK_TYPE_SET, long(round((impulse_time - 2 * bank.filter_length) * gst.SECOND)),
-	gst.SEEK_TYPE_SET, long(round((impulse_time + 2 * bank.filter_length) * gst.SECOND))
+	gst.SEEK_TYPE_SET, long(round((impulse_time - 1.5 * bank.filter_length) * gst.SECOND)),
+	gst.SEEK_TYPE_SET, long(round((impulse_time + 1.5 * bank.filter_length) * gst.SECOND))
 ))
 
 
