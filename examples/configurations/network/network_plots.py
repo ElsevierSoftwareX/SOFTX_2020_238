@@ -9,6 +9,7 @@ import datetime
 import optparse
 import os
 import pytz
+import subprocess
 import sys
 import time
 import stat
@@ -67,25 +68,26 @@ def array_from_cursor(cursor):
 	"""Get a Numpy array with named columns from an sqlite query cursor."""
 	return numpy.array(cursor.fetchall(), dtype=[(desc[0], float) for desc in cursor.description])
 
+p = subprocess.Popen(["/usr/bin/which", "convert"], stdout=subprocess.PIPE)
+if p.wait() != 0:
+	raise RuntimeError, "can't find ImageMagick convert"
+convert_path = p.communicate()[0].rstrip()
 def savefig(fname):
-	"""Wraps pylab.savefig, but replaces the destination file atomically and destroys the plotting state."""
+	"""Wraps pylab.savefig, but replaces the destination file atomically and destroys the plotting state. Also writes thumbnails."""
 	fid, path = mkstemp(suffix = fname, dir = '.')
 	pylab.savefig(path)
-
-	# also save a thumbnail with 1/2 the DPI
-	base, ext = os.path.splitext(fname)
-	thumb_fname = base + "_thumb" + ext
-	thumb_fid, thumb_path = mkstemp(suffix = thumb_fname, dir = '.')
-	pylab.savefig(thumb_path, dpi=matplotlib.rcParams["savefig.dpi"] // 2)
-
-	# move them into place
-	os.chmod(path, stat.S_IRGRP | stat.S_IRUSR | stat.S_IROTH)
+	os.chmod(path, stat.S_IRGRP | stat.S_IRUSR | stat.S_IROTH | stat.S_IWUSR)
 	os.rename(path, fname)
 	os.close(fid)
-	os.chmod(thumb_path, stat.S_IRGRP | stat.S_IRUSR | stat.S_IROTH)
-	os.rename(thumb_path, thumb_fname)
-	os.close(thumb_fid)
 	pylab.clf()
+
+	# also generate a thumbnail
+	base, ext = os.path.splitext(fname)
+	thumb_fname = base + "_thumb" + ext
+	cmd = [convert_path, fname, "-thumbnail", "400x300", thumb_fname]
+	retcode = subprocess.call(cmd)
+	if retcode != 0:
+		raise RuntimeError, "convert failed. Command: " + " ".join(cmd)
 
 def to_table(fname, headings, rows):
 	print >>open(fname, 'w'), '<table><tr>%s</tr>%s</table>' % (
