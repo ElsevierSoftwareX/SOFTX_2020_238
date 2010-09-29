@@ -585,4 +585,4 @@ def audioresample_variance_gain(quality, num, den):
 			0.9704505626409354324
 			)[quality]
 	else: # no change in sample rate
-		return 1
+		return 1.
