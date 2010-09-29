@@ -62,7 +62,7 @@ src_elems = mkelems_fast(pipeline,
 )
 
 snr_elems = mkelems_fast(pipeline,
-	"lal_adder",
+	"lal_adder", {"sync": True},
 	"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % source_rate)},
 	"progressreport", {"name": "progress_out", "update-freq": 1},
 	"lal_nxydump",
