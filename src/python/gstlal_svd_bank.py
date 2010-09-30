@@ -104,11 +104,11 @@ class BankFragment(object):
 		self.start = start
 		self.end = end
 
-	def set_template_bank(self, template_bank, tolerance, snr_thresh, verbose = False):
+	def set_template_bank(self, template_bank, tolerance, snr_thresh, identity = False, verbose = False):
 		if verbose:
 			print >>sys.stderr, "\t%d templates of %d samples" % template_bank.shape
 
-		self.orthogonal_template_bank, self.singular_values, self.mix_matrix, self.chifacs = cbc_template_fir.decompose_templates(template_bank, tolerance)
+		self.orthogonal_template_bank, self.singular_values, self.mix_matrix, self.chifacs = cbc_template_fir.decompose_templates(template_bank, tolerance, identity = identity)
 
 		self.sum_of_squares_weights = numpy.sqrt(self.chifacs.mean() * gstlalmisc.ss_coeffs(self.singular_values,snr_thresh))
 
@@ -119,7 +119,7 @@ class BankFragment(object):
 
 class Bank(object):
 
-	def __init__(self, bank_xmldoc, psd, time_slices, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, verbose = False):
+	def __init__(self, bank_xmldoc, psd, time_slices, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, identity = False, verbose = False):
 		# FIXME: remove template_bank_filename when no longer needed
 		# by trigger generator element
 		self.template_bank_filename = None
@@ -142,7 +142,7 @@ class Bank(object):
 		for i, bank_fragment in enumerate(self.bank_fragments):
 			if verbose:
 				print >>sys.stderr, "constructing template decomposition %d of %d:  %g s ... %g s" % (i + 1, len(self.bank_fragments), -bank_fragment.end, -bank_fragment.start)
-			bank_fragment.set_template_bank(template_bank[i], tolerance, self.snr_threshold, verbose = verbose)
+			bank_fragment.set_template_bank(template_bank[i], tolerance, self.snr_threshold, identity = identity, verbose = verbose)
 
 		self.gate_threshold = sum_of_squares_threshold_from_fap(gate_fap, numpy.array([weight**2 for bank_fragment in self.bank_fragments for weight in bank_fragment.sum_of_squares_weights], dtype = "double"))
 		if verbose:
@@ -158,7 +158,7 @@ class Bank(object):
 
 
 
-def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, verbose):
+def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.1, identity = False, verbose = False):
 	# Open template bank file
 	bank_xmldoc = utils.load_filename(
 		template_bank_filename,
@@ -173,6 +173,7 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 		zip(bank_sngl_table.get_column('mass1'),bank_sngl_table.get_column('mass2')),
 		fhigh=check_ffinal_and_find_max_ffinal(bank_xmldoc),
 		flow = flow,
+		padding = padding,
 		verbose=verbose)
 
 	# Generate templates, perform SVD, get orthogonal basis
@@ -186,6 +187,7 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 		tolerance = svd_tolerance,
 		flow = flow,
 		autocorrelation_length = 201,	# samples
+		identity = identity,
 		verbose = verbose
 	)
 
