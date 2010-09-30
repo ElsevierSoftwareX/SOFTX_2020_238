@@ -10,6 +10,11 @@ FILES = \
 	ligo_data_find.out \
 	swinj.xml
 
+MIN_MASS = 1.2
+MAX_MASS = 1.6
+MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
+MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
+
 all: $(FILES)
 
 .PHONY: clean
@@ -30,12 +35,12 @@ swinj.xml:
 		--max-distance 10e3 \
 		--l-distr random \
 		--m-distr componentMass \
-		--min-mass1 1.2 \
-		--max-mass1 1.6 \
-		--min-mass2 1.2 \
-		--max-mass2 1.6 \
-		--min-mtotal 2.4 \
-		--max-mtotal 3.2 \
+		--min-mass1 $(MIN_MASS) \
+		--max-mass1 $(MAX_MASS) \
+		--min-mass2 $(MIN_MASS) \
+		--max-mass2 $(MAX_MASS) \
+		--min-mtotal $(MIN_TOTAL_MASS) \
+		--max-mtotal $(MAX_TOTAL_MASS) \
 		--i-distr uniform \
 		--waveform GeneratePPNtwoPN \
 		--f-lower 10.0 \
@@ -56,7 +61,7 @@ H1-TMPLTBANK_LLOID_S6_ONLINE-958740096-2048.xml.gz: ligo_data_find.out
 		--dynamic-range-exponent 69.0 \
 		--enable-high-pass 30.0 --high-pass-order 8 \
 		--strain-high-pass-order 8 \
-		--minimum-mass 1.2 --maximum-mass 1.6 \
+		--minimum-mass $(MIN_MASS) --maximum-mass $(MAX_MASS) \
 		--approximant TaylorF2 --order twoPN \
 		--standard-candle \
 		--calibrated-data real_8 \
@@ -69,7 +74,7 @@ H1-TMPLTBANK_LLOID_S6_ONLINE-958740096-2048.xml.gz: ligo_data_find.out
 		--low-frequency-cutoff 40.0 --pad-data 8 --num-freq-cutoffs 1 \
 		--sample-rate 4096 --high-frequency-cutoff 1843.2 --resample-filter ldas \
 		--strain-high-pass-atten 0.1 --strain-high-pass-freq 30 \
-		--min-total-mass 2.4 --max-total-mass 3.2 \
+		--min-total-mass $(MIN_TOTAL_MASS) --max-total-mass $(MAX_TOTAL_MASS) \
 		--write-compress --spectrum-type median
 
 tmpltbank.xml.gz: H1-TMPLTBANK_LLOID_S6_ONLINE-958740096-2048.xml.gz
