@@ -220,7 +220,7 @@ else:
 #
 
 banks = [
-	build_bank(filename, psd, options.flow, options.ortho_gate_fap, options.snr_threshold, options.svd_tolerance, options.verbose)
+	build_bank(filename, psd, options.flow, options.ortho_gate_fap, options.snr_threshold, options.svd_tolerance, verbose = options.verbose)
 	for filename in options.template_bank
 ]
 for n, bank in enumerate(banks):
