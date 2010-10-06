@@ -208,7 +208,7 @@ def time_slices(
 	# How many sample points should be included in a chunk?
 	# We need to balance the need to have few chunks with the
 	# need to have small chunks.
-	# We choose the min size such that the template matrix is
+	# We choose the min size such that the template matrix
 	# has its time dimension at least as large as its template dimension.
 	# The max size is chosen based on experience, which shows that
 	# SVDs of matrices bigger than m x 8192 are very slow.
