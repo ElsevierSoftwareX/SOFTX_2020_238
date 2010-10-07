@@ -31,8 +31,21 @@ from glue.ligolw.utils import segments as ligolw_segments
 from glue.segments import segment, segmentlist
 from pylal import llwapp
 from pylal.xlal.datatypes.snglinspiraltable import SnglInspiralTable
+lsctables.SnglInspiralTable.RowType = SnglInspiralTable
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 lsctables.LIGOTimeGPS = LIGOTimeGPS
+
+# work around lack of nanosecond support in DQ segments
+def get_segment(self):
+    """
+    Return the segment described by this row.
+    """
+    return segment(lsctables.LIGOTimeGPS(self.start_time, 0), lsctables.LIGOTimeGPS(self.end_time, 0))
+lsctables.Segment.get = get_segment
+if "start_time_ns" in lsctables.SegmentTable.validcolumns:
+    del lsctables.SegmentTable.validcolumns["start_time_ns"]
+if "end_time_ns" in lsctables.SegmentTable.validcolumns:
+    del lsctables.SegmentTable.validcolumns["end_time_ns"]
 
 
 def trigger_time(trig):
@@ -133,19 +146,6 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 		start_time = self.get_property("start-time")
 		duration = self.get_property("duration")
 		end_time = start_time + duration
-
-		# override SnglInspiralTable to create rows of type SnglInspiralTable
-		lsctables.SnglInspiralTable.RowType = SnglInspiralTable
-
-		# work around lack of nanosecond support in DQ segments
-		del lsctables.SegmentTable.validcolumns["start_time_ns"]
-		del lsctables.SegmentTable.validcolumns["end_time_ns"]
-		def get_segment(self):
-			"""
-			Return the segment described by this row.
-			"""
-			return segment(lsctables.LIGOTimeGPS(self.start_time, 0), lsctables.LIGOTimeGPS(self.end_time, 0))
-		lsctables.Segment.get = get_segment
 
 		# load XML document
 		if xml_location is not None:
