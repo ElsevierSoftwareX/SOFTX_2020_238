@@ -225,7 +225,6 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 
 		if timestamp >= self.__stream_end_time:
 			gst.info('timestamp %d is greater than stream end time %d, sending EOS' % (timestamp, self.__stream_end_time))
-			self.src_pads().next().push_event(gst.event_new_eos())
 			return (gst.FLOW_UNEXPECTED, None)
 
 		# decide on buffer end time, ignoring gaps for the moment
