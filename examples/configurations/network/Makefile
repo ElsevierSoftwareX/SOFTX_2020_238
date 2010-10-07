@@ -25,13 +25,13 @@ all: $(FILES)
 clean:
 	rm -f $(FILES)
 
-# Injections go from July through October 1 00:00 UTC
+# Injections go from July through November 1 00:00 UTC
 swinj.xml:
 	lalapps_inspinj \
 		--output $@ \
 		--user-tag LLOID_S6_ONLINE \
 		--gps-start-time 961977615 \
-		--gps-end-time 969926415 \
+		--gps-end-time 972604815 \
 		--t-distr fixed \
 		--time-step 300 \
 		--d-distr volume \
