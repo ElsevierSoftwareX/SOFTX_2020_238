@@ -10,5 +10,5 @@ To get started, build all of the data files by typing
 $ make -j all
 
 and then start the pipeline by typing
-$ ./network.py -i H1 -i L1 -s 962006414 -e 962037014 --template-bank tmpltbank.xml.gz --output network.sqlite
+$ ./network.py -i H1 -i L1 -s 969333979 -e 966788256 --template-bank tmpltbank.xml.gz --output network.sqlite
 

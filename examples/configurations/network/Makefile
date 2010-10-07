@@ -1,5 +1,10 @@
+PSD_START_TIME=969333979
+PSD_END_TIME=969335142
+FRAME_FILE_TYPE=$(if $(filter H1,$(1)),H1_DMT_C00_L2,$(if $(filter L1,$(1)),L1_DMT_C00_L2,$(if $(filter V1,$(1)),HrecOnline,)))
+CHANNEL_NAME=$(if $(filter H1,$(1)),DMT-STRAIN,$(if $(filter L1,$(1)),DMT-STRAIN,$(if $(filter V1,$(1)),h_16384Hz,)))
+
 FILES = \
-	H1-TMPLTBANK_LLOID_S6_ONLINE-958740096-2048.xml.gz \
+	H1-TMPLTBANK_LLOID_S6_ONLINE-$(PSD_START_TIME)-2048.xml.gz \
 	tmpltbank.xml.gz \
 	reference_psd.H1.xml.gz \
 	reference_psd.L1.xml.gz \
@@ -7,7 +12,6 @@ FILES = \
 	bank.H1.pickle \
 	bank.L1.pickle \
 	bank.V1.pickle \
-	ligo_data_find.out \
 	swinj.xml
 
 MIN_MASS = 1.2
@@ -47,16 +51,22 @@ swinj.xml:
 		--disable-spin \
 		--verbose
 
-ligo_data_find.out:
-	ligo_data_find -o H -t H1_DMT_C00_L2 -u file -l -s 958739936 -e 958743552 > $@
+ligo_data_find.%1.out:
+	ligo_data_find \
+		--observatory $* \
+		--type $(call FRAME_FILE_TYPE,$*1) \
+		--url-type file \
+		--lal-cache \
+		--gps-start-time $(PSD_START_TIME) \
+		--gps-end-time $(shell echo $(PSD_START_TIME) + 3072 | bc) > $@
 
-H1-TMPLTBANK_LLOID_S6_ONLINE-958740096-2048.xml.gz: ligo_data_find.out
+H1-TMPLTBANK_LLOID_S6_ONLINE-$(PSD_START_TIME)-2048.xml.gz: ligo_data_find.H1.out
 	lalapps_tmpltbank \
 		--verbose \
 		--disable-compute-moments \
 		--user-tag LLOID_S6_ONLINE \
-		--gps-start-time 958740096 \
-		--gps-end-time 958742144 \
+		--gps-start-time $(PSD_START_TIME) \
+		--gps-end-time $(shell echo $(PSD_START_TIME) + 2048 | bc) \
 		--grid-spacing Hexagonal \
 		--dynamic-range-exponent 69.0 \
 		--enable-high-pass 30.0 --high-pass-order 8 \
@@ -66,7 +76,7 @@ H1-TMPLTBANK_LLOID_S6_ONLINE-958740096-2048.xml.gz: ligo_data_find.out
 		--standard-candle \
 		--calibrated-data real_8 \
 		--candle-mass1 1.4 --candle-mass2 1.4 \
-		--channel-name H1:DMT-STRAIN --frame-cache ligo_data_find.out \
+		--channel-name H1:DMT-STRAIN --frame-cache $^ \
 		--space Tau0Tau3 --number-of-segments 15 \
 		--minimal-match 0.98 --candle-snr 8 --debug-level 33 --high-pass-attenuation 0.1 \
 		--min-high-freq-cutoff SchwarzISCO --max-high-freq-cutoff SchwarzISCO \
@@ -77,35 +87,18 @@ H1-TMPLTBANK_LLOID_S6_ONLINE-958740096-2048.xml.gz: ligo_data_find.out
 		--min-total-mass $(MIN_TOTAL_MASS) --max-total-mass $(MAX_TOTAL_MASS) \
 		--write-compress --spectrum-type median
 
-tmpltbank.xml.gz: H1-TMPLTBANK_LLOID_S6_ONLINE-958740096-2048.xml.gz
+tmpltbank.xml.gz: H1-TMPLTBANK_LLOID_S6_ONLINE-$(PSD_START_TIME)-2048.xml.gz
 	gstlal_prune_duplicate_mass_pairs $< $@
 
-reference_psd.H1.xml.gz:
+reference_psd.%.xml.gz: ligo_data_find.%.out
 	gstlal_reference_psd \
 		--verbose \
-		--online-data \
-		--instrument H1 \
-		--write-psd $@ \
-		--gps-start-time 958739939 \
-		--gps-end-time 958743539
-
-reference_psd.L1.xml.gz:
-	gstlal_reference_psd \
-		--verbose \
-		--online-data \
-		--instrument L1 \
-		--write-psd $@ \
-		--gps-start-time 958744974 \
-		--gps-end-time 958747374
-
-reference_psd.V1.xml.gz:
-	gstlal_reference_psd \
-		--verbose \
-		--online-data \
-		--instrument V1 \
-		--write-psd $@ \
-		--gps-start-time 966704415 \
-		--gps-end-time 966711615
+		--gps-start-time $(PSD_START_TIME) \
+		--gps-end-time $(PSD_END_TIME) \
+		--channel-name $(call CHANNEL_NAME,$*) \
+		--frame-cache $^ \
+		--instrument $* \
+		--write-psd $@
 
 bank.%.pickle: reference_psd.%.xml.gz tmpltbank.xml.gz
 	gstlal_svd_bank \
