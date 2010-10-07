@@ -42,7 +42,7 @@ def LIGOTimeGPS_to_ns(gps):
 	return gps.seconds * gst.SECOND + gps.nanoseconds
 
 def seglist_seconds_to_ns(seglist):
-	return segmentlist([(LIGOTimeGPS_to_ns(s), LIGOTimeGPS_to_ns(e)) for (s, e) in seglist])
+	return segmentlist([segment(LIGOTimeGPS_to_ns(s), LIGOTimeGPS_to_ns(e)) for (s, e) in seglist])
 
 class lal_ligolwtriggersrc(gst.BaseSrc):
 	__gstdetails__ = (
@@ -152,10 +152,10 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 			doc = utils.load_filename(xml_location, gz=xml_location.endswith(".gz"))
 		else:
 			try:
-					import sqlite3
+				import sqlite3
 			except ImportError:
-					# pre 2.5.x
-					from pysqlite2 import dbapi2 as sqlite3
+				# pre 2.5.x
+				from pysqlite2 import dbapi2 as sqlite3
 			from glue.ligolw import dbtables
 			working_filename = dbtables.get_connection_filename(sqlite_location, tmp_path=tmp_space, verbose=True)
 			connection = sqlite3.connect(working_filename)
@@ -169,6 +169,12 @@ class lal_ligolwtriggersrc(gst.BaseSrc):
 		if start_time == gst.CLOCK_TIME_NONE:
 			start_time = self.live_segs[0][0]
 		if duration == gst.CLOCK_TIME_NONE:
+			end_time = self.live_segs[-1][1]
+			duration = end_time - start_time
+		else:  # dur was given and start time is set, one way or another
+			end_time = start_time + duration
+
+		if (start_time == gst.CLOCK_TIME_NONE) or (duration == gst.CLOCK_TIME_NONE):
 			end_time = self.live_segs[-1][1]
 
 		# read triggers
