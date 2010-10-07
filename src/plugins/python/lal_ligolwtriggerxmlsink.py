@@ -26,6 +26,7 @@ import numpy as np
 
 from gstlal.pipeutil import *
 from gstlal import pipeio
+from gstlal import ligolw_output
 from gst.extend.pygobject import gproperty
 from glue import iterutils
 from glue.ligolw import ligolw
@@ -149,7 +150,7 @@ class lal_ligolwtriggersink(gst.BaseSink):
 			coinc_inspiral.end_time = mean_end_time.seconds
 			coinc_inspiral.end_time_ns = mean_end_time.nanoseconds
 			coinc_inspiral.ifos = None
-			coinc_inspiral.snr = np.sqrt(sum([sngl.snr**2 for sngl in sngls]))
+			coinc_inspiral.snr = ligolw_output.combined_effective_snr(sngls)
 			self.coinc_inspiral_table.append(coinc_inspiral)
 
 			for i, sngl in enumerate(sngls):
