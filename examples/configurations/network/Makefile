@@ -153,7 +153,7 @@ science_segments.%.xml:
 		--gps-start-time $(VETOSTARTTIME) \
 		--gps-end-time $(VETOENDTIME) \
 		--result-name SCIENCE \
-		-o $@ \
+		-o $@
 	ligolw_cut \
 		--delete-column process:domain \
 		--delete-column process:is_online \
@@ -165,9 +165,8 @@ science_segments.%.xml:
 science_cat3_segments.%.xml: science_segments.%.xml %-VETOTIME_CAT3-$(VETOSTARTTIME)-$(VETODURATION).xml
 	ligolw_segment_diff \
 		--segment \
-		--include-segments $*:SCIENCE \
-		--include-segments $*:VETO_CAT3_CUMULATIVE \
-		--result-name SCIENCE_CAT3 \
+		--include-segments $*:SCIENCE,$*:VETO_CAT3_CUMULATIVE \
+		--result-name $*_SCIENCE_CAT3 \
 		-o $@ $^ || test -e $@
 
 # Intersect all cat5 science segments from all detectors
@@ -175,7 +174,7 @@ science_cat3_segments.%.xml: science_segments.%.xml %-VETOTIME_CAT3-$(VETOSTARTT
 intersection.xml: $(foreach ifo,$(IFOS),science_cat3_segments.$(ifo).xml)
 	ligolw_segment_intersect \
 		--segment \
-		--include-segments :SCIENCE_CAT3 \
+		--include-segments :H1_SCIENCE_CAT3,:L1_SCIENCE_CAT3,:V1_SCIENCE_CAT3 \
 		-o $@ $^ || test -e $@
 
 intersection_spans.txt: intersection.xml
@@ -200,4 +199,4 @@ intersection_end_times.txt: intersection.xml
 
 longest_triple_time.txt: intersection_spans.txt intersection_start_times.txt intersection_end_times.txt
 	echo "# Duration  Start Time  End Time" > $@
-	paste $^ | sort -nr | head -n 10 >> $@
+	paste $^ | sort -nr >> $@
