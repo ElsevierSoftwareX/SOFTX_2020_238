@@ -51,6 +51,7 @@ swinj.xml:
 		--disable-spin \
 		--verbose
 
+# Locate data for reference PSDs; use online frames
 ligo_data_find.%1.out:
 	ligo_data_find \
 		--observatory $* \
@@ -60,6 +61,7 @@ ligo_data_find.%1.out:
 		--gps-start-time $(PSD_START_TIME) \
 		--gps-end-time $(shell echo $(PSD_START_TIME) + 3072 | bc) > $@
 
+# Place templates
 H1-TMPLTBANK_LLOID_S6_ONLINE-$(PSD_START_TIME)-2048.xml.gz: ligo_data_find.H1.out
 	lalapps_tmpltbank \
 		--verbose \
@@ -87,9 +89,11 @@ H1-TMPLTBANK_LLOID_S6_ONLINE-$(PSD_START_TIME)-2048.xml.gz: ligo_data_find.H1.ou
 		--min-total-mass $(MIN_TOTAL_MASS) --max-total-mass $(MAX_TOTAL_MASS) \
 		--write-compress --spectrum-type median
 
+# Prune duplicate mass pairs (can someone fix this in lalapps_inspiral?)
 tmpltbank.xml.gz: H1-TMPLTBANK_LLOID_S6_ONLINE-$(PSD_START_TIME)-2048.xml.gz
 	gstlal_prune_duplicate_mass_pairs $< $@
 
+# Estimate PSDs
 reference_psd.%.xml.gz: ligo_data_find.%.out
 	gstlal_reference_psd \
 		--verbose \
@@ -100,6 +104,7 @@ reference_psd.%.xml.gz: ligo_data_find.%.out
 		--instrument $* \
 		--write-psd $@
 
+# Decompose template banks into time slices and orthogonal components
 bank.%.pickle: reference_psd.%.xml.gz tmpltbank.xml.gz
 	gstlal_svd_bank \
 		--verbose \
@@ -127,7 +132,8 @@ SCIENCE_SEGMENTS=H1:DMT-SCIENCE:1 L1:DMT-SCIENCE:1 V1:ITF_SCIENCEMODE:1
 $(VETODEF):
 	wget --no-check-certificate $(VETODEFURL)
 
-# Query segment database for cumulative veto times for all categories
+# Query segment database for cumulative veto times for all categories.
+# WARNING!!! This takes about an hour for each detector!
 $(foreach cat,$(CATS),$(foreach ifo,$(IFOS),$(ifo)-VETOTIME_CAT$(cat)-$(VETOSTARTTIME)-$(VETODURATION).xml)):
 	ligolw_segments_from_cats \
 		--database \
@@ -170,6 +176,7 @@ intersection.xml: $(foreach ifo,$(IFOS),science_cat3_segments.$(ifo).xml)
 		--include-segments :H1_SCIENCE_CAT3,:L1_SCIENCE_CAT3,:V1_SCIENCE_CAT3 \
 		-o $@ $^ || test -e $@
 
+# Create list of times spanned by segments
 intersection_spans.txt: intersection.xml
 	ligolw_print \
 		--table segment \
@@ -178,18 +185,21 @@ intersection_spans.txt: intersection.xml
 		--delimiter "-" \
 		$^ | bc > $@
 
+# Create list of start times of segments
 intersection_start_times.txt: intersection.xml
 	ligolw_print \
 		--table segment \
 		--column start_time \
 		$^ > $@
 
+# Create list of end times of segments
 intersection_end_times.txt: intersection.xml
 	ligolw_print \
 		--table segment \
 		--column end_time \
 		$^ > $@
 
+# Create list of segments, sorted by duration, descending
 longest_triple_time.txt: intersection_spans.txt intersection_start_times.txt intersection_end_times.txt
 	echo "# Duration  Start Time  End Time" > $@
 	paste $^ | sort -nr >> $@
