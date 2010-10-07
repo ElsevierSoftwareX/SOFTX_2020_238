@@ -114,3 +114,90 @@ bank.%.pickle: reference_psd.%.xml.gz tmpltbank.xml.gz
 		--ortho-gate-fap 0.01 \
 		--reference-psd $< \
 		--write-bank $@
+
+
+#
+# Segment queries
+#
+
+# Definitions
+VETODEF=H1L1V1-S6_CBC_LOWMASS_D_PSEUDO_ONLINE.xml
+VETODEFURL=https://www.lsc-group.phys.uwm.edu/ligovirgo/cbc/public/segments/S6/S6D/$(VETODEF)
+VETOSTARTTIME=$(shell lalapps_tconvert September 24, 2010)
+VETOENDTIME=$(shell lalapps_tconvert October 1, 2010)
+VETODURATION=$(shell echo $(VETOENDTIME) - $(VETOSTARTTIME) | bc)
+IFOS=H1 L1 V1
+CATS=1 2 3 4 5
+SCIENCE_SEGMENTS=H1:DMT-SCIENCE:1 L1:DMT-SCIENCE:1 V1:ITF_SCIENCEMODE:1
+
+# Download veto definer
+$(VETODEF):
+	wget --no-check-certificate $(VETODEFURL)
+
+# Query segment database for cumulative veto times for all categories
+$(foreach cat,$(CATS),$(foreach ifo,$(IFOS),$(ifo)-VETOTIME_CAT$(cat)-$(VETOSTARTTIME)-$(VETODURATION).xml)):
+	ligolw_segments_from_cats \
+		--database \
+		--veto-file $(VETODEF) \
+		--cumulative-categories \
+		--gps-start-time $(VETOSTARTTIME) \
+		--gps-end-time $(VETOENDTIME)
+
+# Query segment database for science segments
+# Arrghh! ligolw_cut needed because of incompatible columns!
+science_segments.%.xml:
+	ligolw_segment_query \
+		--database \
+		--query-segments \
+		--include-segments $(filter $(*):%,$(SCIENCE_SEGMENTS)) \
+		--gps-start-time $(VETOSTARTTIME) \
+		--gps-end-time $(VETOENDTIME) \
+		--result-name SCIENCE \
+		-o $@ \
+	ligolw_cut \
+		--delete-column process:domain \
+		--delete-column process:is_online \
+		--delete-column process:jobid \
+		$@
+
+# Subtract vetoed segments from science segments
+# Arrghh! ligolw_segment_diff does not return exit code 0 iff successful!
+science_cat3_segments.%.xml: science_segments.%.xml %-VETOTIME_CAT3-$(VETOSTARTTIME)-$(VETODURATION).xml
+	ligolw_segment_diff \
+		--segment \
+		--include-segments $*:SCIENCE \
+		--include-segments $*:VETO_CAT3_CUMULATIVE \
+		--result-name SCIENCE_CAT3 \
+		-o $@ $^ || test -e $@
+
+# Intersect all cat5 science segments from all detectors
+# Arrghh! ligolw_segment_intersect does not return exit code 0 iff successful!
+intersection.xml: $(foreach ifo,$(IFOS),science_cat3_segments.$(ifo).xml)
+	ligolw_segment_intersect \
+		--segment \
+		--include-segments :SCIENCE_CAT3 \
+		-o $@ $^ || test -e $@
+
+intersection_spans.txt: intersection.xml
+	ligolw_print \
+		--table segment \
+		--column end_time \
+		--column start_time \
+		--delimiter "-" \
+		$^ | bc > $@
+
+intersection_start_times.txt: intersection.xml
+	ligolw_print \
+		--table segment \
+		--column start_time \
+		$^ > $@
+
+intersection_end_times.txt: intersection.xml
+	ligolw_print \
+		--table segment \
+		--column end_time \
+		$^ > $@
+
+longest_triple_time.txt: intersection_spans.txt intersection_start_times.txt intersection_end_times.txt
+	echo "# Duration  Start Time  End Time" > $@
+	paste $^ | sort -nr | head -n 10 >> $@
