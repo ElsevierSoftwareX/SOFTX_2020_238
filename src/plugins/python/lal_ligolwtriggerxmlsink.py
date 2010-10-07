@@ -144,8 +144,8 @@ class lal_ligolwtriggersink(gst.BaseSink):
 			coinc_inspiral.coinc_event_id = coinc_event.coinc_event_id
 			coinc_inspiral.mchirp = sngls[0].mchirp
 			coinc_inspiral.mass = sngls[0].mtotal
-			coinc_inspiral.false_alarm_rate = None
-			coinc_inspiral.combined_far = reduce(operator.mul, (s.alpha for s in sngls), 1.)
+			coinc_inspiral.false_alarm_rate = reduce(operator.mul, (s.alpha for s in sngls), 1.)
+			coinc_inspiral.combined_far = None
 			mean_end_time = sum([LIGOTimeGPS(sngl.end_time, sngl.end_time_ns) for sngl in sngls]) / len(sngls)
 			coinc_inspiral.end_time = mean_end_time.seconds
 			coinc_inspiral.end_time_ns = mean_end_time.nanoseconds
