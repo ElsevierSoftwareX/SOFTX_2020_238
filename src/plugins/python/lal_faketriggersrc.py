@@ -32,7 +32,7 @@ from pylal.datatypes import LIGOTimeGPS
 
 def sngl_inspiral_pylal_from_glue(glue_sngl):
 	pylal_sngl = SnglInspiralTable()
-	for key in glue_sngl.__slots__:
+	for key in lsctables.SnglInspiralTable.validcolumns.iterkeys():
 		setattr(pylal_sngl, key, getattr(glue_sngl, key))
 	return pylal_sngl
 
