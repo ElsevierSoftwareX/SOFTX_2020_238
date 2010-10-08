@@ -151,6 +151,7 @@ class lal_ligolwtriggerxmlsink(gst.BaseSink):
 			coinc_inspiral.end_time_ns = mean_end_time.nanoseconds
 			coinc_inspiral.ifos = None
 			coinc_inspiral.snr = ligolw_output.combined_effective_snr(sngls)
+			coinc_inspiral.minimum_duration = min(sngl.template_duration for sngl in sngls)
 			self.coinc_inspiral_table.append(coinc_inspiral)
 
 			for i, sngl in enumerate(sngls):
