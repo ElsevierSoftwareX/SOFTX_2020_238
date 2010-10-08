@@ -41,7 +41,7 @@ lsctables.SnglInspiralTable.next_id = lsctables.SnglInspiralID(1)
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
-class lal_ligolwtriggersink(gst.BaseSink):
+class lal_ligolwtriggerxmlsink(gst.BaseSink):
 	__gstdetails__ = (
 		"LIGO_LW trigger sink",
 		"Sink",
@@ -80,7 +80,7 @@ class lal_ligolwtriggersink(gst.BaseSink):
 	)
 
 	def __init__(self):
-		super(lal_ligolwtriggersink, self).__init__()
+		super(lal_ligolwtriggerxmlsink, self).__init__()
 		for prop in self.props:
 			if prop.name in ("xml-location"):
 				self.set_property(prop.name, prop.default_value)
@@ -167,4 +167,4 @@ class lal_ligolwtriggersink(gst.BaseSink):
 		return gst.FLOW_OK
 
 # Register element class
-gstlal_element_register(lal_ligolwtriggersink)
+gstlal_element_register(lal_ligolwtriggerxmlsink)
