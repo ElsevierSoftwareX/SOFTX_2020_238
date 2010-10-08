@@ -27,7 +27,7 @@ import numpy as np
 from gstlal.pipeutil import *
 from gstlal import pipeio
 from gstlal import ligolw_output
-from gst.extend.pygobject import gproperty
+from gst.extend.pygobject import gproperty, with_construct_properties
 from glue import iterutils
 from glue.ligolw import ligolw
 from glue.ligolw import table
@@ -79,6 +79,7 @@ class lal_ligolwtriggerxmlsink(gst.BaseSink):
 		),
 	)
 
+	@with_construct_properties
 	def __init__(self):
 		super(lal_ligolwtriggerxmlsink, self).__init__()
 		for prop in self.props:
