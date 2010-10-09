@@ -84,7 +84,7 @@ def savefig(fname):
 	# also generate a thumbnail
 	base, ext = os.path.splitext(fname)
 	thumb_fname = base + "_thumb" + ext
-	cmd = [convert_path, fname, "-thumbnail", "400x300", thumb_fname]
+	cmd = [convert_path, fname, "-thumbnail", "240x180", thumb_fname]
 	retcode = subprocess.call(cmd)
 	if retcode != 0:
 		raise RuntimeError, "convert failed. Command: " + " ".join(cmd)
