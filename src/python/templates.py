@@ -195,7 +195,7 @@ def time_slices(
 
 	# Remove too-small and too-big sample rates base on input params.
 	sample_rate_min = ceil_pow_2( 2 * padding * flow )
-	sample_rate_max = ceil_pow_2( 2 * padding * fhigh )
+	sample_rate_max = ceil_pow_2( 2 * fhigh )
 	while allowed_rates[-1] < sample_rate_min:
 		allowed_rates.pop(-1)
 	while allowed_rates[0] > sample_rate_max:
@@ -208,7 +208,7 @@ def time_slices(
 	# How many sample points should be included in a chunk?
 	# We need to balance the need to have few chunks with the
 	# need to have small chunks.
-	# We choose the min size such that the template matrix is
+	# We choose the min size such that the template matrix
 	# has its time dimension at least as large as its template dimension.
 	# The max size is chosen based on experience, which shows that
 	# SVDs of matrices bigger than m x 8192 are very slow.
