@@ -195,7 +195,7 @@ def time_slices(
 
 	# Remove too-small and too-big sample rates base on input params.
 	sample_rate_min = ceil_pow_2( 2 * padding * flow )
-	sample_rate_max = ceil_pow_2( 2 * padding * fhigh )
+	sample_rate_max = ceil_pow_2( 2 * fhigh )
 	while allowed_rates[-1] < sample_rate_min:
 		allowed_rates.pop(-1)
 	while allowed_rates[0] > sample_rate_max:
