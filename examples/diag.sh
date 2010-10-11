@@ -96,10 +96,10 @@ function test_whiten() {
 
 function test_simulation() {
 	gst-launch \
-		audiotestsrc wave=9 volume=1e-21 timestamp-offset=874107195000000000 num-buffers=5 samplesperbuffer=16384 \
+		audiotestsrc wave=9 volume=1e-21 timestamp-offset=900000000000000000 num-buffers=10000 samplesperbuffer=16384 \
 		! audio/x-raw-float, channels=1, width=64, rate=16384 \
 		! taginject tags="instrument=\"H1\",channel-name=\"LSC-STRAIN\",units=\"strain\"" \
-		! lal_simulation xml-location="bns_injections.xml" \
+		! lal_simulation xml-location="test_inspiral_injections_1s_step.xml" \
 		! audioamplify clipping-method=3 amplification=1e20 \
 		! adder ! audioconvert ! autoaudiosink
 }
@@ -183,4 +183,4 @@ function test_chisquare_gaps() {
 		! queue ! filesink buffer-mode=2 location="dump_in.txt"
 }
 
-test_down_resampler_gaps
+test_simulation
