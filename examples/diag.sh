@@ -96,7 +96,7 @@ function test_whiten() {
 
 function test_simulation() {
 	gst-launch \
-		audiotestsrc wave=9 volume=1e-21 timestamp-offset=900000000000000000 num-buffers=10000 samplesperbuffer=16384 \
+		audiotestsrc wave=9 volume=1e-21 timestamp-offset=900000000000000000 num-buffers=30 samplesperbuffer=16384 \
 		! audio/x-raw-float, channels=1, width=64, rate=16384 \
 		! taginject tags="instrument=\"H1\",channel-name=\"LSC-STRAIN\",units=\"strain\"" \
 		! lal_simulation xml-location="test_inspiral_injections_1s_step.xml" \
@@ -106,10 +106,10 @@ function test_simulation() {
 
 function test_simulation2wav() {
 	gst-launch \
-		audiotestsrc wave=9 volume=1e-21 timestamp-offset=874107195000000000 num-buffers=5 samplesperbuffer=16384 \
+		audiotestsrc wave=9 volume=1e-21 timestamp-offset=900000000000000000 num-buffers=30 samplesperbuffer=16384 \
 		! audio/x-raw-float, channels=1, width=64, rate=16384 \
 		! taginject tags="title=\"Inspiral Injections\",instrument=\"H1\",channel-name=\"LSC-STRAIN\",units=\"strain\"" \
-		! lal_simulation xml-location="bns_injections.xml" \
+		! lal_simulation xml-location="test_inspiral_injections_1s_step.xml" \
 		! progressreport \
 		! audioamplify clipping-method=3 amplification=1e20 \
 		! wavenc \
