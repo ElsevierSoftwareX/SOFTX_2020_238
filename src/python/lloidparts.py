@@ -323,7 +323,14 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		"lal_matrixmixer", {"matrix": bank_fragment.mix_matrix},
 		"audioresample", {"gap-aware": True, "quality": 9},
 		"lal_nofakedisconts", {"silent": True}, # FIXME:  remove after basetransform behaviour fixed
-		"lal_checktimestamps", {"name": "timestamps_%s_after_snr_resampler" % logname}
+		"lal_checktimestamps", {"name": "timestamps_%s_after_snr_resampler" % logname},
+
+		# This queue permits all of the SNR reconstruction stages (constisting
+		# of the lal_matrixmixer and audioresample above) to run in parallel,
+		# possibly providing significant speedup if multiple cores are available.
+		# This may increase peak memory use.
+
+		"queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": gst.SECOND},
 	)
 
 
