@@ -376,6 +376,19 @@ while True:
 			FROM sngl_inspiral INNER JOIN coinc_event_map USING (event_id) INNER JOIN coinc_inspiral USING (coinc_event_id) GROUP BY coinc_event_id ORDER BY combined_eff_snr DESC LIMIT 10
 		""").fetchall())
 
+	# Make injection plots
+	found = array_from_cursor(clustered_coincdb.execute("SELECT geocent_end_time, distance FROM sim_inspiral WHERE EXISTS (SELECT * FROM coinc_inspiral WHERE coinc_inspiral.end_time BETWEEN sim_inspiral.geocent_end_time - 1.0 AND sim_inspiral.geocent_end_time + 1.0);"))
+
+	missed = array_from_cursor(clustered_coincdb.execute("SELECT geocent_end_time, distance FROM sim_inspiral WHERE NOT EXISTS (SELECT * FROM coinc_inspiral WHERE coinc_inspiral.end_time BETWEEN sim_inspiral.geocent_end_time - 1.0 AND sim_inspiral.geocent_end_time + 1.0) AND geocent_end_time BETWEEN (SELECT MIN(coinc_inspiral.end_time) FROM coinc_inspiral) AND (SELECT MAX(coinc_inspiral.end_time) FROM coinc_inspiral);"))
+
+	pylab.semilogy(missed['geocent_end_time'], missed['distance'],'*k')
+	pylab.semilogy(found['geocent_end_time'], found['distance'],'*')
+	pylab.ylabel('Distance (Mpc)')
+	pylab.xlabel('Geocentric end time')
+	pylab.title('Missed/Found injections distance versus end time')
+	pylab.legend(['missed','found'])
+	savefig('missed_found.png')
+
 	stop = time.time()
 
 	if (stop - start) < wait: time.sleep(wait - (stop-start))
