@@ -51,8 +51,9 @@ if len(args) == 0 or opts.www_path is None:
 # described
 input_path, input_name = os.path.split(opts.input)
 coincdb = sqlite3.connect(os.path.join(input_path, "".join(args) + "-" + input_name))
+clustered_coincdb = sqlite3.connect(os.path.join(input_path, "".join(args) + "-clustered_" + input_name))
 trigdbs = tuple( (ifo, sqlite3.connect(os.path.join(input_path, ifo + "-" + input_name))) for ifo in args)
-alldbs = tuple(x[1] for x in trigdbs) + (coincdb,)
+alldbs = tuple(x[1] for x in trigdbs) + (coincdb,clustered_coincdb)
 
 # Attach some functions to all databases
 for db in alldbs:
@@ -118,6 +119,7 @@ wait = 5.0
 
 ifostyle = {"H1": {"color": "red", "label": "H1"}, "L1": {"color": "green", "label": "L1"}, "V1": {"color": "purple", "label": "V1"}}
 hist_ifostyle = {"H1": {"facecolor": "red", "label": "H1"}, "L1": {"facecolor": "green", "label": "L1"}, "V1": {"facecolor": "purple", "label": "V1"}}
+clusterstyle = {"linestyle": "none", "marker": "o", "markersize": 10, "markeredgecolor": "blue", "markerfacecolor": "none", "markeredgewidth": 2}
 
 
 # Save directory that we were in
@@ -332,17 +334,28 @@ while True:
 			sqrt(sum(square(eff_snr(snr, chisq)))) as combined_eff_snr
 			FROM sngl_inspiral INNER JOIN coinc_event_map USING (event_id) GROUP BY coinc_event_id
 		"""))
+	clustered_params = array_from_cursor(clustered_coincdb.execute("""
+			SELECT
+			avg(end_time + 1e-9 * end_time_ns) as mean_end_time,
+			sqrt(sum(square(snr))) as combined_snr,
+			sqrt(sum(square(eff_snr(snr, chisq)))) as combined_eff_snr
+			FROM sngl_inspiral INNER JOIN coinc_event_map USING (event_id) GROUP BY coinc_event_id
+		"""))
 
-	pylab.semilogy(params['mean_end_time'], params['combined_snr'], '.k')
+	pylab.semilogy(params['mean_end_time'], params['combined_snr'], '.k', label="all coincidences")
+	pylab.semilogy(clustered_params['mean_end_time'], clustered_params['combined_snr'], label="clustered", **clusterstyle)
 	pylab.xlabel('Mean end time')
 	pylab.ylabel(plots.labels['combined_snr'])
 	pylab.title('Combined SNR versus end time')
+	pylab.legend()
 	savefig('combined_snr_end_time.png')
 
-	pylab.semilogy(params['mean_end_time'], params['combined_eff_snr'], '.k')
+	pylab.semilogy(params['mean_end_time'], params['combined_eff_snr'], '.k', label="all coincidences")
+	pylab.semilogy(clustered_params['mean_end_time'], clustered_params['combined_eff_snr'], label="clustered", **clusterstyle)
 	pylab.xlabel('Mean end time')
 	pylab.ylabel(plots.labels['combined_eff_snr'])
 	pylab.title('Combined effective SNR versus end time')
+	pylab.legend()
 	savefig('combined_eff_snr_end_time.png')
 
 	to_table("trigcount.html", ("count", "ifo"),
@@ -352,7 +365,7 @@ while True:
 		coincdb.execute("SELECT count(*) as n, ifos FROM coinc_inspiral GROUP BY ifos ORDER BY n DESC").fetchall())
 
 	to_table("loudest.html", ("end_time", "combined_snr", "combined_eff_snr", "ifos", "mchirp", "mtotal"),
-		coincdb.execute("""
+		clustered_coincdb.execute("""
 			SELECT
 			coinc_inspiral.end_time + 1e-9 * coinc_inspiral.end_time_ns,
 			sqrt(sum(square(sngl_inspiral.snr))) as combined_snr,
