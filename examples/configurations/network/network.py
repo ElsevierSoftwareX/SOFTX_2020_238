@@ -15,6 +15,12 @@ opts, args = OptionParser(
 	]
 ).parse_args()
 
+if len(opts.instrument) == 0:
+    raise ValueError, "require at least one instrument"
+if (opts.gps_start_time is None) or (opts.gps_end_time is None):
+    raise ValueError, "require start and end times"
+if opts.template_bank is None:
+    raise ValueError, "require template bank file"
 
 opts.psd_fft_length = 8
 
