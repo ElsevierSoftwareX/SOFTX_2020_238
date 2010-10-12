@@ -73,22 +73,53 @@ p = subprocess.Popen(["/usr/bin/which", "convert"], stdout=subprocess.PIPE)
 if p.wait() != 0:
 	raise RuntimeError, "can't find ImageMagick convert"
 convert_path = p.communicate()[0].rstrip()
-def savefig(fname):
-	"""Wraps pylab.savefig, but replaces the destination file atomically and destroys the plotting state. Also writes thumbnails."""
-	fid, path = mkstemp(suffix = fname, dir = '.')
-	pylab.savefig(path)
-	os.chmod(path, stat.S_IRGRP | stat.S_IRUSR | stat.S_IROTH | stat.S_IWUSR)
-	os.rename(path, fname)
-	os.close(fid)
-	pylab.clf()
 
-	# also generate a thumbnail
+
+def savefig(fname):
+	"""Wraps pylab.savefig, but replaces the destination file atomically and
+	destroys the plotting state. Also writes thumbnails."""
+
+	# Deduce base name, format, and extension for file
 	base, ext = os.path.splitext(fname)
-	thumb_fname = base + "_thumb" + ext
-	cmd = [convert_path, fname, "-thumbnail", "240x180", thumb_fname]
-	retcode = subprocess.call(cmd)
-	if retcode != 0:
-		raise RuntimeError, "convert failed. Command: " + " ".join(cmd)
+	format = ext[1:]
+
+	# Open a randomly named temporary file to save the image.
+	fid, path = mkstemp(dir='.')
+	f = os.fdopen(fid, 'wb')
+
+	# Permissions for destination file: -rw-r--r--
+	perms = stat.S_IRGRP|stat.S_IRUSR|stat.S_IWUSR|stat.S_IROTH|stat.S_IWUSR
+
+	# Atomically save the file to the destination.  At the end of this nested
+	# try block, whether or not the file is saved successfully, the temporary
+	# file will be deleted and the drawing state will be reset.
+	try:
+		try:
+			try:
+				pylab.savefig(f, format=format)
+			finally:
+				f.close()
+			os.chmod(path, perms)
+			os.rename(path, fname)
+		except:
+			os.unlink(path)
+			raise
+	finally:
+		pylab.clf()
+
+	# Atomically save a thumbnail.
+	fid, path = mkstemp(dir='.')
+	os.close(fid)
+	try:
+		cmd = [convert_path, fname, "-thumbnail", "240x180", path]
+		retcode = subprocess.call(cmd)
+		if retcode != 0:
+			raise RuntimeError, "convert failed. Command: " + " ".join(cmd)
+		os.chmod(path, perms)
+		os.rename(path, base + "_thumb" + ext)
+	except:
+		os.unlink(path)
+		raise
 
 def to_table(fname, headings, rows):
 	print >>open(fname, 'w'), '<table><tr>%s</tr>%s</table>' % (
