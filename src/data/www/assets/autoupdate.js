@@ -45,24 +45,20 @@
 
 		var interval = config['interval'];
 
+		var is_img = $(this).is('img');
+
 		this.each(function() {
 			var obj = this;
-			var old_src = $(this).attr('src');
-			var parent = $(obj).parent();
-			var old_href = undefined;
-			if (parent.is('a'))
-				old_href=parent.attr('href');
+			var old_src = $(this).attr(is_img ? 'src' : 'href');
 			var func = function() {
 				window.setTimeout(function() {
 					// FIXME: we could load the image into a separate img object,
 					// then swap URLs; this might help to avoid flicker.
-					var new_id = "#e" + Math.random();
-					if ($(obj).is(':visible'))
-						obj.src = old_src + new_id;
-					// This is a hack to get fancybox to work right.
-					var parent = $(obj).parent();
-					if (parent.is('a'))
-						parent.attr('href', old_href + new_id);
+					var new_src = old_src + "#e" + Math.random();
+					if (is_img && $(obj).is(':visible'))
+						obj.src = new_src;
+					else
+						obj.href = new_src;
 					func();
 				}, interval);
 			};
