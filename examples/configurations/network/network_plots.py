@@ -373,7 +373,7 @@ while True:
 			ifos,
 			coinc_inspiral.mchirp,
 			mtotal
-			FROM sngl_inspiral INNER JOIN coinc_event_map USING (event_id) INNER JOIN coinc_inspiral USING (coinc_event_id) GROUP BY coinc_event_id ORDER BY ifo ASC, combined_eff_snr DESC LIMIT 10
+			FROM sngl_inspiral INNER JOIN coinc_event_map USING (event_id) INNER JOIN coinc_inspiral USING (coinc_event_id) GROUP BY coinc_event_id ORDER BY combined_eff_snr DESC LIMIT 10
 		""").fetchall())
 
 	stop = time.time()
