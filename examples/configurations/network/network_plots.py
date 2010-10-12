@@ -22,6 +22,7 @@ import numpy
 import math
 from pylal import date
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
+from glue import iterutils
 from glue.ligolw import utils, lsctables
 
 from gstlal.ligolw_output import effective_snr
@@ -406,6 +407,29 @@ while True:
 			mtotal
 			FROM sngl_inspiral INNER JOIN coinc_event_map USING (event_id) INNER JOIN coinc_inspiral USING (coinc_event_id) GROUP BY coinc_event_id ORDER BY combined_eff_snr DESC LIMIT 10
 		""").fetchall())
+
+	# coinc stat1 vs stat2 plots
+	stat_query = "SELECT sngl1.snr AS snr1, eff_snr(sngl1.snr, sngl1.chisq) AS eff_snr1, sngl2.snr AS snr2, eff_snr(sngl2.snr, sngl2.chisq) AS eff_snr2 FROM coinc_event_map AS cem1 JOIN coinc_event_map AS cem2 ON cem1.coinc_event_id=cem2.coinc_event_id JOIN sngl_inspiral AS sngl1 ON cem1.event_id=sngl1.event_id JOIN sngl_inspiral AS sngl2 ON cem2.event_id=sngl2.event_id JOIN coinc_inspiral AS ci ON ci.coinc_event_id=cem1.coinc_event_id WHERE sngl1.ifo=? AND sngl2.ifo=? ORDER BY ci.end_time * 1000000000 + ci.end_time_ns;"
+	for ifo1, ifo2 in iterutils.choices(sorted(args), 2):
+		unclustered_stats = array_from_cursor(coincdb.execute(stat_query, (ifo1, ifo2))).T
+		clustered_stats = array_from_cursor(clustered_coincdb.execute(stat_query, (ifo1, ifo2))).T
+		pylab.loglog(unclustered_stats["snr1"], unclustered_stats["snr2"], "k.", label="all coincidences")
+		pylab.loglog(clustered_stats["snr1"], clustered_stats["snr2"], label="clustered", **clusterstyle)
+		pylab.xlabel("%s SNR" % ifo1)
+		pylab.ylabel("%s SNR" % ifo2)
+		pylab.title("Coincident SNRs: %s vs %s" % (ifo2, ifo1))
+		pylab.legend(loc="upper left")
+		pylab.grid(True)
+		savefig("%s%s_snr_snr.png" % (ifo1, ifo2))
+
+		pylab.loglog(unclustered_stats["eff_snr1"], unclustered_stats["eff_snr2"], "k.", label="all coincidences")
+		pylab.loglog(clustered_stats["eff_snr1"], clustered_stats["eff_snr2"], label="clustered", **clusterstyle)
+		pylab.xlabel("%s effective SNR" % ifo1)
+		pylab.ylabel("%s effective SNR" % ifo2)
+		pylab.title("Coincident effective SNRs: %s vs %s" % (ifo2, ifo1))
+		pylab.legend(loc="upper left")
+		pylab.grid(True)
+		savefig("%s%s_effsnr_effsnr.png" % (ifo1, ifo2))
 
 	stop = time.time()
 
