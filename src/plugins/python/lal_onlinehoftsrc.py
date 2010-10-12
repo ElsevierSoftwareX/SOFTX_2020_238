@@ -15,17 +15,33 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
-Online calibrated h(t) source, implementing the S6 specification described on 
+Online calibrated h(t) source, following conventions established in S6.
+
+The LIGO online frames are described at
 <https://www.lsc-group.phys.uwm.edu/daswg/wiki/S6OnlineGroup/CalibratedData>.
+
+The Virgo online frames are described at
+<https://workarea.ego-gw.it/ego2/virgo/data-analysis/calibration-reconstruction/online-h-t-reconstruction-hrec>.
 
 The environment variable ONLINEHOFT must be set and must point to the online
 frames directory, which has subfolders for H1, H2, L1, V1, ... .
 
-Online frames are 16 seconds in duration, and start on 16 second boundaries.
+LIGO online frames are 16 seconds in duration, and start on 16 second boundaries.
 They contain up to three channels:
  - IFO:DMT-STRAIN (16384 Hz), online calibrated h(t)
  - IFO:DMT-STATE_VECTOR (16 Hz), state vector
  - IFO:DMT-DATA_QUALITY_VECTOR (1 Hz), data quality flags
+
+Virgo online frames, on the other hand, consist of the following channels:
+ - IFO:h_16384Hz (16384 Hz), online calibrated h(t)
+ - IFO:Hrec_Veto_dataQuality (1 Hz), data quality flags.
+Also not that LIGO produces double precision h(t), whereas Virgo produces
+single precision h(t).  In order to be able to use fixed caps, this element
+always casts h(t) to double precision.
+
+In the future, this element may produce single precision h(t) when instrument=V1,
+so it would be prudent to put an "audioconvert" element directly downstream of
+this element if your pipelines can only operate on double precision buffers.
 
 This element features user-programmable data vetos at 1 second resolution.
 Gaps (GStreamer buffers marked as containing neutral data) will be created
@@ -47,6 +63,7 @@ import os.path
 import sys
 import time
 import bisect
+import numpy
 from _onlinehoftsrc import *
 try:
 	from collections import namedtuple
@@ -54,7 +71,6 @@ except:
 	# Pre-Python 2.6 compatibility.
 	from gstlal.namedtuple import namedtuple
 from gstlal.pipeutil import *
-from gst.extend.pygobject import gproperty, with_construct_properties
 
 
 def gps_now():
@@ -171,6 +187,7 @@ class directory_poller(object):
 
 			try:
 				# Attempt to open the file.
+				gst.info("attempting to open %s" % filepath)
 				fd = os.open(filepath, os.O_RDONLY)
 			except OSError, (err, strerror):
 				# Opening the file failed.
@@ -179,14 +196,14 @@ class directory_poller(object):
 					if gps_now() - self.time < self.latency:
 						# The requested time is too recent, so just wait
 						# a bit and then try again.
-						print >>sys.stderr, "lal_onlinehoftsrc: sleeping because requested time is too new"
+						gst.warning("lal_onlinehoftsrc: sleeping because requested time is too new")
 						time.sleep(self.timeout)
 					else:
 						# The requested time is old enough that it is possible that
 						# there is a missing file.  Look through the directory tree
 						# to find the next available file.
 
-						print >>sys.stderr, "lal_onlinehoftsrc: %s: late or missing file suspected" % filepath
+						gst.warning("lal_onlinehoftsrc: %s: late or missing file suspected" % filepath)
 
 						# We need to scan the directory tree successfully twice
 						# in succession to avoid a race condition where the
@@ -241,14 +258,14 @@ class directory_poller(object):
 										if num_tries_remaining == 0:
 											# We have found a new file a second time,
 											# so go back to outer loop.
-											print >>sys.stderr, "lal_onlinehoftsrc: files skipped" 
+											gst.warning("lal_onlinehoftsrc: files skipped")
 											self.time = cache.items[idx]
 									# Go back to outer loop.
 									new_file_found = True
 									break
 							if not new_file_found:
 								num_tries_remaining = 2
-								print >>sys.stderr, "lal_onlinehoftsrc: files are very late"
+								gst.warning("lal_onlinehoftsrc: files are very late")
 								time.sleep(self.timeout)
 				else:
 					# Opening file failed for some reason *other* than that it did
@@ -267,7 +284,8 @@ ifodesc = namedtuple("ifodesc", "ifo nameprefix namesuffix channelname state_cha
 ifodescs = {
 	"H1": ifodesc("H1", "H-H1_DMT_C00_L2-", "-16.gwf", "H1:DMT-STRAIN", "H1:DMT-STATE_VECTOR", "H1:DMT-DATA_QUALITY_VECTOR"),
 	"H2": ifodesc("H2", "H-H2_DMT_C00_L2-", "-16.gwf", "H2:DMT-STRAIN", "H2:DMT-STATE_VECTOR", "H2:DMT-DATA_QUALITY_VECTOR"),
-	"L1": ifodesc("L1", "L-L1_DMT_C00_L2-", "-16.gwf", "L1:DMT-STRAIN", "L1:DMT-STATE_VECTOR", "L1:DMT-DATA_QUALITY_VECTOR")
+	"L1": ifodesc("L1", "L-L1_DMT_C00_L2-", "-16.gwf", "L1:DMT-STRAIN", "L1:DMT-STATE_VECTOR", "L1:DMT-DATA_QUALITY_VECTOR"),
+	"V1": ifodesc("V1", "V-V1_DMT_HREC-", "-16.gwf", "V1:h_16384Hz", None, "V1:Hrec_Veto_dataQuality"),
 }
 
 
@@ -279,41 +297,57 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		__doc__,
 		__author__
 	)
-	gproperty(
-		gobject.TYPE_STRING,
-		"instrument",
-		'Instrument name (e.g., "H1")',
-		None,
-		construct=True
-	)
-	gproperty(
-		StateFlags,
-		"state-require",
-		"State vector flags that must be TRUE",
-		STATE_SCI | STATE_CON | STATE_UP | STATE_EXC,
-		construct=True
-	)
-	gproperty(
-		StateFlags,
-		"state-deny",
-		"State vector flags that must be FALSE",
-		0,
-		construct=True
-	)
-	gproperty(
-		DQFlags,
-		"data-quality-require",
-		"Data quality flags that must be TRUE",
-		DQ_SCIENCE | DQ_UP | DQ_CALIBRATED | DQ_LIGHT,
-		construct=True
-	)
-	gproperty(
-		DQFlags,
-		"data-quality-deny",
-		"Data quality flags that must be FALSE",
-		DQ_BADGAMMA,
-		construct=True
-	)
+	__gproperties__ = {
+		"instrument": (
+			gobject.TYPE_STRING,
+			"instrument",
+			'Instrument name (e.g., "H1")',
+			None,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"state-require": (
+			StateFlags,
+			"state-require",
+			"State vector flags that must be TRUE",
+			STATE_SCI | STATE_CON | STATE_UP | STATE_EXC,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"state-deny": (
+			StateFlags,
+			"state-deny",
+			"State vector flags that must be FALSE",
+			0,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"data-quality-require": (
+			DQFlags,
+			"data-quality-require",
+			"Data quality flags that must be TRUE",
+			DQ_SCIENCE | DQ_UP | DQ_CALIBRATED | DQ_LIGHT,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"data-quality-deny": (
+			DQFlags,
+			"data-quality-deny",
+			"Data quality flags that must be FALSE",
+			DQ_BADGAMMA,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"virgo-data-quality": (
+			VirgoDQFlags,
+			"virgo-data-quality",
+			"Data quality value that must be present in Virgo data",
+			VIRGO_DQ_12,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"is-live": (
+			gobject.TYPE_BOOLEAN,
+			"is-live",
+			"Whether to act as a live source, starting playback from current GPS time",
+			False,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		)
+	}
 	__gsttemplates__ = (
 		gst.PadTemplate("src",
 			gst.PAD_SRC, gst.PAD_ALWAYS,
@@ -328,7 +362,6 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 	)
 
 
-	@with_construct_properties
 	def __init__(self):
 		super(lal_onlinehoftsrc, self).__init__()
 		self.set_property('blocksize', 16384 * 16 * 8)
@@ -338,26 +371,39 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		self.__needs_seek = False
 
 
+	def do_set_property(self, prop, val):
+		setattr(self, '_' + prop.name.replace('-', '_'), val)
+		if prop.name == 'is-live':
+			self.set_live(val)
+			if val:
+				self.seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_KEY_UNIT,
+						gst.SEEK_TYPE_SET, (gps_now() - 70) * gst.SECOND,
+						gst.SEEK_TYPE_NONE, -1)
+
+
+	def do_get_property(self, prop):
+		return getattr(self, '_' + prop.name.replace('-', '_'))
+
+
 	def do_start(self):
 		"""GstBaseSrc->start virtual method"""
 		self.__last_successful_gps_end = None
 
 		# Look up instrument
-		instrument = self.get_property('instrument')
-		if instrument not in ifodescs:
-			self.error("unknown instrument: %s" % instrument)
+		if self._instrument not in ifodescs:
+			self.error("unknown instrument: %s" % self._instrument)
 			return False
-		self.__ifodesc = ifodescs[instrument]
+		self.__ifodesc = ifodescs[self._instrument]
 
 		# Create instance of directory_poller
 		self.__poller = directory_poller(
-			os.path.join(os.getenv('ONLINEHOFT'), instrument),
+			os.path.join(os.getenv('ONLINEHOFT'), self._instrument),
 			self.__ifodesc.nameprefix, self.__ifodesc.namesuffix
 		)
 
 		# Send tags
 		taglist = gst.TagList()
-		taglist["instrument"] = instrument
+		taglist["instrument"] = self._instrument
 		taglist["channel-name"] = self.__ifodesc.channelname.split(":")[-1]
 		taglist["units"] = "strain" # FIXME: can we get this value from the frame file itself?
 
@@ -384,7 +430,7 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 
 	def do_is_seekable(self):
 		"""GstBaseSrc->is_seekable virtual method"""
-		return True
+		return not(self._is_live)
 
 
 	def do_do_seek(self, segment):
@@ -448,8 +494,13 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 				try:
 					filename = "/dev/fd/%d" % fd
 					hoft_array = safe_getvect(filename, self.__ifodesc.channelname, gps_start, 16, 16384)
-					os.lseek(fd, 0, 0) # FIXME: use os.SEEK_SET (added to API in Python 2.5) for last argument
-					state_array = safe_getvect(filename, self.__ifodesc.state_channelname, gps_start, 16, 16)
+					# FIXME: cast to double because Virgo produces single precision data.
+					# We could instead allow this element to push buffers with different caps
+					# according to whether h(t) is single precision or double precision.
+					hoft_array = hoft_array.astype(numpy.float64)
+					if self.__ifodesc.ifo != 'V1':
+						os.lseek(fd, 0, 0) # FIXME: use os.SEEK_SET (added to API in Python 2.5) for last argument
+						state_array = safe_getvect(filename, self.__ifodesc.state_channelname, gps_start, 16, 16)
 					os.lseek(fd, 0, 0) # FIXME: use os.SEEK_SET (added to API in Python 2.5) for last argument
 					dq_array = safe_getvect(filename, self.__ifodesc.dq_channelname, gps_start, 16, 1)
 				finally:
@@ -464,17 +515,20 @@ class lal_onlinehoftsrc(gst.BaseSrc):
 		caps = pad.get_caps_reffed()
 
 		# Compute "good data" segment mask.
-		dq_require = int(self.get_property('data-quality-require'))
-		dq_deny = int(self.get_property('data-quality-deny'))
-		state_require = int(self.get_property('state-require'))
-		state_deny = int(self.get_property('state-deny'))
-		state_array = state_array.astype(int).reshape((16, 16))
-		segment_mask = (
-			(state_array & state_require == state_require).all(1) &
-			(~state_array & state_deny == state_deny).all(1) &
-			(dq_array & dq_require == dq_require) & 
-			(~dq_array & dq_deny == dq_deny)
-		)
+		if self.__ifodesc.ifo == "V1":
+			segment_mask = (dq_array >= int(self._virgo_data_quality))
+		else:
+			dq_require = int(self._data_quality_require)
+			dq_deny = int(self._data_quality_deny)
+			state_require = int(self._state_require)
+			state_deny = int(self._state_deny)
+			state_array = state_array.astype(int).reshape((16, 16))
+			segment_mask = (
+				(state_array & state_require == state_require).all(1) &
+				(~state_array & state_deny == state_deny).all(1) &
+				(dq_array & dq_require == dq_require) & 
+				(~dq_array & dq_deny == dq_deny)
+			)
 		self.info('good data mask is ' + ''.join([str(x) for x in segment_mask.astype('int')]))
 
 		# If necessary, create gap for skipped frames.

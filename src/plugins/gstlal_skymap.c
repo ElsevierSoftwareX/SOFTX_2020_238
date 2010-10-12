@@ -28,6 +28,10 @@
 #include <math.h>
 
 
+#define GST_CAT_DEFAULT gstlal_skymap_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
 static GstElementClass *parent_class = NULL;
 
 
@@ -250,12 +254,7 @@ static GstPad *request_new_pad(GstElement *element, GstPadTemplate *templ, const
 {
 	GSTLALSkymap* skymap = GSTLAL_SKYMAP(element);
 
-	/* FIXME: by passing NULL as the name for the new pad, we'll get pad names
-	   like pad0, pad1, ..., padN.  We would probably prefer
-	   to get sink0, sink1, ..., sinkN, but we'd have to build the string
-	   ourselves.
-	 */
-	GstPad* pad = gst_pad_new_from_template(templ, NULL);
+	GstPad* pad = gst_pad_new_from_template(templ, g_strdup_printf("sink%d", skymap->padcounter++));
 	if (!pad) return pad;
 
 	if (!gst_element_add_pad(element, pad)) goto bad_pad;
@@ -411,18 +410,18 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 			if (data == (GstSkymapCollectData*)(skymap->coinc_collectdata))
 			{
-				GST_INFO_OBJECT(skymap, "popping coinc buffer");
+				GST_DEBUG_OBJECT(skymap, "popping coinc buffer");
 				g_assert(((GstSkymapCoincCollectData*)(skymap->coinc_collectdata))->last_buffer == NULL);
 				if (GST_BUFFER_SIZE(buf) > 0)
 					((GstSkymapCoincCollectData*)(skymap->coinc_collectdata))->last_buffer = buf;
 				else
 					gst_buffer_unref(buf);
 			} else {
-				GST_INFO_OBJECT(skymap, "popping SNR buffer");
+				GST_DEBUG_OBJECT(skymap, "popping SNR buffer");
 				gst_adapter_push( ((GstSkymapSnrCollectData*)data)->adapter, buf );
 			}
 		} else {
-			GST_INFO_OBJECT(skymap, "no buffer to pop");
+			GST_DEBUG_OBJECT(skymap, "no buffer to pop");
 		}
 	}
 
@@ -483,7 +482,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 				if (((GstSkymapCollectData*)collectdata)->last_end_time < max_stop_time)
 				{
-					GST_INFO_OBJECT(skymap, "nothing to do right now");
+					GST_DEBUG_OBJECT(skymap, "nothing to do right now");
 					processed = FALSE;
 					break;
 				} /* else {
@@ -502,6 +501,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 			if (processed)
 			{
+				GST_INFO_OBJECT(skymap, "starting sky localization");
 				/* Build skymap. */
 				{
 					/* Make sure we don't have more than the supported number of channels. */
@@ -527,6 +527,10 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 					/* Set rate. */
 					skymap->wanalysis.rate = rate;
 
+					/* Set min and max time. */
+					skymap->wanalysis.min_t = 0;
+					skymap->wanalysis.max_t = 1.0e-9 * (max_stop_time - min_start_time);
+
 					size_t xSw_nsamples = gst_util_uint64_scale_ceil(max_stop_time - min_start_time, rate, GST_SECOND);
 					double* xSw_reals = g_malloc(sizeof(double) * xSw_nsamples * nchannels);
 					double* xSw_imags = g_malloc(sizeof(double) * xSw_nsamples * nchannels);
@@ -539,6 +543,12 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 						const SnglInspiralTable* found_sngl = NULL;
 						for (ptr = head; ptr < end; ptr++)
 						{
+							if (G_UNLIKELY(!(collectdata->instrument)))
+							{
+								/* FIXME should clean up some state here, but we can't recover from this error. */
+								GST_ELEMENT_ERROR(skymap, CORE, TAG, ("one or mor SNR pads never recieved an 'instrument' tag"), (NULL));
+								return GST_FLOW_ERROR;
+							}
 							if (strcmp(ptr->ifo, collectdata->instrument) == 0)
 							{
 								found_sngl = ptr;
@@ -577,18 +587,14 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 						guint64 adapter_offset = gst_util_uint64_scale_round(min_start_time - adapter_start_time, rate, GST_SECOND) - adapter_distance;
 
-						double min_t = 1.0e-9 * (gst_util_uint64_scale_round(adapter_offset + adapter_distance, GST_SECOND, rate) + adapter_start_time);
-						skymap->wanalysis.min_t = 0;
-						skymap->wanalysis.max_t = 1.0e-9 * (gst_util_uint64_scale_round(adapter_offset + adapter_distance + xSw_nsamples, GST_SECOND, rate) + adapter_start_time) - min_t;
-
 						/* Set per-channel analysis parameters. */
 						skymap->wanalysis.detectors[ichannel] = analysis_identify_detector(collectdata->instrument);
-						skymap->wanalysis.wSw[ichannel] = found_sngl->eff_distance;
-						skymap->wanalysis.min_ts[ichannel] = 1.0e-9 * start_time - min_t;
-						skymap->wanalysis.max_ts[ichannel] = 1.0e-9 * stop_time - min_t;
+						skymap->wanalysis.wSw[ichannel] = found_sngl->sigmasq;
+						skymap->wanalysis.min_ts[ichannel] = 1.0e-9 * (start_time - min_start_time);
+						skymap->wanalysis.max_ts[ichannel] = 1.0e-9 * (stop_time - min_start_time);
 						skymap->wanalysis.xSw_real[ichannel] = xSw_real;
 						skymap->wanalysis.xSw_imag[ichannel] = xSw_imag;
-						
+
 						/* Copy data from adapter. */
 						double* adapter_bytes = g_malloc(adapter_stride_bytes * xSw_nsamples);
 						gst_adapter_copy(collectdata->adapter, (void*)adapter_bytes, adapter_offset * adapter_stride_bytes, xSw_nsamples * adapter_stride_bytes);
@@ -597,8 +603,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 						unsigned int i;
 						for (i = 0; i < xSw_nsamples; i ++)
 						{
-							xSw_real[i] = adapter_bytes[adapter_stride*i + bank_index*2] * found_sngl->eff_distance;
-							xSw_imag[i] = adapter_bytes[adapter_stride*i + bank_index*2 + 1] * found_sngl->eff_distance;
+							xSw_real[i] = adapter_bytes[adapter_stride*i + bank_index*2] * sqrt(found_sngl->sigmasq);
+							xSw_imag[i] = adapter_bytes[adapter_stride*i + bank_index*2 + 1] * sqrt(found_sngl->sigmasq);
 						}
 
 						/* Free data that was copied from adapter. */
@@ -640,14 +646,15 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 					g_free(skymap->wanalysis.log_skymap);
 
 					/* FIXME: set buffer metadata here.  We probably only want to set the timestamp, and leave all the other fields blank. */
-					GST_BUFFER_TIMESTAMP(outbuf) = GST_CLOCK_TIME_NONE;
-					GST_BUFFER_DURATION(outbuf) = GST_CLOCK_TIME_NONE;
+					GST_BUFFER_TIMESTAMP(outbuf) = min_start_time;
+					GST_BUFFER_DURATION(outbuf) = max_stop_time - min_start_time;
 					GST_BUFFER_OFFSET(outbuf) = GST_BUFFER_OFFSET_NONE;
 					GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_NONE;
 
 					/* TODO: emit coinc event right before emitting buffer. */
 
 					/* Push buffer. */
+					GST_INFO_OBJECT(skymap, "completed sky localization");
 					result = gst_pad_push(skymap->srcpad, outbuf);
 					if (result != GST_FLOW_OK)
 						return result;
@@ -676,6 +683,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	if (((GstSkymapCoincCollectData*)(skymap->coinc_collectdata))->last_buffer == NULL)
 	{
 		GstClockTime last_end_time = ((GstSkymapCollectData*)(skymap->coinc_collectdata))->last_end_time;
+		GstClockTime last_untouchable_time = last_end_time + skymap->dt + skymap->trigger_present_padding + skymap->trigger_absent_padding;
 		GSList* slist;
 		for (slist = skymap->snr_collectdatas; slist; slist = g_slist_next(slist))
 		{
@@ -683,12 +691,17 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			guint64 adapter_distance_bytes;
 			GstClockTime adapter_start_time = gst_adapter_prev_timestamp(collectdata->adapter, &adapter_distance_bytes);
 			guint64 adapter_distance = adapter_distance_bytes / adapter_stride_bytes;
-			GstClockTime adapter_pos_time = adapter_start_time + gst_util_uint64_scale(adapter_distance, GST_SECOND, rate);
-			GstClockTime last_untouchable_time = adapter_pos_time + skymap->dt + skymap->trigger_present_padding + skymap->trigger_absent_padding;
-			if (last_end_time > last_untouchable_time)
+			guint64 available_samples = gst_adapter_available(collectdata->adapter) / adapter_stride_bytes;
+			GstClockTime adapter_earliest_time = adapter_start_time + gst_util_uint64_scale(adapter_distance, GST_SECOND, rate);
+			GstClockTime adapter_latest_time = adapter_start_time + gst_util_uint64_scale(adapter_distance + available_samples, GST_SECOND, rate);
+			if (last_untouchable_time >= adapter_latest_time)
 			{
-				guint64 flushable_samples = gst_util_uint64_scale(last_end_time - last_untouchable_time, rate, GST_SECOND);
-				GST_INFO_OBJECT(skymap, "flushing adapters");
+				guint64 flush_to_time;
+				if (last_untouchable_time > adapter_latest_time)
+					flush_to_time = adapter_latest_time;
+				else
+					flush_to_time = last_untouchable_time;
+				guint64 flushable_samples = gst_util_uint64_scale(flush_to_time - adapter_earliest_time, rate, GST_SECOND);
 				gst_adapter_flush(collectdata->adapter, flushable_samples * adapter_stride_bytes);
 			}
 		}
@@ -720,6 +733,9 @@ static void finalize(GObject *object)
 
 	gst_object_unref(element->collect);
 	element->collect = NULL;
+
+	gst_object_unref(element->srcpad);
+	element->srcpad = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -853,7 +869,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->collect_event = NULL;
 	gst_collect_pads_set_function(element->collect, GST_DEBUG_FUNCPTR(collected), element);
 
-	element->coinc_collectdata = gst_collect_pads_add_pad_full(element->collect, gst_element_get_static_pad(GST_ELEMENT(element), "sink"), sizeof(GstSkymapCoincCollectData), gst_skymap_coinc_collectdata_destroy);
+	element->coinc_collectdata = gst_collect_pads_add_pad_full(element->collect, gst_element_get_static_pad(GST_ELEMENT(element), "sink"), sizeof(GstSkymapCoincCollectData), (GstCollectDataDestroyNotify)gst_skymap_coinc_collectdata_destroy);
 	((GstSkymapCoincCollectData*)(element->coinc_collectdata))->last_buffer = NULL;
 	((GstSkymapCollectData*)(element->coinc_collectdata))->last_end_time = 0;
 	element->snr_collectdatas = NULL;
@@ -863,6 +879,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->bank_filename = NULL;
 	element->ntemplates = 0;
 	element->bank = NULL;
+	element->padcounter = 0;
 
 	/* Initialize wanalysis. */
 	analysis_default_construct(&element->wanalysis);
@@ -885,6 +902,7 @@ GType gstlal_skymap_get_type(void)
 			.instance_init = instance_init,
 		};
 		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_skymap", &info, 0);
+		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "skymap", 0, "skymap element");
 	}
 
 	return type;

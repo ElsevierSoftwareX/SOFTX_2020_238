@@ -30,6 +30,8 @@ parser = OptionParser(
 	description = "Stream-based inspiral analysis tool"
 )
 parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
+parser.add_option("--identity", action = "store_true", default = False, help = "Do not perform an SVD; instead, use the original templates as the analyzing templates and the identity matrix as the reconstruction matrix.")
+parser.add_option("--padding", metavar = "pad", type = "float", default = 1.1, help = "Fractional amount to pad time slices.")
 parser.add_option("--svd-tolerance", metavar = "match", type = "float", default = 0.9995, help = "Set the SVD reconstruction tolerance (default = 0.9995).")
 parser.add_option("--reference-psd", metavar = "filename", help = "Instead of measuring the noise spectrum, load the spectrum from this LIGO light-weight XML file (required).")
 parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).")
@@ -72,6 +74,8 @@ write_bank(
 		options.ortho_gate_fap,
 		options.snr_threshold,
 		options.svd_tolerance,
+		options.padding,
+		options.identity,
 		options.verbose
 	)
 )

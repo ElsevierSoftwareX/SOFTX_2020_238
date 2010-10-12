@@ -58,10 +58,10 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"endianness = (int) BYTE_ORDER, " \
 		"width = (int) {32,64}; " \
 		"audio/x-raw-int, " \
-                "rate = (int) [1, MAX], " \
+		"rate = (int) [1, MAX], " \
 		"channels = (int) [1, MAX], " \
-                "endianness = (int) BYTE_ORDER, " \
-                "width = (int) {8,16,32,64}, " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) {8,16,32,64}, " \
 		"signed = (boolean) {true,false}; " \
 		"audio/x-raw-complex, " \
 		"rate = (int) [1, MAX], " \
@@ -83,17 +83,17 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 		"endianness = (int) BYTE_ORDER, " \
 		"width = (int) {32,64};"
 		"audio/x-raw-int, " \
-                "rate = (int) [1, MAX], " \
+		"rate = (int) [1, MAX], " \
 		"channels = (int) [1, MAX], " \
-                "endianness = (int) BYTE_ORDER, " \
-                "width = (int) {8,16,32,64}, " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) {8,16,32,64}, " \
 		"signed = (boolean) {true,false}; " \
 		"audio/x-raw-complex, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) [1, MAX], " \
 		"endianness = (int) BYTE_ORDER, " \
 		"width = (int) {64,128}"
-			)
+	)
 );
 
 
@@ -115,7 +115,7 @@ GST_BOILERPLATE(
 
 
 enum property {
-   ARG_DELAY = 1
+	ARG_DELAY = 1
 };
 
 #define DEFAULT_DELAY 0
@@ -156,15 +156,15 @@ static gboolean set_caps(GstBaseTransform *trans,
 			 GstCaps *incaps,
 			 GstCaps *outcaps)
 {
-      GSTLALDelay *element = GSTLAL_DELAY(trans);
+	GSTLALDelay *element = GSTLAL_DELAY(trans);
 
-      /* sampling rate of this channel */
-      gst_structure_get_int(gst_caps_get_structure(incaps, 0), "rate", &element->rate);
+	/* sampling rate of this channel */
+	gst_structure_get_int(gst_caps_get_structure(incaps, 0), "rate", &element->rate);
 
-      /* size of unit sample */
-      get_unit_size(trans,incaps,&element->unit_size);
+	/* size of unit sample */
+	get_unit_size(trans,incaps,&element->unit_size);
 
-      return TRUE;
+	return TRUE;
 }
 
 
@@ -182,7 +182,7 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans,
 					   GstCaps *caps,
 					   GstBuffer **outbuf)
 {
-        /* cast BaseTransform to GSTLALDelay */
+	/* cast BaseTransform to GSTLALDelay */
 	GSTLALDelay *element = GSTLAL_DELAY(trans);
 	GstFlowReturn result;
 
@@ -193,19 +193,19 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans,
 	if ( insize <= delaysize )
 	   /* ignore this buffer */
 	{
-	      *outbuf = NULL;
-	      result = GST_FLOW_OK;
+		*outbuf = NULL;
+		result = GST_FLOW_OK;
 	}
 	else if ( 0 < delaysize )
 	   /* pass part of this buffer */
 	{
-	      *outbuf = gst_buffer_create_sub(inbuf, delaysize, insize - delaysize );
-	      result = GST_FLOW_OK;
+		*outbuf = gst_buffer_create_sub(inbuf, delaysize, insize - delaysize );
+		result = GST_FLOW_OK;
 	}
 	else
 	{
-	      *outbuf = gst_buffer_ref(inbuf);
-	      result = GST_FLOW_OK;
+		*outbuf = gst_buffer_ref(inbuf);
+		result = GST_FLOW_OK;
 	}
 
 	return result;
@@ -220,46 +220,44 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans,
  */
 static GstFlowReturn transform( GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
-      GSTLALDelay *element = GSTLAL_DELAY(trans);
-      GstFlowReturn result;
-      guint delaysize = element->unit_size*element->delay;
-      guint64 delaytime;
+	GSTLALDelay *element = GSTLAL_DELAY(trans);
+	GstFlowReturn result;
+	guint delaysize = element->unit_size*element->delay;
+	guint64 delaytime;
 
-      if ( GST_BUFFER_SIZE(inbuf) <= delaysize )
-	 /* drop entire buffer */
-      {
-	    element->delay -= GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
-	    result = GST_BASE_TRANSFORM_FLOW_DROPPED;
-      }
-      else if ( 0 < element->delay )
-	 /* drop part of buffer, pass the rest */
-      {
-	    /* how much time to skip */
-	    delaytime = gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(inbuf),
-							element->delay,
-							GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf));
+	if ( GST_BUFFER_SIZE(inbuf) <= delaysize )
+	/* drop entire buffer */
+	{
+		element->delay -= GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
+		result = GST_BASE_TRANSFORM_FLOW_DROPPED;
+	}
+	else if ( 0 < element->delay )
+	/* drop part of buffer, pass the rest */
+	{
+		/* how much time to skip */
+		delaytime = gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(inbuf),
+			element->delay, GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf));
 
-	    /* set output buffer metadata */
-	    GST_BUFFER_TIMESTAMP(outbuf) = GST_BUFFER_TIMESTAMP(inbuf) + delaytime;
-	    GST_BUFFER_DURATION(outbuf) = GST_BUFFER_DURATION(inbuf) - delaytime;
-	    GST_BUFFER_OFFSET(outbuf) = GST_BUFFER_OFFSET(inbuf) + element->delay;
-	    GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_END(inbuf);
-	    GST_BUFFER_SIZE(outbuf) = GST_BUFFER_SIZE(inbuf) - delaysize;
-	    GST_BUFFER_FLAG_SET(outbuf,GST_BUFFER_FLAG_DISCONT);
+		/* set output buffer metadata */
+		GST_BUFFER_TIMESTAMP(outbuf) = GST_BUFFER_TIMESTAMP(inbuf) + delaytime;
+		GST_BUFFER_DURATION(outbuf) = GST_BUFFER_DURATION(inbuf) - delaytime;
+		GST_BUFFER_OFFSET(outbuf) = GST_BUFFER_OFFSET(inbuf) + element->delay;
+		GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_END(inbuf);
+		GST_BUFFER_SIZE(outbuf) = GST_BUFFER_SIZE(inbuf) - delaysize;
+		GST_BUFFER_FLAG_SET(outbuf,GST_BUFFER_FLAG_DISCONT);
 
-	    /* never come back */
-	    element->delay = 0;
+		/* never come back */
+		element->delay = 0;
 
-	    result = GST_FLOW_OK;
-      }
-      else
-	 /* pass entire buffer */
-      {
-	    result = GST_FLOW_OK;
-      }
+		result = GST_FLOW_OK;
+	}
+	else
+	/* pass entire buffer */
+	{
+		result = GST_FLOW_OK;
+	}
 
-      return result;
-
+	return result;
 }
 
 
@@ -285,14 +283,12 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	switch (prop_id)
 	{
 	case ARG_DELAY:
-	  {
-	      element->delay = g_value_get_uint64(value);
-	      break;
-	  }
+		element->delay = g_value_get_uint64(value);
+		break;
 
 	default:
-	  G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
-	  break;
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+		break;
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -381,5 +377,5 @@ static void gstlal_delay_class_init(GSTLALDelayClass *klass)
  */
 static void gstlal_delay_init(GSTLALDelay *filter, GSTLALDelayClass *kclass)
 {
-      filter->delay = DEFAULT_DELAY;
+	filter->delay = DEFAULT_DELAY;
 }

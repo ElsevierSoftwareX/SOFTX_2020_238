@@ -25,7 +25,8 @@ void analysis_default_construct(analysis* a)
     a->log_skymap = 0;
     a->p_realloc = realloc;
     a->p_free = free;
-    for (size_t i = 0; i != XLALSKYMAP_N; ++i)
+    size_t i;
+    for (i = 0; i != XLALSKYMAP_N; ++i)
     {
         a->xSw_real[i] = 0;
 	a->xSw_imag[i] = 0;
@@ -44,10 +45,12 @@ void analysis_default_directions(analysis* a)
     a->directions = a->p_realloc(0, a->n_directions * 2 * sizeof(double));
     
     double* p = a->directions;
-    for (size_t j = 0; j != v; ++j)
+    size_t j;
+    for (j = 0; j != v; ++j)
     {
         double theta = (0.4 * (j + .5)) * LAL_PI / 180; 
-        for (size_t i = 0; i != u; ++i)
+        size_t i;
+        for (i = 0; i != u; ++i)
 	{
 	    double phi = (0.4 * (i + .5)) * LAL_PI / 180;
 	    *(p++) = theta;
@@ -119,14 +122,16 @@ analysis* analysis_example(void)
 
     a->log_skymap = (double*) a->p_realloc(0, sizeof(double) * a->n_directions);
 
-    for (size_t i = 0; i != a->n_detectors; ++i)
+    size_t i;
+    for (i = 0; i != a->n_detectors; ++i)
     {
         a->wSw[i] = 1.0; // white noise and unit template
 	
 	a->xSw_real[i] = (double*) a->p_realloc(0, sizeof(double) * a->rate * duration);
         a->xSw_imag[i] = (double*) a->p_realloc(0, sizeof(double) * a->rate * duration);
         
-	for (size_t j = 0; j != (a->rate * duration); ++j)
+        size_t j;
+	for (j = 0; j != (a->rate * duration); ++j)
 	{
 	    // make gaussian noise
 	    a->xSw_real[i][j] = XLALUniformDeviate(rng) * sqrt(a->wSw[i]);
@@ -157,14 +162,16 @@ void analyze(analysis* s)
     // Working array
     double* p_t = 0;
 
-    for (size_t i = 0; i != s->n_directions; ++i) {
+    size_t i;
+    for (i = 0; i != s->n_directions; ++i) {
         XLALSkymapDirectionPropertiesType properties;
         XLALSkymapDirectionPropertiesConstruct(&plan, s->directions + (i * 2), &properties);
 
         double t_begin = s->min_t;
         double t_end = s->max_t;
 
-        for (size_t j = 0; j != s->n_detectors; ++j) {
+        size_t j;
+        for (j = 0; j != s->n_detectors; ++j) {
             t_begin = fmax(t_begin, s->min_ts[j] - properties.delay[j]);
             t_end = fmin(t_end, s->max_ts[j] - properties.delay[j]);
         }
@@ -190,7 +197,7 @@ void analyze(analysis* s)
                 size_t p_t_size = (size_t) (ceil((t_end - t_begin) / dt));
                 p_t = (double*) s->p_realloc(p_t, p_t_size * sizeof(double));
                 double t = t_begin;
-                for (size_t j = 0; j != p_t_size; ++j)
+                for (j = 0; j != p_t_size; ++j)
                 {
                       double log_p_real, log_p_imag;
                       XLALSkymapApply(&plan, &properties, &kernel, s->xSw_real, t, &log_p_real);

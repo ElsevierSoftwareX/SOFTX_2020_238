@@ -416,7 +416,8 @@ static GstFlowReturn push_psd(GstPad *psd_pad, const REAL8FrequencySeries *psd)
 		"channels", G_TYPE_INT, 1,
 		"delta-f", G_TYPE_DOUBLE, psd->deltaF,
 		"endianness", G_TYPE_INT, G_BYTE_ORDER,
-		"width", G_TYPE_INT, 64
+		"width", G_TYPE_INT, 64,
+		NULL
 	);
 
 	gst_pad_set_caps(psd_pad, caps);

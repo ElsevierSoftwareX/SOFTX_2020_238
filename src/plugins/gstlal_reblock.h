@@ -1,6 +1,5 @@
 /*
- * An element to flag buffers in a stream as silence or not based on the
- * value of a control input.
+ * An element to chop up audio buffers into smaller pieces.
  *
  * Copyright (C) 2008  Kipp Cannon, Chad Hanna
  *

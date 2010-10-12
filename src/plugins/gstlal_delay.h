@@ -66,17 +66,17 @@ G_BEGIN_DECLS
 /* Subclass BaseTransformClass */
 typedef struct
 {
-  GstBaseTransformClass parent_class;
+	GstBaseTransformClass parent_class;
 } GSTLALDelayClass;
 
 
 /* Subclass GstBaseTransform element */
 typedef struct
 {
-   GstBaseTransform element;  /* parent class */
-   guint64 delay;             /* amount of incoming data to drop (in samples) */
-   gint rate;                /* sampling rate */
-   guint unit_size;           /* unit size */
+	GstBaseTransform element;  /* parent class */
+	guint64 delay;             /* amount of incoming data to drop (in samples) */
+	gint rate;                /* sampling rate */
+	guint unit_size;           /* unit size */
 } GSTLALDelay;
 
 

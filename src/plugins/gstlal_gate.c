@@ -30,7 +30,7 @@
 
 
 /*
- * struff from the C library
+ * stuff from the C library
  */
 
 
@@ -55,6 +55,10 @@
 
 #include <gstlal.h>
 #include <gstlal_gate.h>
+
+
+#define GST_CAT_DEFAULT gstlal_gate_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 /*
@@ -315,6 +319,7 @@ static gint control_get_state(GSTLALGate *element, GstClockTime tmin, GstClockTi
 		.peak = -1
 	};
 
+	GST_DEBUG_OBJECT(element, "looping over %u buffers to check control state", g_queue_get_length(element->control_queue));
 	g_queue_foreach(element->control_queue, g_list_for_each_gst_buffer_peak, &data);
 
 	return data.peak >= element->threshold ? +1 : data.peak >= 0 ? 0 : -1;
@@ -896,8 +901,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			 */
 
 			result = gst_pad_push(element->srcpad, srcbuf);
-			if(result != GST_FLOW_OK) {
-				GST_ELEMENT_ERROR(element, CORE, PAD, (NULL), ("%s: gst_pad_push() failed (%d)", GST_PAD_NAME(element->srcpad), result));
+			if(G_UNLIKELY(result != GST_FLOW_OK)) {
+				GST_WARNING_OBJECT(element, "%s: gst_pad_push() failed (%s)", GST_PAD_NAME(element->srcpad), gst_flow_get_name(result));
 				goto done;
 			}
 		} else {
@@ -1333,6 +1338,7 @@ GType gstlal_gate_get_type(void)
 			.instance_init = instance_init,
 		};
 		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_gate", &info, 0);
+		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "gate", 0, "gate element");
 	}
 
 	return type;

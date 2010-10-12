@@ -55,30 +55,12 @@ def measure_psd(instrument, seekevent, detector, seg, rate, fake_data=False, onl
 	# pipeline handler for PSD measurement
 	#
 
-	class PSDHandler(object):
-		def __init__(self, mainloop, pipeline, verbose = False):
-			self.mainloop = mainloop
-			self.pipeline = pipeline
-			self.verbose = verbose
-
-			bus = pipeline.get_bus()
-			bus.add_signal_watch()
-			bus.connect("message", self.on_message)
-
-			self.psd = None
-
+	class PSDHandler(LLOIDHandler):
 		def on_message(self, bus, message):
-			if message.type == gst.MESSAGE_EOS:
-				self.pipeline.set_state(gst.STATE_NULL)
-				self.mainloop.quit()
-			elif message.type == gst.MESSAGE_ERROR:
-				gerr, dbgmsg = message.parse_error()
-				self.pipeline.set_state(gst.STATE_NULL)
-				self.mainloop.quit()
-				sys.exit("GStreamer error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
-			elif message.type == gst.MESSAGE_ELEMENT:
-				if message.structure.get_name() == "spectrum":
-					self.psd = pipeio.parse_spectrum_message(message)
+			if message.type == gst.MESSAGE_ELEMENT and message.structure.get_name() == "spectrum":
+				self.psd = pipeio.parse_spectrum_message(message)
+			else:
+				super(PSDHandler, self).on_message(bus, message)
 
 	#
 	# 8 FFT-lengths is just a ball-parky estimate of how much data is
@@ -95,7 +77,7 @@ def measure_psd(instrument, seekevent, detector, seg, rate, fake_data=False, onl
 
 	mainloop = gobject.MainLoop()
 	pipeline = gst.Pipeline("psd")
-	handler = PSDHandler(mainloop, pipeline, verbose = verbose)
+	handler = PSDHandler(mainloop, pipeline)
 
 	mkelems_fast(pipeline,
 		mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data=fake_data, online_data=online_data, injection_filename = injection_filename, verbose=verbose),
