@@ -47,7 +47,7 @@ swinj.xml:
 		--max-mtotal $(MAX_TOTAL_MASS) \
 		--i-distr uniform \
 		--waveform GeneratePPNtwoPN \
-		--f-lower 10.0 \
+		--f-lower 30.0 \
 		--disable-spin \
 		--verbose
 
