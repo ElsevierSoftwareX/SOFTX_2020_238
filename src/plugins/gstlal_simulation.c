@@ -752,23 +752,40 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 
 	if (GST_EVENT_TYPE(event) == GST_EVENT_TAG) {
 		GstTagList *taglist;
-		gchar *tagvalue;
+		gchar *instrument = NULL, *channel_name = NULL, *units = NULL;
+
+		/* Attempt to extract all 3 tags from the event's taglist. */
 		gst_event_parse_tag(event, &taglist);
-		if (gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &tagvalue)) {
+		gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
+		gst_tag_list_get_string(taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
+		gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units);
+
+		if (instrument || channel_name || units)
+		{
+			/* If any of the 3 tags were provided, we discard the old, stored values. */
 			g_free(element->instrument);
-			element->instrument = tagvalue;
-		}
-		if (gst_tag_list_get_string(taglist, GSTLAL_TAG_CHANNEL_NAME, &tagvalue)) {
 			g_free(element->channel_name);
-			element->channel_name = tagvalue;
-		}
-		if (gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &tagvalue)) {
 			g_free(element->units);
-			element->units = tagvalue;
-			/* FIXME:  flush the cache of injection timeseries */
+
+			if (instrument && channel_name && units)
+			{
+				/* If all 3 tags were provided, we save the new values. */
+				element->instrument = instrument;
+				element->channel_name = channel_name;
+				element->units = units;
+			} else {
+				/* If only some of the tags were provided, we wipe out all trace that any of the values were ever stored. */
+				element->instrument = NULL;
+				element->channel_name = NULL;
+				element->units = NULL;
+				g_free(instrument);
+				g_free(channel_name);
+				g_free(units);
+			}
 		}
 	}
 
+	/* Allow the default event handler to take over. Downstream elements may want to look at tags too. */
 	return gst_pad_event_default(pad, event);
 }
 
