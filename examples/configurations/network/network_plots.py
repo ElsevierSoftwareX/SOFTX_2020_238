@@ -22,6 +22,7 @@ import numpy
 import math
 from pylal import date
 from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
+from glue import iterutils
 from glue.ligolw import utils, lsctables
 
 from gstlal.ligolw_output import effective_snr
@@ -73,22 +74,53 @@ p = subprocess.Popen(["/usr/bin/which", "convert"], stdout=subprocess.PIPE)
 if p.wait() != 0:
 	raise RuntimeError, "can't find ImageMagick convert"
 convert_path = p.communicate()[0].rstrip()
-def savefig(fname):
-	"""Wraps pylab.savefig, but replaces the destination file atomically and destroys the plotting state. Also writes thumbnails."""
-	fid, path = mkstemp(suffix = fname, dir = '.')
-	pylab.savefig(path)
-	os.chmod(path, stat.S_IRGRP | stat.S_IRUSR | stat.S_IROTH | stat.S_IWUSR)
-	os.rename(path, fname)
-	os.close(fid)
-	pylab.clf()
 
-	# also generate a thumbnail
+
+def savefig(fname):
+	"""Wraps pylab.savefig, but replaces the destination file atomically and
+	destroys the plotting state. Also writes thumbnails."""
+
+	# Deduce base name, format, and extension for file
 	base, ext = os.path.splitext(fname)
-	thumb_fname = base + "_thumb" + ext
-	cmd = [convert_path, fname, "-thumbnail", "240x180", thumb_fname]
-	retcode = subprocess.call(cmd)
-	if retcode != 0:
-		raise RuntimeError, "convert failed. Command: " + " ".join(cmd)
+	format = ext[1:]
+
+	# Open a randomly named temporary file to save the image.
+	fid, path = mkstemp(dir='.')
+	f = os.fdopen(fid, 'wb')
+
+	# Permissions for destination file: -rw-r--r--
+	perms = stat.S_IRGRP|stat.S_IRUSR|stat.S_IWUSR|stat.S_IROTH|stat.S_IWUSR
+
+	# Atomically save the file to the destination.  At the end of this nested
+	# try block, whether or not the file is saved successfully, the temporary
+	# file will be deleted and the drawing state will be reset.
+	try:
+		try:
+			try:
+				pylab.savefig(f, format=format)
+			finally:
+				f.close()
+			os.chmod(path, perms)
+			os.rename(path, fname)
+		except:
+			os.unlink(path)
+			raise
+	finally:
+		pylab.clf()
+
+	# Atomically save a thumbnail.
+	fid, path = mkstemp(dir='.')
+	os.close(fid)
+	try:
+		cmd = [convert_path, fname, "-thumbnail", "240x180", path]
+		retcode = subprocess.call(cmd)
+		if retcode != 0:
+			raise RuntimeError, "convert failed. Command: " + " ".join(cmd)
+		os.chmod(path, perms)
+		os.rename(path, base + "_thumb" + ext)
+	except:
+		os.unlink(path)
+		raise
 
 def to_table(fname, headings, rows):
 	print >>open(fname, 'w'), '<table><tr>%s</tr>%s</table>' % (
@@ -388,6 +420,29 @@ while True:
 	pylab.title('Missed/Found injections distance versus end time')
 	pylab.legend(['missed','found'])
 	savefig('missed_found.png')
+
+	# coinc stat1 vs stat2 plots
+	stat_query = "SELECT sngl1.snr AS snr1, eff_snr(sngl1.snr, sngl1.chisq) AS eff_snr1, sngl2.snr AS snr2, eff_snr(sngl2.snr, sngl2.chisq) AS eff_snr2 FROM coinc_event_map AS cem1 JOIN coinc_event_map AS cem2 ON cem1.coinc_event_id=cem2.coinc_event_id JOIN sngl_inspiral AS sngl1 ON cem1.event_id=sngl1.event_id JOIN sngl_inspiral AS sngl2 ON cem2.event_id=sngl2.event_id JOIN coinc_inspiral AS ci ON ci.coinc_event_id=cem1.coinc_event_id WHERE sngl1.ifo=? AND sngl2.ifo=? ORDER BY ci.end_time * 1000000000 + ci.end_time_ns;"
+	for ifo1, ifo2 in iterutils.choices(sorted(args), 2):
+		unclustered_stats = array_from_cursor(coincdb.execute(stat_query, (ifo1, ifo2))).T
+		clustered_stats = array_from_cursor(clustered_coincdb.execute(stat_query, (ifo1, ifo2))).T
+		pylab.loglog(unclustered_stats["snr1"], unclustered_stats["snr2"], "k.", label="all coincidences")
+		pylab.loglog(clustered_stats["snr1"], clustered_stats["snr2"], label="clustered", **clusterstyle)
+		pylab.xlabel("%s SNR" % ifo1)
+		pylab.ylabel("%s SNR" % ifo2)
+		pylab.title("Coincident SNRs: %s vs %s" % (ifo2, ifo1))
+		pylab.legend(loc="upper left")
+		pylab.grid(True)
+		savefig("%s%s_snr_snr.png" % (ifo1, ifo2))
+
+		pylab.loglog(unclustered_stats["eff_snr1"], unclustered_stats["eff_snr2"], "k.", label="all coincidences")
+		pylab.loglog(clustered_stats["eff_snr1"], clustered_stats["eff_snr2"], label="clustered", **clusterstyle)
+		pylab.xlabel("%s effective SNR" % ifo1)
+		pylab.ylabel("%s effective SNR" % ifo2)
+		pylab.title("Coincident effective SNRs: %s vs %s" % (ifo2, ifo1))
+		pylab.legend(loc="upper left")
+		pylab.grid(True)
+		savefig("%s%s_effsnr_effsnr.png" % (ifo1, ifo2))
 
 	stop = time.time()
 
