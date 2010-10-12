@@ -41,7 +41,9 @@ seekevent = gst.event_new_seek(
 )
 
 
-coinc_elems = mkelems_fast(pipeline, "lal_coinc", "progressreport", {"name": "progress_coinc"}, "tee")
+coinc_elems = mkelems_fast(pipeline, "lal_coinc","progressreport", {"name": "progress_coinc"}, "tee")
+clustered_coinc_elems = mkelems_fast(pipeline, coinc_elems[-1],
+    "lal_coincselector", {"min-combined-eff-snr": 0, "min-waiting-time": 10000000000})
 #skymap = mkelems_fast(pipeline, coinc, "lal_skymap", {"bank-filename": opts.template_bank})[-1]
 #mkelems_fast(pipeline, skymap, "fakesink")
 #mkelems_fast(pipeline, coinc, "fakesink")
@@ -52,14 +54,17 @@ if opts.output is not None:
 	seg = segments.segment(LIGOTimeGPS(opts.gps_start_time), LIGOTimeGPS(opts.gps_end_time))
 	data = {}
 	data['all'] = ligolw_output.Data(opts.instrument, ligolw_output.make_process_params(opts), tmp_space=None, output=os.path.join(output_prefix,"".join(opts.instrument)+"-"+output_name), seg=seg, out_seg=seg, injections=opts.injections, comment="", verbose=True)
+	data['clustered'] = ligolw_output.Data(opts.instrument, ligolw_output.make_process_params(opts), tmp_space=None, output=os.path.join(output_prefix,"".join(opts.instrument)+"-clustered_"+output_name), seg=seg, out_seg=seg, injections=opts.injections, comment="", verbose=True)
 	for ifo in opts.instrument:
 		data[ifo] = ligolw_output.Data([ifo], ligolw_output.make_process_params(opts), tmp_space=None, output=ifo+"-"+opts.output, seg=seg, out_seg=seg, injections=None, comment="", verbose=True)
 
 	# NB: To mix XML and sqlite, must call prepare_output_file() after all
 	# instances of Data have been initialized.
 	data['all'].prepare_output_file()
+	data['clustered'].prepare_output_file()
 else:
 	mkelems_fast(pipeline, coinc_elems[-1], "fakesink", {"sync": False, "async": False})
+	mkelems_fast(pipeline, clustered_coinc_elems[-1], "fakesink", {"sync": False, "async": False})
 
 for ifo in opts.instrument:
 	bank = read_bank("bank.%s.pickle" % ifo)
@@ -87,6 +92,7 @@ for ifo in opts.instrument:
 # FIXME make some of these kw args options
 if opts.output is not None:
 	pipeparts.mkappsink(pipeline, coinc_elems[-1]).connect_after("new-buffer", lloidparts.appsink_new_buffer, data['all'])
+	pipeparts.mkappsink(pipeline, clustered_coinc_elems[-1]).connect_after("new-buffer", lloidparts.appsink_new_buffer, data['clustered'])
 
 #
 # Ready set go!
