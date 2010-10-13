@@ -109,7 +109,8 @@ def make_process_params(options):
 	params = {}
 
 	for key in options.__dict__:
-		if getattr(options, key) is not None:
+		val = getattr(options, key)
+		if val is not None and val is not False:
 			opt = getattr(options, key, "")
 			if isinstance(opt,list): opt = ",".join(opt)
 			params[key] = opt
