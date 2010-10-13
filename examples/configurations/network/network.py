@@ -11,6 +11,7 @@ opts, args = OptionParser(
 		Option("--gps-start-time", "-s", metavar="INT", type="int", help="GPS time at which to start analysis."),
 		Option("--gps-end-time", "-e", metavar="INT", type="int", help="GPS time at which to end analysis."),
 		Option("--template-bank", metavar="FILE", help="Name of template bank file."),
+		Option("--enable-gracedb", action="store_true", default=False, help="Activate communication with GraCeDB."),
 		Option("--output", metavar="FILE.{xml,xml.gz,sqlite}", help="Name of output file.  If not provided, then the output stage will be omitted."),
 	]
 ).parse_args()
@@ -49,10 +50,13 @@ seekevent = gst.event_new_seek(
 
 coinc_elems = mkelems_fast(pipeline, "lal_coinc","progressreport", {"name": "progress_coinc"}, "tee")
 clustered_coinc_elems = mkelems_fast(pipeline, coinc_elems[-1],
-    "lal_coincselector", {"min-combined-eff-snr": 0, "min-waiting-time": 10000000000})
+    "lal_coincselector", {"min-combined-eff-snr": 0, "min-waiting-time": 10000000000}, "tee")
 #skymap = mkelems_fast(pipeline, coinc, "lal_skymap", {"bank-filename": opts.template_bank})[-1]
 #mkelems_fast(pipeline, skymap, "fakesink")
 #mkelems_fast(pipeline, coinc, "fakesink")
+
+if opts.enable_gracedb:
+	mkelems_fast(pipeline, clustered_coinc_elems[-1], "queue", "lal_gracedbsink", {"sync": False, "async": False})
 
 if opts.output is not None:
 	output_prefix=os.path.split(opts.output)[0]
@@ -69,8 +73,8 @@ if opts.output is not None:
 	data['all'].prepare_output_file()
 	data['clustered'].prepare_output_file()
 else:
-	mkelems_fast(pipeline, coinc_elems[-1], "fakesink", {"sync": False, "async": False})
-	mkelems_fast(pipeline, clustered_coinc_elems[-1], "fakesink", {"sync": False, "async": False})
+	mkelems_fast(pipeline, coinc_elems[-1], "queue", "fakesink", {"sync": False, "async": False})
+	mkelems_fast(pipeline, clustered_coinc_elems[-1], "queue", "fakesink", {"sync": False, "async": False})
 
 for ifo in opts.instrument:
 	bank = read_bank("bank.%s.pickle" % ifo)
@@ -97,8 +101,8 @@ for ifo in opts.instrument:
 
 # FIXME make some of these kw args options
 if opts.output is not None:
-	pipeparts.mkappsink(pipeline, coinc_elems[-1]).connect_after("new-buffer", lloidparts.appsink_new_buffer, data['all'])
-	pipeparts.mkappsink(pipeline, clustered_coinc_elems[-1]).connect_after("new-buffer", lloidparts.appsink_new_buffer, data['clustered'])
+	pipeparts.mkappsink(pipeline, mkelems_fast(pipeline, coinc_elems[-1], "queue")[-1]).connect_after("new-buffer", lloidparts.appsink_new_buffer, data['all'])
+	pipeparts.mkappsink(pipeline, mkelems_fast(pipeline, clustered_coinc_elems[-1], "queue")[-1]).connect_after("new-buffer", lloidparts.appsink_new_buffer, data['clustered'])
 
 #
 # Ready set go!
