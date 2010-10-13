@@ -133,19 +133,19 @@ gps_start_time = int(coincdb.execute("SELECT value FROM process_params WHERE par
 gps_end_time = int(coincdb.execute("SELECT value FROM process_params WHERE param='--gps-end-time' AND program='gstlal_inspiral'").fetchone()[0])
 tz_dict = {"UTC": pytz.timezone("UTC"), "H": pytz.timezone("US/Pacific"), "L": pytz.timezone("US/Central"), "V": pytz.timezone("Europe/Rome")}
 tz_fmt = "%Y-%m-%d %T"
-dt_row_headers = ("GPS", "UTC", "Hanford", "Livingston", "Virgo", "Seconds since analysis start", "Seconds until analysis end")
-def dt_to_rows(dt):
+dt_row_headers = ("", "GPS", "UTC", "Hanford", "Livingston", "Virgo")
+def dt_to_row(dt):
 	"""
 	Generate rows suitable for to_table based on a given datetime object.
 	"""
 	assert dt.tzinfo == tz_dict["UTC"]
 	as_gps_int = date.XLALUTCToGPS(dt.timetuple()).seconds
-	return ((str(as_gps_int), dt.strftime(tz_fmt),
+	return (str(as_gps_int), dt.strftime(tz_fmt),
 	        dt.astimezone(tz_dict["H"]).strftime(tz_fmt),
 	        dt.astimezone(tz_dict["L"]).strftime(tz_fmt),
-	        dt.astimezone(tz_dict["V"]).strftime(tz_fmt),
-	        str(as_gps_int - gps_start_time),
-	        str(gps_end_time - as_gps_int)),)
+	        dt.astimezone(tz_dict["V"]).strftime(tz_fmt))
+def gps_to_datetime(gps):
+	return datetime.datetime(*date.XLALGPSToUTC(LIGOTimeGPS(gps))[:6] + (0, tz_dict["UTC"]))
 
 wait = 5.0
 
@@ -256,20 +256,31 @@ while True:
 	# Table saying what time various things have happened
 	#
 	now_dt = datetime.datetime.now(tz_dict["UTC"])
-	to_table("page_time.html", dt_row_headers, dt_to_rows(now_dt))
 
 	last_trig_gps = 0
 	for ifo, db in trigdbs:
 		query_result = db.execute("SELECT end_time FROM sngl_inspiral ORDER BY end_time DESC LIMIT 1;").fetchone()
 		if query_result is not None:
 			last_trig_gps = max(last_trig_gps, query_result[0])
-	last_trig_dt = datetime.datetime(*date.XLALGPSToUTC(LIGOTimeGPS(last_trig_gps))[:6] + (0, tz_dict["UTC"]))
-	to_table("trig_time.html", dt_row_headers, dt_to_rows(last_trig_dt))
+	last_trig_dt = gps_to_datetime(last_trig_gps)
 
-	last_coinc_gps = coincdb.execute("SELECT end_time FROM coinc_inspiral ORDER BY end_time DESC LIMIT 1;").fetchone()
-	if last_coinc_gps is not None:
-		last_coinc_dt = datetime.datetime(*date.XLALGPSToUTC(LIGOTimeGPS(last_coinc_gps[0]))[:6] + (0, tz_dict["UTC"]))
-		to_table("coinc_time.html", dt_row_headers, dt_to_rows(last_coinc_dt))
+	query_result = coincdb.execute("SELECT end_time FROM coinc_inspiral ORDER BY end_time DESC LIMIT 1;").fetchone()
+	last_coinc_gps = 0
+	if query_result is not None:
+		last_coinc_gps = query_result[0]
+	last_coinc_dt = gps_to_datetime(last_coinc_gps)
+
+	out_start_gps, out_end_gps = coincdb.execute("SELECT out_start_time, out_end_time FROM search_summary INNER JOIN process USING (process_id) WHERE program = 'gstlal_inspiral'").fetchone()
+	out_start_dt = gps_to_datetime(out_start_gps)
+	out_end_dt = gps_to_datetime(out_end_gps)
+
+	to_table("page_time.html", dt_row_headers, (
+		("Last figure saved",) + dt_to_row(now_dt),
+		("Data start time",) + dt_to_row(out_start_dt),
+		("Data end time",) + dt_to_row(out_end_dt),
+		("Latest trigger time",) + dt_to_row(last_trig_dt),
+		("Latest coinc time",) + dt_to_row(last_coinc_dt),
+		))
 
 	# Make single detector plots.
 	for ifo, db in trigdbs:

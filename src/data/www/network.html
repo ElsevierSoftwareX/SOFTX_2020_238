@@ -31,8 +31,6 @@
 				// set up other tables to load every ten seconds
 				init_autorefreshing_table('loudest', 10000);
 				init_autorefreshing_table('page_time', 10000);
-				init_autorefreshing_table('trig_time', 10000);
-				init_autorefreshing_table('coinc_time', 10000);
 				init_autorefreshing_table('trigcount', 10000);
 				init_autorefreshing_table('coinccount', 10000);
 			});
@@ -53,14 +51,6 @@
 			<figure>
 				<div id="page_time_table"></div>
 				<figcaption>Time of last plot generation</figcaption>
-			</figure>
-			<figure>
-				<div id="trig_time_table"></div>
-				<figcaption>Time of last trigger in databases</figcaption>
-			</figure>
-			<figure>
-				<div id="coinc_time_table"></div>
-				<figcaption>Time of last coinc in database</figcaption>
 			</figure>
 			<figure>
 				<span id="trigcount_table" display="inline"></span>
