@@ -76,6 +76,9 @@ if p.wait() != 0:
 convert_path = p.communicate()[0].rstrip()
 
 
+# Permissions for destination file: -rw-r--r--
+perms = stat.S_IRGRP | stat.S_IRUSR | stat.S_IWUSR | stat.S_IROTH | stat.S_IWUSR
+
 def savefig(fname):
 	"""Wraps pylab.savefig, but replaces the destination file atomically and
 	destroys the plotting state. Also writes thumbnails."""
@@ -87,9 +90,6 @@ def savefig(fname):
 	# Open a randomly named temporary file to save the image.
 	fid, path = mkstemp(dir='.')
 	f = os.fdopen(fid, 'wb')
-
-	# Permissions for destination file: -rw-r--r--
-	perms = stat.S_IRGRP|stat.S_IRUSR|stat.S_IWUSR|stat.S_IROTH|stat.S_IWUSR
 
 	# Atomically save the file to the destination.  At the end of this nested
 	# try block, whether or not the file is saved successfully, the temporary
@@ -123,10 +123,15 @@ def savefig(fname):
 		raise
 
 def to_table(fname, headings, rows):
-	print >>open(fname, 'w'), '<table><tr>%s</tr>%s</table>' % (
+	fid, path = mkstemp(dir='.', text=True)
+	f = os.fdopen(fid, 'w')
+	print >>f, '<table><tr>%s</tr>%s</table>' % (
 		''.join('<th>%s</th>' % heading for heading in headings),
 		''.join('<tr>%s</tr>' % ''.join('<td>%s</td>' % column for column in row) for row in rows)
 	)
+	f.close()
+	os.chmod(path, perms)
+	os.rename(path, fname)
 
 # time conversion
 gps_start_time = int(coincdb.execute("SELECT value FROM process_params WHERE param='--gps-start-time' AND program='gstlal_inspiral'").fetchone()[0])
