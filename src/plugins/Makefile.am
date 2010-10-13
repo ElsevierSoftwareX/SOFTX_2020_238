@@ -31,6 +31,7 @@ libgstlal_la_SOURCES = \
 	gstlal_firbank.h gstlal_firbank.c \
 	gstlal_sumsquares.h gstlal_sumsquares.c \
 	gstlal_togglecomplex.h gstlal_togglecomplex.c \
+	gstlal_timeslide.h gstlal_timeslide.c \
 	gstlal_nofakedisconts.h gstlal_nofakedisconts.c \
 	gstlal_reblock.h gstlal_reblock.c \
 	gstlal_delay.h gstlal_delay.c \
