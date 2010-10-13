@@ -413,8 +413,8 @@ while True:
 
 	missed = array_from_cursor(clustered_coincdb.execute("SELECT geocent_end_time, distance FROM sim_inspiral WHERE NOT EXISTS (SELECT * FROM coinc_inspiral WHERE coinc_inspiral.end_time BETWEEN sim_inspiral.geocent_end_time - 1.0 AND sim_inspiral.geocent_end_time + 1.0) AND geocent_end_time BETWEEN (SELECT MIN(coinc_inspiral.end_time) FROM coinc_inspiral) AND (SELECT MAX(coinc_inspiral.end_time) FROM coinc_inspiral);"))
 
-	pylab.semilogy(missed['geocent_end_time'], missed['distance'],'*k')
-	pylab.semilogy(found['geocent_end_time'], found['distance'],'*')
+	pylab.semilogy(missed['geocent_end_time'], missed['distance'],'xr')
+	pylab.semilogy(found['geocent_end_time'], found['distance'],'*b')
 	pylab.ylabel('Distance (Mpc)')
 	pylab.xlabel('Geocentric end time')
 	pylab.title('Missed/Found injections distance versus end time')
