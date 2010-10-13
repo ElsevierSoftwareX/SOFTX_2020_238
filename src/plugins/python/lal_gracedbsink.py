@@ -158,7 +158,7 @@ class lal_gracedbsink(gst.BaseSink):
 			# Check return code
 			if proc.returncode != 0:
 				# FIXME: should we also return gst.FLOW_ERROR?
-				self.error('gracedb exited with return code %d' % coinc_process.returncode)
+				self.error('gracedb exited with return code %d' % proc.returncode)
 
 			# Report gracedb ID
 			self.info('gracedb ID: %s' % stdoutdata)
