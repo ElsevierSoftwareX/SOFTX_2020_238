@@ -45,20 +45,22 @@
 
 		var interval = config['interval'];
 
-		var is_img = $(this).is('img');
-
 		this.each(function() {
 			var obj = this;
+			var is_img = $(this).is('img');
 			var old_src = $(this).attr(is_img ? 'src' : 'href');
 			var func = function() {
 				window.setTimeout(function() {
 					// FIXME: we could load the image into a separate img object,
 					// then swap URLs; this might help to avoid flicker.
 					var new_src = old_src + "#e" + Math.random();
-					if (is_img && $(obj).is(':visible'))
-						obj.src = new_src;
-					else
-						obj.href = new_src;
+					if (is_img)
+					{
+						if ($(obj).is(':visible'))
+							$(obj).attr('src', new_src);
+					} else {
+						$(obj).attr('href', new_src);
+					}
 					func();
 				}, interval);
 			};
