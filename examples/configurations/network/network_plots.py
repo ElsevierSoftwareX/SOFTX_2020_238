@@ -248,7 +248,7 @@ del xmldoc, table, bankdict, psds
 
 # Write process params stuff options
 to_table('processes.html', ('program', 'command-line arguments'),
-    ((program, " ".join(" ".join(tup) for tup in coincdb.execute("SELECT param, value FROM process_params WHERE program=?", program))) for program in coincdb.execute("SELECT program FROM process ORDER BY start_time")))
+    [(program, " ".join([" ".join(t or '' for t in tup) for tup in coincdb.execute("SELECT param, value FROM process_params WHERE program=?", program)])) for program in coincdb.execute("SELECT program FROM process ORDER BY start_time")])
 
 while True:
 	start = time.time()
