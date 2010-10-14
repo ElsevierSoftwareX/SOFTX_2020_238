@@ -65,7 +65,6 @@ AX_PYTHON_DEVEL()
 AX_CFLAGS_WARN_ALL([AM_CFLAGS])
 AM_CFLAGS="$AM_CFLAGS -Wextra -Wno-missing-field-initializers -Wno-unused-parameter"	# extra gcc-specific stuff
 AC_SUBST([AM_CFLAGS])
-AX_CC_MAXOPT
 
 
 #
