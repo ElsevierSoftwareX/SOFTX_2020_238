@@ -71,9 +71,6 @@ typedef struct {
 	char *xml_location;
 
 	struct injection_document {
-		ProcessTable *process_table_head;
-		ProcessParamsTable *process_params_table_head;
-		SearchSummaryTable *search_summary_table_head;
 		int has_sim_burst_table;
 		SimBurst *sim_burst_table_head;
 		int has_sim_inspiral_table;

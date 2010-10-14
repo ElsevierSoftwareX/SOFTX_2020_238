@@ -93,9 +93,6 @@
 static void destroy_injection_document(struct injection_document *doc)
 {
 	if(doc) {
-		XLALDestroyProcessTable(doc->process_table_head);
-		XLALDestroyProcessParamsTable(doc->process_params_table_head);
-		XLALDestroySearchSummaryTable(doc->search_summary_table_head);
 		XLALDestroySimBurstTable(doc->sim_burst_table_head);
 		while(doc->sim_inspiral_table_head) {
 			SimInspiralTable *next = doc->sim_inspiral_table_head->next;
@@ -139,33 +136,6 @@ static struct injection_document *load_injection_document(const char *filename, 
 
 	XLALGPSAdd(&start, -longest_injection);
 	XLALGPSAdd(&end, longest_injection);
-
-	/*
-	 * load required tables
-	 */
-
-	XLALClearErrno();
-	new->process_table_head = XLALProcessTableFromLIGOLw(filename);
-	if(XLALGetBaseErrno()) {
-		XLALPrintError("%s(): failure reading process table from \"%s\"\n", func, filename);
-		success = 0;
-	} else
-		XLALPrintInfo("%s(): found process table\n", func);
-
-	XLALClearErrno();
-	new->process_params_table_head = XLALProcessParamsTableFromLIGOLw(filename);
-	if(XLALGetBaseErrno()) {
-		XLALPrintError("%s(): failure reading process_params table from \"%s\"\n", func, filename);
-		success = 0;
-	} else
-		XLALPrintInfo("%s(): found process_params table\n", func);
-
-	XLALClearErrno();
-	new->search_summary_table_head = XLALSearchSummaryTableFromLIGOLw(filename);
-	if(XLALGetBaseErrno())
-		XLALPrintError("%s(): non-fatal failure reading search_summary table from \"%s\"\n", func, filename);
-	else
-		XLALPrintInfo("%s(): found search_summary table\n", func);
 
 	/*
 	 * load optional sim_burst table
