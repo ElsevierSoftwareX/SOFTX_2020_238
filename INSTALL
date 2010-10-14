@@ -215,7 +215,7 @@ To make sure that MacPorts is installed, run the following command::
 
 You should not get an error message.  If you now have the Port command, proceed.
 
-Now, we asre going to use MacPorts to get the prerequisites for GStreamer, 
+Now, we are going to use MacPorts to get the prerequisites for GStreamer, 
 lalsuite, and gstlal.  (Note: this is a partial list; I need to test the 
 procedure on a fresh Mac box.)  Every time you see a command starting with
 `sudo`, you may be prompted for your login password.  Run the following commands::
