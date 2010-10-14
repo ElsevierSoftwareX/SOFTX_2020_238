@@ -31,8 +31,6 @@
 				// set up other tables to load every ten seconds
 				init_autorefreshing_table('loudest', 10000);
 				init_autorefreshing_table('page_time', 10000);
-				init_autorefreshing_table('trig_time', 10000);
-				init_autorefreshing_table('coinc_time', 10000);
 				init_autorefreshing_table('trigcount', 10000);
 				init_autorefreshing_table('coinccount', 10000);
 			});
@@ -55,16 +53,8 @@
 				<figcaption>Time of last plot generation</figcaption>
 			</figure>
 			<figure>
-				<div id="trig_time_table"></div>
-				<figcaption>Time of last trigger in databases</figcaption>
-			</figure>
-			<figure>
-				<div id="coinc_time_table"></div>
-				<figcaption>Time of last coinc in database</figcaption>
-			</figure>
-			<figure>
-				<span id="trigcount_table" display="inline"></span>
-				<span id="coinccount_table" display="inline"></span>
+				<span id="trigcount_table"></span>
+				<span id="coinccount_table"></span>
 				<figcaption>Cumulative number of triggers and coincidences since start of run</figcaption>
 			</figure>
 			<figure>
@@ -191,7 +181,7 @@
 		<section>
 			<h1>Coincident Injections</h1>
 			<figure>
-				<img class="autoupdating" src="missed_found.png" />
+				<a class="autoupdating" href="missed_found.png"><img class="autoupdating" src="missed_found_thumb.png" /></a>
 				<figcaption>Distance vs Time for missed and found injections</figcaption>
 			</figure>
 		</section>

@@ -93,6 +93,7 @@
 #include <gstlal_firbank.h>
 #include <gstlal_sumsquares.h>
 #include <gstlal_togglecomplex.h>
+#include <gstlal_timeslide.h>
 #include <gstlal_nofakedisconts.h>
 #include <gstlal_reblock.h>
 #include <gstlal_delay.h>
@@ -147,6 +148,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_firbank", GSTLAL_FIRBANK_TYPE},
 		{"lal_sumsquares", GSTLAL_SUMSQUARES_TYPE},
 		{"lal_togglecomplex", GSTLAL_TOGGLECOMPLEX_TYPE},
+		{"lal_timeslide", GSTLAL_TIMESLIDE_TYPE},
 		{"lal_nofakedisconts", GSTLAL_NOFAKEDISCONTS_TYPE},
 		{"lal_reblock", GSTLAL_REBLOCK_TYPE},
 		{"lal_delay", GSTLAL_DELAY_TYPE},

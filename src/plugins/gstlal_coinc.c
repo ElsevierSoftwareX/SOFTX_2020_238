@@ -247,29 +247,10 @@ static GstCoincCollectData* find_earliest_collectdata(GSTLALCoinc* coinc)
 }
 
 
-static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
+static void pop_coincs(GstCollectData *collectdata, GSTLALCoinc *coinc)
 {
-	GSTLALCoinc* coinc = GSTLAL_COINC(user_data);
-
-	/* Assure that we have enough sink pads. */
-	if (GST_ELEMENT(coinc)->numsinkpads < 2)
-	{
-		GST_ERROR_OBJECT(coinc, "not enough sink pads, 2 required but only %d are present", GST_ELEMENT(coinc)->numsinkpads < 2);
-		return GST_FLOW_ERROR;
-	}
-
-	/*
-	 * Pick the pad from which to pop the next buffer.  Choose the pad for
-	 * which the last received end time is the earliest, and only accept
-	 * data from that pad.
-	 */
-	GstCoincCollectData* data = find_earliest_collectdata(coinc);
-	g_assert(data);
-	GstClockTime timestamp = data->last_end_time;
-
-
-	/* Take a buffer from that pad, if one is available, else return. */
-	GstBuffer* buf = gst_collect_pads_pop(coinc->collect, &data->gstcollectdata);
+	GstCoincCollectData *data = (GstCoincCollectData*)collectdata;
+	GstBuffer* buf = gst_collect_pads_pop(collectdata->collect, collectdata);
 	if (buf)
 	{
 		data->last_end_time = GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
@@ -321,10 +302,37 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		/* Unref input hashtable. */
 		g_hash_table_unref(hash);
 	}
+}
+
+
+static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
+{
+	GSTLALCoinc* coinc = GSTLAL_COINC(user_data);
+	GstElement* element = GST_ELEMENT(coinc);
+
+	/* Assure that we have enough sink pads. */
+	if (element->numsinkpads < 2)
+	{
+		GST_ERROR_OBJECT(coinc, "not enough sink pads, 2 required but only %d are present", element->numsinkpads < 2);
+		return GST_FLOW_ERROR;
+	}
+
+	/*
+	 * Pick the pad from which to pop the next buffer.  Choose the pad for
+	 * which the last received end time is the earliest, and only accept
+	 * data from that pad.
+	 */
+	GstCoincCollectData* data = find_earliest_collectdata(coinc);
+	g_assert(data);
+	GstClockTime timestamp = data->last_end_time;
+
+
+	/* Take buffers from all pads for which data is available. */
+	g_slist_foreach(pads->data, (GFunc)pop_coincs, coinc);
 
 	GstClockTime last_seen_time;
 	gboolean eos;
-	if (pads->eospads == GST_ELEMENT(coinc)->numsinkpads)
+	if (pads->eospads == element->numsinkpads)
 	{
 		/* No data to be read, must be EOS */
 		eos = TRUE;
@@ -401,7 +409,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 							g_array_append_vals(outarray, head_sngl, 1);
 
 						/* resize output array to a multiple of numsinkpads */
-						g_array_size_to_next_multiple(outarray, GST_ELEMENT(coinc)->numsinkpads);
+						g_array_size_to_next_multiple(outarray, element->numsinkpads);
 					}
 
 					/* forget triggers that are no longer relevant */
@@ -415,7 +423,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 						g_assert(numtriggers > 0);
 						--numtriggers;
 					}
-				} else if (numtriggers >= GST_ELEMENT(coinc)->numsinkpads) {
+				} else if (numtriggers >= element->numsinkpads) {
 					/* all detectors are present, form a coincidence. */
 					SnglInspiralTable* head_sngl;
 					if (numtriggers > 1)
@@ -447,7 +455,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 							g_array_append_vals(outarray, head_sngl, 1);
 
 						/* resize output array to a multiple of numsinkpads */
-						g_array_size_to_next_multiple(outarray, GST_ELEMENT(coinc)->numsinkpads);
+						g_array_size_to_next_multiple(outarray, element->numsinkpads);
 					}
 
 					/* forget triggers that are no longer relevant */
@@ -495,6 +503,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		}
 
 		/* Generate outgoing buffer. */
+		GstBuffer *buf;
 		retval = gst_pad_alloc_buffer(coinc->srcpad, GST_BUFFER_OFFSET_NONE, siz, GST_PAD_CAPS(coinc->srcpad), &buf);
 		if (retval == GST_FLOW_OK)
 		{
@@ -640,9 +649,10 @@ static void class_init(gpointer klass, gpointer class_data)
 static void instance_init(GTypeInstance *object, gpointer klass)
 {
 	GSTLALCoinc *coinc = GSTLAL_COINC(object);
+	GstElement *element = GST_ELEMENT(coinc);
 
-	gst_element_create_all_pads(GST_ELEMENT(coinc));
-	coinc->srcpad = gst_element_get_static_pad(GST_ELEMENT(coinc), "src");
+	gst_element_create_all_pads(element);
+	coinc->srcpad = gst_element_get_static_pad(element, "src");
 
 	coinc->collect = gst_collect_pads_new();
 	gst_collect_pads_set_function(coinc->collect, GST_DEBUG_FUNCPTR(collected), coinc);

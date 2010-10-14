@@ -76,6 +76,9 @@ if p.wait() != 0:
 convert_path = p.communicate()[0].rstrip()
 
 
+# Permissions for destination file: -rw-r--r--
+perms = stat.S_IRGRP | stat.S_IRUSR | stat.S_IWUSR | stat.S_IROTH | stat.S_IWUSR
+
 def savefig(fname):
 	"""Wraps pylab.savefig, but replaces the destination file atomically and
 	destroys the plotting state. Also writes thumbnails."""
@@ -87,9 +90,6 @@ def savefig(fname):
 	# Open a randomly named temporary file to save the image.
 	fid, path = mkstemp(dir='.')
 	f = os.fdopen(fid, 'wb')
-
-	# Permissions for destination file: -rw-r--r--
-	perms = stat.S_IRGRP|stat.S_IRUSR|stat.S_IWUSR|stat.S_IROTH|stat.S_IWUSR
 
 	# Atomically save the file to the destination.  At the end of this nested
 	# try block, whether or not the file is saved successfully, the temporary
@@ -123,29 +123,34 @@ def savefig(fname):
 		raise
 
 def to_table(fname, headings, rows):
-	print >>open(fname, 'w'), '<table><tr>%s</tr>%s</table>' % (
+	fid, path = mkstemp(dir='.', text=True)
+	f = os.fdopen(fid, 'w')
+	print >>f, '<table><tr>%s</tr>%s</table>' % (
 		''.join('<th>%s</th>' % heading for heading in headings),
 		''.join('<tr>%s</tr>' % ''.join('<td>%s</td>' % column for column in row) for row in rows)
 	)
+	f.close()
+	os.chmod(path, perms)
+	os.rename(path, fname)
 
 # time conversion
 gps_start_time = int(coincdb.execute("SELECT value FROM process_params WHERE param='--gps-start-time' AND program='gstlal_inspiral'").fetchone()[0])
 gps_end_time = int(coincdb.execute("SELECT value FROM process_params WHERE param='--gps-end-time' AND program='gstlal_inspiral'").fetchone()[0])
 tz_dict = {"UTC": pytz.timezone("UTC"), "H": pytz.timezone("US/Pacific"), "L": pytz.timezone("US/Central"), "V": pytz.timezone("Europe/Rome")}
 tz_fmt = "%Y-%m-%d %T"
-dt_row_headers = ("GPS", "UTC", "Hanford", "Livingston", "Virgo", "Seconds since analysis start", "Seconds until analysis end")
-def dt_to_rows(dt):
+dt_row_headers = ("", "GPS", "UTC", "Hanford", "Livingston", "Virgo")
+def dt_to_row(dt):
 	"""
 	Generate rows suitable for to_table based on a given datetime object.
 	"""
 	assert dt.tzinfo == tz_dict["UTC"]
 	as_gps_int = date.XLALUTCToGPS(dt.timetuple()).seconds
-	return ((str(as_gps_int), dt.strftime(tz_fmt),
+	return (str(as_gps_int), dt.strftime(tz_fmt),
 	        dt.astimezone(tz_dict["H"]).strftime(tz_fmt),
 	        dt.astimezone(tz_dict["L"]).strftime(tz_fmt),
-	        dt.astimezone(tz_dict["V"]).strftime(tz_fmt),
-	        str(as_gps_int - gps_start_time),
-	        str(gps_end_time - as_gps_int)),)
+	        dt.astimezone(tz_dict["V"]).strftime(tz_fmt))
+def gps_to_datetime(gps):
+	return datetime.datetime(*date.XLALGPSToUTC(LIGOTimeGPS(gps))[:6] + (0, tz_dict["UTC"]))
 
 wait = 5.0
 
@@ -248,7 +253,7 @@ del xmldoc, table, bankdict, psds
 
 # Write process params stuff options
 to_table('processes.html', ('program', 'command-line arguments'),
-    ((program, " ".join(" ".join(tup) for tup in coincdb.execute("SELECT param, value FROM process_params WHERE program=?", program))) for program in coincdb.execute("SELECT program FROM process ORDER BY start_time")))
+    [(program, " ".join([" ".join(t or '' for t in tup) for tup in coincdb.execute("SELECT param, value FROM process_params WHERE program=?", program)])) for program in coincdb.execute("SELECT program FROM process ORDER BY start_time")])
 
 while True:
 	start = time.time()
@@ -256,20 +261,31 @@ while True:
 	# Table saying what time various things have happened
 	#
 	now_dt = datetime.datetime.now(tz_dict["UTC"])
-	to_table("page_time.html", dt_row_headers, dt_to_rows(now_dt))
 
 	last_trig_gps = 0
 	for ifo, db in trigdbs:
 		query_result = db.execute("SELECT end_time FROM sngl_inspiral ORDER BY end_time DESC LIMIT 1;").fetchone()
 		if query_result is not None:
 			last_trig_gps = max(last_trig_gps, query_result[0])
-	last_trig_dt = datetime.datetime(*date.XLALGPSToUTC(LIGOTimeGPS(last_trig_gps))[:6] + (0, tz_dict["UTC"]))
-	to_table("trig_time.html", dt_row_headers, dt_to_rows(last_trig_dt))
+	last_trig_dt = gps_to_datetime(last_trig_gps)
 
-	last_coinc_gps = coincdb.execute("SELECT end_time FROM coinc_inspiral ORDER BY end_time DESC LIMIT 1;").fetchone()
-	if last_coinc_gps is not None:
-		last_coinc_dt = datetime.datetime(*date.XLALGPSToUTC(LIGOTimeGPS(last_coinc_gps[0]))[:6] + (0, tz_dict["UTC"]))
-		to_table("coinc_time.html", dt_row_headers, dt_to_rows(last_coinc_dt))
+	query_result = coincdb.execute("SELECT end_time FROM coinc_inspiral ORDER BY end_time DESC LIMIT 1;").fetchone()
+	last_coinc_gps = 0
+	if query_result is not None:
+		last_coinc_gps = query_result[0]
+	last_coinc_dt = gps_to_datetime(last_coinc_gps)
+
+	out_start_gps, out_end_gps = coincdb.execute("SELECT out_start_time, out_end_time FROM search_summary INNER JOIN process USING (process_id) WHERE program = 'gstlal_inspiral'").fetchone()
+	out_start_dt = gps_to_datetime(out_start_gps)
+	out_end_dt = gps_to_datetime(out_end_gps)
+
+	to_table("page_time.html", dt_row_headers, (
+		("Last figure saved",) + dt_to_row(now_dt),
+		("Data start time",) + dt_to_row(out_start_dt),
+		("Data end time",) + dt_to_row(out_end_dt),
+		("Latest trigger time",) + dt_to_row(last_trig_dt),
+		("Latest coinc time",) + dt_to_row(last_coinc_dt),
+		))
 
 	# Make single detector plots.
 	for ifo, db in trigdbs:
@@ -416,8 +432,8 @@ while True:
 
 		missed = array_from_cursor(clustered_coincdb.execute("SELECT geocent_end_time, distance FROM sim_inspiral WHERE NOT EXISTS (SELECT * FROM coinc_inspiral WHERE coinc_inspiral.end_time BETWEEN sim_inspiral.geocent_end_time - 1.0 AND sim_inspiral.geocent_end_time + 1.0) AND geocent_end_time BETWEEN (SELECT MIN(coinc_inspiral.end_time) FROM coinc_inspiral) AND (SELECT MAX(coinc_inspiral.end_time) FROM coinc_inspiral);"))
 
-		pylab.semilogy(missed['geocent_end_time'], missed['distance'],'*k')
-		pylab.semilogy(found['geocent_end_time'], found['distance'],'*')
+		pylab.semilogy(missed['geocent_end_time'], missed['distance'],'xr')
+		pylab.semilogy(found['geocent_end_time'], found['distance'],'*b')
 		pylab.ylabel('Distance (Mpc)')
 		pylab.xlabel('Geocentric end time')
 		pylab.title('Missed/Found injections distance versus end time')

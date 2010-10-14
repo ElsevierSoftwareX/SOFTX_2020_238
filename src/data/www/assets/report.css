@@ -69,6 +69,7 @@ figure figcaption:before {
 	font-weight: bold;
 }
 table {
+	display: inline-table;
 	border-collapse: collapse;
 	margin: 2em;
 }
