@@ -409,17 +409,20 @@ while True:
 		""").fetchall())
 
 	# Make injection plots
-	found = array_from_cursor(clustered_coincdb.execute("SELECT geocent_end_time, distance FROM sim_inspiral WHERE EXISTS (SELECT * FROM coinc_inspiral WHERE coinc_inspiral.end_time BETWEEN sim_inspiral.geocent_end_time - 1.0 AND sim_inspiral.geocent_end_time + 1.0);"))
+	# FIXME this is sqlite specific
+	# FIXME move outside the loop?
+	if clustered_coincdb.execute("SELECT tbl_name FROM sqlite_master WHERE tbl_name='sim_inspiral';").fetchone():
+		found = array_from_cursor(clustered_coincdb.execute("SELECT geocent_end_time, distance FROM sim_inspiral WHERE EXISTS (SELECT * FROM coinc_inspiral WHERE coinc_inspiral.end_time BETWEEN sim_inspiral.geocent_end_time - 1.0 AND sim_inspiral.geocent_end_time + 1.0);"))
 
-	missed = array_from_cursor(clustered_coincdb.execute("SELECT geocent_end_time, distance FROM sim_inspiral WHERE NOT EXISTS (SELECT * FROM coinc_inspiral WHERE coinc_inspiral.end_time BETWEEN sim_inspiral.geocent_end_time - 1.0 AND sim_inspiral.geocent_end_time + 1.0) AND geocent_end_time BETWEEN (SELECT MIN(coinc_inspiral.end_time) FROM coinc_inspiral) AND (SELECT MAX(coinc_inspiral.end_time) FROM coinc_inspiral);"))
+		missed = array_from_cursor(clustered_coincdb.execute("SELECT geocent_end_time, distance FROM sim_inspiral WHERE NOT EXISTS (SELECT * FROM coinc_inspiral WHERE coinc_inspiral.end_time BETWEEN sim_inspiral.geocent_end_time - 1.0 AND sim_inspiral.geocent_end_time + 1.0) AND geocent_end_time BETWEEN (SELECT MIN(coinc_inspiral.end_time) FROM coinc_inspiral) AND (SELECT MAX(coinc_inspiral.end_time) FROM coinc_inspiral);"))
 
-	pylab.semilogy(missed['geocent_end_time'], missed['distance'],'*k')
-	pylab.semilogy(found['geocent_end_time'], found['distance'],'*')
-	pylab.ylabel('Distance (Mpc)')
-	pylab.xlabel('Geocentric end time')
-	pylab.title('Missed/Found injections distance versus end time')
-	pylab.legend(['missed','found'])
-	savefig('missed_found.png')
+		pylab.semilogy(missed['geocent_end_time'], missed['distance'],'*k')
+		pylab.semilogy(found['geocent_end_time'], found['distance'],'*')
+		pylab.ylabel('Distance (Mpc)')
+		pylab.xlabel('Geocentric end time')
+		pylab.title('Missed/Found injections distance versus end time')
+		pylab.legend(['missed','found'])
+		savefig('missed_found.png')
 
 	# coinc stat1 vs stat2 plots
 	stat_query = "SELECT sngl1.snr AS snr1, eff_snr(sngl1.snr, sngl1.chisq) AS eff_snr1, sngl2.snr AS snr2, eff_snr(sngl2.snr, sngl2.chisq) AS eff_snr2 FROM coinc_event_map AS cem1 JOIN coinc_event_map AS cem2 ON cem1.coinc_event_id=cem2.coinc_event_id JOIN sngl_inspiral AS sngl1 ON cem1.event_id=sngl1.event_id JOIN sngl_inspiral AS sngl2 ON cem2.event_id=sngl2.event_id JOIN coinc_inspiral AS ci ON ci.coinc_event_id=cem1.coinc_event_id WHERE sngl1.ifo=? AND sngl2.ifo=? ORDER BY ci.end_time * 1000000000 + ci.end_time_ns;"
