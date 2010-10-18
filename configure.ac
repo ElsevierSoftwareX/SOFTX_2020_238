@@ -13,17 +13,16 @@ AC_CONFIG_MACRO_DIR([gnuscripts])
 AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_FILES([ \
 	Makefile \
-	src/Makefile \
-	src/bin/Makefile \
-	src/lib/gstlal.pc \
-	src/lib/Makefile \
-	src/skymap/Makefile \
-	src/cairovis/Makefile \
-	src/plugins/Makefile \
-	src/plugins/python/Makefile \
-	src/python/Makefile \
-	src/python/elements/Makefile \
-	src/utilities/Makefile \
+	lib/gstlal.pc \
+	lib/Makefile \
+	lib/skymap/Makefile \
+	python/Makefile \
+	python/elements/Makefile \
+	gst/Makefile \
+	gst/cairovis/Makefile \
+	gst/lal/Makefile \
+	gst/python/Makefile \
+	bin/Makefile \
 	tests/Makefile
 ])
 

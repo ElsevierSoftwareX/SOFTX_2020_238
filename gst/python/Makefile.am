@@ -1,4 +1,4 @@
-INCLUDES = -I$(top_srcdir)/src/lib
+INCLUDES = -I$(top_srcdir)/lib
 
 # Put these Python scripts into the plugin directory under "python" so that
 # GStreamer sees them.

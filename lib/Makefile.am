@@ -1,3 +1,5 @@
+SUBDIRS = skymap
+
 pkginclude_HEADERS = gstlal.h gstlal_cdf_weighted_chisq_P.h
 pkgconfig_DATA = gstlal.pc
 lib_LTLIBRARIES = libgstlal.la

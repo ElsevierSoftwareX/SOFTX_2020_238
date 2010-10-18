@@ -13,6 +13,6 @@ config.log
 config.status
 configure
 libtool
-src/lib/gstlal.pc
-src/plugins/python/*.pyc
+lib/gstlal.pc
+gst/python/*.pyc
 tests/*.pyc

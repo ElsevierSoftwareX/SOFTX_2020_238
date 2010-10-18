@@ -4,4 +4,4 @@ else
 CAIRO_SUBDIRS = 
 endif
 
-SUBDIRS = lib skymap plugins python bin utilities $(CAIRO_SUBDIRS)
+SUBDIRS = lal python $(CAIRO_SUBDIRS)
