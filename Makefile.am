@@ -1,2 +1,2 @@
 ACLOCAL_AMFLAGS = -I gnuscripts
-SUBDIRS = src tests
+SUBDIRS = data lib python gst bin tests

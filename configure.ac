@@ -13,21 +13,20 @@ AC_CONFIG_MACRO_DIR([gnuscripts])
 AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_FILES([ \
 	Makefile \
-	src/data/Makefile \
-	src/data/www/Makefile \
-	src/data/www/assets/Makefile \
-	src/data/www/assets/fancybox/Makefile \
-	src/Makefile \
-	src/bin/Makefile \
-	src/lib/gstlal.pc \
-	src/lib/Makefile \
-	src/skymap/Makefile \
-	src/cairovis/Makefile \
-	src/plugins/Makefile \
-	src/plugins/python/Makefile \
-	src/python/Makefile \
-	src/python/elements/Makefile \
-	src/utilities/Makefile \
+	data/Makefile \
+	data/www/Makefile \
+	data/www/assets/Makefile \
+	data/www/assets/fancybox/Makefile \
+	lib/gstlal.pc \
+	lib/Makefile \
+	lib/skymap/Makefile \
+	python/Makefile \
+	python/elements/Makefile \
+	gst/Makefile \
+	gst/cairovis/Makefile \
+	gst/lal/Makefile \
+	gst/python/Makefile \
+	bin/Makefile \
 	tests/Makefile
 ])
 
@@ -69,7 +68,6 @@ AX_PYTHON_DEVEL()
 AX_CFLAGS_WARN_ALL([AM_CFLAGS])
 AM_CFLAGS="$AM_CFLAGS -Wextra -Wno-missing-field-initializers -Wno-unused-parameter"	# extra gcc-specific stuff
 AC_SUBST([AM_CFLAGS])
-AX_CC_MAXOPT
 
 
 #

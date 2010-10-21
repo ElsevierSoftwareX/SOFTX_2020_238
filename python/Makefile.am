@@ -1,5 +1,5 @@
 SUBDIRS = elements
-INCLUDES = -I$(top_srcdir)/src/lib
+INCLUDES = -I$(top_srcdir)/lib
 
 # This is a trick taken from the gst-python automake setup.
 # All of the Python scripts will be installed under the exec dir,
@@ -14,4 +14,4 @@ pkgpyexec_LTLIBRARIES = _misc.la
 _misc_la_SOURCES = misc.c
 _misc_la_CPPFLAGS = $(PYTHON_CPPFLAGS)
 _misc_la_LDFLAGS = -module $(PYTHON_LDFLAGS)
-_misc_la_LIBADD = $(top_srcdir)/src/lib/libgstlal.la
+_misc_la_LIBADD = $(top_srcdir)/lib/libgstlal.la
