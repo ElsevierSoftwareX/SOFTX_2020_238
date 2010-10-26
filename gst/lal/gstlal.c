@@ -29,15 +29,6 @@
 
 
 /*
- * Stuff from the C library
- */
-
-
-#include <math.h>
-#include <stdio.h>
-
-
-/*
  * Stuff from GStreamer
  */
 
@@ -46,25 +37,10 @@
 
 
 /*
- * stuff from GSL
- */
-
-
-#include <gsl/gsl_matrix.h>
-#include <gsl/gsl_spline.h>
-
-
-/*
  * Stuff from LAL
  */
 
 
-#include <lal/Date.h>
-#include <lal/LALDatatypes.h>
-#include <lal/Sequence.h>
-#include <lal/TimeSeries.h>
-#include <lal/FrequencySeries.h>
-#include <lal/Units.h>
 #include <lal/XLALError.h>
 
 
@@ -73,6 +49,7 @@
  */
 
 
+#include <gstlal_tags.h>
 #include <gstlal.h>
 #include <gstlal_plugins.h>
 #include <gstlal_framesrc.h>
@@ -154,19 +131,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 #endif
 		{NULL, 0},
 	};
-	struct {
-		const gchar *name;
-		GstTagFlag flag;
-		GType type;
-		const gchar *nick;
-		const gchar *blurb;
-		GstTagMergeFunc func;
-	} *tagarg, tagargs[] = {
-		{GSTLAL_TAG_INSTRUMENT, GST_TAG_FLAG_META, G_TYPE_STRING, "instrument", "The short name of the instrument or observatory where this data was recorded, e.g., \"H1\"", gst_tag_merge_strings_with_comma},
-		{GSTLAL_TAG_CHANNEL_NAME, GST_TAG_FLAG_META, G_TYPE_STRING, "channel name", "The name of this channel, e.g., \"LSC-STRAIN\"", gst_tag_merge_strings_with_comma},
-		{GSTLAL_TAG_UNITS, GST_TAG_FLAG_META, G_TYPE_STRING, "units", "The units for this channel (as encoded by LAL), e.g., \"strain\".", NULL},
-		{NULL,},
-	};
 
 	/*
 	 * Set the LAL debug level.
@@ -193,8 +157,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 	 * Tell GStreamer about the custom tags.
 	 */
 
-	for(tagarg = tagargs; tagarg->name; tagarg++)
-		gst_tag_register(tagarg->name, tagarg->flag, tagarg->type, tagarg->nick, tagarg->blurb, tagarg->func);
+	gstlal_register_tags();
 
 	/*
 	 * Done.

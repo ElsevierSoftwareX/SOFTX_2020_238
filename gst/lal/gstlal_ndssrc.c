@@ -53,6 +53,7 @@
 
 
 #include <gstlal.h>
+#include <gstlal_tags.h>
 #include <gstlal_ndssrc.h>
 #include <daqc_internal.h>
 #include <daqc_response.h>
