@@ -1,1 +1,1 @@
-bin_SCRIPTS = gstlal_inspiral gstlal_inspiral_pipe gstlal_reference_psd gstlal_spectrum_movie gstlal_svd_bank
+dist_bin_SCRIPTS = gstlal_inspiral gstlal_inspiral_pipe gstlal_reference_psd gstlal_spectrum_movie gstlal_svd_bank
