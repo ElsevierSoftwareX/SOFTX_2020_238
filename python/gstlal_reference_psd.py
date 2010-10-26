@@ -85,7 +85,7 @@ def measure_psd(instrument, seekevent, detector, seg, rate, fake_data=False, onl
 		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % rate)},
 		"queue", {"max-size-buffers": 8},
 		"lal_whiten", {"psd-mode": 0, "zero-pad": 0, "fft-length": psd_fft_length, "average-samples": int(round(float(abs(seg)) / (psd_fft_length / 2) - 1)), "median-samples": 7},
-		"fakesink"
+		"fakesink", {"sync": False, "async": False},
 	)
 
 	#
