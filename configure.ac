@@ -68,6 +68,16 @@ AC_SUBST([AM_CFLAGS])
 
 
 #
+# LDFLAGS
+#
+
+
+# Turn on error messages for undefined symbols
+AM_LDFLAGS="$AM_LDFLAGS -no-undefined"
+AC_SUBST([AM_LDFLAGS])
+
+
+#
 # Check for math library
 #
 

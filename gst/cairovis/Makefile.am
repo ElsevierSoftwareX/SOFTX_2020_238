@@ -7,4 +7,4 @@ libcairovis_la_SOURCES = \
 	cairovis_waterfall.h cairovis_waterfall.c
 libcairovis_la_CFLAGS = -O2 $(AM_CFLAGS) $(CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_video_CFLAGS) $(cairo_CFLAGS)
 libcairovis_la_LIBADD = $(gstreamer_LIBS) $(gstreamer_video_LIBS) $(cairo_LIBS)
-libcairovis_la_LDFLAGS = $(GSTREAMER_PLUGIN_LDFLAGS)
+libcairovis_la_LDFLAGS = $(AM_LDFLAGS) $(GSTREAMER_PLUGIN_LDFLAGS)

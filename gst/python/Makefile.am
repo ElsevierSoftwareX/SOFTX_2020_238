@@ -11,4 +11,4 @@ pkgpyexec_LTLIBRARIES = _onlinehoftsrc.la
 
 _onlinehoftsrc_la_SOURCES = _onlinehoftsrc.c
 _onlinehoftsrc_la_CPPFLAGS = $(PYTHON_CPPFLAGS) $(pygobject_CFLAGS)
-_onlinehoftsrc_la_LDFLAGS = -module $(PYTHON_LDFLAGS) $(pygobject_LIBS)
+_onlinehoftsrc_la_LDFLAGS = $(AM_LDFLAGS) -module $(PYTHON_LDFLAGS) $(pygobject_LIBS)
