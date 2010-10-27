@@ -20,6 +20,7 @@ AC_CONFIG_FILES([ \
 	python/elements/Makefile \
 	gst/Makefile \
 	gst/cairovis/Makefile \
+	gst/nds/Makefile \
 	gst/lal/Makefile \
 	gst/python/Makefile \
 	bin/Makefile \

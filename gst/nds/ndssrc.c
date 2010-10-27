@@ -52,9 +52,8 @@
  */
 
 
-#include <gstlal.h>
 #include <gstlal_tags.h>
-#include <gstlal_ndssrc.h>
+#include <ndssrc.h>
 #include <daqc_internal.h>
 #include <daqc_response.h>
 
@@ -938,3 +937,21 @@ GType gstlal_ndssrc_get_type(void)
 
 	return type;
 }
+
+
+static gboolean plugin_init(GstPlugin *plugin)
+{
+	if (!gst_element_register(plugin, "ndssrc", GST_RANK_NONE, GSTLAL_NDSSRC_TYPE))
+		return FALSE;
+
+	/*
+	 * Tell GStreamer about the custom tags.
+	 */
+
+	gstlal_register_tags();
+
+	return TRUE;
+}
+
+
+GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, "nds", "LIGO Network Data Server (NDS) v1/v2 elements", plugin_init, PACKAGE_VERSION, "GPL", PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")
