@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2000,2001,2008  Kipp C. Cannon
+ * Copyrigth (C) 2010  Leo Singer
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
