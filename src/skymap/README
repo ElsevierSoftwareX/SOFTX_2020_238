@@ -1,7 +1,0 @@
-This directory contains files taken from
-
-omega/branches/gstlal/src/bayesian
-
-that specify a common interface through which both Omega and GSTLAL can
-produce a full skymap.  This functionality will eventually be migrated to the
-XLALSkymap package, and this directory deleted.
