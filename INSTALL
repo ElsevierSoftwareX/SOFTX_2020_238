@@ -82,7 +82,8 @@ RedHat derived systems like CentOS, use ``lib64/`` instead of ``lib/`` in these
 two paths.  Log out of your account and log back in again and confirm that 
 ``pkg-config`` returns the correct directories for these two libraries with::
 
-  $ pkg-config --cflags libframe libmetaio -I/opt/lscsoft/libmetaio/include -I/opt/lscsoft/libframe/include
+  $ pkg-config --cflags libframe libmetaio
+  -I/opt/lscsoft/libmetaio/include -I/opt/lscsoft/libframe/include
 
 
 Debian **ONLY** Instructions
