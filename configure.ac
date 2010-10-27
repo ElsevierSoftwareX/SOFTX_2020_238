@@ -20,6 +20,7 @@ AC_CONFIG_FILES([ \
 	python/elements/Makefile \
 	gst/Makefile \
 	gst/cairovis/Makefile \
+	gst/nds/Makefile \
 	gst/lal/Makefile \
 	gst/python/Makefile \
 	bin/Makefile \
@@ -64,6 +65,16 @@ AX_PYTHON_DEVEL()
 AX_CFLAGS_WARN_ALL([AM_CFLAGS])
 AM_CFLAGS="$AM_CFLAGS -Wextra -Wno-missing-field-initializers -Wno-unused-parameter"	# extra gcc-specific stuff
 AC_SUBST([AM_CFLAGS])
+
+
+#
+# LDFLAGS
+#
+
+
+# Turn on error messages for undefined symbols
+AM_LDFLAGS="$AM_LDFLAGS -no-undefined"
+AC_SUBST([AM_LDFLAGS])
 
 
 #

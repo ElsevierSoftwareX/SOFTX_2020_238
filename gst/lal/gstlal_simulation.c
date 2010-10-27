@@ -73,6 +73,7 @@
 
 
 #include <gstlal.h>
+#include <gstlal_tags.h>
 #include <gstlal_simulation.h>
 #include <low_latency_inspiral_functions.h>
 

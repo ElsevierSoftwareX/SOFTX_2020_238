@@ -66,6 +66,7 @@
 
 
 #include <gstlal.h>
+#include <gstlal_tags.h>
 #include <gstlal_framesrc.h>
 
 
