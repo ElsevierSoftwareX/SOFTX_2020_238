@@ -42,8 +42,10 @@ AC_SUBST([pkgconfigdir],[${libdir}/pkgconfig])
 # Check for programs
 #
 
+# check for c99 compiler
+m4_pattern_allow([AC_PROG_CC_C99])
+m4_ifdef([AC_PROG_CC_C99],[AC_PROG_CC_C99],[LALSUITE_AC_PROG_CC_C99])
 
-AC_PROG_CC_STDC
 AC_PROG_INSTALL
 AC_PROG_LIBTOOL
 PKG_PROG_PKG_CONFIG()
