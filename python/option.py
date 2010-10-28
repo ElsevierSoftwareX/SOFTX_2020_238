@@ -31,11 +31,11 @@ except:
 
 
 # FIXME: Delete this when 564070 has been fixed.
-import glib as _glib
+import gobject as _gobject
 try:
 	# This is the test that would fail if pygobject hasn't been patched.
 	a = OptionParser();
-	a.add_option_group(_glib.OptionGroup('foo', 'bar', 'bat', None))
+	a.add_option_group(_gobject.OptionGroup('foo', 'bar', 'bat', None))
 	a.parse_args([])
 	del a
 except:
@@ -48,15 +48,15 @@ except:
 				options, args = optparse.OptionParser.parse_args(
 					self, args, values)
 				return options, args
-			except _glib.GError:
+			except _gobject.GError:
 				error = sys.exc_info()[1]
-				if error.domain != _glib.OPTION_ERROR:
+				if error.domain != _gobject.OPTION_ERROR:
 					raise
-				if error.code == _glib.OPTION_ERROR_BAD_VALUE:
+				if error.code == _gobject.OPTION_ERROR_BAD_VALUE:
 					raise OptionValueError(error.message)
-				elif error.code == _glib.OPTION_ERROR_UNKNOWN_OPTION:
+				elif error.code == _gobject.OPTION_ERROR_UNKNOWN_OPTION:
 					raise BadOptionError(error.message)
-				elif error.code == _glib.OPTION_ERROR_FAILED:
+				elif error.code == _gobject.OPTION_ERROR_FAILED:
 					raise OptParseError(error.message)
 				else:
 					raise
