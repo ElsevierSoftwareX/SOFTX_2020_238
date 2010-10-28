@@ -247,9 +247,6 @@ After you have set up your Mac OS X dependencies and your Mac OS X environment
 script, skip the section "Downloading and Installing Dependencies" and continue 
 to the section `Downloading the Software`_.
 
-.. NOTE:: When you reach the "gstlal Installation" step, configure GStreamer 
-          with ``CFLAGS="-g"``.
-
 
 Downloading and Installing Dependencies
 =======================================
