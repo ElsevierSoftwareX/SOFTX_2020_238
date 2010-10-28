@@ -188,10 +188,6 @@ Mac OS X **ONLY** Instructions
 
 Skip this section **UNLESS** you are on a Mac OS X system.
 
-Note: the Mac OS instructions are known to be incomplete; there may be some
-MacPorts packages that are required but not listed.  If you discover this is
-the case, please email <leo.singer@lig.org>.
-
 Additional Mac OS X Dependencies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -217,9 +213,8 @@ To make sure that MacPorts is installed, run the following command::
 You should not get an error message.  If you now have the Port command, proceed.
 
 Now, we are going to use MacPorts to get the prerequisites for GStreamer, 
-lalsuite, and gstlal.  (Note: this is a partial list; I need to test the 
-procedure on a fresh Mac box.)  Every time you see a command starting with
-`sudo`, you may be prompted for your login password.  Run the following commands::
+lalsuite, and gstlal.  Every time you see a command starting with `sudo`, you
+may be prompted for your login password.  Run the following commands::
     
   $ sudo port install python26
   $ sudo port install python_select
