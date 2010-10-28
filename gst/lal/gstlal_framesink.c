@@ -4,7 +4,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or(at your option) any later version.
+ * version 2 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -22,6 +22,13 @@
  * @see_also: #GSTLALFrameSrc
  *
  * Write incoming data to a GWF file in the local file system.
+ *
+ * <refsect2>
+ * <title>Example launch line</title>
+ * |[
+ * gst-launch audiotestsrc wave=sine num_buffers=100 ! audioconvert ! lal_framesink location=out.gwf
+ * ]| Save a sine wave into a gwf file.
+ * </refsect2>
  */
 
 #ifdef HAVE_CONFIG_H
@@ -29,12 +36,13 @@
 #endif
 
 
-#include <lal/Date.h>
-#include <lal/LALDatatypes.h>
-#include <lal/FrameStream.h>
+//// #include <lal/Date.h>
+//// #include <lal/LALDatatypes.h>
+//// #include <lal/FrameStream.h>
 #include <lal/LALFrameIO.h>
-#include <lal/Units.h>
 #include <lal/TimeSeries.h>
+#include <lal/LALDetectors.h>  // LAL_LHO_4K_DETECTOR_BIT
+#include <lal/Units.h>         // lalDimensionlessUnit
 
 #include <gstlal.h>
 #include <gstlal_tags.h>
@@ -78,19 +86,18 @@ buffer_mode_get_type(void)
 GST_DEBUG_CATEGORY_STATIC(gst_lalframe_sink_debug);
 #define GST_CAT_DEFAULT gst_lalframe_sink_debug
 
-#define DEFAULT_LOCATION    NULL
 #define DEFAULT_BUFFER_MODE     -1
 #define DEFAULT_BUFFER_SIZE     64 * 1024
-#define DEFAULT_APPEND      FALSE
 
 enum
 {
     PROP_0,
     PROP_LOCATION,
+    PROP_INSTRUMENT,
+    PROP_CHANNEL_NAME,
+    PROP_UNITS,
     PROP_BUFFER_MODE,
-    PROP_BUFFER_SIZE,
-    PROP_APPEND,
-    PROP_LAST
+    PROP_BUFFER_SIZE
 };
 
 
@@ -209,6 +216,27 @@ gst_lalframe_sink_class_init(GstLalframeSinkClass * klass)
             "location", "File Location",
             "Location of the file to write", NULL,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+    g_object_class_install_property(
+        gobject_class, PROP_INSTRUMENT,
+        g_param_spec_string(
+            "instrument", "Instrument",
+            "Name of the interferometer (H1, H2, L1, V1)", NULL,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+    g_object_class_install_property(
+        gobject_class, PROP_CHANNEL_NAME,
+        g_param_spec_string(
+            "channel-name", "Channel name",
+            "Name of the channel as will appear in the file", NULL,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+    g_object_class_install_property(
+        gobject_class, PROP_UNITS,
+        g_param_spec_string(
+            "units", "Units",
+            "Units of the data. Not used yet.", NULL,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
     
     g_object_class_install_property(
         gobject_class, PROP_BUFFER_MODE,
@@ -225,7 +253,7 @@ gst_lalframe_sink_class_init(GstLalframeSinkClass * klass)
             G_MAXUINT, DEFAULT_BUFFER_SIZE,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-    gstbasesink_class->get_times = NULL;
+    gstbasesink_class->get_times = NULL;  //// ?
     gstbasesink_class->start = GST_DEBUG_FUNCPTR(gst_lalframe_sink_start);
     gstbasesink_class->stop = GST_DEBUG_FUNCPTR(gst_lalframe_sink_stop);
     gstbasesink_class->render = GST_DEBUG_FUNCPTR(gst_lalframe_sink_render);
@@ -275,10 +303,16 @@ gst_lalframe_sink_dispose(GObject * object)
 
     G_OBJECT_CLASS(parent_class)->dispose(object);
 
+    g_free(sink->units);
+    sink->units = NULL;
+    g_free(sink->channel_name);
+    sink->channel_name = NULL;
+    g_free(sink->instrument);
+    sink->instrument = NULL;
     g_free(sink->uri);
     sink->uri = NULL;
     g_free(sink->filename);
-    sink->frame = NULL;
+    sink->filename = NULL;
     g_free(sink->buffer);
     sink->buffer = NULL;
     sink->buffer_size = 0;
@@ -315,8 +349,85 @@ gst_lalframe_sink_set_location(GstLalframeSink * sink, const gchar * location)
     /* ERRORS */
 was_open:
     {
-        g_warning("Changing the `location' property on lalframesink when a file is "
-                  "open is not supported.");
+        g_warning("Changing the `location' property on lalframesink when a "
+                  "file is open is not supported.");
+        return FALSE;
+    }
+}
+
+static gboolean
+gst_lalframe_sink_set_instrument(GstLalframeSink * sink,
+                                 const gchar * instrument)
+{
+    if (sink->frame)
+        goto was_open;
+
+    g_free(sink->instrument);
+    if (instrument != NULL) {
+        /* we store the filename as we received it from the application */
+        sink->instrument = g_strdup(instrument);
+    } else {
+        sink->instrument = NULL;
+    }
+
+    return TRUE;
+
+    /* ERRORS */
+was_open:
+    {
+        g_warning("Changing the `instrument' property on lalframesink when a "
+                  "file is open is not supported.");
+        return FALSE;
+    }
+}
+
+static gboolean
+gst_lalframe_sink_set_channel_name(GstLalframeSink * sink,
+                                   const gchar * channel_name)
+{
+    if (sink->frame)
+        goto was_open;
+
+    g_free(sink->channel_name);
+    if (channel_name != NULL) {
+        /* we store the filename as we received it from the application */
+        sink->channel_name = g_strdup(channel_name);
+    } else {
+        sink->channel_name = NULL;
+    }
+
+    return TRUE;
+
+    /* ERRORS */
+was_open:
+    {
+        g_warning("Changing the `channel-name' property on lalframesink when a "
+                  "file is open is not supported.");
+        return FALSE;
+    }
+}
+
+static gboolean
+gst_lalframe_sink_set_units(GstLalframeSink * sink, const gchar * units)
+{
+    if (sink->frame)
+        goto was_open;
+
+    g_free(sink->units);
+    if (units != NULL) {
+        /* we store the filename as we received it from the application */
+        sink->units = g_strdup(units);
+    } else {
+        sink->units = NULL;
+    }
+
+    return TRUE;
+
+    /* ERRORS */
+was_open:
+    {
+        g_warning("Changing the `units' property on lalframesink when a "
+                  "file is open is not supported.");
         return FALSE;
     }
 }
@@ -340,6 +451,15 @@ gst_lalframe_sink_set_property(GObject * object, guint prop_id,
     case PROP_LOCATION:
         gst_lalframe_sink_set_location(sink, g_value_get_string(value));
         break;
+    case PROP_INSTRUMENT:
+        gst_lalframe_sink_set_instrument(sink, g_value_get_string(value));
+        break;
+    case PROP_CHANNEL_NAME:
+        gst_lalframe_sink_set_channel_name(sink, g_value_get_string(value));
+        break;
+    case PROP_UNITS:
+        gst_lalframe_sink_set_units(sink, g_value_get_string(value));
+        break;
     case PROP_BUFFER_MODE:
         sink->buffer_mode = g_value_get_enum(value);
         break;
@@ -361,6 +481,15 @@ gst_lalframe_sink_get_property(GObject * object, guint prop_id, GValue * value,
     switch (prop_id) {
     case PROP_LOCATION:
         g_value_set_string(value, sink->filename);
+        break;
+    case PROP_INSTRUMENT:
+        g_value_set_string(value, sink->instrument);
+        break;
+    case PROP_CHANNEL_NAME:
+        g_value_set_string(value, sink->channel_name);
+        break;
+    case PROP_UNITS:
+        g_value_set_string(value, sink->units);
         break;
     case PROP_BUFFER_MODE:
         g_value_set_enum(value, sink->buffer_mode);
@@ -402,6 +531,7 @@ gst_lalframe_sink_open_file(GstLalframeSink * sink)
 
         /* Initialization */
         epoch.gpsSeconds = 600000000;
+        epoch.gpsNanoSeconds = 0;
 
         sink->frame = XLALFrameNew(&epoch, duration, "LIGO", run, frnum, detectorFlags);
     /* This evidently has to be properly filled! Get epoch, duration
@@ -621,9 +751,33 @@ gst_lalframe_sink_render(GstBaseSink * sink, GstBuffer * buffer)
                      size, lalframesink->current_pos);
 
     if (size > 0 && data != NULL) {
-        gchar* tmpname = g_strconcat("temp_", lalframesink->frame);
-        if (XLALFrameWrite(lalframesink->frame, tmpname, -1) != 0)
+        LIGOTimeGPS epoch;
+        REAL8TimeSeries *series;  //// pick type depending on input
+        double f0 = 0;        ////  FIXME
+        double deltaT = 1.0;  ///// FIXME
+
+        epoch.gpsSeconds = 600000000;   //// FIXME
+        epoch.gpsNanoSeconds = 0;       //// FIXME
+
+        if (lalframesink->channel_name == NULL)
             goto handle_error;
+
+        series = XLALCreateREAL8TimeSeries(lalframesink->channel_name,
+                                           &epoch, f0, deltaT,
+                                           &lalDimensionlessUnit, size);
+
+        {  /* copy buffer contents to timeseries */
+            size_t i;
+            for (i = 0; i < size; i++)
+                series->data->data[i] = data[i];
+        }
+
+        XLALFrameAddREAL8TimeSeriesProcData(lalframesink->frame, series);
+
+        ////
+        /* gchar* tmpname = g_strconcat("temp_", lalframesink->frame); */
+        /* if (XLALFrameWrite(lalframesink->frame, tmpname, -1) != 0) */
+        /*     goto handle_error; */
 
         lalframesink->current_pos += size;
     }
