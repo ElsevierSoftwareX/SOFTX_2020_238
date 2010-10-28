@@ -26,7 +26,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch audiotestsrc wave=sine num_buffers=100 ! audioconvert ! lal_framesink location=out.gwf
+ * gst-launch audiotestsrc wave=sine num_buffers=100 ! audio/x-raw-float,rate=16384,width=64 ! lal_framesink location=out.gwf
  * ]| Save a sine wave into a gwf file.
  * </refsect2>
  */
