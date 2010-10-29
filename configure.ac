@@ -10,7 +10,7 @@ AC_COPYRIGHT([Copyright (C) 2008 Kipp C. Cannon])
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
 AC_CONFIG_AUX_DIR([gnuscripts])
 AC_CONFIG_MACRO_DIR([gnuscripts])
-AM_INIT_AUTOMAKE([foreign])
+AM_INIT_AUTOMAKE([1.9 tar-ustar foreign])
 AC_CONFIG_FILES([ \
 	Makefile \
 	lib/gstlal.pc \
@@ -24,7 +24,8 @@ AC_CONFIG_FILES([ \
 	gst/lal/Makefile \
 	gst/python/Makefile \
 	bin/Makefile \
-	tests/Makefile
+	tests/Makefile \
+	examples/Makefile
 ])
 
 
