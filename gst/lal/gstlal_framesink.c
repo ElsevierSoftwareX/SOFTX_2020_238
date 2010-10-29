@@ -26,7 +26,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch audiotestsrc wave=sine num_buffers=100 ! audio/x-raw-float,rate=16384,width=64 ! lal_framesink location=out.gwf
+ * gst-launch audiotestsrc wave=sine num_buffers=100 ! taginject tags="instrument=H1,channel-name=H1:LSC-STRAIN,units=strain" ! audio/x-raw-float,rate=16384,width=64 ! lal_framesink location=out.gwf
  * ]| Save a sine wave into a gwf file.
  * </refsect2>
  */
@@ -98,24 +98,24 @@ enum
 };
 
 
-static void gst_lalframe_sink_dispose(GObject * object);
+static void gst_lalframe_sink_dispose(GObject *object);
 
-static void gst_lalframe_sink_set_property(GObject * object, guint prop_id,
-                                           const GValue * value,
-                                           GParamSpec * pspec);
-static void gst_lalframe_sink_get_property(GObject * object, guint prop_id,
-                                           GValue * value, GParamSpec * pspec);
+static void gst_lalframe_sink_set_property(GObject *object, guint prop_id,
+                                           const GValue *value,
+                                           GParamSpec *pspec);
+static void gst_lalframe_sink_get_property(GObject *object, guint prop_id,
+                                           GValue *value, GParamSpec *pspec);
 
-static gboolean gst_lalframe_sink_open_file(GstLalframeSink * sink);
-static void gst_lalframe_sink_close_file(GstLalframeSink * sink);
+static gboolean gst_lalframe_sink_open_file(GstLalframeSink *sink);
+static void gst_lalframe_sink_close_file(GstLalframeSink *sink);
 
-static gboolean gst_lalframe_sink_start(GstBaseSink * sink);
-static gboolean gst_lalframe_sink_stop(GstBaseSink * sink);
-static gboolean gst_lalframe_sink_event(GstBaseSink * sink, GstEvent * event);
-static GstFlowReturn gst_lalframe_sink_render(GstBaseSink * sink,
-                                              GstBuffer * buffer);
+static gboolean gst_lalframe_sink_start(GstBaseSink *sink);
+static gboolean gst_lalframe_sink_stop(GstBaseSink *sink);
+static gboolean gst_lalframe_sink_event(GstBaseSink *sink, GstEvent *event);
+static GstFlowReturn gst_lalframe_sink_render(GstBaseSink *sink,
+                                              GstBuffer *buffer);
 
-static gboolean gst_lalframe_sink_query(GstPad * pad, GstQuery * query);
+static gboolean gst_lalframe_sink_query(GstPad *pad, GstQuery *query);
 
 static void gst_lalframe_sink_uri_handler_init(gpointer g_iface,
                                                gpointer iface_data);
@@ -197,7 +197,7 @@ gst_lalframe_sink_base_init(gpointer g_class)
  * Specify properties ("arguments").
  */
 static void
-gst_lalframe_sink_class_init(GstLalframeSinkClass * klass)
+gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
 {
     GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
     GstBaseSinkClass *gstbasesink_class = GST_BASE_SINK_CLASS(klass);
@@ -269,32 +269,32 @@ gst_lalframe_sink_class_init(GstLalframeSinkClass * klass)
  * Create caps.
  */
 static void
-gst_lalframe_sink_init(GstLalframeSink * lalframesink,
-                       GstLalframeSinkClass * g_class)
+gst_lalframe_sink_init(GstLalframeSink *sink,
+                       GstLalframeSinkClass *g_class)
 {
     GstPad *pad;
 
-    pad = GST_BASE_SINK_PAD(lalframesink);
+    pad = GST_BASE_SINK_PAD(sink);
 
     gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(gst_lalframe_sink_query));
 
-    lalframesink->filename = NULL;
-    lalframesink->frame = NULL;
-    lalframesink->buffer_mode = DEFAULT_BUFFER_MODE;
-    lalframesink->buffer_size = DEFAULT_BUFFER_SIZE;
-    lalframesink->buffer = NULL;
-    lalframesink->instrument = NULL;
-    lalframesink->channel_name = NULL;
-    lalframesink->units = NULL;
+    sink->filename = NULL;
+    sink->frame = NULL;
+    sink->buffer_mode = DEFAULT_BUFFER_MODE;
+    sink->buffer_size = DEFAULT_BUFFER_SIZE;
+    sink->buffer = NULL;
+    sink->instrument = NULL;
+    sink->channel_name = NULL;
+    sink->units = NULL;
 
-    /* retrieve (and ref) src pad */
-    lalframesink->srcpad = gst_element_get_static_pad(GST_ELEMENT(lalframesink), "src");
+    /* retrieve (and ref) sink pad */
+    sink->sinkpad = gst_element_get_static_pad(GST_ELEMENT(sink), "sink");
 
-    gst_base_sink_set_sync(GST_BASE_SINK(lalframesink), FALSE);
+    gst_base_sink_set_sync(GST_BASE_SINK(sink), FALSE);
 }
 
 static void
-gst_lalframe_sink_dispose(GObject * object)
+gst_lalframe_sink_dispose(GObject *object)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(object);
 
@@ -325,7 +325,7 @@ gst_lalframe_sink_dispose(GObject * object)
  */
 
 static gboolean
-gst_lalframe_sink_set_location(GstLalframeSink * sink, const gchar * location)
+gst_lalframe_sink_set_location(GstLalframeSink *sink, const gchar *location)
 {
     if (sink->frame)
         goto was_open;
@@ -353,8 +353,8 @@ was_open:
 }
 
 static gboolean
-gst_lalframe_sink_set_instrument(GstLalframeSink * sink,
-                                 const gchar * instrument)
+gst_lalframe_sink_set_instrument(GstLalframeSink *sink,
+                                 const gchar *instrument)
 {
     if (sink->frame)
         goto was_open;
@@ -379,8 +379,8 @@ was_open:
 }
 
 static gboolean
-gst_lalframe_sink_set_channel_name(GstLalframeSink * sink,
-                                   const gchar * channel_name)
+gst_lalframe_sink_set_channel_name(GstLalframeSink *sink,
+                                   const gchar *channel_name)
 {
     if (sink->frame)
         goto was_open;
@@ -405,7 +405,7 @@ was_open:
 }
 
 static gboolean
-gst_lalframe_sink_set_units(GstLalframeSink * sink, const gchar * units)
+gst_lalframe_sink_set_units(GstLalframeSink *sink, const gchar *units)
 {
     if (sink->frame)
         goto was_open;
@@ -439,8 +439,8 @@ was_open:
  */
 
 static void
-gst_lalframe_sink_set_property(GObject * object, guint prop_id,
-                               const GValue * value, GParamSpec * pspec)
+gst_lalframe_sink_set_property(GObject *object, guint prop_id,
+                               const GValue *value, GParamSpec *pspec)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(object);
 
@@ -470,8 +470,8 @@ gst_lalframe_sink_set_property(GObject * object, guint prop_id,
 }
 
 static void
-gst_lalframe_sink_get_property(GObject * object, guint prop_id, GValue * value,
-                               GParamSpec * pspec)
+gst_lalframe_sink_get_property(GObject *object, guint prop_id, GValue *value,
+                               GParamSpec *pspec)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(object);
 
@@ -511,7 +511,7 @@ gst_lalframe_sink_get_property(GObject * object, guint prop_id, GValue * value,
 
 
 static gboolean
-gst_lalframe_sink_open_file(GstLalframeSink * sink)
+gst_lalframe_sink_open_file(GstLalframeSink *sink)
 {
     gint mode;
 
@@ -571,7 +571,7 @@ open_failed:
 }
 
 static void
-gst_lalframe_sink_close_file(GstLalframeSink * sink)
+gst_lalframe_sink_close_file(GstLalframeSink *sink)
 {
     if (sink->frame) {
         if (XLALFrameWrite(sink->frame, sink->filename, -1) != 0)
@@ -596,7 +596,7 @@ close_failed:
 }
 
 static gboolean
-gst_lalframe_sink_query(GstPad * pad, GstQuery * query)
+gst_lalframe_sink_query(GstPad *pad, GstQuery *query)
 {
     GstLalframeSink *self;
     GstFormat format;
@@ -644,7 +644,7 @@ taglist_extract_string(GstLalframeSink *element, GstTagList *taglist,
 }
 
 static gboolean
-gst_lalframe_sink_event(GstBaseSink * base_sink, GstEvent * event)
+gst_lalframe_sink_event(GstBaseSink *base_sink, GstEvent *event)
 {
     gboolean success;
 
@@ -672,8 +672,8 @@ gst_lalframe_sink_event(GstBaseSink * base_sink, GstEvent * event)
             sink->channel_name = channel_name;
             g_free(sink->units);
             sink->units = units;
-            success = gst_pad_push_event(sink->srcpad, event);
-            /* FIXME:  flush the cache of injection timeseries */
+            /* FIXME: flush the cache of injection timeseries (see
+             * gstlal_simulation.c */
         }
         break;
     }
@@ -732,7 +732,7 @@ flush_failed:
 }
 
 static GstFlowReturn
-gst_lalframe_sink_render(GstBaseSink * sink, GstBuffer * buffer)
+gst_lalframe_sink_render(GstBaseSink *sink, GstBuffer *buffer)
 {
     GstLalframeSink *lalframesink;
     guint size;
@@ -800,13 +800,13 @@ handle_error:
 }
 
 static gboolean
-gst_lalframe_sink_start(GstBaseSink * basesink)
+gst_lalframe_sink_start(GstBaseSink *basesink)
 {
     return gst_lalframe_sink_open_file(GST_LALFRAME_SINK(basesink));
 }
 
 static gboolean
-gst_lalframe_sink_stop(GstBaseSink * basesink)
+gst_lalframe_sink_stop(GstBaseSink *basesink)
 {
     gst_lalframe_sink_close_file(GST_LALFRAME_SINK(basesink));
     return TRUE;
@@ -829,7 +829,7 @@ gst_lalframe_sink_uri_get_protocols(void)
 }
 
 static const gchar *
-gst_lalframe_sink_uri_get_uri(GstURIHandler * handler)
+gst_lalframe_sink_uri_get_uri(GstURIHandler *handler)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(handler);
 
@@ -837,7 +837,7 @@ gst_lalframe_sink_uri_get_uri(GstURIHandler * handler)
 }
 
 static gboolean
-gst_lalframe_sink_uri_set_uri(GstURIHandler * handler, const gchar * uri)
+gst_lalframe_sink_uri_set_uri(GstURIHandler *handler, const gchar *uri)
 {
     gchar *protocol, *location;
     gboolean ret;

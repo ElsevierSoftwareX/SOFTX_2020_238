@@ -78,7 +78,7 @@ typedef struct _GstLalframeSinkClass GstLalframeSinkClass;
 struct _GstLalframeSink {
     GstBaseSink parent;
 
-    GstPad *srcpad;
+    GstPad *sinkpad;
 
     /*< private >*/
     gchar *filename;
