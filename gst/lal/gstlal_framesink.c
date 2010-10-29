@@ -36,9 +36,6 @@
 #endif
 
 
-//// #include <lal/Date.h>
-//// #include <lal/LALDatatypes.h>
-//// #include <lal/FrameStream.h>
 #include <lal/LALFrameIO.h>
 #include <lal/TimeSeries.h>
 #include <lal/LALDetectors.h>  // LAL_LHO_4K_DETECTOR_BIT
@@ -647,14 +644,13 @@ taglist_extract_string(GstLalframeSink *element, GstTagList *taglist,
 }
 
 static gboolean
-gst_lalframe_sink_event(GstBaseSink * sink, GstEvent * event)
+gst_lalframe_sink_event(GstBaseSink * base_sink, GstEvent * event)
 {
-    GstLalframeSink *element = GST_LALFRAME_SINK(GST_PAD_PARENT(sink));
     gboolean success;
 
-    GstLalframeSink *lalframesink;
+    GstLalframeSink *sink;
 
-    lalframesink = GST_LALFRAME_SINK(sink);
+    sink = GST_LALFRAME_SINK(base_sink);
 
     switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_TAG:  /* from gstlal_simulation.c */
@@ -662,21 +658,21 @@ gst_lalframe_sink_event(GstBaseSink * sink, GstEvent * event)
         GstTagList *taglist;
         gchar *instrument, *channel_name, *units;
         gst_event_parse_tag(event, &taglist);
-        success = taglist_extract_string(element, taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
-        success &= taglist_extract_string(element, taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
-        success &= taglist_extract_string(element, taglist, GSTLAL_TAG_UNITS, &units);
+        success = taglist_extract_string(sink, taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
+        success &= taglist_extract_string(sink, taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
+        success &= taglist_extract_string(sink, taglist, GSTLAL_TAG_UNITS, &units);
         if (success) {
             GST_DEBUG_OBJECT(
-                element, "found tags \"%s\"=\"%s\" \"%s\"=\"%s\" \"%s\"=\"%s\"",
+                sink, "found tags \"%s\"=\"%s\" \"%s\"=\"%s\" \"%s\"=\"%s\"",
                 GSTLAL_TAG_INSTRUMENT, instrument, GSTLAL_TAG_CHANNEL_NAME,
                 channel_name, GSTLAL_TAG_UNITS, units);
-            g_free(element->instrument);
-            element->instrument = instrument;
-            g_free(element->channel_name);
-            element->channel_name = channel_name;
-            g_free(element->units);
-            element->units = units;
-            success = gst_pad_push_event(element->srcpad, event);
+            g_free(sink->instrument);
+            sink->instrument = instrument;
+            g_free(sink->channel_name);
+            sink->channel_name = channel_name;
+            g_free(sink->units);
+            sink->units = units;
+            success = gst_pad_push_event(sink->srcpad, event);
             /* FIXME:  flush the cache of injection timeseries */
         }
         break;
@@ -692,22 +688,22 @@ gst_lalframe_sink_event(GstBaseSink * sink, GstEvent * event)
         if (format == GST_FORMAT_BYTES) {
             /* only try to seek and fail when we are going to a different
              * position */
-            if (lalframesink->current_pos != start) {
+            if (sink->current_pos != start) {
                 goto seek_failed;
             } else {
                 GST_DEBUG_OBJECT(
-                    lalframesink, "Ignored NEWSEGMENT, no seek needed");
+                    sink, "Ignored NEWSEGMENT, no seek needed");
             }
         } else {
             GST_DEBUG_OBJECT(
-                lalframesink,
+                sink,
                 "Ignored NEWSEGMENT event of format %u(%s)", (guint) format,
                 gst_format_get_name(format));
         }
         break;
     }
     case GST_EVENT_EOS:
-        if (XLALFrameWrite(lalframesink->frame, lalframesink->filename, -1) != 0)
+        if (XLALFrameWrite(sink->frame, sink->filename, -1) != 0)
             goto flush_failed;
         break;
     default:
@@ -720,16 +716,16 @@ gst_lalframe_sink_event(GstBaseSink * sink, GstEvent * event)
 seek_failed:
     {
         GST_ELEMENT_ERROR(
-            lalframesink, RESOURCE, SEEK,
-            ("Error while seeking in file \"%s\".", lalframesink->filename),
+            sink, RESOURCE, SEEK,
+            ("Error while seeking in file \"%s\".", sink->filename),
             GST_ERROR_SYSTEM);
         return FALSE;
     }
 flush_failed:
     {
         GST_ELEMENT_ERROR(
-            lalframesink, RESOURCE, WRITE,
-            ("Error while writing to file \"%s\".", lalframesink->filename),
+            sink, RESOURCE, WRITE,
+            ("Error while writing to file \"%s\".", sink->filename),
             GST_ERROR_SYSTEM);
         return FALSE;
     }
@@ -752,7 +748,7 @@ gst_lalframe_sink_render(GstBaseSink * sink, GstBuffer * buffer)
 
     if (size > 0 && data != NULL) {
         LIGOTimeGPS epoch;
-        REAL8TimeSeries *series;  //// pick type depending on input
+        REAL8TimeSeries *series;  //// FIXME: pick type depending on input
         double f0 = 0;        ////  FIXME
         double deltaT = 1.0;  ///// FIXME
 
