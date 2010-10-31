@@ -10,4 +10,4 @@ check :
 clean-local :
 	rm -f *.dump
 	rm -f *.avi
-	rm -f test_common.pyc
+	rm -f {test_common,fixtures}.pyc
