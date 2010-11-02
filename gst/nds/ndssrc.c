@@ -22,7 +22,7 @@
 /*
  * ========================================================================
  *
- *                                  Preamble
+ *								  Preamble
  *
  * ========================================================================
  */
@@ -69,7 +69,7 @@ static GstBaseSrcClass *parent_class = NULL;
 /*
  * ========================================================================
  *
- *                                 Parameters
+ *								 Parameters
  *
  * ========================================================================
  */
@@ -79,23 +79,23 @@ static GstBaseSrcClass *parent_class = NULL;
 static GType
 gstlal_ndssrc_chantype_get_type (void)
 {
-    static GType chantype_type = 0;
-    static const GEnumValue chantype_values[] = {
-        {cUnknown, "Unknown", "unknown"},
-        {cOnline, "Online", "online"},
-        {cRaw, "Raw", "raw"},
-        {cRDS, "Reduced", "reduced"},
-        {cSTrend, "Second trend", "second-trend"},
-        {cMTrend, "Minute trend", "minute-trend"},
-        {cTestPoint, "Test point", "test-point"},
-        {0, NULL, NULL},
-    };
+	static GType chantype_type = 0;
+	static const GEnumValue chantype_values[] = {
+		{cUnknown, "Unknown", "unknown"},
+		{cOnline, "Online", "online"},
+		{cRaw, "Raw", "raw"},
+		{cRDS, "Reduced", "reduced"},
+		{cSTrend, "Second trend", "second-trend"},
+		{cMTrend, "Minute trend", "minute-trend"},
+		{cTestPoint, "Test point", "test-point"},
+		{0, NULL, NULL},
+	};
 
-    if (G_UNLIKELY (chantype_type == 0)) {
-        chantype_type = g_enum_register_static ("GSTLALNDSSrcChanType",
-                                                chantype_values);
-    }
-    return chantype_type;
+	if (G_UNLIKELY (chantype_type == 0)) {
+		chantype_type = g_enum_register_static ("GSTLALNDSSrcChanType",
+												chantype_values);
+	}
+	return chantype_type;
 }
 
 
@@ -103,19 +103,19 @@ gstlal_ndssrc_chantype_get_type (void)
 static GType
 gstlal_ndssrc_nds_version_get_type (void)
 {
-    static GType nds_version_type = 0;
-    static const GEnumValue nds_version_values[] = {
+	static GType nds_version_type = 0;
+	static const GEnumValue nds_version_values[] = {
 		{nds_try, "Automatic", "auto"},
-        {nds_v1, "NDS Version 1", "v1"},
-        {nds_v2, "NDS Version 2", "v2"},
-        {0, NULL, NULL},
-    };
+		{nds_v1, "NDS Version 1", "v1"},
+		{nds_v2, "NDS Version 2", "v2"},
+		{0, NULL, NULL},
+	};
 
-    if (G_UNLIKELY (nds_version_type == 0)) {
-        nds_version_type = g_enum_register_static ("GSTLALNDSSrcNDSVersionType",
-                                                nds_version_values);
-    }
-    return nds_version_type;
+	if (G_UNLIKELY (nds_version_type == 0)) {
+		nds_version_type = g_enum_register_static ("GSTLALNDSSrcNDSVersionType",
+												nds_version_values);
+	}
+	return nds_version_type;
 }
 
 
@@ -129,7 +129,7 @@ static const enum nds_version DEFAULT_VERSION = nds_try;
 /*
  * ========================================================================
  *
- *                             Utility Functions
+ *							 Utility Functions
  *
  * ========================================================================
  */
@@ -203,97 +203,97 @@ static GstCaps *caps_for_channel(GSTLALNDSSrc* element)
 		);
 		break;
 
-    // TODO: there is one more NDS daq datatype: _32bit_complex.  Should this
-    // be a two-channel audio/x-raw-float?
+	// TODO: there is one more NDS daq datatype: _32bit_complex.  Should this
+	// be a two-channel audio/x-raw-float?
 
 	default:
 		GST_ERROR_OBJECT(element, "unsupported NDS data_type: %d", element->daq->chan_req_list->data_type);
 		break;
 	}
 
-    if (caps)
-        gst_caps_set_simple(caps,
-            "rate", G_TYPE_INT, (int)(element->daq->chan_req_list->rate),
-            NULL);
+	if (caps)
+		gst_caps_set_simple(caps,
+			"rate", G_TYPE_INT, (int)(element->daq->chan_req_list->rate),
+			NULL);
 
-    return caps;
+	return caps;
 }
 
 
 
 static gboolean push_new_caps(GSTLALNDSSrc* element)
 {
-    GstBaseSrc* object = GST_BASE_SRC(element);
+	GstBaseSrc* object = GST_BASE_SRC(element);
 
-    GstCaps* caps = caps_for_channel(element);
-    if(!caps) {
-        GST_ERROR_OBJECT(element, "unable to construct caps");
-        return FALSE;
-    }
+	GstCaps* caps = caps_for_channel(element);
+	if(!caps) {
+		GST_ERROR_OBJECT(element, "unable to construct caps");
+		return FALSE;
+	}
 
-    /*
-     * Try setting the caps on the source pad.
-     */
+	/*
+	 * Try setting the caps on the source pad.
+	 */
 
-    if(!gst_pad_set_caps(GST_BASE_SRC_PAD(object), caps)) {
-        gst_caps_unref(caps);
-        GST_ERROR_OBJECT(element, "unable to set caps %" GST_PTR_FORMAT " on %s", caps, GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
-        return FALSE;
-    }
-    gst_caps_unref(caps);
+	if(!gst_pad_set_caps(GST_BASE_SRC_PAD(object), caps)) {
+		gst_caps_unref(caps);
+		GST_ERROR_OBJECT(element, "unable to set caps %" GST_PTR_FORMAT " on %s", caps, GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
+		return FALSE;
+	}
+	gst_caps_unref(caps);
 
-    /*
-     * Transmit the tag list.
-     */
+	/*
+	 * Transmit the tag list.
+	 */
 
-    GstTagList* taglist;
-    {
-        char* full_channel_name = strdup(element->daq->chan_req_list->name);
-        char* instrument;
-        char* channel_name = strchr(full_channel_name, ':');
-        if (channel_name)
-        {
-            instrument = full_channel_name;
-            *(channel_name++) = '\0';
-        } else {
-            channel_name = full_channel_name;
-            instrument = NULL;
-        }
+	GstTagList* taglist;
+	{
+		char* full_channel_name = strdup(element->daq->chan_req_list->name);
+		char* instrument;
+		char* channel_name = strchr(full_channel_name, ':');
+		if (channel_name)
+		{
+			instrument = full_channel_name;
+			*(channel_name++) = '\0';
+		} else {
+			channel_name = full_channel_name;
+			instrument = NULL;
+		}
 
-        taglist = gst_tag_list_new_full(
-            GSTLAL_TAG_CHANNEL_NAME, channel_name,
-            GSTLAL_TAG_INSTRUMENT, instrument,
-            NULL);
+		taglist = gst_tag_list_new_full(
+			GSTLAL_TAG_CHANNEL_NAME, channel_name,
+			GSTLAL_TAG_INSTRUMENT, instrument,
+			NULL);
 
-        free(full_channel_name);
-    }
+		free(full_channel_name);
+	}
 
-    if (!taglist)
-    {
-        GST_ERROR_OBJECT(element, "unable to create taglist");
-        return FALSE;
-    }
+	if (!taglist)
+	{
+		GST_ERROR_OBJECT(element, "unable to create taglist");
+		return FALSE;
+	}
 
-    if (!gst_pad_push_event(GST_BASE_SRC_PAD(object), gst_event_new_tag(taglist)))
-    {
-        gst_tag_list_free(taglist);
-        GST_ERROR_OBJECT(element, "unable to push taglist %" GST_PTR_FORMAT " on %s", taglist, GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
-        return FALSE;
-    }
+	if (!gst_pad_push_event(GST_BASE_SRC_PAD(object), gst_event_new_tag(taglist)))
+	{
+		gst_tag_list_free(taglist);
+		GST_ERROR_OBJECT(element, "unable to push taglist %" GST_PTR_FORMAT " on %s", taglist, GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
+		return FALSE;
+	}
 
-    return TRUE;
+	return TRUE;
 }
 
 
 
 static gboolean ensure_availableChannels(GSTLALNDSSrc* element)
 {
-    if (!element->daq)
-        return FALSE;
+	if (!element->daq)
+		return FALSE;
 
-    if (element->availableChannels)
-        return TRUE;
-    else {
+	if (element->availableChannels)
+		return TRUE;
+	else {
 		int nchannels_received;
 		int retval;
 
@@ -322,8 +322,8 @@ static gboolean ensure_availableChannels(GSTLALNDSSrc* element)
 				free(channels);
 			}
 		}
-    }
-    return FALSE;
+	}
+	return FALSE;
 }
 
 
@@ -334,65 +334,65 @@ static gboolean ensure_availableChannels(GSTLALNDSSrc* element)
 
 static gboolean ensure_channelSelected(GSTLALNDSSrc *element)
 {
-    if (!element->channelName)
-    {
-        GST_ERROR_OBJECT(element, "required property `channel-name' not specified");
-        return FALSE;
-    }
+	if (!element->channelName)
+	{
+		GST_ERROR_OBJECT(element, "required property `channel-name' not specified");
+		return FALSE;
+	}
 
-    if (element->daq->num_chan_request > 0)
-        return TRUE;
-    else {
-        if (!ensure_availableChannels(element))
-            GST_ERROR_OBJECT(element, "failed to retrieve channel list");
-        else {
-            daq_channel_t* channel;
-            for (channel = element->availableChannels; channel < &element->availableChannels[element->countAvailableChannels]; channel++)
-            {
-                if (!strcmp(element->channelName, channel->name))
-                {
-                    GST_INFO_OBJECT(element, "daq_request_channel_from_chanlist");
-                    int retval = daq_request_channel_from_chanlist(element->daq, channel);
-                    if (retval)
-                        DAQ_GST_ERROR_OBJECT(element, "daq_request_channel_from_chanlist", retval);
-                    else {
-                        if (!push_new_caps(element))
-                            GST_ERROR_OBJECT(element, "failed to push new caps");
-                        else {
-                            element->needs_seek = TRUE;
-                            return TRUE;
-                        }
-                        GST_INFO_OBJECT(element, "daq_clear_channel_list");
-                        retval = daq_clear_channel_list(element->daq);
-                        if (retval)
-                            DAQ_GST_ERROR_OBJECT(element, "daq_clear_channel_list", retval);
-                    }
-                    break;
-                }
-            }
-            GST_ERROR_OBJECT(element, "channel not found: %s", element->channelName);
-        }
-    }
-    return FALSE;
+	if (element->daq->num_chan_request > 0)
+		return TRUE;
+	else {
+		if (!ensure_availableChannels(element))
+			GST_ERROR_OBJECT(element, "failed to retrieve channel list");
+		else {
+			daq_channel_t* channel;
+			for (channel = element->availableChannels; channel < &element->availableChannels[element->countAvailableChannels]; channel++)
+			{
+				if (!strcmp(element->channelName, channel->name))
+				{
+					GST_INFO_OBJECT(element, "daq_request_channel_from_chanlist");
+					int retval = daq_request_channel_from_chanlist(element->daq, channel);
+					if (retval)
+						DAQ_GST_ERROR_OBJECT(element, "daq_request_channel_from_chanlist", retval);
+					else {
+						if (!push_new_caps(element))
+							GST_ERROR_OBJECT(element, "failed to push new caps");
+						else {
+							element->needs_seek = TRUE;
+							return TRUE;
+						}
+						GST_INFO_OBJECT(element, "daq_clear_channel_list");
+						retval = daq_clear_channel_list(element->daq);
+						if (retval)
+							DAQ_GST_ERROR_OBJECT(element, "daq_clear_channel_list", retval);
+					}
+					break;
+				}
+			}
+			GST_ERROR_OBJECT(element, "channel not found: %s", element->channelName);
+		}
+	}
+	return FALSE;
 }
 
 
 /*
  * ============================================================================
  *
- *                                 Properties
+ *								 Properties
  *
  * ============================================================================
  */
 
 
 enum property {
-    ARG_SRC_HOST = 1,
+	ARG_SRC_HOST = 1,
 	ARG_SRC_PORT,
-    ARG_SRC_VERSION,
-    ARG_SRC_CHANNEL_NAME,
-    ARG_SRC_CHANNEL_TYPE,
-    ARG_SRC_AVAILABLE_CHANNEL_NAMES
+	ARG_SRC_VERSION,
+	ARG_SRC_CHANNEL_NAME,
+	ARG_SRC_CHANNEL_TYPE,
+	ARG_SRC_AVAILABLE_CHANNEL_NAMES
 };
 
 
@@ -402,44 +402,44 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	GST_OBJECT_LOCK(element);
 
-    if (id == ARG_SRC_HOST)
-    {
+	if (id == ARG_SRC_HOST)
+	{
 		g_free(element->host);
 		element->host = g_value_dup_string(value);
-    }
-    if (id == ARG_SRC_PORT)
-    {
-        element->port = g_value_get_int(value);
-    }
-    if (id == ARG_SRC_VERSION)
-    {
-        element->version = g_value_get_enum(value);
-    }
-    if (id == ARG_SRC_CHANNEL_NAME || id == ARG_SRC_CHANNEL_TYPE)
-    {
-        if (element->daq)
-        {
-            GST_INFO_OBJECT(element, "daq_clear_channel_list");
-            int retval = daq_clear_channel_list(element->daq);
-            if (retval)
-                DAQ_GST_ERROR_OBJECT(element, "daq_clear_channel_list", retval);
-        }
-    }
-    if (id == ARG_SRC_CHANNEL_NAME)
-    {
+	}
+	if (id == ARG_SRC_PORT)
+	{
+		element->port = g_value_get_int(value);
+	}
+	if (id == ARG_SRC_VERSION)
+	{
+		element->version = g_value_get_enum(value);
+	}
+	if (id == ARG_SRC_CHANNEL_NAME || id == ARG_SRC_CHANNEL_TYPE)
+	{
+		if (element->daq)
+		{
+			GST_INFO_OBJECT(element, "daq_clear_channel_list");
+			int retval = daq_clear_channel_list(element->daq);
+			if (retval)
+				DAQ_GST_ERROR_OBJECT(element, "daq_clear_channel_list", retval);
+		}
+	}
+	if (id == ARG_SRC_CHANNEL_NAME)
+	{
 		g_free(element->channelName);
 		element->channelName = g_value_dup_string(value);
-    }
-    if (id == ARG_SRC_CHANNEL_TYPE)
-    {
-        if (element->availableChannels)
-        {
-            free(element->availableChannels);
-            element->availableChannels = NULL;
-            element->countAvailableChannels = 0;
-        }
-        element->channelType = g_value_get_enum(value);
-    }
+	}
+	if (id == ARG_SRC_CHANNEL_TYPE)
+	{
+		if (element->availableChannels)
+		{
+			free(element->availableChannels);
+			element->availableChannels = NULL;
+			element->countAvailableChannels = 0;
+		}
+		element->channelType = g_value_get_enum(value);
+	}
 
 	GST_OBJECT_UNLOCK(element);
 }
@@ -456,36 +456,36 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_string(value, element->host);
 		break;
 
-    case ARG_SRC_PORT:
-        g_value_set_int(value, element->port);
-        break;
+	case ARG_SRC_PORT:
+		g_value_set_int(value, element->port);
+		break;
 
-    case ARG_SRC_VERSION:
-        g_value_set_enum(value, element->version);
-        break;
+	case ARG_SRC_VERSION:
+		g_value_set_enum(value, element->version);
+		break;
 
 	case ARG_SRC_CHANNEL_NAME:
 		g_value_set_string(value, element->channelName);
 		break;
 
-    case ARG_SRC_CHANNEL_TYPE:
-        g_value_set_enum(value, element->channelType);
-        break;
+	case ARG_SRC_CHANNEL_TYPE:
+		g_value_set_enum(value, element->channelType);
+		break;
 
-    case ARG_SRC_AVAILABLE_CHANNEL_NAMES:
-        {
-            int nchannels = 0;
-            if (ensure_availableChannels(element))
-                nchannels = element->countAvailableChannels;
+	case ARG_SRC_AVAILABLE_CHANNEL_NAMES:
+		{
+			int nchannels = 0;
+			if (ensure_availableChannels(element))
+				nchannels = element->countAvailableChannels;
 
-            // TODO: implement proper error checking here
-            char** channel_names = calloc(nchannels+1, sizeof(char*));
-            int i;
-            for (i = 0; i < nchannels; i ++)
-                channel_names[i] = strdup(element->availableChannels[i].name);
-            channel_names[i] = NULL;
-            g_value_set_boxed(value, channel_names);
-        }
+			// TODO: implement proper error checking here
+			char** channel_names = calloc(nchannels+1, sizeof(char*));
+			int i;
+			for (i = 0; i < nchannels; i ++)
+				channel_names[i] = strdup(element->availableChannels[i].name);
+			channel_names[i] = NULL;
+			g_value_set_boxed(value, channel_names);
+		}
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -495,7 +495,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 /*
  * ============================================================================
  *
- *                        GstBaseSrc Method Overrides
+ *						GstBaseSrc Method Overrides
  *
  * ============================================================================
  */
@@ -509,28 +509,28 @@ static gboolean start(GstBaseSrc *object)
 {
 	GSTLALNDSSrc *element = GSTLAL_NDSSRC(object);
 
-    if (!element->host)
-    {
-        GST_ERROR_OBJECT(element, "required property `host' not specified");
-        return FALSE;
-    }
+	if (!element->host)
+	{
+		GST_ERROR_OBJECT(element, "required property `host' not specified");
+		return FALSE;
+	}
 
-    daq_t* daq = malloc(sizeof(daq_t));
-    if (!daq)
-        GST_ERROR_OBJECT(element, "out of memory");
-    else {
-        GST_INFO_OBJECT(element, "daq_connect(daq_t*, \"%s\", %d, %d)", element->host, element->port, element->version);
-        int retval = daq_connect(daq, element->host, element->port, element->version);
-        if (retval)
-            DAQ_GST_ERROR_OBJECT(element, "daq_connect", retval);
-        else {
-            element->daq = daq;
-            element->needs_seek = TRUE;
-            return TRUE;
-        }
-        free(daq);
-    }
-    return FALSE;
+	daq_t* daq = malloc(sizeof(daq_t));
+	if (!daq)
+		GST_ERROR_OBJECT(element, "out of memory");
+	else {
+		GST_INFO_OBJECT(element, "daq_connect(daq_t*, \"%s\", %d, %d)", element->host, element->port, element->version);
+		int retval = daq_connect(daq, element->host, element->port, element->version);
+		if (retval)
+			DAQ_GST_ERROR_OBJECT(element, "daq_connect", retval);
+		else {
+			element->daq = daq;
+			element->needs_seek = TRUE;
+			return TRUE;
+		}
+		free(daq);
+	}
+	return FALSE;
 }
 
 
@@ -543,22 +543,22 @@ static gboolean stop(GstBaseSrc *object)
 {
 	GSTLALNDSSrc *element = GSTLAL_NDSSRC(object);
 
-    if (element->daq)
-    {
-        GST_INFO_OBJECT(element, "daq_disconnect");
-        int retval = daq_disconnect(element->daq);
-        if (retval)
-            DAQ_GST_ERROR_OBJECT(element, "daq_disconnect", retval);
-        free(element->daq);
-        element->daq = NULL;
-    }
+	if (element->daq)
+	{
+		GST_INFO_OBJECT(element, "daq_disconnect");
+		int retval = daq_disconnect(element->daq);
+		if (retval)
+			DAQ_GST_ERROR_OBJECT(element, "daq_disconnect", retval);
+		free(element->daq);
+		element->daq = NULL;
+	}
 
-    if (element->availableChannels)
-    {
-        free(element->availableChannels);
-        element->availableChannels = NULL;
-        element->countAvailableChannels = 0;
-    }
+	if (element->availableChannels)
+	{
+		free(element->availableChannels);
+		element->availableChannels = NULL;
+		element->countAvailableChannels = 0;
+	}
 
 	return TRUE;
 }
@@ -571,68 +571,68 @@ static gboolean stop(GstBaseSrc *object)
 
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
-    GSTLALNDSSrc *element = GSTLAL_NDSSRC(basesrc);
+	GSTLALNDSSrc *element = GSTLAL_NDSSRC(basesrc);
 
-    if (!ensure_channelSelected(element))
-    {
-        GST_ERROR_OBJECT(element, "failed to select channel");
-        return GST_FLOW_ERROR;
-    }
+	if (!ensure_channelSelected(element))
+	{
+		GST_ERROR_OBJECT(element, "failed to select channel");
+		return GST_FLOW_ERROR;
+	}
 
-    guint rate = element->daq->chan_req_list->rate;
-    int bytes_per_sample = data_type_size(element->daq->chan_req_list->data_type);
+	guint rate = element->daq->chan_req_list->rate;
+	int bytes_per_sample = data_type_size(element->daq->chan_req_list->data_type);
 
-    if (element->daq->chan_req_list->rate != (double)rate)
-    {
-        GST_ERROR_OBJECT(element, "non-integer sample rate not supported (%f != %u)", element->daq->chan_req_list->rate, rate);
-        return GST_FLOW_ERROR;
-    }
+	if (element->daq->chan_req_list->rate != (double)rate)
+	{
+		GST_ERROR_OBJECT(element, "non-integer sample rate not supported (%f != %u)", element->daq->chan_req_list->rate, rate);
+		return GST_FLOW_ERROR;
+	}
 
-    int retval;
-    if (element->needs_seek)
-    {
-        gulong blocksize = gst_base_src_get_blocksize(basesrc);
-        int stride_seconds;
+	int retval;
+	if (element->needs_seek)
+	{
+		gulong blocksize = gst_base_src_get_blocksize(basesrc);
+		int stride_seconds;
 
-        if (blocksize == G_MAXULONG)
-            stride_seconds = 1;
-        else
-        {
-            gulong bytes_per_sec = rate * bytes_per_sample;
-            if (blocksize % bytes_per_sec != 0)
-            {
-                GST_ERROR_OBJECT(element, "property `blocksize' must correspond to an integer number of seconds");
-                return GST_FLOW_ERROR;
-            }
+		if (blocksize == G_MAXULONG)
+			stride_seconds = 1;
+		else
+		{
+			gulong bytes_per_sec = rate * bytes_per_sample;
+			if (blocksize % bytes_per_sec != 0)
+			{
+				GST_ERROR_OBJECT(element, "property `blocksize' must correspond to an integer number of seconds");
+				return GST_FLOW_ERROR;
+			}
 
-            stride_seconds = blocksize / bytes_per_sec;
-        }
+			stride_seconds = blocksize / bytes_per_sec;
+		}
 
-        if (element->channelType == cOnline)
-        {
-            //gst_base_src_set_live(object, TRUE);
-            GST_INFO_OBJECT(element, "daq_request_data(daq_t*, 0, 0, %d)", stride_seconds);
-            retval = daq_request_data(element->daq, 0, 0, stride_seconds);
-        } else {
-            //gst_base_src_set_live(object, FALSE);
-            gint64 start_time = gst_util_uint64_scale_int(basesrc->segment.start, 1, GST_SECOND);
-            gint64 stop_time = gst_util_uint64_scale_int_ceil(basesrc->segment.stop, 1, GST_SECOND);
-            if (start_time < 600000000)
-                start_time = 600000000;
-            if (stop_time > 9999999999)
-                stop_time = 9999999999;
-            GST_INFO_OBJECT(element, "daq_request_data(daq_t*, %lld, %lld, %d)", start_time, stop_time, stride_seconds);
-            retval = daq_request_data(element->daq, start_time, stop_time, stride_seconds);
-        }
+		if (element->channelType == cOnline)
+		{
+			//gst_base_src_set_live(object, TRUE);
+			GST_INFO_OBJECT(element, "daq_request_data(daq_t*, 0, 0, %d)", stride_seconds);
+			retval = daq_request_data(element->daq, 0, 0, stride_seconds);
+		} else {
+			//gst_base_src_set_live(object, FALSE);
+			gint64 start_time = gst_util_uint64_scale_int(basesrc->segment.start, 1, GST_SECOND);
+			gint64 stop_time = gst_util_uint64_scale_int_ceil(basesrc->segment.stop, 1, GST_SECOND);
+			if (start_time < 600000000)
+				start_time = 600000000;
+			if (stop_time > 9999999999)
+				stop_time = 9999999999;
+			GST_INFO_OBJECT(element, "daq_request_data(daq_t*, %lld, %lld, %d)", start_time, stop_time, stride_seconds);
+			retval = daq_request_data(element->daq, start_time, stop_time, stride_seconds);
+		}
 
-        if (retval)
-        {
-            DAQ_GST_ERROR_OBJECT(element, "daq_request_data", retval);
-            return GST_FLOW_ERROR;
-        }
+		if (retval)
+		{
+			DAQ_GST_ERROR_OBJECT(element, "daq_request_data", retval);
+			return GST_FLOW_ERROR;
+		}
 
-        element->needs_seek = FALSE;
-    }
+		element->needs_seek = FALSE;
+	}
 
 	GST_INFO_OBJECT(element, "daq_recv_next");
 	retval = -daq_recv_next(element->daq);
@@ -642,32 +642,32 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		return GST_FLOW_ERROR;
 	}
 
-    int data_length = element->daq->chan_req_list->status;
-    guint64 nsamples = data_length / bytes_per_sample;
-    GST_INFO_OBJECT(element, "received segment [%u, %llu)", element->daq->tb->gps, element->daq->tb->gps + nsamples / rate);
+	int data_length = element->daq->chan_req_list->status;
+	guint64 nsamples = data_length / bytes_per_sample;
+	GST_INFO_OBJECT(element, "received segment [%u, %llu)", element->daq->tb->gps, element->daq->tb->gps + nsamples / rate);
 
-    if (data_length % bytes_per_sample != 0)
-    {
-        GST_ERROR_OBJECT(element, "daq buffer length is not multiple of data type length");
-        return GST_FLOW_ERROR;
-    }
+	if (data_length % bytes_per_sample != 0)
+	{
+		GST_ERROR_OBJECT(element, "daq buffer length is not multiple of data type length");
+		return GST_FLOW_ERROR;
+	}
 
-    {
-        GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, data_length, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
-        if (result != GST_FLOW_OK)
-            return result;
-    }
+	{
+		GstFlowReturn result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, data_length, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
+		if (result != GST_FLOW_OK)
+			return result;
+	}
 
-    memcpy((char*)GST_BUFFER_DATA(*buffer), element->daq->tb->data + element->daq->chan_req_list->offset, data_length);
+	memcpy((char*)GST_BUFFER_DATA(*buffer), element->daq->tb->data + element->daq->chan_req_list->offset, data_length);
 
-    // TODO: Ask John Zweizig how to get timestamp and duration of block; this
-    // struct is part of an obsolete interface according to Doxygen documentation
-    basesrc->offset += nsamples;
-    GST_BUFFER_OFFSET_END(*buffer) = basesrc->offset;
-    GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * element->daq->tb->gps + element->daq->tb->gpsn;
-    GST_BUFFER_DURATION(*buffer) = GST_SECOND * nsamples / rate;
+	// TODO: Ask John Zweizig how to get timestamp and duration of block; this
+	// struct is part of an obsolete interface according to Doxygen documentation
+	basesrc->offset += nsamples;
+	GST_BUFFER_OFFSET_END(*buffer) = basesrc->offset;
+	GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * element->daq->tb->gps + element->daq->tb->gpsn;
+	GST_BUFFER_DURATION(*buffer) = GST_SECOND * nsamples / rate;
 
-    return GST_FLOW_OK;
+	return GST_FLOW_OK;
 }
 
 
@@ -678,7 +678,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 static gboolean is_seekable(GstBaseSrc *basesrc)
 {
-    return TRUE;
+	return TRUE;
 }
 
 
@@ -690,9 +690,9 @@ static gboolean is_seekable(GstBaseSrc *basesrc)
 
 static gboolean do_seek(GstBaseSrc *basesrc, GstSegment* segment)
 {
-    GSTLALNDSSrc *element = GSTLAL_NDSSRC(basesrc);
-    element->needs_seek = TRUE;
-    return TRUE;
+	GSTLALNDSSrc *element = GSTLAL_NDSSRC(basesrc);
+	element->needs_seek = TRUE;
+	return TRUE;
 }
 
 
@@ -711,7 +711,7 @@ static gboolean check_get_range(GstBaseSrc *basesrc)
 /*
  * ============================================================================
  *
- *                                Type Support
+ *								Type Support
  *
  * ============================================================================
  */
@@ -727,9 +727,9 @@ static void finalize(GObject *object)
 	GSTLALNDSSrc *element = GSTLAL_NDSSRC(object);
 
 	g_free(element->host);
-    element->host = NULL;
-    g_free(element->channelName);
-    element->channelName = NULL;
+	element->host = NULL;
+	g_free(element->channelName);
+	element->channelName = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -808,31 +808,31 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
-    g_object_class_install_property(
-        gobject_class,
-        ARG_SRC_PORT,
-        g_param_spec_int(
-            "port",
-            "Port",
-            "NDS1 or NDS2 remote host port",
-            1,
-            65535,
-            DEFAULT_PORT,
-            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-        )
-    );
-    g_object_class_install_property(
-        gobject_class,
-        ARG_SRC_VERSION,
-        g_param_spec_enum(
-            "nds-version",
-            "NDS version",
-            "NDS protocol version",
-            GSTLAL_TYPE_NDSSRC_NDS_VERSION,
-            DEFAULT_VERSION,
-            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-        )
-    );
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SRC_PORT,
+		g_param_spec_int(
+			"port",
+			"Port",
+			"NDS1 or NDS2 remote host port",
+			1,
+			65535,
+			DEFAULT_PORT,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SRC_VERSION,
+		g_param_spec_enum(
+			"nds-version",
+			"NDS version",
+			"NDS protocol version",
+			GSTLAL_TYPE_NDSSRC_NDS_VERSION,
+			DEFAULT_VERSION,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_SRC_CHANNEL_NAME,
@@ -844,29 +844,29 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
-    g_object_class_install_property(
-        gobject_class,
-        ARG_SRC_CHANNEL_TYPE,
-        g_param_spec_enum(
-            "channel-type",
-            "Channel type",
-            "Type of the desired NDS channel.",
-            GSTLAL_TYPE_NDSSRC_CHANTYPE,
-            cUnknown,
-            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-        )
-    );
-    g_object_class_install_property(
-        gobject_class,
-        ARG_SRC_AVAILABLE_CHANNEL_NAMES,
-        g_param_spec_boxed(
-            "available-channel-names",
-            "Available channel names",
-            "Array of all currently available channel names of the currently selected channel type.",
-            G_TYPE_STRV,
-            G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
-        )
-    );
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SRC_CHANNEL_TYPE,
+		g_param_spec_enum(
+			"channel-type",
+			"Channel type",
+			"Type of the desired NDS channel.",
+			GSTLAL_TYPE_NDSSRC_CHANTYPE,
+			cUnknown,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SRC_AVAILABLE_CHANNEL_NAMES,
+		g_param_spec_boxed(
+			"available-channel-names",
+			"Available channel names",
+			"Array of all currently available channel names of the currently selected channel type.",
+			G_TYPE_STRV,
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+		)
+	);
 
 	/*
 	 * GstBaseSrc method overrides
@@ -876,12 +876,12 @@ static void class_init(gpointer class, gpointer class_data)
 	gstbasesrc_class->stop = GST_DEBUG_FUNCPTR(stop);
 	gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
 	gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
-    gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
+	gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
 	gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
 
-    // Start up NDS
-    GST_INFO_OBJECT(gobject_class, "daq_startup");
-    daq_startup();
+	// Start up NDS
+	GST_INFO_OBJECT(gobject_class, "daq_startup");
+	daq_startup();
 }
 
 
@@ -899,19 +899,19 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	gst_pad_use_fixed_caps(GST_BASE_SRC_PAD(basesrc));
 
-    element->host = NULL;
-    element->port = DEFAULT_PORT;
-    element->version = DEFAULT_VERSION;
+	element->host = NULL;
+	element->port = DEFAULT_PORT;
+	element->version = DEFAULT_VERSION;
 	element->channelName = NULL;
-    element->channelType = cUnknown;
-    element->availableChannels = NULL;
-    element->countAvailableChannels = 0;
-    element->daq = NULL;
-    element->needs_seek = TRUE;
-    basesrc->blocksize = G_MAXULONG;
+	element->channelType = cUnknown;
+	element->availableChannels = NULL;
+	element->countAvailableChannels = 0;
+	element->daq = NULL;
+	element->needs_seek = TRUE;
+	basesrc->blocksize = G_MAXULONG;
 
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
-    gst_base_src_set_live(GST_BASE_SRC(object), TRUE);
+	gst_base_src_set_live(GST_BASE_SRC(object), TRUE);
 }
 
 
