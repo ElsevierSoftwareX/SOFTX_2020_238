@@ -231,7 +231,7 @@ gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
             "units", "Units",
             "Units of the data. Not used yet.", NULL,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-    
+
     g_object_class_install_property(
         gobject_class, PROP_BUFFER_MODE,
         g_param_spec_enum(
@@ -568,7 +568,7 @@ gst_lalframe_sink_event(GstBaseSink *base_sink, GstEvent *event)
         break;
     }
     case GST_EVENT_EOS:
-        // FIXME: Fill the last frame if there is something we haven't saved yet
+        // FIXME: Fill the last frame if there is something to save
         if (0)  // whatever is appropiate
             goto flush_failed;
         break;
@@ -615,15 +615,24 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
     if (size > 0 && data != NULL) {
         FrameH *frame;
         double duration = size / (sizeof(double)*16.0*1024);
-        const int run = 0;
-        const int frnum = 1;
-        const int detectorFlags = LAL_LHO_4K_DETECTOR_BIT;  //// FIXME: fill in using instrument tag
+        int detectorFlags;
         LIGOTimeGPS epoch;
         REAL8TimeSeries *series;  //// FIXME: pick type depending on input
-        double f0 = 0;        ////  FIXME
+        double f0 = 0;
         double deltaT = 1.0/(16*1024);  ///// FIXME: take sample rate from the buffer's caps
         guint i;
         char name[256];
+
+        if      (strcmp(sink->instrument, "H1") == 0)
+            detectorFlags = LAL_LHO_4K_DETECTOR_BIT;
+        else if (strcmp(sink->instrument, "H2") == 0)
+            detectorFlags = LAL_LHO_2K_DETECTOR_BIT;
+        else if (strcmp(sink->instrument, "L1") == 0)
+            detectorFlags = LAL_LLO_4K_DETECTOR_BIT;
+        else if (strcmp(sink->instrument, "V1") == 0)
+            detectorFlags = LAL_VIRGO_DETECTOR_BIT;
+        else
+            detectorFlags = -1;
 
         epoch.gpsSeconds = GST_BUFFER_TIMESTAMP(buffer) / GST_SECOND;
         epoch.gpsNanoSeconds = GST_BUFFER_TIMESTAMP(buffer) % GST_SECOND;
@@ -631,11 +640,12 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
         if (sink->channel_name == NULL)
             goto handle_error;
 
-        frame = XLALFrameNew(&epoch, duration, "LIGO", run, frnum, detectorFlags);
+        frame = XLALFrameNew(&epoch, duration, "LIGO", 0, 1, detectorFlags);
 
         series = XLALCreateREAL8TimeSeries(sink->channel_name,
                                            &epoch, f0, deltaT,
-                                           &lalDimensionlessUnit, size/sizeof(double));
+                                           &lalDimensionlessUnit,
+                                           size/sizeof(double));
 
         /* copy buffer contents to timeseries */
         for (i = 0; i < size/sizeof(double); i++)
@@ -643,7 +653,8 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
 
         XLALFrameAddREAL8TimeSeriesProcData(frame, series);
 
-        snprintf(name, sizeof(name), "%s-%d-16.gwf", sink->filename, epoch.gpsSeconds);
+        snprintf(name, sizeof(name), "%s-%d-%g.gwf",
+                 sink->filename, epoch.gpsSeconds, duration);
         if (XLALFrameWrite(frame, name, -1) != 0)
             goto handle_error;
 

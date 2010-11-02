@@ -50,6 +50,7 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstbasesink.h>
+#include <gst/base/gstadapter.h>
 
 
 G_BEGIN_DECLS
@@ -91,6 +92,8 @@ struct _GstLalframeSink {
     gint    buffer_mode;
     guint   buffer_size;
     gchar  *buffer;
+
+    GstAdapter *adapter;
 };
 
 struct _GstLalframeSinkClass {
