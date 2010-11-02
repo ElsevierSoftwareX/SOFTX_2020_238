@@ -539,8 +539,6 @@ gst_lalframe_sink_event(GstBaseSink *base_sink, GstEvent *event)
             sink->channel_name = channel_name;
             g_free(sink->units);
             sink->units = units;
-            /* FIXME: flush the cache of injection timeseries (see
-             * gstlal_simulation.c */
         }
         break;
     }
