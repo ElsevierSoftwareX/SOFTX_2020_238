@@ -627,8 +627,8 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
         guint i;
         char name[256];
 
-        epoch.gpsSeconds = GST_BUFFER_TIMESTAMP(buffer) / 1000000000L;
-        epoch.gpsNanoSeconds = GST_BUFFER_TIMESTAMP(buffer) % 1000000000L;
+        epoch.gpsSeconds = GST_BUFFER_TIMESTAMP(buffer) / GST_SECOND;
+        epoch.gpsNanoSeconds = GST_BUFFER_TIMESTAMP(buffer) % GST_SECOND;
 
         if (sink->channel_name == NULL)
             goto handle_error;
