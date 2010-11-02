@@ -617,7 +617,7 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
         double duration = size / (sizeof(double)*16.0*1024);
         const int run = 0;
         const int frnum = 1;
-        const int detectorFlags = LAL_LHO_4K_DETECTOR_BIT;
+        const int detectorFlags = LAL_LHO_4K_DETECTOR_BIT;  //// FIXME: fill in using instrument tag
         LIGOTimeGPS epoch;
         REAL8TimeSeries *series;  //// FIXME: pick type depending on input
         double f0 = 0;        ////  FIXME
