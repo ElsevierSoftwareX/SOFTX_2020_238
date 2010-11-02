@@ -621,7 +621,7 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
         LIGOTimeGPS epoch;
         REAL8TimeSeries *series;  //// FIXME: pick type depending on input
         double f0 = 0;        ////  FIXME
-        double deltaT = 1.0/(16*1024);  ///// FIXME
+        double deltaT = 1.0/(16*1024);  ///// FIXME: take sample rate from the buffer's caps
         guint i;
         char name[256];
 
