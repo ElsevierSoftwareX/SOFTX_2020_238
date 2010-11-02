@@ -26,7 +26,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch audiotestsrc wave=sine num-buffers=100 ! taginject tags="instrument=H1,channel-name=H1:LSC-STRAIN,units=strain" ! audio/x-raw-float,rate=16384,width=64 ! lal_framesink location=out.gwf
+ * gst-launch audiotestsrc wave=sine num-buffers=100 ! taginject tags="instrument=H1,channel-name=H1:LSC-STRAIN,units=strain" ! audio/x-raw-float,rate=16384,width=64 ! lal_framesink location=out
  * ]| Save a sine wave into a gwf file.
  * </refsect2>
  */
@@ -105,9 +105,6 @@ static void gst_lalframe_sink_set_property(GObject *object, guint prop_id,
                                            GParamSpec *pspec);
 static void gst_lalframe_sink_get_property(GObject *object, guint prop_id,
                                            GValue *value, GParamSpec *pspec);
-
-static gboolean gst_lalframe_sink_open_file(GstLalframeSink *sink);
-static void gst_lalframe_sink_close_file(GstLalframeSink *sink);
 
 static gboolean gst_lalframe_sink_start(GstBaseSink *sink);
 static gboolean gst_lalframe_sink_stop(GstBaseSink *sink);
@@ -279,7 +276,6 @@ gst_lalframe_sink_init(GstLalframeSink *sink,
     gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(gst_lalframe_sink_query));
 
     sink->filename = NULL;
-    sink->frame = NULL;
     sink->buffer_mode = DEFAULT_BUFFER_MODE;
     sink->buffer_size = DEFAULT_BUFFER_SIZE;
     sink->buffer = NULL;
@@ -327,9 +323,6 @@ gst_lalframe_sink_dispose(GObject *object)
 static gboolean
 gst_lalframe_sink_set_location(GstLalframeSink *sink, const gchar *location)
 {
-    if (sink->frame)
-        goto was_open;
-
     g_free(sink->filename);
     g_free(sink->uri);
     if (location != NULL) {
@@ -342,23 +335,12 @@ gst_lalframe_sink_set_location(GstLalframeSink *sink, const gchar *location)
     }
 
     return TRUE;
-
-    /* ERRORS */
-was_open:
-    {
-        g_warning("Changing the `location' property on lalframesink when a "
-                  "file is open is not supported.");
-        return FALSE;
-    }
 }
 
 static gboolean
 gst_lalframe_sink_set_instrument(GstLalframeSink *sink,
                                  const gchar *instrument)
 {
-    if (sink->frame)
-        goto was_open;
-
     g_free(sink->instrument);
     if (instrument != NULL) {
         /* we store the filename as we received it from the application */
@@ -368,23 +350,12 @@ gst_lalframe_sink_set_instrument(GstLalframeSink *sink,
     }
 
     return TRUE;
-
-    /* ERRORS */
-was_open:
-    {
-        g_warning("Changing the `instrument' property on lalframesink when a "
-                  "file is open is not supported.");
-        return FALSE;
-    }
 }
 
 static gboolean
 gst_lalframe_sink_set_channel_name(GstLalframeSink *sink,
                                    const gchar *channel_name)
 {
-    if (sink->frame)
-        goto was_open;
-
     g_free(sink->channel_name);
     if (channel_name != NULL) {
         /* we store the filename as we received it from the application */
@@ -394,22 +365,11 @@ gst_lalframe_sink_set_channel_name(GstLalframeSink *sink,
     }
 
     return TRUE;
-
-    /* ERRORS */
-was_open:
-    {
-        g_warning("Changing the `channel-name' property on lalframesink when a "
-                  "file is open is not supported.");
-        return FALSE;
-    }
 }
 
 static gboolean
 gst_lalframe_sink_set_units(GstLalframeSink *sink, const gchar *units)
 {
-    if (sink->frame)
-        goto was_open;
-
     g_free(sink->units);
     if (units != NULL) {
         /* we store the filename as we received it from the application */
@@ -419,14 +379,6 @@ gst_lalframe_sink_set_units(GstLalframeSink *sink, const gchar *units)
     }
 
     return TRUE;
-
-    /* ERRORS */
-was_open:
-    {
-        g_warning("Changing the `units' property on lalframesink when a "
-                  "file is open is not supported.");
-        return FALSE;
-    }
 }
 
 
@@ -509,91 +461,6 @@ gst_lalframe_sink_get_property(GObject *object, guint prop_id, GValue *value,
  * ============================================================================
  */
 
-
-static gboolean
-gst_lalframe_sink_open_file(GstLalframeSink *sink)
-{
-    gint mode;
-
-    /* open the file */
-    if (sink->filename == NULL || sink->filename[0] == '\0')
-        goto no_filename;
-
-    {
-        LIGOTimeGPS epoch;
-        const int duration = 60;
-        const int run = 0;
-        const int frnum = 1;
-        const int detectorFlags = LAL_LHO_4K_DETECTOR_BIT;
-
-        /* Initialization */
-        epoch.gpsSeconds = 600000000;
-        epoch.gpsNanoSeconds = 0;
-
-        sink->frame = XLALFrameNew(&epoch, duration, "LIGO", run, frnum, detectorFlags);
-    /* This evidently has to be properly filled! Get epoch, duration
-     * and detector from metadata or something. */
-    }
-
-    if (sink->frame == NULL)
-        goto open_failed;
-
-    /* see if we are asked to perform a specific kind of buffering */
-    if ((mode = sink->buffer_mode) != -1) {
-        GST_WARNING_OBJECT(
-            sink, "warning: asked for buffering or something, that I don't know how to do!", g_strerror(errno));
-    }
-
-    sink->current_pos = 0;
-    sink->seekable = FALSE;
-
-    GST_DEBUG_OBJECT(sink, "opened file %s, seekable %d",
-                     sink->filename, sink->seekable);
-
-    return TRUE;
-
-    /* ERRORS */
-no_filename:
-    {
-        GST_ELEMENT_ERROR(
-            sink, RESOURCE, NOT_FOUND,
-            ("No file name specified for writing."), (NULL));
-        return FALSE;
-    }
-open_failed:
-    {
-        GST_ELEMENT_ERROR(
-            sink, RESOURCE, OPEN_WRITE,
-            ("Could not open file \"%s\" for writing.", sink->filename),
-            GST_ERROR_SYSTEM);
-        return FALSE;
-    }
-}
-
-static void
-gst_lalframe_sink_close_file(GstLalframeSink *sink)
-{
-    if (sink->frame) {
-        if (XLALFrameWrite(sink->frame, sink->filename, -1) != 0)
-            goto close_failed;
-
-        GST_DEBUG_OBJECT(sink, "closed file");
-        sink->frame = NULL;
-
-        g_free(sink->buffer);
-        sink->buffer = NULL;
-    }
-    return;
-
-    /* ERRORS */
-close_failed:
-    {
-        GST_ELEMENT_ERROR(
-            sink, RESOURCE, CLOSE,
-            ("Error closing file \"%s\".", sink->filename), GST_ERROR_SYSTEM);
-        return;
-    }
-}
 
 static gboolean
 gst_lalframe_sink_query(GstPad *pad, GstQuery *query)
@@ -688,7 +555,7 @@ gst_lalframe_sink_event(GstBaseSink *base_sink, GstEvent *event)
         if (format == GST_FORMAT_BYTES) {
             /* only try to seek and fail when we are going to a different
              * position */
-            if (sink->current_pos != start) {
+            if (sink->current_pos != (guint64) start) {
                 goto seek_failed;
             } else {
                 GST_DEBUG_OBJECT(
@@ -703,7 +570,8 @@ gst_lalframe_sink_event(GstBaseSink *base_sink, GstEvent *event)
         break;
     }
     case GST_EVENT_EOS:
-        if (XLALFrameWrite(sink->frame, sink->filename, -1) != 0)
+        // FIXME: Fill the last frame if there is something we haven't saved yet
+        if (0)  // whatever is appropiate
             goto flush_failed;
         break;
     default:
@@ -732,50 +600,56 @@ flush_failed:
 }
 
 static GstFlowReturn
-gst_lalframe_sink_render(GstBaseSink *sink, GstBuffer *buffer)
+gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
 {
-    GstLalframeSink *lalframesink;
+    GstLalframeSink *sink;
     guint size;
-    guint8 *data;
+    double *data;  // people normally address it as  guint8 *data; ...
 
-    lalframesink = GST_LALFRAME_SINK(sink);
+    sink = GST_LALFRAME_SINK(base_sink);
 
     size = GST_BUFFER_SIZE(buffer);
-    data = GST_BUFFER_DATA(buffer);
+    data = (double *) GST_BUFFER_DATA(buffer);
 
-    GST_DEBUG_OBJECT(lalframesink, "writing %u bytes at %" G_GUINT64_FORMAT,
-                     size, lalframesink->current_pos);
+    GST_DEBUG_OBJECT(sink, "writing %u bytes at %" G_GUINT64_FORMAT,
+                     size, sink->current_pos);
 
     if (size > 0 && data != NULL) {
+        FrameH *frame;
+        double duration = size / (sizeof(double)*16.0*1024);
+        const int run = 0;
+        const int frnum = 1;
+        const int detectorFlags = LAL_LHO_4K_DETECTOR_BIT;
         LIGOTimeGPS epoch;
         REAL8TimeSeries *series;  //// FIXME: pick type depending on input
         double f0 = 0;        ////  FIXME
-        double deltaT = 1.0;  ///// FIXME
+        double deltaT = 1.0/(16*1024);  ///// FIXME
+        guint i;
+        char name[256];
 
-        epoch.gpsSeconds = 600000000;   //// FIXME
-        epoch.gpsNanoSeconds = 0;       //// FIXME
+        epoch.gpsSeconds = GST_BUFFER_TIMESTAMP(buffer) / 1000000000L;
+        epoch.gpsNanoSeconds = GST_BUFFER_TIMESTAMP(buffer) % 1000000000L;
 
-        if (lalframesink->channel_name == NULL)
+        if (sink->channel_name == NULL)
             goto handle_error;
 
-        series = XLALCreateREAL8TimeSeries(lalframesink->channel_name,
+        frame = XLALFrameNew(&epoch, duration, "LIGO", run, frnum, detectorFlags);
+
+        series = XLALCreateREAL8TimeSeries(sink->channel_name,
                                            &epoch, f0, deltaT,
-                                           &lalDimensionlessUnit, size);
+                                           &lalDimensionlessUnit, size/sizeof(double));
 
-        {  /* copy buffer contents to timeseries */
-            size_t i;
-            for (i = 0; i < size; i++)
-                series->data->data[i] = data[i];
-        }
+        /* copy buffer contents to timeseries */
+        for (i = 0; i < size/sizeof(double); i++)
+            series->data->data[i] = data[i];
 
-        XLALFrameAddREAL8TimeSeriesProcData(lalframesink->frame, series);
+        XLALFrameAddREAL8TimeSeriesProcData(frame, series);
 
-        ////
-        /* gchar* tmpname = g_strconcat("temp_", lalframesink->frame); */
-        /* if (XLALFrameWrite(lalframesink->frame, tmpname, -1) != 0) */
-        /*     goto handle_error; */
+        snprintf(name, sizeof(name), "%s-%d-16.gwf", sink->filename, epoch.gpsSeconds);
+        if (XLALFrameWrite(frame, name, -1) != 0)
+            goto handle_error;
 
-        lalframesink->current_pos += size;
+        sink->current_pos += size;
     }
 
     return GST_FLOW_OK;
@@ -785,13 +659,13 @@ handle_error:
         switch (errno) {
         case ENOSPC: {
             GST_ELEMENT_ERROR(
-                lalframesink, RESOURCE, NO_SPACE_LEFT, (NULL), (NULL));
+                sink, RESOURCE, NO_SPACE_LEFT, (NULL), (NULL));
             break;
         }
         default: {
             GST_ELEMENT_ERROR(
-                lalframesink, RESOURCE, WRITE,
-                ("Error while writing to file \"%s\".", lalframesink->filename),
+                sink, RESOURCE, WRITE,
+                ("Error while writing to file \"%s\".", sink->filename),
                 ("%s", g_strerror(errno)));
         }
         }
@@ -802,13 +676,14 @@ handle_error:
 static gboolean
 gst_lalframe_sink_start(GstBaseSink *basesink)
 {
-    return gst_lalframe_sink_open_file(GST_LALFRAME_SINK(basesink));
+    // We may want to open files or other resources...
+    return TRUE;
 }
 
 static gboolean
 gst_lalframe_sink_stop(GstBaseSink *basesink)
 {
-    gst_lalframe_sink_close_file(GST_LALFRAME_SINK(basesink));
+    // And we may want to close resources too...
     return TRUE;
 }
 

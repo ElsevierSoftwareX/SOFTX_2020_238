@@ -51,8 +51,6 @@
 #include <gst/gst.h>
 #include <gst/base/gstbasesink.h>
 
-#include <lal/LALFrameIO.h>
-
 
 G_BEGIN_DECLS
 
@@ -83,7 +81,6 @@ struct _GstLalframeSink {
     /*< private >*/
     gchar *filename;
     gchar *uri;
-    FrameH *frame;
     gchar *instrument;
     gchar *channel_name;
     gchar *units;
