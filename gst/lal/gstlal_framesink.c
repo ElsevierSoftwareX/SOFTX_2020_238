@@ -26,7 +26,9 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch audiotestsrc wave=sine num-buffers=100 ! taginject tags="instrument=H1,channel-name=H1:LSC-STRAIN,units=strain" ! audio/x-raw-float,rate=16384,width=64 ! lal_framesink location=out
+ * gst-launch audiotestsrc wave=sine num-buffers=100 ! \
+ *   taginject tags="instrument=H1,channel-name=H1:LSC-STRAIN,units=strain" ! \
+ *   audio/x-raw-float,rate=16384,width=64 ! lal_framesink location=out
  * ]| Save a sine wave into a gwf file.
  * </refsect2>
  */
@@ -282,6 +284,7 @@ gst_lalframe_sink_init(GstLalframeSink *sink,
     sink->instrument = NULL;
     sink->channel_name = NULL;
     sink->units = NULL;
+    sink->adapter = gst_adapter_new();
 
     /* retrieve (and ref) sink pad */
     sink->sinkpad = gst_element_get_static_pad(GST_ELEMENT(sink), "sink");
@@ -294,8 +297,10 @@ gst_lalframe_sink_dispose(GObject *object)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(object);
 
-    G_OBJECT_CLASS(parent_class)->dispose(object);
-
+    if (sink->adapter) {
+        g_object_unref(sink->adapter);
+        sink->adapter = NULL;
+    }
     g_free(sink->units);
     sink->units = NULL;
     g_free(sink->channel_name);
@@ -309,6 +314,8 @@ gst_lalframe_sink_dispose(GObject *object)
     g_free(sink->buffer);
     sink->buffer = NULL;
     sink->buffer_size = 0;
+
+    G_OBJECT_CLASS(parent_class)->dispose(object);
 }
 
 
@@ -601,20 +608,22 @@ static GstFlowReturn
 gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
 {
     GstLalframeSink *sink;
-    guint size;
+//    guint size;
     double *data;  // people normally address it as  guint8 *data; ...
+    /* Number of expected bytes. 16 s, 16*1024 Hz, 8 bytes/double */
+    const guint N_EXP_BYTES = 16 * 16*1024 * sizeof(double);
 
     sink = GST_LALFRAME_SINK(base_sink);
 
-    size = GST_BUFFER_SIZE(buffer);
-    data = (double *) GST_BUFFER_DATA(buffer);
+//    size = GST_BUFFER_SIZE(buffer);
 
-    GST_DEBUG_OBJECT(sink, "writing %u bytes at %" G_GUINT64_FORMAT,
-                     size, sink->current_pos);
+    gst_buffer_ref(buffer); //// FIXME: really? where do I lose the ref??
+    gst_adapter_push(sink->adapter, buffer);
+    while (gst_adapter_available(sink->adapter) >= N_EXP_BYTES) {
+        data = (double *) gst_adapter_peek(sink->adapter, N_EXP_BYTES);
 
-    if (size > 0 && data != NULL) {
         FrameH *frame;
-        double duration = size / (sizeof(double)*16.0*1024);
+        double duration = N_EXP_BYTES / (sizeof(double)*16.0*1024);
         int detectorFlags;
         LIGOTimeGPS epoch;
         REAL8TimeSeries *series;  //// FIXME: pick type depending on input
@@ -634,6 +643,10 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
         else
             detectorFlags = -1;
 
+   /* /\* get timestamp of the current adapter byte *\/ */
+
+   /*  timestamp = gst_adapter_prev_timestamp(sink->adapter, &dist); */
+
         epoch.gpsSeconds = GST_BUFFER_TIMESTAMP(buffer) / GST_SECOND;
         epoch.gpsNanoSeconds = GST_BUFFER_TIMESTAMP(buffer) % GST_SECOND;
 
@@ -645,10 +658,10 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
         series = XLALCreateREAL8TimeSeries(sink->channel_name,
                                            &epoch, f0, deltaT,
                                            &lalDimensionlessUnit,
-                                           size/sizeof(double));
+                                           N_EXP_BYTES/sizeof(double));
 
         /* copy buffer contents to timeseries */
-        for (i = 0; i < size/sizeof(double); i++)
+        for (i = 0; i < N_EXP_BYTES/sizeof(double); i++)
             series->data->data[i] = data[i];
 
         XLALFrameAddREAL8TimeSeriesProcData(frame, series);
@@ -658,7 +671,9 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
         if (XLALFrameWrite(frame, name, -1) != 0)
             goto handle_error;
 
-        sink->current_pos += size;
+        sink->current_pos += N_EXP_BYTES;
+
+        gst_adapter_flush(sink->adapter, N_EXP_BYTES);
     }
 
     return GST_FLOW_OK;
