@@ -501,14 +501,14 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
         REAL8TimeSeries *series;  //// FIXME: pick type depending on input
         double f0 = 0;
         double deltaT = 1.0/(16*1024);  ///// FIXME: take sample rate from the buffer's caps
-        guint i;
         char name[256];
         GstClockTime timestamp;
 
-        /* Get detector flags */
-        if (sink->instrument == NULL)
+        if (sink->instrument == NULL || sink->path == NULL ||
+            sink->frame_type == NULL || sink->channel_name == NULL)
             goto handle_error;
 
+        /* Get detector flags */
         if      (strcmp(sink->instrument, "H1") == 0)
             ifo_flags = LAL_LHO_4K_DETECTOR_BIT;
         else if (strcmp(sink->instrument, "H2") == 0)
@@ -525,9 +525,6 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
         epoch.gpsSeconds     = timestamp / GST_SECOND;
         epoch.gpsNanoSeconds = timestamp % GST_SECOND;
 
-        if (sink->channel_name == NULL)
-            goto handle_error;
-
         frame = XLALFrameNew(&epoch, duration, "LIGO", 0, 1, ifo_flags);
 
         series = XLALCreateREAL8TimeSeries(sink->channel_name,
@@ -536,8 +533,7 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
                                            N_EXP_BYTES/sizeof(double));
 
         /* copy buffer contents to timeseries */
-        for (i = 0; i < N_EXP_BYTES/sizeof(double); i++)
-            series->data->data[i] = data[i];
+        memcpy(series->data->data, data, N_EXP_BYTES);
 
         XLALFrameAddREAL8TimeSeriesProcData(frame, series);
 
