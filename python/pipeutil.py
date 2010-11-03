@@ -22,6 +22,7 @@ elements and pipelines.
 __author__       = "Leo Singer <leo.singer@ligo.org>"
 __organization__ = ["LIGO", "California Institute of Technology"]
 __copyright__    = "Copyright 2010, Leo Singer"
+__all__          = ["gobject", "gst", "gstlal_element_register", "mkelem", "mkelems_in_bin"]
 
 
 #
@@ -41,10 +42,6 @@ gobject.threads_init()
 import pygst
 pygst.require('0.10')
 import gst
-
-# Shouldn't need pygtk or pygst
-del pygtk
-del pygst
 
 
 #
