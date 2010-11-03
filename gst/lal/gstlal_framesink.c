@@ -73,6 +73,7 @@ enum {
     PROP_INSTRUMENT,
     PROP_CHANNEL_NAME,
     PROP_UNITS,
+    PROP_DURATION,
 };
 
 
@@ -168,14 +169,14 @@ gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
         gobject_class, PROP_PATH,
         g_param_spec_string(
             "path", "Path to files.",
-            "Directory where the frame files will be written", NULL,
+            "Directory where the frame files will be written", ".",
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
     g_object_class_install_property(
         gobject_class, PROP_FRAME_TYPE,
         g_param_spec_string(
             "frame-type", "Frame type.",
-            "Type of frame, a sort of description of its contents", NULL,
+            "Type of frame, kind of description of its contents", "test_frame",
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
     g_object_class_install_property(
@@ -196,7 +197,14 @@ gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
         gobject_class, PROP_UNITS,
         g_param_spec_string(
             "units", "Units",
-            "Units of the data. Not used yet.", NULL,
+            "Units of the data (not used yet)", NULL,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+    g_object_class_install_property(
+        gobject_class, PROP_DURATION,
+        g_param_spec_double(
+            "duration", "Duration",
+            "Time span (in s) stored in each frame file", 0, G_MAXDOUBLE, 16,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
     gstbasesink_class->get_times = NULL;  /* no sync */
@@ -227,11 +235,12 @@ gst_lalframe_sink_init(GstLalframeSink *sink,
 
     gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(gst_lalframe_sink_query));
 
-    sink->path = NULL;
-    sink->frame_type = NULL;
+    sink->path = g_strdup(".");
+    sink->frame_type = g_strdup("test_frame");
     sink->instrument = NULL;
     sink->channel_name = NULL;
     sink->units = NULL;
+    sink->duration = 16;
     sink->adapter = gst_adapter_new();
 
     /* retrieve (and ref) sink pad */
@@ -299,6 +308,9 @@ gst_lalframe_sink_set_property(GObject *object, guint prop_id,
         g_free(sink->units);
         sink->units = g_strdup(g_value_get_string(value));
         break;
+    case PROP_DURATION:
+        sink->duration = g_value_get_double(value);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
         break;
@@ -326,6 +338,9 @@ gst_lalframe_sink_get_property(GObject *object, guint prop_id, GValue *value,
         break;
     case PROP_UNITS:
         g_value_set_string(value, sink->units);
+        break;
+    case PROP_DURATION:
+        g_value_set_double(value, sink->duration);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -479,15 +494,13 @@ flush_failed:
 static GstFlowReturn
 gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
 {
-    /* Number of expected bytes. 16 s, 16*1024 Hz, 8 bytes/double */
-    const guint N_EXP_BYTES = 16 * 16*1024 * sizeof(double);
     GstLalframeSink *sink = GST_LALFRAME_SINK(base_sink);
+    const guint N_BYTES = sink->duration * 16*1024 * sizeof(double);
 
     gst_buffer_ref(buffer);  /* one reference is lost in GstBaseSink's render */
     gst_adapter_push(sink->adapter, buffer);  /* put buffer into adapter */
-    while (gst_adapter_available(sink->adapter) >= N_EXP_BYTES) {
+    while (gst_adapter_available(sink->adapter) >= N_BYTES) {
         FrameH *frame;
-        double duration = N_EXP_BYTES / (sizeof(double)*16.0*1024);
         int ifo_flags;
         LIGOTimeGPS epoch;
         REAL8TimeSeries *series;  //// FIXME: pick type depending on input
@@ -517,28 +530,28 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
         epoch.gpsSeconds     = timestamp / GST_SECOND;
         epoch.gpsNanoSeconds = timestamp % GST_SECOND;
 
-        frame = XLALFrameNew(&epoch, duration, "LIGO", 0, 1, ifo_flags);
+        frame = XLALFrameNew(&epoch, sink->duration, "LIGO", 0, 1, ifo_flags);
 
         series = XLALCreateREAL8TimeSeries(sink->channel_name,
                                            &epoch, f0, deltaT,
                                            &lalDimensionlessUnit,
-                                           N_EXP_BYTES/sizeof(double));
+                                           N_BYTES/sizeof(double));
 
         /* copy buffer contents to timeseries */
         gst_adapter_copy(sink->adapter, (guint8 *) series->data->data,
-                         0, N_EXP_BYTES);
+                         0, N_BYTES);
 
         XLALFrameAddREAL8TimeSeriesProcData(frame, series);
 
         snprintf(name, sizeof(name), "%s/%c-%s-%d-%g.gwf",
                  sink->path, sink->instrument[0], sink->frame_type,
-                 epoch.gpsSeconds, duration);
+                 epoch.gpsSeconds, sink->duration);
         if (XLALFrameWrite(frame, name, -1) != 0)
             goto handle_error;
 
-        sink->current_pos += N_EXP_BYTES;
+        sink->current_pos += N_BYTES;
 
-        gst_adapter_flush(sink->adapter, N_EXP_BYTES);
+        gst_adapter_flush(sink->adapter, N_BYTES);
     }
 
     return GST_FLOW_OK;

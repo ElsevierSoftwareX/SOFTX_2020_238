@@ -85,6 +85,7 @@ struct _GstLalframeSink {
     gchar *instrument;
     gchar *channel_name;
     gchar *units;
+    double duration;
 
     guint64 current_pos;
 
