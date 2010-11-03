@@ -20,8 +20,8 @@
 /*
  * Copied from gstreamer's gstfilesink:
 
- cp ../gstreamer/plugins/elements/gstfilesink.h src/plugins/gstlalframesink.h
- cp ../gstreamer/plugins/elements/gstfilesink.c src/plugins/gstlalframesink.c
+ cp ../gstreamer/plugins/elements/gstfilesink.h src/plugins/gstlalframesink.h .
+ cp ../gstreamer/plugins/elements/gstfilesink.c src/plugins/gstlalframesink.c .
 
  * And then used:
 
@@ -50,6 +50,7 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstbasesink.h>
+#include <gst/base/gstadapter.h>
 
 
 G_BEGIN_DECLS
@@ -79,18 +80,14 @@ struct _GstLalframeSink {
     GstPad *sinkpad;
 
     /*< private >*/
-    gchar *filename;
-    gchar *uri;
+    gchar *prefix;
     gchar *instrument;
     gchar *channel_name;
     gchar *units;
 
-    gboolean seekable;
     guint64 current_pos;
 
-    gint    buffer_mode;
-    guint   buffer_size;
-    gchar  *buffer;
+    GstAdapter *adapter;
 };
 
 struct _GstLalframeSinkClass {
