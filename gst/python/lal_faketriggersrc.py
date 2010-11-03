@@ -42,7 +42,7 @@ class lal_faketriggersrc(gst.BaseSrc):
 	__gstdetails__ = (
 		"Fake trigger source",
 		"Source",
-		__doc__,
+		__doc__.strip(),
 		__author__
 	)
 	gproperty(
