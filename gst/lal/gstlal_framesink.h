@@ -80,8 +80,7 @@ struct _GstLalframeSink {
     GstPad *sinkpad;
 
     /*< private >*/
-    gchar *filename;
-    gchar *uri;
+    gchar *prefix;
     gchar *instrument;
     gchar *channel_name;
     gchar *units;

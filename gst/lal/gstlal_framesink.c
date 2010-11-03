@@ -21,15 +21,15 @@
  * SECTION:element-lalframesink
  * @see_also: #GSTLALFrameSrc
  *
- * Write incoming data to a GWF file in the local file system.
+ * Write incoming data to a sequence of GWF files in the local file system.
  *
  * <refsect2>
  * <title>Example launch line</title>
  * |[
  * gst-launch audiotestsrc wave=sine num-buffers=100 ! \
  *   taginject tags="instrument=H1,channel-name=H1:LSC-STRAIN,units=strain" ! \
- *   audio/x-raw-float,rate=16384,width=64 ! lal_framesink location=out
- * ]| Save a sine wave into a gwf file.
+ *   audio/x-raw-float,rate=16384,width=64 ! lal_framesink prefix=./out
+ * ]| Save wave into a sequence of gwf files of the form ./out-TIME-SPAN.gwf.
  * </refsect2>
  */
 
@@ -40,7 +40,7 @@
 
 #include <lal/LALFrameIO.h>
 #include <lal/TimeSeries.h>
-#include <lal/LALDetectors.h>  // LAL_LHO_4K_DETECTOR_BIT
+#include <lal/LALDetectors.h>  // LAL_LHO_4K_DETECTOR_BIT et al
 #include <lal/Units.h>         // lalDimensionlessUnit
 
 #include <gstlal.h>
@@ -67,7 +67,7 @@ GST_DEBUG_CATEGORY_STATIC(gst_lalframe_sink_debug);
 
 enum {
     PROP_0,
-    PROP_LOCATION,
+    PROP_PREFIX,
     PROP_INSTRUMENT,
     PROP_CHANNEL_NAME,
     PROP_UNITS,
@@ -90,9 +90,6 @@ static GstFlowReturn gst_lalframe_sink_render(GstBaseSink *sink,
 
 static gboolean gst_lalframe_sink_query(GstPad *pad, GstQuery *query);
 
-static void gst_lalframe_sink_uri_handler_init(gpointer g_iface,
-                                               gpointer iface_data);
-
 
 
 /*
@@ -103,23 +100,9 @@ static void gst_lalframe_sink_uri_handler_init(gpointer g_iface,
  * ============================================================================
  */
 
-static void
-_do_init(GType lalframesink_type)
-{
-    static const GInterfaceInfo urihandler_info = {
-        gst_lalframe_sink_uri_handler_init,
-        NULL,
-        NULL
-    };
 
-    g_type_add_interface_static(lalframesink_type, GST_TYPE_URI_HANDLER,
-                                &urihandler_info);
-    GST_DEBUG_CATEGORY_INIT(gst_lalframe_sink_debug, "lalframesink", 0,
-                            "lalframesink element");
-}
-
-GST_BOILERPLATE_FULL(GstLalframeSink, gst_lalframe_sink, GstBaseSink,
-                     GST_TYPE_BASE_SINK, _do_init);
+GST_BOILERPLATE(GstLalframeSink, gst_lalframe_sink, GstBaseSink,
+                GST_TYPE_BASE_SINK);
 
 
 /*
@@ -139,7 +122,6 @@ gst_lalframe_sink_base_init(gpointer g_class)
         "Sink/GWF",
         "Write data to a frame file",
         "Jordi Burguet-Castell <jordi.burguet-castell@ligo.org>");
-
 
     /* Pad description. */
     gst_element_class_add_pad_template(
@@ -181,10 +163,10 @@ gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
     gobject_class->get_property = gst_lalframe_sink_get_property;
 
     g_object_class_install_property(
-        gobject_class, PROP_LOCATION,
+        gobject_class, PROP_PREFIX,
         g_param_spec_string(
-            "location", "File Location",
-            "Location of the file to write", NULL,
+            "prefix", "Path and file prefix",
+            "Prefix of the files PREFIX-TIME-SPAN.gwf to write", NULL,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
     g_object_class_install_property(
@@ -236,7 +218,7 @@ gst_lalframe_sink_init(GstLalframeSink *sink,
 
     gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(gst_lalframe_sink_query));
 
-    sink->filename = NULL;
+    sink->prefix = NULL;
     sink->instrument = NULL;
     sink->channel_name = NULL;
     sink->units = NULL;
@@ -263,82 +245,10 @@ gst_lalframe_sink_dispose(GObject *object)
     sink->channel_name = NULL;
     g_free(sink->instrument);
     sink->instrument = NULL;
-    g_free(sink->uri);
-    sink->uri = NULL;
-    g_free(sink->filename);
-    sink->filename = NULL;
+    g_free(sink->prefix);
+    sink->prefix = NULL;
 
     G_OBJECT_CLASS(parent_class)->dispose(object);
-}
-
-
-/*
- * ============================================================================
- *
- *                                 Utilities
- *
- * ============================================================================
- */
-
-static gboolean
-gst_lalframe_sink_set_location(GstLalframeSink *sink, const gchar *location)
-{
-    g_free(sink->filename);
-    g_free(sink->uri);
-    if (location != NULL) {
-        /* we store the filename as we received it from the application */
-        sink->filename = g_strdup(location);
-        sink->uri = gst_uri_construct("file", sink->filename);
-    } else {
-        sink->filename = NULL;
-        sink->uri = NULL;
-    }
-
-    return TRUE;
-}
-
-static gboolean
-gst_lalframe_sink_set_instrument(GstLalframeSink *sink,
-                                 const gchar *instrument)
-{
-    g_free(sink->instrument);
-    if (instrument != NULL) {
-        /* we store the filename as we received it from the application */
-        sink->instrument = g_strdup(instrument);
-    } else {
-        sink->instrument = NULL;
-    }
-
-    return TRUE;
-}
-
-static gboolean
-gst_lalframe_sink_set_channel_name(GstLalframeSink *sink,
-                                   const gchar *channel_name)
-{
-    g_free(sink->channel_name);
-    if (channel_name != NULL) {
-        /* we store the filename as we received it from the application */
-        sink->channel_name = g_strdup(channel_name);
-    } else {
-        sink->channel_name = NULL;
-    }
-
-    return TRUE;
-}
-
-static gboolean
-gst_lalframe_sink_set_units(GstLalframeSink *sink, const gchar *units)
-{
-    g_free(sink->units);
-    if (units != NULL) {
-        /* we store the filename as we received it from the application */
-        sink->units = g_strdup(units);
-    } else {
-        sink->units = NULL;
-    }
-
-    return TRUE;
 }
 
 
@@ -357,17 +267,21 @@ gst_lalframe_sink_set_property(GObject *object, guint prop_id,
     GstLalframeSink *sink = GST_LALFRAME_SINK(object);
 
     switch (prop_id) {
-    case PROP_LOCATION:
-        gst_lalframe_sink_set_location(sink, g_value_get_string(value));
+    case PROP_PREFIX:
+        g_free(sink->prefix);
+        sink->prefix = g_strdup(g_value_get_string(value));
         break;
     case PROP_INSTRUMENT:
-        gst_lalframe_sink_set_instrument(sink, g_value_get_string(value));
+        g_free(sink->instrument);
+        sink->instrument = g_strdup(g_value_get_string(value));
         break;
     case PROP_CHANNEL_NAME:
-        gst_lalframe_sink_set_channel_name(sink, g_value_get_string(value));
+        g_free(sink->channel_name);
+        sink->channel_name = g_strdup(g_value_get_string(value));
         break;
     case PROP_UNITS:
-        gst_lalframe_sink_set_units(sink, g_value_get_string(value));
+        g_free(sink->units);
+        sink->units = g_strdup(g_value_get_string(value));
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -382,8 +296,8 @@ gst_lalframe_sink_get_property(GObject *object, guint prop_id, GValue *value,
     GstLalframeSink *sink = GST_LALFRAME_SINK(object);
 
     switch (prop_id) {
-    case PROP_LOCATION:
-        g_value_set_string(value, sink->filename);
+    case PROP_PREFIX:
+        g_value_set_string(value, sink->prefix);
         break;
     case PROP_INSTRUMENT:
         g_value_set_string(value, sink->instrument);
@@ -432,10 +346,6 @@ gst_lalframe_sink_query(GstPad *pad, GstQuery *query)
 
     case GST_QUERY_FORMATS:
         gst_query_set_formats(query, 2, GST_FORMAT_DEFAULT, GST_FORMAT_BYTES);
-        return TRUE;
-
-    case GST_QUERY_URI:
-        gst_query_set_uri(query, self->uri);
         return TRUE;
 
     default:
@@ -531,7 +441,7 @@ seek_failed:
     {
         GST_ELEMENT_ERROR(
             sink, RESOURCE, SEEK,
-            ("Error while seeking in file \"%s\".", sink->filename),
+            ("Error while seeking in file \"%s-TIME-SPAN.gwf\".", sink->prefix),
             GST_ERROR_SYSTEM);
         return FALSE;
     }
@@ -539,7 +449,7 @@ flush_failed:
     {
         GST_ELEMENT_ERROR(
             sink, RESOURCE, WRITE,
-            ("Error while writing to file \"%s\".", sink->filename),
+            ("Error while writing to file \"%s-TIME-SPAN.gwf\".", sink->prefix),
             GST_ERROR_SYSTEM);
         return FALSE;
     }
@@ -608,7 +518,7 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
         XLALFrameAddREAL8TimeSeriesProcData(frame, series);
 
         snprintf(name, sizeof(name), "%s-%d-%g.gwf",
-                 sink->filename, epoch.gpsSeconds, duration);
+                 sink->prefix, epoch.gpsSeconds, duration);
         if (XLALFrameWrite(frame, name, -1) != 0)
             goto handle_error;
 
@@ -630,7 +540,8 @@ handle_error:
         default: {
             GST_ELEMENT_ERROR(
                 sink, RESOURCE, WRITE,
-                ("Error while writing to file \"%s\".", sink->filename),
+                ("Error while writing to file \"%s-GPSTIME-SPAN.gwf\".",
+                 sink->prefix),
                 ("%s", g_strerror(errno)));
         }
         }
@@ -650,87 +561,4 @@ gst_lalframe_sink_stop(GstBaseSink *basesink)
 {
     // And we may want to close resources too...
     return TRUE;
-}
-
-/*** GSTURIHANDLER INTERFACE *************************************************/
-
-static GstURIType
-gst_lalframe_sink_uri_get_type(void)
-{
-    return GST_URI_SINK;
-}
-
-static gchar **
-gst_lalframe_sink_uri_get_protocols(void)
-{
-    static gchar *protocols[] = { "file", NULL };
-
-    return protocols;
-}
-
-static const gchar *
-gst_lalframe_sink_uri_get_uri(GstURIHandler *handler)
-{
-    GstLalframeSink *sink = GST_LALFRAME_SINK(handler);
-
-    return sink->uri;
-}
-
-static gboolean
-gst_lalframe_sink_uri_set_uri(GstURIHandler *handler, const gchar *uri)
-{
-    gchar *protocol, *location;
-    gboolean ret;
-    GstLalframeSink *sink = GST_LALFRAME_SINK(handler);
-
-    protocol = gst_uri_get_protocol(uri);
-    if (strcmp(protocol, "file") != 0) {
-        g_free(protocol);
-        return FALSE;
-    }
-    g_free(protocol);
-
-    /* allow file://localhost/foo/bar by stripping localhost but fail
-     * for every other hostname */
-    if (g_str_has_prefix(uri, "file://localhost/")) {
-        char *tmp;
-
-        /* 16 == strlen("file://localhost") */
-        tmp = g_strconcat("file://", uri + 16, NULL);
-        /* we use gst_uri_get_location() although we already have the
-         * "location" with uri + 16 because it provides unescaping */
-        location = gst_uri_get_location(tmp);
-        g_free(tmp);
-    } else if (strcmp(uri, "file://") == 0) {
-        /* Special case for "file://" as this is used by some applications
-         *  to test with gst_element_make_from_uri if there's an element
-         *  that supports the URI protocol. */
-        gst_lalframe_sink_set_location(sink, NULL);
-        return TRUE;
-    } else {
-        location = gst_uri_get_location(uri);
-    }
-
-    if (!location)
-        return FALSE;
-    if (!g_path_is_absolute(location)) {
-        g_free(location);
-        return FALSE;
-    }
-
-    ret = gst_lalframe_sink_set_location(sink, location);
-    g_free(location);
-
-    return ret;
-}
-
-static void
-gst_lalframe_sink_uri_handler_init(gpointer g_iface, gpointer iface_data)
-{
-    GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
-
-    iface->get_type = gst_lalframe_sink_uri_get_type;
-    iface->get_protocols = gst_lalframe_sink_uri_get_protocols;
-    iface->get_uri = gst_lalframe_sink_uri_get_uri;
-    iface->set_uri = gst_lalframe_sink_uri_set_uri;
 }
