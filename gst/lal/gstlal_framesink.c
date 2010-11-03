@@ -26,7 +26,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch audiotestsrc wave=sine num-buffers=100 ! \
+ * gst-launch audiotestsrc wave=sine num-buffers=1000 ! \
  *   taginject tags="instrument=H1,channel-name=H1:LSC-STRAIN,units=strain" ! \
  *   audio/x-raw-float,rate=16384,width=64 ! \
  *   lal_framesink path=. frame-type=hoft
@@ -199,7 +199,7 @@ gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
             "Units of the data. Not used yet.", NULL,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-    gstbasesink_class->get_times = NULL;  //// ?
+    gstbasesink_class->get_times = NULL;  /* no sync */
     gstbasesink_class->start = GST_DEBUG_FUNCPTR(gst_lalframe_sink_start);
     gstbasesink_class->stop = GST_DEBUG_FUNCPTR(gst_lalframe_sink_stop);
     gstbasesink_class->render = GST_DEBUG_FUNCPTR(gst_lalframe_sink_render);
@@ -479,21 +479,13 @@ flush_failed:
 static GstFlowReturn
 gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
 {
-    GstLalframeSink *sink;
-//    guint size;
-    double *data;  // people normally address it as  guint8 *data; ...
     /* Number of expected bytes. 16 s, 16*1024 Hz, 8 bytes/double */
     const guint N_EXP_BYTES = 16 * 16*1024 * sizeof(double);
-
-    sink = GST_LALFRAME_SINK(base_sink);
-
-//    size = GST_BUFFER_SIZE(buffer);
+    GstLalframeSink *sink = GST_LALFRAME_SINK(base_sink);
 
     gst_buffer_ref(buffer);  /* one reference is lost in GstBaseSink's render */
-    gst_adapter_push(sink->adapter, buffer);
+    gst_adapter_push(sink->adapter, buffer);  /* put buffer into adapter */
     while (gst_adapter_available(sink->adapter) >= N_EXP_BYTES) {
-        data = (double *) gst_adapter_peek(sink->adapter, N_EXP_BYTES);
-
         FrameH *frame;
         double duration = N_EXP_BYTES / (sizeof(double)*16.0*1024);
         int ifo_flags;
@@ -533,7 +525,8 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
                                            N_EXP_BYTES/sizeof(double));
 
         /* copy buffer contents to timeseries */
-        memcpy(series->data->data, data, N_EXP_BYTES);
+        gst_adapter_copy(sink->adapter, (guint8 *) series->data->data,
+                         0, N_EXP_BYTES);
 
         XLALFrameAddREAL8TimeSeriesProcData(frame, series);
 
