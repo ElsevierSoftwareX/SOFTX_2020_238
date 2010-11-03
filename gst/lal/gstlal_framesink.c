@@ -62,41 +62,15 @@
 #endif
 
 
-#define GST_TYPE_BUFFER_MODE (buffer_mode_get_type())
-static GType
-buffer_mode_get_type(void)
-{
-    static GType buffer_mode_type = 0;
-    static const GEnumValue buffer_mode[] = {
-        {-1, "Default buffering", "default"},
-        {_IOFBF, "Fully buffered", "full"},
-        {_IOLBF, "Line buffered", "line"},
-        {_IONBF, "Unbuffered", "unbuffered"},
-        {0, NULL, NULL},
-    };
-
-    if (!buffer_mode_type) {
-        buffer_mode_type =
-            g_enum_register_static("GstLalframeSinkBufferMode", buffer_mode);
-    }
-    return buffer_mode_type;
-}
-
 GST_DEBUG_CATEGORY_STATIC(gst_lalframe_sink_debug);
 #define GST_CAT_DEFAULT gst_lalframe_sink_debug
 
-#define DEFAULT_BUFFER_MODE     -1
-#define DEFAULT_BUFFER_SIZE     64 * 1024
-
-enum
-{
+enum {
     PROP_0,
     PROP_LOCATION,
     PROP_INSTRUMENT,
     PROP_CHANNEL_NAME,
     PROP_UNITS,
-    PROP_BUFFER_MODE,
-    PROP_BUFFER_SIZE
 };
 
 
@@ -234,21 +208,6 @@ gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
             "Units of the data. Not used yet.", NULL,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-    g_object_class_install_property(
-        gobject_class, PROP_BUFFER_MODE,
-        g_param_spec_enum(
-            "buffer-mode", "Buffering mode",
-            "The buffering mode to use", GST_TYPE_BUFFER_MODE,
-            DEFAULT_BUFFER_MODE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-    g_object_class_install_property(
-        gobject_class, PROP_BUFFER_SIZE,
-        g_param_spec_uint(
-            "buffer-size", "Buffering size",
-            "Size of buffer in number of bytes for line or full buffer-mode", 0,
-            G_MAXUINT, DEFAULT_BUFFER_SIZE,
-            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
     gstbasesink_class->get_times = NULL;  //// ?
     gstbasesink_class->start = GST_DEBUG_FUNCPTR(gst_lalframe_sink_start);
     gstbasesink_class->stop = GST_DEBUG_FUNCPTR(gst_lalframe_sink_stop);
@@ -278,9 +237,6 @@ gst_lalframe_sink_init(GstLalframeSink *sink,
     gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(gst_lalframe_sink_query));
 
     sink->filename = NULL;
-    sink->buffer_mode = DEFAULT_BUFFER_MODE;
-    sink->buffer_size = DEFAULT_BUFFER_SIZE;
-    sink->buffer = NULL;
     sink->instrument = NULL;
     sink->channel_name = NULL;
     sink->units = NULL;
@@ -311,9 +267,6 @@ gst_lalframe_sink_dispose(GObject *object)
     sink->uri = NULL;
     g_free(sink->filename);
     sink->filename = NULL;
-    g_free(sink->buffer);
-    sink->buffer = NULL;
-    sink->buffer_size = 0;
 
     G_OBJECT_CLASS(parent_class)->dispose(object);
 }
@@ -416,12 +369,6 @@ gst_lalframe_sink_set_property(GObject *object, guint prop_id,
     case PROP_UNITS:
         gst_lalframe_sink_set_units(sink, g_value_get_string(value));
         break;
-    case PROP_BUFFER_MODE:
-        sink->buffer_mode = g_value_get_enum(value);
-        break;
-    case PROP_BUFFER_SIZE:
-        sink->buffer_size = g_value_get_uint(value);
-        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
         break;
@@ -446,12 +393,6 @@ gst_lalframe_sink_get_property(GObject *object, guint prop_id, GValue *value,
         break;
     case PROP_UNITS:
         g_value_set_string(value, sink->units);
-        break;
-    case PROP_BUFFER_MODE:
-        g_value_set_enum(value, sink->buffer_mode);
-        break;
-    case PROP_BUFFER_SIZE:
-        g_value_set_uint(value, sink->buffer_size);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
