@@ -28,8 +28,9 @@
  * |[
  * gst-launch audiotestsrc wave=sine num-buffers=100 ! \
  *   taginject tags="instrument=H1,channel-name=H1:LSC-STRAIN,units=strain" ! \
- *   audio/x-raw-float,rate=16384,width=64 ! lal_framesink prefix=./out
- * ]| Save wave into a sequence of gwf files of the form ./out-TIME-SPAN.gwf.
+ *   audio/x-raw-float,rate=16384,width=64 ! \
+ *   lal_framesink path=. frame-type=hoft
+ * ]| Save wave into a sequence of gwf files of the form ./H-hoft-TIME-SPAN.gwf.
  * </refsect2>
  */
 
@@ -67,7 +68,8 @@ GST_DEBUG_CATEGORY_STATIC(gst_lalframe_sink_debug);
 
 enum {
     PROP_0,
-    PROP_PREFIX,
+    PROP_PATH,
+    PROP_FRAME_TYPE,
     PROP_INSTRUMENT,
     PROP_CHANNEL_NAME,
     PROP_UNITS,
@@ -163,10 +165,17 @@ gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
     gobject_class->get_property = gst_lalframe_sink_get_property;
 
     g_object_class_install_property(
-        gobject_class, PROP_PREFIX,
+        gobject_class, PROP_PATH,
         g_param_spec_string(
-            "prefix", "Path and file prefix",
-            "Prefix of the files PREFIX-TIME-SPAN.gwf to write", NULL,
+            "path", "Path to files.",
+            "Directory where the frame files will be written", NULL,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+    g_object_class_install_property(
+        gobject_class, PROP_FRAME_TYPE,
+        g_param_spec_string(
+            "frame-type", "Frame type.",
+            "Type of frame, a sort of description of its contents", NULL,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
     g_object_class_install_property(
@@ -218,7 +227,8 @@ gst_lalframe_sink_init(GstLalframeSink *sink,
 
     gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(gst_lalframe_sink_query));
 
-    sink->prefix = NULL;
+    sink->path = NULL;
+    sink->frame_type = NULL;
     sink->instrument = NULL;
     sink->channel_name = NULL;
     sink->units = NULL;
@@ -245,8 +255,10 @@ gst_lalframe_sink_dispose(GObject *object)
     sink->channel_name = NULL;
     g_free(sink->instrument);
     sink->instrument = NULL;
-    g_free(sink->prefix);
-    sink->prefix = NULL;
+    g_free(sink->frame_type);
+    sink->frame_type = NULL;
+    g_free(sink->path);
+    sink->path = NULL;
 
     G_OBJECT_CLASS(parent_class)->dispose(object);
 }
@@ -267,9 +279,13 @@ gst_lalframe_sink_set_property(GObject *object, guint prop_id,
     GstLalframeSink *sink = GST_LALFRAME_SINK(object);
 
     switch (prop_id) {
-    case PROP_PREFIX:
-        g_free(sink->prefix);
-        sink->prefix = g_strdup(g_value_get_string(value));
+    case PROP_PATH:
+        g_free(sink->path);
+        sink->path = g_strdup(g_value_get_string(value));
+        break;
+    case PROP_FRAME_TYPE:
+        g_free(sink->frame_type);
+        sink->frame_type = g_strdup(g_value_get_string(value));
         break;
     case PROP_INSTRUMENT:
         g_free(sink->instrument);
@@ -296,8 +312,11 @@ gst_lalframe_sink_get_property(GObject *object, guint prop_id, GValue *value,
     GstLalframeSink *sink = GST_LALFRAME_SINK(object);
 
     switch (prop_id) {
-    case PROP_PREFIX:
-        g_value_set_string(value, sink->prefix);
+    case PROP_PATH:
+        g_value_set_string(value, sink->path);
+        break;
+    case PROP_FRAME_TYPE:
+        g_value_set_string(value, sink->frame_type);
         break;
     case PROP_INSTRUMENT:
         g_value_set_string(value, sink->instrument);
@@ -441,7 +460,8 @@ seek_failed:
     {
         GST_ELEMENT_ERROR(
             sink, RESOURCE, SEEK,
-            ("Error while seeking in file \"%s-TIME-SPAN.gwf\".", sink->prefix),
+            ("Error while seeking in file %s/%c-%s-TIME-SPAN.gwf",
+             sink->path, sink->instrument[0], sink->frame_type),
             GST_ERROR_SYSTEM);
         return FALSE;
     }
@@ -449,7 +469,8 @@ flush_failed:
     {
         GST_ELEMENT_ERROR(
             sink, RESOURCE, WRITE,
-            ("Error while writing to file \"%s-TIME-SPAN.gwf\".", sink->prefix),
+            ("Error while writing to file %s/%c-%s-TIME-SPAN.gwf",
+             sink->path, sink->instrument[0], sink->frame_type),
             GST_ERROR_SYSTEM);
         return FALSE;
     }
@@ -468,14 +489,14 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
 
 //    size = GST_BUFFER_SIZE(buffer);
 
-    gst_buffer_ref(buffer); //// FIXME: really? where do I lose the ref??
+    gst_buffer_ref(buffer);  /* one reference is lost in GstBaseSink's render */
     gst_adapter_push(sink->adapter, buffer);
     while (gst_adapter_available(sink->adapter) >= N_EXP_BYTES) {
         data = (double *) gst_adapter_peek(sink->adapter, N_EXP_BYTES);
 
         FrameH *frame;
         double duration = N_EXP_BYTES / (sizeof(double)*16.0*1024);
-        int detectorFlags;
+        int ifo_flags;
         LIGOTimeGPS epoch;
         REAL8TimeSeries *series;  //// FIXME: pick type depending on input
         double f0 = 0;
@@ -485,16 +506,19 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
         GstClockTime timestamp;
 
         /* Get detector flags */
+        if (sink->instrument == NULL)
+            goto handle_error;
+
         if      (strcmp(sink->instrument, "H1") == 0)
-            detectorFlags = LAL_LHO_4K_DETECTOR_BIT;
+            ifo_flags = LAL_LHO_4K_DETECTOR_BIT;
         else if (strcmp(sink->instrument, "H2") == 0)
-            detectorFlags = LAL_LHO_2K_DETECTOR_BIT;
+            ifo_flags = LAL_LHO_2K_DETECTOR_BIT;
         else if (strcmp(sink->instrument, "L1") == 0)
-            detectorFlags = LAL_LLO_4K_DETECTOR_BIT;
+            ifo_flags = LAL_LLO_4K_DETECTOR_BIT;
         else if (strcmp(sink->instrument, "V1") == 0)
-            detectorFlags = LAL_VIRGO_DETECTOR_BIT;
+            ifo_flags = LAL_VIRGO_DETECTOR_BIT;
         else
-            detectorFlags = -1;
+            ifo_flags = -1;
 
         /* Get timestamp from adapter */
         timestamp = gst_adapter_prev_timestamp(sink->adapter, NULL);
@@ -504,7 +528,7 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
         if (sink->channel_name == NULL)
             goto handle_error;
 
-        frame = XLALFrameNew(&epoch, duration, "LIGO", 0, 1, detectorFlags);
+        frame = XLALFrameNew(&epoch, duration, "LIGO", 0, 1, ifo_flags);
 
         series = XLALCreateREAL8TimeSeries(sink->channel_name,
                                            &epoch, f0, deltaT,
@@ -517,8 +541,9 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
 
         XLALFrameAddREAL8TimeSeriesProcData(frame, series);
 
-        snprintf(name, sizeof(name), "%s-%d-%g.gwf",
-                 sink->prefix, epoch.gpsSeconds, duration);
+        snprintf(name, sizeof(name), "%s/%c-%s-%d-%g.gwf",
+                 sink->path, sink->instrument[0], sink->frame_type,
+                 epoch.gpsSeconds, duration);
         if (XLALFrameWrite(frame, name, -1) != 0)
             goto handle_error;
 
@@ -540,8 +565,8 @@ handle_error:
         default: {
             GST_ELEMENT_ERROR(
                 sink, RESOURCE, WRITE,
-                ("Error while writing to file \"%s-GPSTIME-SPAN.gwf\".",
-                 sink->prefix),
+                ("Error while writing to file %s/%c-%s-TIME-SPAN.gwf",
+                 sink->path, sink->instrument[0], sink->frame_type),
                 ("%s", g_strerror(errno)));
         }
         }
