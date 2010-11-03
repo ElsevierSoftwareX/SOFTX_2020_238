@@ -25,15 +25,6 @@ __copyright__    = "Copyright 2010, Leo Singer"
 __all__          = ["gobject", "gst", "gstlal_element_register", "mkelem", "mkelems_in_bin"]
 
 
-#
-# =============================================================================
-#
-#                                   Preamble
-#
-# =============================================================================
-#
-
-
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
 pygtk.require("2.0")
@@ -42,15 +33,6 @@ gobject.threads_init()
 import pygst
 pygst.require('0.10')
 import gst
-
-
-#
-# =============================================================================
-#
-#                                   Element
-#
-# =============================================================================
-#
 
 
 def gstlal_element_register(clazz):
