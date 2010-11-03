@@ -32,7 +32,7 @@
    (replace-string "file_" "lalframe_" nil (point-min) (point-max))
    (replace-string "filesink" "lalframesink" nil (point-min) (point-max))))
 
- * and (beautify)
+ * and (beautify) . And a lot of editing afterwards.
  */
 
 /*

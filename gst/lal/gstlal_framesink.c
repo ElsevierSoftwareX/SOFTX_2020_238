@@ -77,21 +77,19 @@ enum {
 };
 
 
-static void gst_lalframe_sink_dispose(GObject *object);
+static void dispose(GObject *object);
 
-static void gst_lalframe_sink_set_property(GObject *object, guint prop_id,
-                                           const GValue *value,
-                                           GParamSpec *pspec);
-static void gst_lalframe_sink_get_property(GObject *object, guint prop_id,
-                                           GValue *value, GParamSpec *pspec);
+static void set_property(GObject *object, guint prop_id,
+                         const GValue *value, GParamSpec *pspec);
+static void get_property(GObject *object, guint prop_id,
+                         GValue *value, GParamSpec *pspec);
 
-static gboolean gst_lalframe_sink_start(GstBaseSink *sink);
-static gboolean gst_lalframe_sink_stop(GstBaseSink *sink);
-static gboolean gst_lalframe_sink_event(GstBaseSink *sink, GstEvent *event);
-static GstFlowReturn gst_lalframe_sink_render(GstBaseSink *sink,
-                                              GstBuffer *buffer);
+static gboolean start(GstBaseSink *basesink);
+static gboolean stop(GstBaseSink *basesink);
+static gboolean event(GstBaseSink *basesink, GstEvent *event);
+static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer);
 
-static gboolean gst_lalframe_sink_query(GstPad *pad, GstQuery *query);
+static gboolean query(GstPad *pad, GstQuery *query);
 
 
 
@@ -113,8 +111,7 @@ GST_BOILERPLATE(GstLalframeSink, gst_lalframe_sink, GstBaseSink,
  *
  * Element description and pads description.
  */
-static void
-gst_lalframe_sink_base_init(gpointer g_class)
+static void gst_lalframe_sink_base_init(gpointer g_class)
 {
     GstElementClass *gstelement_class = GST_ELEMENT_CLASS(g_class);
 
@@ -154,16 +151,15 @@ gst_lalframe_sink_base_init(gpointer g_class)
  *
  * Specify properties ("arguments").
  */
-static void
-gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
+static void gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
 {
     GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
     GstBaseSinkClass *gstbasesink_class = GST_BASE_SINK_CLASS(klass);
 
-    gobject_class->dispose = gst_lalframe_sink_dispose;
+    gobject_class->dispose = dispose;
 
-    gobject_class->set_property = gst_lalframe_sink_set_property;
-    gobject_class->get_property = gst_lalframe_sink_get_property;
+    gobject_class->set_property = set_property;
+    gobject_class->get_property = get_property;
 
     g_object_class_install_property(
         gobject_class, PROP_PATH,
@@ -208,10 +204,10 @@ gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
     gstbasesink_class->get_times = NULL;  /* no sync */
-    gstbasesink_class->start = GST_DEBUG_FUNCPTR(gst_lalframe_sink_start);
-    gstbasesink_class->stop = GST_DEBUG_FUNCPTR(gst_lalframe_sink_stop);
-    gstbasesink_class->render = GST_DEBUG_FUNCPTR(gst_lalframe_sink_render);
-    gstbasesink_class->event = GST_DEBUG_FUNCPTR(gst_lalframe_sink_event);
+    gstbasesink_class->start = GST_DEBUG_FUNCPTR(start);
+    gstbasesink_class->stop = GST_DEBUG_FUNCPTR(stop);
+    gstbasesink_class->render = GST_DEBUG_FUNCPTR(render);
+    gstbasesink_class->event = GST_DEBUG_FUNCPTR(event);
 
     if (sizeof(off_t) < 8) {
         GST_LOG("No large file support, sizeof(off_t) = %" G_GSIZE_FORMAT "!",
@@ -225,15 +221,14 @@ gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
  *
  * Create caps.
  */
-static void
-gst_lalframe_sink_init(GstLalframeSink *sink,
-                       GstLalframeSinkClass *g_class)
+static void gst_lalframe_sink_init(GstLalframeSink *sink,
+                                   GstLalframeSinkClass *g_class)
 {
     GstPad *pad;
 
     pad = GST_BASE_SINK_PAD(sink);
 
-    gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(gst_lalframe_sink_query));
+    gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(query));
 
     sink->path = g_strdup(".");
     sink->frame_type = g_strdup("test_frame");
@@ -249,8 +244,8 @@ gst_lalframe_sink_init(GstLalframeSink *sink,
     gst_base_sink_set_sync(GST_BASE_SINK(sink), FALSE);
 }
 
-static void
-gst_lalframe_sink_dispose(GObject *object)
+
+static void dispose(GObject *object)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(object);
 
@@ -281,9 +276,9 @@ gst_lalframe_sink_dispose(GObject *object)
  * ============================================================================
  */
 
-static void
-gst_lalframe_sink_set_property(GObject *object, guint prop_id,
-                               const GValue *value, GParamSpec *pspec)
+
+static void set_property(GObject *object, guint prop_id,
+                         const GValue *value, GParamSpec *pspec)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(object);
 
@@ -317,9 +312,9 @@ gst_lalframe_sink_set_property(GObject *object, guint prop_id,
     }
 }
 
+
 static void
-gst_lalframe_sink_get_property(GObject *object, guint prop_id, GValue *value,
-                               GParamSpec *pspec)
+get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(object);
 
@@ -358,13 +353,10 @@ gst_lalframe_sink_get_property(GObject *object, guint prop_id, GValue *value,
  */
 
 
-static gboolean
-gst_lalframe_sink_query(GstPad *pad, GstQuery *query)
+static gboolean query(GstPad *pad, GstQuery *query)
 {
-    GstLalframeSink *self;
     GstFormat format;
-
-    self = GST_LALFRAME_SINK(GST_PAD_PARENT(pad));
+    GstLalframeSink *sink = GST_LALFRAME_SINK(GST_PAD_PARENT(pad));
 
     switch (GST_QUERY_TYPE(query)) {
     case GST_QUERY_POSITION:
@@ -372,7 +364,7 @@ gst_lalframe_sink_query(GstPad *pad, GstQuery *query)
         switch (format) {
         case GST_FORMAT_DEFAULT:
         case GST_FORMAT_BYTES:
-            gst_query_set_position(query, GST_FORMAT_BYTES, self->current_pos);
+            gst_query_set_position(query, GST_FORMAT_BYTES, sink->current_pos);
             return TRUE;
         default:
             return FALSE;
@@ -388,7 +380,7 @@ gst_lalframe_sink_query(GstPad *pad, GstQuery *query)
 }
 
 
-/* handle events(search) */
+/* handle events (search) */
 
 static gboolean
 taglist_extract_string(GstLalframeSink *element, GstTagList *taglist,
@@ -402,14 +394,12 @@ taglist_extract_string(GstLalframeSink *element, GstTagList *taglist,
     return TRUE;
 }
 
-static gboolean
-gst_lalframe_sink_event(GstBaseSink *base_sink, GstEvent *event)
+
+static gboolean event(GstBaseSink *basesink, GstEvent *event)
 {
     gboolean success;
 
-    GstLalframeSink *sink;
-
-    sink = GST_LALFRAME_SINK(base_sink);
+    GstLalframeSink *sink = GST_LALFRAME_SINK(basesink);
 
     switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_TAG:  /* from gstlal_simulation.c */
@@ -491,10 +481,10 @@ flush_failed:
     }
 }
 
-static GstFlowReturn
-gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
+
+static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
 {
-    GstLalframeSink *sink = GST_LALFRAME_SINK(base_sink);
+    GstLalframeSink *sink = GST_LALFRAME_SINK(basesink);
     const guint N_BYTES = sink->duration * 16*1024 * sizeof(double);
 
     gst_buffer_ref(buffer);  /* one reference is lost in GstBaseSink's render */
@@ -576,15 +566,15 @@ handle_error:
     }
 }
 
-static gboolean
-gst_lalframe_sink_start(GstBaseSink *basesink)
+
+static gboolean start(GstBaseSink *basesink)
 {
     // We may want to open files or other resources...
     return TRUE;
 }
 
-static gboolean
-gst_lalframe_sink_stop(GstBaseSink *basesink)
+
+static gboolean stop(GstBaseSink *basesink)
 {
     // And we may want to close resources too...
     return TRUE;
