@@ -482,7 +482,9 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
         double deltaT = 1.0/(16*1024);  ///// FIXME: take sample rate from the buffer's caps
         guint i;
         char name[256];
+        GstClockTime timestamp;
 
+        /* Get detector flags */
         if      (strcmp(sink->instrument, "H1") == 0)
             detectorFlags = LAL_LHO_4K_DETECTOR_BIT;
         else if (strcmp(sink->instrument, "H2") == 0)
@@ -494,12 +496,10 @@ gst_lalframe_sink_render(GstBaseSink *base_sink, GstBuffer *buffer)
         else
             detectorFlags = -1;
 
-   /* /\* get timestamp of the current adapter byte *\/ */
-
-   /*  timestamp = gst_adapter_prev_timestamp(sink->adapter, &dist); */
-
-        epoch.gpsSeconds = GST_BUFFER_TIMESTAMP(buffer) / GST_SECOND;
-        epoch.gpsNanoSeconds = GST_BUFFER_TIMESTAMP(buffer) % GST_SECOND;
+        /* Get timestamp from adapter */
+        timestamp = gst_adapter_prev_timestamp(sink->adapter, NULL);
+        epoch.gpsSeconds     = timestamp / GST_SECOND;
+        epoch.gpsNanoSeconds = timestamp % GST_SECOND;
 
         if (sink->channel_name == NULL)
             goto handle_error;
