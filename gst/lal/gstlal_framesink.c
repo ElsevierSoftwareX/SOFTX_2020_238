@@ -84,13 +84,14 @@ static void set_property(GObject *object, guint prop_id,
 static void get_property(GObject *object, guint prop_id,
                          GValue *value, GParamSpec *pspec);
 
+static gboolean event(GstBaseSink *basesink, GstEvent *event);
+
 static gboolean start(GstBaseSink *basesink);
 static gboolean stop(GstBaseSink *basesink);
-static gboolean event(GstBaseSink *basesink, GstEvent *event);
+static gboolean query(GstPad *pad, GstQuery *query);
 static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer);
 
-static gboolean query(GstPad *pad, GstQuery *query);
-
+static gboolean write_frame(GstLalframeSink *sink, guint nbytes);
 
 
 /*
@@ -347,10 +348,122 @@ get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 /*
  * ============================================================================
  *
- *                           Open, query, seek, event
+ *                                Events
  *
  * ============================================================================
  */
+
+
+static inline void extract(GstLalframeSink *sink, GstTagList *taglist,
+                           const char *tagname, gchar **dest)
+{
+    gchar *tmp;
+    if (!gst_tag_list_get_string(taglist, tagname, &tmp)) {
+        GST_WARNING_OBJECT(sink, "Unable to parse \"%s\" from %" GST_PTR_FORMAT,
+                           tagname, taglist);
+        return;
+    }
+    g_free(*dest);
+    *dest = tmp;
+    GST_DEBUG_OBJECT(sink, "Found tag \"%s\"=\"%s\"", tagname, *dest);
+}
+
+
+static gboolean event(GstBaseSink *basesink, GstEvent *event)
+{
+    GstLalframeSink *sink = GST_LALFRAME_SINK(basesink);
+
+    switch (GST_EVENT_TYPE(event)) {
+    case GST_EVENT_TAG:  /* from gstlal_simulation.c */
+    {
+        GstTagList *taglist;
+        gst_event_parse_tag(event, &taglist);
+        extract(sink, taglist, GSTLAL_TAG_INSTRUMENT, &sink->instrument);
+        extract(sink, taglist, GSTLAL_TAG_CHANNEL_NAME, &sink->channel_name);
+        extract(sink, taglist, GSTLAL_TAG_UNITS, &sink->units);
+        break;
+    }
+    case GST_EVENT_NEWSEGMENT:
+    {
+        gint64 start, stop, pos;
+        GstFormat format;
+
+        gst_event_parse_new_segment(event, NULL, NULL, &format, &start,
+                                    &stop, &pos);
+
+        if (format == GST_FORMAT_BYTES) {
+            /* only try to seek and fail when we are going to a different
+             * position */
+            if (sink->current_pos != (guint64) start)
+                goto seek_failed;
+            else
+                GST_DEBUG_OBJECT(sink, "Ignored NEWSEGMENT, no seek needed");
+        }
+        else {
+            GST_DEBUG_OBJECT(
+                sink,
+                "Ignored NEWSEGMENT event of format %u (%s)", (guint) format,
+                gst_format_get_name(format));
+        }
+        break;
+    }
+    case GST_EVENT_EOS:
+    {
+        guint nbytes = gst_adapter_available(sink->adapter);
+        if (nbytes > 0) {
+            if (!write_frame(sink, nbytes))
+                goto flush_failed;
+            gst_adapter_flush(sink->adapter, nbytes);
+        }
+        break;
+    }
+    default:
+        break;
+    }
+
+    return TRUE;
+
+    /* ERRORS */
+seek_failed:
+    {
+        GST_ELEMENT_ERROR(
+            sink, RESOURCE, SEEK,
+            ("Error while seeking in function %s", __FUNCTION__),
+            GST_ERROR_SYSTEM);
+        return FALSE;
+    }
+flush_failed:
+    {
+        GST_ELEMENT_ERROR(
+            sink, RESOURCE, WRITE,
+            ("Error while writing in function %s", __FUNCTION__),
+            GST_ERROR_SYSTEM);
+        return FALSE;
+    }
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                          Start, Stop, Query, Render
+ *
+ * ============================================================================
+ */
+
+
+static gboolean start(GstBaseSink *basesink)
+{
+    // We may want to open files or other resources...
+    return TRUE;
+}
+
+
+static gboolean stop(GstBaseSink *basesink)
+{
+    // And we may want to close resources too...
+    return TRUE;
+}
 
 
 static gboolean query(GstPad *pad, GstQuery *query)
@@ -380,202 +493,104 @@ static gboolean query(GstPad *pad, GstQuery *query)
 }
 
 
-/* handle events (search) */
-
-static gboolean
-taglist_extract_string(GstLalframeSink *element, GstTagList *taglist,
-                       const char *tagname, gchar **dest)
-{
-    if (!gst_tag_list_get_string(taglist, tagname, dest)) {
-        GST_WARNING_OBJECT(element, "unable to parse \"%s\" from %"
-                           GST_PTR_FORMAT, tagname, taglist);
-        return FALSE;
-    }
-    return TRUE;
-}
-
-
-static gboolean event(GstBaseSink *basesink, GstEvent *event)
-{
-    gboolean success;
-
-    GstLalframeSink *sink = GST_LALFRAME_SINK(basesink);
-
-    switch (GST_EVENT_TYPE(event)) {
-    case GST_EVENT_TAG:  /* from gstlal_simulation.c */
-    {
-        GstTagList *taglist;
-        gchar *instrument, *channel_name, *units;
-        gst_event_parse_tag(event, &taglist);
-        success = taglist_extract_string(sink, taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
-        success &= taglist_extract_string(sink, taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
-        success &= taglist_extract_string(sink, taglist, GSTLAL_TAG_UNITS, &units);
-        if (success) {
-            GST_DEBUG_OBJECT(
-                sink, "found tags \"%s\"=\"%s\" \"%s\"=\"%s\" \"%s\"=\"%s\"",
-                GSTLAL_TAG_INSTRUMENT, instrument, GSTLAL_TAG_CHANNEL_NAME,
-                channel_name, GSTLAL_TAG_UNITS, units);
-            g_free(sink->instrument);
-            sink->instrument = instrument;
-            g_free(sink->channel_name);
-            sink->channel_name = channel_name;
-            g_free(sink->units);
-            sink->units = units;
-        }
-        break;
-    }
-    case GST_EVENT_NEWSEGMENT:
-    {
-        gint64 start, stop, pos;
-        GstFormat format;
-
-        gst_event_parse_new_segment(event, NULL, NULL, &format, &start,
-                                    &stop, &pos);
-
-        if (format == GST_FORMAT_BYTES) {
-            /* only try to seek and fail when we are going to a different
-             * position */
-            if (sink->current_pos != (guint64) start) {
-                goto seek_failed;
-            } else {
-                GST_DEBUG_OBJECT(
-                    sink, "Ignored NEWSEGMENT, no seek needed");
-            }
-        } else {
-            GST_DEBUG_OBJECT(
-                sink,
-                "Ignored NEWSEGMENT event of format %u(%s)", (guint) format,
-                gst_format_get_name(format));
-        }
-        break;
-    }
-    case GST_EVENT_EOS:
-        // FIXME: Fill the last frame if there is something to save
-        if (0)  // whatever is appropiate
-            goto flush_failed;
-        break;
-    default:
-        break;
-    }
-
-    return TRUE;
-
-    /* ERRORS */
-seek_failed:
-    {
-        GST_ELEMENT_ERROR(
-            sink, RESOURCE, SEEK,
-            ("Error while seeking in file %s/%c-%s-TIME-SPAN.gwf",
-             sink->path, sink->instrument[0], sink->frame_type),
-            GST_ERROR_SYSTEM);
-        return FALSE;
-    }
-flush_failed:
-    {
-        GST_ELEMENT_ERROR(
-            sink, RESOURCE, WRITE,
-            ("Error while writing to file %s/%c-%s-TIME-SPAN.gwf",
-             sink->path, sink->instrument[0], sink->frame_type),
-            GST_ERROR_SYSTEM);
-        return FALSE;
-    }
-}
-
-
+/* This is the most important one. It calls write_frame() */
 static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(basesink);
-    const guint N_BYTES = sink->duration * 16*1024 * sizeof(double);
+    const guint nbytes = sink->duration * 16*1024 * sizeof(double);
 
     gst_buffer_ref(buffer);  /* one reference is lost in GstBaseSink's render */
+
     gst_adapter_push(sink->adapter, buffer);  /* put buffer into adapter */
-    while (gst_adapter_available(sink->adapter) >= N_BYTES) {
-        FrameH *frame;
-        int ifo_flags;
-        LIGOTimeGPS epoch;
-        REAL8TimeSeries *series;  //// FIXME: pick type depending on input
-        double f0 = 0;
-        double deltaT = 1.0/(16*1024);  ///// FIXME: take sample rate from the buffer's caps
-        char name[256];
-        GstClockTime timestamp;
 
-        if (sink->instrument == NULL || sink->path == NULL ||
-            sink->frame_type == NULL || sink->channel_name == NULL)
-            goto handle_error;
+    while (gst_adapter_available(sink->adapter) >= nbytes) {
+        if (!write_frame(sink, nbytes))
+            return GST_FLOW_ERROR;
 
-        /* Get detector flags */
-        if      (strcmp(sink->instrument, "H1") == 0)
-            ifo_flags = LAL_LHO_4K_DETECTOR_BIT;
-        else if (strcmp(sink->instrument, "H2") == 0)
-            ifo_flags = LAL_LHO_2K_DETECTOR_BIT;
-        else if (strcmp(sink->instrument, "L1") == 0)
-            ifo_flags = LAL_LLO_4K_DETECTOR_BIT;
-        else if (strcmp(sink->instrument, "V1") == 0)
-            ifo_flags = LAL_VIRGO_DETECTOR_BIT;
-        else
-            ifo_flags = -1;
-
-        /* Get timestamp from adapter */
-        timestamp = gst_adapter_prev_timestamp(sink->adapter, NULL);
-        epoch.gpsSeconds     = timestamp / GST_SECOND;
-        epoch.gpsNanoSeconds = timestamp % GST_SECOND;
-
-        frame = XLALFrameNew(&epoch, sink->duration, "LIGO", 0, 1, ifo_flags);
-
-        series = XLALCreateREAL8TimeSeries(sink->channel_name,
-                                           &epoch, f0, deltaT,
-                                           &lalDimensionlessUnit,
-                                           N_BYTES/sizeof(double));
-
-        /* copy buffer contents to timeseries */
-        gst_adapter_copy(sink->adapter, (guint8 *) series->data->data,
-                         0, N_BYTES);
-
-        XLALFrameAddREAL8TimeSeriesProcData(frame, series);
-
-        snprintf(name, sizeof(name), "%s/%c-%s-%d-%g.gwf",
-                 sink->path, sink->instrument[0], sink->frame_type,
-                 epoch.gpsSeconds, sink->duration);
-        if (XLALFrameWrite(frame, name, -1) != 0)
-            goto handle_error;
-
-        sink->current_pos += N_BYTES;
-
-        gst_adapter_flush(sink->adapter, N_BYTES);
+        gst_adapter_flush(sink->adapter, nbytes);
     }
 
     return GST_FLOW_OK;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                                Utilities
+ *
+ * ============================================================================
+ */
+
+
+static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
+{
+    FrameH *frame;
+    int ifo_flags;
+    LIGOTimeGPS epoch;
+    REAL8TimeSeries *series;  //// FIXME: pick type depending on input
+    double f0 = 0;
+    double deltaT = 1.0/(16*1024);  ///// FIXME: take sample rate from the buffer's caps
+    char name[256];
+    GstClockTime timestamp;
+    double duration = nbytes / (16.0*1024 * sizeof(double));
+
+    if (sink->instrument == NULL || sink->path == NULL ||
+        sink->frame_type == NULL || sink->channel_name == NULL)
+        goto handle_error;
+
+    /* Get detector flags */
+    if      (strcmp(sink->instrument, "H1") == 0)
+        ifo_flags = LAL_LHO_4K_DETECTOR_BIT;
+    else if (strcmp(sink->instrument, "H2") == 0)
+        ifo_flags = LAL_LHO_2K_DETECTOR_BIT;
+    else if (strcmp(sink->instrument, "L1") == 0)
+        ifo_flags = LAL_LLO_4K_DETECTOR_BIT;
+    else if (strcmp(sink->instrument, "V1") == 0)
+        ifo_flags = LAL_VIRGO_DETECTOR_BIT;
+    else
+        ifo_flags = -1;
+
+    /* Get timestamp from adapter */
+    timestamp = gst_adapter_prev_timestamp(sink->adapter, NULL);
+    epoch.gpsSeconds     = timestamp / GST_SECOND;
+    epoch.gpsNanoSeconds = timestamp % GST_SECOND;
+
+    frame = XLALFrameNew(&epoch, duration, "LIGO", 0, 1, ifo_flags);
+
+    series = XLALCreateREAL8TimeSeries(sink->channel_name,
+                                       &epoch, f0, deltaT,
+                                       &lalDimensionlessUnit,
+                                       nbytes/sizeof(double));
+
+    /* copy buffer contents to timeseries */
+    gst_adapter_copy(sink->adapter, (guint8 *) series->data->data, 0, nbytes);
+
+    XLALFrameAddREAL8TimeSeriesProcData(frame, series);
+
+    snprintf(name, sizeof(name), "%s/%c-%s-%g-%g.gwf",
+             sink->path, sink->instrument[0], sink->frame_type,
+             epoch.gpsSeconds + epoch.gpsNanoSeconds*1e-9, duration);
+    if (XLALFrameWrite(frame, name, -1) != 0)
+        goto handle_error;
+
+    sink->current_pos += nbytes;
+
+    return TRUE;
 
 handle_error:
     {
         switch (errno) {
         case ENOSPC: {
-            GST_ELEMENT_ERROR(
-                sink, RESOURCE, NO_SPACE_LEFT, (NULL), (NULL));
+            GST_ELEMENT_ERROR(sink, RESOURCE, NO_SPACE_LEFT, (NULL), (NULL));
             break;
         }
         default: {
-            GST_ELEMENT_ERROR(
-                sink, RESOURCE, WRITE,
-                ("Error while writing to file %s/%c-%s-TIME-SPAN.gwf",
-                 sink->path, sink->instrument[0], sink->frame_type),
+            GST_ELEMENT_ERROR(sink, RESOURCE, WRITE,
+                ("Error in function %s", __FUNCTION__),
                 ("%s", g_strerror(errno)));
         }
         }
-        return GST_FLOW_ERROR;
+        return FALSE;
     }
-}
-
-
-static gboolean start(GstBaseSink *basesink)
-{
-    // We may want to open files or other resources...
-    return TRUE;
-}
-
-
-static gboolean stop(GstBaseSink *basesink)
-{
-    // And we may want to close resources too...
-    return TRUE;
 }
