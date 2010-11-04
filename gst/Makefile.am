@@ -4,4 +4,10 @@ else
 CAIRO_SUBDIRS = 
 endif
 
-SUBDIRS = lal python $(CAIRO_SUBDIRS)
+if COND_NDS
+NDS_SUBDIRS = nds
+else
+NDS_SUBDIRS =
+endif
+
+SUBDIRS = lal python $(CAIRO_SUBDIRS) $(NDS_SUBDIRS)

@@ -2,15 +2,10 @@ INCLUDES = -I$(top_srcdir)/lib -I$(top_srcdir)/lib/skymap
 
 plugin_LTLIBRARIES = libgstlal.la
 
-if COND_NDS
-NDSSRC_SOURCES = gstlal_ndssrc.h gstlal_ndssrc.c
-else
-NDSSRC_SOURCES =
-endif
-
 libgstlal_la_SOURCES = \
 	gstlal_plugins.h gstlal.c \
 	gstlal_framesrc.h gstlal_framesrc.c \
+	gstlal_framesink.h gstlal_framesink.c \
 	low_latency_inspiral_functions.h low_latency_inspiral_functions.c \
 	gstlal_matrixmixer.h gstlal_matrixmixer.c \
 	gstlal_simulation.h gstlal_simulation.c \
@@ -34,10 +29,9 @@ libgstlal_la_SOURCES = \
 	gstlal_nofakedisconts.h gstlal_nofakedisconts.c \
 	gstlal_reblock.h gstlal_reblock.c \
 	gstlal_delay.h gstlal_delay.c \
-	gstlal_iirbank.h gstlal_iirbank.c \
-	$(NDSSRC_SOURCES)
-libgstlal_la_CFLAGS = -O2 $(AM_CFLAGS) $(CFLAGS) ${gstreamer_CFLAGS} ${LAL_CFLAGS} ${GSL_CFLAGS} ${FFTW_CFLAGS} ${NDS_CFLAGS}
-libgstlal_la_LIBADD = ${gstreamer_LIBS} ${LAL_LIBS} ${GSL_LIBS} ${FFTW_LIBS} ${NDS_LIBS} $(top_srcdir)/lib/skymap/libwanalysis.la $(top_srcdir)/lib/libgstlal.la
-libgstlal_la_LDFLAGS = ${GSTREAMER_PLUGIN_LDFLAGS}
+	gstlal_iirbank.h gstlal_iirbank.c
+libgstlal_la_CFLAGS = $(AM_CFLAGS) $(gstreamer_CFLAGS) $(LAL_CFLAGS) $(GSL_CFLAGS) $(FFTW_CFLAGS)
+libgstlal_la_LIBADD = $(gstreamer_LIBS) $(LAL_LIBS) $(GSL_LIBS) $(FFTW_LIBS) $(top_srcdir)/lib/skymap/libwanalysis.la $(top_srcdir)/lib/libgstlal.la $(top_srcdir)/lib/libgstlaltags.la
+libgstlal_la_LDFLAGS = $(AM_LDFLAGS) $(GSTREAMER_PLUGIN_LDFLAGS)
 
 noinst_HEADERS = gstlal_plugins.h

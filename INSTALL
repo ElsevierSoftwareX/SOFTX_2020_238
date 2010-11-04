@@ -82,7 +82,8 @@ RedHat derived systems like CentOS, use ``lib64/`` instead of ``lib/`` in these
 two paths.  Log out of your account and log back in again and confirm that 
 ``pkg-config`` returns the correct directories for these two libraries with::
 
-  $ pkg-config --cflags libframe libmetaio -I/opt/lscsoft/libmetaio/include -I/opt/lscsoft/libframe/include
+  $ pkg-config --cflags libframe libmetaio
+  -I/opt/lscsoft/libmetaio/include -I/opt/lscsoft/libframe/include
 
 
 Debian **ONLY** Instructions
@@ -187,10 +188,6 @@ Mac OS X **ONLY** Instructions
 
 Skip this section **UNLESS** you are on a Mac OS X system.
 
-Note: the Mac OS instructions are known to be incomplete; there may be some
-MacPorts packages that are required but not listed.  If you discover this is
-the case, please email <leo.singer@lig.org>.
-
 Additional Mac OS X Dependencies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -216,9 +213,8 @@ To make sure that MacPorts is installed, run the following command::
 You should not get an error message.  If you now have the Port command, proceed.
 
 Now, we are going to use MacPorts to get the prerequisites for GStreamer, 
-lalsuite, and gstlal.  (Note: this is a partial list; I need to test the 
-procedure on a fresh Mac box.)  Every time you see a command starting with
-`sudo`, you may be prompted for your login password.  Run the following commands::
+lalsuite, and gstlal.  Every time you see a command starting with `sudo`, you
+may be prompted for your login password.  Run the following commands::
     
   $ sudo port install python26
   $ sudo port install python_select
@@ -250,9 +246,6 @@ remember you have done this, if you choose to).
 After you have set up your Mac OS X dependencies and your Mac OS X environment 
 script, skip the section "Downloading and Installing Dependencies" and continue 
 to the section `Downloading the Software`_.
-
-.. NOTE:: When you reach the "gstlal Installation" step, configure GStreamer 
-          with ``CFLAGS="-g"``.
 
 
 Downloading and Installing Dependencies
@@ -303,7 +296,7 @@ gstlal includes an optional source element for retrieving live data from an NDS
 server. To enable NDS support, ensure that you have the NDS2 client installed 
 before building gstlal. This requires you to install
 
- * ≥nds2-client-0.5.2.tar.gz
+ * ≥nds2-client-0.6.5.tar.gz
 
 To support Kerberos authentication, you will need to make sure that your system 
 has libsasl2 and the gssapi module for libsasl2. In Debian these are the packages
@@ -313,9 +306,9 @@ has libsasl2 and the gssapi module for libsasl2. In Debian these are the package
 
 To install the NDS client library, run the following commands::
 
-  $ wget http://ldas-jobs.ligo.caltech.edu/~jzweizig/nds2-release/nds2-client-0.5.2.tar.gz
-  $ tar -xzf nds2-client-0.5.2.tar.gz
-  $ pushd nds2-client-0.5.2
+  $ wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/nds2-client-0.6.5-src.tar.gz
+  $ tar -xzf nds2-client-0.6.5-src.tar.gz
+  $ pushd nds2-client-0.6.5
   $ ./configure --prefix=/path/to/local && make install
   $ popd
 

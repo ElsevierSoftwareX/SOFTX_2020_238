@@ -53,17 +53,17 @@ typedef struct {
 typedef struct {
 	GstBaseSrc basesrc;
 
-    char* host;
-    gint port;
-    enum nds_version version;
+	char* host;
+	gint port;
+	enum nds_version version;
 
-    daq_t* daq;
-    gboolean needs_seek;
+	daq_t* daq;
+	gboolean needs_seek;
 
-    char* channelName;
-    enum chantype channelType;
-    daq_channel_t* availableChannels;
-    int countAvailableChannels;
+	char* channelName;
+	enum chantype channelType;
+	daq_channel_t* availableChannels;
+	int countAvailableChannels;
 
 } GSTLALNDSSrc;
 

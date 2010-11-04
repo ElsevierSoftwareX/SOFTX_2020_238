@@ -13,5 +13,5 @@ pkgpyexec_LTLIBRARIES = _misc.la
 
 _misc_la_SOURCES = misc.c
 _misc_la_CPPFLAGS = $(PYTHON_CPPFLAGS)
-_misc_la_LDFLAGS = -module $(PYTHON_LDFLAGS)
+_misc_la_LDFLAGS = $(AM_LDFLAGS) -module $(PYTHON_LDFLAGS)
 _misc_la_LIBADD = $(top_srcdir)/lib/libgstlal.la

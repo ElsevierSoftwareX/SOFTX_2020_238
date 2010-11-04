@@ -10,7 +10,7 @@ AC_COPYRIGHT([Copyright (C) 2008 Kipp C. Cannon])
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
 AC_CONFIG_AUX_DIR([gnuscripts])
 AC_CONFIG_MACRO_DIR([gnuscripts])
-AM_INIT_AUTOMAKE([foreign])
+AM_INIT_AUTOMAKE([1.9 tar-ustar foreign])
 AC_CONFIG_FILES([ \
 	Makefile \
 	data/Makefile \
@@ -24,10 +24,12 @@ AC_CONFIG_FILES([ \
 	python/elements/Makefile \
 	gst/Makefile \
 	gst/cairovis/Makefile \
+	gst/nds/Makefile \
 	gst/lal/Makefile \
 	gst/python/Makefile \
 	bin/Makefile \
-	tests/Makefile
+	tests/Makefile \
+	examples/Makefile
 ])
 
 
@@ -45,8 +47,10 @@ AC_SUBST([pkgconfigdir],[${libdir}/pkgconfig])
 # Check for programs
 #
 
+# check for c99 compiler
+m4_pattern_allow([AC_PROG_CC_C99])
+m4_ifdef([AC_PROG_CC_C99],[AC_PROG_CC_C99],[LALSUITE_AC_PROG_CC_C99])
 
-AC_PROG_CC_STDC
 AC_PROG_INSTALL
 AC_PROG_LIBTOOL
 PKG_PROG_PKG_CONFIG()
@@ -68,6 +72,16 @@ AX_PYTHON_DEVEL()
 AX_CFLAGS_WARN_ALL([AM_CFLAGS])
 AM_CFLAGS="$AM_CFLAGS -Wextra -Wno-missing-field-initializers -Wno-unused-parameter"	# extra gcc-specific stuff
 AC_SUBST([AM_CFLAGS])
+
+
+#
+# LDFLAGS
+#
+
+
+# Turn on error messages for undefined symbols
+AM_LDFLAGS="$AM_LDFLAGS -no-undefined"
+AC_SUBST([AM_LDFLAGS])
 
 
 #
