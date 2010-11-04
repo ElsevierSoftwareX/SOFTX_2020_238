@@ -239,8 +239,9 @@ static void gst_lalframe_sink_init(GstLalframeSink *sink,
     sink->duration = 16;
     sink->adapter = gst_adapter_new();
 
-    /* retrieve (and ref) sink pad */
-    sink->sinkpad = gst_element_get_static_pad(GST_ELEMENT(sink), "sink");
+    sink->rate = 0;
+    sink->width = 0;
+    sink->type = NULL;
 
     gst_base_sink_set_sync(GST_BASE_SINK(sink), FALSE);
 }
@@ -264,6 +265,9 @@ static void dispose(GObject *object)
     sink->frame_type = NULL;
     g_free(sink->path);
     sink->path = NULL;
+
+    g_free(sink->type);
+    sink->type = NULL;
 
     G_OBJECT_CLASS(parent_class)->dispose(object);
 }
@@ -387,6 +391,8 @@ static gboolean event(GstBaseSink *basesink, GstEvent *event)
     {
         gint64 start, stop, pos;
         GstFormat format;
+        GstPad *pad;
+        GstStructure *str;
 
         gst_event_parse_new_segment(event, NULL, NULL, &format, &start,
                                     &stop, &pos);
@@ -405,6 +411,16 @@ static gboolean event(GstBaseSink *basesink, GstEvent *event)
                 "Ignored NEWSEGMENT event of format %u (%s)", (guint) format,
                 gst_format_get_name(format));
         }
+
+        /* Keep info about the data stream */
+        pad = gst_element_get_static_pad(GST_ELEMENT(sink), "sink");
+        str = gst_caps_get_structure(GST_PAD_CAPS(pad), 0);
+
+        gst_structure_get_int(str, "width", &sink->width);
+        gst_structure_get_int(str, "rate", &sink->rate);
+        g_free(sink->type);
+        sink->type = g_strdup(gst_structure_get_name(str));
+
         break;
     }
     case GST_EVENT_EOS:
@@ -497,9 +513,9 @@ static gboolean query(GstPad *pad, GstQuery *query)
 static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(basesink);
-    const guint nbytes = sink->duration * 16*1024 * sizeof(double);
+    guint nbytes = sink->duration * sink->rate * sink->width / 8;
 
-    gst_buffer_ref(buffer);  /* one reference is lost in GstBaseSink's render */
+    gst_buffer_ref(buffer);  /* a reference is lost in GstBaseSink's render */
 
     gst_adapter_push(sink->adapter, buffer);  /* put buffer into adapter */
 
@@ -525,15 +541,14 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
 
 static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
 {
-    FrameH *frame;
+    double duration = nbytes*8.0 / (sink->rate * sink->width);
+    double deltaT = 1.0 / sink->rate;  /* to write in the TimeSeries */
     int ifo_flags;
     LIGOTimeGPS epoch;
-    REAL8TimeSeries *series;  //// FIXME: pick type depending on input
-    double f0 = 0;
-    double deltaT = 1.0/(16*1024);  ///// FIXME: take sample rate from the buffer's caps
-    char name[256];
     GstClockTime timestamp;
-    double duration = nbytes / (16.0*1024 * sizeof(double));
+    FrameH *frame;
+    double f0 = 0;  /* kind of dummy, to write in the TimeSeries */
+    char filename[256];
 
     if (sink->instrument == NULL || sink->path == NULL ||
         sink->frame_type == NULL || sink->channel_name == NULL)
@@ -558,20 +573,42 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
 
     frame = XLALFrameNew(&epoch, duration, "LIGO", 0, 1, ifo_flags);
 
-    series = XLALCreateREAL8TimeSeries(sink->channel_name,
-                                       &epoch, f0, deltaT,
-                                       &lalDimensionlessUnit,
-                                       nbytes/sizeof(double));
+    if (strcmp(sink->type, "audio/x-raw-float") == 0) {
+        if (sink->width == 64) {
+            REAL8TimeSeries *ts = XLALCreateREAL8TimeSeries(
+                sink->channel_name, &epoch, f0, deltaT,
+                &lalDimensionlessUnit, nbytes/8);
 
-    /* copy buffer contents to timeseries */
-    gst_adapter_copy(sink->adapter, (guint8 *) series->data->data, 0, nbytes);
+            gst_adapter_copy(sink->adapter, (guint8 *) ts->data->data,
+                             0, nbytes);
 
-    XLALFrameAddREAL8TimeSeriesProcData(frame, series);
+            XLALFrameAddREAL8TimeSeriesProcData(frame, ts);
+        }
+        else if (sink->width == 32) {
+            REAL4TimeSeries *ts = XLALCreateREAL4TimeSeries(
+                sink->channel_name, &epoch, f0, deltaT,
+                &lalDimensionlessUnit, nbytes/4);
 
-    snprintf(name, sizeof(name), "%s/%c-%s-%g-%g.gwf",
+            gst_adapter_copy(sink->adapter, (guint8 *) ts->data->data,
+                             0, nbytes);
+
+            XLALFrameAddREAL4TimeSeriesProcData(frame, ts);
+        }
+    }
+    else if (strcmp(sink->type, "audio/x-raw-int") == 0) {
+        INT4TimeSeries *ts = XLALCreateINT4TimeSeries(
+            sink->channel_name, &epoch, f0, deltaT,
+            &lalDimensionlessUnit, nbytes/4);
+
+        gst_adapter_copy(sink->adapter, (guint8 *) ts->data->data, 0, nbytes);
+
+        XLALFrameAddINT4TimeSeriesProcData(frame, ts);
+    }
+
+    snprintf(filename, sizeof(filename), "%s/%c-%s-%g-%g.gwf",
              sink->path, sink->instrument[0], sink->frame_type,
              epoch.gpsSeconds + epoch.gpsNanoSeconds*1e-9, duration);
-    if (XLALFrameWrite(frame, name, -1) != 0)
+    if (XLALFrameWrite(frame, filename, -1) != 0)
         goto handle_error;
 
     sink->current_pos += nbytes;

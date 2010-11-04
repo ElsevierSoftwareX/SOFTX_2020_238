@@ -77,8 +77,6 @@ typedef struct _GstLalframeSinkClass GstLalframeSinkClass;
 struct _GstLalframeSink {
     GstBaseSink parent;
 
-    GstPad *sinkpad;
-
     /*< private >*/
     gchar *path;
     gchar *frame_type;
@@ -87,6 +85,8 @@ struct _GstLalframeSink {
     gchar *units;
     double duration;
 
+    gint rate, width;  /* rate and width of the samples we are receiving */
+    gchar *type;       /* mime type */
     guint64 current_pos;
 
     GstAdapter *adapter;
