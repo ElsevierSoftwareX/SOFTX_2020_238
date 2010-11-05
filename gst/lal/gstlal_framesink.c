@@ -70,9 +70,6 @@ enum {
     PROP_0,
     PROP_PATH,
     PROP_FRAME_TYPE,
-    PROP_INSTRUMENT,
-    PROP_CHANNEL_NAME,
-    PROP_UNITS,
     PROP_DURATION,
 };
 
@@ -177,31 +174,10 @@ static void gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
     g_object_class_install_property(
-        gobject_class, PROP_INSTRUMENT,
-        g_param_spec_string(
-            "instrument", "Instrument",
-            "Name of the interferometer (H1, H2, L1, V1)", NULL,
-            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-    g_object_class_install_property(
-        gobject_class, PROP_CHANNEL_NAME,
-        g_param_spec_string(
-            "channel-name", "Channel name",
-            "Name of the channel as will appear in the file", NULL,
-            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-    g_object_class_install_property(
-        gobject_class, PROP_UNITS,
-        g_param_spec_string(
-            "units", "Units",
-            "Units of the data (not used yet)", NULL,
-            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-    g_object_class_install_property(
         gobject_class, PROP_DURATION,
         g_param_spec_double(
             "duration", "Duration",
-            "Time span (in s) stored in each frame file", 0, G_MAXDOUBLE, 16,
+            "Time span (in s) stored in each frame file", 0, G_MAXDOUBLE, 64,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
     gstbasesink_class->get_times = NULL;  /* no sync */
@@ -236,7 +212,7 @@ static void gst_lalframe_sink_init(GstLalframeSink *sink,
     sink->instrument = NULL;
     sink->channel_name = NULL;
     sink->units = NULL;
-    sink->duration = 16;
+    sink->duration = 64;
     sink->adapter = gst_adapter_new();
 
     sink->rate = 0;
@@ -296,18 +272,6 @@ static void set_property(GObject *object, guint prop_id,
         g_free(sink->frame_type);
         sink->frame_type = g_strdup(g_value_get_string(value));
         break;
-    case PROP_INSTRUMENT:
-        g_free(sink->instrument);
-        sink->instrument = g_strdup(g_value_get_string(value));
-        break;
-    case PROP_CHANNEL_NAME:
-        g_free(sink->channel_name);
-        sink->channel_name = g_strdup(g_value_get_string(value));
-        break;
-    case PROP_UNITS:
-        g_free(sink->units);
-        sink->units = g_strdup(g_value_get_string(value));
-        break;
     case PROP_DURATION:
         sink->duration = g_value_get_double(value);
         break;
@@ -329,15 +293,6 @@ get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
         break;
     case PROP_FRAME_TYPE:
         g_value_set_string(value, sink->frame_type);
-        break;
-    case PROP_INSTRUMENT:
-        g_value_set_string(value, sink->instrument);
-        break;
-    case PROP_CHANNEL_NAME:
-        g_value_set_string(value, sink->channel_name);
-        break;
-    case PROP_UNITS:
-        g_value_set_string(value, sink->units);
         break;
     case PROP_DURATION:
         g_value_set_double(value, sink->duration);
@@ -548,7 +503,7 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
     GstClockTime timestamp;
     FrameH *frame;
     double f0 = 0;  /* kind of dummy, to write in the TimeSeries */
-    char filename[256];
+    char filename[1024];
 
     if (sink->instrument == NULL || sink->path == NULL ||
         sink->frame_type == NULL || sink->channel_name == NULL)
@@ -605,7 +560,7 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
         XLALFrameAddINT4TimeSeriesProcData(frame, ts);
     }
 
-    snprintf(filename, sizeof(filename), "%s/%c-%s-%g-%g.gwf",
+    snprintf(filename, sizeof(filename), "%s/%c-%s-%.15g-%.15g.gwf",
              sink->path, sink->instrument[0], sink->frame_type,
              epoch.gpsSeconds + epoch.gpsNanoSeconds*1e-9, duration);
     if (XLALFrameWrite(frame, filename, -1) != 0)
