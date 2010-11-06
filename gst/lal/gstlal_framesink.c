@@ -71,6 +71,7 @@ enum {
     PROP_PATH,
     PROP_FRAME_TYPE,
     PROP_DURATION,
+    PROP_CLEAN_TIMESTAMPS,
 };
 
 
@@ -180,6 +181,13 @@ static void gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
             "Time span (in s) stored in each frame file", 0, G_MAXDOUBLE, 64,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
+    g_object_class_install_property(
+        gobject_class, PROP_CLEAN_TIMESTAMPS,
+        g_param_spec_boolean(
+            "clean-timestamps", "Clean timestamps",
+            "Files start at a multiple of \"duration\"", TRUE,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
     gstbasesink_class->get_times = NULL;  /* no sync */
     gstbasesink_class->start = GST_DEBUG_FUNCPTR(start);
     gstbasesink_class->stop = GST_DEBUG_FUNCPTR(stop);
@@ -213,6 +221,7 @@ static void gst_lalframe_sink_init(GstLalframeSink *sink,
     sink->channel_name = NULL;
     sink->units = NULL;
     sink->duration = 64;
+    sink->clean_timestamps = TRUE;
     sink->adapter = gst_adapter_new();
 
     sink->rate = 0;
@@ -275,6 +284,9 @@ static void set_property(GObject *object, guint prop_id,
     case PROP_DURATION:
         sink->duration = g_value_get_double(value);
         break;
+    case PROP_CLEAN_TIMESTAMPS:
+        sink->clean_timestamps = g_value_get_boolean(value);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
         break;
@@ -296,6 +308,9 @@ get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
         break;
     case PROP_DURATION:
         g_value_set_double(value, sink->duration);
+        break;
+    case PROP_CLEAN_TIMESTAMPS:
+        g_value_set_boolean(value, sink->clean_timestamps);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -425,14 +440,14 @@ flush_failed:
 
 static gboolean start(GstBaseSink *basesink)
 {
-    // We may want to open files or other resources...
+    GstLalframeSink *sink = GST_LALFRAME_SINK(basesink);
+    sink->current_pos = 0;
     return TRUE;
 }
 
 
 static gboolean stop(GstBaseSink *basesink)
 {
-    // And we may want to close resources too...
     return TRUE;
 }
 
@@ -474,6 +489,26 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
 
     gst_adapter_push(sink->adapter, buffer);  /* put buffer into adapter */
 
+    if (sink->clean_timestamps) {
+        GstClockTime t0_ns = gst_adapter_prev_timestamp(sink->adapter, NULL);
+        GstClockTime dur_ns = (GstClockTime) (sink->duration * GST_SECOND);
+
+        if (t0_ns % dur_ns != 0) {  /* if beginning of data is not aligned */
+            double dt = (dur_ns - t0_ns % dur_ns) / (double) GST_SECOND;
+            guint n = dt * sink->rate * sink->width / 8;  /* bytes to save */
+
+            if (gst_adapter_available(sink->adapter) < n)
+                return GST_FLOW_OK;  /* not enough data to write yet */
+
+            /* Write only a few bytes so next frame starts at proper times */
+            if (!write_frame(sink, n))
+                return GST_FLOW_ERROR;
+
+            gst_adapter_flush(sink->adapter, n);
+        }
+    }
+
+    /* Keep writing frames of requested duration while we have data */
     while (gst_adapter_available(sink->adapter) >= nbytes) {
         if (!write_frame(sink, nbytes))
             return GST_FLOW_ERROR;
