@@ -85,6 +85,7 @@ struct _GstLalframeSink {
     gchar *units;
     double duration;
     gboolean clean_timestamps;
+    double dir_digits;
 
     gint rate, width;  /* rate and width of the samples we are receiving */
     gchar *type;       /* mime type */

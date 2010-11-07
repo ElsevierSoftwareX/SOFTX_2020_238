@@ -34,6 +34,26 @@
  * </refsect2>
  */
 
+static const char __doc__[] =
+    "Write data to frame files.\n"
+    "\n"
+    "This element will read a stream of either int, float or double data and "
+    "save it into frame files in subdirectories. The files will look like:\n"
+    "  ./H-test_frame-9888/H-test_frame-988889100-64.gwf\n"
+    "\n"
+    "It requires the following tags to be present:\n"
+    "  instrument   - can be G1, H1, H2, L1, V1\n"
+    "  channel-name - name of channel in the frames, e.g. H1:LSC-STRAIN\n"
+    "  units        - currently not used\n"
+    "\n"
+    "The duration property controls the length of each frame file. The "
+    "timestamps of the files are a multiple of this duration, unless the "
+    "property clean-timestamps is false.\n"
+    "\n"
+    "The dir-digits property controls how many digits appear in the name of "
+    "the subdirectories, by specifying how many of the less-significant "
+    "digits should be removed. If 0, no subdirectories are created.\n";
+
 #ifdef HAVE_CONFIG_H
 #  include "config.h"
 #endif
@@ -48,13 +68,9 @@
 #include <gstlal_tags.h>
 
 #include <gst/gst.h>
-#include <stdio.h>              /* for fseeko() */
-#ifdef HAVE_STDIO_EXT_H
-#include <stdio_ext.h>          /* for __fbufsize, for debugging */
-#endif
-#include <errno.h>
 #include "gstlal_framesink.h"
 #include <string.h>
+#include <math.h>
 #include <sys/types.h>
 
 #include <sys/stat.h>
@@ -72,6 +88,7 @@ enum {
     PROP_FRAME_TYPE,
     PROP_DURATION,
     PROP_CLEAN_TIMESTAMPS,
+    PROP_DIR_DIGITS,
 };
 
 
@@ -119,7 +136,7 @@ static void gst_lalframe_sink_base_init(gpointer g_class)
         gstelement_class,
         "GWF Frame File Sink",
         "Sink/GWF",
-        "Write data to a frame file",
+        __doc__,
         "Jordi Burguet-Castell <jordi.burguet-castell@ligo.org>");
 
     /* Pad description. */
@@ -188,7 +205,15 @@ static void gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
             "Files start at a multiple of \"duration\"", TRUE,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-    gstbasesink_class->get_times = NULL;  /* no sync */
+    g_object_class_install_property(
+        gobject_class, PROP_DIR_DIGITS,
+        g_param_spec_int(
+            "dir-digits", "Directory digits to remove",
+            "Number of digits removed from gpstime in the subdirectories",
+            0, G_MAXINT, 5,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+    gstbasesink_class->get_times = NULL;  // no sync
     gstbasesink_class->start = GST_DEBUG_FUNCPTR(start);
     gstbasesink_class->stop = GST_DEBUG_FUNCPTR(stop);
     gstbasesink_class->render = GST_DEBUG_FUNCPTR(render);
@@ -204,7 +229,7 @@ static void gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
 /*
  * Instance init function.
  *
- * Create caps.
+ * Initialize instance. Give default values.
  */
 static void gst_lalframe_sink_init(GstLalframeSink *sink,
                                    GstLalframeSinkClass *g_class)
@@ -222,6 +247,7 @@ static void gst_lalframe_sink_init(GstLalframeSink *sink,
     sink->units = NULL;
     sink->duration = 64;
     sink->clean_timestamps = TRUE;
+    sink->dir_digits = 5;
     sink->adapter = gst_adapter_new();
 
     sink->rate = 0;
@@ -232,6 +258,9 @@ static void gst_lalframe_sink_init(GstLalframeSink *sink,
 }
 
 
+/*
+ * Free resources.
+ */
 static void dispose(GObject *object)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(object);
@@ -287,6 +316,9 @@ static void set_property(GObject *object, guint prop_id,
     case PROP_CLEAN_TIMESTAMPS:
         sink->clean_timestamps = g_value_get_boolean(value);
         break;
+    case PROP_DIR_DIGITS:
+        sink->dir_digits = g_value_get_int(value);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
         break;
@@ -312,6 +344,9 @@ get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
     case PROP_CLEAN_TIMESTAMPS:
         g_value_set_boolean(value, sink->clean_timestamps);
         break;
+    case PROP_DIR_DIGITS:
+        g_value_set_int(value, sink->dir_digits);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
         break;
@@ -328,6 +363,10 @@ get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
  */
 
 
+/*
+ * Helper function used in event(). Get a string from a tag and put it
+ * in dest. And track what's going on with warnings or debug info.
+ */
 static inline void extract(GstLalframeSink *sink, GstTagList *taglist,
                            const char *tagname, gchar **dest)
 {
@@ -343,6 +382,15 @@ static inline void extract(GstLalframeSink *sink, GstTagList *taglist,
 }
 
 
+/*
+ * Gets called if the Data passed to this element is an Event (the
+ * only other option being a Buffer).
+ *
+ * Events contain a subtype indicating the type of the contained event. For:
+ *   tags received: save the values in instrument, channel_name and units
+ *   new segment: save the type of data coming (int/float, rate, width)
+ *   end of stream: flush remaining data into a (shorter) frame
+ */
 static gboolean event(GstBaseSink *basesink, GstEvent *event)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(basesink);
@@ -386,10 +434,10 @@ static gboolean event(GstBaseSink *basesink, GstEvent *event)
         pad = gst_element_get_static_pad(GST_ELEMENT(sink), "sink");
         str = gst_caps_get_structure(GST_PAD_CAPS(pad), 0);
 
-        gst_structure_get_int(str, "width", &sink->width);
-        gst_structure_get_int(str, "rate", &sink->rate);
+        gst_structure_get_int(str, "width", &sink->width);   // read width
+        gst_structure_get_int(str, "rate", &sink->rate);     // read rate
         g_free(sink->type);
-        sink->type = g_strdup(gst_structure_get_name(str));
+        sink->type = g_strdup(gst_structure_get_name(str));  // mime type
 
         break;
     }
@@ -397,7 +445,7 @@ static gboolean event(GstBaseSink *basesink, GstEvent *event)
     {
         guint nbytes = gst_adapter_available(sink->adapter);
         if (nbytes > 0) {
-            if (!write_frame(sink, nbytes))
+            if (!write_frame(sink, nbytes))  // write any remaining data
                 goto flush_failed;
             gst_adapter_flush(sink->adapter, nbytes);
         }
@@ -441,7 +489,7 @@ flush_failed:
 static gboolean start(GstBaseSink *basesink)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(basesink);
-    sink->current_pos = 0;
+    sink->current_pos = 0;  // used in query()
     return TRUE;
 }
 
@@ -479,26 +527,31 @@ static gboolean query(GstPad *pad, GstQuery *query)
 }
 
 
-/* This is the most important one. It calls write_frame() */
+/*
+ * This is the most important one. It calls write_frame()
+ */
 static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(basesink);
     guint nbytes = sink->duration * sink->rate * sink->width / 8;
 
-    gst_buffer_ref(buffer);  /* a reference is lost in GstBaseSink's render */
+    /* Compensate for reference lost in GstBaseSink's render */
+    gst_buffer_ref(buffer);
 
-    gst_adapter_push(sink->adapter, buffer);  /* put buffer into adapter */
+    /* Put buffer into adapter */
+    gst_adapter_push(sink->adapter, buffer);
 
+    /* Write a first frame if needed to align timestamps in the filenames */
     if (sink->clean_timestamps) {
         GstClockTime t0_ns = gst_adapter_prev_timestamp(sink->adapter, NULL);
         GstClockTime dur_ns = (GstClockTime) (sink->duration * GST_SECOND);
 
-        if (t0_ns % dur_ns != 0) {  /* if beginning of data is not aligned */
+        if (t0_ns % dur_ns != 0) {  // if beginning of data is not aligned
             double dt = (dur_ns - t0_ns % dur_ns) / (double) GST_SECOND;
-            guint n = dt * sink->rate * sink->width / 8;  /* bytes to save */
+            guint n = dt * sink->rate * sink->width / 8;  // bytes to save
 
             if (gst_adapter_available(sink->adapter) < n)
-                return GST_FLOW_OK;  /* not enough data to write yet */
+                return GST_FLOW_OK;  // not enough data to write yet, fine
 
             /* Write only a few bytes so next frame starts at proper times */
             if (!write_frame(sink, n))
@@ -529,15 +582,19 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
  */
 
 
+/*
+ * Write a single frame file of size nbytes.
+ */
 static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
 {
     double duration = nbytes*8.0 / (sink->rate * sink->width);
-    double deltaT = 1.0 / sink->rate;  /* to write in the TimeSeries */
+    double deltaT = 1.0 / sink->rate;  // to write in the TimeSeries
     int ifo_flags;
     LIGOTimeGPS epoch;
     GstClockTime timestamp;
     FrameH *frame;
-    double f0 = 0;  /* kind of dummy, to write in the TimeSeries */
+    double f0 = 0;  // kind of dummy, to write in the TimeSeries
+    char dirname[1024];
     char filename[1024];
 
     if (sink->instrument == NULL || sink->path == NULL ||
@@ -561,10 +618,12 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
     epoch.gpsSeconds     = timestamp / GST_SECOND;
     epoch.gpsNanoSeconds = timestamp % GST_SECOND;
 
+    /* Create frame file */
     frame = XLALFrameNew(&epoch, duration, "LIGO", 0, 1, ifo_flags);
 
+    /* Create and store the proper timeseries depending on data mime type */
     if (strcmp(sink->type, "audio/x-raw-float") == 0) {
-        if (sink->width == 64) {
+        if (sink->width == 64) {  // 64 bits = 8 bytes ... a double
             REAL8TimeSeries *ts = XLALCreateREAL8TimeSeries(
                 sink->channel_name, &epoch, f0, deltaT,
                 &lalDimensionlessUnit, nbytes/8);
@@ -574,7 +633,7 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
 
             XLALFrameAddREAL8TimeSeriesProcData(frame, ts);
         }
-        else if (sink->width == 32) {
+        else if (sink->width == 32) {  // 32 bits = 4 bytes... a float
             REAL4TimeSeries *ts = XLALCreateREAL4TimeSeries(
                 sink->channel_name, &epoch, f0, deltaT,
                 &lalDimensionlessUnit, nbytes/4);
@@ -595,8 +654,20 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
         XLALFrameAddINT4TimeSeriesProcData(frame, ts);
     }
 
+    /* Create subdirectories with nice names if needed */
+    if (sink->dir_digits > 0) {
+        int pre = epoch.gpsSeconds / (int) pow(10, sink->dir_digits);
+        snprintf(dirname, sizeof(dirname), "%s/%c-%s-%d",
+                 sink->path, sink->instrument[0], sink->frame_type, pre);
+        mkdir(dirname, 0777);
+    }
+    else {
+        strncpy(dirname, sink->path, sizeof(dirname));
+    }
+
+    /* Save the frame file */
     snprintf(filename, sizeof(filename), "%s/%c-%s-%.15g-%.15g.gwf",
-             sink->path, sink->instrument[0], sink->frame_type,
+             dirname, sink->instrument[0], sink->frame_type,
              epoch.gpsSeconds + epoch.gpsNanoSeconds*1e-9, duration);
     if (XLALFrameWrite(frame, filename, -1) != 0)
         goto handle_error;
