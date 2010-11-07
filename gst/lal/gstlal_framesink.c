@@ -51,7 +51,7 @@ static const char __doc__[] =
     "property clean-timestamps is false.\n"
     "\n"
     "The dir-digits property controls how many digits appear in the name of "
-    "the subdirectories, by specifying how many of the less-significant "
+    "the subdirectories, by specifying how many of the least significant "
     "digits should be removed. If 0, no subdirectories are created.\n";
 
 #ifdef HAVE_CONFIG_H
@@ -209,7 +209,7 @@ static void gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
         gobject_class, PROP_DIR_DIGITS,
         g_param_spec_int(
             "dir-digits", "Directory digits to remove",
-            "Number of digits removed from gpstime in the subdirectories",
+            "Number of least significant digits dropped from subdir names",
             0, G_MAXINT, 5,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
