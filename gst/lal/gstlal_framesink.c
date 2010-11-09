@@ -599,7 +599,10 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
 
 	if (sink->instrument == NULL || sink->path == NULL ||
 		sink->frame_type == NULL || sink->channel_name == NULL)
-		goto handle_error;
+	{
+		GST_ELEMENT_ERROR(sink, STREAM, FAILED, ("instrument, path, frame type, or channel name not set"), (NULL));
+		return FALSE;
+	}
 
 	/* Get detector flags */
 	if (strcmp(sink->instrument, "H1") == 0)
@@ -673,26 +676,11 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
 	g_free(dirname);
 	g_free(filename);
 
-	if (result != 0)
-		goto handle_error;
-
-	sink->current_pos += nbytes;
-
-	return TRUE;
-
-handle_error:
-	{
-		switch (errno) {
-		case ENOSPC: {
-			GST_ELEMENT_ERROR(sink, RESOURCE, NO_SPACE_LEFT, (NULL), (NULL));
-			break;
-		}
-		default: {
-			GST_ELEMENT_ERROR(sink, RESOURCE, WRITE,
-				("Error in function %s", __FUNCTION__),
-				("%s", g_strerror(errno)));
-		}
-		}
+	if (result != 0) {
+		GST_ELEMENT_ERROR(sink, RESOURCE, WRITE, ("could not write frame"), GST_ERROR_SYSTEM);
 		return FALSE;
+	} else {
+		sink->current_pos += nbytes;
+		return TRUE;
 	}
 }
