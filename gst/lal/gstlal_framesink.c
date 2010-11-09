@@ -69,7 +69,6 @@ static const char doc[] =
 
 #include <gst/gst.h>
 #include "gstlal_framesink.h"
-#include <string.h>
 #include <math.h>
 #include <sys/types.h>
 
