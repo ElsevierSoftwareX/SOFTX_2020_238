@@ -618,6 +618,26 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
 	epoch.gpsSeconds	 = timestamp / GST_SECOND;
 	epoch.gpsNanoSeconds = timestamp % GST_SECOND;
 
+	/* Create subdirectories with nice names if needed */
+	if (sink->dir_digits > 0) {
+		int pre = epoch.gpsSeconds / (int) pow(10, sink->dir_digits);
+		dirname = g_strdup_printf("%s/%c-%s-%d",
+			sink->path, sink->instrument[0], sink->frame_type, pre);
+		if (mkdir(dirname, 0777) != 0 && errno != EEXIST)
+		{
+			GST_ELEMENT_ERROR(sink, RESOURCE, WRITE, ("could not create directory: %s", dirname), GST_ERROR_SYSTEM);
+			g_free(dirname);
+			return FALSE;
+		}
+	} else {
+		dirname = g_strdup(sink->path);
+	}
+
+	filename = g_strdup_printf("%s/%c-%s-%.15g-%.15g.gwf",
+		dirname, sink->instrument[0], sink->frame_type,
+		epoch.gpsSeconds + epoch.gpsNanoSeconds*1e-9, duration);
+	g_free(dirname);
+
 	/* Create frame file */
 	frame = XLALFrameNew(&epoch, duration, "LIGO", 0, 1, ifo_flags);
 
@@ -654,30 +674,16 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
 		XLALFrameAddINT4TimeSeriesProcData(frame, ts);
 	}
 
-	/* Create subdirectories with nice names if needed */
-	if (sink->dir_digits > 0) {
-		int pre = epoch.gpsSeconds / (int) pow(10, sink->dir_digits);
-		dirname = g_strdup_printf("%s/%c-%s-%d",
-			sink->path, sink->instrument[0], sink->frame_type, pre);
-		mkdir(dirname, 0777);
-	} else {
-		dirname = g_strdup(sink->path);
-	}
-
 	/* Save the frame file */
-	filename = g_strdup_printf("%s/%c-%s-%.15g-%.15g.gwf",
-		dirname, sink->instrument[0], sink->frame_type,
-		epoch.gpsSeconds + epoch.gpsNanoSeconds*1e-9, duration);
 	result = XLALFrameWrite(frame, filename, -1);
 
-	g_free(dirname);
-	g_free(filename);
-
 	if (result != 0) {
-		GST_ELEMENT_ERROR(sink, RESOURCE, WRITE, ("could not write frame"), GST_ERROR_SYSTEM);
+		GST_ELEMENT_ERROR(sink, RESOURCE, WRITE, ("could not write frame file: %s", filename), GST_ERROR_SYSTEM);
+		g_free(filename);
 		return FALSE;
 	} else {
 		sink->current_pos += nbytes;
+		g_free(filename);
 		return TRUE;
 	}
 }
