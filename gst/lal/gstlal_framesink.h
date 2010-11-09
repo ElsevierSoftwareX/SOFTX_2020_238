@@ -55,16 +55,16 @@
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_LALFRAME_SINK                  \
-    (gst_lalframe_sink_get_type())
-#define GST_LALFRAME_SINK(obj)                                          \
-    (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_LALFRAME_SINK, GstLalframeSink))
-#define GST_LALFRAME_SINK_CLASS(klass)                                  \
-    (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_LALFRAME_SINK, GstLalframeSinkClass))
-#define GST_IS_LALFRAME_SINK(obj)                               \
-    (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_LALFRAME_SINK))
-#define GST_IS_LALFRAME_SINK_CLASS(klass)                       \
-    (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_LALFRAME_SINK))
+#define GST_TYPE_LALFRAME_SINK				  \
+	(gst_lalframe_sink_get_type())
+#define GST_LALFRAME_SINK(obj)										  \
+	(G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_LALFRAME_SINK, GstLalframeSink))
+#define GST_LALFRAME_SINK_CLASS(klass)								  \
+	(G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_LALFRAME_SINK, GstLalframeSinkClass))
+#define GST_IS_LALFRAME_SINK(obj)							   \
+	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_LALFRAME_SINK))
+#define GST_IS_LALFRAME_SINK_CLASS(klass)					   \
+	(G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_LALFRAME_SINK))
 
 typedef struct _GstLalframeSink GstLalframeSink;
 typedef struct _GstLalframeSinkClass GstLalframeSinkClass;
@@ -75,27 +75,27 @@ typedef struct _GstLalframeSinkClass GstLalframeSinkClass;
  * Opaque #GstLalframeSink structure.
  */
 struct _GstLalframeSink {
-    GstBaseSink parent;
+	GstBaseSink parent;
 
-    /*< private >*/
-    gchar *path;
-    gchar *frame_type;
-    gchar *instrument;
-    gchar *channel_name;
-    gchar *units;
-    double duration;
-    gboolean clean_timestamps;
-    double dir_digits;
+	/*< private >*/
+	gchar *path;
+	gchar *frame_type;
+	gchar *instrument;
+	gchar *channel_name;
+	gchar *units;
+	double duration;
+	gboolean clean_timestamps;
+	double dir_digits;
 
-    gint rate, width;  /* rate and width of the samples we are receiving */
-    gchar *type;       /* mime type */
-    guint64 current_pos;
+	gint rate, width;  /* rate and width of the samples we are receiving */
+	gchar *type;	   /* mime type */
+	guint64 current_pos;
 
-    GstAdapter *adapter;
+	GstAdapter *adapter;
 };
 
 struct _GstLalframeSinkClass {
-    GstBaseSinkClass parent_class;
+	GstBaseSinkClass parent_class;
 };
 
 GType gst_lalframe_sink_get_type(void);
