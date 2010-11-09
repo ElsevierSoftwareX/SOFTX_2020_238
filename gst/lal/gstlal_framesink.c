@@ -602,7 +602,7 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
 		goto handle_error;
 
 	/* Get detector flags */
-	if	  (strcmp(sink->instrument, "H1") == 0)
+	if (strcmp(sink->instrument, "H1") == 0)
 		ifo_flags = LAL_LHO_4K_DETECTOR_BIT;
 	else if (strcmp(sink->instrument, "H2") == 0)
 		ifo_flags = LAL_LHO_2K_DETECTOR_BIT;
