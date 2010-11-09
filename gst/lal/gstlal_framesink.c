@@ -590,12 +590,12 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
 	double duration = nbytes*8.0 / (sink->rate * sink->width);
 	double deltaT = 1.0 / sink->rate;  // to write in the TimeSeries
 	int ifo_flags;
+	int result;
 	LIGOTimeGPS epoch;
 	GstClockTime timestamp;
 	FrameH *frame;
 	double f0 = 0;  // kind of dummy, to write in the TimeSeries
-	char dirname[1024];
-	char filename[1024];
+	gchar *dirname, *filename;
 
 	if (sink->instrument == NULL || sink->path == NULL ||
 		sink->frame_type == NULL || sink->channel_name == NULL)
@@ -657,19 +657,23 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
 	/* Create subdirectories with nice names if needed */
 	if (sink->dir_digits > 0) {
 		int pre = epoch.gpsSeconds / (int) pow(10, sink->dir_digits);
-		snprintf(dirname, sizeof(dirname), "%s/%c-%s-%d",
-				 sink->path, sink->instrument[0], sink->frame_type, pre);
+		dirname = g_strdup_printf("%s/%c-%s-%d",
+			sink->path, sink->instrument[0], sink->frame_type, pre);
 		mkdir(dirname, 0777);
-	}
-	else {
-		strncpy(dirname, sink->path, sizeof(dirname));
+	} else {
+		dirname = g_strdup(sink->path);
 	}
 
 	/* Save the frame file */
-	snprintf(filename, sizeof(filename), "%s/%c-%s-%.15g-%.15g.gwf",
-			 dirname, sink->instrument[0], sink->frame_type,
-			 epoch.gpsSeconds + epoch.gpsNanoSeconds*1e-9, duration);
-	if (XLALFrameWrite(frame, filename, -1) != 0)
+	filename = g_strdup_printf("%s/%c-%s-%.15g-%.15g.gwf",
+		dirname, sink->instrument[0], sink->frame_type,
+		epoch.gpsSeconds + epoch.gpsNanoSeconds*1e-9, duration);
+	result = XLALFrameWrite(frame, filename, -1);
+
+	g_free(dirname);
+	g_free(filename);
+
+	if (result != 0)
 		goto handle_error;
 
 	sink->current_pos += nbytes;
