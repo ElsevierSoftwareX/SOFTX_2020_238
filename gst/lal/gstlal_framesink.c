@@ -70,7 +70,6 @@ static const char doc[] =
 #include <gst/gst.h>
 #include "gstlal_framesink.h"
 #include <math.h>
-#include <sys/types.h>
 
 #include <sys/stat.h>
 #ifdef HAVE_UNISTD_H
