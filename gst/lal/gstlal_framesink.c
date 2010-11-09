@@ -34,7 +34,7 @@
  * </refsect2>
  */
 
-static const char __doc__[] =
+static const char doc[] =
 	"Write data to frame files.\n"
 	"\n"
 	"This element will read a stream of either int, float or double data and "
@@ -133,7 +133,7 @@ static void gst_lalframe_sink_base_init(gpointer g_class)
 		gstelement_class,
 		"GWF Frame File Sink",
 		"Sink/GWF",
-		__doc__,
+		doc,
 		"Jordi Burguet-Castell <jordi.burguet-castell@ligo.org>");
 
 	/* Pad description. */
