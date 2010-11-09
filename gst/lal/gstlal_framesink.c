@@ -79,9 +79,6 @@ static const char __doc__[] =
 #endif
 
 
-GST_DEBUG_CATEGORY_STATIC(gst_lalframe_sink_debug);
-#define GST_CAT_DEFAULT gst_lalframe_sink_debug
-
 enum {
 	PROP_0,
 	PROP_PATH,
