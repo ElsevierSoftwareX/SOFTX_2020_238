@@ -34,7 +34,7 @@
  * </refsect2>
  */
 
-static const char __doc__[] =
+static const char gst_lalframe_sink_doc[] =
     "Write data to frame files.\n"
     "\n"
     "This element will read a stream of either int, float or double data and "
@@ -42,7 +42,7 @@ static const char __doc__[] =
     "  ./H-test_frame-9888/H-test_frame-988889100-64.gwf\n"
     "\n"
     "It requires the following tags to be present:\n"
-    "  instrument   - can be G1, H1, H2, L1, V1\n"
+    "  instrument   - e.g. G1, H1, H2, L1, V1\n"
     "  channel-name - name of channel in the frames, e.g. H1:LSC-STRAIN\n"
     "  units        - currently not used\n"
     "\n"
@@ -69,18 +69,13 @@ static const char __doc__[] =
 
 #include <gst/gst.h>
 #include "gstlal_framesink.h"
-#include <string.h>
 #include <math.h>
-#include <sys/types.h>
 
 #include <sys/stat.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 
-
-GST_DEBUG_CATEGORY_STATIC(gst_lalframe_sink_debug);
-#define GST_CAT_DEFAULT gst_lalframe_sink_debug
 
 enum {
     PROP_0,
@@ -136,7 +131,7 @@ static void gst_lalframe_sink_base_init(gpointer g_class)
         gstelement_class,
         "GWF Frame File Sink",
         "Sink/GWF",
-        __doc__,
+        gst_lalframe_sink_doc,
         "Jordi Burguet-Castell <jordi.burguet-castell@ligo.org>");
 
     /* Pad description. */
@@ -594,12 +589,15 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
     GstClockTime timestamp;
     FrameH *frame;
     double f0 = 0;  // kind of dummy, to write in the TimeSeries
-    char dirname[1024];
-    char filename[1024];
+    gchar *dirname, *filename;
 
     if (sink->instrument == NULL || sink->path == NULL ||
-        sink->frame_type == NULL || sink->channel_name == NULL)
-        goto handle_error;
+        sink->frame_type == NULL || sink->channel_name == NULL) {
+        GST_ELEMENT_ERROR(
+            sink, STREAM, FAILED,
+            ("instrument, path, frame-type, or channel-name not set"), (NULL));
+        return FALSE;
+    }
 
     /* Get detector flags */
     if      (strcmp(sink->instrument, "H1") == 0)
@@ -617,6 +615,30 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
     timestamp = gst_adapter_prev_timestamp(sink->adapter, NULL);
     epoch.gpsSeconds     = timestamp / GST_SECOND;
     epoch.gpsNanoSeconds = timestamp % GST_SECOND;
+
+    /* Create subdirectories with nice names if needed */
+    if (sink->dir_digits > 0) {
+        int pre = epoch.gpsSeconds / (int) pow(10, sink->dir_digits);
+        dirname = g_strdup_printf("%s/%c-%s-%d",
+                                  sink->path, sink->instrument[0],
+                                  sink->frame_type, pre);
+        if (mkdir(dirname, 0777) != 0 && errno != EEXIST) {
+            GST_ELEMENT_ERROR(
+                sink, RESOURCE, WRITE,
+                ("Could not create directory: %s", dirname), GST_ERROR_SYSTEM);
+            g_free(dirname);
+            return FALSE;
+        }
+    }
+    else {
+        dirname = g_strdup(sink->path);
+    }
+
+    filename = g_strdup_printf("%s/%c-%s-%.15g-%.15g.gwf",
+                               dirname, sink->instrument[0], sink->frame_type,
+                               epoch.gpsSeconds + epoch.gpsNanoSeconds*1e-9,
+                               duration);
+    g_free(dirname);
 
     /* Create frame file */
     frame = XLALFrameNew(&epoch, duration, "LIGO", 0, 1, ifo_flags);
@@ -654,41 +676,17 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
         XLALFrameAddINT4TimeSeriesProcData(frame, ts);
     }
 
-    /* Create subdirectories with nice names if needed */
-    if (sink->dir_digits > 0) {
-        int pre = epoch.gpsSeconds / (int) pow(10, sink->dir_digits);
-        snprintf(dirname, sizeof(dirname), "%s/%c-%s-%d",
-                 sink->path, sink->instrument[0], sink->frame_type, pre);
-        mkdir(dirname, 0777);
-    }
-    else {
-        strncpy(dirname, sink->path, sizeof(dirname));
-    }
-
     /* Save the frame file */
-    snprintf(filename, sizeof(filename), "%s/%c-%s-%.15g-%.15g.gwf",
-             dirname, sink->instrument[0], sink->frame_type,
-             epoch.gpsSeconds + epoch.gpsNanoSeconds*1e-9, duration);
-    if (XLALFrameWrite(frame, filename, -1) != 0)
-        goto handle_error;
-
-    sink->current_pos += nbytes;
-
-    return TRUE;
-
-handle_error:
-    {
-        switch (errno) {
-        case ENOSPC: {
-            GST_ELEMENT_ERROR(sink, RESOURCE, NO_SPACE_LEFT, (NULL), (NULL));
-            break;
-        }
-        default: {
-            GST_ELEMENT_ERROR(sink, RESOURCE, WRITE,
-                ("Error in function %s", __FUNCTION__),
-                ("%s", g_strerror(errno)));
-        }
-        }
+    if (XLALFrameWrite(frame, filename, -1) != 0) {
+        GST_ELEMENT_ERROR(sink, RESOURCE, WRITE,
+                          ("could not write frame file: %s", filename),
+                          GST_ERROR_SYSTEM);
+        g_free(filename);
         return FALSE;
     }
+
+    sink->current_pos += nbytes;
+    g_free(filename);
+
+    return TRUE;
 }
