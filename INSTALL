@@ -292,11 +292,11 @@ Downloading the Software
 Download the latest GStreamer pre-releases::
 
   $ cd /path/to/local/src/
-  $ wget http://gstreamer.freedesktop.org/src/gstreamer/gstreamer-0.10.31.tar.gz
-  $ wget http://gstreamer.freedesktop.org/src/gst-plugins-base/gst-plugins-base-0.10.31.tar.gz
-  $ wget http://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-0.10.26.tar.gz
+  $ wget http://gstreamer.freedesktop.org/src/gstreamer/pre/gstreamer-0.10.30.3.tar.gz
+  $ wget http://gstreamer.freedesktop.org/src/gst-plugins-base/pre/gst-plugins-base-0.10.30.3.tar.gz
+  $ wget http://gstreamer.freedesktop.org/src/gst-plugins-good/pre/gst-plugins-good-0.10.25.3.tar.gz
   $ wget http://gstreamer.freedesktop.org/src/gst-plugins-bad/gst-plugins-bad-0.10.20.tar.gz
-  $ wget http://gstreamer.freedesktop.org/src/gst-python/gst-python-0.10.20.tar.gz
+  $ wget http://gstreamer.freedesktop.org/src/gst-python/pre/gst-python-0.10.19.2.tar.gz
 
 The following will clone the gstlal source tree giving you read-only access::
 
