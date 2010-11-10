@@ -27,7 +27,7 @@
  * <title>Example launch line</title>
  * |[
  * gst-launch audiotestsrc wave=sine num-buffers=1000 ! \
- *   taginject tags="instrument=H1,channel-name=H1:LSC-STRAIN,units=strain" ! \
+ *   taginject tags="instrument=H1,channel-name=LSC-STRAIN,units=strain" ! \
  *   audio/x-raw-float,rate=16384,width=64 ! \
  *   lal_framesink path=. frame-type=hoft
  * ]| Save wave into a sequence of gwf files of the form ./H-hoft-TIME-SPAN.gwf.
@@ -43,7 +43,7 @@ static const char gst_lalframe_sink_doc[] =
     "\n"
     "It requires the following tags to be present:\n"
     "  instrument   - e.g. G1, H1, H2, L1, V1\n"
-    "  channel-name - name of channel in the frames, e.g. H1:LSC-STRAIN\n"
+    "  channel-name - name of channel in the frames, e.g. LSC-STRAIN\n"
     "  units        - currently not used\n"
     "\n"
     "The duration property controls the length of each frame file. The "
@@ -484,7 +484,7 @@ flush_failed:
 static gboolean start(GstBaseSink *basesink)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(basesink);
-    sink->current_pos = 0;  // used in query()
+    sink->current_pos = 0;
     return TRUE;
 }
 
@@ -529,6 +529,25 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(basesink);
     guint nbytes = sink->duration * sink->rate * sink->width / 8;
+
+    guint available = gst_adapter_available(sink->adapter);
+
+    /* Check for discontinuities (see gstlal_firbank.c at ~ 909) */
+    if (GST_BUFFER_IS_DISCONT(buffer)) {
+        /* Flush previous data to a frame */
+        if (available > 0) {
+            if (!write_frame(sink, available)) { // write any remaining data
+                GST_ELEMENT_ERROR(
+                    sink, RESOURCE, WRITE,
+                    ("Error while writing in function %s", __FUNCTION__),
+                    GST_ERROR_SYSTEM);
+                return GST_FLOW_ERROR;
+            }
+
+            /* Flush adapter, set new position using buffer info */
+            gst_adapter_flush(sink->adapter, available);
+        }
+    }
 
     /* Compensate for reference lost in GstBaseSink's render */
     gst_buffer_ref(buffer);
@@ -589,7 +608,7 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
     GstClockTime timestamp;
     FrameH *frame;
     double f0 = 0;  // kind of dummy, to write in the TimeSeries
-    gchar *dirname, *filename;
+    gchar *channame, *dirname, *filename;
 
     if (sink->instrument == NULL || sink->path == NULL ||
         sink->frame_type == NULL || sink->channel_name == NULL) {
@@ -640,6 +659,8 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
                                duration);
     g_free(dirname);
 
+    channame = g_strdup_printf("%s:%s", sink->instrument, sink->channel_name);
+
     /* Create frame file */
     frame = XLALFrameNew(&epoch, duration, "LIGO", 0, 1, ifo_flags);
 
@@ -647,8 +668,7 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
     if (strcmp(sink->type, "audio/x-raw-float") == 0) {
         if (sink->width == 64) {  // 64 bits = 8 bytes ... a double
             REAL8TimeSeries *ts = XLALCreateREAL8TimeSeries(
-                sink->channel_name, &epoch, f0, deltaT,
-                &lalDimensionlessUnit, nbytes/8);
+                channame, &epoch, f0, deltaT, &lalDimensionlessUnit, nbytes/8);
 
             gst_adapter_copy(sink->adapter, (guint8 *) ts->data->data,
                              0, nbytes);
@@ -657,8 +677,7 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
         }
         else if (sink->width == 32) {  // 32 bits = 4 bytes... a float
             REAL4TimeSeries *ts = XLALCreateREAL4TimeSeries(
-                sink->channel_name, &epoch, f0, deltaT,
-                &lalDimensionlessUnit, nbytes/4);
+                channame, &epoch, f0, deltaT, &lalDimensionlessUnit, nbytes/4);
 
             gst_adapter_copy(sink->adapter, (guint8 *) ts->data->data,
                              0, nbytes);
@@ -668,13 +687,14 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
     }
     else if (strcmp(sink->type, "audio/x-raw-int") == 0) {
         INT4TimeSeries *ts = XLALCreateINT4TimeSeries(
-            sink->channel_name, &epoch, f0, deltaT,
-            &lalDimensionlessUnit, nbytes/4);
+            channame, &epoch, f0, deltaT, &lalDimensionlessUnit, nbytes/4);
 
         gst_adapter_copy(sink->adapter, (guint8 *) ts->data->data, 0, nbytes);
 
         XLALFrameAddINT4TimeSeriesProcData(frame, ts);
     }
+
+    g_free(channame);
 
     /* Save the frame file */
     if (XLALFrameWrite(frame, filename, -1) != 0) {
