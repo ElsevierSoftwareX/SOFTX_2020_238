@@ -61,7 +61,8 @@ elems = []
 # advanced LIGO noise source
 elems.append(pipeutil.mkelem("lal_fakeadvligosrc",
 			     {"channel-name": 'LSC-STRAIN',
-			      "instrument": 'H1'
+			      "instrument": 'H1',
+				  "blocksize": 4096,
 			      }))
 
 # add injection if specified
@@ -120,6 +121,7 @@ elems.append(pipeutil.mkelem("lal_firbank",
 			     {"name": "Q",
 			      "time-domain": False,
 			      "fir-matrix": qbank,
+				  "block-length-factor": 2,
 			     }))
 
 elems.append(pipeutil.mkelem("progressreport"))
