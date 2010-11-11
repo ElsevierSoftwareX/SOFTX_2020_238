@@ -56,6 +56,9 @@ static void colormap_destroy_channel(colormap_channel *channel)
 
 void colormap_destroy(colormap *map)
 {
+	if (map == NULL)
+		return;
+
 	colormap_destroy_channel(&map->red);
 	colormap_destroy_channel(&map->green);
 	colormap_destroy_channel(&map->blue);
