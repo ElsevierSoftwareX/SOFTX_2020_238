@@ -51,8 +51,9 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 	gint width, height;
 	cairo_surface_t *surf;
 	cairo_t *cr;
-	const double *data;
+	double *data;
 	guint i;
+	gboolean zlog = (element->zscale == CAIROVIS_SCALE_LOG);
 
 	if (base->xscale || base->yscale)
 	{
@@ -142,10 +143,19 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 
 		guint npixels = desired_samples * element->nchannels;
 		if (desired_samples > 0)
-			data = (const double*) gst_adapter_peek(element->adapter, desired_bytes);
-		else
+		{
+			double *orig_data = (double *) gst_adapter_peek(element->adapter, desired_bytes);
+			if (zlog)
+			{
+				data = g_malloc(desired_bytes);
+				for (i = 0; i < npixels; i ++)
+					data[i] = log10(orig_data[i]);
+			} else {
+				data = orig_data;
+			}
+		} else
 			data = NULL;
-		
+
 		/* Determine x-axis limits */
 		if (base->xautoscale) {
 			base->xmin = 0;
@@ -204,6 +214,9 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 			g_free(pixdata);
 		}
 
+		if (zlog)
+			g_free(data);
+
 		/* Discard Cairo context, surface */
 		cairo_destroy(cr);
 		cairo_surface_destroy(surf);
@@ -241,7 +254,7 @@ done:
 
 enum property {
 	ARG_ZLABEL = 1,
-	/* FIXME: add ARG_ZSCALE */
+	ARG_ZSCALE,
 	ARG_ZAUTOSCALE,
 	ARG_ZMIN,
 	ARG_ZMAX,
@@ -261,7 +274,9 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 			g_free(element->zlabel);
 			element->zlabel = g_value_dup_string(value);
 			break;
-		/* FIXME: add ARG_ZSCALE */
+		case ARG_ZSCALE:
+			element->zscale = g_value_get_enum(value);
+			break;
 		case ARG_ZAUTOSCALE:
 			element->zautoscale = g_value_get_boolean(value);
 			break;
@@ -304,7 +319,9 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		case ARG_ZLABEL:
 			g_value_set_string(value, element->zlabel);
 			break;
-		/* FIXME: add ARG_ZSCALE */
+		case ARG_ZSCALE:
+			g_value_set_enum(value, element->zscale);
+			break;
 		case ARG_ZAUTOSCALE:
 			g_value_set_boolean(value, element->zautoscale);
 			break;
@@ -395,7 +412,18 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
-	/* FIXME: add ARG_ZSCALE */
+	g_object_class_install_property(
+		gobject_class,
+		ARG_ZSCALE,
+		g_param_spec_enum(
+			"z-scale",
+			"z-Scale",
+			"Linear or logarithmic scale",
+			CAIROVIS_SCALE_TYPE,
+			CAIROVIS_SCALE_LINEAR,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
 	g_object_class_install_property(
 		gobject_class,
 		ARG_ZAUTOSCALE,
