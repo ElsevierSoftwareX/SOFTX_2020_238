@@ -1,7 +1,7 @@
 plugin_LTLIBRARIES = libcairovis.la
 
-colormap_data.c: gencolormap.py
-	python $< > $@
+#colormap_data.c: gencolormap.py
+#	python $< > $@
 
 libcairovis_la_SOURCES = \
 	cairovis.c \
