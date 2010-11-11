@@ -1,12 +1,6 @@
 #!/usr/bin/env python
 
-import pygtk
-pygtk.require('2.0')
-import pygst
-pygst.require('0.10')
-import gobject
-import gst
-from gstlal import pipeutil
+import optparse
 import sys
 import os
 import numpy
@@ -17,20 +11,47 @@ matplotlib.use('AGG')
 import matplotlib.pyplot as plot
 
 ############################################################
+# options
+
+parser = optparse.OptionParser(
+	version = "%prog ??",
+	usage = "%prog [options] [injfile.xml]",
+	description = "GSTLAL burt demo using aLIGO sim noise"
+	)
+
+parser.add_option("-s", "--spectrogram",
+                  help="turn on spectrogram plot",
+                  dest="plotSpec",
+                  action="store_true",
+		  default=False
+                  )
+parser.add_option("-l", "--lineseries",
+                  help="turn on lineseries plot of sumsquare",
+                  dest="plotLine",
+                  action="store_true",
+		  default=False
+                  )
+
+(options, args) = parser.parse_args()
 
 # single optional argument is injection file
 injfile = []
-if len(sys.argv) > 1:
-	injfile = sys.argv[1]
+if args:
+	injfile = args[0]
+
+############################################################
+# construct the pipeline
+
+# import gstreamer stuff after option parsing
+from gstlal import pipeutil
+from gstlal.pipeutil import gobject, gst
+#from gstlal.elements import channelgram
 
 # downsample
 samplerate = 2048
 
 # size of queue buffers (1 second)
-queuesize = int(1e9)
-
-############################################################
-# construct the pipeline
+queuesize = gst.SECOND
 
 mainloop = gobject.MainLoop()
 pipeline = gst.Pipeline("burstdemo")
@@ -40,7 +61,8 @@ elems = []
 # advanced LIGO noise source
 elems.append(pipeutil.mkelem("lal_fakeadvligosrc",
 			     {"channel-name": 'LSC-STRAIN',
-			      "instrument": 'H1'
+			      "instrument": 'H1',
+				  "blocksize": 4096,
 			      }))
 
 # add injection if specified
@@ -99,34 +121,66 @@ elems.append(pipeutil.mkelem("lal_firbank",
 			     {"name": "Q",
 			      "time-domain": False,
 			      "fir-matrix": qbank,
+				  "block-length-factor": 2,
 			     }))
 
 elems.append(pipeutil.mkelem("progressreport"))
 
-# sum square of the snr channels
-elems.append(pipeutil.mkelem("lal_sumsquares"))
+elems.append(pipeutil.mkelem("tee"))
+tee = elems[-1]
 
-elems.append(pipeutil.mkelem("queue", {"max-size-time": queuesize}))
+##############################
+# tee line to waterfall
+if options.plotSpec:
+	print >>sys.stderr, "plotting spectrogram..."
+	elems.append(pipeutil.mkelem("queue", {"max-size-time": queuesize}))
+	elems.append(pipeutil.mkelem("cairovis_waterfall",
+				     {"title": "OmegaGram",
+				      "history": gst.SECOND,
+				      }))
+	# elems.append(channelgram.Channelgram())
+	# elems[-1].set_property("plot-width", 2.0)
+	elems.append(pipeutil.mkelem("capsfilter",
+				     {"caps": gst.Caps("video/x-raw-rgb,framerate=24/1,width=800,height=600")
+				      }))
+	elems.append(pipeutil.mkelem("ximagesink",
+				     {"sync": False,
+				      "async": False,
+				      }))
+else:
+	elems.append(pipeutil.mkelem("fakesink"))
 
-elems.append(pipeutil.mkelem("cairovis_lineseries",
-			     {"title": "Omega detection"}))
-# elems.append(pipeutil.mkelem("cairovis_waterfall",
-# 			     {"title": "OmegaGram",
-# 			      "history": gst.SECOND,
-# 			      }))
-
-elems.append(pipeutil.mkelem("capsfilter",
-			     {"caps": gst.Caps("video/x-raw-rgb,framerate=24/1,width=800,height=600")
-			      }))
-elems.append(pipeutil.mkelem("ximagesink",
-			     {"sync": False,
-			      "async": False,
- 			      }))
-
-# link the elements together
 for elem in elems:
 	pipeline.add(elem)
 gst.element_link_many(*elems)
+
+##############################
+# tee line to sum square of the snr channels
+elems = []
+
+elems.append(pipeutil.mkelem("lal_sumsquares"))
+
+if options.plotLine:
+	print >>sys.stderr, "plotting lineseries..."
+
+	elems.append(pipeutil.mkelem("queue", {"max-size-time": queuesize}))
+	elems.append(pipeutil.mkelem("cairovis_lineseries",
+				     {"title": "Omega detection"}))
+	elems.append(pipeutil.mkelem("capsfilter",
+				     {"caps": gst.Caps("video/x-raw-rgb,framerate=24/1,width=800,height=600")
+				      }))
+	elems.append(pipeutil.mkelem("ximagesink",
+				     {"sync": False,
+				      "async": False,
+				      }))
+else:
+	elems.append(pipeutil.mkelem("fakesink"))
+
+for elem in elems:
+	pipeline.add(elem)
+gst.element_link_many(tee, *elems)
+
+############################################################
 
 # dump the pipeline dot file if the dot file is specified
 if 'GST_DEBUG_DUMP_DOT_DIR' in os.environ:
