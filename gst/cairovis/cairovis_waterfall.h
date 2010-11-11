@@ -25,6 +25,7 @@
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
 
+#include "colormap.h"
 #include "cairovis_base.h"
 
 
@@ -68,6 +69,7 @@ typedef struct _CairoVisWaterfall {
 	guint64 offset0;
 	guint64 last_offset_end;
 	guint64 frame_number;
+	colormap *map;
 } CairoVisWaterfall;
 
 

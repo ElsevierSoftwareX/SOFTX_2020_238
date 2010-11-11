@@ -193,8 +193,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 					x = 1;
 				else
 					x = (x - element->zmin) * invzspan;
-				guint8 graylevel = 0xFF * x;
-				pixdata[i] = (guint32)graylevel << 16;
+				pixdata[i] = colormap_map(element->map, x);
 			}
 			cairo_surface_t *pixsurf = cairo_image_surface_create_for_data((unsigned char *)pixdata, CAIRO_FORMAT_RGB24, element->nchannels, desired_samples, element->nchannels * 4);
 			cairo_rotate(cr, M_PI_2);
@@ -320,6 +319,8 @@ static void finalize(GObject *object)
 	element->sinkpad = NULL;
 	gst_object_unref(element->adapter);
 	element->adapter = NULL;
+	colormap_destroy(element->map);
+	element->map = NULL;
 	
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -439,6 +440,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->t0 = GST_CLOCK_TIME_NONE;
 	element->offset0 = GST_BUFFER_OFFSET_NONE;
 	element->last_offset_end = GST_BUFFER_OFFSET_NONE;
+	element->map = colormap_create_by_name("jet");
 
 	element->zlabel = NULL;
 }
