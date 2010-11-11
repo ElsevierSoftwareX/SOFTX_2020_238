@@ -1,12 +1,7 @@
 #!/usr/bin/env python
 
-import pygtk
-pygtk.require('2.0')
-import pygst
-pygst.require('0.10')
-import gobject
-import gst
 from gstlal import pipeutil
+from gstlal.pipeutil import gobject, gst
 import sys
 import os
 import numpy
