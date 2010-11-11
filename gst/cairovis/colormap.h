@@ -30,8 +30,8 @@ G_BEGIN_DECLS
 
 typedef struct {
 	size_t len;
-	const double *x;
-	const double *y;
+	double *x;
+	double *y;
 } colormap_channel_data;
 
 typedef struct {
