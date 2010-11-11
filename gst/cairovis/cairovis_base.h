@@ -42,6 +42,16 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), CAIROVIS_BASE_TYPE))
 
 
+#define CAIROVIS_SCALE_TYPE \
+	(cairovis_scale_get_type())
+
+
+enum cairovis_scale {
+	CAIROVIS_SCALE_LINEAR,
+	CAIROVIS_SCALE_LOG,
+};
+
+
 typedef struct {
 	GstElementClass parent_class;
 } CairoVisBaseClass;
@@ -54,7 +64,7 @@ typedef struct _CairoVisBase {
 	GstPad *srcpad;
 
 	/* Properties */
-	int xscale, yscale;
+	enum cairovis_scale xscale, yscale;
 	gchar *title, *xlabel, *ylabel;
 	gboolean xautoscale, yautoscale;
 	gdouble xmin, xmax, ymin, ymax;
@@ -67,6 +77,7 @@ void cairovis_draw_axes(CairoVisBase *element, cairo_t *cr, gint width, gint hei
 
 
 GType cairovis_base_get_type(void);
+GType cairovis_scale_get_type(void);
 
 
 G_END_DECLS

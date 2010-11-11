@@ -24,19 +24,12 @@
 #include <math.h>
 
 
-enum {
-	SCALE_LINEAR,
-	SCALE_LOG,
-};
-
-
-static GType
-scale_type_get_type (void)
+GType cairovis_scale_get_type (void)
 {
     static GType tp = 0;
     static const GEnumValue values[] = {
-		{SCALE_LINEAR, "linear scale", "linear"},
-		{SCALE_LOG, "logarithmic scale", "log"},
+		{CAIROVIS_SCALE_LINEAR, "linear scale", "linear"},
+		{CAIROVIS_SCALE_LOG, "logarithmic scale", "log"},
         {0, NULL, NULL},
     };
 
@@ -297,8 +290,8 @@ void cairovis_draw_axes(CairoVisBase *element, cairo_t *cr, gint width, gint hei
 	cairo_text_extents_t text_extents;
 	double padding, padded_width, padded_height;
 
-	gboolean xlog = (element->xscale == SCALE_LOG);
-	gboolean ylog = (element->yscale == SCALE_LOG);
+	gboolean xlog = (element->xscale == CAIROVIS_SCALE_LOG);
+	gboolean ylog = (element->yscale == CAIROVIS_SCALE_LOG);
 
 	gdouble xmin = element->xmin;
 	gdouble xmax = element->xmax;
@@ -596,8 +589,8 @@ static void class_init(gpointer class, gpointer class_data)
 			"x-scale",
 			"x-Scale",
 			"Linear or logarithmic scale",
-			scale_type_get_type(),
-			SCALE_LINEAR,
+			CAIROVIS_SCALE_TYPE,
+			CAIROVIS_SCALE_LINEAR,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
@@ -608,8 +601,8 @@ static void class_init(gpointer class, gpointer class_data)
 			"y-scale",
 			"y-Scale",
 			"Linear or logarithmic scale",
-			scale_type_get_type(),
-			SCALE_LINEAR,
+			CAIROVIS_SCALE_TYPE,
+			CAIROVIS_SCALE_LINEAR,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
