@@ -6,3 +6,6 @@ injections:
 	lalapps_binj  --gps-end-time=10000 --gps-start-time=120  --max-frequency=1000 --min-frequency=40 --max-hrss=10e-22 --min-hrss=10e-25 --output=inj4.xml --population="all_sky_sinegaussian" --time-step=30 --q=9
 	ligolw_add inj0.xml inj1.xml inj2.xml inj3.xml inj4.xml -o sine_gauss_test.xml
 	rm inj0.xml inj1.xml inj2.xml inj3.xml inj4.xml
+
+clean:
+	rm -f sine_gauss_test.xml
