@@ -1,5 +1,6 @@
 plugin_LTLIBRARIES = libcairovis.la
 
+# FIXME: is it OK to have Matplotlib as a build dependency?
 #colormap_data.c: gencolormap.py
 #	python $< > $@
 
