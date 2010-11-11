@@ -104,16 +104,16 @@ elems.append(pipeutil.mkelem("lal_firbank",
 elems.append(pipeutil.mkelem("progressreport"))
 
 # sum square of the snr channels
-elems.append(pipeutil.mkelem("lal_sumsquares"))
+#elems.append(pipeutil.mkelem("lal_sumsquares"))
 
 elems.append(pipeutil.mkelem("queue", {"max-size-time": queuesize}))
 
-elems.append(pipeutil.mkelem("cairovis_lineseries",
-			     {"title": "Omega detection"}))
-# elems.append(pipeutil.mkelem("cairovis_waterfall",
-# 			     {"title": "OmegaGram",
-# 			      "history": gst.SECOND,
-# 			      }))
+#elems.append(pipeutil.mkelem("cairovis_lineseries",
+#			     {"title": "Omega detection"}))
+elems.append(pipeutil.mkelem("cairovis_waterfall",
+ 			     {"title": "OmegaGram",
+ 			      "history": gst.SECOND,
+ 			      }))
 
 elems.append(pipeutil.mkelem("capsfilter",
 			     {"caps": gst.Caps("video/x-raw-rgb,framerate=24/1,width=800,height=600")

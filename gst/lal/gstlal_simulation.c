@@ -156,6 +156,7 @@ static struct injection_document *load_injection_document(const char *filename, 
 			success = 0;
 		} else
 			XLALPrintInfo("%s(): found sim_burst table\n", func);
+                new->sim_burst_table_head = XLALSortSimBurst(new->sim_burst_table_head, *XLALCompareSimBurstByGeocentTimeGPS);
 	} else
 		new->sim_burst_table_head = NULL;
 
@@ -180,7 +181,8 @@ static struct injection_document *load_injection_document(const char *filename, 
 			/* FIXME no rows found raises an error we don't care about, but why ? */
 			XLALPrintInfo("%s(): found sim_inspiral table\n", func);
 			XLALClearErrno();
-		}		
+		}
+                XLALSortSimInspiral(&(new->sim_inspiral_table_head), *XLALCompareSimInspiralByGeocentEndTime);
 	} else
 		new->sim_inspiral_table_head = NULL;
 
