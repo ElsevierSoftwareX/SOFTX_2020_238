@@ -58,6 +58,7 @@ typedef struct _CairoVisWaterfall {
 
 	/* Properties */
 	GstClockTime history;
+	enum cairovis_scale zscale;
 	gchar *zlabel;
 	gboolean zautoscale;
 	gdouble zmin, zmax;
