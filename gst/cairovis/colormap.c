@@ -26,6 +26,11 @@ static colormap_channel channel_for_data(colormap_channel_data *data)
 	channel.accel = gsl_interp_accel_alloc();
 	channel.spline = gsl_spline_alloc(gsl_interp_linear, data->len);
 	gsl_spline_init(channel.spline, data->x, data->y, data->len);
+
+	/* FIXME: move these into a separate destructor for colormap_channel_data? */
+	g_free(data->x);
+	g_free(data->y);
+
 	return channel;
 }
 

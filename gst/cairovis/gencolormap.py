@@ -46,8 +46,8 @@ for key, value in sorted(datad.items()):
 			print 'const double x[] = {', ','.join([repr(x) for x, y0, y1 in sorted(value[color])]), '};'
 			print 'const double y[] = {', ','.join([repr(y1) for x, y0, y1 in sorted(value[color])]), '};'
 			print 'data->%s.len = sizeof(x) / sizeof(double);' % color
-			print 'data->%s.x = x;' % color
-			print 'data->%s.y = y;' % color
+			print 'data->%s.x = g_memdup(x, sizeof(x));' % color
+			print 'data->%s.y = g_memdup(y, sizeof(y));' % color
 			print '}'
 		print 'return TRUE;'
 		print '} else',
