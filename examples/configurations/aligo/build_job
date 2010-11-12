@@ -13,6 +13,8 @@ from optparse import Option, OptionParser
 opts, args = OptionParser(description = __doc__, option_list = [
 	Option("-n", "--num-templates", type=int, default=256, metavar="INT", help="Number of templates per sub-bank"),
 	Option("--template-bank", metavar="FILE.xml|FILE.xml.gz", help="Filename of input template bank"),
+	Option("--total-duration", type=int, default=3600*24*14, metavar="SECONDS", help="Total analysis duration (default=1 week)"),
+	Option("--job-duration", type=int, default=3600*8, metavar="SECONDS", help="Analysis duration per job (default=8 hours).  FIXME: must be a divisor of --total-duration."),
 ]).parse_args()
 
 
@@ -64,18 +66,32 @@ for i, start_idx in enumerate(range(0, count_sngls, opts.num_templates)):
 	path = os.path.join(head, "%d.%s" % (i, tail))
 	utils.write_filename(xmldoc, path)
 
+count_sub_banks = i + 1
+
 
 # Write the DAG.
 
-progress.max = i + 1
+progress.max = count_sub_banks
 progress.update(-1, 'Generating DAG')
 
 dag = makeDAG('aligo')
 
-sub = EnvCondorJob("gstlal_svd_bank --flow 10 --reference-psd psd.xml.gz --template-bank $(template_bank) --write-bank svd.$(template_bank)", outputname="svd.$(template_bank)")
-for j in range(i+1):
+gstlal_svd_bank_sub = EnvCondorJob("gstlal_svd_bank --flow 10 --reference-psd psd.xml.gz --template-bank $(template_bank) --write-bank svd.$(template_bank)", outputname="svd.$(template_bank)")
+gstlal_inspiral_sub = EnvCondorJob("gstlal_inspiral --flow 10 --reference-psd psd.xml.gz --svd-bank svd.$(template_bank) --gps-start-time $(gps_start_time) --gps-end-time $(gps_end_time) --output output.$(gps_start_time)-$(gps_end_time).$(template_bank)", outputname="output.$(gps_start_time)-$(gps_end_time).$(template_bank)")
+
+for j in range(count_sub_banks):
+
 	progress.update(j)
-	node = makeNode(dag, sub, template_bank=os.path.join(head, "%d.%s" % (j, tail)))
+	template_bank = os.path.join(head, "%d.%s" % (j, tail))
+
+	gstlal_svd_bank_node = makeNode(dag, gstlal_svd_bank_sub, template_bank=template_bank)
+
+	for gps_start_time in range(0, opts.total_duration, opts.job_duration):
+		gstlal_inspiral_node = makeNode(dag, gstlal_inspiral_sub,
+			parents=[gstlal_svd_bank_node],
+			template_bank=template_bank,
+			gps_start_time=gps_start_time,
+			gps_end_time=gps_start_time + min(opts.total_duration, gps_start_time+opts.job_duration))
 
 # Write DAG and submit files.
 
