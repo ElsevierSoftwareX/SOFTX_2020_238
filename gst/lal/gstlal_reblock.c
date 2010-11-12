@@ -72,7 +72,7 @@
 
 
 enum property {
-	ARG_BLOCK_DURATION = 1
+	PROP_BLOCK_DURATION = 1
 };
 
 
@@ -83,7 +83,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case ARG_BLOCK_DURATION:
+	case PROP_BLOCK_DURATION:
 		element->block_duration = g_value_get_uint64(value);
 		break;
 	}
@@ -99,7 +99,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case ARG_BLOCK_DURATION:
+	case PROP_BLOCK_DURATION:
 		g_value_set_uint64(value, element->block_duration);
 		break;
 	}
@@ -418,7 +418,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_BLOCK_DURATION,
+		PROP_BLOCK_DURATION,
 		g_param_spec_uint64(
 			"block-duration",
 			"Block duration",

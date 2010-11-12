@@ -374,12 +374,12 @@ static void stop(GstElement *element, guint64 timestamp, void *data)
 
 
 enum property {
-	ARG_EMIT_SIGNALS = 1,
-	ARG_DEFAULT_STATE,
-	ARG_THRESHOLD,
-	ARG_ATTACK_LENGTH,
-	ARG_HOLD_LENGTH,
-	ARG_LEAKY
+	PROP_EMIT_SIGNALS = 1,
+	PROP_DEFAULT_STATE,
+	PROP_THRESHOLD,
+	PROP_ATTACK_LENGTH,
+	PROP_HOLD_LENGTH,
+	PROP_LEAKY
 };
 
 
@@ -390,27 +390,27 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case ARG_EMIT_SIGNALS:
+	case PROP_EMIT_SIGNALS:
 		element->emit_signals = g_value_get_boolean(value);
 		break;
 
-	case ARG_DEFAULT_STATE:
+	case PROP_DEFAULT_STATE:
 		element->default_state = g_value_get_boolean(value);
 		break;
 
-	case ARG_THRESHOLD:
+	case PROP_THRESHOLD:
 		element->threshold = g_value_get_double(value);
 		break;
 
-	case ARG_ATTACK_LENGTH:
+	case PROP_ATTACK_LENGTH:
 		element->attack_length = g_value_get_int64(value);
 		break;
 
-	case ARG_HOLD_LENGTH:
+	case PROP_HOLD_LENGTH:
 		element->hold_length = g_value_get_int64(value);
 		break;
 
-	case ARG_LEAKY:
+	case PROP_LEAKY:
 		element->leaky = g_value_get_boolean(value);
 		break;
 	}
@@ -426,27 +426,27 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case ARG_EMIT_SIGNALS:
+	case PROP_EMIT_SIGNALS:
 		g_value_set_boolean(value, element->emit_signals);
 		break;
 
-	case ARG_DEFAULT_STATE:
+	case PROP_DEFAULT_STATE:
 		g_value_set_boolean(value, element->default_state);
 		break;
 
-	case ARG_THRESHOLD:
+	case PROP_THRESHOLD:
 		g_value_set_double(value, element->threshold);
 		break;
 
-	case ARG_ATTACK_LENGTH:
+	case PROP_ATTACK_LENGTH:
 		g_value_set_int64(value, element->attack_length);
 		break;
 
-	case ARG_HOLD_LENGTH:
+	case PROP_HOLD_LENGTH:
 		g_value_set_int64(value, element->hold_length);
 		break;
 
-	case ARG_LEAKY:
+	case PROP_LEAKY:
 		g_value_set_boolean(value, element->leaky);
 		break;
 	}
@@ -1152,7 +1152,7 @@ static void class_init(gpointer klass, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_EMIT_SIGNALS,
+		PROP_EMIT_SIGNALS,
 		g_param_spec_boolean(
 			"emit-signals",
 			"Emit signals",
@@ -1163,7 +1163,7 @@ static void class_init(gpointer klass, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_DEFAULT_STATE,
+		PROP_DEFAULT_STATE,
 		g_param_spec_boolean(
 			"default-state",
 			"Default State",
@@ -1174,7 +1174,7 @@ static void class_init(gpointer klass, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_THRESHOLD,
+		PROP_THRESHOLD,
 		g_param_spec_double(
 			"threshold",
 			"Threshold",
@@ -1185,7 +1185,7 @@ static void class_init(gpointer klass, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_ATTACK_LENGTH,
+		PROP_ATTACK_LENGTH,
 		g_param_spec_int64(
 			"attack-length",
 			"Attack",
@@ -1196,7 +1196,7 @@ static void class_init(gpointer klass, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_HOLD_LENGTH,
+		PROP_HOLD_LENGTH,
 		g_param_spec_int64(
 			"hold-length",
 			"Hold",
@@ -1207,7 +1207,7 @@ static void class_init(gpointer klass, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_LEAKY,
+		PROP_LEAKY,
 		g_param_spec_boolean(
 			"leaky",
 			"Leaky",

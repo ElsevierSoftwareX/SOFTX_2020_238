@@ -263,10 +263,10 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 
 
 enum property {
-	ARG_SRC_LOCATION = 1,
-	ARG_SRC_INSTRUMENT,
-	ARG_SRC_CHANNEL_NAME,
-	ARG_SRC_UNITS
+	PROP_SRC_LOCATION = 1,
+	PROP_SRC_INSTRUMENT,
+	PROP_SRC_CHANNEL_NAME,
+	PROP_SRC_UNITS
 };
 
 
@@ -277,26 +277,26 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case ARG_SRC_LOCATION:
+	case PROP_SRC_LOCATION:
 		g_free(element->location);
 		element->location = g_value_dup_string(value);
 		break;
 
-	case ARG_SRC_INSTRUMENT:
+	case PROP_SRC_INSTRUMENT:
 		g_free(element->instrument);
 		element->instrument = g_value_dup_string(value);
 		g_free(element->full_channel_name);
 		element->full_channel_name = gstlal_build_full_channel_name(element->instrument, element->channel_name);
 		break;
 
-	case ARG_SRC_CHANNEL_NAME:
+	case PROP_SRC_CHANNEL_NAME:
 		g_free(element->channel_name);
 		element->channel_name = g_value_dup_string(value);
 		g_free(element->full_channel_name);
 		element->full_channel_name = gstlal_build_full_channel_name(element->instrument, element->channel_name);
 		break;
 
-	case ARG_SRC_UNITS: {
+	case PROP_SRC_UNITS: {
 		const char *units = g_value_get_string(value);
 		if(!units || !strlen(units))
 			element->units = lalDimensionlessUnit;
@@ -317,19 +317,19 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case ARG_SRC_LOCATION:
+	case PROP_SRC_LOCATION:
 		g_value_set_string(value, element->location);
 		break;
 
-	case ARG_SRC_INSTRUMENT:
+	case PROP_SRC_INSTRUMENT:
 		g_value_set_string(value, element->instrument);
 		break;
 
-	case ARG_SRC_CHANNEL_NAME:
+	case PROP_SRC_CHANNEL_NAME:
 		g_value_set_string(value, element->channel_name);
 		break;
 
-	case ARG_SRC_UNITS: {
+	case PROP_SRC_UNITS: {
 		char units[100];
 		XLALUnitAsString(units, sizeof(units), &element->units);
 		g_value_set_string(value, units);
@@ -939,7 +939,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_SRC_LOCATION,
+		PROP_SRC_LOCATION,
 		g_param_spec_string(
 			"location",
 			"Location",
@@ -950,7 +950,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_SRC_INSTRUMENT,
+		PROP_SRC_INSTRUMENT,
 		g_param_spec_string(
 			"instrument",
 			"Instrument",
@@ -961,7 +961,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_SRC_CHANNEL_NAME,
+		PROP_SRC_CHANNEL_NAME,
 		g_param_spec_string(
 			"channel-name",
 			"Channel name",
@@ -972,7 +972,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_SRC_UNITS,
+		PROP_SRC_UNITS,
 		g_param_spec_string(
 			"units",
 			"Units",

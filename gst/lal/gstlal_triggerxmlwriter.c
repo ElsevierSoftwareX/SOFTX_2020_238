@@ -95,7 +95,7 @@ static GstFlowReturn xmlwriter_render(GstBaseSink *sink, GstBuffer *buffer)
 
 
 enum xmlwriter_property {
-	ARG_LOCATION = 1
+	PROP_LOCATION = 1
 };
 
 
@@ -105,7 +105,7 @@ static void xmlwriter_set_property(GObject * object, enum xmlwriter_property id,
 
 	GST_OBJECT_LOCK(element);
 	switch(id) {
-	case ARG_LOCATION:
+	case PROP_LOCATION:
 		g_free(element->location);
 		element->location = g_value_dup_string(value);
 		break;
@@ -120,7 +120,7 @@ static void xmlwriter_get_property(GObject * object, enum xmlwriter_property id,
 
 	GST_OBJECT_LOCK(element);
 	switch(id) {
-	case ARG_LOCATION:
+	case PROP_LOCATION:
 		g_value_set_string(value,element->location);
 		break;
 	}
@@ -171,7 +171,7 @@ static void xmlwriter_class_init(gpointer klass, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_LOCATION,
+		PROP_LOCATION,
 		g_param_spec_string(
 			"location",
 			"filename",

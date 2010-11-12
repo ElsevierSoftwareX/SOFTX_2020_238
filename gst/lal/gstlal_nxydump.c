@@ -238,8 +238,8 @@ static GstFlowReturn print_samples(GstBuffer *out, const double *samples, int ch
 
 
 enum property {
-	ARG_START_TIME = 1,
-	ARG_STOP_TIME
+	PROP_START_TIME = 1,
+	PROP_STOP_TIME
 };
 
 
@@ -248,11 +248,11 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GSTLALNXYDump *element = GSTLAL_NXYDUMP(object);
 
 	switch(id) {
-	case ARG_START_TIME:
+	case PROP_START_TIME:
 		element->start_time = g_value_get_uint64(value);
 		break;
 
-	case ARG_STOP_TIME:
+	case PROP_STOP_TIME:
 		element->stop_time = g_value_get_uint64(value);
 		break;
 	}
@@ -264,11 +264,11 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	GSTLALNXYDump *element = GSTLAL_NXYDUMP(object);
 
 	switch(id) {
-	case ARG_START_TIME:
+	case PROP_START_TIME:
 		g_value_set_uint64(value, element->start_time);
 		break;
 
-	case ARG_STOP_TIME:
+	case PROP_STOP_TIME:
 		g_value_set_uint64(value, element->stop_time);
 		break;
 	}
@@ -515,7 +515,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_START_TIME,
+		PROP_START_TIME,
 		g_param_spec_uint64(
 			"start-time",
 			"Start time",
@@ -526,7 +526,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_STOP_TIME,
+		PROP_STOP_TIME,
 		g_param_spec_uint64(
 			"stop-time",
 			"Stop time",

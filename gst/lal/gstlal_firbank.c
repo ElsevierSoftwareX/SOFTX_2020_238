@@ -622,10 +622,10 @@ GST_BOILERPLATE(
 
 
 enum property {
-	ARG_TIME_DOMAIN = 1,
-	ARG_BLOCK_LENGTH_FACTOR,
-	ARG_FIR_MATRIX,
-	ARG_LATENCY
+	PROP_TIME_DOMAIN = 1,
+	PROP_BLOCK_LENGTH_FACTOR,
+	PROP_FIR_MATRIX,
+	PROP_LATENCY
 };
 
 
@@ -1062,7 +1062,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case ARG_TIME_DOMAIN:
+	case PROP_TIME_DOMAIN:
 		g_mutex_lock(element->fir_matrix_lock);
 		element->time_domain = g_value_get_boolean(value);
 		if(element->time_domain) {
@@ -1075,7 +1075,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
 
-	case ARG_BLOCK_LENGTH_FACTOR:
+	case PROP_BLOCK_LENGTH_FACTOR:
 		g_mutex_lock(element->fir_matrix_lock);
 		element->block_length_factor = g_value_get_int(value);
 
@@ -1087,7 +1087,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
 
-	case ARG_FIR_MATRIX: {
+	case PROP_FIR_MATRIX: {
 		unsigned channels;
 		g_mutex_lock(element->fir_matrix_lock);
 		if(element->fir_matrix) {
@@ -1123,7 +1123,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 	}
 
-	case ARG_LATENCY:
+	case PROP_LATENCY:
 		element->latency = g_value_get_int64(value);
 		/* FIXME:  send updated segment downstream? */
 		break;
@@ -1149,15 +1149,15 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case ARG_TIME_DOMAIN:
+	case PROP_TIME_DOMAIN:
 		g_value_set_boolean(value, element->time_domain);
 		break;
 
-	case ARG_BLOCK_LENGTH_FACTOR:
+	case PROP_BLOCK_LENGTH_FACTOR:
 		g_value_set_int(value, element->block_length_factor);
 		break;
 
-	case ARG_FIR_MATRIX:
+	case PROP_FIR_MATRIX:
 		g_mutex_lock(element->fir_matrix_lock);
 		if(element->fir_matrix)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix(element->fir_matrix));
@@ -1165,7 +1165,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
 
-	case ARG_LATENCY:
+	case PROP_LATENCY:
 		g_value_set_int64(value, element->latency);
 		break;
 
@@ -1265,7 +1265,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_TIME_DOMAIN,
+		PROP_TIME_DOMAIN,
 		g_param_spec_boolean(
 			"time-domain",
 			"Use time-domain convolution",
@@ -1276,7 +1276,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_BLOCK_LENGTH_FACTOR,
+		PROP_BLOCK_LENGTH_FACTOR,
 		g_param_spec_int(
 			"block-length-factor",
 			"Convolution block size in multiples of the FIR length",
@@ -1287,7 +1287,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_FIR_MATRIX,
+		PROP_FIR_MATRIX,
 		g_param_spec_value_array(
 			"fir-matrix",
 			"FIR Matrix",
@@ -1310,7 +1310,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_LATENCY,
+		PROP_LATENCY,
 		g_param_spec_int64(
 			"latency",
 			"Latency",

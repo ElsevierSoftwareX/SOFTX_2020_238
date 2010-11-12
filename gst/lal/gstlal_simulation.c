@@ -683,7 +683,7 @@ static REAL8TimeSeries *compute_strain(double right_ascension, double declinatio
 
 
 enum property {
-	ARG_XML_LOCATION = 1
+	PROP_XML_LOCATION = 1
 };
 
 
@@ -693,7 +693,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 	GSTLALSimulation *element = GSTLAL_SIMULATION(object);
 
 	switch (id) {
-	case ARG_XML_LOCATION:
+	case PROP_XML_LOCATION:
 		g_free(element->xml_location);
 		element->xml_location = g_value_dup_string(value);
 		destroy_injection_document(element->injection_document);
@@ -707,7 +707,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 	GSTLALSimulation *element = GSTLAL_SIMULATION(object);
 
 	switch (id) {
-	case ARG_XML_LOCATION:
+	case PROP_XML_LOCATION:
 		g_value_set_string(value, element->xml_location);
 		break;
 	}
@@ -974,7 +974,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_XML_LOCATION,
+		PROP_XML_LOCATION,
 		g_param_spec_string(
 			"xml-location",
 			"XML Location",

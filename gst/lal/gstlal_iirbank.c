@@ -269,9 +269,9 @@ GST_BOILERPLATE(
 
 
 enum property {
-	ARG_IIR_A1 = 1,
-	ARG_IIR_B0,
-	ARG_IIR_DELAY
+	PROP_IIR_A1 = 1,
+	PROP_IIR_B0,
+	PROP_IIR_DELAY
 };
 
 
@@ -605,7 +605,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case ARG_IIR_A1:
+	case PROP_IIR_A1:
 		g_mutex_lock(element->iir_matrix_lock);
 		if(element->a1)
 		        gsl_vector_complex_free(element->a1);
@@ -620,7 +620,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		g_mutex_unlock(element->iir_matrix_lock);
 		break;
 
-	case ARG_IIR_B0:
+	case PROP_IIR_B0:
 		g_mutex_lock(element->iir_matrix_lock);
 		if(element->b0)
 		        gsl_vector_complex_free(element->b0);
@@ -635,7 +635,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		g_mutex_unlock(element->iir_matrix_lock);
 		break;
 
-	case ARG_IIR_DELAY:
+	case PROP_IIR_DELAY:
 		g_mutex_lock(element->iir_matrix_lock);
 		if(element->delay)
 		        gsl_vector_int_free(element->delay);
@@ -671,7 +671,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case ARG_IIR_A1:
+	case PROP_IIR_A1:
 		g_mutex_lock(element->iir_matrix_lock);
 		if(element->a1)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_vector_complex(element->a1));
@@ -679,7 +679,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		g_mutex_unlock(element->iir_matrix_lock);
 		break;
 
-	case ARG_IIR_B0:
+	case PROP_IIR_B0:
 		g_mutex_lock(element->iir_matrix_lock);
 		if(element->b0)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_vector_complex(element->b0));
@@ -687,7 +687,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		g_mutex_unlock(element->iir_matrix_lock);
 		break;
 
-	case ARG_IIR_DELAY:
+	case PROP_IIR_DELAY:
 		g_mutex_lock(element->iir_matrix_lock);
 		if(element->delay)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_vector_int(element->delay));
@@ -780,7 +780,7 @@ static void gstlal_iirbank_class_init(GSTLALIIRBankClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_IIR_A1,
+		PROP_IIR_A1,
 		g_param_spec_value_array(
 			"a1",
 			"IIR feedback coefficient",
@@ -798,7 +798,7 @@ static void gstlal_iirbank_class_init(GSTLALIIRBankClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_IIR_B0,
+		PROP_IIR_B0,
 		g_param_spec_value_array(
 			"b0",
 			"IIR coefficient",
@@ -816,7 +816,7 @@ static void gstlal_iirbank_class_init(GSTLALIIRBankClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_IIR_DELAY,
+		PROP_IIR_DELAY,
 		g_param_spec_value_array(
 			"delay",
 			"Delay for IIR filter",
