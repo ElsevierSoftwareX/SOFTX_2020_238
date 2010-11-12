@@ -94,7 +94,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 
 	/* FIXME: This doesn't really have to be an infinite loop. */
 	while (TRUE) {
-		GST_INFO_OBJECT(element, "checking to see if we have enough data to draw frame %llu", element->frame_number);
+		GST_INFO_OBJECT(element, "checking to see if we have enough data to draw frame %" G_GUINT64_FORMAT, element->frame_number);
 		GST_INFO_OBJECT(element, "rate=%d, framerate=%d/%d", element->rate, fpsn, fpsd);
 
 		/* FIXME: check my timestamp math here; it's probably not perfect */
@@ -107,7 +107,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 		guint64 desired_samples = desired_offset_end - desired_offset;
 		guint64 desired_bytes = desired_samples * stride_bytes;
 
-		GST_INFO_OBJECT(element, "we want offsets %llu through %llu", desired_offset, desired_offset_end);
+		GST_INFO_OBJECT(element, "we want offsets %" G_GUINT64_FORMAT " through %" G_GUINT64_FORMAT, desired_offset, desired_offset_end);
 
 		if (element->last_offset_end < desired_offset)
 		{
@@ -120,19 +120,19 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 			available_bytes -= flush_bytes;
 			element->last_offset_end += flush_samples;
 		} else if (element->last_offset_end > desired_offset) {
-			GST_INFO_OBJECT(element, "sink pad has not yet advanced far enough to draw frame %llu", element->frame_number);
+			GST_INFO_OBJECT(element, "sink pad has not yet advanced far enough to draw frame %" G_GUINT64_FORMAT, element->frame_number);
 			result = GST_FLOW_OK;
 			goto done;
 		}
 
 		if (available_samples < desired_samples)
 		{
-			GST_INFO_OBJECT(element, "not enough data to draw frame %llu", element->frame_number);
+			GST_INFO_OBJECT(element, "not enough data to draw frame %" G_GUINT64_FORMAT, element->frame_number);
 			result = GST_FLOW_OK;
 			goto done;
 		}
 
-		GST_INFO_OBJECT(element, "preparing to draw frame %llu", element->frame_number);
+		GST_INFO_OBJECT(element, "preparing to draw frame %" G_GUINT64_FORMAT, element->frame_number);
 
 		result = cairovis_base_buffer_surface_alloc(base, &outbuf, &surf, &width, &height);
 
@@ -190,7 +190,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 		/* Draw pixels */
 		if (data)
 		{
-			GST_INFO_OBJECT(element, "painting pixels for frame %llu", element->frame_number);
+			GST_INFO_OBJECT(element, "painting pixels for frame %" G_GUINT64_FORMAT, element->frame_number);
 			guint32 *pixdata = g_malloc(npixels * sizeof(guint32));
 			double invzspan = 1.0 / (element->zmax - element->zmin);
 			for (i = 0; i < npixels; i ++)
