@@ -136,6 +136,10 @@ if options.plotSpec:
 	elems.append(pipeutil.mkelem("queue", {"max-size-time": queuesize}))
 	elems.append(pipeutil.mkelem("cairovis_waterfall",
 				     {"title": "OmegaGram",
+				      "z-autoscale": False,
+				      "z-min": -10.0,
+				      "z-max": 10.0,
+				      "colormap": "spectral",
 				      "history": gst.SECOND,
 				      }))
 	# elems.append(channelgram.Channelgram())
