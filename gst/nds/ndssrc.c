@@ -644,7 +644,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	int data_length = element->daq->chan_req_list->status;
 	guint64 nsamples = data_length / bytes_per_sample;
-	GST_INFO_OBJECT(element, "received segment [%u, %llu)", element->daq->tb->gps, element->daq->tb->gps + nsamples / rate);
+	GST_INFO_OBJECT(element, "received segment [%u, %" G_GUINT64_FORMAT ")", element->daq->tb->gps, element->daq->tb->gps + nsamples / rate);
 
 	if (data_length % bytes_per_sample != 0)
 	{
