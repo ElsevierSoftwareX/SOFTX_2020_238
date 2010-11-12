@@ -91,7 +91,7 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 
 
 enum property {
-	ARG_BASE = 1,
+	PROP_BASE = 1,
 };
 
 
@@ -102,7 +102,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 	GST_OBJECT_LOCK(element);
 	
 	switch (id) {
-		case ARG_BASE:
+		case PROP_BASE:
 			element->base = g_value_get_double(value);
 			element->invlogbase = 1. / log(element->base);
 			break;
@@ -119,7 +119,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 	GST_OBJECT_LOCK(element);
 	
 	switch (id) {
-		case ARG_BASE:
+		case PROP_BASE:
 			g_value_set_double(value, element->base);
 			break;
 	}
@@ -152,7 +152,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_BASE,
+		PROP_BASE,
 		g_param_spec_double(
 			"base",
 			"Base",
