@@ -9,8 +9,6 @@ TODO
 * Divide the gstlal_inspiral pipeline into smaller reusable components,
   possibly creating new element classes in Python.
 
-* Make first-class element plugins for commonly used visualization elements.
-
 * Add the "restrict" keyword wherever possible in C code.
 
 
