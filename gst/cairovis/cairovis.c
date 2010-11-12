@@ -73,16 +73,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"cairovis_waterfall", CAIROVIS_WATERFALL_TYPE},
 		{NULL, 0},
 	};
-	struct {
-		const gchar *name;
-		GstTagFlag flag;
-		GType type;
-		const gchar *nick;
-		const gchar *blurb;
-		GstTagMergeFunc func;
-	} *tagarg, tagargs[] = {
-		{NULL,},
-	};
 
 	/*
 	 * Tell GStreamer about the elements.
@@ -91,13 +81,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 	for(element = elements; element->name; element++)
 		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->type))
 			return FALSE;
-
-	/*
-	 * Tell GStreamer about the custom tags.
-	 */
-
-	for(tagarg = tagargs; tagarg->name; tagarg++)
-		gst_tag_register(tagarg->name, tagarg->flag, tagarg->type, tagarg->nick, tagarg->blurb, tagarg->func);
 
 	/*
 	 * Done.
