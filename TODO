@@ -6,8 +6,7 @@ TODO
 
 * Verify that all elements support gaps.
 
-* Divide the gstlal_inspiral pipeline into smaller reusable components,
-  possibly creating new element classes in Python.
+* Divide the gstlal_inspiral pipeline into reusable components, e.g. bins.
 
 * Add the "restrict" keyword wherever possible in C code.
 
