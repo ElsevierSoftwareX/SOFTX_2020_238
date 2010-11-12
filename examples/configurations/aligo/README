@@ -1,0 +1,32 @@
+=======================
+DAG generator for LLOID
+=======================
+
+No time slides, no coincidence.
+Designed to assess sensitivity in colored Gaussian noise.
+
+
+Instructions
+============
+
+To build and submit a DAG:
+
+ 1. Make sure lalsuite and gstlal are in your environment.
+
+ 2. Set the environment variable TMPDIR to point to a directory that is not
+    NFS mounted but exists on all of the nodes in the cluster.  For example, at
+    CIT I would type::
+
+	  $ export TMPDIR=/usr1/$(USER)
+
+ 3. Grab some mock h(t).  On CIT, you can just symlink this into place::
+    
+	  $ ln -s ~lsinger/mock_aligo_hoft hoft
+
+ 4. Run make to generate a template bank, a PSD estimate, and a DAG:
+ 
+      $ make -j
+
+ 5. Submit the DAG::
+     
+	 $ condor_submit_dag aligo.dag
