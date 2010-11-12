@@ -12,3 +12,11 @@ TODO
 * Make first-class element plugins for commonly used visualization elements.
 
 * Add the "restrict" keyword wherever possible in C code.
+
+
+cairovis
+========
+
+* Add direct output to png, pdf, etc.
+* Add timestamps to axes
+* Add colorbar
