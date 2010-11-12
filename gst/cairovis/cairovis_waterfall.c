@@ -253,13 +253,13 @@ done:
 
 
 enum property {
-	ARG_ZLABEL = 1,
-	ARG_ZSCALE,
-	ARG_ZAUTOSCALE,
-	ARG_ZMIN,
-	ARG_ZMAX,
-	ARG_HISTORY,
-	ARG_COLORMAP,
+	PROP_ZLABEL = 1,
+	PROP_ZSCALE,
+	PROP_ZAUTOSCALE,
+	PROP_ZMIN,
+	PROP_ZMAX,
+	PROP_HISTORY,
+	PROP_COLORMAP,
 };
 
 
@@ -270,26 +270,26 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 	GST_OBJECT_LOCK(element);
 
 	switch (id) {
-		case ARG_ZLABEL:
+		case PROP_ZLABEL:
 			g_free(element->zlabel);
 			element->zlabel = g_value_dup_string(value);
 			break;
-		case ARG_ZSCALE:
+		case PROP_ZSCALE:
 			element->zscale = g_value_get_enum(value);
 			break;
-		case ARG_ZAUTOSCALE:
+		case PROP_ZAUTOSCALE:
 			element->zautoscale = g_value_get_boolean(value);
 			break;
-		case ARG_ZMIN:
+		case PROP_ZMIN:
 			element->zmin = g_value_get_double(value);
 			break;
-		case ARG_ZMAX:
+		case PROP_ZMAX:
 			element->zmax = g_value_get_double(value);
 			break;
-		case ARG_HISTORY:
+		case PROP_HISTORY:
 			element->history = g_value_get_uint64(value);
 			break;
-		case ARG_COLORMAP: {
+		case PROP_COLORMAP: {
 			gchar *new_map_name = g_value_dup_string(value);
 			colormap *new_map = colormap_create_by_name(new_map_name);
 			if (new_map)
@@ -316,25 +316,25 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 	GST_OBJECT_LOCK(element);
 
 	switch (id) {
-		case ARG_ZLABEL:
+		case PROP_ZLABEL:
 			g_value_set_string(value, element->zlabel);
 			break;
-		case ARG_ZSCALE:
+		case PROP_ZSCALE:
 			g_value_set_enum(value, element->zscale);
 			break;
-		case ARG_ZAUTOSCALE:
+		case PROP_ZAUTOSCALE:
 			g_value_set_boolean(value, element->zautoscale);
 			break;
-		case ARG_ZMIN:
+		case PROP_ZMIN:
 			g_value_set_double(value, element->zmin);
 			break;
-		case ARG_ZMAX:
+		case PROP_ZMAX:
 			g_value_set_double(value, element->zmax);
 			break;
-		case ARG_HISTORY:
+		case PROP_HISTORY:
 			g_value_set_uint64(value, element->history);
 			break;
-		case ARG_COLORMAP:
+		case PROP_COLORMAP:
 			g_value_set_string(value, element->map_name);
 			break;
 	}
@@ -403,7 +403,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_ZLABEL,
+		PROP_ZLABEL,
 		g_param_spec_string(
 			"z-label",
 			"z-Label",
@@ -414,7 +414,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_ZSCALE,
+		PROP_ZSCALE,
 		g_param_spec_enum(
 			"z-scale",
 			"z-Scale",
@@ -426,7 +426,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_ZAUTOSCALE,
+		PROP_ZAUTOSCALE,
 		g_param_spec_boolean(
 			"z-autoscale",
 			"z-Autoscale",
@@ -437,7 +437,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_ZMIN,
+		PROP_ZMIN,
 		g_param_spec_double(
 			"z-min",
 			"z-Minimum",
@@ -448,7 +448,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_ZMAX,
+		PROP_ZMAX,
 		g_param_spec_double(
 			"z-max",
 			"z-Maximum",
@@ -459,7 +459,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_HISTORY,
+		PROP_HISTORY,
 		g_param_spec_uint64(
 			"history",
 			"History",
@@ -470,7 +470,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_COLORMAP,
+		PROP_COLORMAP,
 		g_param_spec_string(
 			"colormap",
 			"Colormap",

@@ -388,17 +388,17 @@ static GstElementClass *parent_class = NULL;
 
 
 enum property {
-	ARG_TITLE = 1,
-	ARG_XLABEL,
-	ARG_YLABEL,
-	ARG_XSCALE,
-	ARG_YSCALE,
-	ARG_XAUTOSCALE,
-	ARG_YAUTOSCALE,
-	ARG_XMIN,
-	ARG_XMAX,
-	ARG_YMIN,
-	ARG_YMAX,
+	PROP_TITLE = 1,
+	PROP_XLABEL,
+	PROP_YLABEL,
+	PROP_XSCALE,
+	PROP_YSCALE,
+	PROP_XAUTOSCALE,
+	PROP_YAUTOSCALE,
+	PROP_XMIN,
+	PROP_XMAX,
+	PROP_YMIN,
+	PROP_YMAX,
 };
 
 
@@ -409,40 +409,40 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 	GST_OBJECT_LOCK(element);
 
 	switch (id) {
-		case ARG_TITLE:
+		case PROP_TITLE:
 			g_free(element->title);
 			element->title = g_value_dup_string(value);
 			break;
-		case ARG_XLABEL:
+		case PROP_XLABEL:
 			g_free(element->xlabel);
 			element->xlabel = g_value_dup_string(value);
 			break;
-		case ARG_YLABEL:
+		case PROP_YLABEL:
 			g_free(element->ylabel);
 			element->ylabel = g_value_dup_string(value);
 			break;
-		case ARG_XSCALE:
+		case PROP_XSCALE:
 			element->xscale = g_value_get_enum(value);
 			break;
-		case ARG_YSCALE:
+		case PROP_YSCALE:
 			element->yscale = g_value_get_enum(value);
 			break;
-		case ARG_XAUTOSCALE:
+		case PROP_XAUTOSCALE:
 			element->xautoscale = g_value_get_boolean(value);
 			break;
-		case ARG_YAUTOSCALE:
+		case PROP_YAUTOSCALE:
 			element->yautoscale = g_value_get_boolean(value);
 			break;
-		case ARG_XMIN:
+		case PROP_XMIN:
 			element->xmin = g_value_get_double(value);
 			break;
-		case ARG_XMAX:
+		case PROP_XMAX:
 			element->xmax = g_value_get_double(value);
 			break;
-		case ARG_YMIN:
+		case PROP_YMIN:
 			element->ymin = g_value_get_double(value);
 			break;
-		case ARG_YMAX:
+		case PROP_YMAX:
 			element->ymax = g_value_get_double(value);
 			break;
 	}
@@ -458,37 +458,37 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 	GST_OBJECT_LOCK(element);
 
 	switch (id) {
-		case ARG_TITLE:
+		case PROP_TITLE:
 			g_value_set_string(value, element->title);
 			break;
-		case ARG_XLABEL:
+		case PROP_XLABEL:
 			g_value_set_string(value, element->xlabel);
 			break;
-		case ARG_YLABEL:
+		case PROP_YLABEL:
 			g_value_set_string(value, element->ylabel);
 			break;
-		case ARG_XSCALE:
+		case PROP_XSCALE:
 			g_value_set_enum(value, element->xscale);
 			break;
-		case ARG_YSCALE:
+		case PROP_YSCALE:
 			g_value_set_enum(value, element->yscale);
 			break;
-		case ARG_XAUTOSCALE:
+		case PROP_XAUTOSCALE:
 			g_value_set_boolean(value, element->xautoscale);
 			break;
-		case ARG_YAUTOSCALE:
+		case PROP_YAUTOSCALE:
 			g_value_set_boolean(value, element->yautoscale);
 			break;
-		case ARG_XMIN:
+		case PROP_XMIN:
 			g_value_set_double(value, element->xmin);
 			break;
-		case ARG_XMAX:
+		case PROP_XMAX:
 			g_value_set_double(value, element->xmax);
 			break;
-		case ARG_YMIN:
+		case PROP_YMIN:
 			g_value_set_double(value, element->ymin);
 			break;
-		case ARG_YMAX:
+		case PROP_YMAX:
 			g_value_set_double(value, element->ymax);
 			break;
 	}
@@ -551,7 +551,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_TITLE,
+		PROP_TITLE,
 		g_param_spec_string(
 			"title",
 			"Title",
@@ -562,7 +562,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_XLABEL,
+		PROP_XLABEL,
 		g_param_spec_string(
 			"x-label",
 			"x-Label",
@@ -573,7 +573,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_YLABEL,
+		PROP_YLABEL,
 		g_param_spec_string(
 			"y-label",
 			"y-Label",
@@ -584,7 +584,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_XSCALE,
+		PROP_XSCALE,
 		g_param_spec_enum(
 			"x-scale",
 			"x-Scale",
@@ -596,7 +596,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_YSCALE,
+		PROP_YSCALE,
 		g_param_spec_enum(
 			"y-scale",
 			"y-Scale",
@@ -608,7 +608,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_XAUTOSCALE,
+		PROP_XAUTOSCALE,
 		g_param_spec_boolean(
 			"x-autoscale",
 			"x-Autoscale",
@@ -619,7 +619,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_YAUTOSCALE,
+		PROP_YAUTOSCALE,
 		g_param_spec_boolean(
 			"y-autoscale",
 			"y-Autoscale",
@@ -630,7 +630,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_XMIN,
+		PROP_XMIN,
 		g_param_spec_double(
 			"x-min",
 			"x-Minimum",
@@ -641,7 +641,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_XMAX,
+		PROP_XMAX,
 		g_param_spec_double(
 			"x-max",
 			"x-Maximum",
@@ -652,7 +652,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_YMIN,
+		PROP_YMIN,
 		g_param_spec_double(
 			"y-min",
 			"y-Minimum",
@@ -663,7 +663,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_YMAX,
+		PROP_YMAX,
 		g_param_spec_double(
 			"y-max",
 			"y-Maximum",
