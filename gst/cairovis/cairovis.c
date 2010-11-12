@@ -27,15 +27,6 @@
 
 
 /*
- * Stuff from the C library
- */
-
-
-#include <math.h>
-#include <stdio.h>
-
-
-/*
  * Stuff from GStreamer
  */
 
