@@ -166,6 +166,15 @@ static int make_workspace(GSTLALWhiten *element)
 	REAL8FFTPlan *revplan = NULL;
 	REAL8TimeSeries *tdworkspace = NULL;
 	COMPLEX16FrequencySeries *fdworkspace = NULL;
+	REAL8Sequence *tail = NULL;
+
+	/*
+	 * safety checks
+	 */
+
+	g_assert(fft_length(element) > 0);
+	g_assert(zero_pad_length(element) >= 0);
+	g_assert(fft_length(element) > 2 * zero_pad_length(element));
 
 	/*
 	 * construct FFT plans and build a Hann window with zero-padding.
@@ -228,6 +237,17 @@ static int make_workspace(GSTLALWhiten *element)
 	}
 
 	/*
+	 * allocate a tail buffer
+	 */
+
+	tail = XLALCreateREAL8Sequence(fft_length(element) / 2 - zero_pad_length(element));
+	if(!tail) {
+		GST_ERROR_OBJECT(element, "failure allocating tail buffer: %s", XLALErrorString(XLALGetBaseErrno()));
+		goto error;
+	}
+	memset(tail->data, 0, tail->length * sizeof(*tail->data));
+
+	/*
 	 * done
 	 */
 
@@ -236,6 +256,7 @@ static int make_workspace(GSTLALWhiten *element)
 	element->revplan = revplan;
 	element->tdworkspace = tdworkspace;
 	element->fdworkspace = fdworkspace;
+	element->tail = tail;
 	return 0;
 
 error:
@@ -246,6 +267,7 @@ error:
 	g_mutex_unlock(gstlal_fftw_lock);
 	XLALDestroyREAL8TimeSeries(tdworkspace);
 	XLALDestroyCOMPLEX16FrequencySeries(fdworkspace);
+	XLALDestroyREAL8Sequence(tail);
 	XLALClearErrno();
 	return -1;
 }
@@ -273,6 +295,8 @@ static void free_workspace(GSTLALWhiten *element)
 	element->tdworkspace = NULL;
 	XLALDestroyCOMPLEX16FrequencySeries(element->fdworkspace);
 	element->fdworkspace = NULL;
+	XLALDestroyREAL8Sequence(element->tail);
+	element->tail = NULL;
 }
 
 
@@ -521,6 +545,15 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		if(newpsd != element->psd) {
 			XLALDestroyREAL8FrequencySeries(element->psd);
 			element->psd = newpsd;
+
+			/*
+			 * let everybody know about the new PSD:  gobject's
+			 * notify mechanism, post a gst message on the
+			 * message bus, and push a buffer containing the
+			 * PSD out the psd pad.
+			 */
+
+			g_object_notify(G_OBJECT(element), "mean-psd");
 			gst_element_post_message(GST_ELEMENT(element), psd_message_new(element, element->psd));
 			if(element->mean_psd_pad) {
 				GstFlowReturn result = push_psd(element->mean_psd_pad, element->psd);
@@ -647,39 +680,33 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 /*
  * ============================================================================
  *
- *                                  Signals
+ *                              Signal Handlers
  *
  * ============================================================================
  */
 
 
-static void f_nyquist_changed(GObject *object, GParamSpec *pspec, gpointer user_data)
+static void rebuild_workspace_and_reset(GObject *object, GParamSpec *pspec, gpointer user_data)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(object);
 
 	/*
-	 * (re)build work space
+	 * free old work space
 	 */
 
 	free_workspace(element);
-	if(make_workspace(element) < 0) {
-		/* FIXME:  should this be indicated somehow?  return
-		 * non-void? */
-	}
 
 	/*
-	 * allocate a tail buffer
+	 * build work space if we know the number of samples in the FFT
+	 * (requires fft length to be set and the sample rate to be known)
 	 */
 
-	XLALDestroyREAL8Sequence(element->tail);
-	element->tail = XLALCreateREAL8Sequence(fft_length(element) / 2 - zero_pad_length(element));
-	if(!element->tail) {
-		GST_ERROR_OBJECT(element, "failure allocating tail buffer: %s", XLALErrorString(XLALGetBaseErrno()));
-		XLALClearErrno();
-		/* FIXME:  should this be indicated somehow?  return
-		 * non-void? */
-	} else
-		memset(element->tail->data, 0, element->tail->length * sizeof(*element->tail->data));
+	if(fft_length(element)) {
+		if(make_workspace(element) < 0) {
+			/* FIXME:  should this be indicated somehow?  return
+			 * non-void? */
+		}
+	}
 
 	/*
 	 * reset PSD regressor
@@ -849,10 +876,12 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	if(!gst_structure_get_int(s, "channels", &channels)) {
 		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
 		success = FALSE;
-	} else if(!gst_structure_get_int(s, "rate", &rate)) {
+	}
+	if(!gst_structure_get_int(s, "rate", &rate)) {
 		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
 		success = FALSE;
-	} else if((int) round(element->fft_length_seconds * rate) & 1 || (int) round(element->zero_pad_seconds * rate) & 1) {
+	}
+	if(success && ((int) round(element->fft_length_seconds * rate) & 1 || (int) round(element->zero_pad_seconds * rate) & 1)) {
 		GST_ERROR_OBJECT(element, "bad sample rate: FFT length and/or zero-padding is an odd number of samples (must be even)");
 		success = FALSE;
 	}
@@ -1103,20 +1132,11 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		double zero_pad_seconds = g_value_get_double(value);
 		if(zero_pad_seconds != element->zero_pad_seconds) {
 			/*
-			 * set sink pad's caps to NULL to force
-			 * renegotiation == check that the rate is still
-			 * OK, and rebuild windows and FFT plans
+			 * record new value
 			 */
 
-			gst_pad_set_caps(GST_BASE_TRANSFORM_SINK_PAD(GST_BASE_TRANSFORM(object)), NULL);
-		}
-		element->zero_pad_seconds = zero_pad_seconds;
-		break;
-	}
+			element->zero_pad_seconds = zero_pad_seconds;
 
-	case PROP_FFT_LENGTH: {
-		double fft_length_seconds = g_value_get_double(value);
-		if(fft_length_seconds != element->fft_length_seconds) {
 			/*
 			 * set sink pad's caps to NULL to force
 			 * renegotiation == check that the rate is still
@@ -1124,8 +1144,36 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 			 */
 
 			gst_pad_set_caps(GST_BASE_TRANSFORM_SINK_PAD(GST_BASE_TRANSFORM(object)), NULL);
+			element->sample_rate = 0;
 		}
-		element->fft_length_seconds = fft_length_seconds;
+		break;
+	}
+
+	case PROP_FFT_LENGTH: {
+		double fft_length_seconds = g_value_get_double(value);
+		if(fft_length_seconds != element->fft_length_seconds) {
+			/*
+			 * record new value
+			 */
+
+			element->fft_length_seconds = fft_length_seconds;
+
+			/*
+			 * set sink pad's caps to NULL to force
+			 * renegotiation == check that the rate is still
+			 * OK, and rebuild windows and FFT plans
+			 */
+
+			gst_pad_set_caps(GST_BASE_TRANSFORM_SINK_PAD(GST_BASE_TRANSFORM(object)), NULL);
+			element->sample_rate = 0;
+
+			/*
+			 * let everybody know the PSD's \Delta f has
+			 * changed.
+			 */
+
+			g_object_notify(object, "delta-f");
+		}
 		break;
 	}
 
@@ -1233,8 +1281,6 @@ static void finalize(GObject * object)
 	element->psd_regressor = NULL;
 	XLALDestroyREAL8FrequencySeries(element->psd);
 	element->psd = NULL;
-	XLALDestroyREAL8Sequence(element->tail);
-	element->tail = NULL;
 
 	free_workspace(element);
 
@@ -1394,7 +1440,8 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 
 static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *klass)
 {
-	g_signal_connect(G_OBJECT(element), "notify::f-nyquist", G_CALLBACK(f_nyquist_changed), NULL);
+	g_signal_connect(G_OBJECT(element), "notify::f-nyquist", G_CALLBACK(rebuild_workspace_and_reset), NULL);
+	g_signal_connect(G_OBJECT(element), "notify::delta-f", G_CALLBACK(rebuild_workspace_and_reset), NULL);
 
 	element->mean_psd_pad = NULL;
 	element->adapter = gst_adapter_new();
