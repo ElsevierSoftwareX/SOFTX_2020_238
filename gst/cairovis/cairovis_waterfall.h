@@ -62,7 +62,7 @@ typedef struct _CairoVisWaterfall {
 	gchar *zlabel;
 	gboolean zautoscale;
 	gdouble zmin, zmax;
-	
+
 	/* Internal data */
 	gint nchannels;
 	gint rate;
