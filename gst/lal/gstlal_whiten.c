@@ -876,10 +876,12 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	if(!gst_structure_get_int(s, "channels", &channels)) {
 		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
 		success = FALSE;
-	} else if(!gst_structure_get_int(s, "rate", &rate)) {
+	}
+	if(!gst_structure_get_int(s, "rate", &rate)) {
 		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
 		success = FALSE;
-	} else if((int) round(element->fft_length_seconds * rate) & 1 || (int) round(element->zero_pad_seconds * rate) & 1) {
+	}
+	if(success && ((int) round(element->fft_length_seconds * rate) & 1 || (int) round(element->zero_pad_seconds * rate) & 1)) {
 		GST_ERROR_OBJECT(element, "bad sample rate: FFT length and/or zero-padding is an odd number of samples (must be even)");
 		success = FALSE;
 	}
