@@ -2,6 +2,10 @@
 TODO
 ====
 
+
+General
+=======
+
 * Verify that all elements support discontinuities.
 * Verify that all elements support gaps.
 * Divide the gstlal_inspiral pipeline into reusable components, e.g. bins.
