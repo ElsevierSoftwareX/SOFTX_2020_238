@@ -8,6 +8,19 @@ TODO
 * Add the "restrict" keyword wherever possible in C code.
 
 
+lal
+===
+
+* Add gap support to lal_whiten.
+* Factor chi square calculation out of lal_triggergen.
+* Backport the new time-symmetric trigger algorithm from s6online to master.
+* Add support for partial coincidences (coincidences in which not all detectors
+  participate) to lal_skymap.
+* Come up with a trigger format that is less inspiral-centric so that all
+  transient searches can share some common elements for trigger I/O, coincidence,
+  and Bayesian localization.
+
+
 cairovis
 ========
 
