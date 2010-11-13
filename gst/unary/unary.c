@@ -56,6 +56,7 @@ GType unary_exp_get_type(void);
 GType unary_ln_get_type(void);
 GType unary_log_get_type(void);
 GType unary_log10_get_type(void);
+GType unary_pow_get_type(void);
 
 
 static gboolean plugin_init(GstPlugin *plugin)
@@ -70,6 +71,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"ln", unary_ln_get_type()},
 		{"log", unary_log_get_type()},
 		{"log10", unary_log10_get_type()},
+		{"pow", unary_pow_get_type()},
 		{NULL, 0},
 	};
 
