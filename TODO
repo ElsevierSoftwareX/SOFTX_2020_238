@@ -12,8 +12,8 @@ General
 * Add the "restrict" keyword wherever possible in C code.
 
 
-lal
-===
+``gstlal`` plugin
+=================
 
 * Add gap support to lal_whiten.
 * Factor chi square calculation out of lal_triggergen.
@@ -25,8 +25,8 @@ lal
   and Bayesian localization.
 
 
-cairovis
-========
+``cairovis`` plugin
+===================
 
 * Add direct output to png, pdf, etc.
 * Add timestamps to axes
