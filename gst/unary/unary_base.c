@@ -45,12 +45,7 @@ static void base_init(gpointer class)
 			"rate = (int) [1, MAX], " \
 			"endianness = (int) BYTE_ORDER, " \
 			"width = (int) {32, 64}, " \
-			"channels = (int) [1, MAX]; " \
-			"audio/x-raw-int, " \
-			"rate = (int) [1, MAX], " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) {16, 32, 64}, " \
-			"signed = (bool) {false, true}"
+			"channels = (int) [1, MAX]"
 		)
 	);
 }

@@ -57,22 +57,6 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 		float *ptr, *end = data_end;
 		for (ptr = data; ptr < end; ptr++)
 			*ptr = logf(*ptr) * n;
-	} else if (format >= GST_U32_LE) {
-		guint32 *ptr, *end = data_end;
-		for (ptr = data; ptr < end; ptr++)
-			*ptr = logf(*ptr) * n;
-	} else if (format >= GST_S32_LE) {
-		gint32 *ptr, *end = data_end;
-		for (ptr = data; ptr < end; ptr++)
-			*ptr = logf(*ptr) * n;
-	} else if (format >= GST_U16_LE) {
-		guint16 *ptr, *end = data_end;
-		for (ptr = data; ptr < end; ptr++)
-			*ptr = logf(*ptr) * n;
-	} else if (format >= GST_S16_LE) {
-		gint16 *ptr, *end = data_end;
-		for (ptr = data; ptr < end; ptr++)
-			*ptr = logf(*ptr) * n;
 	} else {
 		g_assert_not_reached();
 	}

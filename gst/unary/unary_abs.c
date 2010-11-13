@@ -26,7 +26,6 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 {
 	GstAudioFilter *audiofilter = GST_AUDIO_FILTER(trans);
 	GstBufferFormat format = audiofilter->format.format;
-	gboolean sign = audiofilter->format.sign;
 
 	gpointer data = GST_BUFFER_DATA(buf);
 	gpointer data_end = GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf);
@@ -40,20 +39,6 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 		float *ptr, *end = data_end;
 		for (ptr = data; ptr < end; ptr++)
 			*ptr = fabsf(*ptr);
-	} else if (format >= GST_S32_LE) {
-		if (sign)
-		{
-			gint32 *ptr, *end = data_end;
-			for (ptr = data; ptr < end; ptr++)
-				*ptr = abs(*ptr);
-		}
-	} else if (format >= GST_S16_LE) {
-		if (sign)
-		{
-			gint16 *ptr, *end = data_end;
-			for (ptr = data; ptr < end; ptr++)
-				*ptr = abs(*ptr);
-		}
 	} else {
 		g_assert_not_reached();
 	}
