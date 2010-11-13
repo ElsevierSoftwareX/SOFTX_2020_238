@@ -25,9 +25,10 @@
 
 
 from gstlal.pipeutil import *
+from math import cos, pi, sqrt
 
 
-__author__ = "Drew Keppel <drew.keppel@ligo.org>"
+__author__ = "Drew Keppel <drew.keppel@ligo.org>, Leo Singer <leo.singer@ligo.org>"
 __version__ = "FIXME"
 __date__ = "FIXME"
 
@@ -131,34 +132,30 @@ class lal_fakeadvligosrc(gst.Bin):
 
 		chains = (
 			mkelems_in_bin(self,
-				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 4e-18, 'samplesperbuffer': 16384}),
-				*((('audioiirfilter', {'a': (1.951516E-6, 3.903032E-6, 1.951516E-6), 'b': (1., 1.9970651, -0.99707294)}),) * 20)
+				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 4e-28, 'samplesperbuffer': 16384}),
+				('audioiirfilter', {'a': (1.,), 'b': (-1., 2*cos(2*pi*9.103/16384)*0.99995, -1.*0.99995**2)}),
 			),
 			mkelems_in_bin(self,
-				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 1.2e-20, 'samplesperbuffer': 16384}),
-				*((('audioiirfilter', {'a': (6.686792E-7, 1.3373584E-6, 6.686792E-7), 'b': (1.0, 1.9982744, -0.9982772)}),) * 3)
+				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 1.1e-23, 'samplesperbuffer': 16384}),
+				('audiofirfilter', {'kernel': (1., -1.)}),
 			),
 			mkelems_in_bin(self,
-				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 4e-22, 'samplesperbuffer': 16384}),
-				('audioiirfilter', {'a': (6.686792E-7, 1.3373584E-6, 6.686792E-7), 'b': (1.0, 1.9982744, -0.9982772)})
+				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 1e-27, 'samplesperbuffer': 16384}),
+				('audioiirfilter', {'a': (1.,), 'b': (-1.0, 2 * 0.999, -.999**2)}),
 			),
 			mkelems_in_bin(self,
-				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 3.6e-24, 'samplesperbuffer': 16384})
+				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 4e-26, 'samplesperbuffer': 16384}),
+				('audioiirfilter', {'a': (1.,), 'b': (-1., 2*cos(2*pi*50./16384)*.87, -.87**2)}),
 			),
 			mkelems_in_bin(self,
-				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 3.12e-23, 'samplesperbuffer': 16384}),
-				('audioiirfilter', {'a': (8.003242E-4, 8.003242E-4), 'b': (1.0, 0.99843043)})
+				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 6.5e-24, 'samplesperbuffer': 16384}),
+				('audioiirfilter', {'a': (1.,), 'b': (-1., -2*.45, -.45**2)}),
 			),
-			mkelems_in_bin(self,
-				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 5.36e-20, 'samplesperbuffer': 16384}),
-				('audioiirfilter', {'a': (0.5591789, 0.5591789), 'b': (1., -0.1183578)}),
-				('audioiirfilter', {'a': (4.2278392E-4, -4.2278392E-4), 'b': (1.0, -0.9992149)})
-			)
 		)
 
 		outputchain = mkelems_in_bin(self,
 			('lal_adder', {'sync': True}),
-			('audioamplify', {'clipping-method': 3, 'amplification': 16384.**.5}),
+			('audioamplify', {'clipping-method': 3, 'amplification': sqrt(16384.)*3/4}),
 			('taginject',)
 		)
 
