@@ -54,6 +54,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 	double *data;
 	guint i;
 	gboolean zlog = (element->zscale == CAIROVIS_SCALE_LOG);
+	gdouble zmin, zmax;
 
 	if (base->xscale || base->yscale)
 	{
@@ -170,14 +171,21 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 
 		/* Determine z-axis limits */
 		if (element->zautoscale && data) {
-			element->zmin = INFINITY;
-			element->zmax = -INFINITY;
+			zmin = INFINITY;
+			zmax = -INFINITY;
 			for (i = 0; i < npixels; i ++)
 			{
-				if (data[i] < element->zmin)
-					element->zmin = data[i];
-				if (data[i] > element->zmax)
-					element->zmax = data[i];
+				if (data[i] < zmin)
+					zmin = data[i];
+				if (data[i] > zmax)
+					zmax = data[i];
+			}
+		} else {
+			zmin = element->zmin;
+			zmax = element->zmax;
+			if (zlog) {
+				zmin = log10(zmin);
+				zmax = log10(zmax);
 			}
 		}
 
@@ -192,17 +200,17 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 		{
 			GST_INFO_OBJECT(element, "painting pixels for frame %" G_GUINT64_FORMAT, element->frame_number);
 			guint32 *pixdata = g_malloc(npixels * sizeof(guint32));
-			double invzspan = 1.0 / (element->zmax - element->zmin);
+			double invzspan = 1.0 / (zmax - zmin);
 			for (i = 0; i < npixels; i ++)
 			{
 				/* FIXME: add colors! */
 				double x = data[i];
-				if (x < element->zmin)
+				if (x < zmin)
 					x = 0;
-				else if (x > element->zmax)
+				else if (x > zmax)
 					x = 1;
 				else
-					x = (x - element->zmin) * invzspan;
+					x = (x - zmin) * invzspan;
 				pixdata[i] = colormap_map(element->map, x);
 			}
 			cairo_surface_t *pixsurf = cairo_image_surface_create_for_data((unsigned char *)pixdata, CAIRO_FORMAT_RGB24, element->nchannels, desired_samples, element->nchannels * 4);
