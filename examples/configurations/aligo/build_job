@@ -98,7 +98,7 @@ dag = makeDAG('aligo')
 gstlal_svd_bank_sub = EnvCondorJob("""gstlal_svd_bank
 	--flow 10 --reference-psd psd.xml.gz
 	--template-bank $(template_bank)
-	--write-bank svd.$(template_bank)
+	--write-svd-bank svd.$(template_bank)
 	""", outputname="svd.$(template_bank)")
 
 # gstlal_inspiral submit file for generating single-detector triggers.
