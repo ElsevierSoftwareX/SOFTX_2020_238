@@ -30,3 +30,26 @@ To build and submit a DAG:
  5. Submit the DAG::
      
 	 $ condor_submit_dag aligo.dag
+
+
+Side notes
+==========
+
+To run a single instance of lalapps_inspiral, here is an example command on our mock data:
+
+lalapps_inspiral --trig-end-time 0 --cluster-method template \
+--dynamic-range-exponent 69.0 --disable-rsq-veto  --bank-file \
+${BANK_FILE} --high-pass-order 8 \
+--strain-high-pass-order 8 --ifo-tag FIRST --approximant FindChirpSP \
+--gps-end-time 3048 --calibrated-data real_8 --channel-name H1:MOCK-STRAIN \
+--snr-threshold 2 --number-of-segments 15 --trig-start-time 1000 \
+--enable-high-pass $(echo "0.9 * ${LOW_FREQ}" | bc -l) --debug-level 33 \
+--gps-start-time 1000 --enable-filter-inj-only  --high-pass-attenuation 0.1 \
+--chisq-bins 0 --inverse-spec-length 16 --segment-length 1048576 \
+--low-frequency-cutoff ${LOW_FREQ} --pad-data 8 --sample-rate 4096 \
+--chisq-threshold 10.0 --resample-filter ldas --strain-high-pass-atten 0.1 \
+--strain-high-pass-freq $(echo "0.9 * ${LOW_FREQ}" | bc -l) \
+--segment-overlap 524288 --frame-cache frame_cache --chisq-delta 0.2 \
+--bank-veto-subbank-size 16 --user-tag FULL_DATA --ts-metric-scaling 0.06 \
+--write-compress  --enable-output --ts-cluster T0T3TcAS --order twoPN \
+--spectrum-type median
