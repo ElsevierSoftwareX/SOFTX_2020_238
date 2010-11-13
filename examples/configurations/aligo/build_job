@@ -104,6 +104,7 @@ gstlal_svd_bank_sub = EnvCondorJob("""gstlal_svd_bank
 # gstlal_inspiral submit file for generating single-detector triggers.
 gstlal_inspiral_sub = EnvCondorJob("""gstlal_inspiral
 	--flow 10 --reference-psd psd.xml.gz
+	--frame-cache frame.cache
 	--svd-bank svd.$(template_bank)
 	--gps-start-time $(gps_start_time)
 	--gps-end-time $(gps_end_time)
