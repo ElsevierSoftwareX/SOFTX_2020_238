@@ -12,6 +12,18 @@ General
 * Add the "restrict" keyword wherever possible in C code.
 
 
+Plugins/elements to hand over to GStreamer
+==========================================
+
+* ``cairovis`` plugin
+* ``unary`` plugin
+* ``lal_gate`` element
+* ``lal_reblock`` element
+* ``lal_adder`` element: make the stock ``adder`` synchronous, or figure out how to use it
+* ``lal_firbank`` element
+* ``lal_matrixmixer`` element
+
+
 ``gstlal`` plugin
 =================
 
