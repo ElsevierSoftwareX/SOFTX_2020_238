@@ -13,33 +13,15 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-
-
-#
-# =============================================================================
-#
-#                                   Preamble
-#
-# =============================================================================
-#
+"""
+Generate simulated Advanced LIGO h(t) based on ZERO DET, high power in
+http://lhocds.ligo-wa.caltech.edu:8000/advligo/AdvLIGO_noise_curves
+"""
+__author__ = "Drew Keppel <drew.keppel@ligo.org>, Leo Singer <leo.singer@ligo.org>"
 
 
 from gstlal.pipeutil import *
 from math import cos, pi, sqrt
-
-
-__author__ = "Drew Keppel <drew.keppel@ligo.org>, Leo Singer <leo.singer@ligo.org>"
-__version__ = "FIXME"
-__date__ = "FIXME"
-
-
-#
-# =============================================================================
-#
-#                                   Element
-#
-# =============================================================================
-#
 
 
 class lal_fakeadvligosrc(gst.Bin):
@@ -47,7 +29,7 @@ class lal_fakeadvligosrc(gst.Bin):
 	__gstdetails__ = (
 		'Fake Advanced LIGO Source',
 		'Source',
-		'generate simulated Advanced LIGO h(t) based on ZERO DET, high power in http://lhocds.ligo-wa.caltech.edu:8000/advligo/AdvLIGO_noise_curves',
+		__doc__,
 		__author__
 	)
 
