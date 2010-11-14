@@ -248,6 +248,8 @@ static void gst_lalframe_sink_init(GstLalframeSink *sink,
     sink->rate = 0;
     sink->width = 0;
     sink->type = NULL;
+    sink->start = TRUE;
+    sink->t0_ns = 0;
 
     gst_base_sink_set_sync(GST_BASE_SINK(sink), FALSE);
 }
@@ -528,12 +530,20 @@ static gboolean query(GstPad *pad, GstQuery *query)
 static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(basesink);
-    guint nbytes = sink->duration * sink->rate * sink->width / 8;
+    guint byterate = sink->rate * sink->width / 8;
+    guint nbytes = sink->duration * byterate;
 
-    guint available = gst_adapter_available(sink->adapter);
+    /* Get t0_ns from the very first buffer */
+    if (sink->start) {
+        sink->t0_ns = GST_BUFFER_TIMESTAMP(buffer);
+        sink->start = FALSE;
+    }
 
     /* Check for discontinuities (see gstlal_firbank.c at ~ 909) */
-    if (GST_BUFFER_IS_DISCONT(buffer)) {
+    guint available = gst_adapter_available(sink->adapter);
+
+    if (GST_BUFFER_IS_DISCONT(buffer) || GST_BUFFER_TIMESTAMP(buffer) !=
+        sink->t0_ns + GST_SECOND * available / byterate) {
         /* Flush previous data to a frame */
         if (available > 0) {
             if (!write_frame(sink, available)) { // write any remaining data
@@ -544,8 +554,9 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
                 return GST_FLOW_ERROR;
             }
 
-            /* Flush adapter, set new position using buffer info */
+            /* Flush adapter and restart counting timestamps */
             gst_adapter_flush(sink->adapter, available);
+            sink->t0_ns = GST_BUFFER_TIMESTAMP(buffer);
         }
     }
 
@@ -557,12 +568,11 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
 
     /* Write a first frame if needed to align timestamps in the filenames */
     if (sink->clean_timestamps) {
-        GstClockTime t0_ns = gst_adapter_prev_timestamp(sink->adapter, NULL);
         GstClockTime dur_ns = (GstClockTime) (sink->duration * GST_SECOND);
 
-        if (t0_ns % dur_ns != 0) {  // if beginning of data is not aligned
-            double dt = (dur_ns - t0_ns % dur_ns) / (double) GST_SECOND;
-            guint n = dt * sink->rate * sink->width / 8;  // bytes to save
+        if (sink->t0_ns % dur_ns != 0) {  // if beginning of data is not aligned
+            double dt = (dur_ns - sink->t0_ns % dur_ns) / (double) GST_SECOND;
+            guint n = dt * byterate;  // bytes to save
 
             if (gst_adapter_available(sink->adapter) < n)
                 return GST_FLOW_OK;  // not enough data to write yet, fine
@@ -572,6 +582,7 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
                 return GST_FLOW_ERROR;
 
             gst_adapter_flush(sink->adapter, n);
+            sink->t0_ns += GST_SECOND * n / byterate;
         }
     }
 
@@ -581,6 +592,7 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
             return GST_FLOW_ERROR;
 
         gst_adapter_flush(sink->adapter, nbytes);
+        sink->t0_ns += GST_SECOND * nbytes / byterate;
     }
 
     return GST_FLOW_OK;
@@ -601,11 +613,11 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
  */
 static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
 {
-    double duration = nbytes*8.0 / (sink->rate * sink->width);
+    guint byterate = sink->rate * sink->width / 8;
+    double duration = nbytes / (double) byterate;
     double deltaT = 1.0 / sink->rate;  // to write in the TimeSeries
     int ifo_flags;
     LIGOTimeGPS epoch;
-    GstClockTime timestamp;
     FrameH *frame;
     double f0 = 0;  // kind of dummy, to write in the TimeSeries
     gchar *channame, *dirname, *filename;
@@ -631,9 +643,8 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
         ifo_flags = -1;
 
     /* Get timestamp from adapter */
-    timestamp = gst_adapter_prev_timestamp(sink->adapter, NULL);
-    epoch.gpsSeconds     = timestamp / GST_SECOND;
-    epoch.gpsNanoSeconds = timestamp % GST_SECOND;
+    epoch.gpsSeconds     = sink->t0_ns / GST_SECOND;
+    epoch.gpsNanoSeconds = sink->t0_ns % GST_SECOND;
 
     /* Create subdirectories with nice names if needed */
     if (sink->dir_digits > 0) {
