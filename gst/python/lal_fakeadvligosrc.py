@@ -98,19 +98,6 @@ class lal_fakeadvligosrc(gst.Bin):
 			tagstring = ','.join('%s="%s"' % kv for kv in self.__tags.iteritems())
 			self.__taginject.set_property('tags', tagstring)
 
-	__gsttemplates__ = (
-		gst.PadTemplate("src",
-			gst.PAD_SRC, gst.PAD_ALWAYS,
-			gst.caps_from_string("""
-				audio/x-raw-float,
-				channels = (int) 1,
-				endianness = (int) BYTE_ORDER,
-				width = (int) 64,
-				rate = (int) 16384
-			""")
-		),
-	)
-
 
 	def do_send_event(self, event):
 		"""Override send_event so that SEEK events go straight to the source
