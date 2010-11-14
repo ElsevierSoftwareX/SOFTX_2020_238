@@ -13,32 +13,11 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-
-
-#
-# =============================================================================
-#
-#                                   Preamble
-#
-# =============================================================================
-#
+"""Generate simulated initial LIGO h(t)"""
+__author__ = "Drew Keppel <drew.keppel@ligo.org>"
 
 
 from gstlal.pipeutil import *
-
-
-__author__ = "Drew Keppel <drew.keppel@ligo.org>"
-__version__ = "FIXME"
-__date__ = "FIXME"
-
-
-#
-# =============================================================================
-#
-#                                   Element
-#
-# =============================================================================
-#
 
 
 class lal_fakeligosrc(gst.Bin):
@@ -46,7 +25,7 @@ class lal_fakeligosrc(gst.Bin):
 	__gstdetails__ = (
 		'Fake LIGO Source',
 		'Source',
-		'generate simulated initial LIGO h(t)',
+		__doc__,
 		__author__
 	)
 
