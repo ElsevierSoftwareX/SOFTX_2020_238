@@ -32,6 +32,14 @@ parser.add_option("-l", "--lineseries",
 		  default=False
                   )
 
+parser.add_option("-o", "--out-put",
+                  help="save the output movie run into a file",
+                  dest="outmov",
+                  action="store_true",
+		  default=False
+                  )
+
+
 (options, args) = parser.parse_args()
 
 # single optional argument is injection file
@@ -46,6 +54,11 @@ if args:
 from gstlal import pipeutil
 from gstlal.pipeutil import gobject, gst
 #from gstlal.elements import channelgram
+
+#delete previous movie file if any
+cmd = ['rm -f OmegaGram_test.ogg','rm -f OmegaDetection_test.ogg']
+os.system(cmd[0])
+os.system(cmd[1])
 
 # downsample
 samplerate = 2048
@@ -133,24 +146,39 @@ tee = elems[-1]
 # tee line to waterfall
 if options.plotSpec:
 	print >>sys.stderr, "plotting spectrogram..."
-	elems.append(pipeutil.mkelem("queue", {"max-size-time": queuesize}))
+	elems.append(pipeutil.mkelem("queue", {"max-size-time": 2}))
+	elems.append(pipeutil.mkelem("pow"))
+	elems.append(pipeutil.mkelem("queue", {"max-size-time": 2}))
 	elems.append(pipeutil.mkelem("cairovis_waterfall",
 				     {"title": "OmegaGram",
-				      "z-autoscale": False,
-				      "z-min": -10.0,
+				      "z-scale": 0,
+				      "z-autoscale":False,
+				      "z-min": 0.0,
 				      "z-max": 10.0,
-				      "colormap": "spectral",
+				      "colormap": "jet",
 				      "history": gst.SECOND,
 				      }))
 	# elems.append(channelgram.Channelgram())
 	# elems[-1].set_property("plot-width", 2.0)
 	elems.append(pipeutil.mkelem("capsfilter",
-				     {"caps": gst.Caps("video/x-raw-rgb,framerate=24/1,width=800,height=600")
+				     {"caps": gst.Caps("video/x-raw-rgb,framerate=24/1,width=400,height=300")
 				      }))
-	elems.append(pipeutil.mkelem("ximagesink",
-				     {"sync": False,
+	if options.outmov:
+	 elems.append(pipeutil.mkelem("ffmpegcolorspace"))
+	 elems.append(pipeutil.mkelem("theoraenc"))	
+	 elems.append(pipeutil.mkelem("oggmux"))
+	 elems.append(pipeutil.mkelem("filesink",
+				      {"location":"OmegaGram_test.ogg",
+				      "append":True,
+				      "sync": False,
 				      "async": False,
-				      }))
+				       }))
+	else:
+	 elems.append(pipeutil.mkelem("ximagesink",
+				       {"sync": False,
+				       "async": False,
+				        }))
+
 else:
 	elems.append(pipeutil.mkelem("fakesink"))
 
@@ -171,12 +199,24 @@ if options.plotLine:
 	elems.append(pipeutil.mkelem("cairovis_lineseries",
 				     {"title": "Omega detection"}))
 	elems.append(pipeutil.mkelem("capsfilter",
-				     {"caps": gst.Caps("video/x-raw-rgb,framerate=24/1,width=800,height=600")
+				     {"caps": gst.Caps("video/x-raw-rgb,framerate=24/1,width=400,height=300")
 				      }))
-	elems.append(pipeutil.mkelem("ximagesink",
-				     {"sync": False,
+	if options.outmov:
+	 elems.append(pipeutil.mkelem("ffmpegcolorspace"))
+	 elems.append(pipeutil.mkelem("theoraenc"))	
+	 elems.append(pipeutil.mkelem("oggmux"))
+	 elems.append(pipeutil.mkelem("filesink",
+				      {"location":"OmegaDetection_test.ogg",
+				      "append":True,
+				      "sync": False,
 				      "async": False,
-				      }))
+				       }))
+	else:						
+	 elems.append(pipeutil.mkelem("ximagesink",
+				      {"sync": False,
+				       "async": False,
+				       }))
+
 else:
 	elems.append(pipeutil.mkelem("fakesink"))
 
