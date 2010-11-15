@@ -165,7 +165,9 @@ if options.plotSpec:
 				      }))
 	if options.outmov:
 	 elems.append(pipeutil.mkelem("ffmpegcolorspace"))
-	 elems.append(pipeutil.mkelem("theoraenc"))	
+	 elems.append(pipeutil.mkelem("theoraenc",
+				      {"quality":10
+				      }))	
 	 elems.append(pipeutil.mkelem("oggmux"))
 	 elems.append(pipeutil.mkelem("filesink",
 				      {"location":"OmegaGram_test.ogg",
