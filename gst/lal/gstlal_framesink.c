@@ -571,8 +571,17 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
         GstClockTime dur_ns = (GstClockTime) (sink->duration * GST_SECOND);
 
         if (sink->t0_ns % dur_ns != 0) {  // if beginning of data is not aligned
-            double dt = (dur_ns - sink->t0_ns % dur_ns) / (double) GST_SECOND;
-            guint n = dt * byterate;  // bytes to save
+            gdouble dt = (dur_ns - sink->t0_ns % dur_ns) / (gdouble) GST_SECOND;
+            gdouble n = dt * byterate;  // bytes to save
+            if (fabs(n - (guint) n) > 1e-12) {
+                GST_ELEMENT_ERROR(
+                    sink, STREAM, FAILED,
+                    ("Impossible to do clean timestamps. Current timestamp (%"
+                     G_GUINT64_FORMAT " ns) and rate (%d Hz) will not produce "
+                     "a timestamp multiple of duration (%.14g s)",
+                     sink->t0_ns, sink->rate, sink->duration), (NULL));
+                return GST_FLOW_ERROR;
+            }
 
             if (gst_adapter_available(sink->adapter) < n)
                 return GST_FLOW_OK;  // not enough data to write yet, fine
