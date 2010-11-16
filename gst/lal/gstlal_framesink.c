@@ -96,6 +96,10 @@ enum {
 };
 
 
+#define GST_CAT_DEFAULT gstlal_framesink_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
 static void dispose(GObject *object);
 
 static void set_property(GObject *object, guint prop_id,
@@ -122,8 +126,14 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes);
  */
 
 
-GST_BOILERPLATE(GstLalframeSink, gst_lalframe_sink, GstBaseSink,
-                GST_TYPE_BASE_SINK);
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framesink", 0, "framesink element");
+}
+
+
+GST_BOILERPLATE_FULL(GstLalframeSink, gst_lalframe_sink, GstBaseSink,
+                GST_TYPE_BASE_SINK, additional_initializations);
 
 
 /*
