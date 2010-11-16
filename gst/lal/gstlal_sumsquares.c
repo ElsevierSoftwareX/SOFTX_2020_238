@@ -61,26 +61,22 @@ static GstFlowReturn sumsquares(GSTLALSumSquares *element, GstBuffer *inbuf, Gst
 	const double *src = (const double *) GST_BUFFER_DATA(inbuf);
 	double *dst = (double *) GST_BUFFER_DATA(outbuf);
 	double *dst_end = dst + (GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf));
-	double *weights;
+	const double *weights = element->weights;
 
-	if(element->weights)
-		weights = element->weights;
-	else {
-		gint channel;
-		weights = g_new(gdouble, element->channels);
-		for(channel = 0; channel < element->channels; channel++)
-			weights[channel] = 1.0;
+	if(weights) {
+		for(; dst < dst_end; dst++) {
+			const double *src_end = src + element->channels;
+			const double *w = weights;
+			for(*dst = 0; src < src_end; w++, src++)
+				*dst += pow(*w * *src, 2);
+		}
+	} else {
+		for(; dst < dst_end; dst++) {
+			const double *src_end = src + element->channels;
+			for(*dst = 0; src < src_end; src++)
+				*dst += pow(*src, 2);
+		}
 	}
-
-	for(; dst < dst_end; dst++) {
-		const double *src_end = src + element->channels;
-		const double *w = weights;
-		for(*dst = 0; src < src_end; w++, src++)
-			*dst += pow(*w * *src, 2);
-	}
-
-	if(!element->weights)
-		g_free(weights);
 
 	return GST_FLOW_OK;
 }
