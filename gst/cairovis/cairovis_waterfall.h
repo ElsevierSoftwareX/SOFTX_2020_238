@@ -70,7 +70,7 @@ typedef struct _CairoVisWaterfall {
 	guint64 offset0;
 	guint64 last_offset_end;
 	guint64 frame_number;
-	gchar *map_name;
+	enum cairovis_colormap_name map_name;
 	colormap *map;
 } CairoVisWaterfall;
 

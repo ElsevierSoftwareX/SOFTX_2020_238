@@ -22,10 +22,16 @@
 
 
 #include <glib.h>
+#include <glib-object.h>
 #include <gsl/gsl_spline.h>
 
 
 G_BEGIN_DECLS
+
+#include "colormap_data.h"
+
+#define CAIROVIS_COLORMAP_TYPE \
+(cairovis_colormap_get_type())
 
 
 typedef struct {
@@ -50,10 +56,13 @@ typedef struct {
 } colormap;
 
 
-gboolean colormap_get_data_by_name(gchar *name, colormap_data *data);
-colormap *colormap_create_by_name(gchar *name);
+gboolean colormap_get_data_by_name(enum cairovis_colormap_name key, colormap_data *data);
+colormap *colormap_create_by_name(enum cairovis_colormap_name key);
 void colormap_destroy(colormap *map);
 guint32 colormap_map(colormap *map, double x);
+
+
+GType cairovis_colormap_get_type (void);
 
 
 G_END_DECLS

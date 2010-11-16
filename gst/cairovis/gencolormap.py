@@ -23,7 +23,8 @@ from matplotlib.cm import datad
 from inspect import isfunction
 import sys
 
-print """
+
+header = """
 /*
  * Copyright (c) 2010  Leo Singer
  *
@@ -32,24 +33,67 @@ print """
  *
  */
 
-#include "colormap.h"
-#include <gsl/gsl_interp.h>
-#include <string.h>
-gboolean colormap_get_data_by_name(gchar *name, colormap_data *data) {
 """
+ 
+# Select all colormaps to print
+datad_items = sorted([(key, value) for key, value in datad.items() if hasattr(value, 'iteritems') and not(isfunction(value['red']) or isfunction(value['green']) or isfunction(value['blue']))])
 
-for key, value in sorted(datad.items()):
-	if hasattr(value, 'iteritems') and not(isfunction(value['red']) or isfunction(value['green']) or isfunction(value['blue'])):
-		print 'if (strcmp(name, "%s") == 0) {' % key
+# Write header file
+file = open('colormap_data.h', 'w')
+try:
+	print >>file, header
+	print >>file, "#ifndef __CAIROVIS_COLORMAP_DATA_H__"
+	print >>file, "#define __CAIROVIS_COLORMAP_DATA_H__"
+	print >>file, "enum cairovis_colormap_name {"
+	for key, value in datad_items:
+		print >>file, "	CAIROVIS_COLORMAP_%s," % key
+	print >>file, "};"
+	print >>file, ""
+	print >>file, "#endif"
+finally:
+	file.close()
+
+# Write C file
+
+file = open('colormap_data.c', 'w')
+try:
+	print >>file, header
+	print >>file, """#include "colormap.h"
+#include <glib.h>
+#include <glib-object.h>
+
+gboolean colormap_get_data_by_name(enum cairovis_colormap_name key, colormap_data *data) {
+	switch (key) {"""
+	for key, value in datad_items:
+		print >>file, '		case CAIROVIS_COLORMAP_%s: {' % key
 		for color in ('red', 'green', 'blue'):
-			print '{'
-			print 'const double x[] = {', ','.join([repr(x) for x, y0, y1 in sorted(value[color])]), '};'
-			print 'const double y[] = {', ','.join([repr(y1) for x, y0, y1 in sorted(value[color])]), '};'
-			print 'data->%s.len = sizeof(x) / sizeof(double);' % color
-			print 'data->%s.x = g_memdup(x, sizeof(x));' % color
-			print 'data->%s.y = g_memdup(y, sizeof(y));' % color
-			print '}'
-		print 'return TRUE;'
-		print '} else',
-print 'return FALSE;'
-print "}"
+			print >>file, '			{'
+			print >>file, '				const double x[] = {', ','.join([repr(x) for x, y0, y1 in sorted(value[color])]), '};'
+			print >>file, '				const double y[] = {', ','.join([repr(y1) for x, y0, y1 in sorted(value[color])]), '};'
+			print >>file, '				data->%s.len = sizeof(x) / sizeof(double);' % color
+			print >>file, '				data->%s.x = g_memdup(x, sizeof(x));' % color
+			print >>file, '				data->%s.y = g_memdup(y, sizeof(y));' % color
+			print >>file, '			}'
+		print >>file, '		} return TRUE; break;'
+	print >>file, '		default: return FALSE;'
+	print >>file, "	}"
+	print >>file, "}"
+	print >>file, """
+
+GType cairovis_colormap_get_type (void)
+{
+	static GType tp = 0;
+	static const GEnumValue values[] = {"""
+	for key, value in datad_items:
+		print >>file, '		{CAIROVIS_COLORMAP_%s, "%s", "%s"},' % (key, key, key)
+	print >>file, """		{0, NULL, NULL},
+	};
+
+	if (G_UNLIKELY (tp == 0)) {
+		tp = g_enum_register_static ("CairoVisColormap", values);
+	}
+	return tp;
+}
+	"""
+finally:
+	file.close()

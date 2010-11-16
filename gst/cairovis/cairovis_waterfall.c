@@ -298,17 +298,15 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 			element->history = g_value_get_uint64(value);
 			break;
 		case PROP_COLORMAP: {
-			gchar *new_map_name = g_value_dup_string(value);
+			enum cairovis_colormap_name new_map_name = g_value_get_enum(value);
 			colormap *new_map = colormap_create_by_name(new_map_name);
 			if (new_map)
 			{
-				g_free(element->map_name);
 				colormap_destroy(element->map);
 				element->map_name = new_map_name;
 				element->map = new_map;
 			} else {
-				GST_ERROR_OBJECT(element, "no such colormap: %s", new_map_name);
-				g_free(new_map_name);
+				GST_ERROR_OBJECT(element, "no such colormap");
 			}
 		} break;
 	}
@@ -343,7 +341,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 			g_value_set_uint64(value, element->history);
 			break;
 		case PROP_COLORMAP:
-			g_value_set_string(value, element->map_name);
+			g_value_set_enum(value, element->map_name);
 			break;
 	}
 
@@ -362,8 +360,6 @@ static void finalize(GObject *object)
 	element->sinkpad = NULL;
 	gst_object_unref(element->adapter);
 	element->adapter = NULL;
-	g_free(element->map_name);
-	element->map_name = NULL;
 	colormap_destroy(element->map);
 	element->map = NULL;
 	
@@ -479,11 +475,12 @@ static void class_init(gpointer class, gpointer class_data)
 	g_object_class_install_property(
 		gobject_class,
 		PROP_COLORMAP,
-		g_param_spec_string(
+		g_param_spec_enum(
 			"colormap",
 			"Colormap",
 			"Name of colormap (e.g. 'jet')",
-			"jet",
+			CAIROVIS_COLORMAP_TYPE,
+			CAIROVIS_COLORMAP_jet,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
@@ -508,7 +505,6 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->offset0 = GST_BUFFER_OFFSET_NONE;
 	element->last_offset_end = GST_BUFFER_OFFSET_NONE;
 	element->map = NULL;
-	element->map_name = NULL;
 
 	element->zlabel = NULL;
 }

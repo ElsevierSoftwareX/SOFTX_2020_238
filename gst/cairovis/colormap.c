@@ -36,7 +36,7 @@ static colormap_channel channel_for_data(colormap_channel_data *data)
 
 
 /* FIXME: it would be nice to have shared instances of colormaps, instead of each element having its own colormaps. */
-colormap *colormap_create_by_name(gchar *name)
+colormap *colormap_create_by_name(guint name)
 {
 	colormap *map;
 	colormap_data data;
