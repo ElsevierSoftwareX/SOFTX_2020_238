@@ -242,7 +242,9 @@ AC_SUBST([LAL_LIBS])
 #
 
 
-AX_PATH_GSL()
+PKG_CHECK_MODULES([GSL], [gsl], , [AC_MSG_ERROR([Not found!])])
+AC_SUBST([GSL_CFLAGS])
+AC_SUBST([GSL_LIBS])
 
 
 #
