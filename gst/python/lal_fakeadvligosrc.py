@@ -74,7 +74,7 @@ class lal_fakeadvligosrc(gst.Bin):
 		if prop.name == 'blocksize':
 			# Set property on all sources
 			for elem in self.iterate_sources():
-				elem.set_property('samplesperbuffer', val / 8)
+				elem.set_property('blocksize', val)
 		elif prop.name in ('instrument', 'channel-name'):
 			self.__tags[prop.name] = val
 			tagstring = ','.join('%s="%s"' % kv for kv in self.__tags.iteritems())
