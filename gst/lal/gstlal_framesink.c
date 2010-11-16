@@ -76,6 +76,15 @@ static const char gst_lalframe_sink_doc[] =
 #include <unistd.h>
 #endif
 
+/* Geez, I don't wanna write so much! */
+#define A_X_B__C(a, b, c)  gst_util_uint64_scale_int(a, b, c)
+/* This is the same as
+ *    #define A_X_B__C(a, b, c)  a * b / c
+ * except it takes better care of possible over/underflows. It seems
+ * better to use gst_util_uint64_scale_int_round() but audiotestsrc
+ * computes the timestamps of its buffers with gst_..._int() <shrugs>
+ */
+
 
 enum {
     PROP_0,
@@ -543,7 +552,7 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
     guint available = gst_adapter_available(sink->adapter);
 
     if (GST_BUFFER_IS_DISCONT(buffer) || GST_BUFFER_TIMESTAMP(buffer) !=
-        sink->t0_ns + GST_SECOND * available / byterate) {
+        sink->t0_ns + A_X_B__C(available, GST_SECOND, byterate)) {
         /* Flush previous data to a frame */
         if (available > 0) {
             if (!write_frame(sink, available)) { // write any remaining data
@@ -591,7 +600,7 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
                 return GST_FLOW_ERROR;
 
             gst_adapter_flush(sink->adapter, n);
-            sink->t0_ns += GST_SECOND * n / byterate;
+            sink->t0_ns += A_X_B__C(n, GST_SECOND, byterate);
         }
     }
 
@@ -601,7 +610,7 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
             return GST_FLOW_ERROR;
 
         gst_adapter_flush(sink->adapter, nbytes);
-        sink->t0_ns += GST_SECOND * nbytes / byterate;
+        sink->t0_ns += A_X_B__C(nbytes, GST_SECOND, byterate);
     }
 
     return GST_FLOW_OK;

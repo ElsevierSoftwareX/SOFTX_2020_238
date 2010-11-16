@@ -32,7 +32,7 @@ parser.add_option("-l", "--lineseries",
 		  default=False
                   )
 
-parser.add_option("-o", "--out-put",
+parser.add_option("-o", "--output",
                   help="save the output movie run into a file",
                   dest="outmov",
                   action="store_true",
@@ -56,7 +56,7 @@ from gstlal.pipeutil import gobject, gst
 #from gstlal.elements import channelgram
 
 #delete previous movie file if any
-cmd = ['rm -f OmegaGram_test.ogg','rm -f OmegaDetection_test.ogg']
+cmd = ['rm -f MovSpecGram_test.ogg','rm -f Detection_test.ogg']
 os.system(cmd[0])
 os.system(cmd[1])
 
@@ -150,7 +150,7 @@ if options.plotSpec:
 	elems.append(pipeutil.mkelem("pow"))
 	elems.append(pipeutil.mkelem("queue", {"max-size-time": 2}))
 	elems.append(pipeutil.mkelem("cairovis_waterfall",
-				     {"title": "OmegaGram",
+				     {"title": "Moving Spectrogram",
 				      "z-scale": 0,
 				      "z-autoscale":False,
 				      "z-min": 0.0,
@@ -165,10 +165,12 @@ if options.plotSpec:
 				      }))
 	if options.outmov:
 	 elems.append(pipeutil.mkelem("ffmpegcolorspace"))
-	 elems.append(pipeutil.mkelem("theoraenc"))	
+	 elems.append(pipeutil.mkelem("theoraenc",
+				      {"quality":10
+				      }))	
 	 elems.append(pipeutil.mkelem("oggmux"))
 	 elems.append(pipeutil.mkelem("filesink",
-				      {"location":"OmegaGram_test.ogg",
+				      {"location":"MovSpecGram_test.ogg",
 				      "append":True,
 				      "sync": False,
 				      "async": False,
@@ -197,7 +199,7 @@ if options.plotLine:
 
 	elems.append(pipeutil.mkelem("queue", {"max-size-time": queuesize}))
 	elems.append(pipeutil.mkelem("cairovis_lineseries",
-				     {"title": "Omega detection"}))
+				     {"title": "Detection"}))
 	elems.append(pipeutil.mkelem("capsfilter",
 				     {"caps": gst.Caps("video/x-raw-rgb,framerate=24/1,width=400,height=300")
 				      }))
@@ -206,7 +208,7 @@ if options.plotLine:
 	 elems.append(pipeutil.mkelem("theoraenc"))	
 	 elems.append(pipeutil.mkelem("oggmux"))
 	 elems.append(pipeutil.mkelem("filesink",
-				      {"location":"OmegaDetection_test.ogg",
+				      {"location":"Detection_test.ogg",
 				      "append":True,
 				      "sync": False,
 				      "async": False,
