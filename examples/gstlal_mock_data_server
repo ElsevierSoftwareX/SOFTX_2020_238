@@ -42,6 +42,8 @@ from optparse import OptionParser, Option
 opts, args = OptionParser(usage = "%prog [options]" + __doc__, option_list = [
 	Option("--port", "-p", type="int", help="Enable streaming h(t) on this port."),
 	Option("--instrument", "-i", default="H1", help="Name of instrument (default=H1)"),
+	Option("--gps-start-time", "-s", default=0, type="int", metavar="INT", help="GPS start time in seconds (default=0)"),
+	Option("--gps-end-time", "-e", type="int", metavar="INT", help="GPS start time in seconds (default=infinity)"),
 ]).parse_args()
 
 
@@ -120,6 +122,22 @@ if opts.port is not None:
 #
 # Run pipeline
 #
+
+seek_start_type = gst.SEEK_TYPE_SET
+seek_start_time = opts.gps_start_time * gst.SECOND
+if opts.gps_end_time is None:
+	seek_stop_type = gst.SEEK_TYPE_NONE
+	seek_stop_time = -1
+else:
+	seek_stop_type = gst.SEEK_TYPE_SET
+	seek_stop_time = opts.gps_end_time * gst.SECOND
+
+pipeline.set_state(gst.STATE_READY)
+event = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_NONE, seek_start_type, seek_start_time, seek_stop_type, seek_stop_time)
+
+for elem in pipeline.iterate_sources():
+	if not elem.send_event(event):
+		raise RuntimeError("Element did not accept seek event: %r" % elem)
 
 pipeline.set_state(gst.STATE_PLAYING)
 mainloop.run()
