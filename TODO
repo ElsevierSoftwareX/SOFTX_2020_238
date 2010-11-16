@@ -38,7 +38,6 @@ Plugins/elements to hand over to GStreamer
 * Add single-precision support to the following elements:
 
   * lal_firbank
-  * lal_sumsquares
   * lal_triggergen
   * lal_nxydump
 
