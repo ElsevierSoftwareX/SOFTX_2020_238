@@ -42,16 +42,16 @@ function test_up_resampler_gaps() {
 	gst-launch \
 		lal_gate name=gate threshold=0.7 \
 		! tee name=orig \
-		! audioresample gap-aware=true \
-		! audio/x-raw-float, width=64, rate=16384 \
+		! audioresample \
+		! audio/x-raw-float, width=64, rate=16383 \
 		! lal_nxydump \
 		! queue ! filesink buffer-mode=2 location="dump_out.txt" \
-		audiotestsrc freq=15.8 samplesperbuffer=1024 num-buffers=8 \
-		! audio/x-raw-float, width=64, rate=2048 \
+		audiotestsrc freq=15.8 samplesperbuffer=1025 num-buffers=8 \
+		! audio/x-raw-float, width=64, rate=2047 \
 		! tee name=control \
 		! gate.control \
-		audiotestsrc freq=256 wave=pink-noise samplesperbuffer=1024 num-buffers=8 \
-		! audio/x-raw-float, channels=1, width=64, rate=2048 \
+		audiotestsrc freq=256 wave=sine samplesperbuffer=1024 num-buffers=8 \
+		! audio/x-raw-float, channels=1, width=64, rate=2047 \
 		! gate.sink \
 		control. \
 		! lal_nxydump \
@@ -65,16 +65,16 @@ function test_down_resampler_gaps() {
 	gst-launch \
 		lal_gate name=gate threshold=0.7 \
 		! tee name=orig \
-		! audioresample gap-aware=true \
-		! audio/x-raw-float, width=64, rate=16384 \
+		! audioresample \
+		! audio/x-raw-float, width=64, rate=16383 \
 		! lal_nxydump \
 		! queue ! filesink buffer-mode=2 location="dump_out.txt" \
 		audiotestsrc freq=15.8 samplesperbuffer=1024 num-buffers=128 \
-		! audio/x-raw-float, width=64, rate=32768 \
+		! audio/x-raw-float, width=64, rate=1023 \
 		! tee name=control \
 		! gate.control \
-		audiotestsrc freq=256 wave=pink-noise samplesperbuffer=1024 num-buffers=128 \
-		! audio/x-raw-float, channels=1, width=64, rate=32768 \
+		audiotestsrc freq=256 wave=sine samplesperbuffer=1024 num-buffers=128 \
+		! audio/x-raw-float, channels=1, width=64, rate=1023 \
 		! gate.sink \
 		control. \
 		! lal_nxydump \
