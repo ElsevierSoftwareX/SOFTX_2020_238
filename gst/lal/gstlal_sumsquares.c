@@ -133,7 +133,7 @@ GST_BOILERPLATE(
 
 
 enum property {
-	PROP_WEIGHTS = 1
+	ARG_WEIGHTS = 1
 };
 
 
@@ -326,7 +326,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case PROP_WEIGHTS: {
+	case ARG_WEIGHTS: {
 		gint channels;
 		g_mutex_lock(element->weights_lock);
 		if(element->weights_double) {
@@ -376,7 +376,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case PROP_WEIGHTS:
+	case ARG_WEIGHTS:
 		g_mutex_lock(element->weights_lock);
 		if(element->weights_double)
 			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(element->weights_double, element->channels));
@@ -451,7 +451,7 @@ static void gstlal_sumsquares_class_init(GSTLALSumSquaresClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_WEIGHTS,
+		ARG_WEIGHTS,
 		g_param_spec_value_array(
 			"weights",
 			"Weights",

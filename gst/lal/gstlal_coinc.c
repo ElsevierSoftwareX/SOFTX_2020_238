@@ -32,7 +32,7 @@ static GstElementClass *parent_class = NULL;
 
 
 enum gen_property {
-	PROP_DT = 1
+	ARG_DT = 1
 };
 
 
@@ -42,7 +42,7 @@ static void set_property(GObject *object, enum gen_property id, const GValue *va
 
 	GST_OBJECT_LOCK(element);
 	switch(id) {
-		case PROP_DT:
+		case ARG_DT:
 			element->dt = g_value_get_uint64(value);
 			break;
 
@@ -60,7 +60,7 @@ static void get_property(GObject * object, enum gen_property id, GValue * value,
 
 	GST_OBJECT_LOCK(element);
 	switch(id) {
-		case PROP_DT:
+		case ARG_DT:
 			g_value_set_uint64(value, element->dt);
 			break;
 
@@ -634,7 +634,7 @@ static void class_init(gpointer klass, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_DT,
+		ARG_DT,
 		g_param_spec_uint64(
 			"dt",
 			"Coincidence Window",

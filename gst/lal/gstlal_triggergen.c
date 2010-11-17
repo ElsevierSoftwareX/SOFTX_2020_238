@@ -723,10 +723,10 @@ eos:
 
 
 enum gen_property {
-	PROP_SNR_THRESH = 1, 
-	PROP_BANK_FILENAME,
-	PROP_MAX_GAP,
-	PROP_SIGMASQ
+	ARG_SNR_THRESH = 1, 
+	ARG_BANK_FILENAME,
+	ARG_MAX_GAP,
+	ARG_SIGMASQ
 };
 
 
@@ -736,21 +736,21 @@ static void gen_set_property(GObject *object, enum gen_property id, const GValue
 
 	GST_OBJECT_LOCK(element);
 	switch(id) {
-	case PROP_SNR_THRESH:
+	case ARG_SNR_THRESH:
 		element->snr_thresh = g_value_get_double(value);
 		break;
 
-	case PROP_BANK_FILENAME:
+	case ARG_BANK_FILENAME:
 		g_mutex_lock(element->bank_lock);
 		setup_bankfile_input(element, g_value_dup_string(value));
 		g_mutex_unlock(element->bank_lock);
 		break;
 
-	case PROP_MAX_GAP:
+	case ARG_MAX_GAP:
 		element->max_gap = g_value_get_double(value);
 		break;
 
-	case PROP_SIGMASQ: {
+	case ARG_SIGMASQ: {
 		g_mutex_lock(element->bank_lock);
 		if(element->bank) {
 			gint length;
@@ -784,21 +784,21 @@ static void gen_get_property(GObject * object, enum gen_property id, GValue * va
 
 	GST_OBJECT_LOCK(element);
 	switch(id) {
-	case PROP_SNR_THRESH:
+	case ARG_SNR_THRESH:
 		g_value_set_double(value, element->snr_thresh);
 		break;
 
-	case PROP_BANK_FILENAME:
+	case ARG_BANK_FILENAME:
 		g_mutex_lock(element->bank_lock);
 		g_value_set_string(value, element->bank_filename);
 		g_mutex_unlock(element->bank_lock);
 		break;
 
-	case PROP_MAX_GAP:
+	case ARG_MAX_GAP:
 		g_value_set_double(value, element->max_gap);
 		break;
 
-	case PROP_SIGMASQ: {
+	case ARG_SIGMASQ: {
 		g_mutex_lock(element->bank_lock);
 		if(element->bank) {
 			double sigmasq[element->num_templates];
@@ -959,7 +959,7 @@ static void gen_class_init(gpointer klass, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_BANK_FILENAME,
+		ARG_BANK_FILENAME,
 		g_param_spec_string(
 			"bank-filename",
 			"Bank file name",
@@ -970,7 +970,7 @@ static void gen_class_init(gpointer klass, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		PROP_SNR_THRESH,
+		ARG_SNR_THRESH,
 		g_param_spec_double(
 			"snr-thresh",
 			"SNR Threshold",
@@ -981,7 +981,7 @@ static void gen_class_init(gpointer klass, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		PROP_MAX_GAP,
+		ARG_MAX_GAP,
 		g_param_spec_double(
 			"max-gap",
 			"Maximum below-threshold gap (seconds)",
@@ -992,7 +992,7 @@ static void gen_class_init(gpointer klass, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		PROP_SIGMASQ,
+		ARG_SIGMASQ,
 		g_param_spec_value_array(
 			"sigmasq",
 			"\\sigma^{2} factors",

@@ -64,7 +64,7 @@
 
 
 enum property {
-	PROP_SILENT = 1
+	ARG_SILENT = 1
 };
 
 
@@ -75,7 +75,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case PROP_SILENT:
+	case ARG_SILENT:
 		element->silent = g_value_get_boolean(value);
 		break;
 	}
@@ -91,7 +91,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case PROP_SILENT:
+	case ARG_SILENT:
 		g_value_set_boolean(value, element->silent);
 		break;
 	}
@@ -311,7 +311,7 @@ static void class_init(gpointer klass, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_SILENT,
+		ARG_SILENT,
 		g_param_spec_boolean(
 			"silent",
 			"Silent",

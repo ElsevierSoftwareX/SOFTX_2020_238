@@ -812,14 +812,14 @@ GST_BOILERPLATE(
 
 
 enum property {
-	PROP_PSDMODE = 1,
-	PROP_ZERO_PAD_SECONDS,
-	PROP_FFT_LENGTH,
-	PROP_AVERAGE_SAMPLES,
-	PROP_MEDIAN_SAMPLES,
-	PROP_DELTA_F,
-	PROP_F_NYQUIST,
-	PROP_MEAN_PSD
+	ARG_PSDMODE = 1,
+	ARG_ZERO_PAD_SECONDS,
+	ARG_FFT_LENGTH,
+	ARG_AVERAGE_SAMPLES,
+	ARG_MEDIAN_SAMPLES,
+	ARG_DELTA_F,
+	ARG_F_NYQUIST,
+	ARG_MEAN_PSD
 };
 
 
@@ -1124,11 +1124,11 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 	GST_OBJECT_LOCK(element);
 
 	switch (id) {
-	case PROP_PSDMODE:
+	case ARG_PSDMODE:
 		element->psdmode = g_value_get_enum(value);
 		break;
 
-	case PROP_ZERO_PAD_SECONDS: {
+	case ARG_ZERO_PAD_SECONDS: {
 		double zero_pad_seconds = g_value_get_double(value);
 		if(zero_pad_seconds != element->zero_pad_seconds) {
 			/*
@@ -1149,7 +1149,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		break;
 	}
 
-	case PROP_FFT_LENGTH: {
+	case ARG_FFT_LENGTH: {
 		double fft_length_seconds = g_value_get_double(value);
 		if(fft_length_seconds != element->fft_length_seconds) {
 			/*
@@ -1177,21 +1177,21 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		break;
 	}
 
-	case PROP_AVERAGE_SAMPLES:
+	case ARG_AVERAGE_SAMPLES:
 		XLALPSDRegressorSetAverageSamples(element->psd_regressor, g_value_get_uint(value));
 		break;
 
-	case PROP_MEDIAN_SAMPLES:
+	case ARG_MEDIAN_SAMPLES:
 		XLALPSDRegressorSetMedianSamples(element->psd_regressor, g_value_get_uint(value));
 		break;
 
-	case PROP_DELTA_F:
-	case PROP_F_NYQUIST:
+	case ARG_DELTA_F:
+	case ARG_F_NYQUIST:
 		/* read-only */
 		g_assert_not_reached();
 		break;
 
-	case PROP_MEAN_PSD: {
+	case ARG_MEAN_PSD: {
 		GValueArray *va = g_value_get_boxed(value);
 		REAL8FrequencySeries *psd;
 		psd = make_empty_psd(0.0, 1.0 / element->fft_length_seconds, va->n_values, element->sample_units);
@@ -1224,35 +1224,35 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 	GST_OBJECT_LOCK(element);
 
 	switch (id) {
-	case PROP_PSDMODE:
+	case ARG_PSDMODE:
 		g_value_set_enum(value, element->psdmode);
 		break;
 
-	case PROP_ZERO_PAD_SECONDS:
+	case ARG_ZERO_PAD_SECONDS:
 		g_value_set_double(value, element->zero_pad_seconds);
 		break;
 
-	case PROP_FFT_LENGTH:
+	case ARG_FFT_LENGTH:
 		g_value_set_double(value, element->fft_length_seconds);
 		break;
 
-	case PROP_AVERAGE_SAMPLES:
+	case ARG_AVERAGE_SAMPLES:
 		g_value_set_uint(value, XLALPSDRegressorGetAverageSamples(element->psd_regressor));
 		break;
 
-	case PROP_MEDIAN_SAMPLES:
+	case ARG_MEDIAN_SAMPLES:
 		g_value_set_uint(value, XLALPSDRegressorGetMedianSamples(element->psd_regressor));
 		break;
 
-	case PROP_DELTA_F:
+	case ARG_DELTA_F:
 		g_value_set_double(value, 1.0 / element->fft_length_seconds);
 		break;
 
-	case PROP_F_NYQUIST:
+	case ARG_F_NYQUIST:
 		g_value_set_double(value, element->sample_rate / 2.0);
 		break;
 
-	case PROP_MEAN_PSD:
+	case ARG_MEAN_PSD:
 		if(element->psd)
 			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(element->psd->data->data, element->psd->data->length));
 		else
@@ -1337,7 +1337,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_PSDMODE,
+		ARG_PSDMODE,
 		g_param_spec_enum(
 			"psd-mode",
 			"PSD mode",
@@ -1349,7 +1349,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		PROP_ZERO_PAD_SECONDS,
+		ARG_ZERO_PAD_SECONDS,
 		g_param_spec_double(
 			"zero-pad",
 			"Zero-padding",
@@ -1360,7 +1360,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		PROP_FFT_LENGTH,
+		ARG_FFT_LENGTH,
 		g_param_spec_double(
 			"fft-length",
 			"FFT length",
@@ -1371,7 +1371,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		PROP_AVERAGE_SAMPLES,
+		ARG_AVERAGE_SAMPLES,
 		g_param_spec_uint(
 			"average-samples",
 			"Average samples",
@@ -1382,7 +1382,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		PROP_MEDIAN_SAMPLES,
+		ARG_MEDIAN_SAMPLES,
 		g_param_spec_uint(
 			"median-samples",
 			"Median samples",
@@ -1393,7 +1393,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		PROP_DELTA_F,
+		ARG_DELTA_F,
 		g_param_spec_double(
 			"delta-f",
 			"Delta f",
@@ -1404,7 +1404,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		PROP_F_NYQUIST,
+		ARG_F_NYQUIST,
 		g_param_spec_double(
 			"f-nyquist",
 			"Nyquist Frequency",
@@ -1415,7 +1415,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		PROP_MEAN_PSD,
+		ARG_MEAN_PSD,
 		g_param_spec_value_array(
 			"mean-psd",
 			"Mean PSD",

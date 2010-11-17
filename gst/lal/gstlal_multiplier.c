@@ -161,7 +161,7 @@ MAKE_FUNC_NC(multiply_float32, gfloat, gfloat)
 
 
 enum property {
-	PROP_SYNCHRONOUS = 1
+	ARG_SYNCHRONOUS = 1
 };
 
 
@@ -172,7 +172,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 	GST_OBJECT_LOCK(multiplier);
 
 	switch (id) {
-	case PROP_SYNCHRONOUS:
+	case ARG_SYNCHRONOUS:
 		multiplier->synchronous = g_value_get_boolean(value);
 		break;
 	}
@@ -188,7 +188,7 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 	GST_OBJECT_LOCK(multiplier);
 
 	switch (id) {
-	case PROP_SYNCHRONOUS:
+	case ARG_SYNCHRONOUS:
 		/* FIXME:  on asynchronous --> synchronous transition, mark
 		 * all collect pad's offset_offsets as invalid to force a
 		 * resync */
@@ -1391,7 +1391,7 @@ static void gstlal_multiplier_class_init(gpointer klass, gpointer class_data)
 	gobject_class->get_property = get_property;
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(gstlal_multiplier_finalize);
 
-	g_object_class_install_property(gobject_class, PROP_SYNCHRONOUS, g_param_spec_boolean("sync", "Synchronous", "Align the time stamps of input streams", FALSE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+	g_object_class_install_property(gobject_class, ARG_SYNCHRONOUS, g_param_spec_boolean("sync", "Synchronous", "Align the time stamps of input streams", FALSE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
 	gst_element_class_add_pad_template(gstelement_class, gst_static_pad_template_get(&gstlal_multiplier_src_template));
 	gst_element_class_add_pad_template(gstelement_class, gst_static_pad_template_get(&gstlal_multiplier_sink_template));

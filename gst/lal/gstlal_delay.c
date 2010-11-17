@@ -115,7 +115,7 @@ GST_BOILERPLATE(
 
 
 enum property {
-	PROP_DELAY = 1
+	ARG_DELAY = 1
 };
 
 #define DEFAULT_DELAY 0
@@ -282,7 +282,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
 	switch (prop_id)
 	{
-	case PROP_DELAY:
+	case ARG_DELAY:
 		element->delay = g_value_get_uint64(value);
 		break;
 
@@ -306,7 +306,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 	switch (prop_id)
 	{
-	case PROP_DELAY:
+	case ARG_DELAY:
 	  g_value_set_uint64(value, element->delay);
 	  break;
 
@@ -359,7 +359,7 @@ static void gstlal_delay_class_init(GSTLALDelayClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_DELAY,
+		ARG_DELAY,
 		g_param_spec_uint64(
 			"delay",
 			"Time delay",
