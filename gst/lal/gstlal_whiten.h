@@ -115,6 +115,7 @@ typedef struct {
 	REAL8FFTPlan *revplan;
 	REAL8TimeSeries *tdworkspace;
 	COMPLEX16FrequencySeries *fdworkspace;
+	REAL8Sequence *tail;
 
 	/*
 	 * PSD state
@@ -122,7 +123,6 @@ typedef struct {
 
 	LALPSDRegressor *psd_regressor;
 	REAL8FrequencySeries *psd;
-	REAL8Sequence *tail;
 } GSTLALWhiten;
 
 
