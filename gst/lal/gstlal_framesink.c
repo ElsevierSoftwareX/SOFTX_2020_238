@@ -128,12 +128,13 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes);
 
 static void additional_initializations(GType type)
 {
-	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framesink", 0, "framesink element");
+    GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framesink", 0,
+                            "framesink element");
 }
 
 
 GST_BOILERPLATE_FULL(GstLalframeSink, gst_lalframe_sink, GstBaseSink,
-                GST_TYPE_BASE_SINK, additional_initializations);
+                     GST_TYPE_BASE_SINK, additional_initializations);
 
 
 /*
@@ -552,7 +553,10 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
     guint byterate = sink->rate * sink->width / 8;
     guint nbytes = sink->duration * byterate;
 
-	GST_DEBUG_OBJECT(sink, "got timestamp=%llu, duration=%llu, offset=%llu, offset_end=%llu", GST_BUFFER_TIMESTAMP(buffer), GST_BUFFER_DURATION(buffer), GST_BUFFER_OFFSET(buffer), GST_BUFFER_OFFSET_END(buffer));
+    GST_DEBUG_OBJECT(
+        sink, "Got timestamp=%llu, duration=%llu, offset=%llu, offset_end=%llu",
+        GST_BUFFER_TIMESTAMP(buffer), GST_BUFFER_DURATION(buffer),
+        GST_BUFFER_OFFSET(buffer), GST_BUFFER_OFFSET_END(buffer));
 
     /* Get t0_ns from the very first buffer */
     if (sink->start) {
@@ -565,7 +569,7 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
 
     if (GST_BUFFER_IS_DISCONT(buffer) || GST_BUFFER_TIMESTAMP(buffer) !=
         sink->t0_ns + A_X_B__C(available, GST_SECOND, byterate)) {
-		GST_INFO_OBJECT(sink, "detected discontinuity");
+        GST_INFO_OBJECT(sink, "Detected discontinuity");
         /* Flush previous data to a frame */
         if (available > 0) {
             if (!write_frame(sink, available)) { // write any remaining data
