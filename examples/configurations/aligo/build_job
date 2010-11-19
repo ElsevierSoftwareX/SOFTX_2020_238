@@ -87,7 +87,7 @@ bank_duration = max(sngl.ttotal for sngl in sngls)
 
 # The time slices that are selected might result in slightly longer filters,
 # so pad each job at the end with the template duration times a fudge factor.
-post_padding = round(2 * bank_duration)
+post_padding = int(round(2 * bank_duration))
 
 
 
