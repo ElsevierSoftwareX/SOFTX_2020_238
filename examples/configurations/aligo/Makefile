@@ -18,10 +18,10 @@ MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
 
 
-all: aligo.dag $(TMPLTBANK) psd.xml.gz
+all: aligo.dag tmpltbank.xml.gz psd.xml.gz
 
 
-aligo.dag: $(TMPLTBANK) psd.xml.gz
+aligo.dag: tmpltbank.xml.gz psd.xml.gz
 	./build_job $<
 
 
@@ -81,6 +81,11 @@ $(TMPLTBANK): frame.cache
 		--spectrum-type median
 
 
+# Generate template bank with duplicate mass pairs pruned
+tmpltbank.xml.gz: $(TMPLTBANK)
+	gstlal_prune_duplicate_mass_pairs $^ $@
+
+
 # Generate software injections
 swinj.%.xml.gz:
 	lalapps_inspinj \
@@ -115,4 +120,4 @@ frame.cache:
 
 
 clean:
-	rm -f frame.cache *.sub *.dag *.$(TMPLTBANK) *.$(TMPLTBANK).* $(TMPLTBANK) psd.xml.gz
+	rm -f frame.cache *.sub *.dag *.tmpltbank.xml.gz *.tmpltbank.xml.gz.* tmpltbank.xml.gz $(TMPLTBANK) psd.xml.gz
