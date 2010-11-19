@@ -21,6 +21,5 @@ for root, dirs, files in os.walk(top):
 		stem, suffix = os.path.splitext(file)
 		if suffix == '.gwf':
 			observatory, frameType, startTime, duration = stem.split('-')
-			ifo, subFrameType = frameType.split('_', 2)
 			path = os.path.join(root, file)
-			print ifo, frameType, startTime, duration, path
+			print observatory, frameType, startTime, duration, path

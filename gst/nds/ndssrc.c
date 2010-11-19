@@ -610,11 +610,9 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 		if (element->channelType == cOnline)
 		{
-			//gst_base_src_set_live(object, TRUE);
 			GST_INFO_OBJECT(element, "daq_request_data(daq_t*, 0, 0, %d)", stride_seconds);
 			retval = daq_request_data(element->daq, 0, 0, stride_seconds);
 		} else {
-			//gst_base_src_set_live(object, FALSE);
 			gint64 start_time = gst_util_uint64_scale_int(basesrc->segment.start, 1, GST_SECOND);
 			gint64 stop_time = gst_util_uint64_scale_int_ceil(basesrc->segment.stop, 1, GST_SECOND);
 			if (start_time < 600000000)

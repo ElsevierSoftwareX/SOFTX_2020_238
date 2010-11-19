@@ -307,7 +307,7 @@ The following will clone the gstlal source tree giving you read-only access::
 gstlal source tree by using::
 
   $ cd /path/to/local/src/
-  $ git clone ssh://albert.einstein@ligo-vcs.phys.uwm.edu/usr/local/git/gstlal.git
+  $ git clone albert.einstein@ligo-vcs.phys.uwm.edu:/usr/local/git/gstlal.git
 
 You must also clone lalsuite by following the instructions on the LAL project page.
 

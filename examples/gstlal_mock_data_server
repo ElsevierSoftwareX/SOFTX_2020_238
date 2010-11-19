@@ -98,7 +98,7 @@ elems = mkelems_fast(pipeline,
 mkelems_fast(pipeline,
 	elems[-1],
 	"queue", {"max-size-time": 2 * frame_duration * gst.SECOND, "max-size-buffers": 0, "max-size-bytes": 0},
-	"lal_framesink", {"frame-type": "MOCK", "duration": frame_duration, "sync": False}
+	"lal_framesink", {"frame-type": "%s_MOCK" % opts.instrument, "duration": frame_duration, "sync": False}
 )
 
 # Create optional TCP server
