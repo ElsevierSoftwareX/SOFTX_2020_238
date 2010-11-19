@@ -77,7 +77,7 @@ static const char gst_lalframe_sink_doc[] =
 #endif
 
 /* Geez, I don't wanna write so much! */
-#define A_X_B__C(a, b, c)  gst_util_uint64_scale_int(a, b, c)
+#define A_X_B__C(a, b, c)  gst_util_uint64_scale_int_round(a, b, c)
 /* This is the same as
  *    #define A_X_B__C(a, b, c)  a * b / c
  * except it takes better care of possible over/underflows. It seems
