@@ -18,15 +18,18 @@ MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
 
 
-all: aligo.dag tmpltbank.xml.gz psd.xml.gz
+all: aligo.dag tmpltbank/tmpltbank.xml.gz psd.xml.gz
 
 
 # These targets are intermediate; it's OK to delete them if they are built only
 # to satisfy a dependency for another target.
-.INTERMEDIATE: $(TMPLTBANK)
+#.INTERMEDIATE: $(TMPLTBANK)
 
 
-aligo.dag: tmpltbank.xml.gz psd.xml.gz
+aligo.dag: tmpltbank/tmpltbank.xml.gz psd.xml.gz
+	mkdir -p log
+	mkdir -p svd
+	mkdir -p triggers
 	./build_job $<
 
 
@@ -91,7 +94,8 @@ $(TMPLTBANK): frame.cache
 
 
 # Generate template bank with duplicate mass pairs pruned
-tmpltbank.xml.gz: $(TMPLTBANK)
+tmpltbank/tmpltbank.xml.gz: $(TMPLTBANK)
+	mkdir -p $(@D)
 	gstlal_prune_duplicate_mass_pairs $^ $@
 
 
@@ -124,4 +128,11 @@ swinj.%.xml.gz:
 
 
 clean:
-	rm -f frame.cache *.sub *.dag *.tmpltbank.xml.gz *.tmpltbank.xml.gz.* tmpltbank.xml.gz $(TMPLTBANK) swinj.*.xml.gz psd.xml.gz
+	rm -f \
+		frame.cache \
+		psd.xml.gz \
+		$(TMPLTBANK) \
+		swinj.*.xml.gz \
+		*.{sub,dag} \
+		*.dag.*
+	rm -rf tmpltbank log svd triggers
