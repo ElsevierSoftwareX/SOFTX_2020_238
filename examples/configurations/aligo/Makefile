@@ -30,6 +30,11 @@ aligo.dag: tmpltbank.xml.gz psd.xml.gz
 	./build_job $<
 
 
+# Generate LAL frame cache
+frame.cache:
+	./glob_data_find $(PWD)/hoft > $@
+
+
 # Estimate PSD
 psd.xml.gz: frame.cache
 	gstlal_reference_psd \
@@ -117,11 +122,6 @@ swinj.%.xml.gz:
 		--max-mtotal $(MAX_TOTAL_MASS) \
 		--waveform GeneratePPNtwoPN \
 		--disable-spin
-
-
-# Generate LAL frame cache
-frame.cache:
-	./glob_data_find $(PWD)/hoft > $@
 
 
 clean:
