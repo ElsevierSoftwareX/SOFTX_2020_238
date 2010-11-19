@@ -13,7 +13,7 @@ To build and submit a DAG:
 
  1. Make sure lalsuite and gstlal are in your environment.
 
- 2. Set the environment variable TMPDIR to point to a directory that is not
+ 2. Set the environment variable ``TMPDIR`` to point to a directory that is not
     NFS mounted but exists on all of the nodes in the cluster.  For example, at
     CIT I would type::
 
@@ -23,7 +23,7 @@ To build and submit a DAG:
     
 	  $ ln -s ~lsinger/mock_aligo_hoft hoft
 
- 4. Run make to generate a template bank, a PSD estimate, and a DAG:
+ 4. Run ``make`` to generate a template bank, a PSD estimate, and a DAG:
  
       $ make -j
 
@@ -35,7 +35,7 @@ To build and submit a DAG:
 Side notes
 ==========
 
-To run a single instance of lalapps_inspiral, here is an example command on our mock data:
+To run a single instance of ``lalapps_inspiral``, here is an example command on our mock data:
 
 lalapps_inspiral --trig-end-time 0 --cluster-method template \
 --dynamic-range-exponent 69.0 --disable-rsq-veto  --bank-file \
