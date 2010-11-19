@@ -494,7 +494,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 	guint32 zero_pad = zero_pad_length(element);
 	guint32 hann_length = fft_length(element) - 2 * zero_pad;
 	double *dst = (double *) GST_BUFFER_DATA(outbuf);
-	unsigned block_number;
+	guint32 dst_offset;
 
 	/*
 	 * safety checks
@@ -510,9 +510,15 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 	 * Iterate over the available data
 	 */
 
-	for(block_number = 0; get_available_samples(element) >= hann_length; block_number++) {
+	for(dst_offset = 0; get_available_samples(element) >= hann_length; dst_offset += hann_length / 2) {
 		REAL8FrequencySeries *newpsd;
 		unsigned i;
+
+		/*
+		 * safety checks
+		 */
+
+		g_assert((dst_offset + hann_length / 2) * sizeof(*element->tdworkspace->data->data) <= GST_BUFFER_SIZE(outbuf));
 
 		/*
 		 * Reset the workspace's metadata that gets modified
@@ -534,7 +540,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 
 		memcpy(&element->tdworkspace->data->data[zero_pad], gst_adapter_peek(element->adapter, hann_length * sizeof(*element->tdworkspace->data->data)), hann_length * sizeof(*element->tdworkspace->data->data));
 		XLALINT8NSToGPS(&element->tdworkspace->epoch, element->t0);
-		XLALGPSAdd(&element->tdworkspace->epoch, (double) (element->next_offset_out - element->offset0) / element->sample_rate);
+		XLALGPSAdd(&element->tdworkspace->epoch, (double) (element->next_offset_out + dst_offset - element->offset0) / element->sample_rate);
 
 		/*
 		 * Transform to frequency domain
@@ -645,13 +651,12 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		}
 
 		/*
-		 * Copy the first half of the time series minus the
-		 * zero_pad into the output buffer, removing the zero_pad
-		 * from the start, and adding the contents of the tail.
-		 * When we add the two time series (the first half of the
-		 * piece we have just whitened and the contents of the tail
-		 * buffer), we do so overlapping the Hann windows so that
-		 * the sum of the windows is 1.
+		 * Copy the first half of the time series into the output,
+		 * adding the contents of the tail buffer.  When we add the
+		 * two time series (the first half of the piece we have
+		 * just whitened and the contents of the tail buffer), we
+		 * do so overlapping the Hann windows so that the sum of
+		 * the windows is 1.
 		 */
 
 		for(i = 0; i < element->tail->length; i++)
@@ -665,25 +670,24 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		memcpy(element->tail->data, &element->tdworkspace->data->data[zero_pad + element->tail->length], element->tail->length * sizeof(*element->tail->data));
 
 		/*
-		 * flush the adapter, advance the output pointer
+		 * flush the adapter
 		 */
 
 		gst_adapter_flush(element->adapter, hann_length / 2 * sizeof(*element->tdworkspace->data->data));
-		dst += element->tail->length;
 	}
 
 	/*
 	 * check for no-op
 	 */
 
-	if(!block_number)
+	if(!dst_offset)
 		return GST_BASE_TRANSFORM_FLOW_DROPPED;
 
 	/*
 	 * set output metadata
 	 */
 
-	set_metadata(element, outbuf, dst - (double *) GST_BUFFER_DATA(outbuf));
+	set_metadata(element, outbuf, dst_offset);
 
 	/*
 	 * done
