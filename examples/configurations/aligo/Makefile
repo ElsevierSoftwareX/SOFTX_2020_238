@@ -125,4 +125,4 @@ frame.cache:
 
 
 clean:
-	rm -f frame.cache *.sub *.dag *.tmpltbank.xml.gz *.tmpltbank.xml.gz.* tmpltbank.xml.gz $(TMPLTBANK) psd.xml.gz
+	rm -f frame.cache *.sub *.dag *.tmpltbank.xml.gz *.tmpltbank.xml.gz.* tmpltbank.xml.gz $(TMPLTBANK) swinj.*.xml.gz psd.xml.gz
