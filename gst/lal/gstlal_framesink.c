@@ -716,43 +716,79 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
             REAL8TimeSeries *ts = XLALCreateREAL8TimeSeries(
                 channame, &epoch, f0, deltaT, &lalDimensionlessUnit, nbytes/8);
 
+            if (ts == NULL)
+                goto memory_failed;
+
             gst_adapter_copy(sink->adapter, (guint8 *) ts->data->data,
                              0, nbytes);
 
             XLALFrameAddREAL8TimeSeriesProcData(frame, ts);
+
+            if (XLALFrameWrite(frame, filename, -1) != 0)
+                goto write_failed;
+
+            XLALDestroyREAL8TimeSeries(ts);
         }
         else if (sink->width == 32) {  // 32 bits = 4 bytes... a float
             REAL4TimeSeries *ts = XLALCreateREAL4TimeSeries(
                 channame, &epoch, f0, deltaT, &lalDimensionlessUnit, nbytes/4);
 
+            if (ts == NULL)
+                goto memory_failed;
+
             gst_adapter_copy(sink->adapter, (guint8 *) ts->data->data,
                              0, nbytes);
 
             XLALFrameAddREAL4TimeSeriesProcData(frame, ts);
+
+            if (XLALFrameWrite(frame, filename, -1) != 0)
+                goto write_failed;
+
+            XLALDestroyREAL4TimeSeries(ts);
         }
     }
     else if (strcmp(sink->type, "audio/x-raw-int") == 0) {
         INT4TimeSeries *ts = XLALCreateINT4TimeSeries(
             channame, &epoch, f0, deltaT, &lalDimensionlessUnit, nbytes/4);
 
+        if (ts == NULL)
+            goto memory_failed;
+
         gst_adapter_copy(sink->adapter, (guint8 *) ts->data->data, 0, nbytes);
 
         XLALFrameAddINT4TimeSeriesProcData(frame, ts);
+
+        if (XLALFrameWrite(frame, filename, -1) != 0)
+            goto write_failed;
+
+        XLALDestroyINT4TimeSeries(ts);
     }
 
+    sink->current_pos += nbytes;
     g_free(channame);
+    g_free(filename);
 
-    /* Save the frame file */
-    if (XLALFrameWrite(frame, filename, -1) != 0) {
-        GST_ELEMENT_ERROR(sink, RESOURCE, WRITE,
-                          ("could not write frame file: %s", filename),
-                          GST_ERROR_SYSTEM);
+    return TRUE;
+
+memory_failed:
+    {
+        GST_ELEMENT_ERROR(
+            sink, RESOURCE, NO_SPACE_LEFT,
+            ("Error when creating timeseries in function %s", __FUNCTION__),
+            GST_ERROR_SYSTEM);
+        g_free(channame);
         g_free(filename);
         return FALSE;
     }
 
-    sink->current_pos += nbytes;
-    g_free(filename);
-
-    return TRUE;
+write_failed:
+    {
+        GST_ELEMENT_ERROR(
+            sink, RESOURCE, WRITE,
+            ("Could not write frame file: %s", filename),
+            GST_ERROR_SYSTEM);
+        g_free(channame);
+        g_free(filename);
+        return FALSE;
+    }
 }
