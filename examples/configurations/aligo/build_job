@@ -68,6 +68,19 @@ sorted_sngls = sorted(sngls, key=lambda x: x.mchirp)
 
 
 #
+# Determine the duration of the longest template.
+#
+
+# FIXME: check that the 'ttotal' column is the template duration.
+bank_duration = max(sngl.ttotal for sngl in sngls)
+
+# The time slices that are selected might result in slightly longer filters,
+# so pad each job at the end with the template duration times a fudge factor.
+post_padding = round(2 * bank_duration)
+
+
+
+#
 # Write sub-banks to disk.
 #
 
@@ -124,7 +137,7 @@ for j in range(count_sub_banks):
 	# Add a bunch of gstlal_inspiral nodes to process disjoint time segments in parallel.
 	for start in range(0, opts.total_duration, opts.job_duration):
 
-		end = start + min(opts.total_duration, start+opts.job_duration)
+		end = min(start + opts.job_duration + post_padding, opts.total_duration)
 
 		gstlal_inspiral_node = makeNode(dag, gstlal_inspiral_sub,
 			parents = [gstlal_svd_bank_node],
