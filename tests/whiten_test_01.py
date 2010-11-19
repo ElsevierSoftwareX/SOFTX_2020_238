@@ -37,7 +37,7 @@ def whiten_test_01a(pipeline):
 	# frequency changes
 	#
 
-	def f_nyquist_changed(elem, pspec, ignored):
+	def psd_resolution_changed(elem, pspec, ignored):
 		delta_f = elem.get_property("delta-f")
 		n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
 		elem.set_property("mean-psd", numpy.zeros((n,), dtype="double") + 2.0 * delta_f)
@@ -50,7 +50,7 @@ def whiten_test_01a(pipeline):
 	zero_pad = 0.0		# seconds
 	fft_length = 4.0	# seconds
 	buffer_length = 1.0	# seconds
-	test_duration = 50.0	# seconds
+	test_duration = 100.0	# seconds
 
 	#
 	# build pipeline
@@ -59,7 +59,8 @@ def whiten_test_01a(pipeline):
 	head = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration)
 	head = tee = pipeparts.mktee(pipeline, head)
 	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 1, zero_pad = zero_pad, fft_length = fft_length)
-	head.connect_after("notify::f-nyquist", f_nyquist_changed, None)
+	head.connect_after("notify::f-nyquist", psd_resolution_changed, None)
+	head.connect_after("notify::delta-f", psd_resolution_changed, None)
 	head = pipeparts.mknofakedisconts(pipeline, head)
 	head = pipeparts.mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01a_out.dump")
@@ -85,7 +86,7 @@ def whiten_test_01b(pipeline):
 
 	rate = 2048	# Hz
 	zero_pad = 0.0		# seconds
-	fft_length = 2.0	# seconds
+	fft_length = 4.0	# seconds
 	buffer_length = 1.0	# seconds
 	test_duration = 100.0	# seconds
 
@@ -93,8 +94,10 @@ def whiten_test_01b(pipeline):
 	# build pipeline
 	#
 
-	head = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration)
-	head = pipeparts.mkchecktimestamps(pipeline, pipeparts.mkwhiten(pipeline, head, psd_mode = 0, zero_pad = zero_pad, fft_length = fft_length))
+	head = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, wave = 6)
+	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 0, zero_pad = zero_pad, fft_length = fft_length)
+	head = pipeparts.mknofakedisconts(pipeline, head)
+	head = pipeparts.mkchecktimestamps(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "whiten_test_01b_out.dump")
 
 	#
