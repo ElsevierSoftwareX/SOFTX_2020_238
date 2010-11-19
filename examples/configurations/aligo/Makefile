@@ -1,19 +1,44 @@
-all: aligo.dag H1-TMPLTBANK-1024-2048.xml.gz psd.xml.gz
+# Analaysis time
+GPS_START_TIME=900000000
+DURATION=1209600
+GPS_END_TIME=$(shell echo $(GPS_START_TIME) + $(DURATION) | bc)
 
-aligo.dag: H1-TMPLTBANK-1024-2048.xml.gz psd.xml.gz
+
+# PSD estimate and template placement time
+PSD_START_TIME=$(shell echo $(GPS_START_TIME) + 1024 | bc)
+PSD_END_TIME=$(shell echo $(GPS_START_TIME) + 3072 | bc)
+PSD_DURATION=$(shell echo $(PSD_END_TIME) - $(PSD_START_TIME) | bc)
+TMPLTBANK=H1-TMPLTBANK-$(PSD_START_TIME)-$(PSD_DURATION).xml.gz
+
+
+# Mass parameters
+MIN_MASS = 1.0
+MAX_MASS = 3.0
+MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
+MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
+
+
+all: aligo.dag $(TMPLTBANK) psd.xml.gz
+
+
+aligo.dag: $(TMPLTBANK) psd.xml.gz
 	./build_job $<
 
+
+# Estimate PSD
 psd.xml.gz: frame.cache
 	gstlal_reference_psd \
 		--verbose \
 		--instrument H1 \
 		--channel-name MOCK-STRAIN \
-		--gps-start-time 1024 \
-		--gps-end-time 3073 \
+		--gps-start-time $(PSD_START_TIME) \
+		--gps-end-time $(PSD_END_TIME) \
 		--frame-cache $^ \
 		--write-psd $@
-	
-H1-TMPLTBANK-1024-2048.xml.gz: frame.cache
+
+
+# Place templates
+$(TMPLTBANK): frame.cache
 	lalapps_tmpltbank \
 		--disable-compute-moments \
 		--grid-spacing Hexagonal \
@@ -21,12 +46,12 @@ H1-TMPLTBANK-1024-2048.xml.gz: frame.cache
 		--enable-high-pass 5.0 \
 		--high-pass-order 8 \
 		--strain-high-pass-order 8 \
-		--minimum-mass 1.0 \
-		--maximum-mass 3.0 \
-		--min-total-mass 2.0 \
-		--max-total-mass 6.0 \
-		--gps-start-time 1024 \
-		--gps-end-time 3072 \
+		--minimum-mass $(MIN_MASS) \
+		--maximum-mass $(MAX_MASS) \
+		--min-total-mass $(MIN_TOTAL_MASS) \
+		--max-total-mass $(MAX_TOTAL_MASS) \
+		--gps-start-time $(PSD_START_TIME) \
+		--gps-end-time $(PSD_END_TIME) \
 		--standard-candle \
 		--calibrated-data real_8 \
 		--candle-mass1 1 \
@@ -55,8 +80,39 @@ H1-TMPLTBANK-1024-2048.xml.gz: frame.cache
 		--order twoPN \
 		--spectrum-type median
 
+
+# Generate software injections
+swinj.%.xml.gz:
+	lalapps_inspinj \
+		--output $@ \
+		--write-compress \
+		--seed $* \
+		--f-lower 1	0 \
+		--gps-start-time $(GPS_START_TIME) \
+		--gps-end-time $(GPS_END_TIME) \
+		--t-distr uniform \
+		--time-step 1200 \
+		--time-interval 200 \
+		--i-distr uniform \
+		--l-distr random \
+		--d-distr uniform \
+		--min-distance 1e3 \
+		--max-distance 300e3 \
+		--m-distr componentMass \
+		--min-mass1 $(MIN_MASS) \
+		--max-mass1 $(MAX_MASS) \
+		--min-mass2 $(MIN_MASS) \
+		--max-mass2 $(MAX_MASS) \
+		--min-mtotal $(MIN_TOTAL_MASS) \
+		--max-mtotal $(MAX_TOTAL_MASS) \
+		--waveform GeneratePPNtwoPN \
+		--disable-spin
+
+
+# Generate LAL frame cache
 frame.cache:
 	./glob_data_find $(PWD)/hoft > $@
 
+
 clean:
-	rm -f frame.cache *.sub *.dag *.H1-TMPLTBANK-1024-2048.xml.gz *.H1-TMPLTBANK-1024-2048.xml.gz.* H1-TMPLTBANK-1024-2048.xml.gz psd.xml.gz
+	rm -f frame.cache *.sub *.dag *.$(TMPLTBANK) *.$(TMPLTBANK).* $(TMPLTBANK) psd.xml.gz
