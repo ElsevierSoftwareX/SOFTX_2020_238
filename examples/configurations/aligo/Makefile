@@ -34,7 +34,7 @@ aligo.dag: tmpltbank/tmpltbank.xml.gz psd.xml.gz $(INJECTIONS)
 	mkdir -p log
 	mkdir -p svd
 	mkdir -p triggers
-	./build_job $<
+	./build_job --gps-start-time $(GPS_START_TIME) --gps-end-time $(GPS_END_TIME) $<
 
 
 # Generate LAL frame cache

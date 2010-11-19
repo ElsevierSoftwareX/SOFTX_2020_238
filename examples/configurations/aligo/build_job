@@ -16,7 +16,8 @@ from optparse import Option, OptionParser
 opts, args = OptionParser(description = __doc__, option_list = [
 	Option("-n", "--num-templates", type=int, default=256, metavar="INT", help="Number of templates per sub-bank"),
 	Option("--template-bank", metavar="FILE.xml|FILE.xml.gz", help="Filename of input template bank"),
-	Option("--total-duration", type=int, default=3600*24*14, metavar="SECONDS", help="Total analysis duration (default=1 week)"),
+	Option("--gps-start-time", type=int, metavar="SECONDS", help="Start of analysis time"),
+	Option("--gps-end-time", type=int, metavar="SECONDS", help="End of analysis time"),
 	Option("--job-duration", type=int, default=3600*8, metavar="SECONDS", help="Analysis duration per job (default=8 hours).  FIXME: must be a divisor of --total-duration."),
 ]).parse_args()
 
@@ -34,6 +35,16 @@ if len(args) > 0:
 	raise ValueError("Too many command line arguments.")	
 if opts.template_bank is None:
 	raise ValueError("No template bank specified.")
+
+
+#
+# Require certain arguments.
+#
+
+if opts.gps_start_time is None:
+	raise RuntimeError, "required --gps-start-time argument not specified"
+if opts.gps_end_time is None:
+	raise RuntimeError, "required --gps-end-time argument not specified"
 
 
 
@@ -135,9 +146,9 @@ for j in range(count_sub_banks):
 	gstlal_svd_bank_node = makeNode(dag, gstlal_svd_bank_sub, template_bank=template_bank)
 
 	# Add a bunch of gstlal_inspiral nodes to process disjoint time segments in parallel.
-	for start in range(0, opts.total_duration, opts.job_duration):
+	for start in range(opts.gps_start_time, opts.gps_end_time, opts.job_duration):
 
-		end = min(start + opts.job_duration + post_padding, opts.total_duration)
+		end = min(start + opts.job_duration + post_padding, opts.gps_end_time)
 
 		gstlal_inspiral_node = makeNode(dag, gstlal_inspiral_sub,
 			parents = [gstlal_svd_bank_node],
