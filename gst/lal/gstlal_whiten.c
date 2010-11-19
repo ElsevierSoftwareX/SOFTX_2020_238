@@ -486,7 +486,8 @@ static void set_metadata(GSTLALWhiten *element, GstBuffer *buf, guint64 outsampl
 
 static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 {
-	guint64 zero_pad = zero_pad_length(element);
+	guint32 zero_pad = zero_pad_length(element);
+	guint32 hann_length = fft_length(element) - 2 * zero_pad;
 	double *dst = (double *) GST_BUFFER_DATA(outbuf);
 	unsigned block_number;
 
@@ -494,7 +495,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 	 * Iterate over the available data
 	 */
 
-	for(block_number = 0; get_available_samples(element) >= element->tdworkspace->data->length - 2 * zero_pad; block_number++) {
+	for(block_number = 0; get_available_samples(element) >= hann_length; block_number++) {
 		REAL8FrequencySeries *newpsd;
 		unsigned i;
 
@@ -516,7 +517,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		 * earlier).
 		 */
 
-		memcpy(element->tdworkspace->data->data + zero_pad * sizeof(*element->tdworkspace->data->data), gst_adapter_peek(element->adapter, (element->tdworkspace->data->length - 2 * zero_pad) * sizeof(*element->tdworkspace->data->data)), (element->tdworkspace->data->length - 2 * zero_pad) * sizeof(*element->tdworkspace->data->data));
+		memcpy(&element->tdworkspace->data->data[zero_pad], gst_adapter_peek(element->adapter, hann_length * sizeof(*element->tdworkspace->data->data)), hann_length * sizeof(*element->tdworkspace->data->data));
 		XLALINT8NSToGPS(&element->tdworkspace->epoch, element->t0);
 		XLALGPSAdd(&element->tdworkspace->epoch, (double) (element->next_offset_out - element->offset0) / element->sample_rate);
 
