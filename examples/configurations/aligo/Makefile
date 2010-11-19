@@ -11,6 +11,10 @@ PSD_DURATION=$(shell echo $(PSD_END_TIME) - $(PSD_START_TIME) | bc)
 TMPLTBANK=H1-TMPLTBANK-$(PSD_START_TIME)-$(PSD_DURATION).xml.gz
 
 
+# Injection files (10)
+INJECTIONS=$(foreach n,$(shell echo {0..9}),injections/swinj.$n.xml.gz)
+
+
 # Mass parameters
 MIN_MASS = 1.0
 MAX_MASS = 3.0
@@ -18,7 +22,7 @@ MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
 
 
-all: aligo.dag tmpltbank/tmpltbank.xml.gz psd.xml.gz
+all: aligo.dag tmpltbank/tmpltbank.xml.gz $(INJECTIONS) psd.xml.gz
 
 
 # These targets are intermediate; it's OK to delete them if they are built only
@@ -26,7 +30,7 @@ all: aligo.dag tmpltbank/tmpltbank.xml.gz psd.xml.gz
 #.INTERMEDIATE: $(TMPLTBANK)
 
 
-aligo.dag: tmpltbank/tmpltbank.xml.gz psd.xml.gz
+aligo.dag: tmpltbank/tmpltbank.xml.gz psd.xml.gz $(INJECTIONS)
 	mkdir -p log
 	mkdir -p svd
 	mkdir -p triggers
@@ -100,12 +104,13 @@ tmpltbank/tmpltbank.xml.gz: $(TMPLTBANK)
 
 
 # Generate software injections
-swinj.%.xml.gz:
+injections/swinj.%.xml.gz:
+	mkdir -p $(@D)
 	lalapps_inspinj \
 		--output $@ \
 		--write-compress \
 		--seed $* \
-		--f-lower 1	0 \
+		--f-lower 10 \
 		--gps-start-time $(GPS_START_TIME) \
 		--gps-end-time $(GPS_END_TIME) \
 		--t-distr uniform \
@@ -135,4 +140,4 @@ clean:
 		swinj.*.xml.gz \
 		*.{sub,dag} \
 		*.dag.*
-	rm -rf tmpltbank log svd triggers
+	rm -rf tmpltbank log svd injections triggers
