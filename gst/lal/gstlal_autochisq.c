@@ -390,9 +390,9 @@ GST_BOILERPLATE(
 
 
 enum property {
-	PROP_AUTOCORRELATION_MATRIX = 1,
-	PROP_LATENCY,
-	PROP_SNR_THRESH
+	ARG_AUTOCORRELATION_MATRIX = 1,
+	ARG_LATENCY,
+	ARG_SNR_THRESH
 };
 
 
@@ -779,7 +779,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case PROP_AUTOCORRELATION_MATRIX: {
+	case ARG_AUTOCORRELATION_MATRIX: {
 		unsigned channels;
 		g_mutex_lock(element->autocorrelation_lock);
 		if(element->autocorrelation_matrix) {
@@ -826,7 +826,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 	}
 
-	case PROP_LATENCY: {
+	case ARG_LATENCY: {
 		gint64 latency = g_value_get_int64(value);
 		g_mutex_lock(element->autocorrelation_lock);
 		if(element->autocorrelation_matrix && -latency >= (gint) autocorrelation_length(element))
@@ -837,7 +837,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 	}
 
-	case PROP_SNR_THRESH:
+	case ARG_SNR_THRESH:
 		element->snr_thresh = g_value_get_double(value);
 		break;
 
@@ -862,7 +862,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case PROP_AUTOCORRELATION_MATRIX:
+	case ARG_AUTOCORRELATION_MATRIX:
 		g_mutex_lock(element->autocorrelation_lock);
 		if(element->autocorrelation_matrix)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_complex(element->autocorrelation_matrix));
@@ -870,11 +870,11 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		g_mutex_unlock(element->autocorrelation_lock);
 		break;
 
-	case PROP_LATENCY:
+	case ARG_LATENCY:
 		g_value_set_int64(value, element->latency);
 		break;
 
-	case PROP_SNR_THRESH:
+	case ARG_SNR_THRESH:
 		g_value_set_double(value, element->snr_thresh);
 		break;
 
@@ -961,7 +961,7 @@ static void gstlal_autochisq_class_init(GSTLALAutoChiSqClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_AUTOCORRELATION_MATRIX,
+		ARG_AUTOCORRELATION_MATRIX,
 		g_param_spec_value_array(
 			"autocorrelation-matrix",
 			"Autocorrelation Matrix",
@@ -985,7 +985,7 @@ static void gstlal_autochisq_class_init(GSTLALAutoChiSqClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		PROP_LATENCY,
+		ARG_LATENCY,
 		g_param_spec_int64(
 			"latency",
 			"Latency",
@@ -996,7 +996,7 @@ static void gstlal_autochisq_class_init(GSTLALAutoChiSqClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		PROP_SNR_THRESH,
+		ARG_SNR_THRESH,
 		g_param_spec_double(
 			"snr-thresh",
 			"SNR Threshold",

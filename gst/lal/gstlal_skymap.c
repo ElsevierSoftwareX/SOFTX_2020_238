@@ -47,10 +47,10 @@ static GstElementClass *parent_class = NULL;
 
 
 enum gen_property {
-	PROP_DT = 1,
-	PROP_TRIGGER_PRESENT_PADDING,
-	PROP_TRIGGER_ABSENT_PADDING,
-	PROP_BANK_FILENAME
+	ARG_DT = 1,
+	ARG_TRIGGER_PRESENT_PADDING,
+	ARG_TRIGGER_ABSENT_PADDING,
+	ARG_BANK_FILENAME
 };
 
 
@@ -90,19 +90,19 @@ static void set_property(GObject *object, enum gen_property id, const GValue *va
 
 	GST_OBJECT_LOCK(element);
 	switch(id) {
-	case PROP_DT:
+	case ARG_DT:
 		element->dt = g_value_get_uint64(value);
 		break;
 
-	case PROP_TRIGGER_PRESENT_PADDING:
+	case ARG_TRIGGER_PRESENT_PADDING:
 		element->trigger_present_padding = g_value_get_uint64(value);
 		break;
 
-	case PROP_TRIGGER_ABSENT_PADDING:
+	case ARG_TRIGGER_ABSENT_PADDING:
 		element->trigger_absent_padding = g_value_get_uint64(value);
 		break;
 
-	case PROP_BANK_FILENAME:
+	case ARG_BANK_FILENAME:
 		g_mutex_lock(element->bank_lock);
 		setup_bankfile_input(element, g_value_dup_string(value));
 		g_mutex_unlock(element->bank_lock);
@@ -122,19 +122,19 @@ static void get_property(GObject * object, enum gen_property id, GValue * value,
 
 	GST_OBJECT_LOCK(element);
 	switch(id) {
-	case PROP_DT:
+	case ARG_DT:
 		g_value_set_uint64(value, element->dt);
 		break;
 
-	case PROP_TRIGGER_PRESENT_PADDING:
+	case ARG_TRIGGER_PRESENT_PADDING:
 		g_value_set_uint64(value, element->trigger_present_padding);
 		break;
 
-	case PROP_TRIGGER_ABSENT_PADDING:
+	case ARG_TRIGGER_ABSENT_PADDING:
 		g_value_set_uint64(value, element->trigger_absent_padding);
 		break;
 
-	case PROP_BANK_FILENAME:
+	case ARG_BANK_FILENAME:
 		g_mutex_lock(element->bank_lock);
 		g_value_set_string(value, element->bank_filename);
 		g_mutex_unlock(element->bank_lock);
@@ -812,7 +812,7 @@ static void class_init(gpointer klass, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_DT,
+		ARG_DT,
 		g_param_spec_uint64(
 			"dt",
 			"Coincidence Window",
@@ -823,7 +823,7 @@ static void class_init(gpointer klass, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		PROP_TRIGGER_PRESENT_PADDING,
+		ARG_TRIGGER_PRESENT_PADDING,
 		g_param_spec_uint64(
 			"trigger-present-padding",
 			"Trigger Present Padding",
@@ -834,7 +834,7 @@ static void class_init(gpointer klass, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		PROP_TRIGGER_ABSENT_PADDING,
+		ARG_TRIGGER_ABSENT_PADDING,
 		g_param_spec_uint64(
 			"trigger-absent-padding",
 			"Trigger Absent Padding",
@@ -845,7 +845,7 @@ static void class_init(gpointer klass, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		PROP_BANK_FILENAME,
+		ARG_BANK_FILENAME,
 		g_param_spec_string(
 			"bank-filename",
 			"Bank file name",

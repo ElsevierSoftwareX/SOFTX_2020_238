@@ -290,7 +290,7 @@ GST_BOILERPLATE(
 
 
 enum property {
-	PROP_MATRIX = 1
+	ARG_MATRIX = 1
 };
 
 
@@ -517,7 +517,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case PROP_MATRIX: {
+	case ARG_MATRIX: {
 		guint data_type;
 		gint in_channels, out_channels;
 		g_mutex_lock(element->mixmatrix_lock);
@@ -576,7 +576,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case PROP_MATRIX:
+	case ARG_MATRIX:
 		g_mutex_lock(element->mixmatrix_lock);
 		if(element->mixmatrix.as_void)
 			/* FIXME:  allow other data types */
@@ -653,7 +653,7 @@ static void gstlal_matrixmixer_class_init(GSTLALMatrixMixerClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_MATRIX,
+		ARG_MATRIX,
 		g_param_spec_value_array(
 			"matrix",
 			"Matrix",
