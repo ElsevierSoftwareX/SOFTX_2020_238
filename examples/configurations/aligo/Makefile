@@ -38,7 +38,6 @@ frame.cache:
 # Estimate PSD
 psd.xml.gz: frame.cache
 	gstlal_reference_psd \
-		--verbose \
 		--instrument H1 \
 		--channel-name MOCK-STRAIN \
 		--gps-start-time $(PSD_START_TIME) \
