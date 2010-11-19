@@ -91,7 +91,7 @@ for i, start_idx in enumerate(range(0, count_sngls, opts.num_templates)):
 	progress.update(start_idx)
 	stop_idx = min(start_idx + opts.num_templates, count_sngls)
 	sngls[:] = sorted_sngls[start_idx:stop_idx]
-	path = os.path.join(head, "%d.%s" % (i, tail))
+	path = os.path.join("tmpltbank", "%d.xml.gz" % i)
 	utils.write_filename(xmldoc, path)
 
 count_sub_banks = i + 1
@@ -110,26 +110,26 @@ dag = makeDAG('aligo')
 # gstlal_svd_bank submit file for generating time sliced, SVD'd template banks.
 gstlal_svd_bank_sub = EnvCondorJob("""gstlal_svd_bank
 	--flow 10 --reference-psd psd.xml.gz
-	--template-bank $(template_bank)
-	--write-svd-bank svd.$(template_bank)
-	""", outputname="svd.$(template_bank)")
+	--template-bank tmpltbank/$(template_bank)
+	--write-svd-bank svd/$(template_bank)
+	""", outputname="log/svd_$(template_bank)")
 
 # gstlal_inspiral submit file for generating single-detector triggers.
 gstlal_inspiral_sub = EnvCondorJob("""gstlal_inspiral
 	--flow 10 --reference-psd psd.xml.gz
 	--frame-cache frame.cache
 	--instrument H1 --channel-name MOCK-STRAIN
-	--svd-bank svd.$(template_bank)
+	--svd-bank svd/$(template_bank)
 	--gps-start-time $(gps_start_time)
 	--gps-end-time $(gps_end_time)
-	--output output.$(gps_start_time)-$(gps_end_time).$(template_bank)
-	""", outputname="output.$(gps_start_time)-$(gps_end_time).$(template_bank)")
+	--output triggers/$(gps_start_time)-$(gps_end_time).$(template_bank)
+	""", outputname="log/triggers_$(gps_start_time)-$(gps_end_time).$(template_bank)")
 
 # Assemble DAG.
 for j in range(count_sub_banks):
 
 	progress.update(j)
-	template_bank = os.path.join(head, "%d.%s" % (j, tail))
+	template_bank = os.path.join(head, "%d.xml.gz" % j)
 
 	# Add gstlal_svd_bank node for this bank fragment.
 	gstlal_svd_bank_node = makeNode(dag, gstlal_svd_bank_sub, template_bank=template_bank)
