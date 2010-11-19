@@ -21,6 +21,11 @@ MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
 all: aligo.dag tmpltbank.xml.gz psd.xml.gz
 
 
+# These targets are intermediate; it's OK to delete them if they are built only
+# to satisfy a dependency for another target.
+.INTERMEDIATE: $(TMPLTBANK)
+
+
 aligo.dag: tmpltbank.xml.gz psd.xml.gz
 	./build_job $<
 
