@@ -60,7 +60,7 @@ head, tail = os.path.split(opts.template_bank)
 
 progress.update(-1, 'Reading template bank')
 
-xmldoc = utils.load_filename(opts.template_bank)
+xmldoc = utils.load_filename(opts.template_bank, gz=opts.template_bank.endswith('.gz'))
 sngls = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 count_sngls = len(sngls)
 sorted_sngls = sorted(sngls, key=lambda x: x.mchirp)
