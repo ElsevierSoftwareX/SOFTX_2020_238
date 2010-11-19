@@ -140,7 +140,7 @@ gstlal_inspiral_sub = EnvCondorJob("""gstlal_inspiral
 for j in range(count_sub_banks):
 
 	progress.update(j)
-	template_bank = os.path.join(head, "%d.xml.gz" % j)
+	template_bank = "%d.xml.gz" % j
 
 	# Add gstlal_svd_bank node for this bank fragment.
 	gstlal_svd_bank_node = makeNode(dag, gstlal_svd_bank_sub, template_bank=template_bank)
