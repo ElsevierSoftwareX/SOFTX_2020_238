@@ -103,7 +103,7 @@ for i, start_idx in enumerate(range(0, count_sngls, opts.num_templates)):
 	stop_idx = min(start_idx + opts.num_templates, count_sngls)
 	sngls[:] = sorted_sngls[start_idx:stop_idx]
 	path = os.path.join("tmpltbank", "%d.xml.gz" % i)
-	utils.write_filename(xmldoc, path)
+	utils.write_filename(xmldoc, path, gz=path.endswith('.gz'))
 
 count_sub_banks = i + 1
 
