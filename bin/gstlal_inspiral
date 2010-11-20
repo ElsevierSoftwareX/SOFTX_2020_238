@@ -59,8 +59,6 @@ from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals
 
 def parse_command_line():
 	parser = OptionParser(
-		version = "%prog ??",
-		usage = "%prog [options]",
 		description = "Stream-based inspiral analysis tool"
 	)
 	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
