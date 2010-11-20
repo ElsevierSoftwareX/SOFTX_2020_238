@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""Estimate power spectra from LIGO frames or simulated h(t)."""
 
 
 #
@@ -26,11 +27,7 @@ from optparse import OptionParser
 from glue import segments
 from pylal.datatypes import LIGOTimeGPS
 
-parser = OptionParser(
-	version = "%prog ??",
-	usage = "%prog [options]",
-	description = "Stream-based inspiral analysis tool"
-)
+parser = OptionParser(description = __doc__)
 parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
 parser.add_option("--online-data", action = "store_true", help = "Use online DMT-STRAIN instead of a frame file (optional).")
 parser.add_option("--fake-data", action = "store_true", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
