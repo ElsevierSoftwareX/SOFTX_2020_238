@@ -15,11 +15,13 @@ TMPLTBANK=H1-TMPLTBANK-$(PSD_START_TIME)-$(PSD_DURATION).xml.gz
 INJECTIONS=$(foreach n,$(shell echo {0..9}),injections/swinj.$n.xml.gz)
 
 
-# Mass parameters
+# Template bank parameters
 MIN_MASS = 1.0
 MAX_MASS = 3.0
 MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
+LOW_FREQUENCY_CUTOFF = 10.0
+HIGH_PASS_FREQ = 5.0
 
 
 all: aligo.dag tmpltbank/tmpltbank.xml.gz $(INJECTIONS) psd.xml.gz
@@ -34,7 +36,7 @@ aligo.dag: tmpltbank/tmpltbank.xml.gz psd.xml.gz $(INJECTIONS)
 	mkdir -p log
 	mkdir -p svd
 	mkdir -p triggers
-	./build_job --gps-start-time $(GPS_START_TIME) --gps-end-time $(GPS_END_TIME) $<
+	./build_job --gps-start-time $(GPS_START_TIME) --gps-end-time $(GPS_END_TIME) --flow $(LOW_FREQUENCY_CUTOFF) $<
 
 
 # Generate LAL frame cache
@@ -59,7 +61,7 @@ $(TMPLTBANK): frame.cache
 		--disable-compute-moments \
 		--grid-spacing Hexagonal \
 		--dynamic-range-exponent 69.0 \
-		--enable-high-pass 5.0 \
+		--enable-high-pass $(HIGH_PASS_FREQ) \
 		--high-pass-order 8 \
 		--strain-high-pass-order 8 \
 		--minimum-mass $(MIN_MASS) \
@@ -81,14 +83,14 @@ $(TMPLTBANK): frame.cache
 		--high-pass-attenuation 0.1 \
 		--min-high-freq-cutoff SchwarzISCO \
 		--segment-length 131072 \
-		--low-frequency-cutoff 10.0 \
+		--low-frequency-cutoff $(LOW_FREQUENCY_CUTOFF) \
 		--pad-data 8 \
 		--num-freq-cutoffs 1 \
 		--sample-rate 4096 \
 		--high-frequency-cutoff 2048.0 \
 		--resample-filter ldas \
 		--strain-high-pass-atten 0.1 \
-		--strain-high-pass-freq 5 \
+		--strain-high-pass-freq $(HIGH_PASS_FREQ) \
 		--frame-cache $^ \
 		--max-high-freq-cutoff SchwarzISCO \
 		--approximant TaylorF2 \
@@ -110,7 +112,7 @@ injections/swinj.%.xml.gz:
 		--output $@ \
 		--write-compress \
 		--seed $* \
-		--f-lower 10 \
+		--f-lower $(LOW_FREQUENCY_CUTOFF) \
 		--gps-start-time $(GPS_START_TIME) \
 		--gps-end-time $(GPS_END_TIME) \
 		--t-distr uniform \

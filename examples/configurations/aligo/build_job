@@ -15,6 +15,7 @@ from optparse import Option, OptionParser
 
 opts, args = OptionParser(description = __doc__, option_list = [
 	Option("-n", "--num-templates", type=int, default=256, metavar="INT", help="Number of templates per sub-bank"),
+	Option("--flow", type="float", metavar="Hz", help="Low frequency cutoff"),
 	Option("--template-bank", metavar="FILE.xml|FILE.xml.gz", help="Filename of input template bank"),
 	Option("--gps-start-time", type=int, metavar="SECONDS", help="Start of analysis time"),
 	Option("--gps-end-time", type=int, metavar="SECONDS", help="End of analysis time"),
@@ -45,6 +46,8 @@ if opts.gps_start_time is None:
 	raise RuntimeError, "required --gps-start-time argument not specified"
 if opts.gps_end_time is None:
 	raise RuntimeError, "required --gps-end-time argument not specified"
+if opts.flow is None:
+	raise RuntimeError, "required --flow argument not specified"
 
 
 
@@ -120,14 +123,14 @@ dag = makeDAG('aligo')
 
 # gstlal_svd_bank submit file for generating time sliced, SVD'd template banks.
 gstlal_svd_bank_sub = EnvCondorJob("""gstlal_svd_bank
-	--flow 10 --reference-psd psd.xml.gz
+	--flow $(flow) --reference-psd psd.xml.gz
 	--template-bank tmpltbank/$(template_bank)
 	--write-svd-bank svd/$(template_bank)
 	""", outputname="log/svd_$(template_bank)")
 
 # gstlal_inspiral submit file for generating single-detector triggers.
 gstlal_inspiral_sub = EnvCondorJob("""gstlal_inspiral
-	--flow 10 --reference-psd psd.xml.gz
+	--flow $(flow) --reference-psd psd.xml.gz
 	--frame-cache frame.cache
 	--instrument H1 --channel-name MOCK-STRAIN
 	--svd-bank svd/$(template_bank)
@@ -143,7 +146,7 @@ for j in range(count_sub_banks):
 	template_bank = "%d.xml.gz" % j
 
 	# Add gstlal_svd_bank node for this bank fragment.
-	gstlal_svd_bank_node = makeNode(dag, gstlal_svd_bank_sub, template_bank=template_bank)
+	gstlal_svd_bank_node = makeNode(dag, gstlal_svd_bank_sub, template_bank=template_bank, flow=opts.flow)
 
 	# Add a bunch of gstlal_inspiral nodes to process disjoint time segments in parallel.
 	for start in range(opts.gps_start_time, opts.gps_end_time, opts.job_duration):
@@ -154,7 +157,8 @@ for j in range(count_sub_banks):
 			parents = [gstlal_svd_bank_node],
 			template_bank = template_bank,
 			gps_start_time = start,
-			gps_end_time = end)
+			gps_end_time = end,
+			flow = opts.flow)
 
 
 # Write DAG and submit files.
