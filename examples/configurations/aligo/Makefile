@@ -1,6 +1,6 @@
 # Analaysis time
 GPS_START_TIME=900000000
-DURATION=1209600
+DURATION=86400
 GPS_END_TIME=$(shell echo $(GPS_START_TIME) + $(DURATION) | bc)
 
 
@@ -20,8 +20,8 @@ MIN_MASS = 1.0
 MAX_MASS = 3.0
 MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
-LOW_FREQUENCY_CUTOFF = 10.0
-HIGH_PASS_FREQ = 5.0
+LOW_FREQUENCY_CUTOFF = 40.0
+HIGH_PASS_FREQ = 30.0
 
 
 all: aligo.dag tmpltbank/tmpltbank.xml.gz $(INJECTIONS) psd.xml.gz
@@ -116,13 +116,13 @@ injections/swinj.%.xml.gz:
 		--gps-start-time $(GPS_START_TIME) \
 		--gps-end-time $(GPS_END_TIME) \
 		--t-distr uniform \
-		--time-step 1200 \
-		--time-interval 200 \
+		--time-step 80 \
+		--time-interval 20 \
 		--i-distr uniform \
 		--l-distr random \
 		--d-distr uniform \
 		--min-distance 1e3 \
-		--max-distance 300e3 \
+		--max-distance 40e3 \
 		--m-distr componentMass \
 		--min-mass1 $(MIN_MASS) \
 		--max-mass1 $(MAX_MASS) \
