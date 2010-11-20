@@ -656,6 +656,7 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
     FrameH *frame;
     double f0 = 0;  // kind of dummy, to write in the TimeSeries
     gchar *channame, *dirname, *filename;
+    int result;
 
     if (sink->instrument == NULL || sink->path == NULL ||
         sink->frame_type == NULL || sink->channel_name == NULL) {
@@ -722,12 +723,10 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
             gst_adapter_copy(sink->adapter, (guint8 *) ts->data->data,
                              0, nbytes);
 
-            XLALFrameAddREAL8TimeSeriesProcData(frame, ts);
-
-            if (XLALFrameWrite(frame, filename, -1) != 0)
-                goto write_failed;
-
+            result = XLALFrameAddREAL8TimeSeriesProcData(frame, ts);
             XLALDestroyREAL8TimeSeries(ts);
+            if (result != 0)
+                goto add_failed;
         }
         else if (sink->width == 32) {  // 32 bits = 4 bytes... a float
             REAL4TimeSeries *ts = XLALCreateREAL4TimeSeries(
@@ -739,12 +738,10 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
             gst_adapter_copy(sink->adapter, (guint8 *) ts->data->data,
                              0, nbytes);
 
-            XLALFrameAddREAL4TimeSeriesProcData(frame, ts);
-
-            if (XLALFrameWrite(frame, filename, -1) != 0)
-                goto write_failed;
-
+            result = XLALFrameAddREAL4TimeSeriesProcData(frame, ts);
             XLALDestroyREAL4TimeSeries(ts);
+			if (result != 0)
+                goto add_failed;
         }
     }
     else if (strcmp(sink->type, "audio/x-raw-int") == 0) {
@@ -756,17 +753,19 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
 
         gst_adapter_copy(sink->adapter, (guint8 *) ts->data->data, 0, nbytes);
 
-        XLALFrameAddINT4TimeSeriesProcData(frame, ts);
-
-        if (XLALFrameWrite(frame, filename, -1) != 0)
-            goto write_failed;
-
+        result = XLALFrameAddINT4TimeSeriesProcData(frame, ts);
         XLALDestroyINT4TimeSeries(ts);
+        if (result != 0)
+            goto add_failed;
     }
+
+	if (XLALFrameWrite(frame, filename, -1) != 0)
+		goto write_failed;
 
     sink->current_pos += nbytes;
     g_free(channame);
     g_free(filename);
+    FrameFree(frame);
 
     return TRUE;
 
@@ -778,6 +777,19 @@ memory_failed:
             GST_ERROR_SYSTEM);
         g_free(channame);
         g_free(filename);
+        FrameFree(frame);
+        return FALSE;
+    }
+
+add_failed:
+    {
+        GST_ELEMENT_ERROR(
+            sink, RESOURCE, NO_SPACE_LEFT,
+            ("Error when adding timeseries in function %s", __FUNCTION__),
+            GST_ERROR_SYSTEM);
+        g_free(channame);
+        g_free(filename);
+        FrameFree(frame);
         return FALSE;
     }
 
@@ -789,6 +801,7 @@ write_failed:
             GST_ERROR_SYSTEM);
         g_free(channame);
         g_free(filename);
+        FrameFree(frame);
         return FALSE;
     }
 }
