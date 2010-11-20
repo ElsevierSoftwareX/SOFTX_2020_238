@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""Stream-based inspiral analysis tool"""
 
 
 #
@@ -59,7 +60,7 @@ from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals
 
 def parse_command_line():
 	parser = OptionParser(
-		description = "Stream-based inspiral analysis tool"
+		description = __doc__
 	)
 	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
 	parser.add_option("--online-data", action = "store_true", help = "Use online DMT-STRAIN instead of a frame file (optional).")
