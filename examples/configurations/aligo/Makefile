@@ -29,7 +29,7 @@ all: aligo.dag tmpltbank/tmpltbank.xml.gz $(INJECTIONS) psd.xml.gz
 
 # These targets are intermediate; it's OK to delete them if they are built only
 # to satisfy a dependency for another target.
-#.INTERMEDIATE: $(TMPLTBANK)
+.INTERMEDIATE: $(TMPLTBANK)
 
 
 aligo.dag: tmpltbank/tmpltbank.xml.gz psd.xml.gz $(INJECTIONS)
