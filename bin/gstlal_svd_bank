@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""Build time-sliced, SVD'd filter banks for use with gstlal_inspiral"""
 
 
 #
@@ -24,11 +25,7 @@
 
 from optparse import OptionParser
 
-parser = OptionParser(
-	version = "%prog ??",
-	usage = "%prog [options]",
-	description = "Stream-based inspiral analysis tool"
-)
+parser = OptionParser(description = __doc__)
 parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
 parser.add_option("--identity", action = "store_true", default = False, help = "Do not perform an SVD; instead, use the original templates as the analyzing templates and the identity matrix as the reconstruction matrix.")
 parser.add_option("--padding", metavar = "pad", type = "float", default = 1.1, help = "Fractional amount to pad time slices.")
