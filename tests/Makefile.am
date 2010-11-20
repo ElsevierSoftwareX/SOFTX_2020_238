@@ -1,4 +1,11 @@
-EXTRA_DIST = firbank_test_01.py fixtures.py plots_test_01.py resample_test_01.py whiten_test_01.py test_common.py test_coinc.py
+EXTRA_DIST = \
+	firbank_test_01.py \
+	fixtures.py \
+	plots_test_01.py \
+	resample_test_01.py \
+	whiten_test_01.py \
+	test_common.py \
+	test_coinc.py
 
 check :
 	python test_coinc.py
