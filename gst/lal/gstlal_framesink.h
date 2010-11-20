@@ -77,16 +77,20 @@ typedef struct _GstLalframeSinkClass GstLalframeSinkClass;
 struct _GstLalframeSink {
     GstBaseSink parent;
 
-    GstPad *sinkpad;
-
     /*< private >*/
-    gchar *path;
-    gchar *frame_type;
-    gchar *instrument;
-    gchar *channel_name;
-    gchar *units;
-    double duration;
+    gchar *path;           // directory where we write the files
+    gchar *frame_type;     // R, H1_RDS_R_L1, H1_LDAS_C02_L2, etc
+    gchar *instrument;     // ifo: G1, H1, H2, L1, V1
+    gchar *channel_name;   // DARM_ERR, LSC-STRAIN, etc
+    gchar *units;          // not used so far
+    double duration;       // time span for each frame file
+    gboolean clean_timestamps;  // use timestamps multiple of duration?
+    double dir_digits;     // number of gpstime digits to remove for dirname
 
+    gint rate, width;    // rate and width of the samples we are receiving
+    gchar *type;         // mime type
+    gboolean start;      // is this the first buffer?
+    GstClockTime t0_ns;  // timestamp at the beginning of data in adapter
     guint64 current_pos;
 
     GstAdapter *adapter;

@@ -25,6 +25,7 @@
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
 
+#include "colormap.h"
 #include "cairovis_base.h"
 
 
@@ -57,10 +58,11 @@ typedef struct _CairoVisWaterfall {
 
 	/* Properties */
 	GstClockTime history;
+	enum cairovis_scale zscale;
 	gchar *zlabel;
 	gboolean zautoscale;
 	gdouble zmin, zmax;
-	
+
 	/* Internal data */
 	gint nchannels;
 	gint rate;
@@ -68,6 +70,8 @@ typedef struct _CairoVisWaterfall {
 	guint64 offset0;
 	guint64 last_offset_end;
 	guint64 frame_number;
+	enum cairovis_colormap_name map_name;
+	colormap *map;
 } CairoVisWaterfall;
 
 

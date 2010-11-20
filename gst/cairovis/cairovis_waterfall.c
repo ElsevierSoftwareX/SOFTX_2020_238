@@ -51,8 +51,10 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 	gint width, height;
 	cairo_surface_t *surf;
 	cairo_t *cr;
-	const double *data;
+	double *data;
 	guint i;
+	gboolean zlog = (element->zscale == CAIROVIS_SCALE_LOG);
+	gdouble zmin, zmax;
 
 	if (base->xscale || base->yscale)
 	{
@@ -93,7 +95,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 
 	/* FIXME: This doesn't really have to be an infinite loop. */
 	while (TRUE) {
-		GST_INFO_OBJECT(element, "checking to see if we have enough data to draw frame %llu", element->frame_number);
+		GST_INFO_OBJECT(element, "checking to see if we have enough data to draw frame %" G_GUINT64_FORMAT, element->frame_number);
 		GST_INFO_OBJECT(element, "rate=%d, framerate=%d/%d", element->rate, fpsn, fpsd);
 
 		/* FIXME: check my timestamp math here; it's probably not perfect */
@@ -106,7 +108,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 		guint64 desired_samples = desired_offset_end - desired_offset;
 		guint64 desired_bytes = desired_samples * stride_bytes;
 
-		GST_INFO_OBJECT(element, "we want offsets %llu through %llu", desired_offset, desired_offset_end);
+		GST_INFO_OBJECT(element, "we want offsets %" G_GUINT64_FORMAT " through %" G_GUINT64_FORMAT, desired_offset, desired_offset_end);
 
 		if (element->last_offset_end < desired_offset)
 		{
@@ -119,19 +121,19 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 			available_bytes -= flush_bytes;
 			element->last_offset_end += flush_samples;
 		} else if (element->last_offset_end > desired_offset) {
-			GST_INFO_OBJECT(element, "sink pad has not yet advanced far enough to draw frame %llu", element->frame_number);
+			GST_INFO_OBJECT(element, "sink pad has not yet advanced far enough to draw frame %" G_GUINT64_FORMAT, element->frame_number);
 			result = GST_FLOW_OK;
 			goto done;
 		}
 
 		if (available_samples < desired_samples)
 		{
-			GST_INFO_OBJECT(element, "not enough data to draw frame %llu", element->frame_number);
+			GST_INFO_OBJECT(element, "not enough data to draw frame %" G_GUINT64_FORMAT, element->frame_number);
 			result = GST_FLOW_OK;
 			goto done;
 		}
 
-		GST_INFO_OBJECT(element, "preparing to draw frame %llu", element->frame_number);
+		GST_INFO_OBJECT(element, "preparing to draw frame %" G_GUINT64_FORMAT, element->frame_number);
 
 		result = cairovis_base_buffer_surface_alloc(base, &outbuf, &surf, &width, &height);
 
@@ -142,10 +144,19 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 
 		guint npixels = desired_samples * element->nchannels;
 		if (desired_samples > 0)
-			data = (const double*) gst_adapter_peek(element->adapter, desired_bytes);
-		else
+		{
+			double *orig_data = (double *) gst_adapter_peek(element->adapter, desired_bytes);
+			if (zlog)
+			{
+				data = g_malloc(desired_bytes);
+				for (i = 0; i < npixels; i ++)
+					data[i] = log10(orig_data[i]);
+			} else {
+				data = orig_data;
+			}
+		} else
 			data = NULL;
-		
+
 		/* Determine x-axis limits */
 		if (base->xautoscale) {
 			base->xmin = 0;
@@ -160,14 +171,21 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 
 		/* Determine z-axis limits */
 		if (element->zautoscale && data) {
-			element->zmin = INFINITY;
-			element->zmax = -INFINITY;
+			zmin = INFINITY;
+			zmax = -INFINITY;
 			for (i = 0; i < npixels; i ++)
 			{
-				if (data[i] < element->zmin)
-					element->zmin = data[i];
-				if (data[i] > element->zmax)
-					element->zmax = data[i];
+				if (data[i] < zmin)
+					zmin = data[i];
+				if (data[i] > zmax)
+					zmax = data[i];
+			}
+		} else {
+			zmin = element->zmin;
+			zmax = element->zmax;
+			if (zlog) {
+				zmin = log10(zmin);
+				zmax = log10(zmax);
 			}
 		}
 
@@ -180,21 +198,20 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 		/* Draw pixels */
 		if (data)
 		{
-			GST_INFO_OBJECT(element, "painting pixels for frame %llu", element->frame_number);
+			GST_INFO_OBJECT(element, "painting pixels for frame %" G_GUINT64_FORMAT, element->frame_number);
 			guint32 *pixdata = g_malloc(npixels * sizeof(guint32));
-			double invzspan = 1.0 / (element->zmax - element->zmin);
+			double invzspan = 1.0 / (zmax - zmin);
 			for (i = 0; i < npixels; i ++)
 			{
 				/* FIXME: add colors! */
 				double x = data[i];
-				if (x < element->zmin)
+				if (x < zmin)
 					x = 0;
-				else if (x > element->zmax)
+				else if (x > zmax)
 					x = 1;
 				else
-					x = (x - element->zmin) * invzspan;
-				guint8 graylevel = 0xFF * x;
-				pixdata[i] = (guint32)graylevel << 16;
+					x = (x - zmin) * invzspan;
+				pixdata[i] = colormap_map(element->map, x);
 			}
 			cairo_surface_t *pixsurf = cairo_image_surface_create_for_data((unsigned char *)pixdata, CAIRO_FORMAT_RGB24, element->nchannels, desired_samples, element->nchannels * 4);
 			cairo_rotate(cr, M_PI_2);
@@ -204,6 +221,9 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 			cairo_surface_destroy(pixsurf);
 			g_free(pixdata);
 		}
+
+		if (zlog)
+			g_free(data);
 
 		/* Discard Cairo context, surface */
 		cairo_destroy(cr);
@@ -241,12 +261,13 @@ done:
 
 
 enum property {
-	ARG_ZLABEL = 1,
-	/* FIXME: add ARG_ZSCALE */
-	ARG_ZAUTOSCALE,
-	ARG_ZMIN,
-	ARG_ZMAX,
-	ARG_HISTORY,
+	PROP_ZLABEL = 1,
+	PROP_ZSCALE,
+	PROP_ZAUTOSCALE,
+	PROP_ZMIN,
+	PROP_ZMAX,
+	PROP_HISTORY,
+	PROP_COLORMAP,
 };
 
 
@@ -257,23 +278,37 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 	GST_OBJECT_LOCK(element);
 
 	switch (id) {
-		case ARG_ZLABEL:
+		case PROP_ZLABEL:
 			g_free(element->zlabel);
 			element->zlabel = g_value_dup_string(value);
 			break;
-		/* FIXME: add ARG_ZSCALE */
-		case ARG_ZAUTOSCALE:
+		case PROP_ZSCALE:
+			element->zscale = g_value_get_enum(value);
+			break;
+		case PROP_ZAUTOSCALE:
 			element->zautoscale = g_value_get_boolean(value);
 			break;
-		case ARG_ZMIN:
+		case PROP_ZMIN:
 			element->zmin = g_value_get_double(value);
 			break;
-		case ARG_ZMAX:
+		case PROP_ZMAX:
 			element->zmax = g_value_get_double(value);
 			break;
-		case ARG_HISTORY:
+		case PROP_HISTORY:
 			element->history = g_value_get_uint64(value);
 			break;
+		case PROP_COLORMAP: {
+			enum cairovis_colormap_name new_map_name = g_value_get_enum(value);
+			colormap *new_map = colormap_create_by_name(new_map_name);
+			if (new_map)
+			{
+				colormap_destroy(element->map);
+				element->map_name = new_map_name;
+				element->map = new_map;
+			} else {
+				GST_ERROR_OBJECT(element, "no such colormap");
+			}
+		} break;
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -287,21 +322,26 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 	GST_OBJECT_LOCK(element);
 
 	switch (id) {
-		case ARG_ZLABEL:
+		case PROP_ZLABEL:
 			g_value_set_string(value, element->zlabel);
 			break;
-		/* FIXME: add ARG_ZSCALE */
-		case ARG_ZAUTOSCALE:
+		case PROP_ZSCALE:
+			g_value_set_enum(value, element->zscale);
+			break;
+		case PROP_ZAUTOSCALE:
 			g_value_set_boolean(value, element->zautoscale);
 			break;
-		case ARG_ZMIN:
+		case PROP_ZMIN:
 			g_value_set_double(value, element->zmin);
 			break;
-		case ARG_ZMAX:
+		case PROP_ZMAX:
 			g_value_set_double(value, element->zmax);
 			break;
-		case ARG_HISTORY:
+		case PROP_HISTORY:
 			g_value_set_uint64(value, element->history);
+			break;
+		case PROP_COLORMAP:
+			g_value_set_enum(value, element->map_name);
 			break;
 	}
 
@@ -320,6 +360,8 @@ static void finalize(GObject *object)
 	element->sinkpad = NULL;
 	gst_object_unref(element->adapter);
 	element->adapter = NULL;
+	colormap_destroy(element->map);
+	element->map = NULL;
 	
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -365,7 +407,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_ZLABEL,
+		PROP_ZLABEL,
 		g_param_spec_string(
 			"z-label",
 			"z-Label",
@@ -374,10 +416,21 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
-	/* FIXME: add ARG_ZSCALE */
 	g_object_class_install_property(
 		gobject_class,
-		ARG_ZAUTOSCALE,
+		PROP_ZSCALE,
+		g_param_spec_enum(
+			"z-scale",
+			"z-Scale",
+			"Linear or logarithmic scale",
+			CAIROVIS_SCALE_TYPE,
+			CAIROVIS_SCALE_LINEAR,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_ZAUTOSCALE,
 		g_param_spec_boolean(
 			"z-autoscale",
 			"z-Autoscale",
@@ -388,7 +441,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_ZMIN,
+		PROP_ZMIN,
 		g_param_spec_double(
 			"z-min",
 			"z-Minimum",
@@ -399,7 +452,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_ZMAX,
+		PROP_ZMAX,
 		g_param_spec_double(
 			"z-max",
 			"z-Maximum",
@@ -410,12 +463,24 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_HISTORY,
+		PROP_HISTORY,
 		g_param_spec_uint64(
 			"history",
 			"History",
 			"Duration of history to keep, in nanoseconds",
 			0, GST_CLOCK_TIME_NONE, 10 * GST_SECOND,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_COLORMAP,
+		g_param_spec_enum(
+			"colormap",
+			"Colormap",
+			"Name of colormap (e.g. 'jet')",
+			CAIROVIS_COLORMAP_TYPE,
+			CAIROVIS_COLORMAP_jet,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
@@ -439,6 +504,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->t0 = GST_CLOCK_TIME_NONE;
 	element->offset0 = GST_BUFFER_OFFSET_NONE;
 	element->last_offset_end = GST_BUFFER_OFFSET_NONE;
+	element->map = NULL;
 
 	element->zlabel = NULL;
 }

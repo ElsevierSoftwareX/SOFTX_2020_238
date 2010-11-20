@@ -59,7 +59,9 @@ typedef struct {
 	gint channels;
 
 	GMutex *weights_lock;
-	double *weights;
+	double *weights_double;
+	float *weights_float;
+	gboolean is_float;
 } GSTLALSumSquares;
 
 

@@ -10,4 +10,4 @@ else
 NDS_SUBDIRS =
 endif
 
-SUBDIRS = lal python $(CAIRO_SUBDIRS) $(NDS_SUBDIRS)
+SUBDIRS = lal python unary $(CAIRO_SUBDIRS) $(NDS_SUBDIRS)

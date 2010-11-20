@@ -139,47 +139,6 @@ You will need to do this everytime you wish to use or do development work with
 the software.  It might make sense to put this in your login scripts (but 
 remember you have done this, if you choose to).
 
-
-Additional CentOS Dependencies
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-CentOS requires a few extra packages because GStreamer depends on newer versions
-of GNU Autotools and the lexer 'flex'.  Before proceeding, you will need to 
-install source releases of the following packages.
-
-You can use the latest stable release for each of these, but for the sake of 
-convenience we have added URL shortcuts to download versions that we have tested.
-
- * m4:        http://ftp.gnu.org/gnu/m4/m4-1.4.14.tar.gz
- * autoconf:  http://ftp.gnu.org/gnu/autoconf/autoconf-2.65.tar.gz
- * automake:  http://ftp.gnu.org/gnu/automake/automake-1.11.tar.gz
- * gettext:   http://ftp.gnu.org/pub/gnu/gettext/gettext-0.17.tar.gz
- * libtool:   http://ftp.gnu.org/gnu/libtool/libtool-2.2.6b.tar.gz
- * flex:      http://prdownloads.sourceforge.net/flex/flex-2.5.35.tar.gz?download
- * pkgconfig: http://pkgconfig.freedesktop.org/releases/pkg-config-0.23.tar.gz
-
-Installing each of these **except** pkgconfig using the standard recipe:
-download, extract, enter the directory, configure, and make install::
-    
-  $ cd /path/to/local/src
-  $ wget *url*
-  $ tar xzvf *tarball name*
-  $ pushd *directory*
-  $ ./configure --prefix=/path/to/local && make -j install
-  $ popd
-
-When you get to pkgconfig, follow a slightly modified recipe.  Although you need
-to upprade pkgconfig in order to build GStreamer, you need your new pkgconfig
-installation to pick up the system-level .pc path.  To do this, install
-pkgconfig using the following incantation::
-
-  $ cd /path/to/local/src
-  $ wget http://pkgconfig.freedesktop.org/releases/pkg-config-0.23.tar.gz
-  $ tar xzvf pkg-config-0.23.tar.gz
-  $ pushd pkg-config-0.23
-  $ ./configure --prefix=/path/to/local --with-pc-path=/usr/lib64/pkgconfig && make -j install
-  $ popd
-
 Now continue to the section `Downloading and Installing Dependencies`_.
 
 
@@ -265,6 +224,10 @@ release, the OS found on the Atlas cluster) will require you to install
  * ≥pygobject-2.14.2.tar.gz
  * ≥pygtk-2.8.6.tar.gz
 
+and, on CentOS 5, also
+
+ * ≥flex-2.5.31.tar.gz
+
 in your home directory.  The following instructions will download and install 
 these three software packages into your ``/path/to/local`` prefix::
 
@@ -285,6 +248,15 @@ these three software packages into your ``/path/to/local`` prefix::
   $ tar -xzf pygtk-2.8.6.tar.gz
   $ pushd pygtk-2.8.6
   $ ./configure --disable-glibtest --prefix=/path/to/local && make install
+  $ popd
+
+and, on CentOS 5, also install flex by running the following commands::
+
+  $ cd /path/to/local/src
+  $ wget http://prdownloads.sourceforge.net/flex/flex-2.5.35.tar.gz?download
+  $ tar -xzf flex-2.5.35.tar.gz
+  $ pushd flex-2.5.35
+  $ ./configure --prefix=/path/to/local && make install
   $ popd
 
 
@@ -317,14 +289,14 @@ To install the NDS client library, run the following commands::
 Downloading the Software
 ========================
 
-The following will clone the GStreamer source trees giving you read-only access::
+Download the latest GStreamer pre-releases::
 
   $ cd /path/to/local/src/
-  $ git clone git://anongit.freedesktop.org/git/gstreamer/gst-plugins-bad
-  $ git clone git://anongit.freedesktop.org/git/gstreamer/gst-plugins-base
-  $ git clone git://anongit.freedesktop.org/git/gstreamer/gst-plugins-good
-  $ git clone git://anongit.freedesktop.org/git/gstreamer/gst-python
-  $ git clone git://anongit.freedesktop.org/git/gstreamer/gstreamer
+  $ wget http://gstreamer.freedesktop.org/src/gstreamer/pre/gstreamer-0.10.30.3.tar.gz
+  $ wget http://gstreamer.freedesktop.org/src/gst-plugins-base/pre/gst-plugins-base-0.10.30.3.tar.gz
+  $ wget http://gstreamer.freedesktop.org/src/gst-plugins-good/pre/gst-plugins-good-0.10.25.3.tar.gz
+  $ wget http://gstreamer.freedesktop.org/src/gst-plugins-bad/gst-plugins-bad-0.10.20.tar.gz
+  $ wget http://gstreamer.freedesktop.org/src/gst-python/pre/gst-python-0.10.19.2.tar.gz
 
 The following will clone the gstlal source tree giving you read-only access::
 
@@ -335,7 +307,7 @@ The following will clone the gstlal source tree giving you read-only access::
 gstlal source tree by using::
 
   $ cd /path/to/local/src/
-  $ git clone ssh://albert.einstein@ligo-vcs.phys.uwm.edu/usr/local/git/gstlal.git
+  $ git clone albert.einstein@ligo-vcs.phys.uwm.edu:/usr/local/git/gstlal.git
 
 You must also clone lalsuite by following the instructions on the LAL project page.
 
@@ -353,30 +325,9 @@ gst-plugins-base source tree locally::
   $ cd /path/to/local/src
   $ pushd gst-plugins-base
   $ wget https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal/audioresample.patch
-  $ git apply audioresample.patch
+  $ patch -p1 < audioresample.patch
   $ popd
 
-
-
-
-Patching gst-plugins-bad
-========================
-
-Our pipelines get bitten by a long-standing bug in the glib library (166020).  
-I have opened a new bug report with a patch to gst-plugins-bad to work around 
-the problem (607513), but hopefully progress can be made on fixing the real 
-problem in glib.  In the meantime, you need to apply the patch locally to 
-eliminate some segfaults from the input-selector element.
-
-The patch was briefly accepted into the main source tree but was found to 
-create lock-ups in totem, the Gnome media player, and so because a release is 
-pending the patch has been reverted.  git can be used to retrieve and re-apply 
-the original patch locally to allow our pipelines to work::
-
-  $ cd /path/to/local/src
-  $ pushd gst-plugins-bad
-  $ git cherry-pick 7e067615ffb5614f068f7753c10dde99afe49c3c
-  $ popd
 
 
 
@@ -414,21 +365,11 @@ Installing the Software
     gst-plugins-base, gst-plugins-good, gst-plugins-bad, gst-python, using::
     
     $ pushd directory
-    $ ./autogen.sh --noconfigure && ./configure --prefix=/path/to/local && make -j install
+    $ ./configure --prefix=/path/to/local && make -j install
     $ popd
     
     .. NOTE:: Ignore warnings about "failed to install schema", these appear 
               to be harmless.
-    
-    .. NOTE:: Occasionally, a few of the libraries provided by ``gst-plugins-good``
-              and ``gst-plugins-bad`` will fail to build because compiler warnings
-              that occur on only certain (usually older) versions of gcc.
-
-              The ``'<variable>' may be used uninitialized in this function`` warning
-              appears to be highly dependent on compiler version.  If you have
-              trouble building some of the GStreamer plugins, try setting the
-              environment variable ``CFLAGS="-O2 -g -Wno-uninitialized"`` and re-running
-              ``configure`` and ``make install``.
     
     .. IMPORTANT:: At configure time, ``gst-python`` needs to know the directory in
               which the Python shared library, libpython2.x, is installed on

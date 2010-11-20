@@ -39,9 +39,7 @@
  */
 
 
-#include <cairovis_base.h>
-#include <cairovis_lineseries.h>
-#include <cairovis_waterfall.h>
+#include <unary_base.h>
 
 
 /*
@@ -53,15 +51,27 @@
  */
 
 
+GType unary_abs_get_type(void);
+GType unary_exp_get_type(void);
+GType unary_ln_get_type(void);
+GType unary_log_get_type(void);
+GType unary_log10_get_type(void);
+GType unary_pow_get_type(void);
+
+
 static gboolean plugin_init(GstPlugin *plugin)
 {
 	struct {
 		const gchar *name;
 		GType type;
 	} *element, elements[] = {
-		{"cairovis_base", CAIROVIS_BASE_TYPE},
-		{"cairovis_lineseries", CAIROVIS_LINESERIES_TYPE},
-		{"cairovis_waterfall", CAIROVIS_WATERFALL_TYPE},
+		{"unary_base", UNARY_BASE_TYPE},
+		{"abs", unary_abs_get_type()},
+		{"exp", unary_exp_get_type()},
+		{"ln", unary_ln_get_type()},
+		{"log", unary_log_get_type()},
+		{"log10", unary_log10_get_type()},
+		{"pow", unary_pow_get_type()},
 		{NULL, 0},
 	};
 
@@ -86,4 +96,4 @@ static gboolean plugin_init(GstPlugin *plugin)
  */
 
 
-GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, "cairovis", "Cairo visualization elements", plugin_init, PACKAGE_VERSION, "GPL", PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")
+GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, "unary", "Unary arithmetic elements", plugin_init, PACKAGE_VERSION, "GPL", PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")

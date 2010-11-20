@@ -13,32 +13,15 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-
-
-#
-# =============================================================================
-#
-#                                   Preamble
-#
-# =============================================================================
-#
+"""
+Generate simulated Advanced LIGO h(t) based on ZERO DET, high power in
+http://lhocds.ligo-wa.caltech.edu:8000/advligo/AdvLIGO_noise_curves
+"""
+__author__ = "Drew Keppel <drew.keppel@ligo.org>, Leo Singer <leo.singer@ligo.org>"
 
 
 from gstlal.pipeutil import *
-
-
-__author__ = "Drew Keppel <drew.keppel@ligo.org>"
-__version__ = "FIXME"
-__date__ = "FIXME"
-
-
-#
-# =============================================================================
-#
-#                                   Element
-#
-# =============================================================================
-#
+from math import cos, pi, sqrt
 
 
 class lal_fakeadvligosrc(gst.Bin):
@@ -46,7 +29,7 @@ class lal_fakeadvligosrc(gst.Bin):
 	__gstdetails__ = (
 		'Fake Advanced LIGO Source',
 		'Source',
-		'generate simulated Advanced LIGO h(t) based on ZERO DET, high power in http://lhocds.ligo-wa.caltech.edu:8000/advligo/AdvLIGO_noise_curves',
+		__doc__,
 		__author__
 	)
 
@@ -91,24 +74,11 @@ class lal_fakeadvligosrc(gst.Bin):
 		if prop.name == 'blocksize':
 			# Set property on all sources
 			for elem in self.iterate_sources():
-				elem.set_property('samplesperbuffer', val / 8)
+				elem.set_property('blocksize', val)
 		elif prop.name in ('instrument', 'channel-name'):
 			self.__tags[prop.name] = val
 			tagstring = ','.join('%s="%s"' % kv for kv in self.__tags.iteritems())
 			self.__taginject.set_property('tags', tagstring)
-
-	__gsttemplates__ = (
-		gst.PadTemplate("src",
-			gst.PAD_SRC, gst.PAD_ALWAYS,
-			gst.caps_from_string("""
-				audio/x-raw-float,
-				channels = (int) 1,
-				endianness = (int) BYTE_ORDER,
-				width = (int) 64,
-				rate = (int) 16384
-			""")
-		),
-	)
 
 
 	def do_send_event(self, event):
@@ -131,34 +101,30 @@ class lal_fakeadvligosrc(gst.Bin):
 
 		chains = (
 			mkelems_in_bin(self,
-				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 4e-18, 'samplesperbuffer': 16384}),
-				*((('audioiirfilter', {'a': (1.951516E-6, 3.903032E-6, 1.951516E-6), 'b': (1., 1.9970651, -0.99707294)}),) * 20)
+				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 4e-28, 'samplesperbuffer': 16384}),
+				('audioiirfilter', {'a': (1.,), 'b': (-1., 2*cos(2*pi*9.103/16384)*0.99995, -1.*0.99995**2)}),
 			),
 			mkelems_in_bin(self,
-				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 1.2e-20, 'samplesperbuffer': 16384}),
-				*((('audioiirfilter', {'a': (6.686792E-7, 1.3373584E-6, 6.686792E-7), 'b': (1.0, 1.9982744, -0.9982772)}),) * 3)
+				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 1.1e-23, 'samplesperbuffer': 16384}),
+				('audiofirfilter', {'kernel': (1., -1.)}),
 			),
 			mkelems_in_bin(self,
-				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 4e-22, 'samplesperbuffer': 16384}),
-				('audioiirfilter', {'a': (6.686792E-7, 1.3373584E-6, 6.686792E-7), 'b': (1.0, 1.9982744, -0.9982772)})
+				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 1e-27, 'samplesperbuffer': 16384}),
+				('audioiirfilter', {'a': (1.,), 'b': (-1.0, 2 * 0.999, -.999**2)}),
 			),
 			mkelems_in_bin(self,
-				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 3.6e-24, 'samplesperbuffer': 16384})
+				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 4e-26, 'samplesperbuffer': 16384}),
+				('audioiirfilter', {'a': (1.,), 'b': (-1., 2*cos(2*pi*50./16384)*.87, -.87**2)}),
 			),
 			mkelems_in_bin(self,
-				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 3.12e-23, 'samplesperbuffer': 16384}),
-				('audioiirfilter', {'a': (8.003242E-4, 8.003242E-4), 'b': (1.0, 0.99843043)})
+				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 6.5e-24, 'samplesperbuffer': 16384}),
+				('audioiirfilter', {'a': (1.,), 'b': (-1., -2*.45, -.45**2)}),
 			),
-			mkelems_in_bin(self,
-				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 5.36e-20, 'samplesperbuffer': 16384}),
-				('audioiirfilter', {'a': (0.5591789, 0.5591789), 'b': (1., -0.1183578)}),
-				('audioiirfilter', {'a': (4.2278392E-4, -4.2278392E-4), 'b': (1.0, -0.9992149)})
-			)
 		)
 
 		outputchain = mkelems_in_bin(self,
 			('lal_adder', {'sync': True}),
-			('audioamplify', {'clipping-method': 3, 'amplification': 16384.**.5}),
+			('audioamplify', {'clipping-method': 3, 'amplification': sqrt(16384.)*3/4}),
 			('taginject',)
 		)
 

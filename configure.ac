@@ -27,6 +27,7 @@ AC_CONFIG_FILES([ \
 	gst/nds/Makefile \
 	gst/lal/Makefile \
 	gst/python/Makefile \
+	gst/unary/Makefile \
 	bin/Makefile \
 	tests/Makefile \
 	examples/Makefile
@@ -196,6 +197,18 @@ AC_SUBST([gstreamer_video_LIBS])
 
 
 #
+# Check for GStreamer Audio Library 0.10
+#
+
+
+AC_SUBST([GSTREAMER_AUDIO_RELEASE], [0.10])
+AC_SUBST([MIN_GSTREAMER_VIDEO_VERSION], [0.10.0])
+PKG_CHECK_MODULES([gstreamer_audio], [gstreamer-audio-${GSTREAMER_VIDEO_RELEASE} >= ${MIN_GSTREAMER_VIDEO_VERSION}], , [AC_MSG_ERROR([Not found!])])
+AC_SUBST([gstreamer_audio_CFLAGS])
+AC_SUBST([gstreamer_audio_LIBS])
+
+
+#
 # Check for PyGObject
 #
 PKG_CHECK_MODULES([pygobject], [pygobject-2.0], , [AC_MSG_ERROR([Not found!])])
@@ -233,7 +246,9 @@ AC_SUBST([LAL_LIBS])
 #
 
 
-AX_PATH_GSL()
+PKG_CHECK_MODULES([GSL], [gsl], , [AC_MSG_ERROR([Not found!])])
+AC_SUBST([GSL_CFLAGS])
+AC_SUBST([GSL_LIBS])
 
 
 #

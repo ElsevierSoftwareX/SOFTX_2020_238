@@ -156,6 +156,7 @@ static struct injection_document *load_injection_document(const char *filename, 
 			success = 0;
 		} else
 			XLALPrintInfo("%s(): found sim_burst table\n", func);
+		XLALSortSimBurst(&new->sim_burst_table_head, XLALCompareSimBurstByGeocentTimeGPS);
 	} else
 		new->sim_burst_table_head = NULL;
 
@@ -180,7 +181,8 @@ static struct injection_document *load_injection_document(const char *filename, 
 			/* FIXME no rows found raises an error we don't care about, but why ? */
 			XLALPrintInfo("%s(): found sim_inspiral table\n", func);
 			XLALClearErrno();
-		}		
+		}
+		XLALSortSimInspiral(&new->sim_inspiral_table_head, XLALCompareSimInspiralByGeocentEndTime);
 	} else
 		new->sim_inspiral_table_head = NULL;
 
@@ -318,8 +320,7 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 					 * resolution of this response is probably wrong.
 					 */
 					inspiral_response = XLALCreateCOMPLEX8FrequencySeries(response->name, &response->epoch, response->f0, response->deltaF, &response->sampleUnits, response->data->length);
-				}
-				else {
+				} else {
 					inspiral_response = XLALCreateCOMPLEX8FrequencySeries(NULL, &h->epoch, 0.0, 1.0 / XLALGPSDiff(&injEndTime, &injStartTime), &strain_per_count, (int) (0.5 + XLALGPSDiff(&injEndTime, &injStartTime) / h->deltaT));
 				}
 
@@ -379,8 +380,7 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 				thisInjectionCacheElement = element->injection_cache;
 				if(!thisInjectionCacheElement) {
 					element->injection_cache = newInjectionCacheElement;
-				}
-				else {
+				} else {
 					while(thisInjectionCacheElement->next)
 						thisInjectionCacheElement = thisInjectionCacheElement->next;
 					thisInjectionCacheElement->next = newInjectionCacheElement;
@@ -533,8 +533,7 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 			thisInjectionCacheElement = element->injection_cache;
 			if(!thisInjectionCacheElement) {
 				element->injection_cache = newInjectionCacheElement;
-			}
-			else {
+			} else {
 				while(thisInjectionCacheElement->next)
 					thisInjectionCacheElement = thisInjectionCacheElement->next;
 				thisInjectionCacheElement->next = newInjectionCacheElement;
@@ -563,8 +562,7 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 			if(XLALGPSDiff(&h->epoch, &thisInjectionCacheElement->sim_burst->time_geocent_gps) > injection_window || XLALGPSDiff(&thisInjectionCacheElement->sim_burst->time_geocent_gps, &h->epoch) > (h->data->length * h->deltaT + injection_window)) {
 				remove = 1;
 			}
-		}
-		else {
+		} else {
 			if( XLALGPSCmp(&(thisInjectionCacheElement->endTime), &hStartTime) <= 0 ) {
 				remove = 1;
 			}
@@ -588,8 +586,7 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 			if(tmpInjectionCacheElement->sim_burst)
 				free(tmpInjectionCacheElement->sim_burst);
 			free(tmpInjectionCacheElement);
-		}
-		else {
+		} else {
 			previousInjectionCacheElement = thisInjectionCacheElement;
 			thisInjectionCacheElement = thisInjectionCacheElement->next;
 		}
@@ -731,27 +728,20 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		gst_tag_list_get_string(taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
 		gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units);
 
-		if (instrument || channel_name || units)
-		{
+		if(instrument || channel_name || units) {
 			/* If any of the 3 tags were provided, we discard the old, stored values. */
 			g_free(element->instrument);
+			element->instrument = NULL;
 			g_free(element->channel_name);
+			element->channel_name = NULL;
 			g_free(element->units);
+			element->units = NULL;
 
-			if (instrument && channel_name && units)
-			{
+			if(instrument && channel_name && units) {
 				/* If all 3 tags were provided, we save the new values. */
 				element->instrument = instrument;
 				element->channel_name = channel_name;
 				element->units = units;
-			} else {
-				/* If only some of the tags were provided, we wipe out all trace that any of the values were ever stored. */
-				element->instrument = NULL;
-				element->channel_name = NULL;
-				element->units = NULL;
-				g_free(instrument);
-				g_free(channel_name);
-				g_free(units);
 			}
 		}
 	}

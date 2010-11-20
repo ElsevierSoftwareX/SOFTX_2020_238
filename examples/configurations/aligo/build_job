@@ -1,0 +1,173 @@
+#!/usr/bin/env python
+"""
+DAG generator script
+"""
+__copyright__ = "Copyright 2010, Leo Singer"
+__author__    = "Leo Singer <leo.singer@ligo.org>"
+
+
+
+#
+# Parse command line options.
+#
+
+from optparse import Option, OptionParser
+
+opts, args = OptionParser(description = __doc__, option_list = [
+	Option("-n", "--num-templates", type=int, default=256, metavar="INT", help="Number of templates per sub-bank"),
+	Option("--template-bank", metavar="FILE.xml|FILE.xml.gz", help="Filename of input template bank"),
+	Option("--gps-start-time", type=int, metavar="SECONDS", help="Start of analysis time"),
+	Option("--gps-end-time", type=int, metavar="SECONDS", help="End of analysis time"),
+	Option("--job-duration", type=int, default=3600*8, metavar="SECONDS", help="Analysis duration per job (default=8 hours).  FIXME: must be a divisor of --total-duration."),
+]).parse_args()
+
+
+
+#
+# Accept either the --template-bank option or a single positional argument as
+# the input template bank.
+#
+
+if opts.template_bank is None and len(args) >= 1:
+	opts.template_bank = args[0]
+	del args[0]
+if len(args) > 0:
+	raise ValueError("Too many command line arguments.")	
+if opts.template_bank is None:
+	raise ValueError("No template bank specified.")
+
+
+#
+# Require certain arguments.
+#
+
+if opts.gps_start_time is None:
+	raise RuntimeError, "required --gps-start-time argument not specified"
+if opts.gps_end_time is None:
+	raise RuntimeError, "required --gps-end-time argument not specified"
+
+
+
+#
+# Late imports.
+#
+
+from glue.ligolw import utils
+from glue.ligolw import lsctables
+import os.path
+
+from pipeline import *
+from progress import *
+
+progress = ProgressBar()
+
+
+
+#
+# Open, read, and sort the original templates by mchirp.
+#
+
+head, tail = os.path.split(opts.template_bank)
+
+progress.update(-1, 'Reading template bank')
+
+xmldoc = utils.load_filename(opts.template_bank, gz=opts.template_bank.endswith('.gz'))
+sngls = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+count_sngls = len(sngls)
+sorted_sngls = sorted(sngls, key=lambda x: x.mchirp)
+
+
+
+#
+# Determine the duration of the longest template.
+#
+
+# FIXME: check that the 'ttotal' column is the template duration.
+bank_duration = max(sngl.ttotal for sngl in sngls)
+
+# The time slices that are selected might result in slightly longer filters,
+# so pad each job at the end with the template duration times a fudge factor.
+post_padding = int(round(2 * bank_duration))
+
+
+
+#
+# Write sub-banks to disk.
+#
+
+progress.max = count_sngls
+progress.update(-1, 'Writing sub-banks')
+
+for i, start_idx in enumerate(range(0, count_sngls, opts.num_templates)):
+	progress.update(start_idx)
+	stop_idx = min(start_idx + opts.num_templates, count_sngls)
+	sngls[:] = sorted_sngls[start_idx:stop_idx]
+	path = os.path.join("tmpltbank", "%d.xml.gz" % i)
+	utils.write_filename(xmldoc, path)
+
+count_sub_banks = i + 1
+
+
+
+#
+# Write the DAG.
+#
+
+progress.max = count_sub_banks
+progress.update(-1, 'Generating DAG')
+
+dag = makeDAG('aligo')
+
+# gstlal_svd_bank submit file for generating time sliced, SVD'd template banks.
+gstlal_svd_bank_sub = EnvCondorJob("""gstlal_svd_bank
+	--flow 10 --reference-psd psd.xml.gz
+	--template-bank tmpltbank/$(template_bank)
+	--write-svd-bank svd/$(template_bank)
+	""", outputname="log/svd_$(template_bank)")
+
+# gstlal_inspiral submit file for generating single-detector triggers.
+gstlal_inspiral_sub = EnvCondorJob("""gstlal_inspiral
+	--flow 10 --reference-psd psd.xml.gz
+	--frame-cache frame.cache
+	--instrument H1 --channel-name MOCK-STRAIN
+	--svd-bank svd/$(template_bank)
+	--gps-start-time $(gps_start_time)
+	--gps-end-time $(gps_end_time)
+	--output triggers/$(gps_start_time)-$(gps_end_time).$(template_bank)
+	""", outputname="log/triggers_$(gps_start_time)-$(gps_end_time).$(template_bank)")
+
+# Assemble DAG.
+for j in range(count_sub_banks):
+
+	progress.update(j)
+	template_bank = "%d.xml.gz" % j
+
+	# Add gstlal_svd_bank node for this bank fragment.
+	gstlal_svd_bank_node = makeNode(dag, gstlal_svd_bank_sub, template_bank=template_bank)
+
+	# Add a bunch of gstlal_inspiral nodes to process disjoint time segments in parallel.
+	for start in range(opts.gps_start_time, opts.gps_end_time, opts.job_duration):
+
+		end = min(start + opts.job_duration + post_padding, opts.gps_end_time)
+
+		gstlal_inspiral_node = makeNode(dag, gstlal_inspiral_sub,
+			parents = [gstlal_svd_bank_node],
+			template_bank = template_bank,
+			gps_start_time = start,
+			gps_end_time = end)
+
+
+# Write DAG and submit files.
+progress.update(-1, 'Finishing DAG')
+
+dag.write_sub_files()
+dag.write_dag()
+
+
+# Print a helpful message to tell the user what to do next.
+print """
+
+Successfully generated "aligo.dag".  You may now launch it with
+  
+  condor_submit_dag aligo.dag
+"""

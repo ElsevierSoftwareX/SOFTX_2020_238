@@ -387,12 +387,12 @@ static gboolean ensure_channelSelected(GSTLALNDSSrc *element)
 
 
 enum property {
-	ARG_SRC_HOST = 1,
-	ARG_SRC_PORT,
-	ARG_SRC_VERSION,
-	ARG_SRC_CHANNEL_NAME,
-	ARG_SRC_CHANNEL_TYPE,
-	ARG_SRC_AVAILABLE_CHANNEL_NAMES
+	PROP_SRC_HOST = 1,
+	PROP_SRC_PORT,
+	PROP_SRC_VERSION,
+	PROP_SRC_CHANNEL_NAME,
+	PROP_SRC_CHANNEL_TYPE,
+	PROP_SRC_AVAILABLE_CHANNEL_NAMES
 };
 
 
@@ -402,20 +402,20 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	GST_OBJECT_LOCK(element);
 
-	if (id == ARG_SRC_HOST)
+	if (id == PROP_SRC_HOST)
 	{
 		g_free(element->host);
 		element->host = g_value_dup_string(value);
 	}
-	if (id == ARG_SRC_PORT)
+	if (id == PROP_SRC_PORT)
 	{
 		element->port = g_value_get_int(value);
 	}
-	if (id == ARG_SRC_VERSION)
+	if (id == PROP_SRC_VERSION)
 	{
 		element->version = g_value_get_enum(value);
 	}
-	if (id == ARG_SRC_CHANNEL_NAME || id == ARG_SRC_CHANNEL_TYPE)
+	if (id == PROP_SRC_CHANNEL_NAME || id == PROP_SRC_CHANNEL_TYPE)
 	{
 		if (element->daq)
 		{
@@ -425,12 +425,12 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 				DAQ_GST_ERROR_OBJECT(element, "daq_clear_channel_list", retval);
 		}
 	}
-	if (id == ARG_SRC_CHANNEL_NAME)
+	if (id == PROP_SRC_CHANNEL_NAME)
 	{
 		g_free(element->channelName);
 		element->channelName = g_value_dup_string(value);
 	}
-	if (id == ARG_SRC_CHANNEL_TYPE)
+	if (id == PROP_SRC_CHANNEL_TYPE)
 	{
 		if (element->availableChannels)
 		{
@@ -452,27 +452,27 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	GST_OBJECT_LOCK(element);
 
 	switch(id) {
-	case ARG_SRC_HOST:
+	case PROP_SRC_HOST:
 		g_value_set_string(value, element->host);
 		break;
 
-	case ARG_SRC_PORT:
+	case PROP_SRC_PORT:
 		g_value_set_int(value, element->port);
 		break;
 
-	case ARG_SRC_VERSION:
+	case PROP_SRC_VERSION:
 		g_value_set_enum(value, element->version);
 		break;
 
-	case ARG_SRC_CHANNEL_NAME:
+	case PROP_SRC_CHANNEL_NAME:
 		g_value_set_string(value, element->channelName);
 		break;
 
-	case ARG_SRC_CHANNEL_TYPE:
+	case PROP_SRC_CHANNEL_TYPE:
 		g_value_set_enum(value, element->channelType);
 		break;
 
-	case ARG_SRC_AVAILABLE_CHANNEL_NAMES:
+	case PROP_SRC_AVAILABLE_CHANNEL_NAMES:
 		{
 			int nchannels = 0;
 			if (ensure_availableChannels(element))
@@ -610,11 +610,9 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 		if (element->channelType == cOnline)
 		{
-			//gst_base_src_set_live(object, TRUE);
 			GST_INFO_OBJECT(element, "daq_request_data(daq_t*, 0, 0, %d)", stride_seconds);
 			retval = daq_request_data(element->daq, 0, 0, stride_seconds);
 		} else {
-			//gst_base_src_set_live(object, FALSE);
 			gint64 start_time = gst_util_uint64_scale_int(basesrc->segment.start, 1, GST_SECOND);
 			gint64 stop_time = gst_util_uint64_scale_int_ceil(basesrc->segment.stop, 1, GST_SECOND);
 			if (start_time < 600000000)
@@ -644,7 +642,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	int data_length = element->daq->chan_req_list->status;
 	guint64 nsamples = data_length / bytes_per_sample;
-	GST_INFO_OBJECT(element, "received segment [%u, %llu)", element->daq->tb->gps, element->daq->tb->gps + nsamples / rate);
+	GST_INFO_OBJECT(element, "received segment [%u, %" G_GUINT64_FORMAT ")", element->daq->tb->gps, element->daq->tb->gps + nsamples / rate);
 
 	if (data_length % bytes_per_sample != 0)
 	{
@@ -799,7 +797,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	g_object_class_install_property(
 		gobject_class,
-		ARG_SRC_HOST,
+		PROP_SRC_HOST,
 		g_param_spec_string(
 			"host",
 			"Host",
@@ -810,7 +808,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_SRC_PORT,
+		PROP_SRC_PORT,
 		g_param_spec_int(
 			"port",
 			"Port",
@@ -823,7 +821,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_SRC_VERSION,
+		PROP_SRC_VERSION,
 		g_param_spec_enum(
 			"nds-version",
 			"NDS version",
@@ -835,7 +833,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_SRC_CHANNEL_NAME,
+		PROP_SRC_CHANNEL_NAME,
 		g_param_spec_string(
 			"channel-name",
 			"Channel name",
@@ -846,7 +844,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_SRC_CHANNEL_TYPE,
+		PROP_SRC_CHANNEL_TYPE,
 		g_param_spec_enum(
 			"channel-type",
 			"Channel type",
@@ -858,7 +856,7 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_SRC_AVAILABLE_CHANNEL_NAMES,
+		PROP_SRC_AVAILABLE_CHANNEL_NAMES,
 		g_param_spec_boxed(
 			"available-channel-names",
 			"Available channel names",

@@ -75,7 +75,8 @@ def parse_command_line():
 	parser.add_option("--nxydump-segment", metavar = "start:stop", default = ":", help = "Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time.")
 	parser.add_option("--output", metavar = "filename", help = "Set the name of the LIGO light-weight XML output file *.{xml,xml.gz} or an SQLite database *.sqlite (required).")
 	parser.add_option("--reference-psd", metavar = "filename", help = "Instead of measuring the noise spectrum, load the spectrum from this LIGO light-weight XML file (optional).")
-	parser.add_option("--template-bank", metavar = "filename", action = "append", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).  This option can be given multiple times to process multiple template banks in parallel.")
+	parser.add_option("--template-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).  This option can be given multiple times to process multiple template banks in parallel.")
+	parser.add_option("--svd-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the SVD'd template bank (required).  This option can be given multiple times to process multiple template banks in parallel.")
 	parser.add_option("--ortho-gate-fap", metavar = "probability", type = "float", default = 1e-2, help = "Set the orthogonal SNR projection gate false-alarm probability (default = 1e-2).")
 	parser.add_option("--snr-threshold", metavar = "SNR", type = "float", default = 5.5, help = "Set the SNR threshold (default = 5.5).")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
@@ -97,7 +98,7 @@ def parse_command_line():
 	if sum(1 for option in ('frame_cache', 'fake_data', 'online_data') if getattr(options, option) is not None) != 1:
 		raise ValueError, "must provide exactly one of --frame-cache, --fake-data, --online-data"
 
-	required_options = ["instrument", "output", "template_bank"]
+	required_options = ["instrument", "output"]
 
 	if options.frame_cache:
 		required_options += ["channel_name", "gps_start_time", "gps_end_time"]
@@ -105,8 +106,11 @@ def parse_command_line():
 	if options.online_data:
 		required_options += ["reference_psd"]
 
+	if len(options.template_bank) + len(options.svd_bank) == 0:
+		raise SystemExit, "Must provide at least one --template-bank or --svd-bank option."
+
 	# FIXME: should also check for read permissions
-	for bankname in options.template_bank:
+	for bankname in options.template_bank + options.svd_bank:
 		if not os.path.exists(bankname):
 			raise SystemExit, "Template bank file %s does not exist." % bankname
 
@@ -162,7 +166,7 @@ options, filenames, process_params = parse_command_line()
 from gstlal.pipeutil import *
 from gstlal.lloidparts import *
 from gstlal import templates
-from gstlal.gstlal_svd_bank import build_bank
+from gstlal.gstlal_svd_bank import build_bank, read_bank
 from gstlal.gstlal_reference_psd import *
 
 
@@ -221,6 +225,9 @@ else:
 banks = [
 	build_bank(filename, psd, options.flow, options.ortho_gate_fap, options.snr_threshold, options.svd_tolerance, verbose = options.verbose)
 	for filename in options.template_bank
+] + [
+	read_bank(filename)
+	for filename in options.svd_bank
 ]
 for n, bank in enumerate(banks):
 	bank.logname = "bank%d" % n
