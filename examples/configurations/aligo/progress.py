@@ -110,3 +110,7 @@ def demo():
         sleep(0.01)
         progressbar.update(i)
     print >>sys.stderr, ''
+
+
+if __name__ == '__main__':
+	demo()
