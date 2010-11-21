@@ -137,7 +137,7 @@ gstlal_inspiral_noninjections_sub = EnvCondorJob("""gstlal_inspiral
 	--svd-bank svd/$(template_bank)
 	--gps-start-time $(gps_start_time)
 	--gps-end-time $(gps_end_time)
-	--output triggers/noninjections/$(gps_start_time)-$(gps_end_time).$(template_bank)
+	--output triggers/noninjections_$(gps_start_time)-$(gps_end_time).$(template_bank)
 	""", outputname="log/$(Cluster).$(Process)", subfilename="gstlal_inspiral_noninjections")
 
 gstlal_inspiral_injections_sub = EnvCondorJob("""gstlal_inspiral
@@ -148,7 +148,7 @@ gstlal_inspiral_injections_sub = EnvCondorJob("""gstlal_inspiral
 	--gps-start-time $(gps_start_time)
 	--gps-end-time $(gps_end_time)
 	--injections injections/$(injection_name).xml
-	--output triggers/$(injection_name)/$(gps_start_time)-$(gps_end_time).$(template_bank)
+	--output triggers/$(injection_name)_$(gps_start_time)-$(gps_end_time).$(template_bank)
 	""", outputname="log/$(Cluster).$(Process)", subfilename="gstlal_inspiral_injections")
 
 # Assemble DAG.
