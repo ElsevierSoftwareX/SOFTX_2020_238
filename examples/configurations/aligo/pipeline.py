@@ -27,7 +27,7 @@ class EnvCondorJob(CondorDAGJob):
 		CondorDAGJob.__init__(self, 'vanilla', '/usr/bin/env')
 		cmdline = cmdline.replace('\n', ' ')
 		if subfilename is None:
-			subfilename = cmdline.split(' ', 1)[0]
+			subfilename = cmdline.strip().split(' ', 1)[0]
 		if outputname is None:
 			outputname = subfilename
 		self.add_arg(cmdline)
