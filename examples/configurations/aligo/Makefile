@@ -12,7 +12,7 @@ TMPLTBANK=H1-TMPLTBANK-$(PSD_START_TIME)-$(PSD_DURATION).xml.gz
 
 
 # Injection files (10)
-INJECTIONS=$(foreach n,$(shell echo {0..9}),injections/swinj.$n.xml.gz)
+INJECTIONS=$(foreach n,$(shell echo {0..9}),injections/injections$n.xml)
 
 
 # Template bank parameters
@@ -36,7 +36,12 @@ aligo.dag: tmpltbank/tmpltbank.xml.gz psd.xml.gz $(INJECTIONS)
 	mkdir -p log
 	mkdir -p svd
 	mkdir -p triggers
-	./build_job --gps-start-time $(GPS_START_TIME) --gps-end-time $(GPS_END_TIME) --flow $(LOW_FREQUENCY_CUTOFF) $<
+	./build_job \
+		--gps-start-time $(GPS_START_TIME) \
+		--gps-end-time $(GPS_END_TIME) \
+		--flow $(LOW_FREQUENCY_CUTOFF) \
+		$(foreach inj,$(INJECTIONS),--injections $(inj)) \
+		$<
 
 
 # Generate LAL frame cache
@@ -106,11 +111,10 @@ tmpltbank/tmpltbank.xml.gz: $(TMPLTBANK)
 
 
 # Generate software injections
-injections/swinj.%.xml.gz:
+injections/injections%.xml:
 	mkdir -p $(@D)
 	lalapps_inspinj \
 		--output $@ \
-		--write-compress \
 		--seed $* \
 		--f-lower $(LOW_FREQUENCY_CUTOFF) \
 		--gps-start-time $(GPS_START_TIME) \
@@ -139,7 +143,6 @@ clean:
 		frame.cache \
 		psd.xml.gz \
 		$(TMPLTBANK) \
-		swinj.*.xml.gz \
 		*.{sub,dag} \
 		*.dag.*
 	rm -rf tmpltbank log svd injections triggers

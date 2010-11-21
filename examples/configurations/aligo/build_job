@@ -16,6 +16,7 @@ from optparse import Option, OptionParser
 opts, args = OptionParser(description = __doc__, option_list = [
 	Option("-n", "--num-templates", type=int, default=256, metavar="INT", help="Number of templates per sub-bank"),
 	Option("--flow", type="float", metavar="Hz", help="Low frequency cutoff"),
+	Option("--injections", metavar="FILE.xml|FILE.xml.gz", action="append", default=[], help="Injection file.  Provide multiple times for multiple parallel injection runs."),
 	Option("--template-bank", metavar="FILE.xml|FILE.xml.gz", help="Filename of input template bank"),
 	Option("--gps-start-time", type=int, metavar="SECONDS", help="Start of analysis time"),
 	Option("--gps-end-time", type=int, metavar="SECONDS", help="End of analysis time"),
@@ -129,15 +130,26 @@ gstlal_svd_bank_sub = EnvCondorJob("""gstlal_svd_bank
 	""", outputname="log/svd_$(template_bank)")
 
 # gstlal_inspiral submit file for generating single-detector triggers.
-gstlal_inspiral_sub = EnvCondorJob("""gstlal_inspiral
+gstlal_inspiral_noninjections_sub = EnvCondorJob("""gstlal_inspiral
 	--flow $(flow) --reference-psd psd.xml.gz
 	--frame-cache frame.cache
 	--instrument H1 --channel-name MOCK-STRAIN
 	--svd-bank svd/$(template_bank)
 	--gps-start-time $(gps_start_time)
 	--gps-end-time $(gps_end_time)
-	--output triggers/$(gps_start_time)-$(gps_end_time).$(template_bank)
-	""", outputname="log/triggers_$(gps_start_time)-$(gps_end_time).$(template_bank)")
+	--output triggers/noninjections/$(gps_start_time)-$(gps_end_time).$(template_bank)
+	""", outputname="log/triggers_noninjections_$(gps_start_time)-$(gps_end_time).$(template_bank)")
+
+gstlal_inspiral_injections_sub = EnvCondorJob("""gstlal_inspiral
+	--flow $(flow) --reference-psd psd.xml.gz
+	--frame-cache frame.cache
+	--instrument H1 --channel-name MOCK-STRAIN
+	--svd-bank svd/$(template_bank)
+	--gps-start-time $(gps_start_time)
+	--gps-end-time $(gps_end_time)
+	--injections injections/$(injection_name).xml.gz
+	--output triggers/$(injection_name)/$(gps_start_time)-$(gps_end_time).$(template_bank)
+	""", outputname="log/triggers_$(injection_name)_$(gps_start_time)-$(gps_end_time).$(template_bank)")
 
 # Assemble DAG.
 for j in range(count_sub_banks):
@@ -153,12 +165,26 @@ for j in range(count_sub_banks):
 
 		end = min(start + opts.job_duration + post_padding, opts.gps_end_time)
 
-		gstlal_inspiral_node = makeNode(dag, gstlal_inspiral_sub,
+		node = makeNode(dag,
+			gstlal_inspiral_noninjections_sub,
 			parents = [gstlal_svd_bank_node],
 			template_bank = template_bank,
 			gps_start_time = start,
 			gps_end_time = end,
 			flow = opts.flow)
+
+		for injections in opts.injections:
+			head, tail = os.path.split(injections)
+			stem, ext = os.path.splitext(tail)
+
+			node = makeNode(dag,
+				gstlal_inspiral_injections_sub,
+				parents = [gstlal_svd_bank_node],
+				template_bank = template_bank,
+				gps_start_time = start,
+				gps_end_time = end,
+				injection_name = stem,
+				flow = opts.flow)
 
 
 # Write DAG and submit files.
