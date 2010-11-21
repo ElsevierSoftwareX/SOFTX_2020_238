@@ -20,7 +20,7 @@ opts, args = OptionParser(description = __doc__, option_list = [
 	Option("--template-bank", metavar="FILE.xml|FILE.xml.gz", help="Filename of input template bank"),
 	Option("--gps-start-time", type=int, metavar="SECONDS", help="Start of analysis time"),
 	Option("--gps-end-time", type=int, metavar="SECONDS", help="End of analysis time"),
-	Option("--job-duration", type=int, default=3600*8, metavar="SECONDS", help="Analysis duration per job (default=8 hours).  FIXME: must be a divisor of --total-duration."),
+	Option("--job-duration", type=int, default=3600*2, metavar="SECONDS", help="Analysis duration per job (default=2 hours).  FIXME: must be a divisor of --total-duration."),
 ]).parse_args()
 
 
