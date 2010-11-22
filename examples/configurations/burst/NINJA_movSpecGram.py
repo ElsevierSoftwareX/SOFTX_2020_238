@@ -97,7 +97,6 @@ elems.append(pipeutil.mkelem("audioamplify",
 			     }))
 
 elems.append(pipeutil.mkelem("lal_adder"))
-elems.append(pipeutil.mkelem("audiorate"))
 elems.append(pipeutil.mkelem("audioconvert"))
 # resample at the specified sample rate
 elems.append(pipeutil.mkelem("audioresample"))
