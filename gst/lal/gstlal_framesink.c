@@ -584,6 +584,7 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
     if (GST_BUFFER_IS_DISCONT(buffer) || GST_BUFFER_TIMESTAMP(buffer) !=
         sink->t0_ns + A_X_B__C(available, GST_SECOND, byterate)) {
         GST_INFO_OBJECT(sink, "Detected discontinuity");
+
         /* Flush previous data to a frame */
         if (available > 0) {
             if (!write_frame(sink, available)) { // write any remaining data
@@ -594,10 +595,11 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
                 return GST_FLOW_ERROR;
             }
 
-            /* Flush adapter and restart counting timestamps */
-            gst_adapter_flush(sink->adapter, available);
-            sink->t0_ns = GST_BUFFER_TIMESTAMP(buffer);
+            gst_adapter_flush(sink->adapter, available);  // flush adapter
         }
+
+        /* Restart counting timestamps */
+        sink->t0_ns = GST_BUFFER_TIMESTAMP(buffer);
     }
 
     /* Compensate for reference lost in GstBaseSink's render */
