@@ -767,26 +767,38 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 	case GST_QUERY_CONVERT: {
 		GstFormat src_format, dest_format;
 		gint64 src_value, dest_value;
-		guint64 timestamp;
+		guint64 offset;
 
 		gst_query_parse_convert(query, &src_format, &src_value, &dest_format, &dest_value);
 
 		switch(src_format) {
 		case GST_FORMAT_DEFAULT:
 		case GST_FORMAT_TIME:
-			timestamp = src_value;
+			if(src_value < basesrc->segment.start) {
+				GST_DEBUG("requested time precedes start of segment, clipping to start of segment");
+				offset = 0;
+			} else
+				offset = gst_util_uint64_scale_int_round(src_value - basesrc->segment.start, element->rate, GST_SECOND);
 			break;
 
 		case GST_FORMAT_BYTES:
-			timestamp = basesrc->segment.start + gst_util_uint64_scale_int_round(src_value, GST_SECOND, element->width / 8 * element->rate);
+			offset = src_value / (element->width / 8);
 			break;
 
 		case GST_FORMAT_BUFFERS:
-			timestamp = basesrc->segment.start + gst_util_uint64_scale_int_round(src_value, gst_base_src_get_blocksize(basesrc) * GST_SECOND, element->width / 8 * element->rate);
+			offset = gst_util_uint64_scale_int_round(src_value, gst_base_src_get_blocksize(basesrc), element->width / 8);
 			break;
 
 		case GST_FORMAT_PERCENT:
-			timestamp = basesrc->segment.start + gst_util_uint64_scale_int_round(basesrc->segment.stop - basesrc->segment.start, src_value, 100);
+			if(src_value < 0) {
+				GST_DEBUG("requested percentage < 0, clipping to 0");
+				offset = 0;
+			} else if(src_value > 100) {
+				GST_DEBUG("requested percentage > 100, clipping to 100");
+				offset = basesrc->segment.stop - basesrc->segment.start;
+			} else
+				offset = gst_util_uint64_scale_int_round(basesrc->segment.stop - basesrc->segment.start, src_value, 100);
+			offset = gst_util_uint64_scale_int_round(offset, element->rate, GST_SECOND);
 			break;
 
 		default:
@@ -796,19 +808,19 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 		switch(dest_format) {
 		case GST_FORMAT_DEFAULT:
 		case GST_FORMAT_TIME:
-			dest_value = timestamp;
+			dest_value = basesrc->segment.start + gst_util_uint64_scale_int_round(offset, GST_SECOND, element->rate);
 			break;
 
 		case GST_FORMAT_BYTES:
-			dest_value = gst_util_uint64_scale_int_round(timestamp - basesrc->segment.start, element->width / 8 * element->rate, GST_SECOND);
+			dest_value = offset * (element->width / 8);
 			break;
 
 		case GST_FORMAT_BUFFERS:
-			dest_value = gst_util_uint64_scale_int_round(timestamp - basesrc->segment.start, element->width / 8 * element->rate, gst_base_src_get_blocksize(basesrc) * GST_SECOND);
+			dest_value = gst_util_uint64_scale_int_ceil(offset, element->width / 8, gst_base_src_get_blocksize(basesrc));
 			break;
 
 		case GST_FORMAT_PERCENT:
-			dest_value = gst_util_uint64_scale_int_round(timestamp - basesrc->segment.start, 100, basesrc->segment.stop - basesrc->segment.start);
+			dest_value = gst_util_uint64_scale_int_round(offset, 100, gst_util_uint64_scale_int_round(basesrc->segment.stop - basesrc->segment.start, element->rate, GST_SECOND));
 			break;
 
 		default:
