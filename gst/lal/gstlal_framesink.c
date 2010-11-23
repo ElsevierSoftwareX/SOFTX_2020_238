@@ -80,9 +80,10 @@ static const char gst_lalframe_sink_doc[] =
 #define A_X_B__C(a, b, c)  gst_util_uint64_scale_int_round(a, b, c)
 /* This is the same as
  *    #define A_X_B__C(a, b, c)  a * b / c
- * except it takes better care of possible over/underflows. It seems
- * better to use gst_util_uint64_scale_int_round() but audiotestsrc
- * computes the timestamps of its buffers with gst_..._int() <shrugs>
+ * except it takes better care of possible over/underflows and rounds
+ * properly. Old versions of audiotestsrc can produce buffers with incorrect
+ * timestamps (when the rate is not exactly representable in binary)
+ * because it uses gst_..._int(). Watch out when using it for testing.
  */
 
 
@@ -181,7 +182,7 @@ static void gst_lalframe_sink_base_init(gpointer g_class)
    * to do it, even if the infrastructure in LAL is there. If they are ever
    * needed/written, add the caps here and uncomment lines in write_frame().
    */
-                "audio/x-raw-float, "                // gfloat, gdouble
+                "audio/x-raw-float, "                // float, double
                 "rate = (int) [1, MAX], "
                 "channels = (int) 1, "
                 "endianness = (int) BYTE_ORDER, "
