@@ -1,8 +1,6 @@
 START = 871147452
 STOP = 871753660
 IFOS = H V L
-i = 0
-k = 0
 
 all : dag
 
@@ -20,7 +18,7 @@ dag : segments.xml V1-TMPLTBANK_DATAFIND-871147460-2048.xml.gz
 	for f in `ls -I 'DAG*' -d *split_bank-IMRSA-TMPLATEBANK-V1-TMPLTBANK_DATAFIND-871147460-2048.xml.gz`; do \
 		mkdir -p DAG_$${f}; \
 		cp gstlal_inspiral.ini DAG_$${f} ;\
-		sed --in-place s/bank_file/$${f}/g DAG_$${f}/gstlal_inspiral.ini ;\
+		sed --in-place s@bank_file@../$${f}@g DAG_$${f}/gstlal_inspiral.ini ;\
 		pushd DAG_$${f} && rm -f vetoes.xml.gz ; ligolw_segments --verbose --output vetoes.xml.gz --name vetoes --insert-from-segwizard={H1,L1,V1}=/dev/null && ligolw_tisi --verbose --instrument L1=0:0:0 --instrument H1=0:0:0 --instrument V1=0:0:0 time_slides.xml.gz && gstlal_inspiral_pipe --verbose --config-file gstlal_inspiral.ini --log-path $(TMPDIR) --time-slides time_slides.xml.gz --vetoes vetoes.xml.gz ; popd; \
 	done
 
