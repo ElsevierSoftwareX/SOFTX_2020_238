@@ -162,18 +162,30 @@ static void gst_lalframe_sink_base_init(gpointer g_class)
             GST_PAD_SINK,
             GST_PAD_ALWAYS,
             gst_caps_from_string(
-                "audio/x-raw-float, "
-                "rate = (int) [1, MAX], "
-                "channels = (int) 1, "
-                "endianness = (int) BYTE_ORDER, "
-                "width = (int) {32, 64}; "
-                "audio/x-raw-int, "
+                "audio/x-raw-int, "                  // int32
                 "rate = (int) [1, MAX], "
                 "channels = (int) 1, "
                 "endianness = (int) BYTE_ORDER, "
                 "width = (int) 32, "
                 "depth = (int) 32, "
-                "signed = (boolean) true")));
+                "signed = (boolean) true; "
+  /*
+   * Note: the code (in write_frame()) is ready to use audio/x-raw-int's with
+   *   width = (int) 64
+   *   depth = (int) 64
+   * and 16, and 8 too. And also handles
+   *   signed = (boolean) {true, false};
+   * instead of just true. Finally, it can do audio/x-raw-complex with
+   *   width = (int) {64, 128}
+   * But there are no equivalent XLALFrameAdd*TimeSeriesProcData() functions
+   * to do it, even if the infrastructure in LAL is there. If they are ever
+   * needed/written, add the caps here and uncomment lines in write_frame().
+   */
+                "audio/x-raw-float, "                // gfloat, gdouble
+                "rate = (int) [1, MAX], "
+                "channels = (int) 1, "
+                "endianness = (int) BYTE_ORDER, "
+                "width = (int) {32, 64}")));
 }
 
 
@@ -267,6 +279,7 @@ static void gst_lalframe_sink_init(GstLalframeSink *sink,
 
     sink->rate = 0;
     sink->width = 0;
+    sink->sign = TRUE;
     sink->type = NULL;
     sink->start = TRUE;
     sink->t0_ns = 0;
@@ -405,7 +418,7 @@ static inline void extract(GstLalframeSink *sink, GstTagList *taglist,
  *
  * Events contain a subtype indicating the type of the contained event. For:
  *   tags received: save the values in instrument, channel_name and units
- *   new segment: save the type of data coming (int/float, rate, width)
+ *   new segment: save the type of data coming (int/float, rate, width, signed)
  *   end of stream: flush remaining data into a (shorter) frame
  */
 static gboolean event(GstBaseSink *basesink, GstEvent *event)
@@ -452,6 +465,7 @@ static gboolean event(GstBaseSink *basesink, GstEvent *event)
         str = gst_caps_get_structure(GST_PAD_CAPS(pad), 0);
 
         gst_structure_get_int(str, "width", &sink->width);   // read width
+        gst_structure_get_boolean(str, "signed", &sink->sign);  // signed?
         gst_structure_get_int(str, "rate", &sink->rate);     // read rate
         g_free(sink->type);
         sink->type = g_strdup(gst_structure_get_name(str));  // mime type
@@ -656,7 +670,6 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
     FrameH *frame;
     double f0 = 0;  // kind of dummy, to write in the TimeSeries
     gchar *channame, *dirname, *filename;
-    int result;
 
     if (sink->instrument == NULL || sink->path == NULL ||
         sink->frame_type == NULL || sink->channel_name == NULL) {
@@ -711,56 +724,53 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
     /* Create frame file */
     frame = XLALFrameNew(&epoch, duration, "LIGO", 0, 1, ifo_flags);
 
+    /* Macro to save us from writing a lot of boring repetitive stuff
+     * in the next lines */
+#define SAVE_TSERIES(TYPE, N)  do {                                     \
+        TYPE##TimeSeries *ts = XLALCreate##TYPE##TimeSeries(            \
+            channame, &epoch, f0, deltaT, &lalDimensionlessUnit, nbytes/N); \
+                                                                        \
+        if (ts == NULL)                                                 \
+            goto memory_failed;                                         \
+                                                                        \
+        gst_adapter_copy(sink->adapter, (guint8 *) ts->data->data, 0, nbytes); \
+                                                                        \
+        if (XLALFrameAdd##TYPE##TimeSeriesProcData(frame, ts) != 0) {   \
+            XLALDestroy##TYPE##TimeSeries(ts);                          \
+            goto add_failed;                                            \
+        }                                                               \
+                                                                        \
+        XLALDestroy##TYPE##TimeSeries(ts);                              \
+    } while (0)
+
     /* Create and store the proper timeseries depending on data mime type */
-    if (strcmp(sink->type, "audio/x-raw-float") == 0) {
-        if (sink->width == 64) {  // 64 bits = 8 bytes ... a double
-            REAL8TimeSeries *ts = XLALCreateREAL8TimeSeries(
-                channame, &epoch, f0, deltaT, &lalDimensionlessUnit, nbytes/8);
-
-            if (ts == NULL)
-                goto memory_failed;
-
-            gst_adapter_copy(sink->adapter, (guint8 *) ts->data->data,
-                             0, nbytes);
-
-            result = XLALFrameAddREAL8TimeSeriesProcData(frame, ts);
-            XLALDestroyREAL8TimeSeries(ts);
-            if (result != 0)
-                goto add_failed;
-        }
-        else if (sink->width == 32) {  // 32 bits = 4 bytes... a float
-            REAL4TimeSeries *ts = XLALCreateREAL4TimeSeries(
-                channame, &epoch, f0, deltaT, &lalDimensionlessUnit, nbytes/4);
-
-            if (ts == NULL)
-                goto memory_failed;
-
-            gst_adapter_copy(sink->adapter, (guint8 *) ts->data->data,
-                             0, nbytes);
-
-            result = XLALFrameAddREAL4TimeSeriesProcData(frame, ts);
-            XLALDestroyREAL4TimeSeries(ts);
-			if (result != 0)
-                goto add_failed;
-        }
+    if (strcmp(sink->type, "audio/x-raw-int") == 0) {
+        if (sink->width == 32)
+            if (sink->sign)          SAVE_TSERIES(INT4, 4);
+//            else                     SAVE_TSERIES(UINT4, 4);
+//        else if (sink->width == 64)
+//            if (sink->sign)          SAVE_TSERIES(INT8, 8);
+//            else                     SAVE_TSERIES(UINT8, 8);
+//        else if (sink->width == 16)
+//            if (sink->sign)          SAVE_TSERIES(INT2, 2);
+//            else                     SAVE_TSERIES(UINT2, 2);
+        /* Uncomment when those capacities are added */
     }
-    else if (strcmp(sink->type, "audio/x-raw-int") == 0) {
-        INT4TimeSeries *ts = XLALCreateINT4TimeSeries(
-            channame, &epoch, f0, deltaT, &lalDimensionlessUnit, nbytes/4);
-
-        if (ts == NULL)
-            goto memory_failed;
-
-        gst_adapter_copy(sink->adapter, (guint8 *) ts->data->data, 0, nbytes);
-
-        result = XLALFrameAddINT4TimeSeriesProcData(frame, ts);
-        XLALDestroyINT4TimeSeries(ts);
-        if (result != 0)
-            goto add_failed;
+    else if (strcmp(sink->type, "audio/x-raw-float") == 0) {
+        if (sink->width == 64)       SAVE_TSERIES(REAL8, 8);
+        else if (sink->width == 32)  SAVE_TSERIES(REAL4, 4);
     }
+//    else if (strcmp(sink->type, "audio/x-raw-complex") == 0) {
+//        if (sink->width == 128)      SAVE_TSERIES(COMPLEX16, 16);
+//        else if (sink->width == 64)  SAVE_TSERIES(COMPLEX8, 8);
+//    }
+        /* Ditto */
 
-	if (XLALFrameWrite(frame, filename, -1) != 0)
-		goto write_failed;
+#undef SAVE_TSERIES
+    /* Just to make clear, we don't use the SAVE_TSERIES beyond this point */
+
+    if (XLALFrameWrite(frame, filename, -1) != 0)
+        goto write_failed;
 
     sink->current_pos += nbytes;
     g_free(channame);
