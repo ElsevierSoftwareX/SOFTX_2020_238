@@ -46,7 +46,6 @@ Plugins/elements to hand over to GStreamer
 ===================
 
 * Add direct output to png, pdf, etc.
-* Add timestamps to axes
 * Add colorbar
 
 

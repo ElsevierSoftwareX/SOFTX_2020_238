@@ -142,6 +142,13 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 
 		cr = cairo_create(surf);
 
+		/* Copy buffer flags and timestamps */
+		gst_buffer_copy_metadata(outbuf, inbuf, GST_BUFFER_COPY_FLAGS);
+		GST_BUFFER_OFFSET(outbuf) = element->frame_number;
+		GST_BUFFER_OFFSET_END(outbuf) = element->frame_number + 1;
+		GST_BUFFER_TIMESTAMP(outbuf) = gst_util_uint64_scale_round(desired_offset, GST_SECOND, element->rate) + element->t0;
+		GST_BUFFER_DURATION(outbuf) = gst_util_uint64_scale_round(desired_offset_end, GST_SECOND, element->rate) + element->t0 - GST_BUFFER_TIMESTAMP(outbuf);
+
 		guint npixels = desired_samples * element->nchannels;
 		if (desired_samples > 0)
 		{
@@ -159,8 +166,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 
 		/* Determine x-axis limits */
 		if (base->xautoscale) {
-			base->xmin = 0;
-			base->xmax = history_samples;
+			base->xmin = (-1. / GST_SECOND) * element->history;
+			base->xmax = 0;
 		}
 
 		/* Determine y-axis limits */
@@ -191,9 +198,46 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 
 		cairovis_draw_axes(base, cr, width, height);
 
-		/* Let plot fill in from the right. */
-		/* FIXME: it would be better to handle this with the axes limits. */
-		cairo_translate(cr, history_samples - desired_samples, 0);
+		cairo_save(cr);
+		cairo_identity_matrix(cr);
+		cairo_reset_clip(cr);
+		/* Draw timestamp. */
+		gchar *nanos_str = NULL;
+		gchar *secs_str = NULL;
+		GstClockTime ts = GST_BUFFER_TIMESTAMP(outbuf) + GST_BUFFER_DURATION(outbuf);
+		for (i = 0; i < 3; ts /= 1000, i++)
+		{
+			gchar frag[4];
+			g_snprintf(frag, sizeof(frag), "%03hu", (unsigned short)(ts % 1000));
+			gchar *new_str = g_strjoin(" ", frag, nanos_str, NULL);
+			g_free(nanos_str);
+			nanos_str = new_str;
+		}
+		for (; ts >= 1000; ts /= 1000)
+		{
+			gchar frag[4];
+			g_snprintf(frag, sizeof(frag), "%03hu", (unsigned short)(ts % 1000));
+			gchar *new_str = g_strjoin(" ", frag, secs_str, NULL);
+			g_free(secs_str);
+			secs_str = new_str;
+		}
+		if (ts > 0)
+		{
+			gchar frag[4];
+			g_snprintf(frag, sizeof(frag), "%hu", (unsigned short)(ts % 1000));
+			gchar *new_str = g_strjoin(" ", frag, secs_str, NULL);
+			g_free(secs_str);
+			secs_str = new_str;
+		}
+		gchar *ts_str = g_strdup_printf("+ %s.%s", secs_str, nanos_str);
+		g_free(nanos_str);
+		g_free(secs_str);
+		cairo_text_extents_t extents;
+		cairo_text_extents(cr, ts_str, &extents);
+		cairo_move_to(cr, width - extents.width - 36, height - 18);
+		cairo_show_text(cr, ts_str);
+		g_free(ts_str);
+		cairo_restore(cr);
 
 		/* Draw pixels */
 		if (data)
@@ -214,8 +258,9 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 				pixdata[i] = colormap_map(element->map, x);
 			}
 			cairo_surface_t *pixsurf = cairo_image_surface_create_for_data((unsigned char *)pixdata, CAIRO_FORMAT_RGB24, element->nchannels, desired_samples, element->nchannels * 4);
+			cairo_translate(cr, -1e-9*GST_BUFFER_DURATION(outbuf), 0);
 			cairo_rotate(cr, M_PI_2);
-			cairo_scale(cr, 1.0, -1.0);
+			cairo_scale(cr, 1.0, -1.0 / element->rate);
 			cairo_set_source_surface(cr, pixsurf, 0, 0);
 			cairo_paint(cr);
 			cairo_surface_destroy(pixsurf);
@@ -228,13 +273,6 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 		/* Discard Cairo context, surface */
 		cairo_destroy(cr);
 		cairo_surface_destroy(surf);
-
-		/* Copy buffer flags and timestamps */
-		gst_buffer_copy_metadata(outbuf, inbuf, GST_BUFFER_COPY_FLAGS);
-		GST_BUFFER_OFFSET(outbuf) = element->frame_number;
-		GST_BUFFER_OFFSET_END(outbuf) = element->frame_number + 1;
-		GST_BUFFER_TIMESTAMP(outbuf) = gst_util_uint64_scale_round(desired_offset_end, GST_SECOND, element->rate) + element->t0;
-		GST_BUFFER_DURATION(outbuf) = GST_CLOCK_TIME_NONE;
 
 		result = gst_pad_push(base->srcpad, outbuf);
 		if (result != GST_FLOW_OK)
