@@ -52,6 +52,23 @@ enum cairovis_scale {
 };
 
 
+enum cairovis_cardinal_direction {
+	CAIROVIS_NORTH,
+	CAIROVIS_SOUTH,
+	CAIROVIS_EAST,
+	CAIROVIS_WEST
+};
+
+
+struct cairovis_axis_spec {
+	enum cairovis_scale scale;
+	enum cairovis_cardinal_direction which_side;
+	double device_max;
+	double data_min;
+	double data_max;
+};
+
+
 typedef struct {
 	GstElementClass parent_class;
 } CairoVisBaseClass;
@@ -73,6 +90,7 @@ typedef struct _CairoVisBase {
 
 gboolean cairovis_base_negotiate_srcpad(CairoVisBase *element);
 GstFlowReturn cairovis_base_buffer_surface_alloc(CairoVisBase *element, GstBuffer **buf, cairo_surface_t **surf, gint *width, gint *height);
+void cairovis_draw_axis(cairo_t *restrict cr, const struct cairovis_axis_spec *restrict axis);
 void cairovis_draw_axes(CairoVisBase *element, cairo_t *cr, gint width, gint height);
 
 

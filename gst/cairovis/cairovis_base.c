@@ -71,12 +71,34 @@ static void draw_minor_tick(cairo_t *cr, double x)
 }
 
 
-static void draw_axis(cairo_t *cr, double devicemax, double datamin, double datamax, gboolean is_log, gboolean is_horizontal)
+void cairovis_draw_axis(cairo_t *restrict cr, const struct cairovis_axis_spec *restrict axis)
 {
 	cairo_text_extents_t extents;
 	int ntick, nmintick, nmaxtick, nsubtick;
+	double devicemax = axis->device_max;
+	double datamin = axis->data_min;
+	double datamax = axis->data_max;
 	double scalefactor = devicemax / (datamax - datamin);
 	double x;
+	gchar *text;
+
+	cairo_save(cr);
+
+	switch (axis->which_side) {
+		case CAIROVIS_EAST:
+			cairo_rotate(cr, M_PI_2);
+			cairo_scale(cr, -1, -1);
+			break;
+		case CAIROVIS_WEST:
+			cairo_rotate(cr, M_PI_2);
+			cairo_scale(cr, -1, 1);
+			break;
+		case CAIROVIS_NORTH:
+			cairo_scale(cr, 1, -1);
+			break;
+		case CAIROVIS_SOUTH:
+			break;
+	}
 
 	/* Draws a horizontal axis with tick marks, labels, and automagically placed
 	 * tick marks.  datamin and datamax are the dataspace limits of the plot.
@@ -90,9 +112,8 @@ static void draw_axis(cairo_t *cr, double devicemax, double datamin, double data
 	 * The tick placement algorithm for linear scales can pick ticks that are
 	 * spaced by powers of ten, or doubled or halved powers of ten.
 	 */
-	if (is_log)
+	if (axis->scale == CAIROVIS_SCALE_LOG)
 	{
-
 		nmintick = floor(datamin);
 		nmaxtick = ceil(datamax);
 
@@ -123,22 +144,29 @@ static void draw_axis(cairo_t *cr, double devicemax, double datamin, double data
 		/* Place major tick labels. */
 		for (ntick = nmintick; ntick <= nmaxtick; ntick++)
 		{
-			x = (ntick - datamin) * scalefactor;
-			cairo_move_to(cr, x, -16);
-			gchar *text = g_strdup_printf("10%d", ntick);
+			text = g_strdup_printf("10%d", ntick);
 			cairo_text_extents(cr, text, &extents);
 			g_free(text);
-			text = g_strdup_printf("%d", ntick);
+			cairo_move_to(cr, (ntick - datamin) * scalefactor, 16);
+			switch (axis->which_side) {
+				case CAIROVIS_NORTH:
+					cairo_rel_move_to(cr, -0.5 * extents.width, 0.);
+					break;
+				case CAIROVIS_SOUTH:
+					cairo_rel_move_to(cr, -0.5 * extents.width, extents.height);
+					break;
+				case CAIROVIS_EAST:
+					cairo_rel_move_to(cr, -0.5 * extents.height, 0.);
+					break;
+				case CAIROVIS_WEST:
+					cairo_rel_move_to(cr, -0.5 * extents.height, extents.width);
+					break;
+			}
 			cairo_save(cr);
 			cairo_identity_matrix(cr);
-			if (is_horizontal)
-			{
-				cairo_rel_move_to(cr, - 0.5 * extents.width, extents.height);
-			} else {
-				cairo_rel_move_to(cr, -extents.width, 0.5 * extents.height);
-			}
 			cairo_show_text(cr, "10");
 			cairo_rel_move_to(cr, 0, -0.5 * extents.height);
+			text = g_strdup_printf("%d", ntick);
 			cairo_show_text(cr, text);
 			g_free(text);
 			cairo_restore(cr);
@@ -209,24 +237,32 @@ static void draw_axis(cairo_t *cr, double devicemax, double datamin, double data
 		/* Place major tick labels. */
 		for (ntick = nmintick; ntick <= nmaxtick; ntick++)
 		{
-			x = (ntick - datamin) * scalefactor;
-			cairo_move_to(cr, x, -16);
-			gchar *text = g_strdup_printf("%g", ntick * interval);
+			text = g_strdup_printf("%g", ntick * interval);
 			cairo_text_extents(cr, text, &extents);
+			cairo_move_to(cr, (ntick - datamin) * scalefactor, 16);
+			switch (axis->which_side) {
+				case CAIROVIS_NORTH:
+					cairo_rel_move_to(cr, -0.5 * extents.width, 0.);
+					break;
+				case CAIROVIS_SOUTH:
+					cairo_rel_move_to(cr, -0.5 * extents.width, extents.height);
+					break;
+				case CAIROVIS_EAST:
+					cairo_rel_move_to(cr, -0.5 * extents.height, 0.);
+					break;
+				case CAIROVIS_WEST:
+					cairo_rel_move_to(cr, -0.5 * extents.height, extents.width);
+					break;
+			}
 			cairo_save(cr);
 			cairo_identity_matrix(cr);
-			if (is_horizontal)
-			{
-				cairo_rel_move_to(cr, - 0.5 * extents.width, extents.height);
-			} else {
-				cairo_rel_move_to(cr, -extents.width, 0.5 * extents.height);
-			}
 			cairo_show_text(cr, text);
 			g_free(text);
 			cairo_restore(cr);
 		}
 	}
 
+	cairo_restore(cr);
 }
 
 
@@ -351,19 +387,17 @@ void cairovis_draw_axes(CairoVisBase *element, cairo_t *cr, gint width, gint hei
 
 	/* Flip & translate transformation so that bottom left corner is origin */
 	cairo_translate(cr, padding, height - padding);
-	cairo_scale(cr, 1.0, -1.0);
 
 	/* Render x-axis tick marks */
-	draw_axis(cr, padded_width, xmin, xmax, xlog, TRUE);
+	struct cairovis_axis_spec xspec = {element->xscale, CAIROVIS_SOUTH, padded_width, xmin, xmax};
+	struct cairovis_axis_spec yspec = {element->yscale, CAIROVIS_WEST, padded_height, ymin, ymax};
+	cairovis_draw_axis(cr, &xspec);
+	cairovis_draw_axis(cr, &yspec);
 
 	/* Render y-axis tick marks */
-	cairo_save(cr);
-	cairo_rotate(cr, M_PI_2);
-	cairo_scale(cr, 1.0, -1.0);
-	draw_axis(cr, padded_height, ymin, ymax, ylog, FALSE);
-	cairo_restore(cr);
 
 	/* Draw axes frame, and clip all further drawing inside it */
+	cairo_scale(cr, 1.0, -1.0);
 	cairo_rectangle(cr, 0, 0, padded_width, padded_height);
 	cairo_stroke_preserve(cr);
 	cairo_clip(cr);
