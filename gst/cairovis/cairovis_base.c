@@ -403,7 +403,6 @@ void cairovis_draw_axes(CairoVisBase *element, cairo_t *cr, gint width, gint hei
 	cairo_clip(cr);
 
 	/* Build transformation for data to user space */
-	cairo_save(cr);
 	cairo_scale(cr, padded_width / (xmax - xmin), padded_height / (ymax - ymin));
 	cairo_translate(cr, -xmin, -ymin);
 }

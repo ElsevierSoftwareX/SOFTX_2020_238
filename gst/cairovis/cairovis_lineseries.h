@@ -52,6 +52,9 @@ typedef struct _CairoVisLineSeries {
 
 	/* Pads */
 	GstPad *sinkpad;
+
+	/* Internal data */
+	gint nchannels;
 } CairoVisLineSeries;
 
 

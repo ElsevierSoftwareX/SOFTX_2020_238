@@ -247,7 +247,6 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *inbuf)
 			double invzspan = 1.0 / (zmax - zmin);
 			for (i = 0; i < npixels; i ++)
 			{
-				/* FIXME: add colors! */
 				double x = data[i];
 				if (x < zmin)
 					x = 0;
