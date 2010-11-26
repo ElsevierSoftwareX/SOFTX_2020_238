@@ -146,7 +146,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 
 	if (element->normed)
 		for (i = 0; i < element->nbins; i ++)
-			bin_heights[i] = element->bin_counts[i] * (bin_edges[i + 1] - bin_edges[i]) / (element->max - element->min) / element->total;
+			bin_heights[i] = element->bin_counts[i] / (bin_edges[i + 1] - bin_edges[i]) / element->total;
 	else
 		for (i = 0; i < element->nbins; i ++)
 			bin_heights[i] = element->bin_counts[i];
