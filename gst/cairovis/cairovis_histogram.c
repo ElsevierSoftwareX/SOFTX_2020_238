@@ -50,7 +50,7 @@ static void increment_bin(CairoVisHistogram *element, double x, gchar value)
 			break;
 	}
 
-	
+	element->total += value;
 
 	if (isfinite(x) && x >= 0 && x < element->nbins)
 		element->bin_counts[(uint) floor(x)] += value;
@@ -82,6 +82,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 	gint width, height;
 	cairo_surface_t *surf;
 	cairo_t *cr;
+	double *bin_heights, *bin_edges;
 	guint i;
 	double last_x;
 
@@ -125,6 +126,31 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 
 	cr = cairo_create(surf);
 
+	bin_heights = g_malloc(sizeof(double) * element->nbins);
+	bin_edges = g_malloc(sizeof(double) * (element->nbins + 1));
+
+	for (i = 0; i < element->nbins + 1; i ++)
+	{
+		switch (element->bins)
+		{
+			case CAIROVIS_BINS_LINEAR:
+				bin_edges[i] = i * (element->max - element->min) / element->nbins + element->min;
+				break;
+			case CAIROVIS_BINS_LOG:
+				bin_edges[i] = pow(element->max / element->min, (double) i / element->nbins) * element->min;
+				break;
+			default:
+				g_assert_not_reached();
+		}
+	}
+
+	if (element->normed)
+		for (i = 0; i < element->nbins; i ++)
+			bin_heights[i] = element->bin_counts[i] * (bin_edges[i + 1] - bin_edges[i]) / (element->max - element->min) / element->total;
+	else
+		for (i = 0; i < element->nbins; i ++)
+			bin_heights[i] = element->bin_counts[i];
+
 	/* Determine x-axis limits */
 	if (base->xautoscale) {
 		base->xmin = element->min;
@@ -133,11 +159,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 
 	/* Determine y-axis limits */
 	if (base->yautoscale) {
-		base->ymin = 0.1;
+		base->ymin = INFINITY;
 		base->ymax = -INFINITY;
 		for (i = 0; i < element->nbins; i ++)
 		{
-			double x = element->bin_counts[i];
+			double x = bin_heights[i];
 			if (!ylog || isfinite(log10(x)))
 			{
 				if (x < base->ymin)
@@ -151,27 +177,15 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 	/* Draw axes */
 	cairovis_draw_axes(base, cr, width, height);
 
-	last_x = element->min;
+	last_x = bin_edges[0];
 	if (xlog)
 		last_x = log10(last_x);
 
 	/* Draw data */
 	for (i = 0; i < element->nbins; i ++)
 	{
-		double x;
-		double y = element->bin_counts[i];
-
-		switch (element->bins)
-		{
-			case CAIROVIS_BINS_LINEAR:
-				x = (i + 1) * (element->max - element->min) / element->nbins + element->min;
-				break;
-			case CAIROVIS_BINS_LOG:
-				x = pow(element->max / element->min, (double)(i + 1) / element->nbins) * element->min;
-				break;
-			default:
-				g_assert_not_reached();
-		}
+		double x = bin_edges[i + 1];
+		double y = bin_heights[i];
 
 		if (xlog) x = log10(x);
 		if (ylog) y = log10(y);
@@ -185,6 +199,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 
 		last_x = x;
 	}
+
+	g_free(bin_heights);
+	g_free(bin_edges);
 
 	/* Jump back to device space */
 	cairo_identity_matrix(cr);
@@ -271,8 +288,8 @@ enum property {
 	PROP_BIN_MIN,
 	PROP_BIN_MAX,
 	PROP_NUM_BINS,
-	PROP_HISTORY_SAMPLES/*,
-	PROP_NORMED*/
+	PROP_HISTORY_SAMPLES,
+	PROP_NORMED
 };
 
 
@@ -298,11 +315,9 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		case PROP_HISTORY_SAMPLES:
 			element->history = g_value_get_uint(value);
 			break;
-			/*
 		case PROP_NORMED:
 			element->normed = g_value_get_boolean(value);
 			break;
-			 */
 	}
 
 	/* Setting any of the following properties forces rebinning. */
@@ -339,11 +354,9 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		case PROP_HISTORY_SAMPLES:
 			g_value_set_uint(value, element->history);
 			break;
-			/*
 		case PROP_NORMED:
 			g_value_set_boolean(value, element->normed);
 			break;
-			 */
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -416,7 +429,6 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
-	/*
 	g_object_class_install_property(
 		gobject_class,
 		PROP_NORMED,
@@ -428,7 +440,6 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
-	 */
 }
 
 

@@ -70,10 +70,11 @@ typedef struct _CairoVisHistogram {
 	gdouble max;
 	guint nbins;
 	guint history;
-	/* gboolean normed; */
+	gboolean normed;
 
 	/* Internal data */
 	guint *bin_counts;
+	guint total;
 	GstAdapter *adapter;
 	gdouble scale;
 } CairoVisHistogram;
