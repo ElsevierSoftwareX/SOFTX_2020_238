@@ -112,6 +112,29 @@ class LLOIDHandler(object):
 			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
 
 
+def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
+	"""Create a new seek event for a given gps_start_time and gps_end_time,
+	with optional flags.  gps_start_time and gps_end_time may be provided as
+	instances of LIGOTimeGPS, as doubles, or as floats."""
+
+	def seek_args_for_gps(gps_time):
+		"""Convenience routine to convert a GPS time to a seek type and a
+		GStreamer timestamp."""
+
+		if gps_time is None or gps_time == -1:
+			return (gst.SEEK_TYPE_NONE, -1) # -1 == gst.CLOCK_TIME_NONE
+		elif hasattr(gps_time, 'ns'):
+			return (gst.SEEK_TYPE_SET, gps_time.ns())
+		else:
+			return (gst.SEEK_TYPE_SET, long(float(gps_time) * gst.SECOND))
+
+	start_type, start_time = seek_args_for_gps(gps_start_time)
+	stop_type, stop_time   = seek_args_for_gps(gps_end_time)
+
+	return gst.event_new_seek(1., gst.FORMAT_TIME, flags,
+		start_type, start_time, stop_type, stop_time)
+
+
 #
 # sum-of-squares aggregator
 #

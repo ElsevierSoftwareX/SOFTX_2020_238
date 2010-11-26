@@ -91,6 +91,10 @@ static GstBaseSrcClass *parent_class = NULL;
 #define DEFAULT_UNITS_UNIT lalStrainUnit
 
 
+#define GST_CAT_DEFAULT gstlal_framesrc_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
+
+
 /*
  * ========================================================================
  *
@@ -1062,6 +1066,7 @@ GType gstlal_framesrc_get_type(void)
 			.instance_init = instance_init,
 		};
 		type = g_type_register_static(GST_TYPE_BASE_SRC, "lal_framesrc", &info, 0);
+		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framesrc", 0, "framesrc element");
 	}
 
 	return type;

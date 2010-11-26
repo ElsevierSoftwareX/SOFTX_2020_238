@@ -22,6 +22,18 @@
 #include <math.h>
 
 
+static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
+{
+	CairoVisLineSeries *element = CAIROVIS_LINESERIES(gst_pad_get_parent(pad));
+	GstStructure *structure = gst_caps_get_structure(caps, 0);
+	gboolean success = gst_structure_get_int(structure, "channels", &element->nchannels);
+
+	gst_object_unref(element);
+
+	return success;
+}
+
+
 static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 {
 	CairoVisLineSeries *element = CAIROVIS_LINESERIES(gst_pad_get_parent(pad));
@@ -45,7 +57,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 	/* Determine number of samples, data pointer */
 	const double* data = (const double*) GST_BUFFER_DATA(inbuf);
 	gulong nsamples = GST_BUFFER_SIZE(inbuf) / sizeof(double);
+	gint nchannels = element->nchannels;
+	gulong nsamples_per_channel = nsamples / nchannels;
 	gulong i;
+	gint channel;
 
 	/* Determine x-axis limits */
 	if (base->xautoscale) {
@@ -53,7 +68,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			base->xmin = 1;
 		else
 			base->xmin = 0;
-		base->xmax = nsamples;
+		base->xmax = nsamples_per_channel;
 	}
 
 	/* Determine y-axis limits */
@@ -73,25 +88,33 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 	cairovis_draw_axes(base, cr, width, height);
 
 	/* Draw data */
-	gboolean was_finite = FALSE;
-	for (i = 0; i < nsamples; i ++)
+	for (channel = 0; channel < nchannels; channel ++)
 	{
-		double x = i, y = data[i];
-		if (xlog) x = log10(x);
-		if (ylog) y = log10(y);
-		gboolean is_finite = isfinite(x) && isfinite(y);
-		if (!was_finite && is_finite)
-			cairo_move_to(cr, x, y);
-		else if (is_finite)
-			cairo_line_to(cr, x, y);
-		was_finite = is_finite;
+		gboolean was_finite = FALSE;
+
+		for (i = 0; i < nsamples; i ++)
+		{
+			double x = i, y = data[i * nchannels + channel];
+			if (xlog) x = log10(x);
+			if (ylog) y = log10(y);
+			gboolean is_finite = isfinite(x) && isfinite(y);
+			if (!was_finite && is_finite)
+				cairo_move_to(cr, x, y);
+			else if (is_finite)
+				cairo_line_to(cr, x, y);
+			was_finite = is_finite;
+		}
+
+		cairo_save(cr);
+
+		/* Jump back to device space */
+		cairo_identity_matrix(cr);
+
+		/* Stroke the line series */
+		cairo_stroke(cr);
+
+		cairo_restore(cr);
 	}
-
-	/* Jump back to device space */
-	cairo_restore(cr);
-
-	/* Stroke the line series */
-	cairo_stroke(cr);
 
 	/* Discard Cairo context, surface */
 	cairo_destroy(cr);
@@ -153,7 +176,7 @@ static void base_init(gpointer class)
 			GST_PAD_ALWAYS,
 			gst_caps_from_string(
 				"audio/x-raw-float, " \
-				"channels   = (int) 1, " \
+				"channels   = (int) [1, MAX], " \
 				"width      = (int) 64"
 			)
 		)
@@ -180,6 +203,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	gst_object_ref(pad);
 	gst_element_add_pad(GST_ELEMENT(element), pad);
 	gst_pad_use_fixed_caps(pad);
+	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(sink_setcaps));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
 	element->sinkpad = pad;
 }

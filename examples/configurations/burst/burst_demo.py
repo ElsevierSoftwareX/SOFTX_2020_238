@@ -39,6 +39,15 @@ parser.add_option("-o", "--output",
 		  default=False
                   )
 
+parser.add_option("--gps-start-time",
+                  help="GPS start time",
+                  type="float"
+                  )
+
+parser.add_option("--gps-end-time",
+                  help="GPS end time",
+                  type="float"
+                  )
 
 (options, args) = parser.parse_args()
 
@@ -52,6 +61,7 @@ if args:
 
 # import gstreamer stuff after option parsing
 from gstlal import pipeutil
+from gstlal.lloidparts import seek_event_for_gps
 from gstlal.pipeutil import gobject, gst
 #from gstlal.elements import channelgram
 
@@ -254,6 +264,9 @@ class Handler(object):
 			self.mainloop.quit()
 			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
 
+seekevent = seek_event_for_gps(options.gps_start_time, options.gps_end_time)
+for src in pipeline.iterate_sources():
+	src.send_event(seekevent)
 
 handler = Handler(mainloop, pipeline)
 

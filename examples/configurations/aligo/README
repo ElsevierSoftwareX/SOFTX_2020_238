@@ -4,6 +4,7 @@ DAG generator for LLOID
 
 No time slides, no coincidence.
 Designed to assess sensitivity in colored Gaussian noise.
+Temporarily retooled for initial LIGO.
 
 
 Instructions
@@ -21,7 +22,7 @@ To build and submit a DAG:
 
  3. Grab some mock h(t).  On CIT, you can just symlink this into place::
     
-	  $ ln -s ~lsinger/mock_aligo_hoft hoft
+	  $ ln -s ~lsinger/opt/gstlal-prerelease/src/gstlal/examples/configurations/aligo/hoft hoft
 
  4. Run ``make`` to generate a template bank, a PSD estimate, and a DAG:
  
