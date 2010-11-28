@@ -152,7 +152,7 @@ class Data(object):
 		if self.output.endswith('.sqlite'):
 			from glue.ligolw.utils import ligolw_sqlite
 			from glue.ligolw import dbtables
-			self.working_filename = dbtables.get_connection_filename(self.output, tmp_path = self.tmp_space, verbose = self.verbose)
+			self.working_filename = dbtables.get_connection_filename(self.output, tmp_path = self.tmp_space, replace_file = True, verbose = self.verbose)
 			self.connection = sqlite3.connect(self.working_filename, check_same_thread=False)
 			# setup id remapping
 			dbtables.idmap_create(self.connection)
