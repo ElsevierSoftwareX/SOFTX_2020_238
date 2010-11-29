@@ -286,13 +286,12 @@ static void gst_lalframe_sink_init(GstLalframeSink *sink,
     sink->clean_timestamps = FALSE;
     sink->dir_digits = 0;
     sink->adapter = gst_adapter_new();
+    sink->current_byte = 0;
 
     sink->rate = 0;
     sink->width = 0;
     sink->sign = TRUE;
     sink->type = NULL;
-    sink->start = TRUE;
-    sink->t0_ns = 0;
 
     gst_base_sink_set_sync(GST_BASE_SINK(sink), FALSE);
 }
@@ -452,16 +451,36 @@ static gboolean event(GstBaseSink *basesink, GstEvent *event)
         GstPad *pad;
         GstStructure *str;
 
+        /* Get all the info about the new segment */
         gst_event_parse_new_segment(event, NULL, NULL, &format, &start,
                                     &stop, &pos);
 
-        if (format == GST_FORMAT_BYTES) {
-            /* only try to seek and fail when we are going to a different
-             * position */
-            if (sink->current_pos != (guint64) start)
-                goto seek_failed;
-            else
-                GST_DEBUG_OBJECT(sink, "Ignored NEWSEGMENT, no seek needed");
+        /* Flush if necessary, and start counting */
+        if (format == GST_FORMAT_BYTES || format == GST_FORMAT_DEFAULT ||
+            format == GST_FORMAT_TIME) {
+            gint64 start_byte;
+
+            if (format == GST_FORMAT_TIME) {
+                guint byterate = sink->rate * sink->width / 8;
+                start_byte = A_X_B__C(start, byterate, GST_SECOND);
+            }
+            else {
+                start_byte = start;
+            }
+
+            guint nbytes = gst_adapter_available(sink->adapter);
+
+            if (start_byte != sink->current_byte + nbytes) {
+                GST_DEBUG_OBJECT(sink, "NEWSEGMENT, flushing and restarting");
+
+                if (nbytes > 0) {
+                    if (!write_frame(sink, nbytes))  // flush
+                        goto flush_failed;
+                    gst_adapter_flush(sink->adapter, nbytes);
+                }
+
+                sink->current_byte = start_byte;
+            }
         }
         else {
             GST_DEBUG_OBJECT(
@@ -489,6 +508,7 @@ static gboolean event(GstBaseSink *basesink, GstEvent *event)
             if (!write_frame(sink, nbytes))  // write any remaining data
                 goto flush_failed;
             gst_adapter_flush(sink->adapter, nbytes);
+            sink->current_byte += nbytes;
         }
         break;
     }
@@ -499,14 +519,6 @@ static gboolean event(GstBaseSink *basesink, GstEvent *event)
     return TRUE;
 
     /* ERRORS */
-seek_failed:
-    {
-        GST_ELEMENT_ERROR(
-            sink, RESOURCE, SEEK,
-            ("Error while seeking in function %s", __FUNCTION__),
-            GST_ERROR_SYSTEM);
-        return FALSE;
-    }
 flush_failed:
     {
         GST_ELEMENT_ERROR(
@@ -529,8 +541,6 @@ flush_failed:
 
 static gboolean start(GstBaseSink *basesink)
 {
-    GstLalframeSink *sink = GST_LALFRAME_SINK(basesink);
-    sink->current_pos = 0;
     return TRUE;
 }
 
@@ -545,6 +555,9 @@ static gboolean query(GstPad *pad, GstQuery *query)
 {
     GstFormat format;
     GstLalframeSink *sink = GST_LALFRAME_SINK(GST_PAD_PARENT(pad));
+    guint available = gst_adapter_available(sink->adapter);
+    guint byterate = sink->rate * sink->width / 8;
+    gint64 pos = sink->current_byte + available;
 
     switch (GST_QUERY_TYPE(query)) {
     case GST_QUERY_POSITION:
@@ -552,7 +565,11 @@ static gboolean query(GstPad *pad, GstQuery *query)
         switch (format) {
         case GST_FORMAT_DEFAULT:
         case GST_FORMAT_BYTES:
-            gst_query_set_position(query, GST_FORMAT_BYTES, sink->current_pos);
+            gst_query_set_position(query, GST_FORMAT_BYTES, pos);
+            return TRUE;
+        case GST_FORMAT_TIME:
+            gst_query_set_position(query, GST_FORMAT_TIME,
+                                   A_X_B__C(pos, GST_SECOND, byterate));
             return TRUE;
         default:
             return FALSE;
@@ -579,7 +596,7 @@ static gboolean reset_on_discontinuity(GstLalframeSink *sink, GstBuffer *buffer)
     guint available = gst_adapter_available(sink->adapter);
 
     if (GST_BUFFER_IS_DISCONT(buffer) || GST_BUFFER_TIMESTAMP(buffer) !=
-        sink->t0_ns + A_X_B__C(available, GST_SECOND, byterate)) {
+        A_X_B__C(sink->current_byte + available, GST_SECOND, byterate)) {
         GST_INFO_OBJECT(sink, "Detected discontinuity");
 
         /* Flush previous data to a frame */
@@ -596,7 +613,8 @@ static gboolean reset_on_discontinuity(GstLalframeSink *sink, GstBuffer *buffer)
         }
 
         /* Restart counting timestamps */
-        sink->t0_ns = GST_BUFFER_TIMESTAMP(buffer);
+        sink->current_byte = A_X_B__C(GST_BUFFER_TIMESTAMP(buffer),
+                                      byterate, GST_SECOND);
     }
 
     return TRUE;
@@ -614,8 +632,10 @@ static gboolean align_frames(GstLalframeSink *sink)
     guint byterate = sink->rate * sink->width / 8;
     GstClockTime dur_ns = (GstClockTime) (sink->duration * GST_SECOND);
 
-    if (sink->t0_ns % dur_ns != 0) {  // if beginning of data is not aligned
-        gdouble dt = (dur_ns - sink->t0_ns % dur_ns) / (gdouble) GST_SECOND;
+    GstClockTime t0_ns = A_X_B__C(sink->current_byte, GST_SECOND, byterate);
+
+    if (t0_ns % dur_ns != 0) {  // if beginning of data is not aligned
+        gdouble dt = (dur_ns - t0_ns % dur_ns) / (gdouble) GST_SECOND;
         gdouble n = dt * byterate;  // bytes to save
         if (fabs(n - (guint) n) > 1e-12) {
             GST_ELEMENT_ERROR(
@@ -623,7 +643,7 @@ static gboolean align_frames(GstLalframeSink *sink)
                 ("Impossible to do clean timestamps. Current timestamp (%"
                  G_GUINT64_FORMAT " ns) and rate (%d Hz) will not produce "
                  "a timestamp multiple of duration (%.14g s)",
-                 sink->t0_ns, sink->rate, sink->duration), (NULL));
+                 t0_ns, sink->rate, sink->duration), (NULL));
             return FALSE;
         }
 
@@ -635,7 +655,7 @@ static gboolean align_frames(GstLalframeSink *sink)
             return FALSE;
 
         gst_adapter_flush(sink->adapter, n);
-        sink->t0_ns += A_X_B__C(n, GST_SECOND, byterate);
+        sink->current_byte += n;
     }
 
     return TRUE;
@@ -655,12 +675,6 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
         sink, "Got timestamp=%llu, duration=%llu, offset=%llu, offset_end=%llu",
         GST_BUFFER_TIMESTAMP(buffer), GST_BUFFER_DURATION(buffer),
         GST_BUFFER_OFFSET(buffer), GST_BUFFER_OFFSET_END(buffer));
-
-    /* Get t0_ns from the very first buffer */
-    if (sink->start) {
-        sink->t0_ns = GST_BUFFER_TIMESTAMP(buffer);
-        sink->start = FALSE;
-    }
 
     /* Check for discontinuities and handle them */
     if (!reset_on_discontinuity(sink, buffer))
@@ -683,7 +697,7 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
             return GST_FLOW_ERROR;
 
         gst_adapter_flush(sink->adapter, nbytes);
-        sink->t0_ns += A_X_B__C(nbytes, GST_SECOND, byterate);
+        sink->current_byte += nbytes;
     }
 
     return GST_FLOW_OK;
@@ -734,8 +748,9 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
         ifo_flags = -1;
 
     /* Get timestamp from adapter */
-    epoch.gpsSeconds     = sink->t0_ns / GST_SECOND;
-    epoch.gpsNanoSeconds = sink->t0_ns % GST_SECOND;
+    GstClockTime t0_ns = A_X_B__C(sink->current_byte, GST_SECOND, byterate);
+    epoch.gpsSeconds     = t0_ns / GST_SECOND;
+    epoch.gpsNanoSeconds = t0_ns % GST_SECOND;
 
     /* Create subdirectories with nice names if needed */
     if (sink->dir_digits > 0) {
@@ -814,7 +829,6 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
     if (XLALFrameWrite(frame, filename, -1) != 0)
         goto write_failed;
 
-    sink->current_pos += nbytes;
     g_free(channame);
     g_free(filename);
     FrameFree(frame);
