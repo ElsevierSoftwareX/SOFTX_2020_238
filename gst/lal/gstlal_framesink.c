@@ -37,22 +37,31 @@
 static const char gst_lalframe_sink_doc[] =
     "Write data to frame files.\n"
     "\n"
-    "This element will read a stream of either int, float or double data and "
-    "save it into frame files in subdirectories. The files will look like:\n"
-    "  ./H-test_frame-9888/H-test_frame-988889100-64.gwf\n"
+    "This element reads a stream of either int, float or double data and "
+    "saves it into frame files. The output frame files look like:\n"
+    "  H-test_frame-988889100-64.gwf\n"
     "\n"
     "It requires the following tags to be present:\n"
     "  instrument   - e.g. G1, H1, H2, L1, V1\n"
     "  channel-name - name of channel in the frames, e.g. LSC-STRAIN\n"
     "  units        - currently not used\n"
     "\n"
-    "The duration property controls the length of each frame file. The "
-    "timestamps of the files are a multiple of this duration, unless the "
-    "property clean-timestamps is false.\n"
+    "The duration property controls the length of each frame file. If the "
+    "clean-timestamps property is set to true, the timestamps of the files "
+    "are also a multiple of this duration.\n"
     "\n"
     "The dir-digits property controls how many digits appear in the name of "
     "the subdirectories, by specifying how many of the least significant "
-    "digits should be removed. If 0, no subdirectories are created.\n";
+    "digits should be removed. If 0, no subdirectories are created. A value "
+    "of 5, for example, will write the files like this:\n"
+    "  ./H-test_frame-9888/H-test_frame-988889100-64.gwf\n"
+    "\n"
+    "Example launch line:\n"
+    "  gst-launch audiotestsrc num-buffers=10000 "
+    "timestamp-offset=988889100000000000 ! "
+    "taginject tags=\"instrument=H1,channel-name=LSC-STRAIN,units=strain\" ! "
+    "audio/x-raw-float,rate=16384,width=64 ! "
+    "lal_framesink frame-type=hoft clean-timestamps=true\n";
 
 #ifdef HAVE_CONFIG_H
 #  include "config.h"
@@ -230,7 +239,7 @@ static void gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
         gobject_class, PROP_CLEAN_TIMESTAMPS,
         g_param_spec_boolean(
             "clean-timestamps", "Clean timestamps",
-            "Files start at a multiple of \"duration\"", TRUE,
+            "Files start at a multiple of \"duration\"", FALSE,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
     g_object_class_install_property(
@@ -238,7 +247,7 @@ static void gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
         g_param_spec_int(
             "dir-digits", "Directory digits to remove",
             "Number of least significant digits dropped from subdir names",
-            0, G_MAXINT, 5,
+            0, G_MAXINT, 0,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
     gstbasesink_class->get_times = NULL;  // no sync
@@ -274,8 +283,8 @@ static void gst_lalframe_sink_init(GstLalframeSink *sink,
     sink->channel_name = NULL;
     sink->units = NULL;
     sink->duration = 64;
-    sink->clean_timestamps = TRUE;
-    sink->dir_digits = 5;
+    sink->clean_timestamps = FALSE;
+    sink->dir_digits = 0;
     sink->adapter = gst_adapter_new();
 
     sink->rate = 0;
@@ -560,6 +569,80 @@ static gboolean query(GstPad *pad, GstQuery *query)
 
 
 /*
+ * Helper function used in render(). If there is a discontinuity,
+ * flush previous data to a frame and reset timestamp. See
+ * gstlal_firbank.c at line ~ 909
+ */
+static gboolean reset_on_discontinuity(GstLalframeSink *sink, GstBuffer *buffer)
+{
+    guint byterate = sink->rate * sink->width / 8;
+    guint available = gst_adapter_available(sink->adapter);
+
+    if (GST_BUFFER_IS_DISCONT(buffer) || GST_BUFFER_TIMESTAMP(buffer) !=
+        sink->t0_ns + A_X_B__C(available, GST_SECOND, byterate)) {
+        GST_INFO_OBJECT(sink, "Detected discontinuity");
+
+        /* Flush previous data to a frame */
+        if (available > 0) {
+            if (!write_frame(sink, available)) { // write any remaining data
+                GST_ELEMENT_ERROR(
+                    sink, RESOURCE, WRITE,
+                    ("Error while writing in function %s", __FUNCTION__),
+                    GST_ERROR_SYSTEM);
+                return FALSE;
+            }
+
+            gst_adapter_flush(sink->adapter, available);  // flush adapter
+        }
+
+        /* Restart counting timestamps */
+        sink->t0_ns = GST_BUFFER_TIMESTAMP(buffer);
+    }
+
+    return TRUE;
+}
+
+
+/*
+ * Helper function used in render(). If the beginning of data is not a
+ * multiple of duration, create a first frame with a duration such
+ * that all the following frames will have timestamps multiple of
+ * duration.
+ */
+static gboolean align_frames(GstLalframeSink *sink)
+{
+    guint byterate = sink->rate * sink->width / 8;
+    GstClockTime dur_ns = (GstClockTime) (sink->duration * GST_SECOND);
+
+    if (sink->t0_ns % dur_ns != 0) {  // if beginning of data is not aligned
+        gdouble dt = (dur_ns - sink->t0_ns % dur_ns) / (gdouble) GST_SECOND;
+        gdouble n = dt * byterate;  // bytes to save
+        if (fabs(n - (guint) n) > 1e-12) {
+            GST_ELEMENT_ERROR(
+                sink, STREAM, FAILED,
+                ("Impossible to do clean timestamps. Current timestamp (%"
+                 G_GUINT64_FORMAT " ns) and rate (%d Hz) will not produce "
+                 "a timestamp multiple of duration (%.14g s)",
+                 sink->t0_ns, sink->rate, sink->duration), (NULL));
+            return FALSE;
+        }
+
+        if (gst_adapter_available(sink->adapter) < n)
+            return TRUE;  // not enough data to write yet, fine
+
+        /* Write only a few bytes so next frame starts at proper times */
+        if (!write_frame(sink, n))
+            return FALSE;
+
+        gst_adapter_flush(sink->adapter, n);
+        sink->t0_ns += A_X_B__C(n, GST_SECOND, byterate);
+    }
+
+    return TRUE;
+}
+
+
+/*
  * This is the most important one. It calls write_frame()
  */
 static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
@@ -579,29 +662,9 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
         sink->start = FALSE;
     }
 
-    /* Check for discontinuities (see gstlal_firbank.c at ~ 909) */
-    guint available = gst_adapter_available(sink->adapter);
-
-    if (GST_BUFFER_IS_DISCONT(buffer) || GST_BUFFER_TIMESTAMP(buffer) !=
-        sink->t0_ns + A_X_B__C(available, GST_SECOND, byterate)) {
-        GST_INFO_OBJECT(sink, "Detected discontinuity");
-
-        /* Flush previous data to a frame */
-        if (available > 0) {
-            if (!write_frame(sink, available)) { // write any remaining data
-                GST_ELEMENT_ERROR(
-                    sink, RESOURCE, WRITE,
-                    ("Error while writing in function %s", __FUNCTION__),
-                    GST_ERROR_SYSTEM);
-                return GST_FLOW_ERROR;
-            }
-
-            gst_adapter_flush(sink->adapter, available);  // flush adapter
-        }
-
-        /* Restart counting timestamps */
-        sink->t0_ns = GST_BUFFER_TIMESTAMP(buffer);
-    }
+    /* Check for discontinuities and handle them */
+    if (!reset_on_discontinuity(sink, buffer))
+        return GST_FLOW_ERROR;
 
     /* Compensate for reference lost in GstBaseSink's render */
     gst_buffer_ref(buffer);
@@ -610,33 +673,9 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
     gst_adapter_push(sink->adapter, buffer);
 
     /* Write a first frame if needed to align timestamps in the filenames */
-    if (sink->clean_timestamps) {
-        GstClockTime dur_ns = (GstClockTime) (sink->duration * GST_SECOND);
-
-        if (sink->t0_ns % dur_ns != 0) {  // if beginning of data is not aligned
-            gdouble dt = (dur_ns - sink->t0_ns % dur_ns) / (gdouble) GST_SECOND;
-            gdouble n = dt * byterate;  // bytes to save
-            if (fabs(n - (guint) n) > 1e-12) {
-                GST_ELEMENT_ERROR(
-                    sink, STREAM, FAILED,
-                    ("Impossible to do clean timestamps. Current timestamp (%"
-                     G_GUINT64_FORMAT " ns) and rate (%d Hz) will not produce "
-                     "a timestamp multiple of duration (%.14g s)",
-                     sink->t0_ns, sink->rate, sink->duration), (NULL));
-                return GST_FLOW_ERROR;
-            }
-
-            if (gst_adapter_available(sink->adapter) < n)
-                return GST_FLOW_OK;  // not enough data to write yet, fine
-
-            /* Write only a few bytes so next frame starts at proper times */
-            if (!write_frame(sink, n))
-                return GST_FLOW_ERROR;
-
-            gst_adapter_flush(sink->adapter, n);
-            sink->t0_ns += A_X_B__C(n, GST_SECOND, byterate);
-        }
-    }
+    if (sink->clean_timestamps)
+        if (!align_frames(sink))
+            return GST_FLOW_ERROR;
 
     /* Keep writing frames of requested duration while we have data */
     while (gst_adapter_available(sink->adapter) >= nbytes) {
