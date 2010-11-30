@@ -589,6 +589,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	}
 
 	int retval;
+	gboolean should_push_newsegment = FALSE;
 	if (element->needs_seek)
 	{
 		gulong blocksize = gst_base_src_get_blocksize(basesrc);
@@ -630,6 +631,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		}
 
 		element->needs_seek = FALSE;
+		should_push_newsegment = TRUE;
 	}
 
 	GST_INFO_OBJECT(element, "daq_recv_next");
@@ -664,6 +666,18 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	GST_BUFFER_OFFSET_END(*buffer) = basesrc->offset;
 	GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * element->daq->tb->gps + element->daq->tb->gpsn;
 	GST_BUFFER_DURATION(*buffer) = GST_SECOND * nsamples / rate;
+
+	if (should_push_newsegment)
+	{
+		if (!gst_base_src_new_seamless_segment(basesrc,
+			GST_BUFFER_TIMESTAMP(*buffer),
+			basesrc->segment.stop,
+			GST_BUFFER_TIMESTAMP(*buffer)))
+		{
+			GST_ERROR_OBJECT(element, "failed to create new segment");
+		}
+	}
+
 
 	return GST_FLOW_OK;
 }
@@ -909,7 +923,6 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	basesrc->blocksize = G_MAXULONG;
 
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
-	gst_base_src_set_live(GST_BASE_SRC(object), TRUE);
 }
 
 
