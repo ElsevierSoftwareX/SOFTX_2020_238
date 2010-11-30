@@ -73,6 +73,13 @@ class lal_checktimestamps(gst.BaseTransform):
 				"rate = (int) [1, MAX], " +
 				"channels = (int) [1, MAX], " +
 				"endianness = (int) BYTE_ORDER, " +
+				"width = (int) 16," +
+				"depth = (int) 16," +
+				"signed = (bool) {true, false}; " +
+				"audio/x-raw-int, " +
+				"rate = (int) [1, MAX], " +
+				"channels = (int) [1, MAX], " +
+				"endianness = (int) BYTE_ORDER, " +
 				"width = (int) 32," +
 				"depth = (int) 32," +
 				"signed = (bool) {true, false}; " +
@@ -99,6 +106,13 @@ class lal_checktimestamps(gst.BaseTransform):
 				"channels = (int) [1, MAX], " +
 				"endianness = (int) BYTE_ORDER, " +
 				"width = (int) {64, 128};" +
+				"audio/x-raw-int, " +
+				"rate = (int) [1, MAX], " +
+				"channels = (int) [1, MAX], " +
+				"endianness = (int) BYTE_ORDER, " +
+				"width = (int) 16," +
+				"depth = (int) 16," +
+				"signed = (bool) {true, false}; " +
 				"audio/x-raw-int, " +
 				"rate = (int) [1, MAX], " +
 				"channels = (int) [1, MAX], " +
