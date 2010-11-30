@@ -1,0 +1,126 @@
+#!/usr/bin/env python
+# Copyright (C) 2010  Leo Singer
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""
+GAB: GStreamer Audio Bridge
+"""
+__author__ = "Leo Singer <leo.singer@ligo.org>"
+
+
+
+# Command line interface
+
+from optparse import OptionParser, Option
+
+opts, args = OptionParser(description = __doc__, option_list = [
+	Option("--host", metavar="example.com", help="hostname for NDS connection"),
+	Option("--port", metavar="INT", type=int, help="port for NDS connection (default=31200)", default=31200),
+]).parse_args()
+
+required_options = ("host", "port")
+
+for key in required_options:
+	if getattr(opts, key) is None:
+		raise ValueError("Required argument --%s not provided" % key.replace('_', '-'))
+
+if len(args) > 0:
+	raise ValueError("Too many command line arguments")
+
+
+
+# Late imports
+
+import nds
+import httplib
+import threading
+import subprocess
+from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+
+
+doc_pattern = """
+<!DOCTYPE html>
+<html>
+<head>
+	<title>GStreamer Audio Bridge - %(host)s:%(port)d</title>
+	<style type="text/css">
+		td { font-family: monospace; }
+	</style>
+</head>
+<body>
+	<h1>GStreamer Audio Bridge</h1>
+	<h2>%(host)s:%(port)d</h2>
+	<table>
+		<caption><h3>&#8220;Online&#8221; channels</h3></caption>
+		<thead>
+			<tr>
+				<td><strong>channel name</strong></td>
+				<td><strong>type</strong></td>
+				<td><strong>format</strong></td>
+				<td><strong>rate</strong></td>
+			</tr>
+		</thead>
+		<tbody>
+%(tbody)s
+		</tbody>
+	</table>
+</body>
+</html>
+"""
+
+
+channel_pattern = """
+			<tr>
+				<td><a href="rtsp://localhost:8554/%(name)s">%(name)s</a></td>
+				<td>%(type)s</td>
+				<td>%(data_type)s</td>
+				<td>%(rate)d</td>
+			</tr>
+"""
+
+
+channel_list = []
+daq = None
+
+
+def update_channel_list(daq):
+	global channel_list
+	if daq is None:
+		daq = nds.daq(opts.host, opts.port)
+	try:
+		print "refreshing channel list"
+		channel_list = daq.recv_channel_list(nds.channel_type.online)
+	except RuntimeError:
+		daq = None
+	thread = threading.Timer(30, update_channel_list, [daq])
+	thread.daemon = True
+	thread.start()
+
+
+class Handler(BaseHTTPRequestHandler):
+
+	def do_GET(self):
+		if self.path != '/':
+			self.send_error(httplib.NOT_FOUND)
+		else:
+			self.send_response(httplib.OK)
+			self.end_headers()
+			tbody = "".join(channel_pattern % {'name': c.name, 'type': str(c.type), 'data_type': c.data_type, 'rate': c.rate} for c in channel_list)
+			print >>self.wfile, doc_pattern % {'host': opts.host, 'port': opts.port, 'tbody': tbody}
+
+
+subprocess.Popen(['./gab-rtsp-server', '--host', opts.host, '--port', str(opts.port)])
+update_channel_list(None)
+HTTPServer(('', 8080), Handler).serve_forever()

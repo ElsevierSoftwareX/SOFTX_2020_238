@@ -1,0 +1,47 @@
+===========================
+GAB: GStreamer Audio Bridge
+===========================
+
+Provides live audio from instrumental channels at LIGO observatories.
+
+Includes a lightweight RealTime Streaming Protocol (RTSP) server powered
+by GStreamer.  Audio streams should be compatible with Totem, QuickTime Player,
+Windows Media Player, and other popular media player apps.
+
+A web page providing a list of links to available channels is provided by a
+lightweight HTTP server written in Python.
+
+Instructions
+------------
+
+1. Run ``make`` in this directory to build the native C component.
+2. Run ``gab`` in this directory to start the server, pointing it at an NDS1
+   or NDS2 server::
+
+   $ ./gstlal_gab --host marble.ligo-wa.caltech.edu --port 31200
+
+3. Open a web browser and go to <http://localhost:8080/>.
+4. Click any link to open an audio stream in your media player.
+
+I have tested this with QuickTime Player on Mac OS, but it should also work with
+Totem on Linux and Windows Media Player on Windows.
+
+Dependencies
+------------
+
+* gstreamer
+* gst-plugins-good
+* gst-rtsp-server
+
+Demonstrates
+------------
+
+* lightweight RTSP servers with GStreamer
+* lightweight HTTP servers in Python
+* NDS1/2 client element, ndssrc
+* command line parsing with GOption
+
+TODO
+----
+
+* use DataTables <http://www.datatables.net/> for channel list
