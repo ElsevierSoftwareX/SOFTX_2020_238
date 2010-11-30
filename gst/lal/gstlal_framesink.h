@@ -90,9 +90,7 @@ struct _GstLalframeSink {
     gint rate, width;    // rate and width of the samples we are receiving
     gboolean sign;       // integer data is signed?
     gchar *type;         // mime type
-    gboolean start;      // is this the first buffer?
-    GstClockTime t0_ns;  // timestamp at the beginning of data in adapter
-    guint64 current_pos;
+    gint64 current_byte; // "bytestamp" at the beginning of data in adapter
 
     GstAdapter *adapter;
 };
