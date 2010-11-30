@@ -82,6 +82,7 @@ struct _GstLalframeSink {
     gchar *frame_type;     // R, H1_RDS_R_L1, H1_LDAS_C02_L2, etc
     gchar *instrument;     // ifo: G1, H1, H2, L1, V1
     gchar *channel_name;   // DARM_ERR, LSC-STRAIN, etc
+    gchar *description;    // what kind of data is being received
     gchar *units;          // not used so far
     double duration;       // time span for each frame file
     gboolean clean_timestamps;  // use timestamps multiple of duration?
