@@ -159,14 +159,22 @@ static guint32 get_available_samples(GSTLALWhiten *element)
  */
 
 
+static void zero_output_history(GSTLALWhiten *element)
+{
+	if(element->output_history)
+		memset(element->output_history->data, 0, element->output_history->length * sizeof(*element->output_history->data));
+	element->output_history_offset = element->next_offset_out - zero_pad_length(element);
+}
+
+
 static int make_workspace(GSTLALWhiten *element)
 {
-	REAL8Window *window = NULL;
+	REAL8Window *hann_window = NULL;
 	REAL8FFTPlan *fwdplan = NULL;
 	REAL8FFTPlan *revplan = NULL;
 	REAL8TimeSeries *tdworkspace = NULL;
 	COMPLEX16FrequencySeries *fdworkspace = NULL;
-	REAL8Sequence *tail = NULL;
+	REAL8Sequence *output_history = NULL;
 
 	/*
 	 * safety checks
@@ -203,12 +211,17 @@ static int make_workspace(GSTLALWhiten *element)
 		GST_ERROR_OBJECT(element, "bad sample rate: FFT length is an odd number of samples, must be even");
 		goto error;
 	}
-	window = XLALCreateHannREAL8Window(fft_length(element) - 2 * zero_pad_length(element) + 1);
-	if(!window) {
+	if((element->zero_pad_seconds > 0) && zero_pad_length(element) % (fft_length(element) / 2 - zero_pad_length(element))) {
+		GST_ERROR_OBJECT(element, "bad zero-pad length:  must be a multiple of 1/2 the non-zero-pad length");
+		goto error;
+	}
+
+	hann_window = XLALCreateHannREAL8Window(fft_length(element) - 2 * zero_pad_length(element) + 1);
+	if(!hann_window) {
 		GST_ERROR_OBJECT(element, "failure creating Hann window: %s", XLALErrorString(XLALGetBaseErrno()));
 		goto error;
 	}
-	if(!XLALResizeREAL8Sequence(window->data, -zero_pad_length(element), fft_length(element))) {
+	if(!XLALResizeREAL8Sequence(hann_window->data, -zero_pad_length(element), fft_length(element))) {
 		GST_ERROR_OBJECT(element, "failure resizing Hann window: %s", XLALErrorString(XLALGetBaseErrno()));
 		goto error;
 	}
@@ -242,37 +255,38 @@ static int make_workspace(GSTLALWhiten *element)
 	}
 
 	/*
-	 * allocate a tail buffer
+	 * allocate an output history buffer
 	 */
 
-	tail = XLALCreateREAL8Sequence(fft_length(element) / 2 - zero_pad_length(element));
-	if(!tail) {
-		GST_ERROR_OBJECT(element, "failure allocating tail buffer: %s", XLALErrorString(XLALGetBaseErrno()));
+	output_history = XLALCreateREAL8Sequence(fft_length(element));
+	if(!output_history) {
+		GST_ERROR_OBJECT(element, "failure allocating output history buffer: %s", XLALErrorString(XLALGetBaseErrno()));
 		goto error;
 	}
-	memset(tail->data, 0, tail->length * sizeof(*tail->data));
 
 	/*
 	 * done
 	 */
 
-	element->window = window;
+	element->hann_window = hann_window;
 	element->fwdplan = fwdplan;
 	element->revplan = revplan;
 	element->tdworkspace = tdworkspace;
 	element->fdworkspace = fdworkspace;
-	element->tail = tail;
+	element->output_history = output_history;
+	zero_output_history(element);
+	g_object_notify(G_OBJECT(element), "sigma-squared");
 	return 0;
 
 error:
-	XLALDestroyREAL8Window(window);
+	XLALDestroyREAL8Window(hann_window);
 	g_mutex_lock(gstlal_fftw_lock);
 	XLALDestroyREAL8FFTPlan(fwdplan);
 	XLALDestroyREAL8FFTPlan(revplan);
 	g_mutex_unlock(gstlal_fftw_lock);
 	XLALDestroyREAL8TimeSeries(tdworkspace);
 	XLALDestroyCOMPLEX16FrequencySeries(fdworkspace);
-	XLALDestroyREAL8Sequence(tail);
+	XLALDestroyREAL8Sequence(output_history);
 	XLALClearErrno();
 	return -1;
 }
@@ -288,8 +302,8 @@ static void reset_workspace_metadata(GSTLALWhiten *element)
 
 static void free_workspace(GSTLALWhiten *element)
 {
-	XLALDestroyREAL8Window(element->window);
-	element->window = NULL;
+	XLALDestroyREAL8Window(element->hann_window);
+	element->hann_window = NULL;
 	g_mutex_lock(gstlal_fftw_lock);
 	XLALDestroyREAL8FFTPlan(element->fwdplan);
 	element->fwdplan = NULL;
@@ -300,8 +314,8 @@ static void free_workspace(GSTLALWhiten *element)
 	element->tdworkspace = NULL;
 	XLALDestroyCOMPLEX16FrequencySeries(element->fdworkspace);
 	element->fdworkspace = NULL;
-	XLALDestroyREAL8Sequence(element->tail);
-	element->tail = NULL;
+	XLALDestroyREAL8Sequence(element->output_history);
+	element->output_history = NULL;
 }
 
 
@@ -502,15 +516,15 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 
 	g_assert(element->tdworkspace);
 	g_assert(element->tdworkspace->data->length == fft_length(element));
-	g_assert(element->window->data->length == element->tdworkspace->data->length);
-	g_assert(element->tail->length * 2 == element->tdworkspace->data->length);
-	g_assert(sizeof(*element->tail->data) == sizeof(*element->tdworkspace->data->data));
+	g_assert(element->hann_window->data->length == element->tdworkspace->data->length);
+	g_assert(element->output_history->length == element->tdworkspace->data->length);
+	g_assert(sizeof(*element->output_history->data) == sizeof(*element->tdworkspace->data->data));
 
 	/*
 	 * Iterate over the available data
 	 */
 
-	for(dst_offset = 0; get_available_samples(element) >= hann_length; dst_offset += hann_length / 2) {
+	for(dst_offset = 0; get_available_samples(element) >= hann_length;) {
 		REAL8FrequencySeries *newpsd;
 		unsigned i;
 
@@ -533,20 +547,20 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		 * window function will do it for us.
 		 *
 		 * Note:  the time series' epoch is set to the timestamp of
-		 * the data taken from the adapter, not the timestamp of
-		 * the start of the series (which is zero_pad samples
-		 * earlier).
+		 * the first sample of the series, not the first sample of
+		 * the data taken from the adapter (which is zero_pad
+		 * samples later).
 		 */
 
 		memcpy(&element->tdworkspace->data->data[zero_pad], gst_adapter_peek(element->adapter, hann_length * sizeof(*element->tdworkspace->data->data)), hann_length * sizeof(*element->tdworkspace->data->data));
 		XLALINT8NSToGPS(&element->tdworkspace->epoch, element->t0);
-		XLALGPSAdd(&element->tdworkspace->epoch, (double) (element->next_offset_out + dst_offset - element->offset0) / element->sample_rate);
+		XLALGPSAdd(&element->tdworkspace->epoch, (double) ((gint64) (element->next_offset_out + dst_offset - element->offset0) - (gint64) zero_pad) / element->sample_rate);
 
 		/*
 		 * Transform to frequency domain
 		 */
 
-		if(!XLALUnitaryWindowREAL8Sequence(element->tdworkspace->data, element->window)) {
+		if(!XLALUnitaryWindowREAL8Sequence(element->tdworkspace->data, element->hann_window)) {
 			GST_ERROR_OBJECT(element, "XLALUnitaryWindowREAL8Sequence() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
 			return GST_FLOW_ERROR;
@@ -635,7 +649,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		 */
 
 		for(i = 0; i < element->tdworkspace->data->length; i++)
-			element->tdworkspace->data->data[i] *= element->tdworkspace->deltaT * sqrt(element->window->sumofsquares);
+			element->tdworkspace->data->data[i] *= element->tdworkspace->deltaT * sqrt(element->hann_window->sumofsquares);
 		/* normalization constant has units of seconds */
 		XLALUnitMultiply(&element->tdworkspace->sampleUnits, &element->tdworkspace->sampleUnits, &lalSecondUnit);
 
@@ -651,23 +665,20 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		}
 
 		/*
-		 * Copy the first half of the time series into the output,
-		 * adding the contents of the tail buffer.  When we add the
-		 * two time series (the first half of the piece we have
-		 * just whitened and the contents of the tail buffer), we
-		 * do so overlapping the Hann windows so that the sum of
-		 * the windows is 1.
+		 * Mix the results into the output history buffer, copy new
+		 * result into output buffer, shift output history buffer.
 		 */
 
-		for(i = 0; i < element->tail->length; i++)
-			dst[i] = element->tdworkspace->data->data[zero_pad + i] + element->tail->data[i];
-
-		/*
-		 * Save the second half of time series data minus the final
-		 * zero_pad in the tail
-		 */
-
-		memcpy(element->tail->data, &element->tdworkspace->data->data[zero_pad + element->tail->length], element->tail->length * sizeof(*element->tail->data));
+		for(i = zero_pad; i < element->output_history->length - zero_pad; i++)
+			element->output_history->data[i] += element->tdworkspace->data->data[i];
+		g_assert((gint64) element->output_history_offset <= (gint64) (element->next_offset_out + dst_offset));
+		if(element->output_history_offset == element->next_offset_out + dst_offset) {
+			memcpy(&dst[dst_offset], &element->output_history->data[0], hann_length / 2 * sizeof(*element->output_history->data));
+			dst_offset += hann_length / 2;
+		}
+		memmove(&element->output_history->data[0], &element->output_history->data[hann_length / 2], (element->output_history->length - hann_length / 2) * sizeof(*element->output_history->data));
+		memset(&element->output_history->data[element->output_history->length - hann_length / 2], 0, hann_length / 2 * sizeof(*element->output_history->data));
+		element->output_history_offset += hann_length / 2;
 
 		/*
 		 * flush the adapter
@@ -841,7 +852,8 @@ enum property {
 	ARG_MEDIAN_SAMPLES,
 	ARG_DELTA_F,
 	ARG_F_NYQUIST,
-	ARG_MEAN_PSD
+	ARG_MEAN_PSD,
+	ARG_SIGMA_SQUARED
 };
 
 
@@ -1032,6 +1044,7 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
+	/* 1/2 the hann window */
 	guint quantum = fft_length(element) / 2 - zero_pad_length(element);
 	guint unit_size;
 	guint other_unit_size;
@@ -1104,6 +1117,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
 		element->next_offset_out = GST_BUFFER_OFFSET(inbuf);
+		zero_output_history(element);
 	}
 	element->next_offset_in = GST_BUFFER_OFFSET_END(inbuf);
 
@@ -1189,6 +1203,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 
 	case ARG_DELTA_F:
 	case ARG_F_NYQUIST:
+	case ARG_SIGMA_SQUARED:
 		/* read-only */
 		g_assert_not_reached();
 		break;
@@ -1260,6 +1275,12 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		else
 			g_value_take_boxed(value, g_value_array_new(0));
 		break;
+
+	case ARG_SIGMA_SQUARED:
+		if(element->hann_window)
+			g_value_set_double(value, element->hann_window->sumofsquares / element->hann_window->data->length);
+		else
+			g_value_set_double(value, 0.0);
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -1432,6 +1453,17 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SIGMA_SQUARED,
+		g_param_spec_double(
+			"sigma-squared",
+			"\sigma^{2}",
+			"FFT window mean square",
+			0, G_MAXDOUBLE, 0,
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+		)
+	);
 }
 
 
@@ -1461,12 +1493,13 @@ static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *klass)
 	element->fft_length_seconds = 0;
 	element->psdmode = 0;
 
-	element->window = NULL;
+	element->hann_window = NULL;
 	element->fwdplan = NULL;
 	element->revplan = NULL;
 	element->tdworkspace = NULL;
 	element->fdworkspace = NULL;
-	element->tail = NULL;
+	element->output_history = NULL;
+	element->output_history_offset = GST_BUFFER_OFFSET_NONE;
 
 	element->psd_regressor = XLALPSDRegressorNew(DEFAULT_AVERAGE_SAMPLES, DEFAULT_MEDIAN_SAMPLES);
 	element->psd = NULL;

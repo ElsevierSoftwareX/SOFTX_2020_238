@@ -110,12 +110,13 @@ typedef struct {
 	 * work space
 	 */
 
-	REAL8Window *window;
+	REAL8Window *hann_window;
 	REAL8FFTPlan *fwdplan;
 	REAL8FFTPlan *revplan;
 	REAL8TimeSeries *tdworkspace;
 	COMPLEX16FrequencySeries *fdworkspace;
-	REAL8Sequence *tail;
+	REAL8Sequence *output_history;
+	guint64 output_history_offset;
 
 	/*
 	 * PSD state
