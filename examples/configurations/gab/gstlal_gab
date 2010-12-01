@@ -120,7 +120,7 @@ def update_channel_list(daq):
 		channel_list = [(c.name, str(c.type), str(c.data_type), c.rate) for c in daq.recv_channel_list(nds.channel_type.online)]
 	except RuntimeError:
 		daq = None
-	thread = threading.Timer(30, update_channel_list, [daq])
+	thread = threading.Timer(7200, update_channel_list, [daq])
 	thread.daemon = True
 	thread.start()
 
