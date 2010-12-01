@@ -453,14 +453,13 @@ def mkplaybacksink(pipeline, src, amplification = 0.1):
 		gst.element_factory_make("audioconvert"),
 		gst.element_factory_make("capsfilter"),
 		gst.element_factory_make("audioamplify"),
-		gst.element_factory_make("audioresample"),
 		gst.element_factory_make("audioconvert"),
 		gst.element_factory_make("queue"),
-		gst.element_factory_make("alsasink")
+		gst.element_factory_make("autoaudiosink")
 	)
 	elems[1].set_property("caps", gst.Caps("audio/x-raw-float, width=64"))
 	elems[2].set_property("amplification", amplification)
-	elems[5].set_property("max-size-time", 1 * gst.SECOND)
+	elems[4].set_property("max-size-time", 1 * gst.SECOND)
 	pipeline.add(*elems)
 	gst.element_link_many(src, *elems)
 
