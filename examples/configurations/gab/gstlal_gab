@@ -44,7 +44,11 @@ if len(args) > 0:
 # Late imports
 
 import nds
-import json
+try:
+	import json
+except ImportError:
+	# pre Python 2.6
+	import simplejson as json
 import httplib
 import threading
 import subprocess
