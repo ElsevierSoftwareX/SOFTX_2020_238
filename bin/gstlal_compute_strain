@@ -93,16 +93,17 @@ awhiten = mkelem('lal_firbank',
 actuation = mkelem('lal_firbank',
                    {'fir-matrix': atleast_2d(filters['actuation'])})
 
-path2 = [dctrl_src, pr2,audioconvert2, hpf, hpf2, awhiten, actuation]
+path2 = [dctrl_src, pr2, audioconvert2, hpf, hpf2, awhiten, actuation]
 
 
 # [3] Elements from adder to saving the result
 
 path3 = [mkelem(*x) for x in [ \
-        ('lal_adder',   {}),
-        ('queue',       {}),
-        ('lal_nxydump', {}),
-        ('filesink',    {'location': 'gstlal_hoft.txt'}),
+    ('lal_adder',   {}),
+    ('lal_nxydump', {}),
+    ('filesink',    {'location': 'gstlal_hoft.txt',
+                     'sync': False,
+                     'async': False}),
 #        ('cairovis_lineseries', {}),
 #        ('ffmpegcolorspace',    {}),
 ##        ('ximagesink',),
@@ -150,19 +151,20 @@ def extract(pipeline, elem1, elem2, filename):
     tee.link(elem2)
 
     save_path = [mkelem(*x) for x in [ \
-        ('queue',        {}),
         ('audioconvert', {}),
         ('lal_nxydump', {}),
-        ('filesink',    {'location': filename})]]
+        ('filesink',    {'location': filename,
+                         'sync': False,
+                         'async': False})]]
     pipeline.add(*save_path)
     tee.link(save_path[0])
     gst.element_link_many(*save_path)
 
 extract(pipeline, derr_src, pr1, 'gstlal_DARM_ERR.txt')
 extract(pipeline, inv_sensing, path3[0], 'gstlal_C_inv_adv_DARM_ERR.txt')
-#extract(pipeline, dctrl_src, pr2, 'gstlal_DARM_CTRL.txt')
-#extract(pipeline, hpf2, awhiten, 'gstlal_HPFx2_adv_DARM_CTRL.txt')
-#extract(pipeline, awhiten, actuation, 'gstlal_AW_HPFx2_adv_DARM_CTRL.txt')
+extract(pipeline, dctrl_src, pr2, 'gstlal_DARM_CTRL.txt')
+extract(pipeline, hpf2, awhiten, 'gstlal_HPFx2_adv_DARM_CTRL.txt')
+extract(pipeline, awhiten, actuation, 'gstlal_AW_HPFx2_adv_DARM_CTRL.txt')
 extract(pipeline, actuation, path3[0], 'gstlal_A_AW_HPFx2_adv_DARM_CTRL.txt')
 
 ##############################
