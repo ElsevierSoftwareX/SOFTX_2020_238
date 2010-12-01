@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <kstdoc version="1.3">
   <windowsize>
-    <width>717</width>
-    <height>706</height>
+    <width>1037</width>
+    <height>694</height>
     <active name="W1"/>
   </windowsize>
   <graphicsautosave time="1" enabled="false" format="PNG" xsize="640" ysize="480" display="0" square="false" />
@@ -44,12 +44,12 @@
   <scalar>
     <tag>P2/YMin</tag>
     <orphan/>
-    <value>0.023799108302918</value>
+    <value>0.023512372058305</value>
   </scalar>
   <scalar>
     <tag>P2/YMax</tag>
     <orphan/>
-    <value>9212.1494406228</value>
+    <value>9101.1596883261</value>
   </scalar>
   <scalar>
     <tag>P3/XMin</tag>
@@ -84,12 +84,12 @@
   <scalar>
     <tag>Input/YMin</tag>
     <orphan/>
-    <value>1602.3165927319</value>
+    <value>1867775.895</value>
   </scalar>
   <scalar>
     <tag>Input/YMax</tag>
     <orphan/>
-    <value>1811.2787530033</value>
+    <value>1867776.105</value>
   </scalar>
   <scalar>
     <tag>P6/XMin</tag>
@@ -104,15 +104,35 @@
   <scalar>
     <tag>P6/YMin</tag>
     <orphan/>
-    <value>367.41340879126</value>
+    <value>381.82831240798</value>
   </scalar>
   <scalar>
     <tag>P6/YMax</tag>
     <orphan/>
-    <value>1884.9774761309</value>
+    <value>540.45232711687</value>
+  </scalar>
+  <scalar>
+    <tag>P1/XMin</tag>
+    <orphan/>
+    <value>4.0717021469976</value>
+  </scalar>
+  <scalar>
+    <tag>P1/XMax</tag>
+    <orphan/>
+    <value>4.0921517858768</value>
+  </scalar>
+  <scalar>
+    <tag>P1/YMin</tag>
+    <orphan/>
+    <value>-5.0706017721575</value>
+  </scalar>
+  <scalar>
+    <tag>P1/YMax</tag>
+    <orphan/>
+    <value>5.7196541948984</value>
   </scalar>
   <vector>
-    <tag>DS-whiten_test_01a_in.dump/2</tag>
+    <tag>DS-whiten_test_01a_in.dump/01a in y</tag>
     <provider>DS-whiten_test_01a_in.dump</provider>
     <filename>/home/kipp/Development/gstlal/tests/whiten_test_01a_in.dump</filename>
     <field>2</field>
@@ -120,7 +140,7 @@
     <num>-1</num>
   </vector>
   <vector>
-    <tag>DS-whiten_test_01a_out.dump/2-1</tag>
+    <tag>DS-whiten_test_01a_out.dump/01a out y</tag>
     <provider>DS-whiten_test_01a_out.dump</provider>
     <filename>/home/kipp/Development/gstlal/tests/whiten_test_01a_out.dump</filename>
     <field>2</field>
@@ -128,16 +148,24 @@
     <num>-1</num>
   </vector>
   <vector>
-    <tag>DS-whiten_test_01b_out.dump/2-2</tag>
+    <tag>DS-whiten_test_01b_out.dump/01b out y</tag>
     <provider>DS-whiten_test_01b_out.dump</provider>
     <filename>/home/kipp/Development/gstlal/tests/whiten_test_01b_out.dump</filename>
     <field>2</field>
     <start>32768</start>
     <num>-1</num>
   </vector>
+  <vector>
+    <tag>DS-whiten_test_01a_out.dump/01a out x</tag>
+    <provider>DS-whiten_test_01a_out.dump</provider>
+    <filename>/home/kipp/Development/gstlal/tests/whiten_test_01a_out.dump</filename>
+    <field>1</field>
+    <start>32768</start>
+    <num>-1</num>
+  </vector>
   <histogram>
     <tag>2-H</tag>
-    <vectag>DS-whiten_test_01a_in.dump/2</vectag>
+    <vectag>DS-whiten_test_01a_in.dump/01a in y</vectag>
     <numBins>101</numBins>
     <realtimeautobin>0</realtimeautobin>
     <minX>-1.00031</minX>
@@ -161,7 +189,7 @@
   </curve>
   <histogram>
     <tag>2-1-H</tag>
-    <vectag>DS-whiten_test_01a_out.dump/2-1</vectag>
+    <vectag>DS-whiten_test_01a_out.dump/01a out y</vectag>
     <numBins>101</numBins>
     <realtimeautobin>0</realtimeautobin>
     <minX>-0.0449602</minX>
@@ -185,7 +213,7 @@
   </curve>
   <histogram>
     <tag>2-2-H</tag>
-    <vectag>DS-whiten_test_01b_out.dump/2-2</vectag>
+    <vectag>DS-whiten_test_01b_out.dump/01b out y</vectag>
     <numBins>101</numBins>
     <realtimeautobin>0</realtimeautobin>
     <minX>-5</minX>
@@ -209,7 +237,7 @@
   </curve>
   <equationobject>
     <tag>EXP(-2-2-H_b...</tag>
-    <equation>[2-2/NS]*0.1*EXP(-[2-2-H/bins]^2/2)/SQRT(2*PI)</equation>
+    <equation>[01b out y/NS]*0.1*EXP(-[2-2-H/bins]^2/2)/SQRT(2*PI)</equation>
     <xvector>2-2-H/bins</xvector>
     <interpolate/>
   </equationobject>
@@ -228,11 +256,26 @@
     <pointDensity>0</pointDensity>
     <barStyle>1</barStyle>
   </curve>
+  <curve>
+    <tag>01a out y</tag>
+    <xvectag>DS-whiten_test_01a_out.dump/01a out x</xvectag>
+    <yvectag>DS-whiten_test_01a_out.dump/01a out y</yvectag>
+    <legend></legend>
+    <interp>0</interp>
+    <hasMinus/>
+    <color>#00aa00</color>
+    <hasLines/>
+    <lineWidth>0</lineWidth>
+    <lineStyle>0</lineStyle>
+    <pointType>0</pointType>
+    <pointDensity>0</pointDensity>
+    <barStyle>1</barStyle>
+  </curve>
   <plot>
     <border color="#000000" width="0" padding="0" margin="0" />
     <tag>Input</tag>
-    <aspect x="0" y="0" w="1" h="0.33282674772036" />
-    <idealsize w="713" h="219" />
+    <aspect x="0" y="0" w="0.53481894150418" h="0.24966799468792" />
+    <idealsize w="768" h="188" />
     <name>Input</name>
     <borderColor>#000000</borderColor>
     <borderWidth>0</borderWidth>
@@ -246,8 +289,8 @@
     <yscalemodedefault>5</yscalemodedefault>
     <xmin>-1.00031</xmin>
     <xmax>1.00026</xmax>
-    <ymin>1602.3165927319</ymin>
-    <ymax>1811.2787530033</ymax>
+    <ymin>1867775.895</ymin>
+    <ymax>1867776.105</ymax>
     <xreversed>0</xreversed>
     <yreversed>0</yreversed>
     <toplabel>
@@ -280,7 +323,7 @@
       <size>12</size>
     </xticklabel>
     <yticklabel>
-      <text>1794.88833</text>
+      <text>1811.2769</text>
       <interpret/>
       <rotation>0</rotation>
       <fontfamily>Bitstream Vera Sans</fontfamily>
@@ -343,8 +386,8 @@
   <plot>
     <border color="#000000" width="0" padding="0" margin="0" />
     <tag>P6</tag>
-    <aspect x="0" y="0.33282674772036" w="1" h="0.33282674772036" />
-    <idealsize w="713" h="219" />
+    <aspect x="0" y="0.24833997343958" w="0.53481894150418" h="0.24966799468792" />
+    <idealsize w="768" h="188" />
     <name>P6</name>
     <borderColor>#000000</borderColor>
     <borderWidth>0</borderWidth>
@@ -358,8 +401,8 @@
     <yscalemodedefault>5</yscalemodedefault>
     <xmin>-0.0449602</xmin>
     <xmax>0.0449194</xmax>
-    <ymin>367.41340879126</ymin>
-    <ymax>1884.9774761309</ymax>
+    <ymin>381.82831240798</ymin>
+    <ymax>540.45232711687</ymax>
     <xreversed>0</xreversed>
     <yreversed>0</yreversed>
     <toplabel>
@@ -392,7 +435,7 @@
       <size>12</size>
     </xticklabel>
     <yticklabel>
-      <text>1000</text>
+      <text>500</text>
       <interpret/>
       <rotation>0</rotation>
       <fontfamily>Bitstream Vera Sans</fontfamily>
@@ -455,8 +498,8 @@
   <plot>
     <border color="#000000" width="0" padding="0" margin="0" />
     <tag>P2</tag>
-    <aspect x="0" y="0.66565349544073" w="1" h="0.33282674772036" />
-    <idealsize w="713" h="219" />
+    <aspect x="0" y="0.49586776859504" w="0.53533397870281" h="0.50413223140496" />
+    <idealsize w="553" h="305" />
     <name>P2</name>
     <borderColor>#000000</borderColor>
     <borderWidth>0</borderWidth>
@@ -470,8 +513,8 @@
     <yscalemodedefault>5</yscalemodedefault>
     <xmin>-5</xmin>
     <xmax>5</xmax>
-    <ymin>0.023799108302918</ymin>
-    <ymax>9212.1494406228</ymax>
+    <ymin>0.023512372058305</ymin>
+    <ymax>9101.1596883261</ymax>
     <xreversed>0</xreversed>
     <yreversed>0</yreversed>
     <toplabel>
@@ -565,11 +608,121 @@
     <autoLabelX>0</autoLabelX>
     <autoLabelY>0</autoLabelY>
   </plot>
+  <plot>
+    <border color="#000000" width="0" padding="0" margin="0" />
+    <tag>P1</tag>
+    <aspect x="0.53412256267409" y="0" w="0.46587743732591" h="0.49800796812749" />
+    <idealsize w="669" h="375" />
+    <name>P1</name>
+    <borderColor>#000000</borderColor>
+    <borderWidth>0</borderWidth>
+    <foregroundColor>#000000</foregroundColor>
+    <backgroundColor>#ffffff</backgroundColor>
+    <margin>0</margin>
+    <padding>0</padding>
+    <xscalemode>2</xscalemode>
+    <yscalemode>2</yscalemode>
+    <xscalemodedefault>0</xscalemodedefault>
+    <yscalemodedefault>5</yscalemodedefault>
+    <xmin>4.0717021469976</xmin>
+    <xmax>4.0921517858768</xmax>
+    <ymin>-5.0706017721575</ymin>
+    <ymax>5.7196541948984</ymax>
+    <xreversed>0</xreversed>
+    <yreversed>0</yreversed>
+    <toplabel>
+      <text></text>
+      <interpret/>
+      <rotation>0</rotation>
+      <justify>0</justify>
+      <fontfamily>Bitstream Vera Sans</fontfamily>
+      <size>12</size>
+    </toplabel>
+    <xlabel>
+      <text></text>
+      <interpret/>
+      <rotation>0</rotation>
+      <fontfamily>Bitstream Vera Sans</fontfamily>
+      <size>12</size>
+    </xlabel>
+    <ylabel>
+      <text></text>
+      <interpret/>
+      <rotation>270</rotation>
+      <fontfamily>Bitstream Vera Sans</fontfamily>
+      <size>12</size>
+    </ylabel>
+    <xticklabel>
+      <text>4.09</text>
+      <interpret/>
+      <rotation>0</rotation>
+      <fontfamily>Bitstream Vera Sans</fontfamily>
+      <size>12</size>
+    </xticklabel>
+    <yticklabel>
+      <text>4</text>
+      <interpret/>
+      <rotation>0</rotation>
+      <fontfamily>Bitstream Vera Sans</fontfamily>
+      <size>12</size>
+    </yticklabel>
+    <xfullticklabel>
+      <text></text>
+      <interpret/>
+      <rotation>0</rotation>
+      <fontfamily>Bitstream Vera Sans</fontfamily>
+      <size>12</size>
+    </xfullticklabel>
+    <xlogbase>10</xlogbase>
+    <ylogbase>10</ylogbase>
+    <curvetag>01a out y</curvetag>
+    <xmajorgrid>0</xmajorgrid>
+    <ymajorgrid>0</ymajorgrid>
+    <xminorgrid>0</xminorgrid>
+    <yminorgrid>0</yminorgrid>
+    <majorgridcolor>#808080</majorgridcolor>
+    <minorgridcolor>#808080</minorgridcolor>
+    <majorgridcolordefault>1</majorgridcolordefault>
+    <minorgridcolordefault>1</minorgridcolordefault>
+    <majorpenwidth>1</majorpenwidth>
+    <minorpenwidth>1</minorpenwidth>
+    <axispenwidth>1</axispenwidth>
+    <xminorticks>-1</xminorticks>
+    <yminorticks>-1</yminorticks>
+    <xmajorticks>5</xmajorticks>
+    <ymajorticks>5</ymajorticks>
+    <xticksinplot>1</xticksinplot>
+    <xticksoutplot>0</xticksoutplot>
+    <yticksinplot>1</yticksinplot>
+    <yticksoutplot>0</yticksoutplot>
+    <suppresstop>0</suppresstop>
+    <suppressbottom>0</suppressbottom>
+    <suppressleft>0</suppressleft>
+    <suppressright>0</suppressright>
+    <xtransformed>0</xtransformed>
+    <ytransformed>0</ytransformed>
+    <xtransformedexp></xtransformedexp>
+    <ytransformedexp></ytransformedexp>
+    <xinterpret>0</xinterpret>
+    <xinterpretas>1</xinterpretas>
+    <xdisplayas>4</xdisplayas>
+    <yinterpret>0</yinterpret>
+    <yinterpretas>1</yinterpretas>
+    <ydisplayas>4</ydisplayas>
+    <xoffsetmode>0</xoffsetmode>
+    <yoffsetmode>0</yoffsetmode>
+    <stylemarker>0</stylemarker>
+    <widthmarker>0</widthmarker>
+    <colormarker>#000000</colormarker>
+    <defaultcolormarker>1</defaultcolormarker>
+    <autoLabelTop>1</autoLabelTop>
+    <autoLabelX>1</autoLabelX>
+    <autoLabelY>1</autoLabelY>
+  </plot>
   <window>
     <tag>W1</tag>
-    <restore x="2" y="2" w="713" h="617" />
-    <internal x="2" y="2" w="713" h="617" />
-    <columns>1</columns>
+    <restore x="2" y="2" w="1033" h="605" />
+    <internal x="2" y="2" w="1033" h="605" />
     <name>W1</name>
     <backgroundColor>#efefef</backgroundColor>
     <Plot>
@@ -580,6 +733,9 @@
     </Plot>
     <Plot>
       <tag>P2</tag>
+    </Plot>
+    <Plot>
+      <tag>P1</tag>
     </Plot>
   </window>
 </kstdoc>
