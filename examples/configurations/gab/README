@@ -32,6 +32,7 @@ Dependencies
 * gstreamer
 * gst-plugins-good
 * gst-rtsp-server
+* Python 2.6 (or simplejson <http://simplejson.googlecode.com/svn/tags/simplejson-2.1.2/docs/index.html>)
 
 Demonstrates
 ------------
@@ -40,8 +41,5 @@ Demonstrates
 * lightweight HTTP servers in Python
 * NDS1/2 client element, ndssrc
 * command line parsing with GOption
-
-TODO
-----
-
-* use DataTables <http://www.datatables.net/> for channel list
+* AJAX-driven columnar data display with DataTables (http://www.datatables.net/)
+* JSON

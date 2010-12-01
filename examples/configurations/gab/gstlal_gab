@@ -44,51 +44,67 @@ if len(args) > 0:
 # Late imports
 
 import nds
+import json
 import httplib
 import threading
 import subprocess
+from urlparse import urlparse, parse_qs
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 
 
-doc_pattern = """
+doc = """
 <!DOCTYPE html>
 <html>
 <head>
 	<title>GStreamer Audio Bridge - %(host)s:%(port)d</title>
-	<style type="text/css">
-		td { font-family: monospace; }
+	<style type="text/css" title="currentStyle">
+		@import "%(datatables)s/media/css/demo_page.css";
+		@import "%(datatables)s/media/css/demo_table_jui.css";
+		@import "%(datatables)s/examples/examples_support/themes/smoothness/jquery-ui-1.8.4.custom.css";
 	</style>
+	<script type="text/javascript" language="javascript" src="%(datatables)s/media/js/jquery.js"></script>
+	<script type="text/javascript" language="javascript" src="%(datatables)s/media/js/jquery.dataTables.min.js"></script>
+	<script type="text/javascript" charset="utf-8">
+		$(document).ready(function() {
+			$('#example').dataTable( {
+				"bJQueryUI": true,
+				"bProcessing": true,
+				"bServerSide": true,
+				"sAjaxSource": "/data"
+			} );
+		} );
+	</script>
 </head>
-<body>
+<body id="dt_example">
+	<div id="container">
 	<h1>GStreamer Audio Bridge</h1>
 	<h2>%(host)s:%(port)d</h2>
-	<table>
-		<caption><h3>&#8220;Online&#8221; channels</h3></caption>
+	<div id="demo">
+	<table cellpadding="0" cellspacing="0" border="0" class="display" id="example">
+		<caption>&#8220;Online&#8221; channels</caption>
 		<thead>
 			<tr>
-				<td><strong>channel name</strong></td>
-				<td><strong>type</strong></td>
-				<td><strong>format</strong></td>
-				<td><strong>rate</strong></td>
+				<th>channel name</th>
+				<th>type</th>
+				<th>format</th>
+				<th>rate</th>
 			</tr>
 		</thead>
 		<tbody>
-%(tbody)s
+			<tr>
+				<td colspan="4">Loading data from server</td>
+			</tr>
 		</tbody>
 	</table>
+	</div>
+	</div>
 </body>
 </html>
-"""
-
-
-channel_pattern = """
-			<tr>
-				<td><a href="rtsp://localhost:8554/%(name)s">%(name)s</a></td>
-				<td>%(type)s</td>
-				<td>%(data_type)s</td>
-				<td>%(rate)d</td>
-			</tr>
-"""
+""" % {
+	'host': opts.host,
+	'port': opts.port,
+	'datatables': 'https://ldas-jobs.ligo.caltech.edu/~lsinger/DataTables-1.7.4'
+}
 
 
 channel_list = []
@@ -101,7 +117,7 @@ def update_channel_list(daq):
 		daq = nds.daq(opts.host, opts.port)
 	try:
 		print "refreshing channel list"
-		channel_list = daq.recv_channel_list(nds.channel_type.online)
+		channel_list = [(c.name, str(c.type), str(c.data_type), c.rate) for c in daq.recv_channel_list(nds.channel_type.online)]
 	except RuntimeError:
 		daq = None
 	thread = threading.Timer(30, update_channel_list, [daq])
@@ -112,13 +128,72 @@ def update_channel_list(daq):
 class Handler(BaseHTTPRequestHandler):
 
 	def do_GET(self):
-		if self.path != '/':
-			self.send_error(httplib.NOT_FOUND)
-		else:
+		# Parse URL
+		scheme, netloc, path, params, query, fragment = urlparse(self.path, scheme='http')
+
+		if path == '/':
 			self.send_response(httplib.OK)
 			self.end_headers()
-			tbody = "".join(channel_pattern % {'name': c.name, 'type': str(c.type), 'data_type': c.data_type, 'rate': c.rate} for c in channel_list)
-			print >>self.wfile, doc_pattern % {'host': opts.host, 'port': opts.port, 'tbody': tbody}
+			self.wfile.write(doc)
+		elif path == '/data':
+			args = parse_qs(query)
+			self.send_response(httplib.OK)
+			self.end_headers()
+			answer = {}
+			print args
+
+			# Make local copy of channel list
+			channels = channel_list
+			answer['iTotalRecords'] = len(channel_list)
+
+			# Read arguments
+			try:
+				startIndex = int(args['iDisplayStart'][0])
+				endIndex = startIndex + int(args['iDisplayLength'][0])
+			except KeyError, ValueError:
+				startIndex = None
+				endIndex = None
+
+			try:
+				sortingCols = int(args['iSortingCols'][0])
+			except KeyError, ValueError:
+				sortingCols = -1
+
+			for i in range(sortingCols):
+				sortReversed = (args['sSortDir_%d' % i][0] == 'desc')
+				sortCol = int(args['iSortCol_%d' % i][0])
+				channels = sorted(channels, reverse=sortReversed, key=lambda x: x[sortCol])
+
+			try:
+				searchStr = args['sSearch'][0]
+			except KeyError, ValueError:
+				searchStr = None
+
+			try:
+				answer['sEcho'] = args['sEcho']
+			except KeyError:
+				pass
+
+			if searchStr is None:
+				selected_channels = channels
+			else:
+				print searchStr
+				selected_channels = [c for c in channels if searchStr in c[0]]
+
+			answer['iTotalDisplayRecords'] = len(selected_channels)
+
+			selected_channels = selected_channels[startIndex:endIndex]
+
+			answer['aaData'] = [
+				(
+					'<a href="rtsp://localhost:8554/%(name)s">%(name)s</a>' % {'name': c[0]},
+					c[1], c[2], '%g Hz' % c[3]
+				)
+				for c in selected_channels
+			]
+			json.dump(answer, self.wfile)
+		else:
+			self.send_error(httplib.NOT_FOUND)
 
 
 subprocess.Popen(['./gab-rtsp-server', '--host', opts.host, '--port', str(opts.port)])
