@@ -166,6 +166,10 @@ class lal_checktimestamps(gst.BaseTransform):
 		if buf.size != length * self.unit_size:
 			print >>sys.stderr, "%s: got buffer size %d, buffer length %d corresponds to size %d" % (self.get_property("name"), buf.size, length, length * self.unit_size)
 
+		expected_duration = int(round(length * gst.SECOND / float(self.units_per_second)))
+		if buf.duration != expected_duration:
+			print >>sys.stderr, "%s: got duration %d ns, buffer length %d corresponds to %d ns" % (self.get_property("name"), buf.duration, length, expected_duration)
+
 		#
 		# reset for next buffer
 		#
