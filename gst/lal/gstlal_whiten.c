@@ -1296,8 +1296,10 @@ static void finalize(GObject * object)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(object);
 
-	if(element->mean_psd_pad)
+	if(element->mean_psd_pad) {
 		gst_object_unref(element->mean_psd_pad);
+		element->mean_psd_pad = NULL;
+	}
 	g_object_unref(element->adapter);
 	element->adapter = NULL;
 	XLALPSDRegressorFree(element->psd_regressor);
@@ -1458,7 +1460,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 		ARG_SIGMA_SQUARED,
 		g_param_spec_double(
 			"sigma-squared",
-			"\sigma^{2}",
+			"sigma^{2}",
 			"FFT window mean square",
 			0, G_MAXDOUBLE, 0,
 			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
