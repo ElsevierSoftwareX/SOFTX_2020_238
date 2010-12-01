@@ -12,8 +12,6 @@ S6H1Filters_942436815.txt
 """
 
 # TODO:
-#   change name of filter "sensing" -> "isensing"
-#   change name of vars derr,dctrl to smtg sensible
 #   make it work! (compared to dumped frame)
 
 import sys
@@ -24,7 +22,7 @@ pygtk.require('2.0')
 import pygst
 pygst.require('0.10')
 import gobject, gst
-from gstlal import pipeutil
+from gstlal.pipeutil import mkelem
 
 mainloop = gobject.MainLoop()
 pipeline = gst.Pipeline('calibration')
@@ -36,62 +34,148 @@ filters = load('filters.npz')
 ref_gpstime = 943009024
 duration = 48
 
-# Description of elements in the first path (from DARM_ERR channel)
-desc_derr = [
-    ('lal_framesrc',   {'location': 'data.cache',
-                        'channel-name': 'LSC-DARM_ERR',
-                        'instrument': 'H1',
-                        'blocksize': 524288}),
-    ('progressreport', {'name': 'DARM_ERR progress'}),
-    ('audioconvert',   {}),  # because lal_firbank only supports doubles
-    ('lal_firbank',    {'fir-matrix': atleast_2d(filters['sensing']),
-                        'latency': filters['sens_delay']}),
-    ]
 
-# Description of elements in the second path (from DARM_CTRL channel)
-desc_dctrl = [
-    ('lal_framesrc',    {'location': 'data.cache',
-                         'channel-name': 'LSC-DARM_CTRL',
-                         'instrument': 'H1',
-                         'blocksize': 524288}),
-    ('progressreport',  {'name': 'DARM_CTRL progress'}),
-    ('audioconvert',    {}),  # because lal_firbank only supports doubles
-    ('audiowsinclimit', {'mode': 1,  # high-pass filter
-                         'cutoff': 0.00244140625 * 16384/2,  # cf ComputeStrain.c
-                         'length': 2*2000+1}),
-    ('audiowsinclimit', {'mode': 1,  # again!
-                         'cutoff': 0.00244140625 * 16384/2,
-                         'length': 2*2000+1}),
-    ('lal_firbank',     {'fir-matrix': atleast_2d(filters['awhitening'])}),
-    ('lal_firbank',     {'fir-matrix': atleast_2d(filters['actuation'])}),
-    ]
+#
+# Creation of the pipeline. We have to create the elements, and
+# connect them in the right way.
+#
+# It will look like:
+#
+#   derr  -> 1/C              [1]  \
+#                                   |->  [3] save
+#   dctrl -> HPx2 -> AW -> A  [2]  /
+#
 
-# Description of elements from adder to saving the result
-desc_addnsave = [
+# [1] Elements in the first path (from DARM_ERR channel)
+
+derr_src = mkelem('lal_framesrc',
+                  {'location': 'data.cache',
+                   'channel-name': 'LSC-DARM_ERR',
+                   'instrument': 'H1',
+                   'blocksize': 524288})
+
+pr1 = mkelem('progressreport', {'name': 'DARM_ERR progress'})
+
+audioconvert1 = mkelem('audioconvert')  # lal_firbank only supports doubles
+
+inv_sensing = mkelem('lal_firbank',
+                     {'fir-matrix': atleast_2d(filters['inv_sensing']),
+                      'latency': filters['inv_sens_delay']})
+
+path1 = [derr_src, pr1, audioconvert1, inv_sensing]  # so we write less later
+
+
+# [2] Elements in the second path (from DARM_CTRL channel)
+
+dctrl_src = mkelem('lal_framesrc',
+                   {'location': 'data.cache',
+                    'channel-name': 'LSC-DARM_CTRL',
+                    'instrument': 'H1',
+                    'blocksize': 524288})
+
+pr2 = mkelem('progressreport', {'name': 'DARM_CTRL progress'})
+
+audioconvert2 = mkelem('audioconvert')  # lal_firbank only supports doubles
+
+hpf = mkelem('audiowsinclimit',
+             {'mode': 1,  # high pass filter
+              'cutoff': 0.00244140625 * 16384/2,  # cf. ComputeStrain.c
+              'length': 2*2000+1})
+
+hpf2 = mkelem('audiowsinclimit',   # again! wish I could just copy it!
+              {'mode': 1,
+               'cutoff': 0.00244140625 * 16384/2,
+               'length': 2*2000+1})
+
+awhiten = mkelem('lal_firbank',
+                 {'fir-matrix': atleast_2d(filters['awhitening'])})
+
+actuation = mkelem('lal_firbank',
+                   {'fir-matrix': atleast_2d(filters['actuation'])})
+
+path2 = [dctrl_src, pr2, audioconvert2, hpf, hpf2, awhiten, actuation]
+
+
+# [3] Elements from adder to saving the result
+
+path3 = [mkelem(*x) for x in [ \
     ('lal_adder',   {}),
     ('lal_nxydump', {}),
-    ('filesink',    {'location': 'output.txt'}),
-    ]
+    ('filesink',    {'location': 'gstlal_hoft.txt',
+                     'sync': False,
+                     'async': False}),
+#        ('cairovis_lineseries', {}),
+#        ('ffmpegcolorspace',    {}),
+##        ('ximagesink',),
+#        ('pngenc',              {}),
+#        ('filesink', {'location': 'plot.png'}),
+        ]]
 
-# Create the elements and link appropiately
-derr  = [pipeutil.mkelem(*x) for x in desc_derr]
-dctrl = [pipeutil.mkelem(*x) for x in desc_dctrl]
-addnsave = [pipeutil.mkelem(*x) for x in desc_addnsave]
+#### For debugging stuff #####
 
-pipeline.add(*derr+dctrl+addnsave)  # add all
+#    ('lal_whiten',            {'zero-pad': 0,
+#                               'fft-length': 1,
+#                               'average-samples': 1,
+#                               'median-samples': 1,
+#                               'name': 'whiten'}),
+#    ('fakesink',   {'sync': 0,
+#                    'async': 0}),
+#    ]
 
-gst.element_link_many(*derr)     # derr  -> 1/C  [1]
-gst.element_link_many(*dctrl)    # dctrl -> AW -> A  [2]
-derr[-1].link(addnsave[0])       # [1] \
-                                 #       + [3]
-dctrl[-1].link(addnsave[0])      # [2] /
-gst.element_link_many(*addnsave) # [3] -> save
+###############################
+
+
+# Add to pipeline and link
+
+pipeline.add(* path1 + path2 + path3)
+
+gst.element_link_many(*path1)  # [1]
+gst.element_link_many(*path2)  # [2]
+
+path1[-1].link(path3[0])  # [1] \
+                          #      |-> [3]
+path2[-1].link(path3[0])  # [2] /
+
+gst.element_link_many(*path3)  # [3]
+
+
+#### For debugging stuff #####
+
+def extract(pipeline, elem1, elem2, filename):
+    """Take a couple of linked elements elem1->elem2 in a pipeline and
+    extract the data flowing betweem them to a file."""
+    tee = mkelem('tee')
+    pipeline.add(tee)
+    elem1.unlink(elem2)
+    elem1.link(tee)
+    tee.link(elem2)
+
+    save_path = [mkelem(*x) for x in [ \
+        ('audioconvert', {}),
+        ('lal_nxydump', {}),
+        ('filesink',    {'location': filename,
+                         'sync': False,
+                         'async': False})]]
+    pipeline.add(*save_path)
+    tee.link(save_path[0])
+    gst.element_link_many(*save_path)
+
+extract(pipeline, derr_src, pr1, 'gstlal_DARM_ERR.txt')
+extract(pipeline, inv_sensing, path3[0], 'gstlal_C_inv_adv_DARM_ERR.txt')
+extract(pipeline, dctrl_src, pr2, 'gstlal_DARM_CTRL.txt')
+extract(pipeline, hpf2, awhiten, 'gstlal_HPFx2_adv_DARM_CTRL.txt')
+extract(pipeline, awhiten, actuation, 'gstlal_AW_HPFx2_adv_DARM_CTRL.txt')
+extract(pipeline, actuation, path3[0], 'gstlal_A_AW_HPFx2_adv_DARM_CTRL.txt')
+
+##############################
+
 
 # Make it start playing at the appropiate reference gpstime
-derr[0].seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
-             gst.SEEK_TYPE_SET, ref_gpstime * 1e9,
-             gst.SEEK_TYPE_SET, (ref_gpstime + duration) * 1e9)
-dctrl[0].seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
+
+path1[0].seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
+              gst.SEEK_TYPE_SET, ref_gpstime * 1e9,
+              gst.SEEK_TYPE_SET, (ref_gpstime + duration) * 1e9)
+path2[0].seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
               gst.SEEK_TYPE_SET, ref_gpstime * 1e9,
               gst.SEEK_TYPE_SET, (ref_gpstime + duration) * 1e9)
 

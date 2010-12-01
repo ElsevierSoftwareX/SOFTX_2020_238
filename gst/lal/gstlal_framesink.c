@@ -108,7 +108,7 @@ enum {
 
 #define GST_CAT_DEFAULT gstlal_framesink_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
-
+// See http://library.gnome.org/devel/gstreamer/unstable/gstreamer-GstInfo.html
 
 static void dispose(GObject *object);
 
@@ -138,8 +138,8 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes);
 
 static void additional_initializations(GType type)
 {
-    GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framesink", 0,
-                            "framesink element");
+    GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_framesink", GST_DEBUG_FG_BLUE,
+                            "gstlal framesink element");
 }
 
 
@@ -282,6 +282,7 @@ static void gst_lalframe_sink_init(GstLalframeSink *sink,
     sink->instrument = NULL;
     sink->channel_name = NULL;
     sink->units = NULL;
+    sink->description = NULL;
     sink->duration = 64;
     sink->clean_timestamps = FALSE;
     sink->dir_digits = 0;
@@ -308,6 +309,8 @@ static void dispose(GObject *object)
         g_object_unref(sink->adapter);
         sink->adapter = NULL;
     }
+    g_free(sink->description);
+    sink->description = NULL;
     g_free(sink->units);
     sink->units = NULL;
     g_free(sink->channel_name);
@@ -411,13 +414,13 @@ static inline void extract(GstLalframeSink *sink, GstTagList *taglist,
 {
     gchar *tmp;
     if (!gst_tag_list_get_string(taglist, tagname, &tmp)) {
-        GST_WARNING_OBJECT(sink, "Unable to parse \"%s\" from %" GST_PTR_FORMAT,
-                           tagname, taglist);
+        GST_INFO_OBJECT(sink, "Unable to parse \"%s\" from %" GST_PTR_FORMAT,
+                        tagname, taglist);
         return;
     }
     g_free(*dest);
     *dest = tmp;
-    GST_DEBUG_OBJECT(sink, "Found tag \"%s\"=\"%s\"", tagname, *dest);
+    GST_DEBUG_OBJECT(sink, "Found tag %s=\"%s\"", tagname, *dest);
 }
 
 
@@ -434,14 +437,18 @@ static gboolean event(GstBaseSink *basesink, GstEvent *event)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(basesink);
 
+    GST_DEBUG_OBJECT(sink, "Got an event");
+
     switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_TAG:  /* from gstlal_simulation.c */
     {
         GstTagList *taglist;
+        GST_INFO_OBJECT(sink, "Got TAG");
         gst_event_parse_tag(event, &taglist);
         extract(sink, taglist, GSTLAL_TAG_INSTRUMENT, &sink->instrument);
         extract(sink, taglist, GSTLAL_TAG_CHANNEL_NAME, &sink->channel_name);
         extract(sink, taglist, GSTLAL_TAG_UNITS, &sink->units);
+        extract(sink, taglist, GST_TAG_DESCRIPTION, &sink->description);
         break;
     }
     case GST_EVENT_NEWSEGMENT:
@@ -450,6 +457,8 @@ static gboolean event(GstBaseSink *basesink, GstEvent *event)
         GstFormat format;
         GstPad *pad;
         GstStructure *str;
+
+        GST_INFO_OBJECT(sink, "Got NEWSEGMENT");
 
         /* Get all the info about the new segment */
         gst_event_parse_new_segment(event, NULL, NULL, &format, &start,
@@ -471,7 +480,7 @@ static gboolean event(GstBaseSink *basesink, GstEvent *event)
             guint nbytes = gst_adapter_available(sink->adapter);
 
             if (start_byte != sink->current_byte + nbytes) {
-                GST_DEBUG_OBJECT(sink, "NEWSEGMENT, flushing and restarting");
+                GST_INFO_OBJECT(sink, "Flushing and restarting");
 
                 if (nbytes > 0) {
                     if (!write_frame(sink, nbytes))  // flush
@@ -483,7 +492,7 @@ static gboolean event(GstBaseSink *basesink, GstEvent *event)
             }
         }
         else {
-            GST_DEBUG_OBJECT(
+            GST_INFO_OBJECT(
                 sink,
                 "Ignored NEWSEGMENT event of format %u (%s)", (guint) format,
                 gst_format_get_name(format));
@@ -597,6 +606,8 @@ static gboolean reset_on_discontinuity(GstLalframeSink *sink, GstBuffer *buffer)
 
     if (GST_BUFFER_IS_DISCONT(buffer) || GST_BUFFER_TIMESTAMP(buffer) !=
         A_X_B__C(sink->current_byte + available, GST_SECOND, byterate)) {
+// Could do:
+// sink->byte_0 + GST_BUFFER_OFFSET(buffer) != sink->current_byte + available) {
         GST_INFO_OBJECT(sink, "Detected discontinuity");
 
         /* Flush previous data to a frame */
@@ -615,6 +626,8 @@ static gboolean reset_on_discontinuity(GstLalframeSink *sink, GstBuffer *buffer)
         /* Restart counting timestamps */
         sink->current_byte = A_X_B__C(GST_BUFFER_TIMESTAMP(buffer),
                                       byterate, GST_SECOND);
+// Could do:
+// sink->current_byte = sink->byte_0 + GST_BUFFER_OFFSET(buffer)
     }
 
     return TRUE;
@@ -780,6 +793,10 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
 
     /* Create frame file */
     frame = XLALFrameNew(&epoch, duration, "LIGO", 0, 1, ifo_flags);
+
+    /* Add description, if it exists */
+    if (sink->description != NULL)
+        XLALFrHistoryAdd(frame, NULL, sink->description);
 
     /* Macro to save us from writing a lot of boring repetitive stuff
      * in the next lines */
