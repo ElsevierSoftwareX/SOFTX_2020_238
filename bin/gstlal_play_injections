@@ -1,0 +1,116 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2010  Kipp Cannon
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import pygtk
+pygtk.require("2.0")
+import pygst
+pygst.require("0.10")
+import gobject
+import gst
+from optparse import OptionParser
+
+
+from gstlal import lloidparts
+from gstlal import pipeparts
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		version = "%prog ??",
+		usage = "%prog [options] filename",
+		description = "Convert a LIGO Light Weight XML file containing software injection descriptions into an audio file."
+	)
+	parser.add_option("--amplification", metavar = "factor", type = "float", default = 1e17, help = "Set the amplification factor (optional).  The default is 1e17.")
+	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
+	parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
+	parser.add_option("--instrument", metavar = "name", default = "H1", help = "Set the name of the instrument to simulate (optional).  The default is \"H1\".")
+	parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
+	parser.add_option("--output", metavar = "filename", help = "Set the name of the .wav format output file (optional).  The default is to play the audio through the speakers.")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+	options, filenames = parser.parse_args()
+
+	if len(filenames) < 1:
+		raise ValueError, "input file required"
+	if len(filenames) > 1:
+		raise ValueError, "maximum of one input file allowed"
+
+	return options, filenames
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# parse command line
+#
+
+
+options, [filename] = parse_command_line()
+
+
+#
+# build pipeline
+#
+
+
+pipeline = gst.Pipeline("pipeline")
+mainloop = gobject.MainLoop()
+handler = lloidparts.LLOIDHandler(mainloop, pipeline)
+
+
+head = pipeparts.mkaudiotestsrc(pipeline, volume = 0, samplesperbuffer = 8192)
+head = pipeparts.mktaginject(pipeline, head, "instrument=%s,channel-name=%s,units=strain" % (options.instrument, options.channel_name))
+head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float,rate=16384")
+head = pipeparts.mkinjections(pipeline, head, filename)
+if options.verbose:
+	head = pipeparts.mkprogressreport(pipeline, head, "playback")
+head = pipeparts.mkaudioamplify(pipeline, head, options.amplification)
+if options.output:
+	head = pipeparts.mkwavenc(pipeline, head)
+	pipeparts.mkfilesink(pipeline, head, options.output)
+else:
+	pipeparts.mkplaybacksink(pipeline, head)
+
+pipeline.set_state(gst.STATE_PLAYING)
+mainloop.run()
