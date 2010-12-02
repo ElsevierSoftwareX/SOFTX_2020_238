@@ -12,6 +12,7 @@ __author__    = "Leo Singer <leo.singer@ligo.org>"
 #
 
 from optparse import Option, OptionParser
+import tempfile
 
 opts, args = OptionParser(description = __doc__, option_list = [
 	Option("-n", "--num-templates", type=int, default=128, metavar="INT", help="Number of templates per sub-bank"),
@@ -37,6 +38,14 @@ if len(args) > 0:
 	raise ValueError("Too many command line arguments.")	
 if opts.template_bank is None:
 	raise ValueError("No template bank specified.")
+
+#
+# Determine temporary directory from environment.
+#
+
+tmpdir = tempfile.gettempdir()
+if tmpdir is None:
+	raise ValueError("No temporary directory set (did you forget to set TMPDIR in your environment?")
 
 
 #
@@ -138,6 +147,7 @@ gstlal_inspiral_noninjections_sub = EnvCondorJob("""gstlal_inspiral
 	--gps-start-time $(gps_start_time)
 	--gps-end-time $(gps_end_time)
 	--output triggers/noninjections_$(gps_start_time)-$(gps_end_time).$(template_bank).sqlite
+	--tmp-space $(tmpdir)
 	""", outputname="log/$(Cluster).$(Process)", subfilename="gstlal_inspiral_noninjections")
 gstlal_inspiral_noninjections_sub.add_condor_cmd('requirements', 'Memory > 1600')
 
@@ -150,6 +160,7 @@ gstlal_inspiral_injections_sub = EnvCondorJob("""gstlal_inspiral
 	--gps-end-time $(gps_end_time)
 	--injections injections/$(injection_name).xml
 	--output triggers/$(injection_name)_$(gps_start_time)-$(gps_end_time).$(template_bank).sqlite
+	--tmp-space $(tmpdir)
 	""", outputname="log/$(Cluster).$(Process)", subfilename="gstlal_inspiral_injections")
 gstlal_inspiral_injections_sub.add_condor_cmd('requirements', 'Memory > 1600')
 
@@ -173,7 +184,8 @@ for j in range(count_sub_banks):
 			template_bank = template_bank,
 			gps_start_time = start,
 			gps_end_time = end,
-			flow = opts.flow)
+			flow = opts.flow,
+			tmpdir = tmpdir)
 
 		for injections in opts.injections:
 			head, tail = os.path.split(injections)
@@ -186,7 +198,8 @@ for j in range(count_sub_banks):
 				gps_start_time = start,
 				gps_end_time = end,
 				injection_name = stem,
-				flow = opts.flow)
+				flow = opts.flow,
+				tmpdir = tmpdir)
 
 
 # Write DAG and submit files.
