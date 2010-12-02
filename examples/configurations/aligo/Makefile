@@ -29,7 +29,7 @@ all: aligo.dag tmpltbank/tmpltbank.xml.gz $(INJECTIONS) psd.xml.gz
 
 # These targets are intermediate; it's OK to delete them if they are built only
 # to satisfy a dependency for another target.
-.INTERMEDIATE: $(TMPLTBANK)
+.INTERMEDIATE: $(TMPLTBANK) eff_distances candle_snr min_distance max_distance
 
 
 aligo.dag: tmpltbank/tmpltbank.xml.gz psd.xml.gz $(INJECTIONS)
@@ -110,8 +110,31 @@ tmpltbank/tmpltbank.xml.gz: $(TMPLTBANK)
 	gstlal_prune_duplicate_mass_pairs $^ $@
 
 
+# Read and sort effective distances for entire template bank
+eff_distances: tmpltbank/tmpltbank.xml.gz
+	ligolw_print --table summ_value --column name --column value $< \
+	| sed -n s/inspiral_effective_distance,//p \
+	| sort -n > $@
+
+
+# Read candle SNR argument from template bank
+candle_snr: tmpltbank/tmpltbank.xml.gz
+	ligolw_print --table process_params --column param --column value $< \
+	| sed -n s/--candle-snr,//p > $@
+
+
+# Determine minimum distance for injections
+min_distance: eff_distances candle_snr
+	echo "print 0.5 * $(shell cat candle_snr) / 8.0 * $(shell head -n 1 eff_distances) * 1e3" | python > $@
+
+
+# Determine maximum distance for injections
+max_distance: eff_distances candle_snr
+	echo "print 0.5 * $(shell cat candle_snr) / 4.0 * $(shell tail -n 1 eff_distances) * 1e3" | python > $@
+
+
 # Generate software injections
-injections/injections%.xml:
+injections/injections%.xml: min_distance max_distance
 	mkdir -p $(@D)
 	lalapps_inspinj \
 		--output $@ \
@@ -125,8 +148,8 @@ injections/injections%.xml:
 		--i-distr uniform \
 		--l-distr random \
 		--d-distr uniform \
-		--min-distance 1e3 \
-		--max-distance 40e3 \
+		--min-distance $(shell cat min_distance) \
+		--max-distance $(shell cat max_distance) \
 		--m-distr componentMass \
 		--min-mass1 $(MIN_MASS) \
 		--max-mass1 $(MAX_MASS) \
@@ -140,6 +163,7 @@ injections/injections%.xml:
 
 clean:
 	rm -f \
+		eff_distances candle_snr min_distance max_distance \
 		frame.cache \
 		psd.xml.gz \
 		$(TMPLTBANK) \
