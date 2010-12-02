@@ -5,8 +5,8 @@ GPS_END_TIME=$(shell echo $(GPS_START_TIME) + $(DURATION) | bc)
 
 
 # PSD estimate and template placement time
-PSD_START_TIME=$(shell echo $(GPS_START_TIME) + 1024 | bc)
-PSD_END_TIME=$(shell echo $(GPS_START_TIME) + 3072 | bc)
+PSD_START_TIME=$(shell echo $(GPS_START_TIME) + 7200 | bc)
+PSD_END_TIME=$(shell echo $(PSD_START_TIME) + 2048 | bc)
 PSD_DURATION=$(shell echo $(PSD_END_TIME) - $(PSD_START_TIME) | bc)
 TMPLTBANK=H1-TMPLTBANK-$(PSD_START_TIME)-$(PSD_DURATION).xml.gz
 
