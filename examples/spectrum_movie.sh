@@ -8,4 +8,6 @@ gstlal_spectrum_movie \
 	--psd-zero-pad-length 0.0 \
 	--average-length 64.0 \
 	--median-samples 3 \
+	--frame-rate 10/1 \
+	--output spectrum_movie.ogm \
 	--verbose
