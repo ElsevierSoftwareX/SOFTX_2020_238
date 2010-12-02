@@ -14,13 +14,13 @@ __author__    = "Leo Singer <leo.singer@ligo.org>"
 from optparse import Option, OptionParser
 
 opts, args = OptionParser(description = __doc__, option_list = [
-	Option("-n", "--num-templates", type=int, default=256, metavar="INT", help="Number of templates per sub-bank"),
+	Option("-n", "--num-templates", type=int, default=128, metavar="INT", help="Number of templates per sub-bank"),
 	Option("--flow", type="float", metavar="Hz", help="Low frequency cutoff"),
 	Option("--injections", metavar="FILE.xml|FILE.xml.gz", action="append", default=[], help="Injection file.  Provide multiple times for multiple parallel injection runs."),
 	Option("--template-bank", metavar="FILE.xml|FILE.xml.gz", help="Filename of input template bank"),
 	Option("--gps-start-time", type=int, metavar="SECONDS", help="Start of analysis time"),
 	Option("--gps-end-time", type=int, metavar="SECONDS", help="End of analysis time"),
-	Option("--job-duration", type=int, default=3600*2, metavar="SECONDS", help="Analysis duration per job (default=2 hours).  FIXME: must be a divisor of --total-duration."),
+	Option("--job-duration", type=int, default=3600*6, metavar="SECONDS", help="Analysis duration per job (default=6 hours)."),
 ]).parse_args()
 
 
@@ -137,8 +137,9 @@ gstlal_inspiral_noninjections_sub = EnvCondorJob("""gstlal_inspiral
 	--svd-bank svd/$(template_bank)
 	--gps-start-time $(gps_start_time)
 	--gps-end-time $(gps_end_time)
-	--output triggers/noninjections_$(gps_start_time)-$(gps_end_time).$(template_bank)
+	--output triggers/noninjections_$(gps_start_time)-$(gps_end_time).$(template_bank).sqlite
 	""", outputname="log/$(Cluster).$(Process)", subfilename="gstlal_inspiral_noninjections")
+gstlal_inspiral_noninjections_sub.add_condor_cmd('requirements', 'Memory > 1600')
 
 gstlal_inspiral_injections_sub = EnvCondorJob("""gstlal_inspiral
 	--flow $(flow) --reference-psd psd.xml.gz
@@ -148,8 +149,9 @@ gstlal_inspiral_injections_sub = EnvCondorJob("""gstlal_inspiral
 	--gps-start-time $(gps_start_time)
 	--gps-end-time $(gps_end_time)
 	--injections injections/$(injection_name).xml
-	--output triggers/$(injection_name)_$(gps_start_time)-$(gps_end_time).$(template_bank)
+	--output triggers/$(injection_name)_$(gps_start_time)-$(gps_end_time).$(template_bank).sqlite
 	""", outputname="log/$(Cluster).$(Process)", subfilename="gstlal_inspiral_injections")
+gstlal_inspiral_injections_sub.add_condor_cmd('requirements', 'Memory > 1600')
 
 # Assemble DAG.
 for j in range(count_sub_banks):
