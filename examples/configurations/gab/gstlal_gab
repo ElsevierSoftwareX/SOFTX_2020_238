@@ -44,7 +44,11 @@ if len(args) > 0:
 # Late imports
 
 import nds
-import json
+try:
+	import json
+except ImportError:
+	# pre Python 2.6
+	import simplejson as json
 import httplib
 import threading
 import subprocess
@@ -120,7 +124,7 @@ def update_channel_list(daq):
 		channel_list = [(c.name, str(c.type), str(c.data_type), c.rate) for c in daq.recv_channel_list(nds.channel_type.online)]
 	except RuntimeError:
 		daq = None
-	thread = threading.Timer(30, update_channel_list, [daq])
+	thread = threading.Timer(7200, update_channel_list, [daq])
 	thread.daemon = True
 	thread.start()
 
@@ -140,7 +144,6 @@ class Handler(BaseHTTPRequestHandler):
 			self.send_response(httplib.OK)
 			self.end_headers()
 			answer = {}
-			print args
 
 			# Make local copy of channel list
 			channels = channel_list
@@ -177,7 +180,6 @@ class Handler(BaseHTTPRequestHandler):
 			if searchStr is None:
 				selected_channels = channels
 			else:
-				print searchStr
 				selected_channels = [c for c in channels if searchStr in c[0]]
 
 			answer['iTotalDisplayRecords'] = len(selected_channels)
