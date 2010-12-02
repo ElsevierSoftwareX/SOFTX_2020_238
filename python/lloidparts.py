@@ -223,7 +223,7 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8):
 		# into the whitener.
 		#
 
-		def f_nyquist_changed(elem, pspec, psd):
+		def psd_resolution_changed(elem, pspec, psd):
 			# get frequency resolution and number of bins
 			delta_f = elem.get_property("delta-f")
 			n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
@@ -231,7 +231,8 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8):
 			psd = cbc_template_fir.interpolate_psd(psd, delta_f)
 			elem.set_property("mean-psd", psd.data[:n])
 
-		elems[-3].connect_after("notify::f-nyquist", f_nyquist_changed, psd)
+		elems[-3].connect_after("notify::f-nyquist", psd_resolution_changed, psd)
+		elems[-3].connect_after("notify::delta-f", psd_resolution_changed, psd)
 
 	#
 	# down-sample whitened time series to remaining target sample rates
