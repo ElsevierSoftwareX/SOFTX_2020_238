@@ -30,8 +30,13 @@ import pygtk
 pygtk.require('2.0')
 import pygst
 pygst.require('0.10')
+import gobject
+import gst
 import gstoption
 from gstlal.option import OptionParser
+from gstlal import lloidparts
+from gstlal import pipeparts
+
 
 from glue import segments
 from pylal.datatypes import LIGOTimeGPS
@@ -56,10 +61,11 @@ def parse_command_line():
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
 	parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
 	parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
-	parser.add_option("--psd-fft-length", metavar = "seconds", type = "float", default = 4.0, help = "Set the length of the FFT windows used to measure the PSD (optional).")
+	parser.add_option("--psd-fft-length", metavar = "seconds", type = "float", default = 8.0, help = "Set the length of the FFT windows used to measure the PSD (optional).")
+	parser.add_option("--psd-zero-pad-length", metavar = "seconds", type = "float", default = 0.0, help = "Set the length of zero-padding in the FFT windows used to measure the PSD (optional).")
 	parser.add_option("--average-length", metavar = "seconds", type = "float", default = 64.0, help = "Set the time scale for the running mean (optional).  Default = 64.0.")
 	parser.add_option("--median-samples", metavar = "samples", type = "int", default = 5, help = "Set the number of samples in the median history (optional).  Default = 5.")
-	parser.add_option("--output", metavar = "filename", help = "Set the name of the movie file to write (required).")
+	parser.add_option("--output", metavar = "filename", help = "Set the name of the movie file to write (optional).  The default is to display the video on screen.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 	parser.add_option_group(gstoption.get_group())
@@ -69,7 +75,7 @@ def parse_command_line():
 	if sum(1 for option in ('frame_cache', 'fake_data', 'online_data') if getattr(options, option) is not None) != 1:
 		raise ValueError, "must provide exactly one of --frame-cache, --fake-data, --online-data"
 
-	required_options = ["gps_start_time", "gps_end_time", "instrument", "channel_name", "output"]
+	required_options = ["gps_start_time", "gps_end_time", "instrument", "channel_name"]
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
@@ -98,18 +104,15 @@ def parse_command_line():
 options, filenames = parse_command_line()
 
 
-from gstlal.pipeutil import *
-from gstlal.lloidparts import LLOIDHandler, mkLLOIDbasicsrc, DetectorData, mkelems_fast
-from gstlal import pipeparts
-
-
 #
 # build pipeline
 #
 
 
-def build_pipeline(pipeline, head, psd_fft_length, average_length, median_samples, verbose = False):
-	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, average_samples = int(round(average_length / (psd_fft_length / 2) - 1)), median_samples = median_samples)
+def build_pipeline(pipeline, head, sample_rate, psd_fft_length, psd_zero_pad_length, average_length, median_samples, verbose = False):
+	head = pipeparts.mkresample(pipeline, head, quality = 9)
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % sample_rate)
+	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = psd_zero_pad_length, average_samples = int(round(average_length / (psd_fft_length / 2) - 1)), median_samples = median_samples)
 	pipeparts.mkfakesink(pipeline, head)
 	head = pipeparts.mkqueue(pipeline, head, pad_name = "mean-psd", max_size_buffers = 4)
 
@@ -123,10 +126,11 @@ def build_pipeline(pipeline, head, psd_fft_length, average_length, median_sample
 
 
 mainloop = gobject.MainLoop()
-pipeline = gst.Pipeline("psd")
-handler = LLOIDHandler(mainloop, pipeline)
+pipeline = gst.Pipeline("spectrum-movie")
+handler = lloidparts.LLOIDHandler(mainloop, pipeline)
 
-head = mkLLOIDbasicsrc(
+
+head = lloidparts.mkLLOIDbasicsrc(
 	pipeline,
 	gst.event_new_seek(
 		1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_KEY_UNIT,
@@ -134,27 +138,26 @@ head = mkLLOIDbasicsrc(
 		gst.SEEK_TYPE_SET, options.seg[1].ns()
 	),
 	options.instrument,
-	DetectorData(options.frame_cache, options.channel_name),
+	lloidparts.DetectorData(options.frame_cache, options.channel_name),
 	options.fake_data,
 	options.online_data,
 	options.injections,
 	options.verbose
 )
-head = mkelems_fast(
-	pipeline,
-	head,
-	"audioresample", {"gap-aware": True, "quality": 9},
-	"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % 8192)}
-)[-1]
 head = build_pipeline(
 	pipeline,
 	head,
+	8192,
 	options.psd_fft_length,
+	options.psd_zero_pad_length,
 	options.average_length,
 	options.median_samples,
 	verbose = options.verbose
 )
-pipeparts.mkogmvideosink(pipeline, head, options.output, verbose = options.verbose)
+if options.output is not None:
+	pipeparts.mkogmvideosink(pipeline, head, options.output, verbose = options.verbose)
+else:
+	pipeparts.mkvideosink(pipeline, pipeparts.mkcolorspace(pipeline, head))
 
 
 #

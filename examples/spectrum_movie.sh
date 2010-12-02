@@ -4,10 +4,8 @@ gstlal_spectrum_movie \
 	--channel-name "LSC-STRAIN" \
 	--gps-start-time 874100000.0 \
 	--gps-end-time 874120000.0 \
-	--psd-fft-length 4.0 \
+	--psd-fft-length 8.0 \
+	--psd-zero-pad-length 0.0 \
 	--average-length 64.0 \
 	--median-samples 3 \
-	--output "/dev/null" \
 	--verbose
-
-exit
