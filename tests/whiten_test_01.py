@@ -41,7 +41,7 @@ def whiten_test_01a(pipeline):
 		delta_f = elem.get_property("delta-f")
 		f_nyquist = elem.get_property("f-nyquist")
 		n = int(round(f_nyquist / delta_f) + 1)
-		elem.set_property("mean-psd", numpy.zeros((n,), dtype="double") + 2.0 * delta_f * (4 / f_nyquist))
+		elem.set_property("mean-psd", numpy.zeros((n,), dtype="double") + 1.0 / (n * delta_f))
 
 	#
 	# try changing these.  test should still work!
