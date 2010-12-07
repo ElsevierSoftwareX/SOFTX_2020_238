@@ -24,7 +24,7 @@
 
 
 #include <gst/gst.h>
-#include <gst/base/gstpushsrc.h>
+#include <gst/base/gstbasesrc.h>
 
 #include <lal/FrameStream.h>
 #include <lal/LALDatatypes.h>

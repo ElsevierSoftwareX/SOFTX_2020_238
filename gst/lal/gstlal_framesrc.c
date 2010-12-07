@@ -44,7 +44,7 @@
 
 
 #include <gst/gst.h>
-#include <gst/base/gstpushsrc.h>
+#include <gst/base/gstbasesrc.h>
 
 
 /*
