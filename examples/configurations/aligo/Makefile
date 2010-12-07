@@ -8,7 +8,7 @@ GPS_END_TIME=$(shell echo $(GPS_START_TIME) + $(DURATION) | bc)
 PSD_START_TIME=$(shell echo $(GPS_START_TIME) + 7200 | bc)
 PSD_END_TIME=$(shell echo $(PSD_START_TIME) + 2048 | bc)
 PSD_DURATION=$(shell echo $(PSD_END_TIME) - $(PSD_START_TIME) | bc)
-TMPLTBANK=H1-TMPLTBANK-$(PSD_START_TIME)-$(PSD_DURATION).xml.gz
+TMPLTBANK=H1-TMPLTBANK-$(PSD_START_TIME)-$(PSD_DURATION).xml
 
 
 # Injection files (10)
@@ -24,7 +24,7 @@ LOW_FREQUENCY_CUTOFF = 40.0
 HIGH_PASS_FREQ = 30.0
 
 
-all: aligo.dag tmpltbank/tmpltbank.xml.gz $(INJECTIONS) psd.xml.gz
+all: aligo.dag tmpltbank/tmpltbank.xml $(INJECTIONS) psd.xml
 
 
 # These targets are intermediate; it's OK to delete them if they are built only
@@ -32,7 +32,7 @@ all: aligo.dag tmpltbank/tmpltbank.xml.gz $(INJECTIONS) psd.xml.gz
 .INTERMEDIATE: $(TMPLTBANK) eff_distances candle_snr min_distance max_distance
 
 
-aligo.dag: tmpltbank/tmpltbank.xml.gz psd.xml.gz $(INJECTIONS)
+aligo.dag: tmpltbank/tmpltbank.xml psd.xml $(INJECTIONS)
 	mkdir -p log
 	mkdir -p svd
 	mkdir -p triggers
@@ -50,7 +50,7 @@ frame.cache:
 
 
 # Estimate PSD
-psd.xml.gz: frame.cache
+psd.xml: frame.cache
 	gstlal_reference_psd \
 		--instrument H1 \
 		--channel-name MOCK-STRAIN \
@@ -99,26 +99,25 @@ $(TMPLTBANK): frame.cache
 		--frame-cache $^ \
 		--max-high-freq-cutoff SchwarzISCO \
 		--approximant TaylorF2 \
-		--write-compress \
 		--order twoPN \
 		--spectrum-type median
 
 
 # Generate template bank with duplicate mass pairs pruned
-tmpltbank/tmpltbank.xml.gz: $(TMPLTBANK)
+tmpltbank/tmpltbank.xml: $(TMPLTBANK)
 	mkdir -p $(@D)
 	gstlal_prune_duplicate_mass_pairs $^ $@
 
 
 # Read and sort effective distances for entire template bank
-eff_distances: tmpltbank/tmpltbank.xml.gz
+eff_distances: tmpltbank/tmpltbank.xml
 	ligolw_print --table summ_value --column name --column value $< \
 	| sed -n s/inspiral_effective_distance,//p \
 	| sort -n > $@
 
 
 # Read candle SNR argument from template bank
-candle_snr: tmpltbank/tmpltbank.xml.gz
+candle_snr: tmpltbank/tmpltbank.xml
 	ligolw_print --table process_params --column param --column value $< \
 	| sed -n s/--candle-snr,//p > $@
 
@@ -165,7 +164,7 @@ clean:
 	rm -f \
 		eff_distances candle_snr min_distance max_distance \
 		frame.cache \
-		psd.xml.gz \
+		psd.xml \
 		$(TMPLTBANK) \
 		*.{sub,dag} \
 		*.dag.*
