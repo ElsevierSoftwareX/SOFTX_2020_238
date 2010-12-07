@@ -50,14 +50,17 @@ def whiten_test_01a(pipeline):
 	#
 	# signal handler to construct a new unit PSD (with LAL's
 	# normalization) whenever the frequency resolution or Nyquist
-	# frequency changes
+	# frequency changes.  LAL's normalization is such that the integral
+	# of the PSD yields the variance in the time domain, therefore
+	#
+	# PSD =  1 / (n \Delta f)
 	#
 
 	def psd_resolution_changed(elem, pspec, ignored):
 		delta_f = elem.get_property("delta-f")
 		f_nyquist = elem.get_property("f-nyquist")
 		n = int(round(f_nyquist / delta_f) + 1)
-		elem.set_property("mean-psd", numpy.zeros((n,), dtype="double") + 1.0 / (n * delta_f))
+		elem.set_property("mean-psd", numpy.ones((n,), dtype = "double") / (n * delta_f))
 
 	#
 	# try changing these.  test should still work!
