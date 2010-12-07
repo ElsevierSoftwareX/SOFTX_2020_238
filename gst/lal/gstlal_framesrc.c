@@ -516,6 +516,14 @@ static gboolean start(GstBaseSrc *object)
 	gst_caps_unref(caps);
 
 	/*
+	 * Set up default segment using start time of frame cache, so that
+	 * if the user does not provide any seek event playback will start
+	 * from the first frame
+	 */
+
+	gst_segment_set_newsegment(&object->segment, FALSE, 1.0, GST_FORMAT_TIME, (GstClockTime) XLALGPSToINT8NS(&stream_start), GST_CLOCK_TIME_NONE, (GstClockTime) XLALGPSToINT8NS(&stream_start));
+
+	/*
 	 * Done
 	 */
 
