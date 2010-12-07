@@ -95,10 +95,13 @@ class Handler(object):
 			self.mainloop.quit()
 
 
-def build_and_run(pipelinefunc, name):
+def build_and_run(pipelinefunc, name, segment = None):
 	print >>sys.stderr, "=== Running Test %s ===" % name
 	mainloop = gobject.MainLoop()
 	pipeline = gst.Pipeline(name)
 	handler = Handler(mainloop, pipelinefunc(pipeline))
+	if segment is not None:
+		pipeline.set_state(gst.STATE_PAUSED)
+		pipeline.seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH, gst.SEEK_TYPE_SET, segment[0].ns(), gst.SEEK_TYPE_SET, segment[1].ns())
 	pipeline.set_state(gst.STATE_PLAYING)
 	mainloop.run()
