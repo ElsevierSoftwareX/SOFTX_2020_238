@@ -45,12 +45,12 @@
   <scalar>
     <tag>P2/YMin</tag>
     <orphan/>
-    <value>0.71156689971975</value>
+    <value>0.71156333512089</value>
   </scalar>
   <scalar>
     <tag>P2/YMax</tag>
     <orphan/>
-    <value>1145921.2103862</value>
+    <value>1146156.5956277</value>
   </scalar>
   <scalar>
     <tag>Input/XMin</tag>
@@ -95,12 +95,12 @@
   <scalar>
     <tag>P1/XMin</tag>
     <orphan/>
-    <value>7.0196187807861</value>
+    <value>5.570271230491</value>
   </scalar>
   <scalar>
     <tag>P1/XMax</tag>
     <orphan/>
-    <value>7.3621726297636</value>
+    <value>5.6153817436959</value>
   </scalar>
   <scalar>
     <tag>P1/YMin</tag>
@@ -245,8 +245,8 @@
     <yscalemodedefault>5</yscalemodedefault>
     <xmin>-5.0000020000002</xmin>
     <xmax>5.0000020000002</xmax>
-    <ymin>0.71156689971975</ymin>
-    <ymax>1145921.2103862</ymax>
+    <ymin>0.71156333512089</ymin>
+    <ymax>1146156.5956277</ymax>
     <xreversed>0</xreversed>
     <yreversed>0</yreversed>
     <toplabel>
@@ -356,8 +356,8 @@
     <yscalemode>6</yscalemode>
     <xscalemodedefault>0</xscalemodedefault>
     <yscalemodedefault>5</yscalemodedefault>
-    <xmin>7.0196187807861</xmin>
-    <xmax>7.3621726297636</xmax>
+    <xmin>5.570271230491</xmin>
+    <xmax>5.6153817436959</xmax>
     <ymin>-2.9859260858322</ymin>
     <ymax>2.938916321205</ymax>
     <xreversed>0</xreversed>
@@ -387,7 +387,7 @@
       <size>12</size>
     </ylabel>
     <xticklabel>
-      <text>7.35</text>
+      <text>5.61</text>
       <interpret/>
       <rotation>0</rotation>
       <fontfamily>Bitstream Vera Sans</fontfamily>
