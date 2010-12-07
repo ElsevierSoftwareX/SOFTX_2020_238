@@ -74,6 +74,7 @@
 #include <gstlal_reblock.h>
 #include <gstlal_delay.h>
 #include <gstlal_iirbank.h>
+#include <gstlal_mean.h>
 
 
 /*
@@ -125,6 +126,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_reblock", GSTLAL_REBLOCK_TYPE},
 		{"lal_delay", GSTLAL_DELAY_TYPE},
 		{"lal_iirbank", GSTLAL_IIRBANK_TYPE},
+		{"lal_mean", GSTLAL_MEAN_TYPE},
 		{NULL, 0},
 	};
 
