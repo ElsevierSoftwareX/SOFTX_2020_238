@@ -188,8 +188,8 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 	 */
 
 	if(offset >= segment_length) {
-		GST_ELEMENT_ERROR(element, RESOURCE, READ, ("requested interval lies outside input domain"), (NULL));
-		return GST_FLOW_ERROR;
+		GST_WARNING_OBJECT(element, "requested interval lies outside input domain");
+		return GST_FLOW_UNEXPECTED;
 	}
 	if(segment_length - offset < length)
 		length = segment_length - offset;
