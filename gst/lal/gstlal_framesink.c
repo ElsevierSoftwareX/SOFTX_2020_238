@@ -34,6 +34,13 @@
  * </refsect2>
  */
 
+/* The Frame Format Specification is described in LIGO-T970130-v1
+ * (https://dcc.ligo.org/cgi-bin/DocDB/ShowDocument?docid=329)
+ *
+ * The Naming Convention for Frame Files is described in the Technical
+ * Note LIGO-T010150-00 (http://www.ligo.caltech.edu/docs/T/T010150-00.pdf)
+ */
+
 static const char gst_lalframe_sink_doc[] =
     "Write data to frame files.\n"
     "\n"
@@ -102,6 +109,7 @@ enum {
     PROP_FRAME_TYPE,
     PROP_DURATION,
     PROP_CLEAN_TIMESTAMPS,
+    PROP_STRICT_TIMESTAMPS,
     PROP_DIR_DIGITS,
 };
 
@@ -243,6 +251,13 @@ static void gst_lalframe_sink_class_init(GstLalframeSinkClass *klass)
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
     g_object_class_install_property(
+        gobject_class, PROP_STRICT_TIMESTAMPS,
+        g_param_spec_boolean(
+            "strict-timestamps", "Strict timestamps",
+            "Fail if timestamping not striclty as expected", FALSE,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+    g_object_class_install_property(
         gobject_class, PROP_DIR_DIGITS,
         g_param_spec_int(
             "dir-digits", "Directory digits to remove",
@@ -285,6 +300,7 @@ static void gst_lalframe_sink_init(GstLalframeSink *sink,
     sink->description = NULL;
     sink->duration = 64;
     sink->clean_timestamps = FALSE;
+    sink->strict_timestamps = FALSE;
     sink->dir_digits = 0;
     sink->adapter = gst_adapter_new();
     sink->current_byte = 0;
@@ -358,6 +374,9 @@ static void set_property(GObject *object, guint prop_id,
     case PROP_CLEAN_TIMESTAMPS:
         sink->clean_timestamps = g_value_get_boolean(value);
         break;
+    case PROP_STRICT_TIMESTAMPS:
+        sink->strict_timestamps = g_value_get_boolean(value);
+        break;
     case PROP_DIR_DIGITS:
         sink->dir_digits = g_value_get_int(value);
         break;
@@ -385,6 +404,9 @@ get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
         break;
     case PROP_CLEAN_TIMESTAMPS:
         g_value_set_boolean(value, sink->clean_timestamps);
+        break;
+    case PROP_STRICT_TIMESTAMPS:
+        g_value_set_boolean(value, sink->strict_timestamps);
         break;
     case PROP_DIR_DIGITS:
         g_value_set_int(value, sink->dir_digits);
@@ -604,8 +626,7 @@ static gboolean reset_on_discontinuity(GstLalframeSink *sink, GstBuffer *buffer)
     guint byterate = sink->rate * sink->width / 8;
     guint available = gst_adapter_available(sink->adapter);
 
-    if (GST_BUFFER_IS_DISCONT(buffer) || GST_BUFFER_TIMESTAMP(buffer) !=
-        A_X_B__C(sink->current_byte + available, GST_SECOND, byterate)) {
+    if (GST_BUFFER_IS_DISCONT(buffer)) {
 // Could do:
 // sink->byte_0 + GST_BUFFER_OFFSET(buffer) != sink->current_byte + available) {
         GST_INFO_OBJECT(sink, "Detected discontinuity");
@@ -628,6 +649,11 @@ static gboolean reset_on_discontinuity(GstLalframeSink *sink, GstBuffer *buffer)
                                       byterate, GST_SECOND);
 // Could do:
 // sink->current_byte = sink->byte_0 + GST_BUFFER_OFFSET(buffer)
+    }
+    else if (sink->strict_timestamps) {  // be a pain in the neck
+        GstClockTime t = A_X_B__C(sink->current_byte + available,
+                                  GST_SECOND, byterate);
+        g_assert(GST_BUFFER_TIMESTAMP(buffer) == t);
     }
 
     return TRUE;
@@ -783,10 +809,13 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
         dirname = g_strdup(sink->path);
     }
 
-    filename = g_strdup_printf("%s/%c-%s-%.15g-%.15g.gwf",
+    /* See conventions in the technical note referred at the top */
+    int G = epoch.gpsSeconds;
+    GstClockTime t1_ns = t0_ns + duration * GST_SECOND;
+    int T = ceil(t1_ns / (double) GST_SECOND) - t0_ns / GST_SECOND;
+    filename = g_strdup_printf("%s/%c-%s-%09d-%d.gwf",
                                dirname, sink->instrument[0], sink->frame_type,
-                               epoch.gpsSeconds + epoch.gpsNanoSeconds*1e-9,
-                               duration);
+                               G, T);
     g_free(dirname);
 
     channame = g_strdup_printf("%s:%s", sink->instrument, sink->channel_name);
