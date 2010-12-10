@@ -96,6 +96,36 @@ static int mean_process(GSTLALMean *element, guint64 available_length, guint64 o
 	return 0;
 }
 
+static int thresh_process(GSTLALMean *element, guint64 available_length, guint64 output_length, double *in, double *out)
+{
+	guint64 i,j,k;
+	double thresh = element->thresh;
+
+	if (!element->lastcross) element->lastcross = (guint64 *) calloc(element->channels, sizeof(guint64));
+
+	memset((void *) element->lastcross, 0, sizeof(guint64) * element->channels);
+
+	/* pre compute the threshold crossing for the first sample */
+	guint64 offset = available_length - output_length;
+	for (j = 0; j < element->channels; j++) {
+		for(k = 0; k < element->n-1; k++) {
+			if(k > offset) break;
+			if (fabs(in[(offset - k) * element->channels + j]) >= thresh) element->lastcross[j] = offset - k;
+		}
+	}
+	
+	for(i = 0; i < output_length; i++) {
+		/* How far to look back in the input */
+		offset = available_length - output_length + i;
+		for (j = 0; j < element->channels; j++) {
+			if (fabs(in[offset * element->channels + j]) >= thresh) element->lastcross[j] = offset - k;
+			if (offset - element->lastcross[j] > element->n) out[i*element->channels +j] = 0.0;
+			else out[i*element->channels +j] = in[offset * element->channels + j];
+		}
+	}
+	return 0;
+}
+
 static int max_over_n_process(GSTLALMean *element, guint64 available_length, guint64 output_length, double *in, double *out)
 {
 	guint64 i,j,k;
@@ -353,12 +383,14 @@ GST_BOILERPLATE(
 enum property {
 	ARG_N = 1,
 	ARG_TYPE,
-	ARG_MOMENT
+	ARG_MOMENT,
+	ARG_THRESH
 };
 
 #define DEFAULT_N 1
 #define DEFAULT_MOMENT 2
 #define DEFAULT_TYPE 1
+#define DEFAULT_THRESH 5.0
 #define TYPE_MEAN 1
 #define TYPE_INTEGRAL 2
 #define TYPE_MAX_OVER_N 3
@@ -588,6 +620,14 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 	}
 
+	case ARG_THRESH: {
+		double old_thresh = element->thresh;
+		element->thresh = g_value_get_double(value);
+		if(element->thresh != old_thresh)
+			g_object_notify(object, "moment");
+		break;
+	}
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -621,6 +661,10 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		g_value_set_uint(value, element->moment);
 		break;
 
+	case ARG_THRESH:
+		g_value_set_double(value, element->thresh);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -648,11 +692,19 @@ static void finalize(GObject *object)
 		element->adapter = NULL;
 	}
 
+
+	if (element->sum1) free(element->sum1);
+	if (element->sum2) free(element->sum2);
+	if (element->max) free(element->max);
+	if (element->lastmax) free(element->lastmax);
+	if (element->lastcross) free(element->lastcross);
+
 	/*
 	 * chain to parent class' finalize() method
 	 */
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
+
 }
 
 
@@ -666,7 +718,7 @@ static void gstlal_mean_base_init(gpointer gclass)
 	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
 	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
 
-	gst_element_class_set_details_simple(element_class, "Average of last N samples", "Filter/Audio", "Each output sample is some average-like quantity of the N most recent samples", "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>");
+	gst_element_class_set_details_simple(element_class, "Average, max or thresh of last N samples", "Filter/Audio", "Each output sample is some average-like quantity of the N most recent samples", "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>");
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
@@ -710,7 +762,7 @@ static void gstlal_mean_class_init(GSTLALMeanClass *klass)
 		g_param_spec_uint(
 			"type",
 			"type",
-			"type of average 1=mean, 2=integral, 3=max over n, 4=max every n (faster)",
+			"type of average 1=mean, 2=integral, 3=max over n, 4=max every n (faster), 5=threshold",
 			0, G_MAXUINT, DEFAULT_TYPE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
@@ -724,6 +776,18 @@ static void gstlal_mean_class_init(GSTLALMeanClass *klass)
 			"moment",
 			"power of the data to average.",
 			0, G_MAXUINT, DEFAULT_MOMENT,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_THRESH,
+		g_param_spec_double(
+			"thresh",
+			"thresh",
+			"threshold to apply when used in threshold mode",
+			0, G_MAXDOUBLE, DEFAULT_THRESH,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
@@ -741,9 +805,13 @@ static void gstlal_mean_init(GSTLALMean *filter, GSTLALMeanClass *kclass)
 	filter->adapter = NULL;
 	filter->sum1 = NULL;
 	filter->sum2 = NULL;
+	filter->max = NULL;
+	filter->lastmax = NULL;
+	filter->lastcross = NULL;
 	filter->n = DEFAULT_N;
 	filter->moment = DEFAULT_MOMENT;
 	filter->type = DEFAULT_TYPE;
+	filter->thresh = DEFAULT_THRESH;
 	filter->process = GST_DEBUG_FUNCPTR(mean_process);
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);
 }
