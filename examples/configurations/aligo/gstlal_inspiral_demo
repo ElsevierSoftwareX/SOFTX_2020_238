@@ -12,13 +12,13 @@ __author__ = "Leo Singer <leo.singer@ligo.org>"
 
 from optparse import Option, OptionParser
 
-opts, args = OptionParser(option_list = [
-	Option("--frame-cache", help="filename of LAL frame cache"),
-	Option("--channel-name", help="chanenl name (e.g. LSC-STRAIN)"),
-	Option("--instrument", "-i", help="interferometer name (e.g. H1"),
-	Option("--gps-start-time", "-s", type="float", help="GPS start time"),
-	Option("--gps-end-time", "-e", type="float", help="GPS end time"),
-	Option("--svd-bank", help="filename of SVD'd template bank"),
+opts, args = OptionParser(description = __doc__, option_list = [
+	Option("--frame-cache", metavar="FILE", help="filename of LAL frame cache"),
+	Option("--channel-name", metavar="CHANNEL", help="channel name (e.g. LSC-STRAIN)"),
+	Option("--instrument", "-i", metavar="IFO", help="interferometer name (e.g. H1)"),
+	Option("--gps-start-time", "-s", metavar="SECONDS", type="float", help="GPS start time"),
+	Option("--gps-end-time", "-e", metavar="SECONDS", type="float", help="GPS end time"),
+	Option("--svd-bank", metavar="FILE.xml{.gz}", help="filename of SVD'd template bank"),
 ]).parse_args()
 
 
