@@ -252,21 +252,76 @@ head = mkelems_fast(pipeline,
 	"tee")[-1]
 
 
+tee_type = gst.element_factory_find('tee').get_element_type()
+
+def splice(bin, pad, element):
+	"""Splice element into an existing bin by teeing off an existing pad.
+
+	If necessary, a tee is added to the pipeline in order to splice the new element.
+
+	bin is an instance of gst.Bin or gst.Pipeline.  pad is a string that
+	describes any pad inside that bin.  The syntax used in gst-launch is
+	understood.  For example, the string 'foo.bar.bat' means the pad called 'bat'
+	on the element called 'bar' in the bin called 'foo' inside bin.  'foo.bar.'
+	refers to any pad on the element 'bar'.  element_or_pad is either an element
+	or a pad.
+
+	FIXME: implicit pad names not yet understood.
+	"""
+
+	padpath = pad.split('.')
+	padname = padpath.pop()
+
+	elem = bin
+	for name in padpath:
+		elem = elem.get_by_name(name)
+		if elem is None:
+			raise NameError("no such element: '%s'" % name)
+
+	pad = elem.get_pad(padname)
+	if pad is None:
+		raise NameError("no such pad: '%s'" % padname)
+
+	tee = pad.get_parent_element()
+	if tee.__gtype__ != tee_type:
+		peer_pad = pad.get_peer()
+		if peer_pad is None:
+			if hasattr(element, 'get_direction'):
+				elem.get_pad('src').link(element)
+			else:
+				elem.link(element)
+			return
+		else:
+			peer_element = peer_pad.get_parent_element()
+			if peer_element.__gtype__ == tee_type:
+				tee = peer_element
+			else:
+				if pad.get_direction() == gst.PAD_SINK:
+					pad, peer_pad = peer_pad, pad
+				pad.unlink(peer_pad)
+				tee = gst.element_factory_make("tee")
+				bin.add(tee)
+				pad.link(tee.get_static_pad('sink'))
+				tee.get_request_pad('src%d').link(peer_pad)
+	if hasattr(element, 'get_direction'):
+		tee.get_request_pad('src%d').link(element)
+	else:
+		tee.link(element)
+
+
 output_rate = max(fragment.rate for fragment in bank.bank_fragments)
 autocorrelation_length = bank.autocorrelation_bank.shape[1]
 autocorrelation_latency = -(autocorrelation_length - 1) / 2
 
 
 rate_key = lambda x: x.rate
-
 last_ortho_snr_adder = None
-
 old_rate = 16384
 
-k = 0
 
-mixer = mkelems_fast(pipeline,
-	"videomixer", {"background": "black"}, "ffmpegcolorspace", "ximagesink", {"sync": False, "async": False})[0]
+#
+# Build main pipeline
+#
 
 for i, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, key=rate_key, reverse=True), rate_key)):
 
@@ -277,30 +332,10 @@ for i, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, key=ra
 		"lal_nofakedisconts", {"silent": True},
 		"audioamplify", {"amplification": 1/math.sqrt(audioresample_variance_gain(4, old_rate, rate)), "clipping-method": "none"},
 		"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % rate)},
-		"tee")[-1]
+		"tee", {"name": "hoft_%d" % i})[-1]
 
-	branch_ortho_snr_adder = mkelems_fast(pipeline, "lal_adder", {"sync": True})[-1]
-
-	branch_snr_adder = mkelems_fast(pipeline, "lal_adder", {"sync": True})[-1]
-
-	if i == 0:
-		gate_control = mkelems_fast(pipeline,
-			branch_ortho_snr_adder,
-			"tee")[-1]
-		mkelems_fast(pipeline,
-			gate_control,
-			"queue", {"max-size-bytes": 0, "max-size-buffers": 0},
-			"cairovis_histogram", {"bin-min": bank.gate_threshold * 0.1, "bin-max": bank.gate_threshold * 2., "num-bins": 100, "y-autoscale": False, "y-min": 0, "y-max": 0.25, "normed": True, "title": "Composite detection statistic", "x-label": "Gamma", "y-label": "Density", "history-samples": 4*output_rate},
-			"capsfilter", {"caps": gst.Caps("video/x-raw-rgb,width=500,height=400")},
-			"ximagesink", {"sync": False}
-		)
-		mkelems_fast(pipeline,
-			branch_snr_adder,
-			"abs",
-			"cairovis_waterfall", {"title": "SNR", "z-autoscale": False, "z-scale": "log", "z-min": 1 + 0 * bank.snr_threshold, "z-max": 100, "y-label": "template", "history": gst.SECOND},
-			"capsfilter", {"caps": gst.Caps("video/x-raw-rgb,width=640,height=480,framerate=8/1")},
-			"ximagesink", {"name": "snr", "sync": False}
-		)
+	branch_ortho_snr_adder = mkelems_fast(pipeline, "lal_adder", {"sync": True, "name": "lambda_%d" % i})[-1]
+	branch_snr_adder = mkelems_fast(pipeline, "lal_adder", {"sync": True, "name": "snr_%d" % i})[-1]
 
 	for j, fragment in enumerate(fragments):
 
@@ -322,19 +357,8 @@ for i, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, key=ra
 			"lal_delay", {"delay": int(round((bank.filter_length - fragment.end) * fragment.rate))},
 			"lal_firbank", {"time-domain": False, "block-length-factor": 2, "latency": -int(round(fragment.start * fragment.rate)) - 1, "fir-matrix": fragment.orthogonal_template_bank},
 			"lal_nofakedisconts", {"silent": True},
-			"lal_reblock", {"block-duration": gst.SECOND / 2},
+			"lal_reblock", {"name": "ortho_snr_%dHz_%d" % (rate, j), "block-duration": gst.SECOND / 2},
 			"tee")[-1]
-
-		mkelems_fast(pipeline,
-			branch_ortho_snr,
-			"queue", {"max-size-bytes": 0, "max-size-buffers": 0},
-			"abs",
-			"cairovis_waterfall", {"z-autoscale": False, "z-min": 0, "z-max": 10, "title": "time slice %d at %d Hz" % (k, rate), "history": gst.SECOND},
-			"capsfilter", {"caps": gst.Caps("video/x-raw-rgb,width=300,height=200")},
-			"videobox", {"left": -250 * k, "border-alpha": 0.}, "alpha", "queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": 2 * gst.SECOND}, mixer
-		)
-
-		k += 1
 
 		mkelems_fast(pipeline,
 			branch_ortho_snr,
@@ -350,7 +374,7 @@ for i, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, key=ra
 				"threshold": bank.gate_threshold
 			})[-1]
 
-		gate_control.link_pads("src%d", gate, "control")
+		splice(pipeline, 'lambda_0.src', gate.get_pad('control'))
 
 		mkelems_fast(pipeline,
 			branch_ortho_snr,
@@ -377,6 +401,40 @@ for i, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, key=ra
 	old_rate = rate
 	last_snr_adder = branch_snr_adder
 	last_ortho_snr_adder = branch_ortho_snr_adder
+
+
+
+#
+# Add visualization stuff
+#
+
+mixer = mkelems_fast(pipeline,
+	"videomixer", {"background": "black"}, "ffmpegcolorspace", "ximagesink", {"sync": False, "async": False})[0]
+
+k = 0
+for i, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, key=rate_key, reverse=True), rate_key)):
+	for j, fragment in enumerate(fragments):
+		splice(pipeline, "ortho_snr_%dHz_%d.src" % (rate, j), mkelems_fast(pipeline,
+				"queue", {"max-size-bytes": 0, "max-size-buffers": 0},
+				"abs",
+				"cairovis_waterfall", {"z-autoscale": False, "z-min": 0, "z-max": 10, "title": "time slice %d at %d Hz" % (k, rate), "history": gst.SECOND},
+				"capsfilter", {"caps": gst.Caps("video/x-raw-rgb,width=300,height=200")},
+				"videobox", {"left": -250 * k, "border-alpha": 0.}, "alpha", "queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": 2 * gst.SECOND}, mixer
+			)[0])
+		k += 1
+
+splice(pipeline, "lambda_0.src", mkelems_fast(pipeline,
+	"queue", {"max-size-bytes": 0, "max-size-buffers": 0},
+	"cairovis_histogram", {"bin-min": bank.gate_threshold * 0.1, "bin-max": bank.gate_threshold * 2., "num-bins": 100, "y-autoscale": False, "y-min": 0, "y-max": 0.25, "normed": True, "title": "Composite detection statistic", "x-label": "Gamma", "y-label": "Density", "history-samples": 4*output_rate},
+	"capsfilter", {"caps": gst.Caps("video/x-raw-rgb,width=500,height=400")},
+	"ximagesink", {"sync": False}
+)[0])
+splice(pipeline, "snr_0.src", mkelems_fast(pipeline,
+	"abs",
+	"cairovis_waterfall", {"title": "SNR", "z-autoscale": False, "z-scale": "log", "z-min": 1 + 0 * bank.snr_threshold, "z-max": 100, "y-label": "template", "history": gst.SECOND},
+	"capsfilter", {"caps": gst.Caps("video/x-raw-rgb,width=640,height=480,framerate=8/1")},
+	"ximagesink", {"name": "snr", "sync": False}
+)[0])
 
 del bank
 
