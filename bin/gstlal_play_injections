@@ -114,7 +114,7 @@ head = pipeparts.mktaginject(pipeline, head, "instrument=%s,channel-name=%s,unit
 head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float,rate=16384")
 head = pipeparts.mkinjections(pipeline, head, filename)
 head = pipeparts.mkaudioamplify(pipeline, head, options.amplification)
-if options.output:
+if options.output is not None:
 	head = pipeparts.mkwavenc(pipeline, head)
 	if options.verbose:
 		head = pipeparts.mkprogressreport(pipeline, head, options.output)
