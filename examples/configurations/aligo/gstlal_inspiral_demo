@@ -38,7 +38,7 @@ for key in ("svd_bank", "frame_cache", "channel_name", "instrument"):
 #
 
 from gstlal.pipeutil import *
-from gstlal.gstlal_svd_bank import read_bank
+from gstlal.svd_bank import read_bank
 from gstlal.lloidparts import mkelems_fast, seek_event_for_gps
 from gstlal.pipeparts import audioresample_variance_gain
 from pylal.spawaveform import chirptime

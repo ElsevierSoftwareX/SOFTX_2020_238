@@ -56,7 +56,7 @@ if missing_options:
 #
 
 
-from gstlal.gstlal_svd_bank import build_bank, write_bank
+from gstlal.svd_bank import build_bank, write_bank
 from gstlal.gstlal_reference_psd import read_psd
 
 write_bank(
