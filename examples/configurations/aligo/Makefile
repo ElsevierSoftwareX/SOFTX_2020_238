@@ -146,7 +146,7 @@ injections/injections%.xml: min_distance max_distance
 		--time-interval 20 \
 		--i-distr uniform \
 		--l-distr random \
-		--d-distr uniform \
+		--d-distr log10 \
 		--min-distance $(shell cat min_distance) \
 		--max-distance $(shell cat max_distance) \
 		--m-distr componentMass \
