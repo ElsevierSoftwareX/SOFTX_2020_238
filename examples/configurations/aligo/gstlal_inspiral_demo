@@ -39,7 +39,7 @@ for key in ("svd_bank", "frame_cache", "channel_name", "instrument"):
 
 from gstlal.pipeutil import *
 from gstlal.gstlal_svd_bank import read_bank
-from gstlal.lloidparts import LLOIDHandler, mkelems_fast, seek_event_for_gps
+from gstlal.lloidparts import mkelems_fast, seek_event_for_gps
 from gstlal.pipeparts import audioresample_variance_gain
 from pylal.spawaveform import chirptime
 from subprocess import check_call
@@ -47,6 +47,7 @@ import math
 import os
 import tempfile
 import gtk
+import sys
 from itertools import groupby
 
 
@@ -59,14 +60,33 @@ class DemoApp(object):
 
 	def __init__(self, pipeline):
 		self.pipeline = pipeline
+
+		bus = pipeline.get_bus()
+		bus.add_signal_watch()
+		bus.connect("message", self._on_message)
+
 		self.injection_element = pipeline.get_by_name('injections')
 		pipeline.get_by_name('snr').sink_pads().next().add_buffer_probe(self._snr_probe)
 		self.last_injection_filename = None
 		self._make_gui()
 		self.last_inj_time = 0
 
+	def _on_message(self, bus, message):
+		if message.type == gst.MESSAGE_EOS:
+			self.pipeline.set_state(gst.STATE_NULL)
+			gtk.main_quit()
+		elif message.type == gst.MESSAGE_ERROR:
+			gerr, dbgmsg = message.parse_error()
+			msg = "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+			self.pipeline.set_state(gst.STATE_NULL)
+			gtk.MessageDialog(self.window, gtk.DIALOG_MODAL, gtk.MESSAGE_ERROR, gtk.BUTTONS_OK, msg)
+			gtk.main_quit()
+			sys.exit(msg)
+		return True
+
 	def _make_gui(self):
 		window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+		self.window = window
 		window.set_title("gstlal_inspiral Interactive Demo")
 		window.set_resizable(False)
 		window.connect("destroy", gtk.main_quit, "WM destroy")
@@ -240,8 +260,6 @@ class DemoApp(object):
 bank = read_bank(opts.svd_bank)
 
 pipeline = gst.Pipeline()
-mainloop = gobject.MainLoop()
-handler = LLOIDHandler(mainloop, pipeline)
 
 
 head = mkelems_fast(pipeline,
@@ -439,6 +457,8 @@ splice(pipeline, "snr_0.src", mkelems_fast(pipeline,
 del bank
 
 
+gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS, "gstlal_inspiral_demo")
+
 seek_event = seek_event_for_gps(opts.gps_start_time, opts.gps_end_time)
 
 for elem in pipeline.iterate_sources():
@@ -447,5 +467,4 @@ for elem in pipeline.iterate_sources():
 
 app = DemoApp(pipeline)
 pipeline.set_state(gst.STATE_PLAYING)
-gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS, "gstlal_inspiral_demo")
 gtk.main()
