@@ -6,6 +6,12 @@ __author__    = "Leo Singer <leo.singer@ligo.org>"
 __all__	      = ["ProgressBar"]
 
 
+# TODO: Implement the context manager API (but wait until clusters have Python >= 2.5).
+# TODO: Is it better to print the progress bar to stderr or stdout?
+# TODO: Automatically detect if the file descriptor is NOT hooked up to a tty, to
+#       avoid printing control characters if the program is not being used interactively.
+
+
 import sys
 
 
