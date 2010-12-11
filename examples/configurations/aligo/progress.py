@@ -9,31 +9,42 @@ __all__       = ["ProgressBar"]
 import sys
 
 
+# From http://stackoverflow.com/questions/566746/how-to-get-console-window-width-in-python
 def getTerminalSize():
-    """Return terminal size as a (columns, rows) tuple."""
-    # From http://stackoverflow.com/questions/566746/how-to-get-console-window-width-in-python
+    """
+    returns (lines:int, cols:int)
+    """
+    import os, struct
     def ioctl_GWINSZ(fd):
+        import fcntl, termios
+        return struct.unpack("hh", fcntl.ioctl(fd, termios.TIOCGWINSZ, "1234"))
+    # try stdin, stdout, stderr
+    for fd in (0, 1, 2):
         try:
-            import fcntl, termios, struct, os
-            cr = struct.unpack('hh', fcntl.ioctl(fd, termios.TIOCGWINSZ,
-        '1234'))
-        except:
-            return None
-        return cr
-    cr = ioctl_GWINSZ(0) or ioctl_GWINSZ(1) or ioctl_GWINSZ(2)
-    if not cr:
-        try:
-            fd = os.open(os.ctermid(), os.O_RDONLY)
-            cr = ioctl_GWINSZ(fd)
-            os.close(fd)
+            return ioctl_GWINSZ(fd)
         except:
             pass
-    if not cr:
+    # try os.ctermid()
+    try:
+        fd = os.open(os.ctermid(), os.O_RDONLY)
         try:
-            cr = (env['LINES'], env['COLUMNS'])
-        except:
-            cr = (25, 80)
-    return int(cr[1]), int(cr[0])
+            return ioctl_GWINSZ(fd)
+        finally:
+            os.close(fd)
+    except:
+        pass
+    # try `stty size`
+    try:
+        return tuple(int(x) for x in os.popen("stty size", "r").read().split())
+    except:
+        pass
+    # try environment variables
+    try:
+        return tuple(int(os.getenv(var)) for var in ("LINES", "COLUMNS"))
+    except:
+        pass
+    # i give up. return default.
+    return (25, 80)
 
 
 class ProgressBar:
@@ -60,7 +71,7 @@ class ProgressBar:
         if terminalSize is None:
             terminalSize = 80
         else:
-            terminalSize = terminalSize[0]
+            terminalSize = terminalSize[1]
         
         barWidth = terminalSize - self.textwidth - 10
         
