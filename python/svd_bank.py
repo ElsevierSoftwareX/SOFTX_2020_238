@@ -42,7 +42,7 @@ from glue.ligolw.utils import process as ligolw_process
 from gstlal import cbc_template_fir
 from gstlal import misc as gstlalmisc
 from gstlal import templates
-from gstlal_reference_psd import read_psd
+from gstlal.reference_psd import read_psd
 
 
 #

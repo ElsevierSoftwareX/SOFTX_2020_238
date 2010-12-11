@@ -34,7 +34,7 @@ from gstlal.pipeutil import *
 from gstlal import lloidparts
 from gstlal import pipeparts
 from gstlal.lloidparts import mkelems_fast
-from gstlal.gstlal_svd_bank import read_bank
+from gstlal.svd_bank import read_bank
 import math
 
 bank = read_bank(opts.bank)

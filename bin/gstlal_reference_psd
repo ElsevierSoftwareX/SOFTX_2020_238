@@ -69,7 +69,7 @@ options.psd_fft_length = 8	# seconds
 
 
 
-from gstlal.gstlal_reference_psd import *
+from gstlal.reference_psd import *
 from gstlal.pipeutil import gst
 
 
