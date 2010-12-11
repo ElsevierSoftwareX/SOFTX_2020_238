@@ -50,7 +50,9 @@ def getTerminalSize():
 class ProgressBar:
 	"""Display a text progress bar."""
 
-	def __init__(self, text='Working', max=1, value=0, textwidth=24, fid=sys.stderr):
+	def __init__(self, text='Working', max=1, value=0, textwidth=24, fid=None):
+		if fid is None:
+			fid = sys.stderr
 		self.text = text
 		self.max = max
 		self.value = value
