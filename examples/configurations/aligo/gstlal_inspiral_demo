@@ -257,17 +257,112 @@ class DemoApp(object):
 #
 
 
-bank = read_bank(opts.svd_bank)
+class AudioresampleUnityVarianceGain(gst.Bin):
+	__gstdetails__ = (
+		'Audioresample with Unity Gain in Variance Bin',
+		'Bin',
+		'An audioresample combined with an audioamplify in order to restore unit variance of Gaussian noise',
+		'Leo Singer <leo.singer@ligo.org>'
+	)
+	__gproperties__ = {
+		# Copied from audioresample's param spec
+		'quality': (
+			gobject.TYPE_INT,
+			'quality',
+			'Resample quality with 0 being the lowest and 10 being the best',
+			0, 10, 4,
+			gobject.PARAM_READWRITE
+		),
+	}
 
-pipeline = gst.Pipeline()
+	def do_set_property(self, prop, val):
+		if prop.name == "quality":
+			# Forward to audioresample element
+			self.audioresample.set_property(prop.name, val)
 
+	def do_get_property(self, prop):
+		if prop.name == "quality":
+			# Forward to audioresample element
+			return self.audioresample.get_property(prop.name)
 
-head = mkelems_fast(pipeline,
-	"lal_framesrc", {"location": opts.frame_cache, "channel-name": opts.channel_name, "instrument": opts.instrument, "blocksize": 16384 * 8},
-	"lal_simulation", {"name": "injections"},
-	"lal_whiten", {"fft-length": 4, "zero-pad": 0, "average-samples": 64, "median-samples": 7},
-	"lal_nofakedisconts", {"silent": True},
-	"tee")[-1]
+	def __init__(self):
+		# Call superclass initializer
+		super(gst.Bin, self).__init__()
+
+		# Initialize data members
+		self.sink_rate = None
+		self.src_rate = None
+		self.quality = None
+
+		# Add audioresample element
+		self.audioresample = gst.element_factory_make("audioresample")
+		self.audioresample.set_property("gap-aware", True)
+		self.audioresample.connect("notify::quality", self.quality_changed)
+		self.quality = self.audioresample.get_property("quality")
+		self.add(self.audioresample)
+
+		# Add lal_nofakedisconts element
+		nofakedisconts = gst.element_factory_make("lal_nofakedisconts")
+		self.add(nofakedisconts)
+
+		# Add audioamplify element
+		self.audioamplify = gst.element_factory_make("audioamplify")
+		self.audioamplify.set_property("clipping-method", "none")
+		self.add(self.audioamplify)
+
+		# Link all elements
+		self.audioresample.link(nofakedisconts)
+		nofakedisconts.link(self.audioamplify)
+
+		# Add sink ghost pad
+		sink = gst.GhostPad("sink", self.audioresample.sink_pads().next())
+		self.add_pad(sink)
+
+		# Add src ghost pad
+		src = gst.GhostPad("src", self.audioamplify.src_pads().next())
+		self.add_pad(src)
+
+		# Hook up pad setcaps functions
+		sink.set_setcaps_function(self.sink_set_caps)
+		nofakedisconts.src_pads().next().set_setcaps_function(self.src_set_caps)
+
+	def update_gain(self):
+		# Update gain of audioresample element
+		args = (self.quality, self.sink_rate, self.src_rate)
+		if None not in args:
+			self.audioamplify.set_property("amplification", 1. / math.sqrt(audioresample_variance_gain(*args)))
+
+	def sink_set_caps(self, pad, caps):
+		"""setcaps function for sink pad, tells us the input sample rate"""
+		try:
+			self.sink_rate = caps[0]['rate']
+		except KeyError:
+			self.error("unable to parse rate from caps")
+			return False
+		self.update_gain()
+		return True
+
+	def src_set_caps(self, pad, caps):
+		"""setcaps function for src pad, tells us the output sample rate"""
+		try:
+			self.src_rate = caps[0]['rate']
+		except KeyError:
+			self.error("unable to parse rate from caps")
+			return False
+		self.update_gain()
+		return True
+
+	def quality_changed(self, prop):
+		"""notify::quality signal handler for audioresample element"""
+
+		# Make note of new property value
+		self.quality = self.audioresample.get_property("quality")
+
+		# Adjust gain
+		self.update_gain()
+
+		# Notify others of a change to our own 'quality' property
+		self.notify("quality")
 
 
 tee_type = gst.element_factory_find('tee').get_element_type()
@@ -327,30 +422,44 @@ def splice(bin, pad, element):
 		tee.link(element)
 
 
-output_rate = max(fragment.rate for fragment in bank.bank_fragments)
+bank = read_bank(opts.svd_bank)
 autocorrelation_length = bank.autocorrelation_bank.shape[1]
 autocorrelation_latency = -(autocorrelation_length - 1) / 2
+output_rate = max(fragment.rate for fragment in bank.bank_fragments)
+count_rates = len(bank.get_rates())
 
+pipeline = gst.Pipeline()
+
+head = mkelems_fast(pipeline,
+	"lal_framesrc", {"location": opts.frame_cache, "channel-name": opts.channel_name, "instrument": opts.instrument, "blocksize": 16384 * 8},
+	"lal_simulation", {"name": "injections"},
+	"audioresample",
+	"lal_nofakedisconts", {"silent": True},
+	"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % output_rate)},
+	"lal_whiten", {"fft-length": 4, "zero-pad": 0, "average-samples": 64, "median-samples": 7},
+	"lal_nofakedisconts", {"silent": True})[-1]
 
 rate_key = lambda x: x.rate
 last_ortho_snr_adder = None
-old_rate = 16384
-
 
 #
 # Build main pipeline
 #
 
+
 for i, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, key=rate_key, reverse=True), rate_key)):
 
-	head = mkelems_fast(pipeline,
-		head,
-		"queue", {"max-size-bytes": 0, "max-size-buffers": 0},
-		"audioresample", {"gap-aware": True},
-		"lal_nofakedisconts", {"silent": True},
-		"audioamplify", {"amplification": 1/math.sqrt(audioresample_variance_gain(4, old_rate, rate)), "clipping-method": "none"},
-		"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % rate)},
-		"tee", {"name": "hoft_%d" % i})[-1]
+	if i == 0:
+		head = mkelems_fast(pipeline,
+			head,
+			"tee", {"name": "hoft_%d" % i})[-1]
+	else:
+		head = mkelems_fast(pipeline,
+			head,
+			"queue", {"max-size-bytes": 0, "max-size-buffers": 0},
+			AudioresampleUnityVarianceGain(),
+			"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % rate)},
+			"tee", {"name": "hoft_%d" % i})[-1]
 
 	branch_ortho_snr_adder = mkelems_fast(pipeline, "lal_adder", {"sync": True, "name": "lambda_%d" % i})[-1]
 	branch_snr_adder = mkelems_fast(pipeline, "lal_adder", {"sync": True, "name": "snr_%d" % i})[-1]
@@ -468,3 +577,4 @@ for elem in pipeline.iterate_sources():
 app = DemoApp(pipeline)
 pipeline.set_state(gst.STATE_PLAYING)
 gtk.main()
+gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, "gstlal_inspiral_demo_closing")
