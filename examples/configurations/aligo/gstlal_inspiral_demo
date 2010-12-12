@@ -68,6 +68,7 @@ class DemoApp(object):
 		self.injection_element = pipeline.get_by_name('injections')
 		pipeline.get_by_name('snr').sink_pads().next().add_buffer_probe(self._snr_probe)
 		self.last_injection_filename = None
+		self._update_label_args = None
 		self._make_gui()
 		self.last_inj_time = 0
 
@@ -178,25 +179,38 @@ class DemoApp(object):
 
 		window.show_all()
 
+	def _update_label(self, remaining_seconds, bold):
+		args = (remaining_seconds, bold)
+		if args != self._update_label_args:
+			gtk.gdk.threads_enter()
+			if remaining_seconds >= 0:
+				self.fire_button.set_sensitive(False)
+				self.message_label.set_sensitive(True)
+				if remaining_seconds <= 12:
+					if bold:
+						self.message_label.set_markup("<big><b>%d!</b></big>" % remaining_seconds)
+					else:
+						self.message_label.set_label("%d!" % remaining_seconds)
+				else:
+					self.message_label.set_label("%d seconds until ISCO for next injection" % remaining_seconds)
+			else:
+				self.fire_button.set_sensitive(True)
+				self.message_label.set_sensitive(False)
+				self.message_label.set_label("No injections pending")
+			self._update_label_args = args
+			gtk.gdk.threads_leave()
+
 	def _snr_probe(self, pad, buf):
 		buf_end_time = buf.timestamp + buf.duration
 		if self.last_inj_time > buf_end_time:
 			remaining_time = self.last_inj_time - buf_end_time
 			remaining_seconds = remaining_time / gst.SECOND
 			remaining_nanos = remaining_time % gst.SECOND
-			if remaining_seconds <= 12:
-				if remaining_nanos > 250 * gst.MSECOND:
-					self.message_label.set_markup("<big><b>%d!</b></big>" % remaining_seconds)
-				else:
-					self.message_label.set_label("%d!" % remaining_seconds)
-			else:
-				self.message_label.set_label("%d seconds until ISCO for next injection" % remaining_seconds)
-			self.message_label.set_sensitive(True)
-			self.fire_button.set_sensitive(False)
+			bold = remaining_seconds <= 12 and remaining_nanos > 250 * gst.MSECOND
 		else:
-			self.message_label.set_label('No injections pending')
-			self.message_label.set_sensitive(False)
-			self.fire_button.set_sensitive(True)
+			remaining_seconds = -1
+			bold = False
+		self._update_label(remaining_seconds, bold)
 		return True
 
 	def _inject(self, widget):
