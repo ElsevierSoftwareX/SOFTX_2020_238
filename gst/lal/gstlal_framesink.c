@@ -482,6 +482,16 @@ static gboolean event(GstBaseSink *basesink, GstEvent *event)
 
         GST_INFO_OBJECT(sink, "Got NEWSEGMENT");
 
+        /* Keep info about the data stream */
+        pad = gst_element_get_static_pad(GST_ELEMENT(sink), "sink");
+        str = gst_caps_get_structure(GST_PAD_CAPS(pad), 0);
+
+        gst_structure_get_int(str, "width", &sink->width);   // read width
+        gst_structure_get_boolean(str, "signed", &sink->sign);  // signed?
+        gst_structure_get_int(str, "rate", &sink->rate);     // read rate
+        g_free(sink->type);
+        sink->type = g_strdup(gst_structure_get_name(str));  // mime type
+
         /* Get all the info about the new segment */
         gst_event_parse_new_segment(event, NULL, NULL, &format, &start,
                                     &stop, &pos);
@@ -519,16 +529,6 @@ static gboolean event(GstBaseSink *basesink, GstEvent *event)
                 "Ignored NEWSEGMENT event of format %u (%s)", (guint) format,
                 gst_format_get_name(format));
         }
-
-        /* Keep info about the data stream */
-        pad = gst_element_get_static_pad(GST_ELEMENT(sink), "sink");
-        str = gst_caps_get_structure(GST_PAD_CAPS(pad), 0);
-
-        gst_structure_get_int(str, "width", &sink->width);   // read width
-        gst_structure_get_boolean(str, "signed", &sink->sign);  // signed?
-        gst_structure_get_int(str, "rate", &sink->rate);     // read rate
-        g_free(sink->type);
-        sink->type = g_strdup(gst_structure_get_name(str));  // mime type
 
         break;
     }
