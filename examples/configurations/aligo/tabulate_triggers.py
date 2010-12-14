@@ -83,35 +83,6 @@ from optparse import Option, OptionParser
 from glue.ligolw import utils, table, lsctables
 
 
-def cluster(iterable, cluster_window, key_func = None, val_func = None):
-	"""O(n) clustering based on pylal.CoincInspiralUtils"""
-
-	if key_func is None:
-		key_func = lambda x: x[0]
-	if val_func is None:
-		val_func = lambda x: x[1]
-
-	try:
-		item = iterable.next()
-	except StopIteration:
-		return
-
-	key = key_func(item)
-	val = val_func(item)
-
-	for new_item in iterable:
-		new_key = key_func(new_item)
-		new_val = val_func(new_item)
-
-		if new_key - key < cluster_window:
-			if new_val > val:
-				item, key, val = new_item, new_key, new_val
-		else:
-			yield item
-			item, key, val = new_item, new_key, new_val
-
-
-
 opts, args = OptionParser(
 	description = __doc__,
 	usage = "%prog [options] DIRECTORY"
