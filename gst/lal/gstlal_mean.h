@@ -78,6 +78,8 @@ typedef struct {
 	double *sum2;
 	double *max;
 	guint64 *lastmax;
+	guint64 *lastcross;
+	double thresh;
 
 	/*
 	 * timestamp book-keeping

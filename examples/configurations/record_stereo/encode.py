@@ -22,7 +22,7 @@ if opts.gps_time is None:
 # Pipeline
 
 from gstlal.pipeutil import *
-from gstlal.gstlal_reference_psd import read_psd
+from gstlal.reference_psd import read_psd
 from gstlal.lloidparts import *
 
 pipeline = gst.Pipeline()

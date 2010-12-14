@@ -166,8 +166,8 @@ options, filenames, process_params = parse_command_line()
 from gstlal.pipeutil import *
 from gstlal.lloidparts import *
 from gstlal import templates
-from gstlal.gstlal_svd_bank import build_bank, read_bank
-from gstlal.gstlal_reference_psd import *
+from gstlal.svd_bank import build_bank, read_bank
+from gstlal.reference_psd import *
 
 
 #

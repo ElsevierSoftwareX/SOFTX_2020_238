@@ -129,7 +129,7 @@ min_distance: eff_distances candle_snr
 
 # Determine maximum distance for injections
 max_distance: eff_distances candle_snr
-	echo "print 0.5 * $(shell cat candle_snr) / 4.0 * $(shell tail -n 1 eff_distances) * 1e3" | python > $@
+	echo "print 0.1 * $(shell cat candle_snr) / 5.5 * $(shell tail -n 1 eff_distances) * 1e3" | python > $@
 
 
 # Generate software injections
@@ -146,7 +146,7 @@ injections/injections%.xml: min_distance max_distance
 		--time-interval 20 \
 		--i-distr uniform \
 		--l-distr random \
-		--d-distr uniform \
+		--d-distr log10 \
 		--min-distance $(shell cat min_distance) \
 		--max-distance $(shell cat max_distance) \
 		--m-distr componentMass \

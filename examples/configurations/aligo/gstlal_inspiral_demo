@@ -1,0 +1,594 @@
+#!/usr/bin/env python
+# coding=utf-8
+"""
+Graphical demonstration of inspiral search with gstlal for GWPAW 2010.
+"""
+__author__ = "Leo Singer <leo.singer@ligo.org>"
+
+
+#
+# Command line interface
+#
+
+from optparse import Option, OptionParser
+
+opts, args = OptionParser(description = __doc__, option_list = [
+	Option("--frame-cache", metavar="FILE", help="filename of LAL frame cache"),
+	Option("--channel-name", metavar="CHANNEL", help="channel name (e.g. LSC-STRAIN)"),
+	Option("--instrument", "-i", metavar="IFO", help="interferometer name (e.g. H1)"),
+	Option("--gps-start-time", "-s", metavar="SECONDS", type="float", help="GPS start time"),
+	Option("--gps-end-time", "-e", metavar="SECONDS", type="float", help="GPS end time"),
+	Option("--svd-bank", metavar="FILE.xml{.gz}", help="filename of SVD'd template bank"),
+]).parse_args()
+
+
+
+#
+# Require some options
+#
+
+for key in ("svd_bank", "frame_cache", "channel_name", "instrument"):
+	if getattr(opts, key) is None:
+		raise ValueError("required argument --%s not provided" % key.replace('_', '-'))
+
+
+
+#
+# Late imports
+#
+
+from gstlal.pipeutil import *
+from gstlal.svd_bank import read_bank
+from gstlal.lloidparts import mkelems_fast, seek_event_for_gps
+from gstlal.pipeparts import audioresample_variance_gain
+from pylal.spawaveform import chirptime
+from subprocess import check_call
+import math
+import os
+import tempfile
+import gtk
+import sys
+from itertools import groupby
+
+
+
+#
+# GUI
+#
+
+class DemoApp(object):
+
+	def __init__(self, pipeline):
+		self.pipeline = pipeline
+
+		bus = pipeline.get_bus()
+		bus.add_signal_watch()
+		bus.connect("message", self._on_message)
+
+		self.injection_element = pipeline.get_by_name('injections')
+		pipeline.get_by_name('snr').sink_pads().next().add_buffer_probe(self._snr_probe)
+		self.last_injection_filename = None
+		self._update_label_args = None
+		self._make_gui()
+		self.last_inj_time = 0
+
+	def _on_message(self, bus, message):
+		if message.type == gst.MESSAGE_EOS:
+			self.pipeline.set_state(gst.STATE_NULL)
+			gtk.main_quit()
+		elif message.type == gst.MESSAGE_ERROR:
+			gerr, dbgmsg = message.parse_error()
+			msg = "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+			self.pipeline.set_state(gst.STATE_NULL)
+			gtk.MessageDialog(self.window, gtk.DIALOG_MODAL, gtk.MESSAGE_ERROR, gtk.BUTTONS_OK, msg)
+			gtk.main_quit()
+			sys.exit(msg)
+		return True
+
+	def _make_gui(self):
+		window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+		self.window = window
+		window.set_title("gstlal_inspiral Interactive Demo")
+		window.set_resizable(False)
+		window.connect("destroy", gtk.main_quit, "WM destroy")
+
+		vbox = gtk.VBox(False, 10)
+		vbox.set_border_width(10)
+		window.add(vbox)
+
+		label = gtk.Label()
+		label.set_markup("<big><b>Instructions</b></big>")
+		vbox.pack_start(label)
+
+		label = gtk.Label("""To inject an inspiral signal, use the sliders below to adjust the distance and component masses of the binary.  When you are satisfied, click the "Fire!" button.  A countdown to the innermost stable circular orbit will start.  By the time that the countdown reaches zero, the injection has completed.  A bright splotch should appear in the SNR graph.""")
+		label.set_line_wrap(True)
+		label.set_justify(gtk.JUSTIFY_FILL)
+		vbox.pack_start(label, expand=True)
+
+		hsep = gtk.HSeparator()
+		vbox.pack_start(hsep)
+
+		hbox = gtk.HBox(False, 10)
+		hbox.set_border_width(10)
+		vbox.pack_start(hbox)
+
+		hsep = gtk.HSeparator()
+		vbox.pack_start(hsep)
+
+		label = gtk.Label()
+		label.set_size_request(-1, 36)
+		self.message_label = label
+		vbox.pack_start(label)
+
+		vbox = gtk.VBox(False, 10)
+		hbox.set_border_width(10)
+		hbox.pack_start(vbox)
+
+		btn = gtk.Button("Fire!")
+		self.fire_button = btn
+		btn.set_sensitive(False)
+		btn.set_size_request(144, -1)
+		btn.connect("clicked", self._inject)
+		hbox.pack_end(btn, expand=False)
+
+		hbox = gtk.HBox(False, 10)
+		hbox.set_border_width(10)
+		vbox.pack_start(hbox, expand=False)
+
+		label = gtk.Label("Distance (Mpc)")
+		hbox.pack_start(label, expand=False)
+
+		adj = gtk.Adjustment(1, 1, 40)
+		self.distance_adjustment = adj
+		scale = gtk.HScale(adj)
+		scale.set_property("draw-value", True)
+		scale.set_property("value-pos", gtk.POS_LEFT)
+		hbox.pack_end(scale)
+
+		hbox = gtk.HBox(False, 10)
+		hbox.set_border_width(10)
+		vbox.pack_start(hbox, expand=False)
+
+		label = gtk.Label("Mass 1 (solar masses)")
+		hbox.pack_start(label, expand=False)
+
+		adj = gtk.Adjustment(1.08, 1, 3)
+		self.m1_adjustment = adj
+		scale = gtk.HScale(adj)
+		scale.set_digits(2)
+		scale.set_property("draw-value", True)
+		scale.set_property("value-pos", gtk.POS_LEFT)
+		scale.set_size_request(210, -1)
+		hbox.pack_end(scale)
+
+		hbox = gtk.HBox(False, 10)
+		hbox.set_border_width(10)
+		vbox.pack_start(hbox, expand=False)
+
+		label = gtk.Label("Mass 2 (solar masses)")
+		hbox.pack_start(label, expand=False)
+
+		adj = gtk.Adjustment(1.14, 1, 3)
+		self.m2_adjustment = adj
+		scale = gtk.HScale(adj)
+		scale.set_digits(2)
+		scale.set_property("draw-value", True)
+		scale.set_property("value-pos", gtk.POS_LEFT)
+		scale.set_size_request(210, -1)
+		hbox.pack_end(scale)
+
+		window.show_all()
+
+	def _update_label(self, remaining_seconds, bold):
+		args = (remaining_seconds, bold)
+		if args != self._update_label_args:
+			gtk.gdk.threads_enter()
+			if remaining_seconds >= 0:
+				self.fire_button.set_sensitive(False)
+				self.message_label.set_sensitive(True)
+				if remaining_seconds <= 12:
+					if bold:
+						self.message_label.set_markup("<big><b>%d!</b></big>" % remaining_seconds)
+					else:
+						self.message_label.set_label("%d!" % remaining_seconds)
+				else:
+					self.message_label.set_label("%d seconds until ISCO for next injection" % remaining_seconds)
+			else:
+				self.fire_button.set_sensitive(True)
+				self.message_label.set_sensitive(False)
+				self.message_label.set_label("No injections pending")
+			self._update_label_args = args
+			gtk.gdk.threads_leave()
+
+	def _snr_probe(self, pad, buf):
+		buf_end_time = buf.timestamp + buf.duration
+		if self.last_inj_time > buf_end_time:
+			remaining_time = self.last_inj_time - buf_end_time
+			remaining_seconds = remaining_time / gst.SECOND
+			remaining_nanos = remaining_time % gst.SECOND
+			bold = remaining_seconds <= 12 and remaining_nanos > 250 * gst.MSECOND
+		else:
+			remaining_seconds = -1
+			bold = False
+		self._update_label(remaining_seconds, bold)
+		return True
+
+	def _inject(self, widget):
+		distance_kpc = self.distance_adjustment.value * 1e3
+		m1 = self.m1_adjustment.value
+		m2 = self.m2_adjustment.value
+		mtotal = m1 + m2
+
+		self.injection_element.set_state(gst.STATE_PAUSED)
+		state_change_status, state, pending = self.injection_element.get_state()
+		if state_change_status != gst.STATE_CHANGE_SUCCESS:
+			raise RuntimeError("State change not successful: %r", state_change_status)
+
+		last_time, last_time_format = self.injection_element.query_position(gst.FORMAT_TIME)
+		inj_time = last_time / float(gst.SECOND) + chirptime(m1, m2, 4, 40)
+
+		injection_filename = tempfile.mktemp(prefix="injections", suffix=".xml")
+
+		args = [
+			"lalapps_inspinj",
+			"--output", injection_filename,
+			"--f-lower", "40",
+			"--t-distr", "fixed",
+			"--time-step", "1",
+			"--gps-start-time", repr(inj_time),
+			"--gps-end-time", repr(inj_time),
+			"--m-distr", "componentMass",
+			"--min-mass1", repr(m1),
+			"--max-mass1", repr(m1),
+			"--min-mass2", repr(m2),
+			"--max-mass2", repr(m2),
+			"--min-mtotal", repr(mtotal),
+			"--max-mtotal", repr(mtotal),
+			"--d-distr", "uniform",
+			"--min-distance", repr(distance_kpc),
+			"--max-distance", repr(distance_kpc),
+			"--l-distr", "random",
+			"--i-distr", "uniform",
+			"--waveform", "GeneratePPNtwoPN",
+			"--disable-spin"
+		]
+
+		check_call(args)
+
+		self.injection_element.set_property("xml-location", injection_filename)
+		self.last_inj_time = long(round(inj_time * gst.SECOND))
+		if self.last_injection_filename is not None:
+			os.unlink(self.last_injection_filename)
+		self.last_injection_filename = injection_filename
+
+		self.injection_element.set_state(gst.STATE_PLAYING)
+		
+
+
+
+#
+# Pipeline
+#
+
+
+class AudioresampleUnityVarianceGain(gst.Bin):
+	__gstdetails__ = (
+		'Audioresample with Unity Gain in Variance Bin',
+		'Bin',
+		'An audioresample combined with an audioamplify in order to restore unit variance of Gaussian noise',
+		'Leo Singer <leo.singer@ligo.org>'
+	)
+	__gproperties__ = {
+		# Copied from audioresample's param spec
+		'quality': (
+			gobject.TYPE_INT,
+			'quality',
+			'Resample quality with 0 being the lowest and 10 being the best',
+			0, 10, 4,
+			gobject.PARAM_READWRITE
+		),
+	}
+
+	def do_set_property(self, prop, val):
+		if prop.name == "quality":
+			# Forward to audioresample element
+			self.audioresample.set_property(prop.name, val)
+
+	def do_get_property(self, prop):
+		if prop.name == "quality":
+			# Forward to audioresample element
+			return self.audioresample.get_property(prop.name)
+
+	def __init__(self):
+		# Call superclass initializer
+		super(gst.Bin, self).__init__()
+
+		# Initialize data members
+		self.sink_rate = None
+		self.src_rate = None
+		self.quality = None
+
+		# Add audioresample element
+		self.audioresample = gst.element_factory_make("audioresample")
+		self.audioresample.set_property("gap-aware", True)
+		self.audioresample.connect("notify::quality", self.quality_changed)
+		self.quality = self.audioresample.get_property("quality")
+		self.add(self.audioresample)
+
+		# Add lal_nofakedisconts element
+		nofakedisconts = gst.element_factory_make("lal_nofakedisconts")
+		self.add(nofakedisconts)
+
+		# Add audioamplify element
+		self.audioamplify = gst.element_factory_make("audioamplify")
+		self.audioamplify.set_property("clipping-method", "none")
+		self.add(self.audioamplify)
+
+		# Link all elements
+		self.audioresample.link(nofakedisconts)
+		nofakedisconts.link(self.audioamplify)
+
+		# Add sink ghost pad
+		sink = gst.GhostPad("sink", self.audioresample.sink_pads().next())
+		self.add_pad(sink)
+
+		# Add src ghost pad
+		src = gst.GhostPad("src", self.audioamplify.src_pads().next())
+		self.add_pad(src)
+
+		# Hook up pad setcaps functions
+		sink.set_setcaps_function(self.sink_set_caps)
+		nofakedisconts.src_pads().next().set_setcaps_function(self.src_set_caps)
+
+	def update_gain(self):
+		# Update gain of audioresample element
+		args = (self.quality, self.sink_rate, self.src_rate)
+		if None not in args:
+			self.audioamplify.set_property("amplification", 1. / math.sqrt(audioresample_variance_gain(*args)))
+
+	def sink_set_caps(self, pad, caps):
+		"""setcaps function for sink pad, tells us the input sample rate"""
+		try:
+			self.sink_rate = caps[0]['rate']
+		except KeyError:
+			self.error("unable to parse rate from caps")
+			return False
+		self.update_gain()
+		return True
+
+	def src_set_caps(self, pad, caps):
+		"""setcaps function for src pad, tells us the output sample rate"""
+		try:
+			self.src_rate = caps[0]['rate']
+		except KeyError:
+			self.error("unable to parse rate from caps")
+			return False
+		self.update_gain()
+		return True
+
+	def quality_changed(self, prop):
+		"""notify::quality signal handler for audioresample element"""
+
+		# Make note of new property value
+		self.quality = self.audioresample.get_property("quality")
+
+		# Adjust gain
+		self.update_gain()
+
+		# Notify others of a change to our own 'quality' property
+		self.notify("quality")
+
+
+tee_type = gst.element_factory_find('tee').get_element_type()
+
+def splice(bin, pad, element):
+	"""Splice element into an existing bin by teeing off an existing pad.
+
+	If necessary, a tee is added to the pipeline in order to splice the new element.
+
+	bin is an instance of gst.Bin or gst.Pipeline.  pad is a string that
+	describes any pad inside that bin.  The syntax used in gst-launch is
+	understood.  For example, the string 'foo.bar.bat' means the pad called 'bat'
+	on the element called 'bar' in the bin called 'foo' inside bin.  'foo.bar.'
+	refers to any pad on the element 'bar'.  element_or_pad is either an element
+	or a pad.
+
+	FIXME: implicit pad names not yet understood.
+	"""
+
+	padpath = pad.split('.')
+	padname = padpath.pop()
+
+	elem = bin
+	for name in padpath:
+		elem = elem.get_by_name(name)
+		if elem is None:
+			raise NameError("no such element: '%s'" % name)
+
+	pad = elem.get_pad(padname)
+	if pad is None:
+		raise NameError("no such pad: '%s'" % padname)
+
+	tee = pad.get_parent_element()
+	if tee.__gtype__ != tee_type:
+		peer_pad = pad.get_peer()
+		if peer_pad is None:
+			if hasattr(element, 'get_direction'):
+				elem.get_pad('src').link(element)
+			else:
+				elem.link(element)
+			return
+		else:
+			peer_element = peer_pad.get_parent_element()
+			if peer_element.__gtype__ == tee_type:
+				tee = peer_element
+			else:
+				if pad.get_direction() == gst.PAD_SINK:
+					pad, peer_pad = peer_pad, pad
+				pad.unlink(peer_pad)
+				tee = gst.element_factory_make("tee")
+				bin.add(tee)
+				pad.link(tee.get_static_pad('sink'))
+				tee.get_request_pad('src%d').link(peer_pad)
+	if hasattr(element, 'get_direction'):
+		tee.get_request_pad('src%d').link(element)
+	else:
+		tee.link(element)
+
+
+bank = read_bank(opts.svd_bank)
+autocorrelation_length = bank.autocorrelation_bank.shape[1]
+autocorrelation_latency = -(autocorrelation_length - 1) / 2
+output_rate = max(fragment.rate for fragment in bank.bank_fragments)
+count_rates = len(bank.get_rates())
+
+pipeline = gst.Pipeline()
+
+head = mkelems_fast(pipeline,
+	"lal_framesrc", {"location": opts.frame_cache, "channel-name": opts.channel_name, "instrument": opts.instrument, "blocksize": 16384 * 8},
+	"lal_simulation", {"name": "injections"},
+	"audioresample",
+	"lal_nofakedisconts", {"silent": True},
+	"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % output_rate)},
+	"lal_whiten", {"fft-length": 4, "zero-pad": 0, "average-samples": 64, "median-samples": 7},
+	"lal_nofakedisconts", {"silent": True})[-1]
+
+rate_key = lambda x: x.rate
+last_ortho_snr_adder = None
+
+#
+# Build main pipeline
+#
+
+
+for i, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, key=rate_key, reverse=True), rate_key)):
+
+	if i == 0:
+		head = mkelems_fast(pipeline,
+			head,
+			"tee", {"name": "hoft_%d" % i})[-1]
+	else:
+		head = mkelems_fast(pipeline,
+			head,
+			"queue", {"max-size-bytes": 0, "max-size-buffers": 0},
+			AudioresampleUnityVarianceGain(),
+			"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % rate)},
+			"tee", {"name": "hoft_%d" % i})[-1]
+
+	branch_ortho_snr_adder = mkelems_fast(pipeline, "lal_adder", {"sync": True, "name": "lambda_%d" % i})[-1]
+	branch_snr_adder = mkelems_fast(pipeline, "lal_adder", {"sync": True, "name": "snr_%d" % i})[-1]
+
+	for j, fragment in enumerate(fragments):
+
+		attack_hold_length = int(math.ceil(-autocorrelation_latency * (float(fragment.rate) / output_rate)))
+
+		#
+		# Maximum amount of time to queue *upstream* of the FIR filters.
+		#
+		# The first term represents the intrinsic latency of the FFT convolution.
+		#
+		# The second term permits the input for the earliest time slice
+		# (whose output leads the other streams) to lag behind.
+		#
+		upstream_queue_time = long(round(gst.SECOND * (2 * (fragment.end - fragment.start) + fragment.end)))
+
+		branch_ortho_snr = mkelems_fast(pipeline,
+			head,
+			"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": upstream_queue_time},
+			"lal_delay", {"delay": int(round((bank.filter_length - fragment.end) * fragment.rate))},
+			"lal_firbank", {"time-domain": False, "block-length-factor": 2, "latency": -int(round(fragment.start * fragment.rate)) - 1, "fir-matrix": fragment.orthogonal_template_bank},
+			"lal_nofakedisconts", {"silent": True},
+			"lal_reblock", {"name": "ortho_snr_%dHz_%d" % (rate, j), "block-duration": gst.SECOND / 2},
+			"tee")[-1]
+
+		mkelems_fast(pipeline,
+			branch_ortho_snr,
+			"queue", {"max-size-bytes": 0, "max-size-buffers": 0},
+			"lal_sumsquares", {"weights": fragment.sum_of_squares_weights},
+			branch_ortho_snr_adder)
+
+		gate = mkelems_fast(pipeline,
+			"lal_gate",
+			{
+				"attack-length": attack_hold_length,
+				"hold-length": attack_hold_length,
+				"threshold": bank.gate_threshold
+			})[-1]
+
+		splice(pipeline, 'lambda_0.src', gate.get_pad('control'))
+
+		mkelems_fast(pipeline,
+			branch_ortho_snr,
+			"queue", {"max-size-bytes": 0, "max-size-buffers": 0},
+			gate,
+			"lal_matrixmixer", {"matrix": fragment.mix_matrix},
+			"queue", {"max-size-bytes": 0, "max-size-buffers": 0},
+			branch_snr_adder)
+
+	if last_ortho_snr_adder is not None:
+		mkelems_fast(pipeline,
+			branch_ortho_snr_adder,
+			"audioresample", {"gap-aware": True},
+			"lal_nofakedisconts", {"silent": True},
+			"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % old_rate)},
+			last_ortho_snr_adder)
+		mkelems_fast(pipeline,
+			branch_snr_adder,
+			"audioresample", {"gap-aware": True},
+			"lal_nofakedisconts", {"silent": True},
+			"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % old_rate)},
+			last_snr_adder)
+
+	old_rate = rate
+	last_snr_adder = branch_snr_adder
+	last_ortho_snr_adder = branch_ortho_snr_adder
+
+
+
+#
+# Add visualization stuff
+#
+
+mixer = mkelems_fast(pipeline,
+	"videomixer", {"background": "black"}, "ffmpegcolorspace", "ximagesink", {"sync": False, "async": False})[0]
+
+k = 0
+for i, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, key=rate_key, reverse=True), rate_key)):
+	for j, fragment in enumerate(fragments):
+		splice(pipeline, "ortho_snr_%dHz_%d.src" % (rate, j), mkelems_fast(pipeline,
+				"queue", {"max-size-bytes": 0, "max-size-buffers": 0},
+				"abs",
+				"cairovis_waterfall", {"z-autoscale": False, "z-min": 0, "z-max": 10, "title": "time slice %d at %d Hz" % (k, rate), "history": gst.SECOND},
+				"capsfilter", {"caps": gst.Caps("video/x-raw-rgb,width=300,height=200")},
+				"videobox", {"left": -250 * k, "border-alpha": 0.}, "alpha", "queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": 2 * gst.SECOND}, mixer
+			)[0])
+		k += 1
+
+splice(pipeline, "lambda_0.src", mkelems_fast(pipeline,
+	"queue", {"max-size-bytes": 0, "max-size-buffers": 0},
+	"cairovis_histogram", {"bin-min": bank.gate_threshold * 0.1, "bin-max": bank.gate_threshold * 2., "num-bins": 100, "y-autoscale": False, "y-min": 0, "y-max": 0.25, "normed": True, "title": "Composite detection statistic", "x-label": "Gamma", "y-label": "Density", "history-samples": 4*output_rate},
+	"capsfilter", {"caps": gst.Caps("video/x-raw-rgb,width=500,height=400")},
+	"ximagesink", {"sync": False}
+)[0])
+splice(pipeline, "snr_0.src", mkelems_fast(pipeline,
+	"abs",
+	"cairovis_waterfall", {"title": "SNR", "z-autoscale": False, "z-scale": "log", "z-min": 1 + 0 * bank.snr_threshold, "z-max": 100, "y-label": "template", "history": gst.SECOND},
+	"capsfilter", {"caps": gst.Caps("video/x-raw-rgb,width=640,height=480,framerate=8/1")},
+	"ximagesink", {"name": "snr", "sync": False}
+)[0])
+
+del bank
+
+
+gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS, "gstlal_inspiral_demo")
+
+seek_event = seek_event_for_gps(opts.gps_start_time, opts.gps_end_time)
+
+for elem in pipeline.iterate_sources():
+	elem.set_state(gst.STATE_READY)
+	elem.send_event(seek_event)
+
+app = DemoApp(pipeline)
+pipeline.set_state(gst.STATE_PLAYING)
+gtk.main()
+gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, "gstlal_inspiral_demo_closing")

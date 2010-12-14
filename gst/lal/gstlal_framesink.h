@@ -86,6 +86,7 @@ struct _GstLalframeSink {
     gchar *units;          // not used so far
     double duration;       // time span for each frame file
     gboolean clean_timestamps;  // use timestamps multiple of duration?
+    gboolean strict_timestamps; // fail if timestamps not to our taste
     double dir_digits;     // number of gpstime digits to remove for dirname
 
     gint rate, width;    // rate and width of the samples we are receiving

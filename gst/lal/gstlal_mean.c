@@ -69,28 +69,60 @@ static int mean_process(GSTLALMean *element, guint64 available_length, guint64 o
 {
 	/* FIXME assumed to be stable over size of input buffer, probably fine */
 	guint64 i,j,k;
-	if (!element->sum1) element->sum1 = (double *) calloc(element->channels, sizeof(double));
-	if (!element->sum2) element->sum2 = (double *) calloc(element->channels, sizeof(double));
+	guint64 channels = (guint64) element->channels;
+	if (!element->sum1) element->sum1 = (double *) calloc(channels, sizeof(double));
+	if (!element->sum2) element->sum2 = (double *) calloc(channels, sizeof(double));
 
-	memset((void *) element->sum1, 0, sizeof(double) * element->channels);
-	memset((void *) element->sum2, 0, sizeof(double) * element->channels);
+	memset((void *) element->sum1, 0, sizeof(double) * channels);
+	memset((void *) element->sum2, 0, sizeof(double) * channels);
 
 	/* pre compute the sum for the first sample */
 	guint64 offset = available_length - output_length;
-	for (j = 0; j < element->channels; j++) {
+	for (j = 0; j < channels; j++) {
 		for(k = 0; k < element->n-1; k++) {
 			if(k > offset) break;
-			element->sum2[j] += pow(in[(offset - k) * element->channels + j], element->moment);
+			element->sum2[j] += pow(in[(offset - k) * channels + j], element->moment);
 		}
 	}
 	
 	for(i = 0; i < output_length; i++) {
 		/* How far to look back in the input */
 		offset = available_length - output_length + i;
-		for (j = 0; j < element->channels; j++) {
-			element->sum2[j] += pow(in[offset * element->channels + j], element->moment);
-			element->sum1[j] += pow(in[(offset - element->n + 1) * element->channels + j], element->moment);
-			out[i*element->channels +j] = (element->sum2[j] - element->sum1[j]) / element->n;
+		for (j = 0; j < channels; j++) {
+			element->sum2[j] += pow(in[offset * channels + j], element->moment);
+			element->sum1[j] += pow(in[(offset - element->n + 1) * channels + j], element->moment);
+			out[i*channels +j] = (element->sum2[j] - element->sum1[j]) / element->n;
+		}
+	}
+	return 0;
+}
+
+static int thresh_process(GSTLALMean *element, guint64 available_length, guint64 output_length, double *in, double *out)
+{
+	guint64 i,j,k;
+	double thresh = element->thresh;
+	guint64 channels = (guint64) element->channels;
+
+	if (!element->lastcross) element->lastcross = (guint64 *) calloc(channels, sizeof(guint64));
+
+	memset((void *) element->lastcross, 0, sizeof(guint64) * channels);
+
+	/* pre compute the threshold crossing for the first sample */
+	guint64 offset = available_length - output_length;
+	for (j = 0; j < channels; j++) {
+		for(k = 0; k < element->n-1; k++) {
+			if(k > offset) break;
+			if (fabs(in[(offset - k) * channels + j]) >= thresh) element->lastcross[j] = offset - k;
+		}
+	}
+	
+	for(i = 0; i < output_length; i++) {
+		/* How far to look back in the input */
+		offset = available_length - output_length + i;
+		for (j = 0; j < channels; j++) {
+			if (fabs(in[offset * channels + j]) >= thresh) element->lastcross[j] = offset - j;
+			if (offset - element->lastcross[j] > element->n) out[i*channels +j] = 0.0;
+			else out[i*channels +j] = in[offset * channels + j];
 		}
 	}
 	return 0;
@@ -100,18 +132,19 @@ static int max_over_n_process(GSTLALMean *element, guint64 available_length, gui
 {
 	guint64 i,j,k;
 	double currentvalue = 0.;
+	guint64 channels = (guint64) element->channels;
 
-	if (!element->max) element->max = (double *) calloc(element->channels, sizeof(double));
-	if (!element->lastmax) element->lastmax = (guint64 *) calloc(element->channels, sizeof(guint64));
+	if (!element->max) element->max = (double *) calloc(channels, sizeof(double));
+	if (!element->lastmax) element->lastmax = (guint64 *) calloc(channels, sizeof(guint64));
 
 	/* pre compute the max for the first sample */
 	guint64 offset = available_length - output_length;
-	for (j = 0; j < element->channels; j++) {
-		element->max[j] = pow(in[(offset - element->n + 1) * element->channels + j], element->moment);
+	for (j = 0; j < channels; j++) {
+		element->max[j] = pow(in[(offset - element->n + 1) * channels + j], element->moment);
 		element->lastmax[j] = offset - element->n;
 		for(k = 0; k < element->n-1; k++) {
 			if(k > offset) break;
-			currentvalue = pow(in[(offset - k) * element->channels + j], element->moment);
+			currentvalue = pow(in[(offset - k) * channels + j], element->moment);
 			if (currentvalue >= element->max[j] ) {
 				element->max[j] = currentvalue;
 				element->lastmax[j] = offset-k;
@@ -122,30 +155,30 @@ static int max_over_n_process(GSTLALMean *element, guint64 available_length, gui
 	for(i = 0; i < output_length; i++) {
 		/* How far to look back in the input */
 		offset = available_length - output_length + i;
-		for (j = 0; j < element->channels; j++) {
+		for (j = 0; j < channels; j++) {
 
 			/* Check to see if the current value exceeds the previous maximum */
-			currentvalue = pow(in[(offset) * element->channels + j], element->moment);
+			currentvalue = pow(in[(offset) * channels + j], element->moment);
 			if (currentvalue >= element->max[j]) {
 				element->max[j] = currentvalue;
 				element->lastmax[j] = offset;
 			}
 
 			/* Check to see if the last maximum was recent, and use it if so */
-			if ( (offset - element->lastmax[j]) < element->n ) out[i*element->channels +j] = element->max[j];
+			if ( (offset - element->lastmax[j]) < element->n ) out[i*channels +j] = element->max[j];
 			/* Otherwise recompute the maximum over the last n samples */
 			else {
-				element->max[j] = pow(in[(offset - element->n + 1) * element->channels + j], element->moment);
+				element->max[j] = pow(in[(offset - element->n + 1) * channels + j], element->moment);
 				element->lastmax[j] = offset - element->n;
 				for(k = 0; k < element->n; k++) {
 					if(k > offset) break;
-					currentvalue = pow(in[(offset - k) * element->channels + j], element->moment);
+					currentvalue = pow(in[(offset - k) * channels + j], element->moment);
 					if (currentvalue >= element->max[j] ) {
 						element->max[j] = currentvalue;
 						element->lastmax[j] = offset - k;
 					}
 				}
-			out[i*element->channels +j] = element->max[j];
+			out[i*channels +j] = element->max[j];
 			}
 		}
 	}
@@ -157,27 +190,28 @@ static int max_every_n_process(GSTLALMean *element, guint64 available_length, gu
 	guint64 i,j,k;
 	double currentvalue = 0.;
 	guint64 offset = 0;
+	guint64 channels = (guint64) element->channels;
 
-	if (!element->max) element->max = (double *) calloc(element->channels, sizeof(double));
-	if (!element->lastmax) element->lastmax = (guint64 *) calloc(element->channels, sizeof(guint64));
+	if (!element->max) element->max = (double *) calloc(channels, sizeof(double));
+	if (!element->lastmax) element->lastmax = (guint64 *) calloc(channels, sizeof(guint64));
 
 	for(i = 0; i < output_length; i++) {
 		/* How far to look back in the input */
 		offset = available_length - output_length + i;
-		for (j = 0; j < element->channels; j++) {
+		for (j = 0; j < channels; j++) {
 			if (!(i % element->n)) {
-				element->max[j] = pow(in[(offset) * element->channels + j], element->moment);
+				element->max[j] = pow(in[(offset) * channels + j], element->moment);
 				element->lastmax[j] = offset;
 				for(k = 0; k < element->n; k++) {
 					if(k > offset) break;
-					currentvalue = pow(in[(offset - k) * element->channels + j], element->moment);
+					currentvalue = pow(in[(offset - k) * channels + j], element->moment);
 					if (currentvalue >= element->max[j] ) {
 						element->max[j] = currentvalue;
 						element->lastmax[j] = offset - k;
 					}
 				}
 			}
-			out[i*element->channels +j] = element->max[j];
+			out[i*channels +j] = element->max[j];
 		}
 	}
 	return 0;
@@ -353,17 +387,19 @@ GST_BOILERPLATE(
 enum property {
 	ARG_N = 1,
 	ARG_TYPE,
-	ARG_MOMENT
+	ARG_MOMENT,
+	ARG_THRESH
 };
 
 #define DEFAULT_N 1
 #define DEFAULT_MOMENT 2
 #define DEFAULT_TYPE 1
+#define DEFAULT_THRESH 5.0
 #define TYPE_MEAN 1
 #define TYPE_INTEGRAL 2
 #define TYPE_MAX_OVER_N 3
 #define TYPE_MAX_EVERY_N 4
-
+#define TYPE_THRESH 5
 
 /*
  * ============================================================================
@@ -433,7 +469,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	if (element->type == TYPE_INTEGRAL) element->process = GST_DEBUG_FUNCPTR(mean_process);
 	if (element->type == TYPE_MAX_OVER_N) element->process = GST_DEBUG_FUNCPTR(max_over_n_process);
 	if (element->type == TYPE_MAX_EVERY_N) element->process = GST_DEBUG_FUNCPTR(max_every_n_process);
-
+	if (element->type == TYPE_THRESH) element->process = GST_DEBUG_FUNCPTR(thresh_process);
 	return success;
 }
 
@@ -588,6 +624,14 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 	}
 
+	case ARG_THRESH: {
+		double old_thresh = element->thresh;
+		element->thresh = g_value_get_double(value);
+		if(element->thresh != old_thresh)
+			g_object_notify(object, "moment");
+		break;
+	}
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -621,6 +665,10 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		g_value_set_uint(value, element->moment);
 		break;
 
+	case ARG_THRESH:
+		g_value_set_double(value, element->thresh);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -648,11 +696,19 @@ static void finalize(GObject *object)
 		element->adapter = NULL;
 	}
 
+
+	if (element->sum1) free(element->sum1);
+	if (element->sum2) free(element->sum2);
+	if (element->max) free(element->max);
+	if (element->lastmax) free(element->lastmax);
+	if (element->lastcross) free(element->lastcross);
+
 	/*
 	 * chain to parent class' finalize() method
 	 */
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
+
 }
 
 
@@ -666,7 +722,7 @@ static void gstlal_mean_base_init(gpointer gclass)
 	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
 	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
 
-	gst_element_class_set_details_simple(element_class, "Average of last N samples", "Filter/Audio", "Each output sample is some average-like quantity of the N most recent samples", "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>");
+	gst_element_class_set_details_simple(element_class, "Average, max or thresh of last N samples", "Filter/Audio", "Each output sample is some average-like quantity of the N most recent samples", "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>");
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
@@ -710,7 +766,7 @@ static void gstlal_mean_class_init(GSTLALMeanClass *klass)
 		g_param_spec_uint(
 			"type",
 			"type",
-			"type of average 1=mean, 2=integral, 3=max over n, 4=max every n (faster)",
+			"type of average 1=mean, 2=integral, 3=max over n, 4=max every n (faster), 5=threshold",
 			0, G_MAXUINT, DEFAULT_TYPE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
@@ -724,6 +780,18 @@ static void gstlal_mean_class_init(GSTLALMeanClass *klass)
 			"moment",
 			"power of the data to average.",
 			0, G_MAXUINT, DEFAULT_MOMENT,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_THRESH,
+		g_param_spec_double(
+			"thresh",
+			"thresh",
+			"threshold to apply when used in threshold mode",
+			0, G_MAXDOUBLE, DEFAULT_THRESH,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
@@ -741,9 +809,13 @@ static void gstlal_mean_init(GSTLALMean *filter, GSTLALMeanClass *kclass)
 	filter->adapter = NULL;
 	filter->sum1 = NULL;
 	filter->sum2 = NULL;
+	filter->max = NULL;
+	filter->lastmax = NULL;
+	filter->lastcross = NULL;
 	filter->n = DEFAULT_N;
 	filter->moment = DEFAULT_MOMENT;
 	filter->type = DEFAULT_TYPE;
+	filter->thresh = DEFAULT_THRESH;
 	filter->process = GST_DEBUG_FUNCPTR(mean_process);
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);
 }
