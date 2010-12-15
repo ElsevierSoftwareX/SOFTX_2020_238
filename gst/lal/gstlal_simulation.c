@@ -115,11 +115,8 @@ static struct injection_document *load_injection_document(const char *filename, 
 	int success = 1;
 	struct injection_document *new;
 	int nrows; 
-	
-	if(!filename) {
-		XLALPrintError("%s(): filename not set\n");
-		XLAL_ERROR_NULL(func, XLAL_EFAULT);
-	}
+
+	g_assert(filename != NULL);
 
 	/*
 	 * allocate the document
@@ -761,6 +758,15 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	GSTLALSimulation *element = GSTLAL_SIMULATION(gst_pad_get_parent(pad));
 	GstFlowReturn result = GST_FLOW_OK;
 	REAL8TimeSeries *h;
+
+	/*
+	 * If no injection list, reduce to pass-through
+	 */
+
+	if(!element->xml_location) {
+		result = gst_pad_push(element->srcpad, buf);
+		goto done;
+	}
 
 	/*
 	 * Load injections if needed
