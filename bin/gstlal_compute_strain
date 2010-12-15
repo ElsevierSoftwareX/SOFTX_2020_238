@@ -78,7 +78,7 @@ pr1 = mkelem('progressreport', {'name': 'DARM_ERR progress'})
 audioconvert1 = mkelem('audioconvert')  # lal_firbank only supports doubles
 
 inv_sensing = mkelem('lal_firbank',
-                     {'fir-matrix': atleast_2d(filters['inv_sensing']),
+                     {'fir-matrix': atleast_2d(filters['inv_sensing'][::-1]),
                       'latency': filters['inv_sens_delay']})
 
 path1 = [derr_src, pr1, audioconvert1, inv_sensing]  # so we write less later
@@ -107,10 +107,10 @@ hpf2 = mkelem('audiowsinclimit',   # again! wish I could just copy it!
                'length': 2*2000+1})
 
 awhiten = mkelem('lal_firbank',
-                 {'fir-matrix': atleast_2d(filters['awhitening'])})
+                 {'fir-matrix': atleast_2d(filters['awhitening'][::-1])})
 
 actuation = mkelem('lal_firbank',
-                   {'fir-matrix': atleast_2d(filters['actuation'])})
+                   {'fir-matrix': atleast_2d(filters['actuation'][::-1])})
 
 path2 = [dctrl_src, pr2, audioconvert2, hpf, hpf2, awhiten, actuation]
 
