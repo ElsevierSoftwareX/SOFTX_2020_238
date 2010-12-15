@@ -1,4 +1,20 @@
-#!/usr/bin/python
+#!/usr/bin/env python
+#
+# Copyright (C) 2010  Jordi Burguet-Castell
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 """
 Generate h(t).
@@ -10,6 +26,9 @@ It reads DARM_ERR and DARM_CTRL from H-H1_RDS_R_L1-943009024-64.gwf as
 specified in data.cache. The filters file it uses is a npz version of
 S6H1Filters_942436815.txt
 """
+
+# To generate filters.npz you can use the program at
+# gstlal/examples/utilities/calfilters2npz.py
 
 # TODO:
 #   make it work! (compared to dumped frame)
@@ -59,7 +78,7 @@ pr1 = mkelem('progressreport', {'name': 'DARM_ERR progress'})
 audioconvert1 = mkelem('audioconvert')  # lal_firbank only supports doubles
 
 inv_sensing = mkelem('lal_firbank',
-                     {'fir-matrix': atleast_2d(filters['inv_sensing']),
+                     {'fir-matrix': atleast_2d(filters['inv_sensing'][::-1]),
                       'latency': filters['inv_sens_delay']})
 
 path1 = [derr_src, pr1, audioconvert1, inv_sensing]  # so we write less later
@@ -88,10 +107,10 @@ hpf2 = mkelem('audiowsinclimit',   # again! wish I could just copy it!
                'length': 2*2000+1})
 
 awhiten = mkelem('lal_firbank',
-                 {'fir-matrix': atleast_2d(filters['awhitening'])})
+                 {'fir-matrix': atleast_2d(filters['awhitening'][::-1])})
 
 actuation = mkelem('lal_firbank',
-                   {'fir-matrix': atleast_2d(filters['actuation'])})
+                   {'fir-matrix': atleast_2d(filters['actuation'][::-1])})
 
 path2 = [dctrl_src, pr2, audioconvert2, hpf, hpf2, awhiten, actuation]
 
@@ -151,8 +170,9 @@ def extract(pipeline, elem1, elem2, filename):
     tee.link(elem2)
 
     save_path = [mkelem(*x) for x in [ \
+        ('queue',        {}),
         ('audioconvert', {}),
-        ('lal_nxydump', {}),
+        ('lal_nxydump',  {}),
         ('filesink',    {'location': filename,
                          'sync': False,
                          'async': False})]]
