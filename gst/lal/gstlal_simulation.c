@@ -141,7 +141,8 @@ static struct injection_document *load_injection_document(const char *filename, 
 
 	new->has_sim_burst_table = XLALLIGOLwHasTable(filename, "sim_burst");
 	if(new->has_sim_burst_table < 0) {
-		/* FIXME:  handle failure */
+		XLALPrintError("%s(): error searching for sim_burst table in \"%s\": %s\n", func, filename, XLALErrorString(xlalErrno));
+		XLALClearErrno();
 		new->has_sim_burst_table = 0;
 		new->sim_burst_table_head = NULL;
 		success = 0;
@@ -163,7 +164,8 @@ static struct injection_document *load_injection_document(const char *filename, 
 
 	new->has_sim_inspiral_table = XLALLIGOLwHasTable(filename, "sim_inspiral");
 	if(new->has_sim_inspiral_table < 0) {
-		/* FIXME:  handle failure */
+		XLALPrintError("%s(): error searching for sim_inspiral table in \"%s\": %s\n", func, filename, XLALErrorString(xlalErrno));
+		XLALClearErrno();
 		new->has_sim_inspiral_table = 0;
 		new->sim_inspiral_table_head = NULL;
 		success = 0;
