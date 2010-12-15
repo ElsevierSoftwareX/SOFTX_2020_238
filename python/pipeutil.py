@@ -22,7 +22,7 @@ elements and pipelines.
 __author__       = "Leo Singer <leo.singer@ligo.org>"
 __organization__ = ["LIGO", "California Institute of Technology"]
 __copyright__    = "Copyright 2010, Leo Singer"
-__all__          = ["gobject", "gst", "gstlal_element_register", "mkelem", "mkelems_in_bin"]
+__all__          = ["gobject", "gst", "gstlal_element_register", "mkelem", "mkelems_in_bin", "splice"]
 
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -82,3 +82,61 @@ def mkelems_in_bin(bin, *pipedesc):
 	if len(elems) > 1:
 		gst.element_link_many(*elems)
 	return elems
+
+
+
+def splice(bin, pad, element):
+	"""Splice element into an existing bin by teeing off an existing pad.
+
+	If necessary, a tee is added to the pipeline in order to splice the new element.
+
+	bin is an instance of gst.Bin or gst.Pipeline.  pad is a string that
+	describes any pad inside that bin.  The syntax used in gst-launch is
+	understood.  For example, the string 'foo.bar.bat' means the pad called 'bat'
+	on the element called 'bar' in the bin called 'foo' inside bin.  'foo.bar.'
+	refers to any pad on the element 'bar'.  element_or_pad is either an element
+	or a pad.
+
+	FIXME: implicit pad names not yet understood.
+	"""
+
+	padpath = pad.split('.')
+	padname = padpath.pop()
+
+	elem = bin
+	for name in padpath:
+		elem = elem.get_by_name(name)
+		if elem is None:
+			raise NameError("no such element: '%s'" % name)
+
+	pad = elem.get_pad(padname)
+	if pad is None:
+		raise NameError("no such pad: '%s'" % padname)
+
+	tee_type = gst.element_factory_find('tee').get_element_type()
+
+	tee = pad.get_parent_element()
+	if tee.__gtype__ != tee_type:
+		peer_pad = pad.get_peer()
+		if peer_pad is None:
+			if hasattr(element, 'get_direction'):
+				elem.get_pad('src').link(element)
+			else:
+				elem.link(element)
+			return
+		else:
+			peer_element = peer_pad.get_parent_element()
+			if peer_element.__gtype__ == tee_type:
+				tee = peer_element
+			else:
+				if pad.get_direction() == gst.PAD_SINK:
+					pad, peer_pad = peer_pad, pad
+				pad.unlink(peer_pad)
+				tee = gst.element_factory_make("tee")
+				bin.add(tee)
+				pad.link(tee.get_static_pad('sink'))
+				tee.get_request_pad('src%d').link(peer_pad)
+	if hasattr(element, 'get_direction'):
+		tee.get_request_pad('src%d').link(element)
+	else:
+		tee.link(element)
