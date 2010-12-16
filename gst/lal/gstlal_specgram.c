@@ -450,7 +450,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		success = FALSE;
 	}
 
-	if (outrate < (inrate / element->n)) {
+	if (outrate < (inrate / (gint) element->n)) {
 		GST_DEBUG_OBJECT(element, "outrate must be greater than or equal to in rate / n %" GST_PTR_FORMAT " %" GST_PTR_FORMAT, outcaps, incaps);
 		success = FALSE;
 	}
