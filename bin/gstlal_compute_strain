@@ -51,7 +51,7 @@ filters = load('filters.npz')
 
 # Time we use to start calibrating
 ref_gpstime = 943009024
-duration = 48
+duration = 64
 
 
 #
@@ -79,7 +79,7 @@ audioconvert1 = mkelem('audioconvert')  # lal_firbank only supports doubles
 
 inv_sensing = mkelem('lal_firbank',
                      {'fir-matrix': atleast_2d(filters['inv_sensing'][::-1]),
-                      'latency': filters['inv_sens_delay']})
+                      'latency': -filters['inv_sens_delay']})
 
 path1 = [derr_src, pr1, audioconvert1, inv_sensing]  # so we write less later
 
