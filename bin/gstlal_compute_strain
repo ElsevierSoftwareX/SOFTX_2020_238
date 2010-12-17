@@ -107,10 +107,12 @@ hpf2 = mkelem('audiowsinclimit',   # again! wish I could just copy it!
                'length': 2*2000+1})
 
 awhiten = mkelem('lal_firbank',
-                 {'fir-matrix': atleast_2d(filters['awhitening'][::-1])})
+                 {'fir-matrix': atleast_2d(filters['awhitening'][::-1]),
+                  'time-domain': False})
 
 actuation = mkelem('lal_firbank',
-                   {'fir-matrix': atleast_2d(filters['actuation'][::-1])})
+                   {'fir-matrix': atleast_2d(filters['actuation'][::-1]),
+                    'time-domain': False})
 
 path2 = [dctrl_src, pr2, audioconvert2, hpf, hpf2, awhiten, actuation]
 
