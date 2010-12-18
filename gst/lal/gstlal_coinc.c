@@ -375,7 +375,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	{
 		SnglInspiralTable* latest_sngl = *val_handle;
 		SnglInspiralTable* earliest_sngl = NULL;
-		GstClockTime earliest_time;
+		GstClockTime earliest_time = 0; /* FIXME: this is needed to avoid uninitialized use warning, but you can check that this variable is always initialized on the first pass thru this loop! */
 		GstClockTime latest_time;
 		guint numtriggers = 0;
 
