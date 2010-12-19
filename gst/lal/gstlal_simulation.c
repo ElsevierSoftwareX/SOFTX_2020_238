@@ -764,10 +764,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 * If no injection list, reduce to pass-through
 	 */
 
-	if(!element->xml_location) {
-		result = gst_pad_push(element->srcpad, buf);
-		goto done;
-	}
+	if(!element->xml_location)
+		goto push;
 
 	/*
 	 * Load injections if needed
@@ -795,14 +793,19 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 
 	if(!element->instrument || !element->channel_name || !element->units) {
 		GST_ERROR_OBJECT(element, "stream metadata not available, cannot construct injections");
-		result = gst_pad_push(element->srcpad, buf);
-		goto done;
+		goto push;
 	}
 
 	/*
 	 * Wrap buffer in a LAL REAL8TimeSeries.
 	 */
 
+	buf = gst_buffer_make_writable(buf);
+	if(!buf) {
+		GST_ERROR_OBJECT(element, "gst_buffer_make_writable() failed");
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
 	h = gstlal_REAL8TimeSeries_from_buffer(buf, element->instrument, element->channel_name, element->units);
 	if(!h) {
 		GST_ERROR_OBJECT(element, "failure wrapping buffer in REAL8TimeSeries");
@@ -850,6 +853,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 * Push data out srcpad
 	 */
 
+push:
 	result = gst_pad_push(element->srcpad, buf);
 
 	/*
