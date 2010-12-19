@@ -43,7 +43,6 @@
 
 
 #include <gst/gst.h>
-#include <gst/base/gstadapter.h>
 
 
 /*
