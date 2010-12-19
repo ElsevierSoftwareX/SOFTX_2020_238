@@ -100,6 +100,7 @@ static void destroy_injection_document(struct injection_document *doc)
 			doc->sim_inspiral_table_head = next;
 		}
 	}
+	free(doc);
 }
 
 
@@ -906,6 +907,7 @@ static void finalize(GObject * object)
 	g_free(element->xml_location);
 	element->xml_location = NULL;
 	destroy_injection_document(element->injection_document);
+	element->injection_document = NULL;
 	g_free(element->instrument);
 	element->instrument = NULL;
 	g_free(element->channel_name);
