@@ -714,18 +714,29 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 {
 	GSTLALSimulation *element = GSTLAL_SIMULATION(GST_PAD_PARENT(pad));
 
-	if (GST_EVENT_TYPE(event) == GST_EVENT_TAG) {
+	/*
+	 * Check for tag events
+	 */
+
+	if(GST_EVENT_TYPE(event) == GST_EVENT_TAG) {
 		GstTagList *taglist;
 		gchar *instrument = NULL, *channel_name = NULL, *units = NULL;
 
-		/* Attempt to extract all 3 tags from the event's taglist. */
+		/*
+		 * Attempt to extract all 3 tags from the event's taglist
+		 */
+
 		gst_event_parse_tag(event, &taglist);
 		gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
 		gst_tag_list_get_string(taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
 		gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units);
 
+		/*
+		 * If any of the 3 tags were provided, discard all stored
+		 * values.
+		 */
+
 		if(instrument || channel_name || units) {
-			/* If any of the 3 tags were provided, we discard the old, stored values. */
 			g_free(element->instrument);
 			element->instrument = NULL;
 			g_free(element->channel_name);
@@ -733,8 +744,13 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 			g_free(element->units);
 			element->units = NULL;
 
+			/*
+			 * If all 3 tags were provided, save the new values
+			 * --- we only accept new values if we are provided
+			 * with a complete set.
+			 */
+
 			if(instrument && channel_name && units) {
-				/* If all 3 tags were provided, we save the new values. */
 				element->instrument = instrument;
 				element->channel_name = channel_name;
 				element->units = units;
@@ -742,7 +758,11 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		}
 	}
 
-	/* Allow the default event handler to take over. Downstream elements may want to look at tags too. */
+	/*
+	 * Allow the default event handler to take over.  Downstream
+	 * elements might want to look at tags too.
+	 */
+
 	return gst_pad_event_default(pad, event);
 }
 
