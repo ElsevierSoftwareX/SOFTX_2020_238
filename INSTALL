@@ -220,7 +220,7 @@ dependencies might be a little ahead of what is provided by your operating
 system.  Building gstreamer from git clone on Debian lenny (the current stable 
 release, the OS found on the Atlas cluster) will require you to install
 
- * ≥glib-2.20.5.tar.gz
+ * ≥glib-2.22.5.tar.gz
  * ≥pygobject-2.14.2.tar.gz
  * ≥pygtk-2.8.6.tar.gz
 
@@ -232,11 +232,11 @@ in your home directory.  The following instructions will download and install
 these three software packages into your ``/path/to/local`` prefix::
 
   $ cd /path/to/local/src
-  $ wget http://ftp.gnome.org/pub/GNOME/sources/glib/2.20/glib-2.20.5.tar.gz
+  $ wget http://ftp.gnome.org/pub/GNOME/sources/glib/2.22/glib-2.22.5.tar.gz
   $ wget http://ftp.gnome.org/pub/GNOME/sources/pygobject/2.14/pygobject-2.14.2.tar.gz
   $ wget http://ftp.gnome.org/pub/GNOME/sources/pygtk/2.8/pygtk-2.8.6.tar.gz
-  $ tar -xzf glib-2.20.5.tar.gz
-  $ pushd glib-2.20.5
+  $ tar -xzf glib-2.22.5.tar.gz
+  $ pushd glib-2.22.5
   $ ./configure --prefix=/path/to/local && make install
   $ popd
   
