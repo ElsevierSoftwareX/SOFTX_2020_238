@@ -312,24 +312,6 @@ gstlal source tree by using::
 You must also clone lalsuite by following the instructions on the LAL project page.
 
 
-Patching gst-plugins-base
-=========================
-
-To improve performance, some of the example pipelines provided with gstlal use 
-an experimental patch that adds gap support to gstreamer's stock audioresample 
-element.  We are in the process of preparing the patch for inclusion in the 
-upstream source tree but the patch is not ready yet.  To use the programs 
-included in gstlal you will need to apply the audioresample patch to your 
-gst-plugins-base source tree locally::
-
-  $ cd /path/to/local/src
-  $ pushd gst-plugins-base
-  $ wget https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal/audioresample.patch
-  $ patch -p1 < audioresample.patch
-  $ popd
-
-
-
 
 Installing the Software
 =======================
@@ -443,12 +425,7 @@ gstreamer
   
   $ gst-inspect coreelements
   
-  should indicate that the Filename is in ``/path/to/local/lib/...`` .  To test for 
-  the audioresampler's gap-aware patch::
-  
-  $ gst-inspect audioresample
-  
-  should list ``gap-aware`` under ``Element Properties``.
+  should indicate that the Filename is in ``/path/to/local/lib/...`` .
 
 
 gstlal
