@@ -209,15 +209,11 @@ to the section `Downloading the Software`_.
 Downloading and Installing Dependencies
 =======================================
 
-As we develop gstlal we sometimes find and fix bugs in and add new features to 
-gstreamer itself.  Using gstlal requires a version of gstreamer that has our 
-patches included, so in the instructions below we will be using the head of 
-gstreamer's master branch, not an official source release (we do not expect to 
-work this way in the long run, this is a start-up transient).  Because, for now,
-we will be using the newest version of gstreamer available, some of the software
-dependencies might be a little ahead of what is provided by your operating 
-system.  Building gstreamer from git clone on Debian lenny (the current stable 
-release, the OS found on the Atlas cluster) will require you to install
+Because, for now, we will be using the newest version of gstreamer available,
+some of the software dependencies might be a little ahead of what is provided by
+your operating system.  Building gstreamer from the latest stable releases on
+Debian lenny (the current stable release, the OS found on the Atlas cluster)
+will require you to install
 
  * ≥glib-2.22.5.tar.gz
  * ≥pygobject-2.14.2.tar.gz
@@ -291,10 +287,10 @@ Downloading the Software
 Download the latest GStreamer pre-releases::
 
   $ cd /path/to/local/src/
-  $ wget http://gstreamer.freedesktop.org/src/gstreamer/pre/gstreamer-0.10.30.3.tar.gz
-  $ wget http://gstreamer.freedesktop.org/src/gst-plugins-base/pre/gst-plugins-base-0.10.30.3.tar.gz
-  $ wget http://gstreamer.freedesktop.org/src/gst-plugins-good/pre/gst-plugins-good-0.10.25.3.tar.gz
-  $ wget http://gstreamer.freedesktop.org/src/gst-python/pre/gst-python-0.10.19.2.tar.gz
+  $ wget http://gstreamer.freedesktop.org/src/gstreamer/gstreamer-0.10.32.tar.gz
+  $ wget http://gstreamer.freedesktop.org/src/gst-plugins-base/gst-plugins-base-0.10.32.tar.gz
+  $ wget http://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-0.10.27.tar.gz
+  $ wget http://gstreamer.freedesktop.org/src/gst-python/gst-python-0.10.21.tar.gz
 
 The following will clone the gstlal source tree giving you read-only access::
 
