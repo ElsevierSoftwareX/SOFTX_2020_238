@@ -310,7 +310,6 @@ class AudioresampleUnityVarianceGain(gst.Bin):
 
 		# Add audioresample element
 		self.audioresample = gst.element_factory_make("audioresample")
-		self.audioresample.set_property("gap-aware", True)
 		self.audioresample.connect("notify::quality", self.quality_changed)
 		self.quality = self.audioresample.get_property("quality")
 		self.add(self.audioresample)
@@ -471,13 +470,13 @@ for i, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, key=ra
 	if last_ortho_snr_adder is not None:
 		mkelems_fast(pipeline,
 			branch_ortho_snr_adder,
-			"audioresample", {"gap-aware": True},
+			"audioresample",
 			"lal_nofakedisconts", {"silent": True},
 			"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % old_rate)},
 			last_ortho_snr_adder)
 		mkelems_fast(pipeline,
 			branch_snr_adder,
-			"audioresample", {"gap-aware": True},
+			"audioresample",
 			"lal_nofakedisconts", {"silent": True},
 			"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % old_rate)},
 			last_snr_adder)

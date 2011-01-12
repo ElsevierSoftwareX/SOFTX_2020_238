@@ -67,7 +67,6 @@ for ifo in ('H1', 'L1'):
 		"audioresample",
 		{
 			"quality": 9,
-			"gap-aware": True,
 		},
 		"lal_nofakedisconts",
 		"capsfilter",

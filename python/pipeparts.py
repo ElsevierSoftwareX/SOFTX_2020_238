@@ -174,7 +174,6 @@ def mkaudioamplify(pipeline, src, amplification):
 
 def mkresample(pipeline, src, pad_name = None, **properties):
 	elem = gst.element_factory_make("audioresample")
-	elem.set_property("gap-aware", True)
 	for name, value in properties.items():
 		elem.set_property(name.replace("_", "-"), value)
 	pipeline.add(elem)
