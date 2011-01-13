@@ -431,6 +431,15 @@ pylal
   should not produce an error, and should show that ``liblal.so.0`` is provided by 
   a file located in the ``/path/to/local`` directory tree.
 
+pygtk
+-----
+
+   ::
+
+   $ python -c "import pygtk; pygtk.require('2.0'); import gobject; print gobject.glib_version"
+
+   should not produce an error and should print the version corresponding to
+   the version of glib you installed.
 
 gstreamer
 ---------
