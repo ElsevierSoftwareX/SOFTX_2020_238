@@ -18,6 +18,7 @@ def parse_command_line():
         parser.add_option("-s", "--sort-by", metavar = "{mchirp|ffinal}", help = "Select the template sort order (required).")
 	parser.add_option("-F", "--add-f-final", action = "store_true", help = "Select whether to add f_final to the bank.")
 	parser.add_option("-M", "--max-f-final", metavar = "float", type="float", help = "Max f_final to populate table with; if f_final over mx, use max.")
+	parser.add_option("-i", "--instrument", metavar = "ifo", type="string", help = "override the instrument")
 	parser.add_option("-S", "--shear-file", metavar = "N", type="int", help = "Creates two files one with N templates and the other with the Total Number - N templates, give N.")
         parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
         options, filenames = parser.parse_args()
@@ -58,6 +59,13 @@ for file in filenames:
 				row.f_final=spawaveform.ffinal(row.mass1,row.mass2,'schwarz_isco')
 				if options.max_f_final and (row.f_final > options.max_f_final):
 					row.f_final=options.max_f_final
+	if options.instrument:
+		for row in sngl_inspiral_table: row.ifo = options.instrument
+	else:
+		for row in process_params_table:
+                	if row.param=='--ifos':
+				options.instrument = row.value
+		
 
 	if options.sort_by=='mchirp':
         	sngl_inspiral_table.sort(lambda a, b: cmp(a.mchirp, b.mchirp))
@@ -73,13 +81,13 @@ for file in filenames:
 	ligolw_process.append_process_params(xmldoc, process, options_params)	
 
 
-	output='split_bank-' + os.path.basename(file)
+	output=options.instrument + '_split_bank-' + os.path.basename(file)
 
 	if options.shear_file:
 		large_file_length=len(sngl_inspiral_table)-options.shear_file
 		for first_row in range(0, len(sngl_inspiral_table), large_file_length):
         		sngl_inspiral_table_split[:] = sngl_inspiral_table[first_row:first_row + large_file_length]
-        		output_split = os.path.join(options.output_path, "%04d-%s" % (first_row/large_file_length + 1, output))
+        		output_split = os.path.join(options.output_path, "%04d-%s-%s" % (first_row/large_file_length + 1, output))
         		utils.write_filename(xmldoc, output_split, gz = (output_split or "stdout").endswith(".gz"), verbose = options.verbose)
 	else:
                 for first_row in range(0, len(sngl_inspiral_table), options.n):
