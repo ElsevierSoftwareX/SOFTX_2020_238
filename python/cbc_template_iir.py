@@ -7,6 +7,8 @@
 #######
 
 from pylal import spawaveform
+import sys
+import time
 import numpy
 import scipy
 import pylab
@@ -65,60 +67,68 @@ def waveform(m1, m2, fLow, fhigh, sampleRate):
 #
 	
 
+def get_iir_sample_rate(xmldoc):
+	pass
+
 	
-def makeiirbank():
-
-	fFinal = 1500.0
-	sampleRate = 4096;
-	maxlength = -10
-
+def makeiirbank(xmdoc=None, sampleRate=4096, fuzz=0.90, epsilon=0.04, alpha=.99, beta=0.4, pnorder=4, flower = 40, psd_interp=None):
+	
 	Amat = []
 	Bmat = []
 	Dmat = []
-	for i in range(1, 2):
-		for j in range(i, 2):
-			m1 = (i - 1) * 0.2 + 0.8
-			m2 = (j - 1) * 0.2 + 0.8
-			amp, phase, f = waveform(m1, m2, 40, fFinal, sampleRate)
-			a1, b0, delay = spawaveform.iir(amp, phase, 0.01, 0.2, 0.2)
-			Amat.append(a1)
-			Bmat.append(b0)
-			Dmat.append(delay)
+	mvec = numpy.linspace(1,3,20)
+	snrvec = []
+	for m1 in mvec:
+		for m2 in mvec:
+			if m1 > m2: continue
+
+			start = time.time()
+		
+			#work out the waveform frequency
+			fFinal = spawaveform.ffinal(m1,m2)
+			if fFinal > fuzz * sampleRate / 2.0: fFinal = fuzz * sampleRate / 2.0 
+
+			# make the waveform
+			amp, phase, f = waveform(m1, m2, flower, fFinal, sampleRate)
+
+			if psd_interp is not None:
+				amp /= psd_interp(f)**0.5 * 1e23
+			
+			#print >> sys.stderr, "waveform %f" % (time.time() - start)
+					
+			# make the iir filter coeffs
+			a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta)
+			#print >> sys.stderr, "iir %f" % (time.time() - start)
+			# get the chirptime
+			duration = spawaveform.chirptime(m1,m2,pnorder,flower)
+			length = 2**numpy.ceil(numpy.log2(duration * sampleRate))
+
+			# get the IIR response
+			out = spawaveform.iirresponse(length, a1, b0, delay)
+			#print >> sys.stderr, "response %f" % (time.time() - start)
+			out = out[::-1]
+			vec1 = numpy.zeros(length * 2)
+			vec1[-len(out):] = out
+			norm1 = (vec1 * numpy.conj(vec1)).sum()**0.5
+			vec1 /= norm1	
+			#print >> sys.stderr, "norm 1 %f" % (time.time() - start)
+		
+			# get the original waveform
+			out2 = amp * numpy.exp(1j * phase)
+			vec2 = numpy.zeros(length * 2)
+			vec2[-len(out2):] = out2
+			vec2 /= (vec2 * numpy.conj(vec2)).sum()**0.5
+			#print >> sys.stderr, "norm 2 %f" % (time.time() - start)
+			
+			#n = 2**numpy.ceil(numpy.log2(length))
+			#print n, length
+			snr = numpy.abs(scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec2)))).max()
+			snrvec.append(snr)
+			print >>sys.stderr, m1, m2, snr, len(a1)
+			#print >> sys.stderr, "done %f" % (time.time() - start)
 			
 
-	dims = (len(Amat),max([len(i) for i in Amat]))
-	A = numpy.zeros(dims)
-	i = 0
-	for a in Amat:
-		A[i,0:len(a)] = a
-		i = i+1
-
-	B = numpy.zeros(dims)
-	i = 0
-	for a in Bmat:
-		B[i,0:len(a)] = a
-		i = i+1
-				
-	D = numpy.zeros(dims)
-	i = 0
-	for a in Dmat:
-		D[i,0:len(a)] = a
-		i = i+1
-		
-
-
-#psd = numpy.ones(amp.shape[0]/2)
-
-
-	print A.shape, B.shape, D.shape
-
-#ip = spawaveform.iirinnerproduct(a1, b0, delay, psd)
-#print "inner product = ", ip
-
-#pylab.plot()
-#pylab.show()
-
-	return A, B, D
+	return snrvec
 
 
 def innerproduct(a,b):
