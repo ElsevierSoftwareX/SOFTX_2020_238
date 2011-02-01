@@ -151,9 +151,9 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 		root = xmldoc.childNodes[0]
 		root.appendChild(param.new_param('sample_rate', types.FromPyType[int], sampleRate))
 		root.appendChild(param.new_param('flower', types.FromPyType[float], flower))
-		root.appendChild(array.from_array('A', A))
-		root.appendChild(array.from_array('B', B))
-		root.appendChild(array.from_array('D', D))
+		root.appendChild(array.from_array('a', A))
+		root.appendChild(array.from_array('b', B))
+		root.appendChild(array.from_array('d', D))
 	
 	return A, B, D, snrvec
 
@@ -186,3 +186,18 @@ def smooth_and_interp(psd, width=1, length = 10):
 		out[i+width*length] = (sfunc * data[i:i+2*width*length]).sum()
 	return scipy.interpolate.interp1d(f, out)
 
+def get_matrices_from_xml(xmldoc):
+	
+	root = xmldoc
+
+	A = array.get_array(root, 'a').array
+	Aout = numpy.zeros((A.shape[0] / 2, A.shape[1]), numpy.complex128)
+	for i,a in enumerate(Aout): Aout[i,:] = A[2*i,:] + 1j * A[2*i+1,:]
+
+	B = array.get_array(root, 'b').array
+	Bout = numpy.zeros((B.shape[0] / 2, B.shape[1]), numpy.complex128)
+	for i,b in enumerate(Bout): Bout[i,:] = B[2*i,:] + 1j * B[2*i+1,:]
+
+	D = array.get_array(root, 'd').array
+
+	return A, B, D
