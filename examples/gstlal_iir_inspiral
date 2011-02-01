@@ -1,0 +1,108 @@
+#!/usr/bin/python
+import sys
+import scipy
+import numpy
+import pylab
+from optparse import OptionParser
+
+
+def plot(pipeline, pre_elems, title="gstlal"):
+	elems = []
+	elems.append(pipeutil.mkelem("queue", {"max-size-time": 2}))
+	elems.append(pipeutil.mkelem("cairovis_waterfall", {"title": title, "z-scale": 0, "z-min":0, "z-max":8, "z-autoscale": False, "colormap": "jet", "history": 10 * gst.SECOND}))
+	elems.append(pipeutil.mkelem("capsfilter",{"caps": gst.Caps("video/x-raw-rgb,framerate=12/1,width=800,height=800")}))
+	elems.append(pipeutil.mkelem("ximagesink",{"sync": False,"async": False,}))
+	for elem in elems: pipeline.add(elem)
+	elems = pre_elems + elems
+	gst.element_link_many(*elems)
+
+
+parser = OptionParser(description = __doc__)
+parser.add_option("--iir-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required).")
+parser.add_option("--injection-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the injections (optional).")
+parser.add_option("--gps-start-time", help="GPS start time", type="float")
+parser.add_option("--gps-end-time", help="GPS end time", type="float")
+#parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
+parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+options, filenames = parser.parse_args()
+
+from gstlal import cbc_template_iir
+from gstlal.reference_psd import read_psd
+from glue.ligolw import utils, array, param
+from gstlal import pipeutil
+from gstlal.lloidparts import seek_event_for_gps
+from gstlal.pipeutil import gobject, gst
+
+# extract parameters from the bank
+xmldoc = utils.load_filename(options.iir_bank, gz=options.iir_bank.endswith('.gz'))
+A, B, D = cbc_template_iir.get_matrices_from_xml(xmldoc)
+sample_rate = param.get_pyvalue(xmldoc, 'sample_rate')
+flower = param.get_pyvalue(xmldoc, 'flower')
+
+for ifo in ["H1", "H2", "L1"]:
+	elems = []
+	elems.append(pipeutil.mkelem("lal_fakeadvligosrc", {"channel-name": 'LSC-STRAIN', "instrument": ifo, "blocksize": 16384 * 8}))
+
+	# add injection if specified
+	if options.injection_file: elems.append(pipeutil.mkelem("lal_simulation", {"xml-location": options.injection_file}))
+
+	# resample at the specified sample rate
+	elems.append(pipeutil.mkelem("audioresample"))
+	elems.append(pipeutil.mkelem("capsfilter",{"caps": gst.Caps("audio/x-raw-float,width=64,rate=%d" % (sample_rate))}))
+
+	# apply whitening and do filtering
+	elems.append(pipeutil.mkelem("lal_whiten",{"zero-pad": 0, "fft-length": 8, "average-samples": 32, "median-samples": 9,}))
+	elems.append(pipeutil.mkelem("lal_nofakedisconts"))
+	elems.append(pipeutil.mkelem("progressreport"))
+	elems.append(pipeutil.mkelem("lal_iirbank",{"name": ifo+" iir", "a1": A, "b0": B, "delay":D}))
+	elems.append(pipeutil.mkelem("lal_nofakedisconts"))
+	elems.append(pipeutil.mkelem("progressreport"))
+	mean[ifo] = pipeutil.mkelem("lal_mean",{"n":coinc_window, "moment":2, "type":2, "thresh": snr_threshold})
+	elems.append(mean[ifo])
+	elems.append(pipeutil.mkelem("lal_nofakedisconts"))
+	#elems.append(pipeutil.mkelem("audioresample"))
+	#elems.append(pipeutil.mkelem("capsfilter",{"caps": gst.Caps("audio/x-raw-float,width=64,rate=%d" % (int(4. / coinc_time)))}))
+	#elems.append(pipeutil.mkelem("queue"))
+	elems.append(pipeutil.mkelem("fakesink"))
+	#mean[ifo] = elems[-1]
+	for elem in elems: pipeline.add(elem)
+	#plot(pipeline, elems, ifo+" ringdown")
+	gst.element_link_many(*elems)
+	#mean[ifo].link(multiplier)
+
+############################################################
+# run the pipeline
+
+class Handler(object):
+	def __init__(self, mainloop, pipeline):
+		self.mainloop = mainloop
+		self.pipeline = pipeline
+
+		bus = pipeline.get_bus()
+		bus.add_signal_watch()
+		bus.connect("message", self.on_message)
+
+	def on_message(self, bus, message):
+		if message.type == gst.MESSAGE_EOS:
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
+		elif message.type == gst.MESSAGE_ERROR:
+			gerr, dbgmsg = message.parse_error()
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
+			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
+
+seekevent = seek_event_for_gps(options.gps_start_time, options.gps_end_time)
+for src in pipeline.iterate_sources():
+	src.send_event(seekevent)
+
+handler = Handler(mainloop, pipeline)
+
+pipeline.set_state(gst.STATE_PLAYING)
+mainloop.run()
+
+
+
+
+
