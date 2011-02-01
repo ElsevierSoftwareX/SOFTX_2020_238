@@ -82,7 +82,7 @@ typedef struct {
         gsl_vector_int *delay;
         gsl_vector_complex *a1;
         gsl_vector_complex *b0;
-        gsl_vector_complex *ylast;
+        gsl_vector_complex *y;
 	gint64 latency;
 
 	/*
