@@ -34,7 +34,54 @@ S6H1Filters_942436815.txt
 #   make it work! (compared to dumped frame)
 
 import sys
+from optparse import OptionParser
+
 from numpy import load, atleast_2d
+
+
+#
+# Read command-line options
+#
+
+parser = OptionParser(
+    version='%prog 0.9',
+    usage='%prog [options]',
+    description=__doc__)
+
+add = parser.add_option  # for short notation
+add('--gps-start-time', type='int', help='GPS start time')
+add('--gps-end-time',   type='int', help='GPS end time')
+add('--filters-file', help='Name of file containing filters (in npz format)')
+add('--frame-cache',  help='Name of frame cache file')
+add('--ifo',          help='Name of the interferometer (H1, H2, L1)')
+add('--frame-type',   help='Frame type to be written (eg, H1_GSTLAL_C02)')
+add('--silent', action='store_true', help='Be less verbose')
+
+opts, rest = parser.parse_args()
+
+# Use default arguments for testing. Temporary!
+if opts.gps_start_time is None:
+    opts.gps_start_time = 943009024
+
+if opts.gps_end_time is None:
+    opts.gps_end_time = 943009024 + 64
+
+if opts.filters_file is None:
+    opts.filters_file = 'filters.npz'
+
+if opts.frame_cache is None:
+    opts.frame_cache = 'data.cache'
+
+if opts.ifo is None:
+    opts.ifo = 'H1'
+
+if opts.frame_type is None:
+    opts.frame_type = opts.ifo + '_GSTLAL_C02'
+
+
+#
+# Initialization
+#
 
 import pygtk
 pygtk.require('2.0')
@@ -43,22 +90,23 @@ pygst.require('0.10')
 import gobject, gst
 from gstlal.pipeutil import mkelem
 
+if not opts.silent:
+    print 'Processing data from time %d to %d (%d seconds)' % \
+        (opts.gps_start_time, opts.gps_end_time,
+         opts.gps_end_time - opts.gps_start_time)
+    print 'Opening filters file %s' % opts.filters_file
+
+filters = load(opts.filters_file)
+
 mainloop = gobject.MainLoop()
 pipeline = gst.Pipeline('calibration')
 
-# Read filters file
-filters = load('filters.npz')
-
-# Time we use to start calibrating
-ref_gpstime = 943009024
-duration = 48
-
 
 #
-# Creation of the pipeline. We have to create the elements, and
-# connect them in the right way.
+# Creation of the pipeline. We create the elements and connect them
+# appropriately.
 #
-# It will look like:
+# It looks like:
 #
 #   derr  -> 1/C              [1]  \
 #                                   |->  [3] save
@@ -68,9 +116,9 @@ duration = 48
 # [1] Elements in the first path (from DARM_ERR channel)
 
 derr_src = mkelem('lal_framesrc',
-                  {'location': 'data.cache',
+                  {'location': opts.frame_cache,
                    'channel-name': 'LSC-DARM_ERR',
-                   'instrument': 'H1',
+                   'instrument': opts.ifo,
                    'blocksize': 524288})
 
 pr1 = mkelem('progressreport', {'name': 'DARM_ERR progress'})
@@ -79,7 +127,7 @@ audioconvert1 = mkelem('audioconvert')  # lal_firbank only supports doubles
 
 inv_sensing = mkelem('lal_firbank',
                      {'fir-matrix': atleast_2d(filters['inv_sensing'][::-1]),
-                      'latency': filters['inv_sens_delay']})
+                      'latency': -filters['inv_sens_delay']})  # +/-? careful!
 
 path1 = [derr_src, pr1, audioconvert1, inv_sensing]  # so we write less later
 
@@ -87,9 +135,9 @@ path1 = [derr_src, pr1, audioconvert1, inv_sensing]  # so we write less later
 # [2] Elements in the second path (from DARM_CTRL channel)
 
 dctrl_src = mkelem('lal_framesrc',
-                   {'location': 'data.cache',
+                   {'location': opts.frame_cache,
                     'channel-name': 'LSC-DARM_CTRL',
-                    'instrument': 'H1',
+                    'instrument': opts.ifo,
                     'blocksize': 524288})
 
 pr2 = mkelem('progressreport', {'name': 'DARM_CTRL progress'})
@@ -107,10 +155,12 @@ hpf2 = mkelem('audiowsinclimit',   # again! wish I could just copy it!
                'length': 2*2000+1})
 
 awhiten = mkelem('lal_firbank',
-                 {'fir-matrix': atleast_2d(filters['awhitening'][::-1])})
+                 {'fir-matrix': atleast_2d(filters['awhitening'][::-1]),
+                  'time-domain': False})
 
 actuation = mkelem('lal_firbank',
-                   {'fir-matrix': atleast_2d(filters['actuation'][::-1])})
+                   {'fir-matrix': atleast_2d(filters['actuation'][::-1]),
+                    'time-domain': False})
 
 path2 = [dctrl_src, pr2, audioconvert2, hpf, hpf2, awhiten, actuation]
 
@@ -119,29 +169,12 @@ path2 = [dctrl_src, pr2, audioconvert2, hpf, hpf2, awhiten, actuation]
 
 path3 = [mkelem(*x) for x in [ \
     ('lal_adder',   {}),
-    ('lal_nxydump', {}),
-    ('filesink',    {'location': 'gstlal_hoft.txt',
-                     'sync': False,
-                     'async': False}),
-#        ('cairovis_lineseries', {}),
-#        ('ffmpegcolorspace',    {}),
-##        ('ximagesink',),
-#        ('pngenc',              {}),
-#        ('filesink', {'location': 'plot.png'}),
-        ]]
-
-#### For debugging stuff #####
-
-#    ('lal_whiten',            {'zero-pad': 0,
-#                               'fft-length': 1,
-#                               'average-samples': 1,
-#                               'median-samples': 1,
-#                               'name': 'whiten'}),
-#    ('fakesink',   {'sync': 0,
-#                    'async': 0}),
-#    ]
-
-###############################
+#    ('lal_delay', {'delay': 16*16384-len( shortest delay of the two paths? )}),
+    ('taginject', {'tags': 'channel-name=LDAS-STRAIN'}),  # change
+    ('lal_framesink', {'frame-type': opts.frame_type,
+                       'duration': 16,
+                       'clean-timestamps': True}),
+    ]]
 
 
 # Add to pipeline and link
@@ -158,7 +191,7 @@ path2[-1].link(path3[0])  # [2] /
 gst.element_link_many(*path3)  # [3]
 
 
-#### For debugging stuff #####
+# #### For debugging stuff #####
 
 def extract(pipeline, elem1, elem2, filename):
     """Take a couple of linked elements elem1->elem2 in a pipeline and
@@ -186,6 +219,7 @@ extract(pipeline, dctrl_src, pr2, 'gstlal_DARM_CTRL.txt')
 extract(pipeline, hpf2, awhiten, 'gstlal_HPFx2_adv_DARM_CTRL.txt')
 extract(pipeline, awhiten, actuation, 'gstlal_AW_HPFx2_adv_DARM_CTRL.txt')
 extract(pipeline, actuation, path3[0], 'gstlal_A_AW_HPFx2_adv_DARM_CTRL.txt')
+extract(pipeline, path3[1], path3[2], 'gstlal_STRAIN.txt')
 
 ##############################
 
@@ -193,11 +227,11 @@ extract(pipeline, actuation, path3[0], 'gstlal_A_AW_HPFx2_adv_DARM_CTRL.txt')
 # Make it start playing at the appropiate reference gpstime
 
 path1[0].seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
-              gst.SEEK_TYPE_SET, ref_gpstime * 1e9,
-              gst.SEEK_TYPE_SET, (ref_gpstime + duration) * 1e9)
+              gst.SEEK_TYPE_SET, opts.gps_start_time * 1e9,
+              gst.SEEK_TYPE_SET, opts.gps_end_time * 1e9)
 path2[0].seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
-              gst.SEEK_TYPE_SET, ref_gpstime * 1e9,
-              gst.SEEK_TYPE_SET, (ref_gpstime + duration) * 1e9)
+              gst.SEEK_TYPE_SET, opts.gps_start_time * 1e9,
+              gst.SEEK_TYPE_SET, opts.gps_end_time * 1e9)
 
 # Boilerplate
 class Handler(object):

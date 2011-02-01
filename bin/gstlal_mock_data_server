@@ -51,7 +51,7 @@ opts, args = OptionParser(usage = "%prog [options]" + __doc__, option_list = [
 # Late imports
 #
 
-from gstlal.pipeutil import *
+from gstlal.pipeutil import gst, gobject
 from gstlal.lloidparts import mkelems_fast, LLOIDHandler
 from pylal.Fr import frputvect
 from gstlal.pipeio import array_from_audio_buffer

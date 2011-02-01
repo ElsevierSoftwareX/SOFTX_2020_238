@@ -33,4 +33,4 @@ ax2.set_yticks(ticklocs)
 ax2.set_yticklabels(['%0.1f' % noninj[round(x * (len(noninj) - 1))] for x in reversed(ticklocs)])
 ax2.set_ylabel(r'SNR threshold')
 
-rocplot.savefig('roc.png')
+rocplot.savefig('roc.pdf')

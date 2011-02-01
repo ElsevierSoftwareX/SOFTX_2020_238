@@ -375,7 +375,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	{
 		SnglInspiralTable* latest_sngl = *val_handle;
 		SnglInspiralTable* earliest_sngl = NULL;
-		GstClockTime earliest_time;
+		GstClockTime earliest_time = 0; /* FIXME: this is needed to avoid uninitialized use warning, but you can check that this variable is always initialized on the first pass thru this loop! */
 		GstClockTime latest_time;
 		guint numtriggers = 0;
 
@@ -675,7 +675,7 @@ GType gstlal_coinc_get_type(void)
 			.instance_init = instance_init,
 		};
 		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_coinc", &info, 0);
-		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "coinc", 0, "coinc element");
+		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_coinc", 0, "coinc element");
 	}
 
 	return type;

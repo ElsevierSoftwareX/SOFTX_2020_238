@@ -38,7 +38,6 @@ EXTRA_DIST = \
 	final.py \
 	gaptest.sh \
 	gstlal_inspiral.ini \
-	gstlal_mock_data_server \
 	impulse_at_874107198.xml \
 	inspiral.sh \
 	inspiral_fake.sh \
