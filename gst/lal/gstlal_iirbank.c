@@ -53,7 +53,6 @@
  */
 
 
-#include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_blas.h>
 
@@ -72,7 +71,9 @@
 
 static unsigned iir_channels(const GSTLALIIRBank *element)
 {
-  return 2; /* FIXME 2 is the number of output channels */
+	if(element->a1)
+		return 2 * element->a1->size1;
+	return 0;
 }
 
 
@@ -142,20 +143,20 @@ static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 	double *input;
 	complex double *output;
 	int dmax, dmin;
-	unsigned i, j;
+	unsigned i, j, k;
 	complex double *y, *a1, *b0;
 	int *d;
 
-	y = (complex double *) gsl_vector_complex_ptr(element->y, 0);
-	a1 = (complex double *) gsl_vector_complex_ptr(element->a1, 0);
-	b0 = (complex double *) gsl_vector_complex_ptr(element->b0, 0);
-	d = gsl_vector_int_ptr(element->delay, 0);
+	y = (complex double *) gsl_matrix_complex_ptr(element->y, 0, 0);
+	a1 = (complex double *) gsl_matrix_complex_ptr(element->a1, 0, 0);
+	b0 = (complex double *) gsl_matrix_complex_ptr(element->b0, 0, 0);
+	d = gsl_matrix_int_ptr(element->delay, 0, 0);
 
 	/*
 	 * how much data is available?
 	 */
 
-	gsl_vector_int_minmax(element->delay, &dmin, &dmax); 
+	gsl_matrix_int_minmax(element->delay, &dmin, &dmax); 
 	available_length = get_available_samples(element);
 	output_length = available_length - (dmax - dmin);
 
@@ -175,10 +176,12 @@ static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 	for(i = 0; i < output_length * iir_channels(element) / 2; i++)
 		output[i] = 0.0;
 
-	for(j = 0; j < element->a1->size; j++) {
-		for(i = 0; i < output_length; i++) {
-			y[j] = a1[j] * y[j] + b0[j] * input[dmax - d[j] + i];
-			output[i] += y[j];
+	for(k = 0; k < element->a1->size1; k++) { /* waveform # */
+		for(j = 0; j < element->a1->size2; j++) { /* filter # */
+			for(i = 0; i < output_length; i++) { /* sample # */
+				y[k*element->a1->size2+j] = a1[k*element->a1->size2+j] * y[k*element->a1->size2+j] + b0[k*element->a1->size2+j] * input[dmax - d[k*element->a1->size2+j] + i];
+				output[i*element->a1->size1+k] += y[j];
+			}
 		}
 	}
 	/*fprintf(stderr,"Input Buffer length = %d, Output Buffer length = %d\n",available_length, output_length); */
@@ -422,7 +425,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		while(!element->delay || !element->a1 || !element->b0)
 			g_cond_wait(element->iir_matrix_available, element->iir_matrix_lock);
 
-         	gsl_vector_int_minmax(element->delay, &dmin, &dmax);
+         	gsl_matrix_int_minmax(element->delay, &dmin, &dmax);
 		g_mutex_unlock(element->iir_matrix_lock);
 
 		*othersize = size / unit_size + get_available_samples(element);
@@ -496,18 +499,6 @@ static gboolean start(GstBaseTransform *trans)
 
 
 /*
- * stop()
- */
-
-
-static gboolean stop(GstBaseTransform *trans)
-{
-	GSTLALIIRBank *element = GSTLAL_IIRBANK(trans);
-	return TRUE;
-}
-
-
-/*
  * transform()
  */
 
@@ -527,14 +518,16 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	while(!element->delay || !element->a1 || !element->b0)
 		g_cond_wait(element->iir_matrix_available, element->iir_matrix_lock);
 
-	g_assert(element->b0->size == element->delay->size);
-	g_assert(element->a1->size == element->delay->size);
+	g_assert(element->b0->size1 == element->delay->size1);
+	g_assert(element->a1->size1 == element->delay->size1);
+	g_assert(element->b0->size2 == element->delay->size2);
+	g_assert(element->a1->size2 == element->delay->size2);
 
 	if(!element->y)
-	        element->y = gsl_vector_complex_calloc(element->a1->size);
-	else if(element->y->size != element->delay->size) {
-		gsl_vector_complex_free(element->y);
-	        element->y = gsl_vector_complex_calloc(element->a1->size);
+	        element->y = gsl_matrix_complex_calloc(element->a1->size1, element->a1->size2);
+	else if(element->y->size1 != element->delay->size1 || element->y->size2 != element->delay->size2 ) {
+		gsl_matrix_complex_free(element->y);
+	        element->y = gsl_matrix_complex_calloc(element->a1->size1, element->a1->size2);
 	}
 
 	/*
@@ -553,7 +546,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		gst_adapter_clear(element->adapter);
 		element->zeros_in_adapter = 0;
 
-		gsl_vector_int_minmax(element->delay, &dmin, &dmax);
+		gsl_matrix_int_minmax(element->delay, &dmin, &dmax);
 		push_zeros(element, dmax-dmin);
 
                 /*
@@ -630,9 +623,9 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	case ARG_IIR_A1:
 		g_mutex_lock(element->iir_matrix_lock);
 		if(element->a1)
-		        gsl_vector_complex_free(element->a1);
+		        gsl_matrix_complex_free(element->a1);
 
-		element->a1 = gstlal_gsl_vector_complex_from_g_value_array(g_value_get_boxed(value));
+		element->a1 = gstlal_gsl_matrix_complex_from_g_value_array(g_value_get_boxed(value));
 
 		/*
 		 * signal change of IIR coeffs
@@ -645,9 +638,9 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	case ARG_IIR_B0:
 		g_mutex_lock(element->iir_matrix_lock);
 		if(element->b0)
-		        gsl_vector_complex_free(element->b0);
+		        gsl_matrix_complex_free(element->b0);
 
-		element->b0 = gstlal_gsl_vector_complex_from_g_value_array(g_value_get_boxed(value));
+		element->b0 = gstlal_gsl_matrix_complex_from_g_value_array(g_value_get_boxed(value));
 
 		/*
 		 * signal change of IIR coeffs
@@ -663,13 +656,13 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
 		g_mutex_lock(element->iir_matrix_lock);
 		if(element->delay) {
-			gsl_vector_int_minmax(element->delay, &dmin, &dmax); 
-		        gsl_vector_int_free(element->delay);
+			gsl_matrix_int_minmax(element->delay, &dmin, &dmax); 
+		        gsl_matrix_int_free(element->delay);
 		} else 
 			dmin = dmax = 0;
 
-		element->delay = gstlal_gsl_vector_int_from_g_value_array(g_value_get_boxed(value));
-		gsl_vector_int_minmax(element->delay, &dmin_new, &dmax_new); 
+		element->delay = gstlal_gsl_matrix_int_from_g_value_array(g_value_get_boxed(value));
+		gsl_matrix_int_minmax(element->delay, &dmin_new, &dmax_new); 
 
 		if(dmax_new-dmin_new > dmax-dmin)
 			push_zeros(element, dmax_new-dmin_new-(dmax-dmin));
@@ -707,7 +700,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	case ARG_IIR_A1:
 		g_mutex_lock(element->iir_matrix_lock);
 		if(element->a1)
-			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_vector_complex(element->a1));
+			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_complex(element->a1));
 		/* FIXME:  else? */
 		g_mutex_unlock(element->iir_matrix_lock);
 		break;
@@ -715,7 +708,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	case ARG_IIR_B0:
 		g_mutex_lock(element->iir_matrix_lock);
 		if(element->b0)
-			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_vector_complex(element->b0));
+			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_complex(element->b0));
 		/* FIXME:  else? */
 		g_mutex_unlock(element->iir_matrix_lock);
 		break;
@@ -723,7 +716,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	case ARG_IIR_DELAY:
 		g_mutex_lock(element->iir_matrix_lock);
 		if(element->delay)
-			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_vector_int(element->delay));
+			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_int(element->delay));
 		/* FIXME:  else? */
 		g_mutex_unlock(element->iir_matrix_lock);
 		break;
@@ -751,19 +744,19 @@ static void finalize(GObject *object)
 	g_cond_free(element->iir_matrix_available);
 	element->iir_matrix_available = NULL;
 	if(element->a1) {
-		gsl_vector_complex_free(element->a1);
+		gsl_matrix_complex_free(element->a1);
 		element->a1 = NULL;
 	}
 	if(element->b0) {
-		gsl_vector_complex_free(element->b0);
+		gsl_matrix_complex_free(element->b0);
 		element->b0 = NULL;
 	}
 	if(element->delay) {
-		gsl_vector_int_free(element->delay);
+		gsl_matrix_int_free(element->delay);
 		element->delay = NULL;
 	}
 	if(element->y) {
-		gsl_vector_complex_free(element->y);
+		gsl_matrix_complex_free(element->y);
 		element->y = NULL;
 	}
 	g_object_unref(element->adapter);
@@ -794,7 +787,6 @@ static void gstlal_iirbank_base_init(gpointer gclass)
 	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
 	transform_class->start = GST_DEBUG_FUNCPTR(start);
-	transform_class->stop = GST_DEBUG_FUNCPTR(stop);
 }
 
 
@@ -817,32 +809,44 @@ static void gstlal_iirbank_class_init(GSTLALIIRBankClass *klass)
 		gobject_class,
 		ARG_IIR_A1,
 		g_param_spec_value_array(
-			"a1",
-			"IIR feedback coefficient",
-			"Array of first order IIR filter feedback coefficients.  All filters must have the same length.",
-			g_param_spec_double(
-				"coefficient",
-				"Coefficient",
-				"Feedback coefficient",
-				-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+			"a1-matrix",
+			"Matric of IIR feedback coefficients",
+			"A Matrix of first order IIR filter feedback coefficients. Each row represents a different IIR bank.",
+			g_param_spec_value_array(
+				"a1",
+				"IIR bank feedback coefficients",
+				"A parallel bank of first order IIR filter feedback coefficients",
+				g_param_spec_double(
+					"coefficient",
+					"Coefficient",
+					"Feedback coefficient",
+					-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+				),
 				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 			),
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-		)
+	        )
 	);
 
 	g_object_class_install_property(
 		gobject_class,
 		ARG_IIR_B0,
 		g_param_spec_value_array(
-			"b0",
-			"IIR coefficient",
-			"Array of first order IIR filter coefficients.  All filters must have the same length.",
-			g_param_spec_double(
-				"coefficient",
-				"Coefficient",
-				"Current input sample coefficient",
-				-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+			"b0-matrix",
+			"Matrix of IIR bank feedforward coefficients",
+			"Array of first order IIR filter coefficients. Each row represents a different IIR bank.",
+			g_param_spec_value_array(
+				"b0",
+				"IIR bank of feedforward coefficients",
+				"A parallel bank of first order IIR filter feedforward coefficents",
+				g_param_spec_double(
+					 "coefficient",
+					 "Coefficient",
+					 "Current input sample coefficient",
+					 -G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+					 G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			        ),
 				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 			),
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
@@ -853,14 +857,20 @@ static void gstlal_iirbank_class_init(GSTLALIIRBankClass *klass)
 		gobject_class,
 		ARG_IIR_DELAY,
 		g_param_spec_value_array(
-			"delay",
-			"Delay for IIR filter",
-			"Array of delays for first order IIR filters.  All filters must have the same length.",
-			g_param_spec_int(
+			"delay-matrix",
+			"Matrix of delays for IIR filter bank",
+			"Matrix of delays for first order IIR filters.  All filters must have the same length.",
+			g_param_spec_value_array(
 				"delay",
-				"Delay",
-				"Delay for IIR filter",
-				0, G_MAXINT, 0,
+				"delays for IIR bank",
+				"A parallel bank of first order IIR filter delays",
+				g_param_spec_int(
+					"delay",
+					"Delay",
+					"Delay for IIR filter",
+					0, G_MAXINT, 0,
+					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+				),
 				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 			),
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
