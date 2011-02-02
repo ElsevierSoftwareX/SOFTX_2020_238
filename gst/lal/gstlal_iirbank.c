@@ -180,7 +180,7 @@ static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 		for(j = 0; j < element->a1->size2; j++) { /* filter # */
 			for(i = 0; i < output_length; i++) { /* sample # */
 				y[k*element->a1->size2+j] = a1[k*element->a1->size2+j] * y[k*element->a1->size2+j] + b0[k*element->a1->size2+j] * input[dmax - d[k*element->a1->size2+j] + i];
-				output[i*element->a1->size1+k] += y[j];
+				output[i*element->a1->size1+k] += y[k*element->a1->size2+j];
 			}
 		}
 	}
