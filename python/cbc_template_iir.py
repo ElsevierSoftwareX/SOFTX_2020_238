@@ -16,6 +16,7 @@ import pdb
 import csv
 import time
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
+from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 
 def Theta(eta, Mtot, t):
 	Tsun = 5.925491e-6
@@ -136,23 +137,23 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 		if verbose: print >>sys.stderr, m1, m2, snr, len(a1)
 			
 	# get ready to store the coefficients
+	print [len(i) for i in Amat]
 	max_len = max([len(i) for i in Amat])
-	A = numpy.zeros((len(Amat)*2, max_len))#, dtype=numpy.complex128)
-	B = numpy.zeros((len(Amat)*2, max_len))#, dtype=numpy.complex128)
-	D = numpy.zeros((len(Amat), max_len))#, dtype=numpy.complex128)
+	
+	A = numpy.zeros((len(Amat), max_len),dtype=numpy.complex128)
+	B = numpy.zeros((len(Amat), max_len), dtype=numpy.complex128)
+	D = numpy.zeros((len(Amat), max_len))
 
-	for i, Am in enumerate(Amat): A[i*2,:len(Am)] = numpy.real(Am)
-	for i, Am in enumerate(Amat): A[i*2+1,:len(Am)] = numpy.imag(Am)
-	for i, Bm in enumerate(Bmat): B[i*2,:len(Bm)] = numpy.real(Bm)
-	for i, Bm in enumerate(Bmat): B[i*2+1,:len(Bm)] = numpy.imag(Bm)
+	for i, Am in enumerate(Amat): A[i,:len(Am)] = Am
+	for i, Bm in enumerate(Bmat): B[i,:len(Bm)] = Bm
 	for i, Dm in enumerate(Dmat): D[i,:len(Dm)] = Dm
 	
 	if output_to_xml: # Create new document and add them together
 		root = xmldoc.childNodes[0]
 		root.appendChild(param.new_param('sample_rate', types.FromPyType[int], sampleRate))
 		root.appendChild(param.new_param('flower', types.FromPyType[float], flower))
-		root.appendChild(array.from_array('a', A))
-		root.appendChild(array.from_array('b', B))
+		root.appendChild(array.from_array('a', repack_complex_array_to_real(A)))
+		root.appendChild(array.from_array('b', repack_complex_array_to_real(B)))
 		root.appendChild(array.from_array('d', D))
 	
 	return A, B, D, snrvec
@@ -190,13 +191,15 @@ def get_matrices_from_xml(xmldoc):
 	
 	root = xmldoc
 
-	A = array.get_array(root, 'a').array
-	Aout = numpy.zeros((A.shape[0] / 2, A.shape[1]), numpy.complex128)
-	for i,a in enumerate(Aout): Aout[i,:] = A[2*i,:] + 1j * A[2*i+1,:]
+	A = repack_real_array_to_complex(array.get_array(root, 'a').array)
+	#A = array.get_array(root, 'a').array
+	#Aout = numpy.zeros((A.shape[0] / 2, A.shape[1]), numpy.complex128)
+	#for i,a in enumerate(Aout): Aout[i,:] = A[2*i,:] + 1j * A[2*i+1,:]
 
-	B = array.get_array(root, 'b').array
-	Bout = numpy.zeros((B.shape[0] / 2, B.shape[1]), numpy.complex128)
-	for i,b in enumerate(Bout): Bout[i,:] = B[2*i,:] + 1j * B[2*i+1,:]
+	B = repack_real_array_to_complex(array.get_array(root, 'b').array)
+	#B = array.get_array(root, 'b').array
+	#Bout = numpy.zeros((B.shape[0] / 2, B.shape[1]), numpy.complex128)
+	#for i,b in enumerate(Bout): Bout[i,:] = B[2*i,:] + 1j * B[2*i+1,:]
 
 	D = array.get_array(root, 'd').array
 
