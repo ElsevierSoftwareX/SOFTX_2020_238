@@ -4,12 +4,14 @@ import scipy
 import numpy
 import pylab
 from optparse import OptionParser
+from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 
 
 def plot(pipeline, pre_elems, title="gstlal"):
 	elems = []
 	elems.append(pipeutil.mkelem("queue", {"max-size-time": 2}))
-	elems.append(pipeutil.mkelem("cairovis_waterfall", {"title": title, "z-scale": 0, "z-min":0, "z-max":8, "z-autoscale": False, "colormap": "jet", "history": 10 * gst.SECOND}))
+	elems.append(pipeutil.mkelem("cairovis_waterfall", {"title": title, "z-autoscale": True, "colormap": "jet", "history": 10 * gst.SECOND}))
+	#elems.append(pipeutil.mkelem("cairovis_lineseries", {"title": title}))
 	elems.append(pipeutil.mkelem("capsfilter",{"caps": gst.Caps("video/x-raw-rgb,framerate=12/1,width=800,height=800")}))
 	elems.append(pipeutil.mkelem("ximagesink",{"sync": False,"async": False,}))
 	for elem in elems: pipeline.add(elem)
@@ -37,12 +39,30 @@ from gstlal.pipeutil import gobject, gst
 # extract parameters from the bank
 xmldoc = utils.load_filename(options.iir_bank, gz=options.iir_bank.endswith('.gz'))
 A, B, D = cbc_template_iir.get_matrices_from_xml(xmldoc)
+print A.shape, B.shape, D.shape
+print A
+print B
+print D
+#A = A.T
+#B = B.T
+#D = D.T
+
 sample_rate = param.get_pyvalue(xmldoc, 'sample_rate')
 flower = param.get_pyvalue(xmldoc, 'flower')
+coinc_window = 128
+coinc_time = 0.03
+snr_threshold = 5.5
+mean = {}
 
-for ifo in ["H1", "H2", "L1"]:
+mainloop = gobject.MainLoop()
+pipeline = gst.Pipeline("gstlal_iir_inspiral")
+
+print A.shape,  B.shape, D.shape
+
+for ifo in ["H1"]:
 	elems = []
 	elems.append(pipeutil.mkelem("lal_fakeadvligosrc", {"channel-name": 'LSC-STRAIN', "instrument": ifo, "blocksize": 16384 * 8}))
+	elems.append(pipeutil.mkelem("progressreport"))
 
 	# add injection if specified
 	if options.injection_file: elems.append(pipeutil.mkelem("lal_simulation", {"xml-location": options.injection_file}))
@@ -55,20 +75,23 @@ for ifo in ["H1", "H2", "L1"]:
 	elems.append(pipeutil.mkelem("lal_whiten",{"zero-pad": 0, "fft-length": 8, "average-samples": 32, "median-samples": 9,}))
 	elems.append(pipeutil.mkelem("lal_nofakedisconts"))
 	elems.append(pipeutil.mkelem("progressreport"))
-	elems.append(pipeutil.mkelem("lal_iirbank",{"name": ifo+" iir", "a1": A, "b0": B, "delay":D}))
+	elems.append(pipeutil.mkelem("lal_iirbank",{"name": ifo+" iir", "a1-matrix": repack_complex_array_to_real(A), "b0-matrix": repack_complex_array_to_real(B), "delay-matrix":D}))
+	#elems.append(pipeparts.mkiirbank(pipeline, )
 	elems.append(pipeutil.mkelem("lal_nofakedisconts"))
 	elems.append(pipeutil.mkelem("progressreport"))
-	mean[ifo] = pipeutil.mkelem("lal_mean",{"n":coinc_window, "moment":2, "type":2, "thresh": snr_threshold})
-	elems.append(mean[ifo])
-	elems.append(pipeutil.mkelem("lal_nofakedisconts"))
+	#elems.append(pipeutil.mkelem("lal_nxydump"))
+	#elems.append(pipeutil.mkelem("filesink", {"location":"test.txt"}))
+	#mean[ifo] = pipeutil.mkelem("lal_mean",{"n":coinc_window, "moment":2, "type":2, "thresh": snr_threshold})
+	#elems.append(mean[ifo])
+	#elems.append(pipeutil.mkelem("lal_nofakedisconts"))
 	#elems.append(pipeutil.mkelem("audioresample"))
 	#elems.append(pipeutil.mkelem("capsfilter",{"caps": gst.Caps("audio/x-raw-float,width=64,rate=%d" % (int(4. / coinc_time)))}))
 	#elems.append(pipeutil.mkelem("queue"))
-	elems.append(pipeutil.mkelem("fakesink"))
-	#mean[ifo] = elems[-1]
+	#elems.append(pipeutil.mkelem("fakesink"))
+	mean[ifo] = elems[-1]
 	for elem in elems: pipeline.add(elem)
-	#plot(pipeline, elems, ifo+" ringdown")
-	gst.element_link_many(*elems)
+	plot(pipeline, elems, ifo+" iir")
+	#gst.element_link_many(*elems)
 	#mean[ifo].link(multiplier)
 
 ############################################################
