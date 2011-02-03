@@ -11,7 +11,6 @@ import sys
 import time
 import numpy
 import scipy
-import pylab
 import pdb
 import csv
 import time
