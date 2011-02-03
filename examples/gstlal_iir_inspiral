@@ -70,7 +70,7 @@ sample_rate = param.get_pyvalue(xmldoc, 'sample_rate')
 flower = param.get_pyvalue(xmldoc, 'flower')
 coinc_window = 512
 coinc_time = 0.03
-snr_threshold = 5.5
+snr_threshold = 5.0
 mean = {}
 tee = {}
 triggergen = {}
@@ -79,11 +79,28 @@ chisq = {}
 mainloop = gobject.MainLoop()
 pipeline = gst.Pipeline("gstlal_iir_inspiral")
 
-print A.shape,  B.shape, D.shape
+from gstlal.lloidparts import DetectorData
 
-for ifo in ["H1"]:
+detectors = {
+        options.instrument: DetectorData(options.frame_cache, options.channel_name)
+}
+
+options.out_seg = segments.segment(options.seg[0], options.seg[1]) #FIXME make better outseg def.
+data = ligolw_output.Data(options, detectors)
+data.prepare_output_file(process_params)
+
+def appsink_new_buffer(elem, data):
+	for row in sngl_inspirals_from_buffer(elem.get_property("last-buffer")):
+		if (row.end_time + 1e-9*row.end_time_ns) in data.out_seg:
+			row.process_id = data.process.process_id
+			row.event_id = data.sngl_inspiral_table.get_next_id()
+			data.sngl_inspiral_table.append(row)
+	if data.connection: data.connection.commit()
+
+
+for ifo in [options.instrument]:
 	elems = []
-	elems.append(pipeutil.mkelem("lal_fakeligosrc", {"channel-name": 'LSC-STRAIN', "instrument": ifo, "blocksize": 16384 * 8}))
+	elems.append(pipeutil.mkelem("lal_fakeligosrc", {"channel-name": options.channel_name, "instrument": ifo, "blocksize": 16384 * 8}))
 	#elems.append(pipeutil.mkelem("audiotestsrc", {"wave":10, "freq":0.1}))
 	elems.append(pipeutil.mkelem("progressreport"))
 
@@ -108,7 +125,7 @@ for ifo in ["H1"]:
 	for elem in elems: pipeline.add(elem)
 	gst.element_link_many(*elems)
 	
-	triggergen[ifo] = pipeutil.mkelem("lal_triggergen",{"bank-filename":options.iir_bank, "snr-thresh":snr_threshold, "max-gap":16 * gst.SECOND})
+	triggergen[ifo] = pipeutil.mkelem("lal_triggergen",{"bank-filename":options.iir_bank, "snr-thresh":snr_threshold, "max-gap": 1.0})
 	chisq[ifo] = pipeutil.mkelem("lal_autochisq", {"snr-thresh":snr_threshold, "latency": -50, "autocorrelation-matrix":repack_complex_array_to_real(autocor)})
 	pipeline.add(chisq[ifo])
 	pipeline.add(triggergen[ifo])
@@ -123,7 +140,23 @@ for ifo in ["H1"]:
 	tee[ifo].link(queue)
 	queue.link(chisq[ifo])
 	chisq[ifo].link(triggergen[ifo])
+
+	tc = pipeutil.mkelem("lal_togglecomplex")
+	pipeline.add(tc)
+	nxydump = pipeutil.mkelem("lal_nxydump")
+	pipeline.add(nxydump)
+	filesink = pipeutil.mkelem("filesink", {"location":"test.txt"})
+	pipeline.add(filesink)
+
+	tee[ifo].link(tc)
+	tc.link(nxydump)
+	nxydump.link(filesink)
 	
+	appsink = pipeutil.mkelem("appsink",{"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})
+	pipeline.add(appsink)
+	triggergen[ifo].link(appsink)
+	appsink.connect_after("new-buffer", appsink_new_buffer, data)
+		
 
 ############################################################
 # run the pipeline
@@ -150,31 +183,8 @@ class Handler(object):
 
 gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS, "gstlal_iir_inspiral_graph")
 
-
-### output
-
-from gstlal.lloidparts import DetectorData
-
-detectors = {
-        options.instrument: DetectorData(options.frame_cache, options.channel_name)
-}
-
-options.out_seg = segments.segment(options.seg[0], options.seg[1]) #FIXME make better outseg def.
-data = ligolw_output.Data(options, detectors)
-data.prepare_output_file(process_params)
-
-def appsink_new_buffer(elem, data):
-	for row in sngl_inspirals_from_buffer(elem.get_property("last-buffer")):
-		if (row.end_time + 1e-9*row.end_time_ns) in data.out_seg:
-			row.process_id = data.process.process_id
-			row.event_id = data.sngl_inspiral_table.get_next_id()
-			data.sngl_inspiral_table.append(row)
-	if data.connection: data.connection.commit()
-
-mkelems_fast(pipeline, triggergen[ifo], "appsink", {"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})[-1].connect_after("new-buffer", appsink_new_buffer, data)
-
-
 seekevent = seek_event_for_gps(options.gps_start_time, options.gps_end_time)
+
 for src in pipeline.iterate_sources():
 	src.send_event(seekevent)
 
@@ -182,3 +192,5 @@ handler = Handler(mainloop, pipeline)
 
 pipeline.set_state(gst.STATE_PLAYING)
 mainloop.run()
+
+data.write_output_file()
