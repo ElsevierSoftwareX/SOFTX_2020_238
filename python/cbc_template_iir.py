@@ -72,14 +72,20 @@ def get_iir_sample_rate(xmldoc):
 	pass
 
 	
-def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, beta=0.4, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, verbose=False):
+def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, beta=0.4, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=101, verbose=False):
 
 	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 	Amat = []
 	Bmat = []
 	Dmat = []
 	snrvec = []
-	for row in sngl_inspiral_table:
+
+
+	if not (autocorrelation_length % 2):
+		raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
+	autocorrelation_bank = numpy.zeros((len(sngl_inspiral_table), autocorrelation_length), dtype = "cdouble")
+	
+	for tmp, row in enumerate(sngl_inspiral_table):
 
 		m1 = row.mass1
 		m2 = row.mass2
@@ -125,10 +131,14 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 		vec2[-len(out2):] = out2
 		vec2 /= (vec2 * numpy.conj(vec2)).sum()**0.5
 			
-		#FIXME also compute autocorrelation chisq
 		
 		# compute the SNR	
-		snr = numpy.abs(scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec2)))).max()
+		corr = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec2)))
+		
+		#FIXME this is actually the cross correlation between the original waveform and this approximation
+		autocorrelation_bank[tmp,:] = numpy.concatenate((corr[(-autocorrelation_length/2+2):],corr[:autocorrelation_length/2+2]))
+		
+		snr = numpy.abs(corr).max()
 		snrvec.append(snr)
 		
 		# store the match for later
@@ -155,6 +165,7 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 		root.appendChild(array.from_array('a', repack_complex_array_to_real(A)))
 		root.appendChild(array.from_array('b', repack_complex_array_to_real(B)))
 		root.appendChild(array.from_array('d', D))
+		root.appendChild(array.from_array('autocorrelation', repack_complex_array_to_real(autocorrelation_bank)))
 	
 	return A, B, D, snrvec
 
@@ -188,19 +199,9 @@ def smooth_and_interp(psd, width=1, length = 10):
 	return scipy.interpolate.interp1d(f, out)
 
 def get_matrices_from_xml(xmldoc):
-	
 	root = xmldoc
-
 	A = repack_real_array_to_complex(array.get_array(root, 'a').array)
-	#A = array.get_array(root, 'a').array
-	#Aout = numpy.zeros((A.shape[0] / 2, A.shape[1]), numpy.complex128)
-	#for i,a in enumerate(Aout): Aout[i,:] = A[2*i,:] + 1j * A[2*i+1,:]
-
 	B = repack_real_array_to_complex(array.get_array(root, 'b').array)
-	#B = array.get_array(root, 'b').array
-	#Bout = numpy.zeros((B.shape[0] / 2, B.shape[1]), numpy.complex128)
-	#for i,b in enumerate(Bout): Bout[i,:] = B[2*i,:] + 1j * B[2*i+1,:]
-
 	D = array.get_array(root, 'd').array
-
-	return A, B, D
+	autocorrelation = repack_real_array_to_complex(array.get_array(root, 'autocorrelation').array)
+	return A, B, D, autocorrelation
