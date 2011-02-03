@@ -1,0 +1,17 @@
+PBH search on S5/S6
+
+Triple coincidence time only, triple coinc only (snr thresholds appropriate for each detector)
+Mass range 0.2 - 1.0 
+Starting freq 40 Hz
+Template length ~600 seconds
+number of templates 100,000
+
+
+
+Novel features:
+
+no time slides
+exact mass coincidence
+filtering across gaps (treat vetoes as gaps)
+
+
