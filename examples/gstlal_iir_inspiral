@@ -10,6 +10,10 @@ from pylal.datatypes import LIGOTimeGPS
 from gstlal import ligolw_output
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
+#
+# a function for plotting multiple time series, used for debugging
+# 
+
 def plot(pipeline, pre_elems, title="gstlal"):
 	elems = []
 	elems.append(pipeutil.mkelem("queue", {"max-size-time": 2}))
@@ -20,38 +24,45 @@ def plot(pipeline, pre_elems, title="gstlal"):
 	elems = pre_elems + elems
 	gst.element_link_many(*elems)
 
+#
+# A function for parsing command line
+#
+
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
 	parser.add_option("--iir-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required).")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the injections (optional).")
-	parser.add_option("--gps-start-time", help="GPS start time", type="float")
-	parser.add_option("--gps-end-time", help="GPS end time", type="float")
+	parser.add_option("--gps-start-time", help="GPS start time (required)", type="float")
+	parser.add_option("--gps-end-time", help="GPS end time (required)", type="float")
 	parser.add_option("--frame-cache", help="frame-cache. If not specified fake data will be used", type="str")
 	parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the triggers (required)")
 	parser.add_option("--instrument", metavar="IFO", help="set the instrument default H1", default="H1")
-	parser.add_option("--channel-name", metavar="IFO", help="set the channel default LSC-STRAIN", default="LSC-STRAIN")
+	parser.add_option("--channel-name", metavar="channel", help="set the channel default LSC-STRAIN", default="LSC-STRAIN")
 	parser.add_option("--tmp-space",  metavar="PATH")
 	parser.add_option("--comment",  metavar="str")
+	parser.add_option("--snr-threshold", metavar="float", help="SNR threshold default 5.5", default=5.5) 
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	
 	options, filenames = parser.parse_args()
 
-	# If --gps-start-time is not specified, assume "beginning of time"
-	if options.gps_start_time is None:
-		effective_gps_start_time = LIGOTimeGPS(0) # FIXME: should be gobject.G_MININT, but somewhere along the line we have an integer overflow error
-	else:
-		effective_gps_start_time = LIGOTimeGPS(options.gps_start_time)
+	fail = ""
+	for option in ("iir_bank", "output", "gps_start_time", "gps_end_time"):
+		if getattr(options, option) is None:
+			fail += "must provide option %s\n" % (option)
 
-	# If --gps-end-time is not specified, assume "end of time"
-	if options.gps_end_time is None:
-		effective_gps_end_time = LIGOTimeGPS(999999999) # FIXME: should be gobject.G_MAXINT, but somewhere along the line we have an integer overflow error
-	else:
-		effective_gps_end_time = LIGOTimeGPS(options.gps_end_time)
+	if fail: raise ValueError, fail
+	
+	effective_gps_start_time = LIGOTimeGPS(options.gps_start_time)
+	effective_gps_end_time = LIGOTimeGPS(options.gps_end_time)
 
-	process_params = ligolw_output.make_process_params(options)
+	process_params = ligolw_output.make_process_params(options) #FIXME override program name
 	options.seg = segments.segment(effective_gps_start_time, effective_gps_end_time)
 
 	return options, filenames, process_params
+
+#
+# Main
+#
 
 options, filenames, process_params = parse_command_line()
 
@@ -62,22 +73,28 @@ from gstlal import pipeutil
 from gstlal.lloidparts import seek_event_for_gps, mkelems_fast
 from gstlal.pipeutil import gobject, gst
 
+#
 # extract parameters from the bank
+#
+
 xmldoc = utils.load_filename(options.iir_bank, gz=options.iir_bank.endswith('.gz'))
 A, B, D, autocor = cbc_template_iir.get_matrices_from_xml(xmldoc)
-
 sample_rate = param.get_pyvalue(xmldoc, 'sample_rate')
 flower = param.get_pyvalue(xmldoc, 'flower')
-coinc_window = 512
-coinc_time = 0.03
-snr_threshold = 5.0
-mean = {}
+snr_threshold = options.snr_threshold
+
+# dictionaries for elements
 tee = {}
 triggergen = {}
 chisq = {}
 
+# get the pipeline running
 mainloop = gobject.MainLoop()
 pipeline = gst.Pipeline("gstlal_iir_inspiral")
+
+#
+# setup the output stage FIXME move this to support multiple instruments
+#
 
 from gstlal.lloidparts import DetectorData
 
@@ -97,15 +114,22 @@ def appsink_new_buffer(elem, data):
 			data.sngl_inspiral_table.append(row)
 	if data.connection: data.connection.commit()
 
+#
+# loop over instruments FIXME for now it is just one instrument :)
+#
 
 for ifo in [options.instrument]:
 	elems = []
+	#FIXME add frame support
 	elems.append(pipeutil.mkelem("lal_fakeligosrc", {"channel-name": options.channel_name, "instrument": ifo, "blocksize": 16384 * 8}))
 	#elems.append(pipeutil.mkelem("audiotestsrc", {"wave":10, "freq":0.1}))
 	elems.append(pipeutil.mkelem("progressreport"))
 
 	# add injection if specified
-	if options.injections: elems.append(pipeutil.mkelem("lal_simulation", {"xml-location": options.injections}))
+	if options.injections:
+		elems.append(pipeutil.mkelem("queue"))
+		elems.append(pipeutil.mkelem("lal_simulation", {"xml-location": options.injections}))
+		elems.append(pipeutil.mkelem("queue"))
 
 	# resample at the specified sample rate
 	elems.append(pipeutil.mkelem("audioresample"))
@@ -114,6 +138,7 @@ for ifo in [options.instrument]:
 	# apply whitening and do filtering
 	elems.append(pipeutil.mkelem("lal_whiten",{"zero-pad": 0, "fft-length": 8, "average-samples": 32, "median-samples": 9,}))
 	elems.append(pipeutil.mkelem("lal_nofakedisconts"))
+	elems.append(pipeutil.mkelem("queue"))
 	elems.append(pipeutil.mkelem("progressreport"))
 	elems.append(pipeutil.mkelem("lal_iirbank",{"name": ifo+" iir", "a1-matrix": repack_complex_array_to_real(A), "b0-matrix": repack_complex_array_to_real(B), "delay-matrix":D}))
 	elems.append(pipeutil.mkelem("queue"))
@@ -121,6 +146,7 @@ for ifo in [options.instrument]:
 	elems.append(pipeutil.mkelem("lal_nofakedisconts"))
 	elems.append(pipeutil.mkelem("progressreport"))
 	tee[ifo] =  pipeutil.mkelem("tee")
+
 	elems.append(tee[ifo])
 	for elem in elems: pipeline.add(elem)
 	gst.element_link_many(*elems)
@@ -141,16 +167,18 @@ for ifo in [options.instrument]:
 	queue.link(chisq[ifo])
 	chisq[ifo].link(triggergen[ifo])
 
-	tc = pipeutil.mkelem("lal_togglecomplex")
-	pipeline.add(tc)
-	nxydump = pipeutil.mkelem("lal_nxydump")
-	pipeline.add(nxydump)
-	filesink = pipeutil.mkelem("filesink", {"location":"test.txt"})
-	pipeline.add(filesink)
-
-	tee[ifo].link(tc)
-	tc.link(nxydump)
-	nxydump.link(filesink)
+	#
+	# Uncomment to dump snr to txt (HUGE)
+	#
+	#tc = pipeutil.mkelem("lal_togglecomplex")
+	#pipeline.add(tc)
+	#nxydump = pipeutil.mkelem("lal_nxydump")
+	#pipeline.add(nxydump)
+	#filesink = pipeutil.mkelem("filesink", {"location":"test.txt"})
+	#pipeline.add(filesink)
+	#tee[ifo].link(tc)
+	#tc.link(nxydump)
+	#nxydump.link(filesink)
 	
 	appsink = pipeutil.mkelem("appsink",{"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})
 	pipeline.add(appsink)
