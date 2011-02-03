@@ -2,7 +2,6 @@
 import sys
 import scipy
 import numpy
-import pylab
 from optparse import OptionParser
 
 parser = OptionParser(description = __doc__)
@@ -13,8 +12,6 @@ parser.add_option("--padding", metavar = "pad", type = "float", default = 1.1, h
 #parser.add_option("--iir-tolerance", metavar = "match", type = "float", default = 0.99, help = "Set the SVD reconstruction tolerance (default = 0.99).")
 parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
 parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).")
-#parser.add_option("--ortho-gate-fap", metavar = "probability", type = "float", default = 1e-2, help = "Set the orthogonal SNR projection gate false-alarm probability (default = 1e-2).")
-#parser.add_option("--snr-threshold", metavar = "SNR", type = "float", default = 5.5, help = "Set the SNR threshold (default = 5.5).")
 parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
@@ -45,8 +42,7 @@ A, B, D, snrs = cbc_template_iir.makeiirbank(bank, psd_interp = psd, verbose=opt
 
 utils.write_filename(bank, options.output, gz=options.output.endswith('.gz'))
 
-#print A, B, D
-
-pylab.hist(snrs)
-pylab.show()
+#import pylab
+#pylab.hist(snrs)
+#pylab.show()
 
