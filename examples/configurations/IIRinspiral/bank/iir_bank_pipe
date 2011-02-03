@@ -110,7 +110,7 @@ try: os.mkdir("logs")
 except: pass
 dag = bank_DAG(psdname + "_iir_bank")
 
-svdJob = gstlal_svd_bank_job(tag_base=psdname + "_gstlal_iir_bank")
+iirJob = gstlal_iir_bank_job(tag_base=psdname + "_gstlal_iir_bank")
 iirNode = {}
 
 
