@@ -75,7 +75,7 @@ class gstlal_iir_bank_job(pipeline.CondorDAGJob):
 		self.__universe = 'vanilla'
 		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
 		self.add_condor_cmd('getenv','True')
-		self.add_condor_cmd('requirements', 'Memory > 3000') #FIXME is this enough?
+		# self.add_condor_cmd('requirements', 'Memory > 3000') #FIXME is this enough?
 		self.tag_base = tag_base
 		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
 		self.set_sub_file(tag_base+'.sub')
@@ -105,6 +105,7 @@ class gstlal_iir_bank_node(pipeline.CondorDAGNode):
 ref_psd = sys.argv[1]
 input_cache = sys.argv[2]
 psdname = ref_psd.split('.')[0]
+flow = float(sys.argv[3])
 
 try: os.mkdir("logs")
 except: pass
@@ -116,7 +117,7 @@ iirNode = {}
 
 for f in [lal.CacheEntry(line).path() for line in open(input_cache)]:
 	print f
-	iirNode[f] = gstlal_iir_bank_node(iirJob, dag, f, reference_psd=ref_psd)
+	iirNode[f] = gstlal_iir_bank_node(iirJob, dag, f, flow=flow, reference_psd=ref_psd)
 
 dag.write_sub_files()
 dag.write_dag()
