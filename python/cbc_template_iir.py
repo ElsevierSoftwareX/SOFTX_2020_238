@@ -105,6 +105,8 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 					
 		# make the iir filter coeffs
 		a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta)
+		
+		if verbose: print>>sys.stderr, "m1: %f m2: %f required %d filters" % (m1,m2,len(a1))
 		# get the chirptime
 		length = 2**numpy.ceil(numpy.log2(amp.shape[0]))
 
