@@ -18,18 +18,18 @@ from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 
 def Theta(eta, Mtot, t):
-	Tsun = 5.925491e-6
+	Tsun = 4.925491e-6
 	theta = eta / (5.0 * Mtot * Tsun) * -t;
 	return theta
 
 def freq(eta, Mtot, t):
 	theta = Theta(eta, Mtot, t)
-	Tsun = 5.925491e-6
+	Tsun = 4.925491e-6
 	f = 1.0 / (8.0 * Tsun * scipy.pi * Mtot) * (
 		theta**(-3.0/8.0) +
 		(743.0/2688.0 + 11.0 /32.0 * eta) * theta**(-5.0 /8.0) -
-		3.0 * scipy.pi / 10.0 * theta**(-3.0 / 4.0) +
-		(1855099.0 / 14450688.0 + 56975.0 / 258048.0 * eta + 371.0 / 2048.0 * eta**2.0) * theta**(-7.0/8.0))
+		3.0 * scipy.pi / 10.0 * theta**(-3.0 / 4.0))# +
+		#(1855099.0 / 14450688.0 + 56975.0 / 258048.0 * eta + 371.0 / 2048.0 * eta**2.0) * theta**(-7.0/8.0))
 	return f
 
 def Phase(eta, Mtot, t, phic = 0.0):
@@ -37,13 +37,14 @@ def Phase(eta, Mtot, t, phic = 0.0):
 	phi = phic - 2.0 / eta * (
 		theta**(5.0 / 8.0) +
 		(3715.0 /8064.0 +55.0 /96.0 *eta) * theta**(3.0/8.0) -
-		3.0 *scipy.pi / 4.0 * theta**(1.0/4.0) +
-		(9275495.0 / 14450688.0 + 284875.0 / 258048.0 * eta + 1855.0 /2048.0 * eta**2) * theta**(1.0/8.0))
+		3.0 *scipy.pi / 4.0 * theta**(1.0/4.0))
+		#+
+		#(9275495.0 / 14450688.0 + 284875.0 / 258048.0 * eta + 1855.0 /2048.0 * eta**2) * theta**(1.0/8.0))
 	return phi
 
 def Amp(eta, Mtot, t):
-	c = 3.0e8
-	Tsun = 5.925491e-6
+	c = 3.0e10
+	Tsun = 4.925491e-6
 	f = freq(eta, Mtot, t)
 	amp = - 2 * Tsun * c * (eta * Mtot ) * (Tsun * scipy.pi * Mtot * f)**(2.0/3.0);
 	return amp
@@ -52,7 +53,6 @@ def waveform(m1, m2, fLow, fhigh, sampleRate):
 	deltaT = 1.0 / sampleRate
 	T = spawaveform.chirptime(m1, m2 , 4, fLow, fhigh)
 	tc = -spawaveform.chirptime(m1, m2 , 4, fhigh)
-	N = numpy.floor(T / deltaT)
 	t = numpy.arange(tc-T, tc, deltaT)
 	Mtot = m1 + m2
 	eta = m1 * m2 / Mtot**2
@@ -106,13 +106,12 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 		# make the iir filter coeffs
 		a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta)
 		# get the chirptime
-		duration = spawaveform.chirptime(m1,m2,pnorder,flower)
-		length = 2**numpy.ceil(numpy.log2(duration * sampleRate))
+		length = 2**numpy.ceil(numpy.log2(amp.shape[0]))
 
 		# get the IIR response
 		out = spawaveform.iirresponse(length, a1, b0, delay)
 		out = out[::-1]
-		vec1 = numpy.zeros(length * 2)
+		vec1 = numpy.zeros(length * 2, dtype=numpy.cdouble)
 		vec1[-len(out):] = out
 		norm1 = (vec1 * numpy.conj(vec1)).sum()**0.5
 		vec1 /= norm1
@@ -126,7 +125,7 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 		
 		# get the original waveform
 		out2 = amp * numpy.exp(1j * phase)
-		vec2 = numpy.zeros(length * 2)
+		vec2 = numpy.zeros(length * 2, dtype=numpy.cdouble)
 		vec2[-len(out2):] = out2
 		vec2 /= (vec2 * numpy.conj(vec2)).sum()**0.5
 			
