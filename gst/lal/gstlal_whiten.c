@@ -170,6 +170,7 @@ static void zero_output_history(GSTLALWhiten *element)
 static int make_workspace(GSTLALWhiten *element)
 {
 	REAL8Window *hann_window = NULL;
+	REAL8Window *tukey_window = NULL;
 	REAL8FFTPlan *fwdplan = NULL;
 	REAL8FFTPlan *revplan = NULL;
 	REAL8TimeSeries *tdworkspace = NULL;
@@ -263,12 +264,20 @@ static int make_workspace(GSTLALWhiten *element)
 		GST_ERROR_OBJECT(element, "failure allocating output history buffer: %s", XLALErrorString(XLALGetBaseErrno()));
 		goto error;
 	}
+	if(zero_pad_length(element)) {
+		tukey_window = XLALCreateTukeyREAL8Window(fft_length(element), 2.0 * zero_pad_length(element) / fft_length(element));
+		if(!tukey_window) {
+			GST_ERROR_OBJECT(element, "failure creating Tukey window: %s", XLALErrorString(XLALGetBaseErrno()));
+			goto error;
+		}
+	}
 
 	/*
 	 * done
 	 */
 
 	element->hann_window = hann_window;
+	element->tukey_window = tukey_window;
 	element->fwdplan = fwdplan;
 	element->revplan = revplan;
 	element->tdworkspace = tdworkspace;
@@ -280,6 +289,7 @@ static int make_workspace(GSTLALWhiten *element)
 
 error:
 	XLALDestroyREAL8Window(hann_window);
+	XLALDestroyREAL8Window(tukey_window);
 	g_mutex_lock(gstlal_fftw_lock);
 	XLALDestroyREAL8FFTPlan(fwdplan);
 	XLALDestroyREAL8FFTPlan(revplan);
@@ -304,6 +314,8 @@ static void free_workspace(GSTLALWhiten *element)
 {
 	XLALDestroyREAL8Window(element->hann_window);
 	element->hann_window = NULL;
+	XLALDestroyREAL8Window(element->tukey_window);
+	element->tukey_window = NULL;
 	g_mutex_lock(gstlal_fftw_lock);
 	XLALDestroyREAL8FFTPlan(element->fwdplan);
 	element->fwdplan = NULL;
@@ -560,16 +572,19 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		 * Transform to frequency domain
 		 */
 
+		/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square before window = %.16g\n", s / kk); }*/
 		if(!XLALUnitaryWindowREAL8Sequence(element->tdworkspace->data, element->hann_window)) {
 			GST_ERROR_OBJECT(element, "XLALUnitaryWindowREAL8Sequence() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
 			return GST_FLOW_ERROR;
 		}
+		/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square after window = %.16g\n", s / kk); }*/
 		if(XLALREAL8TimeFreqFFT(element->fdworkspace, element->tdworkspace, element->fwdplan)) {
 			GST_ERROR_OBJECT(element, "XLALREAL8TimeFreqFFT() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
 			return GST_FLOW_ERROR;
 		}
+		/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->fdworkspace->data->length; kk++) s += LAL_CABS2(element->fdworkspace->data->data[kk]); fprintf(stderr, "mean square after FFT = %.16g\n", s / kk); }*/
 
 		/*
 		 * Retrieve the PSD.
@@ -621,6 +636,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 			XLALClearErrno();
 			return GST_FLOW_ERROR;
 		}
+		/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->fdworkspace->data->length; kk++) s += LAL_CABS2(element->fdworkspace->data->data[kk]); fprintf(stderr, "mean square after whiten = %.16g\n", s / kk); }*/
 
 		/*
 		 * Transform to time domain.
@@ -631,6 +647,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 			XLALClearErrno();
 			return GST_FLOW_ERROR;
 		}
+		/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square after IFFT = %.16g\n", s / kk); }*/
 
 		/* 
 		 * Normalize the time series.
@@ -652,6 +669,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 			element->tdworkspace->data->data[i] *= element->tdworkspace->deltaT * sqrt(element->hann_window->sumofsquares);
 		/* normalization constant has units of seconds */
 		XLALUnitMultiply(&element->tdworkspace->sampleUnits, &element->tdworkspace->sampleUnits, &lalSecondUnit);
+		/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square after normalization = %.16g\n", s / kk); }*/
 
 		/*
 		 * Verify the result is dimensionless.
@@ -669,8 +687,13 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		 * result into output buffer, shift output history buffer.
 		 */
 
-		for(i = zero_pad; i < element->output_history->length - zero_pad; i++)
-			element->output_history->data[i] += element->tdworkspace->data->data[i];
+		if(element->tukey_window) {
+			for(i = 0; i < element->output_history->length; i++)
+				element->output_history->data[i] += element->tdworkspace->data->data[i] * element->tukey_window->data->data[i];
+		} else {
+			for(i = 0; i < element->output_history->length; i++)
+				element->output_history->data[i] += element->tdworkspace->data->data[i];
+		}
 		g_assert((gint64) element->output_history_offset <= (gint64) (element->next_offset_out + dst_offset));
 		if(element->output_history_offset == element->next_offset_out + dst_offset) {
 			memcpy(&dst[dst_offset], &element->output_history->data[0], hann_length / 2 * sizeof(*element->output_history->data));
@@ -1496,6 +1519,7 @@ static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *klass)
 	element->psdmode = 0;
 
 	element->hann_window = NULL;
+	element->tukey_window = NULL;
 	element->fwdplan = NULL;
 	element->revplan = NULL;
 	element->tdworkspace = NULL;

@@ -111,6 +111,7 @@ typedef struct {
 	 */
 
 	REAL8Window *hann_window;
+	REAL8Window *tukey_window;
 	REAL8FFTPlan *fwdplan;
 	REAL8FFTPlan *revplan;
 	REAL8TimeSeries *tdworkspace;
