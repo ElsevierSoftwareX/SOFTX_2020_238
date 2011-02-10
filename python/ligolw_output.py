@@ -178,7 +178,7 @@ class Data(object):
 			dbtables.put_connection_filename(self.output, self.working_filename, verbose = self.verbose)
 		else:
 			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
-			search_summary = lsctables.table.get_table(self.xmldoc, lsctables.SearchSummaryTable.tableName)
+			search_summary, = [row for row in lsctables.table.get_table(self.xmldoc, lsctables.SearchSummaryTable.tableName) if row.process_id == self.process.process_id]
 			search_summary.nevents = len(self.sngl_inspiral_table)
 			ligolw_process.set_process_end_time(self.process)
 			utils.write_filename(self.xmldoc, self.output, gz = (self.output or "stdout").endswith(".gz"), verbose = self.verbose)
