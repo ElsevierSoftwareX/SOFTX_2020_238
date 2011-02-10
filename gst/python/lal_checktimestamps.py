@@ -48,11 +48,21 @@ def printable_timestamp(timestamp):
 
 class lal_checktimestamps(gst.BaseTransform):
 	__gstdetails__ = (
-		'Timestamp Checker Pass-Through Element',
-		'Generic',
-		'check to make sure that timestamps increase as expected',
+		"Timestamp Checker Pass-Through Element",
+		"Generic",
+		"Checks that timestamps and offsets of audio streams advance as expected and remain synchronized to each other",
 		__author__
 	)
+
+	__gproperties__ = {
+		"timestamp-fuzz": (
+			gobject.TYPE_UINT64,
+			"timestamp fuzz",
+			"Number of nanoseconds of timestamp<-->offset discrepancy to accept before reporting it.  Timestamp<-->offset discrepancies of 1/2 a sample or more are always reported.",
+			0, gobject.G_MAXUINT64, 1,
+			gobject.PARAM_WRITABLE | gobject.PARAM_CONSTRUCT
+		)
+	}
 
 	__gsttemplates__ = (
 		gst.PadTemplate("sink",
@@ -136,6 +146,12 @@ class lal_checktimestamps(gst.BaseTransform):
 		super(lal_checktimestamps, self).__init__()
 		self.set_passthrough(True)
 
+
+	def do_set_property(self, prop, val):
+		if prop.name == "timestamp-fuzz":
+			self.timestamp_fuzz = val
+
+
 	def do_set_caps(self, incaps, outcaps):
 		self.unit_size = incaps[0]["width"] // 8 * incaps[0]["channels"]
 		self.units_per_second = incaps[0]["rate"]
@@ -173,18 +189,15 @@ class lal_checktimestamps(gst.BaseTransform):
 			print >>sys.stderr, "%s: got offset %d expected %d" % (self.get_property("name"), buf.offset, self.next_offset)
 
 		expected_offset = self.offset0 + int(round((buf.timestamp - self.t0) * float(self.units_per_second) / gst.SECOND))
+		expected_timestamp = self.t0 + int(round((buf.offset - self.offset0) * gst.SECOND / float(self.units_per_second)))
 		if buf.offset != expected_offset:
-			print >>sys.stderr, "%s: timestamp/offset mismatch:  got offset %d, buffer timestamp %s corresponds to offset %d" % (self.get_property("name"), buf.offset, printable_timestamp(buf.timestamp), expected_offset)
+			print >>sys.stderr, "%s: timestamp/offset mismatch:  got offset %d, buffer timestamp %s corresponds to offset %d (error = %d samples)" % (self.get_property("name"), buf.offset, printable_timestamp(buf.timestamp), expected_offset, buf.offset - expected_offset)
+		elif abs(buf.timestamp - expected_timestamp) > self.timestamp_fuzz:
+			print >>sys.stderr, "%s: timestamp/offset mismatch:  got timestamp %s, buffer offset %d corresponds to timestamp %s (error = %d ns)" % (self.get_property("name"), printable_timestamp(buf.timestamp), buf.offset, printable_timestamp(expected_timestamp), buf.timestamp - expected_timestamp)
 
 		length = buf.offset_end - buf.offset
 		if buf.size != length * self.unit_size:
 			print >>sys.stderr, "%s: got buffer size %d, buffer length %d corresponds to size %d" % (self.get_property("name"), buf.size, length, length * self.unit_size)
-
-		expected_duration = int(round(length * gst.SECOND / float(self.units_per_second)))
-		if buf.duration != expected_duration:
-			# silenced.
-			pass
-			#print >>sys.stderr, "%s: got duration %d ns, buffer length %d corresponds to %d ns" % (self.get_property("name"), buf.duration, length, expected_duration)
 
 		#
 		# reset for next buffer
