@@ -409,7 +409,7 @@ static gboolean start(GstBaseSrc *object)
 	XLALGPSSet(&stream_start, element->stream->file->toc->GTimeS[element->stream->pos], element->stream->file->toc->GTimeN[element->stream->pos]);
 
 	/*
-	 * Create a zero-length I/O buffer, and populate its metadata
+	 * Create a zero-length I/O buffer and populate its metadata
 	 *
 	 * NOTE:  frame files cannot be relied on to provide the correct
 	 * units, so we unconditionally override them with a user-supplied
@@ -435,6 +435,13 @@ static gboolean start(GstBaseSrc *object)
 			return FALSE;
 		}
 		rate = round(1.0 / series->deltaT);
+		if(fabs(1.0 / series->deltaT - rate) / rate > 1e-16) {
+			GST_ERROR_OBJECT(element, "non-integer sample rate in frame file:  1 / %g s != %d Hz", series->deltaT, element->rate);
+			XLALDestroyINT4TimeSeries(series);
+			XLALFrClose(element->stream);
+			element->stream = NULL;
+			return FALSE;
+		}
 		width = 32;
 		caps = series_to_caps(rate, element->series_type);
 		XLALDestroyINT4TimeSeries(series);
@@ -459,6 +466,13 @@ static gboolean start(GstBaseSrc *object)
 			return FALSE;
 		}
 		rate = round(1.0 / series->deltaT);
+		if(fabs(1.0 / series->deltaT - rate) / rate > 1e-16) {
+			GST_ERROR_OBJECT(element, "non-integer sample rate in frame file:  1 / %g s != %d Hz", series->deltaT, element->rate);
+			XLALDestroyREAL4TimeSeries(series);
+			XLALFrClose(element->stream);
+			element->stream = NULL;
+			return FALSE;
+		}
 		width = 32;
 		caps = series_to_caps(rate, element->series_type);
 		XLALDestroyREAL4TimeSeries(series);
@@ -483,6 +497,13 @@ static gboolean start(GstBaseSrc *object)
 			return FALSE;
 		}
 		rate = round(1.0 / series->deltaT);
+		if(fabs(1.0 / series->deltaT - rate) / rate > 1e-16) {
+			GST_ERROR_OBJECT(element, "non-integer sample rate in frame file:  1 / %g s != %d Hz", series->deltaT, element->rate);
+			XLALDestroyREAL8TimeSeries(series);
+			XLALFrClose(element->stream);
+			element->stream = NULL;
+			return FALSE;
+		}
 		width = 64;
 		caps = series_to_caps(rate, element->series_type);
 		XLALDestroyREAL8TimeSeries(series);
@@ -607,6 +628,21 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	/*
 	 * Read data
+	 *
+	 * We compute our own time stamps by counting the number of samples
+	 * that have elapsed since the start of the segment.  We do this so
+	 * that downstream elements that perform strict comparisons of
+	 * timestamps to offsets are happy with what they see, otherwise
+	 * there can be problems when the very first sample doesn't
+	 * correspond to an integer nanosecond boundary because then the
+	 * subsequent rounding of buffer start times won't match what
+	 * downstream elements expect.  We require our computed time stamp
+	 * and the time stamp reported by LAL to never disagree by more
+	 * than 1 ns.  The buffer duration is computed by imposing
+	 * "timestamp + duration = next timestamp", and we require the
+	 * result to not disagree by more than 1 ns from the duration
+	 * obtained by converting the count of samples to an exactly
+	 * rounded duration.
 	 */
 
 	switch(element->series_type) {
@@ -619,6 +655,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		result = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data), (void**) &chunk);
 		if(result != GST_FLOW_OK)
 			return result;
+		g_assert(round(1.0 / chunk->deltaT) == element->rate);
 		result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
 		if(result != GST_FLOW_OK) {
 			XLALDestroyINT4TimeSeries(chunk);
@@ -631,8 +668,10 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
-		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&chunk->epoch);
-		GST_BUFFER_DURATION(*buffer) = (GstClockTime) round(chunk->data->length * GST_SECOND * chunk->deltaT);
+		GST_BUFFER_TIMESTAMP(*buffer) = basesrc->segment.start + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(*buffer), GST_SECOND, element->rate);
+		g_assert(llabs((gint64) GST_BUFFER_TIMESTAMP(*buffer) - (gint64) XLALGPSToINT8NS(&chunk->epoch)) <= 1);
+		GST_BUFFER_DURATION(*buffer) = basesrc->segment.start + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(*buffer), GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(*buffer);
+		g_assert(llabs((gint64) GST_BUFFER_DURATION(*buffer) - (gint64) gst_util_uint64_scale_int_round(chunk->data->length, GST_SECOND, element->rate)) <= 1);
 		if(basesrc->offset == 0)
 			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 		basesrc->offset += chunk->data->length;
@@ -649,6 +688,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		result = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data), (void**) &chunk);
 		if(result != GST_FLOW_OK)
 			return result;
+		g_assert(round(1.0 / chunk->deltaT) == element->rate);
 		result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
 		if(result != GST_FLOW_OK) {
 			XLALDestroyREAL4TimeSeries(chunk);
@@ -661,8 +701,10 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
-		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&chunk->epoch);
-		GST_BUFFER_DURATION(*buffer) = (GstClockTime) round(chunk->data->length * GST_SECOND * chunk->deltaT);
+		GST_BUFFER_TIMESTAMP(*buffer) = basesrc->segment.start + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(*buffer), GST_SECOND, element->rate);
+		g_assert(llabs((gint64) GST_BUFFER_TIMESTAMP(*buffer) - (gint64) XLALGPSToINT8NS(&chunk->epoch)) <= 1);
+		GST_BUFFER_DURATION(*buffer) = basesrc->segment.start + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(*buffer), GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(*buffer);
+		g_assert(llabs((gint64) GST_BUFFER_DURATION(*buffer) - (gint64) gst_util_uint64_scale_int_round(chunk->data->length, GST_SECOND, element->rate)) <= 1);
 		if(basesrc->offset == 0)
 			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 		basesrc->offset += chunk->data->length;
@@ -679,6 +721,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		result = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data), (void**) &chunk);
 		if(result != GST_FLOW_OK)
 			return result;
+		g_assert(round(1.0 / chunk->deltaT) == element->rate);
 		result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
 		if(result != GST_FLOW_OK) {
 			XLALDestroyREAL8TimeSeries(chunk);
@@ -691,8 +734,10 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		}
 		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
 		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
-		GST_BUFFER_TIMESTAMP(*buffer) = (GstClockTime) XLALGPSToINT8NS(&chunk->epoch);
-		GST_BUFFER_DURATION(*buffer) = (GstClockTime) round(chunk->data->length * GST_SECOND * chunk->deltaT);
+		GST_BUFFER_TIMESTAMP(*buffer) = basesrc->segment.start + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(*buffer), GST_SECOND, element->rate);
+		g_assert(llabs((gint64) GST_BUFFER_TIMESTAMP(*buffer) - (gint64) XLALGPSToINT8NS(&chunk->epoch)) <= 1);
+		GST_BUFFER_DURATION(*buffer) = basesrc->segment.start + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(*buffer), GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(*buffer);
+		g_assert(llabs((gint64) GST_BUFFER_DURATION(*buffer) - (gint64) gst_util_uint64_scale_int_round(chunk->data->length, GST_SECOND, element->rate)) <= 1);
 		if(basesrc->offset == 0)
 			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 		basesrc->offset += chunk->data->length;
