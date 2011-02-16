@@ -112,12 +112,12 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		dag.add_node(self)
 
 # FIXME surely this is in glue
-def parse_cache_str(instr)
+def parse_cache_str(instr):
 	dictcache = {}
 	for c in instr.split(','):
 		ifo = c.split("=")[0]
 		cache = c.replace(ifo+"=","")
-		cachedict[ifo] = cache
+		dictcache[ifo] = cache
 	return dictcache
 
 def cache_to_dict(cachefile):
@@ -148,7 +148,7 @@ def parse_command_line():
 	framecache = parse_cache_str(options.frame_cache)
 	bankcache = parse_cache_str(options.bank_cache)
 	
-	return options, filenames, framecache, bank_cache#, process_params
+	return options, filenames, framecache, bankcache#, process_params
 
 
 options, filenames, frame_cache, bank_cache = parse_command_line()
@@ -162,9 +162,9 @@ inspJob = gstlal_inspiral_job()
 for instrument, centries in cache_to_dict(options.psd_cache).items():
 	for centry in centries:
 		seg = centry.segment
-		for bank in cache_to_dict(bank_cache)[instrument]:
+		for bank in cache_to_dict(bank_cache[instrument])[instrument]:
 			#FIXME if there are segments without frame caches this will barf
-			gstlal_inspiral_node(inspJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, options.channel, reference_psd=centry.path(), bank.path(), injections=options.injections, flow=40)
+			gstlal_inspiral_node(inspJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, options.channel, reference_psd=centry.path(), svd_bank=bank.path(), injections=options.injections, flow=40)
 		
 dag.write_sub_files()
 dag.write_dag()
