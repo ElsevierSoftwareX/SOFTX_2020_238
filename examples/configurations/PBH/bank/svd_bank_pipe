@@ -86,7 +86,7 @@ class gstlal_svd_bank_job(pipeline.CondorDAGJob):
 class gstlal_svd_bank_node(pipeline.CondorDAGNode):
 	"""
 	"""
-	def __init__(self, job, dag, template_bank, flow=40, reference_psd="psd.xml", p_node=[]):
+	def __init__(self, job, dag, template_bank, ifo, flow=40, reference_psd="psd.xml", p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("flow", flow)
@@ -95,15 +95,16 @@ class gstlal_svd_bank_node(pipeline.CondorDAGNode):
 		svd_bank_name_path = os.path.split(template_bank)
 		svd_bank_name = svd_bank_name_path[0] + "/svd_" + svd_bank_name_path[1]
 		self.add_var_opt("write-svd-bank", svd_bank_name)
-		dag.output_cache.append(lal.CacheEntry("-", "-", segments.segment(0, 999999999), "file://localhost%s/%s" % (os.getcwd(),svd_bank_name)))
+		dag.output_cache.append(lal.CacheEntry(ifo, "-", segments.segment(0, 999999999), "file://localhost%s/%s" % (os.getcwd(),svd_bank_name)))
 		for p in p_node:
 			self.add_parent(p)
 		dag.add_node(self)
 
 
 # get input arguments
-ref_psd = sys.argv[1]
-input_cache = sys.argv[2]
+ifo = sys.argv[1]
+ref_psd = sys.argv[2]
+input_cache = sys.argv[3]
 psdname = ref_psd.split('.')[0]
 
 try: os.mkdir("logs")
@@ -115,8 +116,7 @@ svdNode = {}
 
 
 for f in [lal.CacheEntry(line).path() for line in open(input_cache)]:
-	print f
-	svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, reference_psd=ref_psd)
+	svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, reference_psd=ref_psd)
 
 dag.write_sub_files()
 dag.write_dag()
