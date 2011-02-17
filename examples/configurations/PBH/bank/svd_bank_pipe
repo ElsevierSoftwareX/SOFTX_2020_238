@@ -95,7 +95,7 @@ class gstlal_svd_bank_node(pipeline.CondorDAGNode):
 		svd_bank_name_path = os.path.split(template_bank)
 		svd_bank_name = svd_bank_name_path[0] + "/svd_" + svd_bank_name_path[1]
 		self.add_var_opt("write-svd-bank", svd_bank_name)
-		dag.output_cache.append(lal.CacheEntry(ifo, "-", segments.segment(0, 999999999), "file://localhost%s/%s" % (os.getcwd(),svd_bank_name)))
+		dag.output_cache.append(lal.CacheEntry(ifo, "-", segments.segment(0, 999999999), "file://localhost%s" % (svd_bank_name,)))
 		for p in p_node:
 			self.add_parent(p)
 		dag.add_node(self)
