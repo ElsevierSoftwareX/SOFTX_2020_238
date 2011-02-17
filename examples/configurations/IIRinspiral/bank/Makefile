@@ -3,12 +3,12 @@ STOP =  871247452
 IFOS = H
 
 # Template bank parameters
-MIN_MASS = 0.2
-MAX_MASS = 1.0
+MIN_MASS = 1.0
+MAX_MASS = 34.0
 MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
-LOW_FREQUENCY_CUTOFF = 40.0
-HIGH_PASS_FREQ = 30.0
+LOW_FREQUENCY_CUTOFF = 15.0
+HIGH_PASS_FREQ = 13.0
 HIGH_FREQUENCY_CUTOFF = 1023.0
 SAMPLE_RATE = 2048
 NUM_SPLIT_TEMPLATES = 500
@@ -60,7 +60,7 @@ H1-TMPLTBANK-871154847-2048.xml: frame.H.cache
 		--approximant TaylorF2 \
 		--order twoPN \
 		--verbose \
-		--spectrum-type LIGO \
+		--spectrum-type AdvLIGO \
 		&& ./bank_splitter -i H1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml \
 		&& ./bank_splitter -i H2 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml \
 		&& ./bank_splitter -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml
@@ -78,9 +78,9 @@ dag : H1-TMPLTBANK-871154847-2048.xml mode_H1-TMPLTBANK-869040003-2048.strainspe
 	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > H1_split_bank.cache
 	ls *H2_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > H2_split_bank.cache
 	ls *L1_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > L1_split_bank.cache
-	./iir_bank_pipe mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz H1_split_bank.cache
-	./iir_bank_pipe mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz H2_split_bank.cache
-	./iir_bank_pipe mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz L1_split_bank.cache
+	./iir_bank_pipe mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz H1_split_bank.cache $(LOW_FREQUENCY_CUTOFF)
+	./iir_bank_pipe mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz H2_split_bank.cache $(LOW_FREQUENCY_CUTOFF)
+	./iir_bank_pipe mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz L1_split_bank.cache $(LOW_FREQUENCY_CUTOFF)
 
 realclean :
 	rm *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml *split_bank-H1-TMPLTBANK-871154847-2048.xml mode_*.xml.gz

@@ -78,9 +78,9 @@ dag : H1-TMPLTBANK-871154847-2048.xml mode_H1-TMPLTBANK-869040003-2048.strainspe
 	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > H1_split_bank.cache
 	ls *H2_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > H2_split_bank.cache
 	ls *L1_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > L1_split_bank.cache
-	./svd_bank_pipe mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz H1_split_bank.cache
-	./svd_bank_pipe mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz H2_split_bank.cache
-	./svd_bank_pipe mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz L1_split_bank.cache
+	./svd_bank_pipe H1 mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz H1_split_bank.cache
+	./svd_bank_pipe H2 mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz H2_split_bank.cache
+	./svd_bank_pipe L1 mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz L1_split_bank.cache
 
 realclean :
 	rm *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml *split_bank-H1-TMPLTBANK-871154847-2048.xml mode_*.xml.gz
