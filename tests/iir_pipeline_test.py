@@ -15,7 +15,7 @@ import test_common
 from gstlal.elements.check_timestamps import mkchecktimestamps
 from pylal import spawaveform
 from gstlal import cbc_template_iir
-
+from gstlal.pipeutil import gobject, gst
 
 #
 # =============================================================================
@@ -74,12 +74,17 @@ def iirbank_test_01a(pipeline):
 
         #ip = spawaveform.iirinnerproduct(a1, b0, delay, psd)
 
-        M = numpy.loadtxt('test.out')
-        amp = M[:,0]
-        phase = M[:,1]
-        a1, b0, delay = spawaveform.iir(amp, phase, 0.01, 0.2, 0.2)
+        #M = numpy.loadtxt('test.out')
+        #amp = M[:,0]
+        #phase = M[:,1]
+	amp, phase, f = cbc_template_iir.waveform(1.4, 1.4, 40, 1500, 4096)
+	#for x in zip(amp, phase): print "%f %f\n" %x 
+        a1, b0, delay = spawaveform.iir(amp, phase, 0.04, 0.9, 0.25)
         psd = numpy.ones(amp.shape[0]/2)
-
+	a1 =numpy.array([a1])
+	b0 =numpy.array([b0])
+	delay =numpy.array([delay])
+	print a1.shape, b0.shape, delay.shape
         #
         # Build rest of pipeline
         #
@@ -97,6 +102,7 @@ def iirbank_test_01a(pipeline):
         # done
         #
         # gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS, "iir_single_waveform_pipeline")
+	gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS, "iir_single_waveform_pipeline")
 
         return pipeline
 
@@ -117,7 +123,7 @@ def iirbank_test_01a(pipeline):
 #pipeline = gst.Pipeline()
 #pipeline = iirbank_test_01a(pipeline)
 
-#gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS, "iir_single_waveform_pipeline")
+
 
 #pipeline.set_state(gst.STATE_PLAYING)
 
