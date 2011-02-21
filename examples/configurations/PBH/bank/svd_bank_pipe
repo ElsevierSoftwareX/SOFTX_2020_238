@@ -86,10 +86,11 @@ class gstlal_svd_bank_job(pipeline.CondorDAGJob):
 class gstlal_svd_bank_node(pipeline.CondorDAGNode):
 	"""
 	"""
-	def __init__(self, job, dag, template_bank, ifo, flow=40, reference_psd="psd.xml", p_node=[]):
+	def __init__(self, job, dag, template_bank, ifo, flow=40, reference_psd="psd.xml", tolerance=0.9999, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("flow", flow)
+		self.add_var_opt("svd-tolerance", tolerance)
 		self.add_var_opt("reference-psd", reference_psd)
 		self.add_var_opt("template-bank", template_bank)
 		svd_bank_name_path = os.path.split(template_bank)
