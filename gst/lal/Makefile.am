@@ -29,6 +29,7 @@ libgstlal_la_SOURCES = \
 	gstlal_delay.h gstlal_delay.c \
 	gstlal_iirbank.h gstlal_iirbank.c \
 	gstlal_mean.h gstlal_mean.c \
+	gstlal_timeslicechisq.h gstlal_timeslicechisq.c \
 	gstlal_specgram.h gstlal_specgram.c
 libgstlal_la_CFLAGS = $(AM_CFLAGS) $(gstreamer_CFLAGS) $(LAL_CFLAGS) $(GSL_CFLAGS) $(FFTW_CFLAGS)
 libgstlal_la_LIBADD = $(gstreamer_LIBS) $(LAL_LIBS) $(GSL_LIBS) $(FFTW_LIBS) $(top_srcdir)/lib/skymap/libwanalysis.la $(top_srcdir)/lib/libgstlal.la $(top_srcdir)/lib/libgstlaltags.la
