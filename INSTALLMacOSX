@@ -1,0 +1,265 @@
+================================
+gstlal Installation Instructions
+================================
+
+
+----------------
+Debian Lenny LDG
+----------------
+
+
+.. WARNING:: These are **experimental** installation instructions for
+             **Debian Lenny LDG ONLY**.
+
+
+.. contents:: Table of Contents
+
+
+Overview
+========
+
+gstlal is a project that links together LAL and its associated libraries with 
+GStreamer and so requires all of those tools to be installed, including the 
+normally optional development-related components.  Once the dependencies are 
+installed, the installation of gstlal itself should be very simple.
+
+
+Preparing the Filesystem
+========================
+
+The following is the filesystem layout I (Kipp) use.  Of course other 
+arrangements are possible, and you are welcome to experiment, but if you have 
+problems please try this arrangement before reporting problems.
+
+The top level directory is ``local/`` in which is found a normal collection of 
+unix install directorys: ``bin/``, ``lib/``, etc..  The ``/path/to/local/`` will
+be used as the install prefix for all software components.  Also in ``local/`` 
+is a directory named ``src/``, and this is where we will keep the source code 
+for the software.  For reference the tree looks like this, but do not try to 
+make this by hand, it will be constructed for you as you download and install 
+softare::
+
+  local/
+    bin/
+    include/
+    lib/
+    ... and so on ...
+    src/
+      gst-plugins-base/
+      gst-plugins-good/
+      gst-python/
+      gstlal/
+      gstreamer/
+      lalsuite/
+        glue/
+        lal/
+        lalapps/
+        lalburst/
+        lalframe/
+        lalmetaio/
+        pylal/
+        ... and so on ...
+
+Prepare the filesystem by doing the following.  Choose where you want ``local/``
+to go (I put it in my home directory, but you might prefer to be more organized 
+than that), then in that directory type::
+
+  $ mkdir local
+  $ mkdir local/src
+
+The rest of the tree will be created as software is downloaded and installed.
+
+
+Installing Dependencies
+=======================
+
+The preferred method of getting Mac OS X build dependencies is MacPorts, a 
+free, source-based package manager for Mac OS.
+
+The following instructions assume that you have a fresh installation of Leopard
+or Snow Leopard.  These instructions should work on most systems, except if you 
+have another package manager (such as Fink) installed.
+
+To install MacPorts, first install Xcode from the Developer CD that came with
+your computer, or from the Mac OS developer site <http://developer.apple.com>.
+
+Next, download the latest MacPorts release for your system from
+<http://www.macports.org/install.php>.  Make sure that you select the installer
+package (.pkg) that matches your operating system: Leopard or Snow Leopard.
+
+Run the installer to set up the MacPorts package manager.  Then start a new shell.
+To make sure that MacPorts is installed, run the following command::
+   
+   $ port help
+
+You should not get an error message.  If you now have the Port command, proceed.
+
+Now, we are going to use MacPorts to get the prerequisites for GStreamer, 
+lalsuite, and gstlal.  Every time you see a command starting with `sudo`, you
+may be prompted for your login password.  Run the following commands::
+    
+  $ sudo port install python26
+  $ sudo port install python_select
+  $ sudo python_select python26
+  $ sudo port install wget fftw-3 fftw-3-single py26-scipy py26-matplotlib gst-plugins-good py26-gst-python git-core gsl libframe metaio
+
+
+Preparing the Environment
+=========================
+
+Now create the environment setup script for the software to be installed in your
+home directory with::
+
+  $ cd /path/to/local/
+  $ cat >environment.sh <<_EOF_
+  export PATH="/path/to/local/bin:\${PATH}"
+  export PKG_CONFIG_PATH="/path/to/local/lib/pkgconfig:\$(python-config --prefix)/lib/pkgconfig:\${PKG_CONFIG_PATH}"
+  export PYTHONPATH="/path/to/local/lib/python2.6/site-packages:\${PYTHONPATH}"
+  export GST_PLUGIN_PATH="/path/to/local/lib/gstreamer-0.10:\$(python-config --prefix)/lib/gstreamer-0.10"
+  _EOF_
+
+Once you have constructed ``environment.sh`` with those four environment variables in it::
+
+  $ source /path/to/local/environment.sh
+
+You will need to do this everytime you wish to use or do development work with 
+the software.  It might make sense to put this in your login scripts (but 
+remember you have done this, if you choose to).
+
+
+Downloading the Software
+========================
+
+The following will clone the gstlal source tree giving you read-only access::
+
+  $ cd /path/to/local/src/
+  $ git clone git://ligo-vcs.phys.uwm.edu/gstlal.git
+
+*OR*, those with ligo.org credentials can obtain a read-write clone of the 
+gstlal source tree by using::
+
+  $ cd /path/to/local/src/
+  $ git clone albert.einstein@ligo-vcs.phys.uwm.edu:/usr/local/git/gstlal.git
+
+You must also clone lalsuite by following the instructions on the LAL project page.
+
+
+Installing the Software
+=======================
+
+ 1. Change to your ``src`` directory::
+    
+    $ cd /path/to/local/src
+
+ 2. Install the components of lalsuite in the order glue, lal, lalframe, 
+    lalmetaio, lalburst, lalinspiral, lalpulsar, lalstochastic, lalapps, 
+    pylal, using:
+    
+    * ``$ pushd lalsuite``
+    
+      - For C components::
+        
+        $ pushd directory
+        $ ./00boot && ./configure --prefix=/path/to/local && make -j install
+        $ popd
+      
+      - For Python components::
+        
+        $ pushd directory
+        $ python setup.py install --prefix=/path/to/local
+        $ popd
+      
+    * ``$ popd``
+      
+    * *do not* set any environment variables except as instructed above,
+    * *do not* source any "user-env" scripts.
+ 
+ 3. Install gstlal with::
+    
+    $ pushd gstlal
+    $ ./00init.sh && ./configure --prefix=/path/to/local && make -j install
+    $ popd
+
+
+
+Verifying the Installation
+==========================
+
+To check that each component is installed correctly, do the following.
+
+.. NOTE::  Do not run these commands from inside any of the respective source 
+           trees as the presence of files in those directories with names 
+           matching those referred to in these commands will confuse the tests.
+
+glue
+----
+
+  ::
+  
+  $ python -c "from glue import segments ; print segments.__file__"
+  
+  should not produce an error, and should print a filename located in the 
+  ``/path/to/local/`` directory tree.
+
+
+pylal
+-----
+  
+  ::
+  
+  $ python -c "from pylal import datatypes ; print datatypes.__file__"
+  
+  should not produce an error, and should print a filename located in the 
+  ``/path/to/local/`` directory tree, and::
+  
+  $ ldd /path/to/local/lib*/python*/site-packages/pylal/xlal/fft.so
+  
+  should not produce an error, and should show that ``liblal.so.0`` is provided by 
+  a file located in the ``/path/to/local`` directory tree.
+
+pygtk
+-----
+
+   ::
+
+   $ python -c "import pygtk; pygtk.require('2.0'); import gobject; print gobject.glib_version"
+
+   should not produce an error and should print the version corresponding to
+   the version of glib you installed.
+
+gstreamer
+---------
+  
+  ::
+  
+  $ which gst-inspect
+  
+  should print ``/opt/local/bin/gst-inspect``, and::
+  
+  $ gst-inspect coreelements
+  
+  should indicate that the Filename is in ``/opt/local/lib/...`` .
+
+
+gstlal
+------
+  
+  ::
+  
+  $ gst-inspect gstlal
+  
+  should report information on the gstlal plugin, showing a Filename in the 
+  ``/path/to/local/lib/...`` tree, and there should be several elements provided
+  by the plugin; and::
+  
+  $ ldd /path/to/local/lib/libgstlal.so
+  
+  should not produce an error, and should show that ``libgstbase-0.10.so.0``, 
+  ``libgstreamer-0.10.so.0``, ``libgobject-2.0.so.0``, ``libgmodule-2.0.so.0``, 
+  ``libgthread-2.0.so.0`` and ``libglib-2.0.so.0`` are all provided by files 
+  located in the ``/path/to/local`` directory tree; and::
+  
+  $ python -c "from gstlal import pipeparts ; print pipeparts.__file__"
+  
+  should not produce an error, and should print a filename located in the 
+  ``/path/to/local/`` directory tree.

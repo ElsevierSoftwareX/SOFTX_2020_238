@@ -1,0 +1,464 @@
+================================
+gstlal Installation Instructions
+================================
+
+
+------------
+CentOS 5 LDG
+------------
+
+
+.. WARNING:: These are **experimental** installation instructions for
+             **CentOS 5 LDG ONLY**.
+
+
+.. contents:: Table of Contents
+
+
+Overview
+========
+
+gstlal is a project that links together LAL and its associated libraries with 
+GStreamer and so requires all of those tools to be installed, including the 
+normally optional development-related components.  Once the dependencies are 
+installed, the installation of gstlal itself should be very simple.
+
+
+
+Preparing the Filesystem
+========================
+
+The following is the filesystem layout I (Kipp) use.  Of course other 
+arrangements are possible, and you are welcome to experiment, but if you have 
+problems please try this arrangement before reporting problems.
+
+The top level directory is ``local/`` in which is found a normal collection of 
+unix install directorys: ``bin/``, ``lib/``, etc..  The ``/path/to/local/`` will
+be used as the install prefix for all software components.  Also in ``local/`` 
+is a directory named ``src/``, and this is where we will keep the source code 
+for the software.  For reference the tree looks like this, but do not try to 
+make this by hand, it will be constructed for you as you download and install 
+softare::
+
+  local/
+    bin/
+    include/
+    lib/
+    ... and so on ...
+    src/
+      gst-plugins-base/
+      gst-plugins-good/
+      gst-python/
+      gstlal/
+      gstreamer/
+      lalsuite/
+        glue/
+        lal/
+        lalapps/
+        lalburst/
+        lalframe/
+        lalmetaio/
+        pylal/
+        ... and so on ...
+
+Prepare the filesystem by doing the following.  Choose where you want ``local/``
+to go (I put it in my home directory, but you might prefer to be more organized 
+than that), then in that directory type::
+
+  $ mkdir local
+  $ mkdir local/src
+
+The rest of the tree will be created as software is downloaded and installed.
+
+
+
+Preparing the Environment
+=========================
+
+Disable the system-wide lscsoft installation by doing::
+
+  $ cd ${HOME}
+  $ touch .nolscsoft
+
+then, on Debian systems, manually re-enable libframe and libmetaio by adding::
+
+  export PKG_CONFIG_PATH="/opt/lscsoft/libframe/lib/pkgconfig:${PKG_CONFIG_PATH}"
+  export PKG_CONFIG_PATH="/opt/lscsoft/libmetaio/lib/pkgconfig:${PKG_CONFIG_PATH}"
+
+to ``${HOME}/.bash_profile``, or wherever you set variables like this.  On 
+RedHat derived systems like CentOS, use ``lib64/`` instead of ``lib/`` in these 
+two paths.  Log out of your account and log back in again and confirm that 
+``pkg-config`` returns the correct directories for these two libraries with::
+
+  $ pkg-config --cflags libframe libmetaio
+  -I/opt/lscsoft/libmetaio/include -I/opt/lscsoft/libframe/include
+
+
+Debian **ONLY** Instructions
+----------------------------
+
+Skip this section **UNLESS** you are on a Debian system.
+
+Now create the environment setup script for the software to be installed in your
+home directory with::
+
+  $ cd /path/to/local/
+  $ cat >environment.sh <<_EOF_
+  export PATH="/path/to/local/bin:\${PATH}"
+  export PKG_CONFIG_PATH="/path/to/local/lib/pkgconfig:\${PKG_CONFIG_PATH}"
+  export PYTHONPATH="/path/to/local/lib/python2.5/site-packages:\${PYTHONPATH}"
+  _EOF_
+
+If your system is older the ``python2.5`` part of the paths might need to be 
+replaced with ``python2.4``, or if it's newer you might need to change it to 
+``python2.6``.  So, take a look at your system and figure this out.
+
+Once you have constructed ``environment.sh`` with those four environment variables in it::
+
+  $ source /path/to/local/environment.sh
+
+You will need to do this everytime you wish to use or do development work with 
+the software.  It might make sense to put this in your login scripts (but 
+remember you have done this, if you choose to).
+
+Now continue to the section `Downloading and Installing Dependencies`_.
+
+
+CentOS **ONLY** Instructions
+----------------------------
+
+Skip this section **UNLESS** you are on a CentOS or Red Hat system.
+
+Now create the environment setup script for the software to be installed in your
+home directory with::
+
+  $ cd /path/to/local/
+  $ cat >environment.sh <<_EOF_
+  export PATH="/path/to/local/bin:\${PATH}"
+  export PKG_CONFIG_PATH="/path/to/local/lib/pkgconfig:\${PKG_CONFIG_PATH}"
+  export PYTHONPATH="/path/to/local/lib64/python2.4/site-packages:/path/to/local/lib/python2.4/site-packages:\${PYTHONPATH}"
+  _EOF_
+
+Once you have constructed ``environment.sh`` with those four environment variables in it::
+
+  $ source /path/to/local/environment.sh
+
+You will need to do this everytime you wish to use or do development work with 
+the software.  It might make sense to put this in your login scripts (but 
+remember you have done this, if you choose to).
+
+Now continue to the section `Downloading and Installing Dependencies`_.
+
+
+Mac OS X **ONLY** Instructions
+------------------------------
+
+Skip this section **UNLESS** you are on a Mac OS X system.
+
+Additional Mac OS X Dependencies
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The preferred method of getting Mac OS X build dependencies is MacPorts, a 
+free, source-based package manager for Mac OS.
+
+The following instructions assume that you have a fresh installation of Leopard
+or Snow Leopard.  These instructions should work on most systems, except if you 
+have another package manager (such as Fink) installed.
+
+To install MacPorts, first install Xcode from the Developer CD that came with
+your computer, or from the Mac OS developer site <http://developer.apple.com>.
+
+Next, download the latest MacPorts release for your system from
+<http://www.macports.org/install.php>.  Make sure that you select the installer
+package (.pkg) that matches your operating system: Leopard or Snow Leopard.
+
+Run the installer to set up the MacPorts package manager.  Then start a new shell.
+To make sure that MacPorts is installed, run the following command::
+   
+   $ port help
+
+You should not get an error message.  If you now have the Port command, proceed.
+
+Now, we are going to use MacPorts to get the prerequisites for GStreamer, 
+lalsuite, and gstlal.  Every time you see a command starting with `sudo`, you
+may be prompted for your login password.  Run the following commands::
+    
+  $ sudo port install python26
+  $ sudo port install python_select
+  $ sudo python_select python26
+  $ sudo port install wget fftw-3 fftw-3-single py26-numpy py26-scipy py26-matplotlib glib2 py26-gobject py26-gtk git-core gsl libframe metaio
+ 
+
+Mac OS X Environment
+~~~~~~~~~~~~~~~~~~~~
+
+Now create the environment setup script for the software to be installed in your
+home directory with::
+
+  $ cd /path/to/local/
+  $ cat >environment.sh <<_EOF_
+  export PATH="/path/to/local/bin:\${PATH}"
+  export PKG_CONFIG_PATH="/path/to/local/lib/pkgconfig:\$(python-config --prefix)/lib/pkgconfig:\${PKG_CONFIG_PATH}"
+  export PYTHONPATH="/path/to/local/lib/python2.6/site-packages:\${PYTHONPATH}"
+  _EOF_
+
+Once you have constructed ``environment.sh`` with those four environment variables in it::
+
+  $ source /path/to/local/environment.sh
+
+You will need to do this everytime you wish to use or do development work with 
+the software.  It might make sense to put this in your login scripts (but 
+remember you have done this, if you choose to).
+
+After you have set up your Mac OS X dependencies and your Mac OS X environment 
+script, skip the section "Downloading and Installing Dependencies" and continue 
+to the section `Downloading the Software`_.
+
+
+Downloading and Installing Dependencies
+=======================================
+
+Because, for now, we will be using the newest version of gstreamer available,
+some of the software dependencies might be a little ahead of what is provided by
+your operating system.  Building gstreamer from the latest stable releases on
+Debian lenny (the current stable release, the OS found on the Atlas cluster)
+will require you to install
+
+ * ≥glib-2.22.5.tar.gz
+ * ≥pygobject-2.14.2.tar.gz
+ * ≥pygtk-2.8.6.tar.gz
+
+and, on CentOS 5, also
+
+ * ≥flex-2.5.31.tar.gz
+
+in your home directory.  The following instructions will download and install 
+these three software packages into your ``/path/to/local`` prefix::
+
+  $ cd /path/to/local/src
+  $ wget http://ftp.gnome.org/pub/GNOME/sources/glib/2.22/glib-2.22.5.tar.gz
+  $ wget http://ftp.gnome.org/pub/GNOME/sources/pygobject/2.14/pygobject-2.14.2.tar.gz
+  $ wget http://ftp.gnome.org/pub/GNOME/sources/pygtk/2.8/pygtk-2.8.6.tar.gz
+  $ tar -xzf glib-2.22.5.tar.gz
+  $ pushd glib-2.22.5
+  $ ./configure --prefix=/path/to/local && make install
+  $ popd
+  
+  $ tar -xzf pygobject-2.14.2.tar.gz
+  $ pushd pygobject-2.14.2
+  $ ./configure --disable-glibtest --prefix=/path/to/local && make install
+  $ popd
+  
+  $ tar -xzf pygtk-2.8.6.tar.gz
+  $ pushd pygtk-2.8.6
+  $ ./configure --disable-glibtest --prefix=/path/to/local && make install
+  $ popd
+
+and, on CentOS 5, also install flex by running the following commands::
+
+  $ cd /path/to/local/src
+  $ wget http://prdownloads.sourceforge.net/flex/flex-2.5.35.tar.gz?download
+  $ tar -xzf flex-2.5.35.tar.gz
+  $ pushd flex-2.5.35
+  $ ./configure --prefix=/path/to/local && make install
+  $ popd
+
+
+
+(Optional) NDS Support
+======================
+
+gstlal includes an optional source element for retrieving live data from an NDS 
+server. To enable NDS support, ensure that you have the NDS2 client installed 
+before building gstlal. This requires you to install
+
+ * ≥nds2-client-0.6.5.tar.gz
+
+To support Kerberos authentication, you will need to make sure that your system 
+has libsasl2 and the gssapi module for libsasl2. In Debian these are the packages
+
+ * libsasl2-dev
+ * libsasl2-modules-gssapi-mit
+
+To install the NDS client library, run the following commands::
+
+  $ wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/nds2-client-0.6.5-src.tar.gz
+  $ tar -xzf nds2-client-0.6.5-src.tar.gz
+  $ pushd nds2-client-0.6.5
+  $ ./configure --prefix=/path/to/local && make install
+  $ popd
+
+
+
+Downloading the Software
+========================
+
+Download the latest GStreamer pre-releases::
+
+  $ cd /path/to/local/src/
+  $ wget http://gstreamer.freedesktop.org/src/gstreamer/gstreamer-0.10.32.tar.gz
+  $ wget http://gstreamer.freedesktop.org/src/gst-plugins-base/gst-plugins-base-0.10.32.tar.gz
+  $ wget http://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-0.10.27.tar.gz
+  $ wget http://gstreamer.freedesktop.org/src/gst-python/gst-python-0.10.21.tar.gz
+
+The following will clone the gstlal source tree giving you read-only access::
+
+  $ cd /path/to/local/src/
+  $ git clone git://ligo-vcs.phys.uwm.edu/gstlal.git
+
+*OR*, those with ligo.org credentials can obtain a read-write clone of the 
+gstlal source tree by using::
+
+  $ cd /path/to/local/src/
+  $ git clone albert.einstein@ligo-vcs.phys.uwm.edu:/usr/local/git/gstlal.git
+
+You must also clone lalsuite by following the instructions on the LAL project page.
+
+
+
+Installing the Software
+=======================
+
+ 1. Change to your ``src`` directory::
+    
+    $ cd /path/to/local/src
+
+ 2. Install the components of lalsuite in the order glue, lal, lalframe, 
+    lalmetaio, lalburst, lalinspiral, lalpulsar, lalstochastic, lalapps, 
+    pylal, using:
+    
+    * ``$ pushd lalsuite``
+    
+      - For C components::
+        
+        $ pushd directory
+        $ ./00boot && ./configure --prefix=/path/to/local && make -j install
+        $ popd
+      
+      - For Python components::
+        
+        $ pushd directory
+        $ python setup.py install --prefix=/path/to/local
+        $ popd
+      
+    * ``$ popd``
+      
+    * *do not* set any environment variables except as instructed above,
+    * *do not* source any "user-env" scripts.
+ 
+ 3. Install the components of gstreamer in the order gstreamer, 
+    gst-plugins-base, gst-plugins-good, gst-python, using::
+    
+    $ pushd directory
+    $ ./configure --prefix=/path/to/local && make -j install
+    $ popd
+    
+    .. NOTE:: Ignore warnings about "failed to install schema", these appear 
+              to be harmless.
+    
+    .. IMPORTANT:: At configure time, ``gst-python`` needs to know the directory in
+              which the Python shared library, libpython2.x, is installed on
+              your system.  The rules it uses to locate libpython are known not
+              to work perfectly on CentOS and Mac OS.  You can specify this
+              directory explicitly, if necessary.
+              
+              If you are installing on a 64-bit CentOS machine (e.g., the CIT cluster),
+              you must configure ``gst-python`` with::
+              
+                $ ./configure --prefix=/path/to/local --with-libpython-dir=/usr/lib64
+             
+             And if you are installing on a Mac and you want to use the Python
+             interpreter that comes with MacPorts, you must configure ``gst-python``
+             with::
+             
+               $ ./configure --prefix=/path/to/local --with-libpython-dir=/opt/local/lib
+ 
+ 4. Install gstlal with::
+    
+    $ pushd gstlal
+    $ ./00init.sh && ./configure --prefix=/path/to/local && make -j install
+    $ popd
+
+
+
+Verifying the Installation
+==========================
+
+To check that each component is installed correctly, do the following.
+
+.. NOTE::  Do not run these commands from inside any of the respective source 
+           trees as the presence of files in those directories with names 
+           matching those referred to in these commands will confuse the tests.
+
+glue
+----
+
+  ::
+  
+  $ python -c "from glue import segments ; print segments.__file__"
+  
+  should not produce an error, and should print a filename located in the 
+  ``/path/to/local/`` directory tree.
+
+
+pylal
+-----
+  
+  ::
+  
+  $ python -c "from pylal import datatypes ; print datatypes.__file__"
+  
+  should not produce an error, and should print a filename located in the 
+  ``/path/to/local/`` directory tree, and::
+  
+  $ ldd /path/to/local/lib*/python*/site-packages/pylal/xlal/fft.so
+  
+  should not produce an error, and should show that ``liblal.so.0`` is provided by 
+  a file located in the ``/path/to/local`` directory tree.
+
+pygtk
+-----
+
+   ::
+
+   $ python -c "import pygtk; pygtk.require('2.0'); import gobject; print gobject.glib_version"
+
+   should not produce an error and should print the version corresponding to
+   the version of glib you installed.
+
+gstreamer
+---------
+  
+  ::
+  
+  $ which gst-inspect
+  
+  should print ``/path/to/local/bin/gst-inspect``, and::
+  
+  $ gst-inspect coreelements
+  
+  should indicate that the Filename is in ``/path/to/local/lib/...`` .
+
+
+gstlal
+------
+  
+  ::
+  
+  $ gst-inspect gstlal
+  
+  should report information on the gstlal plugin, showing a Filename in the 
+  ``/path/to/local/lib/...`` tree, and there should be several elements provided
+  by the plugin; and::
+  
+  $ ldd /path/to/local/lib/libgstlal.so
+  
+  should not produce an error, and should show that ``libgstbase-0.10.so.0``, 
+  ``libgstreamer-0.10.so.0``, ``libgobject-2.0.so.0``, ``libgmodule-2.0.so.0``, 
+  ``libgthread-2.0.so.0`` and ``libglib-2.0.so.0`` are all provided by files 
+  located in the ``/path/to/local`` directory tree; and::
+  
+  $ python -c "from gstlal import pipeparts ; print pipeparts.__file__"
+  
+  should not produce an error, and should print a filename located in the 
+  ``/path/to/local/`` directory tree.
