@@ -10,6 +10,7 @@ pkgpythondir = $(pkgpyexecdir)
 pkgpython_PYTHON = \
 	__init__.py \
 	cbc_template_fir.py \
+	cbc_template_iir.py \
 	dagparts.py \
 	lloidparts.py \
 	matplotlibhelper.py \

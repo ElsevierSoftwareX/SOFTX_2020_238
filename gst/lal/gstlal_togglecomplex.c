@@ -164,6 +164,7 @@ static GValue *g_value_scale_int(const GValue *src, GValue *dst, double factor)
 			gst_value_init_and_copy(&x, gst_value_list_get_value(src, i));
 			g_assert(G_VALUE_HOLDS_INT(&x));
 			g_value_set_int(&x, scale_int(g_value_get_int(&x), factor, 1, G_MAXINT));
+			/* makes a copy of the GValue */
 			gst_value_list_append_value(dst, &x);
 			g_value_unset(&x);
 		}
@@ -186,10 +187,9 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 	case GST_PAD_SINK:
 		for(n = 0; n < gst_caps_get_size(caps); n++) {
 			GstStructure *str = gst_caps_get_structure(caps, n);
-			const gchar *name;
+			const gchar *name = gst_structure_get_name(str);
 			GValue channels = {0};
 			GValue width = {0};
-			name = gst_structure_get_name(str);
 			if(name && !strcmp(name, "audio/x-raw-float")) {
 				/* FIXME: should confirm that the channel count is even */
 				gst_structure_set_name(str, "audio/x-raw-complex");
@@ -203,6 +203,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 				GST_DEBUG_OBJECT(trans, "unrecognized format %s in %" GST_PTR_FORMAT, name ? name : "(NULL)", caps);
 				goto error;
 			}
+			/* makes a copy of the GValue */
 			gst_structure_set_value(str, "channels", &channels);
 			gst_structure_set_value(str, "width", &width);
 			g_value_unset(&channels);

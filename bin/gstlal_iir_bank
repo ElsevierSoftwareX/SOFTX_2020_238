@@ -1,0 +1,48 @@
+#!/usr/bin/env python
+import sys
+import scipy
+import numpy
+from optparse import OptionParser
+
+parser = OptionParser(description = __doc__)
+parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
+parser.add_option("--sample-rate", metavar = "Hz", type = "float", default = 4096, help = "Set the sample rate (default = 4096).")
+parser.add_option("--padding", metavar = "pad", type = "float", default = 1.1, help = "Fractional amount to pad time slices.")
+# FIXME add this when we know how to (by changing the parameters accoring to a function or optimizing on the fly or something)
+#parser.add_option("--iir-tolerance", metavar = "match", type = "float", default = 0.99, help = "Set the SVD reconstruction tolerance (default = 0.99).")
+parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
+parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).")
+parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
+parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+options, filenames = parser.parse_args()
+
+required_options = ("reference_psd", "template_bank", "output")
+
+missing_options = [option for option in required_options if getattr(options, option) is None]
+if missing_options:
+	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+
+
+from gstlal import cbc_template_iir
+from gstlal.reference_psd import read_psd
+from glue.ligolw import utils
+
+# read bank file
+bank = utils.load_filename(options.template_bank, gz=options.template_bank.endswith('.gz'))
+
+# read psd file
+psd = read_psd(options.reference_psd)
+
+# smooth and create an interp object
+psd = cbc_template_iir.smooth_and_interp(psd)
+
+# get the iir coefficients
+A, B, D, snrs = cbc_template_iir.makeiirbank(bank, psd_interp = psd, verbose=options.verbose, sampleRate=options.sample_rate, padding=options.padding, flower=options.flow, output_to_xml=True)
+
+utils.write_filename(bank, options.output, gz=options.output.endswith('.gz'))
+
+#import pylab
+#pylab.hist(snrs)
+#pylab.show()
+
