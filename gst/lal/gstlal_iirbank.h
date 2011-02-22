@@ -39,7 +39,7 @@
 #include <gst/base/gstbasetransform.h>
 
 
-#include <gsl/gsl_vector.h>
+#include <gsl/gsl_matrix.h>
 
 
 G_BEGIN_DECLS
@@ -79,10 +79,10 @@ typedef struct {
 
 	GMutex *iir_matrix_lock;
 	GCond *iir_matrix_available;
-        gsl_vector_int *delay;
-        gsl_vector_complex *a1;
-        gsl_vector_complex *b0;
-        gsl_vector_complex *ylast;
+        gsl_matrix_int *delay;
+        gsl_matrix_complex *a1;
+        gsl_matrix_complex *b0;
+        gsl_matrix_complex *y;
 	gint64 latency;
 
 	/*

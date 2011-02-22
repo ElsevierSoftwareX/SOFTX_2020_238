@@ -78,7 +78,7 @@ import os.path
 from bisect import bisect_left, bisect_right, insort
 from glob import glob
 from itertools import groupby, takewhile
-from progress import ProgressBar
+from pylal.progress import ProgressBar
 from optparse import Option, OptionParser
 from glue.ligolw import utils, table, lsctables
 

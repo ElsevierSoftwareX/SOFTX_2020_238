@@ -6,4 +6,5 @@ dist_bin_SCRIPTS = \
 	gstlal_mock_data_server \
 	gstlal_spectrum_movie \
 	gstlal_svd_bank \
-	gstlal_reference_psd
+	gstlal_reference_psd \
+	gstlal_iir_bank

@@ -187,8 +187,8 @@ GValueArray *gstlal_g_value_array_from_doubles(const gdouble *src, gint n)
 
 
 /**
- * convert a GValueArray to a GSL vector_int.  the return value is the
- * newly allocated vector_int on success or NULL on failure.
+ * convert a GValueArray of ints to a GSL vector.  the return value is the
+ * newly allocated vector on success or NULL on failure.
  */
 
 
@@ -206,8 +206,8 @@ gsl_vector_int *gstlal_gsl_vector_int_from_g_value_array(GValueArray *va)
 
 
 /**
- * convert a gsl_vector_int to a GValueArray of ints.  the return value is
- * the newly allocated GValueArray object.
+ * convert a GSL vector of ints to a GValueArray.  the return value is the
+ * newly allocated GValueArray object.
  */
 
 
@@ -218,8 +218,8 @@ GValueArray *gstlal_g_value_array_from_gsl_vector_int(const gsl_vector_int *vect
 
 
 /**
- * convert a GValueArray to a GSL vector.  the return value is the newly
- * allocated vector on success or NULL on failure.
+ * convert a GValueArray of doubles to a GSL vector.  the return value is
+ * the newly allocated vector on success or NULL on failure.
  */
 
 
@@ -237,7 +237,7 @@ gsl_vector *gstlal_gsl_vector_from_g_value_array(GValueArray *va)
 
 
 /**
- * convert a gsl_vector to a GValueArray of doubles.  the return value is
+ * convert a GSL vector of doubles to a GValueArray.  the return value is
  * the newly allocated GValueArray object.
  */
 
@@ -249,10 +249,11 @@ GValueArray *gstlal_g_value_array_from_gsl_vector(const gsl_vector *vector)
 
 
 /**
- * convert a GValueArray to a GSL complex vector.  the return value is the
- * newly allocated vector on success or NULL on failure.  Note:
- * glib/gobject don't support complex floats, so the data are assumed to be
- * stored as a GValueArray of doubles packed as real,imag,real,imag,...
+ * convert a GValueArray of complex doubles to a GSL vector.  the return
+ * value is the newly allocated vector on success or NULL on failure.
+ * Note: glib/gobject don't support complex floats, so the data are assumed
+ * to be stored as a GValueArray of doubles packed as
+ * real,imag,real,imag,...
  */
 
 
@@ -271,7 +272,7 @@ gsl_vector_complex *gstlal_gsl_vector_complex_from_g_value_array(GValueArray *va
 
 
 /**
- * convert a gsl_vector_complex to a GValueArray of doubles.  the return
+ * convert a GSL vector of complex doubles to a GValueArray.  the return
  * value is the newly allocated GValueArray object.  Note:  glib/gobject
  * don't support complex floats, so the data are assumed to be stored as a
  * GValueArray of doubles packed as real,imag,real,imag,...
@@ -282,6 +283,80 @@ gsl_vector_complex *gstlal_gsl_vector_complex_from_g_value_array(GValueArray *va
 GValueArray *gstlal_g_value_array_from_gsl_vector_complex(const gsl_vector_complex *vector)
 {
 	return gstlal_g_value_array_from_doubles((const double *) gsl_vector_complex_const_ptr(vector, 0), vector->size * 2);
+}
+
+
+/**
+ * convert a GValueArray of GValueArrays of ints to a GSL matrix.  the
+ * return value is the newly allocated matrix on success or NULL on
+ * failure.
+ */
+
+
+gsl_matrix_int *gstlal_gsl_matrix_int_from_g_value_array(GValueArray *va)
+{
+	gsl_matrix_int *matrix;
+	GValueArray *row;
+	guint rows, cols;
+	guint i;
+
+	if(!va)
+		return NULL;
+	rows = va->n_values;
+	if(!rows)
+		/* 0x0 matrix */
+		return gsl_matrix_int_alloc(0, 0);
+
+	row = g_value_get_boxed(g_value_array_get_nth(va, 0));
+	cols = row->n_values;
+	matrix = gsl_matrix_int_alloc(rows, cols);
+	if(!matrix)
+		/* allocation failure */
+		return NULL;
+	if(!gstlal_ints_from_g_value_array(row, gsl_matrix_int_ptr(matrix, 0, 0), NULL)) {
+		/* row conversion failure */
+		gsl_matrix_int_free(matrix);
+		return NULL;
+	}
+	for(i = 1; i < rows; i++) {
+		row = g_value_get_boxed(g_value_array_get_nth(va, i));
+		if(row->n_values != cols) {
+			/* one of the rows has the wrong number of columns */
+			gsl_matrix_int_free(matrix);
+			return NULL;
+		}
+		if(!gstlal_ints_from_g_value_array(row, gsl_matrix_int_ptr(matrix, i, 0), NULL)) {
+			/* row conversion failure */
+			gsl_matrix_int_free(matrix);
+			return NULL;
+		}
+	}
+
+	return matrix;
+}
+
+
+/**
+ * convert a GSL matrix of ints to a GValueArray of GValueArrays.  the
+ * return value is the newly allocated GValueArray object.
+ */
+
+
+GValueArray *gstlal_g_value_array_from_gsl_matrix_int(const gsl_matrix_int *matrix)
+{
+	GValueArray *va;
+	GValue v = {0,};
+	guint i;
+	g_value_init(&v, G_TYPE_VALUE_ARRAY);
+
+	va = g_value_array_new(matrix->size1);
+	if(!va)
+		return NULL;
+	for(i = 0; i < matrix->size1; i++) {
+		g_value_take_boxed(&v, gstlal_g_value_array_from_ints(gsl_matrix_int_const_ptr(matrix, i, 0), matrix->size2));
+		g_value_array_append(va, &v);
+	}
+	return va;
 }
 
 
@@ -336,7 +411,7 @@ gsl_matrix *gstlal_gsl_matrix_from_g_value_array(GValueArray *va)
 
 
 /**
- * convert a gsl_matrix to a GValueArray of GValueArray of doubles.  the
+ * convert a GSL matrix of doubles to a GValueArray of GValueArrays.  the
  * return value is the newly allocated GValueArray object.
  */
 
@@ -413,10 +488,11 @@ gsl_matrix_complex *gstlal_gsl_matrix_complex_from_g_value_array(GValueArray *va
 
 
 /**
- * convert a gsl_matrix_complex to a GValueArray of GValueArray of doubles.
- * the return value is the newly allocated GValueArray object.  Note:
- * glib/gobject don't support complex floats, so the data are assumed to be
- * stored as rows (GValueArrays) packed as real,imag,real,imag,...
+ * convert a GSL matrix of complex doubles to a GValueArray of
+ * GValueArrays.  the return value is the newly allocated GValueArray
+ * object.  Note: glib/gobject don't support complex floats, so the data
+ * are assumed to be stored as rows (GValueArrays) packed as
+ * real,imag,real,imag,...
  */
 
 
