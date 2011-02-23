@@ -75,6 +75,7 @@
 #include <gstlal_delay.h>
 #include <gstlal_iirbank.h>
 #include <gstlal_mean.h>
+#include <gstlal_timeslicechisq.h>
 #include <gstlal_specgram.h>
 
 
@@ -128,6 +129,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_delay", GSTLAL_DELAY_TYPE},
 		{"lal_iirbank", GSTLAL_IIRBANK_TYPE},
 		{"lal_mean", GSTLAL_MEAN_TYPE},
+		{"lal_timeslicechisq", GSTLAL_TIMESLICECHISQUARE_TYPE},
 		{"lal_specgram", GSTLAL_SPECGRAM_TYPE},
 		{NULL, 0},
 	};

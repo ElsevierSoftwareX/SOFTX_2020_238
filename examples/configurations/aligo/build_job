@@ -70,7 +70,7 @@ from glue.ligolw import lsctables
 import os.path
 
 from pipeline import *
-from progress import *
+from pylal.progress import *
 
 progress = ProgressBar()
 
