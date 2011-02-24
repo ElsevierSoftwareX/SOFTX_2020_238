@@ -163,11 +163,20 @@ options, filenames, process_params = parse_command_line()
 #
 
 
-from gstlal.pipeutil import *
-from gstlal.lloidparts import *
+# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require('0.10')
+import gst
+
+from gstlal import pipeutil
+from gstlal import lloidparts
 from gstlal import templates
 from gstlal.svd_bank import build_bank, read_bank
-from gstlal.reference_psd import *
+from gstlal import reference_psd
 
 
 #
@@ -196,12 +205,12 @@ seekevent = gst.event_new_seek(1.0, gst.Format(gst.FORMAT_TIME),
 
 
 detectors = {
-	options.instrument: DetectorData(options.frame_cache, options.channel_name)
+	options.instrument: lloidparts.DetectorData(options.frame_cache, options.channel_name)
 }
 
 
 if options.reference_psd is not None:
-	psd = read_psd(options.reference_psd, verbose = options.verbose)
+	psd = reference_psd.read_psd(options.reference_psd, verbose = options.verbose)
 else:
 	psd = measure_psd(
 		options.instrument,
@@ -265,9 +274,9 @@ def maybe_dump_dot(pipeline, stage):
 
 pipeline = gst.Pipeline("gstlal_inspiral")
 mainloop = gobject.MainLoop()
-handler = LLOIDHandler(mainloop, pipeline)
+handler = lloidparts.LLOIDHandler(mainloop, pipeline)
 
-src = mkLLOIDmulti(
+src = lloidparts.mkLLOIDmulti(
 	pipeline,
 	seekevent,
 	detectors = detectors,
@@ -297,7 +306,7 @@ def appsink_new_buffer(elem, data):
 			data.sngl_inspiral_table.append(row)
 	if data.connection: data.connection.commit()
 
-mkelems_fast(pipeline, src, "appsink", {"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})[-1].connect_after("new-buffer", appsink_new_buffer, data)
+lloidparts.mkelems_fast(pipeline, src, "appsink", {"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})[-1].connect_after("new-buffer", appsink_new_buffer, data)
 
 
 
