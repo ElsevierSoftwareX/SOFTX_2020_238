@@ -25,13 +25,20 @@
 #
 
 
-from gstlal.pipeutil import *
 from gstlal import pipeparts
 from gstlal import pipeio
 from gstlal import cbc_template_fir
 import math
 import sys
 
+# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require('0.10')
+import gst
 
 def mkelems_fast(bin, *pipedesc):
 	elems = []
@@ -202,7 +209,7 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8):
 	elems = mkelems_fast(pipeline,
 		src,
 		"queue", # FIXME: I think we can remove this queue.
-		"audioresample", {"gap-aware": True, "quality": 9},
+		"audioresample", {"quality": 9},
 		"lal_nofakedisconts", {"silent": True},
 		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % source_rate)},
 		"lal_whiten", {"fft-length": psd_fft_length, "zero-pad": 0, "average-samples": 64, "median-samples": 7},
@@ -264,7 +271,7 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8):
 		head[rate] = mkelems_fast(pipeline,
 			elems[-1],
 			"audioamplify", {"clipping-method": 3, "amplification": 1/math.sqrt(pipeparts.audioresample_variance_gain(quality, source_rate, rate))},
-			"audioresample", {"gap-aware": True, "quality": quality},
+			"audioresample", {"quality": quality},
 			"lal_nofakedisconts", {"silent": True},
 			"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % rate)},
 			"tee"
@@ -315,7 +322,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		src,
 		"lal_sumsquares", {"weights": bank_fragment.sum_of_squares_weights},
 		"queue",
-		"audioresample", {"gap-aware": True, "quality": 9},
+		"audioresample", {"quality": 9},
 		"lal_nofakedisconts", {"silent": True},
 		"lal_checktimestamps", {"name": "timestamps_%s_after_sumsquare_resampler" % logname},
 		control_snk
@@ -345,7 +352,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		#
 
 		"lal_matrixmixer", {"matrix": bank_fragment.mix_matrix},
-		"audioresample", {"gap-aware": True, "quality": 9},
+		"audioresample", {"quality": 9},
 		"lal_nofakedisconts", {"silent": True}, # FIXME:  remove after basetransform behaviour fixed
 		"lal_checktimestamps", {"name": "timestamps_%s_after_snr_resampler" % logname},
 
