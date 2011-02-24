@@ -31,9 +31,18 @@ __all__ = ("measure_psd", "read_psd", "write_psd")
 
 import sys
 
-from gstlal.pipeutil import *
-from gstlal.pipeparts import *
-from gstlal.lloidparts import *
+# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require('0.10')
+import gst
+
+from gstlal import pipeutil
+from gstlal import pipeparts
+from gstlal import lloidparts
 from gstlal import pipeio
 
 from glue.ligolw import ligolw
@@ -79,7 +88,7 @@ def measure_psd(instrument, seekevent, detector, seg, rate, fake_data=False, onl
 	pipeline = gst.Pipeline("psd")
 	handler = PSDHandler(mainloop, pipeline)
 
-	mkelems_fast(pipeline,
+	lloidparts.mkelems_fast(pipeline,
 		mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data=fake_data, online_data=online_data, injection_filename = injection_filename, verbose=verbose),
 		"audioresample", {"quality": 9},
 		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % rate)},
