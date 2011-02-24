@@ -19,7 +19,7 @@ do
 		(time -p gst-launch \
 			fakesrc num-buffers=$NUMBUFFERS sizetype=fixed sizemax=$BUFSIZE filltype=zero datarate=$DATARATE \
 			! audio/x-raw-float,rate=1,channels=$CHANNELS,width=$WIDTH \
-			! audioresample gap-aware=1 quality=$QUALITY \
+			! audioresample quality=$QUALITY \
 			! audio/x-raw-float,rate=$UPSAMPLEFACTOR \
 			! fakesink sync=0 async=0 \
 			> /dev/null) 2>&1 | sed -n "s/real \(.*\)/\1/p" >>$FILENAME
