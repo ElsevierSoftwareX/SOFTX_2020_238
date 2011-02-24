@@ -64,7 +64,7 @@ def measure_psd(instrument, seekevent, detector, seg, rate, fake_data=False, onl
 	# pipeline handler for PSD measurement
 	#
 
-	class PSDHandler(LLOIDHandler):
+	class PSDHandler(lloidparts.LLOIDHandler):
 		def on_message(self, bus, message):
 			if message.type == gst.MESSAGE_ELEMENT and message.structure.get_name() == "spectrum":
 				self.psd = pipeio.parse_spectrum_message(message)
@@ -89,7 +89,7 @@ def measure_psd(instrument, seekevent, detector, seg, rate, fake_data=False, onl
 	handler = PSDHandler(mainloop, pipeline)
 
 	lloidparts.mkelems_fast(pipeline,
-		mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data=fake_data, online_data=online_data, injection_filename = injection_filename, verbose=verbose),
+		lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data=fake_data, online_data=online_data, injection_filename = injection_filename, verbose=verbose),
 		"audioresample", {"quality": 9},
 		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % rate)},
 		"queue", {"max-size-buffers": 8},
