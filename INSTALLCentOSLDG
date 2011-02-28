@@ -1,36 +1,85 @@
-=========================================================
-Instructions for installing gstlal on CentOS 5 on the LDG
-=========================================================
+================================
+gstlal Installation Instructions
+================================
+
 
 .. contents:: Table of Contents
 
-Introduction
-============
 
-These instructions are a quick start guide for running on the LDG on a cluster
-using CentOS5 with the lscsoft gstreamer packages installed.  If this doesn't
-sound like what you want then consult the more general instructions in INSTALL.
-Note that these are greatly simplified instructions that assume knowledge of
-the software and infrastructure.  Do not blindly cut-and-paste unless you know
-what you are doing!
+Overview
+========
 
-Environment
-===========
+gstlal is a project that links together LAL and its associated libraries with 
+GStreamer and so requires all of those tools to be installed, including the 
+normally optional development-related components.  Once the dependencies are 
+installed, the installation of gstlal itself should be very simple.  
+The LDG clusters have the dependencies installed in /opt/lscsoft/gst. 
+These instructions
 
-NOTE:  These instructions assume that you do not use any of the lscsoft
-environment scripts.  It is not clear what will happen if you do.  So if you
-are not sure, don't!  Put the file .nolscsoft in your home directory to avoid
-the execution of any lscsoft environment scripts.
 
-This is an example bash environment script to set up the dependencies that are
-already installed on the cluster, as well as lalsuite and gstlal.  It assumes
-that lalsuite and gstlal are built in your home directory called gstlocal.
-Please note that this environment script is an example, don't blindly
-cut-and-paste it unless you know what you are doing.  Start by making a
-similar environment script to this and sourcing it to set up your environment.
-You will need to source it everytime you log in to the cluster in order to use
-gstlal::
 
+Preparing the Filesystem
+========================
+
+The following is the filesystem layout I (Kipp) use.  Of course other 
+arrangements are possible, and you are welcome to experiment, but if you have 
+problems please try this arrangement before reporting problems.
+
+The top level directory is ``local/`` in which is found a normal collection of
+unix install directorys: ``bin/``, ``lib/``, etc..  The ``/path/to/local/``
+will be used as the install prefix for all software components.  Note that you
+probably shouldn't literally use /path/to/local as the prefix since that will
+require root access.  Use something like ``/archive/home/yourusername/local``
+Also in ``local/`` is a directory named ``src/``, and this is where we will
+keep the source code for the software.  For reference the tree looks like this,
+but do not try to make this by hand, it will be constructed for you as you
+download and install software::
+
+  local/
+    bin/
+    include/
+    lib/
+    ... and so on ...
+    src/
+      gst-plugins-base/
+      gst-plugins-good/
+      gst-python/
+      gstlal/
+      gstreamer/
+      lalsuite/
+        glue/
+        lal/
+        lalapps/
+        lalburst/
+        lalframe/
+        lalmetaio/
+        pylal/
+        ... and so on ...
+
+Prepare the filesystem by doing the following.  Choose where you want ``local/``
+to go (I put it in my home directory, but you might prefer to be more organized 
+than that), then in that directory type::
+
+  $ mkdir local
+  $ mkdir local/src
+
+The rest of the tree will be created as software is downloaded and installed.
+
+
+
+Preparing the Environment
+=========================
+
+Disable the system-wide lscsoft installation by doing::
+
+  $ cd ${HOME}
+  $ touch .nolscsoft
+
+Now create the environment setup script for the software to be installed in your
+home directory that links against the proper system software with::
+
+  $ cd /path/to/local/
+  $ cat >environment.sh <<_EOF_
   #!/bin/bash
 
   # NOTICE: Here is an environment script that is presented in the hope that it
@@ -48,7 +97,8 @@ gstlal::
   done
 
   # This is an install prefix that does not get used anywhere but this script
-  INSTALLPATH=${HOME}/gstlocal
+  # change it to something useful
+  INSTALLPATH=/path/to/local
 
   # These are environment variables that do get exported
   PATH=${INSTALLPATH}/bin:$PATH
@@ -57,41 +107,103 @@ gstlal::
   GST_PLUGIN_PATH=${INSTALLPATH}/lib/gstreamer-0.10:${GST_PLUGIN_PATH}
 
   export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH
+  _EOF_
 
-Software
-========
+Once you have constructed ``environment.sh`` with those four environment variables in it::
 
-It is assumed that all of the dependencies are available except lalsuite and
-gstlal.  It is also assumed that you will build both lalsuite and gstlal to the
-same directory.  Concretely, this example assumes that directory is ${HOME}/gstlocal.
-Again, please do not just blindly cut-and-paste unless you know what you are doing.
-You can checkout lalsuite from git by going here and following the instructions under
-"Basic usage":
+  $ source /path/to/local/environment.sh
 
-https://www.lsc-group.phys.uwm.edu/daswg/docs/howto/lalsuite-git.html#basic
+You will need to do this everytime you wish to use or do development work with 
+the software.  It might make sense to put this in your login scripts (but 
+remember you have done this, if you choose to).
 
-In order to get gstlal, simply follow the same instructions, but replace lalsuite
-with gstlal.  The repository is hosted at the same location.
 
-Building lalsuite (from the top level directory)::
-  
-  $ ./00boot && ./configure --prefix=${HOME}/gstlocal --enable-condor && make install -j 
 
-Descend into lalsuite to build pylal and glue. In the pylal and glue directories
-run::
+(Optional) NDS Support
+======================
 
-  $ python setup.py install --prefix=${HOME}/gstlocal
+gstlal includes an optional source element for retrieving live data from an NDS 
+server. To enable NDS support, ensure that you have the NDS2 client installed 
+before building gstlal. This requires you to install
 
-Building gstlal::
+ * ≥nds2-client-0.6.5.tar.gz
 
-  $ ./00init.sh && ./configure --prefix=${HOME}/gstlocal && make install -j
-  
+To support Kerberos authentication, you will need to make sure that your system 
+has libsasl2 and the gssapi module for libsasl2. In Debian these are the packages
+
+ * libsasl2-dev
+ * libsasl2-modules-gssapi-mit
+
+To install the NDS client library, run the following commands::
+
+  $ wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/nds2-client-0.6.5-src.tar.gz
+  $ tar -xzf nds2-client-0.6.5-src.tar.gz
+  $ pushd nds2-client-0.6.5
+  $ ./configure --prefix=/path/to/local && make install
+  $ popd
+
+
+
+Downloading the Software
+========================
+
+The following will clone the gstlal and lalsuite source tree giving you read-only access::
+
+  $ cd /path/to/local/src/
+  $ git clone git://ligo-vcs.phys.uwm.edu/gstlal.git
+  $ git clone git://ligo-vcs.phys.uwm.edu/lalsuite.git
+
+*OR*, those with ligo.org credentials can obtain a read-write clone of the 
+gstlal source tree by using::
+
+  $ cd /path/to/local/src/
+  $ git clone albert.einstein@ligo-vcs.phys.uwm.edu:/usr/local/git/gstlal.git
+  $ git clone albert.einstein@ligo-vcs.phys.uwm.edu:/usr/local/git/lalsuite.git
+
+
+
+
+Installing the Software
+=======================
+
+ 1. Change to your ``src`` directory::
+    
+    $ cd /path/to/local/src
+
+ 2. Install the components of lalsuite in the order glue, lal, lalframe, 
+    lalmetaio, lalburst, lalinspiral, lalpulsar, lalstochastic, lalapps, 
+    pylal, using:
+    
+    * ``$ pushd lalsuite``
+    
+      - For C components::
+        
+        $ pushd directory
+        $ ./00boot && ./configure --prefix=/path/to/local && make -j install
+        $ popd
+      
+      - For Python components::
+        
+        $ pushd directory
+        $ python setup.py install --prefix=/path/to/local
+        $ popd
+      
+    * ``$ popd``
+      
+    * *do not* set any environment variables except as instructed above,
+    * *do not* source any "user-env" scripts.
+ 
+ 
+ 3. Install gstlal with::
+    
+    $ pushd gstlal
+    $ ./00init.sh && ./configure --prefix=/path/to/local && make -j install
+    $ popd
+
+
 
 Verifying the Installation
 ==========================
-
-Hopefully everything worked, but if you are paranoid use this section to verify
-the installation
 
 To check that each component is installed correctly, do the following.
 
@@ -106,9 +218,8 @@ glue
   
   $ python -c "from glue import segments ; print segments.__file__"
   
-
-should not produce an error, and should print a filename located in your
-directory tree (e.g. ${HOME}/gstlocal in the examples above)
+  should not produce an error, and should print a filename located in the 
+  ``/path/to/local/`` directory tree.
 
 
 pylal
@@ -118,9 +229,13 @@ pylal
   
   $ python -c "from pylal import datatypes ; print datatypes.__file__"
   
-should not produce an error, and should print a filename located in your
-directory tree (e.g. ${HOME}/gstlocal in the examples above)
- 
+  should not produce an error, and should print a filename located in the 
+  ``/path/to/local/`` directory tree, and::
+  
+  $ ldd /path/to/local/lib*/python*/site-packages/pylal/xlal/fft.so
+  
+  should not produce an error, and should show that ``liblal.so.0`` is provided by 
+  a file located in the ``/path/to/local`` directory tree.
 
 pygtk
 -----
@@ -130,7 +245,7 @@ pygtk
    $ python -c "import pygtk; pygtk.require('2.0'); import gobject; print gobject.glib_version"
 
    should not produce an error and should print the version corresponding to
-   the version of glib in /opt/lscsoft/gst.
+   the version of glib in /opt/lscsoft/gst
 
 gstreamer
 ---------
@@ -138,11 +253,13 @@ gstreamer
   ::
   
   $ which gst-inspect
+  
+  should print ``/opt/lscsoft/gst/bin/gst-inspect``, and::
+  
   $ gst-inspect coreelements
   
+  should indicate that the Filename is in ``/opt/lscsoft/gst/lib/...`` .
 
-should not produce errors, and should print a filename located in your
-directory tree (e.g. ${HOME}/gstlocal in the examples above)
 
 gstlal
 ------
@@ -152,7 +269,7 @@ gstlal
   $ gst-inspect gstlal
   
   should report information on the gstlal plugin, showing a Filename in the 
-  ``${HOME}/gstlocal/lib/...`` tree, and there should be several elements provided
+  ``/path/to/local/lib/...`` tree, and there should be several elements provided
   by the plugin; and::
   
   $ ldd /path/to/local/lib/libgstlal.so
@@ -165,5 +282,4 @@ gstlal
   $ python -c "from gstlal import pipeparts ; print pipeparts.__file__"
   
   should not produce an error, and should print a filename located in the 
-  ``${HOME}/gstlocal`` directory tree.
-
+  ``/path/to/local/`` directory tree.
