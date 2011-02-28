@@ -3,13 +3,13 @@ gstlal Installation Instructions
 ================================
 
 
-----------------
-Debian Lenny LDG
-----------------
+---------------------------------
+Mac OS X 10.5 and 10.6 + MacPorts
+---------------------------------
 
 
 .. WARNING:: These are **experimental** installation instructions for
-             **Debian Lenny LDG ONLY**.
+             **Mac OS X 10.5 and 10.6 ONLY**.
 
 
 .. contents:: Table of Contents
