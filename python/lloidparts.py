@@ -79,7 +79,7 @@ def mkelems_fast(bin, *pipedesc):
 class DetectorData(object):
 	# default block_size = 16384 samples/second * 8 bytes/sample * 8
 	# second
-	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 8):
+	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 512):
 		self.frame_cache = frame_cache
 		self.channel = channel
 		self.block_size = block_size
@@ -305,7 +305,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 
 	src = mkelems_fast(pipeline,
 		src,
-		"lal_firbank", {"latency": -int(round(bank_fragment.start * bank_fragment.rate)) - 1, "fir-matrix": bank_fragment.orthogonal_template_bank},
+		"lal_firbank", {"block-length-factor": 40, "latency": -int(round(bank_fragment.start * bank_fragment.rate)) - 1, "fir-matrix": bank_fragment.orthogonal_template_bank},
 		"lal_nofakedisconts", {"silent": True},
 		"lal_reblock",
 		"tee"
@@ -352,7 +352,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		#
 
 		"lal_matrixmixer", {"matrix": bank_fragment.mix_matrix},
-		"audioresample", {"quality": 9},
+		"audioresample", {"quality": 4},
 		"lal_nofakedisconts", {"silent": True}, # FIXME:  remove after basetransform behaviour fixed
 		"lal_checktimestamps", {"name": "timestamps_%s_after_snr_resampler" % logname},
 
