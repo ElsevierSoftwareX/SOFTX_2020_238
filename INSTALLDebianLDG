@@ -93,15 +93,15 @@ home directory that links against the proper system software with::
   # NOTICE: Here is an environment script that is presented in the hope that it
   # will be useful Please do not just blindy copy it, as you may want to modify
   # some of what it does to suit your system and environment. This assumes an
-  # LDG cluster environment using CentOS 5.  (like CIT)
+  # LDG cluster environment using Debian Lenny.  (like Atlas)
 
   # These are on the cluster
   # FIXME when pylal is released maybe we can just use all of lalsuite?
   for p in libframe libmetaio gst
   do
   PATH=/opt/lscsoft/\${p}/bin:\${PATH}
-  PKG_CONFIG_PATH=/opt/lscsoft/\${p}/lib64/pkgconfig:/opt/lscsoft/\${p}/lib/pkgconfig:\${PKG_CONFIG_PATH}
-  PYTHONPATH=/opt/lscsoft/\${p}/lib64/python2.4/site-packages:\${PYTHONPATH}
+  PKG_CONFIG_PATH=/opt/lscsoft/\${p}/lib/pkgconfig:\${PKG_CONFIG_PATH}
+  PYTHONPATH=/opt/lscsoft/\${p}/lib/python2.5/site-packages:\${PYTHONPATH}
   done
 
   # This is an install prefix that does not get used anywhere but this script
@@ -110,8 +110,8 @@ home directory that links against the proper system software with::
 
   # These are environment variables that do get exported
   PATH=\${INSTALLPATH}/bin:\${PATH}
-  PKG_CONFIG_PATH=\${INSTALLPATH}/lib64/pkgconfig:\${INSTALLPATH}/lib/pkgconfig:\${PKG_CONFIG_PATH}
-  PYTHONPATH=\${INSTALLPATH}/lib64/python2.4/site-packages:\${PYTHONPATH}
+  PKG_CONFIG_PATH=\${INSTALLPATH}/lib/pkgconfig:\${PKG_CONFIG_PATH}
+  PYTHONPATH=\${INSTALLPATH}/lib/python2.5/site-packages:\${PYTHONPATH}
   GST_PLUGIN_PATH=\${INSTALLPATH}/lib/gstreamer-0.10
 
   export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH
