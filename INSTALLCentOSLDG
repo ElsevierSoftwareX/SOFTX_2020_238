@@ -239,7 +239,7 @@ gstreamer
   
   $ gst-inspect coreelements
   
-  should indicate that the Filename is in ``/opt/lscsoft/gst/lib/...`` .
+  should indicate that the Filename is in ``/opt/lscsoft/gst/lib64/...`` .
 
 
 gstlal
