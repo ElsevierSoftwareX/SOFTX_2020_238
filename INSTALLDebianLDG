@@ -125,31 +125,6 @@ remember you have done this, if you choose to).
 
 
 
-(Optional) NDS Support
-======================
-
-gstlal includes an optional source element for retrieving live data from an NDS 
-server. To enable NDS support, ensure that you have the NDS2 client installed 
-before building gstlal. This requires you to install
-
- * ≥nds2-client-0.6.5.tar.gz
-
-To support Kerberos authentication, you will need to make sure that your system 
-has libsasl2 and the gssapi module for libsasl2. In Debian these are the packages
-
- * libsasl2-dev
- * libsasl2-modules-gssapi-mit
-
-To install the NDS client library, run the following commands::
-
-  $ wget https://www.lsc-group.phys.uwm.edu/daswg/download/software/source/nds2-client-0.6.5-src.tar.gz
-  $ tar -xzf nds2-client-0.6.5-src.tar.gz
-  $ pushd nds2-client-0.6.5
-  $ ./configure --prefix=/path/to/local && make install
-  $ popd
-
-
-
 Downloading the Software
 ========================
 
