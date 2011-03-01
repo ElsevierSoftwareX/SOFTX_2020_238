@@ -159,7 +159,8 @@ injections/injections%.xml: min_distance max_distance
 		--min-mtotal $(MIN_TOTAL_MASS) \
 		--max-mtotal $(MAX_TOTAL_MASS) \
 		--waveform GeneratePPNtwoPN \
-		--disable-spin
+		--disable-spin \
+		--taper-injection start
 
 
 clean:
