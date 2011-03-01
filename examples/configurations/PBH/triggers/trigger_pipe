@@ -102,6 +102,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		self.add_var_opt("svd-bank", svd_bank)
 		self.add_var_opt("tmp-space", tmp_space)
 		self.add_var_opt("flow", flow)
+		self.add_var_opt("verbose", "") #FIXME remove this when we are done!
 		if injections: self.add_var_opt("injections", injections)
 		path = os.getcwd()
 		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
