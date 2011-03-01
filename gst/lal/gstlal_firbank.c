@@ -139,14 +139,19 @@ static guint64 minimum_input_length(const GSTLALFIRBank *element, guint64 n)
 
 static int push_zeros(GSTLALFIRBank *element, unsigned samples)
 {
-	GstBuffer *zerobuf = gst_buffer_new_and_alloc(samples * sizeof(double));
-	if(!zerobuf) {
-		GST_DEBUG_OBJECT(element, "failure allocating zero-pad buffer");
-		return -1;
+	GstBuffer *zerobuf;
+
+	if(samples) {
+		zerobuf = gst_buffer_new_and_alloc(samples * sizeof(double));
+		if(!zerobuf) {
+			GST_DEBUG_OBJECT(element, "failure allocating zero-pad buffer");
+			return -1;
+		}
+		memset(GST_BUFFER_DATA(zerobuf), 0, GST_BUFFER_SIZE(zerobuf));
+		gst_adapter_push(element->adapter, zerobuf);
+		element->zeros_in_adapter += samples;
 	}
-	memset(GST_BUFFER_DATA(zerobuf), 0, GST_BUFFER_SIZE(zerobuf));
-	gst_adapter_push(element->adapter, zerobuf);
-	element->zeros_in_adapter += samples;
+
 	return 0;
 }
 
@@ -273,6 +278,20 @@ static void free_fft_workspace(GSTLALFIRBank *element)
  */
 
 
+static unsigned td_output_length(const GSTLALFIRBank *element, unsigned available_length)
+{
+	/*
+	 * how many samples can we construct from the contents of the
+	 * adapter?  the +1 is because when there is 1 FIR-length of data
+	 * in the adapter then we can produce 1 output sample, not 0.
+	 */
+
+	if(available_length < fir_length(element))
+		return 0;
+	return available_length - fir_length(element) + 1;
+}
+
+
 static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned available_length)
 {
 	unsigned i;
@@ -282,13 +301,10 @@ static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ava
 
 	/*
 	 * how many samples can we construct from the contents of the
-	 * adapter?  the +1 is because when there is 1 FIR-length of data
-	 * in the adapter then we can produce 1 output sample, not 0.
+	 * adapter?
 	 */
 
-	if(available_length < fir_length(element))
-		return 0;
-	output_length = available_length - fir_length(element) + 1;
+	output_length = td_output_length(element, available_length);
 
 	g_assert(GST_BUFFER_SIZE(outbuf) >= output_length * fir_channels(element) * sizeof(double));
 
@@ -536,7 +552,7 @@ static GstFlowReturn filter(GSTLALFIRBank *element, GstBuffer *outbuf)
  */
 
 
-GstFlowReturn filter_and_push(GSTLALFIRBank *element, guint64 length)
+static GstFlowReturn filter_and_push(GSTLALFIRBank *element, guint64 length)
 {
 	GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
 	GstBuffer *buf;
@@ -548,6 +564,94 @@ GstFlowReturn filter_and_push(GSTLALFIRBank *element, guint64 length)
 	result = filter(element, buf);
 	g_assert(result == GST_FLOW_OK);
 	return gst_pad_push(srcpad, buf);
+}
+
+
+/*
+ * flush the remaining contents of the adapter.  e.g., at EOS, etc.
+ */
+
+
+static GstFlowReturn flush_history(GSTLALFIRBank *element)
+{
+	unsigned available_length;
+	unsigned padding;
+	unsigned output_length;
+	unsigned final_gap_length;
+	GstFlowReturn result = GST_FLOW_OK;
+
+	/*
+	 * in time-domain mode, there's never enough stuff left in the
+	 * adpater, after an invocation of the transform() method, to
+	 * produce any more output data.
+	 */
+
+	if(element->time_domain)
+		goto done;
+
+	/*
+	 * in frequency-domain mode, there's never enough stuff left in the
+	 * adapter, after an invocation of the transform() method, to
+	 * process one full FFT block-length, but there can be enough in
+	 * the adapter to produce at least some samples of output.  figure
+	 * out how many samples are in the adpater, how many output samples
+	 * we can generate, how many zeros need to be pushed into the
+	 * adpater to pad it to a full FFT block-length
+	 */
+
+	available_length = get_available_samples(element);
+
+	output_length = td_output_length(element, available_length);
+	if(output_length <= 0)
+		/* not enough, infact, to generate any output */
+		goto done;
+	final_gap_length = element->zeros_in_adapter >= fir_length(element) ? element->zeros_in_adapter - fir_length(element) + 1 : 0;
+
+	/* sanity checks */
+	g_assert(available_length <= fft_block_length(element));
+	g_assert(output_length <= fft_block_stride(element));
+	g_assert(final_gap_length <= output_length);
+
+	padding = fft_block_length(element) - available_length;
+
+	/*
+	 * push enough zeros to pad to an FFT block boundary
+	 */
+
+	if(push_zeros(element, padding) < 0) {
+		GST_DEBUG_OBJECT(element, "failure padding to FFT block boundary");
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+
+	/*
+	 * process contents
+	 */
+
+	result = filter_and_push(element, output_length - final_gap_length);
+	if(result != GST_FLOW_OK)
+		goto done;
+	if(final_gap_length) {
+		GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
+		GstBuffer *buf;
+
+		result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, final_gap_length * fir_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
+		if(result != GST_FLOW_OK)
+			goto done;
+
+		memset(GST_BUFFER_DATA(buf), 0, GST_BUFFER_SIZE(buf));
+		set_metadata(element, buf, final_gap_length, TRUE);
+		result = gst_pad_push(srcpad, buf);
+	}
+
+	/*
+	 * done.  discard the adapter's contents regardless of success
+	 */
+
+done:
+	gst_adapter_clear(element->adapter);
+	element->zeros_in_adapter = 0;
+	return result;
 }
 
 
@@ -853,6 +957,8 @@ static gboolean stop(GstBaseTransform *trans)
 
 static gboolean event(GstBaseTransform *trans, GstEvent *event)
 {
+	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
+
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT: {
 		gboolean update;
@@ -869,6 +975,15 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 		gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(trans), event);
 		return FALSE;
 	}
+
+	case GST_EVENT_EOS:
+		/*
+		 * end-of-stream:  finish processing adapter's contents
+		 */
+
+		if(flush_history(element) != GST_FLOW_OK)
+			GST_WARNING_OBJECT(element, "unable to process internal history, some data at end of stream has been discarded");
+		return TRUE;
 
 	default:
 		return TRUE;
@@ -908,7 +1023,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	if(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0)) {
 		/*
-		 * flush adapter
+		 * clear adapter
 		 */
 
 		gst_adapter_clear(element->adapter);
