@@ -345,7 +345,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		# because streaming can begin through the downstream adders without
 		# waiting for input from all upstream elements.
 
-		"queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": gst.SECOND},
+		"queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": 2 * gst.SECOND},
 
 		#
 		# reconstruct physical SNRs
@@ -365,9 +365,8 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	)
 
 
-	mkelems_fast(pipeline, src, "queue")[-1].link_pads("src", elems[0], "sink")
-	mkelems_fast(pipeline, control_src, "queue")[-1].link_pads("src", elems[0], "control")
-
+	mkelems_fast(pipeline, src, "queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": 5 * gst.SECOND})[-1].link_pads("src", elems[0], "sink")
+	mkelems_fast(pipeline, control_src, "queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": 1 * gst.SECOND})[-1].link_pads("src", elems[0], "control")
 
 	#
 	# done
