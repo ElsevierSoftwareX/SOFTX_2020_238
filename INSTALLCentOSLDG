@@ -22,8 +22,6 @@ GStreamer and so requires all of those tools to be installed, including the
 normally optional development-related components.  Once the dependencies are 
 installed, the installation of gstlal itself should be very simple.  
 The LDG clusters have the dependencies installed in /opt/lscsoft/gst. 
-These instructions
-
 
 
 Preparing the Filesystem
