@@ -80,7 +80,6 @@ home directory that links against the proper system software with::
 
   $ cd /path/to/local/
   $ cat >environment.sh <<_EOF_
-  #!/bin/bash
 
   # NOTICE: Here is an environment script that is presented in the hope that it
   # will be useful Please do not just blindy copy it, as you may want to modify
