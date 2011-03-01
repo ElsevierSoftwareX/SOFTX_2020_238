@@ -2,6 +2,14 @@
 gstlal Installation Instructions
 ================================
 
+------------
+CentOS 5 LDG
+------------
+
+
+.. WARNING:: These are **experimental** installation instructions for
+             **CentOS 5 LDG ONLY**.
+
 
 .. contents:: Table of Contents
 
