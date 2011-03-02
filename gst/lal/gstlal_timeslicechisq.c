@@ -162,9 +162,17 @@ static gboolean setcaps_snr(GstPad *pad, GstCaps *caps)
 	gint rate, width, channels;
 	gboolean success = TRUE;
 
+	GST_LOG_OBJECT(element, "setting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME (pad), caps);
+
 	/*
 	 * parse the caps
 	 */
+
+	/* FIXME, see if the timeslicessnrpad can accept the format. Also lock the
+	 * format on the other pads to this new format. */
+//	GST_OBJECT_LOCK(element);
+//	gst_caps_replace(&GST_PAD_CAPS(element->timeslicesnrpad), caps);
+//	GST_OBJECT_UNLOCK(element);
 
 	GST_DEBUG_OBJECT(element, "(%s) trying %" GST_PTR_FORMAT "\n", GST_PAD_NAME(pad), caps);
 	structure = gst_caps_get_structure(caps, 0);
@@ -174,7 +182,7 @@ static gboolean setcaps_snr(GstPad *pad, GstCaps *caps)
 		success = FALSE;
 	if(!gst_structure_get_int(structure, "channels", &channels))
 		success = FALSE;
-	GST_DEBUG_OBJECT(element, "(%s) %" GST_PTR_FORMAT " parse %s\n", GST_PAD_NAME(pad), caps, success ? "OK" : "FAILED");
+
 
 	/*
 	 * if we have a chifacs, the number of channels must match the length
@@ -248,30 +256,21 @@ static GstCaps *getcaps_timeslicesnr(GstPad *pad)
 	caps = gst_pad_get_fixed_caps_func(pad);
 
 	/*
-	 * intersect with the downstream peer's caps if known.  if we have a
-	 * chifacs, use it to set the number of time-slice SNR channels,
-	 * otherwise allow any number
+	 * intersect with the downstream peer's caps if known.
 	 */
 
-	g_mutex_lock(element->coefficients_lock);
 	peercaps = gst_pad_peer_get_caps(element->srcpad);
 	if(peercaps) {
 		GstCaps *result;
 		guint n;
 
-		if(element->chifacs) {
-			for(n = 0; n < gst_caps_get_size(peercaps); n++)
-				gst_structure_set(gst_caps_get_structure(peercaps, n), "channels", G_TYPE_INT, num_channels(element), NULL);
-		} else {
-			for(n = 0; n < gst_caps_get_size(peercaps); n++)
-				gst_structure_remove_field(gst_caps_get_structure(peercaps, n), "channels");
-		}
+		for(n = 0; n < gst_caps_get_size(peercaps); n++)
+			gst_structure_remove_field(gst_caps_get_structure(peercaps, n), "channels");
 		result = gst_caps_intersect(peercaps, caps);
 		gst_caps_unref(caps);
 		gst_caps_unref(peercaps);
 		caps = result;
 	}
-	g_mutex_unlock(element->coefficients_lock);
 	GST_OBJECT_UNLOCK(element);
 
 	/*
@@ -300,6 +299,13 @@ static gboolean setcaps_timeslicesnr(GstPad *pad, GstCaps *caps)
 	 * parse the caps
 	 */
 
+	/* FIXME, see if the timeslicessnrpad can accept the format. Also lock the
+	 * format on the other pads to this new format. */
+//	GST_OBJECT_LOCK(element);
+//	gst_caps_replace(&GST_PAD_CAPS(element->snrpad), caps);
+//	GST_OBJECT_UNLOCK(element);
+
+	GST_DEBUG_OBJECT(element, "(%s) trying %" GST_PTR_FORMAT "\n", GST_PAD_NAME(pad), caps);
 	structure = gst_caps_get_structure(caps, 0);
 	if(!gst_structure_get_int(structure, "rate", &rate))
 		success = FALSE;
@@ -568,9 +574,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		 */
 
 		if(num_channels(element) != channels) {
-			/* FIXME:  is this right? */
-			setcaps_timeslicesnr(element->timeslicesnrpad, NULL);
-			setcaps_snr(element->snrpad, NULL);
+			/* FIXME:  what do we do here? */
 		}
 
 		/*
