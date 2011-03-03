@@ -365,7 +365,6 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	del bank_fragment.orthogonal_template_bank
 	del bank_fragment.sum_of_squares_weights
 	del bank_fragment.mix_matrix
-	
 
 
 	return elems[-1]
@@ -414,7 +413,7 @@ def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbo
 			int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),
 			int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate)))
 		)
-	
+
 		elems = mkelems_fast(pipeline,
 			branch_snr,
 			"audioresample", {"quality": 4},
