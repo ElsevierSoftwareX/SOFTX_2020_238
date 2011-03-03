@@ -109,10 +109,12 @@ tmpltbank/tmpltbank.xml: $(TMPLTBANK)
 	gstlal_prune_duplicate_mass_pairs $^ $@
 
 
-# Read and sort effective distances for entire template bank
+# Read and sort effective distances for entire template bank.
+# FIXME: masses to scan from summ_value table are hard coded!
 eff_distances: tmpltbank/tmpltbank.xml
-	ligolw_print --table summ_value --column name --column value $< \
+	ligolw_print -t summ_value -c name -c comment -c value $< \
 	| sed -n s/inspiral_effective_distance,//p \
+	| sed -n "s/[1-3]\.00_[1-3]\.00.*,//p" \
 	| sort -n > $@
 
 
@@ -129,7 +131,7 @@ min_distance: eff_distances candle_snr
 
 # Determine maximum distance for injections
 max_distance: eff_distances candle_snr
-	echo "print 0.1 * $(shell cat candle_snr) / 5.5 * $(shell tail -n 1 eff_distances) * 1e3" | python > $@
+	echo "print 0.25 * $(shell cat candle_snr) / 5.5 * $(shell tail -n 1 eff_distances) * 1e3" | python > $@
 
 
 # Generate software injections
@@ -157,7 +159,8 @@ injections/injections%.xml: min_distance max_distance
 		--min-mtotal $(MIN_TOTAL_MASS) \
 		--max-mtotal $(MAX_TOTAL_MASS) \
 		--waveform GeneratePPNtwoPN \
-		--disable-spin
+		--disable-spin \
+		--taper-injection start
 
 
 clean:

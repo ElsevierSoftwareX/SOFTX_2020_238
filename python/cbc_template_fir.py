@@ -102,7 +102,7 @@ def interpolate_psd(psd, deltaF):
 	psd_data = numpy.where(psd_data, psd_data, 1e-300)
 	f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
 	interp = interpolate.splrep(f, numpy.log(psd_data), s = 0)
-	f = psd.f0 + numpy.arange(round(len(psd_data) * psd.deltaF / deltaF)) * deltaF
+	f = psd.f0 + numpy.arange(round((len(psd_data) - 1) * psd.deltaF / deltaF) + 1) * deltaF
 	psd_data = numpy.exp(interpolate.splev(f, interp, der = 0))
 
 	#
@@ -229,9 +229,16 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		# is 2
 		#
 
-		sigma = abs(numpy.dot(data, numpy.conj(data)))
-		data *= cmath.sqrt(2 / sigma)
-		sigmasq.append(2. * sigma)
+		norm = abs(numpy.dot(data, numpy.conj(data)))
+		data *= cmath.sqrt(2 / norm)
+
+		#
+		# definition of sigmasq is:
+		# sigmasq = \int h(t) h^*(t) dt
+		# the norm we have computed so far is missing 2*dt
+		#
+
+		sigmasq.append(2. * norm / sample_rate_max)
 
 		#
 		# copy real and imaginary parts into adjacent (real-valued)
