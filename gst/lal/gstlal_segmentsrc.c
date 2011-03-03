@@ -76,7 +76,7 @@ enum property {
 static void set_property(GObject *object, enum property prop_id, const GValue *value, GParamSpec *pspec)
 {
     GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(object);
-    
+
     GST_OBJECT_LOCK(element);
 
     switch (prop_id) {
@@ -92,7 +92,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
     GST_OBJECT_UNLOCK(element);
 }
-        
+
 
 /*
  * get_property()
@@ -101,7 +101,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 static void get_property(GObject *object, enum property prop_id, GValue *value, GParamSpec *pspec)
 {
     GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(object);
-    
+
     GST_OBJECT_LOCK(element);
 
     switch (prop_id) {
