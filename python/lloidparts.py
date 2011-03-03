@@ -332,7 +332,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# use sum-of-squares aggregate as gate control for orthogonal SNRs
 	#
 
-	elems = mkelems_fast(pipeline,
+	matmixelems = mkelems_fast(pipeline,
 		"lal_gate", {"threshold": bank.gate_threshold, "attack-length": gate_attack_length, "hold-length": gate_hold_length},
 		"lal_checktimestamps", {"name": "timestamps_%s_after_gate" % logname},
 
@@ -352,6 +352,10 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		#
 
 		"lal_matrixmixer", {"matrix": bank_fragment.mix_matrix},
+	)
+
+	elems = mkelems_fast(pipeline,
+		matmixelems[-1],
 		"audioresample", {"quality": 4},
 		"lal_nofakedisconts", {"silent": True}, # FIXME:  remove after basetransform behaviour fixed
 		"lal_checktimestamps", {"name": "timestamps_%s_after_snr_resampler" % logname},
@@ -365,8 +369,8 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	)
 
 
-	mkelems_fast(pipeline, src, "queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": 5 * gst.SECOND})[-1].link_pads("src", elems[0], "sink")
-	mkelems_fast(pipeline, control_src, "queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": 1 * gst.SECOND})[-1].link_pads("src", elems[0], "control")
+	mkelems_fast(pipeline, src, "queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": 5 * gst.SECOND})[-1].link_pads("src", matmixelems[0], "sink")
+	mkelems_fast(pipeline, control_src, "queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": 1 * gst.SECOND})[-1].link_pads("src", matmixelems[0], "control")
 
 	#
 	# done
