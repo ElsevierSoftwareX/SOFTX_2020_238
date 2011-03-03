@@ -58,7 +58,8 @@ GST_BOILERPLATE(
 );
 
 enum property {
-    ARG_SEGMENT_LIST = 1
+    ARG_SEGMENT_LIST = 1,
+    ARG_INVERT_OUTPUT
 };
 
 /*
@@ -84,6 +85,9 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
             g_value_array_free(element->segment_list);
             element->segment_list = g_value_get_boxed(value);
             break;
+        case ARG_INVERT_OUTPUT:
+            element->invert_output = g_value_get_boolean(value);
+            break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
             break;
@@ -107,6 +111,9 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
     switch (prop_id) {
         case ARG_SEGMENT_LIST:
             g_value_set_boxed(value, element->segment_list);
+            break;
+        case ARG_INVERT_OUTPUT:
+            g_value_set_boolean(value, element->invert_output);
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -188,6 +195,18 @@ static void gstlal_segmentsrc_class_init(GSTLALSegmentSrcClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+
+    g_object_class_install_property(
+        gobject_class,
+        ARG_INVERT_OUTPUT,
+        g_param_spec_boolean(
+            "invert-output",
+            "Invert output",
+            "False = output is high in segments (default), True = output is low in segments",
+            FALSE,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+        )
+    );
 }
 
 

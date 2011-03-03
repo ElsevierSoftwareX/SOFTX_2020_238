@@ -26,7 +26,7 @@ typedef struct {
     GstBaseSrc          element;
 
     GValueArray         *segment_list;
-
+    gboolean            invert_output;
 } GSTLALSegmentSrc;
 
 GType gstlal_segmentsrc_get_type(void);
