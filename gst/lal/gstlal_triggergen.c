@@ -577,13 +577,13 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 
 		length = MIN(GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf));
 		if(GST_BUFFER_TIMESTAMP(snrbuf) > GST_BUFFER_TIMESTAMP(chisqbuf)) {
-			length -= t0 = GST_BUFFER_TIMESTAMP(snrbuf);
+			t0 = GST_BUFFER_TIMESTAMP(snrbuf);
 			chisqdata += gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(snrbuf) - GST_BUFFER_TIMESTAMP(chisqbuf), element->rate, GST_SECOND) * element->num_templates;
 		} else {
-			length -= t0 = GST_BUFFER_TIMESTAMP(chisqbuf);
+			t0 = GST_BUFFER_TIMESTAMP(chisqbuf);
 			snrdata += gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(chisqbuf) - GST_BUFFER_TIMESTAMP(snrbuf), element->rate, GST_SECOND) * element->num_templates;
 		}
-		length = gst_util_uint64_scale_int_round(length, element->rate, GST_SECOND);
+		length = gst_util_uint64_scale_int_round(length > t0 ? length - t0 : 0, element->rate, GST_SECOND);
 
 		GST_DEBUG_OBJECT(element, "searching %" G_GUINT64_FORMAT " samples at %" GST_TIME_SECONDS_FORMAT " for events", length, GST_TIME_SECONDS_ARGS(t0));
 		g_mutex_lock(element->bank_lock);
