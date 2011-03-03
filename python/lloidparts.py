@@ -381,7 +381,6 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 
 def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbose = False, nxydump_segment = None):
 	"""Build pipeline fragment that converts h(t) to SNR."""
-	# FIXME: The last two parameters are either used only for logging, or only in commented out code.
 
 	logname = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 
