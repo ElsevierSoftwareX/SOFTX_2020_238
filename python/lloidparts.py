@@ -332,7 +332,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# use sum-of-squares aggregate as gate control for orthogonal SNRs
 	#
 
-	matmixelems = mkelems_fast(pipeline,
+	elems = mkelems_fast(pipeline,
 		"lal_gate", {"threshold": bank.gate_threshold, "attack-length": gate_attack_length, "hold-length": gate_hold_length},
 		"lal_checktimestamps", {"name": "timestamps_%s_after_gate" % logname},
 
@@ -354,23 +354,8 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		"lal_matrixmixer", {"matrix": bank_fragment.mix_matrix},
 	)
 
-	elems = mkelems_fast(pipeline,
-		matmixelems[-1],
-		"audioresample", {"quality": 4},
-		"lal_nofakedisconts", {"silent": True}, # FIXME:  remove after basetransform behaviour fixed
-		"lal_checktimestamps", {"name": "timestamps_%s_after_snr_resampler" % logname},
-
-		# This queue permits all of the SNR reconstruction stages (constisting
-		# of the lal_matrixmixer and audioresample above) to run in parallel,
-		# possibly providing significant speedup if multiple cores are available.
-		# This may increase peak memory use.
-
-		"queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": gst.SECOND},
-	)
-
-
-	mkelems_fast(pipeline, src, "queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": 5 * gst.SECOND})[-1].link_pads("src", matmixelems[0], "sink")
-	mkelems_fast(pipeline, control_src, "queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": 1 * gst.SECOND})[-1].link_pads("src", matmixelems[0], "control")
+	mkelems_fast(pipeline, src, "queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": 5 * gst.SECOND})[-1].link_pads("src", elems[0], "sink")
+	mkelems_fast(pipeline, control_src, "queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": 1 * gst.SECOND})[-1].link_pads("src", elems[0], "control")
 
 	#
 	# done
@@ -380,6 +365,9 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	del bank_fragment.orthogonal_template_bank
 	del bank_fragment.sum_of_squares_weights
 	del bank_fragment.mix_matrix
+	
+
+
 	return elems[-1]
 
 
@@ -407,6 +395,7 @@ def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbo
 	#
 
 	for bank_fragment in bank.bank_fragments:
+		logname = "%s_%d_%d" % (bank.logname, bank_fragment.start, bank_fragment.end)
 		branch_snr = mkLLOIDbranch(
 			pipeline,
 			# FIXME:  the size isn't ideal:  the correct value
@@ -425,9 +414,23 @@ def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbo
 			int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),
 			int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate)))
 		)
+	
+		elems = mkelems_fast(pipeline,
+			branch_snr,
+			"audioresample", {"quality": 4},
+			"lal_nofakedisconts", {"silent": True}, # FIXME:  remove after basetransform behaviour fixed
+			"lal_checktimestamps", {"name": "timestamps_%s_after_snr_resampler" % logname},
+
+			# This queue permits all of the SNR reconstruction stages (constisting
+			# of the lal_matrixmixer and audioresample above) to run in parallel,
+			# possibly providing significant speedup if multiple cores are available.
+			# This may increase peak memory use.
+
+			"queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": gst.SECOND},
+		)
 		#branch_snr = pipeparts.mktee(pipeline, branch_snr)
 		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, branch_snr), "snr_%s_%02d.dump" % (logname, bank_fragment.start), segment = nxydump_segment)
-		branch_snr.link(snr)
+		elems[-1].link(snr)
 
 	#
 	# snr
