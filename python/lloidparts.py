@@ -393,9 +393,11 @@ def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbo
 	# loop over template bank slices
 	#
 
+	branch_heads = {}
 	for bank_fragment in bank.bank_fragments:
-		logname = "%s_%d_%d" % (bank.logname, bank_fragment.start, bank_fragment.end)
-		branch_snr = mkLLOIDbranch(
+		if bank_fragment.rate not in branch_heads:
+			branch_heads[bank_fragment.rate] = set()
+		branch_heads[bank_fragment.rate].add(mkLLOIDbranch(
 			pipeline,
 			# FIXME:  the size isn't ideal:  the correct value
 			# depends on how much data is accumulated in the
@@ -412,24 +414,36 @@ def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbo
 			control_snksrc,
 			int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),
 			int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate)))
-		)
+		))
 
-		elems = mkelems_fast(pipeline,
-			branch_snr,
-			"audioresample", {"quality": 4},
-			"lal_nofakedisconts", {"silent": True}, # FIXME:  remove after basetransform behaviour fixed
-			"lal_checktimestamps", {"name": "timestamps_%s_after_snr_resampler" % logname},
+	#
+	# sum snrs with common sample rates
+	#
 
-			# This queue permits all of the SNR reconstruction stages (constisting
-			# of the lal_matrixmixer and audioresample above) to run in parallel,
-			# possibly providing significant speedup if multiple cores are available.
-			# This may increase peak memory use.
+	for rate, heads in branch_heads.items():
+		#
+		# hook matrix mixers to an adder
+		#
 
-			"queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": gst.SECOND},
-		)
-		#branch_snr = pipeparts.mktee(pipeline, branch_snr)
-		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, branch_snr), "snr_%s_%02d.dump" % (logname, bank_fragment.start), segment = nxydump_segment)
-		elems[-1].link(snr)
+		branchsnr = mkelems_fast(pipeline, "lal_adder", {"sync": True})[-1]
+		for head in heads:
+			pipeparts.mkqueue(pipeline, head, max_size_time = gst.SECOND).link(branchsnr)
+
+		#
+		# resample
+		#
+
+		branchsnr = pipeparts.mknofakedisconts(pipeline, pipeparts.mkresample(pipeline, branchsnr, quality = 4))
+		#logname = "%s_%d_%d" % (bank.logname, bank_fragment.start, bank_fragment.end)
+		#branchsnr = pipeparts.mkchecktimestamps(pipeline, branchsnr, "timestamps_%s_after_snr_resampler" % logname)
+
+		#
+		# hook resampler to all-branch adder
+		#
+
+		#branchsnr = pipeparts.mktee(pipeline, branchsnr)
+		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, branchsnr), "snr_%s_%02d.dump" % (logname, bank_fragment.start), segment = nxydump_segment)
+		branchsnr = pipeparts.mkqueue(pipeline, branchsnr, max_size_time = gst.SECOND).link(snr)
 
 	#
 	# snr
