@@ -62,6 +62,205 @@ enum property {
     ARG_INVERT_OUTPUT
 };
 
+
+/*
+ * ============================================================================
+ *
+ *                        GstBaseSrc Method Overrides
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * start()
+ */
+
+
+static gboolean start(GstBaseSrc *object)
+{
+    GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(object);
+
+    return TRUE;
+}
+
+
+/*
+ * stop()
+ */
+
+
+static gboolean stop(GstBaseSrc *object)
+{
+    GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(object);
+
+    return TRUE;
+}
+
+
+/*
+ * create()
+ */
+
+
+static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
+{
+    GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
+    GstFlowReturn result;
+
+
+    return GST_FLOW_OK;
+}
+
+
+/*
+ * is_seekable()
+ */
+
+
+static gboolean is_seekable(GstBaseSrc *object)
+{
+    return TRUE;
+}
+
+
+/*
+ * do_seek()
+ */
+
+
+static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
+{
+    GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
+    GstClockTime epoch;
+
+    /*
+     * Parse the segment
+     */
+
+    if((GstClockTime) segment->start == GST_CLOCK_TIME_NONE) {
+        GST_ELEMENT_ERROR(element, RESOURCE, SEEK, ("seek failed:  start time is required"), (NULL));
+        return FALSE;
+    }
+    epoch = segment->start;
+
+    /*
+     * Try doing the seek
+     */
+
+    /*
+     * Done
+     */
+
+    basesrc->offset = 0;
+    return TRUE;
+}
+
+
+/*
+ * query
+ */
+
+
+static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
+{
+    GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
+
+    /* FIXME:  this is copy-and-pasted from frammesrc and needs to be reworked for this element */
+#if 0
+	switch(GST_QUERY_TYPE(query)) {
+	case GST_QUERY_FORMATS:
+		gst_query_set_formats(query, 5, GST_FORMAT_DEFAULT, GST_FORMAT_BYTES, GST_FORMAT_TIME, GST_FORMAT_BUFFERS, GST_FORMAT_PERCENT);
+		break;
+
+	case GST_QUERY_CONVERT: {
+		GstFormat src_format, dest_format;
+		gint64 src_value, dest_value;
+		guint64 offset;
+
+		gst_query_parse_convert(query, &src_format, &src_value, &dest_format, &dest_value);
+
+		switch(src_format) {
+		case GST_FORMAT_DEFAULT:
+		case GST_FORMAT_TIME:
+			if(src_value < basesrc->segment.start) {
+				GST_DEBUG("requested time precedes start of segment, clipping to start of segment");
+				offset = 0;
+			} else
+				offset = gst_util_uint64_scale_int_round(src_value - basesrc->segment.start, element->rate, GST_SECOND);
+			break;
+
+		case GST_FORMAT_BYTES:
+			offset = src_value / (element->width / 8);
+			break;
+
+		case GST_FORMAT_BUFFERS:
+			offset = gst_util_uint64_scale_int_round(src_value, gst_base_src_get_blocksize(basesrc), element->width / 8);
+			break;
+
+		case GST_FORMAT_PERCENT:
+			if(src_value < 0) {
+				GST_DEBUG("requested percentage < 0, clipping to 0");
+				offset = 0;
+			} else if(src_value > 100) {
+				GST_DEBUG("requested percentage > 100, clipping to 100");
+				offset = basesrc->segment.stop - basesrc->segment.start;
+			} else
+				offset = gst_util_uint64_scale_int_round(basesrc->segment.stop - basesrc->segment.start, src_value, 100);
+			offset = gst_util_uint64_scale_int_round(offset, element->rate, GST_SECOND);
+			break;
+
+		default:
+			g_assert_not_reached();
+			return FALSE;
+		}
+		switch(dest_format) {
+		case GST_FORMAT_DEFAULT:
+		case GST_FORMAT_TIME:
+			dest_value = basesrc->segment.start + gst_util_uint64_scale_int_round(offset, GST_SECOND, element->rate);
+			break;
+
+		case GST_FORMAT_BYTES:
+			dest_value = offset * (element->width / 8);
+			break;
+
+		case GST_FORMAT_BUFFERS:
+			dest_value = gst_util_uint64_scale_int_ceil(offset, element->width / 8, gst_base_src_get_blocksize(basesrc));
+			break;
+
+		case GST_FORMAT_PERCENT:
+			dest_value = gst_util_uint64_scale_int_round(offset, 100, gst_util_uint64_scale_int_round(basesrc->segment.stop - basesrc->segment.start, element->rate, GST_SECOND));
+			break;
+
+		default:
+			g_assert_not_reached();
+			return FALSE;
+		}
+
+		gst_query_set_convert(query, src_format, src_value, dest_format, dest_value);
+
+		break;
+	}
+
+	default:
+		return parent_class->query(basesrc, query);
+	}
+#endif
+
+	return TRUE;
+}
+
+
+/*
+ * check_get_range()
+ */
+
+
+static gboolean check_get_range(GstBaseSrc *basesrc)
+{
+	return TRUE;
+}
+
 /*
  * ============================================================================
  *
@@ -167,6 +366,7 @@ static void gstlal_segmentsrc_base_init(gpointer gclass)
 static void gstlal_segmentsrc_class_init(GSTLALSegmentSrcClass *klass)
 {
     GObjectClass        *gobject_class = G_OBJECT_CLASS(klass);
+    GstBaseSrcClass *gstbasesrc_class = GST_BASE_SRC_CLASS(klass);
 
     gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
     gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
@@ -207,6 +407,18 @@ static void gstlal_segmentsrc_class_init(GSTLALSegmentSrcClass *klass)
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
         )
     );
+
+    /*
+     * GstBaseSrc method overrides
+     */
+
+    gstbasesrc_class->start = GST_DEBUG_FUNCPTR(start);
+    gstbasesrc_class->stop = GST_DEBUG_FUNCPTR(stop);
+    gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
+    gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
+    gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
+    gstbasesrc_class->query = GST_DEBUG_FUNCPTR(query);
+    gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
 }
 
 
