@@ -59,7 +59,9 @@ class lal_checktimestamps(gst.BaseTransform):
 			gobject.TYPE_UINT64,
 			"timestamp fuzz",
 			"Number of nanoseconds of timestamp<-->offset discrepancy to accept before reporting it.  Timestamp<-->offset discrepancies of 1/2 a sample or more are always reported.",
-			0, gobject.G_MAXUINT64, 1,
+			# FIXME:  why isn't G_MAXUINT64 defined in 2.18?
+			#0, gobject.G_MAXUINT64, 1,
+			0, 18446744073709551615L, 1,
 			gobject.PARAM_WRITABLE | gobject.PARAM_CONSTRUCT
 		)
 	}
