@@ -45,7 +45,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
         "channels = (int) 1, " \
         "endianness = (int) BYTE_ORDER, " \
         "width = (int) 8," \
-        "depth = (int) 1," \
+        "depth = (int) 8," \
         "signed = false"
     )
 );
@@ -61,6 +61,30 @@ enum property {
     ARG_SEGMENT_LIST = 1,
     ARG_INVERT_OUTPUT
 };
+
+
+
+static GstCaps *segments_to_caps(gint rate)
+{
+    GstCaps *caps;
+
+    /* 
+     * FIXME, it would be nice to get say, the rate from the segments...
+     * but that seems hard.  So for now everything is hardcoded
+     */ 
+
+    caps = gst_caps_new_simple(
+        "audio/x-raw-int",
+        "rate", G_TYPE_INT, rate,
+        "channels", G_TYPE_INT, 1,
+        "endianness", G_TYPE_INT, G_BYTE_ORDER,
+        "width", G_TYPE_INT, 8,
+        "depth", G_TYPE_INT, 8,
+	"signed", G_TYPE_BOOLEAN, FALSE,
+        NULL
+    );
+    return caps;
+}
 
 
 /*
@@ -80,7 +104,21 @@ enum property {
 static gboolean start(GstBaseSrc *object)
 {
     GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(object);
+    GstCaps *caps = segments_to_caps(element->rate);
 
+    /*
+     * Try to set the caps, right now only one choice
+     */
+
+    if(!gst_pad_set_caps(GST_BASE_SRC_PAD(object), caps)) {
+        gst_caps_unref(caps);
+        GST_ERROR_OBJECT(element, "unable to set caps %" GST_PTR_FORMAT " on %s", 
+                         caps, GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
+        return FALSE;
+    }
+
+    gst_caps_unref(caps);
+ 
     return TRUE;
 }
 
@@ -92,22 +130,86 @@ static gboolean start(GstBaseSrc *object)
 
 static gboolean stop(GstBaseSrc *object)
 {
-    GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(object);
+    //GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(object);
 
     return TRUE;
 }
 
 
+static guint sample_size(GstBaseSrc *basesrc)
+{
+    //GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
+    return 8; /* FIXME The only width supported, unsigned char */
+}
+
 /*
  * create()
  */
 
+static int mark_segments(GstBaseSrc *basesrc, GstBuffer *buffer)
+{
+    //GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
+    return 0;
+}
 
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
     GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
     GstFlowReturn result;
+    gulong blocksize = gst_base_src_get_blocksize(basesrc);
+    guint samplesize = sample_size(basesrc);
+    guint64 numsamps = blocksize / samplesize;
 
+    /*
+     * Bail if the requested block size doesn't correspond to integer samples 
+     */
+
+    if (blocksize % samplesize) {
+        GST_ERROR_OBJECT(element,
+            "block size %lu is not an integer multiple of the sample size %lu",
+            blocksize, samplesize);
+        return GST_FLOW_ERROR;
+    }
+
+    /*
+     * Allocate the buffer of ones or zeros depending on the invert property
+     */
+
+    result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, blocksize, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
+
+    if (element->invert_output)
+        memset(GST_BUFFER_DATA(*buffer), 0, blocksize);
+    else {
+        /*FIXME don't assume char in long run */
+        guint8 * d = (guint8 *) GST_BUFFER_DATA(*buffer);
+        /* FIXME memset 1 okay? we use unsigned char type */
+        for (int i = 0; i < numsamps; i++) d[i] = G_MAXUINT8;
+    }
+
+    /* 
+     * Mark the buffer according to the segments
+     */
+   
+    mark_segments(basesrc, *buffer);
+
+    /* 
+     * update the offsets, timestamps etc 
+     */
+
+    GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + numsamps;
+
+    GST_BUFFER_TIMESTAMP(*buffer) = basesrc->segment.start
+        + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(*buffer), GST_SECOND, element->rate);
+
+    GST_BUFFER_DURATION(*buffer) = basesrc->segment.start
+        + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(*buffer), GST_SECOND, element->rate)
+        - GST_BUFFER_TIMESTAMP(*buffer);
+
+    /* FIXME Huh? */
+    if(basesrc->offset == 0)
+        GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
+
+    basesrc->offset += numsamps;
 
     return GST_FLOW_OK;
 }
@@ -417,7 +519,8 @@ static void gstlal_segmentsrc_class_init(GSTLALSegmentSrcClass *klass)
     gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
     gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR(is_seekable);
     gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR(do_seek);
-    gstbasesrc_class->query = GST_DEBUG_FUNCPTR(query);
+    /* FIXME, write a proper query function */
+    /* gstbasesrc_class->query = GST_DEBUG_FUNCPTR(query); */
     gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
 }
 
@@ -429,4 +532,5 @@ static void gstlal_segmentsrc_class_init(GSTLALSegmentSrcClass *klass)
 static void gstlal_segmentsrc_init(GSTLALSegmentSrc *segment_src, GSTLALSegmentSrcClass *klass)
 {
     segment_src->segment_list = g_value_array_new(0);
+    segment_src->rate = 128; //FIXME how do I get a sensible rate?
 }
