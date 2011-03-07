@@ -10,6 +10,7 @@
  * stuff from the C library
  */
 
+#include <string.h>
 
 /*
  * stuff from gobject/gstreamer
@@ -180,9 +181,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
     if (element->invert_output)
         memset(GST_BUFFER_DATA(*buffer), 0, blocksize);
     else {
-        /*FIXME don't assume char in long run */
         guint8 * d = (guint8 *) GST_BUFFER_DATA(*buffer);
-        /* FIXME memset 1 okay? we use unsigned char type */
         for (int i = 0; i < numsamps; i++) d[i] = G_MAXUINT8;
     }
 
@@ -210,6 +209,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 
     basesrc->offset += numsamps;
+    fprintf(stderr, "offset %llu timestamp %llu\n", basesrc->offset, GST_BUFFER_TIMESTAMP(*buffer) / GST_SECOND);
 
     return GST_FLOW_OK;
 }
@@ -255,6 +255,7 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
      */
 
     basesrc->offset = 0;
+    fprintf("offset in doseek %llu\n", basesrc->offset);   
     return TRUE;
 }
 
