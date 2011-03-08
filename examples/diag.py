@@ -4,8 +4,16 @@
 import sys
 
 
-from gstlal.pipeutil import *
+# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require('0.10')
+import gst
 
+from gstlal import pipeutil
 
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import pipeparts
@@ -78,6 +86,16 @@ def test_firbank(pipeline):
 	pipeparts.mknxydumpsink(pipeline, head, "dump_out.txt")
 
 
+def test_segmentsrc(pipeline):
+	elems = []
+	elems.append(pipeutil.mkelem("lal_segmentsrc", {"invert-output":True}))
+	elems.append(pipeutil.mkelem("audioconvert"))
+	elems.append(pipeutil.mkelem("lal_nxydump"))
+	elems.append(pipeutil.mkelem("filesink", {"location":"test.txt"}))
+	for elem in elems: pipeline.add(elem)
+	gst.element_link_many(*elems)
+
+
 #
 # =============================================================================
 #
@@ -112,7 +130,7 @@ mainloop = gobject.MainLoop()
 
 pipeline = gst.Pipeline("diag")
 
-test_histogram(pipeline)
+test_segmentsrc(pipeline)
 
 handler = Handler(mainloop, pipeline)
 
