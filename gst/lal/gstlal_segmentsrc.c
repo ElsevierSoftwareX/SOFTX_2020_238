@@ -72,6 +72,7 @@ static GstCaps *segments_to_caps(gint rate)
     /* 
      * FIXME, it would be nice to get say, the rate from the segments...
      * but that seems hard.  So for now everything is hardcoded
+     * FIXME this function isn't even used yet, we get caps from downstream
      */ 
 
     caps = gst_caps_new_simple(
@@ -104,22 +105,6 @@ static GstCaps *segments_to_caps(gint rate)
 
 static gboolean start(GstBaseSrc *object)
 {
-    GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(object);
-    GstCaps *caps = segments_to_caps(element->rate);
-
-    /*
-     * Try to set the caps, right now only one choice
-     */
-
-    if(!gst_pad_set_caps(GST_BASE_SRC_PAD(object), caps)) {
-        gst_caps_unref(caps);
-        GST_ERROR_OBJECT(element, "unable to set caps %" GST_PTR_FORMAT " on %s", 
-                         caps, GST_PAD_NAME(GST_BASE_SRC_PAD(object)));
-        return FALSE;
-    }
-
-    gst_caps_unref(caps);
- 
     return TRUE;
 }
 
@@ -182,7 +167,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         memset(GST_BUFFER_DATA(*buffer), 0, blocksize);
     else {
         guint8 * d = (guint8 *) GST_BUFFER_DATA(*buffer);
-        for (int i = 0; i < numsamps; i++) d[i] = G_MAXUINT8;
+        for (guint32 i = 0; i < numsamps; i++) d[i] = G_MAXUINT8;
     }
 
     /* 
@@ -209,7 +194,6 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 
     basesrc->offset += numsamps;
-    fprintf(stderr, "offset %llu timestamp %llu\n", basesrc->offset, GST_BUFFER_TIMESTAMP(*buffer) / GST_SECOND);
 
     return GST_FLOW_OK;
 }
@@ -255,7 +239,6 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
      */
 
     basesrc->offset = 0;
-    fprintf("offset in doseek %llu\n", basesrc->offset);   
     return TRUE;
 }
 
@@ -267,7 +250,7 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 
 static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 {
-    GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
+    //GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
 
     /* FIXME:  this is copy-and-pasted from frammesrc and needs to be reworked for this element */
 #if 0
@@ -450,6 +433,36 @@ static void finalize(GObject *object)
 
 
 /*
+ * set_caps()
+ */
+
+
+static gboolean set_caps(GstBaseSrc *src, GstCaps *caps)
+{
+    GSTLALSegmentSrc *element = GSTLAL_SEGMENTSRC(src);
+    GstStructure *s;
+    gint rate;
+    gboolean success = TRUE;
+
+    s = gst_caps_get_structure(caps, 0);
+
+    if(!gst_structure_get_int(s, "rate", &rate)) {
+        GST_DEBUG_OBJECT(element, "unable to parse rate from %" GST_PTR_FORMAT,
+                         caps);
+        success = FALSE;
+    }
+
+    if(success) {
+        if(rate != element->rate)
+		GST_DEBUG_OBJECT(element, "rate changed, but no signal was emitted because it is not implmented: %d -> %d ", element->rate, rate);
+        element->rate = rate;
+    }
+
+	return success;
+}
+
+
+/*
  * base_init()
  */
 
@@ -523,6 +536,7 @@ static void gstlal_segmentsrc_class_init(GSTLALSegmentSrcClass *klass)
     /* FIXME, write a proper query function */
     /* gstbasesrc_class->query = GST_DEBUG_FUNCPTR(query); */
     gstbasesrc_class->check_get_range = GST_DEBUG_FUNCPTR(check_get_range);
+    gstbasesrc_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
 }
 
 
@@ -533,5 +547,5 @@ static void gstlal_segmentsrc_class_init(GSTLALSegmentSrcClass *klass)
 static void gstlal_segmentsrc_init(GSTLALSegmentSrc *segment_src, GSTLALSegmentSrcClass *klass)
 {
     segment_src->segment_list = g_value_array_new(0);
-    segment_src->rate = 128; //FIXME how do I get a sensible rate?
+    segment_src->rate = 0;
 }
