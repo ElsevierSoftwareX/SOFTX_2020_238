@@ -305,7 +305,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 
 	src = mkelems_fast(pipeline,
 		src,
-		"lal_firbank", {"block-length-factor": 40, "latency": -int(round(bank_fragment.start * bank_fragment.rate)) - 1, "fir-matrix": bank_fragment.orthogonal_template_bank},
+		"lal_firbank", {"block-length-factor": 10, "latency": -int(round(bank_fragment.start * bank_fragment.rate)) - 1, "fir-matrix": bank_fragment.orthogonal_template_bank},
 		"lal_nofakedisconts", {"silent": True},
 		"lal_reblock",
 		"tee"
