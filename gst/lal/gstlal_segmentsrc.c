@@ -47,7 +47,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
         "endianness = (int) BYTE_ORDER, " \
         "width = (int) 8," \
         "depth = (int) 8," \
-        "signed = false"
+        "signed = true"
     )
 );
 
@@ -82,7 +82,7 @@ static GstCaps *segments_to_caps(gint rate)
         "endianness", G_TYPE_INT, G_BYTE_ORDER,
         "width", G_TYPE_INT, 8,
         "depth", G_TYPE_INT, 8,
-	"signed", G_TYPE_BOOLEAN, FALSE,
+	"signed", G_TYPE_BOOLEAN, TRUE,
         NULL
     );
     return caps;
@@ -132,9 +132,63 @@ static guint sample_size(GstBaseSrc *basesrc)
  * create()
  */
 
-static int mark_segments(GstBaseSrc *basesrc, GstBuffer *buffer)
+static guint64 round_to_nearest_sample(GstBaseSrc *basesrc, guint64 val)
 {
-    //GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
+    GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
+    return gst_util_uint64_scale_int_round(val, 1, element->rate) * element->rate;
+}
+
+
+static int mark_segment(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, guint64 stop)
+{
+
+    GSTLALSegmentSrc *element = GSTLAL_SEGMENTSRC(basesrc);
+    guint startix, stopix;
+    gint8 *data = NULL;
+
+    if (start > GST_BUFFER_TIMESTAMP(buffer))
+        startix = (start - GST_BUFFER_TIMESTAMP(buffer)) / element->rate;
+    else 
+        startix = 0;
+
+    if (stop > GST_BUFFER_TIMESTAMP(buffer))
+        stopix = (stop - GST_BUFFER_TIMESTAMP(buffer)) / element->rate;
+    else
+        stopix = 0;
+
+    data = (gint8 *) GST_BUFFER_DATA(buffer);
+
+    if (element->invert_output)
+        for (guint32 i = startix; i < stopix; i++) data[i] = 0;
+    else 
+        for (guint32 i = startix; i < stopix; i++) data[i] = G_MAXINT8;
+        
+    return 0;
+}
+
+static int mark_segments(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, guint64 stop)
+{
+    GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
+    GValueArray *va = element->segment_list;
+    if (!va) return 0; /* FIXME handle no segment lists */
+    guint rows = va->n_values;
+    guint64 segstart, segstop;
+    GValueArray *row;
+
+    /* FIXME provide a bailout and a sensible starting point */
+    /* This is ridiculous, but doesn't require sorted or coalesced segments */
+    for (guint i = 0; i < rows; i++) {
+	row = (GValueArray *) g_value_get_boxed(g_value_array_get_nth(va, i));
+        segstart = round_to_nearest_sample(basesrc, g_value_get_int64(g_value_array_get_nth(row, 0)));
+        segstop = round_to_nearest_sample(basesrc, g_value_get_int64(g_value_array_get_nth(row, 1)));
+        if ((segstart >= start) && (segstart < stop) && (segstop < stop))
+            mark_segment(basesrc, buffer, segstart, segstop);
+        if ((segstart >= start) && (segstart < stop) && (segstop >= stop))
+            mark_segment(basesrc, buffer, segstart, stop);
+        if ((segstop >= start) && (segstop < stop) && (segstart < start))
+            mark_segment(basesrc, buffer, start, segstop);
+    }
+	
     return 0;
 }
 
@@ -145,6 +199,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
     gulong blocksize = gst_base_src_get_blocksize(basesrc);
     guint samplesize = sample_size(basesrc);
     guint64 numsamps = blocksize / samplesize;
+    guint64 start, stop;
 
     /*
      * Bail if the requested block size doesn't correspond to integer samples 
@@ -163,18 +218,12 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
     result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, blocksize, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
 
+    gint8 *d = (gint8 *) GST_BUFFER_DATA(*buffer);
     if (element->invert_output)
-        memset(GST_BUFFER_DATA(*buffer), 0, blocksize);
+        for (guint32 i = 0; i < numsamps; i++) d[i] = G_MAXINT8;
     else {
-        guint8 * d = (guint8 *) GST_BUFFER_DATA(*buffer);
-        for (guint32 i = 0; i < numsamps; i++) d[i] = G_MAXUINT8;
+        for (guint32 i = 0; i < numsamps; i++) d[i] = 0;
     }
-
-    /* 
-     * Mark the buffer according to the segments
-     */
-   
-    mark_segments(basesrc, *buffer);
 
     /* 
      * update the offsets, timestamps etc 
@@ -182,12 +231,19 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
     GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + numsamps;
 
-    GST_BUFFER_TIMESTAMP(*buffer) = basesrc->segment.start
+    start = GST_BUFFER_TIMESTAMP(*buffer) = basesrc->segment.start
         + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(*buffer), GST_SECOND, element->rate);
+    
+    stop = basesrc->segment.start
+        + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(*buffer), GST_SECOND, element->rate);
 
-    GST_BUFFER_DURATION(*buffer) = basesrc->segment.start
-        + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(*buffer), GST_SECOND, element->rate)
-        - GST_BUFFER_TIMESTAMP(*buffer);
+    GST_BUFFER_DURATION(*buffer) = stop - start;
+
+    /* 
+     * Mark the buffer according to the segments
+     */
+   
+    //mark_segments(basesrc, *buffer, start, stop);
 
     /* FIXME Huh? */
     if(basesrc->offset == 0)
@@ -359,6 +415,16 @@ static gboolean check_get_range(GstBaseSrc *basesrc)
  * set_property()
  */
 
+gint seg_compare_func(gconstpointer a, gconstpointer b)
+{
+    GValueArray *rowa = (GValueArray *) g_value_get_boxed((GValue *) a);
+    GValueArray *rowb = (GValueArray *) g_value_get_boxed((GValue *) b);
+    gint64 astart = g_value_get_int64(g_value_array_get_nth(rowa, 0));
+    gint64 bstart = g_value_get_int64(g_value_array_get_nth(rowb, 0));
+    return astart - bstart;
+}
+
+
 static void set_property(GObject *object, enum property prop_id, const GValue *value, GParamSpec *pspec)
 {
     GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(object);
@@ -368,7 +434,8 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
     switch (prop_id) {
         case ARG_SEGMENT_LIST:
             g_value_array_free(element->segment_list);
-            element->segment_list = g_value_get_boxed(value);
+            GValueArray *va = g_value_get_boxed(value);
+            element->segment_list = g_value_array_sort(va, seg_compare_func);
             break;
         case ARG_INVERT_OUTPUT:
             element->invert_output = g_value_get_boolean(value);
