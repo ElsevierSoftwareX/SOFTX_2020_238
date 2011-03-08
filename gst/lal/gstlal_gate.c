@@ -76,7 +76,7 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 #define DEFAULT_ATTACK_LENGTH 0
 #define DEFAULT_HOLD_LENGTH 0
 #define DEFAULT_LEAKY FALSE
-
+#define DEFAULT_INVERT FALSE
 
 /*
  * ============================================================================
@@ -322,7 +322,10 @@ static gint control_get_state(GSTLALGate *element, GstClockTime tmin, GstClockTi
 	GST_DEBUG_OBJECT(element, "looping over %u buffers to check control state", g_queue_get_length(element->control_queue));
 	g_queue_foreach(element->control_queue, g_list_for_each_gst_buffer_peak, &data);
 
-	return data.peak >= element->threshold ? +1 : data.peak >= 0 ? 0 : -1;
+	if (element->invert_output) 
+		return (data.peak <= element->threshold && data.peak >= 0) ? +1 : data.peak > element->threshold ? 0 : -1;
+	else
+		return data.peak >= element->threshold ? +1 : data.peak >= 0 ? 0 : -1;
 }
 
 
@@ -379,7 +382,8 @@ enum property {
 	ARG_THRESHOLD,
 	ARG_ATTACK_LENGTH,
 	ARG_HOLD_LENGTH,
-	ARG_LEAKY
+	ARG_LEAKY,
+	ARG_INVERT
 };
 
 
@@ -412,6 +416,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	case ARG_LEAKY:
 		element->leaky = g_value_get_boolean(value);
+		break;
+
+	case ARG_INVERT:
+		element->invert_output = g_value_get_boolean(value);
 		break;
 	}
 
@@ -1216,6 +1224,17 @@ static void class_init(gpointer klass, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_INVERT,
+		g_param_spec_boolean(
+			"invert-output",
+			"Invert",
+			"Invert the output: Threshold crossings are gaps",
+			DEFAULT_INVERT,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 
 	signals[SIGNAL_RATE_CHANGED] = g_signal_new(
 		"rate-changed",
@@ -1317,6 +1336,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->unit_size = 0;
 	element->control_rate = 0;
 	element->need_discont = FALSE;
+	element->invert_output = DEFAULT_INVERT;
 }
 
 

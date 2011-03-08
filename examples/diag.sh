@@ -15,15 +15,19 @@ function test_gate() {
 		! audio/x-raw-float, channels=1, width=64, rate=16384 \
 		! lal_nxydump start-time=0 stop-time=10000000000 \
 		! queue ! filesink location="dump_out.txt" \
-		audiotestsrc freq=13 samplesperbuffer=1024 num-buffers=8 \
+		audiotestsrc freq=13 samplesperbuffer=1024 num-buffers=1 \
 		! audio/x-raw-float, rate=1024 \
+		! tee name=control \
 		! gate.control \
 		audiotestsrc freq=256 samplesperbuffer=1024 num-buffers=8 \
 		! tee name=orig \
-		! gate.sink
+		! gate.sink \
 		orig. \
 		! lal_nxydump start-time=0 stop-time=10000000000 \
-		! queue ! filesink location="dump_in.txt"
+		! queue ! filesink location="dump_in.txt" \
+		control. \
+		! lal_nxydump start-time=0 stop-time=10000000000 \
+		! queue ! filesink location="dump_control.txt"
 }
 
 function test_resampler() {
@@ -183,4 +187,4 @@ function test_chisquare_gaps() {
 		! queue ! filesink buffer-mode=2 location="dump_in.txt"
 }
 
-test_simulation
+test_gate
