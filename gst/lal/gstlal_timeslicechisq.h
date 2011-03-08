@@ -74,6 +74,12 @@ typedef struct {
 	gboolean segment_pending;
 	GstSegment segment;
 	guint64 offset;
+
+	/* sink event handling */
+	GstPadEventFunction collect_event;
+
+	/* src event handling */
+	gboolean flush_stop_pending;
 } GSTLALTimeSliceChiSquare;
 
 
