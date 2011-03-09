@@ -19,5 +19,5 @@ injections :
 	./trigger_pipe --injections $(INJECTION_FILE) --psd-cache $(PSD_CACHE) --frame-cache H1=$(H1_FRAME_CACHE),H2=$(H2_FRAME_CACHE),L1=$(L1_FRAME_CACHE) --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE)
 	
 realclean :
-	rm *.sub *.dag*
+	rm *.sub *.dag* *.cache *.sh
 	rm -r logs
