@@ -64,7 +64,41 @@ enum property {
 };
 
 
+/*
+ * ======================================================================
+ *
+ * utility functions
+ *
+ * ======================================================================
+ */
 
+
+/*
+ * return the sample size (this is always 8 for now)
+ */
+
+
+static guint sample_size(GstBaseSrc *basesrc)
+{
+    //GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
+    return 8; /* FIXME The only width supported, unsigned char */
+}
+
+
+/*
+ * round a time to the nearest sample based on sample rate
+ */
+
+
+static guint64 round_to_nearest_sample(GstBaseSrc *basesrc, guint64 val)
+{
+    GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
+    return gst_util_uint64_scale_int_round(val, 1, element->rate) * element->rate;
+}
+
+
+/* FIXME a place holder to somehow infer caps from segments??? maybe useless */
+#if 0
 static GstCaps *segments_to_caps(gint rate)
 {
     GstCaps *caps;
@@ -87,6 +121,7 @@ static GstCaps *segments_to_caps(gint rate)
     );
     return caps;
 }
+#endif
 
 
 /*
@@ -116,32 +151,17 @@ static gboolean start(GstBaseSrc *object)
 
 static gboolean stop(GstBaseSrc *object)
 {
-    //GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(object);
-
     return TRUE;
 }
 
 
-static guint sample_size(GstBaseSrc *basesrc)
-{
-    //GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
-    return 8; /* FIXME The only width supported, unsigned char */
-}
-
 /*
- * create()
+ * Mark buffer according to segment
  */
-
-static guint64 round_to_nearest_sample(GstBaseSrc *basesrc, guint64 val)
-{
-    GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
-    return gst_util_uint64_scale_int_round(val, 1, element->rate) * element->rate;
-}
 
 
 static int mark_segment(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, guint64 stop)
 {
-
     GSTLALSegmentSrc *element = GSTLAL_SEGMENTSRC(basesrc);
     guint startix=0;
     guint stopix =0;
@@ -167,6 +187,12 @@ static int mark_segment(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, g
     return 0;
 }
 
+
+/*
+ * Mark buffer according to segment list
+ */
+
+
 static int mark_segments(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, guint64 stop)
 {
     GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
@@ -190,6 +216,12 @@ static int mark_segments(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, 
 
     return 0;
 }
+
+
+/*
+ * create()
+ */
+
 
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
@@ -331,18 +363,28 @@ static gboolean check_get_range(GstBaseSrc *basesrc)
  * ============================================================================
  */
 
+
 /*
- * set_property()
+ * Compare function to sort segment list
  */
+
 
 gint seg_compare_func(gconstpointer a, gconstpointer b)
 {
     GValueArray *rowa = (GValueArray *) g_value_get_boxed((GValue *) a);
     GValueArray *rowb = (GValueArray *) g_value_get_boxed((GValue *) b);
-    guint64 astart = g_value_get_int64(g_value_array_get_nth(rowa, 0));
-    guint64 bstart = g_value_get_int64(g_value_array_get_nth(rowb, 0));
-    return (gint) (astart - bstart); //FIXME this will overflow? put in if statments.
+    guint64 astart = g_value_get_uint64(g_value_array_get_nth(rowa, 0));
+    guint64 bstart = g_value_get_uint64(g_value_array_get_nth(rowb, 0));
+
+    if (astart <  bstart) return -1;
+    if (astart == bstart) return 0;
+    if (astart >  bstart) return 1;
 }
+
+
+/*
+ * set_property()
+ */
 
 
 static void set_property(GObject *object, enum property prop_id, const GValue *value, GParamSpec *pspec)
@@ -353,7 +395,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
     switch (prop_id) {
         case ARG_SEGMENT_LIST:
-            element->segment_matrix = gstlal_gsl_matrix_ulong_from_g_value_array(g_value_get_boxed(g_value_array_sort(value, seg_compare_func)));
+            element->segment_matrix = gstlal_gsl_matrix_ulong_from_g_value_array(g_value_array_sort(g_value_get_boxed(value), seg_compare_func));
             break;
         case ARG_INVERT_OUTPUT:
             element->invert_output = g_value_get_boolean(value);
@@ -371,6 +413,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 /*
  * get_property()
  */
+
 
 static void get_property(GObject *object, enum property prop_id, GValue *value, GParamSpec *pspec)
 {
@@ -403,6 +446,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
  * finalize()
  */
 
+
 static void finalize(GObject *object)
 {
     GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(object);
@@ -410,8 +454,8 @@ static void finalize(GObject *object)
     /*
      * free resources
      */
-    if (element->segment_matrix) gsl_matrix_ulong_free(element->segment_matrix);
 
+    if (element->segment_matrix) gsl_matrix_ulong_free(element->segment_matrix);
     g_mutex_free(element->segment_matrix_lock);
 
     /*
