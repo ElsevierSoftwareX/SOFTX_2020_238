@@ -56,5 +56,5 @@ dag : frame.H1.cache frame.H2.cache frame.L1.cache segments.xml injections.xml
 	./psd_pipe --injections injections.xml --segment-file segments.xml --min-segment-length $(MIN_SEG_LENGTH) --frame-cache H1=frame.H1.cache,H2=frame.H2.cache,L1=frame.L1.cache
 	
 realclean :
-	rm *.sub *.dag* *.cache *.sh segments.*xml
+	rm *.sub *.dag* *.cache *.sh segments.*xml injections.xml
 	rm -r logs
