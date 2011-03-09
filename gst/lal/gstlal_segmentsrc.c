@@ -143,16 +143,17 @@ static int mark_segment(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, g
 {
 
     GSTLALSegmentSrc *element = GSTLAL_SEGMENTSRC(basesrc);
-    guint startix, stopix;
+    guint startix=0;
+    guint stopix =0;
     gint8 *data = NULL;
 
     if (start > GST_BUFFER_TIMESTAMP(buffer))
-        startix = (start - GST_BUFFER_TIMESTAMP(buffer)) / element->rate;
+        startix = (start - GST_BUFFER_TIMESTAMP(buffer)) / element->rate / GST_SECOND;
     else 
         startix = 0;
 
     if (stop > GST_BUFFER_TIMESTAMP(buffer))
-        stopix = (stop - GST_BUFFER_TIMESTAMP(buffer)) / element->rate;
+        stopix = (stop - GST_BUFFER_TIMESTAMP(buffer)) / element->rate / GST_SECOND;
     else
         stopix = 0;
 
@@ -169,18 +170,16 @@ static int mark_segment(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, g
 static int mark_segments(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, guint64 stop)
 {
     GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
-    GValueArray *va = element->segment_list;
-    if (!va) return 0; /* FIXME handle no segment lists */
-    guint rows = va->n_values;
+    gsl_matrix_ulong *mat = element->segment_matrix;
+    if (!mat) return 0; /* FIXME handle no segment lists */
+    guint rows = (guint) mat->size1;
     guint64 segstart, segstop;
-    GValueArray *row;
 
-    /* FIXME provide a bailout and a sensible starting point */
-    /* This is ridiculous, but doesn't require sorted or coalesced segments */
+    /* FIXME provide a bailout and a sensible starting point if you have sorted and coalesced segents */
+    /* This is ridiculous, but doesn't require sorted or coalesced segments.  Could some fancy data structure help? */
     for (guint i = 0; i < rows; i++) {
-	row = (GValueArray *) g_value_get_boxed(g_value_array_get_nth(va, i));
-        segstart = round_to_nearest_sample(basesrc, g_value_get_int64(g_value_array_get_nth(row, 0)));
-        segstop = round_to_nearest_sample(basesrc, g_value_get_int64(g_value_array_get_nth(row, 1)));
+        segstart = round_to_nearest_sample(basesrc, gsl_matrix_ulong_get(mat, i, 0));
+        segstop = round_to_nearest_sample(basesrc, gsl_matrix_ulong_get(mat, i, 1));
         if ((segstart >= start) && (segstart < stop) && (segstop < stop))
             mark_segment(basesrc, buffer, segstart, segstop);
         if ((segstart >= start) && (segstart < stop) && (segstop >= stop))
@@ -243,7 +242,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
      * Mark the buffer according to the segments
      */
    
-    //mark_segments(basesrc, *buffer, start, stop);
+    mark_segments(basesrc, *buffer, start, stop);
 
     /* FIXME Huh? */
     if(basesrc->offset == 0)
@@ -419,9 +418,9 @@ gint seg_compare_func(gconstpointer a, gconstpointer b)
 {
     GValueArray *rowa = (GValueArray *) g_value_get_boxed((GValue *) a);
     GValueArray *rowb = (GValueArray *) g_value_get_boxed((GValue *) b);
-    gint64 astart = g_value_get_int64(g_value_array_get_nth(rowa, 0));
-    gint64 bstart = g_value_get_int64(g_value_array_get_nth(rowb, 0));
-    return astart - bstart;
+    guint64 astart = g_value_get_int64(g_value_array_get_nth(rowa, 0));
+    guint64 bstart = g_value_get_int64(g_value_array_get_nth(rowb, 0));
+    return (gint) (astart - bstart); //FIXME this will overflow? put in if statments.
 }
 
 
@@ -433,9 +432,9 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
     switch (prop_id) {
         case ARG_SEGMENT_LIST:
-            g_value_array_free(element->segment_list);
-            GValueArray *va = g_value_get_boxed(value);
-            element->segment_list = g_value_array_sort(va, seg_compare_func);
+            //g_value_array_free(element->segment_list);
+            //GValueArray *va = g_value_get_boxed(value);
+            element->segment_matrix = gstlal_gsl_matrix_ulong_from_g_value_array(g_value_get_boxed(value)); //g_value_dup_boxed(value); //g_value_array_sort(va, seg_compare_func);
             break;
         case ARG_INVERT_OUTPUT:
             element->invert_output = g_value_get_boolean(value);
@@ -462,7 +461,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
     switch (prop_id) {
         case ARG_SEGMENT_LIST:
-            g_value_set_boxed(value, element->segment_list);
+            // FIXME make a gsl version g_value_set_boxed(value, element->segment_list);
             break;
         case ARG_INVERT_OUTPUT:
             g_value_set_boolean(value, element->invert_output);
@@ -488,7 +487,7 @@ static void finalize(GObject *object)
     /*
      * free resources
      */
-    g_value_array_free(element->segment_list);
+    if (element->segment_matrix) gsl_matrix_ulong_free(element->segment_matrix);
 
 
     /*
@@ -613,6 +612,6 @@ static void gstlal_segmentsrc_class_init(GSTLALSegmentSrcClass *klass)
 
 static void gstlal_segmentsrc_init(GSTLALSegmentSrc *segment_src, GSTLALSegmentSrcClass *klass)
 {
-    segment_src->segment_list = g_value_array_new(0);
+    segment_src->segment_matrix = NULL;
     segment_src->rate = 0;
 }

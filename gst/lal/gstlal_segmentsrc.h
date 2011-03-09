@@ -25,7 +25,7 @@ typedef struct {
 typedef struct {
     GstBaseSrc          element;
 
-    GValueArray         *segment_list;
+    gsl_matrix_ulong    *segment_matrix;
     gboolean            invert_output;
     gint 		rate;
 
