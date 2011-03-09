@@ -69,11 +69,11 @@ static GstCaps *segments_to_caps(gint rate)
 {
     GstCaps *caps;
 
-    /* 
+    /*
      * FIXME, it would be nice to get say, the rate from the segments...
      * but that seems hard.  So for now everything is hardcoded
      * FIXME this function isn't even used yet, we get caps from downstream
-     */ 
+     */
 
     caps = gst_caps_new_simple(
         "audio/x-raw-int",
@@ -82,7 +82,7 @@ static GstCaps *segments_to_caps(gint rate)
         "endianness", G_TYPE_INT, G_BYTE_ORDER,
         "width", G_TYPE_INT, 8,
         "depth", G_TYPE_INT, 8,
-	"signed", G_TYPE_BOOLEAN, TRUE,
+        "signed", G_TYPE_BOOLEAN, TRUE,
         NULL
     );
     return caps;
@@ -149,7 +149,7 @@ static int mark_segment(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, g
 
     if (start > GST_BUFFER_TIMESTAMP(buffer))
         startix = (start - GST_BUFFER_TIMESTAMP(buffer)) / element->rate / GST_SECOND;
-    else 
+    else
         startix = 0;
 
     if (stop > GST_BUFFER_TIMESTAMP(buffer))
@@ -161,9 +161,9 @@ static int mark_segment(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, g
 
     if (element->invert_output)
         for (guint32 i = startix; i < stopix; i++) data[i] = 0;
-    else 
+    else
         for (guint32 i = startix; i < stopix; i++) data[i] = G_MAXINT8;
-        
+
     return 0;
 }
 
@@ -187,7 +187,7 @@ static int mark_segments(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, 
         if ((segstop >= start) && (segstop < stop) && (segstart < start))
             mark_segment(basesrc, buffer, start, segstop);
     }
-	
+
     return 0;
 }
 
@@ -201,7 +201,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
     guint64 start, stop;
 
     /*
-     * Bail if the requested block size doesn't correspond to integer samples 
+     * Bail if the requested block size doesn't correspond to integer samples
      */
 
     if (blocksize % samplesize) {
@@ -224,24 +224,24 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         for (guint32 i = 0; i < numsamps; i++) d[i] = 0;
     }
 
-    /* 
-     * update the offsets, timestamps etc 
+    /*
+     * update the offsets, timestamps etc
      */
 
     GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + numsamps;
 
     start = GST_BUFFER_TIMESTAMP(*buffer) = basesrc->segment.start
         + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(*buffer), GST_SECOND, element->rate);
-    
+
     stop = basesrc->segment.start
         + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(*buffer), GST_SECOND, element->rate);
 
     GST_BUFFER_DURATION(*buffer) = stop - start;
 
-    /* 
+    /*
      * Mark the buffer according to the segments
      */
-   
+
     mark_segments(basesrc, *buffer, start, stop);
 
     /* FIXME Huh? */
@@ -307,88 +307,9 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 {
     //GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
 
-    /* FIXME:  this is copy-and-pasted from frammesrc and needs to be reworked for this element */
-#if 0
-	switch(GST_QUERY_TYPE(query)) {
-	case GST_QUERY_FORMATS:
-		gst_query_set_formats(query, 5, GST_FORMAT_DEFAULT, GST_FORMAT_BYTES, GST_FORMAT_TIME, GST_FORMAT_BUFFERS, GST_FORMAT_PERCENT);
-		break;
-
-	case GST_QUERY_CONVERT: {
-		GstFormat src_format, dest_format;
-		gint64 src_value, dest_value;
-		guint64 offset;
-
-		gst_query_parse_convert(query, &src_format, &src_value, &dest_format, &dest_value);
-
-		switch(src_format) {
-		case GST_FORMAT_DEFAULT:
-		case GST_FORMAT_TIME:
-			if(src_value < basesrc->segment.start) {
-				GST_DEBUG("requested time precedes start of segment, clipping to start of segment");
-				offset = 0;
-			} else
-				offset = gst_util_uint64_scale_int_round(src_value - basesrc->segment.start, element->rate, GST_SECOND);
-			break;
-
-		case GST_FORMAT_BYTES:
-			offset = src_value / (element->width / 8);
-			break;
-
-		case GST_FORMAT_BUFFERS:
-			offset = gst_util_uint64_scale_int_round(src_value, gst_base_src_get_blocksize(basesrc), element->width / 8);
-			break;
-
-		case GST_FORMAT_PERCENT:
-			if(src_value < 0) {
-				GST_DEBUG("requested percentage < 0, clipping to 0");
-				offset = 0;
-			} else if(src_value > 100) {
-				GST_DEBUG("requested percentage > 100, clipping to 100");
-				offset = basesrc->segment.stop - basesrc->segment.start;
-			} else
-				offset = gst_util_uint64_scale_int_round(basesrc->segment.stop - basesrc->segment.start, src_value, 100);
-			offset = gst_util_uint64_scale_int_round(offset, element->rate, GST_SECOND);
-			break;
-
-		default:
-			g_assert_not_reached();
-			return FALSE;
-		}
-		switch(dest_format) {
-		case GST_FORMAT_DEFAULT:
-		case GST_FORMAT_TIME:
-			dest_value = basesrc->segment.start + gst_util_uint64_scale_int_round(offset, GST_SECOND, element->rate);
-			break;
-
-		case GST_FORMAT_BYTES:
-			dest_value = offset * (element->width / 8);
-			break;
-
-		case GST_FORMAT_BUFFERS:
-			dest_value = gst_util_uint64_scale_int_ceil(offset, element->width / 8, gst_base_src_get_blocksize(basesrc));
-			break;
-
-		case GST_FORMAT_PERCENT:
-			dest_value = gst_util_uint64_scale_int_round(offset, 100, gst_util_uint64_scale_int_round(basesrc->segment.stop - basesrc->segment.start, element->rate, GST_SECOND));
-			break;
-
-		default:
-			g_assert_not_reached();
-			return FALSE;
-		}
-
-		gst_query_set_convert(query, src_format, src_value, dest_format, dest_value);
-
-		break;
-	}
-
-	default:
-		return parent_class->query(basesrc, query);
-	}
-#endif
-
-	return TRUE;
+    /* FIXME:  see frammesrc, and rework for this element */
+    /* Right now this function is not used */
+    return TRUE;
 }
 
 
@@ -399,7 +320,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 
 static gboolean check_get_range(GstBaseSrc *basesrc)
 {
-	return TRUE;
+    return TRUE;
 }
 
 /*
@@ -432,9 +353,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
     switch (prop_id) {
         case ARG_SEGMENT_LIST:
-            //g_value_array_free(element->segment_list);
-            //GValueArray *va = g_value_get_boxed(value);
-            element->segment_matrix = gstlal_gsl_matrix_ulong_from_g_value_array(g_value_get_boxed(value)); //g_value_dup_boxed(value); //g_value_array_sort(va, seg_compare_func);
+            element->segment_matrix = gstlal_gsl_matrix_ulong_from_g_value_array(g_value_get_boxed(g_value_array_sort(value, seg_compare_func)));
             break;
         case ARG_INVERT_OUTPUT:
             element->invert_output = g_value_get_boolean(value);
@@ -461,7 +380,11 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
     switch (prop_id) {
         case ARG_SEGMENT_LIST:
-            // FIXME make a gsl version g_value_set_boxed(value, element->segment_list);
+            g_mutex_lock(element->segment_matrix_lock);
+            if(element->segment_matrix)
+                g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_ulong(element->segment_matrix));
+            /* FIXME:  else? */
+            g_mutex_unlock(element->segment_matrix_lock);
             break;
         case ARG_INVERT_OUTPUT:
             g_value_set_boolean(value, element->invert_output);
@@ -489,6 +412,7 @@ static void finalize(GObject *object)
      */
     if (element->segment_matrix) gsl_matrix_ulong_free(element->segment_matrix);
 
+    g_mutex_free(element->segment_matrix_lock);
 
     /*
      * chain to parent class' finalize() method
@@ -520,11 +444,11 @@ static gboolean set_caps(GstBaseSrc *src, GstCaps *caps)
 
     if(success) {
         if(rate != element->rate)
-		GST_DEBUG_OBJECT(element, "rate changed, but no signal was emitted because it is not implmented: %d -> %d ", element->rate, rate);
+            GST_DEBUG_OBJECT(element, "rate changed, but no signal was emitted because it is not implmented: %d -> %d ", element->rate, rate);
         element->rate = rate;
     }
 
-	return success;
+    return success;
 }
 
 
@@ -561,22 +485,22 @@ static void gstlal_segmentsrc_class_init(GSTLALSegmentSrcClass *klass)
             "segment-list",
             "Segment List",
             "List of Segments. This is a Nx2 array where N (the rows) is the number of segments. The columns are the start and stop times of each segment.",
-			g_param_spec_value_array(
-				"segment",
-				"[start, stop)",
-				"Start and stop time of segment.",
-				g_param_spec_uint64(
-					"time",
-					"Time",
-					"Time (in nanoseconds)",
-					0, G_MAXUINT64, 0,
-					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-				),
-				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-			),
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-		)
-	);
+                g_param_spec_value_array(
+                    "segment",
+                    "[start, stop)",
+                    "Start and stop time of segment.",
+                    g_param_spec_uint64(
+                        "time",
+                        "Time",
+                        "Time (in nanoseconds)",
+                        0, G_MAXUINT64, 0,
+                        G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+                    ),
+                    G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+                ),
+                G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+            )
+    );
 
     g_object_class_install_property(
         gobject_class,
@@ -614,4 +538,5 @@ static void gstlal_segmentsrc_init(GSTLALSegmentSrc *segment_src, GSTLALSegmentS
 {
     segment_src->segment_matrix = NULL;
     segment_src->rate = 0;
+    segment_src->segment_matrix_lock = g_mutex_new();
 }
