@@ -25,6 +25,7 @@ typedef struct {
 typedef struct {
     GstBaseSrc          element;
 
+    GMutex *segment_matrix_lock;
     gsl_matrix_ulong    *segment_matrix;
     gboolean            invert_output;
     gint 		rate;
