@@ -78,7 +78,7 @@ class gstlal_reference_psd_job(pipeline.CondorDAGJob):
 		self.__universe = 'vanilla'
 		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
 		self.add_condor_cmd('getenv','True')
-		#self.add_condor_cmd('requirements', 'Memory > 3000') #FIXME is this enough?
+		self.add_condor_cmd('requirements', 'Memory > 3000') #FIXME is this enough?
 		self.tag_base = tag_base
 		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
 		self.set_sub_file(tag_base+'.sub')
