@@ -2,7 +2,7 @@
 
 
 import sys
-
+import numpy
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -88,7 +88,9 @@ def test_firbank(pipeline):
 
 def test_segmentsrc(pipeline):
 	elems = []
-	elems.append(pipeutil.mkelem("lal_segmentsrc", {"invert-output":True}))
+	segs = numpy.array([[40,50],[20,40],[2, 3]], dtype=numpy.int64) * gst.SECOND
+	elems.append(pipeutil.mkelem("lal_segmentsrc", {"invert-output":False, "segment-list":segs}))
+	elems.append(pipeutil.mkelem("progressreport"))
 	elems.append(pipeutil.mkelem("audioconvert"))
 	elems.append(pipeutil.mkelem("lal_nxydump"))
 	elems.append(pipeutil.mkelem("filesink", {"location":"test.txt"}))
