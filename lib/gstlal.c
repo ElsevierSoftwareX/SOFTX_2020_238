@@ -135,6 +135,33 @@ GValueArray *gstlal_g_value_array_from_ints(const gint *src, gint n)
 
 
 /**
+ * convert a GValueArray of guint64 to an array of guint64.  if dest is
+ * NULL then new memory will be allocated otherwise the doubles are copied
+ * into the memory pointed to by dest, which must be large enough to hold
+ * them.  the return value is dest or the newly allocated address on
+ * success or NULL on failure.
+ */
+
+
+guint64 *gstlal_ulong_from_g_value_array(GValueArray *va, guint64 *dest, gint *n)
+{
+	guint i;
+
+	if(!va)
+		return NULL;
+	if(!dest)
+		dest = g_new(guint64, va->n_values);
+	if(!dest)
+		return NULL;
+	if(n)
+		*n = va->n_values;
+	for(i = 0; i < va->n_values; i++)
+		dest[i] = g_value_get_uint64(g_value_array_get_nth(va, i));
+	return dest;
+}
+
+
+/**
  * convert a GValueArray of doubles to an array of doubles.  if dest is
  * NULL then new memory will be allocated otherwise the doubles are copied
  * into the memory pointed to by dest, which must be large enough to hold
@@ -158,6 +185,31 @@ gdouble *gstlal_doubles_from_g_value_array(GValueArray *va, gdouble *dest, gint 
 	for(i = 0; i < va->n_values; i++)
 		dest[i] = g_value_get_double(g_value_array_get_nth(va, i));
 	return dest;
+}
+
+/**
+ * convert an array of doubles to a GValueArray.  the return value is the
+ * newly allocated GValueArray object.
+ */
+
+
+GValueArray *gstlal_g_value_array_from_ulong(const guint64 *src, gint n)
+{
+	GValueArray *va;
+	GValue v = {0,};
+	gint i;
+	g_value_init(&v, G_TYPE_UINT64);
+
+	if(!src)
+		return NULL;
+	va = g_value_array_new(n);
+	if(!va)
+		return NULL;
+	for(i = 0; i < n; i++) {
+		g_value_set_uint64(&v, src[i]);
+		g_value_array_append(va, &v);
+	}
+	return va;
 }
 
 /**
@@ -361,6 +413,55 @@ GValueArray *gstlal_g_value_array_from_gsl_matrix_int(const gsl_matrix_int *matr
 
 
 /**
+ * convert a GValueArray of GValueArrays of guint64 to a GSL matrix.  the
+ * return value is the newly allocated matrix on success or NULL on
+ * failure.
+ */
+
+
+gsl_matrix_ulong *gstlal_gsl_matrix_ulong_from_g_value_array(GValueArray *va)
+{
+	gsl_matrix_ulong *matrix;
+	GValueArray *row;
+	guint rows, cols;
+	guint i;
+
+	if(!va)
+		return NULL;
+	rows = va->n_values;
+	if(!rows)
+		/* 0x0 matrix */
+		return gsl_matrix_ulong_alloc(0, 0);
+
+	row = g_value_get_boxed(g_value_array_get_nth(va, 0));
+	cols = row->n_values;
+	matrix = gsl_matrix_ulong_alloc(rows, cols);
+	if(!matrix)
+		/* allocation failure */
+		return NULL;
+	if(!gstlal_ulong_from_g_value_array(row, (guint64 *) gsl_matrix_ulong_ptr(matrix, 0, 0), NULL)) {
+		/* row conversion failure */
+		gsl_matrix_ulong_free(matrix);
+		return NULL;
+	}
+	for(i = 1; i < rows; i++) {
+		row = g_value_get_boxed(g_value_array_get_nth(va, i));
+		if(row->n_values != cols) {
+			/* one of the rows has the wrong number of columns */
+			gsl_matrix_ulong_free(matrix);
+			return NULL;
+		}
+		if(!gstlal_ulong_from_g_value_array(row, (guint64 *) gsl_matrix_ulong_ptr(matrix, i, 0), NULL)) {
+			/* row conversion failure */
+			gsl_matrix_ulong_free(matrix);
+			return NULL;
+		}
+	}
+
+	return matrix;
+}
+
+/**
  * convert a GValueArray of GValueArrays of doubles to a GSL matrix.  the
  * return value is the newly allocated matrix on success or NULL on
  * failure.
@@ -407,6 +508,30 @@ gsl_matrix *gstlal_gsl_matrix_from_g_value_array(GValueArray *va)
 	}
 
 	return matrix;
+}
+
+
+/**
+ * convert a GSL matrix of ulong to a GValueArray of GValueArrays.  the
+ * return value is the newly allocated GValueArray object.
+ */
+
+
+GValueArray *gstlal_g_value_array_from_gsl_matrix_ulong(const gsl_matrix_ulong *matrix)
+{
+	GValueArray *va;
+	GValue v = {0,};
+	guint i;
+	g_value_init(&v, G_TYPE_VALUE_ARRAY);
+
+	va = g_value_array_new(matrix->size1);
+	if(!va)
+		return NULL;
+	for(i = 0; i < matrix->size1; i++) {
+		g_value_take_boxed(&v, gstlal_g_value_array_from_ulong((guint64*) gsl_matrix_ulong_const_ptr(matrix, i, 0), matrix->size2));
+		g_value_array_append(va, &v);
+	}
+	return va;
 }
 
 
