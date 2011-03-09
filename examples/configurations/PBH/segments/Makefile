@@ -64,4 +64,7 @@ injections.xml:
 		--disable-spin
 
 
-all : H1vetoes.xml H1vetoes.xml H1vetoes.xml segments.xml
+all : H1vetoes.xml H2vetoes.xml L1vetoes.xml segments.xml
+
+realclean:
+	rm -r *.xml *.cache
