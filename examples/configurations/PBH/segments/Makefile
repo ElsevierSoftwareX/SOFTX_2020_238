@@ -11,7 +11,7 @@ FLOW = 35
 
 all : H1vetoes.xml H2vetoes.xml L1vetoes.xml segments.xml
 
-injections: injections.xml
+injections: H1vetoes.xml H2vetoes.xml L1vetoes.xml segments.xml injections.xml
 
 H1vetoes.xml:
 	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=H1:Injection > H1vetoes.xml
