@@ -36,7 +36,7 @@ injections.xml:
 		--time-interval 20 \
 		--i-distr uniform \
 		--l-distr random \
-		--d-distr linear \
+		--d-distr log10 \
 		--min-distance $(MIN_DIST) \
 		--max-distance $(MAX_DIST) \
 		--m-distr componentMass \
