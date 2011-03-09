@@ -9,6 +9,10 @@ MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
 FLOW = 35
 
+all : H1vetoes.xml H2vetoes.xml L1vetoes.xml segments.xml
+
+injections: injections.xml
+
 H1vetoes.xml:
 	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=H1:Injection > H1vetoes.xml
 	ligolw_segments_compat H1vetoes.xml
@@ -36,8 +40,6 @@ frame.L1.cache:
 segments.xml: frame.H1.cache frame.H2.cache frame.L1.cache
 	ligolw_add --output segments.xml segments.H1.xml segments.H2.xml segments.L1.xml
 
-injections: injections.xml
-
 injections.xml:
 	lalapps_inspinj \
 		--output injections.xml \
@@ -62,9 +64,6 @@ injections.xml:
 		--max-mtotal $(MAX_TOTAL_MASS) \
 		--waveform GeneratePPNtwoPN \
 		--disable-spin
-
-
-all : H1vetoes.xml H2vetoes.xml L1vetoes.xml segments.xml
 
 realclean:
 	rm -r *.xml *.cache
