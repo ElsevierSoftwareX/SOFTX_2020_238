@@ -93,6 +93,7 @@ class gstlal_reference_psd_node(pipeline.CondorDAGNode):
 	def __init__(self, job, dag, frame_cache, gps_start_time, gps_end_time, instrument, channel, injections=None, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
+		self.add_var_opt("verbose", "") #FIXME for debugging purposes now
 		self.add_var_opt("frame-cache", frame_cache)
 		self.add_var_opt("gps-start-time",gps_start_time)
 		self.add_var_opt("gps-end-time",gps_end_time)
