@@ -73,7 +73,7 @@ typedef struct _GSTLALGate {
 	gint64 attack_length;
 	gint64 hold_length;
 	gboolean leaky;
-	gboolean invert_output;
+	gboolean invert_control;
 
 	gint rate;
 	gint unit_size;

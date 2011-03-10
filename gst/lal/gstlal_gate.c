@@ -322,7 +322,7 @@ static gint control_get_state(GSTLALGate *element, GstClockTime tmin, GstClockTi
 	GST_DEBUG_OBJECT(element, "looping over %u buffers to check control state", g_queue_get_length(element->control_queue));
 	g_queue_foreach(element->control_queue, g_list_for_each_gst_buffer_peak, &data);
 
-	if (element->invert_output) 
+	if (element->invert_control) 
 		return (data.peak <= element->threshold && data.peak >= 0) ? +1 : data.peak > element->threshold ? 0 : -1;
 	else
 		return data.peak >= element->threshold ? +1 : data.peak >= 0 ? 0 : -1;
@@ -419,7 +419,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		break;
 
 	case ARG_INVERT:
-		element->invert_output = g_value_get_boolean(value);
+		element->invert_control = g_value_get_boolean(value);
 		break;
 	}
 
@@ -459,7 +459,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		break;
 	
 	case ARG_INVERT:
-		g_value_set_boolean(value, element->invert_output);
+		g_value_set_boolean(value, element->invert_control);
 		break;
 	}
 
@@ -1232,9 +1232,9 @@ static void class_init(gpointer klass, gpointer class_data)
 		gobject_class,
 		ARG_INVERT,
 		g_param_spec_boolean(
-			"invert-output",
+			"invert-control",
 			"Invert",
-			"Invert the output: Threshold crossings are gaps",
+			"Logically invert the control input.  If false (default) then the output is a gap if and only if the control is <= threshold;  if true then the output is a gap if and only if the control is >= threshold.",
 			DEFAULT_INVERT,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
@@ -1340,7 +1340,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->unit_size = 0;
 	element->control_rate = 0;
 	element->need_discont = FALSE;
-	element->invert_output = DEFAULT_INVERT;
+	element->invert_control = DEFAULT_INVERT;
 }
 
 
