@@ -57,6 +57,16 @@ __date__ = "FIXME"
 #
 
 
+def mksegmentsrc(pipeline, segment_list, blocksize = 4096 * 1 * 1):
+	# default blocksize is 4096 seconds of unsigned integers at
+	# 1 Hz, e.g. segments without nanoseconds
+	elem = gst.element_factory_make("lal_segmentsrc")
+	elem.set_property("blocksize", blocksize)
+	elem.set_property("segment-list", segment_list)
+	pipeline.add(elem)
+	return elem
+
+
 def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 8 * 1):
 	# default blocksize is 1 second of double precision floats at
 	# 16384 Hz, e.g., LIGO h(t)
