@@ -1,1 +1,12 @@
-TBD
+Here is how this works.  Each directory does a small bit of the PBH analysis.  It is assumed that you will copy this directory to somewhere first.
+
+here is what I might do from this directory:
+
+$ cp -r . ${HOME}/PBH_TEST
+$ cd ${HOME}/PBH_TEST
+
+You should start by creating the relevant segments for the run.  This includes generating software injections if you plan to do them
+
+$ cd segments
+
+if you want to 
