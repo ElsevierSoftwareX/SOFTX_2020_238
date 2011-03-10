@@ -457,6 +457,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	case ARG_LEAKY:
 		g_value_set_boolean(value, element->leaky);
 		break;
+	
+	case ARG_INVERT:
+		g_value_set_boolean(value, element->invert_output);
+		break;
 	}
 
 	GST_OBJECT_UNLOCK(element);
