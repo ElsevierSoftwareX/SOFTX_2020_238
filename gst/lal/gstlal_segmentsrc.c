@@ -334,7 +334,7 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
  * query
  */
 
-
+#if 0
 static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 {
     //GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
@@ -343,7 +343,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
     /* Right now this function is not used */
     return TRUE;
 }
-
+#endif
 
 /*
  * check_get_range()
@@ -379,6 +379,7 @@ gint seg_compare_func(gconstpointer a, gconstpointer b)
     if (astart <  bstart) return -1;
     if (astart == bstart) return 0;
     if (astart >  bstart) return 1;
+    return 0;
 }
 
 
