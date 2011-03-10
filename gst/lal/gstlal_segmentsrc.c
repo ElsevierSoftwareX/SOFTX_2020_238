@@ -81,7 +81,7 @@ enum property {
 static guint sample_size(GstBaseSrc *basesrc)
 {
     //GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
-    return 8; /* FIXME The only width supported, unsigned char */
+    return 1; /* FIXME The only size supported, guint8*/
 }
 
 
