@@ -41,6 +41,7 @@ import warnings
 
 from glue import segments
 from glue import segmentsUtils
+import glue.ligolw.utils.segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import ligolw_output
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
@@ -283,6 +284,15 @@ pipeline = gst.Pipeline("gstlal_inspiral")
 mainloop = gobject.MainLoop()
 handler = lloidparts.LLOIDHandler(mainloop, pipeline)
 
+#
+# Parse the veto file into segments if provided
+#
+
+if options.vetoes is not None:
+	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes), "RESULT")
+else:
+	veto_segments = None
+
 src = lloidparts.mkLLOIDmulti(
 	pipeline,
 	seekevent,
@@ -293,7 +303,7 @@ src = lloidparts.mkLLOIDmulti(
 	fake_data = options.fake_data,
 	online_data = options.online_data,
 	injection_filename = options.injections,
-	veto_filename = options.vetoes,
+	veto_segments = veto_segments,
 	verbose = options.verbose,
 	nxydump_segment = options.nxydump_segment
 )
