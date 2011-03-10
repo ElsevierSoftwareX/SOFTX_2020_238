@@ -13,10 +13,10 @@ L1_BANK_CACHE = ../bank/mode_L1-TMPLTBANK-858087370-2048_svd_bank.cache
 all : dag
 
 dag :
-	./trigger_pipe --psd-cache $(PSD_CACHE) --frame-cache H1=$(H1_FRAME_CACHE),H2=$(H2_FRAME_CACHE),L1=$(L1_FRAME_CACHE) --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE)
+	./trigger_pipe --psd-cache $(PSD_CACHE) --frame-cache H1=$(H1_FRAME_CACHE),H2=$(H2_FRAME_CACHE),L1=$(L1_FRAME_CACHE) --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE) --vetoes H1=$(H1_VETOES),H2=$(H2_VETOES),L1=$(L1_VETOES)
 
 injections :
-	./trigger_pipe --injections $(INJECTION_FILE) --psd-cache $(PSD_CACHE) --frame-cache H1=$(H1_FRAME_CACHE),H2=$(H2_FRAME_CACHE),L1=$(L1_FRAME_CACHE) --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE)
+	./trigger_pipe --injections $(INJECTION_FILE) --psd-cache $(PSD_CACHE) --frame-cache H1=$(H1_FRAME_CACHE),H2=$(H2_FRAME_CACHE),L1=$(L1_FRAME_CACHE) --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE) --vetoes H1=$(H1_VETOES),H2=$(H2_VETOES),L1=$(L1_VETOES)
 	
 realclean :
 	rm *.sub *.dag* *.cache *.sh
