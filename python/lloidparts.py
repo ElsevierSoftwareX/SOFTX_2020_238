@@ -193,7 +193,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 	return elems[-1]
 
 
-def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_filename=None):
+def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_segments=None):
 	"""Build pipeline stage to whiten and downsample h(t)."""
 
 	#
@@ -243,8 +243,9 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_filename=N
 	head = elems[-1]
 
 	# optionally add vetoes
-	if veto_filename is not None:
-		segsrc = pipeparts.mksegsrc(pipeline, veto_filename)
+	if veto_segments is not None:
+		# FIXME this assumes that it comes from a call to ligolw_segment_query
+		segsrc = pipeparts.mksegsrc(pipeline, veto_segments)
 		gate = pipeparts.mkgate(pipeline, head, threshold = 0.1, control = segsrc, invert_output=True)
 		head = gate
 
@@ -520,7 +521,7 @@ def mkLLOIDsnrToTriggers(pipeline, snr_tee, bank, verbose = False, nxydump_segme
 #
 
 
-def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, veto_filename=None, verbose = False, nxydump_segment = None):
+def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, veto_segments=None, verbose = False, nxydump_segment = None):
 	#
 	# xml stream aggregator
 	#
@@ -539,7 +540,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	for instrument in detectors:
 		rates = set(rate for bank in banks for rate in bank.get_rates())
 		head = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data=fake_data, online_data=online_data, injection_filename=injection_filename, verbose=verbose)
-		hoftdict = mkLLOIDsrc(pipeline, head, rates, psd=psd, psd_fft_length=psd_fft_length, veto_filename=None)
+		hoftdict = mkLLOIDsrc(pipeline, head, rates, psd=psd, psd_fft_length=psd_fft_length, veto_segments=None)
 		for bank in banks:
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
 			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % bank.logname, segment = nxydump_segment)
