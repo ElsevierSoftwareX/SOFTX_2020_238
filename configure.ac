@@ -207,6 +207,8 @@ AC_SUBST([gstreamer_audio_LIBS])
 #
 # Check for PyGObject
 #
+
+
 PKG_CHECK_MODULES([pygobject], [pygobject-2.0], , [AC_MSG_ERROR([Not found!])])
 AC_SUBST([pygobject_CFLAGS])
 AC_SUBST([pygobject_LIBS])
@@ -215,6 +217,7 @@ AC_SUBST([pygobject_LIBS])
 #
 # Check for NumPy
 #
+
 
 AX_PYTHON_MODULE(numpy, fatal)
 NUMPY_CFLAGS=-I`$PYTHON -c "import numpy;print (numpy.get_include());"`

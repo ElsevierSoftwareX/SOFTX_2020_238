@@ -100,6 +100,7 @@ static void destroy_injection_document(struct injection_document *doc)
 			doc->sim_inspiral_table_head = next;
 		}
 	}
+	free(doc);
 }
 
 
@@ -110,7 +111,6 @@ static void destroy_injection_document(struct injection_document *doc)
 
 static struct injection_document *load_injection_document(const char *filename, LIGOTimeGPS start, LIGOTimeGPS end, double longest_injection)
 {
-	static const char func[] = "load_injection_document";
 	int success = 1;
 	struct injection_document *new;
 	int nrows; 
@@ -123,8 +123,8 @@ static struct injection_document *load_injection_document(const char *filename, 
 
 	new = calloc(1, sizeof(*new));
 	if(!new) {
-		XLALPrintError("%s(): malloc() failed\n", func);
-		XLAL_ERROR_NULL(func, XLAL_ENOMEM);
+		XLALPrintError("%s(): malloc() failed\n", __func__);
+		XLAL_ERROR_NULL(__func__, XLAL_ENOMEM);
 	}
 
 	/*
@@ -140,7 +140,7 @@ static struct injection_document *load_injection_document(const char *filename, 
 
 	new->has_sim_burst_table = XLALLIGOLwHasTable(filename, "sim_burst");
 	if(new->has_sim_burst_table < 0) {
-		XLALPrintError("%s(): error searching for sim_burst table in \"%s\": %s\n", func, filename, XLALErrorString(xlalErrno));
+		XLALPrintError("%s(): error searching for sim_burst table in \"%s\": %s\n", __func__, filename, XLALErrorString(xlalErrno));
 		XLALClearErrno();
 		new->has_sim_burst_table = 0;
 		new->sim_burst_table_head = NULL;
@@ -149,10 +149,10 @@ static struct injection_document *load_injection_document(const char *filename, 
 		XLALClearErrno();
 		new->sim_burst_table_head = XLALSimBurstTableFromLIGOLw(filename, &start, &end);
 		if(XLALGetBaseErrno()) {
-			XLALPrintError("%s(): failure reading sim_burst table from \"%s\"\n", func, filename);
+			XLALPrintError("%s(): failure reading sim_burst table from \"%s\"\n", __func__, filename);
 			success = 0;
 		} else
-			XLALPrintInfo("%s(): found sim_burst table\n", func);
+			XLALPrintInfo("%s(): found sim_burst table\n", __func__);
 		XLALSortSimBurst(&new->sim_burst_table_head, XLALCompareSimBurstByGeocentTimeGPS);
 	} else
 		new->sim_burst_table_head = NULL;
@@ -163,7 +163,7 @@ static struct injection_document *load_injection_document(const char *filename, 
 
 	new->has_sim_inspiral_table = XLALLIGOLwHasTable(filename, "sim_inspiral");
 	if(new->has_sim_inspiral_table < 0) {
-		XLALPrintError("%s(): error searching for sim_inspiral table in \"%s\": %s\n", func, filename, XLALErrorString(xlalErrno));
+		XLALPrintError("%s(): error searching for sim_inspiral table in \"%s\": %s\n", __func__, filename, XLALErrorString(xlalErrno));
 		XLALClearErrno();
 		new->has_sim_inspiral_table = 0;
 		new->sim_inspiral_table_head = NULL;
@@ -172,12 +172,12 @@ static struct injection_document *load_injection_document(const char *filename, 
 		new->sim_inspiral_table_head = NULL;
 		nrows = SimInspiralTableFromLIGOLw(&new->sim_inspiral_table_head, filename, start.gpsSeconds - 1, end.gpsSeconds + 1);
 		if(nrows < 0) {
-			XLALPrintError("%s(): failure reading sim_inspiral table from \"%s\"\n", func, filename);
+			XLALPrintError("%s(): failure reading sim_inspiral table from \"%s\"\n", __func__, filename);
 			new->sim_inspiral_table_head = NULL;
 			success = 0;
 		} else {
 			/* FIXME no rows found raises an error we don't care about, but why ? */
-			XLALPrintInfo("%s(): found sim_inspiral table\n", func);
+			XLALPrintInfo("%s(): found sim_inspiral table\n", __func__);
 			XLALClearErrno();
 		}
 		XLALSortSimInspiral(&new->sim_inspiral_table_head, XLALCompareSimInspiralByGeocentEndTime);
@@ -189,9 +189,9 @@ static struct injection_document *load_injection_document(const char *filename, 
 	 */
 
 	if(!success) {
-		XLALPrintError("%s(): document is incomplete and/or malformed reading \"%s\"\n", func, filename);
+		XLALPrintError("%s(): document is incomplete and/or malformed reading \"%s\"\n", __func__, filename);
 		destroy_injection_document(new);
-		XLAL_ERROR_NULL(func, XLAL_EFUNC);
+		XLAL_ERROR_NULL(__func__, XLAL_EFUNC);
 	}
 
 	/*
@@ -205,7 +205,6 @@ static struct injection_document *load_injection_document(const char *filename, 
 static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element, const COMPLEX16FrequencySeries *response)
 {
 	LALPNOrder order = LAL_PNORDER_THREE_POINT_FIVE;
-	static const char func[] = "update_injection_cache";
 	unsigned injection_made;
 	double injTime;
 	REAL8 tmpREAL8;
@@ -324,7 +323,7 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 
 				if(!inspiral_response) {
 					free(newInjectionCacheElement);
-					XLAL_ERROR(func, XLAL_EFUNC);
+					XLAL_ERROR(__func__, XLAL_EFUNC);
 				}
 
 				if(response) {
@@ -344,7 +343,7 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 				if(!series) {
 					free(newInjectionCacheElement);
 					XLALDestroyCOMPLEX8FrequencySeries(inspiral_response);
-					XLAL_ERROR(func, XLAL_EFUNC);
+					XLAL_ERROR(__func__, XLAL_EFUNC);
 				}
 				memset(series->data->data, 0, series->data->length * sizeof(*series->data->data));
 
@@ -352,13 +351,13 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 				 * compute the injection waveform
 				 */
 
-				XLALPrintInfo("%s(): computing sim_inspiral injection ...\n", func);
+				XLALPrintInfo("%s(): computing sim_inspiral injection ...\n", __func__);
 				/* FIXME: figure out how to do error handling like this */
 				/*LAL_CALL(LALFindChirpInjectSignals(&stat, series, sim_inspiral_head, response), &stat);*/
 				XLALClearErrno();
 				memset(&stat, 0, sizeof(stat));
 				LALFindChirpInjectSignals(&stat, series, newInjectionCacheElement->sim_inspiral, inspiral_response);
-				XLALPrintInfo("%s(): done\n", func);
+				XLALPrintInfo("%s(): done\n", __func__);
 
 				XLALDestroyCOMPLEX8FrequencySeries(inspiral_response);
 
@@ -474,8 +473,8 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 
 			detector = XLALInstrumentNameToLALDetector(h->name);
 			if(!detector)
-				XLAL_ERROR(func, XLAL_EFUNC);
-			XLALPrintInfo("%s(): channel name is '%s', instrument appears to be '%s'\n", func, h->name, detector->frDetector.prefix);
+				XLAL_ERROR(__func__, XLAL_EFUNC);
+			XLALPrintInfo("%s(): channel name is '%s', instrument appears to be '%s'\n", __func__, h->name, detector->frDetector.prefix);
 			detector_copy = *detector;
 
 			/* construct the h+ and hx time series for the injection
@@ -483,7 +482,7 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 			 * t = 0 is the "time" of the injection. */
 
 			if(XLALGenerateSimBurst(&hplus, &hcross, newInjectionCacheElement->sim_burst, h->deltaT))
-				XLAL_ERROR(func, XLAL_EFUNC);
+				XLAL_ERROR(__func__, XLAL_EFUNC);
 
 			/* add the time of the injection at the geocentre to the
 			 * start times of the h+ and hx time series.  after this,
@@ -500,7 +499,7 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 			XLALDestroyREAL8TimeSeries(hplus);
 			XLALDestroyREAL8TimeSeries(hcross);
 			if(!strain)
-				XLAL_ERROR(func, XLAL_EFUNC);
+				XLAL_ERROR(__func__, XLAL_EFUNC);
 
 			/*
 			 * convert the REAL8TimeSeries to a REAL4TimeSeries
@@ -508,7 +507,7 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 
 			series = XLALCreateREAL4TimeSeries(strain->name, &strain->epoch, strain->f0, strain->deltaT, &strain->sampleUnits, strain->data->length);
 			if(!series)
-				XLAL_ERROR(func, XLAL_EFUNC);
+				XLAL_ERROR(__func__, XLAL_EFUNC);
 			underflow_protection = 1e-20;
 			for(i=0; i<strain->data->length; i++)
 				series->data->data[i] = (REAL4) (strain->data->data[i]/underflow_protection);
@@ -716,18 +715,29 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 {
 	GSTLALSimulation *element = GSTLAL_SIMULATION(GST_PAD_PARENT(pad));
 
-	if (GST_EVENT_TYPE(event) == GST_EVENT_TAG) {
+	/*
+	 * Check for tag events
+	 */
+
+	if(GST_EVENT_TYPE(event) == GST_EVENT_TAG) {
 		GstTagList *taglist;
 		gchar *instrument = NULL, *channel_name = NULL, *units = NULL;
 
-		/* Attempt to extract all 3 tags from the event's taglist. */
+		/*
+		 * Attempt to extract all 3 tags from the event's taglist
+		 */
+
 		gst_event_parse_tag(event, &taglist);
 		gst_tag_list_get_string(taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
 		gst_tag_list_get_string(taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
 		gst_tag_list_get_string(taglist, GSTLAL_TAG_UNITS, &units);
 
+		/*
+		 * If any of the 3 tags were provided, discard all stored
+		 * values.
+		 */
+
 		if(instrument || channel_name || units) {
-			/* If any of the 3 tags were provided, we discard the old, stored values. */
 			g_free(element->instrument);
 			element->instrument = NULL;
 			g_free(element->channel_name);
@@ -735,8 +745,13 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 			g_free(element->units);
 			element->units = NULL;
 
+			/*
+			 * If all 3 tags were provided, save the new values
+			 * --- we only accept new values if we are provided
+			 * with a complete set.
+			 */
+
 			if(instrument && channel_name && units) {
-				/* If all 3 tags were provided, we save the new values. */
 				element->instrument = instrument;
 				element->channel_name = channel_name;
 				element->units = units;
@@ -744,7 +759,11 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		}
 	}
 
-	/* Allow the default event handler to take over. Downstream elements may want to look at tags too. */
+	/*
+	 * Allow the default event handler to take over.  Downstream
+	 * elements might want to look at tags too.
+	 */
+
 	return gst_pad_event_default(pad, event);
 }
 
@@ -764,10 +783,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 * If no injection list, reduce to pass-through
 	 */
 
-	if(!element->xml_location) {
-		result = gst_pad_push(element->srcpad, buf);
-		goto done;
-	}
+	if(!element->xml_location)
+		goto push;
 
 	/*
 	 * Load injections if needed
@@ -795,14 +812,19 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 
 	if(!element->instrument || !element->channel_name || !element->units) {
 		GST_ERROR_OBJECT(element, "stream metadata not available, cannot construct injections");
-		result = gst_pad_push(element->srcpad, buf);
-		goto done;
+		goto push;
 	}
 
 	/*
 	 * Wrap buffer in a LAL REAL8TimeSeries.
 	 */
 
+	buf = gst_buffer_make_writable(buf);
+	if(!buf) {
+		GST_ERROR_OBJECT(element, "gst_buffer_make_writable() failed");
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
 	h = gstlal_REAL8TimeSeries_from_buffer(buf, element->instrument, element->channel_name, element->units);
 	if(!h) {
 		GST_ERROR_OBJECT(element, "failure wrapping buffer in REAL8TimeSeries");
@@ -850,6 +872,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 * Push data out srcpad
 	 */
 
+push:
 	result = gst_pad_push(element->srcpad, buf);
 
 	/*
@@ -884,6 +907,7 @@ static void finalize(GObject * object)
 	g_free(element->xml_location);
 	element->xml_location = NULL;
 	destroy_injection_document(element->injection_document);
+	element->injection_document = NULL;
 	g_free(element->instrument);
 	element->instrument = NULL;
 	g_free(element->channel_name);
