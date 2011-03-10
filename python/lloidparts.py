@@ -193,7 +193,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 	return elems[-1]
 
 
-def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8):
+def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_filename=None):
 	"""Build pipeline stage to whiten and downsample h(t)."""
 
 	#
@@ -213,16 +213,15 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8):
 		"lal_nofakedisconts", {"silent": True},
 		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % source_rate)},
 		"lal_whiten", {"fft-length": psd_fft_length, "zero-pad": 0, "average-samples": 64, "median-samples": 7},
-		"lal_nofakedisconts", {"silent": True},
-		"tee"
+		"lal_nofakedisconts", {"silent": True}
 	)
 
 	if psd is None:
 		# use running average PSD
-		elems[-3].set_property("psd-mode", 0)
+		elems[-2].set_property("psd-mode", 0)
 	else:
 		# use fixed PSD
-		elems[-3].set_property("psd-mode", 1)
+		elems[-2].set_property("psd-mode", 1)
 
 		#
 		# install signal handler to retrieve \Delta f when it is
@@ -238,8 +237,19 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8):
 			psd = cbc_template_fir.interpolate_psd(psd, delta_f)
 			elem.set_property("mean-psd", psd.data[:n])
 
-		elems[-3].connect_after("notify::f-nyquist", psd_resolution_changed, psd)
-		elems[-3].connect_after("notify::delta-f", psd_resolution_changed, psd)
+		elems[-2].connect_after("notify::f-nyquist", psd_resolution_changed, psd)
+		elems[-2].connect_after("notify::delta-f", psd_resolution_changed, psd)
+
+	head = elems[-1]
+
+	# optionally add vetoes
+	if veto_filename is not None:
+		segsrc = pipeparts.mksegsrc(pipeline, veto_filename)
+		gate = pipeparts.mkgate(pipeline, head, threshold = 0.1, control = segsrc, invert_output=True)
+		head = gate
+
+	# put in the final tee
+	elems = mkelems_fast(pipeline, head, "tee")
 
 	#
 	# down-sample whitened time series to remaining target sample rates
@@ -510,7 +520,7 @@ def mkLLOIDsnrToTriggers(pipeline, snr_tee, bank, verbose = False, nxydump_segme
 #
 
 
-def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, verbose = False, nxydump_segment = None):
+def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, veto_filename=None, verbose = False, nxydump_segment = None):
 	#
 	# xml stream aggregator
 	#
@@ -529,7 +539,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	for instrument in detectors:
 		rates = set(rate for bank in banks for rate in bank.get_rates())
 		head = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data=fake_data, online_data=online_data, injection_filename=injection_filename, verbose=verbose)
-		hoftdict = mkLLOIDsrc(pipeline, head, rates, psd=psd, psd_fft_length=psd_fft_length)
+		hoftdict = mkLLOIDsrc(pipeline, head, rates, psd=psd, psd_fft_length=psd_fft_length, veto_filename=None)
 		for bank in banks:
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
 			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % bank.logname, segment = nxydump_segment)
