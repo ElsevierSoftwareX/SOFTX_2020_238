@@ -110,7 +110,6 @@ typedef struct {
 	double max_gap;
 	SnglInspiralTable *last_event;
 	LIGOTimeGPS *last_time;
-	int algorithm;
 	double complex *maxsnr;
 	double *maxchisq;
 	guint *maxsample;

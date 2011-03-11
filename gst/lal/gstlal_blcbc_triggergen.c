@@ -61,12 +61,7 @@
 
 
 #define DEFAULT_SNR_THRESH 5.5
-#define DEFAULT_MAX_GAP 0.01
-
-enum trigger_algorithm {
-	MAX_OVER_THRESHOLD = 1,
-	BOUNDED_LATENCY
-};
+#define DEFAULT_MAX_GAP 1.0
 
 
 /*
@@ -275,6 +270,7 @@ static GstClockTime chisq_bytes_to_time(GSTLALBLCBCTriggerGen *element, guint by
 	return (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, bytes, element->num_templates * sizeof(double) * element->rate);
 }
 
+#if 0
 static guint chisq_time_to_bytes(GSTLALBLCBCTriggerGen *element, GstClockTime time)
 {
 
@@ -285,6 +281,7 @@ static guint chisq_time_to_bytes(GSTLALBLCBCTriggerGen *element, GstClockTime ti
 
 	return (guint) gst_util_uint64_scale_int_round(time, element->rate, GST_SECOND) * element->num_templates * sizeof(double);
 }
+#endif
 
 static GstClockTime available_snr_time(GSTLALBLCBCTriggerGen *element)
 {
@@ -423,78 +420,6 @@ static void fix_snr_chisq_timestamps(GSTLALBLCBCTriggerGen *element, GstBuffer *
  */
 
 
-static guint max_over_threshold(GSTLALBLCBCTriggerGen *element, GstBuffer *snrbuf, GstBuffer *chisqbuf, GstBuffer *srcbuf, SnglInspiralTable **headptr)
-{
-
-	/*
-	 * A verbatim copy of the original triggering algorithm
-	 */
-
-	const double complex *snrdata = (const double complex *) GST_BUFFER_DATA(snrbuf);
-	const double *chisqdata = (const double *) GST_BUFFER_DATA(chisqbuf);
-	guint64 t0;
-	guint64 length;
-	guint sample;
-	gint channel;
-	SnglInspiralTable *head = NULL;
-	guint nevents = 0;
-
-	length = MIN(GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf));
-	if(GST_BUFFER_TIMESTAMP(snrbuf) > GST_BUFFER_TIMESTAMP(chisqbuf)) {
-		length -= t0 = GST_BUFFER_TIMESTAMP(snrbuf);
-		chisqdata += gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(snrbuf) - GST_BUFFER_TIMESTAMP(chisqbuf), element->rate, GST_SECOND) * element->num_templates;
-	} else {
-		length -= t0 = GST_BUFFER_TIMESTAMP(chisqbuf);
-		snrdata += gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(chisqbuf) - GST_BUFFER_TIMESTAMP(snrbuf), element->rate, GST_SECOND) * element->num_templates;
-	}
-	length = gst_util_uint64_scale_int_round(length, element->rate, GST_SECOND);
-
-	GST_DEBUG_OBJECT(element, "searching %" G_GUINT64_FORMAT " samples at %" GST_TIME_SECONDS_FORMAT " for events", length, GST_TIME_SECONDS_ARGS(t0));
-	g_mutex_lock(element->bank_lock);
-	for(sample = 0; sample < length; sample++) {
-		LIGOTimeGPS t;
-		XLALINT8NSToGPS(&t, t0);
-		XLALGPSAdd(&t, (double) sample / element->rate);
-
-		for(channel = 0; channel < element->num_templates; channel++) {
-			if(cabs(*snrdata) >= element->snr_thresh) {
-				if(XLALGPSDiff(&t, &element->last_time[channel]) > element->max_gap) {
-					/*
-					 * New event.  prepend last
-					 * event to event list and
-					 * start a new one.
-					 */
-					if(element->last_event[channel].snr != 0) {
-						SnglInspiralTable *new = calloc(1, sizeof(*new));
-						*new = element->last_event[channel];
-						new->next = head;
-						head = new;
-						nevents++;
-					}
-					record_inspiral_event(&element->last_event[channel], t, *snrdata, *chisqdata, channel, element);
-				} else if(cabs(*snrdata) > element->last_event[channel].snr) {
-					/*
-					 * Same event, higher SNR,
-					 * update
-					 */
-					record_inspiral_event(&element->last_event[channel], t, *snrdata, *chisqdata, channel, element);
-				} else {
-					/*
-					 * Same event, not higher
-					 * SNR, do nothing
-					 */
-				}
-				element->last_time[channel] = t;
-			}
-
-			snrdata++;
-			chisqdata++;
-		}
-	}
-	g_mutex_unlock(element->bank_lock);
-	*headptr = head;
-	return nevents;
-}
 
 static int higher_adjacent_snr(GSTLALBLCBCTriggerGen *element, const double complex *leftsnr, const double complex *rightsnr, double complex snr, gint channel, guint sample, guint64 length)
 {
@@ -628,7 +553,7 @@ static guint bounded_latency(GSTLALBLCBCTriggerGen *element, GstBuffer *snrbuf, 
 
 static gboolean gen_setcaps(GstPad *pad, GstCaps *caps)
 {
-	GSTLALBLCBCTriggerGen *element = GSTLAL_TRIGGERGEN(gst_pad_get_parent(pad));
+	GSTLALBLCBCTriggerGen *element = GSTLAL_BLCBC_TRIGGERGEN(gst_pad_get_parent(pad));
 	GstStructure *structure;
 	gint rate, width, channels;
 	gboolean success = TRUE;
@@ -670,7 +595,7 @@ static gboolean gen_setcaps(GstPad *pad, GstCaps *caps)
 
 static gboolean src_event(GstPad *pad, GstEvent *event)
 {
-	GSTLALBLCBCTriggerGen *element = GSTLAL_TRIGGERGEN(GST_PAD_PARENT(pad));
+	GSTLALBLCBCTriggerGen *element = GSTLAL_BLCBC_TRIGGERGEN(GST_PAD_PARENT(pad));
 	gboolean success;
 
 	switch(GST_EVENT_TYPE(event)) {
@@ -771,7 +696,7 @@ static gboolean taglist_extract_string(GSTLALBLCBCTriggerGen *element, GstTagLis
 
 static gboolean snr_event(GstPad *pad, GstEvent *event)
 {
-	GSTLALBLCBCTriggerGen *element = GSTLAL_TRIGGERGEN(GST_PAD_PARENT(pad));
+	GSTLALBLCBCTriggerGen *element = GSTLAL_BLCBC_TRIGGERGEN(GST_PAD_PARENT(pad));
 	gboolean success;
 
 	switch(GST_EVENT_TYPE(event)) {
@@ -908,7 +833,7 @@ static GstFlowReturn push_buffer(GSTLALBLCBCTriggerGen *element, GstBuffer *srcb
 
 static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 {
-	GSTLALBLCBCTriggerGen *element = GSTLAL_TRIGGERGEN(user_data);
+	GSTLALBLCBCTriggerGen *element = GSTLAL_BLCBC_TRIGGERGEN(user_data);
 	GstClockTime earliest_input_t_start, earliest_input_t_end;
 	GstBuffer *snrbuf = NULL;
 	GstBuffer *chisqbuf = NULL;
@@ -1048,119 +973,76 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 * timestamps, and end time is last of the two input end times.
 	 */
 
-	if (element->algorithm==MAX_OVER_THRESHOLD) {
-		if(GST_BUFFER_FLAG_IS_SET(snrbuf, GST_BUFFER_FLAG_GAP) || GST_BUFFER_FLAG_IS_SET(chisqbuf, GST_BUFFER_FLAG_GAP)) {
 
-			/*
-			 * GAP --> no-op
-			 */
+	SnglInspiralTable *head = NULL;
+	double max_gap = ceil(element->max_gap * element->rate) / element->rate;
 
-			GST_DEBUG_OBJECT(element, "input is gap, sending gap downstream");
+	if (GST_BUFFER_FLAG_IS_SET(snrbuf, GST_BUFFER_FLAG_GAP) || GST_BUFFER_FLAG_IS_SET(chisqbuf, GST_BUFFER_FLAG_GAP)) {
+
+		/*
+		 * Buffer is GAP, push zeros
+		 */
+		push_zeros(element, element->snradapter, snrbuf);
+		push_zeros(element, element->chisqadapter, chisqbuf);
+
+		/*
+		 * We are done with snr and chisq buffers
+		 */
+
+		gst_buffer_unref(snrbuf);
+		snrbuf = NULL;
+		gst_buffer_unref(chisqbuf);
+		chisqbuf = NULL;
+	}
+	else {
+
+		/*
+		 * Buffer is not a gap
+		 * Push buffers into adapters
+		 */
+
+		gst_adapter_push(element->snradapter, snrbuf);
+		snrbuf = NULL;
+		gst_adapter_push(element->chisqadapter, chisqbuf);
+		chisqbuf = NULL;
+	}
+
+	result = align_adapters(element);
+	if (result != GST_FLOW_OK) {
+		GST_ERROR_OBJECT(element, "align_adapters() failed");
+		goto error;
+	}
+
+	if (available_snr_time(element) <= 3 * max_gap * GST_SECOND || available_chisq_time(element) <= 3 * max_gap * GST_SECOND) {
+		goto wait;
+	}
+
+	while (available_snr_time(element) > 3 * max_gap * GST_SECOND && available_chisq_time(element) > 3 * max_gap * GST_SECOND) {
+
+		take_snr_chisq_buffers(element, max_gap*GST_SECOND, &snrbuf, &chisqbuf);
+		nevents = bounded_latency(element, snrbuf, chisqbuf, srcbuf, &head);
+		/* We actually record triggers one buffer ahead of snrbuf */
+		fix_snr_chisq_timestamps(element, snrbuf, chisqbuf);
+
+		if(nevents) {
+			result = prepare_trigger_buffer(element, &srcbuf, &head, nevents);
+			if(result != GST_FLOW_OK) {
+				GST_ERROR_OBJECT(element, "prepare_trigger_buffer() failed");
+				goto error;
+			}
+		} else {
+			GST_DEBUG_OBJECT(element, "found 0 events, sending gap downstream");
 			result = prepare_gap_buffer(element, &srcbuf);
 			if (result != GST_FLOW_OK) {
 				GST_ERROR_OBJECT(element, "prepare_gap_buffer() failed");
 				goto error;
 			}
-		} else {
-			SnglInspiralTable *head = NULL;
-			nevents = max_over_threshold(element, snrbuf, chisqbuf, srcbuf, &head);
-			if(nevents) {
-
-				result = prepare_trigger_buffer(element, &srcbuf, &head, nevents);
-				if(result != GST_FLOW_OK) {
-					GST_ERROR_OBJECT(element, "prepare_trigger_buffer() failed");
-					goto error;
-				}
-			} else {
-				GST_DEBUG_OBJECT(element, "found 0 events, sending gap downstream");
-				result = prepare_gap_buffer(element, &srcbuf);
-				if (result != GST_FLOW_OK) {
-					GST_ERROR_OBJECT(element, "prepare_gap_buffer() failed");
-					goto error;
-				}
-			}
 		}
-
 		/*
 		 * Push buffer downstream
 		 */
 
 		result = push_buffer(element, srcbuf, snrbuf, chisqbuf);
-	}
-
-	if (element->algorithm == BOUNDED_LATENCY) {
-
-		SnglInspiralTable *head = NULL;
-		double max_gap = ceil(element->max_gap * element->rate) / element->rate;
-
-		if (GST_BUFFER_FLAG_IS_SET(snrbuf, GST_BUFFER_FLAG_GAP) || GST_BUFFER_FLAG_IS_SET(chisqbuf, GST_BUFFER_FLAG_GAP)) {
-
-			/*
-			 * Buffer is GAP, push zeros
-			 */
-			push_zeros(element, element->snradapter, snrbuf);
-			push_zeros(element, element->chisqadapter, chisqbuf);
-
-			/*
-			 * We are done with snr and chisq buffers
-			 */
-
-			gst_buffer_unref(snrbuf);
-			snrbuf = NULL;
-			gst_buffer_unref(chisqbuf);
-			chisqbuf = NULL;
-		}
-		else {
-
-			/*
-			 * Buffer is not a gap
-			 * Push buffers into adapters
-			 */
-
-			gst_adapter_push(element->snradapter, snrbuf);
-			snrbuf = NULL;
-			gst_adapter_push(element->chisqadapter, chisqbuf);
-			chisqbuf = NULL;
-		}
-
-		result = align_adapters(element);
-		if (result != GST_FLOW_OK) {
-			GST_ERROR_OBJECT(element, "align_adapters() failed");
-			goto error;
-		}
-
-		if (available_snr_time(element) <= 3 * max_gap * GST_SECOND || available_chisq_time(element) <= 3 * max_gap * GST_SECOND) {
-			goto wait;
-		}
-
-		while (available_snr_time(element) > 3 * max_gap * GST_SECOND && available_chisq_time(element) > 3 * max_gap * GST_SECOND) {
-
-			take_snr_chisq_buffers(element, max_gap*GST_SECOND, &snrbuf, &chisqbuf);
-			nevents = bounded_latency(element, snrbuf, chisqbuf, srcbuf, &head);
-			/* We actually record triggers one buffer ahead of snrbuf */
-			fix_snr_chisq_timestamps(element, snrbuf, chisqbuf);
-
-			if(nevents) {
-				result = prepare_trigger_buffer(element, &srcbuf, &head, nevents);
-				if(result != GST_FLOW_OK) {
-					GST_ERROR_OBJECT(element, "prepare_trigger_buffer() failed");
-					goto error;
-				}
-			} else {
-				GST_DEBUG_OBJECT(element, "found 0 events, sending gap downstream");
-				result = prepare_gap_buffer(element, &srcbuf);
-				if (result != GST_FLOW_OK) {
-					GST_ERROR_OBJECT(element, "prepare_gap_buffer() failed");
-					goto error;
-				}
-			}
-
-			/*
-			 * Push buffer downstream
-			 */
-
-			result = push_buffer(element, srcbuf, snrbuf, chisqbuf);
-		}
 	}
 
 	return result;
@@ -1203,13 +1085,12 @@ enum gen_property {
 	ARG_BANK_FILENAME,
 	ARG_MAX_GAP,
 	ARG_SIGMASQ,
-	ARG_ALGORITHM
 };
 
 
 static void gen_set_property(GObject *object, enum gen_property id, const GValue *value, GParamSpec *pspec)
 {
-	GSTLALBLCBCTriggerGen *element = GSTLAL_TRIGGERGEN(object);
+	GSTLALBLCBCTriggerGen *element = GSTLAL_BLCBC_TRIGGERGEN(object);
 
 	GST_OBJECT_LOCK(element);
 	switch(id) {
@@ -1247,10 +1128,6 @@ static void gen_set_property(GObject *object, enum gen_property id, const GValue
 		break;
 	}
 
-	case ARG_ALGORITHM:
-		element->algorithm = g_value_get_int(value);
-		break;
-
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -1261,7 +1138,7 @@ static void gen_set_property(GObject *object, enum gen_property id, const GValue
 
 static void gen_get_property(GObject * object, enum gen_property id, GValue * value, GParamSpec * pspec)
 {
-	GSTLALBLCBCTriggerGen *element = GSTLAL_TRIGGERGEN(object);
+	GSTLALBLCBCTriggerGen *element = GSTLAL_BLCBC_TRIGGERGEN(object);
 
 	GST_OBJECT_LOCK(element);
 	switch(id) {
@@ -1295,10 +1172,6 @@ static void gen_get_property(GObject * object, enum gen_property id, GValue * va
 		break;
 	}
 
-	case ARG_ALGORITHM:
-		g_value_set_int(value, element->algorithm);
-		break;
-
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -1321,7 +1194,7 @@ static GstElementClass *gen_parent_class = NULL;
 
 static void gen_finalize(GObject *object)
 {
-	GSTLALBLCBCTriggerGen *element = GSTLAL_TRIGGERGEN(object);
+	GSTLALBLCBCTriggerGen *element = GSTLAL_BLCBC_TRIGGERGEN(object);
 	g_mutex_free(element->bank_lock);
 	element->bank_lock = NULL;
 	free_bankfile(element);
@@ -1337,7 +1210,7 @@ static void gen_finalize(GObject *object)
 
 static GstStateChangeReturn gen_change_state(GstElement *element, GstStateChange transition)
 {
-	GSTLALBLCBCTriggerGen *triggergen = GSTLAL_TRIGGERGEN(element);
+	GSTLALBLCBCTriggerGen *triggergen = GSTLAL_BLCBC_TRIGGERGEN(element);
 
 	switch(transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
@@ -1494,23 +1367,12 @@ static void gen_class_init(gpointer klass, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
-	g_object_class_install_property(
-		gobject_class,
-		ARG_ALGORITHM,
-		g_param_spec_int(
-			"algorithm",
-			"Triggering algorithm",
-			"1) max over threshold algorithm. 2) bounded latency (max every max-gap seconds)",
-			1, 2, MAX_OVER_THRESHOLD,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-		)
-	);
 }
 
 
 static void gen_instance_init(GTypeInstance *object, gpointer klass)
 {
-	GSTLALBLCBCTriggerGen *element = GSTLAL_TRIGGERGEN(object);
+	GSTLALBLCBCTriggerGen *element = GSTLAL_BLCBC_TRIGGERGEN(object);
 	GstPad *pad;
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
@@ -1561,7 +1423,6 @@ static void gen_instance_init(GTypeInstance *object, gpointer klass)
 	element->max_gap = DEFAULT_MAX_GAP;
 	element->last_event = NULL;
 	element->last_time = NULL;
-	element->algorithm = MAX_OVER_THRESHOLD;
 	element->align_adapters = TRUE;
 	element->maxsample = NULL;
 	element->maxsnr = NULL;
