@@ -61,7 +61,7 @@
 
 
 #define DEFAULT_SNR_THRESH 5.5
-#define DEFAULT_MAX_GAP 1.0
+#define DEFAULT_WINDOW 1.0
 
 
 /*
@@ -975,7 +975,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 
 
 	SnglInspiralTable *head = NULL;
-	double max_gap = ceil(element->max_gap * element->rate) / element->rate;
+	double window = ceil(element->window * element->rate) / element->rate;
 
 	if (GST_BUFFER_FLAG_IS_SET(snrbuf, GST_BUFFER_FLAG_GAP) || GST_BUFFER_FLAG_IS_SET(chisqbuf, GST_BUFFER_FLAG_GAP)) {
 
@@ -1013,13 +1013,13 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		goto error;
 	}
 
-	if (available_snr_time(element) <= 3 * max_gap * GST_SECOND || available_chisq_time(element) <= 3 * max_gap * GST_SECOND) {
+	if (available_snr_time(element) <= 3 * window * GST_SECOND || available_chisq_time(element) <= 3 * window * GST_SECOND) {
 		goto wait;
 	}
 
-	while (available_snr_time(element) > 3 * max_gap * GST_SECOND && available_chisq_time(element) > 3 * max_gap * GST_SECOND) {
+	while (available_snr_time(element) > 3 * window * GST_SECOND && available_chisq_time(element) > 3 * window * GST_SECOND) {
 
-		take_snr_chisq_buffers(element, max_gap*GST_SECOND, &snrbuf, &chisqbuf);
+		take_snr_chisq_buffers(element, window*GST_SECOND, &snrbuf, &chisqbuf);
 		nevents = bounded_latency(element, snrbuf, chisqbuf, srcbuf, &head);
 		/* We actually record triggers one buffer ahead of snrbuf */
 		fix_snr_chisq_timestamps(element, snrbuf, chisqbuf);
@@ -1083,7 +1083,7 @@ eos:
 enum gen_property {
 	ARG_SNR_THRESH = 1,
 	ARG_BANK_FILENAME,
-	ARG_MAX_GAP,
+	ARG_WINDOW,
 	ARG_SIGMASQ,
 };
 
@@ -1104,8 +1104,8 @@ static void gen_set_property(GObject *object, enum gen_property id, const GValue
 		g_mutex_unlock(element->bank_lock);
 		break;
 
-	case ARG_MAX_GAP:
-		element->max_gap = g_value_get_double(value);
+	case ARG_WINDOW:
+		element->window = g_value_get_double(value);
 		break;
 
 	case ARG_SIGMASQ: {
@@ -1152,8 +1152,8 @@ static void gen_get_property(GObject * object, enum gen_property id, GValue * va
 		g_mutex_unlock(element->bank_lock);
 		break;
 
-	case ARG_MAX_GAP:
-		g_value_set_double(value, element->max_gap);
+	case ARG_WINDOW:
+		g_value_set_double(value, element->window);
 		break;
 
 	case ARG_SIGMASQ: {
@@ -1252,11 +1252,13 @@ static void gen_base_init(gpointer g_class)
 		"Filter",
 		"Produce sngl_inspiral records from SNR and chi squared.\n"
 		"A trigger is recorded for every instant at which the absolute value of the SNR\n" \
-		"is greater than snr-thresh, and also greater than at all of the max_gap seconds\n" \
-		"of data that come before and after.  snr-thresh and max_gap are properties of\n" \
-		"this element.\n" \
+		"is greater than snr-thresh, and also greater than at all of the window seconds\n" \
+		"of data that come before and after.  snr-thresh and window are properties of\n" \
+		"this element.  This element has a bounded latency of ~ window and is suitable\n" \
+		"for online applications, or applications where precise triggering behavior with \n" \
+		"small chunks of data is required \n" \
 		"\n" \
-		"The maximum possible trigger rate is (1/max_gap) Hz per template.\n", \
+		"The maximum possible trigger rate is (1/window) Hz per template.\n", \
 		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
 	);
 
@@ -1341,12 +1343,12 @@ static void gen_class_init(gpointer klass, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_MAX_GAP,
+		ARG_WINDOW,
 		g_param_spec_double(
-			"max-gap",
-			"Maximum below-threshold gap (seconds)",
-			"If the SNR drops below threshold for less than this interval (in seconds) then it is not the start of a new event.",
-			0, G_MAXDOUBLE, DEFAULT_MAX_GAP,
+			"window",
+			"Minimum time between triggers (seconds)",
+			"For SNRs above threshold trigger will be produced if no higher SNR is within window seconds.",
+			0, G_MAXDOUBLE, DEFAULT_WINDOW,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
@@ -1420,7 +1422,7 @@ static void gen_instance_init(GTypeInstance *object, gpointer klass)
 	element->bank = NULL;
 	element->num_templates = 0;
 	element->snr_thresh = DEFAULT_SNR_THRESH;
-	element->max_gap = DEFAULT_MAX_GAP;
+	element->window = DEFAULT_WINDOW;
 	element->last_event = NULL;
 	element->last_time = NULL;
 	element->align_adapters = TRUE;

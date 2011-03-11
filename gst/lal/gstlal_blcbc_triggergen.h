@@ -107,7 +107,7 @@ typedef struct {
 	SnglInspiralTable *bank;
 	gint num_templates;
 	double snr_thresh;
-	double max_gap;
+	double window;
 	SnglInspiralTable *last_event;
 	LIGOTimeGPS *last_time;
 	double complex *maxsnr;
