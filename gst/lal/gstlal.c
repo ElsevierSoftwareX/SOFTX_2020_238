@@ -78,6 +78,7 @@
 #include <gstlal_timeslicechisq.h>
 #include <gstlal_specgram.h>
 #include <gstlal_segmentsrc.h>
+#include <gstlal_blcbc_triggergen.h>
 
 
 /*
@@ -133,6 +134,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_timeslicechisq", GSTLAL_TIMESLICECHISQUARE_TYPE},
 		{"lal_specgram", GSTLAL_SPECGRAM_TYPE},
 		{"lal_segmentsrc", GSTLAL_SEGMENTSRC_TYPE},
+		{"lal_blcbctriggergen", GSTLAL_BLCBC_TRIGGERGEN_TYPE},
 		{NULL, 0},
 	};
 
