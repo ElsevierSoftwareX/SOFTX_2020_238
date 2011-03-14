@@ -244,9 +244,11 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_segments=N
 
 	# optionally add vetoes
 	if veto_segments is not None:
+		print "\n\n vetoes \n\n"
 		# FIXME this assumes that it comes from a call to ligolw_segment_query
 		segsrc = pipeparts.mksegsrc(pipeline, veto_segments)
-		gate = pipeparts.mkgate(pipeline, head, threshold = 0.1, control = segsrc, invert_output=True)
+		q = pipeparts.mkqueue(pipeline, segsrc)
+		gate = pipeparts.mkgate(pipeline, head, threshold = 0.1, control = q, invert_output=True)
 		head = gate
 
 	# put in the final tee
@@ -540,7 +542,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	for instrument in detectors:
 		rates = set(rate for bank in banks for rate in bank.get_rates())
 		head = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data=fake_data, online_data=online_data, injection_filename=injection_filename, verbose=verbose)
-		hoftdict = mkLLOIDsrc(pipeline, head, rates, psd=psd, psd_fft_length=psd_fft_length, veto_segments=None)
+		hoftdict = mkLLOIDsrc(pipeline, head, rates, psd=psd, psd_fft_length=psd_fft_length, veto_segments=veto_segments)
 		for bank in banks:
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
 			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % bank.logname, segment = nxydump_segment)
