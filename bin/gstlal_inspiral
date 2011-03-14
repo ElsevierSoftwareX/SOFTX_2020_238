@@ -42,6 +42,7 @@ import warnings
 from glue import segments
 from glue import segmentsUtils
 import glue.ligolw.utils.segments as ligolw_segments
+from glue.ligolw import utils
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import ligolw_output
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
