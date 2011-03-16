@@ -27,45 +27,44 @@
 
 
 G_BEGIN_DECLS
-
 #include "colormap_data.h"
-
 #define CAIROVIS_COLORMAP_TYPE \
 (cairovis_colormap_get_type())
-
-
-typedef struct {
-	size_t len;
-	double *x;
-	double *y;
+    typedef struct
+{
+  size_t len;
+  double *x;
+  double *y;
 } colormap_channel_data;
 
-typedef struct {
-	colormap_channel_data red, green, blue;
+typedef struct
+{
+  colormap_channel_data red, green, blue;
 } colormap_data;
 
 
-typedef struct {
-	gsl_spline *spline;
-	gsl_interp_accel *accel;
+typedef struct
+{
+  gsl_spline *spline;
+  gsl_interp_accel *accel;
 } colormap_channel;
 
 
-typedef struct {
-	colormap_channel red, green, blue;
+typedef struct
+{
+  colormap_channel red, green, blue;
 } colormap;
 
 
-gboolean colormap_get_data_by_name(enum cairovis_colormap_name key, colormap_data *data);
-colormap *colormap_create_by_name(enum cairovis_colormap_name key);
-void colormap_destroy(colormap *map);
-guint32 colormap_map(colormap *map, double x);
+gboolean colormap_get_data_by_name (enum cairovis_colormap_name key,
+    colormap_data * data);
+colormap *colormap_create_by_name (enum cairovis_colormap_name key);
+void colormap_destroy (colormap * map);
+guint32 colormap_map (colormap * map, double x);
 
 
 GType cairovis_colormap_get_type (void);
 
 
 G_END_DECLS
-
-
-#endif	/* __CAIROVIS_COLORMAP_H__ */
+#endif /* __CAIROVIS_COLORMAP_H__ */

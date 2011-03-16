@@ -24,8 +24,7 @@ from inspect import isfunction
 import sys
 
 
-header = """
-/*
+header = """/*
  * Copyright (c) 2010  Leo Singer
  *
  * Colormap data from Matplotlib's matplotlib.cm module, which is
@@ -44,9 +43,11 @@ try:
 	print >>file, header
 	print >>file, "#ifndef __CAIROVIS_COLORMAP_DATA_H__"
 	print >>file, "#define __CAIROVIS_COLORMAP_DATA_H__"
-	print >>file, "enum cairovis_colormap_name {"
+	print >>file
+	print >>file, "enum cairovis_colormap_name"
+	print >>file, "{"
 	for key, value in datad_items:
-		print >>file, "	CAIROVIS_COLORMAP_%s," % key
+		print >>file, "  CAIROVIS_COLORMAP_%s," % key
 	print >>file, "};"
 	print >>file, ""
 	print >>file, "#endif"
@@ -62,38 +63,39 @@ try:
 #include <glib.h>
 #include <glib-object.h>
 
-gboolean colormap_get_data_by_name(enum cairovis_colormap_name key, colormap_data *data) {
-	switch (key) {"""
+gboolean colormap_get_data_by_name(enum cairovis_colormap_name key, colormap_data *data)
+{
+  switch (key)
+  {"""
 	for key, value in datad_items:
-		print >>file, '		case CAIROVIS_COLORMAP_%s: {' % key
+		print >>file, '    case CAIROVIS_COLORMAP_%s: {' % key
 		for color in ('red', 'green', 'blue'):
-			print >>file, '			{'
-			print >>file, '				const double x[] = {', ','.join([repr(x) for x, y0, y1 in sorted(value[color])]), '};'
-			print >>file, '				const double y[] = {', ','.join([repr(y1) for x, y0, y1 in sorted(value[color])]), '};'
-			print >>file, '				data->%s.len = sizeof(x) / sizeof(double);' % color
-			print >>file, '				data->%s.x = g_memdup(x, sizeof(x));' % color
-			print >>file, '				data->%s.y = g_memdup(y, sizeof(y));' % color
-			print >>file, '			}'
-		print >>file, '		} return TRUE; break;'
-	print >>file, '		default: return FALSE;'
-	print >>file, "	}"
+			print >>file, '    {'
+			print >>file, '      const double x[] = {', ','.join([repr(x) for x, y0, y1 in sorted(value[color])]), '};'
+			print >>file, '      const double y[] = {', ','.join([repr(y1) for x, y0, y1 in sorted(value[color])]), '};'
+			print >>file, '      data->%s.len = sizeof(x) / sizeof(double);' % color
+			print >>file, '      data->%s.x = g_memdup(x, sizeof(x));' % color
+			print >>file, '      data->%s.y = g_memdup(y, sizeof(y));' % color
+			print >>file, '    }'
+		print >>file, '    } return TRUE; break;'
+	print >>file, '    default: return FALSE;'
+	print >>file, "  }"
 	print >>file, "}"
 	print >>file, """
 
 GType cairovis_colormap_get_type (void)
 {
-	static GType tp = 0;
-	static const GEnumValue values[] = {"""
+  static GType tp = 0;
+  static const GEnumValue values[] = {"""
 	for key, value in datad_items:
-		print >>file, '		{CAIROVIS_COLORMAP_%s, "%s", "%s"},' % (key, key, key)
-	print >>file, """		{0, NULL, NULL},
-	};
+		print >>file, '    {CAIROVIS_COLORMAP_%s, "%s", "%s"},' % (key, key, key)
+	print >>file, """    {0, NULL, NULL},
+  };
 
-	if (G_UNLIKELY (tp == 0)) {
-		tp = g_enum_register_static ("CairoVisColormap", values);
-	}
-	return tp;
-}
-	"""
+  if (G_UNLIKELY (tp == 0)) {
+    tp = g_enum_register_static ("CairoVisColormap", values);
+  }
+  return tp;
+}"""
 finally:
 	file.close()

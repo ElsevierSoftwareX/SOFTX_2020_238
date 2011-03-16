@@ -30,8 +30,6 @@
 
 
 G_BEGIN_DECLS
-
-
 #define CAIROVIS_WATERFALL_TYPE \
 	(cairovis_waterfall_get_type())
 #define CAIROVIS_WATERFALL(obj) \
@@ -42,43 +40,41 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_INSTANCE_TYPE((obj), CAIROVIS_WATERFALL_TYPE))
 #define GST_IS_CAIROVIS_WATERFALL_CLASS(klass) \
 	(G_TYPE_CHECK_CLASS_TYPE((klass), CAIROVIS_WATERFALL_TYPE))
-
-
-typedef struct {
-	CairoVisBaseClass parent_class;
+    typedef struct
+{
+  CairoVisBaseClass parent_class;
 } CairoVisWaterfallClass;
 
 
-typedef struct _CairoVisWaterfall {
-	CairoVisBase element;
+typedef struct _CairoVisWaterfall
+{
+  CairoVisBase element;
 
-	/* Pads */
-	GstPad *sinkpad;
-	GstAdapter *adapter;
+  /* Pads */
+  GstPad *sinkpad;
+  GstAdapter *adapter;
 
-	/* Properties */
-	GstClockTime history;
-	enum cairovis_scale zscale;
-	gchar *zlabel;
-	gboolean zautoscale;
-	gdouble zmin, zmax;
+  /* Properties */
+  GstClockTime history;
+  enum cairovis_scale zscale;
+  gchar *zlabel;
+  gboolean zautoscale;
+  gdouble zmin, zmax;
 
-	/* Internal data */
-	gint nchannels;
-	gint rate;
-	GstClockTime t0;
-	guint64 offset0;
-	guint64 last_offset_end;
-	guint64 frame_number;
-	enum cairovis_colormap_name map_name;
-	colormap *map;
+  /* Internal data */
+  gint nchannels;
+  gint rate;
+  GstClockTime t0;
+  guint64 offset0;
+  guint64 last_offset_end;
+  guint64 frame_number;
+  enum cairovis_colormap_name map_name;
+  colormap *map;
 } CairoVisWaterfall;
 
 
-GType cairovis_waterfall_get_type(void);
+GType cairovis_waterfall_get_type (void);
 
 
 G_END_DECLS
-
-
-#endif	/* __CAIROVIS_WATERFALL_H__ */
+#endif /* __CAIROVIS_WATERFALL_H__ */
