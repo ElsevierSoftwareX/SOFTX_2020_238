@@ -29,40 +29,38 @@
  */
 
 
-static void base_init(gpointer class)
+static void
+base_init (gpointer class)
 {
-	gst_element_class_set_details_simple(
-		GST_ELEMENT_CLASS(class),
-		"Unary operation base class",
-		"Filter/Audio",
-		"Base class for elements that provide unary arithmetic operations",
-		"Leo Singer <leo.singer@ligo.org>"
-	);
+  gst_element_class_set_details_simple (GST_ELEMENT_CLASS (class),
+      "Unary operation base class",
+      "Filter/Audio",
+      "Base class for elements that provide unary arithmetic operations",
+      "Leo Singer <leo.singer@ligo.org>");
 
-	gst_audio_filter_class_add_pad_templates(GST_AUDIO_FILTER_CLASS(class),
-		gst_caps_from_string(
-			"audio/x-raw-float, " \
-			"rate = (int) [1, MAX], " \
-			"endianness = (int) BYTE_ORDER, " \
-			"width = (int) {32, 64}, " \
-			"channels = (int) [1, MAX]"
-		)
-	);
+  gst_audio_filter_class_add_pad_templates (GST_AUDIO_FILTER_CLASS (class),
+      gst_caps_from_string ("audio/x-raw-float, "
+          "rate = (int) [1, MAX], "
+          "endianness = (int) BYTE_ORDER, "
+          "width = (int) {32, 64}, " "channels = (int) [1, MAX]")
+      );
 }
 
 
-GType unary_base_get_type(void)
+GType
+unary_base_get_type (void)
 {
-	static GType type = 0;
+  static GType type = 0;
 
-	if(!type) {
-		static const GTypeInfo info = {
-			.class_size = sizeof(UnaryBaseClass),
-			.base_init = base_init,
-			.instance_size = sizeof(UnaryBase),
-		};
-		type = g_type_register_static(GST_TYPE_AUDIO_FILTER, "UnaryBase", &info, 0);
-	}
+  if (!type) {
+    static const GTypeInfo info = {
+      .class_size = sizeof (UnaryBaseClass),
+      .base_init = base_init,
+      .instance_size = sizeof (UnaryBase),
+    };
+    type =
+        g_type_register_static (GST_TYPE_AUDIO_FILTER, "UnaryBase", &info, 0);
+  }
 
-	return type;
+  return type;
 }
