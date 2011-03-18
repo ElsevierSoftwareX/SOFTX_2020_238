@@ -29,6 +29,7 @@ typedef struct {
     gsl_matrix_ulong    *segment_matrix;
     gboolean            invert_output;
     gint 		rate;
+    gint 		width;
 
 } GSTLALSegmentSrc;
 
