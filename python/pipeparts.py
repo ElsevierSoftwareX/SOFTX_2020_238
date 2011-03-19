@@ -60,9 +60,12 @@ __date__ = "FIXME"
 def mksegmentsrc(pipeline, segment_list, blocksize = 4096 * 1 * 1, invert_output=False):
 	# default blocksize is 4096 seconds of unsigned integers at
 	# 1 Hz, e.g. segments without nanoseconds
-	varray = numpy.empty((len(segment_list), 2), dtype=numpy.int64)
+	varray = numpy.zeros((len(segment_list), 2), dtype=numpy.int64)
+	print varray
 	for i,v in enumerate(segment_list):
-		varray[i,:] = (v[0], v[1])
+		varray[i,0] = v[0].ns()
+		varray[i,1] = v[1].ns()
+	print varray
 	elem = gst.element_factory_make("lal_segmentsrc")
 	elem.set_property("blocksize", blocksize)
 	elem.set_property("segment-list", varray)
