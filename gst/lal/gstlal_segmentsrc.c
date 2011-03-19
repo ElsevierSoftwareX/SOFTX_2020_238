@@ -269,7 +269,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
         + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(*buffer), GST_SECOND, element->rate);
 
     GST_BUFFER_DURATION(*buffer) = stop - start;
-
+    
     /*
      * Mark the buffer according to the segments
      */
@@ -340,81 +340,87 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 	GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
 
 	switch(GST_QUERY_TYPE(query)) {
-	case GST_QUERY_FORMATS:
-		gst_query_set_formats(query, 5, GST_FORMAT_DEFAULT, GST_FORMAT_BYTES, GST_FORMAT_TIME, GST_FORMAT_BUFFERS, GST_FORMAT_PERCENT);
-		break;
 
-	case GST_QUERY_CONVERT: {
-		GstFormat src_format, dest_format;
-		gint64 src_value, dest_value;
-		guint64 offset;
-
-		gst_query_parse_convert(query, &src_format, &src_value, &dest_format, &dest_value);
-
-		switch(src_format) {
-		case GST_FORMAT_DEFAULT:
-		case GST_FORMAT_TIME:
-			if(src_value < basesrc->segment.start) {
-				GST_DEBUG("requested time precedes start of segment, clipping to start of segment");
-				offset = 0;
-			} else
-				offset = gst_util_uint64_scale_int_round(src_value - basesrc->segment.start, element->rate, GST_SECOND);
+		case GST_QUERY_FORMATS:
+			gst_query_set_formats(query, 5, GST_FORMAT_DEFAULT, GST_FORMAT_TIME, GST_FORMAT_BYTES, GST_FORMAT_BUFFERS, GST_FORMAT_PERCENT);
 			break;
 
-		case GST_FORMAT_BYTES:
-			offset = src_value / (element->width / 8);
-			break;
+		case GST_QUERY_CONVERT: {
+			GstFormat src_format, dest_format;
+			gint64 src_value, dest_value;
+			guint64 offset;
 
-		case GST_FORMAT_BUFFERS:
-			offset = gst_util_uint64_scale_int_round(src_value, gst_base_src_get_blocksize(basesrc), element->width / 8);
-			break;
+			gst_query_parse_convert(query, &src_format, &src_value, &dest_format, &dest_value);
+	
 
-		case GST_FORMAT_PERCENT:
-			if(src_value < 0) {
-				GST_DEBUG("requested percentage < 0, clipping to 0");
-				offset = 0;
-			} else if(src_value > 100) {
-				GST_DEBUG("requested percentage > 100, clipping to 100");
-				offset = basesrc->segment.stop - basesrc->segment.start;
-			} else
-				offset = gst_util_uint64_scale_int_round(basesrc->segment.stop - basesrc->segment.start, src_value, 100);
-			offset = gst_util_uint64_scale_int_round(offset, element->rate, GST_SECOND);
-			break;
+			if (src_format == dest_format) {
+				dest_value = src_value;
+				break;
+			}
+			
+			switch(src_format) {
+				case GST_FORMAT_DEFAULT:
+				case GST_FORMAT_TIME:
+					if(src_value < basesrc->segment.start) {
+						GST_DEBUG("requested time precedes start of segment, clipping to start of segment");
+						offset = 0;
+					} else
+						offset = gst_util_uint64_scale_int_round(src_value, element->rate, GST_SECOND);
+					break;
 
-		default:
-			g_assert_not_reached();
-			return FALSE;
-		}
-		switch(dest_format) {
-		case GST_FORMAT_DEFAULT:
-		case GST_FORMAT_TIME:
-			dest_value = basesrc->segment.start + gst_util_uint64_scale_int_round(offset, GST_SECOND, element->rate);
-			break;
+				case GST_FORMAT_BYTES:
+					offset = src_value / (element->width / 8);
+					break;
 
-		case GST_FORMAT_BYTES:
-			dest_value = offset * (element->width / 8);
-			break;
+				case GST_FORMAT_BUFFERS:
+					offset = gst_util_uint64_scale_int_round(src_value, gst_base_src_get_blocksize(basesrc), element->width / 8);
+					break;
 
-		case GST_FORMAT_BUFFERS:
-			dest_value = gst_util_uint64_scale_int_ceil(offset, element->width / 8, gst_base_src_get_blocksize(basesrc));
-			break;
+				case GST_FORMAT_PERCENT:
+					if(src_value < 0) {
+						GST_DEBUG("requested percentage < 0, clipping to 0");
+						offset = 0;
+					} else if(src_value > 100) {
+						GST_DEBUG("requested percentage > 100, clipping to 100");
+						offset = basesrc->segment.stop - basesrc->segment.start;
+					} else
+						offset = gst_util_uint64_scale_int_round(basesrc->segment.stop - basesrc->segment.start, src_value, 100);
+					offset = gst_util_uint64_scale_int_round(offset, element->rate, GST_SECOND);
+					break;
 
-		case GST_FORMAT_PERCENT:
-			dest_value = gst_util_uint64_scale_int_round(offset, 100, gst_util_uint64_scale_int_round(basesrc->segment.stop - basesrc->segment.start, element->rate, GST_SECOND));
-			break;
+				default:
+					g_assert_not_reached();
+					return FALSE;
+				}
+			
+			switch(dest_format) {
+				case GST_FORMAT_DEFAULT:
+				case GST_FORMAT_TIME:
+					dest_value = gst_util_uint64_scale_int_round(offset, GST_SECOND, element->rate);
+					break;
 
-		default:
-			g_assert_not_reached();
-			return FALSE;
-		}
+				case GST_FORMAT_BYTES:
+					dest_value = offset * (element->width / 8);
+					break;
 
+				case GST_FORMAT_BUFFERS:
+					dest_value = gst_util_uint64_scale_int_ceil(offset, element->width / 8, gst_base_src_get_blocksize(basesrc));
+					break;
+
+				case GST_FORMAT_PERCENT:
+					dest_value = gst_util_uint64_scale_int_round(offset, 100, gst_util_uint64_scale_int_round(basesrc->segment.stop - basesrc->segment.start, element->rate, GST_SECOND));
+					break;
+
+				default:
+					g_assert_not_reached();
+					return FALSE;
+			}
 		gst_query_set_convert(query, src_format, src_value, dest_format, dest_value);
-
 		break;
 	}
 
-	default:
-		return parent_class->query(basesrc, query);
+		default:
+			return parent_class->query(basesrc, query);
 	}
 
 	return TRUE;
@@ -660,4 +666,5 @@ static void gstlal_segmentsrc_init(GSTLALSegmentSrc *segment_src, GSTLALSegmentS
     /* FIXME hardcoded width */
     segment_src->width = 8;
     segment_src->segment_matrix_lock = g_mutex_new();
+    gst_base_src_set_format(GST_BASE_SRC(segment_src), GST_FORMAT_TIME);
 }
