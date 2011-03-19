@@ -35,7 +35,7 @@ pygst.require('0.10')
 import gst
 
 from glue import segments
-
+import numpy
 
 import pipeio
 from elements.channelgram import mkchannelgram
@@ -60,9 +60,12 @@ __date__ = "FIXME"
 def mksegmentsrc(pipeline, segment_list, blocksize = 4096 * 1 * 1, invert_output=False):
 	# default blocksize is 4096 seconds of unsigned integers at
 	# 1 Hz, e.g. segments without nanoseconds
+	varray = numpy.empty((len(segment_list), 2), dtype=numpy.int64)
+	for i,v in enumerate(segment_list):
+		varray[i,:] = (v[0], v[1])
 	elem = gst.element_factory_make("lal_segmentsrc")
 	elem.set_property("blocksize", blocksize)
-	elem.set_property("segment-list", segment_list)
+	elem.set_property("segment-list", varray)
 	elem.set_property("invert-output", invert_output) 
 	pipeline.add(elem)
 	return elem
