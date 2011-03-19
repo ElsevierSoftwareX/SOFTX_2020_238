@@ -253,7 +253,10 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_segments=N
 			if not segsrc.send_event(seekevent):
 				raise RuntimeError, "Element %s did not handle seek event" % segsrc.get_name()
 		q = pipeparts.mkqueue(pipeline, segsrc, max_size_buffers=0, max_size_bytes=0, max_size_time=(1 * gst.SECOND))
-		q = pipeparts.mkaudioconvert(pipeline, q, caps_string="audio/x-raw-float")
+		#q = pipeparts.mkaudioconvert(pipeline, q, caps_string="audio/x-raw-float")
+		#t = pipeparts.mktee(pipeline, q)
+		#q = pipeparts.mkqueue(pipeline, t)
+		#fs = pipeparts.mknxydumpsink(pipeline, t, "test.txt") 
 		head = pipeparts.mkgate(pipeline, head, threshold = 0.1, control = q)
 
 	# put in the final tee
