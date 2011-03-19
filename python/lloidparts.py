@@ -30,6 +30,7 @@ from gstlal import pipeio
 from gstlal import cbc_template_fir
 import math
 import sys
+import numpy
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -193,7 +194,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 	return elems[-1]
 
 
-def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_segments=None):
+def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_segments=None, seekevent=None):
 	"""Build pipeline stage to whiten and downsample h(t)."""
 
 	#
@@ -244,16 +245,21 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_segments=N
 
 	# optionally add vetoes
 	if veto_segments is not None:
-		print "\n\n vetoes \n\n"
-		# FIXME this assumes that it comes from a call to ligolw_segment_query
-		segsrc = pipeparts.mksegsrc(pipeline, veto_segments)
-		q = pipeparts.mkqueue(pipeline, segsrc)
-		gate = pipeparts.mkgate(pipeline, head, threshold = 0.1, control = q, invert_output=True)
-		head = gate
+		segsrc = pipeparts.mksegmentsrc(pipeline, veto_segments, invert_output=True)
+		if seekevent is not None:
+			print "\n\n seeking\n\n"
+			if segsrc.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
+				raise RuntimeError, "Element %s did not want to enter ready state" % segsrc.get_name()
+			if not segsrc.send_event(seekevent):
+				raise RuntimeError, "Element %s did not handle seek event" % segsrc.get_name()
+		q = pipeparts.mkqueue(pipeline, segsrc, max_size_buffers=0, max_size_bytes=0, max_size_time=(1 * gst.SECOND))
+		q = pipeparts.mkaudioconvert(pipeline, q, caps_string="audio/x-raw-float")
+		head = pipeparts.mkgate(pipeline, head, threshold = 0.1, control = q)
 
 	# put in the final tee
 	elems = mkelems_fast(pipeline, head, "tee")
 
+	
 	#
 	# down-sample whitened time series to remaining target sample rates
 	# while applying an amplitude correction to adjust for low-pass
@@ -542,7 +548,8 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	for instrument in detectors:
 		rates = set(rate for bank in banks for rate in bank.get_rates())
 		head = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data=fake_data, online_data=online_data, injection_filename=injection_filename, verbose=verbose)
-		hoftdict = mkLLOIDsrc(pipeline, head, rates, psd=psd, psd_fft_length=psd_fft_length, veto_segments=veto_segments)
+		if veto_segments: hoftdict = mkLLOIDsrc(pipeline, head, rates, psd=psd, psd_fft_length=psd_fft_length, seekevent=seekevent, veto_segments=veto_segments[instrument])
+		else: hoftdict = mkLLOIDsrc(pipeline, head, rates, psd=psd, psd_fft_length=psd_fft_length, veto_segments=None)
 		for bank in banks:
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
 			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % bank.logname, segment = nxydump_segment)
