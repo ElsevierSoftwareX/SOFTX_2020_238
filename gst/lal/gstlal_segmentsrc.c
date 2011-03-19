@@ -212,6 +212,8 @@ static int mark_segments(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, 
             mark_segment(basesrc, buffer, segstart, stop);
         if ((segstop >= start) && (segstop < stop) && (segstart < start))
             mark_segment(basesrc, buffer, start, segstop);
+        if ((segstart <= start) && (segstop >= stop))
+            mark_segment(basesrc, buffer, start, stop);
     }
 
     return 0;
