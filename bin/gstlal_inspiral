@@ -290,6 +290,7 @@ handler = lloidparts.LLOIDHandler(mainloop, pipeline)
 #
 
 if options.vetoes is not None:
+	#FIXME make vetoes name a command line option?  Right now RESULTS is the default name from ligolw_segment_query
 	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes), "RESULT")
 else:
 	veto_segments = None
