@@ -14,15 +14,15 @@ all : H1vetoes.xml H2vetoes.xml L1vetoes.xml segments.xml
 injections: H1vetoes.xml H2vetoes.xml L1vetoes.xml segments.xml injections.xml
 
 H1vetoes.xml:
-	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=H1:Injection > H1vetoes.xml
+	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=H1:Injection --result-name=vetoes > H1vetoes.xml
 	ligolw_segments_compat H1vetoes.xml
 
 H2vetoes.xml:
-	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=H2:Injection > H2vetoes.xml
+	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=H2:Injection --result-name=vetoes > H2vetoes.xml
 	ligolw_segments_compat H2vetoes.xml
 
 L1vetoes.xml:
-	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=L1:Injection > L1vetoes.xml
+	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=L1:Injection --result-name=vetoes > L1vetoes.xml
 	ligolw_segments_compat L1vetoes.xml
 
 frame.H1.cache:
