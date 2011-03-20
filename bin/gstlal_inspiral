@@ -41,6 +41,7 @@ import warnings
 
 from glue import segments
 from glue import segmentsUtils
+import glue.ligolw.utils
 import glue.ligolw.utils.segments as ligolw_segments
 from glue.ligolw import utils
 from pylal.datatypes import LIGOTimeGPS
@@ -71,6 +72,7 @@ def parse_command_line():
 	parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
 	parser.add_option("--vetoes", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
+	parser.add_option("--veto-segments-name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default="RESULT")
 	parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
 	parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
 	parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
@@ -290,8 +292,7 @@ handler = lloidparts.LLOIDHandler(mainloop, pipeline)
 #
 
 if options.vetoes is not None:
-	#FIXME make vetoes name a command line option?  Right now RESULT is the default name from ligolw_segment_query
-	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes), "RESULT")
+	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes), options.veto_segments_name).coalesce()
 else:
 	veto_segments = None
 
