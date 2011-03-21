@@ -23,7 +23,8 @@ pkgpython_PYTHON = \
 	reference_psd.py \
 	svd_bank.py \
 	templates.py \
-	ligolw_output.py
+	ligolw_output.py \
+	simulation.py
 
 pkgpyexec_LTLIBRARIES = _misc.la
 
