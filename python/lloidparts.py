@@ -28,6 +28,7 @@
 from gstlal import pipeparts
 from gstlal import pipeio
 from gstlal import cbc_template_fir
+from gstlal import simulation
 import math
 import sys
 import numpy
@@ -93,6 +94,19 @@ class DetectorData(object):
 #
 # =============================================================================
 #
+
+#
+# gate controlled by a segment source
+#
+
+def mksegmentsrcgate(pipeline, src, segment_list, threshold, seekevent = None, invert_output = False):
+	segsrc = pipeparts.mksegmentsrc(pipeline, segment_list, invert_output=invert_output)
+	if seekevent is not None:
+		if segsrc.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
+			raise RuntimeError, "Element %s did not want to enter ready state" % segsrc.get_name()
+		if not segsrc.send_event(seekevent):
+			raise RuntimeError, "Element %s did not handle seek event" % segsrc.get_name()
+	return pipeparts.mkgate(pipeline, src, threshold = threshold, control = pipeparts.mkqueue(pipeline, segsrc))
 
 
 #
@@ -245,15 +259,7 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_segments=N
 
 	# optionally add vetoes
 	if veto_segments is not None:
-		segsrc = pipeparts.mksegmentsrc(pipeline, veto_segments, invert_output=True)
-		if seekevent is not None:
-			print "\n\n seeking\n\n"
-			if segsrc.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
-				raise RuntimeError, "Element %s did not want to enter ready state" % segsrc.get_name()
-			if not segsrc.send_event(seekevent):
-				raise RuntimeError, "Element %s did not handle seek event" % segsrc.get_name()
-		q = pipeparts.mkqueue(pipeline, segsrc, max_size_buffers=0, max_size_bytes=0, max_size_time=(1 * gst.SECOND))
-		head = pipeparts.mkgate(pipeline, head, threshold = 0.1, control = q)
+		head = mksegmentsrcgate(pipeline, head, veto_segments, threshold=0.1, seekevent=seekevent, invert_output=True)
 
 	# put in the final tee
 	elems = mkelems_fast(pipeline, head, "tee")
@@ -310,7 +316,7 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_segments=N
 #
 
 
-def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src), gate_attack_length, gate_hold_length):
+def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src), gate_attack_length, gate_hold_length, seekevent=None, inj_seg_list=None):
 	logname = "%s_%d_%d" % (bank.logname, bank_fragment.start, bank_fragment.end)
 
 	#
@@ -371,6 +377,13 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 		"lal_matrixmixer", {"matrix": bank_fragment.mix_matrix},
 	)
 
+	#
+	# optionally add a segment src and gate to only reconstruct around injections
+	#
+
+	if inj_seg_list is not None:
+		control_src = mksegmentsrcgate(pipeline, pipeparts.mkqueue(pipeline, control_src), inj_seg_list, threshold=0.1, seekevent=seekevent, invert_output=False)
+
 	mkelems_fast(pipeline, src, "queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": 5 * gst.SECOND})[-1].link_pads("src", elems[0], "sink")
 	mkelems_fast(pipeline, control_src, "queue", {"max-size-buffers": 0, "max-size-bytes": 0, "max-size-time": 1 * gst.SECOND})[-1].link_pads("src", elems[0], "control")
 
@@ -386,7 +399,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	return elems[-1]
 
 
-def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbose = False, nxydump_segment = None):
+def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbose = False, nxydump_segment = None, seekevent=None, inj_seg_list=None):
 	"""Build pipeline fragment that converts h(t) to SNR."""
 
 	logname = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
@@ -422,7 +435,9 @@ def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbo
 			bank_fragment,
 			control_snksrc,
 			int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),
-			int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate)))
+			int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),
+			seekevent = seekevent,
+			inj_seg_list = inj_seg_list
 		))
 
 	#
@@ -501,6 +516,7 @@ def mkLLOIDsnrToTriggers(pipeline, snr, bank, verbose = False, nxydump_segment =
 	head = mkelems_fast(pipeline,
 		chisq,
 		"lal_triggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq},
+		#"lal_blcbctriggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq},
 	)[-1]
 	mkelems_fast(pipeline, snr, "queue", head)
 	if verbose:
@@ -531,14 +547,32 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 		nto1 = mkelems_fast(pipeline, "input-selector", {"select-all": True})[-1]
 
 	#
+	# extract segments from the injection file for selected reconstruction
+	#
+
+	if injection_filename is not None:
+		#inj_seg_list = simulation.sim_inspiral_to_segment_list(injection_filename)
+		inj_seg_list = None
+	else:
+		inj_seg_list = None
+
+	#
 	# loop over instruments and template banks
 	#
 
 	for instrument in detectors:
 		rates = set(rate for bank in banks for rate in bank.get_rates())
 		head = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data=fake_data, online_data=online_data, injection_filename=injection_filename, verbose=verbose)
-		if veto_segments: hoftdict = mkLLOIDsrc(pipeline, head, rates, psd=psd, psd_fft_length=psd_fft_length, seekevent=seekevent, veto_segments=veto_segments[instrument])
-		else: hoftdict = mkLLOIDsrc(pipeline, head, rates, psd=psd, psd_fft_length=psd_fft_length, veto_segments=None)
+		
+		#
+		# check to see if we have veto segments, if so extract the segments for the current instrument
+		#
+
+		if veto_segments:
+			hoftdict = mkLLOIDsrc(pipeline, head, rates, psd=psd, psd_fft_length=psd_fft_length, seekevent=seekevent, veto_segments=veto_segments[instrument])
+		else:
+			hoftdict = mkLLOIDsrc(pipeline, head, rates, psd=psd, psd_fft_length=psd_fft_length, veto_segments=None)
+
 		for bank in banks:
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
 			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % bank.logname, segment = nxydump_segment)
@@ -549,7 +583,9 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 				bank,
 				control_snksrc,
 				verbose = verbose,
-				nxydump_segment = nxydump_segment
+				nxydump_segment = nxydump_segment,
+				seekevent=seekevent,
+				inj_seg_list = inj_seg_list
 			)
 			head = mkLLOIDsnrToTriggers(
 				pipeline,
