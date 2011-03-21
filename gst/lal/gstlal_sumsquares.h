@@ -53,15 +53,19 @@ typedef struct {
 } GSTLALSumSquaresClass;
 
 
-typedef struct {
+struct GSTLALSumSquares;
+
+typedef struct GSTLALSumSquares {
 	GstBaseTransform element;
 
 	gint channels;
 
 	GMutex *weights_lock;
-	double *weights_double;
-	float *weights_float;
-	gboolean is_float;
+	double *weights;
+	void *weights_native;
+
+	void *(*make_weights_native_func)(struct GSTLALSumSquares *);
+	GstFlowReturn (*sumsquares_func)(struct GSTLALSumSquares *, GstBuffer *, GstBuffer *);
 } GSTLALSumSquares;
 
 
