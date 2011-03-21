@@ -93,7 +93,7 @@ static guint sample_size(GstBaseSrc *basesrc)
 static guint64 round_to_nearest_sample(GstBaseSrc *basesrc, guint64 val)
 {
     GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
-    return gst_util_uint64_scale_int_round(val, 1, element->rate) * element->rate;
+    return gst_util_uint64_scale_int_round(val, 1, element->rate * GST_SECOND) * element->rate * GST_SECOND;
 }
 
 
@@ -168,12 +168,12 @@ static int mark_segment(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, g
     gint8 *data = NULL;
 
     if (start > GST_BUFFER_TIMESTAMP(buffer))
-        startix = (start - GST_BUFFER_TIMESTAMP(buffer)) / element->rate / GST_SECOND;
+        startix = round_to_nearest_sample(basesrc, start - GST_BUFFER_TIMESTAMP(buffer)) / element->rate / GST_SECOND;
     else
         startix = 0;
 
     if (stop > GST_BUFFER_TIMESTAMP(buffer))
-        stopix = (stop - GST_BUFFER_TIMESTAMP(buffer)) / element->rate / GST_SECOND;
+        stopix = round_to_nearest_sample(basesrc, stop - GST_BUFFER_TIMESTAMP(buffer)) / element->rate / GST_SECOND;
     else
         stopix = 0;
 
@@ -204,8 +204,8 @@ static int mark_segments(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, 
     /* FIXME provide a bailout and a sensible starting point if you have sorted and coalesced segents */
     /* This is ridiculous, but doesn't require sorted or coalesced segments.  Could some fancy data structure help? */
     for (guint i = 0; i < rows; i++) {
-        segstart = round_to_nearest_sample(basesrc, gsl_matrix_ulong_get(mat, i, 0));
-        segstop = round_to_nearest_sample(basesrc, gsl_matrix_ulong_get(mat, i, 1));
+        segstart = gsl_matrix_ulong_get(mat, i, 0);
+        segstop = gsl_matrix_ulong_get(mat, i, 1);
         if ((segstart >= start) && (segstart < stop) && (segstop < stop))
             mark_segment(basesrc, buffer, segstart, segstop);
         if ((segstart >= start) && (segstart < stop) && (segstop >= stop))
