@@ -384,7 +384,6 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	del bank_fragment.sum_of_squares_weights
 	del bank_fragment.mix_matrix
 
-
 	return elems[-1]
 
 
@@ -397,24 +396,17 @@ def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbo
 	# parameters
 	#
 
-	output_rate = max(bank.get_rates())
+	rates = sorted(bank.get_rates())
+	output_rate = max(rates)
 	autocorrelation_length = bank.autocorrelation_bank.shape[1]
 	autocorrelation_latency = -(autocorrelation_length - 1) / 2
-
-	#
-	# snr aggregator
-	#
-
-	snr = mkelems_fast(pipeline, "lal_adder", {"sync": True})[-1]
 
 	#
 	# loop over template bank slices
 	#
 
-	branch_heads = {}
+	branch_heads = dict((rate, set()) for rate in rates)
 	for bank_fragment in bank.bank_fragments:
-		if bank_fragment.rate not in branch_heads:
-			branch_heads[bank_fragment.rate] = set()
 		branch_heads[bank_fragment.rate].add(mkLLOIDbranch(
 			pipeline,
 			# FIXME:  the size isn't ideal:  the correct value
@@ -424,7 +416,7 @@ def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbo
 			# parameters so might not work if those change
 			mkelems_fast(pipeline,
 				hoftdict[bank_fragment.rate],
-				"lal_delay", {"delay": int(round( (bank.filter_length - bank_fragment.end)*bank_fragment.rate ))},
+				"lal_delay", {"delay": int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))},
 				"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": 4 * int(math.ceil(bank.filter_length)) * gst.SECOND}
 			)[-1],
 			bank,
@@ -438,7 +430,9 @@ def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbo
 	# sum snrs with common sample rates
 	#
 
-	for rate, heads in branch_heads.items():
+	snr = None
+	next_rate = dict(zip(rates, rates[1:]))
+	for rate, heads in sorted(branch_heads.items()):
 		#
 		# hook matrix mixers to an adder
 		#
@@ -446,39 +440,34 @@ def mkLLOIDhoftToSnr(pipeline, hoftdict, instrument, bank, control_snksrc, verbo
 		branchsnr = mkelems_fast(pipeline, "lal_adder", {"sync": True})[-1]
 		for head in heads:
 			pipeparts.mkqueue(pipeline, head, max_size_time = gst.SECOND).link(branchsnr)
-
-		#
-		# resample
-		#
-
-		branchsnr = pipeparts.mknofakedisconts(pipeline, pipeparts.mkresample(pipeline, branchsnr, quality = 4))
 		#logname = "%s_%d_%d" % (bank.logname, bank_fragment.start, bank_fragment.end)
-		#branchsnr = pipeparts.mkchecktimestamps(pipeline, branchsnr, "timestamps_%s_after_snr_resampler" % logname)
-
-		#
-		# hook resampler to all-branch adder
-		#
-
 		#branchsnr = pipeparts.mktee(pipeline, branchsnr)
 		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, branchsnr), "snr_%s_%02d.dump" % (logname, bank_fragment.start), segment = nxydump_segment)
-		branchsnr = pipeparts.mkqueue(pipeline, branchsnr, max_size_time = gst.SECOND).link(snr)
+
+		#
+		# if this isn't the highest sample rate, attach a resampler
+		# and add to heads for next highest sample rate.  otherwise
+		# this adder's output is the fully-reconstructed snr stream
+		#
+
+		if rate in next_rate:
+			branchsnr = pipeparts.mkresample(pipeline, branchsnr, quality = 4)
+			#branchsnr = pipeparts.mkchecktimestamps(pipeline, branchsnr, "timestamps_%s_after_snr_resampler" % logname)
+			branch_heads[next_rate[rate]].add(branchsnr)
+		else:
+			assert snr is None	# only one snr element allowed
+			snr = branchsnr
+	assert snr is not None	# did we identify the snr element?
 
 	#
 	# snr
 	#
 
-	return mkelems_fast(pipeline,
-		snr,
-		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % output_rate)},
-		"lal_togglecomplex",
-		"tee"
-	)[-1]
+	return pipeparts.mktogglecomplex(pipeline, snr)
 
 
-def mkLLOIDsnrToTriggers(pipeline, snr_tee, bank, verbose = False, nxydump_segment = None, logname = None):
+def mkLLOIDsnrToTriggers(pipeline, snr, bank, verbose = False, nxydump_segment = None, logname = None):
 	"""Build pipeline fragment that converts single detector SNR into triggers."""
-	# FIXME: The last three parameters are either used only for logging, or only in commented out code.
-
 	#
 	# parameters
 	#
@@ -487,15 +476,17 @@ def mkLLOIDsnrToTriggers(pipeline, snr_tee, bank, verbose = False, nxydump_segme
 	autocorrelation_length = bank.autocorrelation_bank.shape[1]
 	autocorrelation_latency = -(autocorrelation_length - 1) / 2
 
-	#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr_tee)), "snr_%s.dump" % logname, segment = nxydump_segment)
-	#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr_tee), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % logname, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[output_rate], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
+	snr = pipeparts.mktee(pipeline, snr)
+
+	#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % logname, segment = nxydump_segment)
+	#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % logname, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[output_rate], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
 
 	#
 	# \chi^{2}
 	#
 
 	chisq = mkelems_fast(pipeline,
-		snr_tee,
+		snr,
 		"queue",
 		"lal_autochisq", {"autocorrelation-matrix": pipeio.repack_complex_array_to_real(bank.autocorrelation_bank), "latency": autocorrelation_latency, "snr-thresh": bank.snr_threshold}
 	)[-1]
@@ -512,7 +503,7 @@ def mkLLOIDsnrToTriggers(pipeline, snr_tee, bank, verbose = False, nxydump_segme
 		chisq,
 		"lal_triggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq},
 	)[-1]
-	mkelems_fast(pipeline, snr_tee, "queue", head)
+	mkelems_fast(pipeline, snr, "queue", head)
 	if verbose:
 		head = mkelems_fast(pipeline, head, "progressreport", {"name": "progress_xml_%s" % logname})[-1]
 
@@ -552,7 +543,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 		for bank in banks:
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
 			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % bank.logname, segment = nxydump_segment)
-			snr_tee = mkLLOIDhoftToSnr(
+			snr = mkLLOIDhoftToSnr(
 				pipeline,
 				hoftdict,
 				instrument,
@@ -563,7 +554,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 			)
 			head = mkLLOIDsnrToTriggers(
 				pipeline,
-				snr_tee,
+				snr,
 				bank,
 				verbose = verbose,
 				nxydump_segment = nxydump_segment,
