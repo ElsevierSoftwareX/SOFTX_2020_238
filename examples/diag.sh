@@ -187,4 +187,21 @@ function test_chisquare_gaps() {
 		! queue ! filesink buffer-mode=2 location="dump_in.txt"
 }
 
-test_gate
+function test_chained_resamplers() {
+	gst-launch \
+		audiotestsrc wave=9 samplesperbuffer=128 num-buffers=32 \
+		! audio/x-raw-float, channels=1, width=64, rate=128 \
+		! tee name=src \
+		! lal_nxydump ! queue ! filesink buffer-mode=2 location="dump_in.txt" \
+		src. ! audioresample quality=4 \
+		! audio/x-raw-float, rate=256 \
+		! audioresample quality=4 \
+		! audio/x-raw-float, rate=512 \
+		! lal_nxydump ! queue ! filesink buffer-mode=2 location="dump_out_a.txt" \
+		src. ! audioresample quality=4 \
+		! audio/x-raw-float, rate=512 \
+		! lal_nxydump ! queue ! filesink buffer-mode=2 location="dump_out_b.txt"
+
+}
+
+test_chained_resamplers
