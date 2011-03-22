@@ -194,7 +194,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 	return elems[-1]
 
 
-def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_segments=None, seekevent=None):
+def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length = 8, veto_segments = None, seekevent = None):
 	"""Build pipeline stage to whiten and downsample h(t)."""
 
 	#
@@ -205,14 +205,22 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_segments=N
 	# will likely add (possibly significant) numerical noise when it
 	# amplifies the non-existant high-frequency components
 	#
+	# note that when downsampling it might be possible for the
+	# audioresampler to produce spurious DISCONT flags.  if it receives
+	# an input buffer too small to produce any new output samples, it
+	# might emit a DISCONT flag on the next output buffer (this
+	# behaviour has not been confirmed, but it is a known quirk of the
+	# base class from which it is derived).  however, in this
+	# application the buffer sizes produced by the data source are too
+	# large to trigger this behaviour whether or not the resampler
+	# might ever do it
+	#
 
 	source_rate = max(rates)
 	elems = mkelems_fast(pipeline,
 		src,
-		"queue", # FIXME: I think we can remove this queue.
 		"audioresample", {"quality": 9},
 		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % source_rate)},
-		"lal_checktimestamps", {"name": "timestamps_before_whitener"},
 		"lal_whiten", {"fft-length": psd_fft_length, "zero-pad": 0, "average-samples": 64, "median-samples": 7},
 		"lal_nofakedisconts", {"silent": True}
 	)
@@ -247,7 +255,6 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_segments=N
 	if veto_segments is not None:
 		segsrc = pipeparts.mksegmentsrc(pipeline, veto_segments, invert_output=True)
 		if seekevent is not None:
-			print "\n\n seeking\n\n"
 			if segsrc.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
 				raise RuntimeError, "Element %s did not want to enter ready state" % segsrc.get_name()
 			if not segsrc.send_event(seekevent):
@@ -257,7 +264,6 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_segments=N
 
 	# put in the final tee
 	elems = mkelems_fast(pipeline, head, "tee")
-
 	
 	#
 	# down-sample whitened time series to remaining target sample rates
@@ -276,11 +282,12 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_segments=N
 	# into the h(t) time series here, and, later, another 1/2 factor
 	# into the template when it gets downsampled.
 	#
-	# By design, the input to the orthogonal filter
-	# banks is pre-whitened, so it is unit variance over short periods of time.
-	# However, resampling it reduces the variance by a small, sample rate
-	# dependent factor.  The audioamplify element applies a correction factor
-	# that restores the input's unit variance.
+	# by design, the output of the whitener is a unit-variance time
+	# series.  however, downsampling it reduces the variance due to the
+	# removal of some frequency components.  we require the input to
+	# the orthogonal filter banks to be unit variance, therefore a
+	# correction factor is applied via an audio amplify element to
+	# adjust for the reduction in variance due to the downsampler.
 	#
 
 	quality = 9
@@ -291,7 +298,7 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_segments=N
 			"audioamplify", {"clipping-method": 3, "amplification": 1/math.sqrt(pipeparts.audioresample_variance_gain(quality, source_rate, rate))},
 			"audioresample", {"quality": quality},
 			"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % rate)},
-			"lal_checktimestamps", {"name": "timestamps_after_downsample_to_%d" % rate},
+			"lal_checktimestamps", {"name": "after_downsample_to_%d" % rate},
 			"tee"
 		)[-1]
 
@@ -536,9 +543,14 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 
 	for instrument in detectors:
 		rates = set(rate for bank in banks for rate in bank.get_rates())
-		head = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data=fake_data, online_data=online_data, injection_filename=injection_filename, verbose=verbose)
-		if veto_segments: hoftdict = mkLLOIDsrc(pipeline, head, rates, psd=psd, psd_fft_length=psd_fft_length, seekevent=seekevent, veto_segments=veto_segments[instrument])
-		else: hoftdict = mkLLOIDsrc(pipeline, head, rates, psd=psd, psd_fft_length=psd_fft_length, veto_segments=None)
+		head = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data = fake_data, online_data = online_data, injection_filename = injection_filename, verbose = verbose)
+		# let the frame reader and injection code run in a
+		# different thread than the whitener, etc.,
+		head = pipeparts.mkqueue(pipeline, head)
+		if veto_segments:
+			hoftdict = mkLLOIDsrc(pipeline, head, rates, psd = psd, psd_fft_length = psd_fft_length, seekevent = seekevent, veto_segments = veto_segments[instrument])
+		else:
+			hoftdict = mkLLOIDsrc(pipeline, head, rates, psd = psd, psd_fft_length = psd_fft_length, veto_segments = None)
 		for bank in banks:
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or "")))
 			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % bank.logname, segment = nxydump_segment)
