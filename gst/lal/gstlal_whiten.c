@@ -1120,6 +1120,45 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 
 
 /*
+ * start()
+ */
+
+
+static gboolean start(GstBaseTransform *trans)
+{
+	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
+
+	element->adapter = gst_adapter_new();
+
+	element->t0 = GST_CLOCK_TIME_NONE;
+	element->offset0 = GST_BUFFER_OFFSET_NONE;
+	element->next_offset_in = GST_BUFFER_OFFSET_NONE;
+	element->next_offset_out = GST_BUFFER_OFFSET_NONE;
+	element->need_discont = TRUE;
+
+	element->output_history_offset = GST_BUFFER_OFFSET_NONE;
+
+	return TRUE;
+}
+
+
+/*
+ * stop()
+ */
+
+
+static gboolean stop(GstBaseTransform *trans)
+{
+	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
+
+	g_object_unref(element->adapter);
+	element->adapter = NULL;
+
+	return TRUE;
+}
+
+
+/*
  * transform()
  */
 
@@ -1323,8 +1362,6 @@ static void finalize(GObject * object)
 		gst_object_unref(element->mean_psd_pad);
 		element->mean_psd_pad = NULL;
 	}
-	g_object_unref(element->adapter);
-	element->adapter = NULL;
 	XLALPSDRegressorFree(element->psd_regressor);
 	element->psd_regressor = NULL;
 	XLALDestroyREAL8FrequencySeries(element->psd);
@@ -1360,6 +1397,8 @@ static void gstlal_whiten_base_init(gpointer gclass)
 
 	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
 	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->start = GST_DEBUG_FUNCPTR(start);
+	transform_class->stop = GST_DEBUG_FUNCPTR(stop);
 	transform_class->event = GST_DEBUG_FUNCPTR(event);
 	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
 	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
@@ -1503,16 +1542,10 @@ static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *klass)
 	g_signal_connect(G_OBJECT(element), "notify::zero-pad", G_CALLBACK(rebuild_workspace_and_reset), NULL);
 	g_signal_connect(G_OBJECT(element), "notify::delta-f", G_CALLBACK(rebuild_workspace_and_reset), NULL);
 
-	element->adapter = gst_adapter_new();
 	element->mean_psd_pad = NULL;
 
 	element->sample_units = lalDimensionlessUnit;
 	element->sample_rate = 0;
-	element->need_discont = FALSE;
-	element->t0 = GST_CLOCK_TIME_NONE;
-	element->offset0 = GST_BUFFER_OFFSET_NONE;
-	element->next_offset_in = GST_BUFFER_OFFSET_NONE;
-	element->next_offset_out = GST_BUFFER_OFFSET_NONE;
 
 	element->zero_pad_seconds = 0;
 	element->fft_length_seconds = 0;
@@ -1525,7 +1558,6 @@ static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *klass)
 	element->tdworkspace = NULL;
 	element->fdworkspace = NULL;
 	element->output_history = NULL;
-	element->output_history_offset = GST_BUFFER_OFFSET_NONE;
 
 	element->psd_regressor = XLALPSDRegressorNew(DEFAULT_AVERAGE_SAMPLES, DEFAULT_MEDIAN_SAMPLES);
 	element->psd = NULL;
