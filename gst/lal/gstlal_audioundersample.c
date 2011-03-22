@@ -55,29 +55,70 @@
  */
 
 
-static guint64 undersample_64(const gint64 *src, guint64 src_size, gint64 *dst, guint64 dst_size, gint rate_in, gint rate_out, guint64 *remainder)
+#define DEFINE_UNDERSAMPLE_FUNC(size) \
+static guint64 undersample_ ## size(const gint ## size *src, guint64 src_size, gint ## size *dst, guint64 dst_size, gint cadence, guint64 *remainder) \
+{ \
+	const gint ## size *dst_end; \
+ \
+	for(dst_end = dst + dst_size; dst < dst_end; src += cadence, dst++) \
+		*dst = *src; \
+ \
+	return dst_size; \
+}
+
+DEFINE_UNDERSAMPLE_FUNC(8)
+DEFINE_UNDERSAMPLE_FUNC(16)
+DEFINE_UNDERSAMPLE_FUNC(32)
+DEFINE_UNDERSAMPLE_FUNC(64)
+
+
+static guint64 undersample_other(const gint8 *src, guint64 src_size, gint8 *dst, guint64 dst_size, gint unit_size, gint cadence, guint64 *remainder)
+{
+	const gint8 *dst_end;
+
+	cadence *= unit_size;
+	for(dst_end = dst + dst_size * unit_size; dst < dst_end; src += cadence, dst += unit_size)
+		memcpy(dst, src, unit_size);
+
+	return dst_size;
+}
+
+
+static guint64 undersample(const void *src, guint64 src_size, void *dst, guint64 dst_size, gint unit_size, gint rate_in, gint rate_out, guint64 *remainder)
 {
 	gint cadence = rate_in / rate_out;
-	const gint64 *dst_end;
 
-	g_assert(src_size % sizeof(*src) == 0);
-	g_assert(dst_size % sizeof(*dst) == 0);
+	g_assert(src_size % unit_size == 0);
+	g_assert(dst_size % unit_size == 0);
 
-	src_size /= sizeof(*src);
-	dst_size /= sizeof(*src);
+	src_size /= unit_size;
+	dst_size /= unit_size;
 
 	if(src_size <= *remainder) {
 		*remainder -= src_size;
 		return 0;
 	}
 
-	src += *remainder;
+	src += *remainder * unit_size;
 	src_size -= *remainder;
 	*remainder = src_size % cadence ? cadence - src_size % cadence : 0;
-	for(dst_end = dst + dst_size; dst < dst_end; src += cadence, dst++)
-		*dst = *src;
 
-	return dst_size;
+	switch(unit_size) {
+	case 1:
+		return undersample_8(src, src_size, dst, dst_size, cadence, remainder);
+
+	case 2:
+		return undersample_16(src, src_size, dst, dst_size, cadence, remainder);
+
+	case 4:
+		return undersample_32(src, src_size, dst, dst_size, cadence, remainder);
+
+	case 8:
+		return undersample_64(src, src_size, dst, dst_size, cadence, remainder);
+
+	default:
+		return undersample_other(src, src_size, dst, dst_size, unit_size, cadence, remainder);
+	}
 }
 
 
@@ -431,6 +472,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	if(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0)) {
 		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
 		element->offset0 = element->next_out_offset = gst_util_uint64_scale_ceil(GST_BUFFER_OFFSET(inbuf), element->rate_out, element->rate_in);
+		element->need_discont = TRUE;
 		element->remainder = 0;
 	}
 	element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
@@ -446,7 +488,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * input is not 0s.
 		 */
 
-		output_length = undersample_64((void *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf), (void *) GST_BUFFER_DATA(outbuf), GST_BUFFER_SIZE(outbuf), element->rate_in, element->rate_out, &element->remainder);
+		output_length = undersample((void *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf), (void *) GST_BUFFER_DATA(outbuf), GST_BUFFER_SIZE(outbuf), element->unit_size, element->rate_in, element->rate_out, &element->remainder);
 		set_metadata(element, outbuf, output_length, FALSE);
 	} else {
 		/*
