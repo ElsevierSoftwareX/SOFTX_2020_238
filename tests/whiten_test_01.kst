@@ -8,7 +8,7 @@
   <graphicsautosave time="1" enabled="false" format="PNG" xsize="640" ysize="480" display="0" square="false" />
   <kstfile>
     <tag>DS-whiten_test_01b_out.dump</tag>
-    <filename>/home/kipp/Development/gstlal/tests/whiten_test_01b_out.dump</filename>
+    <filename>whiten_test_01b_out.dump</filename>
     <type>ASCII</type>
     <comment delimiters="#/c!;"/>
     <columns type="0"/>
@@ -16,7 +16,7 @@
   </kstfile>
   <kstfile>
     <tag>DS-whiten_test_01a_in.dump-1</tag>
-    <filename>/home/kipp/Development/gstlal/tests/whiten_test_01a_in.dump</filename>
+    <filename>whiten_test_01a_in.dump</filename>
     <type>ASCII</type>
     <index vector="INDEX" interpretation="3"/>
     <comment delimiters="#/c!;"/>
@@ -25,7 +25,7 @@
   </kstfile>
   <kstfile>
     <tag>DS-whiten_test_01a_out.dump-1</tag>
-    <filename>/home/kipp/Development/gstlal/tests/whiten_test_01a_out.dump</filename>
+    <filename>whiten_test_01a_out.dump</filename>
     <type>ASCII</type>
     <index vector="INDEX" interpretation="3"/>
     <comment delimiters="#/c!;"/>
@@ -115,7 +115,7 @@
   <vector>
     <tag>DS-whiten_test_01a_in.dump-1/01a in y</tag>
     <provider>DS-whiten_test_01a_in.dump-1</provider>
-    <filename>/home/kipp/Development/gstlal/tests/whiten_test_01a_in.dump</filename>
+    <filename>whiten_test_01a_in.dump</filename>
     <field>2</field>
     <start>0</start>
     <num>-1</num>
@@ -123,7 +123,7 @@
   <vector>
     <tag>DS-whiten_test_01a_out.dump-1/01a out y</tag>
     <provider>DS-whiten_test_01a_out.dump-1</provider>
-    <filename>/home/kipp/Development/gstlal/tests/whiten_test_01a_out.dump</filename>
+    <filename>whiten_test_01a_out.dump</filename>
     <field>2</field>
     <start>0</start>
     <num>-1</num>
@@ -131,7 +131,7 @@
   <vector>
     <tag>DS-whiten_test_01b_out.dump/01b out y</tag>
     <provider>DS-whiten_test_01b_out.dump</provider>
-    <filename>/home/kipp/Development/gstlal/tests/whiten_test_01b_out.dump</filename>
+    <filename>whiten_test_01b_out.dump</filename>
     <field>2</field>
     <start>32771</start>
     <num>-1</num>
@@ -139,7 +139,7 @@
   <vector>
     <tag>DS-whiten_test_01a_out.dump-1/01a out x</tag>
     <provider>DS-whiten_test_01a_out.dump-1</provider>
-    <filename>/home/kipp/Development/gstlal/tests/whiten_test_01a_out.dump</filename>
+    <filename>whiten_test_01a_out.dump</filename>
     <field>1</field>
     <start>0</start>
     <num>-1</num>
@@ -147,7 +147,7 @@
   <vector>
     <tag>DS-whiten_test_01a_in.dump-1/01a in x</tag>
     <provider>DS-whiten_test_01a_in.dump-1</provider>
-    <filename>/home/kipp/Development/gstlal/tests/whiten_test_01a_in.dump</filename>
+    <filename>whiten_test_01a_in.dump</filename>
     <field>1</field>
     <start>0</start>
     <num>-1</num>
