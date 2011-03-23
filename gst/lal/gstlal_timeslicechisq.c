@@ -1,31 +1,44 @@
-/*
- * A time-slice-based \chi^{2} element for the inspiral pipeline.
+/* GStreamer
+ * Copyright (C) 1999,2000 Erik Walthinsen <omega@cse.ogi.edu>
+ *                    2001 Thomas <thomas@apestaart.org>
+ *               2005,2006 Wim Taymans <wim@fluendo.com>
+ *               2008 Kipp Cannon <kipp.cannon@ligo.org>
+ *               2011 Drew Keppel <drew.keppel@ligo.org>
  *
- * Copyright (C) 2011  Kipp Cannon, Chad Hanna, Drew Keppel
+ * gstlal_timeslicechisq.c: Time-slice based chisq element
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * You should have received a copy of the GNU Library General Public
+ * License along with this library; if not, write to the
+ * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+ * Boston, MA 02111-1307, USA.
  */
 
 
+/* Element-Checklist-Version: 5 */
+
+
 /*
- * ========================================================================
+ * ============================================================================
  *
  *                                  Preamble
  *
- * ========================================================================
+ * ============================================================================
  */
+
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
 
 /*
@@ -43,9 +56,9 @@
  */
 
 
-#include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstcollectpads.h>
+#include <gst/audio/audio.h>
 
 
 /*
@@ -63,9 +76,14 @@
  * our own stuff
  */
 
+
 #include <gstlal.h>
 #include <gstlalcollectpads.h>
-#include <gstlal_timeslicechisq.h>
+#include "gstlal_timeslicechisq.h"
+
+
+#define GST_CAT_DEFAULT gstlal_timeslicechisq_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 /*
@@ -77,16 +95,46 @@
  */
 
 
+/*
+ * return the number of channels
+ */
+
+
 static int num_channels(const GSTLALTimeSliceChiSquare *element)
 {
-	return element->chifacs->size;
+	return element->chifacs->size1;
+}
+
+
+/*
+ * return the number of timeslices
+ */
+
+
+static int num_timeslices(const GSTLALTimeSliceChiSquare *element)
+{
+	return element->chifacs->size2;
+}
+
+
+/*
+ * function to add doubles
+ */
+
+
+static void add_float64(gpointer out, const gpointer in, size_t bytes)
+{
+	gdouble *_out = out;
+	const gdouble *_in = in;
+	for(bytes /= sizeof(gdouble); bytes--; _in++, _out++)
+		*_out = (gdouble) *_out + (gdouble) *_in;
 }
 
 
 /*
  * ============================================================================
  *
- *                           GStreamer Boiler Plate
+ *                                 Properties
  *
  * ============================================================================
  */
@@ -98,10 +146,78 @@ enum property {
 };
 
 
+static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *psspec)
+{
+	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch (id) {
+	case ARG_CHIFACS: {
+		int channels;
+		g_mutex_lock(element->coefficients_lock);
+		if(element->chifacs) {
+			channels = num_channels(element);
+			gsl_matrix_free(element->chifacs);
+		} else
+			channels = 0;
+		element->chifacs = gstlal_gsl_matrix_from_g_value_array(g_value_get_boxed(value));
+
+		/*
+		 * number of channels has changed, force a caps renegotiation
+		 */
+
+		if(num_channels(element) != channels) {
+			/* FIXME: is this correct? */
+			gst_pad_set_caps(element->srcpad, NULL);
+		}
+
+		/*
+		 * signal availability of new chifacs vector
+		 */
+
+		g_cond_broadcast(element->coefficients_available);
+		g_mutex_unlock(element->coefficients_lock);
+		break;
+	}
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, psspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
+
+
+static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *psspec)
+{
+	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch (id) {
+	case ARG_CHIFACS:
+		g_mutex_lock(element->coefficients_lock);
+		if(element->chifacs)
+			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix(element->chifacs));
+		/* FIXME:  else? */
+		g_mutex_unlock(element->coefficients_lock);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, psspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
+
+
 /*
  * ============================================================================
  *
- *                              Caps --- SNR Pad
+ *                                    Caps
  *
  * ============================================================================
  */
@@ -109,35 +225,36 @@ enum property {
 
 /*
  * we can only accept caps that both ourselves and the downstream peer can
- * handle, and the number of channels must match the size of the mixing
- * matrix
+ * handle
  */
 
 
-static GstCaps *getcaps_snr(GstPad *pad)
+static GstCaps *sink_getcaps(GstPad *pad)
 {
-	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(gst_pad_get_parent(pad));
+	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(GST_PAD_PARENT(pad));
 	GstCaps *peercaps;
 	GstCaps *caps;
 
 	/*
-	 * start by retrieving our own caps.  use get_fixed_caps_func() to
-	 * avoid recursing back into this function.
+	 * get our own allowed caps.  use the fixed caps function to avoid
+	 * recursing back into this function.
 	 */
 
 	GST_OBJECT_LOCK(element);
 	caps = gst_pad_get_fixed_caps_func(pad);
 
 	/*
-	 * intersect with the downstream peer's caps if known.
+	 * get the allowed caps from the downstream peer.
+	 * if the peer has caps, intersect.
 	 */
 
 	peercaps = gst_pad_peer_get_caps(element->srcpad);
 	if(peercaps) {
-		GstCaps *result = gst_caps_intersect(peercaps, caps);
+		GstCaps *result;
 		GST_DEBUG_OBJECT(element, "intersecting %" GST_PTR_FORMAT " and %" GST_PTR_FORMAT, caps, peercaps);
-		gst_caps_unref(caps);
+		result = gst_caps_intersect(peercaps, caps);
 		gst_caps_unref(peercaps);
+		gst_caps_unref(caps);
 		caps = result;
 		GST_DEBUG_OBJECT(element, "intersection %" GST_PTR_FORMAT, caps);
 	}
@@ -152,196 +269,67 @@ static GstCaps *getcaps_snr(GstPad *pad)
 
 
 /*
- * when setting new caps, extract the sample rate and bytes/sample from the
- * caps
+ * the first caps we receive on any of the sinkpads will define the caps
+ * for all the other sinkpads because we can only mix streams with the same
+ * caps.
  */
 
 
-static gboolean setcaps_snr(GstPad *pad, GstCaps *caps)
+static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
-	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(gst_pad_get_parent(pad));
-	GstStructure *structure;
-	gint rate, width, channels;
-	gboolean success = TRUE;
+	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(GST_PAD_PARENT(pad));
+	GList *padlist = NULL;
+	GstStructure *structure = NULL;
+	gint width;
+	gint channels;
 
-	GST_LOG_OBJECT(element, "setting caps on pad %p,%s to %" GST_PTR_FORMAT, pad, GST_PAD_NAME (pad), caps);
-
-	/*
-	 * parse the caps
-	 */
-
-	/* FIXME, see if the timeslicessnrpad can accept the format. Also lock the
-	 * format on the other pads to this new format. */
-//	GST_OBJECT_LOCK(element);
-//	gst_caps_replace(&GST_PAD_CAPS(element->timeslicesnrpad), caps);
-//	GST_OBJECT_UNLOCK(element);
-
-	GST_DEBUG_OBJECT(element, "(%s) trying %" GST_PTR_FORMAT "\n", GST_PAD_NAME(pad), caps);
-	structure = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(structure, "rate", &rate))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "width", &width))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "channels", &channels))
-		success = FALSE;
+	GST_LOG_OBJECT(element, "setting caps on pad %s:%s to %" GST_PTR_FORMAT, GST_DEBUG_PAD_NAME(pad), caps);
 
 	/*
-	 * if we have a chifacs, the number of channels must match the length
-	 * of chifacs.
+	 * loop over all of the element's pads (source and sink), and set
+	 * them all to the same format.
 	 */
 
-	g_mutex_lock(element->coefficients_lock);
-	if(element->chifacs && (channels != (gint) num_channels(element))) {
-		GST_DEBUG_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, num_channels(element), caps);
-		success = FALSE;
-	}
-	g_mutex_unlock(element->coefficients_lock);
-
-	/*
-	 * will the downstream peer will accept the caps?  (the output
-	 * stream has the same caps as the SNR input stream)
-	 */
-
-	if(success) {
-		GST_DEBUG_OBJECT(element, "(%s) trying to set caps %" GST_PTR_FORMAT " on downstream peer\n", GST_PAD_NAME(pad), caps);
-		success = gst_pad_set_caps(element->srcpad, caps);
-		GST_DEBUG_OBJECT(element, "(%s) %s\n", GST_PAD_NAME(pad), success ? "accepted" : "rejected");
-	}
-
-	/*
-	 * if that was successful, update our metadata
-	 */
-
-	if(success) {
-		GST_OBJECT_LOCK(element);
-		gstlal_collect_pads_set_unit_size(pad, (width / 8) * channels);
-		element->rate = rate;
-		GST_OBJECT_UNLOCK(element);
-	}
-
-	/*
-	 * done
-	 */
-
-	gst_object_unref(element);
-	return success;
-}
-
-
-/*
- * ============================================================================
- *
- *                        Caps --- Time-Slice SNR Pad
- *
- * ============================================================================
- */
-
-
-/*
- * we can only accept caps that both ourselves and the downstream peer can
- * handle, and the number of channels must match the size of the chifacs
- */
-
-
-static GstCaps *getcaps_timeslicesnr(GstPad *pad)
-{
-	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(gst_pad_get_parent(pad));
-	GstCaps *peercaps;
-	GstCaps *caps;
-
-	/*
-	 * start by retrieving our own caps.  use get_fixed_caps_func() to
-	 * avoid recursing back into this function.
-	 */
+	/* FIXME, see if the other pads can accept the format. Also lock
+	 * the format on the other pads to this new format. */
 
 	GST_OBJECT_LOCK(element);
-	caps = gst_pad_get_fixed_caps_func(pad);
-
-	/*
-	 * intersect with the downstream peer's caps if known.
-	 */
-
-	peercaps = gst_pad_peer_get_caps(element->srcpad);
-	if(peercaps) {
-		GstCaps *result = gst_caps_intersect(peercaps, caps);
-		GST_DEBUG_OBJECT(element, "intersecting %" GST_PTR_FORMAT " and %" GST_PTR_FORMAT, caps, peercaps);
-		gst_caps_unref(caps);
-		gst_caps_unref(peercaps);
-		caps = result;
-		GST_DEBUG_OBJECT(element, "intersection %" GST_PTR_FORMAT, caps);
-
+	for(padlist = GST_ELEMENT(element)->pads; padlist; padlist = g_list_next(padlist)) {
+		GstPad *otherpad = GST_PAD(padlist->data);
+		if(otherpad != pad)
+			/* don't use gst_pad_set_caps() because that would
+			 * recurse into this function */
+			gst_caps_replace(&GST_PAD_CAPS(otherpad), caps);
 	}
 	GST_OBJECT_UNLOCK(element);
 
 	/*
-	 * done
+	 * parse caps
 	 */
 
-	gst_object_unref(element);
-	return caps;
-}
-
-
-/*
- * when setting new caps, extract the sample rate and bytes/sample from the
- * caps
- */
-
-
-static gboolean setcaps_timeslicesnr(GstPad *pad, GstCaps *caps)
-{
-	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(gst_pad_get_parent(pad));
-	GstStructure *structure;
-	gint rate, width, channels;
-	gboolean success = TRUE;
-
-	/*
-	 * parse the caps
-	 */
-
-	/* FIXME, see if the timeslicessnrpad can accept the format. Also lock the
-	 * format on the other pads to this new format. */
-//	GST_OBJECT_LOCK(element);
-//	gst_caps_replace(&GST_PAD_CAPS(element->snrpad), caps);
-//	GST_OBJECT_UNLOCK(element);
-
-	GST_DEBUG_OBJECT(element, "(%s) trying %" GST_PTR_FORMAT "\n", GST_PAD_NAME(pad), caps);
 	structure = gst_caps_get_structure(caps, 0);
-	if(!gst_structure_get_int(structure, "rate", &rate))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "width", &width))
-		success = FALSE;
-	if(!gst_structure_get_int(structure, "channels", &channels))
-		success = FALSE;
+	gst_structure_get_int(structure, "rate", &element->rate);
+	gst_structure_get_int(structure, "channels", &channels);
+	gst_structure_get_int(structure, "width", &width);
 
 	/*
-	 * if we have a chifacs, the number of channels must match the length
-	 * of chifacs.
+	 * pre-calculate bytes / sample
 	 */
 
-	g_mutex_lock(element->coefficients_lock);
-	if(element->chifacs && (channels != (gint) num_channels(element))) {
-		GST_DEBUG_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, num_channels(element), caps);
-		success = FALSE;
-	}
-	g_mutex_unlock(element->coefficients_lock);
+	element->channels = channels;
+	element->unit_size = (width / 8) * channels;
 
-	/*
-	 * if everything OK, update our metadata
-	 */
-
-	if(success) {
-		GST_OBJECT_LOCK(element);
-		gstlal_collect_pads_set_unit_size(pad, (width / 8) * channels);
-		GST_OBJECT_UNLOCK(element);
+	for(padlist = GST_ELEMENT(element)->pads; padlist; padlist = g_list_next(padlist)) {
+		GstPad *pad = GST_PAD(padlist->data);
+		if(gst_pad_get_direction(pad) == GST_PAD_SINK)
+			gstlal_collect_pads_set_unit_size(pad, element->unit_size);
 	}
 
 	/*
 	 * done
 	 */
 
-	gst_object_unref(element);
-	return success;
+	return TRUE;
 }
 
 
@@ -824,26 +812,134 @@ static gboolean sink_event_function(GstPad *pad, GstEvent *event)
 /*
  * ============================================================================
  *
- *                            \chi^{2} Computation
+ *                            Add/Remove Sink Pad
  *
  * ============================================================================
+ */
+
+
+static GstPad *request_new_pad(GstElement *gstelement, GstPadTemplate *templ, const gchar *unused)
+{
+	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(gstelement);
+	gchar *name = NULL;
+	GstPad *newpad = NULL;
+	GstLALCollectData *data = NULL;
+	gint padcount;
+
+	/*
+	 * new pads can only be sink pads
+	 */
+
+	if(templ->direction != GST_PAD_SINK) {
+		g_warning("gstlal_timeslicechisq: request new pad that is not a SINK pad\n");
+		goto not_sink;
+	}
+
+
+	/*
+	 * create a new pad
+	 */
+
+	padcount = g_atomic_int_exchange_and_add(&element->padcount, 1);
+	name = g_strdup_printf(GST_PAD_TEMPLATE_NAME_TEMPLATE(templ), padcount);
+	newpad = gst_pad_new_from_template(templ, name);
+	GST_DEBUG_OBJECT(element, "request new pad %p (%s)", newpad, name);
+	g_free(name);
+
+	/*
+	 * configure new pad
+	 */
+
+	gst_pad_set_getcaps_function(newpad, GST_DEBUG_FUNCPTR(sink_getcaps));
+	gst_pad_set_setcaps_function(newpad, GST_DEBUG_FUNCPTR(setcaps));
+
+	/*
+	 * add pad to collect pads object
+	 */
+
+	data = gstlal_collect_pads_add_pad(element->collect, newpad, sizeof(*data));
+	if(!data) {
+		GST_DEBUG_OBJECT(element, "could not add pad to collectpads object");
+		goto could_not_add_to_collectpads;
+	}
+
+	/*
+	 * FIXME: hacked way to override/extend the event function of
+	 * GstCollectPads;  because it sets its own event function giving
+	 * the element (us) no access to events
+	 */
+
+	element->collect_event = (GstPadEventFunction) GST_PAD_EVENTFUNC(newpad);
+	gst_pad_set_event_function(newpad, GST_DEBUG_FUNCPTR(sink_event_function));
+
+	/*
+	 * add pad to element (takes ownership of the pad).
+	 */
+
+	if(!gst_element_add_pad(GST_ELEMENT(element), newpad)) {
+		GST_DEBUG_OBJECT(element, "could not add pad to element");
+		goto could_not_add_to_element;
+	}
+
+	/*
+	 * done
+	 */
+
+	return newpad;
+
+	/*
+	 * ERRORS
+	 */
+
+could_not_add_to_element:
+	gstlal_collect_pads_remove_pad(element->collect, newpad);
+could_not_add_to_collectpads:
+	gst_object_unref(newpad);
+not_sink:
+	return NULL;
+}
+
+
+static void release_pad(GstElement *gstelement, GstPad *pad)
+{
+	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(gstelement);
+
+	GST_DEBUG_OBJECT(element, "release pad %s:%s", GST_DEBUG_PAD_NAME(pad));
+
+	gstlal_collect_pads_remove_pad(element->collect, pad);
+	gst_element_remove_pad(gstelement, pad);
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                               Stream Mixing
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * GstCollectPads callback.  called when data is available on all input
+ * pads
  */
 
 
 static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 {
 	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(user_data);
+	GSList *collected = NULL;
 	GstClockTime t_start, t_end;
 	guint64 earliest_input_offset, earliest_input_offset_end;
-	guint64 sample, length;
-	int unit_size = 0;
+	guint64 length;
+	unsigned int timeslice;
+	void *snrbytes = NULL;
 	GstBuffer *outbuf = NULL;
+	GstBuffer *inbufs[num_timeslices(element)];
 	gpointer outbytes = NULL;
 	GstFlowReturn result;
-
-	GstBuffer *snrbuf = NULL;
-	GstBuffer *timeslicesnrbuf = NULL;
-	gint channel, numchannels;
+	unsigned int numchannels, numtimeslices, channel, sample;
 
 	/*
 	 * forward flush-stop event
@@ -859,7 +955,6 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 */
 
 	if(element->segment_pending) {
-		GstEvent *event;
 		GstSegment *segment = gstlal_collect_pads_get_segment(element->collect);
 		if(!segment) {
 			/* FIXME:  failure getting bounding segment, do
@@ -868,15 +963,6 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		element->segment = *segment;
 		element->offset = 0;
 		gst_segment_free(segment);
-
-		event = gst_event_new_new_segment_full(FALSE, element->segment.rate, 1.0, GST_FORMAT_TIME, element->segment.start, element->segment.stop, element->segment.start);
-		if(!event) {
-			/* FIXME:  failure getting event, do something
-			 * about it */
-		}
-		gst_pad_push_event(element->srcpad, event);
-
-		element->segment_pending = FALSE;
 	}
 
 	/*
@@ -884,11 +970,15 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 * available input buffers.
 	 */
 
+	/*
+	 * determine the offsets for real.
+	 */
+
 	if(!gstlal_collect_pads_get_earliest_times(element->collect, &t_start, &t_end, element->rate)) {
 		GST_ERROR_OBJECT(element, "cannot deduce input timestamp offset information");
+		result = GST_FLOW_ERROR;
 		goto error;
 	}
-	fprintf(stderr,"tstart=%i, tend=%i\n", (int) t_start, (int) t_end);
 
 	/*
 	 * check for EOS
@@ -898,14 +988,15 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		goto eos;
 
 	/*
-	 * don't let time go backwards.  in principle we could be smart and
-	 * handle this, but the audiorate element can be used to correct
-	 * screwed up time series so there is no point in re-inventing its
-	 * capabilities here.
+	 * don't let time go backwards.  in principle we could be
+	 * smart and handle this, but the audiorate element can be
+	 * used to correct screwed up time series so there is no
+	 * point in re-inventing its capabilities here.
 	 */
 
 	earliest_input_offset = gst_util_uint64_scale_int_round(t_start - element->segment.start, element->rate, GST_SECOND);
 	earliest_input_offset_end = gst_util_uint64_scale_int_round(t_end - element->segment.start, element->rate, GST_SECOND);
+
 	if(earliest_input_offset < element->offset) {
 		GST_ERROR_OBJECT(element, "detected time reversal in at least one input stream:  expected nothing earlier than offset %" G_GUINT64_FORMAT ", found sample at offset %" G_GUINT64_FORMAT, element->offset, earliest_input_offset);
 		result = GST_FLOW_ERROR;
@@ -913,119 +1004,255 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	}
 
 	/*
-	 * compute the number of samples in each channel
+	 * compute the number of samples for which all sink pads can
+	 * contribute information.  0 does not necessarily mean EOS.
 	 */
 
 	length = earliest_input_offset_end - earliest_input_offset;
 
 	/*
-	 * get buffers upto the desired end offset.
-	 */
-
-	snrbuf = gstlal_collect_pads_take_buffer_sync(pads, element->snrcollectdata, t_end, element->rate);
-	timeslicesnrbuf = gstlal_collect_pads_take_buffer_sync(pads, element->timeslicesnrcollectdata, t_end, element->rate);
-
-	/*
-	 * NULL means EOS.
-	 */
-
-	if(!snrbuf || !timeslicesnrbuf) {
-		if(snrbuf)
-			gst_buffer_unref(snrbuf);
-		if(timeslicesnrbuf)
-			gst_buffer_unref(timeslicesnrbuf);
-		goto eos;
-	}
-
-	/* determine the output unit_size */
-
-	GSList *collectdatalist = NULL;
-	for(collectdatalist = pads->data; collectdatalist; collectdatalist = g_slist_next(collectdatalist)) {
-		GstLALCollectData *data = collectdatalist->data;
-
-		unit_size = data->unit_size;
-	}
-		
-
-	/*
 	 * alloc a new output buffer of length samples, and
 	 * set its offset.
 	 */
+	/* FIXME:  if this returns a short buffer we're
+	 * sort of screwed.  a code re-organization could
+	 * fix it:  request buffer before entering the loop
+	 * and figure out a different way to check for EOS
+	 */
 
 	GST_LOG_OBJECT(element, "requesting output buffer of %" G_GUINT64_FORMAT " samples", length);
-
-	result = gst_pad_alloc_buffer(element->srcpad, earliest_input_offset, length * unit_size, GST_PAD_CAPS(element->srcpad), &outbuf);
+	result = gst_pad_alloc_buffer(element->srcpad, earliest_input_offset, length * element->unit_size, GST_PAD_CAPS(element->srcpad), &outbuf);
 	if(result != GST_FLOW_OK) {
 		/* FIXME: handle failure */
 		outbuf = NULL;
 	}
 	outbytes = GST_BUFFER_DATA(outbuf);
+	memset(outbytes, 0, GST_BUFFER_SIZE(outbuf));
+	GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
+
+	snrbytes = malloc(length * element->unit_size);
+	if(snrbytes == NULL) {
+		/* FIXME: handle failure */
+	}
+	memset(snrbytes, 0, length * element->unit_size);
 
 	/*
-	 * Check for mis-aligned input buffers.  This can happen, but we
-	 * can't handle it.
+	 * loop over input pads, getting chunks of data from each in turn.
 	 */
 
-	if(GST_BUFFER_OFFSET(snrbuf) != GST_BUFFER_OFFSET(timeslicesnrbuf) || GST_BUFFER_OFFSET_END(snrbuf) != GST_BUFFER_OFFSET_END(timeslicesnrbuf)) {
-		GST_ERROR_OBJECT(element, "misaligned buffer boundaries:  got snr offsets [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ") and time-slice snr offsets [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", GST_BUFFER_OFFSET(snrbuf), GST_BUFFER_OFFSET_END(snrbuf), GST_BUFFER_OFFSET(timeslicesnrbuf), GST_BUFFER_OFFSET_END(timeslicesnrbuf));
-		goto error;
+	numtimeslices = element->padcount;
+	timeslice = 0;
+
+	GST_LOG_OBJECT(element, "cycling through channels, offsets [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ") (@ %d Hz) relative to %" GST_TIME_SECONDS_FORMAT " available", earliest_input_offset, earliest_input_offset_end, element->rate, GST_TIME_SECONDS_ARGS(element->segment.start));
+	for(collected = pads->data, timeslice = 0; collected; collected = g_slist_next(collected), timeslice++) {
+		GstLALCollectData *data = collected->data;
+		GstBuffer *inbuf;
+		size_t gap;
+		size_t len;
+
+		/*
+		 * (try to) get a buffer upto the desired end offset.
+		 */
+
+		inbuf = gstlal_collect_pads_take_buffer_sync(pads, data, t_end, element->rate);
+
+		/*
+		 * NULL means EOS.
+		 */
+
+		if(!inbuf) {
+			GST_LOG_OBJECT(element, "channel %p: no bytes available (EOS)", data);
+			continue;
+		}
+
+		/*
+		 * determine the buffer's location relative to the desired
+		 * range of offsets.  we've checked above that time hasn't
+		 * gone backwards on any input buffer so gap can't be
+		 * negative.  if not doing synchronous mixing, the buffer
+		 * starts now.
+		 */
+
+		gap = (gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(inbuf) - element->segment.start, element->rate, GST_SECOND) - earliest_input_offset) * element->unit_size;
+		len = GST_BUFFER_SIZE(inbuf);
+
+		/*
+		 * add to snr
+		 */
+
+		/*
+		 * if buffer is not a gap and has non-zero length
+		 * add to previous data and mark output as
+		 * non-empty, otherwise do nothing.
+		 */
+
+		if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) && len) {
+			GST_LOG_OBJECT(element, "channel %p: mixing %zd bytes from data %p", data, len, GST_BUFFER_DATA(inbuf));
+			add_float64(snrbytes + gap, GST_BUFFER_DATA(inbuf), len);
+			GST_BUFFER_FLAG_UNSET(outbuf, GST_BUFFER_FLAG_GAP);
+		} else
+			GST_LOG_OBJECT(element, "channel %p: skipping %zd bytes from data %p", data, len, GST_BUFFER_DATA(inbuf));
+
+		inbufs[numtimeslices - timeslice - 1] = inbuf;
 	}
 
 	/*
-	 * check for discontinuity
+	 * get the number of channels
+	 */
+
+	numchannels = (guint) num_channels(element);
+
+	/*
+	 * loop over buffers from input pads computing the time-slice chisq
+	 */
+
+
+	g_mutex_lock(element->coefficients_lock);
+	while(!element->chifacs)
+		g_cond_wait(element->coefficients_available, element->coefficients_lock);
+
+	/*
+	 * check that the number of channels and timeslices match the dimension of chifacs
+	 */
+
+	if (num_channels(element) != element->channels) {
+		g_mutex_unlock(element->coefficients_lock);
+		GST_ERROR_OBJECT(element, "number of channels from caps negotiation X does not match first dimension of chifacs matrix: X = %i, Y = %i\n", element->channels, num_channels(element));
+		result = GST_FLOW_ERROR;
+		goto error;
+	}
+
+	if (num_timeslices(element) != element->padcount) {
+		g_mutex_unlock(element->coefficients_lock);
+		GST_ERROR_OBJECT(element, "number of sink pads does not match second dimension of chifacs matrix: X = %i, Y = %i\n", element->padcount, num_timeslices(element));
+		result = GST_FLOW_ERROR;
+		goto error;
+	}
+
+	for(timeslice = 0; timeslice < numtimeslices; timeslice++) {
+		GstBuffer *inbuf = inbufs[timeslice];
+		size_t gap;
+		size_t len;
+
+		/*
+		 * NULL means EOS.
+		 */
+
+		if(!inbuf) {
+			continue;
+		}
+
+		/*
+		 * add chisq to outbuf
+		 */
+
+		/*
+		 * determine the buffer's location relative to the desired
+		 * range of offsets.  we've checked above that time hasn't
+		 * gone backwards on any input buffer so gap can't be
+		 * negative.  if not doing synchronous mixing, the buffer
+		 * starts now.
+		 */
+
+		gap = (gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(inbuf) - element->segment.start, element->rate, GST_SECOND) - earliest_input_offset) * element->unit_size;
+		len = GST_BUFFER_SIZE(inbuf);
+
+		if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) && len) {
+			for (sample = gap; sample < len; sample += element->unit_size) {
+				double *outdata = (double *) (outbytes + sample);
+				const double *snrdata = (double *) (snrbytes + sample);
+				const double *indata = (double *) (GST_BUFFER_DATA(inbuf) + sample);
+				for (channel = 0; channel < numchannels; channel++) {
+					double snr = snrdata[channel];
+					double timeslicesnr = indata[channel];
+					double chifacs_coefficient = gsl_matrix_get(element->chifacs, (size_t) channel, (size_t) timeslice);
+					double chifacs_coefficient2 = chifacs_coefficient*chifacs_coefficient;
+					double chifacs_coefficient3 = chifacs_coefficient2*chifacs_coefficient;
+
+					outdata[channel] += pow(timeslicesnr - chifacs_coefficient * snr, 2.0)/2.0/(chifacs_coefficient2 - chifacs_coefficient3);
+				}
+			}
+		}
+
+		gst_buffer_unref(inbuf);
+		inbufs[timeslice] = NULL;
+	}
+
+	g_mutex_unlock(element->coefficients_lock);
+
+	/*
+	 * free the memomry associated with the snr
+	 */
+
+	free(snrbytes);
+	snrbytes = NULL;
+
+	/*
+	 * can only happen when no pads to collect or all EOS
+	 */
+
+	if(!outbuf)
+		goto eos;
+
+	/*
+	 * check for discontinuity.
 	 */
 
 	if(element->offset != GST_BUFFER_OFFSET(outbuf))
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_DISCONT);
 
 	/*
-	 * Gap --> pass-through
+	 * set the timestamp, end offset, and duration.  computing the
+	 * duration the way we do here ensures that if some downstream
+	 * element adds all the buffer durations together they'll stay in
+	 * sync with the timestamp.  the end offset is saved for comparison
+	 * against the next start offset to watch for discontinuities.
 	 */
 
-	if(GST_BUFFER_FLAG_IS_SET(snrbuf, GST_BUFFER_FLAG_GAP) || GST_BUFFER_FLAG_IS_SET(timeslicesnrbuf, GST_BUFFER_FLAG_GAP)) {
-		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
-		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
-		goto done;
-	}
+	element->offset = GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + length;
+	GST_BUFFER_TIMESTAMP(outbuf) = output_timestamp_from_offset(element, GST_BUFFER_OFFSET(outbuf));
+	GST_BUFFER_DURATION(outbuf) = output_timestamp_from_offset(element, GST_BUFFER_OFFSET_END(outbuf)) - GST_BUFFER_TIMESTAMP(outbuf);
 
 	/*
-	 * make sure the chifacs vectors is available, wait until it is
+	 * precede the buffer with a new_segment event if one is pending
 	 */
+	/* FIXME, use rate/applied_rate as set on all sinkpads.  currently
+	 * we just set rate as received from last seek-event We could
+	 * potentially figure out the duration as well using the current
+	 * segment positions and the stated stop positions. */
 
-	g_mutex_lock(element->coefficients_lock);
-	while(!element->chifacs) {
-		g_cond_wait(element->coefficients_available, element->coefficients_lock);
-		/* FIXME:  we need some way of getting out of this loop.
-		 * maybe check for a flag set in an event handler */
-	}
+	if(element->segment_pending) {
+		/* FIXME:  the segment start time is almost certainly
+		 * incorrect */
+		GstEvent *event = gst_event_new_new_segment_full(FALSE, element->segment.rate, 1.0, GST_FORMAT_TIME, element->segment.start, element->segment.stop, GST_BUFFER_TIMESTAMP(outbuf));
 
-	numchannels = (guint) num_channels(element);
-
-	for(sample = 0; sample < length; sample++) {
-		double *data = &((double *) GST_BUFFER_DATA(outbuf))[numchannels * sample];
-		const double *snrdata = &((const double *) GST_BUFFER_DATA(snrbuf))[numchannels * sample];
-		const double *timeslicesnrdata = &((const double *) GST_BUFFER_DATA(timeslicesnrbuf))[numchannels * sample];
-		for(channel = 0; channel < numchannels; channel++) {
-			double snr = snrdata[channel];
-			double timeslicesnr = timeslicesnrdata[channel];
-			double chifacs_coefficient = gsl_vector_get(element->chifacs, channel);
-			double chifacs_coefficient2 = chifacs_coefficient*chifacs_coefficient;
-			double chifacs_coefficient3 = chifacs_coefficient2*chifacs_coefficient;
-
-			data[channel] = pow(snr * chifacs_coefficient - timeslicesnr, 2.0)/2.0/(chifacs_coefficient2 - chifacs_coefficient3);
+		if(!event) {
+			/* FIXME:  failure getting event, do something
+			 * about it */
 		}
+
+		/*
+		 * gst_pad_push_event() returns a boolean indicating
+		 * whether or not the event was handled.  we ignore this.
+		 * whether or not the new segment event can be handled is
+		 * not our problem to worry about, our responsibility is
+		 * just to send it.
+		 */
+
+		gst_pad_push_event(element->srcpad, event);
+		element->segment_pending = FALSE;
 	}
-	g_mutex_unlock(element->coefficients_lock);
 
 	/*
-	 * push the buffer downstream
+	 * push the buffer downstream.
 	 */
 
-done:
-	gst_buffer_unref(timeslicesnrbuf);
-	gst_buffer_unref(snrbuf);
-	element->offset = GST_BUFFER_OFFSET_END(outbuf);
+	GST_LOG_OBJECT(element, "pushing outbuf, timestamp %" GST_TIME_SECONDS_FORMAT ", offset %" G_GUINT64_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(outbuf)), GST_BUFFER_OFFSET(outbuf));
 	return gst_pad_push(element->srcpad, outbuf);
+
+	/*
+	 * ERRORS
+	 */
 
 eos:
 	GST_DEBUG_OBJECT(element, "no data available (EOS)");
@@ -1033,102 +1260,7 @@ eos:
 	return GST_FLOW_UNEXPECTED;
 
 error:
-	if(outbuf)
-		gst_buffer_unref(outbuf);
-	if(snrbuf)
-		gst_buffer_unref(snrbuf);
-	if(timeslicesnrbuf)
-		gst_buffer_unref(timeslicesnrbuf);
-	return GST_FLOW_ERROR;
-}
-
-
-/*
- * ============================================================================
- *
- *                          GObject Method Overrides
- *
- * ============================================================================
- */
-
-
-/*
- * set_property()
- */
-
-
-static void set_property(GObject *object, enum property prop_id, const GValue *value, GParamSpec *pspec)
-{
-	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(object);
-
-	GST_OBJECT_LOCK(element);
-
-	switch (prop_id) {
-	case ARG_CHIFACS: {
-		int channels;
-		g_mutex_lock(element->coefficients_lock);
-		if(element->chifacs) {
-			channels = num_channels(element);
-			gsl_vector_free(element->chifacs);
-		} else
-			channels = 0;
-		element->chifacs = gstlal_gsl_vector_from_g_value_array(g_value_get_boxed(value));
-
-		/*
-		 * number of channels has changed, force a caps
-		 * renegotiation
-		 */
-
-		if(num_channels(element) != channels) {
-			/* FIXME:  what do we do here? */
-			fprintf(stderr,"CHANNELS DON'T MATCH, channels=%i, num_channels=%i\n", channels, num_channels(element));
-			gst_pad_set_caps(element->srcpad, NULL);
-		}
-
-		/*
-		 * signal availability of new chifacs vector
-		 */
-
-		g_cond_broadcast(element->coefficients_available);
-		g_mutex_unlock(element->coefficients_lock);
-		break;
-	}
-
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
-		break;
-	}
-
-	GST_OBJECT_UNLOCK(element);
-}
-
-
-/*
- * get_property()
- */
-
-
-static void get_property(GObject *object, enum property prop_id, GValue *value, GParamSpec *pspec)
-{
-	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(object);
-
-	GST_OBJECT_LOCK(element);
-
-	switch (prop_id) {
-	case ARG_CHIFACS:
-		g_mutex_lock(element->coefficients_lock);
-		if(element->chifacs)
-			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_vector(element->chifacs));
-		/* FIXME:  else? */
-		g_mutex_unlock(element->coefficients_lock);
-		break;
-
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
-		break;
-	}
-
-	GST_OBJECT_UNLOCK(element);
+	return result;
 }
 
 
@@ -1142,7 +1274,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 
 /*
- * Parent class.
+ * parent class handle
  */
 
 
@@ -1150,59 +1282,56 @@ static GstElementClass *parent_class = NULL;
 
 
 /*
- * Instance finalize function.  See ???
+ * elementfactory information
  */
 
 
-static void finalize(GObject *object)
-{
-	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(object);
+#define CAPS \
+	"audio/x-raw-float, " \
+	"rate = (int) [ 1, MAX ], " \
+	"channels = (int) [ 1, MAX ], " \
+	"endianness = (int) BYTE_ORDER, " \
+	"width = (int) 64;"
 
-	gst_object_unref(element->timeslicesnrpad);
-	element->timeslicesnrpad = NULL;
-	gst_object_unref(element->snrpad);
-	element->snrpad = NULL;
-	gst_object_unref(element->srcpad);
-	element->srcpad = NULL;
 
-	gst_object_unref(element->collect);
-	element->timeslicesnrcollectdata = NULL;
-	element->snrcollectdata = NULL;
-	element->collect = NULL;
+static GstStaticPadTemplate src_template =
+	GST_STATIC_PAD_TEMPLATE(
+		"src",
+		GST_PAD_SRC,
+		GST_PAD_ALWAYS,
+		GST_STATIC_CAPS(CAPS)
+	);
 
-	g_mutex_free(element->coefficients_lock);
-	element->coefficients_lock = NULL;
-	g_cond_free(element->coefficients_available);
-	element->coefficients_available = NULL;
-	if(element->chifacs) {
-		gsl_vector_free(element->chifacs);
-		element->chifacs = NULL;
-	}
 
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
+static GstStaticPadTemplate sink_template =
+	GST_STATIC_PAD_TEMPLATE(
+		"sink%d",
+		GST_PAD_SINK,
+		GST_PAD_REQUEST,
+		GST_STATIC_CAPS(CAPS)
+	);
 
 
 /*
- * change state.  reset element's internal state and start the collect pads
- * on READY --> PAUSED state change.  stop the collect pads on PAUSED -->
- * READY state change.
+ * reset element's internal state and start the collect pads on READY -->
+ * PAUSED state change.  stop the collect pads on PAUSED --> READY state
+ * change.
  */
 
 
-static GstStateChangeReturn change_state(GstElement *element, GstStateChange transition)
+static GstStateChangeReturn change_state(GstElement *gstelement, GstStateChange transition)
 {
-	GSTLALTimeSliceChiSquare *timeslicechisquare = GSTLAL_TIMESLICECHISQUARE(element);
+	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(gstelement);
 
 	switch(transition) {
 	case GST_STATE_CHANGE_NULL_TO_READY:
 		break;
 
 	case GST_STATE_CHANGE_READY_TO_PAUSED:
-		timeslicechisquare->segment_pending = TRUE;
-		gst_segment_init(&timeslicechisquare->segment, GST_FORMAT_UNDEFINED);
-		timeslicechisquare->offset = 0;
-		gst_collect_pads_start(timeslicechisquare->collect);
+		element->segment_pending = TRUE;
+		gst_segment_init(&element->segment, GST_FORMAT_UNDEFINED);
+		element->offset = 0;
+		gst_collect_pads_start(element->collect);
 		break;
 
 	case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
@@ -1211,88 +1340,44 @@ static GstStateChangeReturn change_state(GstElement *element, GstStateChange tra
 	case GST_STATE_CHANGE_PAUSED_TO_READY:
 		/* need to unblock the collectpads before calling the
 		 * parent change_state so that streaming can finish */
-		gst_collect_pads_stop(timeslicechisquare->collect);
+		gst_collect_pads_stop(element->collect);
 		break;
 
 	default:
 		break;
 	}
 
-	return parent_class->change_state(element, transition);
+	return GST_ELEMENT_CLASS(parent_class)->change_state(gstelement, transition);
 }
 
 
 /*
- * Base init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GBaseInitFunc
+ * free internal memory
  */
 
 
-
-static void base_init(gpointer class)
+static void finalize(GObject *object)
 {
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
+	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(object);
 
-	gst_element_class_set_details_simple(
-		element_class,
-		"Inspiral time-slice-based \\chi^{2}",
-		"Filter",
-		"A time-slice-based \\chi^{2} statistic for the inspiral pipeline",
-		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>, Drew Keppel <drew.keppel@ligo.org>"
-	);
-	gst_element_class_add_pad_template(
-		element_class,
-		gst_pad_template_new(
-			"timeslicesnr",
-			GST_PAD_SINK,
-			GST_PAD_ALWAYS,
-			gst_caps_from_string(
-				"audio/x-raw-float, " \
-				"rate = (int) [ 1, MAX ], " \
-				"channels = (int) [ 1, MAX ], " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 64"
-			)
-		)
-	);
-	gst_element_class_add_pad_template(
-		element_class,
-		gst_pad_template_new(
-			"snr",
-			GST_PAD_SINK,
-			GST_PAD_ALWAYS,
-			gst_caps_from_string(
-				"audio/x-raw-float, " \
-				"rate = (int) [ 1, MAX ], " \
-				"channels = (int) [ 1, MAX ], " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 64"
-			)
-		)
-	);
-	gst_element_class_add_pad_template(
-		element_class,
-		gst_pad_template_new(
-			"src",
-			GST_PAD_SRC,
-			GST_PAD_ALWAYS,
-			gst_caps_from_string(
-				"audio/x-raw-float, " \
-				"rate = (int) [ 1, MAX ], " \
-				"channels = (int) [ 1, MAX ], " \
-				"endianness = (int) BYTE_ORDER, " \
-				"width = (int) 64"
-			)
-		)
-	);
+	gst_object_unref(element->collect);
+	element->collect = NULL;
+
+	g_mutex_free(element->coefficients_lock);
+	element->coefficients_lock = NULL;
+	g_cond_free(element->coefficients_available);
+	element->coefficients_available = NULL;
+	if(element->chifacs) {
+		gsl_matrix_free(element->chifacs);
+		element->chifacs = NULL;
+	}
+
+	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
 
 /*
- * Class init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
+ * class init
  */
 
 
@@ -1300,78 +1385,82 @@ static void class_init(gpointer klass, gpointer class_data)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstElementClass *gstelement_class = GST_ELEMENT_CLASS(klass);
+	GSTLALTimeSliceChiSquareClass *gstlal_timeslicechisq_class = GSTLAL_TIMESLICECHISQUARE_CLASS(klass);
 
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
-
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->set_property = set_property;
+	gobject_class->get_property = get_property;
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
-
-	gstelement_class->change_state = GST_DEBUG_FUNCPTR(change_state);
 
 	g_object_class_install_property(
 		gobject_class,
 		ARG_CHIFACS,
 		g_param_spec_value_array(
-			"chifacs",
-			"Chisquared Factors",
-			"Vector of chisquared factors. Number of rows sets number of channels.",
-			g_param_spec_double(
-				"sample",
-				"Sample",
-				"Chifacs sample",
-				-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+			"chifacs-matrix",
+			"Chisquared Factors Matrix",
+			"Array of complex chisquared factor vectors.  Number of vectors (rows) in matrix sets number of channels.  All vectors must have the same length.",
+			g_param_spec_value_array(
+				"chifacs",
+				"Chisquared Factors",
+				"Vector of chisquared factors. Number of elements must equal number of sink pads.",
+				g_param_spec_double(
+					"sample",
+					"Sample",
+					"Chifacs sample",
+					-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+				),
 				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 			),
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
 
+	gst_element_class_add_pad_template(gstelement_class, gst_static_pad_template_get(&src_template));
+	gst_element_class_add_pad_template(gstelement_class, gst_static_pad_template_get(&sink_template));
+	gst_element_class_set_details_simple(
+		gstelement_class,
+		"Time-slice-based \\chi^{2}",
+		"Filter",
+		"A time-slice-based \\chi^{2} statistic",
+		"Drew Keppel <drew.keppel@ligo.org>"
+	);
+
+	parent_class = g_type_class_peek_parent(gstlal_timeslicechisq_class);
+
+	gstelement_class->request_new_pad = GST_DEBUG_FUNCPTR(request_new_pad);
+	gstelement_class->release_pad = GST_DEBUG_FUNCPTR(release_pad);
+	gstelement_class->change_state = GST_DEBUG_FUNCPTR(change_state);
 }
 
 
 /*
- * Instance init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GInstanceInitFunc
+ * instance init
  */
 
 
 static void instance_init(GTypeInstance *object, gpointer class)
 {
 	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(object);
-	GstPad *pad;
+	GstPadTemplate *template = NULL;
 
-	gst_element_create_all_pads(GST_ELEMENT(element));
+	template = gst_static_pad_template_get(&src_template);
+	element->srcpad = gst_pad_new_from_template(template, "src");
+	gst_object_unref(template);
+
+	gst_pad_set_getcaps_function(element->srcpad, GST_DEBUG_FUNCPTR(gst_pad_proxy_getcaps));
+	gst_pad_set_setcaps_function(element->srcpad, GST_DEBUG_FUNCPTR(setcaps));
+	gst_pad_set_query_function(element->srcpad, GST_DEBUG_FUNCPTR(query_function));
+	gst_pad_set_event_function(element->srcpad, GST_DEBUG_FUNCPTR(src_event_function));
+	gst_element_add_pad(GST_ELEMENT(object), element->srcpad);
+
+	element->padcount = 0;
+
 	element->collect = gst_collect_pads_new();
 	gst_collect_pads_set_function(element->collect, GST_DEBUG_FUNCPTR(collected), element);
 
-	/* configure (and ref) timeslice SNR sink pad */
-	pad = gst_element_get_static_pad(GST_ELEMENT(element), "timeslicesnr");
-	element->collect_event = (GstPadEventFunction) GST_PAD_EVENTFUNC(pad);
-	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event_function));
-	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps_timeslicesnr));
-	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(setcaps_timeslicesnr));
-	element->timeslicesnrcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->timeslicesnrcollectdata));
-	element->timeslicesnrpad = pad;
-
-	/* configure (and ref) SNR sink pad */
-	pad = gst_element_get_static_pad(GST_ELEMENT(element), "snr");
-	element->collect_event = (GstPadEventFunction) GST_PAD_EVENTFUNC(pad);
-	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event_function));
-	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps_snr));
-	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(setcaps_snr));
-	element->snrcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->snrcollectdata));
-	element->snrpad = pad;
-
-	/* retrieve (and ref) src pad */
-	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
-	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(src_event_function));
-	gst_pad_set_query_function(pad, GST_DEBUG_FUNCPTR(query_function));
-	element->srcpad = pad;
-
-	/* internal data */
 	element->rate = 0;
+	element->unit_size = 0;
+	element->channels = 0;
 	element->coefficients_lock = g_mutex_new();
 	element->coefficients_available = g_cond_new();
 	element->chifacs = NULL;
@@ -1379,24 +1468,44 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 
 /*
- * gstlal_timeslicechisquare_get_type().
+ * create/get type ID
  */
 
 
 GType gstlal_timeslicechisquare_get_type(void)
 {
-	static GType type = 0;
+	static GType element_type = 0;
 
-	if(!type) {
-		static const GTypeInfo info = {
+	if(G_UNLIKELY(element_type == 0)) {
+		static const GTypeInfo element_info = {
 			.class_size = sizeof(GSTLALTimeSliceChiSquareClass),
 			.class_init = class_init,
-			.base_init = base_init,
 			.instance_size = sizeof(GSTLALTimeSliceChiSquare),
 			.instance_init = instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_timeslicechisquare", &info, 0);
+
+		element_type = g_type_register_static(GST_TYPE_ELEMENT, "GSTLALTimeSliceChisq", &element_info, 0);
+		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "gstlal_timeslicechisq", 0, "");
 	}
 
-	return type;
+	return element_type;
 }
+
+
+/*
+ * ============================================================================
+ *
+ *                              Plug-in Support
+ *
+ * ============================================================================
+ */
+
+
+#if 0
+static gboolean plugin_init(GstPlugin * plugin)
+{
+	return gst_element_register(plugin, "gstlal_timeslicechisq", GST_RANK_NONE, GSTLAL_TIMESLICECHISQUARE_TYPE);
+}
+
+GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, "gstlal_timeslicechisq", "Compute time-slice chisq from multiple streams", plugin_init, VERSION, "LGPL", GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)
+#endif
