@@ -27,8 +27,6 @@
 
 
 G_BEGIN_DECLS
-
-
 #define UNARY_BASE_TYPE \
 	(unary_base_get_type())
 #define UNARY_BASE(obj) \
@@ -39,22 +37,20 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_INSTANCE_TYPE((obj), UNARY_BASE_TYPE))
 #define GST_IS_UNARY_BASE_CLASS(klass) \
 	(G_TYPE_CHECK_CLASS_TYPE((klass), UNARY_BASE_TYPE))
-
-
-typedef struct {
-	GstAudioFilterClass parent_class;
+    typedef struct
+{
+  GstAudioFilterClass parent_class;
 } UnaryBaseClass;
 
 
-typedef struct {
-	GstAudioFilter audiofilter;
+typedef struct
+{
+  GstAudioFilter audiofilter;
 } UnaryBase;
 
 
-GType unary_base_get_type(void);
+GType unary_base_get_type (void);
 
 
 G_END_DECLS
-
-
-#endif	/* __UNARY_BASE_H__ */
+#endif /* __UNARY_BASE_H__ */

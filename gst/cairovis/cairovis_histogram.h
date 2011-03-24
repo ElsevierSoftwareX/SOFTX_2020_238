@@ -29,8 +29,6 @@
 
 
 G_BEGIN_DECLS
-
-
 #define CAIROVIS_HISTOGRAM_TYPE \
 	(cairovis_histogram_get_type())
 #define CAIROVIS_HISTOGRAM(obj) \
@@ -41,52 +39,49 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_INSTANCE_TYPE((obj), CAIROVIS_HISTOGRAM_TYPE))
 #define GST_IS_CAIROVIS_HISTOGRAM_CLASS(klass) \
 	(G_TYPE_CHECK_CLASS_TYPE((klass), CAIROVIS_HISTOGRAM_TYPE))
-
-
 #define CAIROVIS_HISTOGRAM_BINS_TYPE \
 (cairovis_histogram_bins_get_type())
-
-
-enum cairovis_histogram_bins {
-	CAIROVIS_BINS_LINEAR,
-	CAIROVIS_BINS_LOG
+    enum cairovis_histogram_bins
+{
+  CAIROVIS_BINS_LINEAR,
+  CAIROVIS_BINS_LOG
 };
 
 
-typedef struct {
-	CairoVisBaseClass parent_class;
+typedef struct
+{
+  CairoVisBaseClass parent_class;
 } CairoVisHistogramClass;
 
 
-typedef struct _CairoVisHistogram {
-	CairoVisBase element;
+typedef struct _CairoVisHistogram
+{
+  CairoVisBase element;
 
-	/* Pads */
-	GstPad *sinkpad;
+  /* Pads */
+  GstPad *sinkpad;
 
-	/* Properties */
-	enum cairovis_histogram_bins bins;
-	gdouble min;
-	gdouble max;
-	guint nbins;
-	guint history;
-	gboolean normed;
+  /* Properties */
+  enum cairovis_histogram_bins bins;
+  gdouble min;
+  gdouble max;
+  guint nbins;
+  guint history;
+  gboolean normed;
 
-	/* Internal data */
-	guint *bin_counts;
-	guint total;
-	GstAdapter *adapter;
-	gdouble scale;
+  /* Internal data */
+  guint *bin_counts;
+  guint total;
+  GstAdapter *adapter;
+  gdouble scale;
 } CairoVisHistogram;
 
 
-GType cairovis_histogram_get_type(void);
+GType cairovis_histogram_get_type (void);
 
 
-GType cairovis_histogram_bins_get_type(void);
+GType cairovis_histogram_bins_get_type (void);
 
 
 G_END_DECLS
-
-
-#endif	/* __CAIROVIS_HISTOGRAM_H__ */
+#endif /* __CAIROVIS_HISTOGRAM_H__ */

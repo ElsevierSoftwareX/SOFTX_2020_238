@@ -54,32 +54,35 @@
  */
 
 
-static gboolean plugin_init(GstPlugin *plugin)
+static gboolean
+plugin_init (GstPlugin * plugin)
 {
-	struct {
-		const gchar *name;
-		GType type;
-	} *element, elements[] = {
-		{"cairovis_base", CAIROVIS_BASE_TYPE},
-		{"cairovis_histogram", CAIROVIS_HISTOGRAM_TYPE},
-		{"cairovis_lineseries", CAIROVIS_LINESERIES_TYPE},
-		{"cairovis_waterfall", CAIROVIS_WATERFALL_TYPE},
-		{NULL, 0},
-	};
+  struct
+  {
+    const gchar *name;
+    GType type;
+  } *element, elements[] = {
+    {
+    "cairovis_base", CAIROVIS_BASE_TYPE}, {
+    "cairovis_histogram", CAIROVIS_HISTOGRAM_TYPE}, {
+    "cairovis_lineseries", CAIROVIS_LINESERIES_TYPE}, {
+    "cairovis_waterfall", CAIROVIS_WATERFALL_TYPE}, {
+  NULL, 0},};
 
-	/*
-	 * Tell GStreamer about the elements.
-	 */
+  /*
+   * Tell GStreamer about the elements.
+   */
 
-	for(element = elements; element->name; element++)
-		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->type))
-			return FALSE;
+  for (element = elements; element->name; element++)
+    if (!gst_element_register (plugin, element->name, GST_RANK_NONE,
+            element->type))
+      return FALSE;
 
-	/*
-	 * Done.
-	 */
+  /*
+   * Done.
+   */
 
-	return TRUE;
+  return TRUE;
 }
 
 
@@ -88,4 +91,6 @@ static gboolean plugin_init(GstPlugin *plugin)
  */
 
 
-GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, "cairovis", "Cairo visualization elements", plugin_init, PACKAGE_VERSION, "GPL", PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")
+GST_PLUGIN_DEFINE (GST_VERSION_MAJOR, GST_VERSION_MINOR, "cairovis",
+    "Cairo visualization elements", plugin_init, PACKAGE_VERSION, "GPL",
+    PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")

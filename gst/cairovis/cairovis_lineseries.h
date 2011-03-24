@@ -28,8 +28,6 @@
 
 
 G_BEGIN_DECLS
-
-
 #define CAIROVIS_LINESERIES_TYPE \
 	(cairovis_lineseries_get_type())
 #define CAIROVIS_LINESERIES(obj) \
@@ -40,28 +38,26 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_INSTANCE_TYPE((obj), CAIROVIS_LINESERIES_TYPE))
 #define GST_IS_CAIROVIS_LINESERIES_CLASS(klass) \
 	(G_TYPE_CHECK_CLASS_TYPE((klass), CAIROVIS_LINESERIES_TYPE))
-
-
-typedef struct {
-	CairoVisBaseClass parent_class;
+    typedef struct
+{
+  CairoVisBaseClass parent_class;
 } CairoVisLineSeriesClass;
 
 
-typedef struct _CairoVisLineSeries {
-	CairoVisBase element;
+typedef struct _CairoVisLineSeries
+{
+  CairoVisBase element;
 
-	/* Pads */
-	GstPad *sinkpad;
+  /* Pads */
+  GstPad *sinkpad;
 
-	/* Internal data */
-	gint nchannels;
+  /* Internal data */
+  gint nchannels;
 } CairoVisLineSeries;
 
 
-GType cairovis_lineseries_get_type(void);
+GType cairovis_lineseries_get_type (void);
 
 
 G_END_DECLS
-
-
-#endif	/* __CAIROVIS_LINESERIES_H__ */
+#endif /* __CAIROVIS_LINESERIES_H__ */

@@ -22,28 +22,28 @@
 #include <math.h>
 
 
-static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
+static GstFlowReturn
+transform_ip (GstBaseTransform * trans, GstBuffer * buf)
 {
-	GstAudioFilter *audiofilter = GST_AUDIO_FILTER(trans);
-	GstBufferFormat format = audiofilter->format.format;
+  GstAudioFilter *audiofilter = GST_AUDIO_FILTER (trans);
+  GstBufferFormat format = audiofilter->format.format;
 
-	gpointer data = GST_BUFFER_DATA(buf);
-	gpointer data_end = GST_BUFFER_DATA(buf) + GST_BUFFER_SIZE(buf);
+  gpointer data = GST_BUFFER_DATA (buf);
+  gpointer data_end = GST_BUFFER_DATA (buf) + GST_BUFFER_SIZE (buf);
 
-	if (format >= GST_FLOAT64_LE)
-	{
-		double *ptr, *end = data_end;
-		for (ptr = data; ptr < end; ptr++)
-			*ptr = log10(*ptr);
-	} else if (format >= GST_FLOAT32_LE) {
-		float *ptr, *end = data_end;
-		for (ptr = data; ptr < end; ptr++)
-			*ptr = log10f(*ptr);
-	} else {
-		g_assert_not_reached();
-	}
+  if (format >= GST_FLOAT64_LE) {
+    double *ptr, *end = data_end;
+    for (ptr = data; ptr < end; ptr++)
+      *ptr = log10 (*ptr);
+  } else if (format >= GST_FLOAT32_LE) {
+    float *ptr, *end = data_end;
+    for (ptr = data; ptr < end; ptr++)
+      *ptr = log10f (*ptr);
+  } else {
+    g_assert_not_reached ();
+  }
 
-	return GST_FLOW_OK;
+  return GST_FLOW_OK;
 }
 
 
@@ -56,38 +56,39 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
  */
 
 
-static void base_init(gpointer class)
+static void
+base_init (gpointer class)
 {
-	gst_element_class_set_details_simple(
-		GST_ELEMENT_CLASS(class),
-		"Logarithm base 10",
-		"Filter/Audio",
-		"Calculate logarithm base 10, y = log_10 x",
-		"Leo Singer <leo.singer@ligo.org>"
-	);
+  gst_element_class_set_details_simple (GST_ELEMENT_CLASS (class),
+      "Logarithm base 10",
+      "Filter/Audio",
+      "Calculate logarithm base 10, y = log_10 x",
+      "Leo Singer <leo.singer@ligo.org>");
 }
 
 
-static void class_init(gpointer class, gpointer class_data)
+static void
+class_init (gpointer class, gpointer class_data)
 {
-	GstBaseTransformClass *basetransform_class = GST_BASE_TRANSFORM_CLASS(class);
-	basetransform_class->transform_ip = GST_DEBUG_FUNCPTR(transform_ip);
+  GstBaseTransformClass *basetransform_class = GST_BASE_TRANSFORM_CLASS (class);
+  basetransform_class->transform_ip = GST_DEBUG_FUNCPTR (transform_ip);
 }
 
 
-GType unary_log10_get_type(void)
+GType
+unary_log10_get_type (void)
 {
-	static GType type = 0;
+  static GType type = 0;
 
-	if(!type) {
-		static const GTypeInfo info = {
-			.class_size = sizeof(UnaryBaseClass),
-			.base_init = base_init,
-			.class_init = class_init,
-			.instance_size = sizeof(UnaryBase),
-		};
-		type = g_type_register_static(UNARY_BASE_TYPE, "UnaryLog10", &info, 0);
-	}
+  if (!type) {
+    static const GTypeInfo info = {
+      .class_size = sizeof (UnaryBaseClass),
+      .base_init = base_init,
+      .class_init = class_init,
+      .instance_size = sizeof (UnaryBase),
+    };
+    type = g_type_register_static (UNARY_BASE_TYPE, "UnaryLog10", &info, 0);
+  }
 
-	return type;
+  return type;
 }

@@ -28,8 +28,6 @@
 
 
 G_BEGIN_DECLS
-
-
 #define CAIROVIS_BASE_TYPE \
 	(cairovis_base_get_type())
 #define CAIROVIS_BASE(obj) \
@@ -40,65 +38,67 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_INSTANCE_TYPE((obj), CAIROVIS_BASE_TYPE))
 #define GST_IS_CAIROVIS_BASE_CLASS(klass) \
 	(G_TYPE_CHECK_CLASS_TYPE((klass), CAIROVIS_BASE_TYPE))
-
-
 #define CAIROVIS_SCALE_TYPE \
 	(cairovis_scale_get_type())
-
-
-enum cairovis_scale {
-	CAIROVIS_SCALE_LINEAR,
-	CAIROVIS_SCALE_LOG,
+    enum cairovis_scale
+{
+  CAIROVIS_SCALE_LINEAR,
+  CAIROVIS_SCALE_LOG,
 };
 
 
-enum cairovis_cardinal_direction {
-	CAIROVIS_NORTH,
-	CAIROVIS_SOUTH,
-	CAIROVIS_EAST,
-	CAIROVIS_WEST
+enum cairovis_cardinal_direction
+{
+  CAIROVIS_NORTH,
+  CAIROVIS_SOUTH,
+  CAIROVIS_EAST,
+  CAIROVIS_WEST
 };
 
 
-struct cairovis_axis_spec {
-	enum cairovis_scale scale;
-	enum cairovis_cardinal_direction which_side;
-	double device_max;
-	double data_min;
-	double data_max;
+struct cairovis_axis_spec
+{
+  enum cairovis_scale scale;
+  enum cairovis_cardinal_direction which_side;
+  double device_max;
+  double data_min;
+  double data_max;
 };
 
 
-typedef struct {
-	GstElementClass parent_class;
+typedef struct
+{
+  GstElementClass parent_class;
 } CairoVisBaseClass;
 
 
-typedef struct _CairoVisBase {
-	GstElement element;
+typedef struct _CairoVisBase
+{
+  GstElement element;
 
-	/* Pads */
-	GstPad *srcpad;
+  /* Pads */
+  GstPad *srcpad;
 
-	/* Properties */
-	enum cairovis_scale xscale, yscale;
-	gchar *title, *xlabel, *ylabel;
-	gboolean xautoscale, yautoscale;
-	gdouble xmin, xmax, ymin, ymax;
+  /* Properties */
+  enum cairovis_scale xscale, yscale;
+  gchar *title, *xlabel, *ylabel;
+  gboolean xautoscale, yautoscale;
+  gdouble xmin, xmax, ymin, ymax;
 } CairoVisBase;
 
 
-gboolean cairovis_base_negotiate_srcpad(CairoVisBase *element);
-GstFlowReturn cairovis_base_buffer_surface_alloc(CairoVisBase *element, GstBuffer **buf, cairo_surface_t **surf, gint *width, gint *height);
-void cairovis_draw_axis(cairo_t *restrict cr, const struct cairovis_axis_spec *restrict axis);
-void cairovis_draw_axes(CairoVisBase *element, cairo_t *cr, gint width, gint height);
+gboolean cairovis_base_negotiate_srcpad (CairoVisBase * element);
+GstFlowReturn cairovis_base_buffer_surface_alloc (CairoVisBase * element,
+    GstBuffer ** buf, cairo_surface_t ** surf, gint * width, gint * height);
+void cairovis_draw_axis (cairo_t * restrict cr,
+    const struct cairovis_axis_spec *restrict axis);
+void cairovis_draw_axes (CairoVisBase * element, cairo_t * cr, gint width,
+    gint height);
 
 
-GType cairovis_base_get_type(void);
-GType cairovis_scale_get_type(void);
+GType cairovis_base_get_type (void);
+GType cairovis_scale_get_type (void);
 
 
 G_END_DECLS
-
-
-#endif	/* __CAIROVIS_BASE_H__ */
+#endif /* __CAIROVIS_BASE_H__ */

@@ -51,43 +51,46 @@
  */
 
 
-GType unary_abs_get_type(void);
-GType unary_exp_get_type(void);
-GType unary_ln_get_type(void);
-GType unary_log_get_type(void);
-GType unary_log10_get_type(void);
-GType unary_pow_get_type(void);
+GType unary_abs_get_type (void);
+GType unary_exp_get_type (void);
+GType unary_ln_get_type (void);
+GType unary_log_get_type (void);
+GType unary_log10_get_type (void);
+GType unary_pow_get_type (void);
 
 
-static gboolean plugin_init(GstPlugin *plugin)
+static gboolean
+plugin_init (GstPlugin * plugin)
 {
-	struct {
-		const gchar *name;
-		GType type;
-	} *element, elements[] = {
-		{"unary_base", UNARY_BASE_TYPE},
-		{"abs", unary_abs_get_type()},
-		{"exp", unary_exp_get_type()},
-		{"ln", unary_ln_get_type()},
-		{"log", unary_log_get_type()},
-		{"log10", unary_log10_get_type()},
-		{"pow", unary_pow_get_type()},
-		{NULL, 0},
-	};
+  struct
+  {
+    const gchar *name;
+    GType type;
+  } *element, elements[] = {
+    {
+    "unary_base", UNARY_BASE_TYPE}, {
+    "abs", unary_abs_get_type ()}, {
+    "exp", unary_exp_get_type ()}, {
+    "ln", unary_ln_get_type ()}, {
+    "log", unary_log_get_type ()}, {
+    "log10", unary_log10_get_type ()}, {
+    "pow", unary_pow_get_type ()}, {
+  NULL, 0},};
 
-	/*
-	 * Tell GStreamer about the elements.
-	 */
+  /*
+   * Tell GStreamer about the elements.
+   */
 
-	for(element = elements; element->name; element++)
-		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->type))
-			return FALSE;
+  for (element = elements; element->name; element++)
+    if (!gst_element_register (plugin, element->name, GST_RANK_NONE,
+            element->type))
+      return FALSE;
 
-	/*
-	 * Done.
-	 */
+  /*
+   * Done.
+   */
 
-	return TRUE;
+  return TRUE;
 }
 
 
@@ -96,4 +99,6 @@ static gboolean plugin_init(GstPlugin *plugin)
  */
 
 
-GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, "unary", "Unary arithmetic elements", plugin_init, PACKAGE_VERSION, "GPL", PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")
+GST_PLUGIN_DEFINE (GST_VERSION_MAJOR, GST_VERSION_MINOR, "unary",
+    "Unary arithmetic elements", plugin_init, PACKAGE_VERSION, "GPL",
+    PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")
