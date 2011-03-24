@@ -126,21 +126,12 @@ def parse_command_line():
 	# do this before converting option types
 	process_params = ligolw_output.make_process_params(options)
 
-	# If --gps-start-time is not specified, assume "beginning of time"
-	if options.gps_start_time is None:
-		effective_gps_start_time = LIGOTimeGPS(0) # FIXME: should be gobject.G_MININT, but somewhere along the line we have an integer overflow error
-	else:
-		effective_gps_start_time = LIGOTimeGPS(options.gps_start_time)
+	options.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
 
-	# If --gps-end-time is not specified, assume "end of time"
-	if options.gps_end_time is None:
-		effective_gps_end_time = LIGOTimeGPS(999999999) # FIXME: should be gobject.G_MAXINT, but somewhere along the line we have an integer overflow error
-	else:
-		effective_gps_end_time = LIGOTimeGPS(options.gps_end_time)
-
-	options.seg = segments.segment(effective_gps_start_time, effective_gps_end_time)
 	options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
 
+	# hard-coded.  this number is needed in a few places, and storing
+	# it in with the options is a convenient home
 	options.psd_fft_length = 8	# seconds
 
 	return options, filenames, process_params
@@ -325,10 +316,10 @@ def appsink_new_buffer(elem, data):
 			row.process_id = data.process.process_id
 			row.event_id = data.sngl_inspiral_table.get_next_id()
 			data.sngl_inspiral_table.append(row)
-	if data.connection: data.connection.commit()
+	if data.connection:
+		data.connection.commit()
 
 lloidparts.mkelems_fast(pipeline, src, "appsink", {"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})[-1].connect_after("new-buffer", appsink_new_buffer, data)
-
 
 
 #
