@@ -275,7 +275,7 @@ static void g_list_for_each_gst_buffer_peak(gpointer data, gpointer user_data)
 	GstClockTime tmax = ((struct g_list_for_each_gst_buffer_peak_data *) user_data)->tmax;
 	guint64 offset, last;
 	guint64 length = GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
-	gdouble peak = -1;
+	gdouble peak = -1;	/* -1 = no value found */
 
 	if(tmin <= GST_BUFFER_TIMESTAMP(buf))
 		offset = 0;
@@ -316,13 +316,16 @@ static gint control_get_state(GSTLALGate *element, GstClockTime tmin, GstClockTi
 		.element = element,
 		.tmin = tmin,
 		.tmax = tmax,
-		.peak = -1
+		.peak = -1	/* -1 = no value found */
 	};
 
 	GST_DEBUG_OBJECT(element, "looping over %u buffers to check control state", g_queue_get_length(element->control_queue));
 	g_queue_foreach(element->control_queue, g_list_for_each_gst_buffer_peak, &data);
 
-	if (element->invert_control) 
+	/* return value:  +1 = at or above threshold somewhere in interval,
+	 * 0 = below threshold everywhere in interval, -1 = no control data
+	 * available in interval */
+	if(element->invert_control) 
 		return (data.peak <= element->threshold && data.peak >= 0) ? +1 : data.peak > element->threshold ? 0 : -1;
 	else
 		return data.peak >= element->threshold ? +1 : data.peak >= 0 ? 0 : -1;
