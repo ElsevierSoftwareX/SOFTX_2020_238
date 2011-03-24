@@ -102,7 +102,7 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 static int num_channels(const GSTLALTimeSliceChiSquare *element)
 {
-	return element->chifacs->size1;
+	return element->chifacs->size2;
 }
 
 
@@ -113,7 +113,7 @@ static int num_channels(const GSTLALTimeSliceChiSquare *element)
 
 static int num_timeslices(const GSTLALTimeSliceChiSquare *element)
 {
-	return element->chifacs->size2;
+	return element->chifacs->size1;
 }
 
 
@@ -1117,14 +1117,14 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 	if (num_channels(element) != element->channels) {
 		g_mutex_unlock(element->coefficients_lock);
-		GST_ERROR_OBJECT(element, "number of channels from caps negotiation X does not match first dimension of chifacs matrix: X = %i, Y = %i\n", element->channels, num_channels(element));
+		GST_ERROR_OBJECT(element, "number of channels from caps negotiation X does not match second dimension of chifacs matrix: X = %i, Y = %i\n", element->channels, num_channels(element));
 		result = GST_FLOW_ERROR;
 		goto error;
 	}
 
 	if (num_timeslices(element) != element->padcount) {
 		g_mutex_unlock(element->coefficients_lock);
-		GST_ERROR_OBJECT(element, "number of sink pads does not match second dimension of chifacs matrix: X = %i, Y = %i\n", element->padcount, num_timeslices(element));
+		GST_ERROR_OBJECT(element, "number of sink pads does not match first dimension of chifacs matrix: X = %i, Y = %i\n", element->padcount, num_timeslices(element));
 		result = GST_FLOW_ERROR;
 		goto error;
 	}
@@ -1165,11 +1165,11 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 				for (channel = 0; channel < numchannels; channel++) {
 					double snr = snrdata[channel];
 					double timeslicesnr = indata[channel];
-					double chifacs_coefficient = gsl_matrix_get(element->chifacs, (size_t) channel, (size_t) timeslice);
+					double chifacs_coefficient = gsl_matrix_get(element->chifacs, (size_t) timeslice, (size_t) channel);
 					double chifacs_coefficient2 = chifacs_coefficient*chifacs_coefficient;
 					double chifacs_coefficient3 = chifacs_coefficient2*chifacs_coefficient;
 
-					outdata[channel] += pow(timeslicesnr - chifacs_coefficient * snr, 2.0)/2.0/(chifacs_coefficient2 - chifacs_coefficient3);
+					outdata[channel] += pow(timeslicesnr - chifacs_coefficient2 * snr, 2.0)/(chifacs_coefficient2 - chifacs_coefficient3);
 				}
 			}
 		}
@@ -1397,11 +1397,11 @@ static void class_init(gpointer klass, gpointer class_data)
 		g_param_spec_value_array(
 			"chifacs-matrix",
 			"Chisquared Factors Matrix",
-			"Array of complex chisquared factor vectors.  Number of vectors (rows) in matrix sets number of channels.  All vectors must have the same length.",
+			"Array of complex chisquared factor vectors.  Number of vectors (rows) in matrix sets number of sink pads.  All vectors must have the same length.",
 			g_param_spec_value_array(
 				"chifacs",
 				"Chisquared Factors",
-				"Vector of chisquared factors. Number of elements must equal number of sink pads.",
+				"Vector of chisquared factors. Number of elements must equal number of channels.",
 				g_param_spec_double(
 					"sample",
 					"Sample",
