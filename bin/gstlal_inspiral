@@ -168,7 +168,7 @@ import pygst
 pygst.require('0.10')
 import gst
 
-from gstlal import pipeutil
+from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import templates
 from gstlal.svd_bank import build_bank, read_bank
@@ -263,15 +263,12 @@ if options.online_data:
 # to be set. There are several choices for the "details"
 # (second argument). DEBUG_GRAPH_SHOW_ALL is the most verbose.
 #
-def maybe_dump_dot(pipeline, stage):
-	if options.write_pipeline is not None:
-		filestem = '%s.%s' % (options.write_pipeline, stage)
-		filename = '%s.dot' % filestem
-		if "GST_DEBUG_DUMP_DOT_DIR" in os.environ.keys():
-			gst.DEBUG_BIN_TO_DOT_FILE( pipeline, gst.DEBUG_GRAPH_SHOW_ALL, filestem)
-			print >> sys.stderr, "Wrote pipeline to", os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], filename)
-		else:
-			print >> sys.stderr, "***Could not write pipeline, please set GST_DEBUG_DUMP_DOT_DIR in your environment"
+def maybe_dump_dot(pipeline, filestem, verbose = False):
+	if "GST_DEBUG_DUMP_DOT_DIR" not in os.environ:
+		raise ValueError, "Could not write pipeline, please set GST_DEBUG_DUMP_DOT_DIR in your environment"
+	gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, filestem)
+	if verbose:
+		print >>sys.stderr, "Wrote pipeline to %s" % os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], "%s.dot" % filestem)
 
 
 pipeline = gst.Pipeline("gstlal_inspiral")
@@ -319,7 +316,28 @@ def appsink_new_buffer(elem, data):
 	if data.connection:
 		data.connection.commit()
 
-lloidparts.mkelems_fast(pipeline, src, "appsink", {"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})[-1].connect_after("new-buffer", appsink_new_buffer, data)
+sink = pipeparts.mkappsink(pipeline, src, caps = gst.Caps("application/x-lal-snglinspiral"))
+sink.connect_after("new-buffer", appsink_new_buffer, data)
+
+if options.write_pipeline is not None:
+	#
+	# add a signal handler to write a pipeline graph upon receipt of
+	# the first trigger buffer.  the caps in the pipeline graph are not
+	# fully negotiated until data comes out the end, so this version of
+	# the graph shows the final formats on all links
+	#
+
+	class appsink_dump_dot_data(object):
+		pass
+	appsink_dump_dot_data = appsink_dump_dot_data()
+	appsink_dump_dot_data.pipeline = pipeline
+	appsink_dump_dot_data.filestem = "%s.%s" % (options.write_pipeline, "TRIGGERS")
+	appsink_dump_dot_data.verbose = options.verbose
+	appsink_dump_dot_data.object = sink
+	def appsink_dump_dot(elem, data):
+		maybe_dump_dot(data.pipeline, data.filestem, verbose = data.verbose)
+		data.object.disconnect(data.handler_id)
+	appsink_dump_dot_data.handler_id = sink.connect_after("new-buffer", appsink_dump_dot, appsink_dump_dot_data)
 
 
 #
@@ -327,9 +345,11 @@ lloidparts.mkelems_fast(pipeline, src, "appsink", {"caps": gst.Caps("application
 #
 
 
-maybe_dump_dot(pipeline, "NULL")
+if options.write_pipeline is not None:
+	maybe_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
 pipeline.set_state(gst.STATE_PLAYING)
-maybe_dump_dot(pipeline, "PLAYING")
+if options.write_pipeline is not None:
+	maybe_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
 mainloop.run()
 
 
