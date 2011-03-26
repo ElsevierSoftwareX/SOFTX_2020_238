@@ -80,18 +80,26 @@ typedef struct {
 	GstBaseTransform element;
 
 	/*
-	 * I/O
+	 * input stream
 	 */
 
-	GstAdapter *adapter;
+	LALUnit sample_units;
+	gint sample_rate;
+
+	GQueue *queue;
+	gint queue_size;
+	gint queue_skip;
+
+	/*
+	 * psd output stream
+	 */
+
 	GstPad *mean_psd_pad;
 
 	/*
 	 * time stamp book-keeping
 	 */
 
-	LALUnit sample_units;
-	gint sample_rate;
 	gboolean need_discont;
 	GstClockTime t0;
 	guint64 offset0;

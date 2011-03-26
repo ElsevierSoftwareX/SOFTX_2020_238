@@ -44,7 +44,6 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-#include <gst/base/gstadapter.h>
 
 
 /*
@@ -130,6 +129,121 @@ GType gstlal_psdmode_get_type(void)
 /*
  * ============================================================================
  *
+ *                                Input Queue
+ *
+ * ============================================================================
+ */
+
+
+static void queue_create(GSTLALWhiten *element)
+{
+	element->queue = g_queue_new();
+	element->queue_size = 0;
+	element->queue_skip = 0;
+}
+
+
+static void queue_drain(GSTLALWhiten *element)
+{
+	GstBuffer *buf;
+	while((buf = g_queue_pop_head(element->queue)))
+		gst_buffer_unref(buf);
+	element->queue_size = 0;
+	element->queue_skip = 0;
+}
+
+
+static void queue_free(GSTLALWhiten *element)
+{
+	if(element->queue) {
+		queue_drain(element);
+		g_queue_free(element->queue);
+		element->queue = NULL;
+	}
+}
+
+
+static void queue_push(GSTLALWhiten *element, GstBuffer *buf)
+{
+	gst_buffer_ref(buf);
+	g_queue_push_tail(element->queue, buf);
+	element->queue_size += GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
+}
+
+
+static void queue_copy(GSTLALWhiten *element, double *dst, guint samples)
+{
+	GList *head = g_queue_peek_head_link(element->queue);
+	guint n;
+
+	if(samples < GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data) - element->queue_skip) {
+		if(GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP))
+			memset(dst, 0, samples * sizeof(double));
+		else
+			memcpy(dst, GST_BUFFER_DATA(head->data) + element->queue_skip * sizeof(double), samples * sizeof(double));
+		goto done;
+	} else {
+		n = GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data) - element->queue_skip;
+		if(GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP))
+			memset(dst, 0, n * sizeof(double));
+		else
+			memcpy(dst, GST_BUFFER_DATA(head->data) + element->queue_skip * sizeof(double), n * sizeof(double));
+		dst += n;
+		samples -= n;
+	}
+
+	while(samples) {
+		head = g_list_next(head);
+		n = GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data);
+
+		if(samples < n) {
+			if(GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP))
+				memset(dst, 0, samples * sizeof(double));
+			else
+				memcpy(dst, GST_BUFFER_DATA(head->data), samples * sizeof(double));
+			goto done;
+		} else {
+			if(GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP))
+				memset(dst, 0, n * sizeof(double));
+			else
+				memcpy(dst, GST_BUFFER_DATA(head->data), n * sizeof(double));
+		}
+
+		dst += n;
+		samples -= n;
+	}
+
+done:
+	return;
+}
+
+
+static void queue_flush(GSTLALWhiten *element, guint samples)
+{
+	while(samples) {
+		GstBuffer *head = g_queue_peek_head(element->queue);
+		guint n = GST_BUFFER_OFFSET_END(head) - GST_BUFFER_OFFSET(head) - element->queue_skip;
+
+		if(samples < n) {
+			element->queue_skip += samples;
+			element->queue_size -= samples;
+			goto done;
+		} else {
+			element->queue_skip = 0;
+			element->queue_size -= n;
+			samples -= n;
+			gst_buffer_unref(g_queue_pop_head(element->queue));
+		}
+	}
+
+done:
+	return;
+}
+
+
+/*
+ * ============================================================================
+ *
  *                                 Utilities
  *
  * ============================================================================
@@ -150,7 +264,7 @@ static guint32 zero_pad_length(const GSTLALWhiten *element)
 
 static guint32 get_available_samples(GSTLALWhiten *element)
 {
-	return gst_adapter_available(element->adapter) / sizeof(*element->tdworkspace->data->data);
+	return element->queue_size;
 }
 
 
@@ -351,6 +465,30 @@ static REAL8FrequencySeries *make_empty_psd(double f0, double deltaF, int length
 }
 
 
+/*
+ * make the PSD corresponding to zero-mean unit-variance Gaussian noise.
+ * LAL's normalization is such that the integral of the PSD yields the
+ * variance in the time domain, therefore PSD = 1 / (n \Delta f).
+ */
+
+
+static REAL8FrequencySeries *make_unit_psd(double f0, double deltaF, int length, LALUnit sample_units)
+{
+	REAL8FrequencySeries *psd = make_empty_psd(f0, deltaF, length, sample_units);
+	double f_nyquist = f0 + length + deltaF;
+	int n = round(f_nyquist / deltaF) + 1;
+	unsigned i;
+
+	if(psd)
+		return NULL;
+
+	for(i = 0; i < psd->data->length; i++)
+		psd->data->data[i] = 1 / (n * deltaF);
+
+	return psd;
+}
+
+
 static REAL8FrequencySeries *make_psd_from_fseries(const COMPLEX16FrequencySeries *fseries)
 {
 	LALUnit unit;
@@ -465,7 +603,7 @@ static GstMessage *psd_message_new(GSTLALWhiten *element, REAL8FrequencySeries *
 
 static GstFlowReturn push_psd(GstPad *psd_pad, const REAL8FrequencySeries *psd)
 {
-	GstBuffer *buffer;
+	GstBuffer *buffer = NULL;
 	GstFlowReturn result;
 	GstCaps *caps = gst_caps_new_simple(
 		"audio/x-raw-float",
@@ -554,22 +692,25 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		reset_workspace_metadata(element);
 
 		/*
-		 * Copy data from adapter into time-domain workspace.  No
-		 * need to explicitly zero-pad the time series because the
-		 * window function will do it for us.
+		 * Copy data from input queue into time-domain workspace.
+		 * No need to explicitly zero-pad the time series because
+		 * the window function will do it for us.
 		 *
-		 * Note:  the time series' epoch is set to the timestamp of
-		 * the first sample of the series, not the first sample of
-		 * the data taken from the adapter (which is zero_pad
+		 * Note:  the workspace's epoch is set to the timestamp of
+		 * the workspace's first sample, not the first sample of
+		 * the data taken from the input queue (which is zero_pad
 		 * samples later).
 		 */
 
-		memcpy(&element->tdworkspace->data->data[zero_pad], gst_adapter_peek(element->adapter, hann_length * sizeof(*element->tdworkspace->data->data)), hann_length * sizeof(*element->tdworkspace->data->data));
+		queue_copy(element, &element->tdworkspace->data->data[zero_pad], hann_length);
 		XLALINT8NSToGPS(&element->tdworkspace->epoch, element->t0);
 		XLALGPSAdd(&element->tdworkspace->epoch, (double) ((gint64) (element->next_offset_out + dst_offset - element->offset0) - (gint64) zero_pad) / element->sample_rate);
 
+		/* FIXME:  is any of the data we have copied known to be zeros, yes/no? */
+		/* FIXME:  is all of it zero, yes/no? */
+
 		/*
-		 * Transform to frequency domain
+		 * Apply (zero-padded) Hann window.
 		 */
 
 		/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square before window = %.16g\n", s / kk); }*/
@@ -579,6 +720,11 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 			return GST_FLOW_ERROR;
 		}
 		/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square after window = %.16g\n", s / kk); }*/
+
+		/*
+		 * Transform to frequency domain
+		 */
+
 		if(XLALREAL8TimeFreqFFT(element->fdworkspace, element->tdworkspace, element->fwdplan)) {
 			GST_ERROR_OBJECT(element, "XLALREAL8TimeFreqFFT() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
@@ -590,6 +736,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		 * Retrieve the PSD.
 		 */
 
+		/* FIXME: set fdworkspace_contains_gap argument properly */
 		newpsd = get_psd(element);
 		if(!newpsd)
 			return GST_FLOW_ERROR;
@@ -617,6 +764,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		 * Add frequency domain data to spectrum averager
 		 */
 
+		/* FIXME:  skip if it is derived from data containing a gap */
 		if(XLALPSDRegressorAdd(element->psd_regressor, element->fdworkspace)) {
 			GST_ERROR_OBJECT(element, "XLALPSDRegressorAdd() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 			XLALClearErrno();
@@ -702,12 +850,13 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		memmove(&element->output_history->data[0], &element->output_history->data[hann_length / 2], (element->output_history->length - hann_length / 2) * sizeof(*element->output_history->data));
 		memset(&element->output_history->data[element->output_history->length - hann_length / 2], 0, hann_length / 2 * sizeof(*element->output_history->data));
 		element->output_history_offset += hann_length / 2;
+		/* FIXME:  how many consecutive 0s are at the end of the output history? */
 
 		/*
-		 * flush the adapter
+		 * flush the input queue
 		 */
 
-		gst_adapter_flush(element->adapter, hann_length / 2 * sizeof(*element->tdworkspace->data->data));
+		queue_flush(element, hann_length / 2);
 	}
 
 	/*
@@ -966,8 +1115,8 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 /*
  * event()
  *
- * FIXME:  handle flusing and eos (i.e. flush the adapter and send the last
- * bit of data downstream)
+ * FIXME:  handle flusing and eos (i.e. flush the input queue and send the
+ * last bit of data downstream)
  */
 
 
@@ -1093,9 +1242,9 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	case GST_PAD_SINK:
 		/*
 		 * upper bound of sample count on source pad is input
-		 * sample count plus the number of samples in the adapter
-		 * rounded down to an integer multiple of 1/2 the Hann
-		 * window size, but only if there's enough data for at
+		 * sample count plus the number of samples in the input
+		 * queue rounded down to an integer multiple of 1/2 the
+		 * Hann window size, but only if there's enough data for at
 		 * least 1 full Hann window.
 		 */
 
@@ -1128,7 +1277,7 @@ static gboolean start(GstBaseTransform *trans)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
 
-	element->adapter = gst_adapter_new();
+	queue_create(element);
 
 	element->t0 = GST_CLOCK_TIME_NONE;
 	element->offset0 = GST_BUFFER_OFFSET_NONE;
@@ -1151,8 +1300,7 @@ static gboolean stop(GstBaseTransform *trans)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
 
-	g_object_unref(element->adapter);
-	element->adapter = NULL;
+	queue_free(element);
 
 	return TRUE;
 }
@@ -1169,33 +1317,51 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
-	 * If the incoming buffer is a discontinuity, clear the adapter and
-	 * reset the clock
+	 * If the incoming buffer is a discontinuity, clear the input queue
+	 * and reset the clock
 	 */
 
-	if((GST_BUFFER_OFFSET(inbuf) != element->next_offset_in) || GST_BUFFER_IS_DISCONT(inbuf)) {
-		gst_adapter_clear(element->adapter);
-		element->need_discont = TRUE;
+	if(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_offset_in || !GST_CLOCK_TIME_IS_VALID(element->t0)) {
+		/*
+		 * clear input queue
+		 */
+
+		queue_drain(element);
+
+		/*
+		 * (re)sync timestamp and offset book-keeping
+		 */
+
 		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
 		element->next_offset_out = GST_BUFFER_OFFSET(inbuf);
+
+		/*
+		 * next output is a discontinuity
+		 */
+
+		element->need_discont = TRUE;
+
+		/*
+		 * clear the output history
+		 */
+
 		zero_output_history(element);
 	}
 	element->next_offset_in = GST_BUFFER_OFFSET_END(inbuf);
 
 	/*
-	 * Push the incoming buffer into the adapter.  Process adapter
-	 * contents into output buffer
+	 * process data
 	 */
 
-	gst_buffer_ref(inbuf);	/* don't let the adapter free it */
-	gst_adapter_push(element->adapter, inbuf);
+	queue_push(element, inbuf);
 	result = whiten(element, outbuf);
 
 	/*
-	 * Done
+	 * done
 	 */
 
+done:
 	return result;
 }
 
