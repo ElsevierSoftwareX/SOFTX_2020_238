@@ -18,20 +18,26 @@
  */
 
 
-/* Adapted from gst-plugins-base/gst-libs/gst/tag/tags.c */
+/*
+ * Adapted from gst-plugins-base/gst-libs/gst/tag/tags.c
+ */
+
 
 #include "gstlal_tags.h"
 
+
 static gpointer register_tags(gpointer unused)
 {
-	gst_tag_register(GSTLAL_TAG_INSTRUMENT, GST_TAG_FLAG_META, G_TYPE_STRING, "instrument", "The short name of the instrument or observatory where this data was recorded, e.g., \"H1\"", gst_tag_merge_strings_with_comma);
+	gst_tag_register(GSTLAL_TAG_INSTRUMENT, GST_TAG_FLAG_META, G_TYPE_STRING, "instrument", "The short name of the instrument or observatory where these data were recorded, e.g., \"H1\"", gst_tag_merge_strings_with_comma);
 	gst_tag_register(GSTLAL_TAG_CHANNEL_NAME, GST_TAG_FLAG_META, G_TYPE_STRING, "channel name", "The name of this channel, e.g., \"LSC-STRAIN\"", gst_tag_merge_strings_with_comma);
 	gst_tag_register(GSTLAL_TAG_UNITS, GST_TAG_FLAG_META, G_TYPE_STRING, "units", "The units for this channel (as encoded by LAL), e.g., \"strain\".", NULL);
 	return NULL;
 }
 
-void gstlal_register_tags()
+
+void gstlal_register_tags(void)
 {
 	static GOnce mb_once = G_ONCE_INIT;
-	g_once (&mb_once, register_tags, NULL);
+
+	g_once(&mb_once, register_tags, NULL);
 }
