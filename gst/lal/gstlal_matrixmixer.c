@@ -467,9 +467,13 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	GstFlowReturn result;
 
 	g_mutex_lock(element->mixmatrix_lock);
-	while(!element->mixmatrix.as_void)
-		/* FIXME:  figure out how to get out of this loop */
+	while(!element->mixmatrix.as_void) {
 		g_cond_wait(element->mixmatrix_available, element->mixmatrix_lock);
+		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
+			result = GST_FLOW_WRONG_STATE;
+			goto done;
+		}
+	}
 
 	if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
 		/*
@@ -486,12 +490,13 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		result = GST_FLOW_OK;
 	}
-	g_mutex_unlock(element->mixmatrix_lock);
 
 	/*
 	 * done
 	 */
 
+done:
+	g_mutex_unlock(element->mixmatrix_lock);
 	return result;
 }
 
@@ -602,6 +607,23 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 static void finalize(GObject *object)
 {
 	GSTLALMatrixMixer *element = GSTLAL_MATRIXMIXER(object);
+
+	/*
+	 * wake up any threads that are waiting for the mix matrix to
+	 * become available;  since we are being finalized the element
+	 * state should be NULL causing those threads to bail out
+	 */
+
+	/* FIXME:  waking them up and then freeing the mutex is probably a
+	 * race condition that could lead to a memory problem */
+
+	g_mutex_lock(element->mixmatrix_lock);
+	g_cond_broadcast(element->mixmatrix_available);
+	g_mutex_unlock(element->mixmatrix_lock);
+
+	/*
+	 * free resources
+	 */
 
 	g_mutex_free(element->mixmatrix_lock);
 	element->mixmatrix_lock = NULL;

@@ -626,12 +626,16 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	/*
 	 * wait for autocorrelation matrix
-	 * FIXME:  add a way to get out of this loop
 	 */
 
 	g_mutex_lock(element->autocorrelation_lock);
-	while(!element->autocorrelation_matrix)
+	while(!element->autocorrelation_matrix) {
 		g_cond_wait(element->autocorrelation_available, element->autocorrelation_lock);
+		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
+			result = GST_FLOW_WRONG_STATE;
+			goto done;
+		}
+	}
 
 	/*
 	 * check for discontinuity
@@ -895,6 +899,23 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 static void finalize(GObject *object)
 {
 	GSTLALAutoChiSq *element = GSTLAL_AUTOCHISQ(object);
+
+	/*
+	 * wake up any threads that are waiting for the autocorrelation
+	 * matrix to become available;  since we are being finalized the
+	 * element state should be NULL causing those threads to bail out
+	 */
+
+	/* FIXME:  waking them up and then freeing the mutex is probably a
+	 * race condition that could lead to a memory problem */
+
+	g_mutex_lock(element->autocorrelation_lock);
+	g_cond_broadcast(element->autocorrelation_available);
+	g_mutex_unlock(element->autocorrelation_lock);
+
+	/*
+	 * free resources
+	 */
 
 	g_mutex_free(element->autocorrelation_lock);
 	element->autocorrelation_lock = NULL;
