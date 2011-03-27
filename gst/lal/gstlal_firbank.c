@@ -305,6 +305,8 @@ static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ava
 	 */
 
 	output_length = td_output_length(element, available_length);
+	if(!output_length)
+		goto done;
 
 	g_assert(GST_BUFFER_SIZE(outbuf) >= output_length * fir_channels(element) * sizeof(double));
 
@@ -353,6 +355,7 @@ static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ava
 	 * done
 	 */
 
+done:
 	return output_length;
 }
 
