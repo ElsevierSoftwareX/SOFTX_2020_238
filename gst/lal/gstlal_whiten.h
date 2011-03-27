@@ -76,6 +76,14 @@ typedef struct {
 } GSTLALWhitenClass;
 
 
+struct gstlal_input_queue {
+	GQueue *queue;
+	gint unit_size;
+	gint size;
+	gint skip;
+};
+
+
 typedef struct {
 	GstBaseTransform element;
 
@@ -86,9 +94,7 @@ typedef struct {
 	LALUnit sample_units;
 	gint sample_rate;
 
-	GQueue *queue;
-	gint queue_size;
-	gint queue_skip;
+	struct gstlal_input_queue *input_queue;
 
 	/*
 	 * psd output stream

@@ -135,60 +135,113 @@ GType gstlal_psdmode_get_type(void)
  */
 
 
-static void queue_create(GSTLALWhiten *element)
+static struct gstlal_input_queue *gstlal_input_queue_create(gint unit_size)
 {
-	element->queue = g_queue_new();
-	element->queue_size = 0;
-	element->queue_skip = 0;
+	struct gstlal_input_queue *new;
+
+	new = g_malloc(sizeof(*new));
+	if(!new)
+		goto error_no_mem;
+
+	new->queue = g_queue_new();
+	if(!new->queue)
+		goto error_no_queue;
+
+	new->unit_size = unit_size;
+	new->size = 0;
+	new->skip = 0;
+
+	return new;
+
+error_no_queue:
+	g_free(new);
+error_no_mem:
+	return NULL;
 }
 
 
-static void queue_drain(GSTLALWhiten *element)
+static void gstlal_input_queue_drain(struct gstlal_input_queue *input_queue)
 {
 	GstBuffer *buf;
-	while((buf = g_queue_pop_head(element->queue)))
+	while((buf = g_queue_pop_head(input_queue->queue)))
 		gst_buffer_unref(buf);
-	element->queue_size = 0;
-	element->queue_skip = 0;
+	input_queue->size = 0;
+	input_queue->skip = 0;
 }
 
 
-static void queue_free(GSTLALWhiten *element)
+static void gstlal_input_queue_free(struct gstlal_input_queue *input_queue)
 {
-	if(element->queue) {
-		queue_drain(element);
-		g_queue_free(element->queue);
-		element->queue = NULL;
+	if(input_queue) {
+		gstlal_input_queue_drain(input_queue);
+		g_queue_free(input_queue->queue);
+		input_queue->queue = NULL;
+	}
+	g_free(input_queue);
+}
+
+
+static gint gstlal_input_queue_get_unit_size(struct gstlal_input_queue *input_queue)
+{
+	return input_queue->unit_size;
+}
+
+
+static void gstlal_input_queue_set_unit_size(struct gstlal_input_queue *input_queue, gint unit_size)
+{
+	if(unit_size != input_queue->unit_size) {
+		gstlal_input_queue_drain(input_queue);
+		input_queue->unit_size = unit_size;
 	}
 }
 
 
-static void queue_push(GSTLALWhiten *element, GstBuffer *buf)
+static void gstlal_input_queue_push(struct gstlal_input_queue *input_queue, GstBuffer *buf)
 {
-	gst_buffer_ref(buf);
-	g_queue_push_tail(element->queue, buf);
-	element->queue_size += GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
+	g_assert(GST_BUFFER_OFFSET_IS_VALID(buf));
+	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(buf));
+	g_queue_push_tail(input_queue->queue, buf);
+	input_queue->size += GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
 }
 
 
-static void queue_copy(GSTLALWhiten *element, double *dst, guint samples)
+static gboolean gstlal_input_queue_is_gap(struct gstlal_input_queue *input_queue)
 {
-	GList *head = g_queue_peek_head_link(element->queue);
-	guint n;
+	GList *head;
 
-	if(samples < GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data) - element->queue_skip) {
-		if(GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP))
-			memset(dst, 0, samples * sizeof(double));
-		else
-			memcpy(dst, GST_BUFFER_DATA(head->data) + element->queue_skip * sizeof(double), samples * sizeof(double));
+	for(head = g_queue_peek_head_link(input_queue->queue); head; head = g_list_next(head))
+		if(!GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP))
+			return FALSE;
+
+	return TRUE;
+}
+
+
+static void gstlal_input_queue_copy(struct gstlal_input_queue *input_queue, void *dst, guint samples, gboolean *copied_gap, gboolean *copied_nongap)
+{
+	GList *head = g_queue_peek_head_link(input_queue->queue);
+	gboolean gap = FALSE;
+	gboolean nongap = FALSE;
+	guint n = GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data) - input_queue->skip;
+
+	if(samples < n) {
+		if(GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP)) {
+			memset(dst, 0, samples * input_queue->unit_size);
+			gap = TRUE;
+		} else {
+			memcpy(dst, GST_BUFFER_DATA(head->data) + input_queue->skip * input_queue->unit_size, samples * input_queue->unit_size);
+			nongap = TRUE;
+		}
 		goto done;
 	} else {
-		n = GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data) - element->queue_skip;
-		if(GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP))
-			memset(dst, 0, n * sizeof(double));
-		else
-			memcpy(dst, GST_BUFFER_DATA(head->data) + element->queue_skip * sizeof(double), n * sizeof(double));
-		dst += n;
+		if(GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP)) {
+			memset(dst, 0, n * input_queue->unit_size);
+			gap = TRUE;
+		} else {
+			memcpy(dst, GST_BUFFER_DATA(head->data) + input_queue->skip * input_queue->unit_size, n * input_queue->unit_size);
+			nongap = TRUE;
+		}
+		dst += n * input_queue->unit_size;
 		samples -= n;
 	}
 
@@ -197,42 +250,52 @@ static void queue_copy(GSTLALWhiten *element, double *dst, guint samples)
 		n = GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data);
 
 		if(samples < n) {
-			if(GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP))
-				memset(dst, 0, samples * sizeof(double));
-			else
-				memcpy(dst, GST_BUFFER_DATA(head->data), samples * sizeof(double));
+			if(GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP)) {
+				memset(dst, 0, samples * input_queue->unit_size);
+				gap = TRUE;
+			} else {
+				memcpy(dst, GST_BUFFER_DATA(head->data), samples * input_queue->unit_size);
+				nongap = TRUE;
+			}
 			goto done;
 		} else {
-			if(GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP))
-				memset(dst, 0, n * sizeof(double));
-			else
-				memcpy(dst, GST_BUFFER_DATA(head->data), n * sizeof(double));
+			if(GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP)) {
+				memset(dst, 0, n * input_queue->unit_size);
+				gap = TRUE;
+			} else {
+				memcpy(dst, GST_BUFFER_DATA(head->data), n * input_queue->unit_size);
+				nongap = TRUE;
+			}
 		}
 
-		dst += n;
+		dst += n * input_queue->unit_size;
 		samples -= n;
 	}
 
 done:
+	if(copied_gap)
+		*copied_gap = gap;
+	if(copied_nongap)
+		*copied_nongap = nongap;
 	return;
 }
 
 
-static void queue_flush(GSTLALWhiten *element, guint samples)
+static void gstlal_input_queue_flush(struct gstlal_input_queue *input_queue, guint samples)
 {
 	while(samples) {
-		GstBuffer *head = g_queue_peek_head(element->queue);
-		guint n = GST_BUFFER_OFFSET_END(head) - GST_BUFFER_OFFSET(head) - element->queue_skip;
+		GstBuffer *head = g_queue_peek_head(input_queue->queue);
+		guint n = GST_BUFFER_OFFSET_END(head) - GST_BUFFER_OFFSET(head) - input_queue->skip;
 
 		if(samples < n) {
-			element->queue_skip += samples;
-			element->queue_size -= samples;
+			input_queue->skip += samples;
+			input_queue->size -= samples;
 			goto done;
 		} else {
-			element->queue_skip = 0;
-			element->queue_size -= n;
+			input_queue->skip = 0;
+			input_queue->size -= n;
 			samples -= n;
-			gst_buffer_unref(g_queue_pop_head(element->queue));
+			gst_buffer_unref(g_queue_pop_head(input_queue->queue));
 		}
 	}
 
@@ -264,7 +327,7 @@ static guint32 zero_pad_length(const GSTLALWhiten *element)
 
 static guint32 get_available_samples(GSTLALWhiten *element)
 {
-	return element->queue_size;
+	return element->input_queue->size;
 }
 
 
@@ -532,19 +595,13 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 	case GSTLAL_PSDMODE_RUNNING_AVERAGE:
 		if(!element->psd_regressor->n_samples) {
 			/*
-			 * No data for the average yet, seed psd regressor
-			 * with current frequency series.
+			 * No data for the average yet, fake a PSD with
+			 * current frequency series.
 			 */
 
 			psd = make_psd_from_fseries(element->fdworkspace);
 			if(!psd)
 				return NULL;
-			if(XLALPSDRegressorSetPSD(element->psd_regressor, psd, 1)) {
-				GST_ERROR_OBJECT(element, "XLALPSDRegressorSetPSD() failed: %s", XLALErrorString(XLALGetBaseErrno()));
-				XLALDestroyREAL8FrequencySeries(psd);
-				XLALClearErrno();
-				return NULL;
-			}
 		} else {
 			psd = XLALPSDRegressorGetPSD(element->psd_regressor);
 			if(!psd) {
@@ -676,6 +733,8 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 
 	for(dst_offset = 0; get_available_samples(element) >= hann_length;) {
 		REAL8FrequencySeries *newpsd;
+		gboolean block_contains_gaps;
+		gboolean block_contains_nongaps;
 		unsigned i;
 
 		/*
@@ -702,12 +761,9 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		 * samples later).
 		 */
 
-		queue_copy(element, &element->tdworkspace->data->data[zero_pad], hann_length);
+		gstlal_input_queue_copy(element->input_queue, &element->tdworkspace->data->data[zero_pad], hann_length, &block_contains_gaps, &block_contains_nongaps);
 		XLALINT8NSToGPS(&element->tdworkspace->epoch, element->t0);
 		XLALGPSAdd(&element->tdworkspace->epoch, (double) ((gint64) (element->next_offset_out + dst_offset - element->offset0) - (gint64) zero_pad) / element->sample_rate);
-
-		/* FIXME:  is any of the data we have copied known to be zeros, yes/no? */
-		/* FIXME:  is all of it zero, yes/no? */
 
 		/*
 		 * Apply (zero-padded) Hann window.
@@ -722,80 +778,86 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square after window = %.16g\n", s / kk); }*/
 
 		/*
-		 * Transform to frequency domain
+		 * The next steps can be skipped if all we have are zeros
 		 */
 
-		if(XLALREAL8TimeFreqFFT(element->fdworkspace, element->tdworkspace, element->fwdplan)) {
-			GST_ERROR_OBJECT(element, "XLALREAL8TimeFreqFFT() failed: %s", XLALErrorString(XLALGetBaseErrno()));
-			XLALClearErrno();
-			return GST_FLOW_ERROR;
-		}
-		/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->fdworkspace->data->length; kk++) s += LAL_CABS2(element->fdworkspace->data->data[kk]); fprintf(stderr, "mean square after FFT = %.16g\n", s / kk); }*/
-
-		/*
-		 * Retrieve the PSD.
-		 */
-
-		/* FIXME: set fdworkspace_contains_gap argument properly */
-		newpsd = get_psd(element);
-		if(!newpsd)
-			return GST_FLOW_ERROR;
-		if(newpsd != element->psd) {
-			XLALDestroyREAL8FrequencySeries(element->psd);
-			element->psd = newpsd;
-
+		if(block_contains_nongaps) {
 			/*
-			 * let everybody know about the new PSD:  gobject's
-			 * notify mechanism, post a gst message on the
-			 * message bus, and push a buffer containing the
-			 * PSD out the psd pad.
+			 * Transform to frequency domain
 			 */
 
-			g_object_notify(G_OBJECT(element), "mean-psd");
-			gst_element_post_message(GST_ELEMENT(element), psd_message_new(element, element->psd));
-			if(element->mean_psd_pad) {
-				GstFlowReturn result = push_psd(element->mean_psd_pad, element->psd);
-				if(result != GST_FLOW_OK)
-					return result;
+			if(XLALREAL8TimeFreqFFT(element->fdworkspace, element->tdworkspace, element->fwdplan)) {
+				GST_ERROR_OBJECT(element, "XLALREAL8TimeFreqFFT() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+				XLALClearErrno();
+				return GST_FLOW_ERROR;
 			}
+			/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->fdworkspace->data->length; kk++) s += LAL_CABS2(element->fdworkspace->data->data[kk]); fprintf(stderr, "mean square after FFT = %.16g\n", s / kk); }*/
+
+			/*
+			 * Retrieve the PSD.
+			 */
+
+			newpsd = get_psd(element);
+			if(!newpsd)
+				return GST_FLOW_ERROR;
+			if(newpsd != element->psd) {
+				XLALDestroyREAL8FrequencySeries(element->psd);
+				element->psd = newpsd;
+
+				/*
+				 * let everybody know about the new PSD:  gobject's
+				 * notify mechanism, post a gst message on the
+				 * message bus, and push a buffer containing the
+				 * PSD out the psd pad.
+				 */
+
+				g_object_notify(G_OBJECT(element), "mean-psd");
+				gst_element_post_message(GST_ELEMENT(element), psd_message_new(element, element->psd));
+				if(element->mean_psd_pad) {
+					GstFlowReturn result = push_psd(element->mean_psd_pad, element->psd);
+					if(result != GST_FLOW_OK)
+						return result;
+				}
+			}
+
+			/*
+			 * Add frequency domain data to spectrum averager
+			 * if not contaminated by gaps
+			 */
+
+			if(!block_contains_gaps)
+				if(XLALPSDRegressorAdd(element->psd_regressor, element->fdworkspace)) {
+					GST_ERROR_OBJECT(element, "XLALPSDRegressorAdd() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+					XLALClearErrno();
+					return GST_FLOW_ERROR;
+				}
+
+			/*
+			 * Whiten.  After this, the frequency bins should be unit
+			 * variance zero mean complex Gaussian random variables.
+			 * They are *not* independent random variables because the
+			 * source time series data was windowed before conversion
+			 * to the frequency domain.
+			 */
+
+			if(!XLALWhitenCOMPLEX16FrequencySeries(element->fdworkspace, element->psd)) {
+				GST_ERROR_OBJECT(element, "XLALWhitenCOMPLEX16FrequencySeries() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+				XLALClearErrno();
+				return GST_FLOW_ERROR;
+			}
+			/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->fdworkspace->data->length; kk++) s += LAL_CABS2(element->fdworkspace->data->data[kk]); fprintf(stderr, "mean square after whiten = %.16g\n", s / kk); }*/
+
+			/*
+			 * Transform to time domain.
+			 */
+
+			if(XLALREAL8FreqTimeFFT(element->tdworkspace, element->fdworkspace, element->revplan)) {
+				GST_ERROR_OBJECT(element, "XLALREAL8FreqTimeFFT() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+				XLALClearErrno();
+				return GST_FLOW_ERROR;
+			}
+			/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square after IFFT = %.16g\n", s / kk); }*/
 		}
-
-		/*
-		 * Add frequency domain data to spectrum averager
-		 */
-
-		/* FIXME:  skip if it is derived from data containing a gap */
-		if(XLALPSDRegressorAdd(element->psd_regressor, element->fdworkspace)) {
-			GST_ERROR_OBJECT(element, "XLALPSDRegressorAdd() failed: %s", XLALErrorString(XLALGetBaseErrno()));
-			XLALClearErrno();
-			return GST_FLOW_ERROR;
-		}
-
-		/*
-		 * Whiten.  After this, the frequency bins should be unit
-		 * variance zero mean complex Gaussian random variables.
-		 * They are *not* independent random variables because the
-		 * source time series data was windowed before conversion
-		 * to the frequency domain.
-		 */
-
-		if(!XLALWhitenCOMPLEX16FrequencySeries(element->fdworkspace, element->psd)) {
-			GST_ERROR_OBJECT(element, "XLALWhitenCOMPLEX16FrequencySeries() failed: %s", XLALErrorString(XLALGetBaseErrno()));
-			XLALClearErrno();
-			return GST_FLOW_ERROR;
-		}
-		/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->fdworkspace->data->length; kk++) s += LAL_CABS2(element->fdworkspace->data->data[kk]); fprintf(stderr, "mean square after whiten = %.16g\n", s / kk); }*/
-
-		/*
-		 * Transform to time domain.
-		 */
-
-		if(XLALREAL8FreqTimeFFT(element->tdworkspace, element->fdworkspace, element->revplan)) {
-			GST_ERROR_OBJECT(element, "XLALREAL8FreqTimeFFT() failed: %s", XLALErrorString(XLALGetBaseErrno()));
-			XLALClearErrno();
-			return GST_FLOW_ERROR;
-		}
-		/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square after IFFT = %.16g\n", s / kk); }*/
 
 		/* 
 		 * Normalize the time series.
@@ -856,7 +918,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		 * flush the input queue
 		 */
 
-		queue_flush(element, hann_length / 2);
+		gstlal_input_queue_flush(element->input_queue, hann_length / 2);
 	}
 
 	/*
@@ -1069,6 +1131,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
 	GstStructure *s;
+	gint width;
 	gint channels;
 	gint rate;
 	gboolean success = TRUE;
@@ -1079,6 +1142,10 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	 */
 
 	s = gst_caps_get_structure(incaps, 0);
+	if(!gst_structure_get_int(s, "width", &width)) {
+		GST_DEBUG_OBJECT(element, "unable to parse width from %" GST_PTR_FORMAT, incaps);
+		success = FALSE;
+	}
 	if(!gst_structure_get_int(s, "channels", &channels)) {
 		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
 		success = FALSE;
@@ -1277,7 +1344,7 @@ static gboolean start(GstBaseTransform *trans)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
 
-	queue_create(element);
+	element->input_queue = gstlal_input_queue_create(sizeof(*element->tdworkspace->data->data));
 
 	element->t0 = GST_CLOCK_TIME_NONE;
 	element->offset0 = GST_BUFFER_OFFSET_NONE;
@@ -1300,7 +1367,8 @@ static gboolean stop(GstBaseTransform *trans)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
 
-	queue_free(element);
+	gstlal_input_queue_free(element->input_queue);
+	element->input_queue = NULL;
 
 	return TRUE;
 }
@@ -1326,7 +1394,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * clear input queue
 		 */
 
-		queue_drain(element);
+		gstlal_input_queue_drain(element->input_queue);
 
 		/*
 		 * (re)sync timestamp and offset book-keeping
@@ -1354,14 +1422,14 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * process data
 	 */
 
-	queue_push(element, inbuf);
+	gst_buffer_ref(inbuf);	/* don't let calling code free buffer */
+	gstlal_input_queue_push(element->input_queue, inbuf);
 	result = whiten(element, outbuf);
 
 	/*
 	 * done
 	 */
 
-done:
 	return result;
 }
 
@@ -1712,6 +1780,7 @@ static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *klass)
 
 	element->sample_units = lalDimensionlessUnit;
 	element->sample_rate = 0;
+	element->input_queue = NULL;
 
 	element->zero_pad_seconds = 0;
 	element->fft_length_seconds = 0;
@@ -1727,4 +1796,6 @@ static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *klass)
 
 	element->psd_regressor = XLALPSDRegressorNew(DEFAULT_AVERAGE_SAMPLES, DEFAULT_MEDIAN_SAMPLES);
 	element->psd = NULL;
+
+	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }
