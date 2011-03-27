@@ -1,7 +1,7 @@
 /*
  * PSD Estimation and whitener
  *
- * Copyright (C) 2008  Kipp Cannon, Chad Hanna, Drew Keppel
+ * Copyright (C) 2008-2011  Kipp Cannon, Chad Hanna, Drew Keppel
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -181,7 +181,13 @@ static void gstlal_input_queue_free(struct gstlal_input_queue *input_queue)
 }
 
 
-static gint gstlal_input_queue_get_unit_size(struct gstlal_input_queue *input_queue)
+static gint gstlal_input_queue_get_size(const struct gstlal_input_queue *input_queue)
+{
+	return input_queue->size;
+}
+
+
+static gint gstlal_input_queue_get_unit_size(const struct gstlal_input_queue *input_queue)
 {
 	return input_queue->unit_size;
 }
@@ -327,7 +333,7 @@ static guint32 zero_pad_length(const GSTLALWhiten *element)
 
 static guint32 get_available_samples(GSTLALWhiten *element)
 {
-	return element->input_queue->size;
+	return gstlal_input_queue_get_size(element->input_queue);
 }
 
 
@@ -710,12 +716,11 @@ static void set_metadata(GSTLALWhiten *element, GstBuffer *buf, guint64 outsampl
 }
 
 
-static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
+static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint32 *outsamples)
 {
 	guint32 zero_pad = zero_pad_length(element);
 	guint32 hann_length = fft_length(element) - 2 * zero_pad;
 	double *dst = (double *) GST_BUFFER_DATA(outbuf);
-	guint32 dst_offset;
 
 	/*
 	 * safety checks
@@ -731,7 +736,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 	 * Iterate over the available data
 	 */
 
-	for(dst_offset = 0; get_available_samples(element) >= hann_length;) {
+	for(*outsamples = 0; get_available_samples(element) >= hann_length;) {
 		REAL8FrequencySeries *newpsd;
 		gboolean block_contains_gaps;
 		gboolean block_contains_nongaps;
@@ -741,7 +746,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 		 * safety checks
 		 */
 
-		g_assert((dst_offset + hann_length / 2) * sizeof(*element->tdworkspace->data->data) <= GST_BUFFER_SIZE(outbuf));
+		g_assert((*outsamples + hann_length / 2) * sizeof(*element->tdworkspace->data->data) <= GST_BUFFER_SIZE(outbuf));
 
 		/*
 		 * Reset the workspace's metadata that gets modified
@@ -763,7 +768,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 
 		gstlal_input_queue_copy(element->input_queue, &element->tdworkspace->data->data[zero_pad], hann_length, &block_contains_gaps, &block_contains_nongaps);
 		XLALINT8NSToGPS(&element->tdworkspace->epoch, element->t0);
-		XLALGPSAdd(&element->tdworkspace->epoch, (double) ((gint64) (element->next_offset_out + dst_offset - element->offset0) - (gint64) zero_pad) / element->sample_rate);
+		XLALGPSAdd(&element->tdworkspace->epoch, (double) ((gint64) (element->next_offset_out + *outsamples - element->offset0) - (gint64) zero_pad) / element->sample_rate);
 
 		/*
 		 * Apply (zero-padded) Hann window.
@@ -904,10 +909,10 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 			for(i = 0; i < element->output_history->length; i++)
 				element->output_history->data[i] += element->tdworkspace->data->data[i];
 		}
-		g_assert((gint64) element->output_history_offset <= (gint64) (element->next_offset_out + dst_offset));
-		if(element->output_history_offset == element->next_offset_out + dst_offset) {
-			memcpy(&dst[dst_offset], &element->output_history->data[0], hann_length / 2 * sizeof(*element->output_history->data));
-			dst_offset += hann_length / 2;
+		g_assert((gint64) element->output_history_offset <= (gint64) (element->next_offset_out + *outsamples));
+		if(element->output_history_offset == element->next_offset_out + *outsamples) {
+			memcpy(&dst[*outsamples], &element->output_history->data[0], hann_length / 2 * sizeof(*element->output_history->data));
+			*outsamples += hann_length / 2;
 		}
 		memmove(&element->output_history->data[0], &element->output_history->data[hann_length / 2], (element->output_history->length - hann_length / 2) * sizeof(*element->output_history->data));
 		memset(&element->output_history->data[element->output_history->length - hann_length / 2], 0, hann_length / 2 * sizeof(*element->output_history->data));
@@ -920,19 +925,6 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf)
 
 		gstlal_input_queue_flush(element->input_queue, hann_length / 2);
 	}
-
-	/*
-	 * check for no-op
-	 */
-
-	if(!dst_offset)
-		return GST_BASE_TRANSFORM_FLOW_DROPPED;
-
-	/*
-	 * set output metadata
-	 */
-
-	set_metadata(element, outbuf, dst_offset);
 
 	/*
 	 * done
@@ -1383,6 +1375,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
 	GstFlowReturn result = GST_FLOW_OK;
+	guint32 outsamples;
 
 	/*
 	 * If the incoming buffer is a discontinuity, clear the input queue
@@ -1424,12 +1417,30 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	gst_buffer_ref(inbuf);	/* don't let calling code free buffer */
 	gstlal_input_queue_push(element->input_queue, inbuf);
-	result = whiten(element, outbuf);
+	result = whiten(element, outbuf, &outsamples);
+	if(result != GST_FLOW_OK)
+		goto done;
+
+	/*
+	 * check for no-op
+	 */
+
+	if(!outsamples) {
+		result = GST_BASE_TRANSFORM_FLOW_DROPPED;
+		goto done;
+	}
+
+	/*
+	 * set output metadata
+	 */
+
+	set_metadata(element, outbuf, outsamples);
 
 	/*
 	 * done
 	 */
 
+done:
 	return result;
 }
 
