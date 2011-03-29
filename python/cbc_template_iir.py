@@ -28,8 +28,8 @@ def freq(eta, Mtot, t):
 	f = 1.0 / (8.0 * Tsun * scipy.pi * Mtot) * (
 		theta**(-3.0/8.0) +
 		(743.0/2688.0 + 11.0 /32.0 * eta) * theta**(-5.0 /8.0) -
-		3.0 * scipy.pi / 10.0 * theta**(-3.0 / 4.0))# +
-		#(1855099.0 / 14450688.0 + 56975.0 / 258048.0 * eta + 371.0 / 2048.0 * eta**2.0) * theta**(-7.0/8.0))
+		3.0 * scipy.pi / 10.0 * theta**(-3.0 / 4.0) +
+		(1855099.0 / 14450688.0 + 56975.0 / 258048.0 * eta + 371.0 / 2048.0 * eta**2.0) * theta**(-7.0/8.0))
 	return f
 
 def Phase(eta, Mtot, t, phic = 0.0):
@@ -37,9 +37,8 @@ def Phase(eta, Mtot, t, phic = 0.0):
 	phi = phic - 2.0 / eta * (
 		theta**(5.0 / 8.0) +
 		(3715.0 /8064.0 +55.0 /96.0 *eta) * theta**(3.0/8.0) -
-		3.0 *scipy.pi / 4.0 * theta**(1.0/4.0))
-		#+
-		#(9275495.0 / 14450688.0 + 284875.0 / 258048.0 * eta + 1855.0 /2048.0 * eta**2) * theta**(1.0/8.0))
+		3.0 *scipy.pi / 4.0 * theta**(1.0/4.0) +
+		(9275495.0 / 14450688.0 + 284875.0 / 258048.0 * eta + 1855.0 /2048.0 * eta**2) * theta**(1.0/8.0))
 	return phi
 
 def Amp(eta, Mtot, t):
@@ -71,7 +70,7 @@ def get_iir_sample_rate(xmldoc):
 	pass
 
 	
-def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, beta=0.4, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=101, verbose=False):
+def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=101, verbose=False):
 
 	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 	Amat = []
@@ -106,7 +105,7 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 		# make the iir filter coeffs
 		a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta)
 		
-		if verbose: print>>sys.stderr, "m1: %f m2: %f required %d filters" % (m1,m2,len(a1))
+		if verbose: print>>sys.stderr, "row %4.0d - m1: %10.6f m2: %10.6f required %4.0d filters" % (tmp, m1,m2,len(a1))
 		# get the chirptime
 		length = 2**numpy.ceil(numpy.log2(amp.shape[0]))
 
@@ -119,32 +118,32 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 		vec1 /= norm1
 		# normalize the iir coefficients
 		b0 /= norm1
-			
+
 		# store the coeffs.
 		Amat.append(a1)
 		Bmat.append(b0)
 		Dmat.append(delay)
-		
+
 		# get the original waveform
 		out2 = amp * numpy.exp(1j * phase)
 		vec2 = numpy.zeros(length * 2, dtype=numpy.cdouble)
 		vec2[-len(out2):] = out2
 		vec2 /= (vec2 * numpy.conj(vec2)).sum()**0.5
-			
-		
+
+
 		# compute the SNR	
 		corr = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec2)))
-		
+
 		#FIXME this is actually the cross correlation between the original waveform and this approximation
 		autocorrelation_bank[tmp,:] = numpy.concatenate((corr[(-autocorrelation_length/2+2):],corr[:autocorrelation_length/2+2]))
 		
 		snr = numpy.abs(corr).max()
 		snrvec.append(snr)
-		
+
 		# store the match for later
 		if output_to_xml: row.snr = snr
 			
-		if verbose: print >>sys.stderr, m1, m2, snr, len(a1)
+		##if verbose: print >>sys.stderr, m1, m2, snr, len(a1)
 			
 	# get ready to store the coefficients
 	print [len(i) for i in Amat]
