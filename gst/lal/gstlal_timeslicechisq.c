@@ -154,14 +154,25 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	switch (id) {
 	case ARG_CHIFACS: {
-		int channels;
+		int channels, i, j;
 		g_mutex_lock(element->coefficients_lock);
 		if(element->chifacs) {
 			channels = num_channels(element);
 			gsl_matrix_free(element->chifacs);
+			gsl_matrix_free(element->chifacs2);
+			gsl_matrix_free(element->chifacs_denom);
 		} else
 			channels = 0;
 		element->chifacs = gstlal_gsl_matrix_from_g_value_array(g_value_get_boxed(value));
+		element->chifacs2 = gstlal_gsl_matrix_from_g_value_array(g_value_get_boxed(value));
+		element->chifacs_denom = gstlal_gsl_matrix_from_g_value_array(g_value_get_boxed(value));
+		for (i = 0; i < num_timeslices(element); i++) {
+			for (j = 0; j < num_channels(element); j++) {
+				double val = gsl_matrix_get(element->chifacs, (size_t) i, (size_t) j);
+				gsl_matrix_set(element->chifacs2, (size_t) i, (size_t) j, val * val);
+				gsl_matrix_set(element->chifacs_denom, (size_t) i, (size_t) j, val * val - val * val * val);
+			}
+		}
 
 		/*
 		 * number of channels has changed, force a caps renegotiation
@@ -1165,11 +1176,10 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 				for (channel = 0; channel < numchannels; channel++) {
 					double snr = snrdata[channel];
 					double timeslicesnr = indata[channel];
-					double chifacs_coefficient = gsl_matrix_get(element->chifacs, (size_t) timeslice, (size_t) channel);
-					double chifacs_coefficient2 = chifacs_coefficient*chifacs_coefficient;
-					double chifacs_coefficient3 = chifacs_coefficient2*chifacs_coefficient;
+					double chifacs_coefficient2 = gsl_matrix_get(element->chifacs2, (size_t) timeslice, (size_t) channel);
+					double chifacs_coefficient_denom = gsl_matrix_get(element->chifacs_denom, (size_t) timeslice, (size_t) channel);
 
-					outdata[channel] += pow(timeslicesnr - chifacs_coefficient2 * snr, 2.0)/(chifacs_coefficient2 - chifacs_coefficient3);
+					outdata[channel] += pow(timeslicesnr - chifacs_coefficient2 * snr, 2.0) / chifacs_coefficient_denom;
 				}
 			}
 		}
@@ -1369,7 +1379,11 @@ static void finalize(GObject *object)
 	element->coefficients_available = NULL;
 	if(element->chifacs) {
 		gsl_matrix_free(element->chifacs);
+		gsl_matrix_free(element->chifacs2);
+		gsl_matrix_free(element->chifacs_denom);
 		element->chifacs = NULL;
+		element->chifacs2 = NULL;
+		element->chifacs_denom = NULL;
 	}
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
@@ -1464,6 +1478,8 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->coefficients_lock = g_mutex_new();
 	element->coefficients_available = g_cond_new();
 	element->chifacs = NULL;
+	element->chifacs2 = NULL;
+	element->chifacs_denom = NULL;
 }
 
 
