@@ -184,7 +184,7 @@ static GstFlowReturn print_samples(GstBuffer *out, const double *samples, int ch
 		 * Saftey check.
 		 */
 
-		g_assert((guint8 *) location - GST_BUFFER_DATA(out) + MAX_CHARS_PER_TIMESTAMP + channels * MAX_CHARS_PER_COLUMN + MAX_EXTRA_BYTES_PER_LINE <= GST_BUFFER_SIZE(out));
+		g_assert(((guint8 *) location - GST_BUFFER_DATA(out)) + MAX_CHARS_PER_TIMESTAMP + channels * MAX_CHARS_PER_COLUMN + MAX_EXTRA_BYTES_PER_LINE <= GST_BUFFER_SIZE(out));
 
 		/*
 		 * Print the time.
@@ -362,9 +362,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 
 	/*
-	 * Start an output buffer.  Assume an additional channel for the
-	 * time stamps.  If the buffer isn't big enough, it will be resized
-	 * later.
+	 * Allocate an output buffer.
 	 */
 
 	result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET_NONE, (stop - start) * (MAX_CHARS_PER_TIMESTAMP + element->channels * MAX_CHARS_PER_COLUMN + MAX_EXTRA_BYTES_PER_LINE), GST_PAD_CAPS(element->srcpad), &srcbuf);
