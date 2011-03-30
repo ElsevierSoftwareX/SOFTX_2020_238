@@ -74,8 +74,6 @@ typedef struct _GSTLALTimeSliceChiSquare {
 	GMutex *coefficients_lock;
 	GCond *coefficients_available;
 	gsl_matrix *chifacs;
-	gsl_matrix *chifacs2;
-	gsl_matrix *chifacs_denom;
 
 	/* sink event handling */
 	GstPadEventFunction collect_event;
