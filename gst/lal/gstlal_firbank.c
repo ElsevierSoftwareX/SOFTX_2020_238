@@ -1052,6 +1052,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * gap logic
 	 */
 
+	g_assert(GST_BUFFER_OFFSET_IS_VALID(inbuf));
+	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(inbuf));
+
 	in_length = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
 	adapter_length = get_available_samples(element);
 	nonzero_samples = get_available_nonzero_samples(element);
@@ -1193,17 +1196,20 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
 
-	case ARG_BLOCK_LENGTH_FACTOR:
+	case ARG_BLOCK_LENGTH_FACTOR: {
+		gint block_length_factor;
 		g_mutex_lock(element->fir_matrix_lock);
+		block_length_factor = g_value_get_int(value);
+		if(block_length_factor != element->block_length_factor)
+			/*
+			 * invalidate frequency-domain filters
+			 */
+
+			free_fft_workspace(element);
 		element->block_length_factor = g_value_get_int(value);
-
-		/*
-		 * invalidate frequency-domain filters
-		 */
-
-		free_fft_workspace(element);
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
+	}
 
 	case ARG_FIR_MATRIX: {
 		unsigned channels;
@@ -1241,10 +1247,14 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 	}
 
-	case ARG_LATENCY:
-		element->latency = g_value_get_int64(value);
-		/* FIXME:  send updated segment downstream? */
+	case ARG_LATENCY: {
+		gint64 latency = g_value_get_int64(value);
+		if(latency != element->latency) {
+			/* FIXME:  send updated segment downstream? */
+		}
+		element->latency = latency;
 		break;
+	}
 
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1279,7 +1289,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		g_mutex_lock(element->fir_matrix_lock);
 		if(element->fir_matrix)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix(element->fir_matrix));
-		/* FIXME:  else? */
+		/* FIXME:  else?  maybe return an empty array, or unset the gvalue? */
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
 
@@ -1389,7 +1399,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 			"Use time-domain convolution",
 			"Set to true to use time-domain (a.k.a. direct) convolution, set to false to use FFT-based convolution.  FFT-based convolution is usually significantly faster than time-domain convolution but incurs a higher processing latency and requires more RAM.",
 			DEFAULT_TIME_DOMAIN,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
@@ -1400,7 +1410,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 			"Convolution block size in multiples of the FIR length",
 			"When using FFT convolutions, use this many times the number of samples in each FIR vector for the convolution block size.",
 			2, G_MAXINT, DEFAULT_BLOCK_LENGTH_FACTOR,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
@@ -1434,7 +1444,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 			"Latency",
 			"Filter latency in samples.",
 			G_MININT64, G_MAXINT64, DEFAULT_LATENCY,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 
@@ -1463,10 +1473,10 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 
 static void gstlal_firbank_init(GSTLALFIRBank *filter, GSTLALFIRBankClass *kclass)
 {
-	filter->block_length_factor = DEFAULT_BLOCK_LENGTH_FACTOR;
-	filter->latency = DEFAULT_LATENCY;
+	filter->block_length_factor = 0;	/* must != DEFAULT_BLOCK_LENGTH_FACTOR */
+	filter->latency = 0;
 	filter->adapter = NULL;
-	filter->time_domain = DEFAULT_TIME_DOMAIN;
+	filter->time_domain = FALSE;
 	filter->fir_matrix_lock = g_mutex_new();
 	filter->fir_matrix_available = g_cond_new();
 	filter->fir_matrix = NULL;
