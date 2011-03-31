@@ -122,12 +122,12 @@ static int num_timeslices(const GSTLALTimeSliceChiSquare *element)
  */
 
 
-static void add_float64(gpointer out, const gpointer in, size_t bytes)
+static void add_complex128(gpointer out, const gpointer in, size_t bytes)
 {
-	gdouble *_out = out;
-	const gdouble *_in = in;
-	for(bytes /= sizeof(gdouble); bytes--; _in++, _out++)
-		*_out = (gdouble) *_out + (gdouble) *_in;
+	double complex *_out = out;
+	const double complex *_in = in;
+	for(bytes /= sizeof(double complex); bytes--; _in++, _out++)
+		*_out = (double complex) *_out + (double complex) *_in;
 }
 
 
@@ -154,14 +154,25 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	switch (id) {
 	case ARG_CHIFACS: {
-		int channels;
+		int channels, i, j;
 		g_mutex_lock(element->coefficients_lock);
 		if(element->chifacs) {
 			channels = num_channels(element);
 			gsl_matrix_free(element->chifacs);
+			gsl_matrix_free(element->chifacs2);
+			gsl_matrix_free(element->chifacs_denom);
 		} else
 			channels = 0;
 		element->chifacs = gstlal_gsl_matrix_from_g_value_array(g_value_get_boxed(value));
+		element->chifacs2 = gstlal_gsl_matrix_from_g_value_array(g_value_get_boxed(value));
+		element->chifacs_denom = gstlal_gsl_matrix_from_g_value_array(g_value_get_boxed(value));
+		for (i = 0; i < num_timeslices(element); i++) {
+			for (j = 0; j < num_channels(element); j++) {
+				double val = gsl_matrix_get(element->chifacs, (size_t) i, (size_t) j);
+				gsl_matrix_set(element->chifacs2, (size_t) i, (size_t) j, val * val);
+				gsl_matrix_set(element->chifacs_denom, (size_t) i, (size_t) j, val * val - val * val * val);
+			}
+		}
 
 		/*
 		 * number of channels has changed, force a caps renegotiation
@@ -251,12 +262,78 @@ static GstCaps *sink_getcaps(GstPad *pad)
 	peercaps = gst_pad_peer_get_caps(element->srcpad);
 	if(peercaps) {
 		GstCaps *result;
+		gint width;
+		GValue value = {0,};
+		g_value_init(&value, G_TYPE_INT);
+		GstStructure *peercaps_struct = gst_caps_steal_structure(peercaps, 0);
+		gst_structure_get_int(peercaps_struct, "width", &width);
+		gst_structure_set_name(peercaps_struct, (const gchar *) "audio/x-raw-complex");
+		gst_caps_append_structure(peercaps, peercaps_struct);
+		g_value_set_int(&value, width * 2);
+		gst_caps_set_value(peercaps, "width", &value);
+
 		GST_DEBUG_OBJECT(element, "intersecting %" GST_PTR_FORMAT " and %" GST_PTR_FORMAT, caps, peercaps);
 		result = gst_caps_intersect(peercaps, caps);
 		gst_caps_unref(peercaps);
 		gst_caps_unref(caps);
 		caps = result;
 		GST_DEBUG_OBJECT(element, "intersection %" GST_PTR_FORMAT, caps);
+	}
+	GST_OBJECT_UNLOCK(element);
+
+	/*
+	 * done
+	 */
+
+	return caps;
+}
+
+
+static GstCaps *src_getcaps(GstPad *pad)
+{
+	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(GST_PAD_PARENT(pad));
+	GList *padlist = NULL;
+	GstCaps *peercaps;
+	GstCaps *caps;
+
+	/*
+	 * get our own allowed caps.  use the fixed caps function to avoid
+	 * recursing back into this function.
+	 */
+
+	GST_OBJECT_LOCK(element);
+	caps = gst_pad_get_fixed_caps_func(pad);
+
+	/*
+	 * get the allowed caps from the upstream peer.
+	 * if the peer has caps, intersect.
+	 */
+
+	for(padlist = GST_ELEMENT(element)->pads; padlist; padlist = g_list_next(padlist)) {
+		GstPad *otherpad = GST_PAD(padlist->data);
+		if(otherpad != pad) {
+			peercaps = gst_pad_peer_get_caps(otherpad);
+			if(peercaps) {
+				GstCaps *result;
+				gint width;
+				GValue value = {0,};
+				g_value_init(&value, G_TYPE_INT);
+				GstStructure *peercaps_struct = gst_caps_steal_structure(peercaps, 0);
+				gst_structure_get_int(peercaps_struct, "width", &width);
+				gst_structure_set_name(peercaps_struct, (const gchar *) "audio/x-raw-float");
+				gst_caps_append_structure(peercaps, peercaps_struct);
+				g_value_set_int(&value, width / 2);
+				gst_caps_set_value(peercaps, "width", &value);
+
+				GST_DEBUG_OBJECT(element, "intersecting %" GST_PTR_FORMAT " and %" GST_PTR_FORMAT, caps, peercaps);
+				result = gst_caps_intersect(peercaps, caps);
+				gst_caps_unref(peercaps);
+				gst_caps_unref(caps);
+				caps = result;
+				GST_DEBUG_OBJECT(element, "intersection %" GST_PTR_FORMAT, caps);
+			}
+			break;
+		}
 	}
 	GST_OBJECT_UNLOCK(element);
 
@@ -280,14 +357,56 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	GSTLALTimeSliceChiSquare *element = GSTLAL_TIMESLICECHISQUARE(GST_PAD_PARENT(pad));
 	GList *padlist = NULL;
 	GstStructure *structure = NULL;
-	gint width;
-	gint channels;
+	GstCaps *sinkcaps = gst_caps_copy(caps);
+	GstCaps *srccaps = gst_caps_copy(caps);
 
 	GST_LOG_OBJECT(element, "setting caps on pad %s:%s to %" GST_PTR_FORMAT, GST_DEBUG_PAD_NAME(pad), caps);
 
 	/*
+	 * parse caps
+	 */
+
+	structure = gst_caps_get_structure(caps, 0);
+	gst_structure_get_int(structure, "rate", &element->rate);
+	gst_structure_get_int(structure, "channels", &element->channels);
+
+	/*
+	 * pre-calculate bytes / sample
+	 */
+
+	element->float_unit_size = 8 * element->channels;
+	element->complex_unit_size = 16 * element->channels;
+
+	/*
+	 * create the caps appropriate for src and sink pads
+	 */
+
+	if(gst_pad_get_direction(pad) == GST_PAD_SINK) {
+		gint width;
+		GValue value = {0,};
+		g_value_init(&value, G_TYPE_INT);
+		GstStructure *srccaps_struct = gst_caps_steal_structure(srccaps, 0);
+		gst_structure_get_int(srccaps_struct, "width", &width);
+		gst_structure_set_name(srccaps_struct, (const gchar *) "audio/x-raw-float");
+		gst_caps_append_structure(srccaps, srccaps_struct);
+		g_value_set_int(&value, width / 2);
+		gst_caps_set_value(srccaps, "width", &value);
+	}
+	else {
+		gint width;
+		GValue value = {0,};
+		g_value_init(&value, G_TYPE_INT);
+		GstStructure *sinkcaps_struct = gst_caps_steal_structure(sinkcaps, 0);
+		gst_structure_get_int(sinkcaps_struct, "width", &width);
+		gst_structure_set_name(sinkcaps_struct, (const gchar *) "audio/x-raw-complex");
+		gst_caps_append_structure(sinkcaps, sinkcaps_struct);
+		g_value_set_int(&value, width * 2);
+		gst_caps_set_value(sinkcaps, "width", &value);
+	}
+
+	/*
 	 * loop over all of the element's pads (source and sink), and set
-	 * them all to the same format.
+	 * them all to the appropriate format.
 	 */
 
 	/* FIXME, see if the other pads can accept the format. Also lock
@@ -296,38 +415,31 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	GST_OBJECT_LOCK(element);
 	for(padlist = GST_ELEMENT(element)->pads; padlist; padlist = g_list_next(padlist)) {
 		GstPad *otherpad = GST_PAD(padlist->data);
-		if(otherpad != pad)
+		if(otherpad != pad) {
 			/* don't use gst_pad_set_caps() because that would
 			 * recurse into this function */
-			gst_caps_replace(&GST_PAD_CAPS(otherpad), caps);
+			if(gst_pad_get_direction(otherpad) == GST_PAD_SINK) {
+				gst_caps_replace(&GST_PAD_CAPS(otherpad), sinkcaps);
+			}
+			else {
+				gst_caps_replace(&GST_PAD_CAPS(otherpad), srccaps);
+			}
+		}
 	}
 	GST_OBJECT_UNLOCK(element);
-
-	/*
-	 * parse caps
-	 */
-
-	structure = gst_caps_get_structure(caps, 0);
-	gst_structure_get_int(structure, "rate", &element->rate);
-	gst_structure_get_int(structure, "channels", &channels);
-	gst_structure_get_int(structure, "width", &width);
-
-	/*
-	 * pre-calculate bytes / sample
-	 */
-
-	element->channels = channels;
-	element->unit_size = (width / 8) * channels;
 
 	for(padlist = GST_ELEMENT(element)->pads; padlist; padlist = g_list_next(padlist)) {
 		GstPad *pad = GST_PAD(padlist->data);
 		if(gst_pad_get_direction(pad) == GST_PAD_SINK)
-			gstlal_collect_pads_set_unit_size(pad, element->unit_size);
+			gstlal_collect_pads_set_unit_size(pad, element->complex_unit_size);
 	}
 
 	/*
 	 * done
 	 */
+
+	gst_caps_unref(sinkcaps);
+	gst_caps_unref(srccaps);	
 
 	return TRUE;
 }
@@ -1021,7 +1133,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	 */
 
 	GST_LOG_OBJECT(element, "requesting output buffer of %" G_GUINT64_FORMAT " samples", length);
-	result = gst_pad_alloc_buffer(element->srcpad, earliest_input_offset, length * element->unit_size, GST_PAD_CAPS(element->srcpad), &outbuf);
+	result = gst_pad_alloc_buffer(element->srcpad, earliest_input_offset, length * element->float_unit_size,
+		GST_PAD_CAPS(element->srcpad), &outbuf);
 	if(result != GST_FLOW_OK) {
 		/* FIXME: handle failure */
 		outbuf = NULL;
@@ -1030,11 +1143,11 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	memset(outbytes, 0, GST_BUFFER_SIZE(outbuf));
 	GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 
-	snrbytes = malloc(length * element->unit_size);
+	snrbytes = malloc(length * element->complex_unit_size);
 	if(snrbytes == NULL) {
 		/* FIXME: handle failure */
 	}
-	memset(snrbytes, 0, length * element->unit_size);
+	memset(snrbytes, 0, length * element->complex_unit_size);
 
 	/*
 	 * loop over input pads, getting chunks of data from each in turn.
@@ -1073,7 +1186,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		 * starts now.
 		 */
 
-		gap = (gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(inbuf) - element->segment.start, element->rate, GST_SECOND) - earliest_input_offset) * element->unit_size;
+		gap = (gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(inbuf) - element->segment.start, element->rate, GST_SECOND) - earliest_input_offset) * element->complex_unit_size;
 		len = GST_BUFFER_SIZE(inbuf);
 
 		/*
@@ -1088,10 +1201,16 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 
 		if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) && len) {
 			GST_LOG_OBJECT(element, "channel %p: mixing %zd bytes from data %p", data, len, GST_BUFFER_DATA(inbuf));
-			add_float64(snrbytes + gap, GST_BUFFER_DATA(inbuf), len);
+			add_complex128(snrbytes + gap, GST_BUFFER_DATA(inbuf), len);
 			GST_BUFFER_FLAG_UNSET(outbuf, GST_BUFFER_FLAG_GAP);
 		} else
 			GST_LOG_OBJECT(element, "channel %p: skipping %zd bytes from data %p", data, len, GST_BUFFER_DATA(inbuf));
+
+		/*
+		 * add inbuf to list of inbufs
+		 * this is done in reverse order here since the last pad link
+		 * returns the first buffer
+		 */
 
 		inbufs[numtimeslices - timeslice - 1] = inbuf;
 	}
@@ -1105,7 +1224,6 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 	/*
 	 * loop over buffers from input pads computing the time-slice chisq
 	 */
-
 
 	g_mutex_lock(element->coefficients_lock);
 	while(!element->chifacs)
@@ -1154,25 +1272,27 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		 * starts now.
 		 */
 
-		gap = (gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(inbuf) - element->segment.start, element->rate, GST_SECOND) - earliest_input_offset) * element->unit_size;
-		len = GST_BUFFER_SIZE(inbuf);
+		gap = (gst_util_uint64_scale_int_round(GST_BUFFER_TIMESTAMP(inbuf) - element->segment.start, element->rate, GST_SECOND) - earliest_input_offset);
+		len = GST_BUFFER_SIZE(inbuf) / element->complex_unit_size;
 
 		if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) && len) {
-			for (sample = gap; sample < len; sample += element->unit_size) {
-				double *outdata = (double *) (outbytes + sample);
-				const double *snrdata = (double *) (snrbytes + sample);
-				const double *indata = (double *) (GST_BUFFER_DATA(inbuf) + sample);
+			for (sample = gap; sample < len; sample++) {
+				double *outdata = (double *) (outbytes + sample * element->float_unit_size);
+				const double complex *snrdata = (double complex *) (snrbytes + sample * element->complex_unit_size);
+				const double complex *indata = (double complex *) (GST_BUFFER_DATA(inbuf) + sample * element->complex_unit_size);
 				for (channel = 0; channel < numchannels; channel++) {
-					double snr = snrdata[channel];
-					double timeslicesnr = indata[channel];
-					double chifacs_coefficient = gsl_matrix_get(element->chifacs, (size_t) timeslice, (size_t) channel);
-					double chifacs_coefficient2 = chifacs_coefficient*chifacs_coefficient;
-					double chifacs_coefficient3 = chifacs_coefficient2*chifacs_coefficient;
+					double chifacs_coefficient2 = gsl_matrix_get(element->chifacs2, (size_t) timeslice, (size_t) channel);
+					double chifacs_coefficient_denom = gsl_matrix_get(element->chifacs_denom, (size_t) timeslice, (size_t) channel);
+					double complex chisq_num = indata[channel] - chifacs_coefficient2 * snrdata[channel];
 
-					outdata[channel] += pow(timeslicesnr - chifacs_coefficient2 * snr, 2.0)/(chifacs_coefficient2 - chifacs_coefficient3);
+					outdata[channel] += chisq_num * conj(chisq_num) / chifacs_coefficient_denom;
 				}
 			}
 		}
+
+		/*
+		 * unreference the inbuf as we go
+		 */
 
 		gst_buffer_unref(inbuf);
 		inbufs[timeslice] = NULL;
@@ -1286,12 +1406,19 @@ static GstElementClass *parent_class = NULL;
  */
 
 
-#define CAPS \
+#define SRC_CAPS \
 	"audio/x-raw-float, " \
 	"rate = (int) [ 1, MAX ], " \
 	"channels = (int) [ 1, MAX ], " \
 	"endianness = (int) BYTE_ORDER, " \
 	"width = (int) 64;"
+
+#define SINK_CAPS \
+	"audio/x-raw-complex, " \
+	"rate = (int) [ 1, MAX ], " \
+	"channels = (int) [ 1, MAX ], " \
+	"endianness = (int) BYTE_ORDER, " \
+	"width = (int) 128;"
 
 
 static GstStaticPadTemplate src_template =
@@ -1299,7 +1426,7 @@ static GstStaticPadTemplate src_template =
 		"src",
 		GST_PAD_SRC,
 		GST_PAD_ALWAYS,
-		GST_STATIC_CAPS(CAPS)
+		GST_STATIC_CAPS(SRC_CAPS)
 	);
 
 
@@ -1308,7 +1435,7 @@ static GstStaticPadTemplate sink_template =
 		"sink%d",
 		GST_PAD_SINK,
 		GST_PAD_REQUEST,
-		GST_STATIC_CAPS(CAPS)
+		GST_STATIC_CAPS(SINK_CAPS)
 	);
 
 
@@ -1369,7 +1496,11 @@ static void finalize(GObject *object)
 	element->coefficients_available = NULL;
 	if(element->chifacs) {
 		gsl_matrix_free(element->chifacs);
+		gsl_matrix_free(element->chifacs2);
+		gsl_matrix_free(element->chifacs_denom);
 		element->chifacs = NULL;
+		element->chifacs2 = NULL;
+		element->chifacs_denom = NULL;
 	}
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
@@ -1447,7 +1578,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->srcpad = gst_pad_new_from_template(template, "src");
 	gst_object_unref(template);
 
-	gst_pad_set_getcaps_function(element->srcpad, GST_DEBUG_FUNCPTR(gst_pad_proxy_getcaps));
+	gst_pad_set_getcaps_function(element->srcpad, GST_DEBUG_FUNCPTR(src_getcaps));
 	gst_pad_set_setcaps_function(element->srcpad, GST_DEBUG_FUNCPTR(setcaps));
 	gst_pad_set_query_function(element->srcpad, GST_DEBUG_FUNCPTR(query_function));
 	gst_pad_set_event_function(element->srcpad, GST_DEBUG_FUNCPTR(src_event_function));
@@ -1459,11 +1590,14 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	gst_collect_pads_set_function(element->collect, GST_DEBUG_FUNCPTR(collected), element);
 
 	element->rate = 0;
-	element->unit_size = 0;
+	element->float_unit_size = 0;
+	element->complex_unit_size = 0;
 	element->channels = 0;
 	element->coefficients_lock = g_mutex_new();
 	element->coefficients_available = g_cond_new();
 	element->chifacs = NULL;
+	element->chifacs2 = NULL;
+	element->chifacs_denom = NULL;
 }
 
 
