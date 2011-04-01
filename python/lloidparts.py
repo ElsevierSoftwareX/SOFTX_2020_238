@@ -264,7 +264,7 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_segments=N
 	# put in the final tee
 	elems = mkelems_fast(pipeline, head, "tee")
 
-	
+
 	#
 	# down-sample whitened time series to remaining target sample rates
 	# while applying an amplitude correction to adjust for low-pass
@@ -307,7 +307,7 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length=8, veto_segments=N
 	#
 
 	#for rate, elem in head.items():
-	#	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, elem), "src_%d.dump" % rate, segment = nxydump_segment)
+	#	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, elem), "src_%d.dump" % rate)
 	return head
 
 
@@ -380,6 +380,8 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	#
 	# optionally add a segment src and gate to only reconstruct around injections
 	#
+
+	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_src), "sumsq.dump")
 
 	if inj_seg_list is not None:
 		control_src = mksegmentsrcgate(pipeline, pipeparts.mkqueue(pipeline, control_src), inj_seg_list, threshold=0.1, seekevent=seekevent, invert_output=False)
@@ -515,8 +517,8 @@ def mkLLOIDsnrToTriggers(pipeline, snr, bank, verbose = False, nxydump_segment =
 
 	head = mkelems_fast(pipeline,
 		chisq,
-		"lal_triggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq},
-		#"lal_blcbctriggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq},
+		#"lal_triggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq},
+		"lal_blcbctriggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq},
 	)[-1]
 	mkelems_fast(pipeline, snr, "queue", head)
 	if verbose:
@@ -551,8 +553,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	#
 
 	if injection_filename is not None:
-		#inj_seg_list = simulation.sim_inspiral_to_segment_list(injection_filename)
-		inj_seg_list = None
+		inj_seg_list = simulation.sim_inspiral_to_segment_list(injection_filename)
 	else:
 		inj_seg_list = None
 
@@ -563,7 +564,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	for instrument in detectors:
 		rates = set(rate for bank in banks for rate in bank.get_rates())
 		head = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data=fake_data, online_data=online_data, injection_filename=injection_filename, verbose=verbose)
-		
+
 		#
 		# check to see if we have veto segments, if so extract the segments for the current instrument
 		#
