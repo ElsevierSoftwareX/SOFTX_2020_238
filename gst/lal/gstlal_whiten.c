@@ -346,6 +346,7 @@ static void zero_output_history(GSTLALWhiten *element)
 {
 	if(element->output_history)
 		memset(element->output_history->data, 0, element->output_history->length * sizeof(*element->output_history->data));
+	element->nonzero_output_history_length = 0;
 	element->output_history_offset = element->next_offset_out - zero_pad_length(element);
 }
 
@@ -466,6 +467,9 @@ static int make_workspace(GSTLALWhiten *element)
 	element->tdworkspace = tdworkspace;
 	element->fdworkspace = fdworkspace;
 	element->output_history = output_history;
+	/* this is really just for safety;  this function must be called
+	 * again after next_offset_out is initialized at the start of the
+	 * stream */
 	zero_output_history(element);
 	g_object_notify(G_OBJECT(element), "sigma-squared");
 	return 0;
@@ -701,7 +705,7 @@ static GstFlowReturn push_psd(GstPad *psd_pad, const REAL8FrequencySeries *psd)
  */
 
 
-static void set_metadata(GSTLALWhiten *element, GstBuffer *buf, guint64 outsamples)
+static void set_metadata(GSTLALWhiten *element, GstBuffer *buf, guint64 outsamples, gboolean is_gap)
 {
 	GST_BUFFER_SIZE(buf) = outsamples * sizeof(*element->tdworkspace->data->data);
 	GST_BUFFER_OFFSET(buf) = element->next_offset_out;
@@ -713,10 +717,14 @@ static void set_metadata(GSTLALWhiten *element, GstBuffer *buf, guint64 outsampl
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
 	}
+	if(is_gap)
+		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
+	else
+		GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_GAP);
 }
 
 
-static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint32 *outsamples)
+static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint32 *outsamples, gboolean *output_is_gap)
 {
 	guint32 zero_pad = zero_pad_length(element);
 	guint32 hann_length = fft_length(element) - 2 * zero_pad;
@@ -736,6 +744,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint32 *o
 	 * Iterate over the available data
 	 */
 
+	*output_is_gap = TRUE;
 	for(*outsamples = 0; get_available_samples(element) >= hann_length;) {
 		REAL8FrequencySeries *newpsd;
 		gboolean block_contains_gaps;
@@ -909,15 +918,19 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint32 *o
 			for(i = 0; i < element->output_history->length; i++)
 				element->output_history->data[i] += element->tdworkspace->data->data[i];
 		}
+		if(block_contains_nongaps)
+			element->nonzero_output_history_length = element->output_history->length;
 		g_assert((gint64) element->output_history_offset <= (gint64) (element->next_offset_out + *outsamples));
 		if(element->output_history_offset == element->next_offset_out + *outsamples) {
 			memcpy(&dst[*outsamples], &element->output_history->data[0], hann_length / 2 * sizeof(*element->output_history->data));
 			*outsamples += hann_length / 2;
+			if(element->nonzero_output_history_length != 0)
+				*output_is_gap = FALSE;
 		}
 		memmove(&element->output_history->data[0], &element->output_history->data[hann_length / 2], (element->output_history->length - hann_length / 2) * sizeof(*element->output_history->data));
 		memset(&element->output_history->data[element->output_history->length - hann_length / 2], 0, hann_length / 2 * sizeof(*element->output_history->data));
 		element->output_history_offset += hann_length / 2;
-		/* FIXME:  how many consecutive 0s are at the end of the output history? */
+		element->nonzero_output_history_length = element->nonzero_output_history_length > hann_length / 2 ? element->nonzero_output_history_length - hann_length / 2 : 0;
 
 		/*
 		 * flush the input queue
@@ -1338,6 +1351,13 @@ static gboolean start(GstBaseTransform *trans)
 
 	element->input_queue = gstlal_input_queue_create(sizeof(*element->tdworkspace->data->data));
 
+	/*
+	 * an invalid t0 trips the "this buffer is a discont" behaviour in
+	 * the transform() method, causing the timestamp book-keeping to
+	 * reset and zeroing the output history.  the rest of the
+	 * initialization being done here is mostly for safety.
+	 */
+
 	element->t0 = GST_CLOCK_TIME_NONE;
 	element->offset0 = GST_BUFFER_OFFSET_NONE;
 	element->next_offset_in = GST_BUFFER_OFFSET_NONE;
@@ -1345,6 +1365,7 @@ static gboolean start(GstBaseTransform *trans)
 	element->need_discont = TRUE;
 
 	element->output_history_offset = GST_BUFFER_OFFSET_NONE;
+	element->nonzero_output_history_length = 0;
 
 	return TRUE;
 }
@@ -1376,6 +1397,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
 	GstFlowReturn result = GST_FLOW_OK;
 	guint32 outsamples;
+	gboolean output_is_gap;
 
 	/*
 	 * If the incoming buffer is a discontinuity, clear the input queue
@@ -1404,7 +1426,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		element->need_discont = TRUE;
 
 		/*
-		 * clear the output history
+		 * clear the output history.  this must be done after
+		 * setting next_offset_out.
 		 */
 
 		zero_output_history(element);
@@ -1417,7 +1440,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	gst_buffer_ref(inbuf);	/* don't let calling code free buffer */
 	gstlal_input_queue_push(element->input_queue, inbuf);
-	result = whiten(element, outbuf, &outsamples);
+	result = whiten(element, outbuf, &outsamples, &output_is_gap);
 	if(result != GST_FLOW_OK)
 		goto done;
 
@@ -1434,7 +1457,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * set output metadata
 	 */
 
-	set_metadata(element, outbuf, outsamples);
+	set_metadata(element, outbuf, outsamples, output_is_gap);
 
 	/*
 	 * done

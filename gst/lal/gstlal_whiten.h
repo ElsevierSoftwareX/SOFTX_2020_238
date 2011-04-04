@@ -130,8 +130,14 @@ typedef struct {
 	REAL8FFTPlan *revplan;
 	REAL8TimeSeries *tdworkspace;
 	COMPLEX16FrequencySeries *fdworkspace;
+
+	/*
+	 * output stream
+	 */
+
 	REAL8Sequence *output_history;
 	guint64 output_history_offset;
+	guint nonzero_output_history_length;
 
 	/*
 	 * PSD state
