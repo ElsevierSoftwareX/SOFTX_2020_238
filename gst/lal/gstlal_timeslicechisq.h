@@ -67,13 +67,16 @@ typedef struct _GSTLALTimeSliceChiSquare {
 
 	/* stream format */
 	gint rate;
-	guint unit_size; /* = width / 8 * channels */
+	guint float_unit_size; /* = 8 * channels */
+	guint complex_unit_size; /* = 16 * channels */
 	gint channels;
 
 	/* chifacs coefficients */
 	GMutex *coefficients_lock;
 	GCond *coefficients_available;
 	gsl_matrix *chifacs;
+	gsl_matrix *chifacs2;
+	gsl_matrix *chifacs_denom;
 
 	/* sink event handling */
 	GstPadEventFunction collect_event;
