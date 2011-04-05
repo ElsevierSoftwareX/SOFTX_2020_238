@@ -28,26 +28,25 @@
 #
 
 
+import os
+import sys
+import warnings
+
+
 import pygtk
 pygtk.require('2.0')
 import pygst
 pygst.require('0.10')
 from gstlal.option import OptionParser
 
-import sys
-import os.path
-import os
-import warnings
 
 from glue import segments
 from glue import segmentsUtils
-import glue.ligolw.utils
-import glue.ligolw.utils.segments as ligolw_segments
 from glue.ligolw import utils
+from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import ligolw_output
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
-
 
 
 #
@@ -96,32 +95,30 @@ def parse_command_line():
 		import gstoption
 		parser.add_option_group(gstoption.get_group())
 	except:
-		warnings.warn("Failed to get GStreamer's option group, not adding command line options for it")
+		warnings.warn("failed to get GStreamer's option group, not adding command line options for it")
 
 	options, filenames = parser.parse_args()
 
-	if sum(1 for option in ('frame_cache', 'fake_data', 'online_data') if getattr(options, option) is not None) != 1:
+	if len([option for option in ('frame_cache', 'fake_data', 'online_data') if getattr(options, option) is not None]) != 1:
 		raise ValueError, "must provide exactly one of --frame-cache, --fake-data, --online-data"
 
 	required_options = ["instrument", "output"]
-
 	if options.frame_cache:
 		required_options += ["channel_name", "gps_start_time", "gps_end_time"]
-
 	if options.online_data:
 		required_options += ["reference_psd"]
 
+	missing_options = []
 	if len(options.template_bank) + len(options.svd_bank) == 0:
-		raise SystemExit, "Must provide at least one --template-bank or --svd-bank option."
+		missing_options += ["--template-bank or --svd-bank"]
+	missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
+	if missing_options:
+		raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
 
 	# FIXME: should also check for read permissions
-	for bankname in options.template_bank + options.svd_bank:
-		if not os.path.exists(bankname):
-			raise SystemExit, "Template bank file %s does not exist." % bankname
-
-	missing_options = [option for option in required_options if getattr(options, option) is None]
-	if missing_options:
-		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+	missing_files = [filename for filename in options.template_bank + options.svd_bank if not os.path.exists(filename)]
+	if missing_files:
+		raise ValueError, "files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files))
 
 	# do this before converting option types
 	process_params = ligolw_output.make_process_params(options)
@@ -168,15 +165,16 @@ import pygst
 pygst.require('0.10')
 import gst
 
+
 from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import templates
-from gstlal.svd_bank import build_bank, read_bank
+from gstlal import svd_bank
 from gstlal import reference_psd
 
 
 #
-# construct pipeline metadata and measure the PSD
+# construct pipeline metadata and measure or retrieve the PSD
 #
 
 
@@ -205,15 +203,11 @@ detectors = {
 }
 
 
-#
-# FIXME
-# right now vetoes are applied after whitening.  If that
-# changes this function will need to know about vetoes too
-#
-
 if options.reference_psd is not None:
 	psd = reference_psd.read_psd(options.reference_psd, verbose = options.verbose)
 else:
+	# FIXME right now vetoes are applied after whitening.  If that
+	# changes this function will need to know about vetoes too
 	psd = measure_psd(
 		options.instrument,
 		seekevent,
@@ -229,24 +223,24 @@ else:
 	if options.write_psd is not None:
 		write_psd(options.write_psd, psd, verbose = options.verbose)
 
+
 #
 # Make template banks
 #
 
-banks = [
-	build_bank(filename, psd, options.flow, options.ortho_gate_fap, options.snr_threshold, options.svd_tolerance, verbose = options.verbose)
-	for filename in options.template_bank
-] + [
-	read_bank(filename)
-	for filename in options.svd_bank
-]
+
+banks = []
+for filename in options.template_bank:
+	banks.append(svd_bank.build_bank(filename, psd, options.flow, options.ortho_gate_fap, options.snr_threshold, options.svd_tolerance, verbose = options.verbose))
+for filename in options.svd_bank:
+	banks.append(svd_bank.read_bank(filename))
+
 for n, bank in enumerate(banks):
 	bank.logname = "bank%d" % n
 
 
-
 #
-# build pipeline
+# Build pipeline
 #
 
 
@@ -258,11 +252,13 @@ if options.online_data:
 
 
 #
-# Write the pipeline to a dot file.
-# This option needs the environment variable GST_DEBUG_DUMP_DOT_DIR
-# to be set. There are several choices for the "details"
-# (second argument). DEBUG_GRAPH_SHOW_ALL is the most verbose.
+# How to write the pipeline to a dot file.  This option needs the
+# environment variable GST_DEBUG_DUMP_DOT_DIR to be set. There are several
+# choices for the "details" (second argument). DEBUG_GRAPH_SHOW_ALL is the
+# most verbose.
 #
+
+
 def maybe_dump_dot(pipeline, filestem, verbose = False):
 	if "GST_DEBUG_DUMP_DOT_DIR" not in os.environ:
 		raise ValueError, "Could not write pipeline, please set GST_DEBUG_DUMP_DOT_DIR in your environment"
@@ -274,6 +270,7 @@ def maybe_dump_dot(pipeline, filestem, verbose = False):
 pipeline = gst.Pipeline("gstlal_inspiral")
 mainloop = gobject.MainLoop()
 handler = lloidparts.LLOIDHandler(mainloop, pipeline)
+
 
 #
 # Parse the veto file into segments if provided
@@ -316,7 +313,7 @@ def appsink_new_buffer(elem, data):
 	if data.connection:
 		data.connection.commit()
 
-sink = pipeparts.mkappsink(pipeline, src, caps = gst.Caps("application/x-lal-snglinspiral"))
+sink = pipeparts.mkappsink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-snglinspiral"))
 sink.connect_after("new-buffer", appsink_new_buffer, data)
 
 if options.write_pipeline is not None:
