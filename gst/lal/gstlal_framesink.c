@@ -311,6 +311,7 @@ static void gst_lalframe_sink_init(GstLalframeSink *sink,
     sink->type = NULL;
 
     gst_base_sink_set_sync(GST_BASE_SINK(sink), FALSE);
+    gst_base_sink_set_async_enabled(GST_BASE_SINK(sink), FALSE);
 }
 
 
