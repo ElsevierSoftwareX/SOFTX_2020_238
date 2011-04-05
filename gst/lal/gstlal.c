@@ -79,6 +79,7 @@
 #include <gstlal_specgram.h>
 #include <gstlal_segmentsrc.h>
 #include <gstlal_blcbc_triggergen.h>
+#include <gstlal_audioundersample.h>
 
 
 /*
@@ -135,6 +136,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_specgram", GSTLAL_SPECGRAM_TYPE},
 		{"lal_segmentsrc", GSTLAL_SEGMENTSRC_TYPE},
 		{"lal_blcbctriggergen", GSTLAL_BLCBC_TRIGGERGEN_TYPE},
+		{"lal_audioundersample", GSTLAL_AUDIOUNDERSAMPLE_TYPE},
 		{NULL, 0},
 	};
 

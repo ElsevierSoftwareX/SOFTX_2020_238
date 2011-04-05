@@ -204,4 +204,15 @@ function test_chained_resamplers() {
 
 }
 
-test_chained_resamplers
+function test_audioundersample() {
+	gst-launch \
+		audiotestsrc wave=0 freq=32 samplesperbuffer=9 num-buffers=32 \
+		! audio/x-raw-float, channels=1, width=64, rate=512 \
+		! tee name=src \
+		! lal_nxydump ! queue ! filesink buffer-mode=2 location="dump_in.txt" \
+		src. ! lal_audioundersample \
+		! audio/x-raw-float, rate=128 \
+		! lal_nxydump ! queue ! filesink buffer-mode=2 location="dump_out.txt"
+}
+
+test_audioundersample

@@ -37,7 +37,8 @@ G_BEGIN_DECLS
 #define GSTLAL_TAG_CHANNEL_NAME "channel-name"
 #define GSTLAL_TAG_UNITS "units"
 
-void gstlal_register_tags();
+
+void gstlal_register_tags(void);
 
 
 G_END_DECLS

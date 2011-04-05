@@ -117,6 +117,7 @@ def make_process_params(options):
 
 	return params
 
+
 class Data(object):
 	def __init__(self, options, detectors):
 		self.detectors = detectors
@@ -167,7 +168,7 @@ class Data(object):
 			self.sngl_inspiral_table = sngl_inspiral_table
 
 	def write_output_file(self):
-		if self.connection:
+		if self.connection is not None:
 			from glue.ligolw import dbtables
 			from pylal.date import XLALUTCToGPS
 			import time

@@ -76,22 +76,36 @@ typedef struct {
 } GSTLALWhitenClass;
 
 
+struct gstlal_input_queue {
+	GQueue *queue;
+	gint unit_size;
+	gint size;
+	gint skip;
+};
+
+
 typedef struct {
 	GstBaseTransform element;
 
 	/*
-	 * I/O
+	 * input stream
 	 */
 
-	GstAdapter *adapter;
+	LALUnit sample_units;
+	gint sample_rate;
+
+	struct gstlal_input_queue *input_queue;
+
+	/*
+	 * psd output stream
+	 */
+
 	GstPad *mean_psd_pad;
 
 	/*
 	 * time stamp book-keeping
 	 */
 
-	LALUnit sample_units;
-	gint sample_rate;
 	gboolean need_discont;
 	GstClockTime t0;
 	guint64 offset0;
@@ -116,8 +130,14 @@ typedef struct {
 	REAL8FFTPlan *revplan;
 	REAL8TimeSeries *tdworkspace;
 	COMPLEX16FrequencySeries *fdworkspace;
+
+	/*
+	 * output stream
+	 */
+
 	REAL8Sequence *output_history;
 	guint64 output_history_offset;
+	guint nonzero_output_history_length;
 
 	/*
 	 * PSD state
