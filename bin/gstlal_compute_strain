@@ -147,11 +147,13 @@ audioconvert2 = mkelem('audioconvert')  # lal_firbank only supports doubles
 hpf = mkelem('audiowsinclimit',
              {'mode': 1,  # high pass filter
               'cutoff': 0.00244140625 * 16384/2,  # cf. ComputeStrain.c
+              'window': 2,  # gaussian
               'length': 2*2000+1})
 
 hpf2 = mkelem('audiowsinclimit',   # again! wish I could just copy it!
               {'mode': 1,
                'cutoff': 0.00244140625 * 16384/2,
+               'window': 2,  # gaussian
                'length': 2*2000+1})
 
 awhiten = mkelem('lal_firbank',
@@ -168,10 +170,10 @@ path2 = [dctrl_src, pr2, audioconvert2, hpf, hpf2, awhiten, actuation]
 # [3] Elements from adder to saving the result
 
 path3 = [mkelem(*x) for x in [ \
-    ('lal_adder',   {}),
-#    ('lal_delay', {'delay': 16*16384-len( shortest delay of the two paths? )}),
+    ('lal_adder',   {'sync': True}),
     ('taginject', {'tags': 'channel-name=LDAS-STRAIN'}),  # change
     ('lal_framesink', {'frame-type': opts.frame_type,
+                       'async': False,  # though now should be by default!
                        'duration': 16,
                        'clean-timestamps': True}),
     ]]
