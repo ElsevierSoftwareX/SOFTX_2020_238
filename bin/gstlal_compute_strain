@@ -30,9 +30,6 @@ S6H1Filters_942436815.txt
 # To generate filters.npz you can use the program at
 # gstlal/examples/utilities/calfilters2npz.py
 
-# TODO:
-#   make it work! (compared to dumped frame)
-
 import sys
 from optparse import OptionParser
 
@@ -55,6 +52,7 @@ add('--filters-file', help='Name of file containing filters (in npz format)')
 add('--frame-cache',  help='Name of frame cache file')
 add('--ifo',          help='Name of the interferometer (H1, H2, L1)')
 add('--frame-type',   help='Frame type to be written (eg, H1_GSTLAL_C02)')
+add('--debug',  action='store_true', help='Dump intermediate steps to files')
 add('--silent', action='store_true', help='Be less verbose')
 
 opts, rest = parser.parse_args()
@@ -98,6 +96,9 @@ if not opts.silent:
 
 filters = load(opts.filters_file)
 
+if not opts.silent:
+    print 'Entering main loop'
+
 mainloop = gobject.MainLoop()
 pipeline = gst.Pipeline('calibration')
 
@@ -121,7 +122,9 @@ derr_src = mkelem('lal_framesrc',
                    'instrument': opts.ifo,
                    'blocksize': 524288})
 
-pr1 = mkelem('progressreport', {'name': 'DARM_ERR progress'})
+pr1 = mkelem('progressreport',
+             {'name': 'DARM_ERR progress',
+              'silent': opts.silent})
 
 audioconvert1 = mkelem('audioconvert')  # lal_firbank only supports doubles
 
@@ -140,7 +143,9 @@ dctrl_src = mkelem('lal_framesrc',
                     'instrument': opts.ifo,
                     'blocksize': 524288})
 
-pr2 = mkelem('progressreport', {'name': 'DARM_CTRL progress'})
+pr2 = mkelem('progressreport',
+             {'name': 'DARM_CTRL progress',
+              'silent': opts.silent})
 
 audioconvert2 = mkelem('audioconvert')  # lal_firbank only supports doubles
 
@@ -148,7 +153,7 @@ hpf = mkelem('audiowsinclimit',
              {'mode': 1,  # high pass filter
               'cutoff': 0.00244140625 * 16384/2,  # cf. ComputeStrain.c
               'window': 2,  # gaussian
-              'length': 2*2000+1})
+              'length': 2*2000+1})  # 2 * N_FIR_HP + 1, cf. ComputeStrain.c
 
 hpf2 = mkelem('audiowsinclimit',   # again! wish I could just copy it!
               {'mode': 1,
@@ -170,12 +175,12 @@ path2 = [dctrl_src, pr2, audioconvert2, hpf, hpf2, awhiten, actuation]
 # [3] Elements from adder to saving the result
 
 path3 = [mkelem(*x) for x in [ \
-    ('lal_adder',   {'sync': True}),
-    ('taginject', {'tags': 'channel-name=LDAS-STRAIN'}),  # change
+    ('lal_adder', {'sync': True}),
+    ('taginject', {'tags': 'channel-name=LDAS-STRAIN'}),  # or GSTLAL-STRAIN
     ('lal_framesink', {'frame-type': opts.frame_type,
                        'async': False,  # though now should be by default!
                        'duration': 16,
-                       'clean-timestamps': True}),
+                       'clean-timestamps': False}),  # should work with True
     ]]
 
 
@@ -193,7 +198,9 @@ path2[-1].link(path3[0])  # [2] /
 gst.element_link_many(*path3)  # [3]
 
 
-# #### For debugging stuff #####
+#
+# Debugging
+#
 
 def extract(pipeline, elem1, elem2, filename):
     """Take a couple of linked elements elem1->elem2 in a pipeline and
@@ -208,25 +215,26 @@ def extract(pipeline, elem1, elem2, filename):
         ('queue',        {}),
         ('audioconvert', {}),
         ('lal_nxydump',  {}),
-        ('filesink',    {'location': filename,
+        ('filesink',    {'location': 'gstlal_' + filename,
                          'sync': False,
                          'async': False})]]
     pipeline.add(*save_path)
     tee.link(save_path[0])
     gst.element_link_many(*save_path)
 
-extract(pipeline, derr_src, pr1, 'gstlal_DARM_ERR.txt')
-extract(pipeline, inv_sensing, path3[0], 'gstlal_C_inv_adv_DARM_ERR.txt')
-extract(pipeline, dctrl_src, pr2, 'gstlal_DARM_CTRL.txt')
-extract(pipeline, hpf2, awhiten, 'gstlal_HPFx2_adv_DARM_CTRL.txt')
-extract(pipeline, awhiten, actuation, 'gstlal_AW_HPFx2_adv_DARM_CTRL.txt')
-extract(pipeline, actuation, path3[0], 'gstlal_A_AW_HPFx2_adv_DARM_CTRL.txt')
-extract(pipeline, path3[1], path3[2], 'gstlal_STRAIN.txt')
+if opts.debug is not None:
+    extract(pipeline, derr_src, pr1, 'DARM_ERR.txt')
+    extract(pipeline, inv_sensing, path3[0], 'C_inv_adv_DARM_ERR.txt')
+    extract(pipeline, dctrl_src, pr2, 'DARM_CTRL.txt')
+    extract(pipeline, hpf2, awhiten, 'HPFx2_adv_DARM_CTRL.txt')
+    extract(pipeline, awhiten, actuation, 'AW_HPFx2_adv_DARM_CTRL.txt')
+    extract(pipeline, actuation, path3[0], 'A_AW_HPFx2_adv_DARM_CTRL.txt')
+    extract(pipeline, path3[1], path3[2], 'STRAIN.txt')
 
-##############################
 
-
+#
 # Make it start playing at the appropiate reference gpstime
+#
 
 path1[0].seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
               gst.SEEK_TYPE_SET, opts.gps_start_time * 1e9,
@@ -235,7 +243,11 @@ path2[0].seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
               gst.SEEK_TYPE_SET, opts.gps_start_time * 1e9,
               gst.SEEK_TYPE_SET, opts.gps_end_time * 1e9)
 
+
+#
 # Boilerplate
+#
+
 class Handler(object):
     def __init__(self, mainloop, pipeline):
         self.mainloop = mainloop
@@ -253,7 +265,8 @@ class Handler(object):
             gerr, dbgmsg = message.parse_error()
             self.pipeline.set_state(gst.STATE_NULL)
             self.mainloop.quit()
-            sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
+            sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code,
+                                                 gerr.message, dbgmsg))
 
 handler = Handler(mainloop, pipeline)
 
