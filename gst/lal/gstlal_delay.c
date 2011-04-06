@@ -199,7 +199,7 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans,
 	else if ( 0 < delaysize )
 	   /* pass part of this buffer */
 	{
-		*outbuf = gst_buffer_new_and_alloc(insize-delaysize); //gst_buffer_copy(gst_buffer_create_sub(inbuf, delaysize, insize - delaysize ));
+		*outbuf = gst_buffer_new_and_alloc(insize-delaysize);
 		result = GST_FLOW_OK;
 	}
 	else
@@ -282,11 +282,7 @@ static GstFlowReturn transform( GstBaseTransform *trans, GstBuffer *inbuf, GstBu
 		guint8 *indata = GST_BUFFER_DATA(inbuf);
 		guint8 *outdata = GST_BUFFER_DATA(outbuf);
 
-		//memset(GST_BUFFER_DATA(outbuf), 0, outsize);
-		
-		//FIXME this is the wrong place in the input buffer, just testing
 		memcpy((void *) outdata, (const void *) (indata+insize-outsize), outsize);
-		//fprintf(stderr, "insize %llu outsize %llu\n", insize, outsize);
 
 		/* how much time to skip */
 
