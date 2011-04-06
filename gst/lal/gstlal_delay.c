@@ -199,7 +199,7 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans,
 	else if ( 0 < delaysize )
 	   /* pass part of this buffer */
 	{
-		*outbuf = gst_buffer_create_sub(inbuf, delaysize, insize - delaysize );
+		*outbuf = gst_buffer_copy(gst_buffer_create_sub(inbuf, delaysize, insize - delaysize ));
 		result = GST_FLOW_OK;
 	}
 	else
@@ -227,7 +227,6 @@ gboolean transform_size(GstBaseTransform *trans,
 {
 	/* cast BaseTransform to GSTLALDelay */
 	GSTLALDelay *element = GSTLAL_DELAY(trans);
-	GstFlowReturn result;
 
 	/* delay params  */
 	guint delaysize = (guint) element->delay*element->unit_size;
@@ -278,7 +277,19 @@ static GstFlowReturn transform( GstBaseTransform *trans, GstBuffer *inbuf, GstBu
 	else if ( 0 < element->delay )
 	/* drop part of buffer, pass the rest */
 	{
+		guint outsize = GST_BUFFER_SIZE(outbuf);
+		guint insize = GST_BUFFER_SIZE(inbuf);
+		guint8 *indata = GST_BUFFER_DATA(inbuf);
+		guint8 *outdata = GST_BUFFER_DATA(outbuf);
+
+		//memset(GST_BUFFER_DATA(outbuf), 0, outsize);
+		
+		//FIXME this is the wrong place in the input buffer, just testing
+		memcpy((void *) outdata, (const void *) (indata+insize-outsize), outsize);
+		//fprintf(stderr, "insize %llu outsize %llu\n", insize, outsize);
+
 		/* how much time to skip */
+
 		delaytime = gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(inbuf),
 			element->delay, GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf));
 
@@ -300,6 +311,19 @@ static GstFlowReturn transform( GstBaseTransform *trans, GstBuffer *inbuf, GstBu
 	{
 		result = GST_FLOW_OK;
 	}
+/* FIXME REMOVE DEBUG ONLY */
+{
+const double *x;
+unsigned nans = 0;
+for(x = GST_BUFFER_DATA(inbuf); x < GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf); x++) if(isnan(*x)) nans++;
+if(nans) fprintf(stderr, "full buf %s: input %" GST_BUFFER_BOUNDARIES_FORMAT " has %u nans\n", GST_ELEMENT_NAME(element), GST_BUFFER_BOUNDARIES_ARGS(inbuf), nans);
+}
+{
+const double *x;
+unsigned nans = 0;
+for(x = GST_BUFFER_DATA(outbuf); x < GST_BUFFER_DATA(outbuf) + GST_BUFFER_SIZE(outbuf); x++) if(isnan(*x)) nans++;
+if(nans) fprintf(stderr, "full buf %s: output %" GST_BUFFER_BOUNDARIES_FORMAT " has %u nans\n", GST_ELEMENT_NAME(element), GST_BUFFER_BOUNDARIES_ARGS(outbuf), nans);
+}
 
 	return result;
 }
