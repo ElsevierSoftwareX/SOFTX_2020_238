@@ -199,7 +199,7 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans,
 	else if ( 0 < delaysize )
 	   /* pass part of this buffer */
 	{
-		*outbuf = gst_buffer_copy(gst_buffer_create_sub(inbuf, delaysize, insize - delaysize ));
+		*outbuf = gst_buffer_new_and_alloc(insize-delaysize); //gst_buffer_copy(gst_buffer_create_sub(inbuf, delaysize, insize - delaysize ));
 		result = GST_FLOW_OK;
 	}
 	else
