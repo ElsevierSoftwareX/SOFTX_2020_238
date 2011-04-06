@@ -307,19 +307,6 @@ static GstFlowReturn transform( GstBaseTransform *trans, GstBuffer *inbuf, GstBu
 	{
 		result = GST_FLOW_OK;
 	}
-/* FIXME REMOVE DEBUG ONLY */
-{
-const double *x;
-unsigned nans = 0;
-for(x = GST_BUFFER_DATA(inbuf); x < GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf); x++) if(isnan(*x)) nans++;
-if(nans) fprintf(stderr, "full buf %s: input %" GST_BUFFER_BOUNDARIES_FORMAT " has %u nans\n", GST_ELEMENT_NAME(element), GST_BUFFER_BOUNDARIES_ARGS(inbuf), nans);
-}
-{
-const double *x;
-unsigned nans = 0;
-for(x = GST_BUFFER_DATA(outbuf); x < GST_BUFFER_DATA(outbuf) + GST_BUFFER_SIZE(outbuf); x++) if(isnan(*x)) nans++;
-if(nans) fprintf(stderr, "full buf %s: output %" GST_BUFFER_BOUNDARIES_FORMAT " has %u nans\n", GST_ELEMENT_NAME(element), GST_BUFFER_BOUNDARIES_ARGS(outbuf), nans);
-}
 
 	return result;
 }
