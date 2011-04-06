@@ -154,7 +154,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	switch (id) {
 	case ARG_CHIFACS: {
-		int channels, i, j;
+		int channels;
 		g_mutex_lock(element->coefficients_lock);
 		if(element->chifacs) {
 			channels = num_channels(element);
@@ -162,7 +162,6 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		} else
 			channels = 0;
 		element->chifacs = gstlal_gsl_matrix_from_g_value_array(g_value_get_boxed(value));
-		}
 
 		/*
 		 * number of channels has changed, force a caps renegotiation
