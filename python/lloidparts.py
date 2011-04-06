@@ -135,6 +135,10 @@ def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
 
 
 def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list = None, seekevent = None):
+	#
+	# start with an adder and caps filter to select a sample rate
+	#
+
 	snk = gst.element_factory_make("lal_adder")
 	snk.set_property("sync", True)
 	pipeline.add(snk)
@@ -148,9 +152,18 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	if inj_seg_list is not None:
 		src = mksegmentsrcgate(pipeline, src, inj_seg_list, threshold=0.1, seekevent=seekevent, invert_output=False)
 
+	#
+	# verbosity and a tee
+	#
+
 	if verbose:
 		src = pipeparts.mkprogressreport(pipeline, src, "progress_sumsquares%s" % (suffix and "_%s" % suffix or ""))
 	src = pipeparts.mktee(pipeline, src)
+
+	#
+	# return the adder and tee
+	#
+
 	return snk, src
 
 
@@ -240,6 +253,15 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length = 8, veto_segments
 	head = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=[%d,MAX]" % max(rates))
 	head = pipeparts.mkresample(pipeline, head, quality = quality)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max(rates))
+
+	#
+	# add a reblock element.  the framesrc provides enormous buffers
+	# that it helps to slice up, also the whitener's gap support isn't
+	# 100% yet and giving it smaller input buffers works around the
+	# remaining weaknesses
+	#
+
+	head = pipeparts.mkreblock(pipeline, head, block_duration = 1 * gst.SECOND)
 
 	#
 	# construct whitener.  this element must be followed by a
