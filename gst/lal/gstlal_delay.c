@@ -211,6 +211,50 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans,
 	return result;
 }
 
+/*
+ * The transform size function is required to make sure that the prepare buffer
+ * function gives the right output size.  Since this element doesn't convert
+ * unit sizes, this is pretty easy
+ */
+
+
+gboolean transform_size(GstBaseTransform *trans,
+			GstPadDirection direction,
+			GstCaps *caps,
+			guint size,
+			GstCaps *othercaps,
+			guint *othersize)
+{
+	/* cast BaseTransform to GSTLALDelay */
+	GSTLALDelay *element = GSTLAL_DELAY(trans);
+	GstFlowReturn result;
+
+	/* delay params  */
+	guint delaysize = (guint) element->delay*element->unit_size;
+	guint insize = (guint) size;
+
+	if (direction == GST_PAD_SINK)
+	{
+		if (insize <= delaysize)
+			*othersize = 0;
+		else if ( 0 < delaysize )
+			*othersize = insize - delaysize;
+		else
+			*othersize = size;
+		return TRUE;
+	}
+
+	if (direction == GST_PAD_SRC)
+	{
+		/* FIXME I have know idea what to do here */
+		*othersize = size;
+		return TRUE;
+	}
+	
+	/* if we have made it this far we don't know what to do */
+	return FALSE;
+}
+
 
 /*
  * The transform function actually does the heavy lifting on buffers.
@@ -343,7 +387,7 @@ gstlal_delay_base_init(gpointer gclass)
 	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
 	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
 	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
-
+	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
 }
 
 
