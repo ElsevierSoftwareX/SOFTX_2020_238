@@ -25,7 +25,8 @@
 
 
 import sys
-from gstlal.pipeutil import *
+from gstlal import pipeutil
+from gstlal.pipeutil import gobject, gst
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -62,7 +63,14 @@ class lal_checktimestamps(gst.BaseTransform):
 			# FIXME:  why isn't G_MAXUINT64 defined in 2.18?
 			#0, gobject.G_MAXUINT64, 1,
 			0, 18446744073709551615L, 1,
-			gobject.PARAM_WRITABLE | gobject.PARAM_CONSTRUCT
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"silent": (
+			gobject.TYPE_BOOLEAN,
+			"silent",
+			"Only report errors.",
+			False,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
 		)
 	}
 
@@ -152,6 +160,15 @@ class lal_checktimestamps(gst.BaseTransform):
 	def do_set_property(self, prop, val):
 		if prop.name == "timestamp-fuzz":
 			self.timestamp_fuzz = val
+		elif prop.name == "silent":
+			self.silent = val
+
+
+	def do_get_property(self, prop):
+		if prop.name == "timestamp-fuzz":
+			return self.timestamp_fuzz
+		elif prop.name == "silent":
+			return self.silent
 
 
 	def do_set_caps(self, incaps, outcaps):
@@ -175,7 +192,8 @@ class lal_checktimestamps(gst.BaseTransform):
 
 		if self.t0 is None or buf.flag_is_set(gst.BUFFER_FLAG_DISCONT):
 			if self.t0 is None:
-				print >>sys.stderr, "%s: initial timestamp = %s, offset = %d" % (self.get_property("name"), printable_timestamp(buf.timestamp), buf.offset)
+				if not self.silent:
+					print >>sys.stderr, "%s: initial timestamp = %s, offset = %d" % (self.get_property("name"), printable_timestamp(buf.timestamp), buf.offset)
 			elif buf.flag_is_set(gst.BUFFER_FLAG_DISCONT):
 				print >>sys.stderr, "%s: discontinuity:  timestamp = %s, offset = %d;  would have been %s, %d" % (self.get_property("name"), printable_timestamp(buf.timestamp), buf.offset, printable_timestamp(self.next_timestamp), self.next_offset)
 			self.next_timestamp = self.t0 = buf.timestamp
@@ -218,4 +236,4 @@ class lal_checktimestamps(gst.BaseTransform):
 
 
 # Register element class
-gstlal_element_register(lal_checktimestamps)
+pipeutil.gstlal_element_register(lal_checktimestamps)
