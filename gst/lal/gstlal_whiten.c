@@ -150,7 +150,11 @@ static guint32 zero_pad_length(const GSTLALWhiten *element)
 
 static guint32 get_available_samples(GSTLALWhiten *element)
 {
-	return gstlal_input_queue_get_size(element->input_queue);
+	guint size;
+
+	g_object_get(element->input_queue, "size", &size, NULL);
+
+	return size;
 }
 
 
@@ -592,7 +596,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint32 *o
 		 * samples later).
 		 */
 
-		gstlal_input_queue_copy(element->input_queue, &element->tdworkspace->data->data[zero_pad], hann_length, &block_contains_gaps, &block_contains_nongaps);
+		gst_audioadapter_copy(element->input_queue, &element->tdworkspace->data->data[zero_pad], hann_length, &block_contains_gaps, &block_contains_nongaps);
 		XLALINT8NSToGPS(&element->tdworkspace->epoch, element->t0);
 		XLALGPSAdd(&element->tdworkspace->epoch, (double) ((gint64) (element->next_offset_out + *outsamples - element->offset0) - (gint64) zero_pad) / element->sample_rate);
 
@@ -753,7 +757,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint32 *o
 		 * flush the input queue
 		 */
 
-		gstlal_input_queue_flush(element->input_queue, hann_length / 2);
+		gst_audioadapter_flush(element->input_queue, hann_length / 2);
 	}
 
 	/*
@@ -1166,7 +1170,7 @@ static gboolean start(GstBaseTransform *trans)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
 
-	element->input_queue = gstlal_input_queue_create(sizeof(*element->tdworkspace->data->data));
+	element->input_queue = g_object_new(GST_TYPE_AUDIOADAPTER, "unit-size", (guint) sizeof(*element->tdworkspace->data->data), NULL);
 
 	/*
 	 * an invalid t0 trips the "this buffer is a discont" behaviour in
@@ -1197,7 +1201,7 @@ static gboolean stop(GstBaseTransform *trans)
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
 
-	gstlal_input_queue_free(element->input_queue);
+	g_object_unref(element->input_queue);
 	element->input_queue = NULL;
 
 	return TRUE;
@@ -1226,7 +1230,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * clear input queue
 		 */
 
-		gstlal_input_queue_drain(element->input_queue);
+		gst_audioadapter_drain(element->input_queue);
 
 		/*
 		 * (re)sync timestamp and offset book-keeping
@@ -1256,7 +1260,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 */
 
 	gst_buffer_ref(inbuf);	/* don't let calling code free buffer */
-	gstlal_input_queue_push(element->input_queue, inbuf);
+	gst_audioadapter_push(element->input_queue, inbuf);
 	result = whiten(element, outbuf, &outsamples, &output_is_gap);
 	if(result != GST_FLOW_OK)
 		goto done;

@@ -36,6 +36,9 @@
 #include <gst/gst.h>
 
 
+G_BEGIN_DECLS
+
+
 /*
  * ============================================================================
  *
@@ -45,9 +48,42 @@
  */
 
 
-struct gstlal_input_queue {
+#define GST_TYPE_AUDIOADAPTER \
+	(gst_audioadapter_get_type())
+#define GST_AUDIOADAPTER(obj) \
+	(G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_AUDIOADAPTER, GstAudioAdapter))
+#define GST_AUDIOADAPTER_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_AUDIOADAPTER, GstAudioAdapterClass))
+#define GST_AUDIODAPATER_GET_CLASS(obj) \
+	(G_TYPE_INSTANCE_GET_CLASS((obj), GST_TYPE_AUDIOADAPTER, GstAudioAdapterClass))
+#define GST_IS_AUDIOADAPTER(obj) \
+	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_AUDIOADAPTER))
+#define GST_IS_ADAPTER_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_AUDIOADAPTER))
+
+
+typedef struct _GstAudioAdapter GstAudioAdapter;
+typedef struct _GstAudioAdapterClass GstAudioAdapterClass;
+
+
+struct _GstAudioAdapterClass {
+	GObjectClass parent_class;
+};
+
+
+/**
+ * GstAudioAdapter
+ *
+ * The opaque #GstAudioAdapter data structure.
+ */
+
+
+struct _GstAudioAdapter {
+	GObject object;
+
+	/*< private >*/
 	GQueue *queue;
-	gint unit_size;
+	guint unit_size;
 	gint size;
 	gint skip;
 };
@@ -56,22 +92,23 @@ struct gstlal_input_queue {
 /*
  * ============================================================================
  *
- *                            Function Prototypes
+ *                                Exported API
  *
  * ============================================================================
  */
 
 
-struct gstlal_input_queue *gstlal_input_queue_create(gint);
-void gstlal_input_queue_drain(struct gstlal_input_queue *);
-void gstlal_input_queue_free(struct gstlal_input_queue *);
-gint gstlal_input_queue_get_size(const struct gstlal_input_queue *);
-gint gstlal_input_queue_get_unit_size(const struct gstlal_input_queue *);
-void gstlal_input_queue_set_unit_size(struct gstlal_input_queue *, gint);
-void gstlal_input_queue_push(struct gstlal_input_queue *, GstBuffer *);
-gboolean gstlal_input_queue_is_gap(struct gstlal_input_queue *);
-void gstlal_input_queue_copy(struct gstlal_input_queue *, void *, guint, gboolean *, gboolean *);
-void gstlal_input_queue_flush(struct gstlal_input_queue *, guint);
+GType gst_audioadapter_get_type(void);
+
+
+void gst_audioadapter_drain(GstAudioAdapter *);
+void gst_audioadapter_push(GstAudioAdapter *, GstBuffer *);
+gboolean gst_audioadapter_is_gap(GstAudioAdapter *);
+void gst_audioadapter_copy(GstAudioAdapter *, void *, guint, gboolean *, gboolean *);
+void gst_audioadapter_flush(GstAudioAdapter *, guint);
+
+
+G_END_DECLS
 
 
 #endif	/* __GSTAUDIOADAPTER_H__ */

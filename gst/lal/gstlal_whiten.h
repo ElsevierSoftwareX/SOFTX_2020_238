@@ -86,7 +86,7 @@ typedef struct {
 	LALUnit sample_units;
 	gint sample_rate;
 
-	struct gstlal_input_queue *input_queue;
+	GstAudioAdapter *input_queue;
 
 	/*
 	 * psd output stream
