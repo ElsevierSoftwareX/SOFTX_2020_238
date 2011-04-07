@@ -73,7 +73,7 @@ error_no_mem:
 void gstlal_input_queue_drain(struct gstlal_input_queue *input_queue)
 {
 	GstBuffer *buf;
-	while((buf = g_queue_pop_head(input_queue->queue)))
+	while((buf = GST_BUFFER(g_queue_pop_head(input_queue->queue))))
 		gst_buffer_unref(buf);
 	input_queue->size = 0;
 	input_queue->skip = 0;
@@ -126,7 +126,7 @@ gboolean gstlal_input_queue_is_gap(struct gstlal_input_queue *input_queue)
 	GList *head;
 
 	for(head = g_queue_peek_head_link(input_queue->queue); head; head = g_list_next(head))
-		if(!GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP))
+		if(!GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP))
 			return FALSE;
 
 	return TRUE;
@@ -138,23 +138,23 @@ void gstlal_input_queue_copy(struct gstlal_input_queue *input_queue, void *dst, 
 	GList *head = g_queue_peek_head_link(input_queue->queue);
 	gboolean gap = FALSE;
 	gboolean nongap = FALSE;
-	guint n = GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data) - input_queue->skip;
+	guint n = GST_BUFFER_OFFSET_END(GST_BUFFER(head->data)) - GST_BUFFER_OFFSET(GST_BUFFER(head->data)) - input_queue->skip;
 
 	if(samples < n) {
-		if(GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP)) {
+		if(GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP)) {
 			memset(dst, 0, samples * input_queue->unit_size);
 			gap = TRUE;
 		} else {
-			memcpy(dst, GST_BUFFER_DATA(head->data) + input_queue->skip * input_queue->unit_size, samples * input_queue->unit_size);
+			memcpy(dst, GST_BUFFER_DATA(GST_BUFFER(head->data)) + input_queue->skip * input_queue->unit_size, samples * input_queue->unit_size);
 			nongap = TRUE;
 		}
 		goto done;
 	} else {
-		if(GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP)) {
+		if(GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP)) {
 			memset(dst, 0, n * input_queue->unit_size);
 			gap = TRUE;
 		} else {
-			memcpy(dst, GST_BUFFER_DATA(head->data) + input_queue->skip * input_queue->unit_size, n * input_queue->unit_size);
+			memcpy(dst, GST_BUFFER_DATA(GST_BUFFER(head->data)) + input_queue->skip * input_queue->unit_size, n * input_queue->unit_size);
 			nongap = TRUE;
 		}
 		dst += n * input_queue->unit_size;
@@ -163,23 +163,23 @@ void gstlal_input_queue_copy(struct gstlal_input_queue *input_queue, void *dst, 
 
 	while(samples) {
 		head = g_list_next(head);
-		n = GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data);
+		n = GST_BUFFER_OFFSET_END(GST_BUFFER(head->data)) - GST_BUFFER_OFFSET(GST_BUFFER(head->data));
 
 		if(samples < n) {
-			if(GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP)) {
+			if(GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP)) {
 				memset(dst, 0, samples * input_queue->unit_size);
 				gap = TRUE;
 			} else {
-				memcpy(dst, GST_BUFFER_DATA(head->data), samples * input_queue->unit_size);
+				memcpy(dst, GST_BUFFER_DATA(GST_BUFFER(head->data)), samples * input_queue->unit_size);
 				nongap = TRUE;
 			}
 			goto done;
 		} else {
-			if(GST_BUFFER_FLAG_IS_SET(head->data, GST_BUFFER_FLAG_GAP)) {
+			if(GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP)) {
 				memset(dst, 0, n * input_queue->unit_size);
 				gap = TRUE;
 			} else {
-				memcpy(dst, GST_BUFFER_DATA(head->data), n * input_queue->unit_size);
+				memcpy(dst, GST_BUFFER_DATA(GST_BUFFER(head->data)), n * input_queue->unit_size);
 				nongap = TRUE;
 			}
 		}
@@ -200,7 +200,7 @@ done:
 void gstlal_input_queue_flush(struct gstlal_input_queue *input_queue, guint samples)
 {
 	while(samples) {
-		GstBuffer *head = g_queue_peek_head(input_queue->queue);
+		GstBuffer *head = GST_BUFFER(g_queue_peek_head(input_queue->queue));
 		guint n = GST_BUFFER_OFFSET_END(head) - GST_BUFFER_OFFSET(head) - input_queue->skip;
 
 		if(samples < n) {
@@ -211,6 +211,7 @@ void gstlal_input_queue_flush(struct gstlal_input_queue *input_queue, guint samp
 			input_queue->skip = 0;
 			input_queue->size -= n;
 			samples -= n;
+			/* we've already tested the conversion to GstBuffer above */
 			gst_buffer_unref(g_queue_pop_head(input_queue->queue));
 		}
 	}
