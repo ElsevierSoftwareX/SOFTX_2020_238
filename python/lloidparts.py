@@ -156,8 +156,10 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	# verbosity and a tee
 	#
 
+	logname = suffix and "_%s" % suffix or ""
 	if verbose:
-		src = pipeparts.mkprogressreport(pipeline, src, "progress_sumsquares%s" % (suffix and "_%s" % suffix or ""))
+		src = pipeparts.mkprogressreport(pipeline, src, "progress_sumsquares%s" % logname)
+	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps%s_sumsquares" % logname)
 	src = pipeparts.mktee(pipeline, src)
 
 	#
@@ -312,6 +314,7 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length = 8, veto_segments
 	# tee for highest sample rate stream
 	#
 
+	head = pipeparts.mkchecktimestamps(pipeline, head, "timestamps_%d_whitehoft" % max(rates))
 	head = {max(rates): pipeparts.mktee(pipeline, head)}
 
 	#
@@ -340,22 +343,10 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length = 8, veto_segments
 	#
 
 	for rate in sorted(set(rates))[:-1]:	# all but the highest rate
-		head[rate] = pipeparts.mktee(
-			pipeline,
-			pipeparts.mkcapsfilter(
-				pipeline,
-				pipeparts.mkresample(
-					pipeline,
-					pipeparts.mkaudioamplify(
-						pipeline,
-						head[max(rates)],
-						1/math.sqrt(pipeparts.audioresample_variance_gain(quality, max(rates), rate))
-					),
-					quality = quality
-				),
-				caps = "audio/x-raw-float, rate=%d" % rate
-			)
-		)
+		head[rate] = pipeparts.mkaudioamplify(pipeline, head[max(rates)], 1/math.sqrt(pipeparts.audioresample_variance_gain(quality, max(rates), rate)))
+		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head[rate], quality = quality), caps = "audio/x-raw-float, rate=%d" % rate)
+		head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "timestamps_%d_whitehoft" % rate)
+		head[rate] = pipeparts.mktee(pipeline, head[rate])
 
 	#
 	# done.  return value is a dictionary of tee elements indexed by
@@ -384,6 +375,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# figure this out.
 
 	src = pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank)
+	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank" % logname)
 	src = pipeparts.mkreblock(pipeline, src, block_duration = 1 * gst.SECOND)
 	src = pipeparts.mktee(pipeline, src)
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, src), "orthosnr_%s.dump" % logname, segment = nxydump_segment)
