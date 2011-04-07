@@ -107,7 +107,7 @@ struct gstlal_segment_list *gstlal_segment_list_get_range(const struct gstlal_se
 	hi = gstlal_segment_list_index(segmentlist, stop);
 
 	for(i = lo; i <= hi; i++) {
-		if(i < 0)
+		if(i < 0 || segmentlist->segments[i].stop < start)
 			continue;
 		if(!gstlal_segment_list_append(new, gstlal_segment_new(segmentlist->segments[i].start, segmentlist->segments[i].stop))) {
 			gstlal_segment_list_free(new);
