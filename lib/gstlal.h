@@ -50,6 +50,7 @@ G_BEGIN_DECLS
  * Function prototypes
  */
 
+
 /* int type */
 GValueArray *gstlal_g_value_array_from_ints(const gint *, gint);
 gint *gstlal_ints_from_g_value_array(GValueArray *, gint *, gint *);
@@ -89,6 +90,7 @@ LALUnit gstlal_lalUnitSquaredPerHertz(LALUnit);
 /*
  * Debugging helpers
  */
+
 
 #ifndef GST_TIME_SECONDS_FORMAT
 #define GST_TIME_SECONDS_FORMAT G_GUINT64_FORMAT ".%09" G_GUINT64_FORMAT " s"
