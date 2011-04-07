@@ -282,7 +282,7 @@ static void gst_audioadapter_class_init(GstAudioAdapterClass *klass)
 			"size",
 			"size",
 			"The number of frames in the adapter.",
-			1, G_MAXUINT, 1,
+			0, G_MAXUINT, 0,
 			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 		)
 	);
