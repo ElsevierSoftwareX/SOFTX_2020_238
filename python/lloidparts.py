@@ -246,7 +246,8 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length = 8, veto_segments
 	# base class from which it is derived).  however, in this
 	# application the buffer sizes produced by the data source are too
 	# large to trigger this behaviour whether or not the resampler
-	# might ever do it
+	# might ever do it therefore no nofakediscont elements are required
+	# here
 	#
 
 	quality = 9
@@ -255,10 +256,15 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length = 8, veto_segments
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max(rates))
 
 	#
-	# add a reblock element.  the framesrc provides enormous buffers
-	# that it helps to slice up, also the whitener's gap support isn't
-	# 100% yet and giving it smaller input buffers works around the
-	# remaining weaknesses
+	# add a reblock element.  to reduce disk I/O gstlal_inspiral asks
+	# framesrc to provide enormous buffers, and it helps reduce the RAM
+	# pressure of the pipeline by slicing them up.  also, the
+	# whitener's gap support isn't 100% yet and giving it smaller input
+	# buffers works around the remaining weaknesses (namely that when
+	# it sees a gap buffer large enough to drain its internal history,
+	# it doesn't know enough to produce a short non-gap buffer to drain
+	# its history followed by a gap buffer, it just produces one huge
+	# non-gap buffer).
 	#
 
 	head = pipeparts.mkreblock(pipeline, head, block_duration = 1 * gst.SECOND)
