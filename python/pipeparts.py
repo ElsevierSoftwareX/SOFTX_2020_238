@@ -159,6 +159,7 @@ def mkfakeadvLIGOsrc(pipeline, location=None, instrument=None, channel_name=None
 
 def mkprogressreport(pipeline, src, name):
 	elem = gst.element_factory_make("progressreport", name)
+	elem.set_property("do-query", False)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
@@ -509,10 +510,11 @@ def mkappsink(pipeline, src, **properties):
 	src.link(elem)
 	return elem
 
-def mkchecktimestamps(pipeline, src, name = None):
+def mkchecktimestamps(pipeline, src, name = None, silent = True):
 	elem = gst.element_factory_make("lal_checktimestamps")
 	if name is not None:
 		elem.set_property("name", name)
+	elem.set_property("silent", silent)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
