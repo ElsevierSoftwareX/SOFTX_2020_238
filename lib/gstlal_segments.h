@@ -24,7 +24,7 @@
 
 
 #include <glib.h>
-
+#include <glib-object.h>
 
 G_BEGIN_DECLS
 
@@ -46,6 +46,10 @@ struct gstlal_segment_list *gstlal_segment_list_append(struct gstlal_segment_lis
 gint gstlal_segment_list_index(const struct gstlal_segment_list *, guint64);
 struct gstlal_segment_list *gstlal_segment_list_get_range(const struct gstlal_segment_list *, guint64, guint64);
 
+struct gstlal_segment_list *gstlal_segment_list_from_g_value_array(GValueArray *);
+struct gstlal_segment *gstlal_segment_from_g_value_array(GValueArray *);
+GValueArray * g_value_array_from_gstlal_segment(struct gstlal_segment);
+GValueArray * g_value_array_from_gstlal_segment_list(struct gstlal_segment_list *);
 
 G_END_DECLS
 
