@@ -255,7 +255,7 @@ else:
 		verbose = options.verbose
 	)
 	if options.write_psd is not None:
-		write_psd(options.write_psd, psd, verbose = options.verbose)
+		reference_psd.write_psd(options.write_psd, psd, verbose = options.verbose)
 
 
 #
