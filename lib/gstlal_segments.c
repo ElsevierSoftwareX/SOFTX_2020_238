@@ -124,3 +124,56 @@ struct gstlal_segment_list *gstlal_segment_list_get_range(const struct gstlal_se
 
 	return new;
 }
+
+
+/*
+ * Functions to support segment lists to and from GValueArrays
+ */
+
+
+struct gstlal_segment *gstlal_segment_from_g_value_array(GValueArray *va)
+{
+	return gstlal_segment_new(g_value_get_uint64(g_value_array_get_nth(va, 0)), g_value_get_uint64(g_value_array_get_nth(va, 1)));
+}
+
+
+struct gstlal_segment_list *gstlal_segment_list_from_g_value_array(GValueArray *va)
+{
+	guint i;
+	struct gstlal_segment_list *seglist = gstlal_segment_list_new();
+
+	for(i = 0; i < va->n_values; i++)
+		gstlal_segment_list_append(seglist, gstlal_segment_from_g_value_array(g_value_get_boxed(g_value_array_get_nth(va, i))));
+
+	return seglist;
+}
+
+
+GValueArray * g_value_array_from_gstlal_segment(struct gstlal_segment seg)
+{
+	GValueArray *va = g_value_array_new(2);
+	GValue v = {0,};
+	g_value_set_uint64(&v, seg.start);
+	g_value_array_append(va, &v);
+	g_value_set_uint64(&v, seg.stop);
+	g_value_array_append(va, &v);
+	return va;
+}
+
+
+GValueArray * g_value_array_from_gstlal_segment_list(struct gstlal_segment_list *seglist)
+{
+	gint i;
+	GValueArray *va = g_value_array_new(seglist->length);
+	GValue v = {0,};
+	g_value_init(&v, G_TYPE_VALUE_ARRAY);
+
+	for (i=0; i < seglist->length; i++) {
+		g_value_take_boxed(&v, g_value_array_from_gstlal_segment(seglist->segments[i]));
+		g_value_array_append(va, &v);
+	}
+
+	return va;
+}
+
+

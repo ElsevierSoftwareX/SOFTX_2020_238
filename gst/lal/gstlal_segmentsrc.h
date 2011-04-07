@@ -4,6 +4,7 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasesrc.h>
+#include <gstlal_segments.h>
 
 G_BEGIN_DECLS
 
@@ -23,13 +24,13 @@ typedef struct {
 } GSTLALSegmentSrcClass;
 
 typedef struct {
-    GstBaseSrc          element;
+    GstBaseSrc			element;
 
-    GMutex *segment_matrix_lock;
-    gsl_matrix_ulong    *segment_matrix;
-    gboolean            invert_output;
-    gint 		rate;
-    gint 		width;
+    GMutex			*segment_matrix_lock;
+    struct gstlal_segment_list	*seglist;
+    gboolean			invert_output;
+    gint			rate;
+    gint			width;
 
 } GSTLALSegmentSrc;
 

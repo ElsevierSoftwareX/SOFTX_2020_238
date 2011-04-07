@@ -196,16 +196,17 @@ static int mark_segment(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, g
 static int mark_segments(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, guint64 stop)
 {
     GSTLALSegmentSrc        *element = GSTLAL_SEGMENTSRC(basesrc);
-    gsl_matrix_ulong *mat = element->segment_matrix;
-    if (!mat) return 0; /* FIXME handle no segment lists */
-    guint rows = (guint) mat->size1;
+    struct gstlal_segment_list *seglist = element->seglist;
+    if (!seglist) return 0; /* FIXME handle no segment lists */
+    guint rows = seglist->length;
     guint64 segstart, segstop;
 
     /* FIXME provide a bailout and a sensible starting point if you have sorted and coalesced segents */
     /* This is ridiculous, but doesn't require sorted or coalesced segments.  Could some fancy data structure help? */
     for (guint i = 0; i < rows; i++) {
-        segstart = gsl_matrix_ulong_get(mat, i, 0);
-        segstop = gsl_matrix_ulong_get(mat, i, 1);
+        segstart = seglist->segments[i].start;
+        segstop = seglist->segments[i].stop;
+	fprintf(stderr, "start %llu stop %llu\n", segstart,segstop);
         if ((segstart >= start) && (segstart < stop) && (segstop < stop))
             mark_segment(basesrc, buffer, segstart, segstop);
         if ((segstart >= start) && (segstart < stop) && (segstop >= stop))
@@ -479,7 +480,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
     switch (prop_id) {
         case ARG_SEGMENT_LIST:
-            element->segment_matrix = gstlal_gsl_matrix_ulong_from_g_value_array(g_value_array_sort(g_value_get_boxed(value), seg_compare_func));
+            element->seglist = gstlal_segment_list_from_g_value_array(g_value_get_boxed(value));
             break;
         case ARG_INVERT_OUTPUT:
             element->invert_output = g_value_get_boolean(value);
@@ -508,8 +509,8 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
     switch (prop_id) {
         case ARG_SEGMENT_LIST:
             g_mutex_lock(element->segment_matrix_lock);
-            if(element->segment_matrix)
-                g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_ulong(element->segment_matrix));
+            if(element->seglist)
+                g_value_take_boxed(value, g_value_array_from_gstlal_segment_list(element->seglist));
             /* FIXME:  else? */
             g_mutex_unlock(element->segment_matrix_lock);
             break;
@@ -539,7 +540,7 @@ static void finalize(GObject *object)
      * free resources
      */
 
-    if (element->segment_matrix) gsl_matrix_ulong_free(element->segment_matrix);
+    if (element->seglist) gstlal_segment_list_free(element->seglist);
     g_mutex_free(element->segment_matrix_lock);
 
     /*
@@ -663,7 +664,7 @@ static void gstlal_segmentsrc_class_init(GSTLALSegmentSrcClass *klass)
 
 static void gstlal_segmentsrc_init(GSTLALSegmentSrc *segment_src, GSTLALSegmentSrcClass *klass)
 {
-    segment_src->segment_matrix = NULL;
+    segment_src->seglist = NULL;
     segment_src->rate = 0;
     /* FIXME hardcoded width */
     segment_src->width = 8;
