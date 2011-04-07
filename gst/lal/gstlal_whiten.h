@@ -25,7 +25,7 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-#include <gst/base/gstadapter.h>
+#include <gstaudioadapter.h>
 
 
 #include <lal/LALDatatypes.h>
@@ -74,14 +74,6 @@ GType gstlal_psdmode_get_type(void);
 typedef struct {
 	GstBaseTransformClass parent_class;
 } GSTLALWhitenClass;
-
-
-struct gstlal_input_queue {
-	GQueue *queue;
-	gint unit_size;
-	gint size;
-	gint skip;
-};
 
 
 typedef struct {
