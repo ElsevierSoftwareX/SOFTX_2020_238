@@ -177,7 +177,7 @@ AC_MSG_NOTICE([If you have chosen to install the software in a location not incl
 	$plugindir
 	
 to your GST_PLUGIN_PATH environment variable.])
-AC_SUBST([GSTREAMER_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\).*"])
+AC_SUBST([GSTLAL_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\|gstlal_\|GstLAL_\|GSTLAL_\).*"])
 
 
 #

@@ -11,7 +11,6 @@ libgstlal_la_SOURCES = \
 	gstlal_simulation.h gstlal_simulation.c \
 	gstlal_whiten.h gstlal_whiten.c \
 	gstlal_nxydump.h gstlal_nxydump.c \
-	gstlalcollectpads.h gstlalcollectpads.c \
 	gstadder.h gstadder.c \
 	gstlal_multiplier.h gstlal_multiplier.c \
 	gstlal_coinc.h gstlal_coinc.c \
@@ -34,8 +33,8 @@ libgstlal_la_SOURCES = \
 	gstlal_segmentsrc.h gstlal_segmentsrc.c \
 	gstlal_blcbc_triggergen.h gstlal_blcbc_triggergen.c \
 	gstlal_audioundersample.h gstlal_audioundersample.c
-libgstlal_la_CFLAGS = $(AM_CFLAGS) $(gstreamer_CFLAGS) $(LAL_CFLAGS) $(GSL_CFLAGS) $(FFTW_CFLAGS)
-libgstlal_la_LIBADD = $(gstreamer_LIBS) $(LAL_LIBS) $(GSL_LIBS) $(FFTW_LIBS) $(top_srcdir)/lib/skymap/libwanalysis.la $(top_srcdir)/lib/libgstlal.la $(top_srcdir)/lib/libgstlaltags.la $(top_srcdir)/lib/libgstlaltypes.la
-libgstlal_la_LDFLAGS = $(AM_LDFLAGS) $(GSTREAMER_PLUGIN_LDFLAGS)
+libgstlal_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
+libgstlal_la_LIBADD = $(top_srcdir)/lib/skymap/libwanalysis.la $(top_srcdir)/lib/libgstlal.la $(top_srcdir)/lib/libgstlaltags.la $(top_srcdir)/lib/libgstlaltypes.la $(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS)
+libgstlal_la_LDFLAGS = $(AM_LDFLAGS) $(GSTLAL_PLUGIN_LDFLAGS) $(gstreamer_LDFLAGS)
 
 noinst_HEADERS = gstlal_plugins.h
