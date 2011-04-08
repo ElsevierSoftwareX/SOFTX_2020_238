@@ -66,6 +66,7 @@
 
 
 #include <gstlal.h>
+#include <gstlal_segments.h>
 #include <gstlal_tags.h>
 #include <gstlal_framesrc.h>
 
@@ -91,6 +92,15 @@ static GstBaseSrcClass *parent_class = NULL;
 #define DEFAULT_UNITS_UNIT lalStrainUnit
 
 
+enum property {
+	ARG_SRC_LOCATION = 1,
+	ARG_SRC_INSTRUMENT,
+	ARG_SRC_CHANNEL_NAME,
+	ARG_SRC_UNITS,
+	ARG_SEGMENT_LIST
+};
+
+
 /*
  * ========================================================================
  *
@@ -98,6 +108,17 @@ static GstBaseSrcClass *parent_class = NULL;
  *
  * ========================================================================
  */
+
+
+/*
+ * Get the unit size.
+ */
+
+
+static guint unit_size(GSTLALFrameSrc *element)
+{
+	return element->width / 8;
+}
 
 
 /*
@@ -163,42 +184,121 @@ static GstCaps *series_to_caps(gint rate, LALTYPECODE type)
 
 
 /*
- * Retrieve a chunk of data.
+ * Convert sample offsets to/from times
  */
 
 
-static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint64 length, void **out_series)
+static GstClockTime offset_to_time(GSTLALFrameSrc *element, guint64 offset)
+{
+	return GST_BASE_SRC(element)->segment.start + gst_util_uint64_scale_int_round(offset, GST_SECOND, element->rate);
+}
+
+
+static guint64 time_to_offset(GSTLALFrameSrc *element, GstClockTime t)
+{
+	return gst_util_uint64_scale_int_round(t - GST_BASE_SRC(element)->segment.start, element->rate, GST_SECOND);
+}
+
+
+/*
+ * Determine the size of the next output buffer, and whether or not it's a
+ * gap
+ */
+
+
+static guint64 get_next_buffer_length(GSTLALFrameSrc *element, guint64 offset, gboolean *gap)
 {
 	GstBaseSrc *basesrc = GST_BASE_SRC(element);
 	guint64 segment_length;
-	LIGOTimeGPS start_time;
-	void *series;
+	guint64 length;
 
 	/*
-	 * segment length
+	 * use the blocksize to set the target buffer length
+	 */
+
+	if(gst_base_src_get_blocksize(basesrc) % unit_size(element))
+		GST_WARNING_OBJECT(element, "block size %lu is not an integer multiple of the sample size %lu, rounding down", gst_base_src_get_blocksize(basesrc), unit_size(element));
+	length = gst_base_src_get_blocksize(basesrc) / unit_size(element);
+	if(!length)
+		length = 1;
+
+	/*
+	 * check for EOF, clip buffer length to seek segment
 	 */
 
 	if(GST_CLOCK_TIME_IS_VALID(basesrc->segment.stop))
-		segment_length = gst_util_uint64_scale_int_round(basesrc->segment.stop - basesrc->segment.start, element->rate, GST_SECOND);
+		segment_length = time_to_offset(element, basesrc->segment.stop);
 	else
 		segment_length = G_MAXUINT64;
 
-	/*
-	 * check for EOF, clip requested length to segment
-	 */
-
 	if(offset >= segment_length) {
 		GST_WARNING_OBJECT(element, "requested interval lies outside input domain");
-		return GST_FLOW_UNEXPECTED;
+		length = 0;
 	}
 	if(segment_length - offset < length)
 		length = segment_length - offset;
 
 	/*
+	 * if a segment list is set, figure out if we are in a gap and clip
+	 * the buffer length to the current segment
+	 */
+
+	if(element->segmentlist) {
+		gint index = gstlal_segment_list_index(element->segmentlist, offset_to_time(element, offset));
+		guint64 end_offset;
+
+		if(!gstlal_segment_list_length(element->segmentlist)) {
+			/* no segments in list */
+			*gap = TRUE;
+			end_offset = G_MAXUINT64;
+		} else if(index < 0) {
+			/* current time precedes segments in list */
+			*gap = TRUE;
+			end_offset = time_to_offset(element, gstlal_segment_list_get(element->segmentlist, 0)->start);
+		} else if(time_to_offset(element, gstlal_segment_list_get(element->segmentlist, index)->stop) <= offset) {
+			/* current time is past end of most recent segment
+			 * in list */
+			*gap = TRUE;
+			if(index < gstlal_segment_list_length(element->segmentlist) - 1)
+				/* there is another segment after that one */
+				end_offset = time_to_offset(element, gstlal_segment_list_get(element->segmentlist, index + 1)->start);
+			else
+				/* that was the last segment */
+				end_offset = G_MAXUINT64;
+		} else {
+			/* current time is in most recent segment */
+			*gap = FALSE;
+			end_offset = time_to_offset(element, gstlal_segment_list_get(element->segmentlist, index)->stop);
+		}
+
+		if(end_offset - offset < length)
+			length = end_offset - offset;
+	} else {
+		*gap = FALSE;
+	}
+
+	/*
+	 * done
+	 */
+
+	return length;
+}
+
+
+/*
+ * Retrieve a chunk of data.
+ */
+
+
+static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint64 length, void *dst)
+{
+	LIGOTimeGPS start_time;
+
+	/*
 	 * convert the start sample to a start time
 	 */
 
-	XLALINT8NSToGPS(&start_time, basesrc->segment.start + gst_util_uint64_scale_int_round(offset, GST_SECOND, element->rate));
+	XLALINT8NSToGPS(&start_time, offset_to_time(element, offset));
 
 	/*
 	 * load the buffer
@@ -206,35 +306,61 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 	 * NOTE:  frame files cannot be relied on to provide the correct
 	 * units, so we unconditionally override them with a user-supplied
 	 * value.
+	 *
+	 * NOTE:  we do our own time stamp calculation, we do not rely on
+	 * the timestamps returned y LAL for the buffer metadata.  we do
+	 * this to ensure we have control over the rounding direction when
+	 * the starting sample of a buffer does not correspond to an
+	 * integer nanosecond.  however, we do include a safety check that
+	 * requires the timestamp we compute and the timestamp LAL computes
+	 * to never disagree by more than 1 ns.
 	 */
 
-	GST_LOG_OBJECT(element, "reading %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds);
+	GST_LOG_OBJECT(element, "reading %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" starting at %d.%09u s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds);
 	switch(element->series_type) {
-	case LAL_I4_TYPE_CODE:
-		series = XLALFrReadINT4TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
+	case LAL_I4_TYPE_CODE: {
+		INT4TimeSeries *series = XLALFrReadINT4TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
 		if(!series) {
 			GST_ELEMENT_ERROR(element, RESOURCE, READ, ("XLALFrReadINT4TimeSeries() %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s failed", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds), ("%s", XLALErrorString(XLALGetBaseErrno())));
 			XLALClearErrno();
 			return GST_FLOW_ERROR;
 		}
+		g_assert(llabs((gint64) offset_to_time(element, offset) - (gint64) XLALGPSToINT8NS(&series->epoch)) <= 1);
+		g_assert(round(1.0 / series->deltaT) == element->rate);
+		g_assert(series->data->length == length);
+		memcpy(dst, series->data->data, length * unit_size(element));
+		XLALDestroyINT4TimeSeries(series);
+	}
 		break;
 
-	case LAL_S_TYPE_CODE:
-		series = XLALFrReadREAL4TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
+	case LAL_S_TYPE_CODE: {
+		REAL4TimeSeries *series = XLALFrReadREAL4TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
 		if(!series) {
 			GST_ELEMENT_ERROR(element, RESOURCE, READ, ("XLALFrReadREAL4TimeSeries() %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s failed", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds), ("%s", XLALErrorString(XLALGetBaseErrno())));
 			XLALClearErrno();
 			return GST_FLOW_ERROR;
 		}
+		g_assert(llabs((gint64) offset_to_time(element, offset) - (gint64) XLALGPSToINT8NS(&series->epoch)) <= 1);
+		g_assert(round(1.0 / series->deltaT) == element->rate);
+		g_assert(series->data->length == length);
+		memcpy(dst, series->data->data, length * unit_size(element));
+		XLALDestroyREAL4TimeSeries(series);
+	}
 		break;
 
-	case LAL_D_TYPE_CODE:
-		series = XLALFrReadREAL8TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
+	case LAL_D_TYPE_CODE: {
+		REAL8TimeSeries *series = XLALFrReadREAL8TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
 		if(!series) {
 			GST_ELEMENT_ERROR(element, RESOURCE, READ, ("XLALFrReadREAL8TimeSeries() %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s failed", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds), ("%s", XLALErrorString(XLALGetBaseErrno())));
 			XLALClearErrno();
 			return GST_FLOW_ERROR;
 		}
+		g_assert(llabs((gint64) offset_to_time(element, offset) - (gint64) XLALGPSToINT8NS(&series->epoch)) <= 1);
+		g_assert(round(1.0 / series->deltaT) == element->rate);
+		g_assert(series->data->length == length);
+		memcpy(dst, series->data->data, length * unit_size(element));
+		XLALDestroyREAL8TimeSeries(series);
+	}
 		break;
 
 	default:
@@ -246,98 +372,7 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 	 * done
 	 */
 
-	/* FIXME: Can XLALFrRead?????TimeSeries can return NULL on success? */
-
-	*out_series = series;
 	return GST_FLOW_OK;
-}
-
-
-/*
- * ============================================================================
- *
- *                                 Properties
- *
- * ============================================================================
- */
-
-
-enum property {
-	ARG_SRC_LOCATION = 1,
-	ARG_SRC_INSTRUMENT,
-	ARG_SRC_CHANNEL_NAME,
-	ARG_SRC_UNITS
-};
-
-
-static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
-{
-	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
-
-	GST_OBJECT_LOCK(element);
-
-	switch(id) {
-	case ARG_SRC_LOCATION:
-		g_free(element->location);
-		element->location = g_value_dup_string(value);
-		break;
-
-	case ARG_SRC_INSTRUMENT:
-		g_free(element->instrument);
-		element->instrument = g_value_dup_string(value);
-		g_free(element->full_channel_name);
-		element->full_channel_name = gstlal_build_full_channel_name(element->instrument, element->channel_name);
-		break;
-
-	case ARG_SRC_CHANNEL_NAME:
-		g_free(element->channel_name);
-		element->channel_name = g_value_dup_string(value);
-		g_free(element->full_channel_name);
-		element->full_channel_name = gstlal_build_full_channel_name(element->instrument, element->channel_name);
-		break;
-
-	case ARG_SRC_UNITS: {
-		const char *units = g_value_get_string(value);
-		if(!units || !strlen(units))
-			element->units = lalDimensionlessUnit;
-		else
-			XLALParseUnitString(&element->units, units);
-		break;
-	}
-	}
-
-	GST_OBJECT_UNLOCK(element);
-}
-
-
-static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
-{
-	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
-
-	GST_OBJECT_LOCK(element);
-
-	switch(id) {
-	case ARG_SRC_LOCATION:
-		g_value_set_string(value, element->location);
-		break;
-
-	case ARG_SRC_INSTRUMENT:
-		g_value_set_string(value, element->instrument);
-		break;
-
-	case ARG_SRC_CHANNEL_NAME:
-		g_value_set_string(value, element->channel_name);
-		break;
-
-	case ARG_SRC_UNITS: {
-		char units[100];
-		XLALUnitAsString(units, sizeof(units), &element->units);
-		g_value_set_string(value, units);
-		break;
-	}
-	}
-
-	GST_OBJECT_UNLOCK(element);
 }
 
 
@@ -581,13 +616,15 @@ static gboolean stop(GstBaseSrc *object)
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(basesrc);
+	guint64 buffer_length;
+	gboolean next_is_gap = FALSE;
 	GstFlowReturn result;
 
 	/*
 	 * Push tag list if we haven't already
 	 */
 
-	if (element->need_tags) {
+	if(element->need_tags) {
 		GstEvent *evt;
 		GstTagList *taglist;
 		char units[100];
@@ -600,19 +637,19 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			NULL
 		);
 
-		if (!taglist) {
+		if(!taglist) {
 			GST_ELEMENT_ERROR(element, CORE, TAG, ("failure constructing taglist"), (NULL));
 			return GST_FLOW_ERROR;
 		}
 
 		evt = gst_event_new_tag(taglist);
 
-		if (!evt) {
+		if(!evt) {
 			GST_ELEMENT_ERROR(element, CORE, TAG, ("failure constructing tag event"), (NULL));
 			return GST_FLOW_ERROR;
 		}
 
-		if (!gst_pad_push_event(GST_BASE_SRC_PAD(basesrc), evt)) {
+		if(!gst_pad_push_event(GST_BASE_SRC_PAD(basesrc), evt)) {
 			GST_ELEMENT_ERROR(element, CORE, TAG, ("failure pusing tag event"), (NULL));
 			return GST_FLOW_ERROR;
 		}
@@ -627,127 +664,61 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	*buffer = NULL;
 
 	/*
-	 * Read data
-	 *
-	 * We compute our own time stamps by counting the number of samples
-	 * that have elapsed since the start of the segment.  We do this so
-	 * that downstream elements that perform strict comparisons of
-	 * timestamps to offsets are happy with what they see, otherwise
-	 * there can be problems when the very first sample doesn't
-	 * correspond to an integer nanosecond boundary because then the
-	 * subsequent rounding of buffer start times won't match what
-	 * downstream elements expect.  We require our computed time stamp
-	 * and the time stamp reported by LAL to never disagree by more
-	 * than 1 ns.  The buffer duration is computed by imposing
-	 * "timestamp + duration = next timestamp", and we require the
-	 * result to not disagree by more than 1 ns from the duration
+	 * Determine the size of the next output buffer, and whether or not
+	 * it's a gap
+	 */
+
+	buffer_length = get_next_buffer_length(element, basesrc->offset, &next_is_gap);
+	if(buffer_length == 0) {
+		/* end of stream */
+		return GST_FLOW_UNEXPECTED;
+	}
+
+	/*
+	 * Construct and populate output buffer
+	 */
+
+	result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, buffer_length * unit_size(element), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
+	if(result != GST_FLOW_OK)
+		return result;
+	if(basesrc->offset != GST_BUFFER_OFFSET(*buffer) || buffer_length * unit_size(element) != GST_BUFFER_SIZE(*buffer)) {
+		/* FIXME:  didn't get the buffer offset we asked
+		 * for, do something about it */
+		GST_FIXME_OBJECT(element, "gst_pad_alloc_buffer() didn't give us the offset we asked for.  do something about it, but what?");
+	}
+	if(!next_is_gap) {
+		result = read_series(element, basesrc->offset, buffer_length, GST_BUFFER_DATA(*buffer));
+		if(result != GST_FLOW_OK) {
+			gst_buffer_unref(*buffer);
+			*buffer = NULL;
+			return result;
+		}
+	} else
+		memset(GST_BUFFER_DATA(*buffer), 0, GST_BUFFER_SIZE(*buffer));
+
+	/*
+	 * Set the buffer metadata.  The buffer duration is computed by
+	 * imposing "timestamp + duration = next timestamp", and we require
+	 * the result to not disagree by more than 1 ns from the duration
 	 * obtained by converting the count of samples to an exactly
 	 * rounded duration.
 	 */
 
-	switch(element->series_type) {
-	case LAL_I4_TYPE_CODE: {
-		INT4TimeSeries *chunk;
-		if(gst_base_src_get_blocksize(basesrc) % sizeof(*chunk->data->data)) {
-			GST_ERROR_OBJECT(element, "block size %lu is not an integer multiple of the sample size %lu", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
-			return GST_FLOW_ERROR;
-		}
-		result = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data), (void**) &chunk);
-		if(result != GST_FLOW_OK)
-			return result;
-		g_assert(round(1.0 / chunk->deltaT) == element->rate);
-		result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
-		if(result != GST_FLOW_OK) {
-			XLALDestroyINT4TimeSeries(chunk);
-			return result;
-		}
-		if(basesrc->offset != GST_BUFFER_OFFSET(*buffer) || chunk->data->length * sizeof(*chunk->data->data) != GST_BUFFER_SIZE(*buffer)) {
-			/* FIXME:  didn't get the buffer offset we asked
-			 * for, do something about it */
-			GST_FIXME_OBJECT(element, "gst_pad_alloc_buffer() didn't give us the offset we asked for.  do something about it, but what?");
-		}
-		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
-		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
-		GST_BUFFER_TIMESTAMP(*buffer) = basesrc->segment.start + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(*buffer), GST_SECOND, element->rate);
-		g_assert(llabs((gint64) GST_BUFFER_TIMESTAMP(*buffer) - (gint64) XLALGPSToINT8NS(&chunk->epoch)) <= 1);
-		GST_BUFFER_DURATION(*buffer) = basesrc->segment.start + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(*buffer), GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(*buffer);
-		g_assert(llabs((gint64) GST_BUFFER_DURATION(*buffer) - (gint64) gst_util_uint64_scale_int_round(chunk->data->length, GST_SECOND, element->rate)) <= 1);
-		if(basesrc->offset == 0)
-			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
-		basesrc->offset += chunk->data->length;
-		XLALDestroyINT4TimeSeries(chunk);
-		break;
-	}
+	GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + buffer_length;
+	GST_BUFFER_TIMESTAMP(*buffer) = offset_to_time(element, GST_BUFFER_OFFSET(*buffer));
+	GST_BUFFER_DURATION(*buffer) = offset_to_time(element, GST_BUFFER_OFFSET_END(*buffer)) - GST_BUFFER_TIMESTAMP(*buffer);
+	g_assert(llabs((gint64) GST_BUFFER_DURATION(*buffer) - (gint64) gst_util_uint64_scale_int_round(GST_BUFFER_SIZE(*buffer) / unit_size(element), GST_SECOND, element->rate)) <= 1);
+	if(basesrc->offset == 0)
+		GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
+	if(next_is_gap)
+		GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_GAP);
+	else
+		GST_BUFFER_FLAG_UNSET(*buffer, GST_BUFFER_FLAG_GAP);
+	basesrc->offset += buffer_length;
 
-	case LAL_S_TYPE_CODE: {
-		REAL4TimeSeries *chunk;
-		if(gst_base_src_get_blocksize(basesrc) % sizeof(*chunk->data->data)) {
-			GST_ERROR_OBJECT(element, "block size %lu is not an integer multiple of the sample size %lu", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
-			return GST_FLOW_ERROR;
-		}
-		result = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data), (void**) &chunk);
-		if(result != GST_FLOW_OK)
-			return result;
-		g_assert(round(1.0 / chunk->deltaT) == element->rate);
-		result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
-		if(result != GST_FLOW_OK) {
-			XLALDestroyREAL4TimeSeries(chunk);
-			return result;
-		}
-		if(basesrc->offset != GST_BUFFER_OFFSET(*buffer) || chunk->data->length * sizeof(*chunk->data->data) != GST_BUFFER_SIZE(*buffer)) {
-			/* FIXME:  didn't get the buffer offset we asked
-			 * for, do something about it */
-			GST_FIXME_OBJECT(element, "gst_pad_alloc_buffer() didn't give us the offset we asked for.  do something about it, but what?");
-		}
-		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
-		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
-		GST_BUFFER_TIMESTAMP(*buffer) = basesrc->segment.start + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(*buffer), GST_SECOND, element->rate);
-		g_assert(llabs((gint64) GST_BUFFER_TIMESTAMP(*buffer) - (gint64) XLALGPSToINT8NS(&chunk->epoch)) <= 1);
-		GST_BUFFER_DURATION(*buffer) = basesrc->segment.start + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(*buffer), GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(*buffer);
-		g_assert(llabs((gint64) GST_BUFFER_DURATION(*buffer) - (gint64) gst_util_uint64_scale_int_round(chunk->data->length, GST_SECOND, element->rate)) <= 1);
-		if(basesrc->offset == 0)
-			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
-		basesrc->offset += chunk->data->length;
-		XLALDestroyREAL4TimeSeries(chunk);
-		break;
-	}
-
-	case LAL_D_TYPE_CODE: {
-		REAL8TimeSeries *chunk;
-		if(gst_base_src_get_blocksize(basesrc) % sizeof(*chunk->data->data)) {
-			GST_ERROR_OBJECT(element, "block size %lu is not an integer multiple of the sample size %lu", gst_base_src_get_blocksize(basesrc), sizeof(*chunk->data->data));
-			return GST_FLOW_ERROR;
-		}
-		result = read_series(element, basesrc->offset, gst_base_src_get_blocksize(basesrc) / sizeof(*chunk->data->data), (void**) &chunk);
-		if(result != GST_FLOW_OK)
-			return result;
-		g_assert(round(1.0 / chunk->deltaT) == element->rate);
-		result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, chunk->data->length * sizeof(*chunk->data->data), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
-		if(result != GST_FLOW_OK) {
-			XLALDestroyREAL8TimeSeries(chunk);
-			return result;
-		}
-		if(basesrc->offset != GST_BUFFER_OFFSET(*buffer) || chunk->data->length * sizeof(*chunk->data->data) != GST_BUFFER_SIZE(*buffer)) {
-			/* FIXME:  didn't get the buffer offset we asked
-			 * for, do something about it */
-			GST_FIXME_OBJECT(element, "gst_pad_alloc_buffer() didn't give us the offset we asked for.  do something about it, but what?");
-		}
-		memcpy(GST_BUFFER_DATA(*buffer), chunk->data->data, GST_BUFFER_SIZE(*buffer));
-		GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + chunk->data->length;
-		GST_BUFFER_TIMESTAMP(*buffer) = basesrc->segment.start + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(*buffer), GST_SECOND, element->rate);
-		g_assert(llabs((gint64) GST_BUFFER_TIMESTAMP(*buffer) - (gint64) XLALGPSToINT8NS(&chunk->epoch)) <= 1);
-		GST_BUFFER_DURATION(*buffer) = basesrc->segment.start + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(*buffer), GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(*buffer);
-		g_assert(llabs((gint64) GST_BUFFER_DURATION(*buffer) - (gint64) gst_util_uint64_scale_int_round(chunk->data->length, GST_SECOND, element->rate)) <= 1);
-		if(basesrc->offset == 0)
-			GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
-		basesrc->offset += chunk->data->length;
-		XLALDestroyREAL8TimeSeries(chunk);
-		break;
-	}
-
-	default:
-		break;
-	}
+	/*
+	 * Done
+	 */
 
 	return GST_FLOW_OK;
 }
@@ -789,9 +760,11 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 	 */
 
 	if(XLALFrSeek(element->stream, &epoch)) {
-		GST_ELEMENT_ERROR(element, RESOURCE, SEEK, ("XLALFrSeek() to %d.%09u s failed", epoch.gpsSeconds, epoch.gpsNanoSeconds), ("%s", XLALErrorString(XLALGetBaseErrno())));
+		GST_ERROR_OBJECT(element, "XLALFrSeek() to %d.%09u s failed: %s", epoch.gpsSeconds, epoch.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
 		XLALClearErrno();
-		return FALSE;
+		/* FIXME:  figure out how to stop the initial seek to 0 */
+		/*return FALSE;*/
+		GST_FIXME_OBJECT(element, "ignoring XLALFrSeek() failure");
 	}
 
 	/*
@@ -831,15 +804,15 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 				GST_DEBUG("requested time precedes start of segment, clipping to start of segment");
 				offset = 0;
 			} else
-				offset = gst_util_uint64_scale_int_round(src_value - basesrc->segment.start, element->rate, GST_SECOND);
+				offset = time_to_offset(element, src_value);
 			break;
 
 		case GST_FORMAT_BYTES:
-			offset = src_value / (element->width / 8);
+			offset = src_value / unit_size(element);
 			break;
 
 		case GST_FORMAT_BUFFERS:
-			offset = gst_util_uint64_scale_int_round(src_value, gst_base_src_get_blocksize(basesrc), element->width / 8);
+			offset = gst_util_uint64_scale_int_round(src_value, gst_base_src_get_blocksize(basesrc), unit_size(element));
 			break;
 
 		case GST_FORMAT_PERCENT:
@@ -861,19 +834,19 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 		switch(dest_format) {
 		case GST_FORMAT_DEFAULT:
 		case GST_FORMAT_TIME:
-			dest_value = basesrc->segment.start + gst_util_uint64_scale_int_round(offset, GST_SECOND, element->rate);
+			dest_value = offset_to_time(element, offset);
 			break;
 
 		case GST_FORMAT_BYTES:
-			dest_value = offset * (element->width / 8);
+			dest_value = offset * unit_size(element);
 			break;
 
 		case GST_FORMAT_BUFFERS:
-			dest_value = gst_util_uint64_scale_int_ceil(offset, element->width / 8, gst_base_src_get_blocksize(basesrc));
+			dest_value = gst_util_uint64_scale_int_ceil(offset, unit_size(element), gst_base_src_get_blocksize(basesrc));
 			break;
 
 		case GST_FORMAT_PERCENT:
-			dest_value = gst_util_uint64_scale_int_round(offset, 100, gst_util_uint64_scale_int_round(basesrc->segment.stop - basesrc->segment.start, element->rate, GST_SECOND));
+			dest_value = gst_util_uint64_scale_int_round(offset, 100, time_to_offset(element, basesrc->segment.stop));
 			break;
 
 		default:
@@ -882,7 +855,6 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 		}
 
 		gst_query_set_convert(query, src_format, src_value, dest_format, dest_value);
-
 		break;
 	}
 
@@ -908,10 +880,92 @@ static gboolean check_get_range(GstBaseSrc *basesrc)
 /*
  * ============================================================================
  *
- *                                Type Support
+ *                          GObject Method Overrides
  *
  * ============================================================================
  */
+
+
+static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
+{
+	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch(id) {
+	case ARG_SRC_LOCATION:
+		g_free(element->location);
+		element->location = g_value_dup_string(value);
+		break;
+
+	case ARG_SRC_INSTRUMENT:
+		g_free(element->instrument);
+		element->instrument = g_value_dup_string(value);
+		g_free(element->full_channel_name);
+		element->full_channel_name = gstlal_build_full_channel_name(element->instrument, element->channel_name);
+		break;
+
+	case ARG_SRC_CHANNEL_NAME:
+		g_free(element->channel_name);
+		element->channel_name = g_value_dup_string(value);
+		g_free(element->full_channel_name);
+		element->full_channel_name = gstlal_build_full_channel_name(element->instrument, element->channel_name);
+		break;
+
+	case ARG_SRC_UNITS: {
+		const char *units = g_value_get_string(value);
+		if(!units || !strlen(units))
+			element->units = lalDimensionlessUnit;
+		else
+			XLALParseUnitString(&element->units, units);
+		break;
+	}
+
+	case ARG_SEGMENT_LIST:
+		gstlal_segment_list_free(element->segmentlist);
+		element->segmentlist = gstlal_segment_list_from_g_value_array(g_value_get_boxed(value));
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
+
+
+static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
+{
+	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch(id) {
+	case ARG_SRC_LOCATION:
+		g_value_set_string(value, element->location);
+		break;
+
+	case ARG_SRC_INSTRUMENT:
+		g_value_set_string(value, element->instrument);
+		break;
+
+	case ARG_SRC_CHANNEL_NAME:
+		g_value_set_string(value, element->channel_name);
+		break;
+
+	case ARG_SRC_UNITS: {
+		char units[100];
+		XLALUnitAsString(units, sizeof(units), &element->units);
+		g_value_set_string(value, units);
+		break;
+	}
+
+	case ARG_SEGMENT_LIST:
+		if(element->segmentlist)
+			g_value_take_boxed(value, g_value_array_from_gstlal_segment_list(element->segmentlist));
+		/* FIXME:  else? */
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
 
 
 /*
@@ -1046,6 +1100,29 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SEGMENT_LIST,
+		g_param_spec_value_array(
+			"segment-list",
+			"Segment List",
+			"List of Segments.  This is an Nx2 array where N (the rows) is the number of segments.  The columns are the start and stop times of each segment in integer nanoseconds.",
+			g_param_spec_value_array(
+				"segment",
+				"[start, stop)",
+				"Start and stop time of segment in nanoseconds.",
+				g_param_spec_uint64(
+					"time",
+					"Time",
+					"Time in nanoseconds.",
+					0, G_MAXUINT64, 0,
+					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+				),
+				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			),
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 
 	/*
 	 * GstBaseSrc method overrides
@@ -1085,6 +1162,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->stream = NULL;
 	element->units = DEFAULT_UNITS_UNIT;
 	element->series_type = -1;
+	element->segmentlist = NULL;
 
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
 

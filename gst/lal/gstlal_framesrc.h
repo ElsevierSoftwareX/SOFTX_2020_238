@@ -25,6 +25,7 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstbasesrc.h>
+#include <gstlal_segments.h>
 
 #include <lal/FrameStream.h>
 #include <lal/LALDatatypes.h>
@@ -65,6 +66,7 @@ typedef struct {
 	FrStream *stream;
 	LALTYPECODE series_type;
 	LALUnit units;
+	struct gstlal_segment_list *segmentlist;
 } GSTLALFrameSrc;
 
 
