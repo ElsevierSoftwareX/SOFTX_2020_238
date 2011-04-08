@@ -42,8 +42,10 @@ struct gstlal_segment *gstlal_segment_new(guint64, guint64);
 void gstlal_segment_free(struct gstlal_segment *);
 struct gstlal_segment_list *gstlal_segment_list_new(void);
 void gstlal_segment_list_free(struct gstlal_segment_list *);
+gint gstlal_segment_list_length(const struct gstlal_segment_list *);
 struct gstlal_segment_list *gstlal_segment_list_append(struct gstlal_segment_list *, struct gstlal_segment *);
 gint gstlal_segment_list_index(const struct gstlal_segment_list *, guint64);
+struct gstlal_segment *gstlal_segment_list_get(struct gstlal_segment_list *, gint);
 struct gstlal_segment_list *gstlal_segment_list_get_range(const struct gstlal_segment_list *, guint64, guint64);
 
 struct gstlal_segment_list *gstlal_segment_list_from_g_value_array(GValueArray *);

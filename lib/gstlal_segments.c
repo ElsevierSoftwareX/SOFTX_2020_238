@@ -67,6 +67,12 @@ void gstlal_segment_list_free(struct gstlal_segment_list *segmentlist)
 }
 
 
+gint gstlal_segment_list_length(const struct gstlal_segment_list *segmentlist)
+{
+	return segmentlist->length;
+}
+
+
 struct gstlal_segment_list *gstlal_segment_list_append(struct gstlal_segment_list *segmentlist, struct gstlal_segment *segment)
 {
 	struct gstlal_segment *new_segments = g_try_realloc(segmentlist->segments, (segmentlist->length + 1) * sizeof(*segment));
@@ -91,6 +97,12 @@ gint gstlal_segment_list_index(const struct gstlal_segment_list *segmentlist, gu
 		if(segmentlist->segments[i].start <= t)
 			break;
 	return i;
+}
+
+
+struct gstlal_segment *gstlal_segment_list_get(struct gstlal_segment_list *segmentlist, gint index)
+{
+	return &segmentlist->segments[index];
 }
 
 
