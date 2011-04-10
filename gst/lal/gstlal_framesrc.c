@@ -1,7 +1,7 @@
 /*
  * LAL cache-based .gwf frame file src element
  *
- * Copyright (C) 2008  Kipp C. Cannon
+ * Copyright (C) 2008-2011  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -797,6 +797,10 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 
 		gst_query_parse_convert(query, &src_format, &src_value, &dest_format, &dest_value);
 
+		/*
+		 * convert all source formats to a sample offset
+		 */
+
 		switch(src_format) {
 		case GST_FORMAT_DEFAULT:
 		case GST_FORMAT_TIME:
@@ -821,16 +825,20 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 				offset = 0;
 			} else if(src_value > 100) {
 				GST_DEBUG("requested percentage > 100, clipping to 100");
-				offset = basesrc->segment.stop - basesrc->segment.start;
+				offset = time_to_offset(element, basesrc->segment.stop);
 			} else
-				offset = gst_util_uint64_scale_int_round(basesrc->segment.stop - basesrc->segment.start, src_value, 100);
-			offset = gst_util_uint64_scale_int_round(offset, element->rate, GST_SECOND);
+				offset = gst_util_uint64_scale_int_round(src_value, time_to_offset(element, basesrc->segment.stop), 100);
 			break;
 
 		default:
 			g_assert_not_reached();
 			return FALSE;
 		}
+
+		/*
+		 * convert sample offset to destination format
+		 */
+
 		switch(dest_format) {
 		case GST_FORMAT_DEFAULT:
 		case GST_FORMAT_TIME:
