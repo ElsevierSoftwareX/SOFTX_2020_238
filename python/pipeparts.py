@@ -497,7 +497,7 @@ def mkplaybacksink(pipeline, src, amplification = 0.1):
 	gst.element_link_many(src, *elems)
 
 
-def mkappsink(pipeline, src, **properties):
+def mkappsink(pipeline, src, pad = None, **properties):
 	elem = gst.element_factory_make("appsink")
 	elem.set_property("sync", False)
 	elem.set_property("async", False)
@@ -507,7 +507,10 @@ def mkappsink(pipeline, src, **properties):
 	for name, value in properties.items():
 		elem.set_property(name, value)
 	pipeline.add(elem)
-	src.link(elem)
+	if pad is not None:
+		src.link_pads(pad, elem, "sink")
+	else:
+		src.link(elem)
 	return elem
 
 def mkchecktimestamps(pipeline, src, name = None, silent = True):
