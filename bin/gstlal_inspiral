@@ -301,8 +301,17 @@ src = lloidparts.mkLLOIDmulti(
 #
 
 options.out_seg = segments.segment(options.seg[0]+max([b.filter_length for b in banks]), options.seg[1]) #FIXME make better outseg def.
-data = ligolw_output.Data(options, detectors)
-data.prepare_output_file(process_params)
+data = ligolw_output.Data(
+	filename = options.output,
+	process_params = process_params,
+	ifos = set(detectors),
+	seg = options.seg,
+	out_seg = options.out_seg,
+	injection_filename = options.injections,
+	comment = options.comment,
+	tmp_path = options.tmp_space,
+	verbose = options.verbose
+)
 
 def appsink_new_buffer(elem, data):
 	for row in sngl_inspirals_from_buffer(elem.get_property("last-buffer")):
@@ -355,7 +364,7 @@ mainloop.run()
 #
 
 
-data.write_output_file()
+data.write_output_file(verbose = options.verbose)
 
 #
 # done
