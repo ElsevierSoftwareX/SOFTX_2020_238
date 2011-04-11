@@ -30,6 +30,8 @@ from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
+from pylal.datatypes import LIGOTimeGPS
+lsctables.LIGOTimeGPS = LIGOTimeGPS
 
 
 #
@@ -124,21 +126,21 @@ class Data(object):
 	def __init__(self, filename, process_params, ifos, seg, out_seg, injection_filename = None, comment = None, tmp_path = None, verbose = False):
 		self.lock = threading.Lock()
 		self.filename = filename
-		xmldoc = ligolw.Document()
-		xmldoc.appendChild(ligolw.LIGO_LW())
-		self.process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral", process_params, comment = comment, ifos = ifos)
-		search_summary = add_cbc_metadata(xmldoc, self.process, seg, out_seg)
+		self.xmldoc = ligolw.Document()
+		self.xmldoc.appendChild(ligolw.LIGO_LW())
+		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, "gstlal_inspiral", process_params, comment = comment, ifos = ifos)
+		self.search_summary = add_cbc_metadata(self.xmldoc, self.process, seg, out_seg)
 		# FIXME:  argh, ugly
-		sngl_inspiral_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
+		self.sngl_inspiral_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
 
-		sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))	# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
+		self.sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))	# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
 
 		# Add injections table if necessary
 		if injection_filename is not None:
 			from glue.ligolw.utils import ligolw_add
-			ligolw_add.ligolw_add(xmldoc, [injection_filename], verbose = verbose)
+			ligolw_add.ligolw_add(self.xmldoc, [injection_filename], verbose = verbose)
 
-		if filename.endswith('.sqlite'):
+		if filename is not None and filename.endswith('.sqlite'):
 			from glue.ligolw.utils import ligolw_sqlite
 			from glue.ligolw import dbtables
 			self.working_filename = dbtables.get_connection_filename(filename, tmp_path = tmp_path, replace_file = True, verbose = verbose)
@@ -147,14 +149,12 @@ class Data(object):
 			dbtables.idmap_create(self.connection)
 			dbtables.DBTable.append = dbtables.DBTable._remapping_append
 			dbtables.idmap_sync(self.connection)
-			ligolw_sqlite.insert_from_xmldoc(self.connection, xmldoc, preserve_ids = False, verbose = verbose)
-			xmldoc.unlink()
+			ligolw_sqlite.insert_from_xmldoc(self.connection, self.xmldoc, preserve_ids = False, verbose = verbose)
+			self.xmldoc.unlink()
 			self.xmldoc = dbtables.get_xml(self.connection)
 			self.sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
 		else:
-			self.xmldoc = xmldoc
 			self.connection = None
-			self.sngl_inspiral_table = sngl_inspiral_table
 
 	def write_output_file(self, verbose = False):
 		if self.connection is not None:
@@ -168,8 +168,6 @@ class Data(object):
 			dbtables.put_connection_filename(self.filename, self.working_filename, verbose = verbose)
 		else:
 			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
-			search_summary, = [row for row in lsctables.table.get_table(self.xmldoc, lsctables.SearchSummaryTable.tableName) if row.process_id == self.process.process_id]
-			search_summary.nevents = len(self.sngl_inspiral_table)
+			self.search_summary.nevents = len(self.sngl_inspiral_table)
 			ligolw_process.set_process_end_time(self.process)
 			utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose)
-
