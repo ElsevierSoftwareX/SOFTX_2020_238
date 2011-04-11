@@ -605,23 +605,29 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 			))
 
 	#
-	# if there is more than one trigger source, use an n-to-1 adapter
-	# to combine into a single stream
+	# if there is more than one trigger source, synchronize the streams
+	# with a multiqueue then use an n-to-1 adapter to combine into a
+	# single stream
 	#
-	# FIXME:  it has been reported that the input selector breaks
-	# seeks.  confirm and fix if needed
 
 	assert len(triggersrc) > 0
 	if len(triggersrc) > 1:
+		# send all streams through a multiqueue
+		queue = gst.element_factory_make("multiqueue")
+		pipeline.add(queue)
+		for head in triggersrc:
+			head.link(queue)
+		triggersrc = queue
+		# FIXME:  it has been reported that the input selector
+		# breaks seeks.  confirm and fix if needed
 		# FIXME:  input-selector in 0.10.32 no longer has the
 		# "select-all" feature.  need to get this re-instated
-		assert False	# force crash until input-selector problem is fixed
-		nto1 = gst.element_factory_make("input-selector")
-		nto1.set_property("select-all", True)
-		pipeline.add(nto1)
-		for head in triggersrc:
-			pipeparts.mkqueue(pipeline, head).link(nto1)
-		triggersrc = nto1
+		#nto1 = gst.element_factory_make("input-selector")
+		#nto1.set_property("select-all", True)
+		#pipeline.add(nto1)
+		#for pad in queue.src_pads():
+		#	pad.link(nto1)
+		#triggersrc = nto1
 	else:
 		# len(triggersrc) == 1
 		triggersrc, = triggersrc
