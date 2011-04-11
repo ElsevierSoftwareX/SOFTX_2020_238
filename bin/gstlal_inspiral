@@ -335,7 +335,7 @@ output = ligolw_output.Data(
 def appsink_new_buffer(elem, output):
 	output.lock.acquire()
 	for row in sngl_inspirals_from_buffer(elem.emit("pull-buffer")):
-		if (row.end_time + 1e-9*row.end_time_ns) in output.out_seg:
+		if (row.end_time + 1e-9*row.end_time_ns) in output.search_summary.get_out():
 			row.process_id = output.process.process_id
 			row.event_id = output.sngl_inspiral_table.get_next_id()
 			output.sngl_inspiral_table.append(row)
