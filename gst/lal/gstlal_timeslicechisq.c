@@ -251,14 +251,12 @@ static GstCaps *sink_getcaps(GstPad *pad)
 	peercaps = gst_pad_peer_get_caps(element->srcpad);
 	if(peercaps) {
 		GstCaps *result;
-		gint width;
 		GValue value = {0,};
 		g_value_init(&value, G_TYPE_INT);
 		GstStructure *peercaps_struct = gst_caps_steal_structure(peercaps, 0);
-		gst_structure_get_int(peercaps_struct, "width", &width);
 		gst_structure_set_name(peercaps_struct, (const gchar *) "audio/x-raw-complex");
 		gst_caps_append_structure(peercaps, peercaps_struct);
-		g_value_set_int(&value, width * 2);
+		g_value_set_int(&value, 128);
 		gst_caps_set_value(peercaps, "width", &value);
 
 		GST_DEBUG_OBJECT(element, "intersecting %" GST_PTR_FORMAT " and %" GST_PTR_FORMAT, caps, peercaps);
@@ -304,14 +302,12 @@ static GstCaps *src_getcaps(GstPad *pad)
 			peercaps = gst_pad_peer_get_caps(otherpad);
 			if(peercaps) {
 				GstCaps *result;
-				gint width;
 				GValue value = {0,};
 				g_value_init(&value, G_TYPE_INT);
 				GstStructure *peercaps_struct = gst_caps_steal_structure(peercaps, 0);
-				gst_structure_get_int(peercaps_struct, "width", &width);
 				gst_structure_set_name(peercaps_struct, (const gchar *) "audio/x-raw-float");
 				gst_caps_append_structure(peercaps, peercaps_struct);
-				g_value_set_int(&value, width / 2);
+				g_value_set_int(&value, 64);
 				gst_caps_set_value(peercaps, "width", &value);
 
 				GST_DEBUG_OBJECT(element, "intersecting %" GST_PTR_FORMAT " and %" GST_PTR_FORMAT, caps, peercaps);
