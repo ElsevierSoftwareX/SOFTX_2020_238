@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2010
+# Copyright (C) 2010-2011
 # Kipp Cannon <kipp.cannon@ligo.org>
 # Chad Hanna <chad.hanna@ligo.org>
 #
@@ -18,6 +18,8 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
 
+
+import threading
 try:
 	import sqlite3
 except ImportError:
@@ -120,6 +122,7 @@ def make_process_params(options):
 
 class Data(object):
 	def __init__(self, filename, process_params, ifos, seg, out_seg, injection_filename = None, comment = None, tmp_path = None, verbose = False):
+		self.lock = threading.Lock()
 		self.filename = filename
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())

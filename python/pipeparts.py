@@ -503,7 +503,7 @@ def mkappsink(pipeline, src, pad = None, **properties):
 	elem.set_property("async", False)
 	elem.set_property("emit-signals", True)
 	elem.set_property("max-buffers", 1)
-	elem.set_property("drop", True)
+	elem.set_property("drop", False)
 	for name, value in properties.items():
 		elem.set_property(name, value)
 	pipeline.add(elem)
