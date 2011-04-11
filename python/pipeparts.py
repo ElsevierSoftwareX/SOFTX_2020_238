@@ -254,7 +254,7 @@ def mknofakedisconts(pipeline, src, silent = True):
 	return elem
 
 
-def mkfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = None):
+def mkfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = None, block_length = None):
 	elem = gst.element_factory_make("lal_firbank")
 	if latency is not None:
 		elem.set_property("latency", latency)
@@ -262,6 +262,8 @@ def mkfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = No
 		elem.set_property("fir-matrix", fir_matrix)
 	if time_domain is not None:
 		elem.set_property("time-domain", time_domain)
+	if block_length is not None:
+		elem.set_property("block-length", block_length)
 	pipeline.add(elem)
 	src.link(elem)
 	elem = mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed
@@ -497,18 +499,18 @@ def mkplaybacksink(pipeline, src, amplification = 0.1):
 	gst.element_link_many(src, *elems)
 
 
-def mkappsink(pipeline, src, pad = None, **properties):
+def mkappsink(pipeline, src, pad_name = None, max_buffers = 1, drop = False, **properties):
 	elem = gst.element_factory_make("appsink")
 	elem.set_property("sync", False)
 	elem.set_property("async", False)
 	elem.set_property("emit-signals", True)
-	elem.set_property("max-buffers", 1)
-	elem.set_property("drop", False)
+	elem.set_property("max-buffers", max_buffers)
+	elem.set_property("drop", drop)
 	for name, value in properties.items():
 		elem.set_property(name, value)
 	pipeline.add(elem)
-	if pad is not None:
-		src.link_pads(pad, elem, "sink")
+	if pad_name is not None:
+		src.link_pads(pad_name, elem, "sink")
 	else:
 		src.link(elem)
 	return elem
