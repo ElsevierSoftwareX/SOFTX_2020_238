@@ -374,7 +374,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# need to be here, or it might be a symptom of a bug elsewhere.
 	# figure this out.
 
-	src = pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank)
+	src = pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank, block_length = bank_fragment.orthogonal_template_bank.shape[1] * 2, time_domain = max(bank.get_rates()) / bank_fragment.rate >= 32)
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank" % logname)
 	src = pipeparts.mkreblock(pipeline, src, block_duration = 1 * gst.SECOND)
 	src = pipeparts.mktee(pipeline, src)
