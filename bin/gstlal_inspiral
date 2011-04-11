@@ -58,8 +58,6 @@ from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals
 #
 
 
-
-
 def parse_command_line():
 	parser = OptionParser(
 		description = __doc__
@@ -187,7 +185,7 @@ options, filenames, process_params = parse_command_line()
 
 
 if options.vetoes is not None:
-	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes), options.veto_segments_name).coalesce()
+	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes, verbose = options.verbose), options.veto_segments_name).coalesce()
 else:
 	veto_segments = None
 
@@ -209,7 +207,6 @@ import gst
 
 from gstlal import pipeparts
 from gstlal import lloidparts
-from gstlal import templates
 from gstlal import svd_bank
 from gstlal import reference_psd
 
@@ -274,7 +271,7 @@ banks = []
 for filename in options.template_bank:
 	banks.append(svd_bank.build_bank(filename, psd, options.flow, options.ortho_gate_fap, options.snr_threshold, options.svd_tolerance, verbose = options.verbose))
 for filename in options.svd_bank:
-	banks.append(svd_bank.read_bank(filename))
+	banks.append(svd_bank.read_bank(filename, verbose = options.verbose))
 
 for n, bank in enumerate(banks):
 	bank.logname = "bank%d" % n
@@ -291,6 +288,9 @@ for n, bank in enumerate(banks):
 if options.online_data:
 	psd = None
 
+
+if options.verbose:
+	print >>sys.stderr, "assembling pipeline ...",
 
 pipeline = gst.Pipeline("gstlal_inspiral")
 mainloop = gobject.MainLoop()
@@ -311,6 +311,10 @@ triggersrc = lloidparts.mkLLOIDmulti(
 	verbose = options.verbose,
 	nxydump_segment = options.nxydump_segment
 )
+
+
+if options.verbose:
+	print >>sys.stderr, "done"
 
 
 #
