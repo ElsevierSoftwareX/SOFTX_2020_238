@@ -497,6 +497,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	GSTLALAutoChiSq *element = GSTLAL_AUTOCHISQ(trans);
 	guint unit_size;
 	guint other_unit_size;
+	gboolean success = TRUE;
 
 	if(!get_unit_size(trans, caps, &unit_size))
 		return FALSE;
@@ -506,6 +507,21 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	}
 	if(!get_unit_size(trans, othercaps, &other_unit_size))
 		return FALSE;
+
+	/*
+	 * wait for autocorrelation matrix
+	 */
+
+	g_mutex_lock(element->autocorrelation_lock);
+	while(!element->autocorrelation_matrix) {
+		GST_DEBUG_OBJECT(element, "autocorrelation matrix not available, waiting ...");
+		g_cond_wait(element->autocorrelation_available, element->autocorrelation_lock);
+		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
+			GST_DEBUG_OBJECT(element, "element now in null state, abandoning wait for autocorrelation matrix");
+			success = FALSE;
+			goto done;
+		}
+	}
 
 	switch(direction) {
 	case GST_PAD_SRC:
@@ -534,10 +550,13 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 
 	case GST_PAD_UNKNOWN:
 		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
-		return FALSE;
+		success = FALSE;
+		break;
 	}
 
-	return TRUE;
+done:
+	g_mutex_unlock(element->autocorrelation_lock);
+	return success;
 }
 
 
@@ -630,8 +649,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	g_mutex_lock(element->autocorrelation_lock);
 	while(!element->autocorrelation_matrix) {
+		GST_DEBUG_OBJECT(element, "autocorrelation matrix not available, waiting ...");
 		g_cond_wait(element->autocorrelation_available, element->autocorrelation_lock);
 		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
+			GST_DEBUG_OBJECT(element, "element now in null state, abandoning wait for autocorrelation matrix");
 			result = GST_FLOW_WRONG_STATE;
 			goto done;
 		}
