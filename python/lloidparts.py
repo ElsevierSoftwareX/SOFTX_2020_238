@@ -476,7 +476,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 	# sum the snr streams of the same sample rate
 	#
 
-	output_heads = dict((rate, set()) for rate in rates)
+	output_heads = {}
 	for rate, heads in sorted(branch_heads.items()):
 		#
 		# include an adder when more than one stream at a given sample rate
@@ -489,20 +489,21 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			# the new "head" associated with the sample rate
 			#
 
-			output_heads[rate] = gst.element_factory_make("lal_adder")
-			output_heads[rate].set_property("sync", True)
-			pipeline.add(output_heads[rate])
+			output_head = gst.element_factory_make("lal_adder")
+			output_head.set_property("sync", True)
+			pipeline.add(output_head)
 			for head in heads:
-				pipeparts.mkqueue(pipeline, head, max_size_time = gst.SECOND).link(output_heads[rate])
+				pipeparts.mkqueue(pipeline, head, max_size_time = gst.SECOND).link(output_head)
 		else:
-			output_heads[rate] = list(heads)[0]
+			output_head = list(heads)[0]
 
 		#
 		# resample this to the highest sample rate
 		#
 
-		output_heads[rate] = pipeparts.mkresample(pipeline, output_heads[rate], quality = 4)
-		output_heads[rate] = pipeparts.mktogglecomplex(pipeline, output_heads[rate])
+		output_head = pipeparts.mkresample(pipeline, output_head, quality = 4)
+		output_head = pipeparts.mktogglecomplex(pipeline, output_head)
+		output_heads[rate] = output_head
 
 	return output_heads
 
@@ -541,7 +542,7 @@ def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank):
 	for bank_fragment in bank.bank_fragments:
 		chifacsdict[bank_fragment.rate].append(bank_fragment.chifacs)
 	chifacs = []
-	for rate, facs in sorted(chifacs.items()):
+	for rate, facs in sorted(chifacsdict.items()):
 		chifacs.append(facs[0])
 		for fac in facs[1:]:
 			chifacs[-1] += fac
@@ -551,7 +552,7 @@ def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank):
 	#
 
 	chisq = gst.element_factory_make("lal_timeslicechisq")
-	chisq.set_property("chifacs-matrix", chifacs)
+	pipeline.add(chisq)
 
 	#
 	# link the snrslices to the timeslicechisq element in ascending order in rate
@@ -560,8 +561,14 @@ def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank):
 	for rate, snrslice in sorted(branch_heads.items()):
 		pipeparts.mkqueue(pipeline, snrslice, max_size_time = gst.SECOND).link(chisq)
 
-	return chisq
-		
+	#
+	# set chifacs-matrix property, needs to be done after snrslices are linked in
+	#
+
+	chisq.set_property("chifacs-matrix", chifacs)
+
+	return pipeparts.mkqueue(pipeline, chisq)
+
 
 def mkLLOIDSnrToAutoChisq(pipeline, snr, bank):
 	"""Build pipeline fragment that computes the AutoChisq from single detector SNR."""
@@ -583,13 +590,14 @@ def mkLLOIDSnrToAutoChisq(pipeline, snr, bank):
 
 	return chisq
 
+
 def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydump_segment = None, logname = ""):
 	"""Build pipeline fragment that converts single detector SNR and Chisq into triggers."""
 	#
 	# trigger generator and progress report
 	#
 
-	head = pipeparts.mktriggergen(pipeline, pipeparts.mkqueue(pipeline, snr), chisq, template_bank_filename = bank.template_bank_filename, snr_threshold = bank.snr_threshold, sigmasq = bank.sigmasq)
+	head = pipeparts.mktriggergen(pipeline, pipeparts.mkqueue(pipeline, snr), pipeparts.mkqueue(pipeline, chisq), template_bank_filename = bank.template_bank_filename, snr_threshold = bank.snr_threshold, sigmasq = bank.sigmasq)
 	# FIXME:  add ability to choose this
 	# "lal_blcbctriggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq}
 	if verbose:
@@ -607,7 +615,15 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 #
 
 
-def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, veto_segments = None, verbose = False, nxydump_segment = None):
+def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq'):
+	#
+	# check for recognized value of chisq_type
+	#
+
+	if chisq_type not in ['autochisq', 'timeslicechisq']:
+		raise ValueError, "chisq_type must be either 'autochisq' or 'timeslicechisq', given %s" % (chisq_type)
+
+
 	#
 	# extract segments from the injection file for selected reconstruction
 	#
@@ -645,13 +661,19 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 				logname = suffix,
 				nxydump_segment = nxydump_segment
 			)
+			if chisq_type == 'timeslicechisq':
+				for rate, snrslice in snrslices.items():
+					snrslices[rate] = pipeparts.mktee(pipeline, snrslice)
 			snr = mkLLOIDSnrSlicesToSnr(
 				pipeline,
 				snrslices
 			)
 			snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
-			snr = pipeparts.mktee(pipeline, snr)
-			chisq = mkLLOIDSnrToAutoChisq(pipeline, snr, bank)
+			if chisq_type == 'autochisq':
+				snr = pipeparts.mktee(pipeline, snr)
+				chisq = mkLLOIDSnrToAutoChisq(pipeline, snr, bank)
+			else:
+				chisq = mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, snrslices, bank)
 			# FIXME:  find a way to use less memory without this hack
 			del bank.autocorrelation_bank
 			#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
