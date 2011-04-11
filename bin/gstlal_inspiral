@@ -350,7 +350,7 @@ def appsink_new_buffer(elem, output):
 
 appsinks = set()
 for pad in triggersrc.src_pads():
-	sink = pipeparts.mkappsink(pipeline, triggersrc, pad = pad, caps = gst.Caps("application/x-lal-snglinspiral"))
+	sink = pipeparts.mkappsink(pipeline, triggersrc, pad_name = pad.get_property("name"), caps = gst.Caps("application/x-lal-snglinspiral"))
 	sink.connect_after("new-buffer", appsink_new_buffer, output)
 	appsinks.add(sink)
 
