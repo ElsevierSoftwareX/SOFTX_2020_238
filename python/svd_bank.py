@@ -35,14 +35,18 @@ try:
 except NameError:
 	# Python < 2.5 compatibility
 	from glue.iterutils import all
-from glue.ligolw import ligolw, lsctables, array, param, utils, types
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import array
+from glue.ligolw import param
+from glue.ligolw import utils
+from glue.ligolw import types as ligolw_types
 from glue.ligolw.utils import process as ligolw_process
 
 
 from gstlal import cbc_template_fir
 from gstlal import misc as gstlalmisc
 from gstlal import templates
-from gstlal.reference_psd import read_psd
 
 
 #
@@ -116,7 +120,6 @@ class BankFragment(object):
 
 
 class Bank(object):
-
 	def __init__(self, bank_xmldoc, psd, time_slices, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, identity = False, verbose = False):
 		# FIXME: remove template_bank_filename when no longer needed
 		# by trigger generator element
@@ -158,10 +161,7 @@ class Bank(object):
 
 def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.1, identity = False, verbose = False):
 	# Open template bank file
-	bank_xmldoc = utils.load_filename(
-		template_bank_filename,
-		gz = template_bank_filename.endswith(".gz"),
-		verbose = verbose)
+	bank_xmldoc = utils.load_filename(template_bank_filename, verbose = verbose)
 
 	# Get sngl inspiral table
 	bank_sngl_table = lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName )
@@ -195,7 +195,7 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 	return bank
 
 
-def write_bank(filename, bank):
+def write_bank(filename, bank, verbose = False):
 	"""Write an SVD bank to a LIGO_LW xml file."""
 
 	# Create new document
@@ -203,11 +203,11 @@ def write_bank(filename, bank):
 	root = ligolw.LIGO_LW()
 
 	# Add root-level scalar params
-	root.appendChild(param.new_param('filter_length', types.FromPyType[float], bank.filter_length))
-	root.appendChild(param.new_param('gate_threshold', types.FromPyType[float], bank.gate_threshold))
-	root.appendChild(param.new_param('logname', types.FromPyType[str], bank.logname))
-	root.appendChild(param.new_param('snr_threshold', types.FromPyType[float], bank.snr_threshold))
-	root.appendChild(param.new_param('template_bank_filename', types.FromPyType[str], bank.template_bank_filename))
+	root.appendChild(param.new_param('filter_length', lioglw_types.FromPyType[float], bank.filter_length))
+	root.appendChild(param.new_param('gate_threshold', lioglw_types.FromPyType[float], bank.gate_threshold))
+	root.appendChild(param.new_param('logname', lioglw_types.FromPyType[str], bank.logname))
+	root.appendChild(param.new_param('snr_threshold', lioglw_types.FromPyType[float], bank.snr_threshold))
+	root.appendChild(param.new_param('template_bank_filename', lioglw_types.FromPyType[str], bank.template_bank_filename))
 
 	# Add root-level arrays
 	root.appendChild(array.from_array('autocorrelation_bank_real', bank.autocorrelation_bank.real))
@@ -220,9 +220,9 @@ def write_bank(filename, bank):
 		el = ligolw.LIGO_LW()
 
 		# Add scalar params
-		el.appendChild(param.new_param('start', types.FromPyType[float], frag.start))
-		el.appendChild(param.new_param('end', types.FromPyType[float], frag.end))
-		el.appendChild(param.new_param('rate', types.FromPyType[int], frag.rate))
+		el.appendChild(param.new_param('start', lioglw_types.FromPyType[float], frag.start))
+		el.appendChild(param.new_param('end', lioglw_types.FromPyType[float], frag.end))
+		el.appendChild(param.new_param('rate', lioglw_types.FromPyType[int], frag.rate))
 
 		# Add arrays
 		el.appendChild(array.from_array('chifacs', frag.chifacs))
@@ -238,14 +238,14 @@ def write_bank(filename, bank):
 	xmldoc.appendChild(root)
 
 	# Write to file
-	utils.write_filename(xmldoc, filename, gz=filename.endswith('.gz'))
+	utils.write_filename(xmldoc, filename, gz = filename.endswith('.gz'), verbose = verbose)
 
 
-def read_bank(filename):
+def read_bank(filename, verbose = False):
 	"""Read an SVD bank from a LIGO_LW xml file."""
 
 	# Load document
-	xmldoc = utils.load_filename(filename, gz=filename.endswith('.gz'))
+	xmldoc = utils.load_filename(filename, verbose = verbose)
 	root = xmldoc.childNodes[0]
 
 	# Create new SVD bank object
