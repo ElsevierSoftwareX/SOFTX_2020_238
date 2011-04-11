@@ -98,7 +98,10 @@ static unsigned fir_length(const GSTLALFIRBank *element)
 
 static unsigned fft_block_length(const GSTLALFIRBank *element)
 {
-	return element->block_length >= (gint) fir_length(element) ? element->block_length : 2 * fir_length(element);
+	/* no shorter than a filter length */
+	unsigned block_length = element->block_length >= (gint) fir_length(element) ? (unsigned) element->block_length : 2 * fir_length(element);
+	/* round up to even integer */
+	return block_length & 1 ? block_length + 1 : block_length;
 }
 
 
