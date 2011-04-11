@@ -322,24 +322,27 @@ if options.verbose:
 #
 
 
-options.out_seg = segments.segment(options.seg[0]+max([b.filter_length for b in banks]), options.seg[1]) #FIXME make better outseg def.
+if options.verbose:
+	print >>sys.stderr, "initializing output document ..."
 output = ligolw_output.Data(
 	filename = options.output,
 	process_params = process_params,
 	ifos = set(detectors),
 	seg = options.seg,
-	out_seg = options.out_seg,
+	out_seg = segments.segment(options.seg[0]+max([b.filter_length for b in banks]), options.seg[1]), #FIXME make better outseg def.
 	injection_filename = options.injections,
 	comment = options.comment,
 	tmp_path = options.tmp_space,
 	verbose = options.verbose
 )
+if options.verbose:
+	print >>sys.stderr, "... output document initialized"
 
 
 def appsink_new_buffer(elem, output):
 	output.lock.acquire()
 	for row in sngl_inspirals_from_buffer(elem.emit("pull-buffer")):
-		if (row.end_time + 1e-9*row.end_time_ns) in output.search_summary.get_out():
+		if LIGOTimeGPS(row.end_time, row.end_time_ns) in output.search_summary.get_out():
 			row.process_id = output.process.process_id
 			row.event_id = output.sngl_inspiral_table.get_next_id()
 			output.sngl_inspiral_table.append(row)
@@ -348,11 +351,15 @@ def appsink_new_buffer(elem, output):
 	output.lock.release()
 
 
+if options.verbose:
+	print >>sys.stderr, "attaching appsinks to pipeline ...",
 appsinks = set()
 for pad in triggersrc.src_pads():
-	sink = pipeparts.mkappsink(pipeline, triggersrc, pad_name = pad.get_property("name"), caps = gst.Caps("application/x-lal-snglinspiral"))
+	sink = pipeparts.mkappsink(pipeline, pipeparts.mkqueue(pipeline, triggersrc, pad_name = pad.get_property("name")), caps = gst.Caps("application/x-lal-snglinspiral"))
 	sink.connect_after("new-buffer", appsink_new_buffer, output)
 	appsinks.add(sink)
+if options.verbose:
+	print >>sys.stderr, "attached %d, done" % len(appsinks)
 
 
 if options.write_pipeline is not None:
@@ -397,9 +404,13 @@ if options.write_pipeline is not None:
 
 if options.write_pipeline is not None:
 	write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
+if options.verbose:
+	print >>sys.stderr, "setting pipeline state to playing ..."
 pipeline.set_state(gst.STATE_PLAYING)
 if options.write_pipeline is not None:
 	write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
+if options.verbose:
+	print >>sys.stderr, "running pipeline ..."
 mainloop.run()
 
 
