@@ -468,8 +468,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	g_mutex_lock(element->mixmatrix_lock);
 	while(!element->mixmatrix.as_void) {
+		GST_DEBUG_OBJECT(element, "mix matrix not available, waiting ...");
 		g_cond_wait(element->mixmatrix_available, element->mixmatrix_lock);
 		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
+			GST_DEBUG_OBJECT(element, "element now in null state, abandoning wait for mix matrix");
 			result = GST_FLOW_WRONG_STATE;
 			goto done;
 		}

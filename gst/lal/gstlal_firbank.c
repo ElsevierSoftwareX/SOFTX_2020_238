@@ -841,7 +841,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	if(!get_unit_size(trans, caps, &unit_size))
 		return FALSE;
 	if(size % unit_size) {
-		GST_DEBUG_OBJECT(element, "size not a multiple of %u", unit_size);
+		GST_ERROR_OBJECT(element, "size not a multiple of %u", unit_size);
 		return FALSE;
 	}
 	if(!get_unit_size(trans, othercaps, &other_unit_size))
@@ -853,8 +853,10 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 
 	g_mutex_lock(element->fir_matrix_lock);
 	while(!element->fir_matrix) {
+		GST_DEBUG_OBJECT(element, "fir matrix not available, waiting ...");
 		g_cond_wait(element->fir_matrix_available, element->fir_matrix_lock);
 		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
+			GST_DEBUG_OBJECT(element, "element now in null state, abandoning wait for fir matrix");
 			success = FALSE;
 			goto done;
 		}
@@ -1033,8 +1035,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	g_mutex_lock(element->fir_matrix_lock);
 	while(!element->fir_matrix) {
+		GST_DEBUG_OBJECT(element, "fir matrix not available, waiting ...");
 		g_cond_wait(element->fir_matrix_available, element->fir_matrix_lock);
 		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
+			GST_DEBUG_OBJECT(element, "element now in null state, abandoning wait for fir matrix");
 			result = GST_FLOW_WRONG_STATE;
 			goto done;
 		}
