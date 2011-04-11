@@ -98,7 +98,7 @@ static unsigned fir_length(const GSTLALFIRBank *element)
 
 static unsigned fft_block_length(const GSTLALFIRBank *element)
 {
-	return fir_length(element) * element->block_length_factor;
+	return element->block_length >= (gint) fir_length(element) ? element->block_length : 2 * fir_length(element);
 }
 
 
@@ -730,14 +730,14 @@ GST_BOILERPLATE(
 
 enum property {
 	ARG_TIME_DOMAIN = 1,
-	ARG_BLOCK_LENGTH_FACTOR,
+	ARG_BLOCK_LENGTH,
 	ARG_FIR_MATRIX,
 	ARG_LATENCY
 };
 
 
 #define DEFAULT_TIME_DOMAIN FALSE
-#define DEFAULT_BLOCK_LENGTH_FACTOR 4
+#define DEFAULT_BLOCK_LENGTH 2
 #define DEFAULT_LATENCY 0
 
 
@@ -833,6 +833,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
 	guint unit_size;
 	guint other_unit_size;
+	gboolean success = TRUE;
 
 	if(!get_unit_size(trans, caps, &unit_size))
 		return FALSE;
@@ -842,6 +843,19 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	}
 	if(!get_unit_size(trans, othercaps, &other_unit_size))
 		return FALSE;
+
+	/*
+	 * wait for FIR matrix
+	 */
+
+	g_mutex_lock(element->fir_matrix_lock);
+	while(!element->fir_matrix) {
+		g_cond_wait(element->fir_matrix_available, element->fir_matrix_lock);
+		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
+			success = FALSE;
+			goto done;
+		}
+	}
 
 	switch(direction) {
 	case GST_PAD_SRC:
@@ -878,10 +892,13 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 
 	case GST_PAD_UNKNOWN:
 		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
-		return FALSE;
+		success = FALSE;
+		break;
 	}
 
-	return TRUE;
+done:
+	g_mutex_unlock(element->fir_matrix_lock);
+	return success;
 }
 
 
@@ -1196,17 +1213,17 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
 
-	case ARG_BLOCK_LENGTH_FACTOR: {
-		gint block_length_factor;
+	case ARG_BLOCK_LENGTH: {
+		gint block_length;
 		g_mutex_lock(element->fir_matrix_lock);
-		block_length_factor = g_value_get_int(value);
-		if(block_length_factor != element->block_length_factor)
+		block_length = g_value_get_int(value);
+		if(block_length != element->block_length)
 			/*
 			 * invalidate frequency-domain filters
 			 */
 
 			free_fft_workspace(element);
-		element->block_length_factor = g_value_get_int(value);
+		element->block_length = block_length;
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
 	}
@@ -1281,8 +1298,8 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		g_value_set_boolean(value, element->time_domain);
 		break;
 
-	case ARG_BLOCK_LENGTH_FACTOR:
-		g_value_set_int(value, element->block_length_factor);
+	case ARG_BLOCK_LENGTH:
+		g_value_set_int(value, element->block_length);
 		break;
 
 	case ARG_FIR_MATRIX:
@@ -1404,12 +1421,12 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_BLOCK_LENGTH_FACTOR,
+		ARG_BLOCK_LENGTH,
 		g_param_spec_int(
-			"block-length-factor",
-			"Convolution block size in multiples of the FIR length",
-			"When using FFT convolutions, use this many times the number of samples in each FIR vector for the convolution block size.",
-			2, G_MAXINT, DEFAULT_BLOCK_LENGTH_FACTOR,
+			"block-length",
+			"Convolution block size",
+			"When using FFT convolutions, use this many samples for the convolution block size.  If this is shorter than the filters, twice filter length will be used instead.",
+			2, G_MAXINT, DEFAULT_BLOCK_LENGTH,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
@@ -1473,7 +1490,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 
 static void gstlal_firbank_init(GSTLALFIRBank *filter, GSTLALFIRBankClass *kclass)
 {
-	filter->block_length_factor = 0;	/* must != DEFAULT_BLOCK_LENGTH_FACTOR */
+	filter->block_length = ~DEFAULT_BLOCK_LENGTH;	/* must != DEFAULT_BLOCK_LENGTH */
 	filter->latency = 0;
 	filter->adapter = NULL;
 	filter->time_domain = FALSE;

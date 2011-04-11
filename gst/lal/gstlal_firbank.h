@@ -88,7 +88,7 @@ typedef struct {
 	 * FFT work space
 	 */
 
-	gint block_length_factor;
+	gint block_length;
 	complex double *fir_matrix_fd;
 	complex double *input_fd;
 	complex double *workspace_fd;
