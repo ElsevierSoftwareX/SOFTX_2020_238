@@ -20,6 +20,7 @@
 
 
 import threading
+import time
 try:
 	import sqlite3
 except ImportError:
@@ -29,8 +30,10 @@ except ImportError:
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
+from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
 from pylal.datatypes import LIGOTimeGPS
+from pylal.date import XLALUTCToGPS
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
 
@@ -137,7 +140,6 @@ class Data(object):
 
 		# Add injections table if necessary
 		if injection_filename is not None:
-			from glue.ligolw.utils import ligolw_add
 			ligolw_add.ligolw_add(self.xmldoc, [injection_filename], verbose = verbose)
 
 		if filename is not None and filename.endswith('.sqlite'):
@@ -159,8 +161,6 @@ class Data(object):
 	def write_output_file(self, verbose = False):
 		if self.connection is not None:
 			from glue.ligolw import dbtables
-			from pylal.date import XLALUTCToGPS
-			import time
 			self.connection.cursor().execute('UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)')
 			self.connection.cursor().execute('UPDATE process SET end_time = ?', (XLALUTCToGPS(time.gmtime()).seconds,))
 			self.connection.commit()
