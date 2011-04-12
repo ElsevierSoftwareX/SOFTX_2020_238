@@ -26,10 +26,8 @@
 #
 
 
-__all__ = ("measure_psd", "read_psd", "write_psd")
-
-
 import sys
+
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -37,13 +35,15 @@ pygtk.require("2.0")
 import gobject
 gobject.threads_init()
 import pygst
-pygst.require('0.10')
+pygst.require("0.10")
 import gst
+
 
 from gstlal import pipeutil
 from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import pipeio
+
 
 from glue.ligolw import ligolw
 from glue.ligolw import utils
