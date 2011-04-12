@@ -367,14 +367,16 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	logname = "%s_%d_%d" % (bank.logname, bank_fragment.start, bank_fragment.end)
 
 	#
-	# FIR filter bank
+	# FIR filter bank.  low frequency branches use time-domain
+	# convolution, high-frequency branches use FFT convolution with a
+	# block stride of 4 s.
 	#
 	# FIXME:  why the -1?  without it the pieces don't match but I
 	# don't understand where this offset comes from.  it might really
 	# need to be here, or it might be a symptom of a bug elsewhere.
 	# figure this out.
 
-	src = pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank, block_length = bank_fragment.orthogonal_template_bank.shape[1] * 2, time_domain = max(bank.get_rates()) / bank_fragment.rate >= 32)
+	src = pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank, block_stride = 4 * bank_fragment.rate, time_domain = max(bank.get_rates()) / bank_fragment.rate >= 32)
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank" % logname)
 	src = pipeparts.mkreblock(pipeline, src, block_duration = 1 * gst.SECOND)
 	src = pipeparts.mktee(pipeline, src)

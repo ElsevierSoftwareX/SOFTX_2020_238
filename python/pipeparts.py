@@ -263,7 +263,7 @@ def mknofakedisconts(pipeline, src, silent = True):
 	return elem
 
 
-def mkfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = None, block_length = None):
+def mkfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = None, block_stride = None):
 	elem = gst.element_factory_make("lal_firbank")
 	if latency is not None:
 		elem.set_property("latency", latency)
@@ -271,8 +271,8 @@ def mkfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = No
 		elem.set_property("fir-matrix", fir_matrix)
 	if time_domain is not None:
 		elem.set_property("time-domain", time_domain)
-	if block_length is not None:
-		elem.set_property("block-length", block_length)
+	if block_stride is not None:
+		elem.set_property("block-stride", block_stride)
 	pipeline.add(elem)
 	src.link(elem)
 	elem = mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed

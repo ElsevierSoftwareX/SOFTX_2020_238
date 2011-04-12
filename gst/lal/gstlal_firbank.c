@@ -92,22 +92,29 @@ static unsigned fir_length(const GSTLALFIRBank *element)
 
 
 /*
- * return the number of time-domain samples in each FFT
+ * return the number of time-domain samples in each FFT.  inverting this,
+ *
+ * block_stride = block_length - fir_length + 1
+ *
+ * the +1 is because when there is one complete filter-length of data one
+ * can compute 1 sample of output.  we round the result up to an even
+ * integer to simplify the question of how many samples of frequency-domain
+ * data there will be.
  */
 
 
 static unsigned fft_block_length(const GSTLALFIRBank *element)
 {
-	/* no shorter than a filter length */
-	unsigned block_length = element->block_length >= (gint) fir_length(element) ? (unsigned) element->block_length : 2 * fir_length(element);
-	/* round up to even integer */
+	unsigned block_length = element->block_stride + fir_length(element) - 1;
 	return block_length & 1 ? block_length + 1 : block_length;
 }
 
 
 /*
  * the number of samples from the start of one FFT block to the next, also
- * the number of samples produced from each FFT block
+ * the number of samples produced from each FFT block.  note that we don't
+ * use the element property because the corresponding block length might
+ * get rounded up 1 sample.
  */
 
 
@@ -733,14 +740,14 @@ GST_BOILERPLATE(
 
 enum property {
 	ARG_TIME_DOMAIN = 1,
-	ARG_BLOCK_LENGTH,
+	ARG_BLOCK_STRIDE,
 	ARG_FIR_MATRIX,
 	ARG_LATENCY
 };
 
 
 #define DEFAULT_TIME_DOMAIN FALSE
-#define DEFAULT_BLOCK_LENGTH 2
+#define DEFAULT_BLOCK_STRIDE 1
 #define DEFAULT_LATENCY 0
 
 
@@ -1220,17 +1227,17 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
 
-	case ARG_BLOCK_LENGTH: {
-		gint block_length;
+	case ARG_BLOCK_STRIDE: {
+		gint block_stride;
 		g_mutex_lock(element->fir_matrix_lock);
-		block_length = g_value_get_int(value);
-		if(block_length != element->block_length)
+		block_stride = g_value_get_int(value);
+		if(block_stride != element->block_stride)
 			/*
 			 * invalidate frequency-domain filters
 			 */
 
 			free_fft_workspace(element);
-		element->block_length = block_length;
+		element->block_stride = block_stride;
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
 	}
@@ -1305,8 +1312,8 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		g_value_set_boolean(value, element->time_domain);
 		break;
 
-	case ARG_BLOCK_LENGTH:
-		g_value_set_int(value, element->block_length);
+	case ARG_BLOCK_STRIDE:
+		g_value_set_int(value, element->block_stride);
 		break;
 
 	case ARG_FIR_MATRIX:
@@ -1421,19 +1428,19 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 		g_param_spec_boolean(
 			"time-domain",
 			"Use time-domain convolution",
-			"Set to true to use time-domain (a.k.a. direct) convolution, set to false to use FFT-based convolution.  FFT-based convolution is usually significantly faster than time-domain convolution but incurs a higher processing latency and requires more RAM.",
+			"Set to true to use time-domain (a.k.a. direct) convolution, set to false to use FFT-based convolution.  For long filters FFT-based convolution is usually significantly faster than time-domain convolution but incurs a higher processing latency and requires more RAM.",
 			DEFAULT_TIME_DOMAIN,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_BLOCK_LENGTH,
+		ARG_BLOCK_STRIDE,
 		g_param_spec_int(
-			"block-length",
-			"Convolution block size",
-			"When using FFT convolutions, use this many samples for the convolution block size.  If this is shorter than the filters, twice filter length will be used instead.",
-			2, G_MAXINT, DEFAULT_BLOCK_LENGTH,
+			"block-stride",
+			"Convolution block stride",
+			"When using FFT convolutions, this many samples will be produced from each block.  Smaller values decrease latency but increase computational cost.  If very small values are desired, consider using time-domain convolution mode instead.",
+			1, G_MAXINT, DEFAULT_BLOCK_STRIDE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
@@ -1497,7 +1504,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 
 static void gstlal_firbank_init(GSTLALFIRBank *filter, GSTLALFIRBankClass *kclass)
 {
-	filter->block_length = ~DEFAULT_BLOCK_LENGTH;	/* must != DEFAULT_BLOCK_LENGTH */
+	filter->block_stride = 0;	/* must != DEFAULT_BLOCK_STRIDE */
 	filter->latency = 0;
 	filter->adapter = NULL;
 	filter->time_domain = FALSE;
