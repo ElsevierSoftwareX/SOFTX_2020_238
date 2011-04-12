@@ -28,6 +28,8 @@
 
 from scipy import optimize
 import numpy, scipy
+import sys
+
 
 #
 # import all symbols from _misc
@@ -51,7 +53,6 @@ from _misc import *
 #
 
 
-import sys
 def cdf_weighted_chisq_Pinv(A, noncent, dof, var, P, lim, accuracy):
 	func = lambda x: cdf_weighted_chisq_P(A, noncent, dof, var, x, lim, accuracy) - P
 	lo = 0.0
@@ -74,10 +75,12 @@ def max_stat_thresh(coeffs, fap, samp_tol=100.0):
 	out.sort()
 	return out[-int(samp_tol)]
 
+
 #
 # Function to compute the optimal quadratic statistic coefficients given
 # singular values S and a desired signal size amp
 #
+
 
 def ss_coeffs(S, amp=5.5):
 	return S**2 / (S**2 + len(S) / amp**2 )
