@@ -553,7 +553,7 @@ def mkLLOIDsnrToTriggers(pipeline, snr, bank, verbose = False, nxydump_segment =
 #
 
 
-def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, veto_segments=None, verbose = False, nxydump_segment = None):
+def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, veto_segments = None, verbose = False, nxydump_segment = None):
 	#
 	# extract segments from the injection file for selected reconstruction
 	#
@@ -574,10 +574,10 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 		# let the frame reader and injection code run in a
 		# different thread than the whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src)
-		if veto_segments:
+		if veto_segments is not None:
 			hoftdict = mkLLOIDsrc(pipeline, src, rates, psd = psd, psd_fft_length = psd_fft_length, seekevent = seekevent, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment)
 		else:
-			hoftdict = mkLLOIDsrc(pipeline, src, rates, psd = psd, psd_fft_length = psd_fft_length, veto_segments = None, nxydump_segment = nxydump_segment)
+			hoftdict = mkLLOIDsrc(pipeline, src, rates, psd = psd, psd_fft_length = psd_fft_length, seekevent = seekevent, nxydump_segment = nxydump_segment)
 		for bank in banks:
 			suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent)
