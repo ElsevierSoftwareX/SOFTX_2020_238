@@ -190,12 +190,14 @@ static GstCaps *series_to_caps(gint rate, LALTYPECODE type)
 
 static GstClockTime offset_to_time(GSTLALFrameSrc *element, guint64 offset)
 {
+	g_assert(GST_CLOCK_TIME_IS_VALID(GST_BASE_SRC(element)->segment.start));
 	return GST_BASE_SRC(element)->segment.start + gst_util_uint64_scale_int_round(offset, GST_SECOND, element->rate);
 }
 
 
 static guint64 time_to_offset(GSTLALFrameSrc *element, GstClockTime t)
 {
+	g_assert(GST_CLOCK_TIME_IS_VALID(GST_BASE_SRC(element)->segment.start));
 	return gst_util_uint64_scale_int_round(t - GST_BASE_SRC(element)->segment.start, element->rate, GST_SECOND);
 }
 
@@ -217,8 +219,8 @@ static guint64 get_next_buffer_length(GSTLALFrameSrc *element, guint64 offset, g
 	 */
 
 	if(gst_base_src_get_blocksize(basesrc) % unit_size(element))
-		GST_WARNING_OBJECT(element, "block size %lu is not an integer multiple of the sample size %lu, rounding down", gst_base_src_get_blocksize(basesrc), unit_size(element));
-	length = gst_base_src_get_blocksize(basesrc) / unit_size(element);
+		GST_WARNING_OBJECT(element, "block size %lu is not an integer multiple of the sample size %lu, rounding up", gst_base_src_get_blocksize(basesrc), unit_size(element));
+	length = (gst_base_src_get_blocksize(basesrc) + unit_size(element) - 1) / unit_size(element);	/* ceil */
 	if(!length)
 		length = 1;
 
@@ -281,6 +283,7 @@ static guint64 get_next_buffer_length(GSTLALFrameSrc *element, guint64 offset, g
 	 * done
 	 */
 
+	GST_INFO_OBJECT(element, "at offset %" G_GUINT64_FORMAT " buffer will be %s of %" G_GUINT64_FORMAT " samples", offset, *gap ? "gap" : "non-gap", length);
 	return length;
 }
 
@@ -328,6 +331,7 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 		g_assert(llabs((gint64) offset_to_time(element, offset) - (gint64) XLALGPSToINT8NS(&series->epoch)) <= 1);
 		g_assert(round(1.0 / series->deltaT) == element->rate);
 		g_assert(series->data->length == length);
+		g_assert(unit_size(element) == sizeof(*series->data->data));
 		memcpy(dst, series->data->data, length * unit_size(element));
 		XLALDestroyINT4TimeSeries(series);
 	}
@@ -343,6 +347,7 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 		g_assert(llabs((gint64) offset_to_time(element, offset) - (gint64) XLALGPSToINT8NS(&series->epoch)) <= 1);
 		g_assert(round(1.0 / series->deltaT) == element->rate);
 		g_assert(series->data->length == length);
+		g_assert(unit_size(element) == sizeof(*series->data->data));
 		memcpy(dst, series->data->data, length * unit_size(element));
 		XLALDestroyREAL4TimeSeries(series);
 	}
@@ -358,6 +363,7 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 		g_assert(llabs((gint64) offset_to_time(element, offset) - (gint64) XLALGPSToINT8NS(&series->epoch)) <= 1);
 		g_assert(round(1.0 / series->deltaT) == element->rate);
 		g_assert(series->data->length == length);
+		g_assert(unit_size(element) == sizeof(*series->data->data));
 		memcpy(dst, series->data->data, length * unit_size(element));
 		XLALDestroyREAL8TimeSeries(series);
 	}
@@ -670,6 +676,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	buffer_length = get_next_buffer_length(element, basesrc->offset, &next_is_gap);
 	if(buffer_length == 0) {
+		GST_INFO_OBJECT(element, "end of stream");
 		/* end of stream */
 		return GST_FLOW_UNEXPECTED;
 	}
@@ -678,23 +685,47 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	 * Construct and populate output buffer
 	 */
 
+	/* FIXME:  gst_pad_alloc_buffer() will lock up if called too soon
+	 * after the pipeline is put into the playing state.  it is my
+	 * belief (Kipp) that this is due to the screwed up way gstlal
+	 * pipelines seek the framesrc element.  sorting the mess out is
+	 * going to take time because it relies on at least one patch to
+	 * gstreamer proper being accepted (Steve P's patch to fix the seek
+	 * event flood induced by tee elements) before it can be
+	 * investigated farther.  once that patch is into the version of
+	 * gstreamer on the clusters we can take this stupid pause out and
+	 * look again at what's really going on here */
+
+	 {
+	 static gboolean first = TRUE;
+	 /* 5 seconds.  seems to be enough */
+	 if(first) g_usleep(5000000);
+	 first = FALSE;
+	 }
+
 	result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, buffer_length * unit_size(element), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
-	if(result != GST_FLOW_OK)
+	if(result != GST_FLOW_OK) {
+		GST_DEBUG_OBJECT(element, "gst_pad_alloc_buffer() returned %d (%s)", result, gst_flow_get_name(result));
 		return result;
+	}
 	if(basesrc->offset != GST_BUFFER_OFFSET(*buffer) || buffer_length * unit_size(element) != GST_BUFFER_SIZE(*buffer)) {
 		/* FIXME:  didn't get the buffer offset we asked
 		 * for, do something about it */
 		GST_FIXME_OBJECT(element, "gst_pad_alloc_buffer() didn't give us the offset we asked for.  do something about it, but what?");
 	}
 	if(!next_is_gap) {
+		GST_LOG_OBJECT(element, "populating %" G_GUINT64_FORMAT " sample non-gap buffer", buffer_length);
 		result = read_series(element, basesrc->offset, buffer_length, GST_BUFFER_DATA(*buffer));
 		if(result != GST_FLOW_OK) {
+			GST_WARNING_OBJECT(element, "failure reading data");
 			gst_buffer_unref(*buffer);
 			*buffer = NULL;
 			return result;
 		}
-	} else
+	} else {
+		GST_LOG_OBJECT(element, "populating %" G_GUINT64_FORMAT " sample gap buffer", buffer_length);
 		memset(GST_BUFFER_DATA(*buffer), 0, GST_BUFFER_SIZE(*buffer));
+	}
 
 	/*
 	 * Set the buffer metadata.  The buffer duration is computed by
@@ -715,6 +746,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	else
 		GST_BUFFER_FLAG_UNSET(*buffer, GST_BUFFER_FLAG_GAP);
 	basesrc->offset += buffer_length;
+	GST_INFO_OBJECT(element, "constructed buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(*buffer));
 
 	/*
 	 * Done
@@ -760,10 +792,8 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 	 */
 
 	if(XLALFrSeek(element->stream, &epoch)) {
-		GST_ERROR_OBJECT(element, "XLALFrSeek() to %d.%09u s failed: %s", epoch.gpsSeconds, epoch.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
+		GST_WARNING_OBJECT(element, "XLALFrSeek() to %d.%09u s failed: %s", epoch.gpsSeconds, epoch.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno()));
 		XLALClearErrno();
-		/* FIXME:  figure out how to stop the initial seek to 0 */
-		/*return FALSE;*/
 		GST_FIXME_OBJECT(element, "ignoring XLALFrSeek() failure");
 	}
 
@@ -805,7 +835,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 		case GST_FORMAT_DEFAULT:
 		case GST_FORMAT_TIME:
 			if(src_value < basesrc->segment.start) {
-				GST_DEBUG("requested time precedes start of segment, clipping to start of segment");
+				GST_DEBUG_OBJECT(element, "requested time precedes start of segment, clipping to start of segment");
 				offset = 0;
 			} else
 				offset = time_to_offset(element, src_value);
@@ -821,10 +851,10 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 
 		case GST_FORMAT_PERCENT:
 			if(src_value < 0) {
-				GST_DEBUG("requested percentage < 0, clipping to 0");
+				GST_DEBUG_OBJECT(element, "requested percentage < 0, clipping to 0");
 				offset = 0;
 			} else if(src_value > 100) {
-				GST_DEBUG("requested percentage > 100, clipping to 100");
+				GST_DEBUG_OBJECT(element, "requested percentage > 100, clipping to 100");
 				offset = time_to_offset(element, basesrc->segment.stop);
 			} else
 				offset = gst_util_uint64_scale_int_round(src_value, time_to_offset(element, basesrc->segment.stop), 100);
