@@ -24,7 +24,6 @@
 #
 
 
-from gstlal import pipeutil
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
 pygtk.require("2.0")
@@ -146,13 +145,23 @@ def mkiirfilter(pipeline, src, a, b):
 
 
 def mkfakeLIGOsrc(pipeline, location=None, instrument=None, channel_name=None, blocksize=16384 * 8 * 1):
-	head = pipeutil.mkelem('lal_fakeligosrc', {'instrument': instrument, 'channel-name': channel_name, 'blocksize': blocksize})
+	head = gst.element_factory_make("lal_fakeligosrc")
+	if instrument is not None:
+		head.set_property("instrument", instrument)
+	if channel_name is not None:
+		head.set_property("channel-name", channel_name)
+	head.set_property("blocksize", blocksize)
 	pipeline.add(head)
 	return head
 
 
 def mkfakeadvLIGOsrc(pipeline, location=None, instrument=None, channel_name=None, blocksize=16384 * 8 * 1):
-	head = pipeutil.mkelem('lal_fakeadvligosrc', {'instrument': instrument, 'channel-name': channel_name, 'blocksize': blocksize})
+	head = gst.element_factory_make("lal_fakeadvligosrc")
+	if instrument is not None:
+		head.set_property("instrument", instrument)
+	if channel_name is not None:
+		head.set_property("channel-name", channel_name)
+	head.set_property("blocksize", blocksize)
 	pipeline.add(head)
 	return head
 
