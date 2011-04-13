@@ -1,0 +1,87 @@
+###############################################################################
+# INTRODUCTION
+###############################################################################
+
+Here is how this works.  Each directory does a small bit of the PBH analysis.
+It is assumed that you will copy this directory to somewhere first.  At each
+stage there will be a Makefile that you can modify to your liking.  It will be
+clear what the Makefile does, so have a look.  Here are the basic steps
+
+here is what I do from this directory (repeat for each "run"):
+
+$ cp -r . ${HOME}/PBH_TEST
+$ cd ${HOME}/PBH_TEST
+
+###############################################################################
+# SEGMENTS
+###############################################################################
+
+You should start by creating the relevant segments for the run.  This includes
+generating software injections if you plan to do them
+
+$ cd segments
+
+if you want to do an injection run type:
+
+$ make injections
+
+otherwise just type:
+
+$ make
+
+###############################################################################
+# TEMPLATE BANKS
+###############################################################################
+
+Next you need to make template banks.  Regardless of whether or not you plan to
+do injections type:
+
+$ cd ../bank
+$ make
+$ condor_submit_dag *H1*.dag
+$ condor_submit_dag *H2*.dag
+$ condor_submit_dag *L1*.dag
+
+Wait for the dags to finish before going on to the TRIGGERS section
+
+###############################################################################
+# PSD
+###############################################################################
+
+Then you need PSDs
+
+$ cd ../psd
+
+If you want to do an injection run type:
+
+$ make injections
+
+otherwise type
+
+$ make
+
+Then do
+
+$ condor_submit_dag psd_pipe.dag
+
+Wait for the dags to finish before going on to the TRIGGERS section
+
+###############################################################################
+# TRIGGERS
+###############################################################################
+
+Then you are ready to make triggers
+
+$ cd ../triggers
+
+If you want to do an injection run type:
+
+$ make injections
+
+otherwise type
+
+$ make
+
+Then do 
+
+$ condor_submit_dag trigger_pipe.dag
