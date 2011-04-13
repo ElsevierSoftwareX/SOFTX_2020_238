@@ -39,7 +39,6 @@ pygst.require("0.10")
 import gst
 
 
-from gstlal import pipeutil
 from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import pipeio
@@ -59,7 +58,7 @@ from pylal import series as lalseries
 #
 
 
-def measure_psd(instrument, seekevent, detector, seg, rate, fake_data=False, online_data=False, injection_filename=None, psd_fft_length=8, verbose=False):
+def measure_psd(instrument, seekevent, detector, seg, rate, fake_data = False, online_data = False, injection_filename = None, psd_fft_length = 8, verbose = False):
 	#
 	# pipeline handler for PSD measurement
 	#
@@ -84,35 +83,42 @@ def measure_psd(instrument, seekevent, detector, seg, rate, fake_data=False, onl
 	# build pipeline
 	#
 
+	if verbose:
+		print >>sys.stderr, "measuring PSD in segment %s" % str(seg)
+		print >>sys.stderr, "building pipeline ..."
 	mainloop = gobject.MainLoop()
 	pipeline = gst.Pipeline("psd")
 	handler = PSDHandler(mainloop, pipeline)
 
-	lloidparts.mkelems_fast(pipeline,
-		lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data=fake_data, online_data=online_data, injection_filename = injection_filename, verbose=verbose),
-		"audioresample", {"quality": 9},
-		"capsfilter", {"caps": gst.Caps("audio/x-raw-float, rate=%d" % rate)},
-		"queue", {"max-size-buffers": 8},
-		"lal_whiten", {"psd-mode": 0, "zero-pad": 0, "fft-length": psd_fft_length, "average-samples": int(round(float(abs(seg)) / (psd_fft_length / 2) - 1)), "median-samples": 7},
-		"fakesink", {"sync": False, "async": False},
-	)
+	head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = fake_data, online_data = online_data, injection_filename = injection_filename, verbose = verbose)
+	head = pipeparts.mkresample(pipeline, head, quality = 9)
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % rate)
+	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 8)
+	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 0, zero_pad = 0, fft_length = psd_fft_length, average_samples = int(round(float(abs(seg)) / (psd_fft_length / 2) - 1)), median_samples = 7)
+	pipeparts.mkfakesink(pipeline, head)
 
 	#
 	# process segment
 	#
 
+	if verbose:
+		print >>sys.stderr, "putting pipeline into playing state ..."
 	pipeline.set_state(gst.STATE_PLAYING)
+	if verbose:
+		print >>sys.stderr, "running pipeline ..."
 	mainloop.run()
 
 	#
 	# done
 	#
 
+	if verbose:
+		print >>sys.stderr, "PSD measurement complete"
 	return handler.psd
 
 
 def read_psd(filename, verbose = False):
-	return lalseries.parse_REAL8FrequencySeries(utils.load_filename(filename, gz = (filename or "stdin").endswith(".gz"), verbose = verbose))
+	return lalseries.parse_REAL8FrequencySeries(utils.load_filename(filename, verbose = verbose))
 
 
 def write_psd(filename, psd, verbose = False):
