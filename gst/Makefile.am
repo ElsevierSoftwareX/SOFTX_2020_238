@@ -4,4 +4,4 @@ else
 NDS_SUBDIRS =
 endif
 
-SUBDIRS = lal python unary $(NDS_SUBDIRS)
+SUBDIRS = lal python $(NDS_SUBDIRS)

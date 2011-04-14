@@ -22,7 +22,6 @@ AC_CONFIG_FILES([ \
 	gst/nds/Makefile \
 	gst/lal/Makefile \
 	gst/python/Makefile \
-	gst/unary/Makefile \
 	bin/Makefile \
 	tests/Makefile \
 	examples/Makefile
@@ -146,18 +145,6 @@ AC_MSG_NOTICE([If you have chosen to install the software in a location not incl
 	
 to your GST_PLUGIN_PATH environment variable.])
 AC_SUBST([GSTREAMER_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\).*"])
-
-
-#
-# Check for GStreamer Audio Library 0.10
-#
-
-
-AC_SUBST([GSTREAMER_AUDIO_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_AUDIO_VERSION], [0.10.0])
-PKG_CHECK_MODULES([gstreamer_audio], [gstreamer-audio-${GSTREAMER_AUDIO_RELEASE} >= ${MIN_GSTREAMER_AUDIO_VERSION}], , [AC_MSG_ERROR([Not found!])])
-AC_SUBST([gstreamer_audio_CFLAGS])
-AC_SUBST([gstreamer_audio_LIBS])
 
 
 #
