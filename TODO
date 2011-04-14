@@ -15,7 +15,6 @@ General
 Plugins/elements to hand over to GStreamer
 ==========================================
 
-* ``cairovis`` plugin
 * ``unary`` plugin
 * ``lal_gate`` element
 * ``lal_reblock`` element
@@ -40,14 +39,6 @@ Plugins/elements to hand over to GStreamer
   * lal_firbank
   * lal_triggergen
   * lal_nxydump
-
-
-``cairovis`` plugin
-===================
-
-* Add direct output to png, pdf, etc.
-* Add colorbar
-* Add adaptive histograms
 
 
 Streaming with gstreamer
