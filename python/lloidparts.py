@@ -543,9 +543,12 @@ def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank):
 		chifacsdict[bank_fragment.rate].append(bank_fragment.chifacs)
 	chifacs = []
 	for rate, facs in sorted(chifacsdict.items()):
-		chifacs.append(facs[0])
+		chifacs.append(facs[0][0::2])
+		chifacs[-1] += facs[0][1::2]
 		for fac in facs[1:]:
-			chifacs[-1] += fac
+			chifacs[-1] += fac[0::2]
+			chifacs[-1] += fac[1::2]
+		chifacs[-1] /= 2.
 
 	#
 	# create timeslicechisq element and add chifacs as a property
