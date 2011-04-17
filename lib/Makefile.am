@@ -10,11 +10,11 @@ libgstlal_la_LIBADD = $(GSL_LIBS) $(LAL_LIBS) $(gstreamer_LIBS)
 libgstlal_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LDFLAGS) $(LAL_LDFLAGS) $(gstreamer_LDFLAGS)
 
 libgstlaltags_la_SOURCES = gstlal_tags.c gstlal_tags.h
-libgstlaltags_la_CPPFLAGS = $(gstreamer_CFLAGS)
+libgstlaltags_la_CPPFLAGS = $(AM_CFLAGS) $(gstreamer_CFLAGS)
 libgstlaltags_la_LIBADD = $(gstreamer_LIBS)
-libgstlaltags_la_LDFLAGS =  $(gstreamer_LDFLAGS)
+libgstlaltags_la_LDFLAGS = $(AM_LDFLAGS) $(gstreamer_LDFLAGS)
 
 libgstlaltypes_la_SOURCES = gstaudioadapter.h gstaudioadapter.c gstlalcollectpads.h gstlalcollectpads.c
 libgstlaltypes_la_CPPFLAGS = $(AM_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
 libgstlaltypes_la_LIBADD = $(LAL_LIBS) $(gstreamer_LIBS)
-libgstlaltypes_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LDFLAGS) $(GSTLAL_PLUGIN_LDFLAGS) $(gstreamer_LDFLAGS)
+libgstlaltypes_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LDFLAGS) $(gstreamer_LDFLAGS)
