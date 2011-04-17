@@ -1,6 +1,6 @@
 INCLUDES = -I$(top_srcdir)/lib -I$(top_srcdir)/lib/skymap
 
-plugin_LTLIBRARIES = libgstlal.la
+plugin_LTLIBRARIES = libgstlal.la libgstlaladder.la
 
 libgstlal_la_SOURCES = \
 	gstlal_plugins.h gstlal.c \
@@ -11,7 +11,6 @@ libgstlal_la_SOURCES = \
 	gstlal_simulation.h gstlal_simulation.c \
 	gstlal_whiten.h gstlal_whiten.c \
 	gstlal_nxydump.h gstlal_nxydump.c \
-	gstadder.h gstadder.c \
 	gstlal_multiplier.h gstlal_multiplier.c \
 	gstlal_coinc.h gstlal_coinc.c \
 	gstlal_skymap.h gstlal_skymap.c \
@@ -36,5 +35,11 @@ libgstlal_la_SOURCES = \
 libgstlal_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
 libgstlal_la_LIBADD = $(top_srcdir)/lib/skymap/libwanalysis.la $(top_srcdir)/lib/libgstlal.la $(top_srcdir)/lib/libgstlaltags.la $(top_srcdir)/lib/libgstlaltypes.la $(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS)
 libgstlal_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LDFLAGS) $(FFTW_LDFLAGS) $(LAL_LDFLAGS) $(GSTLAL_PLUGIN_LDFLAGS) $(gstreamer_LDFLAGS)
+
+libgstlaladder_la_SOURCES = \
+	gstadder.h gstadder.c
+libgstlaladder_la_CFLAGS = $(AM_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
+libgstlaladder_la_LIBADD = $(top_srcdir)/lib/libgstlaltypes.la $(gstreamer_LIBS)
+libgstlaladder_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LDFLAGS) $(GSTLAL_PLUGIN_LDFLAGS) $(gstreamer_LDFLAGS)
 
 noinst_HEADERS = gstlal_plugins.h

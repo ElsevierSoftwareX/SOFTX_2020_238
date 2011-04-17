@@ -1469,11 +1469,10 @@ GType gst_adder_get_type(void)
  */
 
 
-#if 0
 static gboolean plugin_init(GstPlugin * plugin)
 {
-	return gst_element_register(plugin, "adder", GST_RANK_NONE, GST_TYPE_ADDER);
+	return gst_element_register(plugin, "lal_adder", GST_RANK_NONE, GST_TYPE_ADDER);
 }
 
-GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, "adder", "Adds multiple streams", plugin_init, VERSION, "LGPL", GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)
-#endif
+
+GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, "gstlaladder", "Synchronous version of GStreamer's adder", plugin_init, PACKAGE_VERSION, "GPL", PACKAGE_NAME, "http://www.lsc-group.phys.uwm.edu/daswg")

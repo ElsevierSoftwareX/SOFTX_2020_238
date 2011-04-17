@@ -58,7 +58,6 @@
 #include <gstlal_simulation.h>
 #include <gstlal_whiten.h>
 #include <gstlal_nxydump.h>
-#include <gstadder.h>
 #include <gstlal_multiplier.h>
 #include <gstlal_coinc.h>
 #include <gstlal_skymap.h>
@@ -115,7 +114,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_simulation", GSTLAL_SIMULATION_TYPE},
 		{"lal_whiten", GSTLAL_WHITEN_TYPE},
 		{"lal_nxydump", GSTLAL_NXYDUMP_TYPE},
-		{"lal_adder", GST_TYPE_ADDER},
 		{"lal_multiplier", GSTLAL_TYPE_MULTIPLIER},
 		{"lal_coinc", GSTLAL_COINC_TYPE},
 		{"lal_skymap", GSTLAL_SKYMAP_TYPE},
