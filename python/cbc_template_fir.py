@@ -130,7 +130,8 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 	if approximant=="FindChirpSP" or approximant=="TaylorF2":
 		spawaveform.waveform(template_bank_row.mass1, template_bank_row.mass2, order, 1.0 / duration, 1.0 / sample_rate, f_low, f_high, z)
 	elif approximant=="IMRPhenomB":
-		spawaveform.imrwaveform(template_bank_row.mass1, template_bank_row.mass2, 1.0/duration, f_low, z, template_bank_row.chi)
+		#FIXME a better plan than multiplying flow by 0.5 should be done...
+		spawaveform.imrwaveform(template_bank_row.mass1, template_bank_row.mass2, 1.0/duration, 0.5 * f_low, z, template_bank_row.chi)
 	else:
 		raise ValueError, "Unsupported approximant given"
 
