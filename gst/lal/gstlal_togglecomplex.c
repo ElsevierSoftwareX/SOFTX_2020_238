@@ -225,21 +225,6 @@ error:
 
 
 /*
- * transform()
- */
-
-
-static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
-{
-	/*
-	 * no-op
-	 */
-
-	return GST_FLOW_OK;
-}
-
-
-/*
  * prepare_output_buffer()
  */
 
@@ -302,7 +287,6 @@ static void gstlal_togglecomplex_base_init(gpointer gclass)
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 
 	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
-	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
 	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
 	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 }
@@ -325,7 +309,7 @@ static void gstlal_togglecomplex_class_init(GSTLALToggleComplexClass *klass)
 
 static void gstlal_togglecomplex_init(GSTLALToggleComplex *element, GSTLALToggleComplexClass *kclass)
 {
-	gst_base_transform_set_in_place(GST_BASE_TRANSFORM(element), TRUE);
+	GST_BASE_TRANSFORM(element)->always_in_place = TRUE;
 	gst_base_transform_set_qos_enabled(GST_BASE_TRANSFORM(element), TRUE);
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }
