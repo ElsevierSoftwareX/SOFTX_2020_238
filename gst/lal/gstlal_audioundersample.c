@@ -557,7 +557,7 @@ static void gstlal_audioundersample_class_init(GSTLALAudioUnderSampleClass *klas
  */
 
 
-static void gstlal_audioundersample_init(GSTLALAudioUnderSample *element, GSTLALAudioUnderSampleClass *kclass)
+static void gstlal_audioundersample_init(GSTLALAudioUnderSample *element, GSTLALAudioUnderSampleClass *klass)
 {
 	element->rate_in = 0;
 	element->rate_out = 0;

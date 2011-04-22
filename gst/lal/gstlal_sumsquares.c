@@ -530,7 +530,7 @@ static void gstlal_sumsquares_class_init(GSTLALSumSquaresClass *klass)
  */
 
 
-static void gstlal_sumsquares_init(GSTLALSumSquares *filter, GSTLALSumSquaresClass *kclass)
+static void gstlal_sumsquares_init(GSTLALSumSquares *filter, GSTLALSumSquaresClass *klass)
 {
 	filter->channels = 0;
 	filter->weights_lock = g_mutex_new();

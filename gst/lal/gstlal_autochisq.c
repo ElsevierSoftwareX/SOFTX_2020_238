@@ -1071,7 +1071,7 @@ static void gstlal_autochisq_class_init(GSTLALAutoChiSqClass *klass)
  */
 
 
-static void gstlal_autochisq_init(GSTLALAutoChiSq *filter, GSTLALAutoChiSqClass *kclass)
+static void gstlal_autochisq_init(GSTLALAutoChiSq *filter, GSTLALAutoChiSqClass *klass)
 {
 	filter->latency = DEFAULT_LATENCY;
 	filter->adapter = NULL;

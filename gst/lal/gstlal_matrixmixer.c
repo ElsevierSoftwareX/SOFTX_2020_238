@@ -707,7 +707,7 @@ static void gstlal_matrixmixer_class_init(GSTLALMatrixMixerClass *klass)
  */
 
 
-static void gstlal_matrixmixer_init(GSTLALMatrixMixer *filter, GSTLALMatrixMixerClass *kclass)
+static void gstlal_matrixmixer_init(GSTLALMatrixMixer *filter, GSTLALMatrixMixerClass *klass)
 {
 	filter->data_type = -1;
 	filter->mixmatrix_lock = g_mutex_new();
