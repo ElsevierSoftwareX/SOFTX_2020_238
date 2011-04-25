@@ -7,7 +7,7 @@ MIN_MASS = 0.2
 MAX_MASS = 1.0
 MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
-FLOW = 35
+FLOW = 39
 
 all : H1vetoes.xml H2vetoes.xml L1vetoes.xml segments.xml
 
