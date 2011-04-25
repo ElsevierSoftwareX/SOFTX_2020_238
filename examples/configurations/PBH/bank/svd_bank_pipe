@@ -75,7 +75,7 @@ class gstlal_svd_bank_job(pipeline.CondorDAGJob):
 		self.__universe = 'vanilla'
 		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
 		self.add_condor_cmd('getenv','True')
-		self.add_condor_cmd('requirements', 'Memory > 3000') #FIXME is this enough?
+		self.add_condor_cmd('requirements', 'Memory > 1999') #FIXME is this enough?
 		self.tag_base = tag_base
 		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
 		self.set_sub_file(tag_base+'.sub')
@@ -86,7 +86,7 @@ class gstlal_svd_bank_job(pipeline.CondorDAGJob):
 class gstlal_svd_bank_node(pipeline.CondorDAGNode):
 	"""
 	"""
-	def __init__(self, job, dag, template_bank, ifo, flow=40, reference_psd="psd.xml", tolerance=0.9999, FAP=0.0001, p_node=[]):
+	def __init__(self, job, dag, template_bank, ifo, flow=40, reference_psd="psd.xml", tolerance=0.9999, FAP=0.001, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("flow", flow)
