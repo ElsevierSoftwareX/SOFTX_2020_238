@@ -148,6 +148,12 @@ static gint scale_int(gint x, double factor, gint min, gint max)
 }
 
 
+static gboolean g_value_is_odd_int(const GValue *x)
+{
+	return G_VALUE_HOLDS_INT(x) && (g_value_get_int(x) & 1);
+}
+
+
 static GValue *g_value_scale_int(const GValue *src, GValue *dst, double factor)
 {
 	if(G_VALUE_HOLDS_INT(src)) {
@@ -161,9 +167,10 @@ static GValue *g_value_scale_int(const GValue *src, GValue *dst, double factor)
 		g_value_init(dst, GST_TYPE_LIST);
 		for(i = 0; i < gst_value_list_get_size(src); i++) {
 			GValue x = {0};
-			gst_value_init_and_copy(&x, gst_value_list_get_value(src, i));
-			g_assert(G_VALUE_HOLDS_INT(&x));
-			g_value_set_int(&x, scale_int(g_value_get_int(&x), factor, 1, G_MAXINT));
+			if(!g_value_scale_int(gst_value_list_get_value(src, i), &x, factor)) {
+				g_value_unset(dst);
+				return NULL;
+			}
 			/* makes a copy of the GValue */
 			gst_value_list_append_value(dst, &x);
 			g_value_unset(&x);
@@ -178,6 +185,7 @@ static GValue *g_value_scale_int(const GValue *src, GValue *dst, double factor)
 
 static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps)
 {
+	gboolean success = TRUE;
 	guint n;
 
 	caps = gst_caps_copy(caps);
@@ -191,14 +199,17 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 			GValue channels = {0};
 			GValue width = {0};
 			if(name && !strcmp(name, "audio/x-raw-float")) {
-				/* FIXME: should confirm that the channel count is even */
 				gst_structure_set_name(str, "audio/x-raw-complex");
-				g_value_scale_int(gst_structure_get_value(str, "channels"), &channels, 0.5);
-				g_value_scale_int(gst_structure_get_value(str, "width"), &width, 2.0);
+				if(g_value_is_odd_int(gst_structure_get_value(str, "channels"))) {
+					GST_ERROR_OBJECT(trans, "channel count is odd");
+					goto error;
+				}
+				success &= g_value_scale_int(gst_structure_get_value(str, "channels"), &channels, 0.5) != NULL;
+				success &= g_value_scale_int(gst_structure_get_value(str, "width"), &width, 2.0) != NULL;
 			} else if(name && !strcmp(name, "audio/x-raw-complex")) {
 				gst_structure_set_name(str, "audio/x-raw-float");
-				g_value_scale_int(gst_structure_get_value(str, "channels"), &channels, 2.0);
-				g_value_scale_int(gst_structure_get_value(str, "width"), &width, 0.5);
+				success &= g_value_scale_int(gst_structure_get_value(str, "channels"), &channels, 2.0) != NULL;
+				success &= g_value_scale_int(gst_structure_get_value(str, "width"), &width, 0.5) != NULL;
 			} else {
 				GST_DEBUG_OBJECT(trans, "unrecognized format %s in %" GST_PTR_FORMAT, name ? name : "(NULL)", caps);
 				goto error;
@@ -213,6 +224,11 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 
 	case GST_PAD_UNKNOWN:
 		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
+		goto error;
+	}
+
+	if(!success) {
+		GST_ERROR_OBJECT(trans, "failure constructing caps");
 		goto error;
 	}
 
@@ -307,7 +323,7 @@ static void gstlal_togglecomplex_class_init(GSTLALToggleComplexClass *klass)
  */
 
 
-static void gstlal_togglecomplex_init(GSTLALToggleComplex *element, GSTLALToggleComplexClass *kclass)
+static void gstlal_togglecomplex_init(GSTLALToggleComplex *element, GSTLALToggleComplexClass *klass)
 {
 	GST_BASE_TRANSFORM(element)->always_in_place = TRUE;
 	gst_base_transform_set_qos_enabled(GST_BASE_TRANSFORM(element), TRUE);
