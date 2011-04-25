@@ -63,6 +63,7 @@ injections.xml:
 		--min-mtotal $(MIN_TOTAL_MASS) \
 		--max-mtotal $(MAX_TOTAL_MASS) \
 		--waveform GeneratePPNtwoPN \
+		--taper-injection start \
 		--disable-spin
 
 realclean:
