@@ -266,6 +266,16 @@ AC_SUBST([ORC_LIBS])
 
 
 #
+# Check for ORC
+#
+
+
+PKG_CHECK_MODULES([ORC], [orc-0.4], , [AC_MSG_ERROR([Not found!])])
+AC_SUBST([ORC_CFLAGS])
+AC_SUBST([ORC_LIBS])
+
+
+#
 # Output configure information
 #
 
