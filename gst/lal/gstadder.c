@@ -1054,7 +1054,6 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
   GstClockTime t_start, t_end;
   guint64 earliest_output_offset, earliest_output_offset_end;
 
-fprintf(stderr, "HERE\n");
   adder = GST_ADDER (user_data);
 
   /* this is fatal */
