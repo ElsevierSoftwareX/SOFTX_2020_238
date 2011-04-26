@@ -402,6 +402,11 @@ if options.write_pipeline is not None:
 	write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
 
 if options.verbose:
+	print >>sys.stderr, "setting pipeline state to paused ..."
+if pipeline.set_state(gst.STATE_PAUSED) != gst.STATE_CHANGE_SUCCESS:
+	raise RuntimeError, "pipeline did not enter paused state"
+
+if options.verbose:
 	print >>sys.stderr, "setting pipeline state to playing ..."
 if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
 	raise RuntimeError, "pipeline did not enter playing state"
