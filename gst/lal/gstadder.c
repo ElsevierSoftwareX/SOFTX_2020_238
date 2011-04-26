@@ -2,6 +2,7 @@
  * Copyright (C) 1999,2000 Erik Walthinsen <omega@cse.ogi.edu>
  *                    2001 Thomas <thomas@apestaart.org>
  *               2005,2006 Wim Taymans <wim@fluendo.com>
+ *               2011 Kipp Cannon <kipp.cannon@ligo.org>
  *
  * adder.c: Adder element, N in, one out, samples are added
  *
@@ -26,8 +27,11 @@
  * The adder allows to mix several streams into one by adding the data.
  * Mixed data is clamped to the min/max values of the data format.
  *
- * The adder currently mixes all data received on the sinkpads as soon as
- * possible without trying to synchronize the streams.
+ * If the element's sync property is TRUE the streams are mixed with the
+ * timestamps synchronized.  If the sync property is FALSE (the default, to
+ * be compatible with older versions), then the first samples from each
+ * stream are added to produce the first sample of the output, the second
+ * samples are added to produce the second sample of the output, and so on.
  *
  * <refsect2>
  * <title>Example launch line</title>
