@@ -270,7 +270,10 @@ AC_SUBST([ORC_LIBS])
 #
 
 
-PKG_CHECK_MODULES([ORC], [orc-0.4], , [AC_MSG_ERROR([Not found!])])
+PKG_CHECK_MODULES([ORC], [orc-0.4], , [
+	AC_MSG_WARN([ORC not found;  using potentially slower code paths.])
+	ORC_CFLAGS="-DDISABLE_ORC"
+])
 AC_SUBST([ORC_CFLAGS])
 AC_SUBST([ORC_LIBS])
 
