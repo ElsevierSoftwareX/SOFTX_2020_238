@@ -10,5 +10,4 @@ libgstunary_la_SOURCES = \
 	unary_log10.c \
 	unary_pow.c
 libgstunary_la_CFLAGS = $(AM_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS)
-libgstunary_la_LIBADD = $(gstreamer_LIBS) $(gstreamer_audio_LIBS)
-libgstunary_la_LDFLAGS = $(AM_LDFLAGS) $(GSTLAL_PLUGIN_LDFLAGS)
+libgstunary_la_LDFLAGS = $(AM_LDFLAGS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
