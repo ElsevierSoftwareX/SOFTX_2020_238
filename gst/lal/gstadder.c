@@ -118,7 +118,7 @@ GST_STATIC_PAD_TEMPLATE ("sink%d",
     GST_STATIC_CAPS (CAPS)
     );
 
-GST_BOILERPLATE (GstAdder, gstlal_adder, GstElement, GST_TYPE_ELEMENT);
+GST_BOILERPLATE (GstLALAdder, gstlal_adder, GstElement, GST_TYPE_ELEMENT);
 
 static void gst_adder_dispose (GObject * object);
 static void gst_adder_set_property (GObject * object, guint prop_id,
@@ -161,7 +161,7 @@ MAKE_FUNC_NC (add_float64, gdouble)
 static GstCaps *
 gst_adder_sink_getcaps (GstPad * pad)
 {
-  GstAdder *adder;
+  GstLALAdder *adder;
   GstCaps *result, *peercaps, *sinkcaps, *filter_caps;
 
   adder = GST_ADDER (GST_PAD_PARENT (pad));
@@ -220,7 +220,7 @@ gst_adder_sink_getcaps (GstPad * pad)
 static gboolean
 gst_adder_setcaps (GstPad * pad, GstCaps * caps)
 {
-  GstAdder *adder;
+  GstLALAdder *adder;
   GList *pads;
   GstStructure *structure;
   const char *media_type;
@@ -339,7 +339,7 @@ not_supported:
  * cases work at least somewhat.
  */
 static gboolean
-gst_adder_query_duration (GstAdder * adder, GstQuery * query)
+gst_adder_query_duration (GstLALAdder * adder, GstQuery * query)
 {
   gint64 max;
   gboolean res;
@@ -411,7 +411,7 @@ gst_adder_query_duration (GstAdder * adder, GstQuery * query)
 }
 
 static gboolean
-gst_adder_query_latency (GstAdder * adder, GstQuery * query)
+gst_adder_query_latency (GstLALAdder * adder, GstQuery * query)
 {
   GstClockTime min, max;
   gboolean live;
@@ -498,7 +498,7 @@ gst_adder_query_latency (GstAdder * adder, GstQuery * query)
 static gboolean
 gst_adder_query (GstPad * pad, GstQuery * query)
 {
-  GstAdder *adder = GST_ADDER (gst_pad_get_parent (pad));
+  GstLALAdder *adder = GST_ADDER (gst_pad_get_parent (pad));
   gboolean res = FALSE;
 
   switch (GST_QUERY_TYPE (query)) {
@@ -578,7 +578,7 @@ forward_event_func (GstPad * pad, GValue * ret, EventData * data)
  * sinkpads.
  */
 static gboolean
-forward_event (GstAdder * adder, GstEvent * event, gboolean flush)
+forward_event (GstLALAdder * adder, GstEvent * event, gboolean flush)
 {
   gboolean ret;
   GstIterator *it;
@@ -625,7 +625,7 @@ done:
 static gboolean
 gst_adder_src_event (GstPad * pad, GstEvent * event)
 {
-  GstAdder *adder;
+  GstLALAdder *adder;
   gboolean result;
 
   adder = GST_ADDER (gst_pad_get_parent (pad));
@@ -730,7 +730,7 @@ done:
 static gboolean
 gst_adder_sink_event (GstPad * pad, GstEvent * event)
 {
-  GstAdder *adder;
+  GstLALAdder *adder;
   gboolean ret = TRUE;
 
   adder = GST_ADDER (gst_pad_get_parent (pad));
@@ -752,8 +752,7 @@ gst_adder_sink_event (GstPad * pad, GstEvent * event)
       adder->flush_stop_pending = FALSE;
       /* Clear pending tags */
       if (adder->pending_events) {
-        g_list_foreach (adder->pending_events, (GFunc) gst_event_unref, NULL);
-        g_list_free (adder->pending_events);
+        g_list_free_full (adder->pending_events, (GDestroyNotify) gst_event_unref);
         adder->pending_events = NULL;
       }
       GST_OBJECT_UNLOCK (adder->collect);
@@ -792,7 +791,7 @@ gstlal_adder_base_init (gpointer g_class)
 }
 
 static void
-gstlal_adder_class_init (GstAdderClass * klass)
+gstlal_adder_class_init (GstLALAdderClass * klass)
 {
   GObjectClass *gobject_class = (GObjectClass *) klass;
   GstElementClass *gstelement_class = (GstElementClass *) klass;
@@ -825,7 +824,7 @@ gstlal_adder_class_init (GstAdderClass * klass)
 }
 
 static void
-gstlal_adder_init (GstAdder * adder, GstAdderClass * klass)
+gstlal_adder_init (GstLALAdder * adder, GstLALAdderClass * klass)
 {
   GstPadTemplate *template;
 
@@ -853,14 +852,14 @@ gstlal_adder_init (GstAdder * adder, GstAdderClass * klass)
   adder->collect = gst_collect_pads_new ();
   gst_collect_pads_set_function (adder->collect,
       GST_DEBUG_FUNCPTR (gst_adder_collected), adder);
-  gst_collect_pads_set_clip_function (adder->collect,
-      GST_DEBUG_FUNCPTR (gst_adder_do_clip), adder);
+  /* gst_collect_pads_set_clip_function (adder->collect,
+      GST_DEBUG_FUNCPTR (gst_adder_do_clip), adder); */
 }
 
 static void
 gst_adder_dispose (GObject * object)
 {
-  GstAdder *adder = GST_ADDER (object);
+  GstLALAdder *adder = GST_ADDER (object);
 
   if (adder->collect) {
     gst_object_unref (adder->collect);
@@ -868,8 +867,7 @@ gst_adder_dispose (GObject * object)
   }
   gst_caps_replace (&adder->filter_caps, NULL);
   if (adder->pending_events) {
-    g_list_foreach (adder->pending_events, (GFunc) gst_event_unref, NULL);
-    g_list_free (adder->pending_events);
+    g_list_free_full (adder->pending_events, (GDestroyNotify) gst_event_unref);
     adder->pending_events = NULL;
   }
 
@@ -880,7 +878,7 @@ static void
 gst_adder_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstAdder *adder = GST_ADDER (object);
+  GstLALAdder *adder = GST_ADDER (object);
 
   switch (prop_id) {
     case PROP_FILTER_CAPS:{
@@ -919,7 +917,7 @@ static void
 gst_adder_get_property (GObject * object, guint prop_id, GValue * value,
     GParamSpec * pspec)
 {
-  GstAdder *adder = GST_ADDER (object);
+  GstLALAdder *adder = GST_ADDER (object);
 
   switch (prop_id) {
     case PROP_FILTER_CAPS:
@@ -942,7 +940,7 @@ gst_adder_request_new_pad (GstElement * element, GstPadTemplate * templ,
     const gchar * unused)
 {
   gchar *name;
-  GstAdder *adder;
+  GstLALAdder *adder;
   GstPad *newpad;
   GstLALCollectData *data = NULL;
   gint padcount;
@@ -995,9 +993,7 @@ could_not_add:
 static void
 gst_adder_release_pad (GstElement * element, GstPad * pad)
 {
-  GstAdder *adder;
-
-  adder = GST_ADDER (element);
+  GstLALAdder *adder = GST_ADDER (element);
 
   GST_DEBUG_OBJECT (adder, "release pad %s:%s", GST_DEBUG_PAD_NAME (pad));
 
@@ -1009,7 +1005,7 @@ static GstBuffer *
 gst_adder_do_clip (GstCollectPads * pads, GstCollectData * data,
     GstBuffer * buffer, gpointer user_data)
 {
-  GstAdder *adder = GST_ADDER (user_data);
+  GstLALAdder *adder = GST_ADDER (user_data);
 
   buffer = gst_audio_buffer_clip (buffer, &data->segment, adder->rate,
       adder->bps);
@@ -1018,7 +1014,7 @@ gst_adder_do_clip (GstCollectPads * pads, GstCollectData * data,
 }
 
 static GstClockTime
-output_timestamp_from_offset (const GstAdder *adder, guint64 offset)
+output_timestamp_from_offset (const GstLALAdder *adder, guint64 offset)
 {
   return adder->segment.start + gst_util_uint64_scale_int_round (offset,
       GST_SECOND, adder->rate);
@@ -1043,7 +1039,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
    *   - for int we need to downscale each input to avoid clipping or
    *     mix into a temp (float) buffer and scale afterwards as well
    */
-  GstAdder *adder;
+  GstLALAdder *adder;
   GSList *collected;
   GstBuffer *outbuf = NULL;
   GSList *partial_nongap_buffers = NULL;
@@ -1060,20 +1056,66 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
   if (G_UNLIKELY (adder->func == NULL))
     goto not_negotiated;
 
+  /* flush stop event if needed */
   if (g_atomic_int_compare_and_exchange (&adder->flush_stop_pending,
           TRUE, FALSE)) {
     GST_DEBUG_OBJECT (adder, "pending flush stop");
     gst_pad_push_event (adder->srcpad, gst_event_new_flush_stop ());
   }
 
-  /* check for new segment */
-  if (adder->segment_pending) {
-    GstSegment *segment = gstlal_collect_pads_get_segment (adder->collect);
+  /* do new segment event if needed */
+  if (G_UNLIKELY (adder->segment_pending)) {
+    GstSegment *segment;
+    GstEvent *event;
+
     /* FIXME:  are other formats OK? */
+    segment = gstlal_collect_pads_get_segment (adder->collect);
     g_assert (segment->format == GST_FORMAT_TIME);
     adder->segment = *segment;
-    adder->offset = 0;
     gst_segment_free (segment);
+
+    /* FIXME, use rate/applied_rate as set on all sinkpads.
+     * - currently we just set rate as received from last seek-event
+     *
+     * When seeking we set the start and stop positions as given in the seek
+     * event. We also adjust offset & timestamp acordingly.
+     * This basically ignores all newsegments sent by upstream.
+     */
+    event = gst_event_new_new_segment_full (FALSE, adder->segment.rate,
+        1.0, GST_FORMAT_TIME, adder->segment.start, adder->segment.stop,
+        adder->segment.start);
+    if (adder->segment.rate > 0.0) {
+      adder->timestamp = adder->segment.start;
+      adder->offset = 0;
+    } else {
+      adder->timestamp = adder->segment.stop;
+      adder->offset = gst_util_uint64_scale_round (adder->segment.stop - adder->segment.start, adder->rate, GST_SECOND);
+    }
+    GST_INFO_OBJECT (adder, "seg_start %" G_GUINT64_FORMAT ", seg_end %"
+        G_GUINT64_FORMAT, adder->segment.start, adder->segment.stop);
+    GST_INFO_OBJECT (adder, "timestamp %" G_GINT64_FORMAT ",new offset %"
+        G_GINT64_FORMAT, adder->timestamp, adder->offset);
+
+    if (event) {
+      if (!gst_pad_push_event (adder->srcpad, event)) {
+        GST_WARNING_OBJECT (adder->srcpad, "Sending event  %p (%s) failed.",
+            event, GST_EVENT_TYPE_NAME (event));
+      }
+      adder->segment_pending = FALSE;
+    } else {
+      GST_WARNING_OBJECT (adder->srcpad, "Creating new segment event for "
+          "start:%" G_GINT64_FORMAT "  end:%" G_GINT64_FORMAT " failed",
+          adder->segment.start, adder->segment.stop);
+    }
+  }
+
+  /* do other pending events, e.g., tags */
+  if (G_UNLIKELY (adder->pending_events)) {
+    while (adder->pending_events) {
+      GstEvent *ev = GST_EVENT (adder->pending_events->data);
+      gst_pad_push_event (adder->srcpad, ev);
+      adder->pending_events = g_list_remove (adder->pending_events, ev);
+    }
   }
 
   /* get the range of offsets in the output stream spanned by the available
@@ -1152,18 +1194,16 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
         full_gap_buffer = inbuf;
       else
         gst_buffer_unref (inbuf);
-    } else {
-      if (gap == 0 && inlength == outlength) {
-        if (!outbuf)
-          outbuf = inbuf;
-        else {
-          outbuf = gst_buffer_make_writable (outbuf);
-          adder->func (GST_BUFFER_DATA (outbuf), GST_BUFFER_DATA (inbuf), outlength * adder->bps / adder->sample_size);
-          gst_buffer_unref (inbuf);
-        }
-      } else
-        partial_nongap_buffers = g_slist_prepend (partial_nongap_buffers, inbuf);
-    }
+    } else if (gap == 0 && inlength == outlength) {
+      if (!outbuf)
+        outbuf = inbuf;
+      else {
+        outbuf = gst_buffer_make_writable (outbuf);
+        adder->func (GST_BUFFER_DATA (outbuf), GST_BUFFER_DATA (inbuf), GST_BUFFER_SIZE (outbuf) / adder->sample_size);
+        gst_buffer_unref (inbuf);
+      }
+    } else
+      partial_nongap_buffers = g_slist_prepend (partial_nongap_buffers, inbuf);
   }
 
   /* now add partial non-gap buffers */
@@ -1173,98 +1213,40 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
       /* get a buffer of zeros */
       ret = gst_pad_alloc_buffer (adder->srcpad, earliest_output_offset, outlength * adder->bps, GST_PAD_CAPS(adder->srcpad), &outbuf);
       if (ret != GST_FLOW_OK) {
-        /* FIXME: handle failure */
-        outbuf = NULL;
+        g_slist_free_full (partial_nongap_buffers, (GDestroyNotify) gst_buffer_unref);
+	goto no_buffer;
       }
       memset (GST_BUFFER_DATA (outbuf), 0, GST_BUFFER_SIZE (outbuf));
     } else
       outbuf = gst_buffer_make_writable (outbuf);
-    do {
-      GSList *next = g_slist_next (partial_nongap_buffers);
-      GstBuffer *inbuf = partial_nongap_buffers->data;
+    while (partial_nongap_buffers) {
+      GstBuffer *inbuf = GST_BUFFER (partial_nongap_buffers->data);
       guint gap = adder->synchronous ?  gst_util_uint64_scale_int_round (GST_BUFFER_TIMESTAMP (inbuf) - adder->segment.start, adder->rate, GST_SECOND) - earliest_output_offset : 0;
+      g_assert (gap + GST_BUFFER_SIZE (inbuf) / adder->bps <= outlength);
       adder->func (GST_BUFFER_DATA (outbuf) + gap * adder->bps, GST_BUFFER_DATA (inbuf), GST_BUFFER_SIZE (inbuf) / adder->sample_size);
       gst_buffer_unref (inbuf);
-      g_slist_free_1 (partial_nongap_buffers);
-      partial_nongap_buffers = next;
-    } while (partial_nongap_buffers);
+      partial_nongap_buffers = g_slist_remove (partial_nongap_buffers, inbuf);
+    }
   }
 
   /* if we don't have an output buffer yet, then if there's a full gap
    * buffer it becomes our output, otherwise if there are only partial gap
-   * buffers we need to make a new buffer */
-  if (!outbuf) {
+   * buffers we need to make a gap buffer, otherwise we're at EOS */
+  if (outbuf) {
     if (full_gap_buffer)
-      outbuf = full_gap_buffer;
-    else if (have_gap_buffers) {
-      /* FIXME:  is this condition even possible?  (KCC) */
-      /* get a buffer of zeros */
-      ret = gst_pad_alloc_buffer (adder->srcpad, earliest_output_offset, outlength * adder->bps, GST_PAD_CAPS(adder->srcpad), &outbuf);
-      if (ret != GST_FLOW_OK) {
-        /* FIXME: handle failure */
-        outbuf = NULL;
-      }
-      memset (GST_BUFFER_DATA (outbuf), 0, GST_BUFFER_SIZE (outbuf));
-      GST_BUFFER_FLAG_SET (outbuf, GST_BUFFER_FLAG_GAP);
-    }
+      gst_buffer_unref (full_gap_buffer);
   } else if (full_gap_buffer)
-    gst_buffer_unref (full_gap_buffer);
-
-  /* if we *still* don't have an output buffer, we're at EOS */
-  if (!outbuf)
+    outbuf = full_gap_buffer;
+  else if (have_gap_buffers) {
+    /* FIXME:  is this condition even possible?  (KCC) */
+    /* get a buffer of zeros */
+    ret = gst_pad_alloc_buffer (adder->srcpad, earliest_output_offset, outlength * adder->bps, GST_PAD_CAPS(adder->srcpad), &outbuf);
+    if (ret != GST_FLOW_OK)
+      goto no_buffer;
+    memset (GST_BUFFER_DATA (outbuf), 0, GST_BUFFER_SIZE (outbuf));
+    GST_BUFFER_FLAG_SET (outbuf, GST_BUFFER_FLAG_GAP);
+  } else
     goto eos;
-
-  /* do new segment event if needed */
-  if (adder->segment_pending) {
-    GstEvent *event;
-
-    /* FIXME, use rate/applied_rate as set on all sinkpads.
-     * - currently we just set rate as received from last seek-event
-     *
-     * When seeking we set the start and stop positions as given in the seek
-     * event. We also adjust offset & timestamp acordingly.
-     * This basically ignores all newsegments sent by upstream.
-     */
-    event = gst_event_new_new_segment_full (FALSE, adder->segment.rate,
-        1.0, GST_FORMAT_TIME, adder->segment.start, adder->segment.stop,
-        adder->segment.start);
-    if (adder->segment.rate > 0.0) {
-      adder->timestamp = adder->segment.start;
-      adder->offset = 0;
-    } else {
-      adder->timestamp = adder->segment.stop;
-      adder->offset = gst_util_uint64_scale_round (adder->segment.stop - adder->segment.start, adder->rate, GST_SECOND);
-    }
-    GST_INFO_OBJECT (adder, "seg_start %" G_GUINT64_FORMAT ", seg_end %"
-        G_GUINT64_FORMAT, adder->segment.start, adder->segment.stop);
-    GST_INFO_OBJECT (adder, "timestamp %" G_GINT64_FORMAT ",new offset %"
-        G_GINT64_FORMAT, adder->timestamp, adder->offset);
-
-    if (event) {
-      if (!gst_pad_push_event (adder->srcpad, event)) {
-        GST_WARNING_OBJECT (adder->srcpad, "Sending event  %p (%s) failed.",
-            event, GST_EVENT_TYPE_NAME (event));
-      }
-      adder->segment_pending = FALSE;
-    } else {
-      GST_WARNING_OBJECT (adder->srcpad, "Creating new segment event for "
-          "start:%" G_GINT64_FORMAT "  end:%" G_GINT64_FORMAT " failed",
-          adder->segment.start, adder->segment.stop);
-    }
-  }
-
-  if (G_UNLIKELY (adder->pending_events)) {
-    GList *tmp = adder->pending_events;
-
-    while (tmp) {
-      GstEvent *ev = (GstEvent *) tmp->data;
-
-      gst_pad_push_event (adder->srcpad, ev);
-      tmp = g_list_next (tmp);
-    }
-    g_list_free (adder->pending_events);
-    adder->pending_events = NULL;
-  }
 
   /* FIXME:  this logic can't run backwards */
   /* set timestamps on the output buffer */
@@ -1283,12 +1265,12 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
   /* send it out */
   GST_LOG_OBJECT (adder, "pushing outbuf %p spanning %" GST_BUFFER_BOUNDARIES_FORMAT, outbuf, GST_BUFFER_BOUNDARIES_ARGS (outbuf));
   ret = gst_pad_push (adder->srcpad, outbuf);
-
   GST_LOG_OBJECT (adder, "pushed outbuf, result = %s", gst_flow_get_name (ret));
 
   return ret;
 
   /* ERRORS */
+no_buffer:
 bad_timestamps:
   {
     return GST_FLOW_ERROR;
@@ -1310,7 +1292,7 @@ eos:
 static GstStateChangeReturn
 gst_adder_change_state (GstElement * element, GstStateChange transition)
 {
-  GstAdder *adder;
+  GstLALAdder *adder;
   GstStateChangeReturn ret;
 
   adder = GST_ADDER (element);
@@ -1351,7 +1333,7 @@ gst_adder_change_state (GstElement * element, GstStateChange transition)
 static gboolean
 plugin_init (GstPlugin * plugin)
 {
-  GST_DEBUG_CATEGORY_INIT (GST_CAT_DEFAULT, "adder", 0,
+  GST_DEBUG_CATEGORY_INIT (GST_CAT_DEFAULT, "lal_adder", 0,
       "audio channel mixing element");
 
   gst_adder_orc_init ();
