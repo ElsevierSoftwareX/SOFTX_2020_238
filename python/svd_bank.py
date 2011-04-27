@@ -201,11 +201,11 @@ def write_bank(filename, bank, verbose = False):
 	root = ligolw.LIGO_LW()
 
 	# Add root-level scalar params
-	root.appendChild(param.new_param('filter_length', lioglw_types.FromPyType[float], bank.filter_length))
-	root.appendChild(param.new_param('gate_threshold', lioglw_types.FromPyType[float], bank.gate_threshold))
-	root.appendChild(param.new_param('logname', lioglw_types.FromPyType[str], bank.logname))
-	root.appendChild(param.new_param('snr_threshold', lioglw_types.FromPyType[float], bank.snr_threshold))
-	root.appendChild(param.new_param('template_bank_filename', lioglw_types.FromPyType[str], bank.template_bank_filename))
+	root.appendChild(param.new_param('filter_length', ligolw_types.FromPyType[float], bank.filter_length))
+	root.appendChild(param.new_param('gate_threshold', ligolw_types.FromPyType[float], bank.gate_threshold))
+	root.appendChild(param.new_param('logname', ligolw_types.FromPyType[str], bank.logname))
+	root.appendChild(param.new_param('snr_threshold', ligolw_types.FromPyType[float], bank.snr_threshold))
+	root.appendChild(param.new_param('template_bank_filename', ligolw_types.FromPyType[str], bank.template_bank_filename))
 
 	# Add root-level arrays
 	root.appendChild(array.from_array('autocorrelation_bank_real', bank.autocorrelation_bank.real))
