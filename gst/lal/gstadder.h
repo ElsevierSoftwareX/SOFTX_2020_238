@@ -42,7 +42,8 @@ typedef struct _GstLALAdderInputChannel GstLALAdderInputChannel;
 typedef enum {
   GST_ADDER_FORMAT_UNSET,
   GST_ADDER_FORMAT_INT,
-  GST_ADDER_FORMAT_FLOAT
+  GST_ADDER_FORMAT_FLOAT,
+  GST_ADDER_FORMAT_COMPLEX
 } GstAdderFormat;
 
 typedef void (*GstAdderFunction) (gpointer out, gpointer in, guint size);

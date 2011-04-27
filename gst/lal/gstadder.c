@@ -47,11 +47,13 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <complex.h>
 #include "gstadder.h"
 #include <gst/audio/audio.h>
 #include <string.h>             /* strcmp */
 #include "gstadderorc.h"
 #include <gstlalcollectpads.h>
+#include <gstlal.h>
 
 /* highest positive/lowest negative x-bit value we can use for clamping */
 #define MAX_INT_32  ((gint32) (0x7fffffff))
@@ -106,7 +108,12 @@ GST_DEBUG_CATEGORY_STATIC (GST_CAT_DEFAULT);
   "rate = (int) [ 1, MAX ], " \
   "channels = (int) [ 1, MAX ], " \
   "endianness = (int) BYTE_ORDER, " \
-  "width = (int) { 32, 64 }"
+  "width = (int) { 32, 64 } ;" \
+  "audio/x-raw-complex, " \
+  "rate = (int) [ 1, MAX ], " \
+  "channels = (int) [ 1, MAX ], " \
+  "endianness = (int) BYTE_ORDER, " \
+  "width = (int) { 64, 128 }"
 
 static GstStaticPadTemplate gst_adder_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
@@ -157,6 +164,8 @@ static void name (type *out, type *in, gint samples) {          \
 
 /* *INDENT-OFF* */
 MAKE_FUNC_NC (add_float64, gdouble)
+MAKE_FUNC_NC (add_complex64, complex float)
+MAKE_FUNC_NC (add_complex128, complex double)
 /* *INDENT-ON* */
 
 /* we can only accept caps that we and downstream can handle.
@@ -297,6 +306,27 @@ gst_adder_setcaps (GstPad * pad, GstCaps * caps)
         break;
       case 64:
         adder->func = (GstAdderFunction) add_float64;
+        break;
+      default:
+        goto not_supported;
+    }
+  } else if (strcmp (media_type, "audio/x-raw-complex") == 0) {
+    adder->format = GST_ADDER_FORMAT_COMPLEX;
+    gst_structure_get_int (structure, "width", &adder->width);
+    gst_structure_get_int (structure, "endianness", &adder->endianness);
+
+    GST_INFO_OBJECT (pad, "parse_caps sets adder to format complex, %d bit",
+        adder->width);
+
+    if (adder->endianness != G_BYTE_ORDER)
+      goto not_supported;
+
+    switch (adder->width) {
+      case 64:
+        adder->func = (GstAdderFunction) add_complex64;
+        break;
+      case 128:
+        adder->func = (GstAdderFunction) add_complex128;
         break;
       default:
         goto not_supported;
@@ -755,9 +785,14 @@ gst_adder_sink_event (GstPad * pad, GstEvent * event)
       adder->segment_pending = TRUE;
       adder->flush_stop_pending = FALSE;
       /* Clear pending tags */
-      if (adder->pending_events) {
+      /* FIXME:  switch to
         g_list_free_full (adder->pending_events, (GDestroyNotify) gst_event_unref);
         adder->pending_events = NULL;
+      */
+      while (adder->pending_events) {
+        GstEvent *ev = GST_EVENT (adder->pending_events->data);
+        gst_event_unref (ev);
+        adder->pending_events = g_list_remove (adder->pending_events, ev);
       }
       GST_OBJECT_UNLOCK (adder->collect);
       break;
@@ -870,9 +905,14 @@ gst_adder_dispose (GObject * object)
     adder->collect = NULL;
   }
   gst_caps_replace (&adder->filter_caps, NULL);
-  if (adder->pending_events) {
+  /* FIXME:  switch to
     g_list_free_full (adder->pending_events, (GDestroyNotify) gst_event_unref);
     adder->pending_events = NULL;
+  */
+  while (adder->pending_events) {
+    GstEvent *ev = GST_EVENT (adder->pending_events->data);
+    gst_event_unref (ev);
+    adder->pending_events = g_list_remove (adder->pending_events, ev);
   }
 
   G_OBJECT_CLASS (parent_class)->dispose (object);
@@ -1217,7 +1257,14 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
       /* get a buffer of zeros */
       ret = gst_pad_alloc_buffer (adder->srcpad, earliest_output_offset, outlength * adder->bps, GST_PAD_CAPS(adder->srcpad), &outbuf);
       if (ret != GST_FLOW_OK) {
+        /* FIXME:  replace with
         g_slist_free_full (partial_nongap_buffers, (GDestroyNotify) gst_buffer_unref);
+        */
+        while (partial_nongap_buffers) {
+          GstBuffer *inbuf = GST_BUFFER (partial_nongap_buffers->data);
+          gst_buffer_unref (inbuf);
+          partial_nongap_buffers = g_slist_remove (partial_nongap_buffers, inbuf);
+	}
 	goto no_buffer;
       }
       memset (GST_BUFFER_DATA (outbuf), 0, GST_BUFFER_SIZE (outbuf));
