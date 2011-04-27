@@ -33,11 +33,11 @@ import threading
 import warnings
 
 
+# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
 pygtk.require("2.0")
-import pygst
-pygst.require("0.10")
-from gstlal.option import OptionParser
+import gobject
+gobject.threads_init()
 
 
 from glue import segments
@@ -45,9 +45,10 @@ from glue import segmentsUtils
 from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
+from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 from gstlal import ligolw_output
 from gstlal import svd_bank
-from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
+from gstlal.option import OptionParser
 
 
 #
@@ -196,9 +197,8 @@ else:
 #
 
 
-# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
-import gobject
-gobject.threads_init()
+import pygst
+pygst.require("0.10")
 import gst
 
 
