@@ -218,9 +218,9 @@ def write_bank(filename, bank, verbose = False):
 		el = ligolw.LIGO_LW()
 
 		# Add scalar params
-		el.appendChild(param.new_param('start', lioglw_types.FromPyType[float], frag.start))
-		el.appendChild(param.new_param('end', lioglw_types.FromPyType[float], frag.end))
-		el.appendChild(param.new_param('rate', lioglw_types.FromPyType[int], frag.rate))
+		el.appendChild(param.new_param('start', ligolw_types.FromPyType[float], frag.start))
+		el.appendChild(param.new_param('end', ligolw_types.FromPyType[float], frag.end))
+		el.appendChild(param.new_param('rate', ligolw_types.FromPyType[int], frag.rate))
 
 		# Add arrays
 		el.appendChild(array.from_array('chifacs', frag.chifacs))
