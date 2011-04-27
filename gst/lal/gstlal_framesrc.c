@@ -696,16 +696,16 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	 * gstreamer on the clusters we can take this stupid pause out and
 	 * look again at what's really going on here */
 
-	 {
-	 static gboolean first = TRUE;
-	 /* 5 seconds.  seems to be enough */
-	 if(first) g_usleep(5000000);
-	 first = FALSE;
-	 }
+	{
+	static gboolean first = TRUE;
+	/* 5 seconds.  seems to be enough */
+	if(first) g_usleep(5000000);
+	first = FALSE;
+	}
 
 	result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, buffer_length * unit_size(element), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
 	if(result != GST_FLOW_OK) {
-		GST_DEBUG_OBJECT(element, "gst_pad_alloc_buffer() returned %d (%s)", result, gst_flow_get_name(result));
+		GST_ERROR_OBJECT(element, "gst_pad_alloc_buffer() returned %d (%s)", result, gst_flow_get_name(result));
 		return result;
 	}
 	if(basesrc->offset != GST_BUFFER_OFFSET(*buffer) || buffer_length * unit_size(element) != GST_BUFFER_SIZE(*buffer)) {
@@ -717,7 +717,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		GST_LOG_OBJECT(element, "populating %" G_GUINT64_FORMAT " sample non-gap buffer", buffer_length);
 		result = read_series(element, basesrc->offset, buffer_length, GST_BUFFER_DATA(*buffer));
 		if(result != GST_FLOW_OK) {
-			GST_WARNING_OBJECT(element, "failure reading data");
+			GST_ERROR_OBJECT(element, "failure reading data");
 			gst_buffer_unref(*buffer);
 			*buffer = NULL;
 			return result;
@@ -835,7 +835,7 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 		case GST_FORMAT_DEFAULT:
 		case GST_FORMAT_TIME:
 			if(src_value < basesrc->segment.start) {
-				GST_DEBUG_OBJECT(element, "requested time precedes start of segment, clipping to start of segment");
+				GST_WARNING_OBJECT(element, "requested time precedes start of segment, clipping to start of segment");
 				offset = 0;
 			} else
 				offset = time_to_offset(element, src_value);
@@ -851,10 +851,10 @@ static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
 
 		case GST_FORMAT_PERCENT:
 			if(src_value < 0) {
-				GST_DEBUG_OBJECT(element, "requested percentage < 0, clipping to 0");
+				GST_WARNING_OBJECT(element, "requested percentage < 0, clipping to 0");
 				offset = 0;
 			} else if(src_value > 100) {
-				GST_DEBUG_OBJECT(element, "requested percentage > 100, clipping to 100");
+				GST_WARNING_OBJECT(element, "requested percentage > 100, clipping to 100");
 				offset = time_to_offset(element, basesrc->segment.stop);
 			} else
 				offset = gst_util_uint64_scale_int_round(src_value, time_to_offset(element, basesrc->segment.stop), 100);
