@@ -64,7 +64,7 @@ GstLALCollectData *gstlal_collect_pads_add_pad_full(GstCollectPads *pads, GstPad
 
 	data = (GstLALCollectData *) gst_collect_pads_add_pad_full(pads, pad, size, destroy_notify);
 	if(!data) {
-		GST_DEBUG_OBJECT(pads, "could not add pad to collectpads object");
+		GST_ERROR_OBJECT(pads, "could not add pad to collectpads object");
 		return NULL;
 	}
 
@@ -178,7 +178,7 @@ GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads)
 		if(!segment) {
 			segment = gst_segment_copy(&data->segment);
 			if(!segment) {
-				GST_ERROR_OBJECT(pads, "failure copying segment");
+				GST_ERROR_OBJECT(pads, "%" GST_PTR_FORMAT ": failure copying segment", data->pad);
 				goto done;
 			}
 			continue;
@@ -189,7 +189,7 @@ GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads)
 		 */
 
 		if(segment->format != data->segment.format || segment->applied_rate != data->segment.applied_rate) {
-			GST_ERROR_OBJECT(pads, "mismatch in segment format and/or applied rate");
+			GST_ERROR_OBJECT(pads, "%" GST_PTR_FORMAT ": mismatch in segment format and/or applied rate", data->pad);
 			gst_segment_free(segment);
 			segment = NULL;
 			goto done;
@@ -199,6 +199,7 @@ GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads)
 		 * expand start and stop
 		 */
 
+		GST_INFO_OBJECT(pads, "%" GST_PTR_FORMAT ": have segment [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", data->pad, data->segment.start, data->segment.stop);
 		if(segment->start == -1 || segment->start > data->segment.start)
 			segment->start = data->segment.start;
 		if(segment->stop == -1 || segment->stop < data->segment.stop)
@@ -206,6 +207,7 @@ GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads)
 	}
 
 done:
+	GST_INFO_OBJECT(pads, "returning segment [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", segment->start, segment->stop);
 	return segment;
 }
 
@@ -214,19 +216,27 @@ done:
  * Computes the earliest of the start and of the end times of the
  * GstCollectPad's input buffers.
  *
- * Both times are set to GST_CLOCK_TIME_NONE if one or more input buffers
- * has invalid timestamps and/or offsets or all pads report EOS.  The
- * return value is FALSE if at least one input buffer had an invalid
- * timestamp and/or offsets.  The calling code should interpret this to
- * indicate the presence of invalid input on at least one pad.  The return
- * value is TRUE if no input buffer had invalid metadata (including when
- * there are 0 input buffers, as when all pads report EOS).
+ * The return value indicates the successful execution of this function.
+ * TRUE indicates the function was able to procede to a successful
+ * conclusion, FALSE indicates that one or more errors occured.
+ *
+ * Upon the successful completion of this function, both time parameters
+ * will be set to GST_CLOCK_TIME_NONE if all input streams are at EOS.
+ * Otherwise, if at least one stream is not at EOS, the times are set to
+ * the earliest interval spanned by all the buffers that are available.
+ *
+ * Note that if no input pads have data available, this condition is
+ * interpreted as EOS.  EOS is, therefore, indistinguishable from the
+ * initial state, wherein no data has yet arrived.  It is assumed this
+ * function will only be invoked from within the collected() method, and
+ * therefore only after at least one pad has received a buffer, and
+ * therefore the "no data available" condition is only seen at EOS.
  *
  * Summary:
  *
  * condition   return value   times
  * ----------------------------------
- * bad input   FALSE          GST_CLOCK_TIME_NONE
+ * bad input   FALSE          ?
  * EOS         TRUE           GST_CLOCK_TIME_NONE
  * success     TRUE           >= 0
  *
@@ -247,14 +257,14 @@ static GstClockTime compute_t_end(GstLALCollectData *data, GstBuffer *buf, gint 
 {
 	/* FIXME:  could use GST_FRAMES_TO_CLOCK_TIME() but that macro is
 	 * defined in gst-plugins-base */
-	return GST_BUFFER_TIMESTAMP(buf) + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END_IS_VALID(buf) ? GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf) : GST_BUFFER_SIZE(buf) / data->unit_size, GST_SECOND, rate);
+	return GST_BUFFER_TIMESTAMP(buf) + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf), GST_SECOND, rate);
 }
 
 
 gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTime *t_start, GstClockTime *t_end, gint rate)
 {
-	gboolean valid = FALSE;
-	GSList *collectdatalist = NULL;
+	gboolean all_eos = TRUE;
+	GSList *collectdatalist;
 
 	/*
 	 * initilize
@@ -289,7 +299,7 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 
 		buf = gst_collect_pads_peek(pads, (GstCollectData *) data);
 		if(!buf) {
-			GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "EOS");
+			GST_DEBUG_OBJECT(pads, "%" GST_PTR_FORMAT ": EOS", ((GstCollectData *) data)->pad);
 			continue;
 		}
 
@@ -297,14 +307,14 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 		 * require a valid start offset and timestamp
 		 */
 
-		if(!GST_BUFFER_OFFSET_IS_VALID(buf)) {
-			GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "input buffer does not have a valid offset");
+		if(!GST_BUFFER_OFFSET_IS_VALID(buf) || !GST_BUFFER_OFFSET_END_IS_VALID(buf)) {
+			GST_ERROR_OBJECT(pads, "%" GST_PTR_FORMAT ": %" GST_PTR_FORMAT " does not have a valid offsets", ((GstCollectData *) data)->pad, buf);
 			gst_buffer_unref(buf);
 			return FALSE;
 		}
 
 		if(!GST_BUFFER_TIMESTAMP_IS_VALID(buf)) {
-			GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "input buffer does not have a valid timestamp");
+			GST_ERROR_OBJECT(pads, "%" GST_PTR_FORMAT ": %" GST_PTR_FORMAT " does not have a valid timestamp", ((GstCollectData *) data)->pad, buf);
 			gst_buffer_unref(buf);
 			return FALSE;
 		}
@@ -317,10 +327,10 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 		buf_t_end = compute_t_end(data, buf, rate);
 		gst_buffer_unref(buf);
 
-		GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "(%s): time = [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")\n", GST_PAD_NAME(((GstCollectData *) data)->pad), GST_TIME_SECONDS_ARGS(buf_t_start), GST_TIME_SECONDS_ARGS(buf_t_end));
+		GST_INFO_OBJECT(pads, "%" GST_PTR_FORMAT ": buffer spans [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", ((GstCollectData *) data)->pad, GST_TIME_SECONDS_ARGS(buf_t_start), GST_TIME_SECONDS_ARGS(buf_t_end));
 
 		if(buf_t_end < buf_t_start) {
-			GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "input buffer appears to have negative length");
+			GST_ERROR_OBJECT(pads, "%" GST_PTR_FORMAT ": buffer has negative length", ((GstCollectData *) data)->pad);
 			return FALSE;
 		}
 
@@ -338,16 +348,16 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 		 * meaningful numbers.
 		 */
 
-		valid = TRUE;
+		all_eos = FALSE;
 	}
 
 	/*
 	 * found at least one buffer?
 	 */
 
-	if(!valid)
+	if(all_eos)
 		*t_start = *t_end = GST_CLOCK_TIME_NONE;
-	GST_DEBUG_OBJECT(pads, "found [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(*t_start), GST_TIME_SECONDS_ARGS(*t_end));
+	GST_INFO_OBJECT(pads, "earliest common spanned interval [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(*t_start), GST_TIME_SECONDS_ARGS(*t_end));
 
 	return TRUE;
 }

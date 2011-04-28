@@ -33,13 +33,13 @@ libgstlal_la_SOURCES = \
 	gstlal_blcbc_triggergen.h gstlal_blcbc_triggergen.c \
 	gstlal_audioundersample.h gstlal_audioundersample.c
 libgstlal_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
-libgstlal_la_LIBADD = $(top_srcdir)/lib/skymap/libwanalysis.la $(top_srcdir)/lib/libgstlal.la $(top_srcdir)/lib/libgstlaltags.la $(top_srcdir)/lib/libgstlaltypes.la $(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS)
-libgstlal_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LDFLAGS) $(FFTW_LDFLAGS) $(LAL_LDFLAGS) $(GSTLAL_PLUGIN_LDFLAGS) $(gstreamer_LDFLAGS)
+libgstlal_la_LIBADD = $(top_srcdir)/lib/skymap/libwanalysis.la $(top_srcdir)/lib/libgstlal.la $(top_srcdir)/lib/libgstlaltags.la $(top_srcdir)/lib/libgstlaltypes.la
+libgstlal_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
 
 libgstlaladder_la_SOURCES = \
 	gstadder.h gstadder.c
 libgstlaladder_la_CFLAGS = $(AM_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
-libgstlaladder_la_LIBADD = $(top_srcdir)/lib/libgstlaltypes.la $(gstreamer_LIBS)
-libgstlaladder_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LDFLAGS) $(GSTLAL_PLUGIN_LDFLAGS) $(gstreamer_LDFLAGS)
+libgstlaladder_la_LIBADD = $(top_srcdir)/lib/libgstlaltypes.la
+libgstlaladder_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
 
 noinst_HEADERS = gstlal_plugins.h

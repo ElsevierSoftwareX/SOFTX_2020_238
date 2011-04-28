@@ -24,9 +24,6 @@
 #
 
 
-from gstlal import pipeparts
-from gstlal import cbc_template_fir
-from gstlal import simulation
 import math
 import sys
 
@@ -39,6 +36,11 @@ gobject.threads_init()
 import pygst
 pygst.require('0.10')
 import gst
+
+
+from gstlal import pipeparts
+from gstlal import cbc_template_fir
+from gstlal import simulation
 
 
 #
@@ -100,6 +102,12 @@ class LLOIDHandler(object):
 		if message.type == gst.MESSAGE_EOS:
 			self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
+		elif message.type == gst.MESSAGE_INFO:
+			gerr, dbgmsg = message.parse_info()
+			print >>sys.stderr, "info (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+		elif message.type == gst.MESSAGE_WARNING:
+			gerr, dbgmsg = message.parse_warning()
+			print >>sys.stderr, "warning (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
 		elif message.type == gst.MESSAGE_ERROR:
 			gerr, dbgmsg = message.parse_error()
 			self.pipeline.set_state(gst.STATE_NULL)

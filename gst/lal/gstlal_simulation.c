@@ -676,32 +676,55 @@ static REAL8TimeSeries *compute_strain(double right_ascension, double declinatio
 
 
 enum property {
-	ARG_XML_LOCATION = 1
+	ARG_XML_LOCATION = 1,
+	ARG_INSTRUMENT,
+	ARG_CHANNEL_NAME,
+	ARG_UNITS
 };
 
 
-static void set_property(GObject * object, enum property id, const GValue * value, GParamSpec * pspec)
+static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
 {
 
 	GSTLALSimulation *element = GSTLAL_SIMULATION(object);
 
-	switch (id) {
+	switch(id) {
 	case ARG_XML_LOCATION:
 		g_free(element->xml_location);
 		element->xml_location = g_value_dup_string(value);
 		destroy_injection_document(element->injection_document);
 		element->injection_document = NULL;
 		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
 	}
 }
 
-static void get_property(GObject * object, enum property id, GValue * value, GParamSpec * pspec)
+static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
 {
 	GSTLALSimulation *element = GSTLAL_SIMULATION(object);
 
-	switch (id) {
+	switch(id) {
 	case ARG_XML_LOCATION:
 		g_value_set_string(value, element->xml_location);
+		break;
+
+	case ARG_INSTRUMENT:
+		g_value_set_string(value, element->instrument);
+		break;
+
+	case ARG_CHANNEL_NAME:
+		g_value_set_string(value, element->channel_name);
+		break;
+
+	case ARG_UNITS:
+		g_value_set_string(value, element->units);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
 }
@@ -741,6 +764,11 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 				element->channel_name = channel_name;
 				element->units = units;
 			}
+
+			/* do notifies for all three */
+			g_object_notify(G_OBJECT(element), "instrument");
+			g_object_notify(G_OBJECT(element), "channel-name");
+			g_object_notify(G_OBJECT(element), "units");
 		}
 	}
 
@@ -794,7 +822,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 */
 
 	if(!element->instrument || !element->channel_name || !element->units) {
-		GST_ERROR_OBJECT(element, "stream metadata not available, cannot construct injections");
+		GST_ERROR_OBJECT(element, "stream metadata not available, cannot construct injections:  must receive tags \"%s\", \"%s\", \"%s\"", GSTLAL_TAG_INSTRUMENT, GSTLAL_TAG_CHANNEL_NAME, GSTLAL_TAG_UNITS);
 		result = gst_pad_push(element->srcpad, buf);
 		goto done;
 	}
@@ -976,6 +1004,39 @@ static void class_init(gpointer class, gpointer class_data)
 			"Name of LIGO Light Weight XML file containing list(s) of software injections",
 			NULL,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_INSTRUMENT,
+		g_param_spec_string(
+			"instrument",
+			"Instrument",
+			"Name of instrument for which the injections are being simulated",
+			NULL,
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_CHANNEL_NAME,
+		g_param_spec_string(
+			"channel-name",
+			"Channel name",
+			"Name of the channel for which the injections are being simulated",
+			NULL,
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_UNITS,
+		g_param_spec_string(
+			"units",
+			"Units",
+			"Units in which the injections are being computed.  Units are a string in the format used by the LAL units package.",
+			NULL,
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 		)
 	);
 }

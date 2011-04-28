@@ -24,6 +24,9 @@
 #
 
 
+import numpy
+
+
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
 pygtk.require("2.0")
@@ -33,8 +36,9 @@ import pygst
 pygst.require('0.10')
 import gst
 
+
 from glue import segments
-import numpy
+
 
 import pipeio
 from elements.channelgram import mkchannelgram

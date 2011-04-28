@@ -1502,7 +1502,7 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
  */
 
 
-static void gstlal_firbank_init(GSTLALFIRBank *filter, GSTLALFIRBankClass *kclass)
+static void gstlal_firbank_init(GSTLALFIRBank *filter, GSTLALFIRBankClass *klass)
 {
 	filter->block_stride = 0;	/* must != DEFAULT_BLOCK_STRIDE */
 	filter->latency = 0;

@@ -49,7 +49,7 @@ m4_pattern_allow([AC_PROG_CC_C99])
 m4_ifdef([AC_PROG_CC_C99],[AC_PROG_CC_C99],[LALSUITE_AC_PROG_CC_C99])
 
 AC_PROG_INSTALL
-AC_PROG_LIBTOOL
+LT_INIT
 PKG_PROG_PKG_CONFIG()
 
 
@@ -249,6 +249,19 @@ AC_SUBST([LAL_LIBS])
 PKG_CHECK_MODULES([GSL], [gsl], , [AC_MSG_ERROR([Not found!])])
 AC_SUBST([GSL_CFLAGS])
 AC_SUBST([GSL_LIBS])
+
+
+#
+# Check for ORC
+#
+
+
+PKG_CHECK_MODULES([ORC], [orc-0.4], , [
+	AC_MSG_WARN([ORC not found;  using potentially slower code paths.])
+	ORC_CFLAGS="-DDISABLE_ORC"
+])
+AC_SUBST([ORC_CFLAGS])
+AC_SUBST([ORC_LIBS])
 
 
 #

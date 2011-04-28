@@ -69,30 +69,21 @@ options.psd_fft_length = 8	# seconds
 
 
 
-from gstlal.reference_psd import *
+from gstlal import reference_psd
+from gstlal import lloidparts
 from gstlal.pipeutil import gst
 
 
-# FIXME: This is a silly class.
-class DetectorData(object):
-	# default block_size = 16384 samples/second * 8 bytes/sample * 8
-	# second
-	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 8):
-		self.frame_cache = frame_cache
-		self.channel = channel
-		self.block_size = block_size
-
-
-write_psd(
+reference_psd.write_psd(
 	options.write_psd,
-	measure_psd(
+	reference_psd.measure_psd(
 		options.instrument,
 		gst.event_new_seek(
 			1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_KEY_UNIT,
 			gst.SEEK_TYPE_SET, options.seg[0].ns(),
 			gst.SEEK_TYPE_SET, options.seg[1].ns()
 		),
-		DetectorData(options.frame_cache, options.channel_name),
+		lloidparts.DetectorData(options.frame_cache, options.channel_name),
 		options.seg,
 		2 * 2048,	# Hz;  must not be less than highest bank fragment sample rate (see below)
 		psd_fft_length = options.psd_fft_length,

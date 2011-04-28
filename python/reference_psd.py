@@ -39,14 +39,14 @@ pygst.require("0.10")
 import gst
 
 
-from gstlal import pipeparts
-from gstlal import lloidparts
-from gstlal import pipeio
-
-
 from glue.ligolw import ligolw
 from glue.ligolw import utils
 from pylal import series as lalseries
+
+
+from gstlal import pipeparts
+from gstlal import lloidparts
+from gstlal import pipeio
 
 
 #
@@ -68,7 +68,7 @@ def measure_psd(instrument, seekevent, detector, seg, rate, fake_data = False, o
 			if message.type == gst.MESSAGE_ELEMENT and message.structure.get_name() == "spectrum":
 				self.psd = pipeio.parse_spectrum_message(message)
 			else:
-				super(PSDHandler, self).on_message(bus, message)
+				super(type(self), self).on_message(bus, message)
 
 	#
 	# 8 FFT-lengths is just a ball-parky estimate of how much data is
@@ -91,6 +91,7 @@ def measure_psd(instrument, seekevent, detector, seg, rate, fake_data = False, o
 	handler = PSDHandler(mainloop, pipeline)
 
 	head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = fake_data, online_data = online_data, injection_filename = injection_filename, verbose = verbose)
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=[%d,MAX]" % rate)	# disallow upsampling
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % rate)
 	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 8)

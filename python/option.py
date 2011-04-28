@@ -18,46 +18,39 @@ Wrapper for gobject.option, an adapter for optparse and GOption.
 
 Implements the fixes proposed in Gnome Bugzilla at:
 https://bugzilla.gnome.org/show_bug.cgi?id=564070 (courtesy of Laszlo Pandy)
-https://bugzilla.gnome.org/show_bug.cgi?id=627449 (contributed by me)
 """
 __author__ = "Leo Singer <leo.singer@LIGO.ORG>"
 
 
-# FIXME: Delete this when 627449 has been fixed.
-try:
-	from gobject.option import *
-except:
-	from gobject.option import OptParseError, OptionError, OptionValueError, BadOptionError, OptionConflictError, Option, OptionGroup, OptionParser, make_option
+import gobject
+from gobject import option as goption
 
+OptionParser = goption.OptionParser
 
+# This is the test that would fail if pygobject hasn't been patched.
 # FIXME: Delete this when 564070 has been fixed.
-import gobject as _gobject
+a = OptionParser();
+a.add_option_group(gobject.OptionGroup('foo', 'bar', 'bat', None))
 try:
-	# This is the test that would fail if pygobject hasn't been patched.
-	a = OptionParser();
-	a.add_option_group(_gobject.OptionGroup('foo', 'bar', 'bat', None))
 	a.parse_args([])
-	del a
-except:
-	import sys
-	import optparse
+except AttributeError:
 	# Subclass OptionParser, and fix the broken method.
-	class NewOptionParser(OptionParser):
+	import optparse
+	import sys
+	class OptionParser(OptionParser):
 		def parse_args(self, args=None, values=None):
 			try:
-				options, args = optparse.OptionParser.parse_args(
-					self, args, values)
-				return options, args
-			except _gobject.GError:
+				return optparse.OptionParser.parse_args(self, args, values)
+			except gobject.GError:
 				error = sys.exc_info()[1]
-				if error.domain != _gobject.OPTION_ERROR:
+				if error.domain != gobject.OPTION_ERROR:
 					raise
-				if error.code == _gobject.OPTION_ERROR_BAD_VALUE:
-					raise OptionValueError(error.message)
-				elif error.code == _gobject.OPTION_ERROR_UNKNOWN_OPTION:
-					raise BadOptionError(error.message)
-				elif error.code == _gobject.OPTION_ERROR_FAILED:
-					raise OptParseError(error.message)
+				if error.code == gobject.OPTION_ERROR_BAD_VALUE:
+					raise goption.OptionValueError(error.message)
+				elif error.code == gobject.OPTION_ERROR_UNKNOWN_OPTION:
+					raise goption.BadOptionError(error.message)
+				elif error.code == gobject.OPTION_ERROR_FAILED:
+					raise goption.OptParseError(error.message)
 				else:
 					raise
-	OptionParser = NewOptionParser
+del a

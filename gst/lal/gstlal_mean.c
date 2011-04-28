@@ -803,7 +803,7 @@ static void gstlal_mean_class_init(GSTLALMeanClass *klass)
  */
 
 
-static void gstlal_mean_init(GSTLALMean *filter, GSTLALMeanClass *kclass)
+static void gstlal_mean_init(GSTLALMean *filter, GSTLALMeanClass *klass)
 {
 	filter->rate = 0;
 	filter->adapter = NULL;

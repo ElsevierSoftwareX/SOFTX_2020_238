@@ -10,5 +10,6 @@ pkgpython_PYTHON = lal_checktimestamps.py lal_fakeadvligosrc.py lal_fakeligosrc.
 pkgpyexec_LTLIBRARIES = _onlinehoftsrc.la
 
 _onlinehoftsrc_la_SOURCES = _onlinehoftsrc.c
-_onlinehoftsrc_la_CPPFLAGS = $(PYTHON_CPPFLAGS) $(pygobject_CFLAGS)
+_onlinehoftsrc_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS)
+_onlinehoftsrc_la_CFLAGS = $(AM_CFLAGS) $(pygobject_CFLAGS)
 _onlinehoftsrc_la_LDFLAGS = $(AM_LDFLAGS) -module $(PYTHON_LDFLAGS) $(pygobject_LIBS)
