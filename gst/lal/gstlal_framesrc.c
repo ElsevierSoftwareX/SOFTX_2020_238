@@ -324,7 +324,7 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 	case LAL_I4_TYPE_CODE: {
 		INT4TimeSeries *series = XLALFrReadINT4TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
 		if(!series) {
-			GST_ELEMENT_ERROR(element, RESOURCE, READ, ("XLALFrReadINT4TimeSeries() %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s failed", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds), ("%s", XLALErrorString(XLALGetBaseErrno())));
+			GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("XLALFrReadINT4TimeSeries() %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno())));
 			XLALClearErrno();
 			return GST_FLOW_ERROR;
 		}
@@ -340,7 +340,7 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 	case LAL_S_TYPE_CODE: {
 		REAL4TimeSeries *series = XLALFrReadREAL4TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
 		if(!series) {
-			GST_ELEMENT_ERROR(element, RESOURCE, READ, ("XLALFrReadREAL4TimeSeries() %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s failed", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds), ("%s", XLALErrorString(XLALGetBaseErrno())));
+			GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("XLALFrReadREAL4TimeSeries() %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno())));
 			XLALClearErrno();
 			return GST_FLOW_ERROR;
 		}
@@ -356,7 +356,7 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 	case LAL_D_TYPE_CODE: {
 		REAL8TimeSeries *series = XLALFrReadREAL8TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
 		if(!series) {
-			GST_ELEMENT_ERROR(element, RESOURCE, READ, ("XLALFrReadREAL8TimeSeries() %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s failed", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds), ("%s", XLALErrorString(XLALGetBaseErrno())));
+			GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("XLALFrReadREAL8TimeSeries() %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno())));
 			XLALClearErrno();
 			return GST_FLOW_ERROR;
 		}
@@ -370,7 +370,7 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 		break;
 
 	default:
-		GST_ELEMENT_ERROR(element, RESOURCE, READ, ("unsupported LAL type code (%d)", element->series_type), (NULL));
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("unsupported LAL type code (%d)", element->series_type));
 		return GST_FLOW_ERROR;
 	}
 
@@ -416,14 +416,14 @@ static gboolean start(GstBaseSrc *object)
 
 	cache = XLALFrImportCache(element->location);
 	if(!cache) {
-		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, ("XLALFrImportCache() failed"), ("%s", XLALErrorString(XLALGetBaseErrno())));
+		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrImportCache() failed: %s", XLALErrorString(XLALGetBaseErrno())));
 		XLALClearErrno();
 		return FALSE;
 	}
 	element->stream = XLALFrCacheOpen(cache);
 	XLALFrDestroyCache(cache);
 	if(!element->stream) {
-		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, ("XLALFrCacheOpen() failed"), ("%s", XLALErrorString(XLALGetBaseErrno())));
+		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrCacheOpen() failed: %s", XLALErrorString(XLALGetBaseErrno())));
 		XLALClearErrno();
 		return FALSE;
 	}
@@ -441,7 +441,7 @@ static gboolean start(GstBaseSrc *object)
 
 	element->series_type = XLALFrGetTimeSeriesType(element->full_channel_name, element->stream);
 	if((int) element->series_type < 0) {
-		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, ("XLALFrGetTimeSeriesType() failed"), ("%s", XLALErrorString(XLALGetBaseErrno())));
+		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrGetTimeSeriesType() failed: %s", XLALErrorString(XLALGetBaseErrno())));
 		XLALFrClose(element->stream);
 		element->stream = NULL;
 		XLALClearErrno();
@@ -461,14 +461,14 @@ static gboolean start(GstBaseSrc *object)
 	case LAL_I4_TYPE_CODE: {
 		INT4TimeSeries *series = XLALCreateINT4TimeSeries(element->full_channel_name, &stream_start, 0.0, 0.0, &lalDimensionlessUnit, 0);
 		if(!series) {
-			GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, ("XLALCreateINT4TimeSeries() failed"), ("%s", XLALErrorString(XLALGetBaseErrno())));
+			GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALCreateINT4TimeSeries() failed: %s", XLALErrorString(XLALGetBaseErrno())));
 			XLALFrClose(element->stream);
 			element->stream = NULL;
 			XLALClearErrno();
 			return FALSE;
 		}
 		if(XLALFrGetINT4TimeSeriesMetadata(series, element->stream)) {
-			GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, ("XLALFrGetINT4TimeSeriesMetadata() failed"), ("%s", XLALErrorString(XLALGetBaseErrno())));
+			GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrGetINT4TimeSeriesMetadata() failed: %s", XLALErrorString(XLALGetBaseErrno())));
 			XLALDestroyINT4TimeSeries(series);
 			XLALFrClose(element->stream);
 			element->stream = NULL;
@@ -492,14 +492,14 @@ static gboolean start(GstBaseSrc *object)
 	case LAL_S_TYPE_CODE: {
 		REAL4TimeSeries *series = XLALCreateREAL4TimeSeries(element->full_channel_name, &stream_start, 0.0, 0.0, &lalDimensionlessUnit, 0);
 		if(!series) {
-			GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, ("XLALCreateREAL4TimeSeries() failed"), ("%s", XLALErrorString(XLALGetBaseErrno())));
+			GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALCreateREAL4TimeSeries() failed: %s", XLALErrorString(XLALGetBaseErrno())));
 			XLALFrClose(element->stream);
 			element->stream = NULL;
 			XLALClearErrno();
 			return FALSE;
 		}
 		if(XLALFrGetREAL4TimeSeriesMetadata(series, element->stream)) {
-			GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, ("XLALFrGetREAL4TimeSeriesMetadata() failed"), ("%s", XLALErrorString(XLALGetBaseErrno())));
+			GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrGetREAL4TimeSeriesMetadata() failed: %s", XLALErrorString(XLALGetBaseErrno())));
 			XLALDestroyREAL4TimeSeries(series);
 			XLALFrClose(element->stream);
 			element->stream = NULL;
@@ -523,14 +523,14 @@ static gboolean start(GstBaseSrc *object)
 	case LAL_D_TYPE_CODE: {
 		REAL8TimeSeries *series = XLALCreateREAL8TimeSeries(element->full_channel_name, &stream_start, 0.0, 0.0, &lalDimensionlessUnit, 0);
 		if(!series) {
-			GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, ("XLALCreateREAL8TimeSeries() failed"), ("%s", XLALErrorString(XLALGetBaseErrno())));
+			GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALCreateREAL8TimeSeries() failed: %s", XLALErrorString(XLALGetBaseErrno())));
 			XLALFrClose(element->stream);
 			element->stream = NULL;
 			XLALClearErrno();
 			return FALSE;
 		}
 		if(XLALFrGetREAL8TimeSeriesMetadata(series, element->stream)) {
-			GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, ("XLALFrGetREAL8TimeSeriesMetadata() failed"), ("%s", XLALErrorString(XLALGetBaseErrno())));
+			GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrGetREAL8TimeSeriesMetadata() failed: %s", XLALErrorString(XLALGetBaseErrno())));
 			XLALDestroyREAL8TimeSeries(series);
 			XLALFrClose(element->stream);
 			element->stream = NULL;
@@ -552,7 +552,7 @@ static gboolean start(GstBaseSrc *object)
 	}
 
 	default:
-		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, ("unsupported data type (LALTYPECODE=%d) for channel \"%s\"", element->series_type, element->full_channel_name), (NULL));
+		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("unsupported data type (LALTYPECODE=%d) for channel \"%s\"", element->series_type, element->full_channel_name));
 		XLALFrClose(element->stream);
 		element->stream = NULL;
 		return FALSE;
@@ -644,19 +644,19 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		);
 
 		if(!taglist) {
-			GST_ELEMENT_ERROR(element, CORE, TAG, ("failure constructing taglist"), (NULL));
+			GST_ELEMENT_ERROR(element, CORE, TAG, (NULL), ("failure constructing taglist"));
 			return GST_FLOW_ERROR;
 		}
 
 		evt = gst_event_new_tag(taglist);
 
 		if(!evt) {
-			GST_ELEMENT_ERROR(element, CORE, TAG, ("failure constructing tag event"), (NULL));
+			GST_ELEMENT_ERROR(element, CORE, TAG, (NULL), ("failure constructing tag event"));
 			return GST_FLOW_ERROR;
 		}
 
 		if(!gst_pad_push_event(GST_BASE_SRC_PAD(basesrc), evt)) {
-			GST_ELEMENT_ERROR(element, CORE, TAG, ("failure pusing tag event"), (NULL));
+			GST_ELEMENT_ERROR(element, CORE, TAG, (NULL), ("failure pushing tag event"));
 			return GST_FLOW_ERROR;
 		}
 
@@ -782,7 +782,7 @@ static gboolean do_seek(GstBaseSrc *basesrc, GstSegment *segment)
 	 */
 
 	if((GstClockTime) segment->start == GST_CLOCK_TIME_NONE) {
-		GST_ELEMENT_ERROR(element, RESOURCE, SEEK, ("seek failed:  start time is required"), (NULL));
+		GST_ELEMENT_ERROR(element, RESOURCE, SEEK, (NULL), ("start time is required"));
 		return FALSE;
 	}
 	XLALINT8NSToGPS(&epoch, segment->start);
