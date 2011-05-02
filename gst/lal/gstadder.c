@@ -340,11 +340,15 @@ gst_adder_setcaps (GstPad * pad, GstCaps * caps)
   /* precalc bps */
   adder->sample_size = adder->width / 8;
   adder->bps = adder->sample_size * adder->channels;
+
+  /* set unit size on collect pads */
+  GST_OBJECT_LOCK (adder->collect);
   for (pads = GST_ELEMENT (adder)->pads; pads; pads = g_list_next (pads)) {
     GstPad *pad = GST_PAD (pads->data);
     if (gst_pad_get_direction (pad) == GST_PAD_SINK)
       gstlal_collect_pads_set_unit_size (pad, adder->bps);
   }
+  GST_OBJECT_UNLOCK (adder->collect);
 
   return TRUE;
 
@@ -1005,7 +1009,10 @@ gst_adder_request_new_pad (GstElement * element, GstPadTemplate * templ,
   gst_pad_set_getcaps_function (newpad,
       GST_DEBUG_FUNCPTR (gst_adder_sink_getcaps));
   gst_pad_set_setcaps_function (newpad, GST_DEBUG_FUNCPTR (gst_adder_setcaps));
+  GST_OBJECT_LOCK (adder->collect);
   data = gstlal_collect_pads_add_pad (adder->collect, newpad, sizeof (*data));
+  gstlal_collect_pads_set_unit_size (newpad, adder->bps);
+  GST_OBJECT_UNLOCK (adder->collect);
 
   /* FIXME: hacked way to override/extend the event function of
    * GstCollectPads; because it sets its own event function giving the
