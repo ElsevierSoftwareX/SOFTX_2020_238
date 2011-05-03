@@ -1236,6 +1236,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * (re)sync timestamp and offset book-keeping
 		 */
 
+		g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(inbuf));
+		g_assert(GST_BUFFER_OFFSET_IS_VALID(inbuf));
 		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
 		element->next_offset_out = GST_BUFFER_OFFSET(inbuf);
@@ -1252,7 +1254,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		zero_output_history(element);
-	}
+	} else
+		g_assert(GST_BUFFER_TIMESTAMP(inbuf) == gst_audioadapter_expected_timestamp(element->input_queue));
 	element->next_offset_in = GST_BUFFER_OFFSET_END(inbuf);
 
 	/*
