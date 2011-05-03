@@ -32,7 +32,9 @@
 
 
 #include <complex.h>
+#include <errno.h>
 #include <string.h>
+#include <stdlib.h>
 
 
 /*
@@ -1412,6 +1414,30 @@ static void gstlal_firbank_base_init(gpointer gclass)
  */
 
 
+static void gstlal_load_fftw_wisdom(void)
+{
+	char *filename;
+	int savederrno;
+
+	g_mutex_lock(gstlal_fftw_lock);
+	savederrno = errno;
+	filename = getenv(GSTLAL_FFTW_WISDOM_ENV);
+	if(filename) {
+		FILE *f = fopen(filename, "r");
+		if(!f)
+			GST_ERROR("cannot open FFTW wisdom file \"%s\": %s", filename, strerror(errno));
+		else {
+			if(!fftw_import_wisdom_from_file(f))
+				GST_ERROR("failed to import FFTW wisdom from \"%s\": wisdom not loaded", filename);
+			fclose(f);
+		}
+	} else if(!fftw_import_system_wisdom())
+		GST_WARNING("failed to import system default FFTW wisdom: %s", strerror(errno));
+	errno = savederrno;
+	g_mutex_unlock(gstlal_fftw_lock);
+}
+
+
 static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
@@ -1494,6 +1520,12 @@ static void gstlal_firbank_class_init(GSTLALFIRBankClass *klass)
 		1,
 		G_TYPE_INT
 	);
+
+	/*
+	 * Load FFTW wisdom
+	 */
+
+	gstlal_load_fftw_wisdom();
 }
 
 
