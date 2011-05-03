@@ -1210,7 +1210,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
   for (collected = pads->data; collected; collected = g_slist_next (collected)) {
     GstLALCollectData *collect_data = (GstLALCollectData *) collected->data;
     GstBuffer *inbuf;
-    guint gap;
+    guint offset;
     guint64 inlength;
 
     /* (try to) get a buffer upto the desired end offset */
@@ -1228,9 +1228,9 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
 
     /* determine the buffer's location relative to the desired range of
      * offsets.  we've checked above that time hasn't gone backwards on any
-     * input buffer so gap can't be negative.  if not doing synchronous
+     * input buffer so offset can't be negative.  if not doing synchronous
      * adding the buffer starts "now". */
-    gap = adder->synchronous ?  gst_util_uint64_scale_int_round (GST_BUFFER_TIMESTAMP (inbuf) - adder->segment.start, adder->rate, GST_SECOND) - earliest_output_offset : 0;
+    offset = adder->synchronous ?  gst_util_uint64_scale_int_round (GST_BUFFER_TIMESTAMP (inbuf) - adder->segment.start, adder->rate, GST_SECOND) - earliest_output_offset : 0;
     inlength = GST_BUFFER_OFFSET_END (inbuf) - GST_BUFFER_OFFSET (inbuf);
     g_assert (inlength == GST_BUFFER_SIZE (inbuf) / adder->bps);
     GST_LOG_OBJECT (adder, "channel %p: retrieved %d sample buffer at %" GST_TIME_FORMAT, collect_data, inlength, GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (inbuf)));
@@ -1241,11 +1241,11 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
      * the partial non-gap buffers to add into the result later. */
     if (GST_BUFFER_FLAG_IS_SET (inbuf, GST_BUFFER_FLAG_GAP)) {
       have_gap_buffers = TRUE;
-      if (gap == 0 && inlength == outlength && !full_gap_buffer)
+      if (offset == 0 && inlength == outlength && !full_gap_buffer)
         full_gap_buffer = inbuf;
       else
         gst_buffer_unref (inbuf);
-    } else if (gap == 0 && inlength == outlength) {
+    } else if (offset == 0 && inlength == outlength) {
       if (!outbuf)
         outbuf = inbuf;
       else {
@@ -1279,9 +1279,9 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
       outbuf = gst_buffer_make_writable (outbuf);
     while (partial_nongap_buffers) {
       GstBuffer *inbuf = GST_BUFFER (partial_nongap_buffers->data);
-      guint gap = adder->synchronous ?  gst_util_uint64_scale_int_round (GST_BUFFER_TIMESTAMP (inbuf) - adder->segment.start, adder->rate, GST_SECOND) - earliest_output_offset : 0;
-      g_assert (gap + GST_BUFFER_SIZE (inbuf) / adder->bps <= outlength);
-      adder->func (GST_BUFFER_DATA (outbuf) + gap * adder->bps, GST_BUFFER_DATA (inbuf), GST_BUFFER_SIZE (inbuf) / adder->sample_size);
+      guint offset = adder->synchronous ?  gst_util_uint64_scale_int_round (GST_BUFFER_TIMESTAMP (inbuf) - adder->segment.start, adder->rate, GST_SECOND) - earliest_output_offset : 0;
+      g_assert (offset * adder->bps + GST_BUFFER_SIZE (inbuf) <= GST_BUFFER_SIZE (outbuf) || GST_BUFFER_SIZE (inbuf) == 0);
+      adder->func (GST_BUFFER_DATA (outbuf) + offset * adder->bps, GST_BUFFER_DATA (inbuf), GST_BUFFER_SIZE (inbuf) / adder->sample_size);
       gst_buffer_unref (inbuf);
       partial_nongap_buffers = g_slist_remove (partial_nongap_buffers, inbuf);
     }
