@@ -963,6 +963,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		gstlal_segment_list_free(element->segmentlist);
 		element->segmentlist = gstlal_segment_list_from_g_value_array(g_value_get_boxed(value));
 		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -999,6 +1003,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		if(element->segmentlist)
 			g_value_take_boxed(value, g_value_array_from_gstlal_segment_list(element->segmentlist));
 		/* FIXME:  else? */
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
 

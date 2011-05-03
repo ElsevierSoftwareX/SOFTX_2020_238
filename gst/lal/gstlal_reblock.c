@@ -86,6 +86,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case ARG_BLOCK_DURATION:
 		element->block_duration = g_value_get_uint64(value);
 		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -101,6 +105,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	switch(id) {
 	case ARG_BLOCK_DURATION:
 		g_value_set_uint64(value, element->block_duration);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
 

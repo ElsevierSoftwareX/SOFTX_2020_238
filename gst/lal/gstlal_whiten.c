@@ -1377,6 +1377,10 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		}
 		break;
 	}
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -1435,6 +1439,10 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 			g_value_set_double(value, element->hann_window->sumofsquares / element->hann_window->data->length);
 		else
 			g_value_set_double(value, 0.0);
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
 	}
 
 	GST_OBJECT_UNLOCK(element);

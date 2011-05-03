@@ -424,6 +424,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case ARG_INVERT:
 		element->invert_control = g_value_get_boolean(value);
 		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -463,6 +467,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	
 	case ARG_INVERT:
 		g_value_set_boolean(value, element->invert_control);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
 

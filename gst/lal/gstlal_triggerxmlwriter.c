@@ -109,6 +109,10 @@ static void xmlwriter_set_property(GObject * object, enum xmlwriter_property id,
 		g_free(element->location);
 		element->location = g_value_dup_string(value);
 		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
 	}
 	GST_OBJECT_UNLOCK(element);
 }
@@ -122,6 +126,10 @@ static void xmlwriter_get_property(GObject * object, enum xmlwriter_property id,
 	switch(id) {
 	case ARG_LOCATION:
 		g_value_set_string(value,element->location);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
 	GST_OBJECT_UNLOCK(element);
