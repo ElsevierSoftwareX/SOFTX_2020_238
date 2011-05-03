@@ -203,10 +203,10 @@ static int mark_segments(GstBaseSrc *basesrc, GstBuffer *buffer, guint64 start, 
 
     /* FIXME provide a bailout and a sensible starting point if you have sorted and coalesced segents */
     /* This is ridiculous, but doesn't require sorted or coalesced segments.  Could some fancy data structure help? */
+    /* FIXME switch to using gstlal segment routines */
     for (guint i = 0; i < rows; i++) {
         segstart = seglist->segments[i].start;
         segstop = seglist->segments[i].stop;
-	fprintf(stderr, "start %llu stop %llu\n", segstart,segstop);
         if ((segstart >= start) && (segstart < stop) && (segstop < stop))
             mark_segment(basesrc, buffer, segstart, segstop);
         if ((segstart >= start) && (segstart < stop) && (segstop >= stop))
