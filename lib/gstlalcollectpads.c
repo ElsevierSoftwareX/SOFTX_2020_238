@@ -327,7 +327,7 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 		buf_t_end = compute_t_end(data, buf, rate);
 		gst_buffer_unref(buf);
 
-		GST_INFO_OBJECT(pads, "%" GST_PTR_FORMAT ": buffer spans [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", ((GstCollectData *) data)->pad, GST_TIME_SECONDS_ARGS(buf_t_start), GST_TIME_SECONDS_ARGS(buf_t_end));
+		GST_DEBUG_OBJECT(pads, "%" GST_PTR_FORMAT ": buffer spans [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", ((GstCollectData *) data)->pad, GST_TIME_SECONDS_ARGS(buf_t_start), GST_TIME_SECONDS_ARGS(buf_t_end));
 
 		if(buf_t_end < buf_t_start) {
 			GST_ERROR_OBJECT(pads, "%" GST_PTR_FORMAT ": buffer has negative length", ((GstCollectData *) data)->pad);
@@ -357,7 +357,7 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 
 	if(all_eos)
 		*t_start = *t_end = GST_CLOCK_TIME_NONE;
-	GST_INFO_OBJECT(pads, "earliest common spanned interval [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(*t_start), GST_TIME_SECONDS_ARGS(*t_end));
+	GST_DEBUG_OBJECT(pads, "earliest common spanned interval [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(*t_start), GST_TIME_SECONDS_ARGS(*t_end));
 
 	return TRUE;
 }
