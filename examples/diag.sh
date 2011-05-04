@@ -125,13 +125,11 @@ function test_framesrc() {
         gst-launch \
                 lal_framesrc \
                         blocksize=$((16384*8*16)) \
-                        location="/home/kipp/gwf/cache" \
-                        instrument="H1" \
+                        location="/archive/home/kipp/pbh/psd/frame.H2.cache" \
+                        instrument="H2" \
                         channel-name="LSC-STRAIN" \
                         num-buffers=1000 \
                         name=framesrc \
-                ! lal_simulation xml-location="/home/dkeppel/lloid/HL-INJECTIONS_1_BNS_INJ-873247900-10.xml" \
-                ! audioresample ! audio/x-raw-float, rate=2048 \
                 ! progressreport \
                 ! fakesink
 }
@@ -213,6 +211,14 @@ function test_audioundersample() {
 		src. ! lal_audioundersample \
 		! audio/x-raw-float, rate=128 \
 		! lal_nxydump ! queue ! filesink buffer-mode=2 location="dump_out.txt"
+}
+
+function test_togglecomplex() {
+	gst-launch \
+		audiotestsrc wave=0 freq=32 samplesperbuffer=913 num-buffers=2048 \
+		! audio/x-raw-float, channels=2, width=64, rate=512 \
+		! lal_togglecomplex \
+		! fakesink
 }
 
 test_audioundersample
