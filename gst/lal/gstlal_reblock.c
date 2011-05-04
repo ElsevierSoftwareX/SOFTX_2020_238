@@ -1,7 +1,7 @@
 /*
  * An element to chop up audio buffers into smaller pieces.
  *
- * Copyright (C) 2009  Kipp Cannon
+ * Copyright (C) 2009,2011  Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -59,7 +59,7 @@
  */
 
 
-#define DEFAULT_BLOCK_DURATION GST_SECOND
+#define DEFAULT_BLOCK_DURATION (1 * GST_SECOND)
 
 
 /*
@@ -221,8 +221,8 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALReblock *element = GSTLAL_REBLOCK(gst_pad_get_parent(pad));
-	guint64 offset;
-	guint64 length, block_length;
+	guint64 offset, length;
+	guint64 blocks, block_length;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
@@ -230,31 +230,34 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
+		gst_buffer_unref(sinkbuf);
 		GST_ERROR_OBJECT(element, "error in input stream: buffer has invalid timestamp and/or offset");
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
 
-	length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
+	/*
+	 * if buffer is already small enough, push down stream
+	 */
+
+
+	if(GST_BUFFER_DURATION(sinkbuf) <= element->block_duration) {
+		/* consumes reference */
+		result = gst_pad_push(element->srcpad, sinkbuf);
+		if(G_UNLIKELY(result != GST_FLOW_OK))
+			GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name(result));
+		goto done;
+	}
 
 	/*
 	 * compute the block length
 	 */
 
-	if(GST_BUFFER_DURATION(sinkbuf) <= element->block_duration) {
-		/*
-		 * buffer is already small enough, push down stream
-		 */
-
-		gst_buffer_ref(sinkbuf);	/* we'll unref it again later */
-		result = gst_pad_push(element->srcpad, sinkbuf);
-		if(G_UNLIKELY(result != GST_FLOW_OK))
-			GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name (result));
-		goto done;
-	} else {
-		guint64 n = (GST_BUFFER_DURATION(sinkbuf) + element->block_duration - 1) / element->block_duration;	/* ciel */
-		block_length = (length + n - 1) / n;	/* ciel */
-	}
+	blocks = (GST_BUFFER_DURATION(sinkbuf) + element->block_duration - 1) / element->block_duration;	/* ciel */
+	g_assert(blocks > 0);	/* guaranteed by check for short-buffers above */
+	length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
+	block_length = (length + blocks - 1) / blocks;	/* ciel */
+	g_assert(block_length > 0);	/* barf to avoid infinite loop */
 
 	/*
 	 * loop over the contents of the input buffer
@@ -267,7 +270,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			block_length = length - offset;
 
 		srcbuf = gst_buffer_create_sub(sinkbuf, offset * element->unit_size, block_length * element->unit_size);
-		if(!srcbuf) {
+		if(G_UNLIKELY(!srcbuf)) {
+			gst_buffer_unref(sinkbuf);
 			GST_ERROR_OBJECT(element, "failure creating sub-buffer");
 			result = GST_FLOW_ERROR;
 			goto done;
@@ -297,17 +301,18 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		result = gst_pad_push(element->srcpad, srcbuf);
 		if(G_UNLIKELY(result != GST_FLOW_OK)) {
-			GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name (result));
+			gst_buffer_unref(sinkbuf);
+			GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name(result));
 			goto done;
 		}
 	}
+	gst_buffer_unref(sinkbuf);
 
 	/*
 	 * done
 	 */
 
 done:
-	gst_buffer_unref(sinkbuf);
 	gst_object_unref(element);
 	return result;
 }
@@ -382,7 +387,7 @@ static void base_init(gpointer class)
 		element_class,
 		"Reblock",
 		"Filter",
-		"Chop audio buffers into smaller pieces",
+		"Chop audio buffers into smaller pieces to enforce a maximum allowed buffer duration",
 		"Kipp Cannon <kipp.cannon@ligo.org>"
 	);
 
@@ -430,9 +435,9 @@ static void class_init(gpointer class, gpointer class_data)
 		g_param_spec_uint64(
 			"block-duration",
 			"Block duration",
-			"Desired output buffer duration in nanoseconds.",
+			"Maximum output buffer duration in nanoseconds.  Buffers may be smaller than this.",
 			0, G_MAXUINT64, DEFAULT_BLOCK_DURATION,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 }
@@ -464,7 +469,6 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->srcpad = pad;
 
 	/* internal data */
-	element->block_duration = DEFAULT_BLOCK_DURATION;
 	element->rate = 0;
 	element->unit_size = 0;
 }
