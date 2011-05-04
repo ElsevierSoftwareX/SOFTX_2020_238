@@ -1232,7 +1232,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
      * adding the buffer starts "now". */
     offset = adder->synchronous ?  gst_util_uint64_scale_int_round (GST_BUFFER_TIMESTAMP (inbuf) - adder->segment.start, adder->rate, GST_SECOND) - earliest_output_offset : 0;
     inlength = GST_BUFFER_OFFSET_END (inbuf) - GST_BUFFER_OFFSET (inbuf);
-    g_assert (inlength == GST_BUFFER_SIZE (inbuf) / adder->bps);
+    g_assert (inlength == GST_BUFFER_SIZE (inbuf) / adder->bps || GST_BUFFER_FLAG_IS_SET (inbuf, GST_BUFFER_FLAG_GAP));
     GST_LOG_OBJECT (adder, "channel %p: retrieved %d sample buffer at %" GST_TIME_FORMAT, collect_data, inlength, GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (inbuf)));
 
     /* keep one of the full gap buffers to reuse as output incase we don't
@@ -1311,7 +1311,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
   outbuf = gst_buffer_make_metadata_writable (outbuf);
   GST_BUFFER_OFFSET (outbuf) = earliest_output_offset;
   GST_BUFFER_TIMESTAMP (outbuf) = output_timestamp_from_offset (adder, GST_BUFFER_OFFSET (outbuf));
-  if (GST_BUFFER_TIMESTAMP (outbuf) == 0 || GST_BUFFER_TIMESTAMP (outbuf) != adder->timestamp)
+  if (GST_BUFFER_OFFSET (outbuf) == 0 || GST_BUFFER_TIMESTAMP (outbuf) != adder->timestamp)
     GST_BUFFER_FLAG_SET (outbuf, GST_BUFFER_FLAG_DISCONT);
   else
     GST_BUFFER_FLAG_UNSET (outbuf, GST_BUFFER_FLAG_DISCONT);
