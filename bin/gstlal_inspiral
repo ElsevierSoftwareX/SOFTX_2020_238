@@ -31,6 +31,7 @@ import os
 import sys
 import threading
 import warnings
+from optparse import OptionParser
 
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -38,6 +39,9 @@ import pygtk
 pygtk.require("2.0")
 import gobject
 gobject.threads_init()
+import pygst
+pygst.require("0.10")
+import gst
 
 
 from glue import segments
@@ -48,7 +52,9 @@ from pylal.datatypes import LIGOTimeGPS
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 from gstlal import ligolw_output
 from gstlal import svd_bank
-from gstlal.option import OptionParser
+from gstlal import pipeparts
+from gstlal import lloidparts
+from gstlal import reference_psd
 
 
 #
@@ -88,14 +94,6 @@ def parse_command_line():
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
-
-	# FIXME: This will only raise an exception if we have pygobject < 2.16.
-	# Can we bumpy our pygobject dependency version to 2.16?
-	try:
-		import gstoption
-		parser.add_option_group(gstoption.get_group())
-	except:
-		warnings.warn("failed to get GStreamer's option group, not adding command line options for it")
 
 	options, filenames = parser.parse_args()
 
@@ -190,21 +188,6 @@ if options.vetoes is not None:
 	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes, verbose = options.verbose), options.veto_segments_name).coalesce()
 else:
 	veto_segments = None
-
-
-#
-# Import everything that depends on GStreamer
-#
-
-
-import pygst
-pygst.require("0.10")
-import gst
-
-
-from gstlal import pipeparts
-from gstlal import lloidparts
-from gstlal import reference_psd
 
 
 #
