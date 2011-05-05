@@ -18,13 +18,13 @@ except:
 opts, args = OptionParser(description = __doc__,
 	option_list = [
 		Option("--svd-bank", help="Name of an SVD'd template bank."),
-		Option("-d", "--downsample-quality", metavar="0..9", choices=[str(q) for q in range(10)]),
-		Option("-u", "--upsample-quality", metavar="0..9", choices=[str(q) for q in range(10)]),
+		Option("-d", "--downsample-quality", metavar="0..9", help="Downsampling quality setting (default=9).", choices=[str(q) for q in range(10)], default=9),
+		Option("-u", "--upsample-quality", metavar="0..9", help="Upsampling quality setting (default=9).", choices=[str(q) for q in range(10)], default=9),
 		Option("--output", metavar="FILE"),
 	]
 ).parse_args()
 
-if any(getattr(opts, key) is None for key in ('bank', 'downsample_quality', 'upsample_quality', 'output')):
+if any(getattr(opts, key) is None for key in ('svd_bank', 'downsample_quality', 'upsample_quality', 'output')):
 	raise RuntimeError("Missing some required arguments")
 
 
@@ -37,7 +37,7 @@ from gstlal.lloidparts import mkelems_fast
 from gstlal.svd_bank import read_bank
 import math
 
-bank = read_bank(opts.bank)
+bank = read_bank(opts.svd_bank)
 upsample_quality = int(opts.upsample_quality)
 downsample_quality = int(opts.downsample_quality)
 
@@ -77,7 +77,7 @@ for bank_fragment in bank.bank_fragments:
 		"audioresample", {"quality": downsample_quality},
 		"lal_nofakedisconts", {"silent": True},
 		"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % bank_fragment.rate)},
-		"lal_firbank", {"latency": -int(round(bank_fragment.start * bank_fragment.rate)) - 1, "fir-matrix": bank_fragment.orthogonal_template_bank},
+		"lal_firbank", {"latency": -int(round(bank_fragment.start * bank_fragment.rate)) - 1, "fir-matrix": bank_fragment.orthogonal_template_bank, "time-domain": True},
 		"lal_nofakedisconts", {"silent": True},
 		"lal_reblock",
 		"lal_matrixmixer", {"matrix": bank_fragment.mix_matrix},

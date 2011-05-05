@@ -1,0 +1,94 @@
+#!/usr/bin/env python
+"""
+
+Convolve impulse responses with actual templates.
+
+"""
+__author__ = "Leo Singer <leo.singer@ligo.org>"
+
+
+# Command line interface.
+
+from optparse import OptionParser, Option
+try: # FIXME Python 2.4 compatibility for cluster
+	any
+except:
+	from glue.iterutils import any
+
+opts, args = OptionParser(description = __doc__,
+	option_list = [
+		Option("--impulse-responses", help="Name of a binary data file containing impulse responses."),
+		Option("--svd-bank", help="Name of an svd'd template bank."),
+		Option("--flow", type="float"),
+		Option("--reference-psd", help="Name of a PSD file."),
+		#Option("--output", metavar="FILE"),
+	]
+).parse_args()
+
+# Check for required command line arguments.
+if any(getattr(opts, key) is None for key in ('impulse_responses', 'svd_bank', 'flow', 'reference_psd')):
+	raise RuntimeError("Missing some required arguments")
+
+
+# Late imports (delayed to speed up command line interface)
+from glue.ligolw import ligolw, lsctables, utils
+from gstlal.svd_bank import read_bank, read_approximant
+from gstlal.cbc_template_fir import generate_templates
+from gstlal.reference_psd import read_psd
+from itertools import izip
+from scipy import signal
+import numpy
+
+
+# Read the SVD bank file, which describes (among many other things) the time
+# slice layout.
+svd_bank = read_bank(opts.svd_bank)
+
+# Lay out time slices consisting of a single slice that spans the entire
+# duration of the template, at the hightest sample rate.
+frags = svd_bank.bank_fragments
+time_slices = numpy.empty(1, [('rate','int'),('begin','float'),('end','float')])
+time_slices[0]['rate'] = max(frag.rate for frag in frags)
+time_slices[0]['begin'] = min(frag.start for frag in frags)
+time_slices[0]['end'] = max(frag.end for frag in frags)
+
+# Read the name of the template bank from the SVD bank.
+template_bank_filename = str(svd_bank.template_bank_filename)
+del svd_bank
+
+# Read template bank.
+xmldoc = utils.load_filename(template_bank_filename, gz = template_bank_filename.endswith('.gz'))
+sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+approximant = read_approximant(xmldoc)
+del xmldoc
+
+# Read reference power spectrum.
+psd = read_psd(opts.reference_psd)
+
+# Memory-map the impulse responses.
+# Reading it would be bad because this file is probably several tens of GB in size.
+impulse_responses = numpy.memmap(opts.impulse_responses,
+	dtype = (complex, len(sngl_inspiral_table)),
+	mode = 'r')
+
+def norm_squared(v):
+	return (v.real * v.real + v.imag * v.imag).sum()
+
+# Loop over template bank records and impulse response time series.
+# Use izip instead of zip to avoid reading in entire array of
+# impulse responses at one time.
+for tmpltbank_row, impulse_response in izip(sngl_inspiral_table, impulse_responses.T):
+
+	# Generate template
+	template_tseries = generate_templates([tmpltbank_row], approximant, psd, opts.flow, time_slices)[0][0]
+	template_tseries = template_tseries[0] + template_tseries[1] * 1j
+
+	# Convolve them.
+	#conv = signal.fftconvolve(template_tseries, impulse_response)
+	conv = signal.fftconvolve(template_tseries, impulse_response.conj()) # conj? uh-oh, is there a sign flip in our h_x templates?
+
+	# Normalize the convolution.
+	conv /= numpy.sqrt(norm_squared(template_tseries) * norm_squared(impulse_response))
+
+	# Get maximum value
+	print numpy.sqrt((conv.real * conv.real + conv.imag * conv.imag).max())
