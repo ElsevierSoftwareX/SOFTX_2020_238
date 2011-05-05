@@ -15,9 +15,9 @@ try: # FIXME Python 2.4 compatibility for cluster
 except:
 	from glue.iterutils import any
 
-opts, args = OptionParser(
+opts, args = OptionParser(description = __doc__,
 	option_list = [
-		Option("--bank", help="Name of an SVD pickle file."),
+		Option("--svd-bank", help="Name of an SVD'd template bank."),
 		Option("-d", "--downsample-quality", metavar="0..9", choices=[str(q) for q in range(10)]),
 		Option("-u", "--upsample-quality", metavar="0..9", choices=[str(q) for q in range(10)]),
 		Option("--output", metavar="FILE"),
