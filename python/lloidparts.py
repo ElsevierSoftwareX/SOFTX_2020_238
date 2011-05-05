@@ -509,7 +509,7 @@ def mkLLOIDhoftToSnr(pipeline, hoftdict, bank, control_snksrc, verbose = False, 
 		#
 
 		if rate in next_rate:
-			branch_heads[next_rate[rate]].add(pipeparts.mkresample(pipeline, branch_heads[rate], quality = 4))
+			branch_heads[next_rate[rate]].add(pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, branch_heads[rate], quality = 4), "audio/x-raw-float, rate=%d" % next_rate[rate]))
 
 	#
 	# the adder for the highest sample rate provides the final
