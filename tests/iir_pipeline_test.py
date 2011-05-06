@@ -40,14 +40,36 @@ def iirbank_test_01a(pipeline):
         # try changing these.  test should still work!
         #
 
-        rate = 4096     # Hz
+        rate = 4096             # Sample rate in Hz
         gap_frequency = None    # Hz
         gap_threshold = 0.0     # of 1
         buffer_length = 1.0     # seconds
-        test_duration = 5.0     # seconds
-        wave = 0               # ticks
-        volume = 1.0
-        freq = 50#0.01
+        test_duration = 15.0    # seconds
+        wave = 1                # 0 sine wave, 1 square wave, 8 ticks
+        volume = 0.1            # volume
+        freq = 0.1              # frequency
+
+        #
+        # Create IIR bank
+        #
+
+	amp, phase, f = cbc_template_iir.waveform(1.4, 1.4, 40, 1500, 4096)
+	f = open("template.txt", "w")
+	for n in range(len(amp)):
+		print >>f, "%f, %f" % (amp[n], phase[n])
+	f.close()
+
+        a1, b0, delay = spawaveform.iir(amp, phase, 0.04, 0.9, 0.25)
+	out = spawaveform.iirresponse(test_duration * rate, a1, b0, delay)
+	f = open("response.txt","w")
+	for n in range(len(out)):
+		print >>f, "%f, %f" % (out[n].real, out[n].imag)
+	f.close()
+        psd = numpy.ones(amp.shape[0]/2)
+	a1 =numpy.array([a1])
+	b0 =numpy.array([b0])
+	delay =numpy.array([delay])
+	print a1.shape, b0.shape, delay.shape
 
         #
         # build pipeline
@@ -63,45 +85,15 @@ def iirbank_test_01a(pipeline):
                                            gap_threshold = gap_threshold,
                                            control_dump_filename = "iirbank_test_01a_control.dump")
 
-        ##head = tee = tee2 = pipeparts.mktee(pipeline, head)
-	##pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "iirbank_test_01a_in.dump")
-        #
-        # Create IIR bank
-        #
+        head = tee = pipeparts.mktee(pipeline, head)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "iirbank_test_01a_in.dump")
 
-	amp, phase, f = cbc_template_iir.waveform(1.4, 1.4, 40, 1500, 4096)
-	#numpy.savetxt('amp.txt',numpy.vstack((amp, phase)))
-	##f = open("ampnew.txt", "w")
-	##for n in range(len(amp)):
-	##	print >>f, "%f, %f" % (amp[n], phase[n])
-	##f.close()
+        head = pipeparts.mkiirbank(pipeline, head, a1 = a1, b0 = b0, delay = delay)
+	head = outtee = pipeparts.mktee(pipeline, head)
 
-        ##a1, b0, delay = spawaveform.iir(amp, phase, 0.04, 0.9, 0.25)
-	##out = spawaveform.iirresponse(test_duration * rate, a1, b0, delay)
-	#numpy.savetxt('respnew.txt',(numpy.vstack(out.real), numpy.vstack(out.imag)))
-	##f = open("response.txt","w")
-	##for n in range(len(out)):
-	##	print >>f, "%f, %f" % (out[n].real, out[n].imag)
-	##f.close()
-        ##psd = numpy.ones(amp.shape[0]/2)
-	##a1 =numpy.array([a1])
-	##b0 =numpy.array([b0])
-	##delay =numpy.array([delay])
-	##print a1.shape, b0.shape, delay.shape
-        #
-        # Build rest of pipeline
-        #
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, outtee), "iirbank_test_01a_out.dump")
 
-        ##head = pipeparts.mkiirbank(pipeline, head, a1 = a1, b0 = b0, delay = delay)
-	##head = outtee = pipeparts.mktee(pipeline, head)
-	##pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "iirbank_test_01a_out.dump")
-	##print >>sys.stderr, "finished making iir bank"
-
-        #outtee = tee = pipeparts.mktee(pipeline, tee)
         pipeparts.mkplaybacksink(pipeline, pipeparts.mkqueue(pipeline, head))
-	##print >>sys.stderr, "finished playback"
-        
-        
 
         #
         # done
