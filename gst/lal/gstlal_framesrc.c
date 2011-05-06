@@ -685,6 +685,24 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	 * Construct and populate output buffer
 	 */
 
+	/* FIXME:  gst_pad_alloc_buffer() will lock up if called too soon
+	 * after the pipeline is put into the playing state.  it is my
+	 * belief (Kipp) that this is due to the screwed up way gstlal
+	 * pipelines seek the framesrc element.  sorting the mess out is
+	 * going to take time because it relies on at least one patch to
+	 * gstreamer proper being accepted (Steve P's patch to fix the seek
+	 * event flood induced by tee elements) before it can be
+	 * investigated farther.  once that patch is into the version of
+	 * gstreamer on the clusters we can take this stupid pause out and
+	 * look again at what's really going on here */
+
+	{
+	static gboolean first = TRUE;
+	/* 5 seconds.  seems to be enough */
+	if(first) g_usleep(5000000);
+	first = FALSE;
+	}
+
 	result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), basesrc->offset, buffer_length * unit_size(element), GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
 	if(result != GST_FLOW_OK) {
 		GST_ERROR_OBJECT(element, "gst_pad_alloc_buffer() returned %d (%s)", result, gst_flow_get_name(result));
