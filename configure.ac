@@ -19,11 +19,9 @@ AC_CONFIG_FILES([ \
 	python/Makefile \
 	python/elements/Makefile \
 	gst/Makefile \
-	gst/cairovis/Makefile \
 	gst/nds/Makefile \
 	gst/lal/Makefile \
 	gst/python/Makefile \
-	gst/unary/Makefile \
 	bin/Makefile \
 	tests/Makefile \
 	examples/Makefile
@@ -131,37 +129,6 @@ AC_SUBST([NDS_LIBS])
 
 
 #
-# Check for cairo
-#
-
-
-AC_ARG_WITH(
-	[cairo],
-	[AS_HELP_STRING([--with-cairo], [include cairo visualization elements @<:@default=check@:>@])],
-	[],
-	[with_cairo=check]
-)
-AS_IF(
-	[test "x$with_cairo" != "xno"],
-	[PKG_CHECK_MODULES(
-		[cairo],
-		[cairo],
-		[AC_DEFINE([HAVE_CAIRO], [1], [Define if you have cairo])
-		HAVE_CAIRO="yes"],
-		[HAVE_CAIRO="no"
-		AS_IF(
-			[test "x$with_cairo" != "xcheck"],
-			[AC_MSG_ERROR([Not found!])],
-			[AC_MSG_WARN([Not found!])]
-		)]
-	)]
-)
-AM_CONDITIONAL([COND_CAIRO], [test "x${HAVE_CAIRO}" == "xyes"])
-AC_SUBST([cairo_CFLAGS])
-AC_SUBST([cairo_LIBS])
-
-
-#
 # Check for GStreamer 0.10
 #
 
@@ -178,30 +145,6 @@ AC_MSG_NOTICE([If you have chosen to install the software in a location not incl
 	
 to your GST_PLUGIN_PATH environment variable.])
 AC_SUBST([GSTREAMER_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\).*"])
-
-
-#
-# Check for GStreamer Video Library 0.10
-#
-
-
-AC_SUBST([GSTREAMER_VIDEO_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_VIDEO_VERSION], [0.10.0])
-PKG_CHECK_MODULES([gstreamer_video], [gstreamer-video-${GSTREAMER_VIDEO_RELEASE} >= ${MIN_GSTREAMER_VIDEO_VERSION}], , [AC_MSG_ERROR([Not found!])])
-AC_SUBST([gstreamer_video_CFLAGS])
-AC_SUBST([gstreamer_video_LIBS])
-
-
-#
-# Check for GStreamer Audio Library 0.10
-#
-
-
-AC_SUBST([GSTREAMER_AUDIO_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_VIDEO_VERSION], [0.10.0])
-PKG_CHECK_MODULES([gstreamer_audio], [gstreamer-audio-${GSTREAMER_VIDEO_RELEASE} >= ${MIN_GSTREAMER_VIDEO_VERSION}], , [AC_MSG_ERROR([Not found!])])
-AC_SUBST([gstreamer_audio_CFLAGS])
-AC_SUBST([gstreamer_audio_LIBS])
 
 
 #

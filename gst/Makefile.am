@@ -1,13 +1,7 @@
-if COND_CAIRO
-CAIRO_SUBDIRS = cairovis
-else
-CAIRO_SUBDIRS = 
-endif
-
 if COND_NDS
 NDS_SUBDIRS = nds
 else
 NDS_SUBDIRS =
 endif
 
-SUBDIRS = lal python unary $(CAIRO_SUBDIRS) $(NDS_SUBDIRS)
+SUBDIRS = lal python $(NDS_SUBDIRS)
