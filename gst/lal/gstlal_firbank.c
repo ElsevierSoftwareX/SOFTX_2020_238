@@ -671,6 +671,59 @@ done:
 
 
 /*
+ * constuct a new segment event and push downstream.  must be called with
+ * the fir_matrix_lock held
+ */
+
+
+static GstFlowReturn do_new_segment(GSTLALFIRBank *element)
+{
+	gboolean update;
+	gdouble rate;
+	GstFormat format;
+	gint64 start, stop, position;
+	gint64 samples_lost;
+	GstFlowReturn result = GST_FLOW_OK;
+
+	if(!element->fir_matrix)
+		goto done;
+	if(!element->rate)
+		goto done;
+	if(!element->last_new_segment)
+		goto done;
+
+	gst_event_parse_new_segment(element->last_new_segment, &update, &rate, &format, &start, &stop, &position);
+
+	samples_lost = fir_length(element) - 1;
+
+	switch(format) {
+	case GST_FORMAT_TIME:
+		GST_DEBUG_OBJECT(element, "transforming [%" G_GINT64_FORMAT ", %" G_GINT64_FORMAT "), position = %" G_GINT64_FORMAT", rate = %d, latency = %" G_GINT64_FORMAT "\n", start, stop, position, element->rate, element->latency);
+		start = gst_util_uint64_scale_int_round(start, element->rate, GST_SECOND);
+		start += samples_lost - element->latency;
+		start = gst_util_uint64_scale_int_round(start, GST_SECOND, element->rate);
+		if(stop != -1) {
+			stop = gst_util_uint64_scale_int_round(stop, element->rate, GST_SECOND);
+			stop += -samples_lost - element->latency;
+			stop = gst_util_uint64_scale_int_round(stop, GST_SECOND, element->rate);
+		}
+		position = start;
+		GST_DEBUG_OBJECT(element, "to [%" G_GINT64_FORMAT ", %" G_GINT64_FORMAT "), position = %" G_GINT64_FORMAT", rate = %d, latency = %" G_GINT64_FORMAT "\n", start, stop, position, element->rate, element->latency);
+		break;
+
+	default:
+		g_assert_not_reached();
+		break;
+	}
+
+	result = gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element)), gst_event_new_new_segment(update, rate, format, start, stop, position));
+
+done:
+	return result;
+}
+
+
+/*
  * ============================================================================
  *
  *                                  Signals
@@ -942,9 +995,10 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	}
 
 	if(success) {
-		if(rate != element->rate)
-			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, rate, NULL);
+		gint old_rate = element->rate;
 		element->rate = rate;
+		if(element->rate != old_rate)
+			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
 	}
 
 	return success;
@@ -966,6 +1020,7 @@ static gboolean start(GstBaseTransform *trans)
 	element->next_in_offset = GST_BUFFER_OFFSET_NONE;
 	element->next_out_offset = GST_BUFFER_OFFSET_NONE;
 	element->need_discont = TRUE;
+	element->need_new_segment = TRUE;
 	return TRUE;
 }
 
@@ -995,18 +1050,11 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT: {
-		gboolean update;
-		gdouble rate;
-		GstFormat format;
-		gint64 start, stop, position;
-
-		gst_event_parse_new_segment(event, &update, &rate, &format, &start, &stop, &position);
-
-		/* FIXME:  use latency, sample rate, and FIR length to compute output segment */
-
-		event = gst_event_new_new_segment(update, rate, format, start, stop, position);
-
-		gst_pad_push_event(GST_BASE_TRANSFORM_SRC_PAD(trans), event);
+		if(element->last_new_segment)
+			gst_event_unref(element->last_new_segment);
+		gst_event_ref(event);
+		element->last_new_segment = event;
+		element->need_new_segment = TRUE;
 		return FALSE;
 	}
 
@@ -1051,6 +1099,18 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			result = GST_FLOW_WRONG_STATE;
 			goto done;
 		}
+	}
+
+	/*
+	 * check for new segment
+	 */
+	/* FIXME:  we should do this whenever the sample rate, FIR matrix
+	 * size or latency changes, but those cases should produce "update"
+	 * new segment events */
+
+	if(element->need_new_segment) {
+		do_new_segment(element);
+		element->need_new_segment = FALSE;
 	}
 
 	/*
@@ -1557,5 +1617,6 @@ static void gstlal_firbank_init(GSTLALFIRBank *filter, GSTLALFIRBankClass *klass
 	filter->workspace_fd = NULL;
 	filter->in_plan = NULL;
 	filter->out_plan = NULL;
+	filter->last_new_segment = NULL;
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);
 }
