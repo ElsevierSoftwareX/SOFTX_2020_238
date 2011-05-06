@@ -471,9 +471,10 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	}
 
 	if(success) {
-		if(rate != element->rate)
-			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, rate, NULL);
+		gint old_rate = element->rate;
 		element->rate = rate;
+		if(element->rate != old_rate)
+			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
 	}
 
 	return success;

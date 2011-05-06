@@ -776,10 +776,11 @@ static gboolean sink_setcaps(GstPad *pad, GstCaps *caps)
 	 */
 
 	if(success) {
-		if(rate != element->rate)
-			g_signal_emit(G_OBJECT(element), signals[SIGNAL_RATE_CHANGED], 0, rate, NULL);
+		gint old_rate = element->rate;
 		element->rate = rate;
 		element->unit_size = width / 8 * channels;
+		if(element->rate != old_rate)
+			g_signal_emit(G_OBJECT(element), signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
 	}
 
 	/*
