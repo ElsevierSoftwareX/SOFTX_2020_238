@@ -913,11 +913,11 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 
 /*
- * finalize()
+ * dispose()
  */
 
 
-static void finalize(GObject *object)
+static void dispose(GObject *object)
 {
 	GSTLALAutoChiSq *element = GSTLAL_AUTOCHISQ(object);
 
@@ -927,12 +927,20 @@ static void finalize(GObject *object)
 	 * element state should be NULL causing those threads to bail out
 	 */
 
-	/* FIXME:  waking them up and then freeing the mutex is probably a
-	 * race condition that could lead to a memory problem */
-
 	g_mutex_lock(element->autocorrelation_lock);
 	g_cond_broadcast(element->autocorrelation_available);
 	g_mutex_unlock(element->autocorrelation_lock);
+}
+
+
+/*
+ * finalize()
+ */
+
+
+static void finalize(GObject *object)
+{
+	GSTLALAutoChiSq *element = GSTLAL_AUTOCHISQ(object);
 
 	/*
 	 * free resources
@@ -997,6 +1005,7 @@ static void gstlal_autochisq_class_init(GSTLALAutoChiSqClass *klass)
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->dispose = GST_DEBUG_FUNCPTR(dispose);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	klass->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
