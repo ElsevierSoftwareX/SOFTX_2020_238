@@ -502,6 +502,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 		#
 
 		output_head = pipeparts.mkresample(pipeline, output_head, quality = 4)
+		output_head = pipeparts.mkcapsfilter(pipeline, output_head, "audio/x-raw-float, rate=%d" % output_rate)
 		output_head = pipeparts.mktogglecomplex(pipeline, output_head)
 		output_heads[rate] = output_head
 
