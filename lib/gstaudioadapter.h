@@ -84,8 +84,8 @@ struct _GstAudioAdapter {
 	/*< private >*/
 	GQueue *queue;
 	guint unit_size;
-	gint size;
-	gint skip;
+	guint size;
+	guint skip;
 };
 
 
@@ -101,6 +101,7 @@ struct _GstAudioAdapter {
 GType gst_audioadapter_get_type(void);
 
 
+GstClockTime gst_audioadapter_expected_timestamp(GstAudioAdapter *);
 void gst_audioadapter_drain(GstAudioAdapter *);
 void gst_audioadapter_push(GstAudioAdapter *, GstBuffer *);
 gboolean gst_audioadapter_is_gap(GstAudioAdapter *);

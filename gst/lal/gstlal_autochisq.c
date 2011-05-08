@@ -56,6 +56,7 @@
 
 
 #include <gsl/gsl_complex.h>
+#include <gsl/gsl_complex_math.h>
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_blas.h>
@@ -156,7 +157,8 @@ static guint64 get_available_samples(GSTLALAutoChiSq *element)
 
 
 /*
- * compute autocorrelation norms --- the expectation value in noise
+ * compute autocorrelation norms --- the expectation value in noise.  must
+ * be called with autocorrelation_matrix_lock held
  */
 
 
@@ -165,17 +167,29 @@ static gsl_vector *compute_autocorrelation_norm(GSTLALAutoChiSq *element)
 	gsl_vector *norm = gsl_vector_alloc(autocorrelation_channels(element));
 	unsigned channel;
 
+	if(element->autocorrelation_mask_matrix) {
+		g_assert(autocorrelation_channels(element) == element->autocorrelation_mask_matrix->size1);
+		g_assert(autocorrelation_length(element) == element->autocorrelation_mask_matrix->size2);
+	}
+
 	for(channel = 0; channel < autocorrelation_channels(element); channel++) {
 		gsl_vector_complex_view row = gsl_matrix_complex_row(element->autocorrelation_matrix, channel);
-#if CHI2_USES_REAL_ONLY
+		gsl_vector_int_view mask;
 		unsigned sample;
 		double n = 0;
-		for(sample = 0; sample < row.vector.size; sample++)
+		
+		if(element->autocorrelation_mask_matrix)
+			mask = gsl_matrix_int_row(element->autocorrelation_mask_matrix, channel);
+		for(sample = 0; sample < row.vector.size; sample++) {
+			if(element->autocorrelation_mask_matrix && !gsl_vector_int_get(&mask.vector, sample))
+				continue;
+#if CHI2_USES_REAL_ONLY
 			n += 1 - pow(GSL_REAL(gsl_vector_complex_get(&row.vector, sample)), 2);
-		gsl_vector_set(norm, channel, n);
 #else
-		gsl_vector_set(norm, channel, 2 * autocorrelation_length(element) - pow(gsl_blas_dznrm2(&row.vector), 2));
+			n += 2 - gsl_complex_abs2(gsl_vector_complex_get(&row.vector, sample));
 #endif
+		}
+		gsl_vector_set(norm, channel, n);
 	}
 
 	return norm;
@@ -216,16 +230,25 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	output_end = output + output_length * channels;
 
 	/*
+	 * safety checks
+	 */
+
+	g_assert(element->autocorrelation_matrix->tda == autocorrelation_length(element));
+	if(element->autocorrelation_mask_matrix) {
+		g_assert(autocorrelation_channels(element) == element->autocorrelation_mask_matrix->size1);
+		g_assert(autocorrelation_length(element) == element->autocorrelation_mask_matrix->size2);
+		g_assert(element->autocorrelation_mask_matrix->tda == autocorrelation_length(element));
+	}
+
+	/*
 	 * compute output samples.  note:  we assume that gsl_complex can
 	 * be aliased to complex double.  I think it says somewhere in the
 	 * documentation that this is true.
 	 */
 
-	/* check the autocorrelation matrix' packing */
-	g_assert(element->autocorrelation_matrix->tda == autocorrelation_length(element));
-
 	while(output < output_end) {
 		const complex double *autocorrelation = (complex double *) gsl_matrix_complex_const_ptr(element->autocorrelation_matrix, 0, 0);
+		const int *autocorrelation_mask = element->autocorrelation_mask_matrix ? (int *) gsl_matrix_int_const_ptr(element->autocorrelation_mask_matrix, 0, 0) : NULL;
 		unsigned channel;
 
 		for(channel = 0; channel < channels; channel++) {
@@ -243,8 +266,7 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 
 			complex double snr = input[((gint) autocorrelation_length(element) - 1 + element->latency) * channels];
 
-			if (cabs(snr) >= element->snr_thresh)
-			{
+			if(cabs(snr) >= element->snr_thresh) {
 				/*
 				 * multiplying snr by this makes it real
 				 */
@@ -268,13 +290,27 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 				 * compute \sum_{i} (A_{i} * \rho_{0} - \rho_{i})^{2}
 				 */
 
-				for(chisq = 0; autocorrelation < autocorrelation_end; autocorrelation++, indata += channels) {
-					complex double z = (*autocorrelation * snr - *indata) * invsnrphase;
+				if(autocorrelation_mask) {
+					for(chisq = 0; autocorrelation < autocorrelation_end; autocorrelation++, autocorrelation_mask++, indata += channels) {
+						complex double z;
+						if(!*autocorrelation_mask)
+							continue;
+						z = (*autocorrelation * snr - *indata) * invsnrphase;
 #if CHI2_USES_REAL_ONLY
-					chisq += pow(creal(z), 2);
+						chisq += pow(creal(z), 2);
 #else
-					chisq += pow(creal(z), 2) + pow(cimag(z), 2);
+						chisq += pow(creal(z), 2) + pow(cimag(z), 2);
 #endif
+					}
+				} else {
+					for(chisq = 0; autocorrelation < autocorrelation_end; autocorrelation++, indata += channels) {
+						complex double z = (*autocorrelation * snr - *indata) * invsnrphase;
+#if CHI2_USES_REAL_ONLY
+						chisq += pow(creal(z), 2);
+#else
+						chisq += pow(creal(z), 2) + pow(cimag(z), 2);
+#endif
+					}
 				}
 
 				/*
@@ -283,6 +319,9 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 
 				*(output++) = chisq / gsl_vector_get(element->autocorrelation_norm, channel);
 			} else {
+				autocorrelation += autocorrelation_length(element);
+				if(autocorrelation_mask)
+					autocorrelation_mask += autocorrelation_length(element);
 				*(output++) = 0;
 			}
 
@@ -391,6 +430,7 @@ GST_BOILERPLATE(
 
 enum property {
 	ARG_AUTOCORRELATION_MATRIX = 1,
+	ARG_AUTOCORRELATION_MASK_MATRIX,
 	ARG_LATENCY,
 	ARG_SNR_THRESH
 };
@@ -589,10 +629,10 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	}
 
 	if(success) {
-		if(rate != element->rate) {
-			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, rate, NULL);
-		}
+		gint old_rate = element->rate;
 		element->rate = rate;
+		if(element->rate != old_rate)
+			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
 	}
 
 	return success;
@@ -657,6 +697,13 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			goto done;
 		}
 	}
+
+	/*
+	 * recompute norms if needed
+	 */
+
+	if(!element->autocorrelation_norm)
+		element->autocorrelation_norm = compute_autocorrelation_norm(element);
 
 	/*
 	 * check for discontinuity
@@ -826,12 +873,13 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		}
 
 		/*
-		 * compute norms
+		 * induce norms to be recomputed
 		 */
 
-		if(element->autocorrelation_norm)
+		if(element->autocorrelation_norm) {
 			gsl_vector_free(element->autocorrelation_norm);
-		element->autocorrelation_norm = compute_autocorrelation_norm(element);
+			element->autocorrelation_norm = NULL;
+		}
 
 		/*
 		 * check for invalid latency
@@ -850,6 +898,25 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		g_mutex_unlock(element->autocorrelation_lock);
 		break;
 	}
+
+	case ARG_AUTOCORRELATION_MASK_MATRIX:
+		g_mutex_lock(element->autocorrelation_lock);
+
+		if(element->autocorrelation_mask_matrix)
+			gsl_matrix_int_free(element->autocorrelation_mask_matrix);
+		element->autocorrelation_mask_matrix = gstlal_gsl_matrix_int_from_g_value_array(g_value_get_boxed(value));
+
+		/*
+		 * induce norms to be recomputed
+		 */
+
+		if(element->autocorrelation_norm) {
+			gsl_vector_free(element->autocorrelation_norm);
+			element->autocorrelation_norm = NULL;
+		}
+
+		g_mutex_unlock(element->autocorrelation_lock);
+		break;
 
 	case ARG_LATENCY: {
 		gint64 latency = g_value_get_int64(value);
@@ -895,6 +962,14 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		g_mutex_unlock(element->autocorrelation_lock);
 		break;
 
+	case ARG_AUTOCORRELATION_MASK_MATRIX:
+		g_mutex_lock(element->autocorrelation_lock);
+		if(element->autocorrelation_mask_matrix)
+			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_int(element->autocorrelation_mask_matrix));
+		/* FIXME:  else? */
+		g_mutex_unlock(element->autocorrelation_lock);
+		break;
+
 	case ARG_LATENCY:
 		g_value_set_int64(value, element->latency);
 		break;
@@ -913,11 +988,11 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 
 /*
- * finalize()
+ * dispose()
  */
 
 
-static void finalize(GObject *object)
+static void dispose(GObject *object)
 {
 	GSTLALAutoChiSq *element = GSTLAL_AUTOCHISQ(object);
 
@@ -927,12 +1002,20 @@ static void finalize(GObject *object)
 	 * element state should be NULL causing those threads to bail out
 	 */
 
-	/* FIXME:  waking them up and then freeing the mutex is probably a
-	 * race condition that could lead to a memory problem */
-
 	g_mutex_lock(element->autocorrelation_lock);
 	g_cond_broadcast(element->autocorrelation_available);
 	g_mutex_unlock(element->autocorrelation_lock);
+}
+
+
+/*
+ * finalize()
+ */
+
+
+static void finalize(GObject *object)
+{
+	GSTLALAutoChiSq *element = GSTLAL_AUTOCHISQ(object);
 
 	/*
 	 * free resources
@@ -945,6 +1028,10 @@ static void finalize(GObject *object)
 	if(element->autocorrelation_matrix) {
 		gsl_matrix_complex_free(element->autocorrelation_matrix);
 		element->autocorrelation_matrix = NULL;
+	}
+	if(element->autocorrelation_mask_matrix) {
+		gsl_matrix_int_free(element->autocorrelation_mask_matrix);
+		element->autocorrelation_mask_matrix = NULL;
 	}
 	if(element->autocorrelation_norm) {
 		gsl_vector_free(element->autocorrelation_norm);
@@ -997,6 +1084,7 @@ static void gstlal_autochisq_class_init(GSTLALAutoChiSqClass *klass)
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->dispose = GST_DEBUG_FUNCPTR(dispose);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	klass->rate_changed = GST_DEBUG_FUNCPTR(rate_changed);
@@ -1018,6 +1106,29 @@ static void gstlal_autochisq_class_init(GSTLALAutoChiSqClass *klass)
 					"Sample",
 					"Autocorrelation sample",
 					-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+				),
+				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			),
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_AUTOCORRELATION_MASK_MATRIX,
+		g_param_spec_value_array(
+			"autocorrelation-mask-matrix",
+			"Autocorrelation Mask Matrix",
+			"Array of integer mask vectors.  Matrix must be the same size as the autocorrelation matrix.  Only autocorrelation vector samples corresponding to non-zero samples in these vectors will be used to construct the \\chi^{2} statistic.  If this matrix is not supplied, all autocorrelation samples are used.",
+			g_param_spec_value_array(
+				"autocorrelation-mask",
+				"Autocorrelation Mask",
+				"Array of autocorrelation mask samples.",
+				g_param_spec_int(
+					"sample",
+					"Sample",
+					"Autocorrelation mask sample",
+					G_MININT, G_MAXINT, 0.0,
 					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 				),
 				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
@@ -1078,6 +1189,7 @@ static void gstlal_autochisq_init(GSTLALAutoChiSq *filter, GSTLALAutoChiSqClass 
 	filter->autocorrelation_lock = g_mutex_new();
 	filter->autocorrelation_available = g_cond_new();
 	filter->autocorrelation_matrix = NULL;
+	filter->autocorrelation_mask_matrix = NULL;
 	filter->autocorrelation_norm = NULL;
 	filter->snr_thresh = DEFAULT_SNR_THRESH;
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);

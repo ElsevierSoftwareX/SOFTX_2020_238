@@ -255,6 +255,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case ARG_STOP_TIME:
 		element->stop_time = g_value_get_uint64(value);
 		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
 	}
 }
 
@@ -270,6 +274,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case ARG_STOP_TIME:
 		g_value_set_uint64(value, element->stop_time);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
 }

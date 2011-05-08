@@ -1,4 +1,4 @@
-# Copyright (C) 2009--2011  Kipp Cannon, Chad Hanna
+# Copyright (C) 2009--2011  Kipp Cannon, Chad Hanna, Drew Keppel
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -439,7 +439,8 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	return src
 
 
-def mkLLOIDhoftToSnr(pipeline, hoftdict, bank, control_snksrc, verbose = False, logname = "", nxydump_segment = None):
+def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = False, logname = "", nxydump_segment = None):
+	"""Build the pipeline fragment that creates the SnrSlices associated with different sample rates from hoft."""
 	#
 	# parameters
 	#
@@ -472,60 +473,113 @@ def mkLLOIDhoftToSnr(pipeline, hoftdict, bank, control_snksrc, verbose = False, 
 		))
 
 	#
-	# sum the snr streams, adding resamplers where needed.  at the
-	# start of this loop, branch_heads is a dictionary mapping sample
-	# rates to sets of matrix mixer elements.  we loop over the
-	# contents of the dictionary from lowest to highest sample rate
+	# sum the snr streams of the same sample rate
 	#
 
-	next_rate = dict(zip(rates, rates[1:]))
+	output_heads = {}
 	for rate, heads in sorted(branch_heads.items()):
 		#
-		# hook all matrix mixers that share a common sample rate to
-		# an adder.  the adder replaces the set of matrix mixers as
-		# the new "head" associated with the sample rate
+		# include an adder when more than one stream at a given sample rate
 		#
 
-		branch_heads[rate] = gst.element_factory_make("lal_adder")
-		branch_heads[rate].set_property("sync", True)
-		pipeline.add(branch_heads[rate])
-		for head in heads:
-			pipeparts.mkqueue(pipeline, head, max_size_time = gst.SECOND).link(branch_heads[rate])
+		if len(heads) > 1:
+			#
+			# hook all matrix mixers that share a common sample rate to
+			# an adder.  the adder replaces the set of matrix mixers as
+			# the new "head" associated with the sample rate
+			#
+
+			output_head = gst.element_factory_make("lal_adder")
+			output_head.set_property("sync", True)
+			pipeline.add(output_head)
+			for head in heads:
+				pipeparts.mkqueue(pipeline, head, max_size_time = gst.SECOND).link(output_head)
+		else:
+			output_head = list(heads)[0]
 
 		#
-		# if the reconstructed snr upto and including this sample
-		# rate is needed for something, like an early warning
-		# detection statistic, or to dump it to a file, it can be
-		# tee'ed off here
+		# resample this to the highest sample rate
 		#
 
-		#branch_heads[rate] = pipeparts.mktee(pipeline, branch_heads[rate])
-		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, branch_heads[rate]), "snr_%s_%d.dump" % (logname, rate), segment = nxydump_segment)
+		output_head = pipeparts.mkresample(pipeline, output_head, quality = 4)
+		output_head = pipeparts.mkcapsfilter(pipeline, output_head, "audio/x-raw-float, rate=%d" % output_rate)
+		output_head = pipeparts.mktogglecomplex(pipeline, output_head)
+		output_heads[rate] = output_head
 
-		#
-		# if this isn't the highest sample rate, attach a resampler
-		# to the adder and add the resampler to the set of heads
-		# for next highest sample rate.
-		#
+	return output_heads
 
-		if rate in next_rate:
-			branch_heads[next_rate[rate]].add(pipeparts.mkresample(pipeline, branch_heads[rate], quality = 4))
 
+def mkLLOIDSnrSlicesToSnr(pipeline, branch_heads):
+	"""Build the pipeline fragment to compute the single detector SNR from SnrSlices associated with different saple rates."""
 	#
-	# the adder for the highest sample rate provides the final
-	# reconstructed snr
+	# if more than one SnrSlice, add them together
 	#
 
-	return pipeparts.mktogglecomplex(pipeline, branch_heads[max(rates)])
+	if len(branch_heads) > 1:
+		snr = gst.element_factory_make("lal_adder")
+		snr.set_property("sync", True)
+		pipeline.add(snr)
+		for rate, head in branch_heads.items():
+			pipeparts.mkqueue(pipeline, head, max_size_time = gst.SECOND).link(snr)
+	else:
+		snr = branch_heads.values()[0]
+
+	return snr
 
 
-def mkLLOIDsnrToTriggers(pipeline, snr, bank, verbose = False, nxydump_segment = None, logname = ""):
-	"""Build pipeline fragment that converts single detector SNR into triggers."""
+def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank):
+	"""Build pipeline fragment that computes the TimeSliceChisq from SnrSlices."""
 	#
 	# parameters
 	#
 
-	output_rate = max(bank.get_rates())
+	rates = sorted(bank.get_rates())
+
+	#
+	# compute the chifacs for each rate, store in ascending order in rate
+	#
+
+	chifacsdict = dict((rate, []) for rate in rates)
+	for bank_fragment in bank.bank_fragments:
+		chifacsdict[bank_fragment.rate].append(bank_fragment.chifacs)
+	chifacs = []
+	for rate, facs in sorted(chifacsdict.items()):
+		chifacs.append(facs[0][0::2])
+		chifacs[-1] += facs[0][1::2]
+		for fac in facs[1:]:
+			chifacs[-1] += fac[0::2]
+			chifacs[-1] += fac[1::2]
+		chifacs[-1] /= 2.
+
+	#
+	# create timeslicechisq element and add chifacs as a property
+	#
+
+	chisq = gst.element_factory_make("lal_timeslicechisq")
+	pipeline.add(chisq)
+
+	#
+	# link the snrslices to the timeslicechisq element in ascending order in rate
+	#
+
+	for rate, snrslice in sorted(branch_heads.items()):
+		pipeparts.mkqueue(pipeline, snrslice, max_size_time = gst.SECOND).link(chisq)
+
+	#
+	# set chifacs-matrix property, needs to be done after snrslices are linked in
+	#
+
+	chisq.set_property("chifacs-matrix", chifacs)
+
+	return pipeparts.mkqueue(pipeline, chisq)
+
+
+def mkLLOIDSnrToAutoChisq(pipeline, snr, bank):
+	"""Build pipeline fragment that computes the AutoChisq from single detector SNR."""
+	#
+	# parameters
+	#
+
 	autocorrelation_length = bank.autocorrelation_bank.shape[1]
 	autocorrelation_latency = -(autocorrelation_length - 1) / 2
 
@@ -533,19 +587,21 @@ def mkLLOIDsnrToTriggers(pipeline, snr, bank, verbose = False, nxydump_segment =
 	# \chi^{2}
 	#
 
-	snr = pipeparts.mktee(pipeline, snr)
 	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr), autocorrelation_matrix = bank.autocorrelation_bank, latency = autocorrelation_latency, snr_thresh = bank.snr_threshold)
-	# FIXME:  find a way to use less memory without this hack
-	del bank.autocorrelation_bank
 
 	#chisq = pipeparts.mktee(pipeline, chisq)
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, chisq), "chisq_%s.dump" % logname, segment = nxydump_segment)
 
+	return chisq
+
+
+def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydump_segment = None, logname = ""):
+	"""Build pipeline fragment that converts single detector SNR and Chisq into triggers."""
 	#
 	# trigger generator and progress report
 	#
 
-	head = pipeparts.mktriggergen(pipeline, pipeparts.mkqueue(pipeline, snr), chisq, template_bank_filename = bank.template_bank_filename, snr_threshold = bank.snr_threshold, sigmasq = bank.sigmasq)
+	head = pipeparts.mktriggergen(pipeline, pipeparts.mkqueue(pipeline, snr), pipeparts.mkqueue(pipeline, chisq), template_bank_filename = bank.template_bank_filename, snr_threshold = bank.snr_threshold, sigmasq = bank.sigmasq)
 	# FIXME:  add ability to choose this
 	# "lal_blcbctriggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq}
 	if verbose:
@@ -563,7 +619,15 @@ def mkLLOIDsnrToTriggers(pipeline, snr, bank, verbose = False, nxydump_segment =
 #
 
 
-def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, veto_segments = None, verbose = False, nxydump_segment = None):
+def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq'):
+	#
+	# check for recognized value of chisq_type
+	#
+
+	if chisq_type not in ['autochisq', 'timeslicechisq']:
+		raise ValueError, "chisq_type must be either 'autochisq' or 'timeslicechisq', given %s" % (chisq_type)
+
+
 	#
 	# extract segments from the injection file for selected reconstruction
 	#
@@ -592,7 +656,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 			suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent)
 			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % suffix, segment = nxydump_segment)
-			head = mkLLOIDhoftToSnr(
+			snrslices = mkLLOIDhoftToSnrSlices(
 				pipeline,
 				hoftdict,
 				bank,
@@ -601,13 +665,27 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 				logname = suffix,
 				nxydump_segment = nxydump_segment
 			)
-			head = pipeparts.mkchecktimestamps(pipeline, head, "timestamps_%s_snr" % suffix)
-			#head = pipeparts.mktee(pipeline, head)
-			#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, head)), "snr_%s.dump" % suffix, segment = nxydump_segment)
-			#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, head), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(rates)], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
-			triggersrc.add(mkLLOIDsnrToTriggers(
+			if chisq_type == 'timeslicechisq':
+				for rate, snrslice in snrslices.items():
+					snrslices[rate] = pipeparts.mktee(pipeline, snrslice)
+			snr = mkLLOIDSnrSlicesToSnr(
 				pipeline,
-				head,
+				snrslices
+			)
+			snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
+			if chisq_type == 'autochisq':
+				snr = pipeparts.mktee(pipeline, snr)
+				chisq = mkLLOIDSnrToAutoChisq(pipeline, snr, bank)
+			else:
+				chisq = mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, snrslices, bank)
+			# FIXME:  find a way to use less memory without this hack
+			del bank.autocorrelation_bank
+			#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
+			#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(rates)], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
+			triggersrc.add(mkLLOIDSnrChisqToTriggers(
+				pipeline,
+				snr,
+				chisq,
 				bank,
 				verbose = verbose,
 				nxydump_segment = nxydump_segment,

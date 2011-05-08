@@ -165,7 +165,7 @@ enum property {
 };
 
 
-static void set_property(GObject * object, enum property id, const GValue * value, GParamSpec * psspec)
+static void set_property(GObject * object, enum property id, const GValue * value, GParamSpec * pspec)
 {
 	GSTLALMultiplier *multiplier = GSTLAL_MULTIPLIER(object);
 
@@ -175,13 +175,17 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 	case ARG_SYNCHRONOUS:
 		multiplier->synchronous = g_value_get_boolean(value);
 		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
 	}
 
 	GST_OBJECT_UNLOCK(multiplier);
 }
 
 
-static void get_property(GObject * object, enum property id, GValue * value, GParamSpec * psspec)
+static void get_property(GObject * object, enum property id, GValue * value, GParamSpec * pspec)
 {
 	GSTLALMultiplier *multiplier = GSTLAL_MULTIPLIER(object);
 
@@ -193,6 +197,10 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		 * all collect pad's offset_offsets as invalid to force a
 		 * resync */
 		g_value_set_boolean(value, multiplier->synchronous);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
 

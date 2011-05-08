@@ -452,8 +452,8 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 		break;
 
 	default:
-		psd = NULL;
 		g_assert_not_reached();
+		return NULL;
 	}
 
 	psd->epoch = element->tdworkspace->epoch;
@@ -692,55 +692,62 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint32 *o
 				return GST_FLOW_ERROR;
 			}
 			/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square after IFFT = %.16g\n", s / kk); }*/
-		}
 
-		/* 
-		 * Normalize the time series.
-		 *
-		 * After inverse transforming the frequency series to the
-		 * time domain, the variance of the time series is
-		 *
-		 * <x_{j}^{2}> = w_{j}^{2} / (\Delta t^{2} \sigma^{2})
-		 *
-		 * where \sigma^{2} is the sum-of-squares of the window
-		 * function, \sigma^{2} = \sum_{j} w_{j}^{2}
-		 *
-		 * The time series has a j-dependent variance, but we
-		 * normalize it so that the variance is 1 where w_{j} = 1
-		 * in the middle of the window.
-		 */
+			/* 
+			 * Normalize the time series.
+			 *
+			 * After inverse transforming the frequency series
+			 * to the time domain, the variance of the time
+			 * series is
+			 *
+			 * <x_{j}^{2}> = w_{j}^{2} / (\Delta t^{2}
+			 * \sigma^{2})
+			 *
+			 * where \sigma^{2} is the sum-of-squares of the
+			 * window function, \sigma^{2} = \sum_{j} w_{j}^{2}
+			 *
+			 * The time series has a j-dependent variance, but
+			 * we normalize it so that the variance is 1 where
+			 * w_{j} = 1 in the middle of the window.
+			 */
 
-		for(i = 0; i < element->tdworkspace->data->length; i++)
-			element->tdworkspace->data->data[i] *= element->tdworkspace->deltaT * sqrt(element->hann_window->sumofsquares);
-		/* normalization constant has units of seconds */
-		XLALUnitMultiply(&element->tdworkspace->sampleUnits, &element->tdworkspace->sampleUnits, &lalSecondUnit);
-		/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square after normalization = %.16g\n", s / kk); }*/
+			for(i = 0; i < element->tdworkspace->data->length; i++)
+				element->tdworkspace->data->data[i] *= element->tdworkspace->deltaT * sqrt(element->hann_window->sumofsquares);
+			/* normalization constant has units of seconds */
+			XLALUnitMultiply(&element->tdworkspace->sampleUnits, &element->tdworkspace->sampleUnits, &lalSecondUnit);
+			/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->tdworkspace->data->length; kk++) s += pow(element->tdworkspace->data->data[kk], 2); fprintf(stderr, "mean square after normalization = %.16g\n", s / kk); }*/
 
-		/*
-		 * Verify the result is dimensionless.
-		 */
+			/*
+			 * Verify the result is dimensionless.
+			 */
 
-		if(XLALUnitCompare(&lalDimensionlessUnit, &element->tdworkspace->sampleUnits)) {
-			char units[100];
-			XLALUnitAsString(units, sizeof(units), &element->tdworkspace->sampleUnits);
-			GST_ERROR_OBJECT(element, "whitening process failed to produce dimensionless time series: result has units \"%s\"", units);
-			return GST_FLOW_ERROR;
-		}
+			if(XLALUnitCompare(&lalDimensionlessUnit, &element->tdworkspace->sampleUnits)) {
+				char units[100];
+				XLALUnitAsString(units, sizeof(units), &element->tdworkspace->sampleUnits);
+				GST_ERROR_OBJECT(element, "whitening process failed to produce dimensionless time series: result has units \"%s\"", units);
+				return GST_FLOW_ERROR;
+			}
 
-		/*
-		 * Mix the results into the output history buffer, copy new
-		 * result into output buffer, shift output history buffer.
-		 */
+			/*
+			 * Mix the results into the output history buffer
+			 */
 
-		if(element->tukey_window) {
-			for(i = 0; i < element->output_history->length; i++)
-				element->output_history->data[i] += element->tdworkspace->data->data[i] * element->tukey_window->data->data[i];
-		} else {
-			for(i = 0; i < element->output_history->length; i++)
-				element->output_history->data[i] += element->tdworkspace->data->data[i];
-		}
-		if(block_contains_nongaps)
+			if(element->tukey_window) {
+				for(i = 0; i < element->output_history->length; i++)
+					element->output_history->data[i] += element->tdworkspace->data->data[i] * element->tukey_window->data->data[i];
+			} else {
+				for(i = 0; i < element->output_history->length; i++)
+					element->output_history->data[i] += element->tdworkspace->data->data[i];
+			}
 			element->nonzero_output_history_length = element->output_history->length;
+		} else
+			element->tdworkspace->sampleUnits = lalDimensionlessUnit;
+
+		/*
+		 * copy new result into output buffer, shift output history
+		 * buffer.
+		 */
+
 		g_assert((gint64) element->output_history_offset <= (gint64) (element->next_offset_out + *outsamples));
 		if(element->output_history_offset == element->next_offset_out + *outsamples) {
 			memcpy(&dst[*outsamples], &element->output_history->data[0], hann_length / 2 * sizeof(*element->output_history->data));
@@ -1236,6 +1243,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * (re)sync timestamp and offset book-keeping
 		 */
 
+		g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(inbuf));
+		g_assert(GST_BUFFER_OFFSET_IS_VALID(inbuf));
 		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
 		element->next_offset_out = GST_BUFFER_OFFSET(inbuf);
@@ -1252,12 +1261,19 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		zero_output_history(element);
-	}
+	} else
+		g_assert(GST_BUFFER_TIMESTAMP(inbuf) == gst_audioadapter_expected_timestamp(element->input_queue));
 	element->next_offset_in = GST_BUFFER_OFFSET_END(inbuf);
 
 	/*
 	 * process data
 	 */
+	/* FIXME:  what this code isn't smart enough to do is recognize
+	 * when there is no non-zero history in the adapter and just not
+	 * process inbuf at all.  it's also not smart enough to know when
+	 * inbuf is a large enough gap that it will drain whatever non-zero
+	 * history there is so that only the first bit needs to be
+	 * processed and the rest should be flagged as a gap. */
 
 	gst_buffer_ref(inbuf);	/* don't let calling code free buffer */
 	gst_audioadapter_push(element->input_queue, inbuf);
@@ -1321,7 +1337,8 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		/*
 		 * it is now necessary to re-build the work spaces.  we
 		 * affect this by hooking the workspace re-build function
-		 * onto the zero-pad notification signal
+		 * onto the zero-pad notification signal.  see
+		 * gstlal_whiten_init()
 		 */
 		break;
 
@@ -1336,7 +1353,8 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 
 			/*
 			 * let everybody know the PSD's \Delta f has
-			 * changed.
+			 * changed.  this affects a rebuild of the
+			 * workspace.  see gstlal_whiten_init().
 			 */
 
 			g_object_notify(object, "delta-f");
@@ -1374,6 +1392,10 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		}
 		break;
 	}
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -1432,6 +1454,11 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 			g_value_set_double(value, element->hann_window->sumofsquares / element->hann_window->data->length);
 		else
 			g_value_set_double(value, 0.0);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
 	}
 
 	GST_OBJECT_UNLOCK(element);

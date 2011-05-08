@@ -78,6 +78,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case ARG_SILENT:
 		element->silent = g_value_get_boolean(value);
 		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
 	}
 
 	GST_OBJECT_UNLOCK(element);
@@ -93,6 +97,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	switch(id) {
 	case ARG_SILENT:
 		g_value_set_boolean(value, element->silent);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
 

@@ -57,15 +57,47 @@ enum property {
 /*
  * ============================================================================
  *
+ *                               Internal Code
+ *
+ * ============================================================================
+ */
+
+
+static guint samples_remaining(GstBuffer *buf, guint skip)
+{
+	guint n = GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
+	g_assert(skip <= n);
+	return n - skip;
+}
+
+
+static GstClockTime expected_timestamp(GstAudioAdapter *adapter)
+{
+	GstBuffer *buf = GST_BUFFER(g_queue_peek_tail(adapter->queue));
+	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(buf));
+	g_assert(GST_BUFFER_DURATION_IS_VALID(buf));
+	return GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
+}
+
+
+/*
+ * ============================================================================
+ *
  *                                Exported API
  *
  * ============================================================================
  */
 
 
+GstClockTime gst_audioadapter_expected_timestamp(GstAudioAdapter *adapter)
+{
+	return g_queue_is_empty(adapter->queue) ? GST_CLOCK_TIME_NONE : expected_timestamp(adapter);
+}
+
+
 void gst_audioadapter_drain(GstAudioAdapter *adapter)
 {
-	GstBuffer *buf;
+	void *buf;
 	while((buf = g_queue_pop_head(adapter->queue)))
 		gst_buffer_unref(GST_BUFFER(buf));
 	adapter->size = 0;
@@ -97,54 +129,40 @@ gboolean gst_audioadapter_is_gap(GstAudioAdapter *adapter)
 void gst_audioadapter_copy(GstAudioAdapter *adapter, void *dst, guint samples, gboolean *copied_gap, gboolean *copied_nongap)
 {
 	GList *head = g_queue_peek_head_link(adapter->queue);
+	GstBuffer *buf;
 	gboolean gap = FALSE;
 	gboolean nongap = FALSE;
-	guint n = GST_BUFFER_OFFSET_END(GST_BUFFER(head->data)) - GST_BUFFER_OFFSET(GST_BUFFER(head->data)) - adapter->skip;
+	guint n;
 
-	if(samples < n) {
-		if(GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP)) {
-			memset(dst, 0, samples * adapter->unit_size);
-			gap = TRUE;
-		} else {
-			memcpy(dst, GST_BUFFER_DATA(GST_BUFFER(head->data)) + adapter->skip * adapter->unit_size, samples * adapter->unit_size);
-			nongap = TRUE;
-		}
+	if(!samples)
 		goto done;
+	g_assert(samples <= adapter->size);
+
+	/* first buffer might need to have some samples skipped to it needs
+	 * to be handled separately */
+	buf = GST_BUFFER(head->data);
+	n = MIN(samples, samples_remaining(buf, adapter->skip));
+	if(GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP)) {
+		memset(dst, 0, n * adapter->unit_size);
+		gap = TRUE;
 	} else {
-		if(GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP)) {
+		memcpy(dst, GST_BUFFER_DATA(buf) + adapter->skip * adapter->unit_size, n * adapter->unit_size);
+		nongap = TRUE;
+	}
+	dst += n * adapter->unit_size;
+	samples -= n;
+
+	while(samples) {
+		buf = GST_BUFFER((head = g_list_next(head))->data);
+
+		n = MIN(samples, GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf));
+		if(GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP)) {
 			memset(dst, 0, n * adapter->unit_size);
 			gap = TRUE;
 		} else {
-			memcpy(dst, GST_BUFFER_DATA(GST_BUFFER(head->data)) + adapter->skip * adapter->unit_size, n * adapter->unit_size);
+			memcpy(dst, GST_BUFFER_DATA(buf), n * adapter->unit_size);
 			nongap = TRUE;
 		}
-		dst += n * adapter->unit_size;
-		samples -= n;
-	}
-
-	while(samples) {
-		head = g_list_next(head);
-		n = GST_BUFFER_OFFSET_END(GST_BUFFER(head->data)) - GST_BUFFER_OFFSET(GST_BUFFER(head->data));
-
-		if(samples < n) {
-			if(GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP)) {
-				memset(dst, 0, samples * adapter->unit_size);
-				gap = TRUE;
-			} else {
-				memcpy(dst, GST_BUFFER_DATA(GST_BUFFER(head->data)), samples * adapter->unit_size);
-				nongap = TRUE;
-			}
-			goto done;
-		} else {
-			if(GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP)) {
-				memset(dst, 0, n * adapter->unit_size);
-				gap = TRUE;
-			} else {
-				memcpy(dst, GST_BUFFER_DATA(GST_BUFFER(head->data)), n * adapter->unit_size);
-				nongap = TRUE;
-			}
-		}
-
 		dst += n * adapter->unit_size;
 		samples -= n;
 	}
@@ -160,9 +178,11 @@ done:
 
 void gst_audioadapter_flush(GstAudioAdapter *adapter, guint samples)
 {
+	g_assert(samples <= adapter->size);
+
 	while(samples) {
 		GstBuffer *head = GST_BUFFER(g_queue_peek_head(adapter->queue));
-		guint n = GST_BUFFER_OFFSET_END(head) - GST_BUFFER_OFFSET(head) - adapter->skip;
+		guint n = samples_remaining(head, adapter->skip);
 
 		if(samples < n) {
 			adapter->skip += samples;
@@ -206,6 +226,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		break;
 
 	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
 }
@@ -225,6 +246,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		break;
 
 	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
 }
