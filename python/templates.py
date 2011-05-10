@@ -163,6 +163,12 @@ def normalized_autocorrelation(fseries, revplan):
 	return tseries
 
 
+def ceil_pow_2( number ):
+	"""Return the least integer power of 2 that is greater than or equal to number."""
+	# FIXME: change to integer arithmetic
+	return 2**(numpy.ceil(numpy.log2( number )))
+
+
 def time_slices(
 	m1m2pairs,
 	flow = 40,
@@ -179,10 +185,6 @@ def time_slices(
 	during which the given rate is guaranteed to be appropriate (no
 	template exceeds a frequency of Nyquist/padding during these times).
 	"""
-	# Round a number up to the nearest power of 2
-	# FIXME: change to integer arithmetic
-	def ceil_pow_2( number ):
-		return 2**(numpy.ceil(numpy.log2( number )))
 
 	#
 	# DETERMINE A SET OF ALLOWED SAMPLE RATES
