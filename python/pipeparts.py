@@ -66,7 +66,7 @@ def mksegmentsrc(pipeline, segment_list, blocksize = 4096 * 1 * 1, invert_output
 	elem = gst.element_factory_make("lal_segmentsrc")
 	elem.set_property("blocksize", blocksize)
 	elem.set_property("segment-list", segments.segmentlist(segments.segment(a.ns(), b.ns()) for a, b in segment_list))
-	elem.set_property("invert-output", invert_output) 
+	elem.set_property("invert-output", invert_output)
 	pipeline.add(elem)
 	return elem
 
@@ -527,6 +527,93 @@ def mkappsink(pipeline, src, pad_name = None, max_buffers = 1, drop = False, **p
 	else:
 		src.link(elem)
 	return elem
+
+
+class AppSync(object):
+	def __init__(self, appsinks=[]):
+		self.appsinks = {}
+		for a in appsinks:
+			self.appsinks[a] = None
+
+	def add_sink(self, src, pad_name = None, max_buffers = 1, drop = False, **properties):
+		elem = mkappsink(pipeline, src, pad_name, max_buffers, drop, **properties)
+		self.appsinks[elem] = None
+		return elem
+
+	def times(self):
+		return [a.get_last_buffer().timestamp for a in self.appsinks.keys() if a.get_last_buffer() is not None]
+
+	def earliest_time(self):
+		t=self.times()
+		return min(t)
+
+	def earliest_appsink(self):
+		out = [k for k in self.appsinks.keys() if k.get_last_buffer() is not None and k.get_last_buffer().timestamp == self.earliest_time()]
+		return out
+
+
+def pull_appsinks_in_order(appsink,appsync):
+
+	# get the earliest buffers
+	eap = appsync.earliest_appsink()
+
+	# mark that this one cannot emit another buffer signal (default)
+	appsync.appsinks[appsink] = 1
+
+	# This buffer has never been pulled. Pull it and mark that it could
+	# emit another signal Return when we are done
+	if appsync.appsinks[appsink] is None:
+		appsync.appsinks[appsink] = 0
+		buf = appsink.emit('pull-buffer')
+		return
+
+	# we must wait until we have at least one buffer from each appsink This
+	# thread should block, return when we are done
+	if len(appsync.times()) != len(appsync.appsinks):
+		return
+
+	# if this is among the earliest, pull and mark that it could emit
+	# another signal Return when we are done
+	if appsink in eap:
+		appsync.appsinks[appsink] = 0
+		buf = appsink.emit('pull-buffer')
+		return
+	else:
+		pass
+
+	# If we have gotten this far, it is not the earliest, but we should
+	# check to see if the others are, and are blocked If everything is
+	# blocked we could get a deadlock. We can only unblock one appsync or
+	# else crazy things could happen We should return after finding one
+	# "earliest"
+	if sum([v for v in appsync.appsinks.values()]) == len(appsync.appsinks):
+		not_earliest = []
+		for k,v in appsync.appsinks.items():
+			if v == 1:
+				if k in eap:
+					appsync.appsinks[k] = 0
+					buf = k.emit('pull-buffer')
+					return
+				else:
+					not_earliest.append(k)
+
+	# One last check.  If none of the buffers are "earliest", then we need
+	# to check again, that could have changed.  We should updated our
+	# earliest list at this point.
+	eap = appsync.earliest_appsink()
+	if len(not_earliest) == len(appsync.appsinks):
+		not_earliest = []
+		for k,v in appsync.appsinks.items():
+			if v == 1:
+				if k in eap:
+					appsync.appsinks[k] = 0
+					buf = k.emit('pull-buffer')
+					return
+				else:
+					not_earliest.append(k)
+
+	return
+
 
 def mkchecktimestamps(pipeline, src, name = None, silent = True):
 	elem = gst.element_factory_make("lal_checktimestamps")
