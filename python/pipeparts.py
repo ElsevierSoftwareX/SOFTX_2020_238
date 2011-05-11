@@ -535,13 +535,17 @@ class AppSync(object):
 		for a in appsinks:
 			self.appsinks[a] = None
 
-	def add_sink(self, src, pad_name = None, max_buffers = 1, drop = False, **properties):
-		elem = mkappsink(pipeline, src, pad_name, max_buffers, drop, **properties)
+	def add_sink(self, pipeline, src, pad_name = None, drop = False, **properties):
+		# NOTE that max buffers must be 1 for this to work
+		elem = mkappsink(pipeline, src, pad_name, 1, drop, **properties)
 		self.appsinks[elem] = None
 		return elem
 
 	def times(self):
 		return [a.get_last_buffer().timestamp for a in self.appsinks.keys() if a.get_last_buffer() is not None]
+	
+	def num_first_buffers(self):
+		return len([a for a in self.appsinks.values() if a is not None])
 
 	def earliest_time(self):
 		t=self.times()
@@ -569,7 +573,7 @@ def pull_appsinks_in_order(appsink,appsync):
 
 	# we must wait until we have at least one buffer from each appsink This
 	# thread should block, return when we are done
-	if len(appsync.times()) != len(appsync.appsinks):
+	if appsync.num_first_buffers() != len(appsync.appsinks):
 		return
 
 	# if this is among the earliest, pull and mark that it could emit
@@ -586,8 +590,8 @@ def pull_appsinks_in_order(appsink,appsync):
 	# blocked we could get a deadlock. We can only unblock one appsync or
 	# else crazy things could happen We should return after finding one
 	# "earliest"
+	not_earliest = []
 	if sum([v for v in appsync.appsinks.values()]) == len(appsync.appsinks):
-		not_earliest = []
 		for k,v in appsync.appsinks.items():
 			if v == 1:
 				if k in eap:
