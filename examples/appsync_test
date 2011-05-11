@@ -53,7 +53,7 @@ mainloop = gobject.MainLoop()
 
 pipeline = gst.Pipeline("test")
 
-# Set up two audio test sources
+# Set up audio test sources
 src1 = test_src(pipeline, "test1", samplesperbuffer=20480)
 src2 = test_src(pipeline, "test2", samplesperbuffer=1024)
 src3 = test_src(pipeline, "test3", samplesperbuffer=4096)
@@ -65,7 +65,7 @@ q = multiqueue(pipeline, (src1,src2, src3, src4))
 # Define an appsync class
 appsync = pipeparts.AppSync()
 
-# Add two app sinks and hook up the multiqueue
+# Add app sinks and hook up the multiqueue
 s1 = appsync.add_sink(pipeline,q)
 s2 = appsync.add_sink(pipeline,q)
 s3 = appsync.add_sink(pipeline,q)
