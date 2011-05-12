@@ -121,7 +121,7 @@ count_sub_banks = i + 1
 progress.max = count_sub_banks
 progress.update(-1, 'Generating DAG')
 
-dag = makeDAG('aligo')
+dag = makeDAG('lloid_paper')
 
 # gstlal_svd_bank submit file for generating time sliced, SVD'd template banks.
 gstlal_svd_bank_sub = EnvCondorJob("""gstlal_svd_bank
@@ -130,7 +130,20 @@ gstlal_svd_bank_sub = EnvCondorJob("""gstlal_svd_bank
 	--write-svd-bank svd/$(template_bank)
 	""", outputname="log/$(Cluster).$(Process)")
 
+compute_match_sub = EnvCondorJob("""./compute_match
+	--svd-bank svd/$(template_bank)
+	--impulse-responses $(tmpdir)/$(Cluster).$(Process).dat
+	--flow $(flow)
+	--reference-psd psd.xml
+	--output $(outfilename)""",
+	subfilename='compute_match', outputname="log/$(Cluster).$(Process)")
+
+postprocess_sub = EnvCondorJob("""./postprocess -n $(count_sub_banks)""",
+	subfilename='postprocess', outputname="log/$(Cluster).$(Process)")
+
 # Assemble DAG.
+postprocess_node = makeNode(dag, postprocess_sub, count_sub_banks=count_sub_banks)
+
 for j in range(count_sub_banks):
 
 	progress.update(j)
@@ -138,6 +151,12 @@ for j in range(count_sub_banks):
 
 	# Add gstlal_svd_bank node for this bank fragment.
 	gstlal_svd_bank_node = makeNode(dag, gstlal_svd_bank_sub, template_bank=template_bank, flow=opts.flow)
+
+	# Add impulse_response node for this bank fragment.
+	compute_match_node = makeNode(dag, compute_match_sub,
+		template_bank=template_bank, tmpdir=tmpdir,
+		flow=opts.flow, outfilename=('match/%d.out' % j),
+		parents=[gstlal_svd_bank_node], children=[postprocess_node])
 
 
 # Write DAG and submit files.
@@ -150,7 +169,7 @@ dag.write_dag()
 # Print a helpful message to tell the user what to do next.
 print """
 
-Successfully generated "aligo.dag".  You may now launch it with
+Successfully generated "lloid_paper.dag".  You may now launch it with
 
-  condor_submit_dag aligo.dag
+  condor_submit_dag lloid_paper.dag
 """

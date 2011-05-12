@@ -16,7 +16,7 @@ LOW_FREQUENCY_CUTOFF = 15.0
 HIGH_PASS_FREQ = 10.0
 
 
-all: aligo.dag tmpltbank/tmpltbank.xml psd.xml
+all: lloid_paper.dag tmpltbank/tmpltbank.xml psd.xml
 
 
 # These targets are intermediate; it's OK to delete them if they are built only
@@ -24,9 +24,10 @@ all: aligo.dag tmpltbank/tmpltbank.xml psd.xml
 .INTERMEDIATE: $(TMPLTBANK)
 
 
-aligo.dag: tmpltbank/tmpltbank.xml psd.xml $(INJECTIONS)
+lloid_paper.dag: tmpltbank/tmpltbank.xml psd.xml $(INJECTIONS)
 	mkdir -p log
 	mkdir -p svd
+	mkdir -p match
 	./build_job \
 		--flow $(LOW_FREQUENCY_CUTOFF) \
 		$<
@@ -109,4 +110,4 @@ clean:
 		$(TMPLTBANK) \
 		*.{sub,dag} \
 		*.dag.*
-	rm -rf tmpltbank log svd hoft
+	rm -rf tmpltbank log svd hoft match

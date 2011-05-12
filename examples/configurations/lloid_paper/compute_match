@@ -1,0 +1,26 @@
+#!/usr/bin/env python
+"""
+Kludge to call two scripts in sequence on the same cluster node.
+"""
+
+from optparse import OptionParser, Option
+import subprocess
+
+opts, args = OptionParser(description = __doc__,
+	option_list = [
+		Option("--svd-bank", help="Name of an SVD'd template bank."),
+		Option("-d", "--downsample-quality", metavar="0..9", help="Downsampling quality setting (default=9).", choices=[str(q) for q in range(10)], default=9),
+		Option("-u", "--upsample-quality", metavar="0..9", help="Upsampling quality setting (default=9).", choices=[str(q) for q in range(10)], default=9),
+		Option("--impulse-responses", help="Name of a binary data file containing impulse responses."),
+		Option("--flow", type="float"),
+		Option("--reference-psd", help="Name of a PSD file."),
+		Option("--output", metavar="FILE"),
+	]
+).parse_args()
+
+
+# FIXME: use subprocess.check_call in later versions of Python
+if subprocess.call(['./impulse_response', '-d', str(opts.downsample_quality), '-u', str(opts.upsample_quality), '--svd-bank', opts.svd_bank, '--output', opts.impulse_responses]):
+	raise RuntimeError('Subprocess did not complete successfully')
+if subprocess.call(['./convolve_with_templates', '--impulse-responses', opts.impulse_responses, '--svd-bank', opts.svd_bank, '--flow', str(opts.flow), '--reference-psd', opts.reference_psd, '--output', opts.output]):
+	raise RuntimeError('Subprocess did not complete successfully')

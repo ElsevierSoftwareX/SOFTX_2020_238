@@ -21,12 +21,12 @@ opts, args = OptionParser(description = __doc__,
 		Option("--svd-bank", help="Name of an svd'd template bank."),
 		Option("--flow", type="float"),
 		Option("--reference-psd", help="Name of a PSD file."),
-		#Option("--output", metavar="FILE"),
+		Option("--output", metavar="FILE"),
 	]
 ).parse_args()
 
 # Check for required command line arguments.
-if any(getattr(opts, key) is None for key in ('impulse_responses', 'svd_bank', 'flow', 'reference_psd')):
+if any(getattr(opts, key) is None for key in ('output', 'impulse_responses', 'svd_bank', 'flow', 'reference_psd')):
 	raise RuntimeError("Missing some required arguments")
 
 
@@ -39,6 +39,9 @@ from itertools import izip
 from scipy import signal
 import numpy
 
+
+# Open output data file.
+output = open(opts.output, 'w')
 
 # Read the SVD bank file, which describes (among many other things) the time
 # slice layout.
@@ -91,4 +94,4 @@ for tmpltbank_row, impulse_response in izip(sngl_inspiral_table, impulse_respons
 	conv /= numpy.sqrt(norm_squared(template_tseries) * norm_squared(impulse_response))
 
 	# Get maximum value
-	print numpy.sqrt((conv.real * conv.real + conv.imag * conv.imag).max())
+	print >>output, numpy.sqrt((conv.real * conv.real + conv.imag * conv.imag).max())

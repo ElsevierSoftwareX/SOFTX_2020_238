@@ -19,14 +19,16 @@ if opts.n is None:
 
 # Late imports.
 from glue.ligolw import ligolw, lsctables, utils
+import matplotlib
+matplotlib.use('agg')
 import pylab
 import numpy
 
 
 # Read data.
 def get_data():
-	for i in range(11):
-		match = numpy.loadtxt('output/%d.out' % i)
+	for i in range(opts.n):
+		match = numpy.loadtxt('match/%d.out' % i)
 		sngl_inspiral_table = lsctables.table.get_table(utils.load_filename('tmpltbank/%d.xml' % i), lsctables.SnglInspiralTable.tableName)
 		m1 = sngl_inspiral_table.getColumnByName('mass1')
 		m2 = sngl_inspiral_table.getColumnByName('mass2')
