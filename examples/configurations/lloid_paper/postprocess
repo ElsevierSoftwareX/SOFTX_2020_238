@@ -1,0 +1,55 @@
+#!/usr/bin/env python
+"""
+Post process output in order to generate scatter plot and histogram of matches.
+"""
+__author__ = "Leo Singer <leo.singer@ligo.org>"""
+
+
+# Command line interface.
+from optparse import Option, OptionParser
+opts, args = OptionParser(description = __doc__,
+	option_list = [
+		Option("-n", type="int", help="Number of template bank chunks.")
+	]
+).parse_args()
+
+if opts.n is None:
+	raise RuntimeError("Required argument -n not provided.")
+
+
+# Late imports.
+from glue.ligolw import ligolw, lsctables, utils
+import pylab
+import numpy
+
+
+# Read data.
+def get_data():
+	for i in range(11):
+		match = numpy.loadtxt('output/%d.out' % i)
+		sngl_inspiral_table = lsctables.table.get_table(utils.load_filename('tmpltbank/%d.xml' % i), lsctables.SnglInspiralTable.tableName)
+		m1 = sngl_inspiral_table.getColumnByName('mass1')
+		m2 = sngl_inspiral_table.getColumnByName('mass2')
+		for tup in zip(match, m1, m2):
+			yield tup
+match, m1, m2 = zip(*get_data())
+
+
+# Generate scatter plot.
+pylab.scatter(m1, m2, c=match, linewidth=0.)
+pylab.xlabel(r'Component mass $m_1$ $(\mathrm{M}_\odot)$')
+pylab.ylabel(r'Component mass $m_2$ $(\mathrm{M}_\odot)$')
+pylab.colorbar().set_label('Match between impulse response and nominal template')
+pylab.title('Match: mass dependence')
+pylab.savefig('match.pdf')
+pylab.close()
+
+
+# Generate histogram.
+pylab.clf()
+pylab.hist(match, histtype = 'step', bins=50, cumulative=1)
+pylab.grid()
+pylab.xlabel('Match between impulse response and nominal template')
+pylab.ylabel(r'Count $\leqslant$ match')
+pylab.title('Match: histogram')
+pylab.savefig('hist.pdf')
