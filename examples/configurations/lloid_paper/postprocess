@@ -28,30 +28,34 @@ import numpy
 # Read data.
 def get_data():
 	for i in range(opts.n):
-		match = numpy.loadtxt('match/%d.out' % i)
+		mismatch = 1. - numpy.loadtxt('match/%d.out' % i)
 		sngl_inspiral_table = lsctables.table.get_table(utils.load_filename('tmpltbank/%d.xml' % i), lsctables.SnglInspiralTable.tableName)
-		m1 = sngl_inspiral_table.getColumnByName('mass1')
-		m2 = sngl_inspiral_table.getColumnByName('mass2')
-		for tup in zip(match, m1, m2):
+		tau0 = sngl_inspiral_table.getColumnByName('tau0')
+		tau3 = sngl_inspiral_table.getColumnByName('tau3')
+		for tup in zip(mismatch, tau0, tau3):
 			yield tup
-match, m1, m2 = zip(*get_data())
+mismatch, tau0, tau3 = zip(*sorted(get_data()))
+mismatch = numpy.array(mismatch)
+tau0 = numpy.array(tau0)
+tau3 = numpy.array(tau3)
 
 
 # Generate scatter plot.
-pylab.scatter(m1, m2, c=match, linewidth=0.)
-pylab.xlabel(r'Component mass $m_1$ $(\mathrm{M}_\odot)$')
-pylab.ylabel(r'Component mass $m_2$ $(\mathrm{M}_\odot)$')
-pylab.colorbar().set_label('Match between impulse response and nominal template')
-pylab.title('Match: mass dependence')
-pylab.savefig('match.pdf')
+pylab.scatter(tau0, tau3, c=mismatch, linewidth=0.)
+pylab.grid()
+pylab.xlabel(r'$\tau_0$')
+pylab.ylabel(r'$\tau_3$')
+pylab.colorbar().set_label('Mismatch between impulse response and nominal template')
+pylab.title('Mismatch: by template')
+pylab.savefig('mismatch.pdf')
 pylab.close()
 
 
 # Generate histogram.
 pylab.clf()
-pylab.hist(match, histtype = 'step', bins=50, cumulative=1)
+pylab.hist(mismatch, histtype = 'step', bins=numpy.logspace(numpy.log10(min(mismatch)), numpy.log10(max(mismatch)), 50), normed=True)
 pylab.grid()
-pylab.xlabel('Match between impulse response and nominal template')
-pylab.ylabel(r'Count $\leqslant$ match')
-pylab.title('Match: histogram')
+pylab.xlabel('Mismatch between impulse response and nominal template')
+pylab.ylabel(r'Density')
+pylab.title('Mismatch: histogram')
 pylab.savefig('hist.pdf')
