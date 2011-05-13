@@ -121,8 +121,14 @@ static int thresh_process(GSTLALMean *element, guint64 available_length, guint64
 		offset = available_length - output_length + i;
 		for (j = 0; j < channels; j++) {
 			if (fabs(in[offset * channels + j]) >= thresh) element->lastcross[j] = offset - j;
-			if (offset - element->lastcross[j] > element->n) out[i*channels +j] = 0.0;
-			else out[i*channels +j] = in[offset * channels + j];
+			if (element->invert_thresh) {
+				if (offset - element->lastcross[j] > element->n) out[i*channels +j] = in[offset * channels + j];
+				else out[i*channels +j] = 0.0;
+			}
+			else {
+				if (offset - element->lastcross[j] > element->n) out[i*channels +j] = 0.0;
+				else out[i*channels +j] = in[offset * channels + j];
+			}
 		}
 	}
 	return 0;
@@ -400,6 +406,7 @@ enum property {
 #define TYPE_MAX_OVER_N 3
 #define TYPE_MAX_EVERY_N 4
 #define TYPE_THRESH 5
+#define TYPE_INVERTED_THRESH 6
 
 /*
  * ============================================================================
@@ -470,6 +477,10 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	if (element->type == TYPE_MAX_OVER_N) element->process = GST_DEBUG_FUNCPTR(max_over_n_process);
 	if (element->type == TYPE_MAX_EVERY_N) element->process = GST_DEBUG_FUNCPTR(max_every_n_process);
 	if (element->type == TYPE_THRESH) element->process = GST_DEBUG_FUNCPTR(thresh_process);
+	if (element->type == TYPE_INVERTED_THRESH) { 
+		element->process = GST_DEBUG_FUNCPTR(thresh_process);
+		element->invert_thresh = TRUE;
+	}
 	return success;
 }
 
@@ -487,7 +498,7 @@ static gboolean start(GstBaseTransform *trans)
 	element->offset0 = GST_BUFFER_OFFSET_NONE;
 	element->next_out_offset = GST_BUFFER_OFFSET_NONE;
 	element->need_discont = TRUE;
-
+	element->invert_thresh=FALSE;
 
 	return TRUE;
 }
