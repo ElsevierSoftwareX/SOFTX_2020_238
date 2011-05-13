@@ -296,6 +296,8 @@ static GstFlowReturn transform( GstBaseTransform *trans, GstBuffer *inbuf, GstBu
 		GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_END(inbuf);
 		GST_BUFFER_SIZE(outbuf) = GST_BUFFER_SIZE(inbuf) - delaysize;
 		GST_BUFFER_FLAG_SET(outbuf,GST_BUFFER_FLAG_DISCONT);
+		if ( GST_BUFFER_FLAG_IS_SET(inbuf,GST_BUFFER_FLAG_GAP) )
+			GST_BUFFER_FLAG_SET(outbuf,GST_BUFFER_FLAG_GAP);
 
 		/* never come back */
 		element->delay = 0;
@@ -429,4 +431,5 @@ static void gstlal_delay_class_init(GSTLALDelayClass *klass)
 static void gstlal_delay_init(GSTLALDelay *filter, GSTLALDelayClass *kclass)
 {
 	filter->delay = DEFAULT_DELAY;
+	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);
 }
