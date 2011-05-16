@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 """
 
-Tests impulse response of filter bank for various resampler configurations.
+Calculate impulse response of LLOID filter bank by injecting an impulse
+into the pipeline and recording the output.  Cumulative SNR is recorded
+at each time slice.
 
 """
 __author__ = "Leo Singer <leo.singer@ligo.org>"
@@ -20,7 +22,7 @@ opts, args = OptionParser(description = __doc__,
 		Option("--svd-bank", help="Name of an SVD'd template bank."),
 		Option("-d", "--downsample-quality", metavar="0..9", help="Downsampling quality setting (default=9).", choices=[str(q) for q in range(10)], default=9),
 		Option("-u", "--upsample-quality", metavar="0..9", help="Upsampling quality setting (default=9).", choices=[str(q) for q in range(10)], default=9),
-		Option("--output", metavar="FILE"),
+		Option("-o", "--output", metavar="FILE_%d.out", help="Printf-style pattern for output files.  The single numeric printf specifier will be replaced by the index of each time slice."),
 	]
 ).parse_args()
 
@@ -38,6 +40,7 @@ from gstlal.svd_bank import read_bank
 import math
 
 bank = read_bank(opts.svd_bank)
+count_fragments = len(bank.bank_fragments)
 upsample_quality = int(opts.upsample_quality)
 downsample_quality = int(opts.downsample_quality)
 
@@ -61,15 +64,9 @@ src_elems = mkelems_fast(pipeline,
 	"tee",
 )
 
-snr_elems = mkelems_fast(pipeline,
-	"lal_adder", {"sync": True},
-	"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % source_rate)},
-	"progressreport", {"name": "progress_out", "update-freq": 1},
-	"filesink", {"location": opts.output, "sync": False, "async": False},
-)
-
-for bank_fragment in bank.bank_fragments:
-	mkelems_fast(pipeline,
+# Loop over bank fragments in chronological order
+for i, bank_fragment in enumerate(sorted(bank.bank_fragments, key = lambda x: x.end, reverse = True)):
+	head = mkelems_fast(pipeline,
 		src_elems[-1],
 		"lal_delay", {"delay": int(round( (bank.filter_length - bank_fragment.end)*bank_fragment.rate ))},
 		"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": 4 * int(math.ceil(bank.filter_length)) * gst.SECOND},
@@ -84,8 +81,22 @@ for bank_fragment in bank.bank_fragments:
 		"audioresample", {"quality": upsample_quality},
 		"lal_nofakedisconts", {"silent": True},
 		"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": gst.SECOND},
-		snr_elems[0],
-	)
+	)[-1]
+	if i > 0:
+		head = mkelems_fast(pipeline,
+			head,
+			"lal_adder", {"sync": True})[-1]
+		mkelems_fast(pipeline,
+			last_head,
+			"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": gst.SECOND},
+			head)
+	if i < count_fragments - 1:
+		head = mkelems_fast(pipeline, head, "tee")[-1]
+	mkelems_fast(pipeline,
+		head,
+		"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % source_rate)},
+		"filesink", {"location": opts.output % i, "sync": False, "async": False})[-1]
+	last_head = head
 
 # Seek to just before impulse; be paranoid and pad by 1.5 template lengths before and after.
 
