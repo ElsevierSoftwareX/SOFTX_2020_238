@@ -40,7 +40,7 @@ hoft:
 
 # Generate LAL frame cache
 frame.cache: hoft
-	./glob_data_find $(PWD)/hoft > $@
+	find $< -name *.gwf | lalapps_path2cache > $@
 
 
 # Estimate PSD
