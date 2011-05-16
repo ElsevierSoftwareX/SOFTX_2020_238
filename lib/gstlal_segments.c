@@ -180,12 +180,10 @@ GValueArray * g_value_array_from_gstlal_segment_list(struct gstlal_segment_list 
 	GValue v = {0,};
 	g_value_init(&v, G_TYPE_VALUE_ARRAY);
 
-	for (i=0; i < seglist->length; i++) {
+	for(i = 0; i < seglist->length; i++) {
 		g_value_take_boxed(&v, g_value_array_from_gstlal_segment(seglist->segments[i]));
 		g_value_array_append(va, &v);
 	}
 
 	return va;
 }
-
-
