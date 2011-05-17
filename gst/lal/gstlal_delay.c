@@ -168,106 +168,18 @@ static gboolean set_caps(GstBaseTransform *trans,
 }
 
 
-
-
-/*
- * When an input buffer is received, prepare_output_buffer is called.
- * This function allows you to map an output buffer to a given
- * input buffer.  In this case, we use this function to set the
- * size of the output buffer.
- */
-static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans,
-					   GstBuffer *inbuf,
-					   gint size,
-					   GstCaps *caps,
-					   GstBuffer **outbuf)
-{
-	/* cast BaseTransform to GSTLALDelay */
-	GSTLALDelay *element = GSTLAL_DELAY(trans);
-	GstFlowReturn result;
-
-	/* delay params  */
-	guint delaysize = (guint) element->delay*element->unit_size;
-	guint insize = (guint) size;
-
-	if ( insize <= delaysize )
-	   /* ignore this buffer */
-	{
-		*outbuf = NULL;
-		result = GST_FLOW_OK;
-	}
-	else if ( 0 < delaysize )
-	   /* pass part of this buffer */
-	{
-		*outbuf = gst_buffer_new_and_alloc(insize-delaysize);
-		result = GST_FLOW_OK;
-	}
-	else
-	{
-		*outbuf = gst_buffer_ref(inbuf);
-		result = GST_FLOW_OK;
-	}
-
-	return result;
-}
-
-/*
- * The transform size function is required to make sure that the prepare buffer
- * function gives the right output size.  Since this element doesn't convert
- * unit sizes, this is pretty easy
- */
-
-
-gboolean transform_size(GstBaseTransform *trans,
-			GstPadDirection direction,
-			GstCaps *caps,
-			guint size,
-			GstCaps *othercaps,
-			guint *othersize)
-{
-	/* cast BaseTransform to GSTLALDelay */
-	GSTLALDelay *element = GSTLAL_DELAY(trans);
-
-	/* delay params  */
-	guint delaysize = (guint) element->delay*element->unit_size;
-	guint insize = (guint) size;
-
-	if (direction == GST_PAD_SINK)
-	{
-		if (insize <= delaysize)
-			*othersize = 0;
-		else if ( 0 < delaysize )
-			*othersize = insize - delaysize;
-		else
-			*othersize = size;
-		return TRUE;
-	}
-
-	if (direction == GST_PAD_SRC)
-	{
-		/* FIXME I have know idea what to do here */
-		*othersize = size;
-		return TRUE;
-	}
-	
-	/* if we have made it this far we don't know what to do */
-	return FALSE;
-}
-
-
 /*
  * The transform function actually does the heavy lifting on buffers.
  * Given an input buffer and an output buffer (the latter of which is
  * set in prepare_output_buffer), determine what data actually gets put
  * into the output buffer.
  */
-static GstFlowReturn transform( GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
+static GstFlowReturn transform_ip( GstBaseTransform *trans, GstBuffer *inbuf)
 {
 	GSTLALDelay *element = GSTLAL_DELAY(trans);
 	GstFlowReturn result;
-	guint delaysize = element->unit_size*element->delay;
-	guint64 delaytime;
-
+	guint delaysize = (guint) element->delay*element->unit_size;
+	
 	if ( GST_BUFFER_SIZE(inbuf) <= delaysize )
 	/* drop entire buffer */
 	{
@@ -277,28 +189,6 @@ static GstFlowReturn transform( GstBaseTransform *trans, GstBuffer *inbuf, GstBu
 	else if ( 0 < element->delay )
 	/* drop part of buffer, pass the rest */
 	{
-		guint outsize = GST_BUFFER_SIZE(outbuf);
-		guint insize = GST_BUFFER_SIZE(inbuf);
-		guint8 *indata = GST_BUFFER_DATA(inbuf);
-		guint8 *outdata = GST_BUFFER_DATA(outbuf);
-
-		memcpy((void *) outdata, (const void *) (indata+insize-outsize), outsize);
-
-		/* how much time to skip */
-
-		delaytime = gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(inbuf),
-			element->delay, GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf));
-
-		/* set output buffer metadata */
-		GST_BUFFER_TIMESTAMP(outbuf) = GST_BUFFER_TIMESTAMP(inbuf) + delaytime;
-		GST_BUFFER_DURATION(outbuf) = GST_BUFFER_DURATION(inbuf) - delaytime;
-		GST_BUFFER_OFFSET(outbuf) = GST_BUFFER_OFFSET(inbuf) + element->delay;
-		GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_END(inbuf);
-		GST_BUFFER_SIZE(outbuf) = GST_BUFFER_SIZE(inbuf) - delaysize;
-		GST_BUFFER_FLAG_SET(outbuf,GST_BUFFER_FLAG_DISCONT);
-		if ( GST_BUFFER_FLAG_IS_SET(inbuf,GST_BUFFER_FLAG_GAP) )
-			GST_BUFFER_FLAG_SET(outbuf,GST_BUFFER_FLAG_GAP);
-
 		/* never come back */
 		element->delay = 0;
 
@@ -392,11 +282,8 @@ gstlal_delay_base_init(gpointer gclass)
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
 
-	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
-	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
-	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
+	transform_class->transform_ip = GST_DEBUG_FUNCPTR(transform_ip);
 	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
-	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
 }
 
 
@@ -432,4 +319,6 @@ static void gstlal_delay_init(GSTLALDelay *filter, GSTLALDelayClass *kclass)
 {
 	filter->delay = DEFAULT_DELAY;
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);
+	gst_base_transform_set_in_place(GST_BASE_TRANSFORM(filter), TRUE);
+	gst_base_transform_set_passthrough(GST_BASE_TRANSFORM(filter), TRUE);
 }
