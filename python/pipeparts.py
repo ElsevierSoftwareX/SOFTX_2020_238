@@ -196,6 +196,16 @@ def mkaudiochebband(pipeline, src, lower_frequency, upper_frequency, poles = 8):
 	return elem
 
 
+def mkaudiocheblimit(pipeline, src, cutoff, mode = 0, poles = 8):
+	elem = gst.element_factory_make("audiocheblimit")
+	elem.set_property("cutoff", cutoff)
+	elem.set_property("mode", mode)
+	elem.set_property("poles", poles)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
 def mkaudioamplify(pipeline, src, amplification):
 	elem = gst.element_factory_make("audioamplify")
 	elem.set_property("clipping-method", 3)
