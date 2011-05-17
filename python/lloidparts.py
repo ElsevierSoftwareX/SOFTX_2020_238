@@ -88,12 +88,13 @@ def mksegmentsrcgate(pipeline, src, segment_list, threshold, seekevent = None, i
 #
 
 
-def mkhtgate(pipeline, src, threshold=6.0, attack_length=250, hold_length=250, invert_control=True):
-	q = pipeparts.mkqueue(pipeline,src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND)
-	t = pipeparts.mktee(pipeline,q)
-	q1 = pipeparts.mkqueue(pipeline,t, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND)
-	q2 = pipeparts.mkqueue(pipeline,t, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND)
-	return pipeparts.mkgate(pipeline, q1, threshold = threshold, control = q2, attack_length=attack_length, hold_length=hold_length, invert_control=invert_control)
+def mkhtgate(pipeline, src, threshold = 36.0, attack_length = 250, hold_length = 250, invert_control = True):
+	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND)
+	t = pipeparts.mktee(pipeline, src)
+	q1 = pipeparts.mkqueue(pipeline, t, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND)
+	ss = pipeparts.mksumsquares(pipeline, q1)
+	q2 = pipeparts.mkqueue(pipeline, t, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND)
+	return pipeparts.mkgate(pipeline, q2, threshold = threshold, control = ss, attack_length = attack_length, hold_length = hold_length, invert_control = invert_control)
 
 
 #
@@ -244,7 +245,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 	return src
 
 
-def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length = 8, ht_gate_thresh=None, veto_segments = None, seekevent = None, nxydump_segment = None):
+def mkLLOIDsrc(pipeline, src, rates, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None):
 	"""Build pipeline stage to whiten and downsample h(t)."""
 
 	#
@@ -328,7 +329,7 @@ def mkLLOIDsrc(pipeline, src, rates, psd=None, psd_fft_length = 8, ht_gate_thres
 	# optional gate on h(t) amplitude
 	#
 
-	if ht_gate_thresh is not None:
+	if ht_gate_threshold is not None:
 		head = mkhtgate(pipeline, head)
 
 	#
@@ -484,7 +485,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			# firbank element, and the value here is only
 			# approximate and not tied to the fir bank
 			# parameters so might not work if those change
-			pipeparts.mkqueue(pipeline, pipeparts.mkdelay(pipeline, pipeparts.mkreblock(pipeline, hoftdict[bank_fragment.rate]), int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = 4 * int(math.ceil(bank.filter_length)) * gst.SECOND),
+			pipeparts.mkqueue(pipeline, pipeparts.mkdelay(pipeline, hoftdict[bank_fragment.rate], int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = 4 * int(math.ceil(bank.filter_length)) * gst.SECOND),
 			bank,
 			bank_fragment,
 			control_snksrc,
@@ -640,7 +641,7 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 #
 
 
-def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, ht_gate_thresh=None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq'):
+def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq'):
 	#
 	# check for recognized value of chisq_type
 	#
@@ -670,9 +671,9 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 		# different thread than the whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src)
 		if veto_segments is not None:
-			hoftdict = mkLLOIDsrc(pipeline, src, rates, psd = psd, psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_thresh=ht_gate_thresh, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment)
+			hoftdict = mkLLOIDsrc(pipeline, src, rates, psd = psd, psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment)
 		else:
-			hoftdict = mkLLOIDsrc(pipeline, src, rates, psd = psd, psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_thresh=ht_gate_thresh, nxydump_segment = nxydump_segment)
+			hoftdict = mkLLOIDsrc(pipeline, src, rates, psd = psd, psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, nxydump_segment = nxydump_segment)
 		for bank in banks:
 			suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent)
