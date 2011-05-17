@@ -251,6 +251,14 @@ def mkqueue(pipeline, src, pad_name = None, **properties):
 	return elem
 
 
+def mkdrop(pipeline, src, drop_samples = 0):
+	elem = gst.element_factory_make("lal_drop")
+	elem.set_property("drop-samples",drop_samples)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
 def mkdelay(pipeline, src, delay = 0):
 	elem = gst.element_factory_make("lal_delay")
 	elem.set_property("delay",delay)
