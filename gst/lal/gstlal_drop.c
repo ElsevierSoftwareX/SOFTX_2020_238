@@ -254,8 +254,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
 		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + dropsize;
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET_END(sinkbuf);
-		GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + element->drop_samples * element->rate;
-		GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_DURATION(sinkbuf) - element->drop_samples * element->rate;
+		GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + element->drop_samples * element->rate * GST_SECOND;
+		GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_DURATION(sinkbuf) - element->drop_samples * element->rate * GST_SECOND;
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
 		
 		result = gst_pad_push(element->srcpad, srcbuf);
