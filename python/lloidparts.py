@@ -330,7 +330,7 @@ def mkLLOIDsrc(pipeline, src, rates, psd = None, psd_fft_length = 8, ht_gate_thr
 	#
 
 	if ht_gate_threshold is not None:
-		head = mkhtgate(pipeline, head)
+		head = mkhtgate(pipeline, head, ht_gate_threshold)
 
 	#
 	# optionally add vetoes
