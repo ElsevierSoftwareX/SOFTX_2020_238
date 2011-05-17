@@ -297,6 +297,15 @@ def mkiirbank(pipeline, src, a1, b0, delay):
 	return elem
 
 
+def mkmean(pipeline, src, **properties):
+	elem = gst.element_factory_make("lal_mean")
+	for name, value in properties.items():
+		elem.set_property(name.replace("_", "-"), value)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+	
+
 def mkreblock(pipeline, src, **properties):
 	elem = gst.element_factory_make("lal_reblock")
 	for name, value in properties.items():
