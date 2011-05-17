@@ -88,11 +88,11 @@ def mksegmentsrcgate(pipeline, src, segment_list, threshold, seekevent = None, i
 #
 
 
-def mkhtgate(pipeline, src, threshold = 36.0, attack_length = 250, hold_length = 250, invert_control = True):
+def mkhtgate(pipeline, src, threshold = 6.0, attack_length = 250, hold_length = 250, invert_control = True, high_pass_frequency=40):
 	src = pipeparts.mkqueue(pipeline, src)
 	t = pipeparts.mktee(pipeline, src)
 	q1 = pipeparts.mkqueue(pipeline, t)
-	ss = pipeparts.mksumsquares(pipeline, q1)
+	ss = pipeparts.mkaudiocheblimit(pipeline, q1, high_pass_frequency, mode=1)
 	q2 = pipeparts.mkqueue(pipeline, t)
 	return pipeparts.mkgate(pipeline, q2, threshold = threshold, control = ss, attack_length = attack_length, hold_length = hold_length, invert_control = invert_control)
 
@@ -405,7 +405,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# need to be here, or it might be a symptom of a bug elsewhere.
 	# figure this out.
 
-	src = pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank, block_stride = 4 * bank_fragment.rate, time_domain = max(bank.get_rates()) / bank_fragment.rate >= 32)
+	src = pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank, block_stride = 10 * bank_fragment.rate, time_domain = max(bank.get_rates()) / bank_fragment.rate >= 32)
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank" % logname)
 	src = pipeparts.mkreblock(pipeline, src, block_duration = 1 * gst.SECOND)
 	src = pipeparts.mktee(pipeline, src)
