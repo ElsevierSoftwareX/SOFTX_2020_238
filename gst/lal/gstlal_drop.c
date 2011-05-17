@@ -251,13 +251,15 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	/* drop part of buffer, pass the rest */
 	{
 		GstBuffer *srcbuf = gst_buffer_create_sub(sinkbuf, dropsize, GST_BUFFER_SIZE(sinkbuf) - dropsize);
+		GstClockTime toff = gst_util_uint64_scale_int_round(element->drop_samples, GST_SECOND, element->rate);
 		gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
-		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + dropsize;
+		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + element->drop_samples;
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET_END(sinkbuf);
-		GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + element->drop_samples * element->rate * GST_SECOND;
-		GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_DURATION(sinkbuf) - element->drop_samples * element->rate * GST_SECOND;
+		GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + toff;
+		GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_DURATION(sinkbuf) - toff;
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
 
+		fprintf(stderr, "in offset %llu out offset %llu in time %llu out time %llu\n", GST_BUFFER_OFFSET(sinkbuf), GST_BUFFER_OFFSET(srcbuf), GST_BUFFER_TIMESTAMP(sinkbuf), GST_BUFFER_TIMESTAMP(srcbuf));
 		result = gst_pad_push(element->srcpad, srcbuf);
 		if(G_UNLIKELY(result != GST_FLOW_OK))
 			GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name(result));
