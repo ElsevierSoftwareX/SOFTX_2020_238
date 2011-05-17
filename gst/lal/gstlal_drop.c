@@ -251,7 +251,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	/* drop part of buffer, pass the rest */
 	{
 		GstBuffer *srcbuf = gst_buffer_create_sub(sinkbuf, dropsize, GST_BUFFER_SIZE(sinkbuf) - dropsize);
-		fprintf(stderr, "dropsize %llu buffer size %llu srcbuf size %llu\n", dropsize, GST_BUFFER_SIZE(sinkbuf), GST_BUFFER_SIZE(srcbuf));
 		gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
 		GST_BUFFER_OFFSET(srcbuf) = GST_BUFFER_OFFSET(sinkbuf) + dropsize;
 		GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET_END(sinkbuf);
