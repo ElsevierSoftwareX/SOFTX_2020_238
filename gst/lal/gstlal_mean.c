@@ -777,7 +777,7 @@ static void gstlal_mean_class_init(GSTLALMeanClass *klass)
 		g_param_spec_uint(
 			"type",
 			"type",
-			"type of average 1=mean, 2=integral, 3=max over n, 4=max every n (faster), 5=threshold",
+			"type of average 1=mean, 2=integral, 3=max over n, 4=max every n (faster), 5=threshold, 6=inverted threshold",
 			0, G_MAXUINT, DEFAULT_TYPE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
