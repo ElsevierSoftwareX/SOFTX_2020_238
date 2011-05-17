@@ -240,7 +240,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * if buffer is first, make the buffer of zeros and push
 	 */
 
-	
+
 	if ( GST_BUFFER_SIZE(sinkbuf) <= dropsize )
 	/* drop entire buffer */
 	{
@@ -257,7 +257,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + element->drop_samples * element->rate * GST_SECOND;
 		GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_DURATION(sinkbuf) - element->drop_samples * element->rate * GST_SECOND;
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
-		
+
 		result = gst_pad_push(element->srcpad, srcbuf);
 		if(G_UNLIKELY(result != GST_FLOW_OK))
 			GST_WARNING_OBJECT(element, "Failed to push drain: %s", gst_flow_get_name(result));
