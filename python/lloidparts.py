@@ -89,11 +89,11 @@ def mksegmentsrcgate(pipeline, src, segment_list, threshold, seekevent = None, i
 
 
 def mkhtgate(pipeline, src, threshold = 36.0, attack_length = 250, hold_length = 250, invert_control = True):
-	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND)
+	src = pipeparts.mkqueue(pipeline, src)
 	t = pipeparts.mktee(pipeline, src)
-	q1 = pipeparts.mkqueue(pipeline, t, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND)
+	q1 = pipeparts.mkqueue(pipeline, t)
 	ss = pipeparts.mksumsquares(pipeline, q1)
-	q2 = pipeparts.mkqueue(pipeline, t, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND)
+	q2 = pipeparts.mkqueue(pipeline, t)
 	return pipeparts.mkgate(pipeline, q2, threshold = threshold, control = ss, attack_length = attack_length, hold_length = hold_length, invert_control = invert_control)
 
 
