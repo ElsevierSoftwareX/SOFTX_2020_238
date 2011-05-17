@@ -88,7 +88,7 @@ def parse_command_line():
 	parser.add_option("--template-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).  This option can be given multiple times to process multiple template banks in parallel.")
 	parser.add_option("--svd-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the SVD'd template bank (required).  This option can be given multiple times to process multiple template banks in parallel.")
 	parser.add_option("--ortho-gate-fap", metavar = "probability", type = "float", default = 1e-2, help = "Set the orthogonal SNR projection gate false-alarm probability (default = 1e-2).")
-	parser.add_option("--ht-gate-threshold", metavar = "THRESHOLD", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
+	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
 	parser.add_option("--snr-threshold", metavar = "SNR", type = "float", default = 5.5, help = "Set the SNR threshold (default = 5.5).")
 	parser.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
@@ -291,7 +291,7 @@ triggersrc = lloidparts.mkLLOIDmulti(
 	fake_data = options.fake_data,
 	online_data = options.online_data,
 	injection_filename = options.injections,
-	ht_gate_threshold=options.ht_gate_threshold,
+	ht_gate_threshold = options.ht_gate_threshold,
 	veto_segments = veto_segments,
 	verbose = options.verbose,
 	nxydump_segment = options.nxydump_segment,
