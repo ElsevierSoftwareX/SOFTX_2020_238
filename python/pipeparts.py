@@ -312,7 +312,7 @@ def mkmean(pipeline, src, **properties):
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
-	
+
 
 def mkreblock(pipeline, src, **properties):
 	elem = gst.element_factory_make("lal_reblock")
@@ -560,7 +560,7 @@ class AppSync(object):
 
 	def times(self):
 		return [a.get_last_buffer().timestamp for a in self.appsinks.keys() if a.get_last_buffer() is not None]
-	
+
 	def num_first_buffers(self):
 		return len([a for a in self.appsinks.values() if a is not None])
 
