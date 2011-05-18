@@ -69,7 +69,39 @@ def waveform(m1, m2, fLow, fhigh, sampleRate):
 def get_iir_sample_rate(xmldoc):
 	pass
 
-	
+def get_fir_matrix(xmldoc, sampleRate=4096, flower = 40, pnorder=4, psd_interp=None, output_to_xml = False, verbose=False, padding=1.1):
+
+	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+	waveform_length = 750000
+	M =numpy.empty([len(sngl_inspiral_table) * 2, waveform_length])
+
+	for tmp, row in enumerate(sngl_inspiral_table):
+		m1 = row.mass1
+		m2 = row.mass2
+
+		# work out the waveform frequency
+		fFinal = spawaveform.ffinal(m1,m2)
+		if fFinal > sampleRate / 2.0 / padding: fFinal = sampleRate / 2.0 / padding
+
+		# make the waveform
+		amp, phase, f = waveform(m1, m2, flower, fFinal, sampleRate)
+		if psd_interp is not None:
+			amp /= psd_interp(f)**0.5 * 1e23
+
+		out = amp * numpy.cos(phase)
+		length = 2**numpy.ceil(numpy.log2(amp.shape[0]))
+
+		# normalize the fir coefficients
+		vec1 = numpy.zeros(length * 2, dtype=numpy.double)
+		vec1[-len(out):] = out
+		norm1 = (vec1 * numpy.conj(vec1)).sum()**0.5
+		amp /= norm1
+
+		M[2*tmp,:len(amp)] = amp * numpy.cos(phase)
+		M[2*tmp + 1,:len(amp)] = amp * numpy.sin(phase)
+
+	return M
+
 def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=101, verbose=False):
 
 	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
