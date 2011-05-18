@@ -85,7 +85,7 @@ elems = []
 elems.append(pipeutil.mkelem("lal_fakeadvligosrc",
 			     {"channel-name": 'LSC-STRAIN',
 			      "instrument": 'H1',
-				  "blocksize": 4096,
+			      "blocksize": 4096,
 			      }))
 
 # add injection if specified
@@ -104,7 +104,7 @@ elems.append(pipeutil.mkelem("lal_whiten",
 			      "fft-length": 8,
 			      "average-samples": 32,
 			      "median-samples": 9,
-			     }))
+			      }))
 
 elems.append(pipeutil.mkelem("progressreport"))
 
@@ -144,8 +144,8 @@ elems.append(pipeutil.mkelem("lal_firbank",
 			     {"name": "Q",
 			      "time-domain": False,
 			      "fir-matrix": qbank,
-				  "block-length-factor": 2,
-			     }))
+			      "block-length-factor": 2,
+			      }))
 
 elems.append(pipeutil.mkelem("progressreport"))
 
@@ -174,22 +174,22 @@ if options.plotSpec:
 				     {"caps": gst.Caps("video/x-raw-rgb,framerate=24/1,width=400,height=300")
 				      }))
 	if options.outmov:
-	 elems.append(pipeutil.mkelem("ffmpegcolorspace"))
-	 elems.append(pipeutil.mkelem("theoraenc",
-				      {"quality":10
-				      }))	
-	 elems.append(pipeutil.mkelem("oggmux"))
-	 elems.append(pipeutil.mkelem("filesink",
-				      {"location":"MovSpecGram_test.ogg",
-				      "append":True,
-				      "sync": False,
-				      "async": False,
-				       }))
+		elems.append(pipeutil.mkelem("ffmpegcolorspace"))
+		elems.append(pipeutil.mkelem("theoraenc",
+					     {"quality":10
+					      }))
+		elems.append(pipeutil.mkelem("oggmux"))
+		elems.append(pipeutil.mkelem("filesink",
+					     {"location":"MovSpecGram_test.ogg",
+					      "append":True,
+					      "sync": False,
+					      "async": False,
+					      }))
 	else:
-	 elems.append(pipeutil.mkelem("ximagesink",
-				       {"sync": False,
-				       "async": False,
-				        }))
+		elems.append(pipeutil.mkelem("ximagesink",
+					     {"sync": False,
+					      "async": False,
+					      }))
 
 else:
 	elems.append(pipeutil.mkelem("fakesink"))
@@ -214,20 +214,20 @@ if options.plotLine:
 				     {"caps": gst.Caps("video/x-raw-rgb,framerate=24/1,width=400,height=300")
 				      }))
 	if options.outmov:
-	 elems.append(pipeutil.mkelem("ffmpegcolorspace"))
-	 elems.append(pipeutil.mkelem("theoraenc"))	
-	 elems.append(pipeutil.mkelem("oggmux"))
-	 elems.append(pipeutil.mkelem("filesink",
-				      {"location":"Detection_test.ogg",
-				      "append":True,
-				      "sync": False,
-				      "async": False,
-				       }))
+		elems.append(pipeutil.mkelem("ffmpegcolorspace"))
+		elems.append(pipeutil.mkelem("theoraenc"))
+		elems.append(pipeutil.mkelem("oggmux"))
+		elems.append(pipeutil.mkelem("filesink",
+					     {"location":"Detection_test.ogg",
+					      "append":True,
+					      "sync": False,
+					      "async": False,
+					      }))
 	else:						
-	 elems.append(pipeutil.mkelem("ximagesink",
-				      {"sync": False,
-				       "async": False,
-				       }))
+		elems.append(pipeutil.mkelem("ximagesink",
+					     {"sync": False,
+					      "async": False,
+					      }))
 
 else:
 	elems.append(pipeutil.mkelem("fakesink"))

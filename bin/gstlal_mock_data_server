@@ -22,7 +22,7 @@ Produces mock data frames under the current working directory, as in:
 ./H1/H-H1_MOCK-0000/H-H1_MOCK-000000256-16.gwf
 
 Also, if the --port option is provided, this program also deploys a TCP server
-that provides 
+that streams the generated data realtime using GStreamer Data Protocol (GDP).
 
 To retrieve streaming h(t) and print as ASCII, try the following:
  1. Launch with the optional TCP server mode, as in:

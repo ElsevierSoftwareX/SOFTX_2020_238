@@ -1,0 +1,61 @@
+#!/usr/bin/env python
+"""
+Post process output in order to generate scatter plot and histogram of matches.
+"""
+__author__ = "Leo Singer <leo.singer@ligo.org>"""
+
+
+# Command line interface.
+from optparse import Option, OptionParser
+opts, args = OptionParser(description = __doc__,
+	option_list = [
+		Option("-n", type="int", help="Number of template bank chunks.")
+	]
+).parse_args()
+
+if opts.n is None:
+	raise RuntimeError("Required argument -n not provided.")
+
+
+# Late imports.
+from glue.ligolw import ligolw, lsctables, utils
+import matplotlib
+matplotlib.use('agg')
+import pylab
+import numpy
+
+
+# Read data.
+def get_data():
+	for i in range(opts.n):
+		mismatch = 1. - numpy.loadtxt('match/%d.out' % i)
+		sngl_inspiral_table = lsctables.table.get_table(utils.load_filename('tmpltbank/%d.xml' % i), lsctables.SnglInspiralTable.tableName)
+		tau0 = sngl_inspiral_table.getColumnByName('tau0')
+		tau3 = sngl_inspiral_table.getColumnByName('tau3')
+		for tup in zip(mismatch, tau0, tau3):
+			yield tup
+mismatch, tau0, tau3 = zip(*sorted(get_data()))
+mismatch = numpy.array(mismatch)
+tau0 = numpy.array(tau0)
+tau3 = numpy.array(tau3)
+
+
+# Generate scatter plot.
+pylab.scatter(tau0, tau3, c=mismatch, linewidth=0.)
+pylab.grid()
+pylab.xlabel(r'$\tau_0$')
+pylab.ylabel(r'$\tau_3$')
+pylab.colorbar().set_label('Mismatch between impulse response and nominal template')
+pylab.title('Mismatch: by template')
+pylab.savefig('mismatch.pdf')
+pylab.close()
+
+
+# Generate histogram.
+pylab.clf()
+pylab.hist(mismatch, histtype = 'step', bins=numpy.logspace(numpy.log10(min(mismatch)), numpy.log10(max(mismatch)), 50), normed=True)
+pylab.grid()
+pylab.xlabel('Mismatch between impulse response and nominal template')
+pylab.ylabel(r'Density')
+pylab.title('Mismatch: histogram')
+pylab.savefig('hist.pdf')
