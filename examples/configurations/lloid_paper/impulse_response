@@ -57,7 +57,6 @@ injfile = "impulse_at_874107198.xml"
 
 src_elems = mkelems_fast(pipeline,
 	"audiotestsrc", {"wave": "silence"},
-	"progressreport", {"name": "progress_src", "update-freq": 1},
 	"capsfilter", {"caps": gst.Caps("audio/x-raw-float,width=64,channels=1,rate=%d" % source_rate)},
 	"taginject", {"tags": "instrument=H1,channel-name=IMPULSE,units=strain"},
 	"lal_simulation", {"xml-location": injfile},
@@ -95,6 +94,7 @@ for i, bank_fragment in enumerate(sorted(bank.bank_fragments, key = lambda x: x.
 	mkelems_fast(pipeline,
 		head,
 		"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % source_rate)},
+		"progressreport",
 		"filesink", {"location": opts.output % i, "sync": False, "async": False})[-1]
 	last_head = head
 
