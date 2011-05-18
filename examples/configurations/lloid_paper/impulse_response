@@ -98,12 +98,12 @@ for i, bank_fragment in enumerate(sorted(bank.bank_fragments, key = lambda x: x.
 		"filesink", {"location": opts.output % i, "sync": False, "async": False})[-1]
 	last_head = head
 
-# Seek to just before impulse; be paranoid and pad by 2 seconds before and after.
+# Seek to just before impulse; be paranoid and pad before and after.
 
 src_elems[0].set_state(gst.STATE_READY)
 src_elems[0].send_event(gst.event_new_seek(
 	1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_NONE,
-	gst.SEEK_TYPE_SET, long(math.floor((impulse_time - 2 - bank.filter_length) * gst.SECOND)),
+	gst.SEEK_TYPE_SET, long(math.floor((impulse_time - 0.25 - bank.filter_length) * gst.SECOND)),
 	gst.SEEK_TYPE_SET, long(math.ceil((impulse_time + 2 + bank.filter_length) * gst.SECOND))
 ))
 
