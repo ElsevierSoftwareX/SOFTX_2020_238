@@ -80,7 +80,7 @@ class gstlal_inspiral_job(pipeline.CondorDAGJob):
 		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
 		self.add_condor_cmd('getenv','True')
 		self.add_condor_cmd('requirements', '( CAN_RUN_MULTICORE )')
-		self.add_condor_cmd('request_cpus', '4')
+		self.add_condor_cmd('request_cpus', '2')
 		self.add_condor_cmd('+RequiresMultipleCores', 'True')
 		self.tag_base = tag_base
 		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
