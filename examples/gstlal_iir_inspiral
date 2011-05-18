@@ -85,6 +85,7 @@ snr_threshold = options.snr_threshold
 
 # dictionaries for elements
 tee = {}
+tee2 = {}
 triggergen = {}
 chisq = {}
 
@@ -140,7 +141,22 @@ for ifo in [options.instrument]:
 	elems.append(pipeutil.mkelem("lal_nofakedisconts"))
 	elems.append(pipeutil.mkelem("queue"))
 	elems.append(pipeutil.mkelem("progressreport"))
-	elems.append(pipeutil.mkelem("lal_iirbank",{"name": ifo+" iir", "a1-matrix": repack_complex_array_to_real(A), "b0-matrix": repack_complex_array_to_real(B), "delay-matrix":D}))
+	tee2[ifo] = pipeutil.mkelem("tee")
+	elems.append(tee2[ifo])
+
+	#
+	# Uncomment to dump input to txt (HUGE)
+	#
+
+	nxydump = pipeutil.mkelem("lal_nxydump")
+	pipeline.add(nxydump)
+	filesink = pipeutil.mkelem("filesink", {"location":"input.txt"})
+	pipeline.add(filesink)
+	nxydump.link(filesink)
+
+	iirbank = pipeutil.mkelem("lal_iirbank",{"name": ifo+" iir", "a1-matrix": repack_complex_array_to_real(A), "b0-matrix": repack_complex_array_to_real(B), "delay-matrix":D})
+	elems.append(iirbank)
+	tee2[ifo].link(iirbank)
 	elems.append(pipeutil.mkelem("queue"))
 	elems.append(pipeutil.mkelem("lal_togglecomplex"))
 	elems.append(pipeutil.mkelem("lal_nofakedisconts"))
@@ -150,7 +166,9 @@ for ifo in [options.instrument]:
 	elems.append(tee[ifo])
 	for elem in elems: pipeline.add(elem)
 	gst.element_link_many(*elems)
-	
+
+	tee2[ifo].link(nxydump)
+
 	triggergen[ifo] = pipeutil.mkelem("lal_triggergen",{"bank-filename":options.iir_bank, "snr-thresh":snr_threshold, "max-gap": 1.0})
 	chisq[ifo] = pipeutil.mkelem("lal_autochisq", {"snr-thresh":snr_threshold, "latency": -50, "autocorrelation-matrix":repack_complex_array_to_real(autocor)})
 	pipeline.add(chisq[ifo])
@@ -170,15 +188,15 @@ for ifo in [options.instrument]:
 	#
 	# Uncomment to dump snr to txt (HUGE)
 	#
-	#tc = pipeutil.mkelem("lal_togglecomplex")
-	#pipeline.add(tc)
-	#nxydump = pipeutil.mkelem("lal_nxydump")
-	#pipeline.add(nxydump)
-	#filesink = pipeutil.mkelem("filesink", {"location":"test.txt"})
-	#pipeline.add(filesink)
-	#tee[ifo].link(tc)
-	#tc.link(nxydump)
-	#nxydump.link(filesink)
+	tc = pipeutil.mkelem("lal_togglecomplex")
+	pipeline.add(tc)
+	nxydump = pipeutil.mkelem("lal_nxydump")
+	pipeline.add(nxydump)
+	filesink = pipeutil.mkelem("filesink", {"location":"snroutput.txt"})
+	pipeline.add(filesink)
+	tee[ifo].link(tc)
+	tc.link(nxydump)
+	nxydump.link(filesink)
 	
 	appsink = pipeutil.mkelem("appsink",{"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})
 	pipeline.add(appsink)
