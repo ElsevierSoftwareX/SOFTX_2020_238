@@ -5,7 +5,8 @@ EXTRA_DIST = \
 	resample_test_01.py \
 	whiten_test_01.py \
 	test_common.py \
-	test_coinc.py
+	test_coinc.py \
+	test_ceil_pow_2.py
 
 check :
 	python test_coinc.py
