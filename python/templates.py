@@ -163,10 +163,15 @@ def normalized_autocorrelation(fseries, revplan):
 	return tseries
 
 
-def ceil_pow_2( number ):
+def ceil_pow_2(number):
 	"""Return the least integer power of 2 that is greater than or equal to number."""
-	# FIXME: change to integer arithmetic
-	return 2**(numpy.ceil(numpy.log2( number )))
+	# frexp splits floats into mantissa and exponent, ldexp does the opposite.
+	# For positive numbers, mantissa is in [0.5, 1.).
+	mantissa, exponent = numpy.frexp(number)
+	return numpy.ldexp(
+		numpy.where(mantissa < 0, float('nan'), 1.), # return nan for number < 0
+		numpy.where(mantissa == 0.5, exponent - 1, exponent)
+	)
 
 
 def time_slices(
