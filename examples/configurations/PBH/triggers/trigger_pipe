@@ -93,7 +93,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	"""
 	A gstlal_inspiral node
 	"""
-	def __init__(self, job, dag, frame_cache, gps_start_time, gps_end_time, instrument, channel, reference_psd, svd_bank, tmp_space=log_path(), ht_gate_thresh=7.0, injections=None, flow=40, vetoes=None, p_node=[]):
+	def __init__(self, job, dag, frame_cache, gps_start_time, gps_end_time, instrument, channel, reference_psd, svd_bank, tmp_space=log_path(), ht_gate_thresh=10.0, injections=None, flow=40, vetoes=None, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("frame-cache", frame_cache)
