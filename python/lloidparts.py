@@ -88,11 +88,11 @@ def mksegmentsrcgate(pipeline, src, segment_list, threshold, seekevent = None, i
 #
 
 
-def mkhtgate(pipeline, src, threshold = 6.0, attack_length = 250, hold_length = 250, invert_control = True, high_pass_frequency=40):
+def mkhtgate(pipeline, src, threshold = 1.0, attack_length = 1024, hold_length = 1024, invert_control = True, low_frequency=40, high_frequency=1000):
 	src = pipeparts.mkqueue(pipeline, src)
 	t = pipeparts.mktee(pipeline, src)
 	q1 = pipeparts.mkqueue(pipeline, t)
-	ss = pipeparts.mkaudiocheblimit(pipeline, q1, high_pass_frequency, mode=1)
+	ss = pipeparts.mkaudiochebband(pipeline, q1, low_frequency, high_frequency)
 	q2 = pipeparts.mkqueue(pipeline, t)
 	return pipeparts.mkgate(pipeline, q2, threshold = threshold, control = ss, attack_length = attack_length, hold_length = hold_length, invert_control = invert_control)
 
@@ -330,7 +330,7 @@ def mkLLOIDsrc(pipeline, src, rates, psd = None, psd_fft_length = 8, ht_gate_thr
 	#
 
 	if ht_gate_threshold is not None:
-		head = mkhtgate(pipeline, head, ht_gate_threshold)
+		head = mkhtgate(pipeline, head, ht_gate_threshold, high_frequency = max(rates) * 0.45)
 
 	#
 	# optionally add vetoes
