@@ -18,5 +18,4 @@ injections :
 	./psd_pipe --injections $(INJECTION_FILE) --segment-file $(SEGMENTS_FILE) --min-segment-length $(MIN_SEG_LENGTH) --frame-cache H1=$(H1_FRAME_CACHE),H2=$(H2_FRAME_CACHE),L1=$(L1_FRAME_CACHE)
 
 realclean :
-	rm *.sub *.dag* *.cache *.sh
-	rm -r logs
+	rm -r *.sub *.dag* *.cache *.sh *reference_psd.xml.gz logs

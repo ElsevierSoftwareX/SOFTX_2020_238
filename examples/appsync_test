@@ -1,0 +1,90 @@
+#!/usr/bin/python
+
+import sys
+import numpy
+
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require('0.10')
+import gst
+from gstlal import pipeparts
+import time
+
+def test_src(pipeline, name, **args):
+	head = pipeparts.mkaudiotestsrc(pipeline, **args)
+	head = pipeparts.mkprogressreport(pipeline, head, name)
+	return head
+
+def multiqueue(pipeline, elems):
+	q = gst.element_factory_make("multiqueue")
+	q.set_property("max-size-time", 1 * gst.SECOND)
+	q.set_property("max-size-buffers", 0)
+	q.set_property("max-size-bytes", 0)
+	pipeline.add(q)
+	for elem in elems:
+		elem.link(q)
+	return q
+
+class Handler(object):
+	def __init__(self, mainloop, pipeline):
+		self.mainloop = mainloop
+		self.pipeline = pipeline
+		bus = pipeline.get_bus()
+		bus.add_signal_watch()
+		bus.connect("message", self.on_message)
+
+	def on_message(self, bus, message):
+		if message.type == gst.MESSAGE_EOS:
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
+		elif message.type == gst.MESSAGE_ERROR:
+			gerr, dbgmsg = message.parse_error()
+			print >>sys.stderr, "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
+
+
+gobject.threads_init()
+
+mainloop = gobject.MainLoop()
+
+pipeline = gst.Pipeline("test")
+
+# Set up audio test sources
+src1 = test_src(pipeline, "test1", samplesperbuffer=20480)
+src2 = test_src(pipeline, "test2", samplesperbuffer=1024)
+src3 = test_src(pipeline, "test3", samplesperbuffer=4096)
+src4 = test_src(pipeline, "test4", samplesperbuffer=4096)
+
+# put in a multiqueue for good balance
+q = multiqueue(pipeline, (src1,src2, src3, src4))
+
+# Define an appsync class
+appsync = pipeparts.AppSync()
+
+# Add app sinks and hook up the multiqueue
+s1 = appsync.add_sink(pipeline,q)
+s2 = appsync.add_sink(pipeline,q)
+s3 = appsync.add_sink(pipeline,q)
+s4 = appsync.add_sink(pipeline,q)
+
+# connect the new-buffer signal to a function that pulls in the correct order.
+# This function should be extended to take 1 or more output objects and parsing
+# functions.
+s1.connect_after("new-buffer", pipeparts.pull_appsinks_in_order, appsync)
+s2.connect_after("new-buffer", pipeparts.pull_appsinks_in_order, appsync)
+s3.connect_after("new-buffer", pipeparts.pull_appsinks_in_order, appsync)
+s4.connect_after("new-buffer", pipeparts.pull_appsinks_in_order, appsync)
+
+
+handler = Handler(mainloop, pipeline)
+
+pipeline.set_state(gst.STATE_PAUSED)
+pipeline.set_state(gst.STATE_PLAYING)
+
+gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL,"test")
+
+mainloop.run()

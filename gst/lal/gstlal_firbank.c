@@ -226,6 +226,7 @@ static int create_fft_workspace(GSTLALFIRBank *element)
 
 	g_mutex_lock(gstlal_fftw_lock);
 
+	GST_DEBUG_OBJECT(element, "starting FFTW planning");
 	element->input_fd = (complex double *) fftw_malloc(length_fd * sizeof(*element->input_fd));
 	element->in_plan = fftw_plan_dft_r2c_1d(fft_block_length(element), (double *) element->input_fd, element->input_fd, FFTW_MEASURE);
 
@@ -235,6 +236,7 @@ static int create_fft_workspace(GSTLALFIRBank *element)
 
 	element->workspace_fd = (complex double *) fftw_malloc(length_fd * sizeof(*element->workspace_fd));
 	element->out_plan = fftw_plan_dft_c2r_1d(fft_block_length(element), element->workspace_fd, (double *) element->workspace_fd, FFTW_MEASURE);
+	GST_DEBUG_OBJECT(element, "FFTW planning complete");
 
 	/*
 	 * loop over filters.  copy each time-domain filter to input_fd,

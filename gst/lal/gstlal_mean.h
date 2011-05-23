@@ -80,6 +80,7 @@ typedef struct {
 	guint64 *lastmax;
 	guint64 *lastcross;
 	double thresh;
+	gboolean invert_thresh;
 
 	/*
 	 * timestamp book-keeping

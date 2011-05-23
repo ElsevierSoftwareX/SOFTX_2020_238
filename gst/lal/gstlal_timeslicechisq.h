@@ -33,18 +33,12 @@
 
 
 G_BEGIN_DECLS
-#define GSTLAL_TIMESLICECHISQUARE_TYPE \
-	(gstlal_timeslicechisquare_get_type())
-#define GSTLAL_TIMESLICECHISQUARE(obj) \
-	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_TIMESLICECHISQUARE_TYPE, GSTLALTimeSliceChiSquare))
-#define GST_IS_GSTLAL_TIMESLICECHISQUARE(obj) \
-	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_TIMESLICECHISQUARE_TYPE))
-#define GSTLAL_TIMESLICECHISQUARE_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_TIMESLICECHISQUARE_TYPE, GSTLALTimeSliceChiSquareClass))
-#define GST_IS_GSTLAL_TIMESLICECHISQUARE_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_TIMESLICECHISQUARE_TYPE))
-#define GSTLAL_TIMESLICECHISQUARE_GET_CLASS(obj) \
-	(G_TYPE_INSTANCE_GET_CLASS((obj), GSTLAL_TIMESLICECHISQUARE_TYPE, GSTLALTimeSliceChiSquareClass))
+#define GSTLAL_TIMESLICECHISQUARE_TYPE (gstlal_timeslicechisquare_get_type())
+#define GSTLAL_TIMESLICECHISQUARE(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_TIMESLICECHISQUARE_TYPE, GSTLALTimeSliceChiSquare))
+#define GST_IS_GSTLAL_TIMESLICECHISQUARE(obj) (G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_TIMESLICECHISQUARE_TYPE))
+#define GSTLAL_TIMESLICECHISQUARE_CLASS(klass) (G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_TIMESLICECHISQUARE_TYPE, GSTLALTimeSliceChiSquareClass))
+#define GST_IS_GSTLAL_TIMESLICECHISQUARE_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_TIMESLICECHISQUARE_TYPE))
+#define GSTLAL_TIMESLICECHISQUARE_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), GSTLAL_TIMESLICECHISQUARE_TYPE, GSTLALTimeSliceChiSquareClass))
 
 
 typedef void (*GSTLALTimeSliceChiSquareFunction) (gpointer out, const gpointer in, size_t size);
@@ -76,14 +70,21 @@ typedef struct _GSTLALTimeSliceChiSquare {
 	GCond *coefficients_available;
 	gsl_matrix *chifacs;
 
+	/* counters to keep track of timestamps */
+	GstClockTime    timestamp;
+	guint64         offset;
+	gboolean        synchronous;
+
 	/* sink event handling */
 	GstPadEventFunction collect_event;
-	gboolean segment_pending;
 	GstSegment segment;
-	guint64 offset;
+	gboolean segment_pending;
 
 	/* src event handling */
 	gboolean flush_stop_pending;
+
+	/* Pending inline events */
+	GList *pending_events;
 } GSTLALTimeSliceChiSquare;
 
 
