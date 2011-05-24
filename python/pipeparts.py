@@ -80,7 +80,7 @@ def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 *
 	elem.set_property("instrument", instrument)
 	elem.set_property("channel-name", channel_name)
 	if segment_list is not None:
-		elem.set_property("segment-list", segment_list)
+		elem.set_property("segment-list", segments.segmentlist(segments.segment(a.ns(), b.ns()) for a, b in segment_list))
 	pipeline.add(elem)
 	return elem
 
