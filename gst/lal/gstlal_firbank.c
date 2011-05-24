@@ -575,6 +575,8 @@ static GstFlowReturn filter_and_push(GSTLALFIRBank *element, guint64 length)
 	GstBuffer *buf;
 	GstFlowReturn result;
 
+	if(!length)
+		return GST_FLOW_OK;
 	result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, length * fir_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
 	if(result != GST_FLOW_OK)
 		return result;
