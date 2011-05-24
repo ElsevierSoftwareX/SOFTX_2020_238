@@ -195,7 +195,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 #
 
 
-def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False, online_data = False, injection_filename = None, verbose = False):
+def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False, online_data = False, injection_filename = None, frame_segments = None, verbose = False):
 	#
 	# data source
 	#
@@ -207,7 +207,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 		assert not fake_data
 		src = pipeparts.mkonlinehoftsrc(pipeline, instrument)
 	else:
-		src = pipeparts.mkframesrc(pipeline, location = detector.frame_cache, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
+		src = pipeparts.mkframesrc(pipeline, location = detector.frame_cache, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size, segment_list = frame_segments)
 
 	#
 	# seek the data source
@@ -641,7 +641,7 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 #
 
 
-def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, chisq_type = 'autochisq'):
+def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq'):
 	#
 	# check for recognized value of chisq_type
 	#
@@ -666,7 +666,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	rates = set(rate for bank in banks for rate in bank.get_rates())
 	triggersrc = set()
 	for instrument in detectors:
-		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data = fake_data, online_data = online_data, injection_filename = injection_filename, verbose = verbose)
+		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data = fake_data, online_data = online_data, injection_filename = injection_filename, frame_segments = frame_segments, verbose = verbose)
 		# let the frame reader and injection code run in a
 		# different thread than the whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src)

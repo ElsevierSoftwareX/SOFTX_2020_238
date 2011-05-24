@@ -71,7 +71,7 @@ def mksegmentsrc(pipeline, segment_list, blocksize = 4096 * 1 * 1, invert_output
 	return elem
 
 
-def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 8 * 1):
+def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 * 8 * 1, segment_list = None):
 	# default blocksize is 1 second of double precision floats at
 	# 16384 Hz, e.g., LIGO h(t)
 	elem = gst.element_factory_make("lal_framesrc")
@@ -79,6 +79,8 @@ def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 *
 	elem.set_property("location", location)
 	elem.set_property("instrument", instrument)
 	elem.set_property("channel-name", channel_name)
+	if segment_list is not None:
+		elem.set_property("segment-list", segment_list)
 	pipeline.add(elem)
 	return elem
 
