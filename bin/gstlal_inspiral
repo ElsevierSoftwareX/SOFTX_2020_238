@@ -203,7 +203,7 @@ options, filenames, process_params = parse_command_line()
 if options.frame_segments_file is not None:
 	frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, verbose = options.verbose), options.frame_segments_name).coalesce()
 else:
-	frame_segments = None
+	frame_segments = {options.instrument: None}
 
 if options.veto_segments_file is not None:
 	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.veto_segments_file, verbose = options.verbose), options.veto_segments_name).coalesce()
@@ -256,7 +256,7 @@ else:
 		fake_data = options.fake_data,
 		online_data = options.online_data,
 		injection_filename = options.injections,
-		frame_segments = frame_segments,
+		frame_segments = frame_segments[options.instrument],
 		verbose = options.verbose
 	)
 	if options.write_psd is not None:
@@ -312,7 +312,7 @@ triggersrc = lloidparts.mkLLOIDmulti(
 	veto_segments = veto_segments,
 	verbose = options.verbose,
 	nxydump_segment = options.nxydump_segment,
-	frame_segments = frame_segments,
+	frame_segments = frame_segments[options.instrument],
 	chisq_type = options.chisq_type
 )
 
