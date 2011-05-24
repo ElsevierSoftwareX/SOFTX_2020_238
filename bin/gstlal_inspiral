@@ -71,13 +71,15 @@ def parse_command_line():
 		description = __doc__
 	)
 	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
+	parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments (optional).  If this is not provided then all data between --gps-start-time and --gps-end-time will be analyzed.  If this is provided then --frame-segments-name must also be set.")
+	parser.add_option("--frame-segments-name", metavar = "name", help = "Set the name of hte segments to extract from the segment tables in --frame-segments-file (optional, required if --frame-segments-file is given).")
 	parser.add_option("--online-data", action = "store_true", help = "Use online DMT-STRAIN instead of a frame file (optional).")
 	parser.add_option("--fake-data", action = "store_true", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
-	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
-	parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
+	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the frame data to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
+	parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the frame data to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
-	parser.add_option("--vetoes", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
-	parser.add_option("--veto-segments-name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default="vetoes")
+	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
+	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
 	parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
 	parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
 	parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
@@ -105,6 +107,10 @@ def parse_command_line():
 	required_options = ["instrument", "output"]
 	if options.frame_cache:
 		required_options += ["channel_name", "gps_start_time", "gps_end_time"]
+	if options.frame_segments_file:
+		required_options += ["frame_segments_name"]
+	if options.frame_segments_name:
+		required_options += ["frame_segments_file"]
 	if options.online_data:
 		required_options += ["reference_psd"]
 
@@ -116,7 +122,12 @@ def parse_command_line():
 		raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
 
 	# FIXME: should also check for read permissions
-	missing_files = [filename for filename in options.template_bank + options.svd_bank if not os.path.exists(filename)]
+	required_files = options.template_bank + options.svd_bank
+	if options.frame_segments_file:
+		required_files += [options.frame_segments_file]
+	if options.veto_segments_file:
+		required_files += [options.veto_segments_file]
+	missing_files = [filename for filename in required_files if not os.path.exists(filename)]
 	if missing_files:
 		raise ValueError, "files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files))
 
@@ -185,12 +196,17 @@ options, filenames, process_params = parse_command_line()
 
 
 #
-# Parse the veto file into segments if provided
+# Parse the segments file(s) if provided
 #
 
 
-if options.vetoes is not None:
-	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes, verbose = options.verbose), options.veto_segments_name).coalesce()
+if options.frame_segments_file is not None:
+	frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, verbose = options.verbose), options.frame_segments_name).coalesce()
+else:
+	frame_segments = None
+
+if options.veto_segments_file is not None:
+	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.veto_segments_file, verbose = options.verbose), options.veto_segments_name).coalesce()
 else:
 	veto_segments = None
 
@@ -240,6 +256,7 @@ else:
 		fake_data = options.fake_data,
 		online_data = options.online_data,
 		injection_filename = options.injections,
+		frame_segments = frame_segments,
 		verbose = options.verbose
 	)
 	if options.write_psd is not None:
@@ -295,6 +312,7 @@ triggersrc = lloidparts.mkLLOIDmulti(
 	veto_segments = veto_segments,
 	verbose = options.verbose,
 	nxydump_segment = options.nxydump_segment,
+	frame_segments = frame_segments,
 	chisq_type = options.chisq_type
 )
 
