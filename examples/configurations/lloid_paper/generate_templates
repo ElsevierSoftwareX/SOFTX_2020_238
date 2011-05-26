@@ -1,0 +1,91 @@
+#!/usr/bin/env python
+"""
+
+Generate the nominal templates from an SVD'd, time sliced, template bank.
+
+"""
+__author__ = "Leo Singer <leo.singer@ligo.org>"
+
+
+# Command line interface.
+
+from optparse import OptionParser, Option
+try: # FIXME Python 2.4 compatibility for cluster
+	any
+except:
+	from glue.iterutils import any
+
+opts, args = OptionParser(description = __doc__,
+	option_list = [
+		Option("--template-bank", metavar="filename", help="Set the name of the LIGO light-weight XML file from which to load the template bank (required)."),
+		Option("--padding", metavar="pad", type="float", default=1.1, help="Fractional amount to pad time slices."),
+		Option("--reference-psd", help="Name of a PSD file.", metavar="FILE.xml"),
+		Option("--flow", help="Low frequency cutof", metavar="Hz", type="float"),
+		Option("--output", help="Name of a raw binary file where the output is to be saved.", metavar="FILE.bin"),
+	]
+).parse_args()
+
+# Check for required command line arguments.
+if any(getattr(opts, key) is None for key in ('template_bank', 'flow', 'reference_psd', 'output')):
+	raise RuntimeError("Missing some required arguments")
+
+
+# Late imports (delayed to speed up command line interface)
+from glue.ligolw import ligolw, lsctables, utils
+from gstlal.svd_bank import check_ffinal_and_find_max_ffinal, read_bank, read_approximant
+from gstlal.cbc_template_fir import generate_templates
+from gstlal.reference_psd import read_psd
+from gstlal import templates
+from pylal.progress import ProgressBar
+import numpy
+
+
+pb = ProgressBar()
+
+# Read template bank.
+pb.update(text='Reading %s' % opts.template_bank)
+xmldoc = utils.load_filename(opts.template_bank, gz = opts.template_bank.endswith('.gz'))
+sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+approximant = read_approximant(xmldoc)
+
+# Arrange time slices.
+original_time_slices = templates.time_slices(
+	zip(sngl_inspiral_table.get_column("mass1"), sngl_inspiral_table.get_column("mass2")),
+	fhigh = check_ffinal_and_find_max_ffinal(xmldoc),
+	flow = opts.flow,
+	padding = opts.padding)
+
+# Discard XML document.
+del xmldoc
+
+# Lay out time slices consisting of a single slice that spans the entire
+# duration of the template, at the hightest sample rate.
+time_slices = numpy.empty(1, original_time_slices.dtype)
+time_slices[0]['rate'] = max(original_time_slices['rate'])
+time_slices[0]['begin'] = min(original_time_slices['begin'])
+time_slices[0]['end'] = max(original_time_slices['end'])
+del original_time_slices
+
+# Read reference power spectrum.
+pb.update(text='Reading %s' % opts.reference_psd)
+psd = read_psd(opts.reference_psd)
+
+# Set up output array.
+pb.update(text='Allocating output space')
+nsamples = long(round((time_slices[0]['end'] - time_slices[0]['begin']) * time_slices[0]['rate']))
+ntemplates = len(sngl_inspiral_table)
+data = numpy.empty((nsamples, ntemplates), complex)
+pb.max = ntemplates
+
+# Loop over template bank records and impulse response time series.
+# Use izip instead of zip to avoid reading in entire array of
+# impulse responses at one time.
+for i, tmpltbank_row in enumerate(sngl_inspiral_table):
+
+	pb.update(i, 'Generating template %d' % i)
+	# Generate template
+	data[::-1, i].real, data[::-1, i].imag = generate_templates(
+		[tmpltbank_row], approximant, psd, opts.flow, time_slices)[0][0]
+
+pb.update(-1, 'Saving %s' % opts.output)
+data.tofile(opts.output)

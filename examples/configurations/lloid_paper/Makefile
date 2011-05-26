@@ -8,29 +8,24 @@ TMPLTBANK=H1-TMPLTBANK-$(PSD_START_TIME)-$(PSD_DURATION).xml
 
 
 # Template bank parameters
-MIN_MASS = 1.0
-MAX_MASS = 3.0
+MIN_MASS = 1.32
+MAX_MASS = 1.4
 MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
 LOW_FREQUENCY_CUTOFF = 15.0
 HIGH_PASS_FREQ = 10.0
 
 
-all: lloid_paper.dag tmpltbank/tmpltbank.xml psd.xml
+# Fractional part of SVD tolerances we are interested in
+TOLERANCES = 9 99 999 9999 99999
+
+
+all: $(foreach x,$(TOLERANCES),svd_0_$x.xml match_0_$x_0.out) tmpltbank.bin tmpltbank.xml psd.xml
 
 
 # These targets are intermediate; it's OK to delete them if they are built only
 # to satisfy a dependency for another target.
 .INTERMEDIATE: $(TMPLTBANK)
-
-
-lloid_paper.dag: tmpltbank/tmpltbank.xml psd.xml $(INJECTIONS)
-	mkdir -p log
-	mkdir -p svd
-	mkdir -p match
-	./build_job \
-		--flow $(LOW_FREQUENCY_CUTOFF) \
-		$<
 
 
 hoft:
@@ -98,9 +93,43 @@ $(TMPLTBANK): frame.cache hoft
 
 
 # Generate template bank with duplicate mass pairs pruned
-tmpltbank/tmpltbank.xml: $(TMPLTBANK)
+tmpltbank.xml: $(TMPLTBANK)
 	mkdir -p $(@D)
 	gstlal_prune_duplicate_mass_pairs $^ $@
+
+
+# Realize template bank as FIR filter coefficents saved to flat binary file
+tmpltbank.bin: tmpltbank.xml psd.xml
+	./generate_templates \
+		--flow $(LOW_FREQUENCY_CUTOFF) \
+		--template-bank tmpltbank.xml \
+		--reference-psd psd.xml \
+		--output $@
+
+
+svd_0_%.xml: tmpltbank.xml psd.xml
+	gstlal_svd_bank \
+		--flow $(LOW_FREQUENCY_CUTOFF) \
+		--svd-tolerance 0.$* \
+		--template-bank tmpltbank.xml \
+		--reference-psd psd.xml \
+		--write-svd-bank $@ \
+		--verbose
+
+
+match_0_%_0.out: svd_0_%.xml tmpltbank.bin libcomputematchsink.so
+	./compute_match \
+		--templates tmpltbank.bin \
+		--svd-bank $< \
+		--output match_0_$*_%d.out
+
+
+computematchsink.o: computematchsink.c
+	gcc -fPIC $(shell pkg-config --cflags gstreamer-0.10) -c $< -o $@
+
+
+libcomputematchsink.so: computematchsink.o
+	gcc -shared $< $(shell pkg-config --libs gstreamer-0.10) -o $@
 
 
 clean:
@@ -108,6 +137,10 @@ clean:
 		frame.cache \
 		psd.xml \
 		$(TMPLTBANK) \
-		*.{sub,dag} \
-		*.dag.*
-	rm -rf tmpltbank log svd hoft match
+		tmpltbank.xml \
+		tmpltbank.bin \
+		svd_0_*.xml \
+		match_0_*_*.out \
+		computematchsink.o \
+		libcomputematchsink.so
+	rm -rf hoft
