@@ -40,7 +40,7 @@ import numpy
 from gstlal.pipeutil import *
 from gstlal import pipeio
 from gstlal import matplotlibhelper
-from gstlal.plots import plotskymap
+from gstlal.lloidplots import plotskymap
 
 import matplotlib
 from matplotlib import cm

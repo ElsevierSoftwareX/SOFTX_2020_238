@@ -7,7 +7,7 @@ INCLUDES = -I$(top_srcdir)/lib
 # on e.g. CentOS.
 pkgpythondir = $(pkgpyexecdir)
 
-pkgpython_PYTHON = __init__.py cbc_template_fir.py dagparts.py gstlal_reference_psd.py gstlal_svd_bank.py lloidparts.py matplotlibhelper.py misc.py namedtuple.py option.py pipeio.py pipeparts.py pipeutil.py plots.py templates.py ligolw_output.py
+pkgpython_PYTHON = __init__.py cbc_template_fir.py dagparts.py gstlal_reference_psd.py gstlal_svd_bank.py lloidparts.py lloidplots.py matplotlibhelper.py misc.py namedtuple.py option.py pipeio.py pipeparts.py pipeutil.py plots.py templates.py ligolw_output.py
 
 pkgpyexec_LTLIBRARIES = _misc.la
 

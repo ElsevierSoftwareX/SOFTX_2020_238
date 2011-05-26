@@ -28,7 +28,7 @@ from glue.ligolw import utils, lsctables
 from gstlal.ligolw_output import effective_snr
 from gstlal.gstlal_svd_bank import read_bank
 from gstlal.gstlal_reference_psd import read_psd
-from gstlal import plots
+from gstlal import lloidplots as plots
 
 
 
