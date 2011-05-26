@@ -13,6 +13,7 @@ pkgpython_PYTHON = \
 	cbc_template_iir.py \
 	dagparts.py \
 	lloidparts.py \
+	lloidplots.py \
 	matplotlibhelper.py \
 	misc.py \
 	namedtuple.py \
