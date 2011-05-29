@@ -1,0 +1,152 @@
+#!/usr/bin/env python
+"""
+Calculate floating point operations per sample for a LLOID filter bank.
+"""
+__author__ = "Leo Singer <leo.singer@ligo.org>"
+
+
+# Command line interface
+
+from optparse import OptionParser, Option
+opts, args = OptionParser(description = __doc__, usage = "%prog [options] FILE.xml",
+	option_list = [
+		Option("-d", "--downsample-quality", metavar="0..9", help="Downsampling quality setting (default=9).", choices=[str(q) for q in range(11)], default=9),
+		Option("-u", "--upsample-quality", metavar="0..9", help="Upsampling quality setting (default=9).", choices=[str(q) for q in range(11)], default=9),
+		Option("--method", choices=("lloid", "lloidfft", "fir", "fft", "timeslice", "timeslicefft"), help="Choose filter method (default=lloid).", default="lloid"),
+	]
+).parse_args()
+
+
+# Imports
+from gstlal.svd_bank import read_bank
+import numpy
+
+
+# Read input
+bank = read_bank(args[0])
+rates = set(fragment.rate for fragment in bank.bank_fragments)
+source_rate = max(rates)
+count_templates = bank.autocorrelation_bank.shape[0]
+count_samples = bank.filter_length * source_rate
+resample_filter_length = (8, 16, 32, 48, 64, 80, 96, 128, 160, 192, 256)
+upsample_quality = int(opts.upsample_quality)
+downsample_quality = int(opts.downsample_quality)
+
+
+if opts.method == "fir":
+	flops = 2 * count_templates * count_samples * source_rate
+
+elif opts.method == "fft":
+	blocklen = 2 * count_samples
+	flops = 2 * (count_templates + 1) * numpy.log2(blocklen) + 2 * count_templates
+	flops /= 1 - count_samples / blocklen
+	flops *= source_rate
+
+elif opts.method == "lloid":
+	flops = 0
+
+	for rate in rates:
+		if rate != source_rate:
+
+			# Downsampling
+			flops += 2 * rate * resample_filter_length[downsample_quality]
+
+			# Upsampling
+			flops += 2 * rate * count_templates * resample_filter_length[upsample_quality]
+
+	for fragment in bank.bank_fragments:
+
+		# Read parameters from input file
+		count_orthogonal_templates, count_templates = fragment.mix_matrix.shape
+		count_samples = fragment.orthogonal_template_bank.shape[1]
+		rate = fragment.rate
+
+		# Orthogonal FIR filters
+		flops += 2 * rate * count_orthogonal_templates * count_samples
+
+		# Reconstruction
+		flops += 2 * rate * count_orthogonal_templates * count_templates
+
+		# SNR accumulation
+		flops += rate * count_templates
+
+elif opts.method == "lloidfft":
+	flops = 0
+
+	for rate in rates:
+		if rate != source_rate:
+
+			# Downsampling
+			flops += 2 * rate * resample_filter_length[downsample_quality]
+
+			# Upsampling
+			flops += 2 * rate * count_templates * resample_filter_length[upsample_quality]
+
+	for fragment in bank.bank_fragments:
+
+		# Read parameters from input file
+		count_orthogonal_templates, count_templates = fragment.mix_matrix.shape
+		count_samples = fragment.orthogonal_template_bank.shape[1]
+		rate = fragment.rate
+
+		# FFT convolution
+		blocklen = 2 * count_samples
+		flops += (2 * (count_orthogonal_templates + 1) * numpy.log2(blocklen) + 2 * count_templates) / (1 - count_samples / blocklen) * rate
+
+		# Reconstruction
+		flops += 2 * rate * count_orthogonal_templates * count_templates
+
+		# SNR accumulation
+		flops += rate * count_templates
+
+elif opts.method == "timeslice":
+	flops = 0
+
+	for rate in rates:
+		if rate != source_rate:
+
+			# Downsampling
+			flops += 2 * rate * resample_filter_length[downsample_quality]
+
+			# Upsampling
+			flops += 2 * rate * count_templates * resample_filter_length[upsample_quality]
+
+	for fragment in bank.bank_fragments:
+
+		# Read parameters from input file
+		count_samples = fragment.orthogonal_template_bank.shape[1]
+		rate = fragment.rate
+
+		# FIR filters
+		flops += 2 * rate * count_templates * count_samples
+
+		# SNR accumulation
+		flops += rate * count_templates
+
+elif opts.method == "timeslicefft":
+	flops = 0
+
+	for rate in rates:
+		if rate != source_rate:
+
+			# Downsampling
+			flops += 2 * rate * resample_filter_length[downsample_quality]
+
+			# Upsampling
+			flops += 2 * rate * count_templates * resample_filter_length[upsample_quality]
+
+	for fragment in bank.bank_fragments:
+
+		# Read parameters from input file
+		count_samples = fragment.orthogonal_template_bank.shape[1]
+		rate = fragment.rate
+
+		# FFT convolution
+		blocklen = 2 * count_samples
+		flops += (2 * (count_templates + 1) * numpy.log2(blocklen) + 2 * count_templates) / (1 - count_samples / blocklen) * rate
+
+		# SNR accumulation (noop for one time slice)
+		flops += rate * count_templates
+
+
+print flops
