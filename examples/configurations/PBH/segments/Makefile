@@ -4,9 +4,9 @@ SEED = 1234
 MIN_DIST = 100
 MAX_DIST = 10000
 MIN_MASS = 0.2
-MAX_MASS = 1.0
-MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
-MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
+MAX_MASS = 1.8
+MIN_TOTAL_MASS = 0.4
+MAX_TOTAL_MASS = 2.0
 FLOW = 39
 
 all : H1vetoes.xml H2vetoes.xml L1vetoes.xml segments.xml
