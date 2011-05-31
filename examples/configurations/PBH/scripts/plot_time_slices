@@ -1,0 +1,28 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import warnings
+import copy
+
+import pygtk
+pygtk.require('2.0')
+import pygst
+pygst.require('0.10')
+
+from gstlal.svd_bank import read_bank
+import numpy
+import pylab
+
+bank = read_bank(sys.argv[1])
+
+for frag in bank.bank_fragments:
+	print frag
+	m = frag.mix_matrix
+	s = frag.singular_values
+	u = frag.orthogonal_template_bank
+	h = numpy.dot(m.T, u)
+	t = numpy.linspace(-frag.end, -frag.start, h.shape[1])
+	pylab.plot(t, h[200,:])
+pylab.xlabel('time (s)')
+pylab.savefig('plot.png')

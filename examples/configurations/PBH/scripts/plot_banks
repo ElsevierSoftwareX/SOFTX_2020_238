@@ -1,0 +1,27 @@
+#! /usr/bin/python
+
+import os
+import sys
+import numpy
+import copy
+from optparse import OptionParser
+from pylal import spawaveform
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw.utils import process as ligolw_process
+import pylab
+
+pylab.figure(1)
+
+for f in sys.argv[1:]:
+	print f
+	xmldoc=utils.load_filename(f, verbose = True)
+	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+	mass1 = sngl_inspiral_table.get_column('mass1')
+	mass2 = sngl_inspiral_table.get_column('mass2')
+	pylab.plot(mass1,mass2, '.')
+
+pylab.xlabel('mass 1')
+pylab.ylabel('mass 2')
+pylab.savefig('plot.png')
