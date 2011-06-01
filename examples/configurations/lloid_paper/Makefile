@@ -12,8 +12,8 @@ MIN_MASS = 1.32
 MAX_MASS = 1.4
 MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
-LOW_FREQUENCY_CUTOFF = 15.0
-HIGH_PASS_FREQ = 10.0
+LOW_FREQUENCY_CUTOFF = 10.0
+HIGH_PASS_FREQ = 5.0
 
 
 # Fractional part of SVD tolerances we are interested in
