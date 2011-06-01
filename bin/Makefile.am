@@ -1,4 +1,5 @@
 dist_bin_SCRIPTS = \
+	gstlal_censor_bank \
 	gstlal_play_injections \
 	gstlal_prune_duplicate_mass_pairs \
 	gstlal_inspiral \
