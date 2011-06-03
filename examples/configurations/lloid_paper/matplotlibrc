@@ -1,0 +1,9 @@
+backend: agg
+font.family: serif
+font.serif: cmr10
+font.size: 10.0
+axes.titlesize: 10.0
+axes.labelsize: 10.0
+xtick.labelsize: 10.0
+ytick.labelsize: 10.0
+#legend.fontsize: 8.0

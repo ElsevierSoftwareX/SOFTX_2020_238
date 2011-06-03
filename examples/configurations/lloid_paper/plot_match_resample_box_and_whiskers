@@ -1,0 +1,32 @@
+#!/usr/bin/env python
+"""
+Post process output in order to generate scatter plot and histogram of matches.
+"""
+__author__ = "Leo Singer <leo.singer@ligo.org>"""
+
+
+import matplotlib
+matplotlib.use('agg')
+from matplotlib import ticker
+import pylab
+import numpy
+from glob import glob
+
+resample_filter_length = (8, 16, 32, 48, 64, 80, 96, 128, 160, 192, 256)
+data, qualities = zip(*[(filename, quality) for (quality, filename) in sorted([(int(filename.split('_')[2]), 1-numpy.loadtxt(filename)) for filename in glob('resample_match_*_0.out')])])
+filter_length = [resample_filter_length[quality] for quality in qualities]
+
+pylab.figure(figsize=(3.25,2))
+pylab.subplots_adjust(bottom=0.1, right=0.95)
+bp = pylab.boxplot(data, whis=float('inf'), positions=filter_length, widths=8)
+for key in ('medians', 'boxes', 'whiskers', 'caps'):
+        pylab.setp(bp[key], color='black')
+pylab.setp(bp['whiskers'], linestyle='-')
+pylab.xlim(0, 200)
+pylab.yscale('log')
+pylab.grid()
+#pylab.xlabel('interpolation filter length, $N^\uparrow$')
+#pylab.ylabel('mismatch')
+pylab.savefig('bw_resample.pdf')
+pylab.savefig('bw_resample.png')
+

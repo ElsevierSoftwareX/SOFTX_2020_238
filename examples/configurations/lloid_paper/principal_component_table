@@ -1,0 +1,37 @@
+#!/usr/bin/env python
+
+from glob import glob
+from gstlal.svd_bank import read_bank
+import numpy
+
+num_pc = []
+
+for filename in sorted(glob('svd_0_*.xml')):
+	svd_tolerance = float('.'.join(filename.split('.')[0].split('_')[1:3]))
+	bank = read_bank(filename)
+	num_pc += [[svd_tolerance, [f.mix_matrix.shape[0] for f in bank.bank_fragments]]]
+
+#print r"\documentclass{article}"
+#print r"\begin{document}"
+#print r"\begin{tabular}{lrr" + ("r" * len(num_pc)) + "}"
+#print r"{lrr" + ("r" * len(num_pc)) + "}"
+print r"\begin{indented}"
+print r"\item[]\begin{tabular}{rr@{,}lc*{%d}{r}}" % len(num_pc)
+print r"\br"
+print r"\multicolumn{4}{c}{} &\centre{%d}{$\log_{10}$ (1 - \textsc{svd} tolerance)} \\" % len(num_pc)
+print r"\ns"
+print r"\multicolumn{4}{c}{} &\crule{%d} \\" % len(num_pc)
+print r"$f^s$ (Hz) & $[t^s$&$t^{s+1})$ (s) & $N^s$ &",
+print " & ".join("%d" % int(round(numpy.log10(1-x[0]))) for x in num_pc),
+print r"\\"
+print r"\mr"
+
+for i, frag in enumerate(bank.bank_fragments):
+	print r"%d & [%g&%g) & %d &" % (frag.rate, frag.start, frag.end, frag.orthogonal_template_bank.shape[1]),
+	print ' & '.join((r'%d' % x[1][i]) for x in num_pc),
+	print r'\\'
+
+print r"\end{tabular}"
+print r"\end{indented}"
+#print r"\end{document}"
+
