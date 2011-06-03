@@ -8,8 +8,9 @@ TMPLTBANK=H1-TMPLTBANK-$(PSD_START_TIME)-$(PSD_DURATION).xml
 
 
 # Template bank parameters
-MIN_MASS = 1.32
-MAX_MASS = 1.4
+BANK_EXPRESSION = "1.1955 <= mchirp <= 1.2045"
+MIN_MASS = 1
+MAX_MASS = 3
 MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
 LOW_FREQUENCY_CUTOFF = 10.0
@@ -17,10 +18,10 @@ HIGH_PASS_FREQ = 5.0
 
 
 # Fractional part of SVD tolerances we are interested in
-TOLERANCES = 9 99 999 9999 99999
+TOLERANCES = 9 99 999 9999 99999 999999
+UPSAMPLE_QUALITIES = 0 1 2 3 4 5 6 7 8 9 10
 
-
-all: $(foreach x,$(TOLERANCES),svd_0_$x.xml match_0_$x_0.out) tmpltbank.bin tmpltbank.xml psd.xml
+all: $(foreach x,$(UPSAMPLE_QUALITIES),resample_match_$x_0.out) $(foreach x,$(TOLERANCES),svd_0_$x.xml match_0_$x_0.out) tmpltbank.bin tmpltbank.xml tmpltbank-pruned.xml psd.xml
 
 
 # These targets are intermediate; it's OK to delete them if they are built only
@@ -28,6 +29,7 @@ all: $(foreach x,$(TOLERANCES),svd_0_$x.xml match_0_$x_0.out) tmpltbank.bin tmpl
 .INTERMEDIATE: $(TMPLTBANK)
 
 
+# Generate mock aLIGO h(t)
 hoft:
 	mkdir -p hoft && cd hoft && \
 	gstlal_mock_data_server -i H1 -s $(DATA_START_TIME) -e $(DATA_END_TIME)
@@ -93,9 +95,13 @@ $(TMPLTBANK): frame.cache hoft
 
 
 # Generate template bank with duplicate mass pairs pruned
-tmpltbank.xml: $(TMPLTBANK)
-	mkdir -p $(@D)
+tmpltbank-pruned.xml: $(TMPLTBANK)
 	gstlal_prune_duplicate_mass_pairs $^ $@
+
+
+# Clip out desired templates
+tmpltbank.xml: tmpltbank-pruned.xml
+	gstlal_censor_bank $^ -o $@ -e $(BANK_EXPRESSION)
 
 
 # Realize template bank as FIR filter coefficents saved to flat binary file
@@ -107,6 +113,7 @@ tmpltbank.bin: tmpltbank.xml psd.xml
 		--output $@
 
 
+# Generate SVDs
 svd_0_%.xml: tmpltbank.xml psd.xml
 	gstlal_svd_bank \
 		--flow $(LOW_FREQUENCY_CUTOFF) \
@@ -117,6 +124,7 @@ svd_0_%.xml: tmpltbank.xml psd.xml
 		--verbose
 
 
+# Calculate match with orthogonal templates
 match_0_%_0.out: svd_0_%.xml tmpltbank.bin libcomputematchsink.so
 	./compute_match \
 		--templates tmpltbank.bin \
@@ -124,10 +132,19 @@ match_0_%_0.out: svd_0_%.xml tmpltbank.bin libcomputematchsink.so
 		--output match_0_$*_%d.out
 
 
+resample_match_%_0.out: svd_0_999999.xml tmpltbank.bin libcomputematchsink.so
+	./compute_match \
+		--templates tmpltbank.bin \
+		--svd-bank $< \
+		--upsample-quality $* \
+		--output resample_match_$*_%d.out
+
+# Compile special-purpose element
 computematchsink.o: computematchsink.c
 	gcc -fPIC $(shell pkg-config --cflags gstreamer-0.10) -c $< -o $@
 
 
+# Link special purpose element
 libcomputematchsink.so: computematchsink.o
 	gcc -shared $< $(shell pkg-config --libs gstreamer-0.10) -o $@
 
@@ -138,6 +155,7 @@ clean:
 		psd.xml \
 		$(TMPLTBANK) \
 		tmpltbank.xml \
+		tmpltbank-pruned.xml \
 		tmpltbank.bin \
 		svd_0_*.xml \
 		match_0_*_*.out \
