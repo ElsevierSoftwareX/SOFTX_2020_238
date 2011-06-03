@@ -21,8 +21,8 @@ opts, args = OptionParser(description = __doc__,
 	option_list = [
 		Option("--templates", help="Name of a binary data file containing templates."),
 		Option("--svd-bank", help="Name of an SVD'd template bank."),
-		Option("-d", "--downsample-quality", metavar="0..9", help="Downsampling quality setting (default=9).", choices=[str(q) for q in range(10)], default=9),
-		Option("-u", "--upsample-quality", metavar="0..9", help="Upsampling quality setting (default=9).", choices=[str(q) for q in range(10)], default=9),
+		Option("-d", "--downsample-quality", metavar="0..10", help="Downsampling quality setting (default=9).", choices=[str(q) for q in range(11)], default=9),
+		Option("-u", "--upsample-quality", metavar="0..10", help="Upsampling quality setting (default=9).", choices=[str(q) for q in range(11)], default=9),
 		Option("-o", "--output", metavar="FILE_%d.out", help="Printf-style pattern for output files.  The single numeric printf specifier will be replaced by the index of each time slice."),
 	]
 ).parse_args()
@@ -39,9 +39,10 @@ from gstlal import pipeparts
 from gstlal.lloidparts import mkelems_fast
 from gstlal.svd_bank import read_bank
 import math, numpy
+import os.path
 
 
-gst.plugin_load_file('./libcomputematchsink.so')
+gst.plugin_load_file(os.path.join(os.path.dirname(__file__), 'libcomputematchsink.so'))
 bank = read_bank(opts.svd_bank)
 count_fragments = len(bank.bank_fragments)
 upsample_quality = int(opts.upsample_quality)
@@ -78,9 +79,6 @@ for i, bank_fragment in enumerate(sorted(bank.bank_fragments, key = lambda x: x.
 		"lal_nofakedisconts", {"silent": True},
 		"lal_reblock",
 		"lal_matrixmixer", {"matrix": bank_fragment.mix_matrix},
-		"audioresample", {"quality": upsample_quality},
-		"lal_nofakedisconts", {"silent": True},
-		"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": gst.SECOND},
 	)[-1]
 	if i > 0:
 		head = mkelems_fast(pipeline,
@@ -89,15 +87,20 @@ for i, bank_fragment in enumerate(sorted(bank.bank_fragments, key = lambda x: x.
 		mkelems_fast(pipeline,
 			last_head,
 			"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": gst.SECOND},
+			"audioresample", {"quality": upsample_quality}, # Always at same upsample quality (highest allowed)
+			"lal_nofakedisconts", {"silent": True},
+			"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % bank_fragment.rate)},
 			head)
 	if i < count_fragments - 1:
 		head = mkelems_fast(pipeline, head, "tee")[-1]
 	mkelems_fast(pipeline,
 		head,
+		"audioresample", {"quality": 10}, # Always at same upsample quality (highest allowed)
+		"lal_nofakedisconts", {"silent": True},
 		"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % source_rate)},
 		"lal_delay", {"delay": source_rate},
 		"lal_nofakedisconts", {"silent": True},
-		"queue",
+		"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": gst.SECOND},
 		"progressreport",
 		"computematchsink", {"input-filename": opts.templates, "output-filename": opts.output % (len(bank.bank_fragments) - i - 1)})
 	last_head = head
