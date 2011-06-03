@@ -36,7 +36,7 @@ units = {
 same as a matching ligolw column."""
 labels = {
 	'mtotal': r"total mass, $M$ (%s)" % units['msun'],
-	'mchirp': r"chirp mass, $\mathcal{M}_\mathrm{chirp}$ (%s)" % units['msun'],
+	'mchirp': r"chirp mass, $\mathcal{M}$ (%s)" % units['msun'],
 	'mass1': r"component mass 1, $M_1$ (%s)" % units['msun'],
 	'mass2': r"component mass 2, $M_2$ (%s)" % units['msun'],
 	'snr': r"SNR $\rho$",
