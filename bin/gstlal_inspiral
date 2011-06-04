@@ -65,6 +65,17 @@ from gstlal import reference_psd
 # =============================================================================
 #
 
+def parse_banks(bank_string):
+	"""
+	parses strings of form H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...
+	"""
+	out = {}
+	if bank_string is None:
+		return out
+	for b in bank_string.split(','):
+		ifo, bank = b.split(':')
+		out.setdefault(ifo, []).append(bank)
+	return out
 
 def parse_command_line():
 	parser = OptionParser(
@@ -80,15 +91,15 @@ def parse_command_line():
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
 	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
 	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
-	parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
+	#parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
 	parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
 	parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
 	parser.add_option("--svd-tolerance", metavar = "match", type = "float", default = 0.9995, help = "Set the SVD reconstruction tolerance (default = 0.9995).")
 	parser.add_option("--nxydump-segment", metavar = "start:stop", default = ":", help = "Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time.")
 	parser.add_option("--output", metavar = "filename", help = "Set the name of the LIGO light-weight XML output file *.{xml,xml.gz} or an SQLite database *.sqlite (required).")
 	parser.add_option("--reference-psd", metavar = "filename", help = "Instead of measuring the noise spectrum, load the spectrum from this LIGO light-weight XML file (optional).")
-	parser.add_option("--template-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).  This option can be given multiple times to process multiple template banks in parallel.")
-	parser.add_option("--svd-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the SVD'd template bank (required).  This option can be given multiple times to process multiple template banks in parallel.")
+	parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the template bank for a given instrument in the form ifo:file These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.")
+	parser.add_option("--svd-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.")
 	parser.add_option("--ortho-gate-fap", metavar = "probability", type = "float", default = 1e-2, help = "Set the orthogonal SNR projection gate false-alarm probability (default = 1e-2).")
 	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
 	parser.add_option("--snr-threshold", metavar = "SNR", type = "float", default = 5.5, help = "Set the SNR threshold (default = 5.5).")
@@ -104,7 +115,7 @@ def parse_command_line():
 	if len([option for option in ("frame_cache", "fake_data", "online_data") if getattr(options, option) is not None]) != 1:
 		raise ValueError, "must provide exactly one of --frame-cache, --fake-data, --online-data"
 
-	required_options = ["instrument", "output"]
+	required_options = ["output"]
 	if options.frame_cache:
 		required_options += ["channel_name", "gps_start_time", "gps_end_time"]
 	if options.frame_segments_file:
@@ -115,14 +126,28 @@ def parse_command_line():
 		required_options += ["reference_psd"]
 
 	missing_options = []
-	if len(options.template_bank) + len(options.svd_bank) == 0:
-		missing_options += ["--template-bank or --svd-bank"]
+	if options.template_bank is None and options.svd_bank is None:
+		missing_options += ["--template-bank","--svd-bank"]
 	missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
 
+	# Get the banks and make the detectors
+	# FIXME add error checking on length of banks per detector, etc
+	template_banks = parse_banks(options.template_bank)
+	svd_banks = parse_banks(options.svd_bank)
+	# FIXME if the channel names are different for different detectors this won't work
+	detectors = {}
+	for instrument in set(template_banks.keys() + svd_banks.keys()):
+		detectors[instrument] = lloidparts.DetectorData(options.frame_cache, options.channel_name)
+
 	# FIXME: should also check for read permissions
-	required_files = options.template_bank + options.svd_bank
+	required_files = []
+	for instrument in svd_banks:
+		required_files.extend(svd_banks[instrument])
+	for instrument in template_banks:
+		required_files.extend(template_banks[instrument])
+
 	if options.frame_segments_file:
 		required_files += [options.frame_segments_file]
 	if options.veto_segments_file:
@@ -145,7 +170,7 @@ def parse_command_line():
 	# it in with the options is a convenient home
 	options.psd_fft_length = 8	# seconds
 
-	return options, filenames, process_params
+	return options, filenames, process_params, template_banks, svd_banks, detectors
 
 
 #
@@ -192,7 +217,7 @@ def write_dump_dot(pipeline, filestem, verbose = False):
 #
 
 
-options, filenames, process_params = parse_command_line()
+options, filenames, process_params, template_banks, svd_banks, detectors = parse_command_line()
 
 
 #
@@ -203,7 +228,9 @@ options, filenames, process_params = parse_command_line()
 if options.frame_segments_file is not None:
 	frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, verbose = options.verbose), options.frame_segments_name).coalesce()
 else:
-	frame_segments = {options.instrument: None}
+	frame_segments = {}
+	for instrument in detectors:
+		frame_segments[instrument] = None
 
 if options.veto_segments_file is not None:
 	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.veto_segments_file, verbose = options.verbose), options.veto_segments_name).coalesce()
@@ -236,31 +263,29 @@ seekevent = gst.event_new_seek(1.0, gst.Format(gst.FORMAT_TIME),
 	seek_stop_type, seek_stop_time)
 
 
-detectors = {
-	options.instrument: lloidparts.DetectorData(options.frame_cache, options.channel_name)
-}
-
 
 if options.reference_psd is not None:
 	psd = reference_psd.read_psd(options.reference_psd, verbose = options.verbose)
 else:
-	# FIXME right now vetoes are applied after whitening.  If that
-	# changes this function will need to know about vetoes too
-	psd = reference_psd.measure_psd(
-		options.instrument,
-		seekevent,
-		detectors[options.instrument],
-		options.seg,
-		2 * 2048,	# Hz;  must not be less than highest bank fragment sample rate (see below)
-		psd_fft_length = options.psd_fft_length,
-		fake_data = options.fake_data,
-		online_data = options.online_data,
-		injection_filename = options.injections,
-		frame_segments = frame_segments[options.instrument],
-		verbose = options.verbose
-	)
-	if options.write_psd is not None:
-		reference_psd.write_psd(options.write_psd, psd, verbose = options.verbose)
+	psd = {}
+	for instrument in detectors:
+		# FIXME right now vetoes are applied after whitening.  If that
+		# changes this function will need to know about vetoes too
+		psd[instrument] = reference_psd.measure_psd(
+			instrument,
+			seekevent,
+			detectors[instrument],
+			options.seg,
+			2 * 2048,	# Hz;  must not be less than highest bank fragment sample rate (see below)
+			psd_fft_length = options.psd_fft_length,
+			fake_data = options.fake_data,
+			online_data = options.online_data,
+			injection_filename = options.injections,
+			frame_segments = frame_segments[instrument],
+			verbose = options.verbose
+		)
+		if options.write_psd is not None:
+			reference_psd.write_psd("%s-%s" % (instrument, options.write_psd), psd, instrument=instrument, verbose = options.verbose)
 
 
 #
@@ -268,14 +293,16 @@ else:
 #
 
 
-banks = []
-for filename in options.template_bank:
-	banks.append(svd_bank.build_bank(filename, psd, options.flow, options.ortho_gate_fap, options.snr_threshold, options.svd_tolerance, verbose = options.verbose))
-for filename in options.svd_bank:
-	banks.append(svd_bank.read_bank(filename, verbose = options.verbose))
-
-for n, bank in enumerate(banks):
-	bank.logname = "bank%d" % n
+banks = {}
+for instrument, files in svd_banks.items():
+	for filename in files:
+		banks.setdefault(instrument,[]).append(svd_bank.read_bank(filename, verbose = options.verbose))
+for instrument, files in template_banks.items():
+	for filename in files:
+		banks.setdefault(instrument,[]).append(svd_bank.build_bank(filename, psd, options.flow, options.ortho_gate_fap, options.snr_threshold, options.svd_tolerance, verbose = options.verbose))
+for instrument in banks:
+	for n, bank in enumerate(banks[instrument]):
+		bank.logname = "%sbank%d" % (instrument,n)
 
 
 #
@@ -312,7 +339,7 @@ triggersrc = lloidparts.mkLLOIDmulti(
 	veto_segments = veto_segments,
 	verbose = options.verbose,
 	nxydump_segment = options.nxydump_segment,
-	frame_segments = frame_segments[options.instrument],
+	frame_segments = frame_segments,
 	chisq_type = options.chisq_type
 )
 
@@ -333,7 +360,7 @@ output = ligolw_output.Data(
 	process_params = process_params,
 	ifos = set(detectors),
 	seg = options.seg,
-	out_seg = segments.segment(options.seg[0]+max([b.filter_length for b in banks]), options.seg[1]), #FIXME make better outseg def.
+	out_seg = options.seg, #FIXME make better outseg def?  Maybe pointless now that gstlal inspiral can analyze over frame gaps
 	injection_filename = options.injections,
 	comment = options.comment,
 	tmp_path = options.tmp_space,
