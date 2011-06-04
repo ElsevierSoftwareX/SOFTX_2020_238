@@ -663,18 +663,18 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	# loop over instruments and template banks
 	#
 
-	rates = set(rate for bank in banks for rate in bank.get_rates())
 	triggersrc = set()
 	for instrument in detectors:
-		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data = fake_data, online_data = online_data, injection_filename = injection_filename, frame_segments = frame_segments, verbose = verbose)
+		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
+		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data = fake_data, online_data = online_data, injection_filename = injection_filename, frame_segments = frame_segments[instrument], verbose = verbose)
 		# let the frame reader and injection code run in a
 		# different thread than the whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src)
 		if veto_segments is not None:
-			hoftdict = mkLLOIDsrc(pipeline, src, rates, psd = psd, psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment)
+			hoftdict = mkLLOIDsrc(pipeline, src, rates, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment)
 		else:
-			hoftdict = mkLLOIDsrc(pipeline, src, rates, psd = psd, psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, nxydump_segment = nxydump_segment)
-		for bank in banks:
+			hoftdict = mkLLOIDsrc(pipeline, src, rates, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, nxydump_segment = nxydump_segment)
+		for bank in banks[instrument]:
 			suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent)
 			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % suffix, segment = nxydump_segment)
