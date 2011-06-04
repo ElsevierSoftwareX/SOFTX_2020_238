@@ -9,9 +9,9 @@ MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
 FLOW = 39
 
-all : H1vetoes.xml H2vetoes.xml L1vetoes.xml segments.xml frame.cache
+all : vetoes.xml segments.xml frame.cache
 
-injections: H1vetoes.xml H2vetoes.xml L1vetoes.xml segments.xml frame.cache injections.xml
+injections: vetoes.xml segments.xml frame.cache injections.xml
 
 H1vetoes.xml:
 	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=H1:Injection --result-name=vetoes > H1vetoes.xml
@@ -24,6 +24,9 @@ H2vetoes.xml:
 L1vetoes.xml:
 	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=L1:Injection --result-name=vetoes > L1vetoes.xml
 	ligolw_segments_compat L1vetoes.xml
+
+vetoes.xml: H1vetoes.xml H2vetoes.xml L1vetoes.xml
+	ligolw_add H1vetoes.xml H2vetoes.xml L1vetoes.xml > vetoes.xml
 
 #FIXME don't get segments from frame caches
 frame.H1.cache:
