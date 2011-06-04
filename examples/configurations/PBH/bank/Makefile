@@ -74,8 +74,8 @@ mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz :
 mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz : 
 	./psd_xml_from_asd_txt L1 mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.txt
 
-reference_psd.xml: mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz
-	ligolw_add mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz | gzip > reference_psd.xml.gz
+reference_psd.xml: mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz
+	ligolw_add mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz | gzip > reference_psd.xml.gz
 
 dag : H1-TMPLTBANK-871154847-2048.xml reference_psd.xml
 	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > H1_split_bank.cache
