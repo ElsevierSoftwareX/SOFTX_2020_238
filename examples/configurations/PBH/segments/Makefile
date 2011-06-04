@@ -4,14 +4,14 @@ SEED = 1234
 MIN_DIST = 100
 MAX_DIST = 10000
 MIN_MASS = 0.2
-MAX_MASS = 1.8
-MIN_TOTAL_MASS = 0.4
-MAX_TOTAL_MASS = 2.0
+MAX_MASS = 1.0
+MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
+MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
 FLOW = 39
 
-all : H1vetoes.xml H2vetoes.xml L1vetoes.xml segments.xml
+all : H1vetoes.xml H2vetoes.xml L1vetoes.xml segments.xml frame.cache
 
-injections: H1vetoes.xml H2vetoes.xml L1vetoes.xml segments.xml injections.xml
+injections: H1vetoes.xml H2vetoes.xml L1vetoes.xml segments.xml frame.cache injections.xml
 
 H1vetoes.xml:
 	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=H1:Injection --result-name=vetoes > H1vetoes.xml
@@ -25,6 +25,7 @@ L1vetoes.xml:
 	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=L1:Injection --result-name=vetoes > L1vetoes.xml
 	ligolw_segments_compat L1vetoes.xml
 
+#FIXME don't get segments from frame caches
 frame.H1.cache:
 	ligo_data_find -o H -t H1_RDS_C03_L2 -l  -s $(START) -e $(STOP) --url-type file > frame.H1.cache
 	./cache_to_segments frame.H1.cache segments.H1.xml
@@ -36,6 +37,9 @@ frame.H2.cache:
 frame.L1.cache:
 	ligo_data_find -o L -t L1_RDS_C03_L2 -l  -s $(START) -e $(STOP) --url-type file > frame.L1.cache
 	./cache_to_segments frame.L1.cache segments.L1.xml
+
+frame.cache: frame.H1.cache frame.H2.cache frame.L1.cache
+	cat frame.H1.cache frame.H2.cache frame.L1.cache > frame.cache
 
 segments.xml: frame.H1.cache frame.H2.cache frame.L1.cache
 	ligolw_add --output segments.xml segments.H1.xml segments.H2.xml segments.L1.xml
