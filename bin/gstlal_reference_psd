@@ -92,5 +92,6 @@ reference_psd.write_psd(
 		injection_filename = options.injections,
 		verbose = options.verbose
 	),
-	verbose=options.verbose
+	instrument = options.instrument,
+	verbose = options.verbose
 )
