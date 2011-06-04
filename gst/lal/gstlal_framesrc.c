@@ -400,10 +400,23 @@ static gboolean start(GstBaseSrc *object)
 {
 	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
 	FrCache *cache;
+	FrCache *fullcache;
 	LIGOTimeGPS stream_start;
 	gint rate, width;
 	GstCaps *caps;
+	FrCacheSieve params;
 
+	char dscRegEx[5] = {0};
+
+	/* Set up seive params */
+	strcpy(dscRegEx, element->instrument);
+	strcat(dscRegEx, ".*");
+	params.earliestTime = 0;
+	params.latestTime = 2147483647; /* MAX INT4*/
+	params.srcRegEx = NULL;
+	params.dscRegEx = NULL;
+	params.urlRegEx = dscRegEx;
+	
 	/*
 	 * Make a note to push tags before emitting next frame.
 	 */
@@ -414,13 +427,26 @@ static gboolean start(GstBaseSrc *object)
 	 * Open frame stream.
 	 */
 
-	cache = XLALFrImportCache(element->location);
-	if(!cache) {
+	fullcache = XLALFrImportCache(element->location);
+	if(!fullcache) {
 		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrImportCache() failed: %s", XLALErrorString(XLALGetBaseErrno())));
 		XLALClearErrno();
 		return FALSE;
 	}
+
+	/*
+	 * Sieve the cache for the instrument of interest
+	 */
+
+	cache = XLALFrSieveCache(fullcache, &params);
+	if(!cache) {
+		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrSieveCache() failed: %s", XLALErrorString(XLALGetBaseErrno())));
+		XLALClearErrno();
+		return FALSE;
+	}
+	
 	element->stream = XLALFrCacheOpen(cache);
+	XLALFrDestroyCache(fullcache);
 	XLALFrDestroyCache(cache);
 	if(!element->stream) {
 		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrCacheOpen() failed: %s", XLALErrorString(XLALGetBaseErrno())));
