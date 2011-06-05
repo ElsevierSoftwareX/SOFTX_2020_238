@@ -245,7 +245,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 	return src
 
 
-def mkLLOIDsrc(pipeline, src, rates, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None):
+def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None):
 	"""Build pipeline stage to whiten and downsample h(t)."""
 
 	#
@@ -323,7 +323,7 @@ def mkLLOIDsrc(pipeline, src, rates, psd = None, psd_fft_length = 8, ht_gate_thr
 		head.connect_after("notify::f-nyquist", psd_resolution_changed, psd)
 		head.connect_after("notify::delta-f", psd_resolution_changed, psd)
 	head = pipeparts.mknofakedisconts(pipeline, head, silent = True)
-	head = pipeparts.mkchecktimestamps(pipeline, head, "timestamps_%d_whitehoft" % max(rates))
+	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max(rates)))
 
 	#
 	# optional gate on h(t) amplitude
@@ -374,7 +374,7 @@ def mkLLOIDsrc(pipeline, src, rates, psd = None, psd_fft_length = 8, ht_gate_thr
 		head[rate] = pipeparts.mkaudioamplify(pipeline, head[max(rates)], 1/math.sqrt(pipeparts.audioresample_variance_gain(quality, max(rates), rate)))
 		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head[rate], quality = quality), caps = "audio/x-raw-float, rate=%d" % rate)
 		head[rate] = pipeparts.mknofakedisconts(pipeline, head[rate], silent = True)
-		head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "timestamps_%d_whitehoft" % rate)
+		head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "%s_timestamps_%d_whitehoft" % (instrument, rate))
 		head[rate] = pipeparts.mktee(pipeline, head[rate])
 
 	#
@@ -671,9 +671,9 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 		# different thread than the whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src)
 		if veto_segments is not None:
-			hoftdict = mkLLOIDsrc(pipeline, src, rates, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment)
+			hoftdict = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment)
 		else:
-			hoftdict = mkLLOIDsrc(pipeline, src, rates, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, nxydump_segment = nxydump_segment)
+			hoftdict = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, nxydump_segment = nxydump_segment)
 		for bank in banks[instrument]:
 			suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent)
