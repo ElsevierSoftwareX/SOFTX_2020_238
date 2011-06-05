@@ -253,7 +253,7 @@ static guint64 get_next_buffer_length(GSTLALFrameSrc *element, guint64 offset, g
 			/* no segments in list */
 			*gap = TRUE;
 			end_offset = G_MAXUINT64;
-		} else if(index < 0) {
+		} else if(index <= 0) {
 			/* current time precedes segments in list */
 			*gap = TRUE;
 			end_offset = time_to_offset(element, gstlal_segment_list_get(element->segmentlist, 0)->start);
