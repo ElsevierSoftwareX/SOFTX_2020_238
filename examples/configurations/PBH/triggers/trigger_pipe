@@ -80,27 +80,28 @@ class gstlal_inspiral_job(pipeline.CondorDAGJob):
 		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
 		self.add_condor_cmd('getenv','True')
 		self.add_condor_cmd('requirements', '( CAN_RUN_MULTICORE )')
-		self.add_condor_cmd('request_cpus', '2')
+		self.add_condor_cmd('request_cpus', '8')
 		self.add_condor_cmd('+RequiresMultipleCores', 'True')
 		self.tag_base = tag_base
 		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
 		self.set_sub_file(tag_base+'.sub')
 		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
 		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
-
+		self.number = 1
 
 class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	"""
 	A gstlal_inspiral node
 	"""
-	def __init__(self, job, dag, frame_cache, gps_start_time, gps_end_time, instrument, channel, reference_psd, svd_bank, tmp_space=log_path(), ht_gate_thresh=10.0, injections=None, flow=40, vetoes=None, p_node=[]):
+	#FIXME add frame segments, name and veto segments name
+	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel, reference_psd, svd_bank, tmp_space=log_path(), ht_gate_thresh=10.0, injections=None, flow=40, vetoes=None, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("frame-cache", frame_cache)
-		#self.add_var_opt("fake-data", "")
+		self.add_var_opt("frame-segments-file", frame_segments_file)
+		self.add_var_opt("frame-segments-name", frame_segments_name)
 		self.add_var_opt("gps-start-time",gps_start_time)
 		self.add_var_opt("gps-end-time",gps_end_time)
-		self.add_var_opt("instrument", instrument)
 		self.add_var_opt("channel-name", channel)
 		self.add_var_opt("reference-psd", reference_psd)
 		self.add_var_opt("ht-gate-threshold", ht_gate_thresh)
@@ -112,9 +113,10 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		if vetoes: self.add_var_opt("veto-segments-file", vetoes)
 		path = os.getcwd()
 		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
-		output_name = '%s/%s-%d-%d-triggers.sqlite' % (path, svd_bank, gps_start_time, gps_end_time)
+		output_name = '%s/%s-%04d-%d-%d-triggers.sqlite' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
+		job.number += 1
 		self.add_var_opt("output",output_name)
-		dag.output_cache.append(lal.CacheEntry(instrument, "-", segments.segment(gps_start_time, gps_end_time), "file://localhost/%s" % (output_name,)))
+		dag.output_cache.append(lal.CacheEntry("H1H2L1", "-", segments.segment(gps_start_time, gps_end_time), "file://localhost/%s" % (output_name,)))
 		for p in p_node:
 			self.add_parent(p)
 		dag.add_node(self)
@@ -129,6 +131,27 @@ def parse_cache_str(instr):
 		dictcache[ifo] = cache
 	return dictcache
 
+def num_bank_files(cachedict):
+	ifo = cachedict.keys()[0]
+	f = open(cachedict[ifo],'r')
+	cnt = 0
+	for l in f:
+		cnt+=1
+	f.close()
+	return cnt
+
+def build_bank_string(cachedict):
+	numfiles = num_bank_files(cachedict)
+	filedict = {}
+	for ifo in cachedict:
+		filedict[ifo] = open(cachedict[ifo],'r')
+	for a in range(numfiles):
+		c = ""
+		for ifo, f in filedict.items():
+			c += '%s:%s,' % (ifo, lal.CacheEntry(f.readline()).path())
+		c = c.strip(',')
+		yield c
+	
 def cache_to_dict(cachefile):
 	out  = {}
 	for l in open(cachefile):
@@ -139,30 +162,32 @@ def cache_to_dict(cachefile):
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the xml file for injections")
-	parser.add_option("--frame-cache", metavar = "filenames", help = "Set the frame cache files in format H1=H1.cache,H2=H2.cache, etc..")
-	parser.add_option("--psd-cache", metavar = "filenames", help = "Set the psd cache file. (just one)")
+	parser.add_option("--frame-cache", metavar = "filename", help = "Set the frame cache file")
+	parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the frame segments file")
+	parser.add_option("--frame-segments-name", metavar = "name", help = "Set the frame segments name")
+	parser.add_option("--reference-psd", metavar = "filename", help = "Set the reference psd file.")
 	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
-	parser.add_option("--vetoes", metavar = "filenames", help = "Set the veto xml files in format H1=H1vetoes.xml,H2=H2vetoes.xml, etc..")
+	parser.add_option("--vetoes", metavar = "filename", help = "Set the veto xml file.")
+	parser.add_option("--gps-start-time", metavar = "GPS", help = "Set the gps start time in seconds", type="int")
+	parser.add_option("--gps-stop-time", metavar = "GPS", help = "Set the gps stop time in seconds", type="int")
 	#FIXME get this from the cache?
 	parser.add_option("--channel", metavar = "name", help = "Set the channel name (default=LSC-STRAIN)", default="LSC-STRAIN")
 	
 	options, filenames = parser.parse_args()
 
 	fail = ""
-	for option in ("frame_cache", "psd_cache", "bank_cache"):
+	for option in ("frame_cache", "reference_psd", "bank_cache", "gps_start_time", "gps_stop_time"):
 		if getattr(options, option) is None:
 			fail += "must provide option %s\n" % (option)
 	if fail: raise ValueError, fail
 
 	#FIXME add consistency check?
-	framecache = parse_cache_str(options.frame_cache)
 	bankcache = parse_cache_str(options.bank_cache)
-	vetofiles = parse_cache_str(options.vetoes)
 	
-	return options, filenames, framecache, bankcache, vetofiles#, process_params
+	return options, filenames, bankcache
 
 
-options, filenames, frame_cache, bank_cache, vetofiles = parse_command_line()
+options, filenames, bank_cache = parse_command_line()
 
 try: os.mkdir("logs")
 except: pass
@@ -170,14 +195,8 @@ dag = bank_DAG("trigger_pipe")
 
 inspJob = gstlal_inspiral_job()
 
-for instrument, centries in cache_to_dict(options.psd_cache).items():
-	if vetofiles: vetofile = vetofiles[instrument]
-	else: vetofile = None
-	for centry in centries:
-		seg = centry.segment
-		for bank in cache_to_dict(bank_cache[instrument])[instrument]:
-			#FIXME if there are segments without frame caches this will barf
-			gstlal_inspiral_node(inspJob, dag, frame_cache[instrument], int(seg[0]), int(seg[1]), instrument, options.channel, reference_psd=centry.path(), svd_bank=bank.path(), injections=options.injections, vetoes=vetofile, flow=40)
+for s in build_bank_string(bank_cache):
+	gstlal_inspiral_node(inspJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), options.channel, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, vetoes=options.vetoes, flow=40)
 		
 dag.write_sub_files()
 dag.write_dag()
