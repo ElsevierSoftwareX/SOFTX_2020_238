@@ -198,6 +198,8 @@ static GstClockTime offset_to_time(GSTLALFrameSrc *element, guint64 offset)
 static guint64 time_to_offset(GSTLALFrameSrc *element, GstClockTime t)
 {
 	g_assert(GST_CLOCK_TIME_IS_VALID(GST_BASE_SRC(element)->segment.start));
+	if (t < GST_BASE_SRC(element)->segment.start)
+		return 0;
 	return gst_util_uint64_scale_int_round(t - GST_BASE_SRC(element)->segment.start, element->rate, GST_SECOND);
 }
 
@@ -253,7 +255,7 @@ static guint64 get_next_buffer_length(GSTLALFrameSrc *element, guint64 offset, g
 			/* no segments in list */
 			*gap = TRUE;
 			end_offset = G_MAXUINT64;
-		} else if(index <= 0) {
+		} else if(index < 0) {
 			/* current time precedes segments in list */
 			*gap = TRUE;
 			end_offset = time_to_offset(element, gstlal_segment_list_get(element->segmentlist, 0)->start);
