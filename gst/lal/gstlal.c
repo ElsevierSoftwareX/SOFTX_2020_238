@@ -80,6 +80,7 @@
 #include <gstlal_blcbc_triggergen.h>
 #include <gstlal_audioundersample.h>
 #include <gstlal_drop.h>
+#include <gstlal_peak.h>
 
 
 /*
@@ -137,6 +138,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_blcbctriggergen", GSTLAL_BLCBC_TRIGGERGEN_TYPE},
 		{"lal_audioundersample", GSTLAL_AUDIOUNDERSAMPLE_TYPE},
 		{"lal_drop", GSTLAL_DROP_TYPE},
+		{"lal_peak", GSTLAL_PEAK_TYPE},
 		{NULL, 0},
 	};
 
