@@ -397,20 +397,18 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
  * start()
  */
 
-
-static gboolean start(GstBaseSrc *object)
+static gboolean open_cache_by_instrument(GSTLALFrameSrc *element)
 {
-	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
+	FrCacheSieve params;
 	FrCache *cache;
 	FrCache *fullcache;
-	LIGOTimeGPS stream_start;
-	gint rate, width;
-	GstCaps *caps;
-	FrCacheSieve params;
 
 	char dscRegEx[5] = {0};
 
-	/* Set up seive params */
+	/* 
+	 Set up seive params 
+	 */
+
 	strcpy(dscRegEx, element->instrument);
 	strcat(dscRegEx, ".*");
 	params.earliestTime = 0;
@@ -418,12 +416,6 @@ static gboolean start(GstBaseSrc *object)
 	params.srcRegEx = NULL;
 	params.dscRegEx = NULL;
 	params.urlRegEx = dscRegEx;
-	
-	/*
-	 * Make a note to push tags before emitting next frame.
-	 */
-
-	element->need_tags = TRUE;
 
 	/*
 	 * Open frame stream.
@@ -446,15 +438,39 @@ static gboolean start(GstBaseSrc *object)
 		XLALClearErrno();
 		return FALSE;
 	}
-	
+
 	element->stream = XLALFrCacheOpen(cache);
-	XLALFrDestroyCache(fullcache);
 	XLALFrDestroyCache(cache);
+	XLALFrDestroyCache(fullcache);
 	if(!element->stream) {
 		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrCacheOpen() failed: %s", XLALErrorString(XLALGetBaseErrno())));
 		XLALClearErrno();
 		return FALSE;
 	}
+
+	return TRUE;
+}
+
+
+static gboolean start(GstBaseSrc *object)
+{
+	GSTLALFrameSrc *element = GSTLAL_FRAMESRC(object);
+	LIGOTimeGPS stream_start;
+	gint rate, width;
+	GstCaps *caps;
+	
+	/*
+	 * Make a note to push tags before emitting next frame.
+	 */
+
+	element->need_tags = TRUE;
+
+	/*
+	 * Open the frame cache sieved by instrument
+	 */
+
+	if (!open_cache_by_instrument(element))
+		return FALSE;
 
 	/*
 	 * Be verbose, and make gaps in the cache and seeks beyond the end
