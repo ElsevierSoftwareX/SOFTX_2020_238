@@ -264,34 +264,50 @@ seekevent = gst.event_new_seek(1.0, gst.Format(gst.FORMAT_TIME),
 	seek_stop_type, seek_stop_time)
 
 
+#
+# Alright this psd stuff is a bit confusing.  There are two reasons why this
+# pipeline could use a reference psd.  One is to apply to the whitener, the
+# other is to build the template banks.  In the former case the reference psd
+# can be given and it will simply be used as the psd to apply during whitening.
+# If a reference psd and --track-psd is given then the reference is the first
+# guess, but the whitener does track the psd.  If no reference psd is given and
+# we don't want to track the psd then this pipeline will measure a psd in
+# advance and use it to whiten the data.  When it comes to templates, if a
+# template bank file is given, not an svd bank file, then you need a psd for
+# the svd procedure.  If a reference psd is given then it will be used.
+# Otherwise the pipeline will measure it.  However if you give a reference psd
+# and --track-psd but use a template bank and not an SVD bank then you still
+# need to measure a psd in advance for the template bank... 
+#
+
 
 if options.reference_psd is not None:
 	psd = reference_psd.read_psd(options.reference_psd, verbose = options.verbose)
-else:
+
+elif options.track_psd and not template_banks:
 	psd = {}
-	if options.track_psd:
+	if options.track_psd and not template_banks:
 		for instrument in detectors:
 			psd[instrument] = None
-	else:
-		for instrument in detectors:
-			# FIXME right now vetoes are applied after whitening.  If that
-			# changes this function will need to know about vetoes too
-			psd[instrument] = reference_psd.measure_psd(
-				instrument,
-				seekevent,
-				detectors[instrument],
-				options.seg,
-				2 * 2048,	# Hz;  must not be less than highest bank fragment sample rate (see below)
-				psd_fft_length = options.psd_fft_length,
-				fake_data = options.fake_data,
-				online_data = options.online_data,
-				injection_filename = options.injections,
-				frame_segments = frame_segments[instrument],
-				verbose = options.verbose
-			)
-			if options.write_psd is not None:
-				reference_psd.write_psd("%s-%s" % (instrument, options.write_psd), psd, instrument=instrument, verbose = options.verbose)
-
+else:
+	for instrument in detectors:
+		# FIXME right now vetoes are applied after whitening.  If that
+		# changes this function will need to know about vetoes too
+		psd[instrument] = reference_psd.measure_psd(
+			instrument,
+			seekevent,
+			detectors[instrument],
+			options.seg,
+			2 * 2048,	# Hz;  must not be less than highest bank fragment sample rate (see below)
+			psd_fft_length = options.psd_fft_length,
+			fake_data = options.fake_data,
+			online_data = options.online_data,
+			injection_filename = options.injections,
+			frame_segments = frame_segments[instrument],
+			verbose = options.verbose
+		)
+		if options.write_psd is not None:
+			reference_psd.write_psd("%s-%s" % (instrument, options.write_psd), psd, instrument=instrument, verbose = options.verbose)
 
 #
 # Make template banks
@@ -299,13 +315,15 @@ else:
 
 
 banks = {}
+
 for instrument, files in svd_banks.items():
 	for filename in files:
 		banks.setdefault(instrument,[]).append(svd_bank.read_bank(filename, verbose = options.verbose))
+
 for instrument, files in template_banks.items():
-	#FIXME the psd is busted here if track-psd is used and there is no reference psd!!
 	for filename in files:
-		banks.setdefault(instrument,[]).append(svd_bank.build_bank(filename, psd, options.flow, options.ortho_gate_fap, options.snr_threshold, options.svd_tolerance, verbose = options.verbose))
+		banks.setdefault(instrument,[]).append(svd_bank.build_bank(filename, psd[instrument], options.flow, options.ortho_gate_fap, options.snr_threshold, options.svd_tolerance, verbose = options.verbose))
+
 for instrument in banks:
 	for n, bank in enumerate(banks[instrument]):
 		bank.logname = "%sbank%d" % (instrument,n)
