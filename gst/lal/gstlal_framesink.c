@@ -716,6 +716,32 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
         GST_BUFFER_TIMESTAMP(buffer), GST_BUFFER_DURATION(buffer),
         GST_BUFFER_OFFSET(buffer), GST_BUFFER_OFFSET_END(buffer));
 
+    /* Check for gaps */
+    if (GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_GAP)) {
+        guint available = gst_adapter_available(sink->adapter);
+
+        /* Flush previous data to a frame */
+        if (available > 0) {
+            if (!write_frame(sink, available)) { // write any remaining data
+                GST_ELEMENT_ERROR(
+                    sink, RESOURCE, WRITE,
+                    ("Error while writing in function %s", __FUNCTION__),
+                    GST_ERROR_SYSTEM);
+                return GST_FLOW_ERROR;
+            }
+
+            gst_adapter_flush(sink->adapter, available);  // flush adapter
+        }
+
+        /* Restart counting timestamps */
+        sink->current_byte = A_X_B__C(
+            GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer),
+            byterate, GST_SECOND);
+        /* watch out: this is not the same as with a discontinuity! */
+
+        return GST_FLOW_OK;
+    }
+
     /* Check for discontinuities and handle them */
     if (!reset_on_discontinuity(sink, buffer))
         return GST_FLOW_ERROR;
