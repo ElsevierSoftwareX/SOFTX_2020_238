@@ -151,13 +151,13 @@ audioconvert2 = mkelem('audioconvert')  # lal_firbank only supports doubles
 
 hpf = mkelem('audiowsinclimit',
              {'mode': 1,  # high pass filter
-              'cutoff': 0.00244140625 * 16384/2,  # cf. ComputeStrain.c
+              'cutoff': 20,  # cf. ComputeStrain.c (0.00244140625 * 16384/2)
               'window': 2,  # gaussian
               'length': 2*2000+1})  # 2 * N_FIR_HP + 1, cf. ComputeStrain.c
 
 hpf2 = mkelem('audiowsinclimit',   # again! wish I could just copy it!
               {'mode': 1,
-               'cutoff': 0.00244140625 * 16384/2,
+               'cutoff': 20,
                'window': 2,  # gaussian
                'length': 2*2000+1})
 
