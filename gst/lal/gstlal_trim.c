@@ -33,8 +33,13 @@
  */
 
 static const char gst_laltrim_doc[] =
-    "Let pass data only in the region specified, and mark everything "
-    "else as gaps.\n"
+    "Let pass data only in the region specified, and mark everything else\n"
+    "as gaps.\n"
+    "\n"
+    "The \"offsets\" are media-type specific. For audio buffers, it's the\n"
+    "number of samples produced so far. For video buffers, it's generally\n"
+    "the frame number. For compressed data, it could be the byte offset in\n"
+    "a source or destination file.\n"
     "\n"
     "Example launch line:\n"
     "  gst-launch audiotestsrc wave=sine num-buffers=100 ! lal_trim "
@@ -249,7 +254,7 @@ static GstFlowReturn push_subbuf(GstPad *pad, GstBuffer *template,
     GstFlowReturn result = GST_FLOW_OK;
     GstBuffer *buf;
 
-    if (f1-f0 < 1e-14)  /* if negative interval, or reaaaally small... */
+    if (f1-f0 < 1e-14)  /* if negative interval, or really small... */
         return GST_FLOW_OK;  /* don't bother with them! */
 
     guint size = GST_BUFFER_SIZE(template);
@@ -363,8 +368,5 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
     if (push_subbuf(elem->srcpad, buf, f0, f1, FALSE) != GST_FLOW_OK)
         return GST_FLOW_ERROR;
 
-    if (push_subbuf(elem->srcpad, buf, f1, 1.0, TRUE) != GST_FLOW_OK)
-        return GST_FLOW_ERROR;
-
-    return GST_FLOW_OK;
+    return push_subbuf(elem->srcpad, buf, f1, 1.0, TRUE);
 }
