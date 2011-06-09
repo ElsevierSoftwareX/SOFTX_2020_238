@@ -17,14 +17,6 @@
  * Boston, MA 02111-1307, USA.
  */
 
-/*
- * TODO:
- * See function push_gap() and how it is used in gstlal_nxydump.c, to
- * do something similar here.
- *
- * See
- * http://gstreamer.freedesktop.org/data/doc/gstreamer/head/pwg/html/chapter-building-pads.html
- */
 
 /**
  * SECTION:element-lal_trim
@@ -34,19 +26,22 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch audiotestsrc wave=sine ! \
- *   lal_trim initial-offset=1024 final-offset=2048 ! alsasink
+ * gst-launch audiotestsrc wave=sine num-buffers=100 ! \
+ *   lal_trim initial-offset=10240 final-offset=20480 ! alsasink
  * ]| Only let data between 1024-2048 thru.
  * </refsect2>
  */
 
 static const char gst_laltrim_doc[] =
-    "Prints the offset values of the buffers that pass thru it.\n"
+    "Let pass data only in the region specified, and mark everything "
+    "else as gaps.\n"
     "\n"
     "Example launch line:\n"
-    "  gst-launch audiotestsrc ! lal_trim "
-    "initial_offset=1024 final-offset=2048 ! alsasink\n";
+    "  gst-launch audiotestsrc wave=sine num-buffers=100 ! lal_trim "
+    "initial_offset=10240 final-offset=20480 ! alsasink\n";
 
+
+#include <math.h>  /* to use round() */
 
 #include <gst/gst.h>
 #include "gstlal_trim.h"
@@ -237,6 +232,73 @@ get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
  * ============================================================================
  */
 
+
+/*
+ * Auxiliary function used in chain(). Push a subbuffer into pad,
+ * constructed from buffer template, that spans from the fractions of
+ * the original buffer specified in f0, f1.
+ *
+ * f0, f1: fractions of the original buffer that are going to be
+ * sent. For example, if sending the middle half, f0=0.25, f1=0.75.
+ *
+ * If gap==TRUE, send subbuffer as a gap.
+ */
+static GstFlowReturn push_subbuf(GstPad *pad, GstBuffer *template,
+                                 gdouble f0, gdouble f1, gboolean gap)
+{
+    GstFlowReturn result = GST_FLOW_OK;
+    GstBuffer *buf;
+
+    if (f1-f0 < 1e-14)  /* if negative interval, or reaaaally small... */
+        return GST_FLOW_OK;  /* don't bother with them! */
+
+    guint size = GST_BUFFER_SIZE(template);
+    guint64 s0 = GST_BUFFER_OFFSET(template);      /* first sample */
+    guint64 s1 = GST_BUFFER_OFFSET_END(template);  /* last sample + 1 */
+    GstClockTime t = GST_BUFFER_TIMESTAMP(template);
+    GstClockTime dt = GST_BUFFER_DURATION(template);
+
+    if (gap) {
+        result = gst_pad_alloc_buffer(pad, GST_BUFFER_OFFSET_NONE,
+                                      0, GST_PAD_CAPS(pad), &buf);
+    }
+    else {
+        buf = gst_buffer_create_sub(template, (guint) round(f0 * size),
+                                    (guint) round((f1-f0) * size));
+        result = (buf != NULL) ? GST_FLOW_OK : GST_FLOW_ERROR;
+    }
+
+    if (result != GST_FLOW_OK) {
+        GST_ERROR("gst_pad_alloc_buffer() failed allocating gap buffer");
+        return result;
+    }
+
+    gst_buffer_copy_metadata(buf, template,
+                             GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_CAPS);
+    if (gap)
+        GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
+
+    GST_BUFFER_OFFSET(buf)     = s0 + (guint64) round(f0 * (s1 - s0));
+    GST_BUFFER_OFFSET_END(buf) = s0 + (guint64) round(f1 * (s1 - s0));
+    if (GST_BUFFER_TIMESTAMP_IS_VALID(template)) {
+        GST_BUFFER_TIMESTAMP(buf) = t + (GstClockTime) round(f0 * dt);
+        GST_BUFFER_DURATION(buf) = (GstClockTime) round((f1 - f0) * dt);
+    }
+    else {
+        GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_TIME_NONE;
+        GST_BUFFER_DURATION(buf) = GST_CLOCK_TIME_NONE;
+    }
+
+    result = gst_pad_push(pad, buf);
+    if (result != GST_FLOW_OK) {
+        GST_ERROR("gst_pad_push() failed pushing gap buffer");
+        return result;
+    }
+
+    return GST_FLOW_OK;
+}
+
+
 /*
  * Where data processing takes place.
  *
@@ -245,112 +307,64 @@ get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 {
     GstLaltrim *elem = GST_LALTRIM(GST_OBJECT_PARENT(pad));
-    guint64 t0_buf, t1_buf, t0_cut, t1_cut;
+    guint64 b0, b1, c0, c1;
 
     /* Short notation */
-    t0_buf = GST_BUFFER_OFFSET(buf);
-    t1_buf = GST_BUFFER_OFFSET_END(buf);
-    t0_cut = elem->initial_offset;
-    t1_cut = elem->final_offset;
+    b0 = GST_BUFFER_OFFSET(buf);
+    b1 = GST_BUFFER_OFFSET_END(buf);
+    c0 = elem->initial_offset;
+    c1 = elem->final_offset;
 
-
-   /* The funny pictures below represent the conditions checked:
-     *
-     *  __________-------_____    <--- times/offsets to trim
-     *  ..xxxxxx..............    <--- times/offsets of the buffer
-     *
+    /*                  c0-------c1                   c0-------c1
+     *    b0xxxxxxb1                      or                        b0xxxxxxb1
      */
+    if (b1 < c0 || c1 < b0)  /* buffer out of the region we cut */
+        return push_subbuf(elem->srcpad, buf, 0.0, 1.0, TRUE);
 
-    /*            -------
-     *    xxxxxx
+    /*                  c0-------c1
+     *                     b0xb1
      */
-    if (t1_buf < t0_cut) {
-        GstBuffer *outbuf;
-        outbuf = gst_buffer_create_sub(buf, 0, 0);
-        GST_BUFFER_DURATION(outbuf) = 0;
-        GST_BUFFER_OFFSET_END(outbuf) = 0;
-        GstCaps *caps;
-        if ((caps = GST_BUFFER_CAPS(buf)))
-            gst_caps_ref(caps);
-        GST_BUFFER_CAPS(outbuf) = caps;
-        gst_buffer_unref(buf);
-        return gst_pad_push(elem->srcpad, outbuf);
-    }
-
-    /*            -------
-     *                      xxxxxx
-     */
-    if (t1_cut < t0_buf) {
-        gst_element_send_event(GST_ELEMENT(GST_OBJECT_PARENT(elem->sinkpad)),
-                               gst_event_new_eos());
-        return GST_FLOW_OK;
-    }
-
-    /*            -------
-     *             xxxxx
-     */
-    if (t0_cut <= t0_buf && t1_buf <= t1_cut) {
+    if (c0 <= b0 && b1 <= c1)  /* buffer completely inside the region we cut */
         return gst_pad_push(elem->srcpad, buf);
-    }
 
-    /*            -------
-     *         xxxxxxxxxxxxx
+    /*                  c0-------c1
+     *              b0xxxxxxb1
      */
-    if (t0_buf <= t0_cut && t1_cut <= t1_buf) {
-        GstBuffer* outbuf;
-        guint size = GST_BUFFER_SIZE(buf);
-        guint new_size = size * (t1_cut - t0_cut) / (t1_buf - t0_buf);
-        printf("size, newsize = %ud %ud\n", size, new_size);
-        outbuf = gst_buffer_create_sub(buf, t0_cut - t0_buf, new_size);
-        GST_BUFFER_DURATION(outbuf) = new_size;
-        GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_NONE;
-        GstCaps *caps;
-        if ((caps = GST_BUFFER_CAPS(buf)))
-            gst_caps_ref(caps);
-        GST_BUFFER_CAPS(outbuf) = caps;
-        gst_buffer_unref(buf);
-        return gst_pad_push(elem->srcpad, outbuf);
+    if (b0 <= c0 && b1 <= c1) {
+        gdouble f = (c0 - b0) / (gdouble) (b1 - b0);
+
+        if (push_subbuf(elem->srcpad, buf, 0.0, f, TRUE) != GST_FLOW_OK)
+            return GST_FLOW_ERROR;
+
+        return push_subbuf(elem->srcpad, buf, f, 1.0, FALSE);
     }
 
-    /*            -------
-     *         xxxxxx
+    /*                  c0-------c1
+     *                       b0xxxxxxb1
      */
-    if (t0_buf <= t0_cut && t1_buf <= t1_cut) {
-        GstBuffer* outbuf;
-        guint size = GST_BUFFER_SIZE(buf);
-        guint new_size = size * (t1_buf - t0_cut) / (t1_buf - t0_buf);
-        printf("size, new_size = %ud %ud\n", size, new_size); ///
-        outbuf = gst_buffer_create_sub(buf, t0_cut - t0_buf, new_size);
-        GST_BUFFER_DURATION(outbuf) = new_size;
-        GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_END(buf);
-        GstCaps *caps;
-        if ((caps = GST_BUFFER_CAPS(buf)))
-            gst_caps_ref(caps);
-        GST_BUFFER_CAPS(outbuf) = caps;
-        gst_buffer_unref(buf);
-        return gst_pad_push(elem->srcpad, outbuf);
+    if (c0 <= b0 && c1 <= b1) {
+        gdouble f = (c1 - b0) / (gdouble) (b1 - b0);
+
+        if (push_subbuf(elem->srcpad, buf, 0.0, f, FALSE) != GST_FLOW_OK)
+            return GST_FLOW_ERROR;
+
+        return push_subbuf(elem->srcpad, buf, f, 1.0, TRUE);
     }
 
-    /*            -------
-     *                xxxxxx
+    /*                  c0-------c1
+     *              b0xxxxxxxxxxxxxxxb1
      */
-    if (t0_cut <= t0_buf && t1_cut <= t1_buf) {
-        GstBuffer* outbuf;
-        guint size = GST_BUFFER_SIZE(buf);
-        guint new_size = size * (t1_cut - t0_buf) / (t1_buf - t0_buf);
-        outbuf = gst_buffer_create_sub(buf, 0, new_size);
-        GST_BUFFER_DURATION(outbuf) = new_size;
-        GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_NONE;
-        GstCaps *caps;
-        if ((caps = GST_BUFFER_CAPS(buf)))
-            gst_caps_ref(caps);
-        GST_BUFFER_CAPS(outbuf) = caps;
-        gst_buffer_unref(buf);
-        return gst_pad_push(elem->srcpad, outbuf);
-    }
+    gdouble f0 = (c0 - b0) / (gdouble) (b1 - b0);
+    gdouble f1 = (c1 - b0) / (gdouble) (b1 - b0);
 
+    if (push_subbuf(elem->srcpad, buf, 0.0, f0, TRUE) != GST_FLOW_OK)
+        return GST_FLOW_ERROR;
 
-    // Shouldn't get to this point!
-    printf("Really?\n");
-    return gst_pad_push(elem->srcpad, buf);
+    if (push_subbuf(elem->srcpad, buf, f0, f1, FALSE) != GST_FLOW_OK)
+        return GST_FLOW_ERROR;
+
+    if (push_subbuf(elem->srcpad, buf, f1, 1.0, TRUE) != GST_FLOW_OK)
+        return GST_FLOW_ERROR;
+
+    return GST_FLOW_OK;
 }
