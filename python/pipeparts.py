@@ -418,6 +418,13 @@ def mknxydumpsink(pipeline, src, filename, segment = None):
 	mkfilesink(pipeline, elem, filename)
 
 
+def mknxydumpsinktee(pipeline, src, filename, segment = None):
+	t = mktee(pipeline, src)
+	q = mkqueue(pipeline,t)
+	mknxydumpsink(pipeline,q,filename,segment)
+	return t
+	
+
 def mktriggergen(pipeline, snr, chisq, template_bank_filename, snr_threshold, sigmasq):
 	elem = gst.element_factory_make("lal_triggergen")
 	elem.set_property("bank-filename", template_bank_filename)
@@ -653,6 +660,14 @@ def mkchecktimestamps(pipeline, src, name = None, silent = True):
 	if name is not None:
 		elem.set_property("name", name)
 	elem.set_property("silent", silent)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
+def mkpeak(pipeline, src, n):
+	elem = gst.element_factory_make("lal_peak")
+	elem.set_property("n", n)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
