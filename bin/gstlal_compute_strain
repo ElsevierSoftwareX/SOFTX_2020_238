@@ -113,14 +113,12 @@ derr_src = mkelem('lal_framesrc',
                    'instrument': opts.ifo,
                    'blocksize': 5000000})
 
-audioconvert0 = mkelem('audioconvert')  # lal_firbank only supports doubles
-
 inv_sensing = mkelem('audiofirfilter',
                      {'kernel': filters['inv_sensing'],
                       'latency': int(-filters['inv_sens_delay'])})
 # the *delay* is negative (an advance), and so latency=-delay ... funny legacy
 
-path1 = [derr_src, audioconvert0, inv_sensing]  # so we write less later
+path1 = [derr_src, inv_sensing]  # so we write less later
 
 
 # [2] Elements in the second path (from DARM_CTRL channel)
@@ -130,8 +128,6 @@ dctrl_src = mkelem('lal_framesrc',
                     'channel-name': 'LSC-DARM_CTRL',
                     'instrument': opts.ifo,
                     'blocksize': 5000000})
-
-audioconvert1 = mkelem('audioconvert')  # lal_firbank only supports doubles
 
 hpf0 = mkelem('audiowsinclimit',
               {'mode': 1,  # high pass filter
@@ -151,7 +147,7 @@ awhiten = mkelem('audiofirfilter',
 actuation = mkelem('audiofirfilter',
                    {'kernel': filters['actuation']})
 
-path2 = [dctrl_src, audioconvert1, hpf0, hpf1, awhiten, actuation]
+path2 = [dctrl_src, hpf0, hpf1, awhiten, actuation]
 
 
 # [3] Elements from adder to saving the result
@@ -171,7 +167,7 @@ path3 = [mkelem(*x) for x in [ \
 
 # Add to pipeline and link
 
-pipeline.add(* path1 + path2 + path3)  # means ...add(derr_src, audioc...)
+pipeline.add(* path1 + path2 + path3)  # means ...add(derr_src, inv_sens...)
 
 gst.element_link_many(*path1)  # [1]
 gst.element_link_many(*path2)  # [2]
