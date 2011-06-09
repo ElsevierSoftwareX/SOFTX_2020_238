@@ -180,40 +180,33 @@ gst.element_link_many(*path3)  # [3]
 
 
 #
-# Make it start playing at the appropiate reference gpstime
+# Boilerplate
 #
+
+# Start playing at the appropiate reference gpstime
 
 for src in pipeline.iterate_sources():
     src.seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
              gst.SEEK_TYPE_SET, opts.gps_start_time * 1e9,
              gst.SEEK_TYPE_SET, opts.gps_end_time * 1e9)
 
+# Catch finish and error signals
 
-#
-# Boilerplate
-#
+bus = pipeline.get_bus()
+bus.add_signal_watch()  # emit message signal for messages posted on the bus
 
-class Handler(object):
-    def __init__(self, mainloop, pipeline):
-        self.mainloop = mainloop
-        self.pipeline = pipeline
+def on_message(bus, message):  # message handler
+    if message.type == gst.MESSAGE_EOS:
+        pipeline.set_state(gst.STATE_NULL)
+        mainloop.quit()
+    elif message.type == gst.MESSAGE_ERROR:
+        gerr, dbgmsg = message.parse_error()
+        pipeline.set_state(gst.STATE_NULL)
+        mainloop.quit()
+        sys.exit('Error (%s:%d "%s"): %s' % (gerr.domain, gerr.code,
+                                             gerr.message, dbgmsg))
 
-        bus = pipeline.get_bus()
-        bus.add_signal_watch()
-        bus.connect("message", self.on_message)
-
-    def on_message(self, bus, message):
-        if message.type == gst.MESSAGE_EOS:
-            self.pipeline.set_state(gst.STATE_NULL)
-            self.mainloop.quit()
-        elif message.type == gst.MESSAGE_ERROR:
-            gerr, dbgmsg = message.parse_error()
-            self.pipeline.set_state(gst.STATE_NULL)
-            self.mainloop.quit()
-            sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code,
-                                                 gerr.message, dbgmsg))
-
-handler = Handler(mainloop, pipeline)
+bus.connect('message', on_message)
 
 pipeline.set_state(gst.STATE_PLAYING)
 mainloop.run()
