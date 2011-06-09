@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2010  Jordi Burguet-Castell
+# Copyright (C) 2010, 2011  Jordi Burguet-Castell
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -16,24 +16,23 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-"""
+"""\
 Generate h(t).
 
-It tries to mimic the behavior of LAL's ComputeStrain.c . It does not
-compute the gamma factors for the moment.
+It tries to mimic the behavior of lalapps_ComputeStrainDriver (which
+uses LAL's ComputeStrain.c). It does not compute the gamma factors for
+the moment.
 
-It reads DARM_ERR and DARM_CTRL from H-H1_RDS_R_L1-943009024-64.gwf as
-specified in data.cache. The filters file it uses is a npz version of
-S6H1Filters_942436815.txt
+It reads DARM_ERR and DARM_CTRL from the gwf files specified in the
+cache file. The filters file has to be in numpy's npz format, and can
+be generated from an old one with calfilters2npz.py (in
+examples/utilities).
 """
-
-# To generate filters.npz you can use the program at
-# gstlal/examples/utilities/calfilters2npz.py
 
 import sys
 from optparse import OptionParser
 
-from numpy import load, atleast_2d
+from numpy import load
 
 
 #
@@ -41,7 +40,7 @@ from numpy import load, atleast_2d
 #
 
 parser = OptionParser(
-    version='%prog 0.9',
+    version='%prog 0.95',
     usage='%prog [options]',
     description=__doc__)
 
@@ -51,30 +50,22 @@ add('--gps-end-time',   type='int', help='GPS end time')
 add('--filters-file', help='Name of file containing filters (in npz format)')
 add('--frame-cache',  help='Name of frame cache file')
 add('--ifo',          help='Name of the interferometer (H1, H2, L1)')
-add('--frame-type',   help='Frame type to be written (eg, H1_GSTLAL_C02)')
-add('--debug',  action='store_true', help='Dump intermediate steps to files')
+add('--wings', type='int', default=16, help='Size of wings in seconds')
+add('--frame-type', default='GSTLAL_CAL', help='Frame type to be written')
 add('--silent', action='store_true', help='Be less verbose')
 
 opts, rest = parser.parse_args()
 
-# Use default arguments for testing. Temporary!
-if opts.gps_start_time is None:
-    opts.gps_start_time = 943009024
-
-if opts.gps_end_time is None:
-    opts.gps_end_time = 943009024 + 64
-
-if opts.filters_file is None:
-    opts.filters_file = 'filters.npz'
-
-if opts.frame_cache is None:
-    opts.frame_cache = 'data.cache'
-
-if opts.ifo is None:
-    opts.ifo = 'H1'
-
-if opts.frame_type is None:
-    opts.frame_type = opts.ifo + '_GSTLAL_C02'
+# Check options (help if any of the required ones is None)
+if None in [opts.gps_start_time, opts.gps_end_time,
+            opts.filters_file, opts.frame_cache, opts.ifo]:
+    print 'Missing required option (sorry for the oxymoron).\n'
+    parser.print_help()
+    print """\nExample:
+  %s --gps-start-time 943009024  --gps-end-time $((943009024+64)) \\
+     --filters-file filters.npz  --frame-cache data.cache  --ifo H1 \\
+     --frame-type H1_GSTLAL_C02""" % sys.argv[0]
+    sys.exit()
 
 
 #
@@ -122,17 +113,14 @@ derr_src = mkelem('lal_framesrc',
                    'instrument': opts.ifo,
                    'blocksize': 524288})
 
-pr1 = mkelem('progressreport',
-             {'name': 'DARM_ERR progress',
-              'silent': opts.silent})
+audioconvert0 = mkelem('audioconvert')  # lal_firbank only supports doubles
 
-audioconvert1 = mkelem('audioconvert')  # lal_firbank only supports doubles
+inv_sensing = mkelem('audiofirfilter',
+                     {'kernel': filters['inv_sensing'],
+                      'latency': int(-filters['inv_sens_delay'])})
+# the *delay* is negative (an advance), and so latency=-delay ... funny legacy
 
-inv_sensing = mkelem('lal_firbank',
-                     {'fir-matrix': atleast_2d(filters['inv_sensing'][::-1]),
-                      'latency': -filters['inv_sens_delay']})  # +/-? careful!
-
-path1 = [derr_src, pr1, audioconvert1, inv_sensing]  # so we write less later
+path1 = [derr_src, audioconvert0, inv_sensing]  # so we write less later
 
 
 # [2] Elements in the second path (from DARM_CTRL channel)
@@ -143,50 +131,47 @@ dctrl_src = mkelem('lal_framesrc',
                     'instrument': opts.ifo,
                     'blocksize': 524288})
 
-pr2 = mkelem('progressreport',
-             {'name': 'DARM_CTRL progress',
-              'silent': opts.silent})
+audioconvert1 = mkelem('audioconvert')  # lal_firbank only supports doubles
 
-audioconvert2 = mkelem('audioconvert')  # lal_firbank only supports doubles
+hpf0 = mkelem('audiowsinclimit',
+              {'mode': 1,  # high pass filter
+               'cutoff': 20,  # cf. ComputeStrain.c (0.00244140625 * 16384/2)
+               'window': 2,  # gaussian
+               'length': 2*2000+1})  # 2 * N_FIR_HP + 1, cf. ComputeStrain.c
 
-hpf = mkelem('audiowsinclimit',
-             {'mode': 1,  # high pass filter
-              'cutoff': 20,  # cf. ComputeStrain.c (0.00244140625 * 16384/2)
-              'window': 2,  # gaussian
-              'length': 2*2000+1})  # 2 * N_FIR_HP + 1, cf. ComputeStrain.c
-
-hpf2 = mkelem('audiowsinclimit',   # again! wish I could just copy it!
+hpf1 = mkelem('audiowsinclimit',   # again! wish I could just copy it!
               {'mode': 1,
                'cutoff': 20,
-               'window': 2,  # gaussian
+               'window': 2,
                'length': 2*2000+1})
 
-awhiten = mkelem('lal_firbank',
-                 {'fir-matrix': atleast_2d(filters['awhitening'][::-1]),
-                  'time-domain': False})
+awhiten = mkelem('audiofirfilter',
+                 {'kernel': filters['awhitening']})
 
-actuation = mkelem('lal_firbank',
-                   {'fir-matrix': atleast_2d(filters['actuation'][::-1]),
-                    'time-domain': False})
+actuation = mkelem('audiofirfilter',
+                   {'kernel': filters['actuation']})
 
-path2 = [dctrl_src, pr2, audioconvert2, hpf, hpf2, awhiten, actuation]
+path2 = [dctrl_src, audioconvert1, hpf0, hpf1, awhiten, actuation]
 
 
 # [3] Elements from adder to saving the result
 
+Fs = 16384  # sampling rate
+T = opts.gps_end_time - opts.gps_start_time  # original duration
+
 path3 = [mkelem(*x) for x in [ \
     ('lal_adder', {'sync': True}),
     ('taginject', {'tags': 'channel-name=LDAS-STRAIN'}),  # or GSTLAL-STRAIN
+    ('lal_trim', {'initial-offset': Fs * opts.wings,
+                  'final-offset':  Fs * (T - opts.wings)}),
     ('lal_framesink', {'frame-type': opts.frame_type,
                        'async': False,  # though now should be by default!
-                       'duration': 16,
-                       'clean-timestamps': False}),  # should work with True
-    ]]
+                       'duration': T - 2 * opts.wings})]]
 
 
 # Add to pipeline and link
 
-pipeline.add(* path1 + path2 + path3)
+pipeline.add(* path1 + path2 + path3)  # means ...add(derr_src, audioc...)
 
 gst.element_link_many(*path1)  # [1]
 gst.element_link_many(*path2)  # [2]
@@ -199,49 +184,13 @@ gst.element_link_many(*path3)  # [3]
 
 
 #
-# Debugging
-#
-
-def extract(pipeline, elem1, elem2, filename):
-    """Take a couple of linked elements elem1->elem2 in a pipeline and
-    extract the data flowing betweem them to a file."""
-    tee = mkelem('tee')
-    pipeline.add(tee)
-    elem1.unlink(elem2)
-    elem1.link(tee)
-    tee.link(elem2)
-
-    save_path = [mkelem(*x) for x in [ \
-        ('queue',        {}),
-        ('audioconvert', {}),
-        ('lal_nxydump',  {}),
-        ('filesink',    {'location': 'gstlal_' + filename,
-                         'sync': False,
-                         'async': False})]]
-    pipeline.add(*save_path)
-    tee.link(save_path[0])
-    gst.element_link_many(*save_path)
-
-if opts.debug is not None:
-    extract(pipeline, derr_src, pr1, 'DARM_ERR.txt')
-    extract(pipeline, inv_sensing, path3[0], 'C_inv_adv_DARM_ERR.txt')
-    extract(pipeline, dctrl_src, pr2, 'DARM_CTRL.txt')
-    extract(pipeline, hpf2, awhiten, 'HPFx2_adv_DARM_CTRL.txt')
-    extract(pipeline, awhiten, actuation, 'AW_HPFx2_adv_DARM_CTRL.txt')
-    extract(pipeline, actuation, path3[0], 'A_AW_HPFx2_adv_DARM_CTRL.txt')
-    extract(pipeline, path3[1], path3[2], 'STRAIN.txt')
-
-
-#
 # Make it start playing at the appropiate reference gpstime
 #
 
-path1[0].seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
-              gst.SEEK_TYPE_SET, opts.gps_start_time * 1e9,
-              gst.SEEK_TYPE_SET, opts.gps_end_time * 1e9)
-path2[0].seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
-              gst.SEEK_TYPE_SET, opts.gps_start_time * 1e9,
-              gst.SEEK_TYPE_SET, opts.gps_end_time * 1e9)
+for src in pipeline.iterate_sources():
+    src.seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
+             gst.SEEK_TYPE_SET, opts.gps_start_time * 1e9,
+             gst.SEEK_TYPE_SET, opts.gps_end_time * 1e9)
 
 
 #
