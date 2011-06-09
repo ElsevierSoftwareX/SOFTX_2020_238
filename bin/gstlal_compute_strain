@@ -25,8 +25,7 @@ the moment.
 
 It reads DARM_ERR and DARM_CTRL from the gwf files specified in the
 cache file. The filters file has to be in numpy's npz format, and can
-be generated from an old one with calfilters2npz.py (in
-examples/utilities).
+be generated from an old one with calfilters2npz.py (in examples/utilities).
 """
 
 import sys
@@ -161,7 +160,6 @@ path3 = [mkelem(*x) for x in [ \
     ('lal_trim', {'initial-offset': Fs * opts.wings,
                   'final-offset':  Fs * (T - opts.wings)}),
     ('lal_framesink', {'frame-type': opts.frame_type,
-                       'async': False,  # though now should be by default!
                        'duration': T - 2 * opts.wings})]]
 
 
