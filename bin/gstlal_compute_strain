@@ -111,7 +111,7 @@ derr_src = mkelem('lal_framesrc',
                   {'location': opts.frame_cache,
                    'channel-name': 'LSC-DARM_ERR',
                    'instrument': opts.ifo,
-                   'blocksize': 524288})
+                   'blocksize': 5000000})
 
 audioconvert0 = mkelem('audioconvert')  # lal_firbank only supports doubles
 
@@ -129,7 +129,7 @@ dctrl_src = mkelem('lal_framesrc',
                    {'location': opts.frame_cache,
                     'channel-name': 'LSC-DARM_CTRL',
                     'instrument': opts.ifo,
-                    'blocksize': 524288})
+                    'blocksize': 5000000})
 
 audioconvert1 = mkelem('audioconvert')  # lal_firbank only supports doubles
 
