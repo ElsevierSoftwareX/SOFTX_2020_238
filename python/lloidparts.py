@@ -163,13 +163,13 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	snk = gst.element_factory_make("lal_adder")
 	snk.set_property("sync", True)
 	pipeline.add(snk)
-	src = pipeparts.mkcapsfilter(pipeline, snk, "audio/x-raw-float, rate=%d" % rate)
+	src = pipeparts.mkqueue(pipeparts.mkcapsfilter(pipeline, snk, "audio/x-raw-float, rate=%d" % rate))
 	
 	#
 	# Add a peak finder on the control signal
 	#
 	
-	src = pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, 2048 * 3))
+	src = pipeparts.mkqueue(pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, 2048 * 5)))
 	
 	#
 	# optionally add a segment src and gate to only reconstruct around
@@ -442,7 +442,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# the control signal.  That is currently hardcoded to 3 seconds so this
 	# is plenty of time, but we need a way to vary these numbers together
 	
-	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 15 * gst.SECOND), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 15 * gst.SECOND))
+	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 20 * gst.SECOND), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 20 * gst.SECOND))
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 
 	#
