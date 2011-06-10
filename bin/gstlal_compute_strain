@@ -33,10 +33,15 @@ from optparse import OptionParser
 
 from numpy import load
 
+from gstlal.pipeutil import mkelem
+import gobject, gst
+
 
 #
-# Read command-line options
+# Initialization
 #
+
+# Read command-line options, check and help if a required one is missing
 
 parser = OptionParser(
     version='%prog 0.95',
@@ -51,11 +56,9 @@ add('--frame-cache',  help='Name of frame cache file')
 add('--ifo',          help='Name of the interferometer (H1, H2, L1)')
 add('--wings', type='int', default=16, help='Size of wings in seconds')
 add('--frame-type', default='GSTLAL_CAL', help='Frame type to be written')
-add('--silent', action='store_true', help='Be less verbose')
 
 opts, rest = parser.parse_args()
 
-# Check options (help if any of the required ones is None)
 if None in [opts.gps_start_time, opts.gps_end_time,
             opts.filters_file, opts.frame_cache, opts.ifo]:
     print 'Missing required option (sorry for the oxymoron).\n'
@@ -67,30 +70,9 @@ if None in [opts.gps_start_time, opts.gps_end_time,
     sys.exit()
 
 
-#
-# Initialization
-#
-
-import pygtk
-pygtk.require('2.0')
-import pygst
-pygst.require('0.10')
-import gobject, gst
-from gstlal.pipeutil import mkelem
-
-if not opts.silent:
-    print 'Processing data from time %d to %d (%d seconds)' % \
-        (opts.gps_start_time, opts.gps_end_time,
-         opts.gps_end_time - opts.gps_start_time)
-    print 'Opening filters file %s' % opts.filters_file
+# Read filters file
 
 filters = load(opts.filters_file)
-
-if not opts.silent:
-    print 'Entering main loop'
-
-mainloop = gobject.MainLoop()
-pipeline = gst.Pipeline('calibration')
 
 
 #
@@ -165,6 +147,8 @@ path3 = [mkelem(*x) for x in [ \
 
 # Add to pipeline and link
 
+pipeline = gst.Pipeline('calibration')
+
 pipeline.add(* path1 + path2 + path3)  # means ...add(derr_src, inv_sens...)
 
 gst.element_link_many(*path1)  # [1]
@@ -181,28 +165,28 @@ gst.element_link_many(*path3)  # [3]
 # Boilerplate
 #
 
-# Start playing at the appropiate reference gpstime
+# Start playing at the appropriate reference gpstime
 
 for src in pipeline.iterate_sources():
     src.seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
              gst.SEEK_TYPE_SET, opts.gps_start_time * 1e9,
              gst.SEEK_TYPE_SET, opts.gps_end_time * 1e9)
 
-# Catch finish and error signals
+
+# Create main loop, catch finish and error signals
+
+mainloop = gobject.MainLoop()
 
 bus = pipeline.get_bus()
 bus.add_signal_watch()  # emit message signal for messages posted on the bus
 
 def on_message(bus, message):  # message handler
-    if message.type == gst.MESSAGE_EOS:
+    if message.type in [gst.MESSAGE_EOS, gst.MESSAGE_ERROR]:
         pipeline.set_state(gst.STATE_NULL)
         mainloop.quit()
-    elif message.type == gst.MESSAGE_ERROR:
-        gerr, dbgmsg = message.parse_error()
-        pipeline.set_state(gst.STATE_NULL)
-        mainloop.quit()
-        sys.exit('Error (%s:%d "%s"): %s' % (gerr.domain, gerr.code,
-                                             gerr.message, dbgmsg))
+        if message.type == gst.MESSAGE_ERROR:
+            gerr, dbgmsg = message.parse_error()
+            sys.exit('Error: %s\n%s' % (gerr.message, dbgmsg))
 
 bus.connect('message', on_message)
 
