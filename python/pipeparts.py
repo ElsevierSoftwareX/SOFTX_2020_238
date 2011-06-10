@@ -23,7 +23,7 @@
 # =============================================================================
 #
 
-
+import sys
 import numpy
 
 
@@ -38,6 +38,8 @@ import gst
 
 
 from glue import segments
+from pylal.datatypes import LIGOTimeGPS
+from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
 
 import pipeio
@@ -566,7 +568,9 @@ def mkappsink(pipeline, src, pad_name = None, max_buffers = 1, drop = False, **p
 
 
 class AppSync(object):
-	def __init__(self, appsinks=[]):
+	def __init__(self, output, appsinks=[]):
+		self.lock = threading.Lock()
+		self.output = output
 		self.appsinks = {}
 		for a in appsinks:
 			self.appsinks[a] = None
@@ -592,10 +596,29 @@ class AppSync(object):
 		return out
 
 
+def appsink_new_buffer(elem, output):
+	output.lock.acquire()
+	for row in sngl_inspirals_from_buffer(elem.emit("pull-buffer")):
+		if LIGOTimeGPS(row.end_time, row.end_time_ns) in output.search_summary.get_out():
+			row.process_id = output.process.process_id
+			row.event_id = output.sngl_inspiral_table.get_next_id()
+			output.sngl_inspiral_table.append(row)
+	if output.connection is not None:
+		output.connection.commit()
+	output.lock.release()
+
+
 def pull_appsinks_in_order(appsink,appsync):
+	
+	appsync.lock.acquire()
+	
+	for k,v in appsync.appsinks.items():
+		print >>sys.stderr, k,v
 
 	# get the earliest buffers
 	eap = appsync.earliest_appsink()
+
+	print >> sys.stderr, appsink, eap
 
 	# mark that this one cannot emit another buffer signal (default)
 	appsync.appsinks[appsink] = 1
@@ -604,19 +627,23 @@ def pull_appsinks_in_order(appsink,appsync):
 	# emit another signal Return when we are done
 	if appsync.appsinks[appsink] is None:
 		appsync.appsinks[appsink] = 0
-		buf = appsink.emit('pull-buffer')
+		appsink_new_buffer(appsink, appsync.output)
+		appsync.lock.release()
 		return
 
-	# we must wait until we have at least one buffer from each appsink This
+	# we must wait until we have seen at least one buffer from each appsink This
 	# thread should block, return when we are done
 	if appsync.num_first_buffers() != len(appsync.appsinks):
+		appsync.lock.release()
 		return
+
+	
 
 	# if this is among the earliest, pull and mark that it could emit
 	# another signal Return when we are done
 	if appsink in eap:
 		appsync.appsinks[appsink] = 0
-		buf = appsink.emit('pull-buffer')
+		appsink_new_buffer(appsink, appsync.output)
 		return
 	else:
 		pass
@@ -632,7 +659,7 @@ def pull_appsinks_in_order(appsink,appsync):
 			if v == 1:
 				if k in eap:
 					appsync.appsinks[k] = 0
-					buf = k.emit('pull-buffer')
+					appsink_new_buffer(k, appsync.output)
 					return
 				else:
 					not_earliest.append(k)
@@ -647,7 +674,7 @@ def pull_appsinks_in_order(appsink,appsync):
 			if v == 1:
 				if k in eap:
 					appsync.appsinks[k] = 0
-					buf = k.emit('pull-buffer')
+					appsink_new_buffer(k, appsync.output)
 					return
 				else:
 					not_earliest.append(k)
