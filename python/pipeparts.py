@@ -25,7 +25,7 @@
 
 import sys
 import numpy
-
+import threading
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -611,16 +611,12 @@ def appsink_new_buffer(elem, output):
 def pull_appsinks_in_order(appsink,appsync):
 	
 	appsync.lock.acquire()
-	
-	for k,v in appsync.appsinks.items():
-		print >>sys.stderr, k,v
 
 	# get the earliest buffers
 	eap = appsync.earliest_appsink()
+	print appsink, eap
 
-	print >> sys.stderr, appsink, eap
-
-	# mark that this one cannot emit another buffer signal (default)
+	# mark that this one cannot emit another buffer signal (i.e. that it is blocking)
 	appsync.appsinks[appsink] = 1
 
 	# This buffer has never been pulled. Pull it and mark that it could
@@ -637,49 +633,16 @@ def pull_appsinks_in_order(appsink,appsync):
 		appsync.lock.release()
 		return
 
-	
+	# Otherwise pull all of the earliest buffers that are waiting
+	for k in eap:
+		if appsync.appsinks[k] == 1:
+			appsync.appsinks[k] = 0
+			appsink_new_buffer(k, appsync.output)
 
-	# if this is among the earliest, pull and mark that it could emit
-	# another signal Return when we are done
-	if appsink in eap:
-		appsync.appsinks[appsink] = 0
-		appsink_new_buffer(appsink, appsync.output)
-		return
-	else:
-		pass
-
-	# If we have gotten this far, it is not the earliest, but we should
-	# check to see if the others are, and are blocked If everything is
-	# blocked we could get a deadlock. We can only unblock one appsync or
-	# else crazy things could happen We should return after finding one
-	# "earliest"
-	not_earliest = []
-	if sum([v for v in appsync.appsinks.values()]) == len(appsync.appsinks):
-		for k,v in appsync.appsinks.items():
-			if v == 1:
-				if k in eap:
-					appsync.appsinks[k] = 0
-					appsink_new_buffer(k, appsync.output)
-					return
-				else:
-					not_earliest.append(k)
-
-	# One last check.  If none of the buffers are "earliest", then we need
-	# to check again, that could have changed.  We should updated our
-	# earliest list at this point.
-	eap = appsync.earliest_appsink()
-	if len(not_earliest) == len(appsync.appsinks):
-		not_earliest = []
-		for k,v in appsync.appsinks.items():
-			if v == 1:
-				if k in eap:
-					appsync.appsinks[k] = 0
-					appsink_new_buffer(k, appsync.output)
-					return
-				else:
-					not_earliest.append(k)
-
+	appsync.lock.release()
 	return
+		
+	
 
 
 def mkchecktimestamps(pipeline, src, name = None, silent = True):
