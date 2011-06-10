@@ -614,7 +614,6 @@ def pull_appsinks_in_order(appsink,appsync):
 
 	# get the earliest buffers
 	eap = appsync.earliest_appsink()
-	print appsink, eap
 
 	# mark that this one cannot emit another buffer signal (i.e. that it is blocking)
 	appsync.appsinks[appsink] = 1
