@@ -163,13 +163,13 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	snk = gst.element_factory_make("lal_adder")
 	snk.set_property("sync", True)
 	pipeline.add(snk)
-	src = pipeparts.mkqueue(pipeparts.mkcapsfilter(pipeline, snk, "audio/x-raw-float, rate=%d" % rate))
+	src = pipeparts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, snk, "audio/x-raw-float, rate=%d" % rate))
 	
 	#
 	# Add a peak finder on the control signal
 	#
 	
-	src = pipeparts.mkqueue(pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, 2048 * 5)))
+	src = pipeparts.mkqueue(pipeline, pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, 2048 * 5)))
 	
 	#
 	# optionally add a segment src and gate to only reconstruct around
