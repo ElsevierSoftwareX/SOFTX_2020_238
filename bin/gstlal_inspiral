@@ -395,29 +395,18 @@ output = ligolw_output.Data(
 if options.verbose:
 	print >>sys.stderr, "... output document initialized"
 
-
-def appsink_new_buffer(elem, output):
-	output.lock.acquire()
-	for row in sngl_inspirals_from_buffer(elem.emit("pull-buffer")):
-		if LIGOTimeGPS(row.end_time, row.end_time_ns) in output.search_summary.get_out():
-			row.process_id = output.process.process_id
-			row.event_id = output.sngl_inspiral_table.get_next_id()
-			output.sngl_inspiral_table.append(row)
-	if output.connection is not None:
-		output.connection.commit()
-	output.lock.release()
-
-
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline ...",
+
 appsinks = set()
+appsync = pipeparts.AppSync(output)
+
 for pad in triggersrc.src_pads():
-	sink = pipeparts.mkappsink(pipeline, pipeparts.mkqueue(pipeline, triggersrc, pad_name = pad.get_property("name")), caps = gst.Caps("application/x-lal-snglinspiral"))
-	sink.connect_after("new-buffer", appsink_new_buffer, output)
+	sink = appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, triggersrc, pad_name = pad.get_property("name")), caps = gst.Caps("application/x-lal-snglinspiral"))
+	sink.connect_after("new-buffer", pipeparts.pull_appsinks_in_order, appsync)
 	appsinks.add(sink)
 if options.verbose:
 	print >>sys.stderr, "attached %d, done" % len(appsinks)
-
 
 if options.write_pipeline is not None:
 	#
