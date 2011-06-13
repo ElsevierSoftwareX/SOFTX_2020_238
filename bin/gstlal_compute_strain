@@ -31,11 +31,6 @@ be generated from an old one with calfilters2npz.py (in examples/utilities).
 import sys
 from optparse import OptionParser
 
-from numpy import load
-
-from gstlal.pipeutil import mkelem
-import gobject, gst
-
 
 #
 # Initialization
@@ -56,6 +51,7 @@ add('--frame-cache',  help='Name of frame cache file')
 add('--ifo',          help='Name of the interferometer (H1, H2, L1)')
 add('--wings', type='int', default=16, help='Size of wings in seconds')
 add('--frame-type', default='GSTLAL_CAL', help='Frame type to be written')
+add('--doubles', action='store_true', help='Use doubles instead of floats')
 
 opts, rest = parser.parse_args()
 
@@ -70,9 +66,18 @@ if None in [opts.gps_start_time, opts.gps_end_time,
     sys.exit()
 
 
-# Read filters file
+# Finish importing (not before, so --help works), read filters, set data width
+
+from numpy import load  # only used once to read the filters file
+from gstlal.pipeutil import mkelem
+import gobject, gst
 
 filters = load(opts.filters_file)
+
+if opts.doubles is None:
+    data_width = 32  # = 4 bytes, a float
+else:
+    data_width = 64  # = 8 bytes, a double
 
 
 #
@@ -99,7 +104,11 @@ inv_sensing = mkelem('audiofirfilter',
                       'latency': int(-filters['inv_sens_delay'])})
 # the *delay* is negative (an advance), and so latency=-delay ... funny legacy
 
-path1 = [derr_src, inv_sensing]  # so we write less later
+path1 = [derr_src,
+         mkelem('audioconvert'),  # a NOP if we don't convert to doubles
+         mkelem('capsfilter',
+                {'caps': gst.Caps('audio/x-raw-float,width=%d' % data_width)}),
+         inv_sensing]
 
 
 # [2] Elements in the second path (from DARM_CTRL channel)
@@ -128,7 +137,11 @@ awhiten = mkelem('audiofirfilter',
 actuation = mkelem('audiofirfilter',
                    {'kernel': filters['actuation']})
 
-path2 = [dctrl_src, hpf0, hpf1, awhiten, actuation]
+path2 = [dctrl_src,
+         mkelem('audioconvert'),
+         mkelem('capsfilter',
+                {'caps': gst.Caps('audio/x-raw-float,width=%d' % data_width)}),
+         hpf0, hpf1, awhiten, actuation]
 
 
 # [3] Elements from adder to saving the result
