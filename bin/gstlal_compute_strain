@@ -75,9 +75,9 @@ import gobject, gst
 filters = load(opts.filters_file)
 
 if opts.doubles is None:
-    data_width = 32  # = 4 bytes, a float
+    caps = gst.Caps('audio/x-raw-float,width=32')  # = 4 bytes, a float
 else:
-    data_width = 64  # = 8 bytes, a double
+    caps = gst.Caps('audio/x-raw-float,width=64')  # = 8 bytes, a double
 
 
 #
@@ -106,8 +106,7 @@ inv_sensing = mkelem('audiofirfilter',
 
 path1 = [derr_src,
          mkelem('audioconvert'),  # a NOP if we don't convert to doubles
-         mkelem('capsfilter',
-                {'caps': gst.Caps('audio/x-raw-float,width=%d' % data_width)}),
+         mkelem('capsfilter', {'caps': caps}),
          inv_sensing]
 
 
@@ -139,8 +138,7 @@ actuation = mkelem('audiofirfilter',
 
 path2 = [dctrl_src,
          mkelem('audioconvert'),
-         mkelem('capsfilter',
-                {'caps': gst.Caps('audio/x-raw-float,width=%d' % data_width)}),
+         mkelem('capsfilter', {'caps': caps}),
          hpf0, hpf1, awhiten, actuation]
 
 
