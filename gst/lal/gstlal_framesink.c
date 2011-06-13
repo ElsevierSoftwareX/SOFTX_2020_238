@@ -460,7 +460,8 @@ static gboolean event(GstBaseSink *basesink, GstEvent *event)
 {
     GstLalframeSink *sink = GST_LALFRAME_SINK(basesink);
 
-    GST_DEBUG_OBJECT(sink, "Got an event");
+    GST_DEBUG_OBJECT(sink, "Got an event of type %s",
+                     gst_event_type_get_name(GST_EVENT_TYPE(event)));
 
     switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_TAG:  /* from gstlal_simulation.c */
