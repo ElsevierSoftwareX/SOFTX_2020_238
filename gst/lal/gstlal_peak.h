@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2010 Kipp Cannon <kipp.cannon@ligo.org>
- * Copyright (C) 2010 Chad Hanna <chad.hanna@ligo.org>
+ * Copyright (C) 2011 Chad Hanna <chad.hanna@ligo.org>
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the
