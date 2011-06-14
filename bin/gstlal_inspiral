@@ -403,7 +403,8 @@ appsync = pipeparts.AppSync(output)
 
 for pad in triggersrc.src_pads():
 	sink = appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, triggersrc, pad_name = pad.get_property("name")), caps = gst.Caps("application/x-lal-snglinspiral"))
-	sink.connect_after("new-buffer", pipeparts.pull_appsinks_in_order, appsync)
+	#sink.connect_after("new-buffer", pipeparts.pull_appsinks_in_order, appsync)
+	sink.connect_after("new-buffer", pipeparts.appsink_new_buffer, output)
 	appsinks.add(sink)
 if options.verbose:
 	print >>sys.stderr, "attached %d, done" % len(appsinks)
