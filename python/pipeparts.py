@@ -631,13 +631,21 @@ def pull_appsinks_in_order(appsink,appsync):
 	if appsync.num_first_buffers() != len(appsync.appsinks):
 		appsync.lock.release()
 		return
+	
+	# if there are not earliest buffers, pull this one
+	if len(eap) == 0:
+		appsync.appsinks[appsink] = 0
+		appsink_new_buffer(appsink, appsync.output)
+		appsync.lock.release()
+		return
 
-	# Otherwise pull all of the earliest buffers that are waiting
+	# Otherwise pull the first earliest buffers that are waiting
 	for k in eap:
 		if appsync.appsinks[k] == 1:
 			appsync.appsinks[k] = 0
 			appsink_new_buffer(k, appsync.output)
 
+	# FIXME the code *shouldn't* get here so this is unecessary
 	appsync.lock.release()
 	return
 		
