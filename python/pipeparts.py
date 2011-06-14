@@ -574,6 +574,7 @@ class AppSync(object):
 		self.appsinks = {}
 		for a in appsinks:
 			self.appsinks[a] = None
+		self.deferred = 0
 
 	def add_sink(self, pipeline, src, pad_name = None, drop = False, **properties):
 		# NOTE that max buffers must be 1 for this to work
@@ -581,20 +582,19 @@ class AppSync(object):
 		self.appsinks[elem] = None
 		return elem
 
-	def times(self):
-		return [a.get_last_buffer().timestamp for a in self.appsinks.keys() if a.get_last_buffer() is not None]
-
+	def sorted(self):
+		return sorted([(a.get_last_buffer().timestamp, a) for a in self.appsinks.keys() if a.get_last_buffer() is not None])
+	
+	def earliest(self):
+		l = self.sorted()
+		return [b for (a,b) in l if a == l[0][0]]
+		
 	def num_first_buffers(self):
 		return len([a for a in self.appsinks.values() if a is not None])
 
-	def earliest_time(self):
-		t=self.times()
-		return min(t)
-
-	def earliest_appsink(self):
-		out = [k for k in self.appsinks.keys() if k.get_last_buffer() is not None and k.get_last_buffer().timestamp == self.earliest_time()]
-		return out
-
+	def num_blocking(self):
+		return len([a for a in self.appsinks.values() if a == 1])
+	
 
 def appsink_new_buffer(elem, output):
 	output.lock.acquire()
@@ -608,16 +608,13 @@ def appsink_new_buffer(elem, output):
 	output.lock.release()
 
 
-def pull_appsinks_in_order(appsink,appsync):
+def pull_appsinks_in_order(appsink, appsync, dt = 5 * gst.SECOND):
 	
 	appsync.lock.acquire()
 
-	# get the earliest buffers
-	eap = appsync.earliest_appsink()
-
 	# mark that this one cannot emit another buffer signal (i.e. that it is blocking)
 	appsync.appsinks[appsink] = 1
-
+	
 	# This buffer has never been pulled. Pull it and mark that it could
 	# emit another signal Return when we are done
 	if appsync.appsinks[appsink] is None:
@@ -626,31 +623,21 @@ def pull_appsinks_in_order(appsink,appsync):
 		appsync.lock.release()
 		return
 
-	# we must wait until we have seen at least one buffer from each appsink This
-	# thread should block, return when we are done
-	if appsync.num_first_buffers() != len(appsync.appsinks):
-		appsync.lock.release()
-		return
-	
-	# if there are not earliest buffers, pull this one
-	if len(eap) == 0:
-		appsync.appsinks[appsink] = 0
-		appsink_new_buffer(appsink, appsync.output)
-		appsync.lock.release()
-		return
-
-	# Otherwise pull the first earliest buffers that are waiting
-	for k in eap:
+	# Otherwise pull the earliest buffers that are waiting
+	# FIXME this needs to just pull the earliest buffers period, but then
+	# it won't work at the end. It somehow needs to know when the last
+	# buffers are being pulled, but the EOS has not been emitted yet
+	mint = appsync.sorted()[0][0]
+	for (t,k) in appsync.sorted():
+		if t - mint > dt:
+			break
 		if appsync.appsinks[k] == 1:
 			appsync.appsinks[k] = 0
 			appsink_new_buffer(k, appsync.output)
 
-	# FIXME the code *shouldn't* get here so this is unecessary
 	appsync.lock.release()
 	return
 		
-	
-
 
 def mkchecktimestamps(pipeline, src, name = None, silent = True):
 	elem = gst.element_factory_make("lal_checktimestamps")
