@@ -42,9 +42,10 @@ def Phase(eta, Mtot, t, phic = 0.0):
 	return phi
 
 def Amp(eta, Mtot, t):
+	theta = Theta(eta, Mtot, t)
 	c = 3.0e10
 	Tsun = 4.925491e-6
-	f = freq(eta, Mtot, t)
+	f = 1.0 / (8.0 * Tsun * scipy.pi * Mtot) * (theta**(-3.0/8.0))
 	amp = - 2 * Tsun * c * (eta * Mtot ) * (Tsun * scipy.pi * Mtot * f)**(2.0/3.0);
 	return amp
 
@@ -53,6 +54,9 @@ def waveform(m1, m2, fLow, fhigh, sampleRate):
 	T = spawaveform.chirptime(m1, m2 , 4, fLow, fhigh)
 	tc = -spawaveform.chirptime(m1, m2 , 4, fhigh)
 	t = numpy.arange(tc-T, tc, deltaT)
+	#T = numpy.floor(-spawaveform.chirptime(m1, m2 , 4, fLow)*sampleRate+0.5)*deltaT
+	#tc = numpy.ceil(-spawaveform.chirptime(m1, m2 , 4, fhigh)*sampleRate+0.5)*deltaT
+	#t = numpy.arange(T, tc, deltaT)
 	Mtot = m1 + m2
 	eta = m1 * m2 / Mtot**2
 	f = freq(eta, Mtot, t)
@@ -69,11 +73,17 @@ def waveform(m1, m2, fLow, fhigh, sampleRate):
 def get_iir_sample_rate(xmldoc):
 	pass
 
-def get_fir_matrix(xmldoc, sampleRate=4096, flower = 40, pnorder=4, psd_interp=None, output_to_xml = False, verbose=False, padding=1.1):
+def get_fir_matrix(xmldoc, sampleRate=4096, pnorder=4, psd_interp=None, output_to_xml = False, verbose=False, padding=1.1, autocorrelation_length=101):
+
+	flower = param.get_pyvalue(xmldoc, 'flower')
+	snrvec = []
+	Mlist = []
 
 	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
-	waveform_length = 750000
-	M =numpy.empty([len(sngl_inspiral_table) * 2, waveform_length])
+
+	if not (autocorrelation_length % 2):
+		raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
+	autocorrelation_bank = numpy.zeros((len(sngl_inspiral_table), autocorrelation_length), dtype = "cdouble")
 
 	for tmp, row in enumerate(sngl_inspiral_table):
 		m1 = row.mass1
@@ -88,19 +98,32 @@ def get_fir_matrix(xmldoc, sampleRate=4096, flower = 40, pnorder=4, psd_interp=N
 		if psd_interp is not None:
 			amp /= psd_interp(f)**0.5 * 1e23
 
-		out = amp * numpy.cos(phase)
 		length = 2**numpy.ceil(numpy.log2(amp.shape[0]))
+		out = amp * numpy.exp(1j * phase)
 
 		# normalize the fir coefficients
-		vec1 = numpy.zeros(length * 2, dtype=numpy.double)
+		vec1 = numpy.zeros(length * 2, dtype=numpy.cdouble)
 		vec1[-len(out):] = out
-		norm1 = (vec1 * numpy.conj(vec1)).sum()**0.5
-		amp /= norm1
+		norm1 = (1.0/numpy.sqrt(2.0))*((vec1 * numpy.conj(vec1)).sum()**0.5)
+		vec1 /= norm1
+		#vec1 = vec1[::-1]
 
-		M[2*tmp,:len(amp)] = amp * numpy.cos(phase)
-		M[2*tmp + 1,:len(amp)] = amp * numpy.sin(phase)
+		# store the coeffs.
+		Mlist.append(vec1.real)
+		Mlist.append(vec1.imag)
 
-	return M
+		# compute the SNR
+		corr = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec1)))
+
+		#FIXME this is actually the cross correlation between the original waveform and this approximation
+		autocorrelation_bank[tmp,:] = numpy.concatenate((corr[(-autocorrelation_length/2+2):],corr[:autocorrelation_length/2+2]))
+
+	max_len = max([len(i) for i in Mlist])
+	M = numpy.zeros((len(Mlist), max_len))
+
+	for i, Am in enumerate(Mlist): M[i,:len(Am)] = Am
+
+	return M, autocorrelation_bank
 
 def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=101, verbose=False):
 
@@ -136,7 +159,7 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 					
 		# make the iir filter coeffs
 		a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta)
-		
+
 		if verbose: print>>sys.stderr, "row %4.0d - m1: %10.6f m2: %10.6f required %4.0d filters" % (tmp, m1,m2,len(a1))
 		# get the chirptime
 		length = 2**numpy.ceil(numpy.log2(amp.shape[0]))
@@ -146,8 +169,9 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 		out = out[::-1]
 		vec1 = numpy.zeros(length * 2, dtype=numpy.cdouble)
 		vec1[-len(out):] = out
-		norm1 = (vec1 * numpy.conj(vec1)).sum()**0.5
+		norm1 = 1.0/numpy.sqrt(2.0)*((vec1 * numpy.conj(vec1)).sum()**0.5)
 		vec1 /= norm1
+
 		# normalize the iir coefficients
 		b0 /= norm1
 
@@ -160,10 +184,10 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 		out2 = amp * numpy.exp(1j * phase)
 		vec2 = numpy.zeros(length * 2, dtype=numpy.cdouble)
 		vec2[-len(out2):] = out2
-		vec2 /= (vec2 * numpy.conj(vec2)).sum()**0.5
+		vec2 /= 1.0/numpy.sqrt(2.0)*((vec2 * numpy.conj(vec2)).sum()**0.5)
 
 
-		# compute the SNR	
+		# compute the SNR
 		corr = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec2)))
 
 		#FIXME this is actually the cross correlation between the original waveform and this approximation
@@ -174,7 +198,10 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 
 		# store the match for later
 		if output_to_xml: row.snr = snr
-			
+		print "dot product iir iir", numpy.abs((vec1) * numpy.conj(vec1)).sum()
+		print "dot product fir fir", numpy.abs((vec2) * numpy.conj(vec2)).sum()
+		print "dot product iir fir", numpy.abs((vec1) * numpy.conj(vec2)).sum()
+		print "SNR ", snr
 		##if verbose: print >>sys.stderr, m1, m2, snr, len(a1)
 			
 	# get ready to store the coefficients
@@ -183,7 +210,7 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 	
 	A = numpy.zeros((len(Amat), max_len),dtype=numpy.complex128)
 	B = numpy.zeros((len(Amat), max_len), dtype=numpy.complex128)
-	D = numpy.zeros((len(Amat), max_len))
+	D = numpy.zeros((len(Amat), max_len), dtype=numpy.int32)
 
 	for i, Am in enumerate(Amat): A[i,:len(Am)] = Am
 	for i, Bm in enumerate(Bmat): B[i,:len(Bm)] = Bm
@@ -191,11 +218,23 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 	
 	if output_to_xml: # Create new document and add them together
 		root = xmldoc.childNodes[0]
+		if param.get_param(xmldoc, 'sample_rate'):
+			root.removeChild(param.get_param(xmldoc, 'sample_rate'))
 		root.appendChild(param.new_param('sample_rate', types.FromPyType[int], sampleRate))
+		if param.get_param(xmldoc, 'flower'):
+			root.removeChild(param.get_param(xmldoc, 'flower'))
 		root.appendChild(param.new_param('flower', types.FromPyType[float], flower))
+		if array.get_array(xmldoc, 'a'):
+			root.removeChild(array.get_array(xmldoc, 'a'))
 		root.appendChild(array.from_array('a', repack_complex_array_to_real(A)))
+		if array.get_array(xmldoc, 'b'):
+			root.removeChild(array.get_array(xmldoc, 'b'))
 		root.appendChild(array.from_array('b', repack_complex_array_to_real(B)))
+		if array.get_array(xmldoc, 'd'):
+			root.removeChild(array.get_array(xmldoc, 'd'))
 		root.appendChild(array.from_array('d', D))
+		if array.get_array(xmldoc, 'autocorrelation'):
+			root.removeChild(array.get_array(xmldoc, 'autocorrelation'))
 		root.appendChild(array.from_array('autocorrelation', repack_complex_array_to_real(autocorrelation_bank)))
 	
 	return A, B, D, snrvec
