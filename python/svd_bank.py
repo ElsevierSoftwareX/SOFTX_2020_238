@@ -179,7 +179,7 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 	# and store as Bank object
 	bank = Bank(
 		bank_xmldoc,
-		psd,
+		psd[bank_sngl_table[0].ifo],
 		time_freq_bounds,
 		gate_fap = ortho_gate_fap,
 		snr_threshold = snr_threshold,
