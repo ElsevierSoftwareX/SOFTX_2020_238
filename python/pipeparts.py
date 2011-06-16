@@ -425,7 +425,7 @@ def mknxydumpsinktee(pipeline, src, filename, segment = None):
 	q = mkqueue(pipeline,t)
 	mknxydumpsink(pipeline,q,filename,segment)
 	return t
-	
+
 
 def mktriggergen(pipeline, snr, chisq, template_bank_filename, snr_threshold, sigmasq):
 	elem = gst.element_factory_make("lal_triggergen")
@@ -584,17 +584,17 @@ class AppSync(object):
 
 	def sorted(self):
 		return sorted([(a.get_last_buffer().timestamp, a) for a in self.appsinks.keys() if a.get_last_buffer() is not None])
-	
+
 	def earliest(self):
 		l = self.sorted()
 		return [b for (a,b) in l if a == l[0][0]]
-		
+
 	def num_first_buffers(self):
 		return len([a for a in self.appsinks.values() if a is not None])
 
 	def num_blocking(self):
 		return len([a for a in self.appsinks.values() if a == 1])
-	
+
 
 def appsink_new_buffer(elem, output):
 	output.lock.acquire()
@@ -609,12 +609,12 @@ def appsink_new_buffer(elem, output):
 
 
 def pull_appsinks_in_order(appsink, appsync, dt = 5 * gst.SECOND):
-	
+
 	appsync.lock.acquire()
 
 	# mark that this one cannot emit another buffer signal (i.e. that it is blocking)
 	appsync.appsinks[appsink] = 1
-	
+
 	# This buffer has never been pulled. Pull it and mark that it could
 	# emit another signal Return when we are done
 	if appsync.appsinks[appsink] is None:
@@ -637,7 +637,7 @@ def pull_appsinks_in_order(appsink, appsync, dt = 5 * gst.SECOND):
 
 	appsync.lock.release()
 	return
-		
+
 
 def mkchecktimestamps(pipeline, src, name = None, silent = True):
 	elem = gst.element_factory_make("lal_checktimestamps")
