@@ -198,7 +198,7 @@ static GstClockTime offset_to_time(GSTLALFrameSrc *element, guint64 offset)
 static guint64 time_to_offset(GSTLALFrameSrc *element, GstClockTime t)
 {
 	g_assert(GST_CLOCK_TIME_IS_VALID(GST_BASE_SRC(element)->segment.start));
-	if(t < GST_BASE_SRC(element)->segment.start)
+	if(t < (GstClockTime) GST_BASE_SRC(element)->segment.start)
 		return 0;
 	return gst_util_uint64_scale_int_round(t - GST_BASE_SRC(element)->segment.start, element->rate, GST_SECOND);
 }
