@@ -104,7 +104,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		self.add_var_opt("gps-end-time",gps_end_time)
 		self.add_var_opt("channel-name", channel)
 		self.add_var_opt("reference-psd", reference_psd)
-		self.add_var_opt("ht-gate-threshold", ht_gate_thresh)
+		#self.add_var_opt("ht-gate-threshold", ht_gate_thresh)
 		self.add_var_opt("svd-bank", svd_bank)
 		self.add_var_opt("tmp-space", tmp_space)
 		#self.add_var_opt("chisq-type", "timeslicechisq")
