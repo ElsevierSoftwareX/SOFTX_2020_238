@@ -198,7 +198,7 @@ static GstClockTime offset_to_time(GSTLALFrameSrc *element, guint64 offset)
 static guint64 time_to_offset(GSTLALFrameSrc *element, GstClockTime t)
 {
 	g_assert(GST_CLOCK_TIME_IS_VALID(GST_BASE_SRC(element)->segment.start));
-	if (t < GST_BASE_SRC(element)->segment.start)
+	if(t < GST_BASE_SRC(element)->segment.start)
 		return 0;
 	return gst_util_uint64_scale_int_round(t - GST_BASE_SRC(element)->segment.start, element->rate, GST_SECOND);
 }
@@ -385,6 +385,85 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 
 
 /*
+ * Open the LAL frame cache and sieve for an instrument
+ */
+
+
+static FrStream *open_frstream(GSTLALFrameSrc *element, const char *filename, const char *instrument)
+{
+	FrCacheSieve sieve;
+	FrCache *fullcache;
+	FrCache *cache;
+	FrStream *stream;
+	/* sieve.urlRegEx is const char * so we need a different variable
+	 * we can use to sprintf() and free(), etc..  OMG!  LAL spec
+	 * strikes again --- everything's gotta be passed to functions
+	 * through structures, so if you want a const * the structure's
+	 * element needs to be const *, and so *everything* needs to be
+	 * const *.  Why, why do I bother?  */
+	char *urlRegEx;
+
+	/* 
+	 * Set up seive params
+	 */
+
+	sieve.earliestTime = 0;
+	sieve.latestTime = G_MAXINT32;
+	sieve.srcRegEx = NULL;
+	sieve.dscRegEx = NULL;
+	sieve.urlRegEx = urlRegEx = malloc((strlen(instrument) + 3) * sizeof(*sieve.urlRegEx));	/* 3 = ".*" + \0 */
+	if(!urlRegEx) {
+		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("malloc() failed: %s", strerror(errno)));
+		return NULL;
+	}
+	sprintf(urlRegEx, "%s.*", instrument);
+
+	/*
+	 * Open frame stream
+	 */
+
+	fullcache = XLALFrImportCache(filename);
+	if(!fullcache) {
+		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrImportCache() failed: %s", XLALErrorString(XLALGetBaseErrno())));
+		XLALClearErrno();
+		free(urlRegEx);
+		return NULL;
+	}
+
+	/*
+	 * Sieve the cache for the instrument of interest
+	 */
+
+	cache = XLALFrSieveCache(fullcache, &sieve);
+	XLALFrDestroyCache(fullcache);
+	free(urlRegEx);
+	if(!cache) {
+		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrSieveCache() failed: %s", XLALErrorString(XLALGetBaseErrno())));
+		XLALClearErrno();
+		return NULL;
+	}
+
+	/*
+	 * Open the stream
+	 */
+
+	stream = XLALFrCacheOpen(cache);
+	XLALFrDestroyCache(cache);
+	if(!stream) {
+		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrCacheOpen() failed: %s", XLALErrorString(XLALGetBaseErrno())));
+		XLALClearErrno();
+		return NULL;
+	}
+
+	/*
+	 * Success
+	 */
+
+	return stream;
+}
+
+
+/*
  * ============================================================================
  *
  *                        GstBaseSrc Method Overrides
@@ -396,60 +475,6 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 /*
  * start()
  */
-
-static gboolean open_cache_by_instrument(GSTLALFrameSrc *element)
-{
-	FrCacheSieve params;
-	FrCache *cache;
-	FrCache *fullcache;
-
-	char dscRegEx[5] = {0};
-
-	/* 
-	 Set up seive params 
-	 */
-
-	strcpy(dscRegEx, element->instrument);
-	strcat(dscRegEx, ".*");
-	params.earliestTime = 0;
-	params.latestTime = 2147483647; /* MAX INT4*/
-	params.srcRegEx = NULL;
-	params.dscRegEx = NULL;
-	params.urlRegEx = dscRegEx;
-
-	/*
-	 * Open frame stream.
-	 */
-
-	fullcache = XLALFrImportCache(element->location);
-	if(!fullcache) {
-		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrImportCache() failed: %s", XLALErrorString(XLALGetBaseErrno())));
-		XLALClearErrno();
-		return FALSE;
-	}
-
-	/*
-	 * Sieve the cache for the instrument of interest
-	 */
-
-	cache = XLALFrSieveCache(fullcache, &params);
-	if(!cache) {
-		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrSieveCache() failed: %s", XLALErrorString(XLALGetBaseErrno())));
-		XLALClearErrno();
-		return FALSE;
-	}
-
-	element->stream = XLALFrCacheOpen(cache);
-	XLALFrDestroyCache(cache);
-	XLALFrDestroyCache(fullcache);
-	if(!element->stream) {
-		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrCacheOpen() failed: %s", XLALErrorString(XLALGetBaseErrno())));
-		XLALClearErrno();
-		return FALSE;
-	}
-
-	return TRUE;
-}
 
 
 static gboolean start(GstBaseSrc *object)
@@ -469,7 +494,8 @@ static gboolean start(GstBaseSrc *object)
 	 * Open the frame cache sieved by instrument
 	 */
 
-	if (!open_cache_by_instrument(element))
+	element->stream = open_frstream(element, element->location, element->instrument);
+	if(!element->stream)
 		return FALSE;
 
 	/*
