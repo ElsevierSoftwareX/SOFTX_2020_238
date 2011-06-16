@@ -441,6 +441,8 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# the control signal.  That is currently hardcoded to 3 seconds so this
 	# is plenty of time, but we need a way to vary these numbers together
 	
+	# FIXME I made this queue overly big for the peak finder on the control signal
+	#src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 5 * gst.SECOND), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 5 * gst.SECOND))
 	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 30 * gst.SECOND), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 30 * gst.SECOND))
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 
@@ -453,7 +455,9 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# streaming can begin through the downstream adders without waiting for
 	# input from all upstream elements.
 
-	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * gst.SECOND)
+	# FIXME, I made this queue overly big for the peak finder on the control signal
+	#src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * gst.SECOND)
+	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 30 * gst.SECOND)
 
 	#
 	# reconstruct physical SNRs
@@ -536,6 +540,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 		# resample this to the highest sample rate
 		#
 
+		# FIXME quality = 1 seems to be okay and we could save some flops potentially...
 		output_head = pipeparts.mkresample(pipeline, output_head, quality = 4)
 		output_head = pipeparts.mkcapsfilter(pipeline, output_head, "audio/x-raw-float, rate=%d" % output_rate)
 		output_head = pipeparts.mktogglecomplex(pipeline, output_head)
