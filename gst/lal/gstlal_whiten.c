@@ -456,7 +456,14 @@ static REAL8FrequencySeries *get_psd(GSTLALWhiten *element)
 		return NULL;
 	}
 
+	/*
+	 * place the epoch at the mid-point of the interval of data used to
+	 * produce the PSD.  some rounding is done to help ensure the
+	 * calculation corresponds to an integer number of samples
+	 */
+
 	psd->epoch = element->tdworkspace->epoch;
+	XLALGPSAdd(&psd->epoch, round(element->sample_rate / psd->deltaF) / 2 / element->sample_rate);
 
 	/*
 	 * done
@@ -489,7 +496,7 @@ static GstMessage *psd_message_new(GSTLALWhiten *element, REAL8FrequencySeries *
 }
 
 
-static GstFlowReturn push_psd(GstPad *psd_pad, const REAL8FrequencySeries *psd)
+static GstFlowReturn push_psd(GstPad *psd_pad, const REAL8FrequencySeries *psd, gint period_N, gint period_D)
 {
 	GstBuffer *buffer = NULL;
 	GstFlowReturn result;
@@ -499,6 +506,7 @@ static GstFlowReturn push_psd(GstPad *psd_pad, const REAL8FrequencySeries *psd)
 		"delta-f", G_TYPE_DOUBLE, psd->deltaF,
 		"endianness", G_TYPE_INT, G_BYTE_ORDER,
 		"width", G_TYPE_INT, 64,
+		"rate", GST_TYPE_FRACTION, period_D, period_N,
 		NULL
 	);
 
@@ -649,7 +657,8 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint32 *o
 				g_object_notify(G_OBJECT(element), "mean-psd");
 				gst_element_post_message(GST_ELEMENT(element), psd_message_new(element, element->psd));
 				if(element->mean_psd_pad) {
-					GstFlowReturn result = push_psd(element->mean_psd_pad, element->psd);
+					/* fft_length is sure to be even */
+					GstFlowReturn result = push_psd(element->mean_psd_pad, element->psd, fft_length(element) / 2 - zero_pad_length(element), element->sample_rate);
 					if(result != GST_FLOW_OK)
 						return result;
 				}
@@ -898,7 +907,8 @@ static GstStaticPadTemplate psd_factory = GST_STATIC_PAD_TEMPLATE(
 		"channels = (int) 1, " \
 		"delta-f = (double) [0, MAX], " \
 		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 64"
+		"width = (int) 64, " \
+		"rate = (fraction) [0/1, MAX]"
 	)
 );
 
