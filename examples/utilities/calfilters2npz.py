@@ -27,10 +27,17 @@ https://wiki.ligo.org/foswiki/bin/view/DAC/S6Calibration#Time_domain
 import sys
 import numpy
 
-if len(sys.argv) > 1:
-    filename = sys.argv[1]
+if len(sys.argv) < 2:
+    print 'Usage: %s <old_filters_file> [<new_filters_file>]' % sys.argv[0]
+    sys.exit()
+
+filename = sys.argv[1]
+
+if len(sys.argv) >= 3:
+    new_filename = sys.argv[2]
 else:
-    filename = 'S6H1Filters_942436815.txt'
+    new_filename = 'filters.npz'
+
 
 def ffile_generator():
     for line in open(filename):
@@ -78,7 +85,7 @@ for i in xrange(n):
     awhitening[i] = g.next()
 
 # Write to npz
-numpy.savez('filters.npz',
+numpy.savez(new_filename,
             cal_line_freq=cal_line_freq,
             olg_resp=olg_resp,
             awhitening_resp=awhitening_resp,
@@ -88,3 +95,9 @@ numpy.savez('filters.npz',
             servo=servo,
             actuation=actuation,
             awhitening=awhitening)
+
+# Avoid GeneratorExit warning
+try:
+    g.next()
+except StopIteration:
+    pass
