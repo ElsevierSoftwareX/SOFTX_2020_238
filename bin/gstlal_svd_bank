@@ -46,7 +46,7 @@ missing_options = [option for option in required_options if getattr(options, opt
 if missing_options:
 	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
 
-if options.clipping%2!=0:
+if options.clipping is not None and options.clipping % 2 !=0:
 	raise ValueError, "clipping must be an even intereger"
 
 #
