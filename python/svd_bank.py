@@ -212,7 +212,7 @@ def clip_table(sngl_inspiral_table, int):
 
 	return clipped_table
 
-def write_bank(filename, bank, clipping = none, verbose = False):
+def write_bank(filename, bank, clipping = None, verbose = False):
 	"""Write an SVD bank to a LIGO_LW xml file."""
 
 	# Create new document
@@ -226,7 +226,7 @@ def write_bank(filename, bank, clipping = none, verbose = False):
 	sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
 
 	# Apply clipping option to sngl inspiral table
-	if clipping is not none:
+	if clipping is not None:
 		sngl_inspiral_table = clip_table(sngl_inspiral_table, clipping/2)
 
 	# put the bank table into the output document
@@ -250,7 +250,7 @@ def write_bank(filename, bank, clipping = none, verbose = False):
 		el = ligolw.LIGO_LW()
 
 		# Apply clipping option
-		if clipping is not none:
+		if clipping is not None:
 			frag = clip_M(frag, clipping)
 
 		# Add scalar params
