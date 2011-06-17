@@ -19,7 +19,7 @@
 #
 # =============================================================================
 #
-#                                   Preamble
+#				   Preamble
 #
 # =============================================================================
 #
@@ -50,7 +50,7 @@ from gstlal import templates
 #
 # =============================================================================
 #
-#                                  Utilities
+#				  Utilities
 #
 # =============================================================================
 #
@@ -92,7 +92,7 @@ def sum_of_squares_threshold_from_fap(fap, coefficients):
 #
 # =============================================================================
 #
-#                              Pipeline Metadata
+#			      Pipeline Metadata
 #
 # =============================================================================
 #
@@ -135,6 +135,9 @@ class Bank(object):
 			time_slices,
 			autocorrelation_length = autocorrelation_length,
 			verbose = verbose)
+		
+		# Include signal inspiral table
+		self.sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
 
 		# Assign template banks to fragments
 		self.bank_fragments = [BankFragment(rate,begin,end) for rate,begin,end in time_slices]
@@ -192,13 +195,42 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 	bank.set_template_bank_filename(template_bank_filename)
 	return bank
 
+def clip_M(bank_fragment, int):
 
-def write_bank(filename, bank, verbose = False):
+	numcols = len(bank_fragment.mix_matrix[0])
+	bank_fragment.mix_matrix = bank_fragment.mix_matrix[:,int:numcols-int]
+
+	return bank_fragment
+
+def clip_table(sngl_inspiral_table, int):
+
+	numcols = len(sngl_inspiral_table)
+	clipped_table = lsctables.table.new_from_template(sngl_inspiral_table)
+
+	for i in range(numcols-2*int):
+		clipped_table.append(sngl_inspiral_table[int+i])
+
+	return clipped_table
+
+def write_bank(filename, bank, clipping = none, verbose = False):
 	"""Write an SVD bank to a LIGO_LW xml file."""
 
 	# Create new document
 	xmldoc = ligolw.Document()
 	root = ligolw.LIGO_LW()
+
+	# Open template bank file
+	bank_xmldoc = utils.load_filename(bank.template_bank_filename, verbose = verbose)
+
+	# Get sngl inspiral table
+	sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
+
+	# Apply clipping option to sngl inspiral table
+	if clipping is not none:
+		sngl_inspiral_table = clip_table(sngl_inspiral_table, clipping/2)
+
+	# put the bank table into the output document
+	root.appendChild(sngl_inspiral_table)
 
 	# Add root-level scalar params
 	root.appendChild(param.new_param('filter_length', ligolw_types.FromPyType[float], bank.filter_length))
@@ -216,6 +248,10 @@ def write_bank(filename, bank, verbose = False):
 	for i, frag in enumerate(bank.bank_fragments):
 		# Start new container
 		el = ligolw.LIGO_LW()
+
+		# Apply clipping option
+		if clipping is not none:
+			frag = clip_M(frag, clipping)
 
 		# Add scalar params
 		el.appendChild(param.new_param('start', ligolw_types.FromPyType[float], frag.start))
@@ -248,6 +284,9 @@ def read_bank(filename, verbose = False):
 
 	# Create new SVD bank object
 	bank = Bank.__new__(Bank)
+
+	# Read sngl inspiral table
+	bank.sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 
 	# Read root-level scalar parameters
 	bank.filter_length = param.get_pyvalue(root, 'filter_length')
