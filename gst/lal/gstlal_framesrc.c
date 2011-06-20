@@ -769,7 +769,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	{
 	static gboolean first = TRUE;
 	/* 5 seconds.  seems to be enough */
-	if(first) g_usleep(5000000);
+	if(first) g_usleep(10000000);
 	first = FALSE;
 	}
 
