@@ -48,7 +48,9 @@ Wait for the dags to finish before going on to the TRIGGERS section
 # PSD
 ###############################################################################
 
-Then you need PSDs
+# THIS SECTION IS NO LONGER NEEDED  I am leaving it here in case someone wants
+# to generate reference psds for some other reason. Please skip ahead to
+# triggers
 
 $ cd ../psd
 
