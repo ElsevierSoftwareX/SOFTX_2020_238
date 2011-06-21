@@ -43,6 +43,13 @@ from gstlal import cbc_template_fir
 from gstlal import simulation
 
 
+# Variables that effect sizes of things in various functions
+# length of firbank output stride in seconds
+FIR_STRIDE = 5
+# control signal peak finder window
+CTRL_PEAK_TIME = 3
+
+
 #
 # =============================================================================
 #
@@ -53,9 +60,9 @@ from gstlal import simulation
 
 
 class DetectorData(object):
-	# default block_size = 16384 samples/second * 8 bytes/sample * 512
+	# default block_size = 16384 samples/second * 8 bytes/sample * 128
 	# second
-	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 512):
+	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 128):
 		self.frame_cache = frame_cache
 		self.channel = channel
 		self.block_size = block_size
@@ -160,20 +167,20 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	# start with an adder and caps filter to select a sample rate
 	#
 
-	peak_time = 3 
 	snk = gst.element_factory_make("lal_adder")
 	snk.set_property("sync", True)
 	pipeline.add(snk)
 	src = pipeparts.mkcapsfilter(pipeline, snk, "audio/x-raw-float, rate=%d" % rate)
-	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (4 * peak_time) * gst.SECOND)
+	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (4 * CTRL_PEAK_TIME) * gst.SECOND)
 
 	#
 	# Add a peak finder on the control signal sample number = 3 seconds at 2048 Hz
+	# FIXME don't assume 2048 Hz
 	#
 	
-	src = pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, 2048 * peak_time))
+	src = pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, 2048 * CTRL_PEAK_TIME))
 	
-	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (4 * peak_time) * gst.SECOND)
+	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (4 * CTRL_PEAK_TIME) * gst.SECOND)
 	
 	#
 	# optionally add a segment src and gate to only reconstruct around
@@ -419,7 +426,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# need to be here, or it might be a symptom of a bug elsewhere.
 	# figure this out.
 
-	src = pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank, block_stride = 10 * bank_fragment.rate, time_domain = max(bank.get_rates()) / bank_fragment.rate >= 32)
+	src = pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank, block_stride = FIR_STRIDE * bank_fragment.rate, time_domain = max(bank.get_rates()) / bank_fragment.rate >= 32)
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank" % logname)
 	src = pipeparts.mkreblock(pipeline, src, block_duration = 1 * gst.SECOND)
 	src = pipeparts.mktee(pipeline, src)
@@ -447,7 +454,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	
 	# FIXME I made this queue overly big for the peak finder on the control signal
 	#src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 5 * gst.SECOND), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 5 * gst.SECOND))
-	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 30 * gst.SECOND), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND))
+	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (4 * CTRL_PEAK_TIME + 3) * gst.SECOND), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND))
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 
 	#
@@ -507,7 +514,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			# approximate and not tied to the fir bank
 			# parameters so might not work if those change
 			#pipeparts.mkqueue(pipeline, pipeparts.mkdrop(pipeline, hoftdict[bank_fragment.rate], int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = 4 * int(math.ceil(bank.filter_length)) * gst.SECOND),
-			pipeparts.mkqueue(pipeline, pipeparts.mkdrop(pipeline, hoftdict[bank_fragment.rate], int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = (20+int(math.ceil(bank.filter_length))) * gst.SECOND),
+			pipeparts.mkqueue(pipeline, pipeparts.mkdrop(pipeline, hoftdict[bank_fragment.rate], int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = (2 * FIR_STRIDE + int(math.ceil(bank.filter_length))) * gst.SECOND),
 			bank,
 			bank_fragment,
 			control_snksrc,
