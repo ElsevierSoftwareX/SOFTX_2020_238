@@ -171,7 +171,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	snk.set_property("sync", True)
 	pipeline.add(snk)
 	src = pipeparts.mkcapsfilter(pipeline, snk, "audio/x-raw-float, rate=%d" % rate)
-	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (4 * CTRL_PEAK_TIME) * gst.SECOND)
+	#src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (4 * CTRL_PEAK_TIME) * gst.SECOND)
 
 	#
 	# Add a peak finder on the control signal sample number = 3 seconds at 2048 Hz
@@ -454,7 +454,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	
 	# FIXME I made this queue overly big for the peak finder on the control signal
 	#src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 5 * gst.SECOND), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 5 * gst.SECOND))
-	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (4 * CTRL_PEAK_TIME + 3) * gst.SECOND), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND))
+	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (7 * CTRL_PEAK_TIME + 3) * gst.SECOND), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND))
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 
 	#
