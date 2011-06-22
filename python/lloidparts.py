@@ -179,7 +179,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	
 	src = pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, 2048 * CTRL_PEAK_TIME))
 	
-	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (4 * CTRL_PEAK_TIME) * gst.SECOND)
+	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND)
 	
 	#
 	# optionally add a segment src and gate to only reconstruct around
@@ -449,9 +449,10 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	#
 	# FIXME This queue has to be large for the peak finder on the control
 	# signal if that element gets smarter maybe this could be made smaller
+	# It should be > 3*CTRL_PEAK_TIME + 4, but not this big!
 	#
 
-	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (7 * CTRL_PEAK_TIME + 3) * gst.SECOND), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND))
+	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (3 * CTRL_PEAK_TIME + 10) * gst.SECOND), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * gst.SECOND))
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 
 	#
@@ -463,9 +464,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# streaming can begin through the downstream adders without waiting for
 	# input from all upstream elements.
 
-	# FIXME, I made this queue overly big for the peak finder on the control signal
-	#src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * gst.SECOND)
-	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 30 * gst.SECOND)
+	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * gst.SECOND)
 
 	#
 	# reconstruct physical SNRs
