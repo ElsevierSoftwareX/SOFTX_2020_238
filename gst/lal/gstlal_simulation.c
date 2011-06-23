@@ -807,12 +807,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	}
 
 	/*
-	 * If stream tags not sufficient, reduce to pass-through
+	 * If stream tags not sufficient, fail
 	 */
 
 	if(!element->instrument || !element->channel_name || !element->units) {
-		GST_ERROR_OBJECT(element, "stream metadata not available, cannot construct injections");
-		goto push;
+		GST_ERROR_OBJECT(element, "stream metadata not available, cannot construct injections; need instrument, channel_name, and units tags");
+		result = GST_FLOW_ERROR;
+		gst_buffer_unref(buf);
+		goto done;
 	}
 
 	/*
