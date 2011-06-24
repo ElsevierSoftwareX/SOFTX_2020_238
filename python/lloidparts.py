@@ -45,9 +45,9 @@ from gstlal import simulation
 
 # Variables that effect sizes of things in various functions
 # length of firbank output stride in seconds
-FIR_STRIDE = 5
+FIR_STRIDE = 30
 # control signal peak finder window
-CTRL_PEAK_TIME = 3
+CTRL_PEAK_TIME = 10
 
 
 #
@@ -60,9 +60,9 @@ CTRL_PEAK_TIME = 3
 
 
 class DetectorData(object):
-	# default block_size = 16384 samples/second * 8 bytes/sample * 128
+	# default block_size = 16384 samples/second * 8 bytes/sample * 512
 	# second
-	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 128):
+	def __init__(self, frame_cache, channel, block_size = 16384 * 8 * 512):
 		self.frame_cache = frame_cache
 		self.channel = channel
 		self.block_size = block_size
@@ -449,10 +449,10 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	#
 	# FIXME This queue has to be large for the peak finder on the control
 	# signal if that element gets smarter maybe this could be made smaller
-	# It should be > 3*CTRL_PEAK_TIME + 4, but not this big!
+	# It should be > 3*CTRL_PEAK_TIME + 4
 	#
 
-	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (3 * CTRL_PEAK_TIME + 10) * gst.SECOND), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * gst.SECOND))
+	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (3 * CTRL_PEAK_TIME + 5) * gst.SECOND), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * gst.SECOND))
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 
 	#
@@ -509,8 +509,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			# firbank element, and the value here is only
 			# approximate and not tied to the fir bank
 			# parameters so might not work if those change
-			#pipeparts.mkqueue(pipeline, pipeparts.mkdrop(pipeline, hoftdict[bank_fragment.rate], int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = 4 * int(math.ceil(bank.filter_length)) * gst.SECOND),
-			pipeparts.mkqueue(pipeline, pipeparts.mkdrop(pipeline, hoftdict[bank_fragment.rate], int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = (2 * FIR_STRIDE + int(math.ceil(bank.filter_length))) * gst.SECOND),
+			pipeparts.mkqueue(pipeline, pipeparts.mkdrop(pipeline, hoftdict[bank_fragment.rate], int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = (1 * FIR_STRIDE + int(math.ceil(bank.filter_length))) * gst.SECOND),
 			bank,
 			bank_fragment,
 			control_snksrc,
