@@ -45,7 +45,7 @@ from gstlal import simulation
 
 # Variables that effect sizes of things in various functions
 # length of firbank output stride in seconds
-FIR_STRIDE = 30
+FIR_STRIDE = 10
 # control signal peak finder window
 CTRL_PEAK_TIME = 10
 
