@@ -623,6 +623,11 @@ def pull_appsinks_in_order(appsink, appsync, dt = 5 * gst.SECOND):
 		appsync.lock.release()
 		return
 
+	# wait until we have at least one buffer on every sink
+	if appsync.num_first_buffers() < len(appsync.appsinks):
+		appsync.lock.release()
+		return
+		
 	# Otherwise pull the earliest buffers that are waiting
 	# FIXME this needs to just pull the earliest buffers period, but then
 	# it won't work at the end. It somehow needs to know when the last
