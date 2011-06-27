@@ -21,6 +21,7 @@
 
 import threading
 import time
+import os
 try:
 	import sqlite3
 except ImportError:
@@ -34,6 +35,7 @@ from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
 from pylal.datatypes import LIGOTimeGPS
 from pylal.date import XLALUTCToGPS
+from pylal import rate
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
 
@@ -138,6 +140,13 @@ class Data(object):
 
 		self.sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))	# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
 
+		# setup histograms
+		# FIXME don't hard code these bins
+		self.snr_chisq_histogram = {}
+		self.ifos = ifos
+		for ifo in self.ifos:
+			self.snr_chisq_histogram[ifo] = rate.BinnedArray(rate.NDBins((rate.ATanLogarithmicBins(1, 1000, 1000), rate.ATanLogarithmicBins(1, 1000**2, 1000))))
+
 		# Add injections table if necessary
 		if injection_filename is not None:
 			ligolw_add.ligolw_add(self.xmldoc, [injection_filename], verbose = verbose)
@@ -171,3 +180,11 @@ class Data(object):
 			self.search_summary.nevents = len(self.sngl_inspiral_table)
 			ligolw_process.set_process_end_time(self.process)
 			utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose)
+
+		# write out the snr / chisq histograms
+		xmldoc = ligolw.Document()
+		for ifo in self.ifos:
+			xmldoc.appendChild(rate.binned_array_to_xml(self.snr_chisq_histogram[ifo], ifo))
+		fname = os.path.split(self.filename)
+		fname =  os.path.join(fname[0], 'snr_chisq_%s.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
+		utils.write_filename(xmldoc, fname, gz = fname.endswith(".gz"), verbose = verbose)
