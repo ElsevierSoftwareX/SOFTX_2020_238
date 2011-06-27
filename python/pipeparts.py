@@ -603,6 +603,8 @@ def appsink_new_buffer(elem, output):
 			row.process_id = output.process.process_id
 			row.event_id = output.sngl_inspiral_table.get_next_id()
 			output.sngl_inspiral_table.append(row)
+			# update the snr / chisq histogram for the triggers
+			output.snr_chisq_histogram[row.ifo][row.snr, row.chisq] += 1
 	if output.connection is not None:
 		output.connection.commit()
 	output.lock.release()
