@@ -392,6 +392,7 @@ output = ligolw_output.Data(
 	tmp_path = options.tmp_space,
 	verbose = options.verbose
 )
+stream_thinca = lloidparts.StreamThinca(output)
 if options.verbose:
 	print >>sys.stderr, "... output document initialized"
 
@@ -399,7 +400,7 @@ if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline ...",
 
 appsinks = set()
-appsync = pipeparts.AppSync(output, appsink_new_buffer = pipeparts.appsink_new_buffer)
+appsync = pipeparts.AppSync(output, appsink_new_buffer = stream_thinca.appsink_new_buffer)
 
 for pad in triggersrc.src_pads():
 	sink = appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, triggersrc, pad_name = pad.get_property("name")), caps = gst.Caps("application/x-lal-snglinspiral"))

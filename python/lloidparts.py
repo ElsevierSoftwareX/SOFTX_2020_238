@@ -772,3 +772,19 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	#
 
 	return triggersrc
+
+
+#
+# on-the-fly thinca implementation
+#
+
+
+class StreamThinca(object):
+	def __init__(self, dataobj):
+		self.dataobj = dataobj
+
+	def appsink_new_buffer(self, elem, dataobj):
+		# make sure we've been passed the correct object and chain
+		# to normal function in pipeparts
+		assert dataobj is self.dataobj
+		pipeparts.appsink_new_buffer(elem, dataobj)
