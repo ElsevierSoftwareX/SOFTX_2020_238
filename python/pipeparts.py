@@ -567,6 +567,20 @@ def mkappsink(pipeline, src, pad_name = None, max_buffers = 1, drop = False, **p
 	return elem
 
 
+def appsink_new_buffer(elem, output):
+	output.lock.acquire()
+	for row in sngl_inspirals_from_buffer(elem.emit("pull-buffer")):
+		if LIGOTimeGPS(row.end_time, row.end_time_ns) in output.search_summary.get_out():
+			row.process_id = output.process.process_id
+			row.event_id = output.sngl_inspiral_table.get_next_id()
+			output.sngl_inspiral_table.append(row)
+			# update the snr / chisq histogram for the triggers
+			output.snr_chisq_histogram[row.ifo][row.snr, row.chisq] += 1
+	if output.connection is not None:
+		output.connection.commit()
+	output.lock.release()
+
+
 class AppSync(object):
 	def __init__(self, output, appsinks=[]):
 		self.lock = threading.Lock()
@@ -595,55 +609,38 @@ class AppSync(object):
 	def num_blocking(self):
 		return len([a for a in self.appsinks.values() if a == 1])
 
+	def pull_appsinks_in_order(self, appsink, dt = 5 * gst.SECOND):
+		self.lock.acquire()
 
-def appsink_new_buffer(elem, output):
-	output.lock.acquire()
-	for row in sngl_inspirals_from_buffer(elem.emit("pull-buffer")):
-		if LIGOTimeGPS(row.end_time, row.end_time_ns) in output.search_summary.get_out():
-			row.process_id = output.process.process_id
-			row.event_id = output.sngl_inspiral_table.get_next_id()
-			output.sngl_inspiral_table.append(row)
-			# update the snr / chisq histogram for the triggers
-			output.snr_chisq_histogram[row.ifo][row.snr, row.chisq] += 1
-	if output.connection is not None:
-		output.connection.commit()
-	output.lock.release()
+		# mark that this one cannot emit another buffer signal (i.e. that it is blocking)
+		self.appsinks[appsink] = 1
 
+		# This buffer has never been pulled. Pull it and mark that it could
+		# emit another signal Return when we are done
+		if self.appsinks[appsink] is None:
+			self.appsinks[appsink] = 0
+			appsink_new_buffer(appsink, self.output)
+			self.lock.release()
+			return
 
-def pull_appsinks_in_order(appsink, appsync, dt = 5 * gst.SECOND):
+		# wait until we have at least one buffer on every sink
+		if self.num_first_buffers() < len(self.appsinks):
+			self.lock.release()
+			return
+			
+		# Otherwise pull the earliest buffers that are waiting
+		# FIXME this needs to just pull the earliest buffers period, but then
+		# it won't work at the end. It somehow needs to know when the last
+		# buffers are being pulled, but the EOS has not been emitted yet
+		mint = self.sorted()[0][0]
+		for (t,k) in self.sorted():
+			if t - mint > dt:
+				break
+			if self.appsinks[k] == 1:
+				self.appsinks[k] = 0
+				appsink_new_buffer(k, self.output)
 
-	appsync.lock.acquire()
-
-	# mark that this one cannot emit another buffer signal (i.e. that it is blocking)
-	appsync.appsinks[appsink] = 1
-
-	# This buffer has never been pulled. Pull it and mark that it could
-	# emit another signal Return when we are done
-	if appsync.appsinks[appsink] is None:
-		appsync.appsinks[appsink] = 0
-		appsink_new_buffer(appsink, appsync.output)
-		appsync.lock.release()
-		return
-
-	# wait until we have at least one buffer on every sink
-	if appsync.num_first_buffers() < len(appsync.appsinks):
-		appsync.lock.release()
-		return
-		
-	# Otherwise pull the earliest buffers that are waiting
-	# FIXME this needs to just pull the earliest buffers period, but then
-	# it won't work at the end. It somehow needs to know when the last
-	# buffers are being pulled, but the EOS has not been emitted yet
-	mint = appsync.sorted()[0][0]
-	for (t,k) in appsync.sorted():
-		if t - mint > dt:
-			break
-		if appsync.appsinks[k] == 1:
-			appsync.appsinks[k] = 0
-			appsink_new_buffer(k, appsync.output)
-
-	appsync.lock.release()
-	return
+		self.lock.release()
 
 
 def mkchecktimestamps(pipeline, src, name = None, silent = True):

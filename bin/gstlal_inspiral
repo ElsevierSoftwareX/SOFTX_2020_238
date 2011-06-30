@@ -406,7 +406,7 @@ for pad in triggersrc.src_pads():
 	# FIXME, the pull_appsinks_in_order function works 95% of the time, but
 	# the other 5% locks up.  When it is fixed uncomment this line and
 	# delete the next line and the branches should be sinked
-	sink.connect_after("new-buffer", pipeparts.pull_appsinks_in_order, appsync)
+	sink.connect_after("new-buffer", appsync.pull_appsinks_in_order)
 	#sink.connect_after("new-buffer", pipeparts.appsink_new_buffer, output)
 	appsinks.add(sink)
 if options.verbose:
