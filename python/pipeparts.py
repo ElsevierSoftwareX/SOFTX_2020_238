@@ -582,13 +582,14 @@ def appsink_new_buffer(elem, output):
 
 
 class AppSync(object):
-	def __init__(self, output, appsinks=[]):
+	def __init__(self, output, appsinks = [], appsink_new_buffer = appsink_new_buffer):
 		self.lock = threading.Lock()
 		self.output = output
 		self.appsinks = {}
 		for a in appsinks:
 			self.appsinks[a] = None
 		self.deferred = 0
+		self.appsink_new_buffer = appsink_new_buffer
 
 	def add_sink(self, pipeline, src, pad_name = None, drop = False, **properties):
 		# NOTE that max buffers must be 1 for this to work
@@ -597,17 +598,11 @@ class AppSync(object):
 		return elem
 
 	def sorted(self):
-		return sorted([(a.get_last_buffer().timestamp, a) for a in self.appsinks.keys() if a.get_last_buffer() is not None])
+		return sorted((a.get_last_buffer().timestamp, a) for a in self.appsinks.keys() if a.get_last_buffer() is not None)
 
 	def earliest(self):
 		l = self.sorted()
 		return [b for (a,b) in l if a == l[0][0]]
-
-	def num_first_buffers(self):
-		return len([a for a in self.appsinks.values() if a is not None])
-
-	def num_blocking(self):
-		return len([a for a in self.appsinks.values() if a == 1])
 
 	def pull_appsinks_in_order(self, appsink, dt = 5 * gst.SECOND):
 		self.lock.acquire()
@@ -615,19 +610,11 @@ class AppSync(object):
 		# mark that this one cannot emit another buffer signal (i.e. that it is blocking)
 		self.appsinks[appsink] = 1
 
-		# This buffer has never been pulled. Pull it and mark that it could
-		# emit another signal Return when we are done
-		if self.appsinks[appsink] is None:
-			self.appsinks[appsink] = 0
-			appsink_new_buffer(appsink, self.output)
+		# wait until we have at least one buffer on every sink
+		if None in self.appsinks.values():
 			self.lock.release()
 			return
 
-		# wait until we have at least one buffer on every sink
-		if self.num_first_buffers() < len(self.appsinks):
-			self.lock.release()
-			return
-			
 		# Otherwise pull the earliest buffers that are waiting
 		# FIXME this needs to just pull the earliest buffers period, but then
 		# it won't work at the end. It somehow needs to know when the last
@@ -638,7 +625,7 @@ class AppSync(object):
 				break
 			if self.appsinks[k] == 1:
 				self.appsinks[k] = 0
-				appsink_new_buffer(k, self.output)
+				self.appsink_new_buffer(k, self.output)
 
 		self.lock.release()
 
