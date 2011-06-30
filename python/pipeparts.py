@@ -582,7 +582,7 @@ def appsink_new_buffer(elem, output):
 
 
 class AppSync(object):
-	def __init__(self, output, appsinks = [], appsink_new_buffer = appsink_new_buffer):
+	def __init__(self, output, appsinks = [], appsink_new_buffer = appsink_new_buffer, dt = 5 * gst.SECOND):
 		self.lock = threading.Lock()
 		self.output = output
 		self.appsinks = {}
@@ -590,6 +590,7 @@ class AppSync(object):
 			self.appsinks[a] = None
 		self.deferred = 0
 		self.appsink_new_buffer = appsink_new_buffer
+		self.dt = dt
 
 	def add_sink(self, pipeline, src, pad_name = None, drop = False, **properties):
 		# NOTE that max buffers must be 1 for this to work
@@ -604,7 +605,7 @@ class AppSync(object):
 		l = self.sorted()
 		return [b for (a,b) in l if a == l[0][0]]
 
-	def pull_appsinks_in_order(self, appsink, dt = 5 * gst.SECOND):
+	def pull_appsinks_in_order(self, appsink):
 		self.lock.acquire()
 
 		# mark that this one cannot emit another buffer signal (i.e. that it is blocking)
@@ -621,7 +622,7 @@ class AppSync(object):
 		# buffers are being pulled, but the EOS has not been emitted yet
 		mint = self.sorted()[0][0]
 		for (t,k) in self.sorted():
-			if t - mint > dt:
+			if t - mint > self.dt:
 				break
 			if self.appsinks[k] == 1:
 				self.appsinks[k] = 0
