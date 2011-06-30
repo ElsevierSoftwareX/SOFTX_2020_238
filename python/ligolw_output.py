@@ -35,6 +35,7 @@ from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
 from pylal.datatypes import LIGOTimeGPS
 from pylal.date import XLALUTCToGPS
+from pylal import ligolw_tisi
 from pylal import rate
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
@@ -128,23 +129,32 @@ def make_process_params(options):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, ifos, seg, out_seg, injection_filename = None, comment = None, tmp_path = None, verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, out_seg, injection_filename = None, comment = None, tmp_path = None, verbose = False):
 		self.lock = threading.Lock()
 		self.filename = filename
 		self.xmldoc = ligolw.Document()
 		self.xmldoc.appendChild(ligolw.LIGO_LW())
-		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, "gstlal_inspiral", process_params, comment = comment, ifos = ifos)
+		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, "gstlal_inspiral", process_params, comment = comment, ifos = instruments)
 		self.search_summary = add_cbc_metadata(self.xmldoc, self.process, seg, out_seg)
 		# FIXME:  argh, ugly
 		self.sngl_inspiral_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
+		self.coinc_definer_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincDefTable))
+		self.coinc_event_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincTable))
+		self.coinc_event_map_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincMapTable))
+		self.time_slide_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.TimeSlideTable))
+		self.coinc_inspiral_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincInspiralTable))
+
+		# add an all-zero offset vector to the time_slide table
+		for row in ligolw_tisi.RowsFromOffsetDict(dict((instrument, 0.0) for instrument in instruments), self.time_slide_table.get_next_id(), self.process):
+			self.time_slide_table.append(row)
 
 		self.sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))	# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
 
 		# setup histograms
 		# FIXME don't hard code these bins
 		self.snr_chisq_histogram = {}
-		self.ifos = ifos
-		for ifo in self.ifos:
+		self.instruments = instruments
+		for ifo in self.instruments:
 			self.snr_chisq_histogram[ifo] = rate.BinnedArray(rate.NDBins((rate.ATanLogarithmicBins(1, 1000, 1000), rate.ATanLogarithmicBins(1, 1000**2, 1000))))
 
 		# Add injections table if necessary
@@ -183,7 +193,7 @@ class Data(object):
 
 		# write out the snr / chisq histograms
 		xmldoc = ligolw.Document()
-		for ifo in self.ifos:
+		for ifo in self.instruments:
 			xmldoc.appendChild(rate.binned_array_to_xml(self.snr_chisq_histogram[ifo], ifo))
 		fname = os.path.split(self.filename)
 		fname =  os.path.join(fname[0], 'snr_chisq_%s.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
