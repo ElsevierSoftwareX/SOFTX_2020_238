@@ -582,7 +582,7 @@ def appsink_new_buffer(elem, output):
 
 
 class AppSync(object):
-	def __init__(self, output, appsinks = [], appsink_new_buffer = appsink_new_buffer, dt = 5 * gst.SECOND):
+	def __init__(self, output, appsinks = [], appsink_new_buffer = appsink_new_buffer, dt = 5):
 		self.lock = threading.Lock()
 		self.output = output
 		self.appsinks = {}
@@ -622,7 +622,7 @@ class AppSync(object):
 		# buffers are being pulled, but the EOS has not been emitted yet
 		mint = self.sorted()[0][0]
 		for (t,k) in self.sorted():
-			if t - mint > self.dt:
+			if t - mint > self.dt * gst.SECOND:
 				break
 			if self.appsinks[k] == 1:
 				self.appsinks[k] = 0
