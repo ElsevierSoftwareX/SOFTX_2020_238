@@ -135,9 +135,9 @@ class Data(object):
 		self.xmldoc = ligolw.Document()
 		self.xmldoc.appendChild(ligolw.LIGO_LW())
 		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, "gstlal_inspiral", process_params, comment = comment, ifos = instruments)
+		self.search_summary = add_cbc_metadata(self.xmldoc, self.process, seg, out_seg)
 		self.process_table = lsctables.table.get_table(self.xmldoc, lsctables.ProcessTable.tableName)
 		self.process_params_table = lsctables.table.get_table(self.xmldoc, lsctables.ProcessParamsTable.tableName)
-		self.search_summary = add_cbc_metadata(self.xmldoc, self.process, seg, out_seg)
 		# FIXME:  argh, ugly
 		self.sngl_inspiral_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
 		self.coinc_definer_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincDefTable))
@@ -173,9 +173,17 @@ class Data(object):
 			dbtables.DBTable.append = dbtables.DBTable._remapping_append
 			dbtables.idmap_sync(self.connection)
 			ligolw_sqlite.insert_from_xmldoc(self.connection, self.xmldoc, preserve_ids = False, verbose = verbose)
+
 			self.xmldoc.unlink()
 			self.xmldoc = dbtables.get_xml(self.connection)
+			self.process_table = lsctables.table.get_table(self.xmldoc, lsctables.ProcessTable.tableName)
+			self.process_params_table = lsctables.table.get_table(self.xmldoc, lsctables.ProcessParamsTable.tableName)
 			self.sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
+			self.coinc_definer_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincDefTable.tableName)
+			self.coinc_event_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincTable.tableName)
+			self.coinc_event_map_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincMapTable.tableName)
+			self.time_slide_table = lsctables.table.get_table(self.xmldoc, lsctables.TimeSlideTable.tableName)
+			self.coinc_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincInspiralTable.tableName)
 		else:
 			self.connection = None
 
