@@ -49,7 +49,6 @@ from glue import segmentsUtils
 from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
-from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 from gstlal import ligolw_output
 from gstlal import svd_bank
 from gstlal import pipeparts
@@ -392,7 +391,12 @@ output = ligolw_output.Data(
 	tmp_path = options.tmp_space,
 	verbose = options.verbose
 )
-stream_thinca = lloidparts.StreamThinca(output)
+stream_thinca = lloidparts.StreamThinca(
+	output,
+	e_thinca_parameter = 1.0,
+	coincidence_back_off = 2 * 5,	# coincidence back-off is twice AppSync dt
+	thinca_size = 50.0	# seconds
+)
 if options.verbose:
 	print >>sys.stderr, "... output document initialized"
 
@@ -400,7 +404,7 @@ if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline ...",
 
 appsinks = set()
-appsync = pipeparts.AppSync(output, appsink_new_buffer = stream_thinca.appsink_new_buffer)
+appsync = pipeparts.AppSync(output, appsink_new_buffer = stream_thinca.appsink_new_buffer, dt = 5)
 
 for pad in triggersrc.src_pads():
 	sink = appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, triggersrc, pad_name = pad.get_property("name")), caps = gst.Caps("application/x-lal-snglinspiral"))
@@ -479,6 +483,7 @@ mainloop.run()
 #
 
 
+stream_thinca.flush()
 output.write_output_file(verbose = options.verbose)
 
 
