@@ -176,7 +176,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	# Add a peak finder on the control signal sample number = 3 seconds at 2048 Hz
 	# FIXME don't assume 2048 Hz
 	#
-	
+
 	if control_peak_time is not None:
 		src = pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, 2048 * control_peak_time), block_duration = block_duration)
 	
