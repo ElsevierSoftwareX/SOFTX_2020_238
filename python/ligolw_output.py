@@ -154,10 +154,10 @@ class Data(object):
 
 		# setup histograms
 		# FIXME don't hard code these bins
-		self.snr_chisq_histogram = {}
+		self.snr_chi_histogram = {}
 		self.instruments = instruments
 		for ifo in self.instruments:
-			self.snr_chisq_histogram[ifo] = rate.BinnedArray(rate.NDBins((rate.ATanLogarithmicBins(1, 1000, 1000), rate.ATanLogarithmicBins(1, 1000**2, 1000))))
+			self.snr_chi_histogram[ifo] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusInfinityBins(3., 100., 500), rate.LogarithmicPlusInfinityBins(.1, 1., 500))))
 
 		# Add injections table if necessary
 		if injection_filename is not None:
@@ -203,8 +203,9 @@ class Data(object):
 
 		# write out the snr / chisq histograms
 		xmldoc = ligolw.Document()
+		lw = xmldoc.appendChild(ligolw.LIGO_LW())
 		for ifo in self.instruments:
-			xmldoc.appendChild(rate.binned_array_to_xml(self.snr_chisq_histogram[ifo], ifo))
+			lw.appendChild(rate.binned_array_to_xml(self.snr_chi_histogram[ifo], ifo))	
 		fname = os.path.split(self.filename)
-		fname =  os.path.join(fname[0], 'snr_chisq_%s.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
+		fname =  os.path.join(fname[0], 'snr_chi_%s.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
 		utils.write_filename(xmldoc, fname, gz = fname.endswith(".gz"), verbose = verbose)
