@@ -100,6 +100,7 @@ def parse_command_line():
 	parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
 	parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the template bank for a given instrument in the form ifo:file These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.")
 	parser.add_option("--svd-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.")
+	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets")
 	parser.add_option("--ortho-gate-fap", metavar = "probability", type = "float", default = 1e-2, help = "Set the orthogonal SNR projection gate false-alarm probability (default = 1e-2).")
 	parser.add_option("--control-peak-time", metavar = "time", type = "int", help = "Set a time window in seconds to find peaks in the control signal")
 	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
@@ -389,6 +390,7 @@ output = ligolw_output.Data(
 	seg = options.seg,
 	out_seg = options.seg, #FIXME make better outseg def?  Maybe pointless now that gstlal inspiral can analyze over frame gaps
 	injection_filename = options.injections,
+	time_slide_file = options.time_slide_file,
 	comment = options.comment,
 	tmp_path = options.tmp_space,
 	verbose = options.verbose
