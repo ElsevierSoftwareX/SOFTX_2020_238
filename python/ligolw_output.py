@@ -129,7 +129,7 @@ def make_process_params(options):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, out_seg, injection_filename = None, comment = None, tmp_path = None, verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, out_seg, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, verbose = False):
 		self.lock = threading.Lock()
 		self.filename = filename
 		self.xmldoc = ligolw.Document()
@@ -146,9 +146,13 @@ class Data(object):
 		self.time_slide_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.TimeSlideTable))
 		self.coinc_inspiral_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincInspiralTable))
 
+		# if we have a time slide table file, add it.  Otherwise,
 		# add an all-zero offset vector to the time_slide table
-		for row in ligolw_tisi.RowsFromOffsetDict(dict((instrument, 0.0) for instrument in instruments), self.time_slide_table.get_next_id(), self.process):
-			self.time_slide_table.append(row)
+		if time_slide_file is not None:
+			ligolw_add.ligolw_add(self.xmldoc, [time_slide_file], verbose = verbose)
+		else:
+			for row in ligolw_tisi.RowsFromOffsetDict(dict((instrument, 0.0) for instrument in instruments), self.time_slide_table.get_next_id(), self.process):
+				self.time_slide_table.append(row)
 
 		self.sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))	# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
 
