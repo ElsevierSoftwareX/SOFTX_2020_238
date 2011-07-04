@@ -55,7 +55,8 @@ from gstlal import simulation
 FIR_STRIDE = 10
 # control signal peak finder window
 CTRL_PEAK_TIME = 10
-
+# typical buffer duration
+BLOCK_DURATION = int(1 * gst.SECOND)
 
 #
 # =============================================================================
@@ -184,9 +185,9 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	# FIXME don't assume 2048 Hz
 	#
 	
-	src = pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, 2048 * CTRL_PEAK_TIME))
+	src = pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, 2048 * CTRL_PEAK_TIME), block_duration = BLOCK_DURATION)
 	
-	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND)
+	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = BLOCK_DURATION)
 	
 	#
 	# optionally add a segment src and gate to only reconstruct around
@@ -313,7 +314,7 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 	# non-gap buffer).
 	#
 
-	head = pipeparts.mkreblock(pipeline, head, block_duration = 1 * gst.SECOND)
+	head = pipeparts.mkreblock(pipeline, head, block_duration = BLOCK_DURATION)
 
 	#
 	# construct whitener.  this element must be followed by a
@@ -434,7 +435,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 
 	src = pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank, block_stride = FIR_STRIDE * bank_fragment.rate, time_domain = max(bank.get_rates()) / bank_fragment.rate >= 32)
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank" % logname)
-	src = pipeparts.mkreblock(pipeline, src, block_duration = 1 * gst.SECOND)
+	src = pipeparts.mkreblock(pipeline, src, block_duration = BLOCK_DURATION)
 	src = pipeparts.mktee(pipeline, src)
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, src), "orthosnr_%s.dump" % logname, segment = nxydump_segment)
 
@@ -446,7 +447,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# aggregator
 	#
 
-	elem = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights),max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * gst.SECOND), quality = 9)
+	elem = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights),max_size_buffers = 0, max_size_bytes = 0, max_size_time = BLOCK_DURATION), quality = 9)
 	elem = pipeparts.mknofakedisconts(pipeline, elem, silent = True)
 	elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare_resampler" % logname)
 	elem.link(control_snk)
@@ -456,10 +457,10 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	#
 	# FIXME This queue has to be large for the peak finder on the control
 	# signal if that element gets smarter maybe this could be made smaller
-	# It should be > 3*CTRL_PEAK_TIME + 4
+	# It should be > 3*CTRL_PEAK_TIME*gst.SECOND + 4 * BLOCK_DURATION
 	#
 
-	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (3 * CTRL_PEAK_TIME + 5) * gst.SECOND), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * gst.SECOND))
+	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (3 * CTRL_PEAK_TIME * gst.SECOND + 5 * BLOCK_DURATION)), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * BLOCK_DURATION))
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 
 	#
@@ -471,7 +472,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# streaming can begin through the downstream adders without waiting for
 	# input from all upstream elements.
 
-	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * gst.SECOND)
+	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * BLOCK_DURATION)
 
 	#
 	# reconstruct physical SNRs
@@ -516,6 +517,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			# firbank element, and the value here is only
 			# approximate and not tied to the fir bank
 			# parameters so might not work if those change
+			#pipeparts.mkqueue(pipeline, pipeparts.mkdrop(pipeline, hoftdict[bank_fragment.rate], int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = (10 * FIR_STRIDE) * gst.SECOND),
 			pipeparts.mkqueue(pipeline, pipeparts.mkdrop(pipeline, hoftdict[bank_fragment.rate], int(round((bank.filter_length - bank_fragment.end) * bank_fragment.rate))), max_size_bytes = 0, max_size_buffers = 0, max_size_time = (1 * FIR_STRIDE + int(math.ceil(bank.filter_length))) * gst.SECOND),
 			bank,
 			bank_fragment,
@@ -546,7 +548,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			output_head.set_property("sync", True)
 			pipeline.add(output_head)
 			for head in heads:
-				pipeparts.mkqueue(pipeline, head, max_size_time = gst.SECOND).link(output_head)
+				pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = BLOCK_DURATION).link(output_head)
 		else:
 			output_head = list(heads)[0]
 
@@ -574,7 +576,7 @@ def mkLLOIDSnrSlicesToSnr(pipeline, branch_heads):
 		snr.set_property("sync", True)
 		pipeline.add(snr)
 		for rate, head in branch_heads.items():
-			pipeparts.mkqueue(pipeline, head, max_size_time = gst.SECOND).link(snr)
+			pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = BLOCK_DURATION).link(snr)
 	else:
 		snr = branch_heads.values()[0]
 
@@ -617,7 +619,7 @@ def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank):
 	#
 
 	for rate, snrslice in sorted(branch_heads.items()):
-		pipeparts.mkqueue(pipeline, snrslice, max_size_time = gst.SECOND).link(chisq)
+		pipeparts.mkqueue(pipeline, snrslice,  max_size_bytes = 0, max_size_buffers = 0, max_size_time = BLOCK_DURATION).link(chisq)
 
 	#
 	# set chifacs-matrix property, needs to be done after snrslices are linked in
@@ -625,7 +627,7 @@ def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank):
 
 	chisq.set_property("chifacs-matrix", chifacs)
 
-	return pipeparts.mkqueue(pipeline, chisq)
+	return pipeparts.mkqueue(pipeline, chisq, max_size_bytes = 0, max_size_buffers = 0, max_size_time = BLOCK_DURATION)
 
 
 def mkLLOIDSnrToAutoChisq(pipeline, snr, bank):
@@ -641,7 +643,7 @@ def mkLLOIDSnrToAutoChisq(pipeline, snr, bank):
 	# \chi^{2}
 	#
 
-	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr), autocorrelation_matrix = bank.autocorrelation_bank, latency = autocorrelation_latency, snr_thresh = bank.snr_threshold)
+	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr, max_size_bytes = 0, max_size_buffers = 0, max_size_time = BLOCK_DURATION), autocorrelation_matrix = bank.autocorrelation_bank, latency = autocorrelation_latency, snr_thresh = bank.snr_threshold)
 
 	#chisq = pipeparts.mktee(pipeline, chisq)
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, chisq), "chisq_%s.dump" % logname, segment = nxydump_segment)
@@ -655,7 +657,7 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 	# trigger generator and progress report
 	#
 
-	head = pipeparts.mktriggergen(pipeline, pipeparts.mkqueue(pipeline, snr), pipeparts.mkqueue(pipeline, chisq), template_bank_filename = bank.template_bank_filename, snr_threshold = bank.snr_threshold, sigmasq = bank.sigmasq)
+	head = pipeparts.mktriggergen(pipeline, pipeparts.mkqueue(pipeline, snr, max_size_bytes = 0, max_size_buffers = 0, max_size_time = BLOCK_DURATION), pipeparts.mkqueue(pipeline, chisq, max_size_bytes = 0, max_size_buffers = 0, max_size_time = BLOCK_DURATION), template_bank_filename = bank.template_bank_filename, snr_threshold = bank.snr_threshold, sigmasq = bank.sigmasq)
 	# FIXME:  add ability to choose this
 	# "lal_blcbctriggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq}
 	if verbose:
@@ -701,7 +703,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data = fake_data, online_data = online_data, injection_filename = injection_filename, frame_segments = frame_segments[instrument], verbose = verbose)
 		# let the frame reader and injection code run in a
 		# different thread than the whitener, etc.,
-		src = pipeparts.mkqueue(pipeline, src)
+		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = BLOCK_DURATION)
 		if veto_segments is not None:
 			hoftdict = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment, track_psd = track_psd)
 		else:
