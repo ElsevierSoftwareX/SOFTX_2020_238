@@ -1,0 +1,61 @@
+#!/usr/bin/python
+
+import sys
+from pylal import rate
+import matplotlib
+matplotlib.use('Agg')
+import pylab
+import numpy
+from glue.ligolw import utils
+
+xmldoc = utils.load_filename(sys.argv[1], gz=sys.argv[1].endswith('gz'), verbose=True).childNodes[0]
+
+wn = rate.gaussian_window2d(9,9, sigma = 2)
+
+pylab.figure(1)
+H1 = rate.binned_array_from_xml(xmldoc, "H1")
+snr = H1.bins[0].centres()[1:-1]
+chi = H1.bins[1].centres()[1:-1]
+ax = pylab.subplot(111)
+pylab.pcolormesh(snr, chi, numpy.log10(rate.filter_array(H1.array.T,wn)+1)[1:-1,1:-1])
+ax.set_yscale('log')
+ax.set_xscale('log')
+pylab.colorbar()
+pylab.xlabel('SNR')
+pylab.ylabel('reduced chi / SNR')
+pylab.xlim([3., 100.])
+pylab.title('log base 10 (number + 1)')
+pylab.grid()
+pylab.savefig('H1snrchi.png',dpi=300)
+
+pylab.figure(2)
+H2 = rate.binned_array_from_xml(xmldoc, "H1")
+snr = H2.bins[0].centres()[1:-1]
+chi = H2.bins[1].centres()[1:-1]
+ax = pylab.subplot(111)
+pylab.pcolormesh(snr, chi, numpy.log10(rate.filter_array(H2.array.T,wn)+1)[1:-1,1:-1])
+ax.set_yscale('log')
+ax.set_xscale('log')
+pylab.colorbar()
+pylab.xlabel('SNR')
+pylab.ylabel('reduced chi / SNR')
+pylab.title('log base 10 (number + 1)')
+pylab.xlim([3., 100.])
+pylab.grid()
+pylab.savefig('H2snrchi.png',dpi=300)
+
+pylab.figure(1)
+L1 = rate.binned_array_from_xml(xmldoc, "L1")
+snr = L1.bins[0].centres()[1:-1]
+chi = L1.bins[1].centres()[1:-1]
+ax = pylab.subplot(111)
+pylab.pcolormesh(snr, chi, numpy.log10(rate.filter_array(L1.array.T,wn)+1)[1:-1,1:-1])
+ax.set_yscale('log')
+ax.set_xscale('log')
+pylab.colorbar()
+pylab.xlabel('SNR')
+pylab.ylabel('reduced chi / SNR')
+pylab.title('log base 10 (number + 1)')
+pylab.xlim([3., 100.])
+pylab.grid()
+pylab.savefig('L1snrchi.png',dpi=300)
