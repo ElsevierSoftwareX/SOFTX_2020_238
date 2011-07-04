@@ -575,7 +575,7 @@ def appsink_new_buffer(elem, output):
 			row.event_id = output.sngl_inspiral_table.get_next_id()
 			output.sngl_inspiral_table.append(row)
 			# update the snr / chisq histogram for the triggers
-			output.snr_chisq_histogram[row.ifo][row.snr, row.chisq] += 1
+			output.snr_chi_histogram[row.ifo][row.snr, row.chisq**.5 / row.snr] += 1
 	if output.connection is not None:
 		output.connection.commit()
 	output.lock.release()
