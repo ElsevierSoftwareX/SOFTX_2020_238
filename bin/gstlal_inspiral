@@ -106,6 +106,7 @@ def parse_command_line():
 	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
 	parser.add_option("--snr-threshold", metavar = "SNR", type = "float", default = 5.5, help = "Set the SNR threshold (default = 5.5).")
 	parser.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.")
+	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.015, help = "Set the coincidence window in seconds (default = 0.015).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 	parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (optional).  This option has no effect if --reference-psd is used.")
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
@@ -397,7 +398,7 @@ output = ligolw_output.Data(
 )
 stream_thinca = lloidparts.StreamThinca(
 	output,
-	coincidence_threshold = 0.015,	# \Delta t, seconds (light travel time will be added)
+	coincidence_threshold = options.coincidence_threshold,
 	coincidence_back_off = 2 * 5,	# coincidence back-off is twice AppSync dt
 	thinca_interval = 50.0	# seconds
 )
