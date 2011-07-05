@@ -178,8 +178,8 @@ class Data(object):
 			dbtables.idmap_sync(self.connection)
 			ligolw_sqlite.insert_from_xmldoc(self.connection, self.xmldoc, preserve_ids = False, verbose = verbose)
 
-			self.xmldoc.unlink()
-			self.xmldoc = dbtables.get_xml(self.connection)
+			self.xmldoc.removeChild(self.xmldoc.childNodes[-1]).unlink()
+			self.xmldoc.appendChild(dbtables.get_xml(self.connection))
 			self.process_table = lsctables.table.get_table(self.xmldoc, lsctables.ProcessTable.tableName)
 			self.process_params_table = lsctables.table.get_table(self.xmldoc, lsctables.ProcessParamsTable.tableName)
 			self.sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
