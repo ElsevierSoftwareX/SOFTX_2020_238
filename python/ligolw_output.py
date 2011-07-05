@@ -211,5 +211,5 @@ class Data(object):
 		for ifo in self.instruments:
 			lw.appendChild(rate.binned_array_to_xml(self.snr_chi_histogram[ifo], ifo))	
 		fname = os.path.split(self.filename)
-		fname =  os.path.join(fname[0], 'snr_chi_%s.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
+		fname =  os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
 		utils.write_filename(xmldoc, fname, gz = fname.endswith(".gz"), verbose = verbose)
