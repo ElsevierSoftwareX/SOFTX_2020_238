@@ -161,7 +161,7 @@ class Data(object):
 		self.snr_chi_histogram = {}
 		self.instruments = instruments
 		for ifo in self.instruments:
-			self.snr_chi_histogram[ifo] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusInfinityBins(3., 100., 500), rate.LogarithmicPlusInfinityBins(.1, 1., 500))))
+			self.snr_chi_histogram[ifo] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 500), rate.LogarithmicPlusOverflowBins(.1, 1., 500))))
 
 		# Add injections table if necessary
 		if injection_filename is not None:
