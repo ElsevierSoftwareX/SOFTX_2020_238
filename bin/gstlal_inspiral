@@ -397,9 +397,9 @@ output = ligolw_output.Data(
 )
 stream_thinca = lloidparts.StreamThinca(
 	output,
-	e_thinca_parameter = 1.0,
+	coincidence_threshold = 0.015,	# \Delta t, seconds (light travel time will be added)
 	coincidence_back_off = 2 * 5,	# coincidence back-off is twice AppSync dt
-	thinca_size = 50.0	# seconds
+	thinca_interval = 50.0	# seconds
 )
 if options.verbose:
 	print >>sys.stderr, "... output document initialized"

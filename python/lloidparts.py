@@ -793,21 +793,25 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 
 
 class StreamThinca(object):
-	def __init__(self, dataobj, e_thinca_parameter, coincidence_back_off, thinca_size = 100.0):
+	def __init__(self, dataobj, coincidence_threshold, coincidence_back_off, thinca_interval = 50.0):
 		self.dataobj = dataobj
 		self.process_table = lsctables.New(lsctables.ProcessTable)
 		self.process_params_table = lsctables.New(lsctables.ProcessParamsTable)
 		self.sngl_inspiral_table = lsctables.New(lsctables.SnglInspiralTable, dataobj.sngl_inspiral_table.columnnames)
 		self.coinc_event_map_table = lsctables.New(lsctables.CoincMapTable)
 		self.last_boundary = -segments.infinity()
-		self.e_thinca_parameter = e_thinca_parameter
+		# when using the normal coincidence function from
+		# ligolw_thinca this is the e-thinca parameter.  when using
+		# a \Delta t only coincidence test it's the \Delta t window
+		# not including the light travel time
+		self.coincidence_threshold = coincidence_threshold
 		self.coincidence_back_off = coincidence_back_off
-		self.thinca_size = thinca_size
+		self.thinca_interval = thinca_interval
 		self.ids = set()
 
 	def run_coincidence(self, boundary):
-		# wait until we've accumulated thinca_size seconds
-		if self.last_boundary + self.thinca_size > boundary:
+		# wait until we've accumulated thinca_interval seconds
+		if self.last_boundary + self.thinca_interval > boundary:
 			return
 
 		# remove triggers that are too old to be useful
@@ -823,6 +827,8 @@ class StreamThinca(object):
 		# divide-by-zero error in the effective SNR function used
 		# for lalapps_inspiral triggers, so we replace it with one
 		# that works for the duration of the ligolw_thinca() call.
+		def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, delta_t):
+			return abs(event_a.get_end() + offset_a - event_b.get_end() - offset_b) > light_travel_time + delta_t
 		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary, boundary)):
 			return ligolw_thinca.coinc_inspiral_end_time(events, offset_vector) not in seg
 		def get_effective_snr(self, fac):
@@ -834,8 +840,8 @@ class StreamThinca(object):
 			EventListType = ligolw_thinca.InspiralEventList,
 			CoincTables = ligolw_thinca.InspiralCoincTables,
 			coinc_definer_row = ligolw_thinca.InspiralCoincDef,
-			event_comparefunc = ligolw_thinca.inspiral_coinc_compare_exact,
-			thresholds = self.e_thinca_parameter,
+			event_comparefunc = event_comparefunc,
+			thresholds = self.coincidence_threshold,
 			ntuple_comparefunc = ntuple_comparefunc
 		)
 		ligolw_thinca.SnglInspiral.get_effective_snr = orig_get_effective_snr
@@ -889,13 +895,17 @@ class StreamThinca(object):
 
 		# copy triggers into real output document
 		if self.coinc_event_map_table:
+			index = dict((row.event_id, row) for row in self.sngl_inspiral_table)
+			self.ids &= set(index)
 			newids = set(self.coinc_event_map_table.getColumnByName("event_id")) - self.ids
 			self.ids |= newids
+			self.coinc_event_map_table.reverse()	# so the loop that follows preserves order
 			while self.coinc_event_map_table:
 				self.dataobj.coinc_event_map_table.append(self.coinc_event_map_table.pop())
-			for row in self.sngl_inspiral_table:
-				if row.event_id in newids:
-					self.dataobj.sngl_inspiral_table.append(row)
+			for id in newids:
+				self.dataobj.sngl_inspiral_table.append(index[id])
+			if self.dataobj.connection is not None:
+				self.dataobj.connection.commit()
 
 	def flush(self):
 		# replace the sngl_inspiral table with our version
