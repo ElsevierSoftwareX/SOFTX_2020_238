@@ -28,6 +28,7 @@ except ImportError:
         # pre 2.5.x
 	from pysqlite2 import dbapi2 as sqlite3
 
+from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
@@ -36,6 +37,7 @@ from glue.ligolw.utils import process as ligolw_process
 from pylal.datatypes import LIGOTimeGPS
 from pylal.date import XLALUTCToGPS
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
+from pylal import ligolw_burca_tailor
 from pylal import ligolw_tisi
 from pylal import rate
 lsctables.LIGOTimeGPS = LIGOTimeGPS
@@ -129,6 +131,75 @@ def make_process_params(options):
 	return params
 
 
+#
+# Parameter distributions
+#
+
+
+class DistributionsStats(object):
+	"""
+	A class used to populate a CoincParamsDistribution instance using
+	event parameter data.
+	"""
+
+	binnings = {
+		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 500), rate.LogarithmicPlusOverflowBins(.1, 1., 500))),
+		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 500), rate.LogarithmicPlusOverflowBins(.1, 1., 500))),
+		"L1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 500), rate.LogarithmicPlusOverflowBins(.1, 1., 500))),
+		"V1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 500), rate.LogarithmicPlusOverflowBins(.1, 1., 500)))
+	}
+
+	filters = {
+		"H1_snr_chi": rate.gaussian_window2d(5, 5, sigma = 20),
+		"H2_snr_chi": rate.gaussian_window2d(5, 5, sigma = 20),
+		"L1_snr_chi": rate.gaussian_window2d(5, 5, sigma = 20),
+		"V1_snr_chi": rate.gaussian_window2d(5, 5, sigma = 20)
+	}
+
+	def __init__(self):
+		self.distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
+
+	def add_single(self, event):
+		self.distributions.add_background({
+			("%s_snr_chi" % event.ifo): (event.snr, event.chisq**.5 / event.snr)
+		})
+
+	def finish(self):
+		self.distributions.finish(filters = self.filters)
+
+
+def get_coincparamsdistributions(xmldoc):
+	coincparamsdistributions, process_id = ligolw_burca_tailor.coinc_params_distributions_from_xml(xmldoc, u"gstlal_inspiral_likelihood")
+	seglists = lsctables.table.get_table(xmldoc, lsctables.SearchSummaryTable.tableName).get_out_segmentlistdict(set([process_id])).coalesce()
+	return coincparamsdistributions, seglists
+
+
+def load_likelihood_data(filenames, verbose = False):
+	coincparamsdistributions = None
+	for n, filename in enumerate(filenames):
+		if verbose:
+			print >>sys.stderr, "%d/%d:" % (n + 1, len(filenames)),
+		xmldoc = utils.load_filename(filename, verbose = verbose)
+		if coincparamsdistributions is None:
+			coincparamsdistributions, seglists = get_coincparamsdistributions(xmldoc)
+		else:
+			a, b = get_coincparamsdistributions(xmldoc)
+			coincparamsdistributions += a
+			seglists |= b
+			del a, b
+		xmldoc.unlink()
+	return coincparamsdistributions, seglists
+
+
+def write_likelihood_data(filename, coincparamsdistributions, seglists, verbose = False):
+	utils.write_filename(ligolw_burca_tailor.gen_likelihood_control(coincparamsdistributions, seglists, name = u"gstlal_inspiral_likelihood"), filename, verbose = verbose, gz = (filename or "stdout").endswith(".gz"))
+
+
+#
+# Output document
+#
+
+
 class Data(object):
 	def __init__(self, filename, process_params, instruments, seg, out_seg, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, verbose = False):
 		self.lock = threading.Lock()
@@ -147,6 +218,9 @@ class Data(object):
 		self.time_slide_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.TimeSlideTable))
 		self.coinc_inspiral_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincInspiralTable))
 
+		# record instruments
+		self.instruments = instruments
+
 		# if we have a time slide table file, add it.  Otherwise,
 		# add an all-zero offset vector to the time_slide table
 		if time_slide_file is not None:
@@ -158,11 +232,7 @@ class Data(object):
 		self.sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))	# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
 
 		# setup histograms
-		# FIXME don't hard code these bins
-		self.snr_chi_histogram = {}
-		self.instruments = instruments
-		for ifo in self.instruments:
-			self.snr_chi_histogram[ifo] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 500), rate.LogarithmicPlusOverflowBins(.1, 1., 500))))
+		self.distribution_stats = DistributionsStats()
 
 		# Add injections table if necessary
 		if injection_filename is not None:
@@ -199,8 +269,9 @@ class Data(object):
 				row.process_id = self.process.process_id
 				row.event_id = self.sngl_inspiral_table.get_next_id()
 				self.sngl_inspiral_table.append(row)
-				# update the snr / chisq histogram for the triggers
-				self.snr_chi_histogram[row.ifo][row.snr, row.chisq**.5 / row.snr] += 1
+				# update the update the parameter
+				# distribution data
+				self.distribution_stats.add_single(row)
 		if self.connection is not None:
 			self.connection.commit()
 		self.lock.release()
@@ -220,10 +291,6 @@ class Data(object):
 			utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose)
 
 		# write out the snr / chisq histograms
-		xmldoc = ligolw.Document()
-		lw = xmldoc.appendChild(ligolw.LIGO_LW())
-		for ifo in self.instruments:
-			lw.appendChild(rate.binned_array_to_xml(self.snr_chi_histogram[ifo], ifo))	
 		fname = os.path.split(self.filename)
-		fname =  os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
-		utils.write_filename(xmldoc, fname, gz = fname.endswith(".gz"), verbose = verbose)
+		fname = os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
+		write_likelihood_data(fname, self.distribution_stats.distributions, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = verbose)
