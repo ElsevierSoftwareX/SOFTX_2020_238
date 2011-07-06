@@ -33,6 +33,7 @@ typedef struct _GstLaltrim {
     GstPad *sinkpad, *srcpad;
 
     guint64 initial_offset, final_offset;
+    gboolean inverse;
 } GstLaltrim;
 
 /* Standard definition defining a class for this element. */

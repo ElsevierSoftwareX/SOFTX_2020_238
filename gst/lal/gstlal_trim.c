@@ -33,17 +33,23 @@
  */
 
 static const char gst_laltrim_doc[] =
-    "Let pass data only in the region specified, and mark everything else\n"
-    "as gaps.\n"
+    "Pass data only inside a region and mark everything else as gaps.\n"
     "\n"
     "The \"offsets\" are media-type specific. For audio buffers, it's the\n"
     "number of samples produced so far. For video buffers, it's generally\n"
     "the frame number. For compressed data, it could be the byte offset in\n"
     "a source or destination file.\n"
     "\n"
+    "If \"inverse=true\" is set, only data *outside* of the specified\n"
+    "region will pass, and data in the inside will be marked as gaps.\n"
+    "\n"
     "Example launch line:\n"
     "  gst-launch audiotestsrc wave=sine num-buffers=100 ! lal_trim "
-    "initial_offset=10240 final-offset=20480 ! alsasink\n";
+    "initial-offset=10240 final-offset=20480 ! alsasink\n"
+    "Another example, saving data to disk:\n"
+    "  gst-launch audiotestsrc num-buffers=10 ! audio/x-raw-float,"
+    "rate=16384,width=64 ! lal_trim initial-offset=1024 final-offset=9216 "
+    "inverse=true ! lal_nxydump ! filesink location=borders.txt\n";
 
 
 #include <math.h>  /* to use round() */
@@ -56,6 +62,7 @@ enum {
     PROP_0,
     PROP_INITIAL_OFFSET,
     PROP_FINAL_OFFSET,
+    PROP_INVERSE,
 };
 
 
@@ -157,6 +164,14 @@ static void gst_laltrim_class_init(GstLaltrimClass *klass)
             "Only let data with offset smaller than this value pass",
             0, G_MAXUINT64, 0,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+    g_object_class_install_property(
+        gobject_class, PROP_INVERSE,
+        g_param_spec_boolean(
+            "inverse", "inverse.",
+            "If set only data *outside* the region will pass.",
+            FALSE,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 
@@ -179,6 +194,7 @@ static void gst_laltrim_init(GstLaltrim *elem, GstLaltrimClass *g_class)
     /* Properties initial value */
     elem->initial_offset = 0;
     elem->final_offset = 0;
+    elem->inverse = FALSE;
 }
 
 
@@ -203,6 +219,9 @@ static void set_property(GObject *object, guint prop_id,
     case PROP_FINAL_OFFSET:
         elem->final_offset = g_value_get_uint64(value);
         break;
+    case PROP_INVERSE:
+        elem->inverse = g_value_get_boolean(value);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
         break;
@@ -221,6 +240,9 @@ get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
         break;
     case PROP_FINAL_OFFSET:
         g_value_set_uint64(value, elem->final_offset);
+        break;
+    case PROP_INVERSE:
+        g_value_set_boolean(value, elem->inverse);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -313,6 +335,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 {
     GstLaltrim *elem = GST_LALTRIM(GST_OBJECT_PARENT(pad));
     guint64 b0, b1, c0, c1;
+    gboolean inv = elem->inverse;
 
     /* Short notation */
     b0 = GST_BUFFER_OFFSET(buf);
@@ -324,13 +347,13 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
      *    b0xxxxxxb1                      or                        b0xxxxxxb1
      */
     if (b1 < c0 || c1 < b0)  /* buffer out of the region we cut */
-        return push_subbuf(elem->srcpad, buf, 0.0, 1.0, TRUE);
+        return push_subbuf(elem->srcpad, buf, 0.0, 1.0, TRUE ^ inv);
 
     /*                  c0-------c1
      *                     b0xb1
      */
     if (c0 <= b0 && b1 <= c1)  /* buffer completely inside the region we cut */
-        return gst_pad_push(elem->srcpad, buf);
+        return push_subbuf(elem->srcpad, buf, 0.0, 1.0, FALSE ^ inv);
 
     /*                  c0-------c1
      *              b0xxxxxxb1
@@ -338,10 +361,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
     if (b0 <= c0 && b1 <= c1) {
         gdouble f = (c0 - b0) / (gdouble) (b1 - b0);
 
-        if (push_subbuf(elem->srcpad, buf, 0.0, f, TRUE) != GST_FLOW_OK)
+        if (push_subbuf(elem->srcpad, buf, 0.0, f, TRUE ^ inv) != GST_FLOW_OK)
             return GST_FLOW_ERROR;
 
-        return push_subbuf(elem->srcpad, buf, f, 1.0, FALSE);
+        return push_subbuf(elem->srcpad, buf, f, 1.0, FALSE ^ inv);
     }
 
     /*                  c0-------c1
@@ -350,10 +373,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
     if (c0 <= b0 && c1 <= b1) {
         gdouble f = (c1 - b0) / (gdouble) (b1 - b0);
 
-        if (push_subbuf(elem->srcpad, buf, 0.0, f, FALSE) != GST_FLOW_OK)
+        if (push_subbuf(elem->srcpad, buf, 0.0, f, FALSE ^ inv) != GST_FLOW_OK)
             return GST_FLOW_ERROR;
 
-        return push_subbuf(elem->srcpad, buf, f, 1.0, TRUE);
+        return push_subbuf(elem->srcpad, buf, f, 1.0, TRUE ^ inv);
     }
 
     /*                  c0-------c1
@@ -362,11 +385,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
     gdouble f0 = (c0 - b0) / (gdouble) (b1 - b0);
     gdouble f1 = (c1 - b0) / (gdouble) (b1 - b0);
 
-    if (push_subbuf(elem->srcpad, buf, 0.0, f0, TRUE) != GST_FLOW_OK)
+    if (push_subbuf(elem->srcpad, buf, 0.0, f0, TRUE ^ inv) != GST_FLOW_OK)
         return GST_FLOW_ERROR;
 
-    if (push_subbuf(elem->srcpad, buf, f0, f1, FALSE) != GST_FLOW_OK)
+    if (push_subbuf(elem->srcpad, buf, f0, f1, FALSE ^ inv) != GST_FLOW_OK)
         return GST_FLOW_ERROR;
 
-    return push_subbuf(elem->srcpad, buf, f1, 1.0, TRUE);
+    return push_subbuf(elem->srcpad, buf, f1, 1.0, TRUE ^ inv);
 }
