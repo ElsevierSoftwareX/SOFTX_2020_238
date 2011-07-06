@@ -39,7 +39,6 @@ import gst
 
 from glue import segments
 from pylal.datatypes import LIGOTimeGPS
-from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
 
 import pipeio
@@ -567,24 +566,9 @@ def mkappsink(pipeline, src, pad_name = None, max_buffers = 1, drop = False, **p
 	return elem
 
 
-def appsink_new_buffer(elem, output):
-	output.lock.acquire()
-	for row in sngl_inspirals_from_buffer(elem.emit("pull-buffer")):
-		if LIGOTimeGPS(row.end_time, row.end_time_ns) in output.search_summary.get_out():
-			row.process_id = output.process.process_id
-			row.event_id = output.sngl_inspiral_table.get_next_id()
-			output.sngl_inspiral_table.append(row)
-			# update the snr / chisq histogram for the triggers
-			output.snr_chi_histogram[row.ifo][row.snr, row.chisq**.5 / row.snr] += 1
-	if output.connection is not None:
-		output.connection.commit()
-	output.lock.release()
-
-
 class AppSync(object):
-	def __init__(self, output, appsinks = [], appsink_new_buffer = appsink_new_buffer, dt = 5):
+	def __init__(self, appsink_new_buffer, appsinks = [], dt = 5):
 		self.lock = threading.Lock()
-		self.output = output
 		self.appsinks = {}
 		for a in appsinks:
 			self.appsinks[a] = None
@@ -626,7 +610,7 @@ class AppSync(object):
 				break
 			if self.appsinks[k] == 1:
 				self.appsinks[k] = 0
-				self.appsink_new_buffer(k, self.output)
+				self.appsink_new_buffer(k)
 
 		self.lock.release()
 

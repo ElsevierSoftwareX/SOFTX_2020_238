@@ -856,10 +856,7 @@ class StreamThinca(object):
 		# record boundary
 		self.last_boundary = boundary
 
-	def appsink_new_buffer(self, elem, dataobj):
-		# make sure we've been passed the correct object
-		assert dataobj is self.dataobj
-
+	def appsink_new_buffer(self, elem):
 		# replace the sngl_inspiral table with our version.  in
 		# addition to replacing the table object in the xml tree,
 		# we also need to replace the attribute in the dataobj
@@ -871,7 +868,7 @@ class StreamThinca(object):
 		# new triggers will have been appended to our
 		# sngl_inspiral_table
 		prev_len = len(self.sngl_inspiral_table)
-		pipeparts.appsink_new_buffer(elem, self.dataobj)
+		self.dataobj.appsink_new_buffer(elem)
 
 		# convert the new row objects to the type required by
 		# ligolw_thinca()

@@ -35,6 +35,7 @@ from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
 from pylal.datatypes import LIGOTimeGPS
 from pylal.date import XLALUTCToGPS
+from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 from pylal import ligolw_tisi
 from pylal import rate
 lsctables.LIGOTimeGPS = LIGOTimeGPS
@@ -190,6 +191,19 @@ class Data(object):
 			self.coinc_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincInspiralTable.tableName)
 		else:
 			self.connection = None
+
+	def appsink_new_buffer(self, elem):
+		self.lock.acquire()
+		for row in sngl_inspirals_from_buffer(elem.emit("pull-buffer")):
+			if LIGOTimeGPS(row.end_time, row.end_time_ns) in self.search_summary.get_out():
+				row.process_id = self.process.process_id
+				row.event_id = self.sngl_inspiral_table.get_next_id()
+				self.sngl_inspiral_table.append(row)
+				# update the snr / chisq histogram for the triggers
+				self.snr_chi_histogram[row.ifo][row.snr, row.chisq**.5 / row.snr] += 1
+		if self.connection is not None:
+			self.connection.commit()
+		self.lock.release()
 
 	def write_output_file(self, verbose = False):
 		if self.connection is not None:
