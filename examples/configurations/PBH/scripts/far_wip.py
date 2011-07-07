@@ -92,8 +92,8 @@ for arrayname in [child.getAttribute("Name") for child in snrchidoc.childNodes[-
 # compute FAP mapping preliminaries
 # FIXME only works for H1 / L1, dont' know how to handle correlated H2, not a problem for *this* search?
 print >>sys.stderr, "computing FAP map preliminaries..."
-H1nonzero = get_nonzero(linearize_array(decimate_array(counts["H1"].array)))
-L1nonzero = get_nonzero(linearize_array(decimate_array(counts["L1"].array)))
+H1nonzero = get_nonzero(linearize_array(decimate_array(counts["H1"].array, stride = options.stride)))
+L1nonzero = get_nonzero(linearize_array(decimate_array(counts["L1"].array, stride = options.stride)))
 
 
 # iterate over files to rank
