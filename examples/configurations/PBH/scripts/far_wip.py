@@ -36,7 +36,7 @@ def FAP_from_ranks(ranks):
 	ranks should be sorted
 	"""
 	FAP = (numpy.arange(len(ranks))+1.) / len(ranks)
-	return interpolate.interp1d(ranks, FAP, fill_value=0, bounds_error=False)
+	return interpolate.interp1d(ranks, FAP, fill_value=0., bounds_error=False)
 	
 def FAR_from_FAP(faps, t):
 	return 0. - numpy.log(1.-faps) / t
@@ -66,6 +66,8 @@ def parse_command_line():
 	parser.add_option("--segments-file", metavar = "filename", help = "Set the name of the xml file containing analysis segments with name 'RESULTS'")
 	parser.add_option("--vetoes-file", metavar = "filename", help = "Set the name of the xml file containing the veto segments with name 'vetoes'")
 	parser.add_option("--stride", metavar = "int", type="int", default=5, help = "set the stride to decimate the bins, default 5")
+	parser.add_option("--additional-trials-factor", metavar = "int", type="int", default=1, help = "set an additional trials factor to apply to the rate, beyond what is measured from the SVD.  Default is 1.")
+
 	options, filenames = parser.parse_args()
 	return options, filenames
 
@@ -142,16 +144,16 @@ for f in filenames:
 		# assign rate
 		coinc_inspiral.false_alarm_rate = (counts["H1"][rho_chi["H1"]] / livetime["H1"]) * (counts["L1"][rho_chi["L1"]] / livetime["L1"]) * 2. * delta_t
 		# FIXME use intersection of H1 and L1 for livetime hack to
-		# avoid going off the edge in interp doesn't really matter,
-		# this is buried in the noise lower bound (the more important
-		# bound :) handled by routine and results in 0.  It shouldn't
+		# avoid going off the edge in interp. Doesn't really matter,
+		# this is buried in the noise. The lower bound (the more important
+		# bound :) is handled by routine and results in 0.  It shouldn't
 		# be possible to have a zero FAR for a non injection by
 		# definition since all events are included in ranking.
 		# However, perhaps the smoothing + stride could be a problem??
 		# We have to make the smoothing bigger than the stride
 		if coinc_inspiral.false_alarm_rate > ranks[-2]:
 			coinc_inspiral.false_alarm_rate = ranks[-2]
-		coinc_inspiral.combined_far = trials_factor * FAR_from_FAP(faps(coinc_inspiral.false_alarm_rate), livetime["H1"])
+		coinc_inspiral.combined_far = trials_factor * options.additional_trials_factor * FAR_from_FAP(faps(coinc_inspiral.false_alarm_rate), livetime["H1"])
 
 
 	# write output
