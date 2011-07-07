@@ -1,0 +1,56 @@
+#!/usr/bin/python
+
+import sys
+from pylal import rate
+import matplotlib
+matplotlib.use('Agg')
+import pylab
+import numpy
+from glue.ligolw import utils
+from scipy import interpolate
+
+def get_smoothed_array(xmldoc, ifo, stride = 5):
+	wn = rate.gaussian_window2d(3*stride,3*stride, sigma=2*stride)
+	A = rate.binned_array_from_xml(xmldoc, ifo)
+	return rate.filter_array(A.array.T,wn)
+
+def decimate_array(arr, stride=5):
+	return arr[::stride, ::stride]
+
+def linearize_array(arr):
+	return arr.reshape((1,arr.shape[0] * arr.shape[1]))
+
+def get_nonzero(arr):
+	return arr[arr != 0]
+
+def possible_rates_array(A, B, Alt, Blt, delta_t):
+	out = numpy.outer(A, B) * 2 * delta_t / Alt / Blt
+	out = out.reshape((out.shape[0] * out.shape[1],))
+	out.sort()
+	return out
+
+def FAP_from_rates(rates):
+	" rates should be sorted "
+	FAP = (numpy.arange(len(rates))+1.) / len(rates)
+	return interpolate.interp1d(rates, FAP)
+	
+	
+
+xmldoc = utils.load_filename(sys.argv[1], gz=sys.argv[1].endswith('gz'), verbose=True).childNodes[0]
+
+H1nonzero = get_nonzero(linearize_array(decimate_array(get_smoothed_array(xmldoc, "H1"))))
+H2nonzero = get_nonzero(linearize_array(decimate_array(get_smoothed_array(xmldoc, "H2"))))
+L1nonzero = get_nonzero(linearize_array(decimate_array(get_smoothed_array(xmldoc, "L1"))))
+
+rates = possible_rates_array(H1nonzero, L1nonzero, 100000., 100000., 0.015)
+
+faps = FAP_from_rates(rates)
+
+testrates = numpy.logspace(numpy.log10(rates[0]), numpy.log10(rates[-1]), 1000)
+
+pylab.figure(1)
+pylab.loglog(rates, (numpy.arange(len(rates))+1.) / len(rates))
+pylab.loglog(testrates, faps(testrates))
+pylab.xlabel('rate')
+pylab.ylabel('prob')
+pylab.savefig('test.png',dpi=300)
