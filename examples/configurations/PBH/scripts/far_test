@@ -23,18 +23,19 @@ def linearize_array(arr):
 def get_nonzero(arr):
 	return arr[arr != 0]
 
-def possible_rates_array(A, B, Alt, Blt, delta_t):
+def possible_ranks_array(A, B, Alt, Blt, delta_t):
 	out = numpy.outer(A, B) * 2 * delta_t / Alt / Blt
 	out = out.reshape((out.shape[0] * out.shape[1],))
 	out.sort()
 	return out
 
-def FAP_from_rates(rates):
-	" rates should be sorted "
-	FAP = (numpy.arange(len(rates))+1.) / len(rates)
-	return interpolate.interp1d(rates, FAP)
+def FAP_from_ranks(ranks):
+	" ranks should be sorted "
+	FAP = (numpy.arange(len(ranks))+1.) / len(ranks)
+	return interpolate.interp1d(ranks, FAP)
 	
-	
+def FAR_from_FAP(faps, t):
+	return 0. - numpy.log(1.-faps) / t
 
 xmldoc = utils.load_filename(sys.argv[1], gz=sys.argv[1].endswith('gz'), verbose=True).childNodes[0]
 
@@ -42,15 +43,14 @@ H1nonzero = get_nonzero(linearize_array(decimate_array(get_smoothed_array(xmldoc
 H2nonzero = get_nonzero(linearize_array(decimate_array(get_smoothed_array(xmldoc, "H2"))))
 L1nonzero = get_nonzero(linearize_array(decimate_array(get_smoothed_array(xmldoc, "L1"))))
 
-rates = possible_rates_array(H1nonzero, L1nonzero, 100000., 100000., 0.015)
-
-faps = FAP_from_rates(rates)
-
-testrates = numpy.logspace(numpy.log10(rates[0]), numpy.log10(rates[-1]), 1000)
+ranks = possible_ranks_array(H1nonzero, L1nonzero, 100000., 100000., 0.015)
+faps = FAP_from_ranks(ranks)
+testranks = numpy.logspace(numpy.log10(ranks[0]), numpy.log10(ranks[-1]), 10000)
 
 pylab.figure(1)
-pylab.loglog(rates, (numpy.arange(len(rates))+1.) / len(rates))
-pylab.loglog(testrates, faps(testrates))
-pylab.xlabel('rate')
-pylab.ylabel('prob')
+pylab.loglog(ranks, FAR_from_FAP((numpy.arange(len(ranks))+1.) / len(ranks),100000) )
+# test the interpolation
+pylab.loglog(testranks, FAR_from_FAP(faps(testranks),100000))
+pylab.xlabel('rank')
+pylab.ylabel('FAR')
 pylab.savefig('test.png',dpi=300)
