@@ -89,6 +89,28 @@ class gstlal_inspiral_job(pipeline.CondorDAGJob):
 		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
 		self.number = 1
 
+class gstlal_inspiral_inj_job(pipeline.CondorDAGJob):
+	"""
+	A gstlal_inspiral job
+	"""
+	def __init__(self, executable=which('gstlal_inspiral'), tag_base='gstlal_inspiral_inj'):
+		"""
+		"""
+		self.__prog__ = 'gstlal_inspiral'
+		self.__executable = executable
+		self.__universe = 'vanilla'
+		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
+		self.add_condor_cmd('getenv','True')
+		self.add_condor_cmd('requirements', '( CAN_RUN_MULTICORE )')
+		self.add_condor_cmd('request_cpus', '8')
+		self.add_condor_cmd('+RequiresMultipleCores', 'True')
+		self.tag_base = tag_base
+		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
+		self.number = 1
+
 class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	"""
 	A gstlal_inspiral node
@@ -202,19 +224,20 @@ try: os.mkdir("logs")
 except: pass
 dag = bank_DAG("trigger_pipe")
 
-inspJob = gstlal_inspiral_job()
+gstlalInspiralJob = gstlal_inspiral_job()
+gstlalInspiralInjJob = gstlal_inspiral_inj_job()
 
 for s in build_bank_string(bank_cache):
 	p_nodes = []
 
 	# non injections
-	noninjnode = gstlal_inspiral_node(inspJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), options.channel, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, flow=40, time_slide_file=options.time_slide_file)
+	noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), options.channel, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, flow=40, time_slide_file=options.time_slide_file)
 	p_nodes.append(noninjnode)
 
 	# injections, if you want them
 	# don't get a time slide file
 	if options.injections is not None:
-		injnode = gstlal_inspiral_node(inspJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), options.channel, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, vetoes=options.vetoes, flow=40)
+		injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), options.channel, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, vetoes=options.vetoes, flow=40)
 		p_nodes.append(injnode)
 
 dag.write_sub_files()
