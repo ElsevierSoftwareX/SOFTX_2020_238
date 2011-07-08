@@ -1,89 +1,48 @@
 ###############################################################################
 # INTRODUCTION
 ###############################################################################
+You always have to setup your environment to use the correct gstlal / lalsuite
+code.  Probably there will eventually be a tag.
 
-Here is how this works.  Each directory does a small bit of the PBH analysis.
-It is assumed that you will copy this directory to somewhere first.  At each
-stage there will be a Makefile that you can modify to your liking.  It will be
-clear what the Makefile does, so have a look.  Here are the basic steps
+To run the sub solar mass search you will need 1 template bank dag total and
+one trigger dag for each week of S5.  Organize yourself similar to this:
 
-here is what I do from this directory (repeat for each "run"):
-
-$ cp -r . ${HOME}/PBH_TEST
-$ cd ${HOME}/PBH_TEST
-
-###############################################################################
-# SEGMENTS
-###############################################################################
-
-You should start by creating the relevant segments for the run.  This includes
-generating software injections if you plan to do them
-
-$ cd segments
-
-if you want to do an injection run type:
-
-$ make injections
-
-otherwise just type:
-
-$ make
+$ mkdir <path to scratch space>/PBH
 
 ###############################################################################
 # TEMPLATE BANKS
 ###############################################################################
 
-Next you need to make template banks.  Regardless of whether or not you plan to
-do injections type:
+This step needs to only be done once, and it needs to be done first.  The
+instructions are relative to this directory where the README file is.  They
+assume you have a directory like the one specified above:
+<path to scratch space>/PBH
 
-$ cd ../bank
+$ cp -r bank <path to scratch space>/PBH/.
+$ cd <path to scratch space>/PBH
 $ make
-$ condor_submit_dag *H1*.dag
-$ condor_submit_dag *H2*.dag
-$ condor_submit_dag *L1*.dag
+$ condor_submit_dag bank.dag
 
-Wait for the dags to finish before going on to the TRIGGERS section
-
-###############################################################################
-# PSD
-###############################################################################
-
-# THIS SECTION IS NO LONGER NEEDED  I am leaving it here in case someone wants
-# to generate reference psds for some other reason. Please skip ahead to
-# triggers
-
-$ cd ../psd
-
-If you want to do an injection run type:
-
-$ make injections
-
-otherwise type
-
-$ make
-
-Then do
-
-$ condor_submit_dag psd_pipe.dag
-
-Wait for the dags to finish before going on to the TRIGGERS section
+Wait for the dag to finish before going on to the TRIGGERS section.  It might
+take 1 day.
 
 ###############################################################################
 # TRIGGERS
 ###############################################################################
 
-Then you are ready to make triggers
+This step will be repeated for every week of data.  There is just one example
+here.  These instructions are relative to this directory where the README file
+is and they assume you have made a directory such as:
+<path to scratch space>/PBH
 
-$ cd ../triggers
+$ mkdir <path to scratch space>/PBH/week1 # change week1 as appropriate
+$ cp triggers/* <path to scratch space>/PBH/week1/. 
+$ cd <path to scratch space>/PBH/week1/.
 
-If you want to do an injection run type:
-
-$ make injections
-
-otherwise type
+Modify the Makefile that you just copied to have an injection seed that
+corresponds to the week number and the appropriate gps start and stop times
 
 $ make
-
-Then do 
-
 $ condor_submit_dag trigger_pipe.dag
+
+Rinse and repeat.
