@@ -44,18 +44,14 @@ L1segmentspadded.xml:
 vetoes.xml: H1vetoes.xml H2vetoes.xml L1vetoes.xml
 	ligolw_add H1vetoes.xml H2vetoes.xml L1vetoes.xml > vetoes.xml
 
-#FIXME don't get segments from frame caches
 frame.H1.cache:
 	ligo_data_find -o H -t H1_RDS_C03_L2 -l  -s $(START) -e $(STOP) --url-type file > frame.H1.cache
-	./cache_to_segments frame.H1.cache segments.H1.xml
 
 frame.H2.cache:
 	ligo_data_find -o H -t H2_RDS_C03_L2 -l  -s $(START) -e $(STOP) --url-type file > frame.H2.cache
-	./cache_to_segments frame.H2.cache segments.H2.xml
 
 frame.L1.cache:
 	ligo_data_find -o L -t L1_RDS_C03_L2 -l  -s $(START) -e $(STOP) --url-type file > frame.L1.cache
-	./cache_to_segments frame.L1.cache segments.L1.xml
 
 frame.cache: frame.H1.cache frame.H2.cache frame.L1.cache
 	cat frame.H1.cache frame.H2.cache frame.L1.cache > frame.cache
