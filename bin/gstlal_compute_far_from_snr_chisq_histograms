@@ -13,7 +13,7 @@ from optparse import OptionParser
 from gstlal.svd_bank import read_bank
 
 def smooth_bins(bA, stride = 5):
-	wn = rate.gaussian_window2d(3*stride,3*stride, sigma=2*stride)
+	wn = rate.gaussian_window2d(3*stride,3*stride, sigma=10)
 	rate.filter_array(bA.array.T,wn)
 
 def decimate_array(arr, stride=5):
