@@ -415,8 +415,8 @@ output = ligolw_output.Data(
 stream_thinca = lloidparts.StreamThinca(
 	output,
 	coincidence_threshold = options.coincidence_threshold,
-	coincidence_back_off = 2 * 5,	# coincidence back-off is twice AppSync dt
-	thinca_interval = 50.0	# seconds
+	coincidence_back_off = 2 * (5 + 4),	# coincidence back-off is twice AppSync dt + 4 seconds to allow for time slide
+	thinca_interval = 500.0	# seconds
 )
 if options.verbose:
 	print >>sys.stderr, "... output document initialized"
