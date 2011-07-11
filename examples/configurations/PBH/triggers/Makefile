@@ -11,10 +11,12 @@ L1_BANK_CACHE = ../bank/mode_L1-TMPLTBANK-858087370-2048_svd_bank.cache
 SEED = 1
 MIN_DIST = 100
 MAX_DIST = 10000
-MIN_MASS = 0.2
-MAX_MASS = 1.0
-MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
-MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
+MIN_MASS1 = 0.2
+MAX_MASS1 = 1.8
+MIN_MASS2 = 0.2
+MAX_MASS2 = 1.0
+MIN_TOTAL_MASS = 0.4
+MAX_TOTAL_MASS = 2.0
 FLOW = 39
 TRIM = 16
 
@@ -90,10 +92,10 @@ injections.xml:
 		--min-distance $(MIN_DIST) \
 		--max-distance $(MAX_DIST) \
 		--m-distr componentMass \
-		--min-mass1 $(MIN_MASS) \
-		--max-mass1 $(MAX_MASS) \
-		--min-mass2 $(MIN_MASS) \
-		--max-mass2 $(MAX_MASS) \
+		--min-mass1 $(MIN_MASS1) \
+		--max-mass1 $(MAX_MASS1) \
+		--min-mass2 $(MIN_MASS2) \
+		--max-mass2 $(MAX_MASS2) \
 		--min-mtotal $(MIN_TOTAL_MASS) \
 		--max-mtotal $(MAX_TOTAL_MASS) \
 		--waveform GeneratePPNtwoPN \
