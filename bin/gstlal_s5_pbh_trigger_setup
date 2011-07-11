@@ -9,6 +9,7 @@ import os
 
 if len(sys.argv) != 3:
 	print >>sys.stderr, "usage %s <week (int)> <path to bank dir>" % (sys.argv[0],)
+	sys.exit()
 
 week = int(sys.argv[1])
 path = os.path.abspath(sys.argv[2])
