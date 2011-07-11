@@ -35,12 +35,12 @@
 static const char gst_laltrim_doc[] =
     "Pass data only inside a region and mark everything else as gaps.\n"
     "\n"
-    "The \"offsets\" are media-type specific. For audio buffers, it's the\n"
-    "number of samples produced so far. For video buffers, it's generally\n"
-    "the frame number. For compressed data, it could be the byte offset in\n"
+    "The \"offsets\" are media-type specific. For audio buffers, it's the "
+    "number of samples produced so far. For video buffers, it's generally "
+    "the frame number. For compressed data, it could be the byte offset in "
     "a source or destination file.\n"
     "\n"
-    "If \"inverse=true\" is set, only data *outside* of the specified\n"
+    "If \"inverse=true\" is set, only data *outside* of the specified "
     "region will pass, and data in the inside will be marked as gaps.\n"
     "\n"
     "Example launch line:\n"
@@ -87,8 +87,8 @@ GST_DEBUG_CATEGORY_STATIC(gst_laltrim_debug);  // define category (statically)
 
 static void additional_initializations(GType type)
 {
-    GST_DEBUG_CATEGORY_INIT(gst_laltrim_debug, "laltrim", 0,
-                            "laltrim element");
+    GST_DEBUG_CATEGORY_INIT(gst_laltrim_debug, "lal_trim", 0,
+                            "gstlal trim element");
 }
 
 GST_BOILERPLATE_FULL(GstLaltrim, gst_laltrim, GstElement,
