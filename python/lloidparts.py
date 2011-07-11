@@ -253,7 +253,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 	#
 
 	if injection_filename is not None:
-		src = pipeparts.mkinjections(pipeline, src, injection_filename)
+		src = pipeparts.mkqueue(pipeline,pipeparts.mkinjections(pipeline, pipeparts.mkqueue(pipeline,src), injection_filename))
 
 	#
 	# done
@@ -828,7 +828,7 @@ class StreamThinca(object):
 		# for lalapps_inspiral triggers, so we replace it with one
 		# that works for the duration of the ligolw_thinca() call.
 		def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, delta_t):
-			return abs(event_a.get_end() + offset_a - event_b.get_end() - offset_b) > light_travel_time + delta_t
+			return (event_a.mass1 != event_b.mass1) or (event_a.mass2 != event_b.mass2) or (abs(event_a.get_end() + offset_a - event_b.get_end() - offset_b) > light_travel_time + delta_t) 
 		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary, boundary)):
 			return ligolw_thinca.coinc_inspiral_end_time(events, offset_vector) not in seg
 		def get_effective_snr(self, fac):
