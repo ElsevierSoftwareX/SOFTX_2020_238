@@ -123,7 +123,8 @@ for f in filenames:
 	# index for rapid coinc tuple look-up
 	coinc_index = {}
 	for row in lsctables.table.get_table(triggerdoc, lsctables.CoincMapTable.tableName):
-		coinc_index.setdefault(row.coinc_event_id, set()).add(index[row.event_id])
+		if row.table_name == "sngl_inspiral":
+			coinc_index.setdefault(row.coinc_event_id, set()).add(index[row.event_id])
 
 
 	# compute rates
