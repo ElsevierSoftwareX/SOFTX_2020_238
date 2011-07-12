@@ -10,6 +10,7 @@ from glue.ligolw.utils import segments as ligolw_segments
 from pylal import inject
 from pylal import rate
 from optparse import OptionParser
+from gstlal import ligolw_output as gstlal_likelihood
 from gstlal.svd_bank import read_bank
 
 def smooth_bins(bA, stride = 5):
@@ -62,11 +63,14 @@ def parse_command_line():
 	parser = OptionParser(
 		description = __doc__
 	)
-	parser.add_option("--background-bins-file", metavar = "filename", help = "Set the name of the xml file containing the snr / chisq background distributions")
-	parser.add_option("--segments-file", metavar = "filename", help = "Set the name of the xml file containing analysis segments with name 'RESULTS'")
-	parser.add_option("--vetoes-file", metavar = "filename", help = "Set the name of the xml file containing the veto segments with name 'vetoes'")
+	parser.add_option("--background-bins-file", metavar = "filename", action = "append", help = "Set the name of the xml file containing the snr / chisq background distributions")
+	parser.add_option("--segments-file", metavar = "filename", help = "Set the name of the xml file containing analysis segments.")
+	parser.add_option("--segments-name", metavar = "name", default = "RESULT", help = "Set the name of the analysis segments (default = 'RESULT').")
+	parser.add_option("--vetoes-file", metavar = "filename", help = "Set the name of the xml file containing the veto segments.")
+	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the vetoes segments (default = 'vetoes').")
 	parser.add_option("--stride", metavar = "int", type="int", default=5, help = "set the stride to decimate the bins, default 5")
 	parser.add_option("--additional-trials-factor", metavar = "int", type="int", default=1, help = "set an additional trials factor to apply to the rate, beyond what is measured from the SVD.  Default is 1.")
+	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
 
 	options, filenames = parser.parse_args()
 	return options, filenames
@@ -76,33 +80,36 @@ def parse_command_line():
 options, filenames = parse_command_line()
 
 
-# load background data
-snrchidoc = utils.load_filename(options.background_bins_file, verbose = True)
-segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.segments_file, verbose = True), "RESULT").coalesce()
-vetoes = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes_file, verbose = True), "vetoes").coalesce()
+# load segment data
+segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.segments_file, verbose = options.verbose), options.segments_name).coalesce()
+vetoes = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes_file, verbose = options.verbose), options.vetoes_name).coalesce()
 
 
 # retrieve rank data
-print >>sys.stderr, "extracting rank data ..."
-counts = {}
-for arrayname in [child.getAttribute("Name") for child in snrchidoc.childNodes[-1].childNodes]:
-	instrument = arrayname.split(":")[0]
-	counts[instrument] = rate.binned_array_from_xml(snrchidoc, instrument)
-	smooth_bins(counts[instrument], stride = options.stride)
+coincparamsdistributions, likelihood_seglists = gstlal_likelihood.load_likelihood_data(options.background_bins_file, verbose = options.verbose)
+print >>sys.stderr, "smoothing bin counts ..."
+#coincparamsdistributions.finish(filters = gstlal_likelihood.DistributionsStats.filters, verbose = options.verbose)
+# FIXME:  the smoothing should be done with the .finish() method.
+# FIXME:  make sure the smoothing is what is intended:  what's coded here
+# is neither computing a sliding average of bin counts, nor an event rate
+# density.
+counts = coincparamsdistributions.background_rates
+for binned_array in counts.values():
+	smooth_bins(binned_array, stride = options.stride)
 
 
 # compute FAP mapping preliminaries
 # FIXME only works for H1 / L1, dont' know how to handle correlated H2, not a problem for *this* search?
 print >>sys.stderr, "computing FAP map preliminaries..."
-H1nonzero = get_nonzero(linearize_array(decimate_array(counts["H1"].array, stride = options.stride)))
-L1nonzero = get_nonzero(linearize_array(decimate_array(counts["L1"].array, stride = options.stride)))
+H1nonzero = get_nonzero(linearize_array(decimate_array(counts["H1_snr_chi"].array, stride = options.stride)))
+L1nonzero = get_nonzero(linearize_array(decimate_array(counts["L1_snr_chi"].array, stride = options.stride)))
 
 
 # iterate over files to rank
 for f in filenames:
 
 	# get the trigger document
-	triggerdoc = utils.load_filename(f, verbose = True)
+	triggerdoc = utils.load_filename(f, verbose = options.verbose)
 
 	print >>sys.stderr, "computing live time ..."
 	# intersect segments with search_summary segments and remove vetoes
@@ -142,7 +149,7 @@ for f in filenames:
 		# retrieve \rho and \chi^{2} values
 		rho_chi = dict((event.ifo, (event.snr, event.chisq**.5 / event.snr)) for event in coinc_index[coinc_inspiral.coinc_event_id])
 		# assign rate
-		coinc_inspiral.false_alarm_rate = (counts["H1"][rho_chi["H1"]] / livetime["H1"]) * (counts["L1"][rho_chi["L1"]] / livetime["L1"]) * 2. * delta_t
+		coinc_inspiral.false_alarm_rate = (counts["H1_snr_chi"][rho_chi["H1"]] / livetime["H1"]) * (counts["L1_snr_chi"][rho_chi["L1"]] / livetime["L1"]) * 2. * delta_t
 		# FIXME use intersection of H1 and L1 for livetime hack to
 		# avoid going off the edge in interp. Doesn't really matter,
 		# this is buried in the noise. The lower bound (the more important
@@ -157,4 +164,4 @@ for f in filenames:
 
 
 	# write output
-	utils.write_filename(triggerdoc, f, gz = True, verbose = True)
+	utils.write_filename(triggerdoc, f, gz = True, verbose = options.verbose)
