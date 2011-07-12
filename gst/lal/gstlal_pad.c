@@ -290,6 +290,13 @@ static GstFlowReturn push_gap(GstPad *pad, enum buf_type type)
     GstLalpad *elem = GST_LALPAD(GST_PAD_PARENT(pad));
     GstBuffer *buf;
 
+    /* First check that we are in condition to create the gap */
+    if (elem->caps == NULL) {
+        GST_ERROR_OBJECT(elem, "caps not setted yet");
+        return GST_FLOW_ERROR;
+    }
+
+    /* Allocate a size-zero buffer */
     result = gst_pad_alloc_buffer(pad, GST_BUFFER_OFFSET_NONE,
                                   0, elem->caps, &buf);
 
@@ -298,6 +305,8 @@ static GstFlowReturn push_gap(GstPad *pad, enum buf_type type)
         return result;
     }
 
+    /* Fill all the buffer metadata */
+    /* -- caps, gap flag and offsets */
     gst_buffer_set_caps(buf, elem->caps);
 
     GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
@@ -310,15 +319,31 @@ static GstFlowReturn push_gap(GstPad *pad, enum buf_type type)
         GST_BUFFER_OFFSET(buf)     = elem->saved_offset_end;
         GST_BUFFER_OFFSET_END(buf) = elem->saved_offset_end + elem->post;
     }
-    GstStructure *str;
-    str = gst_caps_get_structure(elem->caps, 0);
 
-    gint rate, width;
+    /* -- timestamp and duration */
+    GstStructure *str = gst_caps_get_structure(elem->caps, 0);
+    gint rate;
     gst_structure_get_int(str, "rate", &rate);     // read rate
-    gst_structure_get_int(str, "width", &width);   // read width
 
-    // if (given_in_time) blah, else ...
-    //elem->saved_byte - elem->pre * width / 8;
+    /* If we wanted to read things in ns, we could add a property
+     * "format" of something that chooses between number-of-samples
+     * and duration in ns, and then:
+     *   if (elem->format == FORMAT_TIME && type == TYPE_PRE) {
+     *     GST_BUFFER_OFFSET(buf) = elem->saved_offset -
+     *                                 A_X_B__C(elem->pre, rate, GST_SECOND);
+     *     GST_BUFFER_OFFSET_END(buf) = elem->saved_offset;
+     *     GST_BUFFER_DURATION(buf) = elem->pre;
+     *     GST_BUFFER_TIMESTAMP(buf) = elem->saved_t - GST_BUFFER_DURATION(buf);
+     *   } // etc for TYPE_POST
+     *
+     * And if we wanted to fill a buffer with something instead of
+     * sending a gap, we can compute the size using:
+     *
+     *   gint width;
+     *   gst_structure_get_int(str, "width", &width);   // read width
+     *   size = elem->pre * width / 8;
+     */
+
     if (type == TYPE_PRE) {
         GST_BUFFER_DURATION(buf) = A_X_B__C(elem->pre, GST_SECOND, rate);
         GST_BUFFER_TIMESTAMP(buf) = elem->saved_t - GST_BUFFER_DURATION(buf);
@@ -328,6 +353,7 @@ static GstFlowReturn push_gap(GstPad *pad, enum buf_type type)
         GST_BUFFER_TIMESTAMP(buf) = elem->saved_t + elem->saved_duration;
     }
 
+    /* Push it and be done */
     result = gst_pad_push(pad, buf);
     if (result != GST_FLOW_OK) {
         GST_ERROR("gst_pad_push() failed pushing gap buffer");
