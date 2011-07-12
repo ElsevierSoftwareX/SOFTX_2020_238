@@ -1,0 +1,45 @@
+#!/usr/bin/python
+
+from optparse import OptionParser
+import sys
+
+from glue import segments
+from glue import segmentsUtils
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from pylal import rate
+from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
+
+from gstlal import ligolw_output as gstlal_likelihood
+
+
+def parse_command_line():
+	parser = OptionParser(
+		description = __doc__
+	)
+	parser.add_option("--segment", "-s", metavar = "start:stop", default = "0:1000000000", help = "Set the segemnt spanned by this data (default = 0:1000000000).")
+	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
+	options, filenames = parser.parse_args()
+	options.segments = segmentsUtils.from_range_strings([options.segment], boundtype = LIGOTimeGPS)
+	return options, filenames
+
+
+# Parse command line
+options, filenames = parse_command_line()
+
+
+for filename in filenames:
+	# load old-format file
+	snrchidoc = utils.load_filename(filename, verbose = options.verbose)
+
+	# copy bin counts to a DistributionStats object
+	distribution_stats = gstlal_likelihood.DistributionsStats()
+	instruments = set()
+	for name in [child.getAttribute("Name") for child in snrchidoc.childNodes[-1].childNodes]:
+		instrument = name.split(":")[0]
+		instruments.add(instrument)
+		distribution_stats.distributions.background_rates["%s_snr_chi" % instrument] = rate.binned_array_from_xml(snrchidoc, instrument)
+	snrchidoc.unlink()
+
+	# write new-format file
+	gstlal_likelihood.write_likelihood_data(filename, distribution_stats.distributions, segments.segmentlistdict.fromkeys(instruments, options.segments), verbose = options.verbose)
