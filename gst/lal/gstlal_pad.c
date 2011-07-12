@@ -36,10 +36,10 @@
 static const char gst_lalpad_doc[] =
     "Prepend and append (\"pad\") gaps to a stream.\n"
     "\n"
-    "The \"pre\" and \"post\" offsets are media-type specific. For audio "
-    "buffers, it's the number of samples produced so far. For video buffers, "
-    "it's generally the frame number. For compressed data, it could be the "
-    "byte offset in a source or destination file.\n"
+    "The \"pre\" and \"post\" properties can be offsets or durations, "
+    "depending on the \"units\" property. By default they are offsets "
+    "--number of samples in the case of audio buffers, and frame number "
+    "for video buffers.\n"
     "\n"
     "The element works this way:\n"
     "  * When the first buffer arrives it saves the caps and sends a gap (of "
@@ -49,9 +49,8 @@ static const char gst_lalpad_doc[] =
     "\n"
     "Example launch line:\n"
     "  gst-launch audiotestsrc wave=sine "
-    "timestamp-offset=1000000000 num-buffers=5 ! \\\n"
-    "    lal_pad pre=1024 post=2048 ! lal_nxydump ! filesink "
-    "location=test.txt\n";
+    "timestamp-offset=1000000000 num-buffers=5 ! lal_pad pre=1024 post=2048 ! "
+    "alsasink\n";
 
 #include <gst/gst.h>
 #include "gstlal_pad.h"
@@ -63,6 +62,7 @@ enum {
     PROP_0,
     PROP_PRE,
     PROP_POST,
+    PROP_UNITS,
 };
 
 
@@ -75,6 +75,25 @@ static void get_property(GObject *object, guint prop_id,
 
 static gboolean event(GstPad *pad, GstEvent *event);
 static GstFlowReturn chain(GstPad *pad, GstBuffer *buf);
+
+
+/* copied from gstaudiotestsrc.c */
+#define GST_TYPE_LALPAD_UNIT (gst_lalpad_unit_get_type())
+static GType gst_lalpad_unit_get_type()
+{
+    static GType lalpad_unit_type = 0;
+    static const GEnumValue lalpad_units[] = {
+        {GST_LALPAD_UNIT_SAMPLES, "Samples", "samples"},
+        {GST_LALPAD_UNIT_TIME, "Time in nanoseconds", "nanoseconds"},
+        {0, NULL, NULL},
+    };
+
+    if (G_UNLIKELY(lalpad_unit_type == 0)) {
+        lalpad_unit_type = g_enum_register_static("GstLalpadUnit",
+                                                  lalpad_units);
+    }
+    return lalpad_unit_type;
+}
 
 
 /*
@@ -169,6 +188,14 @@ static void gst_lalpad_class_init(GstLalpadClass *klass)
             "Number of gap samples to append to the stream",
             0, G_MAXUINT64, 0,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+    g_object_class_install_property(
+        gobject_class, PROP_UNITS,
+        g_param_spec_enum(
+            "units", "Units",
+            "Units in which the \"pre\" and \"post\" properties are given",
+            GST_TYPE_LALPAD_UNIT, GST_LALPAD_UNIT_SAMPLES,
+            G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 
@@ -192,9 +219,12 @@ static void gst_lalpad_init(GstLalpad *elem, GstLalpadClass *g_class)
     /* Properties initial value */
     elem->pre = 0;
     elem->post = 0;
+    elem->unit = GST_LALPAD_UNIT_SAMPLES;
+
+    /* Info about the buffers being processed */
     elem->saved_offset = 0;
     elem->saved_offset_end = 0;
-    elem->saved_t = 0;
+    elem->saved_timestamp = 0;
     elem->saved_duration = 0;
     elem->first_buffer = TRUE;
     elem->caps = NULL;
@@ -236,6 +266,9 @@ static void set_property(GObject *object, guint prop_id,
     case PROP_POST:
         elem->post = g_value_get_uint64(value);
         break;
+    case PROP_UNITS:
+        elem->unit = g_value_get_enum(value);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
         break;
@@ -243,8 +276,8 @@ static void set_property(GObject *object, guint prop_id,
 }
 
 
-static void
-get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
+static void get_property(GObject *object, guint prop_id,
+                         GValue *value, GParamSpec *pspec)
 {
     GstLalpad *elem = GST_LALPAD(object);
 
@@ -254,6 +287,9 @@ get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
         break;
     case PROP_POST:
         g_value_set_uint64(value, elem->post);
+        break;
+    case PROP_UNITS:
+        g_value_set_enum(value, elem->unit);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -296,62 +332,75 @@ static GstFlowReturn push_gap(GstPad *pad, enum buf_type type)
         return GST_FLOW_ERROR;
     }
 
-    /* Allocate a size-zero buffer */
+    /* Allocate a 0-sized buffer */
     result = gst_pad_alloc_buffer(pad, GST_BUFFER_OFFSET_NONE,
                                   0, elem->caps, &buf);
 
     if (result != GST_FLOW_OK) {
-        GST_ERROR("gst_pad_alloc_buffer() failed allocating gap buffer");
+        GST_ERROR_OBJECT(elem, "failed allocating gap buffer");
         return result;
     }
 
     /* Fill all the buffer metadata */
-    /* -- caps, gap flag and offsets */
+    /* -- caps and gap flag */
     gst_buffer_set_caps(buf, elem->caps);
 
     GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
 
-    if (type == TYPE_PRE) {
-        GST_BUFFER_OFFSET(buf)     = elem->saved_offset - elem->pre;
-        GST_BUFFER_OFFSET_END(buf) = elem->saved_offset;
-    }
-    else if (type == TYPE_POST) {
-        GST_BUFFER_OFFSET(buf)     = elem->saved_offset_end;
-        GST_BUFFER_OFFSET_END(buf) = elem->saved_offset_end + elem->post;
-    }
-
-    /* -- timestamp and duration */
+    /* -- offsets and timestamps */
     GstStructure *str = gst_caps_get_structure(elem->caps, 0);
     gint rate;
     gst_structure_get_int(str, "rate", &rate);     // read rate
 
-    /* If we wanted to read things in ns, we could add a property
-     * "format" of something that chooses between number-of-samples
-     * and duration in ns, and then:
-     *   if (elem->format == FORMAT_TIME && type == TYPE_PRE) {
-     *     GST_BUFFER_OFFSET(buf) = elem->saved_offset -
-     *                                 A_X_B__C(elem->pre, rate, GST_SECOND);
-     *     GST_BUFFER_OFFSET_END(buf) = elem->saved_offset;
-     *     GST_BUFFER_DURATION(buf) = elem->pre;
-     *     GST_BUFFER_TIMESTAMP(buf) = elem->saved_t - GST_BUFFER_DURATION(buf);
-     *   } // etc for TYPE_POST
-     *
-     * And if we wanted to fill a buffer with something instead of
+    /* ---- short notation */
+    guint64 offset = elem->saved_offset, offset_end = elem->saved_offset_end;
+    GstClockTime t = elem->saved_timestamp, dt = elem->saved_duration;
+
+    /* ---- compute the number of samples and the duration of the gap */
+    guint64 nsamples = 0;
+    GstClockTime duration = 0;
+
+    if (elem->unit == GST_LALPAD_UNIT_SAMPLES) {
+        if (type == TYPE_PRE)
+            nsamples = elem->pre;
+        else if (type == TYPE_POST)
+            nsamples = elem->post;
+        duration = A_X_B__C(nsamples, GST_SECOND, rate);
+    }
+    else if (elem->unit == GST_LALPAD_UNIT_TIME) {
+        if (type == TYPE_PRE)
+            duration = elem->pre;
+        else if (type == TYPE_POST)
+            duration = elem->post;
+        nsamples = A_X_B__C(duration, rate, GST_SECOND);
+    }
+
+    if (nsamples == 0) {
+        gst_buffer_unref(buf);
+        return GST_FLOW_OK;  // nothing to send if no samples!
+    }
+
+    /* ---- finally set offsets and timestamps, for PRE or POST */
+    if (type == TYPE_PRE) {
+        GST_BUFFER_OFFSET(buf) = offset - nsamples;
+        GST_BUFFER_OFFSET_END(buf) = offset;
+        GST_BUFFER_DURATION(buf) = duration;
+        GST_BUFFER_TIMESTAMP(buf) = t - duration;
+    }
+    else if (type == TYPE_POST) {
+        GST_BUFFER_OFFSET(buf) = offset_end;
+        GST_BUFFER_OFFSET_END(buf) = offset_end + nsamples;
+        GST_BUFFER_DURATION(buf) = duration;
+        GST_BUFFER_TIMESTAMP(buf) = t + dt;
+    }
+
+    /* If we wanted to fill a buffer with something instead of
      * sending a gap, we can compute the size using:
      *
      *   gint width;
      *   gst_structure_get_int(str, "width", &width);   // read width
      *   size = elem->pre * width / 8;
      */
-
-    if (type == TYPE_PRE) {
-        GST_BUFFER_DURATION(buf) = A_X_B__C(elem->pre, GST_SECOND, rate);
-        GST_BUFFER_TIMESTAMP(buf) = elem->saved_t - GST_BUFFER_DURATION(buf);
-    }
-    else if (type == TYPE_POST) {
-        GST_BUFFER_DURATION(buf) = A_X_B__C(elem->post, GST_SECOND, rate);
-        GST_BUFFER_TIMESTAMP(buf) = elem->saved_t + elem->saved_duration;
-    }
 
     /* Push it and be done */
     result = gst_pad_push(pad, buf);
@@ -429,7 +478,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
     /* Save info from buffer in case it is the first one or the last one */
     elem->saved_offset = GST_BUFFER_OFFSET(buf);
     elem->saved_offset_end = GST_BUFFER_OFFSET_END(buf);
-    elem->saved_t = GST_BUFFER_TIMESTAMP(buf);
+    elem->saved_timestamp = GST_BUFFER_TIMESTAMP(buf);
     elem->saved_duration = GST_BUFFER_DURATION(buf);
 
     /* Send the pre-pad before the buffer, for the 1st buffer */

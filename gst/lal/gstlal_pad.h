@@ -26,15 +26,28 @@
 
 G_BEGIN_DECLS
 
+
+/*
+ * Different types of supported units.
+ */
+typedef enum {
+    GST_LALPAD_UNIT_SAMPLES,
+    GST_LALPAD_UNIT_TIME,
+} GstLalpadUnit;
+
+
 /* Definition of structure storing data for this element. */
 typedef struct _GstLalpad {
     GstElement parent;
 
-    GstPad *sinkpad, *srcpad;
-
+    /* parameters */
     guint64 pre, post;
+    GstLalpadUnit unit;
+
+    /*< private >*/
+    GstPad *sinkpad, *srcpad;
     guint64 saved_offset, saved_offset_end;
-    GstClockTime saved_t, saved_duration;
+    GstClockTime saved_timestamp, saved_duration;
     gboolean first_buffer;
     GstCaps* caps;
 } GstLalpad;
