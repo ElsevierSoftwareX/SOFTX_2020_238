@@ -27,6 +27,7 @@ try:
 except ImportError:
         # pre 2.5.x
 	from pysqlite2 import dbapi2 as sqlite3
+import sys
 
 from glue import segments
 from glue.ligolw import ligolw
@@ -169,12 +170,16 @@ class DistributionsStats(object):
 
 
 def get_coincparamsdistributions(xmldoc):
+	# FIXME:  copied from pylal.stringutils.  make one version that can
+	# be re-used
 	coincparamsdistributions, process_id = ligolw_burca_tailor.coinc_params_distributions_from_xml(xmldoc, u"gstlal_inspiral_likelihood")
 	seglists = lsctables.table.get_table(xmldoc, lsctables.SearchSummaryTable.tableName).get_out_segmentlistdict(set([process_id])).coalesce()
 	return coincparamsdistributions, seglists
 
 
 def load_likelihood_data(filenames, verbose = False):
+	# FIXME:  copied from pylal.stringutils.  make one version that can
+	# be re-used
 	coincparamsdistributions = None
 	for n, filename in enumerate(filenames):
 		if verbose:
