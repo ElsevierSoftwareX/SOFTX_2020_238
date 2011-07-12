@@ -253,7 +253,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False
 	#
 
 	if injection_filename is not None:
-		src = pipeparts.mkqueue(pipeline,pipeparts.mkinjections(pipeline, pipeparts.mkqueue(pipeline,src), injection_filename))
+		src = pipeparts.mkinjections(pipeline, src, injection_filename)
 
 	#
 	# done
