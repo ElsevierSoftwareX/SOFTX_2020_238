@@ -78,6 +78,7 @@
 #include <gstlal_timeslicechisq.h>
 #include <gstlal_specgram.h>
 #include <gstlal_trim.h>
+#include <gstlal_pad.h>
 
 
 /*
@@ -133,6 +134,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_timeslicechisq", GSTLAL_TIMESLICECHISQUARE_TYPE},
 		{"lal_specgram", GSTLAL_SPECGRAM_TYPE},
 		{"lal_trim", GST_TYPE_LALTRIM},
+		{"lal_pad", GST_TYPE_LALPAD},
 		{NULL, 0},
 	};
 
