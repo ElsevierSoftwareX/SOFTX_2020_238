@@ -97,7 +97,6 @@ counts = coincparamsdistributions.background_rates
 for binned_array in counts.values():
 	smooth_bins(binned_array, stride = options.stride)
 
-
 # compute FAP mapping preliminaries
 # FIXME only works for H1 / L1, dont' know how to handle correlated H2, not a problem for *this* search?
 print >>sys.stderr, "computing FAP map preliminaries..."
