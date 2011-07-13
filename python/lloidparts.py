@@ -807,6 +807,8 @@ class StreamThinca(object):
 		self.coincidence_threshold = coincidence_threshold
 		self.coincidence_back_off = coincidence_back_off + max(abs(offset) for offset in dataobj.time_slide_table.getColumnByName("offset"))
 		self.thinca_interval = thinca_interval
+		# set of the event ids of triggers currently in ram that
+		# have already been used in coincidences
 		self.ids = set()
 
 	def run_coincidence(self, boundary):
