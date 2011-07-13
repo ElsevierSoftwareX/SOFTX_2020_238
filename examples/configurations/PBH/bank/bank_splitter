@@ -10,6 +10,7 @@ from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
+from pylal.datatypes import LIGOTimeGPS
 
 def parse_command_line():
         parser = OptionParser()
@@ -57,6 +58,7 @@ for file in filenames:
 					row.f_final=options.max_f_final
 			else:
 				row.f_final=spawaveform.ffinal(row.mass1,row.mass2,'schwarz_isco')
+				row.set_end(LIGOTimeGPS(spawaveform.chirptime(row.mass1,row.mass2,7,options.max_f_final, row.f_final)))
 				if options.max_f_final and (row.f_final > options.max_f_final):
 					row.f_final=options.max_f_final
 	if options.instrument:
