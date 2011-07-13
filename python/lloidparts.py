@@ -693,10 +693,11 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 		inj_seg_list = None
 
 	#
-	# loop over instruments and template banks
+	# construct dictionaries of whitened, conditioned, down-sampled
+	# h(t) streams
 	#
 
-	triggersrc = set()
+	hoftdicts = {}
 	for instrument in detectors:
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
 		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data = fake_data, online_data = online_data, injection_filename = injection_filename, frame_segments = frame_segments[instrument], verbose = verbose)
@@ -704,53 +705,59 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 		# different thread than the whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration)
 		if veto_segments is not None:
-			hoftdict = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration)
+			hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration)
 		else:
-			hoftdict = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, nxydump_segment = nxydump_segment, track_psd = track_psd)
-		for bank in banks[instrument]:
-			suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
-			control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_time = control_peak_time, block_duration = block_duration)
-			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % suffix, segment = nxydump_segment)
-			snrslices = mkLLOIDhoftToSnrSlices(
-				pipeline,
-				hoftdict,
-				bank,
-				control_snksrc,
-				verbose = verbose,
-				logname = suffix,
-				nxydump_segment = nxydump_segment,
-				control_peak_time = control_peak_time,
-				fir_stride = fir_stride,
-				block_duration = block_duration
-			)
-			if chisq_type == 'timeslicechisq':
-				for rate, snrslice in snrslices.items():
-					snrslices[rate] = pipeparts.mktee(pipeline, snrslice)
-			snr = mkLLOIDSnrSlicesToSnr(
-				pipeline,
-				snrslices,
-				block_duration
-			)
-			snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
-			if chisq_type == 'autochisq':
-				snr = pipeparts.mktee(pipeline, snr)
-				chisq = mkLLOIDSnrToAutoChisq(pipeline, snr, bank, block_duration)
-			else:
-				chisq = mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, snrslices, bank, block_duration)
-			# FIXME:  find a way to use less memory without this hack
-			del bank.autocorrelation_bank
-			#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
-			#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(rates)], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
-			triggersrc.add(mkLLOIDSnrChisqToTriggers(
-				pipeline,
-				snr,
-				chisq,
-				bank,
-				verbose = verbose,
-				nxydump_segment = nxydump_segment,
-				logname = suffix,
-				block_duration = block_duration
-			))
+			hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, nxydump_segment = nxydump_segment, track_psd = track_psd)
+
+	#
+	# construct trigger generators
+	#
+
+	triggersrc = set()
+	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
+		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
+		control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_time = control_peak_time, block_duration = block_duration)
+		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % suffix, segment = nxydump_segment)
+		snrslices = mkLLOIDhoftToSnrSlices(
+			pipeline,
+			hoftdicts[instrument],
+			bank,
+			control_snksrc,
+			verbose = verbose,
+			logname = suffix,
+			nxydump_segment = nxydump_segment,
+			control_peak_time = control_peak_time,
+			fir_stride = fir_stride,
+			block_duration = block_duration
+		)
+		if chisq_type == 'timeslicechisq':
+			for rate, snrslice in snrslices.items():
+				snrslices[rate] = pipeparts.mktee(pipeline, snrslice)
+		snr = mkLLOIDSnrSlicesToSnr(
+			pipeline,
+			snrslices,
+			block_duration
+		)
+		snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
+		if chisq_type == 'autochisq':
+			snr = pipeparts.mktee(pipeline, snr)
+			chisq = mkLLOIDSnrToAutoChisq(pipeline, snr, bank, block_duration)
+		else:
+			chisq = mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, snrslices, bank, block_duration)
+		# FIXME:  find a way to use less memory without this hack
+		del bank.autocorrelation_bank
+		#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
+		#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(bank.get_rates())], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
+		triggersrc.add(mkLLOIDSnrChisqToTriggers(
+			pipeline,
+			snr,
+			chisq,
+			bank,
+			verbose = verbose,
+			nxydump_segment = nxydump_segment,
+			logname = suffix,
+			block_duration = block_duration
+		))
 
 	#
 	# if there is more than one trigger source, synchronize the streams
