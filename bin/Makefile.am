@@ -11,4 +11,5 @@ dist_bin_SCRIPTS = \
 	gstlal_compute_far_from_snr_chisq_histograms \
 	gstlal_s5_pbh_segments_trim \
 	gstlal_s5_pbh_trigger_pipe \
-	gstlal_s5_pbh_trigger_setup
+	gstlal_s5_pbh_trigger_setup \
+	gstlal_s5_pbh_summary_page
