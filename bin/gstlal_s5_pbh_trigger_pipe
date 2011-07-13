@@ -558,7 +558,7 @@ if inj_nodes:
 	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[injxml], p_node=[inspinjnode])
 	name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
 	plotnode = lalapps_cbc_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb, injdb], p_node=[sqlitenode])
-	gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="'Sub solar mass from %d to %d'" % (options.gps_start_time, options.gps_stop_time))
+	gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="Sub solar mass from %d to %d" % (options.gps_start_time, options.gps_stop_time))
 
 # all done
 dag.write_sub_files()
