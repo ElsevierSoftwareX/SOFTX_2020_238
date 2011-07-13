@@ -126,7 +126,7 @@ injections.xml:
 		--max-mass2 $(MAX_MASS2) \\
 		--min-mtotal $(MIN_TOTAL_MASS) \\
 		--max-mtotal $(MAX_TOTAL_MASS) \\
-		--waveform GeneratePPNtwoPN \\
+		--waveform GeneratePPNthreePointFivePN \\
 		--taper-injection start \\
 		--disable-spin
 
