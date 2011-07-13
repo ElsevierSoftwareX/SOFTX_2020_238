@@ -116,11 +116,28 @@ class lalapps_run_sqlite_node(pipeline.CondorDAGNode):
 # ligolw_sqlite
 ###############################################################################
 
-class ligolw_sqlite_job(pipeline.CondorDAGJob):
+class ligolw_sqlite_from_xml_job(pipeline.CondorDAGJob):
 	"""
 	A ligolw_sqlite_job
 	"""
-	def __init__(self, executable=which('ligolw_sqlite'), tag_base='ligolw_sqlite'):
+	def __init__(self, executable=which('ligolw_sqlite'), tag_base='ligolw_sqlite_from_xml'):
+		self.__prog__ = 'ligolw_sqlite'
+		self.__executable = executable
+		self.__universe = 'vanilla'
+		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
+		self.add_condor_cmd('getenv','True')
+		self.tag_base = tag_base
+		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
+		self.number = 1
+
+class ligolw_sqlite_to_xml_job(pipeline.CondorDAGJob):
+	"""
+	A ligolw_sqlite_job
+	"""
+	def __init__(self, executable=which('ligolw_sqlite'), tag_base='ligolw_sqlite_to_xml'):
 		self.__prog__ = 'ligolw_sqlite'
 		self.__executable = executable
 		self.__universe = 'vanilla'
@@ -412,9 +429,8 @@ gstlalInspiralJob = gstlal_inspiral_job()
 gstlalInspiralInjJob = gstlal_inspiral_inj_job()
 gstlalInspiralComputeFarFromSnrChisqHistogramsJob = gstlal_compute_far_from_snr_chisq_histograms_job()
 ligolwInspinjFindJob = ligolw_inspinjfind_job()
-ligolwSqliteJob = ligolw_sqlite_job()
-toSqliteJob = ligolw_sqlite_job()
-toXMLJob = ligolw_sqlite_job()
+toSqliteJob = ligolw_sqlite_from_xml_job()
+toXMLJob = ligolw_sqlite_to_xml_job()
 lalappsRunSqliteJob = lalapps_run_sqlite_job()
 
 # go over the banks and set up the sub bank dependent nodes
@@ -449,7 +465,7 @@ for s in build_bank_string(bank_cache):
 
 # non injection DB
 noninjdb = "H1H2L1-ALL-%d-%d-LLOID.sqlite" % (options.gps_start_time, options.gps_stop_time)
-ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_name)[1] for f in noninj_nodes], p_node=far_nodes)
+sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_name)[1] for f in noninj_nodes], p_node=far_nodes)
 # simplify and cluster
 lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[noninjdb], p_node=[sqlitenode])
 
