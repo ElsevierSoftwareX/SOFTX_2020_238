@@ -75,9 +75,10 @@ static void get_property(GObject *object, guint prop_id,
 
 static gboolean event(GstPad *pad, GstEvent *event);
 static GstFlowReturn chain(GstPad *pad, GstBuffer *buf);
+static gboolean setcaps(GstPad *pad, GstCaps *caps);
 
 
-/* copied from gstaudiotestsrc.c */
+/* Copied from gstaudiotestsrc.c */
 #define GST_TYPE_LALPAD_UNIT (gst_lalpad_unit_get_type())
 static GType gst_lalpad_unit_get_type()
 {
@@ -93,6 +94,15 @@ static GType gst_lalpad_unit_get_type()
                                                   lalpad_units);
     }
     return lalpad_unit_type;
+}
+
+
+/* Signals */
+guint signal_rate_changed;
+
+static void rate_changed(GstElement* elem, gint rate, gpointer data)
+{
+    // do nothing, but we are necessary for g_signal_new()
 }
 
 
@@ -168,6 +178,8 @@ static void gst_lalpad_class_init(GstLalpadClass *klass)
     gobject_class->set_property = set_property;
     gobject_class->get_property = get_property;
 
+    klass->rate_changed = rate_changed;
+
     /* Specify properties. See:
      * http://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#g-object-class-install-property
      * and the collection of g_param_spec_*() at
@@ -196,6 +208,11 @@ static void gst_lalpad_class_init(GstLalpadClass *klass)
             "Units in which the \"pre\" and \"post\" properties are given",
             GST_TYPE_LALPAD_UNIT, GST_LALPAD_UNIT_SAMPLES,
             G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+    signal_rate_changed = g_signal_new(
+        "rate-changed", G_TYPE_FROM_CLASS(klass), G_SIGNAL_RUN_FIRST,
+        G_STRUCT_OFFSET(GstLalpadClass, rate_changed),
+        NULL, NULL, g_cclosure_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
 }
 
 
@@ -212,6 +229,7 @@ static void gst_lalpad_init(GstLalpad *elem, GstLalpadClass *g_class)
     elem->sinkpad = gst_element_get_static_pad(GST_ELEMENT(elem), "sink");
     gst_pad_set_event_function(elem->sinkpad, event);
     gst_pad_set_chain_function(elem->sinkpad, chain);
+    gst_pad_set_setcaps_function(elem->sinkpad, setcaps);
 
     /* Pad through which data goes out of the element (src pad) */
     elem->srcpad = gst_element_get_static_pad(GST_ELEMENT(elem), "src");
@@ -228,6 +246,7 @@ static void gst_lalpad_init(GstLalpad *elem, GstLalpadClass *g_class)
     elem->saved_duration = 0;
     elem->first_buffer = TRUE;
     elem->caps = NULL;
+    elem->rate = 0;
 }
 
 
@@ -348,10 +367,6 @@ static GstFlowReturn push_gap(GstPad *pad, enum buf_type type)
     GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
 
     /* -- offsets and timestamps */
-    GstStructure *str = gst_caps_get_structure(elem->caps, 0);
-    gint rate;
-    gst_structure_get_int(str, "rate", &rate);     // read rate
-
     /* ---- short notation */
     guint64 offset = elem->saved_offset, offset_end = elem->saved_offset_end;
     GstClockTime t = elem->saved_timestamp, dt = elem->saved_duration;
@@ -365,14 +380,14 @@ static GstFlowReturn push_gap(GstPad *pad, enum buf_type type)
             nsamples = elem->pre;
         else if (type == TYPE_POST)
             nsamples = elem->post;
-        duration = A_X_B__C(nsamples, GST_SECOND, rate);
+        duration = A_X_B__C(nsamples, GST_SECOND, elem->rate);
     }
     else if (elem->unit == GST_LALPAD_UNIT_TIME) {
         if (type == TYPE_PRE)
             duration = elem->pre;
         else if (type == TYPE_POST)
             duration = elem->post;
-        nsamples = A_X_B__C(duration, rate, GST_SECOND);
+        nsamples = A_X_B__C(duration, elem->rate, GST_SECOND);
     }
 
     if (nsamples == 0) {
@@ -441,9 +456,11 @@ static gboolean event(GstPad *pad, GstEvent *event)
     switch (GST_EVENT_TYPE(event)) {
     case GST_EVENT_NEWSEGMENT:
     {
-        if (!elem->first_buffer)  // put padding for previous block
+        /* If this is not the first buffer, put the padding for the previous */
+        if (!elem->first_buffer)
             if (push_gap(elem->srcpad, TYPE_POST) != GST_FLOW_OK)
                 return FALSE;
+
         elem->first_buffer = TRUE;
         break;
     }
@@ -491,4 +508,29 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 
     /* Send the buffer */
     return gst_pad_push(elem->srcpad, buf);
+}
+
+
+static gboolean setcaps(GstPad *pad, GstCaps *caps)
+{
+    GstLalpad *elem = GST_LALPAD(GST_OBJECT_PARENT(pad));
+    GstStructure *str;
+    gint rate;
+
+    /* Forward-negotiate */
+    if (!gst_pad_set_caps(elem->srcpad, caps))
+        return FALSE;
+
+    /* Negotiation succeeded, so now configure ourselves */
+    str = gst_caps_get_structure(caps, 0);
+    gst_structure_get_int(str, "rate", &rate);
+
+    /* Signal if change of rate */
+    if (rate != elem->rate) {
+        g_signal_emit(G_OBJECT(elem), signal_rate_changed,
+                      0, rate, NULL);
+        elem->rate = rate;
+    }
+
+    return TRUE;
 }

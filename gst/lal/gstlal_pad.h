@@ -50,11 +50,14 @@ typedef struct _GstLalpad {
     GstClockTime saved_timestamp, saved_duration;
     gboolean first_buffer;
     GstCaps* caps;
+    gint rate;
 } GstLalpad;
 
 /* Standard definition defining a class for this element. */
 typedef struct _GstLalpadClass {
     GstElementClass parent_class;
+
+    void (*rate_changed)(GstElement *elem, gint rate, gpointer data);
 } GstLalpadClass;
 
 /* Standard macros for defining types for this element.  */
