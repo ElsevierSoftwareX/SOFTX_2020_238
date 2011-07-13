@@ -77,6 +77,79 @@ class bank_DAG(pipeline.CondorDAG):
 
 
 ###############################################################################
+# gstlal_s5_pbh_summary_page
+###############################################################################
+
+class gstlal_s5_pbh_summary_page_job(pipeline.CondorDAGJob):
+	"""
+	A gstlal_s5_pbh_summary_page job
+	"""
+	def __init__(self, executable=which('gstlal_s5_pbh_summary_page'), tag_base='gstlal_s5_pbh_summary_page'):
+		self.__prog__ = 'lalapps_cbc_plotsummary_job'
+		self.__executable = executable
+		self.__universe = 'vanilla'
+		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
+		self.add_condor_cmd('getenv','True')
+		self.tag_base = tag_base
+		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
+		self.number = 1
+
+class gstlal_s5_pbh_summary_page_node(pipeline.CondorDAGNode):
+	"""
+	A gstlal_s5_pbh_summary_page_node
+	"""
+	def __init__(self, job, dag, name_tag, web_dir, title, open_box=True, p_node=[]):
+		pipeline.CondorDAGNode.__init__(self,job)
+		self.add_var_opt("output-name-tag", name_tag)
+		self.add_var_opt("webserver-dir", web_dir)
+		self.add_var_opt("title", title)
+		if open_box: self.add_var_opt("open-box", "")
+		for p in p_node:
+			self.add_parent(p)
+		dag.add_node(self)
+
+
+###############################################################################
+# lalapps_cbc_plotsummary
+###############################################################################
+
+class lalapps_cbc_plotsummary_job(pipeline.CondorDAGJob):
+	"""
+	A lalapps_cbc_plotsummary_job
+	"""
+	def __init__(self, executable=which('lalapps_cbc_plotsummary'), tag_base='lalapps_cbc_plotsummary'):
+		self.__prog__ = 'lalapps_cbc_plotsummary_job'
+		self.__executable = executable
+		self.__universe = 'vanilla'
+		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
+		self.add_condor_cmd('getenv','True')
+		self.tag_base = tag_base
+		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
+		self.number = 1
+
+class lalapps_cbc_plotsummary_node(pipeline.CondorDAGNode):
+	"""
+	A lalapps_cbc_plotsummary_node
+	"""
+	def __init__(self, job, dag, base, live_time_prog="gstlal_inspiral", input=[], tmp_space=log_path(), p_node=[]):
+		pipeline.CondorDAGNode.__init__(self,job)
+		self.add_var_opt("base", base)
+		self.add_var_opt("live-time-program", live_time_prog)
+		self.add_var_opt("tmp-space", tmp_space)
+		for f in input:
+			self.add_file_arg(f)
+		for p in p_node:
+			self.add_parent(p)
+		dag.add_node(self)
+
+
+###############################################################################
 # lalapps_run_sqlite
 ###############################################################################
 
@@ -432,6 +505,8 @@ ligolwInspinjFindJob = ligolw_inspinjfind_job()
 toSqliteJob = ligolw_sqlite_from_xml_job()
 toXMLJob = ligolw_sqlite_to_xml_job()
 lalappsRunSqliteJob = lalapps_run_sqlite_job()
+plotJob = lalapps_cbc_plotsummary_job()
+pageJob = gstlal_s5_pbh_summary_page_job()
 
 # go over the banks and set up the sub bank dependent nodes
 
@@ -465,7 +540,7 @@ for s in build_bank_string(bank_cache):
 
 # non injection DB
 noninjdb = "H1H2L1-ALL-%d-%d-LLOID.sqlite" % (options.gps_start_time, options.gps_stop_time)
-sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_name)[1] for f in noninj_nodes], p_node=far_nodes)
+sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_name)[1] for f in noninj_nodes] + [options.vetoes], p_node=far_nodes)
 # simplify and cluster
 lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[noninjdb], p_node=[sqlitenode])
 
@@ -473,15 +548,16 @@ lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[nonin
 if inj_nodes:
 	injdb = "H1H2L1-ALL-%d-%d-LLOID-simulations.sqlite" % (options.gps_start_time, options.gps_stop_time)
 	injxml = injdb+".xml.gz"
-	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[os.path.split(f.output_name)[1] for f in inj_nodes], p_node=far_nodes)
+	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[os.path.split(f.output_name)[1] for f in inj_nodes] + [options.vetoes], p_node=far_nodes)
 	# simplify and cluster
 	clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.injection_sql_file, input=[injdb], p_node=[sqlitenode])
 	# Find injections (involves XML conversion)
 	clusternode = ligolw_sqlite_node(toXMLJob, dag, injdb, replace=False, extract=injxml, p_node=[clusternode])
 	inspinjnode = ligolw_inspinjfind_node(ligolwInspinjFindJob, dag, injxml, p_node=[clusternode])
-	ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[injxml], p_node=[inspinjnode])
-
-
+	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[injxml], p_node=[inspinjnode])
+	name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
+	plotnode = lalapps_cbc_plotsummary(plotJob, dag, name_tag, input=[noninjdb, injdb], p_node=[sqlitenode])
+	gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="Sub solar mass from %d to %d" % (options.gps_start_time, options.gps_stop_time))
 
 # all done
 dag.write_sub_files()
