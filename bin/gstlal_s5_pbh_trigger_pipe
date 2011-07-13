@@ -77,6 +77,42 @@ class bank_DAG(pipeline.CondorDAG):
 
 
 ###############################################################################
+# lalapps_run_sqlite
+###############################################################################
+
+class lalapps_run_sqlite_job(pipeline.CondorDAGJob):
+	"""
+	A lalapps_run_sqlite
+	"""
+	def __init__(self, executable=which('lalapps_run_sqlite'), tag_base='lalapps_run_sqlite'):
+		self.__prog__ = 'lalapps_run_sqlite'
+		self.__executable = executable
+		self.__universe = 'vanilla'
+		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
+		self.add_condor_cmd('getenv','True')
+		self.tag_base = tag_base
+		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
+		self.number = 1
+
+class lalapps_run_sqlite_node(pipeline.CondorDAGNode):
+	"""
+	A lalapps_run_sqlite node
+	"""
+	def __init__(self, job, dag, sql_file, input=[], tmp_space=log_path(), p_node=[]):
+		pipeline.CondorDAGNode.__init__(self,job)
+		self.add_var_opt("sql-file", sql_file)
+		self.add_var_opt("tmp-space", tmp_space)
+		for f in input:
+			self.add_file_arg(f)
+		for p in p_node:
+			self.add_parent(p)
+		dag.add_node(self)
+
+
+###############################################################################
 # ligolw_sqlite
 ###############################################################################
 
@@ -101,8 +137,10 @@ class ligolw_sqlite_node(pipeline.CondorDAGNode):
 	"""
 	A ligolw_sqlite node
 	"""
-	def __init__(self, job, dag, database, input=[], replace=True, tmp_space=log_path(), p_node=[]):
+	def __init__(self, job, dag, database, input=[], replace=True, tmp_space=log_path(), extract=None, p_node=[]):
 		pipeline.CondorDAGNode.__init__(self,job)
+		if extract is not None:
+			self.add_var_opt("extract", extract)
 		self.add_var_opt("database", database)
 		if replace:
 			self.add_var_opt("replace", "")
@@ -342,6 +380,8 @@ def parse_command_line():
 	#FIXME get this from the cache?
 	parser.add_option("--channel", metavar = "name", help = "Set the channel name (default=LSC-STRAIN)", default="LSC-STRAIN")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
+	parser.add_option("--sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
+	parser.add_option("--injection-sql-file", metavar = "filename", help = "Set the sql file to apply to injection databases")
 	
 	options, filenames = parser.parse_args()
 
@@ -373,6 +413,9 @@ gstlalInspiralInjJob = gstlal_inspiral_inj_job()
 gstlalInspiralComputeFarFromSnrChisqHistogramsJob = gstlal_compute_far_from_snr_chisq_histograms_job()
 ligolwInspinjFindJob = ligolw_inspinjfind_job()
 ligolwSqliteJob = ligolw_sqlite_job()
+toSqliteJob = ligolw_sqlite_job()
+toXMLJob = ligolw_sqlite_job()
+lalappsRunSqliteJob = lalapps_run_sqlite_job()
 
 # go over the banks and set up the sub bank dependent nodes
 
@@ -395,8 +438,7 @@ for s in build_bank_string(bank_cache):
 	# injections, if you want them
 	if options.injections is not None:
 		injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), options.channel, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, vetoes=options.vetoes, flow=40)
-		inspinjnode = ligolw_inspinjfind_node(ligolwInspinjFindJob, dag, injnode.output_name, p_node=[injnode])
-		far_input_nodes.append(inspinjnode)
+		far_input_nodes.append(injnode)
 		inj_nodes.append(injnode)
 
 	# FAR nodes
@@ -406,11 +448,22 @@ for s in build_bank_string(bank_cache):
 # after all of the FAR ranking is finished put everything into a database
 
 # non injection DB
-ligolw_sqlite_node(ligolwSqliteJob, dag, "H1H2L1-ALL-%d-%d-LLOID.sqlite" % (options.gps_start_time, options.gps_stop_time), input=[os.path.split(f.output_name)[1] for f in noninj_nodes], p_node=far_nodes)
+noninjdb = "H1H2L1-ALL-%d-%d-LLOID.sqlite" % (options.gps_start_time, options.gps_stop_time)
+ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_name)[1] for f in noninj_nodes], p_node=far_nodes)
+# simplify and cluster
+lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[noninjdb])
 
 # injection DB
 if inj_nodes:
-	ligolw_sqlite_node(ligolwSqliteJob, dag, "H1H2L1-ALL-%d-%d-LLOID-simulations.sqlite" % (options.gps_start_time, options.gps_stop_time), input=[os.path.split(f.output_name)[1] for f in inj_nodes], p_node=far_nodes)
+	injdb = "H1H2L1-ALL-%d-%d-LLOID-simulations.sqlite" % (options.gps_start_time, options.gps_stop_time)
+	injxml = injdb+".xml.gz"
+	ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[os.path.split(f.output_name)[1] for f in inj_nodes], p_node=far_nodes)
+	# simplify and cluster
+	clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.injection_sql_file, input=[injdb])
+	# Find injections (involves XML conversion)
+	clusternode = ligolw_sqlite_node(toXMLJob, dag, injdb, replace=False, extract=injxml, p_node=[clusternode])
+	inspinjnode = ligolw_inspinjfind_node(ligolwInspinjFindJob, dag, injxml, p_node=[clusternode])
+	ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[injxml], p_node=[inspinjnode])
 
 
 
