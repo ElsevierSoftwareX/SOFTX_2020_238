@@ -472,6 +472,7 @@ def parse_command_line():
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
 	parser.add_option("--sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
 	parser.add_option("--injection-sql-file", metavar = "filename", help = "Set the sql file to apply to injection databases")
+	parser.add_option("--web-dir", metavar = "directory", help = "Set the web directory like /home/USER/public_html")
 	
 	options, filenames = parser.parse_args()
 
@@ -556,8 +557,8 @@ if inj_nodes:
 	inspinjnode = ligolw_inspinjfind_node(ligolwInspinjFindJob, dag, injxml, p_node=[clusternode])
 	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[injxml], p_node=[inspinjnode])
 	name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
-	plotnode = lalapps_cbc_plotsummary(plotJob, dag, name_tag, input=[noninjdb, injdb], p_node=[sqlitenode])
-	gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="Sub solar mass from %d to %d" % (options.gps_start_time, options.gps_stop_time))
+	plotnode = lalapps_cbc_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb, injdb], p_node=[sqlitenode])
+	gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="'Sub solar mass from %d to %d'" % (options.gps_start_time, options.gps_stop_time))
 
 # all done
 dag.write_sub_files()
