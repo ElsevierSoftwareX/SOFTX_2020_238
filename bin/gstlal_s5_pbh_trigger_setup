@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import sys
 import os
+import socket
 
 def web_path():
 	host = socket.getfqdn()
@@ -149,7 +150,7 @@ injections.xml:
 
 web :
 	mkdir plots
-	mkdir %s/sub-solar-mass-%d-%d 
+	mkdir $(WEBDIR) 
 
 realclean :
 	rm -r *.sub *.dag* *.cache *.sh logs *.xml
