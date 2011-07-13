@@ -2,15 +2,66 @@
 # INTRODUCTION
 ###############################################################################
 You always have to setup your environment to use the correct gstlal / lalsuite
-code.  Probably there will eventually be a tag.
+code.  Probably there will eventually be a tag.  Something like this should be
+done.  
 
-To run the sub solar mass search you will need 1 template bank dag total and
-one trigger dag for each week of S5.  Organize yourself similar to this:
+1) Disable the lscsoft installation (to make sure you have a clean slate).
+Also make sure you don't have anything unusual (including other
+lalsuite/gstlal/gstreamer installations) set up by default at login.
 
+ $ touch .nolscsoft
+
+2) Only a few variables need to be set. Here you will setup only the lscsoft
+packages that you need.  I build lalsuite and gstlal to a directory called
+gstlocal, with _no_ subdirectories.  You should do whatever you are comfortable
+with, but I highly recommend simplicity. For comparison here is my environment
+script:
+
+________________________________________________________________________________________________
+for p in libframe gst libmetaio
+       do
+       PATH=/opt/lscsoft/${p}/bin:$PATH
+       PKG_CONFIG_PATH=/opt/lscsoft/${p}/lib64/pkgconfig:/opt/lscsoft/${p}/lib/pkgconfig:$PKG_CONFIG_PATH
+       PYTHONPATH=/opt/lscsoft/${p}/lib64/python2.4/site-packages:$PYTHONPATH
+       done
+
+# This is an install prefix that does not get used anywhere but this script!!!
+INSTALLPATH=${HOME}/gstlocal
+
+# These are environment variables that do get exported
+PATH=${INSTALLPATH}/bin:$PATH
+PKG_CONFIG_PATH=${INSTALLPATH}/lib64/pkgconfig:${INSTALLPATH}/lib/pkgconfig:$PKG_CONFIG_PATH
+PYTHONPATH=${INSTALLPATH}/lib64/python2.4/site-packages:$PYTHONPATH
+GST_PLUGIN_PATH=${INSTALLPATH}/lib/gstreamer-0.10:${GST_PLUGIN_PATH}
+source ~cbc/opt/sqlite/etc/sqliterc
+
+export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH
+________________________________________________________________________________________________
+
+3) Clone the repositories if you don't have them already
+ $ git clone albert.einstein@ligo-vcs.phys.uwm.edu:/usr/local/git/gstlal.git
+ $ git clone albert.einstein@ligo-vcs.phys.uwm.edu:/usr/local/git/lalsuite.git
+
+4) build lalsuite to the prefix you used in your environment script!!
+
+5) in gstlal setup a remote tracking branch for 'pbh'.  That is where
+we are developing until we understand what is appropriate to put back
+on master.
+
+ $ git checkout -b pbh origin/pbh
+
+6) Build gstlal to the same prefix.
+
+
+To run the sub solar mass search you will need to do a one time setup for all
+of S5.  Then you can run a week at a time for as many weeks as you agree to
+analyze.
+
+I would organize yourself by making a directory such as this:
 $ mkdir <path to scratch space>/PBH
 
 ###############################################################################
-# TEMPLATE BANKS
+# SETUP AND TEMPLATE BANKS
 ###############################################################################
 
 This step needs to only be done once, and it needs to be done first.  The
@@ -20,29 +71,34 @@ assume you have a directory like the one specified above:
 
 $ cp -r bank <path to scratch space>/PBH/.
 $ cd <path to scratch space>/PBH
-$ make
+$ make -j
 $ condor_submit_dag bank.dag
 
 Wait for the dag to finish before going on to the TRIGGERS section.  It might
 take 1 day.
 
 ###############################################################################
-# TRIGGERS
+# ANALYSIS
 ###############################################################################
 
-This step will be repeated for every week of data.  There is just one example
-here.  These instructions are relative to this directory where the README file
-is and they assume you have made a directory such as:
+This step will be repeated for every week of data (or other analysis unit).  
+
+There is just one example here.  These instructions assume you have made a
+directory such as what was recommended in the previous step:
 <path to scratch space>/PBH
 
-$ mkdir <path to scratch space>/PBH/week1 # change week1 as appropriate
-$ cp triggers/* <path to scratch space>/PBH/week1/. 
-$ cd <path to scratch space>/PBH/week1/.
+to analyze an arbitrary gps range (warning each gstlal inspiral job will run
+for the entire range!  More than a week is not recommended!):
 
-Modify the Makefile that you just copied to have an injection seed that
-corresponds to the week number and the appropriate gps start and stop times
+$ cd <path to scratch space>/PBH
 
-$ make
+In this directory you should have a directory called bank
+
+to run a given range of gps-times do (the ones given here are a nice test):
+
+$ gstlal_s5_pbh_trigger_setup 869622409 869645354 bank
+$ cd 869622409-869645354
+$ make -j
 $ condor_submit_dag trigger_pipe.dag
 
 Rinse and repeat.
