@@ -7,21 +7,28 @@ import os
 # S5 ended on 875232014 - Mon Oct 01 00:00:00 GMT 2007
 # This program returns the GPS boundaries that approximately correspond to commissioning breaks during this time starting with 815504413 - Tues Nov 08 12:00:00 EST 2005
 
-if len(sys.argv) != 3:
-	print >>sys.stderr, "usage %s <week (int)> <path to bank dir>" % (sys.argv[0],)
+if len(sys.argv) != 3 or len(sys.argv) != 4:
+	print >>sys.stderr, "usage:\n\t%s <week (int)> <path to bank dir>\n\t%s <gps start (int)> <gps end (int)> <path to bank dir>" % (sys.argv[0],)
 	sys.exit()
 
-week = int(sys.argv[1])
-path = os.path.abspath(sys.argv[2])
+if len(sys.argv) == 3:
+	week = int(sys.argv[1])
+	path = os.path.abspath(sys.argv[2])
 
-if week < 1 or week > 98:
-	print >>sys.stderr, "week must be between 1 and 98"
-	sys.exit(1)
+	if week < 1 or week > 98:
+		print >>sys.stderr, "week must be between 1 and 98"
+		sys.exit(1)
 
-start = 815504413 + (week - 1) * 604800
-end = 815504413 + (week) * 604800
+	start = 815504413 + (week - 1) * 604800
+	end = 815504413 + (week) * 604800
 
-print >>sys.stderr, "\n\tmaking directory for week spanning ", start, end
+if len(sys.argv) == 3:
+	week = 1
+	path = os.path.abspath(sys.argv[3])
+	start = int(sys.argv[1])
+	end = int(sys.argv[2])
+
+print >>sys.stderr, "\n\tmaking directory for ", start, end
 
 dir = "%d-%d" % (start, end)
 os.mkdir("%d-%d" % (start, end))
