@@ -718,7 +718,8 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	control_branch = {}
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
-		control_branch[(instrument, bank)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_time = control_peak_time, block_duration = block_duration)
+		if instrument != "H2":
+			control_branch[(instrument, bank)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_time = control_peak_time, block_duration = block_duration)
 
 	#
 	# construct trigger generators
@@ -727,7 +728,10 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	triggersrc = set()
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
-		control_snksrc = control_branch[(instrument, bank)]
+		if instrument != "H2":
+			control_snksrc = control_branch[(instrument, bank)]
+		else:
+			control_snksrc = (None, control_branch[("H1", bank)][1])
 		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % suffix, segment = nxydump_segment)
 		snrslices = mkLLOIDhoftToSnrSlices(
 			pipeline,
