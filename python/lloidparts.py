@@ -429,7 +429,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	src = pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank, block_stride = fir_stride * bank_fragment.rate, time_domain = max(bank.get_rates()) / bank_fragment.rate >= 32)
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank" % logname)
 	src = pipeparts.mkreblock(pipeline, src, block_duration = block_duration)
-	src = pipeparts.mktee(pipeline, src)
+	#src = pipeparts.mktee(pipeline, src)	# comment-out the tee below if this is uncommented
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, src), "orthosnr_%s.dump" % logname, segment = nxydump_segment)
 
 	#pipeparts.mkvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogram(pipeline, src), "video/x-raw-rgb, width=640, height=480, framerate=1/4"))
@@ -440,10 +440,12 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# aggregator
 	#
 
-	elem = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights),max_size_buffers = 0, max_size_bytes = 0, max_size_time = block_duration), quality = 9)
-	elem = pipeparts.mknofakedisconts(pipeline, elem, silent = True)
-	elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare_resampler" % logname)
-	elem.link(control_snk)
+	if control_snk is not None:
+		src = pipeparts.mktee(pipeline, src)	# comment-out if the tee above is uncommented
+		elem = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights),max_size_buffers = 0, max_size_bytes = 0, max_size_time = block_duration), quality = 9)
+		elem = pipeparts.mknofakedisconts(pipeline, elem, silent = True)
+		elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare_resampler" % logname)
+		elem.link(control_snk)
 
 	#
 	# use sum-of-squares aggregate as gate control for orthogonal SNRs
@@ -710,13 +712,22 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 			hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, nxydump_segment = nxydump_segment, track_psd = track_psd)
 
 	#
+	# build gate control branches
+	#
+
+	control_branch = {}
+	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
+		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
+		control_branch[(instrument, bank)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_time = control_peak_time, block_duration = block_duration)
+
+	#
 	# construct trigger generators
 	#
 
 	triggersrc = set()
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
-		control_snksrc = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_time = control_peak_time, block_duration = block_duration)
+		control_snksrc = control_branch[(instrument, bank)]
 		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % suffix, segment = nxydump_segment)
 		snrslices = mkLLOIDhoftToSnrSlices(
 			pipeline,
