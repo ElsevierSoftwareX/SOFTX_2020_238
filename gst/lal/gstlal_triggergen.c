@@ -144,15 +144,13 @@ static int setup_bankfile_input(GSTLALTriggerGen *element, char *bank_filename)
 		bank = next;
 
 		/*
-		 * initialize data in template.  the end_time and snr are
-		 * 0'ed so that when the templates are used to initialize
-		 * the last_event info those fields are set properly.
-		 * sigmasq is 0'ed to "disable" effective distance
-		 * calculation unless a vector of values are provided via
-		 * the sigmasq element property.
+		 * initialize data in template.  the snr is 0'ed so that
+		 * when the templates are used to initialize the last_event
+		 * info that field is set properly.  sigmasq is 0'ed to
+		 * "disable" effective distance calculation unless a vector
+		 * of values are provided via the sigmasq element property.
 		 */
 
-		XLALGPSSetREAL8(&element->bank[i].end_time, 0);
 		element->bank[i].snr = 0;
 		element->bank[i].sigmasq = 0;
 
@@ -198,14 +196,16 @@ static SnglInspiralTable *record_inspiral_event(SnglInspiralTable *dest, LIGOTim
 	dest->channel[LIGOMETA_CHANNEL_MAX - 1] = 0;
 
 	/*
-	 * fill in the rest of the information
+	 * fill in the rest of the information.  the template end_time is
+	 * treated as an offset that is added to the end time recorded from
+	 * the filter output.
 	 */
 
 	dest->snr = cabs(z);
 	dest->coa_phase = carg(z);
 	dest->chisq = chisq;
 	dest->chisq_dof = 1;
-	dest->end_time = end_time;
+	XLALGPSAddGPS(&dest->end_time, &end_time);
 	dest->end_time_gmst = XLALGreenwichMeanSiderealTime(&end_time);
 	dest->eff_distance = effective_distance(dest->snr, dest->sigmasq);
 
