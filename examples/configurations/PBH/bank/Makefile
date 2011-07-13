@@ -77,7 +77,11 @@ mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz :
 reference_psd.xml: mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz
 	ligolw_add mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz | gzip > reference_psd.xml.gz
 
-dag : H1-TMPLTBANK-871154847-2048.xml reference_psd.xml
+sql :
+	cat uniqueify_coinc_definer.sql uniqueify_time_slide.sql cluster.sql > simplify_and_cluster.sql
+	cat uniqueify_sim_inspiral.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql 
+
+dag : H1-TMPLTBANK-871154847-2048.xml reference_psd.xml sql
 	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > H1_split_bank.cache
 	ls *H2_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > H2_split_bank.cache
 	ls *L1_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > L1_split_bank.cache
