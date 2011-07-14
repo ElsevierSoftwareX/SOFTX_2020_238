@@ -226,8 +226,7 @@ def write_bank(filename, bank, clipping = None, verbose = False):
 	root.appendChild(param.new_param('gate_threshold', ligolw_types.FromPyType[float], bank.gate_threshold))
 	root.appendChild(param.new_param('logname', ligolw_types.FromPyType[str], bank.logname))
 	root.appendChild(param.new_param('snr_threshold', ligolw_types.FromPyType[float], bank.snr_threshold))
-	# note that we override the file name to be this file!  Once written this file should be the filename referenced!  Otherwise the clipping option would be busted.
-	root.appendChild(param.new_param('template_bank_filename', ligolw_types.FromPyType[str], filename))
+	root.appendChild(param.new_param('template_bank_filename', ligolw_types.FromPyType[str], bank.filename))
 
 	if clipping is not None:
 		bank.autocorrelation_bank.real = bank.autocorrelation_bank.real[clipping:-clipping]
