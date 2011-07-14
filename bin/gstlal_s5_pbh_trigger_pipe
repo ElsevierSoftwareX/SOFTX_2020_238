@@ -576,7 +576,7 @@ for s in build_bank_string(bank_cache):
 
 	for f in far_input_nodes:
 		clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[f], p_node=[farnode])
-		cluster_nodes.append(cluster_node)
+		cluster_nodes.append(clusternode)
 
 ###############################################################################
 # after all of the FAR ranking is finished put everything into a database
