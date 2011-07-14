@@ -162,7 +162,7 @@ class DistributionsStats(object):
 
 	def add_single(self, event):
 		self.distributions.add_background({
-			("%s_snr_chi" % event.ifo): (event.snr, (event.chisq / event.chisq_dof)**.5 / event.snr)
+			("%s_snr_chi" % event.ifo): (event.snr, event.chisq**.5 / event.snr)
 		})
 
 	def finish(self):
@@ -274,7 +274,8 @@ class Data(object):
 				row.process_id = self.process.process_id
 				row.event_id = self.sngl_inspiral_table.get_next_id()
 				self.sngl_inspiral_table.append(row)
-				# update the parameter distribution data
+				# update the update the parameter
+				# distribution data
 				self.distribution_stats.add_single(row)
 		if self.connection is not None:
 			self.connection.commit()
