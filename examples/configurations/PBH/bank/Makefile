@@ -12,6 +12,7 @@ HIGH_PASS_FREQ = 30.0
 HIGH_FREQUENCY_CUTOFF = 1023.0
 SAMPLE_RATE = 2048
 NUM_SPLIT_TEMPLATES = 500
+OVERLAP = 50
 MM = 0.95
 
 all : dag
@@ -61,9 +62,9 @@ H1-TMPLTBANK-871154847-2048.xml: frame.H.cache
 		--order twoPN \
 		--verbose \
 		--spectrum-type LIGO \
-		&& ./bank_splitter -i H1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml \
-		&& ./bank_splitter -i H2 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml \
-		&& ./bank_splitter -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml
+		&& ./bank_splitter --overlap $(OVERLAP) -i H1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml \
+		&& ./bank_splitter --overlap $(OVERLAP) -i H2 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml \
+		&& ./bank_splitter --overlap $(OVERLAP) -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml
 
 mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz : 
 	./psd_xml_from_asd_txt H1 mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.txt
