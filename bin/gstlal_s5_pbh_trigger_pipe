@@ -575,7 +575,7 @@ for s in build_bank_string(bank_cache):
 	#
 
 	for f in far_input_nodes:
-		clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[f], p_node=[farnode])
+		clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[f.output_name], p_node=[farnode])
 		cluster_nodes.append(clusternode)
 
 ###############################################################################
