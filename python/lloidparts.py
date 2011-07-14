@@ -717,9 +717,18 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 
 	control_branch = {}
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
+		# FIXME:  this is where we impose the requirement that each
+		# instrument have just one template bank.  make this go
+		# away when we can figure out when two template banks are
+		# the "same".
+		assert len(banks[instrument]) == 1
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 		if instrument != "H2":
-			control_branch[(instrument, bank)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_time = control_peak_time, block_duration = block_duration)
+			# FIXME:  the key should be (instrument, <whatever
+			# identifies a template bank>).  we assume that
+			# all instruments have been given the same template
+			# bank
+			control_branch[instrument] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_time = control_peak_time, block_duration = block_duration)
 
 	#
 	# construct trigger generators
@@ -729,9 +738,13 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 		if instrument != "H2":
-			control_snksrc = control_branch[(instrument, bank)]
+			# FIXME:  the key should be (instrument, <whatever
+			# identifies a template bank>)
+			control_snksrc = control_branch[instrument]
 		else:
-			control_snksrc = (None, control_branch[("H1", bank)][1])
+			# FIXME:  the key should be (instrument, <whatever
+			# identifies a template bank>)
+			control_snksrc = (None, control_branch["H1"][1])
 		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % suffix, segment = nxydump_segment)
 		snrslices = mkLLOIDhoftToSnrSlices(
 			pipeline,
