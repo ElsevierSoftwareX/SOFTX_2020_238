@@ -195,22 +195,6 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 	bank.set_template_bank_filename(template_bank_filename)
 	return bank
 
-def clip_M(bank_fragment, int):
-
-	numcols = len(bank_fragment.mix_matrix[0])
-	bank_fragment.mix_matrix = bank_fragment.mix_matrix[:,int:numcols-int]
-
-	return bank_fragment
-
-def clip_table(sngl_inspiral_table, int):
-
-	numcols = len(sngl_inspiral_table)
-	clipped_table = lsctables.table.new_from_template(sngl_inspiral_table)
-
-	for i in range(numcols-2*int):
-		clipped_table.append(sngl_inspiral_table[int+i])
-
-	return clipped_table
 
 def write_bank(filename, bank, clipping = None, verbose = False):
 	"""Write an SVD bank to a LIGO_LW xml file."""
@@ -227,17 +211,28 @@ def write_bank(filename, bank, clipping = None, verbose = False):
 
 	# Apply clipping option to sngl inspiral table
 	if clipping is not None:
-		sngl_inspiral_table = clip_table(sngl_inspiral_table, clipping/2)
+		sngl_inspiral_table = sngl_inspiral_table[clipping:-clipping]
 
 	# put the bank table into the output document
-	root.appendChild(sngl_inspiral_table)
+	new_sngl_table = lsctables.New(lsctables.SnglInspiralTable)
+	for row in sngl_inspiral_table:
+		new_sngl_table.append(row)
+
+	# put the possibly clipped table into the file
+	root.appendChild(new_sngl_table)
 
 	# Add root-level scalar params
 	root.appendChild(param.new_param('filter_length', ligolw_types.FromPyType[float], bank.filter_length))
 	root.appendChild(param.new_param('gate_threshold', ligolw_types.FromPyType[float], bank.gate_threshold))
 	root.appendChild(param.new_param('logname', ligolw_types.FromPyType[str], bank.logname))
 	root.appendChild(param.new_param('snr_threshold', ligolw_types.FromPyType[float], bank.snr_threshold))
-	root.appendChild(param.new_param('template_bank_filename', ligolw_types.FromPyType[str], bank.template_bank_filename))
+	# note that we override the file name to be this file!  Once written this file should be the filename referenced!  Otherwise the clipping option would be busted.
+	root.appendChild(param.new_param('template_bank_filename', ligolw_types.FromPyType[str], filename))
+
+	if clipping is not None:
+		bank.autocorrelation_bank.real = bank.autocorrelation_bank.real[clipping:-clipping]
+		bank.autocorrelation_bank.imag = bank.autocorrelation_bank.imag[clipping:-clipping]
+		bank.sigmasq = bank.sigmasq[clipping:-clipping]
 
 	# Add root-level arrays
 	root.appendChild(array.from_array('autocorrelation_bank_real', bank.autocorrelation_bank.real))
@@ -251,7 +246,8 @@ def write_bank(filename, bank, clipping = None, verbose = False):
 
 		# Apply clipping option
 		if clipping is not None:
-			frag = clip_M(frag, clipping)
+			frag.mix_matrix = frag.mix_matrix[:,clipping*2:-clipping*2]
+			frag.chifacs = frag.chifacs[clipping*2:-clipping*2]
 
 		# Add scalar params
 		el.appendChild(param.new_param('start', ligolw_types.FromPyType[float], frag.start))
