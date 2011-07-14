@@ -229,8 +229,7 @@ def write_bank(filename, bank, clipping = None, verbose = False):
 	root.appendChild(param.new_param('template_bank_filename', ligolw_types.FromPyType[str], bank.template_bank_filename))
 
 	if clipping is not None:
-		bank.autocorrelation_bank.real = bank.autocorrelation_bank.real[clipping:-clipping]
-		bank.autocorrelation_bank.imag = bank.autocorrelation_bank.imag[clipping:-clipping]
+		bank.autocorrelation_bank = bank.autocorrelation_bank[clipping:-clipping,:]
 		bank.sigmasq = bank.sigmasq[clipping:-clipping]
 
 	# Add root-level arrays
