@@ -4,4 +4,4 @@ else
 NDS_SUBDIRS =
 endif
 
-SUBDIRS = lal python $(NDS_SUBDIRS)
+SUBDIRS = flags lal python $(NDS_SUBDIRS)

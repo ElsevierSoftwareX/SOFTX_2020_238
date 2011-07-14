@@ -19,6 +19,7 @@ AC_CONFIG_FILES([ \
 	python/Makefile \
 	python/elements/Makefile \
 	gst/Makefile \
+	gst/flags/Makefile \
 	gst/nds/Makefile \
 	gst/lal/Makefile \
 	gst/python/Makefile \
