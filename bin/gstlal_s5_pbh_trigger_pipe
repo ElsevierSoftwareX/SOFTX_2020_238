@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-This program makes a dag to generate svd banks
+This program makes a dag for the S5 sub solar mass search
 """
 
 __author__ = 'Chad Hanna <channa@caltech.edu>'
@@ -342,23 +342,21 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		self.add_var_opt("gps-end-time",gps_end_time)
 		self.add_var_opt("channel-name", channel)
 		self.add_var_opt("reference-psd", reference_psd)
-		#self.add_var_opt("ht-gate-threshold", ht_gate_thresh)
 		self.add_var_opt("svd-bank", svd_bank)
 		self.add_var_opt("tmp-space", tmp_space)
-		#self.add_var_opt("chisq-type", "timeslicechisq")
 		self.add_var_opt("track-psd", "")
 		self.add_var_opt("flow", flow)
 		self.add_var_opt("control-peak-time", 10)
-		self.add_var_opt("verbose", "") #FIXME remove this when we are done!
+		self.add_var_opt("verbose", "") #FIXME remove this when we are done debugging?
 		if injections: self.add_var_opt("injections", injections)
 		if vetoes: self.add_var_opt("veto-segments-file", vetoes)
 		path = os.getcwd()
 		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
 		if injections is not None:
-			self.output_name = '%s/%s-%04d-%d-%d-LLOID-simulations.xml.gz' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
+			self.output_name = '%s/%s-%04d-%d-%d-LLOID-simulations.sqlite' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
 		else:
-			self.output_name = '%s/%s-%04d-%d-%d-LLOID.xml.gz' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
-			self.background_name = '%s/%s-%04d-%d-%d-LLOID.xml_snr_chi.xml.gz' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
+			self.output_name = '%s/%s-%04d-%d-%d-LLOID.sqlite' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
+			self.background_name = '%s/%s-%04d-%d-%d-LLOID_snr_chi.xml.gz' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
 		job.number += 1
 		self.add_var_opt("output",self.output_name)
 		dag.output_cache.append(lal.CacheEntry("H1H2L1", "-", segments.segment(gps_start_time, gps_end_time), "file://localhost/%s" % (self.output_name,)))
@@ -384,7 +382,9 @@ class gstlal_compute_far_from_snr_chisq_histograms_job(pipeline.CondorDAGJob):
 		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
 		self.add_condor_cmd('getenv','True')
 		self.add_condor_cmd('requirements', '( CAN_RUN_MULTICORE )')
-		# FIXME, really only needs 1 CPU, this is just a hack to get a bunch of RAM.  These jobs are fast (~minute), and so are not very wasteful of cycles.
+		# FIXME, really only needs 1 CPU, this is just a hack to get a
+		# bunch of RAM.  These jobs are fast (~minute), and so are not
+		# very wasteful of cycles.
 		self.add_condor_cmd('request_cpus', '4')
 		self.add_condor_cmd('+RequiresMultipleCores', 'True')
 		self.tag_base = tag_base
@@ -417,6 +417,21 @@ class gstlal_compute_far_from_snr_chisq_histograms_node(pipeline.CondorDAGNode):
 ###############################################################################
 # Utility functions
 ###############################################################################
+
+def parse_banks(bank_string):
+	out = {}
+	for b in bank_string.split(','):
+		ifo, bank = b.split(':')
+		out.setdefault(ifo, []).append(bank)
+	return out
+
+def get_svd_trials_factor(svd_bank_string, ifo):
+	banks = parse_banks(svd_bank_string)
+	print >> sys.stderr, "reading SVD bank ..."
+	bank = read_bank(banks[ifo][0])
+	for frag in bank.bank_fragments:
+		if frag.rate == 256:
+			return len(frag.singular_values)
 
 # FIXME surely this is in glue
 def parse_cache_str(instr):
@@ -498,7 +513,10 @@ try: os.mkdir("logs")
 except: pass
 dag = bank_DAG("trigger_pipe")
 
+#
 # setup the job classes
+#
+
 gstlalInspiralJob = gstlal_inspiral_job()
 gstlalInspiralInjJob = gstlal_inspiral_inj_job()
 gstlalInspiralComputeFarFromSnrChisqHistogramsJob = gstlal_compute_far_from_snr_chisq_histograms_job()
@@ -509,58 +527,98 @@ lalappsRunSqliteJob = lalapps_run_sqlite_job()
 plotJob = lalapps_cbc_plotsummary_job()
 pageJob = gstlal_s5_pbh_summary_page_job()
 
-# go over the banks and set up the sub bank dependent nodes
+#
+# get approximate trials factor for whole search
+#
 
-trials_factor = num_bank_files(bank_cache)
+bank_trials_factor = num_bank_files(bank_cache)
 
 noninj_nodes = []
 inj_nodes = []
-far_nodes = []
+cluster_nodes = []
+
+###############################################################################
+# loop over banks to run gstlal inspiral pre clustering and far computation
+###############################################################################
 
 for s in build_bank_string(bank_cache):
 
-	# variable to keep track of input to far estimation code
+	#trials_factor = get_svd_trials_factor(s) * bank_trials_factor
+	trials_factor = 1
+
 	far_input_nodes = []
 
+	#
 	# non injections
+	#
+
 	noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), options.channel, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, flow=40, time_slide_file=options.time_slide_file)
 	far_input_nodes.append(noninjnode)
 	noninj_nodes.append(noninjnode)
-
+	
+	#
 	# injections, if you want them
+	#
+
 	if options.injections is not None:
 		injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), options.channel, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, vetoes=options.vetoes, flow=40)
 		far_input_nodes.append(injnode)
 		inj_nodes.append(injnode)
-
+	#
 	# FAR nodes
+	#
+	
 	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, noninjnode.background_name, options.frame_segments_file, options.vetoes, trials_factor, 5, input = [f.output_name for f in far_input_nodes], p_node = far_input_nodes)
-	far_nodes.append(farnode)
+	
+	#
+	# Pre clustering
+	#
 
+	for f in far_input_nodes:
+		clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[f], p_node=[farnode])
+		cluster_nodes.append(cluster_node)
+
+###############################################################################
 # after all of the FAR ranking is finished put everything into a database
+###############################################################################
 
+#
 # non injection DB
+#
+
 noninjdb = "H1H2L1-ALL-%d-%d-LLOID.sqlite" % (options.gps_start_time, options.gps_stop_time)
-sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_name)[1] for f in noninj_nodes] + [options.vetoes], p_node=far_nodes)
-# simplify and cluster
+# merge
+sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_name)[1] for f in noninj_nodes] + [options.vetoes], p_node=cluster_nodes)
+# cluster
 lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[noninjdb], p_node=[sqlitenode])
 
+#
 # injection DB
+#
+
 if inj_nodes:
 	injdb = "H1H2L1-ALL-%d-%d-LLOID-simulations.sqlite" % (options.gps_start_time, options.gps_stop_time)
 	injxml = injdb+".xml.gz"
-	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[os.path.split(f.output_name)[1] for f in inj_nodes] + [options.vetoes], p_node=far_nodes)
-	# simplify and cluster
+	# merge
+	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[os.path.split(f.output_name)[1] for f in inj_nodes] + [options.vetoes], p_node=cluster_nodes)
+	# cluster
 	clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.injection_sql_file, input=[injdb], p_node=[sqlitenode])
-	# Find injections (involves XML conversion)
+	# convert to XML
 	clusternode = ligolw_sqlite_node(toXMLJob, dag, injdb, replace=False, extract=injxml, p_node=[clusternode])
+	# find injections
 	inspinjnode = ligolw_inspinjfind_node(ligolwInspinjFindJob, dag, injxml, p_node=[clusternode])
+	# convert back to sqlite
 	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[injxml], p_node=[inspinjnode])
 	name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
+	# make plots
 	plotnode = lalapps_cbc_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb, injdb], p_node=[sqlitenode])
+	# make a web page
 	gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="Sub solar mass from %d to %d" % (options.gps_start_time, options.gps_stop_time), p_node=[plotnode])
 
+#
 # all done
+#
+
 dag.write_sub_files()
 dag.write_dag()
 dag.write_script()
