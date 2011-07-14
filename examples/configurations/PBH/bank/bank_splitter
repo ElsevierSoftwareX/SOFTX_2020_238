@@ -16,6 +16,7 @@ def parse_command_line():
         parser = OptionParser()
         parser.add_option("-o", "--output-path", metavar = "path", default = ".", help = "Set the path to the directory where output files will be written.  Default is \".\".")
         parser.add_option("-n", "--n", metavar = "count", type = "int", help = "Set the number of templates per output file (required).")
+        parser.add_option("-O", "--overlap", metavar = "count", type = "int", help = "overlap the templates in each file by this amount")
         parser.add_option("-s", "--sort-by", metavar = "{mchirp|ffinal}", help = "Select the template sort order (required).")
 	parser.add_option("-F", "--add-f-final", action = "store_true", help = "Select whether to add f_final to the bank.")
 	parser.add_option("-M", "--max-f-final", metavar = "float", type="float", help = "Max f_final to populate table with; if f_final over mx, use max.")
@@ -93,7 +94,11 @@ for file in filenames:
         		utils.write_filename(xmldoc, output_split, gz = (output_split or "stdout").endswith(".gz"), verbose = options.verbose)
 	else:
                 for first_row in range(0, len(sngl_inspiral_table), options.n):
-                        sngl_inspiral_table_split[:] = sngl_inspiral_table[first_row:first_row + options.n]
+
+			if first_row == 0:
+                                sngl_inspiral_table_split[:] = sngl_inspiral_table[first_row:(first_row + options.n + options.overlap)]
+                        else:
+			        sngl_inspiral_table_split[:] = sngl_inspiral_table[(first_row-options.overlap):(first_row + options.n+options.overlap)]
                         output_split = os.path.join(options.output_path, "%04d-%s" % (first_row/options.n + 1, output))
                         utils.write_filename(xmldoc, output_split, gz = (output_split or "stdout").endswith(".gz"), verbose = options.verbose)
 
