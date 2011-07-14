@@ -336,7 +336,11 @@ banks = {}
 
 for instrument, files in svd_banks.items():
 	for filename in files:
-		banks.setdefault(instrument,[]).append(svd_bank.read_bank(filename, verbose = options.verbose))
+		# FIXME over ride the file name stored in the bank file with
+		# this file name this bank I/O code needs to be fixed
+		bank = svd_bank.read_bank(filename, verbose = options.verbose)
+		bank.filename = filename
+		banks.setdefault(instrument,[]).append(bank)
 
 for instrument, files in template_banks.items():
 	for filename in files:
