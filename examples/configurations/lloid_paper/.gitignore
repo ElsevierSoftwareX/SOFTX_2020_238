@@ -1,0 +1,10 @@
+*.out
+*.xml
+*.so
+*.pdf
+*.bin
+*.png
+*.cache
+*.aux
+*.log
+hoft
