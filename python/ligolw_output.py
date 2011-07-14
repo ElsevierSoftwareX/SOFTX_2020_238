@@ -274,8 +274,7 @@ class Data(object):
 				row.process_id = self.process.process_id
 				row.event_id = self.sngl_inspiral_table.get_next_id()
 				self.sngl_inspiral_table.append(row)
-				# update the update the parameter
-				# distribution data
+				# update the parameter distribution data
 				self.distribution_stats.add_single(row)
 		if self.connection is not None:
 			self.connection.commit()
