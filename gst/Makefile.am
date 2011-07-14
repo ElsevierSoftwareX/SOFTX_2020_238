@@ -4,4 +4,4 @@ else
 NDS_SUBDIRS =
 endif
 
-SUBDIRS = flags lal python $(NDS_SUBDIRS)
+SUBDIRS = audiodelay flags lal python $(NDS_SUBDIRS)
