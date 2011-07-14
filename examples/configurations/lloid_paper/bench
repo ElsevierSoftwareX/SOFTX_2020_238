@@ -1,0 +1,120 @@
+#!/usr/bin/env python
+"""
+
+Calculate impulse response of LLOID filter bank by injecting an impulse
+into the pipeline and recording the output.  Cumulative SNR is recorded
+at each time slice.
+
+"""
+__author__ = "Leo Singer <leo.singer@ligo.org>"
+
+
+# Command line interface
+
+from optparse import OptionParser, Option
+try: # FIXME Python 2.4 compatibility for cluster
+	any
+except:
+	from glue.iterutils import any
+
+opts, args = OptionParser(description = __doc__,
+	option_list = [
+		Option("--svd-bank", help="Name of an SVD'd template bank."),
+		Option("-d", "--downsample-quality", metavar="0..10", help="Downsampling quality setting (default=9).", choices=[str(q) for q in range(11)], default=9),
+		Option("-u", "--upsample-quality", metavar="0..10", help="Upsampling quality setting (default=9).", choices=[str(q) for q in range(11)], default=9),
+	]
+).parse_args()
+
+if any(getattr(opts, key) is None for key in ('svd_bank', 'downsample_quality', 'upsample_quality')):
+	raise RuntimeError("Missing some required arguments")
+
+
+# Pipeline
+
+from gstlal.pipeutil import *
+from gstlal import lloidparts
+from gstlal import pipeparts
+from gstlal.lloidparts import mkelems_fast
+from gstlal.svd_bank import read_bank
+from itertools import groupby
+from operator import attrgetter
+import math, numpy
+
+
+bank = read_bank(opts.svd_bank)
+count_fragments = len(bank.bank_fragments)
+upsample_quality = int(opts.upsample_quality)
+downsample_quality = int(opts.downsample_quality)
+
+pipeline = gst.Pipeline("impulse_response")
+mainloop = gobject.MainLoop()
+handler = lloidparts.LLOIDHandler(mainloop, pipeline)
+
+source_rate = max(bank.get_rates())
+
+# Input stage
+src = mkelems_fast(pipeline,
+	"audiotestsrc", {"wave": "silence", "samplesperbuffer": source_rate, "num-buffers": long(round(bank.filter_length * 10))},
+	"flags", {"clear": "gap"},
+	"capsfilter", {"caps": gst.Caps("audio/x-raw-float,width=64,channels=1,rate=%d" % source_rate)},
+	"progressreport", {"name": "hft", "do-query": False},
+	"tee",
+)[-1]
+
+# Loop over bank fragments, grouped by sample rate, from latest (highest frequency) to earliest (lowest frequency)
+n_rates = len(set(fragment.rate for fragment in bank.bank_fragments))
+for i_rate, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, key=attrgetter('start')), attrgetter('rate'))):
+
+	# Decimation
+	if i_rate == 0:
+		src1 = src
+	else:
+		src1 = mkelems_fast(pipeline,
+			src,
+			"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": gst.SECOND},
+			"audioresample", {"quality": downsample_quality},
+			"lal_nofakedisconts", {"silent": True},
+			"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % rate)},
+			"audioamplify", {"clipping-method": "none", "amplification": 1/math.sqrt(pipeparts.audioresample_variance_gain(downsample_quality, source_rate, rate))},
+			"tee"
+		)[-1]
+
+	accum = mkelems_fast(pipeline,
+		"adder",
+		#"lal_adder", {"sync": True},
+	)[-1]
+
+	if i_rate > 0:
+		accum.link(last_accum)
+
+	if i_rate < n_rates - 1:
+		last_accum = mkelems_fast(pipeline,
+			"audioresample", {"quality": upsample_quality},
+			"lal_nofakedisconts", {"silent": True},
+			"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % rate)},
+			accum
+		)[0]
+
+	for fragment in fragments:
+		mkelems_fast(pipeline,
+			src1,
+			"audiodelay", {"samples": long(round(fragment.start * rate))}, # off by one error here!
+			"lal_nofakedisconts", {"silent": True},
+			"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": long(round(fragment.start * gst.SECOND))},
+			"lal_firbank2", {"fir-matrix": fragment.orthogonal_template_bank, "time-domain": True},
+			"lal_nofakedisconts", {"silent": True},
+			"lal_matrixmixer", {"matrix": fragment.mix_matrix},
+			accum
+		)
+
+	if i_rate == 0:
+		mkelems_fast(pipeline,
+			accum,
+			"progressreport", {"name": "snr", "do-query": False},
+			"fakesink", {"sync": True, "async": False}
+		)
+
+
+pipeline.set_state(gst.STATE_PLAYING)
+gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, "bench")
+mainloop.run()
