@@ -12,6 +12,11 @@ from pylal import rate
 from optparse import OptionParser
 from gstlal import ligolw_output as gstlal_likelihood
 from gstlal.svd_bank import read_bank
+try:
+	import sqlite3
+except ImportError:
+	# pre 2.5.x
+	from pysqlite2 import dbapi2 as sqlite3
 
 def smooth_bins(bA, stride = 5):
 	wn = rate.gaussian_window2d(3*stride,3*stride, sigma=10)
@@ -42,23 +47,6 @@ def FAP_from_ranks(ranks):
 def FAR_from_FAP(faps, t):
 	return 0. - numpy.log(1.-faps) / t
 
-def parse_banks(bank_string):
-	out = {}
-	for b in bank_string.split(','):
-		ifo, bank = b.split(':')
-		out.setdefault(ifo, []).append(bank)
-	return out
-
-def get_trials_factor(triggerdoc, ifo):
-	#FIXME don't hard code some of this stuff !!
-	svd_bank_string, = ligolw_process.get_process_params(triggerdoc, "gstlal_inspiral", "--svd-bank")
-	banks = parse_banks(svd_bank_string)
-	print >> sys.stderr, "reading SVD bank ..."
-	bank = read_bank(banks[ifo][0])
-	for frag in bank.bank_fragments:
-		if frag.rate == 256:
-			return len(frag.singular_values)
-
 def parse_command_line():
 	parser = OptionParser(
 		description = __doc__
@@ -70,6 +58,7 @@ def parse_command_line():
 	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the vetoes segments (default = 'vetoes').")
 	parser.add_option("--stride", metavar = "int", type="int", default=5, help = "set the stride to decimate the bins, default 5")
 	parser.add_option("--additional-trials-factor", metavar = "int", type="int", default=1, help = "set an additional trials factor to apply to the rate, beyond what is measured from the SVD.  Default is 1.")
+	parser.add_option("--tmp-space", metavar = "dir", help = "Set the name of the tmp space if working with sqlite")
 	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
 
 	options, filenames = parser.parse_args()
@@ -103,12 +92,21 @@ print >>sys.stderr, "computing FAP map preliminaries..."
 H1nonzero = get_nonzero(linearize_array(decimate_array(counts["H1_snr_chi"].array, stride = options.stride)))
 L1nonzero = get_nonzero(linearize_array(decimate_array(counts["L1_snr_chi"].array, stride = options.stride)))
 
-
 # iterate over files to rank
 for f in filenames:
-
+	
+	#
 	# get the trigger document
-	triggerdoc = utils.load_filename(f, verbose = options.verbose)
+	#
+
+	# check for sqlite
+	if f.endswith('.sqlite'):
+		from glue.ligolw import dbtables
+		working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
+		connection = sqlite3.connect(working_filename)
+		triggerdoc = dbtables.get_xml(connection)
+	else:
+		triggerdoc = utils.load_filename(f, verbose = options.verbose)
 
 	print >>sys.stderr, "computing live time ..."
 	# intersect segments with search_summary segments and remove vetoes
@@ -135,9 +133,6 @@ for f in filenames:
 	faps = FAP_from_ranks(ranks)
 	coinc_inspiral_table = lsctables.table.get_table(triggerdoc, lsctables.CoincInspiralTable.tableName)
 	N = len(coinc_inspiral_table)
-	# get trials factor
-	trials_factor = max([get_trials_factor(triggerdoc, "H1"), get_trials_factor(triggerdoc, "L1")])
-	print >>sys.stderr, "found trials factor to be %d ..." % (trials_factor,)
 	for n, coinc_inspiral in enumerate(coinc_inspiral_table):
 		if not n % 531:
 			print >>sys.stderr, "\t%d / %d\r" % (n, N),
@@ -160,8 +155,12 @@ for f in filenames:
 		# We have to make the smoothing bigger than the stride
 		if coinc_inspiral.false_alarm_rate > ranks[-2]:
 			coinc_inspiral.false_alarm_rate = ranks[-2]
-		coinc_inspiral.combined_far = trials_factor * options.additional_trials_factor * FAR_from_FAP(faps(coinc_inspiral.false_alarm_rate), livetime["H1"])
+		coinc_inspiral.combined_far = options.additional_trials_factor * FAR_from_FAP(faps(coinc_inspiral.false_alarm_rate), livetime["H1"])
 
-
-	# write output
-	utils.write_filename(triggerdoc, f, gz = True, verbose = options.verbose)
+	if f.endswith('.sqlite'):
+		connection.commit()
+		connection.close()
+		dbtables.put_connection_filename(f, working_filename, verbose = options.verbose)
+	else:
+		# write output
+		utils.write_filename(triggerdoc, f, gz = True, verbose = options.verbose)
