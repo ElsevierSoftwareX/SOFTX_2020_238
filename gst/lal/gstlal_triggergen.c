@@ -575,6 +575,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		SnglInspiralTable *head = NULL;
 		guint nevents = 0;
 
+		g_mutex_lock(element->bank_lock);
 		length = MIN(GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf));
 		if(GST_BUFFER_TIMESTAMP(snrbuf) > GST_BUFFER_TIMESTAMP(chisqbuf)) {
 			t0 = GST_BUFFER_TIMESTAMP(snrbuf);
@@ -586,7 +587,6 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		length = gst_util_uint64_scale_int_round(length > t0 ? length - t0 : 0, element->rate, GST_SECOND);
 
 		GST_DEBUG_OBJECT(element, "searching %" G_GUINT64_FORMAT " samples at %" GST_TIME_SECONDS_FORMAT " for events", length, GST_TIME_SECONDS_ARGS(t0));
-		g_mutex_lock(element->bank_lock);
 		for(sample = 0; sample < length; sample++) {
 			LIGOTimeGPS t;
 			XLALINT8NSToGPS(&t, t0);
@@ -657,7 +657,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 
 			for(dest = ((SnglInspiralTable *) GST_BUFFER_DATA(srcbuf)) + nevents - 1; head; dest--) {
 				SnglInspiralTable *next = head->next;
-				memcpy(dest, head, sizeof(*head));
+				*dest = *head;
 				dest->next = dest + 1;
 				free(head);
 				head = next;
@@ -680,7 +680,8 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 */
 
 	GST_BUFFER_TIMESTAMP(srcbuf) = MAX(GST_BUFFER_TIMESTAMP(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf));
-	GST_BUFFER_DURATION(srcbuf) = MIN(GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf)) - GST_BUFFER_TIMESTAMP(srcbuf);
+	GST_BUFFER_DURATION(srcbuf) = MIN(GST_BUFFER_TIMESTAMP(snrbuf) + GST_BUFFER_DURATION(snrbuf), GST_BUFFER_TIMESTAMP(chisqbuf) + GST_BUFFER_DURATION(chisqbuf));
+	GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_DURATION(srcbuf) < GST_BUFFER_TIMESTAMP(srcbuf) ? 0 : GST_BUFFER_DURATION(srcbuf) - GST_BUFFER_TIMESTAMP(srcbuf);
 
 	if(element->next_output_timestamp != GST_BUFFER_TIMESTAMP(srcbuf))
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_DISCONT);
