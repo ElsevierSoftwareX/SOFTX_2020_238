@@ -22,6 +22,7 @@ libgstlal_la_SOURCES = \
 	gstlal_chisquare.h gstlal_chisquare.c \
 	gstlal_autochisq.h gstlal_autochisq.c \
 	gstlal_firbank.h gstlal_firbank.c \
+	gstlal_firbank2.h gstlal_firbank2.c \
 	gstlal_sumsquares.h gstlal_sumsquares.c \
 	gstlal_togglecomplex.h gstlal_togglecomplex.c \
 	gstlal_nofakedisconts.h gstlal_nofakedisconts.c \

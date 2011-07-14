@@ -68,6 +68,7 @@
 #include <gstlal_chisquare.h>
 #include <gstlal_autochisq.h>
 #include <gstlal_firbank.h>
+#include <gstlal_firbank2.h>
 #include <gstlal_sumsquares.h>
 #include <gstlal_togglecomplex.h>
 #include <gstlal_nofakedisconts.h>
@@ -124,6 +125,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_chisquare", GSTLAL_CHISQUARE_TYPE},
 		{"lal_autochisq", GSTLAL_AUTOCHISQ_TYPE},
 		{"lal_firbank", GSTLAL_FIRBANK_TYPE},
+		{"lal_firbank2", GSTLAL_FIRBANK2_TYPE},
 		{"lal_sumsquares", GSTLAL_SUMSQUARES_TYPE},
 		{"lal_togglecomplex", GSTLAL_TOGGLECOMPLEX_TYPE},
 		{"lal_nofakedisconts", GSTLAL_NOFAKEDISCONTS_TYPE},
