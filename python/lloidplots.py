@@ -28,7 +28,7 @@ import pylab
 
 """Dictionary of strings for useful units."""
 units = {
-	'msun': r"$\mathrm{M}_\odot$",
+	'msun': r"$M_\odot$",
 }
 
 
