@@ -53,7 +53,7 @@ def parse_command_line():
 	)
 	parser.add_option("--background-bins-file", metavar = "filename", action = "append", help = "Set the name of the xml file containing the snr / chisq background distributions")
 	parser.add_option("--segments-file", metavar = "filename", help = "Set the name of the xml file containing analysis segments.")
-	parser.add_option("--segments-name", metavar = "name", default = "RESULT", help = "Set the name of the analysis segments (default = 'RESULT').")
+	parser.add_option("--segments-name", metavar = "name", default = "datasegments", help = "Set the name of the analysis segments (default = 'datasegments').")
 	parser.add_option("--vetoes-file", metavar = "filename", help = "Set the name of the xml file containing the veto segments.")
 	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the vetoes segments (default = 'vetoes').")
 	parser.add_option("--stride", metavar = "int", type="int", default=5, help = "set the stride to decimate the bins, default 5")
