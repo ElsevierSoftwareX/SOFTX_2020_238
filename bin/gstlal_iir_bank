@@ -38,7 +38,7 @@ psd = read_psd(options.reference_psd)
 psd = cbc_template_iir.smooth_and_interp(psd)
 
 # get the iir coefficients
-A, B, D, snrs = cbc_template_iir.makeiirbank(bank, psd_interp = psd, verbose=options.verbose, sampleRate=options.sample_rate, padding=options.padding, flower=options.flow, output_to_xml=True)
+A, B, D, snrs = cbc_template_iir.makeiirbank(bank, psd_interp = psd, verbose=options.verbose, sampleRate=options.sample_rate, padding=options.padding, flower=options.flow, downsample=True, output_to_xml=True)
 
 utils.write_filename(bank, options.output, gz=options.output.endswith('.gz'))
 
