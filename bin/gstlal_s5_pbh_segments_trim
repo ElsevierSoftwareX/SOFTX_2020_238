@@ -13,7 +13,7 @@ trim = int(sys.argv[2])
 
 xmldoc = utils.load_filename(fname, verbose = True)
 
-segs = ligolw_segments.segmenttable_get_by_name(xmldoc, "RESULT").contract(trim)
+segs = ligolw_segments.segmenttable_get_by_name(xmldoc, "datasegments").contract(trim)
 
 
 xmldoc = ligolw.Document()
@@ -32,7 +32,7 @@ for ifo in segs.keys():
 	row.segment_def_id = id
 	row.creator_db = None
 	row.process_id = None
-	row.name = "RESULT"
+	row.name = "datasegments"
 	row.version = None
 	row.comment = None
 	row.insertion_time = None
