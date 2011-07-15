@@ -583,19 +583,20 @@ for s in build_bank_string(bank_cache):
 
 noninjdb = "H1H2L1-ALL-%d-%d-LLOID.sqlite" % (options.gps_start_time, options.gps_stop_time)
 # merge
-sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_name)[1] for f in noninj_nodes] + [options.vetoes], p_node=cluster_nodes)
+sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_name)[1] for f in noninj_nodes] + [options.vetoes, options.frame_segments_file], p_node=cluster_nodes)
 # cluster
 lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[noninjdb], p_node=[sqlitenode])
 
 #
 # injection DB
+# FIXME someday support more than one injection run I guess
 #
 
 if inj_nodes:
 	injdb = "H1H2L1-ALL-%d-%d-LLOID-simulations.sqlite" % (options.gps_start_time, options.gps_stop_time)
 	injxml = injdb+".xml.gz"
 	# merge
-	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[os.path.split(f.output_name)[1] for f in inj_nodes] + [options.vetoes], p_node=cluster_nodes)
+	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[os.path.split(f.output_name)[1] for f in inj_nodes] + [options.vetoes, options.frame_segments_file], p_node=cluster_nodes)
 	# cluster
 	clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.injection_sql_file, input=[injdb], p_node=[sqlitenode])
 	# convert to XML
