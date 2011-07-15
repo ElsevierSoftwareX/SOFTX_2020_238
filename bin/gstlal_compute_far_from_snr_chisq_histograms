@@ -73,6 +73,8 @@ options, filenames = parse_command_line()
 segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.segments_file, verbose = options.verbose), options.segments_name).coalesce()
 vetoes = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes_file, verbose = options.verbose), options.vetoes_name).coalesce()
 
+#FIXME for now our live time is defined by this
+H1L1livetime = float(abs((segments - vetoes).intersection(set(("H1","L1")))))
 
 # retrieve rank data
 coincparamsdistributions, likelihood_seglists = gstlal_likelihood.load_likelihood_data(options.background_bins_file, verbose = options.verbose)
@@ -125,6 +127,7 @@ for f in filenames:
 			coinc_index.setdefault(row.coinc_event_id, set()).add(index[row.event_id])
 
 
+	# FIXME only works for H1,L1
 	# compute rates
 	print >>sys.stderr, "computing rates ..."
 	coincidence_threshold, = ligolw_process.get_process_params(triggerdoc, "gstlal_inspiral", "--coincidence-threshold")
@@ -145,17 +148,10 @@ for f in filenames:
 		rho_chi = dict((event.ifo, (event.snr, event.chisq**.5 / event.snr)) for event in coinc_index[coinc_inspiral.coinc_event_id])
 		# assign rate
 		coinc_inspiral.false_alarm_rate = (counts["H1_snr_chi"][rho_chi["H1"]] / livetime["H1"]) * (counts["L1_snr_chi"][rho_chi["L1"]] / livetime["L1"]) * 2. * delta_t
-		# FIXME use intersection of H1 and L1 for livetime hack to
-		# avoid going off the edge in interp. Doesn't really matter,
-		# this is buried in the noise. The lower bound (the more important
-		# bound :) is handled by routine and results in 0.  It shouldn't
-		# be possible to have a zero FAR for a non injection by
-		# definition since all events are included in ranking.
-		# However, perhaps the smoothing + stride could be a problem??
-		# We have to make the smoothing bigger than the stride
+		# FIXME Hack to avoid going off the edge in interp
 		if coinc_inspiral.false_alarm_rate > ranks[-2]:
 			coinc_inspiral.false_alarm_rate = ranks[-2]
-		coinc_inspiral.combined_far = options.additional_trials_factor * FAR_from_FAP(faps(coinc_inspiral.false_alarm_rate), livetime["H1"])
+		coinc_inspiral.combined_far = options.additional_trials_factor * FAR_from_FAP(faps(coinc_inspiral.false_alarm_rate), H1L1livetime)
 
 	if f.endswith('.sqlite'):
 		connection.commit()
