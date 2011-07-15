@@ -121,6 +121,7 @@ frame.cache: frame.H1.cache frame.H2.cache frame.L1.cache
 
 segments.xml: H1segmentspadded.xml H2segmentspadded.xml L1segmentspadded.xml
 	ligolw_add --output segments.xml H1segmentspadded.xml H2segmentspadded.xml L1segmentspadded.xml
+	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segments.xml
 
 injections.xml:
 	lalapps_inspinj \\
