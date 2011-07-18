@@ -62,7 +62,8 @@ def iir_bank(pipeline, src, sample_rates, a1, b0, delay):
 		#head = pipeparts.mkdrop(pipeline, src[sr], drop_samples=D[sr].min())
 		head = pipeparts.mkiirbank(pipeline, src[sr], a1 = A[sr], b0 = B[sr], delay = D[sr])
 		head = pipeparts.mkresample(pipeline, head)
-		head = pipeparts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max_rate))
+		# FIXME make this queue the "right" size
+		head = pipeparts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max_rate), max_size_time=gst.SECOND * 100, max_size_buffers=0, max_size_bytes=0)
 		head.link(adder)
 	return adder
 
@@ -200,7 +201,6 @@ for ifo, bank in banks.items():
 
 	# filter using IIR bank
 	head = iir_bank(pipeline, head, sample_rates, a1 = A, b0 = B, delay = D) #FIXME should this be a1 = repack_complex_array_to_real(A)?
-
 	head = pipeparts.mkqueue(pipeline, head)
 	head = pipeparts.mktogglecomplex(pipeline, head)
 	head = pipeparts.mknofakedisconts(pipeline, head)
