@@ -37,6 +37,20 @@ from pylal.datatypes import LIGOTimeGPS
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 from gstlal import ligolw_output
 
+
+def parse_banks(bank_string):
+	"""
+	parses strings of form H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...
+	"""
+	out = {}
+	if bank_string is None:
+		return out
+	for b in bank_string.split(','):
+		ifo, bank = b.split(':')
+		out.setdefault(ifo, []).append(bank)
+	return out
+
+
 #
 # A function for parsing command line
 #
@@ -45,12 +59,11 @@ def parse_command_line():
 	parser = OptionParser(description = __doc__)
 	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
 	parser.add_option("--fake-data", action = "store_true", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
-	parser.add_option("--iir-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required).")
+	parser.add_option("--iir-bank", metavar = "filenames", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the injections (optional).")
 	parser.add_option("--gps-start-time", help="GPS start time (required)", type="float")
 	parser.add_option("--gps-end-time", help="GPS end time (required)", type="float")
 	parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the triggers (required)")
-	parser.add_option("--instrument", metavar="IFO", help="set the instrument default H1", default="H1")
 	parser.add_option("--channel-name", metavar="channel", help="set the channel default LSC-STRAIN", default="LSC-STRAIN")
 	parser.add_option("--tmp-space",  metavar="PATH")
 	parser.add_option("--comment",  metavar="str")
@@ -106,7 +119,7 @@ from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_com
 from gstlal.reference_psd import read_psd
 from glue.ligolw import utils, param
 from gstlal import pipeutil
-from gstlal.lloidparts import seek_event_for_gps, mkelems_fast
+from gstlal.lloidparts import seek_event_for_gps
 from gstlal.pipeutil import gobject, gst
 from gstlal import pipeparts
 from gstlal import lloidparts
@@ -116,77 +129,75 @@ from gstlal import lloidparts
 # extract parameters from the bank
 #
 
-xmldoc = utils.load_filename(options.iir_bank, gz=options.iir_bank.endswith('.gz'))
-A, B, D, autocor = cbc_template_iir.get_matrices_from_xml(xmldoc)
-sample_rate = param.get_pyvalue(xmldoc, 'sample_rate')
+banks = parse_banks(options.iir_bank)
 snr_threshold = options.snr_threshold
-
 # get the pipeline running
 pipeline = gst.Pipeline("gstlal_iir_inspiral")
 mainloop = gobject.MainLoop()
-
-#
-# setup the output stage FIXME move this to support multiple instruments
-#
-
 seekevent = seek_event_for_gps(options.gps_start_time, options.gps_end_time)
-
-#detectors = lloidparts.DetectorData("framename", options.channel_name)
-
-# FIXME: to support frame files.
-detectors = {
-	options.instrument: lloidparts.DetectorData(options.frame_cache, options.channel_name)
-}
-
-
 options.out_seg = segments.segment(options.seg[0], options.seg[1]) #FIXME make better outseg def.
-data = ligolw_output.Data(options, detectors)
-data.prepare_output_file(process_params)
-
-def appsink_new_buffer(elem, data):
-	for row in sngl_inspirals_from_buffer(elem.get_property("last-buffer")):
-		if (row.end_time + 1e-9*row.end_time_ns) in data.out_seg:
-			row.process_id = data.process.process_id
-			row.event_id = data.sngl_inspiral_table.get_next_id()
-			data.sngl_inspiral_table.append(row)
-	if data.connection: data.connection.commit()
 
 
-def iir_bank(pipeline, head, a1, b0, delay):
-	pass
+def iir_bank(pipeline, head, sample_rates, a1, b0, delay):
+	#FIXME don't upsample everything to a common rate
+	max_rate = max(sample_rates)
+	adder = gst.element_factory_make("lal_adder")
+	pipeline.add(adder)
+	for sr in sample_rates:
+		head = pipeparts.mkiirbank(pipeline, head[sr], a1 = A[sr], b0 = B[sr], delay = D[sr])
+		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max_rate)
+		adder.link(head)
+	return adder
 
 #
 # loop over instruments FIXME for now it is just one instrument :)
 #
+detectors = {}
+for ifo, bank in banks.items():
+	detectors[ifo] = lloidparts.DetectorData(options.frame_cache, options.channel_name)
 
-for ifo in [options.instrument]:
+# FIXME ADD MORE
+data = ligolw_output.Data(filename = options.output, instruments = set(detectors), seg = options.seg, out_seg = options.seg, injection_filename = options.injections)
+
+#FIXME dont hardcode some of this
+stream_thinca = lloidparts.StreamThinca(
+	output,
+	coincidence_threshold = 0.015,
+	coincidence_back_off = 2 * 5,	# coincidence back-off is twice AppSync dt
+	thinca_interval = 50.0	# seconds
+)
+
+appsinks = set()
+triggersrc = set()
+appsync = pipeparts.AppSync(appsink_new_buffer = stream_thinca.appsink_new_buffer, dt = 5)
+
+for ifo, bank in banks.items():
+
+	xmldoc = utils.load_filename(options.iir_bank, gz=options.iir_bank.endswith('.gz'))
+	A, B, D, autocor = cbc_template_iir.get_matrices_from_xml(xmldoc)
+	sample_rates = [int(s) for s in param.get_pyvalue(xmldoc, 'sample_rate').split(',')]
+
 
 	head = lloidparts.mkLLOIDbasicsrc(
 		pipeline,
 		seekevent,
-		options.instrument,
-		detector = detectors[options.instrument],
+		ifo,
+		detector = detectors[ifo],
 		fake_data = options.fake_data,
 		injection_filename = options.injections,
 		verbose = options.verbose)
 
-	head = lloidparts.mkLLOIDsrc(pipeline, head, [sample_rate], psd=None, psd_fft_length = 8)
-
-	# tee off input and write to file
-	head = tee1 = pipeparts.mktee(pipeline, head[sample_rate])
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee1), "input_iir.txt")
+	head = lloidparts.mkLLOIDsrc(pipeline, head, sample_rates, psd=None, psd_fft_length = 8)
 
 	# filter using IIR bank
-	head = pipeparts.mkiirbank(pipeline, head, a1 = A, b0 = B, delay = D) #FIXME should this be a1 = repack_complex_array_to_real(A)?
+	head = iir_bank(pipeline, head, sample_rates, a1 = A, b0 = B, delay = D) #FIXME should this be a1 = repack_complex_array_to_real(A)?
 
 	head = pipeparts.mkqueue(pipeline, head)
 	head = pipeparts.mktogglecomplex(pipeline, head)
 	head = pipeparts.mknofakedisconts(pipeline, head)
 	head = pipeparts.mkprogressreport(pipeline, head, "progressreport3")
 	# tee off and write output file
-	snr = tee2 = chisq = pipeparts.mktee(pipeline, head)
-
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, tee2)), "output_iir.txt")
+	snr = chisq = pipeparts.mktee(pipeline, head)
 
 	chisq = pipeparts.mkqueue(pipeline, chisq)
 	chisq = pipeparts.mkautochisq(pipeline, chisq, autocorrelation_matrix = autocor, latency = -50, snr_thresh = snr_threshold)
@@ -202,48 +213,20 @@ for ifo in [options.instrument]:
 	pipeline.add(triggergen)
 	snr.link_pads("src", triggergen, "snr")
 	chisq.link(triggergen)
-	#head = pipeparts.mktriggergen(pipeline, snr, chisq, template_bank_filename = options.iir_bank, snr_threshold = snr_threshold, sigmasq = sigmasq)
-	# FIXME: What about sigmasq and max-gap?
-	#head.link(appsink)
 
-	appsink = pipeutil.mkelem("appsink",{"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})
-	pipeline.add(appsink)
-
-	triggergen.link(appsink)
-	appsink.connect_after("new-buffer", appsink_new_buffer, data)
-		
+# hook up the triggers
+for trig in triggersrc:
+	sink = appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, trig), caps = gst.Caps("application/x-lal-snglinspiral"))
+	sink.connect_after("new-buffer", appsync.pull_appsinks_in_order)
+	appsinks.add(sink)
+	
 
 ############################################################
 # run the pipeline
 
-class Handler(object):
-	def __init__(self, mainloop, pipeline):
-		self.mainloop = mainloop
-		self.pipeline = pipeline
-
-		bus = pipeline.get_bus()
-		bus.add_signal_watch()
-		bus.connect("message", self.on_message)
-
-	def on_message(self, bus, message):
-		if message.type == gst.MESSAGE_EOS:
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
-		elif message.type == gst.MESSAGE_ERROR:
-			gerr, dbgmsg = message.parse_error()
-			self.pipeline.set_state(gst.STATE_NULL)
-			self.mainloop.quit()
-			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
-
-
 gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS, "gstlal_iir_inspiral_graph")
 
-
-
-for src in pipeline.iterate_sources():
-	src.send_event(seekevent)
-
-handler = Handler(mainloop, pipeline)
+handler = lloidparts.LLOIDHandler(mainloop, pipeline)
 
 pipeline.set_state(gst.STATE_PLAYING)
 mainloop.run()
