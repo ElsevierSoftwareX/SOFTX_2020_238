@@ -12,6 +12,9 @@ parser.add_option("--padding", metavar = "pad", type = "float", default = 1.1, h
 #parser.add_option("--iir-tolerance", metavar = "match", type = "float", default = 0.99, help = "Set the SVD reconstruction tolerance (default = 0.99).")
 parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
 parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).")
+#FIXME figure out how to encode instrument info
+parser.add_option("--instrument", metavar = "ifo", help = "Set the instrument")
+
 parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 parser.add_option("--downsample", action = "store_true", help = "Choose if you want to downsample IIR bank (recommended)")
@@ -33,7 +36,7 @@ from glue.ligolw import utils
 bank = utils.load_filename(options.template_bank, gz=options.template_bank.endswith('.gz'))
 
 # read psd file
-psd = read_psd(options.reference_psd)
+psd = read_psd(options.reference_psd)[options.instrument]
 
 # smooth and create an interp object
 psd = cbc_template_iir.smooth_and_interp(psd)
