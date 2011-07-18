@@ -310,8 +310,13 @@ def smooth_and_interp(psd, width=1, length = 10):
 
 def get_matrices_from_xml(xmldoc):
         root = xmldoc
-        A = repack_real_array_to_complex(array.get_array(root, 'a').array)
-        B = repack_real_array_to_complex(array.get_array(root, 'b').array)
-        D = array.get_array(root, 'd').array
+        sample_rates = [int(r) for r in param.get_pyvalue(root, 'sample_rate').split(',')]
+	A = {}
+	B = {}
+	D = {}
+	for sr in sample_rates:
+		A[sr] = repack_real_array_to_complex(array.get_array(root, 'a_%d' % (sr,)).array)
+		B[sr] = repack_real_array_to_complex(array.get_array(root, 'b_%d' % (sr,)).array)
+		D[sr] = array.get_array(root, 'd_%d' % (sr,)).array
         autocorrelation = repack_real_array_to_complex(array.get_array(root, 'autocorrelation').array)
         return A, B, D, autocorrelation
