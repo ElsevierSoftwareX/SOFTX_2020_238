@@ -14,6 +14,7 @@ parser.add_option("--reference-psd", metavar = "filename", help = "load the spec
 parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).")
 parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+parser.add_option("--downsample", action = "store_true", help = "Choose if you want to downsample IIR bank (recommended)")
 
 options, filenames = parser.parse_args()
 
@@ -38,7 +39,7 @@ psd = read_psd(options.reference_psd)
 psd = cbc_template_iir.smooth_and_interp(psd)
 
 # get the iir coefficients
-A, B, D, snrs = cbc_template_iir.makeiirbank(bank, psd_interp = psd, verbose=options.verbose, sampleRate=options.sample_rate, padding=options.padding, flower=options.flow, output_to_xml=True)
+A, B, D, snrs = cbc_template_iir.makeiirbank(bank, psd_interp = psd, verbose=options.verbose, sampleRate=options.sample_rate, padding=options.padding, flower=options.flow, downsample = options.downsample, output_to_xml = True)
 
 utils.write_filename(bank, options.output, gz=options.output.endswith('.gz'))
 
