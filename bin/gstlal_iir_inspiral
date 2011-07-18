@@ -38,20 +38,6 @@ from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals
 from gstlal import ligolw_output
 
 #
-# a function for plotting multiple time series, used for debugging
-# 
-
-def plot(pipeline, pre_elems, title="gstlal"):
-	elems = []
-	elems.append(pipeutil.mkelem("queue", {"max-size-time": 2}))
-	elems.append(pipeutil.mkelem("cairovis_waterfall", {"title": title, "z-autoscale": True, "colormap": "jet", "history": 10 * gst.SECOND}))
-	elems.append(pipeutil.mkelem("capsfilter",{"caps": gst.Caps("video/x-raw-rgb,framerate=12/1,width=800,height=800")}))
-	elems.append(pipeutil.mkelem("ximagesink",{"sync": False,"async": False,}))
-	for elem in elems: pipeline.add(elem)
-	elems = pre_elems + elems
-	gst.element_link_many(*elems)
-
-#
 # A function for parsing command line
 #
 
@@ -164,6 +150,10 @@ def appsink_new_buffer(elem, data):
 			row.event_id = data.sngl_inspiral_table.get_next_id()
 			data.sngl_inspiral_table.append(row)
 	if data.connection: data.connection.commit()
+
+
+def iir_bank(pipeline, head, a1, b0, delay):
+	pass
 
 #
 # loop over instruments FIXME for now it is just one instrument :)
