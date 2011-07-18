@@ -141,7 +141,7 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
         snrvec = []
 	print sampleRate, type(sampleRate)
         if downsample:
-                sample_rates = 2**numpy.arange(numpy.ceil(numpy.log2(flower*4)), numpy.ceil(numpy.log2(2*sampleRate)))
+                sample_rates = 2**numpy.arange(numpy.ceil(numpy.log2(2*flower*padding)), numpy.ceil(numpy.log2(2*sampleRate)))
                 sample_rates = numpy.array(sample_rates, numpy.int) # FIXME: Superfluous?
         else:
                 sample_rates = numpy.array([int(sampleRate)])
@@ -176,7 +176,7 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
                 #print >> sys.stderr, "waveform %f" % (time.time() - start)
 
                 # make the iir filter coeffs
-                a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta)
+                a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
 
                 if verbose: print>>sys.stderr, "row %4.0d - m1: %10.6f m2: %10.6f required %4.0d filters" % (tmp, m1,m2,len(a1))
                 # get the chirptime
@@ -229,7 +229,7 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 				a1dict.setdefault(sampleRate/M, []).append(a1[i]**M)
 				b0dict.setdefault(sampleRate/M, []).append(b0[i]*M)
 				delaydict.setdefault(sampleRate/M, []).append(delay[i]/M)
-				M = int(max(1, 2**-numpy.ceil(numpy.log2(f * 4.0)))) # Decimation factor
+				M = int(max(1, 2**-numpy.ceil(numpy.log2(f * 2.0 * padding)))) # Decimation factor
 
 		else:
 			a1dict[int(sampleRate)] = a1
