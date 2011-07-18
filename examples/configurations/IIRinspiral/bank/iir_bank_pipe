@@ -92,6 +92,7 @@ class gstlal_iir_bank_node(pipeline.CondorDAGNode):
 		self.add_var_opt("flow", flow)
 		self.add_var_opt("reference-psd", reference_psd)
 		self.add_var_opt("template-bank", template_bank)
+		self.add_var_opt("downsample","")
 		iir_bank_name_path = os.path.split(template_bank)
 		iir_bank_name = iir_bank_name_path[0] + "/iir_" + iir_bank_name_path[1]
 		self.add_var_opt("output", iir_bank_name)
