@@ -51,6 +51,22 @@ def parse_banks(bank_string):
 	return out
 
 
+def iir_bank(pipeline, src, sample_rates, a1, b0, delay):
+	#FIXME don't upsample everything to a common rate
+	max_rate = max(sample_rates)
+	adder = gst.element_factory_make("lal_adder")
+	adder.set_property("sync", True)
+	pipeline.add(adder)
+	for sr in sample_rates:
+		#print D[sr].min()
+		#head = pipeparts.mkdrop(pipeline, src[sr], drop_samples=D[sr].min())
+		head = pipeparts.mkiirbank(pipeline, src[sr], a1 = A[sr], b0 = B[sr], delay = D[sr])
+		head = pipeparts.mkresample(pipeline, head)
+		head = pipeparts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max_rate))
+		head.link(adder)
+	return adder
+
+
 #
 # A function for parsing command line
 #
@@ -138,17 +154,6 @@ seekevent = seek_event_for_gps(options.gps_start_time, options.gps_end_time)
 options.out_seg = segments.segment(options.seg[0], options.seg[1]) #FIXME make better outseg def.
 
 
-def iir_bank(pipeline, head, sample_rates, a1, b0, delay):
-	#FIXME don't upsample everything to a common rate
-	max_rate = max(sample_rates)
-	adder = gst.element_factory_make("lal_adder")
-	pipeline.add(adder)
-	for sr in sample_rates:
-		head = pipeparts.mkiirbank(pipeline, head[sr], a1 = A[sr], b0 = B[sr], delay = D[sr])
-		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max_rate)
-		adder.link(head)
-	return adder
-
 #
 # loop over instruments FIXME for now it is just one instrument :)
 #
@@ -157,11 +162,11 @@ for ifo, bank in banks.items():
 	detectors[ifo] = lloidparts.DetectorData(options.frame_cache, options.channel_name)
 
 # FIXME ADD MORE
-data = ligolw_output.Data(filename = options.output, instruments = set(detectors), seg = options.seg, out_seg = options.seg, injection_filename = options.injections)
+data = ligolw_output.Data(options.output, process_params, set(detectors), options.seg, options.out_seg, options.injections)
 
 #FIXME dont hardcode some of this
 stream_thinca = lloidparts.StreamThinca(
-	output,
+	data,
 	coincidence_threshold = 0.015,
 	coincidence_back_off = 2 * 5,	# coincidence back-off is twice AppSync dt
 	thinca_interval = 50.0	# seconds
@@ -173,7 +178,10 @@ appsync = pipeparts.AppSync(appsink_new_buffer = stream_thinca.appsink_new_buffe
 
 for ifo, bank in banks.items():
 
-	xmldoc = utils.load_filename(options.iir_bank, gz=options.iir_bank.endswith('.gz'))
+	bankfile = bank[0]
+
+	#FIXME don't assume that you only want the 0th bank
+	xmldoc = utils.load_filename(bankfile)
 	A, B, D, autocor = cbc_template_iir.get_matrices_from_xml(xmldoc)
 	sample_rates = [int(s) for s in param.get_pyvalue(xmldoc, 'sample_rate').split(',')]
 
@@ -187,7 +195,8 @@ for ifo, bank in banks.items():
 		injection_filename = options.injections,
 		verbose = options.verbose)
 
-	head = lloidparts.mkLLOIDsrc(pipeline, head, sample_rates, psd=None, psd_fft_length = 8)
+	head = lloidparts.mkLLOIDsrc(pipeline, head, sample_rates, ifo, psd=None, psd_fft_length = 8, block_duration=gst.SECOND)
+
 
 	# filter using IIR bank
 	head = iir_bank(pipeline, head, sample_rates, a1 = A, b0 = B, delay = D) #FIXME should this be a1 = repack_complex_array_to_real(A)?
@@ -195,7 +204,7 @@ for ifo, bank in banks.items():
 	head = pipeparts.mkqueue(pipeline, head)
 	head = pipeparts.mktogglecomplex(pipeline, head)
 	head = pipeparts.mknofakedisconts(pipeline, head)
-	head = pipeparts.mkprogressreport(pipeline, head, "progressreport3")
+	head = pipeparts.mkprogressreport(pipeline, head, bankfile)
 	# tee off and write output file
 	snr = chisq = pipeparts.mktee(pipeline, head)
 
@@ -206,13 +215,14 @@ for ifo, bank in banks.items():
 	snr = pipeparts.mkqueue(pipeline, snr)
 
 	triggergen = gst.element_factory_make("lal_triggergen")
-	triggergen.set_property("bank-filename", options.iir_bank)
+	triggergen.set_property("bank-filename", bankfile)
 	triggergen.set_property("snr-thresh", snr_threshold)
 	triggergen.set_property("sigmasq", sigmasq)
 	triggergen.set_property("max-gap", 1.0)
 	pipeline.add(triggergen)
 	snr.link_pads("src", triggergen, "snr")
 	chisq.link(triggergen)
+	triggersrc.add(triggergen)
 
 # hook up the triggers
 for trig in triggersrc:
