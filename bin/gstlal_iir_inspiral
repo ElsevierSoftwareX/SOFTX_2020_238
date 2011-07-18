@@ -1,0 +1,261 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2011  Shaun Hooper, Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""Stream-based inspiral analysis tool use IIR filters"""
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import sys
+import scipy
+import numpy
+#import pylab
+from optparse import OptionParser
+from glue import segments
+from pylal.datatypes import LIGOTimeGPS
+from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
+from gstlal import ligolw_output
+
+#
+# a function for plotting multiple time series, used for debugging
+# 
+
+def plot(pipeline, pre_elems, title="gstlal"):
+	elems = []
+	elems.append(pipeutil.mkelem("queue", {"max-size-time": 2}))
+	elems.append(pipeutil.mkelem("cairovis_waterfall", {"title": title, "z-autoscale": True, "colormap": "jet", "history": 10 * gst.SECOND}))
+	elems.append(pipeutil.mkelem("capsfilter",{"caps": gst.Caps("video/x-raw-rgb,framerate=12/1,width=800,height=800")}))
+	elems.append(pipeutil.mkelem("ximagesink",{"sync": False,"async": False,}))
+	for elem in elems: pipeline.add(elem)
+	elems = pre_elems + elems
+	gst.element_link_many(*elems)
+
+#
+# A function for parsing command line
+#
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
+	parser.add_option("--fake-data", action = "store_true", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
+	parser.add_option("--iir-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required).")
+	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the injections (optional).")
+	parser.add_option("--gps-start-time", help="GPS start time (required)", type="float")
+	parser.add_option("--gps-end-time", help="GPS end time (required)", type="float")
+	parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the triggers (required)")
+	parser.add_option("--instrument", metavar="IFO", help="set the instrument default H1", default="H1")
+	parser.add_option("--channel-name", metavar="channel", help="set the channel default LSC-STRAIN", default="LSC-STRAIN")
+	parser.add_option("--tmp-space",  metavar="PATH")
+	parser.add_option("--comment",  metavar="str")
+	parser.add_option("--snr-threshold", metavar="float", help="SNR threshold default 5.5", default=5.5)
+	parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+	
+	options, filenames = parser.parse_args()
+
+	if sum(1 for option in ('frame_cache', 'fake_data', ) if getattr(options, option) is not None) != 1: # FIXME: what about oline_data?
+		raise ValueError, "must provide exactly one of --frame-cache, --fake-data"
+
+	if options.frame_cache:
+		required_options += ["channel_name", "gps_start_time", "gps_end_time"]
+
+	fail = ""
+	for option in ("iir_bank", "output", "gps_start_time", "gps_end_time"):
+		if getattr(options, option) is None:
+			fail += "must provide option %s\n" % (option)
+
+	if fail: raise ValueError, fail
+	
+	effective_gps_start_time = LIGOTimeGPS(options.gps_start_time)
+	effective_gps_end_time = LIGOTimeGPS(options.gps_end_time)
+
+	process_params = ligolw_output.make_process_params(options) #FIXME override program name
+	options.seg = segments.segment(effective_gps_start_time, effective_gps_end_time)
+
+	return options, filenames, process_params
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+#
+# parse command line
+#
+
+
+options, filenames, process_params = parse_command_line()
+
+
+#
+# Import everything that depends on GStreamer
+#
+
+from gstlal import cbc_template_iir
+from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
+from gstlal.reference_psd import read_psd
+from glue.ligolw import utils, param
+from gstlal import pipeutil
+from gstlal.lloidparts import seek_event_for_gps, mkelems_fast
+from gstlal.pipeutil import gobject, gst
+from gstlal import pipeparts
+from gstlal import lloidparts
+
+
+#
+# extract parameters from the bank
+#
+
+xmldoc = utils.load_filename(options.iir_bank, gz=options.iir_bank.endswith('.gz'))
+A, B, D, autocor = cbc_template_iir.get_matrices_from_xml(xmldoc)
+sample_rate = param.get_pyvalue(xmldoc, 'sample_rate')
+snr_threshold = options.snr_threshold
+
+# get the pipeline running
+pipeline = gst.Pipeline("gstlal_iir_inspiral")
+mainloop = gobject.MainLoop()
+
+#
+# setup the output stage FIXME move this to support multiple instruments
+#
+
+seekevent = seek_event_for_gps(options.gps_start_time, options.gps_end_time)
+
+#detectors = lloidparts.DetectorData("framename", options.channel_name)
+
+# FIXME: to support frame files.
+detectors = {
+	options.instrument: lloidparts.DetectorData(options.frame_cache, options.channel_name)
+}
+
+
+options.out_seg = segments.segment(options.seg[0], options.seg[1]) #FIXME make better outseg def.
+data = ligolw_output.Data(options, detectors)
+data.prepare_output_file(process_params)
+
+def appsink_new_buffer(elem, data):
+	for row in sngl_inspirals_from_buffer(elem.get_property("last-buffer")):
+		if (row.end_time + 1e-9*row.end_time_ns) in data.out_seg:
+			row.process_id = data.process.process_id
+			row.event_id = data.sngl_inspiral_table.get_next_id()
+			data.sngl_inspiral_table.append(row)
+	if data.connection: data.connection.commit()
+
+#
+# loop over instruments FIXME for now it is just one instrument :)
+#
+
+for ifo in [options.instrument]:
+
+	head = lloidparts.mkLLOIDbasicsrc(
+		pipeline,
+		seekevent,
+		options.instrument,
+		detector = detectors[options.instrument],
+		fake_data = options.fake_data,
+		injection_filename = options.injections,
+		verbose = options.verbose)
+
+	head = lloidparts.mkLLOIDsrc(pipeline, head, [sample_rate], psd=None, psd_fft_length = 8)
+
+	# tee off input and write to file
+	head = tee1 = pipeparts.mktee(pipeline, head[sample_rate])
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee1), "input_iir.txt")
+
+	# filter using IIR bank
+	head = pipeparts.mkiirbank(pipeline, head, a1 = A, b0 = B, delay = D) #FIXME should this be a1 = repack_complex_array_to_real(A)?
+
+	head = pipeparts.mkqueue(pipeline, head)
+	head = pipeparts.mktogglecomplex(pipeline, head)
+	head = pipeparts.mknofakedisconts(pipeline, head)
+	head = pipeparts.mkprogressreport(pipeline, head, "progressreport3")
+	# tee off and write output file
+	snr = tee2 = chisq = pipeparts.mktee(pipeline, head)
+
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, tee2)), "output_iir.txt")
+
+	chisq = pipeparts.mkqueue(pipeline, chisq)
+	chisq = pipeparts.mkautochisq(pipeline, chisq, autocorrelation_matrix = autocor, latency = -50, snr_thresh = snr_threshold)
+
+	sigmasq=numpy.ones(len(autocor)) # FIXME: make sigmasq correct
+	snr = pipeparts.mkqueue(pipeline, snr)
+
+	triggergen = gst.element_factory_make("lal_triggergen")
+	triggergen.set_property("bank-filename", options.iir_bank)
+	triggergen.set_property("snr-thresh", snr_threshold)
+	triggergen.set_property("sigmasq", sigmasq)
+	triggergen.set_property("max-gap", 1.0)
+	pipeline.add(triggergen)
+	snr.link_pads("src", triggergen, "snr")
+	chisq.link(triggergen)
+	#head = pipeparts.mktriggergen(pipeline, snr, chisq, template_bank_filename = options.iir_bank, snr_threshold = snr_threshold, sigmasq = sigmasq)
+	# FIXME: What about sigmasq and max-gap?
+	#head.link(appsink)
+
+	appsink = pipeutil.mkelem("appsink",{"caps": gst.Caps("application/x-lal-snglinspiral"), "sync": False, "async": False, "emit-signals": True, "max-buffers": 1, "drop": True})
+	pipeline.add(appsink)
+
+	triggergen.link(appsink)
+	appsink.connect_after("new-buffer", appsink_new_buffer, data)
+		
+
+############################################################
+# run the pipeline
+
+class Handler(object):
+	def __init__(self, mainloop, pipeline):
+		self.mainloop = mainloop
+		self.pipeline = pipeline
+
+		bus = pipeline.get_bus()
+		bus.add_signal_watch()
+		bus.connect("message", self.on_message)
+
+	def on_message(self, bus, message):
+		if message.type == gst.MESSAGE_EOS:
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
+		elif message.type == gst.MESSAGE_ERROR:
+			gerr, dbgmsg = message.parse_error()
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
+			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
+
+
+gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS, "gstlal_iir_inspiral_graph")
+
+
+
+for src in pipeline.iterate_sources():
+	src.send_event(seekevent)
+
+handler = Handler(mainloop, pipeline)
+
+pipeline.set_state(gst.STATE_PLAYING)
+mainloop.run()
+
+data.write_output_file()
