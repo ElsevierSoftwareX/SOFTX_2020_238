@@ -26,7 +26,7 @@ import numpy
 bank = read_bank(args[0])
 rates = set(fragment.rate for fragment in bank.bank_fragments)
 source_rate = max(rates)
-count_templates = bank.autocorrelation_bank.shape[0]
+count_templates = 2 * bank.autocorrelation_bank.shape[0]
 count_samples = bank.filter_length * source_rate
 resample_filter_length = (8, 16, 32, 48, 64, 80, 96, 128, 160, 192, 256)
 upsample_quality = int(opts.upsample_quality)
