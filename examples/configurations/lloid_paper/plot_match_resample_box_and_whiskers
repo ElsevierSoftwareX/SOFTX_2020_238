@@ -28,5 +28,3 @@ pylab.grid()
 #pylab.xlabel('interpolation filter length, $N^\uparrow$')
 #pylab.ylabel('mismatch')
 pylab.savefig('bw_resample.pdf')
-pylab.savefig('bw_resample.png')
-

@@ -26,5 +26,3 @@ pylab.grid()
 #pylab.xlabel(r'$\log_{10}$ (1 - SVD tolerance)')
 #pylab.ylabel('mismatch')
 pylab.savefig('bw.pdf')
-pylab.savefig('bw.png')
-
