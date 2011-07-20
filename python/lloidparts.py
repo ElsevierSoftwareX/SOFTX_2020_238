@@ -869,7 +869,7 @@ class StreamThinca(object):
 		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary, boundary)):
 			return (set(event.ifo for event in events) != set(["H1", "H2", "L1"]) and set(event.ifo for event in events) != set(["H1", "L1"])) or ligolw_thinca.coinc_inspiral_end_time(events, offset_vector) not in seg
 		def get_effective_snr(self, fac):
-			return self.snr / (self.chisq / self.chisq_dof)**.5
+			return self.snr
 		orig_get_effective_snr, ligolw_thinca.SnglInspiral.get_effective_snr = ligolw_thinca.SnglInspiral.get_effective_snr, get_effective_snr
 		ligolw_thinca.ligolw_thinca(
 			self.dataobj.xmldoc,
