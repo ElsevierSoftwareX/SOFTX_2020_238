@@ -140,7 +140,7 @@ class lalapps_cbc_plotsummary_node(pipeline.CondorDAGNode):
 	def __init__(self, job, dag, base, live_time_prog="gstlal_inspiral", input=[], tmp_space=log_path(), p_node=[]):
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("base", base)
-		self.add_var_opt("live-time-program", live_time_prog)
+		#self.add_var_opt("live-time-program", live_time_prog)
 		self.add_var_opt("tmp-space", tmp_space)
 		for f in input:
 			self.add_file_arg(f)
@@ -571,6 +571,7 @@ for s in build_bank_string(bank_cache):
 
 	for f in far_input_nodes:
 		clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[f.output_name], p_node=[farnode])
+		clusternode = ligolw_sqlite_node(toXMLJob, dag, f.output_name, replace=False, extract=f.output_name.replace('.sqlite','.xml.gz'), p_node=[clusternode])
 		cluster_nodes.append(clusternode)
 
 ###############################################################################
@@ -583,9 +584,9 @@ for s in build_bank_string(bank_cache):
 
 noninjdb = "H1H2L1-ALL-%d-%d-LLOID.sqlite" % (options.gps_start_time, options.gps_stop_time)
 # merge
-sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_name)[1] for f in noninj_nodes] + [options.vetoes, options.frame_segments_file], p_node=cluster_nodes)
+sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_name)[1].replace('.sqlite','.xml.gz') for f in noninj_nodes] + [options.vetoes, options.frame_segments_file], p_node=cluster_nodes)
 # cluster
-lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[noninjdb], p_node=[sqlitenode])
+noninjsqlitenode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[noninjdb], p_node=[sqlitenode])
 
 #
 # injection DB
@@ -596,7 +597,7 @@ if inj_nodes:
 	injdb = "H1H2L1-ALL-%d-%d-LLOID-simulations.sqlite" % (options.gps_start_time, options.gps_stop_time)
 	injxml = injdb+".xml.gz"
 	# merge
-	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[os.path.split(f.output_name)[1] for f in inj_nodes] + [options.vetoes, options.frame_segments_file], p_node=cluster_nodes)
+	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[os.path.split(f.output_name)[1].replace('.sqlite','.xml.gz') for f in inj_nodes] + [options.vetoes, options.frame_segments_file], p_node=cluster_nodes)
 	# cluster
 	clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.injection_sql_file, input=[injdb], p_node=[sqlitenode])
 	# convert to XML
@@ -607,7 +608,7 @@ if inj_nodes:
 	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[injxml], p_node=[inspinjnode])
 	name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
 	# make plots
-	plotnode = lalapps_cbc_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb, injdb], p_node=[sqlitenode])
+	plotnode = lalapps_cbc_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb, injdb], p_node=[sqlitenode, noninjsqlitenode])
 	# make a web page
 	gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="Sub solar mass from %d to %d" % (options.gps_start_time, options.gps_stop_time), p_node=[plotnode])
 
