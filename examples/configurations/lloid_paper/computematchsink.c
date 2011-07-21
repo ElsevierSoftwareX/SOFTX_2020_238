@@ -169,12 +169,12 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buf)
 
 	impulse_data = (double complex *) GST_BUFFER_DATA(buf);
 	len = GST_BUFFER_SIZE(buf) / sizeof(*impulse_data);
-	g_assert(len % element->channels == 0);
+	g_assert(2 * len % element->channels == 0);
 
 	template_data = g_malloc(GST_BUFFER_SIZE(buf));
 	template_data_ptr = template_data;
 	len = fread(template_data, sizeof(*template_data), len, element->fid);
-	g_assert(len % element->channels == 0);
+	g_assert(2 * len % element->channels == 0);
 
 	for (; len > 0;)
 	{
