@@ -59,7 +59,7 @@ class FAR(object):
 		# the most important.  FIXME it should be possible to code
 		# exact solutions for other small values of n that may be
 		# imporant once detections are routine :)
-		if n = 1:
+		if n == 1:
 			return 0. - numpy.log(1.-fap) / self.livetime
 		if n > 1 and n < 100:
 			nvec = numpy.linspace(n**2/10000., n + 10.*n**.5, 100)
@@ -68,21 +68,24 @@ class FAR(object):
 			
 		FAPS = 1. - poisson.cdf(n,nvec)
 		interp = interpolate.interp1d(FAPS, nvec / self.livetime)
-		return interp(fap)
+		if fap < FAPS[1]:
+			return 0.
+		else:
+			return interp(fap)
 			
-	def compute_rank(H1snr, H1chisq, L1snr, L1chisq):
+	def compute_rank(self, H1snr, H1chisq, L1snr, L1chisq):
 		rank = self.counts["H1_snr_chi"][H1snr, H1chisq**.5 / H1snr] * self.counts["L1_snr_chi"][L1snr, L1chisq**.5 / L1snr]
 		if rank > self.ranks[-2]:
 			rank = self.ranks[-2]
 		return rank
 
-	def compute_far(self, H1snr, H1chisq, L1snr, L1chisq):
-		rank = self.counts["H1_snr_chi"][H1snr, H1chisq**.5 / H1snr] * self.counts["L1_snr_chi"][L1snr, L1chisq**.5 / L1snr]
-		if rank > self.ranks[-2]:
-			rank = self.ranks[-2]
+	def compute_far(self, rank, n):
 		fap = self.fap_from_rank(rank)
-		return  self.trials * self.FAR_from_FAP(fap)[0]
-
+		if fap == 0.0:
+			return 0.
+		else:
+			return  self.trials * self.FAR_from_FAP(fap, n)[0]
+	
 def parse_command_line():
 	parser = OptionParser(
 		description = __doc__
@@ -135,11 +138,20 @@ for f in filenames:
 	working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
 
-	connection.create_function("far", 4, Far.compute_far)
+	connection.create_function("rank", 4, Far.compute_rank)
+	connection.create_function("far", 2, Far.compute_far)
+	
+	print >>sys.stderr, "computing ranks ..."
+	# FIXME abusing FAR column
+	connection.cursor().execute('UPDATE coinc_inspiral SET false_alarm_rate = (SELECT rank(snglA.snr, snglA.chisq, snglB.snr, snglB.chisq) FROM coinc_event_map as mapA on mapA.coinc_event_id == coinc_inspiral.coinc_event_id JOIN coinc_event_map as mapB on mapB.coinc_event_id == coinc_inspiral.coinc_event_id JOIN sngl_inspiral as snglA on snglA.event_id == mapA.event_id JOIN sngl_inspiral as snglB on snglB.event_id == mapB.event_id WHERE snglA.ifo == "H1" and snglB.ifo =="L1")')
+	connection.commit()
 	
 	print >>sys.stderr, "computing rates ..."
-	connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(snglA.snr, snglA.chisq, snglB.snr, snglB.chisq) FROM coinc_event_map as mapA on mapA.coinc_event_id == coinc_inspiral.coinc_event_id JOIN coinc_event_map as mapB on mapB.coinc_event_id == coinc_inspiral.coinc_event_id JOIN sngl_inspiral as snglA on snglA.event_id == mapA.event_id JOIN sngl_inspiral as snglB on snglB.event_id == mapB.event_id WHERE snglA.ifo == "H1" and snglB.ifo =="L1")')
-
+	# FIXME abusing FAR column
+	connection.cursor().execute('CREATE TEMPORARY TABLE ranktable AS SELECT * FROM coinc_inspiral ORDER BY false_alarm_rate')
 	connection.commit()
+	connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate, ranktable.rowid) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id)')
+	connection.commit()
+	
 	connection.close()
 	dbtables.put_connection_filename(f, working_filename, verbose = options.verbose)
