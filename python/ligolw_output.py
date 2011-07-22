@@ -294,3 +294,84 @@ class Data(object):
 		fname = os.path.split(self.filename)
 		fname = os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
 		write_likelihood_data(fname, self.distribution_stats.distributions, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = verbose)
+
+
+#
+# Tool to split XML document tree containing sngl_inspiral coincs into a
+# sequence of XML document trees each containing a single coinc
+#
+
+
+def split_sngl_inspiral_coinc_xmldoc(xmldoc):
+	#
+	# index the process, process params and search_summary tables
+	#
+
+	process_table = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName)
+	process_params_table = lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName)
+	search_summary_table = lsctables.table.get_table(xmldoc, lsctables.SearchSummaryTable.tableName)
+
+	process_index = dict((row.process_id, row) for row in process_table)
+	process_params_index = {}
+	for row in process_params_table:
+		process_params_index.setdefault(row.process_id, []).append(row)
+	search_summary_index = dict((row.process_id, row) for row in search_summary_table)
+
+	#
+	# index the sngl_inspiral table
+	#
+
+	sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+	sngl_inspiral_index = dict((row.event_id, row) for row in sngl_inspiral_table)
+
+	#
+	# find the sngl_inspiral<-->sngl_inspiral coincs
+	#
+
+	coinc_def_table = lsctables.table.get_table(xmldoc, lsctables.CoincDefTable.tableName)
+	coinc_event_table = lsctables.table.get_table(xmldoc, lsctables.CoincTable.tableName)
+	coinc_event_map_table = lsctables.table.get_table(xmldoc, lsctables.CoincMapTable.tableName)
+	time_slide_table = lsctables.table.get_table(xmldoc, lsctables.TimeSlideTable.tableName)
+
+	coinc_def, = (row for row in coinc_def_table if row.search == "inspiral" and row.search_coinc_type == 0)
+	coinc_event_map_index = dict((row.coinc_event_id, []) for row in coinc_event_table if row.coinc_def_id == coinc_def.coinc_def_id)
+	for row in coinc_event_map_table:
+		try:
+			coinc = coinc_event_map_index[row.coinc_event_id]
+		except KeyError:
+			continue
+		coinc.append(row)
+	time_slide_index = dict((time_slide_id, []) for time_slide_id in set(time_slide_table.getColumnByName("time_slide_id")))
+	for row in time_slide_table:
+		time_slide_index[row.time_slide_id].append(row)
+
+	for row in coinc_event_table:
+		if row.coinc_def_id != coinc_def.coinc_def_id:
+			continue
+
+		newxmldoc = ligolw.Document()
+		newxmldoc.appendChild(ligolw.LIGO_LW())
+
+		new_process_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(process_table))
+		new_process_params_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(process_params_table))
+		new_search_summary_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(search_summary_table))
+		new_sngl_inspiral_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(sngl_inspiral_table))
+		new_coinc_def_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(coinc_def_table))
+		new_coinc_event_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(coinc_event_table))
+		new_coinc_event_map_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(coinc_event_map_table))
+		new_time_slide_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(time_slide_table))
+
+		new_coinc_def_table.append(coinc_def)
+		new_coinc_event_table.append(row)
+		new_coinc_event_map_table.extend(coinc_event_map_index[row.coinc_event_id])
+		new_time_slide_table.extend(time_slide_index[row.time_slide_id])
+		for row in new_coinc_event_map_table:
+			new_sngl_inspiral_table.append(sngl_inspiral_index[row.event_id])
+
+		process_ids = set(row.process_id for row in new_sngl_inspiral_table) | set(row.process_id for row in new_coinc_event_table)
+		for process_id in process_ids:
+			new_process_table.append(process_index[process_id])
+			new_process_params_table.extend(process_params_index[process_id])
+			new_search_summary_table.append(search_summary_index[process_id])
+
+		yield newxmldoc
