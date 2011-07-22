@@ -84,7 +84,7 @@ def parse_command_line():
 	parser.add_option("--channel-name", metavar="channel", help="set the channel default LSC-STRAIN", default="LSC-STRAIN")
 	parser.add_option("--tmp-space",  metavar="PATH")
 	parser.add_option("--comment",  metavar="str")
-	parser.add_option("--snr-threshold", metavar="float", help="SNR threshold default 5.5", default=5.5)
+	parser.add_option("--snr-threshold", type="float", help="SNR threshold default 5.5", default=5.5)
 	parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	
@@ -206,7 +206,8 @@ for ifo, bank in banks.items():
 	head = pipeparts.mknofakedisconts(pipeline, head)
 	head = pipeparts.mkprogressreport(pipeline, head, bankfile)
 	# tee off and write output file
-	snr = chisq = pipeparts.mktee(pipeline, head)
+	snr = chisq = snrwrite = pipeparts.mktee(pipeline, head)
+	pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, snrwrite), "snrdump_%s.txt" % (ifo))
 
 	chisq = pipeparts.mkqueue(pipeline, chisq)
 	chisq = pipeparts.mkautochisq(pipeline, chisq, autocorrelation_matrix = autocor, latency = -50, snr_thresh = snr_threshold)
