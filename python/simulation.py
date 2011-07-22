@@ -36,7 +36,7 @@ from pylal.datatypes import LIGOTimeGPS
 # open ligolw_xml file containing sim_inspiral and create a segment list
 #
 
-def sim_inspiral_to_segment_list(fname, pad=2, verbose=False):
+def sim_inspiral_to_segment_list(fname, pad=3, verbose=False):
 
 	# initialization
 
