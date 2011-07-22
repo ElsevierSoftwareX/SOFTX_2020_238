@@ -3,6 +3,7 @@
 import sys
 import numpy
 from scipy import interpolate
+from scipy.stats import poisson
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
@@ -18,6 +19,8 @@ except ImportError:
 	# pre 2.5.x
 	from pysqlite2 import dbapi2 as sqlite3
 
+sqlite3.enable_callback_tracebacks(True)
+
 def smooth_bins(bA, stride = 5):
 	wn = rate.gaussian_window2d(3*stride,3*stride, sigma=10)
 	rate.filter_array(bA.array.T,wn)
@@ -31,21 +34,54 @@ def linearize_array(arr):
 def get_nonzero(arr):
 	return arr[arr != 0]
 
-def possible_ranks_array(A, B, Alt, Blt, delta_t):
-	out = numpy.outer(A, B) * 2. * delta_t / Alt / Blt
-	out = out.reshape((out.shape[0] * out.shape[1],))
-	out.sort()
-	return out
 
-def FAP_from_ranks(ranks):
-	"""
-	ranks should be sorted
-	"""
-	FAP = (numpy.arange(len(ranks))+1.) / len(ranks)
-	return interpolate.interp1d(ranks, FAP, fill_value=0., bounds_error=False)
-	
-def FAR_from_FAP(faps, t):
-	return 0. - numpy.log(1.-faps) / t
+class FAR(object):
+	def __init__(self, counts, livetime, trials):
+		self.counts = counts
+		self.livetime = livetime
+		H1nonzero = get_nonzero(linearize_array(decimate_array(counts["H1_snr_chi"].array, stride = options.stride)))
+		L1nonzero = get_nonzero(linearize_array(decimate_array(counts["L1_snr_chi"].array, stride = options.stride)))
+		self.trials = trials
+		self.ranks = self.possible_ranks_array(H1nonzero, L1nonzero)
+		
+		# compute the false alarm probability (FAP) from possible ranks
+		FAP = (numpy.arange(len(self.ranks))+1.) / len(self.ranks)
+		self.fap_from_rank = interpolate.interp1d(self.ranks, FAP, fill_value=0., bounds_error=False)
+
+	def possible_ranks_array(self, A, B):
+		out = numpy.outer(A, B)
+		out = out.reshape((out.shape[0] * out.shape[1],))
+		out.sort()
+		return out
+
+	def FAR_from_FAP(self, fap, n=1):
+		# the n = 1 case can be done exactly.  That is good since it is
+		# the most important.  FIXME it should be possible to code
+		# exact solutions for other small values of n that may be
+		# imporant once detections are routine :)
+		if n = 1:
+			return 0. - numpy.log(1.-fap) / self.livetime
+		if n > 1 and n < 100:
+			nvec = numpy.linspace(n**2/10000., n + 10.*n**.5, 100)
+		if n > 100:
+			nvec = numpy.linspace(n - 10.*n**.5, n + 10.*n**.5, 100)
+			
+		FAPS = 1. - poisson.cdf(n,nvec)
+		interp = interpolate.interp1d(FAPS, nvec / self.livetime)
+		return interp(fap)
+			
+	def compute_rank(H1snr, H1chisq, L1snr, L1chisq):
+		rank = self.counts["H1_snr_chi"][H1snr, H1chisq**.5 / H1snr] * self.counts["L1_snr_chi"][L1snr, L1chisq**.5 / L1snr]
+		if rank > self.ranks[-2]:
+			rank = self.ranks[-2]
+		return rank
+
+	def compute_far(self, H1snr, H1chisq, L1snr, L1chisq):
+		rank = self.counts["H1_snr_chi"][H1snr, H1chisq**.5 / H1snr] * self.counts["L1_snr_chi"][L1snr, L1chisq**.5 / L1snr]
+		if rank > self.ranks[-2]:
+			rank = self.ranks[-2]
+		fap = self.fap_from_rank(rank)
+		return  self.trials * self.FAR_from_FAP(fap)[0]
 
 def parse_command_line():
 	parser = OptionParser(
@@ -88,75 +124,22 @@ counts = coincparamsdistributions.background_rates
 for binned_array in counts.values():
 	smooth_bins(binned_array, stride = options.stride)
 
-# compute FAP mapping preliminaries
-# FIXME only works for H1 / L1, dont' know how to handle correlated H2, not a problem for *this* search?
 print >>sys.stderr, "computing FAP map preliminaries..."
-H1nonzero = get_nonzero(linearize_array(decimate_array(counts["H1_snr_chi"].array, stride = options.stride)))
-L1nonzero = get_nonzero(linearize_array(decimate_array(counts["L1_snr_chi"].array, stride = options.stride)))
+Far = FAR(counts, H1L1livetime, options.additional_trials_factor)
 
 # iterate over files to rank
 for f in filenames:
 	
-	#
-	# get the trigger document
-	#
+	from glue.ligolw import dbtables
+	
+	working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
+	connection = sqlite3.connect(working_filename)
 
-	# check for sqlite
-	if f.endswith('.sqlite'):
-		from glue.ligolw import dbtables
-		working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
-		connection = sqlite3.connect(working_filename)
-		triggerdoc = dbtables.get_xml(connection)
-	else:
-		triggerdoc = utils.load_filename(f, verbose = options.verbose)
-
-	print >>sys.stderr, "computing live time ..."
-	# intersect segments with search_summary segments and remove vetoes
-	search_summary_segs = lsctables.table.get_table(triggerdoc, lsctables.SearchSummaryTable.tableName).get_in_segmentlistdict(lsctables.table.get_table(triggerdoc, lsctables.ProcessTable.tableName).get_ids_by_program("gstlal_inspiral")).coalesce()
-	livetime = dict((instrument, float(abs(seglist))) for instrument, seglist in ((segments & search_summary_segs) - vetoes).items())
-
-
-	print >>sys.stderr, "indexing tables ..."
-	# index for rapid sngl_inspiral and coinc_inspiral row look-up
-	index = dict((row.event_id, row) for row in lsctables.table.get_table(triggerdoc, lsctables.SnglInspiralTable.tableName))
-	index.update(dict((row.coinc_event_id, row) for row in lsctables.table.get_table(triggerdoc, lsctables.CoincInspiralTable.tableName)))
-	# index for rapid coinc tuple look-up
-	coinc_index = {}
-	for row in lsctables.table.get_table(triggerdoc, lsctables.CoincMapTable.tableName):
-		if row.table_name == "sngl_inspiral":
-			coinc_index.setdefault(row.coinc_event_id, set()).add(index[row.event_id])
-
-
-	# FIXME only works for H1,L1
-	# compute rates
+	connection.create_function("far", 4, Far.compute_far)
+	
 	print >>sys.stderr, "computing rates ..."
-	coincidence_threshold, = ligolw_process.get_process_params(triggerdoc, "gstlal_inspiral", "--coincidence-threshold")
-	delta_t = coincidence_threshold + inject.light_travel_time("H1", "L1")
-	ranks = possible_ranks_array(H1nonzero, L1nonzero, livetime["H1"], livetime["L1"], delta_t)
-	faps = FAP_from_ranks(ranks)
-	coinc_inspiral_table = lsctables.table.get_table(triggerdoc, lsctables.CoincInspiralTable.tableName)
-	N = len(coinc_inspiral_table)
-	for n, coinc_inspiral in enumerate(coinc_inspiral_table):
-		if not n % 531:
-			print >>sys.stderr, "\t%d / %d\r" % (n, N),
-		instruments = coinc_inspiral.get_ifos()
-		# if H1 and L1 don't participate, skip
-		if not set(("H1", "L1")).issubset(instruments):
-			coinc_inspiral.false_alarm_rate = None
-			continue
-		# retrieve \rho and \chi^{2} values
-		rho_chi = dict((event.ifo, (event.snr, event.chisq**.5 / event.snr)) for event in coinc_index[coinc_inspiral.coinc_event_id])
-		# assign rate
-		coinc_inspiral.false_alarm_rate = (counts["H1_snr_chi"][rho_chi["H1"]] / livetime["H1"]) * (counts["L1_snr_chi"][rho_chi["L1"]] / livetime["L1"]) * 2. * delta_t
-		# FIXME Hack to avoid going off the edge in interp
-		if coinc_inspiral.false_alarm_rate > ranks[-2]:
-			coinc_inspiral.false_alarm_rate = ranks[-2]
-		coinc_inspiral.combined_far = options.additional_trials_factor * FAR_from_FAP(faps(coinc_inspiral.false_alarm_rate), H1L1livetime)
+	connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(snglA.snr, snglA.chisq, snglB.snr, snglB.chisq) FROM coinc_event_map as mapA on mapA.coinc_event_id == coinc_inspiral.coinc_event_id JOIN coinc_event_map as mapB on mapB.coinc_event_id == coinc_inspiral.coinc_event_id JOIN sngl_inspiral as snglA on snglA.event_id == mapA.event_id JOIN sngl_inspiral as snglB on snglB.event_id == mapB.event_id WHERE snglA.ifo == "H1" and snglB.ifo =="L1")')
 
-	if f.endswith('.sqlite'):
-		connection.commit()
-		connection.close()
-		dbtables.put_connection_filename(f, working_filename, verbose = options.verbose)
-	else:
-		# write output
-		utils.write_filename(triggerdoc, f, gz = True, verbose = options.verbose)
+	connection.commit()
+	connection.close()
+	dbtables.put_connection_filename(f, working_filename, verbose = options.verbose)
