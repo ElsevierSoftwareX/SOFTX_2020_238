@@ -139,7 +139,7 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
         Bmat = {}
         Dmat = {}
         snrvec = []
-	print sampleRate, type(sampleRate)
+
         if downsample:
                 sample_rates = 2**numpy.arange(numpy.ceil(numpy.log2(2*flower*padding)), numpy.ceil(numpy.log2(2*sampleRate)))
                 sample_rates = numpy.array(sample_rates, numpy.int) # FIXME: Superfluous?
@@ -151,7 +151,7 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
                 Bmat[rate] = []
                 Dmat[rate] = []
 
-	print sample_rates
+
         if not (autocorrelation_length % 2):
                 raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
         autocorrelation_bank = numpy.zeros((len(sngl_inspiral_table), autocorrelation_length), dtype = "cdouble")
@@ -178,10 +178,9 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
                 # make the iir filter coeffs
                 a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
 
-                if verbose: print>>sys.stderr, "row %4.0d - m1: %10.6f m2: %10.6f required %4.0d filters" % (tmp, m1,m2,len(a1))
                 # get the chirptime
                 length = int(2**numpy.ceil(numpy.log2(amp.shape[0])))
-		print length, type(length)
+
                 # get the IIR response
                 out = spawaveform.iirresponse(length, a1, b0, delay)
                 out = out[::-1]
@@ -208,13 +207,15 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 
                 snr = numpy.abs(corr).max()
                 snrvec.append(snr)
+                if verbose: print>>sys.stderr, "row %4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %3.2f match" % (tmp, m1,m2,len(a1), snr)
+
 
                 # store the match for later
                 if output_to_xml: row.snr = snr
-                print "dot product iir iir", numpy.abs((vec1) * numpy.conj(vec1)).sum()
-                print "dot product fir fir", numpy.abs((vec2) * numpy.conj(vec2)).sum()
-                print "dot product iir fir", numpy.abs((vec1) * numpy.conj(vec2)).sum()
-                print "SNR ", snr
+                #print "dot product iir iir", numpy.abs((vec1) * numpy.conj(vec1)).sum()
+                #print "dot product fir fir", numpy.abs((vec2) * numpy.conj(vec2)).sum()
+                #print "dot product iir fir", numpy.abs((vec1) * numpy.conj(vec2)).sum()
+                #print "SNR ", snr
 
                 # get the filter frequencies
                 fs = -1. * numpy.angle(a1) / 2 / numpy.pi # Normalised freqeuncy
@@ -225,7 +226,7 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
                 if downsample:
 			# iterate over the frequencies and put them in the right downsampled bin
 			for i, f in enumerate(fs):
-				print>>sys.stderr, "filter %3.0d, M %2.0d, f %10.9f, delay %d" % (i, M, f, delay[i])
+				#print>>sys.stderr, "filter %3.0d, M %2.0d, f %10.9f, delay %d" % (i, M, f, delay[i])
 				a1dict.setdefault(sampleRate/M, []).append(a1[i]**M)
 				b0dict.setdefault(sampleRate/M, []).append(b0[i]*M)
 				delaydict.setdefault(sampleRate/M, []).append(delay[i]/M)
