@@ -97,7 +97,7 @@ static int push_zeros(GSTLALIIRBank *element, unsigned samples)
 
 
 /*
- * set the metadata on an output buffer
+ * set the metadata on an output buffer. 
  */
 
 
@@ -160,6 +160,9 @@ static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 	available_length = get_available_samples(element);
 	output_length = available_length - (dmax - dmin);
 
+	if(!output_length)
+		return GST_BASE_TRANSFORM_FLOW_DROPPED;
+
 	/*
 	 * wrap the adapter's contents in a GSL vector view.
 	 */
@@ -173,25 +176,23 @@ static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 	output = (complex double *) GST_BUFFER_DATA(outbuf);
 	g_assert(output_length * iir_channels(element) / 2 * sizeof(complex double) <= GST_BUFFER_SIZE(outbuf));
 
-	for(i = 0; i < output_length * iir_channels(element) / 2; i++)
-		output[i] = 0.0;
+	memset(output, 0, output_length * iir_channels(element) / 2 * sizeof(*output));
 
-	for(k = 0; k < element->a1->size1; k++) { /* waveform # */
+	for(k = 0; k < element->a1->size1; k++) { /* output channel # */
 		for(j = 0; j < element->a1->size2; j++) { /* filter # */
 			for(i = 0; i < output_length; i++) { /* sample # */
-				y[k*element->a1->size2+j] = a1[k*element->a1->size2+j] * y[k*element->a1->size2+j] + b0[k*element->a1->size2+j] * input[dmax - d[k*element->a1->size2+j] + i];
-				output[i*element->a1->size1+k] += y[k*element->a1->size2+j];
+				*y = *a1 * *y + *b0 * input[dmax - *d + i];
+				output[i*element->a1->size1] += *y;
 			}
+			y++;
+			a1++;
+			b0++;
+			d++;
 		}
+		output++;
 	}
 	/*fprintf(stderr,"Input Buffer length = %d, Output Buffer length = %d\n",available_length, output_length); */
-	
-	/*
-	 * output produced?
-	 */
-
-	if(!output_length)
-		return GST_BASE_TRANSFORM_FLOW_DROPPED;
+ 
 
 	/*
 	 * flush the data from the adapter
@@ -541,7 +542,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		int dmin, dmax;
 
 		/*
-		 * flush adapter
+		 * flush adapter. Erase contents of adaptor. Push dmax - dmin zeros, so the IIR filter bank can start filtering from t0.
 		 */
 
 		gst_adapter_clear(element->adapter);
@@ -551,7 +552,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		push_zeros(element, dmax-dmin);
 
                 /*
-		 * (re)sync timestamp and offset book-keeping
+		 * (re)sync timestamp and offset book-keeping. Set t0 and offset0 to be the timestamp and offset of the inbuf. Next_out_offset is to set the offset of the outbuf.
 		 */
 
 		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
@@ -559,7 +560,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		element->next_out_offset = element->offset0 + dmin;
 
 		/*
-		 * be sure to flag the next output buffer as a discontinuity
+		 * be sure to flag the next output buffer as a discontinuity, because it is the first output buffer.
 		 */
 
 		element->need_discont = TRUE;
@@ -584,7 +585,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		result = filter(element, outbuf);
 	} else if(TRUE) {
 		/*
-		 * input is 0s
+		 * input is 0s, FIXME here. Make dependent on decay rate.
 		 */
 
 		push_zeros(element, length);
