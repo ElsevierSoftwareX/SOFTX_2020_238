@@ -30,6 +30,18 @@
 		<Stream Name="process_params:table" Type="Local" Delimiter=",">
 		</Stream>
 	</Table>
+	<Table Name="time_slide:table">
+		<Column Type="lstring" Name="time_slide:instrument"/>
+		<Column Type="real_8" Name="time_slide:offset"/>
+		<Column Type="ilwd:char" Name="process_params:process_id"/>
+		<Column Type="ilwd:char" Name="time_slide:time_slide_id"/>
+		<Stream Name="time_slide:table" Type="Local" Delimiter=",">
+			"H1",0.0,"process:process_id:0","time_slide:time_slide_id:0",
+			"H2",0.0,"process:process_id:0","time_slide:time_slide_id:0",
+			"L1",0.0,"process:process_id:0","time_slide:time_slide_id:0",
+			"V1",0.0,"process:process_id:0","time_slide:time_slide_id:0"
+		</Stream>
+	</Table>
 	<Table Name="sim_burst:table">
 		<Column Type="ilwd:char" Name="sim_burst:process_id"/>
 		<Column Type="lstring" Name="sim_burst:waveform"/>
@@ -40,9 +52,10 @@
 		<Column Type="int_4s" Name="sim_burst:time_geocent_gps_ns"/>
 		<Column Type="real_8" Name="sim_burst:time_geocent_gmst"/>
 		<Column Type="real_8" Name="sim_burst:amplitude"/>
+		<Column Type="ilwd:char" Name="sim_burst:time_slide_id"/>
 		<Column Type="ilwd:char" Name="sim_burst:simulation_id"/>
 		<Stream Name="sim_burst:table" Type="Local" Delimiter=",">
-			"process:process_id:0","Impulse",0.0,0.0,0.0,874107198,0,0,1e-15,"sim_burst:simulation_id:0"
+			"process:process_id:0","Impulse",0.0,0.0,0.0,874107198,0,0,1e-15,"time_slide:time_slide_id:0","sim_burst:simulation_id:0"
 		</Stream>
 	</Table>
 </LIGO_LW>
