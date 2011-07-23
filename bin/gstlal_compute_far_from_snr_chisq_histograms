@@ -61,11 +61,10 @@ class FAR(object):
 		# imporant once detections are routine :)
 		if n == 1:
 			return 0. - numpy.log(1.-fap) / self.livetime
-		if n > 1 and n < 100:
+		if n > 1 and n <= 100:
 			nvec = numpy.linspace(n**2/10000., n + 10.*n**.5, 100)
-		if n > 100:
+		else:
 			nvec = numpy.linspace(n - 10.*n**.5, n + 10.*n**.5, 100)
-			
 		FAPS = 1. - poisson.cdf(n,nvec)
 		interp = interpolate.interp1d(FAPS, nvec / self.livetime)
 		if fap < FAPS[1]:
