@@ -162,7 +162,7 @@ def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
 #
 
 
-def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list = None, seekevent = None, control_peak_time = None, block_duration = None):
+def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list = None, seekevent = None, control_peak_samples = None, block_duration = None):
 	#
 	# start with an adder and caps filter to select a sample rate
 	#
@@ -176,9 +176,9 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	# Add a peak finder on the control signal sample number = 3 seconds at 2048 Hz
 	# FIXME don't assume 2048 Hz
 	#
-
-	if control_peak_time is not None:
-		src = pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, 2048 * control_peak_time), block_duration = block_duration)
+	print control_peak_samples
+	if control_peak_samples is not None:
+		src = pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, control_peak_samples), block_duration = block_duration)
 	
 	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = block_duration)
 	
@@ -520,8 +520,8 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			bank,
 			bank_fragment,
 			control_snksrc,
-			3 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),
-			3 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),
+			4 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),
+			8 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),
 			nxydump_segment = nxydump_segment,
 			fir_stride = fir_stride,
 			control_peak_time = control_peak_time,
@@ -728,7 +728,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 			# identifies a template bank>).  we assume that
 			# all instruments have been given the same template
 			# bank
-			control_branch[instrument] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_time = control_peak_time, block_duration = block_duration)
+			control_branch[instrument] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()), block_duration = block_duration)
 
 	#
 	# construct trigger generators
