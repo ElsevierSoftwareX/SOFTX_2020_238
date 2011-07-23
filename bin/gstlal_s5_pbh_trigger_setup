@@ -55,7 +55,7 @@ f.write("L1_BANK_CACHE = %s/mode_L1-TMPLTBANK-858087370-2048_svd_bank.cache\n" %
 f.write("SEED = %d\n" % (week,))
 f.write("WEBDIR = %s/sub-solar-mass-%d-%d\n" % (web_path(), start, end))
 f.write("""
-MIN_DIST = 100
+MIN_DIST = 770
 MAX_DIST = 10000
 MIN_MASS1 = 0.2
 MAX_MASS1 = 1.8
@@ -154,7 +154,7 @@ web :
 	mkdir $(WEBDIR) 
 
 realclean :
-	rm -r *.sub *.dag* *.cache *.sh logs *.xml
+	rm -r plots $(WEBDIR) *.sub *.dag* *.cache *.sh logs *.xml
 """)
 f.close()
 
