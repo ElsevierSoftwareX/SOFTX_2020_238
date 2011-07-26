@@ -5,8 +5,6 @@ Post process output in order to generate scatter plot and histogram of matches.
 __author__ = "Leo Singer <leo.singer@ligo.org>"""
 
 
-import matplotlib
-matplotlib.use('agg')
 import pylab
 import numpy
 from glob import glob
