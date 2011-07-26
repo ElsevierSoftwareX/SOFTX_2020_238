@@ -21,7 +21,7 @@ parser.add_option("--downsample", action = "store_true", help = "Choose if you w
 
 options, filenames = parser.parse_args()
 
-required_options = ("reference_psd", "template_bank", "output")
+required_options = ("template_bank", "output")
 
 missing_options = [option for option in required_options if getattr(options, option) is None]
 if missing_options:
@@ -36,10 +36,13 @@ from glue.ligolw import utils
 bank = utils.load_filename(options.template_bank, gz=options.template_bank.endswith('.gz'))
 
 # read psd file
-psd = read_psd(options.reference_psd)[options.instrument]
+if options.reference_psd:
+	psd = read_psd(options.reference_psd)[options.instrument]
+	# smooth and create an interp object
+	psd = cbc_template_iir.smooth_and_interp(psd)
+else:
+	psd = None
 
-# smooth and create an interp object
-psd = cbc_template_iir.smooth_and_interp(psd)
 
 # get the iir coefficients
 A, B, D, snrs = cbc_template_iir.makeiirbank(bank, psd_interp = psd, verbose=options.verbose, sampleRate=options.sample_rate, padding=options.padding, flower=options.flow, downsample = options.downsample, output_to_xml = True)
