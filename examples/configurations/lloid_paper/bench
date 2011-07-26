@@ -54,10 +54,10 @@ source_rate = max(bank.get_rates())
 
 # Input stage
 src = mkelems_fast(pipeline,
-	"audiotestsrc", {"wave": "silence", "samplesperbuffer": source_rate, "num-buffers": long(round(bank.filter_length * 10))},
+	"audiotestsrc", {"wave": "silence", "samplesperbuffer": source_rate / 4, "num-buffers": long(round(bank.filter_length * 40))},
 	"flags", {"clear": "gap"},
 	"capsfilter", {"caps": gst.Caps("audio/x-raw-float,width=64,channels=1,rate=%d" % source_rate)},
-	"progressreport", {"name": "hft", "do-query": False},
+	"progressreport", {"name": "progress_hft", "do-query": False, "update-freq": 1},
 	"tee",
 )[-1]
 
@@ -71,7 +71,6 @@ for i_rate, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, k
 	else:
 		src1 = mkelems_fast(pipeline,
 			src,
-			"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": gst.SECOND},
 			"audioresample", {"quality": downsample_quality},
 			"lal_nofakedisconts", {"silent": True},
 			"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % rate)},
@@ -81,7 +80,6 @@ for i_rate, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, k
 
 	accum = mkelems_fast(pipeline,
 		"adder",
-		#"lal_adder", {"sync": True},
 	)[-1]
 
 	if i_rate > 0:
@@ -98,20 +96,20 @@ for i_rate, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, k
 	for fragment in fragments:
 		mkelems_fast(pipeline,
 			src1,
-			"audiodelay", {"samples": long(round(fragment.start * rate))}, # off by one error here!
+			"audiodelay", {"samples": long(round(fragment.start * rate))},
 			"lal_nofakedisconts", {"silent": True},
-			"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": long(round(fragment.start * gst.SECOND))},
 			"lal_firbank2", {"fir-matrix": fragment.orthogonal_template_bank, "time-domain": True},
 			"lal_nofakedisconts", {"silent": True},
 			"lal_matrixmixer", {"matrix": fragment.mix_matrix},
+			"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": long(round(fragment.start * gst.SECOND))},
 			accum
 		)
 
 	if i_rate == 0:
 		mkelems_fast(pipeline,
 			accum,
-			"progressreport", {"name": "snr", "do-query": False},
-			"fakesink", {"sync": True, "async": False}
+			"progressreport", {"name": "progress_snr", "do-query": False, "update-freq": 1},
+			"fakesink", {"sync": True, "async": True}
 		)
 
 
