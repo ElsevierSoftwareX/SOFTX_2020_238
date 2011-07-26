@@ -414,7 +414,7 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 
 
 def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src), gate_attack_length, gate_hold_length, nxydump_segment = None, fir_stride = None, control_peak_time = None, block_duration = None):
-	logname = "%s_%d_%d" % (bank.logname, bank_fragment.start, bank_fragment.end)
+	logname = "%s_%.2f.%.2f" % (bank.logname, bank_fragment.start, bank_fragment.end)
 
 	#
 	# FIR filter bank.  low frequency branches use time-domain
