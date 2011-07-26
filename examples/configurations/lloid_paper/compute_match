@@ -9,6 +9,11 @@ at each time slice.
 __author__ = "Leo Singer <leo.singer@ligo.org>"
 
 
+# Set to this to True to output the early-warning outputs for all time slices.
+# If False, only produce output for zeroth time slice.
+do_all_time_slices = False
+
+
 # Command line interface
 
 from optparse import OptionParser, Option
@@ -56,8 +61,9 @@ source_rate = max(bank.get_rates())
 
 # Input stage
 src_elems = mkelems_fast(pipeline,
-	"audiotestsrc", {"wave": "square", "freq": 0.001 / bank.filter_length, "volume": 1.},
+	"audiotestsrc", {"wave": "square", "freq": 0.001 / bank.filter_length, "volume": 1., 'samplesperbuffer': source_rate * 1, 'num-buffers': long(math.ceil(bank.filter_length / 1))},
 	"audiofirfilter", {"kernel": [1., -1.]},
+	"lal_nofakedisconts", {"silent": True},
 	"audiodelay", {"samples": source_rate},
 	"lal_nofakedisconts", {"silent": True},
 	"capsfilter", {"caps": gst.Caps("audio/x-raw-float,width=64,channels=1,rate=%d" % source_rate)},
@@ -77,13 +83,12 @@ for i, bank_fragment in enumerate(sorted(bank.bank_fragments, key = lambda x: x.
 		"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % bank_fragment.rate)},
 		"lal_firbank2", {"fir-matrix": bank_fragment.orthogonal_template_bank, "time-domain": True},
 		"lal_nofakedisconts", {"silent": True},
-		"lal_reblock",
 		"lal_matrixmixer", {"matrix": bank_fragment.mix_matrix},
 	)[-1]
 	if i > 0:
 		head = mkelems_fast(pipeline,
 			head,
-			"lal_adder", {"sync": True})[-1]
+			"adder")[-1]
 		mkelems_fast(pipeline,
 			last_head,
 			"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": gst.SECOND},
@@ -91,9 +96,9 @@ for i, bank_fragment in enumerate(sorted(bank.bank_fragments, key = lambda x: x.
 			"lal_nofakedisconts", {"silent": True},
 			"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % bank_fragment.rate)},
 			head)
-	if i < count_fragments - 1:
+	if do_all_time_slices and i < count_fragments - 1:
 		head = mkelems_fast(pipeline, head, "tee")[-1]
-	mkelems_fast(pipeline,
+	if do_all_time_slices or (len(bank.bank_fragments) - i - 1) == 0: mkelems_fast(pipeline,
 		head,
 		"audioresample", {"quality": 10}, # Always at same upsample quality (highest allowed)
 		"lal_nofakedisconts", {"silent": True},
@@ -101,17 +106,9 @@ for i, bank_fragment in enumerate(sorted(bank.bank_fragments, key = lambda x: x.
 		"lal_delay", {"delay": source_rate},
 		"lal_nofakedisconts", {"silent": True},
 		"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": gst.SECOND},
-		"progressreport",
-		"computematchsink", {"input-filename": opts.templates, "output-filename": opts.output % (len(bank.bank_fragments) - i - 1)})
+		"progressreport", {"do-query": False},
+		"computematchsink", {"input-filename": opts.templates, "output-filename": opts.output % (len(bank.bank_fragments) - i - 1), "sync": False, "async": True})
 	last_head = head
-
-src_elems[0].set_state(gst.STATE_READY)
-src_elems[0].send_event(gst.event_new_seek(
-	1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_NONE,
-	gst.SEEK_TYPE_SET, 0,
-	gst.SEEK_TYPE_SET, long(math.ceil((1 + bank.filter_length) * gst.SECOND))
-))
-
 
 
 pipeline.set_state(gst.STATE_PLAYING)
