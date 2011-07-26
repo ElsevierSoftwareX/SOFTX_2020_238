@@ -228,7 +228,7 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 			for i, f in enumerate(fs):
 				#print>>sys.stderr, "filter %3.0d, M %2.0d, f %10.9f, delay %d" % (i, M, f, delay[i])
 				a1dict.setdefault(sampleRate/M, []).append(a1[i]**M)
-				b0dict.setdefault(sampleRate/M, []).append(b0[i]*M)
+				b0dict.setdefault(sampleRate/M, []).append(b0[i]*M**0.5)
 				delaydict.setdefault(sampleRate/M, []).append(delay[i]/M)
 				M = int(max(1, 2**-numpy.ceil(numpy.log2(f * 2.0 * padding)))) # Decimation factor
 
