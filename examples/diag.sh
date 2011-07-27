@@ -221,4 +221,18 @@ function test_togglecomplex() {
 		! fakesink
 }
 
+function test_triggergen() {
+	gst-launch \
+		audiotestsrc wave=9 samplesperbuffer=128 \
+		! audio/x-raw-float, channels=2, width=64, rate=2048 \
+		! taginject tags="instrument=\"H1\",channel-name=\"LSC-STRAIN\"" \
+		! lal_togglecomplex \
+		! lal_triggergen name=triggergen snr-thresh=3 bank-filename="banks/femtobank.xml" \
+		! progressreport \
+		! fakesink \
+		audiotestsrc wave=9 samplesperbuffer=128 \
+		! audio/x-raw-float, channels=1, width=64, rate=2048 \
+		! triggergen.
+}
+
 test_audioundersample
