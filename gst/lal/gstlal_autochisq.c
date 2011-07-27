@@ -265,8 +265,20 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 			 */
 
 			complex double snr = input[((gint) autocorrelation_length(element) - 1 + element->latency) * channels];
+			complex double snrminus1 = input[((gint) autocorrelation_length(element) - 1 + element->latency - 1) * channels];
+			complex double snrplus1 = input[((gint) autocorrelation_length(element) - 1 + element->latency + 1) * channels];
+			complex double snrminus2 = input[((gint) autocorrelation_length(element) - 1 + element->latency - 2) * channels];
+			complex double snrplus2 = input[((gint) autocorrelation_length(element) - 1 + element->latency + 2) * channels];
 
-			if(cabs(snr) >= element->snr_thresh) {
+			/*
+			 * Check to see if it is on a local peak and above threshold
+			 */
+
+			if( (cabs(snr) >= element->snr_thresh) &&
+			    (cabs(snr) >= cabs(snrplus1)) &&
+			    (cabs(snr) >= cabs(snrminus1)) &&
+			    (cabs(snr) >= cabs(snrplus2)) &&
+			    (cabs(snr) >= cabs(snrminus2))) {
 				/*
 				 * multiplying snr by this makes it real
 				 */
