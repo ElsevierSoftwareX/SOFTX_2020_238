@@ -1224,7 +1224,7 @@ static void class_init(gpointer klass, gpointer class_data)
 		g_param_spec_boolean(
 			"emit-signals",
 			"Emit signals",
-			"Emit start and stop signals (rate-changed is always emited).",
+			"Emit start and stop signals (rate-changed is always emited).  The start and stop signals are emited on gap-to-non-gap and non-gap-to-gap transitions in the output stream respectively.",
 			DEFAULT_EMIT_SIGNALS,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
