@@ -62,8 +62,12 @@ src4 = test_src(pipeline, "test4", samplesperbuffer=4096)
 # put in a multiqueue for good balance
 q = multiqueue(pipeline, (src1,src2, src3, src4))
 
+def pull(elem):
+	for row in elem.emit("pull-buffer"):
+		pass
+
 # Define an appsync class
-appsync = pipeparts.AppSync()
+appsync = pipeparts.AppSync(pull)
 
 # Add app sinks and hook up the multiqueue
 s1 = appsync.add_sink(pipeline,q)
@@ -74,10 +78,10 @@ s4 = appsync.add_sink(pipeline,q)
 # connect the new-buffer signal to a function that pulls in the correct order.
 # This function should be extended to take 1 or more output objects and parsing
 # functions.
-s1.connect_after("new-buffer", pipeparts.pull_appsinks_in_order, appsync)
-s2.connect_after("new-buffer", pipeparts.pull_appsinks_in_order, appsync)
-s3.connect_after("new-buffer", pipeparts.pull_appsinks_in_order, appsync)
-s4.connect_after("new-buffer", pipeparts.pull_appsinks_in_order, appsync)
+s1.connect_after("new-buffer", appsync.pull_appsinks_in_order)
+s2.connect_after("new-buffer", appsync.pull_appsinks_in_order)
+s3.connect_after("new-buffer", appsync.pull_appsinks_in_order)
+s4.connect_after("new-buffer", appsync.pull_appsinks_in_order)
 
 
 handler = Handler(mainloop, pipeline)
