@@ -9,9 +9,9 @@ MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
 LOW_FREQUENCY_CUTOFF = 40.0
 HIGH_PASS_FREQ = 30.0
-HIGH_FREQUENCY_CUTOFF = 1023.0
-SAMPLE_RATE = 2048
-NUM_SPLIT_TEMPLATES = 500
+HIGH_FREQUENCY_CUTOFF = 2047.0
+SAMPLE_RATE = 4096
+NUM_SPLIT_TEMPLATES = 300
 OVERLAP = 50
 MM = 0.95
 
@@ -47,7 +47,7 @@ H1-TMPLTBANK-871154847-2048.xml: frame.H.cache
 		--debug-level 33 \
 		--high-pass-attenuation 0.1 \
 		--min-high-freq-cutoff SchwarzISCO \
-		--segment-length 524288 \
+		--segment-length 1048576 \
 		--low-frequency-cutoff $(LOW_FREQUENCY_CUTOFF) \
 		--pad-data 8 \
 		--num-freq-cutoffs 1 \
