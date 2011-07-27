@@ -99,6 +99,7 @@ for file in filenames:
                                 sngl_inspiral_table_split[:] = sngl_inspiral_table[first_row:(first_row + options.n + options.overlap)]
                         else:
 			        sngl_inspiral_table_split[:] = sngl_inspiral_table[(first_row-options.overlap):(first_row + options.n+options.overlap)]
-                        output_split = os.path.join(options.output_path, "%04d-%s" % (first_row/options.n + 1, output))
-                        utils.write_filename(xmldoc, output_split, gz = (output_split or "stdout").endswith(".gz"), verbose = options.verbose)
+                        if len(sngl_inspiral_table_split) > 2*options.overlap:# Keep it from populating an empty template bank file after the trim
+				output_split = os.path.join(options.output_path, "%04d-%s" % (first_row/options.n + 1, output))
+        	                utils.write_filename(xmldoc, output_split, gz = (output_split or "stdout").endswith(".gz"), verbose = options.verbose)
 
