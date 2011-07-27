@@ -459,7 +459,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	if control_peak_time is None:
 		control_peak_time = 0
 
-	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (3 * control_peak_time * gst.SECOND + 5 * block_duration)), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * block_duration))
+	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (3 * control_peak_time * gst.SECOND + 5 * block_duration)), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * block_duration), leaky = False)
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 
 	#
@@ -499,6 +499,13 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 	#
 
 	rates = sorted(bank.get_rates())
+	nextrates = {}#FIXME make prettier
+	for i,rate in enumerate(rates):
+		if i < (len(rates)-1):
+			nextrates[rate] = rates[i+1]
+		else:
+			nextrates[rate] = rate
+
 	output_rate = max(rates)
 	autocorrelation_length = bank.autocorrelation_bank.shape[1]
 	autocorrelation_latency = -(autocorrelation_length - 1) / 2
@@ -533,11 +540,14 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 	#
 
 	output_heads = {}
+	prev_head = None
 	for rate, heads in sorted(branch_heads.items()):
 		#
 		# include an adder when more than one stream at a given sample rate
 		#
 
+		if prev_head is not None:
+			heads.add(prev_head)
 		if len(heads) > 1:
 			#
 			# hook all matrix mixers that share a common sample rate to
@@ -554,16 +564,21 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			output_head = list(heads)[0]
 
 		#
-		# resample this to the highest sample rate
+		# resample this to next highest rate, or max rate
 		#
 
 		# FIXME quality = 1 seems to be okay and we could save some flops potentially...
-		output_head = pipeparts.mkresample(pipeline, output_head, quality = 4)
-		output_head = pipeparts.mkcapsfilter(pipeline, output_head, "audio/x-raw-float, rate=%d" % output_rate)
-		output_head = pipeparts.mktogglecomplex(pipeline, output_head)
-		output_heads[rate] = output_head
+		if True:#FIXME replace with conditional on TS chisq
+			output_head = pipeparts.mkresample(pipeline, output_head, quality = 1)
+			output_heads[output_rate] = prev_head = pipeparts.mkcapsfilter(pipeline, output_head, "audio/x-raw-float, rate=%d" % nextrates[rate])
+		else:
+			output_head = pipeparts.mkresample(pipeline, output_head, quality = 1)
+			output_heads[rate] = pipeparts.mkcapsfilter(pipeline, output_head, "audio/x-raw-float, rate=%d" % output_rate)
 
-	return output_heads
+	out_heads = {}
+	for k,v in output_heads.items():
+		out_heads[k] = pipeparts.mktogglecomplex(pipeline, v)
+	return out_heads
 
 
 def mkLLOIDSnrSlicesToSnr(pipeline, branch_heads, block_duration):
