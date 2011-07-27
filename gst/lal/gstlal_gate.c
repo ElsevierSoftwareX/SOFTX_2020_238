@@ -833,6 +833,50 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	control_get_interval(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), -element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), sinkbuf_length + element->attack_length, element->rate));
 
 	/*
+	 * is input already a gap?  then push it as is
+	 */
+
+	if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP)) {
+		/*
+		 * tell the world about state changes
+		 */
+
+		if(element->emit_signals && 0 != element->last_state) {
+			g_signal_emit(G_OBJECT(element), signals[SIGNAL_STOP], 0, GST_BUFFER_TIMESTAMP(sinkbuf), NULL);
+			element->last_state = 0;	/* 0 = "gap" */
+		}
+		if(!element->leaky) {
+			/*
+			 * push buffer verbatim
+			 */
+
+			element->need_discont = FALSE;
+			result = gst_pad_push(element->srcpad, sinkbuf);
+		} else {
+			/*
+			 * discard buffer
+			 */
+
+			gst_buffer_unref(sinkbuf);
+			if(sinkbuf_length)
+				/*
+				 * skipping an interval of non-zero length,
+				 * next buffer must be a discont
+				 */
+
+				element->need_discont = TRUE;
+		}
+
+		/*
+		 * done
+		 */
+
+		g_mutex_unlock(element->control_lock);
+		gst_object_unref(element);
+		return result;
+	}
+
+	/*
 	 * loop over the contents of the input buffer.
 	 */
 
