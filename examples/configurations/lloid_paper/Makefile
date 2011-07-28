@@ -21,7 +21,7 @@ HIGH_PASS_FREQ = 5.0
 TOLERANCES = 9 99 999 9999 99999 999999
 UPSAMPLE_QUALITIES = 0 1 2 3 4 5 6 7 8 9 10
 
-all: $(foreach x,$(UPSAMPLE_QUALITIES),resample_match_$x_0.out) $(foreach x,$(TOLERANCES),svd_0_$x.xml match_0_$x_0.out) tmpltbank.bin tmpltbank.xml tmpltbank-pruned.xml psd.xml
+all: bw.pdf bw_resample.pdf $(foreach x,$(UPSAMPLE_QUALITIES),resample_match_$x_0.out) $(foreach x,$(TOLERANCES),svd_0_$x.xml match_0_$x_0.out) tmpltbank.bin tmpltbank.xml tmpltbank-pruned.xml psd.xml
 
 
 # These targets are intermediate; it's OK to delete them if they are built only
@@ -139,6 +139,14 @@ resample_match_%_0.out: svd_0_999999.xml tmpltbank.bin libcomputematchsink.so
 		--upsample-quality $* \
 		--output resample_match_$*_%d.out
 
+
+# Make box and whisker plots for paper
+bw.pdf: plot_match_box_and_whiskers $(foreach x,$(TOLERANCES),svd_0_$x.xml match_0_$x_0.out)
+	python $<
+
+bw_resample.pdf: plot_match_resample_box_and_whiskers $(foreach x,$(UPSAMPLE_QUALITIES),resample_match_$x_0.out)
+	python $<
+
 # Compile special-purpose element
 computematchsink.o: computematchsink.c
 	gcc -fPIC $(shell pkg-config --cflags gstreamer-0.10) -c $< -o $@
@@ -151,6 +159,8 @@ libcomputematchsink.so: computematchsink.o
 
 clean:
 	rm -f \
+		bw.pdf \
+		bw_resample.pdf \
 		frame.cache \
 		psd.xml \
 		$(TMPLTBANK) \
