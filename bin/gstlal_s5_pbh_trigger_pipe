@@ -542,7 +542,7 @@ cluster_nodes = []
 for s in build_bank_string(bank_cache):
 
 	#trials_factor = get_svd_trials_factor(s) * bank_trials_factor
-	trials_factor = 1
+	trials_factor = bank_trials_factor
 
 	far_input_nodes = []
 
