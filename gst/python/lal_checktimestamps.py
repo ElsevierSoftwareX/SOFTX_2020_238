@@ -185,35 +185,54 @@ class lal_checktimestamps(gst.BaseTransform):
 		return True
 
 
-	def do_transform_ip(self, buf):
-		#
-		# initialize timestamp book-keeping
-		#
+	def check_time_offset_mismatch(self, buf):
+		expected_offset = self.offset0 + int(round((buf.timestamp - self.t0) * float(self.units_per_second) / gst.SECOND))
+		expected_timestamp = self.t0 + int(round((buf.offset - self.offset0) * gst.SECOND / float(self.units_per_second)))
+		if buf.offset != expected_offset:
+			print >>sys.stderr, "%s: timestamp/offset mismatch%s:  got offset %d, buffer timestamp %s corresponds to offset %d (error = %d samples)" % (self.get_property("name"), (buf.flag_is_set(gst.BUFFER_FLAG_DISCONT) and " at discontinuity" or ""), buf.offset, printable_timestamp(buf.timestamp), expected_offset, buf.offset - expected_offset)
+		elif abs(buf.timestamp - expected_timestamp) > self.timestamp_fuzz:
+			print >>sys.stderr, "%s: timestamp/offset mismatch%s:  got timestamp %s, buffer offset %d corresponds to timestamp %s (error = %d ns)" % (self.get_property("name"), (buf.flag_is_set(gst.BUFFER_FLAG_DISCONT) and " at discontinuity" or ""), printable_timestamp(buf.timestamp), buf.offset, printable_timestamp(expected_timestamp), buf.timestamp - expected_timestamp)
 
+
+	def do_transform_ip(self, buf):
 		if self.t0 is None or buf.flag_is_set(gst.BUFFER_FLAG_DISCONT):
 			if self.t0 is None:
 				if not self.silent:
 					print >>sys.stderr, "%s: initial timestamp = %s, offset = %d" % (self.get_property("name"), printable_timestamp(buf.timestamp), buf.offset)
 			elif buf.flag_is_set(gst.BUFFER_FLAG_DISCONT):
-				print >>sys.stderr, "%s: discontinuity:  timestamp = %s, offset = %d;  would have been %s, %d" % (self.get_property("name"), printable_timestamp(buf.timestamp), buf.offset, printable_timestamp(self.next_timestamp), self.next_offset)
+				if not self.silent:
+					print >>sys.stderr, "%s: discontinuity:  timestamp = %s, offset = %d;  would have been %s, %d" % (self.get_property("name"), printable_timestamp(buf.timestamp), buf.offset, printable_timestamp(self.next_timestamp), self.next_offset)
+				#
+				# check for timestamp/offset mismatch
+				#
+
+				self.check_time_offset_mismatch(buf)
+
+			#
+			# reset/initialize timestamp book-keeping
+			#
+
 			self.next_timestamp = self.t0 = buf.timestamp
 			self.next_offset = self.offset0 = buf.offset
+		else:
+			#
+			# check for timestamp/offset discontinuities
+			#
+
+			if buf.timestamp != self.next_timestamp:
+				print >>sys.stderr, "%s: got timestamp %s expected %s" % (self.get_property("name"), printable_timestamp(buf.timestamp), printable_timestamp(self.next_timestamp))
+			if buf.offset != self.next_offset:
+				print >>sys.stderr, "%s: got offset %d expected %d" % (self.get_property("name"), buf.offset, self.next_offset)
+
+			#
+			# check for timestamp/offset mismatch
+			#
+
+			self.check_time_offset_mismatch(buf)
 
 		#
-		# check timestamps and offsets
+		# check for buffer size / sample count mismatch
 		#
-
-		if buf.timestamp != self.next_timestamp:
-			print >>sys.stderr, "%s: got timestamp %s expected %s" % (self.get_property("name"), printable_timestamp(buf.timestamp), printable_timestamp(self.next_timestamp))
-		if buf.offset != self.next_offset:
-			print >>sys.stderr, "%s: got offset %d expected %d" % (self.get_property("name"), buf.offset, self.next_offset)
-
-		expected_offset = self.offset0 + int(round((buf.timestamp - self.t0) * float(self.units_per_second) / gst.SECOND))
-		expected_timestamp = self.t0 + int(round((buf.offset - self.offset0) * gst.SECOND / float(self.units_per_second)))
-		if buf.offset != expected_offset:
-			print >>sys.stderr, "%s: timestamp/offset mismatch:  got offset %d, buffer timestamp %s corresponds to offset %d (error = %d samples)" % (self.get_property("name"), buf.offset, printable_timestamp(buf.timestamp), expected_offset, buf.offset - expected_offset)
-		elif abs(buf.timestamp - expected_timestamp) > self.timestamp_fuzz:
-			print >>sys.stderr, "%s: timestamp/offset mismatch:  got timestamp %s, buffer offset %d corresponds to timestamp %s (error = %d ns)" % (self.get_property("name"), printable_timestamp(buf.timestamp), buf.offset, printable_timestamp(expected_timestamp), buf.timestamp - expected_timestamp)
 
 		length = buf.offset_end - buf.offset
 		if buf.size != length * self.unit_size:
