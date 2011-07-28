@@ -14,14 +14,14 @@ CREATE TEMPORARY TABLE _cluster_info_ AS
 		coinc_event.coinc_event_id AS coinc_event_id,
 		(coinc_event.time_slide_id || ";" || coinc_event.instruments) AS category,
 		(coinc_inspiral.end_time - (SELECT MIN(end_time) FROM coinc_inspiral)) + 1e-9 * coinc_inspiral.end_time_ns AS end_time,
-		coinc_inspiral.combined_far
+		coinc_inspiral.combined_far AS combined_far
 	FROM
 		coinc_event
 		JOIN coinc_inspiral ON (
 			coinc_inspiral.coinc_event_id == coinc_event.coinc_event_id
 		);
 CREATE INDEX tmpindex1 ON _cluster_info_ (coinc_event_id);
-CREATE INDEX tmpindex2 ON _cluster_info_ (category, end_time, snr);
+CREATE INDEX tmpindex2 ON _cluster_info_ (category, end_time, combined_far);
 
 --
 -- delete coincs that are within 10 s of coincs with higher SNR in the same
@@ -37,7 +37,7 @@ WHERE
 		FROM
 			_cluster_info_
 		WHERE
-			_cluster_info_.combined_far < 1.0 / 10.0
+			_cluster_info_.combined_far > 0.1
 		AND
 			_cluster_info_.coinc_event_id == coinc_event.coinc_event_id
 	);
