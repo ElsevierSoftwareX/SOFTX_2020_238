@@ -1,6 +1,6 @@
 Studies accuracy of LLOID filters with respect to nominal templates by
 evaluating the dot product ("match") between the LLOID pipeline's impulse
-respone and the time-reveresed templates.
+response and the time-reveresed templates.
 
 The entire process is automated by a Makefile; you can generate all of the
 results for the paper by running the command::
