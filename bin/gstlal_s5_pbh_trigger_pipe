@@ -296,7 +296,7 @@ class gstlal_inspiral_job(pipeline.CondorDAGJob):
 		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
 		self.add_condor_cmd('getenv','True')
 		self.add_condor_cmd('requirements', '( CAN_RUN_MULTICORE )')
-		self.add_condor_cmd('request_cpus', '8')
+		self.add_condor_cmd('request_cpus', '4')
 		self.add_condor_cmd('+RequiresMultipleCores', 'True')
 		self.tag_base = tag_base
 		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
@@ -318,7 +318,7 @@ class gstlal_inspiral_inj_job(pipeline.CondorDAGJob):
 		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
 		self.add_condor_cmd('getenv','True')
 		self.add_condor_cmd('requirements', '( CAN_RUN_MULTICORE )')
-		self.add_condor_cmd('request_cpus', '8')
+		self.add_condor_cmd('request_cpus', '4')
 		self.add_condor_cmd('+RequiresMultipleCores', 'True')
 		self.tag_base = tag_base
 		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
@@ -350,11 +350,12 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		self.add_var_opt("flow", flow)
 		self.add_var_opt("control-peak-time", 16)
 		#self.add_var_opt("verbose", "") #Put this in for debugging
-		if injections: self.add_var_opt("injections", injections)
+		self.injections = injections
+		if self.injections: self.add_var_opt("injections", injections)
 		if vetoes: self.add_var_opt("veto-segments-file", vetoes)
 		path = os.getcwd()
 		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
-		if injections is not None:
+		if self.injections is not None:
 			self.output_name = '%s/%s-%04d-%d-%d-LLOID-simulations.sqlite' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
 		else:
 			self.output_name = '%s/%s-%04d-%d-%d-LLOID.sqlite' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
@@ -482,7 +483,8 @@ def parse_command_line():
 	#FIXME get this from the cache?
 	parser.add_option("--channel", metavar = "name", help = "Set the channel name (default=LSC-STRAIN)", default="LSC-STRAIN")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
-	parser.add_option("--sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
+	parser.add_option("--delete-sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
+	parser.add_option("--cluster-sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
 	parser.add_option("--injection-sql-file", metavar = "filename", help = "Set the sql file to apply to injection databases")
 	parser.add_option("--web-dir", metavar = "directory", help = "Set the web directory like /home/USER/public_html")
 	
@@ -551,7 +553,6 @@ for s in build_bank_string(bank_cache):
 	#
 
 	noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), options.channel, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, flow=40, time_slide_file=options.time_slide_file)
-	#clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[noninjnode.output_name], p_node=[noninjnode])
 	far_input_nodes.append(noninjnode)
 	noninj_nodes.append(noninjnode)
 	
@@ -561,7 +562,6 @@ for s in build_bank_string(bank_cache):
 
 	if options.injections is not None:
 		injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), options.channel, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, vetoes=options.vetoes, flow=40)
-		#injnode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[injnode.output_name], p_node=[injnode])
 		far_input_nodes.append(injnode)
 		inj_nodes.append(injnode)
 	#
@@ -575,7 +575,12 @@ for s in build_bank_string(bank_cache):
 	#
 
 	for f in far_input_nodes:
-		clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[f.output_name], p_node=[farnode])
+		if f.injections:
+			# cluster injections
+			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.cluster_sql_file, input=[f.output_name], p_node=[farnode])
+		else:
+			# don't cluster zerolag, instead delete above FAR
+			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.delete_sql_file, input=[f.output_name], p_node=[farnode])
 		clusternode = ligolw_sqlite_node(toXMLJob, dag, f.output_name, replace=False, extract=f.output_name.replace('.sqlite','.xml.gz'), p_node=[clusternode])
 		cluster_nodes.append(clusternode)
 
@@ -590,8 +595,8 @@ for s in build_bank_string(bank_cache):
 noninjdb = "H1H2L1-ALL-%d-%d-LLOID.sqlite" % (options.gps_start_time, options.gps_stop_time)
 # merge
 sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_name)[1].replace('.sqlite','.xml.gz') for f in noninj_nodes] + [options.vetoes, options.frame_segments_file], p_node=cluster_nodes)
-# cluster
-noninjsqlitenode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.sql_file, input=[noninjdb], p_node=[sqlitenode])
+# delete high FARs
+noninjsqlitenode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.delete_sql_file, input=[noninjdb], p_node=[sqlitenode])
 
 #
 # injection DB
