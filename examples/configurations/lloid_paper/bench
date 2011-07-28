@@ -113,5 +113,4 @@ for i_rate, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, k
 
 
 pipeline.set_state(gst.STATE_PLAYING)
-gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, "bench")
 mainloop.run()

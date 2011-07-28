@@ -112,5 +112,4 @@ for i, bank_fragment in enumerate(sorted(bank.bank_fragments, key = lambda x: x.
 
 
 pipeline.set_state(gst.STATE_PLAYING)
-gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, "impulse_response")
 mainloop.run()
