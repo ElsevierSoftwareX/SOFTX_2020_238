@@ -459,7 +459,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	if control_peak_time is None:
 		control_peak_time = 0
 
-	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (3 * control_peak_time * gst.SECOND + 5 * block_duration)), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * block_duration), leaky = False)
+	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (3 * control_peak_time * gst.SECOND + 5 * block_duration)), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * block_duration))
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 
 	#
@@ -499,13 +499,6 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 	#
 
 	rates = sorted(bank.get_rates())
-	nextrates = {}#FIXME make prettier
-	for i,rate in enumerate(rates):
-		if i < (len(rates)-1):
-			nextrates[rate] = rates[i+1]
-		else:
-			nextrates[rate] = rate
-
 	output_rate = max(rates)
 	autocorrelation_length = bank.autocorrelation_bank.shape[1]
 	autocorrelation_latency = -(autocorrelation_length - 1) / 2
@@ -527,8 +520,8 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			bank,
 			bank_fragment,
 			control_snksrc,
-			32 + 4 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#32 is for a the audioresample filter. FIXME tune these windows
-			32 + 8 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#32 is for the audioresample filter 
+			16 + 4 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#16 is for a the audioresample filter with qual=1. FIXME tune these windows
+			16 + 8 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#16 is for the audioresample filter with qual=1 
 			nxydump_segment = nxydump_segment,
 			fir_stride = fir_stride,
 			control_peak_time = control_peak_time,
@@ -567,18 +560,15 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 		# resample this to next highest rate, or max rate
 		#
 
-		# FIXME quality = 1 seems to be okay and we could save some flops potentially...
 		if True:#FIXME replace with conditional on TS chisq
-			output_head = pipeparts.mkresample(pipeline, output_head, quality = 1)
-			output_heads[output_rate] = prev_head = pipeparts.mkcapsfilter(pipeline, output_head, "audio/x-raw-float, rate=%d" % nextrates[rate])
+			output_heads[output_rate] = prev_head = pipeparts.mkresample(pipeline, output_head, quality = 1)
 		else:
 			output_head = pipeparts.mkresample(pipeline, output_head, quality = 1)
 			output_heads[rate] = pipeparts.mkcapsfilter(pipeline, output_head, "audio/x-raw-float, rate=%d" % output_rate)
 
-	out_heads = {}
 	for k,v in output_heads.items():
-		out_heads[k] = pipeparts.mktogglecomplex(pipeline, v)
-	return out_heads
+		output_heads[k] = pipeparts.mktogglecomplex(pipeline, v)
+	return output_heads
 
 
 def mkLLOIDSnrSlicesToSnr(pipeline, branch_heads, block_duration):
