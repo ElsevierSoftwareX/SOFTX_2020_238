@@ -404,6 +404,8 @@ class gstlal_compute_far_from_snr_chisq_histograms_node(pipeline.CondorDAGNode):
 		self.add_var_opt("segments-file", segments_file)
 		self.add_var_opt("vetoes-file", vetoes_file)
 		self.add_var_opt("additional-trials-factor", additional_trials_factor)
+		self.add_var_opt("compute-fap", "")
+		self.add_var_opt("compute-far", "")
 		self.add_var_opt("stride", stride)
 		for f in input:
 			self.add_file_arg(f)
