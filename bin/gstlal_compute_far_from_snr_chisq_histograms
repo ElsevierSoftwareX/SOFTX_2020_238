@@ -22,10 +22,10 @@ except ImportError:
 sqlite3.enable_callback_tracebacks(True)
 
 def smooth_bins(bA, stride = 5):
-	wn = rate.gaussian_window2d(3*stride,3*stride, sigma=10)
-	rate.filter_array(bA.array.T,wn)
+	wn = rate.gaussian_window2d(3 * stride, 3 * stride, sigma = 10)
+	rate.filter_array(bA.array.T, wn)
 
-def decimate_array(arr, stride=5):
+def decimate_array(arr, stride = 5):
 	return arr[::stride, ::stride]
 
 def linearize_array(arr):
@@ -44,10 +44,10 @@ class FAR(object):
 			H1nonzero = get_nonzero(linearize_array(decimate_array(counts["H1_snr_chi"].array, stride = options.stride)))
 			L1nonzero = get_nonzero(linearize_array(decimate_array(counts["L1_snr_chi"].array, stride = options.stride)))
 			self.ranks = self.possible_ranks_array(H1nonzero, L1nonzero)
-		
+
 			# compute the false alarm probability (FAP) from possible ranks
-			FAP = (numpy.arange(len(self.ranks))+1.) / len(self.ranks)
-			self.fap_from_rank = interpolate.interp1d(self.ranks, FAP, fill_value=0., bounds_error=False)
+			FAP = (numpy.arange(len(self.ranks)) + 1.) / len(self.ranks)
+			self.fap_from_rank = interpolate.interp1d(self.ranks, FAP, fill_value = 0., bounds_error = False)
 
 	# Method only works if counts is not None:
 	def possible_ranks_array(self, A, B):
@@ -57,7 +57,7 @@ class FAR(object):
 		out = out.reshape((out.shape[0] * out.shape[1],))
 		out.sort()
 		return out
-	
+
 	# Method only works if counts is not None:
 	def compute_rank(self, H1snr, H1chisq, L1snr, L1chisq):
 		if self.counts is None:
@@ -66,7 +66,7 @@ class FAR(object):
 		if rank > self.ranks[-2]:
 			rank = self.ranks[-2]
 		return rank
-	
+
 	# Method only works if counts is not None:
 	def compute_fap(self, H1snr, H1chisq, L1snr, L1chisq):
 		if self.counts is None:
@@ -74,18 +74,18 @@ class FAR(object):
 		fap = self.fap_from_rank(self.compute_rank(H1snr, H1chisq, L1snr, L1chisq))[0]
 		fap = 1.0 - (1.0 - fap)**self.trials_factor
 		return fap
-	
-	def FAR_from_FAP(self, fap, n=1):
+
+	def FAR_from_FAP(self, fap, n = 1):
 		# the n = 1 case can be done exactly.  That is good since it is
 		# the most important.  FIXME it should be possible to code
 		# exact solutions for other small values of n that may be
 		# imporant once detections are routine :)
 		if n == 1:
-			return 0. - numpy.log(1.-fap) / self.livetime
+			return 0. - numpy.log(1. - fap) / self.livetime
 		if n > 1 and n <= 100:
-			nvec = numpy.linspace(n**2/10000., n + 10.*n**.5, 100)
+			nvec = numpy.linspace(n**2 / 10000., n + 10. * n**.5, 100)
 		else:
-			nvec = numpy.linspace(n - 10.*n**.5, n + 10.*n**.5, 100)
+			nvec = numpy.linspace(n - 10. * n**.5, n + 10. * n**.5, 100)
 		FAPS = 1. - poisson.cdf(n,nvec)
 		interp = interpolate.interp1d(FAPS, nvec / self.livetime)
 		if fap < FAPS[1]:
@@ -100,7 +100,7 @@ class FAR(object):
 		else:
 			far = self.FAR_from_FAP(fap, n)
 		return far
-	
+
 
 def parse_command_line():
 	parser = OptionParser(
@@ -115,7 +115,7 @@ def parse_command_line():
 	parser.add_option("--additional-trials-factor", metavar = "int", type="int", default=1, help = "set an additional trials factor to apply to the rate, beyond what is measured from the SVD.  Default is 1.")
 	parser.add_option("--tmp-space", metavar = "dir", help = "Set the name of the tmp space if working with sqlite")
 	parser.add_option("--compute-fap", action = "store_true", help = "compute fap, otherwise compute far assuming fap has been calculated")
-	parser.add_option("--compute-far", action = "store_true", help = "compute far")
+	parser.add_option("--compute-far", action = "store_true", help = "compute far, only works if fap is being computed or has been computed.")
 	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
 
 	options, filenames = parser.parse_args()
@@ -130,7 +130,7 @@ segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.
 vetoes = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes_file, verbose = options.verbose), options.vetoes_name).coalesce()
 
 #FIXME for now our live time is defined by this
-H1L1livetime = float(abs((segments - vetoes).intersection(set(("H1","L1")))))
+H1L1livetime = float(abs((segments - vetoes).intersection(set(("H1", "L1")))))
 
 if options.compute_fap:
 	# retrieve rank data
@@ -152,21 +152,21 @@ else:
 
 # iterate over files to rank
 for f in filenames:
-	
+
 	from glue.ligolw import dbtables
-	
+
 	working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
 
 	connection.create_function("fap", 4, Far.compute_fap)
 	connection.create_function("far", 2, Far.compute_far)
-	
+
 	if options.compute_fap:
 		print >>sys.stderr, "computing faps ..."
 		# FIXME abusing FAR column
 		connection.cursor().execute('UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(snglA.snr, snglA.chisq, snglB.snr, snglB.chisq) FROM coinc_event_map as mapA on mapA.coinc_event_id == coinc_inspiral.coinc_event_id JOIN coinc_event_map as mapB on mapB.coinc_event_id == coinc_inspiral.coinc_event_id JOIN sngl_inspiral as snglA on snglA.event_id == mapA.event_id JOIN sngl_inspiral as snglB on snglB.event_id == mapB.event_id WHERE snglA.ifo == "H1" and snglB.ifo =="L1")')
 		connection.commit()
-	
+
 	if options.compute_far:
 		print >>sys.stderr, "computing rates ..."
 		# FIXME abusing FAR column
@@ -174,6 +174,6 @@ for f in filenames:
 		connection.commit()
 		connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate, ranktable.rowid) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id)')
 		connection.commit()
-	
+
 	connection.close()
 	dbtables.put_connection_filename(f, working_filename, verbose = options.verbose)
