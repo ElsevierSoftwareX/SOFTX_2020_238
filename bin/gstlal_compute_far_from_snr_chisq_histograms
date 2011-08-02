@@ -115,6 +115,7 @@ def parse_command_line():
 	parser.add_option("--additional-trials-factor", metavar = "int", type="int", default=1, help = "set an additional trials factor to apply to the rate, beyond what is measured from the SVD.  Default is 1.")
 	parser.add_option("--tmp-space", metavar = "dir", help = "Set the name of the tmp space if working with sqlite")
 	parser.add_option("--compute-fap", action = "store_true", help = "compute fap, otherwise compute far assuming fap has been calculated")
+	parser.add_option("--compute-far", action = "store_true", help = "compute far")
 	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
 
 	options, filenames = parser.parse_args()
@@ -166,7 +167,7 @@ for f in filenames:
 		connection.cursor().execute('UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(snglA.snr, snglA.chisq, snglB.snr, snglB.chisq) FROM coinc_event_map as mapA on mapA.coinc_event_id == coinc_inspiral.coinc_event_id JOIN coinc_event_map as mapB on mapB.coinc_event_id == coinc_inspiral.coinc_event_id JOIN sngl_inspiral as snglA on snglA.event_id == mapA.event_id JOIN sngl_inspiral as snglB on snglB.event_id == mapB.event_id WHERE snglA.ifo == "H1" and snglB.ifo =="L1")')
 		connection.commit()
 	
-	else:
+	if options.compute_far:
 		print >>sys.stderr, "computing rates ..."
 		# FIXME abusing FAR column
 		connection.cursor().execute('CREATE TEMPORARY TABLE ranktable AS SELECT * FROM coinc_inspiral ORDER BY false_alarm_rate')
