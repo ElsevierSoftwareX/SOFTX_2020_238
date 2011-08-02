@@ -426,6 +426,19 @@ def mknxydumpsinktee(pipeline, src, filename, segment = None):
 	return t
 
 
+def mkblcbctriggergen(pipeline, snr, chisq, template_bank_filename, snr_threshold, sigmasq):
+	elem = gst.element_factory_make("lal_blcbctriggergen")
+	elem.set_property("bank-filename", template_bank_filename)
+	elem.set_property("snr-thresh", snr_threshold)
+	elem.set_property("sigmasq", sigmasq)
+	pipeline.add(elem)
+	# snr is complex and chisq is real so the correct source and sink
+	# pads will be selected automatically
+	snr.link(elem)
+	chisq.link(elem)
+	return elem
+
+
 def mktriggergen(pipeline, snr, chisq, template_bank_filename, snr_threshold, sigmasq):
 	elem = gst.element_factory_make("lal_triggergen")
 	elem.set_property("bank-filename", template_bank_filename)
@@ -567,7 +580,7 @@ def mkappsink(pipeline, src, pad_name = None, max_buffers = 1, drop = False, **p
 
 
 class AppSync(object):
-	def __init__(self, appsink_new_buffer, appsinks = [], dt = 5):
+	def __init__(self, appsink_new_buffer, appsinks = [], dt = None):
 		self.lock = threading.Lock()
 		self.appsinks = {}
 		for a in appsinks:
@@ -605,8 +618,9 @@ class AppSync(object):
 		# it won't work at the end. It somehow needs to know when the last
 		# buffers are being pulled, but the EOS has not been emitted yet
 		mint = self.sorted()[0][0]
+		
 		for (t,k) in self.sorted():
-			if t - mint > self.dt * gst.SECOND:
+			if self.dt is not None and t - mint > self.dt * gst.SECOND:
 				break
 			if self.appsinks[k] == 1:
 				self.appsinks[k] = 0
@@ -632,6 +646,21 @@ def mkpeak(pipeline, src, n):
 	src.link(elem)
 	return elem
 
+def mksyncsink(pipeline, srcs):
+	"""
+	add streams together and dump to a fake sink.  this can be used to
+	synchronize streams. It returns tee'd off versions of srcs
+	"""
+	adder = gst.element_factory_make("lal_adder")
+	adder.set_property("sync", True)
+	pipeline.add(adder)
+	outsrcs = []
+	for src in srcs:
+		outsrcs.append(mktee(pipeline,src))
+		mkqueue(pipeline,outsrcs[-1],max_size_time=0, max_size_buffers=1, max_size_bytes=0).link(adder)
+	mkfakesink(pipeline, adder)
+	return outsrcs
+	
 
 def audioresample_variance_gain(quality, num, den):
 	"""Calculate the output gain of GStreamer's stock audioresample element.
