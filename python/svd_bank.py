@@ -160,7 +160,7 @@ class Bank(object):
 
 
 
-def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.1, identity = False, verbose = False, autocorrelation_length = 101):
+def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.1, identity = False, verbose = False, autocorrelation_length = 201):
 	# Open template bank file
 	bank_xmldoc = utils.load_filename(template_bank_filename, verbose = verbose)
 
