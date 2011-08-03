@@ -620,7 +620,7 @@ class AppSync(object):
 		mint = self.sorted()[0][0]
 		
 		for (t,k) in self.sorted():
-			if self.dt is not None and t - mint > self.dt * gst.SECOND:
+			if (self.dt is not None) and (t - mint > self.dt * gst.SECOND):
 				break
 			if self.appsinks[k] == 1:
 				self.appsinks[k] = 0
