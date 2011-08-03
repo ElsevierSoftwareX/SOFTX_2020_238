@@ -499,6 +499,14 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 	#
 
 	rates = sorted(bank.get_rates())
+	
+	nextrates = {}#FIXME make prettier
+	for i,rate in enumerate(rates):
+		if i < (len(rates)-1):
+			nextrates[rate] = rates[i+1]
+		else:
+			nextrates[rate] = rate
+	
 	output_rate = max(rates)
 	autocorrelation_length = bank.autocorrelation_bank.shape[1]
 	autocorrelation_latency = -(autocorrelation_length - 1) / 2
@@ -520,8 +528,8 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			bank,
 			bank_fragment,
 			control_snksrc,
-			16 + 4 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#16 is for a the audioresample filter with qual=1. FIXME tune these windows
-			16 + 8 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#16 is for the audioresample filter with qual=1 
+			16 + 2 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#16 is for a the audioresample filter with qual=1. FIXME tune these windows
+			16 + 2 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#16 is for the audioresample filter with qual=1 
 			nxydump_segment = nxydump_segment,
 			fir_stride = fir_stride,
 			control_peak_time = control_peak_time,
@@ -561,7 +569,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 		#
 
 		if True:#FIXME replace with conditional on TS chisq
-			output_heads[output_rate] = prev_head = pipeparts.mkresample(pipeline, output_head, quality = 1)
+			output_heads[output_rate] = prev_head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, output_head, quality = 1), "audio/x-raw-float, rate=%d" % nextrates[rate])
 		else:
 			output_head = pipeparts.mkresample(pipeline, output_head, quality = 1)
 			output_heads[rate] = pipeparts.mkcapsfilter(pipeline, output_head, "audio/x-raw-float, rate=%d" % output_rate)
