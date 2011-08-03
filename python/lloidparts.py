@@ -176,12 +176,12 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	# Add a peak finder on the control signal sample number = 3 seconds at 2048 Hz
 	# FIXME don't assume 2048 Hz
 	#
-	
+
 	if control_peak_samples is not None:
 		src = pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, control_peak_samples), block_duration = block_duration)
-	
+
 	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = block_duration)
-	
+
 	#
 	# optionally add a segment src and gate to only reconstruct around
 	# injections
@@ -499,14 +499,14 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 	#
 
 	rates = sorted(bank.get_rates())
-	
+
 	nextrates = {}#FIXME make prettier
 	for i,rate in enumerate(rates):
 		if i < (len(rates)-1):
 			nextrates[rate] = rates[i+1]
 		else:
 			nextrates[rate] = rate
-	
+
 	output_rate = max(rates)
 	autocorrelation_length = bank.autocorrelation_bank.shape[1]
 	autocorrelation_latency = -(autocorrelation_length - 1) / 2
