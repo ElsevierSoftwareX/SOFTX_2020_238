@@ -105,6 +105,8 @@ GstClockTime gst_audioadapter_expected_timestamp(GstAudioAdapter *);
 void gst_audioadapter_drain(GstAudioAdapter *);
 void gst_audioadapter_push(GstAudioAdapter *, GstBuffer *);
 gboolean gst_audioadapter_is_gap(GstAudioAdapter *);
+guint gst_audioadapter_head_gap_length(GstAudioAdapter *);
+guint gst_audioadapter_tail_gap_length(GstAudioAdapter *);
 void gst_audioadapter_copy(GstAudioAdapter *, void *, guint, gboolean *, gboolean *);
 void gst_audioadapter_flush(GstAudioAdapter *, guint);
 
