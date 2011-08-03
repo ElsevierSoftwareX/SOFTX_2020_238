@@ -164,13 +164,15 @@ static guint64 get_available_samples(GSTLALAutoChiSq *element)
 
 static gsl_vector *compute_autocorrelation_norm(GSTLALAutoChiSq *element)
 {
-	gsl_vector *norm = gsl_vector_alloc(autocorrelation_channels(element));
+	gsl_vector *norm;
 	unsigned channel;
 
-	if(element->autocorrelation_mask_matrix) {
-		g_assert(autocorrelation_channels(element) == element->autocorrelation_mask_matrix->size1);
-		g_assert(autocorrelation_length(element) == element->autocorrelation_mask_matrix->size2);
+	if(element->autocorrelation_mask_matrix && (autocorrelation_channels(element) != element->autocorrelation_mask_matrix->size1 || autocorrelation_length(element) != element->autocorrelation_mask_matrix->size2)) {
+		GST_ELEMENT_ERROR(element, STREAM, FAILED, ("array size mismatch"), ("autocorrelation matrix (%dx%d) and mask matrix (%dx%d) do not have the same size", autocorrelation_channels(element), autocorrelation_length(element), element->autocorrelation_mask_matrix->size1, element->autocorrelation_mask_matrix->size2));
+		return NULL;
 	}
+
+	norm = gsl_vector_alloc(autocorrelation_channels(element));
 
 	for(channel = 0; channel < autocorrelation_channels(element); channel++) {
 		gsl_vector_complex_view row = gsl_matrix_complex_row(element->autocorrelation_matrix, channel);
@@ -702,8 +704,14 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * recompute norms if needed
 	 */
 
-	if(!element->autocorrelation_norm)
+	if(!element->autocorrelation_norm) {
 		element->autocorrelation_norm = compute_autocorrelation_norm(element);
+		if(!element->autocorrelation_norm) {
+			GST_DEBUG_OBJECT(element, "failed to compute autocorrelation norms");
+			result = GST_FLOW_ERROR;
+			goto done;
+		}
+	}
 
 	/*
 	 * check for discontinuity
