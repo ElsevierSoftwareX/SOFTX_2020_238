@@ -17,9 +17,11 @@ from glue import pipeline
 from glue import lal
 from glue.ligolw import lsctables
 from glue import segments
+from glue.ligolw import array
 import glue.ligolw.utils as utils
 import glue.ligolw.utils.segments as ligolw_segments
 from optparse import OptionParser
+from gstlal.svd_bank import read_bank
 
 ###############################################################################
 # environment utilities
@@ -426,12 +428,16 @@ def parse_banks(bank_string):
 	return out
 
 def get_svd_trials_factor(svd_bank_string, ifo):
-	banks = parse_banks(svd_bank_string)
-	print >> sys.stderr, "reading SVD bank ..."
-	bank = read_bank(banks[ifo][0])
-	for frag in bank.bank_fragments:
-		if frag.rate == 256:
-			return len(frag.singular_values)
+	fname = parse_banks(svd_bank_string)[ifo][0]
+	proc = subprocess.Popen(["grep -A 3 squares %s | sed -n '4~5p' | sed -e 's@ @\\n@g' | awk '{tot=tot+$1} END {print tot}' | tr -d '\\n'" % (fname,)], shell=True, stdout=subprocess.PIPE)
+	return int(float(proc.communicate()[0]))
+	
+	#FIXME the correct way is here, but it is really slow
+	lw = utils.load_filename(f, verbose = True).childNodes[0]
+	out = 0.0
+	for node in (node for node in lw.childNodes if node.tagName == 'LIGO_LW'):
+		out += array.get_array(node, 'sum_of_squares_weights').array.sum()
+	return int(out)
 
 # FIXME surely this is in glue
 def parse_cache_str(instr):
@@ -531,9 +537,9 @@ pageJob = gstlal_s5_pbh_summary_page_job()
 
 #
 # get approximate trials factor for whole search
-#
+# FIXME probably not needed, remove
 
-bank_trials_factor = num_bank_files(bank_cache)
+# bank_trials_factor = num_bank_files(bank_cache)
 
 noninj_nodes = []
 inj_nodes = []
@@ -545,8 +551,7 @@ cluster_nodes = []
 
 for s in build_bank_string(bank_cache):
 
-	#trials_factor = get_svd_trials_factor(s) * bank_trials_factor
-	trials_factor = bank_trials_factor
+	trials_factor = get_svd_trials_factor(s, "H1")# * bank_trials_factor
 
 	far_input_nodes = []
 
