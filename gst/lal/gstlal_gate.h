@@ -60,10 +60,11 @@ typedef struct _GSTLALGate {
 	GstPad *srcpad;
 
 	GMutex *control_lock;
-	GCond *control_availability;
 	gboolean control_eos;
 	gboolean sink_eos;
+	GstClockTime t_req_control_head;
 	GQueue *control_queue;
+	GCond *control_queue_size_changed;
 	gdouble (*control_sample_func)(const gpointer, guint64);
 
 	gboolean emit_signals;
