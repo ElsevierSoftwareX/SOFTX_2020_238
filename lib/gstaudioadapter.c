@@ -138,7 +138,7 @@ void gst_audioadapter_copy(GstAudioAdapter *adapter, void *dst, guint samples, g
 		goto done;
 	g_assert(samples <= adapter->size);
 
-	/* first buffer might need to have some samples skipped to it needs
+	/* first buffer might need to have some samples skipped so it needs
 	 * to be handled separately */
 	buf = GST_BUFFER(head->data);
 	n = MIN(samples, samples_remaining(buf, adapter->skip));
