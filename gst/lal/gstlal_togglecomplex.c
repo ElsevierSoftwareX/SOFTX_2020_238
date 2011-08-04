@@ -242,17 +242,27 @@ error:
 
 /*
  * prepare_output_buffer()
+ *
+ * FIXME:  the logic here results in a copy being made of the buffer's
+ * metadata even if this element is the only element with a reference to
+ * the input buffer.  it migh be possible to avoid this in 0.11
  */
 
 
 static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *input, gint size, GstCaps *caps, GstBuffer **buf)
 {
 	/*
-	 * create sub-buffer from input with writeable metadata
+	 * start by making output a reference to the input
 	 */
 
 	gst_buffer_ref(input);
-	*buf = gst_buffer_make_metadata_writable(input);
+	*buf = input;
+
+	/*
+	 * make metadata writeable
+	 */
+
+	*buf = gst_buffer_make_metadata_writable(*buf);
 	if(!*buf) {
 		GST_DEBUG_OBJECT(trans, "failure creating sub-buffer from input");
 		return GST_FLOW_ERROR;
