@@ -148,7 +148,7 @@ static guint32 zero_pad_length(const GSTLALWhiten *element)
 }
 
 
-static guint32 get_available_samples(GSTLALWhiten *element)
+static guint get_available_samples(GSTLALWhiten *element)
 {
 	guint size;
 
@@ -1247,7 +1247,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * clear input queue
 		 */
 
-		gst_audioadapter_drain(element->input_queue);
+		gst_audioadapter_clear(element->input_queue);
 
 		/*
 		 * (re)sync timestamp and offset book-keeping

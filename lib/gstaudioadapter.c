@@ -95,7 +95,7 @@ GstClockTime gst_audioadapter_expected_timestamp(GstAudioAdapter *adapter)
 }
 
 
-void gst_audioadapter_drain(GstAudioAdapter *adapter)
+void gst_audioadapter_clear(GstAudioAdapter *adapter)
 {
 	void *buf;
 	while((buf = g_queue_pop_head(adapter->queue)))
@@ -243,7 +243,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case PROP_UNITSIZE: {
 		guint unit_size = g_value_get_uint(value);
 		if(unit_size != adapter->unit_size) {
-			gst_audioadapter_drain(adapter);
+			gst_audioadapter_clear(adapter);
 			adapter->unit_size = unit_size;
 		}
 	}
@@ -280,7 +280,7 @@ static void dispose(GObject *object)
 {
 	GstAudioAdapter *adapter = GST_AUDIOADAPTER(object);
 
-	gst_audioadapter_drain(adapter);
+	gst_audioadapter_clear(adapter);
 }
 
 
