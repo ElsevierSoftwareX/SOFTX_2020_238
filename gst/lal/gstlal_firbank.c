@@ -468,9 +468,10 @@ static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ava
 			 * the work space in the time domain.
 			 */
 
-			unsigned k;
-			for(k = 0; k < filter_length_fd; k++)
-				element->workspace_fd[k] = element->input_fd[k] * *(filter++);
+			complex double *last_input_fd, *input_fd = element->input_fd;
+			complex double *workspace_fd = element->workspace_fd;
+			for(last_input_fd = input_fd + filter_length_fd; input_fd < last_input_fd; )
+				*(workspace_fd++) = *(input_fd++) * *(filter++);
 			fftw_execute(element->out_plan);
 			gsl_matrix_set_col(&output.matrix, j, &workspace.vector);
 		}
