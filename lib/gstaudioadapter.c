@@ -102,6 +102,7 @@ void gst_audioadapter_clear(GstAudioAdapter *adapter)
 		gst_buffer_unref(GST_BUFFER(buf));
 	adapter->size = 0;
 	adapter->skip = 0;
+	/*g_object_notify(G_OBJECT(adapter), "size");*/
 }
 
 
@@ -111,6 +112,7 @@ void gst_audioadapter_push(GstAudioAdapter *adapter, GstBuffer *buf)
 	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(buf));
 	g_queue_push_tail(adapter->queue, buf);
 	adapter->size += GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
+	/*g_object_notify(G_OBJECT(adapter), "size");*/
 }
 
 
@@ -202,6 +204,7 @@ done:
 
 void gst_audioadapter_flush(GstAudioAdapter *adapter, guint samples)
 {
+	/*gboolean size_changed = samples;*/
 	g_assert(samples <= adapter->size);
 
 	while(samples) {
@@ -222,6 +225,7 @@ void gst_audioadapter_flush(GstAudioAdapter *adapter, guint samples)
 	}
 
 done:
+	/*if(size_changed) g_object_notify(G_OBJECT(adapter), "size");*/
 	return;
 }
 
