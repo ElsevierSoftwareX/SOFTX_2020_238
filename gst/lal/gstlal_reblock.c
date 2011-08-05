@@ -266,6 +266,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	for(offset = 0; offset < length; offset += block_length) {
 		GstBuffer *srcbuf;
 
+		/*
+		 * extract sub-buffer
+		 */
+
 		if(length - offset < block_length)
 			block_length = length - offset;
 
@@ -276,6 +280,17 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			result = GST_FLOW_ERROR;
 			goto done;
 		}
+
+		/*
+		 * tweak for buffers that don't have data in them
+		 *
+		 * FIXME:  gst_buffer_create_sub() needs to check for this
+		 * itself if gstreamer is going to allow such buffers.
+		 * submit a patch?
+		 */
+
+		if(!GST_BUFFER_DATA(sinkbuf))
+			GST_BUFFER_DATA(srcbuf) = NULL;
 
 		/*
 		 * set flags, caps, offset, and timestamps.
