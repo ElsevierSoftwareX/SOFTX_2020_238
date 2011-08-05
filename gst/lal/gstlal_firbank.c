@@ -1161,7 +1161,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * input is not 0s.
 		 */
 
-		gst_buffer_ref(inbuf);	/* don't let the adapter free it */
+		gst_buffer_ref(inbuf);	/* don't let calling code free buffer */
 		gst_adapter_push(element->adapter, inbuf);
 		element->zeros_in_adapter = 0;
 		result = filter(element, outbuf);
