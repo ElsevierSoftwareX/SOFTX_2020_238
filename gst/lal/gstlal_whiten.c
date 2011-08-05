@@ -136,13 +136,13 @@ GType gstlal_psdmode_get_type(void)
  */
 
 
-static guint32 fft_length(const GSTLALWhiten *element)
+static guint fft_length(const GSTLALWhiten *element)
 {
 	return round(element->fft_length_seconds * element->sample_rate);
 }
 
 
-static guint32 zero_pad_length(const GSTLALWhiten *element)
+static guint zero_pad_length(const GSTLALWhiten *element)
 {
 	return round(element->zero_pad_seconds * element->sample_rate);
 }
@@ -553,10 +553,10 @@ static void set_metadata(GSTLALWhiten *element, GstBuffer *buf, guint64 outsampl
 }
 
 
-static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint32 *outsamples, gboolean *output_is_gap)
+static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *outsamples, gboolean *output_is_gap)
 {
-	guint32 zero_pad = zero_pad_length(element);
-	guint32 hann_length = fft_length(element) - 2 * zero_pad;
+	guint zero_pad = zero_pad_length(element);
+	guint hann_length = fft_length(element) - 2 * zero_pad;
 	double *dst = (double *) GST_BUFFER_DATA(outbuf);
 
 	/*
@@ -1234,7 +1234,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 {
 	GSTLALWhiten *element = GSTLAL_WHITEN(trans);
 	GstFlowReturn result = GST_FLOW_OK;
-	guint32 outsamples;
+	guint outsamples;
 	gboolean output_is_gap;
 
 	/*
