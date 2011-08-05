@@ -430,10 +430,13 @@ def parse_banks(bank_string):
 def get_svd_trials_factor(svd_bank_string, ifo):
 	fname = parse_banks(svd_bank_string)[ifo][0]
 	proc = subprocess.Popen(["grep -A 3 squares %s | sed -n '4~5p' | sed -e 's@ @\\n@g' | awk '{tot=tot+$1} END {print tot}' | tr -d '\\n'" % (fname,)], shell=True, stdout=subprocess.PIPE)
-	return int(float(proc.communicate()[0]))
+	rank = int(float(proc.communicate()[0]))
 	
 	#FIXME the correct way is here, but it is really slow
 	lw = utils.load_filename(f, verbose = True).childNodes[0]
+	return len(lsctables.table.get_table(xmldoc, lw.SnglInspiralTable.tableName)) / rank
+
+
 	out = 0.0
 	for node in (node for node in lw.childNodes if node.tagName == 'LIGO_LW'):
 		out += array.get_array(node, 'sum_of_squares_weights').array.sum()
@@ -551,7 +554,7 @@ cluster_nodes = []
 
 for s in build_bank_string(bank_cache):
 
-	trials_factor = get_svd_trials_factor(s, "H1")# * bank_trials_factor
+	trials_factor = 1 #get_svd_trials_factor(s, "H1")# * bank_trials_factor
 
 	far_input_nodes = []
 
