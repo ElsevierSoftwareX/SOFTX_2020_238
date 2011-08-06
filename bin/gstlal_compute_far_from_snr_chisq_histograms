@@ -168,12 +168,14 @@ for f in filenames:
 		connection.commit()
 
 	if options.compute_far:
-		print >>sys.stderr, "computing rates ..."
-		# FIXME abusing FAR column
-		connection.cursor().execute('CREATE TEMPORARY TABLE ranktable AS SELECT * FROM coinc_inspiral ORDER BY false_alarm_rate')
-		connection.commit()
-		connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate, ranktable.rowid) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id)')
-		connection.commit()
-
+		ids = [id for id, in connection.cursor().execute("SELECT DISTINCT(time_slide_id) FROM time_slide")]
+		for id in ids:
+			print >>sys.stderr, "computing rates for ", id
+			# FIXME abusing FAR column
+			connection.cursor().execute('DROP TABLE IF EXISTS ranktable')
+			# FIXME any indicies on ranktable??
+			connection.cursor().execute('CREATE TEMPORARY TABLE ranktable AS SELECT * FROM coinc_inspiral JOIN coinc_event ON coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id WHERE coinc_event.time_slide_id == ? ORDER BY false_alarm_rate', (id,))
+			connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate, ranktable.rowid) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.coinc_event_id IN (SELECT coinc_event_id FROM ranktable)')
+	
 	connection.close()
 	dbtables.put_connection_filename(f, working_filename, verbose = options.verbose)
