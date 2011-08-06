@@ -399,15 +399,18 @@ class gstlal_compute_far_from_snr_chisq_histograms_node(pipeline.CondorDAGNode):
 	A gstlal_compute_far_from_snr_chisq_histograms_job node
 	"""
 	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, background_bins_file, segments_file, vetoes_file, additional_trials_factor, stride, input = [], p_node=[]):
+	def __init__(self, job, dag, background_bins_file, segments_file, vetoes_file, additional_trials_factor, stride, FAR = False, FAP = False, input = [], p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
-		self.add_var_opt("background-bins-file", background_bins_file)
+		if background_bins_file is not None:
+			self.add_var_opt("background-bins-file", background_bins_file)
 		self.add_var_opt("segments-file", segments_file)
 		self.add_var_opt("vetoes-file", vetoes_file)
 		self.add_var_opt("additional-trials-factor", additional_trials_factor)
-		self.add_var_opt("compute-fap", "")
-		self.add_var_opt("compute-far", "")
+		if FAP:
+			self.add_var_opt("compute-fap", "")
+		if FAR:
+			self.add_var_opt("compute-far", "")
 		self.add_var_opt("stride", stride)
 		for f in input:
 			self.add_file_arg(f)
@@ -529,7 +532,8 @@ dag = bank_DAG("trigger_pipe")
 
 gstlalInspiralJob = gstlal_inspiral_job()
 gstlalInspiralInjJob = gstlal_inspiral_inj_job()
-gstlalInspiralComputeFarFromSnrChisqHistogramsJob = gstlal_compute_far_from_snr_chisq_histograms_job()
+gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP = gstlal_compute_far_from_snr_chisq_histograms_job()
+gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR = gstlal_compute_far_from_snr_chisq_histograms_job()
 ligolwInspinjFindJob = ligolw_inspinjfind_job()
 toSqliteJob = ligolw_sqlite_from_xml_job()
 toXMLJob = ligolw_sqlite_to_xml_job()
@@ -578,7 +582,7 @@ for s in build_bank_string(bank_cache):
 	# FAR nodes
 	#
 	
-	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, noninjnode.background_name, options.frame_segments_file, options.vetoes, trials_factor, 5, input = [f.output_name for f in far_input_nodes], p_node = far_input_nodes)
+	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode.background_name, options.frame_segments_file, options.vetoes, trials_factor, 5, FAP = True, input = [f.output_name for f in far_input_nodes], p_node = far_input_nodes)
 	
 	#
 	# Pre clustering
@@ -607,6 +611,8 @@ noninjdb = "H1H2L1-ALL-%d-%d-LLOID.sqlite" % (options.gps_start_time, options.gp
 sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_name)[1].replace('.sqlite','.xml.gz') for f in noninj_nodes] + [options.vetoes, options.frame_segments_file], p_node=cluster_nodes)
 # delete high FARs
 noninjsqlitenode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.delete_sql_file, input=[noninjdb], p_node=[sqlitenode])
+# compute FARs
+noninjfarnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, options.frame_segments_file, options.vetoes, 1, 5, FAR = True, input = [noninjdb], p_node = [noninjsqlitenode])
 
 #
 # injection DB
@@ -626,9 +632,11 @@ if inj_nodes:
 	inspinjnode = ligolw_inspinjfind_node(ligolwInspinjFindJob, dag, injxml, p_node=[clusternode])
 	# convert back to sqlite
 	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[injxml], p_node=[inspinjnode])
+	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, options.frame_segments_file, options.vetoes, 1, 5, FAR = True, input = [injdb], p_node = [sqlitenode])
+	# compute FARs
 	name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
 	# make plots
-	plotnode = lalapps_cbc_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb, injdb], p_node=[sqlitenode, noninjsqlitenode])
+	plotnode = lalapps_cbc_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb, injdb], p_node=[farnode, noninjfarnode])
 	# make a web page
 	gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-closed-box" % (options.gps_start_time, options.gps_stop_time), open_box = False, p_node=[plotnode])
 	gstlal_s5_pbh_summary_page_node(openpageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-open-box" % (options.gps_start_time, options.gps_stop_time), p_node=[plotnode])
