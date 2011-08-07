@@ -374,11 +374,31 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 # gstlal_compute_far_from_snr_chisq_histograms
 ###############################################################################
 
-class gstlal_compute_far_from_snr_chisq_histograms_job(pipeline.CondorDAGJob):
+class gstlal_compute_far_from_snr_chisq_histograms_jobFAP(pipeline.CondorDAGJob):
 	"""
 	A gstlal_compute_far_from_snr_chisq_histograms job
 	"""
-	def __init__(self, executable=which('gstlal_compute_far_from_snr_chisq_histograms'), tag_base='gstlal_compute_far_from_snr_chisq_histograms'):
+	def __init__(self, executable=which('gstlal_compute_far_from_snr_chisq_histograms'), tag_base='gstlal_compute_far_from_snr_chisq_histogramsFAP'):
+		"""
+		"""
+		self.__prog__ = 'gstlal_compute_far_from_snr_chisq_histograms'
+		self.__executable = executable
+		self.__universe = 'vanilla'
+		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
+		self.add_condor_cmd('getenv','True')
+		self.add_condor_cmd('requirements', 'Memory > 1999') # is this enough?
+		self.tag_base = tag_base
+		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
+		self.number = 1
+
+class gstlal_compute_far_from_snr_chisq_histograms_jobFAR(pipeline.CondorDAGJob):
+	"""
+	A gstlal_compute_far_from_snr_chisq_histograms job
+	"""
+	def __init__(self, executable=which('gstlal_compute_far_from_snr_chisq_histograms'), tag_base='gstlal_compute_far_from_snr_chisq_histogramsFAR'):
 		"""
 		"""
 		self.__prog__ = 'gstlal_compute_far_from_snr_chisq_histograms'
@@ -532,8 +552,8 @@ dag = bank_DAG("trigger_pipe")
 
 gstlalInspiralJob = gstlal_inspiral_job()
 gstlalInspiralInjJob = gstlal_inspiral_inj_job()
-gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP = gstlal_compute_far_from_snr_chisq_histograms_job()
-gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR = gstlal_compute_far_from_snr_chisq_histograms_job()
+gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP = gstlal_compute_far_from_snr_chisq_histograms_jobFAP()
+gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR = gstlal_compute_far_from_snr_chisq_histograms_jobFAR()
 ligolwInspinjFindJob = ligolw_inspinjfind_job()
 toSqliteJob = ligolw_sqlite_from_xml_job()
 toXMLJob = ligolw_sqlite_to_xml_job()
