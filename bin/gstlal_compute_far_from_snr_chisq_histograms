@@ -161,13 +161,13 @@ for f in filenames:
 	connection.create_function("fap", 4, Far.compute_fap)
 	connection.create_function("far", 2, Far.compute_far)
 
-	if options.compute_fap:
+	if options.compute_fap is not None:
 		print >>sys.stderr, "computing faps ..."
 		# FIXME abusing FAR column
 		connection.cursor().execute('UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(snglA.snr, snglA.chisq, snglB.snr, snglB.chisq) FROM coinc_event_map as mapA on mapA.coinc_event_id == coinc_inspiral.coinc_event_id JOIN coinc_event_map as mapB on mapB.coinc_event_id == coinc_inspiral.coinc_event_id JOIN sngl_inspiral as snglA on snglA.event_id == mapA.event_id JOIN sngl_inspiral as snglB on snglB.event_id == mapB.event_id WHERE snglA.ifo == "H1" and snglB.ifo =="L1")')
 		connection.commit()
 
-	if options.compute_far:
+	if options.compute_far is not None:
 		ids = [id for id, in connection.cursor().execute("SELECT DISTINCT(time_slide_id) FROM time_slide")]
 		for id in ids:
 			print >>sys.stderr, "computing rates for ", id
