@@ -382,7 +382,6 @@ def mkautochisq(pipeline, src, autocorrelation_matrix = None, latency = 0, snr_t
 		elem.set_property("snr-thresh", snr_thresh)
 	pipeline.add(elem)
 	src.link(elem)
-	elem = mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed
 	return elem
 
 
