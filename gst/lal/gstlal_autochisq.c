@@ -44,7 +44,6 @@
 
 #include <glib.h>
 #include <gst/gst.h>
-#include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
 #include <gstlal.h>
 #include <gstlal_autochisq.h>
@@ -60,6 +59,14 @@
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_blas.h>
+
+
+/*
+ * our own stuff
+ */
+
+
+#include <gstaudioadapter.h>
 
 
 /*
@@ -103,25 +110,6 @@ static unsigned autocorrelation_length(const GSTLALAutoChiSq *element)
 
 
 /*
- * construct a buffer of zeros and push into adapter
- */
-
-
-static int push_zeros(GSTLALAutoChiSq *element, unsigned samples)
-{
-	GstBuffer *zerobuf = gst_buffer_new_and_alloc(samples * autocorrelation_channels(element) * sizeof(complex double));
-	if(!zerobuf) {
-		GST_DEBUG_OBJECT(element, "failure allocating zero-pad buffer");
-		return -1;
-	}
-	memset(GST_BUFFER_DATA(zerobuf), 0, GST_BUFFER_SIZE(zerobuf));
-	gst_adapter_push(element->adapter, zerobuf);
-	element->zeros_in_adapter += samples;
-	return 0;
-}
-
-
-/*
  * set the metadata on an output buffer
  */
 
@@ -150,9 +138,13 @@ static void set_metadata(GSTLALAutoChiSq *element, GstBuffer *buf, guint64 outsa
  */
 
 
-static guint64 get_available_samples(GSTLALAutoChiSq *element)
+static guint get_available_samples(GSTLALAutoChiSq *element)
 {
-	return gst_adapter_available(element->adapter) / (autocorrelation_channels(element) * sizeof(complex double));
+	guint size;
+
+	g_object_get(element->adapter, "size", &size, NULL);
+
+	return size;
 }
 
 
@@ -203,12 +195,13 @@ static gsl_vector *compute_autocorrelation_norm(GSTLALAutoChiSq *element)
  */
 
 
-static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
+static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 {
 	unsigned channels = autocorrelation_channels(element);
+	unsigned zeros_in_adapter;
 	unsigned available_length;
-	unsigned output_length;
-	const complex double *input;
+	unsigned output_length = 0;
+	complex double *input;
 	double *output;
 	double *output_end;
 
@@ -218,17 +211,27 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 
 	available_length = get_available_samples(element);
 	if(available_length < autocorrelation_length(element))
-		return GST_BASE_TRANSFORM_FLOW_DROPPED;
+		goto done;
+	zeros_in_adapter = gst_audioadapter_tail_gap_length(element->adapter);
+	if(zeros_in_adapter >= autocorrelation_length(element))
+		/* the +1 is because when there is 1 correlation-length of
+		 * 0s at the tail of the adapter the output will contain 1
+		 * sample equal to 0, not 0 samples. */
+		available_length -= zeros_in_adapter - autocorrelation_length(element) + 1;
+
+	/* the +1 is because when there is 1 correlation-length of data in
+	 * the adapter then we can produce 1 output sample, not 0. */
+	output_length = available_length - autocorrelation_length(element) + 1;
+	if(!output_length)
+		goto done;
 
 	/*
-	 * initialize pointers.  the +1 in output_length is because when
-	 * there is 1 correlation-length of data in the adapter then we can
-	 * produce 1 output sample, not 0.
+	 * initialize pointers.
 	 */
 
-	input = (complex double *) gst_adapter_peek(element->adapter, available_length * channels * sizeof(complex double));
+	input = (complex double *) g_malloc(available_length * channels * sizeof(*input));
+	gst_audioadapter_copy(element->adapter, input, available_length, NULL, NULL);
 	output = (double *) GST_BUFFER_DATA(outbuf);
-	output_length = available_length - autocorrelation_length(element) + 1;
 	output_end = output + output_length * channels;
 
 	/*
@@ -339,14 +342,10 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	 * flush the data from the adapter
 	 */
 
-	gst_adapter_flush(element->adapter, output_length * channels * sizeof(complex double));
-	if(element->zeros_in_adapter > available_length - output_length)
-		/*
-		 * some trailing zeros have been flushed from the adapter
-		 */
+	g_free(input);
+	gst_audioadapter_flush(element->adapter, output_length);
 
-		element->zeros_in_adapter = available_length - output_length;
-
+done:
 	/*
 	 * set buffer metadata
 	 */
@@ -357,7 +356,7 @@ static GstFlowReturn filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	 * done
 	 */
 
-	return GST_FLOW_OK;
+	return output_length;
 }
 
 
@@ -578,9 +577,9 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		/*
 		 * upper bound of sample count on source pad is input
 		 * sample count plus the number of samples in the adapter
-		 * minus the length of the autocorrelation vectors (-1
-		 * because if there's 1 autocorrelation-length of data then
-		 * we can generate 1 sample, not 0)
+		 * minus the length of the autocorrelation vectors +1
+		 * (because if there's 1 autocorrelation-length of data
+		 * then we can generate 1 sample, not 0)
 		 */
 
 		*othersize = size / unit_size + get_available_samples(element);
@@ -611,13 +610,18 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 {
 	GSTLALAutoChiSq *element = GSTLAL_AUTOCHISQ(trans);
 	GstStructure *s;
-	gint rate;
 	gint channels;
+	gint width;
+	gint rate;
 	gboolean success = TRUE;
 
 	s = gst_caps_get_structure(incaps, 0);
 	if(!gst_structure_get_int(s, "channels", &channels)) {
 		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
+		success = FALSE;
+	}
+	if(!gst_structure_get_int(s, "width", &width)) {
+		GST_DEBUG_OBJECT(element, "unable to parse width from %" GST_PTR_FORMAT, incaps);
 		success = FALSE;
 	}
 	if(!gst_structure_get_int(s, "rate", &rate)) {
@@ -635,6 +639,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		element->rate = rate;
 		if(element->rate != old_rate)
 			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
+		g_object_set(element->adapter, "unit-size", width / 8 * channels, NULL);
 	}
 
 	return success;
@@ -649,8 +654,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 static gboolean start(GstBaseTransform *trans)
 {
 	GSTLALAutoChiSq *element = GSTLAL_AUTOCHISQ(trans);
-	element->adapter = gst_adapter_new();
-	element->zeros_in_adapter = 0;
+	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
 	element->t0 = GST_CLOCK_TIME_NONE;
 	element->offset0 = GST_BUFFER_OFFSET_NONE;
 	element->next_in_offset = GST_BUFFER_OFFSET_NONE;
@@ -682,8 +686,10 @@ static gboolean stop(GstBaseTransform *trans)
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
 	GSTLALAutoChiSq *element = GSTLAL_AUTOCHISQ(trans);
-	guint64 length;
-	GstFlowReturn result;
+	gboolean history_is_gap, input_is_gap;
+	guint zeros_in_adapter;
+	guint output_length;
+	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
 	 * wait for autocorrelation matrix
@@ -724,8 +730,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * flush adapter
 		 */
 
-		gst_adapter_clear(element->adapter);
-		element->zeros_in_adapter = 0;
+		gst_audioadapter_clear(element->adapter);
 
 		/*
 		 * (re)sync timestamp and offset book-keeping
@@ -740,92 +745,84 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		element->need_discont = TRUE;
-	}
+	} else
+		g_assert(GST_BUFFER_TIMESTAMP(inbuf) == gst_audioadapter_expected_timestamp(element->adapter));
 	element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
 
 	/*
-	 * gap logic
+	 * build output buffer(s)
 	 */
 
-	length = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
-	if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
+	input_is_gap = GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP);
+	history_is_gap = gst_audioadapter_is_gap(element->adapter);
+
+	output_length = get_available_samples(element) + GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
+	if(output_length >= autocorrelation_length(element))
+		output_length -= autocorrelation_length(element) - 1;
+	else
+		output_length = 0;
+	g_assert(output_length == GST_BUFFER_SIZE(outbuf) / (autocorrelation_channels(element) * sizeof(double)));
+
+	gst_buffer_ref(inbuf);	/* don't let calling code free buffer */
+	gst_audioadapter_push(element->adapter, inbuf);
+
+	zeros_in_adapter = gst_audioadapter_tail_gap_length(element->adapter);
+
+	if(!input_is_gap) {
 		/*
-		 * input is not 0s.
+		 * because the history that remains in the adapter cannot
+		 * be large enough to compute even 1 sample, the output is
+		 * a single non-gap buffer whether or not the history is
+		 * known to be all 0s
 		 */
 
-		gst_buffer_ref(inbuf);	/* don't let the adapter free it */
-		gst_adapter_push(element->adapter, inbuf);
-		element->zeros_in_adapter = 0;
-		result = filter(element, outbuf);
-	} else if(element->zeros_in_adapter >= autocorrelation_length(element) - 1) {
+		g_assert(output_length == filter(element, outbuf));
+	} else if(history_is_gap) {
 		/*
-		 * input is 0s and we are past the tail of the impulse
-		 * response so output is all 0s.  output is a gap with the
-		 * same number of samples as the input.
+		 * all data in hand is known to be 0s, the output is a
+		 * single gap buffer
 		 */
 
+		gst_audioadapter_flush(element->adapter, output_length);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
-		set_metadata(element, outbuf, GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf), TRUE);
-		result = GST_FLOW_OK;
-	} else if(element->zeros_in_adapter + length < autocorrelation_length(element)) {
+		set_metadata(element, outbuf, output_length, TRUE);
+	} else if(zeros_in_adapter < autocorrelation_length(element)) {
 		/*
-		 * input is 0s, we are not yet past the tail of the impulse
-		 * response and the input is not long enough to change
-		 * that.  push length 0s into the adapter and run normal
-		 * filtering
+		 * the history contains some amount of non-zero data and
+		 * whatever zeros are at the end of the history combined
+		 * with the input, which is known to be all 0, together do
+		 * not add up to enough to produce any 0-valued output
+		 * samples, so the output is a single non-gap buffer
 		 */
 
-		push_zeros(element, length);
-		result = filter(element, outbuf);
+		g_assert(output_length == filter(element, outbuf));
 	} else {
 		/*
-		 * input is 0s, we are not yet past the tail of the impulse
-		 * response, but the input is long enough to push us past
-		 * the end.  this code path also handles the case of the
-		 * first buffer being a gap, in which case
-		 * available_samples is 0
+		 * the tailing zeros in the history combined with the input
+		 * data are together large enough to yield 0s in the
+		 * output. the output will be two buffers, a non-gap buffer
+		 * to finish off the non-zero data in the history followed
+		 * by a gap buffer.
 		 */
 
-		guint64 non_zero_samples = get_available_samples(element) - element->zeros_in_adapter;
+		GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
+		guint gap_length = zeros_in_adapter - autocorrelation_length(element) + 1;
+		GstBuffer *buf;
 
-		/*
-		 * push (correlation-length - zeros-in-adapter - 1) 0s into
-		 * adapter to allow previous non-zero data to be finished
-		 * off.  push_zeros() modifies zeros_in_adapter so update
-		 * length first.
-		 */
+		result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, (output_length - gap_length) * autocorrelation_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
+		if(result != GST_FLOW_OK)
+			goto done;
+		g_assert((output_length - gap_length) == filter(element, buf));
 
-		length -= autocorrelation_length(element) - element->zeros_in_adapter - 1;
-		push_zeros(element, autocorrelation_length(element) - element->zeros_in_adapter - 1);
+		g_mutex_unlock(element->autocorrelation_lock);
+		result = gst_pad_push(srcpad, buf);
+		g_mutex_lock(element->autocorrelation_lock);
+		if(result != GST_FLOW_OK)
+			goto done;
 
-		/*
-		 * run normal filter code to finish off adapter's contents,
-		 * and manually push buffer downstream.
-		 */
-
-		if(non_zero_samples) {
-			GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
-			GstBuffer *buf;
-
-			result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, non_zero_samples * autocorrelation_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
-			if(result != GST_FLOW_OK)
-				goto done;
-			result = filter(element, buf);
-			g_assert(result == GST_FLOW_OK);
-			result = gst_pad_push(srcpad, buf);
-			if(result != GST_FLOW_OK)
-				goto done;
-		}
-
-		/*
-		 * remainder of input produces 0s in output.  make outbuf a
-		 * gap whose size matches the remainder of the input gap
-		 */
-
-		GST_BUFFER_SIZE(outbuf) = length * autocorrelation_channels(element) * sizeof(double);
+		GST_BUFFER_SIZE(outbuf) = gap_length * autocorrelation_channels(element) * sizeof(double);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
-		set_metadata(element, outbuf, length, TRUE);
-		result = GST_FLOW_OK;
+		set_metadata(element, outbuf, gap_length, TRUE);
 	}
 
 	/*

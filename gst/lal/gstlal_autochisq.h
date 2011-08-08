@@ -48,12 +48,14 @@
 
 #include <glib.h>
 #include <gst/gst.h>
-#include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
 
 
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_vector.h>
+
+
+#include <gstaudioadapter.h>
 
 
 G_BEGIN_DECLS
@@ -84,8 +86,7 @@ typedef struct {
 	 */
 
 	gint rate;
-	GstAdapter *adapter;
-	guint zeros_in_adapter;
+	GstAudioAdapter *adapter;
 
 	/*
 	 * autocorrelation info
