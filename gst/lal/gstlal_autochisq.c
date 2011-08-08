@@ -201,7 +201,7 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	unsigned zeros_in_adapter;
 	unsigned available_length;
 	unsigned output_length = 0;
-	complex double *input;
+	complex double *inputbuf, *input;
 	double *output;
 	double *output_end;
 
@@ -229,8 +229,8 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	 * initialize pointers.
 	 */
 
-	input = (complex double *) g_malloc(available_length * channels * sizeof(*input));
-	gst_audioadapter_copy(element->adapter, input, available_length, NULL, NULL);
+	input = inputbuf = g_malloc(available_length * channels * sizeof(*input));
+	gst_audioadapter_copy(element->adapter, inputbuf, available_length, NULL, NULL);
 	output = (double *) GST_BUFFER_DATA(outbuf);
 	output_end = output + output_length * channels;
 
@@ -252,8 +252,8 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	 */
 
 	while(output < output_end) {
-		const complex double *autocorrelation = (complex double *) gsl_matrix_complex_const_ptr(element->autocorrelation_matrix, 0, 0);
-		const int *autocorrelation_mask = element->autocorrelation_mask_matrix ? (int *) gsl_matrix_int_const_ptr(element->autocorrelation_mask_matrix, 0, 0) : NULL;
+		const complex double *autocorrelation = (const complex double *) gsl_matrix_complex_const_ptr(element->autocorrelation_matrix, 0, 0);
+		const int *autocorrelation_mask = element->autocorrelation_mask_matrix ? (const int *) gsl_matrix_int_const_ptr(element->autocorrelation_mask_matrix, 0, 0) : NULL;
 		unsigned channel;
 
 		for(channel = 0; channel < channels; channel++) {
@@ -342,7 +342,7 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	 * flush the data from the adapter
 	 */
 
-	g_free(input);
+	g_free(inputbuf);
 	gst_audioadapter_flush(element->adapter, output_length);
 
 done:
@@ -725,7 +725,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * FIXME:  instead of reseting, flush/pad adapter as needed
 	 */
 
-	if(GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0)) {
+	if(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0)) {
 		/*
 		 * flush adapter
 		 */
@@ -809,7 +809,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		guint gap_length = zeros_in_adapter - autocorrelation_length(element) + 1;
 		GstBuffer *buf;
 
+		g_mutex_unlock(element->autocorrelation_lock);
 		result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, (output_length - gap_length) * autocorrelation_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
+		g_mutex_lock(element->autocorrelation_lock);
 		if(result != GST_FLOW_OK)
 			goto done;
 		g_assert((output_length - gap_length) == filter(element, buf));
