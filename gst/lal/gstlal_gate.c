@@ -197,7 +197,6 @@ static void control_flush(GSTLALGate *element)
 {
 	g_queue_foreach(element->control_queue, g_list_foreach_gst_buffer_unref, NULL);
 	g_queue_clear(element->control_queue);
-	g_cond_broadcast(element->control_queue_size_changed);
 }
 
 
@@ -211,43 +210,38 @@ static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstCloc
 {
 	g_mutex_lock(element->control_lock);
 	element->t_req_control_head = tmax;
+	g_cond_broadcast(element->control_queue_head_changed);
 	while(1) {
 		GstBuffer *buf;
-		gboolean flushed;
 
 		/*
 		 * flush old data from tail
 		 */
 
 		buf = g_queue_peek_tail(element->control_queue);
-		flushed = FALSE;
 		while(buf && (GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf) <= tmin)) {
 			GST_DEBUG_OBJECT(element, "flushing control queue to %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf)));
 			g_queue_pop_tail(element->control_queue);
 			gst_buffer_unref(buf);
-			flushed = TRUE;
 			buf = g_queue_peek_tail(element->control_queue);
 		}
-		if(flushed)
-			g_cond_broadcast(element->control_queue_size_changed);
 
 		/*
 		 * has head advanced far enough, or are we at EOS?
 		 */
 
 		buf = g_queue_peek_head(element->control_queue);
-		if((buf && (GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf) >= tmax)) || element->control_eos) {
-			g_mutex_unlock(element->control_lock);
-			return;
-		}
+		if((buf && (GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf) >= tmax)) || element->control_eos)
+			break;
 
 		/*
 		 * no, wait for buffer to arrive
 		 */
 
 		GST_DEBUG_OBJECT(element, "waiting for control to advance to %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(tmax));
-		g_cond_wait(element->control_queue_size_changed, element->control_lock);
+		g_cond_wait(element->control_queue_head_changed, element->control_lock);
 	}
+	g_mutex_unlock(element->control_lock);
 }
 
 
@@ -323,7 +317,6 @@ static gint control_get_state(GSTLALGate *element, GstClockTime tmin, GstClockTi
 		.peak = -1	/* -1 = no value found */
 	};
 
-	GST_DEBUG_OBJECT(element, "looping over %u buffers to check control state in %" GST_TIME_SECONDS_FORMAT " <= t < %" GST_TIME_SECONDS_FORMAT, g_queue_get_length(element->control_queue), GST_TIME_SECONDS_ARGS(tmin), GST_TIME_SECONDS_ARGS(tmax));
 	g_queue_foreach(element->control_queue, g_list_for_each_gst_buffer_peak, &data);
 
 	/* return value:  +1 = at or above threshold somewhere in interval,
@@ -596,23 +589,21 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
-		GST_ERROR_OBJECT(element, "error in control stream: buffer does not have valid timestamp and/or offset");
+		GST_ERROR_OBJECT(pad, "buffer does not have valid timestamp and/or offset");
 		gst_buffer_unref(sinkbuf);
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
+	GST_DEBUG_OBJECT(pad, "have buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 
 	/*
-	 * if there's already enough control data wait for it to be flushed
+	 * wait until this buffer is needed
 	 */
 
 	g_mutex_lock(element->control_lock);
-	while(!g_queue_is_empty(element->control_queue)) {
-		GstBuffer *head = g_queue_peek_head(element->control_queue);
-		if(element->sink_eos || (GST_CLOCK_TIME_IS_VALID(element->t_req_control_head) && GST_BUFFER_TIMESTAMP(head) < element->t_req_control_head))
-			break;
-		GST_DEBUG_OBJECT(element, "waiting for space in control queue");
-		g_cond_wait(element->control_queue_size_changed, element->control_lock);
+	while(!element->sink_eos && (!GST_CLOCK_TIME_IS_VALID(element->t_req_control_head) || GST_BUFFER_TIMESTAMP(sinkbuf) >= element->t_req_control_head)) {
+		GST_DEBUG_OBJECT(pad, "waiting for space in queue: sink_eos = %d, t_req_control_head is valid = %d, timestamp >= t_req_control_head = %d", element->sink_eos, GST_CLOCK_TIME_IS_VALID(element->t_req_control_head), GST_BUFFER_TIMESTAMP(sinkbuf) >= element->t_req_control_head);
+		g_cond_wait(element->control_queue_head_changed, element->control_lock);
 	}
 
 	/*
@@ -620,24 +611,19 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(element->sink_eos) {
-		GST_DEBUG_OBJECT(element, "sink is at end-of-stream, discarding control buffer");
+		GST_DEBUG_OBJECT(pad, "sink is at end-of-stream, discarding buffer");
 		gst_buffer_unref(sinkbuf);
 		g_mutex_unlock(element->control_lock);
 		goto done;
 	}
 
 	/*
-	 * store this buffer
+	 * prepend buffer to queue
 	 */
 
 	g_queue_push_head(element->control_queue, sinkbuf);
-
-	/*
-	 * signal the buffer's availability
-	 */
-
-	GST_DEBUG_OBJECT(element, "new control buffer available %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
-	g_cond_broadcast(element->control_queue_size_changed);
+	GST_DEBUG_OBJECT(pad, "buffer %" GST_BUFFER_BOUNDARIES_FORMAT " prepended to queue", GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
+	g_cond_broadcast(element->control_queue_head_changed);
 	g_mutex_unlock(element->control_lock);
 
 	/*
@@ -661,18 +647,18 @@ static gboolean control_event(GstPad *pad, GstEvent *event)
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT:
-		g_mutex_lock(element->control_lock);
 		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag and flushing queue");
+		g_mutex_lock(element->control_lock);
 		element->control_eos = FALSE;
 		control_flush(element);
 		g_mutex_unlock(element->control_lock);
 		break;
 
 	case GST_EVENT_EOS:
-		g_mutex_lock(element->control_lock);
 		GST_DEBUG_OBJECT(pad, "end-of-stream;  setting end-of-stream flag");
+		g_mutex_lock(element->control_lock);
 		element->control_eos = TRUE;
-		g_cond_broadcast(element->control_queue_size_changed);
+		g_cond_broadcast(element->control_queue_head_changed);
 		g_mutex_unlock(element->control_lock);
 		break;
 
@@ -806,7 +792,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
-		GST_ERROR_OBJECT(element, "error in input stream: buffer has invalid timestamp and/or offset");
+		GST_ERROR_OBJECT(pad, "error: buffer has invalid timestamp and/or offset");
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
@@ -1003,7 +989,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		result = gst_pad_push(element->srcpad, srcbuf);
 		if(G_UNLIKELY(result != GST_FLOW_OK)) {
-			GST_WARNING_OBJECT(element, "%s: gst_pad_push() failed (%s)", GST_PAD_NAME(element->srcpad), gst_flow_get_name(result));
+			GST_WARNING_OBJECT(element->srcpad, "gst_pad_push() failed (%s)", gst_flow_get_name(result));
 			goto done;
 		}
 	}
@@ -1033,8 +1019,8 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT:
-		g_mutex_lock(element->control_lock);
 		GST_DEBUG_OBJECT(pad, "new segment;  clearing internal end-of-stream flag");
+		g_mutex_lock(element->control_lock);
 		element->t_req_control_head = GST_CLOCK_TIME_NONE;
 		element->sink_eos = FALSE;
 		element->last_state = FALSE;
@@ -1043,10 +1029,11 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		break;
 
 	case GST_EVENT_EOS:
-		g_mutex_lock(element->control_lock);
 		GST_DEBUG_OBJECT(pad, "end-of-stream;  setting internal end-of-stream flag and flushing control buffer");
+		g_mutex_lock(element->control_lock);
 		element->sink_eos = TRUE;
 		control_flush(element);
+		g_cond_broadcast(element->control_queue_head_changed);
 		g_mutex_unlock(element->control_lock);
 		break;
 
@@ -1132,8 +1119,8 @@ static void finalize(GObject *object)
 		g_queue_free(element->control_queue);
 		element->control_queue = NULL;
 	}
-	g_cond_free(element->control_queue_size_changed);
-	element->control_queue_size_changed = NULL;
+	g_cond_free(element->control_queue_head_changed);
+	element->control_queue_head_changed = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -1412,7 +1399,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->sink_eos = FALSE;
 	element->t_req_control_head = GST_CLOCK_TIME_NONE;
 	element->control_queue = g_queue_new();
-	element->control_queue_size_changed = g_cond_new();
+	element->control_queue_head_changed = g_cond_new();
 	element->control_sample_func = NULL;
 	element->emit_signals = DEFAULT_EMIT_SIGNALS;
 	element->default_state = DEFAULT_DEFAULT_STATE;

@@ -64,7 +64,7 @@ typedef struct _GSTLALGate {
 	gboolean sink_eos;
 	GstClockTime t_req_control_head;
 	GQueue *control_queue;
-	GCond *control_queue_size_changed;
+	GCond *control_queue_head_changed;
 	gdouble (*control_sample_func)(const gpointer, guint64);
 
 	gboolean emit_signals;
