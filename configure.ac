@@ -24,6 +24,7 @@ AC_CONFIG_FILES([ \
 	gst/nds/Makefile \
 	gst/lal/Makefile \
 	gst/multirate/Makefile \
+	gst/progressreport2/Makefile \
 	gst/python/Makefile \
 	bin/Makefile \
 	tests/Makefile \
