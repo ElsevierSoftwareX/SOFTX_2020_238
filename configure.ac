@@ -23,6 +23,7 @@ AC_CONFIG_FILES([ \
 	gst/flags/Makefile \
 	gst/nds/Makefile \
 	gst/lal/Makefile \
+	gst/multirate/Makefile \
 	gst/python/Makefile \
 	bin/Makefile \
 	tests/Makefile \
