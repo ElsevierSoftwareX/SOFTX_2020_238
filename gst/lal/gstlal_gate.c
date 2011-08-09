@@ -811,7 +811,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * wait for control queue to span the necessary interval
 	 */
 
-	control_get_interval(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), -element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), sinkbuf_length + element->attack_length, element->rate));
+	control_get_interval(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), -element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) sinkbuf_length + element->attack_length, element->rate));
 
 	/*
 	 * is input already a gap?  then push it as is
