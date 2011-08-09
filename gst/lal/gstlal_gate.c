@@ -601,7 +601,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	g_mutex_lock(element->control_lock);
-	while(!element->sink_eos && (!GST_CLOCK_TIME_IS_VALID(element->t_req_control_head) || GST_BUFFER_TIMESTAMP(sinkbuf) >= element->t_req_control_head)) {
+	while(!(element->sink_eos || (GST_CLOCK_TIME_IS_VALID(element->t_req_control_head) && GST_BUFFER_TIMESTAMP(sinkbuf) < element->t_req_control_head)) && !g_queue_is_empty(element->control_queue)) {
 		GST_DEBUG_OBJECT(pad, "waiting for space in queue: sink_eos = %d, t_req_control_head is valid = %d, timestamp >= t_req_control_head = %d", element->sink_eos, GST_CLOCK_TIME_IS_VALID(element->t_req_control_head), GST_BUFFER_TIMESTAMP(sinkbuf) >= element->t_req_control_head);
 		g_cond_wait(element->control_queue_head_changed, element->control_lock);
 	}
