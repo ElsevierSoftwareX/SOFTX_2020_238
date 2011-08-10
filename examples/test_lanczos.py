@@ -3,8 +3,8 @@ from gstlal.pipeutil import *
 from gstlal.lloidparts import mkelems_fast, LLOIDHandler
 import numpy
 
-upsample_factor = 3
-num_zeros = 16
+upsample_factor = 4
+num_zeros = 8
 
 def lanczos_kernel(upsample_factor, num_zeros):
 	"""Create a Lanczos interpolation filter.  upsample_factor is the ratio of
@@ -27,7 +27,7 @@ mainloop = gobject.MainLoop()
 handler = LLOIDHandler(mainloop, pipeline)
 
 pipeline = gst.parse_launch("""
-	audiotestsrc wave=pink-noise freq=1 volume=1 samplesperbuffer=128 num-buffers=10
+	audiotestsrc wave=square freq=1 volume=1 samplesperbuffer=128 num-buffers=10
 		! audio/x-raw-float,rate=%d,width=64,channels=1
 		! tee name=tee0
 		! queue
