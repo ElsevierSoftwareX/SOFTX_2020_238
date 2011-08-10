@@ -1,5 +1,8 @@
 #!/usr/bin/python
 
+# FIXME proper copyright and GPL notice
+# Copyright 2011 Kipp Cannon, Chad Hanna
+
 import sys
 import numpy
 from scipy import interpolate
@@ -21,12 +24,21 @@ except ImportError:
 
 sqlite3.enable_callback_tracebacks(True)
 
-def smooth_bins(bA, stride = 5):
-	wn = rate.gaussian_window2d(3 * stride, 3 * stride, sigma = 10)
+def smooth_bins(bA):
+	#FIXME what is this window supposed to be??
+	wn = rate.gaussian_window2d(3, 3, sigma = 8)
 	rate.filter_array(bA.array.T, wn)
+	bA.array /= bA.array.sum()
 
-def decimate_array(arr, stride = 5):
-	return arr[::stride, ::stride]
+def decimate_array(arr, size):
+	if size > len(arr):
+		size = len(arr)
+	arr.sort()
+	X = numpy.arange(1, len(arr)+1)
+	Xnew = numpy.linspace(1, len(arr), size)
+	interp = interpolate.interp1d(X, arr)
+	out = interp(Xnew)
+	return out
 
 def linearize_array(arr):
 	return arr.reshape((1,arr.shape[0] * arr.shape[1]))
@@ -34,44 +46,64 @@ def linearize_array(arr):
 def get_nonzero(arr):
 	return arr[arr != 0]
 
-
 class FAR(object):
 	def __init__(self, livetime, trials_factor, counts = None):
 		self.counts = counts
 		self.livetime = livetime
 		self.trials_factor = trials_factor
-		if counts is not None:
-			H1nonzero = get_nonzero(linearize_array(decimate_array(counts["H1_snr_chi"].array, stride = options.stride)))
-			L1nonzero = get_nonzero(linearize_array(decimate_array(counts["L1_snr_chi"].array, stride = options.stride)))
-			self.ranks = self.possible_ranks_array(H1nonzero, L1nonzero)
 
-			# compute the false alarm probability (FAP) from possible ranks
-			FAP = (numpy.arange(len(self.ranks)) + 1.) / len(self.ranks)
-			self.fap_from_rank = interpolate.interp1d(self.ranks, FAP, fill_value = 0., bounds_error = False)
-
-	# Method only works if counts is not None:
-	def possible_ranks_array(self, A, B):
+	def updateFAPmap(self, instruments):
 		if self.counts is None:
 			raise InputError, "must provide background bins file"
-		out = numpy.outer(A, B)
-		out = out.reshape((out.shape[0] * out.shape[1],))
+		
+		nonzero = {}
+
+		#
+		# the target FAP resolution is 1 part in 10^7.  So depending on
+		# how many instruments we have we have to take the nth root of
+		# that number to set the scale in each detector. This is purely
+		# for memory/CPU requirements
+		#
+
+		targetlen = int(1e7**(1. / len(instruments)))
+		
+		for ifo in instruments:
+			nonzero[ifo] = decimate_array(get_nonzero(linearize_array(counts[ifo+"_snr_chi"].array)), targetlen)
+		self.ranks = self.possible_ranks_array(nonzero.values())
+
+		# compute the false alarm probability (FAP) from possible ranks
+		FAP = (numpy.arange(len(self.ranks)) + 1.) / len(self.ranks)
+		self.fap_from_rank = interpolate.interp1d(self.ranks, FAP, fill_value = 0., bounds_error = False)
+		
+
+	def possible_ranks_array(self, arrays):
+		out = arrays[0]
+		for array in arrays[1:]:
+			out = numpy.outer(out, array)
+			out = out.reshape((out.shape[0] * out.shape[1],))
 		out.sort()
 		return out
 
 	# Method only works if counts is not None:
-	def compute_rank(self, H1snr, H1chisq, L1snr, L1chisq):
+	def compute_rank(self, snr_chisq_dict):
 		if self.counts is None:
 			raise InputError, "must provide background bins file"
-		rank = self.counts["H1_snr_chi"][H1snr, H1chisq**.5 / H1snr] * self.counts["L1_snr_chi"][L1snr, L1chisq**.5 / L1snr]
+		rank = 1
+		for ifo, (snr,chisq) in snr_chisq_dict.items():
+			rank *= self.counts[ifo+"_snr_chi"][snr, chisq**.5 / snr]
 		if rank > self.ranks[-2]:
 			rank = self.ranks[-2]
 		return rank
 
-	# Method only works if counts is not None:
-	def compute_fap(self, H1snr, H1chisq, L1snr, L1chisq):
-		if self.counts is None:
-			raise InputError, "must provide background bins file"
-		fap = self.fap_from_rank(self.compute_rank(H1snr, H1chisq, L1snr, L1chisq))[0]
+	def compute_fap2(self, ifo1, snr1, chisq1, ifo2, snr2, chisq2):
+		input = {ifo1:(snr1,chisq1), ifo2:(snr2,chisq2)}
+		fap = self.fap_from_rank(self.compute_rank(input))[0]
+		fap = 1.0 - (1.0 - fap)**self.trials_factor
+		return fap
+	
+	def compute_fap3(self, ifo1, snr1, chisq1, ifo2, snr2, chisq2, ifo3, snr3, chisq3):
+		input = {ifo1:(snr1,chisq1), ifo2:(snr2,chisq2), ifo3:(snr3,chisq3)}
+		fap = self.fap_from_rank(self.compute_rank(input))[0]
 		fap = 1.0 - (1.0 - fap)**self.trials_factor
 		return fap
 
@@ -101,6 +133,59 @@ class FAR(object):
 			far = self.FAR_from_FAP(fap, n)
 		return far
 
+def get_ifo_combos_and_live_time(segments, verbose = True):
+	#FIXME Kipp will like nothing about this function.
+	ifos_available = set(segments.keys())
+	ifo_combos = []
+	# FIXME is this what we want, H2 never participates in a double?
+	# fixme use choices in glue or something for this and then correct the special cases?
+	for ifos in [set(("H1","L1")), set(("H1","H2","L1")), set(("H1","L1","V1")), set(("H1","V1")), set(("L1","V1")), set(("H1","H2","L1","V1"))]:
+		if ifos.issubset(ifos_available):
+			ifo_combos.append(ifos)
+	LTsegs = segments.intersection(ifo_combos[0])
+	for ifos in ifo_combos[1:]:
+		LTsegs |= segments.intersection(ifos)
+	livetime =  float(abs(LTsegs))
+	if verbose:
+		print >> sys.stderr, "Livetime: ", livetime
+	# We can never have H1,H2 together
+	# FIXME don't use strings as keys, use frozen sets?
+	ifo_fap_dict = {"H1,L1":("H1","L1"), "H1,H2,L1":("H1","L1"), "H1,L1,V1":("H1","L1","V1"), "H1,V1":("H1","V1"), "L1,V1":("L1","V1"), "H1,H2,L1,V1":("H1","L1","V1")}
+	return ifo_fap_dict, livetime
+
+def two_fap_query(fap_ifos, ifostr):
+	query = '''UPDATE coinc_inspiral
+	SET false_alarm_rate = (SELECT fap2(snglA.ifo, snglA.snr, snglA.chisq, snglB.ifo, snglB.snr, snglB.chisq)
+				FROM coinc_event_map AS mapA ON mapA.coinc_event_id == coinc_inspiral.coinc_event_id
+				JOIN coinc_event_map AS mapB ON mapB.coinc_event_id == coinc_inspiral.coinc_event_id
+				JOIN sngl_inspiral AS snglA ON snglA.event_id == mapA.event_id
+				JOIN sngl_inspiral AS snglB ON snglB.event_id == mapB.event_id
+				WHERE snglA.ifo == "%s"
+				AND snglB.ifo == "%s")
+	WHERE coinc_inspiral.ifos = "%s"''' % (fap_ifos[0], fap_ifos[1], ifostr)
+	return query
+
+def three_fap_query(fap_ifos, ifostr):
+	query = '''UPDATE coinc_inspiral
+	SET false_alarm_rate = (SELECT fap3(snglA.ifo, snglA.snr, snglA.chisq, snglB.ifo, snglB.snr, snglB.chisq, snglC.ifo, snglC.snr, snglC.chisq)
+				FROM coinc_event_map AS mapA ON mapA.coinc_event_id == coinc_inspiral.coinc_event_id
+				JOIN coinc_event_map AS mapB ON mapB.coinc_event_id == coinc_inspiral.coinc_event_id
+				JOIN coinc_event_map AS mapC ON mapC.coinc_event_id == coinc_inspiral.coinc_event_id
+				JOIN sngl_inspiral AS snglA ON snglA.event_id == mapA.event_id
+				JOIN sngl_inspiral AS snglB ON snglB.event_id == mapB.event_id
+				JOIN sngl_inspiral AS snglC ON snglC.event_id == mapC.event_id
+				WHERE snglA.ifo == "%s"
+				AND snglB.ifo == "%s"
+				AND snglC.ifo == "%s")
+	WHERE coinc_inspiral.ifos = "%s"''' % (fap_ifos[0], fap_ifos[1], fap_ifos[2], ifostr)
+	return query
+
+def fap_query(fap_ifos, ifostr):
+	if len(fap_ifos) == 2:
+		return two_fap_query(fap_ifos, ifostr)
+	if len(fap_ifos) == 3:
+		return three_fap_query(fap_ifos, ifostr)
+	raise ValueError("number of ifos to compute fap is not supported ", len(fap_ifos))
 
 def parse_command_line():
 	parser = OptionParser(
@@ -111,8 +196,7 @@ def parse_command_line():
 	parser.add_option("--segments-name", metavar = "name", default = "datasegments", help = "Set the name of the analysis segments (default = 'datasegments').")
 	parser.add_option("--vetoes-file", metavar = "filename", help = "Set the name of the xml file containing the veto segments.")
 	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the vetoes segments (default = 'vetoes').")
-	parser.add_option("--stride", metavar = "int", type="int", default=5, help = "set the stride to decimate the bins, default 5")
-	parser.add_option("--additional-trials-factor", metavar = "int", type="int", default=1, help = "set an additional trials factor to apply to the rate, beyond what is measured from the SVD.  Default is 1.")
+	parser.add_option("--additional-trials-factor", metavar = "int", type="int", default=1, help = "set an additional trials factor to apply to the FAP.  Default = 1 (no trials factor)")
 	parser.add_option("--tmp-space", metavar = "dir", help = "Set the name of the tmp space if working with sqlite")
 	parser.add_option("--compute-fap", action = "store_true", help = "compute fap, otherwise compute far assuming fap has been calculated")
 	parser.add_option("--compute-far", action = "store_true", help = "compute far, only works if fap is being computed or has been computed.")
@@ -129,8 +213,10 @@ options, filenames = parse_command_line()
 segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.segments_file, verbose = options.verbose), options.segments_name).coalesce()
 vetoes = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes_file, verbose = options.verbose), options.vetoes_name).coalesce()
 
-#FIXME for now our live time is defined by this
-H1L1livetime = float(abs((segments - vetoes).intersection(set(("H1", "L1")))))
+# Here we get the union of all of the possible live time segments and subtract the vetoes.
+segments -= vetoes
+ifo_fap_dict, livetime = get_ifo_combos_and_live_time(segments)
+
 
 if options.compute_fap:
 	# retrieve rank data
@@ -141,14 +227,15 @@ if options.compute_fap:
 	# FIXME:  make sure the smoothing is what is intended:  what's coded here
 	# is neither computing a sliding average of bin counts, nor an event rate
 	# density.
+	# CHAD I have called to_pdf() after smoothing, is that right?
 	counts = coincparamsdistributions.background_rates
 	for binned_array in counts.values():
-		smooth_bins(binned_array, stride = options.stride)
+		smooth_bins(binned_array)
 
 	print >>sys.stderr, "computing FAP map preliminaries..."
-	Far = FAR(H1L1livetime, options.additional_trials_factor, counts)
+	Far = FAR(livetime, options.additional_trials_factor, counts)
 else:
-	Far = FAR(H1L1livetime, options.additional_trials_factor)
+	Far = FAR(livetime, options.additional_trials_factor)
 
 # iterate over files to rank
 for f in filenames:
@@ -158,23 +245,28 @@ for f in filenames:
 	working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
 
-	connection.create_function("fap", 4, Far.compute_fap)
-	connection.create_function("far", 2, Far.compute_far)
-
 	if options.compute_fap is not None:
+		connection.create_function("fap2", 6, Far.compute_fap2)
+		connection.create_function("fap3", 9, Far.compute_fap3)
 		print >>sys.stderr, "computing faps ..."
-		# FIXME abusing FAR column
-		connection.cursor().execute('UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(snglA.snr, snglA.chisq, snglB.snr, snglB.chisq) FROM coinc_event_map as mapA on mapA.coinc_event_id == coinc_inspiral.coinc_event_id JOIN coinc_event_map as mapB on mapB.coinc_event_id == coinc_inspiral.coinc_event_id JOIN sngl_inspiral as snglA on snglA.event_id == mapA.event_id JOIN sngl_inspiral as snglB on snglB.event_id == mapB.event_id WHERE snglA.ifo == "H1" and snglB.ifo =="L1")')
-		connection.commit()
+		for ifos, in connection.cursor().execute('SELECT DISTINCT(ifos) FROM coinc_inspiral').fetchall():
+			print >>sys.stderr, "computing faps for ", ifos
+			# FIXME since some combinations are degenerate a few things will be computed twice unecessarily 
+			fap_ifos = ifo_fap_dict[ifos]
+			Far.updateFAPmap(fap_ifos)
+			# FIXME abusing FAR column
+			connection.cursor().execute(fap_query(fap_ifos, ifos))
+			connection.commit()
 
 	if options.compute_far is not None:
+		connection.create_function("far", 2, Far.compute_far)
 		ids = [id for id, in connection.cursor().execute("SELECT DISTINCT(time_slide_id) FROM time_slide")]
 		for id in ids:
 			print >>sys.stderr, "computing rates for ", id
 			# FIXME abusing FAR column
 			connection.cursor().execute('DROP TABLE IF EXISTS ranktable')
-			# FIXME any indicies on ranktable??
 			connection.commit()
+			# FIXME any indicies on ranktable??
 			connection.cursor().execute('CREATE TEMPORARY TABLE ranktable AS SELECT * FROM coinc_inspiral JOIN coinc_event ON coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id WHERE coinc_event.time_slide_id == ? ORDER BY false_alarm_rate', (id,))
 			connection.commit()
 			connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate, ranktable.rowid) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.coinc_event_id IN (SELECT coinc_event_id FROM ranktable)')
