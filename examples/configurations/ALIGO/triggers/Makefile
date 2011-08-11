@@ -1,12 +1,12 @@
 START = 871147452
 STOP = 871197452
-PSD_FILE = ../bank/reference_psd.xml
-DELETE_SQL_FILE = ../bank/simplify_and_delete_by_far.sql
-CLUSTER_SQL_FILE = ../bank/simplify_and_cluster.sql
-INJ_SQL_FILE = ../bank/inj_simplify_and_cluster.sql
-H1_BANK_CACHE = ../bank/H1_reference_psd_svd_bank.cache
-L1_BANK_CACHE = ../bank/L1_reference_psd_svd_bank.cache
-V1_BANK_CACHE = ../bank/V1_reference_psd_svd_bank.cache
+PSD_FILE = ../bank2/reference_psd.xml
+DELETE_SQL_FILE = ../bank2/simplify_and_delete_by_far.sql
+CLUSTER_SQL_FILE = ../bank2/simplify_and_cluster.sql
+INJ_SQL_FILE = ../bank2/inj_simplify_and_cluster.sql
+H1_BANK_CACHE = ../bank2/H1_reference_psd_svd_bank.cache
+L1_BANK_CACHE = ../bank2/L1_reference_psd_svd_bank.cache
+V1_BANK_CACHE = ../bank2/V1_reference_psd_svd_bank.cache
 FRAMES = ../frames/frames.cache
 SEED = 1
 WEBDIR = /home/channa/public_html/ALIGO
@@ -68,4 +68,4 @@ web :
 	mkdir $(WEBDIR) 
 
 realclean :
-	rm -r plots $(WEBDIR) *.sub *.dag* *.cache *.sh logs *.xml
+	rm -r plots $(WEBDIR) *.sub *.dag* *.cache *.sh logs *.xml vetoes.xml.gz segments.xml.gz

@@ -1,9 +1,7 @@
-V1PSDFILE = ../psd/V1-871147452-871147652-reference_psd.xml.gz
-H1PSDFILE = ../psd/H1-871147452-871147652-reference_psd.xml.gz
-L1PSDFILE = ../psd/L1-871147452-871147652-reference_psd.xml.gz
-
-START = 871147452
-STOP =  871247452
+V1PSDFILE = ../psd/V1-871147452-871159228-reference_psd.xml.gz
+H1PSDFILE = ../psd/H1-871147452-871158716-reference_psd.xml.gz
+L1PSDFILE = ../psd/L1-871147452-871159228-reference_psd.xml.gz
+CACHE = ../frames/frame.H1.cache
 IFOS = H
 
 # Template bank parameters
@@ -21,11 +19,7 @@ MM = 0.97
 
 all : dag
 
-frame.H.cache:
-	ligo_data_find -o H -t H1_RDS_C03_L2 -l  -s $(START) -e $(STOP) --url-type file > frame.H.cache
-	./cache_to_segments frame.H.cache segments.H.xml
-
-H1-TMPLTBANK-871154847-2048.xml: frame.H.cache 
+H1-TMPLTBANK-871147516-2048.xml:
 	lalapps_tmpltbank \
 		--disable-compute-moments \
 		--grid-spacing Hexagonal \
@@ -37,8 +31,8 @@ H1-TMPLTBANK-871154847-2048.xml: frame.H.cache
 		--maximum-mass $(MAX_MASS) \
 		--min-total-mass $(MIN_TOTAL_MASS) \
 		--max-total-mass $(MAX_TOTAL_MASS) \
-		--gps-start-time 871154847 \
-		--gps-end-time 871156895 \
+		--gps-start-time 871147516 \
+		--gps-end-time 871149564 \
 		--standard-candle \
 		--calibrated-data real_8 \
 		--candle-mass1 1 \
@@ -60,15 +54,15 @@ H1-TMPLTBANK-871154847-2048.xml: frame.H.cache
 		--resample-filter ldas \
 		--strain-high-pass-atten 0.1 \
 		--strain-high-pass-freq $(HIGH_PASS_FREQ) \
-		--frame-cache $^ \
+		--frame-cache $(CACHE) \
 		--max-high-freq-cutoff SchwarzISCO \
 		--approximant TaylorF2 \
 		--order twoPN \
+		--spectrum-type median \
 		--verbose \
-		--spectrum-type AdvLIGO \
-		&& ./bank_splitter --overlap $(OVERLAP) -i H1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml \
-		&& ./bank_splitter --overlap $(OVERLAP) -i V1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml \
-		&& ./bank_splitter --overlap $(OVERLAP) -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml
+		&& ./bank_splitter --overlap $(OVERLAP) -i H1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml \
+		&& ./bank_splitter --overlap $(OVERLAP) -i V1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml \
+		&& ./bank_splitter --overlap $(OVERLAP) -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml
 
 reference_psd.xml: 
 	ligolw_add --output reference_psd.xml $(V1PSDFILE) $(H1PSDFILE) $(L1PSDFILE)
@@ -79,14 +73,14 @@ sql :
 	cat simplify.sql delete_by_far.sql > simplify_and_delete_by_far.sql
 	cat fix_coinc_instruments.sql uniqueify_sim_inspiral.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
 
-dag : H1-TMPLTBANK-871154847-2048.xml reference_psd.xml sql
-	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > H1_split_bank.cache
-	ls *V1_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > V1_split_bank.cache
-	ls *L1_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > L1_split_bank.cache
-	./svd_bank_pipe H1 reference_psd.xml H1_split_bank.cache $(OVERLAP)
-	./svd_bank_pipe V1 reference_psd.xml V1_split_bank.cache $(OVERLAP)
-	./svd_bank_pipe L1 reference_psd.xml L1_split_bank.cache $(OVERLAP)
+dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml sql
+	ls *H1_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > H1_split_bank.cache
+	ls *V1_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > V1_split_bank.cache
+	ls *L1_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > L1_split_bank.cache
+	./svd_bank_pipe H1 reference_psd.xml H1_split_bank.cache $(OVERLAP) $(LOW_FREQUENCY_CUTOFF)
+	./svd_bank_pipe V1 reference_psd.xml V1_split_bank.cache $(OVERLAP) $(LOW_FREQUENCY_CUTOFF)
+	./svd_bank_pipe L1 reference_psd.xml L1_split_bank.cache $(OVERLAP) $(LOW_FREQUENCY_CUTOFF)
 	cat H1_reference_psd_svd_bank.dag L1_reference_psd_svd_bank.dag V1_reference_psd_svd_bank.dag > bank.dag
 
 realclean :
-	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml *split_bank-H1-TMPLTBANK-871154847-2048.xml *psd.xml.gz segments.H.xml logs
+	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871147516-2048.xml *split_bank-H1-TMPLTBANK-871147516-2048.xml *psd.xml.gz segments.H.xml logs

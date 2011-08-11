@@ -111,6 +111,7 @@ ref_psd = sys.argv[2]
 input_cache = sys.argv[3]
 clipping = int(sys.argv[4])
 psdname = ref_psd.split('.')[0]
+flow = float(sys.argv[5])
 
 try: os.mkdir("logs")
 except: pass
@@ -121,7 +122,7 @@ svdNode = {}
 
 
 for f in [lal.CacheEntry(line).path() for line in open(input_cache)]:
-	svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, reference_psd=ref_psd, clipping=clipping)
+	svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, flow, reference_psd=ref_psd, clipping=clipping)
 
 dag.write_sub_files()
 dag.write_dag()

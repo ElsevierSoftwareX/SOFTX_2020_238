@@ -12,7 +12,7 @@ MAX_TOTAL_MASS = 2.8
 FLOW = 14
 
 
-all : H1-LSC-STRAIN L1-LSC-STRAIN V1-LSC-STRAIN
+all : frames.cache
 
 H1-LSC-STRAIN : injections.xml
 	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --injections injections.xml --instrument H1 --write-psd H1psd.xml.gz --verbose
@@ -25,6 +25,9 @@ L1-LSC-STRAIN : injections.xml
 V1-LSC-STRAIN : injections.xml
 	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --injections injections.xml --instrument V1 --write-psd V1psd.xml.gz --verbose
 	ls V1-LSC-STRAIN/*.gwf | lalapps_path2cache > frame.V1.cache
+
+frames.cache : H1-LSC-STRAIN L1-LSC-STRAIN V1-LSC-STRAIN
+	cat frame.H1.cache  frame.L1.cache frame.V1.cache > frames.cache
 
 # do one injection for fun
 injections.xml:
