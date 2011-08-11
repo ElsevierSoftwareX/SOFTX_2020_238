@@ -122,7 +122,7 @@ class FAR(object):
 		interp = interpolate.interp1d(FAPS, nvec / self.livetime)
 		if fap < FAPS[1]:
 			return 0.
-		if fap > FAPS[-1]:#This means that the FAP has gone off the edge.  We will bump it down because we don't really care about this being right.
+		if fap > FAPS[-1]:# This means that the FAP has gone off the edge.  We will bump it down because we don't really care about this being right.
 			fap = FAPS[-1]
 		return interp(fap)[0]
 
@@ -139,12 +139,14 @@ def get_ifo_combos_and_live_time(segments, verbose = True):
 	ifo_combos = []
 	# FIXME is this what we want, H2 never participates in a double?
 	# fixme use choices in glue or something for this and then correct the special cases?
-	for ifos in [set(("H1","L1")), set(("H1","H2","L1")), set(("H1","L1","V1")), set(("H1","V1")), set(("L1","V1")), set(("H1","H2","L1","V1"))]:
+	for ifos in [set((u"H1",u"L1")), set((u"H1",u"H2",u"L1")), set((u"H1",u"L1",u"V1")), set((u"H1",u"V1")), set((u"L1",u"V1")), set((u"H1",u"H2",u"L1",u"V1"))]:
 		if ifos.issubset(ifos_available):
 			ifo_combos.append(ifos)
-	LTsegs = segments.intersection(ifo_combos[0])
-	for ifos in ifo_combos[1:]:
-		LTsegs |= segments.intersection(ifos)
+	
+	LTsegs = segments.intersection(ifo_combos[0]).coalesce()
+	for ifos in ifo_combos:
+		LTsegs |= segments.intersection(ifos).coalesce()
+	LTsegs.coalesce()
 	livetime =  float(abs(LTsegs))
 	if verbose:
 		print >> sys.stderr, "Livetime: ", livetime
@@ -205,15 +207,24 @@ def parse_command_line():
 	options, filenames = parser.parse_args()
 	return options, filenames
 
-
+#
 # Parse command line
+#
+
 options, filenames = parse_command_line()
 
+#
 # load segment data
+#
+
 segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.segments_file, verbose = options.verbose), options.segments_name).coalesce()
 vetoes = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes_file, verbose = options.verbose), options.vetoes_name).coalesce()
 
-# Here we get the union of all of the possible live time segments and subtract the vetoes.
+#
+# Here we get the union of all of the possible live time segments and subtract
+# the vetoes.
+#
+
 segments -= vetoes
 ifo_fap_dict, livetime = get_ifo_combos_and_live_time(segments)
 
@@ -236,8 +247,10 @@ if options.compute_fap:
 	Far = FAR(livetime, options.additional_trials_factor, counts)
 else:
 	Far = FAR(livetime, options.additional_trials_factor)
-
+#
 # iterate over files to rank
+#
+
 for f in filenames:
 
 	from glue.ligolw import dbtables
