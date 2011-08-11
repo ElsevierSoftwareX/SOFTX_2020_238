@@ -173,8 +173,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	src = pipeparts.mkcapsfilter(pipeline, snk, "audio/x-raw-float, rate=%d" % rate)
 
 	#
-	# Add a peak finder on the control signal sample number = 3 seconds at 2048 Hz
-	# FIXME don't assume 2048 Hz
+	# Add a peak finder on the control signal sample number
 	#
 
 	if control_peak_samples is not None:
@@ -210,14 +209,19 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 #
 
 
-def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = False, online_data = False, injection_filename = None, frame_segments = None, verbose = False):
+def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None, online_data = False, injection_filename = None, frame_segments = None, verbose = False):
 	#
 	# data source
 	#
 
-	if fake_data:
+	if fake_data is not None:
 		assert not online_data
-		src = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
+		if fake_data == 'LIGO':
+			src = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
+		elif fake_data == 'AdvLIGO':
+			src = pipeparts.mkfakeadvLIGOsrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
+		else:
+			raise ValueError("fake data must be either LIGO or AdvLIGO")
 	elif online_data:
 		assert not fake_data
 		src = pipeparts.mkonlinehoftsrc(pipeline, instrument)
@@ -912,7 +916,8 @@ class StreamThinca(object):
 		def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, delta_t):
 			return (event_a.mass1 != event_b.mass1) or (event_a.mass2 != event_b.mass2) or (abs(event_a.get_end() + offset_a - event_b.get_end() - offset_b) > light_travel_time + delta_t) 
 		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary, boundary)):
-			return set(event.ifo for event in events) not in (set(["H1", "H2", "L1"]), set(["H1", "L1"])) or ligolw_thinca.coinc_inspiral_end_time(events, offset_vector) not in seg
+			#FIXME this is stupid
+			return (set(event.ifo for event in events) != set(["H1", "H2", "L1"]) and (set(event.ifo for event in events) != set(["H1", "L1", "V1"]) and set(event.ifo for event in events) != set(["H1", "L1"])) and set(event.ifo for event in events) != set(["H1", "V1"]) and set(event.ifo for event in events) != set(["L1", "V1"])) or ligolw_thinca.coinc_inspiral_end_time(events, offset_vector) not in seg
 		def get_effective_snr(self, fac):
 			return self.snr
 		orig_get_effective_snr, ligolw_thinca.SnglInspiral.get_effective_snr = ligolw_thinca.SnglInspiral.get_effective_snr, get_effective_snr
