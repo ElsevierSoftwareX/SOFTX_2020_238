@@ -60,7 +60,7 @@ from gstlal import pipeio
 #
 
 
-def measure_psd(instrument, seekevent, detector, seg, rate, fake_data = False, online_data = False, injection_filename = None, psd_fft_length = 8, frame_segments = None, verbose = False):
+def measure_psd(instrument, seekevent, detector, seg, rate, fake_data = None, online_data = False, injection_filename = None, psd_fft_length = 8, frame_segments = None, verbose = False):
 	#
 	# pipeline handler for PSD measurement
 	#
