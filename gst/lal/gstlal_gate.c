@@ -231,8 +231,13 @@ static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstCloc
 		 */
 
 		buf = g_queue_peek_head(element->control_queue);
-		if((buf && (GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf) >= tmax)) || element->control_eos)
+		if((buf && (GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf) >= tmax)) || element->control_eos) {
+			if(buf)
+				GST_DEBUG_OBJECT(element, "have control upto %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(tmax));
+			else
+				GST_DEBUG_OBJECT(element, "control is at EOS");
 			break;
+		}
 
 		/*
 		 * no, wait for buffer to arrive
@@ -601,7 +606,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	g_mutex_lock(element->control_lock);
-	while(!(element->sink_eos || (GST_CLOCK_TIME_IS_VALID(element->t_req_control_head) && GST_BUFFER_TIMESTAMP(sinkbuf) < element->t_req_control_head)) && !g_queue_is_empty(element->control_queue)) {
+	while(!(element->sink_eos || (GST_CLOCK_TIME_IS_VALID(element->t_req_control_head) && GST_BUFFER_TIMESTAMP(sinkbuf) < element->t_req_control_head) || g_queue_is_empty(element->control_queue))) {
 		GST_DEBUG_OBJECT(pad, "waiting for space in queue: sink_eos = %d, t_req_control_head is valid = %d, timestamp >= t_req_control_head = %d", element->sink_eos, GST_CLOCK_TIME_IS_VALID(element->t_req_control_head), GST_BUFFER_TIMESTAMP(sinkbuf) >= element->t_req_control_head);
 		g_cond_wait(element->control_queue_head_changed, element->control_lock);
 	}
@@ -839,6 +844,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 				 */
 
 				element->need_discont = TRUE;
+			GST_DEBUG_OBJECT(element->srcpad, "discarding gap buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 			goto done;
 		}
 
@@ -856,6 +862,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * push buffer
 		 */
 
+		GST_DEBUG_OBJECT(element->srcpad, "pushing reused gap buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 		result = gst_pad_push(element->srcpad, sinkbuf);
 		sinkbuf = NULL;
 		goto done;
@@ -987,6 +994,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * push buffer down stream
 		 */
 
+		GST_DEBUG_OBJECT(element->srcpad, "pushing buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
 		result = gst_pad_push(element->srcpad, srcbuf);
 		if(G_UNLIKELY(result != GST_FLOW_OK)) {
 			GST_WARNING_OBJECT(element->srcpad, "gst_pad_push() failed (%s)", gst_flow_get_name(result));
