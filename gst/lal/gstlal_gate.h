@@ -62,7 +62,7 @@ typedef struct _GSTLALGate {
 	GMutex *control_lock;
 	gboolean control_eos;
 	gboolean sink_eos;
-	GstClockTime t_req_control_head;
+	GstClockTime t_sink_head;
 	GQueue *control_queue;
 	GCond *control_queue_head_changed;
 	gdouble (*control_sample_func)(const gpointer, guint64);

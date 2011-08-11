@@ -209,7 +209,7 @@ static void control_flush(GSTLALGate *element)
 static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstClockTime tmax)
 {
 	g_mutex_lock(element->control_lock);
-	element->t_req_control_head = tmax;
+	element->t_sink_head = tmax;
 	g_cond_broadcast(element->control_queue_head_changed);
 	while(1) {
 		GstBuffer *buf;
@@ -606,8 +606,8 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	g_mutex_lock(element->control_lock);
-	while(!(element->sink_eos || (GST_CLOCK_TIME_IS_VALID(element->t_req_control_head) && GST_BUFFER_TIMESTAMP(sinkbuf) < element->t_req_control_head) || g_queue_is_empty(element->control_queue))) {
-		GST_DEBUG_OBJECT(pad, "waiting for space in queue: sink_eos = %d, t_req_control_head is valid = %d, timestamp >= t_req_control_head = %d", element->sink_eos, GST_CLOCK_TIME_IS_VALID(element->t_req_control_head), GST_BUFFER_TIMESTAMP(sinkbuf) >= element->t_req_control_head);
+	while(!(element->sink_eos || (GST_CLOCK_TIME_IS_VALID(element->t_sink_head) && GST_BUFFER_TIMESTAMP(sinkbuf) < element->t_sink_head) || g_queue_is_empty(element->control_queue))) {
+		GST_DEBUG_OBJECT(pad, "waiting for space in queue: sink_eos = %d, t_sink_head is valid = %d, timestamp >= t_sink_head = %d", element->sink_eos, GST_CLOCK_TIME_IS_VALID(element->t_sink_head), GST_BUFFER_TIMESTAMP(sinkbuf) >= element->t_sink_head);
 		g_cond_wait(element->control_queue_head_changed, element->control_lock);
 	}
 
@@ -1029,7 +1029,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 	case GST_EVENT_NEWSEGMENT:
 		GST_DEBUG_OBJECT(pad, "new segment;  clearing internal end-of-stream flag");
 		g_mutex_lock(element->control_lock);
-		element->t_req_control_head = GST_CLOCK_TIME_NONE;
+		element->t_sink_head = GST_CLOCK_TIME_NONE;
 		element->sink_eos = FALSE;
 		element->last_state = FALSE;
 		element->need_discont = TRUE;
@@ -1405,7 +1405,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->control_lock = g_mutex_new();
 	element->control_eos = FALSE;
 	element->sink_eos = FALSE;
-	element->t_req_control_head = GST_CLOCK_TIME_NONE;
+	element->t_sink_head = GST_CLOCK_TIME_NONE;
 	element->control_queue = g_queue_new();
 	element->control_queue_head_changed = g_cond_new();
 	element->control_sample_func = NULL;
