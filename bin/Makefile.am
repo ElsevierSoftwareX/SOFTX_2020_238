@@ -13,4 +13,5 @@ dist_bin_SCRIPTS = \
 	gstlal_s5_pbh_trigger_pipe \
 	gstlal_s5_pbh_trigger_setup \
 	gstlal_s5_pbh_summary_page \
-	gstlal_iir_inspiral
+	gstlal_iir_inspiral \
+	gstlal_fake_aligo_frames
