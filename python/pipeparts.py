@@ -85,6 +85,13 @@ def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 *
 	pipeline.add(elem)
 	return elem
 
+def mkframesink(pipeline, src, **properties):
+	elem = gst.element_factory_make("lal_framesink")
+	for name, value in properties.items():
+		elem.set_property(name.replace("_", "-"), value)
+	pipeline.add(elem)
+	src.link(elem)
+
 
 def mkndssrc(pipeline, host, instrument, channel_name, blocksize = 16384 * 8 * 1):
 	# default blocksize is 1 second of double precision floats at
