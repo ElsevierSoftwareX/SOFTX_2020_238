@@ -491,11 +491,7 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 			goto error;
 		}
 		GST_DEBUG_OBJECT(element->srcpad, "pushing newsegment event [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(element->segment.start), GST_TIME_SECONDS_ARGS(element->segment.stop));
-		result = gst_pad_push_event(element->srcpad, event);
-		if(result != GST_FLOW_OK) {
-			GST_ERROR_OBJECT(element, "unable to push newsegment event");
-			goto error;
-		}
+		gst_pad_push_event(element->srcpad, event);
 
 		/*
 		 * reset the last inspiral event information
