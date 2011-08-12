@@ -1,0 +1,67 @@
+#!/usr/bin/env python
+"""
+
+Extrapolate LLOID computational cost to advanced LIGO.
+
+"""
+__author__ = "Leo Singer <leo.singer@ligo.org>"
+
+
+# Command line interface.
+
+from optparse import OptionParser, Option
+try: # FIXME Python 2.4 compatibility for cluster
+	any
+except:
+	from glue.iterutils import any
+
+opts, args = OptionParser(description = __doc__,
+	option_list = [
+		Option("--template-bank", metavar="filename", help="Set the name of the LIGO light-weight XML file from which to load the template bank (required)."),
+		Option("--flow", help="Low frequency cutoff", metavar="Hz", type="float"),
+		Option("--alpha", help="Rank reduction efficiency (default=0.01)", type="float", default=0.01),
+	]
+).parse_args()
+
+# Check for required command line arguments.
+if any(getattr(opts, key) is None for key in ('template_bank', 'flow')):
+	raise RuntimeError("Missing some required arguments")
+
+
+# Late imports (delayed to speed up command line interface)
+from glue.ligolw import ligolw, lsctables, utils
+from pylal.spawaveform import chirptime
+from gstlal.templates import ceil_pow_2
+import numpy
+
+
+xmldoc = utils.load_filename(opts.template_bank, gz = opts.template_bank.endswith('.gz'))
+sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+
+# Discard XML document.
+del xmldoc
+
+lloid_flops = 0
+td_flops = 0
+fd_flops = 0
+
+for i, row in enumerate(sngl_inspiral_table):
+	fhigh = row.f_final
+	flow = opts.flow
+	fs = ceil_pow_2(2 * fhigh)
+	m1 = row.mass1
+	m2 = row.mass2
+	tlow = chirptime(m1, m2, 4, flow)
+	thigh = chirptime(m1, m2, 4, fhigh)
+	num_templates = 2 # + and x polarizations
+
+	speedup = 16 * opts.alpha * (tlow * flow * flow - thigh * fhigh * fhigh) / (fs * fs * (tlow - thigh))
+	td_flops_here = 2 * num_templates * fs * fs * (tlow - thigh)
+	td_flops += td_flops_here
+	fd_flops += 4 * num_templates * numpy.log2(2 * fs * (tlow - thigh)) * fs
+	lloid_flops += speedup * td_flops_here
+
+print "TD:    %3g" % td_flops
+print "FD:    %3g" % fd_flops
+print "LLOID: %3g" % lloid_flops
+
