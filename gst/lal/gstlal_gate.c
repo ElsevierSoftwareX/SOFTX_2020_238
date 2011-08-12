@@ -57,10 +57,6 @@
 #include <gstlal_gate.h>
 
 
-#define GST_CAT_DEFAULT gstlal_gate_debug
-GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
-
-
 /*
  * ============================================================================
  *
@@ -68,6 +64,10 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
  *
  * ============================================================================
  */
+
+
+#define GST_CAT_DEFAULT gstlal_gate_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 #define DEFAULT_EMIT_SIGNALS FALSE
