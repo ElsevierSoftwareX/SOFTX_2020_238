@@ -69,11 +69,19 @@
 #include <gstaudioadapter.h>
 
 
+GST_DEBUG_CATEGORY(gstlal_autochisq_debug);
+
+
 /*
- * parameters
+ * ============================================================================
+ *
+ *                                 Parameters
+ *
+ * ============================================================================
  */
 
 
+#define GST_CAT_DEFAULT gstlal_autochisq_debug
 #define CHI2_USES_REAL_ONLY FALSE
 #define DEFAULT_SNR_THRESH 0
 
