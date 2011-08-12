@@ -721,8 +721,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	/*
 	 * check for discontinuity
-	 *
-	 * FIXME:  instead of reseting, flush/pad adapter as needed
 	 */
 
 	if(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0)) {
