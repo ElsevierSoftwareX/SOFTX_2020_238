@@ -142,6 +142,7 @@ static int setup_bankfile_input(GSTLALTriggerGen *element, char *bank_filename)
 
 	for(i = 0; bank; i++) {
 		SnglInspiralTable *next = bank->next;
+		g_assert(i < element->num_templates);
 		element->bank[i] = *bank;
 		element->bank[i].next = NULL;
 		free(bank);
@@ -230,7 +231,7 @@ static SnglInspiralTable *record_inspiral_event(SnglInspiralTable *dest, LIGOTim
  */
 
 
-static gboolean gen_setcaps(GstPad *pad, GstCaps *caps)
+static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(gst_pad_get_parent(pad));
 	GstStructure *structure;
@@ -363,10 +364,10 @@ static gboolean src_event(GstPad *pad, GstEvent *event)
  */
 
 
-static gboolean taglist_extract_string(GSTLALTriggerGen *element, GstTagList *taglist, const char *tagname, gchar **dest)
+static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, const char *tagname, gchar **dest)
 {
 	if(!gst_tag_list_get_string(taglist, tagname, dest)) {
-		GST_WARNING_OBJECT(element, "unable to parse \"%s\" from %" GST_PTR_FORMAT, tagname, taglist);
+		GST_WARNING_OBJECT(object, "unable to parse \"%s\" from %" GST_PTR_FORMAT, tagname, taglist);
 		return FALSE;
 	}
 	return TRUE;
@@ -398,10 +399,10 @@ static gboolean snr_event(GstPad *pad, GstEvent *event)
 		GstTagList *taglist;
 		gchar *instrument, *channel_name;
 		gst_event_parse_tag(event, &taglist);
-		success = taglist_extract_string(element, taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
-		success &= taglist_extract_string(element, taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
+		success = taglist_extract_string(GST_OBJECT(pad), taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
+		success &= taglist_extract_string(GST_OBJECT(pad), taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
 		if(success) {
-			GST_DEBUG_OBJECT(element, "found tags \"%s\"=\"%s\" \"%s\"=\"%s\"", GSTLAL_TAG_INSTRUMENT, instrument, GSTLAL_TAG_CHANNEL_NAME, channel_name);
+			GST_DEBUG_OBJECT(pad, "found tags \"%s\"=\"%s\", \"%s\"=\"%s\"", GSTLAL_TAG_INSTRUMENT, instrument, GSTLAL_TAG_CHANNEL_NAME, channel_name);
 			g_free(element->instrument);
 			element->instrument = instrument;
 			g_free(element->channel_name);
@@ -427,7 +428,7 @@ static gboolean snr_event(GstPad *pad, GstEvent *event)
  */
 
 
-static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
+static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 {
 	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(user_data);
 	GstClockTime earliest_input_t_start, earliest_input_t_end;
@@ -441,7 +442,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	 */
 
 	if(!element->instrument || !element->channel_name) {
-		GST_ERROR_OBJECT(element, "instrument and/or channel name not known (stream's tags must provide this information)");
+		GST_ELEMENT_ERROR(element, STREAM, FAILED, ("missing or invalid tags"), ("instrument and/or channel name not known (stream's tags must provide this information)"));
 		result = GST_FLOW_ERROR;
 		goto error;
 	}
@@ -470,7 +471,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 
 		GstSegment *segment = gstlal_collect_pads_get_segment(element->collect);
 		if(!segment) {
-			GST_ERROR_OBJECT(element, "unable to retrieve bounding segment");
+			GST_ELEMENT_ERROR(element, STREAM, FAILED, ("missing or invalid segment"), ("unable to retrieve bounding segment from gstlal_collect_pads_get_segment()"));
 			result = GST_FLOW_ERROR;
 			goto error;
 		}
@@ -489,7 +490,12 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 			result = GST_FLOW_ERROR;
 			goto error;
 		}
-		gst_pad_push_event(element->srcpad, event);
+		GST_DEBUG_OBJECT(element->srcpad, "pushing newsegment event [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(element->segment.start), GST_TIME_SECONDS_ARGS(element->segment.stop));
+		result = gst_pad_push_event(element->srcpad, event);
+		if(result != GST_FLOW_OK) {
+			GST_ERROR_OBJECT(element, "unable to push newsegment event");
+			goto error;
+		}
 
 		/*
 		 * reset the last inspiral event information
@@ -521,6 +527,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		GST_DEBUG_OBJECT(element, "gstlal_collect_pads_get_earliest_times() says we are at EOS");
 		goto eos;
 	}
+	GST_DEBUG_OBJECT(element, "data available for [%" GST_TIME_SECONDS_FORMAT " s, %" GST_TIME_SECONDS_FORMAT " s)", GST_TIME_SECONDS_ARGS(earliest_input_t_start), GST_TIME_SECONDS_ARGS(earliest_input_t_end));
 
 	/*
 	 * get buffers upto the desired end time.
@@ -538,12 +545,12 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 			gst_buffer_unref(snrbuf);
 			snrbuf = NULL;
 		} else
-			GST_DEBUG_OBJECT(element, "snr pad is at EOS");
+			GST_DEBUG_OBJECT(element->snrpad, "at EOS");
 		if(chisqbuf) {
 			gst_buffer_unref(chisqbuf);
 			chisqbuf = NULL;
 		} else
-			GST_DEBUG_OBJECT(element, "chisq pad is at EOS");
+			GST_DEBUG_OBJECT(element->chisqpad, "at EOS");
 		goto eos;
 	}
 
@@ -557,7 +564,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 		 * GAP --> no-op
 		 */
 
-		GST_DEBUG_OBJECT(element, "input is gap, sending gap downstream");
+		GST_DEBUG_OBJECT(element, "input is gap, output is gap");
 		result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
 		if(result != GST_FLOW_OK)
 			goto error;
@@ -694,7 +701,7 @@ static GstFlowReturn gen_collected(GstCollectPads *pads, gpointer user_data)
 	gst_buffer_unref(snrbuf);
 	gst_buffer_unref(chisqbuf);
 
-	GST_DEBUG_OBJECT(element, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
+	GST_DEBUG_OBJECT(element->srcpad, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
 	return gst_pad_push(element->srcpad, srcbuf);
 
 	/*
@@ -712,7 +719,7 @@ error:
 	return result;
 
 eos:
-	GST_DEBUG_OBJECT(element, "sending EOS event downstream");
+	GST_DEBUG_OBJECT(element->srcpad, "pushing EOS event");
 	gst_pad_push_event(element->srcpad, gst_event_new_eos());
 	return GST_FLOW_UNEXPECTED;
 }
@@ -727,7 +734,7 @@ eos:
  */
 
 
-enum gen_property {
+enum property {
 	ARG_SNR_THRESH = 1, 
 	ARG_BANK_FILENAME,
 	ARG_MAX_GAP,
@@ -735,7 +742,7 @@ enum gen_property {
 };
 
 
-static void gen_set_property(GObject *object, enum gen_property id, const GValue *value, GParamSpec *pspec)
+static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
 {
 	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
 
@@ -783,7 +790,7 @@ static void gen_set_property(GObject *object, enum gen_property id, const GValue
 }
 
 
-static void gen_get_property(GObject * object, enum gen_property id, GValue * value, GParamSpec * pspec)
+static void get_property(GObject * object, enum property id, GValue * value, GParamSpec * pspec)
 {
 	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
 
@@ -836,10 +843,10 @@ static void gen_get_property(GObject * object, enum gen_property id, GValue * va
  */
 
 
-static GstElementClass *gen_parent_class = NULL;
+static GstElementClass *parent_class = NULL;
 
 
-static void gen_finalize(GObject *object)
+static void finalize(GObject *object)
 {
 	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
 	g_mutex_free(element->bank_lock);
@@ -849,11 +856,11 @@ static void gen_finalize(GObject *object)
 	element->instrument = NULL;
 	g_free(element->channel_name);
 	element->channel_name = NULL;
-	G_OBJECT_CLASS(gen_parent_class)->finalize(object);
+	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
 
-static GstStateChangeReturn gen_change_state(GstElement *element, GstStateChange transition)
+static GstStateChangeReturn change_state(GstElement *element, GstStateChange transition)
 {
 	GSTLALTriggerGen *triggergen = GSTLAL_TRIGGERGEN(element);
 
@@ -883,11 +890,11 @@ static GstStateChangeReturn gen_change_state(GstElement *element, GstStateChange
 		break;
 	}
 
-	return gen_parent_class->change_state(element, transition);
+	return parent_class->change_state(element, transition);
 }
 
 
-static void gen_base_init(gpointer g_class)
+static void base_init(gpointer g_class)
 {
 	GstElementClass *element_class = GST_ELEMENT_CLASS(g_class);
 
@@ -951,16 +958,16 @@ static void gen_base_init(gpointer g_class)
 }
 
 
-static void gen_class_init(gpointer klass, gpointer class_data)
+static void class_init(gpointer klass, gpointer class_data)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstElementClass *gstelement_class = GST_ELEMENT_CLASS(klass);
 
-	gen_parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
-	gobject_class->set_property = GST_DEBUG_FUNCPTR(gen_set_property);
-	gobject_class->get_property = GST_DEBUG_FUNCPTR(gen_get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(gen_finalize);
-	gstelement_class->change_state = GST_DEBUG_FUNCPTR(gen_change_state);
+	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+	gstelement_class->change_state = GST_DEBUG_FUNCPTR(change_state);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -1015,25 +1022,25 @@ static void gen_class_init(gpointer klass, gpointer class_data)
 }
 
 
-static void gen_instance_init(GTypeInstance *object, gpointer klass)
+static void instance_init(GTypeInstance *object, gpointer klass)
 {
 	GSTLALTriggerGen *element = GSTLAL_TRIGGERGEN(object);
 	GstPad *pad;
 
 	gst_element_create_all_pads(GST_ELEMENT(element));
 	element->collect = gst_collect_pads_new();
-	gst_collect_pads_set_function(element->collect, GST_DEBUG_FUNCPTR(gen_collected), element);
+	gst_collect_pads_set_function(element->collect, GST_DEBUG_FUNCPTR(collected), element);
 
 	/* configure snr pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "snr");
-	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(gen_setcaps));
+	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(setcaps));
 	gst_pad_use_fixed_caps(pad);
 	element->snrcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->snrcollectdata));
 	element->snrpad = pad;
 
 	/* configure chisquare pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "chisquare");
-	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(gen_setcaps));
+	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(setcaps));
 	gst_pad_use_fixed_caps(pad);
 	element->chisqcollectdata = gstlal_collect_pads_add_pad(element->collect, pad, sizeof(*element->chisqcollectdata));
 	element->chisqpad = pad;
@@ -1076,10 +1083,10 @@ GType gstlal_triggergen_get_type(void)
 	if(!type) {
 		static const GTypeInfo info = {
 			.class_size = sizeof(GSTLALTriggerGenClass),
-			.class_init = gen_class_init,
-			.base_init = gen_base_init,
+			.class_init = class_init,
+			.base_init = base_init,
 			.instance_size = sizeof(GSTLALTriggerGen),
-			.instance_init = gen_instance_init,
+			.instance_init = instance_init,
 		};
 		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_triggergen", &info, 0);
 		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_triggergen", 0, "lal_triggergen element");
