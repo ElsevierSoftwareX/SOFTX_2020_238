@@ -109,6 +109,7 @@ typedef struct {
 } GSTLALTriggerGen;
 
 
+GST_DEBUG_CATEGORY_EXTERN(gstlal_triggergen_debug);
 GType gstlal_triggergen_get_type(void);
 
 

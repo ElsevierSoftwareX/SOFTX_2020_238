@@ -57,6 +57,9 @@
 #include <gstlal_gate.h>
 
 
+GST_DEBUG_CATEGORY(gstlal_gate_debug);
+
+
 /*
  * ============================================================================
  *
@@ -67,9 +70,6 @@
 
 
 #define GST_CAT_DEFAULT gstlal_gate_debug
-GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
-
-
 #define DEFAULT_EMIT_SIGNALS FALSE
 #define DEFAULT_DEFAULT_STATE FALSE
 #define DEFAULT_THRESHOLD 0
@@ -1442,7 +1442,6 @@ GType gstlal_gate_get_type(void)
 			.instance_init = instance_init,
 		};
 		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_gate", &info, 0);
-		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_gate", 0, "lal_gate element");
 	}
 
 	return type;
