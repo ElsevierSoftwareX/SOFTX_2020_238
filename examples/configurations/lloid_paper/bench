@@ -49,23 +49,30 @@ pipeline = gst.Pipeline("impulse_response")
 mainloop = gobject.MainLoop()
 handler = lloidparts.LLOIDHandler(mainloop, pipeline)
 
-source_rate = max(bank.get_rates())
+rates = sorted(list(set(bank.get_rates())), reverse=True)
+source_rate = rates[0]
+min_rate = rates[-1]
+resample_filter_length = (8, 16, 32, 48, 64, 80, 96, 128, 160, 192, 256)
+
+total_latency = 0.5 * resample_filter_length[downsample_quality] / min_rate
+for rate in rates[1:]:
+	total_latency += 0.5 * resample_filter_length[upsample_quality] / rate
+print total_latency
 
 # Input stage
 src = mkelems_fast(pipeline,
 	"audiotestsrc", {"wave": "silence", "samplesperbuffer": source_rate / 4, "num-buffers": long(round(bank.filter_length * 40))},
 	"flags", {"clear": "gap"},
 	"capsfilter", {"caps": gst.Caps("audio/x-raw-float,width=64,channels=1,rate=%d" % source_rate)},
-	"progressreport", {"name": "progress_hft", "do-query": False, "update-freq": 1},
+	"progressreport2", {"name": "progress_hft", "do-query": False, "high-precision": True, "absolute-time": True, "update-freq": 1},
 	"tee",
 )[-1]
 
 # Loop over bank fragments, grouped by sample rate, from latest (highest frequency) to earliest (lowest frequency)
-n_rates = len(set(fragment.rate for fragment in bank.bank_fragments))
-for i_rate, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, key=attrgetter('start')), attrgetter('rate'))):
+for rate, fragments in groupby(bank.bank_fragments, attrgetter('rate')):
 
 	# Decimation
-	if i_rate == 0:
+	if rate == source_rate:
 		src1 = src
 	else:
 		src1 = mkelems_fast(pipeline,
@@ -81,10 +88,10 @@ for i_rate, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, k
 		"adder",
 	)[-1]
 
-	if i_rate > 0:
+	if rate != source_rate:
 		accum.link(last_accum)
 
-	if i_rate < n_rates - 1:
+	if rate != min_rate:
 		last_accum = mkelems_fast(pipeline,
 			"audioresample", {"quality": upsample_quality},
 			"lal_nofakedisconts", {"silent": True},
@@ -100,14 +107,14 @@ for i_rate, (rate, fragments) in enumerate(groupby(sorted(bank.bank_fragments, k
 			"lal_firbank2", {"fir-matrix": fragment.orthogonal_template_bank, "time-domain": True},
 			"lal_nofakedisconts", {"silent": True},
 			"lal_matrixmixer", {"matrix": fragment.mix_matrix},
-			"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": long(round(fragment.start * gst.SECOND))},
+			"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": long(math.ceil((total_latency + fragment.start) * gst.SECOND))},
 			accum
 		)
 
-	if i_rate == 0:
+	if rate == source_rate:
 		mkelems_fast(pipeline,
 			accum,
-			"progressreport", {"name": "progress_snr", "do-query": False, "update-freq": 1},
+			"progressreport2", {"name": "progress_snr", "do-query": False, "high-precision": True, "absolute-time": True, "update-freq": 1},
 			"fakesink", {"sync": True, "async": True}
 		)
 
