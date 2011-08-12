@@ -180,6 +180,10 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	if control_peak_samples is not None:
 		src = pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, control_peak_samples), block_duration = block_duration)
 
+	# FIXME:  why is this queue here?  if there should be a queue
+	# somewhere, isn't it better to put it immediately before the tee
+	# so that everything that needs to be done to the buffers has been
+	# done before they're needed?
 	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = block_duration)
 
 	#
@@ -394,6 +398,9 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 	for rate in sorted(set(rates))[:-1]:	# all but the highest rate
 		head[rate] = pipeparts.mkaudioamplify(pipeline, head[max(rates)], 1/math.sqrt(pipeparts.audioresample_variance_gain(quality, max(rates), rate)))
 		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head[rate], quality = quality), caps = "audio/x-raw-float, rate=%d" % rate)
+		# FIXME:  why is this here?  has someone comfirmed that
+		# it's needed?  why does the comment above say this isn't
+		# needed if it's needed!?
 		head[rate] = pipeparts.mknofakedisconts(pipeline, head[rate], silent = True)
 		head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "%s_timestamps_%d_whitehoft" % (instrument, rate))
 		head[rate] = pipeparts.mktee(pipeline, head[rate])
@@ -443,6 +450,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	if control_snk is not None:
 		src = pipeparts.mktee(pipeline, src)	# comment-out if the tee above is uncommented
 		elem = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights),max_size_buffers = 0, max_size_bytes = 0, max_size_time = block_duration), quality = 9)
+		# FIXME:  does the resampler need this?
 		elem = pipeparts.mknofakedisconts(pipeline, elem, silent = True)
 		elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare_resampler" % logname)
 		elem.link(control_snk)
@@ -492,22 +500,15 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	return src
 
 
-def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = False, logname = "", nxydump_segment = None, fir_stride = None, control_peak_time = None, block_duration = None):
+def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = False, logname = "", nxydump_segment = None, fir_stride = None, control_peak_time = None, block_duration = None, snrslices = None):
 	"""Build the pipeline fragment that creates the SnrSlices associated with different sample rates from hoft."""
 	#
 	# parameters
 	#
 
 	rates = sorted(bank.get_rates())
-
-	nextrates = {}#FIXME make prettier
-	for i,rate in enumerate(rates):
-		if i < (len(rates)-1):
-			nextrates[rate] = rates[i+1]
-		else:
-			nextrates[rate] = rate
-
 	output_rate = max(rates)
+
 	autocorrelation_length = bank.autocorrelation_bank.shape[1]
 	autocorrelation_latency = -(autocorrelation_length - 1) / 2
 
@@ -537,64 +538,104 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 		))
 
 	#
-	# sum the snr streams of the same sample rate
+	# if the calling code has requested copies of the snr
+	# slices, sum together the highest sample rate streams and tee
+	# them off here.  this needs to be done before constructing the
+	# adder network below in order to have access to this snr slice by
+	# itself.  if we put this off until later it'll have all the other
+	# snrs added into it before we get a chance to tee it off
 	#
 
-	output_heads = {}
-	prev_head = None
-	for rate, heads in sorted(branch_heads.items()):
-		#
-		# include an adder when more than one stream at a given sample rate
-		#
-
-		if prev_head is not None:
-			heads.add(prev_head)
+	if snrslices is not None:
+		rate, heads = output_rate, branch_heads[output_rate]
 		if len(heads) > 1:
 			#
-			# hook all matrix mixers that share a common sample rate to
-			# an adder.  the adder replaces the set of matrix mixers as
-			# the new "head" associated with the sample rate
+			# this sample rate has more than one snr stream.
+			# sum them together in an adder, which becomes the
+			# head of the stream at this sample rate
 			#
 
-			output_head = gst.element_factory_make("lal_adder")
-			output_head.set_property("sync", True)
-			pipeline.add(output_head)
+			branch_heads[rate] = gst.element_factory_make("lal_adder")
+			branch_heads[rate].set_property("sync", True)
+			pipeline.add(branch_heads[rate])
 			for head in heads:
-				pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration).link(output_head)
+				pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration).link(branch_heads[rate])
 		else:
-			output_head = list(heads)[0]
+			#
+			# this sample rate has only one stream.  it's the
+			# head of the stream at this sample rate
+			#
+
+			branch_heads[rate], = heads
+		branch_heads[rate] = pipeparts.mktee(pipeline, branch_heads[rate])
+		snrslices[rate] = pipeparts.mktogglecomplex(pipeline, branch_heads[rate])
 
 		#
-		# resample this to next highest rate, or max rate
+		# the code below expects an interable of elements
 		#
 
-		if True:#FIXME replace with conditional on TS chisq
-			output_heads[output_rate] = prev_head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, output_head, quality = 1), "audio/x-raw-float, rate=%d" % nextrates[rate])
-		else:
-			output_head = pipeparts.mkresample(pipeline, output_head, quality = 1)
-			output_heads[rate] = pipeparts.mkcapsfilter(pipeline, output_head, "audio/x-raw-float, rate=%d" % output_rate)
+		branch_heads[rate] = set([branch_heads[rate]])
 
-	for k,v in output_heads.items():
-		output_heads[k] = pipeparts.mktogglecomplex(pipeline, v)
-	return output_heads
-
-
-def mkLLOIDSnrSlicesToSnr(pipeline, branch_heads, block_duration):
-	"""Build the pipeline fragment to compute the single detector SNR from SnrSlices associated with different saple rates."""
 	#
-	# if more than one SnrSlice, add them together
+	# sum the snr streams
 	#
 
-	if len(branch_heads) > 1:
-		snr = gst.element_factory_make("lal_adder")
-		snr.set_property("sync", True)
-		pipeline.add(snr)
-		for rate, head in branch_heads.items():
-			pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration).link(snr)
+	if True:	# FIXME:  make conditional on time-slice \chi^{2}
+		next_rate = dict(zip(rates, rates[1:]))
 	else:
-		snr = branch_heads.values()[0]
+		next_rate = dict((rate, output_rate) for rate in rates if rate != output_rate)
 
-	return snr
+	for rate, heads in sorted(branch_heads.items()):
+		if len(heads) > 1:
+			#
+			# this sample rate has more than one snr stream.
+			# sum them together in an adder, which becomes the
+			# head of the stream at this sample rate
+			#
+
+			branch_heads[rate] = gst.element_factory_make("lal_adder")
+			branch_heads[rate].set_property("sync", True)
+			pipeline.add(branch_heads[rate])
+			for head in heads:
+				pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration).link(branch_heads[rate])
+		else:
+			#
+			# this sample rate has only one stream.  it's the
+			# head of the stream at this sample rate
+			#
+
+			branch_heads[rate], = heads
+
+		#
+		# resample if needed
+		#
+
+		if rate in next_rate:
+			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, branch_heads[rate], quality = 1), "audio/x-raw-float, rate=%d" % next_rate[rate])
+
+		#
+		# if the calling code has requested copies of the snr
+		# slices, tee that off here.  remember that we've already
+		# got the highest sample rate slice from above
+		#
+
+		if snrslices is not None and rate != output_rate:
+			branch_heads[rate] = pipeparts.mktee(pipeline, branch_heads[rate])
+			snrslices[rate] = pipeparts.mktogglecomplex(pipeline, branch_heads[rate])
+
+		#
+		# chain to next adder if this isn't the final answer
+		#
+
+		if rate in next_rate:
+			branch_heads[next_rate[rate]].add(branch_heads.pop(rate))
+
+	#
+	# done
+	#
+
+	snr, = branch_heads.values()	# make sure we've summed down to one stream
+	return pipeparts.mktogglecomplex(pipeline, snr)
 
 
 def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank, block_duration):
@@ -658,6 +699,7 @@ def mkLLOIDSnrToAutoChisq(pipeline, snr, bank, block_duration):
 	#
 
 	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration), autocorrelation_matrix = bank.autocorrelation_bank, latency = autocorrelation_latency, snr_thresh = bank.snr_threshold)
+	chisq = pipeparts.mkchecktimestamps(pipeline, chisq, "timestamps_%s_chisq" % bank.logname)
 
 	#chisq = pipeparts.mktee(pipeline, chisq)
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, chisq), "chisq_%s.dump" % logname, segment = nxydump_segment)
@@ -759,7 +801,11 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 			# identifies a template bank>)
 			control_snksrc = (None, control_branch["H1"][1])
 		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % suffix, segment = nxydump_segment)
-		snrslices = mkLLOIDhoftToSnrSlices(
+		if chisq_type == 'timeslicechisq':
+			snrslices = {}
+		else:
+			snrslices = None
+		snr = mkLLOIDhoftToSnrSlices(
 			pipeline,
 			hoftdicts[instrument],
 			bank,
@@ -769,15 +815,8 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 			nxydump_segment = nxydump_segment,
 			control_peak_time = control_peak_time,
 			fir_stride = fir_stride,
-			block_duration = block_duration
-		)
-		if chisq_type == 'timeslicechisq':
-			for rate, snrslice in snrslices.items():
-				snrslices[rate] = pipeparts.mktee(pipeline, snrslice)
-		snr = mkLLOIDSnrSlicesToSnr(
-			pipeline,
-			snrslices,
-			block_duration
+			block_duration = block_duration,
+			snrslices = snrslices
 		)
 		snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
 		if chisq_type == 'autochisq':
@@ -880,7 +919,7 @@ class StreamThinca(object):
 		def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, delta_t):
 			return (event_a.mass1 != event_b.mass1) or (event_a.mass2 != event_b.mass2) or (abs(event_a.get_end() + offset_a - event_b.get_end() - offset_b) > light_travel_time + delta_t) 
 		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary, boundary)):
-			return (set(event.ifo for event in events) != set(["H1", "H2", "L1"]) and set(event.ifo for event in events) != set(["H1", "L1"])) or ligolw_thinca.coinc_inspiral_end_time(events, offset_vector) not in seg
+			return set(event.ifo for event in events) not in (set(["H1", "H2", "L1"]), set(["H1", "L1"])) or ligolw_thinca.coinc_inspiral_end_time(events, offset_vector) not in seg
 		def get_effective_snr(self, fac):
 			return self.snr
 		orig_get_effective_snr, ligolw_thinca.SnglInspiral.get_effective_snr = ligolw_thinca.SnglInspiral.get_effective_snr, get_effective_snr
