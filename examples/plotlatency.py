@@ -37,7 +37,7 @@ else:
 
 # Regex matching "progress_(??:??:??) ????????? seconds"
 import re
-regex = re.compile(r"^progress_([^ ]+) \((\d\d):(\d\d):(\d\d)\): (\d+) seconds$")
+regex = re.compile(r"^progress_([^ ]+) \((\d+):(\d\d):(\d\d)\.(\d\d\d\d\d\d)\): (\d+) nanoseconds$")
 
 
 # Read file, keeping only lines that match the regex
@@ -45,17 +45,19 @@ trends = {}
 for line in file:
 	m = regex.match(line)
 	if m is not None:
-		name, hours, minutes, seconds, stream_time = m.groups()
+		name, hours, minutes, seconds, useconds, stream_time = m.groups()
 		if name not in trends.keys():
 			trends[name] = []
-		trends[name].append((int(hours) * 3600 + int(minutes) * 60 + int(seconds), int(stream_time)))
+		trends[name].append(((int(hours) * 3600000000 + int(minutes) * 60000000 + int(seconds) * 1000000 + int(useconds)) * 1e-6, int(stream_time) * 1e-9))
 file.close()
 
 
-gps_start_time = min(trend[0][1] for trend in trends.values())
-gps_end_time = max(trend[-1][1] for trend in trends.values())
+gps_start_time = min(min(t[1] for t in trend) for trend in trends.values())
+gps_end_time = max(max(t[1] for t in trend) for trend in trends.values())
 gps_duration = gps_end_time - gps_start_time
-running_duration = max(trend[-1][0] for trend in trends.values())
+start_time = min(min(t[0] for t in trend) for trend in trends.values())
+end_time = max(max(t[0] for t in trend) for trend in trends.values())
+duration = end_time - start_time
 
 # Plot
 if out_filename is not None:
@@ -64,24 +66,26 @@ if out_filename is not None:
 import pylab
 
 # Plot diagonal grid
-t0 = max(gps_duration, running_duration)
-for t in range(-t0, t0, t0 / 20):
+t0 = max(gps_duration, duration)
+for t in pylab.arange(-t0, t0, t0 / 20):
 	lines = pylab.plot((0, t0), (t, t+t0), color='#cccccc')
 lines[0].set_label('constant lag')
 
 for k, v in sorted(trends.iteritems()):
 	data = pylab.array(v)
-	pylab.plot(data[:,0], data[:,1] - gps_start_time, label=k)
+	pylab.plot(data[:,0] - start_time, data[:,1] - gps_start_time, label=k)
+	print k, pylab.mean((data[:, 0] - start_time) - (data[:, 1] - gps_start_time))
 
-pylab.xlim((0, running_duration))
+pylab.xlim((0, duration))
 pylab.ylim((0, gps_duration))
 pylab.gca().set_aspect('equal')
 if not options.disable_legend:
 	pylab.legend(loc='lower right')
-pylab.xlabel('running time (seconds)')
+pylab.xlabel('running time - %d (seconds)' % start_time)
 pylab.ylabel('stream time - %d (seconds)' % gps_start_time)
 pylab.title('Progress report for %s' % filename)
 if out_filename is None:
 	pylab.show()
 else:
 	pylab.savefig(out_filename)
+
