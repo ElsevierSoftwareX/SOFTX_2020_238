@@ -24,7 +24,7 @@ import numpy
 
 # Read input
 bank = read_bank(args[0])
-rates = set(fragment.rate for fragment in bank.bank_fragments)
+rates = sorted(list(set(fragment.rate for fragment in bank.bank_fragments)))
 source_rate = max(rates)
 count_templates = 2 * bank.autocorrelation_bank.shape[0]
 count_samples = bank.filter_length * source_rate
@@ -45,14 +45,12 @@ elif opts.method == "fft":
 elif opts.method == "lloid":
 	flops = 0
 
-	for rate in rates:
-		if rate != source_rate:
+	for inrate, outrate in zip(rates[:-1], rates[1:]):
+		# Downsampling
+		flops += 2 * source_rate * resample_filter_length[downsample_quality]
 
-			# Downsampling
-			flops += 2 * rate * resample_filter_length[downsample_quality]
-
-			# Upsampling
-			flops += 2 * rate * count_templates * resample_filter_length[upsample_quality]
+		# Upsampling
+		flops += 2 * outrate * count_templates * resample_filter_length[upsample_quality]
 
 	for fragment in bank.bank_fragments:
 
@@ -73,14 +71,12 @@ elif opts.method == "lloid":
 elif opts.method == "lloidfft":
 	flops = 0
 
-	for rate in rates:
-		if rate != source_rate:
+	for inrate, outrate in zip(rates[:-1], rates[1:]):
+		# Downsampling
+		flops += 2 * source_rate * resample_filter_length[downsample_quality]
 
-			# Downsampling
-			flops += 2 * rate * resample_filter_length[downsample_quality]
-
-			# Upsampling
-			flops += 2 * rate * count_templates * resample_filter_length[upsample_quality]
+		# Upsampling
+		flops += 2 * outrate * count_templates * resample_filter_length[upsample_quality]
 
 	for fragment in bank.bank_fragments:
 
@@ -102,14 +98,12 @@ elif opts.method == "lloidfft":
 elif opts.method == "timeslice":
 	flops = 0
 
-	for rate in rates:
-		if rate != source_rate:
+	for inrate, outrate in zip(rates[:-1], rates[1:]):
+		# Downsampling
+		flops += 2 * source_rate * resample_filter_length[downsample_quality]
 
-			# Downsampling
-			flops += 2 * rate * resample_filter_length[downsample_quality]
-
-			# Upsampling
-			flops += 2 * rate * count_templates * resample_filter_length[upsample_quality]
+		# Upsampling
+		flops += 2 * outrate * count_templates * resample_filter_length[upsample_quality]
 
 	for fragment in bank.bank_fragments:
 
@@ -126,14 +120,12 @@ elif opts.method == "timeslice":
 elif opts.method == "timeslicefft":
 	flops = 0
 
-	for rate in rates:
-		if rate != source_rate:
+	for inrate, outrate in zip(rates[:-1], rates[1:]):
+		# Downsampling
+		flops += 2 * source_rate * resample_filter_length[downsample_quality]
 
-			# Downsampling
-			flops += 2 * rate * resample_filter_length[downsample_quality]
-
-			# Upsampling
-			flops += 2 * rate * count_templates * resample_filter_length[upsample_quality]
+		# Upsampling
+		flops += 2 * outrate * count_templates * resample_filter_length[upsample_quality]
 
 	for fragment in bank.bank_fragments:
 
