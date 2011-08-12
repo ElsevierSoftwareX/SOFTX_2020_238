@@ -58,7 +58,7 @@ for i, row in enumerate(sngl_inspiral_table):
 	speedup = 16 * opts.alpha * (tlow * flow * flow - thigh * fhigh * fhigh) / (fs * fs * (tlow - thigh))
 	td_flops_here = 2 * num_templates * fs * fs * (tlow - thigh)
 	td_flops += td_flops_here
-	fd_flops += 4 * num_templates * numpy.log2(2 * fs * (tlow - thigh)) * fs
+	fd_flops += 4 * fs * num_templates * (numpy.log2(2 * fs * (tlow - thigh)) + 1)
 	lloid_flops += speedup * td_flops_here
 
 print "TD:    %3g" % td_flops
