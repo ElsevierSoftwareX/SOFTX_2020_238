@@ -168,6 +168,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 	 */
 
 	GST_DEBUG_CATEGORY_INIT(gstlal_autochisq_debug, "lal_autochisq", 0, "lal_autochisq element");
+	GST_DEBUG_CATEGORY_INIT(gstlal_firbank_debug, "lal_firbank", 0, "lal_firbank element");
 	GST_DEBUG_CATEGORY_INIT(gstlal_gate_debug, "lal_gate", 0, "lal_gate element");
 	GST_DEBUG_CATEGORY_INIT(gstlal_triggergen_debug, "lal_triggergen", 0, "lal_triggergen element");
 
