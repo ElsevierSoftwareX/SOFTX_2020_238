@@ -180,12 +180,6 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	if control_peak_samples is not None:
 		src = pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, control_peak_samples), block_duration = block_duration)
 
-	# FIXME:  why is this queue here?  if there should be a queue
-	# somewhere, isn't it better to put it immediately before the tee
-	# so that everything that needs to be done to the buffers has been
-	# done before they're needed?
-	src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = block_duration)
-
 	#
 	# optionally add a segment src and gate to only reconstruct around
 	# injections
@@ -685,7 +679,7 @@ def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank, block_duratio
 	return pipeparts.mkqueue(pipeline, chisq, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration)
 
 
-def mkLLOIDSnrToAutoChisq(pipeline, snr, bank, block_duration):
+def mkLLOIDSnrToAutoChisq(pipeline, snr, bank):
 	"""Build pipeline fragment that computes the AutoChisq from single detector SNR."""
 	#
 	# parameters
@@ -698,7 +692,7 @@ def mkLLOIDSnrToAutoChisq(pipeline, snr, bank, block_duration):
 	# \chi^{2}
 	#
 
-	chisq = pipeparts.mkautochisq(pipeline, pipeparts.mkqueue(pipeline, snr, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration), autocorrelation_matrix = bank.autocorrelation_bank, latency = autocorrelation_latency, snr_thresh = bank.snr_threshold)
+	chisq = pipeparts.mkautochisq(pipeline, snr, autocorrelation_matrix = bank.autocorrelation_bank, latency = autocorrelation_latency, snr_thresh = bank.snr_threshold)
 	chisq = pipeparts.mkchecktimestamps(pipeline, chisq, "timestamps_%s_chisq" % bank.logname)
 
 	#chisq = pipeparts.mktee(pipeline, chisq)
@@ -821,7 +815,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 		snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
 		if chisq_type == 'autochisq':
 			snr = pipeparts.mktee(pipeline, snr)
-			chisq = mkLLOIDSnrToAutoChisq(pipeline, snr, bank, block_duration)
+			chisq = mkLLOIDSnrToAutoChisq(pipeline, pipeparts.mkqueue(pipeline, snr, max_size_buffers = 0, max_size_bytes = 0, max_size_time = block_duration), bank)
 		else:
 			chisq = mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, snrslices, bank, block_duration)
 		# FIXME:  find a way to use less memory without this hack
