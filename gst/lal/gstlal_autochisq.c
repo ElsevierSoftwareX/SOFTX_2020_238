@@ -330,18 +330,19 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 				 * record \chi^{2} sum, advance to next output sample
 				 */
 
-				*(output++) = chisq / gsl_vector_get(element->autocorrelation_norm, channel);
+				*output = chisq / gsl_vector_get(element->autocorrelation_norm, channel);
 			} else {
 				autocorrelation += autocorrelation_length(element);
 				if(autocorrelation_mask)
 					autocorrelation_mask += autocorrelation_length(element);
-				*(output++) = 0;
+				*output = 0;
 			}
 
 			/*
-			 * advance to next input sample
+			 * advance to next sample
 			 */
 
+			output++;
 			input++;
 		}
 	}
@@ -782,7 +783,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * known to be all 0s
 		 */
 
-		g_assert(output_length == filter(element, outbuf));
+		guint samples = filter(element, outbuf);
+		g_assert(output_length == samples);
 	} else if(history_is_gap) {
 		/*
 		 * all data in hand is known to be 0s, the output is a
@@ -801,7 +803,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * samples, so the output is a single non-gap buffer
 		 */
 
-		g_assert(output_length == filter(element, outbuf));
+		guint samples = filter(element, outbuf);
+		g_assert(output_length == samples);
 	} else {
 		/*
 		 * the tailing zeros in the history combined with the input
@@ -813,6 +816,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
 		guint gap_length = zeros_in_adapter - autocorrelation_length(element) + 1;
+		guint samples;
 		GstBuffer *buf;
 
 		g_mutex_unlock(element->autocorrelation_lock);
@@ -820,7 +824,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		g_mutex_lock(element->autocorrelation_lock);
 		if(result != GST_FLOW_OK)
 			goto done;
-		g_assert((output_length - gap_length) == filter(element, buf));
+		samples = filter(element, buf);
+		g_assert(output_length - gap_length == samples);
 
 		g_mutex_unlock(element->autocorrelation_lock);
 		result = gst_pad_push(srcpad, buf);
