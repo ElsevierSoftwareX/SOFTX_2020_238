@@ -628,11 +628,12 @@ class AppSync(object):
 		self.lock.release()
 
 
-def mkchecktimestamps(pipeline, src, name = None, silent = True):
+def mkchecktimestamps(pipeline, src, name = None, silent = True, timestamp_fuzz = 1):
 	elem = gst.element_factory_make("lal_checktimestamps")
 	if name is not None:
 		elem.set_property("name", name)
 	elem.set_property("silent", silent)
+	elem.set_property("timestamp-fuzz", timestamp_fuzz)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
