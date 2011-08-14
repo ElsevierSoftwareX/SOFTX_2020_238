@@ -701,6 +701,16 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
+	 * check validity of timestamp and offsets
+	 */
+
+	if(!GST_BUFFER_TIMESTAMP_IS_VALID(inbuf) || !GST_BUFFER_DURATION_IS_VALID(inbuf) || !GST_BUFFER_OFFSET_IS_VALID(inbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(inbuf)) {
+		GST_ELEMENT_ERROR(element, STREAM, FAILED, ("invalid timestamp and/or offset"), ("%" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(inbuf)));
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+
+	/*
 	 * wait for autocorrelation matrix
 	 */
 
@@ -709,6 +719,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		GST_DEBUG_OBJECT(element, "autocorrelation matrix not available, waiting ...");
 		g_cond_wait(element->autocorrelation_available, element->autocorrelation_lock);
 		if(GST_STATE(GST_ELEMENT(trans)) == GST_STATE_NULL) {
+			g_mutex_unlock(element->autocorrelation_lock);
 			GST_DEBUG_OBJECT(element, "element now in null state, abandoning wait for autocorrelation matrix");
 			result = GST_FLOW_WRONG_STATE;
 			goto done;
@@ -722,6 +733,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	if(!element->autocorrelation_norm) {
 		element->autocorrelation_norm = compute_autocorrelation_norm(element);
 		if(!element->autocorrelation_norm) {
+			g_mutex_unlock(element->autocorrelation_lock);
 			GST_DEBUG_OBJECT(element, "failed to compute autocorrelation norms");
 			result = GST_FLOW_ERROR;
 			goto done;
@@ -764,6 +776,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	history_is_gap = gst_audioadapter_is_gap(element->adapter);
 
 	output_length = get_available_samples(element) + GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
+	GST_DEBUG_OBJECT(element, "%u history+input samples in hand", output_length);
 	if(output_length >= autocorrelation_length(element))
 		output_length -= autocorrelation_length(element) - 1;
 	else
@@ -775,6 +788,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	zeros_in_adapter = gst_audioadapter_tail_gap_length(element->adapter);
 
+	GST_DEBUG_OBJECT(element, "state: history is %s, input is %s, zeros in adapter = %u", history_is_gap ? "gap" : "not gap", input_is_gap ? "gap" : "not gap", zeros_in_adapter);
 	if(!input_is_gap) {
 		/*
 		 * because the history that remains in the adapter cannot
@@ -785,6 +799,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		guint samples = filter(element, outbuf);
 		g_assert(output_length == samples);
+		GST_DEBUG_OBJECT(element, "output is %u samples", output_length);
 	} else if(history_is_gap) {
 		/*
 		 * all data in hand is known to be 0s, the output is a
@@ -794,6 +809,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		gst_audioadapter_flush(element->adapter, output_length);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		set_metadata(element, outbuf, output_length, TRUE);
+		GST_DEBUG_OBJECT(element, "output is %u sample gap", output_length);
 	} else if(zeros_in_adapter < autocorrelation_length(element)) {
 		/*
 		 * the history contains some amount of non-zero data and
@@ -805,6 +821,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		guint samples = filter(element, outbuf);
 		g_assert(output_length == samples);
+		GST_DEBUG_OBJECT(element, "output is %u samples", output_length);
 	} else {
 		/*
 		 * the tailing zeros in the history combined with the input
@@ -818,32 +835,37 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		guint gap_length = zeros_in_adapter - autocorrelation_length(element) + 1;
 		guint samples;
 		GstBuffer *buf;
+		g_assert(gap_length < output_length);
+
+		GST_DEBUG_OBJECT(element, "output is %u samples followed by %u sample gap", output_length - gap_length, gap_length);
 
 		g_mutex_unlock(element->autocorrelation_lock);
 		result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, (output_length - gap_length) * autocorrelation_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
-		g_mutex_lock(element->autocorrelation_lock);
 		if(result != GST_FLOW_OK)
 			goto done;
+		g_mutex_lock(element->autocorrelation_lock);
 		samples = filter(element, buf);
 		g_assert(output_length - gap_length == samples);
 
+		GST_DEBUG_OBJECT(element, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buf));
 		g_mutex_unlock(element->autocorrelation_lock);
 		result = gst_pad_push(srcpad, buf);
-		g_mutex_lock(element->autocorrelation_lock);
 		if(result != GST_FLOW_OK)
 			goto done;
+		g_mutex_lock(element->autocorrelation_lock);
 
 		GST_BUFFER_SIZE(outbuf) = gap_length * autocorrelation_channels(element) * sizeof(double);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		set_metadata(element, outbuf, gap_length, TRUE);
 	}
+	g_mutex_unlock(element->autocorrelation_lock);
 
 	/*
 	 * done
 	 */
 
 done:
-	g_mutex_unlock(element->autocorrelation_lock);
+	GST_DEBUG_OBJECT(element, "output spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(outbuf));
 	return result;
 }
 
