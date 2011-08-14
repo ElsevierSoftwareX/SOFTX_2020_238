@@ -594,7 +594,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
-		GST_ERROR_OBJECT(pad, "buffer does not have valid timestamp and/or offset");
+		GST_ELEMENT_ERROR(pad, STREAM, FAILED, ("invalid timestamp and/or offset"), ("%" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf)));
 		gst_buffer_unref(sinkbuf);
 		result = GST_FLOW_ERROR;
 		goto done;
@@ -797,7 +797,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
-		GST_ERROR_OBJECT(pad, "error: buffer has invalid timestamp and/or offset");
+		GST_ELEMENT_ERROR(pad, STREAM, FAILED, ("invalid timestamp and/or offset"), ("%" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf)));
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
