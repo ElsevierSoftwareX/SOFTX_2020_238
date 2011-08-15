@@ -100,7 +100,8 @@ class FAR(object):
 		else:
 			FAP = weights.cumsum()
 			FAP /= FAP[-1]
-		return FAP, interpolate.interp1d(ranks, FAP, fill_value = 0., bounds_error = False)
+		# Rather than putting 0 for FAPS we cannot estimate, set it to the mimimum non zero value which is more meaningful
+		return FAP, interpolate.interp1d(ranks, FAP, fill_value = (FAP[FAP !=0.0]).min(), bounds_error = False)
 	
 	# Method only works if counts is not None:
 	def compute_rank(self, snr_chisq_dict, eps=1e-30):
@@ -261,27 +262,58 @@ ifo_fap_dict, livetime = get_ifo_combos_and_live_time(segments)
 if options.compute_fap:
 	# retrieve rank data
 	coincparamsdistributions, likelihood_seglists = gstlal_likelihood.load_likelihood_data(options.background_bins_file, verbose = options.verbose)
-	print >>sys.stderr, "smoothing bin counts ..."
-	#coincparamsdistributions.finish(filters = gstlal_likelihood.DistributionsStats.filters, verbose = options.verbose)
-	# FIXME:  the smoothing should be done with the .finish() method.
-	# FIXME:  make sure the smoothing is what is intended:  what's coded here
-	# is neither computing a sliding average of bin counts, nor an event rate
-	# density.
 	counts = coincparamsdistributions.background_rates
-	for binned_array in counts.values():
-		smooth_bins(binned_array)
-
-	print >>sys.stderr, "computing FAP map preliminaries..."
 	Far = FAR(livetime, options.additional_trials_factor, counts)
 else:
 	Far = FAR(livetime, options.additional_trials_factor)
+	
+# late import for DB manipulations
+from glue.ligolw import dbtables
+
+# iterate over files to remove zero lag from bins if we are computing faps
+if options.compute_fap is not None:
+	for f in filenames:
+
+		working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
+		connection = sqlite3.connect(working_filename)
+		
+		#FIXME find a better way to identify injections, don't rely on sqlite_master or the presence of a sim_inspiral table??
+		if connection.cursor().execute("SELECT name FROM sqlite_master WHERE name='sim_inspiral'").fetchall():
+			if options.verbose:
+				print >>sys.stderr, "found sim inspiral, continuing"
+			connection.close()
+			dbtables.put_connection_filename(f, working_filename, verbose = options.verbose)
+			continue
+
+		# remove zero lag triggers from the background bins
+		# FIXME this is supposed to pull out only triggers found in zero lag, is it correct?
+		if options.verbose:
+			print >>sys.stderr, "num sngl trigs before", " ".join(["%s:%d" % (ifo, cnts.array.sum()) for (ifo, cnts) in Far.counts.items()])
+		
+		for ifo, snr, chisq in connection.cursor().execute('SELECT ifo, snr, chisq FROM sngl_inspiral WHERE NOT EXISTS (SELECT * FROM coinc_event_map JOIN coinc_event ON coinc_event_map.coinc_event_id == coinc_event.coinc_event_id JOIN time_slide ON time_slide.time_slide_id == coinc_event.time_slide_id WHERE coinc_event_map.table_name == "sngl_inspiral" AND time_slide.offset != 0.0 AND coinc_event_map.event_id == sngl_inspiral.event_id)'):
+			Far.counts[ifo+"_snr_chi"][snr, chisq**.5 / snr] -= 1
+		
+		if options.verbose:
+			print >>sys.stderr, "num sngl trigs after", " ".join(["%s:%d" % (ifo, cnts.array.sum()) for (ifo, cnts) in Far.counts.items()])
+
+		connection.close()
+		dbtables.put_connection_filename(f, working_filename, verbose = options.verbose)
+
+# FIXME:  the smoothing should be done with the .finish() method.
+# FIXME:  make sure the smoothing is what is intended:  what's coded here
+# is neither computing a sliding average of bin counts, nor an event rate
+# density.
+#coincparamsdistributions.finish(filters = gstlal_likelihood.DistributionsStats.filters, verbose = options.verbose)
+
+print >>sys.stderr, "smoothing bin counts ..."
+for binned_array in Far.counts.values():
+	smooth_bins(binned_array)
+
 #
 # iterate over files to rank
 #
 
 for f in filenames:
-
-	from glue.ligolw import dbtables
 
 	working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
