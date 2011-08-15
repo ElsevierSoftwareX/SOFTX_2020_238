@@ -68,4 +68,4 @@ web :
 	mkdir $(WEBDIR) 
 
 realclean :
-	rm -r plots $(WEBDIR) *.sub *.dag* *.cache *.sh logs *.xml vetoes.xml.gz segments.xml.gz
+	rm -r plots $(WEBDIR) *.sub *.dag* *.cache *.sh logs *.xml vetoes.xml.gz segments.xml.gz segments.txt
