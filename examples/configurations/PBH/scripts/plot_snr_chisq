@@ -12,9 +12,9 @@ from gstlal import ligolw_output as gstlal_likelihood
 coincparamsdistributions, likelihood_seglists = gstlal_likelihood.load_likelihood_data([sys.argv[1]], verbose = True)
 counts = coincparamsdistributions.background_rates
 
-wn = rate.gaussian_window2d(9,9, sigma = 2)
+wn = rate.gaussian_window2d(3,3, sigma = 10)
 
-for i, ifo in enumerate(['H1','H2','L1']):
+for i, ifo in enumerate(['H1','H2','L1', 'V1']):
 	pylab.figure(i)
 	H1 = counts[ifo+"_snr_chi"].array
 	snr = counts[ifo+"_snr_chi"].bins[0].centres()[1:-1]
