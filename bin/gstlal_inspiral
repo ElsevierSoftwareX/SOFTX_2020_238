@@ -419,7 +419,7 @@ output = ligolw_output.Data(
 stream_thinca = lloidparts.StreamThinca(
 	output,
 	coincidence_threshold = options.coincidence_threshold,
-	coincidence_back_off = 2 * 5,	# coincidence back-off is twice AppSync dt
+	coincidence_back_off = 2 * 5 + 7,	# coincidence back-off is twice AppSync dt + time slide times = 7s
 	thinca_interval = 50.0	# seconds
 )
 if options.verbose:
