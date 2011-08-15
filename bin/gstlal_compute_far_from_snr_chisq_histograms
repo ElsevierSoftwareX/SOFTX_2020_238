@@ -137,10 +137,11 @@ class FAR(object):
 		if n == 1:
 			return 0. - numpy.log(1. - fap) / self.livetime
 		if n > 1 and n <= 100:
-			nvec = numpy.linspace(n**2 / 10000., n + 10. * n**.5, 100)
+			nvec = numpy.logspace(-12, numpy.log10(n + 10. * n**.5), 100)
 		else:
-			nvec = numpy.linspace(n - 10. * n**.5, n + 10. * n**.5, 100)
+			nvec = numpy.logspace(numpy.log10(n - 10. * n**.5), numpy.log10(n + 10. * n**.5), 100)
 		FAPS = 1. - poisson.cdf(n,nvec)
+		#FIXME is this right since nvec is log spaced?
 		interp = interpolate.interp1d(FAPS, nvec / self.livetime)
 		if fap < FAPS[1]:
 			return 0.
@@ -305,9 +306,10 @@ if options.compute_fap is not None:
 # density.
 #coincparamsdistributions.finish(filters = gstlal_likelihood.DistributionsStats.filters, verbose = options.verbose)
 
-print >>sys.stderr, "smoothing bin counts ..."
-for binned_array in Far.counts.values():
-	smooth_bins(binned_array)
+if options.compute_fap:
+	print >>sys.stderr, "smoothing bin counts ..."
+	for binned_array in Far.counts.values():
+		smooth_bins(binned_array)
 
 #
 # iterate over files to rank
