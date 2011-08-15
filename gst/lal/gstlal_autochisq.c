@@ -776,7 +776,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	history_is_gap = gst_audioadapter_is_gap(element->adapter);
 
 	output_length = get_available_samples(element) + GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
-	GST_DEBUG_OBJECT(element, "%u history+input samples in hand", output_length);
+	GST_DEBUG_OBJECT(element, "%u+%u=%u history+input samples in hand", get_available_samples(element), (guint) (GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf)), output_length);
 	if(output_length >= autocorrelation_length(element))
 		output_length -= autocorrelation_length(element) - 1;
 	else
@@ -854,6 +854,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			goto done;
 		g_mutex_lock(element->autocorrelation_lock);
 
+		gst_audioadapter_flush(element->adapter, gap_length);
 		GST_BUFFER_SIZE(outbuf) = gap_length * autocorrelation_channels(element) * sizeof(double);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		set_metadata(element, outbuf, gap_length, TRUE);
