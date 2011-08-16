@@ -100,7 +100,7 @@ def parse_command_line():
 	parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments (optional).  If this is not provided then all data between --gps-start-time and --gps-end-time will be analyzed.  If this is provided then --frame-segments-name must also be set.")
 	parser.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables in --frame-segments-file (optional, required if --frame-segments-file is given).")
 	parser.add_option("--online-data", action = "store_true", help = "Use online DMT-STRAIN instead of a frame file (optional).")
-	parser.add_option("--fake-data", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise.  Options LIGO or AdvLIGO")
+	parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise.")
 	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the frame data to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 	parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the frame data to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
@@ -133,6 +133,9 @@ def parse_command_line():
 
 	if len([option for option in ("frame_cache", "fake_data", "online_data") if getattr(options, option) is not None]) != 1:
 		raise ValueError, "must provide exactly one of --frame-cache, --fake-data, --online-data"
+
+	if options.fake_data not in (None, "LIGO", "AdvLIGO"):
+		raise ValueError("unrecognized value for --fake-data %s" % options.fake_data)
 
 	required_options = ["output"]
 	if options.frame_cache:
@@ -419,7 +422,7 @@ output = ligolw_output.Data(
 stream_thinca = lloidparts.StreamThinca(
 	output,
 	coincidence_threshold = options.coincidence_threshold,
-	coincidence_back_off = 2 * 5 + 7,	# coincidence back-off is twice AppSync dt + time slide times = 7s
+	coincidence_back_off = 2 * 5,	# coincidence back-off is twice AppSync dt. Class automatically adds the maximum time slide offset to this value.
 	thinca_interval = 50.0	# seconds
 )
 if options.verbose:
