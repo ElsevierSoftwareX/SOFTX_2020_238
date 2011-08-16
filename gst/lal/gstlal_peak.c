@@ -347,29 +347,6 @@ static GstFlowReturn prepare_output_buffer(GSTLALPeak *element, GstBuffer **srcb
 
 }
 
-static int push_startup(GSTLALPeak *element, GstBuffer *inbuf)
-{
-
-	/*
-	 * Function to push zeros into the specified adapter
-	 * useful when there are gaps
-	 */
-
-	guint bytes = output_num_samps(element) * element->channels * sizeof(double);
-	GstBuffer *zerobuf = gst_buffer_new_and_alloc(bytes);
-	if(!zerobuf) {
-		GST_DEBUG_OBJECT(element, "failure allocating start up buffer");
-		return -1;
-	}
-	/*
-	 * FIXME this metadata is not quite right, does it matter??
-	 */
-	gst_buffer_copy_metadata(zerobuf, inbuf, GST_BUFFER_COPY_TIMESTAMPS | GST_BUFFER_COPY_CAPS);
-	memset(GST_BUFFER_DATA(zerobuf), 0, GST_BUFFER_SIZE(zerobuf));
-	gst_adapter_push(element->adapter, zerobuf);
-	return 0;
-}
-
 static int push_zeros(GSTLALPeak *element, GstBuffer *inbuf)
 {
 
@@ -418,12 +395,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	if (GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT)) {
 		reset_time_and_offset(element);
 		gst_adapter_clear(element->adapter);
-		push_startup(element, sinkbuf);
 	}
 
 	/* if we don't have a valid first timestamp yet take this one */
 	if (element->next_output_timestamp == GST_CLOCK_TIME_NONE) {
-		element->next_output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf); //FIXME old behavior + output_duration(element);
+		element->next_output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf) + output_duration(element);
 	}
 
 	/* put the incoming buffer into an adapter or push zeros if gap */
