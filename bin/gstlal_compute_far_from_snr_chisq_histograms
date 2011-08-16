@@ -31,7 +31,7 @@ def smooth_bins(bA):
 	#FIXME what is this window supposed to be??
 	wn = rate.gaussian_window2d(5, 5, sigma = 8)
 	rate.filter_array(bA.array.T, wn)
-	bA.array /= bA.array.sum()
+	bA.array /= bA.array.sum() # not the same as the to_pdf() method
 
 def linearize_array(arr):
 	return arr.reshape((1,arr.shape[0] * arr.shape[1]))
@@ -39,8 +39,8 @@ def linearize_array(arr):
 def get_nonzero(arr):
 	return arr[arr != 0]
 
-def count_to_rank(val):
-	return numpy.log(val) + 100 #FIXME figure out the proper constant offset or this could totally break!  It should be the absolute value of the minimum of the log of all bins
+def count_to_rank(val, offset = 100):
+	return numpy.log(val) + offset #FIXME figure out the proper constant offset or this could totally break!  It should be the absolute value of the minimum of the log of all bins
 
 class FAR(object):
 	def __init__(self, livetime, trials_factor, counts = None):
@@ -48,10 +48,10 @@ class FAR(object):
 		self.livetime = livetime
 		self.trials_factor = trials_factor
 
-	def updateFAPmap(self, instruments):
+	def updateFAPmap(self, instruments, rank_offset):
 		if self.counts is None:
 			raise InputError, "must provide background bins file"
-		
+		self.rank_offset = rank_offset
 		nonzero = {}
 
 		#
@@ -65,7 +65,7 @@ class FAR(object):
 		tmp = {}
 		for ifo in instruments:
 			# FIXME don't repeat calc by checking if it has been done??
-			tmp[ifo] = count_to_rank(get_nonzero(linearize_array(counts[ifo+"_snr_chi"].array)))
+			tmp[ifo] = count_to_rank(get_nonzero(linearize_array(counts[ifo+"_snr_chi"].array)), offset = self.rank_offset)
 
 		tmp = self.rankBins(tmp, targetlen)
 		self.ranks, weights = self.possible_ranks_array(tmp)
@@ -94,7 +94,7 @@ class FAR(object):
 		ranks.sort()
 		return ranks, vals
 
-	def CDFinterp(self, ranks, weights=None):
+	def CDFinterp(self, ranks, weights = None):
 		if weights is None:
 			FAP = (numpy.arange(len(ranks)) + 1.) / len(vec)
 		else:
@@ -104,12 +104,12 @@ class FAR(object):
 		return FAP, interpolate.interp1d(ranks, FAP, fill_value = (FAP[FAP !=0.0]).min(), bounds_error = False)
 	
 	# Method only works if counts is not None:
-	def compute_rank(self, snr_chisq_dict, eps=1e-30):
+	def compute_rank(self, snr_chisq_dict):
 		if self.counts is None:
 			raise InputError, "must provide background bins file"
 		rank = 1
 		for ifo, (snr,chisq) in snr_chisq_dict.items():
-			val = count_to_rank(self.counts[ifo+"_snr_chi"][snr, chisq**.5 / snr]) #+ eps
+			val = count_to_rank(self.counts[ifo+"_snr_chi"][snr, chisq**.5 / snr], offset = self.rank_offset)
 			rank *= val
 		if rank > self.ranks[-2]:
 			rank = self.ranks[-2]
@@ -161,7 +161,7 @@ def get_ifo_combos_and_live_time(segments, verbose = True):
 	ifos_available = set(segments.keys())
 	ifo_combos = []
 	# FIXME is this what we want, H2 never participates in a double?
-	# fixme use choices in glue or something for this and then correct the special cases?
+	# FIXME use choices in glue or something for this and then correct the special cases?
 	for ifos in [set((u"H1",u"L1")), set((u"H1",u"H2",u"L1")), set((u"H1",u"L1",u"V1")), set((u"H1",u"V1")), set((u"L1",u"V1")), set((u"H1",u"H2",u"L1",u"V1"))]:
 		if ifos.issubset(ifos_available):
 			ifo_combos.append(ifos)
@@ -308,8 +308,12 @@ if options.compute_fap is not None:
 
 if options.compute_fap:
 	print >>sys.stderr, "smoothing bin counts ..."
+	minvals = []
 	for binned_array in Far.counts.values():
 		smooth_bins(binned_array)
+		minvals.append(binned_array.array[binned_array.array != 0.0].min())
+	rankoffset = numpy.ceil(numpy.abs(numpy.log(min(minvals)))) + 1
+	
 
 #
 # iterate over files to rank
@@ -329,7 +333,7 @@ for f in filenames:
 			print >>sys.stderr, "computing faps for ", ifos
 			# FIXME since some combinations are degenerate a few things will be computed twice unecessarily 
 			fap_ifos = ifo_fap_dict[ifos]
-			Far.updateFAPmap(fap_ifos)
+			Far.updateFAPmap(fap_ifos, rankoffset)
 			# FIXME abusing FAR column
 			connection.cursor().execute(fap_query(fap_ifos, ifos))
 			connection.commit()
