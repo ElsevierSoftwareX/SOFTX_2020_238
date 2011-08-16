@@ -87,6 +87,8 @@ def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 *
 
 def mkframesink(pipeline, src, **properties):
 	elem = gst.element_factory_make("lal_framesink")
+	elem.set_property("sync", False)
+	elem.set_property("async", False)
 	for name, value in properties.items():
 		elem.set_property(name.replace("_", "-"), value)
 	pipeline.add(elem)
