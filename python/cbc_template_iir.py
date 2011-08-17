@@ -80,7 +80,7 @@ def sample_rates_str_to_array(sample_rates_str):
         return numpy.array([int(a) for a in sample_rates_str.split(',')])
 
 
-def get_fir_matrix(xmldoc, fFinal, padding=1.1, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=101 verbose=False):
+def get_fir_matrix(xmldoc, fFinal, padding=1.1, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=101, verbose=False):
 	sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
         #flower = param.get_pyvalue(xmldoc, 'flower')
         snrvec = []
