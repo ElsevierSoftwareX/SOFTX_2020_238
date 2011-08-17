@@ -37,7 +37,7 @@
 
 /*
  *  stuff from gobject/gstreamer
- */
+*/
 
 
 #include <glib.h>
@@ -56,6 +56,7 @@
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_blas.h>
 
+#include <time.h>
 
 /*
  * ============================================================================
@@ -140,12 +141,17 @@ static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 {
 	unsigned available_length;
 	unsigned output_length;
-	double *input;
-	complex double *output;
+	double * restrict input;
+	complex double * restrict output;
+	complex double * restrict last_output;
+	complex double * restrict last_filter;
+	complex double ytemp;
 	int dmax, dmin;
-	unsigned i, j, k;
-	complex double *y, *a1, *b0;
-	int *d;
+	complex double * restrict y, * restrict a1, * restrict b0;
+	int * restrict d;
+	//int counter =0;
+	uint size1, size2;
+	struct timeval start, end;
 
 	y = (complex double *) gsl_matrix_complex_ptr(element->y, 0, 0);
 	a1 = (complex double *) gsl_matrix_complex_ptr(element->a1, 0, 0);
@@ -156,7 +162,8 @@ static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 	 * how much data is available?
 	 */
 
-	gsl_matrix_int_minmax(element->delay, &dmin, &dmax); 
+	gsl_matrix_int_minmax(element->delay, &dmin, &dmax);
+	dmin = 0;
 	available_length = get_available_samples(element);
 	output_length = available_length - (dmax - dmin);
 
@@ -173,26 +180,55 @@ static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 	 * wrap output buffer in a complex double array.
 	 */
 
+	//fprintf(stderr,"IIR elem %s : available_length = %d, output_length = %d, dmax = %d\n", GST_ELEMENT_NAME(element), available_length, output_length, dmax);
 	output = (complex double *) GST_BUFFER_DATA(outbuf);
 	g_assert(output_length * iir_channels(element) / 2 * sizeof(complex double) <= GST_BUFFER_SIZE(outbuf));
 
 	memset(output, 0, output_length * iir_channels(element) / 2 * sizeof(*output));
+	//	srand(start.tv_sec + y);
+	//rand() + I*rand();//*y;//3.0+I*6.0;
+	//counter++;
+	//fprintf(stderr, "buffer %f, channel %d: %e + I %e\n", (double) 1e-9 * GST_BUFFER_TIMESTAMP(outbuf), counter, creal(*a1), cimag(*a1));
+	//fprintf(stderr, "(%d, %d)\n", i, j);
+	//fprintf(stderr, "a1(%d, %d) = %e + i %e\n", i, j, creal(*a1), cimag(*a1));
+	/*if (y == (complex double *) gsl_matrix_complex_ptr(element->y, i, j)) {
+	  fprintf(stderr, "y's same (%d, %d)\n", i, j);
+	  }
+	  else {
+	  fprintf(stderr, "y's not same (%d, %d)\n", i, j);
+	  }*/
 
-	for(k = 0; k < element->a1->size1; k++) { /* output channel # */
-		for(j = 0; j < element->a1->size2; j++) { /* filter # */
-			for(i = 0; i < output_length; i++) { /* sample # */
-				*y = *a1 * *y + *b0 * input[dmax - *d + i];
-				output[i*element->a1->size1] += *y;
+
+	size1 = element->a1->size1;
+	size2 = element->a1->size2;
+	uint t=20, f=30;
+
+	gettimeofday(&start, NULL);
+	for (last_output = output + size1; output < last_output; output++) {
+		for (last_filter = y + size2; y < last_filter; y++) {
+			ytemp = *y;
+			complex double *out = output;
+			double *in_last, *in = &input[dmax -*d];
+
+			for(in_last = in + output_length; in < in_last; in++, out += size1) { /* sample # */
+				ytemp = *a1 * ytemp + *b0 * *in;
+				/*if (y == last_filter - size2 + f -1 && output == last_output - size1 + t -1) {
+					fprintf(stderr, "%16.12e, %16.12e + %16.12ei\n", *in, creal(ytemp), cimag(ytemp));
+					//fprintf(stderr, "%16.12e + %16.12ei, %16.12e + %16.12ei\n" , creal(*a1), cimag(*a1), creal(*b0), cimag(*b0));
+					}*/
+				*out += ytemp;
 			}
-			y++;
+			*y = ytemp;
 			a1++;
 			b0++;
 			d++;
 		}
-		output++;
 	}
+	gettimeofday(&end, NULL);
+	/*printf( "%f, %s: loops time:%f\n", (double) 1e-9 * GST_BUFFER_TIMESTAMP(outbuf), GST_ELEMENT_NAME(element), 
+	  end.tv_sec - start.tv_sec + 1e-6 * (float) (end.tv_usec - start.tv_usec) );*/
 	/*fprintf(stderr,"Input Buffer length = %d, Output Buffer length = %d\n",available_length, output_length); */
- 
+	//fprintf(stderr, "Counted %d total samples for element %s. Output channels = %d, Filters = %d, Samples = %d\n", counter, GST_ELEMENT_NAME(element), element->a1->size1, element->a1->size2, output_length);
 
 	/*
 	 * flush the data from the adapter
@@ -421,12 +457,13 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		 * because if there's 1 impulse response of data then we
 		 * can generate 1 sample, not 0)
 		 */
-	  
+
 		g_mutex_lock(element->iir_matrix_lock);
 		while(!element->delay || !element->a1 || !element->b0)
 			g_cond_wait(element->iir_matrix_available, element->iir_matrix_lock);
 
          	gsl_matrix_int_minmax(element->delay, &dmin, &dmax);
+		dmin = 0;
 		g_mutex_unlock(element->iir_matrix_lock);
 
 		*othersize = size / unit_size + get_available_samples(element);
@@ -549,6 +586,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		element->zeros_in_adapter = 0;
 
 		gsl_matrix_int_minmax(element->delay, &dmin, &dmax);
+		dmin = 0;
 		push_zeros(element, dmax-dmin);
 
                 /*
@@ -591,7 +629,20 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		push_zeros(element, length);
 		result = filter(element, outbuf);
 	}
+	//fprintf(stderr, "TIMESTAMP %f, BUFFERSIZE %d\n", (double) 1e-9 * GST_BUFFER_TIMESTAMP(inbuf), GST_BUFFER_SIZE(inbuf) / sizeof(double));
 
+	int dmin, dmax;
+	gsl_matrix_int_minmax(element->delay, &dmin, &dmax);
+	dmin = 0;
+	/*fprintf(stderr, "IIR elem %17s : input timestamp %llu, output timestamp %llu, input offset %llu, output offset %llu, %d, %d\n",
+		GST_ELEMENT_NAME(element),
+		GST_BUFFER_TIMESTAMP(inbuf),
+		GST_BUFFER_TIMESTAMP(outbuf),
+		GST_BUFFER_OFFSET(inbuf),
+		GST_BUFFER_OFFSET(outbuf),
+		dmin,
+		dmax);*/
+	//fprintf(stderr, "IIR elem %17s : input offset %llu, output offset %llu, %d, %d\n", GST_ELEMENT_NAME(element), GST_BUFFER_OFFSET(inbuf), GST_BUFFER_OFFSET(outbuf), dmin, dmax);
 	/*
 	 * done
 	 */
@@ -658,13 +709,15 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
 		g_mutex_lock(element->iir_matrix_lock);
 		if(element->delay) {
-			gsl_matrix_int_minmax(element->delay, &dmin, &dmax); 
-		        gsl_matrix_int_free(element->delay);
-		} else 
+			gsl_matrix_int_minmax(element->delay, &dmin, &dmax);
+			dmin = 0;
+			gsl_matrix_int_free(element->delay);
+		} else
 			dmin = dmax = 0;
 
 		element->delay = gstlal_gsl_matrix_int_from_g_value_array(g_value_get_boxed(value));
-		gsl_matrix_int_minmax(element->delay, &dmin_new, &dmax_new); 
+		gsl_matrix_int_minmax(element->delay, &dmin_new, &dmax_new);
+		dmin_new = 0;
 
 		if(dmax_new-dmin_new > dmax-dmin)
 			push_zeros(element, dmax_new-dmin_new-(dmax-dmin));
