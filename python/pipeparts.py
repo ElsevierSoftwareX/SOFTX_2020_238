@@ -303,9 +303,11 @@ def mkfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = No
 	elem = mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed
 	return elem
 
-def mkiirbank(pipeline, src, a1, b0, delay):
+def mkiirbank(pipeline, src, a1, b0, delay, name=None):
 	elem = gst.element_factory_make("lal_iirbank")
 
+	if name is not None:
+		elem.set_property("name", name)
 	if a1 is not None:
 		elem.set_property("a1-matrix", pipeio.repack_complex_array_to_real(a1))
 	if b0 is not None:
