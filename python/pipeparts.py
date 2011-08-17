@@ -628,7 +628,7 @@ class AppSync(object):
 		# it won't work at the end. It somehow needs to know when the last
 		# buffers are being pulled, but the EOS has not been emitted yet
 		mint = self.sorted()[0][0]
-		
+
 		for (t,k) in self.sorted():
 			if (self.dt is not None) and (t - mint > self.dt * gst.SECOND):
 				break
@@ -671,11 +671,11 @@ def mksyncsink(pipeline, srcs):
 		mkqueue(pipeline,outsrcs[-1],max_size_time=0, max_size_buffers=1, max_size_bytes=0).link(adder)
 	mkfakesink(pipeline, adder)
 	return outsrcs
-	
+
 
 def audioresample_variance_gain(quality, num, den):
 	"""Calculate the output gain of GStreamer's stock audioresample element.
-	
+
 	The audioresample element has a frequency response of unity "almost" all the
 	way up the Nyquist frequency.  However, for an input of unit variance
 	Gaussian noise, the output will have a variance very slighly less than 1.
@@ -702,7 +702,7 @@ def audioresample_variance_gain(quality, num, den):
 	...		std = numpy.std(buf[out_latency:-out_latency])
 	...		print "quality=%2d, filt_len=%3d, num=%d, den=%d, stdev=%.2f" % (
 	...			quality, filt_len, num, den, std)
-	... 
+	...
 	>>> for quality in range(11):
 	...		pipeline = gst.Pipeline()
 	...		correction = 1/numpy.sqrt(audioresample_variance_gain(quality, num, den))
@@ -726,7 +726,7 @@ def audioresample_variance_gain(quality, num, den):
 	...		finally:
 	...			if pipeline.set_state(gst.STATE_NULL) is not gst.STATE_CHANGE_SUCCESS:
 	...				raise RuntimeError
-	... 
+	...
 	quality= 0, filt_len=  8, num=2, den=1, stdev=1.00
 	quality= 1, filt_len= 16, num=2, den=1, stdev=1.00
 	quality= 2, filt_len= 32, num=2, den=1, stdev=1.00
