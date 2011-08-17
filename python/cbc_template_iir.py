@@ -19,7 +19,7 @@ from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_com
 
 def Theta(eta, Mtot, t):
 	Tsun = 4.925491e-6
-        theta = eta / (5.0 * Mtot * Tsun) * -t;
+	theta = eta / (5.0 * Mtot * Tsun) * -t
         return theta
 
 def freq(eta, Mtot, t):
@@ -80,9 +80,9 @@ def sample_rates_str_to_array(sample_rates_str):
         return numpy.array([int(a) for a in sample_rates_str.split(',')])
 
 
-def get_fir_matrix(xmldoc, sampleRate=4096, pnorder=4, psd_interp=None, output_to_xml = False, verbose=False, padding=1.1, autocorrelation_length=101):
-
-        flower = param.get_pyvalue(xmldoc, 'flower')
+def get_fir_matrix(xmldoc, fFinal, padding=1.1, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=101 verbose=False):
+	sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
+        #flower = param.get_pyvalue(xmldoc, 'flower')
         snrvec = []
         Mlist = []
 
@@ -97,15 +97,15 @@ def get_fir_matrix(xmldoc, sampleRate=4096, pnorder=4, psd_interp=None, output_t
                 m2 = row.mass2
 
                 # work out the waveform frequency
-                fFinal = spawaveform.ffinal(m1,m2)
-                if fFinal > sampleRate / 2.0 / padding: fFinal = sampleRate / 2.0 / padding
+                #fFinal = spawaveform.ffinal(m1,m2)
+                #if fFinal > sampleRate / 2.0 / padding: fFinal = sampleRate / 2.0 / padding
 
                 # make the waveform
                 amp, phase, f = waveform(m1, m2, flower, fFinal, sampleRate)
                 if psd_interp is not None:
                         amp /= psd_interp(f)**0.5 * 1e23
 
-                length = 2**numpy.ceil(numpy.log2(amp.shape[0]))
+                length = int(2**numpy.ceil(numpy.log2(amp.shape[0])))
                 out = amp * numpy.exp(1j * phase)
 
                 # normalize the fir coefficients
@@ -132,8 +132,9 @@ def get_fir_matrix(xmldoc, sampleRate=4096, pnorder=4, psd_interp=None, output_t
 
         return M, autocorrelation_bank
 
-def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=101, downsample=False, verbose=False):
-	sampleRate = int(sampleRate)
+def makeiirbank(xmldoc, fFinal, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=101, downsample=False, verbose=False):
+	sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
+	print "fFinal = %d, Sample Rate = %d" % (fFinal, sampleRate)
         sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
         Amat = {}
         Bmat = {}
@@ -141,10 +142,12 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
         snrvec = []
 
         if downsample:
-                sample_rates = 2**numpy.arange(numpy.ceil(numpy.log2(2*flower*padding)), numpy.ceil(numpy.log2(2*sampleRate)))
-                sample_rates = numpy.array(sample_rates, numpy.int) # FIXME: Superfluous?
+                sample_rates = 2**numpy.arange(numpy.ceil(numpy.log2(2*flower*padding)), numpy.ceil(numpy.log2((sampleRate)+1)))
+		sample_rates = numpy.array(sample_rates, numpy.int) # FIXME: Superfluous?
         else:
                 sample_rates = numpy.array([int(sampleRate)])
+
+
 
         for rate in sample_rates:
                 Amat[rate] = []
@@ -164,16 +167,19 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
                 start = time.time()
 
                 # work out the waveform frequency
-                fFinal = spawaveform.ffinal(m1,m2)
-                if fFinal > sampleRate / 2.0 / padding: fFinal = sampleRate / 2.0 / padding
+                #fFinal = spawaveform.ffinal(m1,m2)
+                #if fFinal > sampleRate / 2.0 / padding: fFinal = sampleRate / 2.0 / padding
 
                 # make the waveform
+
                 amp, phase, f = waveform(m1, m2, flower, fFinal, sampleRate)
+		#print m1, m2, flower, fFinal, sampleRate, f[-1]
+		#print >> sys.stderr, "waveform %f" % (time.time() - start)
+
 
                 if psd_interp is not None:
                         amp /= psd_interp(f)**0.5 * 1e23
 
-                #print >> sys.stderr, "waveform %f" % (time.time() - start)
 
                 # make the iir filter coeffs
                 a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
@@ -205,9 +211,9 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
                 #FIXME this is actually the cross correlation between the original waveform and this approximation
                 autocorrelation_bank[tmp,:] = numpy.concatenate((corr[(-autocorrelation_length/2+2):],corr[:autocorrelation_length/2+2]))
 
-                snr = numpy.abs(corr).max()
+                snr = numpy.abs(corr).max() / 2.0
                 snrvec.append(snr)
-                if verbose: print>>sys.stderr, "row %4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %3.2f match" % (tmp, m1,m2,len(a1), snr)
+                if verbose: print>>sys.stderr, "row %4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %10.8f match" % (tmp, m1,m2,len(a1), snr)
 
 
                 # store the match for later
@@ -226,7 +232,7 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
                 if downsample:
 			# iterate over the frequencies and put them in the right downsampled bin
 			for i, f in enumerate(fs):
-				#print>>sys.stderr, "filter %3.0d, M %2.0d, f %10.9f, delay %d" % (i, M, f, delay[i])
+				#print>>sys.stderr, "sampleRate %4.0d, filter %3.0d, M %2.0d, f %10.9f, delay %d" % (sampleRate, i, M, f, delay[i])
 				a1dict.setdefault(sampleRate/M, []).append(a1[i]**M)
 				b0dict.setdefault(sampleRate/M, []).append(b0[i]*M**0.5)
 				delaydict.setdefault(sampleRate/M, []).append(delay[i]/M)
@@ -269,7 +275,7 @@ def makeiirbank(xmldoc, sampleRate=4096, padding=1.1, epsilon=0.02, alpha=.99, b
 		for i, Bm in enumerate(Bmat[rate]): B[rate][i,:len(Bm)] = Bm
 		for i, Dm in enumerate(Dmat[rate]): D[rate][i,:len(Dm)] = Dm
 		if output_to_xml:
-			print 'a_%d' % (rate)
+			#print 'a_%d' % (rate)
 			#print A[rate], type(A[rate])
 			#print repack_complex_array_to_real(A[rate])
 			#print array.from_array('a_%d' % (rate), repack_complex_array_to_real(A[rate]))
