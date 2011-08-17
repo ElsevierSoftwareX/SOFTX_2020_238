@@ -6,7 +6,6 @@ from optparse import OptionParser
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
-parser.add_option("--sample-rate", metavar = "Hz", type = "float", default = 4096, help = "Set the sample rate (default = 4096).")
 parser.add_option("--padding", metavar = "pad", type = "float", default = 1.1, help = "Fractional amount to pad time slices.")
 # FIXME add this when we know how to (by changing the parameters accoring to a function or optimizing on the fly or something)
 #parser.add_option("--iir-tolerance", metavar = "match", type = "float", default = 0.99, help = "Set the SVD reconstruction tolerance (default = 0.99).")
@@ -30,10 +29,12 @@ if missing_options:
 
 from gstlal import cbc_template_iir
 from gstlal.reference_psd import read_psd
-from glue.ligolw import utils
+from glue.ligolw import utils, lsctables
 
 # read bank file
 bank = utils.load_filename(options.template_bank, gz=options.template_bank.endswith('.gz'))
+sngl_inspiral_table = lsctables.table.get_table(bank, lsctables.SnglInspiralTable.tableName)
+fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
 
 # read psd file
 if options.reference_psd:
@@ -45,7 +46,7 @@ else:
 
 
 # get the iir coefficients
-A, B, D, snrs = cbc_template_iir.makeiirbank(bank, psd_interp = psd, verbose=options.verbose, sampleRate=options.sample_rate, padding=options.padding, flower=options.flow, downsample = options.downsample, output_to_xml = True)
+A, B, D, snrs = cbc_template_iir.makeiirbank(bank, psd_interp = psd, verbose=options.verbose, fFinal=fFinal, padding=options.padding, flower=options.flow, downsample = options.downsample, output_to_xml = True)
 
 utils.write_filename(bank, options.output, gz=options.output.endswith('.gz'))
 
