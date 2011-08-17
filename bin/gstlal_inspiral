@@ -298,7 +298,7 @@ seekevent = gst.event_new_seek(1.0, gst.Format(gst.FORMAT_TIME),
 # the svd procedure.  If a reference psd is given then it will be used.
 # Otherwise the pipeline will measure it.  However if you give a reference psd
 # and --track-psd but use a template bank and not an SVD bank then you still
-# need to measure a psd in advance for the template bank... 
+# need to measure a psd in advance for the template bank...
 #
 
 
