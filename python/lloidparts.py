@@ -916,7 +916,6 @@ class StreamThinca(object):
 		def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, delta_t):
 			return (event_a.mass1 != event_b.mass1) or (event_a.mass2 != event_b.mass2) or (abs(event_a.get_end() + offset_a - event_b.get_end() - offset_b) > light_travel_time + delta_t) 
 		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary, boundary)):
-			#FIXME do combinatorics differently?
 			return set(event.ifo for event in events) not in (set(("H1", "H2", "L1")), set(("H1", "L1", "V1")), set(("H1", "L1")), set(("H1", "V1")), set(("L1", "V1"))) or ligolw_thinca.coinc_inspiral_end_time(events, offset_vector) not in seg
 		def get_effective_snr(self, fac):
 			return self.snr
