@@ -37,7 +37,7 @@ WHERE
 		FROM
 			_cluster_info_
 		WHERE
-			_cluster_info_.false_alarm_rate > 0.90
+			_cluster_info_.false_alarm_rate > 0.50
 		AND
 			_cluster_info_.coinc_event_id == coinc_event.coinc_event_id
 	);
