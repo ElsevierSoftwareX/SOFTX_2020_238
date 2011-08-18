@@ -235,7 +235,10 @@ class lal_checktimestamps(gst.BaseTransform):
 		#
 
 		length = buf.offset_end - buf.offset
-		if buf.size != length * self.unit_size:
+		allowed_sizes = [length * self.unit_size]
+		if buf.flag_is_set(gst.BUFFER_FLAG_GAP):
+			allowed_sizes.append(0)
+		if buf.size not in allowed_sizes:
 			print >>sys.stderr, "%s: got buffer size %d, buffer length %d corresponds to size %d" % (self.get_property("name"), buf.size, length, length * self.unit_size)
 
 		#
