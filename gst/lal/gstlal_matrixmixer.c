@@ -69,6 +69,21 @@
 #include <gstlal_matrixmixer.h>
 
 
+GST_DEBUG_CATEGORY(gstlal_matrixmixer_debug);
+
+
+/*
+ * ============================================================================
+ *
+ *                                 Parameters
+ *
+ * ============================================================================
+ */
+
+
+#define GST_CAT_DEFAULT gstlal_matrixmixer_debug
+
+
 /*
  * ========================================================================
  *
@@ -489,7 +504,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
-		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
+		/* prepare_output_buffer() lied.  tell the truth */
+		GST_BUFFER_SIZE(outbuf) = 0;
 		result = GST_FLOW_OK;
 	}
 
@@ -499,6 +515,27 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 done:
 	g_mutex_unlock(element->mixmatrix_lock);
+	return result;
+}
+
+
+/*
+ * prepare_output_buffer()
+ */
+
+
+GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *input, gint size, GstCaps *caps, GstBuffer **buf)
+{
+	GstFlowReturn result;
+
+	result = gst_pad_alloc_buffer(GST_BASE_TRANSFORM_SRC_PAD(trans), GST_BUFFER_OFFSET(input), GST_BUFFER_FLAG_IS_SET(input, GST_BUFFER_FLAG_GAP) ? 0 : size, caps, buf);
+	if(result != GST_FLOW_OK)
+		goto done;
+
+	/* lie to trick basetransform */
+	GST_BUFFER_SIZE(*buf) = size;
+
+done:
 	return result;
 }
 
@@ -667,6 +704,7 @@ static void gstlal_matrixmixer_base_init(gpointer gclass)
 	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
 	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
 	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
+	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
 }
 
 
