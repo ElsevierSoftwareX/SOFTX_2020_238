@@ -252,6 +252,7 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 		g_assert(autocorrelation_length(element) == element->autocorrelation_mask_matrix->size2);
 		g_assert(element->autocorrelation_mask_matrix->tda == autocorrelation_length(element));
 	}
+	g_assert(output_length == GST_BUFFER_SIZE(outbuf) / (channels * sizeof(double)));
 
 	/*
 	 * compute output samples.  note:  we assume that gsl_complex can
@@ -781,7 +782,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		output_length -= autocorrelation_length(element) - 1;
 	else
 		output_length = 0;
-	g_assert(output_length == GST_BUFFER_SIZE(outbuf) / (autocorrelation_channels(element) * sizeof(double)));
 
 	gst_buffer_ref(inbuf);	/* don't let calling code free buffer */
 	gst_audioadapter_push(element->adapter, inbuf);
@@ -807,7 +807,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		gst_audioadapter_flush(element->adapter, output_length);
-		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
+		GST_BUFFER_SIZE(outbuf) = 0;	/* prepare_output_buffer() lied.  tell the truth */
 		set_metadata(element, outbuf, output_length, TRUE);
 		GST_DEBUG_OBJECT(element, "output is %u sample gap", output_length);
 	} else if(zeros_in_adapter < autocorrelation_length(element)) {
@@ -855,8 +855,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		g_mutex_lock(element->autocorrelation_lock);
 
 		gst_audioadapter_flush(element->adapter, gap_length);
-		GST_BUFFER_SIZE(outbuf) = gap_length * autocorrelation_channels(element) * sizeof(double);
-		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
+		GST_BUFFER_SIZE(outbuf) = 0;	/* prepare_output_buffer() lied.  tell the truth */
 		set_metadata(element, outbuf, gap_length, TRUE);
 	}
 	g_mutex_unlock(element->autocorrelation_lock);
@@ -867,6 +866,39 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 done:
 	GST_DEBUG_OBJECT(element, "output spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(outbuf));
+	return result;
+}
+
+
+/*
+ * prepare_output_buffer()
+ */
+
+
+static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *input, gint size, GstCaps *caps, GstBuffer **buf)
+{
+	GSTLALAutoChiSq *element = GSTLAL_AUTOCHISQ(trans);
+	gboolean input_is_gap, history_is_gap, output_is_gap;
+	guint zeros_in_adapter;
+	GstFlowReturn result;
+
+	input_is_gap = GST_BUFFER_FLAG_IS_SET(input, GST_BUFFER_FLAG_GAP);
+	history_is_gap = gst_audioadapter_is_gap(element->adapter);
+
+	zeros_in_adapter = gst_audioadapter_tail_gap_length(element->adapter);
+	if(input_is_gap)
+		zeros_in_adapter += GST_BUFFER_OFFSET_END(input) - GST_BUFFER_OFFSET(input);
+
+	output_is_gap = input_is_gap && (history_is_gap || zeros_in_adapter >= autocorrelation_length(element));
+
+	result = gst_pad_alloc_buffer(GST_BASE_TRANSFORM_SRC_PAD(trans), GST_BUFFER_OFFSET(input), output_is_gap ? 0 : size, caps, buf);
+	if(result != GST_FLOW_OK)
+		goto done;
+
+	/* lie to trick basetransform */
+	GST_BUFFER_SIZE(*buf) = size;
+
+done:
 	return result;
 }
 
@@ -1109,6 +1141,7 @@ static void gstlal_autochisq_base_init(gpointer gclass)
 	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
 	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
+	transform_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(prepare_output_buffer);
 	transform_class->start = GST_DEBUG_FUNCPTR(start);
 	transform_class->stop = GST_DEBUG_FUNCPTR(stop);
 }
