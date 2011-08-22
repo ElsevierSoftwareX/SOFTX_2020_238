@@ -505,7 +505,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 		/* prepare_output_buffer() lied.  tell the truth */
-		GST_BUFFER_SIZE(outbuf) = 0;
+		/* FIXME:  put back when resampler can handle non-malloc()ed buffers */
+		/*GST_BUFFER_SIZE(outbuf) = 0;*/ memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		result = GST_FLOW_OK;
 	}
 
@@ -514,6 +515,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 */
 
 done:
+	gst_buffer_copy_metadata(outbuf, inbuf, GST_BUFFER_COPY_TIMESTAMPS);
 	g_mutex_unlock(element->mixmatrix_lock);
 	return result;
 }
@@ -528,7 +530,8 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *i
 {
 	GstFlowReturn result;
 
-	result = gst_pad_alloc_buffer(GST_BASE_TRANSFORM_SRC_PAD(trans), GST_BUFFER_OFFSET(input), GST_BUFFER_FLAG_IS_SET(input, GST_BUFFER_FLAG_GAP) ? 0 : size, caps, buf);
+	/* FIXME:  put back commented-out code when resampler can handle non-malloc()ed buffers */
+	result = gst_pad_alloc_buffer(GST_BASE_TRANSFORM_SRC_PAD(trans), GST_BUFFER_OFFSET(input), /*GST_BUFFER_FLAG_IS_SET(input, GST_BUFFER_FLAG_GAP) ? 0 :*/ size, caps, buf);
 	if(result != GST_FLOW_OK)
 		goto done;
 
