@@ -328,7 +328,13 @@ for f in filenames:
 			connection.cursor().execute('DROP TABLE IF EXISTS ranktable')
 			connection.commit()
 			# FIXME any indicies on ranktable??
-			connection.cursor().execute('CREATE TEMPORARY TABLE ranktable AS SELECT * FROM coinc_inspiral JOIN coinc_event ON coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id WHERE coinc_event.time_slide_id == ? ORDER BY false_alarm_rate', (id,))
+			# FIXME adding the + 1e-10 / snr to the false
+			# alarm rate forces the ranking to be in snr
+			# order for degenerate ranks.  This is okay for
+			# non degenerate things since we don't have
+			# 1e-10 dynamic range, still this should be
+			# done smarter
+			connection.cursor().execute('CREATE TEMPORARY TABLE ranktable AS SELECT * FROM coinc_inspiral JOIN coinc_event ON coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id WHERE coinc_event.time_slide_id == ? ORDER BY false_alarm_rate+1e-10 / snr', (id,))
 			connection.commit()
 			# For injections every event is treated as "the loudest"
 			if connection.cursor().execute("SELECT name FROM sqlite_master WHERE name='sim_inspiral'").fetchall():
