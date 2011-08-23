@@ -506,7 +506,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 		/* prepare_output_buffer() lied.  tell the truth */
 		/* FIXME:  put back when resampler can handle non-malloc()ed buffers */
-		/*GST_BUFFER_SIZE(outbuf) = 0;*/ memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
+		/*GST_BUFFER_SIZE(outbuf) = 0;*/
+		/* FIXME:  this is needed if used in pipelines that don't
+		 * understand gaps at all */
+		/*memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));*/
 		result = GST_FLOW_OK;
 	}
 
