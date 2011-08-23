@@ -9,7 +9,7 @@ function test_adder() {
 		! adder.
 }
 
-function test_gate() {
+function test_gate_1() {
 	gst-launch \
 		lal_gate name=gate threshold=0.7 \
 		! audio/x-raw-float, channels=1, width=64, rate=16384 \
@@ -28,6 +28,20 @@ function test_gate() {
 		control. \
 		! lal_nxydump start-time=0 stop-time=10000000000 \
 		! queue ! filesink location="dump_control.txt"
+}
+
+function test_gate_2() {
+	gst-launch \
+		lal_gate name=gate threshold=0.7 leaky=true \
+		! fakesink \
+		audiotestsrc wave=9 samplesperbuffer=16 \
+		! audio/x-raw-float, channels=1, width=64, rate=6 \
+		! audioresample \
+		! audio/x-raw-float, rate=16384 \
+		! gate.control \
+		audiotestsrc wave=9 samplesperbuffer=1024 \
+		! audio/x-raw-float, channels=1, width=64, rate=16384 \
+		! gate.sink
 }
 
 function test_resampler() {
@@ -100,12 +114,12 @@ function test_whiten() {
 
 function test_simulation() {
 	gst-launch \
-		audiotestsrc wave=9 volume=1e-21 timestamp-offset=900000000000000000 num-buffers=30 samplesperbuffer=16384 \
+		audiotestsrc wave=9 volume=1e-21 timestamp-offset=869622009000000000 samplesperbuffer=16384 \
 		! audio/x-raw-float, channels=1, width=64, rate=16384 \
 		! taginject tags="instrument=\"H1\",channel-name=\"LSC-STRAIN\",units=\"strain\"" \
-		! lal_simulation xml-location="test_inspiral_injections_1s_step.xml" \
+		! lal_simulation xml-location="injections.xml" \
 		! audioamplify clipping-method=3 amplification=1e20 \
-		! adder ! audioconvert ! autoaudiosink
+		! adder ! audioconvert ! fakesink
 }
 
 function test_simulation2wav() {
@@ -146,7 +160,7 @@ function test_autochisq() {
 	gst-launch \
 		audiotestsrc wave=9 volume=1e-2 \
 		! audio/x-raw-float, width=64, rate=2048 \
-		! lalautochisq template-bank="../src/utilities/chirpmass-1.126557_H1-TMPLTBANK_02-873250008-2048-first.xml.gz" reference-psd="reference_psd.txt"\
+		! lal_autochisq template-bank="../src/utilities/chirpmass-1.126557_H1-TMPLTBANK_02-873250008-2048-first.xml.gz" reference-psd="reference_psd.txt"\
 		! progressreport \
 		! fakesink
 }
@@ -235,4 +249,4 @@ function test_triggergen() {
 		! triggergen.
 }
 
-test_audioundersample
+test_autochisq
