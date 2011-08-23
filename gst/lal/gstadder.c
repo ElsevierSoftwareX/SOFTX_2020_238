@@ -1144,7 +1144,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
     }
     GST_INFO_OBJECT (adder, "seg_start %" G_GUINT64_FORMAT ", seg_end %"
         G_GUINT64_FORMAT, adder->segment.start, adder->segment.stop);
-    GST_INFO_OBJECT (adder, "timestamp %" G_GINT64_FORMAT ",new offset %"
+    GST_INFO_OBJECT (adder, "timestamp %" G_GINT64_FORMAT ", new offset %"
         G_GINT64_FORMAT, adder->timestamp, adder->offset);
 
     if (event) {
@@ -1260,7 +1260,9 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
   /* now add partial non-gap buffers */
   if (partial_nongap_buffers) {
     if (!outbuf) {
-      /* FIXME:  is this condition even possible?  (KCC) */
+      /* this code path should only be possible if the input included a gap
+       * buffer spanning the full input interval */
+      g_assert(full_gap_buffer != NULL);
       /* get a buffer of zeros */
       ret = gst_pad_alloc_buffer (adder->srcpad, earliest_output_offset, outlength * adder->bps, GST_PAD_CAPS(adder->srcpad), &outbuf);
       if (ret != GST_FLOW_OK) {
@@ -1282,8 +1284,8 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
       guint offset = adder->synchronous ?  gst_util_uint64_scale_int_round (GST_BUFFER_TIMESTAMP (inbuf) - adder->segment.start, adder->rate, GST_SECOND) - earliest_output_offset : 0;
       g_assert (offset * adder->bps + GST_BUFFER_SIZE (inbuf) <= GST_BUFFER_SIZE (outbuf) || GST_BUFFER_SIZE (inbuf) == 0);
       adder->func (GST_BUFFER_DATA (outbuf) + offset * adder->bps, GST_BUFFER_DATA (inbuf), GST_BUFFER_SIZE (inbuf) / adder->sample_size);
-      gst_buffer_unref (inbuf);
       partial_nongap_buffers = g_slist_remove (partial_nongap_buffers, inbuf);
+      gst_buffer_unref (inbuf);
     }
   }
 
@@ -1296,13 +1298,10 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
   } else if (full_gap_buffer)
     outbuf = full_gap_buffer;
   else if (have_gap_buffers) {
-    /* FIXME:  is this condition even possible?  (KCC) */
-    /* get a buffer of zeros */
-    ret = gst_pad_alloc_buffer (adder->srcpad, earliest_output_offset, outlength * adder->bps, GST_PAD_CAPS(adder->srcpad), &outbuf);
-    if (ret != GST_FLOW_OK)
-      goto no_buffer;
-    memset (GST_BUFFER_DATA (outbuf), 0, GST_BUFFER_SIZE (outbuf));
-    GST_BUFFER_FLAG_SET (outbuf, GST_BUFFER_FLAG_GAP);
+    /* this condition is not possible;  we would have had to receive only
+     * partial gap buffers, which would imply a bug in the code that
+     * determines the times spanned by the available input buffers */
+    g_assert_not_reached();
   } else
     goto eos;
 
