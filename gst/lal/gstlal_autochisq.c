@@ -811,7 +811,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		gst_audioadapter_flush(element->adapter, output_length);
 		/* FIXME:  this is needed if used in pipelines that don't
 		 * understand gaps at all */
-		/*memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));*/
+		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		/*GST_BUFFER_SIZE(outbuf) = 0;*/	/* prepare_output_buffer() lied.  tell the truth */
 		set_metadata(element, outbuf, output_length, TRUE);
 		GST_DEBUG_OBJECT(element, "output is %u sample gap", output_length);
@@ -862,7 +862,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		gst_audioadapter_flush(element->adapter, gap_length);
 		/* FIXME:  this is needed if used in pipelines that don't
 		 * understand gaps at all */
-		/*memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));*/
+		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		/*GST_BUFFER_SIZE(outbuf) = 0;*/	/* prepare_output_buffer() lied.  tell the truth */
 		set_metadata(element, outbuf, gap_length, TRUE);
 	}

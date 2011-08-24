@@ -509,7 +509,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		/*GST_BUFFER_SIZE(outbuf) = 0;*/
 		/* FIXME:  this is needed if used in pipelines that don't
 		 * understand gaps at all */
-		/*memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));*/
+		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		result = GST_FLOW_OK;
 	}
 
