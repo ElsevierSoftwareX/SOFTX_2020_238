@@ -8,7 +8,7 @@
 
 import sys
 import numpy
-from scipy import interpolate
+from scipy import interpolate, random
 from scipy.stats import poisson
 from glue.ligolw import lsctables
 from glue.ligolw import utils
@@ -28,23 +28,66 @@ except ImportError:
 
 sqlite3.enable_callback_tracebacks(True)
 
+#
+# Functions to synthesize injections
+#
+
+def snr_distribution(size, startsnr):
+	return startsnr * random.power(3, size)**-1 # FIXME 3 or 2??
+
+def noncentrality(snrs, prefactor):
+	return prefactor * random.power(1, len(snrs)) * snrs**2 # FIXME power depends on dimensionality of the bank
+
+def chisq_distribution(df, non_centralities, size):
+	out = numpy.empty((len(non_centralities) * size,))
+	for i, nc in enumerate(non_centralities):
+		out[i*size:(i+1)*size] = random.noncentral_chisquare(df, nc, size)
+	return out
+
+def populate_injections(bindict, prefactor = 4, df = 50, size = 1000000, verbose = True):
+	for i, k in enumerate(bindict):
+		binarr = bindict[k]
+		if verbose:
+			print >> sys.stderr, "synthesizing injections for ", k
+		minsnr = binarr.bins[0].upper().min()
+		random.seed(i) # FIXME changes as appropriate
+		snrs = snr_distribution(size, minsnr)
+		ncs = noncentrality(snrs, prefactor)
+		chisqs = chisq_distribution(df, ncs, 1) / df
+		for snr, chisq in zip(snrs, chisqs):
+			binarr[snr, chisq**.5 / snr] += 1
+	
+#
+# Utility functions
+#
+
+
+
 def smooth_bins(bA):
 	#FIXME what is this window supposed to be??
 	wn = rate.gaussian_window2d(5, 5, sigma = 8)
 	rate.filter_array(bA.array.T, wn)
-	bA.array /= bA.array.sum() # not the same as the to_pdf() method
+	sum = bA.array.sum()
+	if sum != 0:
+		bA.array /= sum # not the same as the to_pdf() method
 
 def linearize_array(arr):
 	return arr.reshape((1,arr.shape[0] * arr.shape[1]))
 
 def get_nonzero(arr):
-	return arr[arr != 0]
+	# zeros, nans and infs mean that either the numerator or denominator of the
+	# likelihood was zero.  We do not include those
+	zb = arr != 0
+	nb = numpy.isnan(arr)
+	ib = numpy.isinf(arr)
+	return arr[zb - nb - ib]
 
 def count_to_rank(val, offset = 100):
 	return numpy.log(val) + offset #FIXME It should be at least the absolute value of the minimum of the log of all bins
 
 class FAR(object):
-	def __init__(self, livetime, trials_factor, counts = None):
+	def __init__(self, livetime, trials_factor, counts = None, injections = None):
+		self.injections = injections
 		self.counts = counts
 		self.livetime = livetime
 		self.trials_factor = trials_factor
@@ -63,10 +106,11 @@ class FAR(object):
 
 		targetlen = int(1e7**(1. / len(instruments)))
 		nonzerorank = {}
+		
 		for ifo in instruments:
 			# FIXME don't repeat calc by checking if it has been done??
 			nonzerorank[ifo] = count_to_rank(get_nonzero(linearize_array(counts[ifo+"_snr_chi"].array)), offset = self.rank_offset)
-
+		
 		nonzerorank = self.rankBins(nonzerorank, targetlen)
 		self.ranks, weights = self.possible_ranks_array(nonzerorank)
 		fap, self.fap_from_rank = self.CDFinterp(self.ranks, weights)
@@ -83,6 +127,7 @@ class FAR(object):
 		return out
 	
 	def possible_ranks_array(self, bAdict):
+		# start with an identity array to seed the outerproduct chain
 		ranks = numpy.array([1])
 		vals = numpy.array([1])
 		for ifo, bA in bAdict.items():
@@ -240,19 +285,27 @@ vetoes = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.ve
 segments -= vetoes
 livetime = get_live_time(segments)
 
+#
+# Pull out background and injections distribution
+#
 
 if options.compute_fap:
 	# retrieve rank data
 	coincparamsdistributions, likelihood_seglists = gstlal_likelihood.load_likelihood_data(options.background_bins_file, verbose = options.verbose)
+	injections = coincparamsdistributions.injection_rates
+	populate_injections(injections)
 	counts = coincparamsdistributions.background_rates
-	Far = FAR(livetime, options.additional_trials_factor, counts)
+	Far = FAR(livetime, options.additional_trials_factor, counts, injections)
 else:
 	Far = FAR(livetime, options.additional_trials_factor)
 	
 # late import for DB manipulations
 from glue.ligolw import dbtables
 
+#
 # iterate over files to remove zero lag from bins if we are computing faps
+#
+
 if options.compute_fap is not None:
 	for f in filenames:
 
@@ -281,6 +334,10 @@ if options.compute_fap is not None:
 		connection.close()
 		dbtables.discard_connection_filename(f, working_filename, verbose = options.verbose)
 
+#
+# Compute the likelihood ratio
+#
+
 # FIXME:  the smoothing should be done with the .finish() method.
 # FIXME:  make sure the smoothing is what is intended:  what's coded here
 # is neither computing a sliding average of bin counts, nor an event rate
@@ -288,12 +345,24 @@ if options.compute_fap is not None:
 #coincparamsdistributions.finish(filters = gstlal_likelihood.DistributionsStats.filters, verbose = options.verbose)
 
 if options.compute_fap:
-	print >>sys.stderr, "smoothing bin counts ..."
+	print >>sys.stderr, "smoothing bin counts and computing likelihood ..."
 	minvals = []
-	for binned_array in Far.counts.values():
+	for i, k in enumerate(Far.counts):
+		binned_array = Far.counts[k]
 		smooth_bins(binned_array)
-		minvals.append(binned_array.array[binned_array.array != 0.0].min())
-	rankoffset = numpy.ceil(numpy.abs(numpy.log(min(minvals)))) + 1
+		binned_array = Far.injections[k]
+		smooth_bins(binned_array)
+		# FIXME inverse likelihood is what is used for the ranking, small means likely
+		Far.counts[k].array /= Far.injections[k].array
+		# we want Nans to be inf because they are not likely to be a GW
+		Far.counts[k].array[numpy.isnan(Far.counts[k].array)] = float('inf')
+		# normalize so that the max value is always less than one
+		Far.counts[k].array /= Far.counts[k].array[-numpy.isinf(Far.counts[k].array)].sum()
+		minArr = Far.counts[k].array[Far.counts[k].array != 0.0]
+		if len(minArr) > 0:
+			minvals.append(minArr.min())
+	minval = min(minvals)
+	rankoffset = numpy.ceil(numpy.abs(numpy.log(minval))) + 1
 	
 
 #
