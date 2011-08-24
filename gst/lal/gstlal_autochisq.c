@@ -281,11 +281,13 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 			complex double snr = input[((gint) autocorrelation_length(element) - 1 + element->latency) * channels];
 
 			if(cabs(snr) >= element->snr_thresh) {
+#if CHI2_USES_REAL_ONLY
 				/*
 				 * multiplying snr by this makes it real
 				 */
 
 				complex double invsnrphase = cexp(-I*carg(snr));
+#endif
 
 				/*
 				 * end of this channel's row in the autocorrelation
@@ -309,18 +311,18 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 						complex double z;
 						if(!*autocorrelation_mask)
 							continue;
-						z = (*autocorrelation * snr - *indata) * invsnrphase;
+						z = *autocorrelation * snr - *indata;
 #if CHI2_USES_REAL_ONLY
-						chisq += pow(creal(z), 2);
+						chisq += pow(creal(z * invsnrphase), 2);
 #else
 						chisq += pow(creal(z), 2) + pow(cimag(z), 2);
 #endif
 					}
 				} else {
 					for(chisq = 0; autocorrelation < autocorrelation_end; autocorrelation++, indata += channels) {
-						complex double z = (*autocorrelation * snr - *indata) * invsnrphase;
+						complex double z = *autocorrelation * snr - *indata;
 #if CHI2_USES_REAL_ONLY
-						chisq += pow(creal(z), 2);
+						chisq += pow(creal(z * invsnrphase), 2);
 #else
 						chisq += pow(creal(z), 2) + pow(cimag(z), 2);
 #endif
