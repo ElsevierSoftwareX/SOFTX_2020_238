@@ -177,7 +177,8 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	#
 
 	if control_peak_samples is not None:
-		src = pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, control_peak_samples), block_duration = block_duration)
+		#src = pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, control_peak_samples), block_duration = block_duration)
+		src = pipeparts.mkpeak(pipeline, src, control_peak_samples)
 
 	#
 	# optionally add a segment src and gate to only reconstruct around
@@ -433,7 +434,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 
 	src = pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank, block_stride = fir_stride * bank_fragment.rate, time_domain = max(bank.get_rates()) / bank_fragment.rate >= 32)
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank" % logname)
-	src = pipeparts.mkreblock(pipeline, src, block_duration = block_duration)
+	src = pipeparts.mkreblock(pipeline, src, block_duration = control_peak_time * gst.SECOND)
 	#src = pipeparts.mktee(pipeline, src)	# comment-out the tee below if this is uncommented
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, src), "orthosnr_%s.dump" % logname, segment = nxydump_segment)
 
@@ -527,8 +528,8 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			bank,
 			bank_fragment,
 			control_snksrc,
-			16 + 8 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#16 is for a the audioresample filter with qual=1. FIXME tune these windows
-			16 + 8 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#16 is for the audioresample filter with qual=1
+			64 + 3 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#64 is for a the audioresample filter with qual=4. FIXME tune these windows
+			64 + 3 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#64 is for the audioresample filter with qual=4
 			nxydump_segment = nxydump_segment,
 			fir_stride = fir_stride,
 			control_peak_time = control_peak_time,
@@ -609,7 +610,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 		#
 
 		if rate in next_rate:
-			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, branch_heads[rate], quality = 1), "audio/x-raw-float, rate=%d" % next_rate[rate])
+			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, branch_heads[rate], quality = 4), "audio/x-raw-float, rate=%d" % next_rate[rate])
 
 		#
 		# if the calling code has requested copies of the snr
