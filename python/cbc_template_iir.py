@@ -80,13 +80,15 @@ def sample_rates_str_to_array(sample_rates_str):
         return numpy.array([int(a) for a in sample_rates_str.split(',')])
 
 
-def get_fir_matrix(xmldoc, fFinal, padding=1.1, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=101, verbose=False):
+def get_fir_matrix(xmldoc, fFinal=None, pnorder=4, flower = 40, psd_interp=None, autocorrelation_length=101, verbose=False):
+	sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+	fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
 	sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
-        #flower = param.get_pyvalue(xmldoc, 'flower')
+        flower = param.get_pyvalue(xmldoc, 'flower')
+	if verbose print >> sys.stderr, "f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate)
+
         snrvec = []
         Mlist = []
-
-        sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 
         if not (autocorrelation_length % 2):
                 raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
@@ -95,10 +97,6 @@ def get_fir_matrix(xmldoc, fFinal, padding=1.1, pnorder=4, flower = 40, psd_inte
         for tmp, row in enumerate(sngl_inspiral_table):
                 m1 = row.mass1
                 m2 = row.mass2
-
-                # work out the waveform frequency
-                #fFinal = spawaveform.ffinal(m1,m2)
-                #if fFinal > sampleRate / 2.0 / padding: fFinal = sampleRate / 2.0 / padding
 
                 # make the waveform
                 amp, phase, f = waveform(m1, m2, flower, fFinal, sampleRate)
@@ -120,10 +118,10 @@ def get_fir_matrix(xmldoc, fFinal, padding=1.1, pnorder=4, flower = 40, psd_inte
                 Mlist.append(vec1.imag)
 
                 # compute the SNR
-                corr = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec1)))
+                #corr = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec1)))
 
                 #FIXME this is actually the cross correlation between the original waveform and this approximation
-                autocorrelation_bank[tmp,:] = numpy.concatenate((corr[(-autocorrelation_length/2+2):],corr[:autocorrelation_length/2+2]))
+                #autocorrelation_bank[tmp,:] = numpy.concatenate((corr[(-autocorrelation_length/2+2):],corr[:autocorrelation_length/2+2]))
 
         max_len = max([len(i) for i in Mlist])
         M = numpy.zeros((len(Mlist), max_len))
@@ -134,7 +132,8 @@ def get_fir_matrix(xmldoc, fFinal, padding=1.1, pnorder=4, flower = 40, psd_inte
 
 def makeiirbank(xmldoc, fFinal, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=101, downsample=False, verbose=False):
 	sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
-	print "fFinal = %d, Sample Rate = %d" % (fFinal, sampleRate)
+	if verbose print >> sys.stderr, "f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate)
+
         sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
         Amat = {}
         Bmat = {}
@@ -146,7 +145,6 @@ def makeiirbank(xmldoc, fFinal, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25,
 		sample_rates = numpy.array(sample_rates, numpy.int) # FIXME: Superfluous?
         else:
                 sample_rates = numpy.array([int(sampleRate)])
-
 
 
         for rate in sample_rates:
@@ -175,8 +173,6 @@ def makeiirbank(xmldoc, fFinal, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25,
                 amp, phase, f = waveform(m1, m2, flower, fFinal, sampleRate)
 		#print m1, m2, flower, fFinal, sampleRate, f[-1]
 		#print >> sys.stderr, "waveform %f" % (time.time() - start)
-
-
                 if psd_interp is not None:
                         amp /= psd_interp(f)**0.5 * 1e23
 
@@ -203,7 +199,6 @@ def makeiirbank(xmldoc, fFinal, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25,
                 vec2 = numpy.zeros(length * 2, dtype=numpy.cdouble)
                 vec2[-len(out2):] = out2
                 vec2 /= 1.0/numpy.sqrt(2.0)*((vec2 * numpy.conj(vec2)).sum()**0.5)
-
 
                 # compute the SNR
                 corr = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec2)))
