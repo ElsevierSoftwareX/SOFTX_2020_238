@@ -285,7 +285,7 @@ static guint64 get_next_buffer_length(GSTLALFrameSrc *element, guint64 offset, g
 	 * done
 	 */
 
-	GST_INFO_OBJECT(element, "at offset %" G_GUINT64_FORMAT " buffer will be %s of %" G_GUINT64_FORMAT " samples", offset, *gap ? "gap" : "non-gap", length);
+	GST_DEBUG_OBJECT(element, "at offset %" G_GUINT64_FORMAT " buffer will be %s of %" G_GUINT64_FORMAT " samples", offset, *gap ? "gap" : "non-gap", length);
 	return length;
 }
 
@@ -746,7 +746,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	buffer_length = get_next_buffer_length(element, basesrc->offset, &next_is_gap);
 	if(buffer_length == 0) {
-		GST_INFO_OBJECT(element, "end of stream");
+		GST_LOG_OBJECT(element, "end of stream");
 		/* end of stream */
 		return GST_FLOW_UNEXPECTED;
 	}
@@ -816,7 +816,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	else
 		GST_BUFFER_FLAG_UNSET(*buffer, GST_BUFFER_FLAG_GAP);
 	basesrc->offset += buffer_length;
-	GST_INFO_OBJECT(element, "constructed buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(*buffer));
+	GST_LOG_OBJECT(element, "constructed %s buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_FLAG_IS_SET(*buffer, GST_BUFFER_FLAG_GAP) ? "gap" : "non-gap", GST_BUFFER_BOUNDARIES_ARGS(*buffer));
 
 	/*
 	 * Done
