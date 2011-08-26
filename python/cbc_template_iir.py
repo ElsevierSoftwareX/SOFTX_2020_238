@@ -85,7 +85,7 @@ def get_fir_matrix(xmldoc, fFinal=None, pnorder=4, flower = 40, psd_interp=None,
 	fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
 	sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
         flower = param.get_pyvalue(xmldoc, 'flower')
-	if verbose print >> sys.stderr, "f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate)
+	if verbose: print >> sys.stderr, "f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate)
 
         snrvec = []
         Mlist = []
@@ -132,7 +132,7 @@ def get_fir_matrix(xmldoc, fFinal=None, pnorder=4, flower = 40, psd_interp=None,
 
 def makeiirbank(xmldoc, fFinal, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=101, downsample=False, verbose=False):
 	sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
-	if verbose print >> sys.stderr, "f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate)
+	if verbose: print >> sys.stderr, "f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate)
 
         sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
         Amat = {}
