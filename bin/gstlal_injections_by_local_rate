@@ -1,0 +1,100 @@
+#!/usr/bin/python
+from optparse import OptionParser, Option
+from scipy import random
+import numpy
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw import ligolw
+from glue.lal import LIGOTimeGPS as GPS
+from glue.ligolw.utils import process
+from gstlal.ligolw_output import make_process_params
+import sys
+
+parser = OptionParser(description = __doc__)
+parser.add_option("--gps-start-time", metavar = "seconds", type = "int", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
+parser.add_option("--gps-end-time", metavar = "seconds", type = "int", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
+parser.add_option("--local-rate", metavar = "mergers / Mpc^3 / Myr", default = 1.2, type = "float", help = "set the local merger rate in mergers / Mpc^3 / Myr, default = 1.2")
+parser.add_option("--output", metavar = "filename", help = "Set the name of the LIGO light-weight XML file to output")
+parser.add_option("--max-distance", metavar = "Mpc", type = "float", help = "set the maximum distance (respected approximately)")
+parser.add_option("--seed", metavar = "int", type = "int", default = 1, help = "set the random seed default = 1")
+
+#
+# Parse options
+#
+
+options, filenames = parser.parse_args()
+maxdist = options.max_distance
+stop, start = options.gps_end_time, options.gps_start_time
+Myrs = (stop - start) / 365.25 / 86400 / 1.e6 #Julian years
+volume = 4./3. * numpy.pi * maxdist**3
+rate = options.local_rate
+expnum = numpy.ceil(volume * Myrs * rate)
+#redo the max distance based on an integer number of injections
+maxdist = (expnum / Myrs / rate  / (4./3. * numpy.pi))**(1./3.)
+
+# injection parameters
+random.seed(options.seed)
+time = random.randint(start, stop, expnum) + random.rand(expnum)
+mass1 = numpy.abs(random.randn(expnum)*0.04 + 1.35) # 1.35 +/- 0.04 abs is to keep negative masses from happening even though the probability is very small :)
+mass2 = numpy.abs(random.randn(expnum)*0.04 + 1.35) # 1.35 +/- 0.04 abs is to keep negative masses from happening even though the probability is very small :)
+dist = random.power(2, expnum) * maxdist
+ra = random.rand(expnum) * 2 * numpy.pi
+dec = numpy.arccos((random.rand(expnum) - 0.5) * 2) - numpy.pi / 2.
+pol = random.rand(expnum) * 2 * numpy.pi
+inc = numpy.arccos((random.rand(expnum) - 0.5) * 2)
+phase = random.rand(expnum) * 2 * numpy.pi
+spin1z = random.rand(expnum) - 0.5 # spins between -0.5 and +0.5
+spin2z = random.rand(expnum) - 0.5 # spins between -0.5 and +0.5
+
+# setup the output document
+xmldoc = ligolw.Document()
+lw = xmldoc.appendChild(ligolw.LIGO_LW())
+sim = lsctables.New(lsctables.SimInspiralTable)
+lw.appendChild(sim)
+procrow = process.register_to_xmldoc(xmldoc, sys.argv[0], make_process_params(options))
+
+#FIXME only set the "needed" columns. Hopefully these are the needed ones
+for i,t in enumerate(time):
+	row = sim.RowType()
+	
+	# string paramters
+	row.waveform = "SpinTaylorthreePointFivePN"
+	row.source = ""
+	row.numrel_data = ""
+	row.taper = "TAPER_START"
+
+	# time parameters
+	row.set_time_geocent(GPS(float(t)))
+	row.h_end_time = row.h_end_time_ns = row.l_end_time = row.l_end_time_ns = row.v_end_time = row.v_end_time_ns = row.g_end_time = row.g_end_time_ns = row.t_end_time = row.t_end_time_ns = row.end_time_gmst = 0
+
+	# masses
+	row.mass2 = mass2[i]
+	row.mass1 = mass1[i]
+	row.mchirp = row.eta = row.psi0 = row.psi3 = 0.0
+	
+	# location / orientation
+	row.distance = dist[i]
+	row.longitude = ra[i]
+	row.latitude = dec[i]
+	row.coa_phase = phase[i]
+	row.inclination = inc[i]
+	row.polarization = pol[i]
+	row.eff_dist_h = row.eff_dist_l = row.eff_dist_v = row.eff_dist_t = row.eff_dist_g = 0
+
+	# spins
+	row.spin1x = row.spin2x = row.spin1y = row.spin2y = 0
+	row.spin1z = spin1z[i]
+	row.spin2z = spin2z[i]
+
+	# frequencies
+	row.f_lower = 14
+	row.f_final = 0
+
+	# misc
+	row.amp_order = -1
+	row.alpha = row.alpha1 = row.alpha2 = row.alpha3 = row.alpha4 = row.alpha5 = row.alpha6 = row.beta = row.theta0 = row.phi0 = row.numrel_mode_min = row.numrel_mode_max = row.bandpass = 0
+	row.simulation_id = sim.get_next_id()
+	row.process_id = procrow.process_id	
+	sim.append(row)
+
+utils.write_filename(xmldoc, options.output)
