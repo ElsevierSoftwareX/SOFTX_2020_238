@@ -14,4 +14,6 @@ dist_bin_SCRIPTS = \
 	gstlal_s5_pbh_trigger_setup \
 	gstlal_s5_pbh_summary_page \
 	gstlal_iir_inspiral \
-	gstlal_fake_aligo_frames
+	gstlal_fake_aligo_frames \
+	gstlal_recolor_frames \
+	gstlal_injections_by_local_rate
