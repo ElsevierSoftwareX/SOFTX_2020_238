@@ -2,13 +2,13 @@ MIN_SEG_LENGTH = 1
 START = 871147452
 STOP =  871247452
 SEED = 1234
-MIN_DIST = 100
-MAX_DIST = 10000
-MIN_MASS = 0.2
-MAX_MASS = 1.0
+MIN_DIST = 1000
+MAX_DIST = 10000000
+MIN_MASS = 1.3
+MAX_MASS = 1.5
 MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
-FLOW = 39
+FLOW = 14
 TRIM = 16
 
 all : dag
@@ -70,7 +70,7 @@ injections.xml:
 		--time-interval 20 \
 		--i-distr uniform \
 		--l-distr random \
-		--d-distr log10 \
+		--d-distr volume \
 		--min-distance $(MIN_DIST) \
 		--max-distance $(MAX_DIST) \
 		--m-distr componentMass \
