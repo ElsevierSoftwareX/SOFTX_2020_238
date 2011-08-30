@@ -16,6 +16,7 @@ parser.add_option("--gps-end-time", metavar = "seconds", type = "int", help = "S
 parser.add_option("--local-rate", metavar = "mergers / Mpc^3 / Myr", default = 1.2, type = "float", help = "set the local merger rate in mergers / Mpc^3 / Myr, default = 1.2")
 parser.add_option("--output", metavar = "filename", help = "Set the name of the LIGO light-weight XML file to output")
 parser.add_option("--max-distance", metavar = "Mpc", type = "float", help = "set the maximum distance (respected approximately)")
+parser.add_option("--flower", metavar = "float", type = "float", help = "set the minumum frequency")
 parser.add_option("--seed", metavar = "int", type = "int", default = 1, help = "set the random seed default = 1")
 
 #
@@ -87,7 +88,7 @@ for i,t in enumerate(time):
 	row.spin2z = spin2z[i]
 
 	# frequencies
-	row.f_lower = 14
+	row.f_lower = options.flower
 	row.f_final = 0
 
 	# misc
