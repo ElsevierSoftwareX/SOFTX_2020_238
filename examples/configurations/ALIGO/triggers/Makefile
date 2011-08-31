@@ -14,12 +14,12 @@ WEBDIR = /home/channa/public_html/ALIGO-2011.08.15
 
 MIN_DIST = 10000
 MAX_DIST = 200000
-MIN_MASS1 = 1.0
-MAX_MASS1 = 3.0
-MIN_MASS2 = 1.0
-MAX_MASS2 = 3.0
-MIN_TOTAL_MASS = 2.0
-MAX_TOTAL_MASS = 6.0
+MIN_MASS1 = 1.2
+MAX_MASS1 = 1.6
+MIN_MASS2 = 1.2
+MAX_MASS2 = 1.6
+MIN_TOTAL_MASS = 2.4
+MAX_TOTAL_MASS = 3.2
 FLOW = 14
 TRIM = 16
 
@@ -57,9 +57,13 @@ injections.xml:
 		--max-mass2 $(MAX_MASS2) \
 		--min-mtotal $(MIN_TOTAL_MASS) \
 		--max-mtotal $(MAX_TOTAL_MASS) \
-		--waveform GeneratePPNthreePointFivePN \
+		--waveform SpinTaylorthreePointFivePN \
 		--taper-injection start \
-		--disable-spin
+		--enable-spin \
+		--min-spin1 0 \
+		--max-spin1 0.6 \
+		--min-spin2 0 \
+		--max-spin2 0.6
 
 web :
 	mkdir plots
