@@ -44,8 +44,8 @@ dec = numpy.arccos((random.rand(expnum) - 0.5) * 2) - numpy.pi / 2.
 pol = random.rand(expnum) * 2 * numpy.pi
 inc = numpy.arccos((random.rand(expnum) - 0.5) * 2)
 phase = random.rand(expnum) * 2 * numpy.pi
-spin1z = random.rand(expnum) - 0.5 # spins between -0.5 and +0.5
-spin2z = random.rand(expnum) - 0.5 # spins between -0.5 and +0.5
+spin1z = 0.8 * (random.rand(expnum) - 0.5) # spins between -0.4 and +0.4
+spin2z = 0.8 * (random.rand(expnum) - 0.5) # spins between -0.4 and +0.4
 
 # setup the output document
 xmldoc = ligolw.Document()
@@ -71,7 +71,8 @@ for i,t in enumerate(time):
 	# masses
 	row.mass2 = mass2[i]
 	row.mass1 = mass1[i]
-	row.mchirp = row.eta = row.psi0 = row.psi3 = 0.0
+	row.eta = row.mass1 * row.mass2 / (row.mass1 + row.mass2)**2
+	row.mchirp = row.psi0 = row.psi3 = 0.0
 	
 	# location / orientation
 	row.distance = dist[i]
