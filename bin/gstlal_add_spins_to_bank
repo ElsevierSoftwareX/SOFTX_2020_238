@@ -1,0 +1,49 @@
+#! /usr/bin/python
+
+import os
+import sys
+import numpy
+import copy
+from optparse import OptionParser
+from pylal import spawaveform
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw.utils import process as ligolw_process
+from gstlal.ligolw_output import make_process_params
+
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("--output", metavar = "file", default = ".", help = "Set the name of the output file")
+	parser.add_option("--input", metavar = "file", default = ".", help = "Set the name of the input file")
+	parser.add_option("--chi", action="append", help="values of chi to populate, give multiple times")
+	parser.add_option("--approximant", help = "override approximant with this value")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	options, filenames = parser.parse_args()
+
+	return options, filenames
+
+options, filenames = parse_command_line()
+
+xmldoc=utils.load_filename(options.input, verbose = options.verbose)
+sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+process_params_table = lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName)
+tmpltbank_process_ids = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName).get_ids_by_program("tmpltbank")
+procrow = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_add_spins_to_bank", make_process_params(options))
+
+if options.approximant is not None:
+	for row in process_params_table:
+		if row.process_id in tmpltbank_process_ids and row.param=='--approximant':
+			row.value= options.approximant
+			row.process_id == procrow.process_id
+	
+new_rows = []
+for row in sngl_inspiral_table:
+	for chi in options.chi:
+		#FIXME populate the ending frequency
+		row.chi=float(chi)
+		new_rows.append(copy.deepcopy(row))
+
+sngl_inspiral_table[:] = new_rows
+
+utils.write_filename(xmldoc, options.output, verbose = options.verbose)
