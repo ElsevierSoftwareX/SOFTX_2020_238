@@ -60,7 +60,7 @@ H1-TMPLTBANK-871147516-2048.xml:
 		--order twoPN \
 		--spectrum-type median \
 		--verbose \
-		&& gstlal_add_spins_to_bank --input H1-TMPLTBANK-871147516-2048.xml --output tmp.xml --chi -0.5 --chi -0.4 --chi -0.3 --chi -0.2 --chi -0.1 --chi 0.0 --chi 0.1 --chi 0.2 --chi 0.3 --chi 0.4 --chi 0.5 \
+		&& gstlal_add_spins_to_bank --input H1-TMPLTBANK-871147516-2048.xml --output tmp.xml --chi -0.5 --chi -0.43 --chi -0.36 --chi -0.29 --chi -0.21 --chi -0.14 --chi -0.07 --chi 0.0 --chi 0.5 --chi 0.43 --chi 0.36 --chi 0.29 --chi 0.21 --chi 0.14 --chi 0.07 \
 		&& mv tmp.xml H1-TMPLTBANK-871147516-2048.xml \
 		&& gstlal_bank_splitter --overlap $(OVERLAP) -i H1 -n $(NUM_SPLIT_TEMPLATES) -s chirptime -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml \
 		&& gstlal_bank_splitter --overlap $(OVERLAP) -i V1 -n $(NUM_SPLIT_TEMPLATES) -s chirptime -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml \
