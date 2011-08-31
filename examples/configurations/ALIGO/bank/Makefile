@@ -1,6 +1,3 @@
-V1PSDFILE = ../psd/V1-871147452-871159228-reference_psd.xml.gz
-H1PSDFILE = ../psd/H1-871147452-871158716-reference_psd.xml.gz
-L1PSDFILE = ../psd/L1-871147452-871159228-reference_psd.xml.gz
 CACHE = ../frames/frame.H1.cache
 IFOS = H
 
@@ -60,14 +57,26 @@ H1-TMPLTBANK-871147516-2048.xml:
 		--order twoPN \
 		--spectrum-type median \
 		--verbose \
-		&& gstlal_add_spins_to_bank --input H1-TMPLTBANK-871147516-2048.xml --output tmp.xml --chi -0.40 --chi -0.34 --chi -0.29 --chi -0.23 --chi -0.17 --chi -0.11 --chi -0.06 --chi 0.00 --chi 0.06 --chi 0.11 --chi 0.17 --chi 0.23 --chi 0.29 --chi 0.34 --chi 0.40\
+		&& gstlal_add_spins_to_bank --input H1-TMPLTBANK-871147516-2048.xml --output tmp.xml --chi -0.30 --chi -0.27 --chi -0.24 --chi -0.21 --chi -0.18 --chi -0.15 --chi -0.12 --chi -0.09 --chi -0.06 --chi -0.03 --chi 0.00 --chi 0.03 --chi 0.06 --chi 0.09 --chi 0.12 --chi 0.15 --chi 0.18 --chi 0.21 --chi 0.24 --chi 0.27 --chi 0.30 \
 		&& mv tmp.xml H1-TMPLTBANK-871147516-2048.xml \
 		&& gstlal_bank_splitter --overlap $(OVERLAP) -i H1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml \
 		&& gstlal_bank_splitter --overlap $(OVERLAP) -i V1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml \
 		&& gstlal_bank_splitter --overlap $(OVERLAP) -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml
 
-reference_psd.xml: 
-	ligolw_add --output reference_psd.xml $(V1PSDFILE) $(H1PSDFILE) $(L1PSDFILE)
+H1psd.xml.gz : 
+	./psd_xml_from_asd_txt H1 ZERO_DET_high_P.txt
+
+H2psd.xml.gz : 
+	./psd_xml_from_asd_txt H2 ZERO_DET_high_P.txt
+
+L1psd.xml.gz : 
+	./psd_xml_from_asd_txt L1 ZERO_DET_high_P.txt
+
+V1psd.xml.gz : 
+	./psd_xml_from_asd_txt V1 ZERO_DET_high_P.txt
+
+reference_psd.xml: H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
+	ligolw_add --output reference_psd.xml H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
 
 sql :
 	cat fix_coinc_instruments.sql uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql
