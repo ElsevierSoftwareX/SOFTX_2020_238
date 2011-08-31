@@ -61,9 +61,9 @@ injections.xml:
 		--taper-injection start \
 		--enable-spin \
 		--min-spin1 0 \
-		--max-spin1 0.6 \
+		--max-spin1 0.3 \
 		--min-spin2 0 \
-		--max-spin2 0.6
+		--max-spin2 0.3
 
 web :
 	mkdir plots
