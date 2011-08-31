@@ -30,7 +30,7 @@ def parse_command_line():
         if missing_options:
                 raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in missing_options)
 
-        if options.sort_by not in ("mchirp", "ffinal"):
+        if options.sort_by not in ("mchirp", "ffinal", "chirptime"):
                 raise ValueError, "unrecognized --sort-by \"%s\"" % options.sort_by
 
         if not filenames:
