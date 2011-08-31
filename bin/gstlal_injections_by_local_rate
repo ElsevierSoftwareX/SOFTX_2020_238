@@ -52,7 +52,7 @@ xmldoc = ligolw.Document()
 lw = xmldoc.appendChild(ligolw.LIGO_LW())
 sim = lsctables.New(lsctables.SimInspiralTable)
 lw.appendChild(sim)
-procrow = process.register_to_xmldoc(xmldoc, sys.argv[0], make_process_params(options))
+procrow = process.register_to_xmldoc(xmldoc, "gstlal_injections_by_local_rate", make_process_params(options))
 
 #FIXME only set the "needed" columns. Hopefully these are the needed ones
 for i,t in enumerate(time):
