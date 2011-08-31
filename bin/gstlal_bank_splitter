@@ -52,6 +52,9 @@ for file in filenames:
 		for row in process_params_table:
                 	if row.process_id in tmpltbank_process_ids and row.param=='--approximant':
 				approximant=row.value
+			#FIXME there should be a check on process ids, but other programs may modify the template bank after the low frequency cutoff is determined
+			if row.param == "--low-frequency-cutoff":
+				flow = float(row.value)
 		for row in sngl_inspiral_table:
 			if approximant=='IMRPhenomB':
 				row.f_final=spawaveform.imrffinal(row.mass1,row.mass2,row.chi)
@@ -62,6 +65,7 @@ for file in filenames:
 				row.set_end(LIGOTimeGPS(spawaveform.chirptime(row.mass1,row.mass2,7,options.max_f_final, row.f_final,row.chi)))
 				if options.max_f_final and (row.f_final > options.max_f_final):
 					row.f_final=options.max_f_final
+				row.template_duration = spawaveform.chirptime(row.mass1,row.mass2,7,flow,row.f_final,row.chi)
 	if options.instrument:
 		for row in sngl_inspiral_table: row.ifo = options.instrument
 	else:
@@ -75,7 +79,7 @@ for file in filenames:
 	elif options.sort_by=='ffinal':
         	sngl_inspiral_table.sort(lambda a, b: cmp(a.f_final, b.f_final))
 	elif options.sort_by=='chirptime':
-        	sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time+1e-9*a.end_time_ns, b.end_time+1e-9*b.end_time_ns))
+        	sngl_inspiral_table.sort(lambda a, b: cmp(a.template_duration, b.template_duration))
 	else:
         	raise ValueError, "internal error"
 
