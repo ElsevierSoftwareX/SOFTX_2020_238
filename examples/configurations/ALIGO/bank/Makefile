@@ -5,8 +5,8 @@ CACHE = ../frames/frame.H1.cache
 IFOS = H
 
 # Template bank parameters
-MIN_MASS = 1.0
-MAX_MASS = 3.0
+MIN_MASS = 1.2
+MAX_MASS = 1.6
 MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
 LOW_FREQUENCY_CUTOFF = 15.0
@@ -60,9 +60,11 @@ H1-TMPLTBANK-871147516-2048.xml:
 		--order twoPN \
 		--spectrum-type median \
 		--verbose \
-		&& ./bank_splitter --overlap $(OVERLAP) -i H1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml \
-		&& ./bank_splitter --overlap $(OVERLAP) -i V1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml \
-		&& ./bank_splitter --overlap $(OVERLAP) -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml
+		&& gstlal_add_spins_to_bank --input H1-TMPLTBANK-871147516-2048.xml --output tmp.xml --chi -0.5 --chi -0.4 --chi -0.3 --chi -0.2 --chi -0.1 --chi 0.0 --chi 0.1 --chi 0.2 --chi 0.3 --chi 0.4 --chi 0.5 \
+		&& mv tmp.xml H1-TMPLTBANK-871147516-2048.xml \
+		&& gstlal_bank_splitter --overlap $(OVERLAP) -i H1 -n $(NUM_SPLIT_TEMPLATES) -s chirptime -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml \
+		&& gstlal_bank_splitter --overlap $(OVERLAP) -i V1 -n $(NUM_SPLIT_TEMPLATES) -s chirptime -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml \
+		&& gstlal_bank_splitter --overlap $(OVERLAP) -i L1 -n $(NUM_SPLIT_TEMPLATES) -s chirptime -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml
 
 reference_psd.xml: 
 	ligolw_add --output reference_psd.xml $(V1PSDFILE) $(H1PSDFILE) $(L1PSDFILE)
