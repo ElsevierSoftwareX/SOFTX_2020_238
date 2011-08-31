@@ -128,7 +128,7 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 	"""
 	z = numpy.empty(int(round(sample_rate * duration)), "cdouble")
 	if approximant=="FindChirpSP" or approximant=="TaylorF2":
-		spawaveform.waveform(template_bank_row.mass1, template_bank_row.mass2, order, 1.0 / duration, 1.0 / sample_rate, f_low, f_high, z)
+		spawaveform.waveform(template_bank_row.mass1, template_bank_row.mass2, order, 1.0 / duration, 1.0 / sample_rate, f_low, f_high, z, template_bank_row.chi)
 	elif approximant=="IMRPhenomB":
 		#FIXME a better plan than multiplying flow by 0.5 should be done...
 		spawaveform.imrwaveform(template_bank_row.mass1, template_bank_row.mass2, 1.0/duration, 0.5 * f_low, z, template_bank_row.chi)
@@ -189,7 +189,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	# Generate each template, downsampling as we go to save memory
 	for i, row in enumerate(template_table):
 		if verbose:
-			print >>sys.stderr, "generating template %d/%d:  m1 = %g, m2 = %g" % (i + 1, len(template_table), row.mass1, row.mass2)
+			print >>sys.stderr, "generating template %d/%d:  m1 = %g, m2 = %g, chi = %g" % (i + 1, len(template_table), row.mass1, row.mass2, row.chi)
 
 		#
 		# generate "cosine" component of frequency-domain template
