@@ -12,38 +12,38 @@ from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
 
 def find_upper_limit_on_chi(delta, x1_max=0.85,  x2_min=-0.85):
-        x_max = 0
-        x_max=((1.0+delta)/2) * (x1_max)+((1.0-delta)/2)*x2_min
-        return x_max
+	x_max = 0
+	x_max=((1.0+delta)/2) * (x1_max)+((1.0-delta)/2)*x2_min
+	return x_max
 
 def find_lower_limit_on_chi(delta, x1_min=-0.85,  x2_max=0.85):
-        x_min = 0
-        x_min=((1.0+delta)/2)*(x1_min)+((1.0-delta)/2)*x2_max
-        return x_min
+	x_min = 0
+	x_min=((1.0+delta)/2)*(x1_min)+((1.0-delta)/2)*x2_max
+	return x_min
 
 def calculate_delta(mass1,mass2):
-        delta= (mass1-mass2)/(mass1+mass2)
-        return delta
+	delta= (mass1-mass2)/(mass1+mass2)
+	return delta
 
 def calculate_x2(delta,x,x1):
-        x2=2.0*x/(1-delta)-(1+delta)/(1-delta)*x1
-        return x2
+	x2=2.0*x/(1-delta)-(1+delta)/(1-delta)*x1
+	return x2
 
 def calculate_symmetric_mass_ratio(m1,m2):
-        return (m1*m2)/(m1+m2)**2
+	return (m1*m2)/(m1+m2)**2
 
 def parse_command_line():
-        parser = OptionParser()
-        parser.add_option("-o", "--output-path", metavar = "path", default = ".", help = "Set the path to the directory where output files will be written. Default is \".\".")
-        parser.add_option("--max-symmetric-mass-ratio", metavar = "value", type = "float", default = 0.084, help = "Set the maximum allowed symmetric mass ratio.  Default = 0.084.")
-        parser.add_option("-N", "--chi-n", metavar = "int", help = "Number of chi's in chi vector, must be odd to include zero.")
-        parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-        options, filenames = parser.parse_args()
+	parser = OptionParser()
+	parser.add_option("-o", "--output-path", metavar = "path", default = ".", help = "Set the path to the directory where output files will be written. Default is \".\".")
+	parser.add_option("--max-symmetric-mass-ratio", metavar = "value", type = "float", default = 0.084, help = "Set the maximum allowed symmetric mass ratio.  Default = 0.084.")
+	parser.add_option("-N", "--chi-n", metavar = "int", help = "Number of chi's in chi vector, must be odd to include zero.")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	options, filenames = parser.parse_args()
 
-        if not filenames:
-                raise ValueError, "must provide list of filenames"
+	if not filenames:
+		raise ValueError, "must provide list of filenames"
 
-        return options, filenames
+	return options, filenames
 
 options, filenames = parse_command_line()
 options_params=[("--filename","string",filenames),("--output_path","string", options.output_path), ("--max-symmetric-mass-ratio","int",options.max_symmetric_mass_ratio)]
@@ -57,21 +57,21 @@ for file in filenames:
 	tmpltbank_process_ids = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName).get_ids_by_program("tmpltbank")
 	
 	for row in process_params_table:
-        	if row.process_id in tmpltbank_process_ids and row.param=='--approximant':
-                	row.value='IMRPhenomB'
+		if row.process_id in tmpltbank_process_ids and row.param=='--approximant':
+			row.value='IMRPhenomB'
 	
 	sngl_inspiral_table[:]=filter(lambda row: row.eta>=options.max_symmetric_mass_ratio, sngl_inspiral_table)
 	
 	new_rows = []
 	for row in sngl_inspiral_table:
-        	delta=calculate_delta(row.mass1,row.mass2)
-        	x_max=find_upper_limit_on_chi(delta)
-        	x_min=find_lower_limit_on_chi(delta)
-        	for x in x_vector:
-                	row.f_final=spawaveform.imrffinal(row.mass1,row.mass2,x)
-                	if x_min <= x <= x_max:
-                        	new_rows.append(copy.deepcopy(row))
-                        	row.chi=x
+		delta=calculate_delta(row.mass1,row.mass2)
+		x_max=find_upper_limit_on_chi(delta)
+		x_min=find_lower_limit_on_chi(delta)
+		for x in x_vector:
+			row.f_final=spawaveform.imrffinal(row.mass1,row.mass2,x)
+			if x_min <= x <= x_max:
+				new_rows.append(copy.deepcopy(row))
+				row.chi=x
 	sngl_inspiral_table[:] = new_rows
 
 	process = ligolw_process.append_process(xmldoc, program = "prepareBank4IMRSA", comment = "prepare the template bank so it acts like an IMRSA bank", ifos = None)
