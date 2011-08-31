@@ -239,13 +239,15 @@ def mkresample(pipeline, src, pad_name = None, **properties):
 	return elem
 
 
-def mkwhiten(pipeline, src, psd_mode = 0, zero_pad = 0, fft_length = 8, average_samples = 64, median_samples = 7):
+def mkwhiten(pipeline, src, psd_mode = 0, zero_pad = 0, fft_length = 8, average_samples = 64, median_samples = 7, mean_psd = None):
 	elem = gst.element_factory_make("lal_whiten")
 	elem.set_property("psd-mode", psd_mode)
 	elem.set_property("zero-pad", zero_pad)
 	elem.set_property("fft-length", fft_length)
 	elem.set_property("average-samples", average_samples)
 	elem.set_property("median-samples", median_samples)
+	if mean_psd is not None:
+		elem.set_property("mean-psd", mean_psd)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
@@ -385,12 +387,14 @@ def mktogglecomplex(pipeline, src):
 	return elem
 
 
-def mkautochisq(pipeline, src, autocorrelation_matrix = None, latency = 0, snr_thresh=0):
+def mkautochisq(pipeline, src, autocorrelation_matrix = None, mask_matrix = None, latency = 0, snr_thresh=0):
 	elem = gst.element_factory_make("lal_autochisq")
 	if autocorrelation_matrix is not None:
 		elem.set_property("autocorrelation-matrix", pipeio.repack_complex_array_to_real(autocorrelation_matrix))
 		elem.set_property("latency", latency)
 		elem.set_property("snr-thresh", snr_thresh)
+	if mask_matrix is not None:
+		elem.set_property("autocorrelation-mask-matrix", mask_matrix)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
