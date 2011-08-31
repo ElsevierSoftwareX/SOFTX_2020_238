@@ -1,13 +1,9 @@
-MIN_SEG_LENGTH = 1
+MIN_SEG_LENGTH = 1800 # seconds, i.e. a half hour
 START = 871147452
 STOP =  871247452
 SEED = 1234
-MIN_DIST = 1000
-MAX_DIST = 10000000
-MIN_MASS = 1.3
-MAX_MASS = 1.5
-MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
-MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
+LOCAL_RATE = 12.0 # mergers per Mpc^3 per Myr, corresponds to "optimistic rate"
+MAX_DIST = 1000 # Mpc
 FLOW = 14
 TRIM = 16
 
@@ -59,30 +55,14 @@ segments.xml: H1segmentspadded.xml H2segmentspadded.xml L1segmentspadded.xml
 	ligolw_add --output segments.xml H1segmentspadded.xml H2segmentspadded.xml L1segmentspadded.xml
 
 injections.xml:
-	lalapps_inspinj \
-		--output injections.xml \
-		--seed $(SEED) \
-		--f-lower $(FLOW) \
-		--gps-start-time $(START) \
-		--gps-end-time $(STOP) \
-		--t-distr uniform \
-		--time-step 100 \
-		--time-interval 20 \
-		--i-distr uniform \
-		--l-distr random \
-		--d-distr volume \
-		--min-distance $(MIN_DIST) \
-		--max-distance $(MAX_DIST) \
-		--m-distr componentMass \
-		--min-mass1 $(MIN_MASS) \
-		--max-mass1 $(MAX_MASS) \
-		--min-mass2 $(MIN_MASS) \
-		--max-mass2 $(MAX_MASS) \
-		--min-mtotal $(MIN_TOTAL_MASS) \
-		--max-mtotal $(MAX_TOTAL_MASS) \
-		--waveform GeneratePPNtwoPN \
-		--taper-injection start \
-		--disable-spin
+	gstlal_injections_by_local_rate \
+	--seed $(SEED) \
+	--flower $(FLOW) \
+	--gps-start-time $(START) \
+	--gps-end-time $(STOP) \
+	--local-rate $(LOCAL_RATE) \
+	--output injections.xml \
+	--max-distance $(MAX_DIST)
 
 H1recolorpsd.xml.gz : 
 	./inverse_psd_xml_from_asd_txt H1 ZERO_DET_high_P.txt
@@ -100,4 +80,4 @@ dag : vetoes.xml segments.xml frame.cache injections.xml recolor_psd.xml.gz
 	./recolor_pipe --recolor-psd recolor_psd.xml.gz --segment-file segments.xml --min-segment-length $(MIN_SEG_LENGTH) --frame-cache H1=$(H1_FRAME_CACHE),V1=$(V1_FRAME_CACHE),L1=$(L1_FRAME_CACHE)
 	
 realclean :
-	rm -r *.sub *.dag* *.cache *.sh *reference_psd.xml.gz *segments.xml.gz logs segments.xml
+	rm -r *.sub *.dag* *.cache *.sh *reference_psd.xml.gz *segments.xml.gz logs *.xml 
