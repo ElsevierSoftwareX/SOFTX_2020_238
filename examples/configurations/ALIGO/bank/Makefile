@@ -64,16 +64,16 @@ H1-TMPLTBANK-871147516-2048.xml:
 		&& gstlal_bank_splitter --overlap $(OVERLAP) -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871147516-2048.xml
 
 H1psd.xml.gz : 
-	./psd_xml_from_asd_txt H1 ZERO_DET_high_P.txt
+	gstlal_psd_xml_from_asd_txt --instrument H1 --output H1psd.xml.gz ZERO_DET_high_P.txt
 
 H2psd.xml.gz : 
-	./psd_xml_from_asd_txt H2 ZERO_DET_high_P.txt
+	gstlal_psd_xml_from_asd_txt --instrument H2 --output H2psd.xml.gz ZERO_DET_high_P.txt
 
 L1psd.xml.gz : 
-	./psd_xml_from_asd_txt L1 ZERO_DET_high_P.txt
+	gstlal_psd_xml_from_asd_txt --instrument L1 --output L1psd.xml.gz ZERO_DET_high_P.txt
 
 V1psd.xml.gz : 
-	./psd_xml_from_asd_txt V1 ZERO_DET_high_P.txt
+	gstlal_psd_xml_from_asd_txt --instrument V1 --output V1psd.xml.gz ZERO_DET_high_P.txt
 
 reference_psd.xml: H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
 	ligolw_add --output reference_psd.xml H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
