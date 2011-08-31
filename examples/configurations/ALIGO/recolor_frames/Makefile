@@ -65,13 +65,13 @@ injections.xml:
 	--max-distance $(MAX_DIST)
 
 H1recolorpsd.xml.gz : 
-	./inverse_psd_xml_from_asd_txt H1 ZERO_DET_high_P.txt
-
-H2recolorpsd.xml.gz : 
-	./inverse_psd_xml_from_asd_txt H2 ZERO_DET_high_P.txt
+	gstlal_psd_xml_from_asd_txt --instrument H1 --output H1recolorpsd.xml.gz --invert ZERO_DET_high_P.txt
 
 L1recolorpsd.xml.gz : 
-	./inverse_psd_xml_from_asd_txt L1 ZERO_DET_high_P.txt
+	gstlal_psd_xml_from_asd_txt --instrument L1 --output L1recolorpsd.xml.gz --invert ZERO_DET_high_P.txt
+
+V1recolorpsd.xml.gz : 
+	gstlal_psd_xml_from_asd_txt --instrument V1 --output V1recolorpsd.xml.gz --invert ZERO_DET_high_P.txt
 
 recolor_psd.xml.gz: H1recolorpsd.xml.gz H2recolorpsd.xml.gz L1recolorpsd.xml.gz
 	ligolw_add H1recolorpsd.xml.gz H2recolorpsd.xml.gz L1recolorpsd.xml.gz | gzip > recolor_psd.xml.gz
