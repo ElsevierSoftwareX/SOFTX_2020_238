@@ -7,6 +7,7 @@ from glue.ligolw import utils
 from glue.ligolw import lsctables
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
+from optparse import OptionParser
 
 def parse_command_line():
 	parser = OptionParser()
@@ -44,7 +45,7 @@ for ifo in segs.keys():
 	row.segment_def_id = id
 	row.creator_db = None
 	row.process_id = None
-	row.name = "RESULT"
+	row.name = options.segment_name
 	row.version = None
 	row.comment = None
 	row.insertion_time = None
