@@ -19,4 +19,5 @@ dist_bin_SCRIPTS = \
 	gstlal_injections_by_local_rate \
 	gstlal_add_spins_to_bank \
 	gstlal_bank_splitter \
-	gstlal_psd_xml_from_asd_txt
+	gstlal_psd_xml_from_asd_txt \
+	gstlal_segments_trim
