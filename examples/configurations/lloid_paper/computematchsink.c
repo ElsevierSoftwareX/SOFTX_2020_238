@@ -174,6 +174,12 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buf)
 	template_data = g_malloc(GST_BUFFER_SIZE(buf));
 	template_data_ptr = template_data;
 	len = fread(template_data, sizeof(*template_data), len, element->fid);
+	if (G_UNLIKELY(len == 0))
+	{
+		g_free(template_data_ptr);
+		gst_element_send_event(GST_ELEMENT(element), gst_event_new_eos());
+		return GST_FLOW_OK;
+	}
 	g_assert(2 * len % element->channels == 0);
 
 	for (; len > 0;)
