@@ -54,14 +54,10 @@ source_rate = rates[0]
 min_rate = rates[-1]
 resample_filter_length = (8, 16, 32, 48, 64, 80, 96, 128, 160, 192, 256)
 
-total_latency = 0.5 * resample_filter_length[downsample_quality] / min_rate
-for rate in rates[1:]:
-	total_latency += 0.5 * resample_filter_length[upsample_quality] / rate
-print total_latency
-
 # Input stage
+buffer_duration = 0.125
 src = mkelems_fast(pipeline,
-	"audiotestsrc", {"wave": "silence", "samplesperbuffer": source_rate / 4, "num-buffers": long(round(bank.filter_length * 40))},
+	"audiotestsrc", {"wave": "silence", "samplesperbuffer": int(round(source_rate * buffer_duration)), "num-buffers": long(round(bank.filter_length * 40 / buffer_duration))},
 	"flags", {"clear": "gap"},
 	"capsfilter", {"caps": gst.Caps("audio/x-raw-float,width=64,channels=1,rate=%d" % source_rate)},
 	"progressreport2", {"name": "progress_hft", "do-query": False, "high-precision": True, "absolute-time": True, "update-freq": 1},
@@ -77,6 +73,7 @@ for rate, fragments in groupby(bank.bank_fragments, attrgetter('rate')):
 	else:
 		src1 = mkelems_fast(pipeline,
 			src,
+			"queue", {"max-size-bytes": 0, "max-size-buffers": 1, "max-size-time": 0},
 			"audioresample", {"quality": downsample_quality},
 			"lal_nofakedisconts", {"silent": True},
 			"capsfilter", {"caps": gst.Caps("audio/x-raw-float,rate=%d" % rate)},
@@ -100,14 +97,23 @@ for rate, fragments in groupby(bank.bank_fragments, attrgetter('rate')):
 		)[0]
 
 	for fragment in fragments:
+		if rate == source_rate:
+			head = mkelems_fast(pipeline,
+				src1,
+				"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": 0}
+			)[-1]
+		else:
+			head = mkelems_fast(pipeline,
+				src1,
+				"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": long(math.ceil((fragment.start - 0.5 * resample_filter_length[downsample_quality] / rate) * gst.SECOND))}
+			)[-1]
 		mkelems_fast(pipeline,
-			src1,
+			head,
 			"audiodelay", {"samples": long(round(fragment.start * rate))},
 			"lal_nofakedisconts", {"silent": True},
 			"lal_firbank2", {"fir-matrix": fragment.orthogonal_template_bank, "time-domain": True},
 			"lal_nofakedisconts", {"silent": True},
 			"lal_matrixmixer", {"matrix": fragment.mix_matrix},
-			"queue", {"max-size-bytes": 0, "max-size-buffers": 0, "max-size-time": long(math.ceil((total_latency + fragment.start) * gst.SECOND))},
 			accum
 		)
 
