@@ -28,11 +28,13 @@
 
 
 import sys
+import os
 import scipy
 import numpy
 #import pylab
 from optparse import OptionParser
 from glue import segments
+from glue import segmentsUtils
 from pylal.datatypes import LIGOTimeGPS
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 from gstlal import ligolw_output
@@ -57,13 +59,17 @@ def iir_bank(pipeline, src, sample_rates, a1, b0, delay):
 	adder = gst.element_factory_make("lal_adder")
 	adder.set_property("sync", True)
 	pipeline.add(adder)
+
 	for sr in sample_rates:
 		#print D[sr].min()
 		#head = pipeparts.mkdrop(pipeline, src[sr], drop_samples=D[sr].min())
-		head = pipeparts.mkiirbank(pipeline, src[sr], a1 = A[sr], b0 = B[sr], delay = D[sr])
+		head = pipeparts.mkiirbank(pipeline, pipeparts.mkqueue(pipeline, src[sr], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0), a1 = a1[sr], b0 = b0[sr], delay = delay[sr], name = "gstlaliirbank%d" % (sr)) # FIXME: does the name need to be unique?
+		head = pipeparts.mkprogressreport(pipeline, head, "afteriirbank_%d" % (sr))
 		head = pipeparts.mkresample(pipeline, head)
 		# FIXME make this queue the "right" size
 		head = pipeparts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max_rate), max_size_time=gst.SECOND * 100, max_size_buffers=0, max_size_bytes=0)
+		#head = pipeparts.mknxydumpsinktee(pipeline, head, "output_%d.txt" % (sr), segment = options.nxydump_segment)
+		#head = pipeparts.mkqueue(pipeline, head)
 		head.link(adder)
 	return adder
 
@@ -75,9 +81,11 @@ def iir_bank(pipeline, src, sample_rates, a1, b0, delay):
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
 	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
-	parser.add_option("--fake-data", action = "store_true", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
-	parser.add_option("--iir-bank", metavar = "filenames", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...")
+	parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise.")
+	parser.add_option("--iir-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...")
+	#parser.add_option("--iir-bank2", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the injections (optional).")
+	parser.add_option("--nxydump-segment", metavar = "start:stop", default = ":", help = "Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time.")
 	parser.add_option("--gps-start-time", help="GPS start time (required)", type="float")
 	parser.add_option("--gps-end-time", help="GPS end time (required)", type="float")
 	parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the triggers (required)")
@@ -87,7 +95,7 @@ def parse_command_line():
 	parser.add_option("--snr-threshold", type="float", help="SNR threshold default 5.5", default=5.5)
 	parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
-	
+
 	options, filenames = parser.parse_args()
 
 	if sum(1 for option in ('frame_cache', 'fake_data', ) if getattr(options, option) is not None) != 1: # FIXME: what about oline_data?
@@ -102,12 +110,14 @@ def parse_command_line():
 			fail += "must provide option %s\n" % (option)
 
 	if fail: raise ValueError, fail
-	
+
 	effective_gps_start_time = LIGOTimeGPS(options.gps_start_time)
 	effective_gps_end_time = LIGOTimeGPS(options.gps_end_time)
 
 	process_params = ligolw_output.make_process_params(options) #FIXME override program name
 	options.seg = segments.segment(effective_gps_start_time, effective_gps_end_time)
+
+	options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
 
 	return options, filenames, process_params
 
@@ -147,7 +157,9 @@ from gstlal import lloidparts
 #
 
 banks = parse_banks(options.iir_bank)
+#iirbanknds = parse_banks(options.iir_bank2)
 snr_threshold = options.snr_threshold
+
 # get the pipeline running
 pipeline = gst.Pipeline("gstlal_iir_inspiral")
 mainloop = gobject.MainLoop()
@@ -183,9 +195,12 @@ for ifo, bank in banks.items():
 
 	#FIXME don't assume that you only want the 0th bank
 	xmldoc = utils.load_filename(bankfile)
+	#xmldocnds = utils.load_filename(options.iir_bank2)
 	A, B, D, autocor = cbc_template_iir.get_matrices_from_xml(xmldoc)
-	sample_rates = [int(s) for s in param.get_pyvalue(xmldoc, 'sample_rate').split(',')]
+	#Ands, Bnds, Dnds, autocornds = cbc_template_iir.get_matrices_from_xml(xmldocnds)
 
+	sample_rates = [int(s) for s in param.get_pyvalue(xmldoc, 'sample_rate').split(',')]
+	print sample_rates
 
 	head = lloidparts.mkLLOIDbasicsrc(
 		pipeline,
@@ -197,18 +212,59 @@ for ifo, bank in banks.items():
 		verbose = options.verbose)
 
 	head = lloidparts.mkLLOIDsrc(pipeline, head, sample_rates, ifo, psd=None, psd_fft_length = 8, block_duration=gst.SECOND)
+	head[max(sample_rates)] = pipeparts.mkprogressreport(pipeline, head[max(sample_rates)], "input")
+
+	# Write input
+	#head[max(sample_rates)] = pipeparts.mknxydumpsinktee(pipeline, head[max(sample_rates)], "input.txt", segment = options.nxydump_segment)
+
+
+
+	# filter using FIR bank
+	# read psd file
+	#if options.reference_psd:
+	#	psd = read_psd(options.reference_psd)[ifo]
+	#	# smooth and create an interp object
+	#	psd = cbc_template_iir.smooth_and_interp(psd)
+	#else:
+	#	psd = None
+
+	#F, autocor = cbc_template_iir.get_fir_matrix(xmldoc, psd_interp=psd, verbose=options.verbose)
+ 	#firhead = head[max(sample_rates)] = pipeparts.mktee(pipeline, head[max(sample_rates)])
+ 	#firhead = pipeparts.mkqueue(pipeline, firhead, max_size_time = 2048 * gst.SECOND, max_size_bytes=0, max_size_buffers=0)
+ 	#firhead = pipeparts.mkfirbank(pipeline, firhead, fir_matrix = F, time_domain = False, block_stride = max(sample_rates) * 1024)
+ 	#firhead = pipeparts.mkqueue(pipeline, firhead)
+ 	#firhead = pipeparts.mkprogressreport(pipeline, firhead, "FIR output")
+ 	#firhead = pipeparts.mkqueue(pipeline, firhead)
+ 	#pipeparts.mknxydumpsink(pipeline, firhead, "output_fir_%s.txt" % (source), segment = options.nxydump_segment)
+
+
+	# filter using high rate IIR bank
+	#iirndshead = pipeparts.mkiirbank(pipeline, pipeparts.mkqueue(pipeline, iirndshead, max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0), a1 = Ands[max(sample_rates)], b0 = Bnds[max(sample_rates)], delay = Dnds[max(sample_rates)])
+	#pipeparts.mkfakesink(pipeline, iirndshead)
+	#iirndshead = pipeparts.mkqueue(pipeline, iirndshead)
+	#iirndshead = pipeparts.mkprogressreport(pipeline, iirndshead, "non-downsampled output")
+	#iirndshead = pipeparts.mkqueue(pipeline, iirndshead)
+	#pipeparts.mknxydumpsink(pipeline, iirndshead, "output_iir_%s_nds.txt" % (source), segment = options.nxydump_segment)
 
 
 	# filter using IIR bank
 	head = iir_bank(pipeline, head, sample_rates, a1 = A, b0 = B, delay = D) #FIXME should this be a1 = repack_complex_array_to_real(A)?
 	head = pipeparts.mkqueue(pipeline, head)
+	head = pipeparts.mknxydumpsinktee(pipeline, head, "output_iir_%s.txt" % (source), segment = options.nxydump_segment)
+	pipeparts.mkfakesink(pipeline, head)
+	continue
+
 	head = pipeparts.mktogglecomplex(pipeline, head)
 	head = pipeparts.mknofakedisconts(pipeline, head)
-	head = pipeparts.mkprogressreport(pipeline, head, bankfile)
+	head = pipeparts.mkprogressreport(pipeline, head, "IIR output")
 	# tee off and write output file
-	snr = chisq = snrwrite = pipeparts.mktee(pipeline, head)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, snrwrite), "snrdump_%s.txt" % (ifo))
+	head = pipeparts.mktogglecomplex(pipeline, head)
 
+	for sr in sample_rates:
+		pipeparts.mkfakesink(pipeline, head[sr])
+	continue
+
+	snr = chisq = pipeparts.mktee(pipeline, head)
 	chisq = pipeparts.mkqueue(pipeline, chisq)
 	chisq = pipeparts.mkautochisq(pipeline, chisq, autocorrelation_matrix = autocor, latency = -50, snr_thresh = snr_threshold)
 
