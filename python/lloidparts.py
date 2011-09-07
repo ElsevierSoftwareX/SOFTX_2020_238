@@ -26,7 +26,7 @@
 
 import math
 import sys
-
+import numpy
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -528,8 +528,8 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			bank,
 			bank_fragment,
 			control_snksrc,
-			64 + 3 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#64 is for a the audioresample filter with qual=4. FIXME tune these windows
-			64 + 3 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#64 is for the audioresample filter with qual=4
+			64 + 8 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#64 is for a the audioresample filter with qual=4. FIXME tune these windows
+			64 + 8 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#64 is for the audioresample filter with qual=4
 			nxydump_segment = nxydump_segment,
 			fir_stride = fir_stride,
 			control_peak_time = control_peak_time,
@@ -693,11 +693,15 @@ def mkLLOIDSnrToAutoChisq(pipeline, snr, bank):
 	autocorrelation_length = bank.autocorrelation_bank.shape[1]
 	autocorrelation_latency = -(autocorrelation_length - 1) / 2
 
+	mask_matrix = numpy.ones(bank.autocorrelation_bank.shape, numpy.int)
+	stix = autocorrelation_latency - 10
+	mask_matrix[:,stix:] = 0
+
 	#
 	# \chi^{2}
 	#
 
-	chisq = pipeparts.mkautochisq(pipeline, snr, autocorrelation_matrix = bank.autocorrelation_bank, latency = autocorrelation_latency, snr_thresh = bank.snr_threshold)
+	chisq = pipeparts.mkautochisq(pipeline, snr, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = mask_matrix, latency = autocorrelation_latency, snr_thresh = bank.snr_threshold)
 	chisq = pipeparts.mkchecktimestamps(pipeline, chisq, "timestamps_%s_chisq" % bank.logname)
 
 	#chisq = pipeparts.mktee(pipeline, chisq)
@@ -915,7 +919,7 @@ class StreamThinca(object):
 		# for lalapps_inspiral triggers, so we replace it with one
 		# that works for the duration of the ligolw_thinca() call.
 		def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, delta_t):
-			return (event_a.mass1 != event_b.mass1) or (event_a.mass2 != event_b.mass2) or (abs(event_a.get_end() + offset_a - event_b.get_end() - offset_b) > light_travel_time + delta_t)
+			return (event_a.mass1 != event_b.mass1) or (event_a.mass2 != event_b.mass2) or (event_a.chi != event_b.chi) or (abs(event_a.get_end() + offset_a - event_b.get_end() - offset_b) > light_travel_time + delta_t)
 		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary, boundary)):
 			return set(event.ifo for event in events) not in (set(("H1", "H2", "L1")), set(("H1", "L1", "V1")), set(("H1", "L1")), set(("H1", "V1")), set(("L1", "V1"))) or ligolw_thinca.coinc_inspiral_end_time(events, offset_vector) not in seg
 		def get_effective_snr(self, fac):
