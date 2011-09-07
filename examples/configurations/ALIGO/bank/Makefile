@@ -82,7 +82,7 @@ sql :
 	cat fix_coinc_instruments.sql uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql
 	cat simplify.sql cluster.sql > simplify_and_cluster.sql
 	cat simplify.sql delete_by_far.sql > simplify_and_delete_by_far.sql
-	cat fix_coinc_instruments.sql uniqueify_sim_inspiral.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
+	cat fix_coinc_instruments.sql drop_sim.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
 
 dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml sql
 	ls *H1_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > H1_split_bank.cache
