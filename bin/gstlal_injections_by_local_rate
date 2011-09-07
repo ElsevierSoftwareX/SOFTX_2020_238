@@ -8,6 +8,7 @@ from glue.ligolw import ligolw
 from glue.lal import LIGOTimeGPS as GPS
 from glue.ligolw.utils import process
 from gstlal.ligolw_output import make_process_params
+from pylal.antenna import response
 import sys
 
 parser = OptionParser(description = __doc__)
@@ -72,7 +73,8 @@ for i,t in enumerate(time):
 	row.mass2 = mass2[i]
 	row.mass1 = mass1[i]
 	row.eta = row.mass1 * row.mass2 / (row.mass1 + row.mass2)**2
-	row.mchirp = row.psi0 = row.psi3 = 0.0
+	row.mchirp = (row.mass1 * row.mass2)**(3./5.) / (row.mass1 + row.mass2)**(1./5.)
+	row.psi0 = row.psi3 = 0.0
 	
 	# location / orientation
 	row.distance = dist[i]
@@ -81,7 +83,10 @@ for i,t in enumerate(time):
 	row.coa_phase = phase[i]
 	row.inclination = inc[i]
 	row.polarization = pol[i]
-	row.eff_dist_h = row.eff_dist_l = row.eff_dist_v = row.eff_dist_t = row.eff_dist_g = 0
+	# set effective distances
+	for det,s in (("H1","h"), ("L1","l"), ("V1","v"), ("G1","g"), ("T1","t")):
+		hp, hc, ha, q =  response(row.geocent_end_time, row.longitude, row.latitude, row.inclination, row.polarization, "radians", det)
+		setattr(row, "eff_dist_%s" % s, row.distance / q)
 
 	# spins
 	row.spin1x = row.spin2x = row.spin1y = row.spin2y = 0
