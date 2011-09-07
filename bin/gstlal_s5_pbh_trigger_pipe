@@ -611,8 +611,8 @@ for s in build_bank_string(bank_cache):
 
 	for f in far_input_nodes:
 		if f.injections:
-			# cluster injections
-			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.cluster_sql_file, input=[f.output_name], p_node=[farnode])
+			# cluster injections and drop the sim inspiral table
+			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.injection_sql_file, input=[f.output_name], p_node=[farnode])
 		else:
 			# don't cluster zerolag, instead delete above FAR
 			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.delete_sql_file, input=[f.output_name], p_node=[farnode])
@@ -644,9 +644,9 @@ if inj_nodes:
 	injdb = "H1H2L1-ALL-%d-%d-LLOID-simulations.sqlite" % (options.gps_start_time, options.gps_stop_time)
 	injxml = injdb+".xml.gz"
 	# merge
-	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[os.path.split(f.output_name)[1].replace('.sqlite','.xml.gz') for f in inj_nodes] + [options.vetoes, options.frame_segments_file], p_node=cluster_nodes)
+	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[os.path.split(f.output_name)[1].replace('.sqlite','.xml.gz') for f in inj_nodes] + [options.vetoes, options.frame_segments_file, options.injections], p_node=cluster_nodes)
 	# cluster
-	clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.injection_sql_file, input=[injdb], p_node=[sqlitenode])
+	clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.cluster_sql_file, input=[injdb], p_node=[sqlitenode])
 	# convert to XML
 	clusternode = ligolw_sqlite_node(toXMLJob, dag, injdb, replace=False, extract=injxml, p_node=[clusternode])
 	# find injections
