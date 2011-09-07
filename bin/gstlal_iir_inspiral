@@ -63,7 +63,8 @@ def iir_bank(pipeline, src, sample_rates, a1, b0, delay):
 	for sr in sample_rates:
 		#print D[sr].min()
 		#head = pipeparts.mkdrop(pipeline, src[sr], drop_samples=D[sr].min())
-		head = pipeparts.mkiirbank(pipeline, pipeparts.mkqueue(pipeline, src[sr], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0), a1 = a1[sr], b0 = b0[sr], delay = delay[sr], name = "gstlaliirbank%d" % (sr)) # FIXME: does the name need to be unique?
+		head = pipeparts.mkqueue(pipeline, src[sr], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
+		#head = pipeparts.mkiirbank(pipeline, head, a1 = a1[sr], b0 = b0[sr], delay = delay[sr], name = "gstlaliirbank%d" % (sr)) # FIXME: does the name need to be unique?
 		head = pipeparts.mkprogressreport(pipeline, head, "afteriirbank_%d" % (sr))
 		head = pipeparts.mkresample(pipeline, head)
 		# FIXME make this queue the "right" size
@@ -71,6 +72,8 @@ def iir_bank(pipeline, src, sample_rates, a1, b0, delay):
 		#head = pipeparts.mknxydumpsinktee(pipeline, head, "output_%d.txt" % (sr), segment = options.nxydump_segment)
 		#head = pipeparts.mkqueue(pipeline, head)
 		head.link(adder)
+
+	adder = pipeparts.mkcapsfilter(pipeline, adder, "audio/x-raw-float, rate=%d" % max_rate)
 	return adder
 
 
@@ -95,6 +98,7 @@ def parse_command_line():
 	parser.add_option("--snr-threshold", type="float", help="SNR threshold default 5.5", default=5.5)
 	parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 
 	options, filenames = parser.parse_args()
 
@@ -130,6 +134,26 @@ def parse_command_line():
 #
 
 #
+# write the pipeline to a dot file.
+#
+
+
+def write_dump_dot(pipeline, filestem, verbose = False):
+	"""
+	This function needs the environment variable GST_DEBUG_DUMP_DOT_DIR
+	to be set.   The filename will be
+
+	os.path.join($GST_DEBUG_DUMP_DOT_DIR, filestem + ".dot")
+
+	If verbose is True, a message will be written to stderr.
+	"""
+	if "GST_DEBUG_DUMP_DOT_DIR" not in os.environ:
+		raise ValueError, "cannot write pipeline, environment variable GST_DEBUG_DUMP_DOT_DIR is not set"
+	gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, filestem)
+	if verbose:
+		print >>sys.stderr, "Wrote pipeline to %s" % os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], "%s.dot" % filestem)
+
+#
 # parse command line
 #
 
@@ -163,6 +187,7 @@ snr_threshold = options.snr_threshold
 # get the pipeline running
 pipeline = gst.Pipeline("gstlal_iir_inspiral")
 mainloop = gobject.MainLoop()
+handler = lloidparts.LLOIDHandler(mainloop, pipeline)
 seekevent = seek_event_for_gps(options.gps_start_time, options.gps_end_time)
 options.out_seg = segments.segment(options.seg[0], options.seg[1]) #FIXME make better outseg def.
 
@@ -250,7 +275,7 @@ for ifo, bank in banks.items():
 	# filter using IIR bank
 	head = iir_bank(pipeline, head, sample_rates, a1 = A, b0 = B, delay = D) #FIXME should this be a1 = repack_complex_array_to_real(A)?
 	head = pipeparts.mkqueue(pipeline, head)
-	head = pipeparts.mknxydumpsinktee(pipeline, head, "output_iir_%s.txt" % (source), segment = options.nxydump_segment)
+	head = pipeparts.mknxydumpsinktee(pipeline, head, "output_iir.txt", segment = options.nxydump_segment)
 	pipeparts.mkfakesink(pipeline, head)
 	continue
 
@@ -286,16 +311,38 @@ for trig in triggersrc:
 	sink = appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, trig), caps = gst.Caps("application/x-lal-snglinspiral"))
 	sink.connect_after("new-buffer", appsync.pull_appsinks_in_order)
 	appsinks.add(sink)
-	
+
 
 ############################################################
 # run the pipeline
 
-gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS, "gstlal_iir_inspiral_graph")
+#gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS, "gstlal_iir_inspiral_graph")
+#pipeline.set_state(gst.STATE_PLAYING)
 
-handler = lloidparts.LLOIDHandler(mainloop, pipeline)
 
-pipeline.set_state(gst.STATE_PLAYING)
+#
+# process requested segment
+#
+
+
+if options.write_pipeline is not None:
+	write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
+
+if options.verbose:
+	print >>sys.stderr, "setting pipeline state to paused ..."
+if pipeline.set_state(gst.STATE_PAUSED) != gst.STATE_CHANGE_SUCCESS:
+	raise RuntimeError, "pipeline did not enter paused state"
+
+if options.verbose:
+	print >>sys.stderr, "setting pipeline state to playing ..."
+if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
+	raise RuntimeError, "pipeline did not enter playing state"
+
+if options.write_pipeline is not None:
+	write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
+
+if options.verbose:
+	print >>sys.stderr, "running pipeline ..."
 mainloop.run()
 
 data.write_output_file()
