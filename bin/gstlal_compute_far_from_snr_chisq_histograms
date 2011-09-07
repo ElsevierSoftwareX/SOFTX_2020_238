@@ -56,7 +56,7 @@ def populate_injections(bindict, prefactor = 4, df = 50, size = 1000000, verbose
 		chisqs = chisq_distribution(df, ncs, 1) / df
 		for snr, chisq in zip(snrs, chisqs):
 			binarr[snr, chisq**.5 / snr] += 1
-	
+
 #
 # Utility functions
 #
@@ -106,16 +106,16 @@ class FAR(object):
 
 		targetlen = int(1e7**(1. / len(instruments)))
 		nonzerorank = {}
-		
+
 		for ifo in instruments:
 			# FIXME don't repeat calc by checking if it has been done??
 			nonzerorank[ifo] = count_to_rank(get_nonzero(linearize_array(counts[ifo+"_snr_chi"].array)), offset = self.rank_offset)
-		
+
 		nonzerorank = self.rankBins(nonzerorank, targetlen)
 		self.ranks, weights = self.possible_ranks_array(nonzerorank)
 		fap, self.fap_from_rank = self.CDFinterp(self.ranks, weights)
-		
-	
+
+
 	def rankBins(self, vec, size):
 		out = {}
 		minrank = min([v.min() for v in vec.values()])
@@ -125,7 +125,7 @@ class FAR(object):
 			for r in ranks:
 				out[ifo][r,]+=1
 		return out
-	
+
 	def possible_ranks_array(self, bAdict):
 		# start with an identity array to seed the outerproduct chain
 		ranks = numpy.array([1])
@@ -147,7 +147,7 @@ class FAR(object):
 			FAP /= FAP[-1]
 		# Rather than putting 0 for FAPS we cannot estimate, set it to the mimimum non zero value which is more meaningful
 		return FAP, interpolate.interp1d(ranks, FAP, fill_value = (FAP[FAP !=0.0]).min(), bounds_error = False)
-	
+
 	# Method only works if counts is not None:
 	def compute_rank(self, snr_chisq_dict):
 		if self.counts is None:
@@ -166,7 +166,7 @@ class FAR(object):
 		fap = self.fap_from_rank(rank)
 		fap = 1.0 - (1.0 - fap)**self.trials_factor
 		return float(fap)
-	
+
 	def compute_fap3(self, ifo1, snr1, chisq1, ifo2, snr2, chisq2, ifo3, snr3, chisq3):
 		input = {ifo1:(snr1,chisq1), ifo2:(snr2,chisq2), ifo3:(snr3,chisq3)}
 		rank = self.compute_rank(input)
@@ -298,7 +298,7 @@ if options.compute_fap:
 	Far = FAR(livetime, options.additional_trials_factor, counts, injections)
 else:
 	Far = FAR(livetime, options.additional_trials_factor)
-	
+
 # late import for DB manipulations
 from glue.ligolw import dbtables
 
@@ -311,7 +311,7 @@ if options.compute_fap is not None:
 
 		working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
 		connection = sqlite3.connect(working_filename)
-		
+
 		#FIXME find a better way to identify injections, don't rely on sqlite_master or the presence of a sim_inspiral table??
 		if connection.cursor().execute("SELECT name FROM sqlite_master WHERE name='sim_inspiral'").fetchall():
 			if options.verbose:
@@ -324,10 +324,10 @@ if options.compute_fap is not None:
 		# FIXME this is supposed to pull out only triggers found in zero lag, is it correct?
 		if options.verbose:
 			print >>sys.stderr, "num sngl trigs before", " ".join(["%s:%d" % (ifo, cnts.array.sum()) for (ifo, cnts) in Far.counts.items()])
-	
+
 		for ifo, snr, chisq in connection.cursor().execute("SELECT ifo, snr, chisq FROM sngl_inspiral WHERE sngl_inspiral.event_id IN (SELECT event_id FROM coinc_event_map JOIN coinc_event ON (coinc_event_map.table_name == 'sngl_inspiral' AND coinc_event.coinc_event_id == coinc_event_map.coinc_event_id) WHERE NOT EXISTS (SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0))"):
 			Far.counts[ifo+"_snr_chi"][snr, chisq**.5 / snr] -= 1
-		
+
 		if options.verbose:
 			print >>sys.stderr, "num sngl trigs after", " ".join(["%s:%d" % (ifo, cnts.array.sum()) for (ifo, cnts) in Far.counts.items()])
 
@@ -363,7 +363,7 @@ if options.compute_fap:
 			minvals.append(minArr.min())
 	minval = min(minvals)
 	rankoffset = numpy.ceil(numpy.abs(numpy.log(minval))) + 1
-	
+
 
 #
 # iterate over files to rank
@@ -380,7 +380,7 @@ for f in filenames:
 		print >>sys.stderr, "computing faps ..."
 		for ifos, in connection.cursor().execute('SELECT DISTINCT(ifos) FROM coinc_inspiral').fetchall():
 			print >>sys.stderr, "computing faps for ", ifos
-			# FIXME since some combinations are degenerate a few things will be computed twice unecessarily 
+			# FIXME since some combinations are degenerate a few things will be computed twice unecessarily
 			ifoset = lsctables.instrument_set_from_ifos(ifos)
 			ifoset.discard("H2")
 			Far.updateFAPmap(ifoset, rankoffset)
@@ -413,7 +413,7 @@ for f in filenames:
 			# For everything else we get a cumulative number
 			else:
 				connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate, ranktable.rowid) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.coinc_event_id IN (SELECT coinc_event_id FROM ranktable)')
-	
+
 	connection.commit()
 	connection.close()
 	dbtables.put_connection_filename(f, working_filename, verbose = options.verbose)
