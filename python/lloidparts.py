@@ -177,7 +177,6 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 	#
 
 	if control_peak_samples is not None:
-		#src = pipeparts.mkreblock(pipeline, pipeparts.mkpeak(pipeline, src, control_peak_samples), block_duration = block_duration)
 		src = pipeparts.mkpeak(pipeline, src, control_peak_samples)
 
 	#
