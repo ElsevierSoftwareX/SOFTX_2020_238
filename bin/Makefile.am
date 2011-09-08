@@ -20,4 +20,5 @@ dist_bin_SCRIPTS = \
 	gstlal_add_spins_to_bank \
 	gstlal_bank_splitter \
 	gstlal_psd_xml_from_asd_txt \
-	gstlal_segments_trim
+	gstlal_segments_trim \
+	gstlal_glitch_population
