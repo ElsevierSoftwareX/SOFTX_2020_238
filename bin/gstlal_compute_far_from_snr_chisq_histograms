@@ -33,10 +33,11 @@ sqlite3.enable_callback_tracebacks(True)
 #
 
 def snr_distribution(size, startsnr):
-	return startsnr * random.power(3, size)**-1 # FIXME 3 or 2??
+	return startsnr * random.power(2, size)**-1 # FIXME 3 or 2??
 
 def noncentrality(snrs, prefactor):
-	return prefactor * random.power(1, len(snrs)) * snrs**2 # FIXME power depends on dimensionality of the bank and the expectation for the mismatch for real signals
+	return prefactor * random.rand(len(snrs)) * snrs**2 # FIXME power depends on dimensionality of the bank and the expectation for the mismatch for real signals
+	#return prefactor * random.power(1, len(snrs)) * snrs**2 # FIXME power depends on dimensionality of the bank and the expectation for the mismatch for real signals
 
 def chisq_distribution(df, non_centralities, size):
 	out = numpy.empty((len(non_centralities) * size,))
@@ -44,7 +45,7 @@ def chisq_distribution(df, non_centralities, size):
 		out[i*size:(i+1)*size] = random.noncentral_chisquare(df, nc, size)
 	return out
 
-def populate_injections(bindict, prefactor = 4, df = 50, size = 1000000, verbose = True):
+def populate_injections(bindict, prefactor = .1, df = 10, size = 1000000, verbose = True):
 	for i, k in enumerate(bindict):
 		binarr = bindict[k]
 		if verbose:
