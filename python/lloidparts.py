@@ -162,7 +162,7 @@ def seek_event_for_gps(gps_start_time, gps_end_time, flags = 0):
 #
 
 
-def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list = None, seekevent = None, control_peak_samples = None, block_duration = None):
+def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list = None, seekevent = None, control_peak_samples = None):
 	#
 	# start with an adder and caps filter to select a sample rate
 	#
@@ -785,7 +785,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 			# identifies a template bank>).  we assume that
 			# all instruments have been given the same template
 			# bank
-			control_branch[instrument] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()), block_duration = block_duration)
+			control_branch[instrument] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()))
 
 	#
 	# construct trigger generators
