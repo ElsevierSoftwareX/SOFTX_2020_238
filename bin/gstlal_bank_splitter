@@ -50,7 +50,7 @@ for file in filenames:
 
 	if options.add_f_final:
 		for row in process_params_table:
-                	if row.process_id in tmpltbank_process_ids and row.param=='--approximant':
+			if row.process_id in tmpltbank_process_ids and row.param=='--approximant':
 				approximant=row.value
 			#FIXME there should be a check on process ids, but other programs may modify the template bank after the low frequency cutoff is determined
 			if row.param == "--low-frequency-cutoff":
@@ -70,12 +70,12 @@ for file in filenames:
 		for row in sngl_inspiral_table: row.ifo = options.instrument
 	else:
 		for row in process_params_table:
-                	if row.param=='--ifos':
+			if row.param=='--ifos':
 				options.instrument = row.value
 		
 
 	if options.sort_by=='mchirp':
-        	sngl_inspiral_table.sort(lambda a, b: cmp(a.mchirp, b.mchirp))
+		sngl_inspiral_table.sort(lambda a, b: cmp(a.mchirp, b.mchirp))
 	elif options.sort_by=='ffinal':
         	sngl_inspiral_table.sort(lambda a, b: cmp(a.f_final, b.f_final))
 	elif options.sort_by=='chirptime':
