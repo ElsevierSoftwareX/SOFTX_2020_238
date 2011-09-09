@@ -92,7 +92,7 @@ def uniform_log(a, b):
 
 def power_law(a, b, n):
 	if n == -1:
-		raise ValueError, "require n != -1"
+		raise ValueError, "requires n != -1"
 	exponent = 1.0 / (n + 1.0)
 	return random.uniform(a**(1.0 / exponent), b**(1.0 / exponent))**exponent
 
@@ -169,7 +169,7 @@ while len(sim_burst_table) < N:
 	# duration, assume DOF = 2 (sine-Gaussian).  the extra .00001 is to
 	# protect against round-off giving the waveform slightly fewer than
 	# 2 degrees of freedom
-	glitch.duration = 2.00001 / (math.pi * glitch.bandwidth) * 1.0000152587890625
+	glitch.duration = 2.00001 / (math.pi * glitch.bandwidth)
 
 	# amplitude power law (note that energy needs to be scaled by the
 	# square of the frequency in order to maintain the peak amplitude
