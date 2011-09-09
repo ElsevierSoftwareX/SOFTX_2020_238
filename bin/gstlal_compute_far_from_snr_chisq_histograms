@@ -33,7 +33,7 @@ sqlite3.enable_callback_tracebacks(True)
 #
 
 def snr_distribution(size, startsnr):
-	return startsnr * random.power(2, size)**-1 # FIXME 3 or 2??
+	return startsnr * random.power(3, size)**-1 # 3 here actually means 2 :) according to scipy docs
 
 def noncentrality(snrs, prefactor):
 	return prefactor * random.rand(len(snrs)) * snrs**2 # FIXME power depends on dimensionality of the bank and the expectation for the mismatch for real signals
