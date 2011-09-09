@@ -175,7 +175,7 @@ while len(sim_burst_table) < N:
 	# square of the frequency in order to maintain the peak amplitude
 	# across the band;  the energy bounds are interpreted as being
 	# those at 100 Hz)
-	glitch.egw_over_rsquared = power_law(1e-17, 1e-7, options.slope**2) * (glitch.frequency / 100.0)**2
+	glitch.egw_over_rsquared = power_law(1e-11, 1e-4, options.slope**2) * (glitch.frequency / 100.0)**2
 	glitch.amplitude = glitch.hrss = None	# not used
 
 	# add to document
