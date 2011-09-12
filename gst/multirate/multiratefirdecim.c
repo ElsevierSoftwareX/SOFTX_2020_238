@@ -21,9 +21,9 @@
  */
 
 /**
- * SECTION:element-multiratefirinterp
+ * SECTION:element-multiratefirdecim
  *
- * Apply an FIR interpolation filter to a stream using a direct form polyphase
+ * Apply an FIR decimation filter to a stream using a direct form polyphase
  * implementation.
  */
 
@@ -35,9 +35,9 @@
 #include <gst/base/gstbasetransform.h>
 #include <string.h>
 
-#include "multiratefirinterp.h"
+#include "multiratefirdecim.h"
 
-#define GST_CAT_DEFAULT gst_multirate_fir_interp_debug
+#define GST_CAT_DEFAULT gst_multirate_fir_decim_debug
 GST_DEBUG_CATEGORY_STATIC (GST_CAT_DEFAULT);
 
 /* Filter signals and args */
@@ -54,7 +54,7 @@ enum
   PROP_LAG
 };
 
-static GstStaticPadTemplate gst_multirate_fir_interp_sink_template =
+static GstStaticPadTemplate gst_multirate_fir_decim_sink_template =
     GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
@@ -65,7 +65,7 @@ static GstStaticPadTemplate gst_multirate_fir_interp_sink_template =
         "channels = (int) [1, MAX]")
     );
 
-static GstStaticPadTemplate gst_multirate_fir_interp_src_template =
+static GstStaticPadTemplate gst_multirate_fir_decim_src_template =
     GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
@@ -77,58 +77,58 @@ static GstStaticPadTemplate gst_multirate_fir_interp_src_template =
     );
 
 #define DEBUG_INIT(bla) \
-  GST_DEBUG_CATEGORY_INIT (gst_multirate_fir_interp_debug, "multiratefirinterp", 0, "multiratefirinterp element");
+  GST_DEBUG_CATEGORY_INIT (gst_multirate_fir_decim_debug, "multiratefirdecim", 0, "multiratefirdecim element");
 
-GST_BOILERPLATE_FULL (GstMultirateFirInterp, gst_multirate_fir_interp, GstBaseTransform,
+GST_BOILERPLATE_FULL (GstMultirateFirDecim, gst_multirate_fir_decim, GstBaseTransform,
     GST_TYPE_BASE_TRANSFORM, DEBUG_INIT);
 
-static void gst_multirate_fir_interp_set_property (GObject * object, guint prop_id,
+static void gst_multirate_fir_decim_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
-static void gst_multirate_fir_interp_get_property (GObject * object, guint prop_id,
+static void gst_multirate_fir_decim_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
-static void gst_multirate_fir_interp_finalize (GObject * object);
+static void gst_multirate_fir_decim_finalize (GObject * object);
 
-static gboolean gst_multirate_fir_interp_set_caps (GstBaseTransform * base,
+static gboolean gst_multirate_fir_decim_set_caps (GstBaseTransform * base,
     GstCaps * incaps, GstCaps * outcaps);
 static GstCaps *
-gst_multirate_fir_interp_transform_caps (GstBaseTransform * base,
+gst_multirate_fir_decim_transform_caps (GstBaseTransform * base,
     GstPadDirection direction, GstCaps * caps);
 static gboolean
-gst_multirate_fir_interp_transform_size (GstBaseTransform * base,
+gst_multirate_fir_decim_transform_size (GstBaseTransform * base,
     GstPadDirection direction, GstCaps * caps, guint size, GstCaps * othercaps,
     guint * othersize);
-static gboolean gst_multirate_fir_interp_start (GstBaseTransform * base);
-static gboolean gst_multirate_fir_interp_event (GstBaseTransform * base,
+static gboolean gst_multirate_fir_decim_start (GstBaseTransform * base);
+static gboolean gst_multirate_fir_decim_event (GstBaseTransform * base,
     GstEvent * event);
-static GstFlowReturn gst_multirate_fir_interp_transform (GstBaseTransform * base,
+static GstFlowReturn gst_multirate_fir_decim_transform (GstBaseTransform * base,
     GstBuffer * inbuf, GstBuffer * outbuf);
 
 /* GObject vmethod implementations */
 
 static void
-gst_multirate_fir_interp_base_init (gpointer klass)
+gst_multirate_fir_decim_base_init (gpointer klass)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
 
   gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_multirate_fir_interp_sink_template));
+      gst_static_pad_template_get (&gst_multirate_fir_decim_sink_template));
   gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_multirate_fir_interp_src_template));
-  gst_element_class_set_details_simple (element_class, "Multirate FIR interpolator",
+      gst_static_pad_template_get (&gst_multirate_fir_decim_src_template));
+  gst_element_class_set_details_simple (element_class, "Multirate FIR decimator",
       "Filter/Audio",
-      "Interpolate an audio stream using a direct form polyphase FIR interpolator",
+      "Decimate an audio stream using a direct form polyphase FIR decimator",
       "Leo Singer <leo.singer@ligo.org>");
 }
 
 static void
-gst_multirate_fir_interp_class_init (GstMultirateFirInterpClass * klass)
+gst_multirate_fir_decim_class_init (GstMultirateFirDecimClass * klass)
 {
   GObjectClass *gobject_class;
 
   gobject_class = (GObjectClass *) klass;
-  gobject_class->set_property = gst_multirate_fir_interp_set_property;
-  gobject_class->get_property = gst_multirate_fir_interp_get_property;
-  gobject_class->finalize = gst_multirate_fir_interp_finalize;
+  gobject_class->set_property = gst_multirate_fir_decim_set_property;
+  gobject_class->get_property = gst_multirate_fir_decim_get_property;
+  gobject_class->finalize = gst_multirate_fir_decim_finalize;
 
   g_object_class_install_property (gobject_class, PROP_KERNEL,
       g_param_spec_value_array ("kernel", "Filter Kernel",
@@ -147,34 +147,31 @@ gst_multirate_fir_interp_class_init (GstMultirateFirInterpClass * klass)
           G_PARAM_STATIC_STRINGS));
 
   GST_BASE_TRANSFORM_CLASS (klass)->set_caps =
-      GST_DEBUG_FUNCPTR (gst_multirate_fir_interp_set_caps);
+      GST_DEBUG_FUNCPTR (gst_multirate_fir_decim_set_caps);
   GST_BASE_TRANSFORM_CLASS (klass)->transform_caps =
-      GST_DEBUG_FUNCPTR (gst_multirate_fir_interp_transform_caps);
+      GST_DEBUG_FUNCPTR (gst_multirate_fir_decim_transform_caps);
   GST_BASE_TRANSFORM_CLASS (klass)->transform_size =
-      GST_DEBUG_FUNCPTR (gst_multirate_fir_interp_transform_size);
+      GST_DEBUG_FUNCPTR (gst_multirate_fir_decim_transform_size);
   GST_BASE_TRANSFORM_CLASS (klass)->start =
-      GST_DEBUG_FUNCPTR (gst_multirate_fir_interp_start);
+      GST_DEBUG_FUNCPTR (gst_multirate_fir_decim_start);
   GST_BASE_TRANSFORM_CLASS (klass)->event =
-      GST_DEBUG_FUNCPTR (gst_multirate_fir_interp_event);
+      GST_DEBUG_FUNCPTR (gst_multirate_fir_decim_event);
   GST_BASE_TRANSFORM_CLASS (klass)->transform =
-      GST_DEBUG_FUNCPTR (gst_multirate_fir_interp_transform);
+      GST_DEBUG_FUNCPTR (gst_multirate_fir_decim_transform);
 }
 
 static void
-gst_multirate_fir_interp_init (GstMultirateFirInterp * filter, GstMultirateFirInterpClass * klass)
+gst_multirate_fir_decim_init (GstMultirateFirDecim * filter, GstMultirateFirDecimClass * klass)
 {
   filter->adapter = gst_adapter_new ();
 }
 
-static void gst_multirate_fir_interp_finalize (GObject * object)
+static void gst_multirate_fir_decim_finalize (GObject * object)
 {
-  GstMultirateFirInterp * self = GST_MULTIRATE_FIR_INTERP (object);
+  GstMultirateFirDecim * self = GST_MULTIRATE_FIR_DECIM (object);
 
   g_free (self->kernel);
   self->kernel = NULL;
-  g_free (self->reordered_kernel);
-  self->reordered_kernel = NULL;
-  self->kernel_ptr = NULL;
   if (self->adapter) {
     g_object_unref (self->adapter);
     self->adapter = NULL;
@@ -184,10 +181,10 @@ static void gst_multirate_fir_interp_finalize (GObject * object)
 }
 
 static void
-gst_multirate_fir_interp_set_property (GObject * object, guint prop_id,
+gst_multirate_fir_decim_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstMultirateFirInterp *filter = GST_MULTIRATE_FIR_INTERP (object);
+  GstMultirateFirDecim *filter = GST_MULTIRATE_FIR_DECIM (object);
 
   GST_OBJECT_LOCK (filter);
 
@@ -198,8 +195,6 @@ gst_multirate_fir_interp_set_property (GObject * object, guint prop_id,
         GValueArray *va = g_value_get_boxed (value);
         filter->kernel_length = va->n_values;
         g_free (filter->kernel);
-        g_free (filter->reordered_kernel);
-        filter->reordered_kernel = NULL;
         filter->kernel = g_new (double, filter->kernel_length);
         for (i = 0; i < filter->kernel_length; i ++)
           filter->kernel[i] = g_value_get_double (g_value_array_get_nth (va, i));
@@ -217,10 +212,10 @@ gst_multirate_fir_interp_set_property (GObject * object, guint prop_id,
 }
 
 static void
-gst_multirate_fir_interp_get_property (GObject * object, guint prop_id,
+gst_multirate_fir_decim_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  GstMultirateFirInterp *filter = GST_MULTIRATE_FIR_INTERP (object);
+  GstMultirateFirDecim *filter = GST_MULTIRATE_FIR_DECIM (object);
 
   GST_OBJECT_LOCK (filter);
 
@@ -236,10 +231,10 @@ gst_multirate_fir_interp_get_property (GObject * object, guint prop_id,
 
 /* GstBaseTransform vmethod implementations */
 static gboolean
-gst_multirate_fir_interp_set_caps (GstBaseTransform * base,
+gst_multirate_fir_decim_set_caps (GstBaseTransform * base,
     GstCaps * incaps, GstCaps * outcaps)
 {
-  GstMultirateFirInterp *filter = GST_MULTIRATE_FIR_INTERP (base);
+  GstMultirateFirDecim *filter = GST_MULTIRATE_FIR_DECIM (base);
   GstStructure *instruct, *outstruct;
   gint inchannels, inrate, outchannels, outrate;
 
@@ -255,43 +250,40 @@ gst_multirate_fir_interp_set_caps (GstBaseTransform * base,
       gst_structure_get_int (outstruct, "rate", &outrate), FALSE);
 
   g_return_val_if_fail (inchannels == outchannels, FALSE);
-  g_return_val_if_fail (outrate >= inrate, FALSE);
-  g_return_val_if_fail (outrate % inrate == 0, FALSE);
+  g_return_val_if_fail (inrate >= outrate, FALSE);
+  g_return_val_if_fail (inrate % outrate == 0, FALSE);
 
   filter->inrate = inrate;
   filter->outrate = outrate;
   filter->channels = inchannels;
-  filter->upsample_factor = outrate / inrate;
-  g_free (filter->reordered_kernel);
-  filter->reordered_kernel = NULL;
+  filter->downsample_factor = inrate / outrate;
 
   return TRUE;
 }
 
 static gboolean
-gst_multirate_fir_interp_start (GstBaseTransform * base)
+gst_multirate_fir_decim_start (GstBaseTransform * base)
 {
-  GstMultirateFirInterp *filter = GST_MULTIRATE_FIR_INTERP (base);
+  GstMultirateFirDecim *filter = GST_MULTIRATE_FIR_DECIM (base);
 
   filter->samples = 0;
   filter->needs_timestamp = TRUE;
-  filter->kernel_ptr = filter->reordered_kernel;
   gst_adapter_clear (filter->adapter);
 
   return TRUE;
 }
 
 static gboolean
-gst_multirate_fir_interp_transform_size (GstBaseTransform * base,
+gst_multirate_fir_decim_transform_size (GstBaseTransform * base,
     GstPadDirection direction, GstCaps * caps, guint size, GstCaps * othercaps,
     guint * othersize)
 {
-  GstMultirateFirInterp *filter = GST_MULTIRATE_FIR_INTERP (base);
+  GstMultirateFirDecim *filter = GST_MULTIRATE_FIR_DECIM (base);
 
   if (direction == GST_PAD_SINK)
-    *othersize = size * filter->upsample_factor;
+    *othersize = size / filter->downsample_factor;
   else if (direction == GST_PAD_SRC)
-    *othersize = size / filter->upsample_factor;
+    *othersize = size * filter->downsample_factor;
   else
     return FALSE;
 
@@ -299,7 +291,7 @@ gst_multirate_fir_interp_transform_size (GstBaseTransform * base,
 }
 
 static GstCaps *
-gst_multirate_fir_interp_transform_caps (GstBaseTransform * base,
+gst_multirate_fir_decim_transform_caps (GstBaseTransform * base,
     GstPadDirection direction, GstCaps * caps)
 {
   GstCaps *othercaps = gst_caps_copy (caps);
@@ -311,39 +303,15 @@ gst_multirate_fir_interp_transform_caps (GstBaseTransform * base,
 }
 
 static GstFlowReturn
-gst_multirate_fir_interp_push_residue (GstMultirateFirInterp * filter)
+gst_multirate_fir_decim_push_residue (GstMultirateFirDecim * filter)
 {
   GstBaseTransform *base = GST_BASE_TRANSFORM (filter);
   GstBuffer *inbuf, *outbuf;
-  double *indata, *outdata, *outend, *kernelend;
-  gint phase;
-  guint i, j;
-  guint availsize;
+  double *indata, *outdata, *outend;
+  guint i;
+  guint insize, availsize, insamples;
   gint channel;
-  guint minsize;
-
-  /* Reorder kernel so that polyphase components are grouped together. */
-  if (G_UNLIKELY (!(filter->reordered_kernel))) {
-    if (G_UNLIKELY (!(filter->kernel))) {
-      GST_ERROR_OBJECT (filter, "kernel not set");
-      return GST_FLOW_ERROR;
-    }
-
-    filter->reordered_kernel_length = gst_util_uint64_scale_int_ceil (
-        filter->kernel_length, 1, filter->upsample_factor) *
-        filter->upsample_factor;
-
-    /* FIXME: don't force the kernel length to be a multiple of the upsampling factor. */
-    filter->reordered_kernel = g_new (double, filter->reordered_kernel_length);
-    for (phase = filter->upsample_factor - 1, i = 0; phase >= 0; phase --) {
-      for (j = phase; j < filter->reordered_kernel_length; j += filter->upsample_factor, i++) {
-        if (G_LIKELY (j < filter->kernel_length))
-          filter->reordered_kernel[i] = filter->kernel[filter->kernel_length - j - 1];
-      }
-    }
-    filter->kernel_ptr = filter->reordered_kernel;
-  }
-  minsize = filter->reordered_kernel_length * filter->channels * sizeof(double) / filter->upsample_factor;
+  guint minsize = filter->kernel_length * filter->channels * sizeof(double);
 
   /* Put inbuf into adapter. We have to ref inbuf because gst_adapter_push takes
    ownership of it, but transform() is not responsible for unreffing it. */
@@ -359,63 +327,59 @@ gst_multirate_fir_interp_push_residue (GstMultirateFirInterp * filter)
     GST_WARNING_OBJECT (filter, "not enough data in adapter to produce output");
     return GST_BASE_TRANSFORM_FLOW_DROPPED;
   }
-  outbuf = gst_buffer_new_and_alloc ((availsize - minsize) * filter->upsample_factor);
+  insamples = (availsize - minsize) / (sizeof(double) * filter->channels);
+  outbuf = gst_buffer_new_and_alloc (insamples / filter->downsample_factor * (sizeof(double) * filter->channels));
   gst_buffer_set_caps (outbuf, GST_PAD_CAPS (GST_BASE_TRANSFORM_SRC_PAD (base)));
+  insize = GST_BUFFER_SIZE (outbuf) * filter->downsample_factor;
   indata = (double *) gst_adapter_peek (filter->adapter, availsize);
-  kernelend = filter->reordered_kernel + filter->reordered_kernel_length;
   outdata = (double *) GST_BUFFER_DATA (outbuf);
   outend = (double *) ((guint8 *) outdata + GST_BUFFER_SIZE (outbuf));
   memset (outdata, 0, GST_BUFFER_SIZE (outbuf));
 
   /* Evaluate filter. */
   for (; outdata < outend; outdata += filter->channels) {
-    for (i = 0; i < filter->reordered_kernel_length / filter->upsample_factor; i ++) {
+    for (i = 0; i < filter->kernel_length; i ++) {
       for (channel = 0; channel < filter->channels; channel++) {
-        *(outdata + channel) += *(indata + i * filter->channels + channel) * (*filter->kernel_ptr);
-      }
-      if (G_UNLIKELY (++filter->kernel_ptr >= kernelend)) {
-        filter->kernel_ptr = filter->reordered_kernel;
-        indata += filter->channels;
+        *(outdata + channel) += *(indata + i * filter->channels + channel) * filter->kernel[filter->kernel_length - 1 - i];
       }
     }
+    indata += filter->downsample_factor * filter->channels;
   }
 
   /* Throw away the contents of the adapter that we have consumed. */
-  gst_adapter_flush (filter->adapter, availsize - minsize);
+  gst_adapter_flush (filter->adapter, insize);
 
   /* Set buffer metadata. */
   if (G_LIKELY (filter->offset0 != GST_BUFFER_OFFSET_NONE))
-    GST_BUFFER_OFFSET (outbuf) = filter->offset0 + filter->samples * filter->upsample_factor;
+    GST_BUFFER_OFFSET (outbuf) = filter->offset0 + filter->samples;
   if (G_LIKELY (GST_CLOCK_TIME_IS_VALID (filter->t0)))
-    GST_BUFFER_TIMESTAMP (outbuf) = filter->t0 + gst_util_uint64_scale_int_round(filter->samples * filter->upsample_factor, GST_SECOND, filter->outrate);
-  filter->samples += (availsize - minsize) / (sizeof(double) * filter->channels);
+    GST_BUFFER_TIMESTAMP (outbuf) = filter->t0 + gst_util_uint64_scale_int_round(filter->samples, GST_SECOND, filter->outrate);
+  filter->samples += GST_BUFFER_SIZE (outbuf) / (sizeof(double) * filter->channels);
   if (G_LIKELY (filter->offset0 != GST_BUFFER_OFFSET_NONE))
-    GST_BUFFER_OFFSET_END (outbuf) = filter->offset0 + filter->samples * filter->upsample_factor;
-  GST_BUFFER_DURATION (outbuf) = gst_util_uint64_scale_int_round((availsize - minsize) / (sizeof(double) * filter->channels) * filter->upsample_factor, GST_SECOND, filter->outrate);
+    GST_BUFFER_OFFSET_END (outbuf) = filter->offset0 + filter->samples;
+  GST_BUFFER_DURATION (outbuf) = gst_util_uint64_scale_int_round(GST_BUFFER_SIZE (outbuf) / (sizeof(double) * filter->channels), GST_SECOND, filter->outrate);
 
   /* Done. */
   return gst_pad_push (GST_BASE_TRANSFORM_SRC_PAD (base), outbuf);
 }
 
 static gboolean
-gst_multirate_fir_interp_event (GstBaseTransform * base, GstEvent * event)
+gst_multirate_fir_decim_event (GstBaseTransform * base, GstEvent * event)
 {
-  GstMultirateFirInterp *filter = GST_MULTIRATE_FIR_INTERP (base);
+  GstMultirateFirDecim *filter = GST_MULTIRATE_FIR_DECIM (base);
 
   switch (GST_EVENT_TYPE (event)) {
     case GST_EVENT_EOS:
       GST_INFO_OBJECT (filter, "pushing residue");
-      if (G_UNLIKELY (gst_multirate_fir_interp_push_residue (filter) != GST_FLOW_OK))
+      if (G_UNLIKELY (gst_multirate_fir_decim_push_residue (filter) != GST_FLOW_OK))
         GST_ERROR_OBJECT (filter, "failed to push residue");
       filter->samples = 0;
       filter->needs_timestamp = TRUE;
-      filter->kernel_ptr = filter->reordered_kernel;
       gst_adapter_clear (filter->adapter);
       break;
     case GST_EVENT_NEWSEGMENT:
       filter->samples = 0;
       filter->needs_timestamp = TRUE;
-      filter->kernel_ptr = filter->reordered_kernel;
       gst_adapter_clear (filter->adapter);
       break;
     default:
@@ -426,39 +390,15 @@ gst_multirate_fir_interp_event (GstBaseTransform * base, GstEvent * event)
 }
 
 static GstFlowReturn
-gst_multirate_fir_interp_transform (GstBaseTransform * base, GstBuffer * inbuf,
+gst_multirate_fir_decim_transform (GstBaseTransform * base, GstBuffer * inbuf,
     GstBuffer * outbuf)
 {
-  GstMultirateFirInterp *filter = GST_MULTIRATE_FIR_INTERP (base);
-  double *indata, *outdata, *outend, *kernelend;
-  gint phase;
-  guint i, j;
-  guint availsize;
+  GstMultirateFirDecim *filter = GST_MULTIRATE_FIR_DECIM (base);
+  double *indata, *outdata, *outend;
+  guint i;
+  guint insize, availsize, insamples;
   gint channel;
-  guint minsize;
-
-  /* Reorder kernel so that polyphase components are grouped together. */
-  if (G_UNLIKELY (!(filter->reordered_kernel))) {
-    if (G_UNLIKELY (!(filter->kernel))) {
-      GST_ERROR_OBJECT (filter, "kernel not set");
-      return GST_FLOW_ERROR;
-    }
-
-    filter->reordered_kernel_length = gst_util_uint64_scale_int_ceil (
-        filter->kernel_length, 1, filter->upsample_factor) *
-        filter->upsample_factor;
-
-    /* FIXME: don't force the kernel length to be a multiple of the upsampling factor. */
-    filter->reordered_kernel = g_new (double, filter->reordered_kernel_length);
-    for (phase = filter->upsample_factor - 1, i = 0; phase >= 0; phase --) {
-      for (j = phase; j < filter->reordered_kernel_length; j += filter->upsample_factor, i++) {
-        if (G_LIKELY (j < filter->kernel_length))
-          filter->reordered_kernel[i] = filter->kernel[filter->kernel_length - j - 1];
-      }
-    }
-    filter->kernel_ptr = filter->reordered_kernel;
-  }
-  minsize = filter->reordered_kernel_length * filter->channels * sizeof(double) / filter->upsample_factor;
+  guint minsize = filter->kernel_length * filter->channels * sizeof(double);
 
   /* Store initial timestamp and offset if this is the first buffer. */
   if (G_UNLIKELY (filter->needs_timestamp)) {
@@ -484,38 +424,36 @@ gst_multirate_fir_interp_transform (GstBaseTransform * base, GstBuffer * inbuf,
     GST_WARNING_OBJECT (filter, "not enough data in adapter to produce output");
     return GST_BASE_TRANSFORM_FLOW_DROPPED;
   }
-  GST_BUFFER_SIZE (outbuf) = (availsize - minsize) * filter->upsample_factor;
+  insamples = (availsize - minsize) / (sizeof(double) * filter->channels);
+  GST_BUFFER_SIZE (outbuf) = insamples / filter->downsample_factor * (sizeof(double) * filter->channels);
+  insize = GST_BUFFER_SIZE (outbuf) * filter->downsample_factor;
   indata = (double *) gst_adapter_peek (filter->adapter, availsize);
-  kernelend = filter->reordered_kernel + filter->reordered_kernel_length;
   outdata = (double *) GST_BUFFER_DATA (outbuf);
   outend = (double *) ((guint8 *) outdata + GST_BUFFER_SIZE (outbuf));
   memset (outdata, 0, GST_BUFFER_SIZE (outbuf));
 
   /* Evaluate filter. */
   for (; outdata < outend; outdata += filter->channels) {
-    for (i = 0; i < filter->reordered_kernel_length / filter->upsample_factor; i ++) {
+    for (i = 0; i < filter->kernel_length; i ++) {
       for (channel = 0; channel < filter->channels; channel++) {
-        *(outdata + channel) += *(indata + i * filter->channels + channel) * (*filter->kernel_ptr);
-      }
-      if (G_UNLIKELY (++filter->kernel_ptr >= kernelend)) {
-        filter->kernel_ptr = filter->reordered_kernel;
-        indata += filter->channels;
+        *(outdata + channel) += *(indata + i * filter->channels + channel) * filter->kernel[filter->kernel_length - 1 - i];
       }
     }
+    indata += filter->downsample_factor * filter->channels;
   }
 
   /* Throw away the contents of the adapter that we have consumed. */
-  gst_adapter_flush (filter->adapter, availsize - minsize);
+  gst_adapter_flush (filter->adapter, insize);
 
   /* Set buffer metadata. */
   if (G_LIKELY (filter->offset0 != GST_BUFFER_OFFSET_NONE))
-    GST_BUFFER_OFFSET (outbuf) = filter->offset0 + filter->samples * filter->upsample_factor;
+    GST_BUFFER_OFFSET (outbuf) = filter->offset0 + filter->samples;
   if (G_LIKELY (GST_CLOCK_TIME_IS_VALID (filter->t0)))
-    GST_BUFFER_TIMESTAMP (outbuf) = filter->t0 + gst_util_uint64_scale_int_round(filter->samples * filter->upsample_factor, GST_SECOND, filter->outrate);
-  filter->samples += (availsize - minsize) / (sizeof(double) * filter->channels);
+    GST_BUFFER_TIMESTAMP (outbuf) = filter->t0 + gst_util_uint64_scale_int_round(filter->samples, GST_SECOND, filter->outrate);
+  filter->samples += GST_BUFFER_SIZE (outbuf) / (sizeof(double) * filter->channels);
   if (G_LIKELY (filter->offset0 != GST_BUFFER_OFFSET_NONE))
-    GST_BUFFER_OFFSET_END (outbuf) = filter->offset0 + filter->samples * filter->upsample_factor;
-  GST_BUFFER_DURATION (outbuf) = gst_util_uint64_scale_int_round((availsize - minsize) / (sizeof(double) * filter->channels) * filter->upsample_factor, GST_SECOND, filter->outrate);
+    GST_BUFFER_OFFSET_END (outbuf) = filter->offset0 + filter->samples;
+  GST_BUFFER_DURATION (outbuf) = gst_util_uint64_scale_int_round(GST_BUFFER_SIZE (outbuf) / (sizeof(double) * filter->channels), GST_SECOND, filter->outrate);
 
   /* Done. */
   return GST_FLOW_OK;
