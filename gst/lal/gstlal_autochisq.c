@@ -72,6 +72,9 @@
 GST_DEBUG_CATEGORY(gstlal_autochisq_debug);
 
 
+#define GSTLAL_MALLOC_GAPS
+
+
 /*
  * ============================================================================
  *
@@ -809,10 +812,11 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		gst_audioadapter_flush(element->adapter, output_length);
-		/* FIXME:  this is needed if used in pipelines that don't
-		 * understand gaps at all */
+#ifdef GSTLAL_MALLOC_GAPS
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
-		/*GST_BUFFER_SIZE(outbuf) = 0;*/	/* prepare_output_buffer() lied.  tell the truth */
+#else
+		GST_BUFFER_SIZE(outbuf) = 0;	/* prepare_output_buffer() lied.  tell the truth */
+#endif
 		set_metadata(element, outbuf, output_length, TRUE);
 		GST_DEBUG_OBJECT(element, "output is %u sample gap", output_length);
 	} else if(zeros_in_adapter < autocorrelation_length(element)) {
@@ -860,10 +864,11 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		g_mutex_lock(element->autocorrelation_lock);
 
 		gst_audioadapter_flush(element->adapter, gap_length);
-		/* FIXME:  this is needed if used in pipelines that don't
-		 * understand gaps at all */
+#ifdef GSTLAL_MALLOC_GAPS
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
-		/*GST_BUFFER_SIZE(outbuf) = 0;*/	/* prepare_output_buffer() lied.  tell the truth */
+#else
+		GST_BUFFER_SIZE(outbuf) = 0;	/* prepare_output_buffer() lied.  tell the truth */
+#endif
 		set_metadata(element, outbuf, gap_length, TRUE);
 	}
 	g_mutex_unlock(element->autocorrelation_lock);
@@ -899,9 +904,11 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *i
 
 	output_is_gap = input_is_gap && (history_is_gap || zeros_in_adapter >= autocorrelation_length(element));
 
-	/* FIXME:  put back commented-out code when GstLALCollectPads
-	 * supports non-malloc()ed gaps */
-	result = gst_pad_alloc_buffer(GST_BASE_TRANSFORM_SRC_PAD(trans), GST_BUFFER_OFFSET(input), /*output_is_gap ? 0 :*/ size, caps, buf);
+#ifdef GSTLAL_MALLOC_GAPS
+	result = gst_pad_alloc_buffer(GST_BASE_TRANSFORM_SRC_PAD(trans), GST_BUFFER_OFFSET(input), size, caps, buf);
+#else
+	result = gst_pad_alloc_buffer(GST_BASE_TRANSFORM_SRC_PAD(trans), GST_BUFFER_OFFSET(input), output_is_gap ? 0 : size, caps, buf);
+#endif
 	if(result != GST_FLOW_OK)
 		goto done;
 
