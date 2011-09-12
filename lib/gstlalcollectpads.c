@@ -257,7 +257,7 @@ static GstClockTime compute_t_end(GstLALCollectData *data, GstBuffer *buf, gint 
 {
 	/* FIXME:  could use GST_FRAMES_TO_CLOCK_TIME() but that macro is
 	 * defined in gst-plugins-base */
-	return GST_BUFFER_TIMESTAMP(buf) + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf), GST_SECOND, rate);
+	return GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf);
 }
 
 
@@ -308,13 +308,13 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 		 */
 
 		if(!GST_BUFFER_OFFSET_IS_VALID(buf) || !GST_BUFFER_OFFSET_END_IS_VALID(buf)) {
-			GST_ERROR_OBJECT(pads, "%" GST_PTR_FORMAT ": %" GST_PTR_FORMAT " does not have a valid offsets", ((GstCollectData *) data)->pad, buf);
+			GST_ERROR_OBJECT(pads, "%" GST_PTR_FORMAT ": %" GST_PTR_FORMAT " does not have valid offsets", ((GstCollectData *) data)->pad, buf);
 			gst_buffer_unref(buf);
 			return FALSE;
 		}
 
-		if(!GST_BUFFER_TIMESTAMP_IS_VALID(buf)) {
-			GST_ERROR_OBJECT(pads, "%" GST_PTR_FORMAT ": %" GST_PTR_FORMAT " does not have a valid timestamp", ((GstCollectData *) data)->pad, buf);
+		if(!GST_BUFFER_TIMESTAMP_IS_VALID(buf) || !GST_BUFFER_DURATION_IS_VALID(buf)) {
+			GST_ERROR_OBJECT(pads, "%" GST_PTR_FORMAT ": %" GST_PTR_FORMAT " does not have a valid timestamp and/or duration", ((GstCollectData *) data)->pad, buf);
 			gst_buffer_unref(buf);
 			return FALSE;
 		}
@@ -386,7 +386,8 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 {
 	GstBuffer *buf;
 	guint64 offset;
-	GstClockTime t_start;
+	GstClockTime buf_t_start, buf_t_end;
+	gboolean is_gap, is_malloced;
 	guint64 units;
 
 	/*
@@ -399,7 +400,8 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 	g_return_val_if_fail(data->unit_size != 0, NULL);
 
 	/*
-	 * retrieve the start time of the next buffer to be dequeued.
+	 * retrieve the start and end time of the next buffer to be
+	 * dequeued.
 	 */
 
 	buf = gst_collect_pads_peek(pads, (GstCollectData *) data);
@@ -409,8 +411,17 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 		 */
 		return NULL;
 	offset = GST_BUFFER_OFFSET(buf) + ((GstCollectData *) data)->pos / data->unit_size;
-	t_start = compute_t_start(data, buf, rate);
+	buf_t_start = compute_t_start(data, buf, rate);
+	buf_t_end = compute_t_end(data, buf, rate);
+	is_gap = GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP);
+	is_malloced = GST_BUFFER_SIZE(buf) != 0;
 	gst_buffer_unref(buf);
+
+	/*
+	 * more checks
+	 */
+
+	g_return_val_if_fail(t_end <= buf_t_end, NULL);
 
 	/*
 	 * compute the number of units to request from the queued buffer.
@@ -420,20 +431,37 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 
 	/* FIXME:  could use GST_CLOCK_TIME_TO_FRAMES() but that macro is
 	 * defined in gst-plugins-base */
-	units = t_end < t_start ? 0 : gst_util_uint64_scale_int_round(t_end - t_start, rate, GST_SECOND);
+	units = t_end < buf_t_start ? 0 : gst_util_uint64_scale_int_round(t_end - buf_t_start, rate, GST_SECOND);
 	GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "(%s): requesting %" G_GUINT64_FORMAT " units\n", GST_PAD_NAME(((GstCollectData *) data)->pad), units);
 
 	/*
 	 * retrieve a buffer
 	 */
 
-	buf = gst_collect_pads_take_buffer(pads, (GstCollectData *) data, units * data->unit_size);
-	if(!buf)
-		/*
-		 * EOS or no data (probably impossible, because we would've
-		 * detected this above, but might as well check again)
-		 */
-		return NULL;
+	if(is_gap && !is_malloced) {
+		/* FIXME:  the underlying GstCollectData class should
+		 * handle this itself.  the need to do so is independent of
+		 * the synchronization-related work going on here.  this
+		 * probably starts by teaching gst_buffer_create_sub() to
+		 * do the right things with non-malloc()ed buffers */
+		GstBuffer *source = gst_collect_pads_peek(pads, (GstCollectData *) data);
+		buf = gst_buffer_new();
+		gst_buffer_copy_metadata(buf, source, GST_BUFFER_COPY_ALL);
+		((GstCollectData *) data)->pos += units * data->unit_size;
+		if(((GstCollectData *) data)->pos / data->unit_size >= GST_BUFFER_OFFSET_END(source) - GST_BUFFER_OFFSET(source)) {
+			gst_buffer_unref(gst_collect_pads_pop(pads, (GstCollectData *) data));
+			/*gst_collect_pads_clear (pads, (GstCollectData *) data);*/
+		}
+		gst_buffer_unref(source);
+	} else {
+		buf = gst_collect_pads_take_buffer(pads, (GstCollectData *) data, units * data->unit_size);
+		/* this would normally indicate EOS, but it's impossible
+		 * here because we would've seen this already up above */
+		g_assert(buf != NULL);
+		/* it should be impossible to not get what we asked for */
+		g_assert(GST_BUFFER_SIZE(buf) == units * data->unit_size);
+	}
+	g_assert(GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP) == is_gap);
 
 	/*
 	 * set the buffer's start and end offsets and time stamp and
@@ -442,13 +470,13 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 
 	buf = gst_buffer_make_metadata_writable(buf);
 	GST_BUFFER_OFFSET(buf) = offset;
-	GST_BUFFER_OFFSET_END(buf) = offset + GST_BUFFER_SIZE(buf) / data->unit_size;
-	GST_BUFFER_TIMESTAMP(buf) = t_start;
+	GST_BUFFER_OFFSET_END(buf) = offset + units;
+	GST_BUFFER_TIMESTAMP(buf) = buf_t_start;
 	/* FIXME:  could use GST_FRAMES_TO_CLOCK_TIME() but that macro is
 	 * defined in gst-plugins-base */
 	GST_BUFFER_DURATION(buf) = gst_util_uint64_scale_int_round(units, GST_SECOND, rate);
 
-	GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "(%s): returning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")\n", GST_PAD_NAME(((GstCollectData *) data)->pad), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buf)), GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(buf) + GST_BUFFER_DURATION(buf)));
+	GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "(%s): returning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_PAD_NAME(((GstCollectData *) data)->pad), GST_BUFFER_BOUNDARIES_ARGS(buf));
 
 	return buf;
 }
