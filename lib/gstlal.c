@@ -143,7 +143,7 @@ GValueArray *gstlal_g_value_array_from_ints(const gint *src, gint n)
  */
 
 
-guint64 *gstlal_ulong_from_g_value_array(GValueArray *va, guint64 *dest, gint *n)
+guint64 *gstlal_uint64s_from_g_value_array(GValueArray *va, guint64 *dest, gint *n)
 {
 	guint i;
 
@@ -158,6 +158,32 @@ guint64 *gstlal_ulong_from_g_value_array(GValueArray *va, guint64 *dest, gint *n
 	for(i = 0; i < va->n_values; i++)
 		dest[i] = g_value_get_uint64(g_value_array_get_nth(va, i));
 	return dest;
+}
+
+
+/**
+ * convert an array of guint64 to a GValueArray.  the return value is the
+ * newly allocated GValueArray object.
+ */
+
+
+GValueArray *gstlal_g_value_array_from_uint64s(const guint64 *src, gint n)
+{
+	GValueArray *va;
+	GValue v = {0,};
+	gint i;
+	g_value_init(&v, G_TYPE_UINT64);
+
+	if(!src)
+		return NULL;
+	va = g_value_array_new(n);
+	if(!va)
+		return NULL;
+	for(i = 0; i < n; i++) {
+		g_value_set_uint64(&v, src[i]);
+		g_value_array_append(va, &v);
+	}
+	return va;
 }
 
 
@@ -187,30 +213,6 @@ gdouble *gstlal_doubles_from_g_value_array(GValueArray *va, gdouble *dest, gint 
 	return dest;
 }
 
-/**
- * convert an array of doubles to a GValueArray.  the return value is the
- * newly allocated GValueArray object.
- */
-
-
-GValueArray *gstlal_g_value_array_from_ulong(const guint64 *src, gint n)
-{
-	GValueArray *va;
-	GValue v = {0,};
-	gint i;
-	g_value_init(&v, G_TYPE_UINT64);
-
-	if(!src)
-		return NULL;
-	va = g_value_array_new(n);
-	if(!va)
-		return NULL;
-	for(i = 0; i < n; i++) {
-		g_value_set_uint64(&v, src[i]);
-		g_value_array_append(va, &v);
-	}
-	return va;
-}
 
 /**
  * convert an array of doubles to a GValueArray.  the return value is the
@@ -439,7 +441,7 @@ gsl_matrix_ulong *gstlal_gsl_matrix_ulong_from_g_value_array(GValueArray *va)
 	if(!matrix)
 		/* allocation failure */
 		return NULL;
-	if(!gstlal_ulong_from_g_value_array(row, (guint64 *) gsl_matrix_ulong_ptr(matrix, 0, 0), NULL)) {
+	if(!gstlal_uint64s_from_g_value_array(row, (guint64 *) gsl_matrix_ulong_ptr(matrix, 0, 0), NULL)) {
 		/* row conversion failure */
 		gsl_matrix_ulong_free(matrix);
 		return NULL;
@@ -451,7 +453,7 @@ gsl_matrix_ulong *gstlal_gsl_matrix_ulong_from_g_value_array(GValueArray *va)
 			gsl_matrix_ulong_free(matrix);
 			return NULL;
 		}
-		if(!gstlal_ulong_from_g_value_array(row, (guint64 *) gsl_matrix_ulong_ptr(matrix, i, 0), NULL)) {
+		if(!gstlal_uint64s_from_g_value_array(row, (guint64 *) gsl_matrix_ulong_ptr(matrix, i, 0), NULL)) {
 			/* row conversion failure */
 			gsl_matrix_ulong_free(matrix);
 			return NULL;
@@ -528,7 +530,7 @@ GValueArray *gstlal_g_value_array_from_gsl_matrix_ulong(const gsl_matrix_ulong *
 	if(!va)
 		return NULL;
 	for(i = 0; i < matrix->size1; i++) {
-		g_value_take_boxed(&v, gstlal_g_value_array_from_ulong((guint64*) gsl_matrix_ulong_const_ptr(matrix, i, 0), matrix->size2));
+		g_value_take_boxed(&v, gstlal_g_value_array_from_uint64s((guint64*) gsl_matrix_ulong_const_ptr(matrix, i, 0), matrix->size2));
 		g_value_array_append(va, &v);
 	}
 	return va;

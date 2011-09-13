@@ -60,10 +60,10 @@ gsl_matrix_int *gstlal_gsl_matrix_int_from_g_value_array(GValueArray *);
 GValueArray *gstlal_g_value_array_from_gsl_matrix_int(const gsl_matrix_int *);
 
 /* long unsigned int type FIXME add vector support */
-guint64 *gstlal_ulong_from_g_value_array(GValueArray *, guint64 *, gint *);
+guint64 *gstlal_uint64s_from_g_value_array(GValueArray *, guint64 *, gint *);
 gsl_matrix_ulong *gstlal_gsl_matrix_ulong_from_g_value_array(GValueArray *);
 GValueArray *gstlal_g_value_array_from_gsl_matrix_ulong(const gsl_matrix_ulong *);
-GValueArray *gstlal_g_value_array_from_ulong(const guint64 *, gint);
+GValueArray *gstlal_g_value_array_from_uint64s(const guint64 *, gint);
 
 
 /* double type */
