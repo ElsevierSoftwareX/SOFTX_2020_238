@@ -250,8 +250,7 @@ class FAR(object):
 		input = {ifo1:(snr1,chisq1), ifo2:(snr2,chisq2)}
 		rank = self.compute_rank(input)
 		fap = self.fap_from_rank(rank)
-		# note the square! See Cannon et. al. 2011
-		fap = 1.0 - (1.0 - fap**2)**trials_factor
+		fap = 1.0 - (1.0 - fap)**trials_factor
 		return float(fap)
 
 	def compute_fap3(self, ifos, tsid, mass1, mass2, chi, ifo1, snr1, chisq1, ifo2, snr2, chisq2, ifo3, snr3, chisq3):
@@ -259,8 +258,7 @@ class FAR(object):
 		input = {ifo1:(snr1,chisq1), ifo2:(snr2,chisq2), ifo3:(snr3,chisq3)}
 		rank = self.compute_rank(input)
 		fap = self.fap_from_rank(rank)
-		# note the square! See Cannon et. al. 2011
-		fap = 1.0 - (1.0 - fap**2)**trials_factor
+		fap = 1.0 - (1.0 - fap)**trials_factor
 		return float(fap)
 
 	def FAR_from_FAP(self, fap, n = 1):
