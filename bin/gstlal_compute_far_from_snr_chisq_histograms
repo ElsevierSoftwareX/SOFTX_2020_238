@@ -45,7 +45,7 @@ def chisq_distribution(df, non_centralities, size):
 		out[i*size:(i+1)*size] = random.noncentral_chisquare(df, nc, size)
 	return out
 
-def populate_injections(bindict, prefactor = .1, df = 10, size = 1000000, verbose = True):
+def populate_injections(bindict, prefactor = .2, df = 8, size = 1000000, verbose = True):
 	for i, k in enumerate(bindict):
 		binarr = bindict[k]
 		if verbose:
