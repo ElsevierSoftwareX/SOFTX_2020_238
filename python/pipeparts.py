@@ -431,10 +431,9 @@ def mknxydumpsink(pipeline, src, filename, segment = None):
 	mkfilesink(pipeline, elem, filename)
 
 
-def mknxydumpsinktee(pipeline, src, filename, segment = None):
+def mknxydumpsinktee(pipeline, src, *args, **kwargs):
 	t = mktee(pipeline, src)
-	q = mkqueue(pipeline,t)
-	mknxydumpsink(pipeline,q,filename,segment)
+	mknxydumpsink(pipeline, mkqueue(pipeline, t), *args, **kwargs)
 	return t
 
 
