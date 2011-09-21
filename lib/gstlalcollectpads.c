@@ -272,6 +272,7 @@ gboolean gstlal_collect_pads_get_earliest_times(GstCollectPads *pads, GstClockTi
 
 	g_return_val_if_fail(t_start != NULL, FALSE);
 	g_return_val_if_fail(t_end != NULL, FALSE);
+	g_return_val_if_fail(rate > 0, FALSE);
 
 	*t_start = *t_end = G_MAXUINT64;
 
@@ -398,6 +399,7 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 	g_return_val_if_fail(GST_IS_COLLECT_PADS(pads), NULL);
 	g_return_val_if_fail(data != NULL, NULL);
 	g_return_val_if_fail(data->unit_size != 0, NULL);
+	g_return_val_if_fail(rate > 0, NULL);
 
 	/*
 	 * retrieve the start and end time of the next buffer to be
