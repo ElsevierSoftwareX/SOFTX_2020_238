@@ -692,15 +692,15 @@ def mkLLOIDSnrToAutoChisq(pipeline, snr, bank):
 	autocorrelation_length = bank.autocorrelation_bank.shape[1]
 	autocorrelation_latency = -(autocorrelation_length - 1) / 2
 
-	mask_matrix = numpy.ones(bank.autocorrelation_bank.shape, numpy.int)
-	stix = autocorrelation_latency - 10
-	mask_matrix[:,stix:] = 0
+	#mask_matrix = numpy.ones(bank.autocorrelation_bank.shape, numpy.int)
+	#stix = autocorrelation_latency - 10
+	#mask_matrix[:,stix:] = 0
 
 	#
 	# \chi^{2}
 	#
 
-	chisq = pipeparts.mkautochisq(pipeline, snr, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = mask_matrix, latency = autocorrelation_latency, snr_thresh = bank.snr_threshold)
+	chisq = pipeparts.mkautochisq(pipeline, snr, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = None, latency = autocorrelation_latency, snr_thresh = bank.snr_threshold)
 	chisq = pipeparts.mkchecktimestamps(pipeline, chisq, "timestamps_%s_chisq" % bank.logname)
 
 	#chisq = pipeparts.mktee(pipeline, chisq)
@@ -733,14 +733,13 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 #
 
 
-def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 10, control_peak_time = 10, block_duration = gst.SECOND):
+def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 16, block_duration = gst.SECOND):
 	#
 	# check for recognized value of chisq_type
 	#
 
 	if chisq_type not in ['autochisq', 'timeslicechisq']:
 		raise ValueError, "chisq_type must be either 'autochisq' or 'timeslicechisq', given %s" % (chisq_type)
-
 
 	#
 	# extract segments from the injection file for selected reconstruction
