@@ -41,7 +41,7 @@ def chisq_distribution(df, non_centralities, size):
 		out[i*size:(i+1)*size] = random.noncentral_chisquare(df, nc, size)
 	return out
 
-def populate_injections(bindict, prefactor = .2, df = 8, size = 1000000, verbose = True):
+def populate_injections(bindict, prefactor = .3, df = 24, size = 1000000, verbose = True):
 	for i, k in enumerate(bindict):
 		binarr = bindict[k]
 		if verbose:
@@ -60,7 +60,7 @@ def populate_injections(bindict, prefactor = .2, df = 8, size = 1000000, verbose
 
 def smooth_bins(bA):
 	#FIXME what is this window supposed to be??
-	wn = rate.gaussian_window2d(5, 5, sigma = 8)
+	wn = rate.gaussian_window2d(15, 15, sigma = 8)
 	rate.filter_array(bA.array.T, wn)
 	sum = bA.array.sum()
 	if sum != 0:
@@ -84,8 +84,9 @@ def count_to_rank(val, offset = 100):
 # Function to compute the fap in a given file
 #
 
-def set_fap(options, Far, f):
-	
+def set_fap(options, Far, f, rankoffset):
+	from glue.ligolw import dbtables
+
 	# set up working file names
 	working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
@@ -117,6 +118,8 @@ def set_fap(options, Far, f):
 #
 
 def set_far(options, Far, f):
+	from glue.ligolw import dbtables	
+	
 	working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
 		
@@ -178,7 +181,7 @@ class FAR(object):
 
 		for ifo in instruments:
 			# FIXME don't repeat calc by checking if it has been done??
-			nonzerorank[ifo] = count_to_rank(get_nonzero(linearize_array(counts[ifo+"_snr_chi"].array)), offset = self.rank_offset)
+			nonzerorank[ifo] = count_to_rank(get_nonzero(linearize_array(self.counts[ifo+"_snr_chi"].array)), offset = self.rank_offset)
 
 		nonzerorank = self.rankBins(nonzerorank, targetlen)
 		self.ranks, weights = self.possible_ranks_array(nonzerorank)
