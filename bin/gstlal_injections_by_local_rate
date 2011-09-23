@@ -60,7 +60,7 @@ for i,t in enumerate(time):
 	row = sim.RowType()
 	
 	# string paramters
-	row.waveform = "SpinTaylorthreePointFivePN"
+	row.waveform = "SpinTaylorFramelessthreePointFivePN"
 	row.source = ""
 	row.numrel_data = ""
 	row.taper = "TAPER_START"
