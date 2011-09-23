@@ -567,8 +567,6 @@ cluster_nodes = []
 ###############################################################################
 
 trials_factor = 0
-for s in build_bank_string(bank_cache):
-	trials_factor += get_svd_trials_factor(s, "H1") #FIXME well... it is tricky because the svd trials factor will be different for each detector.  This choice is arbitrary. Hopefully it doesn't change the answer much
 
 for s in build_bank_string(bank_cache):
 
