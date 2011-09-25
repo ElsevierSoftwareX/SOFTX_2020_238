@@ -692,6 +692,7 @@ def mkLLOIDSnrToAutoChisq(pipeline, snr, bank):
 	autocorrelation_length = bank.autocorrelation_bank.shape[1]
 	autocorrelation_latency = -(autocorrelation_length - 1) / 2
 
+	# FIXME something like this could be tried.
 	#mask_matrix = numpy.ones(bank.autocorrelation_bank.shape, numpy.int)
 	#stix = autocorrelation_latency - 10
 	#mask_matrix[:,stix:] = 0
