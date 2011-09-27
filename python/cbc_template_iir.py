@@ -130,11 +130,15 @@ def get_fir_matrix(xmldoc, fFinal=None, pnorder=4, flower = 40, psd_interp=None,
 
         return M, autocorrelation_bank
 
-def makeiirbank(xmldoc, fFinal, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=101, downsample=False, verbose=False):
-	sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
-	if verbose: print >> sys.stderr, "f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate)
+def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=101, downsample=False, verbose=False):
 
         sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+	fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
+	if sampleRate is None:
+		sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
+
+	if verbose: print >> sys.stderr, "f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate)
+
         Amat = {}
         Bmat = {}
         Dmat = {}
@@ -161,7 +165,7 @@ def makeiirbank(xmldoc, fFinal, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25,
 
                 m1 = row.mass1
                 m2 = row.mass2
-
+		fFinal = row.f_final
                 start = time.time()
 
                 # work out the waveform frequency
@@ -175,7 +179,6 @@ def makeiirbank(xmldoc, fFinal, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25,
 		#print >> sys.stderr, "waveform %f" % (time.time() - start)
                 if psd_interp is not None:
                         amp /= psd_interp(f)**0.5 * 1e23
-
 
                 # make the iir filter coeffs
                 a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
