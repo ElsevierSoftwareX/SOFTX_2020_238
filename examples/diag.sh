@@ -57,26 +57,41 @@ function test_resampler() {
 }
 
 function test_up_resampler_gaps() {
+	# the input to the resampler consists of intervals of a fixed
+	# frequency sine function that are marked as not gaps, interleaved
+	# with intervals of uniform white noise that are marked as gaps.
+	# in addition to testing the resampler's handling of gaps, this
+	# also tests that its output is insensitive to the data contained
+	# in the input gap buffers.  the amplitude of the sine wave
+	# intervals is set to a tiny fraction of the amplitude of the noise
+	# intervals to help spot corruption of the output due to the noise.
 	gst-launch \
 		lal_gate name=gate threshold=0.7 \
 		! tee name=orig \
+		! lal_nxydump ! queue ! filesink buffer-mode=2 location="dump_in.txt" \
+		orig. \
 		! audioresample \
 		! audio/x-raw-float, width=64, rate=16383 \
-		! lal_nxydump \
-		! queue ! filesink buffer-mode=2 location="dump_out.txt" \
+		! lal_nxydump ! queue ! filesink buffer-mode=2 location="dump_out.txt" \
 		audiotestsrc freq=15.8 samplesperbuffer=1025 num-buffers=8 \
 		! audio/x-raw-float, width=64, rate=2047 \
 		! tee name=control \
-		! gate.control \
-		audiotestsrc freq=256 wave=sine samplesperbuffer=1024 num-buffers=8 \
-		! audio/x-raw-float, channels=1, width=64, rate=2047 \
+		! lal_nxydump ! queue ! filesink buffer-mode=2 location="dump_control.txt" \
+		control. ! gate.control \
+		lal_adder name=adder sync=true \
 		! gate.sink \
-		control. \
-		! lal_nxydump \
-		! queue ! filesink buffer-mode=2 location="dump_control.txt" \
-		orig. \
-		! lal_nxydump \
-		! queue ! filesink buffer-mode=2 location="dump_in.txt"
+		lal_gate name=srcgate1 threshold=0.7 \
+		! adder. \
+		lal_gate name=srcgate2 threshold=0.7 invert-control=true \
+		! adder. \
+		control. ! srcgate1.control \
+		control. ! srcgate2.control \
+		audiotestsrc freq=256 wave=sine samplesperbuffer=1024 num-buffers=8 volume=1e-6 \
+		! audio/x-raw-float, channels=1, width=64, rate=2047 \
+		! srcgate1.sink \
+		audiotestsrc wave=white-noise samplesperbuffer=1024 num-buffers=8 \
+		! audio/x-raw-float, channels=1, width=64, rate=2047 \
+		! srcgate2.sink
 }
 
 function test_down_resampler_gaps() {
@@ -249,4 +264,4 @@ function test_triggergen() {
 		! triggergen.
 }
 
-test_autochisq
+test_up_resampler_gaps
