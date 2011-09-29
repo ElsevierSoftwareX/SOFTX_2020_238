@@ -54,7 +54,7 @@ def parse_banks(bank_string):
 	return out
 
 
-def iir_bank(pipeline, src, sample_rates, a1, b0, delay):
+def iir_bank(pipeline, src, sample_rates, a1, b0, delay, quality = 4):
 	#FIXME don't upsample everything to a common rate
 	max_rate = max(sample_rates)
 	adder = gst.element_factory_make("lal_adder")
@@ -66,12 +66,12 @@ def iir_bank(pipeline, src, sample_rates, a1, b0, delay):
 		#head = pipeparts.mkdrop(pipeline, src[sr], drop_samples=D[sr].min())
 		head = pipeparts.mkqueue(pipeline, src[sr], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 		head = pipeparts.mkiirbank(pipeline, head, a1 = a1[sr], b0 = b0[sr], delay = delay[sr], name = "gstlaliirbank%d" % (sr)) # FIXME: does the name need to be unique?
-		head = pipeparts.mkprogressreport(pipeline, head, "afteriirbank_%d" % (sr))
-		head = pipeparts.mkresample(pipeline, head)
-		# FIXME make this queue the "right" size
-		head = pipeparts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max_rate), max_size_time=gst.SECOND * 100, max_size_buffers=0, max_size_bytes=0)
+		#head = pipeparts.mkprogressreport(pipeline, head, "afteriirbank_%d" % (sr))
+		head = pipeparts.mkresample(pipeline, head, quality = quality)
+		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max_rate)
 		#head = pipeparts.mknxydumpsinktee(pipeline, head, "output_%d.txt" % (sr), segment = options.nxydump_segment)
-		#head = pipeparts.mkqueue(pipeline, head)
+		# FIXME make this queue the "right" size
+		#head = pipeparts.mkqueue(pipeline, head, max_size_time=gst.SECOND * 100, max_size_buffers=0, max_size_bytes=0)
 		head.link(adder)
 
 	adder = pipeparts.mkcapsfilter(pipeline, adder, "audio/x-raw-float, rate=%d" % max_rate)
@@ -149,7 +149,7 @@ def write_dump_dot(pipeline, filestem, verbose = False):
 	"""
 	if "GST_DEBUG_DUMP_DOT_DIR" not in os.environ:
 		raise ValueError, "cannot write pipeline, environment variable GST_DEBUG_DUMP_DOT_DIR is not set"
-	gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, filestem)
+	gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS, filestem)
 	if verbose:
 		print >>sys.stderr, "Wrote pipeline to %s" % os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], "%s.dot" % filestem)
 
@@ -235,88 +235,35 @@ for ifo, bank in banks.items():
 		injection_filename = options.injections,
 		verbose = options.verbose)
 
-	#head = pipeparts.mknxydumpsinktee(pipeline, head, "prewhitennoise.txt", segment = options.nxydump_segment)
-	#elem = gst.element_factory_make("lal_numpy_functiongenerator")
-	#elem.set_property("samplesperbuffer", 2048)
-	#elem.set_property("expression", "t == 1")
-	#pipeline.add(elem)
-	#elem.send_event(seekevent)
-	#head = pipeparts.mkaudioconvert(pipeline, elem)
-	#head = pipeparts.mkprogressreport(pipeline, head, "progress_src")
-
 	#
 	# whiten data
 	#
-	quality = 10
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=[%d,MAX]" % max(sample_rates))
-	head = pipeparts.mkresample(pipeline, head, quality = quality)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max(sample_rates))
-
-	head = pipeparts.mkreblock(pipeline, head)
-
-	head = pipeparts.mkwhiten(pipeline, head, fft_length = 8, zero_pad = 0, average_samples = 64, median_samples = 7)
-	head.set_property("psd-mode", 0)
-
-	head = pipeparts.mknofakedisconts(pipeline, head, silent = True)
-	head = pipeparts.mkchecktimestamps(pipeline, head, "timestamps_whitehoft")
-
-	head = pipeparts.mkprogressreport(pipeline, head, "afterwhitener")
-	#head = pipeparts.mknxydumpsinktee(pipeline, head, "whitenoise.txt", segment = options.nxydump_segment)
-
-	# FIXME: Is this queue needed?
-	head = pipeparts.mkqueue(pipeline, head, max_size_time = 2048 * gst.SECOND, max_size_bytes=0, max_size_buffers=0)
-
-	#
-	# Down-sampling
-	#
-
-	max_rate = max(sample_rates)
-	head = {max_rate: pipeparts.mktee(pipeline, head)}
-	for rate in sorted(set(sample_rates))[:-1]:# all but the highest rate
-		head[rate] = pipeparts.mkaudioamplify(pipeline, head[max_rate], 1/math.sqrt(pipeparts.audioresample_variance_gain(quality,max_rate, rate)))
-		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head[rate], quality = quality), caps = "audio/x-raw-float, rate=%d" % rate)
-		#head[rate] = pipeparts.mknxydumpsinktee(pipeline, head[rate], "input_iirds_channel_%d.txt" % rate, segment = nxydump_insegment)
-		# FIXME:  why is this here?  has someone comfirmed that
-		# it's needed?  why does the comment above say this isn't
-		# needed if it's needed!?
-		head[rate] = pipeparts.mknofakedisconts(pipeline, head[rate], silent = True)
-		head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate])
-		head[rate] = pipeparts.mktee(pipeline, head[rate])
+	head = lloidparts.mkLLOIDsrc(
+		pipeline,
+		head,
+		sample_rates,
+		ifo,
+		psd=None,
+		psd_fft_length = 8,
+		block_duration=gst.SECOND)
 
 	#
 	# IIR Filtering
 	#
-	adder = gst.element_factory_make("lal_adder")
-	adder.set_property("sync", True)
-	pipeline.add(adder)
+	head = iir_bank(pipeline, head, sample_rates, A, B, D, 10)
 
-	quality = 10
-	for sr in sample_rates:
-		src = pipeparts.mkqueue(pipeline, head[sr], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
-	        src = pipeparts.mkiirbank(pipeline, src, a1 = A[sr], b0 = B[sr], delay = D[sr], name = "gstlaliirbank%d" % (sr)) # FIXME: does the name need to be unique?
-		#src = pipeparts.mkprogressreport(pipeline, src, "afteriirbank_%d" % (sr))
-		src = pipeparts.mkresample(pipeline, src, quality = quality)
-		src = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=%d" % max_rate)
-		#src = pipeparts.mknxydumpsinktee(pipeline, src, "output_iirds_channel_%d.txt" % sr, segment = nxydump_segment)
-		# FIXME make this queue the "right" size
-		# src = pipeparts.mkqueue(pipeline, src, max_size_time=gst.SECOND * 100, max_size_buffers=0, max_size_bytes=0)
-		src.link(adder)
-
-	adder = pipeparts.mkcapsfilter(pipeline, adder, "audio/x-raw-float, rate=%d" % max_rate)
-
-	head = pipeparts.mkqueue(pipeline, adder)
+	head = pipeparts.mkqueue(pipeline, head)
 	head = pipeparts.mkprogressreport(pipeline, head, "IIR output")
 	head = pipeparts.mkqueue(pipeline, head)
 
 	#pipeparts.mknxydumpsink(pipeline, head, "output_iir.txt", segment = options.nxydump_segment)
-	pipeparts.mkfakesink(pipeline, head)
-	continue
+
 	head = pipeparts.mktogglecomplex(pipeline, head)
 	head = pipeparts.mknofakedisconts(pipeline, head)
-	head = pipeparts.mkprogressreport(pipeline, head, "IIR output")
-	# tee off and write output file
-	head = pipeparts.mktogglecomplex(pipeline, head)
 
+	#
+	# Trigger generation
+	#
 
 	snr = chisq = pipeparts.mktee(pipeline, head)
 	chisq = pipeparts.mkqueue(pipeline, chisq)
