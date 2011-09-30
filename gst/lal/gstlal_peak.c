@@ -85,27 +85,6 @@ static int reset_time_and_offset(GSTLALPeak *element)
 }
 
 
-static int higher_adjacent_data(GSTLALPeak *element, const double *leftdata, const double *rightdata, double data, gint channel, guint sample, guint64 length)
-{
-
-	/*
-	 * A function to search nearby snr buffers for an event with higher snr
-	 * as soon as one is found it returns
-	 */
-
-	guint samp;
-	for (samp = sample; samp < length; samp++) {
-		if ( fabs(leftdata[samp * element->channels + channel]) >= fabs(data) ) return 1;
-	}
-
-	for (samp = 0; samp < sample; samp++) {
-		if ( fabs(rightdata[samp * element->channels + channel]) >= fabs(data) ) return 1;
-	}
-	/* Nothing higher found */
-	return 0;
-}
-
-
 static guint peak_finder(GSTLALPeak *element, GstBuffer *srcbuf)
 {
 	guint64 length = output_num_samps(element);
@@ -114,9 +93,7 @@ static guint peak_finder(GSTLALPeak *element, GstBuffer *srcbuf)
 	 * Peeks are okay, we want the data to remain in the adapters
 	 */
 
-	const double *leftdata = (const double *) gst_adapter_peek(element->adapter, 3 * GST_BUFFER_SIZE(srcbuf));
-	const double *centerdata = leftdata + length * element->channels;
-	const double *rightdata = leftdata + 2 * length * element->channels;
+	const double *data = (const double *) gst_adapter_peek(element->adapter, 1 * GST_BUFFER_SIZE(srcbuf));
 	double *outputdata = (double *) GST_BUFFER_DATA(srcbuf);
 
 	guint sample;
@@ -124,14 +101,7 @@ static guint peak_finder(GSTLALPeak *element, GstBuffer *srcbuf)
 	double *maxdata = NULL;
 	guint *maxsample = NULL;
 	guint index;
-
-	/* see if we can do the calculation */
-	if (!leftdata || !centerdata || !rightdata) {
-		/* FIXME, what do we do, do we crash? */
-		return 0;
-	}
-
-
+	
 	/* FIXME make array to store the max part of element instance for performance */
 	if (!element->maxdata) element->maxdata = (double *) calloc(element->channels, sizeof(double));
 	else memset(element->maxdata, 0.0, element->channels * sizeof(double));
@@ -139,29 +109,27 @@ static guint peak_finder(GSTLALPeak *element, GstBuffer *srcbuf)
 	else memset(element->maxsample, 0.0, element->channels * sizeof(guint));
 	maxdata = element->maxdata;
 	maxsample = element->maxsample;
-
-	/* Find maxima of the center data */
+	
+	/* Find maxima of the data */
 	for(sample = 0; sample < length; sample++) {
 		for(channel = 0; channel < element->channels; channel++) {
-			if(fabs(*centerdata) > fabs(maxdata[channel])) {
-				maxdata[channel] = *centerdata;
+			if(fabs(*data) > fabs(maxdata[channel])) {
+				maxdata[channel] = *data;
 				maxsample[channel] = sample;
 			}
-		centerdata++;
+		data++;
 		}
 	}
-
+	
 	/* Decide if there are any events to keep */
 	for(channel = 0; channel < element->channels; channel++) {
-		if ( maxdata[channel] && !higher_adjacent_data(element, leftdata, rightdata, maxdata[channel], channel, maxsample[channel], length) ) {
+		if ( maxdata[channel] ) {
 			index = maxsample[channel] * element->channels + channel;
 			outputdata[index] = maxdata[channel];
 		}
 	}
-
 	return 0;
 }
-
 
 
 /*
@@ -411,7 +379,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	}
 	
 	/* while we have enough data to do the calculation, do it and push out buffers n samples long */
-	while(gst_adapter_available(element->adapter) >= 3 * maxsize && result == GST_FLOW_OK) {
+	while(gst_adapter_available(element->adapter) >= 1 * maxsize && result == GST_FLOW_OK) {
 		if (prepare_output_buffer(element, &srcbuf) == GST_FLOW_OK) {
 			peak_finder(element, srcbuf);
 			result = push_buffer(element, srcbuf);
