@@ -39,14 +39,14 @@ random.seed(options.seed)
 time = random.randint(start, stop, expnum) + random.rand(expnum)
 mass1 = numpy.abs(random.randn(expnum)*0.04 + 1.35) # 1.35 +/- 0.04 abs is to keep negative masses from happening even though the probability is very small :)
 mass2 = numpy.abs(random.randn(expnum)*0.04 + 1.35) # 1.35 +/- 0.04 abs is to keep negative masses from happening even though the probability is very small :)
-dist = random.power(2, expnum) * maxdist
+dist = random.power(3, expnum) * maxdist # 3 because it is this number minus 1 according to scipy doc
 ra = random.rand(expnum) * 2 * numpy.pi
 dec = numpy.arccos((random.rand(expnum) - 0.5) * 2) - numpy.pi / 2.
 pol = random.rand(expnum) * 2 * numpy.pi
 inc = numpy.arccos((random.rand(expnum) - 0.5) * 2)
 phase = random.rand(expnum) * 2 * numpy.pi
-spin1z = 0.8 * (random.rand(expnum) - 0.5) # spins between -0.4 and +0.4
-spin2z = 0.8 * (random.rand(expnum) - 0.5) # spins between -0.4 and +0.4
+spin1z = 0.1 * (random.rand(expnum) - 0.5) # spins between -0.05 and +0.05
+spin2z = 0.1 * (random.rand(expnum) - 0.5) # spins between -0.05 and +0.05
 
 # setup the output document
 xmldoc = ligolw.Document()
@@ -60,7 +60,7 @@ for i,t in enumerate(time):
 	row = sim.RowType()
 	
 	# string paramters
-	row.waveform = "SpinTaylorthreePointFivePN"
+	row.waveform = "SpinTaylorFramelessthreePointFivePN"
 	row.source = ""
 	row.numrel_data = ""
 	row.taper = "TAPER_START"

@@ -28,7 +28,8 @@ pkgpython_PYTHON = \
 	svd_bank.py \
 	templates.py \
 	ligolw_output.py \
-	simulation.py
+	simulation.py \
+	far.py
 
 pkgpyexec_LTLIBRARIES = _misc.la
 

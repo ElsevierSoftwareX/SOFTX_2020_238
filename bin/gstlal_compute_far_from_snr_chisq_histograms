@@ -20,6 +20,8 @@ from pylal import rate
 from optparse import OptionParser
 from gstlal import ligolw_output as gstlal_likelihood
 from gstlal.svd_bank import read_bank
+from gstlal import far
+
 try:
 	import sqlite3
 except ImportError:
@@ -28,229 +30,9 @@ except ImportError:
 
 sqlite3.enable_callback_tracebacks(True)
 
-#
-# Functions to synthesize injections
-#
-
-def snr_distribution(size, startsnr):
-	return startsnr * random.power(3, size)**-1 # 3 here actually means 2 :) according to scipy docs
-
-def noncentrality(snrs, prefactor):
-	return prefactor * random.rand(len(snrs)) * snrs**2 # FIXME power depends on dimensionality of the bank and the expectation for the mismatch for real signals
-	#return prefactor * random.power(1, len(snrs)) * snrs**2 # FIXME power depends on dimensionality of the bank and the expectation for the mismatch for real signals
-
-def chisq_distribution(df, non_centralities, size):
-	out = numpy.empty((len(non_centralities) * size,))
-	for i, nc in enumerate(non_centralities):
-		out[i*size:(i+1)*size] = random.noncentral_chisquare(df, nc, size)
-	return out
-
-def populate_injections(bindict, prefactor = .1, df = 10, size = 1000000, verbose = True):
-	for i, k in enumerate(bindict):
-		binarr = bindict[k]
-		if verbose:
-			print >> sys.stderr, "synthesizing injections for ", k
-		minsnr = binarr.bins[0].upper().min()
-		random.seed(i) # FIXME changes as appropriate
-		snrs = snr_distribution(size, minsnr)
-		ncs = noncentrality(snrs, prefactor)
-		chisqs = chisq_distribution(df, ncs, 1) / df
-		for snr, chisq in zip(snrs, chisqs):
-			binarr[snr, chisq**.5 / snr] += 1
-
-#
-# Utility functions
-#
-
-
-
-def smooth_bins(bA):
-	#FIXME what is this window supposed to be??
-	wn = rate.gaussian_window2d(5, 5, sigma = 8)
-	rate.filter_array(bA.array.T, wn)
-	sum = bA.array.sum()
-	if sum != 0:
-		bA.array /= sum # not the same as the to_pdf() method
-
-def linearize_array(arr):
-	return arr.reshape((1,arr.shape[0] * arr.shape[1]))
-
-def get_nonzero(arr):
-	# zeros, nans and infs mean that either the numerator or denominator of the
-	# likelihood was zero.  We do not include those
-	zb = arr != 0
-	nb = numpy.isnan(arr)
-	ib = numpy.isinf(arr)
-	return arr[zb - nb - ib]
-
-def count_to_rank(val, offset = 100):
-	return numpy.log(val) + offset #FIXME It should be at least the absolute value of the minimum of the log of all bins
-
-class FAR(object):
-	def __init__(self, livetime, trials_factor, counts = None, injections = None):
-		self.injections = injections
-		self.counts = counts
-		self.livetime = livetime
-		self.trials_factor = trials_factor
-
-	def updateFAPmap(self, instruments, rank_offset):
-		if self.counts is None:
-			raise InputError, "must provide background bins file"
-		self.rank_offset = rank_offset
-
-		#
-		# the target FAP resolution is 1 part in 10^7.  So depending on
-		# how many instruments we have we have to take the nth root of
-		# that number to set the scale in each detector. This is purely
-		# for memory/CPU requirements
-		#
-
-		targetlen = int(1e7**(1. / len(instruments)))
-		nonzerorank = {}
-
-		for ifo in instruments:
-			# FIXME don't repeat calc by checking if it has been done??
-			nonzerorank[ifo] = count_to_rank(get_nonzero(linearize_array(counts[ifo+"_snr_chi"].array)), offset = self.rank_offset)
-
-		nonzerorank = self.rankBins(nonzerorank, targetlen)
-		self.ranks, weights = self.possible_ranks_array(nonzerorank)
-		fap, self.fap_from_rank = self.CDFinterp(self.ranks, weights)
-
-
-	def rankBins(self, vec, size):
-		out = {}
-		minrank = min([v.min() for v in vec.values()])
-		maxrank = max([v.max() for v in vec.values()])
-		for ifo, ranks in vec.items():
-			out[ifo] = rate.BinnedArray(rate.NDBins((rate.LinearBins(minrank, maxrank, size),)))
-			for r in ranks:
-				out[ifo][r,]+=1
-		return out
-
-	def possible_ranks_array(self, bAdict):
-		# start with an identity array to seed the outerproduct chain
-		ranks = numpy.array([1])
-		vals = numpy.array([1])
-		for ifo, bA in bAdict.items():
-			ranks = numpy.outer(ranks, bA.centres()[0])
-			vals = numpy.outer(vals, bA.array)
-			ranks = ranks.reshape((ranks.shape[0] * ranks.shape[1],))
-			vals = vals.reshape((vals.shape[0] * vals.shape[1],))
-		vals = vals[ranks.argsort()]
-		ranks.sort()
-		return ranks, vals
-
-	def CDFinterp(self, ranks, weights = None):
-		if weights is None:
-			FAP = (numpy.arange(len(ranks)) + 1.) / len(vec)
-		else:
-			FAP = weights.cumsum()
-			FAP /= FAP[-1]
-		# Rather than putting 0 for FAPS we cannot estimate, set it to the mimimum non zero value which is more meaningful
-		return FAP, interpolate.interp1d(ranks, FAP, fill_value = (FAP[FAP !=0.0]).min(), bounds_error = False)
-
-	# Method only works if counts is not None:
-	def compute_rank(self, snr_chisq_dict):
-		if self.counts is None:
-			raise InputError, "must provide background bins file"
-		rank = 1
-		for ifo, (snr,chisq) in snr_chisq_dict.items():
-			val = count_to_rank(self.counts[ifo+"_snr_chi"][snr, chisq**.5 / snr], offset = self.rank_offset)
-			rank *= val
-		if rank > self.ranks[-2]:
-			rank = self.ranks[-2]
-		return rank
-
-	def compute_fap2(self, ifo1, snr1, chisq1, ifo2, snr2, chisq2):
-		input = {ifo1:(snr1,chisq1), ifo2:(snr2,chisq2)}
-		rank = self.compute_rank(input)
-		fap = self.fap_from_rank(rank)
-		fap = 1.0 - (1.0 - fap)**self.trials_factor
-		return float(fap)
-
-	def compute_fap3(self, ifo1, snr1, chisq1, ifo2, snr2, chisq2, ifo3, snr3, chisq3):
-		input = {ifo1:(snr1,chisq1), ifo2:(snr2,chisq2), ifo3:(snr3,chisq3)}
-		rank = self.compute_rank(input)
-		fap = self.fap_from_rank(rank)
-		fap = 1.0 - (1.0 - fap)**self.trials_factor
-		return float(fap)
-
-	def FAR_from_FAP(self, fap, n = 1):
-		# the n = 1 case can be done exactly.  That is good since it is
-		# the most important.  FIXME it should be possible to code
-		# exact solutions for other small values of n that may be
-		# imporant once detections are routine :)
-		if n == 1:
-			return 0. - numpy.log(1. - fap) / self.livetime
-		if n > 1 and n <= 100:
-			nvec = numpy.logspace(-12, numpy.log10(n + 10. * n**.5), 100)
-		else:
-			nvec = numpy.logspace(numpy.log10(n - 10. * n**.5), numpy.log10(n + 10. * n**.5), 100)
-		FAPS = 1. - poisson.cdf(n,nvec)
-		#FIXME is this right since nvec is log spaced?
-		interp = interpolate.interp1d(FAPS, nvec / self.livetime)
-		if fap < FAPS[1]:
-			return 0.
-		if fap > FAPS[-1]:# This means that the FAP has gone off the edge.  We will bump it down because we don't really care about this being right.
-			fap = FAPS[-1]
-		return interp(fap)[0]
-
-	def compute_far(self, fap, n):
-		if fap == 0.0:
-			far = 0.
-		else:
-			far = self.FAR_from_FAP(fap, n)
-		return far
-
-def get_live_time(segments, verbose = True):
-	livetime = float(abs(vote((segs for instrument, segs in segments.items() if instrument != "H2"), 2)))
-	if verbose:
-		print >> sys.stderr, "Livetime: ", livetime
-	return livetime
-
-def two_fap_query(fap_ifos, ifostr):
-	fap_ifos = tuple(fap_ifos)
-	query = '''UPDATE coinc_inspiral
-	SET false_alarm_rate = (SELECT fap2(snglA.ifo, snglA.snr, snglA.chisq, snglB.ifo, snglB.snr, snglB.chisq)
-				FROM coinc_event_map AS mapA
-				JOIN coinc_event_map AS mapB ON mapB.coinc_event_id == coinc_inspiral.coinc_event_id
-				JOIN sngl_inspiral AS snglA ON snglA.event_id == mapA.event_id
-				JOIN sngl_inspiral AS snglB ON snglB.event_id == mapB.event_id
-				WHERE mapA.table_name == "sngl_inspiral"
-				AND mapB.table_name == "sngl_inspiral"
-				AND snglA.ifo == "%s"
-				AND snglB.ifo == "%s"
-				AND mapA.coinc_event_id == coinc_inspiral.coinc_event_id)
-	WHERE ifos == "%s"''' % (fap_ifos[0], fap_ifos[1], ifostr)
-	return query
-
-def three_fap_query(fap_ifos, ifostr):
-	fap_ifos = tuple(fap_ifos)
-	query = '''UPDATE coinc_inspiral
-	SET false_alarm_rate = (SELECT fap3(snglA.ifo, snglA.snr, snglA.chisq, snglB.ifo, snglB.snr, snglB.chisq, snglC.ifo, snglC.snr, snglC.chisq)
-				FROM coinc_event_map AS mapA
-				JOIN coinc_event_map AS mapB ON mapB.coinc_event_id == coinc_inspiral.coinc_event_id
-				JOIN coinc_event_map AS mapC ON mapC.coinc_event_id == coinc_inspiral.coinc_event_id
-				JOIN sngl_inspiral AS snglA ON snglA.event_id == mapA.event_id
-				JOIN sngl_inspiral AS snglB ON snglB.event_id == mapB.event_id
-				JOIN sngl_inspiral AS snglC ON snglC.event_id == mapC.event_id
-				WHERE mapA.table_name == "sngl_inspiral"
-				AND mapB.table_name == "sngl_inspiral"
-				AND mapC.table_name == "sngl_inspiral"
-				AND snglA.ifo == "%s"
-				AND snglB.ifo == "%s"
-				AND snglC.ifo == "%s"
-				AND mapA.coinc_event_id == coinc_inspiral.coinc_event_id)
-	WHERE ifos == "%s"''' % (fap_ifos[0], fap_ifos[1], fap_ifos[2], ifostr)
-	return query
-
-def fap_query(fap_ifos, ifostr):
-	return {2: two_fap_query, 3: three_fap_query}[len(fap_ifos)](fap_ifos, ifostr)
 
 def parse_command_line():
-	parser = OptionParser(
-		description = __doc__
-	)
+	parser = OptionParser()
 	parser.add_option("--background-bins-file", metavar = "filename", action = "append", help = "Set the name of the xml file containing the snr / chisq background distributions")
 	parser.add_option("--segments-file", metavar = "filename", help = "Set the name of the xml file containing analysis segments.")
 	parser.add_option("--segments-name", metavar = "name", default = "datasegments", help = "Set the name of the analysis segments (default = 'datasegments').")
@@ -261,6 +43,8 @@ def parse_command_line():
 	parser.add_option("--compute-fap", action = "store_true", help = "compute fap, otherwise compute far assuming fap has been calculated")
 	parser.add_option("--compute-far", action = "store_true", help = "compute far, only works if fap is being computed or has been computed.")
 	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
+	parser.add_option("--non-injection-db", help = "single file for non injections run")
+	parser.add_option("--injection-dbs", action = "append", default=[], help = "append to the list of possible injection files, may be empty if no injections were done. Databases are assumed to be over the same time period as the non injection databases using the same templates.  If not the results will be nonsense.")
 
 	options, filenames = parser.parse_args()
 	return options, filenames
@@ -284,7 +68,7 @@ vetoes = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.ve
 #
 
 segments -= vetoes
-livetime = get_live_time(segments)
+livetime = far.get_live_time(segments)
 
 #
 # Pull out background and injections distribution
@@ -294,46 +78,39 @@ if options.compute_fap:
 	# retrieve rank data
 	coincparamsdistributions, likelihood_seglists = gstlal_likelihood.load_likelihood_data(options.background_bins_file, verbose = options.verbose)
 	injections = coincparamsdistributions.injection_rates
-	populate_injections(injections)
+	far.populate_injections(injections)
 	counts = coincparamsdistributions.background_rates
-	Far = FAR(livetime, options.additional_trials_factor, counts, injections)
+	Far = far.FAR(livetime, options.additional_trials_factor, counts, injections)
 else:
-	Far = FAR(livetime, options.additional_trials_factor)
+	Far = far.FAR(livetime, options.additional_trials_factor)
 
 # late import for DB manipulations
 from glue.ligolw import dbtables
 
 #
-# iterate over files to remove zero lag from bins if we are computing faps
+# remove zero lag from bins if we are computing faps
 #
 
 if options.compute_fap is not None:
-	for f in filenames:
 
-		working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
-		connection = sqlite3.connect(working_filename)
+	working_filename = dbtables.get_connection_filename(options.non_injection_db, tmp_path = options.tmp_space, verbose = options.verbose)
+	connection = sqlite3.connect(working_filename)
 
-		#FIXME find a better way to identify injections, don't rely on sqlite_master or the presence of a sim_inspiral table??
-		if connection.cursor().execute("SELECT name FROM sqlite_master WHERE name='sim_inspiral'").fetchall():
-			if options.verbose:
-				print >>sys.stderr, "found sim inspiral, continuing"
-			connection.close()
-			dbtables.discard_connection_filename(f, working_filename, verbose = options.verbose)
-			continue
+	# remove zero lag triggers from the background bins
+	# FIXME this is supposed to pull out only triggers found in zero lag, is it correct?
+	if options.verbose:
+		print >>sys.stderr, "num sngl trigs before", " ".join(["%s:%d" % (ifo, cnts.array.sum()) for (ifo, cnts) in Far.counts.items()])
 
-		# remove zero lag triggers from the background bins
-		# FIXME this is supposed to pull out only triggers found in zero lag, is it correct?
-		if options.verbose:
-			print >>sys.stderr, "num sngl trigs before", " ".join(["%s:%d" % (ifo, cnts.array.sum()) for (ifo, cnts) in Far.counts.items()])
+	for ifo, snr, chisq in connection.cursor().execute("SELECT ifo, snr, chisq FROM sngl_inspiral WHERE sngl_inspiral.event_id IN (SELECT event_id FROM coinc_event_map JOIN coinc_event ON (coinc_event_map.table_name == 'sngl_inspiral' AND coinc_event.coinc_event_id == coinc_event_map.coinc_event_id) WHERE NOT EXISTS (SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0))"):
+		Far.counts[ifo+"_snr_chi"][snr, chisq**.5 / snr] -= 1
 
-		for ifo, snr, chisq in connection.cursor().execute("SELECT ifo, snr, chisq FROM sngl_inspiral WHERE sngl_inspiral.event_id IN (SELECT event_id FROM coinc_event_map JOIN coinc_event ON (coinc_event_map.table_name == 'sngl_inspiral' AND coinc_event.coinc_event_id == coinc_event_map.coinc_event_id) WHERE NOT EXISTS (SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0))"):
-			Far.counts[ifo+"_snr_chi"][snr, chisq**.5 / snr] -= 1
+	if options.verbose:
+		print >>sys.stderr, "num sngl trigs after", " ".join(["%s:%d" % (ifo, cnts.array.sum()) for (ifo, cnts) in Far.counts.items()])
 
-		if options.verbose:
-			print >>sys.stderr, "num sngl trigs after", " ".join(["%s:%d" % (ifo, cnts.array.sum()) for (ifo, cnts) in Far.counts.items()])
-
-		connection.close()
-		dbtables.discard_connection_filename(f, working_filename, verbose = options.verbose)
+	Far.set_trials_table(connection)
+	
+	connection.close()
+	dbtables.discard_connection_filename(options.non_injection_db, working_filename, verbose = options.verbose)
 
 #
 # Compute the likelihood ratio
@@ -350,9 +127,9 @@ if options.compute_fap:
 	minvals = []
 	for i, k in enumerate(Far.counts):
 		binned_array = Far.counts[k]
-		smooth_bins(binned_array)
+		far.smooth_bins(binned_array)
 		binned_array = Far.injections[k]
-		smooth_bins(binned_array)
+		far.smooth_bins(binned_array)
 		# FIXME inverse likelihood is what is used for the ranking, small means likely
 		Far.counts[k].array /= Far.injections[k].array
 		# we want Nans to be inf because they are not likely to be a GW
@@ -365,56 +142,19 @@ if options.compute_fap:
 	minval = min(minvals)
 	rankoffset = numpy.ceil(numpy.abs(numpy.log(minval))) + 1
 
-
 #
 # iterate over files to rank
 #
 
-for f in filenames:
+if options.compute_fap is not None:
+	far.set_fap(options, Far, options.non_injection_db, rankoffset)
+	# increment the trials factor by 1 before assigning faps for
+	# injections.  Injections imply that there is always one more event
+	Far.increment_trials_table(1)
+	for f in options.injection_dbs:
+		far.set_fap(options, Far, f, rankoffset)
 
-	working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
-	connection = sqlite3.connect(working_filename)
-
-	if options.compute_fap is not None:
-		connection.create_function("fap2", 6, Far.compute_fap2)
-		connection.create_function("fap3", 9, Far.compute_fap3)
-		print >>sys.stderr, "computing faps ..."
-		for ifos, in connection.cursor().execute('SELECT DISTINCT(ifos) FROM coinc_inspiral').fetchall():
-			print >>sys.stderr, "computing faps for ", ifos
-			# FIXME since some combinations are degenerate a few things will be computed twice unecessarily
-			ifoset = lsctables.instrument_set_from_ifos(ifos)
-			ifoset.discard("H2")
-			Far.updateFAPmap(ifoset, rankoffset)
-			# FIXME abusing FAR column
-			connection.cursor().execute(fap_query(ifoset, ifos))
-			connection.commit()
-
-	if options.compute_far is not None:
-		connection.create_function("far", 2, Far.compute_far)
-		ids = [id for id, in connection.cursor().execute("SELECT DISTINCT(time_slide_id) FROM time_slide")]
-		for id in ids:
-			print >>sys.stderr, "computing rates for ", id
-			# FIXME abusing FAR column
-			connection.cursor().execute('DROP TABLE IF EXISTS ranktable')
-			connection.commit()
-			# FIXME any indicies on ranktable??  FIXME adding the +
-			# 1e-20 / snr to the false alarm rate forces the
-			# ranking to be in snr order for degenerate ranks.
-			# This is okay for non degenerate things since we don't
-			# have 1e-20 dynamic range, still this should be done
-			# smarter.  Note it doesn't change the false alarm rate
-			# in the database. It just changes how the CDF is
-			# produced here which will modify the order of events
-			# that get assigned a combined far
-			connection.cursor().execute('CREATE TEMPORARY TABLE ranktable AS SELECT * FROM coinc_inspiral JOIN coinc_event ON coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id WHERE coinc_event.time_slide_id == ? ORDER BY false_alarm_rate+1e-20 / snr', (id,))
-			connection.commit()
-			# For injections every event is treated as "the loudest"
-			if connection.cursor().execute("SELECT name FROM sqlite_master WHERE name='sim_inspiral'").fetchall():
-				connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate, 1) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.coinc_event_id IN (SELECT coinc_event_id FROM ranktable)')
-			# For everything else we get a cumulative number
-			else:
-				connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate, ranktable.rowid) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.coinc_event_id IN (SELECT coinc_event_id FROM ranktable)')
-
-	connection.commit()
-	connection.close()
-	dbtables.put_connection_filename(f, working_filename, verbose = options.verbose)
+if options.compute_far is not None:
+	far.set_far(options, Far, options.non_injection_db)
+	for f in options.injection_dbs:
+		far.set_far(options, Far, f)

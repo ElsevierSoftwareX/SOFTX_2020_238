@@ -419,7 +419,7 @@ class gstlal_compute_far_from_snr_chisq_histograms_node(pipeline.CondorDAGNode):
 	A gstlal_compute_far_from_snr_chisq_histograms_job node
 	"""
 	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, background_bins_file, segments_file, vetoes_file, additional_trials_factor, FAR = False, FAP = False, input = [], p_node=[]):
+	def __init__(self, job, dag, background_bins_file, segments_file, vetoes_file, additional_trials_factor, FAR = False, FAP = False, noninj_input = None, inj_input = [], p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		if background_bins_file is not None:
@@ -432,11 +432,13 @@ class gstlal_compute_far_from_snr_chisq_histograms_node(pipeline.CondorDAGNode):
 			self.add_var_opt("compute-fap", "")
 		if FAR:
 			self.add_var_opt("compute-far", "")
-		for f in input:
-			self.add_file_arg(f)
+		for f in inj_input:
+			#FIXME totally broken if len(inj_input) > 1
+			self.add_var_opt("injection-dbs", f)
+		self.add_var_opt("non-injection-db", noninj_input)
 		for p in p_node:
 			self.add_parent(p)
-		# that is it, this is an inplace job, no new files
+		self.output_names = inj_input + [noninj_input]
 		dag.add_node(self)
 
 ###############################################################################
@@ -452,18 +454,11 @@ def parse_banks(bank_string):
 
 def get_svd_trials_factor(svd_bank_string, ifo):
 	fname = parse_banks(svd_bank_string)[ifo][0]
-	proc = subprocess.Popen(["grep -A 3 squares %s | sed -n '4~5p' | sed -e 's@ @\\n@g' | awk '{tot=tot+$1} END {print tot}' | tr -d '\\n'" % (fname,)], shell=True, stdout=subprocess.PIPE)
-	rank = int(float(proc.communicate()[0]))
-	
-	#FIXME the correct way is here, but it is really slow
-	lw = utils.load_filename(f, verbose = True).childNodes[0]
-	return len(lsctables.table.get_table(xmldoc, lw.SnglInspiralTable.tableName)) / rank
-
-
+	lw = utils.load_filename(fname, verbose = True).childNodes[0]
 	out = 0.0
 	for node in (node for node in lw.childNodes if node.tagName == 'LIGO_LW'):
 		out += array.get_array(node, 'sum_of_squares_weights').array.sum()
-	return int(out)
+	return int(out) / 2 # FIXME The SVD is over the orthogonal phases, but we have half as many templates, should we divide by 2?
 
 # FIXME surely this is in glue
 def parse_cache_str(instr):
@@ -563,12 +558,6 @@ plotJob = lalapps_cbc_plotsummary_job()
 openpageJob = gstlal_s5_pbh_summary_page_job()
 pageJob = gstlal_s5_pbh_summary_page_job()
 
-#
-# get approximate trials factor for whole search
-# FIXME probably not needed, remove
-
-# bank_trials_factor = num_bank_files(bank_cache)
-
 noninj_nodes = []
 inj_nodes = []
 cluster_nodes = []
@@ -577,15 +566,15 @@ cluster_nodes = []
 # loop over banks to run gstlal inspiral pre clustering and far computation
 ###############################################################################
 
+trials_factor = 0
+
 for s in build_bank_string(bank_cache):
-
-	trials_factor = 1 #get_svd_trials_factor(s, "H1")# * bank_trials_factor
-
-	far_input_nodes = []
 
 	#
 	# non injections
 	#
+
+	far_input_nodes = []
 
 	noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), options.channel, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, flow=options.flow, time_slide_file=options.time_slide_file)
 	far_input_nodes.append(noninjnode)
@@ -599,13 +588,16 @@ for s in build_bank_string(bank_cache):
 		injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), options.channel, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, vetoes=options.vetoes, flow=options.flow)
 		far_input_nodes.append(injnode)
 		inj_nodes.append(injnode)
-	#
-	# FAR nodes
-	#
+		#
+		# FAR nodes
+		#
 	
-	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode.background_name, options.frame_segments_file, options.vetoes, trials_factor, FAP = True, input = [f.output_name for f in far_input_nodes], p_node = far_input_nodes)
+		farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode.background_name, options.frame_segments_file, options.vetoes, trials_factor, FAP = True, noninj_input = noninjnode.output_name, inj_input = [injnode.output_name], p_node = [noninjnode, injnode])
 	
-	#
+	else:
+		farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode.background_name, options.frame_segments_file, options.vetoes, trials_factor, FAP = True, noninj_input = noninjnode.output_name, inj_input = [], p_node = [noninjnode, injnode])
+
+#
 	# Pre clustering
 	#
 
@@ -630,10 +622,8 @@ for s in build_bank_string(bank_cache):
 noninjdb = "H1H2L1-ALL-%d-%d-LLOID.sqlite" % (options.gps_start_time, options.gps_stop_time)
 # merge
 sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_name)[1].replace('.sqlite','.xml.gz') for f in noninj_nodes] + [options.vetoes, options.frame_segments_file], p_node=cluster_nodes)
-# delete high FARs
+# delete high FAPs
 noninjsqlitenode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.delete_sql_file, input=[noninjdb], p_node=[sqlitenode])
-# compute FARs
-noninjfarnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, options.frame_segments_file, options.vetoes, 1, FAR = True, input = [noninjdb], p_node = [noninjsqlitenode])
 
 #
 # injection DB
@@ -653,14 +643,17 @@ if inj_nodes:
 	inspinjnode = ligolw_inspinjfind_node(ligolwInspinjFindJob, dag, injxml, p_node=[clusternode])
 	# convert back to sqlite
 	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[injxml], p_node=[inspinjnode])
-	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, options.frame_segments_file, options.vetoes, 1, FAR = True, input = [injdb], p_node = [sqlitenode])
+	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, options.frame_segments_file, options.vetoes, 1, FAR = True, noninj_input = noninjdb, inj_input = [injdb], p_node = [sqlitenode, noninjsqlitenode])
 	# compute FARs
 	name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
 	# make plots
-	plotnode = lalapps_cbc_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb, injdb], p_node=[farnode, noninjfarnode])
+	plotnode = lalapps_cbc_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb, injdb], p_node=[farnode])
 	# make a web page
 	gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-closed-box" % (options.gps_start_time, options.gps_stop_time), open_box = False, p_node=[plotnode])
 	gstlal_s5_pbh_summary_page_node(openpageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-open-box" % (options.gps_start_time, options.gps_stop_time), p_node=[plotnode])
+else:
+	# compute FARs without injections
+	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, options.frame_segments_file, options.vetoes, 1, FAR = True, noninj_input = noninjdb, inj_input = [], p_node = [noninjsqlitenode])
 
 #
 # all done
