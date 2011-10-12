@@ -527,8 +527,8 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			bank,
 			bank_fragment,
 			control_snksrc,
-			64 + 8 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#64 is for a the audioresample filter with qual=4. FIXME tune these windows
-			64 + 8 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#64 is for the audioresample filter with qual=4
+			32 + 2 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#32 is for 1/2 the audioresample filter with qual=4 FIXME tune these windows
+			32 + 2 * int(math.ceil(-autocorrelation_latency * (float(bank_fragment.rate) / output_rate))),#32 is for 1/2 the audioresample filter with qual=4
 			nxydump_segment = nxydump_segment,
 			fir_stride = fir_stride,
 			control_peak_time = control_peak_time,
