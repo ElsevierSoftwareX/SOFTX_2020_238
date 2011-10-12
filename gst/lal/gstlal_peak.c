@@ -367,7 +367,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 	/* if we don't have a valid first timestamp yet take this one */
 	if (element->next_output_timestamp == GST_CLOCK_TIME_NONE) {
-		element->next_output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf) + output_duration(element);
+		element->next_output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);
 	}
 
 	/* put the incoming buffer into an adapter or push zeros if gap */
