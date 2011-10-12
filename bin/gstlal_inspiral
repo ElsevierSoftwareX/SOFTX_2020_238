@@ -436,11 +436,7 @@ appsync = pipeparts.AppSync(appsink_new_buffer = stream_thinca.appsink_new_buffe
 
 for pad in triggersrc.src_pads():
 	sink = appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, triggersrc, pad_name = pad.get_property("name")), caps = gst.Caps("application/x-lal-snglinspiral"))
-	# FIXME, the pull_appsinks_in_order function works 95% of the time, but
-	# the other 5% locks up.  When it is fixed uncomment this line and
-	# delete the next line and the branches should be sinked
 	sink.connect_after("new-buffer", appsync.pull_appsinks_in_order)
-	#sink.connect_after("new-buffer", output.appsink_new_buffer)
 	appsinks.add(sink)
 if options.verbose:
 	print >>sys.stderr, "attached %d, done" % len(appsinks)
