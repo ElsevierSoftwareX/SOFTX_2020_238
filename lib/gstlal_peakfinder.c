@@ -54,6 +54,7 @@ int gstlal_double_peak_over_window(struct gstlal_double_peak_samples_and_values 
 		data++;
 		}
 	}
+	
 	return 0;
 }
 
@@ -70,7 +71,7 @@ int gstlal_double_fill_output_with_peak(struct gstlal_double_peak_samples_and_va
 
 	/* Decide if there are any events to keep */
 	for(channel = 0; channel < input->channels; channel++) {
-		if ( maxdata[channel] > 0) {
+		if ( maxdata[channel] ) {
 			index = maxsample[channel] * input->channels + channel;
 			data[index] = maxdata[channel];
 		}
