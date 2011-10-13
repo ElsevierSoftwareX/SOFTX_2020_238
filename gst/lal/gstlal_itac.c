@@ -249,30 +249,6 @@ static GstFlowReturn push_buffer(GSTLALItac *element, GstBuffer *srcbuf)
 	return gst_pad_push(element->srcpad, srcbuf);
 }
 
-static GstBuffer *make_gap_buffer(GSTLALItac *element, guint length)
-{
-	gint size = sizeof(double) * length * element->channels;
-        GstBuffer *srcbuf = NULL;
-        GstCaps *caps = GST_PAD_CAPS(element->srcpad);
-        GstFlowReturn result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, size, caps, &srcbuf);
-
-        if (result != GST_FLOW_OK)
-                return srcbuf;
-
-        /* set the offset */
-        GST_BUFFER_OFFSET(srcbuf) = element->next_output_offset;
-        GST_BUFFER_OFFSET_END(srcbuf) = element->next_output_offset + length;
-
-        /* set the time stamps */
-        GST_BUFFER_TIMESTAMP(srcbuf) = element->next_output_timestamp;
-        GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, element->rate);
-        
-	/* memset to zero */
-        memset(GST_BUFFER_DATA(srcbuf), 0, GST_BUFFER_SIZE(srcbuf));
-
-	return srcbuf;
-}
-
 static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALItac *element = GSTLAL_ITAC(gst_pad_get_parent(pad));
@@ -316,17 +292,16 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		/* See if the output is a gap or not */
 		gapsamps = gst_audioadapter_head_gap_length(element->adapter);
+
 		if (gapsamps > 0) {
 			outsamps = gst_audioadapter_head_gap_length(element->adapter) > element->n ? element->n : gst_audioadapter_head_gap_length(element->adapter);
-			/* Clearing the max data structure causes the next buffer to be a gap */
+			/* Clearing the max data structure causes the resulting buffer to be a GAP */
 			gstlal_double_peak_samples_and_values_clear(element->maxdata);
 			srcbuf = gstlal_double_new_buffer_from_peak(element->maxdata, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
-			//srcbuf = make_gap_buffer(element, outsamps);
 		}
 		else {
 			outsamps = gst_audioadapter_head_nongap_length(element->adapter) > element->n ? element->n : gst_audioadapter_head_nongap_length(element->adapter);
-
-			/* call the peak finding library on a buffer from the adapter */
+			/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
 			gst_audioadapter_copy(element->adapter, (void *) element->data, outsamps, &copied_gap, &copied_nongap);
 			gstlal_double_peak_over_window(element->maxdata, (const double *) element->data, outsamps);
 			srcbuf = gstlal_double_new_buffer_from_peak(element->maxdata, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
