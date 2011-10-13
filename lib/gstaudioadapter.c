@@ -135,6 +135,7 @@ guint gst_audioadapter_head_gap_length(GstAudioAdapter *adapter)
 
 	for(head = g_queue_peek_head_link(adapter->queue); head && GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP); head = g_list_next(head))
 		length += GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data);
+	length = length > adapter->skip ? length - adapter->skip : 0;
 
 	return MIN(length, adapter->size);
 }
@@ -159,6 +160,7 @@ guint gst_audioadapter_head_nongap_length(GstAudioAdapter *adapter)
 
 	for(head = g_queue_peek_head_link(adapter->queue); head && !GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP); head = g_list_next(head))
 		length += GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data);
+	length = length > adapter->skip ? length - adapter->skip : 0;
 
 	return MIN(length, adapter->size);
 }
