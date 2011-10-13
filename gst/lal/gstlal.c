@@ -81,6 +81,7 @@
 #include <gstlal_audioundersample.h>
 #include <gstlal_drop.h>
 #include <gstlal_peak.h>
+#include <gstlal_itac.h>
 
 
 /*
@@ -139,6 +140,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_audioundersample", GSTLAL_AUDIOUNDERSAMPLE_TYPE},
 		{"lal_drop", GSTLAL_DROP_TYPE},
 		{"lal_peak", GSTLAL_PEAK_TYPE},
+		{"lal_itac", GSTLAL_ITAC_TYPE},
 		{NULL, 0},
 	};
 
