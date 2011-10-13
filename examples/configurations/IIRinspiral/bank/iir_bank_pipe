@@ -86,12 +86,14 @@ class gstlal_iir_bank_job(pipeline.CondorDAGJob):
 class gstlal_iir_bank_node(pipeline.CondorDAGNode):
 	"""
 	"""
-	def __init__(self, job, dag, template_bank, flow=40, reference_psd="psd.xml", p_node=[]):
+	def __init__(self, job, dag, template_bank, ifo, flow=40, reference_psd=None, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("flow", flow)
-		self.add_var_opt("reference-psd", reference_psd)
+		if reference_psd is not None:
+			self.add_var_opt("reference-psd", reference_psd)
 		self.add_var_opt("template-bank", template_bank)
+		self.add_var_opt("instrument", ifo)
 		self.add_var_opt("downsample","")
 		iir_bank_name_path = os.path.split(template_bank)
 		iir_bank_name = iir_bank_name_path[0] + "/iir_" + iir_bank_name_path[1]
@@ -103,10 +105,11 @@ class gstlal_iir_bank_node(pipeline.CondorDAGNode):
 
 
 # get input arguments
-ref_psd = sys.argv[1]
-input_cache = sys.argv[2]
+ifo = sys.argv[1]
+ref_psd = sys.argv[2]
+input_cache = sys.argv[3]
 psdname = ref_psd.split('.')[0]
-flow = float(sys.argv[3])
+flow = float(sys.argv[4])
 
 try: os.mkdir("logs")
 except: pass
@@ -118,7 +121,7 @@ iirNode = {}
 
 for f in [lal.CacheEntry(line).path() for line in open(input_cache)]:
 	print f
-	iirNode[f] = gstlal_iir_bank_node(iirJob, dag, f, flow=flow, reference_psd=ref_psd)
+	iirNode[f] = gstlal_iir_bank_node(iirJob, dag, f, ifo, flow=flow, reference_psd=ref_psd)
 
 dag.write_sub_files()
 dag.write_dag()
