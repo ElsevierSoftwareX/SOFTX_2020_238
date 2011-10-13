@@ -89,7 +89,16 @@ GstBuffer *gstlal_double_new_buffer_from_peak(struct gstlal_double_peak_samples_
 	GstBuffer *srcbuf = NULL;
 	GstCaps *caps = GST_PAD_CAPS(pad);
 	GstFlowReturn result = gst_pad_alloc_buffer(pad, offset, size, caps, &srcbuf);
-       
+
+	/* FIXME someday with better gap support don't actually allocate data
+	 * in this case.  For now we just mark it as a gap but let the rest of
+	 * this function do its thing so that we get a buffer allocated with
+	 * zeros 
+	 */
+	
+	if (input->num_events == 0)
+		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
+
        	if (result != GST_FLOW_OK)
 		return srcbuf;
 
