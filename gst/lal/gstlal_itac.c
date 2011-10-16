@@ -256,7 +256,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GstBuffer *srcbuf = NULL;
 	guint64 maxsize = output_num_bytes(element);
 	gboolean copied_gap, copied_nongap;
-	guint outsamps, gapsamps;
+	guint outsamps, gapsamps, nongapsamps;
 
 	/* if we haven't allocated storage do it now, we should never try to copy from an adapter with a larger buffer than this */
 	if (!element->data)
@@ -291,21 +291,22 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	while(gst_audioadapter_available_samples(element->adapter) >= element->n) {
 
 		/* See if the output is a gap or not */
+		nongapsamps = gst_audioadapter_head_nongap_length(element->adapter);
 		gapsamps = gst_audioadapter_head_gap_length(element->adapter);
 
 		if (gapsamps > 0) {
-			outsamps = gst_audioadapter_head_gap_length(element->adapter) > element->n ? element->n : gst_audioadapter_head_gap_length(element->adapter);
+			outsamps = gapsamps > element->n ? element->n : gapsamps;
 			/* Clearing the max data structure causes the resulting buffer to be a GAP */
 			gstlal_double_peak_samples_and_values_clear(element->maxdata);
-			srcbuf = gstlal_double_new_buffer_from_peak(element->maxdata, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
 		}
 		else {
-			outsamps = gst_audioadapter_head_nongap_length(element->adapter) > element->n ? element->n : gst_audioadapter_head_nongap_length(element->adapter);
+			outsamps = nongapsamps > element->n ? element->n : nongapsamps;
 			/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
 			gst_audioadapter_copy(element->adapter, (void *) element->data, outsamps, &copied_gap, &copied_nongap);
 			gstlal_double_peak_over_window(element->maxdata, (const double *) element->data, outsamps);
-			srcbuf = gstlal_double_new_buffer_from_peak(element->maxdata, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
 		}	
+		
+		srcbuf = gstlal_double_new_buffer_from_peak(element->maxdata, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
 
 		/* set the time stamp and offset state */
 		update_state(element, srcbuf);
