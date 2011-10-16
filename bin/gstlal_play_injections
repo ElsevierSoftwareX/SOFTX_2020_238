@@ -79,6 +79,9 @@ def parse_command_line():
 	if len(filenames) > 1:
 		raise ValueError, "maximum of one input file allowed"
 
+	if options.output is not None and not (options.output.endswith('.txt') or options.output.endswith('.wav')):
+		raise ValueError("output file name must end in .txt or .wav")
+
 	return options, filenames
 
 
@@ -115,10 +118,15 @@ head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float,rate=16384")
 head = pipeparts.mkinjections(pipeline, head, filename)
 head = pipeparts.mkaudioamplify(pipeline, head, options.amplification)
 if options.output is not None:
-	head = pipeparts.mkwavenc(pipeline, head)
-	if options.verbose:
-		head = pipeparts.mkprogressreport(pipeline, head, options.output)
-	pipeparts.mkfilesink(pipeline, head, options.output)
+	if options.output.endswith('.wav'):
+		head = pipeparts.mkwavenc(pipeline, head)
+		if options.verbose:
+			head = pipeparts.mkprogressreport(pipeline, head, options.output)
+		pipeparts.mkfilesink(pipeline, head, options.output)
+	elif options.output.endswith('.txt'):
+		head = pipeparts.mknxydumpsink(pipeline, head, options.output)
+	else:
+		raise ValueError('output must end with .wav or .txt')
 else:
 	if options.verbose:
 		head = pipeparts.mkprogressreport(pipeline, head, "audio output")
