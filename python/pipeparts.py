@@ -658,6 +658,15 @@ def mkpeak(pipeline, src, n):
 	src.link(elem)
 	return elem
 
+
+def mkitac(pipeline, src, n):
+	elem = gst.element_factory_make("lal_itac")
+	elem.set_property("n", n)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
 def mksyncsink(pipeline, srcs):
 	"""
 	add streams together and dump to a fake sink.  this can be used to
