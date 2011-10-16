@@ -130,25 +130,51 @@ gboolean gst_audioadapter_is_gap(GstAudioAdapter *adapter)
 
 guint gst_audioadapter_head_gap_length(GstAudioAdapter *adapter)
 {
-	guint gap_length = 0;
+	guint length = 0;
 	GList *head;
 
 	for(head = g_queue_peek_head_link(adapter->queue); head && GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP); head = g_list_next(head))
-		gap_length += GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data);
+		length += GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data);
+	length = length > adapter->skip ? length - adapter->skip : 0;
 
-	return MIN(gap_length, adapter->size);
+	return MIN(length, adapter->size);
 }
 
 
 guint gst_audioadapter_tail_gap_length(GstAudioAdapter *adapter)
 {
-	guint gap_length = 0;
+	guint length = 0;
 	GList *tail;
 
 	for(tail = g_queue_peek_tail_link(adapter->queue); tail && GST_BUFFER_FLAG_IS_SET(GST_BUFFER(tail->data), GST_BUFFER_FLAG_GAP); tail = g_list_previous(tail))
-		gap_length += GST_BUFFER_OFFSET_END(tail->data) - GST_BUFFER_OFFSET(tail->data);
+		length += GST_BUFFER_OFFSET_END(tail->data) - GST_BUFFER_OFFSET(tail->data);
 
-	return MIN(gap_length, adapter->size);
+	return MIN(length, adapter->size);
+}
+
+
+guint gst_audioadapter_head_nongap_length(GstAudioAdapter *adapter)
+{
+	guint length = 0;
+	GList *head;
+
+	for(head = g_queue_peek_head_link(adapter->queue); head && !GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP); head = g_list_next(head))
+		length += GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data);
+	length = length > adapter->skip ? length - adapter->skip : 0;
+
+	return MIN(length, adapter->size);
+}
+
+
+guint gst_audioadapter_tail_nongap_length(GstAudioAdapter *adapter)
+{
+	guint length = 0;
+	GList *tail;
+
+	for(tail = g_queue_peek_tail_link(adapter->queue); tail && !GST_BUFFER_FLAG_IS_SET(GST_BUFFER(tail->data), GST_BUFFER_FLAG_GAP); tail = g_list_previous(tail))
+		length += GST_BUFFER_OFFSET_END(tail->data) - GST_BUFFER_OFFSET(tail->data);
+
+	return MIN(length, adapter->size);
 }
 
 
