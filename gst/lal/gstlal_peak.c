@@ -1,7 +1,7 @@
 /*
- * An element to find peaks
+ * An peak finding element
  *
- * Copyright (C) 2011  Chad Hanna
+ * Copyright (C) 2011  Chad Hanna, Kipp Cannon
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,7 +50,8 @@
 
 #include <gstlal.h>
 #include <gstlal_peak.h>
-
+#include <gstlal_peakfinder.h>
+#include <gstaudioadapter.h>
 
 static guint64 output_num_samps(GSTLALPeak *element)
 {
@@ -60,20 +61,7 @@ static guint64 output_num_samps(GSTLALPeak *element)
 
 static guint64 output_num_bytes(GSTLALPeak *element)
 {
-	return (guint64) output_num_samps(element) * element->unit_size;
-}
-
-
-static GstClockTime output_duration(GSTLALPeak *element)
-{
-	return (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, output_num_samps(element), element->rate);
-}
-
-
-static guint64 available_samples(GSTLALPeak *element)
-{
-	/*FIXME check that the number of bytes is factor of unit size */
-	return (guint64) gst_adapter_available(element->adapter) / element->unit_size;
+	return (guint64) output_num_samps(element) * element->adapter->unit_size;
 }
 
 
@@ -84,51 +72,11 @@ static int reset_time_and_offset(GSTLALPeak *element)
 	return 0;
 }
 
-
-static guint peak_finder(GSTLALPeak *element, GstBuffer *srcbuf)
+static guint gst_audioadapter_available_samples(GstAudioAdapter *adapter)
 {
-	guint64 length = output_num_samps(element);
-	/*
-	 * Pointer arithmetic to define three buffer regions, we'll identify triggers in the middle
-	 * Peeks are okay, we want the data to remain in the adapters
-	 */
-
-	const double *data = (const double *) gst_adapter_peek(element->adapter, 1 * GST_BUFFER_SIZE(srcbuf));
-	double *outputdata = (double *) GST_BUFFER_DATA(srcbuf);
-
-	guint sample;
-	guint channel;
-	double *maxdata = NULL;
-	guint *maxsample = NULL;
-	guint index;
-	
-	/* FIXME make array to store the max part of element instance for performance */
-	if (!element->maxdata) element->maxdata = (double *) calloc(element->channels, sizeof(double));
-	else memset(element->maxdata, 0.0, element->channels * sizeof(double));
-	if (!element->maxsample) element->maxsample = (guint *) calloc(element->channels, sizeof(guint));
-	else memset(element->maxsample, 0.0, element->channels * sizeof(guint));
-	maxdata = element->maxdata;
-	maxsample = element->maxsample;
-	
-	/* Find maxima of the data */
-	for(sample = 0; sample < length; sample++) {
-		for(channel = 0; channel < element->channels; channel++) {
-			if(fabs(*data) > fabs(maxdata[channel])) {
-				maxdata[channel] = *data;
-				maxsample[channel] = sample;
-			}
-		data++;
-		}
-	}
-	
-	/* Decide if there are any events to keep */
-	for(channel = 0; channel < element->channels; channel++) {
-		if ( maxdata[channel] ) {
-			index = maxsample[channel] * element->channels + channel;
-			outputdata[index] = maxdata[channel];
-		}
-	}
-	return 0;
+	guint size;
+	g_object_get(adapter, "size", &size, NULL);
+	return size;
 }
 
 
@@ -272,7 +220,8 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	if(success) {
 		element->channels = channels;
 		element->rate = rate;
-		element->unit_size = width / 8 * channels;
+		g_object_set(element->adapter, "unit-size", width / 8 * channels, NULL);
+		element->maxdata = gstlal_double_peak_samples_and_values_new(channels);
 	}
 
 	/*
@@ -288,51 +237,10 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
  * chain()
  */
 
-
-static GstFlowReturn prepare_output_buffer(GSTLALPeak *element, GstBuffer **srcbuf)
+static void update_state(GSTLALPeak *element, GstBuffer *srcbuf)
 {
-	GstFlowReturn result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, output_num_bytes(element), GST_PAD_CAPS(element->srcpad), srcbuf);
-	if(result != GST_FLOW_OK)
-		return result;
-
-	g_assert(GST_BUFFER_CAPS(*srcbuf) != NULL);
-	g_assert(GST_PAD_CAPS(element->srcpad) == GST_BUFFER_CAPS(*srcbuf));
-	
-	/* set the offset */
-	GST_BUFFER_OFFSET(*srcbuf) = element->next_output_offset;
-	element->next_output_offset += output_num_samps(element);
-	GST_BUFFER_OFFSET_END(*srcbuf) = element->next_output_offset;
-
-	/* set the time stamps */
-	GST_BUFFER_TIMESTAMP(*srcbuf) = element->next_output_timestamp;
-	element->next_output_timestamp += output_duration(element);
-	GST_BUFFER_DURATION(*srcbuf) = output_duration(element);
-	
-	/* memset to zero */
-	memset(GST_BUFFER_DATA(*srcbuf), 0, GST_BUFFER_SIZE(*srcbuf));
-
-	return result;
-
-}
-
-static int push_zeros(GSTLALPeak *element, GstBuffer *inbuf)
-{
-
-	/*
-	 * Function to push zeros into the specified adapter
-	 * useful when there are gaps
-	 */
-
-	guint bytes = GST_BUFFER_SIZE(inbuf);
-	GstBuffer *zerobuf = gst_buffer_new_and_alloc(bytes);
-	if(!zerobuf) {
-		GST_DEBUG_OBJECT(element, "failure allocating zero-pad buffer");
-		return -1;
-	}
-	gst_buffer_copy_metadata(zerobuf, inbuf, GST_BUFFER_COPY_TIMESTAMPS | GST_BUFFER_COPY_CAPS);
-	memset(GST_BUFFER_DATA(zerobuf), 0, GST_BUFFER_SIZE(zerobuf));
-	gst_adapter_push(element->adapter, zerobuf);
-	return 0;
+	element->next_output_offset = GST_BUFFER_OFFSET_END(srcbuf);
+	element->next_output_timestamp = GST_BUFFER_TIMESTAMP(srcbuf) + GST_BUFFER_DURATION(srcbuf);
 }
 
 static GstFlowReturn push_buffer(GSTLALPeak *element, GstBuffer *srcbuf)
@@ -347,6 +255,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	GstFlowReturn result = GST_FLOW_OK;
 	GstBuffer *srcbuf = NULL;
 	guint64 maxsize = output_num_bytes(element);
+	gboolean copied_gap, copied_nongap;
+	guint outsamps, gapsamps, nongapsamps;
+
+	/* if we haven't allocated storage do it now, we should never try to copy from an adapter with a larger buffer than this */
+	if (!element->data)
+		element->data = (double *) malloc(maxsize);
 
 	/*
 	 * check validity of timestamp and offsets
@@ -362,30 +276,46 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	/* FIXME if we were more careful we wouldn't lose so much data around disconts */
 	if (GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT)) {
 		reset_time_and_offset(element);
-		gst_adapter_clear(element->adapter);
+		gst_audioadapter_clear(element->adapter);
 	}
 
 	/* if we don't have a valid first timestamp yet take this one */
 	if (element->next_output_timestamp == GST_CLOCK_TIME_NONE) {
-		element->next_output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);
+		element->next_output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);// + output_duration(element);
 	}
 
-	/* put the incoming buffer into an adapter or push zeros if gap */
+	/* put the incoming buffer into an adapter, handles gaps */
+	gst_audioadapter_push(element->adapter, sinkbuf);
 
-	if (GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP))
-		push_zeros(element, sinkbuf);
-	else {
-		gst_adapter_push(element->adapter, sinkbuf);
-	}
-	
 	/* while we have enough data to do the calculation, do it and push out buffers n samples long */
-	while(gst_adapter_available(element->adapter) >= 1 * maxsize && result == GST_FLOW_OK) {
-		if (prepare_output_buffer(element, &srcbuf) == GST_FLOW_OK) {
-			peak_finder(element, srcbuf);
-			result = push_buffer(element, srcbuf);
-			/* knock off the first buffers worth of bytes since we don't need them any more */
-			gst_adapter_flush(element->adapter, output_num_bytes(element));
+	while(gst_audioadapter_available_samples(element->adapter) >= element->n) {
+
+		/* See if the output is a gap or not */
+		nongapsamps = gst_audioadapter_head_nongap_length(element->adapter);
+		gapsamps = gst_audioadapter_head_gap_length(element->adapter);
+
+		if (gapsamps > 0) {
+			outsamps = gapsamps > element->n ? element->n : gapsamps;
+			/* Clearing the max data structure causes the resulting buffer to be a GAP */
+			gstlal_double_peak_samples_and_values_clear(element->maxdata);
 		}
+		else {
+			outsamps = nongapsamps > element->n ? element->n : nongapsamps;
+			/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
+			gst_audioadapter_copy(element->adapter, (void *) element->data, outsamps, &copied_gap, &copied_nongap);
+			gstlal_double_peak_over_window(element->maxdata, (const double *) element->data, outsamps);
+		}	
+		
+		srcbuf = gstlal_double_new_buffer_from_peak(element->maxdata, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
+
+		/* set the time stamp and offset state */
+		update_state(element, srcbuf);
+
+		/* push the result */
+		result = push_buffer(element, srcbuf);
+
+		/* knock off the first buffers worth of bytes since we don't need them any more */
+		gst_audioadapter_flush(element->adapter, outsamps);
 	}
 
 done:
@@ -424,9 +354,7 @@ static void finalize(GObject *object)
 	element->sinkpad = NULL;
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
-
-	/*FIXME handle adapter */
-
+	g_object_unref(element->adapter);
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
@@ -537,10 +465,9 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	/* internal data */
 	element->rate = 0;
-	element->unit_size = 0;
 	reset_time_and_offset(element);
 
-	element->adapter = gst_adapter_new();
+	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
 }
 
 
