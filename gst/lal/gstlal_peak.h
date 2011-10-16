@@ -33,7 +33,8 @@
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
-
+#include <gstlal_peakfinder.h>
+#include <gstaudioadapter.h>
 
 G_BEGIN_DECLS
 
@@ -63,14 +64,12 @@ typedef struct {
 	GstPad *srcpad;
 
 	gint rate;
-	gint unit_size;
 	guint n;
 	guint channels;
-	GstAdapter *adapter;
+	GstAudioAdapter *adapter;
 
-	double *maxdata;
-	guint *maxsample;
-	
+	struct gstlal_double_peak_samples_and_values *maxdata;
+	double *data;
 	guint64 next_output_offset;
 	GstClockTime next_output_timestamp;
 
