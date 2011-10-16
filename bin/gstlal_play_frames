@@ -1,0 +1,107 @@
+#!/usr/bin/python
+
+import sys
+import numpy
+
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require('0.10')
+import gst
+from gstlal import pipeparts
+from gstlal import lloidparts
+from gstlal import reference_psd
+from optparse import OptionParser
+from glue.ligolw.utils import segments as ligolw_segments
+from glue.ligolw import utils
+
+class Handler(object):
+	def __init__(self, mainloop, pipeline):
+		self.mainloop = mainloop
+		self.pipeline = pipeline
+		bus = pipeline.get_bus()
+		bus.add_signal_watch()
+		bus.connect("message", self.on_message)
+
+	def on_message(self, bus, message):
+		if message.type == gst.MESSAGE_EOS:
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
+		elif message.type == gst.MESSAGE_ERROR:
+			gerr, dbgmsg = message.parse_error()
+			print >>sys.stderr, "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the injections (optional).")
+	parser.add_option("--gps-start-time", help="GPS start time (required)", type="float")
+	parser.add_option("--gps-end-time", help="GPS end time (required)", type="float")
+	parser.add_option("--frame-cache", help="frame-cache. If not specified fake data will be used", type="str")
+	parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the output")
+	parser.add_option("--instrument", metavar="IFO", help="set the instrument default H1", default="H1")
+	parser.add_option("--channel-name", metavar="channel", help="set the channel default LSC-STRAIN", default="LSC-STRAIN")
+	parser.add_option("--reference-psd", metavar="xml-file", help="reference psd XML file") 
+	parser.add_option("--vetoes", metavar="xml-file", help="veto segments XML file") 
+	parser.add_option("--veto-segments-name", metavar="string", help="veto segments name", default="vetoes") 
+	parser.add_option("--ht-gate-threshold", metavar="float", type="float", help="SNR threshold default is disabled", default=None) 
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+	
+	options, filenames = parser.parse_args()
+
+	fail = ""
+	for option in ("gps_start_time", "gps_end_time", "frame_cache", "instrument", "channel_name"):
+		if getattr(options, option) is None:
+			fail += "must provide option %s\n" % (option)
+
+	if fail: raise ValueError, fail
+	
+	return options, filenames
+
+
+# parsing and setting up some core structures
+options, filenames = parse_command_line()
+detector = lloidparts.DetectorData(options.frame_cache, options.channel_name)
+seekevent = lloidparts.seek_event_for_gps(options.gps_start_time, options.gps_end_time)
+
+if options.vetoes:
+	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes, verbose = options.verbose), options.veto_segments_name).coalesce()[options.instrument]
+else:
+	veto_segments = None
+
+print veto_segments
+
+if options.reference_psd is not None:
+	psd = reference_psd.read_psd(options.reference_psd, verbose = options.verbose)
+else:
+	psd = None
+
+# building the event loop and pipeline
+gobject.threads_init()
+mainloop = gobject.MainLoop()
+pipeline = gst.Pipeline("test")
+
+# the pipeline
+
+rates = [2048]
+
+head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, options.instrument, detector, fake_data = None, online_data = False, injection_filename = options.injections, verbose = options.verbose)
+
+head = lloidparts.mkLLOIDsrc(pipeline, head, rates, options.instrument, psd = psd, ht_gate_threshold = options.ht_gate_threshold, veto_segments = veto_segments, seekevent = seekevent, block_duration = 10 * gst.SECOND)
+
+if options.output.endswith(".wav"):
+	head = pipeparts.mkflacenc(pipeline, head[rates[0]])
+	pipeparts.mkfilesink(pipeline, head, options.output)
+else:
+	pipeparts.mknxydumpsink(pipeline, head[rates[0]], "test.txt")
+
+handler = Handler(mainloop, pipeline)
+
+gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL,"test.dot")
+pipeline.set_state(gst.STATE_PAUSED)
+#gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL,"test.dot")
+pipeline.set_state(gst.STATE_PLAYING)
+mainloop.run()
