@@ -45,8 +45,8 @@ dec = numpy.arccos((random.rand(expnum) - 0.5) * 2) - numpy.pi / 2.
 pol = random.rand(expnum) * 2 * numpy.pi
 inc = numpy.arccos((random.rand(expnum) - 0.5) * 2)
 phase = random.rand(expnum) * 2 * numpy.pi
-spin1z = 0.1 * (random.rand(expnum) - 0.5) # spins between -0.05 and +0.05
-spin2z = 0.1 * (random.rand(expnum) - 0.5) # spins between -0.05 and +0.05
+spin1z = numpy.zeros(expnum) # 0.1 * (random.rand(expnum) - 0.5) # spins between -0.05 and +0.05
+spin2z = numpy.zeros(expnum) # * (random.rand(expnum) - 0.5) # spins between -0.05 and +0.05
 
 # setup the output document
 xmldoc = ligolw.Document()
@@ -60,7 +60,7 @@ for i,t in enumerate(time):
 	row = sim.RowType()
 	
 	# string paramters
-	row.waveform = "SpinTaylorFramelessthreePointFivePN"
+	row.waveform = "TaylorT4threePointFivePN"
 	row.source = ""
 	row.numrel_data = ""
 	row.taper = "TAPER_START"
