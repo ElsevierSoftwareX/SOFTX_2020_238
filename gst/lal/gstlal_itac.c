@@ -304,8 +304,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
 			gst_audioadapter_copy(element->adapter, (void *) element->data, outsamps, &copied_gap, &copied_nongap);
 			gstlal_double_peak_over_window(element->maxdata, (const double *) element->data, outsamps);
-		}	
-		
+		}
+
 		srcbuf = gstlal_double_new_buffer_from_peak(element->maxdata, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
 
 		/* set the time stamp and offset state */
