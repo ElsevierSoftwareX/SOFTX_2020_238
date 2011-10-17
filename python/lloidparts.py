@@ -318,14 +318,11 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 
 	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = 0, average_samples = 64, median_samples = 7)
 	if psd is None:
-		print "psd is none"
 		# use running average PSD
 		head.set_property("psd-mode", 0)
 	else:
-		print "psd is not none"
 		# use running psd
 		if track_psd:
-			print "tracking psd"
 			head.set_property("psd-mode", 0)
 		# use fixed PSD
 		else:
