@@ -318,11 +318,14 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 
 	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = 0, average_samples = 64, median_samples = 7)
 	if psd is None:
+		print "psd is none"
 		# use running average PSD
 		head.set_property("psd-mode", 0)
 	else:
+		print "psd is not none"
 		# use running psd
 		if track_psd:
+			print "tracking psd"
 			head.set_property("psd-mode", 0)
 		# use fixed PSD
 		else:
@@ -876,6 +879,119 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 
 
 #
+# SPIIR many instruments, many template banks
+#
+
+
+def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, ht_gate_threshold = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND):
+	#
+	# check for recognized value of chisq_type
+	#
+
+	if chisq_type not in ['autochisq']:
+		raise ValueError, "chisq_type must be either 'autochisq', given %s" % (chisq_type)
+
+	#
+	# extract segments from the injection file for selected reconstruction
+	#
+
+	if injection_filename is not None:
+		inj_seg_list = simulation.sim_inspiral_to_segment_list(injection_filename)
+	else:
+		inj_seg_list = None
+
+	#
+	# construct dictionaries of whitened, conditioned, down-sampled
+	# h(t) streams
+	#
+
+	hoftdicts = {}
+	for instrument in detectors:
+		print instrument
+		rates = set(rate for bank in banks[instrument] for rate in bank.rates) # FIXME what happens if the rates are not the same?
+		src = mkLLOIDbasicsrc(pipeline,
+			seekevent,
+			instrument,
+			detectors[instrument],
+			fake_data = fake_data,
+			online_data = online_data,
+			injection_filename = injection_filename,
+			frame_segments = None, #frame_segments[instrument],
+			verbose = verbose)
+		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration)
+		hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration)
+
+	#
+	# construct trigger generators
+	#
+
+	triggersrc = set()
+	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
+		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
+
+		snr = mkSPIIRhoftToSnrSlices(
+			pipeline,
+			hoftdicts[instrument],
+			bank,
+			instrument,
+			verbose = verbose,
+			nxydump_segment = nxydump_segment,
+		)
+		snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
+
+		snr = pipeparts.mktogglecomplex(pipeline, snr)
+		snr = pipeparts.mktee(pipeline, snr)
+		chisq = mkLLOIDSnrToAutoChisq(pipeline, pipeparts.mkqueue(pipeline, snr, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * block_duration), bank)
+		# FIXME:  find a way to use less memory without this hack
+		del bank.autocorrelation_bank
+		#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
+		#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(bank.get_rates())], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
+		triggersrc.add(mkLLOIDSnrChisqToTriggers(
+			pipeline,
+			pipeparts.mkqueue(pipeline, snr, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration),
+			chisq,
+			bank,
+			verbose = verbose,
+			nxydump_segment = nxydump_segment,
+			logname = suffix
+		))
+
+	#
+	# if there is more than one trigger source, synchronize the streams
+	# with a multiqueue then use an n-to-1 adapter to combine into a
+	# single stream
+	#
+
+	assert len(triggersrc) > 0
+	if len(triggersrc) > 1:
+		# send all streams through a multiqueue
+		queue = gst.element_factory_make("multiqueue")
+		pipeline.add(queue)
+		for head in triggersrc:
+			head.link(queue)
+		triggersrc = queue
+		# FIXME:  it has been reported that the input selector
+		# breaks seeks.  confirm and fix if needed
+		# FIXME:  input-selector in 0.10.32 no longer has the
+		# "select-all" feature.  need to get this re-instated
+		#nto1 = gst.element_factory_make("input-selector")
+		#nto1.set_property("select-all", True)
+		#pipeline.add(nto1)
+		#for pad in queue.src_pads():
+		#	pad.link(nto1)
+		#triggersrc = nto1
+	else:
+		# len(triggersrc) == 1
+		triggersrc, = triggersrc
+
+	#
+	# done
+	#
+
+	return triggersrc
+
+
+#
 # on-the-fly thinca implementation
 #
 
@@ -1013,3 +1129,27 @@ class StreamThinca(object):
 			row = self.sngl_inspiral_table.pop()
 			if row.event_id in newids:
 				self.dataobj.sngl_inspiral_table.append(row)
+
+
+def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, quality = 4, verbose = None, nxydump_segment = None):
+	sample_rates = bank.rates
+
+	#FIXME don't upsample everything to a common rate
+	max_rate = max(sample_rates)
+	adder = gst.element_factory_make("lal_adder")
+	adder.set_property("sync", True)
+	pipeline.add(adder)
+
+	for sr in sample_rates:
+		head = pipeparts.mkqueue(pipeline, src[sr], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
+		head = pipeparts.mkiirbank(pipeline, head, a1 = bank.A[sr], b0 = bank.B[sr], delay = bank.D[sr], name = "gstlaliirbank_%s_%d" % (instrument, sr))
+		#head = pipeparts.mkprogressreport(pipeline, head, "afteriirbank_%d" % (sr))
+		head = pipeparts.mkresample(pipeline, head, quality = quality)
+		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max_rate)
+		#head = pipeparts.mknxydumpsinktee(pipeline, head, "output_%d.txt" % (sr), segment = options.nxydump_segment)
+		# FIXME make this queue the "right" size
+		#head = pipeparts.mkqueue(pipeline, head, max_size_time=gst.SECOND * 100, max_size_buffers=0, max_size_bytes=0)
+		head.link(adder)
+
+	adder = pipeparts.mkcapsfilter(pipeline, adder, "audio/x-raw-float, rate=%d" % max_rate)
+	return adder
