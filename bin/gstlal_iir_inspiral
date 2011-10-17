@@ -27,19 +27,41 @@
 #
 
 
-import math
 import sys
 import os
-import scipy
-import numpy
-#import pylab
+import threading
+import warnings
 from optparse import OptionParser
+
+
+# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require("0.10")
+import gst
+
+
 from glue import segments
 from glue import segmentsUtils
+from glue.ligolw import utils
 from pylal.datatypes import LIGOTimeGPS
-from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 from gstlal import ligolw_output
+from gstlal import pipeparts
+from gstlal import lloidparts
+from gstlal import reference_psd
+from gstlal import cbc_template_iir
 
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
 
 def parse_banks(bank_string):
 	"""
@@ -52,35 +74,6 @@ def parse_banks(bank_string):
 		ifo, bank = b.split(':')
 		out.setdefault(ifo, []).append(bank)
 	return out
-
-
-def iir_bank(pipeline, src, sample_rates, a1, b0, delay, quality = 4):
-	#FIXME don't upsample everything to a common rate
-	max_rate = max(sample_rates)
-	adder = gst.element_factory_make("lal_adder")
-	adder.set_property("sync", True)
-	pipeline.add(adder)
-
-	for sr in sample_rates:
-		#print D[sr].min()
-		#head = pipeparts.mkdrop(pipeline, src[sr], drop_samples=D[sr].min())
-		head = pipeparts.mkqueue(pipeline, src[sr], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
-		head = pipeparts.mkiirbank(pipeline, head, a1 = a1[sr], b0 = b0[sr], delay = delay[sr], name = "gstlaliirbank%d" % (sr)) # FIXME: does the name need to be unique?
-		#head = pipeparts.mkprogressreport(pipeline, head, "afteriirbank_%d" % (sr))
-		head = pipeparts.mkresample(pipeline, head, quality = quality)
-		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max_rate)
-		#head = pipeparts.mknxydumpsinktee(pipeline, head, "output_%d.txt" % (sr), segment = options.nxydump_segment)
-		# FIXME make this queue the "right" size
-		#head = pipeparts.mkqueue(pipeline, head, max_size_time=gst.SECOND * 100, max_size_buffers=0, max_size_bytes=0)
-		head.link(adder)
-
-	adder = pipeparts.mkcapsfilter(pipeline, adder, "audio/x-raw-float, rate=%d" % max_rate)
-	return adder
-
-
-#
-# A function for parsing command line
-#
 
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
@@ -97,6 +90,9 @@ def parse_command_line():
 	parser.add_option("--comment",  metavar="str")
 	parser.add_option("--snr-threshold", type="float", help="SNR threshold default 5.5", default=5.5)
 	parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
+	parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
+	parser.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.")
+	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.020, help = "Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 
@@ -105,33 +101,51 @@ def parse_command_line():
 	if sum(1 for option in ('frame_cache', 'fake_data', ) if getattr(options, option) is not None) != 1: # FIXME: what about oline_data?
 		raise ValueError, "must provide exactly one of --frame-cache, --fake-data"
 
+	if options.fake_data not in (None, "LIGO", "AdvLIGO"):
+		raise ValueError("unrecognized value for --fake-data %s" % options.fake_data)
+
+	required_options = ["output"]
+	print "HERE ", required_options
+
+
+
+
 	if options.frame_cache:
 		required_options += ["channel_name", "gps_start_time", "gps_end_time"]
 
-	fail = ""
-	for option in ("iir_bank", "output", "gps_start_time", "gps_end_time"):
-		if getattr(options, option) is None:
-			fail += "must provide option %s\n" % (option)
+	missing_options = []
+	if options.iir_bank is None:
+		missing_options += ["--iir-bank"]
+	missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
+	if missing_options:
+		raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
 
-	if fail: raise ValueError, fail
-
-	effective_gps_start_time = LIGOTimeGPS(options.gps_start_time)
-	effective_gps_end_time = LIGOTimeGPS(options.gps_end_time)
+	# Get the banks and make the detectors
+	iir_banks = parse_banks(options.iir_bank)
+	detectors = {}
+	for instrument in set(iir_banks.keys()):
+		detectors[instrument] = lloidparts.DetectorData(options.frame_cache, options.channel_name)
 
 	process_params = ligolw_output.make_process_params(options) #FIXME override program name
-	options.seg = segments.segment(effective_gps_start_time, effective_gps_end_time)
+
+	options.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
 
 	options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
 
-	return options, filenames, process_params
+	# hard-coded.  this number is needed in a few places, and storing
+	# it in with the options is a convenient home
+	options.psd_fft_length = 8	# seconds
+
+	return options, filenames, process_params, iir_banks, detectors
 
 #
 # =============================================================================
 #
-#                                     Main
+#                                     Misc
 #
 # =============================================================================
 #
+
 
 #
 # write the pipeline to a dot file.
@@ -149,152 +163,190 @@ def write_dump_dot(pipeline, filestem, verbose = False):
 	"""
 	if "GST_DEBUG_DUMP_DOT_DIR" not in os.environ:
 		raise ValueError, "cannot write pipeline, environment variable GST_DEBUG_DUMP_DOT_DIR is not set"
-	gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS, filestem)
+	gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, filestem)
 	if verbose:
 		print >>sys.stderr, "Wrote pipeline to %s" % os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], "%s.dot" % filestem)
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
 
 #
 # parse command line
 #
 
 
-options, filenames, process_params = parse_command_line()
+options, filenames, process_params, iir_banks, detectors = parse_command_line()
 
 
 #
-# Import everything that depends on GStreamer
+# construct pipeline metadata and measure or retrieve the PSD
 #
 
-from gstlal import cbc_template_iir
-from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
-from gstlal.reference_psd import read_psd
-from glue.ligolw import utils, param
-from gstlal import pipeutil
-from gstlal.lloidparts import seek_event_for_gps
-from gstlal.pipeutil import gobject, gst
-from gstlal import pipeparts
-from gstlal import lloidparts
+
+seekevent = lloidparts.seek_event_for_gps(options.gps_start_time, options.gps_end_time)
+
+# FIXME correct where this is actually used, and for track psd
+if options.reference_psd is not None:
+	psd = reference_psd.read_psd(options.reference_psd, verbose = options.verbose)
+elif options.track_psd:
+	psd = {}
+	for instrument in detectors:
+		psd[instrument] = None
+## else:
+## 	for instrument in detectors:
+## 		# FIXME right now vetoes are applied after whitening.  If that
+## 		# changes this function will need to know about vetoes too
+## 		psd[instrument] = reference_psd.measure_psd(
+## 			instrument,
+## 			seekevent,
+## 			detectors[instrument],
+## 			options.seg,
+## 			2 * 2048,	# Hz;  must not be less than highest bank fragment sample rate (see below)
+## 			psd_fft_length = options.psd_fft_length,
+## 			fake_data = options.fake_data,
+## 			injection_filename = options.injections,
+## 			verbose = options.verbose
+## 		)
+## 		if options.write_psd is not None:
+## 			reference_psd.write_psd("%s-%s" % (instrument, options.write_psd), psd, instrument=instrument, verbose = options.verbose)
 
 
 #
-# extract parameters from the bank
+# Get IIR banks
 #
 
-banks = parse_banks(options.iir_bank)
-snr_threshold = options.snr_threshold
+banks = {}
 
-# get the pipeline running
+for instrument, files in iir_banks.items():
+	for filename in files:
+		bank = cbc_template_iir.load_iirbank(filename, options.snr_threshold, options.verbose)
+		banks.setdefault(instrument,[]).append(bank)
+
+for instrument in banks:
+	for n, bank in enumerate(banks[instrument]):
+		bank.logname = "%sbank%d" % (instrument,n)
+
+#
+# Build pipeline
+#
+
+
+if options.verbose:
+	print >>sys.stderr, "assembling pipeline ...",
+
 pipeline = gst.Pipeline("gstlal_iir_inspiral")
 mainloop = gobject.MainLoop()
 handler = lloidparts.LLOIDHandler(mainloop, pipeline)
-seekevent = seek_event_for_gps(options.gps_start_time, options.gps_end_time)
-options.out_seg = segments.segment(options.seg[0], options.seg[1]) #FIXME make better outseg def.
+
+
+triggersrc = lloidparts.mkSPIIRmulti(
+	pipeline,
+	seekevent,
+	detectors = detectors,
+	banks = banks,
+	psd = psd,
+	psd_fft_length = options.psd_fft_length,
+	fake_data = options.fake_data,
+	online_data = None, # FIXME so that this can use options.online_data,
+	injection_filename = options.injections,
+	ht_gate_threshold = None, # FIXME correct this argument options.ht_gate_threshold,
+	verbose = options.verbose,
+	nxydump_segment = options.nxydump_segment,
+	frame_segments = None, # FIXME to frame_segments,
+	chisq_type = options.chisq_type,
+	track_psd = options.track_psd,
+)
+
+
+if options.verbose:
+	print >>sys.stderr, "done"
 
 
 #
-# loop over instruments FIXME for now it is just one instrument :)
+# build output document
 #
-detectors = {}
-for ifo, bank in banks.items():
-	detectors[ifo] = lloidparts.DetectorData(options.frame_cache, options.channel_name)
 
-# FIXME ADD MORE
-data = ligolw_output.Data(options.output, process_params, set(detectors), options.seg, options.out_seg, options.injections)
 
+if options.verbose:
+	print >>sys.stderr, "initializing output document ..."
+output = ligolw_output.Data(
+	filename = options.output,
+	process_params = process_params,
+	instruments = set(detectors),
+	seg = options.seg,
+	out_seg = options.seg, #FIXME make better outseg def?  Maybe pointless now that gstlal inspiral can analyze over frame gaps
+	injection_filename = options.injections,
+	comment = options.comment,
+	tmp_path = options.tmp_space,
+	verbose = options.verbose
+)
 #FIXME dont hardcode some of this
 stream_thinca = lloidparts.StreamThinca(
-	data,
+	output,
 	coincidence_threshold = 0.015,
 	coincidence_back_off = 2 * 5,	# coincidence back-off is twice AppSync dt
 	thinca_interval = 50.0	# seconds
 )
+if options.verbose:
+	print >>sys.stderr, "... output document initialized"
+
+if options.verbose:
+	print >>sys.stderr, "attaching appsinks to pipeline ...",
 
 appsinks = set()
-triggersrc = set()
 appsync = pipeparts.AppSync(appsink_new_buffer = stream_thinca.appsink_new_buffer, dt = 5)
 
-for ifo, bank in banks.items():
-
-	bankfile = bank[0]
-
-	#FIXME don't assume that you only want the 0th bank
-	xmldoc = utils.load_filename(bankfile)
-	A, B, D, autocor = cbc_template_iir.get_matrices_from_xml(xmldoc)
-	sample_rates = [int(s) for s in param.get_pyvalue(xmldoc, 'sample_rate').split(',')]
-	if options.verbose: print >> sys.stderr, sample_rates
-
-	#
-	# Set up data generation
-	#
-	head = lloidparts.mkLLOIDbasicsrc(
-		pipeline,
-		seekevent,
-		ifo,
-		detector = detectors[ifo],
-		fake_data = options.fake_data,
-		injection_filename = options.injections,
-		verbose = options.verbose)
-
-	#
-	# whiten data
-	#
-	head = lloidparts.mkLLOIDsrc(
-		pipeline,
-		head,
-		sample_rates,
-		ifo,
-		psd=None,
-		psd_fft_length = 8,
-		block_duration=gst.SECOND)
-
-	#
-	# IIR Filtering
-	#
-	head = iir_bank(pipeline, head, sample_rates, A, B, D, 10)
-
-	head = pipeparts.mkqueue(pipeline, head)
-	head = pipeparts.mkprogressreport(pipeline, head, "IIR output")
-	head = pipeparts.mkqueue(pipeline, head)
-
-	#pipeparts.mknxydumpsink(pipeline, head, "output_iir.txt", segment = options.nxydump_segment)
-
-	head = pipeparts.mktogglecomplex(pipeline, head)
-	head = pipeparts.mknofakedisconts(pipeline, head)
-
-	#
-	# Trigger generation
-	#
-
-	snr = chisq = pipeparts.mktee(pipeline, head)
-	chisq = pipeparts.mkqueue(pipeline, chisq)
-	chisq = pipeparts.mkautochisq(pipeline, chisq, autocorrelation_matrix = autocor, latency = -50, snr_thresh = snr_threshold)
-
-	sigmasq=numpy.ones(len(autocor)) # FIXME: make sigmasq correct
-	snr = pipeparts.mkqueue(pipeline, snr)
-
-	triggergen = gst.element_factory_make("lal_triggergen")
-	triggergen.set_property("bank-filename", bankfile)
-	triggergen.set_property("snr-thresh", snr_threshold)
-	triggergen.set_property("sigmasq", sigmasq)
-	triggergen.set_property("max-gap", 1.0)
-	pipeline.add(triggergen)
-	snr.link_pads("src", triggergen, "snr")
-	chisq.link(triggergen)
-	triggersrc.add(triggergen)
-
-# hook up the triggers
-for trig in triggersrc:
-	sink = appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, trig), caps = gst.Caps("application/x-lal-snglinspiral"))
+for pad in triggersrc.src_pads():
+	sink = appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, triggersrc, pad_name = pad.get_property("name")), caps = gst.Caps("application/x-lal-snglinspiral"))
+	# FIXME, the pull_appsinks_in_order function works 95% of the time, but
+	# the other 5% locks up.  When it is fixed uncomment this line and
+	# delete the next line and the branches should be sinked
 	sink.connect_after("new-buffer", appsync.pull_appsinks_in_order)
+	#sink.connect_after("new-buffer", output.appsink_new_buffer)
 	appsinks.add(sink)
+if options.verbose:
+	print >>sys.stderr, "attached %d, done" % len(appsinks)
 
+if options.write_pipeline is not None:
+	#
+	# add a signal handler to write a pipeline graph upon receipt of
+	# the first trigger buffer.  the caps in the pipeline graph are not
+	# fully negotiated until data comes out the end, so this version of
+	# the graph shows the final formats on all links
+	#
 
-############################################################
-# run the pipeline
+	class AppsinkDumpDotData(object):
+		lock = threading.Lock()
+		n = 0
+		write_after = len(appsinks)
+		pipeline = pipeline
+		filestem = "%s.%s" % (options.write_pipeline, "TRIGGERS")
+		verbose = options.verbose
 
-#gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_NON_DEFAULT_PARAMS, "gstlal_iir_inspiral_graph")
-#pipeline.set_state(gst.STATE_PLAYING)
+		def __init__(self):
+			self.handler_id = None
 
+		def execute(self):
+			self.lock.acquire()
+			self.n += 1
+			if self.n >= self.write_after:
+				write_dump_dot(self.pipeline, self.filestem, verbose = self.verbose)
+			self.lock.release()
+
+	def appsink_dump_dot(elem, appsink_dump_dot_data):
+		appsink_dump_dot_data.execute()
+		elem.disconnect(appsink_dump_dot_data.handler_id)
+
+	for sink in appsinks:
+		appsink_dump_dot_data = AppsinkDumpDotData()
+		appsink_dump_dot_data.handler_id = sink.connect_after("new-buffer", appsink_dump_dot, appsink_dump_dot_data)
 
 #
 # process requested segment
@@ -321,4 +373,16 @@ if options.verbose:
 	print >>sys.stderr, "running pipeline ..."
 mainloop.run()
 
-data.write_output_file()
+
+#
+# write output file
+#
+
+
+stream_thinca.flush()
+output.write_output_file(verbose = options.verbose)
+
+
+#
+# done
+#
