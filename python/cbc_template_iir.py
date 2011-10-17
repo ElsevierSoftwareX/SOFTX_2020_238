@@ -13,7 +13,6 @@ import numpy
 import scipy
 import pdb
 import csv
-import time
 from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 
@@ -144,17 +143,6 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
         Dmat = {}
         snrvec = []
 
-        if downsample:
-                sample_rates = 2**numpy.arange(numpy.ceil(numpy.log2(2*flower*padding)), numpy.ceil(numpy.log2((sampleRate)+1)))
-		sample_rates = numpy.array(sample_rates, numpy.int) # FIXME: Superfluous?
-        else:
-                sample_rates = numpy.array([int(sampleRate)])
-
-
-        for rate in sample_rates:
-                Amat[rate] = []
-                Bmat[rate] = []
-                Dmat[rate] = []
 
 
         if not (autocorrelation_length % 2):
@@ -163,10 +151,10 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 
         for tmp, row in enumerate(sngl_inspiral_table):
 
-                m1 = row.mass1
-                m2 = row.mass2
+		m1 = row.mass1
+		m2 = row.mass2
 		fFinal = row.f_final
-                start = time.time()
+		if verbose: start = time.time()
 
                 # work out the waveform frequency
                 #fFinal = spawaveform.ffinal(m1,m2)
@@ -175,21 +163,27 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
                 # make the waveform
 
                 amp, phase, f = waveform(m1, m2, flower, fFinal, sampleRate)
-		#print m1, m2, flower, fFinal, sampleRate, f[-1]
-		#print >> sys.stderr, "waveform %f" % (time.time() - start)
+		if verbose:
+			print >> sys.stderr, "waveform %f (T = %f)" % ((time.time() - start), float(amp.shape[0]/(float(sampleRate))))
+			start = time.time()
                 if psd_interp is not None:
                         amp /= psd_interp(f)**0.5 * 1e23
 
                 # make the iir filter coeffs
                 a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
-
+		if verbose:
+			print >> sys.stderr, "create IIR bank %f" % (time.time() - start)
+			start = time.time()
                 # get the chirptime
-                length = int(2**numpy.ceil(numpy.log2(amp.shape[0])))
+                length = int(2**numpy.ceil(numpy.log2(amp.shape[0]+autocorrelation_length)))
 
                 # get the IIR response
                 out = spawaveform.iirresponse(length, a1, b0, delay)
+		if verbose:
+			print >> sys.stderr, "create IIR response %f" % (time.time() - start)
+			start = time.time()
                 out = out[::-1]
-                vec1 = numpy.zeros(length * 2, dtype=numpy.cdouble)
+                vec1 = numpy.zeros(length * 1, dtype=numpy.cdouble)
                 vec1[-len(out):] = out
                 norm1 = 1.0/numpy.sqrt(2.0)*((vec1 * numpy.conj(vec1)).sum()**0.5)
                 vec1 /= norm1
@@ -199,69 +193,64 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 
                 # get the original waveform
                 out2 = amp * numpy.exp(1j * phase)
-                vec2 = numpy.zeros(length * 2, dtype=numpy.cdouble)
+                vec2 = numpy.zeros(length * 1, dtype=numpy.cdouble)
                 vec2[-len(out2):] = out2
                 vec2 /= 1.0/numpy.sqrt(2.0)*((vec2 * numpy.conj(vec2)).sum()**0.5)
 
                 # compute the SNR
                 corr = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec2)))
+		if verbose: print>>sys.stderr, "correlation %f, length %d" % ((time.time() - start), length)
 
                 #FIXME this is actually the cross correlation between the original waveform and this approximation
                 autocorrelation_bank[tmp,:] = numpy.concatenate((corr[(-autocorrelation_length/2+2):],corr[:autocorrelation_length/2+2]))
 
                 snr = numpy.abs(corr).max() / 2.0
                 snrvec.append(snr)
-                if verbose: print>>sys.stderr, "row %4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %10.8f match" % (tmp, m1,m2,len(a1), snr)
+		if verbose: print>>sys.stderr, "row %4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %10.8f match" % (tmp+1, m1,m2,len(a1), snr)
 
 
                 # store the match for later
                 if output_to_xml: row.snr = snr
-                #print "dot product iir iir", numpy.abs((vec1) * numpy.conj(vec1)).sum()
-                #print "dot product fir fir", numpy.abs((vec2) * numpy.conj(vec2)).sum()
-                #print "dot product iir fir", numpy.abs((vec1) * numpy.conj(vec2)).sum()
-                #print "SNR ", snr
 
                 # get the filter frequencies
                 fs = -1. * numpy.angle(a1) / 2 / numpy.pi # Normalised freqeuncy
                 a1dict = {}
                 b0dict = {}
                 delaydict = {}
-		M = 1
+
                 if downsample:
 			# iterate over the frequencies and put them in the right downsampled bin
 			for i, f in enumerate(fs):
-				#print>>sys.stderr, "sampleRate %4.0d, filter %3.0d, M %2.0d, f %10.9f, delay %d" % (sampleRate, i, M, f, delay[i])
-				a1dict.setdefault(sampleRate/M, []).append(a1[i]**M)
-				b0dict.setdefault(sampleRate/M, []).append(b0[i]*M**0.5)
-				delaydict.setdefault(sampleRate/M, []).append(delay[i]/M)
 				M = int(max(1, 2**-numpy.ceil(numpy.log2(f * 2.0 * padding)))) # Decimation factor
+				a1dict.setdefault(sampleRate/M, []).append(a1[i]**M)
+				newdelay = numpy.ceil((delay[i]+1)/(float(M)))
+				b0dict.setdefault(sampleRate/M, []).append(b0[i]*M**0.5*a1[i]**(newdelay*M-delay[i]))
+				delaydict.setdefault(sampleRate/M, []).append(newdelay)
+				#print>>sys.stderr, "sampleRate %4.0d, filter %3.0d, M %2.0d, f %10.9f, delay %d, newdelay %d" % (sampleRate, i, M, f, delay[i], newdelay)
 
 		else:
 			a1dict[int(sampleRate)] = a1
 			b0dict[int(sampleRate)] = b0
 			delaydict[int(sampleRate)] = delay
 
-
 		# store the coeffs
 		for k in a1dict.keys():
-			Amat[k].append(a1dict[k])
-			Bmat[k].append(b0dict[k])
-			Dmat[k].append(delaydict[k])
+			Amat.setdefault(k, []).append(a1dict[k])
+			Bmat.setdefault(k, []).append(b0dict[k])
+			Dmat.setdefault(k, []).append(delaydict[k])
+
+
 
 		if verbose: print>>sys.stderr, "filters per sample rate (rate , num filters)\n",[(k,len(v)) for k,v in a1dict.items()]
- 
 
-	if output_to_xml: # Create new document and add them together
-		root = xmldoc.childNodes[0]
-		root.appendChild(param.new_param('sample_rate', types.FromPyType[str], sample_rates_array_to_str(sample_rates)))
-		root.appendChild(param.new_param('flower', types.FromPyType[float], flower))
-		root.appendChild(array.from_array('autocorrelation', repack_complex_array_to_real(autocorrelation_bank)))
 
 	A = {}
 	B = {}
 	D = {}
-	for rate in Amat.keys():
+	sample_rates = []
 
+	for rate in Amat.keys():
+		sample_rates.append(rate)
 		# get ready to store the coefficients
 		max_len = max([len(i) for i in Amat[rate]])
 		print rate, max_len
@@ -281,6 +270,13 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 			root.appendChild(array.from_array('a_%d' % (rate), repack_complex_array_to_real(A[rate])))
 			root.appendChild(array.from_array('b_%d' % (rate), repack_complex_array_to_real(B[rate])))
 			root.appendChild(array.from_array('d_%d' % (rate), D[rate]))
+
+	if output_to_xml: # Create new document and add them together
+		root = xmldoc.childNodes[0]
+		root.appendChild(param.new_param('sample_rate', types.FromPyType[str], sample_rates_array_to_str(sample_rates)))
+		root.appendChild(param.new_param('flower', types.FromPyType[float], flower))
+		root.appendChild(array.from_array('autocorrelation', repack_complex_array_to_real(autocorrelation_bank)))
+
 
         return A, B, D, snrvec
 
@@ -325,3 +321,32 @@ def get_matrices_from_xml(xmldoc):
 		D[sr] = array.get_array(root, 'd_%d' % (sr,)).array
         autocorrelation = repack_real_array_to_complex(array.get_array(root, 'autocorrelation').array)
         return A, B, D, autocorrelation
+
+class Bank(object):
+	def __init__(self, bank_xmldoc, snr_threshold, logname = None, verbose = False):
+		self.template_bank_filename = None
+		self.snr_threshold = snr_threshold
+		self.logname = logname
+
+		self.A, self.B, self.D, self.autocorrelation_bank = get_matrices_from_xml(bank_xmldoc)
+		self.sigmasq=numpy.ones(len(self.autocorrelation_bank)) # FIXME: make sigmasq correct
+
+		self.rates = [int(r) for r in param.get_pyvalue(bank_xmldoc, 'sample_rate').split(',')]
+
+	# FIXME: remove set_template_bank_filename when no longer needed
+	# by trigger generator element
+	def set_template_bank_filename(self,name):
+		self.template_bank_filename = name
+
+def load_iirbank(filename, snr_threshold, verbose = False):
+	bank_xmldoc = utils.load_filename(filename, verbose = verbose)
+
+	bank = Bank.__new__(Bank)
+	bank = Bank(
+		bank_xmldoc,
+		snr_threshold,
+		verbose = verbose
+	)
+
+	bank.set_template_bank_filename(filename)
+	return bank
