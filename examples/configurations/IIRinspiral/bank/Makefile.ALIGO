@@ -1,0 +1,101 @@
+START = 871147452
+STOP =  871247452
+IFOS = H
+
+# Template bank parameters
+MIN_MASS = 1.0
+MAX_MASS = 3.0
+MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
+MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
+LOW_FREQUENCY_CUTOFF = 15.0
+HIGH_PASS_FREQ = 13.0
+HIGH_FREQUENCY_CUTOFF = 2048.0
+SAMPLE_RATE = 4096
+NUM_SPLIT_TEMPLATES = 500
+MM = 0.97
+
+H1BASENAME = fake_advligoH1
+H2BASENAME = fake_advligoH2
+L1BASENAME = fake_advligoL1
+H1XMLFILE = $(H1BASENAME).xml.gz
+H2XMLFILE = $(H2BASENAME).xml.gz
+L1XMLFILE = $(L1BASENAME).xml.gz
+
+all : dag
+
+frame.H.cache:
+	ligo_data_find -o H -t H1_RDS_C03_L2 -l  -s $(START) -e $(STOP) --url-type file > frame.H.cache
+	./cache_to_segments frame.H.cache segments.H.xml
+
+H1-TMPLTBANK-871154847-2048.xml: frame.H.cache
+	lalapps_tmpltbank \
+		--disable-compute-moments \
+		--grid-spacing Hexagonal \
+		--dynamic-range-exponent 69.0 \
+		--enable-high-pass $(HIGH_PASS_FREQ) \
+		--high-pass-order 8 \
+		--strain-high-pass-order 8 \
+		--minimum-mass $(MIN_MASS) \
+		--maximum-mass $(MAX_MASS) \
+		--min-total-mass $(MIN_TOTAL_MASS) \
+		--max-total-mass $(MAX_TOTAL_MASS) \
+		--gps-start-time 871154847 \
+		--gps-end-time 871156895 \
+		--standard-candle \
+		--calibrated-data real_8 \
+		--candle-mass1 1 \
+		--candle-mass2 1 \
+		--channel-name H1:LSC-STRAIN \
+		--space Tau0Tau3 \
+		--number-of-segments 15 \
+		--minimal-match $(MM) \
+		--candle-snr 8 \
+		--debug-level 33 \
+		--high-pass-attenuation 0.1 \
+		--min-high-freq-cutoff SchwarzISCO \
+		--segment-length 1048576 \
+		--low-frequency-cutoff $(LOW_FREQUENCY_CUTOFF) \
+		--pad-data 8 \
+		--num-freq-cutoffs 1 \
+		--sample-rate $(SAMPLE_RATE) \
+		--high-frequency-cutoff $(HIGH_FREQUENCY_CUTOFF) \
+		--resample-filter ldas \
+		--strain-high-pass-atten 0.1 \
+		--strain-high-pass-freq $(HIGH_PASS_FREQ) \
+		--frame-cache $^ \
+		--max-high-freq-cutoff SchwarzISCO \
+		--approximant TaylorF2 \
+		--order twoPN \
+		--verbose \
+		--spectrum-type AdvLIGO \
+		&& ./bank_splitter -i H1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ \
+		&& ./bank_splitter -i H2 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ \
+		&& ./bank_splitter -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ \
+
+${H1BASENAME} :
+	./psd_xml_from_asd_txt H1 ${H1BASENAME}.txt
+
+${H2BASENAME} :
+	./psd_xml_from_asd_txt H2 ${H2BASENAME}.txt
+
+${L1BASENAME} :
+	./psd_xml_from_asd_txt L1 ${L1BASENAME}.txt
+
+reference_psd.xml: ${H1BASENAME} ${H2BASENAME} ${L1BASENAME}
+	./psd_xml_from_asd_txt_new --asd=H1:${H1BASENAME}.txt,H2:${H2BASENAME}.txt,L1:${L1BASENAME}.txt
+
+sql :
+	cat uniqueify_coinc_definer.sql uniqueify_time_slide.sql cluster.sql > simplify_and_cluster.sql
+	cat uniqueify_sim_inspiral.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
+
+dag : H1-TMPLTBANK-871154847-2048.xml ${H1BASENAME} ${H2BASENAME} ${L1BASENAME}
+	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > H1_split_bank.cache
+	ls *H2_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > H2_split_bank.cache
+	ls *L1_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > L1_split_bank.cache
+	./iir_bank_pipe H1 ${H1BASENAME}.xml.gz H1_split_bank.cache $(LOW_FREQUENCY_CUTOFF) $(SAMPLERATE)
+	./iir_bank_pipe H2 ${H2BASENAME}.xml.gz H2_split_bank.cache $(LOW_FREQUENCY_CUTOFF) $(SAMPLERATE)
+	./iir_bank_pipe L1 ${L1BASENAME}.xml.gz L1_split_bank.cache $(LOW_FREQUENCY_CUTOFF) $(SAMPLERATE)
+	cat ${H1BASENAME}_iir_bank.dag  ${H2BASENAME}_iir_bank.dag  ${L1BASENAME}_iir_bank.dag > bank.dag
+
+realclean :
+	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml *split_bank-H1-TMPLTBANK-871154847-2048.xml ${H1BASENAME}.xml.gz ${H2BASENAME}.xml.gz ${L1BASENAME}.xml.gz segments.H.xml logs
