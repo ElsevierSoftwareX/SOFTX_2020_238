@@ -192,12 +192,13 @@ options, filenames, process_params, iir_banks, detectors = parse_command_line()
 
 seekevent = lloidparts.seek_event_for_gps(options.gps_start_time, options.gps_end_time)
 
+
 # FIXME correct where this is actually used, and for track psd
-if options.reference_psd is not None:
-	psd = reference_psd.read_psd(options.reference_psd, verbose = options.verbose)
-elif options.track_psd:
-	psd = {}
-	for instrument in detectors:
+psd = {}
+for instrument in detectors:
+	if options.reference_psd is not None:
+		psd[instrument] = reference_psd.read_psd(options.reference_psd, verbose = options.verbose)[instrument]
+	else:
 		psd[instrument] = None
 ## else:
 ## 	for instrument in detectors:
