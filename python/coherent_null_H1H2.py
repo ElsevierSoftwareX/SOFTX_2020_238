@@ -258,18 +258,16 @@ H2head.link(coh_adder)
 
 COHhead = pipeparts.mkqueue(pipeline, coh_adder)
 COHhead = pipeparts.mkprogressreport(pipeline, COHhead, "progress_coherent")
-COHhead = pipeparts.mknxydumpsink(pipeline, COHhead, "coherent.txt")
+COHhead = pipeparts.mkframesink(pipeline, COHhead, clean_timestamps = False, dir_digits = 0, frame_type = "LHO_COHERENT")
 
 #
 # make the null stream
 #
 
 H1tee = pipeparts.mkqueue(pipeline, H1tee)
-H1tee = pipeparts.mkmatrixmixer(pipeline, H1tee, [[1]])
-H1tee = pipeparts.mkqueue(pipeline, H1tee)
 
 H2tee = pipeparts.mkqueue(pipeline, H2tee)
-H2tee = pipeparts.mkmatrixmixer(pipeline, H2tee, [[-1]])
+H2tee = pipeparts.mkaudioamplify(pipeline, H2tee, -1)
 H2tee = pipeparts.mkqueue(pipeline, H2tee)
 
 null_adder = pipeutil.mkelem("lal_adder", {"sync": True})
@@ -279,7 +277,7 @@ H2tee.link(null_adder)
 
 NULLhead = pipeparts.mkqueue(pipeline, null_adder)
 NULLhead = pipeparts.mkprogressreport(pipeline, NULLhead, "progress_null")
-NULLhead = pipeparts.mknxydumpsink(pipeline, NULLhead, "null.txt")
+NULLhead = pipeparts.mkframesink(pipeline, NULLhead, clean_timestamps = False, dir_digits = 0, frame_type = "LHO_NULL")
 
 #
 # running the pipeline stuff
