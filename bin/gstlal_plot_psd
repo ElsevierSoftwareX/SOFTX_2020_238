@@ -1,0 +1,15 @@
+import sys
+import matplotlib
+matplotlib.use('Agg')
+import pylab
+import numpy
+
+fname = sys.argv[1]
+from gstlal.reference_psd import read_psd
+
+psd = read_psd(fname, True)
+for k,v in psd.items():
+	pylab.plot(v.deltaF * numpy.arange(len(v.data)), v.data)
+	pylab.xlabel('Frequency (Hz)')
+	pylab.ylabel('Strain/Hz')
+	pylab.savefig('%s-%s.png', k, fname)
