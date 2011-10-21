@@ -1,0 +1,124 @@
+#include <glib.h>
+#include <glib-object.h>
+#include <gst/gst.h>
+#include <gstlal_peakfinder.h>
+#include <complex.h>
+#include <string.h>
+#include <math.h>
+#include <lal/Date.h>
+#include <lal/LIGOMetadataTables.h>
+#include <lal/LIGOLwXMLInspiralRead.h>
+#include <lal/LALStdlib.h>
+
+double gstlal_eta(double m1, double m2)
+{
+	return m1 * m2 / pow(m1 + m2, 2);
+}
+
+
+double gstlal_mchirp(double m1, double m2)
+{
+	return pow(m1 * m2, 0.6) / pow(m1 + m2, 0.2);
+}
+
+
+double gstlal_effective_distance(double snr, double sigmasq)
+{
+	return sqrt(sigmasq) / snr;
+}
+
+int gstlal_snglinspiral_array_from_file(char *bank_filename, SnglInspiralTable **bankarray, char *instrument, char *channel)
+{
+	SnglInspiralTable *bank, *this = NULL;
+	int i,num;
+
+	num = LALSnglInspiralTableFromLIGOLw(&bank, bank_filename, -1, -1);
+
+	*bankarray = (SnglInspiralTable *) calloc(num, sizeof(SnglInspiralTable *));
+	
+	/* FIXME do some basic sanity checking */
+
+	/*
+	 * copy the linked list of templates constructed by
+	 * LALSnglInspiralTableFromLIGOLw() into the template array.
+	 */
+
+	for(i = 0; bank; i++) {
+		SnglInspiralTable *next = bank->next;
+		g_assert(i < num);
+		(*bankarray)[i] = *bank;
+		(*bankarray)[i].next = NULL;
+		this = &(*bankarray)[i];
+		free(bank);
+		bank = next;
+
+		this->snr = 0;
+		this->sigmasq = 0;
+
+		/*
+		 * fix some buggered columns.  sigh.
+		 */
+
+		this->mtotal = this->mass1 + this->mass2;
+		this->mchirp = gstlal_mchirp(this->mass1, this->mass2);
+		this->eta = gstlal_eta(this->mass1, this->mass2);
+        
+		strncpy(this->ifo, instrument, LIGOMETA_IFO_MAX * sizeof(*this->ifo));
+	        this->ifo[LIGOMETA_IFO_MAX - 1] = 0;
+        	strncpy(this->channel, channel, LIGOMETA_CHANNEL_MAX * sizeof(*this->channel));
+	        this->channel[LIGOMETA_CHANNEL_MAX - 1] = 0;
+	}
+
+	return num;
+}
+
+GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_double_complex_peak_samples_and_values *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate)
+{
+	/* FIXME check errors */
+	
+	/* size is length in samples times number of channels times number of bytes per sample */
+	gint size = sizeof(SnglInspiralTable) * input->num_events;
+	GstBuffer *srcbuf = NULL;
+	GstCaps *caps = GST_PAD_CAPS(pad);
+	GstFlowReturn result = gst_pad_alloc_buffer(pad, offset, size, caps, &srcbuf);
+	SnglInspiralTable *output = (SnglInspiralTable *) GST_BUFFER_DATA(srcbuf);
+	guint channel;
+	double complex *maxdata = input->values;
+	guint *maxsample = input->samples;
+
+	if (result != GST_FLOW_OK)
+		return srcbuf;
+
+	if (input->num_events == 0)
+		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
+	
+	/* set the offset */
+        GST_BUFFER_OFFSET(srcbuf) = offset;
+        GST_BUFFER_OFFSET_END(srcbuf) = offset + length;
+
+        /* set the time stamps */
+        GST_BUFFER_TIMESTAMP(srcbuf) = time;
+        GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
+	
+	/* FIXME do error checking */
+	if (srcbuf && size) {
+		for(channel = 0; channel < input->channels; channel++) {
+			if ( maxdata[channel] ) {
+				LIGOTimeGPS end_time;
+				XLALINT8NSToGPS(&end_time, time);
+				XLALGPSAdd(&end_time, (double) maxsample[channel] / rate);
+				memcpy(output, &(bankarray[channel]), sizeof(SnglInspiralTable));
+				output->snr = cabs(maxdata[channel]);
+				output->coa_phase = carg(maxdata[channel]);
+				output->chisq = 0.0;
+				output->chisq_dof = 0;
+				output->end_time = end_time;
+				output->end_time_gmst = XLALGreenwichMeanSiderealTime(&end_time);
+				output->eff_distance = gstlal_effective_distance(output->snr, output->sigmasq);
+				output++;
+			}
+		}
+	}
+	
+	return srcbuf;
+}
