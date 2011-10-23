@@ -7,7 +7,7 @@ import pylab
 import numpy
 from gstlal.reference_psd import read_psd
 
-if len(sys.argv != 3):
+if len(sys.argv) != 3:
 	print "USAGE gstlal_plot_psd psd_name output_name"
 	sys.exit()
 
@@ -16,7 +16,7 @@ outname = sys.argv[2]
 
 psd = read_psd(fname, True)
 for k,v in psd.items():
-	pylab.plot(v.deltaF * numpy.arange(len(v.data)), v.data)
+	pylab.loglog(v.deltaF * numpy.arange(len(v.data)), v.data)
 	pylab.xlabel('Frequency (Hz)')
 	pylab.ylabel('Strain/Hz')
-	pylab.savefig('%s-%s.png', k, outname)
+	pylab.savefig('%s-%s.png' % (k, outname))
