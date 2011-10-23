@@ -1,0 +1,68 @@
+###############################################################################
+# INTRODUCTION
+###############################################################################
+
+You always have to setup your environment to use the correct gstlal / lalsuite
+code from git.
+
+1) Disable the lscsoft installation.  Also make sure you don't have anything
+unusual (including other lalsuite/gstlal/gstreamer installations) set up by
+default at login.
+
+ $ touch .nolscsoft
+
+2) Only a few variables need to be set. Here you will setup only the lscsoft
+packages that you need.  I build lalsuite and gstlal to a directory called
+gstlocal, with _no_ subdirectories.  You should do whatever you are comfortable
+with, but I highly recommend simplicity. For comparison here is my environment
+script between the lines below:
+
+________________________________________________________________________________________________
+for p in libframe gst libmetaio
+       do
+       PATH=/opt/lscsoft/${p}/bin:$PATH
+       PKG_CONFIG_PATH=/opt/lscsoft/${p}/lib64/pkgconfig:/opt/lscsoft/${p}/lib/pkgconfig:$PKG_CONFIG_PATH
+       PYTHONPATH=/opt/lscsoft/${p}/lib64/python2.4/site-packages:$PYTHONPATH
+       done
+
+# This is an install prefix that does not get used anywhere but this script!!!
+INSTALLPATH=${HOME}/gstlocal
+
+# These are environment variables that do get exported
+PATH=${INSTALLPATH}/bin:$PATH
+PKG_CONFIG_PATH=${INSTALLPATH}/lib64/pkgconfig:${INSTALLPATH}/lib/pkgconfig:$PKG_CONFIG_PATH
+PYTHONPATH=${INSTALLPATH}/lib64/python2.4/site-packages:$PYTHONPATH
+GST_PLUGIN_PATH=${INSTALLPATH}/lib/gstreamer-0.10:${GST_PLUGIN_PATH}
+source ~cbc/opt/sqlite/etc/sqliterc
+
+export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH
+________________________________________________________________________________________________
+
+NOTE: There is a bug in libmetaio package distributed in lscsoft that may cause
+a segfault.  If you encounter a segfault from metaio then you will need to
+build your own metaio from source and adjust your environment script to not use
+the system wide one.  We are working to fix the installed version.
+
+3) Clone the repositories if you don't have them already
+ $ git clone albert.einstein@ligo-vcs.phys.uwm.edu:/usr/local/git/gstlal.git
+ $ git clone albert.einstein@ligo-vcs.phys.uwm.edu:/usr/local/git/lalsuite.git
+
+4) build lalsuite to the prefix you used in your environment script!!
+
+5) in gstlal setup a remote tracking branch for 'pbh'.  
+
+ $ git checkout -b pbh origin/pbh
+
+6) Build gstlal to the same prefix as lalsuite.
+
+###############################################################################
+# Recoloring frames
+###############################################################################
+
+Make a directory for recoloring the frames and copy this entire direcory's contents to it.
+
+1) edit the Makefile as appropriate
+2) run
+  $ make -j
+3) submit the resulting dag
+  $ condor_submit_dag recolor_pipe.dag
