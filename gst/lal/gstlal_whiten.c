@@ -62,6 +62,7 @@
 #include <lal/LALComplex.h>
 #include <lal/Window.h>
 #include <lal/Units.h>
+#include <lal/TFTransform.h>
 
 
 /*
@@ -293,6 +294,7 @@ static int make_workspace(GSTLALWhiten *element)
 	 * stream */
 	zero_output_history(element);
 	g_object_notify(G_OBJECT(element), "sigma-squared");
+	g_object_notify(G_OBJECT(element), "spectral-correlation");
 	return 0;
 
 error:
@@ -930,7 +932,8 @@ enum property {
 	ARG_DELTA_F,
 	ARG_F_NYQUIST,
 	ARG_MEAN_PSD,
-	ARG_SIGMA_SQUARED
+	ARG_SIGMA_SQUARED,
+	ARG_SPECTRAL_CORRELATION
 };
 
 
@@ -1383,6 +1386,7 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 	case ARG_DELTA_F:
 	case ARG_F_NYQUIST:
 	case ARG_SIGMA_SQUARED:
+	case ARG_SPECTRAL_CORRELATION:
 		/* read-only */
 		g_assert_not_reached();
 		break;
@@ -1464,6 +1468,16 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 			g_value_set_double(value, element->hann_window->sumofsquares / element->hann_window->data->length);
 		else
 			g_value_set_double(value, 0.0);
+		break;
+
+	case ARG_SPECTRAL_CORRELATION:
+		if(!element->hann_window)
+			g_value_take_boxed(value, g_value_array_new(0));
+		else {
+			REAL8Sequence *correlation = XLALREAL8WindowTwoPointSpectralCorrelation(element->hann_window, element->fwdplan);
+			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(correlation->data, correlation->length));
+			XLALDestroyREAL8Sequence(correlation);
+		}
 		break;
 
 	default:
@@ -1651,6 +1665,23 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 			"sigma^{2}",
 			"FFT window mean square",
 			0, G_MAXDOUBLE, 0,
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SPECTRAL_CORRELATION,
+		g_param_spec_value_array(
+			"spectral-correlation",
+			"Two-point Spectral Correlation",
+			"Two-point spectral correlation function for output stream.  Bin index is |k - k'|.",
+			g_param_spec_double(
+				"bin",
+				"Bin",
+				"Two-point spectral correlation bin",
+				-G_MAXDOUBLE, G_MAXDOUBLE, 1.0,
+				G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+			),
 			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 		)
 	);
