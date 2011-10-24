@@ -34,6 +34,7 @@ parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", he
 parser.add_option("--frame-cache", metavar = "name", help = "Set the name of the frame cache (required)")
 parser.add_option("--reference-psd", metavar = "name", help = "Set the name of psd xml file to whiten the data with")
 parser.add_option("--recolor-psd", metavar = "name", help = "Set the name of psd xml file to recolor the data with")
+parser.add_option("--fir", action = "store_true", help = "use an fir filter to color the data")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 #
@@ -68,19 +69,22 @@ seekevent = gst.event_new_seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_F
 # construct the pipeline framesrc -> injection element -> whiten -> frame sink
 #
 
-head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, options.instrument, lloidparts.DetectorData(options.frame_cache, options.channel_name), fake_data = None, online_data = False, injection_filename = options.injections, frame_segments = None, verbose = options.verbose, track_psd = True, zero_pad = 4)
+head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, options.instrument, lloidparts.DetectorData(options.frame_cache, options.channel_name), fake_data = None, online_data = False, injection_filename = options.injections, frame_segments = None, verbose = options.verbose)
 
 #FIXME get sample rate some other way
 # first whiten and downsample
-head = lloidparts.mkLLOIDsrc(pipeline, head, [4096], options.instrument, psd = wpsd, seekevent = seekevent, block_duration = gst.SECOND)
+head = lloidparts.mkLLOIDsrc(pipeline, head, [4096], options.instrument, psd = wpsd, seekevent = seekevent, block_duration = gst.SECOND, track_psd = True, zero_pad = 4)
 head = pipeparts.mkprogressreport(pipeline, head[4096], "frames")
 # a lie to make the whitener happy
 head = pipeparts.mktaginject(pipeline, head, "units=strain")
 
 # then recolor
-head = pipeparts.mkwhiten(pipeline, head, psd_mode = 1)
-head.connect_after("notify::f-nyquist", psd_resolution_changed, rpsd)
-head.connect_after("notify::delta-f", psd_resolution_changed, rpsd)
+if options.fir:
+	head = 
+else:
+	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 1)
+	head.connect_after("notify::f-nyquist", psd_resolution_changed, rpsd)
+	head.connect_after("notify::delta-f", psd_resolution_changed, rpsd)
 
 # put the units back to strain before writing to frames
 head = pipeparts.mktaginject(pipeline, head, "units=strain")
