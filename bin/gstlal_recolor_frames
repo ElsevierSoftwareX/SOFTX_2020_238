@@ -82,9 +82,13 @@ head = pipeparts.mktaginject(pipeline, head, "units=strain")
 
 # then recolor
 if options.fir:
-	latency = len(rpsd.data) / 2
-	fir_matrix = numpy.zeros((1, len(rpsd.data)), 'd64')
-	fir_matrix[0,:] = numpy.array(numpy.roll(numpy.real(scipy.ifft(1.0 / rpsd.data)), latency))
+	#FIXME don't hard code this value, but it is half of max rate which is 4096.  Also note that if the psd doesn't extend to 2048 there will be trouble!
+	latency = int(1.0 / rpsd.deltaF * 2048)
+	fir_matrix = numpy.zeros((1, 2 * latency), 'd64')
+	freq_data = 1.0 / rpsd.data[:latency]**.5
+	fir_matrix[0,:latency] = freq_data
+	fir_matrix[0,latency:] = freq_data[::-1]
+	fir_matrix = numpy.roll(numpy.real(scipy.ifft(fir_matrix)), latency)
 	head = pipeparts.mkfirbank(pipeline, head, latency = latency, fir_matrix = fir_matrix, block_stride = 128)
 else:
 	head = pipeparts.mkwhiten(pipeline, head, psd_mode = 1)
