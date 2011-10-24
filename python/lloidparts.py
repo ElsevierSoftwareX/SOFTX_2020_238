@@ -264,7 +264,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 	return src
 
 
-def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = None):
+def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8, ht_gate_threshold = None, veto_segments = None, seekevent = None, nxydump_segment = None, track_psd = False, block_duration = None, zero_pad = 0):
 	"""Build pipeline stage to whiten and downsample h(t)."""
 
 	#
@@ -316,7 +316,7 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 	# nofakedisconts element.
 	#
 
-	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = 0, average_samples = 64, median_samples = 7)
+	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7)
 	if psd is None:
 		# use running average PSD
 		head.set_property("psd-mode", 0)
