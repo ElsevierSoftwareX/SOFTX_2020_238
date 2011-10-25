@@ -447,7 +447,11 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 
 	if control_snk is not None:
 		src = pipeparts.mktee(pipeline, src)	# comment-out if the tee above is uncommented
-		elem = pipeparts.mkresample(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights),max_size_buffers = 0, max_size_bytes = 0, max_size_time = block_duration), quality = 9)
+		elem = pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights),max_size_buffers = 0, max_size_bytes = 0, max_size_time = block_duration)
+		# FIXME:  the capsfilter shouldn't be needed, the adder
+		# should intersect it's downstream peer's format with the
+		# sink format
+		elem = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, elem, quality = 9), "audio/x-raw-float, rate=%d" % max(bank.get_rates()))
 		# FIXME:  does the resampler need this?
 		elem = pipeparts.mknofakedisconts(pipeline, elem, silent = True)
 		elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare_resampler" % logname)
