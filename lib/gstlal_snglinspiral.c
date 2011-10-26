@@ -35,7 +35,7 @@ int gstlal_snglinspiral_array_from_file(char *bank_filename, SnglInspiralTable *
 	num = LALSnglInspiralTableFromLIGOLw(&bank, bank_filename, -1, -1);
 
 	*bankarray = (SnglInspiralTable *) calloc(num, sizeof(SnglInspiralTable *));
-	
+
 	/* FIXME do some basic sanity checking */
 
 	/*
@@ -62,7 +62,7 @@ int gstlal_snglinspiral_array_from_file(char *bank_filename, SnglInspiralTable *
 		this->mtotal = this->mass1 + this->mass2;
 		this->mchirp = gstlal_mchirp(this->mass1, this->mass2);
 		this->eta = gstlal_eta(this->mass1, this->mass2);
-        
+
 		strncpy(this->ifo, instrument, LIGOMETA_IFO_MAX * sizeof(*this->ifo));
 	        this->ifo[LIGOMETA_IFO_MAX - 1] = 0;
         	strncpy(this->channel, channel, LIGOMETA_CHANNEL_MAX * sizeof(*this->channel));
@@ -75,7 +75,7 @@ int gstlal_snglinspiral_array_from_file(char *bank_filename, SnglInspiralTable *
 GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_double_complex_peak_samples_and_values *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate)
 {
 	/* FIXME check errors */
-	
+
 	/* size is length in samples times number of channels times number of bytes per sample */
 	gint size = sizeof(SnglInspiralTable) * input->num_events;
 	GstBuffer *srcbuf = NULL;
@@ -91,7 +91,7 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_double_complex
 
 	if (input->num_events == 0)
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
-	
+
 	/* set the offset */
         GST_BUFFER_OFFSET(srcbuf) = offset;
         GST_BUFFER_OFFSET_END(srcbuf) = offset + length;
@@ -99,7 +99,7 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_double_complex
         /* set the time stamps */
         GST_BUFFER_TIMESTAMP(srcbuf) = time;
         GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
-	
+
 	/* FIXME do error checking */
 	if (srcbuf && size) {
 		for(channel = 0; channel < input->channels; channel++) {
@@ -119,6 +119,6 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_double_complex
 			}
 		}
 	}
-	
+
 	return srcbuf;
 }
