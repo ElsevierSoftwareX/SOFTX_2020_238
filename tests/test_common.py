@@ -50,6 +50,12 @@ gobject.threads_init()
 #
 
 
+def complex_test_src(pipeline, buffer_length = 1.0, rate = 2048, test_duration = 10.0, wave = 5, freq = 0):
+	head = pipeparts.mkaudiotestsrc(pipeline, wave = wave, freq = freq, blocksize = 8 * int(buffer_length * rate), volume = 1, num_buffers = int(test_duration / buffer_length))
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, width=64, rate=%d, channels=2" % rate)
+	head = pipeparts.mktogglecomplex(pipeline, head)
+	return pipeparts.mkprogressreport(pipeline, head, "src")
+
 def test_src(pipeline, buffer_length = 1.0, rate = 2048, test_duration = 10.0, wave = 5, freq = 0):
 	if wave == "ligo":
 		head = pipeparts.mkfakeLIGOsrc(pipeline, instrument = "H1", channel_name = "LSC-STRAIN")
