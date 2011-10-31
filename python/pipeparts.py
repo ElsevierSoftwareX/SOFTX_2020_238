@@ -659,9 +659,10 @@ def mkpeak(pipeline, src, n):
 	return elem
 
 
-def mkitac(pipeline, src, n):
+def mkitac(pipeline, src, n, bank):
 	elem = gst.element_factory_make("lal_itac")
 	elem.set_property("n", n)
+	elem.set_property("bank-filename", bank)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
