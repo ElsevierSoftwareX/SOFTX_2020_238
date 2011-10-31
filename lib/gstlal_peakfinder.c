@@ -142,7 +142,7 @@ int gstlal_double_complex_peak_samples_and_values_clear(struct gstlal_double_com
 }
 
 /* Simple peak over window algorithm */
-int gstlal_double_complex_peak_over_window(struct gstlal_double_complex_peak_samples_and_values *output, const double *data, guint64 length)
+int gstlal_double_complex_peak_over_window(struct gstlal_double_complex_peak_samples_and_values *output, const double complex *data, guint64 length)
 {
 	guint sample, channel;
 	double complex *maxdata = output->values;

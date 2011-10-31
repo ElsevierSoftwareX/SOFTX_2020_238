@@ -32,7 +32,7 @@ int gstlal_double_complex_peak_samples_and_values_clear(struct gstlal_double_com
 
 /* find a peak over a fixed window */
 int gstlal_double_peak_over_window(struct gstlal_double_peak_samples_and_values *output, const double *data, guint64 length);
-int gstlal_double_complex_peak_over_window(struct gstlal_double_complex_peak_samples_and_values *output, const double *data, guint64 length);
+int gstlal_double_complex_peak_over_window(struct gstlal_double_complex_peak_samples_and_values *output, const double complex *data, guint64 length);
 
 /* fill the output */
 int gstlal_double_fill_output_with_peak(struct gstlal_double_peak_samples_and_values *input, double *data, guint64 length);
