@@ -27,14 +27,16 @@ double gstlal_effective_distance(double snr, double sigmasq)
 	return sqrt(sigmasq) / snr;
 }
 
-int gstlal_snglinspiral_array_from_file(char *bank_filename, SnglInspiralTable **bankarray, char *instrument, char *channel)
+int gstlal_snglinspiral_array_from_file(char *bank_filename, SnglInspiralTable **bankarray)
 {
-	SnglInspiralTable *bank, *this = NULL;
-	int i,num;
+	SnglInspiralTable *this = NULL;
+	int num;
+	fprintf(stderr, "array_from_file A\n");
+	num = LALSnglInspiralTableFromLIGOLw(&this, bank_filename, -1, -1);
+	fprintf(stderr, "array_from_file B\n");
 
-	num = LALSnglInspiralTableFromLIGOLw(&bank, bank_filename, -1, -1);
-
-	*bankarray = (SnglInspiralTable *) calloc(num, sizeof(SnglInspiralTable *));
+	*bankarray = (SnglInspiralTable *) calloc(num, sizeof(SnglInspiralTable));
+	fprintf(stderr, "array_from_file C\n");
 
 	/* FIXME do some basic sanity checking */
 
@@ -43,33 +45,56 @@ int gstlal_snglinspiral_array_from_file(char *bank_filename, SnglInspiralTable *
 	 * LALSnglInspiralTableFromLIGOLw() into the template array.
 	 */
 
-	for(i = 0; bank; i++) {
-		SnglInspiralTable *next = bank->next;
-		g_assert(i < num);
-		(*bankarray)[i] = *bank;
-		(*bankarray)[i].next = NULL;
-		this = &(*bankarray)[i];
-		free(bank);
-		bank = next;
-
+	while (this) {
+		SnglInspiralTable *next = this->next;
+		
 		this->snr = 0;
 		this->sigmasq = 0;
-
-		/*
-		 * fix some buggered columns.  sigh.
-		 */
-
 		this->mtotal = this->mass1 + this->mass2;
 		this->mchirp = gstlal_mchirp(this->mass1, this->mass2);
 		this->eta = gstlal_eta(this->mass1, this->mass2);
-
-		strncpy(this->ifo, instrument, LIGOMETA_IFO_MAX * sizeof(*this->ifo));
-	        this->ifo[LIGOMETA_IFO_MAX - 1] = 0;
-        	strncpy(this->channel, channel, LIGOMETA_CHANNEL_MAX * sizeof(*this->channel));
-	        this->channel[LIGOMETA_CHANNEL_MAX - 1] = 0;
+		memcpy(*bankarray, this, sizeof(SnglInspiralTable));	
+		(*bankarray)->next = NULL;
+		(*bankarray)++;
+		free(this);
+		this = next;
 	}
+	fprintf(stderr, "array_from_file D\n");
 
 	return num;
+}
+
+int gstlal_set_channel_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, char *channel)
+{
+	int i;
+	for (i = 0; i < length; i++) {
+		if (channel) {
+	        	strncpy(bankarray[i].channel, channel, LIGOMETA_CHANNEL_MAX);
+			bankarray[i].channel[LIGOMETA_CHANNEL_MAX - 1] = 0;
+		}
+	}
+	return 0;
+}
+
+int gstlal_set_instrument_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, char *instrument)
+{
+	int i;
+	for (i = 0; i < length; i++) {
+		if (instrument) {
+	        	strncpy(bankarray[i].ifo, instrument, LIGOMETA_IFO_MAX);
+			bankarray[i].ifo[LIGOMETA_IFO_MAX - 1] = 0;
+		}
+	}
+	return 0;
+}
+
+int gstlal_set_sigmasq_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, double *sigmasq)
+{
+	int i;
+	for (i = 0; i < length; i++) {
+		bankarray[i].sigmasq = sigmasq[i];
+	}
+	return 0;
 }
 
 GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_double_complex_peak_samples_and_values *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate)
