@@ -30,13 +30,11 @@ double gstlal_effective_distance(double snr, double sigmasq)
 int gstlal_snglinspiral_array_from_file(char *bank_filename, SnglInspiralTable **bankarray)
 {
 	SnglInspiralTable *this = NULL;
+	SnglInspiralTable *bank = NULL;
 	int num;
-	fprintf(stderr, "array_from_file A\n");
 	num = LALSnglInspiralTableFromLIGOLw(&this, bank_filename, -1, -1);
-	fprintf(stderr, "array_from_file B\n");
 
-	*bankarray = (SnglInspiralTable *) calloc(num, sizeof(SnglInspiralTable));
-	fprintf(stderr, "array_from_file C\n");
+	*bankarray = bank = (SnglInspiralTable *) calloc(num, sizeof(SnglInspiralTable));
 
 	/* FIXME do some basic sanity checking */
 
@@ -47,19 +45,17 @@ int gstlal_snglinspiral_array_from_file(char *bank_filename, SnglInspiralTable *
 
 	while (this) {
 		SnglInspiralTable *next = this->next;
-		
 		this->snr = 0;
 		this->sigmasq = 0;
 		this->mtotal = this->mass1 + this->mass2;
 		this->mchirp = gstlal_mchirp(this->mass1, this->mass2);
 		this->eta = gstlal_eta(this->mass1, this->mass2);
-		memcpy(*bankarray, this, sizeof(SnglInspiralTable));	
-		(*bankarray)->next = NULL;
-		(*bankarray)++;
+		*bank = *this;
+		bank->next = NULL;
+		bank++;
 		free(this);
 		this = next;
 	}
-	fprintf(stderr, "array_from_file D\n");
 
 	return num;
 }
@@ -69,7 +65,7 @@ int gstlal_set_channel_in_snglinspiral_array(SnglInspiralTable *bankarray, int l
 	int i;
 	for (i = 0; i < length; i++) {
 		if (channel) {
-	        	strncpy(bankarray[i].channel, channel, LIGOMETA_CHANNEL_MAX);
+	        	strncpy(bankarray[i].channel, (const char*) channel, LIGOMETA_CHANNEL_MAX);
 			bankarray[i].channel[LIGOMETA_CHANNEL_MAX - 1] = 0;
 		}
 	}
@@ -81,7 +77,7 @@ int gstlal_set_instrument_in_snglinspiral_array(SnglInspiralTable *bankarray, in
 	int i;
 	for (i = 0; i < length; i++) {
 		if (instrument) {
-	        	strncpy(bankarray[i].ifo, instrument, LIGOMETA_IFO_MAX);
+	        	strncpy(bankarray[i].ifo, (const char*) instrument, LIGOMETA_IFO_MAX);
 			bankarray[i].ifo[LIGOMETA_IFO_MAX - 1] = 0;
 		}
 	}
