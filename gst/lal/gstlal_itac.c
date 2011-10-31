@@ -29,12 +29,7 @@
 
 
 /*
- * struff from the C library
- */
-
-
-/*
- * stuff from glib/gstreamer
+ * stuff from C library, glib/gstreamer
  */
 
 
