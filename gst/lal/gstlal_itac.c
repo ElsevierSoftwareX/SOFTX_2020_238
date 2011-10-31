@@ -131,12 +131,15 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 			gstlal_set_channel_in_snglinspiral_array(element->bankarray, element->channels, element->channel_name);
 			gstlal_set_instrument_in_snglinspiral_array(element->bankarray, element->channels, element->instrument);
 			g_mutex_unlock(element->bank_lock);
+			}
+		success = gst_pad_event_default(pad, event);
+		break;
 		}
+
+	default: {
+		success = gst_pad_event_default(pad, event);
 		break;
-	}
-	
-	default:
-		break;
+		}
 	}
 
 	return success;
@@ -165,24 +168,18 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GSTLALItac *element = GSTLAL_ITAC(object);
 
 	GST_OBJECT_LOCK(element);
-	fprintf(stderr, "set start\n");
 	
 
 	switch(id) {
 	case ARG_N:
-		fprintf(stderr, "set n start\n");
 		element->n = g_value_get_uint(value);
-		fprintf(stderr, "set n end\n");
 		break;
 
 	case ARG_SNR_THRESH:
-		fprintf(stderr, "set snr start\n");
 		element->snr_thresh = g_value_get_double(value);
-		fprintf(stderr, "set snr end\n");
 		break;
 
 	case ARG_BANK_FILENAME:
-		fprintf(stderr, "set bank start\n");
 		g_mutex_lock(element->bank_lock);
 		element->bank_filename = g_value_dup_string(value);
 		element->channels = gstlal_snglinspiral_array_from_file(element->bank_filename, &(element->bankarray));
@@ -191,11 +188,9 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 			gstlal_set_channel_in_snglinspiral_array(element->bankarray, element->channels, element->channel_name);
 		}
 		g_mutex_unlock(element->bank_lock);
-		fprintf(stderr, "set bank end\n");
 		break;
 
 	case ARG_SIGMASQ: {
-		fprintf(stderr, "set sigmasq start\n");
 		g_mutex_lock(element->bank_lock);
 		if(element->bankarray) {
 			gint length;
@@ -208,7 +203,6 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		} else
 			GST_WARNING_OBJECT(element, "must set template bank before setting sigmasq");
 		g_mutex_unlock(element->bank_lock);
-		fprintf(stderr, "set sigmasq end\n");
 		break;
 	}
 
@@ -217,7 +211,6 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		break;
 	}
 	
-	fprintf(stderr, "set end\n");
 
 	GST_OBJECT_UNLOCK(element);
 }
@@ -397,7 +390,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	if (!element->data)
 		element->data = (double complex *) malloc(maxsize);
 
-	fprintf(stderr, "in chain\n");
 	/*
 	 * check validity of timestamp, offsets, tags, bank array
 	 */
@@ -453,8 +445,9 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 			gst_audioadapter_copy(element->adapter, (void *) element->data, outsamps, &copied_gap, &copied_nongap);
 			gstlal_double_complex_peak_over_window(element->maxdata, (const double complex*) element->data, outsamps);
 		}
-
+			
 		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
+		
 		/* set the time stamp and offset state */
 		update_state(element, srcbuf);
 
@@ -639,7 +632,6 @@ static void instance_init(GTypeInstance *object, gpointer class)
 {
 	GSTLALItac *element = GSTLAL_ITAC(object);
 	GstPad *pad;
-	fprintf(stderr, "init start\n");
 	gst_element_create_all_pads(GST_ELEMENT(element));
 
 	/* configure (and ref) sink pad */
@@ -672,7 +664,6 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->data = NULL;
 	element->maxdata = NULL;
 	element->bank_lock = g_mutex_new();
-	fprintf(stderr, "init end\n");
 }
 
 
