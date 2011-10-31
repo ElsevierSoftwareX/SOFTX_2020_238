@@ -52,6 +52,10 @@
 #include <gstlal_itac.h>
 #include <gstlal_peakfinder.h>
 #include <gstaudioadapter.h>
+#include <gstlal_tags.h>
+#include <gstlal_snglinspiral.h>
+
+#define DEFAULT_SNR_THRESH 5.5
 
 static guint64 output_num_samps(GSTLALItac *element)
 {
@@ -79,6 +83,65 @@ static guint gst_audioadapter_available_samples(GstAudioAdapter *adapter)
 	return size;
 }
 
+static void free_bank(GSTLALItac *element)
+{
+	g_free(element->bank_filename);
+	element->bank_filename = NULL;
+	free(element->bankarray);
+	element->bankarray = NULL;
+}
+
+/*
+ * ============================================================================
+ *
+ *                                 Events
+ *
+ * ============================================================================
+ */
+
+static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, const char *tagname, gchar **dest)
+{
+	if(!gst_tag_list_get_string(taglist, tagname, dest)) {
+		GST_WARNING_OBJECT(object, "unable to parse \"%s\" from %" GST_PTR_FORMAT, tagname, taglist);
+		return FALSE;
+	}
+	return TRUE;
+}
+
+static gboolean sink_event(GstPad *pad, GstEvent *event)
+{
+	GSTLALItac *element = GSTLAL_ITAC(GST_PAD_PARENT(pad));
+	gboolean success;
+
+	switch(GST_EVENT_TYPE(event)) {
+	
+	case GST_EVENT_TAG: {
+		GstTagList *taglist;
+		gchar *instrument, *channel_name;
+		gst_event_parse_tag(event, &taglist);
+		success = taglist_extract_string(GST_OBJECT(pad), taglist, GSTLAL_TAG_INSTRUMENT, &instrument);
+		success &= taglist_extract_string(GST_OBJECT(pad), taglist, GSTLAL_TAG_CHANNEL_NAME, &channel_name);
+		if(success) {
+			GST_DEBUG_OBJECT(pad, "found tags \"%s\"=\"%s\", \"%s\"=\"%s\"", GSTLAL_TAG_INSTRUMENT, instrument, GSTLAL_TAG_CHANNEL_NAME, channel_name);
+			g_free(element->instrument);
+			element->instrument = instrument;
+			g_free(element->channel_name);
+			element->channel_name = channel_name;
+			g_mutex_lock(element->bank_lock);
+			gstlal_set_channel_in_snglinspiral_array(element->bankarray, element->channels, element->channel_name);
+			gstlal_set_instrument_in_snglinspiral_array(element->bankarray, element->channels, element->instrument);
+			g_mutex_unlock(element->bank_lock);
+		}
+		break;
+	}
+	
+	default:
+		break;
+	}
+
+	return success;
+}
+
 
 /*
  * ============================================================================
@@ -90,7 +153,10 @@ static guint gst_audioadapter_available_samples(GstAudioAdapter *adapter)
 
 
 enum property {
-	ARG_N = 1
+	ARG_N = 1,
+	ARG_SNR_THRESH,
+	ARG_BANK_FILENAME,
+	ARG_SIGMASQ
 };
 
 
@@ -99,16 +165,59 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GSTLALItac *element = GSTLAL_ITAC(object);
 
 	GST_OBJECT_LOCK(element);
+	fprintf(stderr, "set start\n");
+	
 
 	switch(id) {
 	case ARG_N:
+		fprintf(stderr, "set n start\n");
 		element->n = g_value_get_uint(value);
+		fprintf(stderr, "set n end\n");
 		break;
+
+	case ARG_SNR_THRESH:
+		fprintf(stderr, "set snr start\n");
+		element->snr_thresh = g_value_get_double(value);
+		fprintf(stderr, "set snr end\n");
+		break;
+
+	case ARG_BANK_FILENAME:
+		fprintf(stderr, "set bank start\n");
+		g_mutex_lock(element->bank_lock);
+		element->bank_filename = g_value_dup_string(value);
+		element->channels = gstlal_snglinspiral_array_from_file(element->bank_filename, &(element->bankarray));
+		if (element->instrument && element->channel_name) {
+			gstlal_set_instrument_in_snglinspiral_array(element->bankarray, element->channels, element->instrument);
+			gstlal_set_channel_in_snglinspiral_array(element->bankarray, element->channels, element->channel_name);
+		}
+		g_mutex_unlock(element->bank_lock);
+		fprintf(stderr, "set bank end\n");
+		break;
+
+	case ARG_SIGMASQ: {
+		fprintf(stderr, "set sigmasq start\n");
+		g_mutex_lock(element->bank_lock);
+		if(element->bankarray) {
+			gint length;
+			double *sigmasq = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &length);
+			if((gint) element->channels != length)
+				GST_ERROR_OBJECT(element, "vector length (%d) does not match number of templates (%d)", length, element->channels);
+			else
+				gstlal_set_sigmasq_in_snglinspiral_array(element->bankarray, length, sigmasq);
+			g_free(sigmasq);
+		} else
+			GST_WARNING_OBJECT(element, "must set template bank before setting sigmasq");
+		g_mutex_unlock(element->bank_lock);
+		fprintf(stderr, "set sigmasq end\n");
+		break;
+	}
 
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
+	
+	fprintf(stderr, "set end\n");
 
 	GST_OBJECT_UNLOCK(element);
 }
@@ -124,6 +233,32 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	case ARG_N:
 		g_value_set_uint(value, element->n);
 		break;
+
+	case ARG_SNR_THRESH:
+		g_value_set_double(value, element->snr_thresh);
+		break;
+
+	case ARG_BANK_FILENAME:
+		g_mutex_lock(element->bank_lock);
+		g_value_set_string(value, element->bank_filename);
+		g_mutex_unlock(element->bank_lock);
+		break;
+
+	case ARG_SIGMASQ: {
+		g_mutex_lock(element->bank_lock);
+		if(element->bankarray) {
+			double sigmasq[element->channels];
+			gint i;
+			for(i = 0; i < (gint) element->channels; i++)
+				sigmasq[i] = element->bankarray[i].sigmasq;
+			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(sigmasq, element->channels));
+		} else {
+			GST_WARNING_OBJECT(element, "no template bank");
+			g_value_take_boxed(value, g_value_array_new(0));
+		}
+		g_mutex_unlock(element->bank_lock);
+		break;
+	}
 
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
@@ -221,7 +356,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 		element->channels = channels;
 		element->rate = rate;
 		g_object_set(element->adapter, "unit-size", width / 8 * channels, NULL);
-		element->maxdata = gstlal_double_peak_samples_and_values_new(channels);
+		element->maxdata = gstlal_double_complex_peak_samples_and_values_new(channels);
 	}
 
 	/*
@@ -260,15 +395,28 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 
 	/* if we haven't allocated storage do it now, we should never try to copy from an adapter with a larger buffer than this */
 	if (!element->data)
-		element->data = (double *) malloc(maxsize);
+		element->data = (double complex *) malloc(maxsize);
 
+	fprintf(stderr, "in chain\n");
 	/*
-	 * check validity of timestamp and offsets
+	 * check validity of timestamp, offsets, tags, bank array
 	 */
 
 	if(!GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) || !GST_BUFFER_DURATION_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_IS_VALID(sinkbuf) || !GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf)) {
 		gst_buffer_unref(sinkbuf);
 		GST_ERROR_OBJECT(element, "error in input stream: buffer has invalid timestamp and/or offset");
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+	
+	if(!element->instrument || !element->channel_name) {
+		GST_ELEMENT_ERROR(element, STREAM, FAILED, ("missing or invalid tags"), ("instrument and/or channel name not known (stream's tags must provide this information)"));
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+
+	if (!element->bankarray) {
+		GST_ELEMENT_ERROR(element, STREAM, FAILED, ("missing bank file"), ("must have a valid template bank to create events"));
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
@@ -297,17 +445,16 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		if (gapsamps > 0) {
 			outsamps = gapsamps > element->n ? element->n : gapsamps;
 			/* Clearing the max data structure causes the resulting buffer to be a GAP */
-			gstlal_double_peak_samples_and_values_clear(element->maxdata);
+			gstlal_double_complex_peak_samples_and_values_clear(element->maxdata);
 		}
 		else {
 			outsamps = nongapsamps > element->n ? element->n : nongapsamps;
 			/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
 			gst_audioadapter_copy(element->adapter, (void *) element->data, outsamps, &copied_gap, &copied_nongap);
-			gstlal_double_peak_over_window(element->maxdata, (const double *) element->data, outsamps);
+			gstlal_double_complex_peak_over_window(element->maxdata, (const double complex*) element->data, outsamps);
 		}
 
-		srcbuf = gstlal_double_new_buffer_from_peak(element->maxdata, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
-
+		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
 		/* set the time stamp and offset state */
 		update_state(element, srcbuf);
 
@@ -348,8 +495,10 @@ static GstElementClass *parent_class = NULL;
 
 static void finalize(GObject *object)
 {
-	GSTLALItac *element = GSTLAL_ITAC(object);
 
+	GSTLALItac *element = GSTLAL_ITAC(object);
+	//FIXME make sure everything is freed
+	g_mutex_free(element->bank_lock);
 	gst_object_unref(element->sinkpad);
 	element->sinkpad = NULL;
 	gst_object_unref(element->srcpad);
@@ -367,11 +516,11 @@ static void finalize(GObject *object)
 
 
 #define CAPS \
-	"audio/x-raw-float, " \
+	"audio/x-raw-complex, " \
 	"rate = (int) [1, MAX], " \
 	"channels = (int) [1, MAX], " \
 	"endianness = (int) BYTE_ORDER, " \
-	"width = (int) {64}; "
+	"width = (int) {128}; "
 
 
 static void base_init(gpointer class)
@@ -382,7 +531,7 @@ static void base_init(gpointer class)
 		element_class,
 		"Itac",
 		"Filter",
-		"Find itacs in a time series every n samples",
+		"Find inspiral triggers in snr streams",
 		"Chad Hanna <chad.hanna@ligo.org>"
 	);
 
@@ -401,7 +550,7 @@ static void base_init(gpointer class)
 			"src",
 			GST_PAD_SRC,
 			GST_PAD_ALWAYS,
-			gst_caps_from_string(CAPS)
+			gst_caps_from_string("application/x-lal-snglinspiral")
 		)
 	);
 }
@@ -435,6 +584,48 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
+	
+	g_object_class_install_property(
+		gobject_class,
+		ARG_BANK_FILENAME,
+		g_param_spec_string(
+			"bank-filename",
+			"Bank file name",
+			"Path to XML file used to generate the template bank.  Setting this property resets sigmasq to a vector of 0s.",
+			NULL,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SNR_THRESH,
+		g_param_spec_double(
+			"snr-thresh",
+			"SNR Threshold",
+			"SNR Threshold that determines a trigger.",
+			0, G_MAXDOUBLE, DEFAULT_SNR_THRESH,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SIGMASQ,
+		g_param_spec_value_array(
+			"sigmasq",
+			"\\sigma^{2} factors",
+			"Vector of \\sigma^{2} factors.",
+			g_param_spec_double(
+				"sigmasq",
+				"\\sigma^{2}",
+				"\\sigma^{2} factor",
+				-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			),
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 }
 
 
@@ -444,12 +635,11 @@ static void class_init(gpointer class, gpointer class_data)
  * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GInstanceInitFunc
  */
 
-
 static void instance_init(GTypeInstance *object, gpointer class)
 {
 	GSTLALItac *element = GSTLAL_ITAC(object);
 	GstPad *pad;
-
+	fprintf(stderr, "init start\n");
 	gst_element_create_all_pads(GST_ELEMENT(element));
 
 	/* configure (and ref) sink pad */
@@ -457,17 +647,32 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
 	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(setcaps));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
+	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
 	element->sinkpad = pad;
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
 	element->srcpad = pad;
 
+	gst_pad_use_fixed_caps(pad);
+	{
+	GstCaps *caps = gst_caps_copy(gst_pad_get_pad_template_caps(pad));
+	gst_pad_set_caps(pad, caps);
+	gst_caps_unref(caps);
+	}
+
 	/* internal data */
 	element->rate = 0;
 	reset_time_and_offset(element);
-
 	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
+	element->instrument = NULL;
+	element->channel_name = NULL;
+	element->bankarray = NULL;
+	element->bank_filename = NULL;
+	element->data = NULL;
+	element->maxdata = NULL;
+	element->bank_lock = g_mutex_new();
+	fprintf(stderr, "init end\n");
 }
 
 
