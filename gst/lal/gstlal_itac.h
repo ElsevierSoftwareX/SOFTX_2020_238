@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2011 Chad Hanna <chad.hanna@ligo.org>
- * 
+ * Copyright (C) 2011 Chad Hanna <chad.hanna@ligo.org>, Kipp Cannon <kipp.cannon@ligo.org>, Drew Keppel <drew.keppel@ligo.org>
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the
  * "Software"), to deal in the Software without restriction, including
@@ -35,6 +35,7 @@
 #include <gst/base/gstbasetransform.h>
 #include <gstlal_peakfinder.h>
 #include <gstaudioadapter.h>
+#include <lal/LIGOMetadataTables.h>
 
 G_BEGIN_DECLS
 
@@ -62,17 +63,22 @@ typedef struct {
 
 	GstPad *sinkpad;
 	GstPad *srcpad;
+	GstAudioAdapter *adapter;
 
 	gint rate;
 	guint n;
 	guint channels;
-	GstAudioAdapter *adapter;
-
-	struct gstlal_double_peak_samples_and_values *maxdata;
-	double *data;
+	gdouble snr_thresh;
+	struct gstlal_double_complex_peak_samples_and_values *maxdata;
+	double complex *data;
 	guint64 next_output_offset;
 	GstClockTime next_output_timestamp;
+	SnglInspiralTable *bankarray;
+	char * bank_filename;
+	char * instrument;
+	char * channel_name;
 
+	GMutex *bank_lock;
 } GSTLALItac;
 
 
