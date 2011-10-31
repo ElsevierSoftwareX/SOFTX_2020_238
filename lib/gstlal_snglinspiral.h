@@ -16,11 +16,14 @@ G_BEGIN_DECLS
 
 double gstlal_eta(double m1, double m2);
 double gstlal_mchirp(double m1, double m2);
-double gstlal_effective_distance(double snr, double sigmasq)
+double gstlal_effective_distance(double snr, double sigmasq);
 
-int gstlal_snglinspiral_array_from_file(char *bank_filename, SnglInspiralTable **bankarray, char *instrument, char *channel)
+int gstlal_snglinspiral_array_from_file(char *bank_filename, SnglInspiralTable **bankarray);
+int gstlal_set_channel_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, char *channel);
+int gstlal_set_instrument_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, char *instrument);
+int gstlal_set_sigmasq_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, double *sigmasq);
 
-GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_double_complex_peak_samples_and_values *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate)
+GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_double_complex_peak_samples_and_values *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate);
 
 G_END_DECLS
 #endif	/* __GSTLAL_SNGLINSPIRAL_H__ */
