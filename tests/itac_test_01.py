@@ -8,9 +8,9 @@
 
 
 import numpy
-import sys
+import sys, os
 from gstlal import pipeparts
-import test_common
+import test_common, gst
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
 #
@@ -36,9 +36,9 @@ def peak_test_01a(pipeline):
 	in_rate = 32	# Hz
 	sine_frequency = 1
 	gap_frequency = 0.1	# Hz
-	gap_threshold = 0.5	# of 1
+	gap_threshold = 0.7	# of 1
 	buffer_length = 1.0	# seconds
-	test_duration = 5.0	# seconds
+	test_duration = 1000.0	# seconds
 	peak_window = 16 	# samples
 	wave = 0
 
@@ -46,8 +46,7 @@ def peak_test_01a(pipeline):
 	# build pipeline
 	#
 
-	head = test_common.complex_test_src(pipeline, buffer_length = buffer_length, rate = in_rate, test_duration = test_duration, wave = wave, freq = sine_frequency)
-	head = pipeparts.mktaginject(pipeline, head, "instrument=H1,channel-name=LSC-STRAIN,units=strain")
+	head = test_common.gapped_complex_test_src(pipeline, buffer_length = buffer_length, rate = in_rate, test_duration = test_duration, wave = wave, freq = sine_frequency, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "itac_test_01a_control.dump", tags = "instrument=H1,channel-name=LSC-STRAIN,units=strain")
 	head = tee = pipeparts.mktee(pipeline, head)
 	head = pipeparts.mkqueue(pipeline, pipeparts.mkitac(pipeline, head, peak_window, "test_bank.xml"))
 	
@@ -69,6 +68,9 @@ def peak_test_01a(pipeline):
 	#
 	# done
 	#
+
+	if "GST_DEBUG_DUMP_DOT_DIR" in os.environ:
+		gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, "peak_test_01a")
 
 	return pipeline
 
