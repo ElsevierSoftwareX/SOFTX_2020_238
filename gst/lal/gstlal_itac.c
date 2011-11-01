@@ -358,6 +358,8 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 		element->maxdata = gstlal_double_complex_peak_samples_and_values_new(channels);
 		//FIXME get this number from the autocorrelation matrix size!!!
 		element->maxdata->pad = 5;
+		//FIXME set this only once we have the autocorrelation matrix!!
+		element->snr_mat = gsl_matrix_complex_calloc(element->channels, element->maxdata->pad);
 	}
 
 	/*
@@ -413,6 +415,9 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 	dataptr = element->data + element->maxdata->pad * element->maxdata->channels;
 	/* Find the peak */
 	gstlal_double_complex_peak_over_window(element->maxdata, (const double complex*) dataptr, outsamps);
+	/* extract data around peak for chisq calculation */
+	gstlal_double_complex_series_around_peak(element->maxdata, element->data, element->snr_mat, copysamps);
+	
 	/* create the output buffer */
 	srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
 	/* set the time stamp and offset state */
@@ -740,6 +745,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->bank_lock = g_mutex_new();
 	element->last_gap = TRUE;
 	element->EOS = FALSE;
+	element->snr_mat = NULL;
 }
 
 
