@@ -36,6 +36,7 @@
 #include <gstlal_peakfinder.h>
 #include <gstaudioadapter.h>
 #include <lal/LIGOMetadataTables.h>
+#include <gsl/gsl_matrix.h>
 
 G_BEGIN_DECLS
 
@@ -79,7 +80,9 @@ typedef struct {
 	char * channel_name;
 	gboolean last_gap;
 	gboolean EOS;
-
+	gsl_matrix_complex *snr_mat;
+	gsl_matrix_complex *autocorrelation_matrix;
+	
 	GMutex *bank_lock;
 } GSTLALItac;
 
