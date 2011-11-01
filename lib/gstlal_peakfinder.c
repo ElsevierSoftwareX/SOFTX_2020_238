@@ -19,6 +19,7 @@ struct gstlal_double_peak_samples_and_values *gstlal_double_peak_samples_and_val
 	new->samples = g_malloc0(sizeof(guint) * channels);
 	new->values = g_malloc0(sizeof(double) * channels);
 	new->num_events = 0;
+	new->pad = 0;
 	return new;
 }
 
@@ -129,6 +130,7 @@ struct gstlal_double_complex_peak_samples_and_values *gstlal_double_complex_peak
 	new->samples = g_malloc0(sizeof(guint) * channels);
 	new->values = g_malloc0(sizeof(double complex) * channels);
 	new->num_events = 0;
+	new->pad = 0;
 	return new;
 }
 

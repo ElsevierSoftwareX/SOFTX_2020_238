@@ -13,6 +13,7 @@ struct gstlal_double_peak_samples_and_values {
 	guint num_events;
 	guint *samples;
 	double *values;
+	guint pad;
 };
 
 struct gstlal_double_complex_peak_samples_and_values {
@@ -20,6 +21,7 @@ struct gstlal_double_complex_peak_samples_and_values {
 	guint num_events;
 	guint *samples;
 	double complex *values;
+	guint pad;
 };
 
 /* make new structures */
