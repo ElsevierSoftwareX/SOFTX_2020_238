@@ -5,6 +5,8 @@
 #include <complex.h>
 #include <string.h>
 #include <math.h>
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_vector.h>
 
 /*
  * Double precision
@@ -169,6 +171,32 @@ int gstlal_double_complex_peak_over_window(struct gstlal_double_complex_peak_sam
 	
 	return 0;
 }
+
+/* Assumes that you can index the data being given, if not expect a segfault or
+ * worse. To do this it will assume that the pad provided is commensurate with
+ * the amount of data around the peak that you are requesting.  So it adds the
+ * pad length to all the samples in the peak_samples_and_values structure.
+ */
+
+int gstlal_double_complex_series_around_peak(struct gstlal_double_complex_peak_samples_and_values *input, double complex *data, gsl_matrix_complex *outputmat, guint64 length)
+{
+	guint channel, index;
+	gsl_vector_complex_view dataview;
+	guint *maxsample = input->samples;
+	gsl_matrix_complex_set_zero(outputmat);
+
+	for (channel = 0; channel < input->channels; channel++) {
+		if (maxsample[channel]) {
+			index = (maxsample[channel] + input->pad - outputmat->size2 / 2) * input->channels + channel;
+			dataview = gsl_vector_complex_view_array_with_stride((double *) data+index, input->channels, outputmat->size2);
+			gsl_matrix_complex_set_row(outputmat, channel, &dataview.vector);
+			}
+		}
+
+	return 0;
+}
+
+
 
 /* simple function to fill a buffer with the max values */
 int gstlal_double_complex_fill_output_with_peak(struct gstlal_double_complex_peak_samples_and_values *input, double complex *data, guint64 length)
