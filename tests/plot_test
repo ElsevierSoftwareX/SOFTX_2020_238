@@ -4,12 +4,15 @@ import matplotlib
 matplotlib.use('Agg')
 import pylab
 import sys
+import os
 
 name = sys.argv[1]
 
 input = numpy.loadtxt(name+"_in.dump")
 output = numpy.loadtxt(name+"_out.dump")
-
+if os.path.isfile(name+"_control.dump"):
+	control = numpy.loadtxt(name+"_control.dump")
+	pylab.plot(control[:,0], control[:,1], '.-')
 pylab.plot(input[:,0], input[:,1], '.-')
 pylab.plot(output[:,0], output[:,1], '.-')
 pylab.grid()
