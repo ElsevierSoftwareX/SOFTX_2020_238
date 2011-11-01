@@ -102,11 +102,15 @@ static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, c
 	}
 	return TRUE;
 }
+/* FIXME the function placements should be moved around to avoid putting this static prototype here */
+
+static GstFlowReturn process(GSTLALItac *element);
 
 static gboolean sink_event(GstPad *pad, GstEvent *event)
 {
 	GSTLALItac *element = GSTLAL_ITAC(GST_PAD_PARENT(pad));
 	gboolean success;
+	GstFlowReturn result;
 
 	switch(GST_EVENT_TYPE(event)) {
 	
@@ -130,7 +134,14 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		success = gst_pad_event_default(pad, event);
 		break;
 		}
-
+	/* FIXME, will this always occur before last chain function is called?? */
+	case GST_EVENT_EOS: {
+		element->EOS = TRUE;
+		/* FIXME check this output */
+		result = process(element);
+		success = gst_pad_event_default(pad, event);
+		break;
+		}
 	default: {
 		success = gst_pad_event_default(pad, event);
 		break;
@@ -345,6 +356,8 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 		element->rate = rate;
 		g_object_set(element->adapter, "unit-size", width / 8 * channels, NULL);
 		element->maxdata = gstlal_double_complex_peak_samples_and_values_new(channels);
+		//FIXME get this number from the autocorrelation matrix size!!!
+		element->maxdata->pad = 5;
 	}
 
 	/*
@@ -372,14 +385,107 @@ static GstFlowReturn push_buffer(GSTLALItac *element, GstBuffer *srcbuf)
 	return gst_pad_push(element->srcpad, srcbuf);
 }
 
+static GstFlowReturn push_gap(GSTLALItac *element, guint samps)
+{
+	GstBuffer *srcbuf = NULL;
+	GstFlowReturn result = GST_FLOW_OK;
+	/* Clearing the max data structure causes the resulting buffer to be a GAP */
+	gstlal_double_complex_peak_samples_and_values_clear(element->maxdata);
+	/* create the output buffer */
+	srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate);
+	/* set the time stamp and offset state */
+	update_state(element, srcbuf);
+	/* push the result */
+	result = push_buffer(element, srcbuf);
+	return result;
+}
+
+static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint outsamps)
+{
+	GstBuffer *srcbuf = NULL;
+	GstFlowReturn result = GST_FLOW_OK;
+	guint copied_gap, copied_nongap;
+	double complex *dataptr = NULL;
+
+	/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
+	gst_audioadapter_copy(element->adapter, (void *) element->data, copysamps, &copied_gap, &copied_nongap);
+	/* put the data pointer one pad length in */
+	dataptr = element->data + element->maxdata->pad * element->maxdata->channels;
+	/* Find the peak */
+	gstlal_double_complex_peak_over_window(element->maxdata, (const double complex*) dataptr, outsamps);
+	/* create the output buffer */
+	srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
+	/* set the time stamp and offset state */
+	update_state(element, srcbuf);
+	/* push the result */
+	result = push_buffer(element, srcbuf);
+}
+
+static GstFlowReturn process(GSTLALItac *element)
+{
+	gboolean copied_gap, copied_nongap;
+	guint outsamps, gapsamps, nongapsamps, copysamps;
+	double complex *dataptr = NULL;
+	GstFlowReturn result = GST_FLOW_OK;
+	GstBuffer *srcbuf = NULL;
+	
+	while( (element->EOS && gst_audioadapter_available_samples(element->adapter)) || gst_audioadapter_available_samples(element->adapter) > (element->n + 2 * element->maxdata->pad)) {
+
+		/* See if the output is a gap or not */
+		nongapsamps = gst_audioadapter_head_nongap_length(element->adapter);
+		gapsamps = gst_audioadapter_head_gap_length(element->adapter);
+
+		/* First check if the samples are gap */
+		if (gapsamps > 0) {
+			element->last_gap = TRUE;
+			outsamps = gapsamps > element->n ? element->n : gapsamps;
+			result = push_gap(element, outsamps);
+			/* knock off the first buffers worth of bytes since we don't need them any more */
+			gst_audioadapter_flush(element->adapter, outsamps);
+			}
+		/* The check to see if we have enough nongap samples to compute an output, else it is a gap too */
+		else if (nongapsamps <= 2 * element->maxdata->pad) {
+			element->last_gap = TRUE;
+			outsamps = nongapsamps; 
+			result = push_gap(element, outsamps);
+			/* knock off the first buffers worth of bytes since we don't need them any more */
+			gst_audioadapter_flush(element->adapter, outsamps);
+			}
+		/* Else we have enough nongap samples to actually compute an output, but the first and last buffer might still be a gap */
+		else {
+			/* Check to see if we just came off a gap, if so then we need to push a gap for the startup transient if padding is requested */
+			if (element->last_gap) {
+				element->last_gap = FALSE;
+				if (element->maxdata->pad > 0)
+					result = push_gap(element, element->maxdata->pad);
+				}
+			/* if we have enough nongap samples then our output is length n, otherwise we have to knock the padding off of what is available */
+			copysamps = (nongapsamps > (element->n + 2 * element->maxdata->pad)) ? (element->n + 2 * element->maxdata->pad) : nongapsamps;
+			outsamps = (copysamps == nongapsamps) ? (copysamps - 2 * element->maxdata->pad) : element->n;
+			result = push_nongap(element, copysamps, outsamps);
+			/* knock off the first buffers worth of bytes since we don't need them any more */
+			gst_audioadapter_flush(element->adapter, outsamps);
+			
+			/* We are on another gap boundary so push the end transient as a gap */
+			if (copysamps == nongapsamps) {
+				element->last_gap = FALSE;
+				if (element->maxdata->pad > 0) {
+					result = push_gap(element, element->maxdata->pad);
+					gst_audioadapter_flush(element->adapter, 2 * element->maxdata->pad);
+					}
+				}
+			}
+		}
+
+	return result;
+}
+
 static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 {
 	GSTLALItac *element = GSTLAL_ITAC(gst_pad_get_parent(pad));
 	GstFlowReturn result = GST_FLOW_OK;
-	GstBuffer *srcbuf = NULL;
-	guint64 maxsize = output_num_bytes(element);
-	gboolean copied_gap, copied_nongap;
-	guint outsamps, gapsamps, nongapsamps;
+	/* The max size to copy from an adapter is the typical output size plus the padding */
+	guint64 maxsize = output_num_bytes(element) + element->adapter->unit_size * element->maxdata->pad * 2;
 
 	/* if we haven't allocated storage do it now, we should never try to copy from an adapter with a larger buffer than this */
 	if (!element->data)
@@ -413,7 +519,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		reset_time_and_offset(element);
 		gst_audioadapter_clear(element->adapter);
 	}
-
+	
+		
 	/* if we don't have a valid first timestamp yet take this one */
 	if (element->next_output_timestamp == GST_CLOCK_TIME_NONE) {
 		element->next_output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);// + output_duration(element);
@@ -422,36 +529,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	/* put the incoming buffer into an adapter, handles gaps */
 	gst_audioadapter_push(element->adapter, sinkbuf);
 
-	/* while we have enough data to do the calculation, do it and push out buffers n samples long */
-	while(gst_audioadapter_available_samples(element->adapter) >= element->n) {
-
-		/* See if the output is a gap or not */
-		nongapsamps = gst_audioadapter_head_nongap_length(element->adapter);
-		gapsamps = gst_audioadapter_head_gap_length(element->adapter);
-
-		if (gapsamps > 0) {
-			outsamps = gapsamps > element->n ? element->n : gapsamps;
-			/* Clearing the max data structure causes the resulting buffer to be a GAP */
-			gstlal_double_complex_peak_samples_and_values_clear(element->maxdata);
-		}
-		else {
-			outsamps = nongapsamps > element->n ? element->n : nongapsamps;
-			/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
-			gst_audioadapter_copy(element->adapter, (void *) element->data, outsamps, &copied_gap, &copied_nongap);
-			gstlal_double_complex_peak_over_window(element->maxdata, (const double complex*) element->data, outsamps);
-		}
-			
-		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
-		
-		/* set the time stamp and offset state */
-		update_state(element, srcbuf);
-
-		/* push the result */
-		result = push_buffer(element, srcbuf);
-
-		/* knock off the first buffers worth of bytes since we don't need them any more */
-		gst_audioadapter_flush(element->adapter, outsamps);
-	}
+	/* process the data we have */
+	process(element);
 
 done:
 	gst_object_unref(element);
@@ -659,6 +738,8 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->data = NULL;
 	element->maxdata = NULL;
 	element->bank_lock = g_mutex_new();
+	element->last_gap = TRUE;
+	element->EOS = FALSE;
 }
 
 
