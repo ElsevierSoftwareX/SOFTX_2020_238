@@ -77,6 +77,8 @@ typedef struct {
 	char * bank_filename;
 	char * instrument;
 	char * channel_name;
+	gboolean last_gap;
+	gboolean EOS;
 
 	GMutex *bank_lock;
 } GSTLALItac;
