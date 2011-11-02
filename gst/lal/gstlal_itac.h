@@ -82,6 +82,7 @@ typedef struct {
 	gboolean EOS;
 	gsl_matrix_complex *snr_mat;
 	gsl_matrix_complex *autocorrelation_matrix;
+	gsl_vector *autocorrelation_norm;
 	
 	GMutex *bank_lock;
 } GSTLALItac;
