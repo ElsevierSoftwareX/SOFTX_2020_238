@@ -13,7 +13,7 @@ AC_CONFIG_MACRO_DIR([gnuscripts])
 AM_INIT_AUTOMAKE([1.9 tar-ustar foreign])
 AC_CONFIG_FILES([ \
 	Makefile \
-	lib/gstlal.pc \
+	lib/gstlalugly.pc \
 	lib/Makefile \
 	lib/skymap/Makefile \
 	python/Makefile \
@@ -271,6 +271,16 @@ AC_SUBST([framecpp_LIBS])
 PKG_CHECK_MODULES([LAL], [lal lalframe lalmetaio lalsupport lalburst lalinspiral], , [AC_MSG_ERROR([Not found!])])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
+
+
+#
+# Check for gstlal
+#
+
+
+PKG_CHECK_MODULES([GSTLAL], [gstlal], , [AC_MSG_ERROR([Not found!])])
+AC_SUBST([GSTLAL_CFLAGS])
+AC_SUBST([GSTLAL_LIBS])
 
 
 #
