@@ -17,7 +17,6 @@ AC_CONFIG_FILES([ \
 	lib/Makefile \
 	lib/skymap/Makefile \
 	python/Makefile \
-	python/elements/Makefile \
 	gst/Makefile \
 	gst/cairovis/Makefile \
 	gst/nds/Makefile \
