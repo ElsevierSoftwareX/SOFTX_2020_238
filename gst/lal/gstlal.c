@@ -82,6 +82,8 @@
 #include <gstlal_drop.h>
 #include <gstlal_peak.h>
 #include <gstlal_itac.h>
+#include <gstlal_pad.h>
+#include <gstlal_trim.h>
 
 
 /*
@@ -141,6 +143,8 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_drop", GSTLAL_DROP_TYPE},
 		{"lal_peak", GSTLAL_PEAK_TYPE},
 		{"lal_itac", GSTLAL_ITAC_TYPE},
+		{"lal_pad", GST_TYPE_LALPAD},
+		{"lal_trim", GST_TYPE_LALTRIM},
 		{NULL, 0},
 	};
 

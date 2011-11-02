@@ -34,7 +34,9 @@ libgstlal_la_SOURCES = \
 	gstlal_audioundersample.h gstlal_audioundersample.c \
 	gstlal_drop.h gstlal_drop.c \
 	gstlal_peak.h gstlal_peak.c \
-	gstlal_itac.h gstlal_itac.c
+	gstlal_itac.h gstlal_itac.c \
+	gstlal_pad.h gstlal_pad.c \
+	gstlal_trim.h gstlal_trim.c
 libgstlal_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
 libgstlal_la_LIBADD = $(top_builddir)/lib/skymap/libwanalysis.la $(top_builddir)/lib/libgstlal.la $(top_builddir)/lib/libgstlaltags.la $(top_builddir)/lib/libgstlaltypes.la
 libgstlal_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
