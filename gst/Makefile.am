@@ -10,4 +10,10 @@ else
 NDS_SUBDIRS =
 endif
 
-SUBDIRS = lal python unary $(CAIRO_SUBDIRS) $(NDS_SUBDIRS)
+if COND_FRAMECPP
+FRAMECPP_SUBDIRS = framecpp
+else
+FRAMECPP_SUBDIRS =
+endif
+
+SUBDIRS = lal python unary $(CAIRO_SUBDIRS) $(NDS_SUBDIRS) $(FRAMECPP_SUBDIRS)

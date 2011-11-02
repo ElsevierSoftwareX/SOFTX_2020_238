@@ -24,6 +24,7 @@ AC_CONFIG_FILES([ \
 	gst/lal/Makefile \
 	gst/python/Makefile \
 	gst/unary/Makefile \
+	gst/framecpp/Makefile \
 	bin/Makefile \
 	tests/Makefile \
 	examples/Makefile
@@ -48,6 +49,7 @@ AC_SUBST([pkgconfigdir],[${libdir}/pkgconfig])
 m4_pattern_allow([AC_PROG_CC_C99])
 m4_ifdef([AC_PROG_CC_C99],[AC_PROG_CC_C99],[LALSUITE_AC_PROG_CC_C99])
 
+AC_PROG_CXX
 AC_PROG_INSTALL
 LT_INIT
 PKG_PROG_PKG_CONFIG()
@@ -230,6 +232,21 @@ AC_CHECK_HEADER([numpy/arrayobject.h],
 	[AC_MSG_ERROR([Numpy extension header not found])],
 	[#include "Python.h"])
 CFLAGS="$old_CFLAGS"
+
+
+#
+# Check for framecpp
+#
+
+
+PKG_CHECK_MODULES([framecpp], [framecpp], , [AC_MSG_WARN([Not found!])])
+AC_SUBST([framecpp_CFLAGS])
+AC_SUBST([framecpp_LIBS])
+AM_CONDITIONAL([COND_FRAMECPP], [test "x$pkg_failed" != "xyes"])
+AS_IF(
+	[test "x$pkg_failed" != "xyes"],
+	[AC_DEFINE([HAVE_FRAMECPP], [1], [Defined if you have framecpp])]
+)
 
 
 #
