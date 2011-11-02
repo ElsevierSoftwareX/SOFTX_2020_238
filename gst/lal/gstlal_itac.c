@@ -113,7 +113,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 	GstFlowReturn result;
 
 	switch(GST_EVENT_TYPE(event)) {
-	
+
 	case GST_EVENT_TAG: {
 		GstTagList *taglist;
 		gchar *instrument, *channel_name;
@@ -175,7 +175,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	GSTLALItac *element = GSTLAL_ITAC(object);
 
 	GST_OBJECT_LOCK(element);
-	
+
 
 	switch(id) {
 	case ARG_N:
@@ -212,13 +212,13 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		g_mutex_unlock(element->bank_lock);
 		break;
 	}
-	
+
 	case ARG_AUTOCORRELATION_MATRIX: {
 		g_mutex_lock(element->bank_lock);
-		
+
 		if(element->autocorrelation_matrix)
 			gsl_matrix_complex_free(element->autocorrelation_matrix);
-		
+
 		element->autocorrelation_matrix = gstlal_gsl_matrix_complex_from_g_value_array(g_value_get_boxed(value));
 
 		/*
@@ -238,11 +238,11 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
-	
+
 
 	GST_OBJECT_UNLOCK(element);
 }
- 
+
 
 static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
 {
@@ -280,7 +280,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_mutex_unlock(element->bank_lock);
 		break;
 	}
-	
+
 	case ARG_AUTOCORRELATION_MATRIX:
 		g_mutex_lock(element->bank_lock);
 		if(element->autocorrelation_matrix)
@@ -447,7 +447,7 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 	gstlal_double_complex_peak_over_window(element->maxdata, (const double complex*) dataptr, outsamps);
 	/* extract data around peak for chisq calculation */
 	gstlal_double_complex_series_around_peak(element->maxdata, element->data, element->snr_mat, copysamps);
-	
+
 	/* create the output buffer */
 	srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
 	/* set the time stamp and offset state */
@@ -461,7 +461,7 @@ static GstFlowReturn process(GSTLALItac *element)
 {
 	guint outsamps, gapsamps, nongapsamps, copysamps;
 	GstFlowReturn result = GST_FLOW_OK;
-	
+
 	while( (element->EOS && gst_audioadapter_available_samples(element->adapter)) || gst_audioadapter_available_samples(element->adapter) > (element->n + 2 * element->maxdata->pad)) {
 
 		/* See if the output is a gap or not */
@@ -479,7 +479,7 @@ static GstFlowReturn process(GSTLALItac *element)
 		/* The check to see if we have enough nongap samples to compute an output, else it is a gap too */
 		else if (nongapsamps <= 2 * element->maxdata->pad) {
 			element->last_gap = TRUE;
-			outsamps = nongapsamps; 
+			outsamps = nongapsamps;
 			result = push_gap(element, outsamps);
 			/* knock off the first buffers worth of bytes since we don't need them any more */
 			gst_audioadapter_flush(element->adapter, outsamps);
@@ -498,7 +498,7 @@ static GstFlowReturn process(GSTLALItac *element)
 			result = push_nongap(element, copysamps, outsamps);
 			/* knock off the first buffers worth of bytes since we don't need them any more */
 			gst_audioadapter_flush(element->adapter, outsamps);
-			
+
 			/* We are on another gap boundary so push the end transient as a gap */
 			if (copysamps == nongapsamps) {
 				element->last_gap = FALSE;
@@ -534,7 +534,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
-	
+
 	if(!element->instrument || !element->channel_name) {
 		GST_ELEMENT_ERROR(element, STREAM, FAILED, ("missing or invalid tags"), ("instrument and/or channel name not known (stream's tags must provide this information)"));
 		result = GST_FLOW_ERROR;
@@ -552,8 +552,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 		reset_time_and_offset(element);
 		gst_audioadapter_clear(element->adapter);
 	}
-	
-		
+
+
 	/* if we don't have a valid first timestamp yet take this one */
 	if (element->next_output_timestamp == GST_CLOCK_TIME_NONE) {
 		element->next_output_timestamp = GST_BUFFER_TIMESTAMP(sinkbuf);// + output_duration(element);
@@ -684,7 +684,7 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
-	
+
 	g_object_class_install_property(
 		gobject_class,
 		ARG_BANK_FILENAME,
@@ -696,7 +696,7 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
-	
+
 	g_object_class_install_property(
 		gobject_class,
 		ARG_SNR_THRESH,
@@ -708,7 +708,7 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
-	
+
 	g_object_class_install_property(
 		gobject_class,
 		ARG_SIGMASQ,
