@@ -19,7 +19,6 @@ pkgpython_PYTHON = \
 	lloidparts.py \
 	matplotlibhelper.py \
 	misc.py \
-	option.py \
 	pipeio.py \
 	pipeparts.py \
 	pipeutil.py \
