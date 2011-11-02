@@ -62,16 +62,13 @@
 #include <gstlal_coinc.h>
 #include <gstlal_skymap.h>
 #include <gstlal_triggergen.h>
-#include <gstlal_triggerxmlwriter.h>
 #include <gstlal_gate.h>
-#include <gstlal_chisquare.h>
 #include <gstlal_autochisq.h>
 #include <gstlal_firbank.h>
 #include <gstlal_sumsquares.h>
 #include <gstlal_togglecomplex.h>
 #include <gstlal_nofakedisconts.h>
 #include <gstlal_reblock.h>
-#include <gstlal_delay.h>
 #include <gstlal_iirbank.h>
 #include <gstlal_mean.h>
 #include <gstlal_timeslicechisq.h>
@@ -123,16 +120,13 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_coinc", GSTLAL_COINC_TYPE},
 		{"lal_skymap", GSTLAL_SKYMAP_TYPE},
 		{"lal_triggergen", GSTLAL_TRIGGERGEN_TYPE},
-		{"lal_triggerxmlwriter", GSTLAL_TRIGGERXMLWRITER_TYPE},
 		{"lal_gate", GSTLAL_GATE_TYPE},
-		{"lal_chisquare", GSTLAL_CHISQUARE_TYPE},
 		{"lal_autochisq", GSTLAL_AUTOCHISQ_TYPE},
 		{"lal_firbank", GSTLAL_FIRBANK_TYPE},
 		{"lal_sumsquares", GSTLAL_SUMSQUARES_TYPE},
 		{"lal_togglecomplex", GSTLAL_TOGGLECOMPLEX_TYPE},
 		{"lal_nofakedisconts", GSTLAL_NOFAKEDISCONTS_TYPE},
 		{"lal_reblock", GSTLAL_REBLOCK_TYPE},
-		{"lal_delay", GSTLAL_DELAY_TYPE},
 		{"lal_iirbank", GSTLAL_IIRBANK_TYPE},
 		{"lal_mean", GSTLAL_MEAN_TYPE},
 		{"lal_timeslicechisq", GSTLAL_TIMESLICECHISQUARE_TYPE},

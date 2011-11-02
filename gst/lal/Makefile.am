@@ -15,16 +15,13 @@ libgstlal_la_SOURCES = \
 	gstlal_coinc.h gstlal_coinc.c \
 	gstlal_skymap.h gstlal_skymap.c \
 	gstlal_triggergen.h gstlal_triggergen.c \
-	gstlal_triggerxmlwriter.h gstlal_triggerxmlwriter.c \
 	gstlal_gate.h gstlal_gate.c \
-	gstlal_chisquare.h gstlal_chisquare.c \
 	gstlal_autochisq.h gstlal_autochisq.c \
 	gstlal_firbank.h gstlal_firbank.c \
 	gstlal_sumsquares.h gstlal_sumsquares.c \
 	gstlal_togglecomplex.h gstlal_togglecomplex.c \
 	gstlal_nofakedisconts.h gstlal_nofakedisconts.c \
 	gstlal_reblock.h gstlal_reblock.c \
-	gstlal_delay.h gstlal_delay.c \
 	gstlal_iirbank.h gstlal_iirbank.c \
 	gstlal_mean.h gstlal_mean.c \
 	gstlal_timeslicechisq.h gstlal_timeslicechisq.c \

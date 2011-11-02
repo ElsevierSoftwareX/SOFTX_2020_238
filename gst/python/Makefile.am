@@ -5,11 +5,4 @@ INCLUDES = -I$(top_srcdir)/lib
 pkgpythondir = $(plugindir)/python
 pkgpyexecdir = $(pkgpythondir)
 
-pkgpython_PYTHON = lal_checktimestamps.py lal_fakeadvligosrc.py lal_fakeligosrc.py lal_fakeskymapsrc.py lal_faketriggersrc.py lal_onlinehoftsrc.py lal_numpy_functiongenerator.py lal_timeseriesplotter.py lal_skymaprenderer.py
-
-pkgpyexec_LTLIBRARIES = _onlinehoftsrc.la
-
-_onlinehoftsrc_la_SOURCES = _onlinehoftsrc.c
-_onlinehoftsrc_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS)
-_onlinehoftsrc_la_CFLAGS = $(AM_CFLAGS) $(pygobject_CFLAGS)
-_onlinehoftsrc_la_LDFLAGS = $(AM_LDFLAGS) -module $(PYTHON_LDFLAGS) $(pygobject_LIBS)
+pkgpython_PYTHON = lal_checktimestamps.py lal_fakeadvligosrc.py lal_fakeligosrc.py lal_fakeskymapsrc.py lal_faketriggersrc.py lal_numpy_functiongenerator.py lal_timeseriesplotter.py lal_skymaprenderer.py
