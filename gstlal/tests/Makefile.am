@@ -2,7 +2,7 @@ EXTRA_DIST = \
 	firbank_test_01.py \
 	resample_test_01.py \
 	whiten_test_01.py \
-	test_common.py \
+	test_common.py
 
 check :
 	python firbank_test_01.py
