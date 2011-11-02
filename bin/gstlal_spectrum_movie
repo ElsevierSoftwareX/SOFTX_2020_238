@@ -26,14 +26,15 @@
 #
 
 
+from optparse import OptionParser
 import pygtk
 pygtk.require("2.0")
 import pygst
 pygst.require("0.10")
 import gobject
 import gst
-import gstoption
-from gstlal.option import OptionParser
+
+
 from gstlal import lloidparts
 from gstlal import pipeparts
 
@@ -68,8 +69,6 @@ def parse_command_line():
 	parser.add_option("--frame-rate", metavar = "n/d", help = "Force a framerate (optional).  The framerate is a rational number, entered in the format \"n/d\" where n and d are integers.  The default is realtime.")
 	parser.add_option("--output", metavar = "filename", help = "Set the name of the movie file to write (optional).  The default is to display the video on screen.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
-
-	parser.add_option_group(gstoption.get_group())
 
 	options, filenames = parser.parse_args()
 
