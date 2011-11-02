@@ -895,6 +895,9 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *i
 	guint zeros_in_adapter;
 	GstFlowReturn result;
 
+#ifdef GSTLAL_MALLOC_GAPS
+	result = gst_pad_alloc_buffer(GST_BASE_TRANSFORM_SRC_PAD(trans), GST_BUFFER_OFFSET(input), size, caps, buf);
+#else
 	input_is_gap = GST_BUFFER_FLAG_IS_SET(input, GST_BUFFER_FLAG_GAP);
 	history_is_gap = gst_audioadapter_is_gap(element->adapter);
 
@@ -904,9 +907,6 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *i
 
 	output_is_gap = input_is_gap && (history_is_gap || zeros_in_adapter >= autocorrelation_length(element));
 
-#ifdef GSTLAL_MALLOC_GAPS
-	result = gst_pad_alloc_buffer(GST_BASE_TRANSFORM_SRC_PAD(trans), GST_BUFFER_OFFSET(input), size, caps, buf);
-#else
 	result = gst_pad_alloc_buffer(GST_BASE_TRANSFORM_SRC_PAD(trans), GST_BUFFER_OFFSET(input), output_is_gap ? 0 : size, caps, buf);
 #endif
 	if(result != GST_FLOW_OK)
