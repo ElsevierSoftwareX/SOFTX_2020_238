@@ -98,7 +98,7 @@ def set_fap(options, Far, f, rankoffset):
 	# compute the faps
 	print >>sys.stderr, "computing faps ..."
 	for ifos, in connection.cursor().execute('SELECT DISTINCT(ifos) FROM coinc_inspiral').fetchall():
-			
+
 		print >>sys.stderr, "computing faps for ", ifos
 		ifoset = lsctables.instrument_set_from_ifos(ifos)
 		ifoset.discard("H2")
@@ -118,11 +118,11 @@ def set_fap(options, Far, f, rankoffset):
 #
 
 def set_far(options, Far, f):
-	from glue.ligolw import dbtables	
-	
+	from glue.ligolw import dbtables
+
 	working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
-		
+
 	connection.create_function("far", 2, Far.compute_far)
 	ids = [id for id, in connection.cursor().execute("SELECT DISTINCT(time_slide_id) FROM time_slide")]
 	for id in ids:
@@ -163,7 +163,7 @@ class FAR(object):
 		self.livetime = livetime
 		self.trials_factor = trials_factor
 		self.trials_table = {}
-	
+
 	def updateFAPmap(self, instruments, rank_offset):
 		if self.counts is None:
 			raise InputError, "must provide background bins file"
@@ -262,7 +262,7 @@ class FAR(object):
 
 	def FAR_from_FAP(self, fap, n = 1):
 		# the n = 1 case can be done exactly.  That is good since it is
-		# the most important.  
+		# the most important.
 		if n == 1:
 			return 0. - numpy.log(1. - fap) / self.livetime
 		if n > 1 and n <= 100:
