@@ -44,7 +44,7 @@
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
-#include <gstlal.h>
+#include <gstlal/gstlal.h>
 #include <gstlal_iirbank.h>
 
 

@@ -32,7 +32,7 @@
  * stuff from gstlal
  */
 
-#include <gstlal.h>
+#include <gstlal/gstlal.h>
 #include <gstlal_plugins.h>
 #include <gstlal_specgram.h>
 

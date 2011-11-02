@@ -43,7 +43,7 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstcollectpads.h>
-#include <gstlalcollectpads.h>
+#include <gstlal/gstlalcollectpads.h>
 #include <lal/LIGOMetadataTables.h>
 
 

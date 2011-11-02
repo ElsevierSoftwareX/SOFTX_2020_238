@@ -69,8 +69,8 @@
 #include <gst/base/gstcollectpads.h>
 #include <gst/audio/audio.h>
 #include "gstlal_multiplier.h"
-#include <gstlalcollectpads.h>
-#include <gstlal.h>
+#include <gstlal/gstlalcollectpads.h>
+#include <gstlal/gstlal.h>
 
 
 #define GST_CAT_DEFAULT gstlal_multiplier_debug

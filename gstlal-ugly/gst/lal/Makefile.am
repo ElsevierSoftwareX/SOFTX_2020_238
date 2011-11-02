@@ -1,8 +1,8 @@
-INCLUDES = -I$(top_srcdir)/lib/skymap
+INCLUDES = -I$(top_srcdir)/lib/skymap -I$(top_srcdir)/lib
 
-plugin_LTLIBRARIES = libgstlal.la
+plugin_LTLIBRARIES = libgstlalugly.la
 
-libgstlal_la_SOURCES = \
+libgstlalugly_la_SOURCES = \
 	gstlal_plugins.h gstlalugly.c \
 	gstlal_blcbc_triggergen.h gstlal_blcbc_triggergen.c \
 	gstlal_coinc.h gstlal_coinc.c \
@@ -16,8 +16,8 @@ libgstlal_la_SOURCES = \
 	gstlal_timeslicechisq.h gstlal_timeslicechisq.c \
 	gstlal_triggergen.h gstlal_triggergen.c \
 	gstlal_trim.h gstlal_trim.c
-libgstlal_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS)
-libgstlal_la_LIBADD = $(top_builddir)/lib/skymap/libwanalysis.la
-libgstlal_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(GSTLAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
+libgstlalugly_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS)
+libgstlalugly_la_LIBADD = $(top_builddir)/lib/libgstlalugly.la  $(top_builddir)/lib/skymap/libwanalysis.la
+libgstlalugly_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(GSTLAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
 
 noinst_HEADERS = gstlal_plugins.h

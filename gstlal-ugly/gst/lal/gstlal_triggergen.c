@@ -32,8 +32,8 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gsl/gsl_matrix.h>
-#include <gstlal.h>
-#include <gstlal_tags.h>
+#include <gstlal/gstlal.h>
+#include <gstlal/gstlal_tags.h>
 #include <gstlal_triggergen.h>
 #include <lal/Date.h>
 #include <lal/LIGOMetadataTables.h>

@@ -1,4 +1,4 @@
-pkginclude_HEADERS = gstlal.h gstlal_tags.h gstlal_cdf_weighted_chisq_P.h gstlal_segments.h gstaudioadapter.h gstlalcollectpads.h
+pkginclude_HEADERS = gstlal.h gstlal_tags.h gstlal_cdf_weighted_chisq_P.h gstlal_segments.h gstaudioadapter.h gstlalcollectpads.h gstlal_peakfinder.h
 pkgconfig_DATA = gstlal.pc
 lib_LTLIBRARIES = libgstlal.la libgstlaltags.la libgstlaltypes.la
 

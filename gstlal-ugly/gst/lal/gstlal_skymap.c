@@ -20,8 +20,8 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
-#include <gstlal.h>
-#include <gstlal_tags.h>
+#include <gstlal/gstlal.h>
+#include <gstlal/gstlal_tags.h>
 #include <gstlal_skymap.h>
 #include <lal/Date.h>
 #include <lal/LIGOMetadataTables.h>

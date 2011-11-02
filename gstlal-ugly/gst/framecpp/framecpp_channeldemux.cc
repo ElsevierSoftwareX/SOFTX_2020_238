@@ -63,7 +63,7 @@
  */
 
 
-#include <gstlal_tags.h>
+#include <gstlal/gstlal_tags.h>
 #include <framecpp_channeldemux.h>
 
 

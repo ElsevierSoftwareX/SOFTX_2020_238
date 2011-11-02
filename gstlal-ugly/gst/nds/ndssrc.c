@@ -52,7 +52,7 @@
  */
 
 
-#include <gstlal_tags.h>
+#include <gstlal/gstlal_tags.h>
 #include <ndssrc.h>
 #include <daqc_internal.h>
 #include <daqc_response.h>

@@ -43,11 +43,11 @@
  * our own stuff
  */
 
-#include <gstlal.h>
+#include <gstlal/gstlal.h>
 #include <gstlal_itac.h>
-#include <gstlal_peakfinder.h>
-#include <gstaudioadapter.h>
-#include <gstlal_tags.h>
+#include <gstlal/gstlal_peakfinder.h>
+#include <gstlal/gstaudioadapter.h>
+#include <gstlal/gstlal_tags.h>
 #include <gstlal_snglinspiral.h>
 
 #define DEFAULT_SNR_THRESH 5.5

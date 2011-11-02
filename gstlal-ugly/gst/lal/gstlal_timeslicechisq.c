@@ -77,8 +77,8 @@
  */
 
 
-#include <gstlal.h>
-#include <gstlalcollectpads.h>
+#include <gstlal/gstlal.h>
+#include <gstlal/gstlalcollectpads.h>
 #include "gstlal_timeslicechisq.h"
 
 

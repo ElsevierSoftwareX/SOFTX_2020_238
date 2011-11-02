@@ -1,7 +1,7 @@
 #include <glib.h>
 #include <glib-object.h>
 #include <gst/gst.h>
-#include <gstlal_peakfinder.h>
+#include <gstlal/gstlal_peakfinder.h>
 #include <complex.h>
 #include <string.h>
 #include <math.h>
