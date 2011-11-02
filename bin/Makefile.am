@@ -23,4 +23,5 @@ dist_bin_SCRIPTS = \
 	gstlal_segments_trim \
 	gstlal_glitch_population \
 	gstlal_play_frames \
-	gstlal_plot_psd
+	gstlal_plot_psd \
+	gstlal_launch
