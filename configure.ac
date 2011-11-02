@@ -239,14 +239,28 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-PKG_CHECK_MODULES([framecpp], [framecpp], , [AC_MSG_WARN([Not found!])])
+AC_ARG_WITH(
+	[framecpp],
+	[AS_HELP_STRING([--with-framecpp], [include framecpp plugin @<:@default=check@:>@])],
+	[],
+	[with_framecpp=check]
+)
+AS_IF(
+	[test "x$with_framecpp" != "xno"],
+	[PKG_CHECK_MODULES(
+		[framecpp],
+		[framecpp],
+		[HAVE_FRAMECPP="yes"],
+		[AC_MSG_WARN([Not found!])
+		HAVE_FRAMECPP="no"]
+	)],
+	[AC_MSG_WARN([check for framecpp disabled])
+	HAVE_FRAMECPP="no"]
+)
+AC_DEFINE([HAVE_FRAMECPP], [test "x${HAVE_FRAMECPP}" == "xyes"], [Defined if you have framecpp])
+AM_CONDITIONAL([COND_FRAMECPP], [test "x${HAVE_FRAMECPP}" == "xyes"])
 AC_SUBST([framecpp_CFLAGS])
 AC_SUBST([framecpp_LIBS])
-AM_CONDITIONAL([COND_FRAMECPP], [test "x$pkg_failed" != "xyes"])
-AS_IF(
-	[test "x$pkg_failed" != "xyes"],
-	[AC_DEFINE([HAVE_FRAMECPP], [1], [Defined if you have framecpp])]
-)
 
 
 #
