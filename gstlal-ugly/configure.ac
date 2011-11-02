@@ -23,7 +23,6 @@ AC_CONFIG_FILES([ \
 	gst/nds/Makefile \
 	gst/lal/Makefile \
 	gst/python/Makefile \
-	gst/unary/Makefile \
 	gst/framecpp/Makefile \
 	bin/Makefile \
 	tests/Makefile \
