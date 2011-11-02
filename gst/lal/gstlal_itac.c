@@ -165,7 +165,8 @@ enum property {
 	ARG_N = 1,
 	ARG_SNR_THRESH,
 	ARG_BANK_FILENAME,
-	ARG_SIGMASQ
+	ARG_SIGMASQ,
+	ARG_AUTOCORRELATION_MATRIX
 };
 
 
@@ -211,6 +212,27 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		g_mutex_unlock(element->bank_lock);
 		break;
 	}
+	
+	case ARG_AUTOCORRELATION_MATRIX: {
+		g_mutex_lock(element->bank_lock);
+		
+		if(element->autocorrelation_matrix)
+			gsl_matrix_complex_free(element->autocorrelation_matrix);
+		
+		element->autocorrelation_matrix = gstlal_gsl_matrix_complex_from_g_value_array(g_value_get_boxed(value));
+
+		/*
+		 * induce norms to be recomputed
+		 */
+
+		if(element->autocorrelation_norm) {
+			gsl_vector_free(element->autocorrelation_norm);
+			element->autocorrelation_norm = NULL;
+		}
+
+		g_mutex_unlock(element->bank_lock);
+		break;
+	}
 
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
@@ -220,7 +242,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	GST_OBJECT_UNLOCK(element);
 }
-
+ 
 
 static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
 {
@@ -258,6 +280,14 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_mutex_unlock(element->bank_lock);
 		break;
 	}
+	
+	case ARG_AUTOCORRELATION_MATRIX:
+		g_mutex_lock(element->bank_lock);
+		if(element->autocorrelation_matrix)
+			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_complex(element->autocorrelation_matrix));
+		/* FIXME:  else? */
+		g_mutex_unlock(element->bank_lock);
+		break;
 
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
@@ -406,7 +436,7 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 {
 	GstBuffer *srcbuf = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
-	guint copied_gap, copied_nongap;
+	gint copied_gap, copied_nongap;
 	double complex *dataptr = NULL;
 
 	/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
@@ -424,15 +454,13 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 	update_state(element, srcbuf);
 	/* push the result */
 	result = push_buffer(element, srcbuf);
+	return result;
 }
 
 static GstFlowReturn process(GSTLALItac *element)
 {
-	gboolean copied_gap, copied_nongap;
 	guint outsamps, gapsamps, nongapsamps, copysamps;
-	double complex *dataptr = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
-	GstBuffer *srcbuf = NULL;
 	
 	while( (element->EOS && gst_audioadapter_available_samples(element->adapter)) || gst_audioadapter_available_samples(element->adapter) > (element->n + 2 * element->maxdata->pad)) {
 
