@@ -125,6 +125,7 @@ class Bank(object):
 		self.filter_length = max(time_slices['end'])
 		self.snr_threshold = snr_threshold
 		self.logname = logname
+		bank.number = None
 
 		# Generate downsampled templates
 		template_bank, self.autocorrelation_bank, self.sigmasq = cbc_template_fir.generate_templates(
