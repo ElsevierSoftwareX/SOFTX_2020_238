@@ -23,7 +23,7 @@
 # =============================================================================
 #
 
-import sys
+import sys, os
 import numpy
 import threading
 
@@ -591,18 +591,18 @@ def mkappsink(pipeline, src, pad_name = None, max_buffers = 1, drop = False, **p
 
 
 class AppSync(object):
-	def __init__(self, appsink_new_buffer, appsinks = [], dt = None):
+	def __init__(self, appsink_new_buffer, appsinks = []):
 		self.lock = threading.Lock()
 		self.appsinks = {}
 		for a in appsinks:
 			self.appsinks[a] = None
 		self.deferred = 0
 		self.appsink_new_buffer = appsink_new_buffer
-		self.dt = dt
 
 	def add_sink(self, pipeline, src, pad_name = None, drop = False, **properties):
 		# NOTE that max buffers must be 1 for this to work
 		elem = mkappsink(pipeline, src, pad_name, 1, drop, **properties)
+		elem.connect_after("eos", self.pull_appsinks_in_order, True)
 		self.appsinks[elem] = None
 		return elem
 
@@ -613,11 +613,12 @@ class AppSync(object):
 		l = self.sorted()
 		return [b for (a,b) in l if a == l[0][0]]
 
-	def pull_appsinks_in_order(self, appsink):
+	def pull_appsinks_in_order(self, appsink, eos = False):
 		self.lock.acquire()
 
 		# mark that this one cannot emit another buffer signal (i.e. that it is blocking)
-		self.appsinks[appsink] = 1
+		if not eos:
+			self.appsinks[appsink] = 1
 
 		# wait until we have at least one buffer on every sink
 		if None in self.appsinks.values():
@@ -625,14 +626,9 @@ class AppSync(object):
 			return
 
 		# Otherwise pull the earliest buffers that are waiting
-		# FIXME this needs to just pull the earliest buffers period, but then
-		# it won't work at the end. It somehow needs to know when the last
-		# buffers are being pulled, but the EOS has not been emitted yet
 		mint = self.sorted()[0][0]
 
 		for (t,k) in self.sorted():
-			if (self.dt is not None) and (t - mint > self.dt * gst.SECOND):
-				break
 			if self.appsinks[k] == 1:
 				self.appsinks[k] = 0
 				self.appsink_new_buffer(k)
@@ -783,3 +779,29 @@ def audioresample_variance_gain(quality, num, den):
 			)[quality]
 	else: # no change in sample rate
 		return 1.
+
+
+#
+# =============================================================================
+#
+#                                Debug utilities
+#
+# =============================================================================
+#
+
+
+def write_dump_dot(pipeline, filestem, verbose = False):
+	"""
+	This function needs the environment variable GST_DEBUG_DUMP_DOT_DIR
+	to be set.   The filename will be
+
+	os.path.join($GST_DEBUG_DUMP_DOT_DIR, filestem + ".dot")
+
+	If verbose is True, a message will be written to stderr.
+	"""
+	if "GST_DEBUG_DUMP_DOT_DIR" not in os.environ:
+		raise ValueError, "cannot write pipeline, environment variable GST_DEBUG_DUMP_DOT_DIR is not set"
+	gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, filestem)
+	if verbose:
+		print >>sys.stderr, "Wrote pipeline to %s" % os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], "%s.dot" % filestem)
+
