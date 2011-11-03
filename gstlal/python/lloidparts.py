@@ -778,18 +778,9 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 
 	control_branch = {}
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
-		# FIXME:  this is where we impose the requirement that each
-		# instrument have just one template bank.  make this go
-		# away when we can figure out when two template banks are
-		# the "same".
-		assert len(banks[instrument]) == 1
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 		if instrument != "H2":
-			# FIXME:  the key should be (instrument, <whatever
-			# identifies a template bank>).  we assume that
-			# all instruments have been given the same template
-			# bank
-			control_branch[instrument] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()))
+			control_branch[(instrument, bank.number)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()))
 
 	#
 	# construct trigger generators
@@ -799,13 +790,9 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 		if instrument != "H2":
-			# FIXME:  the key should be (instrument, <whatever
-			# identifies a template bank>)
-			control_snksrc = control_branch[instrument]
+			control_snksrc = control_branch[(instrument, bank.number)]
 		else:
-			# FIXME:  the key should be (instrument, <whatever
-			# identifies a template bank>)
-			control_snksrc = (None, control_branch["H1"][1])
+			control_snksrc = (None, control_branch[("H1", bank.number)][1])
 		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % suffix, segment = nxydump_segment)
 		if chisq_type == 'timeslicechisq':
 			snrslices = {}
@@ -850,34 +837,9 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	# single stream
 	#
 
+
 	assert len(triggersrc) > 0
-	if len(triggersrc) > 1:
-		# send all streams through a multiqueue
-		queue = gst.element_factory_make("multiqueue")
-		pipeline.add(queue)
-		for head in triggersrc:
-			head.link(queue)
-		triggersrc = queue
-		# FIXME:  it has been reported that the input selector
-		# breaks seeks.  confirm and fix if needed
-		# FIXME:  input-selector in 0.10.32 no longer has the
-		# "select-all" feature.  need to get this re-instated
-		#nto1 = gst.element_factory_make("input-selector")
-		#nto1.set_property("select-all", True)
-		#pipeline.add(nto1)
-		#for pad in queue.src_pads():
-		#	pad.link(nto1)
-		#triggersrc = nto1
-	else:
-		# len(triggersrc) == 1
-		triggersrc, = triggersrc
-
-	#
-	# done
-	#
-
 	return triggersrc
-
 
 #
 # SPIIR many instruments, many template banks
