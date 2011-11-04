@@ -13,7 +13,7 @@ AC_CONFIG_MACRO_DIR([gnuscripts])
 AM_INIT_AUTOMAKE([1.9 tar-ustar foreign])
 AC_CONFIG_FILES([ \
 	Makefile \
-	lib/gstlalugly.pc \
+	lib/gstlal-ugly.pc \
 	lib/Makefile \
 	lib/skymap/Makefile \
 	python/Makefile \
@@ -169,7 +169,7 @@ AC_SUBST([cairo_LIBS])
 
 
 AC_SUBST([GSTREAMER_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_VERSION], [0.10.0])
+AC_SUBST([MIN_GSTREAMER_VERSION], [0.10.32])
 PKG_CHECK_MODULES([gstreamer], [gstreamer-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-base-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION}], , [AC_MSG_ERROR([Not found!])])
 AC_SUBST([gstreamer_CFLAGS])
 AC_SUBST([gstreamer_LIBS])

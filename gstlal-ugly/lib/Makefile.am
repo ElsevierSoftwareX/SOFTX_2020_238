@@ -1,7 +1,7 @@
 SUBDIRS = skymap
 
 pkginclude_HEADERS = gstlal_snglinspiral.h gstlal_snglburst.h
-pkgconfig_DATA = gstlalugly.pc
+pkgconfig_DATA = gstlal-ugly.pc
 lib_LTLIBRARIES = libgstlalugly.la
 
 libgstlalugly_la_SOURCES = gstlal_snglinspiral.h gstlal_snglinspiral.c gstlal_snglburst.h gstlal_snglburst.c
