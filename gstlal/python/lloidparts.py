@@ -462,14 +462,14 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	#
 	# FIXME This queue has to be large for the peak finder on the control
 	# signal if that element gets smarter maybe this could be made smaller
-	# It should be > 3 * control_peak_time * gst.SECOND + 4 * block_duration
+	# It should be > 1 * control_peak_time * gst.SECOND + 4 * block_duration
 	#
 
 	# if control_peak_time is None, set it to 0
 	if control_peak_time is None:
 		control_peak_time = 0
 
-	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (3 * control_peak_time * gst.SECOND + 5 * block_duration)), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * block_duration))
+	src = pipeparts.mkgate(pipeline, pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = (1 * control_peak_time * gst.SECOND + 5 * block_duration)), threshold = bank.gate_threshold, attack_length = gate_attack_length, hold_length = gate_hold_length, control = pipeparts.mkqueue(pipeline, control_src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 2 * block_duration))
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_gate" % logname)
 
 	#
