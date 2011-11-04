@@ -4,7 +4,7 @@
 
 
 AC_INIT([gstlal],[0.1.0],[kipp.cannon@ligo.org],[gstlal])
-AC_COPYRIGHT([Copyright (C) 2008 Kipp C. Cannon])
+AC_COPYRIGHT([Copyright (C) 2008--2011 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
@@ -122,7 +122,7 @@ AC_SUBST([GSTLAL_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex
 
 
 AC_SUBST([GSTREAMER_VIDEO_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_VIDEO_VERSION], [0.10.0])
+AC_SUBST([MIN_GSTREAMER_VIDEO_VERSION], [0.10.32])
 PKG_CHECK_MODULES([gstreamer_video], [gstreamer-video-${GSTREAMER_VIDEO_RELEASE} >= ${MIN_GSTREAMER_VIDEO_VERSION}], , [AC_MSG_ERROR([Not found!])])
 AC_SUBST([gstreamer_video_CFLAGS])
 AC_SUBST([gstreamer_video_LIBS])
@@ -134,7 +134,7 @@ AC_SUBST([gstreamer_video_LIBS])
 
 
 AC_SUBST([GSTREAMER_AUDIO_RELEASE], [0.10])
-AC_SUBST([MIN_GSTREAMER_VIDEO_VERSION], [0.10.0])
+AC_SUBST([MIN_GSTREAMER_VIDEO_VERSION], [0.10.32])
 PKG_CHECK_MODULES([gstreamer_audio], [gstreamer-audio-${GSTREAMER_VIDEO_RELEASE} >= ${MIN_GSTREAMER_VIDEO_VERSION}], , [AC_MSG_ERROR([Not found!])])
 AC_SUBST([gstreamer_audio_CFLAGS])
 AC_SUBST([gstreamer_audio_LIBS])
