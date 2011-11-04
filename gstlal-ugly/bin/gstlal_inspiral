@@ -230,7 +230,7 @@ else:
 #
 
 
-seekevent = lloidparts.seek_event_for_gps(options.gps_start_time, options.gps_end_time, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT)
+seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, options.seg[0], gst.SEEK_TYPE_SET, options.seg[1])
 
 
 #
