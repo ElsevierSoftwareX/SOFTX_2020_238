@@ -22,6 +22,7 @@ struct gstlal_double_peak_samples_and_values *gstlal_double_peak_samples_and_val
 	new->values = g_malloc0(sizeof(double) * channels);
 	new->num_events = 0;
 	new->pad = 0;
+	new->thresh = 0;
 	return new;
 }
 
@@ -47,7 +48,7 @@ int gstlal_double_peak_over_window(struct gstlal_double_peak_samples_and_values 
 	/* Find maxima of the data */
 	for(sample = 0; sample < length; sample++) {
 		for(channel = 0; channel < output->channels; channel++) {
-			if(fabs(*data) > fabs(maxdata[channel])) {
+			if(fabs(*data) > fabs(maxdata[channel]) && fabs(*data) > output->thresh) {
 				/* only increment events if the previous value was 0 */
 				if (fabs(maxdata[channel]) == 0)
 					output->num_events += 1;
@@ -133,6 +134,7 @@ struct gstlal_double_complex_peak_samples_and_values *gstlal_double_complex_peak
 	new->values = g_malloc0(sizeof(double complex) * channels);
 	new->num_events = 0;
 	new->pad = 0;
+	new->thresh = 0;
 	return new;
 }
 
@@ -158,7 +160,7 @@ int gstlal_double_complex_peak_over_window(struct gstlal_double_complex_peak_sam
 	/* Find maxima of the data */
 	for(sample = 0; sample < length; sample++) {
 		for(channel = 0; channel < output->channels; channel++) {
-			if(fabs(*data) > fabs(maxdata[channel])) {
+			if(cabs(*data) > cabs(maxdata[channel]) && cabs(*data) > output->thresh) {
 				/* only increment events if the previous value was 0 */
 				if (cabs(maxdata[channel]) == 0)
 					output->num_events += 1;
