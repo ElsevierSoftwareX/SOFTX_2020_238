@@ -16,6 +16,7 @@ struct gstlal_double_peak_samples_and_values {
 	guint *samples;
 	double *values;
 	guint pad;
+	double thresh;
 };
 
 struct gstlal_double_complex_peak_samples_and_values {
@@ -24,6 +25,7 @@ struct gstlal_double_complex_peak_samples_and_values {
 	guint *samples;
 	double complex *values;
 	guint pad;
+	double thresh;
 };
 
 /* make new structures */
