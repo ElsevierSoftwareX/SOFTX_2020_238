@@ -164,7 +164,7 @@ AC_SUBST([cairo_LIBS])
 
 
 #
-# Check for GStreamer 0.10
+# Check for GStreamer
 #
 
 
@@ -183,7 +183,7 @@ AC_SUBST([GSTLAL_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex
 
 
 #
-# Check for GStreamer Video Library 0.10
+# Check for GStreamer Video Library
 #
 
 
@@ -195,7 +195,7 @@ AC_SUBST([gstreamer_video_LIBS])
 
 
 #
-# Check for GStreamer Audio Library 0.10
+# Check for GStreamer Audio Library
 #
 
 
@@ -247,7 +247,7 @@ AS_IF(
 	[test "x$with_framecpp" != "xno"],
 	[PKG_CHECK_MODULES(
 		[framecpp],
-		[framecpp],
+		[framecpp = 0.18],
 		[HAVE_FRAMECPP="yes"],
 		[AC_MSG_WARN([Not found!])
 		HAVE_FRAMECPP="no"]
@@ -276,7 +276,7 @@ AC_SUBST([LAL_LIBS])
 #
 
 
-PKG_CHECK_MODULES([GSTLAL], [gstlal], , [AC_MSG_ERROR([Not found!])])
+PKG_CHECK_MODULES([GSTLAL], [gstlal >= 0.1.0], , [AC_MSG_ERROR([Not found!])])
 AC_SUBST([GSTLAL_CFLAGS])
 AC_SUBST([GSTLAL_LIBS])
 

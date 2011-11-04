@@ -98,7 +98,7 @@ AC_DEFINE([GSTLAL_FFTW_WISDOM_ENV], ["GSTLAL_FFTW_WISDOM"], [Set to the name of 
 
 
 #
-# Check for GStreamer 0.10
+# Check for GStreamer
 #
 
 
@@ -117,7 +117,7 @@ AC_SUBST([GSTLAL_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex
 
 
 #
-# Check for GStreamer Video Library 0.10
+# Check for GStreamer Video Library
 #
 
 
@@ -129,7 +129,7 @@ AC_SUBST([gstreamer_video_LIBS])
 
 
 #
-# Check for GStreamer Audio Library 0.10
+# Check for GStreamer Audio Library
 #
 
 
