@@ -98,6 +98,8 @@ class gstlal_svd_bank_node(pipeline.CondorDAGNode):
 		self.add_var_opt("clipping", clipping)
 		svd_bank_name_path = os.path.split(template_bank)
 		svd_bank_name = svd_bank_name_path[0] + "/svd_" + svd_bank_name_path[1]
+		if not svd_bank_name_path[1].endswith('.gz'):
+			svd_bank_name = svd_bank_name + '.gz'
 		self.add_var_opt("write-svd-bank", svd_bank_name)
 		dag.output_cache.append(lal.CacheEntry(ifo, "-", segments.segment(0, 999999999), "file://localhost%s" % (svd_bank_name,)))
 		for p in p_node:
