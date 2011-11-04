@@ -1,0 +1,47 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!DOCTYPE LIGO_LW SYSTEM "http://ldas-sw.ligo.caltech.edu/doc/ligolwAPI/html/ligolw_dtd.txt">
+<LIGO_LW>
+	<Table Name="process:table">
+		<Column Type="lstring" Name="process:comment"/>
+		<Column Type="lstring" Name="process:node"/>
+		<Column Type="lstring" Name="process:domain"/>
+		<Column Type="int_4s" Name="process:unix_procid"/>
+		<Column Type="lstring" Name="process:version"/>
+		<Column Type="ilwd:char" Name="process:process_id"/>
+		<Column Type="int_4s" Name="process:start_time"/>
+		<Column Type="int_4s" Name="process:jobid"/>
+		<Column Type="lstring" Name="process:username"/>
+		<Column Type="lstring" Name="process:program"/>
+		<Column Type="int_4s" Name="process:end_time"/>
+		<Column Type="int_4s" Name="process:is_online"/>
+		<Column Type="lstring" Name="process:ifos"/>
+		<Column Type="lstring" Name="process:cvs_repository"/>
+		<Column Type="int_4s" Name="process:cvs_entry_time"/>
+		<Stream Name="process:table" Type="Local" Delimiter=",">
+			,"pcdev1.phys.uwm.edu",,18770,"git id b172df4a7a0e62bfd5b69ede061eda0e8156ff25","process:process_id:0",997472246,0,"channa","ligolw_tisi",997472246,0,,"lscsoft",995383827
+		</Stream>
+	</Table>
+	<Table Name="process_params:table">
+		<Column Type="ilwd:char" Name="process_params:process_id"/>
+		<Column Type="lstring" Name="process_params:program"/>
+		<Column Type="lstring" Name="process_params:type"/>
+		<Column Type="lstring" Name="process_params:value"/>
+		<Column Type="lstring" Name="process_params:param"/>
+		<Stream Name="process_params:table" Type="Local" Delimiter=",">
+		</Stream>
+	</Table>
+	<Table Name="time_slide:table">
+		<Column Type="lstring" Name="time_slide:instrument"/>
+		<Column Type="ilwd:char" Name="time_slide:time_slide_id"/>
+		<Column Type="ilwd:char" Name="time_slide:process_id"/>
+		<Column Type="real_8" Name="time_slide:offset"/>
+		<Stream Name="time_slide:table" Type="Local" Delimiter=",">
+			"V1","time_slide:time_slide_id:0","process:process_id:0",6.23456,
+			"H1","time_slide:time_slide_id:0","process:process_id:0",0,
+			"L1","time_slide:time_slide_id:0","process:process_id:0",3.14159,
+			"V1","time_slide:time_slide_id:1","process:process_id:0",0,
+			"H1","time_slide:time_slide_id:1","process:process_id:0",0,
+			"L1","time_slide:time_slide_id:1","process:process_id:0",0
+		</Stream>
+	</Table>
+</LIGO_LW>
