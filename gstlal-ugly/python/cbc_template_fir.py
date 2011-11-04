@@ -303,7 +303,7 @@ def decompose_templates(template_bank, tolerance, identity = False):
 	#
 
 	residual = numpy.sqrt((s * s).cumsum() / numpy.dot(s, s))
-	n = min(residual.searchsorted(tolerance) + 1, len(s))
+	n = max(min(residual.searchsorted(tolerance) + 1, len(s)), 2)
 
 	#
 	# clip decomposition, pre-multiply Vh by s
