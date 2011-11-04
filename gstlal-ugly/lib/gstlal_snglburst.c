@@ -50,7 +50,7 @@ int gstlal_set_channel_in_snglburst_array(SnglBurst *bankarray, int length, char
 	int i;
 	for (i = 0; i < length; i++) {
 		if (channel) {
-	        	strncpy(bankarray[i].channel, (const char*) channel, LIGOMETA_CHANNEL_MAX);
+			strncpy(bankarray[i].channel, (const char*) channel, LIGOMETA_CHANNEL_MAX);
 			bankarray[i].channel[LIGOMETA_CHANNEL_MAX - 1] = 0;
 		}
 	}
