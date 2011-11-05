@@ -61,6 +61,16 @@ __date__ = "FIXME"
 #
 
 
+
+def mkgeneric(pipeline, src, elem_type_name, **properties):
+	elem = gst.element_factory_make(elem_type_name)
+	for name, value in properties.items():
+		elem.set_property(name.replace("_", "-"), value)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
+
+
 def mksegmentsrc(pipeline, segment_list, blocksize = 4096 * 1 * 1, invert_output=False):
 	# default blocksize is 4096 seconds of unsigned integers at
 	# 1 Hz, e.g. segments without nanoseconds
@@ -84,6 +94,7 @@ def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 *
 		elem.set_property("segment-list", segments.segmentlist(segments.segment(a.ns(), b.ns()) for a, b in segment_list))
 	pipeline.add(elem)
 	return elem
+
 
 def mkframesink(pipeline, src, **properties):
 	elem = gst.element_factory_make("lal_framesink")
@@ -680,6 +691,20 @@ def mksyncsink(pipeline, srcs):
 	return outsrcs
 
 
+def mktcpserversink(pipeline, src, **properties):
+	elem = gst.element_factory_make("tcpserversink")
+	# FIXME:  are these sensible defaults?
+	elem.set_property("sync", True)
+	elem.set_property("sync-method", "latest-keyframe")
+	elem.set_property("recover-policy", "keyframe")
+	elem.set_property("unit-type", "bytes")
+	elem.set_property("unist-soft-max", 1024**3)	# 1 GB
+	for name, value in properties.items():
+		elem.set_property(name.replace("_", "-"), value)
+	pipeline.add(elem)
+	src.link(elem)
+
+
 def audioresample_variance_gain(quality, num, den):
 	"""Calculate the output gain of GStreamer's stock audioresample element.
 
@@ -804,4 +829,3 @@ def write_dump_dot(pipeline, filestem, verbose = False):
 	gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, filestem)
 	if verbose:
 		print >>sys.stderr, "Wrote pipeline to %s" % os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], "%s.dot" % filestem)
-
