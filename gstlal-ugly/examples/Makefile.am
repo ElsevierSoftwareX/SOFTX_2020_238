@@ -35,13 +35,9 @@ EXTRA_DIST = \
 	dump_triggers.py \
 	enc_hoft.sh \
 	extract_channel.py \
-	final.py \
 	gaptest.sh \
 	gstlal_inspiral.ini \
 	impulse_at_874107198.xml \
-	inspiral.sh \
-	inspiral_fake.sh \
-	inspiral_online.sh \
 	play_nds_hoft.sh \
 	play_nds_hoft_offline.sh \
 	play_onlinehoft.sh \
@@ -53,7 +49,6 @@ EXTRA_DIST = \
 	reference_psd.txt \
 	reference_psd.xml.gz \
 	smoothed_psd.txt \
-	spectrum_movie.sh \
 	test_inspiral_injections_1s_step.xml \
 	timeseriesplotter.sh \
 	unit_psd.txt \
