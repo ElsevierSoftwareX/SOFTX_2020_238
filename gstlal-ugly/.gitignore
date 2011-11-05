@@ -1,1 +1,2 @@
 lib/gstlal-ugly.pc
+tests/*.pyc
