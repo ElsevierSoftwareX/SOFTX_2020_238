@@ -17,6 +17,10 @@
  */
 
 
+#ifndef __GSTLAL_CDF_WEIGHTED_CHISQ_P_H__
+#define __GSTLAL_CDF_WEIGHTED_CHISQ_P_H__
+
+
 struct gstlal_cdf_weighted_chisq_P_trace {
 	/* absolute sum */
 	double absolute_sum;
@@ -39,3 +43,6 @@ struct gstlal_cdf_weighted_chisq_P_trace {
 
 
 double gstlal_cdf_weighted_chisq_P(const double *, const double *, const int *, int, double, double, int, double, struct gstlal_cdf_weighted_chisq_P_trace *, int *);
+
+
+#endif /* __GSTLAL_CDF_WEIGHTED_CHISQ_P_H__ */
