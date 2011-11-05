@@ -51,7 +51,6 @@
 
 #include <gstlal_tags.h>
 #include <gstlal.h>
-#include <gstlal_plugins.h>
 #include <gstlal_audioundersample.h>
 #include <gstlal_autochisq.h>
 #include <gstlal_drop.h>
@@ -69,18 +68,6 @@
 #include <gstlal_sumsquares.h>
 #include <gstlal_togglecomplex.h>
 #include <gstlal_whiten.h>
-
-
-/*
- * ============================================================================
- *
- *                                    Data
- *
- * ============================================================================
- */
-
-
-GMutex *gstlal_fftw_lock;
 
 
 /*
@@ -124,12 +111,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 
 	lalDebugLevel = LALINFO | LALWARNING | LALERROR | LALNMEMDBG | LALNMEMPAD | LALNMEMTRK;
 	XLALSetSilentErrorHandler();
-
-	/*
-	 * Initialize the mutices.
-	 */
-
-	gstlal_fftw_lock = g_mutex_new();
 
 	/*
 	 * Tell GStreamer about the elements.

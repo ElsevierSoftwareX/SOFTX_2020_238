@@ -3,7 +3,7 @@ INCLUDES = -I$(top_srcdir)/lib/skymap -I$(top_srcdir)/lib
 plugin_LTLIBRARIES = libgstlalugly.la
 
 libgstlalugly_la_SOURCES = \
-	gstlal_plugins.h gstlalugly.c \
+	gstlalugly.c \
 	gstlal_blcbc_triggergen.h gstlal_blcbc_triggergen.c \
 	gstlal_coinc.h gstlal_coinc.c \
 	gstlal_iirbank.h gstlal_iirbank.c \
@@ -20,5 +20,3 @@ libgstlalugly_la_SOURCES = \
 libgstlalugly_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS)
 libgstlalugly_la_LIBADD = $(top_builddir)/lib/libgstlalugly.la  $(top_builddir)/lib/skymap/libwanalysis.la
 libgstlalugly_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(GSTLAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
-
-noinst_HEADERS = gstlal_plugins.h

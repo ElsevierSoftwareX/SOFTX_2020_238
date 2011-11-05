@@ -36,10 +36,11 @@
 
 
 /*
- * Stuff from GStreamer
+ * Stuff from glib/GStreamer
  */
 
 
+#include <glib.h>
 #include <gst/gst.h>
 
 
@@ -71,6 +72,19 @@
 
 
 #include <gstlal.h>
+
+
+/*
+ * ============================================================================
+ *
+ *                                Global Data
+ *
+ * ============================================================================
+ */
+
+
+GStaticMutex _gstlal_fftw_lock = G_STATIC_MUTEX_INIT;
+GStaticMutex *gstlal_fftw_lock = &_gstlal_fftw_lock;
 
 
 /*

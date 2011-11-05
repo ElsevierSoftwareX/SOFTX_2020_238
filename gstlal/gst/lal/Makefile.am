@@ -3,7 +3,7 @@ INCLUDES = -I$(top_srcdir)/lib
 plugin_LTLIBRARIES = libgstlal.la libgstlaladder.la
 
 libgstlal_la_SOURCES = \
-	gstlal_plugins.h gstlal.c \
+	gstlal.c \
 	low_latency_inspiral_functions.h low_latency_inspiral_functions.c \
 	gstlal_audioundersample.h gstlal_audioundersample.c \
 	gstlal_autochisq.h gstlal_autochisq.c \
@@ -32,5 +32,3 @@ libgstlaladder_la_SOURCES = \
 libgstlaladder_la_CFLAGS = $(AM_CFLAGS) $(LAL_CFLAGS) $(ORC_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS) -DGST_PACKAGE_NAME=\"gstlal\" -DGST_PACKAGE_ORIGIN=\"\"
 libgstlaladder_la_LIBADD = $(top_builddir)/lib/libgstlaltypes.la
 libgstlaladder_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LIBS) $(ORC_LIBS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
-
-noinst_HEADERS = gstlal_plugins.h
