@@ -33,6 +33,7 @@
 #include <gst/gst.h>
 #include <gsl/gsl_matrix.h>
 #include <gstlal/gstlal.h>
+#include <gstlal/gstlal_debug.h>
 #include <gstlal/gstlal_tags.h>
 #include <gstlal_triggergen.h>
 #include <lal/Date.h>

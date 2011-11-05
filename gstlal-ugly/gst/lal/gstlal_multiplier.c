@@ -70,7 +70,7 @@
 #include <gst/audio/audio.h>
 #include "gstlal_multiplier.h"
 #include <gstlal/gstlalcollectpads.h>
-#include <gstlal/gstlal.h>
+#include <gstlal/gstlal_debug.h>
 
 
 #define GST_CAT_DEFAULT gstlal_multiplier_debug

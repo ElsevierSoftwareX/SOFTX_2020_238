@@ -37,6 +37,7 @@
 #include <complex.h>
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 
 
 /*
@@ -53,7 +54,7 @@
  */
 
 
-#include <gstlal.h>
+#include <gstlal_debug.h>
 #include <gstlal_gate.h>
 
 

@@ -35,7 +35,7 @@
 #include <gst/gst.h>
 #include <gst/base/gstcollectpads.h>
 #include <gstlalcollectpads.h>
-#include <gstlal.h>
+#include <gstlal_debug.h>
 
 
 /*

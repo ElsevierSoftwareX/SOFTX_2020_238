@@ -44,6 +44,7 @@
  */
 
 #include <gstlal/gstlal.h>
+#include <gstlal/gstlal_debug.h>
 #include <gstlal_burst_triggergen.h>
 #include <gstlal/gstlal_peakfinder.h>
 #include <gstlal/gstaudioadapter.h>

@@ -46,6 +46,7 @@
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
 #include <gstlal.h>
+#include <gstlal_debug.h>
 #include <gstlal_autochisq.h>
 
 

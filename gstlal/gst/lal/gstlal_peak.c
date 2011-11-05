@@ -48,7 +48,7 @@
  * our own stuff
  */
 
-#include <gstlal.h>
+#include <gstlal_debug.h>
 #include <gstlal_peak.h>
 #include <gstlal_peakfinder.h>
 #include <gstaudioadapter.h>
