@@ -52,9 +52,9 @@ opts, args = OptionParser(usage = "%prog [options]" + __doc__, option_list = [
 #
 
 from gstlal.pipeutil import gst, gobject
-from gstlal.lloidparts import mkelems_fast, LLOIDHandler
+from gstlal import pipeparts
+from gstlal.lloidparts import LLOIDHandler
 from pylal.Fr import frputvect
-from gstlal.pipeio import array_from_audio_buffer
 import os, os.path, errno
 
 
@@ -84,40 +84,19 @@ handler = LLOIDHandler(mainloop, pipeline)
 gst.debug_set_threshold_for_name('tcpserversink', gst.LEVEL_DEBUG)
 
 # Make mock h(t)
-elems = mkelems_fast(pipeline,
-	"lal_fakeadvligosrc",
-	{
-		"instrument": opts.instrument,
-		"channel-name": channel_name,
-		"blocksize": streaming_buf_size,
-	},
-	"progressreport", {"name": "progress_hoft"},
-	"tee")
+src = pipeparts.mkfakeadvLIGOsrc(pipeline, instrument = opts.instrument, channel_name = channel_name, blocksize = streaming_buf_size)
+src = pipeparts.mkprogressreport(pipeline, src, "progress_hoft")
+src = pipeparts.mktee(pipeline, src)
 
 # appsink for capturing buffers and writing them to frame files
-mkelems_fast(pipeline,
-	elems[-1],
-	"queue", {"max-size-time": 2 * frame_duration * gst.SECOND, "max-size-buffers": 0, "max-size-bytes": 0},
-	"lal_framesink", {"frame-type": "%s_MOCK" % opts.instrument, "duration": frame_duration, "sync": False}
-)
+head = pipeparts.mkqueue(pipeline, src, max_size_time = 2 * frame_duration * gst.SECOND, max_size_buffers = 0, max_size_bytes = 0)
+pipeparts.mkframesink(pipeline, head, frame_type = "%s_MOCK" % opts.instrument, duration = frame_duration)
 
 # Create optional TCP server
 if opts.port is not None:
-	mkelems_fast(pipeline,
-		elems[-1],
-		"queue", {"max-size-time": 0, "max-size-buffers": 3, "max-size-bytes": 0},
-		"gdppay",
-		"tcpserversink",
-		{
-			"sync": True,
-			"port": opts.port,
-			"sync-method": "latest-keyframe",
-			"recover-policy": "keyframe",
-			"unit-type": "bytes",
-			"units-soft-max": 1024**3 # 1 gigabyte
-		}
-	)
-
+	head = pipeparts.mkqueue(pipeline, src, max_size_time = 0, max_size_buffers = 3, max_size_bytes = 0)
+	head = pipeparts.mkgeneric(pipeline, head, "gdppay")
+	head = pipeparts.mktcpserversink(pipeline, head, port = opts.port)
 
 #
 # Run pipeline
