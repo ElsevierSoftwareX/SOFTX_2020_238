@@ -56,7 +56,7 @@ H1-TMPLTBANK-871147516-2048.xml : frame.cache
 		--resample-filter ldas \
 		--strain-high-pass-atten 0.1 \
 		--strain-high-pass-freq $(HIGH_PASS_FREQ) \
-		--frame-cache $(CACHE) \
+		--frame-cache frame.cache \
 		--max-high-freq-cutoff SchwarzISCO \
 		--approximant TaylorF2 \
 		--order twoPN \
