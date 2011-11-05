@@ -14,5 +14,3 @@ config.log
 config.status
 configure
 libtool
-gst/python/*.pyc
-tests/*.pyc
