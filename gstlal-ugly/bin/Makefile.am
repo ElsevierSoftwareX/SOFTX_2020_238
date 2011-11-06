@@ -15,4 +15,5 @@ dist_bin_SCRIPTS = \
 	gstlal_add_spins_to_bank \
 	gstlal_bank_splitter \
 	gstlal_segments_trim \
-	gstlal_glitch_population
+	gstlal_glitch_population \
+	gstlal_omega
