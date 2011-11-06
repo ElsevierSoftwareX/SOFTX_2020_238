@@ -16,4 +16,5 @@ dist_bin_SCRIPTS = \
 	gstlal_bank_splitter \
 	gstlal_segments_trim \
 	gstlal_glitch_population \
-	gstlal_omega
+	gstlal_omega \
+	gstlal_ll_trigger_pipe
