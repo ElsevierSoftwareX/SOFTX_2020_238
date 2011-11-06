@@ -775,19 +775,19 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 		if instrument != "H2":
 			control_branch[(instrument, bank.number)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()))
+			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_branch[(instrument, bank.number)][1]), "control_%s.dump" % suffix, segment = nxydump_segment)
 
 	#
 	# construct trigger generators
 	#
 
-	triggersrc = set()
+	triggersrcs = set()
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 		if instrument != "H2":
 			control_snksrc = control_branch[(instrument, bank.number)]
 		else:
 			control_snksrc = (None, control_branch[("H1", bank.number)][1])
-		#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_snksrc[1]), "control_%s.dump" % suffix, segment = nxydump_segment)
 		if chisq_type == 'timeslicechisq':
 			snrslices = {}
 		else:
@@ -815,7 +815,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 		del bank.autocorrelation_bank
 		#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
 		#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(bank.get_rates())], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
-		triggersrc.add(mkLLOIDSnrChisqToTriggers(
+		triggersrcs.add(mkLLOIDSnrChisqToTriggers(
 			pipeline,
 			pipeparts.mkqueue(pipeline, snr, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration),
 			chisq,
@@ -832,8 +832,8 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	#
 
 
-	assert len(triggersrc) > 0
-	return triggersrc
+	assert len(triggersrcs) > 0
+	return triggersrcs
 
 #
 # SPIIR many instruments, many template banks
