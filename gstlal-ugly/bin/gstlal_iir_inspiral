@@ -53,6 +53,7 @@ from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import reference_psd
 from gstlal import cbc_template_iir
+from gstlal import streamthinca
 
 
 #
@@ -289,7 +290,7 @@ output = ligolw_output.Data(
 	verbose = options.verbose
 )
 #FIXME dont hardcode some of this
-stream_thinca = lloidparts.StreamThinca(
+stream_thinca = streamthinca.StreamThinca(
 	output,
 	coincidence_threshold = 0.015,
 	coincidence_back_off = 2 * 5,	# coincidence back-off is twice AppSync dt

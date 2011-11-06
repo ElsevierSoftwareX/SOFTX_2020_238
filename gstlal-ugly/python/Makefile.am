@@ -16,4 +16,5 @@ pkgpython_PYTHON = \
 	svd_bank.py \
 	templates.py \
 	ligolw_output.py \
-	far.py
+	far.py \
+	streamthinca.py
