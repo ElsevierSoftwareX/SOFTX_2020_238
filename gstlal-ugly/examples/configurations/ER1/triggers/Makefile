@@ -1,10 +1,11 @@
 START = 871147452
-STOP = 871247452
-H1_BANK_CACHE = ../bank/H1_reference_psd_svd_bank.cache
-H2_BANK_CACHE = ../bank/H1_reference_psd_svd_bank.cache
-L1_BANK_CACHE = ../bank/L1_reference_psd_svd_bank.cache
-V1_BANK_CACHE = ../bank/V1_reference_psd_svd_bank.cache
-
+STOP =  871152452
+H1_BANK_CACHE = ../bank2/H1_reference_psd_svd_bank.cache
+H2_BANK_CACHE = ../bank2/H1_reference_psd_svd_bank.cache
+L1_BANK_CACHE = ../bank2/L1_reference_psd_svd_bank.cache
+V1_BANK_CACHE = ../bank2/V1_reference_psd_svd_bank.cache
+FRAME_CACHE = ../frames/frame.cache
+NUMBANKS = 6
 SEED = 1
 
 LOCAL_RATE = 200.0 # mergers per Mpc^3 per Myr, 12 corresponds to "optimistic rate"
@@ -15,7 +16,7 @@ FLOW = 14
 all : injections
 
 injections : injections.xml
-	gstlal_ll_trigger_pipe --injections injections.xml --gps-start-time $(START) --gps-stop-time $(STOP) --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),V1=$(V1_BANK_CACHE),L1=$(L1_BANK_CACHE) 
+	gstlal_ll_trigger_pipe --injections injections.xml --gps-start-time $(START) --gps-stop-time $(STOP) --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),V1=$(V1_BANK_CACHE),L1=$(L1_BANK_CACHE) --frame-cache $(FRAME_CACHE) --num-banks $(NUMBANKS)
 
 injections.xml:
 	gstlal_injections_by_local_rate \
