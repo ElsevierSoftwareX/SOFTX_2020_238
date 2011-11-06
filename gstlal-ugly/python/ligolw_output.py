@@ -231,7 +231,7 @@ class Data(object):
 		if time_slide_file is not None:
 			ligolw_add.ligolw_add(self.xmldoc, [time_slide_file], verbose = verbose)
 		else:
-			for row in ligolw_tisi.RowsFromOffsetDict(dict((instrument, 0.0) for instrument in instruments), self.time_slide_table.get_next_id(), self.process):
+			for row in ligolw_tisi.RowsFromOffsetDict(dict.fromkeys(instruments, 0.0), self.time_slide_table.get_next_id(), self.process):
 				self.time_slide_table.append(row)
 
 		self.sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))	# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
