@@ -674,6 +674,13 @@ def mkitac(pipeline, src, n, bank):
 	src.link(elem)
 	return elem
 
+def mkbursttriggergen(pipeline, src, n, bank):
+	elem = gst.element_factory_make("lal_bursttriggergen")
+	elem.set_property("n", n)
+	elem.set_property("bank-filename", bank)
+	pipeline.add(elem)
+	src.link(elem)
+	return elem
 
 def mksyncsink(pipeline, srcs):
 	"""
