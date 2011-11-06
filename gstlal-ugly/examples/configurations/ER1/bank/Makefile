@@ -1,5 +1,7 @@
-START = 871147416
-STOP =  871149664
+FSTART = 871147316
+FSTOP =  871149864
+START = 871147516
+STOP =  871149564
 IFOS = H
 
 # Template bank parameters
@@ -7,8 +9,8 @@ MIN_MASS = 1.0
 MAX_MASS = 19
 MIN_TOTAL_MASS = 2
 MAX_TOTAL_MASS = 20
-LOW_FREQUENCY_CUTOFF = 10.0
-HIGH_PASS_FREQ = 9.0
+LOW_FREQUENCY_CUTOFF = 15.0
+HIGH_PASS_FREQ = 13
 HIGH_FREQUENCY_CUTOFF = 2047.0
 SAMPLE_RATE = 4096
 NUM_SPLIT_TEMPLATES = 300
@@ -18,7 +20,7 @@ MM = 0.97
 all : dag
 
 frame.cache :
-	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --instrument H1 --write-psd H1psd.xml.gz --verbose
+	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --instrument H1 --write-psd H1psd.xml.gz --verbose
 	ls H1-LSC-STRAIN/*.gwf | lalapps_path2cache > frame.cache
 
 H1-TMPLTBANK-871147516-2048.xml : frame.cache
