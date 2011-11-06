@@ -17,4 +17,5 @@ pkgpython_PYTHON = \
 	templates.py \
 	ligolw_output.py \
 	far.py \
-	streamthinca.py
+	streamthinca.py \
+	omega.py
