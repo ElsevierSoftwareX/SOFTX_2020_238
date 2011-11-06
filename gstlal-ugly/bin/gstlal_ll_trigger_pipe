@@ -1,0 +1,270 @@
+#!/usr/bin/python
+"""
+This program makes a dag for the S5 sub solar mass search
+"""
+
+__author__ = 'Chad Hanna <channa@caltech.edu>'
+
+##############################################################################
+# import standard modules and append the lalapps prefix to the python path
+import sys, os, copy, math
+import subprocess, socket, tempfile
+
+##############################################################################
+# import the modules we need to build the pipeline
+from glue import iterutils
+from glue import pipeline
+from glue import lal
+from glue.ligolw import lsctables
+from glue import segments
+from glue.ligolw import array
+import glue.ligolw.utils as utils
+import glue.ligolw.utils.segments as ligolw_segments
+from optparse import OptionParser
+from gstlal.svd_bank import read_bank
+
+###############################################################################
+# environment utilities
+###############################################################################
+
+def which(prog):
+	which = subprocess.Popen(['which',prog], stdout=subprocess.PIPE)
+	out = which.stdout.read().strip()
+	if not out: 
+		print >>sys.stderr, "ERROR: could not find %s in your path, have you built the proper software and source the proper env. scripts?" % (prog,prog)
+		raise ValueError 
+	return out
+
+def log_path():
+	host = socket.getfqdn()
+	#FIXME add more hosts as you need them
+	if 'caltech.edu' in host: return '/usr1/' + os.environ['USER']
+	if 'phys.uwm.edu' in host: return '/localscratch/' + os.environ['USER']
+	if 'aei.uni-hannover.de' in host: return '/local/user/' + os.environ['USER']
+	if 'phy.syr.edu' in host: return '/usr1/' + os.environ['USER']
+
+
+###############################################################################
+# DAG class
+###############################################################################
+
+class bank_DAG(pipeline.CondorDAG):
+
+	def __init__(self, name, logpath = log_path()):
+		self.basename = name
+		tempfile.tempdir = logpath
+		tempfile.template = self.basename + '.dag.log.'
+		logfile = tempfile.mktemp()
+		fh = open( logfile, "w" )
+		fh.close()
+		pipeline.CondorDAG.__init__(self,logfile)
+		self.set_dag_file(self.basename)
+		self.jobsDict = {}
+		self.node_id = 0
+		self.output_cache = []
+
+	def add_node(self, node):
+		node.set_retry(3)
+		self.node_id += 1
+		node.add_macro("macroid", self.node_id)
+		node.add_macro("macronodename", node.get_name())
+		pipeline.CondorDAG.add_node(self, node)
+
+	def write_cache(self):
+		out = self.basename + ".cache"
+		f = open(out,"w")
+		for c in self.output_cache:
+			f.write(str(c)+"\n")
+		f.close()
+
+
+###############################################################################
+# gstlal_inspiral
+###############################################################################
+
+class gstlal_inspiral_job(pipeline.CondorDAGJob):
+	"""
+	A gstlal_inspiral job
+	"""
+	def __init__(self, executable=which('gstlal_inspiral'), tag_base='gstlal_inspiral'):
+		"""
+		"""
+		self.__prog__ = 'gstlal_inspiral'
+		self.__executable = executable
+		self.__universe = 'vanilla'
+		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
+		self.add_condor_cmd('getenv','True')
+		self.add_condor_cmd('requirements', '( CAN_RUN_MULTICORE )')
+		self.add_condor_cmd('request_cpus', '6')
+		self.add_condor_cmd('+RequiresMultipleCores', 'True')
+		self.tag_base = tag_base
+		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
+		self.number = 1
+
+class gstlal_inspiral_node(pipeline.CondorDAGNode):
+	"""
+	A gstlal_inspiral node
+	"""
+	#FIXME add frame segments, name and veto segments name
+	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel, reference_psd, svd_bank, tmp_space=log_path(), ht_gate_thresh=20.0, injections=None, control_peak_time = 8, vetoes=None, time_slide_file=None, p_node=[]):
+
+		pipeline.CondorDAGNode.__init__(self,job)
+		if time_slide_file is not None:
+			self.add_var_opt("time-slide-file", time_slide_file)
+		self.add_var_opt("frame-cache", frame_cache)
+		self.add_var_opt("frame-segments-file", frame_segments_file)
+		self.add_var_opt("frame-segments-name", frame_segments_name)
+		self.add_var_opt("gps-start-time",gps_start_time)
+		self.add_var_opt("gps-end-time",gps_end_time)
+		self.add_var_opt("channel-name", channel)
+		self.add_var_opt("reference-psd", reference_psd)
+		self.add_var_opt("svd-bank", svd_bank)
+		self.add_var_opt("tmp-space", tmp_space)
+		self.add_var_opt("track-psd", "")
+		self.add_var_opt("control-peak-time", control_peak_time)
+		#self.add_var_opt("ht-gate-threshold", ht_gate_thresh)
+		#self.add_var_opt("verbose", "") #Put this in for debugging
+		self.injections = injections
+		if self.injections: self.add_var_opt("injections", injections)
+		if vetoes: self.add_var_opt("veto-segments-file", vetoes)
+		path = os.getcwd()
+		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
+		if self.injections is not None:
+			self.output_name = '%s/%s-%04d-%d-%d-LLOID-simulations.sqlite' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
+		else:
+			self.output_name = '%s/%s-%04d-%d-%d-LLOID.sqlite' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
+			self.background_name = '%s/%s-%04d-%d-%d-LLOID_snr_chi.xml.gz' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
+		job.number += 1
+		self.add_var_opt("output",self.output_name)
+		dag.output_cache.append(lal.CacheEntry("H1H2L1", "-", segments.segment(gps_start_time, gps_end_time), "file://localhost/%s" % (self.output_name,)))
+		for p in p_node:
+			self.add_parent(p)
+		dag.add_node(self)
+
+
+###############################################################################
+# Utility functions
+###############################################################################
+
+def parse_banks(bank_string):
+	out = {}
+	for b in bank_string.split(','):
+		ifo, bank = b.split(':')
+		out.setdefault(ifo, []).append(bank)
+	return out
+
+# FIXME surely this is in glue
+def parse_cache_str(instr):
+	dictcache = {}
+	if instr is None: return dictcache
+	for c in instr.split(','):
+		ifo = c.split("=")[0]
+		cache = c.replace(ifo+"=","")
+		dictcache[ifo] = cache
+	return dictcache
+
+def num_bank_files(cachedict):
+	ifo = cachedict.keys()[0]
+	f = open(cachedict[ifo],'r')
+	cnt = 0
+	for l in f:
+		cnt+=1
+	f.close()
+	return cnt
+
+def build_bank_string(cachedict, numbanks = 2):
+	numfiles = num_bank_files(cachedict)
+	filedict = {}
+	cnt = 0
+	for ifo in cachedict:
+		filedict[ifo] = open(cachedict[ifo],'r')
+	
+	for a in range(0, numfiles, numbanks):
+		c = ""
+		for b in range(numbanks):
+			cnt += 1
+			for ifo, f in filedict.items():
+				if cnt < numbanks:
+					c += '%s:%s,' % (ifo, lal.CacheEntry(f.readline()).path())
+		c = c.strip(',')
+		yield c
+	
+def cache_to_dict(cachefile):
+	out  = {}
+	for l in open(cachefile):
+		c = lal.CacheEntry(l)
+		out.setdefault(c.observatory, []).append(c)
+	return out
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+	parser.add_option("--injections", metavar = "filename", help = "Set the name of the xml file for injections")
+	parser.add_option("--frame-cache", metavar = "filename", help = "Set the frame cache file")
+	parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the frame segments file")
+	parser.add_option("--frame-segments-name", metavar = "name", help = "Set the frame segments name")
+	parser.add_option("--reference-psd", metavar = "filename", help = "Set the reference psd file.")
+	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
+	parser.add_option("--vetoes", metavar = "filename", help = "Set the veto xml file.")
+	parser.add_option("--gps-start-time", metavar = "GPS", help = "Set the gps start time in seconds", type="int")
+	parser.add_option("--gps-stop-time", metavar = "GPS", help = "Set the gps stop time in seconds", type="int")
+	#FIXME get this from the cache?
+	parser.add_option("--flow", metavar = "freq", help = "Set the gps stop time in seconds", type="float", default=40.0)
+	parser.add_option("--channel", metavar = "name", help = "Set the channel name (default=LSC-STRAIN)", default="LSC-STRAIN")
+	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
+	parser.add_option("--delete-sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
+	parser.add_option("--cluster-sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
+	parser.add_option("--injection-sql-file", metavar = "filename", help = "Set the sql file to apply to injection databases")
+	parser.add_option("--web-dir", metavar = "directory", help = "Set the web directory like /home/USER/public_html")
+	
+	options, filenames = parser.parse_args()
+
+	fail = ""
+	for option in ("frame_cache", "reference_psd", "bank_cache", "gps_start_time", "gps_stop_time"):
+		if getattr(options, option) is None:
+			fail += "must provide option %s\n" % (option)
+	if fail: raise ValueError, fail
+
+	#FIXME add consistency check?
+	bankcache = parse_cache_str(options.bank_cache)
+	
+	return options, filenames, bankcache
+
+
+###############################################################################
+# MAIN
+###############################################################################
+
+options, filenames, bank_cache = parse_command_line()
+
+try: os.mkdir("logs")
+except: pass
+dag = bank_DAG("trigger_pipe")
+
+#
+# setup the job classes
+#
+
+gstlalInspiralJob = gstlal_inspiral_job()
+
+###############################################################################
+# loop over banks to run gstlal inspiral pre clustering and far computation
+###############################################################################
+
+trials_factor = 0
+
+for s in build_bank_string(bank_cache):
+
+	#
+	# non injections
+	#
+
+	noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), options.channel, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, flow=options.flow, time_slide_file=options.time_slide_file)
+
+
+dag.write_sub_files()
+dag.write_dag()
+dag.write_script()
+dag.write_cache()
