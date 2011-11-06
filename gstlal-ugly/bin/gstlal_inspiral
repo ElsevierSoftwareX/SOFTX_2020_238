@@ -354,7 +354,7 @@ if options.write_pipeline is not None:
 	# the graph shows the final formats on all links
 	#
 
-	class AppsinkDumpDotData(object):
+	class AppsinkDumpDot(object):
 		lock = threading.Lock()
 		n = 0
 		write_after = len(appsinks)
@@ -365,20 +365,17 @@ if options.write_pipeline is not None:
 		def __init__(self):
 			self.handler_id = None
 
-		def execute(self):
+		def execute(self, elem):
 			self.lock.acquire()
 			self.n += 1
 			if self.n >= self.write_after:
 				pipeparts.write_dump_dot(self.pipeline, self.filestem, verbose = self.verbose)
 			self.lock.release()
-
-	def appsink_dump_dot(elem, appsink_dump_dot_data):
-		appsink_dump_dot_data.execute()
-		elem.disconnect(appsink_dump_dot_data.handler_id)
+			elem.disconnect(self.handler_id)
 
 	for sink in appsinks:
-		appsink_dump_dot_data = AppsinkDumpDotData()
-		appsink_dump_dot_data.handler_id = sink.connect_after("new-buffer", appsink_dump_dot, appsink_dump_dot_data)
+		appsink_dump_dot = AppsinkDumpDot()
+		appsink_dump_dot.handler_id = sink.connect_after("new-buffer", appsink_dump_dot.execute)
 
 
 #
