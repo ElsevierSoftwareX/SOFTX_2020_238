@@ -297,12 +297,28 @@ class Data(object):
 
 
 #
-# Tool to split XML document tree containing sngl_inspiral coincs into a
-# sequence of XML document trees each containing a single coinc
+# Generator to split XML document tree containing sngl_inspiral coincs into
+# a sequence of XML document trees each containing a single coinc
 #
 
 
 def split_sngl_inspiral_coinc_xmldoc(xmldoc):
+	"""
+	Yield a sequence of XML document trees containing one sngl_inspiral
+	coinc each, extracted from the input XML document tree.
+
+	Note:  the XML documents constructed by this generator function
+	share references to the row objects in the original document.
+	Modifications to the row objects in the tables returned by this
+	generator will affect both the original document and all other
+	documents returned by this generator.  However, the table objects
+	and the document trees returned by this generator are new objects,
+	they can be edited without affecting each other (e.g., rows or
+	columsn added or removed).  To assist with memory clean-up, it is
+	recommended that the calling code invoke the .unlink() method on
+	the objects returned by this generator when they are no longer
+	needed.
+	"""
 	#
 	# index the process, process params and search_summary tables
 	#
@@ -337,13 +353,12 @@ def split_sngl_inspiral_coinc_xmldoc(xmldoc):
 	coinc_event_map_index = dict((row.coinc_event_id, []) for row in coinc_event_table if row.coinc_def_id == coinc_def.coinc_def_id)
 	for row in coinc_event_map_table:
 		try:
-			coinc = coinc_event_map_index[row.coinc_event_id]
+			coinc_event_map_index[row.coinc_event_id].append(row)
 		except KeyError:
 			continue
-		coinc.append(row)
-	time_slide_index = dict((time_slide_id, []) for time_slide_id in set(time_slide_table.getColumnByName("time_slide_id")))
+	time_slide_index = {}
 	for row in time_slide_table:
-		time_slide_index[row.time_slide_id].append(row)
+		time_slide_index.setdefault(row.time_slide_id, []).append(row)
 
 	for row in coinc_event_table:
 		if row.coinc_def_id != coinc_def.coinc_def_id:
@@ -368,8 +383,7 @@ def split_sngl_inspiral_coinc_xmldoc(xmldoc):
 		for row in new_coinc_event_map_table:
 			new_sngl_inspiral_table.append(sngl_inspiral_index[row.event_id])
 
-		process_ids = set(row.process_id for row in new_sngl_inspiral_table) | set(row.process_id for row in new_coinc_event_table)
-		for process_id in process_ids:
+		for process_id in set(new_sngl_inspiral_table.getColumnByName("process_id")) | set(new_coinc_event_table.getColumnByName("process_id")) | set(new_time_slide_table.getColumnByName("process_id")):
 			new_process_table.append(process_index[process_id])
 			new_process_params_table.extend(process_params_index[process_id])
 			new_search_summary_table.append(search_summary_index[process_id])
