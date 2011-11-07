@@ -73,7 +73,7 @@
 GST_DEBUG_CATEGORY(gstlal_autochisq_debug);
 
 
-#define GSTLAL_MALLOC_GAPS
+#undef GSTLAL_MALLOC_GAPS
 
 
 /*
