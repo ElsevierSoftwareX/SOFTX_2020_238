@@ -49,6 +49,7 @@
 #include <gstlal/gstlal_peakfinder.h>
 #include <gstlal/gstaudioadapter.h>
 #include <gstlal/gstlal_tags.h>
+#include <gstlal/gstlal_autocorrelation_chi2.h>
 #include <gstlal_snglinspiral.h>
 
 #define DEFAULT_SNR_THRESH 5.5
@@ -287,6 +288,11 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		if(element->autocorrelation_matrix)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_complex(element->autocorrelation_matrix));
 		/* FIXME:  else? */
+		/* FIXME:  the norms need to be recomputed somewhere else
+		 * if the mask feature is ever implemented */
+		if(element->autocorrelation_norm)
+			gsl_vector_free(element->autocorrelation_norm);
+		element->autocorrelation_norm = gstlal_autocorrelation_chi2_compute_norms(element->autocorrelation_matrix, NULL);
 		g_mutex_unlock(element->bank_lock);
 		break;
 
@@ -605,6 +611,10 @@ static void finalize(GObject *object)
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
 	g_object_unref(element->adapter);
+	if(element->autocorrelation_norm) {
+		gsl_vector_free(element->autocorrelation_norm);
+		element->autocorrelation_norm = NULL;
+	}
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
@@ -775,6 +785,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->last_gap = TRUE;
 	element->EOS = FALSE;
 	element->snr_mat = NULL;
+	element->autocorrelation_norm = NULL;
 }
 
 
