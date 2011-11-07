@@ -117,6 +117,28 @@ static unsigned autocorrelation_length(const gsl_matrix_complex *autocorrelation
 
 
 /*
+ * return the number of autocorrelation vectors
+ */
+
+
+unsigned gstlal_autocorrelation_chi2_autocorrelation_channels(const gsl_matrix_complex *autocorrelation)
+{
+	return autocorrelation_channels(autocorrelation);
+}
+
+
+/*
+ * return the number of samples in the autocorrelation vectors
+ */
+
+
+unsigned gstlal_autocorrelation_chi2_autocorrelation_length(const gsl_matrix_complex *autocorrelation)
+{
+	return autocorrelation_length(autocorrelation);
+}
+
+
+/*
  * compute autocorrelation norms --- the expectation value in noise.
  */
 
