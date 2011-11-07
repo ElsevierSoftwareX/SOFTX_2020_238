@@ -54,6 +54,19 @@
 
 #define DEFAULT_SNR_THRESH 5.5
 
+
+static unsigned autocorrelation_channels(const GSTLALItac *element)
+{
+	return gstlal_autocorrelation_chi2_autocorrelation_channels(element->autocorrelation_matrix);
+}
+
+
+static unsigned autocorrelation_length(const GSTLALItac *element)
+{
+	return gstlal_autocorrelation_chi2_autocorrelation_length(element->autocorrelation_matrix);
+}
+
+
 static guint64 output_num_samps(GSTLALItac *element)
 {
 	return (guint64) element->n;
@@ -336,7 +349,7 @@ static GstCaps *getcaps(GstPad * pad)
 	 * caps, intersect without our own.
 	 */
 
-	peercaps = gst_pad_peer_get_caps(element->srcpad);
+	peercaps = gst_pad_peer_get_caps_reffed(element->srcpad);
 	if(peercaps) {
 		GstCaps *result = gst_caps_intersect(peercaps, caps);
 		gst_caps_unref(peercaps);
@@ -443,17 +456,22 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 {
 	GstBuffer *srcbuf = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
-	gint copied_gap, copied_nongap;
+	double chi2[autocorrelation_channels(element)];
 	double complex *dataptr = NULL;
 
 	/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
-	gst_audioadapter_copy(element->adapter, element->data, copysamps, &copied_gap, &copied_nongap);
+	gst_audioadapter_copy(element->adapter, element->data, copysamps, NULL, NULL);
 	/* put the data pointer one pad length in */
 	dataptr = element->data + element->maxdata->pad * element->maxdata->channels;
 	/* Find the peak */
 	gstlal_double_complex_peak_over_window(element->maxdata, dataptr, outsamps);
 	/* extract data around peak for chisq calculation */
 	gstlal_double_complex_series_around_peak(element->maxdata, element->data, element->snr_mat, copysamps);
+	/* compute \chi^2 values */
+	g_assert(autocorrelation_channels(element) == element->snr_mat->size1);
+	g_assert(autocorrelation_length(element) == element->snr_mat->size2);
+	g_assert(autocorrelation_length(element) & 1);	/* must be odd */
+	gstlal_autocorrelation_chi2(chi2, (complex double *) element->snr_mat->data, autocorrelation_length(element), (autocorrelation_length(element) + 1) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
 
 	/* create the output buffer */
 	srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
