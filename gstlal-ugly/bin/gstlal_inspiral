@@ -335,14 +335,8 @@ if options.verbose:
 
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline ...",
-
-appsinks = set()
 appsync = pipeparts.AppSync(appsink_new_buffer = stream_thinca.appsink_new_buffer)
-
-for src in triggersrc:
-	sink = appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-snglinspiral"))
-	sink.connect_after("new-buffer", appsync.pull_appsinks_in_order)
-	appsinks.add(sink)
+appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-snglinspiral")) for src in triggersrc)
 if options.verbose:
 	print >>sys.stderr, "attached %d, done" % len(appsinks)
 

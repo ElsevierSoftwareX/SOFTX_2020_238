@@ -604,45 +604,59 @@ def mkappsink(pipeline, src, pad_name = None, max_buffers = 1, drop = False, **p
 class AppSync(object):
 	def __init__(self, appsink_new_buffer, appsinks = []):
 		self.lock = threading.Lock()
-		self.appsinks = {}
-		for a in appsinks:
-			self.appsinks[a] = None
-		self.deferred = 0
 		self.appsink_new_buffer = appsink_new_buffer
+		self.appsinks = {}
+		self.at_eos = set()
+		for elem in appsinks:
+			if elem in self.appsinks:
+				raise ValueError, "duplicate appsinks"
+			elem.connect("new-buffer", self.appsink_handler, False)
+			elem.connect("eos", self.appsink_handler, True)
+			self.appsinks[elem] = None
 
-	def add_sink(self, pipeline, src, pad_name = None, drop = False, **properties):
+	def add_sink(self, pipeline, src, drop = False, **properties):
 		# NOTE that max buffers must be 1 for this to work
-		elem = mkappsink(pipeline, src, pad_name, 1, drop, **properties)
-		elem.connect_after("eos", self.pull_appsinks_in_order, True)
+		elem = mkappsink(pipeline, src, max_buffers = 1, drop = drop, **properties)
+		elem.connect("new-buffer", self.appsink_handler, False)
+		elem.connect("eos", self.appsink_handler, True)
 		self.appsinks[elem] = None
 		return elem
 
-	def sorted(self):
-		return sorted((a.get_last_buffer().timestamp, a) for a in self.appsinks.keys() if a.get_last_buffer() is not None)
-
-	def earliest(self):
-		l = self.sorted()
-		return [b for (a,b) in l if a == l[0][0]]
-
-	def pull_appsinks_in_order(self, appsink, eos = False):
+	def appsink_handler(self, elem, eos):
 		self.lock.acquire()
 
-		# mark that this one cannot emit another buffer signal (i.e. that it is blocking)
-		if not eos:
-			self.appsinks[appsink] = 1
+		# update eos status, and retrieve buffer timestamp
+		if eos:
+			self.at_eos.add(elem)
+		else:
+			self.at_eos.discard(elem)
+			assert self.appsinks[elem] is None
+			self.appsinks[elem] = elem.get_last_buffer().timestamp
 
-		# wait until we have at least one buffer on every sink
-		if None in self.appsinks.values():
-			self.lock.release()
-			return
-
-		# Otherwise pull the earliest buffers that are waiting
-		mint = self.sorted()[0][0]
-
-		for (t,k) in self.sorted():
-			if self.appsinks[k] == 1:
-				self.appsinks[k] = 0
-				self.appsink_new_buffer(k)
+		# keep looping while we can process buffers
+		while True:
+			# retrieve the timestamps of all elements that
+			# aren't at eos and all elements at eos that still
+			# have buffers in them
+			timestamps = [(t, e) for e, t in self.appsinks.items() if e not in self.at_eos or t is not None]
+			# nothing to do if all elements are at eos and do
+			# not have buffers
+			if not timestamps:
+				break
+			# find the element with the oldest timestamp.  None
+			# compares as less than everything, so we'll find
+			# any element (that isn't at eos) that doesn't yet
+			# have a buffer (elements at eos and that are
+			# without buffers aren't in the list)
+			timestamp, elem_with_oldest = min(timestamps)
+			# if there's an element without a buffer, do
+			# nothing --- we require all non-eos elements to
+			# have buffers before proceding
+			if timestamp is None:
+				break
+			# pass element to handler func and clear timestamp
+			self.appsink_new_buffer(elem_with_oldest)
+			self.appsinks[elem_with_oldest] = None
 
 		self.lock.release()
 
