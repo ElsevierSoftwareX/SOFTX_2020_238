@@ -552,6 +552,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 		 * GAP --> no-op
 		 */
 
+		/* FIXME:  if more than max_gap samples elapse, we should flush the triggers */
+
 		GST_DEBUG_OBJECT(element, "input is gap, output is gap");
 		result = gst_pad_alloc_buffer(element->srcpad, element->next_output_offset, 0, GST_PAD_CAPS(element->srcpad), &srcbuf);
 		if(result != GST_FLOW_OK)
@@ -620,6 +622,8 @@ static GstFlowReturn collected(GstCollectPads *pads, gpointer user_data)
 						 */
 					}
 					element->last_time[channel] = t;
+				} else {
+					/* FIXME:  if more than max_gap samples elapse, we should flush the triggers */
 				}
 
 				snrdata++;
