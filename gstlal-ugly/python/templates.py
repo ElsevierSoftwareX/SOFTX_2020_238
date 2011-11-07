@@ -230,7 +230,7 @@ def time_slices(
 		else:
 			segment_samples_max = 4096.0
 	
-		if segment_samples_min >= segment_samples_max:
+		if segment_samples_min > segment_samples_max:
 			raise ValueError("The input template bank must have fewer than %d templates, but had %d." % (segment_samples_max, 2 * len(m1m2pairs)))
 
 		this_flow = max( float(rate)/(4*padding), flow )
