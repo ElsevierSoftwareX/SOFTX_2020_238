@@ -116,11 +116,12 @@ class StreamThinca(object):
 		# replace the sngl_inspiral table with our version.  in
 		# addition to replacing the table object in the xml tree,
 		# we also need to replace the attribute in the dataobj
-		# because that's what appsink_new_buffer() will write to
+		# because that's what its appsink_new_buffer() will write
+		# to
 		self.dataobj.xmldoc.childNodes[-1].replaceChild(self.sngl_inspiral_table, self.dataobj.sngl_inspiral_table)
 		orig_sngl_inspiral_table, self.dataobj.sngl_inspiral_table = self.dataobj.sngl_inspiral_table, self.sngl_inspiral_table
 
-		# chain to normal function in pipeparts.  after this, the
+		# chain to normal function in Data object.  after this, the
 		# new triggers will have been appended to our
 		# sngl_inspiral_table
 		prev_len = len(self.sngl_inspiral_table)
