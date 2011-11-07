@@ -139,7 +139,7 @@ static GstCaps *getcaps(GstPad * pad)
 	 * caps, intersect without our own.
 	 */
 
-	peercaps = gst_pad_peer_get_caps(element->srcpad);
+	peercaps = gst_pad_peer_get_caps_reffed(element->srcpad);
 	if(peercaps) {
 		GstCaps *result = gst_caps_intersect(peercaps, caps);
 		gst_caps_unref(peercaps);
