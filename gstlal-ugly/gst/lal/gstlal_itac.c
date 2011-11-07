@@ -441,11 +441,11 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 	double complex *dataptr = NULL;
 
 	/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
-	gst_audioadapter_copy(element->adapter, (void *) element->data, copysamps, &copied_gap, &copied_nongap);
+	gst_audioadapter_copy(element->adapter, element->data, copysamps, &copied_gap, &copied_nongap);
 	/* put the data pointer one pad length in */
 	dataptr = element->data + element->maxdata->pad * element->maxdata->channels;
 	/* Find the peak */
-	gstlal_double_complex_peak_over_window(element->maxdata, (const double complex*) dataptr, outsamps);
+	gstlal_double_complex_peak_over_window(element->maxdata, dataptr, outsamps);
 	/* extract data around peak for chisq calculation */
 	gstlal_double_complex_series_around_peak(element->maxdata, element->data, element->snr_mat, copysamps);
 
