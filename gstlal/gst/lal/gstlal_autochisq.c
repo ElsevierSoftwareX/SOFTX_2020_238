@@ -106,7 +106,7 @@ GST_DEBUG_CATEGORY(gstlal_autochisq_debug);
 
 static unsigned autocorrelation_channels(const GSTLALAutoChiSq *element)
 {
-	return element->autocorrelation_matrix->size1;
+	return gstlal_autocorrelation_chi2_autocorrelation_channels(element->autocorrelation_matrix);
 }
 
 
@@ -117,7 +117,7 @@ static unsigned autocorrelation_channels(const GSTLALAutoChiSq *element)
 
 static unsigned autocorrelation_length(const GSTLALAutoChiSq *element)
 {
-	return element->autocorrelation_matrix->size2;
+	return gstlal_autocorrelation_chi2_autocorrelation_length(element->autocorrelation_matrix);
 }
 
 
