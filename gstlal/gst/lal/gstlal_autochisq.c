@@ -68,6 +68,7 @@
 
 
 #include <gstaudioadapter.h>
+#include <gstlal_autocorrelation_chi2.h>
 
 
 GST_DEBUG_CATEGORY(gstlal_autochisq_debug);
@@ -86,7 +87,6 @@ GST_DEBUG_CATEGORY(gstlal_autochisq_debug);
 
 
 #define GST_CAT_DEFAULT gstlal_autochisq_debug
-#define CHI2_USES_REAL_ONLY FALSE
 #define DEFAULT_SNR_THRESH 0
 
 
@@ -161,48 +161,6 @@ static guint get_available_samples(GSTLALAutoChiSq *element)
 
 
 /*
- * compute autocorrelation norms --- the expectation value in noise.  must
- * be called with autocorrelation_matrix_lock held
- */
-
-
-static gsl_vector *compute_autocorrelation_norm(GSTLALAutoChiSq *element)
-{
-	gsl_vector *norm;
-	unsigned channel;
-
-	if(element->autocorrelation_mask_matrix && (autocorrelation_channels(element) != element->autocorrelation_mask_matrix->size1 || autocorrelation_length(element) != element->autocorrelation_mask_matrix->size2)) {
-		GST_ELEMENT_ERROR(element, STREAM, FAILED, ("array size mismatch"), ("autocorrelation matrix (%dx%d) and mask matrix (%dx%d) do not have the same size", autocorrelation_channels(element), autocorrelation_length(element), element->autocorrelation_mask_matrix->size1, element->autocorrelation_mask_matrix->size2));
-		return NULL;
-	}
-
-	norm = gsl_vector_alloc(autocorrelation_channels(element));
-
-	for(channel = 0; channel < autocorrelation_channels(element); channel++) {
-		gsl_vector_complex_view row = gsl_matrix_complex_row(element->autocorrelation_matrix, channel);
-		gsl_vector_int_view mask;
-		unsigned sample;
-		double n = 0;
-		
-		if(element->autocorrelation_mask_matrix)
-			mask = gsl_matrix_int_row(element->autocorrelation_mask_matrix, channel);
-		for(sample = 0; sample < row.vector.size; sample++) {
-			if(element->autocorrelation_mask_matrix && !gsl_vector_int_get(&mask.vector, sample))
-				continue;
-#if CHI2_USES_REAL_ONLY
-			n += 1 - pow(GSL_REAL(gsl_vector_complex_get(&row.vector, sample)), 2);
-#else
-			n += 2 - gsl_complex_abs2(gsl_vector_complex_get(&row.vector, sample));
-#endif
-		}
-		gsl_vector_set(norm, channel, n);
-	}
-
-	return norm;
-}
-
-
-/*
  * transform input samples to output samples using a time-domain algorithm
  */
 
@@ -213,9 +171,7 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	unsigned zeros_in_adapter;
 	unsigned available_length;
 	unsigned output_length = 0;
-	complex double *inputbuf, *input;
-	double *output;
-	double *output_end;
+	complex double *input;
 
 	/*
 	 * do we have enough data to do anything?
@@ -231,20 +187,10 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 		 * sample equal to 0, not 0 samples. */
 		available_length -= zeros_in_adapter - autocorrelation_length(element) + 1;
 
-	/* the +1 is because when there is 1 correlation-length of data in
+	/* the -1 is because when there is 1 correlation-length of data in
 	 * the adapter then we can produce 1 output sample, not 0. */
-	output_length = available_length - autocorrelation_length(element) + 1;
-	if(!output_length)
+	if(available_length <= autocorrelation_length(element) - 1)
 		goto done;
-
-	/*
-	 * initialize pointers.
-	 */
-
-	input = inputbuf = g_malloc(available_length * channels * sizeof(*input));
-	gst_audioadapter_copy(element->adapter, inputbuf, available_length, NULL, NULL);
-	output = (double *) GST_BUFFER_DATA(outbuf);
-	output_end = output + output_length * channels;
 
 	/*
 	 * safety checks
@@ -256,7 +202,13 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 		g_assert(autocorrelation_length(element) == element->autocorrelation_mask_matrix->size2);
 		g_assert(element->autocorrelation_mask_matrix->tda == autocorrelation_length(element));
 	}
-	g_assert(output_length == GST_BUFFER_SIZE(outbuf) / (channels * sizeof(double)));
+
+	/*
+	 * get input data
+	 */
+
+	input = g_malloc(available_length * channels * sizeof(*input));
+	gst_audioadapter_copy(element->adapter, input, available_length, NULL, NULL);
 
 	/*
 	 * compute output samples.  note:  we assume that gsl_complex can
@@ -264,101 +216,19 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	 * documentation that this is true.
 	 */
 
-	while(output < output_end) {
-		const complex double *autocorrelation = (const complex double *) gsl_matrix_complex_const_ptr(element->autocorrelation_matrix, 0, 0);
-		const int *autocorrelation_mask = element->autocorrelation_mask_matrix ? (const int *) gsl_matrix_int_const_ptr(element->autocorrelation_mask_matrix, 0, 0) : NULL;
-		unsigned channel;
+	output_length = gstlal_autocorrelation_chi2((double *) GST_BUFFER_DATA(outbuf), input, available_length, element->latency, element->snr_thresh, element->autocorrelation_matrix, element->autocorrelation_mask_matrix, element->autocorrelation_norm);
 
-		for(channel = 0; channel < channels; channel++) {
-			/*
-			 * start of input data block to be used for this
-			 * output sample
-			 */
+	/*
+	 * safety checks
+	 */
 
-			const complex double *indata = input;
-
-			/*
-			 * the input sample by which the autocorrelation
-			 * funcion will be scaled
-			 */
-
-			complex double snr = input[((gint) autocorrelation_length(element) - 1 + element->latency) * channels];
-
-			if(cabs(snr) >= element->snr_thresh) {
-#if CHI2_USES_REAL_ONLY
-				/*
-				 * multiplying snr by this makes it real
-				 */
-
-				complex double invsnrphase = cexp(-I*carg(snr));
-#endif
-
-				/*
-				 * end of this channel's row in the autocorrelation
-				 * matrix
-				 */
-
-				const complex double *autocorrelation_end = autocorrelation + autocorrelation_length(element);
-
-				/*
-				 * \chi^{2} sum
-				 */
-
-				double chisq;
-
-				/*
-				 * compute \sum_{i} (A_{i} * \rho_{0} - \rho_{i})^{2}
-				 */
-
-				if(autocorrelation_mask) {
-					for(chisq = 0; autocorrelation < autocorrelation_end; autocorrelation++, autocorrelation_mask++, indata += channels) {
-						complex double z;
-						if(!*autocorrelation_mask)
-							continue;
-						z = *autocorrelation * snr - *indata;
-#if CHI2_USES_REAL_ONLY
-						chisq += pow(creal(z * invsnrphase), 2);
-#else
-						chisq += pow(creal(z), 2) + pow(cimag(z), 2);
-#endif
-					}
-				} else {
-					for(chisq = 0; autocorrelation < autocorrelation_end; autocorrelation++, indata += channels) {
-						complex double z = *autocorrelation * snr - *indata;
-#if CHI2_USES_REAL_ONLY
-						chisq += pow(creal(z * invsnrphase), 2);
-#else
-						chisq += pow(creal(z), 2) + pow(cimag(z), 2);
-#endif
-					}
-				}
-
-				/*
-				 * record \chi^{2} sum, advance to next output sample
-				 */
-
-				*output = chisq / gsl_vector_get(element->autocorrelation_norm, channel);
-			} else {
-				autocorrelation += autocorrelation_length(element);
-				if(autocorrelation_mask)
-					autocorrelation_mask += autocorrelation_length(element);
-				*output = 0;
-			}
-
-			/*
-			 * advance to next sample
-			 */
-
-			output++;
-			input++;
-		}
-	}
+	g_assert(output_length == GST_BUFFER_SIZE(outbuf) / (channels * sizeof(double)));
 
 	/*
 	 * flush the data from the adapter
 	 */
 
-	g_free(inputbuf);
+	g_free(input);
 	gst_audioadapter_flush(element->adapter, output_length);
 
 done:
@@ -738,7 +608,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 */
 
 	if(!element->autocorrelation_norm) {
-		element->autocorrelation_norm = compute_autocorrelation_norm(element);
+		element->autocorrelation_norm = gstlal_autocorrelation_chi2_compute_norms(element->autocorrelation_matrix, element->autocorrelation_mask_matrix);
 		if(!element->autocorrelation_norm) {
 			g_mutex_unlock(element->autocorrelation_lock);
 			GST_DEBUG_OBJECT(element, "failed to compute autocorrelation norms");
