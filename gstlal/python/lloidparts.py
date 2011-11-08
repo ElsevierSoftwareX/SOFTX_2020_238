@@ -412,10 +412,20 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# need to be here, or it might be a symptom of a bug elsewhere.
 	# figure this out.
 
-	src = pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank, block_stride = fir_stride * bank_fragment.rate, time_domain = max(bank.get_rates()) / bank_fragment.rate >= 32)
+	latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1
+	block_stride = fir_stride * bank_fragment.rate
+	
+	# we figure an fft costs ~5 logN flops where N is duration + block
+	# stride.  For each chunk you have to do a forward and a reverse fft.
+	# Time domain costs N * block_stride. So if block stride is less than
+	# about 10logN you might as well do time domain filtering
+	# FIXME This calculation should probably be made more rigorous
+	time_domain = 10 * numpy.log2((bank_fragment.end - bank_fragment.start) * bank_fragment.rate + block_stride) > block_stride
+
+	src = pipeparts.mkfirbank(pipeline, src, latency = latency, fir_matrix = bank_fragment.orthogonal_template_bank, block_stride = block_stride, time_domain = time_domain)
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank" % logname)
-	src = pipeparts.mkreblock(pipeline, src, block_duration = control_peak_time * gst.SECOND)
-	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank_reblock" % logname)
+	#src = pipeparts.mkreblock(pipeline, src, block_duration = control_peak_time * gst.SECOND)
+	#src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank_reblock" % logname)
 	#src = pipeparts.mktee(pipeline, src)	# comment-out the tee below if this is uncommented
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, src), "orthosnr_%s.dump" % logname, segment = nxydump_segment)
 
