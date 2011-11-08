@@ -48,7 +48,7 @@ def peak_test_01a(pipeline):
 
 	head = test_common.gapped_complex_test_src(pipeline, buffer_length = buffer_length, rate = in_rate, test_duration = test_duration, wave = wave, freq = sine_frequency, gap_frequency = gap_frequency, gap_threshold = gap_threshold, control_dump_filename = "itac_test_01a_control.dump", tags = "instrument=H1,channel-name=LSC-STRAIN,units=strain")
 	head = tee = pipeparts.mktee(pipeline, head)
-	head = pipeparts.mkqueue(pipeline, pipeparts.mkitac(pipeline, head, peak_window, "test_bank.xml"))
+	head = pipeparts.mkqueue(pipeline, pipeparts.mkitac(pipeline, head, peak_window, "test_bank.xml", autocorrelation_matrix = numpy.array([[1+1.j, 0+0.j, 0+0.j]])))
 	
 	#
 	# output the before and after
@@ -60,7 +60,7 @@ def peak_test_01a(pipeline):
 
 	def dump_triggers(elem, output = outfile):
 		for row in sngl_inspirals_from_buffer(elem.emit("pull-buffer")):
-			print >>outfile, row.end_time + row.end_time_ns*1e-9, row.snr
+			print >>outfile, row.end_time + row.end_time_ns*1e-9, row.snr, row.chisq, row.chisq_dof
 
 	a.connect_after("new-buffer", dump_triggers)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, tee)), "itac_test_01a_in.dump")
