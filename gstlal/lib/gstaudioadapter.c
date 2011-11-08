@@ -80,6 +80,14 @@ static GstClockTime expected_timestamp(GstAudioAdapter *adapter)
 }
 
 
+static guint64 expected_offset(GstAudioAdapter *adapter)
+{
+	GstBuffer *buf = GST_BUFFER(g_queue_peek_tail(adapter->queue));
+	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(buf));
+	return GST_BUFFER_OFFSET_END(buf);
+}
+
+
 /*
  * ============================================================================
  *
@@ -92,6 +100,12 @@ static GstClockTime expected_timestamp(GstAudioAdapter *adapter)
 GstClockTime gst_audioadapter_expected_timestamp(GstAudioAdapter *adapter)
 {
 	return g_queue_is_empty(adapter->queue) ? GST_CLOCK_TIME_NONE : expected_timestamp(adapter);
+}
+
+
+guint64 gst_audioadapter_expected_offset(GstAudioAdapter *adapter)
+{
+	return g_queue_is_empty(adapter->queue) ? GST_BUFFER_OFFSET_NONE : expected_offset(adapter);
 }
 
 
