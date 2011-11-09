@@ -5,8 +5,6 @@
 #include <complex.h>
 #include <string.h>
 #include <math.h>
-#include <gsl/gsl_matrix.h>
-#include <gsl/gsl_vector.h>
 
 /*
  * Double precision
@@ -175,23 +173,23 @@ int gstlal_double_complex_peak_over_window(struct gstlal_double_complex_peak_sam
 }
 
 /* Assumes that you can index the data being given, if not expect a segfault or
- * worse. To do this it will assume that the pad provided is commensurate with
- * the amount of data around the peak that you are requesting.  So it adds the
- * pad length to all the samples in the peak_samples_and_values structure.
+ * worse.  Data pointer must exist be valid outputmat->size2 / 2 samples in past and future of the time over which the peak was computed
  */
 
-int gstlal_double_complex_series_around_peak(struct gstlal_double_complex_peak_samples_and_values *input, double complex *data, gsl_matrix_complex *outputmat, guint64 length)
+int gstlal_double_complex_series_around_peak(struct gstlal_double_complex_peak_samples_and_values *input, double complex *data, double complex *outputmat, guint n)
 {
-	guint channel, index;
-	gsl_vector_complex_view dataview;
+	guint channel, sample;
+	gint index;
 	guint *maxsample = input->samples;
-	gsl_matrix_complex_set_zero(outputmat);
+	double complex *maxdata = input->values;
+	double complex *peakdata = NULL;
+	memset(outputmat, 0, input->channels * (2 * n + 1));
 
 	for (channel = 0; channel < input->channels; channel++) {
 		if (maxsample[channel]) {
-			index = (maxsample[channel] + input->pad - outputmat->size2 / 2) * input->channels + channel;
-			dataview = gsl_vector_complex_view_array_with_stride((double *) data+index, input->channels, outputmat->size2);
-			gsl_matrix_complex_set_row(outputmat, channel, &dataview.vector);
+			index = (maxsample[channel] - n) * input->channels + channel;
+			for (sample = 0, peakdata = data+index; sample < (2*n + 1); sample++, peakdata += input->channels)
+				outputmat[sample * input->channels + channel] = *peakdata;
 			}
 		}
 
