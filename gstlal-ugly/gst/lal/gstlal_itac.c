@@ -334,50 +334,6 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
  */
 
 
-/*
- * getcaps()
- */
-
-
-static GstCaps *getcaps(GstPad * pad)
-{
-	GSTLALItac *element = GSTLAL_ITAC(gst_pad_get_parent(pad));
-	GstCaps *peercaps, *caps;
-
-	/*
-	 * get our own allowed caps.  use the fixed caps function to avoid
-	 * recursing back into this function.
-	 */
-
-	caps = gst_pad_get_fixed_caps_func(pad);
-
-	/*
-	 * get the allowed caps from the downstream peer if the peer has
-	 * caps, intersect without our own.
-	 */
-
-	peercaps = gst_pad_peer_get_caps_reffed(element->srcpad);
-	if(peercaps) {
-		GstCaps *result = gst_caps_intersect(peercaps, caps);
-		gst_caps_unref(peercaps);
-		gst_caps_unref(caps);
-		caps = result;
-	}
-
-	/*
-	 * done
-	 */
-
-	gst_object_unref(element);
-	return caps;
-}
-
-
-/*
- * setcaps()
- */
-
-
 static gboolean setcaps(GstPad *pad, GstCaps *caps)
 {
 	GSTLALItac *element = GSTLAL_ITAC(gst_pad_get_parent(pad));
@@ -396,13 +352,6 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 		success = FALSE;
 	if(!gst_structure_get_int(structure, "channels", &channels))
 		success = FALSE;
-
-	/*
-	 * try setting caps on downstream element
-	 */
-
-	if(success)
-		success = gst_pad_set_caps(element->srcpad, caps);
 
 	/*
 	 * update the element metadata
@@ -425,6 +374,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 }
 
 
+
 /*
  * chain()
  */
@@ -437,8 +387,10 @@ static void update_state(GSTLALItac *element, GstBuffer *srcbuf)
 
 static GstFlowReturn push_buffer(GSTLALItac *element, GstBuffer *srcbuf)
 {
+	GstFlowReturn result = GST_FLOW_OK;
 	GST_DEBUG_OBJECT(element, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
-	return gst_pad_push(element->srcpad, srcbuf);
+	result =  gst_pad_push(element->srcpad, srcbuf);
+	return result;
 }
 
 static GstFlowReturn push_gap(GSTLALItac *element, guint samps)
@@ -722,6 +674,7 @@ static void base_init(gpointer class)
 			gst_caps_from_string("application/x-lal-snglinspiral")
 		)
 	);
+
 }
 
 
@@ -837,7 +790,6 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	/* configure (and ref) sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
 	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(setcaps));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
@@ -847,13 +799,13 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
 	element->srcpad = pad;
 
-	gst_pad_use_fixed_caps(pad);
 	{
 	GstCaps *caps = gst_caps_copy(gst_pad_get_pad_template_caps(pad));
 	gst_pad_set_caps(pad, caps);
 	gst_caps_unref(caps);
 	}
-
+	gst_pad_use_fixed_caps(pad);
+	
 	/* internal data */
 	element->rate = 0;
 	element->snr_thresh = 0;
