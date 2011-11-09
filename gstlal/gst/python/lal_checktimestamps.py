@@ -255,7 +255,9 @@ class lal_checktimestamps(gst.BaseTransform):
 		return gst.FLOW_OK
 
 
+#
+# register element class
+#
 
 
-# Register element class
 pipeutil.gstlal_element_register(lal_checktimestamps)
