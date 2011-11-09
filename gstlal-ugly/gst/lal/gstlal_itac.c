@@ -433,7 +433,7 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 		/* extract data around peak for chisq calculation */
 		gstlal_double_complex_series_around_peak(element->maxdata, dataptr, element->snr_mat, element->maxdata->pad);
 		g_assert(autocorrelation_length(element) & 1);	/* must be odd */
-		gstlal_autocorrelation_chi2(chi2, element->snr_mat, autocorrelation_length(element), (autocorrelation_length(element) + 1) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
+		gstlal_autocorrelation_chi2(chi2, element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
 		/* create the output buffer */
 		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, chi2);
 		}
