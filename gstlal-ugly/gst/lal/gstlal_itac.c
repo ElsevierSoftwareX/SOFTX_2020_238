@@ -241,9 +241,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		if (! element->maxdata)
 			element->maxdata = gstlal_double_complex_peak_samples_and_values_new(channels);
 		element->maxdata->pad = autocorrelation_length(element) / 2;
-		if (element->snr_mat)
-			gsl_matrix_complex_free(element->snr_mat);
-		element->snr_mat = gsl_matrix_complex_calloc(channels, autocorrelation_length(element));
+		if (element->snr_mat) {
+			free(element->snr_mat);
+			}
+		element->snr_mat = (complex double *) calloc(channels * autocorrelation_length(element), sizeof(complex double));
 
 		/*
 		 * induce norms to be recomputed
@@ -430,11 +431,9 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 		if (!element->autocorrelation_norm)
 			element->autocorrelation_norm = gstlal_autocorrelation_chi2_compute_norms(element->autocorrelation_matrix, NULL);
 		/* extract data around peak for chisq calculation */
-		gstlal_double_complex_series_around_peak(element->maxdata, dataptr, element->snr_mat);
-		g_assert(autocorrelation_channels(element) == element->snr_mat->size1);
-		g_assert(autocorrelation_length(element) == element->snr_mat->size2);
+		gstlal_double_complex_series_around_peak(element->maxdata, dataptr, element->snr_mat, element->maxdata->pad);
 		g_assert(autocorrelation_length(element) & 1);	/* must be odd */
-		gstlal_autocorrelation_chi2(chi2, (complex double *) element->snr_mat->data, autocorrelation_length(element), (autocorrelation_length(element) + 1) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
+		gstlal_autocorrelation_chi2(chi2, element->snr_mat, autocorrelation_length(element), (autocorrelation_length(element) + 1) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
 		/* create the output buffer */
 		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, chi2);
 		}
@@ -614,8 +613,7 @@ static void finalize(GObject *object)
 		element->data = NULL;
 		}
 	if(element->snr_mat) {
-		gsl_matrix_complex_free(element->snr_mat);
-		element->snr_mat = NULL;
+		free(element->snr_mat);
 	}
 	if(element->autocorrelation_matrix) {
 		gsl_matrix_complex_free(element->autocorrelation_matrix);
