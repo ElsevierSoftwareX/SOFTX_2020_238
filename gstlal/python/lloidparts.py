@@ -705,8 +705,6 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 	# trigger generator and progress report
 	#
 
-	snr = pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-complex")	# FIXME:  remove when whatever's wrong with negotiation is fixed
-	chisq = pipeparts.mkcapsfilter(pipeline, chisq, "audio/x-raw-float")	# FIXME:  remove when whatever's wrong with negotiation is fixed
 	head = pipeparts.mktriggergen(pipeline, snr, chisq, template_bank_filename = bank.template_bank_filename, snr_threshold = bank.snr_threshold, sigmasq = bank.sigmasq)
 	# FIXME:  add ability to choose this
 	# "lal_blcbctriggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq}
