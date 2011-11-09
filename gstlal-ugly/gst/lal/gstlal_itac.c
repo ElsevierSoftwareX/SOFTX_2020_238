@@ -792,6 +792,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
 	element->sinkpad = pad;
+	gst_pad_use_fixed_caps(pad);
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
