@@ -107,8 +107,11 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_double_complex
 	double complex *maxdata = input->values;
 	guint *maxsample = input->samples;
 
-	if (result != GST_FLOW_OK)
+	if (result != GST_FLOW_OK) {
+		GstElement *element= gst_pad_get_parent_element(pad);
+		GST_ERROR_OBJECT(element, "Could not allocate sngl-inspiral buffer %d", result);
 		return srcbuf;
+		}
 
 	if (input->num_events == 0)
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
