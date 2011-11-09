@@ -1240,21 +1240,21 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
      * get anything else, record whether or not we saw any gap buffers at
      * all, add all full non-gap buffers together, and collect a list of
      * the partial non-gap buffers to add into the result later. */
-    if (GST_BUFFER_FLAG_IS_SET (inbuf, GST_BUFFER_FLAG_GAP)) {
+    if (GST_BUFFER_FLAG_IS_SET (inbuf, GST_BUFFER_FLAG_GAP)) {	/* is it a gap? */
       have_gap_buffers = TRUE;
-      if (offset == 0 && inlength == outlength && !full_gap_buffer)
+      if (offset == 0 && inlength == outlength && !full_gap_buffer)	/* does it span the full output interval?  and we haven't yet seen one that does? */
         full_gap_buffer = inbuf;
-      else
+      else	/* we don't need this buffer */
         gst_buffer_unref (inbuf);
-    } else if (offset == 0 && inlength == outlength) {
-      if (!outbuf)
+    } else if (offset == 0 && inlength == outlength) {	/* not a gap, does it span the full output interval? */
+      if (!outbuf)	/* if we don't have a buffer to hold the output yet, this one's it */
         outbuf = inbuf;
-      else {
+      else {	/* add this buffer to the output buffer */
         outbuf = gst_buffer_make_writable (outbuf);
         adder->func (GST_BUFFER_DATA (outbuf), GST_BUFFER_DATA (inbuf), GST_BUFFER_SIZE (outbuf) / adder->sample_size);
         gst_buffer_unref (inbuf);
       }
-    } else
+    } else	/* not a gap, doesn't span the full output interval, process it later */
       partial_nongap_buffers = g_slist_prepend (partial_nongap_buffers, inbuf);
   }
 
