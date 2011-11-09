@@ -424,6 +424,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 
 	src = pipeparts.mkfirbank(pipeline, src, latency = latency, fir_matrix = bank_fragment.orthogonal_template_bank, block_stride = block_stride, time_domain = time_domain)
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank" % logname)
+	# uncomment reblock if you ever use really big ffts and want to cut them down a bit
 	#src = pipeparts.mkreblock(pipeline, src, block_duration = control_peak_time * gst.SECOND)
 	#src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank_reblock" % logname)
 	#src = pipeparts.mktee(pipeline, src)	# comment-out the tee below if this is uncommented
