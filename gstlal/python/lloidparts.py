@@ -274,22 +274,12 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 	# you are asking for output sample rates that are higher than the
 	# sample rate of your data source.
 	#
-	# note that when downsampling it might be possible for the
-	# audioresampler to produce spurious DISCONT flags.  if it receives
-	# an input buffer too small to produce any new output samples, it
-	# might emit a DISCONT flag on the next output buffer (this
-	# behaviour has not been confirmed, but it is a known quirk of the
-	# base class from which it is derived).  however, in this
-	# application the buffer sizes produced by the data source are too
-	# large to trigger this behaviour whether or not the resampler
-	# might ever do it therefore no nofakediscont elements are required
-	# here
-	#
 
 	quality = 9
 	head = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw-float, rate=[%d,MAX]" % max(rates))
-	head = pipeparts.mkresample(pipeline, head, quality = quality)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max(rates))
+	head = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head, quality = quality), "audio/x-raw-float, rate=%d" % max(rates))
+	head = pipeparts.mknofakedisconts(pipeline, head)	# FIXME:  remove when resampler is patched
+	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_hoft" % (instrument, max(rates)))
 
 	#
 	# add a reblock element.  to reduce disk I/O gstlal_inspiral asks
@@ -339,7 +329,7 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 
 		head.connect_after("notify::f-nyquist", psd_resolution_changed, psd)
 		head.connect_after("notify::delta-f", psd_resolution_changed, psd)
-	head = pipeparts.mknofakedisconts(pipeline, head, silent = True)
+	head = pipeparts.mknofakedisconts(pipeline, head)
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max(rates)))
 
 	#
@@ -390,10 +380,7 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 	for rate in sorted(set(rates))[:-1]:	# all but the highest rate
 		head[rate] = pipeparts.mkaudioamplify(pipeline, head[max(rates)], 1/math.sqrt(pipeparts.audioresample_variance_gain(quality, max(rates), rate)))
 		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head[rate], quality = quality), caps = "audio/x-raw-float, rate=%d" % rate)
-		# FIXME:  why is this here?  has someone comfirmed that
-		# it's needed?  why does the comment above say this isn't
-		# needed if it's needed!?
-		head[rate] = pipeparts.mknofakedisconts(pipeline, head[rate], silent = True)
+		head[rate] = pipeparts.mknofakedisconts(pipeline, head[rate])	# FIXME:  remove when resampler is patched
 		head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "%s_timestamps_%d_whitehoft" % (instrument, rate))
 		head[rate] = pipeparts.mktee(pipeline, head[rate])
 
@@ -428,6 +415,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	src = pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank, block_stride = fir_stride * bank_fragment.rate, time_domain = max(bank.get_rates()) / bank_fragment.rate >= 32)
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank" % logname)
 	src = pipeparts.mkreblock(pipeline, src, block_duration = control_peak_time * gst.SECOND)
+	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank_reblock" % logname)
 	#src = pipeparts.mktee(pipeline, src)	# comment-out the tee below if this is uncommented
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, src), "orthosnr_%s.dump" % logname, segment = nxydump_segment)
 
@@ -441,13 +429,13 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 
 	if control_snk is not None:
 		src = pipeparts.mktee(pipeline, src)	# comment-out if the tee above is uncommented
-		elem = pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights),max_size_buffers = 0, max_size_bytes = 0, max_size_time = block_duration)
+		elem = pipeparts.mkqueue(pipeline, pipeparts.mksumsquares(pipeline, src, weights = bank_fragment.sum_of_squares_weights), max_size_buffers = 0, max_size_bytes = 0, max_size_time = block_duration)
+		elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare" % logname)
 		# FIXME:  the capsfilter shouldn't be needed, the adder
 		# should intersect it's downstream peer's format with the
 		# sink format
 		elem = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, elem, quality = 9), "audio/x-raw-float, rate=%d" % max(bank.get_rates()))
-		# FIXME:  does the resampler need this?
-		elem = pipeparts.mknofakedisconts(pipeline, elem, silent = True)
+		elem = pipeparts.mknofakedisconts(pipeline, elem)	# FIXME:  remove when resampler is patched
 		elem = pipeparts.mkchecktimestamps(pipeline, elem, "timestamps_%s_after_sumsquare_resampler" % logname)
 		elem.link(control_snk)
 
@@ -594,6 +582,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			pipeline.add(branch_heads[rate])
 			for head in heads:
 				pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration).link(branch_heads[rate])
+			branch_heads[rate] = pipeparts.mkchecktimestamps(pipeline, branch_heads[rate], "timestamps_%s_after_%d_snr_adder" % (logname, rate))
 		else:
 			#
 			# this sample rate has only one stream.  it's the
@@ -608,6 +597,8 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 
 		if rate in next_rate:
 			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, branch_heads[rate], quality = 4), "audio/x-raw-float, rate=%d" % next_rate[rate])
+			branch_heads[rate] = pipeparts.mknofakedisconts(pipeline, branch_heads[rate])	# FIXME:  remove when resampler is patched
+			branch_heads[rate] = pipeparts.mkchecktimestamps(pipeline, branch_heads[rate], "timestamps_%s_after_%d_to_%d_snr_resampler" % (logname, rate, next_rate[rate]))
 
 		#
 		# if the calling code has requested copies of the snr
@@ -700,7 +691,7 @@ def mkLLOIDSnrToAutoChisq(pipeline, snr, bank):
 	#
 
 	chisq = pipeparts.mkautochisq(pipeline, snr, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = None, latency = autocorrelation_latency, snr_thresh = bank.snr_threshold)
-	chisq = pipeparts.mkchecktimestamps(pipeline, chisq, "timestamps_%s_chisq" % bank.logname)
+	chisq = pipeparts.mkchecktimestamps(pipeline, chisq, "timestamps_%s_after_chisq" % bank.logname)
 
 	#chisq = pipeparts.mktee(pipeline, chisq)
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, chisq), "chisq_%s.dump" % logname, segment = nxydump_segment)
@@ -714,6 +705,8 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 	# trigger generator and progress report
 	#
 
+	snr = pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-complex")	# FIXME:  remove when whatever's wrong with negotiation is fixed
+	chisq = pipeparts.mkcapsfilter(pipeline, chisq, "audio/x-raw-float")	# FIXME:  remove when whatever's wrong with negotiation is fixed
 	head = pipeparts.mktriggergen(pipeline, snr, chisq, template_bank_filename = bank.template_bank_filename, snr_threshold = bank.snr_threshold, sigmasq = bank.sigmasq)
 	# FIXME:  add ability to choose this
 	# "lal_blcbctriggergen", {"bank-filename": bank.template_bank_filename, "snr-thresh": bank.snr_threshold, "sigmasq": bank.sigmasq}
@@ -961,6 +954,7 @@ def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, quality = 4, verbose
 		head = pipeparts.mkqueue(pipeline, src[sr], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 		head = pipeparts.mkiirbank(pipeline, head, a1 = bank.A[sr], b0 = bank.B[sr], delay = bank.D[sr], name = "gstlaliirbank_%s_%d" % (instrument, sr))
 		#head = pipeparts.mkprogressreport(pipeline, head, "afteriirbank_%d" % (sr))
+		# FIXME:  this should get a nofakedisconts after it until the resampler is patched
 		head = pipeparts.mkresample(pipeline, head, quality = quality)
 		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max_rate)
 		#head = pipeparts.mknxydumpsinktee(pipeline, head, "output_%d.txt" % (sr), segment = options.nxydump_segment)
