@@ -695,9 +695,10 @@ static gboolean control_event(GstPad *pad, GstEvent *event)
  */
 
 
-static GstCaps *sink_getcaps(GstPad * pad)
+static GstCaps *getcaps(GstPad * pad)
 {
 	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
+	GstPad *otherpad = pad == element->srcpad ? element->sinkpad : element->srcpad;
 	GstCaps *peercaps, *caps;
 
 	/*
@@ -712,7 +713,7 @@ static GstCaps *sink_getcaps(GstPad * pad)
 	 * caps, intersect without our own.
 	 */
 
-	peercaps = gst_pad_peer_get_caps_reffed(element->srcpad);
+	peercaps = gst_pad_peer_get_caps_reffed(otherpad);
 	if(peercaps) {
 		GstCaps *result = gst_caps_intersect(peercaps, caps);
 		gst_caps_unref(peercaps);
@@ -726,6 +727,32 @@ static GstCaps *sink_getcaps(GstPad * pad)
 
 	gst_object_unref(element);
 	return caps;
+}
+
+
+/*
+ * acceptcaps()
+ */
+
+
+static gboolean acceptcaps(GstPad *pad, GstCaps *caps)
+{
+	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
+	GstPad *otherpad = pad == element->srcpad ? element->sinkpad : element->srcpad;
+	gboolean success;
+
+	/*
+	 * ask downstream peer
+	 */
+
+	success = gst_pad_peer_accept_caps(otherpad, caps);
+
+	/*
+	 * done
+	 */
+
+	gst_object_unref(element);
+	return success;
 }
 
 
@@ -1391,7 +1418,8 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 
 	/* configure (and ref) sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(sink_getcaps));
+	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
+	gst_pad_set_acceptcaps_function(pad, GST_DEBUG_FUNCPTR(acceptcaps));
 	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(sink_setcaps));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(sink_chain));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
@@ -1399,6 +1427,8 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
+	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
+	gst_pad_set_acceptcaps_function(pad, GST_DEBUG_FUNCPTR(acceptcaps));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(src_event));
 	element->srcpad = pad;
 

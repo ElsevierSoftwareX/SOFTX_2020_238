@@ -119,7 +119,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 /*
  * ============================================================================
  *
- *                                  Sink Pad
+ *                                    Pads
  *
  * ============================================================================
  */
@@ -133,6 +133,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 static GstCaps *getcaps(GstPad * pad)
 {
 	GSTLALReblock *element = GSTLAL_REBLOCK(gst_pad_get_parent(pad));
+	GstPad *otherpad = pad == element->srcpad ? element->sinkpad : element->srcpad;
 	GstCaps *peercaps, *caps;
 
 	/*
@@ -147,7 +148,7 @@ static GstCaps *getcaps(GstPad * pad)
 	 * caps, intersect without our own.
 	 */
 
-	peercaps = gst_pad_peer_get_caps_reffed(element->srcpad);
+	peercaps = gst_pad_peer_get_caps_reffed(otherpad);
 	if(peercaps) {
 		GstCaps *result = gst_caps_intersect(peercaps, caps);
 		gst_caps_unref(peercaps);
@@ -161,6 +162,32 @@ static GstCaps *getcaps(GstPad * pad)
 
 	gst_object_unref(element);
 	return caps;
+}
+
+
+/*
+ * acceptcaps()
+ */
+
+
+static gboolean acceptcaps(GstPad *pad, GstCaps *caps)
+{
+	GSTLALReblock *element = GSTLAL_REBLOCK(gst_pad_get_parent(pad));
+	GstPad *otherpad = pad == element->srcpad ? element->sinkpad : element->srcpad;
+	gboolean success;
+
+	/*
+	 * ask downstream peer
+	 */
+
+	success = gst_pad_peer_accept_caps(otherpad, caps);
+
+	/*
+	 * done
+	 */
+
+	gst_object_unref(element);
+	return success;
 }
 
 
@@ -475,12 +502,15 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	/* configure (and ref) sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
 	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
+	gst_pad_set_acceptcaps_function(pad, GST_DEBUG_FUNCPTR(acceptcaps));
 	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(setcaps));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
 	element->sinkpad = pad;
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
+	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
+	gst_pad_set_acceptcaps_function(pad, GST_DEBUG_FUNCPTR(acceptcaps));
 	element->srcpad = pad;
 
 	/* internal data */
