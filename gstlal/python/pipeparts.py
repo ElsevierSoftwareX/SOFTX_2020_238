@@ -320,7 +320,6 @@ def mkfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = No
 		elem.set_property("block-stride", block_stride)
 	pipeline.add(elem)
 	src.link(elem)
-	elem = mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed
 	return elem
 
 def mkiirbank(pipeline, src, a1, b0, delay, name=None):

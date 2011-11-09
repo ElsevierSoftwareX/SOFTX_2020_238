@@ -35,8 +35,8 @@
 
 #include <glib.h>
 #include <gst/gst.h>
-#include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
+#include <gstaudioadapter.h>
 
 
 #include <fftw3.h>
@@ -71,8 +71,7 @@ typedef struct {
 	 */
 
 	gint rate;
-	GstAdapter *adapter;
-	guint zeros_in_adapter;
+	GstAudioAdapter *adapter;
 
 	/*
 	 * filter info

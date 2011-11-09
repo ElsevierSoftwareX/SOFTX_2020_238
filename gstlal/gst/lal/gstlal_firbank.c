@@ -44,7 +44,6 @@
 
 #include <glib.h>
 #include <gst/gst.h>
-#include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
 #include <gstlal.h>
 #include <gstlal_firbank.h>
@@ -64,6 +63,10 @@
 /*
  * our own stuff
  */
+
+
+#include <gstaudioadapter.h>
+#include <gstlal_debug.h>
 
 
 GST_DEBUG_CATEGORY(gstlal_firbank_debug);
@@ -146,6 +149,40 @@ static unsigned fft_block_stride(const GSTLALFIRBank *element)
 
 
 /*
+ * how many output samples can be generated from the given number of input
+ * samples
+ */
+
+
+static unsigned td_output_length(const GSTLALFIRBank *element, unsigned input_length)
+{
+	/*
+	 * how many samples can we construct from the contents of the
+	 * adapter?  the +1 is because when there is 1 FIR-length of data
+	 * in the adapter then we can produce 1 output sample, not 0.
+	 */
+
+	if(input_length < fir_length(element))
+		return 0;
+	return input_length - fir_length(element) + 1;
+}
+
+
+static unsigned get_output_length(const GSTLALFIRBank *element, unsigned input_length)
+{
+	if(element->time_domain)
+		return td_output_length(element, input_length);
+	else if(input_length < fft_block_length(element))
+		return 0;
+	else {
+		unsigned stride = fft_block_stride(element);
+		unsigned blocks = (input_length - fft_block_length(element)) / stride + 1;
+		return blocks * stride;
+	}
+}
+
+
+/*
  * number of samples that must be available to compute at least n output
  * samples
  */
@@ -164,23 +201,30 @@ static guint64 minimum_input_length(const GSTLALFIRBank *element, guint64 n)
 
 
 /*
- * construct a buffer of zeros and push into adapter
+ * construct a gap buffer and push into adapter
  */
 
 
-static int push_zeros(GSTLALFIRBank *element, unsigned samples)
+static int push_gap(GSTLALFIRBank *element, unsigned samples)
 {
 	GstBuffer *zerobuf;
 
 	if(samples) {
-		zerobuf = gst_buffer_new_and_alloc(samples * sizeof(double));
+		zerobuf = gst_buffer_new();
 		if(!zerobuf) {
 			GST_DEBUG_OBJECT(element, "failure allocating zero-pad buffer");
 			return -1;
 		}
-		memset(GST_BUFFER_DATA(zerobuf), 0, GST_BUFFER_SIZE(zerobuf));
-		gst_adapter_push(element->adapter, zerobuf);
-		element->zeros_in_adapter += samples;
+		GST_BUFFER_FLAG_SET(zerobuf, GST_BUFFER_FLAG_GAP);
+		GST_BUFFER_TIMESTAMP(zerobuf) = gst_audioadapter_expected_timestamp(element->adapter);
+		if(!GST_BUFFER_TIMESTAMP_IS_VALID(zerobuf))
+			GST_BUFFER_TIMESTAMP(zerobuf) = 0;
+		GST_BUFFER_DURATION(zerobuf) = gst_util_uint64_scale_int_round(samples, GST_SECOND, element->rate);
+		GST_BUFFER_OFFSET(zerobuf) = gst_audioadapter_expected_offset(element->adapter);
+		if(!GST_BUFFER_OFFSET_IS_VALID(zerobuf))
+			GST_BUFFER_OFFSET(zerobuf) = 0;
+		GST_BUFFER_OFFSET_END(zerobuf) = GST_BUFFER_OFFSET(zerobuf) + samples;
+		gst_audioadapter_push(element->adapter, zerobuf);
 	}
 
 	return 0;
@@ -218,14 +262,11 @@ static void set_metadata(GSTLALFIRBank *element, GstBuffer *buf, guint64 outsamp
 
 static guint64 get_available_samples(GSTLALFIRBank *element)
 {
-	return gst_adapter_available(element->adapter) / sizeof(double);
-}
+	guint size;
 
+	g_object_get(element->adapter, "size", &size, NULL);
 
-static guint64 get_available_nonzero_samples(GSTLALFIRBank *element)
-{
-	guint64 available_samples = get_available_samples(element);
-	return available_samples > element->zeros_in_adapter ? available_samples - element->zeros_in_adapter : 0;
+	return size;
 }
 
 
@@ -307,41 +348,33 @@ static void free_fft_workspace(GSTLALFIRBank *element)
 
 
 /*
- * transform input samples to output samples using a time-domain algorithm
+ * transform input samples to output samples using a frequency-domain
+ * algorithm.  output_length is the number of output samples to compute.  if
+ * this is more than will fit in the output buffer, only as many as will fit in
+ * the output buffer will be computed.  the return value is the actual number
+ * of output samples placed in the buffer.
  */
 
 
-static unsigned td_output_length(const GSTLALFIRBank *element, unsigned available_length)
-{
-	/*
-	 * how many samples can we construct from the contents of the
-	 * adapter?  the +1 is because when there is 1 FIR-length of data
-	 * in the adapter then we can produce 1 output sample, not 0.
-	 */
-
-	if(available_length < fir_length(element))
-		return 0;
-	return available_length - fir_length(element) + 1;
-}
-
-
-static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned available_length)
+static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned output_length)
 {
 	unsigned i;
-	unsigned output_length;
-	gsl_vector_view input;
+	unsigned input_length;
+	double *input;
+	gsl_vector_view input_view;
 	gsl_matrix_view output;
 
 	/*
-	 * how many samples can we construct from the contents of the
-	 * adapter?
+	 * clip number of output samples to buffer size.
 	 */
 
-	output_length = td_output_length(element, available_length);
-	if(!output_length)
-		goto done;
+	output_length = MIN(output_length, GST_BUFFER_SIZE(outbuf) / (fir_channels(element) * sizeof(double)));
 
-	g_assert(GST_BUFFER_SIZE(outbuf) >= output_length * fir_channels(element) * sizeof(double));
+	/*
+	 * how many samples do we need from the adapter?
+	 */
+
+	input_length = output_length + fir_length(element) - 1;
 
 	/*
 	 * wrap the adapter's contents in a GSL vector view.  note that the
@@ -350,7 +383,9 @@ static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ava
 	 * properly.
 	 */
 
-	input = gsl_vector_view_array((double *) gst_adapter_peek(element->adapter, available_length * sizeof(double)), fir_length(element));
+	input = g_malloc(input_length * sizeof(double));
+	gst_audioadapter_copy(element->adapter, input, input_length, NULL, NULL);
+	input_view = gsl_vector_view_array(input, fir_length(element));
 
 	/*
 	 * wrap output buffer in a GSL matrix view.
@@ -375,54 +410,58 @@ static unsigned tdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ava
 		 * of the input onto each of the FIR filters
 		 */
 
-		gsl_blas_dgemv(CblasNoTrans, 1.0, element->fir_matrix, &(input.vector), 0.0, &(output_sample.vector));
+		gsl_blas_dgemv(CblasNoTrans, 1.0, element->fir_matrix, &(input_view.vector), 0.0, &(output_sample.vector));
 
 		/*
 		 * advance the input pointer
 		 */
 
-		input.vector.data++;
+		input_view.vector.data++;
 	}
 
 	/*
 	 * done
 	 */
 
-done:
+	g_free(input);
 	return output_length;
 }
 
 
 /*
  * transform input samples to output samples using a frequency-domain
- * algorithm
+ * algorithm.  output_length is the total number of output samples to
+ * compute and is assumed to match the fft block size and stride.  although
+ * all the output samples will be computed, only as many as will fit in the
+ * buffer will be copied into it.  the return value is the actual number of
+ * output samples placed in the buffer.
  */
 
 
-static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned available_length)
+static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned output_length)
 {
-	unsigned stride;
-	unsigned blocks;
+	unsigned stride = fft_block_stride(element);
+	unsigned filter_length_fd = fft_block_length(element) / 2 + 1;
 	unsigned input_length;
-	unsigned output_length;
-	unsigned filter_length_fd;
-	double *input;
+	double *input, *malloced_input;
 	double *output_end;
 	gsl_matrix_view output;
 	gsl_vector_view workspace;
 
 	/*
-	 * how many FFT blocks can we construct from the contents of the
-	 * adapter?
+	 * how many samples do we need from the adapter?  FIXME:  we might
+	 * not need this much because after output_length is clipped to the
+	 * buffer size we might find we can reduce the number of fft blocks
+	 * to be processed
 	 */
 
-	if(available_length < fft_block_length(element))
-		return 0;
-	stride = fft_block_stride(element);
-	blocks = (available_length - fft_block_length(element)) / stride + 1;
-	output_length = blocks * stride;
 	input_length = output_length + fir_length(element) - 1;
-	filter_length_fd = fft_block_length(element) / 2 + 1;
+
+	/*
+	 * clip number of output samples to buffer size.  we still need to
+	 * compute all of them because we're limited to processing full FFT
+	 * blocks, but only this many will be copied into the output buffer
+	 */
 
 	output_length = MIN(output_length, GST_BUFFER_SIZE(outbuf) / (fir_channels(element) * sizeof(double)));
 
@@ -430,7 +469,8 @@ static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ava
 	 * retrieve input samples
 	 */
 
-	input = (double *) gst_adapter_peek(element->adapter, input_length * sizeof(double));
+	input = malloced_input = g_malloc(input_length * sizeof(double));
+	gst_audioadapter_copy(element->adapter, input, input_length, NULL, NULL);
 
 	/*
 	 * wrap workspace (as real numbers) in a GSL vector view.  note
@@ -507,6 +547,7 @@ static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ava
 	 * done
 	 */
 
+	g_free(malloced_input);
 	return output_length;
 }
 
@@ -516,58 +557,47 @@ static unsigned fdfilter(GSTLALFIRBank *element, GstBuffer *outbuf, unsigned ava
  */
 
 
-static GstFlowReturn filter(GSTLALFIRBank *element, GstBuffer *outbuf)
+static unsigned filter(GSTLALFIRBank *element, GstBuffer *outbuf)
 {
-	unsigned available_length;
 	unsigned output_length;
 
 	/*
-	 * how much data is available?
+	 * how many samples can we compute?  in fft mode this is limited to
+	 * whole fft blocks
 	 */
 
-	available_length = get_available_samples(element);
+	output_length = get_output_length(element, get_available_samples(element));
 
 	/*
-	 * run filtering code
+	 * run filtering code.  record the actual number of samples produced
 	 */
 
-	if(element->time_domain) {
-		/*
-		 * use time-domain filter implementation
-		 */
+	if(output_length) {
+		if(element->time_domain) {
+			/*
+			 * use time-domain filter implementation
+			 */
 
-		output_length = tdfilter(element, outbuf, available_length);
-	} else {
-		/*
-		 * use frequency-domain filter implementation;  start by
-		 * building frequency-domain filters if we don't have them
-		 * yet
-		 */
+			output_length = tdfilter(element, outbuf, output_length);
+		} else {
+			/*
+			 * use frequency-domain filter implementation;  start by
+			 * building frequency-domain filters if we don't have them
+			 * yet
+			 */
 
-		if(!element->fir_matrix_fd)
-			create_fft_workspace(element);
+			if(!element->fir_matrix_fd)
+				create_fft_workspace(element);
 
-		output_length = fdfilter(element, outbuf, available_length);
+			output_length = fdfilter(element, outbuf, output_length);
+		}
 	}
-
-	/*
-	 * output produced?
-	 */
-
-	if(!output_length)
-		return GST_BASE_TRANSFORM_FLOW_DROPPED;
 
 	/*
 	 * flush the data from the adapter
 	 */
 
-	gst_adapter_flush(element->adapter, output_length * sizeof(double));
-	if(element->zeros_in_adapter > available_length - output_length)
-		/*
-		 * some trailing zeros have been flushed from the adapter
-		 */
-
-		element->zeros_in_adapter = available_length - output_length;
+	gst_audioadapter_flush(element->adapter, output_length);
 
 	/*
 	 * set buffer metadata
@@ -579,30 +609,37 @@ static GstFlowReturn filter(GSTLALFIRBank *element, GstBuffer *outbuf)
 	 * done
 	 */
 
-	return GST_FLOW_OK;
+	return output_length;
 }
 
 
 /*
  * run filter code on adapter's contents putting result into a newly
- * allocated buffer, and push buffer downstream.
+ * allocated buffer, and push buffer downstream.  the fir_matrix_lock must
+ * be held when calling this function
  */
 
 
-static GstFlowReturn filter_and_push(GSTLALFIRBank *element, guint64 length)
+static GstFlowReturn filter_and_push(GSTLALFIRBank *element, guint64 output_length)
 {
 	GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
 	GstBuffer *buf;
+	unsigned filter_output_length;
 	GstFlowReturn result;
 
-	if(!length)
+	/* FIXME:  if we released the fir matrix lock the matrix might
+	 * change while we do this.  but we probably shouldn't hold the
+	 * lock while leaving the element */
+
+	if(!output_length)
 		return GST_FLOW_OK;
-	result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, length * fir_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
+	result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, output_length * fir_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
 	if(result != GST_FLOW_OK)
 		return result;
-	result = filter(element, buf);
-	g_assert(result == GST_FLOW_OK);
-	return gst_pad_push(srcpad, buf);
+	filter_output_length = filter(element, buf);
+	g_assert(filter_output_length == output_length);
+	result = gst_pad_push(srcpad, buf);
+	return result;
 }
 
 
@@ -614,6 +651,7 @@ static GstFlowReturn filter_and_push(GSTLALFIRBank *element, guint64 length)
 static GstFlowReturn flush_history(GSTLALFIRBank *element)
 {
 	unsigned available_length;
+	unsigned zeros_in_adapter;
 	unsigned padding;
 	unsigned output_length;
 	unsigned final_gap_length;
@@ -644,7 +682,8 @@ static GstFlowReturn flush_history(GSTLALFIRBank *element)
 	if(output_length <= 0)
 		/* not enough, infact, to generate any output */
 		goto done;
-	final_gap_length = element->zeros_in_adapter >= fir_length(element) ? element->zeros_in_adapter - fir_length(element) + 1 : 0;
+	zeros_in_adapter = gst_audioadapter_tail_gap_length(element->adapter);
+	final_gap_length = zeros_in_adapter >= fir_length(element) ? zeros_in_adapter - fir_length(element) + 1 : 0;
 
 	/* sanity checks */
 	g_assert(available_length <= fft_block_length(element));
@@ -657,7 +696,7 @@ static GstFlowReturn flush_history(GSTLALFIRBank *element)
 	 * push enough zeros to pad to an FFT block boundary
 	 */
 
-	if(push_zeros(element, padding) < 0) {
+	if(push_gap(element, padding) < 0) {
 		GST_DEBUG_OBJECT(element, "failure padding to FFT block boundary");
 		result = GST_FLOW_ERROR;
 		goto done;
@@ -688,8 +727,7 @@ static GstFlowReturn flush_history(GSTLALFIRBank *element)
 	 */
 
 done:
-	gst_adapter_clear(element->adapter);
-	element->zeros_in_adapter = 0;
+	gst_audioadapter_clear(element->adapter);
 	return result;
 }
 
@@ -722,7 +760,7 @@ static GstFlowReturn do_new_segment(GSTLALFIRBank *element)
 
 	switch(format) {
 	case GST_FORMAT_TIME:
-		GST_DEBUG_OBJECT(element, "transforming [%" G_GINT64_FORMAT ", %" G_GINT64_FORMAT "), position = %" G_GINT64_FORMAT", rate = %d, latency = %" G_GINT64_FORMAT "\n", start, stop, position, element->rate, element->latency);
+		GST_INFO_OBJECT(element, "transforming [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), position = %" GST_TIME_SECONDS_FORMAT " (rate = %d, latency = %" G_GINT64_FORMAT ")\n", GST_TIME_SECONDS_ARGS(start), GST_TIME_SECONDS_ARGS(stop), GST_TIME_SECONDS_ARGS(position), element->rate, element->latency);
 		start = gst_util_uint64_scale_int_round(start, element->rate, GST_SECOND);
 		start += samples_lost - element->latency;
 		start = gst_util_uint64_scale_int_round(start, GST_SECOND, element->rate);
@@ -732,7 +770,7 @@ static GstFlowReturn do_new_segment(GSTLALFIRBank *element)
 			stop = gst_util_uint64_scale_int_round(stop, GST_SECOND, element->rate);
 		}
 		position = start;
-		GST_DEBUG_OBJECT(element, "to [%" G_GINT64_FORMAT ", %" G_GINT64_FORMAT "), position = %" G_GINT64_FORMAT", rate = %d, latency = %" G_GINT64_FORMAT "\n", start, stop, position, element->rate, element->latency);
+		GST_INFO_OBJECT(element, "to [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT "), position = %" GST_TIME_SECONDS_FORMAT "\n", GST_TIME_SECONDS_ARGS(start), GST_TIME_SECONDS_ARGS(stop), GST_TIME_SECONDS_ARGS(position));
 		break;
 
 	default:
@@ -968,17 +1006,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		 * an input buffer of the given size.
 		 */
 
-		*othersize = size / unit_size + get_available_samples(element);
-		if(*othersize < minimum_input_length(element, 1))
-			*othersize = 0;
-		else if(element->time_domain)
-			/* + 1 because when we have one FIR-length of
-			 * samples we can compute 1 output sample, not 0 */
-			*othersize = (*othersize - (guint) fir_length(element) + 1) * other_unit_size;
-		else {
-			guint64 blocks = (*othersize - fft_block_length(element)) / fft_block_stride(element) + 1;
-			*othersize = (blocks * fft_block_stride(element)) * other_unit_size;
-		}
+		*othersize = get_output_length(element, size / unit_size + get_available_samples(element)) * other_unit_size;
 		break;
 
 	case GST_PAD_UNKNOWN:
@@ -1002,13 +1030,17 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 {
 	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
 	GstStructure *s;
-	gint rate;
 	gint channels;
+	gint width;
+	gint rate;
 	gboolean success = TRUE;
 
 	s = gst_caps_get_structure(outcaps, 0);
 	if(!gst_structure_get_int(s, "channels", &channels)) {
 		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, outcaps);
+		success = FALSE;
+	} else if(!gst_structure_get_int(s, "width", &width)) {
+		GST_DEBUG_OBJECT(element, "unable to parse width from %" GST_PTR_FORMAT, outcaps);
 		success = FALSE;
 	} else if(!gst_structure_get_int(s, "rate", &rate)) {
 		GST_DEBUG_OBJECT(element, "unable to parse rate from %" GST_PTR_FORMAT, outcaps);
@@ -1023,6 +1055,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		element->rate = rate;
 		if(element->rate != old_rate)
 			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
+		g_object_set(element->adapter, "unit-size", width / 8 * 1, NULL);	/* input has 1 channel */
 	}
 
 	return success;
@@ -1037,8 +1070,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 static gboolean start(GstBaseTransform *trans)
 {
 	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
-	element->adapter = gst_adapter_new();
-	element->zeros_in_adapter = 0;
+	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
 	element->t0 = GST_CLOCK_TIME_NONE;
 	element->offset0 = GST_BUFFER_OFFSET_NONE;
 	element->next_in_offset = GST_BUFFER_OFFSET_NONE;
@@ -1059,6 +1091,10 @@ static gboolean stop(GstBaseTransform *trans)
 	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
 	g_object_unref(element->adapter);
 	element->adapter = NULL;
+	if(element->last_new_segment) {
+		gst_event_unref(element->last_new_segment);
+		element->last_new_segment = NULL;
+	}
 	return TRUE;
 }
 
@@ -1073,14 +1109,13 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
 
 	switch(GST_EVENT_TYPE(event)) {
-	case GST_EVENT_NEWSEGMENT: {
+	case GST_EVENT_NEWSEGMENT:
 		if(element->last_new_segment)
 			gst_event_unref(element->last_new_segment);
 		gst_event_ref(event);
 		element->last_new_segment = event;
 		element->need_new_segment = TRUE;
 		return FALSE;
-	}
 
 	case GST_EVENT_EOS:
 		/*
@@ -1104,11 +1139,15 @@ static gboolean event(GstBaseTransform *trans, GstEvent *event)
 
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
-	guint64 in_length;
-	guint64 adapter_length;
-	guint64 nonzero_samples;
 	GSTLALFIRBank *element = GSTLAL_FIRBANK(trans);
-	GstFlowReturn result;
+	gboolean history_is_gap, input_is_gap;
+	guint output_length, nonzero_output_length;
+	GstFlowReturn result = GST_FLOW_OK;
+
+	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(inbuf));
+	g_assert(GST_BUFFER_DURATION_IS_VALID(inbuf));
+	g_assert(GST_BUFFER_OFFSET_IS_VALID(inbuf));
+	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(inbuf));
 
 	/*
 	 * wait for FIR matrix
@@ -1146,8 +1185,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * clear adapter
 		 */
 
-		gst_adapter_clear(element->adapter);
-		element->zeros_in_adapter = 0;
+		gst_audioadapter_clear(element->adapter);
 
 		/*
 		 * (re)sync timestamp and offset book-keeping
@@ -1162,111 +1200,95 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		element->need_discont = TRUE;
-	}
+	} else
+		g_assert(GST_BUFFER_TIMESTAMP(inbuf) == gst_audioadapter_expected_timestamp(element->adapter));
 	element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
 
 	/*
-	 * gap logic
+	 * build output buffer(s)
 	 */
 
-	g_assert(GST_BUFFER_OFFSET_IS_VALID(inbuf));
-	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(inbuf));
+	input_is_gap = GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP);
+	history_is_gap = gst_audioadapter_is_gap(element->adapter);
 
-	in_length = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
-	adapter_length = get_available_samples(element);
-	nonzero_samples = get_available_nonzero_samples(element);
-	if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
+	GST_DEBUG_OBJECT(element, "%u+%u history+input samples in hand", get_available_samples(element), (guint) (GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf)));
+	gst_buffer_ref(inbuf);	/* don't let calling code free buffer */
+	gst_audioadapter_push(element->adapter, inbuf);
+
+	output_length = get_output_length(element, get_available_samples(element));
+
+	/* how much input data is required to consume all the oldest
+	 * non-zero samples in the adapter, and if we had that much input
+	 * data how much output data would we produce?  if the answer is
+	 * "less than we're going to produce" then we will make two output
+	 * buffers */
+	nonzero_output_length = get_output_length(element, minimum_input_length(element, gst_audioadapter_head_nongap_length(element->adapter)));
+
+	GST_DEBUG_OBJECT(element, "state: history is %s, input is %s, zeros in adapter = %u", history_is_gap ? "gap" : "not gap", input_is_gap ? "gap" : "not gap", gst_audioadapter_tail_gap_length(element->adapter));
+	if(!input_is_gap) {
 		/*
-		 * input is not 0s.
+		 * because the history that remains in the adapter cannot
+		 * be large enough to compute even 1 sample, the output is
+		 * a single non-gap buffer whether or not the history is
+		 * known to be all 0s
 		 */
 
-		gst_buffer_ref(inbuf);	/* don't let calling code free buffer */
-		gst_adapter_push(element->adapter, inbuf);
-		element->zeros_in_adapter = 0;
-		result = filter(element, outbuf);
-	} else if(!nonzero_samples) {
+		guint samples = filter(element, outbuf);
+		g_assert(output_length == samples);
+		GST_DEBUG_OBJECT(element, "output is %u samples", output_length);
+	} else if(history_is_gap) {
 		/*
-		 * input is 0s and adapter has no non-zero samples in it so
-		 * output is all 0s.  the output nominally has the same
-		 * number of samples as the input unless we are still in
-		 * the start-up transient at the beginning of the stream
+		 * all data in hand is known to be 0s, the output is a
+		 * single gap buffer
 		 */
 
-		if(adapter_length < fir_length(element) - 1) {
-			/*
-			 * input has not yet advanced beyond the start-up
-			 * transient.  initialize adapter's contents by
-			 * consuming input samples.  if there are no input
-			 * samples left then we produce no output
-			 */
-
-			guint64 zeros = MIN(in_length, fir_length(element) - 1 - adapter_length);
-			push_zeros(element, zeros);
-			in_length -= zeros;
-			if(!in_length) {
-				result = GST_BASE_TRANSFORM_FLOW_DROPPED;
-				goto done;
-			}
-		}
+		gst_audioadapter_flush(element->adapter, output_length);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
-		set_metadata(element, outbuf, in_length, TRUE);
-		result = GST_FLOW_OK;
-	} else if(adapter_length + in_length <= minimum_input_length(element, nonzero_samples)) {
+		set_metadata(element, outbuf, output_length, TRUE);
+		GST_DEBUG_OBJECT(element, "output is %u sample gap", output_length);
+	} else if(nonzero_output_length >= output_length) {
 		/*
-		 * input is 0s, adapter has at least 1 non-zero sample in
-		 * it, but not enough input samples are available to
-		 * consume the non-zero samples from the adapter and still
-		 * have data left over:  output will be single buffer
-		 * computed normally.  the buffer might be dropped if we
-		 * don't have enough samples to compute anything
+		 * at least some of the start of the history contains
+		 * non-zero data, so we must produce at least 1 non-gap
+		 * buffer, and there aren't enough 0s at the end of the
+		 * history to allow a full gap buffer to be produced, so
+		 * the output is a single non-gap buffer.  (the test is "do
+		 * we have enough input to consume all non-zero samples
+		 * from the history?")
 		 */
 
-		push_zeros(element, in_length);
-		result = filter(element, outbuf);
+		guint samples = filter(element, outbuf);
+		g_assert(output_length == samples);
+		GST_DEBUG_OBJECT(element, "output is %u samples", output_length);
 	} else {
 		/*
-		 * input is 0s, adapter has at least 1 non-zero sample in
-		 * it, and enough input samples are available to consume
-		 * the non-zero samples from the adapter and still have
-		 * data left over:  output will be two buffers, the first
-		 * computed normally to consume the non-zero samples, the
-		 * second a gap buffer
+		 * the tailing zeros in the history combined with the input
+		 * data are together large enough to yield 0s in the
+		 * output. the output will be two buffers, a non-gap buffer
+		 * to finish off the non-zero data in the history followed
+		 * by a gap buffer.
 		 */
 
-		/*
-		 * push enough zeros into the adapter to allow the
-		 * filtering code to consume the non-zero samples
-		 */
+		guint gap_length = output_length - nonzero_output_length;
 
-		guint64 zeros = minimum_input_length(element, nonzero_samples) - adapter_length;
-		push_zeros(element, zeros);
-		in_length -= zeros;
+		GST_DEBUG_OBJECT(element, "output is %u samples followed by %u sample gap", output_length - gap_length, gap_length);
 
 		/*
 		 * generate the first output buffer and push downstream
 		 */
 
-		if(element->time_domain) {
-			result = filter_and_push(element, nonzero_samples);
-			if(result != GST_FLOW_OK)
-				goto done;
-		} else {
-			/* FIXME:  the boundary between the two buffers should be
-			 * set to where the zeros actually start, not where the FFT
-			 * block boundary occurs */
-
-			result = filter_and_push(element, nonzero_samples);
-			if(result != GST_FLOW_OK)
-				goto done;
-		}
+		result = filter_and_push(element, nonzero_output_length);
+		if(result != GST_FLOW_OK)
+			goto done;
 
 		/*
 		 * generate the second, gap, buffer
 		 */
 
-		GST_BUFFER_SIZE(outbuf) = in_length * fir_channels(element) * sizeof(double);
+		gst_audioadapter_flush(element->adapter, gap_length);
+		GST_BUFFER_SIZE(outbuf) = gap_length * fir_channels(element) * sizeof(double);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
-		set_metadata(element, outbuf, in_length, TRUE);
+		set_metadata(element, outbuf, gap_length, TRUE);
 	}
 
 	/*
