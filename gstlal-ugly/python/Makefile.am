@@ -18,4 +18,5 @@ pkgpython_PYTHON = \
 	ligolw_output.py \
 	far.py \
 	streamthinca.py \
-	omega.py
+	omega.py \
+	lloidplots.py
