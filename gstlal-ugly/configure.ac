@@ -23,6 +23,7 @@ AC_CONFIG_FILES([ \
 	gst/lal/Makefile \
 	gst/python/Makefile \
 	gst/framecpp/Makefile \
+	gst/multirate/Makefile \
 	bin/Makefile \
 	tests/Makefile \
 	examples/Makefile
