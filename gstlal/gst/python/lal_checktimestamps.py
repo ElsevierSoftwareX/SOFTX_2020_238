@@ -200,8 +200,8 @@ class lal_checktimestamps(gst.BaseTransform):
 				if not self.silent:
 					print >>sys.stderr, "%s: initial timestamp = %s, offset = %d" % (self.get_property("name"), printable_timestamp(buf.timestamp), buf.offset)
 			elif buf.flag_is_set(gst.BUFFER_FLAG_DISCONT):
-				if not self.silent:
-					print >>sys.stderr, "%s: discontinuity:  timestamp = %s, offset = %d;  would have been %s, %d" % (self.get_property("name"), printable_timestamp(buf.timestamp), buf.offset, printable_timestamp(self.next_timestamp), self.next_offset)
+				print >>sys.stderr, "%s: discontinuity:  timestamp = %s, offset = %d;  would have been %s, %d" % (self.get_property("name"), printable_timestamp(buf.timestamp), buf.offset, printable_timestamp(self.next_timestamp), self.next_offset)
+
 				#
 				# check for timestamp/offset mismatch
 				#
@@ -220,9 +220,9 @@ class lal_checktimestamps(gst.BaseTransform):
 			#
 
 			if buf.timestamp != self.next_timestamp:
-				print >>sys.stderr, "%s: got timestamp %s expected %s" % (self.get_property("name"), printable_timestamp(buf.timestamp), printable_timestamp(self.next_timestamp))
+				print >>sys.stderr, "%s: got timestamp %s expected %s (discont flag is %s)" % (self.get_property("name"), printable_timestamp(buf.timestamp), printable_timestamp(self.next_timestamp), buf.flag_is_set(gst.BUFFER_FLAG_DISCONT) and "set" or "not set")
 			if buf.offset != self.next_offset:
-				print >>sys.stderr, "%s: got offset %d expected %d" % (self.get_property("name"), buf.offset, self.next_offset)
+				print >>sys.stderr, "%s: got offset %d expected %d (discont flag is %s)" % (self.get_property("name"), buf.offset, self.next_offset, buf.flag_is_set(gst.BUFFER_FLAG_DISCONT) and "set" or "not set")
 
 			#
 			# check for timestamp/offset mismatch
