@@ -1265,7 +1265,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
        * buffer spanning the full input interval */
       g_assert(full_gap_buffer != NULL);
       /* get a buffer of zeros */
-      ret = gst_pad_alloc_buffer (adder->srcpad, earliest_output_offset, outlength * adder->bps, GST_PAD_CAPS(adder->srcpad), &outbuf);
+      ret = gst_pad_alloc_buffer (adder->srcpad, earliest_output_offset, outlength * adder->bps, GST_BUFFER_CAPS(full_gap_buffer), &outbuf);
       if (ret != GST_FLOW_OK) {
         /* FIXME:  replace with
         g_slist_free_full (partial_nongap_buffers, (GDestroyNotify) gst_buffer_unref);
@@ -1277,6 +1277,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
 	}
 	goto no_buffer;
       }
+      g_assert (GST_BUFFER_CAPS(outbuf) != NULL);
       memset (GST_BUFFER_DATA (outbuf), 0, GST_BUFFER_SIZE (outbuf));
     } else
       outbuf = gst_buffer_make_writable (outbuf);
@@ -1291,16 +1292,15 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
   }
 
   /* if we don't have an output buffer yet, then if there's a full gap
-   * buffer it becomes our output, otherwise if there are only partial gap
-   * buffers we need to make a gap buffer, otherwise we're at EOS */
+   * buffer it becomes our output, otherwise we're at EOS */
   if (outbuf) {
     if (full_gap_buffer)
       gst_buffer_unref (full_gap_buffer);
   } else if (full_gap_buffer)
     outbuf = full_gap_buffer;
   else if (have_gap_buffers) {
-    /* this condition is not possible;  we would have had to receive only
-     * partial gap buffers, which would imply a bug in the code that
+    /* the condition of having only partial gap buffers and nothing else is
+     * not possible.  getting here implies a bug in the code that
      * determines the times spanned by the available input buffers */
     g_assert_not_reached();
   } else
