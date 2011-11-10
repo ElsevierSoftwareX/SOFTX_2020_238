@@ -720,7 +720,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		GST_DEBUG_OBJECT(element, "output is %u samples followed by %u sample gap", output_length - gap_length, gap_length);
 
 		g_mutex_unlock(element->autocorrelation_lock);
-		result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, (output_length - gap_length) * autocorrelation_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
+		result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, (output_length - gap_length) * autocorrelation_channels(element) * sizeof(double), GST_BUFFER_CAPS(outbuf), &buf);
+		g_assert(GST_BUFFER_CAPS(buf) != NULL);
 		if(result != GST_FLOW_OK)
 			goto done;
 		g_mutex_lock(element->autocorrelation_lock);

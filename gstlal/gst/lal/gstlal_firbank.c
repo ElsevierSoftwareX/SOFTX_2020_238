@@ -620,7 +620,7 @@ static unsigned filter(GSTLALFIRBank *element, GstBuffer *outbuf)
  */
 
 
-static GstFlowReturn filter_and_push(GSTLALFIRBank *element, guint64 output_length)
+static GstFlowReturn filter_and_push(GSTLALFIRBank *element, GstCaps *caps, guint64 output_length)
 {
 	GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
 	GstBuffer *buf;
@@ -633,7 +633,8 @@ static GstFlowReturn filter_and_push(GSTLALFIRBank *element, guint64 output_leng
 
 	if(!output_length)
 		return GST_FLOW_OK;
-	result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, output_length * fir_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
+	result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, output_length * fir_channels(element) * sizeof(double), caps, &buf);
+	g_assert(GST_BUFFER_CAPS(buf) != NULL);
 	if(result != GST_FLOW_OK)
 		return result;
 	filter_output_length = filter(element, buf);
@@ -650,6 +651,7 @@ static GstFlowReturn filter_and_push(GSTLALFIRBank *element, guint64 output_leng
 
 static GstFlowReturn flush_history(GSTLALFIRBank *element)
 {
+	GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
 	unsigned available_length;
 	unsigned zeros_in_adapter;
 	unsigned padding;
@@ -706,14 +708,16 @@ static GstFlowReturn flush_history(GSTLALFIRBank *element)
 	 * process contents
 	 */
 
-	result = filter_and_push(element, output_length - final_gap_length);
+	/* FIXME:  the source pad's caps might not be set yet, then what? */
+	result = filter_and_push(element, GST_PAD_CAPS(srcpad), output_length - final_gap_length);
 	if(result != GST_FLOW_OK)
 		goto done;
 	if(final_gap_length) {
-		GstPad *srcpad = GST_BASE_TRANSFORM_SRC_PAD(GST_BASE_TRANSFORM(element));
 		GstBuffer *buf;
 
+		/* FIXME:  the source pad's caps might not be set yet, then what? */
 		result = gst_pad_alloc_buffer(srcpad, element->next_out_offset, final_gap_length * fir_channels(element) * sizeof(double), GST_PAD_CAPS(srcpad), &buf);
+		g_assert(GST_BUFFER_CAPS(buf) != NULL);
 		if(result != GST_FLOW_OK)
 			goto done;
 
@@ -1277,7 +1281,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * generate the first output buffer and push downstream
 		 */
 
-		result = filter_and_push(element, nonzero_output_length);
+		result = filter_and_push(element, GST_BUFFER_CAPS(outbuf), nonzero_output_length);
 		if(result != GST_FLOW_OK)
 			goto done;
 
