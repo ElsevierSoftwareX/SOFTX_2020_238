@@ -24,12 +24,34 @@
 #
 
 
+import matplotlib
+matplotlib.rcParams.update({
+	"font.size": 8.0,
+	"axes.titlesize": 10.0,
+	"axes.labelsize": 10.0,
+	"xtick.labelsize": 8.0,
+	"ytick.labelsize": 8.0,
+	"legend.fontsize": 8.0,
+	"figure.dpi": 100,
+	"savefig.dpi": 100,
+	"text.usetex": True,
+	"path.simplify": True
+})
+from matplotlib import figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy
 
 
-from gstlal.pipeutil import *
-from gstlal import matplotlibhelper
+import pygtk
+pygtk.require("2.0")
+import gobject
+import pygst
+pygst.require('0.10')
+import gst
+
+
 from gstlal import pipeio
+from gstlal.elements import matplotlibcaps
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -46,7 +68,7 @@ __date__ = "FIXME"
 #
 
 
-class Histogram(matplotlibhelper.BaseMatplotlibTransform):
+class Histogram(gst.BaseTransform):
 	__gsttemplates__ = (
 		gst.PadTemplate("sink",
 			gst.PAD_SINK,
@@ -73,15 +95,26 @@ class Histogram(matplotlibhelper.BaseMatplotlibTransform):
 				"signed = (bool) {true, false}"
 			)
 		),
-		matplotlibhelper.BaseMatplotlibTransform.__gsttemplates__
+		gst.PadTemplate("src",
+			gst.PAD_SRC,
+			gst.PAD_ALWAYS,
+			gst.caps_from_string(
+				matplotlibcaps + ", " +
+				"width = (int) [1, MAX], " +
+				"height = (int) [1, MAX], " +
+				"framerate = (fraction) [0, MAX]"
+			)
+		)
 	)
 
 
 	def __init__(self):
-		super(Histogram, self).__init__()
+		gst.BaseTransform.__init__(self)
 		self.channels = None
 		self.in_rate = None
 		self.out_rate = None
+		self.out_width = 320	# default
+		self.out_height = 200	# default
 		self.instrument = None
 		self.channel_name = None
 		self.sample_units = None
@@ -94,6 +127,8 @@ class Histogram(matplotlibhelper.BaseMatplotlibTransform):
 		self.channels = channels
 		self.in_rate = incaps[0]["rate"]
 		self.out_rate = outcaps[0]["framerate"]
+		self.out_width = outcaps[0]["width"]
+		self.out_height = outcaps[0]["height"]
 		return True
 
 
@@ -102,6 +137,10 @@ class Histogram(matplotlibhelper.BaseMatplotlibTransform):
 		self.offset0 = None
 		self.next_out_offset = None
 		return True
+
+
+	def do_get_unit_size(self, caps):
+		return pipeio.get_unit_size(caps)
 
 
 	def do_event(self, event):
@@ -128,21 +167,31 @@ class Histogram(matplotlibhelper.BaseMatplotlibTransform):
 		# generate histogram
 		#
 
-		axes = self.axes
-		axes.clear()
+		fig = figure.Figure()
+		FigureCanvas(fig)
+		fig.set_size_inches(self.out_width / float(fig.get_dpi()), self.out_height / float(fig.get_dpi()))
+		axes = fig.gca(yscale = "log", rasterized = True)
 		for channel in numpy.transpose(samples)[:]:
 			axes.hist(channel, bins = 101, histtype = "step")
-		axes.set_yscale("log")
 		axes.grid(True)
 		axes.set_xlabel(r"Amplitude (%s)" % ((self.sample_units is not None) and (str(self.sample_units) or "dimensionless") or "unkown units"))
 		axes.set_ylabel(r"Count")
 		axes.set_title(r"%s, %s (%.9g s -- %.9g s)" % (self.instrument or "Unknown Instrument", self.channel_name or "Unknown Channel", float(outbuf.timestamp) / gst.SECOND, float(outbuf.timestamp + outbuf.duration) / gst.SECOND))
 
 		#
+		# extract pixel data
+		#
+
+		fig.canvas.draw()
+		rgba_buffer = fig.canvas.buffer_rgba(0, 0)
+		rgba_buffer_size = len(rgba_buffer)
+
+		#
 		# copy pixel data to output buffer
 		#
 
-		matplotlibhelper.render(self.figure, outbuf)
+		outbuf[0:rgba_buffer_size] = rgba_buffer
+		outbuf.datasize = rgba_buffer_size
 
 		#
 		# done
@@ -187,7 +236,7 @@ class Histogram(matplotlibhelper.BaseMatplotlibTransform):
 			return gst.FLOW_CUSTOM_SUCCESS
 
 		while len(self.buf) >= 2 * samples_per_frame:
-			flow_return, newoutbuf = self.get_pad("src").alloc_buffer(self.next_out_offset, outbuf.size, outbuf.caps)
+			flow_return, newoutbuf = self.get_pad("src").alloc_buffer(self.next_out_offset, self.out_width * self.out_height * 4, outbuf.caps)
 			self.get_pad("src").push(self.make_frame(self.buf[:samples_per_frame], newoutbuf))
 			self.buf = self.buf[samples_per_frame:]
 		self.make_frame(self.buf[:samples_per_frame], outbuf)
@@ -198,6 +247,24 @@ class Histogram(matplotlibhelper.BaseMatplotlibTransform):
 		#
 
 		return gst.FLOW_OK
+
+
+	def do_transform_caps(self, direction, caps):
+		if direction == gst.PAD_SRC:
+			#
+			# convert src pad's caps to sink pad's
+			#
+
+			return self.get_pad("sink").get_fixed_caps_func()
+
+		elif direction == gst.PAD_SINK:
+			#
+			# convert sink pad's caps to src pad's
+			#
+
+			return self.get_pad("src").get_fixed_caps_func()
+
+		raise ValueError
 
 
 	def do_transform_size(self, direction, caps, size, othercaps):
@@ -220,8 +287,27 @@ class Histogram(matplotlibhelper.BaseMatplotlibTransform):
 				return 0
 			return samples * (othercaps[0]["width"] // 8) * othercaps[0]["channels"]
 
-		else:
-			return super(Histogram, self).do_transform_size(direction, caps, size, othercaps)
+		elif direction == gst.PAD_SINK:
+			#
+			# convert byte count on sink pad plus samples we
+			# already have to frame count on src pad.
+			#
+
+			frames = (int(size * 8 / caps[0]["width"]) // caps[0]["channels"] + len(self.buf)) / samples_per_frame
+
+			#
+			# if there's enough for at least one frame, claim
+			# output size will be 1 frame.  additional buffers
+			# will be created as needed
+			#
+
+			if frames < 1:
+				return 0
+			# FIXME:  why is othercaps not the *other* caps?
+			return self.out_width * self.out_height * 4
+			return othercaps[0]["width"] * othercaps[0]["height"] * othercaps[0]["bpp"] / 8
+
+		raise ValueError, direction
 
 
 gobject.type_register(Histogram)

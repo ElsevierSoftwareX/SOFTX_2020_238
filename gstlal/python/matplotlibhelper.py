@@ -106,7 +106,6 @@ class BaseMatplotlibTransform(gst.BaseTransform):
 	__gsttemplates__ = padtemplate
 
 	def __init__(self):
-		super(BaseMatplotlibTransform, self).__init__()
 		self.figure = figure()
 		self.axes = self.figure.gca()
 
