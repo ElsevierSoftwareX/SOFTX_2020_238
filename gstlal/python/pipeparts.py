@@ -43,7 +43,6 @@ from pylal.datatypes import LIGOTimeGPS
 
 import pipeio
 from elements.histogram import mkhistogram
-from elements.spectrum import mkspectrumplot
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -72,6 +71,16 @@ def mkgeneric(pipeline, src, elem_type_name, **properties):
 
 def mkchannelgram(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "lal_channelgram", **properties)
+
+
+def mkspectrumplot(pipeline, src, pad = None):
+	elem = gst.element_factory_make("lal_spectrumplot")
+	pipeline.add(elem)
+	if pad is not None:
+		src.link_pads(pad, elem, "sink")
+	else:
+		src.link(elem)
+	return elem
 
 
 def mksegmentsrc(pipeline, segment_list, blocksize = 4096 * 1 * 1, invert_output=False):

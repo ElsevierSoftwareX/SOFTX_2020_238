@@ -1,4 +1,4 @@
-# Copyright (C) 2009  Kipp Cannon
+# Copyright (C) 2009--2011  Kipp Cannon
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -53,6 +53,7 @@ pygst.require('0.10')
 import gst
 
 
+from gstlal import pipeutil
 from gstlal import pipeio
 from gstlal.elements import matplotlibcaps
 
@@ -71,7 +72,14 @@ __date__ = "FIXME"
 #
 
 
-class Spectrum(gst.BaseTransform):
+class lal_spectrumplot(gst.BaseTransform):
+	__gstdetails__ = (
+		"Power spectrum plot",
+		"Plots",
+		"Generates a video showing a power spectrum (e.g., as measured by lal_whiten)",
+		__author__
+	)
+
 	__gsttemplates__ = (
 		gst.PadTemplate("sink",
 			gst.PAD_SINK,
@@ -238,14 +246,4 @@ class Spectrum(gst.BaseTransform):
 		raise ValueError, direction
 
 
-gobject.type_register(Spectrum)
-
-
-def mkspectrumplot(pipeline, src, pad = None):
-	elem = Spectrum()
-	pipeline.add(elem)
-	if pad is not None:
-		src.link_pads(pad, elem, "sink")
-	else:
-		src.link(elem)
-	return elem
+pipeutil.gstlal_element_register(lal_spectrumplot)
