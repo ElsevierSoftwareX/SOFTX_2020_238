@@ -1,4 +1,4 @@
-# Copyright (C) 2009  LIGO Scientific Collaboration
+# Copyright (C) 2009--2011  LIGO Scientific Collaboration
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -27,13 +27,6 @@
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
 __version__ = "FIXME"
 __date__ = "FIXME"
-
-
-__all__ = [
-	"channelgram",
-	"histogram",
-	"spectrum"
-]
 
 
 #

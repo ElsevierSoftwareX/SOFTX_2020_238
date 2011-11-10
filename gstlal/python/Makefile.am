@@ -1,4 +1,3 @@
-SUBDIRS = elements
 INCLUDES = -I$(top_srcdir)/lib
 
 # This is a trick taken from the gst-python automake setup.
@@ -13,6 +12,7 @@ pkgpythondir = $(pkgpyexecdir)
 
 pkgpython_PYTHON = \
 	__init__.py \
+	elements.py \
 	lloidparts.py \
 	matplotlibhelper.py \
 	misc.py \
