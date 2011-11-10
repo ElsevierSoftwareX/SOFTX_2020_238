@@ -42,7 +42,6 @@ from pylal.datatypes import LIGOTimeGPS
 
 
 import pipeio
-from elements.channelgram import mkchannelgram
 from elements.histogram import mkhistogram
 from elements.spectrum import mkspectrumplot
 
@@ -69,6 +68,10 @@ def mkgeneric(pipeline, src, elem_type_name, **properties):
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
+
+
+def mkchannelgram(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "lal_channelgram", **properties)
 
 
 def mksegmentsrc(pipeline, segment_list, blocksize = 4096 * 1 * 1, invert_output=False):

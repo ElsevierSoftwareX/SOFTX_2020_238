@@ -52,6 +52,7 @@ import gst
 from gst.extend.pygobject import gproperty
 
 
+from gstlal import pipeutil
 from gstlal import pipeio
 from gstlal.elements import matplotlibcaps
 
@@ -64,7 +65,7 @@ __date__ = "FIXME"
 #
 # =============================================================================
 #
-#                                   Element
+#                                  Utilities
 #
 # =============================================================================
 #
@@ -143,7 +144,23 @@ def yticks(min, max, n):
 	return sorted(set(min + int(round(delta * i)) for i in range(n + 1)))
 
 
-class Channelgram(gst.BaseTransform):
+#
+# =============================================================================
+#
+#                                   Element
+#
+# =============================================================================
+#
+
+
+class lal_channelgram(gst.BaseTransform):
+	__gstdetails__ = (
+		"Scrolling channel amplitude plot",
+		"Plots",
+		"Generates video showing a scrolling plot of channel amplitudes",
+		__author__
+	)
+
 	gproperty(
 		gobject.TYPE_DOUBLE,
 		"plot-width",
@@ -430,13 +447,9 @@ class Channelgram(gst.BaseTransform):
 		raise ValueError, direction
 
 
-gobject.type_register(Channelgram)
+#
+# register element class
+#
 
 
-def mkchannelgram(pipeline, src, **kwargs):
-	elem = Channelgram()
-	for name, value in kwargs.items():
-		elem.set_property(name, value)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+pipeutil.gstlal_element_register(lal_channelgram)
