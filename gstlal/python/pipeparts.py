@@ -42,7 +42,6 @@ from pylal.datatypes import LIGOTimeGPS
 
 
 import pipeio
-from elements.histogram import mkhistogram
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
@@ -81,6 +80,10 @@ def mkspectrumplot(pipeline, src, pad = None):
 	else:
 		src.link(elem)
 	return elem
+
+
+def mkhistogram(pipeline, src):
+	return mkgeneric(pipeline, src, "lal_histogramplot")
 
 
 def mksegmentsrc(pipeline, segment_list, blocksize = 4096 * 1 * 1, invert_output=False):

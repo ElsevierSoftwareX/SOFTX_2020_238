@@ -50,6 +50,7 @@ pygst.require('0.10')
 import gst
 
 
+from gstlal import pipeutil
 from gstlal import pipeio
 from gstlal.elements import matplotlibcaps
 
@@ -68,7 +69,14 @@ __date__ = "FIXME"
 #
 
 
-class Histogram(gst.BaseTransform):
+class lal_histogramplot(gst.BaseTransform):
+	__gstdetails__ = (
+		"Histogram plot",
+		"Plots",
+		"Generates a video showing a histogram of the input time series",
+		__author__
+	)
+
 	__gsttemplates__ = (
 		gst.PadTemplate("sink",
 			gst.PAD_SINK,
@@ -310,11 +318,4 @@ class Histogram(gst.BaseTransform):
 		raise ValueError, direction
 
 
-gobject.type_register(Histogram)
-
-
-def mkhistogram(pipeline, src):
-	elem = Histogram()
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+pipeutil.gstlal_element_register(lal_histogramplot)

@@ -47,7 +47,7 @@ def test_histogram(pipeline):
 	head = pipeparts.mkprogressreport(pipeline, pipeparts.mkframesrc(pipeline, location = "/home/kipp/scratch_local/874100000-20000/cache/874000000-20000.cache", instrument = "H1", channel_name = "LSC-STRAIN"), "src")
 	head = pipeparts.mkwhiten(pipeline, head)
 	pipeparts.mkvideosink(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkspectrumplot(pipeline, head, pad = "psd"), "video/x-raw-rgb, width=640, height=480")))
-	pipeparts.mkvideosink(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogram(pipeline, head), "video/x-raw-rgb, width=640, height=480, framerate=1/4")))
+	pipeparts.mkvideosink(pipeline, pipeparts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogramplot(pipeline, head), "video/x-raw-rgb, width=640, height=480, framerate=1/4")))
 
 
 def test_channelgram(pipeline):
@@ -72,7 +72,7 @@ def test_sumsquares(pipeline):
 	pipeline.add(head)
 	head = pipeparts.mkprogressreport(pipeline, pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=2048, channels=2"), "src")
 	head = pipeparts.mksumsquares(pipeline, head)
-	pipeparts.mkvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogram(pipeline, head), "video/x-raw-rgb, width=640, height=480, framerate=1/8"))
+	pipeparts.mkvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkhistogramplot(pipeline, head), "video/x-raw-rgb, width=640, height=480, framerate=1/8"))
 
 
 def test_firbank(pipeline):
