@@ -237,7 +237,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 		element->autocorrelation_matrix = gstlal_gsl_matrix_complex_from_g_value_array(g_value_get_boxed(value));
 		channels = autocorrelation_channels(element);
-		//FIXME doesn't support changing the number of channels dynamically !!!
+		/* FIXME doesn't support changing the number of channels dynamically !!! */
 		if (! element->maxdata)
 			element->maxdata = gstlal_double_complex_peak_samples_and_values_new(channels);
 		element->maxdata->pad = autocorrelation_length(element) / 2;
