@@ -593,6 +593,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			pipeline.add(branch_heads[rate])
 			for head in heads:
 				pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration).link(branch_heads[rate])
+			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, branch_heads[rate], "audio/x-raw-float, rate=%d" % rate)
 			branch_heads[rate] = pipeparts.mkchecktimestamps(pipeline, branch_heads[rate], "timestamps_%s_after_%d_snr_adder" % (logname, rate))
 		else:
 			#
@@ -814,7 +815,8 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 			# FIXME don't hardcode
 			# peak finding window (n) in samples is one second at max rate, ie max(rates)
 			head = pipeparts.mkitac(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, snr_thresh = bank.snr_threshold)
-			head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
+			if verbose:
+				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
 			triggersrcs.add(head)
 			# old way
 			# snr = pipeparts.mktee(pipeline, snr)
