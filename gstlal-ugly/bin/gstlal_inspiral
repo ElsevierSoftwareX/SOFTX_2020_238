@@ -349,26 +349,28 @@ if options.write_pipeline is not None:
 	#
 
 	class AppsinkDumpDot(object):
-		lock = threading.Lock()
+		# data shared by all instances
+		# number of times execute method has been invoked, and a mutex
+		n_lock = threading.Lock()
 		n = 0
-		write_after = len(appsinks)
-		pipeline = pipeline
-		filestem = "%s.%s" % (options.write_pipeline, "TRIGGERS")
-		verbose = options.verbose
 
-		def __init__(self):
+		def __init__(self, pipeline, write_after, basename, verbose = False):
+			self.pipeline = pipeline
 			self.handler_id = None
+			self.write_after = write_after
+			self.filestem = "%s.%s" % (basename, "TRIGGERS")
+			self.verbose = verbose
 
 		def execute(self, elem):
-			self.lock.acquire()
-			self.n += 1
+			self.n_lock.acquire()
+			type(self).n += 1
 			if self.n >= self.write_after:
 				pipeparts.write_dump_dot(self.pipeline, self.filestem, verbose = self.verbose)
-			self.lock.release()
+			self.n_lock.release()
 			elem.disconnect(self.handler_id)
 
 	for sink in appsinks:
-		appsink_dump_dot = AppsinkDumpDot()
+		appsink_dump_dot = AppsinkDumpDot(pipeline, len(appsinks), basename = options.write_pipeline, verbose = options.verbose)
 		appsink_dump_dot.handler_id = sink.connect_after("new-buffer", appsink_dump_dot.execute)
 
 
