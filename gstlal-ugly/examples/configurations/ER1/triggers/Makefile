@@ -1,9 +1,9 @@
 START = 871147452
 STOP =  871152452
-H1_BANK_CACHE = ../bank2/H1_reference_psd_svd_bank.cache
-H2_BANK_CACHE = ../bank2/H1_reference_psd_svd_bank.cache
-L1_BANK_CACHE = ../bank2/L1_reference_psd_svd_bank.cache
-V1_BANK_CACHE = ../bank2/V1_reference_psd_svd_bank.cache
+H1_BANK_CACHE = ../bank1/H1_reference_psd_svd_bank.cache
+H2_BANK_CACHE = ../bank1/H2_reference_psd_svd_bank.cache
+L1_BANK_CACHE = ../bank1/L1_reference_psd_svd_bank.cache
+V1_BANK_CACHE = ../bank1/V1_reference_psd_svd_bank.cache
 FRAME_CACHE = ../frames/frame.cache
 NUMBANKS = 6
 SEED = 1
