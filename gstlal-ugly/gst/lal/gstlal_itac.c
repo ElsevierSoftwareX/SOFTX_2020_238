@@ -229,12 +229,22 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	}
 
 	case ARG_AUTOCORRELATION_MATRIX: {
+		unsigned channels;
 		g_mutex_lock(element->bank_lock);
 
 		if(element->autocorrelation_matrix)
 			gsl_matrix_complex_free(element->autocorrelation_matrix);
 
 		element->autocorrelation_matrix = gstlal_gsl_matrix_complex_from_g_value_array(g_value_get_boxed(value));
+		channels = autocorrelation_channels(element);
+		/* FIXME doesn't support changing the number of channels dynamically !!! */
+		if (! element->maxdata)
+			element->maxdata = gstlal_double_complex_peak_samples_and_values_new(channels);
+		element->maxdata->pad = autocorrelation_length(element) / 2;
+		if (element->snr_mat) {
+			free(element->snr_mat);
+			}
+		element->snr_mat = (complex double *) calloc(channels * autocorrelation_length(element), sizeof(complex double));
 
 		/*
 		 * induce norms to be recomputed
@@ -300,12 +310,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_mutex_lock(element->bank_lock);
 		if(element->autocorrelation_matrix)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_complex(element->autocorrelation_matrix));
-		/* FIXME:  else? */
-		/* FIXME:  the norms need to be recomputed somewhere else
-		 * if the mask feature is ever implemented */
-		if(element->autocorrelation_norm)
-			gsl_vector_free(element->autocorrelation_norm);
-		element->autocorrelation_norm = gstlal_autocorrelation_chi2_compute_norms(element->autocorrelation_matrix, NULL);
+		else {
+			GST_WARNING_OBJECT(element, "no autocorrelation matrix");
+			g_value_take_boxed(value, g_value_array_new(0));
+			}
 		g_mutex_unlock(element->bank_lock);
 		break;
 
@@ -324,50 +332,6 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
  *                                  Sink Pad
  *
  * ============================================================================
- */
-
-
-/*
- * getcaps()
- */
-
-
-static GstCaps *getcaps(GstPad * pad)
-{
-	GSTLALItac *element = GSTLAL_ITAC(gst_pad_get_parent(pad));
-	GstCaps *peercaps, *caps;
-
-	/*
-	 * get our own allowed caps.  use the fixed caps function to avoid
-	 * recursing back into this function.
-	 */
-
-	caps = gst_pad_get_fixed_caps_func(pad);
-
-	/*
-	 * get the allowed caps from the downstream peer if the peer has
-	 * caps, intersect without our own.
-	 */
-
-	peercaps = gst_pad_peer_get_caps_reffed(element->srcpad);
-	if(peercaps) {
-		GstCaps *result = gst_caps_intersect(peercaps, caps);
-		gst_caps_unref(peercaps);
-		gst_caps_unref(caps);
-		caps = result;
-	}
-
-	/*
-	 * done
-	 */
-
-	gst_object_unref(element);
-	return caps;
-}
-
-
-/*
- * setcaps()
  */
 
 
@@ -391,13 +355,6 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 		success = FALSE;
 
 	/*
-	 * try setting caps on downstream element
-	 */
-
-	if(success)
-		success = gst_pad_set_caps(element->srcpad, caps);
-
-	/*
 	 * update the element metadata
 	 */
 
@@ -405,11 +362,8 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 		element->channels = channels;
 		element->rate = rate;
 		g_object_set(element->adapter, "unit-size", width / 8 * channels, NULL);
-		element->maxdata = gstlal_double_complex_peak_samples_and_values_new(channels);
-		//FIXME get this number from the autocorrelation matrix size!!!
-		element->maxdata->pad = 5;
-		//FIXME set this only once we have the autocorrelation matrix!!
-		element->snr_mat = gsl_matrix_complex_calloc(element->channels, element->maxdata->pad);
+		if (! element->maxdata)
+			element->maxdata = gstlal_double_complex_peak_samples_and_values_new(channels);
 	}
 
 	/*
@@ -419,6 +373,7 @@ static gboolean setcaps(GstPad *pad, GstCaps *caps)
 	gst_object_unref(element);
 	return success;
 }
+
 
 
 /*
@@ -433,8 +388,10 @@ static void update_state(GSTLALItac *element, GstBuffer *srcbuf)
 
 static GstFlowReturn push_buffer(GSTLALItac *element, GstBuffer *srcbuf)
 {
+	GstFlowReturn result = GST_FLOW_OK;
 	GST_DEBUG_OBJECT(element, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
-	return gst_pad_push(element->srcpad, srcbuf);
+	result =  gst_pad_push(element->srcpad, srcbuf);
+	return result;
 }
 
 static GstFlowReturn push_gap(GSTLALItac *element, guint samps)
@@ -444,7 +401,7 @@ static GstFlowReturn push_gap(GSTLALItac *element, guint samps)
 	/* Clearing the max data structure causes the resulting buffer to be a GAP */
 	gstlal_double_complex_peak_samples_and_values_clear(element->maxdata);
 	/* create the output buffer */
-	srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate);
+	srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate, NULL);
 	/* set the time stamp and offset state */
 	update_state(element, srcbuf);
 	/* push the result */
@@ -456,25 +413,33 @@ static GstFlowReturn push_nongap(GSTLALItac *element, guint copysamps, guint out
 {
 	GstBuffer *srcbuf = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
-	double chi2[autocorrelation_channels(element)];
 	double complex *dataptr = NULL;
 
+	/* make sure the snr threshold is up-to-date */
+	element->maxdata->thresh = element->snr_thresh;
 	/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
 	gst_audioadapter_copy(element->adapter, element->data, copysamps, NULL, NULL);
 	/* put the data pointer one pad length in */
 	dataptr = element->data + element->maxdata->pad * element->maxdata->channels;
 	/* Find the peak */
 	gstlal_double_complex_peak_over_window(element->maxdata, dataptr, outsamps);
-	/* extract data around peak for chisq calculation */
-	gstlal_double_complex_series_around_peak(element->maxdata, element->data, element->snr_mat, copysamps);
-	/* compute \chi^2 values */
-	g_assert(autocorrelation_channels(element) == element->snr_mat->size1);
-	g_assert(autocorrelation_length(element) == element->snr_mat->size2);
-	g_assert(autocorrelation_length(element) & 1);	/* must be odd */
-	gstlal_autocorrelation_chi2(chi2, (complex double *) element->snr_mat->data, autocorrelation_length(element), (autocorrelation_length(element) + 1) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
-
-	/* create the output buffer */
-	srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
+	/* compute \chi^2 values if we can */
+	if (element->autocorrelation_matrix) {
+		/* FIXME preallocate? */
+		double chi2[autocorrelation_channels(element)];
+		/* compute the chisq norm if it doesn't exist */
+		if (!element->autocorrelation_norm)
+			element->autocorrelation_norm = gstlal_autocorrelation_chi2_compute_norms(element->autocorrelation_matrix, NULL);
+		/* extract data around peak for chisq calculation */
+		gstlal_double_complex_series_around_peak(element->maxdata, dataptr, element->snr_mat, element->maxdata->pad);
+		g_assert(autocorrelation_length(element) & 1);	/* must be odd */
+		gstlal_autocorrelation_chi2(chi2, element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
+		/* create the output buffer */
+		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, chi2);
+		}
+	else
+		srcbuf = gstlal_snglinspiral_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, NULL);
+		
 	/* set the time stamp and offset state */
 	update_state(element, srcbuf);
 	/* push the result */
@@ -629,6 +594,31 @@ static void finalize(GObject *object)
 	gst_object_unref(element->srcpad);
 	element->srcpad = NULL;
 	g_object_unref(element->adapter);
+	if (element->instrument) {
+		free(element->instrument);
+		element->instrument = NULL;
+		}
+	if (element->channel_name) {
+		free(element->channel_name);
+		element->channel_name = NULL;
+		}
+	if (element->bankarray)
+		free_bank(element);
+	if (element->maxdata) {
+		free(element->maxdata);
+		element->maxdata = NULL;
+		}
+	if (element->data) {
+		free(element->data);
+		element->data = NULL;
+		}
+	if(element->snr_mat) {
+		free(element->snr_mat);
+	}
+	if(element->autocorrelation_matrix) {
+		gsl_matrix_complex_free(element->autocorrelation_matrix);
+		element->autocorrelation_matrix = NULL;
+	}
 	if(element->autocorrelation_norm) {
 		gsl_vector_free(element->autocorrelation_norm);
 		element->autocorrelation_norm = NULL;
@@ -682,6 +672,7 @@ static void base_init(gpointer class)
 			gst_caps_from_string("application/x-lal-snglinspiral")
 		)
 	);
+
 }
 
 
@@ -755,6 +746,31 @@ static void class_init(gpointer class, gpointer class_data)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);
+	
+	g_object_class_install_property(
+		gobject_class,
+		ARG_AUTOCORRELATION_MATRIX,
+		g_param_spec_value_array(
+			"autocorrelation-matrix",
+			"Autocorrelation Matrix",
+			"Array of complex autocorrelation vectors.  Number of vectors (rows) in matrix sets number of channels.  All vectors must have the same length.",
+			g_param_spec_value_array(
+				"autocorrelation",
+				"Autocorrelation",
+				"Array of autocorrelation samples.",
+				/* FIXME:  should be complex */
+				g_param_spec_double(
+					"sample",
+					"Sample",
+					"Autocorrelation sample",
+					-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+				),
+				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			),
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 }
 
 
@@ -772,25 +788,26 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	/* configure (and ref) sink pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_getcaps_function(pad, GST_DEBUG_FUNCPTR(getcaps));
 	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(setcaps));
 	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
 	gst_pad_set_event_function(pad, GST_DEBUG_FUNCPTR(sink_event));
 	element->sinkpad = pad;
+	gst_pad_use_fixed_caps(pad);
 
 	/* retrieve (and ref) src pad */
 	pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
 	element->srcpad = pad;
 
-	gst_pad_use_fixed_caps(pad);
 	{
 	GstCaps *caps = gst_caps_copy(gst_pad_get_pad_template_caps(pad));
 	gst_pad_set_caps(pad, caps);
 	gst_caps_unref(caps);
 	}
-
+	gst_pad_use_fixed_caps(pad);
+	
 	/* internal data */
 	element->rate = 0;
+	element->snr_thresh = 0;
 	reset_time_and_offset(element);
 	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
 	element->instrument = NULL;
@@ -803,6 +820,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->last_gap = TRUE;
 	element->EOS = FALSE;
 	element->snr_mat = NULL;
+	element->autocorrelation_matrix = NULL;
 	element->autocorrelation_norm = NULL;
 }
 

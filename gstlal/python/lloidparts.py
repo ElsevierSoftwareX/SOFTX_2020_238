@@ -412,10 +412,21 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	# need to be here, or it might be a symptom of a bug elsewhere.
 	# figure this out.
 
-	src = pipeparts.mkfirbank(pipeline, src, latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1, fir_matrix = bank_fragment.orthogonal_template_bank, block_stride = fir_stride * bank_fragment.rate, time_domain = max(bank.get_rates()) / bank_fragment.rate >= 32)
+	latency = -int(round(bank_fragment.start * bank_fragment.rate)) - 1
+	block_stride = fir_stride * bank_fragment.rate
+	
+	# we figure an fft costs ~5 logN flops where N is duration + block
+	# stride.  For each chunk you have to do a forward and a reverse fft.
+	# Time domain costs N * block_stride. So if block stride is less than
+	# about 10logN you might as well do time domain filtering
+	# FIXME This calculation should probably be made more rigorous
+	time_domain = 10 * numpy.log2((bank_fragment.end - bank_fragment.start) * bank_fragment.rate + block_stride) > block_stride
+
+	src = pipeparts.mkfirbank(pipeline, src, latency = latency, fir_matrix = bank_fragment.orthogonal_template_bank, block_stride = block_stride, time_domain = time_domain)
 	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank" % logname)
-	src = pipeparts.mkreblock(pipeline, src, block_duration = control_peak_time * gst.SECOND)
-	src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank_reblock" % logname)
+	# uncomment reblock if you ever use really big ffts and want to cut them down a bit
+	#src = pipeparts.mkreblock(pipeline, src, block_duration = control_peak_time * gst.SECOND)
+	#src = pipeparts.mkchecktimestamps(pipeline, src, "timestamps_%s_after_firbank_reblock" % logname)
 	#src = pipeparts.mktee(pipeline, src)	# comment-out the tee below if this is uncommented
 	#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, src), "orthosnr_%s.dump" % logname, segment = nxydump_segment)
 
@@ -582,6 +593,8 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 			pipeline.add(branch_heads[rate])
 			for head in heads:
 				pipeparts.mkqueue(pipeline, head, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration).link(branch_heads[rate])
+			# FIXME capsfilter shouldn't be needed remove when adder is fixed
+			branch_heads[rate] = pipeparts.mkcapsfilter(pipeline, branch_heads[rate], "audio/x-raw-float, rate=%d" % rate)
 			branch_heads[rate] = pipeparts.mkchecktimestamps(pipeline, branch_heads[rate], "timestamps_%s_after_%d_snr_adder" % (logname, rate))
 		else:
 			#
@@ -623,6 +636,7 @@ def mkLLOIDhoftToSnrSlices(pipeline, hoftdict, bank, control_snksrc, verbose = F
 
 	snr, = branch_heads.values()	# make sure we've summed down to one stream
 	return pipeparts.mktogglecomplex(pipeline, snr)
+	#return pipeparts.mkcapsfilter(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkcapsfilter(pipeline, snr, "audio/x-raw-float, rate=%d" % output_rate)), "audio/x-raw-complex, rate=%d" % output_rate)
 
 
 def mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, branch_heads, bank, block_duration):
@@ -797,24 +811,32 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 			snrslices = snrslices
 		)
 		snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
+		# FIXME you get a different trigger generator depending on the chisq calculation :/
 		if chisq_type == 'autochisq':
-			snr = pipeparts.mktee(pipeline, snr)
-			chisq = mkLLOIDSnrToAutoChisq(pipeline, pipeparts.mkqueue(pipeline, snr, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * block_duration), bank)
+			# FIXME don't hardcode
+			# peak finding window (n) in samples is one second at max rate, ie max(rates)
+			head = pipeparts.mkitac(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, snr_thresh = bank.snr_threshold)
+			if verbose:
+				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
+			triggersrcs.add(head)
+			# old way
+			# snr = pipeparts.mktee(pipeline, snr)
+			# chisq = mkLLOIDSnrToAutoChisq(pipeline, pipeparts.mkqueue(pipeline, snr, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * block_duration), bank)
 		else:
 			chisq = mkLLOIDSnrSlicesToTimeSliceChisq(pipeline, snrslices, bank, block_duration)
+			triggersrcs.add(mkLLOIDSnrChisqToTriggers(
+				pipeline,
+				pipeparts.mkqueue(pipeline, snr, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration),
+				chisq,
+				bank,
+				verbose = verbose,
+				nxydump_segment = nxydump_segment,
+				logname = suffix
+			))
 		# FIXME:  find a way to use less memory without this hack
 		del bank.autocorrelation_bank
 		#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
 		#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(bank.get_rates())], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
-		triggersrcs.add(mkLLOIDSnrChisqToTriggers(
-			pipeline,
-			pipeparts.mkqueue(pipeline, snr, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration),
-			chisq,
-			bank,
-			verbose = verbose,
-			nxydump_segment = nxydump_segment,
-			logname = suffix
-		))
 
 	#
 	# if there is more than one trigger source, synchronize the streams

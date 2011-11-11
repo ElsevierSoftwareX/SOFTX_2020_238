@@ -109,27 +109,28 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	A gstlal_inspiral node
 	"""
 	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel, reference_psd, svd_bank, tmp_space=log_path(), ht_gate_thresh=20.0, injections=None, control_peak_time = 8, vetoes=None, time_slide_file=None, p_node=[]):
+	def __init__(self, job, dag, gps_start_time, gps_end_time, channel, reference_psd, svd_bank, frame_cache = None, tmp_space=log_path(), ht_gate_thresh=10.0, injections=None, control_peak_time = 4, fir_stride = 4,  p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
-		if time_slide_file is not None:
-			self.add_var_opt("time-slide-file", time_slide_file)
-		self.add_var_opt("frame-cache", frame_cache)
-		self.add_var_opt("frame-segments-file", frame_segments_file)
-		self.add_var_opt("frame-segments-name", frame_segments_name)
+		if frame_cache is None:
+			self.add_var_opt("fake-data", "")
+		else:
+			self.add_var_opt("frame-cache", frame_cache)
 		self.add_var_opt("gps-start-time",gps_start_time)
 		self.add_var_opt("gps-end-time",gps_end_time)
 		self.add_var_opt("channel-name", channel)
-		self.add_var_opt("reference-psd", reference_psd)
+		if reference_psd is not None:
+			self.add_var_opt("reference-psd", reference_psd)
 		self.add_var_opt("svd-bank", svd_bank)
 		self.add_var_opt("tmp-space", tmp_space)
 		self.add_var_opt("track-psd", "")
 		self.add_var_opt("control-peak-time", control_peak_time)
-		#self.add_var_opt("ht-gate-threshold", ht_gate_thresh)
+		self.add_var_opt("fir-stride", fir_stride)
+		if ht_gate_thresh is not None:
+			self.add_var_opt("ht-gate-threshold", ht_gate_thresh)
 		#self.add_var_opt("verbose", "") #Put this in for debugging
 		self.injections = injections
 		if self.injections: self.add_var_opt("injections", injections)
-		if vetoes: self.add_var_opt("veto-segments-file", vetoes)
 		path = os.getcwd()
 		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
 		if self.injections is not None:
@@ -187,7 +188,7 @@ def build_bank_string(cachedict, numbanks = 2):
 		for b in range(numbanks):
 			cnt += 1
 			for ifo, f in filedict.items():
-				if cnt < numbanks:
+				if cnt < numfiles:
 					c += '%s:%s,' % (ifo, lal.CacheEntry(f.readline()).path())
 		c = c.strip(',')
 		yield c
@@ -202,27 +203,19 @@ def cache_to_dict(cachefile):
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the xml file for injections")
-	parser.add_option("--frame-cache", metavar = "filename", help = "Set the frame cache file")
-	parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the frame segments file")
-	parser.add_option("--frame-segments-name", metavar = "name", help = "Set the frame segments name")
+	parser.add_option("--frame-cache", metavar = "filename", help = "Set the frame cache.")
 	parser.add_option("--reference-psd", metavar = "filename", help = "Set the reference psd file.")
 	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
-	parser.add_option("--vetoes", metavar = "filename", help = "Set the veto xml file.")
 	parser.add_option("--gps-start-time", metavar = "GPS", help = "Set the gps start time in seconds", type="int")
 	parser.add_option("--gps-stop-time", metavar = "GPS", help = "Set the gps stop time in seconds", type="int")
-	#FIXME get this from the cache?
-	parser.add_option("--flow", metavar = "freq", help = "Set the gps stop time in seconds", type="float", default=40.0)
 	parser.add_option("--channel", metavar = "name", help = "Set the channel name (default=LSC-STRAIN)", default="LSC-STRAIN")
-	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
-	parser.add_option("--delete-sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
-	parser.add_option("--cluster-sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
-	parser.add_option("--injection-sql-file", metavar = "filename", help = "Set the sql file to apply to injection databases")
-	parser.add_option("--web-dir", metavar = "directory", help = "Set the web directory like /home/USER/public_html")
+	parser.add_option("--ht-gate-threshold", metavar = "float", help = "Set the h(t) gate threshold to reject glitches", type="float")
+	parser.add_option("--num-banks", metavar = "int", type = "int", help = "the number of banks per job")
 	
 	options, filenames = parser.parse_args()
 
 	fail = ""
-	for option in ("frame_cache", "reference_psd", "bank_cache", "gps_start_time", "gps_stop_time"):
+	for option in ("frame_cache", "bank_cache", "gps_start_time", "gps_stop_time"):
 		if getattr(options, option) is None:
 			fail += "must provide option %s\n" % (option)
 	if fail: raise ValueError, fail
@@ -255,13 +248,8 @@ gstlalInspiralJob = gstlal_inspiral_job()
 
 trials_factor = 0
 
-for s in build_bank_string(bank_cache):
-
-	#
-	# non injections
-	#
-
-	noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), options.channel, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, flow=options.flow, time_slide_file=options.time_slide_file)
+for s in build_bank_string(bank_cache, options.num_banks):
+	gstlal_inspiral_node(gstlalInspiralJob, dag, int(options.gps_start_time), int(options.gps_stop_time), options.channel, frame_cache = options.frame_cache, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, ht_gate_thresh = options.ht_gate_threshold)
 
 
 dag.write_sub_files()

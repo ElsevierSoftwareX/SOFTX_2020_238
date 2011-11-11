@@ -212,10 +212,7 @@ def time_slices(
 	# has its time dimension at least as large as its template dimension.
 	# The max size is chosen based on experience, which shows that
 	# SVDs of matrices bigger than m x 8192 are very slow.
-	segment_samples_max = 4096.0
 	segment_samples_min = max(ceil_pow_2( 2*len(m1m2pairs) ),1024)
-	if segment_samples_min >= segment_samples_max:
-		raise ValueError("The input template bank must have fewer than %d templates, but had %d." % (segment_samples_max, 2 * len(m1m2pairs)))
 
 	# For each allowed sampling rate with associated Nyquist frequency fN,
 	# determine the greatest amount of time any template in the bank spends
@@ -226,6 +223,16 @@ def time_slices(
 	time_freq_boundaries = []
 	accum_time = 0
 	for rate in allowed_rates:
+		if rate >= 256:
+			segment_samples_max = 1024.0
+		elif rate >= 64:
+			segment_samples_max = 2048.0
+		else:
+			segment_samples_max = 4096.0
+	
+		if segment_samples_min > segment_samples_max:
+			raise ValueError("The input template bank must have fewer than %d templates, but had %d." % (segment_samples_max, 2 * len(m1m2pairs)))
+
 		this_flow = max( float(rate)/(4*padding), flow )
 		longest_chirp = max(spawaveform.chirptime(m1,m2,7,this_flow,fhigh) for m1,m2 in m1m2pairs )
 
