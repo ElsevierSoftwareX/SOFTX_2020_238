@@ -1,4 +1,5 @@
 # Copyright (C) 2010  Leo Singer
+# Copyright (C) 2010  Drew Keppel
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -19,6 +20,12 @@ http://lhocds.ligo-wa.caltech.edu:8000/advligo/AdvLIGO_noise_curves
 """
 __author__ = "Drew Keppel <drew.keppel@ligo.org>, Leo Singer <leo.singer@ligo.org>"
 
+#
+# The filter design is by Drew Keppel, who added the mkfakeadvLIGOsrc()
+# function to pipeparts.py in Apr 2010 (git hash 232ee6bf97).  The code was
+# subsequently ported to a stand-alone Python element by Leo Singer (git
+# hash c79657d297).
+#
 
 from gstlal.pipeutil import *
 from math import cos, pi, sqrt

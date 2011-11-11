@@ -1,4 +1,5 @@
 # Copyright (C) 2010  Leo Singer
+# Copyright (C) 2009  Drew Keppel
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -15,6 +16,13 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """Generate simulated initial LIGO h(t)"""
 __author__ = "Drew Keppel <drew.keppel@ligo.org>"
+
+#
+# The filter design in this code is by Drew Keppel originally commited to
+# the lloid_gui program in Jul 2009 (git hash d7e01fa5be6) and subsequently
+# migrated into pipeparts.py.  It was converted into a stand-alone Python
+# element by Leo Singer in 2010 (git hash c79657d297)
+#
 
 
 from gstlal.pipeutil import *
