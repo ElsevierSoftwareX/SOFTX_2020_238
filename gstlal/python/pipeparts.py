@@ -700,7 +700,7 @@ def mkitac(pipeline, src, n, bank, autocorrelation_matrix = None, snr_thresh = 0
 	elem.set_property("bank-filename", bank)
 	if autocorrelation_matrix is not None:
 		elem.set_property("autocorrelation-matrix", pipeio.repack_complex_array_to_real(autocorrelation_matrix))
-		elem.set_property("snr-thresh", snr_thresh)
+	elem.set_property("snr-thresh", snr_thresh)
 	pipeline.add(elem)
 	src.link(elem)
 	return elem
