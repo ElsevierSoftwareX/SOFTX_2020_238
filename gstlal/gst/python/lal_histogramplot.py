@@ -50,7 +50,6 @@ pygst.require('0.10')
 import gst
 
 
-from gstlal import pipeutil
 from gstlal import pipeio
 from gstlal.elements import matplotlibcaps
 
@@ -318,4 +317,15 @@ class lal_histogramplot(gst.BaseTransform):
 		raise ValueError, direction
 
 
-pipeutil.gstlal_element_register(lal_histogramplot)
+#
+# register element class
+#
+
+
+gobject.type_register(lal_histogramplot)
+
+__gstelementfactory__ = (
+	lal_histogramplot.__name__,
+	gst.RANK_NONE,
+	lal_histogramplot
+)

@@ -53,7 +53,6 @@ pygst.require('0.10')
 import gst
 
 
-from gstlal import pipeutil
 from gstlal import pipeio
 from gstlal.elements import matplotlibcaps
 
@@ -246,4 +245,15 @@ class lal_spectrumplot(gst.BaseTransform):
 		raise ValueError, direction
 
 
-pipeutil.gstlal_element_register(lal_spectrumplot)
+#
+# register element class
+#
+
+
+gobject.type_register(lal_spectrumplot)
+
+__gstelementfactory__ = (
+	lal_spectrumplot.__name__,
+	gst.RANK_NONE,
+	lal_spectrumplot
+)

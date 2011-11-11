@@ -25,8 +25,14 @@
 
 
 import sys
-from gstlal import pipeutil
-from gstlal.pipeutil import gobject, gst
+
+
+import pygtk
+pygtk.require("2.0")
+import gobject
+import pygst
+pygst.require('0.10')
+import gst
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -260,4 +266,10 @@ class lal_checktimestamps(gst.BaseTransform):
 #
 
 
-pipeutil.gstlal_element_register(lal_checktimestamps)
+gobject.type_register(lal_checktimestamps)
+
+__gstelementfactory__ = (
+	lal_checktimestamps.__name__,
+	gst.RANK_NONE,
+	lal_checktimestamps
+)

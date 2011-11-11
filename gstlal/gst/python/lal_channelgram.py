@@ -52,7 +52,6 @@ import gst
 from gst.extend.pygobject import gproperty
 
 
-from gstlal import pipeutil
 from gstlal import pipeio
 from gstlal.elements import matplotlibcaps
 
@@ -452,4 +451,10 @@ class lal_channelgram(gst.BaseTransform):
 #
 
 
-pipeutil.gstlal_element_register(lal_channelgram)
+gobject.type_register(lal_channelgram)
+
+__gstelementfactory__ = (
+	lal_channelgram.__name__,
+	gst.RANK_NONE,
+	lal_channelgram
+)
