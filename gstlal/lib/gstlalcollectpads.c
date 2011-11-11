@@ -466,6 +466,20 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 	g_assert(GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP) == is_gap);
 
 	/*
+	 * make sure its caps are set.  for some reason we can get buffers
+	 * with NULL caps, but setcaps() must have been called on the sink
+	 * pad so we should be able to copy the caps from there.  I think
+	 * gst_buffer_create_sub() maybe doesn't copy the caps?
+	 */
+	/* FIXME:  I'm going to open a PR for this, and this code should be
+	 * removed when we can rely on a gstreamer new-enough to contain
+	 * the fix */
+
+	if(!GST_BUFFER_CAPS(buf))
+		gst_buffer_set_caps(buf, GST_PAD_CAPS(((GstCollectData *) data)->pad));
+	g_assert(GST_BUFFER_CAPS(buf) != NULL);
+
+	/*
 	 * set the buffer's start and end offsets and time stamp and
 	 * duration relative to the input stream
 	 */
