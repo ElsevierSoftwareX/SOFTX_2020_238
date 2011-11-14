@@ -19,4 +19,5 @@ pkgpython_PYTHON = \
 	far.py \
 	streamthinca.py \
 	omega.py \
-	lloidplots.py
+	lloidplots.py \
+	inspiral.py
