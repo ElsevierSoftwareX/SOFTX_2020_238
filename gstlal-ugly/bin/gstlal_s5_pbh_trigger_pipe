@@ -22,6 +22,7 @@ import glue.ligolw.utils as utils
 import glue.ligolw.utils.segments as ligolw_segments
 from optparse import OptionParser
 from gstlal.svd_bank import read_bank
+from gstlal import inspiral
 
 ###############################################################################
 # environment utilities
@@ -334,7 +335,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	A gstlal_inspiral node
 	"""
 	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel, reference_psd, svd_bank, tmp_space=log_path(), ht_gate_thresh=20.0, injections=None, control_peak_time = 8, vetoes=None, time_slide_file=None, p_node=[]):
+	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, tmp_space=log_path(), ht_gate_thresh=20.0, injections=None, control_peak_time = 8, vetoes=None, time_slide_file=None, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		if time_slide_file is not None:
@@ -344,7 +345,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		self.add_var_opt("frame-segments-name", frame_segments_name)
 		self.add_var_opt("gps-start-time",gps_start_time)
 		self.add_var_opt("gps-end-time",gps_end_time)
-		self.add_var_opt("channel-name", channel)
+		self.add_var_opt("channel-name", inspiral.pipeline_channel_list_from_channel_dict(channel_dict))
 		self.add_var_opt("reference-psd", reference_psd)
 		self.add_var_opt("svd-bank", svd_bank)
 		self.add_var_opt("tmp-space", tmp_space)
@@ -511,7 +512,7 @@ def parse_command_line():
 	parser.add_option("--gps-stop-time", metavar = "GPS", help = "Set the gps stop time in seconds", type="int")
 	#FIXME get this from the cache?
 	parser.add_option("--flow", metavar = "freq", help = "Set the gps stop time in seconds", type="float", default=40.0)
-	parser.add_option("--channel", metavar = "name", help = "Set the channel name (default=LSC-STRAIN)", default="LSC-STRAIN")
+	parser.add_option("--channel", metavar = "name", default = [], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
 	parser.add_option("--delete-sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
 	parser.add_option("--cluster-sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
@@ -528,15 +529,16 @@ def parse_command_line():
 
 	#FIXME add consistency check?
 	bankcache = parse_cache_str(options.bank_cache)
-	
-	return options, filenames, bankcache
+	channel_dict = inspiral.channel_dict_from_channel_list(options.channel)
+
+	return options, filenames, bankcache, channel_dict
 
 
 ###############################################################################
 # MAIN
 ###############################################################################
 
-options, filenames, bank_cache = parse_command_line()
+options, filenames, bank_cache, channel_dict = parse_command_line()
 
 try: os.mkdir("logs")
 except: pass
@@ -576,7 +578,7 @@ for s in build_bank_string(bank_cache):
 
 	far_input_nodes = []
 
-	noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), options.channel, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, flow=options.flow, time_slide_file=options.time_slide_file)
+	noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, flow=options.flow, time_slide_file=options.time_slide_file)
 	far_input_nodes.append(noninjnode)
 	noninj_nodes.append(noninjnode)
 	
@@ -585,7 +587,7 @@ for s in build_bank_string(bank_cache):
 	#
 
 	if options.injections is not None:
-		injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), options.channel, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, vetoes=options.vetoes, flow=options.flow)
+		injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, vetoes=options.vetoes, flow=options.flow)
 		far_input_nodes.append(injnode)
 		inj_nodes.append(injnode)
 		#
