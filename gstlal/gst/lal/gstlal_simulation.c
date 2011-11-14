@@ -800,8 +800,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 */
 
 	if(!element->injection_document) {
-		LIGOTimeGPS start = {-999999999, 0};
-		LIGOTimeGPS end = {+999999999, 0};
+		LIGOTimeGPS start = {-2000000000, 0};
+		LIGOTimeGPS end = {+2000000000, 0};
 		/* earliest and latest possible LIGOTimeGPS */
 		/* FIXME:  hard-coded = BAD BAD BAD */
 		/*XLALINT8NSToGPS(&start, (INT8) 1 << 63);
