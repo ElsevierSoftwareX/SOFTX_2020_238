@@ -94,12 +94,14 @@ static void destroy_injection_document(struct injection_document *doc)
 {
 	if(doc) {
 		XLALDestroySimBurstTable(doc->sim_burst_table_head);
+		doc->sim_burst_table_head = NULL;
 		while(doc->sim_inspiral_table_head) {
 			SimInspiralTable *next = doc->sim_inspiral_table_head->next;
 			XLALFree(doc->sim_inspiral_table_head);
 			doc->sim_inspiral_table_head = next;
 		}
 	}
+	g_free(doc);
 }
 
 
@@ -120,7 +122,7 @@ static struct injection_document *load_injection_document(const char *filename, 
 	 * allocate the document
 	 */
 
-	new = calloc(1, sizeof(*new));
+	new = g_new0(struct injection_document, 1);
 	if(!new) {
 		XLALPrintError("%s(): malloc() failed\n", __func__);
 		XLAL_ERROR_NULL(XLAL_ENOMEM);
@@ -686,6 +688,8 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	GSTLALSimulation *element = GSTLAL_SIMULATION(object);
 
+	GST_OBJECT_LOCK(element);
+
 	switch(id) {
 	case ARG_XML_LOCATION:
 		g_free(element->xml_location);
@@ -698,11 +702,15 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
+
+	GST_OBJECT_UNLOCK(element);
 }
 
 static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
 {
 	GSTLALSimulation *element = GSTLAL_SIMULATION(object);
+
+	GST_OBJECT_LOCK(element);
 
 	switch(id) {
 	case ARG_XML_LOCATION:
@@ -725,6 +733,8 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
+
+	GST_OBJECT_UNLOCK(element);
 }
 
 
@@ -910,6 +920,7 @@ static void finalize(GObject * object)
 	g_free(element->xml_location);
 	element->xml_location = NULL;
 	destroy_injection_document(element->injection_document);
+	element->injection_document = NULL;
 	g_free(element->instrument);
 	element->instrument = NULL;
 	g_free(element->channel_name);
