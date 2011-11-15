@@ -32,7 +32,8 @@ import sys
 import threading
 import warnings
 from optparse import OptionParser
-
+import signal
+import time
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -73,6 +74,8 @@ def excepthook(*args):
 sys.excepthook = excepthook
 
 
+def now():
+	return LIGOTimeGPS(time.time() - 315964786)
 #
 # =============================================================================
 #
@@ -136,8 +139,6 @@ def parse_command_line():
 	# do this before converting option types
 	process_params = ligolw_output.make_process_params(options)
 
-	# FIXME
-	options.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
 
 	# hard-coded.  this number is needed in a few places, and storing
 	# it in with the options is a convenient home
@@ -196,7 +197,37 @@ if options.verbose:
 
 pipeline = gst.Pipeline("gstlal_inspiral")
 mainloop = gobject.MainLoop()
-handler = lloidparts.LLOIDHandler(mainloop, pipeline)
+
+# custom handler
+class LLOIDHandler(object):
+	def __init__(self, mainloop, pipeline):
+		self.mainloop = mainloop
+		self.pipeline = pipeline
+
+		bus = pipeline.get_bus()
+		bus.add_signal_watch()
+		bus.connect("message", self.on_message)
+
+	def on_message(self, bus, message):
+		if message.type == gst.MESSAGE_EOS:
+			print >> sys.stderr, "EOS received"
+			self.pipeline.set_state(gst.STATE_PAUSED)
+			# FIXME we should set null, but if we try it locks
+			# self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
+		elif message.type == gst.MESSAGE_INFO:
+			gerr, dbgmsg = message.parse_info()
+			print >>sys.stderr, "info (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+		elif message.type == gst.MESSAGE_WARNING:
+			gerr, dbgmsg = message.parse_warning()
+			print >>sys.stderr, "warning (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+		elif message.type == gst.MESSAGE_ERROR:
+			gerr, dbgmsg = message.parse_error()
+			self.pipeline.set_state(gst.STATE_NULL)
+			self.mainloop.quit()
+			sys.exit("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg))
+
+handler = LLOIDHandler(mainloop, pipeline)
 
 
 triggersrc = lloidparts.mkLLOIDmulti(
@@ -229,6 +260,8 @@ if options.verbose:
 # build output document
 #
 
+# FIXME approximate GPS now to "infinity"
+options.seg = segments.segment(now(), LIGOTimeGPS(2000000000))
 
 if options.verbose:
 	print >>sys.stderr, "initializing output document ..."
@@ -283,6 +316,18 @@ if options.write_pipeline is not None:
 
 if options.verbose:
 	print >>sys.stderr, "running pipeline ..."
+
+#
+# setup sigint handler to shutdown pipeline
+#
+
+def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.keys()):
+	print >>sys.stderr, "*** SIGINT attempting graceful shutdown... ***"
+	bus = pipeline.get_bus()
+	bus.post(gst.message_new_eos(pipeline))
+
+signal.signal(signal.SIGINT, signal_handler)
+
 mainloop.run()
 
 
@@ -290,6 +335,8 @@ mainloop.run()
 # write output file
 #
 
+# override file name with approximate interval
+output.filename = "%s-%d-%d.sqlite" % (options.output.split(".sqlite")[0], options.seg[0], now())
 
 stream_thinca.flush()
 output.write_output_file(verbose = options.verbose)
