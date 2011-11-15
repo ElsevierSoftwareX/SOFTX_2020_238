@@ -218,18 +218,18 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 			raise ValueError("fake data cannot be %s" % fake_data)
 	elif online_data:
 		assert not fake_data
-		src = pipeparts.mkonlinehoftsrc(pipeline, instrument)
+		src = pipeparts.mkfakesrc(pipeline, instrument, detector.channel, blocksize = 16384 * 8 * 1, volume = 1e-20, is_live = True)
 	else:
 		src = pipeparts.mkframesrc(pipeline, location = detector.frame_cache, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size, segment_list = frame_segments)
 
-	#
-	# seek the data source
-	#
+		#
+		# seek the data source if not live
+		#
 
-	if src.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
-		raise RuntimeError, "Element %s did not want to enter ready state" % src.get_name()
-	if not src.send_event(seekevent):
-		raise RuntimeError, "Element %s did not handle seek event" % src.get_name()
+		if src.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
+			raise RuntimeError, "Element %s did not want to enter ready state" % src.get_name()
+		if not src.send_event(seekevent):
+			raise RuntimeError, "Element %s did not handle seek event" % src.get_name()
 
 	#
 	# convert single precision streams to double precision if needed
