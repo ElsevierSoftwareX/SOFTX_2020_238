@@ -97,6 +97,9 @@ class gstlal_inspiral_job(pipeline.CondorDAGJob):
 		self.add_condor_cmd('getenv','True')
 		self.add_condor_cmd('requirements', '( CAN_RUN_MULTICORE )')
 		self.add_condor_cmd('request_cpus', '8')
+		# these jobs gracefully shutdown with SIGINT
+		self.add_condor_cmd("remove_kill_sig", "15")
+		self.add_condor_cmd("kill_sig", "15")
 		self.add_condor_cmd('+RequiresMultipleCores', 'True')
 		self.tag_base = tag_base
 		self.set_sub_file(tag_base+'.sub')
