@@ -67,7 +67,7 @@ H1-TMPLTBANK-871154847-2048.xml: frame.H.cache
 		--approximant TaylorF2 \
 		--order twoPN \
 		--verbose \
-		--spectrum-type AdvLIGO \
+		--spectrum-type LIGO \
 		&& ./bank_splitter -i H1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ \
 		&& ./bank_splitter -i H2 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ \
 		&& ./bank_splitter -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) $@ \
@@ -82,13 +82,14 @@ ${L1BASENAME} :
 	./psd_xml_from_asd_txt L1 ${L1BASENAME}.txt
 
 reference_psd.xml: ${H1BASENAME} ${H2BASENAME} ${L1BASENAME}
-	./psd_xml_from_asd_txt_new --asd=H1:${H1BASENAME}.txt,H2:${H2BASENAME}.txt,L1:${L1BASENAME}.txt
+	ligolw_add ${H1BASENAME}.xml.gz ${H2BASENAME}.xml.gz ${L1BASENAME}.xml.gz | gzip > reference_psd.xml.gz
+#	./psd_xml_from_asd_txt_new --asd=H1:${H1BASENAME}.txt,H2:${H2BASENAME}.txt,L1:${L1BASENAME}.txt
 
 sql :
 	cat uniqueify_coinc_definer.sql uniqueify_time_slide.sql cluster.sql > simplify_and_cluster.sql
 	cat uniqueify_sim_inspiral.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
 
-dag : H1-TMPLTBANK-871154847-2048.xml ${H1BASENAME} ${H2BASENAME} ${L1BASENAME}
+dag : H1-TMPLTBANK-871154847-2048.xml reference_psd.xml
 	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > H1_split_bank.cache
 	ls *H2_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > H2_split_bank.cache
 	ls *L1_split_bank-H1-TMPLTBANK-871154847-2048.xml | lalapps_path2cache > L1_split_bank.cache
@@ -98,4 +99,4 @@ dag : H1-TMPLTBANK-871154847-2048.xml ${H1BASENAME} ${H2BASENAME} ${L1BASENAME}
 	cat mode_H1-TMPLTBANK-869040003-2048_iir_bank.dag mode_H2-TMPLTBANK-875211248-2048_iir_bank.dag mode_L1-TMPLTBANK-858087370-2048_iir_bank.dag > bank.dag
 
 realclean :
-	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml *split_bank-H1-TMPLTBANK-871154847-2048.xml ${H1BASENAME}.xml.gz ${H2BASENAME}.xml.gz ${L1BASENAME}.xml.gz segments.H.xml logs
+	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml H1-TMPLTBANK-871154847-2048.xml *split_bank-H1-TMPLTBANK-871154847-2048.xml ${H1BASENAME}.xml.gz ${H2BASENAME}.xml.gz ${L1BASENAME}.xml.gz reference_psd.xml.gz segments.H.xml logs
