@@ -47,6 +47,7 @@ import gst
 from glue import segments
 from glue import segmentsUtils
 from glue.ligolw import utils
+from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import ligolw_output
 from gstlal import pipeparts
@@ -79,23 +80,31 @@ def parse_banks(bank_string):
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
 	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
+	parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments (optional).  If this is not provided then all data between --gps-start-time and --gps-end-time will be analyzed.  If this is provided then --frame-segments-name must also be set.")
+	parser.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables in --frame-segments-file (optional, required if --frame-segments-file is given).")
 	parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise.")
-	parser.add_option("--iir-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...")
-	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the injections (optional).")
-	parser.add_option("--nxydump-segment", metavar = "start:stop", default = ":", help = "Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time.")
 	parser.add_option("--gps-start-time", help="GPS start time (required)", type="float")
 	parser.add_option("--gps-end-time", help="GPS end time (required)", type="float")
-	parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the triggers (required)")
+	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
+	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
+	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
 	parser.add_option("--channel-name", metavar="channel", help="set the channel default LSC-STRAIN", default="LSC-STRAIN")
-	parser.add_option("--tmp-space",  metavar="PATH")
-	parser.add_option("--comment",  metavar="str")
-	parser.add_option("--snr-threshold", type="float", help="SNR threshold default 5.5", default=5.5)
+	parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
+	parser.add_option("--nxydump-segment", metavar = "start:stop", default = ":", help = "Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time.")
+	parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the triggers (required)")
 	parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
 	parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
+	parser.add_option("--iir-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...")
+	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets")
+	parser.add_option("--control-peak-time", metavar = "time", type = "int", help = "Set a time window in seconds to find peaks in the control signal")
+	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
+	parser.add_option("--snr-threshold", type="float", help="SNR threshold default 5.5", default=5.5)
 	parser.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.020, help = "Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.")
-	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
+	parser.add_option("--comment",  metavar="str")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 
 	options, filenames = parser.parse_args()
 
@@ -106,13 +115,12 @@ def parse_command_line():
 		raise ValueError("unrecognized value for --fake-data %s" % options.fake_data)
 
 	required_options = ["output"]
-	print "HERE ", required_options
-
-
-
-
 	if options.frame_cache:
 		required_options += ["channel_name", "gps_start_time", "gps_end_time"]
+	if options.frame_segments_file:
+		required_options += ["frame_segments_name"]
+	if options.frame_segments_name:
+		required_options += ["frame_segments_file"]
 
 	missing_options = []
 	if options.iir_bank is None:
@@ -124,8 +132,17 @@ def parse_command_line():
 	# Get the banks and make the detectors
 	iir_banks = parse_banks(options.iir_bank)
 	detectors = {}
+	required_files = []
 	for instrument in set(iir_banks.keys()):
 		detectors[instrument] = lloidparts.DetectorData(options.frame_cache, options.channel_name)
+
+	if options.frame_segments_file:
+		required_files += [options.frame_segments_file]
+	if options.veto_segments_file:
+		required_files += [options.veto_segments_file]
+	missing_files = [filename for filename in required_files if not os.path.exists(filename)]
+	if missing_files:
+		raise ValueError, "files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files))
 
 	process_params = ligolw_output.make_process_params(options) #FIXME override program name
 
@@ -184,6 +201,24 @@ def write_dump_dot(pipeline, filestem, verbose = False):
 
 
 options, filenames, process_params, iir_banks, detectors = parse_command_line()
+
+
+#
+# Parse the segments file(s) if provided
+#
+
+
+if options.frame_segments_file is not None:
+	frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, verbose = options.verbose), options.frame_segments_name).coalesce()
+else:
+	frame_segments = {}
+	for instrument in detectors:
+		frame_segments[instrument] = None
+
+if options.veto_segments_file is not None:
+	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.veto_segments_file, verbose = options.verbose), options.veto_segments_name).coalesce()
+else:
+	veto_segments = None
 
 
 #
@@ -258,12 +293,14 @@ triggersrc = lloidparts.mkSPIIRmulti(
 	fake_data = options.fake_data,
 	online_data = None, # FIXME so that this can use options.online_data,
 	injection_filename = options.injections,
-	ht_gate_threshold = None, # FIXME correct this argument options.ht_gate_threshold,
+	ht_gate_threshold = options.ht_gate_threshold,
+	veto_segments = veto_segments,
 	verbose = options.verbose,
 	nxydump_segment = options.nxydump_segment,
-	frame_segments = None, # FIXME to frame_segments,
+	frame_segments = frame_segments,
 	chisq_type = options.chisq_type,
 	track_psd = options.track_psd,
+	control_peak_time = options.control_peak_time
 )
 
 
@@ -285,6 +322,7 @@ output = ligolw_output.Data(
 	seg = options.seg,
 	out_seg = options.seg, #FIXME make better outseg def?  Maybe pointless now that gstlal inspiral can analyze over frame gaps
 	injection_filename = options.injections,
+	time_slide_file = options.time_slide_file,
 	comment = options.comment,
 	tmp_path = options.tmp_space,
 	verbose = options.verbose
