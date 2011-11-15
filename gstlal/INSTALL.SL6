@@ -33,11 +33,7 @@ ________________________________________________________________________________
 
 3) build lalsuite to the prefix you used in your environment script!!
 
-4) in gstlal setup a remote tracking branch for 'pbh'.
+4) cd into gstlal and build to the same prefix.
 
- $ git checkout -b pbh origin/pbh
-
-6) cd into gstlal and build to the same prefix.
-
-7) cd into gstlal-ugly and build to the same prefix.
+5) cd into gstlal-ugly and build to the same prefix.
 
