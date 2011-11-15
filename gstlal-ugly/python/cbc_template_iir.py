@@ -320,6 +320,11 @@ def get_matrices_from_xml(xmldoc):
 		B[sr] = repack_real_array_to_complex(array.get_array(root, 'b_%d' % (sr,)).array)
 		D[sr] = array.get_array(root, 'd_%d' % (sr,)).array
         autocorrelation = repack_real_array_to_complex(array.get_array(root, 'autocorrelation').array)
+
+        sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+	sigmasq  = sngl_inspiral_table.getColumnByName("sigmasq").asarray()
+	print "sigmasq shape ", sigmasq.shape
+
         return A, B, D, autocorrelation
 
 class Bank(object):
@@ -331,7 +336,9 @@ class Bank(object):
 		self.A, self.B, self.D, self.autocorrelation_bank = get_matrices_from_xml(bank_xmldoc)
 		self.sigmasq=numpy.ones(len(self.autocorrelation_bank)) # FIXME: make sigmasq correct
 
-		self.rates = [int(r) for r in param.get_pyvalue(bank_xmldoc, 'sample_rate').split(',')]
+	def get_rates(self, verbose = False):
+		bank_xmldoc = utils.load_filename(self.template_bank_filename, verbose = verbose)
+		return [int(r) for r in param.get_pyvalue(bank_xmldoc, 'sample_rate').split(',')]
 
 	# FIXME: remove set_template_bank_filename when no longer needed
 	# by trigger generator element
