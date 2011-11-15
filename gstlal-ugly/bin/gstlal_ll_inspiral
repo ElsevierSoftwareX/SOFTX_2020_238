@@ -322,11 +322,12 @@ if options.verbose:
 #
 
 def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.keys()):
-	print >>sys.stderr, "*** SIGINT attempting graceful shutdown... ***"
+	print >>sys.stderr, "*** SIGINT/SIGTERM attempting graceful shutdown... ***"
 	bus = pipeline.get_bus()
 	bus.post(gst.message_new_eos(pipeline))
 
 signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 mainloop.run()
 
