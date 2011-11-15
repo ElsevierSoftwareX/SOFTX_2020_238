@@ -39,7 +39,7 @@ def which(prog):
 def log_path():
 	host = socket.getfqdn()
 	#FIXME add more hosts as you need them
-	if 'caltech.edu' in host: return '/usr1/' + os.environ['USER']
+	if 'caltech.edu' in host or 'cit' in host: return '/usr1/' + os.environ['USER']
 	if 'phys.uwm.edu' in host: return '/localscratch/' + os.environ['USER']
 	if 'aei.uni-hannover.de' in host: return '/local/user/' + os.environ['USER']
 	if 'phy.syr.edu' in host: return '/usr1/' + os.environ['USER']
@@ -87,7 +87,7 @@ class gstlal_inspiral_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_inspiral job
 	"""
-	def __init__(self, executable=which('gstlal_inspiral'), tag_base='gstlal_inspiral'):
+	def __init__(self, executable=which('gstlal_ll_inspiral'), tag_base='gstlal_inspiral'):
 		"""
 		"""
 		self.__prog__ = 'gstlal_inspiral'
@@ -99,7 +99,6 @@ class gstlal_inspiral_job(pipeline.CondorDAGJob):
 		self.add_condor_cmd('request_cpus', '12')
 		self.add_condor_cmd('+RequiresMultipleCores', 'True')
 		self.tag_base = tag_base
-		#self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
 		self.set_sub_file(tag_base+'.sub')
 		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
 		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
@@ -110,15 +109,9 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	A gstlal_inspiral node
 	"""
 	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, frame_cache = None, tmp_space=log_path(), ht_gate_thresh=10.0, injections=None, control_peak_time = 4, fir_stride = 4,  p_node=[]):
+	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=log_path(), ht_gate_thresh=10.0, control_peak_time = 4, fir_stride = 4, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
-		if frame_cache is None:
-			self.add_var_opt("fake-data", "")
-		else:
-			self.add_var_opt("frame-cache", frame_cache)
-		self.add_var_opt("gps-start-time",gps_start_time)
-		self.add_var_opt("gps-end-time",gps_end_time)
 		self.add_var_opt("channel-name", inspiral.pipeline_channel_list_from_channel_dict(channel_dict))
 		if reference_psd is not None:
 			self.add_var_opt("reference-psd", reference_psd)
@@ -130,18 +123,13 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		if ht_gate_thresh is not None:
 			self.add_var_opt("ht-gate-threshold", ht_gate_thresh)
 		#self.add_var_opt("verbose", "") #Put this in for debugging
-		self.injections = injections
-		if self.injections: self.add_var_opt("injections", injections)
 		path = os.getcwd()
 		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
-		if self.injections is not None:
-			self.output_name = '%s/%s-%04d-%d-%d-LLOID-simulations.sqlite' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
-		else:
-			self.output_name = '%s/%s-%04d-%d-%d-LLOID.sqlite' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
-			self.background_name = '%s/%s-%04d-%d-%d-LLOID_snr_chi.xml.gz' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
+		self.output_name = '%s/%s-%04d-LLOID.sqlite' % (path, "H1H2L1V1", job.number)
+		self.background_name = '%s/%s-%04d-LLOID_snr_chi.xml.gz' % (path, "H1H2L1V1", job.number)
 		job.number += 1
 		self.add_var_opt("output",self.output_name)
-		dag.output_cache.append(lal.CacheEntry("H1H2L1", "-", segments.segment(gps_start_time, gps_end_time), "file://localhost/%s" % (self.output_name,)))
+		dag.output_cache.append(lal.CacheEntry("H1H2L1V1", "-", segments.segment(0, 2000000000), "file://localhost/%s" % (self.output_name,)))
 		for p in p_node:
 			self.add_parent(p)
 		dag.add_node(self)
@@ -203,12 +191,8 @@ def cache_to_dict(cachefile):
 
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
-	parser.add_option("--injections", metavar = "filename", help = "Set the name of the xml file for injections")
-	parser.add_option("--frame-cache", metavar = "filename", help = "Set the frame cache.")
 	parser.add_option("--reference-psd", metavar = "filename", help = "Set the reference psd file.")
 	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
-	parser.add_option("--gps-start-time", metavar = "GPS", help = "Set the gps start time in seconds", type="int")
-	parser.add_option("--gps-stop-time", metavar = "GPS", help = "Set the gps stop time in seconds", type="int")
 	parser.add_option("--channel", metavar = "name", default=[], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
 	parser.add_option("--ht-gate-threshold", metavar = "float", help = "Set the h(t) gate threshold to reject glitches", type="float")
 	parser.add_option("--num-banks", metavar = "int", type = "int", help = "the number of banks per job")
@@ -216,7 +200,7 @@ def parse_command_line():
 	options, filenames = parser.parse_args()
 
 	fail = ""
-	for option in ("frame_cache", "bank_cache", "gps_start_time", "gps_stop_time"):
+	for option in ("bank_cache",):
 		if getattr(options, option) is None:
 			fail += "must provide option %s\n" % (option)
 	if fail: raise ValueError, fail
@@ -251,7 +235,7 @@ gstlalInspiralJob = gstlal_inspiral_job()
 trials_factor = 0
 
 for s in build_bank_string(bank_cache, options.num_banks):
-	gstlal_inspiral_node(gstlalInspiralJob, dag, int(options.gps_start_time), int(options.gps_stop_time), channel_dict, frame_cache = options.frame_cache, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, ht_gate_thresh = options.ht_gate_threshold)
+	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold)
 
 
 dag.write_sub_files()
