@@ -1233,8 +1233,17 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
     offset = adder->synchronous ?  gst_util_uint64_scale_int_round (GST_BUFFER_TIMESTAMP (inbuf) - adder->segment.start, adder->rate, GST_SECOND) - earliest_output_offset : 0;
     inlength = GST_BUFFER_OFFSET_END (inbuf) - GST_BUFFER_OFFSET (inbuf);
     g_assert (inlength == GST_BUFFER_SIZE (inbuf) / adder->bps || GST_BUFFER_FLAG_IS_SET (inbuf, GST_BUFFER_FLAG_GAP));
-    g_assert (offset + inlength <= outlength);
+    g_assert (offset + inlength <= outlength || inlength == 0);
     GST_LOG_OBJECT (adder, "channel %p: retrieved %d sample buffer at %" GST_TIME_FORMAT, collect_data, inlength, GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (inbuf)));
+
+    /* this buffer is for the future, we don't need it yet. */
+    if (offset > outlength || (offset == outlength && outlength != 0)) {
+      /* it must be empty or there's a bug in the collect pads class */
+      g_assert (inlength == 0);
+      GST_LOG_OBJECT (adder, "channel %p: discarding 0 sample buffer from the future", collect_data);
+      gst_buffer_unref (inbuf);
+      continue;
+    }
 
     /* keep one of the full gap buffers to reuse as output incase we don't
      * get anything else, record whether or not we saw any gap buffers at
@@ -1265,7 +1274,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
        * buffer spanning the full input interval */
       g_assert(full_gap_buffer != NULL);
       /* get a buffer of zeros */
-      ret = gst_pad_alloc_buffer (adder->srcpad, earliest_output_offset, outlength * adder->bps, GST_BUFFER_CAPS(full_gap_buffer), &outbuf);
+      ret = gst_pad_alloc_buffer (adder->srcpad, earliest_output_offset, outlength * adder->bps, GST_BUFFER_CAPS (full_gap_buffer), &outbuf);
       if (ret != GST_FLOW_OK) {
         /* FIXME:  replace with
         g_slist_free_full (partial_nongap_buffers, (GDestroyNotify) gst_buffer_unref);
@@ -1277,7 +1286,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
 	}
 	goto no_buffer;
       }
-      g_assert (GST_BUFFER_CAPS(outbuf) != NULL);
+      g_assert (GST_BUFFER_CAPS (outbuf) != NULL);
       memset (GST_BUFFER_DATA (outbuf), 0, GST_BUFFER_SIZE (outbuf));
     } else
       outbuf = gst_buffer_make_writable (outbuf);
@@ -1321,6 +1330,7 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
   GST_BUFFER_DURATION (outbuf) = adder->timestamp - GST_BUFFER_TIMESTAMP (outbuf);
 
   /* send it out */
+  g_assert (GST_BUFFER_CAPS (outbuf) != NULL);
   GST_LOG_OBJECT (adder, "pushing outbuf %p spanning %" GST_BUFFER_BOUNDARIES_FORMAT, outbuf, GST_BUFFER_BOUNDARIES_ARGS (outbuf));
   ret = gst_pad_push (adder->srcpad, outbuf);
   GST_LOG_OBJECT (adder, "pushed outbuf, result = %s", gst_flow_get_name (ret));
