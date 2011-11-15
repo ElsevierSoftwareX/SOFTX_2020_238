@@ -81,17 +81,6 @@ sys.excepthook = excepthook
 # =============================================================================
 #
 
-def parse_banks(bank_string):
-	"""
-	parses strings of form H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...
-	"""
-	out = {}
-	if bank_string is None:
-		return out
-	for b in bank_string.split(','):
-		ifo, bank = b.split(':')
-		out.setdefault(ifo, []).append(bank)
-	return out
 
 def parse_command_line():
 	parser = OptionParser(
@@ -151,7 +140,7 @@ def parse_command_line():
 
 	# Get the banks and make the detectors
 	# FIXME add error checking on length of banks per detector, etc
-	svd_banks = parse_banks(options.svd_bank)
+	svd_banks = inspiral.parse_banks(options.svd_bank)
 	# You get a dictionary of channels keyed by ifo, can be overidden by command line, default is LSC-STRAIN
 	channel_dict = inspiral.channel_dict_from_channel_list(options.channel_name)
 	detectors = {}
@@ -254,19 +243,7 @@ else:
 # Parse template banks
 #
 
-
-banks = {}
-
-for instrument, files in svd_banks.items():
-	for n, filename in enumerate(files):
-		# FIXME over ride the file name stored in the bank file with
-		# this file name this bank I/O code needs to be fixed
-		bank = svd_bank.read_bank(filename, verbose = options.verbose)
-		bank.template_bank_filename = filename
-		bank.logname = "%sbank%d" % (instrument,n)
-		bank.number = n
-		banks.setdefault(instrument,[]).append(bank)
-
+banks = inspiral.parse_bank_files(svd_banks, verbose = options.verbose)
 
 #
 # Build pipeline
@@ -341,47 +318,17 @@ appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps
 if options.verbose:
 	print >>sys.stderr, "attached %d, done" % len(appsinks)
 
-if options.write_pipeline is not None:
-	#
-	# add a signal handler to write a pipeline graph upon receipt of
-	# the first trigger buffer.  the caps in the pipeline graph are not
-	# fully negotiated until data comes out the end, so this version of
-	# the graph shows the final formats on all links
-	#
-
-	class AppsinkDumpDot(object):
-		# data shared by all instances
-		# number of times execute method has been invoked, and a mutex
-		n_lock = threading.Lock()
-		n = 0
-
-		def __init__(self, pipeline, write_after, basename, verbose = False):
-			self.pipeline = pipeline
-			self.handler_id = None
-			self.write_after = write_after
-			self.filestem = "%s.%s" % (basename, "TRIGGERS")
-			self.verbose = verbose
-
-		def execute(self, elem):
-			self.n_lock.acquire()
-			type(self).n += 1
-			if self.n >= self.write_after:
-				pipeparts.write_dump_dot(self.pipeline, self.filestem, verbose = self.verbose)
-			self.n_lock.release()
-			elem.disconnect(self.handler_id)
-
-	for sink in appsinks:
-		appsink_dump_dot = AppsinkDumpDot(pipeline, len(appsinks), basename = options.write_pipeline, verbose = options.verbose)
-		appsink_dump_dot.handler_id = sink.connect_after("new-buffer", appsink_dump_dot.execute)
-
-
 #
-# process requested segment
+# if we request a dot graph of the pipeline, set it up
 #
 
-
 if options.write_pipeline is not None:
+	inspiral.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
 	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
+
+#
+# Run pipeline
+#
 
 if options.verbose:
 	print >>sys.stderr, "setting pipeline state to paused ..."
