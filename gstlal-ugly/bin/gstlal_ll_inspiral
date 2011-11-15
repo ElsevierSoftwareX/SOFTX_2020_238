@@ -1,0 +1,300 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2009-2011  Kipp Cannon, Chad Hanna, Drew Keppel
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""Stream-based inspiral analysis tool"""
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import os
+import sys
+import threading
+import warnings
+from optparse import OptionParser
+
+
+# The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require("0.10")
+import gst
+
+
+from glue import segments
+from glue import segmentsUtils
+from glue.ligolw import utils
+from glue.ligolw.utils import segments as ligolw_segments
+from pylal.datatypes import LIGOTimeGPS
+from gstlal import ligolw_output
+from gstlal import svd_bank
+from gstlal import pipeparts
+from gstlal import lloidparts
+from gstlal import reference_psd
+from gstlal import streamthinca
+from gstlal import inspiral
+
+def excepthook(*args):
+	# system exception hook that forces hard exit.  without this,
+	# exceptions that occur inside python code invoked as a call-back
+	# from the gstreamer pipeline just stop the pipeline, they don't
+	# cause gstreamer to exit.
+
+	# FIXME:  they probably *would* cause if we could figure out why
+	# element errors and the like simply stop the pipeline instead of
+	# crashing it, as well.  Perhaps this should be removed when/if the
+	# "element error's don't crash program" problem is fixed
+	sys.__excepthook__(*args)
+	os._exit(1)
+
+sys.excepthook = excepthook
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		description = __doc__
+	)
+	parser.add_option("--channel-name", metavar = "name", default = [], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
+	parser.add_option("--output", metavar = "filename", help = "Set the name of the LIGO light-weight XML output file *.{xml,xml.gz} or an SQLite database *.sqlite (required).")
+	parser.add_option("--reference-psd", metavar = "filename", help = "Instead of measuring the noise spectrum, load the spectrum from this LIGO light-weight XML file (optional).")
+	parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
+	parser.add_option("--svd-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.")
+	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets")
+	parser.add_option("--control-peak-time", metavar = "time", type = "int", help = "Set a time window in seconds to find peaks in the control signal")
+	parser.add_option("--fir-stride", metavar = "time", type = "int", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
+	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
+	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.020, help = "Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.")
+	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
+	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+
+	options, filenames = parser.parse_args()
+
+	if options.reference_psd is None and not options.track_psd:
+		raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
+
+	required_options = ["output"]
+	
+	missing_options = []
+	if options.svd_bank is None:
+		missing_options += ["--svd-bank"]
+	missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
+	if missing_options:
+		raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
+
+	# Get the banks and make the detectors
+	# FIXME add error checking on length of banks per detector, etc
+	svd_banks = inspiral.parse_banks(options.svd_bank)
+	
+	# You get a dictionary of channels keyed by ifo, can be overidden by command line, default is LSC-STRAIN
+	channel_dict = inspiral.channel_dict_from_channel_list(options.channel_name)
+	detectors = {}
+	for instrument in set(svd_banks.keys()):
+		detectors[instrument] = lloidparts.DetectorData(None, channel_dict[instrument])
+
+	# FIXME: should also check for read permissions
+	required_files = []
+	for instrument in svd_banks:
+		required_files.extend(svd_banks[instrument])
+
+	# autochisq
+	options.chisq_type = "autochisq"
+
+	# do this before converting option types
+	process_params = ligolw_output.make_process_params(options)
+
+	# FIXME
+	options.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
+
+	# hard-coded.  this number is needed in a few places, and storing
+	# it in with the options is a convenient home
+	options.psd_fft_length = 8	# seconds
+
+	return options, filenames, process_params, svd_banks, detectors
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# parse command line
+#
+
+
+options, filenames, process_params, svd_banks, detectors = parse_command_line()
+frame_segments = dict([(instrument, None) for instrument in detectors])
+veto_segments = None
+
+#
+# set up the PSDs
+#
+# There are three modes for psds in this program
+# 1) --reference-psd without --track-psd - a fixed psd (provided by the user) will be used to whiten the data
+# 2) --track-psd without --reference-psd - a psd will me measured and used on the fly
+# 3) --track-psd with --reference-psd - a psd will be measured on the fly, but the first "guess will come from the users provided psd
+#
+
+
+if options.reference_psd is not None:
+	psd = reference_psd.read_psd(options.reference_psd, verbose = options.verbose)
+else:
+	psd = dict([(instrument, None) for instrument in detectors])
+
+
+#
+# Parse template banks
+#
+
+banks = inspiral.parse_bank_files(svd_banks, verbose = options.verbose)
+
+#
+# Build pipeline
+#
+
+
+if options.verbose:
+	print >>sys.stderr, "assembling pipeline ...",
+
+pipeline = gst.Pipeline("gstlal_inspiral")
+mainloop = gobject.MainLoop()
+handler = lloidparts.LLOIDHandler(mainloop, pipeline)
+
+
+triggersrc = lloidparts.mkLLOIDmulti(
+	pipeline,
+	seekevent = None,
+	detectors = detectors,
+	banks = banks,
+	psd = psd,
+	psd_fft_length = options.psd_fft_length,
+	fake_data = None,
+	online_data = True,
+	injection_filename = None,
+	ht_gate_threshold = options.ht_gate_threshold,
+	veto_segments = None,
+	verbose = options.verbose,
+	nxydump_segment = None,
+	frame_segments = frame_segments,
+	chisq_type = options.chisq_type,
+	track_psd = options.track_psd,
+	control_peak_time = options.control_peak_time,
+	fir_stride = options.fir_stride
+)
+
+
+if options.verbose:
+	print >>sys.stderr, "done"
+
+
+#
+# build output document
+#
+
+
+if options.verbose:
+	print >>sys.stderr, "initializing output document ..."
+output = ligolw_output.Data(
+	filename = options.output,
+	process_params = process_params,
+	instruments = set(detectors),
+	seg = options.seg,
+	out_seg = options.seg, #FIXME make better outseg def?  Maybe pointless now that gstlal inspiral can analyze over frame gaps
+	injection_filename = None,
+	time_slide_file = options.time_slide_file,
+	comment = options.comment,
+	tmp_path = options.tmp_space,
+	verbose = options.verbose
+)
+stream_thinca = streamthinca.StreamThinca(
+	output,
+	coincidence_threshold = options.coincidence_threshold,
+	coincidence_back_off = 50,	# coincidence back-off is big enough to handle buffer slop, max time slide offset automatically added.
+	thinca_interval = 50.0	# seconds
+)
+if options.verbose:
+	print >>sys.stderr, "... output document initialized"
+
+if options.verbose:
+	print >>sys.stderr, "attaching appsinks to pipeline ...",
+appsync = pipeparts.AppSync(appsink_new_buffer = stream_thinca.appsink_new_buffer)
+appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-snglinspiral")) for src in triggersrc)
+if options.verbose:
+	print >>sys.stderr, "attached %d, done" % len(appsinks)
+
+#
+# if we request a dot graph of the pipeline, set it up
+#
+
+if options.write_pipeline is not None:
+	inspiral.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
+	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
+
+#
+# Run pipeline
+#
+
+
+if options.verbose:
+	print >>sys.stderr, "setting pipeline state to playing ..."
+if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
+	raise RuntimeError, "pipeline did not enter playing state"
+
+if options.write_pipeline is not None:
+	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
+
+if options.verbose:
+	print >>sys.stderr, "running pipeline ..."
+mainloop.run()
+
+
+#
+# write output file
+#
+
+
+stream_thinca.flush()
+output.write_output_file(verbose = options.verbose)
+
+
+#
+# done
+#
