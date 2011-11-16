@@ -55,7 +55,7 @@ def parse_command_line():
 	effective_gps_start_time = LIGOTimeGPS(options.gps_start_time)
 	effective_gps_end_time = LIGOTimeGPS(options.gps_end_time)
 
-	process_params = ligolw_output.make_process_params(options) #FIXME override program name
+	process_params = options.__dict__.copy() #FIXME override program name
 	options.seg = segments.segment(effective_gps_start_time, effective_gps_end_time)
 
 	return options, filenames, process_params

@@ -10,7 +10,6 @@ from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
-from gstlal.ligolw_output import make_process_params
 
 def parse_command_line():
 	parser = OptionParser()
@@ -29,7 +28,7 @@ xmldoc=utils.load_filename(options.input, verbose = options.verbose)
 sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 process_params_table = lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName)
 tmpltbank_process_ids = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName).get_ids_by_program("tmpltbank")
-procrow = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_add_spins_to_bank", make_process_params(options))
+procrow = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_add_spins_to_bank", options.__dict__)
 
 if options.approximant is not None:
 	for row in process_params_table:

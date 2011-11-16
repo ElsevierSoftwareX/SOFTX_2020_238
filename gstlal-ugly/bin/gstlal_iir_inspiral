@@ -144,7 +144,7 @@ def parse_command_line():
 	if missing_files:
 		raise ValueError, "files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files))
 
-	process_params = ligolw_output.make_process_params(options) #FIXME override program name
+	process_params = options.__dict__.copy() #FIXME override program name
 
 	options.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
 

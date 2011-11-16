@@ -120,19 +120,6 @@ def add_cbc_metadata(xmldoc, process, seg_in, seg_out):
 	return search_summary
 
 
-def make_process_params(options):
-	params = {}
-
-	for key in options.__dict__:
-		val = getattr(options, key)
-		if val is not None and val is not False:
-			opt = getattr(options, key, "")
-			if isinstance(opt,list): opt = ",".join(opt)
-			params[key] = opt
-
-	return params
-
-
 #
 # Parameter distributions
 #

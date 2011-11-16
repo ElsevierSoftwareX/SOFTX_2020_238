@@ -164,7 +164,7 @@ def parse_command_line():
 		raise ValueError, "--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type)
 
 	# do this before converting option types
-	process_params = ligolw_output.make_process_params(options)
+	process_params = options.__dict__.copy()
 
 	options.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
 

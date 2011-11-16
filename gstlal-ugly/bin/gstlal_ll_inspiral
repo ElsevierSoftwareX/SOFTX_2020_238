@@ -137,7 +137,7 @@ def parse_command_line():
 	options.chisq_type = "autochisq"
 
 	# do this before converting option types
-	process_params = ligolw_output.make_process_params(options)
+	process_params = options.__dict__.copy()
 
 
 	# hard-coded.  this number is needed in a few places, and storing
