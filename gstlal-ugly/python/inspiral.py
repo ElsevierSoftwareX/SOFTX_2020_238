@@ -297,7 +297,7 @@ class DistributionsStats(object):
 			("%s_snr_chi" % event.ifo): (event.snr, event.chisq**.5 / event.snr)
 		})
 
-	def synthesize_injections(self, prefactor = .3, df = 24, N = 1000000, verbose = True):
+	def synthesize_injections(self, prefactor = .3, df = 24, N = 1000000, verbose = False):
 		random.seed(0) # FIXME changes as appropriate
 		chunk_size = 1000000	# do this many at once
 		for k, binarr in self.raw_distributions.injection_rates.items():
