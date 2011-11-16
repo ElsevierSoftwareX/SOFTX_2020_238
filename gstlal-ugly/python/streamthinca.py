@@ -49,8 +49,6 @@ lsctables.LIGOTimeGPS = LIGOTimeGPS
 class StreamThinca(object):
 	def __init__(self, dataobj, coincidence_threshold, coincidence_back_off, thinca_interval = 50.0):
 		self.dataobj = dataobj
-		self.process_table = lsctables.New(lsctables.ProcessTable)
-		self.process_params_table = lsctables.New(lsctables.ProcessParamsTable)
 		self.sngl_inspiral_table = lsctables.New(lsctables.SnglInspiralTable, dataobj.sngl_inspiral_table.columnnames)
 		self.coinc_event_map_table = lsctables.New(lsctables.CoincMapTable)
 		self.last_boundary = -segments.infinity()
@@ -75,8 +73,6 @@ class StreamThinca(object):
 		iterutils.inplace_filter(lambda row: row.get_end() >= discard_boundary, self.sngl_inspiral_table)
 
 		# replace tables with our versions
-		self.dataobj.xmldoc.childNodes[-1].replaceChild(self.process_table, self.dataobj.process_table)
-		self.dataobj.xmldoc.childNodes[-1].replaceChild(self.process_params_table, self.dataobj.process_params_table)
 		self.dataobj.xmldoc.childNodes[-1].replaceChild(self.coinc_event_map_table, self.dataobj.coinc_event_map_table)
 
 		# find coincs.  gstlal_inspiral's triggers cause a
@@ -103,11 +99,7 @@ class StreamThinca(object):
 		ligolw_thinca.SnglInspiral.get_effective_snr = orig_get_effective_snr
 
 		# put the original table objects back
-		self.dataobj.xmldoc.childNodes[-1].replaceChild(self.dataobj.process_table, self.process_table)
-		self.dataobj.xmldoc.childNodes[-1].replaceChild(self.dataobj.process_params_table, self.process_params_table)
 		self.dataobj.xmldoc.childNodes[-1].replaceChild(self.dataobj.coinc_event_map_table, self.coinc_event_map_table)
-		del self.process_table[:]
-		del self.process_params_table[:]
 
 		# record boundary
 		self.last_boundary = boundary
