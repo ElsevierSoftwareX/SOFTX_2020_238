@@ -280,13 +280,23 @@ class Data(object):
 	def appsink_new_buffer(self, elem):
 		self.lock.acquire()
 		try:
-			for row in sngl_inspirals_from_buffer(elem.emit("pull-buffer")):
-				if LIGOTimeGPS(row.end_time, row.end_time_ns) in self.search_summary.get_out():
-					row.process_id = self.process.process_id
-					row.event_id = self.sngl_inspiral_table.get_next_id()
-					self.sngl_inspiral_table.append(row)
-					# update the parameter distribution data
-					self.distribution_stats.add_single(row)
+			# retrieve triggers from appsink element
+			events = tuple(event for event in sngl_inspirals_from_buffer(elem.emit("pull-buffer")) if LIGOTimeGPS(event.end_time, event.end_time_ns) in self.search_summary.get_out())
+
+			# set metadata on triggers
+			for event in events:
+				event.process_id = self.process.process_id
+				event.event_id = self.sngl_inspiral_table.get_next_id()
+
+			# update the parameter distribution data
+			for event in events:
+				self.distribution_stats.add_single(event)
+
+			# run stream thinca
+			# FIXME:
+
+			# update output document
+			self.sngl_inspiral_table.extend(events)
 			if self.connection is not None:
 				self.connection.commit()
 		finally:
