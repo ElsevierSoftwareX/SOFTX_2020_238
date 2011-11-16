@@ -15,7 +15,6 @@ pkgpython_PYTHON = \
 	dagparts.py \
 	svd_bank.py \
 	templates.py \
-	ligolw_output.py \
 	far.py \
 	streamthinca.py \
 	omega.py \

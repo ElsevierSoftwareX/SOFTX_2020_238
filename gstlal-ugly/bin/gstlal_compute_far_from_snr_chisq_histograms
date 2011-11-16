@@ -18,7 +18,7 @@ from glue.segmentsUtils import vote
 from pylal import inject
 from pylal import rate
 from optparse import OptionParser
-from gstlal import ligolw_output as gstlal_likelihood
+from gstlal import inspiral as gstlal_likelihood
 from gstlal.svd_bank import read_bank
 from gstlal import far
 

@@ -7,7 +7,7 @@ from optparse import OptionParser
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 from glue import segments
 from pylal.datatypes import LIGOTimeGPS
-from gstlal import ligolw_output
+from gstlal import inspiral
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 
 #
@@ -103,7 +103,7 @@ detectors = {
 }
 
 options.out_seg = segments.segment(options.seg[0], options.seg[1]) #FIXME make better outseg def.
-data = ligolw_output.Data(options, detectors)
+data = inspiral.Data(options, detectors)
 data.prepare_output_file(process_params)
 
 def appsink_new_buffer(elem, data):

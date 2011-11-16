@@ -49,7 +49,6 @@ from glue import segmentsUtils
 from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
-from gstlal import ligolw_output
 from gstlal import svd_bank
 from gstlal import pipeparts
 from gstlal import lloidparts
@@ -290,7 +289,7 @@ if options.verbose:
 
 if options.verbose:
 	print >>sys.stderr, "initializing output document ..."
-output = ligolw_output.Data(
+output = inspiral.Data(
 	filename = options.output,
 	process_params = process_params,
 	instruments = set(detectors),
