@@ -17,6 +17,16 @@
 #
 
 
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import itertools
 import threading
 import time
 import os
@@ -42,6 +52,15 @@ from pylal import ligolw_tisi
 from pylal import rate
 from gstlal import svd_bank
 lsctables.LIGOTimeGPS = LIGOTimeGPS
+
+
+#
+# =============================================================================
+#
+#                                     Misc
+#
+# =============================================================================
+#
 
 
 def channel_dict_from_channel_list(channel_list):
@@ -220,7 +239,32 @@ def add_cbc_metadata(xmldoc, process, seg_in, seg_out):
 
 
 #
-# Parameter distributions
+# =============================================================================
+#
+#                           Parameter Distributions
+#
+# =============================================================================
+#
+
+#
+# Functions to synthesize injections
+#
+
+def snr_distribution(size, startsnr):
+	return startsnr * random.power(3, size)**-1 # 3 here actually means 2 :) according to scipy docs
+
+def noncentrality(snrs, prefactor):
+	return prefactor * random.rand(len(snrs)) * snrs**2 # FIXME power depends on dimensionality of the bank and the expectation for the mismatch for real signals
+	#return prefactor * random.power(1, len(snrs)) * snrs**2 # FIXME power depends on dimensionality of the bank and the expectation for the mismatch for real signals
+
+def chisq_distribution(df, non_centralities, size):
+	out = numpy.empty((len(non_centralities) * size,))
+	for i, nc in enumerate(non_centralities):
+		out[i*size:(i+1)*size] = random.noncentral_chisquare(df, nc, size)
+	return out
+
+#
+# Book-keeping class
 #
 
 
@@ -238,57 +282,70 @@ class DistributionsStats(object):
 	}
 
 	filters = {
-		"H1_snr_chi": rate.gaussian_window2d(5, 5, sigma = 20),
-		"H2_snr_chi": rate.gaussian_window2d(5, 5, sigma = 20),
-		"L1_snr_chi": rate.gaussian_window2d(5, 5, sigma = 20),
-		"V1_snr_chi": rate.gaussian_window2d(5, 5, sigma = 20)
+		"H1_snr_chi": rate.gaussian_window2d(15, 15, sigma = 8),
+		"H2_snr_chi": rate.gaussian_window2d(15, 15, sigma = 8),
+		"L1_snr_chi": rate.gaussian_window2d(15, 15, sigma = 8),
+		"V1_snr_chi": rate.gaussian_window2d(15, 15, sigma = 8)
 	}
 
 	def __init__(self):
-		self.distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
+		self.raw_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
+		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
 
 	def add_single(self, event):
-		self.distributions.add_background({
+		self.raw_distributions.add_background({
 			("%s_snr_chi" % event.ifo): (event.snr, event.chisq**.5 / event.snr)
 		})
 
+	def synthesize_injections(self, prefactor = .3, df = 24, N = 1000000, verbose = True):
+		random.seed(0) # FIXME changes as appropriate
+		chunk_size = 1000000	# do this many at once
+		for k, binarr in self.raw_distributions.injection_rates.items():
+			if verbose:
+				print >> sys.stderr, "synthesizing injections for ", k
+			minsnr = binarr.bins[0].upper().min()
+			remaining = N
+			while remaining:
+				size = min(chunk_size, remaining)
+
+				snrs = snr_distribution(size, minsnr)
+				ncs = noncentrality(snrs, prefactor)
+				chisqs = chisq_distribution(df, ncs, 1) / df
+				for snr, chisq in itertools.izip(snrs, chisqs):
+					binarr[snr, chisq**.5 / snr] += 1
+
+				remaining -= size
+
 	def finish(self):
-		self.distributions.finish(filters = self.filters)
+		self.smoothed_distributions = self.raw_distributions.copy(self.raw_distributions)
+		#self.smoothed_distributions.finish(filters = self.filters)
+		# FIXME:  should be the line above, we'll temporarily do
+		# the following.  the difference is that the above produces
+		# PDFs while what follows produces probabilities in each
+		# bin
+		for name, binnedarray in itertools.chain(self.smoothed_distributions.zero_lag_rates.items(), self.smoothed_distributions.background_rates.items(), self.smoothed_distributions.injection_rates.items()):
+			rate.filter_array(binnedarray.array, self.filters[name])
+			binnedarray.array /= numpy.sum(binnedarray.array)
 
+	@classmethod
+	def from_filename(cls, filename, verbose = False):
+		self = cls()
+		self.raw_distributions, seglists = ligolw_burca_tailor.load_likelihood_data([filename], u"gstlal_inspiral_likelihood", verbose = verbose)
+		# FIXME:  produce error if binnings don't match this class's binnings attribute?
+		binnings = dict((param, self.raw_distributions.zero_lag_rates[param].bins) for param in self.raw_distributions.zero_lag_rates)
+		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**binnings)
+		return self, seglists
 
-def get_coincparamsdistributions(xmldoc):
-	# FIXME:  copied from pylal.stringutils.  make one version that can
-	# be re-used
-	coincparamsdistributions, process_id = ligolw_burca_tailor.coinc_params_distributions_from_xml(xmldoc, u"gstlal_inspiral_likelihood")
-	seglists = lsctables.table.get_table(xmldoc, lsctables.SearchSummaryTable.tableName).get_out_segmentlistdict(set([process_id])).coalesce()
-	return coincparamsdistributions, seglists
-
-
-def load_likelihood_data(filenames, verbose = False):
-	# FIXME:  copied from pylal.stringutils.  make one version that can
-	# be re-used
-	coincparamsdistributions = None
-	for n, filename in enumerate(filenames):
-		if verbose:
-			print >>sys.stderr, "%d/%d:" % (n + 1, len(filenames)),
-		xmldoc = utils.load_filename(filename, verbose = verbose)
-		if coincparamsdistributions is None:
-			coincparamsdistributions, seglists = get_coincparamsdistributions(xmldoc)
-		else:
-			a, b = get_coincparamsdistributions(xmldoc)
-			coincparamsdistributions += a
-			seglists |= b
-			del a, b
-		xmldoc.unlink()
-	return coincparamsdistributions, seglists
-
-
-def write_likelihood_data(filename, coincparamsdistributions, seglists, verbose = False):
-	utils.write_filename(ligolw_burca_tailor.gen_likelihood_control(coincparamsdistributions, seglists, name = u"gstlal_inspiral_likelihood"), filename, verbose = verbose, gz = (filename or "stdout").endswith(".gz"))
+	def to_filename(self, filename, seglists, verbose = False):
+		ligolw_burca_tailor.write_likelihood_data(filename, self.raw_distributions, seglists, u"gstlal_inspiral_likelihood", verbose = verbose)
 
 
 #
-# Output document
+# =============================================================================
+#
+#                               Output Document
+#
+# =============================================================================
 #
 
 
@@ -418,7 +475,7 @@ class Data(object):
 		# write out the snr / chisq histograms
 		fname = os.path.split(self.filename)
 		fname = os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
-		write_likelihood_data(fname, self.distribution_stats.distributions, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = verbose)
+		self.distribution_stats.to_filename(fname, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = verbose)
 
 
 #
