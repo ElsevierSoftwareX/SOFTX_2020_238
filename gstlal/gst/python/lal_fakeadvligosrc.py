@@ -27,7 +27,8 @@ __author__ = "Drew Keppel <drew.keppel@ligo.org>, Leo Singer <leo.singer@ligo.or
 # hash c79657d297).
 #
 
-from gstlal.pipeutil import *
+from gstlal import pipeutil
+from gstlal.pipeutil import gobject, gst
 from math import cos, pi, sqrt
 
 
@@ -107,29 +108,29 @@ class lal_fakeadvligosrc(gst.Bin):
 		self.__tags = {'units':'strain'}
 
 		chains = (
-			mkelems_in_bin(self,
+			pipeutil.mkelems_in_bin(self,
 				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 4e-28, 'samplesperbuffer': 16384}),
 				('audioiirfilter', {'a': (1.,), 'b': (-1., 2*cos(2*pi*9.103/16384)*0.99995, -1.*0.99995**2)}),
 			),
-			mkelems_in_bin(self,
+			pipeutil.mkelems_in_bin(self,
 				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 1.1e-23, 'samplesperbuffer': 16384}),
 				('audiofirfilter', {'kernel': (1., -1.)}),
 			),
-			mkelems_in_bin(self,
+			pipeutil.mkelems_in_bin(self,
 				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 1e-27, 'samplesperbuffer': 16384}),
 				('audioiirfilter', {'a': (1.,), 'b': (-1.0, 2 * 0.999, -.999**2)}),
 			),
-			mkelems_in_bin(self,
+			pipeutil.mkelems_in_bin(self,
 				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 4e-26, 'samplesperbuffer': 16384}),
 				('audioiirfilter', {'a': (1.,), 'b': (-1., 2*cos(2*pi*50./16384)*.87, -.87**2)}),
 			),
-			mkelems_in_bin(self,
+			pipeutil.mkelems_in_bin(self,
 				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 6.5e-24, 'samplesperbuffer': 16384}),
 				('audioiirfilter', {'a': (1.,), 'b': (-1., -2*.45, -.45**2)}),
 			),
 		)
 
-		outputchain = mkelems_in_bin(self,
+		outputchain = pipeutil.mkelems_in_bin(self,
 			('lal_adder', {'sync': True}),
 			('audioamplify', {'clipping-method': 3, 'amplification': sqrt(16384.)*3/4}),
 			('taginject',)
@@ -144,4 +145,10 @@ class lal_fakeadvligosrc(gst.Bin):
 
 
 # Register element class
-gstlal_element_register(lal_fakeadvligosrc)
+gobject.type_register(lal_fakeadvligosrc)
+
+__gstelementfactory__ = (
+	lal_fakeadvligosrc.__name__,
+	gst.RANK_NONE,
+	lal_fakeadvligosrc
+)

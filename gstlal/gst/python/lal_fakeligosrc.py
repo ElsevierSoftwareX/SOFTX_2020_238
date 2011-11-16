@@ -25,7 +25,8 @@ __author__ = "Drew Keppel <drew.keppel@ligo.org>"
 #
 
 
-from gstlal.pipeutil import *
+from gstlal import pipeutil
+from gstlal.pipeutil import gobject, gst
 
 
 class lal_fakeligosrc(gst.Bin):
@@ -105,25 +106,25 @@ class lal_fakeligosrc(gst.Bin):
 
 		# Build first filter chain
 		chains = (
-			mkelems_in_bin(self,
+			pipeutil.mkelems_in_bin(self,
 				('audiotestsrc', {'wave':'gaussian-noise', 'volume': 5.03407936516e-17, 'samplesperbuffer': 16384}),
 				*((('audioiirfilter', {'a': (1.87140685e-05, 3.74281370e-05, 1.87140685e-05), 'b': (1., 1.98861643, -0.98869215)}),) * 14)
 			),
-			mkelems_in_bin(self,
+			pipeutil.mkelems_in_bin(self,
 				('audiotestsrc', {'wave': 'gaussian-noise', 'volume': 1.39238913312e-20, 'samplesperbuffer': 16384}),
 				('audioiirfilter', {'a': (9.17933667e-07, 1.83586733e-06, 9.17933667e-07), 'b': (1., 1.99728828, -0.99729195)})
 			),
-			mkelems_in_bin(self,
+			pipeutil.mkelems_in_bin(self,
 				('audiotestsrc', {'wave': 'gaussian-noise', 'volume': 2.16333076528e-23, 'samplesperbuffer': 16384})
 			),
-			mkelems_in_bin(self,
+			pipeutil.mkelems_in_bin(self,
 				('audiotestsrc', {'wave': 'gaussian-noise', 'volume': 1.61077910675e-20, 'samplesperbuffer': 16384}),
 				('audioiirfilter', {'a': (0.5591789, 0.5591789), 'b': (1., -0.1183578)}),
 				('audioiirfilter', {'a': (0.03780506, -0.03780506), 'b': (1.0, -0.9243905)})
 			)
 		)
 
-		outputchain = mkelems_in_bin(self,
+		outputchain = pipeutil.mkelems_in_bin(self,
 			('lal_adder', {'sync': True}),
 			('audioamplify', {'clipping-method': 3, 'amplification': 16384.**.5}),
 			('taginject',)
@@ -138,4 +139,10 @@ class lal_fakeligosrc(gst.Bin):
 
 
 # Register element class
-gstlal_element_register(lal_fakeligosrc)
+gobject.type_register(lal_fakeligosrc)
+
+__gstelementfactory__ = (
+	lal_fakeligosrc.__name__,
+	gst.RANK_NONE,
+	lal_fakeligosrc
+)
