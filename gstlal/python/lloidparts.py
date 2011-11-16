@@ -853,7 +853,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 #
 
 
-def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, ht_gate_threshold = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND):
+def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND):
 	#
 	# check for recognized value of chisq_type
 	#
@@ -878,24 +878,21 @@ def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	hoftdicts = {}
 	for instrument in detectors:
 		print instrument
-		rates = set(rate for bank in banks[instrument] for rate in bank.rates) # FIXME what happens if the rates are not the same?
-		src = mkLLOIDbasicsrc(pipeline,
-			seekevent,
-			instrument,
-			detectors[instrument],
-			fake_data = fake_data,
-			online_data = online_data,
-			injection_filename = injection_filename,
-			frame_segments = None, #frame_segments[instrument],
-			verbose = verbose)
+		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
+		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data = fake_data, online_data = online_data, injection_filename = injection_filename, frame_segments = frame_segments[instrument], verbose = verbose)
+		# let the frame reader and injection code run in a
+		# different thread than the whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration)
-		hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration)
+		if veto_segments is not None:
+			hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration)
+		else:
+			hoftdicts[instrument] = mkLLOIDsrc(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, seekevent = seekevent, ht_gate_threshold = ht_gate_threshold, nxydump_segment = nxydump_segment, track_psd = track_psd, block_duration = block_duration)
 
 	#
 	# construct trigger generators
 	#
 
-	triggersrc = set()
+	triggersrcs = set()
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 
@@ -911,20 +908,29 @@ def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 
 		snr = pipeparts.mktogglecomplex(pipeline, snr)
 		snr = pipeparts.mktee(pipeline, snr)
-		chisq = mkLLOIDSnrToAutoChisq(pipeline, pipeparts.mkqueue(pipeline, snr, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * block_duration), bank)
+		# FIXME you get a different trigger generator depending on the chisq calculation :/
+		if chisq_type == 'autochisq':
+			# FIXME don't hardcode
+			# peak finding window (n) in samples is one second at max rate, ie max(rates)
+			head = pipeparts.mkitac(pipeline, snr, max(rates), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, snr_thresh = bank.snr_threshold)
+			if verbose:
+				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
+			triggersrcs.add(head)
+			# old way
+			# chisq = mkLLOIDSnrToAutoChisq(pipeline, pipeparts.mkqueue(pipeline, snr, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 1 * block_duration), bank)
 		# FIXME:  find a way to use less memory without this hack
 		del bank.autocorrelation_bank
 		#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
 		#pipeparts.mkogmvideosink(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkchannelgram(pipeline, pipeparts.mkqueue(pipeline, snr), plot_width = .125), "video/x-raw-rgb, width=640, height=480, framerate=64/1"), "snr_channelgram_%s.ogv" % suffix, audiosrc = pipeparts.mkaudioamplify(pipeline, pipeparts.mkqueue(pipeline, hoftdict[max(bank.get_rates())], max_size_time = 2 * int(math.ceil(bank.filter_length)) * gst.SECOND), 0.125), verbose = True)
-		triggersrc.add(mkLLOIDSnrChisqToTriggers(
-			pipeline,
-			pipeparts.mkqueue(pipeline, snr, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration),
-			chisq,
-			bank,
-			verbose = verbose,
-			nxydump_segment = nxydump_segment,
-			logname = suffix
-		))
+## 		triggersrc.add(mkLLOIDSnrChisqToTriggers(
+## 			pipeline,
+## 			pipeparts.mkqueue(pipeline, snr, max_size_bytes = 0, max_size_buffers = 0, max_size_time = 1 * block_duration),
+## 			chisq,
+## 			bank,
+## 			verbose = verbose,
+## 			nxydump_segment = nxydump_segment,
+## 			logname = suffix
+## 		))
 
 	#
 	# if there is more than one trigger source, synchronize the streams
@@ -932,37 +938,37 @@ def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	# single stream
 	#
 
-	assert len(triggersrc) > 0
-	if len(triggersrc) > 1:
-		# send all streams through a multiqueue
-		queue = gst.element_factory_make("multiqueue")
-		pipeline.add(queue)
-		for head in triggersrc:
-			head.link(queue)
-		triggersrc = queue
-		# FIXME:  it has been reported that the input selector
-		# breaks seeks.  confirm and fix if needed
-		# FIXME:  input-selector in 0.10.32 no longer has the
-		# "select-all" feature.  need to get this re-instated
-		#nto1 = gst.element_factory_make("input-selector")
-		#nto1.set_property("select-all", True)
-		#pipeline.add(nto1)
-		#for pad in queue.src_pads():
-		#	pad.link(nto1)
-		#triggersrc = nto1
-	else:
-		# len(triggersrc) == 1
-		triggersrc, = triggersrc
+	assert len(triggersrcs) > 0
+## 	if len(triggersrc) > 1:
+## 		# send all streams through a multiqueue
+## 		queue = gst.element_factory_make("multiqueue")
+## 		pipeline.add(queue)
+## 		for head in triggersrc:
+## 			head.link(queue)
+## 		triggersrc = queue
+## 		# FIXME:  it has been reported that the input selector
+## 		# breaks seeks.  confirm and fix if needed
+## 		# FIXME:  input-selector in 0.10.32 no longer has the
+## 		# "select-all" feature.  need to get this re-instated
+## 		#nto1 = gst.element_factory_make("input-selector")
+## 		#nto1.set_property("select-all", True)
+## 		#pipeline.add(nto1)
+## 		#for pad in queue.src_pads():
+## 		#	pad.link(nto1)
+## 		#triggersrc = nto1
+## 	else:
+## 		# len(triggersrc) == 1
+## 		triggersrc, = triggersrc
 
 	#
 	# done
 	#
 
-	return triggersrc
+	return triggersrcs
 
 
-def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, quality = 4, verbose = None, nxydump_segment = None):
-	sample_rates = bank.rates
+def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxydump_segment = None, quality = 4):
+	sample_rates = sorted(bank.get_rates())
 
 	#FIXME don't upsample everything to a common rate
 	max_rate = max(sample_rates)
