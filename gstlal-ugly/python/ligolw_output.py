@@ -29,6 +29,7 @@ except ImportError:
 	from pysqlite2 import dbapi2 as sqlite3
 import sys
 
+from glue import iterutils
 from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
@@ -207,41 +208,59 @@ def write_likelihood_data(filename, coincparamsdistributions, seglists, verbose 
 
 class Data(object):
 	def __init__(self, filename, process_params, instruments, seg, out_seg, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, verbose = False):
+		#
+		# initialize
+		#
+
 		self.lock = threading.Lock()
+		self.instruments = instruments
+		self.distribution_stats = DistributionsStats()
 		self.filename = filename
+
+		#
+		# build the XML document
+		#
+
 		self.xmldoc = ligolw.Document()
 		self.xmldoc.appendChild(ligolw.LIGO_LW())
 		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, "gstlal_inspiral", process_params, comment = comment, ifos = instruments)
 		self.search_summary = add_cbc_metadata(self.xmldoc, self.process, seg, out_seg)
-		self.process_table = lsctables.table.get_table(self.xmldoc, lsctables.ProcessTable.tableName)
-		self.process_params_table = lsctables.table.get_table(self.xmldoc, lsctables.ProcessParamsTable.tableName)
 		# FIXME:  argh, ugly
-		self.sngl_inspiral_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
-		self.coinc_definer_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincDefTable))
-		self.coinc_event_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincTable))
-		self.coinc_event_map_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincMapTable))
-		self.time_slide_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.TimeSlideTable))
-		self.coinc_inspiral_table = self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincInspiralTable))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincDefTable))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincTable))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincMapTable))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.TimeSlideTable))
+		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincInspiralTable))
 
-		# record instruments
-		self.instruments = instruments
+		#
+		# optionally insert injection list document
+		#
 
-		# if we have a time slide table file, add it.  Otherwise,
-		# add an all-zero offset vector to the time_slide table
+		if injection_filename is not None:
+			ligolw_add.ligolw_add(self.xmldoc, [injection_filename], verbose = verbose)
+
+		#
+		# optionally insert a time slide table document.  if we
+		# don't have one, add an all-zero offset vector.  remove
+		# duplicate offset vectors when done
+		#
+
+		time_slide_table = lsctables.table.get_table(self.xmldoc, lsctables.TimeSlideTable.tableName)
 		if time_slide_file is not None:
 			ligolw_add.ligolw_add(self.xmldoc, [time_slide_file], verbose = verbose)
 		else:
-			for row in ligolw_tisi.RowsFromOffsetDict(dict.fromkeys(instruments, 0.0), self.time_slide_table.get_next_id(), self.process):
-				self.time_slide_table.append(row)
+			for row in ligolw_tisi.RowsFromOffsetDict(dict.fromkeys(instruments, 0.0), time_slide_table.get_next_id(), self.process):
+				time_slide_table.append(row)
+		time_slide_mapping = ligolw_tisi.time_slides_vacuum(time_slide_table.as_dict())
+		iterutils.inplace_filter(lambda row: row.time_slide_id not in time_slide_mapping, time_slide_table)
+		for tbl in self.xmldoc.getElementsByTagName(ligolw.Table.tagName):
+			tbl.applyKeyMapping(time_slide_mapping)
 
-		self.sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))	# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
-
-		# setup histograms
-		self.distribution_stats = DistributionsStats()
-
-		# Add injections table if necessary
-		if injection_filename is not None:
-			ligolw_add.ligolw_add(self.xmldoc, [injection_filename], verbose = verbose)
+		#
+		# if the output is an sqlite database, convert the in-ram
+		# XML document to an interface to the database file
+		#
 
 		if filename is not None and filename.endswith('.sqlite'):
 			from glue.ligolw.utils import ligolw_sqlite
@@ -249,32 +268,42 @@ class Data(object):
 			self.working_filename = dbtables.get_connection_filename(filename, tmp_path = tmp_path, replace_file = True, verbose = verbose)
 			self.connection = sqlite3.connect(self.working_filename, check_same_thread=False)
 			ligolw_sqlite.insert_from_xmldoc(self.connection, self.xmldoc, preserve_ids = True, verbose = verbose)
-
 			self.xmldoc.removeChild(self.xmldoc.childNodes[-1]).unlink()
 			self.xmldoc.appendChild(dbtables.get_xml(self.connection))
-			self.process_table = lsctables.table.get_table(self.xmldoc, lsctables.ProcessTable.tableName)
-			self.process_params_table = lsctables.table.get_table(self.xmldoc, lsctables.ProcessParamsTable.tableName)
-			self.sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
-			self.coinc_definer_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincDefTable.tableName)
-			self.coinc_event_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincTable.tableName)
-			self.coinc_event_map_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincMapTable.tableName)
-			self.time_slide_table = lsctables.table.get_table(self.xmldoc, lsctables.TimeSlideTable.tableName)
-			self.coinc_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincInspiralTable.tableName)
 		else:
-			self.connection = None
+			self.connection = self.working_filename = None
+
+		#
+		# retrieve references to the table objects, now that we
+		# know if they are database-backed or XML objects
+		#
+
+		self.process_table = lsctables.table.get_table(self.xmldoc, lsctables.ProcessTable.tableName)
+		self.process_params_table = lsctables.table.get_table(self.xmldoc, lsctables.ProcessParamsTable.tableName)
+		self.sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
+		self.coinc_definer_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincDefTable.tableName)
+		self.coinc_event_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincTable.tableName)
+		self.coinc_event_map_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincMapTable.tableName)
+		self.time_slide_table = lsctables.table.get_table(self.xmldoc, lsctables.TimeSlideTable.tableName)
+		self.coinc_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincInspiralTable.tableName)
+
+		# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
+		self.sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))
 
 	def appsink_new_buffer(self, elem):
 		self.lock.acquire()
-		for row in sngl_inspirals_from_buffer(elem.emit("pull-buffer")):
-			if LIGOTimeGPS(row.end_time, row.end_time_ns) in self.search_summary.get_out():
-				row.process_id = self.process.process_id
-				row.event_id = self.sngl_inspiral_table.get_next_id()
-				self.sngl_inspiral_table.append(row)
-				# update the parameter distribution data
-				self.distribution_stats.add_single(row)
-		if self.connection is not None:
-			self.connection.commit()
-		self.lock.release()
+		try:
+			for row in sngl_inspirals_from_buffer(elem.emit("pull-buffer")):
+				if LIGOTimeGPS(row.end_time, row.end_time_ns) in self.search_summary.get_out():
+					row.process_id = self.process.process_id
+					row.event_id = self.sngl_inspiral_table.get_next_id()
+					self.sngl_inspiral_table.append(row)
+					# update the parameter distribution data
+					self.distribution_stats.add_single(row)
+			if self.connection is not None:
+				self.connection.commit()
+		finally:
+			self.lock.release()
 
 	def write_output_file(self, verbose = False):
 		if self.connection is not None:
