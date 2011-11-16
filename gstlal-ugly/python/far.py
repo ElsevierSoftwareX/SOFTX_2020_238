@@ -14,7 +14,6 @@ from glue.ligolw.utils import segments as ligolw_segments
 from glue.segmentsUtils import vote
 from pylal import inject
 from pylal import rate
-from gstlal import ligolw_output as gstlal_likelihood
 from gstlal.svd_bank import read_bank
 try:
 	import sqlite3
