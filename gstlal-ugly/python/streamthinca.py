@@ -42,6 +42,35 @@ lsctables.LIGOTimeGPS = LIGOTimeGPS
 
 
 #
+# sngl_inspiral<-->sngl_inspiral comparison function
+#
+
+
+def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, delta_t):
+	return (event_a.mass1 != event_b.mass1) or (event_a.mass2 != event_b.mass2) or (event_a.chi != event_b.chi) or (float(abs(event_a.get_end() + offset_a - event_b.get_end() - offset_b)) > light_travel_time + delta_t)
+
+
+#
+# allowed instrument combinations (yes, hard-coded, just take off, eh)
+#
+
+
+allowed_instrument_combos = (frozenset(("H1", "H2", "L1")), frozenset(("H1", "L1", "V1")), frozenset(("H1", "L1")), frozenset(("H1", "V1")), frozenset(("L1", "V1")))
+
+
+#
+# gstlal_inspiral's triggers cause a divide-by-zero error in the effective
+# SNR method attached to the triggers, so we replace it with one that works
+# for the duration of the ligolw_thinca() call.  this is the function with
+# which we replace it
+#
+
+
+def get_effective_snr(self, fac):
+	return self.snr
+
+
+#
 # on-the-fly thinca implementation
 #
 
@@ -75,17 +104,16 @@ class StreamThinca(object):
 		# replace tables with our versions
 		self.dataobj.xmldoc.childNodes[-1].replaceChild(self.coinc_event_map_table, self.dataobj.coinc_event_map_table)
 
-		# find coincs.  gstlal_inspiral's triggers cause a
-		# divide-by-zero error in the effective SNR function used
-		# for lalapps_inspiral triggers, so we replace it with one
-		# that works for the duration of the ligolw_thinca() call.
-		def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, delta_t):
-			return (event_a.mass1 != event_b.mass1) or (event_a.mass2 != event_b.mass2) or (event_a.chi != event_b.chi) or (abs(event_a.get_end() + offset_a - event_b.get_end() - offset_b) > light_travel_time + delta_t)
+		# define once-off ntuple_comparefunc() so we can pass the
+		# coincidence segment in as a default value for the seg
+		# keyword argument
 		def ntuple_comparefunc(events, offset_vector, seg = segments.segment(self.last_boundary, boundary)):
-			return set(event.ifo for event in events) not in (set(("H1", "H2", "L1")), set(("H1", "L1", "V1")), set(("H1", "L1")), set(("H1", "V1")), set(("L1", "V1"))) or ligolw_thinca.coinc_inspiral_end_time(events, offset_vector) not in seg
-		def get_effective_snr(self, fac):
-			return self.snr
+			return frozenset(event.ifo for event in events) not in allowed_instrument_combos or ligolw_thinca.coinc_inspiral_end_time(events, offset_vector) not in seg
+
+		# swap .get_effective_snr() method on trigger class
 		orig_get_effective_snr, ligolw_thinca.SnglInspiral.get_effective_snr = ligolw_thinca.SnglInspiral.get_effective_snr, get_effective_snr
+
+		# find coincs
 		ligolw_thinca.ligolw_thinca(
 			self.dataobj.xmldoc,
 			process_id = self.dataobj.process.process_id,
@@ -96,6 +124,8 @@ class StreamThinca(object):
 			thresholds = self.coincidence_threshold,
 			ntuple_comparefunc = ntuple_comparefunc
 		)
+
+		# restore .get_effective_snr() method on trigger class
 		ligolw_thinca.SnglInspiral.get_effective_snr = orig_get_effective_snr
 
 		# put the original table objects back
