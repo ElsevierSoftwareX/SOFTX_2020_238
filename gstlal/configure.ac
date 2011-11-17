@@ -35,6 +35,14 @@ AC_SUBST([pkgdocdir], [${docdir}/${PACKAGE_NAME}-${PACKAGE_VERSION}])
 AC_SUBST([pkgconfigdir],[${libdir}/pkgconfig])
 
 
+# Set the library API info
+#  0.0.0   Original version
+AC_SUBST([LIBAPI], [0])
+AC_SUBST([LIBREL], [0])
+AC_SUBST([LIBAGE], [0])
+AC_SUBST([LIBVERSION], [${LIBAPI}:${LIBREL}:${LIBAGE}])
+
+
 #
 # Check for programs
 #
