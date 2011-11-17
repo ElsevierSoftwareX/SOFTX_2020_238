@@ -462,9 +462,9 @@ class Data(object):
 			# run stream thinca
 			self.stream_thinca.add_events(events)
 
-			# update the parameter distribution data
-			# FIXME:  only add events that aren't used in coincs
-			for event in events:
+			# update the parameter distribution data.  only
+			# update from sngls that weren't used in coincs
+			for event in self.stream_thinca.noncoinc_sngls:
 				self.distribution_stats.add_single(event)
 
 			# update output document

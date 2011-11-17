@@ -94,17 +94,24 @@ class StreamThinca(object):
 		# set of the event ids of triggers currently in ram that
 		# have already been used in coincidences
 		self.ids = set()
+		# sngls that are not involved in coincidences
+		self.noncoinc_sngls = []
+
 
 	def run_coincidence(self, boundary):
 		# wait until we've accumulated thinca_interval seconds
 		if self.last_boundary + self.thinca_interval > boundary:
 			return
 
-		# remove triggers that are too old to be useful
+		# remove triggers that are too old to be useful.  save any
+		# that were never used in coincidences
 		discard_boundary = self.last_boundary - self.coincidence_back_off
+		self.noncoinc_sngls[:] = (row for row in self.sngl_inspiral_table if row.get_end() < discard_boundary and row.event_id not in self.ids)
 		iterutils.inplace_filter(lambda row: row.get_end() >= discard_boundary, self.sngl_inspiral_table)
 
 		# replace tables with our versions
+		orig_sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
+		self.xmldoc.childNodes[-1].replaceChild(self.sngl_inspiral_table, orig_sngl_inspiral_table)
 		orig_coinc_event_map_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincMapTable.tableName)
 		self.xmldoc.childNodes[-1].replaceChild(self.coinc_event_map_table, orig_coinc_event_map_table)
 
@@ -133,16 +140,40 @@ class StreamThinca(object):
 		ligolw_thinca.SnglInspiral.get_effective_snr = orig_get_effective_snr
 
 		# put the original table objects back
+		self.xmldoc.childNodes[-1].replaceChild(orig_sngl_inspiral_table, self.sngl_inspiral_table)
 		self.xmldoc.childNodes[-1].replaceChild(orig_coinc_event_map_table, self.coinc_event_map_table)
 
 		# record boundary
 		self.last_boundary = boundary
 
-	def add_events(self, events):
-		# replace the sngl_inspiral table with our version.
-		real_sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
-		self.xmldoc.childNodes[-1].replaceChild(self.sngl_inspiral_table, real_sngl_inspiral_table)
 
+	def move_results_to_output(self):
+		"""
+		Copy rows into real output document.  FOR INTERNAL USE ONLY.
+		"""
+		if self.coinc_event_map_table:
+			# retrieve the target tables
+			real_coinc_event_map_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincMapTable.tableName)
+			real_sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
+
+			# figure out the IDs of triggers that have been
+			# used in coincs for the first time, and update the
+			# set of IDs of all triggers that have been used in
+			# coincs
+			index = dict((row.event_id, row) for row in self.sngl_inspiral_table)
+			self.ids &= set(index)
+			newids = set(self.coinc_event_map_table.getColumnByName("event_id")) - self.ids
+			self.ids |= newids
+
+			# move/copy rows into target tables
+			self.coinc_event_map_table.reverse()	# so the loop that follows preserves order
+			while self.coinc_event_map_table:
+				real_coinc_event_map_table.append(self.coinc_event_map_table.pop())
+			for id in newids:
+				real_sngl_inspiral_table.append(index[id])
+
+
+	def add_events(self, events):
 		# convert the new row objects to the type required by
 		# ligolw_thinca(), and append to our sngl_inspiral table
 		for old_event in events:
@@ -151,48 +182,31 @@ class StreamThinca(object):
 				setattr(new_event, col, getattr(old_event, col))
 			self.sngl_inspiral_table.append(new_event)
 
-		# coincidence
+		# clear the list of non-coincident triggers
+		del self.noncoinc_sngls[:]
+
+		# anything to do?
 		if self.sngl_inspiral_table:
-			# since the triggers are appended to the table, we
-			# can rely on the last one to provide an estimate
-			# of the most recent time stamps to come out of the
-			# pipeline
+			# coincidence.  since the triggers are appended to
+			# the table, we can rely on the last one to provide
+			# an estimate of the most recent time stamps to
+			# come out of the pipeline
 			self.run_coincidence(self.sngl_inspiral_table[-1].get_end() - self.coincidence_back_off)
 
-		# put the original sngl_inspiral table back
-		self.xmldoc.childNodes[-1].replaceChild(real_sngl_inspiral_table, self.sngl_inspiral_table)
+			# copy triggers into real output document
+			self.move_results_to_output()
 
-		# copy triggers into real output document
-		if self.coinc_event_map_table:
-			real_coinc_event_map_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincMapTable.tableName)
-			index = dict((row.event_id, row) for row in self.sngl_inspiral_table)
-			self.ids &= set(index)
-			newids = set(self.coinc_event_map_table.getColumnByName("event_id")) - self.ids
-			self.ids |= newids
-			self.coinc_event_map_table.reverse()	# so the loop that follows preserves order
-			while self.coinc_event_map_table:
-				real_coinc_event_map_table.append(self.coinc_event_map_table.pop())
-			for id in newids:
-				real_sngl_inspiral_table.append(index[id])
 
 	def flush(self):
-		# replace the sngl_inspiral table with our version.
-		real_sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
-		self.xmldoc.childNodes[-1].replaceChild(self.sngl_inspiral_table, real_sngl_inspiral_table)
+		# clear the list of non-coincident triggers
+		del self.noncoinc_sngls[:]
 
 		# coincidence
 		self.run_coincidence(segments.infinity())
 
-		# put the original sngl_inspiral table back
-		self.xmldoc.childNodes[-1].replaceChild(real_sngl_inspiral_table, self.sngl_inspiral_table)
-
 		# copy triggers into real output document
-		real_coinc_event_map_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincMapTable.tableName)
-		newids = set(self.coinc_event_map_table.getColumnByName("event_id")) - self.ids
-		self.ids |= newids
-		while self.coinc_event_map_table:
-			real_coinc_event_map_table.append(self.coinc_event_map_table.pop())
-		while self.sngl_inspiral_table:
-			row = self.sngl_inspiral_table.pop()
-			if row.event_id in newids:
-				real_sngl_inspiral_table.append(row)
+		self.move_results_to_output()
+
+		# save all remaining triggers that weren't used in coincs
+		self.noncoinc_sngls.exted(row for row in self.sngl_inspiral_table if row.event_id not in self.ids)
+		del self.sngl_inspiral_table[:]
