@@ -208,19 +208,24 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 	# data source
 	#
 
-	if fake_data is not None:
-		assert not online_data
-		if fake_data == 'LIGO':
-			src = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
-		elif fake_data == 'AdvLIGO':
-			src = pipeparts.mkfakeadvLIGOsrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
-		else:
-			raise ValueError("fake data cannot be %s" % fake_data)
-	elif online_data:
+
+	# Live source, no seek
+	if online_data:
 		assert not fake_data
 		src = pipeparts.mkfakesrc(pipeline, instrument, detector.channel, blocksize = 16384 * 8 * 1, volume = 1e-20, is_live = True)
+
+	# Unlive source, needs a seek
 	else:
-		src = pipeparts.mkframesrc(pipeline, location = detector.frame_cache, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size, segment_list = frame_segments)
+		if fake_data is not None:
+			assert not online_data
+			if fake_data == 'LIGO':
+				src = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
+			elif fake_data == 'AdvLIGO':
+				src = pipeparts.mkfakeadvLIGOsrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
+			else:
+				raise ValueError("fake data cannot be %s" % fake_data)
+		else:
+			src = pipeparts.mkframesrc(pipeline, location = detector.frame_cache, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size, segment_list = frame_segments)
 
 		#
 		# seek the data source if not live
