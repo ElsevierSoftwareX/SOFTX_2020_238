@@ -18,7 +18,7 @@ from glue.segmentsUtils import vote
 from pylal import inject
 from pylal import rate
 from optparse import OptionParser
-from gstlal import inspiral as gstlal_likelihood
+from gstlal import inspiral
 from gstlal.svd_bank import read_bank
 from gstlal import far
 
@@ -76,11 +76,9 @@ livetime = far.get_live_time(segments)
 
 if options.compute_fap:
 	# retrieve rank data
-	coincparamsdistributions, likelihood_seglists = gstlal_likelihood.load_likelihood_data(options.background_bins_file, verbose = options.verbose)
-	injections = coincparamsdistributions.injection_rates
-	far.populate_injections(injections)
-	counts = coincparamsdistributions.background_rates
-	Far = far.FAR(livetime, options.additional_trials_factor, counts, injections)
+	distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_filename(options.background_bins_file, verbose = options.verbose)
+	distribution_stats.synthesize_injections(verbose = options.verbose)
+	Far = far.FAR(livetime, options.additional_trials_factor, distribution_stats)
 else:
 	Far = far.FAR(livetime, options.additional_trials_factor)
 
@@ -112,47 +110,18 @@ if options.compute_fap is not None:
 	connection.close()
 	dbtables.discard_connection_filename(options.non_injection_db, working_filename, verbose = options.verbose)
 
-#
-# Compute the likelihood ratio
-#
-
-# FIXME:  the smoothing should be done with the .finish() method.
-# FIXME:  make sure the smoothing is what is intended:  what's coded here
-# is neither computing a sliding average of bin counts, nor an event rate
-# density.
-#coincparamsdistributions.finish(filters = gstlal_likelihood.DistributionsStats.filters, verbose = options.verbose)
-
-if options.compute_fap:
-	print >>sys.stderr, "smoothing bin counts and computing likelihood ..."
-	minvals = []
-	for i, k in enumerate(Far.counts):
-		binned_array = Far.counts[k]
-		far.smooth_bins(binned_array)
-		binned_array = Far.injections[k]
-		far.smooth_bins(binned_array)
-		# FIXME inverse likelihood is what is used for the ranking, small means likely
-		Far.counts[k].array /= Far.injections[k].array
-		# we want Nans to be inf because they are not likely to be a GW
-		Far.counts[k].array[numpy.isnan(Far.counts[k].array)] = float('inf')
-		# normalize so that the max value is always less than one
-		Far.counts[k].array /= Far.counts[k].array[-numpy.isinf(Far.counts[k].array)].sum()
-		minArr = Far.counts[k].array[Far.counts[k].array != 0.0]
-		if len(minArr) > 0:
-			minvals.append(minArr.min())
-	minval = min(minvals)
-	rankoffset = numpy.ceil(numpy.abs(numpy.log(minval))) + 1
 
 #
 # iterate over files to rank
 #
 
 if options.compute_fap is not None:
-	far.set_fap(options, Far, options.non_injection_db, rankoffset)
+	far.set_fap(options, Far, options.non_injection_db)
 	# increment the trials factor by 1 before assigning faps for
 	# injections.  Injections imply that there is always one more event
 	Far.increment_trials_table(1)
 	for f in options.injection_dbs:
-		far.set_fap(options, Far, f, rankoffset)
+		far.set_fap(options, Far, f)
 
 if options.compute_far is not None:
 	far.set_far(options, Far, options.non_injection_db)

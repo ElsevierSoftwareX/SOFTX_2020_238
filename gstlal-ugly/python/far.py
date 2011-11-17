@@ -7,11 +7,13 @@ import sys
 import numpy
 from scipy import interpolate, random
 from scipy.stats import poisson
+from glue import iterutils
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.segmentsUtils import vote
+from pylal import ligolw_burca2
 from pylal import inject
 from pylal import rate
 from gstlal.svd_bank import read_bank
@@ -24,66 +26,17 @@ except ImportError:
 sqlite3.enable_callback_tracebacks(True)
 
 #
-# Functions to synthesize injections
-#
-
-def snr_distribution(size, startsnr):
-	return startsnr * random.power(3, size)**-1 # 3 here actually means 2 :) according to scipy docs
-
-def noncentrality(snrs, prefactor):
-	return prefactor * random.rand(len(snrs)) * snrs**2 # FIXME power depends on dimensionality of the bank and the expectation for the mismatch for real signals
-	#return prefactor * random.power(1, len(snrs)) * snrs**2 # FIXME power depends on dimensionality of the bank and the expectation for the mismatch for real signals
-
-def chisq_distribution(df, non_centralities, size):
-	out = numpy.empty((len(non_centralities) * size,))
-	for i, nc in enumerate(non_centralities):
-		out[i*size:(i+1)*size] = random.noncentral_chisquare(df, nc, size)
-	return out
-
-def populate_injections(bindict, prefactor = .3, df = 24, size = 1000000, verbose = True):
-	for i, k in enumerate(bindict):
-		binarr = bindict[k]
-		if verbose:
-			print >> sys.stderr, "synthesizing injections for ", k
-		minsnr = binarr.bins[0].upper().min()
-		random.seed(i) # FIXME changes as appropriate
-		snrs = snr_distribution(size, minsnr)
-		ncs = noncentrality(snrs, prefactor)
-		chisqs = chisq_distribution(df, ncs, 1) / df
-		for snr, chisq in zip(snrs, chisqs):
-			binarr[snr, chisq**.5 / snr] += 1
-
-#
 # Utility functions
 #
 
-def smooth_bins(bA):
-	#FIXME what is this window supposed to be??
-	wn = rate.gaussian_window2d(15, 15, sigma = 8)
-	rate.filter_array(bA.array.T, wn)
-	sum = bA.array.sum()
-	if sum != 0:
-		bA.array /= sum # not the same as the to_pdf() method
-
 def linearize_array(arr):
 	return arr.reshape((1,arr.shape[0] * arr.shape[1]))
-
-def get_nonzero(arr):
-	# zeros, nans and infs mean that either the numerator or denominator of the
-	# likelihood was zero.  We do not include those
-	zb = arr != 0
-	nb = numpy.isnan(arr)
-	ib = numpy.isinf(arr)
-	return arr[zb - nb - ib]
-
-def count_to_rank(val, offset = 100):
-	return numpy.log(val) + offset #FIXME It should be at least the absolute value of the minimum of the log of all bins
 
 #
 # Function to compute the fap in a given file
 #
 
-def set_fap(options, Far, f, rankoffset):
+def set_fap(options, Far, f):
 	from glue.ligolw import dbtables
 
 	# set up working file names
@@ -101,7 +54,7 @@ def set_fap(options, Far, f, rankoffset):
 		print >>sys.stderr, "computing faps for ", ifos
 		ifoset = lsctables.instrument_set_from_ifos(ifos)
 		ifoset.discard("H2")
-		Far.updateFAPmap(ifoset, rankoffset)
+		Far.updateFAPmap(ifoset)
 
 		# FIXME abusing FAR column
 		connection.cursor().execute(fap_query(ifoset, ifos))
@@ -156,17 +109,24 @@ def set_far(options, Far, f):
 #
 
 class FAR(object):
-	def __init__(self, livetime, trials_factor, counts = None, injections = None):
-		self.injections = injections
-		self.counts = counts
+	def __init__(self, livetime, trials_factor, distribution_stats = None):
+		self.distribution_stats = distribution_stats
+		if self.distribution_stats is not None:
+			# FIXME:  this results in the
+			# .smoothed_distributions object containing
+			# *probabilities* not probability densities. this
+			# might be changed in the future.
+			self.distribution_stats.finish()
+			self.likelihood_ratio = ligolw_burca2.LikelihoodRatio(self.distribution_stats.smoothed_distributions)
+		else:
+			self.likelihood_ratio = None
 		self.livetime = livetime
 		self.trials_factor = trials_factor
 		self.trials_table = {}
 
-	def updateFAPmap(self, instruments, rank_offset):
-		if self.counts is None:
+	def updateFAPmap(self, instruments):
+		if self.distribution_stats is None:
 			raise InputError, "must provide background bins file"
-		self.rank_offset = rank_offset
 
 		#
 		# the target FAP resolution is 1 part in 10^7.  So depending on
@@ -176,15 +136,59 @@ class FAR(object):
 		#
 
 		targetlen = int(1e7**(1. / len(instruments)))
-		nonzerorank = {}
 
-		for ifo in instruments:
-			# FIXME don't repeat calc by checking if it has been done??
-			nonzerorank[ifo] = count_to_rank(get_nonzero(linearize_array(self.counts[ifo+"_snr_chi"].array)), offset = self.rank_offset)
+		# reduce typing
+		background = self.distribution_stats.smoothed_distributions.background_rates
+		injections = self.distribution_stats.smoothed_distributions.injection_rates
 
-		nonzerorank = self.rankBins(nonzerorank, targetlen)
-		self.ranks, weights = self.possible_ranks_array(nonzerorank)
-		fap, self.fap_from_rank = self.CDFinterp(self.ranks, weights)
+		likelihood_pdfs = {}
+		for param in background:
+			instrument = param.split("_")[0]
+			if instrument not in instruments:
+				continue
+
+			likelihoods = injections[param].array / background[param].array
+			# ignore infs and nans because background is never
+			# found in those bins.  the boolean array indexing
+			# flattens the array
+			likelihoods = likelihoods[numpy.isfinite(likelihoods)]
+			minlikelihood = likelihoods[likelihoods != 0].min()
+			maxlikelihood = likelihoods.max()
+
+			# construct PDF
+			# FIXME:  because the background array contains
+			# probabilities and not probability densities, the
+			# likelihood_pdfs contain probabilities and not
+			# densities, as well, when this is done
+			likelihood_pdfs[param] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, targetlen),)))
+			for coords in iterutils.MultiIter(*background[param].bins.centres()):
+				likelihood = self.likelihood_ratio({param: coords})
+				if numpy.isfinite(likelihood):
+					likelihood_pdfs[param][likelihood,] += background[param][coords]
+		# make sure we didn't skip any instruments' data
+		assert len(likelihood_pdfs) == len(instruments)
+
+		ranks, weights = self.possible_ranks_array(likelihood_pdfs)
+		# complementary cumulative distribution function
+		self.ccdf = weights[::-1].cumsum()[::-1]
+		self.ccdf /= self.ccdf[0]
+		self.ccdf_interpolator = interpolate.interp1d(ranks, self.ccdf)
+		# record min and max ranks so we know which end of the ccdf to use when we're out of bounds
+		self.minrank = min(ranks)
+		self.maxrank = max(ranks)
+
+	def fap_from_rank(self, rank):
+		# FIXME:  doesn't check that rank is a scalar
+		try:
+			return self.ccdf_interpolator(rank)[0]
+		except ValueError:
+			# out of bounds, return ccdf edge
+			if rank >= self.maxrank:
+				return self.ccdf[-1]
+			if rank < self.minrank:
+				return self.ccdf[0]
+			# shouldn't get here
+			raise
 
 	def set_trials_table(self, connection):
 
@@ -199,49 +203,26 @@ class FAR(object):
 		for k in self.trials_table:
 			self.trials_table[k] += n
 
-	def rankBins(self, vec, size):
-		out = {}
-		minrank = min([v.min() for v in vec.values()])
-		maxrank = max([v.max() for v in vec.values()])
-		for ifo, ranks in vec.items():
-			out[ifo] = rate.BinnedArray(rate.NDBins((rate.LinearBins(minrank, maxrank, size),)))
-			for r in ranks:
-				out[ifo][r,]+=1
-		return out
-
-	def possible_ranks_array(self, bAdict):
+	def possible_ranks_array(self, likelihood_pdfs):
 		# start with an identity array to seed the outerproduct chain
-		ranks = numpy.array([1])
-		vals = numpy.array([1])
-		for ifo, bA in bAdict.items():
-			ranks = numpy.outer(ranks, bA.centres()[0])
-			vals = numpy.outer(vals, bA.array)
+		ranks = numpy.array([1.0])
+		vals = numpy.array([1.0])
+		# FIXME:  probably only works because the pdfs aren't pdfs but probabilities
+		for likelihood_pdf in likelihood_pdfs.values():
+			ranks = numpy.outer(ranks, likelihood_pdf.centres()[0])
+			vals = numpy.outer(vals, likelihood_pdf.array)
 			ranks = ranks.reshape((ranks.shape[0] * ranks.shape[1],))
 			vals = vals.reshape((vals.shape[0] * vals.shape[1],))
 		vals = vals[ranks.argsort()]
 		ranks.sort()
 		return ranks, vals
 
-	def CDFinterp(self, ranks, weights = None):
-		if weights is None:
-			FAP = (numpy.arange(len(ranks)) + 1.) / len(vec)
-		else:
-			FAP = weights.cumsum()
-			FAP /= FAP[-1]
-		# Rather than putting 0 for FAPS we cannot estimate, set it to the mimimum non zero value which is more meaningful
-		return FAP, interpolate.interp1d(ranks, FAP, fill_value = (FAP[FAP !=0.0]).min(), bounds_error = False)
-
-	# Method only works if counts is not None:
+	# Method only works if likelihood ratio data is available
 	def compute_rank(self, snr_chisq_dict):
-		if self.counts is None:
+		if self.distribution_stats is None:
 			raise InputError, "must provide background bins file"
-		rank = 1
-		for ifo, (snr,chisq) in snr_chisq_dict.items():
-			val = count_to_rank(self.counts[ifo+"_snr_chi"][snr, chisq**.5 / snr], offset = self.rank_offset)
-			rank *= val
-		if rank > self.ranks[-2]:
-			rank = self.ranks[-2]
-		return rank
+		snr_chisq_dict = dict((ifo + "_snr_chi", (snr, chisq**.5 / snr)) for ifo, (snr, chisq) in snr_chisq_dict.items())
+		return self.likelihood_ratio(snr_chisq_dict)
 
 	def compute_fap2(self, ifos, tsid, mass1, mass2, chi, ifo1, snr1, chisq1, ifo2, snr2, chisq2):
 		trials_factor = self.trials_table.setdefault((ifos, tsid, mass1, mass2, chi),1) + self.trials_factor
@@ -259,30 +240,26 @@ class FAR(object):
 		fap = 1.0 - (1.0 - fap)**trials_factor
 		return float(fap)
 
-	def FAR_from_FAP(self, fap, n = 1):
+	def compute_far(self, fap, n = 1):
+		if fap == 0.:
+			return 0.
+		livetime = float(abs(self.livetime))
 		# the n = 1 case can be done exactly.  That is good since it is
 		# the most important.
 		if n == 1:
-			return 0. - numpy.log(1. - fap) / self.livetime
+			return 0. - numpy.log(1. - fap) / livetime
 		if n > 1 and n <= 100:
 			nvec = numpy.logspace(-12, numpy.log10(n + 10. * n**.5), 100)
 		else:
 			nvec = numpy.logspace(numpy.log10(n - 10. * n**.5), numpy.log10(n + 10. * n**.5), 100)
 		FAPS = 1. - poisson.cdf(n,nvec)
 		#FIXME is this right since nvec is log spaced?
-		interp = interpolate.interp1d(FAPS, nvec / self.livetime)
+		interp = interpolate.interp1d(FAPS, nvec / livetime)
 		if fap < FAPS[1]:
 			return 0.
 		if fap > FAPS[-1]:# This means that the FAP has gone off the edge.  We will bump it down because we don't really care about this being right.
 			fap = FAPS[-1]
 		return interp(fap)[0]
-
-	def compute_far(self, fap, n):
-		if fap == 0.0:
-			far = 0.
-		else:
-			far = self.FAR_from_FAP(fap, n)
-		return far
 
 
 def get_live_time(segments, verbose = True):

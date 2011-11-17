@@ -27,15 +27,17 @@
 
 
 import itertools
-import threading
-import time
+import numpy
 import os
+from scipy import random
 try:
 	import sqlite3
 except ImportError:
         # pre 2.5.x
 	from pysqlite2 import dbapi2 as sqlite3
 import sys
+import threading
+import time
 
 from glue import iterutils
 from glue import segments
@@ -300,9 +302,9 @@ class DistributionsStats(object):
 	def synthesize_injections(self, prefactor = .3, df = 24, N = 1000000, verbose = False):
 		random.seed(0) # FIXME changes as appropriate
 		chunk_size = 1000000	# do this many at once
-		for k, binarr in self.raw_distributions.injection_rates.items():
+		for param, binarr in self.raw_distributions.injection_rates.items():
 			if verbose:
-				print >> sys.stderr, "synthesizing injections for ", k
+				print >> sys.stderr, "synthesizing injections for %s" % param
 			minsnr = binarr.bins[0].upper().min()
 			remaining = N
 			while remaining:
@@ -328,9 +330,9 @@ class DistributionsStats(object):
 			binnedarray.array /= numpy.sum(binnedarray.array)
 
 	@classmethod
-	def from_filename(cls, filename, verbose = False):
+	def from_filename(cls, filenames, verbose = False):
 		self = cls()
-		self.raw_distributions, seglists = ligolw_burca_tailor.load_likelihood_data([filename], u"gstlal_inspiral_likelihood", verbose = verbose)
+		self.raw_distributions, seglists = ligolw_burca_tailor.load_likelihood_data(filenames, u"gstlal_inspiral_likelihood", verbose = verbose)
 		# FIXME:  produce error if binnings don't match this class's binnings attribute?
 		binnings = dict((param, self.raw_distributions.zero_lag_rates[param].bins) for param in self.raw_distributions.zero_lag_rates)
 		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**binnings)
