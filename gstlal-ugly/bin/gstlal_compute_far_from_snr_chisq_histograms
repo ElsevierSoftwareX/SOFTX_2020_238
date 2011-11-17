@@ -90,20 +90,19 @@ from glue.ligolw import dbtables
 #
 
 if options.compute_fap is not None:
-
 	working_filename = dbtables.get_connection_filename(options.non_injection_db, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
 
 	# remove zero lag triggers from the background bins
 	# FIXME this is supposed to pull out only triggers found in zero lag, is it correct?
 	if options.verbose:
-		print >>sys.stderr, "num sngl trigs before", " ".join(["%s:%d" % (ifo, cnts.array.sum()) for (ifo, cnts) in Far.counts.items()])
+		print >>sys.stderr, "num sngl trigs before", " ".join(["%s:%d" % (ifo, cnts.array.sum()) for (ifo, cnts) in Far.distribution_stats.raw_distributions.background_rates.items()])
 
 	for ifo, snr, chisq in connection.cursor().execute("SELECT ifo, snr, chisq FROM sngl_inspiral WHERE sngl_inspiral.event_id IN (SELECT event_id FROM coinc_event_map JOIN coinc_event ON (coinc_event_map.table_name == 'sngl_inspiral' AND coinc_event.coinc_event_id == coinc_event_map.coinc_event_id) WHERE NOT EXISTS (SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0))"):
-		Far.counts[ifo+"_snr_chi"][snr, chisq**.5 / snr] -= 1
+		Far.distribution_stats.raw_distributions.background_rates[ifo+"_snr_chi"][snr, chisq**.5 / snr] -= 1
 
 	if options.verbose:
-		print >>sys.stderr, "num sngl trigs after", " ".join(["%s:%d" % (ifo, cnts.array.sum()) for (ifo, cnts) in Far.counts.items()])
+		print >>sys.stderr, "num sngl trigs after", " ".join(["%s:%d" % (ifo, cnts.array.sum()) for (ifo, cnts) in Far.distribution_stats.raw_distributions.background_rates.items()])
 
 	Far.set_trials_table(connection)
 	
