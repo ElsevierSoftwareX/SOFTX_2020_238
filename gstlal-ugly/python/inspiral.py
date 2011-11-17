@@ -52,6 +52,7 @@ from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals
 from pylal import ligolw_burca_tailor
 from pylal import ligolw_tisi
 from pylal import rate
+from gstlal import streamthinca
 from gstlal import svd_bank
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
@@ -352,7 +353,7 @@ class DistributionsStats(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, out_seg, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, verbose = False):
 		#
 		# initialize
 		#
@@ -435,6 +436,18 @@ class Data(object):
 		# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
 		self.sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))
 
+		#
+		# attach a StreamThinca instance to ourselves
+		#
+
+		self.stream_thinca = streamthinca.StreamThinca(
+			self.xmldoc,
+			self.process.process_id,
+			coincidence_threshold = coincidence_threshold,
+			coincidence_back_off = 50,	# coincidence back-off is big enough to handle buffer slop, max time slide offset automatically added.
+			thinca_interval = 50.0	# seconds
+		)
+
 	def appsink_new_buffer(self, elem):
 		self.lock.acquire()
 		try:
@@ -446,19 +459,24 @@ class Data(object):
 				event.process_id = self.process.process_id
 				event.event_id = self.sngl_inspiral_table.get_next_id()
 
+			# run stream thinca
+			self.stream_thinca.add_events(events)
+
 			# update the parameter distribution data
+			# FIXME:  only add events that aren't used in coincs
 			for event in events:
 				self.distribution_stats.add_single(event)
 
-			# run stream thinca
-			# FIXME:
-
 			# update output document
-			self.sngl_inspiral_table.extend(events)
 			if self.connection is not None:
 				self.connection.commit()
 		finally:
 			self.lock.release()
+
+	def flush(self):
+		self.stream_thinca.flush()
+		if self.connection is not None:
+			self.connection.commit()
 
 	def write_output_file(self, verbose = False):
 		if self.connection is not None:

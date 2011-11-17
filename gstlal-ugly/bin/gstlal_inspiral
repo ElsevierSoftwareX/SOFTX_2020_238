@@ -53,7 +53,6 @@ from gstlal import svd_bank
 from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import reference_psd
-from gstlal import streamthinca
 from gstlal import inspiral
 
 def excepthook(*args):
@@ -297,22 +296,17 @@ output = inspiral.Data(
 	out_seg = options.seg, #FIXME make better outseg def?  Maybe pointless now that gstlal inspiral can analyze over frame gaps
 	injection_filename = options.injections,
 	time_slide_file = options.time_slide_file,
+	coincidence_threshold = options.coincidence_threshold,
 	comment = options.comment,
 	tmp_path = options.tmp_space,
 	verbose = options.verbose
-)
-stream_thinca = streamthinca.StreamThinca(
-	output,
-	coincidence_threshold = options.coincidence_threshold,
-	coincidence_back_off = 50,	# coincidence back-off is big enough to handle buffer slop, max time slide offset automatically added.
-	thinca_interval = 50.0	# seconds
 )
 if options.verbose:
 	print >>sys.stderr, "... output document initialized"
 
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline ...",
-appsync = pipeparts.AppSync(appsink_new_buffer = stream_thinca.appsink_new_buffer)
+appsync = pipeparts.AppSync(appsink_new_buffer = output.appsink_new_buffer)
 appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-snglinspiral")) for src in triggersrc)
 if options.verbose:
 	print >>sys.stderr, "attached %d, done" % len(appsinks)
@@ -352,7 +346,7 @@ mainloop.run()
 #
 
 
-stream_thinca.flush()
+output.flush()
 output.write_output_file(verbose = options.verbose)
 
 
