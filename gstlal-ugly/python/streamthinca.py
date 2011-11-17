@@ -208,5 +208,5 @@ class StreamThinca(object):
 		self.move_results_to_output()
 
 		# save all remaining triggers that weren't used in coincs
-		self.noncoinc_sngls.exted(row for row in self.sngl_inspiral_table if row.event_id not in self.ids)
+		self.noncoinc_sngls.extend(row for row in self.sngl_inspiral_table if row.event_id not in self.ids)
 		del self.sngl_inspiral_table[:]
