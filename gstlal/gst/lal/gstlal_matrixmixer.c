@@ -194,11 +194,18 @@ static GstFlowReturn mix(GSTLALMatrixMixer *element, GstBuffer *inbuf, GstBuffer
 	} input_channels, output_channels;
 
 	/*
+	 * Number of samples to process.
+	 */
+
+	length = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
+	if(!length)
+		return GST_FLOW_OK;
+
+	/*
 	 * Wrap the input and output buffers in GSL matrix views, then mix
 	 * input channels into output channels.
 	 */
 
-	length = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
 	switch(element->data_type) {
 	case GSTLAL_MATRIXMIXER_FLOAT:
 		input_channels.as_float = gsl_matrix_float_view_array((float *) GST_BUFFER_DATA(inbuf), length, num_input_channels(element));
