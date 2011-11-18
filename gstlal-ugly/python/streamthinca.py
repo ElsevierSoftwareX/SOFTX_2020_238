@@ -76,7 +76,7 @@ def get_effective_snr(self, fac):
 
 
 class StreamThinca(object):
-	def __init__(self, xmldoc, process_id, coincidence_threshold, coincidence_back_off, thinca_interval = 50.0):
+	def __init__(self, xmldoc, process_id, coincidence_threshold, thinca_interval = 50.0):
 		self.xmldoc = xmldoc
 		self.process_id = process_id
 		# can't use table.new_from_template() because we need to
@@ -89,7 +89,9 @@ class StreamThinca(object):
 		# a \Delta t only coincidence test it's the \Delta t window
 		# not including the light travel time
 		self.coincidence_threshold = coincidence_threshold
-		self.coincidence_back_off = coincidence_back_off + max(abs(offset) for offset in lsctables.table.get_table(self.xmldoc, lsctables.TimeSlideTable.tableName).getColumnByName("offset"))
+		# stay this far away from the boundaries of the available
+		# triggers
+		self.coincidence_back_off = max(abs(offset) for offset in lsctables.table.get_table(self.xmldoc, lsctables.TimeSlideTable.tableName).getColumnByName("offset"))
 		self.thinca_interval = thinca_interval
 		# set of the event ids of triggers currently in ram that
 		# have already been used in coincidences
@@ -100,7 +102,7 @@ class StreamThinca(object):
 
 	def run_coincidence(self, boundary):
 		# wait until we've accumulated thinca_interval seconds
-		if self.last_boundary + self.thinca_interval > boundary:
+		if self.last_boundary + self.thinca_interval > boundary - self.coincidence_back_off:
 			return
 
 		# remove triggers that are too old to be useful.  save any
@@ -173,7 +175,7 @@ class StreamThinca(object):
 				real_sngl_inspiral_table.append(index[id])
 
 
-	def add_events(self, events):
+	def add_events(self, events, boundary):
 		# convert the new row objects to the type required by
 		# ligolw_thinca(), and append to our sngl_inspiral table
 		for old_event in events:
@@ -191,7 +193,7 @@ class StreamThinca(object):
 			# the table, we can rely on the last one to provide
 			# an estimate of the most recent time stamps to
 			# come out of the pipeline
-			self.run_coincidence(self.sngl_inspiral_table[-1].get_end() - self.coincidence_back_off)
+			self.run_coincidence(boundary)
 
 			# copy triggers into real output document
 			self.move_results_to_output()

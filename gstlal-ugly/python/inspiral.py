@@ -444,7 +444,6 @@ class Data(object):
 			self.xmldoc,
 			self.process.process_id,
 			coincidence_threshold = coincidence_threshold,
-			coincidence_back_off = 50,	# coincidence back-off is big enough to handle buffer slop, max time slide offset automatically added.
 			thinca_interval = 50.0	# seconds
 		)
 
@@ -452,7 +451,9 @@ class Data(object):
 		self.lock.acquire()
 		try:
 			# retrieve triggers from appsink element
-			events = tuple(event for event in sngl_inspirals_from_buffer(elem.emit("pull-buffer")) if LIGOTimeGPS(event.end_time, event.end_time_ns) in self.search_summary.get_out())
+			buffer = elem.emit("pull-buffer")
+			timestamp = LIGOTimeGPS(0, buffer.timestamp)
+			events = tuple(event for event in sngl_inspirals_from_buffer(buffer) if LIGOTimeGPS(event.end_time, event.end_time_ns) in self.search_summary.get_out())
 
 			# set metadata on triggers
 			for event in events:
@@ -460,7 +461,7 @@ class Data(object):
 				event.event_id = self.sngl_inspiral_table.get_next_id()
 
 			# run stream thinca
-			self.stream_thinca.add_events(events)
+			self.stream_thinca.add_events(events, timestamp)
 
 			# update the parameter distribution data.  only
 			# update from sngls that weren't used in coincs
