@@ -18,4 +18,5 @@ dist_bin_SCRIPTS = \
 	gstlal_glitch_population \
 	gstlal_omega \
 	gstlal_ll_inspiral \
-	gstlal_ll_trigger_pipe
+	gstlal_ll_trigger_pipe \
+	gstlal_excesspower

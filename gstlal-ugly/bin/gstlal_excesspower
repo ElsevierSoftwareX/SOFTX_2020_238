@@ -1,0 +1,311 @@
+#!/usr/bin/python
+
+import numpy
+
+from gstlal.pipeutil import gst, mkelem
+from gstlal.pipeparts import *
+from gstlal.pipeio import parse_spectrum_message
+from gstlal.lloidparts import LLOIDHandler
+
+import gstlal.excesspower as ep
+from gstlal.excesspower import *
+
+from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
+
+import os
+
+class EPHandler( LLOIDHandler ):
+	def __init__( self, mainloop, pipeline ):
+		# TODO: Unhardcode
+		self.base_band = 16 
+		self.flow = 64 
+		self.fhigh = 500
+		#self.fhigh = 2000
+		self.rate = 1024
+		#self.rate = 4096
+		self.filter_len = 2*int(2*self.rate/self.base_band)
+
+		self.psd = self.build_default_psd( self.rate, self.filter_len )
+		self.psd_power = 0
+
+		self.spec_corr = self.build_default_correlation( self.rate )
+
+		self.filter_bank = None
+		# TODO: Maybe not necessary
+		self.rebuild_filter()
+		self.firbank = None
+
+		self.chan_matrix = None
+		self.rebuild_chan_mix_matrix()
+		self.mmixers = {}
+
+		super(type(self), self).__init__(mainloop, pipeline)
+
+	def add_firbank( self, firbank ):
+		self.firbank = firbank
+		firbank.set_property( "fir-matrix", self.rebuild_filter() )
+
+	def add_matmixer( self, mm, res_level ):
+		self.mmixers[ res_level ] = mm
+		self.rebuild_matrix_mixers( res_level )
+
+	def build_default_psd( self, rate, filter_len ):
+		psd = REAL8FrequencySeries()
+		psd.deltaF = float(rate)/filter_len
+		psd.data = numpy.ones( filter_len/2 + 1 ) #/ 2 / psd.deltaF
+		psd.f0 = 0
+		return psd
+
+	def build_default_correlation( self, rate ):
+		"""
+		Builds a Kronecker delta correlation series for k, k'.
+		"""
+		corr = numpy.zeros(rate + 1)
+		corr[0] = 1
+		return corr
+
+	def rebuild_matrix_mixers( self, res_level = None ):
+		#print >> sys.stderr, "Building reslevel %d mm" % res_level
+		#print >> sys.stderr, len(self.mmixers), len(self.chan_matrix)
+		for i, mm in self.mmixers.iteritems():
+			#print >> sys.stderr, self.chan_matrix
+			if( res_level != None and res_level != i ): continue
+			#print >> sys.stderr, "res level %d" % i
+
+			nchannels = self.filter_bank.shape[0]
+			up_factor = int(numpy.log2(nchannels/(nchannels >> i)))
+			cmatrix = ep.build_chan_matrix( 
+				nchannels = nchannels,
+				up_factor = up_factor,
+				norm = self.chan_matrix[i] 
+			)
+			#cmatrix = numpy.matrix( cmatrix )
+			mm.set_property( "matrix", cmatrix )
+			#print >> sys.stderr, mm.get_property( "matrix" )
+
+	def rebuild_filter( self ):
+		self.filter_bank = ep.build_filter( fhigh = self.fhigh, psd = self.psd, corr = self.spec_corr )
+		return self.filter_bank
+
+	def rebuild_chan_mix_matrix( self ):
+		self.chan_matrix = ep.build_inner_product_norm( 
+			corr = self.spec_corr, 
+			band = self.base_band, 
+			# NOTE: No, I have no idea why.
+			#del_f = self.psd.deltaF/2**5,
+			del_f = self.psd.deltaF,
+			nfilts = len(self.filter_bank),
+			flow = self.flow
+			# TODO: PSD option to lalburst IP doesn't work
+			#psd = self.psd
+		)
+		#import pickle
+		#self.chan_matrix = pickle.load( open("mmixercoeff.pickle") )
+		#self.chan_matrix = pickle.load( open("mmixercoeff_psd.pickle") )
+		return self.chan_matrix
+
+	def rebuild_everything( self ):
+		# Rebuild filter bank and hand it off to the FIR element
+		print >> sys.stderr, "Rebuilding FIR bank"
+		self.firbank.set_property( "fir_matrix", self.rebuild_filter() )
+
+		print >> sys.stderr, "Rebuilding matrix mixer"
+		self.rebuild_chan_mix_matrix()
+		# Rebuild the matrix mixer with new normalization coefficients
+		self.rebuild_matrix_mixers()
+
+def on_psd_change( elem, pspec, hand ):
+	print >> sys.stderr, "Intercepted spectrum signal."
+	# TODO: Ensure that the other options (flow and such) are set here as well
+
+	hand.psd = REAL8FrequencySeries(
+		name = "PSD",
+		#epoch = laltypes.LIGOTimeGPS(0, message.structure["timestamp"]),
+		f0 = 0.0,
+		deltaF = elem.get_property( "delta-f" ),
+		#sampleUnits = laltypes.LALUnit(message.structure["sample-units"].strip()),
+		data = numpy.array( elem.get_property( "mean-psd" ) )
+	)
+
+	#f = open("psd.dat", "w")
+	#for freq, p in enumerate( hand.psd.data ):
+		#f.write("%f %g\n" % (freq*hand.psd.deltaF, p) )
+	#f.close()
+
+	# Determine if the PSD has changed enough to warrant rebuilding the filter
+	# bank.
+	psd_power = sum(hand.psd.data)
+	change = abs((hand.psd_power - psd_power) / psd_power )
+	if( change > 0.5 ):
+		print >> sys.stderr, "Processed signal. PSD change %d per, regenerating filters" % int(change*100)
+		hand.psd_power = psd_power
+		hand.rebuild_everything()
+
+def on_spec_corr_change( elem, pspec, hand ):
+	print >> sys.stderr, "Intercepted correlation signal."
+	# TODO: Ensure that the other options (flow and such) are set here as well
+	#import pickle
+	#pickle.dump( elem.get_property( "spectral-correlation" ), open("spec_corr.pickle", "w") )
+	hand.spec_corr = elem.get_property( "spectral-correlation" )
+
+	#if( hand.cache_spec_corr ):
+		#f = open( "spec_corr.dat", "w" )
+		#k_end = len( hand.spec_corr ) / 2
+		#for k, sp in enumerate( hand.spec_corr ):
+			#f.write( "%d %g\n" % (k, sp) )
+	
+	# If the spectrum correlation changes, rebuild everything
+	if( hand.psd != None ):
+		hand.rebuild_everything()
+
+### MAIN PIPELINE ####
+
+# The data rate at which we wish to do analysis
+# Assumed lower than the input data
+sample_rate = 1024
+base_band = 16
+
+# Max trigger duration (s)
+max_dur = 1  # s
+
+# Verbosity and diagnostics
+verbose = True
+diagnostics = False
+
+# Caching options
+cache_spec_corr = True
+
+pipeline = gst.Pipeline( "gstlal_excesspower" )
+mainloop = gobject.MainLoop()
+handler = EPHandler(mainloop, pipeline)
+
+head = mkfakeLIGOsrc( pipeline, instrument="H1", channel_name = "LSC-STRAIN" )
+
+# Diagnostic plot
+if( diagnostics ):
+	head = postdatatee = mktee( pipeline, head )
+	mknxydumpsink( pipeline, mkqueue( pipeline, postdatatee ), "data_pre.txt" )
+
+# Data conditioning
+head = mkcapsfilter( pipeline, mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % sample_rate )
+head = whitener = mkwhiten( pipeline, head )
+
+head = mknofakedisconts( pipeline, head )
+
+# Diagnostic plot
+if( diagnostics ):
+	head = postresamptee = mktee( pipeline, head )
+	mknxydumpsink( pipeline, mkqueue( pipeline, head ), "data_post.txt" )
+
+head = mkprogressreport( pipeline, head, "prog1" )
+
+# excess power channel firbank
+# NOTE: This is where the inspiral pipeline will feed in
+#fir_filter = handler.rebuild_filter()
+head = mkfirbank( pipeline, head, 
+	#fir_matrix = fir_filter,
+	# Time domain processing seems *much* faster
+	#time_domain=True 
+	time_domain=False 
+)
+# TODO: Make this less hardcodish
+handler.add_firbank( pipeline.get_by_name( "gstlalfirbank0" ) )
+nchannels = handler.filter_bank.shape[0]
+
+# TODO: We could limit the number of resolutions available and add an
+# audioundersampler here to reduce our workload, for each factor of
+# undersampling, we reduce our largest available frequency tile by a factor of 
+# 2.
+
+head = mkprogressreport( pipeline, head, "prog2" )
+
+head = postfirtee = mktee( pipeline, mkqueue( pipeline, head ) )
+# Diagnostic plot
+if( diagnostics ):
+	mknxydumpsink( pipeline, postfirtee, "postfirbank.txt" )
+
+# First branch -- send fully sampled data to wider channels for processing
+nlevels = int(numpy.ceil( numpy.log2( nchannels ) )) 
+for res_level in range(0, nlevels):
+	head = postfirtee
+
+# DEBUG:
+#import pickle
+#chan_matrix = numpy.array(pickle.load( open("mmixercoeff.pickle") ))
+#chan_matrix = ep.build_chan_matrix( nchannels, res_level, chan_matrix[res_level] )
+	#chan_matrix = ep.build_chan_matrix( nchannels, res_level )
+	head = matmixer = mkmatrixmixer( pipeline, head )
+	#up_factor = int(chan_matrix.shape[0] / chan_matrix.shape[1])
+	handler.add_matmixer( matmixer, res_level )
+
+	handler.cache_spec_corr = cache_spec_corr
+
+	head = mkprogressreport( pipeline, head, "post matrix mixer %d" % res_level )
+
+	head = postmmtee = mktee( pipeline, mkqueue( pipeline, head ) )
+	if( diagnostics ):
+		mknxydumpsink( pipeline, postmmtee, "postmatmix_res_%d.txt" % res_level )
+
+	elem = gst.element_factory_make("lal_audioundersample")
+	pipeline.add(elem)
+	head.link(elem)
+	head = elem
+
+	# base_band * 2 * @ of channel combinations
+	band = base_band * 2**res_level
+
+	# 2B = Nyquist = sample rate
+	#head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d" % (sample_rate/res_level) )
+	# TODO: A rate of <= 32 will cause flow failures here
+	undersamp_rate = sample_rate/128
+	#print undersamp_rate, band
+	head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate )
+	#head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d" % band )
+
+	elem = gst.element_factory_make("pow")
+	elem.set_property( "exponent", 2 )
+	pipeline.add(elem)
+	head.link(elem)
+	head = elem
+
+	head = mktee( pipeline, head )
+
+	duration = 1
+	# Second branch -- duration
+	# max_samp = int(max_dur*rate)
+	#while duration <= max_samp:
+		#duration = duration << 1
+
+	# Multi channel FIR filter
+	elem = gst.element_factory_make("audiofirfilter")
+	# TODO: Calculate the right thing here
+	fir_sq_adder = ep.build_fir_sq_adder( duration )
+	elem.set_property( "kernel", fir_sq_adder )
+	pipeline.add(elem)
+	head.link(elem)
+	head = elem
+
+	head = postsqtee = mktee( pipeline, mkqueue( pipeline, head ) )
+	if( diagnostics ):
+		mknxydumpsink( pipeline, postsqtee, "postsquare_ts_%d.txt" % duration )
+
+	head = mkprogressreport( pipeline, head, "post audio FIR filter %d, %d" % (res_level, duration) )
+
+	head = mkfakesink( pipeline, head )
+
+"""
+# generate triggers
+elem = gst.element_factory_make("appsink")
+"""
+
+# Spectrum notification processing
+whitener.connect_after( "notify::mean-psd", on_psd_change, handler )
+# Handle spectral correlation changes
+# TODO: Make sure this doesn't have to be in the mm loop
+whitener.connect_after( "notify::spectral-correlation", on_spec_corr_change, handler )
+
+print "Startin' up."
+pipeline.set_state( gst.STATE_PLAYING )
+gst.DEBUG_BIN_TO_DOT_FILE(pipeline,
+		gst.DEBUG_GRAPH_SHOW_ALL,"excesspower.dotfile")
+mainloop.run()

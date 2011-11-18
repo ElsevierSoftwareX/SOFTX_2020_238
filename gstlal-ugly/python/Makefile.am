@@ -19,4 +19,5 @@ pkgpython_PYTHON = \
 	streamthinca.py \
 	omega.py \
 	lloidplots.py \
-	inspiral.py
+	inspiral.py \
+	excesspower.py
