@@ -66,6 +66,23 @@ def set_fap(options, Far, f):
 	dbtables.put_connection_filename(f, working_filename, verbose = options.verbose)
 
 #
+# Trials table
+#
+
+class TrialsTable(dict):
+	@classmethod
+	def from_db(cls, connection):
+		connection.cursor().execute('CREATE INDEX template_index ON sngl_inspiral(mass1,mass2,chi)')
+		self = cls(((ifos, tsid, mass1, mass2, chi), count) for ifos, tsid, mass1, mass2, chi, count in connection.cursor().execute('SELECT ifos, coinc_event.time_slide_id, mass1, mass2, chi, count(*) / nevents FROM sngl_inspiral JOIN coinc_event_map ON coinc_event_map.event_id == sngl_inspiral.event_id JOIN coinc_inspiral ON coinc_inspiral.coinc_event_id == coinc_event_map.coinc_event_id JOIN coinc_event ON coinc_event.coinc_event_id == coinc_event_map.coinc_event_id  WHERE coinc_event_map.table_name = "sngl_inspiral" GROUP BY mass1, mass2, chi, ifos;'))
+		connection.cursor().execute('DROP INDEX template_index')
+		connection.commit()
+		return self
+
+	def increment(self, n):
+		for k in self:
+			self[k] += n
+
+#
 # Function to compute the far in a given file
 #
 
@@ -122,7 +139,6 @@ class FAR(object):
 			self.likelihood_ratio = None
 		self.livetime = livetime
 		self.trials_factor = trials_factor
-		self.trials_table = {}
 
 	def updateFAPmap(self, instruments):
 		if self.distribution_stats is None:
@@ -189,19 +205,6 @@ class FAR(object):
 				return self.ccdf[0]
 			# shouldn't get here
 			raise
-
-	def set_trials_table(self, connection):
-
-		connection.cursor().execute('CREATE INDEX template_index ON sngl_inspiral(mass1,mass2,chi)')
-
-		for ifos, tsid, mass1, mass2, chi, count in connection.cursor().execute('SELECT ifos, coinc_event.time_slide_id, mass1, mass2, chi, count(*) / nevents FROM sngl_inspiral JOIN coinc_event_map ON coinc_event_map.event_id == sngl_inspiral.event_id JOIN coinc_inspiral ON coinc_inspiral.coinc_event_id == coinc_event_map.coinc_event_id JOIN coinc_event ON coinc_event.coinc_event_id == coinc_event_map.coinc_event_id  WHERE coinc_event_map.table_name = "sngl_inspiral" GROUP BY mass1, mass2, chi, ifos;'):
-			self.trials_table[(ifos, tsid, mass1, mass2, chi)] = count
-		connection.cursor().execute('DROP INDEX template_index')
-		connection.commit()
-
-	def increment_trials_table(self, n):
-		for k in self.trials_table:
-			self.trials_table[k] += n
 
 	def possible_ranks_array(self, likelihood_pdfs):
 		# start with an identity array to seed the outerproduct chain

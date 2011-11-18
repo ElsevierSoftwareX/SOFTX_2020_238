@@ -93,7 +93,7 @@ if options.compute_fap is not None:
 	working_filename = dbtables.get_connection_filename(options.non_injection_db, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
 
-	Far.set_trials_table(connection)
+	Far.trials_table = far.TrialsTable.from_db(connection)
 
 	connection.close()
 	dbtables.discard_connection_filename(options.non_injection_db, working_filename, verbose = options.verbose)
@@ -107,7 +107,7 @@ if options.compute_fap is not None:
 	far.set_fap(options, Far, options.non_injection_db)
 	# increment the trials factor by 1 before assigning faps for
 	# injections.  Injections imply that there is always one more event
-	Far.increment_trials_table(1)
+	Far.trials_table.increment(1)
 	for f in options.injection_dbs:
 		far.set_fap(options, Far, f)
 
