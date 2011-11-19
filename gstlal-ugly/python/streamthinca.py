@@ -28,8 +28,6 @@ from glue import iterutils
 from glue import segments
 from glue.ligolw import lsctables
 from pylal import ligolw_thinca
-from pylal.xlal.datatypes.ligotimegps import LIGOTimeGPS
-lsctables.LIGOTimeGPS = LIGOTimeGPS
 
 
 #
@@ -79,24 +77,41 @@ class StreamThinca(object):
 	def __init__(self, xmldoc, process_id, coincidence_threshold, thinca_interval = 50.0):
 		self.xmldoc = xmldoc
 		self.process_id = process_id
-		# can't use table.new_from_template() because we need to
-		# ensure we have a Table subclass, not a DBTable subclass
-		self.sngl_inspiral_table = lsctables.New(lsctables.SnglInspiralTable, lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName).columnnames)
-		self.coinc_event_map_table = lsctables.New(lsctables.CoincMapTable)
-		self.last_boundary = -segments.infinity()
+		self.thinca_interval = thinca_interval
+
 		# when using the normal coincidence function from
 		# ligolw_thinca this is the e-thinca parameter.  when using
 		# a \Delta t only coincidence test it's the \Delta t window
 		# not including the light travel time
 		self.coincidence_threshold = coincidence_threshold
+
+		# we need our own copy of the sngl_inspiral table because
+		# we need a place for all the triggers to be held while we
+		# run coincidence on them.  we need our own copies of the
+		# other tables because sometimes ligolw_thinca wants to
+		# modify the attributes of a row object after appending it
+		# to a table, which isn't possible if the tables are
+		# SQL-based.  also, when making these, we can't use
+		# table.new_from_template() because we need to ensure we
+		# have a Table subclass, not a DBTable subclass
+		self.sngl_inspiral_table = lsctables.New(lsctables.SnglInspiralTable, lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName).columnnames)
+		self.coinc_event_map_table = lsctables.New(lsctables.CoincMapTable)
+		self.coinc_event_table = lsctables.New(lsctables.CoincTable)
+		self.coinc_inspiral_table = lsctables.New(lsctables.CoincInspiralTable)
+
+		# upper boundary of interval spanned by last invocation
+		self.last_boundary = -segments.infinity()
+
 		# stay this far away from the boundaries of the available
 		# triggers
 		self.coincidence_back_off = max(abs(offset) for offset in lsctables.table.get_table(self.xmldoc, lsctables.TimeSlideTable.tableName).getColumnByName("offset"))
-		self.thinca_interval = thinca_interval
+
 		# set of the event ids of triggers currently in ram that
 		# have already been used in coincidences
 		self.ids = set()
-		# sngls that are not involved in coincidences
+
+		# sngls that are not involved in coincidences.  we don't
+		# use this information, but the calling code might want it
 		self.noncoinc_sngls = []
 
 
@@ -116,6 +131,10 @@ class StreamThinca(object):
 		self.xmldoc.childNodes[-1].replaceChild(self.sngl_inspiral_table, orig_sngl_inspiral_table)
 		orig_coinc_event_map_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincMapTable.tableName)
 		self.xmldoc.childNodes[-1].replaceChild(self.coinc_event_map_table, orig_coinc_event_map_table)
+		orig_coinc_event_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincTable.tableName)
+		self.xmldoc.childNodes[-1].replaceChild(self.coinc_event_table, orig_coinc_event_table)
+		orig_coinc_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincInspiralTable.tableName)
+		self.xmldoc.childNodes[-1].replaceChild(self.coinc_inspiral_table, orig_coinc_inspiral_table)
 
 		# define once-off ntuple_comparefunc() so we can pass the
 		# coincidence segment in as a default value for the seg
@@ -144,6 +163,8 @@ class StreamThinca(object):
 		# put the original table objects back
 		self.xmldoc.childNodes[-1].replaceChild(orig_sngl_inspiral_table, self.sngl_inspiral_table)
 		self.xmldoc.childNodes[-1].replaceChild(orig_coinc_event_map_table, self.coinc_event_map_table)
+		self.xmldoc.childNodes[-1].replaceChild(orig_coinc_event_table, self.coinc_event_table)
+		self.xmldoc.childNodes[-1].replaceChild(orig_coinc_inspiral_table, self.coinc_inspiral_table)
 
 		# record boundary
 		self.last_boundary = boundary
@@ -155,8 +176,10 @@ class StreamThinca(object):
 		"""
 		if self.coinc_event_map_table:
 			# retrieve the target tables
-			real_coinc_event_map_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincMapTable.tableName)
 			real_sngl_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.SnglInspiralTable.tableName)
+			real_coinc_event_map_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincMapTable.tableName)
+			real_coinc_event_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincTable.tableName)
+			real_coinc_inspiral_table = lsctables.table.get_table(self.xmldoc, lsctables.CoincInspiralTable.tableName)
 
 			# figure out the IDs of triggers that have been
 			# used in coincs for the first time, and update the
@@ -167,10 +190,17 @@ class StreamThinca(object):
 			newids = set(self.coinc_event_map_table.getColumnByName("event_id")) - self.ids
 			self.ids |= newids
 
-			# move/copy rows into target tables
-			self.coinc_event_map_table.reverse()	# so the loop that follows preserves order
+			# move/copy rows into target tables.  reverse
+			# tables to preserve order (why?  why not)
+			self.coinc_event_map_table.reverse()
+			self.coinc_event_table.reverse()
+			self.coinc_inspiral_table.reverse()
 			while self.coinc_event_map_table:
 				real_coinc_event_map_table.append(self.coinc_event_map_table.pop())
+			while self.coinc_event_table:
+				real_coinc_event_table.append(self.coinc_event_table.pop())
+			while self.coinc_inspiral_table:
+				real_coinc_inspiral_table.append(self.coinc_inspiral_table.pop())
 			for id in newids:
 				real_sngl_inspiral_table.append(index[id])
 
