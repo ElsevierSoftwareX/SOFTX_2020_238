@@ -110,20 +110,30 @@ class StreamThinca(object):
 		# have already been used in coincidences
 		self.ids = set()
 
-		# sngls that are not involved in coincidences.  we don't
-		# use this information, but the calling code might want it
-		self.noncoinc_sngls = []
+
+	def add_events(self, events, boundary):
+		# convert the new row objects to the type required by
+		# ligolw_thinca(), and append to our sngl_inspiral table
+		for old_event in events:
+			new_event = ligolw_thinca.SnglInspiral()
+			for col in self.sngl_inspiral_table.columnnames:
+				setattr(new_event, col, getattr(old_event, col))
+			self.sngl_inspiral_table.append(new_event)
+
+		# run coincidence, return non-coincident sngls
+		return self.run_coincidence(boundary)
 
 
 	def run_coincidence(self, boundary):
-		# wait until we've accumulated thinca_interval seconds
-		if self.last_boundary + self.thinca_interval > boundary - self.coincidence_back_off:
-			return
+		# check that we've got events to process, and wait until
+		# we've accumulated thinca_interval seconds
+		if not self.sngl_inspiral_table or self.last_boundary + self.thinca_interval > boundary - self.coincidence_back_off:
+			return []
 
 		# remove triggers that are too old to be useful.  save any
 		# that were never used in coincidences
 		discard_boundary = self.last_boundary - self.coincidence_back_off
-		self.noncoinc_sngls[:] = (row for row in self.sngl_inspiral_table if row.get_end() < discard_boundary and row.event_id not in self.ids)
+		noncoinc_sngls = [row for row in self.sngl_inspiral_table if row.get_end() < discard_boundary and row.event_id not in self.ids]
 		iterutils.inplace_filter(lambda row: row.get_end() >= discard_boundary, self.sngl_inspiral_table)
 
 		# replace tables with our versions
@@ -166,8 +176,14 @@ class StreamThinca(object):
 		self.xmldoc.childNodes[-1].replaceChild(orig_coinc_event_table, self.coinc_event_table)
 		self.xmldoc.childNodes[-1].replaceChild(orig_coinc_inspiral_table, self.coinc_inspiral_table)
 
+		# copy triggers into real output document
+		self.move_results_to_output()
+
 		# record boundary
 		self.last_boundary = boundary
+
+		# return non-coincident sngls
+		return noncoinc_sngls
 
 
 	def move_results_to_output(self):
@@ -205,40 +221,12 @@ class StreamThinca(object):
 				real_sngl_inspiral_table.append(index[id])
 
 
-	def add_events(self, events, boundary):
-		# convert the new row objects to the type required by
-		# ligolw_thinca(), and append to our sngl_inspiral table
-		for old_event in events:
-			new_event = ligolw_thinca.SnglInspiral()
-			for col in self.sngl_inspiral_table.columnnames:
-				setattr(new_event, col, getattr(old_event, col))
-			self.sngl_inspiral_table.append(new_event)
-
-		# clear the list of non-coincident triggers
-		del self.noncoinc_sngls[:]
-
-		# anything to do?
-		if self.sngl_inspiral_table:
-			# coincidence.  since the triggers are appended to
-			# the table, we can rely on the last one to provide
-			# an estimate of the most recent time stamps to
-			# come out of the pipeline
-			self.run_coincidence(boundary)
-
-			# copy triggers into real output document
-			self.move_results_to_output()
-
-
 	def flush(self):
-		# clear the list of non-coincident triggers
-		del self.noncoinc_sngls[:]
-
 		# coincidence
-		self.run_coincidence(segments.infinity())
-
-		# copy triggers into real output document
-		self.move_results_to_output()
+		noncoinc_sngls = self.run_coincidence(segments.infinity())
 
 		# save all remaining triggers that weren't used in coincs
-		self.noncoinc_sngls.extend(row for row in self.sngl_inspiral_table if row.event_id not in self.ids)
-		del self.sngl_inspiral_table[:]
+		noncoinc_sngls.extend(row for row in self.sngl_inspiral_table if row.event_id not in self.ids)
+
+		# return non-coincident sngls
+		return noncoinc_sngls

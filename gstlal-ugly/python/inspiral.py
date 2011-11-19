@@ -461,11 +461,11 @@ class Data(object):
 				event.event_id = self.sngl_inspiral_table.get_next_id()
 
 			# run stream thinca
-			self.stream_thinca.add_events(events, timestamp)
+			noncoinc_sngls = self.stream_thinca.add_events(events, timestamp)
 
 			# update the parameter distribution data.  only
 			# update from sngls that weren't used in coincs
-			for event in self.stream_thinca.noncoinc_sngls:
+			for event in noncoinc_sngls:
 				self.distribution_stats.add_single(event)
 
 			# update output document
@@ -475,7 +475,10 @@ class Data(object):
 			self.lock.release()
 
 	def flush(self):
-		self.stream_thinca.flush()
+		# run StreamThinca's .flush().  returns the last remaining
+		# non-coincident sngls, add them to the distribution
+		for event in self.stream_thinca.flush():
+			self.distribution_stats.add_single(event)
 		if self.connection is not None:
 			self.connection.commit()
 
