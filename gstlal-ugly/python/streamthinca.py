@@ -159,8 +159,6 @@ class StreamThinca(object):
 		ligolw_thinca.ligolw_thinca(
 			self.xmldoc,
 			process_id = self.process_id,
-			EventListType = ligolw_thinca.InspiralEventList,
-			CoincTables = ligolw_thinca.InspiralCoincTables,
 			coinc_definer_row = ligolw_thinca.InspiralCoincDef,
 			event_comparefunc = event_comparefunc,
 			thresholds = self.coincidence_threshold,
