@@ -266,6 +266,16 @@ def chisq_distribution(df, non_centralities, size):
 		out[i*size:(i+1)*size] = random.noncentral_chisquare(df, nc, size)
 	return out
 
+
+#
+# Likelihood params func
+#
+
+
+def likelihood_params_func(events, offsetvector):
+	return dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq**.5 / event.snr)) for event in events)
+
+
 #
 # Book-keeping class
 #
@@ -296,11 +306,12 @@ class DistributionsStats(object):
 		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
 
 	def add_single(self, event):
-		self.raw_distributions.add_background({
-			("%s_snr_chi" % event.ifo): (event.snr, event.chisq**.5 / event.snr)
-		})
+		self.raw_distributions.add_background(likelihood_params_func((event,), None))
 
 	def synthesize_injections(self, prefactor = .3, df = 24, N = 1000000, verbose = False):
+		# FIXME:  for maintainability, this should be modified to
+		# use the .add_injection() method of the .raw_distributions
+		# attribute, but that will slow this down
 		random.seed(0) # FIXME changes as appropriate
 		chunk_size = 1000000	# do this many at once
 		for param, binarr in self.raw_distributions.injection_rates.items():
@@ -312,23 +323,28 @@ class DistributionsStats(object):
 				size = min(chunk_size, remaining)
 
 				snrs = snr_distribution(size, minsnr)
-				ncs = noncentrality(snrs, prefactor)
-				chisqs = chisq_distribution(df, ncs, 1) / df
+				chisqs = chisq_distribution(df, noncentrality(snrs, prefactor), 1) / df
 				for snr, chisq in itertools.izip(snrs, chisqs):
 					binarr[snr, chisq**.5 / snr] += 1
 
 				remaining -= size
 
-	def finish(self):
+	def finish(self, verbose = False):
 		self.smoothed_distributions = self.raw_distributions.copy(self.raw_distributions)
-		#self.smoothed_distributions.finish(filters = self.filters)
+		#self.smoothed_distributions.finish(filters = self.filters, verbose = verbose)
 		# FIXME:  should be the line above, we'll temporarily do
 		# the following.  the difference is that the above produces
 		# PDFs while what follows produces probabilities in each
 		# bin
-		for name, binnedarray in itertools.chain(self.smoothed_distributions.zero_lag_rates.items(), self.smoothed_distributions.background_rates.items(), self.smoothed_distributions.injection_rates.items()):
+		if verbose:
+			print >>sys.stderr, "smoothing parameter distributions ...",
+		for name, binnedarray in itertools.chain(self.smoothed_distributions.background_rates.items(), self.smoothed_distributions.injection_rates.items()):
+			if verbose:
+				print >>sys.stderr, "%s," % name,
 			rate.filter_array(binnedarray.array, self.filters[name])
 			binnedarray.array /= numpy.sum(binnedarray.array)
+		if verbose:
+			print >>sys.stderr, "done"
 
 	@classmethod
 	def from_filenames(cls, filenames, verbose = False):
@@ -353,15 +369,24 @@ class DistributionsStats(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, verbose = False):
 		#
 		# initialize
 		#
 
 		self.lock = threading.Lock()
-		self.instruments = instruments
-		self.distribution_stats = DistributionsStats()
 		self.filename = filename
+		self.instruments = instruments
+		self.verbose = verbose
+		self.distribution_stats = distribution_stats
+		# True to enable likelihood assignment
+		self.assign_likelihoods = assign_likelihoods
+		# Set to None to disable period snapshots, otherwise set to seconds
+		self.likelihood_snapshot_interval = likelihood_snapshot_interval
+		# Set to 1.0 to disable background data decay
+		self.likelihood_retention_factor = likelihood_retention_factor
+		# FIXME:  should this live in the DistributionsStats object?
+		self.likelihood_snapshot_timestamp = None
 
 		#
 		# build the XML document
@@ -404,8 +429,9 @@ class Data(object):
 			tbl.applyKeyMapping(time_slide_mapping)
 
 		#
-		# if the output is an sqlite database, convert the in-ram
-		# XML document to an interface to the database file
+		# if the output is an sqlite database, build the sqlite
+		# database and convert the in-ram XML document to an
+		# interface to the database file
 		#
 
 		if filename is not None and filename.endswith('.sqlite'):
@@ -446,6 +472,9 @@ class Data(object):
 			coincidence_threshold = coincidence_threshold,
 			thinca_interval = 50.0	# seconds
 		)
+		if self.assign_likelihoods:
+			self.distribution_stats.finish(verbose = self.verbose)
+			self.stream_thinca.set_likelihood_data(self.distribution_stats.smoothed_distributions, likelihood_params_func)
 
 	def appsink_new_buffer(self, elem):
 		self.lock.acquire()
@@ -459,6 +488,24 @@ class Data(object):
 			for event in events:
 				event.process_id = self.process.process_id
 				event.event_id = self.sngl_inspiral_table.get_next_id()
+
+			# update likelihood snapshot if needed
+			if self.likelihood_snapshot_timestamp is None:
+				self.likelihood_snapshot_timestamp = timestamp
+			if self.assign_likelihoods and self.likelihood_snapshot_interval is not None and timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval:
+				# generate smoothed snapshot of raw counts
+				self.distribution_stats.finish(verbose = self.verbose)
+				self.likelihood_snapshot_timestamp = timestamp
+				# update stream thinca's likelihood data
+				self.stream_thinca.set_likelihood_data(self.distribution_stats.smoothed_distributions, likelihood_params_func)
+				# decay the raw background counts to affect
+				# a moving history
+				# FIXME:  this will do bad things if the
+				# instruments stop produce events;  the
+				# decay should be tied to live time not
+				# wall clock time
+				for binnedarray in self.distribution_stats.raw_counts.background.values():
+					binnedarray.array *= self.likelihood_retention_factor
 
 			# run stream thinca
 			noncoinc_sngls = self.stream_thinca.add_events(events, timestamp)
@@ -476,7 +523,7 @@ class Data(object):
 
 	def flush(self):
 		# run StreamThinca's .flush().  returns the last remaining
-		# non-coincident sngls, add them to the distribution
+		# non-coincident sngls.  add them to the distribution
 		for event in self.stream_thinca.flush():
 			self.distribution_stats.add_single(event)
 		if self.connection is not None:
