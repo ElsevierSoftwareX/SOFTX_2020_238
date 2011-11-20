@@ -101,6 +101,7 @@ def parse_command_line():
 	parser.add_option("--snr-threshold", type="float", help="SNR threshold default 5.5", default=5.5)
 	parser.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.020, help = "Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.")
+	parser.add_option("--likelihood-file", metavar = "filename", help = "Set the name of the likelihood ratio data file to use (optional).  If not specified, likelihood ratios will not be assigned to coincs.")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 	parser.add_option("--comment",  metavar="str")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
@@ -308,6 +309,18 @@ if options.verbose:
 
 
 #
+# Load likelihood ratio data
+#
+
+
+if options.likelihood_file is not None:
+	distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
+	distribution_stats.synthesize_injections(verbose = options.verbose)
+else:
+	distribution_stats = inspiral.DistributionsStats()
+
+
+#
 # build output document
 #
 
@@ -322,23 +335,19 @@ output = inspiral.Data(
 	out_seg = options.seg, #FIXME make better outseg def?  Maybe pointless now that gstlal inspiral can analyze over frame gaps
 	injection_filename = options.injections,
 	time_slide_file = options.time_slide_file,
+	coincidence_threshold = options.coincidence_threshold,
+	distribution_stats = distribution_stats,
+	assign_likelihoods = options.likelihood_file is not None,
 	comment = options.comment,
 	tmp_path = options.tmp_space,
 	verbose = options.verbose
-)
-#FIXME dont hardcode some of this
-stream_thinca = streamthinca.StreamThinca(
-  	output,
-	coincidence_threshold = options.coincidence_threshold,
-	coincidence_back_off = 50,	# coincidence back-off is big enough to handle buffer slop, max time slide offset automatically added. 
-	thinca_interval = 50.0	# seconds
 )
 if options.verbose:
 	print >>sys.stderr, "... output document initialized"
 
 if options.verbose:
 	print >>sys.stderr, "attaching appsinks to pipeline ...",
-appsync = pipeparts.AppSync(appsink_new_buffer = stream_thinca.appsink_new_buffer)
+appsync = pipeparts.AppSync(appsink_new_buffer = output.appsink_new_buffer)
 appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps = gst.Caps("application/x-lal-snglinspiral")) for src in triggersrc)
 if options.verbose:
 	print >>sys.stderr, "attached %d, done" % len(appsinks)
