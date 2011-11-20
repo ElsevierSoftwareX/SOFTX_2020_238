@@ -97,6 +97,7 @@ def parse_command_line():
 	parser.add_option("--fir-stride", metavar = "time", type = "int", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
 	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.020, help = "Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.")
+	parser.add_option("--likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial likelihood ratio data (required).")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
@@ -107,7 +108,7 @@ def parse_command_line():
 	if options.reference_psd is None and not options.track_psd:
 		raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
 
-	required_options = ["output"]
+	required_options = ["output", "likelihood_file"]
 	
 	missing_options = []
 	if options.svd_bank is None:
@@ -255,6 +256,15 @@ if options.verbose:
 
 
 #
+# Load likelihood ratio data
+#
+
+
+distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
+distribution_stats.synthesize_injections(verbose = options.verbose)
+
+
+#
 # build output document
 #
 
@@ -272,6 +282,10 @@ output = inspiral.Data(
 	injection_filename = None,
 	time_slide_file = options.time_slide_file,
 	coincidence_threshold = options.coincidence_threshold,
+	distribution_stats = distribution_stats,
+	assign_likelihoods = True,
+	likelihood_snapshot_interval = 3600.0,	# seconds
+	likelihood_retention_factor = 0.98,	# characteristic decay time of 50 snapshots (~2 days)
 	comment = options.comment,
 	tmp_path = options.tmp_space,
 	verbose = options.verbose
