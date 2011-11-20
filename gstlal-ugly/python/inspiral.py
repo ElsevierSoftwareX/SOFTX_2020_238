@@ -331,7 +331,7 @@ class DistributionsStats(object):
 			binnedarray.array /= numpy.sum(binnedarray.array)
 
 	@classmethod
-	def from_filename(cls, filenames, verbose = False):
+	def from_filenames(cls, filenames, verbose = False):
 		self = cls()
 		self.raw_distributions, seglists = ligolw_burca_tailor.load_likelihood_data(filenames, u"gstlal_inspiral_likelihood", verbose = verbose)
 		# FIXME:  produce error if binnings don't match this class's binnings attribute?
