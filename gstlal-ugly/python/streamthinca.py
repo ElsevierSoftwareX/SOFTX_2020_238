@@ -27,6 +27,7 @@
 from glue import iterutils
 from glue import segments
 from glue.ligolw import lsctables
+from pylal import ligolw_burca2
 from pylal import ligolw_thinca
 
 
@@ -74,10 +75,11 @@ def get_effective_snr(self, fac):
 
 
 class StreamThinca(object):
-	def __init__(self, xmldoc, process_id, coincidence_threshold, thinca_interval = 50.0):
+	def __init__(self, xmldoc, process_id, coincidence_threshold, thinca_interval = 50.0, coinc_params_distributions = None, likelihood_params_func = None):
 		self.xmldoc = xmldoc
 		self.process_id = process_id
 		self.thinca_interval = thinca_interval
+		self.set_likelihood_data(coinc_params_distributions, likelihood_params_func)
 
 		# when using the normal coincidence function from
 		# ligolw_thinca this is the e-thinca parameter.  when using
@@ -109,6 +111,16 @@ class StreamThinca(object):
 		# set of the event ids of triggers currently in ram that
 		# have already been used in coincidences
 		self.ids = set()
+
+
+	def set_likelihood_data(self, coinc_params_distributions, likelihood_params_func):
+		if coinc_params_distributions is not None:
+			assert likelihood_params_func is not None
+			self.likelihood_func = ligolw_burca2.LikelihoodRatio(coinc_params_distributions)
+		else:
+			assert likelihood_params_func is None
+			self.likelihood_func = None
+		self.likelihood_params_func = likelihood_params_func
 
 
 	def add_events(self, events, boundary):
@@ -162,7 +174,9 @@ class StreamThinca(object):
 			coinc_definer_row = ligolw_thinca.InspiralCoincDef,
 			event_comparefunc = event_comparefunc,
 			thresholds = self.coincidence_threshold,
-			ntuple_comparefunc = ntuple_comparefunc
+			ntuple_comparefunc = ntuple_comparefunc,
+			likelihood_func = self.likelihood_func,
+			likelihood_params_func = self.likelihood_params_func
 		)
 
 		# restore .get_effective_snr() method on trigger class
