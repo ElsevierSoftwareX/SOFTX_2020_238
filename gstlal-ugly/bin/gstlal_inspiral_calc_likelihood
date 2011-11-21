@@ -1,0 +1,206 @@
+#!/usr/bin/python
+#
+# Copyright (C) 2010--2011  Kipp Cannon
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+from optparse import OptionParser
+try:
+	import sqlite3
+except ImportError:
+	# pre 2.5.x
+	from pysqlite2 import dbapi2 as sqlite3
+import sys
+
+
+from glue.lal import CacheEntry
+from glue.ligolw.utils import segments as ligolwsegments
+from pylal import ligolw_burca2
+from pylal import ligolw_thinca
+from gstlal import inspiral
+
+
+__author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
+__version__ = "git id %s" % ""	# FIXME
+__date__ = ""	# FIXME
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		version = "Name: %%prog\n%s" % "" # FIXME
+	)
+	parser.add_option("-c", "--input-cache", metavar = "filename", help = "Also process the files named in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
+	parser.add_option("-l", "--likelihood-file", metavar = "filename", action = "append", help = "Set the name of the likelihood ratio data file to use.  Can be given more than once.")
+	parser.add_option("--likelihood-cache", metavar = "filename", help = "Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
+	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+	parser.add_option("--vetoes-name", metavar = "name", help = "Set the name of the segment lists to use as vetoes (default = do not apply vetoes).")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
+	options, filenames = parser.parse_args()
+
+	options.likelihood_filenames = []
+	if options.likelihood_file is not None:
+		options.likelihood_filenames += options.likelihood_file
+	if options.likelihood_cache is not None:
+		options.likelihood_filenames += [CacheEntry(line).path() for line in file(options.likelihood_cache)]
+	if not options.likelihood_filenames:
+		raise ValueError, "no likelihood files specified"
+
+	if options.input_cache:
+		filenames += [CacheEntry(line).path() for line in file(options.input_cache)]
+
+	return options, filenames
+
+
+#
+# =============================================================================
+#
+#                   Support Funcs for Likelihood Ratio Code
+#
+# =============================================================================
+#
+
+
+def sngl_inspiral_events_func(cursor, coinc_event_id, row_from_cols):
+	return map(row_from_cols, cursor.execute("""
+SELECT
+	sngl_inspiral.*
+FROM
+	sngl_inspiral
+	JOIN coinc_event_map ON (
+		coinc_event_map.table_name == 'sngl_inspiral'
+		AND coinc_event_map.event_id == sngl_inspiral.event_id
+	)
+WHERE
+	coinc_event_map.coinc_event_id == ?
+	""", (coinc_event_id,)))
+
+
+def sngl_inspiral_veto_func(event, vetoseglists):
+	# return True if event should be *retained*
+	return event.ifo not in vetoseglists or event.get_end() not in vetoseglists[event.ifo]
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# command line
+#
+
+
+options, filenames = parse_command_line()
+
+
+#
+# load likelihood data
+#
+
+
+coincparamsdistributions, likelihood_seglists = inspiral.DistributionsStats.from_filenames(options.likelihood_filenames, verbose = options.verbose)
+if options.write_likelihood is not None:
+	coincparamsdistributions.to_filename(options.write_likelihood, likelihood_seglists, verbose = options.verbose)
+
+if options.verbose:
+	print >>sys.stderr, "computing event densities ..."
+# FIXME:  call .synthesize_injections() ?
+coincparamsdistributions.finish(verbose = options.verbose)
+
+likelihood_ratio_func = ligolw_burca2.LikelihoodRatio(coincparamsdistributions.smoothed_distributions)
+
+
+#
+# iterate over files
+#
+
+
+from glue.ligolw import dbtables
+
+
+for n, filename in enumerate(filenames):
+	#
+	# Open the database file.
+	#
+
+	if options.verbose:
+		print >>sys.stderr, "%d/%d: %s" % (n + 1, len(filenames), filename)
+
+	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
+	connection = sqlite3.connect(working_filename)
+	dbtables.DBTable_set_connection(connection)
+	if options.tmp_space is not None:
+		dbtables.set_temp_store_directory(connection, options.tmp_space, verbose = options.verbose)
+
+	#
+	# Summarize the database.
+	#
+
+	xmldoc = dbtables.get_xml(connection)
+	sngl_inspiral_table = dbtables.table.get_table(xmldoc, dbtables.lsctables.SnglInspiralTable.tableName)
+	coinc_def_id = dbtables.table.get_table(xmldoc, dbtables.lsctables.CoincDefTable.tableName).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
+	offset_vectors = dbtables.table.get_table(xmldoc, dbtables.lsctables.TimeSlideTable.tableName).as_dict()
+	if options.vetoes_name is not None:
+		vetoseglists = ligolwsegments.segmenttable_get_by_name(xmldoc, options.vetoes_name).coalesce()
+	else:
+		vetoseglists = ligolwsegments.segments.segmentlistdict()
+
+	#
+	# Run likelihood ratio calculation.
+	#
+
+	ligolw_burca2.assign_likelihood_ratios(
+		connection = connection,
+		coinc_def_id = coinc_def_id,
+		offset_vectors = offset_vectors,
+		vetoseglists = vetoseglists,
+		events_func = lambda cursor, coinc_event_id: sngl_inspiral_events_func(cursor, coinc_event_id, sngl_inspiral_table.row_from_cols),
+		veto_func = sngl_inspiral_veto_func,
+		likelihood_ratio_func = likelihood_ratio_func,
+		likelihood_params_func = inspiral.likelihood_params_func,
+		verbose = options.verbose
+	)
+
+	#
+	# Clean up.
+	#
+
+	xmldoc.unlink()
+	connection.close()
+	dbtables.put_connection_filename(filename, working_filename, verbose = options.verbose)

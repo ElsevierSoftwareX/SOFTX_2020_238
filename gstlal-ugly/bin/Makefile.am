@@ -1,6 +1,7 @@
 dist_bin_SCRIPTS = \
 	gstlal_prune_duplicate_mass_pairs \
 	gstlal_inspiral \
+	gstlal_inspiral_calc_likelihood \
 	gstlal_inspiral_pipe \
 	gstlal_mock_data_server \
 	gstlal_svd_bank \
