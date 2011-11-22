@@ -73,7 +73,7 @@ class TrialsTable(dict):
 	@classmethod
 	def from_db(cls, connection):
 		connection.cursor().execute('CREATE INDEX template_index ON sngl_inspiral(mass1,mass2,chi)')
-		self = cls(((ifos, tsid, mass1, mass2, chi), count) for ifos, tsid, mass1, mass2, chi, count in connection.cursor().execute('SELECT ifos, coinc_event.time_slide_id, mass1, mass2, chi, count(*) / nevents FROM sngl_inspiral JOIN coinc_event_map ON coinc_event_map.event_id == sngl_inspiral.event_id JOIN coinc_inspiral ON coinc_inspiral.coinc_event_id == coinc_event_map.coinc_event_id JOIN coinc_event ON coinc_event.coinc_event_id == coinc_event_map.coinc_event_id  WHERE coinc_event_map.table_name = "sngl_inspiral" GROUP BY mass1, mass2, chi, ifos;'))
+		self = cls(((ifos, tsid), count) for ifos, tsid, count in connection.cursor().execute('SELECT ifos, coinc_event.time_slide_id AS tsid, count(*) / nevents FROM sngl_inspiral JOIN coinc_event_map ON coinc_event_map.event_id == sngl_inspiral.event_id JOIN coinc_inspiral ON coinc_inspiral.coinc_event_id == coinc_event_map.coinc_event_id JOIN coinc_event ON coinc_event.coinc_event_id == coinc_event_map.coinc_event_id  WHERE coinc_event_map.table_name = "sngl_inspiral" GROUP BY tsid, ifos;'))
 		connection.cursor().execute('DROP INDEX template_index')
 		connection.commit()
 		return self
@@ -195,16 +195,11 @@ class FAR(object):
 
 	def fap_from_rank(self, rank):
 		# FIXME:  doesn't check that rank is a scalar
-		try:
-			return self.ccdf_interpolator(rank)[0]
-		except ValueError:
-			# out of bounds, return ccdf edge
-			if rank >= self.maxrank:
-				return self.ccdf[-1]
-			if rank < self.minrank:
-				return self.ccdf[0]
-			# shouldn't get here
-			raise
+		if rank >= self.maxrank:
+			return self.ccdf[-1]
+		if rank <= self.minrank:
+			return self.ccdf[0]
+		return self.ccdf_interpolator(rank)[0]
 
 	def possible_ranks_array(self, likelihood_pdfs):
 		# start with an identity array to seed the outerproduct chain
@@ -228,7 +223,7 @@ class FAR(object):
 		return self.likelihood_ratio(snr_chisq_dict)
 
 	def compute_fap2(self, ifos, tsid, mass1, mass2, chi, ifo1, snr1, chisq1, ifo2, snr2, chisq2):
-		trials_factor = self.trials_table.setdefault((ifos, tsid, mass1, mass2, chi),1) + self.trials_factor
+		trials_factor = int(self.trials_table.setdefault((ifos, tsid),1) * self.trials_factor) or 1
 		input = {ifo1:(snr1,chisq1), ifo2:(snr2,chisq2)}
 		rank = self.compute_rank(input)
 		fap = self.fap_from_rank(rank)
@@ -236,7 +231,7 @@ class FAR(object):
 		return float(fap)
 
 	def compute_fap3(self, ifos, tsid, mass1, mass2, chi, ifo1, snr1, chisq1, ifo2, snr2, chisq2, ifo3, snr3, chisq3):
-		trials_factor = self.trials_table.setdefault((ifos, tsid, mass1, mass2, chi),1) + self.trials_factor
+		trials_factor = int(self.trials_table.setdefault((ifos, tsid),1) * self.trials_factor) or 1
 		input = {ifo1:(snr1,chisq1), ifo2:(snr2,chisq2), ifo3:(snr3,chisq3)}
 		rank = self.compute_rank(input)
 		fap = self.fap_from_rank(rank)
