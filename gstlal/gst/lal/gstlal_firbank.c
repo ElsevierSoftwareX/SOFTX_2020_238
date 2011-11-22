@@ -212,7 +212,7 @@ static int push_gap(GSTLALFIRBank *element, unsigned samples)
 	if(samples) {
 		zerobuf = gst_buffer_new();
 		if(!zerobuf) {
-			GST_DEBUG_OBJECT(element, "failure allocating zero-pad buffer");
+			GST_ERROR_OBJECT(element, "failure allocating zero-pad buffer");
 			return -1;
 		}
 		GST_BUFFER_FLAG_SET(zerobuf, GST_BUFFER_FLAG_GAP);
@@ -252,6 +252,7 @@ static void set_metadata(GSTLALFIRBank *element, GstBuffer *buf, guint64 outsamp
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
 	else
 		GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_GAP);
+	GST_INFO_OBJECT(element, "%s%s output buffer %p spans %" GST_BUFFER_BOUNDARIES_FORMAT, gap ? "gap" : "nongap", GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", buf, GST_BUFFER_BOUNDARIES_ARGS(buf));
 }
 
 
@@ -286,7 +287,7 @@ static int create_fft_workspace(GSTLALFIRBank *element)
 
 	g_static_mutex_lock(gstlal_fftw_lock);
 
-	GST_DEBUG_OBJECT(element, "starting FFTW planning");
+	GST_LOG_OBJECT(element, "starting FFTW planning");
 	element->input_fd = (complex double *) fftw_malloc(length_fd * sizeof(*element->input_fd));
 	element->in_plan = fftw_plan_dft_r2c_1d(fft_block_length(element), (double *) element->input_fd, element->input_fd, FFTW_MEASURE);
 
@@ -296,7 +297,7 @@ static int create_fft_workspace(GSTLALFIRBank *element)
 
 	element->workspace_fd = (complex double *) fftw_malloc(length_fd * sizeof(*element->workspace_fd));
 	element->out_plan = fftw_plan_dft_c2r_1d(fft_block_length(element), element->workspace_fd, (double *) element->workspace_fd, FFTW_MEASURE);
-	GST_DEBUG_OBJECT(element, "FFTW planning complete");
+	GST_LOG_OBJECT(element, "FFTW planning complete");
 
 	/*
 	 * loop over filters.  copy each time-domain filter to input_fd,
@@ -699,7 +700,7 @@ static GstFlowReturn flush_history(GSTLALFIRBank *element)
 	 */
 
 	if(push_gap(element, padding) < 0) {
-		GST_DEBUG_OBJECT(element, "failure padding to FFT block boundary");
+		GST_ERROR_OBJECT(element, "failure padding to FFT block boundary");
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
@@ -893,7 +894,7 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
 
 	str = gst_caps_get_structure(caps, 0);
 	if(!gst_structure_get_int(str, "channels", &channels)) {
-		GST_DEBUG_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
+		GST_ERROR_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
 		return FALSE;
 	}
 
@@ -1041,16 +1042,16 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 
 	s = gst_caps_get_structure(outcaps, 0);
 	if(!gst_structure_get_int(s, "channels", &channels)) {
-		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, outcaps);
+		GST_ERROR_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, outcaps);
 		success = FALSE;
 	} else if(!gst_structure_get_int(s, "width", &width)) {
-		GST_DEBUG_OBJECT(element, "unable to parse width from %" GST_PTR_FORMAT, outcaps);
+		GST_ERROR_OBJECT(element, "unable to parse width from %" GST_PTR_FORMAT, outcaps);
 		success = FALSE;
 	} else if(!gst_structure_get_int(s, "rate", &rate)) {
-		GST_DEBUG_OBJECT(element, "unable to parse rate from %" GST_PTR_FORMAT, outcaps);
+		GST_ERROR_OBJECT(element, "unable to parse rate from %" GST_PTR_FORMAT, outcaps);
 		success = FALSE;
 	} else if(element->fir_matrix && (channels != (gint) fir_channels(element))) {
-		GST_DEBUG_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, fir_channels(element), outcaps);
+		GST_ERROR_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, fir_channels(element), outcaps);
 		success = FALSE;
 	}
 
@@ -1215,7 +1216,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	input_is_gap = GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP);
 	history_is_gap = gst_audioadapter_is_gap(element->adapter);
 
-	GST_DEBUG_OBJECT(element, "%u+%u history+input samples in hand", get_available_samples(element), (guint) (GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf)));
+	GST_INFO_OBJECT(element, "%u+%u history+input samples in hand", get_available_samples(element), (guint) (GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf)));
 	gst_buffer_ref(inbuf);	/* don't let calling code free buffer */
 	gst_audioadapter_push(element->adapter, inbuf);
 
@@ -1228,7 +1229,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * buffers */
 	nonzero_output_length = get_output_length(element, minimum_input_length(element, gst_audioadapter_head_nongap_length(element->adapter)));
 
-	GST_DEBUG_OBJECT(element, "state: history is %s, input is %s, zeros in adapter = %u", history_is_gap ? "gap" : "not gap", input_is_gap ? "gap" : "not gap", gst_audioadapter_tail_gap_length(element->adapter));
+	GST_INFO_OBJECT(element, "state: history is %s, input is %s, zeros in adapter = %u", history_is_gap ? "gap" : "not gap", input_is_gap ? "gap" : "not gap", gst_audioadapter_tail_gap_length(element->adapter));
 	if(!input_is_gap) {
 		/*
 		 * because the history that remains in the adapter cannot
@@ -1239,7 +1240,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		guint samples = filter(element, outbuf);
 		g_assert(output_length == samples);
-		GST_DEBUG_OBJECT(element, "output is %u samples", output_length);
+		GST_LOG_OBJECT(element, "output is %u samples", output_length);
 	} else if(history_is_gap) {
 		/*
 		 * all data in hand is known to be 0s, the output is a
@@ -1249,7 +1250,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		gst_audioadapter_flush(element->adapter, output_length);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		set_metadata(element, outbuf, output_length, TRUE);
-		GST_DEBUG_OBJECT(element, "output is %u sample gap", output_length);
+		GST_LOG_OBJECT(element, "output is %u sample gap", output_length);
 	} else if(nonzero_output_length >= output_length) {
 		/*
 		 * at least some of the start of the history contains
@@ -1263,7 +1264,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		guint samples = filter(element, outbuf);
 		g_assert(output_length == samples);
-		GST_DEBUG_OBJECT(element, "output is %u samples", output_length);
+		GST_LOG_OBJECT(element, "output is %u samples", output_length);
 	} else {
 		/*
 		 * the tailing zeros in the history combined with the input
@@ -1275,7 +1276,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		guint gap_length = output_length - nonzero_output_length;
 
-		GST_DEBUG_OBJECT(element, "output is %u samples followed by %u sample gap", output_length - gap_length, gap_length);
+		GST_LOG_OBJECT(element, "output is %u samples followed by %u sample gap", output_length - gap_length, gap_length);
 
 		/*
 		 * generate the first output buffer and push downstream
