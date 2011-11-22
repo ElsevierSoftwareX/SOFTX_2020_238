@@ -288,17 +288,17 @@ class DistributionsStats(object):
 	"""
 
 	binnings = {
-		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 500), rate.LogarithmicPlusOverflowBins(.1, 1., 500))),
-		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 500), rate.LogarithmicPlusOverflowBins(.1, 1., 500))),
-		"L1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 500), rate.LogarithmicPlusOverflowBins(.1, 1., 500))),
-		"V1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 500), rate.LogarithmicPlusOverflowBins(.1, 1., 500)))
+		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LogarithmicPlusOverflowBins(.1, 1., 200))),
+		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LogarithmicPlusOverflowBins(.1, 1., 200))),
+		"L1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LogarithmicPlusOverflowBins(.1, 1., 200))),
+		"V1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LogarithmicPlusOverflowBins(.1, 1., 200)))
 	}
 
 	filters = {
-		"H1_snr_chi": rate.gaussian_window2d(15, 15, sigma = 8),
-		"H2_snr_chi": rate.gaussian_window2d(15, 15, sigma = 8),
-		"L1_snr_chi": rate.gaussian_window2d(15, 15, sigma = 8),
-		"V1_snr_chi": rate.gaussian_window2d(15, 15, sigma = 8)
+		"H1_snr_chi": rate.gaussian_window2d(5, 5, sigma = 8),
+		"H2_snr_chi": rate.gaussian_window2d(5, 5, sigma = 8),
+		"L1_snr_chi": rate.gaussian_window2d(5, 5, sigma = 8),
+		"V1_snr_chi": rate.gaussian_window2d(5, 5, sigma = 8)
 	}
 
 	def __init__(self):
