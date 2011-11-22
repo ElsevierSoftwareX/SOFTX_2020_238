@@ -22,7 +22,8 @@ CREATE INDEX tmpindex1 ON _cluster_info_ (coinc_event_id);
 CREATE INDEX tmpindex2 ON _cluster_info_ (category, end_time, false_alarm_rate);
 
 --
--- delete coincs that are within 10 s of coincs with higher SNR in the same
+-- FIXME a no op right now, do we need to do this?
+-- delete coincs that are within 10 s of coincs with a certain FAP in the same
 -- category
 --
 
@@ -35,7 +36,7 @@ WHERE
 		FROM
 			_cluster_info_
 		WHERE
-			_cluster_info_.false_alarm_rate > 0.70
+			_cluster_info_.false_alarm_rate > 1.0
 		AND
 			_cluster_info_.coinc_event_id == coinc_event.coinc_event_id
 	);
