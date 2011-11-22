@@ -26,13 +26,6 @@ except ImportError:
 sqlite3.enable_callback_tracebacks(True)
 
 #
-# Utility functions
-#
-
-def linearize_array(arr):
-	return arr.reshape((1,arr.shape[0] * arr.shape[1]))
-
-#
 # Function to compute the fap in a given file
 #
 
@@ -44,8 +37,7 @@ def set_fap(options, Far, f):
 	connection = sqlite3.connect(working_filename)
 
 	# define double and triple fap functions
-	connection.create_function("fap2", 11, Far.compute_fap2)
-	connection.create_function("fap3", 14, Far.compute_fap3)
+	connection.create_function("fap", 3, Far.fap_from_rank)
 
 	# compute the faps
 	print >>sys.stderr, "computing faps ..."
@@ -54,10 +46,11 @@ def set_fap(options, Far, f):
 		print >>sys.stderr, "computing faps for ", ifos
 		ifoset = lsctables.instrument_set_from_ifos(ifos)
 		ifoset.discard("H2")
+		ifos = lsctables.ifos_from_instrument_set(ifoset)
 		Far.updateFAPmap(ifoset)
 
 		# FIXME abusing FAR column
-		connection.cursor().execute(fap_query(ifoset, ifos))
+		connection.cursor().execute(fap_query(ifos))
 		connection.commit()
 
 	# all finished
@@ -139,8 +132,11 @@ class FAR(object):
 			self.likelihood_ratio = None
 		self.livetime = livetime
 		self.trials_factor = trials_factor
+		self.ccdf_interpolator = {}
+		self.minrank = {}
+		self.maxrank = {}
 
-	def updateFAPmap(self, instruments):
+	def updateFAPmap(self, ifo_set):
 		if self.distribution_stats is None:
 			raise InputError, "must provide background bins file"
 
@@ -151,17 +147,19 @@ class FAR(object):
 		# for memory/CPU requirements
 		#
 
-		targetlen = int(1e7**(1. / len(instruments)))
+		targetlen = int(1e7**(1. / len(ifo_set)))
 
 		# reduce typing
 		background = self.distribution_stats.smoothed_distributions.background_rates
 		injections = self.distribution_stats.smoothed_distributions.injection_rates
 
 		likelihood_pdfs = {}
+		
 		for param in background:
 			instrument = param.split("_")[0]
-			if instrument not in instruments:
+			if instrument not in ifo_set:
 				continue
+			# FIXME only works if there is a 1-1 relationship between params and instruments
 
 			likelihoods = injections[param].array / background[param].array
 			# ignore infs and nans because background is never
@@ -176,37 +174,41 @@ class FAR(object):
 			# probabilities and not probability densities, the
 			# likelihood_pdfs contain probabilities and not
 			# densities, as well, when this is done
-			likelihood_pdfs[param] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, targetlen),)))
+			likelihood_pdfs[instrument] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, targetlen),)))
 			for coords in iterutils.MultiIter(*background[param].bins.centres()):
 				likelihood = self.likelihood_ratio({param: coords})
 				if numpy.isfinite(likelihood):
-					likelihood_pdfs[param][likelihood,] += background[param][coords]
-		# make sure we didn't skip any instruments' data
-		assert len(likelihood_pdfs) == len(instruments)
+					likelihood_pdfs[instrument][likelihood,] += background[param][coords]
 
-		ranks, weights = self.possible_ranks_array(likelihood_pdfs)
+		# switch to str representation because we will be using these in DB queries
+		ifostr = lsctables.ifos_from_instrument_set(ifo_set)
+
+		ranks, weights = self.possible_ranks_array(likelihood_pdfs, ifo_set)
 		# complementary cumulative distribution function
-		self.ccdf = weights[::-1].cumsum()[::-1]
-		self.ccdf /= self.ccdf[0]
-		self.ccdf_interpolator = interpolate.interp1d(ranks, self.ccdf)
+		ccdf = weights[::-1].cumsum()[::-1]
+		ccdf /= ccdf[0]
+		self.ccdf_interpolator[ifostr] = interpolate.interp1d(ranks, ccdf)
 		# record min and max ranks so we know which end of the ccdf to use when we're out of bounds
-		self.minrank = min(ranks)
-		self.maxrank = max(ranks)
+		self.minrank[ifostr] = (min(ranks), ccdf[0])
+		self.maxrank[ifostr] = (max(ranks), ccdf[-1])
 
-	def fap_from_rank(self, rank):
+	def fap_from_rank(self, rank, ifostr, tsid):
 		# FIXME:  doesn't check that rank is a scalar
-		if rank >= self.maxrank:
-			return self.ccdf[-1]
-		if rank <= self.minrank:
-			return self.ccdf[0]
-		return self.ccdf_interpolator(rank)[0]
+		if rank >= self.maxrank[ifostr][0]:
+			return self.maxrank[ifostr][1]
+		if rank <= self.minrank[ifostr][0]:
+			return self.minrank[ifostr][1]
+		fap = self.ccdf_interpolator[ifostr](rank)
+		trials_factor = int(self.trials_table.setdefault((ifostr, tsid),1) * self.trials_factor) or 1
+		return 1.0 - (1.0 - fap)**trials_factor
 
-	def possible_ranks_array(self, likelihood_pdfs):
+	def possible_ranks_array(self, likelihood_pdfs, ifo_set):
 		# start with an identity array to seed the outerproduct chain
 		ranks = numpy.array([1.0])
 		vals = numpy.array([1.0])
 		# FIXME:  probably only works because the pdfs aren't pdfs but probabilities
-		for likelihood_pdf in likelihood_pdfs.values():
+		for ifo in ifo_set:
+			likelihood_pdf = likelihood_pdfs[ifo]
 			ranks = numpy.outer(ranks, likelihood_pdf.centres()[0])
 			vals = numpy.outer(vals, likelihood_pdf.array)
 			ranks = ranks.reshape((ranks.shape[0] * ranks.shape[1],))
@@ -214,29 +216,6 @@ class FAR(object):
 		vals = vals[ranks.argsort()]
 		ranks.sort()
 		return ranks, vals
-
-	# Method only works if likelihood ratio data is available
-	def compute_rank(self, snr_chisq_dict):
-		if self.distribution_stats is None:
-			raise InputError, "must provide background bins file"
-		snr_chisq_dict = dict((ifo + "_snr_chi", (snr, chisq**.5 / snr)) for ifo, (snr, chisq) in snr_chisq_dict.items())
-		return self.likelihood_ratio(snr_chisq_dict)
-
-	def compute_fap2(self, ifos, tsid, mass1, mass2, chi, ifo1, snr1, chisq1, ifo2, snr2, chisq2):
-		trials_factor = int(self.trials_table.setdefault((ifos, tsid),1) * self.trials_factor) or 1
-		input = {ifo1:(snr1,chisq1), ifo2:(snr2,chisq2)}
-		rank = self.compute_rank(input)
-		fap = self.fap_from_rank(rank)
-		fap = 1.0 - (1.0 - fap)**trials_factor
-		return float(fap)
-
-	def compute_fap3(self, ifos, tsid, mass1, mass2, chi, ifo1, snr1, chisq1, ifo2, snr2, chisq2, ifo3, snr3, chisq3):
-		trials_factor = int(self.trials_table.setdefault((ifos, tsid),1) * self.trials_factor) or 1
-		input = {ifo1:(snr1,chisq1), ifo2:(snr2,chisq2), ifo3:(snr3,chisq3)}
-		rank = self.compute_rank(input)
-		fap = self.fap_from_rank(rank)
-		fap = 1.0 - (1.0 - fap)**trials_factor
-		return float(fap)
 
 	def compute_far(self, fap, n = 1):
 		if fap == 0.:
@@ -266,45 +245,5 @@ def get_live_time(segments, verbose = True):
 		print >> sys.stderr, "Livetime: ", livetime
 	return livetime
 
-def two_fap_query(fap_ifos, ifostr):
-	# NOTE Assumes exact mass1,mass2,chi coincidence
-	fap_ifos = tuple(fap_ifos)
-	query = '''UPDATE coinc_inspiral
-	SET false_alarm_rate = (SELECT fap2(coinc_inspiral.ifos, coinc_event.time_slide_id, snglA.mass1, snglA.mass2, snglA.chi, snglA.ifo, snglA.snr, snglA.chisq, snglB.ifo, snglB.snr, snglB.chisq)
-				FROM coinc_event_map AS mapA
-				JOIN coinc_event_map AS mapB ON mapB.coinc_event_id == coinc_inspiral.coinc_event_id
-				JOIN sngl_inspiral AS snglA ON snglA.event_id == mapA.event_id
-				JOIN sngl_inspiral AS snglB ON snglB.event_id == mapB.event_id
-				JOIN coinc_event ON coinc_event.coinc_event_id == mapA.coinc_event_id
-				WHERE mapA.table_name == "sngl_inspiral"
-				AND mapB.table_name == "sngl_inspiral"
-				AND snglA.ifo == "%s"
-				AND snglB.ifo == "%s"
-				AND mapA.coinc_event_id == coinc_inspiral.coinc_event_id)
-	WHERE ifos == "%s"''' % (fap_ifos[0], fap_ifos[1], ifostr)
-	return query
-
-def three_fap_query(fap_ifos, ifostr):
-	fap_ifos = tuple(fap_ifos)
-	query = '''UPDATE coinc_inspiral
-	SET false_alarm_rate = (SELECT fap3(coinc_inspiral.ifos, coinc_event.time_slide_id, snglA.mass1, snglA.mass2, snglA.chi, snglA.ifo, snglA.snr, snglA.chisq, snglB.ifo, snglB.snr, snglB.chisq, snglC.ifo, snglC.snr, snglC.chisq)
-				FROM coinc_event_map AS mapA
-				JOIN coinc_event_map AS mapB ON mapB.coinc_event_id == coinc_inspiral.coinc_event_id
-				JOIN coinc_event_map AS mapC ON mapC.coinc_event_id == coinc_inspiral.coinc_event_id
-				JOIN sngl_inspiral AS snglA ON snglA.event_id == mapA.event_id
-				JOIN sngl_inspiral AS snglB ON snglB.event_id == mapB.event_id
-				JOIN sngl_inspiral AS snglC ON snglC.event_id == mapC.event_id
-				JOIN coinc_event ON coinc_event.coinc_event_id == mapA.coinc_event_id
-				WHERE mapA.table_name == "sngl_inspiral"
-				AND mapB.table_name == "sngl_inspiral"
-				AND mapC.table_name == "sngl_inspiral"
-				AND snglA.ifo == "%s"
-				AND snglB.ifo == "%s"
-				AND snglC.ifo == "%s"
-				AND mapA.coinc_event_id == coinc_inspiral.coinc_event_id)
-	WHERE ifos == "%s"''' % (fap_ifos[0], fap_ifos[1], fap_ifos[2], ifostr)
-	return query
-
-def fap_query(fap_ifos, ifostr):
-	return {2: two_fap_query, 3: three_fap_query}[len(fap_ifos)](fap_ifos, ifostr)
-
+def fap_query(ifos):
+	return '''UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(coinc_event.likelihood, coinc_inspiral.ifos, coinc_event.time_slide_id) FROM coinc_event WHERE coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id AND coinc_inspiral.ifos = "%s" ) WHERE coinc_inspiral.ifos == "%s" ''' % (ifos,ifos)
