@@ -44,10 +44,15 @@ def set_fap(options, Far, f):
 	for ifos, in connection.cursor().execute('SELECT DISTINCT(ifos) FROM coinc_inspiral').fetchall():
 
 		print >>sys.stderr, "computing faps for ", ifos
-		ifoset = lsctables.instrument_set_from_ifos(ifos)
-		ifoset.discard("H2")
-		ifos = lsctables.ifos_from_instrument_set(ifoset)
-		Far.updateFAPmap(ifoset)
+		ifoset = frozenset(lsctables.instrument_set_from_ifos(ifos))
+		#ifoset.discard("H2")
+		#ifos = lsctables.ifos_from_instrument_set(ifoset)
+		# FIXME make this remap an option, don't hardcode
+		# remap means that you actually want to build a different
+		# likelihood distribution.  Here is lets us avoid the H1/H2
+		# correlations by ignoring H2.  THis only works if H2 was also
+		# ignored in the ranking
+		Far.updateFAPmap(ifoset, remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])})
 
 		# FIXME abusing FAR column
 		connection.cursor().execute(fap_query(ifos))
@@ -136,7 +141,7 @@ class FAR(object):
 		self.minrank = {}
 		self.maxrank = {}
 
-	def updateFAPmap(self, ifo_set):
+	def updateFAPmap(self, ifo_set, remap = {}):
 		if self.distribution_stats is None:
 			raise InputError, "must provide background bins file"
 
@@ -154,10 +159,15 @@ class FAR(object):
 		injections = self.distribution_stats.smoothed_distributions.injection_rates
 
 		likelihood_pdfs = {}
-		
+
+		# we might choose to statically map certain likelihood
+		# distributions to others.  This is useful for ignoring H2 when
+		# H1 is present. By default we don't
+		remap_set = remap.setdefault(ifo_set, ifo_set)
+
 		for param in background:
 			instrument = param.split("_")[0]
-			if instrument not in ifo_set:
+			if instrument not in remap_set:
 				continue
 			# FIXME only works if there is a 1-1 relationship between params and instruments
 
@@ -183,7 +193,7 @@ class FAR(object):
 		# switch to str representation because we will be using these in DB queries
 		ifostr = lsctables.ifos_from_instrument_set(ifo_set)
 
-		ranks, weights = self.possible_ranks_array(likelihood_pdfs, ifo_set)
+		ranks, weights = self.possible_ranks_array(likelihood_pdfs, remap_set)
 		# complementary cumulative distribution function
 		ccdf = weights[::-1].cumsum()[::-1]
 		ccdf /= ccdf[0]
