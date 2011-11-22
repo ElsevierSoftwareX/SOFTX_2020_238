@@ -50,6 +50,16 @@ m4_ifdef([AC_PROG_CC_C99],[AC_PROG_CC_C99],[LALSUITE_AC_PROG_CC_C99])
 
 AC_PROG_CXX
 AC_PROG_INSTALL
+# libtool incorrectly determines library path on SL6.  FIXME:  remove when
+# no longer needed
+case "${host}" in
+	x86_64-*-linux-gnu*)
+		if test `cat /etc/redhat-release 2>/dev/null` = "Scientific Linux release 6.1 (Carbon)" ; then
+			AC_MSG_NOTICE([hacking round broken libtool multilib support on SL6])
+			lt_cv_sys_lib_dlsearch_path_spec="/lib64 /usr/lib64"
+		fi
+	;;
+esac
 LT_INIT
 PKG_PROG_PKG_CONFIG()
 
