@@ -40,7 +40,7 @@ def which(prog):
 def log_path():
 	host = socket.getfqdn()
 	#FIXME add more hosts as you need them
-	if 'caltech.edu' in host: return '/usr1/' + os.environ['USER']
+	if 'cit' in host or 'caltech.edu' in host: return '/usr1/' + os.environ['USER']
 	if 'phys.uwm.edu' in host: return '/localscratch/' + os.environ['USER']
 	if 'aei.uni-hannover.de' in host: return '/local/user/' + os.environ['USER']
 	if 'phy.syr.edu' in host: return '/usr1/' + os.environ['USER']
@@ -376,6 +376,49 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 # gstlal_compute_far_from_snr_chisq_histograms
 ###############################################################################
 
+class gstlal_inspiral_calc_likelihood_job(pipeline.CondorDAGJob):
+	"""
+	A gstlal_inspiral_calc_likelihood job
+	"""
+	def __init__(self, executable=which('gstlal_inspiral_calc_likelihood'), tag_base='gstlal_inspiral_calc_likelihood'):
+		"""
+		"""
+		self.__prog__ = 'gstlal_inspiral_calc_likelihood'
+		self.__executable = executable
+		self.__universe = 'vanilla'
+		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
+		self.add_condor_cmd('getenv','True')
+		self.tag_base = tag_base
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
+		self.number = 1
+
+class gstlal_inspiral_calc_likelihood_node(pipeline.CondorDAGNode):
+	"""
+	A gstlal_inspiral_calc_likelihood node
+	"""
+	def __init__(self, job, dag, likelihood_file, synthesize_injections = True, input = [], p_node=[]):
+
+		pipeline.CondorDAGNode.__init__(self,job)
+		self.add_var_opt("likelihood-file", likelihood_file)
+		self.add_var_opt("tmp-space", log_path())
+		for f in input:
+			self.add_file_arg(f)
+		fpath = os.path.split(likelihood_file)
+		self.background_name = os.path.join(fpath[0], "post_calc_likelihood_" + fpath[1])
+		self.add_var_opt("write-likelihood", self.background_name)
+		if synthesize_injections:
+			self.add_var_opt("synthesize-injections", "")
+		for p in p_node:
+			self.add_parent(p)
+		self.output_names = input
+		dag.add_node(self)
+
+###############################################################################
+# gstlal_compute_far_from_snr_chisq_histograms
+###############################################################################
+
 class gstlal_compute_far_from_snr_chisq_histograms_jobFAP(pipeline.CondorDAGJob):
 	"""
 	A gstlal_compute_far_from_snr_chisq_histograms job
@@ -566,6 +609,7 @@ dag = bank_DAG("trigger_pipe")
 
 gstlalInspiralJob = gstlal_inspiral_job()
 gstlalInspiralInjJob = gstlal_inspiral_inj_job()
+calcLikelihoodJob = gstlal_inspiral_calc_likelihood_job()
 gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP = gstlal_compute_far_from_snr_chisq_histograms_jobFAP()
 gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR = gstlal_compute_far_from_snr_chisq_histograms_jobFAR()
 ligolwInspinjFindJob = ligolw_inspinjfind_job()
@@ -581,7 +625,7 @@ inj_nodes = []
 cluster_nodes = []
 
 num_jobs = num_bank_files(bank_cache)
-indfac = get_independence_factor(bank_cache)
+indfac = .1 # get_independence_factor(bank_cache)
 
 ###############################################################################
 # loop over banks to run gstlal inspiral pre clustering and far computation
@@ -609,18 +653,22 @@ for cnt, s in enumerate(build_bank_string(bank_cache)):
 	# the simplifying assumption that each gstlal_inspiral job produces
 	# roughly the same number of events.  Then the trials factor is
 	#
-	# trials factor = # of events in job X # of jobs X independence fraction.
+	# trials factor = # of events in job \times # of jobs \times independence fraction.
 	#
 	# The far code already uses the number of events in the job to rank the
-	# events.  Thus we just need to provide the factor # of jobs X
+	# events.  Thus we just need to provide the factor # of jobs \times
 	# independence fraction as an additional argument
 	#
 
-	trials_factor = int(num_banks * indfac) or 1
+	trials_factor = int(num_jobs * indfac) or 1
 
 	far_input_nodes = []
 
 	noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file)
+	
+	noninjnode_likelihood = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, noninjnode.background_name, synthesize_injections = True, input = [noninjnode.output_name], p_node=[noninjnode])
+
+	# book keeping
 	far_input_nodes.append(noninjnode)
 	noninj_nodes.append(noninjnode)
 	
@@ -630,16 +678,21 @@ for cnt, s in enumerate(build_bank_string(bank_cache)):
 
 	if options.injections is not None:
 		injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, vetoes=options.vetoes)
+	
+		# FIXME the previous compute likelihood function already populates the injections, we should just use those
+		injnode_likelihood = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, noninjnode_likelihood.background_name, synthesize_injections = True, input = [injnode.output_name], p_node=[noninjnode_likelihood, injnode])
+		
+		# book keeping
 		far_input_nodes.append(injnode)
 		inj_nodes.append(injnode)
 		#
 		# FAR nodes
 		#
 	
-		farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode.background_name, options.frame_segments_file, options.vetoes, trials_factor, FAP = True, noninj_input = noninjnode.output_name, inj_input = [injnode.output_name], p_node = [noninjnode, injnode])
+		farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode_likelihood.background_name, options.frame_segments_file, options.vetoes, trials_factor, FAP = True, noninj_input = noninjnode.output_name, inj_input = [injnode.output_name], p_node = [noninjnode_likelihood, injnode_likelihood])
 	
 	else:
-		farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode.background_name, options.frame_segments_file, options.vetoes, trials_factor, FAP = True, noninj_input = noninjnode.output_name, inj_input = [], p_node = [noninjnode])
+		farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode_likelihood.background_name, options.frame_segments_file, options.vetoes, trials_factor, FAP = True, noninj_input = noninjnode.output_name, inj_input = [], p_node = [noninjnode_likelihood])
 
 #
 	# Pre clustering
