@@ -4,7 +4,6 @@ plugin_LTLIBRARIES = libgstlal.la libgstlaladder.la
 
 libgstlal_la_SOURCES = \
 	gstlal.c \
-	low_latency_inspiral_functions.h low_latency_inspiral_functions.c \
 	gstlal_audioundersample.h gstlal_audioundersample.c \
 	gstlal_autochisq.h gstlal_autochisq.c \
 	gstlal_drop.h gstlal_drop.c \

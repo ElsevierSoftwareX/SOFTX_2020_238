@@ -74,7 +74,7 @@
 #include <gstlal.h>
 #include <gstlal_tags.h>
 #include <gstlal_simulation.h>
-#include <low_latency_inspiral_functions.h>
+
 
 /*
  * ============================================================================
@@ -205,7 +205,7 @@ static struct injection_document *load_injection_document(const char *filename, 
 
 static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element, const COMPLEX16FrequencySeries *response)
 {
-	LALPNOrder order = LAL_PNORDER_THREE_POINT_FIVE;
+	int twice_pn_order = 7;
 	unsigned injection_made;
 	double injTime;
 	REAL8 tmpREAL8;
@@ -234,10 +234,11 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 	while(thisSimInspiral) {
 
 		/*
-		 * calculate start and end times for this series containing this injection
+		 * calculate start and end times for this series containing
+		 * this injection
 		 */
 
-		injTime = gstlal_spa_chirp_time((REAL8) thisSimInspiral->mass1 + thisSimInspiral->mass2, (REAL8) thisSimInspiral->eta, (REAL8) thisSimInspiral->f_lower, order);
+		injTime = XLALSimInspiralTaylorLength(1.0 / 4096, thisSimInspiral->mass1 * LAL_MSUN_SI, thisSimInspiral->mass2 * LAL_MSUN_SI, thisSimInspiral->f_lower, twice_pn_order);
 		injStartTime = injEndTime = thisSimInspiral->geocent_end_time;
 		XLALGPSAdd(&injStartTime, -(1.9*injTime - 1.0));
 		XLALGPSAdd(&injEndTime, 0.1*injTime + 1.0);
