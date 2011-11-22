@@ -18,6 +18,7 @@ from glue import lal
 from glue.ligolw import lsctables
 from glue import segments
 from glue.ligolw import array
+from glue.ligolw import param
 import glue.ligolw.utils as utils
 import glue.ligolw.utils.segments as ligolw_segments
 from optparse import OptionParser
@@ -453,13 +454,29 @@ def parse_banks(bank_string):
 		out.setdefault(ifo, []).append(bank)
 	return out
 
-def get_svd_trials_factor(svd_bank_string, ifo):
+def get_independent_components(svd_bank_string, ifo):
+	"""
+	Estimate the number of independent components by using the SVD
+	"""
 	fname = parse_banks(svd_bank_string)[ifo][0]
-	lw = utils.load_filename(fname, verbose = True).childNodes[0]
+	lw = utils.load_filename(fname, verbose = False).childNodes[0]
 	out = 0.0
 	for node in (node for node in lw.childNodes if node.tagName == 'LIGO_LW'):
 		out += array.get_array(node, 'sum_of_squares_weights').array.sum()
-	return int(out) / 2 # FIXME The SVD is over the orthogonal phases, but we have half as many templates, should we divide by 2?
+	return int(out)
+
+
+def get_independence_factor(bank_cache, ifo = "H1"):
+	dof = 0.0
+	num_tmps = 0
+	for cnt, s in enumerate(build_bank_string(bank_cache)):
+		fname = parse_banks(s)[ifo][0]
+		lw = utils.load_filename(fname, verbose = False).childNodes[0]
+		for node in (node for node in lw.childNodes if node.tagName == 'LIGO_LW'):
+			dof += array.get_array(node, 'sum_of_squares_weights').array.sum()
+		num_tmps += len(lsctables.table.get_table(lw, lsctables.SnglInspiralTable.tableName))
+	return dof / num_tmps / 2. # 2 degrees of freedom per template
+		
 
 # FIXME surely this is in glue
 def parse_cache_str(instr):
@@ -563,17 +580,43 @@ noninj_nodes = []
 inj_nodes = []
 cluster_nodes = []
 
+num_jobs = num_bank_files(bank_cache)
+indfac = get_independence_factor(bank_cache)
+
 ###############################################################################
 # loop over banks to run gstlal inspiral pre clustering and far computation
 ###############################################################################
 
-trials_factor = 0
-
-for s in build_bank_string(bank_cache):
+for cnt, s in enumerate(build_bank_string(bank_cache)):
 
 	#
 	# non injections
 	#
+
+	print >>sys.stderr, "processing bank %d/%d\r" % (cnt, num_jobs),
+
+	#
+	# FIXME this is approximately correct, can we do better?
+	#
+	# Trials factors:
+	#
+	# The false alarm probability depends on how many coincidences are
+	# formed.  The more you form the more chance you have to see an
+	# excursion.  But the coincidences formed in any one gstlal_inspiral
+	# job are correlated. We use the SVD to estimate the independent
+	# degrees of freedom.  This is expressed as a fraction of the total
+	# number of templates to get the degree of independence.  We then make
+	# the simplifying assumption that each gstlal_inspiral job produces
+	# roughly the same number of events.  Then the trials factor is
+	#
+	# trials factor = # of events in job X # of jobs X independence fraction.
+	#
+	# The far code already uses the number of events in the job to rank the
+	# events.  Thus we just need to provide the factor # of jobs X
+	# independence fraction as an additional argument
+	#
+
+	trials_factor = int(num_banks * indfac) or 1
 
 	far_input_nodes = []
 
