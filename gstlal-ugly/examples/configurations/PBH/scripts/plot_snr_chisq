@@ -13,7 +13,7 @@ coincparamsdistributions, likelihood_seglists = ligolw_burca_tailor.load_likelih
 #coincparamsdistributions, likelihood_seglists = ligolw_burca_tailor.load_likelihood_data([sys.argv[1]], verbose = True)
 counts = coincparamsdistributions.background_rates
 
-wn = rate.gaussian_window2d(15,15, sigma = 8)
+wn = rate.gaussian_window2d(5,5, sigma = 8)
 
 for i, ifo in enumerate(['H1','H2','L1', 'V1']):
 	pylab.figure(i)
