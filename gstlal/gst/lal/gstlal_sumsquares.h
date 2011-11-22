@@ -69,6 +69,7 @@ typedef struct GSTLALSumSquares {
 } GSTLALSumSquares;
 
 
+GST_DEBUG_CATEGORY_EXTERN(gstlal_sumsquares_debug);
 GType gstlal_sumsquares_get_type(void);
 
 

@@ -43,8 +43,31 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
+
+
+/*
+ * our own stuff
+ */
+
+
 #include <gstlal.h>
 #include <gstlal_sumsquares.h>
+#include <gstlal_debug.h>
+
+
+GST_DEBUG_CATEGORY(gstlal_sumsquares_debug);
+
+
+/*
+ * ============================================================================
+ *
+ *                                 Parameters
+ *
+ * ============================================================================
+ */
+
+
+#define GST_CAT_DEFAULT gstlal_sumsquares_debug
 
 
 /*
@@ -174,11 +197,11 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
 
 	str = gst_caps_get_structure(caps, 0);
 	if(!gst_structure_get_int(str, "channels", &channels)) {
-		GST_DEBUG_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
+		GST_ERROR_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
 		return FALSE;
 	}
 	if(!gst_structure_get_int(str, "width", &width)) {
-		GST_DEBUG_OBJECT(trans, "unable to parse width from %" GST_PTR_FORMAT, caps);
+		GST_ERROR_OBJECT(trans, "unable to parse width from %" GST_PTR_FORMAT, caps);
 		return FALSE;
 	}
 
@@ -256,11 +279,11 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 
 	s = gst_caps_get_structure(incaps, 0);
 	if(!gst_structure_get_int(s, "channels", &channels)) {
-		GST_DEBUG_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
+		GST_ERROR_OBJECT(element, "unable to parse channels from %" GST_PTR_FORMAT, incaps);
 		return FALSE;
 	}
 	if(!gst_structure_get_int(s, "width", &width)) {
-		GST_DEBUG_OBJECT(element, "unable to parse width from %" GST_PTR_FORMAT, incaps);
+		GST_ERROR_OBJECT(element, "unable to parse width from %" GST_PTR_FORMAT, incaps);
 		return FALSE;
 	}
 
@@ -273,7 +296,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		element->channels = channels;
 	else if(channels != element->channels) {
 		/* FIXME:  perhaps emit a "channel-count-changed" signal? */
-		GST_DEBUG_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, element->channels, incaps);
+		GST_ERROR_OBJECT(element, "channels != %d in %" GST_PTR_FORMAT, element->channels, incaps);
 		g_mutex_unlock(element->weights_lock);
 		return FALSE;
 	}
@@ -321,6 +344,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	GstFlowReturn result;
 
 	g_assert(element->sumsquares_func != NULL);
+
+	GST_INFO_OBJECT(element, "processing %s%s buffer %p spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ? "gap" : "nongap", GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", inbuf, GST_BUFFER_BOUNDARIES_ARGS(inbuf));
 
 	if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
 		/*

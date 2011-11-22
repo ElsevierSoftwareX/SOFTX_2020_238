@@ -128,6 +128,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 	GST_DEBUG_CATEGORY_INIT(gstlal_firbank_debug, "lal_firbank", 0, "lal_firbank element");
 	GST_DEBUG_CATEGORY_INIT(gstlal_gate_debug, "lal_gate", 0, "lal_gate element");
 	GST_DEBUG_CATEGORY_INIT(gstlal_matrixmixer_debug, "lal_matrixmixer", 0, "lal_matrixmixer element");
+	GST_DEBUG_CATEGORY_INIT(gstlal_sumsquares_debug, "lal_sumsquares", 0, "lal_sumsquares element");
 
 	/*
 	 * Tell GStreamer about the custom tags.
