@@ -279,10 +279,10 @@ class DistributionsStats(object):
 	"""
 
 	binnings = {
-		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LogarithmicPlusOverflowBins(.1, 1., 200))),
-		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LogarithmicPlusOverflowBins(.1, 1., 200))),
-		"L1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LogarithmicPlusOverflowBins(.1, 1., 200))),
-		"V1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LogarithmicPlusOverflowBins(.1, 1., 200)))
+		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LinearPlusOverflowBins(.01, 1., 200))),
+		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LinearPlusOverflowBins(.01, 1., 200))),
+		"L1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LinearPlusOverflowBins(.01, 1., 200))),
+		"V1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LinearPlusOverflowBins(.01, 1., 200)))
 	}
 
 	filters = {
@@ -301,10 +301,14 @@ class DistributionsStats(object):
 		instruments = set(event.ifo for event in events)
 		if "H1" in instruments:
 			instruments.discard("H2")
-		return dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq**.5 / event.snr)) for event in events if event.ifo in instruments)
+		return dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events if event.ifo in instruments)
 
 	def add_single(self, event):
 		self.raw_distributions.add_background(self.likelihood_params_func((event,), None))
+
+	def add_uniform_background_prior(self, n = 1):
+		for param, binarr in self.raw_distributions.background_rates.items():
+			binarr.array += n
 
 	def synthesize_injections(self, prefactor = .3, df = 24, N = 1000000, verbose = False):
 		# FIXME:  for maintainability, this should be modified to
