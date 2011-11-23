@@ -1,0 +1,101 @@
+#!/usr/bin/python
+#
+# Copyright (C) 2010--2011  Kipp Cannon, Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+from optparse import OptionParser
+try:
+	import sqlite3
+except ImportError:
+	# pre 2.5.x
+	from pysqlite2 import dbapi2 as sqlite3
+import sys
+
+
+from glue.lal import CacheEntry
+from glue import segments
+from glue.ligolw.utils import segments as ligolwsegments
+from pylal.datatypes import LIGOTimeGPS as GPS
+from pylal import ligolw_burca2
+from pylal import ligolw_thinca
+from gstlal import inspiral
+
+
+__author__ = "Chad Hanna <chad.hanna@ligo.org>"
+__version__ = "git id %s" % ""	# FIXME
+__date__ = ""	# FIXME
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		version = "Name: %%prog\n%s" % "" # FIXME
+	)
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("-s", "--synthesize-injection-count", metavar = "N", default = 1000000, type = "int", help = "Synthesize an injection distribution with N injections. default 1000000")
+	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
+	options, filenames = parser.parse_args()
+
+	return options, filenames
+
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# command line
+#
+
+
+options, filenames = parse_command_line()
+
+
+#
+# Create likelihood data
+#
+
+coincparamsdistributions = inspiral.DistributionsStats()
+coincparamsdistributions.add_uniform_background_prior()
+coincparamsdistributions.synthesize_injections(verbose = options.verbose, N = options.synthesize_injection_count)
+
+#FIXME there is no real segment here, should there be?
+segs = segments.segmentlistdict.fromkeys(("H1","H2","L1","V1"), segments.segmentlist([segments.segment([GPS(0), GPS(2000000000)])]))
+coincparamsdistributions.to_filename(options.write_likelihood, segs, verbose = options.verbose)
