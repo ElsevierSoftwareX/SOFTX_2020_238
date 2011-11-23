@@ -41,6 +41,7 @@
  */
 
 
+#include <gstlal/gstlal_tags.h>
 #include <framecpp_channeldemux.h>
 
 
@@ -62,6 +63,12 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"framecpp_channeldemux", FRAMECPP_CHANNELDEMUX_TYPE},
 		{NULL, 0},
 	};
+
+	/*
+	 * Register tags.
+	 */
+
+	gstlal_register_tags();
 
 	/*
 	 * Tell GStreamer about the elements.
