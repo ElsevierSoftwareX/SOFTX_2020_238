@@ -67,6 +67,7 @@ def parse_command_line():
 	parser.add_option("--vetoes-name", metavar = "name", help = "Set the name of the segment lists to use as vetoes (default = do not apply vetoes).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("-s", "--synthesize-injections", action = "store_true", help = "Synthesize an injection distribution")
+	parser.add_option("-p", "--background-prior", metavar = "N", default = 0, type = "int", help = "include a uniform background prior with bin count = N, default 0, no additional prior")
 	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
 	options, filenames = parser.parse_args()
 
@@ -140,6 +141,9 @@ coincparamsdistributions, likelihood_seglists = inspiral.DistributionsStats.from
 # calculate injections before writing to disk
 if options.synthesize_injections:
 	coincparamsdistributions.synthesize_injections(verbose = options.verbose)
+
+# add a uniform prior to background, by default 0 is added so it has no effect
+coincparamsdistributions.add_uniform_background_prior(options.background_prior)
 
 if options.write_likelihood is not None:
 	coincparamsdistributions.to_filename(options.write_likelihood, likelihood_seglists, verbose = options.verbose)
