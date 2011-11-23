@@ -258,7 +258,7 @@ AS_IF(
 	[test "x$with_framecpp" != "xno"],
 	[PKG_CHECK_MODULES(
 		[framecpp],
-		[framecpp = 0.18],
+		[framecpp >= 0.19],
 		[HAVE_FRAMECPP="yes"],
 		[AC_MSG_WARN([Not found!])
 		HAVE_FRAMECPP="no"]

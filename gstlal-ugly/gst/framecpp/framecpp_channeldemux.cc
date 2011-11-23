@@ -49,6 +49,7 @@
  */
 
 
+#include <framecpp/Common/MemoryBuffer.hh>
 #include <framecpp/IFrameStream.hh>
 #include <framecpp/FrameH.hh>
 #include <framecpp/FrAdcData.hh>
@@ -70,10 +71,151 @@
 GST_DEBUG_CATEGORY(framecpp_channeldemux_debug);
 
 
+using namespace FrameCPP;
+
+
 /*
  * ============================================================================
  *
- *			     GStreamer Element
+ *                                 Parameters
+ *
+ * ============================================================================
+ */
+
+
+
+#define GST_CAT_DEFAULT framecpp_channeldemux_debug
+
+
+/*
+ * ============================================================================
+ *
+ *                                 Utilities
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * split a string of the form "INSTRUMENT:CHANNEL" into two strings
+ * containing the instrument and channel parts separately.  the pointers
+ * placed in the instrument and channel pointers should be free()ed when no
+ * longer needed.  returns 0 on success, < 0 on failure.
+ */
+
+
+static int split_name(const char *name, char **instrument, char **channel)
+{
+	const char *colon = strchr(name, ':');
+
+	if(!colon) {
+		*instrument = *channel = NULL;
+		return -1;
+	}
+
+	*instrument = strndup(name, colon - name);
+	*channel = strdup(colon + 1);
+
+	return 0;
+}
+
+
+/*
+ * transfer the contents of an FrVect into a newly-created GstBuffer.
+ * caller must unref buffer when no longer needed.
+ */
+
+
+static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrVect > vect, GstClockTime epoch)
+{
+	gint rate = round(1.0 / vect->GetDim(0).GetDx());
+	gint width = vect->GetTypeSize() * 8;
+	GstBuffer *buffer = gst_buffer_new_and_alloc(vect->GetNBytes());
+
+	if(!buffer)
+		return NULL;
+
+	/*
+	 * copy data into buffer
+	 */
+
+	g_assert(vect->GetNDim() == 1);
+	memcpy(GST_BUFFER_DATA(buffer), vect->GetData().get(), GST_BUFFER_SIZE(buffer));
+
+	/*
+	 * set timestamp and duration
+	 */
+
+	GST_BUFFER_TIMESTAMP(buffer) = epoch;
+	GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int(vect->GetNData(), GST_SECOND, rate);
+	GST_BUFFER_OFFSET(buffer) = 0;
+	GST_BUFFER_OFFSET_END(buffer) = vect->GetNData();
+
+	/*
+	 * set buffer format
+	 */
+
+	switch(vect->GetType()) {
+	case FrVect::FR_VECT_4R:
+	case FrVect::FR_VECT_8R:
+		GST_BUFFER_CAPS(buffer) = gst_caps_new_simple("audio/x-raw-float",
+			"rate", G_TYPE_INT, rate,
+			"channels", G_TYPE_INT, 1,
+			"endianness", G_TYPE_INT, G_BYTE_ORDER,
+			"width", G_TYPE_INT, width,
+			NULL);
+		break;
+
+	case FrVect::FR_VECT_8C:
+	case FrVect::FR_VECT_16C:
+		GST_BUFFER_CAPS(buffer) = gst_caps_new_simple("audio/x-raw-complex",
+			"rate", G_TYPE_INT, rate,
+			"channels", G_TYPE_INT, 1,
+			"endianness", G_TYPE_INT, G_BYTE_ORDER,
+			"width", G_TYPE_INT, width,
+			NULL);
+		break;
+
+	case FrVect::FR_VECT_C:
+	case FrVect::FR_VECT_2S:
+	case FrVect::FR_VECT_4S:
+	case FrVect::FR_VECT_8S:
+		GST_BUFFER_CAPS(buffer) = gst_caps_new_simple("audio/x-raw-int",
+			"rate", G_TYPE_INT, rate,
+			"channels", G_TYPE_INT, 1,
+			"endianness", G_TYPE_INT, G_BYTE_ORDER,
+			"width", G_TYPE_INT, width,
+			"depth", G_TYPE_INT, width,
+			"signed", G_TYPE_BOOLEAN, TRUE,
+			NULL);
+		break;
+
+	case FrVect::FR_VECT_1U:
+	case FrVect::FR_VECT_2U:
+	case FrVect::FR_VECT_4U:
+	case FrVect::FR_VECT_8U:
+		GST_BUFFER_CAPS(buffer) = gst_caps_new_simple("audio/x-raw-int",
+			"rate", G_TYPE_INT, rate,
+			"channels", G_TYPE_INT, 1,
+			"endianness", G_TYPE_INT, G_BYTE_ORDER,
+			"width", G_TYPE_INT, width,
+			"depth", G_TYPE_INT, width,
+			"signed", G_TYPE_BOOLEAN, FALSE,
+			NULL);
+		break;
+
+	default:
+		g_assert_not_reached();
+	}
+
+	return buffer;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                           GStreamer Element
  *
  * ============================================================================
  */
@@ -84,95 +226,85 @@ GST_DEBUG_CATEGORY(framecpp_channeldemux_debug);
  */
 
 
-static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
+static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 {
-	using namespace FrameCPP;
-	using FrameCPP::Common::FrameBuffer;
+	using FrameCPP::Common::MemoryBuffer;
 	GSTFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
+	IFrameStream::frame_h_type frame;
+	GstPadTemplate *src_pad_template = gst_element_class_get_pad_template(GST_ELEMENT_CLASS(FRAMECPP_CHANNELDEMUX_GET_CLASS(element)), "src");
+	GstBuffer *outbuf = NULL;
+	GstPad *srcpad = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
 
-	/*
-	 * to be removed and replaced with the proper buffer when framecpp
-	 * api is updated
-	 */
-
-	void *frame_image = GST_BUFFER_DATA(buf);
-	FrameH *frame = NULL;
+	g_assert(src_pad_template != NULL);
 
 	try {
-		FrameBuffer< std::filebuf >*
-			ibuf(new FrameBuffer< std::filebuf >(std::ios::in));
+		MemoryBuffer *ibuf(new MemoryBuffer(std::ios::in));
+
+		ibuf->pubsetbuf((char *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf));
+
 		IFrameStream ifs(ibuf);
 		frame = ifs.ReadNextFrame();
+		GstClockTime frame_timestamp = 1000000000L * frame->GetGTime().GetSeconds() + frame->GetGTime().GetNanoseconds();
+
+		GST_LOG_OBJECT(element, "found version %d frame file", ifs.Version());
+		GST_LOG_OBJECT(element, "found frame at %lu.%09lu s", frame->GetGTime().GetSeconds(), frame->GetGTime().GetNanoseconds());
 
 		/*
 		 * process ADCs
 		 */
 	
-		FrameH::rawData_type *rd = frame->GetRawData();
+		FrameH::rawData_type rd = frame->GetRawData();
 		if(rd) {
-			FrRawData::firstAdc_iterator
-				current = rd->RefFirstAdc().begin(),
-				last = rd->RefFirstAdc().end();
+			FrRawData::firstAdc_iterator current = rd->RefFirstAdc().begin(), last = rd->RefFirstAdc().end();
 			for(; current != last; ++current) {
 				FrAdcData::data_type vects = (*current)->RefData();
-				FrVect *vect = vects[0];
-				gint rate = round(1.0 / vect->GetDim(0).GetDx());
-				gint width = vect->GetTypeSize() * 8;
-				GstCaps *caps;
+				double timeOffset = (*current)->GetTimeOffset();
+				const char *name = (*current)->GetName().c_str();
+				char *instrument, *channel;
 
-				switch(vect->GetType()) {
-				case FrVect::FR_VECT_4R:
-				case FrVect::FR_VECT_8R:
-					caps = gst_caps_new_simple("audio/x-raw-float",
-						"rate", G_TYPE_INT, rate,
-						"channels", G_TYPE_INT, 1,
-						"endianness", G_TYPE_INT, G_BYTE_ORDER,
-						"width", G_TYPE_INT, width,
-						NULL);
-					break;
+				GST_LOG_OBJECT(element, "found FrAdc %s", name);
 
-				case FrVect::FR_VECT_8C:
-				case FrVect::FR_VECT_16C:
-					caps = gst_caps_new_simple("audio/x-raw-complex",
-						"rate", G_TYPE_INT, rate,
-						"channels", G_TYPE_INT, 1,
-						"endianness", G_TYPE_INT, G_BYTE_ORDER,
-						"width", G_TYPE_INT, width,
-						NULL);
-					break;
+				/*
+				 * retrieve the source pad.  this will
+				 * induce it to be created if it doesn't
+				 * exist.
+				 */
 
-				case FrVect::FR_VECT_C:
-				case FrVect::FR_VECT_2S:
-				case FrVect::FR_VECT_4S:
-				case FrVect::FR_VECT_8S:
-					caps = gst_caps_new_simple("audio/x-raw-int",
-						"rate", G_TYPE_INT, rate,
-						"channels", G_TYPE_INT, 1,
-						"endianness", G_TYPE_INT, G_BYTE_ORDER,
-						"width", G_TYPE_INT, width,
-						"depth", G_TYPE_INT, width,
-						"signed", G_TYPE_BOOLEAN, TRUE,
-						NULL);
-					break;
+				srcpad = gst_element_request_pad(GST_ELEMENT(element), src_pad_template, name, NULL);
+				g_assert(srcpad != NULL);
 
-				case FrVect::FR_VECT_1U:
-				case FrVect::FR_VECT_2U:
-				case FrVect::FR_VECT_4U:
-				case FrVect::FR_VECT_8U:
-					caps = gst_caps_new_simple("audio/x-raw-int",
-						"rate", G_TYPE_INT, rate,
-						"channels", G_TYPE_INT, 1,
-						"endianness", G_TYPE_INT, G_BYTE_ORDER,
-						"width", G_TYPE_INT, width,
-						"depth", G_TYPE_INT, width,
-						"signed", G_TYPE_BOOLEAN, FALSE,
-						NULL);
-					break;
+				/* FIXME:  keep track of these, and send
+				 * tags events when they change */
+				split_name(name, &instrument, &channel);
+				free(instrument);
+				free(channel);
 
-				default:
-					g_assert_not_reached();
+				/*
+				 * construct output buffer.  if they're
+				 * equal, replace the buffer's caps with
+				 * the pad's to reduce the number of caps
+				 * objects in play and simplify subsequent
+				 * comparisons
+				 */
+
+				outbuf = FrVect_to_GstBuffer(vects[0], frame_timestamp + (int) round(timeOffset * 1e9));
+				g_assert(outbuf != NULL);
+				if(gst_caps_is_equal(GST_BUFFER_CAPS(outbuf), GST_PAD_CAPS(srcpad)))
+					gst_buffer_set_caps(outbuf, GST_PAD_CAPS(srcpad));
+
+				/*
+				 * push buffer downstream
+				 */
+
+				result = gst_pad_push(srcpad, outbuf);
+				outbuf = NULL;
+				if(result != GST_FLOW_OK) {
+					GST_ERROR_OBJECT(element, "failed to push buffer");
+					goto done;
 				}
+				gst_object_unref(srcpad);
+				srcpad = NULL;
 			}
 		}
 
@@ -185,7 +317,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
 	 */
 
 done:
-	delete frame;
+	gst_buffer_unref(inbuf);
 	gst_object_unref(element);
 	return result;
 }
