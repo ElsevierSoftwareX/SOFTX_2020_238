@@ -408,6 +408,7 @@ class gstlal_inspiral_calc_likelihood_node(pipeline.CondorDAGNode):
 		fpath = os.path.split(likelihood_file)
 		self.background_name = os.path.join(fpath[0], "post_calc_likelihood_" + fpath[1])
 		self.add_var_opt("write-likelihood", self.background_name)
+		self.add_var_opt("background-prior", 1) #FIXME make this optional
 		if synthesize_injections:
 			self.add_var_opt("synthesize-injections", "")
 		for p in p_node:
