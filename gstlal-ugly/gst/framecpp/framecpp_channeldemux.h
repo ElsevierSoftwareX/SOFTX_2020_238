@@ -44,8 +44,6 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_INSTANCE_TYPE((obj), FRAMECPP_CHANNELDEMUX_TYPE))
 #define GST_IS_FRAMECPP_CHANNELDEMUX_CLASS(klass) \
 	(G_TYPE_CHECK_CLASS_TYPE((klass), FRAMECPP_CHANNELDEMUX_TYPE))
-#define FRAMECPP_CHANNELDEMUX_GET_CLASS(obj) \
-	(G_TYPE_INSTANCE_GET_CLASS((obj), FRAMECPP_CHANNELDEMUX_TYPE, GSTFrameCPPChannelDemuxClass))
 
 
 typedef struct {
@@ -56,6 +54,8 @@ typedef struct {
 typedef struct {
 	GstElement element;
 
+	GstEvent *last_new_segment;
+	GHashTable *pad_state;
 } GSTFrameCPPChannelDemux;
 
 
