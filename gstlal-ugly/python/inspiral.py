@@ -298,7 +298,10 @@ class DistributionsStats(object):
 
 	@staticmethod
 	def likelihood_params_func(events, offsetvector):
-		return dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq**.5 / event.snr)) for event in events)
+		instruments = set(event.ifo for event in events)
+		if "H1" in instruments:
+			instruments.discard("H2")
+		return dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq**.5 / event.snr)) for event in events if event.ifo in instruments)
 
 	def add_single(self, event):
 		self.raw_distributions.add_background(self.likelihood_params_func((event,), None))
