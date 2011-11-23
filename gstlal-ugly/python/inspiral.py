@@ -268,15 +268,6 @@ def chisq_distribution(df, non_centralities, size):
 
 
 #
-# Likelihood params func
-#
-
-
-def likelihood_params_func(events, offsetvector):
-	return dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq**.5 / event.snr)) for event in events)
-
-
-#
 # Book-keeping class
 #
 
@@ -305,8 +296,12 @@ class DistributionsStats(object):
 		self.raw_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
 		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
 
+	@staticmethod
+	def likelihood_params_func(events, offsetvector):
+		return dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq**.5 / event.snr)) for event in events)
+
 	def add_single(self, event):
-		self.raw_distributions.add_background(likelihood_params_func((event,), None))
+		self.raw_distributions.add_background(self.likelihood_params_func((event,), None))
 
 	def synthesize_injections(self, prefactor = .3, df = 24, N = 1000000, verbose = False):
 		# FIXME:  for maintainability, this should be modified to
@@ -474,7 +469,7 @@ class Data(object):
 		)
 		if self.assign_likelihoods:
 			self.distribution_stats.finish(verbose = self.verbose)
-			self.stream_thinca.set_likelihood_data(self.distribution_stats.smoothed_distributions, likelihood_params_func)
+			self.stream_thinca.set_likelihood_data(self.distribution_stats.smoothed_distributions, self.distribution_stats.likelihood_params_func)
 
 	def appsink_new_buffer(self, elem):
 		self.lock.acquire()
@@ -497,7 +492,7 @@ class Data(object):
 				self.distribution_stats.finish(verbose = self.verbose)
 				self.likelihood_snapshot_timestamp = timestamp
 				# update stream thinca's likelihood data
-				self.stream_thinca.set_likelihood_data(self.distribution_stats.smoothed_distributions, likelihood_params_func)
+				self.stream_thinca.set_likelihood_data(self.distribution_stats.smoothed_distributions, self.distribution_stats.likelihood_params_func)
 				# decay the raw background counts to affect
 				# a moving history
 				# FIXME:  this will do bad things if the
