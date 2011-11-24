@@ -191,7 +191,7 @@ static GstCaps *FrVect_get_caps(General::SharedPtr < FrVect > vect)
 }
 
 
-static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrVect > vect, GstClockTime timestamp)
+static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrVect > vect, GstClockTime timestamp, guint64 offset)
 {
 	gint rate = round(1.0 / vect->GetDim(0).GetDx());
 	GstBuffer *buffer = gst_buffer_new_and_alloc(vect->GetNBytes());
@@ -212,8 +212,8 @@ static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrVect > vect, GstClo
 
 	GST_BUFFER_TIMESTAMP(buffer) = timestamp;
 	GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int(vect->GetNData(), GST_SECOND, rate);
-	GST_BUFFER_OFFSET(buffer) = 0;
-	GST_BUFFER_OFFSET_END(buffer) = vect->GetNData();
+	GST_BUFFER_OFFSET(buffer) = offset;
+	GST_BUFFER_OFFSET_END(buffer) = offset + vect->GetNData();
 
 	/*
 	 * set buffer format
@@ -443,7 +443,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 		GST_LOG_OBJECT(element, "found frame at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(frame_timestamp));
 
 		/*
-		 * process ADCs
+		 * process ADC data
 		 */
 	
 		FrameH::rawData_type rd = frame->GetRawData();
@@ -474,12 +474,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				 * comparisons
 				 */
 
-				outbuf = FrVect_to_GstBuffer(vects[0], timestamp);
+				outbuf = FrVect_to_GstBuffer(vects[0], timestamp, srcpad_state->next_out_offset);
 				g_assert(outbuf != NULL);
 				if(gst_caps_is_equal(GST_BUFFER_CAPS(outbuf), GST_PAD_CAPS(srcpad)))
 					gst_buffer_set_caps(outbuf, GST_PAD_CAPS(srcpad));
-				GST_BUFFER_OFFSET(outbuf) += srcpad_state->next_out_offset;
-				GST_BUFFER_OFFSET_END(outbuf) += srcpad_state->next_out_offset;
 				if(srcpad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(srcpad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(outbuf) - srcpad_state->next_timestamp) > 1)) {
 					GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_DISCONT);
 					srcpad_state->need_discont = FALSE;
@@ -507,6 +505,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			}
 		}
 	} catch(...) {
+		if(srcpad)
+			gst_object_unref(srcpad);
 		result = GST_FLOW_ERROR;
 	}
 
@@ -515,8 +515,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 	 */
 
 done:
-	if(srcpad)
-		gst_object_unref(srcpad);
 	gst_buffer_unref(inbuf);
 	gst_object_unref(element);
 	return result;
