@@ -41,6 +41,7 @@
  */
 
 
+#include <lvshmsrc.h>
 
 
 /*
@@ -58,6 +59,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		const gchar *name;
 		GType type;
 	} *element, elements[] = {
+		{"gds_lvshmsrc", GDS_LVSHMSRC_TYPE},
 		{NULL, 0},
 	};
 
@@ -68,6 +70,12 @@ static gboolean plugin_init(GstPlugin *plugin)
 	for(element = elements; element->name; element++)
 		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->type))
 			return FALSE;
+
+	/*
+	 * Tell GStreamer about the debug categories.
+	 */
+
+	GST_DEBUG_CATEGORY_INIT(gds_lvshmsrc_debug, "gds_lvshmsrc", 0, "gds_lvshmsrc element");
 
 	/*
 	 * Done.
