@@ -108,7 +108,7 @@ AC_CHECK_LIB([m], [main], , [AC_MSG_ERROR([Not found!])])
 #
 
 
-PKG_CHECK_MODULES([FFTW], [fftw3], , [AC_MSG_ERROR([Not found!])])
+PKG_CHECK_MODULES([FFTW], [fftw3])
 AC_SUBST([FFTW_CFLAGS])
 AC_SUBST([FFTW_LIBS])
 AC_DEFINE([GSTLAL_FFTW_WISDOM_ENV], ["GSTLAL_FFTW_WISDOM"], [Set to the name of the environment variable to use for overriding the system-wide FFTW wisdom file])
@@ -121,7 +121,7 @@ AC_DEFINE([GSTLAL_FFTW_WISDOM_ENV], ["GSTLAL_FFTW_WISDOM"], [Set to the name of 
 
 AC_SUBST([GSTREAMER_RELEASE], [0.10])
 AC_SUBST([MIN_GSTREAMER_VERSION], [0.10.32])
-PKG_CHECK_MODULES([gstreamer], [gstreamer-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-base-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION}], , [AC_MSG_ERROR([Not found!])])
+PKG_CHECK_MODULES([gstreamer], [gstreamer-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION} gstreamer-base-${GSTREAMER_RELEASE} >= ${MIN_GSTREAMER_VERSION}])
 AC_SUBST([gstreamer_CFLAGS])
 AC_SUBST([gstreamer_LIBS])
 AC_SUBST([plugindir], [${libdir}/gstreamer-${GSTREAMER_RELEASE}])
@@ -140,7 +140,7 @@ AC_SUBST([GSTLAL_PLUGIN_LDFLAGS], ["-module -avoid-version -export-symbols-regex
 
 AC_SUBST([GSTREAMER_VIDEO_RELEASE], [0.10])
 AC_SUBST([MIN_GSTREAMER_VIDEO_VERSION], [0.10.32])
-PKG_CHECK_MODULES([gstreamer_video], [gstreamer-video-${GSTREAMER_VIDEO_RELEASE} >= ${MIN_GSTREAMER_VIDEO_VERSION}], , [AC_MSG_ERROR([Not found!])])
+PKG_CHECK_MODULES([gstreamer_video], [gstreamer-video-${GSTREAMER_VIDEO_RELEASE} >= ${MIN_GSTREAMER_VIDEO_VERSION}])
 AC_SUBST([gstreamer_video_CFLAGS])
 AC_SUBST([gstreamer_video_LIBS])
 
@@ -152,7 +152,7 @@ AC_SUBST([gstreamer_video_LIBS])
 
 AC_SUBST([GSTREAMER_AUDIO_RELEASE], [0.10])
 AC_SUBST([MIN_GSTREAMER_VIDEO_VERSION], [0.10.32])
-PKG_CHECK_MODULES([gstreamer_audio], [gstreamer-audio-${GSTREAMER_VIDEO_RELEASE} >= ${MIN_GSTREAMER_VIDEO_VERSION}], , [AC_MSG_ERROR([Not found!])])
+PKG_CHECK_MODULES([gstreamer_audio], [gstreamer-audio-${GSTREAMER_VIDEO_RELEASE} >= ${MIN_GSTREAMER_VIDEO_VERSION}])
 AC_SUBST([gstreamer_audio_CFLAGS])
 AC_SUBST([gstreamer_audio_LIBS])
 
@@ -162,7 +162,7 @@ AC_SUBST([gstreamer_audio_LIBS])
 #
 
 
-PKG_CHECK_MODULES([pygobject], [pygobject-2.0], , [AC_MSG_ERROR([Not found!])])
+PKG_CHECK_MODULES([pygobject], [pygobject-2.0])
 AC_SUBST([pygobject_CFLAGS])
 AC_SUBST([pygobject_LIBS])
 
@@ -188,7 +188,7 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-PKG_CHECK_MODULES([LAL], [lal lalframe lalmetaio lalsupport lalsimulation lalburst lalinspiral], , [AC_MSG_ERROR([Not found!])])
+PKG_CHECK_MODULES([LAL], [lal lalframe lalmetaio lalsupport lalsimulation lalburst lalinspiral])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
 
@@ -198,7 +198,7 @@ AC_SUBST([LAL_LIBS])
 #
 
 
-PKG_CHECK_MODULES([GSL], [gsl], , [AC_MSG_ERROR([Not found!])])
+PKG_CHECK_MODULES([GSL], [gsl])
 AC_SUBST([GSL_CFLAGS])
 AC_SUBST([GSL_LIBS])
 
