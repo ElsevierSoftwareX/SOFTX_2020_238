@@ -23,6 +23,7 @@ AC_CONFIG_FILES([ \
 	gst/lal/Makefile \
 	gst/python/Makefile \
 	gst/framecpp/Makefile \
+	gst/gds/Makefile \
 	gst/multirate/Makefile \
 	bin/Makefile \
 	tests/Makefile \
@@ -270,6 +271,35 @@ AC_DEFINE([HAVE_FRAMECPP], [test "x${HAVE_FRAMECPP}" == "xyes"], [Defined if you
 AM_CONDITIONAL([COND_FRAMECPP], [test "x${HAVE_FRAMECPP}" == "xyes"])
 AC_SUBST([framecpp_CFLAGS])
 AC_SUBST([framecpp_LIBS])
+
+
+#
+# Check for GDS
+#
+
+
+AC_ARG_WITH(
+	[gds],
+	[AS_HELP_STRING([--with-gds], [include gds plugin @<:@default=check@:>@])],
+	[],
+	[with_gds=check]
+)
+AS_IF(
+	[test "x$with_gds" != "xno"],
+	[PKG_CHECK_MODULES(
+		[gds],
+		[gds >= 2.15.5],
+		[HAVE_GDS="yes"],
+		[AC_MSG_WARN([Not found: $gds_PKG_ERRORS])
+		HAVE_GDS="no"]
+	)],
+	[AC_MSG_WARN([check for gds disabled])
+	HAVE_GDS="no"]
+)
+AC_DEFINE([HAVE_GDS], [test "x${HAVE_GDS}" == "xyes"], [Defined if you have gds])
+AM_CONDITIONAL([COND_GDS], [test "x${HAVE_GDS}" == "xyes"])
+AC_SUBST([gds_CFLAGS])
+AC_SUBST([gds_LIBS])
 
 
 #
