@@ -289,7 +289,8 @@ AS_IF(
 	[PKG_CHECK_MODULES(
 		[gds],
 		[gds >= 2.15.5],
-		[HAVE_GDS="yes"],
+		[HAVE_GDS="yes"
+		gds_LIBS="$gds_LIBS -llsmp"],	# hack to work around broken .pc file
 		[AC_MSG_WARN([Not found: $gds_PKG_ERRORS])
 		HAVE_GDS="no"]
 	)],
