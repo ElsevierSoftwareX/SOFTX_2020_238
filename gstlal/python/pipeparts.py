@@ -111,6 +111,18 @@ def mkframesrc(pipeline, location, instrument, channel_name, blocksize = 16384 *
 	return elem
 
 
+def mklvshmsrc(pipeline, **properties):
+	elem = gst.element_factory_make("gds_lvshmsrc")
+	for name, value in properties.items():
+		elem.set_property(name.replace("_", "-"), value)
+	pipeline.add(elem)
+	return elem
+
+
+def mkframecppchanneldemux(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "framecpp_channeldemux", **properties)
+
+
 def mkframesink(pipeline, src, **properties):
 	elem = gst.element_factory_make("lal_framesink")
 	elem.set_property("sync", False)
