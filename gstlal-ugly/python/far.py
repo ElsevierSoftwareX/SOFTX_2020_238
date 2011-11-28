@@ -70,9 +70,7 @@ def set_fap(options, Far, f):
 class TrialsTable(dict):
 	@classmethod
 	def from_db(cls, connection):
-		connection.cursor().execute('CREATE INDEX template_index ON sngl_inspiral(mass1,mass2,chi)')
 		self = cls(((ifos, tsid), count) for ifos, tsid, count in connection.cursor().execute('SELECT ifos, coinc_event.time_slide_id AS tsid, count(*) / nevents FROM sngl_inspiral JOIN coinc_event_map ON coinc_event_map.event_id == sngl_inspiral.event_id JOIN coinc_inspiral ON coinc_inspiral.coinc_event_id == coinc_event_map.coinc_event_id JOIN coinc_event ON coinc_event.coinc_event_id == coinc_event_map.coinc_event_id  WHERE coinc_event_map.table_name = "sngl_inspiral" GROUP BY tsid, ifos;'))
-		connection.cursor().execute('DROP INDEX template_index')
 		connection.commit()
 		return self
 
@@ -141,7 +139,7 @@ class FAR(object):
 		self.minrank = {}
 		self.maxrank = {}
 
-	def updateFAPmap(self, ifo_set, remap = {}):
+	def updateFAPmap(self, ifo_set, remap = {}, verbose = False):
 		if self.distribution_stats is None:
 			raise InputError, "must provide background bins file"
 
@@ -169,6 +167,8 @@ class FAR(object):
 			instrument = param.split("_")[0]
 			if instrument not in remap_set:
 				continue
+			if verbose:
+				print >>sys.stderr, "updating fap maps for ", instrument, " in ", ifo_set
 			# FIXME only works if there is a 1-1 relationship between params and instruments
 
 			likelihoods = injections[param].array / background[param].array
