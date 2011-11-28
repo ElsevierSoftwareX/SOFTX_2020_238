@@ -305,6 +305,15 @@ static gboolean send_tags(GstPad *pad)
 static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
 {
 	GSTFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
+	struct pad_state *pad_state = get_src_pad_state(element, pad);
+
+	/*
+	 * reset pad's state
+	 */
+
+	pad_state->need_discont = TRUE;
+	pad_state->next_timestamp = GST_CLOCK_TIME_NONE;
+	pad_state->next_out_offset = 0;
 
 	/*
 	 * forward most recent new segment event
@@ -356,7 +365,7 @@ static GstPad *get_src_pad(GSTFrameCPPChannelDemux *element, const char *name)
 		g_signal_connect(srcpad, "linked", (GCallback) src_pad_linked, NULL);
 
 		/*
-		 * initialize pad state
+		 * create & initialize pad state
 		 */
 
 		pad_state = g_new(struct pad_state, 1);
