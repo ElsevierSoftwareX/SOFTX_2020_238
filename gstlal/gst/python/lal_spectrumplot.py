@@ -88,6 +88,7 @@ class lal_spectrumplot(gst.BaseTransform):
 				"delta-f = (double) [0, MAX], " +
 				"channels = (int) [1, MAX], " +
 				"endianness = (int) BYTE_ORDER, " +
+				"rate = (fraction) [0/1, 2147483647/1], " +
 				"width = (int) 64"
 			)
 		),
@@ -200,14 +201,26 @@ class lal_spectrumplot(gst.BaseTransform):
 			# convert src pad's caps to sink pad's
 			#
 
-			return self.get_pad("sink").get_allowed_caps()
+			rate, = [struct["framerate"] for struct in caps]
+			result = gst.Caps()
+			for struct in self.get_pad("sink").get_pad_template_caps():
+				struct = struct.copy()
+				struct["rate"] = rate
+				result.append_structure(struct)
+			return result
 
 		elif direction == gst.PAD_SINK:
 			#
 			# convert sink pad's caps to src pad's
 			#
 
-			return self.get_pad("src").get_allowed_caps()
+			rate, = [struct["rate"] for struct in caps]
+			result = gst.Caps()
+			for struct in self.get_pad("src").get_pad_template_caps():
+				struct = struct.copy()
+				struct["framerate"] = rate
+				result.append_structure(struct)
+			return result
 
 		raise ValueError, direction
 
