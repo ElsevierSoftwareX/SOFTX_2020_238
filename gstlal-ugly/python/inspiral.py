@@ -54,6 +54,8 @@ from pylal import ligolw_tisi
 from pylal import rate
 from gstlal import streamthinca
 from gstlal import svd_bank
+from gstlal import far
+
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
 
@@ -390,6 +392,15 @@ class Data(object):
 		# FIXME:  should this live in the DistributionsStats object?
 		self.likelihood_snapshot_timestamp = None
 
+		# FIXME: don't hardcode
+		# All possible instrument combinations
+		self.ifo_combos = []
+		for num in [2,3,4]:
+			self.ifo_combos += [frozenset(ifos) for ifos in iterutils.choices(list(self.instruments), num)]
+
+		# setup the first trials table instance (empty dict)
+		self.trials_table = far.TrialsTable()
+
 		#
 		# build the XML document
 		#
@@ -474,9 +485,6 @@ class Data(object):
 			coincidence_threshold = coincidence_threshold,
 			thinca_interval = 50.0	# seconds
 		)
-		if self.assign_likelihoods:
-			self.distribution_stats.finish(verbose = self.verbose)
-			self.stream_thinca.set_likelihood_data(self.distribution_stats.smoothed_distributions, self.distribution_stats.likelihood_params_func)
 
 	def appsink_new_buffer(self, elem):
 		self.lock.acquire()
@@ -492,9 +500,12 @@ class Data(object):
 				event.event_id = self.sngl_inspiral_table.get_next_id()
 
 			# update likelihood snapshot if needed
-			if self.likelihood_snapshot_timestamp is None:
-				self.likelihood_snapshot_timestamp = timestamp
-			if self.assign_likelihoods and self.likelihood_snapshot_interval is not None and timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval:
+			if self.assign_likelihoods and (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
+				#First time through, pick up a time stamp, finish the distributions, set the function
+				if self.likelihood_snapshot_timestamp is None:
+					self.likelihood_snapshot_timestamp = timestamp
+					self.distribution_stats.finish(verbose = self.verbose)
+					self.stream_thinca.set_likelihood_data(self.distribution_stats.smoothed_distributions, self.distribution_stats.likelihood_params_func)
 				# generate smoothed snapshot of raw counts
 				self.distribution_stats.finish(verbose = self.verbose)
 				self.likelihood_snapshot_timestamp = timestamp
@@ -506,11 +517,25 @@ class Data(object):
 				# instruments stop produce events;  the
 				# decay should be tied to live time not
 				# wall clock time
-				for binnedarray in self.distribution_stats.raw_counts.background.values():
+				for binnedarray in self.distribution_stats.raw_distributions.background_rates.values():
 					binnedarray.array *= self.likelihood_retention_factor
 
+				# create a FAR class FIXME use a real livetime
+				# not None that is updated and propagate a
+				# trials factor through from the command line
+				self.far = far.FAR(None, 1, self.distribution_stats)
+				# FIXME don't hard code
+				remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}
+
+				# generate the background likelihood distributions
+				for ifo_set in self.ifo_combos:
+					self.far.updateFAPmap(ifo_set, remap, verbose = self.verbose)
+
+				# hook up a reference to the Data class instance level trials_table
+				self.far.trials_table = self.trials_table
+
 			# run stream thinca
-			noncoinc_sngls = self.stream_thinca.add_events(events, timestamp)
+			noncoinc_sngls = self.stream_thinca.add_events(events, timestamp, FAP = self.far)
 
 			# update the parameter distribution data.  only
 			# update from sngls that weren't used in coincs
