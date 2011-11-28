@@ -29,7 +29,7 @@ from glue import segments
 from glue.ligolw import lsctables
 from pylal import ligolw_burca2
 from pylal import ligolw_thinca
-
+import time
 
 #
 # =============================================================================
@@ -112,6 +112,8 @@ class StreamThinca(object):
 		# have already been used in coincidences
 		self.ids = set()
 
+		# the start time
+		self.start_time = time.time()
 
 	def set_likelihood_data(self, coinc_params_distributions, likelihood_params_func):
 		if coinc_params_distributions is not None:
@@ -187,6 +189,8 @@ class StreamThinca(object):
 		
 		# Assign FAPs if requested
 		if FAP is not None:
+			# set the live time
+			FAP.livetime = time.time() - self.start_time
 			coinc_event_index = dict((row.coinc_event_id, row) for row in self.coinc_event_table)
 			for coinc_inspiral_row in self.coinc_inspiral_table:
 				coinc_event_row = coinc_event_index[coinc_inspiral_row.coinc_event_id]
@@ -194,7 +198,9 @@ class StreamThinca(object):
 				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)
 				# increment the trials table
 				FAP.trials_table[(coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)] += 1
-
+				# assume each event is "loudest" so n = 1 by default, not the same as required for an IFAR plot
+				coinc_inspiral_row.combined_far = FAP.compute_far(coinc_inspiral_row.false_alarm_rate)
+	
 		self.xmldoc.childNodes[-1].replaceChild(orig_coinc_event_map_table, self.coinc_event_map_table)
 		self.xmldoc.childNodes[-1].replaceChild(orig_coinc_event_table, self.coinc_event_table)
 		self.xmldoc.childNodes[-1].replaceChild(orig_coinc_inspiral_table, self.coinc_inspiral_table)
