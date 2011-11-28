@@ -257,11 +257,10 @@ if options.verbose:
 
 #
 # Load likelihood ratio data
+# Note: It assumes injections are present
 #
 
-
 distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
-distribution_stats.synthesize_injections(verbose = options.verbose)
 
 
 #
@@ -285,7 +284,7 @@ output = inspiral.Data(
 	distribution_stats = distribution_stats,
 	assign_likelihoods = True,
 	likelihood_snapshot_interval = 3600.0,	# seconds
-	likelihood_retention_factor = 0.98,	# characteristic decay time of 50 snapshots (~2 days)
+	likelihood_retention_factor = 1.0,	# disabled effectively until we understand how to use it.
 	comment = options.comment,
 	tmp_path = options.tmp_space,
 	verbose = options.verbose
