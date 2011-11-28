@@ -123,7 +123,7 @@ class StreamThinca(object):
 		self.likelihood_params_func = likelihood_params_func
 
 
-	def add_events(self, events, boundary):
+	def add_events(self, events, boundary, FAP = None):
 		# convert the new row objects to the type required by
 		# ligolw_thinca(), and append to our sngl_inspiral table
 		for old_event in events:
@@ -133,10 +133,10 @@ class StreamThinca(object):
 			self.sngl_inspiral_table.append(new_event)
 
 		# run coincidence, return non-coincident sngls
-		return self.run_coincidence(boundary)
+		return self.run_coincidence(boundary, FAP)
 
 
-	def run_coincidence(self, boundary):
+	def run_coincidence(self, boundary, FAP = None):
 		# check that we've got events to process, and wait until
 		# we've accumulated thinca_interval seconds
 		if not self.sngl_inspiral_table or self.last_boundary + self.thinca_interval > boundary - self.coincidence_back_off:
@@ -184,6 +184,17 @@ class StreamThinca(object):
 
 		# put the original table objects back
 		self.xmldoc.childNodes[-1].replaceChild(orig_sngl_inspiral_table, self.sngl_inspiral_table)
+		
+		# Assign FAPs if requested
+		if FAP is not None:
+			coinc_event_index = dict((row.coinc_event_id, row) for row in self.coinc_event_table)
+			for coinc_inspiral_row in self.coinc_inspiral_table:
+				coinc_event_row = coinc_event_index[coinc_inspiral_row.coinc_event_id]
+				# Assign the FAP
+				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)
+				# increment the trials table
+				FAP.trials_table[(coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)] += 1
+
 		self.xmldoc.childNodes[-1].replaceChild(orig_coinc_event_map_table, self.coinc_event_map_table)
 		self.xmldoc.childNodes[-1].replaceChild(orig_coinc_event_table, self.coinc_event_table)
 		self.xmldoc.childNodes[-1].replaceChild(orig_coinc_inspiral_table, self.coinc_inspiral_table)
