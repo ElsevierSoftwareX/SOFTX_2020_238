@@ -267,8 +267,9 @@ distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_fil
 # build output document
 #
 
-# FIXME approximate GPS now to "infinity"
-options.seg = segments.segment(now(), LIGOTimeGPS(2000000000))
+# FIXME 0 to "infinity"
+options.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
+start = now()
 
 if options.verbose:
 	print >>sys.stderr, "initializing output document ..."
@@ -352,7 +353,7 @@ mainloop.run()
 #
 
 # override file name with approximate interval
-output.filename = "%s-%d-%d.sqlite" % (options.output.split(".sqlite")[0], options.seg[0], now())
+output.filename = "%s-%d-%d.sqlite" % (options.output.split(".sqlite")[0], start, now())
 
 output.flush()
 output.write_output_file(verbose = options.verbose)
