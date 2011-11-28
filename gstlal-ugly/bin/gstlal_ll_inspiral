@@ -264,6 +264,7 @@ if options.verbose:
 # Note: It assumes injections are present
 #
 
+
 distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
 
 
