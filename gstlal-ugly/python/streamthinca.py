@@ -31,6 +31,7 @@ from pylal import ligolw_burca2
 from pylal import ligolw_thinca
 import time
 
+
 #
 # =============================================================================
 #
@@ -184,9 +185,6 @@ class StreamThinca(object):
 		# restore .get_effective_snr() method on trigger class
 		ligolw_thinca.SnglInspiral.get_effective_snr = orig_get_effective_snr
 
-		# put the original table objects back
-		self.xmldoc.childNodes[-1].replaceChild(orig_sngl_inspiral_table, self.sngl_inspiral_table)
-		
 		# Assign FAPs if requested
 		if FAP is not None:
 			# set the live time
@@ -200,7 +198,9 @@ class StreamThinca(object):
 				FAP.trials_table[(coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)] += 1
 				# assume each event is "loudest" so n = 1 by default, not the same as required for an IFAR plot
 				coinc_inspiral_row.combined_far = FAP.compute_far(coinc_inspiral_row.false_alarm_rate)
-	
+
+		# put the original table objects back
+		self.xmldoc.childNodes[-1].replaceChild(orig_sngl_inspiral_table, self.sngl_inspiral_table)
 		self.xmldoc.childNodes[-1].replaceChild(orig_coinc_event_map_table, self.coinc_event_map_table)
 		self.xmldoc.childNodes[-1].replaceChild(orig_coinc_event_table, self.coinc_event_table)
 		self.xmldoc.childNodes[-1].replaceChild(orig_coinc_inspiral_table, self.coinc_inspiral_table)
