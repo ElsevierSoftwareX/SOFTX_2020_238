@@ -124,9 +124,7 @@ def build_pipeline(pipeline, head, sample_rate, psd_fft_length, psd_zero_pad_len
 	if frame_rate is not None:
 		head = pipeparts.mkcapsfilter(pipeline, head, "video/x-raw-rgb, width=768, height=320, framerate=%d/%d" % frame_rate)
 	else:
-		# FIXME:  not a very clever algorithm for auto-setting the
-		# framerate
-		head = pipeparts.mkcapsfilter(pipeline, head, "video/x-raw-rgb, width=768, height=320, framerate=1/%d" % int(round(psd_fft_length / 2 - psd_zero_pad_length)))
+		head = pipeparts.mkcapsfilter(pipeline, head, "video/x-raw-rgb, width=768, height=320")
 	return head
 
 
