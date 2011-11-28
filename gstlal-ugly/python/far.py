@@ -36,7 +36,7 @@ def set_fap(options, Far, f):
 	working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
 
-	# define double and triple fap functions
+	# define fap function
 	connection.create_function("fap", 3, Far.fap_from_rank)
 
 	# compute the faps
