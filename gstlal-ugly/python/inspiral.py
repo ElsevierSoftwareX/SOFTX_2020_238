@@ -392,11 +392,9 @@ class Data(object):
 		# FIXME:  should this live in the DistributionsStats object?
 		self.likelihood_snapshot_timestamp = None
 
-		# FIXME: don't hardcode
 		# All possible instrument combinations
-		self.ifo_combos = []
-		for num in [2,3,4]:
-			self.ifo_combos += [frozenset(ifos) for ifos in iterutils.choices(list(self.instruments), num)]
+		# frozenset(ifos) for n in range(2, len(instruments)+1) for ifos in choices(instruments, n
+		self.ifo_combos = [frozenset(ifos) for n in range(2, len(instruments)+1) for ifos in iterutils.choices(list(self.instruments), n)]
 
 		# setup the first trials table instance (empty dict)
 		self.trials_table = far.TrialsTable()
