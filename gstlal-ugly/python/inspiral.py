@@ -373,7 +373,7 @@ class DistributionsStats(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, verbose = False):
 		#
 		# initialize
 		#
@@ -400,6 +400,7 @@ class Data(object):
 
 		# setup the first trials table instance (empty dict)
 		self.trials_table = far.TrialsTable()
+		self.trials_factor = trials_factor
 
 		#
 		# build the XML document
@@ -520,10 +521,10 @@ class Data(object):
 				for binnedarray in self.distribution_stats.raw_distributions.background_rates.values():
 					binnedarray.array *= self.likelihood_retention_factor
 
-				# create a FAR class FIXME use a real livetime
-				# not None that is updated and propagate a
+				# create a FAR class 
+				# livetime is set to None because it gets updated when coincidences are recorded
 				# trials factor through from the command line
-				self.far = far.FAR(None, 1, self.distribution_stats)
+				self.far = far.FAR(None, self.trials_factor, self.distribution_stats)
 				# FIXME don't hard code
 				remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}
 
