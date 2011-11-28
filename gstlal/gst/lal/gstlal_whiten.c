@@ -1590,7 +1590,7 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 		g_param_spec_double(
 			"fft-length",
 			"FFT length",
-			"Total length of the FFT convolution in seconds",
+			"Total length of the FFT convolution (including zero padding) in seconds",
 			0, G_MAXDOUBLE, DEFAULT_FFT_LENGTH_SECONDS,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
