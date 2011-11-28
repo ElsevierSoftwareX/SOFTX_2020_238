@@ -79,6 +79,23 @@ class lal_spectrumplot(gst.BaseTransform):
 		__author__
 	)
 
+	__gproperties__ = {
+		"f-min": (
+			gobject.TYPE_DOUBLE,
+			"f_{min}",
+			"Lower bound of plot in Hz.",
+			0, gobject.G_MAXDOUBLE, 10.0,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		),
+		"f-max": (
+			gobject.TYPE_DOUBLE,
+			"f_{max}",
+			"Upper bound of plot in Hz.",
+			0, gobject.G_MAXDOUBLE, 4000.0,
+			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+		)
+	}
+
 	__gsttemplates__ = (
 		gst.PadTemplate("sink",
 			gst.PAD_SINK,
@@ -118,6 +135,24 @@ class lal_spectrumplot(gst.BaseTransform):
 		self.sample_units = None
 
 
+	def do_set_property(self, prop, val):
+		if prop.name == "f-min":
+			self.f_min = val
+		elif prop.name == "f-max":
+			self.f_max = val
+		else:
+			raise AssertError
+
+
+	def so_get_property(self, prop, val):
+		if prop.name == "f-min":
+			return self.f_min
+		elif prop.name == "f-max":
+			return self.f_max
+		else:
+			raise AssertError
+
+
 	def do_set_caps(self, incaps, outcaps):
 		self.channels = incaps[0]["channels"]
 		self.delta_f = incaps[0]["delta-f"]
@@ -152,15 +187,14 @@ class lal_spectrumplot(gst.BaseTransform):
 		data = numpy.transpose(pipeio.array_from_audio_buffer(inbuf))
 		f = numpy.arange(len(data[0]), dtype = "double") * self.delta_f
 
-		fmin, fmax = 30.0, 3000.0
-		imin = bisect.bisect_left(f, fmin)
-		imax = bisect.bisect_right(f, fmax)
+		imin = bisect.bisect_left(f, self.f_min)
+		imax = bisect.bisect_right(f, self.f_max)
 
 		for psd in data[:]:
 			axes.loglog(f[imin:imax], psd[imin:imax], alpha = 0.7)
 
 		axes.grid(True)
-		axes.set_xlim((fmin, fmax))
+		axes.set_xlim((self.f_min, self.f_max))
 		axes.set_title(r"Spectral Density of %s, %s at %.9g s" % (self.instrument or "Unknown Instrument", self.channel_name or "Unknown Channel", float(inbuf.timestamp) / gst.SECOND))
 		axes.set_xlabel(r"Frequency (Hz)")
 		axes.set_ylabel(r"Spectral Density (FIXME)")
