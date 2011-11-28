@@ -195,9 +195,9 @@ class lal_spectrumplot(gst.BaseTransform):
 
 		axes.grid(True)
 		axes.set_xlim((self.f_min, self.f_max))
-		axes.set_title(r"Spectral Density of %s, %s at %.9g s" % (self.instrument or "Unknown Instrument", self.channel_name or "Unknown Channel", float(inbuf.timestamp) / gst.SECOND))
+		axes.set_title(r"Spectral Density of %s, %s at %.11g s" % (self.instrument or "Unknown Instrument", self.channel_name or "Unknown Channel", float(inbuf.timestamp) / gst.SECOND))
 		axes.set_xlabel(r"Frequency (Hz)")
-		axes.set_ylabel(r"Spectral Density (FIXME)")
+		axes.set_ylabel(r"Spectral Density (%s)" % self.sample_units)
 
 		#
 		# extract pixel data
