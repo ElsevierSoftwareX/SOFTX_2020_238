@@ -24,7 +24,7 @@
 
 
 #include <gst/gst.h>
-#include <gst/base/gstbasesrc.h>
+#include <gst/base/gstpushsrc.h>
 
 #include <gds/lvshmapi.h>
 
@@ -45,12 +45,12 @@ G_BEGIN_DECLS
 
 
 typedef struct {
-	GstBaseSrcClass parent_class;
+	GstPushSrcClass parent_class;
 } GDSLVSHMSrcClass;
 
 
 typedef struct {
-	GstBaseSrc basesrc;
+	GstPushSrc basesrc;
 
 	char *name;
 	lvshm_mask mask;

@@ -42,7 +42,7 @@
 
 
 #include <gst/gst.h>
-#include <gst/base/gstbasesrc.h>
+#include <gst/base/gstpushsrc.h>
 
 
 /*
@@ -70,7 +70,7 @@ GST_DEBUG_CATEGORY(gds_lvshmsrc_debug);
  */
 
 
-static GstBaseSrcClass *parent_class = NULL;
+static GstPushSrcClass *parent_class = NULL;
 
 
 /*
@@ -95,15 +95,6 @@ enum property {
 #define DEFAULT_NAME "Fast_Data"
 #define DEFAULT_MASK -1	/* FIXME:  what does this mean? */
 #define DEFAULT_WAIT_TIME -1.0	/* wait indefinitely */
-
-
-/*
- * ========================================================================
- *
- *                             Utility Functions
- *
- * ========================================================================
- */
 
 
 /*
@@ -432,7 +423,7 @@ GType gsd_lvshmsrc_get_type(void)
 			.instance_size = sizeof(GDSLVSHMSrc),
 			.instance_init = instance_init,
 		};
-		type = g_type_register_static(GST_TYPE_BASE_SRC, "gds_lvshmsrc", &info, 0);
+		type = g_type_register_static(GST_TYPE_PUSH_SRC, "gds_lvshmsrc", &info, 0);
 	}
 
 	return type;
