@@ -281,10 +281,10 @@ class DistributionsStats(object):
 	"""
 
 	binnings = {
-		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LinearPlusOverflowBins(.01, 1., 200))),
-		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LinearPlusOverflowBins(.01, 1., 200))),
-		"L1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LinearPlusOverflowBins(.01, 1., 200))),
-		"V1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LinearPlusOverflowBins(.01, 1., 200)))
+		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LinearPlusOverflowBins(.005, 1., 200))),
+		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LinearPlusOverflowBins(.005, 1., 200))),
+		"L1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LinearPlusOverflowBins(.005, 1., 200))),
+		"V1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(3., 100., 200), rate.LinearPlusOverflowBins(.005, 1., 200)))
 	}
 
 	filters = {
@@ -308,7 +308,7 @@ class DistributionsStats(object):
 	def add_single(self, event):
 		self.raw_distributions.add_background(self.likelihood_params_func((event,), None))
 
-	def add_uniform_background_prior(self, n = 1):
+	def add_uniform_background_prior(self, n = 1.):
 		for param, binarr in self.raw_distributions.background_rates.items():
 			binarr.array += n
 
@@ -329,7 +329,8 @@ class DistributionsStats(object):
 				snrs = snr_distribution(size, minsnr)
 				chisqs = chisq_distribution(df, noncentrality(snrs, prefactor), 1) / df
 				for snr, chisq in itertools.izip(snrs, chisqs):
-					binarr[snr, chisq**.5 / snr] += 1
+					#FIXME keep synced with the likelihood_params_func!!
+					binarr[snr, chisq / snr**2] += 1
 
 				remaining -= size
 
