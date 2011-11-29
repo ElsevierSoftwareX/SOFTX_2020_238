@@ -398,7 +398,7 @@ class gstlal_inspiral_calc_likelihood_node(pipeline.CondorDAGNode):
 	"""
 	A gstlal_inspiral_calc_likelihood node
 	"""
-	def __init__(self, job, dag, likelihood_file, synthesize_injections = True, input = [], p_node=[]):
+	def __init__(self, job, dag, likelihood_file, synthesize_injections = True, input = [], likelihood_output_name = "post_calc_likelihood_", p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("likelihood-file", likelihood_file)
@@ -406,9 +406,9 @@ class gstlal_inspiral_calc_likelihood_node(pipeline.CondorDAGNode):
 		for f in input:
 			self.add_file_arg(f)
 		fpath = os.path.split(likelihood_file)
-		self.background_name = os.path.join(fpath[0], "post_calc_likelihood_" + fpath[1])
+		self.background_name = os.path.join(fpath[0], likelihood_output_name + fpath[1])
 		self.add_var_opt("write-likelihood", self.background_name)
-		self.add_var_opt("background-prior", 1) #FIXME make this optional
+		self.add_var_opt("background-prior", 1e-5) #FIXME make this optional
 		if synthesize_injections:
 			self.add_var_opt("synthesize-injections", "")
 		for p in p_node:
@@ -681,7 +681,7 @@ for cnt, s in enumerate(build_bank_string(bank_cache)):
 		injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, vetoes=options.vetoes)
 	
 		# FIXME the previous compute likelihood function already populates the injections, we should just use those
-		injnode_likelihood = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, noninjnode_likelihood.background_name, synthesize_injections = True, input = [injnode.output_name], p_node=[noninjnode_likelihood, injnode])
+		injnode_likelihood = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, noninjnode_likelihood.background_name, synthesize_injections = True, input = [injnode.output_name], likelihood_output_name = "post_calc_likelihood_simulation", p_node=[noninjnode_likelihood, injnode])
 		
 		# book keeping
 		far_input_nodes.append(injnode)
