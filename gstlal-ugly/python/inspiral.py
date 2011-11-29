@@ -400,6 +400,7 @@ class Data(object):
 		# setup the first trials table instance (empty dict)
 		self.trials_table = far.TrialsTable()
 		self.trials_factor = trials_factor
+		self.far = None
 
 		#
 		# build the XML document
