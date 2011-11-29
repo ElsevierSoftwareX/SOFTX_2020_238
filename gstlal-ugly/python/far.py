@@ -43,7 +43,7 @@ def set_fap(options, Far, f):
 	print >>sys.stderr, "computing faps ..."
 	for ifos, in connection.cursor().execute('SELECT DISTINCT(ifos) FROM coinc_inspiral').fetchall():
 
-		print >>sys.stderr, "computing faps for ", ifos
+		print >>sys.stderr, "computing fap maps for ", ifos
 		ifoset = frozenset(lsctables.instrument_set_from_ifos(ifos))
 		#ifoset.discard("H2")
 		#ifos = lsctables.ifos_from_instrument_set(ifoset)
@@ -54,9 +54,9 @@ def set_fap(options, Far, f):
 		# ignored in the ranking
 		Far.updateFAPmap(ifoset, remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])})
 
-		# FIXME abusing FAR column
-		connection.cursor().execute(fap_query(ifos))
-		connection.commit()
+	# FIXME abusing FAR column
+	connection.cursor().execute("UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(coinc_event.likelihood, coinc_inspiral.ifos, coinc_event.time_slide_id) FROM coinc_event WHERE coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id)")
+	connection.commit()
 
 	# all finished
 	connection.commit()
@@ -208,7 +208,7 @@ class FAR(object):
 			return self.maxrank[ifostr][1]
 		if rank <= self.minrank[ifostr][0]:
 			return self.minrank[ifostr][1]
-		fap = self.ccdf_interpolator[ifostr](rank)
+		fap = float(self.ccdf_interpolator[ifostr](rank))
 		trials_factor = int(self.trials_table.setdefault((ifostr, tsid),1) * self.trials_factor) or 1
 		return 1.0 - (1.0 - fap)**trials_factor
 
@@ -254,6 +254,3 @@ def get_live_time(segments, verbose = True):
 	if verbose:
 		print >> sys.stderr, "Livetime: ", livetime
 	return livetime
-
-def fap_query(ifos):
-	return '''UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(coinc_event.likelihood, coinc_inspiral.ifos, coinc_event.time_slide_id) FROM coinc_event WHERE coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id AND coinc_inspiral.ifos = "%s" ) WHERE coinc_inspiral.ifos == "%s" ''' % (ifos,ifos)
