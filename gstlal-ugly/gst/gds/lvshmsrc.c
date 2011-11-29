@@ -153,8 +153,6 @@ static gboolean stop(GstBaseSrc *object)
 
 /*
  * create()
- *
- * FIXME:  handle timeouts, etc.
  */
 
 
@@ -173,10 +171,17 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	*buffer = NULL;
 
 	/*
-	 * retrieve next frame file from the lvshm library
+	 * retrieve next frame file from the lvshm library.  all error
+	 * paths after this succedes must include a call to
+	 * lvshm_releaseDataBuffer()
 	 */
 
 	data = lvshm_getNextBuffer(element->handle, flags);
+	if(!data) {
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("unknown failure retrieving buffer from GDS shared memory.  possible causes include:  timeout, interupted by signal, no data available."));
+		/* indicate end-of-stream */
+		return GST_FLOW_UNEXPECTED;
+	}
 	length = lvshm_dataLength(element->handle);
 	GST_LOG_OBJECT(element, "retrieved %u byte frame file labeled %lu", length, (unsigned long) lvshm_bufferGPS(element->handle));
 
@@ -186,11 +191,16 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), offset, length, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
 	if(result != GST_FLOW_OK) {
-		GST_ERROR_OBJECT(element, "gst_pad_alloc_buffer() returned %d (%s)", result, gst_flow_get_name(result));
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("gst_pad_alloc_buffer() returned %d (%s)", result, gst_flow_get_name(result)));
 		goto done;
 	}
-
-	g_assert(GST_BUFFER_SIZE(*buffer) == length);
+	if(GST_BUFFER_SIZE(*buffer) != length) {
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("gst_pad_alloc_buffer(): requested buffer size %u, got buffer size %u", length, GST_BUFFER_SIZE(*buffer)));
+		gst_buffer_unref(*buffer);
+		*buffer = NULL;
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
 	memcpy(GST_BUFFER_DATA(*buffer), data, length);
 	GST_BUFFER_TIMESTAMP(*buffer) = lvshm_bufferGPS(element->handle) * GST_SECOND;
 	GST_BUFFER_DURATION(*buffer) = GST_CLOCK_TIME_NONE;
