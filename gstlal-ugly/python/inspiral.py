@@ -312,6 +312,14 @@ class DistributionsStats(object):
 		for param, binarr in self.raw_distributions.background_rates.items():
 			binarr.array += n
 
+	def add_gaussian_background_prior(self, N = 1000, df = 24):
+		snrs = random.chisquare(2, N)
+		chisqs = random.chisquare(df, N)
+		for param, binarr in self.raw_distributions.background_rates.items():
+			for snr, chisq in itertools.izip(snrs, chisqs):
+				#FIXME keep synced with the likelihood_params_func!!
+				binarr[snr, chisq / snr**2] += 1
+
 	def synthesize_injections(self, prefactor = .3, df = 24, N = 1000000, verbose = False):
 		# FIXME:  for maintainability, this should be modified to
 		# use the .add_injection() method of the .raw_distributions
