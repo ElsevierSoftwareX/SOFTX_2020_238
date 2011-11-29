@@ -12,22 +12,25 @@ from pylal import ligolw_burca_tailor
 coincparamsdistributions, likelihood_seglists = ligolw_burca_tailor.load_likelihood_data([sys.argv[1]], u"gstlal_inspiral_likelihood", verbose = True)
 #coincparamsdistributions, likelihood_seglists = ligolw_burca_tailor.load_likelihood_data([sys.argv[1]], verbose = True)
 counts = coincparamsdistributions.background_rates
+inj = coincparamsdistributions.injection_rates
 
 wn = rate.gaussian_window2d(5,5, sigma = 8)
 
 for i, ifo in enumerate(['H1','H2','L1', 'V1']):
-	pylab.figure(i)
-	H1 = counts[ifo+"_snr_chi"].array
-	snr = counts[ifo+"_snr_chi"].bins[0].centres()[1:-1]
-	chi = counts[ifo+"_snr_chi"].bins[1].centres()[1:-1]
-	ax = pylab.subplot(111)
-	pylab.pcolormesh(snr, chi, numpy.log10(rate.filter_array(H1.T,wn)+1)[1:-1,1:-1])
-	ax.set_yscale('log')
-	ax.set_xscale('log')
-	pylab.colorbar()
-	pylab.xlabel('SNR')
-	pylab.ylabel('reduced chi / SNR')
-	pylab.xlim([3., 100.])
-	pylab.title('log base 10 (number + 1)')
-	pylab.grid()
-	pylab.savefig(ifo+'snrchi.png',dpi=300)
+	for name, obj in (("background", counts), ("injections", inj)):
+		pylab.figure(i)
+		H1 = obj[ifo+"_snr_chi"].array
+		snr = obj[ifo+"_snr_chi"].bins[0].centres()[1:-1]
+		chi = obj[ifo+"_snr_chi"].bins[1].centres()[1:-1]
+		chi[0] = 0 # not inf
+		ax = pylab.subplot(111)
+		pylab.pcolormesh(snr, chi, numpy.log10(rate.filter_array(H1.T,wn)+1)[1:-1,1:-1])
+		ax.set_yscale('linear')
+		ax.set_xscale('log')
+		pylab.colorbar()
+		pylab.xlabel('SNR')
+		pylab.ylabel('reduced chi / SNR')
+		pylab.xlim([3., 100.])
+		pylab.title('log base 10 (number + 1)')
+		pylab.grid()
+		pylab.savefig(ifo+name+'snrchi.png',dpi=300)
