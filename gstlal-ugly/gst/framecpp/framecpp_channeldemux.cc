@@ -468,10 +468,17 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 
 				/*
 				 * retrieve the source pad.  create it if
-				 * it doesn't exist.
+				 * it doesn't exist.  if the pad has no
+				 * peer, skip this channel.
 				 */
 
 				srcpad = get_src_pad(element, name);
+				if(!gst_pad_is_linked(srcpad)) {
+					GST_LOG_OBJECT(element, "skipping: not linked");
+					gst_object_unref(srcpad);
+					srcpad = NULL;
+					continue;
+				}
 				srcpad_state = get_src_pad_state(element, srcpad);
 				g_assert(srcpad_state != NULL);
 
@@ -498,19 +505,15 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				 * push buffer downstream
 				 */
 
-				GST_LOG_OBJECT(element, "pushing buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(outbuf));
+				GST_LOG_OBJECT(element, "pushing buffer on %s spanning %" GST_BUFFER_BOUNDARIES_FORMAT, name, GST_BUFFER_BOUNDARIES_ARGS(outbuf));
 				result = gst_pad_push(srcpad, outbuf);
 				outbuf = NULL;
-				if(result != GST_FLOW_OK) {
-					if(result != GST_FLOW_NOT_LINKED) {
-						GST_ERROR_OBJECT(element, "failed to push buffer");
-						goto done;
-					}
-					GST_LOG_OBJECT(element, "buffer dropped: not linked");
-					result = GST_FLOW_OK;
-				}
 				gst_object_unref(srcpad);
 				srcpad = NULL;
+				if(result != GST_FLOW_OK) {
+					GST_ERROR_OBJECT(element, "failure: %s", gst_flow_get_name(result));
+					goto done;
+				}
 			}
 		}
 	} catch(...) {
