@@ -26,6 +26,16 @@ AC_CONFIG_FILES([ \
 
 
 #
+# Move headers into a versions sub-directory to allow more than one set of
+# headers to be installed system-wide.  (commented out until this is
+# needed)
+#
+
+
+#AC_SUBST([includedir],[${includedir}/${PACKAGE}-${PACKAGE_VERSION}])
+
+
+#
 # Extra directories
 #
 
