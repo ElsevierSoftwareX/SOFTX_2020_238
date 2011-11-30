@@ -565,7 +565,7 @@ class Data(object):
 		if self.connection is not None:
 			self.connection.commit()
 
-	def write_output_file(self, verbose = False):
+	def write_output_file(self, likelihood_file = None, verbose = False):
 		if self.connection is not None:
 			from glue.ligolw import dbtables
 			self.connection.cursor().execute('UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)')
@@ -580,8 +580,11 @@ class Data(object):
 			utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose)
 
 		# write out the snr / chisq histograms
-		fname = os.path.split(self.filename)
-		fname = os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
+		if likelihood_file is None:
+			fname = os.path.split(self.filename)
+			fname = os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
+		else:
+			fname = likelihood_file
 		self.distribution_stats.to_filename(fname, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = verbose)
 
 
