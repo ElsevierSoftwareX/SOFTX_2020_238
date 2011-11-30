@@ -94,8 +94,8 @@ options, filenames = parse_command_line()
 
 coincparamsdistributions = inspiral.DistributionsStats()
 # FIXME what should this be?
-coincparamsdistributions.add_uniform_background_prior(n = 1e-5)
-coincparamsdistributions.add_gaussian_background_prior()
+coincparamsdistributions.add_uniform_background_prior(n = 1e-4)
+coincparamsdistributions.add_gaussian_background_prior(N = 10000)
 coincparamsdistributions.synthesize_injections(verbose = options.verbose, N = options.synthesize_injection_count)
 
 #FIXME there is no real segment here, should there be?
