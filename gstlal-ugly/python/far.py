@@ -135,14 +135,24 @@ class FAR(object):
 			self.likelihood_ratio = None
 		self.livetime = livetime
 		self.trials_factor = trials_factor
+		self.reset()
+
+	def reset(self):
 		self.ccdf_interpolator = {}
 		self.minrank = {}
 		self.maxrank = {}
+		self.likelihood_pdfs = {}
 
 	def updateFAPmap(self, ifo_set, remap = {}, verbose = False):
 		if self.distribution_stats is None:
 			raise InputError, "must provide background bins file"
 
+		# we might choose to statically map certain likelihood
+		# distributions to others.  This is useful for ignoring H2 when
+		# H1 is present. By default we don't
+		
+		remap_set = remap.setdefault(ifo_set, ifo_set)
+		
 		#
 		# the target FAP resolution is 1 part in 10^7.  So depending on
 		# how many instruments we have we have to take the nth root of
@@ -150,27 +160,29 @@ class FAR(object):
 		# for memory/CPU requirements
 		#
 
-		targetlen = int(1e7**(1. / len(ifo_set)))
+		targetlen = int(1e7**(1. / len(remap_set)))
 
 		# reduce typing
 		background = self.distribution_stats.smoothed_distributions.background_rates
 		injections = self.distribution_stats.smoothed_distributions.injection_rates
 
-		likelihood_pdfs = {}
-
-		# we might choose to statically map certain likelihood
-		# distributions to others.  This is useful for ignoring H2 when
-		# H1 is present. By default we don't
-		remap_set = remap.setdefault(ifo_set, ifo_set)
 
 		for param in background:
+			# FIXME only works if there is a 1-1 relationship between params and instruments
 			instrument = param.split("_")[0]
 			if instrument not in remap_set:
 				continue
-			if verbose:
-				print >>sys.stderr, "updating fap maps for ", instrument, " in ", ifo_set
-			# FIXME only works if there is a 1-1 relationship between params and instruments
 
+			# don't repeat the calculation if we have already done
+			# it for the requested instrument and resolution
+			if (instrument, targetlen) in self.likelihood_pdfs:
+				if verbose:
+					print >>sys.stderr, "already computed likelihood for ", instrument, " at resolution ", targetlen, " continuing..."
+				continue
+			else:
+				if verbose:
+					print >>sys.stderr, "updating likelihood background for ", instrument, " in ", ifo_set
+	
 			likelihoods = injections[param].array / background[param].array
 			# ignore infs and nans because background is never
 			# found in those bins.  the boolean array indexing
@@ -184,23 +196,30 @@ class FAR(object):
 			# probabilities and not probability densities, the
 			# likelihood_pdfs contain probabilities and not
 			# densities, as well, when this is done
-			likelihood_pdfs[instrument] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, targetlen),)))
+			self.likelihood_pdfs[(instrument, targetlen)] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, targetlen),)))
 			for coords in iterutils.MultiIter(*background[param].bins.centres()):
 				likelihood = self.likelihood_ratio({param: coords})
 				if numpy.isfinite(likelihood):
-					likelihood_pdfs[instrument][likelihood,] += background[param][coords]
+					self.likelihood_pdfs[(instrument, targetlen)][likelihood,] += background[param][coords]
 
 		# switch to str representation because we will be using these in DB queries
 		ifostr = lsctables.ifos_from_instrument_set(ifo_set)
 
-		ranks, weights = self.possible_ranks_array(likelihood_pdfs, remap_set)
-		# complementary cumulative distribution function
-		ccdf = weights[::-1].cumsum()[::-1]
-		ccdf /= ccdf[0]
-		self.ccdf_interpolator[ifostr] = interpolate.interp1d(ranks, ccdf)
-		# record min and max ranks so we know which end of the ccdf to use when we're out of bounds
-		self.minrank[ifostr] = (min(ranks), ccdf[0])
-		self.maxrank[ifostr] = (max(ranks), ccdf[-1])
+		# only recompute if necessary
+		if ifostr not in self.ccdf_interpolator:
+			if verbose:
+				print >>sys.stderr, "computing joint likelihood background for ", ifostr
+			ranks, weights = self.possible_ranks_array(self.likelihood_pdfs, remap_set, targetlen)
+			# complementary cumulative distribution function
+			ccdf = weights[::-1].cumsum()[::-1]
+			ccdf /= ccdf[0]
+			self.ccdf_interpolator[ifostr] = interpolate.interp1d(ranks, ccdf)
+			# record min and max ranks so we know which end of the ccdf to use when we're out of bounds
+			self.minrank[ifostr] = (min(ranks), ccdf[0])
+			self.maxrank[ifostr] = (max(ranks), ccdf[-1])
+		else:
+			if verbose:
+				print>>sys.stderr, "already computed faps for ", ifostr, " continuing"
 
 	def fap_from_rank(self, rank, ifostr, tsid):
 		# FIXME:  doesn't check that rank is a scalar
@@ -212,13 +231,13 @@ class FAR(object):
 		trials_factor = int(self.trials_table.setdefault((ifostr, tsid),1) * self.trials_factor) or 1
 		return 1.0 - (1.0 - fap)**trials_factor
 
-	def possible_ranks_array(self, likelihood_pdfs, ifo_set):
+	def possible_ranks_array(self, likelihood_pdfs, ifo_set, targetlen):
 		# start with an identity array to seed the outerproduct chain
 		ranks = numpy.array([1.0])
 		vals = numpy.array([1.0])
 		# FIXME:  probably only works because the pdfs aren't pdfs but probabilities
 		for ifo in ifo_set:
-			likelihood_pdf = likelihood_pdfs[ifo]
+			likelihood_pdf = likelihood_pdfs[(ifo,targetlen)]
 			ranks = numpy.outer(ranks, likelihood_pdf.centres()[0])
 			vals = numpy.outer(vals, likelihood_pdf.array)
 			ranks = ranks.reshape((ranks.shape[0] * ranks.shape[1],))
