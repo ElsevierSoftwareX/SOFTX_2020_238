@@ -264,9 +264,15 @@ if options.verbose:
 # Note: It assumes injections are present
 #
 
-
-distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
-
+try:
+	distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
+except IOError:
+	print >> sys.stderr, options.likelihood_file, " not found, creating a prior distribution"
+	distribution_stats = inspiral.DistributionsStats()
+	# FIXME what should these be?
+	distribution_stats.add_uniform_background_prior(n = 1e-4)
+	distribution_stats.add_gaussian_background_prior(N = 10000)
+	distribution_stats.synthesize_injections(verbose = options.verbose)
 
 #
 # build output document
@@ -362,7 +368,7 @@ mainloop.run()
 output.filename = "%s-%d-%d.sqlite" % (options.output.split(".sqlite")[0], start, now())
 
 output.flush()
-output.write_output_file(verbose = options.verbose)
+output.write_output_file(likelihood_file = options.likelihood_file, verbose = options.verbose)
 
 
 #
