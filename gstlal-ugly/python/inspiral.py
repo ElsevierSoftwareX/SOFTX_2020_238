@@ -312,9 +312,9 @@ class DistributionsStats(object):
 		for param, binarr in self.raw_distributions.background_rates.items():
 			binarr.array += n
 
-	def add_gaussian_background_prior(self, N = 1000, df = 24):
-		snrs = random.chisquare(2, N)
-		chisqs = random.chisquare(df, N)
+	def add_gaussian_background_prior(self, N = 1000, maxnum = 200, df = 24):
+		snrs = [ (random.chisquare(2, maxnum)**.5).max() for n in range(N)]
+		chisqs = random.chisquare(df, N)  / df
 		for param, binarr in self.raw_distributions.background_rates.items():
 			for snr, chisq in itertools.izip(snrs, chisqs):
 				#FIXME keep synced with the likelihood_params_func!!
