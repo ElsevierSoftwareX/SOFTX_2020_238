@@ -8,7 +8,7 @@ __author__ = 'Chad Hanna <channa@caltech.edu>'
 ##############################################################################
 # import standard modules and append the lalapps prefix to the python path
 import sys, os, copy, math
-import subprocess, socket, tempfile
+import subprocess, socket, tempfile, shutil
 
 ##############################################################################
 # import the modules we need to build the pipeline
@@ -113,7 +113,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	A gstlal_inspiral node
 	"""
 	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=log_path(), ht_gate_thresh=10.0, control_peak_time = 8, fir_stride = 8, p_node=[]):
+	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=log_path(), ht_gate_thresh=10.0, control_peak_time = 8, fir_stride = 8, likelihood_file = None, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("channel-name", inspiral.pipeline_channel_list_from_channel_dict(channel_dict))
@@ -127,7 +127,12 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		if ht_gate_thresh is not None:
 			self.add_var_opt("ht-gate-threshold", ht_gate_thresh)
 		#self.add_var_opt("verbose", "") #Put this in for debugging
+		likefile = os.path.split(likelihood_file)[1]
 		path = os.getcwd()
+		# make a new likelihood file
+		likefile = "%s/%d-%s" % (path, job.number, likefile)
+		shutil.copyfile(likelihood_file, likefile)
+		self.add_var_opt("likelihood-file", likefile)
 		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
 		self.output_name = '%s/%s-%04d-LLOID.sqlite' % (path, "H1H2L1V1", job.number)
 		self.background_name = '%s/%s-%04d-LLOID_snr_chi.xml.gz' % (path, "H1H2L1V1", job.number)
@@ -209,12 +214,12 @@ def parse_command_line():
 	parser.add_option("--ht-gate-threshold", metavar = "float", help = "Set the h(t) gate threshold to reject glitches", type="float")
 	parser.add_option("--num-banks", metavar = "str", help = "the number of banks per job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
 	parser.add_option("--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs")
-	
+	parser.add_option("--likelihood-file", help = "set the likelihood file, required")	
 	options, filenames = parser.parse_args()
 	options.num_banks = [int(v) for v in options.num_banks.split(",")]
 
 	fail = ""
-	for option in ("bank_cache",):
+	for option in ("bank_cache", "likelihood_file"):
 		if getattr(options, option) is None:
 			fail += "must provide option %s\n" % (option)
 	if fail: raise ValueError, fail
@@ -249,7 +254,7 @@ gstlalInspiralJob = gstlal_inspiral_job()
 trials_factor = 0
 
 for s in build_bank_string(bank_cache, options.num_banks, options.max_jobs):
-	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold)
+	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold, likelihood_file = options.likelihood_file)
 
 
 dag.write_sub_files()
