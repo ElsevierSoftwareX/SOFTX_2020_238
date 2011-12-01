@@ -34,6 +34,7 @@ import warnings
 from optparse import OptionParser
 import signal
 import time
+import resource
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -71,6 +72,11 @@ def excepthook(*args):
 	os._exit(1)
 
 sys.excepthook = excepthook
+
+# Setup the resource limits
+
+maxproc = resource.getrlimit(resource.RLIMIT_NPROC)[1]
+resource.setrlimit(resource.RLIMIT_NPROC, (maxproc, maxproc))
 
 
 def now():
@@ -264,15 +270,8 @@ if options.verbose:
 # Note: It assumes injections are present
 #
 
-try:
-	distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
-except IOError:
-	print >> sys.stderr, options.likelihood_file, " not found, creating a prior distribution"
-	distribution_stats = inspiral.DistributionsStats()
-	# FIXME what should these be?
-	distribution_stats.add_uniform_background_prior(n = 1e-4)
-	distribution_stats.add_gaussian_background_prior(N = 10000)
-	distribution_stats.synthesize_injections(verbose = options.verbose)
+distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
+
 
 #
 # build output document
