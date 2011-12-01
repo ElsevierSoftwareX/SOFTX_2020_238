@@ -183,7 +183,15 @@ for n, filename in enumerate(filenames):
 
 	xmldoc = dbtables.get_xml(connection)
 	sngl_inspiral_table = dbtables.table.get_table(xmldoc, dbtables.lsctables.SnglInspiralTable.tableName)
-	coinc_def_id = dbtables.table.get_table(xmldoc, dbtables.lsctables.CoincDefTable.tableName).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
+	try:
+		coinc_def_id = dbtables.table.get_table(xmldoc, dbtables.lsctables.CoincDefTable.tableName).get_coinc_def_id(ligolw_thinca.InspiralCoincDef.search, ligolw_thinca.InspiralCoincDef.search_coinc_type, create_new = False)
+	except KeyError:
+		xmldoc.unlink()
+		connection.commit()
+		connection.close()
+		dbtables.put_connection_filename(filename, working_filename, verbose = options.verbose)
+		continue
+	
 	offset_vectors = dbtables.table.get_table(xmldoc, dbtables.lsctables.TimeSlideTable.tableName).as_dict()
 	if options.vetoes_name is not None:
 		vetoseglists = ligolwsegments.segmenttable_get_by_name(xmldoc, options.vetoes_name).coalesce()
