@@ -17,6 +17,7 @@ from glue import pipeline
 from glue import lal
 from glue.ligolw import lsctables
 from glue import segments
+from optparse import OptionParser
 
 def which(prog):
 	which = subprocess.Popen(['which',prog], stdout=subprocess.PIPE)
@@ -106,10 +107,12 @@ class gstlal_svd_bank_node(pipeline.CondorDAGNode):
 
 def parse_command_line():
 	parser = OptionParser()
-	parser.add_option("--instrument", help = "set the name of the instrument")
-	parser.add_option("--reference-psd", metavar = "file", help = "Set the name of the reference psd file")
-	parser.add_option("--bank-cache", metavar = "file", help = "Set the name of the bank cache")
-	parser.add_option("--clipping", metavar = "num", type = "int", default = 0, help = "set the clipping factor")
+	parser.add_option("--instrument", help = "set the name of the instrument, required")
+	parser.add_option("--reference-psd", metavar = "file", help = "Set the name of the reference psd file, required")
+	parser.add_option("--bank-cache", metavar = "file", help = "Set the name of the bank cache, required")
+	parser.add_option("--clipping", metavar = "num", type = "int", default = 0, help = "set the clipping factor, default 0")
+	parser.add_option("--flow", metavar = "num", type = "float", default = 40, help = "set the low frequency cutoff, default 40 (Hz)")
+	parser.add_option("--output-name", help = "set the base name of the output, required")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
@@ -127,14 +130,14 @@ psdname = ref_psd.split('.')[0]
 
 try: os.mkdir("logs")
 except: pass
-dag = bank_DAG(psdname + "_svd_bank")
+dag = bank_DAG(options.output_name)
 
 svdJob = gstlal_svd_bank_job(tag_base=psdname + "_gstlal_svd_bank")
 svdNode = {}
 
 
 for f in [lal.CacheEntry(line).path() for line in open(input_cache)]:
-	svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, reference_psd=ref_psd, clipping=clipping)
+	svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, reference_psd = ref_psd, flow = options.flow, clipping = clipping)
 
 dag.write_sub_files()
 dag.write_dag()
