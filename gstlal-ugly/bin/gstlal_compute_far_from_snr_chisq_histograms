@@ -60,16 +60,14 @@ options, filenames = parse_command_line()
 #
 
 segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.segments_file, verbose = options.verbose), options.segments_name).coalesce()
-if options.vetoes_file is not None:
-	vetoes = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes_file, verbose = options.verbose), options.vetoes_name).coalesce()
+vetoes = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes_file, verbose = options.verbose), options.vetoes_name).coalesce()
 
 #
 # Here we get the union of all of the possible live time segments and subtract
 # the vetoes.
 #
 
-if options.vetoes_file is not None:
-	segments -= vetoes
+segments -= vetoes
 livetime = far.get_live_time(segments)
 
 #
