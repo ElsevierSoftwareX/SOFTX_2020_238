@@ -83,6 +83,8 @@ class source(object):
 parser = OptionParser(description = __doc__)
 parser.add_option("--gps-start-time", metavar = "seconds", type = "int", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 parser.add_option("--gps-end-time", metavar = "seconds", type = "int", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
+parser.add_option("--bns-waveform", metavar = "str", default = "TaylorT4threePointFivePN", help = "Set the name of the bns waveform, default = TaylorT4threePointFivePN")
+parser.add_option("--nsbh-waveform", metavar = "str", default = "SpinTaylorFramelessthreePointFivePN", help = "Set the name of the nsbh waveform, default = SpinTaylorFramelessthreePointFivePN")
 parser.add_option("--bns-local-rate", metavar = "mergers / Mpc^3 / Myr", default = 1.2, type = "float", help = "set the local merger rate in mergers / Mpc^3 / Myr, default = 1.2")
 parser.add_option("--nsbh-local-rate", metavar = "mergers / Mpc^3 / Myr", default = .005, type = "float", help = "set the local merger rate in mergers / Mpc^3 / Myr, default = 0.005")
 parser.add_option("--output", metavar = "filename", help = "Set the name of the LIGO light-weight XML file to output")
@@ -118,8 +120,8 @@ stop, start = options.gps_end_time, options.gps_start_time
 random.seed(options.seed)
 
 # set up the types of sources
-BNS = source("TaylorT4threePointFivePN", (options.ns_min_mass, options.ns_max_mass), (options.ns_min_mass, options.ns_max_mass), (0,0), (0,0), options.bns_local_rate, options.bns_max_distance, start, stop)
-NSBH = source("SpinTaylorFramelessthreePointFivePN", (options.ns_min_mass,options.ns_max_mass), (options.bh_min_mass, options.bh_max_mass), (0,0), (options.bh_min_spin, options.bh_max_spin), options.nsbh_local_rate, options.nsbh_max_distance, start, stop)
+BNS = source(options.bns_waveform, (options.ns_min_mass, options.ns_max_mass), (options.ns_min_mass, options.ns_max_mass), (0,0), (0,0), options.bns_local_rate, options.bns_max_distance, start, stop)
+NSBH = source(options.nsbh_waveform, (options.ns_min_mass,options.ns_max_mass), (options.bh_min_mass, options.bh_max_mass), (0,0), (options.bh_min_spin, options.bh_max_spin), options.nsbh_local_rate, options.nsbh_max_distance, start, stop)
 
 for src in (BNS, NSBH):
 
