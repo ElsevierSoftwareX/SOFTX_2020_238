@@ -1,9 +1,19 @@
-START = 871147452
-STOP =  871252452
-LOCAL_RATE = 12.0 # mergers per Mpc^3 per Myr, corresponds to "optimistic rate"
-MAX_DIST = 1000 # Mpc
+START = $(shell lalapps_tconvert January 18 2012)
+STOP = $(shell lalapps_tconvert February 15 2012)
+BNS_WAVEFORM = TaylorT4threePointFivePN
+NSBH_WAVEFORM = SpinTaylorFramelessthreePointFivePN
+BNS_LOCAL_RATE = 1.2 # mergers per Mpc^3 per Myr, corresponds to "realistic rate"
+NSBH_LOCAL_RATE = 0.005 # mergers per Mpc^3 per Myr, corresponds to "realistic rate"
+BNS_MAX_DIST = 1000 # Mpc
+NSBH_MAX_DIST = 5000 # Mpc
+NS_MIN_MASS = 1.0
+NS_MAX_MASS = 2.0
+BH_MIN_MASS = 5.0
+BH_MAX_MASS = 20.0
+BH_MIN_SPIN = 0.0
+BH_MAX_SPIN = 1.0
 SEED = 1
-FLOW = 14
+FLOW = 9
 
 
 all : frames.cache
@@ -33,9 +43,19 @@ injections.xml:
 	--flower $(FLOW) \
 	--gps-start-time $(START) \
 	--gps-end-time $(STOP) \
-	--local-rate $(LOCAL_RATE) \
-	--output injections.xml \
-	--max-distance $(MAX_DIST)
+	--bns-waveform $(BNS_WAVEFORM) \
+	--nsbh-waveform $(NSBH_WAVEFORM) \
+	--bns-local-rate $(BNS_LOCAL_RATE) \
+	--nsbh-local-rate $(NSBH_LOCAL_RATE) \
+	--bns-max-distance $(BNS_MAX_DIST) \
+	--nsbh-max-distance $(NSBH_MAX_DIST) \
+	--ns-min-mass $(NS_MIN_MASS) \
+	--ns-max-mass $(NS_MAX_MASS) \
+	--bh-min-mass $(BH_MIN_MASS) \
+	--bh-max-mass $(BH_MAX_MASS) \
+	--bh-min-spin $(BH_MIN_SPIN) \
+	--bh-max-spin $(BH_MAX_SPIN) \
+	--output injections.xml && gstlal_injections_by_local_rate_plot injections.xml
 
 realclean: 
-	rm -rf injections.xml  H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz H1-LSC-STRAIN H2-LSC-STRAIN L1-LSC-STRAIN V1-LSC-STRAIN frame.*.cache
+	rm -rf injections.xml  H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz H1-LSC-STRAIN H2-LSC-STRAIN L1-LSC-STRAIN V1-LSC-STRAIN *.cache *.png
