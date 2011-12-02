@@ -22,9 +22,9 @@ from optparse import OptionParser
 def which(prog):
 	which = subprocess.Popen(['which',prog], stdout=subprocess.PIPE)
 	out = which.stdout.read().strip()
-	if not out:
+	if not out: 
 		print >>sys.stderr, "ERROR: could not find %s in your path, have you built the proper software and source the proper env. scripts?" % (prog,prog)
-		raise ValueError
+		raise ValueError 
 	return out
 
 def log_path():
