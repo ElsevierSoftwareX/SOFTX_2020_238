@@ -642,9 +642,6 @@ class sngl_inspiral_coincs(object):
 	To assist with memory clean-up, it is helpful to invoke the
 	.unlink() method on the XML trees returned by this class when they
 	are no longer needed.
-
-	NOTE:  this class does not work with SQL-based input documents.
-	This might be fixed in a future version.
 	"""
 	def __init__(self, xmldoc):
 		"""
@@ -714,15 +711,18 @@ class sngl_inspiral_coincs(object):
 		newxmldoc = ligolw.Document()
 		newxmldoc.appendChild(ligolw.LIGO_LW())
 
-		new_process_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(self.process_table))
-		new_process_params_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(self.process_params_table))
-		new_search_summary_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(self.search_summary_table))
-		new_sngl_inspiral_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(self.sngl_inspiral_table))
-		new_coinc_def_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(self.coinc_def_table))
-		new_coinc_event_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(self.coinc_event_table))
-		new_coinc_inspiral_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(self.coinc_inspiral_table))
-		new_coinc_event_map_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(self.coinc_event_map_table))
-		new_time_slide_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(self.time_slide_table))
+		# when making these, we can't use table.new_from_template()
+		# because we need to ensure we have a Table subclass, not a
+		# DBTable subclass
+		new_process_table = newxmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.ProcessTable, self.process_table.columnnames))
+		new_process_params_table = newxmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.ProcessParamsTable, self.process_params_table.columnnames))
+		new_search_summary_table = newxmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SearchSummaryTable, self.search_summary_table.columnnames))
+		new_sngl_inspiral_table = newxmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, self.sngl_inspiral_table.columnnames))
+		new_coinc_def_table = newxmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincDefTable, self.coinc_def_table.columnnames))
+		new_coinc_event_table = newxmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincTable, self.coinc_event_table.columnnames))
+		new_coinc_inspiral_table = newxmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincInspiralTable, self.coinc_inspiral_table.columnnames))
+		new_coinc_event_map_table = newxmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincMapTable, self.coinc_event_map_table.columnnames))
+		new_time_slide_table = newxmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.TimeSlideTable, self.time_slide_table.columnnames))
 
 		new_coinc_def_table.append(self.coinc_def)
 		coinc_event = self.coinc_event_index[coinc_event_id]
