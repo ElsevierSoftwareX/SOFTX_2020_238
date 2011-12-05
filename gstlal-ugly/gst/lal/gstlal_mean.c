@@ -97,6 +97,57 @@ static int mean_process(GSTLALMean *element, guint64 available_length, guint64 o
 	return 0;
 }
 
+static int variance_process(GSTLALMean *element, guint64 available_length, guint64 output_length, double *in, double *out)
+{
+	/* FIXME assumed to be stable over size of input buffer, probably fine */
+	guint64 i,j,k;
+	guint64 channels = (guint64) element->channels;
+	if (!element->sum1) element->sum1 = (double *) calloc(channels, sizeof(double));
+	if (!element->sum2) element->sum2 = (double *) calloc(channels, sizeof(double));
+
+	memset((void *) element->sum1, 0, sizeof(double) * channels);
+	memset((void *) element->sum2, 0, sizeof(double) * channels);
+
+	// Running means
+	double *mean, *mean2;
+	mean = (double *) calloc(channels, sizeof(double));
+	mean2 = (double *) calloc(channels, sizeof(double));
+	// Temporary calculation variable
+	double delta = 0.0;
+
+	/* pre compute the sum for the first sample */
+	guint64 offset = available_length - output_length;
+	for (j = 0; j < channels; j++) {
+		for(k = 0; k < element->n-1; k++) {
+			if(k > offset) break;
+			delta = in[(offset - k) * channels + j] - mean2[j];
+			mean2[j] += delta/(k+1);
+			element->sum2[j] += delta*( in[(offset - k) * channels + j] - mean2[j] );
+		}
+	}
+	
+	for(i = 0; i < output_length; i++) {
+		/* How far to look back in the input */
+		offset = available_length - output_length + i;
+		for (j = 0; j < channels; j++) {
+			delta = in[offset * channels + j] - mean2[j];
+			mean2[j] += delta / element->n;
+			element->sum2[j] += delta*( in[offset * channels + j] - mean2[j] );
+
+			delta = in[(offset - element->n + 1) * channels + j] - mean[j];
+			mean[j] += delta / ( i+1 < element->n ? (i+1) : element->n );
+			element->sum1[j] += delta*( in[(offset - element->n + 1) * channels + j] - mean[j] );
+
+			out[i*channels +j] = (element->sum2[j] - element->sum1[j]) / element->n;
+		}
+	}
+
+	free( mean );
+	free( mean2 );
+
+	return 0;
+}
+
 static int thresh_process(GSTLALMean *element, guint64 available_length, guint64 output_length, double *in, double *out)
 {
 	guint64 i,j,k;
@@ -407,6 +458,7 @@ enum property {
 #define TYPE_MAX_EVERY_N 4
 #define TYPE_THRESH 5
 #define TYPE_INVERTED_THRESH 6
+#define TYPE_VARIANCE 7
 
 /*
  * ============================================================================
@@ -481,6 +533,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		element->process = GST_DEBUG_FUNCPTR(thresh_process);
 		element->invert_thresh = TRUE;
 	}
+	if (element->type == TYPE_VARIANCE) element->process = GST_DEBUG_FUNCPTR(variance_process);
 	return success;
 }
 
@@ -515,7 +568,9 @@ static gboolean stop(GstBaseTransform *trans)
 	g_object_unref(element->adapter);
 	element->adapter = NULL;
 	if (element->sum1) free(element->sum1);
+	element->sum1 = NULL;
 	if (element->sum2) free(element->sum2);
+	element->sum2 = NULL;
 	return TRUE;
 }
 
@@ -777,7 +832,7 @@ static void gstlal_mean_class_init(GSTLALMeanClass *klass)
 		g_param_spec_uint(
 			"type",
 			"type",
-			"type of average 1=mean, 2=integral, 3=max over n, 4=max every n (faster), 5=threshold, 6=inverted threshold",
+			"type of average 1=mean, 2=integral, 3=max over n, 4=max every n (faster), 5=threshold, 6=inverted threshold, 7=variance",
 			0, G_MAXUINT, DEFAULT_TYPE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
