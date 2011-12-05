@@ -30,6 +30,7 @@ import itertools
 import numpy
 import os
 from scipy import random
+import StringIO
 try:
 	import sqlite3
 except ImportError:
@@ -554,6 +555,9 @@ class Data(object):
 			# update output document
 			if self.connection is not None:
 				self.connection.commit()
+
+			# do GraceDB alerts
+			self.do_gracedb_alerts()
 		finally:
 			self.lock.release()
 
@@ -564,6 +568,20 @@ class Data(object):
 			self.distribution_stats.add_single(event)
 		if self.connection is not None:
 			self.connection.commit()
+
+		# do GraceDB alerts
+		self.do_gracedb_alerts()
+
+	def do_gracedb_alerts(self):
+		if self.stream_thinca.last_coincs:
+			for coinc_event_id, false_alarm_rate in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far"):
+				# FIXME:  don't hard-code rate threshold
+				if false_alarm_rate > 1.0 / (7 * 86400.0):
+					continue
+				message = StringIO.StringIO()
+				self.stream_thinca.last_coincs[coinc_event_id].write(message)
+				# FIXME:  transmit alert to GraceDB
+				message.close()
 
 	def write_output_file(self, likelihood_file = None, verbose = False):
 		if self.connection is not None:
