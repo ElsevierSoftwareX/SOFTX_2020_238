@@ -755,6 +755,9 @@ class sngl_inspiral_coincs(object):
 		"""
 		return iter(self.coinc_event_index)
 
+	def __nonzero__(self):
+		return bool(self.coinc_event_index)
+
 	def keys(self):
 		"""
 		A list of the coinc_event_id's of the
@@ -776,3 +779,21 @@ class sngl_inspiral_coincs(object):
 		"""
 		for coinc_event_id in self:
 			yield (coinc_event_id, self[coinc_event_id])
+
+	def column_index(self, table_name, column_name):
+		"""
+		Return a dictionary mapping coinc_event_id to the values in
+		the given column in the given table.
+
+		Example:
+
+		>>> print coincs.column_index("coinc_event", "likelihood")
+
+		Only columns in the coinc_event and coinc_inspiral tables
+		can be retrieved this way.
+		"""
+		if not lsctables.table.CompareTableNames(table_name, lsctables.CoincTable.tableName):
+			return dict(zip(self.coinc_event_table.getColumnByName("coinc_event_id"), self.coinc_event_table.getColumnByName(column_name)))
+		elif not lsctables.table.CompareTableNames(table_name, lsctables.CoincInspiralTable.tableName):
+			return dict(zip(self.coinc_inspiral_table.getColumnByName("coinc_event_id"), self.coinc_inspiral_table.getColumnByName(column_name)))
+		raise ValueError(table_name)
