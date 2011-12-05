@@ -265,7 +265,7 @@ class FAR(object):
 			return 0.
 		if fap > FAPS[-1]:# This means that the FAP has gone off the edge.  We will bump it down because we don't really care about this being right.
 			fap = FAPS[-1]
-		return interp(fap)[0]
+		return float(interp(fap))
 
 
 def get_live_time(segments, verbose = True):
