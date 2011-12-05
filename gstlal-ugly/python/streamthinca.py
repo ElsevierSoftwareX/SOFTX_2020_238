@@ -136,13 +136,15 @@ class StreamThinca(object):
 			self.sngl_inspiral_table.append(new_event)
 
 		# run coincidence, return non-coincident sngls
-		return self.run_coincidence(boundary, FAP)
+		if self.sngl_inspiral_table:
+			return self.run_coincidence(boundary, FAP)
+		else:
+			return []
 
 
 	def run_coincidence(self, boundary, FAP = None):
-		# check that we've got events to process, and wait until
-		# we've accumulated thinca_interval seconds
-		if not self.sngl_inspiral_table or self.last_boundary + self.thinca_interval > boundary - self.coincidence_back_off:
+		# check that we've accumulated thinca_interval seconds
+		if  self.last_boundary + self.thinca_interval > boundary - self.coincidence_back_off:
 			return []
 
 		# remove triggers that are too old to be useful.  save any
