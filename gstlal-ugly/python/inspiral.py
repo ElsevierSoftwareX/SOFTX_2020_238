@@ -589,7 +589,7 @@ class Data(object):
 
 
 #
-# Device to extract sngl_inspiral # coincs from a source XML document tree.
+# Device to extract sngl_inspiral coincs from a source XML document tree.
 #
 
 
