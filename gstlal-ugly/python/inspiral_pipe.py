@@ -28,7 +28,7 @@ def log_path():
 # DAG class
 ###############################################################################
 
-class bank_DAG(pipeline.CondorDAG):
+class DAG(pipeline.CondorDAG):
 
 	def __init__(self, name, logpath = log_path()):
 		self.basename = name
