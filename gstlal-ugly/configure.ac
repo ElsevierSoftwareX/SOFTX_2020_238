@@ -269,7 +269,7 @@ AS_IF(
 	[test "x$with_framecpp" != "xno"],
 	[PKG_CHECK_MODULES(
 		[framecpp],
-		[framecpp >= 1.19.14],
+		[framecpp >= 1.19.15],
 		[HAVE_FRAMECPP="yes"],
 		[AC_MSG_WARN([Not found: $framecpp_PKG_ERRORS])
 		HAVE_FRAMECPP="no"]

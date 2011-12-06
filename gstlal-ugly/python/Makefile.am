@@ -20,4 +20,5 @@ pkgpython_PYTHON = \
 	omega.py \
 	lloidplots.py \
 	inspiral.py \
+	inspiral_pipe.py \
 	excesspower.py

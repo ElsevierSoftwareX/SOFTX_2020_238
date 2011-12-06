@@ -99,138 +99,6 @@ using namespace FrameCPP;
 
 
 /*
- * split a string of the form "INSTRUMENT:CHANNEL" into two strings
- * containing the instrument and channel parts separately.  the pointers
- * placed in the instrument and channel pointers should be free()ed when no
- * longer needed.  returns 0 on success, < 0 on failure.
- */
-
-
-static int split_name(const char *name, char **instrument, char **channel)
-{
-	const char *colon = strchr(name, ':');
-
-	if(!colon) {
-		*instrument = *channel = NULL;
-		return -1;
-	}
-
-	*instrument = strndup(name, colon - name);
-	*channel = strdup(colon + 1);
-
-	return 0;
-}
-
-
-/*
- * transfer the contents of an FrVect into a newly-created GstBuffer.
- * caller must unref buffer when no longer needed.
- */
-
-
-static GstCaps *FrVect_get_caps(General::SharedPtr < FrVect > vect)
-{
-	GstCaps *caps;
-	gint rate = round(1.0 / vect->GetDim(0).GetDx());
-	gint width = vect->GetTypeSize() * 8;
-
-	switch(vect->GetType()) {
-	case FrVect::FR_VECT_4R:
-	case FrVect::FR_VECT_8R:
-		caps = gst_caps_new_simple("audio/x-raw-float",
-			"rate", G_TYPE_INT, rate,
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, width,
-			NULL);
-		break;
-
-	case FrVect::FR_VECT_8C:
-	case FrVect::FR_VECT_16C:
-		caps = gst_caps_new_simple("audio/x-raw-complex",
-			"rate", G_TYPE_INT, rate,
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, width,
-			NULL);
-		break;
-
-	case FrVect::FR_VECT_C:
-	case FrVect::FR_VECT_2S:
-	case FrVect::FR_VECT_4S:
-	case FrVect::FR_VECT_8S:
-		caps = gst_caps_new_simple("audio/x-raw-int",
-			"rate", G_TYPE_INT, rate,
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, width,
-			"depth", G_TYPE_INT, width,
-			"signed", G_TYPE_BOOLEAN, TRUE,
-			NULL);
-		break;
-
-	case FrVect::FR_VECT_1U:
-	case FrVect::FR_VECT_2U:
-	case FrVect::FR_VECT_4U:
-	case FrVect::FR_VECT_8U:
-		caps = gst_caps_new_simple("audio/x-raw-int",
-			"rate", G_TYPE_INT, rate,
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, width,
-			"depth", G_TYPE_INT, width,
-			"signed", G_TYPE_BOOLEAN, FALSE,
-			NULL);
-		break;
-
-	default:
-		g_assert_not_reached();
-	}
-
-	return caps;
-}
-
-
-static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrVect > vect, GstClockTime timestamp, guint64 offset)
-{
-	gint rate = round(1.0 / vect->GetDim(0).GetDx());
-	GstBuffer *buffer = gst_buffer_new_and_alloc(vect->GetNBytes());
-
-	if(!buffer)
-		return NULL;
-
-	/*
-	 * copy data into buffer
-	 */
-
-	g_assert(vect->GetNDim() == 1);
-	memcpy(GST_BUFFER_DATA(buffer), vect->GetData().get(), GST_BUFFER_SIZE(buffer));
-
-	/*
-	 * set timestamp and duration
-	 */
-
-	GST_BUFFER_TIMESTAMP(buffer) = timestamp;
-	GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int(vect->GetNData(), GST_SECOND, rate);
-	GST_BUFFER_OFFSET(buffer) = offset;
-	GST_BUFFER_OFFSET_END(buffer) = offset + vect->GetNData();
-
-	/*
-	 * set buffer format
-	 */
-
-	GST_BUFFER_CAPS(buffer) = FrVect_get_caps(vect);
-	g_assert(GST_BUFFER_CAPS(buffer) != NULL);
-
-	/*
-	 * done
-	 */
-
-	return buffer;
-}
-
-
-/*
  * ============================================================================
  *
  *                                Source Pads
@@ -266,6 +134,30 @@ static gboolean pad_state_key_equal_func(gconstpointer a, gconstpointer b)
 static struct pad_state *get_src_pad_state(GSTFrameCPPChannelDemux *element, const GstPad *pad)
 {
 	return (struct pad_state *) g_hash_table_lookup(element->pad_state, pad);
+}
+
+
+/*
+ * split a string of the form "INSTRUMENT:CHANNEL" into two strings
+ * containing the instrument and channel parts separately.  the pointers
+ * placed in the instrument and channel pointers should be free()ed when no
+ * longer needed.  returns 0 on success, < 0 on failure.
+ */
+
+
+static int split_name(const char *name, char **instrument, char **channel)
+{
+	const char *colon = strchr(name, ':');
+
+	if(!colon) {
+		*instrument = *channel = NULL;
+		return -1;
+	}
+
+	*instrument = strndup(name, colon - name);
+	*channel = strdup(colon + 1);
+
+	return 0;
 }
 
 
@@ -390,6 +282,190 @@ static GstPad *get_src_pad(GSTFrameCPPChannelDemux *element, const char *name)
 
 
 /*
+ * transfer the contents of an FrVect into a newly-created GstBuffer.
+ * caller must unref buffer when no longer needed.
+ */
+
+
+static GstCaps *FrVect_get_caps(General::SharedPtr < FrVect > vect)
+{
+	GstCaps *caps;
+	gint rate = round(1.0 / vect->GetDim(0).GetDx());
+	gint width = vect->GetTypeSize() * 8;
+
+	switch(vect->GetType()) {
+	case FrVect::FR_VECT_4R:
+	case FrVect::FR_VECT_8R:
+		caps = gst_caps_new_simple("audio/x-raw-float",
+			"rate", G_TYPE_INT, rate,
+			"channels", G_TYPE_INT, 1,
+			"endianness", G_TYPE_INT, G_BYTE_ORDER,
+			"width", G_TYPE_INT, width,
+			NULL);
+		break;
+
+	case FrVect::FR_VECT_8C:
+	case FrVect::FR_VECT_16C:
+		caps = gst_caps_new_simple("audio/x-raw-complex",
+			"rate", G_TYPE_INT, rate,
+			"channels", G_TYPE_INT, 1,
+			"endianness", G_TYPE_INT, G_BYTE_ORDER,
+			"width", G_TYPE_INT, width,
+			NULL);
+		break;
+
+	case FrVect::FR_VECT_C:
+	case FrVect::FR_VECT_2S:
+	case FrVect::FR_VECT_4S:
+	case FrVect::FR_VECT_8S:
+		caps = gst_caps_new_simple("audio/x-raw-int",
+			"rate", G_TYPE_INT, rate,
+			"channels", G_TYPE_INT, 1,
+			"endianness", G_TYPE_INT, G_BYTE_ORDER,
+			"width", G_TYPE_INT, width,
+			"depth", G_TYPE_INT, width,
+			"signed", G_TYPE_BOOLEAN, TRUE,
+			NULL);
+		break;
+
+	case FrVect::FR_VECT_1U:
+	case FrVect::FR_VECT_2U:
+	case FrVect::FR_VECT_4U:
+	case FrVect::FR_VECT_8U:
+		caps = gst_caps_new_simple("audio/x-raw-int",
+			"rate", G_TYPE_INT, rate,
+			"channels", G_TYPE_INT, 1,
+			"endianness", G_TYPE_INT, G_BYTE_ORDER,
+			"width", G_TYPE_INT, width,
+			"depth", G_TYPE_INT, width,
+			"signed", G_TYPE_BOOLEAN, FALSE,
+			NULL);
+		break;
+
+	default:
+		g_assert_not_reached();
+	}
+
+	return caps;
+}
+
+
+static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrVect > vect, GstClockTime timestamp, guint64 offset)
+{
+	gint rate = round(1.0 / vect->GetDim(0).GetDx());
+	GstBuffer *buffer;
+
+	/*
+	 * trigger data decompression before calling GetNBytes()
+	 */
+
+	vect->GetDataUncompressed();
+
+	/*
+	 * allocate buffer
+	 */
+
+	buffer = gst_buffer_new_and_alloc(vect->GetNBytes());
+	if(!buffer)
+		return NULL;
+
+	/*
+	 * copy data into buffer
+	 */
+
+	g_assert(vect->GetNDim() == 1);
+	memcpy(GST_BUFFER_DATA(buffer), vect->GetData().get(), GST_BUFFER_SIZE(buffer));
+
+	/*
+	 * set timestamp and duration
+	 */
+
+	GST_BUFFER_TIMESTAMP(buffer) = timestamp;
+	GST_BUFFER_DURATION(buffer) = gst_util_uint64_scale_int(vect->GetNData(), GST_SECOND, rate);
+	GST_BUFFER_OFFSET(buffer) = offset;
+	GST_BUFFER_OFFSET_END(buffer) = offset + vect->GetNData();
+
+	/*
+	 * set buffer format
+	 */
+
+	GST_BUFFER_CAPS(buffer) = FrVect_get_caps(vect);
+	g_assert(GST_BUFFER_CAPS(buffer) != NULL);
+
+	/*
+	 * done
+	 */
+
+	return buffer;
+}
+
+
+/*
+ * convert an FrVect to a GstBuffer, and push out a source pad.
+ */
+
+
+static GstFlowReturn frvect_to_buffer_and_push(GSTFrameCPPChannelDemux *element, GstPad *pad, const char *name, General::SharedPtr < FrVect > vect, GstClockTime timestamp)
+{
+	struct pad_state *pad_state;
+	GstBuffer *buffer;
+	GstFlowReturn result = GST_FLOW_OK;
+
+	/*
+	 * retrieve source pad state
+	 */
+
+	pad_state = get_src_pad_state(element, pad);
+	g_assert(pad_state != NULL);
+
+	/*
+	 * convert FrVect to GstBuffer
+	 */
+
+	buffer = FrVect_to_GstBuffer(vect, timestamp, pad_state->next_out_offset);
+	g_assert(buffer != NULL);
+
+	/*
+	 * if the format matches the pad's replace the buffer's caps with
+	 * the pad's to reduce the number of objects in memory and simplify
+	 * subsequent comparisons
+	 */
+
+	if(gst_caps_is_equal(GST_BUFFER_CAPS(buffer), GST_PAD_CAPS(pad)))
+		gst_buffer_set_caps(buffer, GST_PAD_CAPS(pad));
+
+	/*
+	 * check for disconts
+	 */
+
+	if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(buffer) - pad_state->next_timestamp) > 1)) {
+		GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
+		pad_state->need_discont = FALSE;
+	}
+
+	/*
+	 * record state for next time
+	 */
+
+	pad_state->next_timestamp = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
+	pad_state->next_out_offset = GST_BUFFER_OFFSET_END(buffer);
+
+	/*
+	 * push buffer downstream
+	 */
+
+	GST_LOG_OBJECT(element, "pushing buffer on %s spanning %" GST_BUFFER_BOUNDARIES_FORMAT, name, GST_BUFFER_BOUNDARIES_ARGS(buffer));
+	result = gst_pad_push(pad, buffer);
+
+	/*
+	 * done
+	 */
+
+	return result;
+}
+
+
+/*
  * ============================================================================
  *
  *                                  Sink Pad
@@ -435,7 +511,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 	using FrameCPP::Common::MemoryBuffer;
 	GSTFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
 	IFrameStream::frame_h_type frame;
-	GstBuffer *outbuf = NULL;
 	GstPad *srcpad = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
 
@@ -445,26 +520,68 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 		ibuf->pubsetbuf((char *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf));
 
 		IFrameStream ifs(ibuf);
-		frame = ifs.ReadNextFrame();
-		GstClockTime frame_timestamp = 1000000000L * frame->GetGTime().GetSeconds() + frame->GetGTime().GetNanoseconds();
 
-		GST_LOG_OBJECT(element, "found version %d frame file", ifs.Version());
-		GST_LOG_OBJECT(element, "found frame at %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(frame_timestamp));
+		GST_LOG_OBJECT(element, "found version %u frame file generated by library %d revision %d", ifs.Version(), ifs.FrameLibrary(), ifs.LibraryRevision());
 
-		/*
-		 * process ADC data
-		 */
+		while((frame = ifs.ReadNextFrame())) {
+			GstClockTime frame_timestamp = 1000000000L * frame->GetGTime().GetSeconds() + frame->GetGTime().GetNanoseconds();
+
+			GST_LOG_OBJECT(element, "found frame %d at %" GST_TIME_SECONDS_FORMAT, ifs.GetCurrentFrameOffset(), GST_TIME_SECONDS_ARGS(frame_timestamp));
+
+			/*
+			 * process ADC data
+			 */
 	
-		FrameH::rawData_type rd = frame->GetRawData();
-		if(rd) {
-			FrRawData::firstAdc_iterator current = rd->RefFirstAdc().begin(), last = rd->RefFirstAdc().end();
-			for(; current != last; ++current) {
-				FrAdcData::data_type vects = (*current)->RefData();
+			FrameH::rawData_type rd = frame->GetRawData();
+			if(rd) {
+				for(FrRawData::firstAdc_iterator current = rd->RefFirstAdc().begin(), last = rd->RefFirstAdc().end(); current != last; current++) {
+					FrAdcData::data_type vects = (*current)->RefData();
+					GstClockTime timestamp = frame_timestamp + (int) round((*current)->GetTimeOffset() * 1e9);
+					const char *name = (*current)->GetName().c_str();
+
+					GST_LOG_OBJECT(element, "found FrAdcData %s at %" GST_TIME_SECONDS_FORMAT, name, GST_TIME_SECONDS_ARGS(timestamp));
+
+					/*
+					 * retrieve the source pad.  create it if
+					 * it doesn't exist.  if the pad has no
+					 * peer, skip this channel.
+					 */
+
+					srcpad = get_src_pad(element, name);
+					if(!gst_pad_is_linked(srcpad)) {
+						GST_LOG_OBJECT(element, "skipping: not linked");
+						gst_object_unref(srcpad);
+						srcpad = NULL;
+						continue;
+					}
+
+					/*
+					 * convert FrVect to a GstBuffer
+					 * and push out source pad,
+					 * checking for disconts and
+					 * recording state for next time.
+					 */
+
+					result = frvect_to_buffer_and_push(element, srcpad, name, vects[0], timestamp);
+					gst_object_unref(srcpad);
+					srcpad = NULL;
+					if(result != GST_FLOW_OK) {
+						GST_ERROR_OBJECT(element, "failure: %s", gst_flow_get_name(result));
+						goto done;
+					}
+				}
+			}
+
+			/*
+			 * process proc data
+			 */
+
+			for(FrameH::procData_iterator current = frame->RefProcData().begin(), last = frame->RefProcData().end(); current != last; current++) {
+				FrProcData::data_type vects = (*current)->RefData();
 				GstClockTime timestamp = frame_timestamp + (int) round((*current)->GetTimeOffset() * 1e9);
 				const char *name = (*current)->GetName().c_str();
-				struct pad_state *srcpad_state;
 
-				GST_LOG_OBJECT(element, "found FrAdc %s at %" GST_TIME_SECONDS_FORMAT, name, GST_TIME_SECONDS_ARGS(timestamp));
+				GST_LOG_OBJECT(element, "found FrProcData %s at %" GST_TIME_SECONDS_FORMAT, name, GST_TIME_SECONDS_ARGS(timestamp));
 
 				/*
 				 * retrieve the source pad.  create it if
@@ -479,35 +596,54 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					srcpad = NULL;
 					continue;
 				}
-				srcpad_state = get_src_pad_state(element, srcpad);
-				g_assert(srcpad_state != NULL);
 
 				/*
-				 * construct output buffer.  if they're
-				 * equal, replace the buffer's caps with
-				 * the pad's to reduce the number of caps
-				 * objects in play and simplify subsequent
-				 * comparisons
+				 * convert FrVect to a GstBuffer and push
+				 * out source pad, checking for disconts
+				 * and recording state for next time.
 				 */
 
-				outbuf = FrVect_to_GstBuffer(vects[0], timestamp, srcpad_state->next_out_offset);
-				g_assert(outbuf != NULL);
-				if(gst_caps_is_equal(GST_BUFFER_CAPS(outbuf), GST_PAD_CAPS(srcpad)))
-					gst_buffer_set_caps(outbuf, GST_PAD_CAPS(srcpad));
-				if(srcpad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(srcpad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(outbuf) - srcpad_state->next_timestamp) > 1)) {
-					GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_DISCONT);
-					srcpad_state->need_discont = FALSE;
+				result = frvect_to_buffer_and_push(element, srcpad, name, vects[0], timestamp);
+				gst_object_unref(srcpad);
+				srcpad = NULL;
+				if(result != GST_FLOW_OK) {
+					GST_ERROR_OBJECT(element, "failure: %s", gst_flow_get_name(result));
+					goto done;
 				}
-				srcpad_state->next_timestamp = GST_BUFFER_TIMESTAMP(outbuf) + GST_BUFFER_DURATION(outbuf);
-				srcpad_state->next_out_offset = GST_BUFFER_OFFSET_END(outbuf);
+			}
+
+			/*
+			 * process simulated data
+			 */
+
+			for(FrameH::simData_iterator current = frame->RefSimData().begin(), last = frame->RefSimData().end(); current != last; current++) {
+				FrSimData::data_type vects = (*current)->RefData();
+				GstClockTime timestamp = frame_timestamp + (int) round((*current)->GetTimeOffset() * 1e9);
+				const char *name = (*current)->GetName().c_str();
+
+				GST_LOG_OBJECT(element, "found FrSimData %s at %" GST_TIME_SECONDS_FORMAT, name, GST_TIME_SECONDS_ARGS(timestamp));
 
 				/*
-				 * push buffer downstream
+				 * retrieve the source pad.  create it if
+				 * it doesn't exist.  if the pad has no
+				 * peer, skip this channel.
 				 */
 
-				GST_LOG_OBJECT(element, "pushing buffer on %s spanning %" GST_BUFFER_BOUNDARIES_FORMAT, name, GST_BUFFER_BOUNDARIES_ARGS(outbuf));
-				result = gst_pad_push(srcpad, outbuf);
-				outbuf = NULL;
+				srcpad = get_src_pad(element, name);
+				if(!gst_pad_is_linked(srcpad)) {
+					GST_LOG_OBJECT(element, "skipping: not linked");
+					gst_object_unref(srcpad);
+					srcpad = NULL;
+					continue;
+				}
+
+				/*
+				 * convert FrVect to a GstBuffer and push
+				 * out source pad, checking for disconts
+				 * and recording state for next time.
+				 */
+
+				result = frvect_to_buffer_and_push(element, srcpad, name, vects[0], timestamp);
 				gst_object_unref(srcpad);
 				srcpad = NULL;
 				if(result != GST_FLOW_OK) {

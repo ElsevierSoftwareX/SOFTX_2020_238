@@ -149,9 +149,13 @@ guint gst_audioadapter_head_gap_length(GstAudioAdapter *adapter)
 
 	for(head = g_queue_peek_head_link(adapter->queue); head && GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP); head = g_list_next(head))
 		length += GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data);
-	length = length > adapter->skip ? length - adapter->skip : 0;
+	if(length) {
+		g_assert(length >= adapter->skip);
+		length -= adapter->skip;
+	}
+	g_assert(length <= adapter->size);
 
-	return MIN(length, adapter->size);
+	return length;
 }
 
 
@@ -174,9 +178,13 @@ guint gst_audioadapter_head_nongap_length(GstAudioAdapter *adapter)
 
 	for(head = g_queue_peek_head_link(adapter->queue); head && !GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP); head = g_list_next(head))
 		length += GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data);
-	length = length > adapter->skip ? length - adapter->skip : 0;
+	if(length) {
+		g_assert(length >= adapter->skip);
+		length -= adapter->skip;
+	}
+	g_assert(length <= adapter->size);
 
-	return MIN(length, adapter->size);
+	return length;
 }
 
 
@@ -254,8 +262,10 @@ void gst_audioadapter_flush(GstAudioAdapter *adapter, guint samples)
 		if(samples < n) {
 			adapter->skip += samples;
 			adapter->size -= samples;
-			goto done;
+			break;
 		} else {
+			/* want the samples == n case to go this way so
+			 * that the buffer is removed from the queue */
 			adapter->skip = 0;
 			adapter->size -= n;
 			samples -= n;
@@ -264,7 +274,6 @@ void gst_audioadapter_flush(GstAudioAdapter *adapter, guint samples)
 		}
 	}
 
-done:
 	/*if(size_changed) g_object_notify(G_OBJECT(adapter), "size");*/
 	return;
 }

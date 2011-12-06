@@ -15,6 +15,7 @@ dist_bin_SCRIPTS = \
 	gstlal_s5_pbh_summary_page \
 	gstlal_iir_inspiral \
 	gstlal_injections_by_local_rate \
+	gstlal_injections_by_local_rate_plot \
 	gstlal_add_spins_to_bank \
 	gstlal_bank_splitter \
 	gstlal_segments_trim \

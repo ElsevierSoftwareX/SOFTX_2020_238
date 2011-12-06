@@ -30,6 +30,7 @@ import itertools
 import numpy
 import os
 from scipy import random
+import StringIO
 try:
 	import sqlite3
 except ImportError:
@@ -554,6 +555,9 @@ class Data(object):
 			# update output document
 			if self.connection is not None:
 				self.connection.commit()
+
+			# do GraceDB alerts
+			self.do_gracedb_alerts()
 		finally:
 			self.lock.release()
 
@@ -564,6 +568,20 @@ class Data(object):
 			self.distribution_stats.add_single(event)
 		if self.connection is not None:
 			self.connection.commit()
+
+		# do GraceDB alerts
+		self.do_gracedb_alerts()
+
+	def do_gracedb_alerts(self):
+		if self.stream_thinca.last_coincs:
+			for coinc_event_id, false_alarm_rate in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far").items():
+				# FIXME:  don't hard-code rate threshold
+				if false_alarm_rate > 1.0 / (7 * 86400.0):
+					continue
+				message = StringIO.StringIO()
+				self.stream_thinca.last_coincs[coinc_event_id].write(message)
+				# FIXME:  transmit alert to GraceDB
+				message.close()
 
 	def write_output_file(self, likelihood_file = None, verbose = False):
 		if self.connection is not None:
@@ -586,98 +604,3 @@ class Data(object):
 		else:
 			fname = likelihood_file
 		self.distribution_stats.to_filename(fname, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = verbose)
-
-
-#
-# Generator to split XML document tree containing sngl_inspiral coincs into
-# a sequence of XML document trees each containing a single coinc
-#
-
-
-def split_sngl_inspiral_coinc_xmldoc(xmldoc):
-	"""
-	Yield a sequence of XML document trees containing one sngl_inspiral
-	coinc each, extracted from the input XML document tree.
-
-	Note:  the XML documents constructed by this generator function
-	share references to the row objects in the original document.
-	Modifications to the row objects in the tables returned by this
-	generator will affect both the original document and all other
-	documents returned by this generator.  However, the table objects
-	and the document trees returned by this generator are new objects,
-	they can be edited without affecting each other (e.g., rows or
-	columsn added or removed).  To assist with memory clean-up, it is
-	recommended that the calling code invoke the .unlink() method on
-	the objects returned by this generator when they are no longer
-	needed.
-	"""
-	#
-	# index the process, process params and search_summary tables
-	#
-
-	process_table = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName)
-	process_params_table = lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName)
-	search_summary_table = lsctables.table.get_table(xmldoc, lsctables.SearchSummaryTable.tableName)
-
-	process_index = dict((row.process_id, row) for row in process_table)
-	process_params_index = {}
-	for row in process_params_table:
-		process_params_index.setdefault(row.process_id, []).append(row)
-	search_summary_index = dict((row.process_id, row) for row in search_summary_table)
-
-	#
-	# index the sngl_inspiral table
-	#
-
-	sngl_inspiral_table = lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
-	sngl_inspiral_index = dict((row.event_id, row) for row in sngl_inspiral_table)
-
-	#
-	# find the sngl_inspiral<-->sngl_inspiral coincs
-	#
-
-	coinc_def_table = lsctables.table.get_table(xmldoc, lsctables.CoincDefTable.tableName)
-	coinc_event_table = lsctables.table.get_table(xmldoc, lsctables.CoincTable.tableName)
-	coinc_event_map_table = lsctables.table.get_table(xmldoc, lsctables.CoincMapTable.tableName)
-	time_slide_table = lsctables.table.get_table(xmldoc, lsctables.TimeSlideTable.tableName)
-
-	coinc_def, = (row for row in coinc_def_table if row.search == "inspiral" and row.search_coinc_type == 0)
-	coinc_event_map_index = dict((row.coinc_event_id, []) for row in coinc_event_table if row.coinc_def_id == coinc_def.coinc_def_id)
-	for row in coinc_event_map_table:
-		try:
-			coinc_event_map_index[row.coinc_event_id].append(row)
-		except KeyError:
-			continue
-	time_slide_index = {}
-	for row in time_slide_table:
-		time_slide_index.setdefault(row.time_slide_id, []).append(row)
-
-	for row in coinc_event_table:
-		if row.coinc_def_id != coinc_def.coinc_def_id:
-			continue
-
-		newxmldoc = ligolw.Document()
-		newxmldoc.appendChild(ligolw.LIGO_LW())
-
-		new_process_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(process_table))
-		new_process_params_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(process_params_table))
-		new_search_summary_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(search_summary_table))
-		new_sngl_inspiral_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(sngl_inspiral_table))
-		new_coinc_def_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(coinc_def_table))
-		new_coinc_event_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(coinc_event_table))
-		new_coinc_event_map_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(coinc_event_map_table))
-		new_time_slide_table = newxmldoc.childNodes[-1].appendChild(lsctables.table.new_from_template(time_slide_table))
-
-		new_coinc_def_table.append(coinc_def)
-		new_coinc_event_table.append(row)
-		new_coinc_event_map_table.extend(coinc_event_map_index[row.coinc_event_id])
-		new_time_slide_table.extend(time_slide_index[row.time_slide_id])
-		for row in new_coinc_event_map_table:
-			new_sngl_inspiral_table.append(sngl_inspiral_index[row.event_id])
-
-		for process_id in set(new_sngl_inspiral_table.getColumnByName("process_id")) | set(new_coinc_event_table.getColumnByName("process_id")) | set(new_time_slide_table.getColumnByName("process_id")):
-			new_process_table.append(process_index[process_id])
-			new_process_params_table.extend(process_params_index[process_id])
-			new_search_summary_table.append(search_summary_index[process_id])
-
-		yield newxmldoc
