@@ -244,7 +244,10 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 	#
 
 	if online_data:
-		src = pipeparts.mkaudioconvert(pipeline, src, pad_name = "%s:%s" % (instrument, detector.channel))
+		elem = gst.element_factory_make("audioconvert")
+		pipeline.add(elem)
+		pipeparts.framecppchanneldemux_link(src, "%s:%s" % (instrument, detector.channel), elem.get_pad("sink"))
+		src = elem
 	else:
 		src = pipeparts.mkaudioconvert(pipeline, src)
 
