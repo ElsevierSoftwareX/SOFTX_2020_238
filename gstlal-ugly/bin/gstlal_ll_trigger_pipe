@@ -59,12 +59,13 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	A gstlal_inspiral node
 	"""
 	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=10.0, control_peak_time = 4, fir_stride = 4, likelihood_file = None, p_node=[]):
+	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=10.0, control_peak_time = 4, fir_stride = 4, likelihood_file = None, trials_factor = 1, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("channel-name", inspiral.pipeline_channel_list_from_channel_dict(channel_dict))
 		if reference_psd is not None:
 			self.add_var_opt("reference-psd", reference_psd)
+		self.add_var_opt("trials-factor", trials_factor)
 		self.add_var_opt("svd-bank", svd_bank)
 		self.add_var_opt("tmp-space", tmp_space)
 		self.add_var_opt("track-psd", "")
@@ -140,11 +141,14 @@ gstlalInspiralJob = gstlal_inspiral_job()
 ###############################################################################
 # loop over banks to run gstlal inspiral pre clustering and far computation
 ###############################################################################
-
-trials_factor = 0
+num_jobs = inspiral_pipe.num_bank_files(bank_cache)
+if options.max_jobs < num_jobs:
+	num_jobs = options.max_jobs
+indfac = inspiral_pipe.get_independence_factor(bank_cache, maxjobs = num_jobs)
+trials_factor = int(numpy.ceil(num_jobs * indfac))
 
 for s in inspiral_pipe.build_bank_string(bank_cache, options.num_banks, options.max_jobs):
-	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold, likelihood_file = options.likelihood_file, control_peak_time = options.control_peak_time)
+	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold, likelihood_file = options.likelihood_file, control_peak_time = options.control_peak_time, trials_factor = trials_factor)
 
 
 dag.write_sub_files()
