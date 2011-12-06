@@ -1,6 +1,7 @@
 import sys, os, copy, math
 import subprocess, socket, tempfile
 from glue import pipeline, lal
+from glue.ligolw import utils, lsctables, array
 
 ###############################################################################
 # environment utilities
@@ -103,4 +104,25 @@ def build_bank_string(cachedict, numbanks = [2], maxjobs = None):
 					break
 		c = c.strip(',')
 		yield c
+
+def get_independence_factor(bank_cache, ifo = "H1", maxjobs = None):
+	dof = 0.0
+	num_tmps = 0
+	for cnt, s in enumerate(build_bank_string(bank_cache)):
+		if maxjobs is not None and cnt > maxjobs:
+			break
+		fname = parse_banks(s)[ifo][0]
+		lw = utils.load_filename(fname, verbose = False).childNodes[0]
+		for node in (node for node in lw.childNodes if node.tagName == 'LIGO_LW'):
+			dof += array.get_array(node, 'sum_of_squares_weights').array.sum()
+		num_tmps += len(lsctables.table.get_table(lw, lsctables.SnglInspiralTable.tableName))
+		print >>sys.stderr, "processing bank %d\r" % (cnt,),
+	return dof / num_tmps
+
+def parse_banks(bank_string):
+	out = {}
+	for b in bank_string.split(','):
+		ifo, bank = b.split(':')
+		out.setdefault(ifo, []).append(bank)
+	return out
 
