@@ -144,7 +144,9 @@ gstlalInspiralJob = gstlal_inspiral_job()
 num_jobs = inspiral_pipe.num_bank_files(bank_cache)
 if options.max_jobs < num_jobs:
 	num_jobs = options.max_jobs
-indfac = inspiral_pipe.get_independence_factor(bank_cache, maxjobs = num_jobs)
+
+indfac = 1./7. # conservative guess from SVD paper, this is slow to calculate otherwise #inspiral_pipe.get_independence_factor(bank_cache, maxjobs = num_jobs)
+
 trials_factor = int(numpy.ceil(num_jobs * indfac))
 
 for s in inspiral_pipe.build_bank_string(bank_cache, options.num_banks, options.max_jobs):
