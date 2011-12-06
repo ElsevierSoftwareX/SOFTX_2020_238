@@ -241,6 +241,8 @@ class FAR(object):
 			ranks = numpy.outer(ranks, likelihood_pdf.centres()[0])
 			vals = numpy.outer(vals, likelihood_pdf.array)
 			ranks = ranks.reshape((ranks.shape[0] * ranks.shape[1],))
+			# FIXME nans arise from inf * 0.  Do we want these to be 0?
+			ranks[numpy.isnan(ranks)] = 0.0
 			vals = vals.reshape((vals.shape[0] * vals.shape[1],))
 		vals = vals[ranks.argsort()]
 		ranks.sort()
@@ -265,7 +267,7 @@ class FAR(object):
 			return 0.
 		if fap > FAPS[-1]:# This means that the FAP has gone off the edge.  We will bump it down because we don't really care about this being right.
 			fap = FAPS[-1]
-		return interp(fap)[0]
+		return float(interp(fap))
 
 
 def get_live_time(segments, verbose = True):
