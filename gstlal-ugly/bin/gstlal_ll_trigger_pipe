@@ -130,7 +130,7 @@ options, filenames, bank_cache, channel_dict = parse_command_line()
 
 try: os.mkdir("logs")
 except: pass
-dag = inspiral_pipe.bank_DAG("trigger_pipe")
+dag = inspiral_pipe.DAG("trigger_pipe")
 
 #
 # setup the job classes
