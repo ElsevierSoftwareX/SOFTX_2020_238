@@ -122,6 +122,12 @@ def mklvshmsrc(pipeline, **properties):
 def mkframecppchanneldemux(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "framecpp_channeldemux", **properties)
 
+def framecppchanneldemux_link(src, srcpadname, sinkpad):
+	def pad_added(element, pad, (srcpadname, sinkpad)):
+		if pad.name == srcpadname:
+			pad.link(sinkpad)
+	elem.connect("pad-added", pad_added, (srcpadname, sinkpad))
+
 
 def mkframesink(pipeline, src, **properties):
 	elem = gst.element_factory_make("lal_framesink")
