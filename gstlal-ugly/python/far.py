@@ -238,11 +238,12 @@ class FAR(object):
 		# FIXME:  probably only works because the pdfs aren't pdfs but probabilities
 		for ifo in ifo_set:
 			likelihood_pdf = likelihood_pdfs[(ifo,targetlen)]
-			ranks = numpy.outer(ranks, likelihood_pdf.centres()[0])
+			# FIXME lower instead of centres() to avoid inf in the last bin
+			ranks = numpy.outer(ranks, likelihood_pdf.bins.lower()[0])
 			vals = numpy.outer(vals, likelihood_pdf.array)
 			ranks = ranks.reshape((ranks.shape[0] * ranks.shape[1],))
 			# FIXME nans arise from inf * 0.  Do we want these to be 0?
-			ranks[numpy.isnan(ranks)] = 0.0
+			#ranks[numpy.isnan(ranks)] = 0.0
 			vals = vals.reshape((vals.shape[0] * vals.shape[1],))
 		vals = vals[ranks.argsort()]
 		ranks.sort()
