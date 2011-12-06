@@ -277,9 +277,14 @@ distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_fil
 # build output document
 #
 
-# FIXME 0 to "infinity"
-options.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
+# FIXME now to "infinity"
 start = now()
+likelihood_snapshot_interval = 3600.0 # seconds
+# FIXME We don't dump triggers out in the beginning because 
+# 1) the psd estimation needs to settle
+# 2) the fap estimation needs to settle
+# so we wait until 400 seconds beyond the likelihood update interval
+options.seg = segments.segment(start+likelihood_snapshot_interval + 400, LIGOTimeGPS(2000000000))
 
 if options.verbose:
 	print >>sys.stderr, "initializing output document ..."
@@ -294,7 +299,7 @@ output = inspiral.Data(
 	coincidence_threshold = options.coincidence_threshold,
 	distribution_stats = distribution_stats,
 	assign_likelihoods = True,
-	likelihood_snapshot_interval = 3600.0,	# seconds
+	likelihood_snapshot_interval = likelihood_snapshot_interval,	# seconds
 	likelihood_retention_factor = 1.0,	# disabled effectively until we understand how to use it.
 	comment = options.comment,
 	tmp_path = options.tmp_space,
@@ -342,34 +347,16 @@ if options.verbose:
 
 def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.keys()):
 	print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" % (signal,)
+	# override file name with approximate interval
+	output.filename = "%s-%d-%d.sqlite" % (options.output.split(".sqlite")[0], start, now())
+	output.flush()
+	output.write_output_file(likelihood_file = options.likelihood_file, verbose = options.verbose)
 	bus = pipeline.get_bus()
 	bus.post(gst.message_new_eos(pipeline))
 
-# FIXME delete this, but it may be useful to revive before the condor signal stuff is working
-#for i in [x for x in dir(signal) if x.startswith("SIG")]:
-#	try:
-#		signum = getattr(signal,i)
-#		signal.signal(signum, signal_handler)
-#	except:
-#		pass
-
+# this is how the program stops gracefully, it is the only way to stop it.
+# Otherwise it runs forever man.
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 mainloop.run()
-
-
-#
-# write output file
-#
-
-# override file name with approximate interval
-output.filename = "%s-%d-%d.sqlite" % (options.output.split(".sqlite")[0], start, now())
-
-output.flush()
-output.write_output_file(likelihood_file = options.likelihood_file, verbose = options.verbose)
-
-
-#
-# done
-#
