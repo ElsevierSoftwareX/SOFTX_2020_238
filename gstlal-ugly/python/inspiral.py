@@ -574,7 +574,7 @@ class Data(object):
 
 	def do_gracedb_alerts(self):
 		if self.stream_thinca.last_coincs:
-			for coinc_event_id, false_alarm_rate in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far"):
+			for coinc_event_id, false_alarm_rate in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far").items():
 				# FIXME:  don't hard-code rate threshold
 				if false_alarm_rate > 1.0 / (7 * 86400.0):
 					continue
