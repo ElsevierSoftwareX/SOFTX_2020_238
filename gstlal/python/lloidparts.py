@@ -212,7 +212,9 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 	# Live source, no seek
 	if online_data:
 		assert not fake_data
-		src = pipeparts.mkfakesrc(pipeline, instrument, detector.channel, blocksize = 16384 * 8 * 1, volume = 1e-20, is_live = True)
+		# FIXME:  be careful hard-coding shared-memory partition
+		src = pipeparts.mklvshmsrc(pipeline, shm_name = {"H1": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}[instrument])
+		src = pipeparts.mkframecppchanneldemux(pipeline, src)
 
 	# Unlive source, needs a seek
 	else:
@@ -237,10 +239,14 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 			raise RuntimeError, "Element %s did not handle seek event" % src.get_name()
 
 	#
-	# convert single precision streams to double precision if needed
+	# provide an audioconvert element to allow Virgo data (which is
+	# single-precision) to be adapted into the pipeline
 	#
 
-	src = pipeparts.mkaudioconvert(pipeline, src)
+	if online_data:
+		src = pipeparts.mkaudioconvert(pipeline, src, pad_name = "%s:%s" % (instrument, detector.channel))
+	else:
+		src = pipeparts.mkaudioconvert(pipeline, src)
 
 	#
 	# progress report
