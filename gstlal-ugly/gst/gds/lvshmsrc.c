@@ -92,7 +92,7 @@ enum property {
 };
 
 
-#define DEFAULT_NAME "Fast_Data"
+#define DEFAULT_NAME NULL
 #define DEFAULT_MASK -1	/* FIXME:  what does this mean? */
 #define DEFAULT_WAIT_TIME -1.0	/* wait indefinitely */
 
@@ -115,8 +115,15 @@ static gboolean start(GstBaseSrc *object)
 {
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(object);
 
-	g_assert(element->name != NULL);
+	if(!element->name) {
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("shm-name not set"));
+		return FALSE;
+	}
 	element->handle = lvshm_init(element->name, element->mask);
+	if(!element->handle) {
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("lvshm_init() failed"));
+		return FALSE;
+	}
 	lvshm_setWaitTime(element->handle, element->wait_time);
 
 	return TRUE;
@@ -349,7 +356,7 @@ static void class_init(gpointer class, gpointer class_data)
 		g_param_spec_string(
 			"shm-name",
 			"Name",
-			"Shared memory partition name.",
+			"Shared memory partition name.  Suggestions:  \"LHO_Data\", \"LLO_Data\", \"VIRGO_Data\".",
 			DEFAULT_NAME,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
