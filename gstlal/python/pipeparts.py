@@ -124,9 +124,9 @@ def mkframecppchanneldemux(pipeline, src, **properties):
 
 def framecppchanneldemux_link(src, srcpadname, sinkpad):
 	def pad_added(element, pad, (srcpadname, sinkpad)):
-		if pad.name == srcpadname:
+		if pad.get_name() == srcpadname:
 			pad.link(sinkpad)
-	elem.connect("pad-added", pad_added, (srcpadname, sinkpad))
+	src.connect("pad-added", pad_added, (srcpadname, sinkpad))
 
 
 def mkframesink(pipeline, src, **properties):
