@@ -555,10 +555,13 @@ def mkavimux(pipeline, src):
 	return elem
 
 
-def mkaudioconvert(pipeline, src, caps_string = None):
+def mkaudioconvert(pipeline, src, pad_name = None, caps_string = None):
 	elem = gst.element_factory_make("audioconvert")
 	pipeline.add(elem)
-	src.link(elem)
+	if pad_name is None:
+		src.link(elem)
+	else:
+		src.link_pads(pad_name, elem, "sink")
 	src = elem
 	if caps_string is not None:
 		src = mkcapsfilter(pipeline, src, caps_string)
