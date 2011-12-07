@@ -292,6 +292,11 @@ static void finalize(GObject *object)
 {
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(object);
 
+	if(element->handle) {
+		GST_WARN_OBJECT(element, "parent class failed to invoke stop() method.  doing lvshm_deaccess() in finalize() instead.");
+		lvshm_deaccess(element->handle);
+		element->handle = NULL;
+	}
 	g_free(element->name);
 	element->name = NULL;
 
