@@ -567,6 +567,8 @@ static void finalize(GObject *object)
 	element->srcpad = NULL;
 	g_object_unref(element->adapter);
 	G_OBJECT_CLASS(parent_class)->finalize(object);
+	if (element->bankarray)
+		free_bank(element);
 }
 
 
