@@ -122,6 +122,12 @@ def mklvshmsrc(pipeline, **properties):
 def mkframecppchanneldemux(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "framecpp_channeldemux", **properties)
 
+def framecppchanneldemux_link(src, srcpadname, sinkpad):
+	def pad_added(element, pad, (srcpadname, sinkpad)):
+		if pad.get_name() == srcpadname:
+			pad.link(sinkpad)
+	src.connect("pad-added", pad_added, (srcpadname, sinkpad))
+
 
 def mkframesink(pipeline, src, **properties):
 	elem = gst.element_factory_make("lal_framesink")
@@ -555,10 +561,13 @@ def mkavimux(pipeline, src):
 	return elem
 
 
-def mkaudioconvert(pipeline, src, caps_string = None):
+def mkaudioconvert(pipeline, src, pad_name = None, caps_string = None):
 	elem = gst.element_factory_make("audioconvert")
 	pipeline.add(elem)
-	src.link(elem)
+	if pad_name is None:
+		src.link(elem)
+	else:
+		src.link_pads(pad_name, elem, "sink")
 	src = elem
 	if caps_string is not None:
 		src = mkcapsfilter(pipeline, src, caps_string)
