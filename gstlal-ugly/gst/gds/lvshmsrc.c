@@ -119,6 +119,7 @@ static gboolean start(GstBaseSrc *object)
 		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("shm-name not set"));
 		return FALSE;
 	}
+	GST_LOG_OBJECT(element, "lvshm_init()");
 	element->handle = lvshm_init(element->name, element->mask);
 	if(!element->handle) {
 		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("lvshm_init() failed"));
@@ -141,6 +142,7 @@ static gboolean stop(GstBaseSrc *object)
 
 	/* FIXME:  can I pass NULL to deaccess()? */
 	if(element->handle) {
+		GST_LOG_OBJECT(element, "lvshm_deaccess()");
 		lvshm_deaccess(element->handle);
 		element->handle = NULL;
 	}
@@ -211,6 +213,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 done:
 	lvshm_releaseDataBuffer(element->handle);
+	GST_LOG_OBJECT(element, "released frame file");
 	return result;
 }
 
@@ -294,6 +297,7 @@ static void finalize(GObject *object)
 
 	if(element->handle) {
 		GST_WARNING_OBJECT(element, "parent class failed to invoke stop() method.  doing lvshm_deaccess() in finalize() instead.");
+		GST_LOG_OBJECT(element, "lvshm_deaccess()");
 		lvshm_deaccess(element->handle);
 		element->handle = NULL;
 	}
