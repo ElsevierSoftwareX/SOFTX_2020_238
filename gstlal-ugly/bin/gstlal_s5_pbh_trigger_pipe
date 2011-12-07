@@ -529,6 +529,7 @@ def parse_command_line():
 	parser.add_option("--injection-sql-file", metavar = "filename", help = "Set the sql file to apply to injection databases")
 	parser.add_option("--web-dir", metavar = "directory", help = "Set the web directory like /home/USER/public_html")
 	parser.add_option("--control-peak-time", type="int", help = "Set the peak finding time for the control signal")
+	parser.add_option("--do-iir-pipeline", help = "run the iir pipeline instead of lloid")
 
 	options, filenames = parser.parse_args()
 
@@ -559,8 +560,12 @@ dag = inspiral_pipe.DAG("trigger_pipe")
 # setup the job classes
 #
 
-gstlalInspiralJob = gstlal_inspiral_job()
-gstlalInspiralInjJob = gstlal_inspiral_inj_job()
+if options.do_iir_pipeline is not None:
+	gstlalInspiralJob = gstlal_inspiral_job(executable=inspiral_pipe.which('gstlal_iir_inspiral'))
+	gstlalInspiralInjJob = gstlal_inspiral_inj_job(executable=inspiral_pipe.which('gstlal_iir_inspiral'))
+else:
+	gstlalInspiralJob = gstlal_inspiral_job()
+	gstlalInspiralInjJob = gstlal_inspiral_inj_job()
 calcLikelihoodJob = gstlal_inspiral_calc_likelihood_job()
 gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP = gstlal_compute_far_from_snr_chisq_histograms_jobFAP()
 gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR = gstlal_compute_far_from_snr_chisq_histograms_jobFAR()
