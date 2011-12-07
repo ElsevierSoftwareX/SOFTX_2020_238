@@ -284,7 +284,9 @@ likelihood_snapshot_interval = 3600.0 # seconds
 # 1) the psd estimation needs to settle
 # 2) the fap estimation needs to settle
 # so we wait until 400 seconds beyond the likelihood update interval
-options.seg = segments.segment(start+likelihood_snapshot_interval + 400, LIGOTimeGPS(2000000000))
+# FIXME for now it is 0 until the lvshm source works
+options.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
+#options.seg = segments.segment(start+likelihood_snapshot_interval + 400, LIGOTimeGPS(2000000000))
 
 if options.verbose:
 	print >>sys.stderr, "initializing output document ..."
@@ -348,9 +350,6 @@ if options.verbose:
 def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.keys()):
 	print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" % (signal,)
 	# override file name with approximate interval
-	output.filename = "%s-%d-%d.sqlite" % (options.output.split(".sqlite")[0], start, now())
-	output.flush()
-	output.write_output_file(likelihood_file = options.likelihood_file, verbose = options.verbose)
 	bus = pipeline.get_bus()
 	bus.post(gst.message_new_eos(pipeline))
 
@@ -360,3 +359,7 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 mainloop.run()
+
+output.filename = "%s-%d-%d.sqlite" % (options.output.split(".sqlite")[0], start, now())
+output.flush()
+output.write_output_file(likelihood_file = options.likelihood_file, verbose = options.verbose)
