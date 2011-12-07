@@ -289,12 +289,7 @@ distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_fil
 # FIXME now to "infinity"
 start = now()
 likelihood_snapshot_interval = 3600.0 # seconds
-# FIXME We don't dump triggers out in the beginning because 
-# 1) the psd estimation needs to settle
-# 2) the fap estimation needs to settle
-# so we wait until 400 seconds beyond the likelihood update interval
-#options.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
-options.seg = segments.segment(start+likelihood_snapshot_interval + 400, LIGOTimeGPS(2000000000))
+options.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
 
 if options.verbose:
 	print >>sys.stderr, "initializing output document ..."
