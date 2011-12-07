@@ -982,30 +982,6 @@ def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	return triggersrcs
 
 
-## def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxydump_segment = None, quality = 4):
-## 	sample_rates = sorted(bank.get_rates())
-
-## 	#FIXME don't upsample everything to a common rate
-## 	max_rate = max(sample_rates)
-## 	adder = gst.element_factory_make("lal_adder")
-## 	adder.set_property("sync", True)
-## 	pipeline.add(adder)
-
-## 	for sr in sample_rates:
-## 		head = pipeparts.mkqueue(pipeline, src[sr], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
-## 		head = pipeparts.mkiirbank(pipeline, head, a1 = bank.A[sr], b0 = bank.B[sr], delay = bank.D[sr], name = "gstlaliirbank_%s_%d" % (instrument, sr))
-## 		#head = pipeparts.mkprogressreport(pipeline, head, "afteriirbank_%d" % (sr))
-## 		# FIXME:  this should get a nofakedisconts after it until the resampler is patched
-## 		head = pipeparts.mkresample(pipeline, head, quality = quality)
-## 		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max_rate)
-## 		#head = pipeparts.mknxydumpsinktee(pipeline, head, "output_%d.txt" % (sr), segment = options.nxydump_segment)
-## 		# FIXME make this queue the "right" size
-## 		#head = pipeparts.mkqueue(pipeline, head, max_size_time=gst.SECOND * 100, max_size_buffers=0, max_size_bytes=0)
-## 		head.link(adder)
-
-## 	adder = pipeparts.mkcapsfilter(pipeline, adder, "audio/x-raw-float, rate=%d" % max_rate)
-## 	return adder
-
 def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxydump_segment = None, quality = 4):
 	sample_rates = sorted(bank.get_rates())
 
