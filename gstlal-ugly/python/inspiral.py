@@ -402,7 +402,7 @@ class DistributionsStats(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, verbose = False):
 		#
 		# initialize
 		#
@@ -512,7 +512,7 @@ class Data(object):
 			self.xmldoc,
 			self.process.process_id,
 			coincidence_threshold = coincidence_threshold,
-			thinca_interval = 50.0	# seconds
+			thinca_interval = thinca_interval	# seconds
 		)
 
 	def appsink_new_buffer(self, elem):
