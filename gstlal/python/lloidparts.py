@@ -40,7 +40,7 @@ import gst
 
 
 from gstlal import pipeparts
-from gstlal import cbc_template_fir
+from gstlal import reference_psd
 from gstlal import simulation
 
 
@@ -343,7 +343,7 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 			delta_f = elem.get_property("delta-f")
 			n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
 			# interpolate and install PSD
-			psd = cbc_template_fir.interpolate_psd(psd, delta_f)
+			psd = reference_psd.interpolate_psd(psd, delta_f)
 			elem.set_property("mean-psd", psd.data[:n])
 
 		head.connect_after("notify::f-nyquist", psd_resolution_changed, psd)

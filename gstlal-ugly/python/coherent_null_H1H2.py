@@ -60,7 +60,6 @@ from gstlal import pipeutil
 from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import reference_psd
-from gstlal import cbc_template_fir
 
 import pylal.xlal.datatypes.real8frequencyseries
 import numpy
@@ -183,7 +182,7 @@ def psd_resolution_changed(elem, pspec, psd):
           #print delta_f, f_nyquist
           n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
           # interpolate and install PSD
-          psd = cbc_template_fir.interpolate_psd(psd, delta_f)
+          psd = reference_psd.interpolate_psd(psd, delta_f)
           elem.set_property("mean-psd", psd.data[:n])
 
 #

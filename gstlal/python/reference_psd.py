@@ -26,6 +26,8 @@
 #
 
 
+import numpy
+from scipy import interpolate
 import sys
 
 
@@ -43,6 +45,7 @@ from glue.ligolw import ligolw
 from glue.ligolw import utils
 from glue.ligolw import param
 from glue.ligolw import types as ligolw_types
+from pylal import datatypes as laltypes
 from pylal import series as lalseries
 
 
@@ -143,3 +146,78 @@ def write_psd(filename, psd, instrument=None, verbose = False):
 	if instrument is not None:
 		fs.appendChild(param.new_param('instrument', ligolw_types.FromPyType[str], instrument))
 	utils.write_filename(xmldoc, filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose)
+
+
+#
+# =============================================================================
+#
+#                                PSD Utilities
+#
+# =============================================================================
+#
+
+
+def interpolate_psd(psd, deltaF):
+	#
+	# no-op?
+	#
+
+	if deltaF == psd.deltaF:
+		return psd
+
+	#
+	# interpolate PSD by clipping/zero-padding time-domain impulse
+	# response of equivalent whitening filter
+	#
+
+	#from scipy import fftpack
+	#psd_data = psd.data
+	#x = numpy.zeros((len(psd_data) * 2 - 2,), dtype = "double")
+	#psd_data = numpy.where(psd_data, psd_data, float("inf"))
+	#x[0] = 1 / psd_data[0]**.5
+	#x[1::2] = 1 / psd_data[1:]**.5
+	#x = fftpack.irfft(x)
+	#if deltaF < psd.deltaF:
+	#	x *= numpy.cos(numpy.arange(len(x)) * math.pi / (len(x) + 1))**2
+	#	x = numpy.concatenate((x[:(len(x) / 2)], numpy.zeros((int(round(len(x) * psd.deltaF / deltaF)) - len(x),), dtype = "double"), x[(len(x) / 2):]))
+	#else:
+	#	x = numpy.concatenate((x[:(int(round(len(x) * psd.deltaF / deltaF)) / 2)], x[-(int(round(len(x) * psd.deltaF / deltaF)) / 2):]))
+	#	x *= numpy.cos(numpy.arange(len(x)) * math.pi / (len(x) + 1))**2
+	#x = 1 / fftpack.rfft(x)**2
+	#psd_data = numpy.concatenate(([x[0]], x[1::2]))
+
+	#
+	# interpolate PSD with linear interpolator
+	#
+
+	#psd_data = psd.data
+	#f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
+	#interp = interpolate.interp1d(f, psd_data, bounds_error = False)
+	#f = psd.f0 + numpy.arange(round(len(psd_data) * psd.deltaF / deltaF)) * deltaF
+	#psd_data = interp(f)
+
+	#
+	# interpolate log(PSD) with cubic spline.  note that the PSD is
+	# clipped at 1e-300 to prevent nan's in the interpolator (which
+	# doesn't seem to like the occasional sample being -inf)
+	#
+
+	psd_data = psd.data
+	psd_data = numpy.where(psd_data, psd_data, 1e-300)
+	f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
+	interp = interpolate.splrep(f, numpy.log(psd_data), s = 0)
+	f = psd.f0 + numpy.arange(round((len(psd_data) - 1) * psd.deltaF / deltaF) + 1) * deltaF
+	psd_data = numpy.exp(interpolate.splev(f, interp, der = 0))
+
+	#
+	# return result
+	#
+
+	return laltypes.REAL8FrequencySeries(
+		name = psd.name,
+		epoch = psd.epoch,
+		f0 = psd.f0,
+		deltaF = deltaF,
+		sampleUnits = psd.sampleUnits,
+		data = psd_data
+	)

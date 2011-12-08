@@ -4,7 +4,6 @@ import numpy
 from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import lloidparts
-from gstlal import cbc_template_fir
 from optparse import OptionParser, Option
 from glue import segments
 from pylal.datatypes import LIGOTimeGPS
@@ -24,7 +23,7 @@ def psd_resolution_changed(elem, pspec, psd):
 	n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
 	# interpolate and install PSD
 	print delta_f, n
-	psd = cbc_template_fir.interpolate_psd(psd, delta_f)
+	psd = reference_psd.interpolate_psd(psd, delta_f)
 	elem.set_property("mean-psd", psd.data[:n])
 
 parser = OptionParser(description = __doc__)
