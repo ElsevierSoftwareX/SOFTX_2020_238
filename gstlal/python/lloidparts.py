@@ -248,6 +248,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		pipeline.add(elem)
 		pipeparts.framecppchanneldemux_link(src, "%s:%s" % (instrument, detector.channel), elem.get_pad("sink"))
 		src = elem
+		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True)
 	else:
 		src = pipeparts.mkaudioconvert(pipeline, src)
 
