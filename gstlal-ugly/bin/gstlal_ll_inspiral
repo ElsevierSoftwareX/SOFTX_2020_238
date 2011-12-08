@@ -86,7 +86,6 @@ def smrepair():
 	subprocess.call(["smrepair", "LLO_Data"])
 	subprocess.call(["smrepair", "VIRGO_Data"])
 
-smrepair()
 
 def now():
 	return XLALUTCToGPS(time.gmtime())
@@ -336,6 +335,8 @@ if options.write_pipeline is not None:
 # Run pipeline
 #
 
+# repair the shared memory just in case before starting
+smrepair()
 
 if options.verbose:
 	print >>sys.stderr, "setting pipeline state to playing ..."
@@ -363,8 +364,10 @@ def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.k
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
+# away we go...
 mainloop.run()
 
+# all done
 output.filename = "%s-%d-%d.sqlite" % (options.output.split(".sqlite")[0], start, now())
 output.flush()
 output.write_output_file(likelihood_file = options.likelihood_file, verbose = options.verbose)
