@@ -50,7 +50,6 @@ from pylal import series as lalseries
 
 
 from gstlal import pipeparts
-from gstlal import lloidparts
 from gstlal import pipeio
 
 
@@ -64,6 +63,11 @@ from gstlal import pipeio
 
 
 def measure_psd(instrument, seekevent, detector, seg, rate, fake_data = None, online_data = False, injection_filename = None, psd_fft_length = 8, frame_segments = None, verbose = False):
+	# FIXME:  why can't this be done at the top with the other imports?
+	# yes it creates a cyclic dependency, but there's no reason why it
+	# shouldn't work that I can see.
+	from gstlal import lloidparts
+
 	#
 	# pipeline handler for PSD measurement
 	#
