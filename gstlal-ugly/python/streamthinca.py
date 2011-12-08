@@ -255,9 +255,9 @@ class StreamThinca(object):
 			# copy rows into target tables.
 			for id in newids:
 				real_sngl_inspiral_table.append(index[id])
-			real_coinc_event_map_table.extend(self.coinc_event_map_table)
-			real_coinc_event_table.extend(self.coinc_event_table)
-			real_coinc_inspiral_table.extend(self.coinc_inspiral_table)
+			map(real_coinc_event_map_table.append, self.coinc_event_map_table)
+			map(real_coinc_event_table.append, self.coinc_event_table)
+			map(real_coinc_inspiral_table.append, self.coinc_inspiral_table)
 
 
 	def flush(self):
