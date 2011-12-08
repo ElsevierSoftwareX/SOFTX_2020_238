@@ -79,8 +79,16 @@ sys.excepthook = excepthook
 maxproc = resource.getrlimit(resource.RLIMIT_NPROC)[1]
 resource.setrlimit(resource.RLIMIT_NPROC, (maxproc, maxproc))
 
-# FIXME repair the shared memory partition just in case, update this as appropriate
 
+#
+# disable time stamp checking
+#
+
+
+pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
+
+
+# FIXME repair the shared memory partition just in case, update this as appropriate
 def smrepair():
 	subprocess.call(["smrepair", "LHO_Data"])
 	subprocess.call(["smrepair", "LLO_Data"])
