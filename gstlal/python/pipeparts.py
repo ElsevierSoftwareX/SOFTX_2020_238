@@ -476,6 +476,19 @@ def mkaudioconvert(pipeline, src, pad_name = None, caps_string = None):
 	return src
 
 
+def mkaudiorate(pipeline, src, pad_name = None, **properties):
+	elem = gst.element_factory_make("audiorate")
+	pipeline.add(elem)
+	for name, value in properties.items():
+		elem.set_property(name, value)
+	if pad_name is None:
+		src.link(elem)
+	else:
+		src.link_pads(pad_name, elem, "sink")
+	src = elem
+	return src
+
+
 def mkflacenc(pipeline, src, quality = 0, **properties):
 	return mkgeneric(pipeline, src, "flacenc", quality = quality, **properties)
 
