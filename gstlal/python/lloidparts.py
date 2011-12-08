@@ -217,6 +217,10 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		src = pipeparts.mkframecppchanneldemux(pipeline, src)
 
 	# Unlive source, needs a seek
+	elif fake_data == "white":
+		src = pipeparts.mkfakesrcseeked(pipeline, instrument, detector.channel, seekevent, blocksize = detector.block_size)
+	elif fake_data == "silence":
+		src = pipeparts.mkfakesrcseeked(pipeline, instrument, detector.channel, seekevent, blocksize = detector.block_size, wave = 4)
 	else:
 		if fake_data is not None:
 			assert not online_data
