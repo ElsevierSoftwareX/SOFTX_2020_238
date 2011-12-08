@@ -210,11 +210,14 @@ class StreamThinca(object):
 				# Assign the FAP
 				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)
 				# increment the trials table
-				FAP.trials_table[(coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)] += 1
+				try:
+					FAP.trials_table[(coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)] += 1
+				except KeyError:
+					FAP.trials_table[(coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)] = 1
 				# assume each event is "loudest" so n = 1 by default, not the same as required for an IFAR plot
 				coinc_inspiral_row.combined_far = FAP.compute_far(coinc_inspiral_row.false_alarm_rate)
 				# populate a column with latency
-				coinc_inspiral_row.minimum_duration = float(coinc_inspiral_row.get_end() - ref_time)
+				coinc_inspiral_row.minimum_duration = float(ref_time - coinc_inspiral_row.get_end())
 
 		# construct a coinc extractor from the XML document while
 		# the tree still contains our internal table objects
