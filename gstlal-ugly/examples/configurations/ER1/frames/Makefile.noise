@@ -1,0 +1,22 @@
+START = $(shell lalapps_tconvert now)
+STOP = $(shell lalapps_tconvert now + 128 seconds)
+
+all : frames.cache
+
+H1-FAKE-STRAIN :
+	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --instrument H1 --verbose
+	ls H1-FAKE-STRAIN/*.gwf | lalapps_path2cache > frame.H1.cache
+
+H2-FAKE-STRAIN :
+	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --instrument H2  --verbose
+	ls H2-FAKE-STRAIN/*.gwf | lalapps_path2cache > frame.H2.cache
+
+L1-FAKE-STRAIN :
+	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --instrument L1 --verbose
+	ls L1-FAKE-STRAIN/*.gwf | lalapps_path2cache > frame.L1.cache
+
+frames.cache : H1-FAKE-STRAIN H2-FAKE-STRAIN L1-FAKE-STRAIN
+	cat frame.H1.cache frame.H2.cache frame.L1.cache > frames.cache
+
+realclean: 
+	rm -rf injections.xml H1-FAKE-STRAIN H2-FAKE-STRAIN L1-FAKE-STRAIN *.cache
