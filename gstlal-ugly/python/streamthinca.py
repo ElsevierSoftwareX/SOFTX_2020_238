@@ -36,7 +36,24 @@ import time
 #
 # =============================================================================
 #
-#                              Pipeline Elements
+#                                Configuration
+#
+# =============================================================================
+#
+
+
+#
+# allowed instrument combinations (yes, hard-coded, just take off, eh)
+#
+
+
+allowed_instrument_combos = (frozenset(("H1", "H2", "L1")), frozenset(("H1", "L1", "V1")), frozenset(("H1", "L1")), frozenset(("H1", "V1")), frozenset(("L1", "V1")))
+
+
+#
+# =============================================================================
+#
+#                      pylal.ligolw_thinca Customizations
 #
 # =============================================================================
 #
@@ -52,14 +69,6 @@ def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, d
 
 
 #
-# allowed instrument combinations (yes, hard-coded, just take off, eh)
-#
-
-
-allowed_instrument_combos = (frozenset(("H1", "H2", "L1")), frozenset(("H1", "L1", "V1")), frozenset(("H1", "L1")), frozenset(("H1", "V1")), frozenset(("L1", "V1")))
-
-
-#
 # gstlal_inspiral's triggers cause a divide-by-zero error in the effective
 # SNR method attached to the triggers, so we replace it with one that works
 # for the duration of the ligolw_thinca() call.  this is the function with
@@ -69,6 +78,15 @@ allowed_instrument_combos = (frozenset(("H1", "H2", "L1")), frozenset(("H1", "L1
 
 def get_effective_snr(self, fac):
 	return self.snr
+
+
+#
+# =============================================================================
+#
+#                                 StreamThinca
+#
+# =============================================================================
+#
 
 
 #
@@ -117,6 +135,7 @@ class StreamThinca(object):
 
 		# the start time
 		self.start_time = time.time()
+
 
 	def set_likelihood_data(self, coinc_params_distributions, likelihood_params_func):
 		if coinc_params_distributions is not None:
