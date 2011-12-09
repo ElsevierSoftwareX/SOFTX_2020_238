@@ -140,12 +140,9 @@ static gboolean stop(GstBaseSrc *object)
 {
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(object);
 
-	/* FIXME:  can I pass NULL to deaccess()? */
-	if(element->handle) {
-		GST_LOG_OBJECT(element, "lvshm_deaccess()");
-		lvshm_deaccess(element->handle);
-		element->handle = NULL;
-	}
+	GST_LOG_OBJECT(element, "lvshm_deaccess()");
+	lvshm_deaccess(element->handle);
+	element->handle = NULL;
 
 	return TRUE;
 }
