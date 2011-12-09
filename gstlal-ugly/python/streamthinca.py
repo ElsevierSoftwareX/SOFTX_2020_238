@@ -24,6 +24,9 @@
 #
 
 
+import bisect
+
+
 from glue import iterutils
 from glue import segments
 from glue.ligolw import lsctables
@@ -65,7 +68,11 @@ allowed_instrument_combos = (frozenset(("H1", "H2", "L1")), frozenset(("H1", "L1
 
 
 def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, delta_t):
-	return (event_a.mass1 != event_b.mass1) or (event_a.mass2 != event_b.mass2) or (event_a.chi != event_b.chi) or (float(abs(event_a.get_end() + offset_a - event_b.get_end() - offset_b)) > light_travel_time + delta_t)
+	# NOTE:  we also require the masses and chi of the two events to
+	# match, but the InspiralEventList class ensures that all event
+	# pairs that make it this far are from the same template so we
+	# don't need to explicitly test for that here.
+	return float(abs(event_a.get_end() + offset_a - event_b.get_end() - offset_b)) > light_travel_time + delta_t
 
 
 #
@@ -78,6 +85,68 @@ def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, d
 
 def get_effective_snr(self, fac):
 	return self.snr
+
+
+#
+# InspiralEventList customization making use of the fact that we demand
+# exact template co-incidence to increase performance.  NOTE:  the use of
+# this class defeats ligolw_thinca()'s ability to apply veto segments.  We
+# don't use that feature in StreamThinca so this isn't a problem for us,
+# but it's something to be aware of if this gets used somewhere else.
+#
+
+
+class InspiralEventList(ligolw_thinca.InspiralEventList):
+	@staticmethod
+	def template(event):
+		"""
+		Returns an immutable hashable object (it can be used as a
+		dictionary key) uniquely identifying the template that
+		produced the given event.
+		"""
+		return event.mass1, event.mass2, event.chi
+
+	def make_index(self):
+		self.index = {}
+		for event in self:
+			self.index.setdefault(self.template(event), []).append(event)
+		for events in self.index.values():
+			events.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns))
+
+	def get_coincs(self, event_a, offset_a, light_travel_time, e_thinca_parameter, comparefunc):
+		#
+		# event_a's end time, with the time shift applied
+		#
+
+		end = event_a.get_end() + offset_a - self.offset
+
+		#
+		# all events sharing event_a's template
+		#
+
+		try:
+			events = self.index[self.template(event_a)]
+		except KeyError:
+			# that template didn't produce any events in this
+			# instrument
+			return []
+
+		#
+		# extract the subset of events from this list that pass
+		# coincidence with event_a (use bisection searches for the
+		# minimum and maximum allowed end times to quickly identify
+		# a subset of the full list)
+		#
+
+		return [event_b for event_b in events[bisect.bisect_left(events, end - self.dt) : bisect.bisect_right(events, end + self.dt)] if not comparefunc(event_a, offset_a, event_b, self.offset, light_travel_time, e_thinca_parameter)]
+
+
+#
+# Replace the InspiralEventList class in ligolw_thinca with ours
+#
+
+
+ligolw_thinca.InspiralEventList = InspiralEventList
 
 
 #
