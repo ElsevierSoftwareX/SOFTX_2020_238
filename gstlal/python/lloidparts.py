@@ -213,7 +213,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 	if online_data:
 		assert not fake_data
 		# FIXME:  be careful hard-coding shared-memory partition
-		src = pipeparts.mklvshmsrc(pipeline, shm_name = {"H1": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}[instrument])
+		src = pipeparts.mklvshmsrc(pipeline, shm_name = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}[instrument])
 		src = pipeparts.mkframecppchanneldemux(pipeline, src)
 
 	# Unlive source, needs a seek
