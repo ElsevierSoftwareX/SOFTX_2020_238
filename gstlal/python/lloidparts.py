@@ -252,7 +252,8 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		pipeline.add(elem)
 		pipeparts.framecppchanneldemux_link(src, "%s:%s" % (instrument, detector.channel), elem.get_pad("sink"))
 		src = elem
-		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True)
+		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
+		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, verbose = verbose)
 	else:
 		src = pipeparts.mkaudioconvert(pipeline, src)
 
