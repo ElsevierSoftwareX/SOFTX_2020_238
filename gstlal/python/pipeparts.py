@@ -488,7 +488,7 @@ def mkaudioconvert(pipeline, src, pad_name = None, caps_string = None):
 	return src
 
 
-def mkaudiorate(pipeline, src, pad_name = None, **properties):
+def mkaudiorate(pipeline, src, pad_name = None, verbose = False, **properties):
 	elem = gst.element_factory_make("audiorate")
 	pipeline.add(elem)
 	for name, value in properties.items():
@@ -498,6 +498,18 @@ def mkaudiorate(pipeline, src, pad_name = None, **properties):
 	else:
 		src.link_pads(pad_name, elem, "sink")
 	src = elem
+	
+	if verbose:
+		src.set_property("silent", False)
+		def print_val(elem, val, prop):
+			sin = elem.get_property("in")
+			sout = elem.get_property("out")
+			add = elem.get_property("add")
+			drop = elem.get_property("drop")
+			print >> sys.stderr, "audiorate: add %d | drop %d | in %d | out %d" % (add, drop, sin, sout)
+		src.connect_after("notify::add", print_val, "add")
+		src.connect_after("notify::drop", print_val, "drop")
+
 	return src
 
 
