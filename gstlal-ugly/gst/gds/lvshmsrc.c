@@ -169,7 +169,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	/*
 	 * retrieve next frame file from the lvshm library.  all error
-	 * paths after this succedes must include a call to
+	 * paths after this succeeds must include a call to
 	 * lvshm_releaseDataBuffer()
 	 */
 
