@@ -582,7 +582,7 @@ inj_nodes = []
 cluster_nodes = []
 
 num_jobs = num_bank_files(bank_cache)
-indfac = get_independence_factor(bank_cache)
+indfac = 1./7. # from svd paper, or do this: get_independence_factor(bank_cache)
 
 ###############################################################################
 # loop over banks to run gstlal inspiral pre clustering and far computation
