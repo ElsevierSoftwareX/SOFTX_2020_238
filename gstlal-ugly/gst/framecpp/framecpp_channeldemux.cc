@@ -170,22 +170,23 @@ static gboolean send_tags(GstPad *pad)
 {
 	char *instrument, *channel;
 	GstTagList *taglist;
-	GstEvent *event;
 
 	split_name(GST_PAD_NAME(pad), &instrument, &channel);
+	g_assert(instrument != NULL);
+	g_assert(channel != NULL);
 
 	taglist = gst_tag_list_new_full(
 		GSTLAL_TAG_INSTRUMENT, instrument,
 		GSTLAL_TAG_CHANNEL_NAME, channel,
-		GSTLAL_TAG_UNITS, "strain",	/* FIXME */
+		GSTLAL_TAG_UNITS, strstr(channel, "STRAIN") ? "strain" : " ",	/* FIXME */
 		NULL
 	);
-	g_assert(taglist);
+	g_assert(taglist != NULL);
 
-	event = gst_event_new_tag(taglist);
-	g_assert(event);
+	free(instrument);
+	free(channel);
 
-	return gst_pad_push_event(pad, event);
+	return gst_pad_push_event(pad, gst_event_new_tag(taglist));
 }
 
 
@@ -371,6 +372,9 @@ static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrVect > vect, GstClo
 
 	/*
 	 * copy data into buffer
+	 * FIXME:  it would be nice to remove the memcpy() by hooking the
+	 * GstBuffer's clean-up into framecpp's reference counting
+	 * machinery
 	 */
 
 	g_assert(vect->GetNDim() == 1);
