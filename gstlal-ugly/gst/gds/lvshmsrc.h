@@ -52,11 +52,20 @@ typedef struct {
 typedef struct {
 	GstPushSrc basesrc;
 
+	/*
+	 * properties
+	 */
+
 	char *name;
 	lvshm_mask mask;
 	double wait_time;
 
+	/*
+	 * state
+	 */
+
 	lvshm_handle handle;
+	gboolean need_new_segment;
 } GDSLVSHMSrc;
 
 

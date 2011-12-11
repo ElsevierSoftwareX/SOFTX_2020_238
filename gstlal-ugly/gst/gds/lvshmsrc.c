@@ -127,6 +127,8 @@ static gboolean start(GstBaseSrc *object)
 	}
 	lvshm_setWaitTime(element->handle, element->wait_time);
 
+	element->need_new_segment = TRUE;
+
 	return TRUE;
 }
 
@@ -203,6 +205,15 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	GST_BUFFER_DURATION(*buffer) = GST_CLOCK_TIME_NONE;
 	GST_BUFFER_OFFSET(*buffer) = offset;
 	GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
+
+	/*
+	 * adjust segment
+	 */
+
+	if(element->need_new_segment) {
+		gst_base_src_new_seamless_segment(basesrc, GST_BUFFER_TIMESTAMP(*buffer), GST_CLOCK_TIME_NONE, GST_BUFFER_TIMESTAMP(*buffer));
+		element->need_new_segment = FALSE;
+	}
 
 	/*
 	 * Done
