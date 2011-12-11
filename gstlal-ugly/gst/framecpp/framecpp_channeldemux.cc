@@ -170,10 +170,16 @@ static gboolean send_tags(GstPad *pad)
 {
 	char *instrument, *channel;
 	GstTagList *taglist;
+	gboolean success = TRUE;
 
 	split_name(GST_PAD_NAME(pad), &instrument, &channel);
-	g_assert(instrument != NULL);
-	g_assert(channel != NULL);
+	if(!instrument || !channel) {
+		/*
+		 * cannot deduce instrument and/or channel from pad's name.
+		 * don't bother sending any tags, report success.
+		 */
+		goto done;
+	}
 
 	taglist = gst_tag_list_new_full(
 		GSTLAL_TAG_INSTRUMENT, instrument,
@@ -182,11 +188,14 @@ static gboolean send_tags(GstPad *pad)
 		NULL
 	);
 	g_assert(taglist != NULL);
+	GST_LOG_OBJECT(pad, "pushing %P", taglist);
 
+	success = gst_pad_push_event(pad, gst_event_new_tag(taglist));
+
+done:
 	free(instrument);
 	free(channel);
-
-	return gst_pad_push_event(pad, gst_event_new_tag(taglist));
+	return success;
 }
 
 
@@ -547,7 +556,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			if(rd) {
 				for(FrRawData::firstAdc_iterator current = rd->RefFirstAdc().begin(), last = rd->RefFirstAdc().end(); current != last; current++) {
 					FrAdcData::data_type vects = (*current)->RefData();
-					GstClockTime timestamp = frame_timestamp + (int) round((*current)->GetTimeOffset() * 1e9);
+					GstClockTime timestamp = frame_timestamp + (GstClockTime) round((*current)->GetTimeOffset() * 1e9);
 					const char *name = (*current)->GetName().c_str();
 
 					GST_LOG_OBJECT(element, "found FrAdcData %s at %" GST_TIME_SECONDS_FORMAT, name, GST_TIME_SECONDS_ARGS(timestamp));
@@ -589,7 +598,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 
 			for(FrameH::procData_iterator current = frame->RefProcData().begin(), last = frame->RefProcData().end(); current != last; current++) {
 				FrProcData::data_type vects = (*current)->RefData();
-				GstClockTime timestamp = frame_timestamp + (int) round((*current)->GetTimeOffset() * 1e9);
+				GstClockTime timestamp = frame_timestamp + (GstClockTime) round((*current)->GetTimeOffset() * 1e9);
 				const char *name = (*current)->GetName().c_str();
 
 				GST_LOG_OBJECT(element, "found FrProcData %s at %" GST_TIME_SECONDS_FORMAT, name, GST_TIME_SECONDS_ARGS(timestamp));
@@ -629,7 +638,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 
 			for(FrameH::simData_iterator current = frame->RefSimData().begin(), last = frame->RefSimData().end(); current != last; current++) {
 				FrSimData::data_type vects = (*current)->RefData();
-				GstClockTime timestamp = frame_timestamp + (int) round((*current)->GetTimeOffset() * 1e9);
+				GstClockTime timestamp = frame_timestamp + (GstClockTime) round((*current)->GetTimeOffset() * 1e9);
 				const char *name = (*current)->GetName().c_str();
 
 				GST_LOG_OBJECT(element, "found FrSimData %s at %" GST_TIME_SECONDS_FORMAT, name, GST_TIME_SECONDS_ARGS(timestamp));
