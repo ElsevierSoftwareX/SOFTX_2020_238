@@ -119,7 +119,7 @@ def parse_banks(bank_string):
 		out.setdefault(ifo, []).append(bank)
 	return out
 
-def parse_bank_files(svd_banks, verbose):
+def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 	"""
 	given a dictionary of lists of svd template bank file names parse them
 	into a dictionary of bank classes
@@ -136,6 +136,8 @@ def parse_bank_files(svd_banks, verbose):
 			bank.logname = "%sbank%d" % (instrument,n)
 			bank.number = n
 			banks.setdefault(instrument,[]).append(bank)
+			if snr_threshold is not None:
+				bank.snr_threshold = snr_threshold
 
 	return banks
 
