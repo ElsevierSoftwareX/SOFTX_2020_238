@@ -21,7 +21,7 @@ all : dag
 
 frame.cache :
 	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --instrument H1 --verbose
-	ls H1-LSC-STRAIN/*.gwf | lalapps_path2cache > frame.cache
+	ls H1-FAKE-STRAIN/*.gwf | lalapps_path2cache > frame.cache
 
 H1-TMPLTBANK-871147516-2048.xml : frame.cache
 	lalapps_tmpltbank \
@@ -41,7 +41,7 @@ H1-TMPLTBANK-871147516-2048.xml : frame.cache
 		--calibrated-data real_8 \
 		--candle-mass1 1 \
 		--candle-mass2 1 \
-		--channel-name H1:LSC-STRAIN \
+		--channel-name H1:FAKE-STRAIN \
 		--space Tau0Tau3 \
 		--number-of-segments 15 \
 		--minimal-match $(MM) \
