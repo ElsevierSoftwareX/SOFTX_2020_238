@@ -517,6 +517,13 @@ class Data(object):
 			thinca_interval = thinca_interval	# seconds
 		)
 
+		#
+		# Fun output stuff
+		#
+		
+		self.latency_histogram = rate.BinnedArray(rate.NDBins((rate.LinearPlusOverflowBins(10, 200, 21),)))
+		self.google_description_latency_histogram = [("latency", "string"), ("count", "number")]
+
 	def appsink_new_buffer(self, elem):
 		self.lock.acquire()
 		try:
@@ -579,6 +586,10 @@ class Data(object):
 
 			# do GraceDB alerts
 			self.do_gracedb_alerts()
+
+			# update the latency histogram
+			# FIXME uncomment when we have settled on how to do it.
+			# self.update_latency_histogram()
 		finally:
 			self.lock.release()
 
@@ -603,6 +614,24 @@ class Data(object):
 				self.stream_thinca.last_coincs[coinc_event_id].write(message)
 				# FIXME:  transmit alert to GraceDB
 				message.close()
+
+	def update_latency_histogram(self):
+		if self.stream_thinca.last_coincs:
+			for coinc_event_id, latency in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "minimum_duration").items():
+				self.latency_histogram[latency,] += 1
+		
+		#FIXME can be smarter than this
+		self.google_data_latency_histogram = []
+		for val in self.latency_histogram.centres()[0]:
+			self.google_data_latency_histogram.append((repr(val), self.latency_histogram[val,])) # strings are required for google api bar charts :/
+		
+		import gviz_api
+		data_table = gviz_api.DataTable(self.google_description_latency_histogram)
+		data_table.LoadData(self.google_data_latency_histogram)
+		f = open("/home/channa/public_html/test.txt", "w")
+		f.write(data_table.ToJSonResponse(columns_order=("latency", "count")))
+		f.close()
+
 
 	def write_output_file(self, likelihood_file = None, verbose = False):
 		if self.connection is not None:
