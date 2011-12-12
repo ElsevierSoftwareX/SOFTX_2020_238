@@ -31,6 +31,7 @@ import numpy
 import os
 from scipy import random
 import StringIO
+import subprocess
 try:
 	import sqlite3
 except ImportError:
@@ -404,7 +405,7 @@ class DistributionsStats(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = 1.0 / (7 * 86400.0), verbose = False):
 		#
 		# initialize
 		#
@@ -422,6 +423,8 @@ class Data(object):
 		self.likelihood_retention_factor = likelihood_retention_factor
 		# FIXME:  should this live in the DistributionsStats object?
 		self.likelihood_snapshot_timestamp = None
+		# gracedb far threshold
+		self.gracedb_far_threshold = gracedb_far_threshold
 
 		# All possible instrument combinations
 		# frozenset(ifos) for n in range(2, len(instruments)+1) for ifos in choices(instruments, n
@@ -582,6 +585,7 @@ class Data(object):
 		finally:
 			self.lock.release()
 
+
 	def flush(self):
 		# run StreamThinca's .flush().  returns the last remaining
 		# non-coincident sngls.  add them to the distribution
@@ -593,16 +597,51 @@ class Data(object):
 		# do GraceDB alerts
 		self.do_gracedb_alerts()
 
-	def do_gracedb_alerts(self):
+
+	def do_gracedb_alerts(self, gracedb_prog = "/usr/bin/gracedb", gracedb_group = "Test", gracedb_type = "LowMass"):
 		if self.stream_thinca.last_coincs:
+			# FIXME:  this should maybe not be retrieved this
+			# way.  and the .column_index() method is probably
+			# useless
+			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
 			for coinc_event_id, false_alarm_rate in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far").items():
-				# FIXME:  don't hard-code rate threshold
-				if false_alarm_rate > 1.0 / (7 * 86400.0):
+				#
+				# do we keep this event?
+				#
+
+				if false_alarm_rate > self.gracedb_far_threshold:
 					continue
+
+				#
+				# fake a filename for end-user convenience
+				#
+
+				instruments = coinc_inspiral_index[coinc_event_id].get_ifos()
+				observatories = "".join(sorted(set(instrument[0] for instrument in instruments)))
+				instruments = "".join(sorted(instruments))
+				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event_id].mass).replace(".", "_").replace("-", "_"), gracedb_group, gracedb_type)
+				end_time = int(coinc_inspiral_index[coinc_event_id].get_end())
+				filename = "%s-%s-%d-%d.xml.gz" % (observatories, description, end_time, 0)
+
+				#
+				# construct message and send to gracedb.
+				# we go through the intermediate step of
+				# first writing the document into a string
+				# buffer incase there is some safety in
+				# doing so in the event of a malformed
+				# document;  instead of writing directly
+				# into gracedb's input pipe and crashing
+				# part way through.
+				#
+
 				message = StringIO.StringIO()
-				self.stream_thinca.last_coincs[coinc_event_id].write(message)
-				# FIXME:  transmit alert to GraceDB
+				utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = True)
+				message.seek(0)
+				# FIXME:  put gracedb call back when testing is done
+				#subprocess.Popen((gracedb_prog, "--filename", filename, gracedb_group, gracedb_type, "-"), stdin = message)
+				subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = message)
 				message.close()
+
 
 	def write_output_file(self, likelihood_file = None, verbose = False):
 		if self.connection is not None:
