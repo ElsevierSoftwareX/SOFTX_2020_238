@@ -29,4 +29,4 @@ EXTRA_DIST = \
 	plotlatency.py \
 	prune_duplicate_mass_pairs.py \
 	pypid.py \
-	timeseriesplotter.sh \
+	timeseriesplotter.sh
