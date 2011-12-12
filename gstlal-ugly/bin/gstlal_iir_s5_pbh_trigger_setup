@@ -50,21 +50,21 @@ f.write("PSD_FILE = %s/reference_psd.xml.gz\n" % (path,))
 f.write("DELETE_SQL_FILE = %s/simplify_and_delete_by_far.sql\n" % (path,))
 f.write("CLUSTER_SQL_FILE = %s/simplify_and_cluster.sql\n" % (path,))
 f.write("INJ_SQL_FILE = %s/inj_simplify_and_cluster.sql\n" % (path,))
-f.write("H1_BANK_CACHE = %s/mode_H1-TMPLTBANK-869040003-2048_svd_bank.cache\n" % (path,))
-f.write("H2_BANK_CACHE = %s/mode_H2-TMPLTBANK-875211248-2048_svd_bank.cache\n" % (path,))
-f.write("L1_BANK_CACHE = %s/mode_L1-TMPLTBANK-858087370-2048_svd_bank.cache\n" % (path,))
+f.write("H1_BANK_CACHE = %s/mode_H1-TMPLTBANK-869040003-2048_iir_bank.cache\n" % (path,))
+f.write("H2_BANK_CACHE = %s/mode_H2-TMPLTBANK-875211248-2048_iir_bank.cache\n" % (path,))
+f.write("L1_BANK_CACHE = %s/mode_L1-TMPLTBANK-858087370-2048_iir_bank.cache\n" % (path,))
 f.write("SEED = %d\n" % (week,))
 f.write("WEBDIR = %s/sub-solar-mass-%d-%d\n" % (web_path(), start, end))
 f.write("""
 MIN_DIST = 770
 MAX_DIST = 10000
-MIN_MASS1 = 0.2
-MAX_MASS1 = 1.8
-MIN_MASS2 = 0.2
-MAX_MASS2 = 1.0
-MIN_TOTAL_MASS = 0.4
-MAX_TOTAL_MASS = 1.8
-FLOW = 39
+MIN_MASS1 = 1.06
+MAX_MASS1 = 1.07
+MIN_MASS2 = 1.06
+MAX_MASS2 = 1.07
+MIN_TOTAL_MASS = 2.12
+MAX_TOTAL_MASS = 2.14
+FLOW = 15
 TRIM = 16
 
 all : injections
@@ -73,14 +73,10 @@ tisi.xml :
 	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:3.14159:3.14159 tisi.xml
 
 dag : vetoes.xml segments.xml frame.cache tisi.xml web
-	gstlal_s5_pbh_trigger_pipe --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml  --frame-segments-name datasegments --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE) --vetoes vetoes.xml --time-slide-file tisi.xml --delete-sql-file $(DELETE_SQL_FILE) --cluster-sql-file $(CLUSTER_SQL_FILE) --web-dir $(WEBDIR)
-
-iirdag : vetoes.xml segments.xml frame.cache tisi.xml web
 	gstlal_iir_s5_pbh_trigger_pipe --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml  --frame-segments-name datasegments --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE) --vetoes vetoes.xml --time-slide-file tisi.xml --delete-sql-file $(DELETE_SQL_FILE) --cluster-sql-file $(CLUSTER_SQL_FILE) --web-dir $(WEBDIR)
 
-
 injections : vetoes.xml segments.xml frame.cache injections.xml web tisi.xml
-	gstlal_s5_pbh_trigger_pipe --injections injections.xml --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE) --vetoes vetoes.xml --delete-sql-file $(DELETE_SQL_FILE) --cluster-sql-file $(CLUSTER_SQL_FILE) --injection-sql-file $(INJ_SQL_FILE) --web-dir $(WEBDIR) --time-slide-file tisi.xml
+	gstlal_iir_s5_pbh_trigger_pipe --injections injections.xml --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE) --vetoes vetoes.xml --delete-sql-file $(DELETE_SQL_FILE) --cluster-sql-file $(CLUSTER_SQL_FILE) --injection-sql-file $(INJ_SQL_FILE) --web-dir $(WEBDIR) --time-slide-file tisi.xml
 
 H1vetoes.xml:
 	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=H1:Injection --result-name=vetoes > H1vetoes.xml

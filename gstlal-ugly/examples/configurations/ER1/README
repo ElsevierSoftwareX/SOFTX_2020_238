@@ -43,7 +43,5 @@ new directory
 # Step 3 launching the analysis
 ###############################################################################
 
-The condor configuration is not quite ready, but you can test some of these
-jobs on the headnode.  to do that look at trigger_pipe.sh. Note that you may
-want to add --verbose to the command line.  You kill the job with ctrl+c  Have
-fun!
+You can launch the triggers dag with condor_submit_dag.  To kill the dag do
+condor_rm.

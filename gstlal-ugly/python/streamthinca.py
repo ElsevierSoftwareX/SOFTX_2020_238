@@ -24,18 +24,39 @@
 #
 
 
+import bisect
+
+
 from glue import iterutils
 from glue import segments
 from glue.ligolw import lsctables
 from pylal import ligolw_burca2
 from pylal import ligolw_thinca
+from pylal.date import XLALUTCToGPS
 import time
 
 
 #
 # =============================================================================
 #
-#                              Pipeline Elements
+#                                Configuration
+#
+# =============================================================================
+#
+
+
+#
+# allowed instrument combinations (yes, hard-coded, just take off, eh)
+#
+
+
+allowed_instrument_combos = (frozenset(("H1", "H2", "L1")), frozenset(("H1", "L1", "V1")), frozenset(("H1", "L1")), frozenset(("H1", "V1")), frozenset(("L1", "V1")))
+
+
+#
+# =============================================================================
+#
+#                      pylal.ligolw_thinca Customizations
 #
 # =============================================================================
 #
@@ -47,15 +68,11 @@ import time
 
 
 def event_comparefunc(event_a, offset_a, event_b, offset_b, light_travel_time, delta_t):
-	return (event_a.mass1 != event_b.mass1) or (event_a.mass2 != event_b.mass2) or (event_a.chi != event_b.chi) or (float(abs(event_a.get_end() + offset_a - event_b.get_end() - offset_b)) > light_travel_time + delta_t)
-
-
-#
-# allowed instrument combinations (yes, hard-coded, just take off, eh)
-#
-
-
-allowed_instrument_combos = (frozenset(("H1", "H2", "L1")), frozenset(("H1", "L1", "V1")), frozenset(("H1", "L1")), frozenset(("H1", "V1")), frozenset(("L1", "V1")))
+	# NOTE:  we also require the masses and chi of the two events to
+	# match, but the InspiralEventList class ensures that all event
+	# pairs that make it this far are from the same template so we
+	# don't need to explicitly test for that here.
+	return float(abs(event_a.get_end() + offset_a - event_b.get_end() - offset_b)) > light_travel_time + delta_t
 
 
 #
@@ -68,6 +85,77 @@ allowed_instrument_combos = (frozenset(("H1", "H2", "L1")), frozenset(("H1", "L1
 
 def get_effective_snr(self, fac):
 	return self.snr
+
+
+#
+# InspiralEventList customization making use of the fact that we demand
+# exact template co-incidence to increase performance.  NOTE:  the use of
+# this class defeats ligolw_thinca()'s ability to apply veto segments.  We
+# don't use that feature in StreamThinca so this isn't a problem for us,
+# but it's something to be aware of if this gets used somewhere else.
+#
+
+
+class InspiralEventList(ligolw_thinca.InspiralEventList):
+	@staticmethod
+	def template(event):
+		"""
+		Returns an immutable hashable object (it can be used as a
+		dictionary key) uniquely identifying the template that
+		produced the given event.
+		"""
+		return event.mass1, event.mass2, event.chi
+
+	def make_index(self):
+		self.index = {}
+		for event in self:
+			self.index.setdefault(self.template(event), []).append(event)
+		for events in self.index.values():
+			events.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns))
+
+	def get_coincs(self, event_a, offset_a, light_travel_time, e_thinca_parameter, comparefunc):
+		#
+		# event_a's end time, with the time shift applied
+		#
+
+		end = event_a.get_end() + offset_a - self.offset
+
+		#
+		# all events sharing event_a's template
+		#
+
+		try:
+			events = self.index[self.template(event_a)]
+		except KeyError:
+			# that template didn't produce any events in this
+			# instrument
+			return []
+
+		#
+		# extract the subset of events from this list that pass
+		# coincidence with event_a (use bisection searches for the
+		# minimum and maximum allowed end times to quickly identify
+		# a subset of the full list)
+		#
+
+		return [event_b for event_b in events[bisect.bisect_left(events, end - self.dt) : bisect.bisect_right(events, end + self.dt)] if not comparefunc(event_a, offset_a, event_b, self.offset, light_travel_time, e_thinca_parameter)]
+
+
+#
+# Replace the InspiralEventList class in ligolw_thinca with ours
+#
+
+
+ligolw_thinca.InspiralEventList = InspiralEventList
+
+
+#
+# =============================================================================
+#
+#                                 StreamThinca
+#
+# =============================================================================
+#
 
 
 #
@@ -116,6 +204,7 @@ class StreamThinca(object):
 
 		# the start time
 		self.start_time = time.time()
+
 
 	def set_likelihood_data(self, coinc_params_distributions, likelihood_params_func):
 		if coinc_params_distributions is not None:
@@ -203,14 +292,20 @@ class StreamThinca(object):
 			# set the live time
 			FAP.livetime = time.time() - self.start_time
 			coinc_event_index = dict((row.coinc_event_id, row) for row in self.coinc_event_table)
+			ref_time = XLALUTCToGPS(time.gmtime())
 			for coinc_inspiral_row in self.coinc_inspiral_table:
 				coinc_event_row = coinc_event_index[coinc_inspiral_row.coinc_event_id]
 				# Assign the FAP
 				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)
 				# increment the trials table
-				FAP.trials_table[(coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)] += 1
+				try:
+					FAP.trials_table[(coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)] += 1
+				except KeyError:
+					FAP.trials_table[(coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)] = 1
 				# assume each event is "loudest" so n = 1 by default, not the same as required for an IFAR plot
 				coinc_inspiral_row.combined_far = FAP.compute_far(coinc_inspiral_row.false_alarm_rate)
+				# populate a column with latency
+				coinc_inspiral_row.minimum_duration = float(ref_time - coinc_inspiral_row.get_end())
 
 		# construct a coinc extractor from the XML document while
 		# the tree still contains our internal table objects
@@ -255,9 +350,9 @@ class StreamThinca(object):
 			# copy rows into target tables.
 			for id in newids:
 				real_sngl_inspiral_table.append(index[id])
-			real_coinc_event_map_table.extend(self.coinc_event_map_table)
-			real_coinc_event_table.extend(self.coinc_event_table)
-			real_coinc_inspiral_table.extend(self.coinc_inspiral_table)
+			map(real_coinc_event_map_table.append, self.coinc_event_map_table)
+			map(real_coinc_event_table.append, self.coinc_event_table)
+			map(real_coinc_inspiral_table.append, self.coinc_inspiral_table)
 
 
 	def flush(self):

@@ -88,7 +88,9 @@ def channel_dict_from_channel_list(channel_list):
 
 def pipeline_channel_list_from_channel_dict(channel_dict):
 	"""
-	produce a string of channel name arguments suitable for a pipeline.py program that doesn't technically allow multiple options. For example --channel-name=H1=LSC-STRAIN --channel-name=H2=LSC-STRAIN
+	produce a string of channel name arguments suitable for a pipeline.py
+	program that doesn't technically allow multiple options. For example
+	--channel-name=H1=LSC-STRAIN --channel-name=H2=LSC-STRAIN
 	"""
 
 	outstr = ""
@@ -103,7 +105,11 @@ def pipeline_channel_list_from_channel_dict(channel_dict):
 
 def parse_banks(bank_string):
 	"""
-	parses strings of form H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...
+	parses strings of form 
+	
+	H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,... 
+	
+	into a dictionary of lists of bank files.
 	"""
 	out = {}
 	if bank_string is None:
@@ -113,10 +119,10 @@ def parse_banks(bank_string):
 		out.setdefault(ifo, []).append(bank)
 	return out
 
-def parse_bank_files(svd_banks, verbose):
+def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 	"""
-	given a dictionary of lists svd template bank file names parse them
-	into a dictionary of bakn classes
+	given a dictionary of lists of svd template bank file names parse them
+	into a dictionary of bank classes
 	"""
 
 	banks = {}
@@ -130,6 +136,8 @@ def parse_bank_files(svd_banks, verbose):
 			bank.logname = "%sbank%d" % (instrument,n)
 			bank.number = n
 			banks.setdefault(instrument,[]).append(bank)
+			if snr_threshold is not None:
+				bank.snr_threshold = snr_threshold
 
 	return banks
 
@@ -175,6 +183,10 @@ def connect_appsink_dump_dot(pipeline, appsinks, basename, verbose = False):
 
 
 def add_cbc_metadata(xmldoc, process, seg_in, seg_out):
+	"""
+	A convenience function to add metadata to a cbc output document
+	"""
+	
 	#
 	# add entry to search_summary table
 	#
@@ -257,13 +269,22 @@ def add_cbc_metadata(xmldoc, process, seg_in, seg_out):
 #
 
 def snr_distribution(size, startsnr):
+	"""
+	This produces a power law distribution in snr of size size starting at startsnr
+	"""
 	return startsnr * random.power(3, size)**-1 # 3 here actually means 2 :) according to scipy docs
 
 def noncentrality(snrs, prefactor):
+	"""
+	This produces a set of noncentrality parameters that scale with snr^2 according to the prefactor
+	"""
 	return prefactor * random.rand(len(snrs)) * snrs**2 # FIXME power depends on dimensionality of the bank and the expectation for the mismatch for real signals
 	#return prefactor * random.power(1, len(snrs)) * snrs**2 # FIXME power depends on dimensionality of the bank and the expectation for the mismatch for real signals
 
 def chisq_distribution(df, non_centralities, size):
+	"""
+	This produces a set of noncentral chisq values of size size, with degrees of freedom given by df
+	"""
 	out = numpy.empty((len(non_centralities) * size,))
 	for i, nc in enumerate(non_centralities):
 		out[i*size:(i+1)*size] = random.noncentral_chisquare(df, nc, size)
@@ -383,7 +404,7 @@ class DistributionsStats(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, verbose = False):
 		#
 		# initialize
 		#
@@ -493,7 +514,7 @@ class Data(object):
 			self.xmldoc,
 			self.process.process_id,
 			coincidence_threshold = coincidence_threshold,
-			thinca_interval = 50.0	# seconds
+			thinca_interval = thinca_interval	# seconds
 		)
 
 	def appsink_new_buffer(self, elem):

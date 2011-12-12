@@ -119,12 +119,15 @@ static gboolean start(GstBaseSrc *object)
 		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("shm-name not set"));
 		return FALSE;
 	}
+	GST_LOG_OBJECT(element, "lvshm_init()");
 	element->handle = lvshm_init(element->name, element->mask);
 	if(!element->handle) {
 		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("lvshm_init() failed"));
 		return FALSE;
 	}
 	lvshm_setWaitTime(element->handle, element->wait_time);
+
+	element->need_new_segment = TRUE;
 
 	return TRUE;
 }
@@ -139,11 +142,9 @@ static gboolean stop(GstBaseSrc *object)
 {
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(object);
 
-	/* FIXME:  can I pass NULL to deaccess()? */
-	if(element->handle) {
-		lvshm_deaccess(element->handle);
-		element->handle = NULL;
-	}
+	GST_LOG_OBJECT(element, "lvshm_deaccess()");
+	lvshm_deaccess(element->handle);
+	element->handle = NULL;
 
 	return TRUE;
 }
@@ -170,7 +171,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	/*
 	 * retrieve next frame file from the lvshm library.  all error
-	 * paths after this succedes must include a call to
+	 * paths after this succeeds must include a call to
 	 * lvshm_releaseDataBuffer()
 	 */
 
@@ -206,11 +207,21 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
 
 	/*
+	 * adjust segment
+	 */
+
+	if(element->need_new_segment) {
+		gst_base_src_new_seamless_segment(basesrc, GST_BUFFER_TIMESTAMP(*buffer), GST_CLOCK_TIME_NONE, GST_BUFFER_TIMESTAMP(*buffer));
+		element->need_new_segment = FALSE;
+	}
+
+	/*
 	 * Done
 	 */
 
 done:
 	lvshm_releaseDataBuffer(element->handle);
+	GST_LOG_OBJECT(element, "released frame file");
 	return result;
 }
 
@@ -292,6 +303,12 @@ static void finalize(GObject *object)
 {
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(object);
 
+	if(element->handle) {
+		GST_WARNING_OBJECT(element, "parent class failed to invoke stop() method.  doing lvshm_deaccess() in finalize() instead.");
+		GST_LOG_OBJECT(element, "lvshm_deaccess()");
+		lvshm_deaccess(element->handle);
+		element->handle = NULL;
+	}
 	g_free(element->name);
 	element->name = NULL;
 

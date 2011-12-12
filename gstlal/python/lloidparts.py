@@ -40,7 +40,7 @@ import gst
 
 
 from gstlal import pipeparts
-from gstlal import cbc_template_fir
+from gstlal import reference_psd
 from gstlal import simulation
 
 
@@ -213,10 +213,14 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 	if online_data:
 		assert not fake_data
 		# FIXME:  be careful hard-coding shared-memory partition
-		src = pipeparts.mklvshmsrc(pipeline, shm_name = {"H1": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}[instrument])
+		src = pipeparts.mklvshmsrc(pipeline, shm_name = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}[instrument])
 		src = pipeparts.mkframecppchanneldemux(pipeline, src)
 
 	# Unlive source, needs a seek
+	elif fake_data == "white":
+		src = pipeparts.mkfakesrcseeked(pipeline, instrument, detector.channel, seekevent, blocksize = detector.block_size)
+	elif fake_data == "silence":
+		src = pipeparts.mkfakesrcseeked(pipeline, instrument, detector.channel, seekevent, blocksize = detector.block_size, wave = 4)
 	else:
 		if fake_data is not None:
 			assert not online_data
@@ -248,6 +252,8 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		pipeline.add(elem)
 		pipeparts.framecppchanneldemux_link(src, "%s:%s" % (instrument, detector.channel), elem.get_pad("sink"))
 		src = elem
+		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
+		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, verbose = verbose)
 	else:
 		src = pipeparts.mkaudioconvert(pipeline, src)
 
@@ -338,7 +344,7 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 			delta_f = elem.get_property("delta-f")
 			n = int(round(elem.get_property("f-nyquist") / delta_f) + 1)
 			# interpolate and install PSD
-			psd = cbc_template_fir.interpolate_psd(psd, delta_f)
+			psd = reference_psd.interpolate_psd(psd, delta_f)
 			elem.set_property("mean-psd", psd.data[:n])
 
 		head.connect_after("notify::f-nyquist", psd_resolution_changed, psd)
@@ -917,6 +923,7 @@ def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 			instrument,
 			verbose = verbose,
 			nxydump_segment = nxydump_segment,
+			quality = 4,
 		)
 		snr = pipeparts.mkchecktimestamps(pipeline, snr, "timestamps_%s_snr" % suffix)
 
@@ -986,21 +993,24 @@ def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxyd
 
 	#FIXME don't upsample everything to a common rate
 	max_rate = max(sample_rates)
-	adder = gst.element_factory_make("lal_adder")
-	adder.set_property("sync", True)
-	pipeline.add(adder)
+	prehead = None
 
 	for sr in sample_rates:
 		head = pipeparts.mkqueue(pipeline, src[sr], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 		head = pipeparts.mkiirbank(pipeline, head, a1 = bank.A[sr], b0 = bank.B[sr], delay = bank.D[sr], name = "gstlaliirbank_%s_%d" % (instrument, sr))
-		#head = pipeparts.mkprogressreport(pipeline, head, "afteriirbank_%d" % (sr))
+		if prehead is not None:
+			adder = gst.element_factory_make("lal_adder")
+			adder.set_property("sync", True)
+			pipeline.add(adder)
+			head.link(adder)
+			prehead.link(adder)
+			head = adder
 		# FIXME:  this should get a nofakedisconts after it until the resampler is patched
 		head = pipeparts.mkresample(pipeline, head, quality = quality)
-		head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max_rate)
-		#head = pipeparts.mknxydumpsinktee(pipeline, head, "output_%d.txt" % (sr), segment = options.nxydump_segment)
-		# FIXME make this queue the "right" size
-		#head = pipeparts.mkqueue(pipeline, head, max_size_time=gst.SECOND * 100, max_size_buffers=0, max_size_bytes=0)
-		head.link(adder)
+		if sr == max_rate:
+			head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % max_rate)
+		else:
+			head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % (2 * sr))
+		prehead = head
 
-	adder = pipeparts.mkcapsfilter(pipeline, adder, "audio/x-raw-float, rate=%d" % max_rate)
-	return adder
+	return head

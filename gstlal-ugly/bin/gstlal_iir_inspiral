@@ -27,8 +27,8 @@
 #
 
 
-import sys
 import os
+import sys
 import threading
 import warnings
 from optparse import OptionParser
@@ -54,8 +54,22 @@ from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import reference_psd
 from gstlal import cbc_template_iir
-from gstlal import streamthinca
+from gstlal import inspiral
 
+def excepthook(*args):
+	# system exception hook that forces hard exit.  without this,
+	# exceptions that occur inside python code invoked as a call-back
+	# from the gstreamer pipeline just stop the pipeline, they don't
+	# cause gstreamer to exit.
+
+	# FIXME:  they probably *would* cause if we could figure out why
+	# element errors and the like simply stop the pipeline instead of
+	# crashing it, as well.  Perhaps this should be removed when/if the
+	# "element error's don't crash program" problem is fixed
+	sys.__excepthook__(*args)
+	os._exit(1)
+
+sys.excepthook = excepthook
 
 #
 # =============================================================================
@@ -64,18 +78,6 @@ from gstlal import streamthinca
 #
 # =============================================================================
 #
-
-def parse_banks(bank_string):
-	"""
-	parses strings of form H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...
-	"""
-	out = {}
-	if bank_string is None:
-		return out
-	for b in bank_string.split(','):
-		ifo, bank = b.split(':')
-		out.setdefault(ifo, []).append(bank)
-	return out
 
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
@@ -88,13 +90,13 @@ def parse_command_line():
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
 	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
 	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
-	parser.add_option("--channel-name", metavar="channel", help="set the channel default LSC-STRAIN", default="LSC-STRAIN")
-	parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
+	parser.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
 	parser.add_option("--nxydump-segment", metavar = "start:stop", default = ":", help = "Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time.")
 	parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the triggers (required)")
 	parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
 	parser.add_option("--track-psd", action = "store_true", help = "Track PSD even if a reference is given")
 	parser.add_option("--iir-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the iir template bank (required) format H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...")
+	parser.add_option("--svd-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets")
 	parser.add_option("--control-peak-time", metavar = "time", type = "int", help = "Set a time window in seconds to find peaks in the control signal")
 	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
@@ -123,6 +125,9 @@ def parse_command_line():
 	if options.frame_segments_name:
 		required_options += ["frame_segments_file"]
 
+	if options.svd_bank is not None:
+		options.iir_bank = options.svd_bank
+
 	missing_options = []
 	if options.iir_bank is None:
 		missing_options += ["--iir-bank"]
@@ -131,11 +136,13 @@ def parse_command_line():
 		raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
 
 	# Get the banks and make the detectors
-	iir_banks = parse_banks(options.iir_bank)
+	iir_banks = inspiral.parse_banks(options.iir_bank)
+	# You get a dictionary of channels keyed by ifo, can be overidden by command line, default is LSC-STRAIN
+	channel_dict = inspiral.channel_dict_from_channel_list(options.channel_name)
 	detectors = {}
 	required_files = []
 	for instrument in set(iir_banks.keys()):
-		detectors[instrument] = lloidparts.DetectorData(options.frame_cache, options.channel_name)
+		detectors[instrument] = lloidparts.DetectorData(options.frame_cache, channel_dict[instrument])
 
 	if options.frame_segments_file:
 		required_files += [options.frame_segments_file]
@@ -156,35 +163,6 @@ def parse_command_line():
 	options.psd_fft_length = 8	# seconds
 
 	return options, filenames, process_params, iir_banks, detectors
-
-#
-# =============================================================================
-#
-#                                     Misc
-#
-# =============================================================================
-#
-
-
-#
-# write the pipeline to a dot file.
-#
-
-
-def write_dump_dot(pipeline, filestem, verbose = False):
-	"""
-	This function needs the environment variable GST_DEBUG_DUMP_DOT_DIR
-	to be set.   The filename will be
-
-	os.path.join($GST_DEBUG_DUMP_DOT_DIR, filestem + ".dot")
-
-	If verbose is True, a message will be written to stderr.
-	"""
-	if "GST_DEBUG_DUMP_DOT_DIR" not in os.environ:
-		raise ValueError, "cannot write pipeline, environment variable GST_DEBUG_DUMP_DOT_DIR is not set"
-	gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, filestem)
-	if verbose:
-		print >>sys.stderr, "Wrote pipeline to %s" % os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], "%s.dot" % filestem)
 
 
 #
@@ -212,9 +190,11 @@ options, filenames, process_params, iir_banks, detectors = parse_command_line()
 if options.frame_segments_file is not None:
 	frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, verbose = options.verbose), options.frame_segments_name).coalesce()
 else:
-	frame_segments = {}
-	for instrument in detectors:
-		frame_segments[instrument] = None
+	frame_segments = dict([(instrument, None) for instrument in detectors])
+
+#
+# Parse the vetos segments file(s) if provided
+#
 
 if options.veto_segments_file is not None:
 	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.veto_segments_file, verbose = options.verbose), options.veto_segments_name).coalesce()
@@ -230,30 +210,20 @@ else:
 seekevent = lloidparts.seek_event_for_gps(options.gps_start_time, options.gps_end_time)
 
 
-# FIXME correct where this is actually used, and for track psd
-psd = {}
-for instrument in detectors:
-	if options.reference_psd is not None:
-		psd[instrument] = reference_psd.read_psd(options.reference_psd, verbose = options.verbose)[instrument]
-	else:
-		psd[instrument] = None
-## else:
-## 	for instrument in detectors:
-## 		# FIXME right now vetoes are applied after whitening.  If that
-## 		# changes this function will need to know about vetoes too
-## 		psd[instrument] = reference_psd.measure_psd(
-## 			instrument,
-## 			seekevent,
-## 			detectors[instrument],
-## 			options.seg,
-## 			2 * 2048,	# Hz;  must not be less than highest bank fragment sample rate (see below)
-## 			psd_fft_length = options.psd_fft_length,
-## 			fake_data = options.fake_data,
-## 			injection_filename = options.injections,
-## 			verbose = options.verbose
-## 		)
-## 		if options.write_psd is not None:
-## 			reference_psd.write_psd("%s-%s" % (instrument, options.write_psd), psd, instrument=instrument, verbose = options.verbose)
+#
+# set up the PSDs
+#
+# There are three modes for psds in this program
+# 1) --reference-psd without --track-psd - a fixed psd (provided by the user) will be used to whiten the data
+# 2) --track-psd without --reference-psd - a psd will me measured and used on the fly
+# 3) --track-psd with --reference-psd - a psd will be measured on the fly, but the first "guess will come from the users provided psd
+#
+
+
+if options.reference_psd is not None:
+	psd = reference_psd.read_psd(options.reference_psd, verbose = options.verbose)
+else:
+	        psd = dict([(instrument, None) for instrument in detectors])
 
 
 #
@@ -352,47 +322,17 @@ appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps
 if options.verbose:
 	print >>sys.stderr, "attached %d, done" % len(appsinks)
 
-if options.write_pipeline is not None:
-	#
-	# add a signal handler to write a pipeline graph upon receipt of
-	# the first trigger buffer.  the caps in the pipeline graph are not
-	# fully negotiated until data comes out the end, so this version of
-	# the graph shows the final formats on all links
-	#
-
-	class AppsinkDumpDotData(object):
-		lock = threading.Lock()
-		n = 0
-		write_after = len(appsinks)
-		pipeline = pipeline
-		filestem = "%s.%s" % (options.write_pipeline, "TRIGGERS")
-		verbose = options.verbose
-
-		def __init__(self):
-			self.handler_id = None
-
-		def execute(self):
-			self.lock.acquire()
-			self.n += 1
-			if self.n >= self.write_after:
-				write_dump_dot(self.pipeline, self.filestem, verbose = self.verbose)
-			self.lock.release()
-
-	def appsink_dump_dot(elem, appsink_dump_dot_data):
-		appsink_dump_dot_data.execute()
-		elem.disconnect(appsink_dump_dot_data.handler_id)
-
-	for sink in appsinks:
-		appsink_dump_dot_data = AppsinkDumpDotData()
-		appsink_dump_dot_data.handler_id = sink.connect_after("new-buffer", appsink_dump_dot, appsink_dump_dot_data)
-
 #
-# process requested segment
+# if we request a dot graph of the pipeline, set it up
 #
 
-
 if options.write_pipeline is not None:
-	write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
+	inspiral.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
+	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
+
+#
+# Run pipeline
+#
 
 if options.verbose:
 	print >>sys.stderr, "setting pipeline state to paused ..."
@@ -405,7 +345,7 @@ if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
 	raise RuntimeError, "pipeline did not enter playing state"
 
 if options.write_pipeline is not None:
-	write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
+	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
 
 if options.verbose:
 	print >>sys.stderr, "running pipeline ..."
@@ -417,7 +357,7 @@ mainloop.run()
 #
 
 
-stream_thinca.flush()
+output.flush()
 output.write_output_file(verbose = options.verbose)
 
 

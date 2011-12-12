@@ -154,13 +154,13 @@ class FAR(object):
 		remap_set = remap.setdefault(ifo_set, ifo_set)
 		
 		#
-		# the target FAP resolution is 1 part in 10^7.  So depending on
+		# the target FAP resolution is 1 part in 10^6.  So depending on
 		# how many instruments we have we have to take the nth root of
 		# that number to set the scale in each detector. This is purely
 		# for memory/CPU requirements
 		#
 
-		targetlen = int(1e7**(1. / len(remap_set)))
+		targetlen = int(1e6**(1. / len(remap_set)))
 
 		# reduce typing
 		background = self.distribution_stats.smoothed_distributions.background_rates

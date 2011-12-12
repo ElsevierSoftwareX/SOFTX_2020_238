@@ -149,9 +149,7 @@ static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 	int dmax, dmin;
 	complex double * restrict y, * restrict a1, * restrict b0;
 	int * restrict d;
-	//int counter =0;
 	uint size1, size2;
-	struct timeval start, end;
 
 	y = (complex double *) gsl_matrix_complex_ptr(element->y, 0, 0);
 	a1 = (complex double *) gsl_matrix_complex_ptr(element->a1, 0, 0);
@@ -180,30 +178,14 @@ static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 	 * wrap output buffer in a complex double array.
 	 */
 
-	//fprintf(stderr,"IIR elem %s : available_length = %d, output_length = %d, dmax = %d\n", GST_ELEMENT_NAME(element), available_length, output_length, dmax);
 	output = (complex double *) GST_BUFFER_DATA(outbuf);
 	g_assert(output_length * iir_channels(element) / 2 * sizeof(complex double) <= GST_BUFFER_SIZE(outbuf));
 
 	memset(output, 0, output_length * iir_channels(element) / 2 * sizeof(*output));
-	//	srand(start.tv_sec + y);
-	//rand() + I*rand();//*y;//3.0+I*6.0;
-	//counter++;
-	//fprintf(stderr, "buffer %f, channel %d: %e + I %e\n", (double) 1e-9 * GST_BUFFER_TIMESTAMP(outbuf), counter, creal(*a1), cimag(*a1));
-	//fprintf(stderr, "(%d, %d)\n", i, j);
-	//fprintf(stderr, "a1(%d, %d) = %e + i %e\n", i, j, creal(*a1), cimag(*a1));
-	/*if (y == (complex double *) gsl_matrix_complex_ptr(element->y, i, j)) {
-	  fprintf(stderr, "y's same (%d, %d)\n", i, j);
-	  }
-	  else {
-	  fprintf(stderr, "y's not same (%d, %d)\n", i, j);
-	  }*/
-
 
 	size1 = element->a1->size1;
 	size2 = element->a1->size2;
-	uint t=20, f=30;
 
-	gettimeofday(&start, NULL);
 	for (last_output = output + size1; output < last_output; output++) {
 		for (last_filter = y + size2; y < last_filter; y++) {
 			ytemp = *y;
@@ -212,10 +194,6 @@ static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 
 			for(in_last = in + output_length; in < in_last; in++, out += size1) { /* sample # */
 				ytemp = *a1 * ytemp + *b0 * *in;
-				/*if (y == last_filter - size2 + f -1 && output == last_output - size1 + t -1) {
-					fprintf(stderr, "%16.12e, %16.12e + %16.12ei\n", *in, creal(ytemp), cimag(ytemp));
-					//fprintf(stderr, "%16.12e + %16.12ei, %16.12e + %16.12ei\n" , creal(*a1), cimag(*a1), creal(*b0), cimag(*b0));
-					}*/
 				*out += ytemp;
 			}
 			*y = ytemp;
@@ -224,11 +202,6 @@ static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 			d++;
 		}
 	}
-	gettimeofday(&end, NULL);
-	/*printf( "%f, %s: loops time:%f\n", (double) 1e-9 * GST_BUFFER_TIMESTAMP(outbuf), GST_ELEMENT_NAME(element), 
-	  end.tv_sec - start.tv_sec + 1e-6 * (float) (end.tv_usec - start.tv_usec) );*/
-	/*fprintf(stderr,"Input Buffer length = %d, Output Buffer length = %d\n",available_length, output_length); */
-	//fprintf(stderr, "Counted %d total samples for element %s. Output channels = %d, Filters = %d, Samples = %d\n", counter, GST_ELEMENT_NAME(element), element->a1->size1, element->a1->size2, output_length);
 
 	/*
 	 * flush the data from the adapter

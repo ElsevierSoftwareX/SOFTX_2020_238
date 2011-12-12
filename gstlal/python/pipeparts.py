@@ -1,4 +1,4 @@
-# Copyright (C) 2009  LIGO Scientific Collaboration
+# Copyright (C) 2009--2011  LIGO Scientific Collaboration
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -23,9 +23,11 @@
 # =============================================================================
 #
 
+
 import sys, os
 import numpy
 import threading
+
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -38,7 +40,6 @@ import gst
 
 
 from glue import segments
-from pylal.datatypes import LIGOTimeGPS
 
 
 import pipeio
@@ -52,11 +53,18 @@ __date__ = "FIXME"
 #
 # =============================================================================
 #
-#                                Pipeline Parts
+#                             Generic Constructors
 #
 # =============================================================================
 #
 
+
+#
+# Applications should use the element-specific wrappings below.  The
+# generic constructors are only intended to simplify the writing of those
+# wrappings, they are not meant to be how applications create elements in
+# pipelines.
+#
 
 
 def mkgeneric(pipeline, src, elem_type_name, **properties):
@@ -64,8 +72,18 @@ def mkgeneric(pipeline, src, elem_type_name, **properties):
 	for name, value in properties.items():
 		elem.set_property(name.replace("_", "-"), value)
 	pipeline.add(elem)
-	src.link(elem)
+	if src is not None:
+		src.link(elem)
 	return elem
+
+
+#
+# =============================================================================
+#
+#                                Pipeline Parts
+#
+# =============================================================================
+#
 
 
 def mkchannelgram(pipeline, src, **properties):
@@ -164,19 +182,11 @@ def mkonlinehoftsrc(pipeline, instrument):
 
 
 def mkcapsfilter(pipeline, src, caps):
-	elem = gst.element_factory_make("capsfilter")
-	elem.set_property("caps", gst.Caps(caps))
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "capsfilter", caps = gst.Caps(caps))
 
 
 def mktaginject(pipeline, src, tags):
-	elem = gst.element_factory_make("taginject")
-	elem.set_property("tags", tags)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "taginject", tags = tags)
 
 
 def mkaudiotestsrc(pipeline, **properties):
@@ -187,21 +197,28 @@ def mkaudiotestsrc(pipeline, **properties):
 	return elem
 
 
-def mkfakesrc(pipeline, instrument, channel_name, blocksize = 16384 * 8 * 1, volume = 1e-20, is_live = False):
+def mkfakesrc(pipeline, instrument, channel_name, blocksize = 16384 * 8 * 1, volume = 1e-20, is_live = False, wave = 9):
 	# default blocksize is 1 second of double precision floats at
 	# 16384 Hz, e.g., h(t)
-	return mktaginject(pipeline, mkcapsfilter(pipeline, mkaudiotestsrc(pipeline, samplesperbuffer = blocksize / 8, wave = 9, volume = volume, is_live = is_live), "audio/x-raw-float, width=64, rate=16384"), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
+	return mktaginject(pipeline, mkcapsfilter(pipeline, mkaudiotestsrc(pipeline, samplesperbuffer = blocksize / 8, wave = wave, volume = volume, is_live = is_live), "audio/x-raw-float, width=64, rate=16384"), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
+
+
+def mkfakesrcseeked(pipeline, instrument, channel_name, seekevent, blocksize = 16384 * 8 * 1, volume = 1e-20, is_live = False, wave = 9):
+	# default blocksize is 1 second of double precision floats at
+	# 16384 Hz, e.g., h(t)
+	src = mkaudiotestsrc(pipeline, samplesperbuffer = blocksize / 8, wave = wave, volume = volume, is_live = is_live)
+	# attempt to seek the element
+	if src.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
+		raise RuntimeError, "Element %s did not want to enter ready state" % src.get_name()
+	if not src.send_event(seekevent):
+		raise RuntimeError, "Element %s did not handle seek event" % src.get_name()
+	return mktaginject(pipeline, mkcapsfilter(pipeline, src, "audio/x-raw-float, width=64, rate=16384"), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
 
 
 def mkiirfilter(pipeline, src, a, b):
 	# convention is z = \exp(-i 2 \pi f / f_{\rm sampling})
 	# H(z) = (\sum_{j=0}^{N} a_j z^{-j}) / (\sum_{j=0}^{N} (-1)^{j} b_j z^{-j})
-	elem = gst.element_factory_make("audioiirfilter")
-	elem.set_property("a", a)
-	elem.set_property("b", b)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "audioiirfilter", a = a, b = b)
 
 
 def mkfakeLIGOsrc(pipeline, location=None, instrument=None, channel_name=None, blocksize=16384 * 8 * 1):
@@ -227,48 +244,23 @@ def mkfakeadvLIGOsrc(pipeline, location=None, instrument=None, channel_name=None
 
 
 def mkprogressreport(pipeline, src, name):
-	elem = gst.element_factory_make("progressreport", name)
-	elem.set_property("do-query", False)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "progressreport", do_query = False, name = name)
 
 
 def mkinjections(pipeline, src, filename):
-	elem = gst.element_factory_make("lal_simulation")
-	elem.set_property("xml-location", filename)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "lal_simulation", xml_location = filename)
 
 
 def mkaudiochebband(pipeline, src, lower_frequency, upper_frequency, poles = 8):
-	elem = gst.element_factory_make("audiochebband")
-	elem.set_property("lower-frequency", lower_frequency)
-	elem.set_property("upper-frequency", upper_frequency)
-	elem.set_property("poles", poles)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "audiochebband", lower_frequency = lower_frequency, upper_frequency = upper_frequency, poles = poles)
 
 
 def mkaudiocheblimit(pipeline, src, cutoff, mode = 0, poles = 8):
-	elem = gst.element_factory_make("audiocheblimit")
-	elem.set_property("cutoff", cutoff)
-	elem.set_property("mode", mode)
-	elem.set_property("poles", poles)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "audiocheblimit", cutoff = cutoff, mode = mode, poles = poles)
 
 
 def mkaudioamplify(pipeline, src, amplification):
-	elem = gst.element_factory_make("audioamplify")
-	elem.set_property("clipping-method", 3)
-	elem.set_property("amplification", amplification)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "audioamplify", clipping_method = 3, amplification = amplification)
 
 
 def mkresample(pipeline, src, pad_name = None, **properties):
@@ -284,15 +276,7 @@ def mkresample(pipeline, src, pad_name = None, **properties):
 
 
 def mkwhiten(pipeline, src, psd_mode = 0, zero_pad = 0, fft_length = 8, average_samples = 64, median_samples = 7):
-	elem = gst.element_factory_make("lal_whiten")
-	elem.set_property("psd-mode", psd_mode)
-	elem.set_property("zero-pad", zero_pad)
-	elem.set_property("fft-length", fft_length)
-	elem.set_property("average-samples", average_samples)
-	elem.set_property("median-samples", median_samples)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "lal_whiten", psd_mode = psd_mode, zero_pad = zero_pad, fft_length = fft_length, average_samples = average_samples, median_samples = median_samples)
 
 
 def mktee(pipeline, src, pad_name = None):
@@ -318,76 +302,42 @@ def mkqueue(pipeline, src, pad_name = None, **properties):
 
 
 def mkdrop(pipeline, src, drop_samples = 0):
-	elem = gst.element_factory_make("lal_drop")
-	elem.set_property("drop-samples",drop_samples)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "lal_drop", drop_samples = drop_samples)
 
 
 def mkdelay(pipeline, src, delay = 0):
-	elem = gst.element_factory_make("lal_delay")
-	elem.set_property("delay",delay)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "lal_delay", delay = delay)
 
 
 def mknofakedisconts(pipeline, src, silent = True):
-	elem = gst.element_factory_make("lal_nofakedisconts")
-	elem.set_property("silent", silent)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "lal_nofakedisconts", silent = silent)
 
 
 def mkfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = None, block_stride = None):
-	elem = gst.element_factory_make("lal_firbank")
-	if latency is not None:
-		elem.set_property("latency", latency)
-	if fir_matrix is not None:
-		elem.set_property("fir-matrix", fir_matrix)
-	if time_domain is not None:
-		elem.set_property("time-domain", time_domain)
-	if block_stride is not None:
-		elem.set_property("block-stride", block_stride)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	properties = dict((name, value) for name, value in zip(("latency", "fir_matrix", "time_domain", "block_stride"), (latency, fir_matrix, time_domain, block_stride)) if value is not None)
+	return mkgeneric(pipeline, src, "lal_firbank", **properties)
 
 def mkiirbank(pipeline, src, a1, b0, delay, name=None):
-	elem = gst.element_factory_make("lal_iirbank")
-
+	properties = {}
 	if name is not None:
-		elem.set_property("name", name)
+		properties["name"] = name
 	if a1 is not None:
-		elem.set_property("a1-matrix", pipeio.repack_complex_array_to_real(a1))
+		properties["a1_matrix"] = pipeio.repack_complex_array_to_real(a1)
 	if b0 is not None:
-		elem.set_property("b0-matrix", pipeio.repack_complex_array_to_real(b0))
+		properties["b0_matrix"] = pipeio.repack_complex_array_to_real(b0)
 	if delay is not None:
-		elem.set_property("delay-matrix", delay)
-	pipeline.add(elem)
-	src.link(elem)
+		properties["delay_matrix"] = delay
+	elem = mkgeneric(pipeline, src, "lal_iirbank", **properties)
 	elem = mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed
 	return elem
 
 
 def mkmean(pipeline, src, **properties):
-	elem = gst.element_factory_make("lal_mean")
-	for name, value in properties.items():
-		elem.set_property(name.replace("_", "-"), value)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "lal_mean", **properties)
 
 
 def mkreblock(pipeline, src, **properties):
-	elem = gst.element_factory_make("lal_reblock")
-	for name, value in properties.items():
-		elem.set_property(name.replace("_", "-"), value)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "lal_reblock", **properties)
 
 
 def mksumsquares(pipeline, src, weights = None):
@@ -422,10 +372,7 @@ def mkmatrixmixer(pipeline, src, matrix = None):
 
 
 def mktogglecomplex(pipeline, src):
-	elem = gst.element_factory_make("lal_togglecomplex")
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "lal_togglecomplex")
 
 
 def mkautochisq(pipeline, src, autocorrelation_matrix = None, mask_matrix = None, latency = 0, snr_thresh=0):
@@ -453,13 +400,7 @@ def mkfakesink(pipeline, src, pad = None):
 
 
 def mkfilesink(pipeline, src, filename):
-	elem = gst.element_factory_make("filesink")
-	elem.set_property("sync", False)
-	elem.set_property("async", False)
-	elem.set_property("buffer-mode", 2)
-	elem.set_property("location", filename)
-	pipeline.add(elem)
-	src.link(elem)
+	return mkgeneric(pipeline, src, "filesink", sync = False, async = False, buffer_mode = 2, location = filename)
 
 
 def mknxydumpsink(pipeline, src, filename, segment = None):
@@ -507,58 +448,31 @@ def mktriggergen(pipeline, snr, chisq, template_bank_filename, snr_threshold, si
 
 
 def mktriggerxmlwritersink(pipeline, src, filename):
-	elem = gst.element_factory_make("lal_triggerxmlwriter")
-	elem.set_property("location", filename)
-	elem.set_property("sync", False)
-	elem.set_property("async", False)
-	pipeline.add(elem)
-	src.link(elem)
+	return mkgeneric(pipeline, src, "lal_triggerxmlwriter", sync = False, async = False, location = filename)
 
 
 def mkwavenc(pipeline, src):
-	elem = gst.element_factory_make("wavenc")
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "wavenc")
 
 
 def mkcolorspace(pipeline, src):
-	elem = gst.element_factory_make("ffmpegcolorspace")
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "ffmpegcolorspace")
 
 
 def mktheoraenc(pipeline, src, **properties):
-	elem = gst.element_factory_make("theoraenc")
-	for name, value in properties.items():
-		elem.set_property(name.replace("_", "-"), value)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "theoraenc", **properties)
 
 
 def mkmpeg4enc(pipeline, src, **properties):
-	elem = gst.element_factory_make("ffenc_mpeg4")
-	for name, value in properties.items():
-		elem.set_property(name.replace("_", "-"), value)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "ffenc_mpeg4", **properties)
 
 
 def mkoggmux(pipeline, src):
-	elem = gst.element_factory_make("oggmux")
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "oggmux")
 
 
 def mkavimux(pipeline, src):
-	elem = gst.element_factory_make("avimux")
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "avimux")
 
 
 def mkaudioconvert(pipeline, src, pad_name = None, caps_string = None):
@@ -574,14 +488,33 @@ def mkaudioconvert(pipeline, src, pad_name = None, caps_string = None):
 	return src
 
 
-def mkflacenc(pipeline, src, quality = 0, **properties):
-	elem = gst.element_factory_make("flacenc")
-	elem.set_property("quality", quality)
+def mkaudiorate(pipeline, src, pad_name = None, verbose = False, **properties):
+	elem = gst.element_factory_make("audiorate")
+	pipeline.add(elem)
 	for name, value in properties.items():
 		elem.set_property(name, value)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	if pad_name is None:
+		src.link(elem)
+	else:
+		src.link_pads(pad_name, elem, "sink")
+	src = elem
+	
+	if verbose:
+		src.set_property("silent", False)
+		def print_val(elem, val, prop):
+			sin = elem.get_property("in")
+			sout = elem.get_property("out")
+			add = elem.get_property("add")
+			drop = elem.get_property("drop")
+			print >> sys.stderr, "audiorate: add %d | drop %d | in %d | out %d" % (add, drop, sin, sout)
+		src.connect_after("notify::add", print_val, "add")
+		src.connect_after("notify::drop", print_val, "drop")
+
+	return src
+
+
+def mkflacenc(pipeline, src, quality = 0, **properties):
+	return mkgeneric(pipeline, src, "flacenc", quality = quality, **properties)
 
 
 def mkogmvideosink(pipeline, videosrc, filename, audiosrc = None, verbose = False):
@@ -597,10 +530,7 @@ def mkogmvideosink(pipeline, videosrc, filename, audiosrc = None, verbose = Fals
 
 
 def mkvideosink(pipeline, src):
-	src = mkcolorspace(pipeline, src)
-	elem = gst.element_factory_make("autovideosink")
-	pipeline.add(elem)
-	src.link(elem)
+	return mkgeneric(pipeline, mkcolorspace(pipeline, src), "autovideosink")
 
 
 def mkplaybacksink(pipeline, src, amplification = 0.1):
@@ -708,11 +638,7 @@ def mkchecktimestamps(pipeline, src, name = None, silent = True, timestamp_fuzz 
 
 
 def mkpeak(pipeline, src, n):
-	elem = gst.element_factory_make("lal_peak")
-	elem.set_property("n", n)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "lal_peak", n = n)
 
 
 def mkitac(pipeline, src, n, bank, autocorrelation_matrix = None, snr_thresh = 0):
@@ -726,13 +652,10 @@ def mkitac(pipeline, src, n, bank, autocorrelation_matrix = None, snr_thresh = 0
 	src.link(elem)
 	return elem
 
+
 def mkbursttriggergen(pipeline, src, n, bank):
-	elem = gst.element_factory_make("lal_bursttriggergen")
-	elem.set_property("n", n)
-	elem.set_property("bank-filename", bank)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "lal_bursttriggergen", n = n, bank_filename = bank)
+
 
 def mksyncsink(pipeline, srcs):
 	"""

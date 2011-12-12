@@ -20,8 +20,8 @@ MM = 0.97
 all : dag
 
 frame.cache :
-	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --instrument H1 --write-psd H1psd.xml.gz --verbose
-	ls H1-LSC-STRAIN/*.gwf | lalapps_path2cache > frame.cache
+	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --instrument H1 --verbose
+	ls H1-FAKE-STRAIN/*.gwf | lalapps_path2cache > frame.cache
 
 H1-TMPLTBANK-871147516-2048.xml : frame.cache
 	lalapps_tmpltbank \
@@ -41,7 +41,7 @@ H1-TMPLTBANK-871147516-2048.xml : frame.cache
 		--calibrated-data real_8 \
 		--candle-mass1 1 \
 		--candle-mass2 1 \
-		--channel-name H1:LSC-STRAIN \
+		--channel-name H1:FAKE-STRAIN \
 		--space Tau0Tau3 \
 		--number-of-segments 15 \
 		--minimal-match $(MM) \
@@ -85,10 +85,10 @@ reference_psd.xml: H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
 	ligolw_add --output reference_psd.xml H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
 
 sql :
-	cat fix_coinc_instruments.sql uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql
+	cat uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql
 	cat simplify.sql cluster.sql > simplify_and_cluster.sql
 	cat simplify.sql delete_by_far.sql > simplify_and_delete_by_far.sql
-	cat fix_coinc_instruments.sql drop_sim.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
+	cat drop_sim.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
 
 dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml sql
 	ls *H2_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > H2_split_bank.cache

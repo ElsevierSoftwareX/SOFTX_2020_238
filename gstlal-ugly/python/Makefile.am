@@ -9,7 +9,6 @@ pkgpythondir = $(pkgpyexecdir)
 #pkgpyexecdir = $(pkgpythondir)
 
 pkgpython_PYTHON = \
-	__init__.py \
 	cbc_template_fir.py \
 	cbc_template_iir.py \
 	dagparts.py \

@@ -35,6 +35,7 @@ from optparse import OptionParser
 import signal
 import time
 import resource
+import subprocess
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -79,6 +80,21 @@ maxproc = resource.getrlimit(resource.RLIMIT_NPROC)[1]
 resource.setrlimit(resource.RLIMIT_NPROC, (maxproc, maxproc))
 
 
+#
+# disable time stamp checking
+#
+
+
+pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
+
+
+# FIXME repair the shared memory partition just in case, update this as appropriate
+def smrepair():
+	subprocess.call(["smrepair", "LHO_Data"])
+	subprocess.call(["smrepair", "LLO_Data"])
+	subprocess.call(["smrepair", "VIRGO_Data"])
+
+
 def now():
 	return XLALUTCToGPS(time.gmtime())
 	#return LIGOTimeGPS(time.time() - 315964786)
@@ -105,6 +121,7 @@ def parse_command_line():
 	parser.add_option("--control-peak-time", metavar = "time", type = "int", help = "Set a time window in seconds to find peaks in the control signal")
 	parser.add_option("--fir-stride", metavar = "time", type = "int", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
 	parser.add_option("--trials-factor", metavar = "num", type = "int", default = 1, help = "Set the multiplicative trials factor, default 1")
+	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
 	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.020, help = "Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	parser.add_option("--likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial likelihood ratio data (required).")
@@ -277,9 +294,10 @@ distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_fil
 # build output document
 #
 
-# FIXME 0 to "infinity"
-options.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
+# FIXME now to "infinity"
 start = now()
+likelihood_snapshot_interval = 3600.0 # seconds
+options.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
 
 if options.verbose:
 	print >>sys.stderr, "initializing output document ..."
@@ -294,11 +312,12 @@ output = inspiral.Data(
 	coincidence_threshold = options.coincidence_threshold,
 	distribution_stats = distribution_stats,
 	assign_likelihoods = True,
-	likelihood_snapshot_interval = 3600.0,	# seconds
+	likelihood_snapshot_interval = likelihood_snapshot_interval,	# seconds
 	likelihood_retention_factor = 1.0,	# disabled effectively until we understand how to use it.
 	comment = options.comment,
 	tmp_path = options.tmp_space,
 	trials_factor = options.trials_factor,
+	thinca_interval = options.thinca_interval,
 	verbose = options.verbose
 )
 
@@ -324,6 +343,8 @@ if options.write_pipeline is not None:
 # Run pipeline
 #
 
+# repair the shared memory just in case before starting
+smrepair()
 
 if options.verbose:
 	print >>sys.stderr, "setting pipeline state to playing ..."
@@ -342,34 +363,21 @@ if options.verbose:
 
 def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.keys()):
 	print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" % (signal,)
+	# override file name with approximate interval
 	bus = pipeline.get_bus()
 	bus.post(gst.message_new_eos(pipeline))
 
-# FIXME delete this, but it may be useful to revive before the condor signal stuff is working
-#for i in [x for x in dir(signal) if x.startswith("SIG")]:
-#	try:
-#		signum = getattr(signal,i)
-#		signal.signal(signum, signal_handler)
-#	except:
-#		pass
-
+# this is how the program stops gracefully, it is the only way to stop it.
+# Otherwise it runs forever man.
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
+# away we go...
 mainloop.run()
 
-
-#
-# write output file
-#
-
-# override file name with approximate interval
+# all done
 output.filename = "%s-%d-%d.sqlite" % (options.output.split(".sqlite")[0], start, now())
-
 output.flush()
 output.write_output_file(likelihood_file = options.likelihood_file, verbose = options.verbose)
-
-
-#
-# done
-#
+# repair the shared memory just in case before exiting
+smrepair()

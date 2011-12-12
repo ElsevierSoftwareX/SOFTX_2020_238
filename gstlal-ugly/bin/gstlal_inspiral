@@ -54,6 +54,7 @@ from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import reference_psd
 from gstlal import inspiral
+import resource
 
 def excepthook(*args):
 	# system exception hook that forces hard exit.  without this,
@@ -70,6 +71,18 @@ def excepthook(*args):
 
 sys.excepthook = excepthook
 
+#
+# Make sure we have sufficient resources
+# We allocate far more memory than we need, so this is okay
+# 
+
+# set the number of processes up to hard limit
+maxproc = resource.getrlimit(resource.RLIMIT_NPROC)[1]
+resource.setrlimit(resource.RLIMIT_NPROC, (maxproc, maxproc))
+
+# set the total set size up to hard limit
+maxas = resource.getrlimit(resource.RLIMIT_AS)[1]
+resource.setrlimit(resource.RLIMIT_AS, (maxas, maxas))
 
 #
 # =============================================================================
@@ -108,6 +121,7 @@ def parse_command_line():
 	parser.add_option("--likelihood-file", metavar = "filename", help = "Set the name of the likelihood ratio data file to use (optional).  If not specified, likelihood ratios will not be assigned to coincs.")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
+	parser.add_option("--check-time-stamps", action = "store_true", help = "Turn on time stamp checking")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 
@@ -192,6 +206,8 @@ def parse_command_line():
 
 options, filenames, process_params, svd_banks, detectors = parse_command_line()
 
+if not options.check_time_stamps:
+	pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
 
 #
 # Parse the segments file(s) if provided
