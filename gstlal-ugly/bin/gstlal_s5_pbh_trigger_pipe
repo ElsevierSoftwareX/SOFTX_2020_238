@@ -529,7 +529,7 @@ def parse_command_line():
 	parser.add_option("--injection-sql-file", metavar = "filename", help = "Set the sql file to apply to injection databases")
 	parser.add_option("--web-dir", metavar = "directory", help = "Set the web directory like /home/USER/public_html")
 	parser.add_option("--control-peak-time", type="int", help = "Set the peak finding time for the control signal")
-	parser.add_option("--do-iir-pipeline", help = "run the iir pipeline instead of lloid")
+	parser.add_option("--do-iir-pipeline", action=store_true, help = "run the iir pipeline instead of lloid")
 
 	options, filenames = parser.parse_args()
 
