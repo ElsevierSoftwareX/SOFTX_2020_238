@@ -7,29 +7,12 @@ EXTRA_DIST = \
 	audioresamplebench.sh \
 	audioresampleresponse.py \
 	audioresampleresponsenoise.py \
-	banks/1-IMRSA-TMPLATEBANK-IMRSA-TMPLATEBANK-H2-TMPLTBANK_EOBNR_ONE_INJ-841309725-2048.xml.gz \
-	banks/1-split_bank-H1-TMPLTBANK_DATAFIND-871157768-2048.xml.gz \
-	banks/10-split_bank-H1-TMPLTBANK_DATAFIND-871157768-2048.xml.gz \
-	banks/2-IMRSA-TMPLATEBANK-IMRSA-TMPLATEBANK-H2-TMPLTBANK_EOBNR_ONE_INJ-841309725-2048.xml.gz \
-	banks/2-split_bank-H1-TMPLTBANK_DATAFIND-871157768-2048.xml.gz \
-	banks/3-split_bank-H1-TMPLTBANK_DATAFIND-871157768-2048.xml.gz \
-	banks/4-split_bank-H1-TMPLTBANK_DATAFIND-871157768-2048.xml.gz \
-	banks/5-split_bank-H1-TMPLTBANK_DATAFIND-871157768-2048.xml.gz \
-	banks/6-split_bank-H1-TMPLTBANK_DATAFIND-871157768-2048.xml.gz \
-	banks/7-split_bank-H1-TMPLTBANK_DATAFIND-871157768-2048.xml.gz \
-	banks/8-split_bank-H1-TMPLTBANK_DATAFIND-871157768-2048.xml.gz \
-	banks/9-split_bank-H1-TMPLTBANK_DATAFIND-871157768-2048.xml.gz \
-	banks/femtobank.xml \
-	banks/macho_bank.xml.gz \
-	banks/minibank.xml \
 	banks/test_bank.xml \
-	bns_injections.xml \
 	configurations/record_stereo/Makefile \
 	configurations/record_stereo/encode.py \
 	configurations/testSkyMap/testSkyMap.dag \
 	configurations/testSkyMap/testSkyMap.py \
 	configurations/testSkyMap/testSkyMap.sub \
-	design_psd.txt \
 	diag.py \
 	diag.sh \
 	dump_triggers.py \
@@ -46,19 +29,4 @@ EXTRA_DIST = \
 	plotlatency.py \
 	prune_duplicate_mass_pairs.py \
 	pypid.py \
-	reference_psd.txt \
-	reference_psd.xml.gz \
-	smoothed_psd.txt \
-	test_inspiral_injections_1s_step.xml \
 	timeseriesplotter.sh \
-	unit_psd.txt \
-	unit_psd.xml.gz \
-	utilities/Makefile.am \
-	utilities/gstlal_connect_db.c \
-	utilities/gstlal_connect_db.h \
-	utilities/gstlal_inspiral_db.c \
-	utilities/gstlal_inspiral_db.h \
-	utilities/run_psql.sh \
-	utilities/splitbank.c \
-	utilities/ssh_tunnel.sh \
-	utilities/test_db.c
