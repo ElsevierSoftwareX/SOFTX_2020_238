@@ -73,6 +73,8 @@ def start_servers(port, handler_class, verbose = False):
 		servers_and_threads.append((httpd, httpd_thread))
 		if verbose:
 			print >>sys.stderr, "started http server on %s" % repr(sockaddr)
+	if not servers_and_threads:
+		raise ValueError("unable to start servers on port %d" % port)
 	return tuple(servers_and_threads)
 
 
