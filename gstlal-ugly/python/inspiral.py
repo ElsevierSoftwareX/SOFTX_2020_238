@@ -633,13 +633,28 @@ class Data(object):
 				# into gracedb's input pipe and crashing
 				# part way through.
 				#
+				# FIXME:  the signal.signal() function is
+				# disabled for the duration of the
+				# .write_fileobj() call to work around some
+				# threading problems.  Glue should be
+				# modified to make signal trapping optional
+				# so that this isn't needed.  Remove when
+				# that's taken care of.
+				#
 
+				if self.verbose:
+					print >>sys.stderr, "sending %s to gracedb ..." % filename
 				message = StringIO.StringIO()
+				orig_signal = utils.signal.signal
+				utils.signal.signal = lambda *args: None
 				utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = True)
-				message.seek(0)
+				utils.signal.signal = orig_signal
 				# FIXME:  put gracedb call back when testing is done
-				#subprocess.Popen((gracedb_prog, "--filename", filename, gracedb_group, gracedb_type, "-"), stdin = message)
-				subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = message)
+				#gracedb = subprocess.Popen((gracedb_prog, "--filename", filename, gracedb_group, gracedb_type, "-"), stdin = subprocess.PIPE)
+				gracedb = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
+				gracedb.stdin.write(message.getvalue())
+				gracedb.stdin.flush()
+				gracedb.stdin.close()
 				message.close()
 
 
