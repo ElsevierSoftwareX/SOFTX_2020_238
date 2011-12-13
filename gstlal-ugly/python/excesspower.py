@@ -92,6 +92,9 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 
 		td_filter = t_series.data
 		td_filter = numpy.roll( td_filter, filter_len/2 )[:filter_len]
+		## normalize the filters
+		td_filter /= numpy.sqrt( sum( [ x**2 for x in td_filter ] ) )
+		######################
 		filters = numpy.concatenate( (filters, td_filter) )
 		
 		# DEBUG: Uncomment to dump TD filters
@@ -114,7 +117,6 @@ def build_chan_matrix( nchannels=1, up_factor=0, norm=None ):
 
 	if( norm == None ):
 		norm = numpy.ones( nchannels >> up_factor )
-	#print >> sys.stderr, nchannels, up_factor, norm[0]
 
 	r0 = numpy.zeros(nchannels)
 	n = 2**up_factor
@@ -123,29 +125,22 @@ def build_chan_matrix( nchannels=1, up_factor=0, norm=None ):
 	for i, mu_sq in enumerate(norm):
 		r = r0.copy()
 		if mu_sq > 0:
-			#r[i*n:(i+1)*n] = numpy.sqrt(1.0/mu_sq)
-			r[i*n:(i+1)*n] = 1.0/mu_sq
+			r[i*n:(i+1)*n] = numpy.sqrt(1.0/mu_sq)
 		else:  # End of the filter bank which we're killing
 			r[i*n:(i+1)*n] = 0
 		m.append( r )
 
 	return numpy.array(m).T
 
-def build_inner_product_norm( corr, band, del_f, nfilts, flow, psd=None, level=None ):
+def build_inner_product_norm( corr, band, del_f, nfilts, flow, psd=None, level=None, max_level=None ):
 	"""Determine the mu^2(f_low, n*b) for higher bandiwdth channels from the base band. Returns a list where the indexes correspond to the 'upsample' factor - 1. For example, For 16 channels, An array of length 4 will be returned with the first index corresponding to 8 channels, second to 4, third to 2, and fourth to the single wide band channel. If level != None, then the specified index will be calculated and returned."""
 	# TODO: can we build middle channels from one level down?
 
-	#print band, del_f, nfilts, flow
-	#print len(corr)
-
 	# Recreate the Hann filter in the FD
-	#total_len = nfilts*band*2 # Hardcoded to 50 % overlap
 	total_len = flow/del_f + nfilts*band/del_f  # Hardcoded to 50 % overlap
 	total_len += 5*band/del_f # buffer at the end, shouldn't be needed
-	#print total_len
 
 	wind_len = int(band*2/del_f)
-	#print wind_len
 	# Build the actual filter in the FD
 	h_wind = XLALCreateHannREAL8Window( wind_len )
 	d = h_wind.data
@@ -168,12 +163,10 @@ def build_inner_product_norm( corr, band, del_f, nfilts, flow, psd=None, level=N
 	inner = []
 	n, itr = 1, 0
 	itr = 0
-	max_level = numpy.ceil(numpy.log2(nfilts))
+	max_level = min( max_level, numpy.ceil(numpy.log2(nfilts)) )
 	while itr <= max_level:
 		# Only one level was requested, skip until we find it
 		if( level != None and level != itr ): continue
-		#print >> sys.stderr, "Resolution level %d" % itr
-		#print >> sys.stderr, "Number of filters to add %d" % n
  
 		foff = 0
 		level_ar = []
@@ -182,8 +175,8 @@ def build_inner_product_norm( corr, band, del_f, nfilts, flow, psd=None, level=N
 		# number of filters at the edge is not equal to the normal number 
 		# (n) at this resolution.
 		nb = nfilts % n
-		mu_sq = n*band/del_f
-		#print mu_sq
+		#mu_sq = n*band/del_f
+		mu_sq = n
 		for i in range( n-1 ):
 			if( foff + i + 1 >= nfilts ):
 				break # because we hit the end of the filter bank
@@ -195,11 +188,12 @@ def build_inner_product_norm( corr, band, del_f, nfilts, flow, psd=None, level=N
 			if( psd == None ):
 				mu_sq += lalburst.XLALExcessPowerFilterInnerProduct( 
 					filter1, filter2, corr
-				)
+				) * del_f/band * 2
 			else:
 				mu_sq += lalburst.XLALExcessPowerFilterInnerProduct( 
 					filter1, filter2, corr, psd
-				)
+				) * del_f/band * 2
+
 
 			# DEBUG: Dump the FD filters
 			#f = open( "filters_fd_corr/hann_%dhz" % int((foff+i*band)+flow), "w" )
@@ -209,7 +203,6 @@ def build_inner_product_norm( corr, band, del_f, nfilts, flow, psd=None, level=N
 
 		# TODO: Since this is pretty much filter independent
 		# drop the iteration and just multiply
-		#print mu_sq
 		level_ar = numpy.ones( numpy.ceil( float(nfilts)/n ) )*mu_sq 
 
 		# Filter at the end can be different than the others -- but we can't
