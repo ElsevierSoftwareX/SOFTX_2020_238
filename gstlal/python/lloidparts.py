@@ -320,7 +320,7 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 	# nofakedisconts element.
 	#
 
-	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7)
+	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, name = "lal_whiten_%s" % instrument)
 	if psd is None:
 		# use running average PSD
 		head.set_property("psd-mode", 0)

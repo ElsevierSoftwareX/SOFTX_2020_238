@@ -68,7 +68,11 @@ __date__ = "FIXME"
 
 
 def mkgeneric(pipeline, src, elem_type_name, **properties):
-	elem = gst.element_factory_make(elem_type_name)
+	if "name" in properties:
+		name = properties.pop("name")
+	else:
+		name = None
+	elem = gst.element_factory_make(elem_type_name, name)
 	for name, value in properties.items():
 		elem.set_property(name.replace("_", "-"), value)
 	pipeline.add(elem)
@@ -275,8 +279,8 @@ def mkresample(pipeline, src, pad_name = None, **properties):
 	return elem
 
 
-def mkwhiten(pipeline, src, psd_mode = 0, zero_pad = 0, fft_length = 8, average_samples = 64, median_samples = 7):
-	return mkgeneric(pipeline, src, "lal_whiten", psd_mode = psd_mode, zero_pad = zero_pad, fft_length = fft_length, average_samples = average_samples, median_samples = median_samples)
+def mkwhiten(pipeline, src, psd_mode = 0, zero_pad = 0, fft_length = 8, average_samples = 64, median_samples = 7, **kwargs):
+	return mkgeneric(pipeline, src, "lal_whiten", psd_mode = psd_mode, zero_pad = zero_pad, fft_length = fft_length, average_samples = average_samples, median_samples = median_samples, **kwargs)
 
 
 def mktee(pipeline, src, pad_name = None):
