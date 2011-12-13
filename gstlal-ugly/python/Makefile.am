@@ -20,4 +20,5 @@ pkgpython_PYTHON = \
 	lloidplots.py \
 	inspiral.py \
 	inspiral_pipe.py \
-	excesspower.py
+	excesspower.py \
+	httpinterface.py
