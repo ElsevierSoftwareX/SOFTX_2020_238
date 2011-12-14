@@ -267,14 +267,17 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	switch(width) {
 	case 8:
 		element->get_input = get_input_uint8;
+		element->mask = 0xff;
 		break;
 
 	case 16:
 		element->get_input = get_input_uint16;
+		element->mask = 0xffff;
 		break;
 
 	case 32:
 		element->get_input = get_input_uint32;
+		element->mask = 0xffffffff;
 		break;
 
 	default:
@@ -308,10 +311,12 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		void *in = GST_BUFFER_DATA(inbuf);
 		void *end = GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf);
 		guint8 *out = GST_BUFFER_DATA(outbuf);
+		guint required_on = element->required_on & element->mask;
+		guint required_off = element->required_off | ~element->mask;
 
 		while(in < end) {
 			guint input = element->get_input(&in);
-			*out++ = ((input & element->required_on) == element->required_on) && ((~input & element->required_off) == element->required_off) ? 0xff : 0x00;
+			*out++ = ((input & required_on) == required_on) && ((~input & required_off) == required_off) ? 0xff : 0x00;
 		}
 	} else {
 		/*
