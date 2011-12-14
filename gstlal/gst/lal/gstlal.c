@@ -65,6 +65,7 @@
 #include <gstlal_reblock.h>
 #include <gstlal_segmentsrc.h>
 #include <gstlal_simulation.h>
+#include <gstlal_statevector.h>
 #include <gstlal_sumsquares.h>
 #include <gstlal_togglecomplex.h>
 #include <gstlal_whiten.h>
@@ -100,6 +101,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_segmentsrc", GSTLAL_SEGMENTSRC_TYPE},
 		{"lal_simulation", GSTLAL_SIMULATION_TYPE},
 		{"lal_sumsquares", GSTLAL_SUMSQUARES_TYPE},
+		{"lal_statevector", GSTLAL_STATEVECTOR_TYPE},
 		{"lal_togglecomplex", GSTLAL_TOGGLECOMPLEX_TYPE},
 		{"lal_whiten", GSTLAL_WHITEN_TYPE},
 		{NULL, 0},
@@ -129,6 +131,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 	GST_DEBUG_CATEGORY_INIT(gstlal_gate_debug, "lal_gate", 0, "lal_gate element");
 	GST_DEBUG_CATEGORY_INIT(gstlal_matrixmixer_debug, "lal_matrixmixer", 0, "lal_matrixmixer element");
 	GST_DEBUG_CATEGORY_INIT(gstlal_sumsquares_debug, "lal_sumsquares", 0, "lal_sumsquares element");
+	GST_DEBUG_CATEGORY_INIT(gstlal_statevector_debug, "lal_statevector", 0, "lal_statevector element");
 
 	/*
 	 * Tell GStreamer about the custom tags.
