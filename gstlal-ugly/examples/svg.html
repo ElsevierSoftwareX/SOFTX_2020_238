@@ -8,37 +8,22 @@
 <script type="text/javascript" src="jquery.svg.js"></script>
 <script type="text/javascript">
 
-function load_canvasa() {
-	$('#canvasa').fadeOut("fast").load('https://ldas-jobs.ligo.caltech.edu/~channa/cgi-bin/plot.py').fadeIn("fast");
-	}
-
-function load_canvasb() {
-	$('#canvasb').fadeOut("fast").load('https://ldas-jobs.ligo.caltech.edu/~channa/cgi-bin/plot.py').fadeIn("fast");
-	}
-
-function load_canvasc() {
-	$('#canvasc').fadeOut("fast").load('https://ldas-jobs.ligo.caltech.edu/~channa/cgi-bin/plot.py').fadeIn("fast");
-	}
-
-function load_canvasd() {
-	$('#canvasd').fadeOut("fast").load('https://ldas-jobs.ligo.caltech.edu/~channa/cgi-bin/plot.py').fadeIn("fast");
+function load_canvas(selector, url) {
+	$(selector).fadeOut("slow").load(url).fadeIn("slow");
 	}
 
 function load_all() {
-	load_canvasa();
-	load_canvasb();
-	load_canvasc();
-	load_canvasd();
+	load_canvas('#canvasa', 'cgi-bin/cgi_plot.py?type=plot&xlabel=time&ylabel=amp');
+	load_canvas('#canvasb', 'cgi-bin/cgi_plot.py?type=hist&ylabel=probability&xlabel=number');
+	load_canvas('#canvasc', 'cgi-bin/cgi_plot.py?type=loglog&ylabel=power&xlabel=frequency');
+	load_canvas('#canvasd', 'cgi-bin/cgi_plot.py?type=pie&xlabel=delicious');
 	}
 
-var seta = self.setInterval(load_canvasa, 20000);
-var setb = self.setInterval(load_canvasb, 20000);
-var setc = self.setInterval(load_canvasc, 20000);
-var setd = self.setInterval(load_canvasd, 20000);
+var setloadall = self.setInterval(load_all, 20000);
 
 </script>
 </head>
-<body onload="load_all()">
+<body onload="load_all()" bgcolor=#E0E0E0>
 <table face="Arial">
 <tr>
 <td><div id='canvasa'></div></td>
