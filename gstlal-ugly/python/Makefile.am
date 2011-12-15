@@ -21,4 +21,5 @@ pkgpython_PYTHON = \
 	inspiral.py \
 	inspiral_pipe.py \
 	excesspower.py \
+	gviz_api.py \
 	httpinterface.py

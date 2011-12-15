@@ -41,6 +41,11 @@ import sys
 import threading
 import time
 
+try:
+	from ligo import gracedb
+except ImportError:
+	print >>sys.stderr, "warning: gracedb import failed, gracedb uploads disabled"
+
 from glue import iterutils
 from glue import segments
 from glue.ligolw import ligolw
@@ -405,7 +410,7 @@ class DistributionsStats(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = 1.0 / (7 * 86400.0), verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, verbose = False):
 		#
 		# initialize
 		#
@@ -520,6 +525,13 @@ class Data(object):
 			thinca_interval = thinca_interval	# seconds
 		)
 
+		#
+		# Fun output stuff
+		#
+		
+		self.latency_histogram = rate.BinnedArray(rate.NDBins((rate.LinearPlusOverflowBins(10, 200, 21),)))
+		self.google_description_latency_histogram = [("latency", "string"), ("count", "number")]
+
 	def appsink_new_buffer(self, elem):
 		self.lock.acquire()
 		try:
@@ -581,7 +593,12 @@ class Data(object):
 				self.connection.commit()
 
 			# do GraceDB alerts
-			self.do_gracedb_alerts()
+			if self.gracedb_far_threshold is not None:
+				self.do_gracedb_alerts()
+
+			# update the latency histogram
+			# FIXME uncomment when we have settled on how to do it.
+			# self.update_latency_histogram()
 		finally:
 			self.lock.release()
 
@@ -599,6 +616,11 @@ class Data(object):
 
 
 	def do_gracedb_alerts(self, gracedb_prog = "/usr/bin/gracedb", gracedb_group = "Test", gracedb_type = "LowMass"):
+		try:
+			gracedb
+		except NameError:
+			# gracedb import failed, disable event uploads
+			return
 		if self.stream_thinca.last_coincs:
 			# FIXME:  this should maybe not be retrieved this
 			# way.  and the .column_index() method is probably
@@ -650,12 +672,37 @@ class Data(object):
 				utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = True)
 				utils.signal.signal = orig_signal
 				# FIXME:  put gracedb call back when testing is done
-				#gracedb = subprocess.Popen((gracedb_prog, "--filename", filename, gracedb_group, gracedb_type, "-"), stdin = subprocess.PIPE)
-				gracedb = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
-				gracedb.stdin.write(message.getvalue())
-				gracedb.stdin.flush()
-				gracedb.stdin.close()
+				if False:
+					resp = gracedb.Client().create(gracedb_group, gracedb_type, filename, message.getvalue())
+					if "error" in resp:
+						print >>sys.stderr, "gracedb upload of %s failed: %s" % (filename, resp["error"])
+					elif self.verbose:
+						if "warning" in resp:
+							print >>sys.stderr, "gracedb issued warning: %s" % resp["warning"]
+						print >>sys.stderr, "event assigned grace ID %s" % resp["output"]
+				else:
+					proc = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
+					proc.stdin.write(message.getvalue())
+					proc.stdin.flush()
+					proc.stdin.close()
 				message.close()
+
+	def update_latency_histogram(self):
+		if self.stream_thinca.last_coincs:
+			for coinc_event_id, latency in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "minimum_duration").items():
+				self.latency_histogram[latency,] += 1
+
+		#FIXME can be smarter than this
+		self.google_data_latency_histogram = []
+		for val in self.latency_histogram.centres()[0]:
+			self.google_data_latency_histogram.append((repr(val), self.latency_histogram[val,])) # strings are required for google api bar charts :/
+
+		import gviz_api
+		data_table = gviz_api.DataTable(self.google_description_latency_histogram)
+		data_table.LoadData(self.google_data_latency_histogram)
+		f = open("/home/channa/public_html/latency.js", "w")
+		f.write(data_table.ToJSonResponse(columns_order=("latency", "count")))
+		f.close()
 
 
 	def write_output_file(self, likelihood_file = None, verbose = False):

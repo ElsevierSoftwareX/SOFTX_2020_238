@@ -1,0 +1,478 @@
+/*
+ * Copyright (C) 2011 Kipp Cannon <kipp.cannon@ligo.org>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+
+/*
+ * ============================================================================
+ *
+ *                                  Preamble
+ *
+ * ============================================================================
+ */
+
+
+/*
+ *  stuff from gobject/gstreamer
+ */
+
+
+#include <glib.h>
+#include <gst/gst.h>
+#include <gst/base/gstbasetransform.h>
+
+
+/*
+ * our own stuff
+ */
+
+
+#include <gstlal.h>
+#include <gstlal_statevector.h>
+#include <gstlal_debug.h>
+
+
+GST_DEBUG_CATEGORY(gstlal_statevector_debug);
+
+
+/*
+ * ============================================================================
+ *
+ *                                 Parameters
+ *
+ * ============================================================================
+ */
+
+
+#define GST_CAT_DEFAULT gstlal_statevector_debug
+#define DEFAULT_REQUIRED_ON 0
+#define DEFAULT_REQUIRED_OFF 0
+
+
+/*
+ * ============================================================================
+ *
+ *                            Input Type Handling
+ *
+ * ============================================================================
+ */
+
+
+static guint get_input_uint8(void **in)
+{
+	return *(*(guint8 **) in)++;
+}
+
+
+static guint get_input_uint16(void **in)
+{
+	return *(*(guint16 **) in)++;
+}
+
+
+static guint get_input_uint32(void **in)
+{
+	return *(*(guint32 **) in)++;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                           GStreamer Boiler Plate
+ *
+ * ============================================================================
+ */
+
+
+static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
+	GST_BASE_TRANSFORM_SINK_NAME,
+	GST_PAD_SINK,
+	GST_PAD_ALWAYS,
+	GST_STATIC_CAPS(
+		"audio/x-raw-int, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) 1, " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) 32, " \
+		"depth = (int) 32, " \
+		"signed = false; " \
+		"audio/x-raw-int, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) 1, " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) 16, " \
+		"depth = (int) 16, " \
+		"signed = false; " \
+		"audio/x-raw-int, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) 1, " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) 8, " \
+		"depth = (int) 8, " \
+		"signed = false"
+	)
+);
+
+
+static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
+	GST_BASE_TRANSFORM_SRC_NAME,
+	GST_PAD_SRC,
+	GST_PAD_ALWAYS,
+	GST_STATIC_CAPS(
+		"audio/x-raw-int, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) 1, " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) 8, " \
+		"depth = (int) 1, " \
+		"signed = false"
+	)
+);
+
+
+GST_BOILERPLATE(
+	GSTLALStateVector,
+	gstlal_statevector,
+	GstBaseTransform,
+	GST_TYPE_BASE_TRANSFORM
+);
+
+
+enum property {
+	ARG_REQUIRED_ON = 1,
+	ARG_REQUIRED_OFF
+};
+
+
+/*
+ * ============================================================================
+ *
+ *                     GstBaseTransform Method Overrides
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * get_unit_size()
+ */
+
+
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
+{
+	GstStructure *str;
+	gint width;
+
+	str = gst_caps_get_structure(caps, 0);
+	if(!gst_structure_get_int(str, "width", &width)) {
+		GST_ERROR_OBJECT(trans, "unable to parse width from %" GST_PTR_FORMAT, caps);
+		return FALSE;
+	}
+
+	*size = width;
+
+	return TRUE;
+}
+
+
+/*
+ * transform_caps()
+ */
+
+
+static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps)
+{
+	GstCaps *othercaps = NULL;
+	guint i;
+
+	switch(direction) {
+	case GST_PAD_SRC:
+		/*
+		 * sink pad must have same sample rate as source pad
+		 * FIXME:  this doesn't work out all the allowed
+		 * permutations, it just takes the channel count from the
+		 * first structure on the source pad and copies it into all
+		 * the structures on the sink pad
+		 */
+
+		othercaps = gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SINK_PAD(trans)));
+		for(i = 0; i < gst_caps_get_size(othercaps); i++)
+			gst_structure_set_value(gst_caps_get_structure(othercaps, i), "channels", gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels"));
+		break;
+
+	case GST_PAD_SINK:
+		/*
+		 * source pad must have same sample rate as sink pad
+		 * FIXME:  this doesn't work out all the allowed
+		 * permutations, it just takes the channel count from the
+		 * first structure on the sink pad and copies it into all
+		 * the structures on the source pad
+		 */
+
+		othercaps = gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SRC_PAD(trans)));
+		for(i = 0; i < gst_caps_get_size(caps); i++)
+			gst_structure_set_value(gst_caps_get_structure(othercaps, i), "channels", gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels"));
+		break;
+
+	case GST_PAD_UNKNOWN:
+		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
+		gst_caps_unref(caps);
+		return GST_CAPS_NONE;
+	}
+
+	return othercaps;
+}
+
+
+/*
+ * set_caps()
+ */
+
+
+static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps)
+{
+	GSTLALStateVector *element = GSTLAL_STATEVECTOR(trans);
+	GstStructure *s;
+	gint width;
+
+	/*
+	 * parse the caps
+	 */
+
+	s = gst_caps_get_structure(incaps, 0);
+	if(!gst_structure_get_int(s, "width", &width)) {
+		GST_ERROR_OBJECT(element, "unable to parse width from %" GST_PTR_FORMAT, incaps);
+		return FALSE;
+	}
+
+	/*
+	 * set the sum-of-squares function
+	 */
+
+	switch(width) {
+	case 8:
+		element->get_input = get_input_uint8;
+		element->mask = 0xff;
+		break;
+
+	case 16:
+		element->get_input = get_input_uint16;
+		element->mask = 0xffff;
+		break;
+
+	case 32:
+		element->get_input = get_input_uint32;
+		element->mask = 0xffffffff;
+		break;
+
+	default:
+		g_assert_not_reached();
+		break;
+	}
+
+	return TRUE;
+}
+
+
+/*
+ * transform()
+ */
+
+
+static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
+{
+	GSTLALStateVector *element = GSTLAL_STATEVECTOR(trans);
+	GstFlowReturn result = GST_FLOW_OK;
+
+	g_assert(element->get_input != NULL);
+
+	GST_INFO_OBJECT(element, "processing %s%s buffer %p spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ? "gap" : "nongap", GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", inbuf, GST_BUFFER_BOUNDARIES_ARGS(inbuf));
+
+	if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
+		/*
+		 * input is not 0s.
+		 */
+
+		void *in = GST_BUFFER_DATA(inbuf);
+		void *end = GST_BUFFER_DATA(inbuf) + GST_BUFFER_SIZE(inbuf);
+		guint8 *out = GST_BUFFER_DATA(outbuf);
+		guint required_on = element->required_on & element->mask;
+		guint required_off = element->required_off | ~element->mask;
+
+		while(in < end) {
+			guint input = element->get_input(&in);
+			*out++ = ((input & required_on) == required_on) && ((~input & required_off) == required_off) ? 0xff : 0x00;
+		}
+	} else {
+		/*
+		 * input is 0s.
+		 */
+
+		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
+		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
+	}
+
+	/*
+	 * done
+	 */
+
+	return result;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                          GObject Method Overrides
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * set_property()
+ */
+
+
+static void set_property(GObject *object, enum property prop_id, const GValue *value, GParamSpec *pspec)
+{
+	GSTLALStateVector *element = GSTLAL_STATEVECTOR(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch (prop_id) {
+	case ARG_REQUIRED_ON: {
+		element->required_on = g_value_get_uint(value);
+		break;
+	}
+
+	case ARG_REQUIRED_OFF: {
+		element->required_off = g_value_get_uint(value);
+		break;
+	}
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
+
+
+/*
+ * get_property()
+ */
+
+
+static void get_property(GObject *object, enum property prop_id, GValue *value, GParamSpec *pspec)
+{
+	GSTLALStateVector *element = GSTLAL_STATEVECTOR(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch (prop_id) {
+	case ARG_REQUIRED_ON: {
+		g_value_set_uint(value, element->required_on);
+		break;
+	}
+
+	case ARG_REQUIRED_OFF: {
+		g_value_set_uint(value, element->required_off);
+		break;
+	}
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
+
+
+/*
+ * base_init()
+ */
+
+
+static void gstlal_statevector_base_init(gpointer gclass)
+{
+	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
+	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
+
+	gst_element_class_set_details_simple(element_class, "LIGO State Vector Parser", "Filter/Audio", "Converts a state vector stream into booleans, for example to drive a lal_gate element.", "Kipp Cannon <kipp.cannon@ligo.org>");
+
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
+
+	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
+	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
+}
+
+
+/*
+ * class_init()
+ */
+
+
+static void gstlal_statevector_class_init(GSTLALStateVectorClass *klass)
+{
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_REQUIRED_ON,
+		g_param_spec_uint(
+			"required-on",
+			"Required on",
+			"Bit mask setting the bits that must be on in the state vector",
+			0, G_MAXUINT32, DEFAULT_REQUIRED_ON,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_REQUIRED_OFF,
+		g_param_spec_uint(
+			"required-off",
+			"Required off",
+			"Bit mask setting the bits that must be off in the state vector",
+			0, G_MAXUINT32, DEFAULT_REQUIRED_OFF,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+}
+
+
+/*
+ * init()
+ */
+
+
+static void gstlal_statevector_init(GSTLALStateVector *filter, GSTLALStateVectorClass *klass)
+{
+	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);
+
+	filter->get_input = NULL;
+}

@@ -1,0 +1,77 @@
+Name: @PACKAGE_NAME@
+Version: @PACKAGE_VERSION@
+Release: 1.lscsoft
+Summary: GSTLAL
+License: GPL
+Group: LSC Software/Data Analysis
+Requires: python >= 2.6 fftw >= 3 gstreamer >= 0.10.32 gstreamer-plugins-base >= 0.10.32 gstreamer-plugins-good >= 0.10.32 gstreamer-python pygobject2 numpy lal >= 6.6.0 lalframe >= 1.0.3 lalmetaio >= 1.0.2 lalsimulation >= 0.1.0 lalburst >= 1.1.0 lalinspiral >= 1.2.0 gsl
+BuildRequires: python-devel >= 2.6 fftw-devel >= 3 gstreamer-devel >= 0.10.32 gstreamer-plugins-base-devel >= 0.10.32 pygobject2-devel lal-devel >= 6.6.0 lalframe-devel >= 1.0.3 lalmetaio-devel >= 1.0.2 lalsimulation-devel >= 0.1.0 lalburst-devel >= 1.1.0 lalinspiral-devel >= 1.2.0 gsl-devel
+Source: @PACKAGE_NAME@-%{version}.tar.gz
+URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
+Packager: Xavier Amador <xavier.amador@gravity.phys.uwm.edu>
+BuildRoot: %{_tmppath}/%{name}-%{version}-root
+%description
+This package provides a variety of gstreamer elements for
+gravitational-wave data analysis and some libraries to help write such
+elements.  The code here sits on top of several other libraries, notably
+the LIGO Algorithm Library (LAL), FFTW, the GNU Scientific Library (GSL),
+and, of course, GStreamer.
+
+This package contains the plugins and shared libraries required to run
+gstlal-based applications.
+
+
+%package devel
+Summary: Files and documentation needed for compiling gstlal-based plugins and programs.
+Group: LSC Software/Data Analysis
+Requires: %{name} = %{version} python-devel >= 2.6 fftw-devel >= 3 gstreamer-devel >= 0.10.32 gstreamer-plugins-base-devel >= 0.10.32 pygobject2-devel lal-devel >= 6.6.0 lalframe-devel >= 1.0.3 lalmetaio-devel >= 1.0.2 lalsimulation-devel >= 0.1.0 lalburst-devel >= 1.1.0 lalinspiral-devel >= 1.2.0 gsl-devel
+%description devel
+This package contains the files needed for building gstlal plugins and
+programs.
+
+
+%prep
+%setup -q -n gstlal-%{version}
+
+
+%build
+%configure
+%{__make}
+
+
+%install
+%makeinstall
+# remove .so symlinks from libdir.  these are not included in the .rpm,
+# they will be installed by ldconfig in the post-install script
+[ ${RPM_BUILD_ROOT} != "/" ] && find ${RPM_BUILD_ROOT}/%{_libdir} -name "*.so*" -type l -delete
+# don't distribute *.la files
+[ ${RPM_BUILD_ROOT} != "/" ] && find ${RPM_BUILD_ROOT} -name "*.la" -type f -delete
+
+
+%post
+ldconfig %{_libdir}
+
+
+%postun
+ldconfig %{_libdir}
+
+
+%clean
+[ ${RPM_BUILD_ROOT} != "/" ] && rm -Rf ${RPM_BUILD_ROOT}
+rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
+
+
+%files
+%defattr(-,root,root)
+%{_bindir}/*
+%{_libdir}/*.so.*
+%{_libdir}/gstreamer-0.10/*.so
+%{_libdir}/gstreamer-0.10/python/*
+%{_prefix}/%{_lib}/python*/site-packages/gstlal
+
+%files devel
+%defattr(-,root,root)
+%{_libdir}/*.a
+%{_libdir}/pkgconfig/*
+%{_libdir}/gstreamer-0.10/*.a
+%{_includedir}/*

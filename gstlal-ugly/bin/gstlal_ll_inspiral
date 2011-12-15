@@ -129,6 +129,7 @@ def parse_command_line():
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
 
 	options, filenames = parser.parse_args()
 
@@ -318,6 +319,7 @@ output = inspiral.Data(
 	tmp_path = options.tmp_space,
 	trials_factor = options.trials_factor,
 	thinca_interval = options.thinca_interval,
+	gracedb_far_threshold = options.gracedb_far_threshold,
 	verbose = options.verbose
 )
 
