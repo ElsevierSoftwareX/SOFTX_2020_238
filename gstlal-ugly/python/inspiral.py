@@ -405,7 +405,7 @@ class DistributionsStats(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = 1.0 / (7 * 86400.0), verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, verbose = False):
 		#
 		# initialize
 		#
@@ -588,7 +588,8 @@ class Data(object):
 				self.connection.commit()
 
 			# do GraceDB alerts
-			self.do_gracedb_alerts()
+			if self.gracedb_far_threshold is not None:
+				self.do_gracedb_alerts()
 
 			# update the latency histogram
 			# FIXME uncomment when we have settled on how to do it.
@@ -681,7 +682,7 @@ class Data(object):
 		import gviz_api
 		data_table = gviz_api.DataTable(self.google_description_latency_histogram)
 		data_table.LoadData(self.google_data_latency_histogram)
-		f = open("/home/channa/public_html/test.txt", "w")
+		f = open("/home/channa/public_html/latency.js", "w")
 		f.write(data_table.ToJSonResponse(columns_order=("latency", "count")))
 		f.close()
 
