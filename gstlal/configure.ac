@@ -13,6 +13,7 @@ AC_CONFIG_MACRO_DIR([gnuscripts])
 AM_INIT_AUTOMAKE([1.9 tar-ustar foreign])
 AC_CONFIG_FILES([ \
 	Makefile \
+	gstlal.spec \
 	lib/gstlal.pc \
 	lib/Makefile \
 	python/Makefile \
@@ -40,9 +41,9 @@ AC_CONFIG_FILES([ \
 #
 
 
-AC_SUBST([docdir], [${datadir}/doc])
-AC_SUBST([pkgdocdir], [${docdir}/${PACKAGE_NAME}-${PACKAGE_VERSION}])
-AC_SUBST([pkgconfigdir],[${libdir}/pkgconfig])
+AC_SUBST([docdir], ["\${datadir}/doc"])
+AC_SUBST([pkgdocdir], ["\${docdir}/\${PACKAGE_NAME}-\${PACKAGE_VERSION}"])
+AC_SUBST([pkgconfigdir],["\${libdir}/pkgconfig"])
 
 
 # Set the library API info

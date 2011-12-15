@@ -1,3 +1,4 @@
+gstlal.spec
 lib/gstlal.pc
 tests/*.pyc
 tests/*.dump
