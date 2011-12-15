@@ -41,6 +41,11 @@ import sys
 import threading
 import time
 
+try:
+	from ligo import gracedb
+except ImportError:
+	print >>sys.stderr, "warning: gracedb import failed, gracedb uploads disabled"
+
 from glue import iterutils
 from glue import segments
 from glue.ligolw import ligolw
@@ -611,6 +616,11 @@ class Data(object):
 
 
 	def do_gracedb_alerts(self, gracedb_prog = "/usr/bin/gracedb", gracedb_group = "Test", gracedb_type = "LowMass"):
+		try:
+			gracedb
+		except NameError:
+			# gracedb import failed, disable event uploads
+			return
 		if self.stream_thinca.last_coincs:
 			# FIXME:  this should maybe not be retrieved this
 			# way.  and the .column_index() method is probably
@@ -662,11 +672,19 @@ class Data(object):
 				utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = True)
 				utils.signal.signal = orig_signal
 				# FIXME:  put gracedb call back when testing is done
-				#gracedb = subprocess.Popen((gracedb_prog, "--filename", filename, gracedb_group, gracedb_type, "-"), stdin = subprocess.PIPE)
-				gracedb = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
-				gracedb.stdin.write(message.getvalue())
-				gracedb.stdin.flush()
-				gracedb.stdin.close()
+				if False:
+					resp = gracedb.Client().create(gracedb_group, gracedb_type, filename, message.getvalue())
+					if "error" in resp:
+						print >>sys.stderr, "gracedb upload of %s failed: %s" % (filename, resp["error"])
+					elif self.verbose:
+						if "warning" in resp:
+							print >>sys.stderr, "gracedb issued warning: %s" % resp["warning"]
+						print >>sys.stderr, "event assigned grace ID %s" % resp["output"]
+				else:
+					proc = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
+					proc.stdin.write(message.getvalue())
+					proc.stdin.flush()
+					proc.stdin.close()
 				message.close()
 
 	def update_latency_histogram(self):
