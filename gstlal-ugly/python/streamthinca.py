@@ -355,12 +355,12 @@ class StreamThinca(object):
 			map(real_coinc_inspiral_table.append, self.coinc_inspiral_table)
 
 
-	def flush(self):
+	def flush(self, FAP = None):
 		# invalidate the coinc extractor
 		self.last_coincs = None
 
 		# coincidence
-		noncoinc_sngls = self.run_coincidence(segments.infinity())
+		noncoinc_sngls = self.run_coincidence(segments.infinity(), FAP = FAP)
 
 		# save all remaining triggers that weren't used in coincs
 		noncoinc_sngls.extend(row for row in self.sngl_inspiral_table if row.event_id not in self.ids)
