@@ -586,9 +586,10 @@ class Data(object):
 
 				# hook up a reference to the Data class instance level trials_table
 				self.far.trials_table = self.trials_table
-				
+
+				# FIXME busted, signal only works in main thread
 				# write the new distribution stats to disk
-				self.distribution_stats.to_filename(self.likelihood_file, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = verbose)	
+				#self.distribution_stats.to_filename(self.likelihood_file, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = False)
 
 			# run stream thinca
 			noncoinc_sngls = self.stream_thinca.add_events(events, timestamp, FAP = self.far)
