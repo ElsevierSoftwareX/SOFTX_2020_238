@@ -69,10 +69,9 @@ __date__ = "FIXME"
 
 def mkgeneric(pipeline, src, elem_type_name, **properties):
 	if "name" in properties:
-		name = properties.pop("name")
+		elem = gst.element_factory_make(elem_type_name, properties.pop("name"))
 	else:
-		name = None
-	elem = gst.element_factory_make(elem_type_name, name)
+		elem = gst.element_factory_make(elem_type_name)
 	for name, value in properties.items():
 		elem.set_property(name.replace("_", "-"), value)
 	pipeline.add(elem)
@@ -187,6 +186,10 @@ def mkonlinehoftsrc(pipeline, instrument):
 
 def mkcapsfilter(pipeline, src, caps):
 	return mkgeneric(pipeline, src, "capsfilter", caps = gst.Caps(caps))
+
+
+def mkstatevector(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "lal_statevector", **properties)
 
 
 def mktaginject(pipeline, src, tags):
