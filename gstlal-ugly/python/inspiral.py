@@ -41,6 +41,7 @@ import sys
 import threading
 import time
 from collections import deque
+import resource
 
 try:
 	from ligo import gracedb
@@ -411,7 +412,7 @@ class DistributionsStats(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, verbose = False):
 		#
 		# initialize
 		#
@@ -440,6 +441,7 @@ class Data(object):
 		self.trials_table = far.TrialsTable()
 		self.trials_factor = trials_factor
 		self.far = None
+		self.likelihood_file = likelihood_file
 
 		#
 		# build the XML document
@@ -530,9 +532,12 @@ class Data(object):
 		# Fun output stuff
 		#
 		
+		self.last_time = time.time()
+		self.output_interval = 60
 		self.latency_histogram = rate.BinnedArray(rate.NDBins((rate.LinearPlusOverflowBins(5, 205, 22),)))
 		self.latency_history = deque(maxlen=1000)
 		self.snr_history = deque(maxlen=1000)
+		self.ram_history = deque(maxlen = 1000)
 
 	def appsink_new_buffer(self, elem):
 		self.lock.acquire()
@@ -581,6 +586,9 @@ class Data(object):
 
 				# hook up a reference to the Data class instance level trials_table
 				self.far.trials_table = self.trials_table
+				
+				# write the new distribution stats to disk
+				self.distribution_stats.to_filename(self.likelihood_file, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = verbose)	
 
 			# run stream thinca
 			noncoinc_sngls = self.stream_thinca.add_events(events, timestamp, FAP = self.far)
@@ -597,12 +605,16 @@ class Data(object):
 			# do GraceDB alerts
 			if self.gracedb_far_threshold is not None:
 				self.do_gracedb_alerts()
+				self.update_eye_candy()
 
-				# FIXME update various eye candy outputs, only do when doing gracedb since we must be "online"
-				self.update_latency_histogram()
-				self.write_latency_history()
-				self.write_latency_histogram()
-				self.write_snr_history()
+				# only write output every once in a while
+				if (time.time() - self.last_time) > self.output_interval:
+					self.last_time = time.time()
+					# FIXME update various eye candy outputs, only do when doing gracedb since we must be "online"
+					self.write_latency_history()
+					self.write_latency_histogram()
+					self.write_snr_history()
+					self.write_ram_history()
 		finally:
 			self.lock.release()
 
@@ -691,8 +703,9 @@ class Data(object):
 					proc.stdin.close()
 				message.close()
 
-	def update_latency_histogram(self):
+	def update_eye_candy(self):
 		if self.stream_thinca.last_coincs:
+			self.ram_history.append((time.time(), (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss + resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss) / 1048576.)) # GB
 			latency_val = None
 			snr_val = (0,0)
 			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
@@ -714,6 +727,10 @@ class Data(object):
 	def write_latency_histogram(self):
 		# FIXME Make url request
 		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_latency_histogram.txt")
+		try:
+			os.remove(fname)
+		except OSError:
+			pass
 		f = open(fname, "w")
 		for latency, number in zip(self.latency_histogram.centres()[0][1:-1], self.latency_histogram.array[1:-1]):
 			f.write("%e %e\n" % (latency, number))
@@ -723,19 +740,42 @@ class Data(object):
 	def write_latency_history(self):
 		# FIXME make url request
 		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_latency_history.txt")
+		try:
+			os.remove(fname)
+		except OSError:
+			pass
 		f = open(fname, "w")
 		# first one in the list is sacrificed for a time stamp
 		for time, latency in self.latency_history:
 			f.write("%f %e\n" % (time - self.latency_history[-1][0], latency))
 		f.close()
 	
+	
 	def write_snr_history(self):
 		# FIXME make url request
 		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_snr_history.txt")
+		try:
+			os.remove(fname)
+		except OSError:
+			pass
 		f = open(fname, "w")
 		# first one in the list is sacrificed for a time stamp
 		for time, snr in self.snr_history:
 			f.write("%f %e\n" % (time - self.snr_history[-1][0], snr))
+		f.close()
+	
+	
+	def write_ram_history(self):
+		# FIXME make url request
+		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_ram_history.txt")
+		try:
+			os.remove(fname)
+		except OSError:
+			pass
+		f = open(fname, "w")
+		# first one in the list is sacrificed for a time stamp
+		for time, ram in self.ram_history:
+			f.write("%f %e\n" % (time - self.ram_history[-1][0], ram))
 		f.close()
 
 
