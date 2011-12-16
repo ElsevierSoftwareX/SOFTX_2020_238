@@ -325,6 +325,7 @@ output = inspiral.Data(
 	trials_factor = options.trials_factor,
 	thinca_interval = options.thinca_interval,
 	gracedb_far_threshold = options.gracedb_far_threshold,
+	likelihood_file = options.likelihood_file,
 	verbose = options.verbose
 )
 
