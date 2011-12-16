@@ -445,9 +445,9 @@ static void gstlal_statevector_class_init(GSTLALStateVectorClass *klass)
 		ARG_REQUIRED_ON,
 		g_param_spec_uint(
 			"required-on",
-			"Required on",
-			"Bit mask setting the bits that must be on in the state vector",
-			0, G_MAXUINT32, DEFAULT_REQUIRED_ON,
+			"On bits",
+			"Bit mask setting the bits that must be on in the state vector.  Only as many of the low bits as the input stream is wide will be considered.",
+			0, G_MAXUINT, DEFAULT_REQUIRED_ON,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
@@ -456,9 +456,9 @@ static void gstlal_statevector_class_init(GSTLALStateVectorClass *klass)
 		ARG_REQUIRED_OFF,
 		g_param_spec_uint(
 			"required-off",
-			"Required off",
-			"Bit mask setting the bits that must be off in the state vector",
-			0, G_MAXUINT32, DEFAULT_REQUIRED_OFF,
+			"Off bits",
+			"Bit mask setting the bits that must be off in the state vector.  Only as many of the low bits as the input stream is wide will be considered.",
+			0, G_MAXUINT, DEFAULT_REQUIRED_OFF,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
