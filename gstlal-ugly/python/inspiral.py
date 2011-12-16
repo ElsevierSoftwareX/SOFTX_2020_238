@@ -40,6 +40,7 @@ except ImportError:
 import sys
 import threading
 import time
+from collections import deque
 
 try:
 	from ligo import gracedb
@@ -529,8 +530,9 @@ class Data(object):
 		# Fun output stuff
 		#
 		
-		self.latency_histogram = rate.BinnedArray(rate.NDBins((rate.LinearPlusOverflowBins(10, 200, 21),)))
-		self.google_description_latency_histogram = [("latency", "string"), ("count", "number")]
+		self.latency_histogram = rate.BinnedArray(rate.NDBins((rate.LinearPlusOverflowBins(5, 205, 22),)))
+		self.latency_history = deque(maxlen=1000)
+		self.snr_history = deque(maxlen=1000)
 
 	def appsink_new_buffer(self, elem):
 		self.lock.acquire()
@@ -596,9 +598,11 @@ class Data(object):
 			if self.gracedb_far_threshold is not None:
 				self.do_gracedb_alerts()
 
-			# update the latency histogram
-			# FIXME uncomment when we have settled on how to do it.
-			# self.update_latency_histogram()
+				# FIXME update various eye candy outputs, only do when doing gracedb since we must be "online"
+				self.update_latency_histogram()
+				self.write_latency_history()
+				self.write_latency_histogram()
+				self.write_snr_history()
 		finally:
 			self.lock.release()
 
@@ -606,7 +610,7 @@ class Data(object):
 	def flush(self):
 		# run StreamThinca's .flush().  returns the last remaining
 		# non-coincident sngls.  add them to the distribution
-		for event in self.stream_thinca.flush():
+		for event in self.stream_thinca.flush(FAP = self.far):
 			self.distribution_stats.add_single(event)
 		if self.connection is not None:
 			self.connection.commit()
@@ -689,19 +693,49 @@ class Data(object):
 
 	def update_latency_histogram(self):
 		if self.stream_thinca.last_coincs:
+			latency_val = None
+			snr_val = (0,0)
+			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
 			for coinc_event_id, latency in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "minimum_duration").items():
 				self.latency_histogram[latency,] += 1
+				if latency_val is None:
+					t = float(coinc_inspiral_index[coinc_event_id].get_end())
+					latency_val = (t, latency)
+				snr = coinc_inspiral_index[coinc_event_id].snr
+				if snr >= snr_val[0]:
+					t = float(coinc_inspiral_index[coinc_event_id].get_end())
+					snr_val = (t, snr)
+			if latency_val is not None:
+				self.latency_history.append(latency_val)
+			if snr_val != (0,0):
+				self.snr_history.append(snr_val)
 
-		#FIXME can be smarter than this
-		self.google_data_latency_histogram = []
-		for val in self.latency_histogram.centres()[0]:
-			self.google_data_latency_histogram.append((repr(val), self.latency_histogram[val,])) # strings are required for google api bar charts :/
 
-		import gviz_api
-		data_table = gviz_api.DataTable(self.google_description_latency_histogram)
-		data_table.LoadData(self.google_data_latency_histogram)
-		f = open("/home/channa/public_html/latency.js", "w")
-		f.write(data_table.ToJSonResponse(columns_order=("latency", "count")))
+	def write_latency_histogram(self):
+		# FIXME Make url request
+		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_latency_histogram.txt")
+		f = open(fname, "w")
+		for latency, number in zip(self.latency_histogram.centres()[0][1:-1], self.latency_histogram.array[1:-1]):
+			f.write("%e %e\n" % (latency, number))
+		f.close()
+
+
+	def write_latency_history(self):
+		# FIXME make url request
+		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_latency_history.txt")
+		f = open(fname, "w")
+		# first one in the list is sacrificed for a time stamp
+		for time, latency in self.latency_history:
+			f.write("%f %e\n" % (time - self.latency_history[-1][0], latency))
+		f.close()
+	
+	def write_snr_history(self):
+		# FIXME make url request
+		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_snr_history.txt")
+		f = open(fname, "w")
+		# first one in the list is sacrificed for a time stamp
+		for time, snr in self.snr_history:
+			f.write("%f %e\n" % (time - self.snr_history[-1][0], snr))
 		f.close()
 
 
