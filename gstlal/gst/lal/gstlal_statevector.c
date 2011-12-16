@@ -184,7 +184,7 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *siz
 		return FALSE;
 	}
 
-	*size = width;
+	*size = width / 8;
 
 	return TRUE;
 }
