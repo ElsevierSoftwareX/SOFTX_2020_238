@@ -21,7 +21,6 @@ from glue.ligolw import array
 import glue.ligolw.utils as utils
 import glue.ligolw.utils.segments as ligolw_segments
 from optparse import OptionParser
-from gstlal.svd_bank import read_bank
 from gstlal import inspiral
 from gstlal import inspiral_pipe
 import numpy
@@ -81,7 +80,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		likefile = os.path.split(likelihood_file)[1]
 		path = os.getcwd()
 		# make a new likelihood file
-		likefile = "%s/%d-%s" % (path, job.number, likefile)
+		likefile = "%s/%04d-%s" % (path, job.number, likefile)
 		shutil.copyfile(likelihood_file, likefile)
 		self.add_var_opt("likelihood-file", likefile)
 		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
