@@ -79,6 +79,7 @@ GST_DEBUG_CATEGORY(gstlal_gate_debug);
 #define DEFAULT_LEAKY FALSE
 #define DEFAULT_INVERT FALSE
 
+
 /*
  * ============================================================================
  *
@@ -1297,7 +1298,7 @@ static void class_init(gpointer klass, gpointer class_data)
 		g_param_spec_double(
 			"threshold",
 			"Threshold",
-			"Control threshold",
+			"Output will be flagged as non-gap when magnitude of control input is >= this value.",
 			0, G_MAXDOUBLE, DEFAULT_THRESHOLD,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
@@ -1308,7 +1309,7 @@ static void class_init(gpointer klass, gpointer class_data)
 		g_param_spec_int64(
 			"attack-length",
 			"Attack",
-			"Number of samples of the input stream ahead of negative-to-positive threshold crossing to include in output.",
+			"Number of samples of the input stream ahead of negative-to-positive threshold crossing to include in non-gap output.",
 			G_MININT64, G_MAXINT64, DEFAULT_ATTACK_LENGTH,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
@@ -1319,7 +1320,7 @@ static void class_init(gpointer klass, gpointer class_data)
 		g_param_spec_int64(
 			"hold-length",
 			"Hold",
-			"Number of samples of the input stream following positive-to-negative threshold crossing to include in output.",
+			"Number of samples of the input stream following positive-to-negative threshold crossing to include in non-gap output.",
 			G_MININT64, G_MAXINT64, DEFAULT_HOLD_LENGTH,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
