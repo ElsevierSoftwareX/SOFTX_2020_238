@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 cgitb.enable()
 form = cgi.FieldStorage()
 
-def plot(dir, dataurl, idrange, xlabel = "", ylabel = "", title = ""):
+def plot(dir, dataurl, idrange, datatype = "last", xlabel = "", ylabel = "", title = ""):
 	fig = plt.figure(figsize=(25,4.5),)
 	fig.patch.set_alpha(0.0)
 	h = fig.add_subplot(111, axisbg = 'k')
@@ -27,16 +27,27 @@ def plot(dir, dataurl, idrange, xlabel = "", ylabel = "", title = ""):
 		# FIXME relies on 4 digit id
 		try:
 			tmp = numpy.loadtxt(url)
-			data.append(tmp[-1,1])
+			if datatype == "last":
+				data.append(tmp[-1,1])
+			if datatype == "max":
+				data.append(tmp[:,1].max())
 		except IOError:
 			data.append(-1)
 
+	# first plot the missing data
+	data = numpy.array(data)
+	maxdata = data.max()
+	x = [i for i,d in enumerate(data) if d == -1]
+	badvalue = -0.05 * maxdata
+	baddata = [badvalue for d in data if d == -1]
+	h.bar(x, baddata, color='r', alpha=0.9, linewidth=2)
+	# then the regular data
+	data[data ==  -1] = 0
 	x = numpy.arange(len(data))
 	h.bar(x, data, color='w', alpha=0.75, linewidth=2)
-	h.bar([i for i,d in enumerate(data) if d == -1], [d for d in data if d == -1], color='r', alpha=0.75, linewidth=2)
 	plt.xticks(x+.3, ids, rotation=90)
-	plt.ylabel(ylabel)
-	plt.ylim([-1, max(data)])
+	plt.ylabel(ylabel, fontsize = 18)
+	plt.ylim([badvalue, maxdata])
 	plt.xlim([x[0], x[-1]])
 	if title:
 		plt.title(title, fontsize=18)
@@ -74,13 +85,12 @@ print """
 plot(form.getvalue("dir"), '_ram_history.txt', idrange, ylabel = "RAM (GB)", title = "RAM summary of all jobs, red means data is missing")
 print """
 </div></td></tr>
-<tr>
-<td><div id='canvasc'>
+<tr><td><div id='canvasc'>
 """
-#plot(baseurl+'_snr_history.txt', "plot", ylabel = "SNR", xlabel = "Time since last trigger (s)")
+plot(form.getvalue("dir"), '_snr_history.txt', idrange, datatype = "max", ylabel = "SNR", title = "max(SNR) of recent triggers summary of all jobs, red means data is missing")
 print """
-</div></td>
-<td><div id='canvasd'>
+</div></td></tr>
+<tr><td><div id='canvasd'>
 """
 #plot(baseurl+'_ram_history.txt', "plot", ylabel = "RAM (GB)", xlabel = "Time before now (s)")
 print """
