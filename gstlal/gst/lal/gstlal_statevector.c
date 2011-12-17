@@ -90,6 +90,13 @@ static guint get_input_uint32(void **in)
 }
 
 
+/* FIXME:  remove this when state vector is an int */
+static guint get_input_float32(void **in)
+{
+	return *(*(float **) in)++;
+}
+
+
 /*
  * ============================================================================
  *
@@ -103,7 +110,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_BASE_TRANSFORM_SINK_NAME,
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
-	GST_STATIC_CAPS(
+	GST_STATIC_CAPS(	/* FIXME:  remove float when state vector is an int */
 		"audio/x-raw-int, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
@@ -124,7 +131,12 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"endianness = (int) BYTE_ORDER, " \
 		"width = (int) 8, " \
 		"depth = (int) 8, " \
-		"signed = false"
+		"signed = false; " \
+		"audio/x-raw-float, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) 1, " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) 32"
 	)
 );
 
@@ -255,6 +267,12 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	 */
 
 	s = gst_caps_get_structure(incaps, 0);
+	/* FIXME:  remove this when statevector is an int */
+	if(!strcmp(gst_structure_get_name(s), "audio/x-raw-float")) {
+		element->get_input = get_input_float32;
+		element->mask = 0xffff;
+		return TRUE;
+	}
 	if(!gst_structure_get_int(s, "width", &width)) {
 		GST_ERROR_OBJECT(element, "unable to parse width from %" GST_PTR_FORMAT, incaps);
 		return FALSE;
@@ -316,7 +334,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		while(in < end) {
 			guint input = element->get_input(&in);
-			*out++ = ((input & required_on) == required_on) && ((~input & required_off) == required_off) ? 0xff : 0x00;
+			*out++ = ((input & required_on) == required_on) && ((~input & required_off) == required_off) ? 0x80: 0x00;
 		}
 	} else {
 		/*
