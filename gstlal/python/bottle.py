@@ -2081,8 +2081,8 @@ class WSGIRefServer(ServerAdapter):
             class QuietHandler(WSGIRequestHandler):
                 def log_request(*args, **kw): pass
             self.options['handler_class'] = QuietHandler
-        srv = make_server(self.host, self.port, handler, **self.options)
-        srv.serve_forever()
+        self.srv = make_server(self.host, self.port, handler, **self.options)
+        self.srv.serve_forever()
 
 
 class CherryPyServer(ServerAdapter):
