@@ -40,7 +40,8 @@ programs.
 
 
 %install
-%makeinstall
+# FIXME:  why doesn't % makeinstall macro work?
+DESTDIR=${RPM_BUILD_ROOT} %{__make} install
 # remove .so symlinks from libdir.  these are not included in the .rpm,
 # they will be installed by ldconfig in the post-install script
 [ ${RPM_BUILD_ROOT} != "/" ] && find ${RPM_BUILD_ROOT}/%{_libdir} -name "*.so*" -type l -delete
@@ -49,11 +50,11 @@ programs.
 
 
 %post
-ldconfig %{_libdir}
+ldconfig
 
 
 %postun
-ldconfig %{_libdir}
+ldconfig
 
 
 %clean
