@@ -587,9 +587,19 @@ class Data(object):
 				# hook up a reference to the Data class instance level trials_table
 				self.far.trials_table = self.trials_table
 
-				# FIXME busted, signal only works in main thread
+				# FIXME:  the signal.signal() function is
+				# disabled for the duration of the
+				# .write_fileobj() call to work around some
+				# threading problems.  Glue should be
+				# modified to make signal trapping optional
+				# so that this isn't needed.  Remove when
+				# that's taken care of.
+				#
 				# write the new distribution stats to disk
-				#self.distribution_stats.to_filename(self.likelihood_file, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = False)
+				orig_signal = utils.signal.signal
+				utils.signal.signal = lambda *args: None
+				self.distribution_stats.to_filename(self.likelihood_file, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = False)
+				utils.signal.signal = orig_signal
 
 			# run stream thinca
 			noncoinc_sngls = self.stream_thinca.add_events(events, timestamp, FAP = self.far)

@@ -50,7 +50,8 @@ def plotsnrchisq(url, name = "gstlal_inspiral_likelihood"):
 	from pylal import ligolw_burca_tailor
 	coincparamsdistributions, likelihood_seglists = ligolw_burca_tailor.load_likelihood_data([url], u"gstlal_inspiral_likelihood", verbose = False)
 
-	fig = plt.figure(figsize = (10,7))
+	fig = plt.figure(figsize = (10.5,7))
+	plt.gray()
 	fig.patch.set_alpha(0.0)
 	for i, ifo in enumerate(['H1','H2','L1', 'V1']):
 		ax = fig.add_subplot(2,2,i+1)
@@ -75,7 +76,7 @@ def plotsnrchisq(url, name = "gstlal_inspiral_likelihood"):
 	plt.savefig(f, format="png")
 	print '<img src="data:image/png;base64,',base64.b64encode(f.getvalue()),'"></img>'
 	f.close()
-	
+
 
 
 if "dir" not in form:
