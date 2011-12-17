@@ -1278,7 +1278,7 @@ static void class_init(gpointer klass, gpointer class_data)
 			"Emit signals",
 			"Emit start and stop signals (rate-changed is always emited).  The start and stop signals are emited on gap-to-non-gap and non-gap-to-gap transitions in the output stream respectively.",
 			DEFAULT_EMIT_SIGNALS,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
@@ -1289,7 +1289,7 @@ static void class_init(gpointer klass, gpointer class_data)
 			"Default State",
 			"Control state to assume when control input is not available",
 			DEFAULT_DEFAULT_STATE,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
@@ -1300,7 +1300,7 @@ static void class_init(gpointer klass, gpointer class_data)
 			"Threshold",
 			"Output will be flagged as non-gap when magnitude of control input is >= this value.",
 			0, G_MAXDOUBLE, DEFAULT_THRESHOLD,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
@@ -1311,7 +1311,7 @@ static void class_init(gpointer klass, gpointer class_data)
 			"Attack",
 			"Number of samples of the input stream ahead of negative-to-positive threshold crossing to include in non-gap output.",
 			G_MININT64, G_MAXINT64, DEFAULT_ATTACK_LENGTH,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
@@ -1322,7 +1322,7 @@ static void class_init(gpointer klass, gpointer class_data)
 			"Hold",
 			"Number of samples of the input stream following positive-to-negative threshold crossing to include in non-gap output.",
 			G_MININT64, G_MAXINT64, DEFAULT_HOLD_LENGTH,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
@@ -1333,7 +1333,7 @@ static void class_init(gpointer klass, gpointer class_data)
 			"Leaky",
 			"Drop buffers instead of forwarding gaps.",
 			DEFAULT_LEAKY,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
@@ -1344,7 +1344,7 @@ static void class_init(gpointer klass, gpointer class_data)
 			"Invert",
 			"Logically invert the control input.  If false (default) then the output is a gap if and only if the control is <= threshold;  if true then the output is a gap if and only if the control is >= threshold.",
 			DEFAULT_INVERT,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 
@@ -1441,18 +1441,11 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->control_queue = g_queue_new();
 	element->control_queue_head_changed = g_cond_new();
 	element->control_sample_func = NULL;
-	element->emit_signals = DEFAULT_EMIT_SIGNALS;
-	element->default_state = DEFAULT_DEFAULT_STATE;
 	element->last_state = FALSE;
-	element->threshold = DEFAULT_THRESHOLD;
-	element->attack_length = DEFAULT_ATTACK_LENGTH;
-	element->hold_length = DEFAULT_HOLD_LENGTH;
-	element->leaky = DEFAULT_LEAKY;
 	element->rate = 0;
 	element->unit_size = 0;
 	element->control_rate = 0;
 	element->need_discont = FALSE;
-	element->invert_control = DEFAULT_INVERT;
 }
 
 
