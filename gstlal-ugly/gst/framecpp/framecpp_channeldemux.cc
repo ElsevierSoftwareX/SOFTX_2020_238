@@ -460,6 +460,8 @@ static GstFlowReturn frvect_to_buffer_and_push(GSTFrameCPPChannelDemux *element,
 
 	if(gst_caps_is_equal(GST_BUFFER_CAPS(buffer), GST_PAD_CAPS(pad)))
 		gst_buffer_set_caps(buffer, GST_PAD_CAPS(pad));
+	else
+		GST_LOG_OBJECT(element, "new caps for %s: %P", name, GST_BUFFER_CAPS(buffer));
 
 	/*
 	 * check for disconts
