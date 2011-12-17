@@ -356,15 +356,13 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case ARG_REQUIRED_ON: {
+	case ARG_REQUIRED_ON:
 		element->required_on = g_value_get_uint(value);
 		break;
-	}
 
-	case ARG_REQUIRED_OFF: {
+	case ARG_REQUIRED_OFF:
 		element->required_off = g_value_get_uint(value);
 		break;
-	}
 
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -387,15 +385,13 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case ARG_REQUIRED_ON: {
+	case ARG_REQUIRED_ON:
 		g_value_set_uint(value, element->required_on);
 		break;
-	}
 
-	case ARG_REQUIRED_OFF: {
+	case ARG_REQUIRED_OFF:
 		g_value_set_uint(value, element->required_off);
 		break;
-	}
 
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
