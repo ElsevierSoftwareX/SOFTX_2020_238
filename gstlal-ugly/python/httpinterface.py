@@ -86,7 +86,12 @@ def httpd_stop(httpd, httpd_thread, verbose = False):
 	"""
 	if verbose:
 		print >>sys.stderr, "stopping http server on http://%s:%d ..." % httpd.srv.server_address,
-	httpd.srv.shutdown()
+	try:
+		httpd.srv.shutdown()
+	except Exception, e:
+		result = "failed: %s" % str(e)
+	else:
+		result = "done"
 	httpd_thread.join()
 	if verbose:
-		print >>sys.stderr, "done"
+		print >>sys.stderr, result
