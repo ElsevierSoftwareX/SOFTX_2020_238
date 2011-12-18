@@ -262,6 +262,18 @@ static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstCloc
  * 0 if control data is available for (at least part of) the times
  * requested and is greather than or equal to the threshold for at least 1
  * sample therein.
+ *
+ * when converting timestamps to control stream sample offsets, if the
+ * requested timestamps do not correspond exactly to the times of samples
+ * they are truncated down to the most recent sample.  this is necessary to
+ * accomodate control streams with lower sample rates than the stream being
+ * controlled, but can cause single-sample jitter when working with streams
+ * having nearly the same sample rates.  the jittler is unlikely to be
+ * noticed, but the former results in significant misbehaviour.  in the
+ * future, the plan is to rework the control stream handling so that on
+ * input it is digested into a sorted sequence of state transitions against
+ * which the stream being controled is compared.  that design will improve
+ * the performance and solve these timestamp problems correctly.
  */
 
 
@@ -287,12 +299,12 @@ static void g_list_for_each_gst_buffer_peak(gpointer data, gpointer user_data)
 	if(tmin <= GST_BUFFER_TIMESTAMP(buf))
 		offset = 0;
 	else {
-		offset = gst_util_uint64_scale_int_round(tmin - GST_BUFFER_TIMESTAMP(buf), element->control_rate, GST_SECOND);
+		offset = gst_util_uint64_scale_int(tmin - GST_BUFFER_TIMESTAMP(buf), element->control_rate, GST_SECOND);
 		if(offset >= length)
 			return;
 	}
 
-	last = gst_util_uint64_scale_int_round(tmax - GST_BUFFER_TIMESTAMP(buf), element->control_rate, GST_SECOND);
+	last = gst_util_uint64_scale_int(tmax - GST_BUFFER_TIMESTAMP(buf), element->control_rate, GST_SECOND);
 	if(last <= offset)
 		/* always test at least one sample */
 		last = offset + 1;
@@ -856,9 +868,9 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * tell the world about state changes
 		 */
 
-		if(element->emit_signals && 0 != element->last_state) {
+		if(element->emit_signals && FALSE != element->last_state) {
 			g_signal_emit(G_OBJECT(element), signals[SIGNAL_STOP], 0, GST_BUFFER_TIMESTAMP(sinkbuf), NULL);
-			element->last_state = 0;	/* 0 = off */
+			element->last_state = FALSE;
 		}
 
 		if(element->leaky) {
@@ -920,11 +932,12 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			gint state_now = control_get_state(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) (start + length) - element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) (start + length) + element->attack_length, element->rate));
 			if(length == 0)
 				/*
-				 * state for this interval
+				 * first iteration sets state for this
+				 * interval
 				 */
 
 				state = state_now;
-			else if(state != state_now)
+			else if(state_now != state)
 				/*
 				 * control state has changed
 				 */
@@ -934,18 +947,20 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		g_mutex_unlock(element->control_lock);
 
 		/*
-		 * apply default state if needed
-		 */
-
-		if(state < 0)
-			state = element->default_state;
-
-		/*
-		 * if the interval has zero length, move on
+		 * if the interval has zero length, ignore it
 		 */
 
 		if(!length)
 			continue;
+
+		/*
+		 * apply default state if needed.  after this, state can
+		 * only be 0 or 1.
+		 */
+
+		if(state < 0)
+			state = element->default_state;
+		g_assert(state == TRUE || state == FALSE);
 
 		/*
 		 * if the output state has changed, tell the world about it
@@ -953,17 +968,17 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		timestamp = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), start, sinkbuf_length);
 		if(element->emit_signals && state != element->last_state) {
-			g_signal_emit(G_OBJECT(element), signals[state > 0 ? SIGNAL_START : SIGNAL_STOP], 0, timestamp, NULL);
+			g_signal_emit(G_OBJECT(element), signals[state ? SIGNAL_START : SIGNAL_STOP], 0, timestamp, NULL);
 			element->last_state = state;
 		}
 
 		/*
 		 * if the output is a gap and we're in leaky mode, discard
-		 * it.  if skipping an interval with non-zero length, next
-		 * buffer must be a discont
+		 * it.  next buffer must be a discont because we know the
+		 * gap has non-zero length
 		 */
 
-		if(state <= 0 && element->leaky) {
+		if(!state && element->leaky) {
 			element->need_discont = TRUE;
 			continue;
 		}
@@ -1010,11 +1025,11 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		element->need_discont = FALSE;
 
 		/*
-		 * if control input was below threshold or
-		 * unavailable then flag buffer as silence.
+		 * if control input was below threshold then flag buffer as
+		 * silence.
 		 */
 
-		if(state <= 0) {
+		if(!state) {
 			srcbuf = gst_buffer_make_metadata_writable(srcbuf);
 			GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 		}
@@ -1060,7 +1075,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		g_mutex_lock(element->control_lock);
 		element->t_sink_head = GST_CLOCK_TIME_NONE;
 		element->sink_eos = FALSE;
-		element->last_state = FALSE;
+		element->last_state = -1;	/* force signal on initial state */
 		element->need_discont = TRUE;
 		g_mutex_unlock(element->control_lock);
 		break;
