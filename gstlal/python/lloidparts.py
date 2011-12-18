@@ -39,6 +39,7 @@ pygst.require('0.10')
 import gst
 
 
+from gstlal import bottle
 from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import simulation
@@ -334,7 +335,14 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 	# nofakedisconts element.
 	#
 
-	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, name = "lal_whiten_%s" % instrument)
+	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7)
+	# export PSD in ascii text format
+	@bottle.route("/%s/psd.txt" % instrument)
+	def get_psd_txt(elem = head):
+		delta_f = elem.get_property("delta-f")
+		yield "# frequency\tspectral density\n"
+		for i, value in enumerate(elem.get_property("mean-psd")):
+			yield "%.16g %.16g\n" % (i * delta_f, value)
 	if psd is None:
 		# use running average PSD
 		head.set_property("psd-mode", 0)
