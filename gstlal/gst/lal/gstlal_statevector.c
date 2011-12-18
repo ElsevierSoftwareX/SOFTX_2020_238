@@ -269,6 +269,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	s = gst_caps_get_structure(incaps, 0);
 	/* FIXME:  remove this when statevector is an int */
 	if(!strcmp(gst_structure_get_name(s), "audio/x-raw-float")) {
+		GST_WARNING_OBJECT(element, "using 32-bit float --> 16 bit int translator.  this will be removed in future versions!");
 		element->get_input = get_input_float32;
 		element->mask = 0xffff;
 		return TRUE;
