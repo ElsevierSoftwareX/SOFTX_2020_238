@@ -85,7 +85,7 @@ def httpd_stop(httpd, httpd_thread, verbose = False):
 	explicitly call this function.
 	"""
 	if verbose:
-		print >>sys.stderr, "stopping http server on http://%s:%d ..." % httpd.src.server_address,
+		print >>sys.stderr, "stopping http server on http://%s:%d ..." % httpd.srv.server_address,
 	httpd.srv.shutdown()
 	httpd_thread.join()
 	if verbose:
