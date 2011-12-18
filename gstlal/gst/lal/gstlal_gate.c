@@ -1441,7 +1441,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 	element->control_queue = g_queue_new();
 	element->control_queue_head_changed = g_cond_new();
 	element->control_sample_func = NULL;
-	element->last_state = FALSE;
+	element->last_state = -1;	/* force signal on initial state */
 	element->rate = 0;
 	element->unit_size = 0;
 	element->control_rate = 0;
