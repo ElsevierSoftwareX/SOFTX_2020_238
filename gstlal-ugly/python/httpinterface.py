@@ -32,11 +32,10 @@ Stuff to help add an http control and query interface to a program.
 
 
 import atexit
-import BaseHTTPServer
 import socket
-import SocketServer
 import sys
 import threading
+from gstlal import bottle
 
 
 #
@@ -48,7 +47,7 @@ import threading
 #
 
 
-def start_servers(port, handler_class, verbose = False):
+def start_servers(port, verbose = False):
 	"""
 	Utility to start http servers on all interfaces.  All servers are
 	started listening on the given port, and will use the hander_class
@@ -64,15 +63,15 @@ def start_servers(port, handler_class, verbose = False):
 	started by this function.
 	"""
 	servers_and_threads = []
-	for (ignored, ignored, ignored, ignored, sockaddr) in socket.getaddrinfo(None, port, socket.AF_INET, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST | socket.AI_PASSIVE):
-		httpd = SocketServer.ThreadingTCPServer(sockaddr, handler_class)
-		httpd_thread = threading.Thread(target = httpd.serve_forever)
+	for (ignored, ignored, ignored, ignored, (host, port)) in socket.getaddrinfo(None, port, socket.AF_INET, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST | socket.AI_PASSIVE):
+		httpd = bottle.WSGIRefServer(host = host, port = port)
+		httpd_thread = threading.Thread(target = lambda: httpd.run(bottle.default_app()))
 		httpd_thread.daemon = True
 		httpd_thread.start()
 		atexit.register(httpd_stop, httpd, httpd_thread, verbose = verbose)
 		servers_and_threads.append((httpd, httpd_thread))
 		if verbose:
-			print >>sys.stderr, "started http server on %s" % repr(sockaddr)
+			print >>sys.stderr, "started http server on http://%s:%d" % (host, port)
 	if not servers_and_threads:
 		raise ValueError("unable to start servers on port %d" % port)
 	return tuple(servers_and_threads)
@@ -86,8 +85,8 @@ def httpd_stop(httpd, httpd_thread, verbose = False):
 	explicitly call this function.
 	"""
 	if verbose:
-		print >>sys.stderr, "stopping http server on %s ..." % repr(httpd.server_address),
-	httpd.shutdown()
+		print >>sys.stderr, "stopping http server on http://%s:%d ..." % httpd.src.server_address,
+	httpd.srv.shutdown()
 	httpd_thread.join()
 	if verbose:
 		print >>sys.stderr, "done"
