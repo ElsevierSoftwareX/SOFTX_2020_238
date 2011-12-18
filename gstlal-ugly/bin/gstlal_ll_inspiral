@@ -29,13 +29,13 @@
 
 import os
 import sys
-import threading
 import warnings
 from optparse import OptionParser
-import signal
-import time
 import resource
+import signal
 import subprocess
+import time
+
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -57,7 +57,9 @@ from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import reference_psd
 from gstlal import inspiral
+from gstlal import httpinterface
 from pylal.date import XLALUTCToGPS
+
 
 def excepthook(*args):
 	# system exception hook that forces hard exit.  without this,
@@ -98,6 +100,7 @@ def smrepair():
 def now():
 	return XLALUTCToGPS(time.gmtime())
 	#return LIGOTimeGPS(time.time() - 315964786)
+
 
 #
 # =============================================================================
@@ -197,6 +200,7 @@ options, filenames, process_params, svd_banks, detectors = parse_command_line()
 frame_segments = dict([(instrument, None) for instrument in detectors])
 veto_segments = None
 
+
 #
 # set up the PSDs
 #
@@ -217,7 +221,9 @@ else:
 # Parse template banks
 #
 
+
 banks = inspiral.parse_bank_files(svd_banks, verbose = options.verbose)
+
 
 #
 # Build pipeline
@@ -293,12 +299,14 @@ if options.verbose:
 # Note: It assumes injections are present
 #
 
+
 distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
 
 
 #
 # build output document
 #
+
 
 # FIXME now to "infinity"
 start = now()
@@ -339,17 +347,29 @@ appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps
 if options.verbose:
 	print >>sys.stderr, "attached %d, done" % len(appsinks)
 
+
 #
 # if we request a dot graph of the pipeline, set it up
 #
+
 
 if options.write_pipeline is not None:
 	inspiral.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
 	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
 
+
+#
+# start http interface
+#
+
+# FIXME: don't hard-code port
+httpinterface.start_servers(16953, verbose = options.verbose)
+
+
 #
 # Run pipeline
 #
+
 
 # repair the shared memory just in case before starting
 smrepair()
@@ -365,9 +385,11 @@ if options.write_pipeline is not None:
 if options.verbose:
 	print >>sys.stderr, "running pipeline ..."
 
+
 #
 # setup sigint handler to shutdown pipeline
 #
+
 
 def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.keys()):
 	print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" % (signal,)
@@ -380,10 +402,20 @@ def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.k
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
-# away we go...
+
+#
+# run pipeline
+#
+
+
 mainloop.run()
 
-# all done
+
+#
+# done
+#
+
+
 output.filename = "%s-%d-%d.sqlite" % (options.output.split(".sqlite")[0], start, now())
 output.flush()
 output.write_output_file(likelihood_file = options.likelihood_file, verbose = options.verbose)
