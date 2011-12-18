@@ -288,7 +288,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = statevector)
 		# export state vector state
 		src.set_property("emit-signals", True)
-		bottle.route("/%s/state_vector.txt" % instrument)(get_state_vector(src).text)
+		bottle.route("/%s/current_segment.txt" % instrument)(get_state_vector(src).text)
 	else:
 		src = pipeparts.mkaudioconvert(pipeline, src)
 
