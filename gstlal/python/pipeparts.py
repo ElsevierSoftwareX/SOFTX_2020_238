@@ -81,6 +81,18 @@ def mkgeneric(pipeline, src, elem_type_name, **properties):
 
 
 #
+# deferred link helper
+#
+
+
+def src_deferred_link(src, srcpadname, sinkpad):
+	def pad_added(element, pad, (srcpadname, sinkpad)):
+		if pad.get_name() == srcpadname:
+			pad.link(sinkpad)
+	src.connect("pad-added", pad_added, (srcpadname, sinkpad))
+
+
+#
 # =============================================================================
 #
 #                                Pipeline Parts
@@ -142,12 +154,6 @@ def mklvshmsrc(pipeline, **properties):
 
 def mkframecppchanneldemux(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "framecpp_channeldemux", **properties)
-
-def framecppchanneldemux_link(src, srcpadname, sinkpad):
-	def pad_added(element, pad, (srcpadname, sinkpad)):
-		if pad.get_name() == srcpadname:
-			pad.link(sinkpad)
-	src.connect("pad-added", pad_added, (srcpadname, sinkpad))
 
 
 def mkframesink(pipeline, src, **properties):
@@ -324,6 +330,7 @@ def mkfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = No
 	properties = dict((name, value) for name, value in zip(("latency", "fir_matrix", "time_domain", "block_stride"), (latency, fir_matrix, time_domain, block_stride)) if value is not None)
 	return mkgeneric(pipeline, src, "lal_firbank", **properties)
 
+
 def mkiirbank(pipeline, src, a1, b0, delay, name=None):
 	properties = {}
 	if name is not None:
@@ -348,12 +355,10 @@ def mkreblock(pipeline, src, **properties):
 
 
 def mksumsquares(pipeline, src, weights = None):
-	elem = gst.element_factory_make("lal_sumsquares")
 	if weights is not None:
-		elem.set_property("weights", weights)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+		return mkgeneric(pipeline, src, "lal_sumsquares", weights = weights)
+	else:
+		return mkgeneric(pipeline, src, "lal_sumsquares")
 
 
 def mkgate(pipeline, src, threshold = None, control = None, **properties):
@@ -370,12 +375,10 @@ def mkgate(pipeline, src, threshold = None, control = None, **properties):
 
 
 def mkmatrixmixer(pipeline, src, matrix = None):
-	elem = gst.element_factory_make("lal_matrixmixer")
 	if matrix is not None:
-		elem.set_property("matrix", matrix)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+		return mkgeneric(pipeline, src, "lal_matrixmixer", matrix = matrix)
+	else:
+		return mkgeneric(pipeline, src, "lal_matrixmixer")
 
 
 def mktogglecomplex(pipeline, src):
@@ -482,17 +485,11 @@ def mkavimux(pipeline, src):
 	return mkgeneric(pipeline, src, "avimux")
 
 
-def mkaudioconvert(pipeline, src, pad_name = None, caps_string = None):
-	elem = gst.element_factory_make("audioconvert")
-	pipeline.add(elem)
-	if pad_name is None:
-		src.link(elem)
-	else:
-		src.link_pads(pad_name, elem, "sink")
-	src = elem
+def mkaudioconvert(pipeline, src, caps_string = None):
+	elem = mkgeneric(pipeline, src, "audioconvert")
 	if caps_string is not None:
-		src = mkcapsfilter(pipeline, src, caps_string)
-	return src
+		elem = mkcapsfilter(pipeline, elem, caps_string)
+	return elem
 
 
 def mkaudiorate(pipeline, src, pad_name = None, verbose = False, **properties):
