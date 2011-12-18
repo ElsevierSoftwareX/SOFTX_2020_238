@@ -248,12 +248,26 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 	#
 
 	if online_data:
-		elem = gst.element_factory_make("audioconvert")
-		pipeline.add(elem)
-		pipeparts.framecppchanneldemux_link(src, "%s:%s" % (instrument, detector.channel), elem.get_pad("sink"))
-		src = elem
-		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
-		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, verbose = verbose)
+		# strain
+		strain = pipeparts.mkaudioconvert(pipeline, None)
+		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, detector.channel), strain.get_pad("sink"))
+		strain = pipeparts.mkqueue(pipeline, strain, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
+		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, verbose = verbose)
+
+		# state vector
+		statevector = gst.element_factory_make("queue")
+		statevector.set_property("max_size_buffers", 0)
+		statevector.set_property("max_size_bytes", 0)
+		statevector.set_property("max_size_time", gst.SECOND * 60 * 10) # 10 minutes of buffering
+		pipeline.add(statevector)
+		# FIXME:  don't hard-code channel name
+		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, "FAKE-STATE_VECTOR"), statevector.get_pad("sink"))
+		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True, verbose = verbose)
+		# FIXME:  what bits do we need on and off?  and don't hard code them
+		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 45)
+
+		# use state vector to gate strain
+		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = statevector)
 	else:
 		src = pipeparts.mkaudioconvert(pipeline, src)
 
