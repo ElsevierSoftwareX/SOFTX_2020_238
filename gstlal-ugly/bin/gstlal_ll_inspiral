@@ -140,14 +140,6 @@ def parse_command_line():
 
 	options, filenames = parser.parse_args()
 
-	# FIXME a hack to output data until the webserver is in place without passing around yet more variables
-	if options.job_tag is not None:
-		os.environ['GSTLAL_LL_JOB'] = options.job_tag
-		host = socket.gethostname()
-		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_registry.txt")
-		f = open(fname, "w")
-		f.write("%s %s" % (options.job_tag, host))
-		f.close
 
 	if options.reference_psd is None and not options.track_psd:
 		raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
@@ -187,6 +179,22 @@ def parse_command_line():
 	# it in with the options is a convenient home
 	options.psd_fft_length = 8	# seconds
 
+	# FIXME a hack to output data until the webserver is in place without passing around yet more variables
+	if options.job_tag is not None:
+		os.environ['GSTLAL_LL_JOB'] = options.job_tag
+		host = socket.gethostname()
+		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_registry.txt")
+		f = open(fname, "w")
+		f.write("%s %s" % (options.job_tag, host))
+		f.close()
+		for instrument in set(svd_banks.keys()):
+			# make sure to mark a 0 sample audiorate add just so the file exists
+			# FIXME filename tied to audiorate name in lloidparts / pipeparts 
+			fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_%saudiorate.txt" % (instrument,))
+			f = open(fname, "w")
+			f.write("%.14g 0" % (now(),))
+			f.close()
+	
 	return options, filenames, process_params, svd_banks, detectors
 
 
