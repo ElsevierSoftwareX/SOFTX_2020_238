@@ -34,8 +34,12 @@ from optparse import OptionParser
 import resource
 import signal
 import subprocess
+<<<<<<< HEAD
 import time
 
+=======
+import socket
+>>>>>>> reduce virtual memory footprint, add node registry file, make signal handler only emit EOS once
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -80,6 +84,8 @@ sys.excepthook = excepthook
 
 maxproc = resource.getrlimit(resource.RLIMIT_NPROC)[1]
 resource.setrlimit(resource.RLIMIT_NPROC, (maxproc, maxproc))
+maxstack = resource.getrlimit(resource.RLIMIT_STACK)[1]
+resource.setrlimit(resource.RLIMIT_STACK, (2 * 1024**2, maxstack)) # 2MB per thread, not 10
 
 
 #
@@ -140,6 +146,11 @@ def parse_command_line():
 	# FIXME a hack to output data until the webserver is in place without passing around yet more variables
 	if options.job_tag is not None:
 		os.environ['GSTLAL_LL_JOB'] = options.job_tag
+		host = socket.gethostname()
+		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_registry.txt")
+		f = open(fname, "w")
+		f.write("%s %s" % (options.job_tag, host))
+		f.close
 
 	if options.reference_psd is None and not options.track_psd:
 		raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
@@ -390,12 +401,21 @@ if options.verbose:
 # setup sigint handler to shutdown pipeline
 #
 
+class SigData(object):
+	def __init__(self):
+		self.has_been_signaled = False
 
-def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.keys()):
-	print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" % (signal,)
-	# override file name with approximate interval
-	bus = pipeline.get_bus()
-	bus.post(gst.message_new_eos(pipeline))
+sigdata = SigData()
+
+def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.keys(), sigdata = sigdata):
+	if not sigdata.has_been_signaled:
+		print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" % (signal,)
+		# override file name with approximate interval
+		bus = pipeline.get_bus()
+		bus.post(gst.message_new_eos(pipeline))
+		sigdata.has_been_signaled = True
+	else:
+		print >>sys.stderr, "*** received SIG %d, but already handled... ***" % (signal,)
 
 # this is how the program stops gracefully, it is the only way to stop it.
 # Otherwise it runs forever man.
