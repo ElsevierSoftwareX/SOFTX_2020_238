@@ -270,7 +270,8 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		strain = pipeparts.mkaudioconvert(pipeline, None)
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, detector.channel), strain.get_pad("sink"))
 		strain = pipeparts.mkqueue(pipeline, strain, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
-		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, verbose = verbose)
+		#FIXME don't hardcode request = True
+		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, request = True)
 
 		# state vector
 		statevector = gst.element_factory_make("queue")
