@@ -34,12 +34,9 @@ from optparse import OptionParser
 import resource
 import signal
 import subprocess
-<<<<<<< HEAD
 import time
-
-=======
 import socket
->>>>>>> reduce virtual memory footprint, add node registry file, make signal handler only emit EOS once
+
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
