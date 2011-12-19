@@ -281,7 +281,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		pipeline.add(statevector)
 		# FIXME:  don't hard-code channel name
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, "FAKE-STATE_VECTOR"), statevector.get_pad("sink"))
-		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True, verbose = verbose)
+		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True, request = True)
 		# FIXME:  what bits do we need on and off?  and don't hard code them
 		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 45)
 
