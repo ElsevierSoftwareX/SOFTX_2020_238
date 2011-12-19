@@ -62,7 +62,7 @@ done
 
 outf=$er1_start-`echo $er1_end - $er1_start | bc`-wnb100df100t100-burstinj.xml
 
-echo "lalapps_binj  --gps-end-time $er1_end  --gps-start-time $er1_start  --max-e-over-r2 $wnb_energy_over_r2_max  --min-e-over-r2 $wnb_energy_over_r2_min  --min-duration 0.1 --max-duration 0.1 --min-bandwidth 100 --max-bandwidth 100 --min-frequency 100 --max-frequency 100 --population all_sky_btlwnb --seed $er1_start --time-step `echo 1.0/$wnb_rate | bc -l` --user-tag "ER1 Burst WNB injections" --time-slide-file HLV_ZERO_LAG.xml --output $outf"
+echo "lalapps_binj  --gps-end-time $er1_end  --gps-start-time $er1_start  --max-e-over-r2 $wnb_energy_over_r2_max  --min-e-over-r2 $wnb_energy_over_r2_min  --min-duration 0.1 --max-duration 0.1 --min-bandwidth 100 --max-bandwidth 100 --min-frequency 100 --max-frequency 100 --population all_sky_btlwnb --jitter 100 --seed 1234 --time-step `echo 1.0/$wnb_rate | bc -l` --user-tag "ER1 Burst WNB injections" --time-slide-file HLV_ZERO_LAG.xml --output $outf"
 
 lalapps_binj  \
 	--gps-end-time $er1_end  \
@@ -76,7 +76,8 @@ lalapps_binj  \
 	--min-frequency 100 \
 	--max-frequency 100 \
 	--population all_sky_btlwnb \
-	--seed $er1_start \
+	--seed 1234 \
+	--jitter 100 \
 	--time-step `echo 1.0/$wnb_rate | bc -l` \
 	--user-tag "ER1 Burst WNB injections" \
 	--time-slide-file HLV_ZERO_LAG.xml \
@@ -84,7 +85,7 @@ lalapps_binj  \
 
 outf=$er1_start-`echo $er1_end - $er1_start | bc`-wnb1000df10t100-burstinj.xml
 
-echo "lalapps_binj  --gps-end-time $er1_end  --gps-start-time $er1_start  --max-e-over-r2 $wnb_energy_over_r2_max  --min-e-over-r2 $wnb_energy_over_r2_min  --min-duration 0.1 --max-duration 0.1 --min-bandwidth 10 --max-bandwidth 10 --min-frequency 1000 --max-frequency 1000 --population all_sky_btlwnb --seed $er1_start --time-step `echo 1.0/$wnb_rate | bc -l` --user-tag "ER1 Burst WNB injections" --time-slide-file HLV_ZERO_LAG.xml --output $outf"
+echo "lalapps_binj  --gps-end-time $er1_end  --gps-start-time $er1_start  --max-e-over-r2 $wnb_energy_over_r2_max  --min-e-over-r2 $wnb_energy_over_r2_min  --min-duration 0.1 --max-duration 0.1 --min-bandwidth 10 --max-bandwidth 10 --min-frequency 1000 --max-frequency 1000 --population all_sky_btlwnb --jitter 100 --seed 1243 --time-step `echo 1.0/$wnb_rate | bc -l` --user-tag "ER1 Burst WNB injections" --time-slide-file HLV_ZERO_LAG.xml --output $outf"
 
 lalapps_binj  \
 	--gps-end-time $er1_end  \
@@ -98,7 +99,8 @@ lalapps_binj  \
 	--min-frequency 1000 \
 	--max-frequency 1000 \
 	--population all_sky_btlwnb \
-	--seed $er1_start \
+	--seed 1243 \
+	--jitter 100 \
 	--time-step `echo 1.0/$wnb_rate | bc -l` \
 	--user-tag "ER1 Burst WNB injections" \
 	--time-slide-file HLV_ZERO_LAG.xml \
@@ -106,7 +108,7 @@ lalapps_binj  \
 
 outf=$er1_start-`echo $er1_end - $er1_start | bc`-wnb1000df100t10-burstinj.xml
 
-echo "lalapps_binj  --gps-end-time $er1_end  --gps-start-time $er1_start  --max-e-over-r2 $wnb_energy_over_r2_max  --min-e-over-r2 $wnb_energy_over_r2_min  --min-duration 0.01 --max-duration 0.01 --min-bandwidth 100 --max-bandwidth 100 --min-frequency 1000 --max-frequency 1000 --population all_sky_btlwnb --seed $er1_start --time-step `echo 1.0/$wnb_rate | bc -l` --user-tag "ER1 Burst WNB injections" --time-slide-file HLV_ZERO_LAG.xml --output $outf"
+echo "lalapps_binj  --gps-end-time $er1_end  --gps-start-time $er1_start  --max-e-over-r2 $wnb_energy_over_r2_max  --min-e-over-r2 $wnb_energy_over_r2_min  --min-duration 0.01 --max-duration 0.01 --min-bandwidth 100 --max-bandwidth 100 --min-frequency 1000 --max-frequency 1000 --population all_sky_btlwnb --jitter 100 --seed 1423 --time-step `echo 1.0/$wnb_rate | bc -l` --user-tag "ER1 Burst WNB injections" --time-slide-file HLV_ZERO_LAG.xml --output $outf"
 
 lalapps_binj  \
 	--gps-end-time $er1_end  \
@@ -120,7 +122,8 @@ lalapps_binj  \
 	--min-frequency 1000 \
 	--max-frequency 1000 \
 	--population all_sky_btlwnb \
-	--seed $er1_start \
+	--jitter 100 \
+	--seed 1423 \
 	--time-step `echo 1.0/$wnb_rate | bc -l` \
 	--user-tag "ER1 Burst WNB injections" \
 	--time-slide-file HLV_ZERO_LAG.xml \
@@ -128,7 +131,7 @@ lalapps_binj  \
 
 outf=$er1_start-`echo $er1_end - $er1_start | bc`-wnb1000df1000t100-burstinj.xml
 
-echo "lalapps_binj  --gps-end-time $er1_end  --gps-start-time $er1_start  --max-e-over-r2 $wnb_energy_over_r2_max  --min-e-over-r2 $wnb_energy_over_r2_min  --min-duration 0.1 --max-duration 0.1 --min-bandwidth 1000 --max-bandwidth 1000 --min-frequency 1000 --max-frequency 1000 --population all_sky_btlwnb --seed $er1_start --time-step `echo 1.0/$wnb_rate | bc -l` --user-tag "ER1 Burst WNB injections" --time-slide-file HLV_ZERO_LAG.xml --output $outf"
+echo "lalapps_binj  --gps-end-time $er1_end  --gps-start-time $er1_start  --max-e-over-r2 $wnb_energy_over_r2_max  --min-e-over-r2 $wnb_energy_over_r2_min  --min-duration 0.1 --max-duration 0.1 --min-bandwidth 1000 --max-bandwidth 1000 --min-frequency 1000 --max-frequency 1000 --population all_sky_btlwnb --jitter 100 --seed 4123 --time-step `echo 1.0/$wnb_rate | bc -l` --user-tag "ER1 Burst WNB injections" --time-slide-file HLV_ZERO_LAG.xml --output $outf"
 
 lalapps_binj  \
 	--gps-end-time $er1_end  \
@@ -142,7 +145,8 @@ lalapps_binj  \
 	--min-frequency 1000 \
 	--max-frequency 1000 \
 	--population all_sky_btlwnb \
-	--seed $er1_start \
+	--jitter 100 \
+	--seed 4123 \
 	--time-step `echo 1.0/$wnb_rate | bc -l` \
 	--user-tag "ER1 Burst WNB injections" \
 	--time-slide-file HLV_ZERO_LAG.xml \
@@ -152,7 +156,7 @@ lalapps_binj  \
 
 outf=$er1_start-`echo $er1_end - $er1_start | bc`-stringcusp-burstinj.xml
 
-echo "lalapps_binj  --gps-end-time $er1_end  --gps-start-time $er1_start --min-frequency 149 --max-frequency 150 --population string_cusp --min-amplitude 1e-21 --max-amplitude 1e-21 --seed $er1_start --time-step `echo 1.0/$sc_rate | bc -l` --user-tag "ER1 Burst string cusp injections" --time-slide-file HLV_ZERO_LAG.xml --output $outf"
+echo "lalapps_binj  --gps-end-time $er1_end  --gps-start-time $er1_start --min-frequency 149 --max-frequency 150 --population string_cusp --min-amplitude 1e-21 --max-amplitude 1e-21 --jitter 100 --seed 4321 --time-step `echo 1.0/$sc_rate | bc -l` --jitter 100 --user-tag "ER1 Burst string cusp injections" --time-slide-file HLV_ZERO_LAG.xml --output $outf"
 
 lalapps_binj  \
 	--gps-end-time $er1_end  \
@@ -162,7 +166,8 @@ lalapps_binj  \
 	--population string_cusp \
 	--min-amplitude 1e-21 \
 	--max-amplitude 1e-20 \
-	--seed $er1_start \
+	--jitter 100 \
+	--seed 4321 \
 	--time-step `echo 1.0/$sc_rate | bc -l` \
 	--user-tag "ER1 Burst string cusp injections" \
 	--time-slide-file HLV_ZERO_LAG.xml \
