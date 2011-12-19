@@ -758,7 +758,7 @@ class Data(object):
 		f = open(fname, "w")
 		# first one in the list is sacrificed for a time stamp
 		for time, latency in self.latency_history:
-			f.write("%f %e\n" % (time - self.latency_history[-1][0], latency))
+			f.write("%f %e\n" % (time, latency))
 		f.close()
 	
 	
@@ -772,7 +772,7 @@ class Data(object):
 		f = open(fname, "w")
 		# first one in the list is sacrificed for a time stamp
 		for time, snr in self.snr_history:
-			f.write("%f %e\n" % (time - self.snr_history[-1][0], snr))
+			f.write("%f %e\n" % (time, snr))
 		f.close()
 	
 	
@@ -786,7 +786,7 @@ class Data(object):
 		f = open(fname, "w")
 		# first one in the list is sacrificed for a time stamp
 		for time, ram in self.ram_history:
-			f.write("%f %e\n" % (time - self.ram_history[-1][0], ram))
+			f.write("%f %e\n" % (time, ram))
 		f.close()
 
 
