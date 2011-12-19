@@ -76,7 +76,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 			self.add_var_opt("ht-gate-threshold", ht_gate_thresh)
 		if gracedb_far_threshold is not None:
 			self.add_var_opt("gracedb-far-threshold", gracedb_far_threshold)
-		self.add_var_opt("verbose", "") #Put this in for debugging
+		# self.add_var_opt("verbose", "") #Put this in for debugging
 		likefile = os.path.split(likelihood_file)[1]
 		path = os.getcwd()
 		# make a new likelihood file
