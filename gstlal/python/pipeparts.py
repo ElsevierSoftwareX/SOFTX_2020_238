@@ -27,7 +27,7 @@
 import sys, os
 import numpy
 import threading
-
+import time
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -40,7 +40,7 @@ import gst
 
 
 from glue import segments
-
+from pylal.date import XLALUTCToGPS
 
 import pipeio
 
@@ -492,7 +492,7 @@ def mkaudioconvert(pipeline, src, caps_string = None):
 	return elem
 
 
-def mkaudiorate(pipeline, src, pad_name = None, verbose = False, **properties):
+def mkaudiorate(pipeline, src, pad_name = None, request = False, **properties):
 	elem = gst.element_factory_make("audiorate")
 	pipeline.add(elem)
 	for name, value in properties.items():
@@ -503,14 +503,23 @@ def mkaudiorate(pipeline, src, pad_name = None, verbose = False, **properties):
 		src.link_pads(pad_name, elem, "sink")
 	src = elem
 	
-	if verbose:
+	if request:
+
 		src.set_property("silent", False)
 		def print_val(elem, val, prop):
-			sin = elem.get_property("in")
-			sout = elem.get_property("out")
 			add = elem.get_property("add")
 			drop = elem.get_property("drop")
-			print >> sys.stderr, "audiorate: add %d | drop %d | in %d | out %d" % (add, drop, sin, sout)
+			# FIXME this also gets printed to stderr so that we have a log of this since it is an error really
+			print >> sys.stderr, "audiorate: add %d | drop %d" % (add, drop)
+			# FIXME Make url request
+			fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_audiorate.txt")
+			try:
+				os.remove(fname)
+			except OSError:
+				pass
+			f = open(fname, "w")
+			f.write("%.14g %d %d\n" % (float(XLALUTCToGPS(time.gmtime())), add, drop))
+			
 		src.connect_after("notify::add", print_val, "add")
 		src.connect_after("notify::drop", print_val, "drop")
 
