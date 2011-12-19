@@ -504,7 +504,6 @@ def mkaudiorate(pipeline, src, pad_name = None, request = False, **properties):
 	src = elem
 	
 	if request:
-
 		src.set_property("silent", False)
 		def print_val(elem, val, prop):
 			add = elem.get_property("add")
@@ -512,7 +511,11 @@ def mkaudiorate(pipeline, src, pad_name = None, request = False, **properties):
 			# FIXME this also gets printed to stderr so that we have a log of this since it is an error really
 			print >> sys.stderr, "audiorate: add %d | drop %d" % (add, drop)
 			# FIXME Make url request
-			fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_audiorate.txt")
+			# FIXME handle better if name is not provided
+			try:
+				fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_" + properties['name'] + ".txt")
+			except KeyError:
+				fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_audiorate.txt")
 			try:
 				os.remove(fname)
 			except OSError:
