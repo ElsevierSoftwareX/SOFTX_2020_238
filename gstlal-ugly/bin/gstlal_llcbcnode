@@ -1,0 +1,179 @@
+#!/usr/bin/python
+import sys
+import cgi
+import cgitb
+import os
+os.environ["MPLCONFIGDIR"] = "/tmp"
+import matplotlib
+matplotlib.use('Agg')
+import numpy
+import matplotlib.pyplot as plt
+cgitb.enable()
+form = cgi.FieldStorage()
+
+def plot(dataurl, plottype, xlabel = "", ylabel = "", title = ""):
+	fig = plt.figure(figsize=(5,3.5),)
+	fig.patch.set_alpha(0.0)
+	h = fig.add_subplot(111, axisbg = 'k')
+	plt.subplots_adjust(bottom = 0.2, left = .16)
+	plt.grid(color="w")
+
+	try:
+		data = numpy.loadtxt(dataurl)
+	except IOError:
+		print "<h2>Data could not be loaded</h2>"
+		return
+
+	if plottype == "history":
+		h.plot(data[:,0] - data[-1,0], data[:,1], 'w', alpha=0.75, linewidth=2)
+	if plottype == "plot":
+		h.plot(data[:,0], data[:,1], 'w', alpha=0.75, linewidth=2)
+	if plottype == "loglog":
+		h.loglog(data[:,0], data[:,1], 'w', alpha=0.75, linewidth=2)
+	if plottype == "hist":
+		from scipy.interpolate import interp1d
+		x = numpy.linspace(data[0,0], data[-1,0], 100)
+		f = interp1d(data[:,0], data[:,1], kind='cubic')
+		y = f(x)
+		y[y<0] = 0.
+		h.fill_between(x, y,  alpha=0.75, linewidth=2, facecolor="w", color="w")
+
+	plt.xlabel(xlabel)
+	plt.ylabel(ylabel)
+	plt.title(title)
+	plt.savefig(sys.stdout, format="svg")
+
+
+def livetime_plot(disconturl, livetimeurl, xlabel = "", ylabel = "", title = ""):
+	fig = plt.figure(figsize=(5,3),)
+	fig.patch.set_alpha(0.0)
+	h = fig.add_subplot(111, axisbg = 'k', aspect='equal')
+	plt.subplots_adjust(bottom = 0, left = .25, top = 1, right = .75)
+	plt.grid(color="w")
+
+	try:	
+		livetimedata = numpy.loadtxt(livetimeurl)
+		discontdata = numpy.loadtxt(disconturl)
+	except IOError:
+		print "<h2>Data could not be loaded</h2>"
+		return
+
+	dt = livetimedata[1]
+	lt = livetimedata[2]
+	discont = discontdata[1]
+	data = [dt, lt, discont]
+	explode = [0.15, 0, 0.15]
+	labels = ["Dead : %g (s)" % dt, "Live : %g (s)" % lt, "Dropped : %g (s)" % discont]
+
+	h.pie(data, shadow=True, explode = explode, labels = labels, autopct='%1.1f%%', colors = ('0.5', '1.0', '0.75'))
+
+	plt.xlabel(xlabel)
+	plt.ylabel(ylabel)
+	plt.title(title)
+	plt.savefig(sys.stdout, format="svg")
+
+
+def plotsnrchisq(url, name = "gstlal_inspiral_likelihood"):
+	from glue.ligolw import utils
+	from pylal import ligolw_burca_tailor
+	coincparamsdistributions, likelihood_seglists = ligolw_burca_tailor.load_likelihood_data([url], u"gstlal_inspiral_likelihood", verbose = False)
+
+	fig = plt.figure(figsize = (10.5,7))
+	plt.gray()
+	fig.patch.set_alpha(0.0)
+	for i, ifo in enumerate(['H1','H2','L1', 'V1']):
+		ax = fig.add_subplot(2,2,i+1)
+		H1 = coincparamsdistributions.background_rates[ifo+"_snr_chi"].array
+		snr = coincparamsdistributions.background_rates[ifo+"_snr_chi"].bins[0].centres()[1:-1]
+		chi = coincparamsdistributions.background_rates[ifo+"_snr_chi"].bins[1].centres()[1:-1]
+		chi[0] = 0 # not inf
+		plt.pcolormesh(snr, chi, numpy.log10(H1.T+1)[1:-1,1:-1])
+		ax.set_yscale('linear')
+		ax.set_xscale('log')
+		plt.colorbar()
+		if i in (2,3):
+			plt.xlabel('SNR')
+		if i in (0,2):
+			plt.ylabel('reduced chisq / SNR^2')
+		plt.title(ifo)
+		plt.xlim([4., 100.])
+		plt.grid()
+	# one figure, four subplots
+	import StringIO,base64
+	f = StringIO.StringIO()
+	plt.savefig(f, format="png")
+	print '<img src="data:image/png;base64,',base64.b64encode(f.getvalue()),'"></img>'
+	f.close()
+
+
+
+if "dir" not in form:
+	raise ValueError("must specify dir")
+if "id" not in form:
+	raise ValueError("must specify id")
+
+baseurl = '%s/%s' % (form.getvalue("dir"), form.getvalue("id"))
+
+print >>sys.stdout, 'Cache-Control: no-cache, must-revalidate'
+print >>sys.stdout, 'Expires: Mon, 26 Jul 1997 05:00:00 GMT'
+print >>sys.stdout, 'Content-type: text/html\r\n'
+
+print """
+<html>
+<head>
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="-1">
+<meta http-equiv="CACHE-CONTROL" content="NO-CACHE">
+</head>
+<body bgcolor=#E0E0E0>
+"""
+
+print "<table face='Arial'>"
+
+print "<tr><td><div id='canvasa'>"
+plot(baseurl+'_latency_history.txt', "history", ylabel = "Latency (s)", xlabel = "Time since last trigger (s)")
+print "</div></td>"
+
+print "<td><div id='canvasb'>"
+plot(baseurl+'_latency_histogram.txt', "hist", ylabel = "Count", xlabel = "Latency (s)")
+print "</div></td></tr>"
+
+print "<tr><td><div id='canvasc'>"
+plot(baseurl+'_snr_history.txt', "history", ylabel = "SNR", xlabel = "Time since last trigger (s)")
+print "</div></td>"
+
+print "<td><div id='canvasd'>"
+plot(baseurl+'_ram_history.txt', "history", ylabel = "RAM (GB)", xlabel = "Time before now (s)")
+print "</div></td></tr>"
+
+print"</table>"
+
+print "<table face='Arial'>"
+
+print "<tr><td><div id='canvase'>"
+livetime_plot(baseurl+'_H1strain_add_drop.txt', baseurl+'_H1state_vector_on_off_gap.txt')
+print "</div></td>"
+
+print "<td><div id='canvasf'>"
+livetime_plot(baseurl+'_H2strain_add_drop.txt', baseurl+'_H2state_vector_on_off_gap.txt')
+print "</div></td></tr>"
+
+print "<tr><td><div id='canvasg'>"
+livetime_plot(baseurl+'_L1strain_add_drop.txt', baseurl+'_L1state_vector_on_off_gap.txt')
+print "</div></td>"
+
+print "<td><div id='canvash'>"
+livetime_plot(baseurl+'_V1strain_add_drop.txt', baseurl+'_V1state_vector_on_off_gap.txt')
+print "</div></td></tr>"
+
+print"</table>"
+
+
+try:
+	plotsnrchisq(baseurl+'-likelihood.xml.gz')
+except ImportError:
+	print "<h2>requires pylal to produce snr / chisq plots</h2>"
+
+
+print "</body>"
+
