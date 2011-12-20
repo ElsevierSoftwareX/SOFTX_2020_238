@@ -32,13 +32,13 @@ AC_CONFIG_FILES([ \
 
 
 #
-# Move headers into a versions sub-directory to allow more than one set of
+# Move headers into a versioned sub-directory to allow more than one set of
 # headers to be installed system-wide.  (commented out until this is
 # needed)
 #
 
 
-#AC_SUBST([includedir],[${includedir}/${PACKAGE}-${PACKAGE_VERSION}])
+#AC_SUBST([includedir],["\${includedir}/\${PACKAGE}-\${PACKAGE_VERSION}"])
 
 
 #
@@ -46,9 +46,9 @@ AC_CONFIG_FILES([ \
 #
 
 
-AC_SUBST([docdir], [${datadir}/doc])
-AC_SUBST([pkgdocdir], [${docdir}/${PACKAGE_NAME}-${PACKAGE_VERSION}])
-AC_SUBST([pkgconfigdir],[${libdir}/pkgconfig])
+AC_SUBST([docdir], ["\${datadir}/doc"])
+AC_SUBST([pkgdocdir], ["\${docdir}/\${PACKAGE_NAME}-\${PACKAGE_VERSION}"])
+AC_SUBST([pkgconfigdir],["\${libdir}/pkgconfig"])
 
 
 #
@@ -269,7 +269,7 @@ AS_IF(
 	[test "x$with_framecpp" != "xno"],
 	[PKG_CHECK_MODULES(
 		[framecpp],
-		[framecpp >= 1.19.15],
+		[framecpp >= 1.19.16],
 		[HAVE_FRAMECPP="yes"],
 		[AC_MSG_WARN([Not found: $framecpp_PKG_ERRORS])
 		HAVE_FRAMECPP="no"]
@@ -298,7 +298,7 @@ AS_IF(
 	[test "x$with_gds" != "xno"],
 	[PKG_CHECK_MODULES(
 		[gds],
-		[gds >= 2.15.5],
+		[gds >= 2.15.6],
 		[HAVE_GDS="yes"
 		gds_LIBS="$gds_LIBS -llsmp"],	# hack to work around broken .pc file
 		[AC_MSG_WARN([Not found: $gds_PKG_ERRORS])
@@ -318,7 +318,7 @@ AC_SUBST([gds_LIBS])
 #
 
 
-PKG_CHECK_MODULES([LAL], [lal lalframe lalmetaio lalsupport lalsimulation lalburst lalinspiral])
+PKG_CHECK_MODULES([LAL], [lal >= 6.6.0 lalframe >= 1.0.3 lalmetaio >= 1.0.2 lalsupport lalsimulation >= 0.1.0 lalburst >= 1.1.0 lalinspiral >= 1.2.0])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
 

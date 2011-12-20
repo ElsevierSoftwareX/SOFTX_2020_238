@@ -1,0 +1,35 @@
+<html>
+<head>
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="-1">
+<meta http-equiv="CACHE-CONTROL" content="NO-CACHE">
+<style type="text/css">@import "jquery.svg.css";</style> 
+<script type="text/javascript" src="http://code.jquery.com/jquery-1.7.1.js"></script>
+<script type="text/javascript" src="jquery.svg.js"></script>
+<script type="text/javascript">
+
+function load_canvas(selector, url) {
+	$(selector).fadeOut("slow").load(url).fadeIn("slow");
+	}
+
+function load_all() {
+	load_canvas('#canvasa', 'cgi-bin/cgi_plot.py?type=plot&xlabel=time&ylabel=amp');
+	load_canvas('#canvasb', 'cgi-bin/cgi_plot.py?type=hist&ylabel=probability&xlabel=number');
+	load_canvas('#canvasc', 'cgi-bin/cgi_plot.py?type=loglog&ylabel=power&xlabel=frequency');
+	load_canvas('#canvasd', 'cgi-bin/cgi_plot.py?type=pie&xlabel=delicious');
+	}
+
+var setloadall = self.setInterval(load_all, 20000);
+
+</script>
+</head>
+<body onload="load_all()" bgcolor=#E0E0E0>
+<table face="Arial">
+<tr>
+<td><div id='canvasa'></div></td>
+<td><div id='canvasb'></div></td>
+<tr>
+<td><div id='canvasc'></div></td>
+<td><div id='canvasd'></div></td>
+</table>
+</body>

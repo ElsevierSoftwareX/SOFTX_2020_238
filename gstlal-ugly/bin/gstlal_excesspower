@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import numpy
 
@@ -17,13 +17,16 @@ import os
 class EPHandler( LLOIDHandler ):
 	def __init__( self, mainloop, pipeline ):
 		# TODO: Unhardcode
-		self.base_band = 16 
+		#self.base_band = 16 
+		self.base_band = 16
 		self.flow = 64 
-		self.fhigh = 500
+		self.fhigh = 1000
 		#self.fhigh = 2000
-		self.rate = 1024
+		self.rate = 2048
 		#self.rate = 4096
 		self.filter_len = 2*int(2*self.rate/self.base_band)
+
+		self.max_level = 4
 
 		self.psd = self.build_default_psd( self.rate, self.filter_len )
 		self.psd_power = 0
@@ -38,6 +41,8 @@ class EPHandler( LLOIDHandler ):
 		self.chan_matrix = None
 		self.rebuild_chan_mix_matrix()
 		self.mmixers = {}
+
+		self.unicorns = False
 
 		super(type(self), self).__init__(mainloop, pipeline)
 
@@ -65,12 +70,8 @@ class EPHandler( LLOIDHandler ):
 		return corr
 
 	def rebuild_matrix_mixers( self, res_level = None ):
-		#print >> sys.stderr, "Building reslevel %d mm" % res_level
-		#print >> sys.stderr, len(self.mmixers), len(self.chan_matrix)
 		for i, mm in self.mmixers.iteritems():
-			#print >> sys.stderr, self.chan_matrix
 			if( res_level != None and res_level != i ): continue
-			#print >> sys.stderr, "res level %d" % i
 
 			nchannels = self.filter_bank.shape[0]
 			up_factor = int(numpy.log2(nchannels/(nchannels >> i)))
@@ -79,29 +80,23 @@ class EPHandler( LLOIDHandler ):
 				up_factor = up_factor,
 				norm = self.chan_matrix[i] 
 			)
-			#cmatrix = numpy.matrix( cmatrix )
 			mm.set_property( "matrix", cmatrix )
-			#print >> sys.stderr, mm.get_property( "matrix" )
 
 	def rebuild_filter( self ):
-		self.filter_bank = ep.build_filter( fhigh = self.fhigh, psd = self.psd, corr = self.spec_corr )
+		self.filter_bank = ep.build_filter( fhigh = self.fhigh, psd = self.psd, corr = self.spec_corr, b_wind = self.base_band )
 		return self.filter_bank
 
 	def rebuild_chan_mix_matrix( self ):
 		self.chan_matrix = ep.build_inner_product_norm( 
 			corr = self.spec_corr, 
 			band = self.base_band, 
-			# NOTE: No, I have no idea why.
-			#del_f = self.psd.deltaF/2**5,
 			del_f = self.psd.deltaF,
 			nfilts = len(self.filter_bank),
-			flow = self.flow
+			flow = self.flow,
 			# TODO: PSD option to lalburst IP doesn't work
 			#psd = self.psd
+			max_level = self.max_level
 		)
-		#import pickle
-		#self.chan_matrix = pickle.load( open("mmixercoeff.pickle") )
-		#self.chan_matrix = pickle.load( open("mmixercoeff_psd.pickle") )
 		return self.chan_matrix
 
 	def rebuild_everything( self ):
@@ -120,17 +115,10 @@ def on_psd_change( elem, pspec, hand ):
 
 	hand.psd = REAL8FrequencySeries(
 		name = "PSD",
-		#epoch = laltypes.LIGOTimeGPS(0, message.structure["timestamp"]),
 		f0 = 0.0,
 		deltaF = elem.get_property( "delta-f" ),
-		#sampleUnits = laltypes.LALUnit(message.structure["sample-units"].strip()),
 		data = numpy.array( elem.get_property( "mean-psd" ) )
 	)
-
-	#f = open("psd.dat", "w")
-	#for freq, p in enumerate( hand.psd.data ):
-		#f.write("%f %g\n" % (freq*hand.psd.deltaF, p) )
-	#f.close()
 
 	# Determine if the PSD has changed enough to warrant rebuilding the filter
 	# bank.
@@ -144,26 +132,22 @@ def on_psd_change( elem, pspec, hand ):
 def on_spec_corr_change( elem, pspec, hand ):
 	print >> sys.stderr, "Intercepted correlation signal."
 	# TODO: Ensure that the other options (flow and such) are set here as well
-	#import pickle
-	#pickle.dump( elem.get_property( "spectral-correlation" ), open("spec_corr.pickle", "w") )
 	hand.spec_corr = elem.get_property( "spectral-correlation" )
 
-	#if( hand.cache_spec_corr ):
-		#f = open( "spec_corr.dat", "w" )
-		#k_end = len( hand.spec_corr ) / 2
-		#for k, sp in enumerate( hand.spec_corr ):
-			#f.write( "%d %g\n" % (k, sp) )
-	
 	# If the spectrum correlation changes, rebuild everything
 	if( hand.psd != None ):
 		hand.rebuild_everything()
 
 ### MAIN PIPELINE ####
 
+pipeline = gst.Pipeline( "gstlal_excesspower" )
+mainloop = gobject.MainLoop()
+handler = EPHandler(mainloop, pipeline)
+
 # The data rate at which we wish to do analysis
 # Assumed lower than the input data
-sample_rate = 1024
-base_band = 16
+sample_rate = 2048
+base_band = handler.base_band
 
 # Max trigger duration (s)
 max_dur = 1  # s
@@ -175,10 +159,6 @@ diagnostics = False
 # Caching options
 cache_spec_corr = True
 
-pipeline = gst.Pipeline( "gstlal_excesspower" )
-mainloop = gobject.MainLoop()
-handler = EPHandler(mainloop, pipeline)
-
 head = mkfakeLIGOsrc( pipeline, instrument="H1", channel_name = "LSC-STRAIN" )
 
 # Diagnostic plot
@@ -188,8 +168,25 @@ if( diagnostics ):
 
 # Data conditioning
 head = mkcapsfilter( pipeline, mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % sample_rate )
-head = whitener = mkwhiten( pipeline, head )
 
+unicorn_volume = 1e-18
+
+if( handler.unicorns ):
+	inj_head = gst.element_factory_make( "filesrc" )
+	pipeline.add( inj_head )
+	inj_head.set_property( "location" , "/Users/chrispankow/work/codedev/excesspower/pipeline/injections/unicorn_delay.mp3" )
+	inj_head = mkgeneric( pipeline, inj_head, "mad" )
+	inj_head = mkaudioconvert( pipeline, inj_head )
+	inj_head = mkresample( pipeline, inj_head ) 
+	inj_head = mkcapsfilter( pipeline, inj_head, "audio/x-raw-float,channels=1,width=64,rate=%d" % sample_rate )
+	inj_head = mkgeneric( pipeline, inj_head, "audioamplify" )
+	inj_head.set_property( "amplification", unicorn_volume )
+	adder = mkgeneric( pipeline, inj_head, "lal_adder" )
+	adder.set_property( "sync", True )
+	head.link( adder )
+	head = adder
+
+head = whitener = mkwhiten( pipeline, head )
 head = mknofakedisconts( pipeline, head )
 
 # Diagnostic plot
@@ -197,17 +194,11 @@ if( diagnostics ):
 	head = postresamptee = mktee( pipeline, head )
 	mknxydumpsink( pipeline, mkqueue( pipeline, head ), "data_post.txt" )
 
-head = mkprogressreport( pipeline, head, "prog1" )
+head = mkprogressreport( pipeline, head, "post whitener" )
 
 # excess power channel firbank
 # NOTE: This is where the inspiral pipeline will feed in
-#fir_filter = handler.rebuild_filter()
-head = mkfirbank( pipeline, head, 
-	#fir_matrix = fir_filter,
-	# Time domain processing seems *much* faster
-	#time_domain=True 
-	time_domain=False 
-)
+head = mkfirbank( pipeline, head, time_domain=False )
 # TODO: Make this less hardcodish
 handler.add_firbank( pipeline.get_by_name( "gstlalfirbank0" ) )
 nchannels = handler.filter_bank.shape[0]
@@ -217,7 +208,7 @@ nchannels = handler.filter_bank.shape[0]
 # undersampling, we reduce our largest available frequency tile by a factor of 
 # 2.
 
-head = mkprogressreport( pipeline, head, "prog2" )
+head = mkprogressreport( pipeline, head, "post FIR bank" )
 
 head = postfirtee = mktee( pipeline, mkqueue( pipeline, head ) )
 # Diagnostic plot
@@ -226,16 +217,10 @@ if( diagnostics ):
 
 # First branch -- send fully sampled data to wider channels for processing
 nlevels = int(numpy.ceil( numpy.log2( nchannels ) )) 
-for res_level in range(0, nlevels):
+for res_level in range(0, min(handler.max_level, nlevels)):
 	head = postfirtee
 
-# DEBUG:
-#import pickle
-#chan_matrix = numpy.array(pickle.load( open("mmixercoeff.pickle") ))
-#chan_matrix = ep.build_chan_matrix( nchannels, res_level, chan_matrix[res_level] )
-	#chan_matrix = ep.build_chan_matrix( nchannels, res_level )
 	head = matmixer = mkmatrixmixer( pipeline, head )
-	#up_factor = int(chan_matrix.shape[0] / chan_matrix.shape[1])
 	handler.add_matmixer( matmixer, res_level )
 
 	handler.cache_spec_corr = cache_spec_corr
@@ -246,21 +231,27 @@ for res_level in range(0, nlevels):
 	if( diagnostics ):
 		mknxydumpsink( pipeline, postmmtee, "postmatmix_res_%d.txt" % res_level )
 
+	#import ep_visualization as vis
+	#if( res_level == 0 ):
+		#vis.channelgram( pipeline, postmmtee )
+	
 	elem = gst.element_factory_make("lal_audioundersample")
+
 	pipeline.add(elem)
 	head.link(elem)
 	head = elem
 
 	# base_band * 2 * @ of channel combinations
 	band = base_band * 2**res_level
+	chan = numpy.ceil( nchannels / 2.0**res_level )
 
 	# 2B = Nyquist = sample rate
-	#head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d" % (sample_rate/res_level) )
-	# TODO: A rate of <= 32 will cause flow failures here
-	undersamp_rate = sample_rate/128
-	#print undersamp_rate, band
-	head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate )
-	#head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d" % band )
+	undersamp_rate = sample_rate >> res_level
+	head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d,width=64,channels=%d" % (undersamp_rate, chan) )
+
+	head = postustee = mktee( pipeline, mkqueue( pipeline, head ) )
+	if( diagnostics ):
+		mknxydumpsink( pipeline, postustee, "postundersamp_res_%d.txt" % res_level )
 
 	elem = gst.element_factory_make("pow")
 	elem.set_property( "exponent", 2 )

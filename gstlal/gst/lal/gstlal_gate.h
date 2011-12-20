@@ -69,7 +69,7 @@ typedef struct _GSTLALGate {
 
 	gboolean emit_signals;
 	gboolean default_state;
-	gboolean last_state;
+	gint last_state;
 	gdouble threshold;
 	gint64 attack_length;
 	gint64 hold_length;

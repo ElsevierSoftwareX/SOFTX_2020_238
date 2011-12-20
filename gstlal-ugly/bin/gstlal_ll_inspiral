@@ -29,13 +29,14 @@
 
 import os
 import sys
-import threading
 import warnings
 from optparse import OptionParser
-import signal
-import time
 import resource
+import signal
 import subprocess
+import time
+import socket
+
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -57,7 +58,9 @@ from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import reference_psd
 from gstlal import inspiral
+from gstlal import httpinterface
 from pylal.date import XLALUTCToGPS
+
 
 def excepthook(*args):
 	# system exception hook that forces hard exit.  without this,
@@ -78,6 +81,8 @@ sys.excepthook = excepthook
 
 maxproc = resource.getrlimit(resource.RLIMIT_NPROC)[1]
 resource.setrlimit(resource.RLIMIT_NPROC, (maxproc, maxproc))
+maxstack = resource.getrlimit(resource.RLIMIT_STACK)[1]
+resource.setrlimit(resource.RLIMIT_STACK, (2 * 1024**2, maxstack)) # 2MB per thread, not 10
 
 
 #
@@ -98,6 +103,7 @@ def smrepair():
 def now():
 	return XLALUTCToGPS(time.gmtime())
 	#return LIGOTimeGPS(time.time() - 315964786)
+
 
 #
 # =============================================================================
@@ -127,10 +133,13 @@ def parse_command_line():
 	parser.add_option("--likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial likelihood ratio data (required).")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
+	parser.add_option("--job-tag", help = "Set the string to be recorded in output files for plot data")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
 
 	options, filenames = parser.parse_args()
+
 
 	if options.reference_psd is None and not options.track_psd:
 		raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
@@ -170,6 +179,22 @@ def parse_command_line():
 	# it in with the options is a convenient home
 	options.psd_fft_length = 8	# seconds
 
+	# FIXME a hack to output data until the webserver is in place without passing around yet more variables
+	if options.job_tag is not None:
+		os.environ['GSTLAL_LL_JOB'] = options.job_tag
+		host = socket.gethostname()
+		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_registry.txt")
+		f = open(fname, "w")
+		f.write("%s %s" % (options.job_tag, host))
+		f.close()
+		for instrument in set(svd_banks.keys()):
+			# make sure to mark a 0 sample audiorate add just so the file exists
+			# FIXME filename tied to audiorate name in lloidparts / pipeparts 
+			fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_%saudiorate.txt" % (instrument,))
+			f = open(fname, "w")
+			f.write("%.14g 0" % (now(),))
+			f.close()
+	
 	return options, filenames, process_params, svd_banks, detectors
 
 
@@ -191,6 +216,7 @@ options, filenames, process_params, svd_banks, detectors = parse_command_line()
 frame_segments = dict([(instrument, None) for instrument in detectors])
 veto_segments = None
 
+
 #
 # set up the PSDs
 #
@@ -211,7 +237,9 @@ else:
 # Parse template banks
 #
 
+
 banks = inspiral.parse_bank_files(svd_banks, verbose = options.verbose)
+
 
 #
 # Build pipeline
@@ -287,12 +315,14 @@ if options.verbose:
 # Note: It assumes injections are present
 #
 
+
 distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
 
 
 #
 # build output document
 #
+
 
 # FIXME now to "infinity"
 start = now()
@@ -318,6 +348,8 @@ output = inspiral.Data(
 	tmp_path = options.tmp_space,
 	trials_factor = options.trials_factor,
 	thinca_interval = options.thinca_interval,
+	gracedb_far_threshold = options.gracedb_far_threshold,
+	likelihood_file = options.likelihood_file,
 	verbose = options.verbose
 )
 
@@ -331,17 +363,29 @@ appsinks = set(appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, src), caps
 if options.verbose:
 	print >>sys.stderr, "attached %d, done" % len(appsinks)
 
+
 #
 # if we request a dot graph of the pipeline, set it up
 #
+
 
 if options.write_pipeline is not None:
 	inspiral.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
 	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
 
+
+#
+# start http interface
+#
+
+# FIXME: don't hard-code port
+httpinterface.start_servers(16953, verbose = options.verbose)
+
+
 #
 # Run pipeline
 #
+
 
 # repair the shared memory just in case before starting
 smrepair()
@@ -357,25 +401,46 @@ if options.write_pipeline is not None:
 if options.verbose:
 	print >>sys.stderr, "running pipeline ..."
 
+
 #
 # setup sigint handler to shutdown pipeline
 #
 
-def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.keys()):
-	print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" % (signal,)
-	# override file name with approximate interval
-	bus = pipeline.get_bus()
-	bus.post(gst.message_new_eos(pipeline))
+class SigData(object):
+	def __init__(self):
+		self.has_been_signaled = False
+
+sigdata = SigData()
+
+def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.keys(), sigdata = sigdata):
+	if not sigdata.has_been_signaled:
+		print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" % (signal,)
+		# override file name with approximate interval
+		bus = pipeline.get_bus()
+		bus.post(gst.message_new_eos(pipeline))
+		sigdata.has_been_signaled = True
+	else:
+		print >>sys.stderr, "*** received SIG %d, but already handled... ***" % (signal,)
 
 # this is how the program stops gracefully, it is the only way to stop it.
 # Otherwise it runs forever man.
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
-# away we go...
+
+#
+# run pipeline
+#
+
+
 mainloop.run()
 
-# all done
+
+#
+# done
+#
+
+
 output.filename = "%s-%d-%d.sqlite" % (options.output.split(".sqlite")[0], start, now())
 output.flush()
 output.write_output_file(likelihood_file = options.likelihood_file, verbose = options.verbose)

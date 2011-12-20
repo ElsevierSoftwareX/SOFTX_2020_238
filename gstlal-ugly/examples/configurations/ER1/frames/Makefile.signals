@@ -15,6 +15,9 @@ BH_MAX_SPIN = 1.0
 SEED = 1
 FLOW = 9
 
+SG_RATE = 0.01 # Hz
+SC_RATE = 0.01 # Hz
+WNB_RATE = 0.01 # Hz
 
 all : frames.cache
 
@@ -37,7 +40,14 @@ V1-FAKE-STRAIN : injections.xml
 frames.cache : H1-FAKE-STRAIN H2-FAKE-STRAIN L1-FAKE-STRAIN V1-FAKE-STRAIN
 	cat frame.H1.cache frame.H2.cache frame.L1.cache frame.V1.cache > frames.cache
 
-injections.xml:
+injections.xml: cbc_injections.xml burst_injections.xml
+	ligolw_add cbc_injections.xml burst_injections.xml -o injections.xml
+
+burst_injections.xml:
+	gstlal_burst_injections_by_rate $(START) $(STOP) $(SG_RATE) $(WNB_RATE) $(SC_RATE)
+	gstlal_burst_injections_by_rate_plot burst_injections.xml
+
+cbc_injections.xml:
 	gstlal_injections_by_local_rate \
 	--seed $(SEED) \
 	--flower $(FLOW) \
@@ -55,7 +65,7 @@ injections.xml:
 	--bh-max-mass $(BH_MAX_MASS) \
 	--bh-min-spin $(BH_MIN_SPIN) \
 	--bh-max-spin $(BH_MAX_SPIN) \
-	--output injections.xml && gstlal_injections_by_local_rate_plot injections.xml
+	--output cbc_injections.xml && gstlal_injections_by_local_rate_plot cbc_injections.xml
 
 realclean: 
-	rm -rf injections.xml H1-FAKE-STRAIN H2-FAKE-STRAIN L1-FAKE-STRAIN V1-FAKE-STRAIN *.cache *.png
+	rm -rf HLV_ZERO_LAG.xml cbc_injections.xml burst_injections.xml injections.xml H1-FAKE-STRAIN H2-FAKE-STRAIN L1-FAKE-STRAIN V1-FAKE-STRAIN *.cache *.png

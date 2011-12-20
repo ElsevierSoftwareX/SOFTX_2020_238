@@ -28,8 +28,8 @@
 
 
 import os
+import resource
 import sys
-import threading
 import warnings
 from optparse import OptionParser
 
@@ -54,7 +54,7 @@ from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import reference_psd
 from gstlal import inspiral
-import resource
+from gstlal import httpinterface
 
 def excepthook(*args):
 	# system exception hook that forces hard exit.  without this,
@@ -349,6 +349,13 @@ if options.verbose:
 if options.write_pipeline is not None:
 	inspiral.connect_appsink_dump_dot(pipeline, appsinks, options.write_pipeline, options.verbose)
 	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "NULL"), verbose = options.verbose)
+
+#
+# start http interface
+#
+
+# FIXME: don't hard-code port
+httpinterface.start_servers(16953, verbose = options.verbose)
 
 #
 # Run pipeline

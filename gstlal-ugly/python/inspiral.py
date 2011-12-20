@@ -31,6 +31,7 @@ import numpy
 import os
 from scipy import random
 import StringIO
+import subprocess
 try:
 	import sqlite3
 except ImportError:
@@ -39,6 +40,13 @@ except ImportError:
 import sys
 import threading
 import time
+from collections import deque
+import resource
+
+try:
+	from ligo import gracedb
+except ImportError:
+	print >>sys.stderr, "warning: gracedb import failed, gracedb uploads disabled"
 
 from glue import iterutils
 from glue import segments
@@ -303,10 +311,10 @@ class DistributionsStats(object):
 	"""
 
 	binnings = {
-		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LinearPlusOverflowBins(.005, 1., 200))),
-		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LinearPlusOverflowBins(.005, 1., 200))),
-		"L1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LinearPlusOverflowBins(.005, 1., 200))),
-		"V1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LinearPlusOverflowBins(.005, 1., 200)))
+		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.005, 0.5, 200))),
+		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.005, 0.5, 200))),
+		"L1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.005, 0.5, 200))),
+		"V1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.005, 0.5, 200)))
 	}
 
 	filters = {
@@ -404,7 +412,7 @@ class DistributionsStats(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, verbose = False):
 		#
 		# initialize
 		#
@@ -422,6 +430,8 @@ class Data(object):
 		self.likelihood_retention_factor = likelihood_retention_factor
 		# FIXME:  should this live in the DistributionsStats object?
 		self.likelihood_snapshot_timestamp = None
+		# gracedb far threshold
+		self.gracedb_far_threshold = gracedb_far_threshold
 
 		# All possible instrument combinations
 		# frozenset(ifos) for n in range(2, len(instruments)+1) for ifos in choices(instruments, n
@@ -431,6 +441,7 @@ class Data(object):
 		self.trials_table = far.TrialsTable()
 		self.trials_factor = trials_factor
 		self.far = None
+		self.likelihood_file = likelihood_file
 
 		#
 		# build the XML document
@@ -517,6 +528,17 @@ class Data(object):
 			thinca_interval = thinca_interval	# seconds
 		)
 
+		#
+		# Fun output stuff
+		#
+		
+		self.last_time = time.time()
+		self.output_interval = 60
+		self.latency_histogram = rate.BinnedArray(rate.NDBins((rate.LinearPlusOverflowBins(5, 205, 22),)))
+		self.latency_history = deque(maxlen=1000)
+		self.snr_history = deque(maxlen=1000)
+		self.ram_history = deque(maxlen = 1000)
+
 	def appsink_new_buffer(self, elem):
 		self.lock.acquire()
 		try:
@@ -565,6 +587,20 @@ class Data(object):
 				# hook up a reference to the Data class instance level trials_table
 				self.far.trials_table = self.trials_table
 
+				# FIXME:  the signal.signal() function is
+				# disabled for the duration of the
+				# .write_fileobj() call to work around some
+				# threading problems.  Glue should be
+				# modified to make signal trapping optional
+				# so that this isn't needed.  Remove when
+				# that's taken care of.
+				#
+				# write the new distribution stats to disk
+				orig_signal = utils.signal.signal
+				utils.signal.signal = lambda *args: None
+				self.distribution_stats.to_filename(self.likelihood_file, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = False)
+				utils.signal.signal = orig_signal
+
 			# run stream thinca
 			noncoinc_sngls = self.stream_thinca.add_events(events, timestamp, FAP = self.far)
 
@@ -578,14 +614,26 @@ class Data(object):
 				self.connection.commit()
 
 			# do GraceDB alerts
-			self.do_gracedb_alerts()
+			if self.gracedb_far_threshold is not None:
+				self.do_gracedb_alerts()
+				self.update_eye_candy()
+
+				# only write output every once in a while
+				if (time.time() - self.last_time) > self.output_interval:
+					self.last_time = time.time()
+					# FIXME update various eye candy outputs, only do when doing gracedb since we must be "online"
+					self.write_latency_history()
+					self.write_latency_histogram()
+					self.write_snr_history()
+					self.write_ram_history()
 		finally:
 			self.lock.release()
+
 
 	def flush(self):
 		# run StreamThinca's .flush().  returns the last remaining
 		# non-coincident sngls.  add them to the distribution
-		for event in self.stream_thinca.flush():
+		for event in self.stream_thinca.flush(FAP = self.far):
 			self.distribution_stats.add_single(event)
 		if self.connection is not None:
 			self.connection.commit()
@@ -593,16 +641,154 @@ class Data(object):
 		# do GraceDB alerts
 		self.do_gracedb_alerts()
 
-	def do_gracedb_alerts(self):
+
+	def do_gracedb_alerts(self, gracedb_prog = "/usr/bin/gracedb", gracedb_group = "Test", gracedb_type = "LowMass"):
+		try:
+			gracedb
+		except NameError:
+			# gracedb import failed, disable event uploads
+			return
 		if self.stream_thinca.last_coincs:
+			# FIXME:  this should maybe not be retrieved this
+			# way.  and the .column_index() method is probably
+			# useless
+			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
 			for coinc_event_id, false_alarm_rate in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far").items():
-				# FIXME:  don't hard-code rate threshold
-				if false_alarm_rate > 1.0 / (7 * 86400.0):
+				#
+				# do we keep this event?
+				#
+
+				if false_alarm_rate > self.gracedb_far_threshold:
 					continue
+
+				#
+				# fake a filename for end-user convenience
+				#
+
+				instruments = coinc_inspiral_index[coinc_event_id].get_ifos()
+				observatories = "".join(sorted(set(instrument[0] for instrument in instruments)))
+				instruments = "".join(sorted(instruments))
+				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event_id].mass).replace(".", "_").replace("-", "_"), gracedb_group, gracedb_type)
+				end_time = int(coinc_inspiral_index[coinc_event_id].get_end())
+				filename = "%s-%s-%d-%d.xml.gz" % (observatories, description, end_time, 0)
+
+				#
+				# construct message and send to gracedb.
+				# we go through the intermediate step of
+				# first writing the document into a string
+				# buffer incase there is some safety in
+				# doing so in the event of a malformed
+				# document;  instead of writing directly
+				# into gracedb's input pipe and crashing
+				# part way through.
+				#
+				# FIXME:  the signal.signal() function is
+				# disabled for the duration of the
+				# .write_fileobj() call to work around some
+				# threading problems.  Glue should be
+				# modified to make signal trapping optional
+				# so that this isn't needed.  Remove when
+				# that's taken care of.
+				#
+
+				if self.verbose:
+					print >>sys.stderr, "sending %s to gracedb ..." % filename
 				message = StringIO.StringIO()
-				self.stream_thinca.last_coincs[coinc_event_id].write(message)
-				# FIXME:  transmit alert to GraceDB
+				orig_signal = utils.signal.signal
+				utils.signal.signal = lambda *args: None
+				utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = True)
+				utils.signal.signal = orig_signal
+				# FIXME:  put gracedb call back when testing is done
+				if False:
+					resp = gracedb.Client().create(gracedb_group, gracedb_type, filename, message.getvalue())
+					if "error" in resp:
+						print >>sys.stderr, "gracedb upload of %s failed: %s" % (filename, resp["error"])
+					elif self.verbose:
+						if "warning" in resp:
+							print >>sys.stderr, "gracedb issued warning: %s" % resp["warning"]
+						print >>sys.stderr, "event assigned grace ID %s" % resp["output"]
+				else:
+					proc = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
+					proc.stdin.write(message.getvalue())
+					proc.stdin.flush()
+					proc.stdin.close()
 				message.close()
+
+	def update_eye_candy(self):
+		if self.stream_thinca.last_coincs:
+			self.ram_history.append((time.time(), (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss + resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss) / 1048576.)) # GB
+			latency_val = None
+			snr_val = (0,0)
+			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
+			for coinc_event_id, latency in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "minimum_duration").items():
+				self.latency_histogram[latency,] += 1
+				if latency_val is None:
+					t = float(coinc_inspiral_index[coinc_event_id].get_end())
+					latency_val = (t, latency)
+				snr = coinc_inspiral_index[coinc_event_id].snr
+				if snr >= snr_val[0]:
+					t = float(coinc_inspiral_index[coinc_event_id].get_end())
+					snr_val = (t, snr)
+			if latency_val is not None:
+				self.latency_history.append(latency_val)
+			if snr_val != (0,0):
+				self.snr_history.append(snr_val)
+
+
+	def write_latency_histogram(self):
+		# FIXME Make url request
+		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_latency_histogram.txt")
+		try:
+			os.remove(fname)
+		except OSError:
+			pass
+		f = open(fname, "w")
+		for latency, number in zip(self.latency_histogram.centres()[0][1:-1], self.latency_histogram.array[1:-1]):
+			f.write("%e %e\n" % (latency, number))
+		f.close()
+
+
+	def write_latency_history(self):
+		# FIXME make url request
+		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_latency_history.txt")
+		try:
+			os.remove(fname)
+		except OSError:
+			pass
+		f = open(fname, "w")
+		# first one in the list is sacrificed for a time stamp
+		for time, latency in self.latency_history:
+			f.write("%f %e\n" % (time, latency))
+		f.close()
+	
+	
+	def write_snr_history(self):
+		# FIXME make url request
+		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_snr_history.txt")
+		try:
+			os.remove(fname)
+		except OSError:
+			pass
+		f = open(fname, "w")
+		# first one in the list is sacrificed for a time stamp
+		for time, snr in self.snr_history:
+			f.write("%f %e\n" % (time, snr))
+		f.close()
+	
+	
+	def write_ram_history(self):
+		# FIXME make url request
+		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_ram_history.txt")
+		try:
+			os.remove(fname)
+		except OSError:
+			pass
+		f = open(fname, "w")
+		# first one in the list is sacrificed for a time stamp
+		for time, ram in self.ram_history:
+			f.write("%f %e\n" % (time, ram))
+		f.close()
+
 
 	def write_output_file(self, likelihood_file = None, verbose = False):
 		if self.connection is not None:

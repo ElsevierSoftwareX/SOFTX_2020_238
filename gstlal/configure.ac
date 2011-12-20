@@ -13,6 +13,7 @@ AC_CONFIG_MACRO_DIR([gnuscripts])
 AM_INIT_AUTOMAKE([1.9 tar-ustar foreign])
 AC_CONFIG_FILES([ \
 	Makefile \
+	gstlal.spec \
 	lib/gstlal.pc \
 	lib/Makefile \
 	python/Makefile \
@@ -26,13 +27,13 @@ AC_CONFIG_FILES([ \
 
 
 #
-# Move headers into a versions sub-directory to allow more than one set of
+# Move headers into a versioned sub-directory to allow more than one set of
 # headers to be installed system-wide.  (commented out until this is
 # needed)
 #
 
 
-#AC_SUBST([includedir],[${includedir}/${PACKAGE}-${PACKAGE_VERSION}])
+#AC_SUBST([includedir],["\${includedir}/\${PACKAGE}-\${PACKAGE_VERSION}"])
 
 
 #
@@ -40,9 +41,9 @@ AC_CONFIG_FILES([ \
 #
 
 
-AC_SUBST([docdir], [${datadir}/doc])
-AC_SUBST([pkgdocdir], [${docdir}/${PACKAGE_NAME}-${PACKAGE_VERSION}])
-AC_SUBST([pkgconfigdir],[${libdir}/pkgconfig])
+AC_SUBST([docdir], ["\${datadir}/doc"])
+AC_SUBST([pkgdocdir], ["\${docdir}/\${PACKAGE_NAME}-\${PACKAGE_VERSION}"])
+AC_SUBST([pkgconfigdir],["\${libdir}/pkgconfig"])
 
 
 # Set the library API info
@@ -198,7 +199,7 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-PKG_CHECK_MODULES([LAL], [lal lalframe lalmetaio lalsupport lalsimulation lalburst lalinspiral])
+PKG_CHECK_MODULES([LAL], [lal >= 6.6.0 lalframe >= 1.0.3 lalmetaio >= 1.0.2 lalsupport lalsimulation >= 0.1.0 lalburst >= 1.1.0 lalinspiral >= 1.2.0])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
 

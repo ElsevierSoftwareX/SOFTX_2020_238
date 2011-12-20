@@ -39,6 +39,7 @@ pygst.require('0.10')
 import gst
 
 
+from gstlal import bottle
 from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import simulation
@@ -203,6 +204,23 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 #
 
 
+class get_state_vector(object):
+	# monitor state vector transitions, export via web
+	# interface
+	def __init__(self, elem):
+		self.current_segment = "unknown"
+		self.segment_start = "unknown"
+		elem.connect("start", self.sighandler, "science")
+		elem.connect("stop", self.sighandler, "lock loss")
+
+	def sighandler(self, elem, timestamp, segment_type):
+		self.current_segment = segment_type
+		self.segment_start = "%.9f" % (timestamp / 1e9)
+
+	def text(self):
+		return "%s @ %s\n" % (self.current_segment, self.segment_start)
+
+
 def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None, online_data = False, injection_filename = None, frame_segments = None, verbose = False):
 	#
 	# data source
@@ -248,12 +266,31 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 	#
 
 	if online_data:
-		elem = gst.element_factory_make("audioconvert")
-		pipeline.add(elem)
-		pipeparts.framecppchanneldemux_link(src, "%s:%s" % (instrument, detector.channel), elem.get_pad("sink"))
-		src = elem
-		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
-		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, verbose = verbose)
+		# strain
+		strain = pipeparts.mkaudioconvert(pipeline, None)
+		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, detector.channel), strain.get_pad("sink"))
+		strain = pipeparts.mkqueue(pipeline, strain, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
+		#FIXME don't hardcode request = True
+		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, request = True, name = "%saudiorate" % (instrument,))
+
+		# state vector
+		statevector = gst.element_factory_make("queue")
+		statevector.set_property("max_size_buffers", 0)
+		statevector.set_property("max_size_bytes", 0)
+		statevector.set_property("max_size_time", gst.SECOND * 60 * 10) # 10 minutes of buffering
+		pipeline.add(statevector)
+		# FIXME:  don't hard-code channel name
+		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, "FAKE-STATE_VECTOR"), statevector.get_pad("sink"))
+		#FIXME we don't add a signal handler to the statevector audiorate, I assume it should report the same missing samples?
+		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True, request = False)
+		# FIXME:  what bits do we need on and off?  and don't hard code them
+		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 45)
+
+		# use state vector to gate strain
+		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = statevector)
+		# export state vector state
+		src.set_property("emit-signals", True)
+		bottle.route("/%s/current_segment.txt" % instrument)(get_state_vector(src).text)
 	else:
 		src = pipeparts.mkaudioconvert(pipeline, src)
 
@@ -321,6 +358,13 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 	#
 
 	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7)
+	# export PSD in ascii text format
+	@bottle.route("/%s/psd.txt" % instrument)
+	def get_psd_txt(elem = head):
+		delta_f = elem.get_property("delta-f")
+		yield "# frequency\tspectral density\n"
+		for i, value in enumerate(elem.get_property("mean-psd")):
+			yield "%.16g %.16g\n" % (i * delta_f, value)
 	if psd is None:
 		# use running average PSD
 		head.set_property("psd-mode", 0)

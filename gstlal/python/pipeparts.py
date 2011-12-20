@@ -27,7 +27,7 @@
 import sys, os
 import numpy
 import threading
-
+import time
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -40,7 +40,7 @@ import gst
 
 
 from glue import segments
-
+from pylal.date import XLALUTCToGPS
 
 import pipeio
 
@@ -68,13 +68,28 @@ __date__ = "FIXME"
 
 
 def mkgeneric(pipeline, src, elem_type_name, **properties):
-	elem = gst.element_factory_make(elem_type_name)
+	if "name" in properties:
+		elem = gst.element_factory_make(elem_type_name, properties.pop("name"))
+	else:
+		elem = gst.element_factory_make(elem_type_name)
 	for name, value in properties.items():
 		elem.set_property(name.replace("_", "-"), value)
 	pipeline.add(elem)
 	if src is not None:
 		src.link(elem)
 	return elem
+
+
+#
+# deferred link helper
+#
+
+
+def src_deferred_link(src, srcpadname, sinkpad):
+	def pad_added(element, pad, (srcpadname, sinkpad)):
+		if pad.get_name() == srcpadname:
+			pad.link(sinkpad)
+	src.connect("pad-added", pad_added, (srcpadname, sinkpad))
 
 
 #
@@ -140,12 +155,6 @@ def mklvshmsrc(pipeline, **properties):
 def mkframecppchanneldemux(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "framecpp_channeldemux", **properties)
 
-def framecppchanneldemux_link(src, srcpadname, sinkpad):
-	def pad_added(element, pad, (srcpadname, sinkpad)):
-		if pad.get_name() == srcpadname:
-			pad.link(sinkpad)
-	src.connect("pad-added", pad_added, (srcpadname, sinkpad))
-
 
 def mkframesink(pipeline, src, **properties):
 	elem = gst.element_factory_make("lal_framesink")
@@ -183,6 +192,10 @@ def mkonlinehoftsrc(pipeline, instrument):
 
 def mkcapsfilter(pipeline, src, caps):
 	return mkgeneric(pipeline, src, "capsfilter", caps = gst.Caps(caps))
+
+
+def mkstatevector(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "lal_statevector", **properties)
 
 
 def mktaginject(pipeline, src, tags):
@@ -275,8 +288,8 @@ def mkresample(pipeline, src, pad_name = None, **properties):
 	return elem
 
 
-def mkwhiten(pipeline, src, psd_mode = 0, zero_pad = 0, fft_length = 8, average_samples = 64, median_samples = 7):
-	return mkgeneric(pipeline, src, "lal_whiten", psd_mode = psd_mode, zero_pad = zero_pad, fft_length = fft_length, average_samples = average_samples, median_samples = median_samples)
+def mkwhiten(pipeline, src, psd_mode = 0, zero_pad = 0, fft_length = 8, average_samples = 64, median_samples = 7, **kwargs):
+	return mkgeneric(pipeline, src, "lal_whiten", psd_mode = psd_mode, zero_pad = zero_pad, fft_length = fft_length, average_samples = average_samples, median_samples = median_samples, **kwargs)
 
 
 def mktee(pipeline, src, pad_name = None):
@@ -317,6 +330,7 @@ def mkfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = No
 	properties = dict((name, value) for name, value in zip(("latency", "fir_matrix", "time_domain", "block_stride"), (latency, fir_matrix, time_domain, block_stride)) if value is not None)
 	return mkgeneric(pipeline, src, "lal_firbank", **properties)
 
+
 def mkiirbank(pipeline, src, a1, b0, delay, name=None):
 	properties = {}
 	if name is not None:
@@ -341,12 +355,10 @@ def mkreblock(pipeline, src, **properties):
 
 
 def mksumsquares(pipeline, src, weights = None):
-	elem = gst.element_factory_make("lal_sumsquares")
 	if weights is not None:
-		elem.set_property("weights", weights)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+		return mkgeneric(pipeline, src, "lal_sumsquares", weights = weights)
+	else:
+		return mkgeneric(pipeline, src, "lal_sumsquares")
 
 
 def mkgate(pipeline, src, threshold = None, control = None, **properties):
@@ -363,12 +375,10 @@ def mkgate(pipeline, src, threshold = None, control = None, **properties):
 
 
 def mkmatrixmixer(pipeline, src, matrix = None):
-	elem = gst.element_factory_make("lal_matrixmixer")
 	if matrix is not None:
-		elem.set_property("matrix", matrix)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+		return mkgeneric(pipeline, src, "lal_matrixmixer", matrix = matrix)
+	else:
+		return mkgeneric(pipeline, src, "lal_matrixmixer")
 
 
 def mktogglecomplex(pipeline, src):
@@ -475,20 +485,14 @@ def mkavimux(pipeline, src):
 	return mkgeneric(pipeline, src, "avimux")
 
 
-def mkaudioconvert(pipeline, src, pad_name = None, caps_string = None):
-	elem = gst.element_factory_make("audioconvert")
-	pipeline.add(elem)
-	if pad_name is None:
-		src.link(elem)
-	else:
-		src.link_pads(pad_name, elem, "sink")
-	src = elem
+def mkaudioconvert(pipeline, src, caps_string = None):
+	elem = mkgeneric(pipeline, src, "audioconvert")
 	if caps_string is not None:
-		src = mkcapsfilter(pipeline, src, caps_string)
-	return src
+		elem = mkcapsfilter(pipeline, elem, caps_string)
+	return elem
 
 
-def mkaudiorate(pipeline, src, pad_name = None, verbose = False, **properties):
+def mkaudiorate(pipeline, src, pad_name = None, request = False, **properties):
 	elem = gst.element_factory_make("audiorate")
 	pipeline.add(elem)
 	for name, value in properties.items():
@@ -499,14 +503,26 @@ def mkaudiorate(pipeline, src, pad_name = None, verbose = False, **properties):
 		src.link_pads(pad_name, elem, "sink")
 	src = elem
 	
-	if verbose:
+	if request:
 		src.set_property("silent", False)
 		def print_val(elem, val, prop):
-			sin = elem.get_property("in")
-			sout = elem.get_property("out")
 			add = elem.get_property("add")
 			drop = elem.get_property("drop")
-			print >> sys.stderr, "audiorate: add %d | drop %d | in %d | out %d" % (add, drop, sin, sout)
+			# FIXME this also gets printed to stderr so that we have a log of this since it is an error really
+			print >> sys.stderr, "audiorate: add %d | drop %d" % (add, drop)
+			# FIXME Make url request
+			# FIXME handle better if name is not provided
+			try:
+				fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_" + properties['name'] + ".txt")
+			except KeyError:
+				fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_audiorate.txt")
+			try:
+				os.remove(fname)
+			except OSError:
+				pass
+			f = open(fname, "w")
+			f.write("%.14g %d %d\n" % (float(XLALUTCToGPS(time.gmtime())), add, drop))
+			
 		src.connect_after("notify::add", print_val, "add")
 		src.connect_after("notify::drop", print_val, "drop")
 
