@@ -26,12 +26,12 @@ Summary: Files and documentation needed for compiling gstlal-based plugins and p
 Group: LSC Software/Data Analysis
 Requires: %{name} = %{version} python-devel >= 2.6 fftw-devel >= 3 gstreamer-devel >= 0.10.32 gstreamer-plugins-base-devel >= 0.10.32 pygobject2-devel lal-devel >= 6.6.0 lalframe-devel >= 1.0.3 lalmetaio-devel >= 1.0.2 lalsimulation-devel >= 0.1.0 lalburst-devel >= 1.1.0 lalinspiral-devel >= 1.2.0 gsl-devel
 %description devel
-This package contains the files needed for building gstlal plugins and
-programs.
+This package contains the files needed for building gstlal-based plugins
+and programs.
 
 
 %prep
-%setup -q -n gstlal-%{version}
+%setup -q -n %{name}-%{version}
 
 
 %build
