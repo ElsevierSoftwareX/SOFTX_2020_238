@@ -1,0 +1,204 @@
+#!/usr/bin/python
+import sys
+import cgi
+import cgitb
+import os
+os.environ["MPLCONFIGDIR"] = "/tmp"
+import matplotlib
+matplotlib.use('Agg')
+import numpy
+# FIXME don't import this when it is "real"
+from numpy import random
+import matplotlib.pyplot as plt
+import time
+cgitb.enable()
+form = cgi.FieldStorage()
+
+def now():
+	#FIXME use pylal when available
+	return time.time() - 315964785
+
+def read_registry(dir, dataurl, idrange):
+	nodedict = {}
+	ids = ['%04d' % (job,) for job in range(idrange[0], idrange[1]+1)]
+	for id in ids:
+		url = '%s/%s%s' % (dir, id, dataurl)
+		# FIXME relies on 4 digit id
+		try:
+			tmp = open(url,"r")
+			tag, node = tmp.readline().split()
+			tmp.close()
+			nodedict[id] = node
+		except IOError:
+			nodedict[id] = ""
+	return nodedict
+	
+
+def plot(dir, dataurl, idrange, registry, col = 1, plottype = "value", datatype = "last", scale = "linear", xlabel = "", ylabel = "", title = ""):
+	fig = plt.figure(figsize=(25,6.5),)
+	fig.patch.set_alpha(0.0)
+	h = fig.add_subplot(111, axisbg = 'k')
+	plt.subplots_adjust(left = .05, right = 0.98, bottom = 0.3)
+
+	data = []
+	timestamp = []
+	ids = ['%04d' % (job,) for job in range(idrange[0], idrange[1]+1)]
+
+	nan = float("nan")
+
+	for id in ids:
+		url = '%s/%s%s' % (dir, id, dataurl)
+		# FIXME relies on 4 digit id
+		try:
+			tmp = numpy.loadtxt(url)
+			# FIXME ARGH THIS FUNCTION SUCKS!
+			if len(tmp.shape) == 1:
+				tmp = tmp.reshape((1, tmp.shape[0]))
+			if datatype == "last":
+				data.append(tmp[-1,col])
+			if datatype == "max":
+				data.append(tmp[:,col].max())
+			timestamp.append(now() - tmp[-1,0] )
+		except IOError:
+			data.append(nan)
+			timestamp.append(nan)
+		except ValueError:
+			data.append(nan)
+			timestamp.append(nan)
+	def process(plotdata):
+		# first get the found and missing data
+		data = numpy.array(plotdata)
+		foundindices = [i for i,d in enumerate(data) if numpy.isfinite(d)]
+		founddata = data[numpy.isfinite(data)]
+		missingindices = [i for i,d in enumerate(data) if numpy.isnan(d)]
+		missingdata = data[numpy.isnan(data)]
+
+		# figure out the maximum
+		if len(founddata):
+			maxdata = founddata.max() or 1 #(so that log10 of it is 0)
+		else:
+			maxdata = 1
+		
+		if scale == "log":
+			if maxdata <= 1:
+				missingvalue = -0.05
+			else:
+				missingvalue = -0.05 * numpy.log10(maxdata)
+		else:
+			missingvalue = -0.05 * maxdata
+
+		# give all the missing data the value badvalue
+		h.bar(missingindices, [missingvalue for d in missingindices], color='r', alpha=0.95, linewidth=2)
+
+		# then the regular data
+		if scale == "log":
+			if len(founddata):
+				founddata[founddata == 0] = 1
+				founddata = numpy.log10(founddata) # ones become zero again
+				maxdata = founddata.max() or 1
+			else:
+				maxdata = 0
+		h.bar(foundindices, founddata, color='w', alpha=0.95, linewidth=2)
+
+		
+		# The ticks
+		if scale == "log":
+			yticks = ["%.2g" % num for num in 10**numpy.linspace(0, maxdata,6)]
+			plt.yticks(numpy.linspace(0, maxdata,6), yticks)
+		x = numpy.arange(len(data))
+		ticks = ["%s : %s " % (id, registry[id]) for id in ids]
+		plt.xticks(x+.3, ticks, rotation=90)
+
+		# the y label
+		plt.ylabel(ylabel, fontsize = 18)
+
+		# the limits
+		plt.ylim([missingvalue, maxdata])
+		plt.xlim([x[0], x[-1]+1])
+		
+		# the title
+		plt.title(title, fontsize=18)
+
+		# save it
+		plt.savefig(sys.stdout, format="svg")
+	
+	if plottype == "value":
+		process(data)
+	if plottype == "timestamp":
+		process(timestamp)
+
+
+if "dir" not in form:
+	raise ValueError("must specify dir")
+if "id" not in form:
+	raise ValueError("must specify id")
+
+idrange = [int(n) for n in form.getvalue("id").split(",")]
+reg = read_registry(form.getvalue("dir"), "_registry.txt", idrange)
+
+# Header
+print >>sys.stdout, 'Cache-Control: no-cache, must-revalidate'
+print >>sys.stdout, 'Expires: Mon, 26 Jul 1997 05:00:00 GMT'
+print >>sys.stdout, 'Content-type: text/html\r\n'
+
+# HTML preamble
+print """
+<html>
+<head>
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="-1">
+<meta http-equiv="CACHE-CONTROL" content="NO-CACHE">
+</head>
+<body bgcolor=#E0E0E0 face="Arial">
+"""
+
+# title
+print "<center><h1>Low-latency Compact Binary Online (LCBO) summary: %d - %s </h1></center><br>" % (int(now()), time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime()))
+
+# start a table
+print "<table>"
+
+# latency history
+print "<tr><td><div id='canvaslatency'>"
+plot(form.getvalue("dir"), '_latency_history.txt', idrange, reg, ylabel = "Latency (s)", title = "Latency summary of all jobs, red means data is missing")
+print "</div></td></tr>"
+
+# RAM history
+print "<tr><td><div id='canvasram'>"
+plot(form.getvalue("dir"), '_ram_history.txt', idrange, reg, ylabel = "RAM (GB)", title = "RAM summary of all jobs, red means data is missing")
+print "</div></td></tr>"
+
+# max SNR
+print "<tr><td><div id='canvassnr'>"
+plot(form.getvalue("dir"), '_snr_history.txt', idrange, reg, datatype = "max", ylabel = "SNR", title = "max(SNR) of recent triggers summary of all jobs, red means data is missing")
+print "</div></td></tr>"
+
+# last update
+print "<tr><td><div id='canvasupdate'>"
+plot(form.getvalue("dir"), '_snr_history.txt', idrange, reg, plottype = "timestamp", ylabel = "Time (s)", scale = "log", xlabel = "Time before now (s)", title = "Time since last event (s), red means data is missing")
+print "</div></td></tr>"
+
+for ifo in ["H1", "H2", "L1", "V1"]:
+	# fault samples
+	print "<tr><td><div id='canvas%s%s'>" % (ifo, "discont")
+	plot(form.getvalue("dir"), '_%sstrain_add_drop.txt' % ifo, idrange, reg, datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Data dropped, red means no data" % ifo)
+	print "</div></td></tr>"
+
+	# deadtime
+	print "<tr><td><div id='canvas%s%s'>" % (ifo, "deadtime")
+	plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Dead time, red means no data" % ifo)
+	print "</div></td></tr>"
+	
+	# livetime
+	print "<tr><td><div id='canvas%s%s'>" % (ifo, "livetime")
+	plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, col = 2, datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Live time, red means no data" % ifo)
+	print "</div></td></tr>"
+
+# end a table
+print "</table>"
+
+# links at bottom
+for k in range(idrange[0], idrange[1]+1):
+	print '<a href="llcbcnode?dir=%s&id=%04d">%04d</a>' % (form.getvalue("dir"), k, k)
+print "</body>"
+
