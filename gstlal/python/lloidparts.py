@@ -270,8 +270,14 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		strain = pipeparts.mkaudioconvert(pipeline, None)
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, detector.channel), strain.get_pad("sink"))
 		strain = pipeparts.mkqueue(pipeline, strain, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
-		#FIXME don't hardcode request = True
-		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, request = True, name = "%saudiorate" % (instrument,))
+		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
+		@bottle.route("%s/strain_add_drop.txt")
+		def strain_add(elem = strain):
+			from pylal.date import XLALUTCToGPS
+			t = float(XLALUTCToGPS(time.gmtime()))
+			add = elem.get_property("add")
+			drop = elem.get_property("drop")
+			return "%.9f %d %d" % (t, add, drop)
 
 		# state vector
 		statevector = gst.element_factory_make("queue")
@@ -282,7 +288,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		# FIXME:  don't hard-code channel name
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, "FAKE-STATE_VECTOR"), statevector.get_pad("sink"))
 		#FIXME we don't add a signal handler to the statevector audiorate, I assume it should report the same missing samples?
-		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True, request = False)
+		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True)
 		# FIXME:  what bits do we need on and off?  and don't hard code them
 		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 45)
 

@@ -61,6 +61,7 @@ from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals
 from pylal import ligolw_burca_tailor
 from pylal import ligolw_tisi
 from pylal import rate
+from gstlal import bottle
 from gstlal import streamthinca
 from gstlal import svd_bank
 from gstlal import far
@@ -532,8 +533,6 @@ class Data(object):
 		# Fun output stuff
 		#
 		
-		self.last_time = time.time()
-		self.output_interval = 60
 		self.latency_histogram = rate.BinnedArray(rate.NDBins((rate.LinearPlusOverflowBins(5, 205, 22),)))
 		self.latency_history = deque(maxlen=1000)
 		self.snr_history = deque(maxlen=1000)
@@ -617,15 +616,6 @@ class Data(object):
 			if self.gracedb_far_threshold is not None:
 				self.do_gracedb_alerts()
 				self.update_eye_candy()
-
-				# only write output every once in a while
-				if (time.time() - self.last_time) > self.output_interval:
-					self.last_time = time.time()
-					# FIXME update various eye candy outputs, only do when doing gracedb since we must be "online"
-					self.write_latency_history()
-					self.write_latency_histogram()
-					self.write_snr_history()
-					self.write_ram_history()
 		finally:
 			self.lock.release()
 
@@ -735,59 +725,31 @@ class Data(object):
 				self.snr_history.append(snr_val)
 
 
+	@bottle.route("/latency_histogram.txt")
 	def write_latency_histogram(self):
-		# FIXME Make url request
-		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_latency_histogram.txt")
-		try:
-			os.remove(fname)
-		except OSError:
-			pass
-		f = open(fname, "w")
 		for latency, number in zip(self.latency_histogram.centres()[0][1:-1], self.latency_histogram.array[1:-1]):
-			f.write("%e %e\n" % (latency, number))
-		f.close()
+			yield "%e %e\n" % (latency, number)
 
 
+	@bottle.route("/latency_history.txt")
 	def write_latency_history(self):
-		# FIXME make url request
-		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_latency_history.txt")
-		try:
-			os.remove(fname)
-		except OSError:
-			pass
-		f = open(fname, "w")
 		# first one in the list is sacrificed for a time stamp
 		for time, latency in self.latency_history:
-			f.write("%f %e\n" % (time, latency))
-		f.close()
-	
-	
+			yield "%f %e\n" % (time, latency)
+
+
+	@bottle.route("/snr_history.txt")
 	def write_snr_history(self):
-		# FIXME make url request
-		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_snr_history.txt")
-		try:
-			os.remove(fname)
-		except OSError:
-			pass
-		f = open(fname, "w")
 		# first one in the list is sacrificed for a time stamp
 		for time, snr in self.snr_history:
-			f.write("%f %e\n" % (time, snr))
-		f.close()
-	
-	
+			yield "%f %e\n" % (time, snr)
+
+
+	@bottle.route("/ram_history.txt")
 	def write_ram_history(self):
-		# FIXME make url request
-		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_ram_history.txt")
-		try:
-			os.remove(fname)
-		except OSError:
-			pass
-		f = open(fname, "w")
 		# first one in the list is sacrificed for a time stamp
 		for time, ram in self.ram_history:
-			f.write("%f %e\n" % (time, ram))
-		f.close()
+			yield "%f %e\n" % (time, ram)
 
 
 	def write_output_file(self, likelihood_file = None, verbose = False):
