@@ -271,8 +271,9 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, detector.channel), strain.get_pad("sink"))
 		strain = pipeparts.mkqueue(pipeline, strain, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
 		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
-		@bottle.route("%s/strain_add_drop.txt")
+		@bottle.route("/%s/strain_add_drop.txt" % instrument)
 		def strain_add(elem = strain):
+			import time
 			from pylal.date import XLALUTCToGPS
 			t = float(XLALUTCToGPS(time.gmtime()))
 			add = elem.get_property("add")
@@ -291,6 +292,15 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True)
 		# FIXME:  what bits do we need on and off?  and don't hard code them
 		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 45)
+		@bottle.route("/%s/state_vector_on_off_gap.txt" % instrument)
+		def state_vector_state(elem = statevector):
+			import time
+			from pylal.date import XLALUTCToGPS
+			t = float(XLALUTCToGPS(time.gmtime()))
+			on = elem.get_property("on-samples")
+			off = elem.get_property("off-samples")
+			gap = elem.get_property("gap-samples")
+			return "%.9f %d %d %d" % (t, on, off, gap)
 
 		# use state vector to gate strain
 		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = statevector)
