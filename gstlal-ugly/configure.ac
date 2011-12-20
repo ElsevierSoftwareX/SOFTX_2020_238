@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-ugly],[0.1.0],[gstlal-discuss@gravity.phys.uwm.edu],[gstlal])
+AC_INIT([gstlal-ugly],[0.1.0],[gstlal-discuss@gravity.phys.uwm.edu],[gstlal-ugly])
 AC_COPYRIGHT([Copyright (C) 2008--2011 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -13,6 +13,7 @@ AC_CONFIG_MACRO_DIR([gnuscripts])
 AM_INIT_AUTOMAKE([1.9 tar-ustar foreign])
 AC_CONFIG_FILES([ \
 	Makefile \
+	gstlal-ugly.spec \
 	lib/gstlal-ugly.pc \
 	lib/Makefile \
 	lib/skymap/Makefile \
@@ -82,6 +83,9 @@ PKG_PROG_PKG_CONFIG()
 
 AM_PATH_PYTHON([2.4],,)
 AX_PYTHON_DEVEL()
+# force python modules into same directory as gstlal
+AC_SUBST([pkgpythondir], ["\${pythondir}/gstlal"])
+AC_SUBST([pkgpyexecdir], ["\${pyexecdir}/gstlal"])
 
 
 #
