@@ -278,7 +278,8 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 			t = float(XLALUTCToGPS(time.gmtime()))
 			add = elem.get_property("add")
 			drop = elem.get_property("drop")
-			return "%.9f %d %d" % (t, add, drop)
+			# FIXME don't hard code the sample rate
+			return "%.9f %d %d" % (t, add / 16384., drop / 16384.)
 
 		# state vector
 		statevector = gst.element_factory_make("queue")
