@@ -1,0 +1,43 @@
+#!/usr/bin/python
+import sys
+import os
+import urllib
+
+#FIXME use cgi url parsing, or optparse
+# usage gstlal_ll_inspiral_get_urls /path/to/process/registry/files IDstart,IDstop
+# Example: ./gstlal_ll_inspiral_get_urls ./ 0152,0153
+
+directory = sys.argv[1]
+idrange = [int(n) for n in sys.argv[2].split(",")]
+
+#FIXME a service registry would be nice
+def read_registry(dir, dataurl, idrange):
+	nodedict = {}
+	ids = ['%04d' % (job,) for job in range(idrange[0], idrange[1]+1)]
+	for id in ids:
+		url = '%s/%s%s' % (dir, id, dataurl)
+		# FIXME relies on 4 digit id
+		try:
+			tmp = open(url,"r")
+			tag, node = tmp.readline().split()
+			tmp.close()
+			nodedict[id] = node
+		except IOError:
+			#FIXME what should be done?
+			pass
+	return nodedict
+
+reg = read_registry(directory, "_registry.txt", idrange)
+
+for id, node in reg.items():
+	print >> sys.stderr, "requesting data from %s..." % node
+	#FIXME a service registry would be nice
+	for request in ("latency_histogram.txt", "latency_history.txt", "snr_history.txt", "ram_history.txt", "H1/strain_add_drop.txt", "H2/strain_add_drop.txt", "L1/strain_add_drop.txt", "V1/strain_add_drop.txt", "H1/state_vector_on_off_gap.txt", "H2/state_vector_on_off_gap.txt", "L1/state_vector_on_off_gap.txt", "V1/state_vector_on_off_gap.txt"):
+		fname = "%s_%s" % (id, request.replace("/",""))
+		try: os.remove(fname) # do this first to help nfs register the new file
+		except OSError: pass  # File not present is not a problem here
+		url = "http://%s:16953/%s" % (node, request)
+		try:
+			urllib.urlretrieve(url, fname)
+		except IOError as (errno, strerror):
+			print >> sys.stderr, "I/O error({0}): {1} on request {2}".format(errno, strerror, url)
