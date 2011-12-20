@@ -167,7 +167,10 @@ GST_BOILERPLATE(
 
 enum property {
 	ARG_REQUIRED_ON = 1,
-	ARG_REQUIRED_OFF
+	ARG_REQUIRED_OFF,
+	ARG_ON_SAMPLES,
+	ARG_OFF_SAMPLES,
+	ARG_GAP_SAMPLES
 };
 
 
@@ -336,6 +339,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		while(in < end) {
 			guint input = element->get_input(&in);
 			*out++ = ((input & required_on) == required_on) && ((~input & required_off) == required_off) ? 0x80: 0x00;
+			if (*out) element->on_samples += 1;
+			else element->off_samples += 1;
 		}
 	} else {
 		/*
@@ -344,6 +349,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
+		element->gap_samples += GST_BUFFER_SIZE(outbuf) / sizeof(guint8);
 	}
 
 	/*
@@ -383,6 +389,18 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		element->required_off = g_value_get_uint(value);
 		break;
 
+	case ARG_ON_SAMPLES:
+		/* Read only should never get here? */
+		break;
+	
+	case ARG_OFF_SAMPLES:
+		/* Read only should never get here? */
+		break;
+	
+	case ARG_GAP_SAMPLES:
+		/* Read only should never get here? */
+		break;
+	
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -410,6 +428,18 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 	case ARG_REQUIRED_OFF:
 		g_value_set_uint(value, element->required_off);
+		break;
+
+	case ARG_ON_SAMPLES:
+		g_value_set_uint64(value, element->on_samples);
+		break;
+
+	case ARG_OFF_SAMPLES:
+		g_value_set_uint64(value, element->off_samples);
+		break;
+
+	case ARG_GAP_SAMPLES:
+		g_value_set_uint64(value, element->gap_samples);
 		break;
 
 	default:
@@ -477,6 +507,39 @@ static void gstlal_statevector_class_init(GSTLALStateVectorClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_ON_SAMPLES,
+		g_param_spec_uint64(
+			"on-samples",
+			"On samples",
+			"Number of samples seen thus far marked as on",
+			0, G_MAXUINT, 0,
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_OFF_SAMPLES,
+		g_param_spec_uint64(
+			"off-samples",
+			"Off samples",
+			"Number of samples seen thus far marked as off",
+			0, G_MAXUINT, 0,
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_GAP_SAMPLES,
+		g_param_spec_uint64(
+			"gap-samples",
+			"Gap samples",
+			"number of samples seen thus far marked as gap",
+			0, G_MAXUINT, 0,
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+		)
+	);
 }
 
 
@@ -489,5 +552,8 @@ static void gstlal_statevector_init(GSTLALStateVector *filter, GSTLALStateVector
 {
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);
 
+	filter->on_samples = 0;
+	filter->off_samples = 0;
+	filter->gap_samples = 0;
 	filter->get_input = NULL;
 }
