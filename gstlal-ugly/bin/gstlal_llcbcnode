@@ -62,8 +62,8 @@ def livetime_plot(disconturl, livetimeurl, xlabel = "", ylabel = "", title = "")
 	lt = livetimedata[2]
 	discont = discontdata[1]
 	data = [dt, lt, discont]
-	explode = [0.15, 0, 0.15]
-	labels = ["Dead : %g (s)" % dt, "Live : %g (s)" % lt, "Dropped : %g (s)" % discont]
+	explode = [0.0, 0, 0.15]
+	labels = ["Dead : %g (s)" % dt, "Live : %g (s)" % lt, "Drop : %g (s)" % discont]
 
 	h.pie(data, shadow=True, explode = explode, labels = labels, autopct='%1.1f%%', colors = ('0.5', '1.0', 'r')) #dropped is bad so we make it red
 
@@ -151,19 +151,19 @@ print"</table>"
 print "<table face='Arial'>"
 
 print "<tr><td><div id='canvase'>"
-livetime_plot(baseurl+'_H1strain_add_drop.txt', baseurl+'_H1state_vector_on_off_gap.txt')
+livetime_plot(baseurl+'_H1strain_add_drop.txt', baseurl+'_H1state_vector_on_off_gap.txt', title="H1")
 print "</div></td>"
 
 print "<td><div id='canvasf'>"
-livetime_plot(baseurl+'_H2strain_add_drop.txt', baseurl+'_H2state_vector_on_off_gap.txt')
+livetime_plot(baseurl+'_H2strain_add_drop.txt', baseurl+'_H2state_vector_on_off_gap.txt', title="H2")
 print "</div></td></tr>"
 
 print "<tr><td><div id='canvasg'>"
-livetime_plot(baseurl+'_L1strain_add_drop.txt', baseurl+'_L1state_vector_on_off_gap.txt')
+livetime_plot(baseurl+'_L1strain_add_drop.txt', baseurl+'_L1state_vector_on_off_gap.txt', title="L1")
 print "</div></td>"
 
 print "<td><div id='canvash'>"
-livetime_plot(baseurl+'_V1strain_add_drop.txt', baseurl+'_V1state_vector_on_off_gap.txt')
+livetime_plot(baseurl+'_V1strain_add_drop.txt', baseurl+'_V1state_vector_on_off_gap.txt', title="V1")
 print "</div></td></tr>"
 
 print"</table>"
