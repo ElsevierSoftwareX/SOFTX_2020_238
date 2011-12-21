@@ -351,7 +351,7 @@ class DistributionsStats(object):
 				#FIXME keep synced with the likelihood_params_func!!
 				binarr[snr, chisq / snr**2] += 1
 
-	def synthesize_injections(self, prefactor = .5, df = 16, N = 1000000, verbose = False):
+	def synthesize_injections(self, prefactor = .6, df = 12, N = 10000000, verbose = False):
 		# FIXME:  for maintainability, this should be modified to
 		# use the .add_injection() method of the .raw_distributions
 		# attribute, but that will slow this down
@@ -423,6 +423,7 @@ class Data(object):
 		bottle.route("/latency_history.txt")(self.write_latency_history)
 		bottle.route("/snr_history.txt")(self.write_snr_history)
 		bottle.route("/ram_history.txt")(self.write_ram_history)
+		bottle.route("/likelihood.xml")(self.write_likelihood_file)
 
 		self.lock = threading.Lock()
 		self.filename = filename
@@ -625,6 +626,26 @@ class Data(object):
 		finally:
 			self.lock.release()
 
+
+	def write_likelihood_file(self):
+		# FIXME:  the signal.signal() function is
+		# disabled for the duration of the
+		# .write_fileobj() call to work around some
+		# threading problems.  Glue should be
+		# modified to make signal trapping optional
+		# so that this isn't needed.  Remove when
+		# that's taken care of.
+				
+		# write the new distribution stats to disk
+		output = StringIO.StringIO()
+		orig_signal = utils.signal.signal
+		utils.signal.signal = lambda *args: None
+		xmldoc = ligolw_burca_tailor.gen_likelihood_control(self.distribution_stats.raw_distributions ,segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), u"gstlal_inspiral_likelihood")
+		utils.write_fileobj(xmldoc, output)
+		utils.signal.signal = orig_signal
+		outstr = output.getvalue()
+		output.close()
+		return outstr
 
 	def flush(self):
 		# run StreamThinca's .flush().  returns the last remaining
