@@ -29,7 +29,10 @@ def plot(dataurl, plottype, xlabel = "", ylabel = "", title = ""):
 	if plottype == "plot":
 		h.plot(data[:,0], data[:,1], 'w', alpha=0.75, linewidth=2)
 	if plottype == "loglog":
-		h.loglog(data[:,0], data[:,1], 'w', alpha=0.75, linewidth=2)
+		x = data[:,0]
+		y = data[:,1]
+		y[y == 0] = 1e-100
+		h.loglog(x, y, 'w', alpha=0.75, linewidth=2)
 	if plottype == "hist":
 		from scipy.interpolate import interp1d
 		x = numpy.linspace(data[0,0], data[-1,0], 100)
@@ -73,30 +76,39 @@ def livetime_plot(disconturl, livetimeurl, xlabel = "", ylabel = "", title = "")
 	plt.savefig(sys.stdout, format="svg")
 
 
-def plotsnrchisq(url, name = "gstlal_inspiral_likelihood"):
+def plotsnrchisq(url, type = "background", name = "gstlal_inspiral_likelihood"):
 	from glue.ligolw import utils
 	from pylal import ligolw_burca_tailor
+	from pylal import rate
+
+	filt = rate.gaussian_window2d(5, 5, sigma = 8)	
 	coincparamsdistributions, likelihood_seglists = ligolw_burca_tailor.load_likelihood_data([url], u"gstlal_inspiral_likelihood", verbose = False)
 
 	fig = plt.figure(figsize = (10.5,7))
-	plt.gray()
+	#plt.gray()
 	fig.patch.set_alpha(0.0)
 	for i, ifo in enumerate(['H1','H2','L1', 'V1']):
 		ax = fig.add_subplot(2,2,i+1)
-		H1 = coincparamsdistributions.background_rates[ifo+"_snr_chi"].array
+		if type == "likelihood":
+			inj = coincparamsdistributions.injection_rates[ifo+"_snr_chi"].array
+			back = coincparamsdistributions.background_rates[ifo+"_snr_chi"].array
+			H1 = rate.filter_array(inj, filt) / rate.filter_array(back, filt)
+		if type == "background":
+			H1 = rate.filter_array(coincparamsdistributions.background_rates[ifo+"_snr_chi"].array, filt)
 		snr = coincparamsdistributions.background_rates[ifo+"_snr_chi"].bins[0].centres()[1:-1]
 		chi = coincparamsdistributions.background_rates[ifo+"_snr_chi"].bins[1].centres()[1:-1]
 		chi[0] = 0 # not inf
 		plt.pcolormesh(snr, chi, numpy.log10(H1.T+1)[1:-1,1:-1])
-		ax.set_yscale('linear')
+		ax.set_yscale('log')
 		ax.set_xscale('log')
 		plt.colorbar()
 		if i in (2,3):
 			plt.xlabel('SNR')
 		if i in (0,2):
 			plt.ylabel('reduced chisq / SNR^2')
-		plt.title(ifo)
+		plt.title( "%s %s" % (ifo, type))
 		plt.xlim([4., 100.])
+		plt.ylim([.005, .5])
 		plt.grid()
 	# one figure, four subplots
 	import StringIO,base64
@@ -136,9 +148,9 @@ print "</div></td>"
 
 print "<td><div id='canvasb'>"
 plot(baseurl+'_latency_histogram.txt', "hist", ylabel = "Count", xlabel = "Latency (s)")
-print "</div></td></tr>"
+print "</div></td>"
 
-print "<tr><td><div id='canvasc'>"
+print "<td><div id='canvasc'>"
 plot(baseurl+'_snr_history.txt', "history", ylabel = "SNR", xlabel = "Time since last trigger (s)")
 print "</div></td>"
 
@@ -148,31 +160,33 @@ print "</div></td></tr>"
 
 print"</table>"
 
-print "<table face='Arial'>"
 
-print "<tr><td><div id='canvase'>"
-livetime_plot(baseurl+'_H1strain_add_drop.txt', baseurl+'_H1state_vector_on_off_gap.txt', title="H1")
-print "</div></td>"
+# Pie table
+print "<table face='Arial'><tr>"
+for ifo in ("H1", "H2", "L1", "V1"):
+	print "<td><div id='canvas%spie'>" % (ifo,)
+	livetime_plot(baseurl+'_%sstrain_add_drop.txt' % ifo, baseurl+'_%sstate_vector_on_off_gap.txt' % ifo, title = ifo)
+	print "</div></td>"
+print"</tr></table>"
 
-print "<td><div id='canvasf'>"
-livetime_plot(baseurl+'_H2strain_add_drop.txt', baseurl+'_H2state_vector_on_off_gap.txt', title="H2")
-print "</div></td></tr>"
-
-print "<tr><td><div id='canvasg'>"
-livetime_plot(baseurl+'_L1strain_add_drop.txt', baseurl+'_L1state_vector_on_off_gap.txt', title="L1")
-print "</div></td>"
-
-print "<td><div id='canvash'>"
-livetime_plot(baseurl+'_V1strain_add_drop.txt', baseurl+'_V1state_vector_on_off_gap.txt', title="V1")
-print "</div></td></tr>"
-
-print"</table>"
+# Psd table
+print "<table face='Arial'><tr>"
+for ifo in ("H1", "H2", "L1", "V1"):
+	print "<td><div id='canvas%spsd'>" % (ifo,)
+	plot(baseurl+'_%spsd.txt' % ifo, "loglog", ylabel = "Power (strain^2/Hz)", xlabel = "Frequency (Hz)", title = ifo)
+	print "</div></td>"
+print"</tr></table>"
 
 
 try:
-	plotsnrchisq(baseurl+'-likelihood.xml.gz')
+	print "<table face='Arial'><tr>"
+	print "<td>"
+	plotsnrchisq(baseurl+'_likelihood.xml')
+	print "</td><td>"
+	plotsnrchisq(baseurl+'_likelihood.xml', type = "likelihood")
+	print "</td></tr></table>"
 except ImportError:
-	print "<h2>requires pylal to produce snr / chisq plots</h2>"
+	print "<h2>requires pylal to produce snr / chisq plots</h2></td></tr></table>"
 
 
 print "</body>"
