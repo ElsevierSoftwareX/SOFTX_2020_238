@@ -20,15 +20,15 @@ def now():
 
 def read_registry(dir, dataurl, idrange):
 	nodedict = {}
+	# FIXME relies on 4 digit id
 	ids = ['%04d' % (job,) for job in range(idrange[0], idrange[1]+1)]
 	for id in ids:
 		url = '%s/%s%s' % (dir, id, dataurl)
-		# FIXME relies on 4 digit id
 		try:
 			tmp = open(url,"r")
-			tag, node = tmp.readline().split()
+			tag, node = tmp.readline().replace("#","").split()
+			nodedict[(id, node)] = tmp.readlines()
 			tmp.close()
-			nodedict[id] = node
 		except IOError:
 			nodedict[id] = ""
 	return nodedict
@@ -199,6 +199,6 @@ print "</table>"
 
 # links at bottom
 for k in range(idrange[0], idrange[1]+1):
-	print '<a href="llcbcnode?dir=%s&id=%04d">%04d</a>' % (form.getvalue("dir"), k, k)
+	print '<a href="gstlal_llcbcnode?dir=%s&id=%04d">%04d</a>' % (form.getvalue("dir"), k, k)
 print "</body>"
 
