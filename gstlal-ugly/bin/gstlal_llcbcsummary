@@ -27,7 +27,7 @@ def read_registry(dir, dataurl, idrange):
 		try:
 			tmp = open(url,"r")
 			tag, node = tmp.readline().replace("#","").split()
-			nodedict[(id, node)] = tmp.readlines()
+			nodedict[id] = node
 			tmp.close()
 		except IOError:
 			nodedict[id] = ""
