@@ -351,7 +351,7 @@ class DistributionsStats(object):
 				#FIXME keep synced with the likelihood_params_func!!
 				binarr[snr, chisq / snr**2] += 1
 
-	def synthesize_injections(self, prefactor = .3, df = 24, N = 1000000, verbose = False):
+	def synthesize_injections(self, prefactor = .5, df = 16, N = 1000000, verbose = False):
 		# FIXME:  for maintainability, this should be modified to
 		# use the .add_injection() method of the .raw_distributions
 		# attribute, but that will slow this down
