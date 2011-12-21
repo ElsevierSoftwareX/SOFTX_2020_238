@@ -40,7 +40,6 @@ import gst
 
 
 from glue import segments
-from pylal.date import XLALUTCToGPS
 
 import pipeio
 
@@ -492,7 +491,7 @@ def mkaudioconvert(pipeline, src, caps_string = None):
 	return elem
 
 
-def mkaudiorate(pipeline, src, pad_name = None, request = False, **properties):
+def mkaudiorate(pipeline, src, pad_name = None, **properties):
 	elem = gst.element_factory_make("audiorate")
 	pipeline.add(elem)
 	for name, value in properties.items():
@@ -501,32 +500,7 @@ def mkaudiorate(pipeline, src, pad_name = None, request = False, **properties):
 		src.link(elem)
 	else:
 		src.link_pads(pad_name, elem, "sink")
-	src = elem
-	
-	if request:
-		src.set_property("silent", False)
-		def print_val(elem, val, prop):
-			add = elem.get_property("add")
-			drop = elem.get_property("drop")
-			# FIXME this also gets printed to stderr so that we have a log of this since it is an error really
-			print >> sys.stderr, "audiorate: add %d | drop %d" % (add, drop)
-			# FIXME Make url request
-			# FIXME handle better if name is not provided
-			try:
-				fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_" + properties['name'] + ".txt")
-			except KeyError:
-				fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_audiorate.txt")
-			try:
-				os.remove(fname)
-			except OSError:
-				pass
-			f = open(fname, "w")
-			f.write("%.14g %d %d\n" % (float(XLALUTCToGPS(time.gmtime())), add, drop))
-			
-		src.connect_after("notify::add", print_val, "add")
-		src.connect_after("notify::drop", print_val, "drop")
-
-	return src
+	return elem
 
 
 def mkflacenc(pipeline, src, quality = 0, **properties):

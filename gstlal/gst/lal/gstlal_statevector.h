@@ -59,6 +59,9 @@ typedef struct GSTLALStateVector {
 	guint required_on;
 	guint required_off;
 	guint mask;
+	guint64 on_samples;
+	guint64 off_samples;
+	guint64 gap_samples;
 
 	guint (*get_input)(void **);
 } GSTLALStateVector;

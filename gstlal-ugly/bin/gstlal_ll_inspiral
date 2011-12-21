@@ -133,7 +133,7 @@ def parse_command_line():
 	parser.add_option("--likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial likelihood ratio data (required).")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
-	parser.add_option("--job-tag", help = "Set the string to be recorded in output files for plot data")
+	parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node. Should 4 digits of the form 0001, 0002, etc.  required")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
@@ -144,7 +144,7 @@ def parse_command_line():
 	if options.reference_psd is None and not options.track_psd:
 		raise ValueError("must use --track-psd if no reference psd is given, you can use both simultaneously")
 
-	required_options = ["output", "likelihood_file"]
+	required_options = ["output", "likelihood_file", "job_tag"]
 	
 	missing_options = []
 	if options.svd_bank is None:
@@ -152,6 +152,14 @@ def parse_command_line():
 	missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
+
+	# sanity check the job id
+	if len(options.job_tag) != 4:
+		raise ValueError("job id should be a 4 digit string that can convert to an int")	
+	try:
+		int(options.job_tag)
+	except ValueError:
+		raise ValueError("job id should be a 4 digit string that can convert to an int")
 
 	# Get the banks and make the detectors
 	# FIXME add error checking on length of banks per detector, etc
@@ -179,21 +187,33 @@ def parse_command_line():
 	# it in with the options is a convenient home
 	options.psd_fft_length = 8	# seconds
 
-	# FIXME a hack to output data until the webserver is in place without passing around yet more variables
-	if options.job_tag is not None:
-		os.environ['GSTLAL_LL_JOB'] = options.job_tag
-		host = socket.gethostname()
-		fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_registry.txt")
-		f = open(fname, "w")
-		f.write("%s %s" % (options.job_tag, host))
-		f.close()
-		for instrument in set(svd_banks.keys()):
-			# make sure to mark a 0 sample audiorate add just so the file exists
-			# FIXME filename tied to audiorate name in lloidparts / pipeparts 
-			fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_%saudiorate.txt" % (instrument,))
-			f = open(fname, "w")
-			f.write("%.14g 0" % (now(),))
-			f.close()
+	# this gets set so that if you log into a node you can find out what the job id is easily
+	os.environ['GSTLAL_LL_JOB'] = options.job_tag
+
+	#
+	# Set up a registry of the resources that this job provides
+	#
+	
+	host = socket.gethostname()
+
+	# FIXME 
+	# update this as bottle routes are added, can we do this automatically?
+	fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_registry.txt")
+	f = open(fname, "w")
+	f.write("# %s %s\n" % (options.job_tag, host))
+
+	# First do urls that do not depend on instruments
+	for request in ("latency_histogram.txt", "latency_history.txt", "snr_history.txt", "ram_history.txt"):
+		# FIXME don't hardcode port number
+		f.write("http://%s:16953/%s\n" % (host, request))
+
+	# Then do instrument dependent urls
+	for ifo in set(svd_banks.keys()):
+		for request in ("strain_add_drop.txt", "state_vector_on_off_gap.txt"):
+			# FIXME don't hardcode port number
+			f.write("http://%s:16953/%s/%s\n" % (host, ifo, request))
+
+	f.close()
 	
 	return options, filenames, process_params, svd_banks, detectors
 

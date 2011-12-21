@@ -20,21 +20,21 @@ def now():
 
 def read_registry(dir, dataurl, idrange):
 	nodedict = {}
+	# FIXME relies on 4 digit id
 	ids = ['%04d' % (job,) for job in range(idrange[0], idrange[1]+1)]
 	for id in ids:
 		url = '%s/%s%s' % (dir, id, dataurl)
-		# FIXME relies on 4 digit id
 		try:
 			tmp = open(url,"r")
-			tag, node = tmp.readline().split()
-			tmp.close()
+			tag, node = tmp.readline().replace("#","").split()
 			nodedict[id] = node
+			tmp.close()
 		except IOError:
 			nodedict[id] = ""
 	return nodedict
 	
 
-def plot(dir, dataurl, idrange, registry, plottype = "value", datatype = "last", scale = "linear", xlabel = "", ylabel = "", title = ""):
+def plot(dir, dataurl, idrange, registry, col = 1, plottype = "value", datatype = "last", scale = "linear", xlabel = "", ylabel = "", title = ""):
 	fig = plt.figure(figsize=(25,6.5),)
 	fig.patch.set_alpha(0.0)
 	h = fig.add_subplot(111, axisbg = 'k')
@@ -55,9 +55,9 @@ def plot(dir, dataurl, idrange, registry, plottype = "value", datatype = "last",
 			if len(tmp.shape) == 1:
 				tmp = tmp.reshape((1, tmp.shape[0]))
 			if datatype == "last":
-				data.append(tmp[-1,1])
+				data.append(tmp[-1,col])
 			if datatype == "max":
-				data.append(tmp[:,1].max())
+				data.append(tmp[:,col].max())
 			timestamp.append(now() - tmp[-1,0] )
 		except IOError:
 			data.append(nan)
@@ -75,20 +75,20 @@ def plot(dir, dataurl, idrange, registry, plottype = "value", datatype = "last",
 
 		# figure out the maximum
 		if len(founddata):
-			maxdata = founddata.max() or 1
+			maxdata = founddata.max() or 1 #(so that log10 of it is 0)
 		else:
 			maxdata = 1
 		
 		if scale == "log":
-			if maxdata <= 0:
+			if maxdata <= 1:
 				missingvalue = -0.05
 			else:
 				missingvalue = -0.05 * numpy.log10(maxdata)
 		else:
 			missingvalue = -0.05 * maxdata
-		
+
 		# give all the missing data the value badvalue
-		h.bar(missingindices, [missingvalue for d in missingindices], color='r', alpha=0.9, linewidth=2)
+		h.bar(missingindices, [missingvalue for d in missingindices], color='r', alpha=0.95, linewidth=2)
 
 		# then the regular data
 		if scale == "log":
@@ -98,7 +98,7 @@ def plot(dir, dataurl, idrange, registry, plottype = "value", datatype = "last",
 				maxdata = founddata.max() or 1
 			else:
 				maxdata = 0
-		h.bar(foundindices, founddata, color='w', alpha=0.75, linewidth=2)
+		h.bar(foundindices, founddata, color='w', alpha=0.95, linewidth=2)
 
 		
 		# The ticks
@@ -159,34 +159,39 @@ print "<center><h1>Low-latency Compact Binary Online (LCBO) summary: %d - %s </h
 print "<table>"
 
 # latency history
-print "<tr><td><div id='canvasa'>"
+print "<tr><td><div id='canvaslatency'>"
 plot(form.getvalue("dir"), '_latency_history.txt', idrange, reg, ylabel = "Latency (s)", title = "Latency summary of all jobs, red means data is missing")
 print "</div></td></tr>"
 
 # RAM history
-print "<tr><td><div id='canvasb'>"
+print "<tr><td><div id='canvasram'>"
 plot(form.getvalue("dir"), '_ram_history.txt', idrange, reg, ylabel = "RAM (GB)", title = "RAM summary of all jobs, red means data is missing")
 print "</div></td></tr>"
 
 # max SNR
-print "<tr><td><div id='canvasc'>"
+print "<tr><td><div id='canvassnr'>"
 plot(form.getvalue("dir"), '_snr_history.txt', idrange, reg, datatype = "max", ylabel = "SNR", title = "max(SNR) of recent triggers summary of all jobs, red means data is missing")
 print "</div></td></tr>"
 
 # last update
-print "<tr><td><div id='canvasd'>"
+print "<tr><td><div id='canvasupdate'>"
 plot(form.getvalue("dir"), '_snr_history.txt', idrange, reg, plottype = "timestamp", ylabel = "Time (s)", scale = "log", xlabel = "Time before now (s)", title = "Time since last event (s), red means data is missing")
 print "</div></td></tr>"
 
 for ifo in ["H1", "H2", "L1", "V1"]:
 	# fault samples
-	print "<tr><td><div id='canvasd'>"
-	plot(form.getvalue("dir"), '_%saudiorate.txt' % ifo, idrange, reg, datatype = "max", ylabel = "Samples", scale = "log", title = " %s : Number of discontinuous samples, red means no data" % ifo)
+	print "<tr><td><div id='canvas%s%s'>" % (ifo, "discont")
+	plot(form.getvalue("dir"), '_%sstrain_add_drop.txt' % ifo, idrange, reg, datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Data dropped, red means no data" % ifo)
 	print "</div></td></tr>"
 
-	# fault samples
-	print "<tr><td><div id='canvasd'>"
-	plot(form.getvalue("dir"), '_%saudiorate.txt' % ifo, idrange, reg, plottype = "timestamp", datatype = "max", scale = "log", ylabel = "Time (s)", title = "%s : Time since last discontinuity, red means no data" % ifo)
+	# deadtime
+	print "<tr><td><div id='canvas%s%s'>" % (ifo, "deadtime")
+	plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Dead time, red means no data" % ifo)
+	print "</div></td></tr>"
+	
+	# livetime
+	print "<tr><td><div id='canvas%s%s'>" % (ifo, "livetime")
+	plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, col = 2, datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Live time, red means no data" % ifo)
 	print "</div></td></tr>"
 
 # end a table
@@ -194,6 +199,6 @@ print "</table>"
 
 # links at bottom
 for k in range(idrange[0], idrange[1]+1):
-	print '<a href="llcbcnode?dir=%s&id=%04d">%04d</a>' % (form.getvalue("dir"), k, k)
+	print '<a href="gstlal_llcbcnode?dir=%s&id=%04d">%04d</a>' % (form.getvalue("dir"), k, k)
 print "</body>"
 

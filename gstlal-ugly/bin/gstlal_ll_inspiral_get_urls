@@ -1,0 +1,44 @@
+#!/usr/bin/python
+import sys
+import os
+import urllib
+from urlparse import urlparse
+
+#FIXME use cgi url parsing, or optparse
+# usage gstlal_ll_inspiral_get_urls /path/to/process/registry/files IDstart,IDstop
+# Example: ./gstlal_ll_inspiral_get_urls ./ 0152,0153
+
+directory = sys.argv[1]
+idrange = [int(n) for n in sys.argv[2].split(",")]
+
+#FIXME a service registry would be nice
+def read_registry(dir, dataurl, idrange):
+	nodedict = {}
+	ids = ['%04d' % (job,) for job in range(idrange[0], idrange[1]+1)]
+	for id in ids:
+		url = '%s/%s%s' % (dir, id, dataurl)
+		# FIXME relies on 4 digit id
+		try:
+			tmp = open(url,"r")
+			tag, node = tmp.readline().replace("#","").split()
+			nodedict[(id, node)] = tmp.readlines()
+			tmp.close()
+		except IOError:
+			#FIXME what should be done?
+			pass
+	return nodedict
+
+reg = read_registry(directory, "_registry.txt", idrange)
+
+for (id, node), urls in reg.items():
+	print >> sys.stderr, "requesting data from %s..." % node
+	for url in urls:
+		url = url.strip()
+		path = urlparse(url).path
+		fname = "%s_%s" % (id, path.replace("/",""))
+		try: os.remove(fname) # do this first to help nfs register the new file
+		except OSError: pass  # File not present is not a problem here
+		try:
+			urllib.urlretrieve(url, fname)
+		except IOError as (errno, strerror):
+			print >> sys.stderr, "I/O error({0}): {1} on request {2}".format(errno, strerror, url)
