@@ -2,6 +2,7 @@
 import sys
 import os
 import urllib
+from urlparse import urlparse
 
 #FIXME use cgi url parsing, or optparse
 # usage gstlal_ll_inspiral_get_urls /path/to/process/registry/files IDstart,IDstop
@@ -19,9 +20,9 @@ def read_registry(dir, dataurl, idrange):
 		# FIXME relies on 4 digit id
 		try:
 			tmp = open(url,"r")
-			tag, node = tmp.readline().split()
+			tag, node = tmp.readline().replace("#","").split()
+			nodedict[(id, node)] = tmp.readlines()
 			tmp.close()
-			nodedict[id] = node
 		except IOError:
 			#FIXME what should be done?
 			pass
@@ -29,14 +30,14 @@ def read_registry(dir, dataurl, idrange):
 
 reg = read_registry(directory, "_registry.txt", idrange)
 
-for id, node in reg.items():
+for (id, node), urls in reg.items():
 	print >> sys.stderr, "requesting data from %s..." % node
-	#FIXME a service registry would be nice
-	for request in ("latency_histogram.txt", "latency_history.txt", "snr_history.txt", "ram_history.txt", "H1/strain_add_drop.txt", "H2/strain_add_drop.txt", "L1/strain_add_drop.txt", "V1/strain_add_drop.txt", "H1/state_vector_on_off_gap.txt", "H2/state_vector_on_off_gap.txt", "L1/state_vector_on_off_gap.txt", "V1/state_vector_on_off_gap.txt"):
-		fname = "%s_%s" % (id, request.replace("/",""))
+	for url in urls:
+		url = url.strip()
+		path = urlparse(url).path
+		fname = "%s_%s" % (id, path.replace("/",""))
 		try: os.remove(fname) # do this first to help nfs register the new file
 		except OSError: pass  # File not present is not a problem here
-		url = "http://%s:16953/%s" % (node, request)
 		try:
 			urllib.urlretrieve(url, fname)
 		except IOError as (errno, strerror):
