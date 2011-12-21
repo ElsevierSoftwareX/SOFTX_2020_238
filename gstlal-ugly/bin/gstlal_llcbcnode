@@ -91,7 +91,9 @@ def plotsnrchisq(url, type = "background", name = "gstlal_inspiral_likelihood"):
 		ax = fig.add_subplot(2,2,i+1)
 		if type == "likelihood":
 			inj = coincparamsdistributions.injection_rates[ifo+"_snr_chi"].array
+			inj /= inj.sum()
 			back = coincparamsdistributions.background_rates[ifo+"_snr_chi"].array
+			back /= back.sum()
 			H1 = rate.filter_array(inj, filt) / rate.filter_array(back, filt)
 		if type == "background":
 			H1 = rate.filter_array(coincparamsdistributions.background_rates[ifo+"_snr_chi"].array, filt)
