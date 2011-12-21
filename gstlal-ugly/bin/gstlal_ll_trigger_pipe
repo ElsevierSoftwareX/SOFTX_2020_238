@@ -80,7 +80,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		likefile = os.path.split(likelihood_file)[1]
 		path = os.getcwd()
 		# make a new likelihood file
-		likefile = "%s/%04d-%s" % (path, job.number, likefile)
+		likefile = "%s/%04d_%s" % (path, job.number, likefile)
 		shutil.copyfile(likelihood_file, likefile)
 		self.add_var_opt("likelihood-file", likefile)
 		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
