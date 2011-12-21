@@ -413,20 +413,16 @@ class DistributionsStats(object):
 
 
 class Data(object):
-	def __new__(cls, *args, **kwargs):
-		obj = super(Data, cls).__new__(cls, *args, **kwargs)
-		# setup bottle routes to access methods of this class with http
-		bottle.route("/latency_histogram.txt")(obj.write_latency_histogram)
-		bottle.route("/latency_history.txt")(obj.write_latency_history)
-		bottle.route("/snr_history.txt")(obj.write_snr_history)
-		bottle.route("/ram_history.txt")(obj.write_ram_history)
-		return obj
-
-
 	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, verbose = False):
 		#
 		# initialize
 		#
+		
+		# setup bottle routes
+		bottle.route("/latency_histogram.txt")(self.write_latency_histogram)
+		bottle.route("/latency_history.txt")(self.write_latency_history)
+		bottle.route("/snr_history.txt")(self.write_snr_history)
+		bottle.route("/ram_history.txt")(self.write_ram_history)
 
 		self.lock = threading.Lock()
 		self.filename = filename
