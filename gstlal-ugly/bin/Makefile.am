@@ -28,4 +28,6 @@ dist_bin_SCRIPTS = \
 	gstlal_ll_inspiral \
 	gstlal_ll_trigger_pipe \
 	gstlal_ll_inspiral_get_urls \
+	gstlal_llcbcsummary \
+	gstlal_llcbcnode \
 	gstlal_excesspower
