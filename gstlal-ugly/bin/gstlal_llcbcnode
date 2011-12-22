@@ -167,7 +167,10 @@ print"</table>"
 print "<table face='Arial'><tr>"
 for ifo in ("H1", "H2", "L1", "V1"):
 	print "<td><div id='canvas%spie'>" % (ifo,)
-	livetime_plot(baseurl+'_%sstrain_add_drop.txt' % ifo, baseurl+'_%sstate_vector_on_off_gap.txt' % ifo, title = ifo)
+	try:
+		livetime_plot(baseurl+'_%sstrain_add_drop.txt' % ifo, baseurl+'_%sstate_vector_on_off_gap.txt' % ifo, title = ifo)
+	except:
+		print "could not get livetime data for ", ifo 
 	print "</div></td>"
 print"</tr></table>"
 
