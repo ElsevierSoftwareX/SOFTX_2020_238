@@ -289,10 +289,13 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		pipeline.add(statevector)
 		# FIXME:  don't hard-code channel name
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, "FAKE-STATE_VECTOR"), statevector.get_pad("sink"))
-		#FIXME we don't add a signal handler to the statevector audiorate, I assume it should report the same missing samples?
+		# FIXME we don't add a signal handler to the statevector audiorate, I assume it should report the same missing samples?
 		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True)
 		# FIXME:  what bits do we need on and off?  and don't hard code them
-		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 45)
+		if instrument == "V1":
+			statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 12, required_off = ~12)
+		else:
+			statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 45)
 		@bottle.route("/%s/state_vector_on_off_gap.txt" % instrument)
 		def state_vector_state(elem = statevector):
 			import time
