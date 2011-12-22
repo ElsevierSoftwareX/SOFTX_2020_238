@@ -659,7 +659,7 @@ class Data(object):
 		self.do_gracedb_alerts()
 
 
-	def do_gracedb_alerts(self, gracedb_prog = "/usr/bin/gracedb", gracedb_group = "Test", gracedb_type = "LowMass"):
+	def do_gracedb_alerts(self, gracedb_group = "Test", gracedb_type = "LowMass"):
 		try:
 			gracedb
 		except NameError:
@@ -715,8 +715,8 @@ class Data(object):
 				utils.signal.signal = lambda *args: None
 				utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = True)
 				utils.signal.signal = orig_signal
-				# FIXME:  put gracedb call back when testing is done
-				if False:
+				# FIXME: make this optional from command line?
+				if True:
 					resp = gracedb.Client().create(gracedb_group, gracedb_type, filename, message.getvalue())
 					if "error" in resp:
 						print >>sys.stderr, "gracedb upload of %s failed: %s" % (filename, resp["error"])
