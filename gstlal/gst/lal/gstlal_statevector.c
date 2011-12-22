@@ -312,6 +312,21 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 
 
 /*
+ * start()
+ */
+
+
+static gboolean start(GstBaseTransform *trans)
+{	
+	GSTLALStateVector *filter = GSTLAL_STATEVECTOR(trans);
+	filter->on_samples = 0;
+	filter->off_samples = 0;
+	filter->gap_samples = 0;
+	return TRUE;
+}
+
+
+/*
  * transform()
  */
 
@@ -327,7 +342,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
 		/*
-		 * input is not 0s.
+		 * input is not GAP.
 		 */
 
 		void *in = GST_BUFFER_DATA(inbuf);
@@ -339,17 +354,19 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		while(in < end) {
 			guint input = element->get_input(&in);
 			*out++ = ((input & required_on) == required_on) && ((~input & required_off) == required_off) ? 0x80: 0x00;
-			if (*out) element->on_samples += 1;
-			else element->off_samples += 1;
+			if(*(out - 1))
+				element->on_samples++;
+			else
+				element->off_samples++;
 		}
 	} else {
 		/*
-		 * input is 0s.
+		 * input is GAP.
 		 */
 
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
-		element->gap_samples += GST_BUFFER_SIZE(outbuf) / sizeof(guint8);
+		element->gap_samples += GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
 	}
 
 	/*
@@ -389,18 +406,6 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		element->required_off = g_value_get_uint(value);
 		break;
 
-	case ARG_ON_SAMPLES:
-		/* Read only should never get here? */
-		break;
-	
-	case ARG_OFF_SAMPLES:
-		/* Read only should never get here? */
-		break;
-	
-	case ARG_GAP_SAMPLES:
-		/* Read only should never get here? */
-		break;
-	
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -470,6 +475,7 @@ static void gstlal_statevector_base_init(gpointer gclass)
 	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
 	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
 	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
+	transform_class->start = GST_DEBUG_FUNCPTR(start);
 }
 
 
@@ -552,8 +558,5 @@ static void gstlal_statevector_init(GSTLALStateVector *filter, GSTLALStateVector
 {
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);
 
-	filter->on_samples = 0;
-	filter->off_samples = 0;
-	filter->gap_samples = 0;
 	filter->get_input = NULL;
 }
