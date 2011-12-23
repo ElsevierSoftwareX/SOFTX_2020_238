@@ -670,12 +670,19 @@ class Data(object):
 			# way.  and the .column_index() method is probably
 			# useless
 			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
+			# FIXME hack to keep from sending too many alerts.
+			# Only send the best one in this set.  May not make
+			# sense depending on what is in last_coincs.  FIX
+			# PROPERLY.  This is probably mostly okay because we
+			# should be doing coincidences every 10s which is a
+			# reasonable time to cluster over
+			minfar = min([false_alarm_rate for coinc_event_id, false_alarm_rate in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far").items()])
 			for coinc_event_id, false_alarm_rate in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far").items():
 				#
 				# do we keep this event?
 				#
 
-				if false_alarm_rate > self.gracedb_far_threshold:
+				if false_alarm_rate > self.gracedb_far_threshold or false_alarm_rate != minfar:
 					continue
 
 				#
@@ -687,7 +694,7 @@ class Data(object):
 				instruments = "".join(sorted(instruments))
 				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event_id].mass).replace(".", "_").replace("-", "_"), gracedb_group, gracedb_type)
 				end_time = int(coinc_inspiral_index[coinc_event_id].get_end())
-				filename = "%s-%s-%d-%d.xml.gz" % (observatories, description, end_time, 0)
+				filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
 
 				#
 				# construct message and send to gracedb.
@@ -713,7 +720,7 @@ class Data(object):
 				message = StringIO.StringIO()
 				orig_signal = utils.signal.signal
 				utils.signal.signal = lambda *args: None
-				utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = True)
+				utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = False)
 				utils.signal.signal = orig_signal
 				# FIXME: make this optional from command line?
 				if True:
