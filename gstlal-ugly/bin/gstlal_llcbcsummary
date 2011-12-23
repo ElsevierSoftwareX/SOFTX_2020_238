@@ -186,12 +186,12 @@ for ifo in ["H1", "H2", "L1", "V1"]:
 
 	# deadtime
 	print "<tr><td><div id='canvas%s%s'>" % (ifo, "deadtime")
-	plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Dead time, red means no data" % ifo)
+	plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, col = 2, datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Dead time, red means no data" % ifo)
 	print "</div></td></tr>"
 	
 	# livetime
 	print "<tr><td><div id='canvas%s%s'>" % (ifo, "livetime")
-	plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, col = 2, datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Live time, red means no data" % ifo)
+	plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, col = 1, datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Live time, red means no data" % ifo)
 	print "</div></td></tr>"
 
 # end a table
