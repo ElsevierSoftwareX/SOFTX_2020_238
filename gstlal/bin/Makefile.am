@@ -7,6 +7,4 @@ dist_bin_SCRIPTS = \
 	gstlal_recolor_frames \
 	gstlal_reference_psd \
 	gstlal_spectrum_movie \
-	gstlal_launch \
-	gstlal_injections_by_local_rate \
-	gstlal_injections_by_local_rate_plot
+	gstlal_launch
