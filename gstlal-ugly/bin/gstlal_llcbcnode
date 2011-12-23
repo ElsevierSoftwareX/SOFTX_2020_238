@@ -61,8 +61,8 @@ def livetime_plot(disconturl, livetimeurl, xlabel = "", ylabel = "", title = "")
 		print "<h2>Data could not be loaded</h2>"
 		return
 
-	dt = livetimedata[1]
-	lt = livetimedata[2]
+	dt = livetimedata[2]
+	lt = livetimedata[1]
 	discont = discontdata[1]
 	data = [dt, lt, discont]
 	explode = [0.0, 0, 0.15]
