@@ -59,6 +59,7 @@ from gstlal import lloidparts
 from gstlal import reference_psd
 from gstlal import inspiral
 from gstlal import httpinterface
+from gstlal import bottle
 from pylal.date import XLALUTCToGPS
 
 
@@ -82,7 +83,7 @@ sys.excepthook = excepthook
 maxproc = resource.getrlimit(resource.RLIMIT_NPROC)[1]
 resource.setrlimit(resource.RLIMIT_NPROC, (maxproc, maxproc))
 maxstack = resource.getrlimit(resource.RLIMIT_STACK)[1]
-resource.setrlimit(resource.RLIMIT_STACK, (2 * 1024**2, maxstack)) # 2MB per thread, not 10
+resource.setrlimit(resource.RLIMIT_STACK, (1 * 1024**2, maxstack)) # 2MB per thread, not 10
 
 
 #
@@ -200,19 +201,24 @@ def parse_command_line():
 	# update this as bottle routes are added, can we do this automatically?
 	fname = os.path.join(os.getcwd(), os.environ['GSTLAL_LL_JOB'] + "_registry.txt")
 	f = open(fname, "w")
-	f.write("# %s %s\n" % (options.job_tag, host))
 
-	# First do urls that do not depend on instruments
-	for request in ("latency_histogram.txt", "latency_history.txt", "snr_history.txt", "ram_history.txt"):
-		# FIXME don't hardcode port number
-		f.write("http://%s:16953/%s\n" % (host, request))
+	@bottle.route("/registry.txt")
+	def register(fname = None):
+		
+		yield "# %s %s\n" % (options.job_tag, host)
 
-	# Then do instrument dependent urls
-	for ifo in set(svd_banks.keys()):
-		for request in ("strain_add_drop.txt", "state_vector_on_off_gap.txt"):
+		# First do urls that do not depend on instruments
+		for request in ("registry.txt", "latency_histogram.txt", "latency_history.txt", "snr_history.txt", "ram_history.txt", "likelihood.xml"):
 			# FIXME don't hardcode port number
-			f.write("http://%s:16953/%s/%s\n" % (host, ifo, request))
+			yield "http://%s:16953/%s\n" % (host, request)
 
+		# Then do instrument dependent urls
+		for ifo in set(svd_banks.keys()):
+			for request in ("strain_add_drop.txt", "state_vector_on_off_gap.txt", "psd.txt"):
+				# FIXME don't hardcode port number
+				yield "http://%s:16953/%s/%s\n" % (host, ifo, request)
+
+	[f.write(l) for l in register(fname)]
 	f.close()
 	
 	return options, filenames, process_params, svd_banks, detectors
