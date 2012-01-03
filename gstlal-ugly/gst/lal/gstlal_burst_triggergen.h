@@ -70,8 +70,15 @@ typedef struct {
 	guint n;
 	guint channels;
 	gdouble snr_thresh;
+	/* TODO: Right now we're just copying all the data structures */
 	struct gstlal_double_complex_peak_samples_and_values *maxdata;
+	struct gstlal_double_peak_samples_and_values *maxdatad;
 	double complex *data;
+	double *datad;
+	enum {
+		GSTLAL_BURSTTRIGGEN_DOUBLE,
+		GSTLAL_BURSTTRIGGEN_COMPLEX_DOUBLE
+	} data_type;
 	guint64 next_output_offset;
 	GstClockTime next_output_timestamp;
 	SnglBurst *bankarray;
