@@ -34,38 +34,46 @@ def read_registry(dir, dataurl, idrange):
 	return nodedict
 	
 
-def plot(dir, dataurl, idrange, registry, col = 1, plottype = "value", datatype = "last", scale = "linear", xlabel = "", ylabel = "", title = ""):
+def plot(dir, dataurl, idrange, registry, cols = [1], plottype = "value", datatype = "last", scale = "linear", xlabel = "", ylabel = "", title = ""):
 	fig = plt.figure(figsize=(25,6.5),)
 	fig.patch.set_alpha(0.0)
 	h = fig.add_subplot(111, axisbg = 'k')
 	plt.subplots_adjust(left = .05, right = 0.98, bottom = 0.3)
 
-	data = []
-	timestamp = []
 	ids = ['%04d' % (job,) for job in range(idrange[0], idrange[1]+1)]
 
-	nan = float("nan")
+	
+	def get_data(dir, id, dataurl, col, datatype):
+	
+		data = []
+		timestamp = []
 
-	for id in ids:
-		url = '%s/%s%s' % (dir, id, dataurl)
-		# FIXME relies on 4 digit id
-		try:
-			tmp = numpy.loadtxt(url)
-			# FIXME ARGH THIS FUNCTION SUCKS!
-			if len(tmp.shape) == 1:
-				tmp = tmp.reshape((1, tmp.shape[0]))
-			if datatype == "last":
-				data.append(tmp[-1,col])
-			if datatype == "max":
-				data.append(tmp[:,col].max())
-			timestamp.append(now() - tmp[-1,0] )
-		except IOError:
-			data.append(nan)
-			timestamp.append(nan)
-		except ValueError:
-			data.append(nan)
-			timestamp.append(nan)
-	def process(plotdata):
+		for id in ids:
+			nan = float("nan")
+			url = '%s/%s%s' % (dir, id, dataurl)
+			# FIXME relies on 4 digit id
+			try:
+				tmp = numpy.loadtxt(url)
+				# FIXME ARGH THIS FUNCTION SUCKS!
+				if len(tmp.shape) == 1:
+					tmp = tmp.reshape((1, tmp.shape[0]))
+				if datatype == "last":
+					data.append(tmp[-1,col])
+				if datatype == "max":
+					data.append(tmp[:,col].max())
+				if datatype == "median":
+					data.append(numpy.median(tmp[:,col]))
+				timestamp.append(now() - tmp[-1,0] )
+			except IOError:
+				data.append(nan)
+				timestamp.append(nan)
+			except ValueError:
+				data.append(nan)
+				timestamp.append(nan)
+		return data, timestamp
+
+
+	def process(plotdata, color="w"):
 		# first get the found and missing data
 		data = numpy.array(plotdata)
 		foundindices = [i for i,d in enumerate(data) if numpy.isfinite(d)]
@@ -88,7 +96,7 @@ def plot(dir, dataurl, idrange, registry, col = 1, plottype = "value", datatype 
 			missingvalue = -0.05 * maxdata
 
 		# give all the missing data the value badvalue
-		h.bar(missingindices, [missingvalue for d in missingindices], color='r', alpha=0.95, linewidth=2)
+		h.bar(missingindices, [missingvalue for d in missingindices], color='r', alpha=0.9, linewidth=2)
 
 		# then the regular data
 		if scale == "log":
@@ -98,7 +106,7 @@ def plot(dir, dataurl, idrange, registry, col = 1, plottype = "value", datatype 
 				maxdata = founddata.max() or 1
 			else:
 				maxdata = 0
-		h.bar(foundindices, founddata, color='w', alpha=0.95, linewidth=2)
+		h.bar(foundindices, founddata, color=color, alpha=0.8, linewidth=2)
 
 		
 		# The ticks
@@ -120,12 +128,17 @@ def plot(dir, dataurl, idrange, registry, col = 1, plottype = "value", datatype 
 		plt.title(title, fontsize=18)
 
 		# save it
-		plt.savefig(sys.stdout, format="svg")
 	
-	if plottype == "value":
-		process(data)
-	if plottype == "timestamp":
-		process(timestamp)
+	#FIXME shouldn't parse files so many times
+	for i, col in enumerate(cols):
+		data, timestamp = get_data(dir, id, dataurl, col, datatype)
+	
+		if plottype == "value":
+			process(data)
+		if plottype == "timestamp":
+			process(timestamp)
+	
+	plt.savefig(sys.stdout, format="svg")
 
 
 if "dir" not in form:
@@ -170,7 +183,7 @@ print "</div></td></tr>"
 
 # max SNR
 print "<tr><td><div id='canvassnr'>"
-plot(form.getvalue("dir"), '_snr_history.txt', idrange, reg, datatype = "max", ylabel = "SNR", title = "max(SNR) of recent triggers summary of all jobs, red means data is missing")
+plot(form.getvalue("dir"), '_snr_history.txt', idrange, reg, datatype = "median", ylabel = "SNR", title = "median(SNR) of recent triggers summary of all jobs, red means data is missing")
 print "</div></td></tr>"
 
 # last update
@@ -185,13 +198,13 @@ for ifo in ["H1", "H2", "L1", "V1"]:
 	print "</div></td></tr>"
 
 	# deadtime
-	print "<tr><td><div id='canvas%s%s'>" % (ifo, "deadtime")
-	plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, col = 2, datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Dead time, red means no data" % ifo)
-	print "</div></td></tr>"
+	#print "<tr><td><div id='canvas%s%s'>" % (ifo, "deadtime")
+	#plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, cols = [2], datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Dead time, red means no data" % ifo)
+	#print "</div></td></tr>"
 	
 	# livetime
 	print "<tr><td><div id='canvas%s%s'>" % (ifo, "livetime")
-	plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, col = 1, datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Live time, red means no data" % ifo)
+	plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, cols = [2,1], datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Up time, red means no data" % ifo)
 	print "</div></td></tr>"
 
 # end a table
