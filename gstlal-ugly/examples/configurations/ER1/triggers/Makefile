@@ -12,7 +12,7 @@ MAXJOBS = 10
 all : dag
 
 dag : likelihood.xml.gz
-	gstlal_ll_trigger_pipe --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),V1=$(V1_BANK_CACHE),L1=$(L1_BANK_CACHE) --num-banks $(NUMBANKS) --max-jobs $(MAXJOBS) --likelihood-file likelihood.xml.gz --channel G1=FAKE-STRAIN --channel=H2=FAKE-STRAIN --channel=H1=FAKE-STRAIN --channel=T1=FAKE-STRAIN --channel=V1=FAKE-STRAIN --channel=L1=FAKE-STRAIN --gracedb-far-threshold 1e-100
+	gstlal_ll_trigger_pipe --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),V1=$(V1_BANK_CACHE),L1=$(L1_BANK_CACHE) --num-banks $(NUMBANKS) --max-jobs $(MAXJOBS) --likelihood-file likelihood.xml.gz --channel G1=FAKE-STRAIN --channel=H2=FAKE-STRAIN --channel=H1=FAKE-STRAIN --channel=T1=FAKE-STRAIN --channel=V1=FAKE-STRAIN --channel=L1=FAKE-STRAIN --gracedb-far-threshold 1e-100 --control-peak-time 4 --fir-stride 4
 
 likelihood.xml.gz :
 	gstlal_inspiral_create_prior_diststats --write-likelihood likelihood.xml.gz --verbose
