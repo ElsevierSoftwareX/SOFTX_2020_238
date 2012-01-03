@@ -25,7 +25,11 @@ def plot(dataurl, plottype, xlabel = "", ylabel = "", title = ""):
 		return
 
 	if plottype == "history":
-		h.plot(data[:,0] - data[-1,0], data[:,1], 'w', alpha=0.75, linewidth=2)
+		h.semilogy(data[:,0] - data[-1,0], data[:,1], 'w', alpha=0.75, linewidth=2)
+		plt.ylim([min(data[:,1]), max(data[:,1])])
+		locs = [min(data[:,1]), numpy.median(data[:,1]), max(data[:,1])]
+		labels = ['%.2g' % lab for lab in locs]
+		plt.yticks(locs, labels)
 	if plottype == "plot":
 		h.plot(data[:,0], data[:,1], 'w', alpha=0.75, linewidth=2)
 	if plottype == "loglog":
