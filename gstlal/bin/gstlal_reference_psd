@@ -47,16 +47,20 @@ if sum(1 for option in ('frame_cache', 'fake_data', 'online_data') if getattr(op
 if options.fake_data not in (None, "LIGO", "AdvLIGO"):
 	raise ValueError("unrecognized value for --fake-data %s" % options.fake_data)
 
-required_options = ["instrument", "gps_start_time", "gps_end_time", "write_psd"]
+required_options = ["instrument", "write_psd"]
 
-if options.frame_cache:
-	required_options += ["channel_name"]
+if options.frame_cache or options.fake_data:
+	options.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
+	seekevent = gst.event_new_seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, options.seg[0].ns(), gst.SEEK_TYPE_SET, options.seg[1].ns())
+	required_options += ["channel_name", "gps_start_time", "gps_end_time"]
+else:
+	options.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)) # FIXME Future infinity :)
+	seekevent = None
 
 missing_options = [option for option in required_options if getattr(options, option) is None]
 if missing_options:
 	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
 
-options.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
 
 options.psd_fft_length = 8	# seconds
 
@@ -81,11 +85,7 @@ reference_psd.write_psd(
 	options.write_psd,
 	reference_psd.measure_psd(
 		options.instrument,
-		gst.event_new_seek(
-			1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_KEY_UNIT,
-			gst.SEEK_TYPE_SET, options.seg[0].ns(),
-			gst.SEEK_TYPE_SET, options.seg[1].ns()
-		),
+		seekevent,
 		lloidparts.DetectorData(options.frame_cache, options.channel_name),
 		options.seg,
 		2 * 2048,	# Hz;  must not be less than highest bank fragment sample rate (see below)
