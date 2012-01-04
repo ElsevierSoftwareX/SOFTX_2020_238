@@ -29,7 +29,7 @@
 import numpy
 from scipy import interpolate
 import sys
-
+import signal
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
@@ -116,6 +116,27 @@ def measure_psd(instrument, seekevent, detector, seg, rate, fake_data = None, on
 	pipeline.set_state(gst.STATE_PLAYING)
 	if verbose:
 		print >>sys.stderr, "running pipeline ..."
+	
+	class SigData(object):
+		def __init__(self):
+			self.has_been_signaled = False
+
+	sigdata = SigData()
+
+	def signal_handler(signal, frame, pipeline = pipeline, sigdata = sigdata):
+		if not sigdata.has_been_signaled:
+			print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" % (signal,)
+			# override file name with approximate interval
+			bus = pipeline.get_bus()
+			bus.post(gst.message_new_eos(pipeline))
+			sigdata.has_been_signaled = True
+		else:
+			print >>sys.stderr, "*** received SIG %d, but already handled... ***" % (signal,)
+
+	# this is how the program could stop gracefully
+	signal.signal(signal.SIGINT, signal_handler)
+	signal.signal(signal.SIGTERM, signal_handler)
+
 	mainloop.run()
 
 	#
