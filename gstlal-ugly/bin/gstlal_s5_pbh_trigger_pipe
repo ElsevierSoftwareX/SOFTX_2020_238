@@ -581,14 +581,11 @@ noninj_nodes = []
 inj_nodes = []
 cluster_nodes = []
 
-num_jobs = num_bank_files(bank_cache)
-indfac = 1./7. # from svd paper, or do this: get_independence_factor(bank_cache)
-
 ###############################################################################
 # loop over banks to run gstlal inspiral pre clustering and far computation
 ###############################################################################
 
-for cnt, s in enumerate(build_bank_string(bank_cache)):
+for cnt, (s, trials_factor) in enumerate(build_bank_string(bank_cache)):
 
 	#
 	# non injections
@@ -615,8 +612,6 @@ for cnt, s in enumerate(build_bank_string(bank_cache)):
 	# events.  Thus we just need to provide the factor # of jobs \times
 	# independence fraction as an additional argument
 	#
-
-	trials_factor = int(numpy.ceil(num_jobs * indfac))
 
 	far_input_nodes = []
 
