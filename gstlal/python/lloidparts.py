@@ -293,8 +293,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True)
 		# FIXME:  what bits do we need on and off?  and don't hard code them
 		if instrument == "V1":
-			import ctypes
-			statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 12, required_off = ctypes.c_uint32(~12).value)
+			statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 12, required_off = ~12 & 0xffffffff)
 		else:
 			statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 45)
 		@bottle.route("/%s/state_vector_on_off_gap.txt" % instrument)
