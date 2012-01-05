@@ -191,6 +191,16 @@ print "<tr><td><div id='canvasupdate'>"
 plot(form.getvalue("dir"), '_snr_history.txt', idrange, reg, plottype = "timestamp", ylabel = "Time (s)", scale = "log", xlabel = "Time before now (s)", title = "Time since last event (s), red means data is missing")
 print "</div></td></tr>"
 
+# chirp mass
+print "<tr><td><div id='canvaschirp'>"
+plot(form.getvalue("dir"), '_bank.txt', idrange, reg, cols = [2], plottype = "value", ylabel = "mchirp (Msun)", title = "Chirp mass, red means data is missing")
+print "</div></td></tr>"
+
+# Duration
+print "<tr><td><div id='canvasduration'>"
+plot(form.getvalue("dir"), '_bank.txt', idrange, reg, cols = [1], plottype = "value", ylabel = "duration (s)", title = "Template duration, red means data is missing")
+print "</div></td></tr>"
+
 for ifo in ["H1", "H2", "L1", "V1"]:
 	# fault samples
 	print "<tr><td><div id='canvas%s%s'>" % (ifo, "discont")
