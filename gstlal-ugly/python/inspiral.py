@@ -670,19 +670,12 @@ class Data(object):
 			# way.  and the .column_index() method is probably
 			# useless
 			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
-			# FIXME hack to keep from sending too many alerts.
-			# Only send the best one in this set.  May not make
-			# sense depending on what is in last_coincs.  FIX
-			# PROPERLY.  This is probably mostly okay because we
-			# should be doing coincidences every 10s which is a
-			# reasonable time to cluster over
-			minfar = min([false_alarm_rate for coinc_event_id, false_alarm_rate in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far").items()])
-			for coinc_event_id, false_alarm_rate in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far").items():
+			for coinc_event_id, false_alarm_rate in sorted(self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far").items(), key = lambda (a, b): b):
 				#
 				# do we keep this event?
 				#
 
-				if false_alarm_rate > self.gracedb_far_threshold or false_alarm_rate != minfar:
+				if false_alarm_rate > self.gracedb_far_threshold:
 					continue
 
 				#
@@ -737,6 +730,15 @@ class Data(object):
 					proc.stdin.flush()
 					proc.stdin.close()
 				message.close()
+
+				# FIXME hack to keep from sending too many alerts.
+				# Only send the best one in this set.  May not make
+				# sense depending on what is in last_coincs.  FIX
+				# PROPERLY.  This is probably mostly okay because we
+				# should be doing coincidences every 10s which is a
+				# reasonable time to cluster over
+				break
+
 
 	def update_eye_candy(self):
 		if self.stream_thinca.last_coincs:
