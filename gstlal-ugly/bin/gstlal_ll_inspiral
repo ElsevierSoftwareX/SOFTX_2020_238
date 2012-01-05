@@ -210,7 +210,7 @@ def parse_command_line():
 		yield "# %s %s\n" % (options.job_tag, host)
 
 		# First do urls that do not depend on instruments
-		for request in ("registry.txt", "latency_histogram.txt", "latency_history.txt", "snr_history.txt", "ram_history.txt", "likelihood.xml"):
+		for request in ("registry.txt", "latency_histogram.txt", "latency_history.txt", "snr_history.txt", "ram_history.txt", "likelihood.xml", "bank.txt"):
 			# FIXME don't hardcode port number
 			yield "http://%s:16953/%s\n" % (host, request)
 
@@ -267,7 +267,10 @@ else:
 
 
 banks = inspiral.parse_bank_files(svd_banks, verbose = options.verbose)
-
+@bottle.route("/bank.txt")
+def get_filter_length_and_chirpmass(banks = banks):
+	bank = banks.values()[0][0] #FIXME maybe shouldn't just take the first ones
+	yield '%.14g %.4g %.4g' % (float(now()), bank.filter_length, bank.sngl_inspiral_table[0].mchirp)
 
 #
 # Build pipeline
