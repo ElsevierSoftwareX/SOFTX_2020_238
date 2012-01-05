@@ -158,15 +158,8 @@ gstlalInspiralJob = gstlal_inspiral_job()
 ###############################################################################
 # loop over banks to run gstlal inspiral pre clustering and far computation
 ###############################################################################
-num_jobs = inspiral_pipe.num_bank_files(bank_cache)
-if options.max_jobs < num_jobs:
-	num_jobs = options.max_jobs
 
-indfac = 1./7. # conservative guess from SVD paper, this is slow to calculate otherwise #inspiral_pipe.get_independence_factor(bank_cache, maxjobs = num_jobs)
-
-trials_factor = int(numpy.ceil(num_jobs * indfac))
-
-for s in inspiral_pipe.build_bank_string(bank_cache, options.num_banks, options.max_jobs):
+for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, options.num_banks, options.max_jobs):
 	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold, fir_stride = options.fir_stride, thinca_interval = options.thinca_interval, likelihood_file = options.likelihood_file, control_peak_time = options.control_peak_time, trials_factor = trials_factor, gracedb_far_threshold = options.gracedb_far_threshold, injections = options.injections, fake_data = options.fake_data, copy_likelihoods = options.copy_likelihoods)
 
 
