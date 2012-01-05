@@ -89,6 +89,8 @@ def build_bank_string(cachedict, numbanks = [2], maxjobs = None):
 		filedict[ifo] = open(cachedict[ifo],'r')
 	
 	loop = True
+	outstrs = []
+	outcounts = []
 	while cnt < numfiles:
 		job += 1
 		if maxjobs is not None and job > maxjobs:
@@ -103,7 +105,10 @@ def build_bank_string(cachedict, numbanks = [2], maxjobs = None):
 				else:
 					break
 		c = c.strip(',')
-		yield c
+		outcounts.append(numbanks[position])
+		outstrs.append(c)
+	total_banks = sum(outcounts)
+	return [(s, total_banks / outcounts[i]) for i, s in enumerate(outstrs)]
 
 def get_independence_factor(bank_cache, ifo = "H1", maxjobs = None):
 	dof = 0.0
