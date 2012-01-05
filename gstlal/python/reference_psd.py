@@ -31,6 +31,7 @@ from scipy import interpolate
 import sys
 import signal
 
+
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
 import pygtk
 pygtk.require("2.0")
@@ -116,7 +117,7 @@ def measure_psd(instrument, seekevent, detector, seg, rate, fake_data = None, on
 	pipeline.set_state(gst.STATE_PLAYING)
 	if verbose:
 		print >>sys.stderr, "running pipeline ..."
-	
+
 	class SigData(object):
 		def __init__(self):
 			self.has_been_signaled = False
