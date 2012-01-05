@@ -21,21 +21,24 @@ WNB_RATE = 0.01 # Hz
 
 all : frames.cache
 
-H1-FAKE-STRAIN : injections.xml
+lalapps_path2cache :
+	wget 'http://www.lsc-group.phys.uwm.edu/cgit/lalsuite/plain/pylal/bin/lalapps_path2cache'
+
+H1-FAKE-STRAIN : injections.xml lalapps_path2cache
 	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --injections injections.xml --instrument H1 --verbose --fake-data silence
-	ls H1-FAKE-STRAIN/*.gwf | lalapps_path2cache > frame.H1.cache
+	ls H1-FAKE-STRAIN/*.gwf | ./lalapps_path2cache > frame.H1.cache
 
-H2-FAKE-STRAIN : injections.xml
+H2-FAKE-STRAIN : injections.xml lalapps_path2cache
 	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --injections injections.xml --instrument H2  --verbose --fake-data silence
-	ls H2-FAKE-STRAIN/*.gwf | lalapps_path2cache > frame.H2.cache
+	ls H2-FAKE-STRAIN/*.gwf | ./lalapps_path2cache > frame.H2.cache
 
-L1-FAKE-STRAIN : injections.xml
+L1-FAKE-STRAIN : injections.xml lalapps_path2cache
 	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --injections injections.xml --instrument L1 --verbose --fake-data silence
-	ls L1-FAKE-STRAIN/*.gwf | lalapps_path2cache > frame.L1.cache
+	ls L1-FAKE-STRAIN/*.gwf | ./lalapps_path2cache > frame.L1.cache
 
-V1-FAKE-STRAIN : injections.xml
+V1-FAKE-STRAIN : injections.xml lalapps_path2cache
 	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --injections injections.xml --instrument V1 --verbose --fake-data silence
-	ls V1-FAKE-STRAIN/*.gwf | lalapps_path2cache > frame.V1.cache
+	ls V1-FAKE-STRAIN/*.gwf | ./lalapps_path2cache > frame.V1.cache
 
 frames.cache : H1-FAKE-STRAIN H2-FAKE-STRAIN L1-FAKE-STRAIN V1-FAKE-STRAIN
 	cat frame.H1.cache frame.H2.cache frame.L1.cache frame.V1.cache > frames.cache
