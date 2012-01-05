@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal],[0.1.0],[gstlal-discuss@gravity.phys.uwm.edu],[gstlal])
+AC_INIT([gstlal],[0.2.0],[gstlal-discuss@gravity.phys.uwm.edu],[gstlal])
 AC_COPYRIGHT([Copyright (C) 2008--2011 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -46,8 +46,12 @@ AC_SUBST([pkgdocdir], ["\${docdir}/\${PACKAGE_NAME}-\${PACKAGE_VERSION}"])
 AC_SUBST([pkgconfigdir],["\${libdir}/pkgconfig"])
 
 
+#
 # Set the library API info
+#
 #  0.0.0   Original version
+
+
 AC_SUBST([LIBAPI], [0])
 AC_SUBST([LIBREL], [0])
 AC_SUBST([LIBAGE], [0])
