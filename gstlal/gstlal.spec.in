@@ -4,7 +4,7 @@ Release: 1.lscsoft
 Summary: GSTLAL
 License: GPL
 Group: LSC Software/Data Analysis
-Requires: python >= 2.6 fftw >= 3 gstreamer >= 0.10.32 gstreamer-plugins-base >= 0.10.32 gstreamer-plugins-good >= 0.10.27 gstreamer-python >= 0.10.21 pygobject2 numpy lal >= 6.6.0 lalframe >= 1.0.3 lalmetaio >= 1.0.2 lalsimulation >= 0.1.0 lalburst >= 1.1.0 lalinspiral >= 1.2.0 gsl
+Requires: python >= 2.6 python-pylal fftw >= 3 gstreamer >= 0.10.32 gstreamer-plugins-base >= 0.10.32 gstreamer-plugins-good >= 0.10.27 gstreamer-python >= 0.10.21 pygobject2 numpy lal >= 6.6.0 lalframe >= 1.0.3 lalmetaio >= 1.0.2 lalsimulation >= 0.1.0 lalburst >= 1.1.0 lalinspiral >= 1.2.0 gsl
 BuildRequires: python-devel >= 2.6 fftw-devel >= 3 gstreamer-devel >= 0.10.32 gstreamer-plugins-base-devel >= 0.10.32 pygobject2-devel lal-devel >= 6.6.0 lalframe-devel >= 1.0.3 lalmetaio-devel >= 1.0.2 lalsimulation-devel >= 0.1.0 lalburst-devel >= 1.1.0 lalinspiral-devel >= 1.2.0 gsl-devel
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
