@@ -1,6 +1,8 @@
 #!/bin/bash
 
-./excesspower 
+gstlal_excesspower  \
+	--verbose  \
+	--diagnostics  \
 	--data-source fakeadvLIGO  \
 	-s 2048  \
-	-f configurations/gstlal_excessopower.ini 
+	-f ~/work/codedev/excesspower/pipeline/configurations/gstlal_excessopower.ini 
