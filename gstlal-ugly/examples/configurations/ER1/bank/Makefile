@@ -21,6 +21,7 @@ all : dag
 
 lalapps_path2cache :
 	wget 'http://www.lsc-group.phys.uwm.edu/cgit/lalsuite/plain/pylal/bin/lalapps_path2cache'
+	chmod +x lalapps_path2cache
 
 frame.cache : lalapps_path2cache
 	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --instrument H1 --verbose
