@@ -5,6 +5,7 @@ all : frames.cache
 
 lalapps_path2cache :
 	wget 'http://www.lsc-group.phys.uwm.edu/cgit/lalsuite/plain/pylal/bin/lalapps_path2cache'
+	chmod +x lalapps_path2cache
 
 H1-FAKE-STRAIN : lalapps_path2cache
 	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --instrument H1 --verbose
