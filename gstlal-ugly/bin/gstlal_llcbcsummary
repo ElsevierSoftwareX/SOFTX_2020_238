@@ -173,48 +173,48 @@ print "<table>"
 
 # latency history
 print "<tr><td><div id='canvaslatency'>"
-plot(form.getvalue("dir"), '_latency_history.txt', idrange, reg, ylabel = "Latency (s)", title = "Latency summary of all jobs, red means data is missing")
+plot(form.getvalue("dir"), '_latency_history.txt', idrange, reg, ylabel = "Latency (s)", title = "Latency summary of all jobs, red means no report")
 print "</div></td></tr>"
 
 # RAM history
 print "<tr><td><div id='canvasram'>"
-plot(form.getvalue("dir"), '_ram_history.txt', idrange, reg, ylabel = "RAM (GB)", title = "RAM summary of all jobs, red means data is missing")
+plot(form.getvalue("dir"), '_ram_history.txt', idrange, reg, ylabel = "RAM (GB)", title = "RAM summary of all jobs, red means no report")
 print "</div></td></tr>"
 
 # max SNR
 print "<tr><td><div id='canvassnr'>"
-plot(form.getvalue("dir"), '_snr_history.txt', idrange, reg, datatype = "median", ylabel = "SNR", title = "median(SNR) of recent triggers summary of all jobs, red means data is missing")
+plot(form.getvalue("dir"), '_snr_history.txt', idrange, reg, datatype = "median", ylabel = "SNR", title = "median(SNR) of recent triggers summary of all jobs, red means no report")
 print "</div></td></tr>"
 
 # last update
 print "<tr><td><div id='canvasupdate'>"
-plot(form.getvalue("dir"), '_snr_history.txt', idrange, reg, plottype = "timestamp", ylabel = "Time (s)", scale = "log", xlabel = "Time before now (s)", title = "Time since last event (s), red means data is missing")
+plot(form.getvalue("dir"), '_snr_history.txt', idrange, reg, plottype = "timestamp", ylabel = "Time (s)", scale = "log", xlabel = "Time before now (s)", title = "Time since last event (s), red means no report")
 print "</div></td></tr>"
 
 # chirp mass
 print "<tr><td><div id='canvaschirp'>"
-plot(form.getvalue("dir"), '_bank.txt', idrange, reg, cols = [2], plottype = "value", ylabel = "mchirp (Msun)", title = "Chirp mass, red means data is missing")
+plot(form.getvalue("dir"), '_bank.txt', idrange, reg, cols = [2], plottype = "value", ylabel = "mchirp (Msun)", title = "Chirp mass, red means no report")
 print "</div></td></tr>"
 
 # Duration
 print "<tr><td><div id='canvasduration'>"
-plot(form.getvalue("dir"), '_bank.txt', idrange, reg, cols = [1], plottype = "value", ylabel = "duration (s)", title = "Template duration, red means data is missing")
+plot(form.getvalue("dir"), '_bank.txt', idrange, reg, cols = [1], plottype = "value", ylabel = "duration (s)", title = "Template duration, red means no report")
 print "</div></td></tr>"
 
 for ifo in ["H1", "H2", "L1", "V1"]:
 	# fault samples
 	print "<tr><td><div id='canvas%s%s'>" % (ifo, "discont")
-	plot(form.getvalue("dir"), '_%sstrain_add_drop.txt' % ifo, idrange, reg, datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Data dropped, red means no data" % ifo)
+	plot(form.getvalue("dir"), '_%sstrain_add_drop.txt' % ifo, idrange, reg, datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Data dropped, red means no report" % ifo)
 	print "</div></td></tr>"
 
 	# deadtime
 	#print "<tr><td><div id='canvas%s%s'>" % (ifo, "deadtime")
-	#plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, cols = [2], datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Dead time, red means no data" % ifo)
+	#plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, cols = [2], datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Dead time, red means no report" % ifo)
 	#print "</div></td></tr>"
 	
 	# livetime
 	print "<tr><td><div id='canvas%s%s'>" % (ifo, "livetime")
-	plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, cols = [2,1], datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Up time, red means no data" % ifo)
+	plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, cols = [2,1], datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Up time, red means no report" % ifo)
 	print "</div></td></tr>"
 
 # end a table
