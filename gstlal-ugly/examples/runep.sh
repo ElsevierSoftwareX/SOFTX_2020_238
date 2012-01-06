@@ -1,6 +1,6 @@
 #!/bin/bash
 
-gstlal_excesspower 
+./excesspower 
 	--data-source fakeadvLIGO  \
 	-s 2048  \
-	-f gstlal_excessopower.ini 
+	-f configurations/gstlal_excessopower.ini 

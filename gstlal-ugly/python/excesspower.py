@@ -172,7 +172,7 @@ def build_inner_product_norm( corr, band, del_f, nfilts, flow, psd=None, level=N
 	max_level = min( max_level, numpy.ceil(numpy.log2(nfilts)) )
 	while itr <= max_level:
 		# Only one level was requested, skip until we find it
-		print "level %d" % itr
+		#print "level %d" % itr
 		if( level != None and level != itr ): continue
  
 		foff = 0

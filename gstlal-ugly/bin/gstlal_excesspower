@@ -62,42 +62,56 @@ class EPHandler( LLOIDHandler ):
 	Handler class for the excess power pipeline. Keeps various bits of information that the pipeline emits and consumes. This is also in charge of signalling the rebuild of various matrices and vectors needed by the pipeline.
 	"""
 	def __init__( self, mainloop, pipeline ):
-		# Defaults
+
+		# Instrument and channel
+		self.inst = None
+		self.channel = None
+
+		# Defaults -- Time-frequency map settings
 		self.base_band = 16
 		self.flow = 64 
 		self.fhigh = 1000
 		#self.fhigh = 2000
+
+		# Defaults -- Resolution settings
 		self.rate = 2048
 		#self.rate = 4096
-		self.filter_len = 2*int(2*self.rate/self.base_band)
-
 		self.max_level = 1
 
-		self.psd = self.build_default_psd( self.rate, self.filter_len )
-		self.psd_power = 0
-
-		self.spec_corr = self.build_default_correlation( self.rate )
-
+		# Defaults -- filtering
+		self.filter_len = 2*int(2*self.rate/self.base_band)
 		self.filter_bank = None
 		# TODO: Maybe not necessary
-		self.rebuild_filter()
 		self.firbank = None
 
+		# Defaults -- PSD settings
+		# This is used to store the previous value of the PSD power
+		self.psd_power = 0
+		self.cache_psd = False
+		self.psd_change_thresh = 0.5 # fifty percent
+
+		# Defaults -- Two-point spectral correlation settings
+		self.cache_spec_corr = False
+
+		# Defaults -- mixer matrices
 		self.chan_matrix = None
-		self.rebuild_chan_mix_matrix()
 		self.mmixers = {}
 
-		self.unicorns = False
+		# Defaults -- injections
+		# TODO: Scheduled for deletion
+		#self.unicorns = False
 
+		# Defaults -- data products
 		self.output = None
 		self.triggers = None
 		self.outfile = "test.xml"
 		self.make_output_table()
-
-		self.cache_psd = False
-		self.cache_spec_corr = False
-
 		self.snr_thresh = 5.5
+
+		self.spec_corr = self.build_default_correlation( self.rate )
+		self.psd = self.build_default_psd( self.rate, self.filter_len )
+		self.rebuild_filter()
+		self.rebuild_chan_mix_matrix()
 
 		super(type(self), self).__init__(mainloop, pipeline)
 
@@ -166,8 +180,8 @@ class EPHandler( LLOIDHandler ):
 			#TODO: self.detector
 		)
 		output = "%sgstlal_excesspower_bank_level_%d.xml" % (loc, res_level)
-		utils.write_filename(xmldoc, output, verbose = True,
-		       gz = (output or "stdout").endswith(".gz"))
+		utils.write_filename( xmldoc, output, verbose = True,
+		       gz = (output or "stdout").endswith(".gz") )
 		return output
 
 	def rebuild_chan_mix_matrix( self ):
@@ -244,7 +258,6 @@ def on_psd_change( elem, pspec, hand ):
 	Get the PSD object and signal the handler to rebuild everything.
 	"""
 	print >> sys.stderr, "Intercepted spectrum signal."
-	# TODO: Ensure that the other options (flow and such) are set here as well
 
 	hand.psd = REAL8FrequencySeries(
 		name = "PSD",
@@ -286,6 +299,10 @@ def on_spec_corr_change( elem, pspec, hand ):
 	# If the spectrum correlation changes, rebuild everything
 	if( hand.psd != None ):
 		hand.rebuild_everything()
+
+def get_triggers(elem, handler):
+	for row in sngl_bursts_from_buffer(elem.emit("pull-buffer")):
+		handler.triggers.append( row )
 
 #
 # =============================================================================
@@ -331,13 +348,18 @@ verbose = options.verbose
 diagnostics = options.diagnostics
 
 # UNICORNS!!!!!!!!!!11!
+unicorns, unicorn_volume = False, 0
 if( options.unicorns ):
 	unicorns = True
 	unicorn_volume = options.unicorns 
-	unicorn_volume = 1e-18
-else: unicorns = False
 
-##### HANDLER / PIPELINE OPTIONS ############
+#
+# =============================================================================
+#
+#                           Handler / Pipeline options
+#
+# =============================================================================
+#
 
 pipeline = gst.Pipeline( "gstlal_excesspower" )
 mainloop = gobject.MainLoop()
@@ -355,20 +377,21 @@ else:
 	handler.base_band = cfg.getint( "tf_parameters", "base-resolution" )
 	handler.max_level = cfg.getint( "tf_parameters", "max-resolution-level" )
 	handler.max_duration = cfg.getfloat( "tf_parameters", "max-time-resolution" )
-	handler.cache_spec_corr = cfg.getboolean(
-					"cache", "cache-spectral-correlation" )
-	handler.cache_psd = cfg.getboolean( 
-					"cache", "cache-psd" )
+	handler.cache_spec_corr = cfg.getboolean( "cache", "cache-spectral-correlation" )
+	handler.cache_psd = cfg.getboolean( "cache", "cache-psd" )
 
+	handler.outfile = cfg.get( "triggering", "output-file" )
 	handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
 
-	# Detector
-	inst = cfg.get( "instrument", "detector" )
+	# Instruments and channels
+	handler.inst = cfg.get( "instrument", "detector" )
+	handler.channel = cfg.get( "instrument", "channel" )
+	gwflocation = cfg.get( "instrument", "location" )
 
 	#inj_loc = "injections/burst_injections.xml"
 	#inj_loc = "injections/sg.xml"
+	#inj_loc = "injections/sc.xml"
 	inj_loc = cfg.get( "injections", "xml-location" )
-	inj_loc = "injections/sc.xml"
 
 base_band = handler.base_band
 
@@ -390,55 +413,50 @@ if options.verbose:
 # Data source
 # TODO: Unhardcode this after testing
 if( data_source == "fakeLIGO" ):
-	head = mkfakeLIGOsrc( pipeline, instrument="H1", channel_name = "LSC-STRAIN" )
+	head = mkfakeLIGOsrc( pipeline, 
+		instrument = handler.inst,
+		channel_name = handler.channel
+	)
 elif( data_source == "fakeadvLIGO" ):
-	head = mkfakeadvLIGOsrc( pipeline, instrument="H1", channel_name = "LSC-STRAIN" )
+	head = mkfakeadvLIGOsrc( pipeline, 
+		instrument = handler.inst,
+		channel_name = handler.channel
+	)
 elif( data_source == "whitedata" ):
 	head = gst.element_factory_make( "audiotestsrc" )
 	pipeline.add( head )
-	head.set_property( "wave", 9 )
+	head.set_property( "wave", 9 ) # unity variance zero mean gaussian noise
 elif( data_source == "lldata" ):
 	# TODO: This
 	print >>sys.stderr, "Not implemented yet. :( Tell Chris to stop being so damn lazy."
 	sys.exit(-1)
+# TODO: This should probably be "cachefile"
 elif( data_source == "gwffile" ):
-	# TODO: This
+	head = mkframesrc( pipeline, 
+		gwflocation, 
+		handler.inst, 
+		handler.channel_name 
+	)
 	print >>sys.stderr, "Not implemented yet. :( Tell Chris to stop being so damn lazy."
 	sys.exit(-1)
-
-# TODO: Scheduled for deletion
-#def on_new_pad(dbin, pad, islast):
-	#decode = pad.get_parent()
-	#pipeline = decode
+else:
+	print >>sys.stderr, "Data source %s not recognized. Check the valid options in the help message."
+	sys.exit(-1)
 
 # Diagnostic plot
 if( diagnostics ):
 	head = postdatatee = mktee( pipeline, head )
-	mknxydumpsink( pipeline, mkqueue( pipeline, postdatatee ), "data_pre.txt" )
-
-"""
-def on_new_decoded_pad(dbin, pad, islast):
-	decode = pad.get_parent()
-	pipeline = decode.get_parent()
-	convert = pipeline.get_by_name('audioconvert0')
-	decode.link(convert)
-	pipeline.set_state(gst.STATE_PLAYING)
-	print "linked!"
-
-	#inj_head = mkgeneric( pipeline, inj_head, "decodebin2" )
-	#inj_head.connect( "new-decoded-pad", on_new_decoded_pad )
-	#convert = gst.element_factory_make( "audioconvert" )
-	#pipeline.add( convert )
-	#inj_head = mkgeneric( pipeline, inj_head, "wavparse" )
-"""
+	mknxydumpsink( pipeline, 
+		mkqueue( pipeline, postdatatee ), 
+		cfg.get( "diagnostics", "strain-data-output" )
+	)
 
 # Data conditioning
 # TODO: Does this need to be set if the data source isn't fake?
 head = mkcapsfilter( pipeline, mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % sample_rate )
 
-#if( unicorns ):
-if( True ):
-	unicorn_volume = 1e-20
+if( unicorns ):
+	# TODO: Link to lalsim to get the unicorn
 	inj_head = gst.element_factory_make( "filesrc" )
 	pipeline.add( inj_head )
 	inj_head.set_property( "location" , "/Users/chrispankow/work/codedev/excesspower/pipeline/jolien/unicorn1_delay.mp3" )
@@ -448,17 +466,16 @@ if( True ):
 	inj_head = mkcapsfilter( pipeline, inj_head, "audio/x-raw-float,channels=1,width=64,rate=%d" % sample_rate )
 	inj_head = mkgeneric( pipeline, inj_head, "audioamplify" )
 	inj_head.set_property( "amplification", unicorn_volume )
-	#inj_head = inj_tee = mktee( pipeline, inj_head )
-	#mknxydumpsink( pipeline, mkqueue( pipeline, inj_tee ), "unicorn_delay.txt" )
 	adder = mkgeneric( pipeline, inj_head, "lal_adder" )
 	adder.set_property( "sync", True )
 	head.link( adder )
 	head = adder
 
-#if( inj_loc ):
-if( False ):
+if( inj_loc ):
 	head = mkinjections( pipeline, head, inj_loc )
-	head = mkprogressreport( pipeline, head, "post injection" )
+
+if( inj_loc and verbose ):
+	head = mkprogressreport( pipeline, head, "injection stream" )
 
 head = whitener = mkwhiten( pipeline, head )
 head = mknofakedisconts( pipeline, head )
@@ -466,15 +483,20 @@ head = mknofakedisconts( pipeline, head )
 # Diagnostic plot
 if( diagnostics ):
 	head = postresamptee = mktee( pipeline, head )
-	mknxydumpsink( pipeline, mkqueue( pipeline, head ), "data_post.txt" )
+	mknxydumpsink( pipeline, 
+		mkqueue( pipeline, head ), 
+		cfg.get( "diagnostics", "whitened-data-output" )
+	)
 
-head = mkprogressreport( pipeline, head, "post whitener" )
+if( verbose ):
+	head = mkprogressreport( pipeline, head, "whitened stream" )
 
 # excess power channel firbank
 # NOTE: This is where the inspiral pipeline will feed in?
 head = mkfirbank( pipeline, head, time_domain=False )
 
 # TODO: Make this less hardcodish
+# This needs to be done since what is returned by mkfirbank is actually a link to the nofakedisconts element, so the fir bank is hidden
 handler.add_firbank( pipeline.get_by_name( "gstlalfirbank0" ) )
 nchannels = handler.filter_bank.shape[0]
 
@@ -482,13 +504,15 @@ nchannels = handler.filter_bank.shape[0]
 # audioundersampler here to reduce our workload, for each factor of
 # undersampling, we reduce our largest available frequency tile by a factor of 
 # 2.
-
-head = mkprogressreport( pipeline, head, "post FIR bank" )
+if( verbose ):
+	head = mkprogressreport( pipeline, head, "FIR bank stream" )
 
 head = postfirtee = mktee( pipeline, mkqueue( pipeline, head ) )
-# Diagnostic plot
 if( diagnostics ):
-	mknxydumpsink( pipeline, postfirtee, "postfirbank.txt" )
+	mknxydumpsink( pipeline, 
+		postfirtee, 
+		cfg.get( "diagnostics", "fir-output" )
+	)
 
 # First branch -- send fully sampled data to wider channels for processing
 nlevels = int(numpy.ceil( numpy.log2( nchannels ) )) 
@@ -500,19 +524,17 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 
 	head = mkprogressreport( pipeline, head, "post matrix mixer %d" % res_level )
 
-	head = postmmtee = mktee( pipeline, mkqueue( pipeline, head ) )
-	mknxydumpsink( pipeline, postmmtee, "postmatmix_res_%d.txt" % res_level )
+	if( diagnostics ):
+		head = postmmtee = mktee( pipeline, mkqueue( pipeline, head ) )
+		mknxydumpsink( pipeline, postmmtee, "postmatmix_res_%d.txt" % res_level )
 
 	# TODO: Make this into an option
+	# TODO: This should be moved to just before the trigger generator
 	#import ep_visualization as vis
 	#if( res_level == 0 ):
 		#vis.channelgram( pipeline, postmmtee )
-	
-	elem = gst.element_factory_make("lal_audioundersample")
 
-	pipeline.add(elem)
-	head.link(elem)
-	head = elem
+	head = mkgeneric( pipeline, head, "lal_audioundersample" )
 
 	# base_band * 2 * # of channel combinations
 	band = base_band * 2**res_level
@@ -522,14 +544,12 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	undersamp_rate = sample_rate >> res_level
 	head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d,width=64,channels=%d" % (undersamp_rate, chan) )
 
-	head = postustee = mktee( pipeline, mkqueue( pipeline, head ) )
-	mknxydumpsink( pipeline, postustee, "postundersamp_res_%d.txt" % res_level )
+	if( diagnostics ):
+		head = postustee = mktee( pipeline, mkqueue( pipeline, head ) )
+		mknxydumpsink( pipeline, postustee, "postundersamp_res_%d.txt" % res_level )
 
-	elem = gst.element_factory_make("pow")
-	elem.set_property( "exponent", 2 )
-	pipeline.add(elem)
-	head.link(elem)
-	head = elem
+	head = mkgeneric( pipeline, head, "pow" )
+	head.set_property( "exponent", 2 )
 
 	head = mktee( pipeline, head )
 
@@ -540,39 +560,30 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		#duration = duration << 1
 
 	# Multi channel FIR filter
-	elem = gst.element_factory_make("audiofirfilter")
 	# TODO: Calculate the right thing here
-	fir_sq_adder = ep.build_fir_sq_adder( duration )
-	elem.set_property( "kernel", fir_sq_adder )
-	pipeline.add(elem)
-	head.link(elem)
-	head = elem
+	head = mkgeneric( pipeline, head, "audiofirfilter" )
+	head.set_property( "kernel", 
+		ep.build_fir_sq_adder( duration )
+	)
 
-	"""
-	head = postsqtee = mktee( pipeline, mkqueue( pipeline, head ) )
-	mknxydumpsink( pipeline, postsqtee, "postsquare_ts_%d.txt" % duration )
-
-	head = mkprogressreport( pipeline, head, "post audio FIR filter %d, %d" % (res_level, duration) )
-	"""
-
-	# TODO: Create new filter banks for each level
-	#head = mkbursttriggergen( pipeline, head, 1, bank = "banks/full_bank.xml" )
+	# Trigger generator
 	head = mkbursttriggergen( pipeline, head, 1, 
 		bank = handler.build_filter_xml( res_level )
 	)
+	# TODO: Determine this from desired FAP
 	head.set_property( "snr-thresh", handler.snr_thresh )
 
-	head = mkprogressreport( pipeline, head, "post trigger gen %d, %d" % (res_level, duration) )
-
-	#head = mkfakesink( pipeline, head )
+	if( verbose ):
+		head = mkprogressreport( pipeline, head, 
+			"Trigger generator resolution level %d, duration %d" % 
+				(res_level, duration) 
+		)
 
 # TODO: This will have to be in the higher level loop
-# generate triggers
-def get_triggers(elem, handler):
-	for row in sngl_bursts_from_buffer(elem.emit("pull-buffer")):
-		handler.triggers.append( row )
 appsink = mkappsink(pipeline, mkqueue(pipeline, head))
 appsink.connect_after("new-buffer", get_triggers, handler)
+
+### END OF PIPELINE
 
 # Spectrum notification processing
 whitener.connect_after( "notify::mean-psd", on_psd_change, handler )
@@ -586,7 +597,10 @@ signal.signal( signal.SIGTERM, handler.shutdown )
 
 print >>sys.stderr, "Startin' up."
 pipeline.set_state( gst.STATE_PLAYING )
-gst.DEBUG_BIN_TO_DOT_FILE(pipeline,
-		gst.DEBUG_GRAPH_SHOW_ALL,"excesspower.dotfile")
+if( diagnostics ):
+	gst.DEBUG_BIN_TO_DOT_FILE( pipeline,
+		gst.DEBUG_GRAPH_SHOW_ALL,
+		cfg.get( "diagnostics", "dot-file-location" )
+	)
 mainloop.run()
 
