@@ -413,7 +413,7 @@ class DistributionsStats(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", verbose = False):
 		#
 		# initialize
 		#
@@ -440,6 +440,8 @@ class Data(object):
 		self.likelihood_snapshot_timestamp = None
 		# gracedb far threshold
 		self.gracedb_far_threshold = gracedb_far_threshold
+		self.gracedb_group = gracedb_group
+		self.gracedb_type = gracedb_type
 
 		# All possible instrument combinations
 		# frozenset(ifos) for n in range(2, len(instruments)+1) for ifos in choices(instruments, n
@@ -659,7 +661,7 @@ class Data(object):
 		self.do_gracedb_alerts()
 
 
-	def do_gracedb_alerts(self, gracedb_group = "Test", gracedb_type = "LowMass"):
+	def do_gracedb_alerts(self):
 		try:
 			gracedb
 		except NameError:
@@ -685,7 +687,7 @@ class Data(object):
 				instruments = coinc_inspiral_index[coinc_event_id].get_ifos()
 				observatories = "".join(sorted(set(instrument[0] for instrument in instruments)))
 				instruments = "".join(sorted(instruments))
-				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event_id].mass).replace(".", "_").replace("-", "_"), gracedb_group, gracedb_type)
+				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_type)
 				end_time = int(coinc_inspiral_index[coinc_event_id].get_end())
 				filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
 
@@ -717,7 +719,7 @@ class Data(object):
 				utils.signal.signal = orig_signal
 				# FIXME: make this optional from command line?
 				if True:
-					resp = gracedb.Client().create(gracedb_group, gracedb_type, filename, message.getvalue())
+					resp = gracedb.Client().create(self.gracedb_group, self.gracedb_type, filename, message.getvalue())
 					if "error" in resp:
 						print >>sys.stderr, "gracedb upload of %s failed: %s" % (filename, resp["error"])
 					elif self.verbose:
