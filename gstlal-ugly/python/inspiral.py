@@ -326,6 +326,7 @@ class DistributionsStats(object):
 	}
 
 	def __init__(self):
+		self.lock = threading.Lock()
 		self.raw_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
 		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
 
@@ -604,10 +605,12 @@ class Data(object):
 				# that's taken care of.
 				#
 				# write the new distribution stats to disk
+				self.distribution_stats.lock.acquire()
 				orig_signal = utils.signal.signal
 				utils.signal.signal = lambda *args: None
 				self.distribution_stats.to_filename(self.likelihood_file, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = False)
 				utils.signal.signal = orig_signal
+				self.distribution_stats.lock.release()
 
 			# run stream thinca
 			noncoinc_sngls = self.stream_thinca.add_events(events, timestamp, FAP = self.far)
@@ -639,6 +642,7 @@ class Data(object):
 		# that's taken care of.
 				
 		# write the new distribution stats to disk
+		self.distribution_stats.lock.acquire()
 		output = StringIO.StringIO()
 		orig_signal = utils.signal.signal
 		utils.signal.signal = lambda *args: None
@@ -647,6 +651,7 @@ class Data(object):
 		utils.signal.signal = orig_signal
 		outstr = output.getvalue()
 		output.close()
+		self.distribution_stats.lock.release()
 		return outstr
 
 	def flush(self):
