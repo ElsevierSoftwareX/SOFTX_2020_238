@@ -88,13 +88,7 @@ V1psd.xml.gz :
 reference_psd.xml: H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
 	ligolw_add --output reference_psd.xml H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
 
-sql :
-	cat uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql
-	cat simplify.sql cluster.sql > simplify_and_cluster.sql
-	cat simplify.sql delete_by_far.sql > simplify_and_delete_by_far.sql
-	cat drop_sim.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
-
-dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml sql lalapps_path2cache
+dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml lalapps_path2cache
 	ls *H2_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > H2_split_bank.cache
 	ls *H1_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > H1_split_bank.cache
 	ls *V1_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > V1_split_bank.cache
