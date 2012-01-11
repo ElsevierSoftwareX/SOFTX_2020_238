@@ -117,21 +117,21 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"endianness = (int) BYTE_ORDER, " \
 		"width = (int) 32, " \
 		"depth = (int) 32, " \
-		"signed = false; " \
+		"signed = {true, false}; " \
 		"audio/x-raw-int, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
 		"endianness = (int) BYTE_ORDER, " \
 		"width = (int) 16, " \
 		"depth = (int) 16, " \
-		"signed = false; " \
+		"signed = {true, false}; " \
 		"audio/x-raw-int, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
 		"endianness = (int) BYTE_ORDER, " \
 		"width = (int) 8, " \
 		"depth = (int) 8, " \
-		"signed = false; " \
+		"signed = {true, false}; " \
 		"audio/x-raw-float, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
