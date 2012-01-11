@@ -3,7 +3,7 @@ H2_BANK_CACHE = /home/channa/ER1/bank/H2_bank.cache
 L1_BANK_CACHE = /home/channa/ER1/bank/L1_bank.cache
 V1_BANK_CACHE = /home/channa/ER1/bank/V1_bank.cache
 
-NUMBANKS = 3,4,5,6,7,8,9,10,11,12
+NUMBANKS = 3,4,5,5,6,7,8,8,9,10,11,12
 MAXJOBS = 150
 
 all : dag
