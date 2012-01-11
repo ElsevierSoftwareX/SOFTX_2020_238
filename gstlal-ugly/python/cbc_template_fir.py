@@ -251,6 +251,18 @@ def decompose_templates(template_bank, tolerance, identity = False):
 	s = s[:n]
 
 	#
+	# renormalize the truncated SVD approximation of these template
+	# waveform slices making sure their squares still add up to chifacs.
+	# This is done by renormalizing the sum of the square of the
+	# singular value weighted reconstruction coefficients associated with
+	# each template.
+	#
+
+	V2 = (Vh * Vh).sum(0)
+	for idx,v2 in enumerate(V2):
+		Vh[:, idx] *= numpy.sqrt(chifacs[idx] / v2)
+
+	#
 	# done.
 	#
 
