@@ -142,6 +142,8 @@ def parse_command_line():
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
 	parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise.")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
+	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
+	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
 
 	options, filenames = parser.parse_args()
 
@@ -244,7 +246,10 @@ def parse_command_line():
 
 options, filenames, process_params, svd_banks, detectors = parse_command_line()
 frame_segments = dict([(instrument, None) for instrument in detectors])
-veto_segments = None
+if options.veto_segments_file is not None:
+	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.veto_segments_file, verbose = options.verbose), options.veto_segments_name).coalesce()
+else:
+	veto_segments = None
 
 
 #
@@ -332,7 +337,7 @@ triggersrc = lloidparts.mkLLOIDmulti(
 	online_data = (not options.fake_data), # two mutually exclusive options, fake data or online data
 	injection_filename = options.injections,
 	ht_gate_threshold = options.ht_gate_threshold,
-	veto_segments = None,
+	veto_segments = veto_segments,
 	verbose = options.verbose,
 	nxydump_segment = None,
 	frame_segments = frame_segments,
