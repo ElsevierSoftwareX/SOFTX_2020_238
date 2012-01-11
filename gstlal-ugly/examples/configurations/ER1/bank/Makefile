@@ -100,4 +100,4 @@ dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml lalapps_path2cache
 	cat H2_bank.dag H1_bank.dag L1_bank.dag V1_bank.dag  > bank.dag
 
 realclean :
-	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871147516-2048.xml *split_bank-H1-TMPLTBANK-871147516-2048.xml *psd.xml.gz segments.H.xml logs
+	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871147516-2048.xml *split_bank-H1-TMPLTBANK-871147516-2048.xml H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz segments.H.xml logs
