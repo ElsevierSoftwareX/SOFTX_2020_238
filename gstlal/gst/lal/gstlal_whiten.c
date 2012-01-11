@@ -1453,7 +1453,12 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		break;
 
 	case ARG_DELTA_F:
-		g_value_set_double(value, 1.0 / element->fft_length_seconds);
+		if(element->fft_length_seconds != 0)
+			g_value_set_double(value, 1.0 / element->fft_length_seconds);
+		else
+			/* prevent divide-by-zero FPE;  if the fft length
+			 * is 0, it doesn't matter what the delta f is */
+			g_value_set_double(value, 0.0);
 		break;
 
 	case ARG_F_NYQUIST:
@@ -1723,10 +1728,6 @@ static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *klass)
 	element->sample_units = lalDimensionlessUnit;
 	element->sample_rate = 0;
 	element->input_queue = NULL;
-
-	element->zero_pad_seconds = 0;
-	element->fft_length_seconds = 0;
-	element->psdmode = 0;
 
 	element->hann_window = NULL;
 	element->tukey_window = NULL;
