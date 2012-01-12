@@ -468,8 +468,13 @@ def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.k
 
 # this is how the program stops gracefully, it is the only way to stop it.
 # Otherwise it runs forever man.
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
+
+for i in [x for x in dir(signal) if x.startswith("SIG") and "_" not in x]:
+	try:
+		signum = getattr(signal, i)
+		signal.signal(signum, signal_handler)
+	except RuntimeError:
+		pass
 
 
 #
@@ -490,3 +495,6 @@ output.flush()
 output.write_output_file(likelihood_file = options.likelihood_file, verbose = options.verbose)
 # repair the shared memory just in case before exiting
 smrepair()
+
+# always end with an error so condor won't mark it as done
+sys.exit(1)
