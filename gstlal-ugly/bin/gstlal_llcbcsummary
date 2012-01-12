@@ -181,9 +181,14 @@ print "<tr><td><div id='canvasram'>"
 plot(form.getvalue("dir"), '_ram_history.txt', idrange, reg, ylabel = "RAM (GB)", title = "RAM summary of all jobs, red means no report")
 print "</div></td></tr>"
 
-# max SNR
+# median SNR
 print "<tr><td><div id='canvassnr'>"
 plot(form.getvalue("dir"), '_snr_history.txt', idrange, reg, datatype = "median", ylabel = "SNR", title = "median(SNR) of recent triggers summary of all jobs, red means no report")
+print "</div></td></tr>"
+
+# max SNR
+print "<tr><td><div id='canvassnrmax'>"
+plot(form.getvalue("dir"), '_snr_history.txt', idrange, reg, datatype = "max", ylabel = "SNR", title = "max(SNR) of recent triggers summary of all jobs, red means no report")
 print "</div></td></tr>"
 
 # last update
