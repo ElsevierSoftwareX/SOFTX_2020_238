@@ -21,6 +21,7 @@ parser.add_option("--injections", metavar = "filename", help = "Set the name of 
 parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
 parser.add_option("--channel-name", metavar = "name", default = "FAKE-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"FAKE-STRAIN\".")
 parser.add_option("--fake-data", metavar = "(white|silence|LIGO|AdvLIGO)", default = 'AdvLIGO', help = "Set the type of noise (default AdvLIGO).")
+parser.add_option("--duration", metavar = "s", default = 64, type = "int", help = "Set the duration of the output frame files")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 options, filenames = parser.parse_args()
@@ -39,7 +40,7 @@ try:
 	os.mkdir(outpath)
 except:
 	pass
-pipeparts.mkframesink(pipeline, head, path=outpath, sync=False, async=True, frame_type=options.instrument)
+pipeparts.mkframesink(pipeline, head, path=outpath, sync=False, async=True, frame_type=options.instrument, duration = options.duration)
 
 pipeline.set_state(gst.STATE_PAUSED)
 pipeline.set_state(gst.STATE_PLAYING)
