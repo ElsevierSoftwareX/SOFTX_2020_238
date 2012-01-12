@@ -77,6 +77,8 @@ GST_DEBUG_CATEGORY(framecpp_channeldemux_debug);
 
 using namespace FrameCPP;
 
+using FrameCPP::Common::Verify;
+
 
 /*
  * ============================================================================
@@ -561,7 +563,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 
 			IFrameStream ifs(ibuf);
 
-			Verifier	verifier;
+			Verify	verifier;
 
 			verifier.BufferSize( GST_BUFFER_SIZE( inbuf ) );
 			verifier.UseMemoryMappedIO( false );
