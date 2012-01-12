@@ -56,6 +56,9 @@ typedef struct {
 
 	GstEvent *last_new_segment;
 	GHashTable *pad_state;
+
+	gboolean do_file_checksum;
+	gboolean skip_bad_files;
 } GSTFrameCPPChannelDemux;
 
 
