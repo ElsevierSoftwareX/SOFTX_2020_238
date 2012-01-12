@@ -723,6 +723,11 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				}
 			}
 		}
+	} catch( const std::exception& Exception ) {
+		GST_ELEMENT_ERROR(element, STREAM, DECODE, (NULL), (Exception.what( )));
+		if(srcpad)
+			gst_object_unref(srcpad);
+		result = GST_FLOW_ERROR;
 	} catch(...) {
 		GST_ELEMENT_ERROR(element, STREAM, DECODE, (NULL), ("libframecpp raised unknown exception"));
 		if(srcpad)
