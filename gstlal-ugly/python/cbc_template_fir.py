@@ -239,8 +239,8 @@ def decompose_templates(template_bank, tolerance, identity = False):
 	#
 
 	residual = numpy.sqrt((s * s).cumsum() / numpy.dot(s, s))
-	# FIXME in an ad hoc way force at least 4 principle components
-	n = max(min(residual.searchsorted(tolerance) + 1, len(s)), 4)
+	# FIXME in an ad hoc way force at least 6 principle components
+	n = max(min(residual.searchsorted(tolerance) + 1, len(s)), 6)
 
 	#
 	# clip decomposition, pre-multiply Vh by s
