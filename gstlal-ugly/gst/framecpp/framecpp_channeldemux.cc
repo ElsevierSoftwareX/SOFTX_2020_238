@@ -35,6 +35,7 @@
 
 #include <iostream>
 #include <stdint.h>
+#include <stdexcept>
 
 
 /*
@@ -51,6 +52,7 @@
 
 
 #include <framecpp/Common/MemoryBuffer.hh>
+#include <framecpp/Common/Verify.hh>
 #include <framecpp/IFrameStream.hh>
 #include <framecpp/FrameH.hh>
 #include <framecpp/FrAdcData.hh>
@@ -544,6 +546,37 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 	GstFlowReturn result = GST_FLOW_OK;
 
 	try {
+	        {
+		        /*
+			 * File Checksum verification
+			 *
+			 * This additional scope allows for cleanup of variables used
+			 * only for the file checksum validation.
+			 * Resources are returned to the system as the variables go
+			 * out of scope.
+			 */
+			MemoryBuffer *ibuf(new MemoryBuffer(std::ios::in));
+
+			ibuf->pubsetbuf((char *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf));
+
+			IFrameStream ifs(ibuf);
+
+			Verifier	verifier;
+
+			verifier.BufferSize( GST_BUFFER_SIZE( inbuf ) );
+			verifier.UseMemoryMappedIO( false );
+			verifier.CheckDataValid( false );
+			verifier.Expandability( false );
+			verifier.MustHaveEOFChecksum( true );
+			verifier.Strict( false );
+			verifier.ValidateMetadata( false );
+			verifier.CheckFileChecksumOnly( true );
+
+			if ( verifier( ifs ) != 0 )
+			{
+				throw std::runtime_error( "File Checksum" );
+			}
+	        }
 		MemoryBuffer *ibuf(new MemoryBuffer(std::ios::in));
 
 		ibuf->pubsetbuf((char *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf));
