@@ -275,6 +275,10 @@ def mkaudioamplify(pipeline, src, amplification):
 	return mkgeneric(pipeline, src, "audioamplify", clipping_method = 3, amplification = amplification)
 
 
+def mkaudioundersample(pipeline, src):
+	return mkgeneric(pipeline, src, "lal_audioundersample")
+
+
 def mkresample(pipeline, src, pad_name = None, **properties):
 	elem = gst.element_factory_make("audioresample")
 	for name, value in properties.items():
