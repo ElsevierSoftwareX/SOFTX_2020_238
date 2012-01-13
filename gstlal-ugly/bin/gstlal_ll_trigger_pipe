@@ -58,7 +58,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	A gstlal_inspiral node
 	"""
 	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=10.0, control_peak_time = 5, fir_stride = 5, thinca_interval = 10, likelihood_file = None, trials_factor = 1, gracedb_far_threshold = None, gracedb_group = None, gracedb_type = None, injections = None, fake_data = None, copy_likelihoods = False, p_node=[]):
+	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=10.0, control_peak_time = 5, fir_stride = 5, thinca_interval = 10, likelihood_file = None, trials_factor = 1, gracedb_far_threshold = None, gracedb_group = None, gracedb_type = None, injections = None, fake_data = None, copy_likelihoods = False, veto_segments_file = None, veto_segments_name = None, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("channel-name", inspiral.pipeline_channel_list_from_channel_dict(channel_dict))
@@ -84,6 +84,10 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 			self.add_var_opt("fake-data", fake_data)
 		if injections is not None:
 			self.add_var_opt("injections", injections)
+		if veto_segments_file is not None:
+			self.add_var_opt("veto-segments-file", veto_segments_file)
+		if veto_segments_name is not None:
+			self.add_var_opt("veto-segments-name", veto_segments_name)
 		# self.add_var_opt("verbose", "") #Put this in for debugging
 		likefile = os.path.split(likelihood_file)[1]
 		path = os.getcwd()
@@ -126,6 +130,8 @@ def parse_command_line():
 	parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise.")
 	parser.add_option("--copy-likelihoods", action = "store_true", help = "Copy the likelihood files from a seed, must give --likelihood-file")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
+	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
+	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
 	options, filenames = parser.parse_args()
 	options.num_banks = [int(v) for v in options.num_banks.split(",")]
 
@@ -166,7 +172,7 @@ gstlalInspiralJob = gstlal_inspiral_job()
 ###############################################################################
 
 for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, options.num_banks, options.max_jobs):
-	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold, fir_stride = options.fir_stride, thinca_interval = options.thinca_interval, likelihood_file = options.likelihood_file, control_peak_time = options.control_peak_time, trials_factor = trials_factor, gracedb_far_threshold = options.gracedb_far_threshold, gracedb_group = options.gracedb_group, gracedb_type = options.gracedb_type, injections = options.injections, fake_data = options.fake_data, copy_likelihoods = options.copy_likelihoods)
+	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold, fir_stride = options.fir_stride, thinca_interval = options.thinca_interval, likelihood_file = options.likelihood_file, control_peak_time = options.control_peak_time, trials_factor = trials_factor, gracedb_far_threshold = options.gracedb_far_threshold, gracedb_group = options.gracedb_group, gracedb_type = options.gracedb_type, injections = options.injections, fake_data = options.fake_data, copy_likelihoods = options.copy_likelihoods, veto_segments_file = options.veto_segments_file, veto_segments_name = options.veto_segments_name)
 
 
 dag.write_sub_files()
