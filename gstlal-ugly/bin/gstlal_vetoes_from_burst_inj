@@ -1,0 +1,70 @@
+#!/usr/bin/python
+
+
+#
+# preamble
+#
+
+
+import math
+from optparse import OptionParser
+
+
+from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw.utils import segments as ligolw_segments
+from glue.ligolw.utils import process as ligolw_process
+
+
+#
+# command line
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+	)
+	parser.add_option("--padding", metavar = "seconds", type = "float", default = 8.0, help = "Set the amount of padding to veto before and after each injection.")
+	parser.add_option("--default-duration", metavar = "seconds", type = "float", default = 3.0, help = "Set the default burst event duration for injections without explicit durations.")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+
+	options, filenames = parser.parse_args()
+
+	return options, filenames
+options, filenames = parse_command_line()
+
+
+#
+# parse injection documents and build segment list
+#
+
+
+vetoes = segments.segmentlist([])
+for filename in filenames:
+	for sim in lsctables.table.get_table(utils.load_filename(filename, verbose = options.verbose), lsctables.SimBurstTable.tableName):
+		t = sim.get_time_geocent()
+		if sim.duration is None or math.isnan(sim.duration):
+			duration = options.default_duration
+		else:
+			duration = sim.duration
+		vetoes.append(segments.segment((t - duration / 2.0, t + duration / 2.0)))
+vetoes.protract(options.padding).coalesce()
+vetoes = segments.segmentlistdict.fromkeys(("H1", "H2", "L1", "V1"), vetoes)
+
+
+#
+# build and write output document
+#
+
+
+xmldoc = ligolw.Document()
+xmldoc.childNodes.append(ligolw.LIGO_LW())
+process = ligolw_process.register_to_xmldoc(xmldoc, "blah", {})
+llwsegments = ligolw_segments.LigolwSegments(xmldoc)
+ligolw_segments.insert_from_segmentlistdict(llwsegments, vetoes, "vetoes", "Burst injections")
+llwsegments.finalize(process)
+
+
+utils.write_filename(xmldoc, "test.xml.gz", gz = True, verbose = options.verbose)
