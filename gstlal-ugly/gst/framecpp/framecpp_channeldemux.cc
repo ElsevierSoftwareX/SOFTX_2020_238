@@ -575,7 +575,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			verifier.CheckFileChecksumOnly(true);
 
 			if(verifier(ifs) != 0)
-				throw std::runtime_error("file checksum mismatch");
+				throw std::runtime_error(verifier.ErrorInfo( ));
 		}
 		MemoryBuffer *ibuf(new MemoryBuffer(std::ios::in));
 
