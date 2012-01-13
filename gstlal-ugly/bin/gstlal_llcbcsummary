@@ -161,6 +161,7 @@ print """
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="-1">
 <meta http-equiv="CACHE-CONTROL" content="NO-CACHE">
+<meta http-equiv="refresh" content="300">
 </head>
 <body bgcolor=#E0E0E0 face="Arial">
 """
