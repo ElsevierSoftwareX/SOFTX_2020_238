@@ -546,20 +546,6 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 	GstPad *srcpad = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
 
-	{
-		std::ifstream	infile( "/tmp/dump.gwf" );
-
-		if ( infile ) {
-	    		infile.close( );
-		} else {
-			std::ofstream	f( "/tmp/dump.gwf" );
-
-			f.write(GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf));
-			f.close( );
-		}
-	}
-
-
 	try {
 		if(element->do_file_checksum) {
 			/*
