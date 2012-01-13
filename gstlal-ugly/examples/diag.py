@@ -100,6 +100,43 @@ def test_segmentsrc(pipeline):
 	for elem in elems: pipeline.add(elem)
 	gst.element_link_many(*elems)
 
+def test_timeslicechisq(pipeline):
+	timeslicesnrs = []
+
+	chifacs = [0.250570, 0.307837, 0.315783, 0.566514, 0.5599827729939556, 0.31425027633241631, 0.095521268663057449]
+
+	for fac in chifacs:
+		timeslicesnr = gst.element_factory_make("audiotestsrc")
+		timeslicesnr.set_property("samplesperbuffer", 1024)
+		timeslicesnr.set_property("num-buffers", 100)
+		timeslicesnr.set_property("wave", 9)
+		timeslicesnr.set_property("volume", 1.)
+		pipeline.add(timeslicesnr)
+		timeslicesnr = pipeparts.mkcapsfilter(pipeline, timeslicesnr, "audio/x-raw-float, width=64, rate=2048, channels=2")
+		# turn 2 (independent) real channels into 2 (identical) complex channels
+		mixmatrix = [[fac, 0, fac, 0],
+			     [0, fac, 0, fac]]
+		timeslicesnr = pipeparts.mkmatrixmixer(pipeline, timeslicesnr, mixmatrix)
+
+		timeslicesnr = pipeparts.mktogglecomplex(pipeline, timeslicesnr)
+		timeslicesnr = pipeparts.mktee(pipeline, timeslicesnr)
+		timeslicesnrs.append(timeslicesnr)
+
+	timeslicechisq = gst.element_factory_make("lal_timeslicechisq")
+	pipeline.add(timeslicechisq)
+	for timeslicesnr in timeslicesnrs:
+		pipeparts.mkqueue(pipeline, timeslicesnr).link(timeslicechisq)
+	# we have 2 complex channels so we need 2 chifacs per time slice
+	timeslicechisq.set_property("chifacs-matrix", [[fac**2., fac**2.] for fac in chifacs])
+	timeslicechisq = pipeparts.mkqueue(pipeline, timeslicechisq)
+	timeslicechisq = pipeparts.mkprogressreport(pipeline, timeslicechisq, 'timeslicechisq')
+
+	for n,timeslicesnr in enumerate(timeslicesnrs):
+		timeslicesnr = pipeparts.mktogglecomplex(pipeline, timeslicesnr)		
+		pipeparts.mknxydumpsink(pipeline, timeslicesnr, "dump_timeslicesnr%i.txt"%(n))
+
+	# output will be 2 real channels, each chisq distributed with dof=2*len(chifacs)-2
+	pipeparts.mknxydumpsink(pipeline, timeslicechisq, "dump_timeslicechisq.txt")
 
 #
 # =============================================================================
