@@ -26,9 +26,11 @@ from glue.ligolw.utils import process as ligolw_process
 def parse_command_line():
 	parser = OptionParser(
 	)
-	parser.add_option("--padding", metavar = "seconds", type = "float", default = 8.0, help = "Set the amount of padding to veto before and after each injection.")
 	parser.add_option("--default-duration", metavar = "seconds", type = "float", default = 3.0, help = "Set the default burst event duration for injections without explicit durations.")
+	parser.add_option("--instruments", metavar = "name1,name2,...", default = "H1,H2,L1,V1", help = "Set the instruments to veto (default = \"H1,H2,L1,V1\").")
 	parser.add_option("--output", metavar = "filename", help = "Set the output filename.")
+	parser.add_option("--padding", metavar = "seconds", type = "float", default = 8.0, help = "Set the amount of padding to veto before and after each injection.")
+	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the vetoes segment lists (default = \"vetoes\").")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
 	options, filenames = parser.parse_args()
@@ -52,7 +54,7 @@ for filename in filenames:
 			duration = sim.duration
 		vetoes.append(segments.segment((t - duration / 2.0, t + duration / 2.0)))
 vetoes.protract(options.padding).coalesce()
-vetoes = segments.segmentlistdict.fromkeys(("H1", "H2", "L1", "V1"), vetoes)
+vetoes = segments.segmentlistdict.fromkeys(options.instruments.split(","), vetoes)
 
 
 #
@@ -62,9 +64,9 @@ vetoes = segments.segmentlistdict.fromkeys(("H1", "H2", "L1", "V1"), vetoes)
 
 xmldoc = ligolw.Document()
 xmldoc.childNodes.append(ligolw.LIGO_LW())
-process = ligolw_process.register_to_xmldoc(xmldoc, "blah", {})
+process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_vetoes_from_burst_inj", options.__dict__)
 llwsegments = ligolw_segments.LigolwSegments(xmldoc)
-ligolw_segments.insert_from_segmentlistdict(llwsegments, vetoes, "vetoes", "Burst injections")
+ligolw_segments.insert_from_segmentlistdict(llwsegments, vetoes, options.vetoes_name, "Burst injections")
 llwsegments.finalize(process)
 
 
