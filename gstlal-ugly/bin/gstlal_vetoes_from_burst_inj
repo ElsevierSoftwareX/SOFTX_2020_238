@@ -28,6 +28,7 @@ def parse_command_line():
 	)
 	parser.add_option("--padding", metavar = "seconds", type = "float", default = 8.0, help = "Set the amount of padding to veto before and after each injection.")
 	parser.add_option("--default-duration", metavar = "seconds", type = "float", default = 3.0, help = "Set the default burst event duration for injections without explicit durations.")
+	parser.add_option("--output", metavar = "filename", help = "Set the output filename.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
 	options, filenames = parser.parse_args()
@@ -67,4 +68,4 @@ ligolw_segments.insert_from_segmentlistdict(llwsegments, vetoes, "vetoes", "Burs
 llwsegments.finalize(process)
 
 
-utils.write_filename(xmldoc, "test.xml.gz", gz = True, verbose = options.verbose)
+utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)
