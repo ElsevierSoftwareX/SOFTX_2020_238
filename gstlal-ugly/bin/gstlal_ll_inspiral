@@ -466,15 +466,21 @@ def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.k
 	else:
 		print >>sys.stderr, "*** received SIG %d, but already handled... ***" % (signal,)
 
+def crash_handler(signal, frame, pipeline = pipeline, instruments = detectors.keys(), sigdata = sigdata, mainloop = mainloop):
+	if not sigdata.has_been_signaled:
+		print >>sys.stderr, "*** SIG %d trying to copy outputfile, won't be able to shutdown pipeline***" % (signal,)
+		mainloop.quit()
+	else:
+		print >>sys.stderr, "*** received SIG %d, but already handled... ***" % (signal,)
+
 # this is how the program stops gracefully, it is the only way to stop it.
 # Otherwise it runs forever man.
 
-for i in [x for x in dir(signal) if x.startswith("SIG") and "_" not in x]:
-	try:
-		signum = getattr(signal, i)
-		signal.signal(signum, signal_handler)
-	except RuntimeError:
-		pass
+signal.signal(signal.SIGBUS, crash_handler)
+signal.signal(signal.SIGSEGV, crash_handler)
+signal.signal(signal.SIGABRT, crash_handler)
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 
 #
