@@ -227,6 +227,11 @@ def mkfakesrcseeked(pipeline, instrument, channel_name, seekevent, blocksize = 1
 	return mktaginject(pipeline, mkcapsfilter(pipeline, src, "audio/x-raw-float, width=64, rate=16384"), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
 
 
+def mkfirfilter(pipeline, src, kernel, latency, **properties):
+	properties.update((name, val) for name, val in (("kernel", kernel), ("latency", latency)) if val is not None)
+	return mkgeneric(pipeline, src, "audiofirfilter", **properties)
+
+
 def mkiirfilter(pipeline, src, a, b):
 	# convention is z = \exp(-i 2 \pi f / f_{\rm sampling})
 	# H(z) = (\sum_{j=0}^{N} a_j z^{-j}) / (\sum_{j=0}^{N} (-1)^{j} b_j z^{-j})
