@@ -89,7 +89,7 @@ PKG_PROG_PKG_CONFIG()
 #
 
 
-AM_PATH_PYTHON([2.4],,)
+AM_PATH_PYTHON([2.6],,)
 AX_PYTHON_DEVEL()
 # force python modules into same directory as gstlal
 AC_SUBST([pkgpythondir], ["\${pythondir}/gstlal"])
