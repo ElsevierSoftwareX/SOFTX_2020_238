@@ -68,7 +68,7 @@ def parse_command_line():
 	parser.add_option("--psd-zero-pad-length", metavar = "seconds", type = "float", default = 0.0, help = "Set the length of zero-padding in the FFT windows used to measure the PSD (optional).")
 	parser.add_option("--average-length", metavar = "seconds", type = "float", default = 64.0, help = "Set the time scale for the running mean (optional).  Default = 64.0.")
 	parser.add_option("--median-samples", metavar = "samples", type = "int", default = 5, help = "Set the number of samples in the median history (optional).  Default = 5.")
-	parsre.add_option("--f-min", metavar = "Hz", type = "float", default = 10.0, help = "Set the lower bound of the spectrum plot's horizontal axis.  Default = 10.0.")
+	parser.add_option("--f-min", metavar = "Hz", type = "float", default = 10.0, help = "Set the lower bound of the spectrum plot's horizontal axis.  Default = 10.0.")
 	parser.add_option("--f-max", metavar = "Hz", type = "float", default = 4000.0, help = "Set the upper bound of the spectrum plot's horizontal axis.  Default = 4000.0.")
 	parser.add_option("--output", metavar = "filename", help = "Set the name of the movie file to write (optional).  The default is to display the video on screen.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
@@ -78,7 +78,9 @@ def parse_command_line():
 	if sum(1 for option in ("frame_cache", "fake_data", "online_data") if getattr(options, option) is not None) != 1:
 		raise ValueError, "must provide exactly one of --frame-cache, --fake-data, --online-data"
 
-	required_options = ["gps_start_time", "gps_end_time", "instrument", "channel_name"]
+	required_options = ["instrument", "channel_name"]
+	if not options.online_data:
+		required_options += ["gps_start_time", "gps_end_time"]
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
@@ -86,9 +88,12 @@ def parse_command_line():
 	if options.f_max <= options.f_min:
 		raise ValueError, "--f-max must be >= --f-min"
 
-	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
-	options.gps_end_time = LIGOTimeGPS(options.gps_end_time)
-	options.seg = segments.segment(options.gps_start_time, options.gps_end_time)
+	if not options.online_data:
+		options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
+		options.gps_end_time = LIGOTimeGPS(options.gps_end_time)
+		options.seg = segments.segment(options.gps_start_time, options.gps_end_time)
+	else:
+		options.seg = None
 
 	return options, filenames
 
@@ -137,13 +142,17 @@ pipeline = gst.Pipeline("spectrum-movie")
 handler = lloidparts.LLOIDHandler(mainloop, pipeline)
 
 
-head = lloidparts.mkLLOIDbasicsrc(
-	pipeline,
-	gst.event_new_seek(
+if options.seg is not None:
+	seek = gst.event_new_seek(
 		1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_KEY_UNIT,
 		gst.SEEK_TYPE_SET, options.seg[0].ns(),
 		gst.SEEK_TYPE_SET, options.seg[1].ns()
-	),
+	)
+else:
+	seek = None
+head = lloidparts.mkLLOIDbasicsrc(
+	pipeline,
+	seek,
 	options.instrument,
 	lloidparts.DetectorData(options.frame_cache, options.channel_name),
 	fake_data = options.fake_data,
