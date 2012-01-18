@@ -585,7 +585,7 @@ cluster_nodes = []
 # loop over banks to run gstlal inspiral pre clustering and far computation
 ###############################################################################
 
-for cnt, (s, trials_factor) in enumerate(build_bank_string(bank_cache)):
+for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, [1]):
 
 	#
 	# non injections
