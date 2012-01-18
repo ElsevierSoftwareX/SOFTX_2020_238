@@ -68,7 +68,8 @@ def parse_command_line():
 	parser.add_option("--psd-zero-pad-length", metavar = "seconds", type = "float", default = 0.0, help = "Set the length of zero-padding in the FFT windows used to measure the PSD (optional).")
 	parser.add_option("--average-length", metavar = "seconds", type = "float", default = 64.0, help = "Set the time scale for the running mean (optional).  Default = 64.0.")
 	parser.add_option("--median-samples", metavar = "samples", type = "int", default = 5, help = "Set the number of samples in the median history (optional).  Default = 5.")
-	parser.add_option("--frame-rate", metavar = "n/d", help = "Force a framerate (optional).  The framerate is a rational number, entered in the format \"n/d\" where n and d are integers.  The default is realtime.")
+	parsre.add_option("--f-min", metavar = "Hz", type = "float", default = 10.0, help = "Set the lower bound of the spectrum plot's horizontal axis.  Default = 10.0.")
+	parser.add_option("--f-max", metavar = "Hz", type = "float", default = 4000.0, help = "Set the upper bound of the spectrum plot's horizontal axis.  Default = 4000.0.")
 	parser.add_option("--output", metavar = "filename", help = "Set the name of the movie file to write (optional).  The default is to display the video on screen.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
@@ -81,8 +82,9 @@ def parse_command_line():
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
-	if options.frame_rate is not None:
-		options.frame_rate = tuple(map(int, options.frame_rate.strip().split("/")))
+
+	if options.f_max <= options.f_min:
+		raise ValueError, "--f-max must be >= --f-min"
 
 	options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
 	options.gps_end_time = LIGOTimeGPS(options.gps_end_time)
@@ -113,18 +115,15 @@ options, filenames = parse_command_line()
 #
 
 
-def build_pipeline(pipeline, head, sample_rate, psd_fft_length, psd_zero_pad_length, average_length, median_samples, frame_rate, verbose = False):
+def build_pipeline(pipeline, head, sample_rate, psd_fft_length, psd_zero_pad_length, average_length, median_samples, (f_min, f_max), verbose = False):
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % sample_rate)
 	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = psd_zero_pad_length, average_samples = int(round(average_length / (psd_fft_length / 2) - 1)), median_samples = median_samples)
 	pipeparts.mkfakesink(pipeline, head)
 	head = pipeparts.mkqueue(pipeline, head, pad_name = "mean-psd", max_size_buffers = 4)
 
-	head = pipeparts.mkspectrumplot(pipeline, head)
-	if frame_rate is not None:
-		head = pipeparts.mkcapsfilter(pipeline, head, "video/x-raw-rgb, width=768, height=320, framerate=%d/%d" % frame_rate)
-	else:
-		head = pipeparts.mkcapsfilter(pipeline, head, "video/x-raw-rgb, width=768, height=320")
+	head = pipeparts.mkspectrumplot(pipeline, head, f_min = f_min, f_max = f_max)
+	head = pipeparts.mkcapsfilter(pipeline, head, "video/x-raw-rgb, width=768, height=320")
 	return head
 
 
@@ -147,10 +146,10 @@ head = lloidparts.mkLLOIDbasicsrc(
 	),
 	options.instrument,
 	lloidparts.DetectorData(options.frame_cache, options.channel_name),
-	options.fake_data,
-	options.online_data,
-	options.injections,
-	options.verbose
+	fake_data = options.fake_data,
+	online_data = options.online_data,
+	injection_filename = options.injections,
+	verbose = options.verbose
 )
 head = build_pipeline(
 	pipeline,
@@ -160,7 +159,7 @@ head = build_pipeline(
 	options.psd_zero_pad_length,
 	options.average_length,
 	options.median_samples,
-	options.frame_rate,
+	(options.f_min, options.f_max),
 	verbose = options.verbose
 )
 if options.output is not None:
