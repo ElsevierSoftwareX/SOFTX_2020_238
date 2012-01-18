@@ -98,12 +98,12 @@ def build_bank_string(cachedict, numbanks = [2], maxjobs = None):
 		position = int(float(cnt) / numfiles * len(numbanks))
 		c = ''
 		for i in range(numbanks[position]):
-			cnt += 1
 			for ifo, f in filedict.items():
 				if cnt < numfiles:
 					c += '%s:%s,' % (ifo, lal.CacheEntry(f.readline()).path())
 				else:
 					break
+			cnt += 1
 		c = c.strip(',')
 		outcounts.append(numbanks[position])
 		outstrs.append(c)
