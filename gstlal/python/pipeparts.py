@@ -104,8 +104,10 @@ def mkchannelgram(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "lal_channelgram", **properties)
 
 
-def mkspectrumplot(pipeline, src, pad = None):
+def mkspectrumplot(pipeline, src, pad = None, **properties):
 	elem = gst.element_factory_make("lal_spectrumplot")
+	for name, value in properties.items():
+		elem.set_property(name.replace("_", "-"), value)
 	pipeline.add(elem)
 	if pad is not None:
 		src.link_pads(pad, elem, "sink")
