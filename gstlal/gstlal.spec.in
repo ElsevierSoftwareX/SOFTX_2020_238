@@ -53,11 +53,19 @@ DESTDIR=${RPM_BUILD_ROOT} %{__make} install
 
 
 %post
-ldconfig
+if test -d /usr/lib64 ; then
+	ldconfig /usr/lib64
+else
+	ldconfig
+fi
 
 
 %postun
-ldconfig
+if test -d /usr/lib64 ; then
+	ldconfig /usr/lib64
+else
+	ldconfig
+fi
 
 
 %clean
