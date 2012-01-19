@@ -249,7 +249,6 @@ def create_bank_xml(flow, fhigh, band, duration, detector=None):
 
 	cfreq = flow
 	while cfreq < fhigh:
-		cfreq += band
 		row = bank.RowType()
 		row.search = u"gstlal_excesspower"
 		row.duration = duration
@@ -281,6 +280,30 @@ def create_bank_xml(flow, fhigh, band, duration, detector=None):
 		row.process_id = ilwd.get_ilwdchar( u"process:process_id:0" )
 
 		bank.append( row )
+		cfreq += band * 0.5 # overlap
 
 	xmldoc.childNodes[0].appendChild(bank)
 	return xmldoc
+
+from glue import lal
+from glue.segments import segment
+import re
+
+from scipy.stats import chi2
+import numpy
+
+def duration_from_cache( cachef ):
+	cache = lal.Cache.fromfile( open( cachef ) )
+	duration = cache[0].segment
+	for entry in cache[1:]:
+		duration |= entry.segment
+
+	return duration[0], abs(duration)
+
+def determine_thresh_from_fap( fap, ndof = 2 ):
+	"""
+	Given a false alarm probability desired, and a given number of degrees of freedom (ndof, default = 2), calculate the proper amplitude snr threshold for samples of tiles with that ndof. This is obtained by solving for the statistical value of a CDF for a chi_squared with ndof degrees of freedom at a given probability.
+	"""
+
+	return numpy.sqrt( chi2.ppf( 1-fap, ndof ) )
+
