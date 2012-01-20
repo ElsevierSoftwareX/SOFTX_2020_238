@@ -646,11 +646,20 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	#head = mkqueue( pipeline, head )
 
 	# Multi channel FIR filter -- used to add together frequency bands into tiles
+	# TODO: Restore this when buffer dropping is fixed
 	head = mkgeneric( pipeline, head, "audiofirfilter" )
 	head.set_property( "kernel", 
 		ep.build_fir_sq_adder( ndof )
 	)
-	#head.set_property( "low-latency", True )
+	"""
+	kern = []
+	for i in range(nchannels):
+		kern.append( ep.build_fir_sq_adder( ndof ) )
+	kern = numpy.array( kern ).T
+	head = matmixer = mkmatrixmixer( pipeline, head )
+	# NOTE: This isn't quite correct -- this will sum energy in adjacent pixels, but will not overlap
+	matmixer.set_property( "matrix", kern )
+	"""
 
 	# factor of 0.65 goes here - 2 dof -- not chisquared
 	if( diagnostics ):
@@ -717,9 +726,8 @@ if( options.gps_start != None ):
 
 print >>sys.stderr, "Startin' up."
 pipeline.set_state( gst.STATE_PLAYING )
-write_dump_dot(pipeline, "test", verbose = True)
 if( diagnostics ):
-	pass
+	write_dump_dot(pipeline, "test", verbose = True)
 	#gst.DEBUG_BIN_TO_DOT_FILE( pipeline,
 		#gst.DEBUG_GRAPH_SHOW_ALL,
 		#cfg.get( "diagnostics", "dot-file-location" )
