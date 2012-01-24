@@ -105,7 +105,7 @@ class lal_fakeadvvirgosrc(gst.Bin):
 		peak_width = 1 - 1e-3
 		vol = 2.6e-31
 		a = [1.]
-		b = [1.0, -4 * peak_width, 6 * peak_width**2, -4 * peak_width**3, peak_width**4]
+		b = [-1.0, 4 * peak_width, -6 * peak_width**2, 4 * peak_width**3, -peak_width**4]
 		chains.append(pipeutil.mkelems_in_bin(self,
 				('audiotestsrc', {'wave':'gaussian-noise', 'volume': vol, 'samplesperbuffer': 16384}),
 				('audioiirfilter', {'a': a, 'b': b}),
@@ -116,7 +116,7 @@ class lal_fakeadvvirgosrc(gst.Bin):
 		peak_width = 1. - 2e-5
 		vol = 5e-28
 		a = [1.]
-		b = [1.0, -2 * central_freq * peak_width, peak_width**2]
+		b = [-1.0, 2 * central_freq * peak_width, -peak_width**2]
 		chains.append(pipeutil.mkelems_in_bin(self,
 				('audiotestsrc', {'wave':'gaussian-noise', 'volume': vol, 'samplesperbuffer': 16384}),
 				('audioiirfilter', {'a': a, 'b': b}),
@@ -126,7 +126,7 @@ class lal_fakeadvvirgosrc(gst.Bin):
 		peak_width = 1. - 1e-3
 		vol = 1.5e-27
 		a = [1.]
-		b = [1.0, -2 * peak_width, peak_width**2]
+		b = [-1.0, 2 * peak_width, -peak_width**2]
 		chains.append(pipeutil.mkelems_in_bin(self,
 				('audiotestsrc', {'wave':'gaussian-noise', 'volume': vol, 'samplesperbuffer': 16384}),
 				('audioiirfilter', {'a': a, 'b': b}),
@@ -137,7 +137,7 @@ class lal_fakeadvvirgosrc(gst.Bin):
 		peak_width = 1. - 1.1e-1
 		vol = 6.3e-26
 		a = [1.]
-		b = [1.0, -2 * central_freq * peak_width, peak_width**2]
+		b = [-1.0, 2 * central_freq * peak_width, -peak_width**2]
 		chains.append(pipeutil.mkelems_in_bin(self,
 				('audiotestsrc', {'wave':'gaussian-noise', 'volume': vol, 'samplesperbuffer': 16384}),
 				('audioiirfilter', {'a': a, 'b': b}),
@@ -148,7 +148,7 @@ class lal_fakeadvvirgosrc(gst.Bin):
 		peak_width = 1. - 7e-5
 		vol = 2e-27
 		a = [1.]
-		b = [1.0, -2 * central_freq * peak_width, peak_width**2]
+		b = [-1.0, 2 * central_freq * peak_width, -peak_width**2]
 		chains.append(pipeutil.mkelems_in_bin(self,
 				('audiotestsrc', {'wave':'gaussian-noise', 'volume': vol, 'samplesperbuffer': 16384}),
 				('audioiirfilter', {'a': a, 'b': b}),
