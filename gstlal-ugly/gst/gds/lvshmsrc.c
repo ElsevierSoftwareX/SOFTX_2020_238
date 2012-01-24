@@ -172,7 +172,12 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	/*
 	 * retrieve next frame file from the lvshm library.  all error
 	 * paths after this succeeds must include a call to
-	 * lvshm_releaseDataBuffer()
+	 * lvshm_releaseDataBuffer().  FIXME:  this element needs to
+	 * provide the unlock() and unlock_stop() overrides and they need
+	 * to be used to induce lvshm_getNextBuffer() to abort, otherwise
+	 * pipelines using this element cannot be shutdown if the gds data
+	 * source ever stops providing data (because lvshm_getNextBuffer()
+	 * will never return).
 	 */
 
 	data = lvshm_getNextBuffer(element->handle, flags);
