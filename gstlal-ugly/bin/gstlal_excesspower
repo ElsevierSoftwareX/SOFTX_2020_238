@@ -117,6 +117,9 @@ class EPHandler( LLOIDHandler ):
 		self.outfile = "test.xml"
 		self.make_output_table()
 		self.snr_thresh = 5.5
+		self.dump_frequency = 60 # s
+		self.max_events = 1000
+		self.time_since_dump = self.start
 
 		self.spec_corr = self.build_default_correlation( self.rate )
 		self.psd = self.build_default_psd( self.rate, self.filter_len )
@@ -230,7 +233,7 @@ class EPHandler( LLOIDHandler ):
 
 	def make_output_table( self ):
 		self.triggers = lsctables.New(lsctables.SnglBurstTable,
-			["ifo", "peak_time", "start_time", 
+			["ifo", "peak_time", "peak_time_ns", "start_time", 
 			"duration",  "search",
 			"central_freq", "channel", "amplitude", "snr", "confidence",
 			"chisq", "chisq_dof", "bandwidth"])
@@ -239,7 +242,11 @@ class EPHandler( LLOIDHandler ):
  			#"time_lag", "flow", "fhigh", tfvolume, hrss, process_id
 		return self.triggers
 
-	def write_triggers( self, flush=True, overwrite=False ):
+	def write_triggers( self, flush=True, overwrite=False, filename=None ):
+
+		if( filename == None ):
+			filename = self.outfile
+
 		output = ligolw.Document()
 		output.appendChild(ligolw.LIGO_LW())
 		output.childNodes[0].appendChild( self.triggers )
@@ -259,9 +266,28 @@ class EPHandler( LLOIDHandler ):
 		#pdb.set_trace()
 		process = ligolw_process.register_to_xmldoc( output, "gstlal_excesspower", vars(options) )#, ifos = self.inst )
 		add_cbc_metadata( output, process, requested_segment, analysis_segment )
+		# TODO replace cbc filter table with our own
 		print >>sys.stderr, "Outputting triggers for %s\n" % str(analysis_segment)
-		utils.write_filename(output, self.outfile, verbose = options.verbose)
+
+		# FIXME:  the signal.signal() function is
+		# disabled for the duration of the
+		# .write_fileobj() call to work around some
+		# threading problems.  Glue should be
+		# modified to make signal trapping optional
+		# so that this isn't needed.  Remove when
+		# that's taken care of.
+		#
+		# write the new distribution stats to disk
+		lock = threading.Lock()
+		lock.acquire()
+		orig_signal = utils.signal.signal
+		utils.signal.signal = lambda *args: None
+		utils.write_filename(output, filename, verbose = options.verbose)
          #gz = (output or "stdout").endswith(".gz"))
+		utils.signal.signal = orig_signal
+		lock.release()
+		# End FIXME
+
 		if( flush ): self.make_output_table()
 
 	def shutdown( self, signum, frame ):
@@ -340,9 +366,13 @@ def get_triggers(elem, handler):
 	buffer = elem.emit("pull-buffer")
 	for row in sngl_bursts_from_buffer(buffer):
 		handler.triggers.append( row )
-	# TODO: This should only be used when stopping the pipeline
-	#print (buffer.timestamp , buffer.duration)
+	
 	handler.stop = (buffer.timestamp + buffer.duration)*1e-9
+	from glue import gpstime
+	if( handler.stop - handler.time_since_dump > handler.dump_frequency or
+			len(handler.triggers) >= handler.max_events ):
+		handler.time_since_dump = gpstime.GpsSecondsFromPyUTC( handler.stop )
+		handler.write_triggers( filename = "gstlal_triggers_%d.xml" % handler.stop )
 
 # TODO: Update the file every couple of seconds.
 """
@@ -497,6 +527,7 @@ elif( data_source == "gwffile" ):
 	)
 	start, duration = ep.duration_from_cache( gwflocation )
 	handler.start = start
+	handler.time_since_dump = start
 	# TODO: Can we unhardcode this
 	head.set_property( "blocksize", 16384*8 ), # Hard coded to one second ?
 	print >>sys.stderr, "Warning, inferring total buffer length from cache."
@@ -712,6 +743,7 @@ signal.signal( signal.SIGTERM, handler.shutdown )
 # Seeking
 if( options.gps_start != None ):
 	handler.start = options.gps_start
+	handler.time_since_dump = options.gps_start
 	seek = long(options.gps_start*1e9)
 	print >>sys.stderr, "Seeking to GPS %d (ns)" % seek
 	for src in pipeline.iterate_sources():
