@@ -144,7 +144,7 @@ class lal_spectrumplot(gst.BaseTransform):
 			raise AssertError
 
 
-	def so_get_property(self, prop, val):
+	def do_get_property(self, prop, val):
 		if prop.name == "f-min":
 			return self.f_min
 		elif prop.name == "f-max":
