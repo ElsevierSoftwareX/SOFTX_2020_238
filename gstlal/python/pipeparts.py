@@ -104,8 +104,10 @@ def mkchannelgram(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "lal_channelgram", **properties)
 
 
-def mkspectrumplot(pipeline, src, pad = None):
+def mkspectrumplot(pipeline, src, pad = None, **properties):
 	elem = gst.element_factory_make("lal_spectrumplot")
+	for name, value in properties.items():
+		elem.set_property(name.replace("_", "-"), value)
 	pipeline.add(elem)
 	if pad is not None:
 		src.link_pads(pad, elem, "sink")
@@ -227,6 +229,11 @@ def mkfakesrcseeked(pipeline, instrument, channel_name, seekevent, blocksize = 1
 	return mktaginject(pipeline, mkcapsfilter(pipeline, src, "audio/x-raw-float, width=64, rate=16384"), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
 
 
+def mkfirfilter(pipeline, src, kernel, latency, **properties):
+	properties.update((name, val) for name, val in (("kernel", kernel), ("latency", latency)) if val is not None)
+	return mkgeneric(pipeline, src, "audiofirfilter", **properties)
+
+
 def mkiirfilter(pipeline, src, a, b):
 	# convention is z = \exp(-i 2 \pi f / f_{\rm sampling})
 	# H(z) = (\sum_{j=0}^{N} a_j z^{-j}) / (\sum_{j=0}^{N} (-1)^{j} b_j z^{-j})
@@ -273,6 +280,10 @@ def mkaudiocheblimit(pipeline, src, cutoff, mode = 0, poles = 8):
 
 def mkaudioamplify(pipeline, src, amplification):
 	return mkgeneric(pipeline, src, "audioamplify", clipping_method = 3, amplification = amplification)
+
+
+def mkaudioundersample(pipeline, src):
+	return mkgeneric(pipeline, src, "lal_audioundersample")
 
 
 def mkresample(pipeline, src, pad_name = None, **properties):
@@ -551,7 +562,7 @@ def mkappsink(pipeline, src, pad_name = None, max_buffers = 1, drop = False, **p
 	pipeline.add(elem)
 	if pad_name is not None:
 		src.link_pads(pad_name, elem, "sink")
-	else:
+	elif src is not None:
 		src.link(elem)
 	return elem
 
@@ -617,14 +628,7 @@ class AppSync(object):
 
 
 def mkchecktimestamps(pipeline, src, name = None, silent = True, timestamp_fuzz = 1):
-	elem = gst.element_factory_make("lal_checktimestamps")
-	if name is not None:
-		elem.set_property("name", name)
-	elem.set_property("silent", silent)
-	elem.set_property("timestamp-fuzz", timestamp_fuzz)
-	pipeline.add(elem)
-	src.link(elem)
-	return elem
+	return mkgeneric(pipeline, src, "lal_checktimestamps", name = name, silent = silent, timestamp_fuzz = timestamp_fuzz)
 
 
 def mkpeak(pipeline, src, n):

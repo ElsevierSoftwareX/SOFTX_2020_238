@@ -6,6 +6,7 @@ matplotlib.use( 'Agg' )
 import pylab
 
 import numpy
+import math
 
 from glue.ligolw import utils
 from glue.ligolw import lsctables
@@ -25,7 +26,7 @@ look_back_t = ts[1] - ts[0]
 for t in ts:
 	inj = filter(lambda th: abs(th[0] - t) < look_back_t and th[0] < t, zip( time, hrss ) )
 	ninj = len(inj)
-	power = sum( [ h**2 for t, h in inj ] )
+	power = sum( [ h**2 for t, h in inj if not math.isnan(h) ] )
 	r_t.append( ninj / look_back_t )
 	p_t.append( power )
 

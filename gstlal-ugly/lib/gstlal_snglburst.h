@@ -20,6 +20,7 @@ int gstlal_set_channel_in_snglburst_array(SnglBurst *bankarray, int length, char
 int gstlal_set_instrument_in_snglburst_array(SnglBurst *bankarray, int length, char *instrument);
 
 GstBuffer *gstlal_snglburst_new_buffer_from_peak(struct gstlal_double_complex_peak_samples_and_values *input, SnglBurst *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate);
+GstBuffer *gstlal_snglburst_new_double_buffer_from_peak(struct gstlal_double_peak_samples_and_values *input, SnglBurst *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate);
 
 G_END_DECLS
 #endif	/* __GSTLAL_SNGLBURST_H__ */

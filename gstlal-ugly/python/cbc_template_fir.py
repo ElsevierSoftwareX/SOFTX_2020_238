@@ -239,7 +239,8 @@ def decompose_templates(template_bank, tolerance, identity = False):
 	#
 
 	residual = numpy.sqrt((s * s).cumsum() / numpy.dot(s, s))
-	n = max(min(residual.searchsorted(tolerance) + 1, len(s)), 2)
+	# FIXME in an ad hoc way force at least 6 principle components
+	n = max(min(residual.searchsorted(tolerance) + 1, len(s)), 6)
 
 	#
 	# clip decomposition, pre-multiply Vh by s
@@ -248,6 +249,18 @@ def decompose_templates(template_bank, tolerance, identity = False):
 	U = U[:,:n]
 	Vh = numpy.dot(numpy.diag(s), Vh)[:n,:]
 	s = s[:n]
+
+	#
+	# renormalize the truncated SVD approximation of these template
+	# waveform slices making sure their squares still add up to chifacs.
+	# This is done by renormalizing the sum of the square of the
+	# singular value weighted reconstruction coefficients associated with
+	# each template.
+	#
+
+	V2 = (Vh * Vh).sum(0)
+	for idx,v2 in enumerate(V2):
+		Vh[:, idx] *= numpy.sqrt(chifacs[idx] / v2)
 
 	#
 	# done.

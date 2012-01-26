@@ -30,4 +30,5 @@ dist_bin_SCRIPTS = \
 	gstlal_ll_inspiral_get_urls \
 	gstlal_llcbcsummary \
 	gstlal_llcbcnode \
-	gstlal_excesspower
+	gstlal_excesspower \
+	gstlal_vetoes_from_burst_inj

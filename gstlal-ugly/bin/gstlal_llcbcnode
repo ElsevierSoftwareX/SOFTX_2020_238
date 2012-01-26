@@ -25,7 +25,11 @@ def plot(dataurl, plottype, xlabel = "", ylabel = "", title = ""):
 		return
 
 	if plottype == "history":
-		h.plot(data[:,0] - data[-1,0], data[:,1], 'w', alpha=0.75, linewidth=2)
+		h.semilogy(data[:,0] - data[-1,0], data[:,1], 'w', alpha=0.75, linewidth=2)
+		plt.ylim([min(data[:,1]), max(data[:,1])])
+		locs = [min(data[:,1]), numpy.median(data[:,1]), max(data[:,1])]
+		labels = ['%.2g' % lab for lab in locs]
+		plt.yticks(locs, labels)
 	if plottype == "plot":
 		h.plot(data[:,0], data[:,1], 'w', alpha=0.75, linewidth=2)
 	if plottype == "loglog":
@@ -61,8 +65,8 @@ def livetime_plot(disconturl, livetimeurl, xlabel = "", ylabel = "", title = "")
 		print "<h2>Data could not be loaded</h2>"
 		return
 
-	dt = livetimedata[1]
-	lt = livetimedata[2]
+	dt = livetimedata[2]
+	lt = livetimedata[1]
 	discont = discontdata[1]
 	data = [dt, lt, discont]
 	explode = [0.0, 0, 0.15]
@@ -138,6 +142,7 @@ print """
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="-1">
 <meta http-equiv="CACHE-CONTROL" content="NO-CACHE">
+<meta http-equiv="refresh" content="300">
 </head>
 <body bgcolor=#E0E0E0>
 """
@@ -167,7 +172,10 @@ print"</table>"
 print "<table face='Arial'><tr>"
 for ifo in ("H1", "H2", "L1", "V1"):
 	print "<td><div id='canvas%spie'>" % (ifo,)
-	livetime_plot(baseurl+'_%sstrain_add_drop.txt' % ifo, baseurl+'_%sstate_vector_on_off_gap.txt' % ifo, title = ifo)
+	try:
+		livetime_plot(baseurl+'_%sstrain_add_drop.txt' % ifo, baseurl+'_%sstate_vector_on_off_gap.txt' % ifo, title = ifo)
+	except:
+		print "could not get livetime data for ", ifo 
 	print "</div></td>"
 print"</tr></table>"
 

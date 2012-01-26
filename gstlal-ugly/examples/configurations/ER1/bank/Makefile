@@ -6,9 +6,9 @@ IFOS = H
 
 # Template bank parameters
 MIN_MASS = 1.0
-MAX_MASS = 25
-MIN_TOTAL_MASS = 2
-MAX_TOTAL_MASS = 50
+MAX_MASS = 20.0
+MIN_TOTAL_MASS = 2.0
+MAX_TOTAL_MASS = 22.0
 LOW_FREQUENCY_CUTOFF = 10.0
 HIGH_PASS_FREQ = 9
 HIGH_FREQUENCY_CUTOFF = 2047.0
@@ -19,9 +19,13 @@ MM = 0.97
 
 all : dag
 
-frame.cache :
+lalapps_path2cache :
+	wget 'http://www.lsc-group.phys.uwm.edu/cgit/lalsuite/plain/pylal/bin/lalapps_path2cache'
+	chmod +x lalapps_path2cache
+
+frame.cache : lalapps_path2cache
 	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --instrument H1 --verbose
-	ls H1-FAKE-STRAIN/*.gwf | lalapps_path2cache > frame.cache
+	ls H1-FAKE-STRAIN/*.gwf | ./lalapps_path2cache > frame.cache
 
 H1-TMPLTBANK-871147516-2048.xml : frame.cache
 	lalapps_tmpltbank \
@@ -78,23 +82,17 @@ H2psd.xml.gz :
 L1psd.xml.gz : 
 	gstlal_psd_xml_from_asd_txt --instrument L1 --output L1psd.xml.gz ZERO_DET_high_P.txt
 
-V1psd.xml.gz : 
-	gstlal_psd_xml_from_asd_txt --instrument V1 --output V1psd.xml.gz ZERO_DET_high_P.txt
+V1psd.xml.gz :
+	cp virgo_online_psd.xml.gz V1psd.xml.gz 
 
 reference_psd.xml: H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
 	ligolw_add --output reference_psd.xml H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
 
-sql :
-	cat uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql
-	cat simplify.sql cluster.sql > simplify_and_cluster.sql
-	cat simplify.sql delete_by_far.sql > simplify_and_delete_by_far.sql
-	cat drop_sim.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
-
-dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml sql
-	ls *H2_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > H2_split_bank.cache
-	ls *H1_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > H1_split_bank.cache
-	ls *V1_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > V1_split_bank.cache
-	ls *L1_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > L1_split_bank.cache
+dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml lalapps_path2cache
+	ls *H2_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > H2_split_bank.cache
+	ls *H1_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > H1_split_bank.cache
+	ls *V1_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > V1_split_bank.cache
+	ls *L1_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > L1_split_bank.cache
 	gstlal_inspiral_svd_bank_pipe --instrument H2 --reference-psd reference_psd.xml --bank-cache H2_split_bank.cache --clipping $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H2_bank
 	gstlal_inspiral_svd_bank_pipe --instrument H1 --reference-psd reference_psd.xml --bank-cache H1_split_bank.cache --clipping $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H1_bank
 	gstlal_inspiral_svd_bank_pipe --instrument V1 --reference-psd reference_psd.xml --bank-cache V1_split_bank.cache --clipping $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name V1_bank
@@ -102,4 +100,4 @@ dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml sql
 	cat H2_bank.dag H1_bank.dag L1_bank.dag V1_bank.dag  > bank.dag
 
 realclean :
-	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871147516-2048.xml *split_bank-H1-TMPLTBANK-871147516-2048.xml *psd.xml.gz segments.H.xml logs
+	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871147516-2048.xml *split_bank-H1-TMPLTBANK-871147516-2048.xml H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz segments.H.xml logs

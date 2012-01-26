@@ -83,7 +83,7 @@ sys.excepthook = excepthook
 maxproc = resource.getrlimit(resource.RLIMIT_NPROC)[1]
 resource.setrlimit(resource.RLIMIT_NPROC, (maxproc, maxproc))
 maxstack = resource.getrlimit(resource.RLIMIT_STACK)[1]
-resource.setrlimit(resource.RLIMIT_STACK, (1 * 1024**2, maxstack)) # 2MB per thread, not 10
+resource.setrlimit(resource.RLIMIT_STACK, (1 * 1024**2, maxstack)) # 1MB per thread, not 10
 
 
 #
@@ -138,6 +138,12 @@ def parse_command_line():
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
+	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
+	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
+	parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise.")
+	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
+	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
+	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
 
 	options, filenames = parser.parse_args()
 
@@ -208,7 +214,7 @@ def parse_command_line():
 		yield "# %s %s\n" % (options.job_tag, host)
 
 		# First do urls that do not depend on instruments
-		for request in ("registry.txt", "latency_histogram.txt", "latency_history.txt", "snr_history.txt", "ram_history.txt", "likelihood.xml"):
+		for request in ("registry.txt", "latency_histogram.txt", "latency_history.txt", "snr_history.txt", "ram_history.txt", "likelihood.xml", "bank.txt"):
 			# FIXME don't hardcode port number
 			yield "http://%s:16953/%s\n" % (host, request)
 
@@ -240,7 +246,10 @@ def parse_command_line():
 
 options, filenames, process_params, svd_banks, detectors = parse_command_line()
 frame_segments = dict([(instrument, None) for instrument in detectors])
-veto_segments = None
+if options.veto_segments_file is not None:
+	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.veto_segments_file, verbose = options.verbose), options.veto_segments_name).coalesce()
+else:
+	veto_segments = None
 
 
 #
@@ -265,7 +274,10 @@ else:
 
 
 banks = inspiral.parse_bank_files(svd_banks, verbose = options.verbose)
-
+@bottle.route("/bank.txt")
+def get_filter_length_and_chirpmass(banks = banks):
+	bank = banks.values()[0][0] #FIXME maybe shouldn't just take the first ones
+	yield '%.14g %.4g %.4g' % (float(now()), bank.filter_length, bank.sngl_inspiral_table[0].mchirp)
 
 #
 # Build pipeline
@@ -309,19 +321,23 @@ class LLOIDHandler(object):
 
 handler = LLOIDHandler(mainloop, pipeline)
 
+if options.fake_data is not None:
+	seekevent = gst.event_new_seek(1., gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, now().ns(), gst.SEEK_TYPE_SET, 2000000000000000000) # FIXME future infinity :)
+else:
+	seekevent = None
 
 triggersrc = lloidparts.mkLLOIDmulti(
 	pipeline,
-	seekevent = None,
+	seekevent = seekevent, # seekevent iff fake data
 	detectors = detectors,
 	banks = banks,
 	psd = psd,
 	psd_fft_length = options.psd_fft_length,
-	fake_data = None,
-	online_data = True,
-	injection_filename = None,
+	fake_data = options.fake_data,
+	online_data = (not options.fake_data), # two mutually exclusive options, fake data or online data
+	injection_filename = options.injections,
 	ht_gate_threshold = options.ht_gate_threshold,
-	veto_segments = None,
+	veto_segments = veto_segments,
 	verbose = options.verbose,
 	nxydump_segment = None,
 	frame_segments = frame_segments,
@@ -375,6 +391,8 @@ output = inspiral.Data(
 	trials_factor = options.trials_factor,
 	thinca_interval = options.thinca_interval,
 	gracedb_far_threshold = options.gracedb_far_threshold,
+	gracedb_type = options.gracedb_type,
+	gracedb_group = options.gracedb_group,
 	likelihood_file = options.likelihood_file,
 	verbose = options.verbose
 )
@@ -448,8 +466,19 @@ def signal_handler(signal, frame, pipeline = pipeline, instruments = detectors.k
 	else:
 		print >>sys.stderr, "*** received SIG %d, but already handled... ***" % (signal,)
 
+def crash_handler(signal, frame, pipeline = pipeline, instruments = detectors.keys(), sigdata = sigdata, mainloop = mainloop):
+	if not sigdata.has_been_signaled:
+		print >>sys.stderr, "*** SIG %d trying to copy outputfile, won't be able to shutdown pipeline***" % (signal,)
+		mainloop.quit()
+	else:
+		print >>sys.stderr, "*** received SIG %d, but already handled... ***" % (signal,)
+
 # this is how the program stops gracefully, it is the only way to stop it.
 # Otherwise it runs forever man.
+
+signal.signal(signal.SIGBUS, crash_handler)
+signal.signal(signal.SIGSEGV, crash_handler)
+signal.signal(signal.SIGABRT, crash_handler)
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
@@ -472,3 +501,6 @@ output.flush()
 output.write_output_file(likelihood_file = options.likelihood_file, verbose = options.verbose)
 # repair the shared memory just in case before exiting
 smrepair()
+
+# always end with an error so condor won't mark it as done
+sys.exit(1)

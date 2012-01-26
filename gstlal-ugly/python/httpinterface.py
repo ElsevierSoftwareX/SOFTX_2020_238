@@ -50,17 +50,19 @@ from gstlal import bottle
 def start_servers(port, verbose = False):
 	"""
 	Utility to start http servers on all interfaces.  All servers are
-	started listening on the given port, and will use the hander_class
-	class to create handlers.  handler_class is typically a subclass of
-	BaseHTTPServer.BaseHTTPRequestHandler.
+	started listening on the given port.
 
 	Returns a tuple of (server, thread) tuples, one for each http
 	server started by the function.  The servers are
-	SocketServer.ThreadingTCPServer instances, the threads are
-	threading.Thread instances.
+	bottle.WSGIRefServer instances, the threads are threading.Thread
+	instances.  NOTE:  the return value should be considered an opaque
+	object, we reserver the right to switch to a different server
+	system in the future.
 
-	httpd_stop() is registered as an atexit handler for each server
-	started by this function.
+	httpd_stop() is registered as a Python atexit handler for each
+	server started by this function, so it is not normally necessary to
+	explicitly stop the servers;  they will be automatically shutdown
+	when the application exits.
 	"""
 	servers_and_threads = []
 	for (ignored, ignored, ignored, ignored, (host, port)) in socket.getaddrinfo(None, port, socket.AF_INET, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST | socket.AI_PASSIVE):

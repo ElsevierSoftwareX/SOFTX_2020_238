@@ -69,6 +69,52 @@ int gstlal_set_instrument_in_snglburst_array(SnglBurst *bankarray, int length, c
 	return 0;
 }
 
+GstBuffer *gstlal_snglburst_new_double_buffer_from_peak(struct gstlal_double_peak_samples_and_values *input, SnglBurst *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate)
+{
+	/* FIXME check errors */
+
+	/* size is length in samples times number of channels times number of bytes per sample */
+	gint size = sizeof(SnglBurst) * input->num_events;
+	GstBuffer *srcbuf = NULL;
+	GstCaps *caps = GST_PAD_CAPS(pad);
+	GstFlowReturn result = gst_pad_alloc_buffer(pad, offset, size, caps, &srcbuf);
+	SnglBurst *output = (SnglBurst *) GST_BUFFER_DATA(srcbuf);
+	guint channel;
+	double *maxdata = input->values;
+	guint *maxsample = input->samples;
+
+	if (result != GST_FLOW_OK)
+		return srcbuf;
+
+	if (input->num_events == 0)
+		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
+
+	/* set the offset */
+        GST_BUFFER_OFFSET(srcbuf) = offset;
+        GST_BUFFER_OFFSET_END(srcbuf) = offset + length;
+
+        /* set the time stamps */
+        GST_BUFFER_TIMESTAMP(srcbuf) = time;
+        GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
+
+	/* FIXME do error checking */
+	if (srcbuf && size) {
+		for(channel = 0; channel < input->channels; channel++) {
+			if ( maxdata[channel] ) {
+				LIGOTimeGPS end_time;
+				XLALINT8NSToGPS(&end_time, time);
+				XLALGPSAdd(&end_time, (double) maxsample[channel] / rate);
+				memcpy(output, &(bankarray[channel]), sizeof(SnglBurst));
+				output->snr = fabs(maxdata[channel]);
+				output->peak_time = end_time;
+				output++;
+			}
+		}
+	}
+
+	return srcbuf;
+}
+
 GstBuffer *gstlal_snglburst_new_buffer_from_peak(struct gstlal_double_complex_peak_samples_and_values *input, SnglBurst *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate)
 {
 	/* FIXME check errors */

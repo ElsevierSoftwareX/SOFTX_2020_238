@@ -1,52 +1,137 @@
 #!/usr/bin/env python
+#
+# Copyright (C) 2011 Chris Pankow
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""Stream-based burst analysis tool"""
 
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import os
 import numpy
+import signal
+
+from optparse import OptionParser
+from ConfigParser import SafeConfigParser
 
 from gstlal.pipeutil import gst, mkelem
 from gstlal.pipeparts import *
 from gstlal.pipeio import parse_spectrum_message
-from gstlal.lloidparts import LLOIDHandler
+from gstlal.lloidparts import LLOIDHandler, DetectorData, mkLLOIDbasicsrc
 
 import gstlal.excesspower as ep
 from gstlal.excesspower import *
+from gstlal.inspiral import add_cbc_metadata
 
+#from ep_utils import duration_from_cache
+
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw.utils import process as ligolw_process
+
+from glue.segments import segment
+
+from pylal.xlal.datatypes.snglburst import from_buffer as sngl_bursts_from_buffer
 from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 
-import os
+#
+# =============================================================================
+#
+#                                Handler Class
+#
+# =============================================================================
+#
+
 
 class EPHandler( LLOIDHandler ):
+	"""
+	Handler class for the excess power pipeline. Keeps various bits of information that the pipeline emits and consumes. This is also in charge of signalling the rebuild of various matrices and vectors needed by the pipeline.
+	"""
 	def __init__( self, mainloop, pipeline ):
-		# TODO: Unhardcode
-		#self.base_band = 16 
+
+		# Instrument and channel
+		self.inst = None
+		self.channel = None
+
+		# Book keeping
+		self.start = 0
+		self.stop = -1
+
+		# Defaults -- Time-frequency map settings
 		self.base_band = 16
 		self.flow = 64 
 		self.fhigh = 1000
 		#self.fhigh = 2000
+
+		# Defaults -- Resolution settings
 		self.rate = 2048
 		#self.rate = 4096
+		self.max_level = 1
+
+		# Defaults -- filtering
 		self.filter_len = 2*int(2*self.rate/self.base_band)
-
-		self.max_level = 4
-
-		self.psd = self.build_default_psd( self.rate, self.filter_len )
-		self.psd_power = 0
-
-		self.spec_corr = self.build_default_correlation( self.rate )
-
 		self.filter_bank = None
 		# TODO: Maybe not necessary
-		self.rebuild_filter()
 		self.firbank = None
 
+		# Defaults -- PSD settings
+		# This is used to store the previous value of the PSD power
+		self.psd_power = 0
+		self.cache_psd = False
+		self.psd_change_thresh = 0.5 # fifty percent
+
+		# Defaults -- Two-point spectral correlation settings
+		self.cache_spec_corr = False
+
+		# Defaults -- mixer matrices
 		self.chan_matrix = None
-		self.rebuild_chan_mix_matrix()
 		self.mmixers = {}
 
-		self.unicorns = False
+		# Defaults -- injections
+		# TODO: Scheduled for deletion
+		#self.unicorns = False
+
+		# Defaults -- data products
+		self.output = None
+		self.triggers = None
+		self.outfile = "test.xml"
+		self.make_output_table()
+		self.snr_thresh = 5.5
+		self.dump_frequency = 60 # s
+		self.max_events = 1000
+		self.time_since_dump = self.start
+
+		self.spec_corr = self.build_default_correlation( self.rate )
+		self.psd = self.build_default_psd( self.rate, self.filter_len )
+		self.rebuild_filter()
+		self.rebuild_chan_mix_matrix()
 
 		super(type(self), self).__init__(mainloop, pipeline)
 
 	def add_firbank( self, firbank ):
+		"""
+		Set the main base band FIR bank, and build the FIR matrix.
+		"""
 		self.firbank = firbank
 		firbank.set_property( "fir-matrix", self.rebuild_filter() )
 
@@ -55,6 +140,9 @@ class EPHandler( LLOIDHandler ):
 		self.rebuild_matrix_mixers( res_level )
 
 	def build_default_psd( self, rate, filter_len ):
+		"""
+		Builds a dummy PSD to use until we get the right one.
+		"""
 		psd = REAL8FrequencySeries()
 		psd.deltaF = float(rate)/filter_len
 		psd.data = numpy.ones( filter_len/2 + 1 ) #/ 2 / psd.deltaF
@@ -70,6 +158,9 @@ class EPHandler( LLOIDHandler ):
 		return corr
 
 	def rebuild_matrix_mixers( self, res_level = None ):
+		"""
+		Rebuilds the matrix mixer matrices from the coefficients calculated in rebuild_chan_mix_matrix and assigns them to their proper element.
+		"""
 		for i, mm in self.mmixers.iteritems():
 			if( res_level != None and res_level != i ): continue
 
@@ -83,10 +174,38 @@ class EPHandler( LLOIDHandler ):
 			mm.set_property( "matrix", cmatrix )
 
 	def rebuild_filter( self ):
+		"""
+		Calling this function rebuilds the filter FIR banks and assigns them to their proper element. This is normally called when the PSD or spectrum correlation changes.
+		"""
 		self.filter_bank = ep.build_filter( fhigh = self.fhigh, psd = self.psd, corr = self.spec_corr, b_wind = self.base_band )
 		return self.filter_bank
 
+	def build_filter_xml( self, res_level, loc="" ):
+		"""
+		Calls the EP library to create a XML of sngl_burst tables representing the filter banks. At the moment, this dumps them to the current directory, but this can be changed by supplying the 'loc' argument. The written filename is returned for easy use by the trigger generator.
+		"""
+		xmldoc = ep.create_bank_xml(
+			self.flow,
+			self.fhigh,
+			self.base_band,
+			# TODO; Check duration, should this go up by factors of two?
+			len(self.filter_bank[0])/self.rate
+			#TODO: self.detector
+		)
+		output = "%sgstlal_excesspower_bank_level_%d.xml" % (loc, res_level)
+		utils.write_filename( xmldoc, output, verbose = True,
+		       gz = (output or "stdout").endswith(".gz") )
+		return output
+
+	def destroy_filter_xml( self, loc="" ):
+		import glob
+		for f in glob.glob( "%s/gstlal_excesspower_bank_level_*.xml" % loc ):
+			os.rm( f )
+
 	def rebuild_chan_mix_matrix( self ):
+		"""
+		Calling this function rebuilds the matrix mixer coefficients for higher resolution components. This is normally called when the PSD or spectrum correlation changes.
+		"""
 		self.chan_matrix = ep.build_inner_product_norm( 
 			corr = self.spec_corr, 
 			band = self.base_band, 
@@ -100,6 +219,9 @@ class EPHandler( LLOIDHandler ):
 		return self.chan_matrix
 
 	def rebuild_everything( self ):
+		"""
+		Top-level function to handle the asynchronous updating of FIR banks and matrix mixer elements.
+		"""
 		# Rebuild filter bank and hand it off to the FIR element
 		print >> sys.stderr, "Rebuilding FIR bank"
 		self.firbank.set_property( "fir_matrix", self.rebuild_filter() )
@@ -109,16 +231,110 @@ class EPHandler( LLOIDHandler ):
 		# Rebuild the matrix mixer with new normalization coefficients
 		self.rebuild_matrix_mixers()
 
+	def make_output_table( self ):
+		self.triggers = lsctables.New(lsctables.SnglBurstTable,
+			["ifo", "peak_time", "peak_time_ns", "start_time", 
+			"duration",  "search",
+			"central_freq", "channel", "amplitude", "snr", "confidence",
+			"chisq", "chisq_dof", "bandwidth"])
+			#"peak_frequency",
+			#"stop_time", "peak_time_ns", "start_time_ns", "stop_time_ns",
+ 			#"time_lag", "flow", "fhigh", tfvolume, hrss, process_id
+		return self.triggers
+
+	def write_triggers( self, flush=True, overwrite=False, filename=None ):
+
+		if( filename == None ):
+			filename = self.outfile
+
+		output = ligolw.Document()
+		output.appendChild(ligolw.LIGO_LW())
+		output.childNodes[0].appendChild( self.triggers )
+
+		from glue.lal import LIGOTimeGPS
+		# TODO: Before or after Paused?
+		# FIXME: How do I do this? This doesn't work (but I can't figure out why since gstreamer eats my traceback ...jerks )
+		analysis_segment = segment(
+			LIGOTimeGPS( self.start ), 
+			LIGOTimeGPS( self.stop )
+		)
+		# TODO: Define a difference between what was requested and what was analyzed
+		requested_segment = analysis_segment
+
+		process_params = vars( options )
+		#import pdb
+		#pdb.set_trace()
+		process = ligolw_process.register_to_xmldoc( output, "gstlal_excesspower", vars(options) )#, ifos = self.inst )
+		add_cbc_metadata( output, process, requested_segment, analysis_segment )
+		# TODO replace cbc filter table with our own
+		print >>sys.stderr, "Outputting triggers for %s\n" % str(analysis_segment)
+
+		# FIXME:  the signal.signal() function is
+		# disabled for the duration of the
+		# .write_fileobj() call to work around some
+		# threading problems.  Glue should be
+		# modified to make signal trapping optional
+		# so that this isn't needed.  Remove when
+		# that's taken care of.
+		#
+		# write the new distribution stats to disk
+		lock = threading.Lock()
+		lock.acquire()
+		orig_signal = utils.signal.signal
+		utils.signal.signal = lambda *args: None
+		utils.write_filename(output, filename, verbose = options.verbose)
+         #gz = (output or "stdout").endswith(".gz"))
+		utils.signal.signal = orig_signal
+		lock.release()
+		# End FIXME
+
+		if( flush ): self.make_output_table()
+
+	def shutdown( self, signum, frame ):
+		"""
+		Method called to flush buffers and shutdown the pipeline.
+		"""
+		print >>sys.stderr, "Caught signal. Dying a terrible, terrible death."
+		self.pipeline.set_state( gst.STATE_PAUSED )
+		bus = self.pipeline.get_bus()
+		bus.post(gst.message_new_eos(pipeline))
+		self.pipeline.set_state( gst.STATE_NULL )
+		self.mainloop.quit()
+
+		print >>sys.stderr, "Please wait (don't ctrl+c) while I dump triggers to disk."
+		self.write_triggers( False )
+		self.destroy_filter_xml()
+
+#
+# =============================================================================
+#
+#                        Message Handler Methods
+#
+# =============================================================================
+#
+
+# These are linked later in the pipeline to do the appropriate actions when signals are sent up.
+
 def on_psd_change( elem, pspec, hand ):
+	"""
+	Get the PSD object and signal the handler to rebuild everything.
+	"""
 	print >> sys.stderr, "Intercepted spectrum signal."
-	# TODO: Ensure that the other options (flow and such) are set here as well
 
 	hand.psd = REAL8FrequencySeries(
 		name = "PSD",
+		#epoch = laltypes.LIGOTimeGPS(0, message.structure["timestamp"]),
 		f0 = 0.0,
 		deltaF = elem.get_property( "delta-f" ),
+		#sampleUnits = laltypes.LALUnit(message.structure["sample-units"].strip()),
 		data = numpy.array( elem.get_property( "mean-psd" ) )
 	)
+
+	if( hand.cache_psd ):
+		f = open("psd.dat", "w")
+		for freq, p in enumerate( hand.psd.data ):
+			f.write("%f %g\n" % (freq*hand.psd.deltaF, p) )
+		f.close()
 
 	# Determine if the PSD has changed enough to warrant rebuilding the filter
 	# bank.
@@ -130,51 +346,214 @@ def on_psd_change( elem, pspec, hand ):
 		hand.rebuild_everything()
 
 def on_spec_corr_change( elem, pspec, hand ):
+	"""
+	Get the 2-point spectral correlation object and signal the handler to rebuild everything.
+	"""
 	print >> sys.stderr, "Intercepted correlation signal."
-	# TODO: Ensure that the other options (flow and such) are set here as well
 	hand.spec_corr = elem.get_property( "spectral-correlation" )
 
+	if( hand.cache_spec_corr ):
+		f = open( "spec_corr.dat", "w" )
+		k_end = len( hand.spec_corr ) / 2
+		for k, sp in enumerate( hand.spec_corr ):
+			f.write( "%d %g\n" % (k, sp) )
+	
 	# If the spectrum correlation changes, rebuild everything
 	if( hand.psd != None ):
 		hand.rebuild_everything()
 
-### MAIN PIPELINE ####
+def get_triggers(elem, handler):
+	buffer = elem.emit("pull-buffer")
+	for row in sngl_bursts_from_buffer(buffer):
+		handler.triggers.append( row )
+	
+	handler.stop = (buffer.timestamp + buffer.duration)*1e-9
+	from glue import gpstime
+	if( handler.stop - handler.time_since_dump > handler.dump_frequency or
+			len(handler.triggers) >= handler.max_events ):
+		handler.time_since_dump = gpstime.GpsSecondsFromPyUTC( handler.stop )
+		handler.write_triggers( filename = "gstlal_triggers_%d.xml" % handler.stop )
+
+# TODO: Update the file every couple of seconds.
+"""
+	dur = 0
+	if( len(handler.triggers) > 0 ):
+		dur = handler.triggers[-1].peak_time - handler.triggers[0].peak_time
+
+	if( len(handler.triggers) > 1000 or dur > 16 ):
+		handler.write_triggers( flush=True )
+"""
+
+#
+# =============================================================================
+#
+#                             Options Handling
+#
+# =============================================================================
+#
+
+parser = OptionParser()
+parser.add_option("-f", "--initialization-file", dest="infile", help="Options to be pased to the pipeline handler. Strongly recommended.", default=None)
+parser.add_option("-d", "--diagnostics", dest="diagnostics", action="store_true", help="Turn on multiple diagnostic dumps. Use with caution, as it will dump gigabytes of data (potentially) in a matter of minutes. Useful in nongraphical environemnts to monitor data throughput.", default=False)
+parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Be verbose.", default=False)
+parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data. Required only if a fake data source is being used.")
+parser.add_option("-D", "--data-source", dest="data_source", action="store", help="Data source to read from. Valid options are gwffile,lldata,whitedata,fakeLIGO,fakeadvLIGO. One is required. If gwffile is selected, then a cache file should also be provided. If whitedata, fakeLIGO, or fakeadvLIGO is selected, then a sample rate must also be provided.")
+parser.add_option("-u", "--unicorns", dest="unicorns", action="store", help="Reveal hidden unicorns in data. The argument to this option determines how strong said unicorns are.", default=None)
+parser.add_option("-s", "--gps-start", dest="gps_start", action="store", type="float", help="Seek to gps time before beginning analysis.", default=None)
+
+(options, args) = parser.parse_args()
+
+# The data rate at which we wish to do analysis
+# Assumed lower than the input data
+data_source = options.data_source
+
+# TODO: Stop reinventing the wheel and replace this with mkLLOIDsrc
+valid_data_sources = [ "gwffile", 
+	  "lldata", 
+	  "whitedata", 
+	  "fakeLIGO", 
+	  "fakeadvLIGO" ]
+if( not data_source in valid_data_sources ):
+	print >>sys.stderr, "Either no data soruce was selected, or an invalid one was requested."
+	sys.exit(-1)
+
+if( not options.sample_rate 
+	and ( data_source in ["whitedata", "fakeLIGO", "fakeadvLIGO"] ) ):
+	print >>sys.stderr, "Sample rate not specified and fake data requested."
+	sys.exit(-1)
+else:
+	sample_rate = options.sample_rate
+
+# Verbosity and diagnostics
+verbose = options.verbose
+diagnostics = options.diagnostics
+
+# UNICORNS!!!!!!!!!!11!
+unicorns, unicorn_volume = False, 0
+if( options.unicorns ):
+	unicorns = True
+	unicorn_volume = options.unicorns 
+
+#
+# =============================================================================
+#
+#                           Handler / Pipeline options
+#
+# =============================================================================
+#
 
 pipeline = gst.Pipeline( "gstlal_excesspower" )
 mainloop = gobject.MainLoop()
 handler = EPHandler(mainloop, pipeline)
 
-# The data rate at which we wish to do analysis
-# Assumed lower than the input data
-sample_rate = 2048
+if( not options.infile ):
+	print >>sys.stderr, "No initialization file specified. Default values will be used."
+else:
+	cfg = SafeConfigParser()
+	cfg.read( options.infile )
+
+	# Handler options
+	handler.flow = cfg.getint( "tf_parameters", "min-frequency" )
+	handler.fhigh = cfg.getint( "tf_parameters", "max-frequency" )
+	handler.base_band = cfg.getint( "tf_parameters", "base-resolution" )
+	handler.max_level = cfg.getint( "tf_parameters", "max-resolution-level" )
+	handler.max_duration = cfg.getfloat( "tf_parameters", "max-time-resolution" )
+	handler.cache_spec_corr = cfg.getboolean( "cache", "cache-spectral-correlation" )
+	handler.cache_psd = cfg.getboolean( "cache", "cache-psd" )
+
+	handler.outfile = cfg.get( "triggering", "output-file" )
+	handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
+
+	# Instruments and channels
+	handler.inst = cfg.get( "instrument", "detector" )
+	handler.channel = cfg.get( "instrument", "channel" )
+	gwflocation = cfg.get( "instrument", "location" )
+
+	#inj_loc = "injections/burst_injections.xml"
+	#inj_loc = "injections/sg.xml"
+	#inj_loc = "injections/sc.xml"
+	inj_loc = cfg.get( "injections", "xml-location" )
+	if( not os.path.isfile( inj_loc ) ):
+		print >>sys.stderr, "Injection file not found, disabling option."
+		inj_loc = None
+
 base_band = handler.base_band
 
 # Max trigger duration (s)
-max_dur = 1  # s
+max_dur = handler.max_duration
 
-# Verbosity and diagnostics
-verbose = True
-diagnostics = False
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
 
-# Caching options
-cache_spec_corr = True
+if options.verbose:
+	print >>sys.stderr, "Assembling pipeline...\n",
 
-head = mkfakeLIGOsrc( pipeline, instrument="H1", channel_name = "LSC-STRAIN" )
+# Data source
+if( data_source == "fakeLIGO" ):
+	head = mkfakeLIGOsrc( pipeline, 
+		instrument = handler.inst,
+		channel_name = handler.channel
+	)
+elif( data_source == "fakeadvLIGO" ):
+	head = mkfakeadvLIGOsrc( pipeline, 
+		instrument = handler.inst,
+		channel_name = handler.channel
+	)
+elif( data_source == "whitedata" ):
+	head = gst.element_factory_make( "audiotestsrc" )
+	pipeline.add( head )
+	head.set_property( "wave", 9 ) # unity variance zero mean gaussian noise
+elif( data_source == "lldata" ):
+	head = mkLLOIDbasicsrc( pipeline, 
+		None, 
+		handler.inst, 
+		DetectorData(None, handler.channel), 
+		fake_data = None, 
+		online_data = True, 
+		injection_filename = inj_loc, 
+		frame_segments = None, 
+		verbose = True
+	)
+elif( data_source == "gwffile" ):
+	head = mkframesrc( pipeline, 
+		gwflocation, 
+		handler.inst, 
+		handler.channel
+	)
+	start, duration = ep.duration_from_cache( gwflocation )
+	handler.start = start
+	handler.time_since_dump = start
+	# TODO: Can we unhardcode this
+	head.set_property( "blocksize", 16384*8 ), # Hard coded to one second ?
+	print >>sys.stderr, "Warning, inferring total buffer length from cache."
+	print >>sys.stderr, "Buffers %f" % int(duration)
+	head.set_property( "num-buffers", int(duration) )
+else:
+	print >>sys.stderr, "Data source %s not recognized. Check the valid options in the help message."
+	sys.exit(-1)
 
 # Diagnostic plot
 if( diagnostics ):
 	head = postdatatee = mktee( pipeline, head )
-	mknxydumpsink( pipeline, mkqueue( pipeline, postdatatee ), "data_pre.txt" )
+	mknxydumpsink( pipeline, 
+		mkqueue( pipeline, postdatatee ), 
+		cfg.get( "diagnostics", "strain-data-output" )
+	)
 
 # Data conditioning
+# TODO: Does this need to be set if the data source isn't fake?
 head = mkcapsfilter( pipeline, mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % sample_rate )
 
-unicorn_volume = 1e-18
-
-if( handler.unicorns ):
+if( unicorns ):
+	# TODO: Link to lalsim to get the unicorn
 	inj_head = gst.element_factory_make( "filesrc" )
 	pipeline.add( inj_head )
-	inj_head.set_property( "location" , "/Users/chrispankow/work/codedev/excesspower/pipeline/injections/unicorn_delay.mp3" )
+	inj_head.set_property( "location" , "/Users/chrispankow/work/codedev/excesspower/pipeline/jolien/unicorn1_delay.mp3" )
 	inj_head = mkgeneric( pipeline, inj_head, "mad" )
 	inj_head = mkaudioconvert( pipeline, inj_head )
 	inj_head = mkresample( pipeline, inj_head ) 
@@ -186,20 +565,32 @@ if( handler.unicorns ):
 	head.link( adder )
 	head = adder
 
+if( inj_loc ):
+	head = mkinjections( pipeline, head, inj_loc )
+
+if( inj_loc and verbose ):
+	head = mkprogressreport( pipeline, head, "injection stream" )
+
 head = whitener = mkwhiten( pipeline, head )
 head = mknofakedisconts( pipeline, head )
 
 # Diagnostic plot
 if( diagnostics ):
 	head = postresamptee = mktee( pipeline, head )
-	mknxydumpsink( pipeline, mkqueue( pipeline, head ), "data_post.txt" )
+	mknxydumpsink( pipeline, 
+		mkqueue( pipeline, head ), 
+		cfg.get( "diagnostics", "whitened-data-output" )
+	)
 
-head = mkprogressreport( pipeline, head, "post whitener" )
+if( verbose ):
+	head = mkprogressreport( pipeline, head, "whitened stream" )
 
 # excess power channel firbank
-# NOTE: This is where the inspiral pipeline will feed in
+# NOTE: This is where the inspiral pipeline will feed in?
 head = mkfirbank( pipeline, head, time_domain=False )
+
 # TODO: Make this less hardcodish
+# This needs to be done since what is returned by mkfirbank is actually a link to the nofakedisconts element, so the fir bank is hidden
 handler.add_firbank( pipeline.get_by_name( "gstlalfirbank0" ) )
 nchannels = handler.filter_bank.shape[0]
 
@@ -207,87 +598,137 @@ nchannels = handler.filter_bank.shape[0]
 # audioundersampler here to reduce our workload, for each factor of
 # undersampling, we reduce our largest available frequency tile by a factor of 
 # 2.
+if( verbose ):
+	head = mkprogressreport( pipeline, head, "FIR bank stream" )
 
-head = mkprogressreport( pipeline, head, "post FIR bank" )
+# TODO: Uncomment here
+#head = postfirtee = mktee( pipeline, mkqueue( pipeline, head ) )
+#####
 
-head = postfirtee = mktee( pipeline, mkqueue( pipeline, head ) )
-# Diagnostic plot
 if( diagnostics ):
-	mknxydumpsink( pipeline, postfirtee, "postfirbank.txt" )
+	mknxydumpsink( pipeline, 
+		postfirtee, 
+		cfg.get( "diagnostics", "fir-output" )
+	)
 
 # First branch -- send fully sampled data to wider channels for processing
 nlevels = int(numpy.ceil( numpy.log2( nchannels ) )) 
 for res_level in range(0, min(handler.max_level, nlevels)):
-	head = postfirtee
+	# TODO: Uncomment here
+	#head = postfirtee
+	#######
 
 	head = matmixer = mkmatrixmixer( pipeline, head )
 	handler.add_matmixer( matmixer, res_level )
 
-	handler.cache_spec_corr = cache_spec_corr
-
 	head = mkprogressreport( pipeline, head, "post matrix mixer %d" % res_level )
 
-	head = postmmtee = mktee( pipeline, mkqueue( pipeline, head ) )
 	if( diagnostics ):
+		head = postmmtee = mktee( pipeline, mkqueue( pipeline, head ) )
 		mknxydumpsink( pipeline, postmmtee, "postmatmix_res_%d.txt" % res_level )
 
+	# TODO: Make this into an option
+	# TODO: This should be moved to just before the trigger generator
 	#import ep_visualization as vis
 	#if( res_level == 0 ):
 		#vis.channelgram( pipeline, postmmtee )
-	
-	elem = gst.element_factory_make("lal_audioundersample")
 
-	pipeline.add(elem)
-	head.link(elem)
-	head = elem
+	# TODO: Add this in when it becomes available
+	#head = mkaudioundersample( pipeline, head )
+	head = mkgeneric( pipeline, head, "lal_audioundersample" )
 
-	# base_band * 2 * @ of channel combinations
 	band = base_band * 2**res_level
+	# TODO: Check this
 	chan = numpy.ceil( nchannels / 2.0**res_level )
 
-	# 2B = Nyquist = sample rate
-	undersamp_rate = sample_rate >> res_level
+	# The undersample_rate for band = R/2 is => sample_rate (passthrough)
+	# TODO: Check this
+	undersamp_rate = 2 * band
+	# TODO: remove width and channels
 	head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d,width=64,channels=%d" % (undersamp_rate, chan) )
 
-	head = postustee = mktee( pipeline, mkqueue( pipeline, head ) )
 	if( diagnostics ):
+		head = postustee = mktee( pipeline, mkqueue( pipeline, head ) )
 		mknxydumpsink( pipeline, postustee, "postundersamp_res_%d.txt" % res_level )
 
-	elem = gst.element_factory_make("pow")
-	elem.set_property( "exponent", 2 )
-	pipeline.add(elem)
-	head.link(elem)
-	head = elem
+	if( verbose ):
+		head = mkprogressreport( pipeline, head, 
+			"Undersampled stream level %d" % res_level
+		)
 
-	head = mktee( pipeline, head )
+	head = mkgeneric( pipeline, head, "pow" )
+	head.set_property( "exponent", 2 )
 
-	duration = 1
+	if( verbose ):
+		head = mkprogressreport( pipeline, head, 
+			"Energy stream level %d" % res_level
+		)
+
+	# TODO: Uncomment here
+	#head = mktee( pipeline, head )
+	#####
+
+	ndof = 2 # samples -- min number
 	# Second branch -- duration
 	# max_samp = int(max_dur*rate)
 	#while duration <= max_samp:
 		#duration = duration << 1
 
-	# Multi channel FIR filter
-	elem = gst.element_factory_make("audiofirfilter")
-	# TODO: Calculate the right thing here
-	fir_sq_adder = ep.build_fir_sq_adder( duration )
-	elem.set_property( "kernel", fir_sq_adder )
-	pipeline.add(elem)
-	head.link(elem)
-	head = elem
+	#head = mkqueue( pipeline, head )
 
-	head = postsqtee = mktee( pipeline, mkqueue( pipeline, head ) )
+	# Multi channel FIR filter -- used to add together frequency bands into tiles
+	# TODO: Restore this when buffer dropping is fixed
+	head = mkgeneric( pipeline, head, "audiofirfilter" )
+	head.set_property( "kernel", 
+		ep.build_fir_sq_adder( ndof )
+	)
+	"""
+	kern = []
+	for i in range(nchannels):
+		kern.append( ep.build_fir_sq_adder( ndof ) )
+	kern = numpy.array( kern ).T
+	head = matmixer = mkmatrixmixer( pipeline, head )
+	# NOTE: This isn't quite correct -- this will sum energy in adjacent pixels, but will not overlap
+	matmixer.set_property( "matrix", kern )
+	"""
+
+	# factor of 0.65 goes here - 2 dof -- not chisquared
 	if( diagnostics ):
-		mknxydumpsink( pipeline, postsqtee, "postsquare_ts_%d.txt" % duration )
+		head = postdurtee = mktee( pipeline, mkqueue( pipeline, head ) )
+		mknxydumpsink( pipeline, postdurtee, "postdur_res_%d_%d.txt" % (res_level, ndof) )
 
-	head = mkprogressreport( pipeline, head, "post audio FIR filter %d, %d" % (res_level, duration) )
+	if( verbose ):
+		head = mkprogressreport( pipeline, head, 
+			"After energy summation resolution level %d, duration %d" % 
+				(res_level, ndof) 
+		)
 
-	head = mkfakesink( pipeline, head )
+	# Trigger generator
+	head = mkbursttriggergen( pipeline, head, 1, 
+		bank = handler.build_filter_xml( res_level )
+	)
 
-"""
-# generate triggers
-elem = gst.element_factory_make("appsink")
-"""
+	"""
+	fap = options.fap
+	# TODO: rename duration -> ndof
+	snr_thresh = ep_utils.determine_thresh_from_fap(fap, duration)
+	"""
+
+	# TODO: Determine this from desired FAP
+	# NOTE: Make sure you get the amplitude SNR thresh here...
+	head.set_property( "snr-thresh", handler.snr_thresh**2 )
+
+	if( verbose ):
+		head = mkprogressreport( pipeline, head, 
+			"Trigger generator resolution level %d, duration %d" % 
+				(res_level, ndof) 
+		)
+
+# TODO: This will have to be linked to multiple outgoing streams
+appsink = mkappsink(pipeline, mkqueue(pipeline, head))
+appsink.connect_after("new-buffer", get_triggers, handler)
+
+### END OF PIPELINE
 
 # Spectrum notification processing
 whitener.connect_after( "notify::mean-psd", on_psd_change, handler )
@@ -295,8 +736,33 @@ whitener.connect_after( "notify::mean-psd", on_psd_change, handler )
 # TODO: Make sure this doesn't have to be in the mm loop
 whitener.connect_after( "notify::spectral-correlation", on_spec_corr_change, handler )
 
-print "Startin' up."
+# Handle shutdowns
+signal.signal( signal.SIGINT, handler.shutdown )
+signal.signal( signal.SIGTERM, handler.shutdown )
+
+# Seeking
+if( options.gps_start != None ):
+	handler.start = options.gps_start
+	handler.time_since_dump = options.gps_start
+	seek = long(options.gps_start*1e9)
+	print >>sys.stderr, "Seeking to GPS %d (ns)" % seek
+	for src in pipeline.iterate_sources():
+		src.seek_simple(
+			# seek type (i.e in time)
+			gst.FORMAT_TIME,
+			# seek position fix behavior
+			gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT,
+			# seek time
+			seek 
+		)
+
+print >>sys.stderr, "Startin' up."
 pipeline.set_state( gst.STATE_PLAYING )
-gst.DEBUG_BIN_TO_DOT_FILE(pipeline,
-		gst.DEBUG_GRAPH_SHOW_ALL,"excesspower.dotfile")
+if( diagnostics ):
+	write_dump_dot(pipeline, "test", verbose = True)
+	#gst.DEBUG_BIN_TO_DOT_FILE( pipeline,
+		#gst.DEBUG_GRAPH_SHOW_ALL,
+		#cfg.get( "diagnostics", "dot-file-location" )
+	#)
 mainloop.run()
+

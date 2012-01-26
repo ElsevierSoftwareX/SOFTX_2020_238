@@ -3,13 +3,26 @@ import sys
 import os
 import urllib
 from urlparse import urlparse
+from multiprocessing import Pool
+import time
 
 #FIXME use cgi url parsing, or optparse
-# usage gstlal_ll_inspiral_get_urls /path/to/process/registry/files IDstart,IDstop
-# Example: ./gstlal_ll_inspiral_get_urls ./ 0152,0153
+# usage gstlal_ll_inspiral_get_urls /path/to/process/registry/files IDstart,IDstop poolnum
+# Example: ./gstlal_ll_inspiral_get_urls ./ 0152,0153 10
 
 directory = sys.argv[1]
 idrange = [int(n) for n in sys.argv[2].split(",")]
+poolnum = int(sys.argv[3])
+
+def fileage(fname):
+	try:
+		stat = os.stat(fname)
+		fileage = stat.st_mtime
+		now = time.time()
+		return now - fileage
+	except OSError:
+		return float('inf') #File doesn't exist so it is infinitely old
+
 
 #FIXME a service registry would be nice
 def read_registry(dir, dataurl, idrange):
@@ -28,17 +41,28 @@ def read_registry(dir, dataurl, idrange):
 			pass
 	return nodedict
 
-reg = read_registry(directory, "_registry.txt", idrange)
-
-for (id, node), urls in reg.items():
+def geturl(idnodeurls):
+	idnode = idnodeurls[0]
+	urls = idnodeurls[1]
+	id = idnode[0]
+	node = idnode[1]
 	print >> sys.stderr, "requesting data from %s..." % node
 	for url in urls:
 		url = url.strip()
 		path = urlparse(url).path
 		fname = "%s_%s" % (id, path.replace("/",""))
+		age = fileage(fname)
+		if age < 120: #FIXME do not hard code, this is the maximum age of the file for which we won't try to retrieve it again (s)
+			continue
 		try: os.remove(fname) # do this first to help nfs register the new file
 		except OSError: pass  # File not present is not a problem here
 		try:
 			urllib.urlretrieve(url, fname)
 		except IOError as (errno, strerror):
 			print >> sys.stderr, "I/O error({0}): {1} on request {2}".format(errno, strerror, url)
+
+
+if __name__ == "__main__":
+	reg = read_registry(directory, "_registry.txt", idrange)
+	pool = Pool(poolnum)
+	pool.map(geturl, reg.items())

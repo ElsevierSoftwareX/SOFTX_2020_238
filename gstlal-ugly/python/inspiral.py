@@ -326,6 +326,7 @@ class DistributionsStats(object):
 	}
 
 	def __init__(self):
+		self.lock = threading.Lock()
 		self.raw_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
 		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
 
@@ -351,7 +352,7 @@ class DistributionsStats(object):
 				#FIXME keep synced with the likelihood_params_func!!
 				binarr[snr, chisq / snr**2] += 1
 
-	def synthesize_injections(self, prefactor = .6, df = 12, N = 10000000, verbose = False):
+	def synthesize_injections(self, prefactor = .6, df = 16, N = 10000000, verbose = False):
 		# FIXME:  for maintainability, this should be modified to
 		# use the .add_injection() method of the .raw_distributions
 		# attribute, but that will slow this down
@@ -413,7 +414,7 @@ class DistributionsStats(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", verbose = False):
 		#
 		# initialize
 		#
@@ -440,6 +441,8 @@ class Data(object):
 		self.likelihood_snapshot_timestamp = None
 		# gracedb far threshold
 		self.gracedb_far_threshold = gracedb_far_threshold
+		self.gracedb_group = gracedb_group
+		self.gracedb_type = gracedb_type
 
 		# All possible instrument combinations
 		# frozenset(ifos) for n in range(2, len(instruments)+1) for ifos in choices(instruments, n
@@ -602,10 +605,12 @@ class Data(object):
 				# that's taken care of.
 				#
 				# write the new distribution stats to disk
+				self.distribution_stats.lock.acquire()
 				orig_signal = utils.signal.signal
 				utils.signal.signal = lambda *args: None
 				self.distribution_stats.to_filename(self.likelihood_file, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = False)
 				utils.signal.signal = orig_signal
+				self.distribution_stats.lock.release()
 
 			# run stream thinca
 			noncoinc_sngls = self.stream_thinca.add_events(events, timestamp, FAP = self.far)
@@ -637,6 +642,7 @@ class Data(object):
 		# that's taken care of.
 				
 		# write the new distribution stats to disk
+		self.distribution_stats.lock.acquire()
 		output = StringIO.StringIO()
 		orig_signal = utils.signal.signal
 		utils.signal.signal = lambda *args: None
@@ -645,6 +651,7 @@ class Data(object):
 		utils.signal.signal = orig_signal
 		outstr = output.getvalue()
 		output.close()
+		self.distribution_stats.lock.release()
 		return outstr
 
 	def flush(self):
@@ -659,7 +666,7 @@ class Data(object):
 		self.do_gracedb_alerts()
 
 
-	def do_gracedb_alerts(self, gracedb_prog = "/usr/bin/gracedb", gracedb_group = "Test", gracedb_type = "LowMass"):
+	def do_gracedb_alerts(self):
 		try:
 			gracedb
 		except NameError:
@@ -670,7 +677,7 @@ class Data(object):
 			# way.  and the .column_index() method is probably
 			# useless
 			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
-			for coinc_event_id, false_alarm_rate in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far").items():
+			for coinc_event_id, false_alarm_rate in sorted(self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far").items(), key = lambda (a, b): b):
 				#
 				# do we keep this event?
 				#
@@ -685,9 +692,9 @@ class Data(object):
 				instruments = coinc_inspiral_index[coinc_event_id].get_ifos()
 				observatories = "".join(sorted(set(instrument[0] for instrument in instruments)))
 				instruments = "".join(sorted(instruments))
-				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event_id].mass).replace(".", "_").replace("-", "_"), gracedb_group, gracedb_type)
+				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_type)
 				end_time = int(coinc_inspiral_index[coinc_event_id].get_end())
-				filename = "%s-%s-%d-%d.xml.gz" % (observatories, description, end_time, 0)
+				filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
 
 				#
 				# construct message and send to gracedb.
@@ -713,11 +720,11 @@ class Data(object):
 				message = StringIO.StringIO()
 				orig_signal = utils.signal.signal
 				utils.signal.signal = lambda *args: None
-				utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = True)
+				utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = False)
 				utils.signal.signal = orig_signal
-				# FIXME:  put gracedb call back when testing is done
-				if False:
-					resp = gracedb.Client().create(gracedb_group, gracedb_type, filename, message.getvalue())
+				# FIXME: make this optional from command line?
+				if True:
+					resp = gracedb.Client().create(self.gracedb_group, self.gracedb_type, filename, message.getvalue())
 					if "error" in resp:
 						print >>sys.stderr, "gracedb upload of %s failed: %s" % (filename, resp["error"])
 					elif self.verbose:
@@ -730,6 +737,15 @@ class Data(object):
 					proc.stdin.flush()
 					proc.stdin.close()
 				message.close()
+
+				# FIXME hack to keep from sending too many alerts.
+				# Only send the best one in this set.  May not make
+				# sense depending on what is in last_coincs.  FIX
+				# PROPERLY.  This is probably mostly okay because we
+				# should be doing coincidences every 10s which is a
+				# reasonable time to cluster over
+				break
+
 
 	def update_eye_candy(self):
 		if self.stream_thinca.last_coincs:

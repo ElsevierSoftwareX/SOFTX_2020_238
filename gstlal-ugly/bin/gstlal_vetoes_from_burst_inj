@@ -1,0 +1,73 @@
+#!/usr/bin/python
+
+
+#
+# preamble
+#
+
+
+import math
+from optparse import OptionParser
+
+
+from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw.utils import segments as ligolw_segments
+from glue.ligolw.utils import process as ligolw_process
+
+
+#
+# command line
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+	)
+	parser.add_option("--default-duration", metavar = "seconds", type = "float", default = 3.0, help = "Set the default burst event duration for injections without explicit durations.")
+	parser.add_option("--instruments", metavar = "name1,name2,...", default = "H1,H2,L1,V1", help = "Set the instruments to veto (default = \"H1,H2,L1,V1\").")
+	parser.add_option("--output", metavar = "filename", help = "Set the output filename.")
+	parser.add_option("--padding", metavar = "seconds", type = "float", default = 8.0, help = "Set the amount of padding to veto before and after each injection.")
+	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the vetoes segment lists (default = \"vetoes\").")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+
+	options, filenames = parser.parse_args()
+
+	return options, filenames
+options, filenames = parse_command_line()
+
+
+#
+# parse injection documents and build segment list
+#
+
+
+vetoes = segments.segmentlist([])
+for filename in filenames:
+	for sim in lsctables.table.get_table(utils.load_filename(filename, verbose = options.verbose), lsctables.SimBurstTable.tableName):
+		t = sim.get_time_geocent()
+		if sim.duration is None or math.isnan(sim.duration):
+			duration = options.default_duration
+		else:
+			duration = sim.duration
+		vetoes.append(segments.segment((t - duration / 2.0, t + duration / 2.0)))
+vetoes.protract(options.padding).coalesce()
+vetoes = segments.segmentlistdict.fromkeys(options.instruments.split(","), vetoes)
+
+
+#
+# build and write output document
+#
+
+
+xmldoc = ligolw.Document()
+xmldoc.childNodes.append(ligolw.LIGO_LW())
+process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_vetoes_from_burst_inj", options.__dict__)
+llwsegments = ligolw_segments.LigolwSegments(xmldoc)
+ligolw_segments.insert_from_segmentlistdict(llwsegments, vetoes, options.vetoes_name, "Burst injections")
+llwsegments.finalize(process)
+
+
+utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)

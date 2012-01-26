@@ -58,7 +58,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	A gstlal_inspiral node
 	"""
 	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=10.0, control_peak_time = 5, fir_stride = 5, thinca_interval = 10, likelihood_file = None, trials_factor = 1, gracedb_far_threshold = None, p_node=[]):
+	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=10.0, control_peak_time = 5, fir_stride = 5, thinca_interval = 10, likelihood_file = None, trials_factor = 1, gracedb_far_threshold = None, gracedb_group = None, gracedb_type = None, injections = None, fake_data = None, copy_likelihoods = False, veto_segments_file = None, veto_segments_name = None, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("channel-name", inspiral.pipeline_channel_list_from_channel_dict(channel_dict))
@@ -76,12 +76,25 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 			self.add_var_opt("ht-gate-threshold", ht_gate_thresh)
 		if gracedb_far_threshold is not None:
 			self.add_var_opt("gracedb-far-threshold", gracedb_far_threshold)
+		if gracedb_group is not None:
+			self.add_var_opt("gracedb-group", gracedb_group)
+		if gracedb_type is not None:
+			self.add_var_opt("gracedb-type", gracedb_type)
+		if fake_data is not None:
+			self.add_var_opt("fake-data", fake_data)
+		if injections is not None:
+			self.add_var_opt("injections", injections)
+		if veto_segments_file is not None:
+			self.add_var_opt("veto-segments-file", veto_segments_file)
+		if veto_segments_name is not None:
+			self.add_var_opt("veto-segments-name", veto_segments_name)
 		# self.add_var_opt("verbose", "") #Put this in for debugging
 		likefile = os.path.split(likelihood_file)[1]
 		path = os.getcwd()
 		# make a new likelihood file
 		likefile = "%s/%04d_%s" % (path, job.number, likefile)
-		shutil.copyfile(likelihood_file, likefile)
+		if copy_likelihoods:
+			shutil.copyfile(likelihood_file, likefile)
 		self.add_var_opt("likelihood-file", likefile)
 		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
 		self.output_name = '%s/%s-%04d-LLOID.sqlite' % (path, "H1H2L1V1", job.number)
@@ -107,19 +120,29 @@ def parse_command_line():
 	parser.add_option("--ht-gate-threshold", metavar = "float", help = "Set the h(t) gate threshold to reject glitches", type="float")
 	parser.add_option("--num-banks", metavar = "str", help = "the number of banks per job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
 	parser.add_option("--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs")
-	parser.add_option("--likelihood-file", help = "set the likelihood file, required")	
+	parser.add_option("--likelihood-file", help = "set the likelihood file, required if --copy-likelihoods is used")	
 	parser.add_option("--control-peak-time", default = 5, metavar = "secs", help = "set the control peak time, default 5")
 	parser.add_option("--fir-stride", default = 5, metavar = "secs", help = "set the fir bank stride, default 5")
 	parser.add_option("--thinca-interval", default = 10, metavar = "secs", help = "set the thinca interval, default 10")
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
+	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default Test")
+	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default LowMass")
+	parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise.")
+	parser.add_option("--copy-likelihoods", action = "store_true", help = "Copy the likelihood files from a seed, must give --likelihood-file")
+	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
+	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
+	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
 	options, filenames = parser.parse_args()
 	options.num_banks = [int(v) for v in options.num_banks.split(",")]
 
 	fail = ""
-	for option in ("bank_cache", "likelihood_file"):
+	for option in ("bank_cache", "gracedb_far_threshold"):
 		if getattr(options, option) is None:
 			fail += "must provide option %s\n" % (option)
 	if fail: raise ValueError, fail
+
+	if options.copy_likelihoods and options.likelihood_file is None:
+		raise ValueError("Must include --likelihood-file when giving --copy-likelihoods")
 
 	#FIXME add consistency check?
 	bankcache = inspiral_pipe.parse_cache_str(options.bank_cache)
@@ -147,16 +170,9 @@ gstlalInspiralJob = gstlal_inspiral_job()
 ###############################################################################
 # loop over banks to run gstlal inspiral pre clustering and far computation
 ###############################################################################
-num_jobs = inspiral_pipe.num_bank_files(bank_cache)
-if options.max_jobs < num_jobs:
-	num_jobs = options.max_jobs
 
-indfac = 1./7. # conservative guess from SVD paper, this is slow to calculate otherwise #inspiral_pipe.get_independence_factor(bank_cache, maxjobs = num_jobs)
-
-trials_factor = int(numpy.ceil(num_jobs * indfac))
-
-for s in inspiral_pipe.build_bank_string(bank_cache, options.num_banks, options.max_jobs):
-	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold, fir_stride = options.fir_stride, thinca_interval = options.thinca_interval, likelihood_file = options.likelihood_file, control_peak_time = options.control_peak_time, trials_factor = trials_factor, gracedb_far_threshold = options.gracedb_far_threshold)
+for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, options.num_banks, options.max_jobs):
+	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold, fir_stride = options.fir_stride, thinca_interval = options.thinca_interval, likelihood_file = options.likelihood_file, control_peak_time = options.control_peak_time, trials_factor = trials_factor, gracedb_far_threshold = options.gracedb_far_threshold, gracedb_group = options.gracedb_group, gracedb_type = options.gracedb_type, injections = options.injections, fake_data = options.fake_data, copy_likelihoods = options.copy_likelihoods, veto_segments_file = options.veto_segments_file, veto_segments_name = options.veto_segments_name)
 
 
 dag.write_sub_files()

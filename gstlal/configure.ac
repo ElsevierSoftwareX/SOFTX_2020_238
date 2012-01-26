@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal],[0.1.0],[gstlal-discuss@gravity.phys.uwm.edu],[gstlal])
+AC_INIT([gstlal],[0.2.0],[gstlal-discuss@gravity.phys.uwm.edu],[gstlal])
 AC_COPYRIGHT([Copyright (C) 2008--2011 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -46,8 +46,12 @@ AC_SUBST([pkgdocdir], ["\${docdir}/\${PACKAGE_NAME}-\${PACKAGE_VERSION}"])
 AC_SUBST([pkgconfigdir],["\${libdir}/pkgconfig"])
 
 
+#
 # Set the library API info
+#
 #  0.0.0   Original version
+
+
 AC_SUBST([LIBAPI], [0])
 AC_SUBST([LIBREL], [0])
 AC_SUBST([LIBAGE], [0])
@@ -65,14 +69,10 @@ m4_ifdef([AC_PROG_CC_C99],[AC_PROG_CC_C99],[LALSUITE_AC_PROG_CC_C99])
 AC_PROG_INSTALL
 # libtool incorrectly determines library path on SL6.  FIXME:  remove when
 # no longer needed
-case "${host}" in
-	x86_64-*-linux-gnu*)
-		if test `cat /etc/redhat-release 2>/dev/null` = "Scientific Linux release 6.1 (Carbon)" ; then
-			AC_MSG_NOTICE([hacking round broken libtool multilib support on SL6])
-			lt_cv_sys_lib_dlsearch_path_spec="/lib64 /usr/lib64"
-		fi
-	;;
-esac
+if test x"`cat /etc/redhat-release 2>/dev/null`" = x"Scientific Linux release 6.1 (Carbon)" ; then
+	AC_MSG_NOTICE([hacking round broken libtool multilib support on SL6])
+	lt_cv_sys_lib_dlsearch_path_spec="/lib64 /usr/lib64"
+fi
 LT_INIT
 PKG_PROG_PKG_CONFIG()
 
@@ -82,8 +82,14 @@ PKG_PROG_PKG_CONFIG()
 #
 
 
-AM_PATH_PYTHON([2.4],,)
+AM_PATH_PYTHON([2.6],,)
 AX_PYTHON_DEVEL()
+# hack to remove default lib dirs from PYTHON_LDFLAGS.  only tested on
+# Debian and SL6.  FIXME:  find a way to do this properly
+PYTHON_LDFLAGS="`echo $PYTHON_LDFLAGS | sed -e 'sX-L/usr/lib\(64\)\?\(/\)\?[[:space:]]*XXg'`"
+# hack to add missing options to PYTHON_LDFLAGS.  sigh, what's the point of
+# AX_PYTHON_DEVEL!?
+PYTHON_LDFLAGS="-module -avoid-version $PYTHON_LDFLAGS"
 
 
 #

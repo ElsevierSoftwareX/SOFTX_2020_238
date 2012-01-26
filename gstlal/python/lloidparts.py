@@ -232,7 +232,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		assert not fake_data
 		# FIXME:  be careful hard-coding shared-memory partition
 		src = pipeparts.mklvshmsrc(pipeline, shm_name = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}[instrument])
-		src = pipeparts.mkframecppchanneldemux(pipeline, src)
+		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True)
 
 	# Unlive source, needs a seek
 	elif fake_data == "white":
@@ -288,11 +288,17 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		statevector.set_property("max_size_time", gst.SECOND * 60 * 10) # 10 minutes of buffering
 		pipeline.add(statevector)
 		# FIXME:  don't hard-code channel name
-		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, "FAKE-STATE_VECTOR"), statevector.get_pad("sink"))
-		#FIXME we don't add a signal handler to the statevector audiorate, I assume it should report the same missing samples?
+		if instrument == "V1":
+			pipeparts.src_deferred_link(src, "%s:%s" % (instrument, "FAKE_Hrec_Flag_Quality"), statevector.get_pad("sink"))
+		else:
+			pipeparts.src_deferred_link(src, "%s:%s" % (instrument, "FAKE-STATE_VECTOR"), statevector.get_pad("sink"))
+		# FIXME we don't add a signal handler to the statevector audiorate, I assume it should report the same missing samples?
 		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True)
 		# FIXME:  what bits do we need on and off?  and don't hard code them
-		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 45)
+		if instrument == "V1":
+			statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 12, required_off = ~12 & 0xffffffff)
+		else:
+			statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 45)
 		@bottle.route("/%s/state_vector_on_off_gap.txt" % instrument)
 		def state_vector_state(elem = statevector):
 			import time
@@ -374,7 +380,7 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 	# nofakedisconts element.
 	#
 
-	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7)
+	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True)
 	# export PSD in ascii text format
 	@bottle.route("/%s/psd.txt" % instrument)
 	def get_psd_txt(elem = head):

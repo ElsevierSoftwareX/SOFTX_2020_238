@@ -35,6 +35,7 @@
 
 #include <iostream>
 #include <stdint.h>
+#include <stdexcept>
 
 
 /*
@@ -51,6 +52,7 @@
 
 
 #include <framecpp/Common/MemoryBuffer.hh>
+#include <framecpp/Common/Verify.hh>
 #include <framecpp/IFrameStream.hh>
 #include <framecpp/FrameH.hh>
 #include <framecpp/FrAdcData.hh>
@@ -85,8 +87,9 @@ using namespace FrameCPP;
  */
 
 
-
 #define GST_CAT_DEFAULT framecpp_channeldemux_debug
+#define DEFAULT_DO_FILE_CHECKSUM FALSE
+#define DEFAULT_SKIP_BAD_FILES FALSE
 
 
 /*
@@ -544,6 +547,36 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 	GstFlowReturn result = GST_FLOW_OK;
 
 	try {
+		if(element->do_file_checksum) {
+			/*
+			 * File Checksum verification
+			 *
+			 * This additional scope allows for cleanup of variables used
+			 * only for the file checksum validation.
+			 * Resources are returned to the system as the variables go
+			 * out of scope.
+			 */
+
+			MemoryBuffer *ibuf(new MemoryBuffer(std::ios::in));
+
+			ibuf->pubsetbuf((char *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf));
+
+			IFrameStream ifs(ibuf);
+
+			Common::Verify::Verify verifier;
+
+			verifier.BufferSize(GST_BUFFER_SIZE(inbuf));
+			verifier.UseMemoryMappedIO(false);
+			verifier.CheckDataValid(false);
+			verifier.Expandability(false);
+			verifier.MustHaveEOFChecksum(true);
+			verifier.Strict(false);
+			verifier.ValidateMetadata(false);
+			verifier.CheckFileChecksumOnly(true);
+
+			if(verifier(ifs) != 0)
+				throw std::runtime_error(verifier.ErrorInfo( ));
+		}
 		MemoryBuffer *ibuf(new MemoryBuffer(std::ios::in));
 
 		ibuf->pubsetbuf((char *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf));
@@ -688,11 +721,24 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				}
 			}
 		}
-	} catch(...) {
-		GST_ELEMENT_ERROR(element, STREAM, DECODE, (NULL), ("libframecpp raised unknown exception"));
+	} catch(const std::exception& Exception) {
 		if(srcpad)
 			gst_object_unref(srcpad);
-		result = GST_FLOW_ERROR;
+		if(element->skip_bad_files)
+			GST_ELEMENT_WARNING(element, STREAM, DECODE, (NULL), ("libframecpp raised exception: %s", Exception.what()));
+		else {
+			GST_ELEMENT_ERROR(element, STREAM, DECODE, (NULL), ("libframecpp raised exception: %s", Exception.what()));
+			result = GST_FLOW_ERROR;
+		}
+	} catch(...) {
+		if(srcpad)
+			gst_object_unref(srcpad);
+		if(element->skip_bad_files)
+			GST_ELEMENT_WARNING(element, STREAM, DECODE, (NULL), ("libframecpp raised unknown exception"));
+		else {
+			GST_ELEMENT_ERROR(element, STREAM, DECODE, (NULL), ("libframecpp raised unknown exception"));
+			result = GST_FLOW_ERROR;
+		}
 	}
 
 	/*
@@ -703,6 +749,69 @@ done:
 	gst_buffer_unref(inbuf);
 	gst_object_unref(element);
 	return result;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                                 Properties
+ *
+ * ============================================================================
+ */
+
+
+enum property {
+	ARG_DO_FILE_CHECKSUM = 1,
+	ARG_SKIP_BAD_FILES
+};
+
+
+static void set_property(GObject *object, guint id, const GValue *value, GParamSpec *pspec)
+{
+	GSTFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch(id) {
+	case ARG_DO_FILE_CHECKSUM:
+		element->do_file_checksum = g_value_get_boolean(value);
+		break;
+
+	case ARG_SKIP_BAD_FILES:
+		element->skip_bad_files = g_value_get_boolean(value);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
+}
+
+
+static void get_property(GObject *object, guint id, GValue *value, GParamSpec *pspec)
+{
+	GSTFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(object);
+
+	GST_OBJECT_LOCK(element);
+
+	switch(id) {
+	case ARG_DO_FILE_CHECKSUM:
+		g_value_set_boolean(value, element->do_file_checksum);
+		break;
+
+	case ARG_SKIP_BAD_FILES:
+		g_value_set_boolean(value, element->skip_bad_files);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(element);
 }
 
 
@@ -837,7 +946,32 @@ static void class_init(gpointer klass, gpointer klass_data)
 
 	parent_class = (GstElementClass *) g_type_class_ref(GST_TYPE_ELEMENT);
 
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_DO_FILE_CHECKSUM,
+		g_param_spec_boolean(
+			"do-file-checksum",
+			"Do file checksum",
+			"Checks the file-level checksum of each input file (individual structure checksums are always checked).  This is costly for large (e.g., level 0) frame files, so it is disabled by default.",
+			DEFAULT_DO_FILE_CHECKSUM,
+			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SKIP_BAD_FILES,
+		g_param_spec_boolean(
+			"skip-bad-files",
+			"Ignore bad files",
+			"Treat files that fail validation checks as missing data instead of raising an error.",
+			DEFAULT_SKIP_BAD_FILES,
+			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
+		)
+	);
 }
 
 

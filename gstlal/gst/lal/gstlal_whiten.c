@@ -625,7 +625,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 		 * The next steps can be skipped if all we have are zeros
 		 */
 
-		if(block_contains_nongaps) {
+		if(block_contains_nongaps && !(element->expand_gaps && block_contains_gaps)) {
 			/*
 			 * Transform to frequency domain
 			 */
@@ -932,7 +932,8 @@ enum property {
 	ARG_F_NYQUIST,
 	ARG_MEAN_PSD,
 	ARG_SIGMA_SQUARED,
-	ARG_SPECTRAL_CORRELATION
+	ARG_SPECTRAL_CORRELATION,
+	ARG_EXPAND_GAPS
 };
 
 
@@ -1406,6 +1407,10 @@ static void set_property(GObject * object, enum property id, const GValue * valu
 		break;
 	}
 
+	case ARG_EXPAND_GAPS:
+		element->expand_gaps = g_value_get_boolean(value);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -1448,7 +1453,12 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 		break;
 
 	case ARG_DELTA_F:
-		g_value_set_double(value, 1.0 / element->fft_length_seconds);
+		if(element->fft_length_seconds != 0)
+			g_value_set_double(value, 1.0 / element->fft_length_seconds);
+		else
+			/* prevent divide-by-zero FPE;  if the fft length
+			 * is 0, it doesn't matter what the delta f is */
+			g_value_set_double(value, 0.0);
 		break;
 
 	case ARG_F_NYQUIST:
@@ -1477,6 +1487,10 @@ static void get_property(GObject * object, enum property id, GValue * value, GPa
 			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(correlation->data, correlation->length));
 			XLALDestroyREAL8Sequence(correlation);
 		}
+		break;
+
+	case ARG_EXPAND_GAPS:
+		g_value_set_boolean(value, element->expand_gaps);
 		break;
 
 	default:
@@ -1684,6 +1698,17 @@ static void gstlal_whiten_class_init(GSTLALWhitenClass *klass)
 			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_EXPAND_GAPS,
+		g_param_spec_boolean(
+			"expand-gaps",
+			"expand gaps",
+			"expand gaps to fill entire fft length",
+			FALSE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
 }
 
 
@@ -1703,10 +1728,6 @@ static void gstlal_whiten_init(GSTLALWhiten *element, GSTLALWhitenClass *klass)
 	element->sample_units = lalDimensionlessUnit;
 	element->sample_rate = 0;
 	element->input_queue = NULL;
-
-	element->zero_pad_seconds = 0;
-	element->fft_length_seconds = 0;
-	element->psdmode = 0;
 
 	element->hann_window = NULL;
 	element->tukey_window = NULL;

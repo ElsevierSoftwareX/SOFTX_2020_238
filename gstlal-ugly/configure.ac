@@ -53,6 +53,18 @@ AC_SUBST([pkgconfigdir],["\${libdir}/pkgconfig"])
 
 
 #
+# Set the library API info
+#
+#  0.0.0   Original version
+
+
+AC_SUBST([LIBAPI], [0])
+AC_SUBST([LIBREL], [0])
+AC_SUBST([LIBAGE], [0])
+AC_SUBST([LIBVERSION], [${LIBAPI}:${LIBREL}:${LIBAGE}])
+
+
+#
 # Check for programs
 #
 
@@ -64,14 +76,10 @@ AC_PROG_CXX
 AC_PROG_INSTALL
 # libtool incorrectly determines library path on SL6.  FIXME:  remove when
 # no longer needed
-case "${host}" in
-	x86_64-*-linux-gnu*)
-		if test `cat /etc/redhat-release 2>/dev/null` = "Scientific Linux release 6.1 (Carbon)" ; then
-			AC_MSG_NOTICE([hacking round broken libtool multilib support on SL6])
-			lt_cv_sys_lib_dlsearch_path_spec="/lib64 /usr/lib64"
-		fi
-	;;
-esac
+if test x"`cat /etc/redhat-release 2>/dev/null`" = x"Scientific Linux release 6.1 (Carbon)" ; then
+	AC_MSG_NOTICE([hacking round broken libtool multilib support on SL6])
+	lt_cv_sys_lib_dlsearch_path_spec="/lib64 /usr/lib64"
+fi
 LT_INIT
 PKG_PROG_PKG_CONFIG()
 
@@ -81,8 +89,14 @@ PKG_PROG_PKG_CONFIG()
 #
 
 
-AM_PATH_PYTHON([2.4],,)
+AM_PATH_PYTHON([2.6],,)
 AX_PYTHON_DEVEL()
+# hack to remove default lib dirs from PYTHON_LDFLAGS.  only tested on
+# Debian and SL6.  FIXME:  find a way to do this properly
+PYTHON_LDFLAGS="`echo $PYTHON_LDFLAGS | sed -e 'sX-L/usr/lib\(64\)\?\(/\)\?[[:space:]]*XXg'`"
+# hack to add missing options to PYTHON_LDFLAGS.  sigh, what's the point of
+# AX_PYTHON_DEVEL!?
+PYTHON_LDFLAGS="-module -avoid-version $PYTHON_LDFLAGS"
 # force python modules into same directory as gstlal
 AC_SUBST([pkgpythondir], ["\${pythondir}/gstlal"])
 AC_SUBST([pkgpyexecdir], ["\${pyexecdir}/gstlal"])

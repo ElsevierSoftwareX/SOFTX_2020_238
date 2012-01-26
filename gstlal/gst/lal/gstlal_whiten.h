@@ -130,6 +130,7 @@ typedef struct {
 	REAL8Sequence *output_history;
 	guint64 output_history_offset;
 	guint nonzero_output_history_length;
+	gboolean expand_gaps;
 
 	/*
 	 * PSD state

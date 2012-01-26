@@ -20,8 +20,8 @@ echo "SineGaussian rate $sg_rate Hz"
 echo "White Noise Burst rate $wnb_rate Hz"
 echo "String Cusp rate $sc_rate Hz"
 
-wnb_energy_over_r2_max=1e-14
-wnb_energy_over_r2_min=1e-20
+wnb_energy_over_r2_max=1e-16
+wnb_energy_over_r2_min=1e-24
 
 sg_freq=(70 235 849 1615 2000 2477 3067)
 sg_q=(3 9 100)
@@ -35,13 +35,13 @@ fi
 for sgf in ${sg_freq[@]}; do
 	for sgq in ${sg_q[@]}; do
 		outf=$er1_start-`echo $er1_end - $er1_start | bc`-sg${sgf}q${sgq}-burstinj.xml
-		echo " lalapps_binj  --gps-end-time $er1_end  --gps-start-time $er1_start  --max-hrss 1e-18  --min-hrss 1e-23 --min-frequency $sgf --max-frequency $sgf --population all_sky_sinegaussian --q $sgq --seed $er1_start --time-step `echo 1.0/$sg_rate | bc -l` --jitter 100 --user-tag \"ER1 Burst SG injections\" --time-slide-file HLV_ZERO_LAG.xml --output $outf --seed $(($sgq*$sgf)) "
+		echo " lalapps_binj  --gps-end-time $er1_end  --gps-start-time $er1_start  --max-hrss 1e-23  --min-hrss 1e-26 --min-frequency $sgf --max-frequency $sgf --population all_sky_sinegaussian --q $sgq --seed $er1_start --time-step `echo 1.0/$sg_rate | bc -l` --jitter 100 --user-tag \"ER1 Burst SG injections\" --time-slide-file HLV_ZERO_LAG.xml --output $outf --seed $(($sgq*$sgf)) "
 
 		lalapps_binj  \
 			--gps-end-time $er1_end  \
 			--gps-start-time $er1_start  \
-			--max-hrss 1e-20  \
-			--min-hrss 1e-25  \
+			--max-hrss 1e-23  \
+			--min-hrss 1e-26  \
 			--min-frequency $sgf \
 			--max-frequency $sgf \
 			--population all_sky_sinegaussian \
