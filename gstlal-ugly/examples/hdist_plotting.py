@@ -32,6 +32,7 @@ from gstlal import pipeparts
 from gstlal.pipeutil import mkelem
 from gstlal import pipeio
 from pylal import lalconstants as lc
+from pylal import date
 
 #
 # =============================================================================
@@ -88,6 +89,9 @@ def parse_args():
         default=800.0, metavar="F_MAX",help="End Frequency")
     parser.add_option("--ifos",action="store",\
         default="H1,H2,L1,V1", metavar="IFOS",help="Comma-separated list of ifos")
+    # TODO: Set timezone that defines midnight for the hour computation
+    # TODO: Need to add some way to specify the history length per IFO
+    # TODO: Drop first N buffers (whitener settling time); default to 8 or 10?
 
     (opts,args) = parser.parse_args()
 
@@ -116,13 +120,21 @@ def compute_hdist(M1, M2, snr, rate, deltaF, f_min, f_max, PSD):
     h_dist = np.sqrt(sigmaSq*sigmaSqSum)/snr
     return h_dist    
 
+def timestamp2hour(timestamp):
+    """
+    Return the number of hours since midnight of the given nanosecond timestamp.
+
+    FIXME: Make relative to local time of main IFO; use pytz
+    """
+    dt_obj = datetime.datetime(*date.XLALGPSToUTC(date.XLALINT8NSToGPS(timestamp))[:6])
+    delta = (dt_obj - dt_obj.replace(hour=0, minute=0, second=0, microsecond=0))
+    return (delta.microseconds + (delta.seconds + delta.days * 24 * 3600) * 1e6) / 1e6 / 3600
+
 def signal_handler(signal, frame, pipeline):
     print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" \
      % (signal,)
     bus = pipeline.get_bus()
     bus.post(gst.message_new_eos(pipeline))
-
-
 
 def make_pipline(ifos, fig, lines, times, h_dist):
     plt.ion()
@@ -135,46 +147,36 @@ def make_pipline(ifos, fig, lines, times, h_dist):
         def update(elem):
             # grab PSD
             buffer = elem.get_property("last-buffer")
-            psd = pipeio.array_from_audio_buffer(buffer)
+            psd = pipeio.array_from_audio_buffer(buffer).squeeze()
 
             # compute horizon distance
             hd = compute_hdist(opts.candle_mass_1, opts.candle_mass_2, 
                 opts.snr, opts.rate, deltaF, opts.f_min, opts.f_max, psd)
 
-            # compute time of buffer
-            hour = float(datetime.datetime.now().strftime('%H'))  # XXX: get now from buffer
-            min = float(datetime.datetime.now().strftime('%M'))
-            t = hour + min / 60.  # XXX: Make relative to local time of main IFO
-
             # update history
-            ifo_times.append(t) 
+            ifo_times.append(buffer.timestamp)  # nanoseconds
             ifo_h_dist.append(hd) 
 
             # update plot
-            tmp_ifo_times = np.array(ifo_times)  # XXX: can't slice deques! Do something smarter.
-            tmp_h_dist = np.array(ifo_h_dist)  # XXX: can't slice deques! Do something smarter.
+            t = timestamp2hour(buffer.timestamp)
+            tmp_ifo_times = np.array(ifo_times)  # FIXME: can't slice deques! Do something smarter.
+            tmp_h_dist = np.array(ifo_h_dist)  # FIXME: can't slice deques! Do something smarter.
             for i, line in enumerate(ifo_lines):  # each line is a day
-                low_ind = tmp_ifo_times.searchsorted(t - (i + 1) * 86400)
-                high_ind = tmp_ifo_times.searchsorted(t - i * 86400)
-                line.set_data(tmp_ifo_times[low_ind:high_ind], tmp_h_dist[low_ind:high_ind])
-            now_line[0].set_data([t, t],[370, 390])  # XXX: unhardcode
+                low_ind = tmp_ifo_times.searchsorted(buffer.timestamp - (i + 1) * 86400 * 1e9)
+                high_ind = tmp_ifo_times.searchsorted(buffer.timestamp - i * 86400 * 1e9)
+                line.set_data(map(timestamp2hour, tmp_ifo_times[low_ind:high_ind]), tmp_h_dist[low_ind:high_ind])
+            now_line[0].set_data([t, t], [0, 10000])  # hopefully 10 Gpc is safe
 
             # write plot
             fig.canvas.draw()
-            png_file = "/usr1/nvf/.tmp_%s_%.4f.png" % (ifo, t)
+            png_file = "/usr1/nvf/.tmp_%s_%d.png" % (ifo, buffer.timestamp)
             fig.canvas.print_png(png_file)
             shutil.move(png_file, "/home/nvf/public_html/sensemon.png")
 
             # save history to disk
-            #Times = np.zeros(1)
-            #H_dist = np.zeros(1)
-            #for key, value in times.iteritems():
-            #    Times = np.append(Times,value)
-            #for key, value in h_dist.iteritems():
-            #    H_dist = np.append(H_dist,value)
-            #data_file = "history_%s.npz" % ifo
-            #np.savez(data_file, time=Times, horizon_distance=H_dist)
-            #os.rename(data_file, "/home/bdaudert/public_html/h_dist_data.npz")
+            data_file = "history_%s.npz" % ifo
+            np.savez(data_file, **{"%s_times" % ifo: ifo_times, "%s_horizon_distance" % ifo: ifo_h_dist})
+            shutil.move(data_file, "/home/nvf/public_html/%s_h_dist_data.npz" % ifo)
         return update
 
     pipe = gst.Pipeline("NDSTest") 
@@ -184,7 +186,7 @@ def make_pipline(ifos, fig, lines, times, h_dist):
     for ifo in ifos:
         src = mkelem("gds_lvshmsrc", {'shm_name': d_name[ifo]})
         dmx = mkelem("framecpp_channeldemux", {'do_file_checksum':True, 'skip_bad_files': True})
-        aud = mkelem("audiochebband", {'lower-frequency': 40, 'upper-frequency': 2500})
+        aud = mkelem("audiochebband", {'lower-frequency': 8, 'upper-frequency': 2500})
         resamp = mkelem("audioresample")
         caps_filt = mkelem("capsfilter", {'caps': gst.Caps("audio/x-raw-float, rate=2048")})
         appsink = mkelem("appsink", {'caps': gst.Caps("audio/x-raw-float"), 'sync': False,
@@ -226,12 +228,12 @@ fig = plt.figure()
 ax1 = fig.add_subplot(111)
 
 for ifo, color in zip(opts.ifos, color_list):
-    if ifo == "H1":  # XXX: Unhardcode
+    if ifo == "H1":  # FIXME: Unhardcode primary IFO
         history_len = 7
     else:
         history_len = 1
-    times[ifo] = deque(maxlen = history_len * 86400/4)
-    h_dist[ifo] = deque(maxlen = history_len * 86400/4)
+    times[ifo] = deque(maxlen = history_len * 86400/4)  # FIXME: unhardcode 4
+    h_dist[ifo] = deque(maxlen = history_len * 86400/4)  # FIXME: unhardcode 4
 
     ifo_lines = lines.setdefault(ifo, [])
     line, = ax1.plot([], [], '*-', color=color, markersize=1.5, lw=1, mec=color, label=ifo)
@@ -246,10 +248,10 @@ lines["now"] = [vline]
 
 ax1.grid(True)
 ax1.legend()
-ax1.set_xlim(0,24)
-ax1.set_ylim(370,390)
+ax1.set_xlim((0, 24))
+ax1.set_ylim((0, 500))
 ax1.set_xticks(range(25))
-ax1.set_xlabel('UTC hour')  # XXX: Make relative to local time of main IFO
+ax1.set_xlabel('UTC hour')  # FIXME: Make relative to local time of main IFO
 ax1.set_ylabel('Horizon distance (Mpc)')
 
 pipeline = make_pipline(opts.ifos, fig, lines, times, h_dist)
