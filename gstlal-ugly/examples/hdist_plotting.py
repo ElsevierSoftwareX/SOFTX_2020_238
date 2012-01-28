@@ -8,6 +8,7 @@ import bisect
 import signal
 import shutil
 import sys
+import tempfile
 import time
 import optparse
 import os
@@ -89,13 +90,19 @@ def parse_args():
         default=800.0, metavar="F_MAX",help="End Frequency")
     parser.add_option("--ifos",action="store",\
         default="H1,H2,L1,V1", metavar="IFOS",help="Comma-separated list of ifos")
+    parser.add_option("--history-files", metavar="FNAME", default="", help="load history from comma-separated list of .npz files")
+    parser.add_option("--figure-path", metavar="FNAME", help="file to which to save plots")
     # TODO: Set timezone that defines midnight for the hour computation
     # TODO: Need to add some way to specify the history length per IFO
     # TODO: Drop first N buffers (whitener settling time); default to 8 or 10?
 
     (opts,args) = parser.parse_args()
 
+    if opts.figure_path is None:
+        parser.error("--figure-path is required")
+
     opts.ifos = opts.ifos.split(",")  # turn into list
+    opts.history_files = opts.history_files.split(",")  # turn into list
 
     return opts, args
 
@@ -129,6 +136,25 @@ def timestamp2hour(timestamp):
     dt_obj = datetime.datetime(*date.XLALGPSToUTC(date.XLALINT8NSToGPS(timestamp))[:6])
     delta = (dt_obj - dt_obj.replace(hour=0, minute=0, second=0, microsecond=0))
     return (delta.microseconds + (delta.seconds + delta.days * 24 * 3600) * 1e6) / 1e6 / 3600
+
+def atomic_print_figure(fig, ifo, dest):
+    """
+    Multiple threads are writing files. Protect them by making the final plot update atomic.
+    """
+    tf = tempfile.NamedTemporaryFile(prefix="tmp_hdist_%s" % ifo, suffix=".png",
+        delete=False)  # do first write to scratch space, as NFS sometimes interferes
+    fig.canvas.print_png(tf.file)
+    tf.close()
+    # mkstemp() ignores umask, creates all files accessible
+    # only by owner;  we should respect umask.  note that
+    # os.umask() sets it, too, so we have to set it back after
+    # we know what it is
+    umsk = os.umask(0777)
+    os.umask(umsk)
+    os.chmod(tf.name, 0666 & ~umsk)
+    hidden_dest = ("/.%s." % ifo).join(os.path.split(dest))  # same volume as dest, but hidden
+    shutil.move(tf.name, hidden_dest)  # leaves target in bad state during transfer
+    os.rename(hidden_dest, dest)  # atomic operation on same volume
 
 def signal_handler(signal, frame, pipeline):
     print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" \
@@ -167,11 +193,9 @@ def make_pipline(ifos, fig, lines, times, h_dist):
                 line.set_data(map(timestamp2hour, tmp_ifo_times[low_ind:high_ind]), tmp_h_dist[low_ind:high_ind])
             now_line[0].set_data([t, t], [0, 10000])  # hopefully 10 Gpc is safe
 
-            # write plot
+            # write plot; be very paranoid about race conditions
             fig.canvas.draw()
-            png_file = "/usr1/nvf/.tmp_%s_%d.png" % (ifo, buffer.timestamp)
-            fig.canvas.print_png(png_file)
-            shutil.move(png_file, "/home/nvf/public_html/sensemon.png")
+            atomic_print_figure(fig, ifo, opts.figure_path)
 
             # save history to disk
             data_file = "history_%s.npz" % ifo
@@ -234,6 +258,13 @@ for ifo, color in zip(opts.ifos, color_list):
         history_len = 1
     times[ifo] = deque(maxlen = history_len * 86400/4)  # FIXME: unhardcode 4
     h_dist[ifo] = deque(maxlen = history_len * 86400/4)  # FIXME: unhardcode 4
+
+    # load history
+    for fname in opts.history_files:
+        if os.path.basename(fname).startswith(ifo):
+            npz = np.load(fname)
+            times[ifo].extend(npz["%s_times" % ifo])
+            h_dist[ifo].extend(npz["%s_horizon_distance" % ifo])
 
     ifo_lines = lines.setdefault(ifo, [])
     line, = ax1.plot([], [], '*-', color=color, markersize=1.5, lw=1, mec=color, label=ifo)
