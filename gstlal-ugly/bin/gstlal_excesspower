@@ -118,7 +118,7 @@ class EPHandler( LLOIDHandler ):
 		self.make_output_table()
 		self.snr_thresh = 5.5
 		self.dump_frequency = 60 # s
-		self.max_events = 1000
+		self.max_events = 1e10
 		self.time_since_dump = self.start
 
 		self.spec_corr = self.build_default_correlation( self.rate )
@@ -363,7 +363,12 @@ def on_spec_corr_change( elem, pspec, hand ):
 		hand.rebuild_everything()
 
 def get_triggers(elem, handler):
+
 	buffer = elem.emit("pull-buffer")
+
+	if( handler.output == None ):
+		return # We don't want event information
+
 	for row in sngl_bursts_from_buffer(buffer):
 		handler.triggers.append( row )
 	
@@ -398,6 +403,7 @@ parser.add_option("-d", "--diagnostics", dest="diagnostics", action="store_true"
 parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Be verbose.", default=False)
 parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data. Required only if a fake data source is being used.")
 parser.add_option("-D", "--data-source", dest="data_source", action="store", help="Data source to read from. Valid options are gwffile,lldata,whitedata,fakeLIGO,fakeadvLIGO. One is required. If gwffile is selected, then a cache file should also be provided. If whitedata, fakeLIGO, or fakeadvLIGO is selected, then a sample rate must also be provided.")
+parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Display the time frequency map as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. Otherwise, or if the \"image\" argument is passed, the output will be streamed to an image file. In this case, the output file name can be indicated by \"image=filename\".")
 parser.add_option("-u", "--unicorns", dest="unicorns", action="store", help="Reveal hidden unicorns in data. The argument to this option determines how strong said unicorns are.", default=None)
 parser.add_option("-s", "--gps-start", dest="gps_start", action="store", type="float", help="Seek to gps time before beginning analysis.", default=None)
 
@@ -678,19 +684,66 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 
 	# Multi channel FIR filter -- used to add together frequency bands into tiles
 	# TODO: Restore this when buffer dropping is fixed
+	"""
 	head = mkgeneric( pipeline, head, "audiofirfilter" )
 	head.set_property( "kernel", 
 		ep.build_fir_sq_adder( ndof )
 	)
 	"""
-	kern = []
-	for i in range(nchannels):
-		kern.append( ep.build_fir_sq_adder( ndof ) )
-	kern = numpy.array( kern ).T
-	head = matmixer = mkmatrixmixer( pipeline, head )
-	# NOTE: This isn't quite correct -- this will sum energy in adjacent pixels, but will not overlap
-	matmixer.set_property( "matrix", kern )
-	"""
+	if( options.stream_tfmap == "video" ):
+		image_filename = handler.inst + "_tfmap.ogg"
+		if( len(options.stream_tfmap.split("=")) == 2 ):
+			image_filename = options.stream_tfmap.split("=")[1] + ".ogg"
+		print >>sys.stderr, "Streaming TF maps to %s\n" % image_filename
+		head = chtee = mktee( pipeline, head )
+		head = mkgeneric( pipeline, head, "pow" )
+		head.set_property( "exponent", 0.5 )
+		head = mkgeneric( pipeline, head, "cairovis_waterfall",
+			title = "TF map %s:%s, (SNR:0,10), fmax=%d Hz" % (handler.inst, handler.channel, handler.fhigh),
+			z_autoscale = False,
+		    z_min = 0,
+		    z_max = 10,
+			z_label = "SNR",
+			#y_autoscale = False,
+		    #y_min = handler.flow,
+		    #y_max = handler.fhigh,
+			y_label = "frequency (Hz)",
+			x_label = "time (s)",
+		    colormap = "jet",
+		    history = gst.SECOND*4
+		)
+		head = mkcapsfilter( pipeline, head, "video/x-raw-rgb,framerate=5/1" )
+		head = mkcolorspace( pipeline, head )
+		head = mkcapsfilter( pipeline, head, "video/x-raw-yuv,framerate=5/1" )
+		head = mkqueue( pipeline, head )
+		#mkgeneric( pipeline, head, "glimagesink", sync = False, async = False )
+		head = mkoggmux( pipeline, mktheoraenc( pipeline, head ) )
+		mkfilesink( pipeline, head, "test.ogg" )
+		head = chtee
+	elif( options.stream_tfmap != None ):
+		image_filename = handler.inst + "_tfmap_%d.png"
+		if( len(options.stream_tfmap.split("=")) == 2 ):
+			image_filename = options.stream_tfmap.split("=")[1] + "_%d.png"
+		print >>sys.stderr, "Streaming TF maps to %s\n" % image_filename
+		head = chtee = mktee( pipeline, head )
+		head = mkgeneric( pipeline, head, "cairovis_waterfall",
+		    title = "Moving Spectrogram %s" % handler.channel,
+		    z_autoscale = True,
+			z_label = "SNR",
+		    y_min = handler.flow,
+		    y_max = handler.fhigh,
+			y_label = "frequency (Hz)",
+			x_label = "time (s)",
+		    colormap = "jet",
+		    history = gst.SECOND*4
+		)
+		head = mkcapsfilter( pipeline, head, "video/x-raw-rgb,framerate=1/1" )
+		head = mkcolorspace( pipeline, head )
+		head = mkqueue( pipeline, head )
+		head = mkgeneric( pipeline, head, "pngenc", snapshot=False )
+		mkgeneric( pipeline, head, "multifilesink", location = "images/test_%d.png", sync = False, async = False ) # synched to history?
+		#mkfilesink( pipeline, head, image_filename )
+		head = chtee
 
 	# factor of 0.65 goes here - 2 dof -- not chisquared
 	if( diagnostics ):
