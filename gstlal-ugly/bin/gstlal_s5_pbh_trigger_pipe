@@ -283,7 +283,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	A gstlal_inspiral node
 	"""
 	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=20.0, injections=None, control_peak_time = 8, vetoes=None, time_slide_file=None, p_node=[]):
+	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=20.0, injections=None, control_peak_time = 8, vetoes=None, time_slide_file=None, fir_stride = 8, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		if time_slide_file is not None:
@@ -299,6 +299,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		self.add_var_opt("tmp-space", tmp_space)
 		self.add_var_opt("track-psd", "")
 		self.add_var_opt("control-peak-time", control_peak_time)
+		self.add_var_opt("fir-stride", fir_stride)
 		#self.add_var_opt("ht-gate-threshold", ht_gate_thresh)
 		#self.add_var_opt("verbose", "") #Put this in for debugging
 		self.injections = injections
@@ -528,6 +529,7 @@ def parse_command_line():
 	parser.add_option("--cluster-sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
 	parser.add_option("--injection-sql-file", metavar = "filename", help = "Set the sql file to apply to injection databases")
 	parser.add_option("--web-dir", metavar = "directory", help = "Set the web directory like /home/USER/public_html")
+	parser.add_option("--fir-stride", type="int", metavar, "secs", default = 8, help = "Set the duration of the fft output blocks, default 8")
 	parser.add_option("--control-peak-time", type="int", help = "Set the peak finding time for the control signal")
 	parser.add_option("--do-iir-pipeline", action="store_true", help = "run the iir pipeline instead of lloid")
 
@@ -615,7 +617,7 @@ for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, [1]):
 
 	far_input_nodes = []
 
-	noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time)
+	noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride)
 	
 	noninjnode_likelihood = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, noninjnode.background_name, synthesize_injections = True, input = [noninjnode.output_name], p_node=[noninjnode])
 
@@ -628,7 +630,7 @@ for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, [1]):
 	#
 
 	if options.injections is not None:
-		injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time)
+		injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride)
 	
 		# FIXME the previous compute likelihood function already populates the injections, we should just use those
 		injnode_likelihood = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, noninjnode_likelihood.background_name, synthesize_injections = True, input = [injnode.output_name], likelihood_output_name = "post_calc_likelihood_simulation", p_node=[noninjnode_likelihood, injnode])
