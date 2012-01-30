@@ -84,6 +84,10 @@ resource.setrlimit(resource.RLIMIT_NPROC, (maxproc, maxproc))
 maxas = resource.getrlimit(resource.RLIMIT_AS)[1]
 resource.setrlimit(resource.RLIMIT_AS, (maxas, maxas))
 
+# set the stack size per thread to be smaller
+maxstack = resource.getrlimit(resource.RLIMIT_STACK)[1]
+resource.setrlimit(resource.RLIMIT_STACK, (1 * 1024**2, maxstack)) # 1MB per thread, not 10
+
 #
 # =============================================================================
 #
