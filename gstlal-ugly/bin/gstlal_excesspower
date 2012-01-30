@@ -690,10 +690,12 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		ep.build_fir_sq_adder( ndof )
 	)
 	"""
+
+	# TODO: Audio
 	if( options.stream_tfmap == "video" ):
-		image_filename = handler.inst + "_tfmap.ogg"
+		image_filename = handler.inst + "_tfmap_%d.ogg"
 		if( len(options.stream_tfmap.split("=")) == 2 ):
-			image_filename = options.stream_tfmap.split("=")[1] + ".ogg"
+			image_filename = options.stream_tfmap.split("=")[1] + "_%d.ogg"
 		print >>sys.stderr, "Streaming TF maps to %s\n" % image_filename
 		head = chtee = mktee( pipeline, head )
 		head = mkgeneric( pipeline, head, "pow" )
@@ -704,10 +706,11 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		    z_min = 0,
 		    z_max = 10,
 			z_label = "SNR",
+		# TODO: Restore this when it becomes available again
 			#y_autoscale = False,
 		    #y_min = handler.flow,
 		    #y_max = handler.fhigh,
-			y_label = "frequency (Hz)",
+			y_label = "channel number",
 			x_label = "time (s)",
 		    colormap = "jet",
 		    history = gst.SECOND*4
@@ -715,10 +718,14 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		head = mkcapsfilter( pipeline, head, "video/x-raw-rgb,framerate=5/1" )
 		head = mkcolorspace( pipeline, head )
 		head = mkcapsfilter( pipeline, head, "video/x-raw-yuv,framerate=5/1" )
+		head = mkprogressreport( pipeline, head, "video sink" )
 		head = mkqueue( pipeline, head )
 		#mkgeneric( pipeline, head, "glimagesink", sync = False, async = False )
 		head = mkoggmux( pipeline, mktheoraenc( pipeline, head ) )
-		mkfilesink( pipeline, head, "test.ogg" )
+		#mkfilesink( pipeline, head, image_filename )
+		# TODO: Explore using different "next file" mechanisms
+		mkgeneric( pipeline, head, "multifilesink", 
+				 next_file = 2, location = image_filename, sync = False, async = False )
 		head = chtee
 	elif( options.stream_tfmap != None ):
 		image_filename = handler.inst + "_tfmap_%d.png"
