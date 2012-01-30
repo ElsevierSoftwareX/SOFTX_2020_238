@@ -663,7 +663,8 @@ class Data(object):
 			self.connection.commit()
 
 		# do GraceDB alerts
-		self.do_gracedb_alerts()
+		if self.gracedb_far_threshold is not None:
+			self.do_gracedb_alerts()
 
 
 	def do_gracedb_alerts(self):
