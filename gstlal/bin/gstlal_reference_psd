@@ -81,20 +81,22 @@ from gstlal import lloidparts
 from gstlal.pipeutil import gst
 
 
+psd = reference_psd.measure_psd(
+	options.instrument,
+	seekevent,
+	lloidparts.DetectorData(options.frame_cache, options.channel_name),
+	options.seg,
+	2 * 2048,# Hz;  must not be less than highest bank fragment sample rate (see below)
+	psd_fft_length = options.psd_fft_length,
+	fake_data = options.fake_data,
+	online_data = options.online_data,
+	injection_filename = options.injections,
+	verbose = options.verbose)
+
+psd = reference_psd.smooth_psd(psd)
+
 reference_psd.write_psd(
-	options.write_psd,
-	reference_psd.measure_psd(
-		options.instrument,
-		seekevent,
-		lloidparts.DetectorData(options.frame_cache, options.channel_name),
-		options.seg,
-		2 * 2048,	# Hz;  must not be less than highest bank fragment sample rate (see below)
-		psd_fft_length = options.psd_fft_length,
-		fake_data = options.fake_data,
-		online_data = options.online_data,
-		injection_filename = options.injections,
-		verbose = options.verbose
-	),
+	options.write_psd,psd,
 	instrument = options.instrument,
 	verbose = options.verbose
 )
