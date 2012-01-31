@@ -818,7 +818,7 @@ static gboolean write_frame(GstLalframeSink *sink, guint nbytes)
     GstClockTime t0_ns = A_X_B__C(sink->current_byte, GST_SECOND, byterate);
     epoch.gpsSeconds     = t0_ns / GST_SECOND;
     epoch.gpsNanoSeconds = t0_ns % GST_SECOND;
-    epoch.gpsSeconds = epoch.gpsSeconds - 66858896;
+    epoch.gpsSeconds = epoch.gpsSeconds - 61545543;
 
     /* Create subdirectories with nice names if needed */
     if (sink->dir_digits > 0) {
