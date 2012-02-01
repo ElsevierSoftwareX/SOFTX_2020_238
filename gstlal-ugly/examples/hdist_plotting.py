@@ -206,10 +206,11 @@ def make_pipline(ifos, fig, lines, times, h_dist):
     pipe = gst.Pipeline("NDSTest") 
   
     d_name = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
-    channel = "FAKE-STRAIN"
+    channels = {"H1": "FAKE-STRAIN", "H2": "FAKE-STRAIN", "L1": "FAKE-STRAIN", "V1": "FAKE_h_16384Hz_4R"}
     for ifo in ifos:
         src = mkelem("gds_lvshmsrc", {'shm_name': d_name[ifo]})
         dmx = mkelem("framecpp_channeldemux", {'do_file_checksum':True, 'skip_bad_files': True})
+        cnv = mkelem("audioconvert")
         aud = mkelem("audiochebband", {'lower-frequency': 8, 'upper-frequency': 2500})
         resamp = mkelem("audioresample")
         caps_filt = mkelem("capsfilter", {'caps': gst.Caps("audio/x-raw-float, rate=2048")})
@@ -219,10 +220,10 @@ def make_pipline(ifos, fig, lines, times, h_dist):
         'median-samples': 7, 'average-samples': 128})
         fakesink = mkelem("fakesink", {'sync': False, 'async': False})
         
-        pipe.add(src, dmx, aud, resamp, caps_filt, whiten, appsink, fakesink)
+        pipe.add(src, dmx, cnv, aud, resamp, caps_filt, whiten, appsink, fakesink)
         gst.element_link_many(src, dmx)
-        pipeparts.src_deferred_link(dmx, "%s:%s" % (ifo, channel), aud.get_pad("sink"))
-        gst.element_link_many(aud,resamp, caps_filt, whiten, fakesink)
+        pipeparts.src_deferred_link(dmx, "%s:%s" % (ifo, channels[ifo]), cnv.get_pad("sink"))
+        gst.element_link_many(cnv, aud, resamp, caps_filt, whiten, fakesink)
         whiten.link_pads("mean-psd", appsink,"sink")
 
         # hook updater to appsink

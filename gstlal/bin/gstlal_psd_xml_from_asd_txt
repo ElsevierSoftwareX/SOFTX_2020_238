@@ -15,15 +15,17 @@ parser.add_option("--df", metavar = "float", type = "float", default = 0.25, hel
 parser.add_option("--invert", action = "store_true", help = "if set put 1/psd into the file")
 options, filenames = parser.parse_args()
 
-data = numpy.loadtxt(filenames[0])
+data = numpy.loadtxt(filenames[0], comments = '#')
 f = data[:,0]
 psd = data[:,1]**2
 
 #FIXME hack to pad the series since it doesn't start at 0 :(
-psd = numpy.concatenate((numpy.ones(int(f[0] / options.df) + 1) * psd[0],psd))
-f = numpy.concatenate((numpy.arange(0, f[0], options.df), f))
-uniformf = numpy.arange(0, f.max(), options.df)
-psdinterp = interp1d(f, psd)
+f_padded = numpy.concatenate((numpy.arange(0, f[0], options.df), f))
+psd_padded = numpy.concatenate((numpy.ones(len(f_padded) - len(f)) * psd[0], psd))
+
+uniformf = numpy.arange(0, f_padded.max(), options.df)
+psdinterp = interp1d(f_padded, psd_padded)
+
 psd = psdinterp(uniformf)
 
 if options.invert:

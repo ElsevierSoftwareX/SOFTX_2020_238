@@ -13,13 +13,16 @@ HIGH_FREQUENCY_CUTOFF = 2047.0
 SAMPLE_RATE = 4096
 NUM_SPLIT_TEMPLATES = 250
 OVERLAP = 25
-MM = 0.95
+MM = 0.97
 
-all : dag
+all : dag plots
 
 frame.H.cache:
 	ligo_data_find -o H -t H1_RDS_C03_L2 -l  -s $(START) -e $(STOP) --url-type file > frame.H.cache
-	./cache_to_segments frame.H.cache segments.H.xml
+
+lalapps_path2cache :
+	wget 'http://www.lsc-group.phys.uwm.edu/cgit/lalsuite/plain/pylal/bin/lalapps_path2cache'
+	chmod +x lalapps_path2cache
 
 H1-TMPLTBANK-871154847-2048.xml.gz: frame.H.cache 
 	lalapps_tmpltbank \
@@ -63,36 +66,39 @@ H1-TMPLTBANK-871154847-2048.xml.gz: frame.H.cache
 		--verbose \
 		--spectrum-type LIGO \
 		&& gzip H1-TMPLTBANK-871154847-2048.xml \
-		&& ./bank_splitter --overlap $(OVERLAP) -i H1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml.gz \
-		&& ./bank_splitter --overlap $(OVERLAP) -i H2 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml.gz \
-		&& ./bank_splitter --overlap $(OVERLAP) -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -F -M $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml.gz
+		&& gstlal_bank_splitter --overlap $(OVERLAP) --instrument H1 --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml.gz \
+		&& gstlal_bank_splitter --overlap $(OVERLAP) --instrument H2 --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml.gz \
+		&& gstlal_bank_splitter --overlap $(OVERLAP) --instrument L1 --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml.gz
 
 mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz : 
-	./psd_xml_from_asd_txt H1 mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.txt
+	gstlal_psd_xml_from_asd_txt --instrument H1 --output mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.txt
 
 mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz : 
-	./psd_xml_from_asd_txt H2 mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.txt
+	gstlal_psd_xml_from_asd_txt --instrument H2 --output mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.txt
 
 mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz : 
-	./psd_xml_from_asd_txt L1 mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.txt
+	gstlal_psd_xml_from_asd_txt --instrument L1 --output mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.txt
 
-reference_psd.xml: mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz
+reference_psd.xml.gz: mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz
 	ligolw_add mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz | gzip > reference_psd.xml.gz
 
 sql :
-	cat fix_coinc_instruments.sql uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql
+	cat uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql
 	cat simplify.sql cluster.sql > simplify_and_cluster.sql
 	cat simplify.sql delete_by_far.sql > simplify_and_delete_by_far.sql
-	cat fix_coinc_instruments.sql drop_sim.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
+	cat drop_sim.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
 
-dag : H1-TMPLTBANK-871154847-2048.xml.gz reference_psd.xml sql
-	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > H1_split_bank.cache
-	ls *H2_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > H2_split_bank.cache
-	ls *L1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > L1_split_bank.cache
-	./svd_bank_pipe H1 mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz H1_split_bank.cache $(OVERLAP)
-	./svd_bank_pipe H2 mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz H2_split_bank.cache $(OVERLAP)
-	./svd_bank_pipe L1 mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz L1_split_bank.cache $(OVERLAP)
-	cat mode_H1-TMPLTBANK-869040003-2048_svd_bank.dag  mode_H2-TMPLTBANK-875211248-2048_svd_bank.dag  mode_L1-TMPLTBANK-858087370-2048_svd_bank.dag > bank.dag
+dag : H1-TMPLTBANK-871154847-2048.xml.gz reference_psd.xml.gz sql lalapps_path2cache
+	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | ./lalapps_path2cache > H1_split_bank.cache
+	ls *H2_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | ./lalapps_path2cache > H2_split_bank.cache
+	ls *L1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | ./lalapps_path2cache > L1_split_bank.cache
+	gstlal_inspiral_svd_bank_pipe --instrument H1 --reference-psd reference_psd.xml.gz --bank-cache H1_split_bank.cache --clipping $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H1_bank
+	gstlal_inspiral_svd_bank_pipe --instrument H2 --reference-psd reference_psd.xml.gz --bank-cache H2_split_bank.cache --clipping $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H2_bank
+	gstlal_inspiral_svd_bank_pipe --instrument L1 --reference-psd reference_psd.xml.gz --bank-cache L1_split_bank.cache --clipping $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name L1_bank
+	cat H2_bank.dag H1_bank.dag L1_bank.dag > bank.dag
+
+plots : reference_psd.xml.gz
+	gstlal_plot_psd reference_psd.xml.gz psd_plot
 
 realclean :
-	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml.gz *split_bank-H1-TMPLTBANK-871154847-2048.xml.gz mode_*.xml.gz segments.H.xml logs
+	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml.gz *split_bank-H1-TMPLTBANK-871154847-2048.xml.gz mode_*.xml.gz logs
