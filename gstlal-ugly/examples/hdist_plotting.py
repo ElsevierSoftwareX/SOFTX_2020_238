@@ -242,8 +242,7 @@ def make_pipline(ifos, fig, lines, times, h_dist):
 
 opts, args = parse_args()
 
-color_list = ['red', 'magenta', 'blueviolet', 'chartreuse', 'chocolate', 'aqua', \
-         'cadetblue', 'blue', 'green','darkgoldenrod']
+color_dict = {"H1": "red", "H2": "blue", "L1": "green", "V1": "magenta"}
 
 # Set up storage for the history of (time, horizon distance) plus the plot's line collections
 times = {}
@@ -252,7 +251,7 @@ lines = {}  # each IFO can have multiple traces, so this dict maps to a list of 
 fig = plt.figure()
 ax1 = fig.add_subplot(111)
 
-for ifo, color in zip(opts.ifos, color_list):
+for ifo in opts.ifos:
     if ifo == "H1":  # FIXME: Unhardcode primary IFO
         history_len = 7
     else:
@@ -262,16 +261,16 @@ for ifo, color in zip(opts.ifos, color_list):
 
     # load history
     for fname in opts.history_files:
-        if os.path.basename(fname).startswith(ifo):
+        if os.path.basename(fname).startswith(ifo) and os.path.exists(fname):
             npz = np.load(fname)
             times[ifo].extend(npz["%s_times" % ifo])
             h_dist[ifo].extend(npz["%s_horizon_distance" % ifo])
 
     ifo_lines = lines.setdefault(ifo, [])
-    line, = ax1.plot([], [], '*-', color=color, markersize=1.5, lw=1, mec=color, label=ifo)
+    line, = ax1.plot([], [], '*-', color=color_dict[ifo], markersize=1.5, lw=1, mec=color_dict[ifo], label=ifo)
     ifo_lines.append(line)
     for j in range(1, history_len):  # add marker-less lines for additional history
-        line, = ax1.plot([], [], '-', color=color, markersize=1, lw=0.5, mec=color,
+        line, = ax1.plot([], [], '-', color=color_dict[ifo], markersize=1, lw=0.5, mec=color_dict[ifo],
             alpha=1. - j / history_len, label="_nolegend_"  )
         ifo_lines.append(line)
 
