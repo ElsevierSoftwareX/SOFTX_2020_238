@@ -412,13 +412,12 @@ static FrStream *open_frstream(GSTLALFrameSrc *element, const char *filename, co
 	sieve.latestTime = G_MAXINT32;
 	sieve.srcRegEx = NULL;
 	sieve.dscRegEx = NULL;
-        sieve.urlRegEx = NULL;
-//	sieve.urlRegEx = urlRegEx = malloc((strlen(instrument) + 3) * sizeof(*sieve.urlRegEx));	/* 3 = ".*" + \0 */
-//	if(!urlRegEx) {
-//		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("malloc() failed: %s", strerror(errno)));
-//		return NULL;
-//	}
-//	sprintf(urlRegEx, "%s.*", instrument);
+	sieve.urlRegEx = urlRegEx = malloc((strlen(instrument) + 3) * sizeof(*sieve.urlRegEx));	/* 3 = ".*" + \0 */
+	if(!urlRegEx) {
+		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("malloc() failed: %s", strerror(errno)));
+		return NULL;
+	}
+	sprintf(urlRegEx, "%s.*", instrument);
 
 	/*
 	 * Open frame stream
@@ -438,7 +437,7 @@ static FrStream *open_frstream(GSTLALFrameSrc *element, const char *filename, co
 
 	cache = XLALFrSieveCache(fullcache, &sieve);
 	XLALFrDestroyCache(fullcache);
-//	free(urlRegEx);
+	free(urlRegEx);
 	if(!cache) {
 		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrSieveCache() failed: %s", XLALErrorString(XLALGetBaseErrno())));
 		XLALClearErrno();
