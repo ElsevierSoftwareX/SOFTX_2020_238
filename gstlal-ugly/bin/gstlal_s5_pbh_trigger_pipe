@@ -530,8 +530,9 @@ def parse_command_line():
 	parser.add_option("--injection-sql-file", metavar = "filename", help = "Set the sql file to apply to injection databases")
 	parser.add_option("--web-dir", metavar = "directory", help = "Set the web directory like /home/USER/public_html")
 	parser.add_option("--fir-stride", type="int", metavar = "secs", default = 8, help = "Set the duration of the fft output blocks, default 8")
-	parser.add_option("--control-peak-time", type="int", help = "Set the peak finding time for the control signal")
+	parser.add_option("--control-peak-time", type="int", default = 8, metavar = "secs", help = "Set the peak finding time for the control signal, default 8")
 	parser.add_option("--do-iir-pipeline", action="store_true", help = "run the iir pipeline instead of lloid")
+	parser.add_option("--num-banks", type="int", metavar = "banks", default = 1, help = "Set the number of template banks per job, default 1")
 
 	options, filenames = parser.parse_args()
 
@@ -587,7 +588,7 @@ cluster_nodes = []
 # loop over banks to run gstlal inspiral pre clustering and far computation
 ###############################################################################
 
-for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, [1]):
+for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, [options.num_banks]):
 
 	#
 	# non injections
