@@ -37,6 +37,10 @@ parser.add_option("--snr-threshold", metavar = "SNR", type = "float", default = 
 parser.add_option("--write-svd-bank", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 parser.add_option("--clipping", type = "int", help = "Remove poorly reconstructable templates from the edge of each sub-bank.")
+parser.add_option("--samples-min", type = "int", default = 1024, help = "The minimum number of samples to use for time slices default 1024")
+parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024")
+parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies above 64Hz, default 2048")
+parser.add_option("--samples-max", type = "int", default = 4096, help = "The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096")
 
 options, filenames = parser.parse_args()
 
@@ -75,6 +79,10 @@ write_bank(
 		options.padding,
 		options.identity,
 		options.verbose,
+		samples_min = options.samples_min,
+		samples_max_256 = options.samples_max_256,
+		samples_max_64 = options.samples_max_64, 
+		samples_max = options.samples_max
 	),
 	options.clipping
 )
