@@ -109,8 +109,8 @@ static gboolean register_typefind(GstPlugin *plugin)
 
 	return gst_type_find_register(
 		plugin,
-		"application/x-igwd-frame",
-		0,
+		"framecpp_typefind",
+		GST_RANK_PRIMARY,
 		typefind,
 		extensions,
 		gst_caps_from_string("application/x-igwd-frame endianness = (int) {1234, 4321}"),
@@ -133,10 +133,11 @@ static gboolean plugin_init(GstPlugin *plugin)
 {
 	struct {
 		const gchar *name;
+		GstRank rank;
 		GType type;
 	} *element, elements[] = {
-		{"framecpp_channeldemux", FRAMECPP_CHANNELDEMUX_TYPE},
-		{NULL, 0},
+		{"framecpp_channeldemux", GST_RANK_SECONDARY, FRAMECPP_CHANNELDEMUX_TYPE},
+		{NULL, 0, 0},
 	};
 
 	/*
@@ -150,7 +151,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 	 */
 
 	for(element = elements; element->name; element++)
-		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->type))
+		if(!gst_element_register(plugin, element->name, element->rank, element->type))
 			return FALSE;
 
 	/*
