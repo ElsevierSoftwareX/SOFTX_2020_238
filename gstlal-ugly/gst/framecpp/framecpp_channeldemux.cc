@@ -563,7 +563,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 
 			IFrameStream ifs(ibuf);
 
-			Common::Verify::Verify verifier;
+			Common::Verify verifier;
 
 			verifier.BufferSize(GST_BUFFER_SIZE(inbuf));
 			verifier.UseMemoryMappedIO(false);
