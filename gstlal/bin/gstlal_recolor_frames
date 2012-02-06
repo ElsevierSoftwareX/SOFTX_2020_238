@@ -36,6 +36,7 @@ parser.add_option("--frame-cache", metavar = "name", help = "Set the name of the
 parser.add_option("--reference-psd", metavar = "name", help = "Set the name of psd xml file to whiten the data with")
 parser.add_option("--recolor-psd", metavar = "name", help = "Set the name of psd xml file to recolor the data with")
 parser.add_option("--fir", action = "store_true", help = "use an fir filter to color the data")
+parser.add_option("--duration", metavar = "s", default = 64, type = "int", help = "Set the duration of the output frame files")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 #
@@ -45,7 +46,7 @@ parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (
 options, filenames = parser.parse_args()
 
 # FIXME set max sample rate
-sr = 4096
+sr = 16384
 
 #
 # read psd file
@@ -105,7 +106,7 @@ try:
 	os.mkdir(outpath)
 except:
 	pass
-pipeparts.mkframesink(pipeline, head, path=outpath, sync=False, async=True, frame_type=options.instrument)
+pipeparts.mkframesink(pipeline, head, path=outpath, sync=False, async=True, frame_type=options.instrument, duration = options.duration)
 
 #
 # Run it

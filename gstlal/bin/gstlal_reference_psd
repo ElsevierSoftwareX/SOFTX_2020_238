@@ -86,7 +86,7 @@ psd = reference_psd.measure_psd(
 	seekevent,
 	lloidparts.DetectorData(options.frame_cache, options.channel_name),
 	options.seg,
-	2 * 2048,# Hz;  must not be less than highest bank fragment sample rate (see below)
+	2 * 8192,# Hz;  must not be less than highest bank fragment sample rate (see below)
 	psd_fft_length = options.psd_fft_length,
 	fake_data = options.fake_data,
 	online_data = options.online_data,
