@@ -249,7 +249,11 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 			else:
 				raise ValueError("fake data cannot be %s" % fake_data)
 		else:
-			src = pipeparts.mkframesrc(pipeline, location = detector.frame_cache, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size, segment_list = frame_segments)
+			if instrument == "V1":
+				#FIXME Hack because virgo often just uses "V" in the file names rather than "V1".  We need to sieve on "V"
+				src = pipeparts.mkframesrc(pipeline, location = detector.frame_cache, instrument = instrument, cache_src_regex = "V", channel_name = detector.channel, blocksize = detector.block_size, segment_list = frame_segments)
+			else:
+				src = pipeparts.mkframesrc(pipeline, location = detector.frame_cache, instrument = instrument, cache_dsc_regex = instrument, channel_name = detector.channel, blocksize = detector.block_size, segment_list = frame_segments)
 
 		#
 		# seek the data source if not live
