@@ -57,6 +57,8 @@ typedef struct {
 
 	char *location;
 	char *instrument;
+	char *cache_src_regex;
+	char *cache_dsc_regex;
 	char *channel_name;
 	char *full_channel_name;
 	gint rate;
