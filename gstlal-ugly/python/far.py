@@ -101,7 +101,7 @@ def set_far(options, Far, f):
 	working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
 
-	connection.create_function("far", 2, Far.compute_far)
+	connection.create_function("far", 1, Far.compute_far)
 	ids = [id for id, in connection.cursor().execute("SELECT DISTINCT(time_slide_id) FROM time_slide")]
 	for id in ids:
 		print >>sys.stderr, "computing rates for ", id
@@ -119,12 +119,17 @@ def set_far(options, Far, f):
 		# that get assigned a combined far
 		connection.cursor().execute('CREATE TEMPORARY TABLE ranktable AS SELECT * FROM coinc_inspiral JOIN coinc_event ON coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id WHERE coinc_event.time_slide_id == ? ORDER BY false_alarm_rate+1e-20 / snr', (id,))
 		connection.commit()
-		# For injections every event is treated as "the loudest"
+		# FIXME someday we might want to consider the rate of multiple events.
+		# having this sorted list will make that easier.  Then you can pass in the rowid like this
+		#
+		# far(ranktable.false_alarm_rate, ranktable.rowid)
+		#
+		# in order to have the number of events below a given FAP
 		if connection.cursor().execute("SELECT name FROM sqlite_master WHERE name='sim_inspiral'").fetchall():
-			connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate, 1) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.coinc_event_id IN (SELECT coinc_event_id FROM ranktable)')
+			connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.coinc_event_id IN (SELECT coinc_event_id FROM ranktable)')
 		# For everything else we get a cumulative number
 		else:
-			connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate, ranktable.rowid) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.coinc_event_id IN (SELECT coinc_event_id FROM ranktable)')
+			connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.coinc_event_id IN (SELECT coinc_event_id FROM ranktable)')
 
 	connection.commit()
 	connection.close()
@@ -262,27 +267,11 @@ class FAR(object):
 		ranks.sort()
 		return ranks, vals
 
-	def compute_far(self, fap, n = 1):
+	def compute_far(self, fap):
 		if fap == 0.:
 			return 0.
 		livetime = float(abs(self.livetime))
-		# the n = 1 case can be done exactly.  That is good since it is
-		# the most important.
-		if n == 1:
-			return 0. - numpy.log(1. - fap) / livetime
-		if n > 1 and n <= 100:
-			nvec = numpy.logspace(-12, numpy.log10(n + 10. * n**.5), 100)
-		else:
-			nvec = numpy.logspace(numpy.log10(n - 10. * n**.5), numpy.log10(n + 10. * n**.5), 100)
-		FAPS = 1. - poisson.cdf(n,nvec)
-		#FIXME is this right since nvec is log spaced?
-		interp = interpolate.interp1d(FAPS, nvec / livetime)
-		if fap < FAPS[1]:
-			return 0.
-		if fap > FAPS[-1]:# This means that the FAP has gone off the edge.  We will bump it down because we don't really care about this being right.
-			fap = FAPS[-1]
-		return float(interp(fap))
-
+		return 0. - numpy.log(1. - fap) / livetime
 
 def get_live_time(segments, verbose = True):
 	livetime = float(abs(vote((segs for instrument, segs in segments.items() if instrument != "H2"), 2)))
