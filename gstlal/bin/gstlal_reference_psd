@@ -26,6 +26,7 @@
 from optparse import OptionParser
 from glue import segments
 from pylal.datatypes import LIGOTimeGPS
+from gstlal.pipeutil import gst
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
@@ -78,7 +79,6 @@ options.psd_fft_length = 8	# seconds
 
 from gstlal import reference_psd
 from gstlal import lloidparts
-from gstlal.pipeutil import gst
 
 
 reference_psd.write_psd(
