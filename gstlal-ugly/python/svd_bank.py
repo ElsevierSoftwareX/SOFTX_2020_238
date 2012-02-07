@@ -161,7 +161,7 @@ class Bank(object):
 
 
 
-def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.1, identity = False, verbose = False, autocorrelation_length = 201):
+def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.1, identity = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096):
 	# Open template bank file
 	bank_xmldoc = utils.load_filename(template_bank_filename, verbose = verbose)
 
@@ -174,6 +174,10 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 		fhigh=check_ffinal_and_find_max_ffinal(bank_xmldoc),
 		flow = flow,
 		padding = padding,
+		samples_min = samples_min,
+		samples_max_256 = samples_max_256,
+		samples_max_64 = samples_max_64,
+		samples_max = samples_max,
 		verbose=verbose)
 
 	# Generate templates, perform SVD, get orthogonal basis

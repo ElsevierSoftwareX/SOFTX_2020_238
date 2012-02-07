@@ -96,6 +96,8 @@ static GstBaseSrcClass *parent_class = NULL;
 enum property {
 	ARG_SRC_LOCATION = 1,
 	ARG_SRC_INSTRUMENT,
+	ARG_CACHE_SRC_REGEX,
+	ARG_CACHE_DSC_REGEX,
 	ARG_SRC_CHANNEL_NAME,
 	ARG_SRC_UNITS,
 	ARG_SEGMENT_LIST
@@ -390,19 +392,12 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
  */
 
 
-static FrStream *open_frstream(GSTLALFrameSrc *element, const char *filename, const char *instrument)
+static FrStream *open_frstream(GSTLALFrameSrc *element, const char *filename, const char *cache_src_regex, const char *cache_dsc_regex)
 {
 	FrCacheSieve sieve;
 	FrCache *fullcache;
 	FrCache *cache;
 	FrStream *stream;
-	/* sieve.urlRegEx is const char * so we need a different variable
-	 * we can use to sprintf() and free(), etc..  OMG!  LAL spec
-	 * strikes again --- everything's gotta be passed to functions
-	 * through structures, so if you want a const * the structure's
-	 * element needs to be const *, and so *everything* needs to be
-	 * const *.  Why, why do I bother?  */
-	char *urlRegEx;
 
 	/* 
 	 * Set up seive params
@@ -410,14 +405,9 @@ static FrStream *open_frstream(GSTLALFrameSrc *element, const char *filename, co
 
 	sieve.earliestTime = 0;
 	sieve.latestTime = G_MAXINT32;
-	sieve.srcRegEx = NULL;
-	sieve.dscRegEx = NULL;
-	sieve.urlRegEx = urlRegEx = malloc((strlen(instrument) + 3) * sizeof(*sieve.urlRegEx));	/* 3 = ".*" + \0 */
-	if(!urlRegEx) {
-		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("malloc() failed: %s", strerror(errno)));
-		return NULL;
-	}
-	sprintf(urlRegEx, "%s.*", instrument);
+	sieve.urlRegEx = NULL;
+	sieve.dscRegEx = cache_dsc_regex;
+	sieve.srcRegEx = cache_src_regex;
 
 	/*
 	 * Open frame stream
@@ -427,17 +417,15 @@ static FrStream *open_frstream(GSTLALFrameSrc *element, const char *filename, co
 	if(!fullcache) {
 		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrImportCache() failed: %s", XLALErrorString(XLALGetBaseErrno())));
 		XLALClearErrno();
-		free(urlRegEx);
 		return NULL;
 	}
 
 	/*
-	 * Sieve the cache for the instrument of interest
+	 * Sieve the cache for the cache_src_regex of interest
 	 */
 
 	cache = XLALFrSieveCache(fullcache, &sieve);
 	XLALFrDestroyCache(fullcache);
-	free(urlRegEx);
 	if(!cache) {
 		GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrSieveCache() failed: %s", XLALErrorString(XLALGetBaseErrno())));
 		XLALClearErrno();
@@ -495,7 +483,7 @@ static gboolean start(GstBaseSrc *object)
 	 * Open the frame cache sieved by instrument
 	 */
 
-	element->stream = open_frstream(element, element->location, element->instrument);
+	element->stream = open_frstream(element, element->location, element->cache_src_regex, element->cache_dsc_regex);
 	if(!element->stream)
 		return FALSE;
 
@@ -1014,6 +1002,16 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->full_channel_name = gstlal_build_full_channel_name(element->instrument, element->channel_name);
 		break;
 
+	case ARG_CACHE_SRC_REGEX:
+		g_free(element->cache_src_regex);
+		element->cache_src_regex = g_value_dup_string(value);
+		break;
+
+	case ARG_CACHE_DSC_REGEX:
+		g_free(element->cache_dsc_regex);
+		element->cache_dsc_regex = g_value_dup_string(value);
+		break;
+
 	case ARG_SRC_CHANNEL_NAME:
 		g_free(element->channel_name);
 		element->channel_name = g_value_dup_string(value);
@@ -1059,6 +1057,14 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_string(value, element->instrument);
 		break;
 
+	case ARG_CACHE_DSC_REGEX:
+		g_value_set_string(value, element->cache_dsc_regex);
+		break;
+
+	case ARG_CACHE_SRC_REGEX:
+		g_value_set_string(value, element->cache_src_regex);
+		break;
+
 	case ARG_SRC_CHANNEL_NAME:
 		g_value_set_string(value, element->channel_name);
 		break;
@@ -1098,6 +1104,10 @@ static void finalize(GObject *object)
 	element->location = NULL;
 	g_free(element->instrument);
 	element->instrument = NULL;
+	g_free(element->cache_src_regex);
+	element->cache_src_regex = NULL;
+	g_free(element->cache_dsc_regex);
+	element->cache_dsc_regex = NULL;
 	g_free(element->channel_name);
 	element->channel_name = NULL;
 	g_free(element->full_channel_name);
@@ -1197,6 +1207,28 @@ static void class_init(gpointer class, gpointer class_data)
 	);
 	g_object_class_install_property(
 		gobject_class,
+		ARG_CACHE_SRC_REGEX,
+		g_param_spec_string(
+			"cache-src-regex",
+			"Pattern",
+			"Description regex for sieving cache (e.g. \"H.*\")",
+			NULL,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_CACHE_DSC_REGEX,
+		g_param_spec_string(
+			"cache-dsc-regex",
+			"Pattern",
+			"Source/Observatory regex for sieving cache (e.g. \"H.*\")",
+			NULL,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
 		ARG_SRC_CHANNEL_NAME,
 		g_param_spec_string(
 			"channel-name",
@@ -1273,6 +1305,8 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->location = NULL;
 	element->instrument = NULL;
 	element->channel_name = NULL;
+	element->cache_src_regex = NULL;
+	element->cache_dsc_regex = NULL;
 	element->full_channel_name = NULL;
 	element->rate = 0;
 	element->width = 0;
