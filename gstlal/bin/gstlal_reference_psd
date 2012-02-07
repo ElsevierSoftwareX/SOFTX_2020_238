@@ -26,6 +26,7 @@
 from optparse import OptionParser
 from glue import segments
 from pylal.datatypes import LIGOTimeGPS
+from gstlal.pipeutil import gst
 
 from gstlal import reference_psd
 from gstlal import lloidparts
