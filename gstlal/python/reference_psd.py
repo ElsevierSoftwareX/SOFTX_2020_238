@@ -248,7 +248,7 @@ def interpolate_psd(psd, deltaF):
 		data = psd_data
 	)
 
-def smooth_psd(psd):
+def smooth_psd(psd,smooth_psd = False, rescale_factor= 1):
 # This routine is designed to smooth a PSD for use in recolouring for NINJA2
 
   psdData = psd.data
@@ -258,6 +258,13 @@ def smooth_psd(psd):
   length = len(psdData)
   deltaF = psd.deltaF
 
+  for i in xrange(length):
+    psdData[i] = psdData[i] / rescale_factor
+
+  if not smooth_psd:
+    psd.data = psdData
+    return psd
+  
   # First scan for the relevant points
   bowlMin = 1E20
   bowlF = 0
