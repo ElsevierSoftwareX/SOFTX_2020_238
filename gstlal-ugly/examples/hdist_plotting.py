@@ -211,19 +211,19 @@ def make_pipline(ifos, fig, lines, times, h_dist):
         src = mkelem("gds_lvshmsrc", {'shm_name': d_name[ifo]})
         dmx = mkelem("framecpp_channeldemux", {'do_file_checksum':True, 'skip_bad_files': True})
         cnv = mkelem("audioconvert")
-        aud = mkelem("audiochebband", {'lower-frequency': 8, 'upper-frequency': 2500})
         resamp = mkelem("audioresample")
         caps_filt = mkelem("capsfilter", {'caps': gst.Caps("audio/x-raw-float, rate=2048")})
+        art = mkelem("audiorate", {"skip_to_first": True})
         appsink = mkelem("appsink", {'caps': gst.Caps("audio/x-raw-float"), 'sync': False,
         'async': False, 'emit-signals': True, 'max-buffers': 1, 'drop': True})
         whiten = mkelem("lal_whiten", {'psd-mode': 0, 'zero-pad': 0, 'fft-length': 8,
         'median-samples': 7, 'average-samples': 128})
         fakesink = mkelem("fakesink", {'sync': False, 'async': False})
         
-        pipe.add(src, dmx, cnv, aud, resamp, caps_filt, whiten, appsink, fakesink)
+        pipe.add(src, dmx, cnv, resamp, caps_filt, art, whiten, appsink, fakesink)
         gst.element_link_many(src, dmx)
         pipeparts.src_deferred_link(dmx, "%s:%s" % (ifo, channels[ifo]), cnv.get_pad("sink"))
-        gst.element_link_many(cnv, aud, resamp, caps_filt, whiten, fakesink)
+        gst.element_link_many(cnv, resamp, caps_filt, art, whiten, fakesink)
         whiten.link_pads("mean-psd", appsink,"sink")
 
         # hook updater to appsink
@@ -278,7 +278,7 @@ vline, = ax1.plot([], [], '-', c='black', lw=0.5)
 lines["now"] = [vline]
 
 ax1.grid(True)
-ax1.legend()
+ax1.legend(loc="lower right")
 ax1.set_xlim((0, 24))
 ax1.set_ylim((0, 500))
 ax1.set_xticks(range(25))
