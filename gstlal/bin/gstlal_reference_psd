@@ -42,6 +42,7 @@ parser.add_option("--injections", metavar = "filename", help = "Set the name of 
 parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
 parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
 parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (required).")
+parser.add_option("--max-freq", metavar = "Hz", help = "Measure PSD up to this frequency, must not exceed the Nyquist frequency.")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 options, filenames = parser.parse_args()
@@ -86,7 +87,7 @@ psd = reference_psd.measure_psd(
 	seekevent,
 	lloidparts.DetectorData(options.frame_cache, options.channel_name),
 	options.seg,
-	2 * 8192,# Hz;  must not be less than highest bank fragment sample rate (see below)
+	2 * opts.max_freq,# Hz;  must not be less than highest bank fragment sample rate (see below)
 	psd_fft_length = options.psd_fft_length,
 	fake_data = options.fake_data,
 	online_data = options.online_data,
