@@ -76,14 +76,14 @@ head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, options.instrument, lloid
 
 #FIXME get sample rate some other way
 # first whiten and downsample
-head = lloidparts.mkLLOIDsrc(pipeline, head, [opts.sample_rate], options.instrument, psd = wpsd, seekevent = seekevent, block_duration = gst.SECOND, track_psd = True)
-head = pipeparts.mkprogressreport(pipeline, head[opts.sample_rate], "frames")
+head = lloidparts.mkLLOIDsrc(pipeline, head, [options.sample_rate], options.instrument, psd = wpsd, seekevent = seekevent, block_duration = gst.SECOND, track_psd = True)
+head = pipeparts.mkprogressreport(pipeline, head[options.sample_rate], "frames")
 # a lie to make the whitener happy
 head = pipeparts.mktaginject(pipeline, head, "units=strain")
 
 # then recolor
 if options.fir:
-	latency = int(1.0 / rpsd.deltaF * opts.sample_rate / 2.0)
+	latency = int(1.0 / rpsd.deltaF * options.sample_rate / 2.0)
 	fir_matrix = numpy.zeros((1, 2 * latency-1), 'd64')
 	freq_data = 1.0 / rpsd.data[:latency]**.5
 	freq_data[0] = 0.0
