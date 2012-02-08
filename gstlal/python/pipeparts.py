@@ -244,6 +244,10 @@ def mkiirfilter(pipeline, src, a, b):
 	return mkgeneric(pipeline, src, "audioiirfilter", a = a, b = b)
 
 
+def mkshift(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "lal_shift", **properties)
+
+
 def mkfakeLIGOsrc(pipeline, location=None, instrument=None, channel_name=None, blocksize=16384 * 8 * 1):
 	head = gst.element_factory_make("lal_fakeligosrc")
 	if instrument is not None:
