@@ -40,10 +40,10 @@ parser.add_option("--reference-psd", metavar = "name", help = "Set the name of p
 parser.add_option("--recolor-psd", metavar = "name", help = "Set the name of psd xml file to recolor the data with")
 parser.add_option("--fir", action = "store_true", help = "use an fir filter to color the data")
 parser.add_option("--duration", metavar = "s", default = 64, type = "int", help = "Set the duration of the output frame files")
-parser.add_option("--sample-rate", metavar= "Hz", default = 4096, type="int", help = "The sample rate of the outputted frames")
 parser.add_option("--track-psd", action = "store_true", help = "Calculate PSD from input data and track with time.")
 parser.add_option("--shift", metavar = "ns", help = "Number of nanoseconds to delay (negative) or advance (positive) the time stream", type = "int")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided, default = 4096 Hz")
 
 #
 # Parse options
@@ -92,7 +92,7 @@ head = lloidparts.mkLLOIDsrc(pipeline, head, [options.sample_rate], options.inst
 # a lie to make the whitener happy
 head = pipeparts.mktaginject(pipeline, head[options.sample_rate], "units=strain")
 
-# Recolor
+# Recolor kernel
 latency = int(1.0 / rpsd.deltaF * options.sample_rate / 2.0)
 fir_matrix = numpy.zeros((1, 2 * latency-1), 'd64') 
 freq_data = 1.0 / rpsd.data[:latency]**.5 
@@ -103,9 +103,10 @@ fir_matrix = numpy.roll(numpy.real(scipy.ifft(fir_matrix)), latency)
 fir_matrix *= (2 * latency-1)**.5 # scipy ifft convention norm
 
 # normalization 
-fir_matrix *= (rpsd.deltaF**2 * 2)**.5
+fir_matrix *= (rpsd.deltaF * 2)**.5 # two delta F from the LIGO PSD convention
+fir_matrix /= 2 # factor of two from the two-sided fir filter being used!
 
-head = pipeparts.mkfirbank(pipeline, head, latency = latency, fir_matrix = fir_matrix, block_stride = 4096 * 32)
+head = pipeparts.mkfirbank(pipeline, head, latency = latency, fir_matrix = fir_matrix, block_stride = options.sample_rate * 32)
 
 # put the units back to strain before writing to frames
 head = pipeparts.mktaginject(pipeline, head, "units=strain")
