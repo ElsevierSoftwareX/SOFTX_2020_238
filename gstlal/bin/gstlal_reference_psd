@@ -93,6 +93,6 @@ reference_psd.write_psd(
 		online_data = options.online_data,
 		injection_filename = options.injections,
 		verbose = options.verbose
-	) }
+	) },
 	verbose = options.verbose
 )
