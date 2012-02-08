@@ -840,6 +840,11 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 				(res_level, ndof) 
 		)
 
+	head = mkgeneric( pipeline, head, "pow" )
+	head.set_property( "exponent", 0.5 )
+
+# TODO: combine trigger streams from various levels
+
 # TODO: This will have to be linked to multiple outgoing streams
 appsink = mkappsink(pipeline, mkqueue(pipeline, head))
 appsink.connect_after("new-buffer", get_triggers, handler)
