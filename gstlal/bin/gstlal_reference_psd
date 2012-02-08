@@ -82,7 +82,7 @@ from gstlal import lloidparts
 
 reference_psd.write_psd(
 	options.write_psd,
-	reference_psd.measure_psd(
+	{ instrument: reference_psd.measure_psd(
 		options.instrument,
 		seekevent,
 		lloidparts.DetectorData(options.frame_cache, options.channel_name),
@@ -93,7 +93,6 @@ reference_psd.write_psd(
 		online_data = options.online_data,
 		injection_filename = options.injections,
 		verbose = options.verbose
-	),
-	instrument = options.instrument,
+	) }
 	verbose = options.verbose
 )

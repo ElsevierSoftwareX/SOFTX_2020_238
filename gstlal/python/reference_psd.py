@@ -149,28 +149,17 @@ def measure_psd(instrument, seekevent, detector, seg, rate, fake_data = None, on
 	return handler.psd
 
 
-def psd_instrument_dict(elem):
-	out = {}
-	for lw in elem.getElementsByTagName(u"LIGO_LW"):
-		if not lw.hasAttribute(u"Name"):
-			continue
-		if lw.getAttribute(u"Name") != u"REAL8FrequencySeries":
-			continue
-		ifo = param.get_pyvalue(lw, u"instrument")
-		out[ifo] = lalseries.parse_REAL8FrequencySeries(lw)
-	return out
-
-
 def read_psd(filename, verbose = False):
-	return psd_instrument_dict(utils.load_filename(filename, verbose = verbose))
+	return dict((param.get_pyvalue(elem, u"instrument"), lalseries.parse_REAL8FrequencySeries(elem)) for elem in utils.load_filename(filename, verbose = verbose).getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"REAL8FrequencySeries")
 
 
-def write_psd(filename, psd, instrument=None, verbose = False):
+def write_psd(filename, psddict, verbose = False):
 	xmldoc = ligolw.Document()
 	lw = xmldoc.appendChild(ligolw.LIGO_LW())
-	fs = lw.appendChild(lalseries.build_REAL8FrequencySeries(psd))
-	if instrument is not None:
-		fs.appendChild(param.new_param('instrument', ligolw_types.FromPyType[str], instrument))
+	for instrument, psd in psddict.items():
+		fs = lw.appendChild(lalseries.build_REAL8FrequencySeries(psd))
+		if instrument is not None:
+			fs.appendChild(param.from_pyvalue(u"instrument", instrument))
 	utils.write_filename(xmldoc, filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose)
 
 
