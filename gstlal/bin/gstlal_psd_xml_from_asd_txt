@@ -32,4 +32,4 @@ if options.invert:
 	psdseries = datatypes.real8frequencyseries.REAL8FrequencySeries(deltaF=options.df, data=1.0/psd, sampleUnits=lalunit.LALUnit("s strain^2"), f0=0) # note the inverse of the psd but not the units.
 else:
 	psdseries = datatypes.real8frequencyseries.REAL8FrequencySeries(deltaF=options.df, data=psd, sampleUnits=lalunit.LALUnit("s strain^2"), f0=0)
-reference_psd.write_psd(options.output, {instrument: psdseries})
+reference_psd.write_psd(options.output, {options.instrument: psdseries})
