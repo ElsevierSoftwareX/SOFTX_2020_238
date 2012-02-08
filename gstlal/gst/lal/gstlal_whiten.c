@@ -564,7 +564,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 	 * safety checks
 	 */
 
-	g_assert(element->tdworkspace);
+	g_assert(element->tdworkspace != NULL);
 	g_assert(element->tdworkspace->data->length == fft_length(element));
 	g_assert(element->hann_window->data->length == element->tdworkspace->data->length);
 	g_assert(element->output_history->length == element->tdworkspace->data->length);
