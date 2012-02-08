@@ -1,0 +1,117 @@
+import sys
+
+import matplotlib
+matplotlib.use("Agg")
+from matplotlib import pyplot
+
+import numpy
+import math
+
+from glue.ligolw import utils
+from glue.ligolw import lsctables
+
+from optparse import OptionParser
+
+parser = OptionParser()
+parser.add_option("-c", "--channels", action="store", help="Comma separated list of channels. Will plot triggers only from the channels indicated. Otherwise, all channels will be plotted.")
+parser.add_option("-i", "--instruments", action="store", help="Comma separates list of instruments. Will plot channels only from the instruments indicated. Otherwise, all no instrument selection is done.")
+parser.add_option("-s", "--gps-start", action="store", type=float, default=-1e20, help="Plot triggers only after indicated gps time. Default is negative infinity.")
+parser.add_option("-e", "--gps-end", action="store", type=float, default=1e20, help="Plot triggers only before indicated gps time. Default is positive infinity.")
+parser.add_option("-f", "--low-frequency", action="store", type=float, default=32.0, help="Plot trigggers with central frequency above this frequency. Default is 2000.")
+parser.add_option("-F", "--high-frequency", action="store", type=float, default=2000.0, help="Plot trigggers with central frequency below this frequency. Default is 32.")
+parser.add_option("-I", "--infer-parameters", action="store_true", help="Infer the TF map dimensions from the search details in the input files.")
+parser.add_option("-S", "--snr-thresh", action="store", type=float, default=0.0, help="Plot trigggers with snr greater than that indicated.")
+
+opts, args = parser.parse_args()
+
+if( opts.channels is not None ):
+	channels = opts.channels.split(",")
+else: channels = None
+
+if( opts.instruments is not None ):
+	instruments = opts.instruments.split(",")
+else: instruments = None
+
+# TODO: group by IFO
+
+events = lsctables.SnglBurstTable()
+for arg in args:
+	xmldoc = utils.load_filename( arg )
+	for tbl in lsctables.getTablesByType( xmldoc, lsctables.SnglBurstTable ):
+		events += tbl 
+
+	# search data
+	#metad = lsctables.getTablesByType( xmldoc, lsctables.SearchSummaryTable )[0]
+
+if( instruments is None ):
+	instruments = {}
+	for event in events:
+		instruments[event.ifo] = None
+	instruments = instruments.keys()
+
+print "Examining instruments: %s" % str(instruments)
+
+if( channels is None ):
+	channels = {}
+	for event in events:
+		if( event.ifo in instruments ):
+			channels[(event.ifo, event.channel)] = None
+	channels = channels.keys()
+
+channels.sort()
+print "Looking at channel list:\n", "\n".join( map(lambda cl: ":".join(cl), channels) )
+channels = [("H1","FAKE-STRAIN"), ("H1","FAKE-STRAIN")]
+print "Looking at channel list:\n", "\n".join( map(lambda cl: ":".join(cl), channels) )
+
+# construct tf map extent
+fig = pyplot.figure()
+gs = matplotlib.gridspec.GridSpec( nrows = len(channels), ncols = 2, width_ratios=[30,1])#, hspace=0.3 )
+
+for i, chan in enumerate(channels):
+	inst, channel = chan
+	ax = pyplot.subplot(gs[2*i])
+
+	# Extent in time
+	ax.set_xlim(0, 10)
+	# Extent in frequency
+	ax.set_ylim(32, 1000)
+
+	# what's our snr scale
+	snr_norm = matplotlib.colors.Normalize( 
+		0, 
+		max([ e.snr for e in events if event.channel == channel]) 
+	)
+	colormap = matplotlib.cm.ScalarMappable( norm = snr_norm, cmap = matplotlib.cm.jet )
+
+	if( i == len(channels)-1 ):
+		pyplot.xlabel( "Time (s)" )
+	pyplot.ylabel( "Frequency (Hz)" )
+	title = "channel: %s, inst %s" % (channel, inst)
+	if( i == 0 ):
+		title = "SNR time frequency map\n%s" % title
+	pyplot.title( title )
+
+	# construct tiles
+	for event in sorted(events, key=lambda tbl: tbl.snr):
+		if( event.channel != channel ): continue
+
+		# 1. plot tile 
+		start = event.get_peak()# + event.start_time_ns*1e-9
+		tile = matplotlib.patches.Rectangle(
+			# lower left point
+			( start,
+			# FIXME: Presumes tile energy is uniform in frequency
+			(event.central_freq - event.bandwidth/2.0) ),
+			# tile extent
+			event.duration,
+			event.bandwidth/2.0,
+			color = colormap.to_rgba( event.snr )
+		)
+		ax.add_patch( tile )
+		
+	ax.grid()
+	ax = pyplot.subplot( gs[2*i+1] )
+	cbl = matplotlib.colorbar.ColorbarBase( ax, cmap=matplotlib.cm.jet, norm=snr_norm, orientation="vertical" )
+	cbl.set_label( "SNR" )
+
+fig.savefig( "trigmap.png" )
