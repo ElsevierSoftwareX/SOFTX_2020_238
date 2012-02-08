@@ -43,8 +43,9 @@ parser.add_option("--injections", metavar = "filename", help = "Set the name of 
 parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
 parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
 parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (required).")
-parser.add_option("--max-freq", metavar = "Hz",type="int", help = "Measure PSD up to this frequency, must not exceed the Nyquist frequency.")
 parser.add_option("--smooth-psd", action= "store_true", help = "Smooth real data PSD to remove lines")
+parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the PSD, default 4096 Hz")
+parser.add_option("--psd-fft-length", metavar = "s", default = 8, type = "int", help = "FFT length, default 8s")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 options, filenames = parser.parse_args()
@@ -70,9 +71,6 @@ if missing_options:
 	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
 
 
-options.psd_fft_length = 8	# seconds
-
-
 
 #
 # =============================================================================
@@ -89,14 +87,14 @@ psd = reference_psd.measure_psd(
 	seekevent,
 	lloidparts.DetectorData(options.frame_cache, options.channel_name),
 	options.seg,
-	2 * options.max_freq,# Hz;  must not be less than highest bank fragment sample rate (see below)
+	options.sample_rate,# Hz;  must not be less than highest bank fragment sample rate (see below)
 	psd_fft_length = options.psd_fft_length,
 	fake_data = options.fake_data,
 	online_data = options.online_data,
 	injection_filename = options.injections,
 	verbose = options.verbose)
 
-psd = reference_psd.smooth_psd(psd,smooth_psd = options.smooth_psd, rescale_factor= options.max_freq*options.max_freq)
+psd = reference_psd.smooth_psd(psd,smooth_psd = options.smooth_psd, rescale_factor= 1)
 
 reference_psd.write_psd(
 	options.write_psd,psd,
