@@ -21,7 +21,8 @@ libgstlal_la_SOURCES = \
 	gstlal_sumsquares.h gstlal_sumsquares.c \
 	gstlal_statevector.h gstlal_statevector.c \
 	gstlal_togglecomplex.h gstlal_togglecomplex.c \
-	gstlal_whiten.h gstlal_whiten.c
+	gstlal_whiten.h gstlal_whiten.c \
+	gstlal_shift.h gstlal_shift.c
 libgstlal_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS)
 libgstlal_la_LIBADD = $(top_builddir)/lib/libgstlal.la $(top_builddir)/lib/libgstlaltags.la $(top_builddir)/lib/libgstlaltypes.la
 libgstlal_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
