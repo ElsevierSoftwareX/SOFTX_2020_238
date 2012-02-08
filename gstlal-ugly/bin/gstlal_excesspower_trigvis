@@ -1,6 +1,8 @@
+#!/usr/bin/env python
 import sys
 
 import matplotlib
+import matplotlib.gridspec
 matplotlib.use("Agg")
 from matplotlib import pyplot
 
@@ -9,20 +11,25 @@ import math
 
 from glue.ligolw import utils
 from glue.ligolw import lsctables
+from glue import segments
 
 from optparse import OptionParser
 
 parser = OptionParser()
 parser.add_option("-c", "--channels", action="store", help="Comma separated list of channels. Will plot triggers only from the channels indicated. Otherwise, all channels will be plotted.")
+parser.add_option("-o", "--output-file", action="store", help="File to output image to. Default: trigmap.png")
 parser.add_option("-i", "--instruments", action="store", help="Comma separates list of instruments. Will plot channels only from the instruments indicated. Otherwise, all no instrument selection is done.")
-parser.add_option("-s", "--gps-start", action="store", type=float, default=-1e20, help="Plot triggers only after indicated gps time. Default is negative infinity.")
-parser.add_option("-e", "--gps-end", action="store", type=float, default=1e20, help="Plot triggers only before indicated gps time. Default is positive infinity.")
-parser.add_option("-f", "--low-frequency", action="store", type=float, default=32.0, help="Plot trigggers with central frequency above this frequency. Default is 2000.")
-parser.add_option("-F", "--high-frequency", action="store", type=float, default=2000.0, help="Plot trigggers with central frequency below this frequency. Default is 32.")
+parser.add_option("-s", "--gps-start", action="store", type=float, help="Plot triggers only after indicated gps time. Default is to infer from triggers.")
+parser.add_option("-e", "--gps-end", action="store", type=float, help="Plot triggers only before indicated gps time. Default is to infer from triggers.")
+parser.add_option("-f", "--low-frequency", action="store", type=float, default=32.0, help="Plot trigggers with central frequency above this frequency. Default is 32.")
+parser.add_option("-F", "--high-frequency", action="store", type=float, default=2000.0, help="Plot trigggers with central frequency below this frequency. Default is 2000.")
 parser.add_option("-I", "--infer-parameters", action="store_true", help="Infer the TF map dimensions from the search details in the input files.")
 parser.add_option("-S", "--snr-thresh", action="store", type=float, default=0.0, help="Plot trigggers with snr greater than that indicated.")
+parser.add_option("-m", "--mark-time", action="store", type=float, help="Mark a particular time on the map. Useful for identifying triggers in a file spanning a large time.")
 
 opts, args = parser.parse_args()
+
+print >>sys.stderr, "WARNING: Assuming SNR is power SNR, not amplitude SNR. Remind Chris that this should be fixed in the next update of gstlal_excesspower."
 
 if( opts.channels is not None ):
 	channels = opts.channels.split(",")
@@ -43,6 +50,14 @@ for arg in args:
 	# search data
 	#metad = lsctables.getTablesByType( xmldoc, lsctables.SearchSummaryTable )[0]
 
+viewseg = segments.segment( segments.NegInfinity, segments.PosInfinity )
+if( opts.gps_start is None ):
+	viewseg = segments.segment( min([e.peak_time for e in events]), viewseg[1] )
+else: viewseg = segments.segment( opts.gps_start, viewseg[1] )
+if( opts.gps_end is None ):
+	viewseg = segments.segment( viewseg[0], max([e.peak_time for e in events]) )
+else: viewseg = segments.segment( viewseg[0], opts.gps_end )
+
 if( instruments is None ):
 	instruments = {}
 	for event in events:
@@ -50,6 +65,8 @@ if( instruments is None ):
 	instruments = instruments.keys()
 
 print "Examining instruments: %s" % str(instruments)
+sys.stdout.write( "Filtering %d events... " % len(events) )
+print "%d events remain." % len(events)
 
 if( channels is None ):
 	channels = {}
@@ -59,8 +76,6 @@ if( channels is None ):
 	channels = channels.keys()
 
 channels.sort()
-print "Looking at channel list:\n", "\n".join( map(lambda cl: ":".join(cl), channels) )
-channels = [("H1","FAKE-STRAIN"), ("H1","FAKE-STRAIN")]
 print "Looking at channel list:\n", "\n".join( map(lambda cl: ":".join(cl), channels) )
 
 # construct tf map extent
@@ -72,16 +87,23 @@ for i, chan in enumerate(channels):
 	ax = pyplot.subplot(gs[2*i])
 
 	# Extent in time
-	ax.set_xlim(0, 10)
+	ax.set_xlim(viewseg[0], viewseg[1])
 	# Extent in frequency
-	ax.set_ylim(32, 1000)
+	# FIXME: Different Channels won't have the same ifrequencysettings
+	ax.set_ylim(opts.low_frequency, opts.high_frequency)
 
 	# what's our snr scale
+	# FIXME: look only at selected events
 	snr_norm = matplotlib.colors.Normalize( 
-		0, 
-		max([ e.snr for e in events if event.channel == channel]) 
+		min([ math.sqrt(e.snr) for e in events if event.channel == channel]),
+		max([ math.sqrt(e.snr) for e in events if event.channel == channel]) 
 	)
 	colormap = matplotlib.cm.ScalarMappable( norm = snr_norm, cmap = matplotlib.cm.jet )
+
+	# Make me purty
+	ax.grid()
+	if( opts.mark_time in viewseg ):
+		pyplot.axvline(opts.mark_time, color="k")
 
 	if( i == len(channels)-1 ):
 		pyplot.xlabel( "Time (s)" )
@@ -92,8 +114,11 @@ for i, chan in enumerate(channels):
 	pyplot.title( title )
 
 	# construct tiles
-	for event in sorted(events, key=lambda tbl: tbl.snr):
+	# FIXME: Partition events first
+	for event in sorted(events, key=lambda tbl: math.sqrt(tbl.snr) ):
 		if( event.channel != channel ): continue
+		if( event.ifo != inst ): continue
+		if( not (event.peak_time in viewseg) ): continue
 
 		# 1. plot tile 
 		start = event.get_peak()# + event.start_time_ns*1e-9
@@ -105,13 +130,14 @@ for i, chan in enumerate(channels):
 			# tile extent
 			event.duration,
 			event.bandwidth/2.0,
-			color = colormap.to_rgba( event.snr )
+			color = colormap.to_rgba( math.sqrt(event.snr) )
 		)
 		ax.add_patch( tile )
 		
-	ax.grid()
+
 	ax = pyplot.subplot( gs[2*i+1] )
 	cbl = matplotlib.colorbar.ColorbarBase( ax, cmap=matplotlib.cm.jet, norm=snr_norm, orientation="vertical" )
 	cbl.set_label( "SNR" )
 
-fig.savefig( "trigmap.png" )
+if( opts.output_file is None ): fig.savefig( "trigmap.png" )
+else: fig.savefig( opts.output_file )
