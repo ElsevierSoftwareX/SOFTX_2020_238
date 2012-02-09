@@ -187,7 +187,9 @@ def psd_to_fir_kernel(psd):
 
 	The return value is the tuple (kernel, latency, sample rate).  The
 	kernel is a numpy array containing the filter kernel, the latency
-	is the filter latency in samples and the sample rate is in Hz.
+	is the filter latency in samples and the sample rate is in Hz.  The
+	kernel and latency can be used, for example, with gstreamer's stock
+	audiofirfilter element.
 	"""
 	#
 	# this could be relaxed with some work
@@ -204,13 +206,24 @@ def psd_to_fir_kernel(psd):
 
 	#
 	# compute the FIR kernel.  it always has an odd number of samples
-	# and no DC offset.  FIXME:  there's a chance the normalization
-	# should be 2*(len(data)-1).  it's a small correction for typical
-	# PSDs but for extremely short FFT lengths it will matter
+	# and no DC offset.
 	#
 
 	data[0] = data[-1] = 0.0
-	kernel = scipy.fftpack.idct(data**.5, type = 1) * sample_rate**.5 / (2 * len(data))
+	try:
+		# FIXME:  there's a chance the normalization should be
+		# 2*(len(data)-1).  it's a small correction for typical
+		# PSDs but for extremely short FFT lengths it will matter
+		kernel = scipy.fftpack.idct(data**.5, type = 1) * sample_rate**.5 / (2 * len(data))
+	except AttributeError:
+		# scipy.fftpack is missing idct()
+		# repack data:  data[0], data[1], 0, data[2], 0, ....
+		tmp = numpy.zeros((2 * len(data) - 1,), dtype = data.dtype)
+		tmp[0] = data[0]
+		tmp[1::2] = data[1:]
+		data = tmp
+		del tmp
+		kernel = scipy.fftpack.irfft(data**.5) * sample_rate**.5
 	kernel = numpy.hstack((kernel[::-1], kernel[1:]))
 
 	#
