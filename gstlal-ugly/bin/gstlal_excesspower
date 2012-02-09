@@ -819,6 +819,9 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 				(res_level, ndof) 
 		)
 
+	head = mkgeneric( pipeline, head, "pow" )
+	head.set_property( "exponent", 0.5 )
+
 	# Trigger generator
 	head = mkbursttriggergen( pipeline, head, 1, 
 		bank = handler.build_filter_xml( res_level )
@@ -839,9 +842,6 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 			"Trigger generator resolution level %d, duration %d" % 
 				(res_level, ndof) 
 		)
-
-	head = mkgeneric( pipeline, head, "pow" )
-	head.set_property( "exponent", 0.5 )
 
 # TODO: combine trigger streams from various levels
 
