@@ -66,7 +66,7 @@ enum property {
 static guint samples_remaining(GstBuffer *buf, guint skip)
 {
 	guint n = GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf);
-	g_assert(skip <= n);
+	g_assert_cmpuint(skip, <=, n);
 	return n - skip;
 }
 
@@ -150,10 +150,10 @@ guint gst_audioadapter_head_gap_length(GstAudioAdapter *adapter)
 	for(head = g_queue_peek_head_link(adapter->queue); head && GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP); head = g_list_next(head))
 		length += GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data);
 	if(length) {
-		g_assert(length >= adapter->skip);
+		g_assert_cmpuint(length, >=, adapter->skip);
 		length -= adapter->skip;
 	}
-	g_assert(length <= adapter->size);
+	g_assert_cmpuint(length, <=, adapter->size);
 
 	return length;
 }
@@ -179,10 +179,10 @@ guint gst_audioadapter_head_nongap_length(GstAudioAdapter *adapter)
 	for(head = g_queue_peek_head_link(adapter->queue); head && !GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP); head = g_list_next(head))
 		length += GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data);
 	if(length) {
-		g_assert(length >= adapter->skip);
+		g_assert_cmpuint(length, >=, adapter->skip);
 		length -= adapter->skip;
 	}
-	g_assert(length <= adapter->size);
+	g_assert_cmpuint(length, <=, adapter->size);
 
 	return length;
 }
@@ -210,7 +210,7 @@ void gst_audioadapter_copy(GstAudioAdapter *adapter, void *dst, guint samples, g
 
 	if(!samples)
 		goto done;
-	g_assert(samples <= adapter->size);
+	g_assert_cmpuint(samples, <=, adapter->size);
 
 	/* first buffer might need to have some samples skipped so it needs
 	 * to be handled separately */
@@ -253,7 +253,7 @@ done:
 void gst_audioadapter_flush(GstAudioAdapter *adapter, guint samples)
 {
 	/*gboolean size_changed = samples;*/
-	g_assert(samples <= adapter->size);
+	g_assert_cmpuint(samples, <=, adapter->size);
 
 	while(samples) {
 		GstBuffer *head = GST_BUFFER(g_queue_peek_head(adapter->queue));
