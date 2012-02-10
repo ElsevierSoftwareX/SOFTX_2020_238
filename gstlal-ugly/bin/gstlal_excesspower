@@ -50,6 +50,7 @@ from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
 
 from glue.segments import segment
+from glue import gpstime
 
 from pylal.xlal.datatypes.snglburst import from_buffer as sngl_bursts_from_buffer
 from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
@@ -112,21 +113,66 @@ class EPHandler( LLOIDHandler ):
 		#self.unicorns = False
 
 		# Defaults -- data products
-		self.output = None
+		self.output = True
 		self.triggers = None
 		self.outfile = "test.xml"
 		self.make_output_table()
 		self.snr_thresh = 5.5
-		self.dump_frequency = 60 # s
-		self.max_events = 1e10
+		self.dump_frequency = 600 # s
+		self.max_events = 1e3
 		self.time_since_dump = self.start
+
+		self.trigger_segment = None
 
 		self.spec_corr = self.build_default_correlation( self.rate )
 		self.psd = self.build_default_psd( self.rate, self.filter_len )
 		self.rebuild_filter()
 		self.rebuild_chan_mix_matrix()
 
+		self.bus = pipeline.get_bus()
+		self.bus.add_signal_watch()
+		self.bus.connect( "message", self.process_message )
+
 		super(type(self), self).__init__(mainloop, pipeline)
+
+	def set_trigger_time_and_action( self, trig_seg, action=["psd"] ):
+		"""
+		Inform the handler of a specific time of interest.
+		"""
+		# TODO: Bounds checking
+		self.trigger_segment = trig_seg
+
+		# TODO: Handle only specific action requests
+
+
+	def process_message( self, bus, message ):
+		"""
+		Process a message from the bus. Depending on what it is, we may drop various data products on to disk.
+		"""
+
+		if( message.structure.get_name() == "spectrum" ):
+			ts = message.structure[ "timestamp" ]*1e-9
+			if( self.trigger_segment is not None 
+				and ts in self.trigger_segment ):
+				self.dump_psd("spectrum_data.dat")
+			elif( self.cache_psd ):
+				self.dump_psd("spectrum_data.dat")
+		if( message.type == gst.MESSAGE_EOS ):
+			self.shutdown()
+		else:
+			pass
+			# TODO: How to send messages to the gst debug stream
+
+	def dump_psd( self, filename, asd=False ):
+		"""
+		Dump the currently cached PSD to a text file.
+		"""
+		# TODO: Better format for this?
+		print >>sys.stderr, "Outputting PSD to psd.dat"
+		f = open("psd.dat", "w")
+		for freq, p in enumerate( self.psd.data ):
+			f.write("%f %g\n" % (freq*self.psd.deltaF, p) )
+		f.close()
 
 	def add_firbank( self, firbank ):
 		"""
@@ -253,7 +299,6 @@ class EPHandler( LLOIDHandler ):
 
 		from glue.lal import LIGOTimeGPS
 		# TODO: Before or after Paused?
-		# FIXME: How do I do this? This doesn't work (but I can't figure out why since gstreamer eats my traceback ...jerks )
 		analysis_segment = segment(
 			LIGOTimeGPS( self.start ), 
 			LIGOTimeGPS( self.stop )
@@ -282,6 +327,8 @@ class EPHandler( LLOIDHandler ):
 		lock.acquire()
 		orig_signal = utils.signal.signal
 		utils.signal.signal = lambda *args: None
+		# Enable to debug LIGOLW stream
+		#utils.write_fileobj(output, sys.stdout)
 		utils.write_filename(output, filename, verbose = options.verbose)
          #gz = (output or "stdout").endswith(".gz"))
 		utils.signal.signal = orig_signal
@@ -330,11 +377,6 @@ def on_psd_change( elem, pspec, hand ):
 		data = numpy.array( elem.get_property( "mean-psd" ) )
 	)
 
-	if( hand.cache_psd ):
-		f = open("psd.dat", "w")
-		for freq, p in enumerate( hand.psd.data ):
-			f.write("%f %g\n" % (freq*hand.psd.deltaF, p) )
-		f.close()
 
 	# Determine if the PSD has changed enough to warrant rebuilding the filter
 	# bank.
@@ -366,18 +408,19 @@ def get_triggers(elem, handler):
 
 	buffer = elem.emit("pull-buffer")
 
-	if( handler.output == None ):
+	if( not handler.output ):
 		return # We don't want event information
 
 	for row in sngl_bursts_from_buffer(buffer):
 		handler.triggers.append( row )
 	
 	handler.stop = (buffer.timestamp + buffer.duration)*1e-9
-	from glue import gpstime
 	if( handler.stop - handler.time_since_dump > handler.dump_frequency or
 			len(handler.triggers) >= handler.max_events ):
-		handler.time_since_dump = gpstime.GpsSecondsFromPyUTC( handler.stop )
-		handler.write_triggers( filename = "gstlal_triggers_%d.xml" % handler.stop )
+		handler.time_since_dump = handler.stop 
+		dur = handler.stop - handler.time_since_dump
+		#print handler.time_since_dump, dur
+		handler.write_triggers( filename = "%s_%s_triggers_%d_%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur), flush = True )
 
 # TODO: Update the file every couple of seconds.
 """
@@ -406,6 +449,7 @@ parser.add_option("-D", "--data-source", dest="data_source", action="store", hel
 parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Display the time frequency map as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. Otherwise, or if the \"image\" argument is passed, the output will be streamed to an image file. In this case, the output file name can be indicated by \"image=filename\".")
 parser.add_option("-u", "--unicorns", dest="unicorns", action="store", help="Reveal hidden unicorns in data. The argument to this option determines how strong said unicorns are.", default=None)
 parser.add_option("-s", "--gps-start", dest="gps_start", action="store", type="float", help="Seek to gps time before beginning analysis.", default=None)
+parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_false", help="Don't record triggers.", default=False)
 
 (options, args) = parser.parse_args()
 
@@ -448,9 +492,12 @@ if( options.unicorns ):
 # =============================================================================
 #
 
+# We need a pipeline and pipeline handler instance to configure
 pipeline = gst.Pipeline( "gstlal_excesspower" )
 mainloop = gobject.MainLoop()
 handler = EPHandler(mainloop, pipeline)
+
+handler.output = not options.disable_triggers
 
 if( not options.infile ):
 	print >>sys.stderr, "No initialization file specified. Default values will be used."
@@ -470,18 +517,26 @@ else:
 	handler.outfile = cfg.get( "triggering", "output-file" )
 	handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
 
+	# If a specific (trigger) time is of interest, specify its GPS here
+	# TODO: Read from sngl_inspirals and sngl_bursts
+	trigger_begin, trigger_end = None, None
+	if( cfg.has_option( "triggering", "trig_time_start" ) ):
+		trigger_begin = cfg.getfloat( "triggering", "trig_time_start" )
+	if( cfg.has_option( "triggering", "trig_time_end" ) ):
+		trigger_end = cfg.getfloat( "triggering", "trig_time_end" )
+	if( trigger_begin and trigger_end ):
+		handler.set_trigger_time_and_action( segment( trigger_begin, trigger_end ) )
+
 	# Instruments and channels
 	handler.inst = cfg.get( "instrument", "detector" )
 	handler.channel = cfg.get( "instrument", "channel" )
 	gwflocation = cfg.get( "instrument", "location" )
 
-	#inj_loc = "injections/burst_injections.xml"
-	#inj_loc = "injections/sg.xml"
-	#inj_loc = "injections/sc.xml"
 	inj_loc = cfg.get( "injections", "xml-location" )
 	if( not os.path.isfile( inj_loc ) ):
 		print >>sys.stderr, "Injection file not found, disabling option."
 		inj_loc = None
+
 
 base_band = handler.base_band
 
@@ -525,6 +580,8 @@ elif( data_source == "lldata" ):
 		frame_segments = None, 
 		verbose = True
 	)
+	# FIXME: This is a guess. Not a terrible one, but still inaccurate
+	handler.time_since_dump = gpstime.GpsSecondsFromPyUTC( time.time() )
 elif( data_source == "gwffile" ):
 	head = mkframesrc( pipeline, 
 		gwflocation, 
@@ -539,6 +596,11 @@ elif( data_source == "gwffile" ):
 	print >>sys.stderr, "Warning, inferring total buffer length from cache."
 	print >>sys.stderr, "Buffers %f" % int(duration)
 	head.set_property( "num-buffers", int(duration) )
+
+	# FIXME: Make this an option
+	if( handler.inst == "V1" ): sieve = "V"
+	else: sieve = handler.inst
+	head.set_property( "cache-dsc-regex", sieve )
 else:
 	print >>sys.stderr, "Data source %s not recognized. Check the valid options in the help message."
 	sys.exit(-1)
@@ -633,12 +695,6 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		head = postmmtee = mktee( pipeline, mkqueue( pipeline, head ) )
 		mknxydumpsink( pipeline, postmmtee, "postmatmix_res_%d.txt" % res_level )
 
-	# TODO: Make this into an option
-	# TODO: This should be moved to just before the trigger generator
-	#import ep_visualization as vis
-	#if( res_level == 0 ):
-		#vis.channelgram( pipeline, postmmtee )
-
 	# TODO: Add this in when it becomes available
 	#head = mkaudioundersample( pipeline, head )
 	head = mkgeneric( pipeline, head, "lal_audioundersample" )
@@ -690,10 +746,12 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		ep.build_fir_sq_adder( ndof )
 	)
 	"""
+
+	# TODO: Audio
 	if( options.stream_tfmap == "video" ):
-		image_filename = handler.inst + "_tfmap.ogg"
+		image_filename = handler.inst + "_tfmap_%d.ogg"
 		if( len(options.stream_tfmap.split("=")) == 2 ):
-			image_filename = options.stream_tfmap.split("=")[1] + ".ogg"
+			image_filename = options.stream_tfmap.split("=")[1] + "_%d.ogg"
 		print >>sys.stderr, "Streaming TF maps to %s\n" % image_filename
 		head = chtee = mktee( pipeline, head )
 		head = mkgeneric( pipeline, head, "pow" )
@@ -704,10 +762,11 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		    z_min = 0,
 		    z_max = 10,
 			z_label = "SNR",
+		# TODO: Restore this when it becomes available again
 			#y_autoscale = False,
 		    #y_min = handler.flow,
 		    #y_max = handler.fhigh,
-			y_label = "frequency (Hz)",
+			y_label = "channel number",
 			x_label = "time (s)",
 		    colormap = "jet",
 		    history = gst.SECOND*4
@@ -715,10 +774,14 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		head = mkcapsfilter( pipeline, head, "video/x-raw-rgb,framerate=5/1" )
 		head = mkcolorspace( pipeline, head )
 		head = mkcapsfilter( pipeline, head, "video/x-raw-yuv,framerate=5/1" )
+		head = mkprogressreport( pipeline, head, "video sink" )
 		head = mkqueue( pipeline, head )
 		#mkgeneric( pipeline, head, "glimagesink", sync = False, async = False )
 		head = mkoggmux( pipeline, mktheoraenc( pipeline, head ) )
-		mkfilesink( pipeline, head, "test.ogg" )
+		#mkfilesink( pipeline, head, image_filename )
+		# TODO: Explore using different "next file" mechanisms
+		mkgeneric( pipeline, head, "multifilesink", 
+				 next_file = 2, location = image_filename, sync = False, async = False )
 		head = chtee
 	elif( options.stream_tfmap != None ):
 		image_filename = handler.inst + "_tfmap_%d.png"
@@ -756,6 +819,9 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 				(res_level, ndof) 
 		)
 
+	head = mkgeneric( pipeline, head, "pow" )
+	head.set_property( "exponent", 0.5 )
+
 	# Trigger generator
 	head = mkbursttriggergen( pipeline, head, 1, 
 		bank = handler.build_filter_xml( res_level )
@@ -776,6 +842,8 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 			"Trigger generator resolution level %d, duration %d" % 
 				(res_level, ndof) 
 		)
+
+# TODO: combine trigger streams from various levels
 
 # TODO: This will have to be linked to multiple outgoing streams
 appsink = mkappsink(pipeline, mkqueue(pipeline, head))

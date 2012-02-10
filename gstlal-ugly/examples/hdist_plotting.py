@@ -4,6 +4,7 @@ from __future__ import division
 
 __author__ = "Britta Daudert <britta.daudert@ligo.org>, Nickolas Fotopoulos <nickolas.fotopoulos@ligo.org>"
 
+import threading as thrd
 import bisect
 import signal
 import shutil
@@ -34,6 +35,8 @@ from gstlal.pipeutil import mkelem
 from gstlal import pipeio
 from pylal import lalconstants as lc
 from pylal import date
+
+matplotlib.rc("font", family="serif", size=12)
 
 #
 # =============================================================================
@@ -92,9 +95,12 @@ def parse_args():
         default="H1,H2,L1,V1", metavar="IFOS",help="Comma-separated list of ifos")
     parser.add_option("--history-files", metavar="FNAME", default="", help="load history from comma-separated list of .npz files")
     parser.add_option("--figure-path", metavar="FNAME", help="file to which to save plots")
+    parser.add_option("--primary-ifo",\
+        default="H1", metavar="IFO", help="ifo for which to keep 7 day history")
+    parser.add_option("-d","--drop-buffers",type="int",\
+            default=10,metavar="N",help="Drop first N buffers (whitener settling time)")   
+        
     # TODO: Set timezone that defines midnight for the hour computation
-    # TODO: Need to add some way to specify the history length per IFO
-    # TODO: Drop first N buffers (whitener settling time); default to 8 or 10?
 
     (opts,args) = parser.parse_args()
 
@@ -137,11 +143,11 @@ def timestamp2hour(timestamp):
     delta = (dt_obj - dt_obj.replace(hour=0, minute=0, second=0, microsecond=0))
     return (delta.microseconds + (delta.seconds + delta.days * 24 * 3600) * 1e6) / 1e6 / 3600
 
-def atomic_print_figure(fig, ifo, dest):
+def atomic_print_figure(fig, dest):
     """
     Multiple threads are writing files. Protect them by making the final plot update atomic.
     """
-    tf = tempfile.NamedTemporaryFile(prefix="tmp_hdist_%s" % ifo, suffix=".png",
+    tf = tempfile.NamedTemporaryFile(prefix="tmp_hdist", suffix=".png",
         delete=False)  # do first write to scratch space, as NFS sometimes interferes
     fig.canvas.print_png(tf.file)
     tf.close()
@@ -152,85 +158,126 @@ def atomic_print_figure(fig, ifo, dest):
     umsk = os.umask(0777)
     os.umask(umsk)
     os.chmod(tf.name, 0666 & ~umsk)
-    hidden_dest = ("/.%s." % ifo).join(os.path.split(dest))  # same volume as dest, but hidden
+    hidden_dest = "/.".join(os.path.split(dest))  # same volume as dest, but hidden
     shutil.move(tf.name, hidden_dest)  # leaves target in bad state during transfer
     os.rename(hidden_dest, dest)  # atomic operation on same volume
 
-def signal_handler(signal, frame, pipeline):
+def signal_handler(signal,frame):
     print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" \
      % (signal,)
     bus = pipeline.get_bus()
     bus.post(gst.message_new_eos(pipeline))
+    print "Exiting with Signal %s" % signal
+    sys.exit(1)
 
-def make_pipline(ifos, fig, lines, times, h_dist):
-    plt.ion()
-    def generate_update_callback(opts, ifo, deltaF):
-        ifo_times = times[ifo]
-        ifo_h_dist = h_dist[ifo]
-        ifo_lines = lines[ifo]
-        now_line = lines["now"]
+def update_plot(lock, ifos, figure_path, times, h_dist):
+    # os.umask() gets and sets at the same time, so we have to set it
+    # back after # we know what it is
+    umsk = os.umask(0777)
+    os.umask(umsk)
 
-        def update(elem):
+    now_line = lines["now"]    
+    while True:
+        time.sleep(10)
+
+        #make sure data is there to avoid out of index error
+        with lock:
+            if not any(len(times[ifo]) for ifo in ifos):    
+                continue
+            t = timestamp2hour(max(np.array(times[ifo])[-1] for ifo in ifos))
+
+        print("Updating plots!")
+                
+        now_line[0].set_data([t, t], [0, 10000])  # hopefully 10 Gpc is safe
+
+        for ifo in ifos:
+            with lock:
+                tmp_ifo_times = np.array(times[ifo])  # FIXME: can't slice deques! Do something smarter.
+                tmp_h_dist = np.array(h_dist[ifo])  # FIXME: can't slice deques! Do something smarter.
+
+            ts = tmp_ifo_times[-1]
+            for i, line in enumerate(lines[ifo]):  # each line is a day
+                low_ind = tmp_ifo_times.searchsorted(ts - (i + 1) * 86400 * 1e9)
+                high_ind = tmp_ifo_times.searchsorted(ts - i * 86400 * 1e9)
+                line.set_data(map(timestamp2hour, tmp_ifo_times[low_ind:high_ind]), tmp_h_dist[low_ind:high_ind])
+
+            # save data files
+            data_file = "history_%s.npz" % ifo
+            # mkstemp() ignores umask, creates all files accessible
+            # only by owner;  we should respect umask.  note that
+            tmpf_1 = "/tmp/%s_horizon_distance.npy" %ifo
+            tmpf_2 = "/tmp/%s_times.npy" %ifo
+            if os.path.exists(data_file):
+                os.chmod(data_file, 0666 & ~umsk)
+            if os.path.exists(tmpf_1):
+                os.chmod(tmpf_1, 0666 & ~umsk)
+            if os.path.exists(tmpf_2):
+                os.chmod(tmpf_2, 0666 & ~umsk)
+            np.savez(data_file, **{"%s_times" % ifo: tmp_ifo_times, "%s_horizon_distance" % ifo: tmp_h_dist})
+            shutil.move(data_file, "/home/nvf/public_html/tmp/%s_h_dist_data.npz" % ifo) 
+
+        #write and save plot
+        fig.canvas.draw()
+        atomic_print_figure(fig, figure_path)
+        
+def make_pipline(opts, fig, lines, times, h_dist, lock):
+    def generate_update_callback(lock, opts, ifo, deltaF):
+        def update_data(elem): 
             # grab PSD
             buffer = elem.get_property("last-buffer")
             psd = pipeio.array_from_audio_buffer(buffer).squeeze()
 
+            print("updating arrays with {0} timestamp {1:d}".format(ifo, buffer.timestamp))
+
             # compute horizon distance
-            hd = compute_hdist(opts.candle_mass_1, opts.candle_mass_2, 
+            hd = compute_hdist(opts.candle_mass_1, opts.candle_mass_2,
                 opts.snr, opts.rate, deltaF, opts.f_min, opts.f_max, psd)
 
             # update history
-            ifo_times.append(buffer.timestamp)  # nanoseconds
-            ifo_h_dist.append(hd) 
-
-            # update plot
-            t = timestamp2hour(buffer.timestamp)
-            tmp_ifo_times = np.array(ifo_times)  # FIXME: can't slice deques! Do something smarter.
-            tmp_h_dist = np.array(ifo_h_dist)  # FIXME: can't slice deques! Do something smarter.
-            for i, line in enumerate(ifo_lines):  # each line is a day
-                low_ind = tmp_ifo_times.searchsorted(buffer.timestamp - (i + 1) * 86400 * 1e9)
-                high_ind = tmp_ifo_times.searchsorted(buffer.timestamp - i * 86400 * 1e9)
-                line.set_data(map(timestamp2hour, tmp_ifo_times[low_ind:high_ind]), tmp_h_dist[low_ind:high_ind])
-            now_line[0].set_data([t, t], [0, 10000])  # hopefully 10 Gpc is safe
-
-            # write plot; be very paranoid about race conditions
-            fig.canvas.draw()
-            atomic_print_figure(fig, ifo, opts.figure_path)
-
-            # save history to disk
-            data_file = "history_%s.npz" % ifo
-            np.savez(data_file, **{"%s_times" % ifo: ifo_times, "%s_horizon_distance" % ifo: ifo_h_dist})
-            shutil.move(data_file, "/home/nvf/public_html/%s_h_dist_data.npz" % ifo)
-        return update
+            with lock:
+                times[ifo].append(buffer.timestamp)  # nanoseconds
+                h_dist[ifo].append(hd)
+        return update_data
 
     pipe = gst.Pipeline("NDSTest") 
   
     d_name = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
     channels = {"H1": "FAKE-STRAIN", "H2": "FAKE-STRAIN", "L1": "FAKE-STRAIN", "V1": "FAKE_h_16384Hz_4R"}
-    for ifo in ifos:
+    for ifo in opts.ifos:
         src = mkelem("gds_lvshmsrc", {'shm_name': d_name[ifo]})
         dmx = mkelem("framecpp_channeldemux", {'do_file_checksum':True, 'skip_bad_files': True})
         cnv = mkelem("audioconvert")
-        aud = mkelem("audiochebband", {'lower-frequency': 8, 'upper-frequency': 2500})
         resamp = mkelem("audioresample")
         caps_filt = mkelem("capsfilter", {'caps': gst.Caps("audio/x-raw-float, rate=2048")})
+        art = mkelem("audiorate", {"skip_to_first": True})
         appsink = mkelem("appsink", {'caps': gst.Caps("audio/x-raw-float"), 'sync': False,
         'async': False, 'emit-signals': True, 'max-buffers': 1, 'drop': True})
         whiten = mkelem("lal_whiten", {'psd-mode': 0, 'zero-pad': 0, 'fft-length': 8,
         'median-samples': 7, 'average-samples': 128})
         fakesink = mkelem("fakesink", {'sync': False, 'async': False})
         
-        pipe.add(src, dmx, cnv, aud, resamp, caps_filt, whiten, appsink, fakesink)
+        pipe.add(src, dmx, cnv, resamp, caps_filt, art, whiten, appsink, fakesink)
         gst.element_link_many(src, dmx)
         pipeparts.src_deferred_link(dmx, "%s:%s" % (ifo, channels[ifo]), cnv.get_pad("sink"))
-        gst.element_link_many(cnv, aud, resamp, caps_filt, whiten, fakesink)
+        gst.element_link_many(cnv, resamp, caps_filt, art, whiten, fakesink)
         whiten.link_pads("mean-psd", appsink,"sink")
 
         # hook updater to appsink
         deltaF = whiten.get_property("delta-f")
-        appsink.connect_after("new-buffer", generate_update_callback(opts, ifo, deltaF))
+        appsink.connect_after("new-buffer", generate_update_callback(lock, opts, ifo, deltaF))
     
     return pipe
+
+def run_pipeline(pipeline):
+    print "Setting state to PAUSED:", pipeline.set_state(gst.STATE_PAUSED)
+    print pipeline.get_state()
+    mainloop = gobject.MainLoop()
+    handler = lloidparts.LLOIDHandler(mainloop, pipeline)
+
+    print "Setting state to PLAYING:", pipeline.set_state(gst.STATE_PLAYING)
+
+    mainloop.run()
+    return
 
 #
 # =============================================================================
@@ -239,6 +286,7 @@ def make_pipline(ifos, fig, lines, times, h_dist):
 #
 # =============================================================================
 #
+
 
 opts, args = parse_args()
 
@@ -249,10 +297,10 @@ times = {}
 h_dist = {}
 lines = {}  # each IFO can have multiple traces, so this dict maps to a list of lines
 fig = plt.figure()
-ax1 = fig.add_subplot(111)
+ax1 = fig.add_axes((0.1, 0.1, 0.75, 0.88))
 
 for ifo in opts.ifos:
-    if ifo == "H1":  # FIXME: Unhardcode primary IFO
+    if ifo == opts.primary_ifo: 
         history_len = 7
     else:
         history_len = 1
@@ -278,28 +326,32 @@ vline, = ax1.plot([], [], '-', c='black', lw=0.5)
 lines["now"] = [vline]
 
 ax1.grid(True)
-ax1.legend()
+ax1.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 ax1.set_xlim((0, 24))
-ax1.set_ylim((0, 500))
+ax1.set_ylim((300, 500))
 ax1.set_xticks(range(25))
 ax1.set_xlabel('UTC hour')  # FIXME: Make relative to local time of main IFO
 ax1.set_ylabel('Horizon distance (Mpc)')
 
-pipeline = make_pipline(opts.ifos, fig, lines, times, h_dist)
+# Start interactive plotting mode
+plt.ion()
 
-print "Setting state to PAUSED:", pipeline.set_state(gst.STATE_PAUSED)
-print pipeline.get_state()
+# Initialize lock for threading
+lock = thrd.Lock()
 
-mainloop = gobject.MainLoop()
-handler = lloidparts.LLOIDHandler(mainloop, pipeline)
+#create pipeline
+pipeline = make_pipline(opts, fig, lines, times, h_dist, lock)
 
-
-print "Setting state to PLAYING:", pipeline.set_state(gst.STATE_PLAYING)
-
+#Add signals
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
-mainloop.run()
+#run threads to save data and plots
+t1 = thrd.Thread(target=run_pipeline, args=(pipeline,))
+t2 = thrd.Thread(target=update_plot, args=(lock, opts.ifos, opts.figure_path, times, h_dist))
+t1.daemon = t2.daemon = True
+t1.start()
+t2.start()
 
-
-
+while 1:
+    time.sleep(100)

@@ -69,7 +69,7 @@
 #include <gstlal_sumsquares.h>
 #include <gstlal_togglecomplex.h>
 #include <gstlal_whiten.h>
-
+#include <gstlal_shift.h>
 
 /*
  * ============================================================================
@@ -104,6 +104,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_statevector", GSTLAL_STATEVECTOR_TYPE},
 		{"lal_togglecomplex", GSTLAL_TOGGLECOMPLEX_TYPE},
 		{"lal_whiten", GSTLAL_WHITEN_TYPE},
+		{"lal_shift", GSTLAL_SHIFT_TYPE},
 		{NULL, 0},
 	};
 

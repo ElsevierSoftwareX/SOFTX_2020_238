@@ -19,5 +19,5 @@ fstart = f[0]
 psd = numpy.concatenate((numpy.ones(fstart / df) * psd[0],psd))
 
 psdseries = datatypes.real8frequencyseries.REAL8FrequencySeries(deltaF=df, data=psd, sampleUnits=lalunit.LALUnit("s strain^2"), f0=0)
-reference_psd.write_psd(file.replace(".txt",".xml.gz"), psdseries, instrument=det)
+reference_psd.write_psd(file.replace(".txt",".xml.gz"), {det: psdseries})
 

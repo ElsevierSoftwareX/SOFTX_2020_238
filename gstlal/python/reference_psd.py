@@ -27,6 +27,8 @@
 
 
 import numpy
+import scipy
+import scipy.fftpack
 from scipy import interpolate
 import sys
 import signal
@@ -48,6 +50,7 @@ from glue.ligolw import param
 from glue.ligolw import types as ligolw_types
 from pylal import datatypes as laltypes
 from pylal import series as lalseries
+from pylal import window
 
 
 from gstlal import pipeparts
@@ -149,28 +152,17 @@ def measure_psd(instrument, seekevent, detector, seg, rate, fake_data = None, on
 	return handler.psd
 
 
-def psd_instrument_dict(elem):
-	out = {}
-	for lw in elem.getElementsByTagName(u"LIGO_LW"):
-		if not lw.hasAttribute(u"Name"):
-			continue
-		if lw.getAttribute(u"Name") != u"REAL8FrequencySeries":
-			continue
-		ifo = param.get_pyvalue(lw, u"instrument")
-		out[ifo] = lalseries.parse_REAL8FrequencySeries(lw)
-	return out
-
-
 def read_psd(filename, verbose = False):
-	return psd_instrument_dict(utils.load_filename(filename, verbose = verbose))
+	return dict((param.get_pyvalue(elem, u"instrument"), lalseries.parse_REAL8FrequencySeries(elem)) for elem in utils.load_filename(filename, verbose = verbose).getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"REAL8FrequencySeries")
 
 
-def write_psd(filename, psd, instrument=None, verbose = False):
+def write_psd(filename, psddict, verbose = False):
 	xmldoc = ligolw.Document()
 	lw = xmldoc.appendChild(ligolw.LIGO_LW())
-	fs = lw.appendChild(lalseries.build_REAL8FrequencySeries(psd))
-	if instrument is not None:
-		fs.appendChild(param.new_param('instrument', ligolw_types.FromPyType[str], instrument))
+	for instrument, psd in psddict.items():
+		fs = lw.appendChild(lalseries.build_REAL8FrequencySeries(psd))
+		if instrument is not None:
+			fs.appendChild(param.from_pyvalue(u"instrument", instrument))
 	utils.write_filename(xmldoc, filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose)
 
 
@@ -181,6 +173,76 @@ def write_psd(filename, psd, instrument=None, verbose = False):
 #
 # =============================================================================
 #
+
+
+def psd_to_fir_kernel(psd):
+	"""
+	Compute a finite impulse-response filter kernel from a power
+	spectral density conforming to the LAL normalization convention,
+	such that if zero-mean unit-variance Gaussian random noise is fed
+	into an FIR filter using the kernel the filter's output will
+	possess the given PSD.  The PSD must be provided as a
+	REAL8FrequencySeries object (see
+	pylal.xlal.datatypes.real8frequencyseries).
+
+	The return value is the tuple (kernel, latency, sample rate).  The
+	kernel is a numpy array containing the filter kernel, the latency
+	is the filter latency in samples and the sample rate is in Hz.  The
+	kernel and latency can be used, for example, with gstreamer's stock
+	audiofirfilter element.
+	"""
+	#
+	# this could be relaxed with some work
+	#
+
+	assert psd.f0 == 0.0
+
+	#
+	# extract the PSD bins and determine sample rate for kernel
+	#
+
+	data = psd.data / 2
+	sample_rate = 2 * int(round(psd.f0 + len(data) * psd.deltaF))
+
+	#
+	# compute the FIR kernel.  it always has an odd number of samples
+	# and no DC offset.
+	#
+
+	data[0] = data[-1] = 0.0
+	try:
+		# FIXME:  there's a chance the normalization should be
+		# 2*(len(data)-1).  it's a small correction for typical
+		# PSDs but for extremely short FFT lengths it will matter
+		kernel = scipy.fftpack.idct(data**.5, type = 1) * sample_rate**.5 / (2 * len(data))
+	except AttributeError:
+		# scipy.fftpack is missing idct()
+		# repack data:  data[0], data[1], 0, data[2], 0, ....
+		tmp = numpy.zeros((2 * len(data) - 1,), dtype = data.dtype)
+		tmp[0] = data[0]
+		tmp[1::2] = data[1:]
+		data = tmp
+		del tmp
+		kernel = scipy.fftpack.irfft(data**.5) * sample_rate**.5
+	kernel = numpy.hstack((kernel[::-1], kernel[1:]))
+
+	#
+	# apply a Tukey window whose flat bit is 50% of the kernel
+	#
+
+	kernel *= window.XLALCreateTukeyREAL8Window(len(kernel), .5).data
+
+	#
+	# the kernel's latency
+	#
+
+	latency = (len(kernel) + 1) / 2
+
+	#
+	# done
+	#
+
+	return kernel, latency, sample_rate
 
 
 def interpolate_psd(psd, deltaF):
