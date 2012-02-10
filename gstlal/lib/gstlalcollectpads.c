@@ -461,7 +461,7 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 		 * here because we would've seen this already up above */
 		g_assert(buf != NULL);
 		/* it should be impossible to not get what we asked for */
-		g_assert(GST_BUFFER_SIZE(buf) == units * data->unit_size);
+		g_assert_cmpuint(GST_BUFFER_SIZE(buf), ==, units * data->unit_size);
 	}
 	g_assert(GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP) == is_gap);
 
