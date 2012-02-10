@@ -93,7 +93,8 @@ head = lloidparts.mkLLOIDsrc(pipeline, head, [options.sample_rate], options.inst
 head = pipeparts.mktaginject(pipeline, head[options.sample_rate], "units=strain")
 
 # Recolor kernel
-latency = int(1.0 / rpsd.deltaF * options.sample_rate / 2.0)
+assert rpsd.f0 == 0
+latency = int(round(1.0 / rpsd.deltaF * sr / 2.0))
 fir_matrix = numpy.zeros((1, 2 * latency-1), 'd64') 
 freq_data = 1.0 / rpsd.data[:latency]**.5 
 freq_data[0] = 0.0
