@@ -74,7 +74,9 @@ def mkgeneric(pipeline, src, elem_type_name, **properties):
 	for name, value in properties.items():
 		elem.set_property(name.replace("_", "-"), value)
 	pipeline.add(elem)
-	if src is not None:
+	if isinstance(src, gst.Pad):
+		src.get_parent_element().link_pads(src, elem, None)
+	elif src is not None:
 		src.link(elem)
 	return elem
 
