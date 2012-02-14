@@ -601,6 +601,19 @@ def mkitac(pipeline, src, n, bank, autocorrelation_matrix = None, snr_thresh = 0
 	return elem
 
 
+def mklhocoherentnull(pipeline, H1src, H2src, H1_impulse, H1_latency, H2_impulse, H2_latency, srate):
+	coherent_null_bin = gst.element_factory_make("lal_lho_coherent_null")
+	coherent_null_bin.set_property("block-stride", srate)
+	coherent_null_bin.set_property("H1-impulse", H1_impulse)
+	coherent_null_bin.set_property("H2-impulse", H2_impulse)
+	coherent_null_bin.set_property("H1-latency", H1_latency)
+	coherent_null_bin.set_property("H2-latency", H2_latency)
+	pipeline.add(coherent_null_bin)
+	H1src.link_pads("src", coherent_null_bin, "H1sink")
+	H2src.link_pads("src", coherent_null_bin, "H2sink")
+	return coherent_null_bin
+
+
 def mkbursttriggergen(pipeline, src, n, bank):
 	return mkgeneric(pipeline, src, "lal_bursttriggergen", n = n, bank_filename = bank)
 

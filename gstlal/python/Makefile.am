@@ -13,6 +13,7 @@ pkgpythondir = $(pkgpyexecdir)
 pkgpython_PYTHON = \
 	__init__.py \
 	bottle.py \
+	coherent_null.py \
 	elements.py \
 	lloidparts.py \
 	matplotlibhelper.py \
