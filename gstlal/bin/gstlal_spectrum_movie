@@ -126,7 +126,7 @@ def build_pipeline(pipeline, head, sample_rate, psd_fft_length, psd_zero_pad_len
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % sample_rate)
 	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = psd_zero_pad_length, average_samples = int(round(average_length / (psd_fft_length / 2) - 1)), median_samples = median_samples)
 	pipeparts.mkfakesink(pipeline, head)
-	head = pipeparts.mkqueue(pipeline, head, pad_name = "mean-psd", max_size_buffers = 4)
+	head = pipeparts.mkqueue(pipeline, head.get_pad("mean-psd"), max_size_buffers = 4)
 
 	head = pipeparts.mkspectrumplot(pipeline, head, f_min = f_min, f_max = f_max)
 	head = pipeparts.mkcapsfilter(pipeline, head, "video/x-raw-rgb, width=768, height=320")

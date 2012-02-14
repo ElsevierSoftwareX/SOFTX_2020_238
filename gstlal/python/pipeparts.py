@@ -107,7 +107,7 @@ def mkchannelgram(pipeline, src, **properties):
 
 
 def mkspectrumplot(pipeline, src, **properties):
-	return mkgeneric(pipeline, src, "lal_spectrumplot", **properties):
+	return mkgeneric(pipeline, src, "lal_spectrumplot", **properties)
 
 
 def mkhistogram(pipeline, src):
@@ -288,42 +288,20 @@ def mkaudioundersample(pipeline, src):
 	return mkgeneric(pipeline, src, "lal_audioundersample")
 
 
-def mkresample(pipeline, src, pad_name = None, **properties):
-	elem = gst.element_factory_make("audioresample")
-	for name, value in properties.items():
-		elem.set_property(name.replace("_", "-"), value)
-	pipeline.add(elem)
-	if pad_name is None:
-		src.link(elem)
-	else:
-		src.link_pads(pad_name, elem, "sink")
-	return elem
+def mkresample(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "audioresample", **properties)
 
 
 def mkwhiten(pipeline, src, psd_mode = 0, zero_pad = 0, fft_length = 8, average_samples = 64, median_samples = 7, **kwargs):
 	return mkgeneric(pipeline, src, "lal_whiten", psd_mode = psd_mode, zero_pad = zero_pad, fft_length = fft_length, average_samples = average_samples, median_samples = median_samples, **kwargs)
 
 
-def mktee(pipeline, src, pad_name = None):
-	elem = gst.element_factory_make("tee")
-	pipeline.add(elem)
-	if pad_name is None:
-		src.link(elem)
-	else:
-		src.link_pads(pad_name, elem, "sink")
-	return elem
+def mktee(pipeline, src):
+	return mkgeneric(pipeline, src, "tee")
 
 
-def mkqueue(pipeline, src, pad_name = None, **properties):
-	elem = gst.element_factory_make("queue")
-	for name, value in properties.items():
-		elem.set_property(name.replace("_", "-"), value)
-	pipeline.add(elem)
-	if pad_name is None:
-		src.link(elem)
-	else:
-		src.link_pads(pad_name, elem, "sink")
-	return elem
+def mkqueue(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "queue", **properties)
 
 
 def mkdrop(pipeline, src, drop_samples = 0):
@@ -410,15 +388,8 @@ def mkautochisq(pipeline, src, autocorrelation_matrix = None, mask_matrix = None
 	return elem
 
 
-def mkfakesink(pipeline, src, pad = None):
-	elem = gst.element_factory_make("fakesink")
-	elem.set_property("sync", False)
-	elem.set_property("async", False)
-	pipeline.add(elem)
-	if pad is not None:
-		src.link_pads(pad, elem, "sink")
-	else:
-		src.link(elem)
+def mkfakesink(pipeline, src):
+	mkgeneric(pipeline, src, "fakesink", sync = False, async = False)
 
 
 def mkfilesink(pipeline, src, filename):
@@ -504,16 +475,8 @@ def mkaudioconvert(pipeline, src, caps_string = None):
 	return elem
 
 
-def mkaudiorate(pipeline, src, pad_name = None, **properties):
-	elem = gst.element_factory_make("audiorate")
-	pipeline.add(elem)
-	for name, value in properties.items():
-		elem.set_property(name, value)
-	if pad_name is None:
-		src.link(elem)
-	else:
-		src.link_pads(pad_name, elem, "sink")
-	return elem
+def mkaudiorate(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "audiorate", **properties)
 
 
 def mkflacenc(pipeline, src, quality = 0, **properties):
@@ -552,21 +515,8 @@ def mkplaybacksink(pipeline, src, amplification = 0.1):
 	gst.element_link_many(src, *elems)
 
 
-def mkappsink(pipeline, src, pad_name = None, max_buffers = 1, drop = False, **properties):
-	elem = gst.element_factory_make("appsink")
-	elem.set_property("sync", False)
-	elem.set_property("async", False)
-	elem.set_property("emit-signals", True)
-	elem.set_property("max-buffers", max_buffers)
-	elem.set_property("drop", drop)
-	for name, value in properties.items():
-		elem.set_property(name, value)
-	pipeline.add(elem)
-	if pad_name is not None:
-		src.link_pads(pad_name, elem, "sink")
-	elif src is not None:
-		src.link(elem)
-	return elem
+def mkappsink(pipeline, src, max_buffers = 1, drop = False, **properties):
+	return mkgeneric(pipeline, src, "appsink", sync = False, async = False, emit_signals = True, max_buffers = max_buffers, drop = drop, **properties)
 
 
 class AppSync(object):
