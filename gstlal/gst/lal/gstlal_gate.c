@@ -96,9 +96,12 @@ GST_DEBUG_CATEGORY(gstlal_gate_debug);
 
 static GstClockTime timestamp_add_offset(GstClockTime t, gint64 offset, gint rate)
 {
-	if(offset >= 0)
-		return t + gst_util_uint64_scale_int_round(offset, GST_SECOND, rate);
-	return t - gst_util_uint64_scale_int_round(-offset, GST_SECOND, rate);
+	if(offset < 0) {
+		GstClockTime dt = gst_util_uint64_scale_int_round(-offset, GST_SECOND, rate);
+		/* don't allow wrap-around */
+		return t < dt ? 0 : t - dt;
+	}
+	return t + gst_util_uint64_scale_int_round(offset, GST_SECOND, rate);
 }
 
 
