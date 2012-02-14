@@ -1,0 +1,43 @@
+#!/usr/bin/python
+
+import sys
+from pylal import rate
+import matplotlib
+matplotlib.use('Agg')
+import pylab
+import numpy
+from scipy.stats import chi2
+from glue.ligolw import utils
+from pylal import ligolw_burca_tailor
+import copy
+import itertools
+from gstlal import inspiral
+
+coincparamsdistributions, likelihood_seglists = inspiral.DistributionsStats.from_filenames([sys.argv[1]], verbose = True)
+coincparamsdistributions.finish()
+
+counts = coincparamsdistributions.smoothed_distributions.background_rates
+inj = coincparamsdistributions.smoothed_distributions.injection_rates
+
+likely = copy.deepcopy(inj)
+for i, ifo in enumerate(['H1','H2','L1', 'V1']):
+	likely[ifo+"_snr_chi"].array /= counts[ifo+"_snr_chi"].array
+	for name, obj in (("background", counts), ("injections", inj), ("likelihood", likely)):
+		pylab.clf()
+		pylab.figure()
+		H1 = obj[ifo+"_snr_chi"].array
+		snr = obj[ifo+"_snr_chi"].bins[0].centres()[1:-1]
+		chi = obj[ifo+"_snr_chi"].bins[1].centres()[1:-1]
+		chi[0] = 0 # not inf
+		ax = pylab.subplot(111)
+		pylab.pcolormesh(snr, chi, numpy.log10(H1.T +1)[1:-1,1:-1])
+		ax.set_yscale('log')
+		ax.set_xscale('log')
+		pylab.colorbar()
+		pylab.xlabel('SNR')
+		pylab.ylabel('reduced chi^2 / SNR^2')
+		pylab.ylim([.005, .5])
+		pylab.xlim([4,100])
+		pylab.title('log base 10 (number + 1)')
+		pylab.grid()
+		pylab.savefig('%s_%s_snrchi.png' % (ifo, name),dpi=300)
