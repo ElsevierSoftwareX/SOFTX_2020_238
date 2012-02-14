@@ -32,8 +32,8 @@ function test_gate_1() {
 
 function test_gate_2() {
 	gst-launch \
-		lal_gate name=gate threshold=0.7 leaky=true \
-		! fakesink \
+		lal_gate name=gate threshold=0.7 leaky=true attack-length=100 hold-length=100 \
+		! progressreport do-query=true ! fakesink sync=false async=false \
 		audiotestsrc wave=9 samplesperbuffer=16 \
 		! audio/x-raw-float, channels=1, width=64, rate=6 \
 		! audioresample \
