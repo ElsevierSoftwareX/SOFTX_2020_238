@@ -347,7 +347,8 @@ static void base_init(gpointer class)
 			GST_PAD_SRC,
 			GST_PAD_ALWAYS,
 			gst_caps_from_string(
-				"application/x-igwd-frame"
+				"application/x-igwd-frame, " \
+				"parsed = (boolean) true"
 			)
 		)
 	);
