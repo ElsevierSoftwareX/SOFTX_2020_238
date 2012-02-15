@@ -51,7 +51,7 @@
 
 #include <gstlal/gstlal_tags.h>
 #include <framecpp_channeldemux.h>
-#include <framecpp_igwdparse.h>
+/*#include <framecpp_igwdparse.h>*/
 
 
 /*
@@ -146,7 +146,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		GType type;
 	} *element, elements[] = {
 		{"framecpp_channeldemux", GST_RANK_SECONDARY, FRAMECPP_CHANNELDEMUX_TYPE},
-		{"framecpp_igwdparse", GST_RANK_SECONDARY, FRAMECPP_IGWDPARSE_TYPE},
+		/*{"framecpp_igwdparse", GST_RANK_SECONDARY, FRAMECPP_IGWDPARSE_TYPE},*/
 		{NULL, 0, 0},
 	};
 
