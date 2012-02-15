@@ -43,6 +43,7 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstbaseparse.h>
+#include <gst/base/gstbytereader.h>
 
 
 /*
@@ -68,6 +69,9 @@ GST_DEBUG_CATEGORY(framecpp_igwdparse_debug);
 
 #define GST_CAT_DEFAULT framecpp_igwdparse_debug
 
+/* number of bytes in Table 5 in LIGO-T970130 */
+#define SIZEOF_FRHEADER 40
+
 
 /*
  * ============================================================================
@@ -78,34 +82,11 @@ GST_DEBUG_CATEGORY(framecpp_igwdparse_debug);
  */
 
 
-static guint64 get_int_8u_64le(const void *data)
-{
-	return GST_READ_UINT64_LE(data);
-}
-
-
-static guint64 get_int_8u_64be(const void *data)
-{
-	return GST_READ_UINT64_BE(data);
-}
-
-
-static guint32 get_int_2u_16le(const void *data)
-{
-	return GST_READ_UINT16_LE(data);
-}
-
-
-static guint32 get_int_2u_16be(const void *data)
-{
-	return GST_READ_UINT16_BE(data);
-}
-
-
 static void parse_table_6(GSTFrameCPPIGWDParse *element, const guint8 *data, guint64 *length, guint16 *klass)
 {
-	*length = element->get_int_8u(data);
-	*klass = element->get_int_2u(data + 8);
+	GstByteReader reader = GST_BYTE_READER_INIT(data, element->sizeof_table_6);
+	*length = element->get_int_8u(&reader);
+	*klass = element->get_int_2u(&reader);
 }
 
 
@@ -126,10 +107,8 @@ static void parse_table_6(GSTFrameCPPIGWDParse *element, const guint8 *data, gui
 static gboolean start(GstBaseParse *parse)
 {
 	GSTFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(parse);
-	/* number of bytes in Table 5 in LIGO-T970130 */
-	const guint sizeof_frheader = 40;
 
-	gst_base_parse_set_min_frame_size(parse, sizeof_frheader);
+	gst_base_parse_set_min_frame_size(parse, SIZEOF_FRHEADER);
 	gst_base_parse_set_syncable(parse, FALSE);
 	gst_base_parse_set_has_timing_info(parse, FALSE);
 
@@ -190,22 +169,22 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 
 	if(element->offset == 0) {
 		/*
-		 * parse header
+		 * parse header.  see Table 5 of LIGO-T970130
 		 */
 
-		g_assert_cmpuint(GST_BUFFER_SIZE(frame->buffer), ==, 40);
+		g_assert_cmpuint(GST_BUFFER_SIZE(frame->buffer), ==, SIZEOF_FRHEADER);
 
 		/*
-		 * how to read INT_4 like things
+		 * how to read INT_2 like things
 		 */
 
 		g_assert_cmpuint(*(data + 7), ==, 2);
 		switch(element->endianness) {
 		case G_LITTLE_ENDIAN:
-			element->get_int_2u = get_int_2u_16le;
+			element->get_int_2u = gst_byte_reader_get_uint16_le_unchecked;
 			break;
 		case G_BIG_ENDIAN:
-			element->get_int_2u = get_int_2u_16be;
+			element->get_int_2u = gst_byte_reader_get_uint16_be_unchecked;
 			break;
 		default:
 			g_assert_not_reached();
@@ -218,10 +197,10 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 		g_assert_cmpuint(*(data + 9), ==, 8);
 		switch(element->endianness) {
 		case G_LITTLE_ENDIAN:
-			element->get_int_8u = get_int_8u_64le;
+			element->get_int_8u = gst_byte_reader_get_uint64_le_unchecked;
 			break;
 		case G_BIG_ENDIAN:
-			element->get_int_8u = get_int_8u_64be;
+			element->get_int_8u = gst_byte_reader_get_uint64_be_unchecked;
 			break;
 		default:
 			g_assert_not_reached();
@@ -237,7 +216,7 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 		 * request the next structure
 		 */
 
-		element->offset = GST_BUFFER_SIZE(frame->buffer);
+		element->offset = SIZEOF_FRHEADER;
 		*framesize = element->offset + element->sizeof_table_6;
 	} else {
 		const guint16 eof_klass = 0x15; /* found in an S5 frame file */
@@ -256,7 +235,7 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 
 		if(klass == eof_klass) {
 			*framesize = element->offset + length;
-			if(element->offset + length <= GST_BUFFER_SIZE(frame->buffer)) {
+			if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
 				element->offset = 0;
 				file_is_complete = TRUE;
 				GST_DEBUG_OBJECT(element, "found %u byte frame file", *framesize);
