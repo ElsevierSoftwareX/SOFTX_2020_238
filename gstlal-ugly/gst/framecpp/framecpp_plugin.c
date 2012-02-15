@@ -93,7 +93,7 @@ static void typefind(GstTypeFind *find, gpointer data)
 	else {
 		GstCaps *caps = gst_caps_new_simple(
 			"application/x-igwd-frame",
-			"parsed", G_TYPE_BOOLEAN, FALSE,
+			"framed", G_TYPE_BOOLEAN, FALSE,
 			NULL
 		);
 		/* bytes 12--15 store 0x1234 */
@@ -123,7 +123,7 @@ static gboolean register_typefind(GstPlugin *plugin)
 		gst_caps_from_string(
 			"application/x-igwd-frame, " \
 			"endianness = (int) {1234, 4321}, " \
-			"parsed = (boolean) false"
+			"framed = (boolean) false"
 		),
 		NULL,
 		NULL

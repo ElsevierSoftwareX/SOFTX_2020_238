@@ -292,7 +292,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_STATIC_CAPS(
 		"application/x-igwd-frame, " \
 		"endianness = (int) {1234, 4321}, " \
-		"parsed = (boolean) false"
+		"framed = (boolean) false"
 	)
 );
 
@@ -304,7 +304,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_STATIC_CAPS(
 		"application/x-igwd-frame, " \
 		"endianness = (int) {1234, 4321}, " \
-		"parsed = (boolean) true"
+		"framed = (boolean) true"
 	)
 );
 

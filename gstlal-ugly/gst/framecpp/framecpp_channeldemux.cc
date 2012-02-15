@@ -920,7 +920,7 @@ static void base_init(gpointer klass)
 			GST_PAD_ALWAYS,
 			gst_caps_new_simple(
 				"application/x-igwd-frame",
-				"parsed", G_TYPE_BOOLEAN, TRUE,
+				"framed", G_TYPE_BOOLEAN, TRUE,
 				NULL
 			)
 		)
