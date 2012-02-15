@@ -489,10 +489,21 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, const char *name, Ge
  */
 
 
+static void forward_sink_event(GstPad *pad, GstEvent *event)
+{
+	if(gst_pad_is_linked(pad)) {
+		gst_event_ref(event);
+		gst_pad_push_event(pad, event);
+	}
+	gst_object_unref(pad);
+}
+
+
 static gboolean sink_event(GstPad *pad, GstEvent *event)
 {
 	GSTFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
-	gboolean result = TRUE;
+	GstIterator *iter;
+	gboolean success = TRUE;
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT:
@@ -511,8 +522,12 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		break;
 	}
 
+	iter = gst_element_iterate_src_pads(GST_ELEMENT(element));
+	gst_iterator_foreach(iter, (GFunc) forward_sink_event, event);
+	gst_iterator_free(iter);
+
 	gst_object_unref(element);
-	return result;
+	return success;
 }
 
 
