@@ -521,6 +521,11 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		element->last_new_segment = event;
 		break;
 
+	case GST_EVENT_EOS:
+		gst_event_unref(element->last_new_segment);
+		element->last_new_segment = NULL;
+		break;
+
 	default:
 		break;
 	}
