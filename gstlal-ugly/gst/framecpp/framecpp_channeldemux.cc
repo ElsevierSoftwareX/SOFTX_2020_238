@@ -489,8 +489,10 @@ static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, const char *name, Ge
  */
 
 
-static void forward_sink_event(GstPad *pad, GstEvent *event)
+static void forward_sink_event(gpointer object, gpointer data)
 {
+	GstPad *pad = GST_PAD(object);
+	GstEvent *event = GST_EVENT(data);
 	if(gst_pad_is_linked(pad)) {
 		gst_event_ref(event);
 		gst_pad_push_event(pad, event);
@@ -523,9 +525,10 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 	}
 
 	iter = gst_element_iterate_src_pads(GST_ELEMENT(element));
-	gst_iterator_foreach(iter, (GFunc) forward_sink_event, event);
+	gst_iterator_foreach(iter, forward_sink_event, event);
 	gst_iterator_free(iter);
 
+	gst_event_unref(event);
 	gst_object_unref(element);
 	return success;
 }
