@@ -133,24 +133,6 @@ struct pad_state {
 };
 
 
-static guint pad_state_hash_func(gconstpointer key)
-{
-	return (uintptr_t) key;
-}
-
-
-static gboolean pad_state_key_equal_func(gconstpointer a, gconstpointer b)
-{
-	return a == b;
-}
-
-
-static struct pad_state *get_src_pad_state(GSTFrameCPPChannelDemux *element, const GstPad *pad)
-{
-	return (struct pad_state *) g_hash_table_lookup(element->pad_state, pad);
-}
-
-
 /*
  * split a string of the form "INSTRUMENT:CHANNEL" into two strings
  * containing the instrument and channel parts separately.  the pointers
@@ -221,7 +203,7 @@ done:
 static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
 {
 	GSTFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
-	struct pad_state *pad_state = get_src_pad_state(element, pad);
+	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
 
 	/*
 	 * reset pad's state
@@ -281,7 +263,13 @@ static GstPad *get_src_pad(GSTFrameCPPChannelDemux *element, const char *name)
 		g_signal_connect(srcpad, "linked", (GCallback) src_pad_linked, NULL);
 
 		/*
-		 * create & initialize pad state
+		 * create & initialize pad state.  FIXME:  this memory is
+		 * leaked.  something could be attached to the pad's
+		 * destroy notify signal to free the memory, but I  believe
+		 * in the long run we're going to end up defining a custom
+		 * subclass of GstPad for this element, and then these
+		 * things can be moved into the instance structure.  it's
+		 * not worth worrying about it for now.
 		 */
 
 		pad_state = g_new(struct pad_state, 1);
@@ -289,7 +277,7 @@ static GstPad *get_src_pad(GSTFrameCPPChannelDemux *element, const char *name)
 		pad_state->need_discont = TRUE;
 		pad_state->next_timestamp = GST_CLOCK_TIME_NONE;
 		pad_state->next_out_offset = 0;
-		g_hash_table_insert(element->pad_state, srcpad, pad_state);
+		gst_pad_set_element_private(srcpad, pad_state);
 
 		/*
 		 * add pad to element.  must ref it because _add_pad()
@@ -432,18 +420,11 @@ static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > ve
  */
 
 
-static GstFlowReturn frvect_to_buffer_and_push(GSTFrameCPPChannelDemux *element, GstPad *pad, const char *name, General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp)
+static GstFlowReturn frvect_to_buffer_and_push(GstPad *pad, const char *name, General::SharedPtr < FrameCPP::FrVect > vect, GstClockTime timestamp)
 {
-	struct pad_state *pad_state;
+	struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
 	GstBuffer *buffer;
 	GstFlowReturn result = GST_FLOW_OK;
-
-	/*
-	 * retrieve source pad state
-	 */
-
-	pad_state = get_src_pad_state(element, pad);
-	g_assert(pad_state != NULL);
 
 	/*
 	 * convert FrVect to GstBuffer
@@ -461,7 +442,7 @@ static GstFlowReturn frvect_to_buffer_and_push(GSTFrameCPPChannelDemux *element,
 	if(gst_caps_is_equal(GST_BUFFER_CAPS(buffer), GST_PAD_CAPS(pad)))
 		gst_buffer_set_caps(buffer, GST_PAD_CAPS(pad));
 	else
-		GST_LOG_OBJECT(element, "new caps for %s: %P", name, GST_BUFFER_CAPS(buffer));
+		GST_LOG_OBJECT(pad, "new caps for %s: %P", name, GST_BUFFER_CAPS(buffer));
 
 	/*
 	 * check for disconts
@@ -483,7 +464,7 @@ static GstFlowReturn frvect_to_buffer_and_push(GSTFrameCPPChannelDemux *element,
 	 * push buffer downstream
 	 */
 
-	GST_LOG_OBJECT(element, "pushing buffer on %s spanning %" GST_BUFFER_BOUNDARIES_FORMAT, name, GST_BUFFER_BOUNDARIES_ARGS(buffer));
+	GST_LOG_OBJECT(pad, "pushing buffer on %s spanning %" GST_BUFFER_BOUNDARIES_FORMAT, name, GST_BUFFER_BOUNDARIES_ARGS(buffer));
 	result = gst_pad_push(pad, buffer);
 
 	/*
@@ -633,7 +614,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					 * recording state for next time.
 					 */
 
-					result = frvect_to_buffer_and_push(element, srcpad, name, vects[0], timestamp);
+					result = frvect_to_buffer_and_push(srcpad, name, vects[0], timestamp);
 					gst_object_unref(srcpad);
 					srcpad = NULL;
 					if(result != GST_FLOW_OK) {
@@ -674,7 +655,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				 * and recording state for next time.
 				 */
 
-				result = frvect_to_buffer_and_push(element, srcpad, name, vects[0], timestamp);
+				result = frvect_to_buffer_and_push(srcpad, name, vects[0], timestamp);
 				gst_object_unref(srcpad);
 				srcpad = NULL;
 				if(result != GST_FLOW_OK) {
@@ -714,7 +695,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				 * and recording state for next time.
 				 */
 
-				result = frvect_to_buffer_and_push(element, srcpad, name, vects[0], timestamp);
+				result = frvect_to_buffer_and_push(srcpad, name, vects[0], timestamp);
 				gst_object_unref(srcpad);
 				srcpad = NULL;
 				if(result != GST_FLOW_OK) {
@@ -846,8 +827,6 @@ static void finalize(GObject * object)
 	if(element->last_new_segment)
 		gst_event_unref(element->last_new_segment);
 	element->last_new_segment = NULL;
-	g_hash_table_unref(element->pad_state);
-	element->pad_state = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -998,7 +977,6 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 
 	/* internal data */
 	element->last_new_segment = NULL;
-	element->pad_state = g_hash_table_new_full(pad_state_hash_func, pad_state_key_equal_func, NULL, g_free);
 }
 
 
