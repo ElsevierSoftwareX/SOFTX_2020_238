@@ -29,8 +29,6 @@ parser.add_option("-m", "--mark-time", action="store", type=float, help="Mark a 
 
 opts, args = parser.parse_args()
 
-print >>sys.stderr, "WARNING: Assuming SNR is power SNR, not amplitude SNR. Remind Chris that this should be fixed in the next update of gstlal_excesspower."
-
 if( opts.channels is not None ):
 	channels = opts.channels.split(",")
 else: channels = None
@@ -92,11 +90,12 @@ for i, chan in enumerate(channels):
 	# FIXME: Different Channels won't have the same ifrequencysettings
 	ax.set_ylim(opts.low_frequency, opts.high_frequency)
 
+	selected_events = [ event.snr for event in events if event.channel == channel and event.ifo == inst and event.central_freq < opts.high_frequency and event.central_freq > opts.low_frequency and event.peak_time in viewseg ]
+
 	# what's our snr scale
 	# FIXME: look only at selected events
 	snr_norm = matplotlib.colors.Normalize( 
-		min([ math.sqrt(e.snr) for e in events if event.channel == channel]),
-		max([ math.sqrt(e.snr) for e in events if event.channel == channel]) 
+		min(selected_events), max(selected_events) 
 	)
 	colormap = matplotlib.cm.ScalarMappable( norm = snr_norm, cmap = matplotlib.cm.jet )
 
@@ -115,7 +114,7 @@ for i, chan in enumerate(channels):
 
 	# construct tiles
 	# FIXME: Partition events first
-	for event in sorted(events, key=lambda tbl: math.sqrt(tbl.snr) ):
+	for event in sorted(events, key=lambda tbl: tbl.snr ):
 		if( event.channel != channel ): continue
 		if( event.ifo != inst ): continue
 		if( not (event.peak_time in viewseg) ): continue
@@ -130,7 +129,7 @@ for i, chan in enumerate(channels):
 			# tile extent
 			event.duration,
 			event.bandwidth/2.0,
-			color = colormap.to_rgba( math.sqrt(event.snr) )
+			color = colormap.to_rgba( event.snr )
 		)
 		ax.add_patch( tile )
 		
