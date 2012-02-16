@@ -33,6 +33,7 @@
  */
 
 
+#include <math.h>
 #include <string.h>
 
 
@@ -51,6 +52,7 @@
  */
 
 
+#include <gstlal/gstlal_debug.h>
 #include <framecpp_igwdparse.h>
 
 
@@ -75,6 +77,8 @@ GST_DEBUG_CATEGORY(framecpp_igwdparse_debug);
 #define FRSH_KLASS 1
 /* name of end-of-file structure */
 #define FRENDOFFILE_NAME "FrEndOfFile"
+/* name of frame header structure */
+#define FRAMEH_NAME "FrameH"
 
 
 /*
@@ -124,9 +128,29 @@ static guint16 fr_get_int_2u(GSTFrameCPPIGWDParse *element, GstByteReader *reade
 }
 
 
+static guint64 fr_get_int_4u(GSTFrameCPPIGWDParse *element, GstByteReader *reader)
+{
+	return fr_get_int_u(reader, element->endianness, element->sizeof_int_4u);
+}
+
+
 static guint64 fr_get_int_8u(GSTFrameCPPIGWDParse *element, GstByteReader *reader)
 {
 	return fr_get_int_u(reader, element->endianness, element->sizeof_int_8u);
+}
+
+
+static double fr_get_real_8(GSTFrameCPPIGWDParse *element, GstByteReader *reader)
+{
+	switch(element->endianness) {
+	case G_LITTLE_ENDIAN:
+		return gst_byte_reader_get_float64_le_unchecked(reader);
+	case G_BIG_ENDIAN:
+		return gst_byte_reader_get_float64_be_unchecked(reader);
+	default:
+		GST_ERROR("unrecognized endianness");
+		g_assert_not_reached();
+	}
 }
 
 
@@ -138,7 +162,7 @@ static void parse_table_6(GSTFrameCPPIGWDParse *element, const guint8 *data, gui
 }
 
 
-static void parse_table_7(GSTFrameCPPIGWDParse *element, const guint8 *data, guint64 length, guint16 *eof_klass)
+static void parse_table_7(GSTFrameCPPIGWDParse *element, const guint8 *data, guint64 length, guint16 *eof_klass, guint16 *frameh_klass)
 {
 	GstByteReader reader = GST_BYTE_READER_INIT(data + element->sizeof_table_6, length - element->sizeof_table_6);
 	const gchar *name;
@@ -148,7 +172,27 @@ static void parse_table_7(GSTFrameCPPIGWDParse *element, const guint8 *data, gui
 	if(!strcmp(name, FRENDOFFILE_NAME)) {
 		*eof_klass = fr_get_int_2u(element, &reader);
 		GST_DEBUG_OBJECT(element, "found FrEndOfFile structure class:  %d", (int) *eof_klass);
+	} else if(!strcmp(name, FRAMEH_NAME)) {
+		*frameh_klass = fr_get_int_2u(element, &reader);
+		GST_DEBUG_OBJECT(element, "found FrameH structure class:  %d", (int) *frameh_klass);
 	}
+}
+
+
+static void parse_table_9(GSTFrameCPPIGWDParse *element, const guint8 *data, guint64 length, GstClockTime *start, GstClockTime *stop)
+{
+	GstByteReader reader = GST_BYTE_READER_INIT(data + element->sizeof_table_6, length - element->sizeof_table_6);
+	const gchar *name;
+
+	fr_get_int_u(&reader, element->endianness, 2);	/* string length */
+	gst_byte_reader_get_string(&reader, &name);
+	fr_get_int_4u(element, &reader);	/* run */
+	fr_get_int_4u(element, &reader);	/* frame */
+	fr_get_int_4u(element, &reader);	/* dataQuality */
+	*start = fr_get_int_4u(element, &reader) * GST_SECOND + fr_get_int_4u(element, &reader);
+	fr_get_int_2u(element, &reader);	/* ULeapS */
+	*stop = *start + (GstClockTime) round(fr_get_real_8(element, &reader) * GST_SECOND);
+	GST_DEBUG_OBJECT(element, "found FrameH spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(*start), GST_TIME_SECONDS_ARGS(*stop));
 }
 
 
@@ -172,11 +216,8 @@ static gboolean start(GstBaseParse *parse)
 
 	gst_base_parse_set_min_frame_size(parse, SIZEOF_FRHEADER);
 	gst_base_parse_set_syncable(parse, FALSE);
-	gst_base_parse_set_has_timing_info(parse, FALSE);
+	gst_base_parse_set_has_timing_info(parse, FALSE);	/* FIXME:  should be TRUE, but breaks element.  why? */
 
-	element->sizeof_int_2u = 0;
-	element->sizeof_int_8u = 0;
-	element->eof_klass = 0;
 	element->offset = 0;
 
 	return TRUE;
@@ -228,8 +269,6 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 	*skipsize = 0;
 
 	if(element->offset == 0) {
-		gint sizeof_int_4u;
-
 		/*
 		 * parse header.  see table 5 of LIGO-T970130.  note:  we
 		 * know the endianness from the caps (which the typefinder
@@ -245,21 +284,30 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 		 */
 
 		element->sizeof_int_2u = *(data + 7);
-		sizeof_int_4u = *(data + 8);
+		element->sizeof_int_4u = *(data + 8);
 		element->sizeof_int_8u = *(data + 9);
-		GST_DEBUG_OBJECT(element, "endianness = %d, size of INT_2 = %d, size of INT_4 = %d, size of INT_8 = %d", element->endianness, element->sizeof_int_2u, sizeof_int_4u, element->sizeof_int_8u);
+		g_assert_cmpuint(*(data + 11), ==, 8);	/* sizeof(REAL_8) */
+		GST_DEBUG_OBJECT(element, "endianness = %d, size of INT_2 = %d, size of INT_4 = %d, size of INT_8 = %d", element->endianness, element->sizeof_int_2u, element->sizeof_int_4u, element->sizeof_int_8u);
 
 		/*
 		 * set the size of the structure in table 6 of LIGO-T970130
 		 */
 
-		element->sizeof_table_6 = element->sizeof_int_8u + element->sizeof_int_2u + sizeof_int_4u;
+		element->sizeof_table_6 = element->sizeof_int_8u + element->sizeof_int_2u + element->sizeof_int_4u;
 
 		/*
-		 * reset the end-of-file class number
+		 * reset the class numbers
 		 */
 
 		element->eof_klass = 0;
+		element->frameh_klass = 0;
+
+		/*
+		 * reset the start and stop times
+		 */
+
+		element->file_start_time = -1;	/* max GstClockTime */
+		element->file_stop_time = 0;	/* min GstClockTime */
 
 		/*
 		 * request the first table 6 structure
@@ -282,7 +330,7 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 		 * what to do?
 		 */
 
-		if(klass == FRSH_KLASS && element->eof_klass == 0) {
+		if(klass == FRSH_KLASS && (element->eof_klass == 0 || element->frameh_klass == 0)) {
 			/*
 			 * frsh structure and do we not yet know the class
 			 * number of the end-of-file structure.  if we have
@@ -293,11 +341,30 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 
 			if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
 				GST_DEBUG_OBJECT(element, "found complete %u byte FrSH structure at offset %zu", (guint) length, element->offset);
-				parse_table_7(element, data + element->offset, length, &element->eof_klass);
+				parse_table_7(element, data + element->offset, length, &element->eof_klass, &element->frameh_klass);
 				element->offset += length;
 				*framesize += element->sizeof_table_6;
 			} else
 				GST_DEBUG_OBJECT(element, "found %u byte FrSH structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
+		} else if(klass == element->frameh_klass) {
+			/*
+			 * frame header structure.  if it's complete,
+			 * extract start time and duration then advance to
+			 * next structure
+			 */
+
+			if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
+				GstClockTime start_time, stop_time;
+				GST_DEBUG_OBJECT(element, "found complete %u byte FrameH structure at offset %zu", (guint) length, element->offset);
+				parse_table_9(element, data + element->offset, length, &start_time, &stop_time);
+
+				element->file_start_time = MIN(element->file_start_time, start_time);
+				element->file_stop_time = MAX(element->file_stop_time, stop_time);
+
+				element->offset += length;
+				*framesize += element->sizeof_table_6;
+			} else
+				GST_DEBUG_OBJECT(element, "found %u byte FrameH structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
 		} else if(klass == element->eof_klass) {
 			/*
 			 * end-of-file structure.  is file complete?
@@ -332,12 +399,18 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 
 static GstFlowReturn parse_frame(GstBaseParse *parse, GstBaseParseFrame *frame)
 {
+	GSTFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(parse);
+	GstBuffer *buffer = frame->buffer;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
-	 * FIXME:  set timestamp, duration, offset of frame->buffer
+	 * FIXME:  set offset, offset_end
 	 */
 
+	GST_BUFFER_TIMESTAMP(buffer) = element->file_start_time;
+	GST_BUFFER_DURATION(buffer) = element->file_stop_time - element->file_start_time;
+
+	GST_DEBUG_OBJECT(element, "file spans %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
 	return result;
 }
 

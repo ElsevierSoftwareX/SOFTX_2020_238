@@ -57,10 +57,14 @@ typedef struct {
 
 	gint endianness;
 	gint sizeof_int_2u;
+	gint sizeof_int_4u;
 	gint sizeof_int_8u;
 	gint sizeof_table_6;
+	guint16 frameh_klass;
 	guint16 eof_klass;
 
+	GstClockTime file_start_time;
+	GstClockTime file_stop_time;
 	size_t offset;
 } GSTFrameCPPIGWDParse;
 
