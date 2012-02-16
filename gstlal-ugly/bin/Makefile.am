@@ -32,4 +32,5 @@ dist_bin_SCRIPTS = \
 	gstlal_llcbcnode \
 	gstlal_excesspower \
 	gstlal_vetoes_from_burst_inj \
-	gstlal_inspiral_plot_likelihoods
+	gstlal_inspiral_plot_likelihoods \
+	gstlal_inspiral_plotsummary
