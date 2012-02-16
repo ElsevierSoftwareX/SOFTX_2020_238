@@ -29,6 +29,14 @@
 
 
 /*
+ * stuff from the C library
+ */
+
+
+#include <string.h>
+
+
+/*
  * stuff from gstreamer
  */
 
@@ -60,9 +68,13 @@ GST_DEBUG_CATEGORY(framecpp_igwdparse_debug);
 
 #define GST_CAT_DEFAULT framecpp_igwdparse_debug
 
-/* number of bytes in table 5 in LIGO-T970130 */
 /* FIXME:  get from framecpp */
+/* number of bytes in table 5 in LIGO-T970130 */
 #define SIZEOF_FRHEADER 40
+/* class of FrSH structure */
+#define FRSH_KLASS 1
+/* name of end-of-file structure */
+#define FRENDOFFILE_NAME "FrEndOfFile"
 
 
 /*
@@ -126,6 +138,20 @@ static void parse_table_6(GSTFrameCPPIGWDParse *element, const guint8 *data, gui
 }
 
 
+static void parse_table_7(GSTFrameCPPIGWDParse *element, const guint8 *data, guint64 length, guint16 *eof_klass)
+{
+	GstByteReader reader = GST_BYTE_READER_INIT(data + element->sizeof_table_6, length - element->sizeof_table_6);
+	const gchar *name;
+
+	fr_get_int_u(&reader, element->endianness, 2);	/* string length */
+	gst_byte_reader_get_string(&reader, &name);
+	if(!strcmp(name, FRENDOFFILE_NAME)) {
+		*eof_klass = fr_get_int_2u(element, &reader);
+		GST_DEBUG_OBJECT(element, "found FrEndOfFile structure class:  %d", (int) *eof_klass);
+	}
+}
+
+
 /*
  * ============================================================================
  *
@@ -150,6 +176,7 @@ static gboolean start(GstBaseParse *parse)
 
 	element->sizeof_int_2u = 0;
 	element->sizeof_int_8u = 0;
+	element->eof_klass = 0;
 	element->offset = 0;
 
 	return TRUE;
@@ -229,30 +256,53 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 		element->sizeof_table_6 = element->sizeof_int_8u + element->sizeof_int_2u + sizeof_int_4u;
 
 		/*
+		 * reset the end-of-file class number
+		 */
+
+		element->eof_klass = 0;
+
+		/*
 		 * request the first table 6 structure
 		 */
 
 		element->offset = SIZEOF_FRHEADER;
 		*framesize = element->offset + element->sizeof_table_6;
 	} else {
-		/* end-of-file class number.  found in an S5 frame file. */
-		/* FIXME:  get from framecpp */
-		const guint16 eof_klass = 0x15;
 		guint64 length;
 		guint16 klass;
 
 		/*
-		 * parse table 6
+		 * parse table 6, update file size
 		 */
 
 		parse_table_6(element, data + element->offset, &length, &klass);
+		*framesize = element->offset + length;
 
 		/*
-		 * frame file complete?  if not request more data
+		 * what to do?
 		 */
 
-		if(klass == eof_klass) {
-			*framesize = element->offset + length;
+		if(klass == FRSH_KLASS && element->eof_klass == 0) {
+			/*
+			 * frsh structure and do we not yet know the class
+			 * number of the end-of-file structure.  if we have
+			 * the complete structure, see if it tells us the
+			 * class for end-of-file structures then advance to
+			 * next structure
+			 */
+
+			if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
+				GST_DEBUG_OBJECT(element, "found complete %u byte FrSH structure at offset %zu", (guint) length, element->offset);
+				parse_table_7(element, data + element->offset, length, &element->eof_klass);
+				element->offset += length;
+				*framesize += element->sizeof_table_6;
+			} else
+				GST_DEBUG_OBJECT(element, "found %u byte FrSH structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
+		} else if(klass == element->eof_klass) {
+			/*
+			 * end-of-file structure.  is file complete?
+			 */
+
 			if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
 				GST_DEBUG_OBJECT(element, "found %u byte FrEndOfFile structure at offset %zu, have complete %u byte frame file", (guint) length, element->offset, *framesize);
 				element->offset = 0;
@@ -260,9 +310,14 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 			} else
 				GST_DEBUG_OBJECT(element, "found %u byte FrEndOfFile structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
 		} else {
+			/*
+			 * something else we don't care about.  skip to
+			 * next structure
+			 */
+
 			GST_DEBUG_OBJECT(element, "found %u byte non-FrEndOfFile structure at offset %zu", (guint) length, element->offset);
 			element->offset += length;
-			*framesize = element->offset + element->sizeof_table_6;
+			*framesize += element->sizeof_table_6;
 		}
 	}
 
@@ -285,7 +340,6 @@ static GstFlowReturn parse_frame(GstBaseParse *parse, GstBaseParseFrame *frame)
 
 	return result;
 }
-
 
 
 /*

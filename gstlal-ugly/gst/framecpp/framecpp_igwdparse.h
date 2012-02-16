@@ -59,6 +59,7 @@ typedef struct {
 	gint sizeof_int_2u;
 	gint sizeof_int_8u;
 	gint sizeof_table_6;
+	guint16 eof_klass;
 
 	size_t offset;
 } GSTFrameCPPIGWDParse;
