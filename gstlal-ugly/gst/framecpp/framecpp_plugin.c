@@ -180,6 +180,9 @@ static gboolean plugin_init(GstPlugin *plugin)
 	 */
 
 	GST_DEBUG_CATEGORY_INIT(framecpp_channeldemux_debug, "framecpp_channeldemux", 0, "framecpp_channeldemux element");
+#if HAVE_GST_BASEPARSE
+	GST_DEBUG_CATEGORY_INIT(framecpp_igwdparse_debug, "framecpp_igwdparse", 0, "framecpp_igwdparse element");
+#endif
 
 	/*
 	 * Done.
