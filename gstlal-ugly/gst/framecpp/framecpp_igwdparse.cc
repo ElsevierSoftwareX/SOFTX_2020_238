@@ -154,6 +154,15 @@ static double fr_get_real_8(GSTFrameCPPIGWDParse *element, GstByteReader *reader
 }
 
 
+static const gchar *fr_get_string(GSTFrameCPPIGWDParse *element, GstByteReader *reader)
+{
+	const gchar *str;
+	gst_byte_reader_skip_unchecked(reader, 2);	/* length */
+	gst_byte_reader_get_string(reader, &str);
+	return str;
+}
+
+
 static void parse_table_6(GSTFrameCPPIGWDParse *element, const guint8 *data, guint64 *length, guint16 *klass)
 {
 	GstByteReader reader = GST_BYTE_READER_INIT(data, element->sizeof_table_6);
@@ -165,16 +174,14 @@ static void parse_table_6(GSTFrameCPPIGWDParse *element, const guint8 *data, gui
 static void parse_table_7(GSTFrameCPPIGWDParse *element, const guint8 *data, guint64 length, guint16 *eof_klass, guint16 *frameh_klass)
 {
 	GstByteReader reader = GST_BYTE_READER_INIT(data + element->sizeof_table_6, length - element->sizeof_table_6);
-	const gchar *name;
+	const gchar *name = fr_get_string(element, &reader);
 
-	fr_get_int_u(&reader, element->endianness, 2);	/* string length */
-	gst_byte_reader_get_string(&reader, &name);
 	if(!strcmp(name, FRENDOFFILE_NAME)) {
 		*eof_klass = fr_get_int_2u(element, &reader);
-		GST_DEBUG_OBJECT(element, "found FrEndOfFile structure class:  %d", (int) *eof_klass);
+		GST_DEBUG_OBJECT(element, "found " FRENDOFFILE_NAME " structure's class:  %d", (int) *eof_klass);
 	} else if(!strcmp(name, FRAMEH_NAME)) {
 		*frameh_klass = fr_get_int_2u(element, &reader);
-		GST_DEBUG_OBJECT(element, "found FrameH structure class:  %d", (int) *frameh_klass);
+		GST_DEBUG_OBJECT(element, "found " FRAMEH_NAME " structure's class:  %d", (int) *frameh_klass);
 	}
 }
 
@@ -182,17 +189,13 @@ static void parse_table_7(GSTFrameCPPIGWDParse *element, const guint8 *data, gui
 static void parse_table_9(GSTFrameCPPIGWDParse *element, const guint8 *data, guint64 length, GstClockTime *start, GstClockTime *stop)
 {
 	GstByteReader reader = GST_BYTE_READER_INIT(data + element->sizeof_table_6, length - element->sizeof_table_6);
-	const gchar *name;
+	const gchar *name = fr_get_string(element, &reader);
 
-	fr_get_int_u(&reader, element->endianness, 2);	/* string length */
-	gst_byte_reader_get_string(&reader, &name);
-	fr_get_int_4u(element, &reader);	/* run */
-	fr_get_int_4u(element, &reader);	/* frame */
-	fr_get_int_4u(element, &reader);	/* dataQuality */
+	gst_byte_reader_skip_unchecked(&reader, 3 * element->sizeof_int_4);	/* run, frame, dataQuality */
 	*start = fr_get_int_4u(element, &reader) * GST_SECOND + fr_get_int_4u(element, &reader);
-	fr_get_int_2u(element, &reader);	/* ULeapS */
+	gst_byte_reader_skip_unchecked(&reader, element->sizeof_int_2);	/* ULeapS */
 	*stop = *start + (GstClockTime) round(fr_get_real_8(element, &reader) * GST_SECOND);
-	GST_DEBUG_OBJECT(element, "found FrameH spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", GST_TIME_SECONDS_ARGS(*start), GST_TIME_SECONDS_ARGS(*stop));
+	GST_DEBUG_OBJECT(element, "found " FRAMEH_NAME " \"%s\" spanning [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ")", name, GST_TIME_SECONDS_ARGS(*start), GST_TIME_SECONDS_ARGS(*stop));
 }
 
 
@@ -214,9 +217,18 @@ static gboolean start(GstBaseParse *parse)
 {
 	GSTFrameCPPIGWDParse *element = FRAMECPP_IGWDPARSE(parse);
 
+	/*
+	 * GstBaseParse lobotomizes itself on paused-->ready transitions,
+	 * so this stuff needs to be set here every time
+	 */
+
 	gst_base_parse_set_min_frame_size(parse, SIZEOF_FRHEADER);
 	gst_base_parse_set_syncable(parse, FALSE);
 	gst_base_parse_set_has_timing_info(parse, FALSE);	/* FIXME:  should be TRUE, but breaks element.  why? */
+
+	/*
+	 * everything else will be reset when the header is parsed
+	 */
 
 	element->offset = 0;
 
@@ -249,6 +261,7 @@ static gboolean set_sink_caps(GstBaseParse *parse, GstCaps *caps)
 		caps = gst_caps_copy(caps);
 		gst_caps_set_simple(caps, "framed", G_TYPE_BOOLEAN, TRUE, NULL);
 		gst_pad_set_caps(GST_BASE_PARSE_SRC_PAD(parse), caps);
+		gst_caps_unref(caps);
 	}
 
 	return success;
@@ -277,6 +290,7 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 		 * FIXME:  get from framecpp?
 		 */
 
+		GST_DEBUG_OBJECT(element, "parsing file header");
 		g_assert_cmpuint(GST_BUFFER_SIZE(frame->buffer), >=, SIZEOF_FRHEADER);
 
 		/*
@@ -332,10 +346,9 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 
 		if(klass == FRSH_KLASS && (element->eof_klass == 0 || element->frameh_klass == 0)) {
 			/*
-			 * frsh structure and do we not yet know the class
-			 * number of the end-of-file structure.  if we have
-			 * the complete structure, see if it tells us the
-			 * class for end-of-file structures then advance to
+			 * found frsh structure and do we not yet know the
+			 * class numbers we want.  if it's complete, see if
+			 * it tells us the class numbers then advance to
 			 * next structure
 			 */
 
@@ -345,17 +358,17 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 				element->offset += length;
 				*framesize += element->sizeof_table_6;
 			} else
-				GST_DEBUG_OBJECT(element, "found %u byte FrSH structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
+				GST_DEBUG_OBJECT(element, "found incomplete %u byte FrSH structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
 		} else if(klass == element->frameh_klass) {
 			/*
-			 * frame header structure.  if it's complete,
+			 * found frame header structure.  if it's complete,
 			 * extract start time and duration then advance to
 			 * next structure
 			 */
 
 			if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
 				GstClockTime start_time, stop_time;
-				GST_DEBUG_OBJECT(element, "found complete %u byte FrameH structure at offset %zu", (guint) length, element->offset);
+				GST_DEBUG_OBJECT(element, "found complete %u byte " FRAMEH_NAME " structure at offset %zu", (guint) length, element->offset);
 				parse_table_9(element, data + element->offset, length, &start_time, &stop_time);
 
 				element->file_start_time = MIN(element->file_start_time, start_time);
@@ -364,25 +377,25 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 				element->offset += length;
 				*framesize += element->sizeof_table_6;
 			} else
-				GST_DEBUG_OBJECT(element, "found %u byte FrameH structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
+				GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRAMEH_NAME " structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
 		} else if(klass == element->eof_klass) {
 			/*
-			 * end-of-file structure.  is file complete?
+			 * end-of-file structure.  if it's complete then
+			 * the file is complete
 			 */
 
 			if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
-				GST_DEBUG_OBJECT(element, "found %u byte FrEndOfFile structure at offset %zu, have complete %u byte frame file", (guint) length, element->offset, *framesize);
+				GST_DEBUG_OBJECT(element, "found complete %u byte " FRENDOFFILE_NAME " structure at offset %zu, have complete %u byte frame file", (guint) length, element->offset, *framesize);
 				element->offset = 0;
 				file_is_complete = TRUE;
 			} else
-				GST_DEBUG_OBJECT(element, "found %u byte FrEndOfFile structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
+				GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRENDOFFILE_NAME " structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
 		} else {
 			/*
-			 * something else we don't care about.  skip to
-			 * next structure
+			 * something else.  skip to next structure
 			 */
 
-			GST_DEBUG_OBJECT(element, "found %u byte non-FrEndOfFile structure at offset %zu", (guint) length, element->offset);
+			GST_DEBUG_OBJECT(element, "found %u byte structure at offset %zu", (guint) length, element->offset);
 			element->offset += length;
 			*framesize += element->sizeof_table_6;
 		}
@@ -404,7 +417,8 @@ static GstFlowReturn parse_frame(GstBaseParse *parse, GstBaseParseFrame *frame)
 	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
-	 * FIXME:  set offset, offset_end
+	 * offset and offset end are automatically set to the byte offsets
+	 * spanned by this file
 	 */
 
 	GST_BUFFER_TIMESTAMP(buffer) = element->file_start_time;
