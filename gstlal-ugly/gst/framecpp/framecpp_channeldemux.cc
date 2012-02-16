@@ -243,7 +243,7 @@ static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
  */
 
 
-static GstPad *get_src_pad(GSTFrameCPPChannelDemux *element, const char *name)
+static GstPad *get_src_pad(GSTFrameCPPChannelDemux *element, const char *name, gboolean *pad_added)
 {
 	GstPad *srcpad = gst_element_get_static_pad(GST_ELEMENT(element), name);
 
@@ -287,6 +287,7 @@ static GstPad *get_src_pad(GSTFrameCPPChannelDemux *element, const char *name)
 		gst_pad_set_active(srcpad, TRUE);
 		gst_object_ref(srcpad);
 		gst_element_add_pad(GST_ELEMENT(element), srcpad);
+		*pad_added = TRUE;
 	}
 
 	return srcpad;
@@ -544,6 +545,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 	using FrameCPP::Common::MemoryBuffer;
 	GSTFrameCPPChannelDemux *element = FRAMECPP_CHANNELDEMUX(gst_pad_get_parent(pad));
 	FrameCPP::IFrameStream::frame_h_type frame;
+	gboolean pads_added = FALSE;
 	GstPad *srcpad = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
 
@@ -617,7 +619,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					 * peer, skip this channel.
 					 */
 
-					srcpad = get_src_pad(element, name);
+					srcpad = get_src_pad(element, name, &pads_added);
 					if(!gst_pad_is_linked(srcpad)) {
 						GST_LOG_OBJECT(element, "skipping: not linked");
 						gst_object_unref(srcpad);
@@ -659,7 +661,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				 * peer, skip this channel.
 				 */
 
-				srcpad = get_src_pad(element, name);
+				srcpad = get_src_pad(element, name, &pads_added);
 				if(!gst_pad_is_linked(srcpad)) {
 					GST_LOG_OBJECT(element, "skipping: not linked");
 					gst_object_unref(srcpad);
@@ -699,7 +701,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				 * peer, skip this channel.
 				 */
 
-				srcpad = get_src_pad(element, name);
+				srcpad = get_src_pad(element, name, &pads_added);
 				if(!gst_pad_is_linked(srcpad)) {
 					GST_LOG_OBJECT(element, "skipping: not linked");
 					gst_object_unref(srcpad);
@@ -730,6 +732,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 		else {
 			GST_ELEMENT_ERROR(element, STREAM, DECODE, (NULL), ("libframecpp raised exception: %s", Exception.what()));
 			result = GST_FLOW_ERROR;
+			goto done;
 		}
 	} catch(...) {
 		if(srcpad)
@@ -739,6 +742,7 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 		else {
 			GST_ELEMENT_ERROR(element, STREAM, DECODE, (NULL), ("libframecpp raised unknown exception"));
 			result = GST_FLOW_ERROR;
+			goto done;
 		}
 	}
 
@@ -747,6 +751,8 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 	 */
 
 done:
+	if(pads_added)
+		gst_element_no_more_pads(GST_ELEMENT(element));
 	gst_buffer_unref(inbuf);
 	gst_object_unref(element);
 	return result;
