@@ -124,19 +124,19 @@ static guint64 fr_get_int_u(GstByteReader *reader, gint endianness, gint size)
 
 static guint16 fr_get_int_2u(GSTFrameCPPIGWDParse *element, GstByteReader *reader)
 {
-	return fr_get_int_u(reader, element->endianness, element->sizeof_int_2u);
+	return fr_get_int_u(reader, element->endianness, element->sizeof_int_2);
 }
 
 
 static guint64 fr_get_int_4u(GSTFrameCPPIGWDParse *element, GstByteReader *reader)
 {
-	return fr_get_int_u(reader, element->endianness, element->sizeof_int_4u);
+	return fr_get_int_u(reader, element->endianness, element->sizeof_int_4);
 }
 
 
 static guint64 fr_get_int_8u(GSTFrameCPPIGWDParse *element, GstByteReader *reader)
 {
-	return fr_get_int_u(reader, element->endianness, element->sizeof_int_8u);
+	return fr_get_int_u(reader, element->endianness, element->sizeof_int_8);
 }
 
 
@@ -283,17 +283,17 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 		 * word sizes
 		 */
 
-		element->sizeof_int_2u = *(data + 7);
-		element->sizeof_int_4u = *(data + 8);
-		element->sizeof_int_8u = *(data + 9);
+		element->sizeof_int_2 = *(data + 7);
+		element->sizeof_int_4 = *(data + 8);
+		element->sizeof_int_8 = *(data + 9);
 		g_assert_cmpuint(*(data + 11), ==, 8);	/* sizeof(REAL_8) */
-		GST_DEBUG_OBJECT(element, "endianness = %d, size of INT_2 = %d, size of INT_4 = %d, size of INT_8 = %d", element->endianness, element->sizeof_int_2u, element->sizeof_int_4u, element->sizeof_int_8u);
+		GST_DEBUG_OBJECT(element, "endianness = %d, size of INT_2 = %d, size of INT_4 = %d, size of INT_8 = %d", element->endianness, element->sizeof_int_2, element->sizeof_int_4, element->sizeof_int_8);
 
 		/*
 		 * set the size of the structure in table 6 of LIGO-T970130
 		 */
 
-		element->sizeof_table_6 = element->sizeof_int_8u + element->sizeof_int_2u + element->sizeof_int_4u;
+		element->sizeof_table_6 = element->sizeof_int_8 + element->sizeof_int_2 + element->sizeof_int_4;
 
 		/*
 		 * reset the class numbers
