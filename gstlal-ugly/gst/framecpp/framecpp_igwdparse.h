@@ -25,7 +25,6 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstbaseparse.h>
-#include <gst/base/gstbytereader.h>
 
 
 G_BEGIN_DECLS
@@ -57,8 +56,8 @@ typedef struct {
 	GstBaseParse element;
 
 	gint endianness;
-	guint64 (*get_int_8u)(GstByteReader *);
-	guint16 (*get_int_2u)(GstByteReader *);
+	gint sizeof_int_2u;
+	gint sizeof_int_8u;
 	gint sizeof_table_6;
 
 	size_t offset;
