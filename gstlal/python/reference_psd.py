@@ -212,12 +212,10 @@ def psd_to_fir_kernel(psd):
 
 	data[0] = data[-1] = 0.0
 	try:
-		# FIXME:  there's a chance the normalization should be
-		# 2*(len(data)-1).  it's a small correction for typical
-		# PSDs but for extremely short FFT lengths it will matter
-		kernel = scipy.fftpack.idct(numpy.sqrt(data), type = 1) * math.sqrt(sample_rate) / (2 * len(data))
+		kernel = scipy.fftpack.idct(numpy.sqrt(data), type = 1) * math.sqrt(sample_rate) / (2 * len(data) - 1)
+		kernel = numpy.hstack((kernel[::-1], kernel[1:]))
 	except AttributeError:
-		# scipy.fftpack is missing idct()
+		# this computer's scipy.fftpack is missing idct()
 		# repack data:  data[0], data[1], 0, data[2], 0, ....
 		tmp = numpy.zeros((2 * len(data) - 1,), dtype = data.dtype)
 		tmp[0] = data[0]
@@ -225,7 +223,7 @@ def psd_to_fir_kernel(psd):
 		data = tmp
 		del tmp
 		kernel = scipy.fftpack.irfft(numpy.sqrt(data)) * math.sqrt(sample_rate)
-	kernel = numpy.hstack((kernel[::-1], kernel[1:]))
+		kernel = numpy.roll(kernel, (len(kernel) - 1) / 2)
 
 	#
 	# apply a Tukey window whose flat bit is 50% of the kernel.
