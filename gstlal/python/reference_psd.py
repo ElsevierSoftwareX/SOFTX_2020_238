@@ -225,17 +225,13 @@ def psd_to_fir_kernel(psd):
 		# FIXME:  there's a chance the normalization should be
 		# 2*(len(data)-1).  it's a small correction for typical
 		# PSDs but for extremely short FFT lengths it will matter
-		kernel = scipy.fftpack.idct(data**.5, type = 1) * sample_rate**.5 / (2 * len(data))
+		kernel = scipy.fftpack.idct(data**.5, type = 1) * sample_rate**.5 / (2 * (len(data) -1))
+		kernel = numpy.hstack((kernel[::-1], kernel[1:-1]))
 	except AttributeError:
-		# scipy.fftpack is missing idct()
-		# repack data:  data[0], data[1], 0, data[2], 0, ....
-		tmp = numpy.zeros((2 * len(data) - 1,), dtype = data.dtype)
-		tmp[0] = data[0]
-		tmp[1::2] = data[1:]
-		data = tmp
-		del tmp
-		kernel = scipy.fftpack.irfft(data**.5) * sample_rate**.5
-	kernel = numpy.hstack((kernel[::-1], kernel[1:]))
+		tmp = numpy.zeros((2 * (len(data) - 1),), dtype = data.dtype)
+		tmp[0:len(data)] = data
+		tmp[len(data):] = data[-2:0:-1]
+		kernel = numpy.roll(numpy.real( scipy.ifft((tmp)**0.5)),(len(data) - 1)) * sample_rate**.5
 
 	#
 	# apply a Tukey window whose flat bit is 50% of the kernel
@@ -247,7 +243,7 @@ def psd_to_fir_kernel(psd):
 	# the kernel's latency
 	#
 
-	latency = (len(kernel) + 1) / 2
+	latency = (len(kernel)) / 2
 
 	#
 	# done
