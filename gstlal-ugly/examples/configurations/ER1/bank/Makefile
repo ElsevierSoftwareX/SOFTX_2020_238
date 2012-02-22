@@ -93,10 +93,10 @@ dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml lalapps_path2cache
 	ls *H1_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > H1_split_bank.cache
 	ls *V1_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > V1_split_bank.cache
 	ls *L1_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > L1_split_bank.cache
-	gstlal_inspiral_svd_bank_pipe --instrument H2 --reference-psd reference_psd.xml --bank-cache H2_split_bank.cache --clipping $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H2_bank
-	gstlal_inspiral_svd_bank_pipe --instrument H1 --reference-psd reference_psd.xml --bank-cache H1_split_bank.cache --clipping $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H1_bank
-	gstlal_inspiral_svd_bank_pipe --instrument V1 --reference-psd reference_psd.xml --bank-cache V1_split_bank.cache --clipping $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name V1_bank
-	gstlal_inspiral_svd_bank_pipe --instrument L1 --reference-psd reference_psd.xml --bank-cache L1_split_bank.cache --clipping $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name L1_bank
+	gstlal_inspiral_svd_bank_pipe --instrument H2 --reference-psd reference_psd.xml --bank-cache H2_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H2_bank
+	gstlal_inspiral_svd_bank_pipe --instrument H1 --reference-psd reference_psd.xml --bank-cache H1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H1_bank
+	gstlal_inspiral_svd_bank_pipe --instrument V1 --reference-psd reference_psd.xml --bank-cache V1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name V1_bank
+	gstlal_inspiral_svd_bank_pipe --instrument L1 --reference-psd reference_psd.xml --bank-cache L1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name L1_bank
 	cat H2_bank.dag H1_bank.dag L1_bank.dag V1_bank.dag  > bank.dag
 
 realclean :
