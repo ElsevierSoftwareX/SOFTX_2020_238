@@ -28,6 +28,7 @@ from glue.ligolw.utils import segments as ligolw_segments
 from glue.segmentsUtils import vote
 from pylal import ligolw_burca2
 from pylal import inject
+from pylal import llwapp
 from pylal import rate
 from gstlal.svd_bank import read_bank
 try:
@@ -52,21 +53,6 @@ def set_fap(options, Far, f):
 	# define fap function
 	connection.create_function("fap", 3, Far.fap_from_rank)
 
-	# compute the faps
-	print >>sys.stderr, "computing faps ..."
-	for ifos, in connection.cursor().execute('SELECT DISTINCT(ifos) FROM coinc_inspiral').fetchall():
-
-		print >>sys.stderr, "computing fap maps for ", ifos
-		ifoset = frozenset(lsctables.instrument_set_from_ifos(ifos))
-		#ifoset.discard("H2")
-		#ifos = lsctables.ifos_from_instrument_set(ifoset)
-		# FIXME make this remap an option, don't hardcode
-		# remap means that you actually want to build a different
-		# likelihood distribution.  Here is lets us avoid the H1/H2
-		# correlations by ignoring H2.  THis only works if H2 was also
-		# ignored in the ranking
-		Far.updateFAPmap(ifoset, remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])})
-
 	# FIXME abusing FAR column
 	connection.cursor().execute("UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(coinc_event.likelihood, coinc_inspiral.ifos, coinc_event.time_slide_id) FROM coinc_event WHERE coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id)")
 	connection.commit()
@@ -81,11 +67,13 @@ def set_fap(options, Far, f):
 #
 
 class TrialsTable(dict):
-	@classmethod
-	def from_db(cls, connection):
-		self = cls(((ifos, tsid), count) for ifos, tsid, count in connection.cursor().execute('SELECT ifos, coinc_event.time_slide_id AS tsid, count(*) / nevents FROM sngl_inspiral JOIN coinc_event_map ON coinc_event_map.event_id == sngl_inspiral.event_id JOIN coinc_inspiral ON coinc_inspiral.coinc_event_id == coinc_event_map.coinc_event_id JOIN coinc_event ON coinc_event.coinc_event_id == coinc_event_map.coinc_event_id  WHERE coinc_event_map.table_name = "sngl_inspiral" GROUP BY tsid, ifos;'))
+	def from_db(self, connection):
+		for ifos, tsid, count in connection.cursor().execute('SELECT ifos, coinc_event.time_slide_id AS tsid, count(*) / nevents FROM sngl_inspiral JOIN coinc_event_map ON coinc_event_map.event_id == sngl_inspiral.event_id JOIN coinc_inspiral ON coinc_inspiral.coinc_event_id == coinc_event_map.coinc_event_id JOIN coinc_event ON coinc_event.coinc_event_id == coinc_event_map.coinc_event_id  WHERE coinc_event_map.table_name = "sngl_inspiral" GROUP BY tsid, ifos;'):
+			try:
+				self[ifos, tsid] += count
+			except KeyError:
+				self[ifos, tsid] = count
 		connection.commit()
-		return self
 
 	def increment(self, n):
 		for k in self:
@@ -278,3 +266,10 @@ def get_live_time(segments, verbose = True):
 	if verbose:
 		print >> sys.stderr, "Livetime: ", livetime
 	return livetime
+
+def get_live_time_segs_from_search_summary_table(connection, program_name = "gstlal_inspiral"):
+	from glue.ligolw import dbtables
+	xmldoc = dbtables.get_xml(connection)
+	farsegs = llwapp.segmentlistdict_fromsearchsummary(xmldoc, program_name).coalesce()
+	xmldoc.unlink()
+	return farsegs
