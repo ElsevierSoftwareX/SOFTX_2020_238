@@ -330,7 +330,8 @@ class gstlal_compute_far_from_snr_chisq_histograms_node(InspiralNode):
 			self.add_var_opt("compute-fap", "")
 		if FAR:
 			self.add_var_opt("compute-far", "")
-		self.add_var_opt("injection-dbs", pipeline_dot_py_append_opts_hack("injection-dbs", inj_input))
+		if len(inj_input) > 0:
+			self.add_var_opt("injection-dbs", pipeline_dot_py_append_opts_hack("injection-dbs", inj_input))
 		self.add_var_opt("non-injection-db", pipeline_dot_py_append_opts_hack("non-injection-db", noninj_input))
 		self.output_names = inj_input + noninj_input
 
