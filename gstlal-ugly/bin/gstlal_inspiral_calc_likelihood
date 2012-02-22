@@ -66,8 +66,8 @@ def parse_command_line():
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--vetoes-name", metavar = "name", help = "Set the name of the segment lists to use as vetoes (default = do not apply vetoes).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("-s", "--synthesize-injections", action = "store_true", help = "Synthesize an injection distribution")
-	parser.add_option("-p", "--background-prior", metavar = "N", default = 0, type = "float", help = "include a uniform background prior with bin count = N, default 0, no additional prior")
+	parser.add_option("-s", "--synthesize-injections", metavar = "N", type = "int", default = 0, help = "Synthesize an injection distribution with N injections, default 0")
+	parser.add_option("-p", "--background-prior", metavar = "N", default = 0, type = "float", help = "include an exponential background prior with the maximum bin count = N, default 0, no additional prior")
 	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
 	options, filenames = parser.parse_args()
 
@@ -139,11 +139,12 @@ options, filenames = parse_command_line()
 coincparamsdistributions, likelihood_seglists = inspiral.DistributionsStats.from_filenames(options.likelihood_filenames, verbose = options.verbose)
 
 # calculate injections before writing to disk
-if options.synthesize_injections:
-	coincparamsdistributions.synthesize_injections(verbose = options.verbose)
+if options.synthesize_injections != 0:
+	coincparamsdistributions.add_foreground_prior(n = options.synthesize_injections, verbose = options.verbose)
 
 # add a uniform prior to background, by default 0 is added so it has no effect
-coincparamsdistributions.add_uniform_background_prior(options.background_prior)
+if options.background_prior != 0:
+	coincparamsdistributions.add_background_prior(n = options.background_prior)
 
 if options.write_likelihood is not None:
 	coincparamsdistributions.to_filename(options.write_likelihood, likelihood_seglists, verbose = options.verbose)
