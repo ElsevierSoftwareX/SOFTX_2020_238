@@ -201,7 +201,7 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 	return bank
 
 
-def write_bank(filename, bank, clipping = None, verbose = False):
+def write_bank(filename, bank, clipleft = 0, clipright = 0, verbose = False):
 	"""Write an SVD bank to a LIGO_LW xml file."""
 
 	# Create new document
@@ -214,9 +214,11 @@ def write_bank(filename, bank, clipping = None, verbose = False):
 	# Get sngl inspiral table
 	sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
 
+	# set the right clipping index
+	clipright = len(sngl_inspiral_table) - clipright
+	
 	# Apply clipping option to sngl inspiral table
-	if clipping is not None:
-		sngl_inspiral_table = sngl_inspiral_table[clipping:-clipping]
+	sngl_inspiral_table = sngl_inspiral_table[clipleft:clipright]
 
 	# put the bank table into the output document
 	new_sngl_table = lsctables.New(lsctables.SnglInspiralTable)
@@ -233,9 +235,9 @@ def write_bank(filename, bank, clipping = None, verbose = False):
 	root.appendChild(param.new_param('snr_threshold', ligolw_types.FromPyType[float], bank.snr_threshold))
 	root.appendChild(param.new_param('template_bank_filename', ligolw_types.FromPyType[str], bank.template_bank_filename))
 
-	if clipping is not None:
-		bank.autocorrelation_bank = bank.autocorrelation_bank[clipping:-clipping,:]
-		bank.sigmasq = bank.sigmasq[clipping:-clipping]
+	# apply clipping to autocorrelations and sigmasq
+	bank.autocorrelation_bank = bank.autocorrelation_bank[clipleft:clipright,:]
+	bank.sigmasq = bank.sigmasq[clipleft:clipright]
 
 	# Add root-level arrays
 	root.appendChild(array.from_array('autocorrelation_bank_real', bank.autocorrelation_bank.real))
@@ -248,9 +250,8 @@ def write_bank(filename, bank, clipping = None, verbose = False):
 		el = ligolw.LIGO_LW()
 
 		# Apply clipping option
-		if clipping is not None:
-			frag.mix_matrix = frag.mix_matrix[:,clipping*2:-clipping*2]
-			frag.chifacs = frag.chifacs[clipping*2:-clipping*2]
+		frag.mix_matrix = frag.mix_matrix[:,clipleft*2:clipright*2]
+		frag.chifacs = frag.chifacs[clipleft*2:clipright*2]
 
 		# Add scalar params
 		el.appendChild(param.new_param('start', ligolw_types.FromPyType[float], frag.start))
