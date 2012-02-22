@@ -87,6 +87,6 @@ ninja : split_banks
 	ls *H1_split_bank-*V1-SBANK-871154847-2048.xml | lalapps_path2cache > H1_split_bank.cache
 	ls *L1_split_bank-*V1-SBANK-871154847-2048.xml | lalapps_path2cache > L1_split_bank.cache
 	ls *V1_split_bank-*V1-SBANK-871154847-2048.xml | lalapps_path2cache > V1_split_bank.cache
-	gstlal_inspiral_svd_bank_pipe --instrument H1 --reference-psd $(PSD_FILE_H1) --output-name H1_svd_bank --bank-cache H1_split_bank.cache --clipping $(CLIPPING)
-	gstlal_inspiral_svd_bank_pipe --instrument L1 --reference-psd $(PSD_FILE_L1) --output-name L1_svd_bank --bank-cache L1_split_bank.cache --clipping $(CLIPPING)
-	gstlal_inspiral_svd_bank_pipe --instrument V1 --reference-psd $(PSD_FILE_V1) --output-name V1_svd_bank --bank-cache V1_split_bank.cache --clipping $(CLIPPING)
+	gstlal_inspiral_svd_bank_pipe --instrument H1 --reference-psd $(PSD_FILE_H1) --output-name H1_svd_bank --bank-cache H1_split_bank.cache --stagger
+	gstlal_inspiral_svd_bank_pipe --instrument L1 --reference-psd $(PSD_FILE_L1) --output-name L1_svd_bank --bank-cache L1_split_bank.cache --stagger
+	gstlal_inspiral_svd_bank_pipe --instrument V1 --reference-psd $(PSD_FILE_V1) --output-name V1_svd_bank --bank-cache V1_split_bank.cache --stagger
