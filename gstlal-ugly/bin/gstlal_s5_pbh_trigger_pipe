@@ -210,7 +210,9 @@ class gstlal_inspiral_job(InspiralJob):
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral'), tag_base='gstlal_inspiral'):
 		InspiralJob.__init__(self, executable, tag_base)
-
+		self.add_condor_cmd('requirements', '( CAN_RUN_MULTICORE )')
+		self.add_condor_cmd('request_cpus', '6')
+		self.add_condor_cmd('+RequiresMultipleCores', 'True')
 
 class gstlal_inspiral_inj_job(InspiralJob):
 	"""
@@ -218,6 +220,9 @@ class gstlal_inspiral_inj_job(InspiralJob):
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral'), tag_base='gstlal_inspiral_inj'):
 		InspiralJob.__init__(self, executable, tag_base)
+		self.add_condor_cmd('requirements', '( CAN_RUN_MULTICORE )')
+		self.add_condor_cmd('request_cpus', '6')
+		self.add_condor_cmd('+RequiresMultipleCores', 'True')
 
 
 class gstlal_inspiral_node(InspiralNode):
@@ -276,7 +281,7 @@ class gstlal_inspiral_calc_likelihood_node(InspiralNode):
 	"""
 	A gstlal_inspiral_calc_likelihood node
 	"""
-	def __init__(self, job, dag, likelihood_file, synthesize_injections = 1000000, input = [], likelihood_output_name = "post_calc_likelihood_", background_prior = 1000.0, p_node=[]):
+	def __init__(self, job, dag, likelihood_file, synthesize_injections = 1000000, input = [], likelihood_output_name = "post_calc_likelihood_", background_prior = 1.0, p_node=[]):
 		InspiralNode.__init__(self, job, dag, p_node)
 		self.add_var_opt("likelihood-file", likelihood_file)
 		self.add_var_opt("tmp-space", inspiral_pipe.log_path())
@@ -315,8 +320,7 @@ class gstlal_compute_far_from_snr_chisq_histograms_node(InspiralNode):
 	"""
 	A gstlal_compute_far_from_snr_chisq_histograms_job node
 	"""
-	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, background_bins_file, additional_trials_factor, FAR = False, FAP = False, noninj_input = None, inj_input = [], p_node=[]):
+	def __init__(self, job, dag, background_bins_file, additional_trials_factor, FAR = False, FAP = False, noninj_input = [], inj_input = [], p_node=[]):
 		InspiralNode.__init__(self, job, dag, p_node)
 		if background_bins_file is not None:
 			self.add_var_opt("background-bins-file", background_bins_file)
@@ -326,49 +330,15 @@ class gstlal_compute_far_from_snr_chisq_histograms_node(InspiralNode):
 			self.add_var_opt("compute-fap", "")
 		if FAR:
 			self.add_var_opt("compute-far", "")
-		for f in inj_input:
-			#FIXME totally broken if len(inj_input) > 1
-			self.add_var_opt("injection-dbs", f)
-		self.add_var_opt("non-injection-db", noninj_input)
-		self.output_names = inj_input + [noninj_input]
+		self.add_var_opt("injection-dbs", pipeline_dot_py_append_opts_hack("injection-dbs", inj_input))
+		self.add_var_opt("non-injection-db", pipeline_dot_py_append_opts_hack("non-injection-db", noninj_input))
+		self.output_names = inj_input + noninj_input
 
 
 #
 # Utility functions
 #
 
-
-def parse_banks(bank_string):
-	out = {}
-	for b in bank_string.split(','):
-		ifo, bank = b.split(':')
-		out.setdefault(ifo, []).append(bank)
-	return out
-
-def get_independent_components(svd_bank_string, ifo):
-	"""
-	Estimate the number of independent components by using the SVD
-	"""
-	fname = parse_banks(svd_bank_string)[ifo][0]
-	lw = utils.load_filename(fname, verbose = False).childNodes[0]
-	out = 0.0
-	for node in (node for node in lw.childNodes if node.tagName == 'LIGO_LW'):
-		out += array.get_array(node, 'sum_of_squares_weights').array.sum()
-	return int(out)
-
-
-def get_independence_factor(bank_cache, ifo = "H1"):
-	dof = 0.0
-	num_tmps = 0
-	for cnt, s in enumerate(build_bank_string(bank_cache)):
-		fname = parse_banks(s)[ifo][0]
-		lw = utils.load_filename(fname, verbose = False).childNodes[0]
-		for node in (node for node in lw.childNodes if node.tagName == 'LIGO_LW'):
-			dof += array.get_array(node, 'sum_of_squares_weights').array.sum()
-		num_tmps += len(lsctables.table.get_table(lw, lsctables.SnglInspiralTable.tableName))
-		print >>sys.stderr, "processing bank %d\r" % (cnt,),
-	return dof / num_tmps
-		
 
 # FIXME surely this is in glue
 def parse_cache_str(instr):
@@ -380,32 +350,10 @@ def parse_cache_str(instr):
 		dictcache[ifo] = cache
 	return dictcache
 
-def num_bank_files(cachedict):
-	ifo = cachedict.keys()[0]
-	f = open(cachedict[ifo],'r')
-	cnt = 0
-	for l in f:
-		cnt+=1
-	f.close()
-	return cnt
-
-def build_bank_string(cachedict):
-	numfiles = num_bank_files(cachedict)
-	filedict = {}
-	for ifo in cachedict:
-		filedict[ifo] = open(cachedict[ifo],'r')
-	for a in range(numfiles):
-		c = ""
-		for ifo, f in filedict.items():
-			c += '%s:%s,' % (ifo, lal.CacheEntry(f.readline()).path())
-		c = c.strip(',')
-		yield c
-	
-def cache_to_dict(cachefile):
-	out  = {}
-	for l in open(cachefile):
-		c = lal.CacheEntry(l)
-		out.setdefault(c.observatory, []).append(c)
+def pipeline_dot_py_append_opts_hack(opt, vals):
+	out = vals[0]
+	for v in vals[1:]:
+		out += " --%s %s" % (opt, v)
 	return out
 
 def parse_command_line():
@@ -445,9 +393,9 @@ def parse_command_line():
 	return options, filenames, bankcache, channel_dict
 
 
-###############################################################################
+#
 # MAIN
-###############################################################################
+#
 
 options, filenames, bank_cache, channel_dict = parse_command_line()
 # FIXME use glue function
@@ -541,10 +489,10 @@ for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, [options.num
 		# FAR nodes
 		#
 	
-		farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode_likelihood.background_name, trials_factor, FAP = True, noninj_input = noninjnode.output_name, inj_input = [injnode.output_name], p_node = [noninjnode_likelihood, injnode_likelihood])
+		farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode_likelihood.background_name, trials_factor, FAP = True, noninj_input = [noninjnode.output_name], inj_input = [injnode.output_name], p_node = [noninjnode_likelihood, injnode_likelihood])
 	
 	else:
-		farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode_likelihood.background_name, trials_factor, FAP = True, noninj_input = noninjnode.output_name, inj_input = [], p_node = [noninjnode_likelihood])
+		farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode_likelihood.background_name, trials_factor, FAP = True, noninj_input = [noninjnode.output_name], inj_input = [], p_node = [noninjnode_likelihood])
 
 #
 	# Pre clustering
@@ -592,7 +540,7 @@ if inj_nodes:
 	inspinjnode = ligolw_inspinjfind_node(ligolwInspinjFindJob, dag, injxml, p_node=[clusternode])
 	# convert back to sqlite
 	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[injxml], p_node=[inspinjnode])
-	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, 1, FAR = True, noninj_input = noninjdb, inj_input = [injdb], p_node = [sqlitenode, noninjsqlitenode])
+	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, 1, FAR = True, noninj_input = [noninjdb], inj_input = [injdb], p_node = [sqlitenode, noninjsqlitenode])
 	# compute FARs
 	name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
 	# make plots
@@ -602,7 +550,7 @@ if inj_nodes:
 	gstlal_s5_pbh_summary_page_node(openpageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-open-box" % (options.gps_start_time, options.gps_stop_time), p_node=[plotnode])
 else:
 	# compute FARs without injections
-	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, 1, FAR = True, noninj_input = noninjdb, inj_input = [], p_node = [noninjsqlitenode])
+	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, 1, FAR = True, noninj_input = [noninjdb], inj_input = [], p_node = [noninjsqlitenode])
 
 #
 # all done
