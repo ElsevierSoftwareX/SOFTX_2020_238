@@ -51,6 +51,9 @@
 
 #include <gstlal/gstlal_tags.h>
 #include <framecpp_channeldemux.h>
+#if HAVE_GST_BASEPARSE
+#include <framecpp_igwdparse.h>
+#endif /* HAVE_GST_BASEPARSE */
 
 
 /*
@@ -88,7 +91,11 @@ static void typefind(GstTypeFind *find, gpointer data)
 	else if(memcmp(header, "IGWD", 5))
 		GST_DEBUG("bytes 0--4 are not {'I', 'G', 'W', 'D', '\\0'}");
 	else {
-		GstCaps *caps = gst_caps_new_simple("application/x-igwd-frame", NULL);
+		GstCaps *caps = gst_caps_new_simple(
+			"application/x-igwd-frame",
+			"framed", G_TYPE_BOOLEAN, FALSE,
+			NULL
+		);
 		/* bytes 12--15 store 0x1234 */
 		if(GST_READ_UINT16_LE(header + 12) == 0x1234)
 			gst_caps_set_simple(caps, "endianness", G_TYPE_INT, G_LITTLE_ENDIAN, NULL);
@@ -113,7 +120,11 @@ static gboolean register_typefind(GstPlugin *plugin)
 		GST_RANK_PRIMARY,
 		typefind,
 		extensions,
-		gst_caps_from_string("application/x-igwd-frame endianness = (int) {1234, 4321}"),
+		gst_caps_from_string(
+			"application/x-igwd-frame, " \
+			"endianness = (int) {1234, 4321}, " \
+			"framed = (boolean) false"
+		),
 		NULL,
 		NULL
 	);
@@ -137,6 +148,9 @@ static gboolean plugin_init(GstPlugin *plugin)
 		GType type;
 	} *element, elements[] = {
 		{"framecpp_channeldemux", GST_RANK_SECONDARY, FRAMECPP_CHANNELDEMUX_TYPE},
+#if HAVE_GST_BASEPARSE
+		{"framecpp_igwdparse", GST_RANK_SECONDARY, FRAMECPP_IGWDPARSE_TYPE},
+#endif
 		{NULL, 0, 0},
 	};
 
@@ -166,6 +180,9 @@ static gboolean plugin_init(GstPlugin *plugin)
 	 */
 
 	GST_DEBUG_CATEGORY_INIT(framecpp_channeldemux_debug, "framecpp_channeldemux", 0, "framecpp_channeldemux element");
+#if HAVE_GST_BASEPARSE
+	GST_DEBUG_CATEGORY_INIT(framecpp_igwdparse_debug, "framecpp_igwdparse", 0, "framecpp_igwdparse element");
+#endif
 
 	/*
 	 * Done.

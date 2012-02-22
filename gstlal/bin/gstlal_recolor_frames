@@ -84,28 +84,17 @@ if options.shift is not None:
 	head = pipeparts.mkshift(pipeline, head, shift = options.shift)
 	head = pipeparts.mkprogressreport(pipeline, head, "frames_shifted")
 
-#FIXME get sample rate some other way
-# first whiten and downsample
-head = lloidparts.mkLLOIDsrc(pipeline, head, [sr], options.instrument, psd = wpsd, seekevent = seekevent, block_duration = gst.SECOND, track_psd = True)
-
-# a lie to make the whitener happy
-head = pipeparts.mktaginject(pipeline, head[sr], "units=strain")
+# first whiten and downsample, take only the [sr] item
+head = lloidparts.mkLLOIDsrc(pipeline, head, [sr], options.instrument, psd = wpsd, seekevent = seekevent, block_duration = gst.SECOND, track_psd = True)[sr]
 
 # Recolor kernel
-latency = int(1.0 / rpsd.deltaF * sr / 2.0)
-fir_matrix = numpy.zeros((1, 2 * latency-1), 'd64') 
-freq_data = 1.0 / rpsd.data[:latency]**.5 
-freq_data[0] = 0.0
-fir_matrix[0,:latency] = freq_data
-fir_matrix[0,latency:] = freq_data[::-1][1:] 
-fir_matrix = numpy.roll(numpy.real(scipy.ifft(fir_matrix)), latency)
-fir_matrix *= (2 * latency-1)**.5 # scipy ifft convention norm
-
-# normalization 
-fir_matrix *= (rpsd.deltaF * 2)**.5 # two delta F from the LIGO PSD convention
-fir_matrix /= 2 # factor of two from the two-sided fir filter being used!
-
-head = pipeparts.mkfirbank(pipeline, head, latency = latency, fir_matrix = fir_matrix, block_stride = sr * 32)
+max_sample = int(round(1.0 / rpsd.deltaF * sr / 2.0)) + 1 
+# truncate to requested output sample rate, if it is higher than the psd provides an assert will fail later
+rpsd.data = 1. / rpsd.data[:max_sample]
+fir_matrix, latency, measured_sample_rate = reference_psd.psd_to_fir_kernel(rpsd)
+# add latency to fix the time stamps
+latency -= 1
+head = pipeparts.mkfirbank(pipeline, head, latency = latency, fir_matrix = [fir_matrix], block_stride = sr * 32)
 
 # put the units back to strain before writing to frames
 head = pipeparts.mktaginject(pipeline, head, "units=strain")
@@ -122,10 +111,7 @@ pipeparts.mkframesink(pipeline, head, path=outpath, sync=False, async=True, fram
 #
 
 pipeline.set_state(gst.STATE_PAUSED)
-#	raise RuntimeError("pipeline did not enter paused state")
-
 pipeline.set_state(gst.STATE_PLAYING)
-#	raise RuntimeError("pipeline did not enter playing state")
 
 mainloop.run()
 
