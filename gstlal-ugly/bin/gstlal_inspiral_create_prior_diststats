@@ -65,6 +65,7 @@ def parse_command_line():
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("-s", "--synthesize-injection-count", metavar = "N", default = 10000000, type = "int", help = "Synthesize an injection distribution with N injections. default 1000000")
 	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
+	parser.add_option("-p", "--background-prior", metavar = "N", default = 1, type = "float", help = "include an exponential background prior with the maximum bin count = N, default 1")
 	options, filenames = parser.parse_args()
 
 	return options, filenames
@@ -93,9 +94,8 @@ options, filenames = parse_command_line()
 #
 
 coincparamsdistributions = inspiral.DistributionsStats()
-# FIXME what should this be?
-coincparamsdistributions.add_uniform_background_prior(n = 1e-4)
-coincparamsdistributions.add_gaussian_background_prior(N = 10000)
+if options.background_prior != 0:
+	coincparamsdistributions.add_background_prior(options.background_prior)
 coincparamsdistributions.synthesize_injections(verbose = options.verbose, N = options.synthesize_injection_count)
 
 #FIXME there is no real segment here, should there be?

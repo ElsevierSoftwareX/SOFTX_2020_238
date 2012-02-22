@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-This program makes a dag for low-latency running, like ER1
+This program makes a dag to run gstlal_inspiral offline
 """
 
 __author__ = 'Chad Hanna <channa@caltech.edu>'
@@ -26,161 +26,144 @@ from gstlal.svd_bank import read_bank
 from gstlal import inspiral, inspiral_pipe
 import numpy
 
-###############################################################################
-# gstlal_s5_pbh_summary_page
-###############################################################################
 
-class gstlal_s5_pbh_summary_page_job(pipeline.CondorDAGJob):
+#
+# Generic job classes
+#
+
+
+class InspiralJob(pipeline.CondorDAGJob):
+	"""
+	A generic job class for gstlal inspiral stuff
+	"""
+	def __init__(self, executable, tag_base):
+		self.__prog__ = tag_base
+		self.__executable = executable
+		self.__universe = 'vanilla'
+		pipeline.CondorDAGJob.__init__(self, self.__universe, self.__executable)
+		self.add_condor_cmd('getenv','True')
+		self.tag_base = tag_base
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
+		self.number = 1
+
+
+class InspiralNode(pipeline.CondorDAGNode):
+	"""
+	A generic node class for gstlal inspiral stuff
+	"""
+	def __init__(self, job, dag, p_node=[]):
+		pipeline.CondorDAGNode.__init__(self, job)
+		for p in p_node:
+			self.add_parent(p)
+		dag.add_node(self)
+
+
+#
+# gstlal_s5_pbh_summary_page
+#
+
+
+class gstlal_s5_pbh_summary_page_job(InspiralJob):
 	"""
 	A gstlal_s5_pbh_summary_page job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_s5_pbh_summary_page'), tag_base='gstlal_s5_pbh_summary_page'):
-		self.__prog__ = 'lalapps_cbc_plotsummary_job'
-		self.__executable = executable
-		self.__universe = 'vanilla'
-		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
-		self.add_condor_cmd('getenv','True')
-		self.tag_base = tag_base
-		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
-		self.set_sub_file(tag_base+'.sub')
-		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
-		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
-		self.number = 1
+		InspiralJob.__init__(self, executable, tag_base)
 
-class gstlal_s5_pbh_summary_page_node(pipeline.CondorDAGNode):
+
+class gstlal_s5_pbh_summary_page_node(InspiralNode):
 	"""
 	A gstlal_s5_pbh_summary_page_node
 	"""
 	def __init__(self, job, dag, name_tag, web_dir, title, open_box=True, p_node=[]):
-		pipeline.CondorDAGNode.__init__(self,job)
+		InspiralNode.__init__(self, job, dag, p_node)
 		self.add_var_opt("output-name-tag", name_tag)
 		self.add_var_opt("webserver-dir", web_dir)
 		self.add_var_opt("title", title)
 		if open_box: self.add_var_opt("open-box", "")
-		for p in p_node:
-			self.add_parent(p)
-		dag.add_node(self)
 
 
-###############################################################################
-# lalapps_cbc_plotsummary
-###############################################################################
+#
+# gstlal_inspiral_plotsummary
+#
 
-class lalapps_cbc_plotsummary_job(pipeline.CondorDAGJob):
-	"""
-	A lalapps_cbc_plotsummary_job
-	"""
-	def __init__(self, executable=inspiral_pipe.which('lalapps_cbc_plotsummary'), tag_base='lalapps_cbc_plotsummary'):
-		self.__prog__ = 'lalapps_cbc_plotsummary_job'
-		self.__executable = executable
-		self.__universe = 'vanilla'
-		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
-		self.add_condor_cmd('getenv','True')
-		self.tag_base = tag_base
-		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
-		self.set_sub_file(tag_base+'.sub')
-		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
-		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
-		self.number = 1
 
-class lalapps_cbc_plotsummary_node(pipeline.CondorDAGNode):
+class gstlal_inspiral_plotsummary_job(InspiralJob):
 	"""
-	A lalapps_cbc_plotsummary_node
+	A gstlal_inspiral_plotsummary_job
 	"""
-	def __init__(self, job, dag, base, live_time_prog="gstlal_inspiral", input=[], tmp_space=inspiral_pipe.log_path(), p_node=[]):
-		pipeline.CondorDAGNode.__init__(self,job)
+	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral_plotsummary'), tag_base='gstlal_inspiral_plotsummary'):
+		InspiralJob.__init__(self, executable, tag_base)
+
+
+class gstlal_inspiral_plotsummary_node(InspiralNode):
+	"""
+	A gstlal_inspiral_plotsummary_node
+	"""
+	def __init__(self, job, dag, base, input=[], tmp_space=inspiral_pipe.log_path(), p_node=[]):
+		InspiralNode.__init__(self, job, dag, p_node)
 		self.add_var_opt("base", base)
-		#self.add_var_opt("live-time-program", live_time_prog)
 		self.add_var_opt("tmp-space", tmp_space)
 		for f in input:
 			self.add_file_arg(f)
-		for p in p_node:
-			self.add_parent(p)
-		dag.add_node(self)
 
 
-###############################################################################
+#
 # lalapps_run_sqlite
-###############################################################################
+#
 
-class lalapps_run_sqlite_job(pipeline.CondorDAGJob):
+
+class lalapps_run_sqlite_job(InspiralJob):
 	"""
 	A lalapps_run_sqlite
 	"""
 	def __init__(self, executable=inspiral_pipe.which('lalapps_run_sqlite'), tag_base='lalapps_run_sqlite'):
-		self.__prog__ = 'lalapps_run_sqlite'
-		self.__executable = executable
-		self.__universe = 'vanilla'
-		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
-		self.add_condor_cmd('getenv','True')
-		self.tag_base = tag_base
-		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
-		self.set_sub_file(tag_base+'.sub')
-		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
-		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
-		self.number = 1
+		InspiralJob.__init__(self, executable, tag_base)
 
-class lalapps_run_sqlite_node(pipeline.CondorDAGNode):
+
+class lalapps_run_sqlite_node(InspiralNode):
 	"""
 	A lalapps_run_sqlite node
 	"""
 	def __init__(self, job, dag, sql_file, input=[], tmp_space=inspiral_pipe.log_path(), p_node=[]):
-		pipeline.CondorDAGNode.__init__(self,job)
+		InspiralNode.__init__(self, job, dag, p_node)
 		self.add_var_opt("sql-file", sql_file)
 		self.add_var_opt("tmp-space", tmp_space)
 		if len(input) == 1:
 			self.output_name = input[0]
 		for f in input:
 			self.add_file_arg(f)
-		for p in p_node:
-			self.add_parent(p)
-		dag.add_node(self)
 
 
-###############################################################################
+#
 # ligolw_sqlite
-###############################################################################
+#
 
-class ligolw_sqlite_from_xml_job(pipeline.CondorDAGJob):
+
+class ligolw_sqlite_from_xml_job(InspiralJob):
 	"""
 	A ligolw_sqlite_job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('ligolw_sqlite'), tag_base='ligolw_sqlite_from_xml'):
-		self.__prog__ = 'ligolw_sqlite'
-		self.__executable = executable
-		self.__universe = 'vanilla'
-		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
-		self.add_condor_cmd('getenv','True')
-		self.tag_base = tag_base
-		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
-		self.set_sub_file(tag_base+'.sub')
-		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
-		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
-		self.number = 1
+		InspiralJob.__init__(self, executable, tag_base)
 
-class ligolw_sqlite_to_xml_job(pipeline.CondorDAGJob):
+
+class ligolw_sqlite_to_xml_job(InspiralJob):
 	"""
 	A ligolw_sqlite_job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('ligolw_sqlite'), tag_base='ligolw_sqlite_to_xml'):
-		self.__prog__ = 'ligolw_sqlite'
-		self.__executable = executable
-		self.__universe = 'vanilla'
-		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
-		self.add_condor_cmd('getenv','True')
-		self.tag_base = tag_base
-		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
-		self.set_sub_file(tag_base+'.sub')
-		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
-		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
-		self.number = 1
+		InspiralJob.__init__(self, executable, tag_base)
 
-class ligolw_sqlite_node(pipeline.CondorDAGNode):
+
+class ligolw_sqlite_node(InspiralNode):
 	"""
 	A ligolw_sqlite node
 	"""
 	def __init__(self, job, dag, database, input=[], replace=True, tmp_space=inspiral_pipe.log_path(), extract=None, p_node=[]):
-		pipeline.CondorDAGNode.__init__(self,job)
+		InspiralNode.__init__(self, job, dag, p_node)
 		if extract is not None:
 			self.add_var_opt("extract", extract)
 		self.add_var_opt("database", database)
@@ -191,101 +174,65 @@ class ligolw_sqlite_node(pipeline.CondorDAGNode):
 			if f is not None:
 				self.add_file_arg(f)
 		self.output_name = database
-		for p in p_node:
-			self.add_parent(p)
-		dag.add_node(self)
 
 
-###############################################################################
+#
 # ligolw_inspinjfind
-###############################################################################
+#
 
-class ligolw_inspinjfind_job(pipeline.CondorDAGJob):
+
+class ligolw_inspinjfind_job(InspiralJob):
 	"""
 	A ligolw_inspinjfind_job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('ligolw_inspinjfind'), tag_base='ligolw_inspinjfind'):
-		self.__prog__ = 'ligolw_inspinjfind'
-		self.__executable = executable
-		self.__universe = 'vanilla'
-		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
-		self.add_condor_cmd('getenv','True')
-		self.tag_base = tag_base
-		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
-		self.set_sub_file(tag_base+'.sub')
-		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
-		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
-		self.number = 1
+		InspiralJob.__init__(self, executable, tag_base)
 
-class ligolw_inspinjfind_node(pipeline.CondorDAGNode):
+
+class ligolw_inspinjfind_node(InspiralNode):
 	"""
 	A ligolw_inspinjfind node
 	"""
 	def __init__(self, job, dag, xml, p_node=[]):
-		pipeline.CondorDAGNode.__init__(self,job)
+		InspiralNode.__init__(self, job, dag, p_node)
 		self.add_var_arg(xml)
 		self.output_name = xml
-		for p in p_node:
-			self.add_parent(p)
-		dag.add_node(self)
 
 
-###############################################################################
+#
 # gstlal_inspiral
-###############################################################################
+#
 
-class gstlal_inspiral_job(pipeline.CondorDAGJob):
+
+class gstlal_inspiral_job(InspiralJob):
 	"""
 	A gstlal_inspiral job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral'), tag_base='gstlal_inspiral'):
-		"""
-		"""
-		self.__prog__ = 'gstlal_inspiral'
-		self.__executable = executable
-		self.__universe = 'vanilla'
-		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
-		self.add_condor_cmd('getenv','True')
+		InspiralJob.__init__(self, executable, tag_base)
 		self.add_condor_cmd('requirements', '( CAN_RUN_MULTICORE )')
 		self.add_condor_cmd('request_cpus', '6')
 		self.add_condor_cmd('+RequiresMultipleCores', 'True')
-		self.tag_base = tag_base
-		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
-		self.set_sub_file(tag_base+'.sub')
-		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
-		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
-		self.number = 1
 
-class gstlal_inspiral_inj_job(pipeline.CondorDAGJob):
+class gstlal_inspiral_inj_job(InspiralJob):
 	"""
 	A gstlal_inspiral job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral'), tag_base='gstlal_inspiral_inj'):
-		"""
-		"""
-		self.__prog__ = 'gstlal_inspiral'
-		self.__executable = executable
-		self.__universe = 'vanilla'
-		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
-		self.add_condor_cmd('getenv','True')
+		InspiralJob.__init__(self, executable, tag_base)
 		self.add_condor_cmd('requirements', '( CAN_RUN_MULTICORE )')
 		self.add_condor_cmd('request_cpus', '6')
 		self.add_condor_cmd('+RequiresMultipleCores', 'True')
-		self.tag_base = tag_base
-		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
-		self.set_sub_file(tag_base+'.sub')
-		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
-		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
-		self.number = 1
 
-class gstlal_inspiral_node(pipeline.CondorDAGNode):
+
+class gstlal_inspiral_node(InspiralNode):
 	"""
 	A gstlal_inspiral node
 	"""
 	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=20.0, injections=None, control_peak_time = 8, vetoes=None, time_slide_file=None, fir_stride = 8, p_node=[]):
+	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=20.0, injections=None, control_peak_time = 8, vetoes=None, time_slide_file=None, fir_stride = 8, instruments = "H1H2L1", p_node=[]):
+		InspiralNode.__init__(self, job, dag, p_node)
 
-		pipeline.CondorDAGNode.__init__(self,job)
 		if time_slide_file is not None:
 			self.add_var_opt("time-slide-file", time_slide_file)
 		self.add_var_opt("frame-cache", frame_cache)
@@ -300,8 +247,6 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		self.add_var_opt("track-psd", "")
 		self.add_var_opt("control-peak-time", control_peak_time)
 		self.add_var_opt("fir-stride", fir_stride)
-		#self.add_var_opt("ht-gate-threshold", ht_gate_thresh)
-		#self.add_var_opt("verbose", "") #Put this in for debugging
 		self.injections = injections
 		if self.injections is not None:
 			self.add_var_opt("injections", injections)
@@ -310,47 +255,34 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		path = os.getcwd()
 		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
 		if self.injections is not None:
-			self.output_name = '%s/%s-%04d-%d-%d-LLOID-simulations.sqlite' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
+			self.output_name = '%s/%s-%04d-%d-%d-LLOID-simulations.sqlite' % (path, instruments, job.number, gps_start_time, gps_end_time)
 		else:
-			self.output_name = '%s/%s-%04d-%d-%d-LLOID.sqlite' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
-			self.background_name = '%s/%s-%04d-%d-%d-LLOID_snr_chi.xml.gz' % (path, "H1H2L1", job.number, gps_start_time, gps_end_time)
+			self.output_name = '%s/%s-%04d-%d-%d-LLOID.sqlite' % (path, instruments, job.number, gps_start_time, gps_end_time)
+			self.background_name = '%s/%s-%04d-%d-%d-LLOID_snr_chi.xml.gz' % (path, instruments, job.number, gps_start_time, gps_end_time)
 		job.number += 1
 		self.add_var_opt("output",self.output_name)
-		dag.output_cache.append(lal.CacheEntry("H1H2L1", "-", segments.segment(gps_start_time, gps_end_time), "file://localhost/%s" % (self.output_name,)))
-		for p in p_node:
-			self.add_parent(p)
-		dag.add_node(self)
+		dag.output_cache.append(lal.CacheEntry(instruments, "-", segments.segment(gps_start_time, gps_end_time), "file://localhost/%s" % (self.output_name,)))
 
 
-###############################################################################
+#
 # gstlal_compute_far_from_snr_chisq_histograms
-###############################################################################
+#
 
-class gstlal_inspiral_calc_likelihood_job(pipeline.CondorDAGJob):
+
+class gstlal_inspiral_calc_likelihood_job(InspiralJob):
 	"""
 	A gstlal_inspiral_calc_likelihood job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral_calc_likelihood'), tag_base='gstlal_inspiral_calc_likelihood'):
-		"""
-		"""
-		self.__prog__ = 'gstlal_inspiral_calc_likelihood'
-		self.__executable = executable
-		self.__universe = 'vanilla'
-		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
-		self.add_condor_cmd('getenv','True')
-		self.tag_base = tag_base
-		self.set_sub_file(tag_base+'.sub')
-		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
-		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
-		self.number = 1
+		InspiralJob.__init__(self, executable, tag_base)
 
-class gstlal_inspiral_calc_likelihood_node(pipeline.CondorDAGNode):
+
+class gstlal_inspiral_calc_likelihood_node(InspiralNode):
 	"""
 	A gstlal_inspiral_calc_likelihood node
 	"""
-	def __init__(self, job, dag, likelihood_file, synthesize_injections = True, input = [], likelihood_output_name = "post_calc_likelihood_", p_node=[]):
-
-		pipeline.CondorDAGNode.__init__(self,job)
+	def __init__(self, job, dag, likelihood_file, synthesize_injections = 1000000, input = [], likelihood_output_name = "post_calc_likelihood_", background_prior = 1.0, p_node=[]):
+		InspiralNode.__init__(self, job, dag, p_node)
 		self.add_var_opt("likelihood-file", likelihood_file)
 		self.add_var_opt("tmp-space", inspiral_pipe.log_path())
 		for f in input:
@@ -358,120 +290,55 @@ class gstlal_inspiral_calc_likelihood_node(pipeline.CondorDAGNode):
 		fpath = os.path.split(likelihood_file)
 		self.background_name = os.path.join(fpath[0], likelihood_output_name + fpath[1])
 		self.add_var_opt("write-likelihood", self.background_name)
-		self.add_var_opt("background-prior", 1e-5) #FIXME make this optional
-		if synthesize_injections:
-			self.add_var_opt("synthesize-injections", "")
-		for p in p_node:
-			self.add_parent(p)
+		self.add_var_opt("background-prior", background_prior)
+		self.add_var_opt("synthesize-injections", synthesize_injections)
 		self.output_names = input
-		dag.add_node(self)
 
-###############################################################################
+
+#
 # gstlal_compute_far_from_snr_chisq_histograms
-###############################################################################
+#
 
-class gstlal_compute_far_from_snr_chisq_histograms_jobFAP(pipeline.CondorDAGJob):
+
+class gstlal_compute_far_from_snr_chisq_histograms_jobFAP(InspiralJob):
 	"""
 	A gstlal_compute_far_from_snr_chisq_histograms job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_compute_far_from_snr_chisq_histograms'), tag_base='gstlal_compute_far_from_snr_chisq_histogramsFAP'):
-		"""
-		"""
-		self.__prog__ = 'gstlal_compute_far_from_snr_chisq_histograms'
-		self.__executable = executable
-		self.__universe = 'vanilla'
-		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
-		self.add_condor_cmd('getenv','True')
-		self.add_condor_cmd('requirements', 'Memory > 1999') # is this enough?
-		self.tag_base = tag_base
-		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
-		self.set_sub_file(tag_base+'.sub')
-		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
-		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
-		self.number = 1
+		InspiralJob.__init__(self, executable, tag_base)
 
-class gstlal_compute_far_from_snr_chisq_histograms_jobFAR(pipeline.CondorDAGJob):
+
+class gstlal_compute_far_from_snr_chisq_histograms_jobFAR(InspiralJob):
 	"""
 	A gstlal_compute_far_from_snr_chisq_histograms job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_compute_far_from_snr_chisq_histograms'), tag_base='gstlal_compute_far_from_snr_chisq_histogramsFAR'):
-		"""
-		"""
-		self.__prog__ = 'gstlal_compute_far_from_snr_chisq_histograms'
-		self.__executable = executable
-		self.__universe = 'vanilla'
-		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
-		self.add_condor_cmd('getenv','True')
-		self.add_condor_cmd('requirements', 'Memory > 1999') # is this enough?
-		self.tag_base = tag_base
-		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
-		self.set_sub_file(tag_base+'.sub')
-		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
-		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
-		self.number = 1
+		InspiralJob.__init__(self, executable, tag_base)
 
-class gstlal_compute_far_from_snr_chisq_histograms_node(pipeline.CondorDAGNode):
+
+class gstlal_compute_far_from_snr_chisq_histograms_node(InspiralNode):
 	"""
 	A gstlal_compute_far_from_snr_chisq_histograms_job node
 	"""
-	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, background_bins_file, segments_file, vetoes_file, additional_trials_factor, FAR = False, FAP = False, noninj_input = None, inj_input = [], p_node=[]):
-
-		pipeline.CondorDAGNode.__init__(self,job)
+	def __init__(self, job, dag, background_bins_file, additional_trials_factor, FAR = False, FAP = False, noninj_input = [], inj_input = [], p_node=[]):
+		InspiralNode.__init__(self, job, dag, p_node)
 		if background_bins_file is not None:
 			self.add_var_opt("background-bins-file", background_bins_file)
-		self.add_var_opt("segments-file", segments_file)
-		self.add_var_opt("vetoes-file", vetoes_file)
 		self.add_var_opt("additional-trials-factor", additional_trials_factor)
 		self.add_var_opt("tmp-space", inspiral_pipe.log_path())
 		if FAP:
 			self.add_var_opt("compute-fap", "")
 		if FAR:
 			self.add_var_opt("compute-far", "")
-		for f in inj_input:
-			#FIXME totally broken if len(inj_input) > 1
-			self.add_var_opt("injection-dbs", f)
-		self.add_var_opt("non-injection-db", noninj_input)
-		for p in p_node:
-			self.add_parent(p)
-		self.output_names = inj_input + [noninj_input]
-		dag.add_node(self)
+		self.add_var_opt("injection-dbs", pipeline_dot_py_append_opts_hack("injection-dbs", inj_input))
+		self.add_var_opt("non-injection-db", pipeline_dot_py_append_opts_hack("non-injection-db", noninj_input))
+		self.output_names = inj_input + noninj_input
 
-###############################################################################
+
+#
 # Utility functions
-###############################################################################
+#
 
-def parse_banks(bank_string):
-	out = {}
-	for b in bank_string.split(','):
-		ifo, bank = b.split(':')
-		out.setdefault(ifo, []).append(bank)
-	return out
-
-def get_independent_components(svd_bank_string, ifo):
-	"""
-	Estimate the number of independent components by using the SVD
-	"""
-	fname = parse_banks(svd_bank_string)[ifo][0]
-	lw = utils.load_filename(fname, verbose = False).childNodes[0]
-	out = 0.0
-	for node in (node for node in lw.childNodes if node.tagName == 'LIGO_LW'):
-		out += array.get_array(node, 'sum_of_squares_weights').array.sum()
-	return int(out)
-
-
-def get_independence_factor(bank_cache, ifo = "H1"):
-	dof = 0.0
-	num_tmps = 0
-	for cnt, s in enumerate(build_bank_string(bank_cache)):
-		fname = parse_banks(s)[ifo][0]
-		lw = utils.load_filename(fname, verbose = False).childNodes[0]
-		for node in (node for node in lw.childNodes if node.tagName == 'LIGO_LW'):
-			dof += array.get_array(node, 'sum_of_squares_weights').array.sum()
-		num_tmps += len(lsctables.table.get_table(lw, lsctables.SnglInspiralTable.tableName))
-		print >>sys.stderr, "processing bank %d\r" % (cnt,),
-	return dof / num_tmps
-		
 
 # FIXME surely this is in glue
 def parse_cache_str(instr):
@@ -483,32 +350,10 @@ def parse_cache_str(instr):
 		dictcache[ifo] = cache
 	return dictcache
 
-def num_bank_files(cachedict):
-	ifo = cachedict.keys()[0]
-	f = open(cachedict[ifo],'r')
-	cnt = 0
-	for l in f:
-		cnt+=1
-	f.close()
-	return cnt
-
-def build_bank_string(cachedict):
-	numfiles = num_bank_files(cachedict)
-	filedict = {}
-	for ifo in cachedict:
-		filedict[ifo] = open(cachedict[ifo],'r')
-	for a in range(numfiles):
-		c = ""
-		for ifo, f in filedict.items():
-			c += '%s:%s,' % (ifo, lal.CacheEntry(f.readline()).path())
-		c = c.strip(',')
-		yield c
-	
-def cache_to_dict(cachefile):
-	out  = {}
-	for l in open(cachefile):
-		c = lal.CacheEntry(l)
-		out.setdefault(c.observatory, []).append(c)
+def pipeline_dot_py_append_opts_hack(opt, vals):
+	out = vals[0]
+	for v in vals[1:]:
+		out += " --%s %s" % (opt, v)
 	return out
 
 def parse_command_line():
@@ -525,7 +370,6 @@ def parse_command_line():
 	#FIXME get this from the cache?
 	parser.add_option("--channel", metavar = "name", default = [], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
-	parser.add_option("--delete-sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
 	parser.add_option("--cluster-sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
 	parser.add_option("--injection-sql-file", metavar = "filename", help = "Set the sql file to apply to injection databases")
 	parser.add_option("--web-dir", metavar = "directory", help = "Set the web directory like /home/USER/public_html")
@@ -549,11 +393,13 @@ def parse_command_line():
 	return options, filenames, bankcache, channel_dict
 
 
-###############################################################################
+#
 # MAIN
-###############################################################################
+#
 
 options, filenames, bank_cache, channel_dict = parse_command_line()
+# FIXME use glue function
+instruments = "".join(sorted(bank_cache.keys()))
 
 try: os.mkdir("logs")
 except: pass
@@ -576,7 +422,7 @@ ligolwInspinjFindJob = ligolw_inspinjfind_job()
 toSqliteJob = ligolw_sqlite_from_xml_job()
 toXMLJob = ligolw_sqlite_to_xml_job()
 lalappsRunSqliteJob = lalapps_run_sqlite_job()
-plotJob = lalapps_cbc_plotsummary_job()
+plotJob = gstlal_inspiral_plotsummary_job()
 openpageJob = gstlal_s5_pbh_summary_page_job()
 pageJob = gstlal_s5_pbh_summary_page_job()
 
@@ -620,7 +466,7 @@ for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, [options.num
 
 	noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride)
 	
-	noninjnode_likelihood = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, noninjnode.background_name, synthesize_injections = True, input = [noninjnode.output_name], p_node=[noninjnode])
+	noninjnode_likelihood = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, noninjnode.background_name, input = [noninjnode.output_name], p_node=[noninjnode])
 
 	# book keeping
 	far_input_nodes.append(noninjnode)
@@ -634,7 +480,7 @@ for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, [options.num
 		injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride)
 	
 		# FIXME the previous compute likelihood function already populates the injections, we should just use those
-		injnode_likelihood = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, noninjnode_likelihood.background_name, synthesize_injections = True, input = [injnode.output_name], likelihood_output_name = "post_calc_likelihood_simulation", p_node=[noninjnode_likelihood, injnode])
+		injnode_likelihood = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, noninjnode_likelihood.background_name, input = [injnode.output_name], likelihood_output_name = "post_calc_likelihood_simulation", p_node=[noninjnode_likelihood, injnode])
 		
 		# book keeping
 		far_input_nodes.append(injnode)
@@ -643,10 +489,10 @@ for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, [options.num
 		# FAR nodes
 		#
 	
-		farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode_likelihood.background_name, options.frame_segments_file, options.vetoes, trials_factor, FAP = True, noninj_input = noninjnode.output_name, inj_input = [injnode.output_name], p_node = [noninjnode_likelihood, injnode_likelihood])
+		farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode_likelihood.background_name, trials_factor, FAP = True, noninj_input = [noninjnode.output_name], inj_input = [injnode.output_name], p_node = [noninjnode_likelihood, injnode_likelihood])
 	
 	else:
-		farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode_likelihood.background_name, options.frame_segments_file, options.vetoes, trials_factor, FAP = True, noninj_input = noninjnode.output_name, inj_input = [], p_node = [noninjnode_likelihood])
+		farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode_likelihood.background_name, trials_factor, FAP = True, noninj_input = [noninjnode.output_name], inj_input = [], p_node = [noninjnode_likelihood])
 
 #
 	# Pre clustering
@@ -657,8 +503,8 @@ for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, [options.num
 			# cluster injections and drop the sim inspiral table
 			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.injection_sql_file, input=[f.output_name], p_node=[farnode])
 		else:
-			# don't cluster zerolag, instead delete above FAR
-			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.delete_sql_file, input=[f.output_name], p_node=[farnode])
+			# cluster non injection files
+			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.cluster_sql_file, input=[f.output_name], p_node=[farnode])
 		clusternode = ligolw_sqlite_node(toXMLJob, dag, f.output_name, replace=False, extract=f.output_name.replace('.sqlite','.xml.gz'), p_node=[clusternode])
 		cluster_nodes.append(clusternode)
 
@@ -670,11 +516,11 @@ for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, [options.num
 # non injection DB
 #
 
-noninjdb = "H1H2L1-ALL-%d-%d-LLOID.sqlite" % (options.gps_start_time, options.gps_stop_time)
+noninjdb = "%s-ALL-%d-%d-LLOID.sqlite" % (instruments, options.gps_start_time, options.gps_stop_time)
 # merge
 sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_name)[1].replace('.sqlite','.xml.gz') for f in noninj_nodes] + [options.vetoes, options.frame_segments_file], p_node=cluster_nodes)
-# delete high FAPs
-noninjsqlitenode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.delete_sql_file, input=[noninjdb], p_node=[sqlitenode])
+# cluster
+noninjsqlitenode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.cluster_sql_file, input=[noninjdb], p_node=[sqlitenode])
 
 #
 # injection DB
@@ -682,7 +528,7 @@ noninjsqlitenode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.del
 #
 
 if inj_nodes:
-	injdb = "H1H2L1-ALL-%d-%d-LLOID-simulations.sqlite" % (options.gps_start_time, options.gps_stop_time)
+	injdb = "%s-ALL-%d-%d-LLOID-simulations.sqlite" % (instruments, options.gps_start_time, options.gps_stop_time)
 	injxml = injdb+".xml.gz"
 	# merge
 	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[os.path.split(f.output_name)[1].replace('.sqlite','.xml.gz') for f in inj_nodes] + [options.vetoes, options.frame_segments_file, options.injections], p_node=cluster_nodes)
@@ -694,17 +540,17 @@ if inj_nodes:
 	inspinjnode = ligolw_inspinjfind_node(ligolwInspinjFindJob, dag, injxml, p_node=[clusternode])
 	# convert back to sqlite
 	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[injxml], p_node=[inspinjnode])
-	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, options.frame_segments_file, options.vetoes, 1, FAR = True, noninj_input = noninjdb, inj_input = [injdb], p_node = [sqlitenode, noninjsqlitenode])
+	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, 1, FAR = True, noninj_input = [noninjdb], inj_input = [injdb], p_node = [sqlitenode, noninjsqlitenode])
 	# compute FARs
 	name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
 	# make plots
-	plotnode = lalapps_cbc_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb, injdb], p_node=[farnode])
+	plotnode = gstlal_inspiral_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb, injdb], p_node=[farnode])
 	# make a web page
 	gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-closed-box" % (options.gps_start_time, options.gps_stop_time), open_box = False, p_node=[plotnode])
 	gstlal_s5_pbh_summary_page_node(openpageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-open-box" % (options.gps_start_time, options.gps_stop_time), p_node=[plotnode])
 else:
 	# compute FARs without injections
-	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, options.frame_segments_file, options.vetoes, 1, FAR = True, noninj_input = noninjdb, inj_input = [], p_node = [noninjsqlitenode])
+	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, 1, FAR = True, noninj_input = [noninjdb], inj_input = [], p_node = [noninjsqlitenode])
 
 #
 # all done

@@ -12,7 +12,7 @@ HIGH_PASS_FREQ = 30.0
 HIGH_FREQUENCY_CUTOFF = 2047.0
 SAMPLE_RATE = 4096
 NUM_SPLIT_TEMPLATES = 250
-OVERLAP = 25
+OVERLAP = 50
 MM = 0.97
 
 all : dag plots
@@ -92,9 +92,9 @@ dag : H1-TMPLTBANK-871154847-2048.xml.gz reference_psd.xml.gz sql lalapps_path2c
 	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | ./lalapps_path2cache > H1_split_bank.cache
 	ls *H2_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | ./lalapps_path2cache > H2_split_bank.cache
 	ls *L1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | ./lalapps_path2cache > L1_split_bank.cache
-	gstlal_inspiral_svd_bank_pipe --instrument H1 --reference-psd reference_psd.xml.gz --bank-cache H1_split_bank.cache --clipping $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H1_bank
-	gstlal_inspiral_svd_bank_pipe --instrument H2 --reference-psd reference_psd.xml.gz --bank-cache H2_split_bank.cache --clipping $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H2_bank
-	gstlal_inspiral_svd_bank_pipe --instrument L1 --reference-psd reference_psd.xml.gz --bank-cache L1_split_bank.cache --clipping $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name L1_bank
+	gstlal_inspiral_svd_bank_pipe --instrument H1 --reference-psd reference_psd.xml.gz --bank-cache H1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H1_bank
+	gstlal_inspiral_svd_bank_pipe --instrument H2 --reference-psd reference_psd.xml.gz --bank-cache H2_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H2_bank
+	gstlal_inspiral_svd_bank_pipe --instrument L1 --reference-psd reference_psd.xml.gz --bank-cache L1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name L1_bank
 	cat H2_bank.dag H1_bank.dag L1_bank.dag > bank.dag
 
 plots : reference_psd.xml.gz

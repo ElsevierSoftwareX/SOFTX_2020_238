@@ -30,6 +30,7 @@ import itertools
 import numpy
 import os
 from scipy import random
+from scipy import stats
 import StringIO
 import subprocess
 try:
@@ -312,17 +313,17 @@ class DistributionsStats(object):
 	"""
 
 	binnings = {
-		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.005, 0.5, 200))),
-		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.005, 0.5, 200))),
-		"L1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.005, 0.5, 200))),
-		"V1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.005, 0.5, 200)))
+		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
+		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
+		"L1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
+		"V1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200)))
 	}
 
 	filters = {
-		"H1_snr_chi": rate.gaussian_window2d(5, 5, sigma = 8),
-		"H2_snr_chi": rate.gaussian_window2d(5, 5, sigma = 8),
-		"L1_snr_chi": rate.gaussian_window2d(5, 5, sigma = 8),
-		"V1_snr_chi": rate.gaussian_window2d(5, 5, sigma = 8)
+		"H1_snr_chi": rate.gaussian_window2d(11, 11, sigma = 16),
+		"H2_snr_chi": rate.gaussian_window2d(11, 11, sigma = 16),
+		"L1_snr_chi": rate.gaussian_window2d(11, 11, sigma = 16),
+		"V1_snr_chi": rate.gaussian_window2d(11, 11, sigma = 16)
 	}
 
 	def __init__(self):
@@ -340,19 +341,53 @@ class DistributionsStats(object):
 	def add_single(self, event):
 		self.raw_distributions.add_background(self.likelihood_params_func((event,), None))
 
-	def add_uniform_background_prior(self, n = 1.):
+	def add_background_prior(self, n = 1., transition = 10.):
 		for param, binarr in self.raw_distributions.background_rates.items():
-			binarr.array += n
+			# Custom handle the first and last over flow bins
+			snrs = binarr.bins[0].centres()
+			snrs[0] = snrs[1] * .9
+			snrs[-1] = snrs[-2] * 1.1
+			chi2_over_snr2s = binarr.bins[1].centres()
+			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
+			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
+			for snr in snrs:
+				p = numpy.exp(-snr**2 / 2. + snrs[0]**2 / 2. + numpy.log(n))
+				p += (transition / snr)**6 * numpy.exp( -transition**2 / 2. + snrs[0]**2 / 2. + numpy.log(n)) # Softer fall off above some transition SNR for numerical reasons
+				for chi2_over_snr2 in chi2_over_snr2s:
+					binarr[snr, chi2_over_snr2] += p
+			# normalize to the requested count
+			binarr.array /= binarr.array.sum()
+			binarr.array *= n
 
-	def add_gaussian_background_prior(self, N = 1000, maxnum = 200, df = 24):
-		snrs = [ (random.chisquare(2, maxnum)**.5).max() for n in range(N)]
-		chisqs = random.chisquare(df, N)  / df
-		for param, binarr in self.raw_distributions.background_rates.items():
-			for snr, chisq in itertools.izip(snrs, chisqs):
-				#FIXME keep synced with the likelihood_params_func!!
-				binarr[snr, chisq / snr**2] += 1
+	def add_foreground_prior(self, n = 1., prefactors_range = (0.01, 0.5), df = 16, verbose = False):
+		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
+		for param, binarr in self.raw_distributions.injection_rates.items():
+			if verbose:
+				print >> sys.stderr, "synthesizing injections for %s" % param
+			# Custom handle the first and last over flow bins
+			snrs = binarr.bins[0].centres()
+			snrs[0] = snrs[1] * .9
+			snrs[-1] = snrs[-2] * 1.1
+			chi2_over_snr2s = binarr.bins[1].centres()
+			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
+			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
+			for i, snr in enumerate(snrs):
+				for j, chi2_over_snr2 in enumerate(chi2_over_snr2s):
+					chisq = chi2_over_snr2 * snr**2 * df # We record the reduced chi2
+					dist = 0
+					for pf in pfs:
+						nc = pf * snr**2
+						v = stats.ncx2.pdf(chisq, df, nc)
+						if numpy.isfinite(v):
+							dist += v
+					dist *= (snr / snrs[0])**-2
+					if numpy.isfinite(dist):
+						binarr[snr, chi2_over_snr2] += dist
+			# normalize to the requested count
+			binarr.array /= binarr.array.sum()
+			binarr.array *= n
 
-	def synthesize_injections(self, prefactor = .6, df = 16, N = 10000000, verbose = False):
+	def synthesize_injections(self, prefactor = .3, df = 16, N = 10000000, verbose = False):
 		# FIXME:  for maintainability, this should be modified to
 		# use the .add_injection() method of the .raw_distributions
 		# attribute, but that will slow this down
