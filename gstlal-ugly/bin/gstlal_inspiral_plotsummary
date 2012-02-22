@@ -1132,7 +1132,7 @@ class RateVsThreshold(object):
 			# skip injection documents
 			return
 
-		self.farsegs |= content.farsegs
+		self.farsegs |= contents.farsegs
 
 		for on_instruments, ifar, snr, is_background in connection.cursor().execute("""
 SELECT
@@ -1170,7 +1170,7 @@ WHERE
 	def finish(self):
 		
 		# Work out the live time from all of the databases
-		self.farsegs = self.farsegs.union(farsegs.keys())
+		self.farsegs = self.farsegs.union(self.farsegs.keys())
 		self.farlivetime = float(abs(self.farsegs))
 
 		for snrs, ifars, is_open_box in [(self.zerolag_snr, self.zerolag_ifar, True), (self.background_snr, self.background_ifar, False)]:
