@@ -380,8 +380,8 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 				GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRAMEH_NAME " structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
 		} else if(klass == element->eof_klass) {
 			/*
-			 * end-of-file structure.  if it's complete then
-			 * the file is complete
+			 * found end-of-file structure.  if it's complete
+			 * then the file is complete
 			 */
 
 			if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
@@ -392,7 +392,7 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 				GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRENDOFFILE_NAME " structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
 		} else {
 			/*
-			 * something else.  skip to next structure
+			 * found something else.  skip to next structure
 			 */
 
 			GST_DEBUG_OBJECT(element, "found %u byte structure at offset %zu", (guint) length, element->offset);
