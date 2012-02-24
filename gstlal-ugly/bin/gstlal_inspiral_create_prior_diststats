@@ -96,7 +96,7 @@ options, filenames = parse_command_line()
 coincparamsdistributions = inspiral.DistributionsStats()
 if options.background_prior != 0:
 	coincparamsdistributions.add_background_prior(options.background_prior)
-coincparamsdistributions.synthesize_injections(verbose = options.verbose, N = options.synthesize_injection_count)
+coincparamsdistributions.add_foreground_prior(verbose = options.verbose, n = options.synthesize_injection_count)
 
 #FIXME there is no real segment here, should there be?
 segs = segments.segmentlistdict.fromkeys(("H1","H2","L1","V1"), segments.segmentlist([segments.segment([GPS(0), GPS(2000000000)])]))
