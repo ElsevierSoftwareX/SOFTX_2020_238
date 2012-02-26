@@ -44,8 +44,9 @@ def Amp(eta, Mtot, t):
         theta = Theta(eta, Mtot, t)
         c = 3.0e10
         Tsun = 4.925491e-6
+	Mpc = 3.08568025e24
         f = 1.0 / (8.0 * Tsun * scipy.pi * Mtot) * (theta**(-3.0/8.0))
-        amp = - 2 * Tsun * c * (eta * Mtot ) * (Tsun * scipy.pi * Mtot * f)**(2.0/3.0);
+        amp = - 4.0/Mpc * Tsun * c * (eta * Mtot ) * (Tsun * scipy.pi * Mtot * f)**(2.0/3.0);
         return amp
 
 def waveform(m1, m2, fLow, fhigh, sampleRate):
@@ -167,7 +168,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 			print >> sys.stderr, "waveform %f (T = %f)" % ((time.time() - start), float(amp.shape[0]/(float(sampleRate))))
 			start = time.time()
                 if psd_interp is not None:
-                        amp /= psd_interp(f)**0.5 * 1e23
+                        amp /= psd_interp(f)**0.5
 
                 # make the iir filter coeffs
                 a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
@@ -195,7 +196,14 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
                 out2 = amp * numpy.exp(1j * phase)
                 vec2 = numpy.zeros(length * 1, dtype=numpy.cdouble)
                 vec2[-len(out2):] = out2
-                vec2 /= 1.0/numpy.sqrt(2.0)*((vec2 * numpy.conj(vec2)).sum()**0.5)
+		#norm2 = 1.0/numpy.sqrt(2.0)*((vec2 * numpy.conj(vec2)).sum()**0.5)
+                #vec2 /= norm2
+		#if output_to_xml: row.sigmasq = norm2**2*2.0*1e46/sampleRate/9.5214e+48
+
+		norm2 = abs(numpy.dot(vec2, numpy.conj(vec2)))
+                vec2 *= numpy.sqrt(2 / norm2)
+		if output_to_xml: row.sigmasq = 1.0 * norm2 / sampleRate
+		if verbose: print>>sys.stderr, "norm2 = %e, %e" % (norm2, row.sigmasq)
 
                 # compute the SNR
                 corr = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec2)))
@@ -323,9 +331,8 @@ def get_matrices_from_xml(xmldoc):
 
         sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 	sigmasq  = sngl_inspiral_table.getColumnByName("sigmasq").asarray()
-	print "sigmasq shape ", sigmasq.shape
 
-        return A, B, D, autocorrelation
+        return A, B, D, autocorrelation, sigmasq
 
 class Bank(object):
 	def __init__(self, bank_xmldoc, snr_threshold, logname = None, verbose = False):
@@ -333,8 +340,8 @@ class Bank(object):
 		self.snr_threshold = snr_threshold
 		self.logname = logname
 
-		self.A, self.B, self.D, self.autocorrelation_bank = get_matrices_from_xml(bank_xmldoc)
-		self.sigmasq=numpy.ones(len(self.autocorrelation_bank)) # FIXME: make sigmasq correct
+		self.A, self.B, self.D, self.autocorrelation_bank, self.sigmasq = get_matrices_from_xml(bank_xmldoc)
+		#self.sigmasq=numpy.ones(len(self.autocorrelation_bank)) # FIXME: make sigmasq correct
 
 	def get_rates(self, verbose = False):
 		bank_xmldoc = utils.load_filename(self.template_bank_filename, verbose = verbose)
