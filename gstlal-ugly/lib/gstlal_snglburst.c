@@ -101,15 +101,16 @@ GstBuffer *gstlal_snglburst_new_double_buffer_from_peak(struct gstlal_double_pea
 	if (srcbuf && size) {
 		for(channel = 0; channel < input->channels; channel++) {
 			if ( maxdata[channel] ) {
+				memcpy(output, &(bankarray[channel]), sizeof(SnglBurst));
 				LIGOTimeGPS peak_time;
 				XLALINT8NSToGPS(&peak_time, time);
 				XLALGPSAdd(&peak_time, (double) maxsample[channel] / rate);
 				LIGOTimeGPS start_time = peak_time;
-				XLALGPSAdd(&start_time, -time-output->duration/2);
-				memcpy(output, &(bankarray[channel]), sizeof(SnglBurst));
+				XLALGPSAdd(&start_time, -output->duration/2);
 				output->snr = fabs(maxdata[channel]);
 				output->start_time = start_time;
 				output->peak_time = peak_time;
+				output++;
 			}
 		}
 	}
@@ -149,12 +150,12 @@ GstBuffer *gstlal_snglburst_new_buffer_from_peak(struct gstlal_double_complex_pe
 	if (srcbuf && size) {
 		for(channel = 0; channel < input->channels; channel++) {
 			if ( maxdata[channel] ) {
+				memcpy(output, &(bankarray[channel]), sizeof(SnglBurst));
 				LIGOTimeGPS peak_time;
 				XLALINT8NSToGPS(&peak_time, time);
 				XLALGPSAdd(&peak_time, (double) maxsample[channel] / rate);
 				LIGOTimeGPS start_time = peak_time;
-				XLALGPSAdd(&start_time, -time-output->duration/2);
-				memcpy(output, &(bankarray[channel]), sizeof(SnglBurst));
+				XLALGPSAdd(&start_time, -output->duration/2);
 				output->snr = cabs(maxdata[channel]);
 				output->start_time = start_time;
 				output->peak_time = peak_time;
