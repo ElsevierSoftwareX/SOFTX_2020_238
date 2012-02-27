@@ -237,7 +237,7 @@ def psd_to_fir_kernel(psd):
 	# apply a Tukey window whose flat bit is 50% of the kernel
 	#
 
-	kernel *= window.XLALCreateTukeyREAL8Window(len(kernel), .5).data
+	kernel *= (window.XLALCreateTukeyREAL8Window(len(kernel)+1, .5).data)[:-1]
 
 	#
 	# the kernel's latency
