@@ -150,6 +150,10 @@ class EPHandler( LLOIDHandler ):
 		Process a message from the bus. Depending on what it is, we may drop various data products on to disk.
 		"""
 
+		if( message.structure is None ):
+			print >>sys.stderr, "WARNING: Received invalid message."
+			return
+
 		if( message.structure.get_name() == "spectrum" ):
 			ts = message.structure[ "timestamp" ]*1e-9
 			if( self.trigger_segment is not None 
@@ -234,18 +238,18 @@ class EPHandler( LLOIDHandler ):
 			self.flow,
 			self.fhigh,
 			self.base_band,
-			# TODO; Check duration, should this go up by factors of two?
-			len(self.filter_bank[0])/self.rate
-			#TODO: self.detector
+			# FIXME: Is there a factor of two here?
+			1.0 / (2*self.base_band*(res_level+1)), # resolution level starts from 0
+			self.inst
 		)
-		output = "%sgstlal_excesspower_bank_level_%d.xml" % (loc, res_level)
+		output = "%sgstlal_excesspower_bank_%s_level_%d.xml" % (loc, self.inst, res_level)
 		utils.write_filename( xmldoc, output, verbose = True,
 		       gz = (output or "stdout").endswith(".gz") )
 		return output
 
 	def destroy_filter_xml( self, loc="" ):
 		import glob
-		for f in glob.glob( "%s/gstlal_excesspower_bank_level_*.xml" % loc ):
+		for f in glob.glob( "%s/gstlal_excesspower_bank_%s_level_*.xml" % (loc, self.inst) ):
 			os.rm( f )
 
 	def rebuild_chan_mix_matrix( self ):
@@ -404,7 +408,7 @@ def on_spec_corr_change( elem, pspec, hand ):
 	if( hand.psd != None ):
 		hand.rebuild_everything()
 
-def get_triggers(elem, handler):
+def get_triggers(elem, handler, ndof):
 
 	buffer = elem.emit("pull-buffer")
 
@@ -412,15 +416,16 @@ def get_triggers(elem, handler):
 		return # We don't want event information
 
 	for row in sngl_bursts_from_buffer(buffer):
+		row.duration *= ndof
 		handler.triggers.append( row )
 	
 	handler.stop = (buffer.timestamp + buffer.duration)*1e-9
 	if( handler.stop - handler.time_since_dump > handler.dump_frequency or
 			len(handler.triggers) >= handler.max_events ):
-		handler.time_since_dump = handler.stop 
-		dur = handler.stop - handler.time_since_dump
+		dur = int( handler.stop - handler.time_since_dump + 1 )
 		#print handler.time_since_dump, dur
 		handler.write_triggers( filename = "%s_%s_triggers_%d_%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur), flush = True )
+		handler.time_since_dump = handler.stop 
 
 # TODO: Update the file every couple of seconds.
 """
@@ -815,7 +820,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 
 	if( verbose ):
 		head = mkprogressreport( pipeline, head, 
-			"After energy summation resolution level %d, duration %d" % 
+			"After energy summation resolution level %d, %d DOF" % 
 				(res_level, ndof) 
 		)
 
@@ -823,31 +828,28 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	head.set_property( "exponent", 0.5 )
 
 	# Trigger generator
-	head = mkbursttriggergen( pipeline, head, 1, 
+	head = mkbursttriggergen( pipeline, head, ndof, 
 		bank = handler.build_filter_xml( res_level )
 	)
 
 	"""
 	fap = options.fap
-	# TODO: rename duration -> ndof
-	snr_thresh = ep_utils.determine_thresh_from_fap(fap, duration)
+	snr_thresh = ep_utils.determine_thresh_from_fap(fap, ndof)
 	"""
-
 	# TODO: Determine this from desired FAP
-	# NOTE: Make sure you get the amplitude SNR thresh here...
-	head.set_property( "snr-thresh", handler.snr_thresh**2 )
+	head.set_property( "snr-thresh", handler.snr_thresh )
 
 	if( verbose ):
 		head = mkprogressreport( pipeline, head, 
-			"Trigger generator resolution level %d, duration %d" % 
+			"Trigger generator resolution level %d, %d DOF" % 
 				(res_level, ndof) 
 		)
 
-# TODO: combine trigger streams from various levels
+	# TODO: combine trigger streams from various levels
 
-# TODO: This will have to be linked to multiple outgoing streams
-appsink = mkappsink(pipeline, mkqueue(pipeline, head))
-appsink.connect_after("new-buffer", get_triggers, handler)
+	# TODO: This will have to be linked to multiple outgoing streams
+	appsink = mkappsink(pipeline, mkqueue(pipeline, head))
+	appsink.connect_after("new-buffer", get_triggers, handler, ndof)
 
 ### END OF PIPELINE
 
