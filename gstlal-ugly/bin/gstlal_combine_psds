@@ -1,0 +1,41 @@
+#!/usr/bin/python
+
+import scipy
+import numpy
+from gstlal import reference_psd
+import sys
+import os
+import glob
+from optparse import OptionParser
+
+parser = OptionParser(description = __doc__)
+parser.add_option("--instrument", help = "The instrument name (required).")
+parser.add_option("--output-name", metavar = "filename", help = "The output xml file (optional)")
+options, filenames = parser.parse_args()
+
+instrument = options.instrument
+
+# Identify the various files
+file_list = glob.glob('*reference_psd*xml.gz')
+
+psds = []
+
+for i in range(len(file_list)):
+  psds.append((reference_psd.read_psd(file_list[i], verbose = True)[instrument]).data)
+
+# One more to get the correct structures
+final_psd = reference_psd.read_psd(file_list[0], verbose = True)[instrument]
+
+psdData = final_psd.data
+numPoints = len(psdData)
+
+for i in range(len(psdData)):
+  data = []
+  for j in range(len(file_list)):
+    data.append(psds[j][i])
+    val = numpy.median(data)
+  psdData[i] = val
+
+final_psd.data = psdData
+
+reference_psd.write_psd(options.output_name,final_psd,instrument = instrument, verbose = True)
