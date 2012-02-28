@@ -299,7 +299,7 @@ class lal_channelgram(gst.BaseTransform):
 		axes.set_xlim(xlim)
 		axes.set_ylim(ylim)
 		axes.set_yticks(yticks(0, samples.shape[1] - 1, 20))
-		axes.set_title(r"Amplitude of %s, %s" % (self.instrument or "Unknown Instrument", self.channel_name or "Unknown Channel"))
+		axes.set_title(r"Amplitude of %s, %s" % (self.instrument or "Unknown Instrument", (self.channel_name or "Unknown Channel").replace("_", r"\_")))
 		axes.set_xlabel(r"Time (s)")
 		axes.set_ylabel(r"Channel Number")
 
