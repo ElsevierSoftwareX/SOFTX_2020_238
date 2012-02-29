@@ -116,6 +116,8 @@ tab,name = cbcwebpage.wiki_table_parse(base_name+'injection_summary.txt')
 page.subpages["missed_found"].add_table(tab[0], "Injection Summary Table", "Summary of missed and found injections broken up by detector time")
 
 page.subpages["missed_found"].add_section("found_missed_mchirp","Found / Missed Chirp Mass")
+imgtable = cbcwebpage.image_glob(base_name+'1_d_vs_mchirp_*.png')
+page.subpages["missed_found"].sections["found_missed_mchirp"].add_table(imgtable, "Missed Found Distance vs Mchirp", "Distance of found and missed injections as a function of chirp mass")
 imgtable = cbcwebpage.image_glob(base_name+'1_deff_vs_mchirp_*.png')
 page.subpages["missed_found"].sections["found_missed_mchirp"].add_table(imgtable, "Missed Found Effective Distance vs Mchirp", "Effective distance of found and missed injections as a function of chirp mass")
 imgtable = cbcwebpage.image_glob(base_name+'1_chirpdist_vs_mchirp_*.png')
