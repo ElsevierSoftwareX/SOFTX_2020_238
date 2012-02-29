@@ -106,6 +106,12 @@ if options.compute_fap is not None:
 		coinc_inspiral_ifos.extend([ifos for ifos, in connection.cursor().execute('SELECT DISTINCT(ifos) FROM coinc_inspiral').fetchall()])
 		connection.close()
 		dbtables.discard_connection_filename(bkdb, working_filename, verbose = options.verbose)
+	for injdb in options.injection_dbs:
+		working_filename = dbtables.get_connection_filename(injdb, tmp_path = options.tmp_space, verbose = options.verbose)
+		connection = sqlite3.connect(working_filename)
+		coinc_inspiral_ifos.extend([ifos for ifos, in connection.cursor().execute('SELECT DISTINCT(ifos) FROM coinc_inspiral').fetchall()])
+		connection.close()
+		dbtables.discard_connection_filename(injdb, working_filename, verbose = options.verbose)
 
 	#
 	# Update the fap mapping
