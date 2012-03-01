@@ -307,3 +307,64 @@ def determine_thresh_from_fap( fap, ndof = 2 ):
 
 	return numpy.sqrt( chi2.ppf( 1-fap, ndof ) )
 
+############ VISUALIZATION ROUTINES #################
+
+def stream_tfmap_image():
+	pass
+
+def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, snr_max=10 ):
+	"""
+	Stream the time frequency channel map to a video source. If filename is None and split_on is None (the default), then the pipeline will attempt to stream to a desktop based (xvimagesink or equivalent) video sink. If filename is not None, but no splitting behavior is specified, video will be encoded and saved to the filename plus ".ogg" in Ogg Vorbis format. If split_on is specified to be 'keyframe', then the encoded video will be split between multiple files based on the keyframes being emitted by the ogg muxer. If no file name is specifed a default will be used, otherwise, an index and ".ogg" will be appended to the file name. Specifying amp_max will set the top of the colorscale for the amplitude SNR, the default is 10.
+	"""
+
+	# Tee off the amplitude stream
+	head = chtee = mktee( pipeline, head )
+	head = mkgeneric( pipeline, head, "cairovis_waterfall",
+			title = "TF map %s:%s, (SNR:0,10), fmax=%d Hz" % (handler.inst, handler.channel, handler.fhigh),
+			z_autoscale = False,
+			z_min = 0,
+			z_max = snr_max,
+			z_label = "SNR",
+			# TODO: Restore this when it becomes available again
+			#y_autoscale = False,
+			#y_min = handler.flow,
+			#y_max = handler.fhigh,
+			y_label = "channel number",
+			x_label = "time (s)",
+			colormap = "jet",
+			history = gst.SECOND*4
+	)
+
+	# Do some format conversion
+	head = mkcapsfilter( pipeline, head, "video/x-raw-rgb,framerate=5/1" )
+	head = mkcolorspace( pipeline, head )
+	head = mkcapsfilter( pipeline, head, "video/x-raw-yuv,framerate=5/1" )
+	head = mkprogressreport( pipeline, head, "video sink" )
+
+	# Muxer
+	head = mkoggmux( pipeline, mktheoraenc( pipeline, head ) )
+
+	# TODO: Explore using different "next file" mechanisms
+	if( split_on == "keyframe" ):
+		if( filename is None ): filename = handler.inst + "_tfmap_%d.ogg"
+		else: filename = filename + "_%d.ogg"
+
+		print >>sys.stderr, "Streaming TF maps to %s\n" % filename
+		mkgeneric( pipeline, head, "multifilesink",
+			next_file = 2, location = filename, sync = False, async = False )
+
+	elif( filename is not None ):
+		mkfilesink( pipeline, head, filename, sync = False, async = False )
+
+	else: # No filename and no splitting options means stream to desktop
+		if( sys.platform == "darwin" ):
+			try: # OSX video streaming options are quite limited, unfortunately
+				mkgeneric( pipeline, head, "glimagesink", sync = False, async = False )
+			except ElementNotFoundError:
+				print >>sys.stderr, "Couldn't get glimagesink element for OS X based video output. Please install this element first."
+				exit()
+		else:
+			mkgeneric( pipeline, head, "autovideosink" )
+
+	return chtee
+
