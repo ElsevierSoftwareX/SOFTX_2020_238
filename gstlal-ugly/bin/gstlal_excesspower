@@ -754,8 +754,8 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 
 	# TODO: Audio
 	if( options.stream_tfmap ):
-		if len(options.stream_tfmap.split("=")):
-			split_opt, filename = options.stream_tfmap.split("="))
+		if len(options.stream_tfmap.split("=")) == 2:
+			split_opt, filename = options.stream_tfmap.split("=")
 		else:
 			filename = options.stream_tfmap
 			split_opt = None
