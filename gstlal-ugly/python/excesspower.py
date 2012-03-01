@@ -16,6 +16,9 @@ from glue.ligolw import ilwd
 from glue.ligolw import utils
 from glue.ligolw import lsctables
 
+from gstlal.pipeutil import gst, mkelem
+from gstlal.pipeparts import *
+
 def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0, overlap=0.5, corr=None):
 	"""Build a set of individual channel Hann window frequency filters (with bandwidth 'band') and then transfer them into the time domain as a matrix. The nth row of the matrix contains the time-domain filter for the flow+n*band*overlap frequency channel. The overlap is the fraction of the channel which overlaps with the previous channel. If filter_len is not set, then it defaults to nominal minimum width needed for the bandwidth requested."""
 
@@ -310,6 +313,7 @@ def determine_thresh_from_fap( fap, ndof = 2 ):
 ############ VISUALIZATION ROUTINES #################
 
 def stream_tfmap_image():
+	# Only difference here is oggmux -> pngenc
 	pass
 
 def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, snr_max=10 ):
@@ -354,7 +358,8 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 			next_file = 2, location = filename, sync = False, async = False )
 
 	elif( filename is not None ):
-		mkfilesink( pipeline, head, filename, sync = False, async = False )
+		filename = filename + ".ogg"
+		mkfilesink( pipeline, head, filename )
 
 	else: # No filename and no splitting options means stream to desktop
 		if( sys.platform == "darwin" ):
