@@ -151,6 +151,13 @@ class EPHandler( LLOIDHandler ):
 		Process a message from the bus. Depending on what it is, we may drop various data products on to disk.
 		"""
 
+		if( message.type == gst.MESSAGE_EOS ):
+			self.shutdown(None, None)
+			return
+		else:
+			pass
+			# TODO: How to send messages to the gst debug stream
+
 		if( message.structure is None ):
 			print >>sys.stderr, "WARNING: Received invalid message."
 			return
@@ -162,11 +169,6 @@ class EPHandler( LLOIDHandler ):
 				self.dump_psd("spectrum_data.dat")
 			elif( self.cache_psd ):
 				self.dump_psd("spectrum_data.dat")
-		if( message.type == gst.MESSAGE_EOS ):
-			self.shutdown()
-		else:
-			pass
-			# TODO: How to send messages to the gst debug stream
 
 	def dump_psd( self, filename, asd=False ):
 		"""
@@ -451,7 +453,7 @@ parser.add_option("-d", "--diagnostics", dest="diagnostics", action="store_true"
 parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Be verbose.", default=False)
 parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data. Required only if a fake data source is being used.")
 parser.add_option("-D", "--data-source", dest="data_source", action="store", help="Data source to read from. Valid options are gwffile,lldata,whitedata,fakeLIGO,fakeadvLIGO. One is required. If gwffile is selected, then a cache file should also be provided. If whitedata, fakeLIGO, or fakeadvLIGO is selected, then a sample rate must also be provided.")
-parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Display the time frequency map as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. Otherwise, or if the \"image\" argument is passed, the output will be streamed to an image file. In this case, the output file name can be indicated by \"image=filename\".")
+parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Encode the time frequency map to video as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. If the option is instead a filename, the video will be sent to that name. Prepending \"keyframe=\" to the filename will start a new video every time a keyframe is hit.")
 parser.add_option("-u", "--unicorns", dest="unicorns", action="store", help="Reveal hidden unicorns in data. The argument to this option determines how strong said unicorns are.", default=None)
 parser.add_option("-s", "--gps-start", dest="gps_start", action="store", type="float", help="Seek to gps time before beginning analysis.", default=None)
 parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_false", help="Don't record triggers.", default=False)
@@ -506,6 +508,9 @@ handler.output = not options.disable_triggers
 
 if( not options.infile ):
 	print >>sys.stderr, "No initialization file specified. Default values will be used."
+elif( not os.path.exists( options.infile ) ):
+	print >>sys.stderr, "Initialization file path is invalid."
+	sys.exit(-1)
 else:
 	cfg = SafeConfigParser()
 	cfg.read( options.infile )
@@ -752,20 +757,6 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	)
 	"""
 
-	# TODO: Audio
-	if( options.stream_tfmap ):
-		if len(options.stream_tfmap.split("=")) == 2:
-			split_opt, filename = options.stream_tfmap.split("=")
-		else:
-			filename = options.stream_tfmap
-			split_opt = None
-
-		head = stream_tfmap_video( pipeline, head, 
-			handler, 
-			filename,
-			split_opt
-		)
-
 	# factor of 0.65 goes here - 2 dof -- not chisquared
 	if( diagnostics ):
 		head = postdurtee = mktee( pipeline, mkqueue( pipeline, head ) )
@@ -779,6 +770,23 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 
 	head = mkgeneric( pipeline, head, "pow" )
 	head.set_property( "exponent", 0.5 )
+
+	# TODO: Audio
+	if( options.stream_tfmap ):
+		print options.stream_tfmap
+		if len(options.stream_tfmap.split("=")) == 2:
+			split_opt, filename = options.stream_tfmap.split("=")
+		else:
+			filename = options.stream_tfmap
+			# TODO: Make this more elegant
+			if( filename == "video" ): filename = None
+			split_opt = None
+
+		head = stream_tfmap_video( pipeline, head, 
+			handler, 
+			filename,
+			split_opt
+		)
 
 	# Trigger generator
 	head = mkbursttriggergen( pipeline, head, ndof, 
