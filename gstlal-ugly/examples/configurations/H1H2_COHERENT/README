@@ -1,0 +1,11 @@
+This is a pipeline that produces frame files for the LHO coherent and null streams.  
+
+H1 and H2 frame cache files have been included in this directory, because these cache files contain long segments during which both H1 and H2 were on.
+
+To run the pipeline from this directory:
+
+python coh_null_h1h2.py --frame-cache-H1=H1.cache --frame-cache-H2=H2.cache --gps-start-time=870008619 --gps-end-time=870009619 --verbose
+
+To run the pipeline and write the pipeline graph to this directory:
+
+GST_DEBUG_DUMP_DOT_DIR=. python coh_null_h1h2.py --frame-cache-H1=H1.cache --frame-cache-H2=H2.cache --gps-start-time=870008619 --gps-end-time=870009619 --verbose --write-pipeline="LHO_COH_NULL"
