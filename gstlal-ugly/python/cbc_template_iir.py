@@ -130,7 +130,7 @@ def get_fir_matrix(xmldoc, fFinal=None, pnorder=4, flower = 40, psd_interp=None,
 
         return M, autocorrelation_bank
 
-def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=101, downsample=False, verbose=False):
+def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99, beta=0.25, pnorder=4, flower = 40, psd_interp=None, output_to_xml = False, autocorrelation_length=201, downsample=False, verbose=False):
 
         sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 	fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
@@ -206,13 +206,13 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 		if verbose: print>>sys.stderr, "norm2 = %e, %e" % (norm2, row.sigmasq)
 
                 # compute the SNR
-                corr = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec2)))
+                corr = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec2)))/2.0
 		if verbose: print>>sys.stderr, "correlation %f, length %d" % ((time.time() - start), length)
 
                 #FIXME this is actually the cross correlation between the original waveform and this approximation
                 autocorrelation_bank[tmp,:] = numpy.concatenate((corr[(-autocorrelation_length/2+2):],corr[:autocorrelation_length/2+2]))
 
-                snr = numpy.abs(corr).max() / 2.0
+                snr = numpy.abs(corr).max()
                 snrvec.append(snr)
 		if verbose: print>>sys.stderr, "row %4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %10.8f match" % (tmp+1, m1,m2,len(a1), snr)
 
@@ -283,8 +283,8 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 		root = xmldoc.childNodes[0]
 		root.appendChild(param.new_param('sample_rate', types.FromPyType[str], sample_rates_array_to_str(sample_rates)))
 		root.appendChild(param.new_param('flower', types.FromPyType[float], flower))
-		root.appendChild(array.from_array('autocorrelation', repack_complex_array_to_real(autocorrelation_bank)))
-
+		root.appendChild(array.from_array('autocorrelation_bank_real', autocorrelation_bank.real))
+		root.appendChild(array.from_array('autocorrelation_bank_imag', autocorrelation_bank.imag))
 
         return A, B, D, snrvec
 
