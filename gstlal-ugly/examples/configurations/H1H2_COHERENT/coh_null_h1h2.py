@@ -157,7 +157,7 @@ def update_psd(elem, pspec, handler):
 			data = numpy.array(elem.get_property("mean-psd"))
 		)
 		handler.psd2_change = 1
-	if (handler.psd1_change == 1 and handler.psd2_change == 2):
+	if (handler.psd1_change == 1 and handler.psd2_change == 1):
 		handler.update_fir_filter
 		handler.psd1_change = 0
 		handler.psd2_change = 0
