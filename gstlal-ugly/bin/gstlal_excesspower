@@ -64,6 +64,14 @@ from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 # =============================================================================
 #
 
+GSTLAL_VALID_FREQ_UNITS = {
+	"Mhz": 1e6,
+	"kHz": 1e3,
+	"Hz": 1.0,
+	"mHz": 1e-3,
+	"uHz": 1e-6
+}
+
 
 class EPHandler( LLOIDHandler ):
 	"""
@@ -89,6 +97,7 @@ class EPHandler( LLOIDHandler ):
 		self.rate = 2048
 		#self.rate = 4096
 		self.max_level = 1
+		self.frequency_units = "Hz"
 
 		# Defaults -- filtering
 		self.filter_len = 2*int(2*self.rate/self.base_band)
@@ -136,6 +145,18 @@ class EPHandler( LLOIDHandler ):
 
 		super(type(self), self).__init__(mainloop, pipeline)
 
+	def set_frequency_units( self, units = "Hz" ):
+		"""
+		Since gstreamer can't handle rates < 1 Hz, this sets the handler to reinterpret the units of frequency (and thus time) when doing calculations in involving either. The valid unit choices are enumerated in GSTLAL_VALID_FREQ_UNITS.
+		"""
+
+		try: 
+			val = GSTLAL_VALID_FREQ_UNITS[units]
+			self.frequency_units = units
+		except KeyError:
+			exit( "Invalid frequency unit selection: %s" % units )
+		return val
+
 	def set_trigger_time_and_action( self, trig_seg, action=["psd"] ):
 		"""
 		Inform the handler of a specific time of interest.
@@ -145,12 +166,10 @@ class EPHandler( LLOIDHandler ):
 
 		# TODO: Handle only specific action requests
 
-
 	def process_message( self, bus, message ):
 		"""
 		Process a message from the bus. Depending on what it is, we may drop various data products on to disk.
 		"""
-
 		if( message.type == gst.MESSAGE_EOS ):
 			self.shutdown(None, None)
 			return
@@ -158,7 +177,7 @@ class EPHandler( LLOIDHandler ):
 			pass
 			# TODO: How to send messages to the gst debug stream
 
-		if( message.structure is None ):
+		if( message.structure is None and message.type == gst.MESSAGE_EOS ):
 			print >>sys.stderr, "WARNING: Received invalid message."
 			return
 
@@ -347,7 +366,8 @@ class EPHandler( LLOIDHandler ):
 		"""
 		Method called to flush buffers and shutdown the pipeline.
 		"""
-		print >>sys.stderr, "Caught signal. Dying a terrible, terrible death."
+		print >>sys.stderr, "Caught signal: dying a terrible, terrible death."
+		print "Signal received, if any: " + str(signum)
 		self.pipeline.set_state( gst.STATE_PAUSED )
 		bus = self.pipeline.get_bus()
 		bus.post(gst.message_new_eos(pipeline))
@@ -357,6 +377,28 @@ class EPHandler( LLOIDHandler ):
 		print >>sys.stderr, "Please wait (don't ctrl+c) while I dump triggers to disk."
 		self.write_triggers( False )
 		self.destroy_filter_xml()
+
+	def cmd_line( self, signum, frame ):
+		"""
+		Basic attempt to control the pipline while in operation. However, the pipeline seems unable to change state, so for the time being, this does nothing.
+		"""
+		print >>sys.stderr, "Attempting to pause pipeline..."
+		self.pipeline.set_state( gst.STATE_PAUSED )
+		if( self.pipeline.get_state() != gst.STATE_PAUSED ): 
+			print >>sys.stderr, "failed."
+			return
+		else:
+			print >>sys.stderr, "success!"
+
+		while( True ):
+			inp = raw_input("gst_ep, proc=() $ ")
+			print inp
+			if( inp.strip() == "continue" ): 
+				self.pipeline.set_state( gst.STATE_PLAYING )
+				break
+			elif( inp.strip() == "quit" ): 
+				gst.message_new_eos( self )
+
 
 #
 # =============================================================================
@@ -410,6 +452,20 @@ def on_spec_corr_change( elem, pspec, hand ):
 	if( hand.psd != None ):
 		hand.rebuild_everything()
 
+def on_rate_changed( pad, pspec, hand ):
+	srccaps = pad.get_caps()
+	oldrate = srccaps[0]["rate"]
+	# or
+	# oldrate = srccaps.structure["rate"]
+	newrate = int(oldrate / GSTLAL_VALID_FREQ_UNITS[hand.frequency_units] + 0.5)
+	print >>sys.stderr, "Non-standard units (%s) requested. Converting %d Hz to %d %s" % (hand.frequency_units, oldrate, newrate, hand.frequency_units )
+	newcaps = gst.element_factory_make( "capsfilter", "audio/x-raw-float,rate=%d" % newrate )
+	handler.pipeline.add( newcaps )
+	othrpad = pad.get_peer()
+	pad.unlink( othrpad )
+	pad.get_parent_element().link( newcaps )
+	newcaps.link( othrpad.get_parent_element() )
+
 def get_triggers(elem, handler, ndof):
 
 	buffer = elem.emit("pull-buffer")
@@ -451,7 +507,8 @@ parser = OptionParser()
 parser.add_option("-f", "--initialization-file", dest="infile", help="Options to be pased to the pipeline handler. Strongly recommended.", default=None)
 parser.add_option("-d", "--diagnostics", dest="diagnostics", action="store_true", help="Turn on multiple diagnostic dumps. Use with caution, as it will dump gigabytes of data (potentially) in a matter of minutes. Useful in nongraphical environemnts to monitor data throughput.", default=False)
 parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Be verbose.", default=False)
-parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data. Required only if a fake data source is being used.")
+parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data.")
+parser.add_option("-R", "--frequency-units", dest="frequency_units", action="store", default="Hz", help="Units in which frequency (and correspondingly, time) will be expressed in. Use this when the sampling rate is near 1 Hz to avoid gstreamer's inability to handle rates < 1. Valid choices are %s" % ", ".join( GSTLAL_VALID_FREQ_UNITS.keys() ) )
 parser.add_option("-D", "--data-source", dest="data_source", action="store", help="Data source to read from. Valid options are gwffile,lldata,whitedata,fakeLIGO,fakeadvLIGO. One is required. If gwffile is selected, then a cache file should also be provided. If whitedata, fakeLIGO, or fakeadvLIGO is selected, then a sample rate must also be provided.")
 parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Encode the time frequency map to video as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. If the option is instead a filename, the video will be sent to that name. Prepending \"keyframe=\" to the filename will start a new video every time a keyframe is hit.")
 parser.add_option("-u", "--unicorns", dest="unicorns", action="store", help="Reveal hidden unicorns in data. The argument to this option determines how strong said unicorns are.", default=None)
@@ -504,7 +561,9 @@ pipeline = gst.Pipeline( "gstlal_excesspower" )
 mainloop = gobject.MainLoop()
 handler = EPHandler(mainloop, pipeline)
 
+handler.set_frequency_units( options.frequency_units )
 handler.output = not options.disable_triggers
+handler.rate = options.sample_rate
 
 if( not options.infile ):
 	print >>sys.stderr, "No initialization file specified. Default values will be used."
@@ -593,7 +652,7 @@ elif( data_source == "lldata" ):
 	# FIXME: This is a guess. Not a terrible one, but still inaccurate
 	handler.time_since_dump = gpstime.GpsSecondsFromPyUTC( time.time() )
 elif( data_source == "gwffile" ):
-	head = mkframesrc( pipeline, 
+	framesrc = head = mkframesrc( pipeline, 
 		gwflocation, 
 		handler.inst, 
 		handler.channel
@@ -625,7 +684,7 @@ if( diagnostics ):
 
 # Data conditioning
 # TODO: Does this need to be set if the data source isn't fake?
-head = mkcapsfilter( pipeline, mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % sample_rate )
+head = mkcapsfilter( pipeline, mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % (handler.rate / GSTLAL_VALID_FREQ_UNITS[handler.frequency_units]) )
 
 if( unicorns ):
 	# TODO: Link to lalsim to get the unicorn
@@ -819,7 +878,14 @@ whitener.connect_after( "notify::mean-psd", on_psd_change, handler )
 # Handle spectral correlation changes
 # TODO: Make sure this doesn't have to be in the mm loop
 whitener.connect_after( "notify::spectral-correlation", on_spec_corr_change, handler )
+try:
+	if( handler.frequency_units != "Hz" and framesrc ):
+		framesrc.get_pad("src").connect_after( "notify::caps", on_rate_changed, handler )
+except NameError:
+	exit("Rate units change requested, but this is not yet implemented for live sources, only frames.")
 
+# Experimental real time command line handling
+signal.signal( signal.SIGUSR1, handler.cmd_line )
 # Handle shutdowns
 signal.signal( signal.SIGINT, handler.shutdown )
 signal.signal( signal.SIGTERM, handler.shutdown )
