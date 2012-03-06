@@ -96,6 +96,9 @@ page.subpages["injection_params_acc"].sections["eta_param_acc"].add_table(imgtab
 page.subpages["injection_params_acc"].add_section("time_param_acc","Time Parameter Accuracy")
 imgtable = cbcwebpage.image_glob(base_name+'2_t_acc_*.png')
 page.subpages["injection_params_acc"].sections["time_param_acc"].add_table(imgtable, "Time Accuracy", "Accuracy of time")
+page.subpages["injection_params_acc"].add_section("deff_param_acc","Effective Distance Accuracy")
+imgtable = cbcwebpage.image_glob(base_name+'2_deff_acc_frac*.png')
+page.subpages["injection_params_acc"].sections["deff_param_acc"].add_table(imgtable, "Effective Distance Accuracy", "Accuracy of effective distance")
 
 ### MISSED FOUND ###
 page.add_subpage("missed_found","Missed Found", "Missed Found")
