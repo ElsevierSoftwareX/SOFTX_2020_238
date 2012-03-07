@@ -22,61 +22,61 @@ from pylal import window
 
 def factors_to_fir_kernel(coh_facs):
 	"""
-        Compute a finite impulse-response filter kernel from a power
-        spectral density conforming to the LAL normalization convention,
-        such that if zero-mean unit-variance Gaussian random noise is fed
-        into an FIR filter using the kernel the filter's output will
-        possess the given PSD.  The PSD must be provided as a
-        REAL8FrequencySeries object (see
-        pylal.xlal.datatypes.real8frequencyseries).
-        
-        The return value is the tuple (kernel, latency, sample rate).  The
-        kernel is a numpy array containing the filter kernel, the latency
-        is the filter latency in samples and the sample rate is in Hz.
+	Compute a finite impulse-response filter kernel from a power
+	spectral density conforming to the LAL normalization convention,
+	such that if zero-mean unit-variance Gaussian random noise is fed
+	into an FIR filter using the kernel the filter's output will
+	possess the given PSD.  The PSD must be provided as a
+	REAL8FrequencySeries object (see
+	pylal.xlal.datatypes.real8frequencyseries).
+
+	The return value is the tuple (kernel, latency, sample rate).  The
+	kernel is a numpy array containing the filter kernel, the latency
+	is the filter latency in samples and the sample rate is in Hz.
         """
 	#
 	# this could be relaxed with some work
 	#
-    
+
 	assert coh_facs.f0 == 0.0
-    
+
 	#
 	# extract the PSD bins and determine sample rate for kernel
 	#
-    
+
 	data = coh_facs.data
 	sample_rate = 2 * int(round(coh_facs.f0 + len(data) * coh_facs.deltaF))
-    
+
 	#
 	# compute the FIR kernel.  it always has an odd number of samples
 	# and no DC offset.
 	#
-    
+
 	data[0] = data[-1] = 0.0
 	tmp = numpy.zeros((2 * len(data) - 1,), dtype = data.dtype)
-        tmp[0] = data[0]
-        tmp[1::2] = data[1:]
-        data = tmp
-        del tmp
+	tmp[0] = data[0]
+	tmp[1::2] = data[1:]
+	data = tmp
+	del tmp
 	kernel = scipy.fftpack.irfft(data)
 	kernel = numpy.hstack((kernel[::-1], kernel[1:]))
-    
+
 	#
 	# apply a Tukey window whose flat bit is 50% of the kernel
 	#
-    
+
 	kernel *= window.XLALCreateTukeyREAL8Window(len(kernel), .5).data
-	
+
 	#
 	# the kernel's latency
 	#
-    
+
 	latency = (len(kernel) + 1) / 2 - 1
-    
+
 	#
 	# done
 	#
-    
+
 	return kernel, latency, sample_rate
 
 def psd_to_impulse_response(PSD1, PSD2):
