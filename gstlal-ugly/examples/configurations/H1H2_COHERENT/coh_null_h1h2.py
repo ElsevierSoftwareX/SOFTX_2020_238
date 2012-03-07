@@ -56,8 +56,8 @@ class COHhandler(lloidparts.LLOIDHandler):
 	def __init__(self, mainloop, pipeline):
 
 		# set various properties for psd and fir filter		
-		self.psd_fft_length = 16
-		self.zero_pad_length = 4		
+		self.psd_fft_length = 8
+		self.zero_pad_length = 2		
 		self.srate = 2*2048
 		self.filter_length = int(self.srate*self.psd_fft_length)
 
@@ -99,7 +99,7 @@ class COHhandler(lloidparts.LLOIDHandler):
 		psd.f0 = 0
 		return psd
 	
-	def update_fir_filter(psd1, psd2):
+	def update_fir_filter(self, psd1, psd2):
 		self.H1_impulse, self.H1_latency, self.H2_impulse, self.H2_latency, self.srate = coherent_null.psd_to_impulse_response(psd1, psd2)
 		
 #
@@ -139,28 +139,28 @@ detectorH2 = {
 	"H2": lloidparts.DetectorData(options.frame_cache_H2, options.channel_name)
 }
 
-def update_psd(elem, pspec, handler):
+def update_psd(elem, pspec, hand):
 	name = elem.get_property("name")
 	if name == "H1_whitener":
-		handler.psd1 = REAL8FrequencySeries(
+		hand.psd1 = REAL8FrequencySeries(
 			name = "PSD1",
 			f0 = 0.0,
 			deltaF = elem.get_property("delta-f"),
 			data = numpy.array(elem.get_property("mean-psd"))
 		)
-		handler.psd1_change = 1	
+		hand.psd1_change = 1	
 	if name == "H2_whitener":
-		handler.psd2 = REAL8FrequencySeries(
+		hand.psd2 = REAL8FrequencySeries(
 			name = "PSD2",
 			f0 = 0.0,
 			deltaF = elem.get_property("delta-f"),
 			data = numpy.array(elem.get_property("mean-psd"))
 		)
-		handler.psd2_change = 1
-	if (handler.psd1_change == 1 and handler.psd2_change == 1):
-		handler.update_fir_filter
-		handler.psd1_change = 0
-		handler.psd2_change = 0
+		hand.psd2_change = 1
+	if (hand.psd1_change == 1 and hand.psd2_change == 1):
+		hand.update_fir_filter(hand.psd1, hand.psd2)
+		hand.psd1_change = 0
+		hand.psd2_change = 0
 
 #
 # begin pipline
