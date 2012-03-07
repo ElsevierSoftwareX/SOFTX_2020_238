@@ -507,6 +507,7 @@ parser = OptionParser()
 parser.add_option("-f", "--initialization-file", dest="infile", help="Options to be pased to the pipeline handler. Strongly recommended.", default=None)
 parser.add_option("-d", "--diagnostics", dest="diagnostics", action="store_true", help="Turn on multiple diagnostic dumps. Use with caution, as it will dump gigabytes of data (potentially) in a matter of minutes. Useful in nongraphical environemnts to monitor data throughput.", default=False)
 parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Be verbose.", default=False)
+parser.add_option("-w", "--channel-width", dest="nbyte", action="store", type=int, help="Specify the channel width in bits (default = 64)", default=64)
 parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data.")
 parser.add_option("-R", "--frequency-units", dest="frequency_units", action="store", default="Hz", help="Units in which frequency (and correspondingly, time) will be expressed in. Use this when the sampling rate is near 1 Hz to avoid gstreamer's inability to handle rates < 1. Valid choices are %s" % ", ".join( GSTLAL_VALID_FREQ_UNITS.keys() ) )
 parser.add_option("-D", "--data-source", dest="data_source", action="store", help="Data source to read from. Valid options are gwffile,lldata,whitedata,fakeLIGO,fakeadvLIGO. One is required. If gwffile is selected, then a cache file should also be provided. If whitedata, fakeLIGO, or fakeadvLIGO is selected, then a sample rate must also be provided.")
@@ -660,16 +661,23 @@ elif( data_source == "gwffile" ):
 	start, duration = ep.duration_from_cache( gwflocation )
 	handler.start = start
 	handler.time_since_dump = start
-	# TODO: Can we unhardcode this
-	head.set_property( "blocksize", 16384*8 ), # Hard coded to one second ?
+	# TODO: Must unhardcode this -- but requires knowledge of native rate
+	if( options.nbyte == 64 ):
+		bsize=16384*8 # 64 bit stream
+	elif( options.nbyte == 32 ):
+		bsize=16384*4 # 32 bit stream
+	duration = int(duration*handler.rate/16384.0)
+	head.set_property( "blocksize", bsize )
 	print >>sys.stderr, "Warning, inferring total buffer length from cache."
-	print >>sys.stderr, "Buffers %f" % int(duration)
+	print >>sys.stderr, "Buffers %d" % int(duration)
 	head.set_property( "num-buffers", int(duration) )
 
 	# FIXME: Make this an option
-	if( handler.inst == "V1" ): sieve = "V"
+	if( handler.inst == "V1" ): 
+		sieve = "V"
+		head.set_property( "cache-dsc-regex", sieve )
 	else: sieve = handler.inst
-	head.set_property( "cache-dsc-regex", sieve )
+	#head.set_property( "cache-dsc-regex", sieve )
 else:
 	print >>sys.stderr, "Data source %s not recognized. Check the valid options in the help message."
 	sys.exit(-1)
@@ -682,8 +690,9 @@ if( diagnostics ):
 		cfg.get( "diagnostics", "strain-data-output" )
 	)
 
+# Convert to 64 bit
+head = mkcapsfilter( pipeline, mkaudioconvert( pipeline, head), "audio/x-raw-float,width=64" )
 # Data conditioning
-# TODO: Does this need to be set if the data source isn't fake?
 head = mkcapsfilter( pipeline, mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % (handler.rate / GSTLAL_VALID_FREQ_UNITS[handler.frequency_units]) )
 
 if( unicorns ):
