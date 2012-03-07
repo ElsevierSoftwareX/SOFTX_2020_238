@@ -8,6 +8,7 @@
 
 import scipy.fftpack
 import numpy
+import math
 
 from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 from pylal import window
@@ -89,11 +90,8 @@ def psd_to_impulse_response(PSD1, PSD2):
 	assert len(PSD1.data) == len(PSD2.data)
 
 	coh_facs_H1 = REAL8FrequencySeries()
-	coh_facs_H1.name = PSD1.name
-	coh_facs_H1.epoch = PSD1.epoch
 	coh_facs_H1.f0 = PSD1.f0
 	coh_facs_H1.deltaF = PSD1.deltaF
-	coh_facs_H1.sampleUnits = PSD1.sampleUnits
 	coh_facs_H1.data = PSD2.data/(PSD1.data + PSD2.data)
 	# work around referencing vs. copying structure
 	data = coh_facs_H1.data
@@ -101,11 +99,8 @@ def psd_to_impulse_response(PSD1, PSD2):
 	coh_facs_H1.data = data
 
 	coh_facs_H2 = REAL8FrequencySeries()
-	coh_facs_H2.name = PSD2.name
-	coh_facs_H2.epoch = PSD2.epoch
 	coh_facs_H2.f0 = PSD2.f0
 	coh_facs_H2.deltaF = PSD2.deltaF
-	coh_facs_H2.sampleUnits = PSD2.sampleUnits
 	coh_facs_H2.data = PSD1.data/(PSD1.data + PSD2.data)
 	# work around referencing vs. copying structure
 	data = coh_facs_H2.data
