@@ -210,9 +210,10 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 		if verbose: print>>sys.stderr, "correlation %f, length %d" % ((time.time() - start), length)
 
                 #FIXME this is actually the cross correlation between the original waveform and this approximation
-                autocorrelation_bank[tmp,:] = numpy.concatenate((corr[(-autocorrelation_length/2+2):],corr[:autocorrelation_length/2+2]))
+                autocorrelation_bank[tmp,:] = numpy.concatenate((corr[-(autocorrelation_length // 2):],corr[:(autocorrelation_length // 2 + 1)]))
 
                 snr = numpy.abs(corr).max()
+		autocorrelation_bank[tmp,:] /= snr
                 snrvec.append(snr)
 		if verbose: print>>sys.stderr, "row %4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %10.8f match" % (tmp+1, m1,m2,len(a1), snr)
 
@@ -327,12 +328,14 @@ def get_matrices_from_xml(xmldoc):
 		A[sr] = repack_real_array_to_complex(array.get_array(root, 'a_%d' % (sr,)).array)
 		B[sr] = repack_real_array_to_complex(array.get_array(root, 'b_%d' % (sr,)).array)
 		D[sr] = array.get_array(root, 'd_%d' % (sr,)).array
-        autocorrelation = repack_real_array_to_complex(array.get_array(root, 'autocorrelation').array)
+	autocorrelation_bank_real = array.get_array(root, 'autocorrelation_bank_real').array
+	autocorrelation_bank_imag = array.get_array(root, 'autocorrelation_bank_imag').array
+	autocorrelation_bank = autocorrelation_bank_real + (0+1j) * autocorrelation_bank_imag
 
         sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 	sigmasq  = sngl_inspiral_table.getColumnByName("sigmasq").asarray()
 
-        return A, B, D, autocorrelation, sigmasq
+        return A, B, D, autocorrelation_bank, sigmasq
 
 class Bank(object):
 	def __init__(self, bank_xmldoc, snr_threshold, logname = None, verbose = False):
