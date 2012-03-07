@@ -59,13 +59,16 @@ def factors_to_fir_kernel(coh_facs):
 	data = tmp
 	del tmp
 	kernel = scipy.fftpack.irfft(data)
-	kernel = numpy.hstack((kernel[::-1], kernel[1:]))
+	kernel = numpy.roll(kernel, (len(kernel) - 1) / 2)
 
 	#
-	# apply a Tukey window whose flat bit is 50% of the kernel
+	# apply a Tukey window whose flat bit is 50% of the kernel.
+	# preserve the FIR kernel's square magnitude
 	#
 
+	norm_before = numpy.dot(kernel, kernel)
 	kernel *= window.XLALCreateTukeyREAL8Window(len(kernel), .5).data
+	kernel *= math.sqrt(norm_before / numpy.dot(kernel, kernel))
 
 	#
 	# the kernel's latency
