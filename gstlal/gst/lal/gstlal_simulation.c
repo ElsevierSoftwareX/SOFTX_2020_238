@@ -330,11 +330,11 @@ static int update_injection_cache(REAL8TimeSeries *h, GSTLALSimulation *element,
 
 				if(response) {
 					for(i = 0; i < inspiral_response->data->length; i++)
-						inspiral_response->data->data[i] = XLALCOMPLEX8Rect(LAL_REAL(response->data->data[i]), LAL_IMAG(response->data->data[i]));
+						inspiral_response->data->data[i] = response->data->data[i];
 				} else {
 					underflow_protection = 1e-20;
 					for(i = 0; i < inspiral_response->data->length; i++)
-						inspiral_response->data->data[i] = XLALCOMPLEX8Rect(underflow_protection, 0.0);
+						inspiral_response->data->data[i] = underflow_protection;
 				}
 
 				/*
