@@ -84,10 +84,8 @@ static guint64 undersample_other(const gint8 *src, guint64 src_size, gint8 *dst,
 }
 
 
-static guint64 undersample(const void *src, guint64 src_size, void *dst, guint64 dst_size, gint unit_size, gint rate_in, gint rate_out, guint64 *remainder)
+static guint64 undersample(const void *src, guint64 src_size, void *dst, guint64 dst_size, gint unit_size, gint cadence, guint64 *remainder)
 {
-	gint cadence = rate_in / rate_out;
-
 	g_assert(src_size % unit_size == 0);
 	g_assert(dst_size % unit_size == 0);
 
@@ -373,6 +371,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
 {
 	GSTLALAudioUnderSample *element = GSTLAL_AUDIOUNDERSAMPLE(trans);
+	gint cadence = element->rate_in / element->rate_out;
 	/* input and output unit sizes are the same */
 	guint unit_size;
 
@@ -391,14 +390,14 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		 *
 		 * size / unit_size = # of samples requested on source pad
 		 *
-		 * rate_in / rate_out = # of input samples per output sample
+		 * cadence = # of input samples per output sample
 		 *
 		 * remainder = how many extra samples of input are needed
 		 * before producing an output sample (because the most
 		 * recent input buffer ended before a complete cycle)
 		 */
 
-		*othersize = ((size / unit_size) * (element->rate_in / element->rate_out) + element->remainder) * unit_size;
+		*othersize = ((size / unit_size) * cadence + element->remainder) * unit_size;
 		break;
 
 	case GST_PAD_SINK:
@@ -412,15 +411,15 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		 * the most recent input buffer ended before a complete
 		 * cycle
 		 *
-		 * rate_in / rate_out = # of input samples per output sample
+		 * cadence = # of input samples per output sample
 		 *
-		 * adding rate_in/rate_out-1 implements the ceiling
-		 * function:  when remainder is 0, the first input sample
-		 * can produce 1 output sample, not 0
+		 * adding cadence-1 implements the ceiling function:  when
+		 * remainder is 0, the first input sample can produce 1
+		 * output sample, not 0
 		 */
 
 		if(size / unit_size >= element->remainder)
-			*othersize = ((size / unit_size) - element->remainder + (element->rate_in / element->rate_out - 1)) / (element->rate_in / element->rate_out) * unit_size;
+			*othersize = ((size / unit_size) - element->remainder + cadence - 1) / cadence * unit_size;
 		else
 			*othersize = 0;
 		break;
@@ -488,7 +487,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * input is not 0s.
 		 */
 
-		output_length = undersample((void *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf), (void *) GST_BUFFER_DATA(outbuf), GST_BUFFER_SIZE(outbuf), element->unit_size, element->rate_in, element->rate_out, &element->remainder);
+		output_length = undersample((void *) GST_BUFFER_DATA(inbuf), GST_BUFFER_SIZE(inbuf), (void *) GST_BUFFER_DATA(outbuf), GST_BUFFER_SIZE(outbuf), element->unit_size, element->rate_in / element->rate_out, &element->remainder);
 		set_metadata(element, outbuf, output_length, FALSE);
 	} else {
 		/*
