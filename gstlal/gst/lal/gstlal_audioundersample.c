@@ -56,7 +56,7 @@
 
 
 #define DEFINE_UNDERSAMPLE_FUNC(size) \
-static guint64 undersample_ ## size(const gint ## size *src, guint64 src_size, gint ## size *dst, guint64 dst_size, gint cadence, guint64 *remainder) \
+static guint64 undersample_ ## size(const gint ## size *src, guint64 src_size, gint ## size *dst, guint64 dst_size, gint cadence) \
 { \
 	const gint ## size *dst_end; \
  \
@@ -72,7 +72,7 @@ DEFINE_UNDERSAMPLE_FUNC(32)
 DEFINE_UNDERSAMPLE_FUNC(64)
 
 
-static guint64 undersample_other(const gint8 *src, guint64 src_size, gint8 *dst, guint64 dst_size, gint unit_size, gint cadence, guint64 *remainder)
+static guint64 undersample_other(const gint8 *src, guint64 src_size, gint8 *dst, guint64 dst_size, gint unit_size, gint cadence)
 {
 	const gint8 *dst_end;
 
@@ -103,19 +103,19 @@ static guint64 undersample(const void *src, guint64 src_size, void *dst, guint64
 
 	switch(unit_size) {
 	case 1:
-		return undersample_8(src, src_size, dst, dst_size, cadence, remainder);
+		return undersample_8(src, src_size, dst, dst_size, cadence);
 
 	case 2:
-		return undersample_16(src, src_size, dst, dst_size, cadence, remainder);
+		return undersample_16(src, src_size, dst, dst_size, cadence);
 
 	case 4:
-		return undersample_32(src, src_size, dst, dst_size, cadence, remainder);
+		return undersample_32(src, src_size, dst, dst_size, cadence);
 
 	case 8:
-		return undersample_64(src, src_size, dst, dst_size, cadence, remainder);
+		return undersample_64(src, src_size, dst, dst_size, cadence);
 
 	default:
-		return undersample_other(src, src_size, dst, dst_size, unit_size, cadence, remainder);
+		return undersample_other(src, src_size, dst, dst_size, unit_size, cadence);
 	}
 }
 
@@ -377,18 +377,24 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 
 	if(!get_unit_size(trans, caps, &unit_size))
 		return FALSE;
+
+	/*
+	 * convert byte count to samples
+	 */
+
 	if(size % unit_size) {
 		GST_DEBUG_OBJECT(element, "buffer size %u is not a multiple of %u", size, unit_size);
 		return FALSE;
 	}
+	size /= unit_size;
 
 	switch(direction) {
 	case GST_PAD_SRC:
 		/*
-		 * compute size required on sink pad to produce requested
-		 * size on source pad
+		 * compute samples required on sink pad to produce
+		 * requested sample count on source pad
 		 *
-		 * size / unit_size = # of samples requested on source pad
+		 * size = # of samples requested on source pad
 		 *
 		 * cadence = # of input samples per output sample
 		 *
@@ -397,15 +403,15 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		 * recent input buffer ended before a complete cycle)
 		 */
 
-		*othersize = ((size / unit_size) * cadence + element->remainder) * unit_size;
+		*othersize = size * cadence + element->remainder;
 		break;
 
 	case GST_PAD_SINK:
 		/*
-		 * compute size to be produced on source pad from size
-		 * available on sink pad
+		 * compute samples to be produced on source pad from sample
+		 * count available on sink pad
 		 *
-		 * size / unit_size = # of samples available on sink pad
+		 * size = # of samples available on sink pad
 		 *
 		 * reminder = how many have already been spoken for because
 		 * the most recent input buffer ended before a complete
@@ -418,8 +424,8 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		 * output sample, not 0
 		 */
 
-		if(size / unit_size >= element->remainder)
-			*othersize = ((size / unit_size) - element->remainder + cadence - 1) / cadence * unit_size;
+		if(size >= element->remainder)
+			*othersize = (size - element->remainder + cadence - 1) / cadence;
 		else
 			*othersize = 0;
 		break;
@@ -428,6 +434,12 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
 		return FALSE;
 	}
+
+	/*
+	 * convert sample count to byte count
+	 */
+
+	*othersize *= unit_size;
 
 	return TRUE;
 }
