@@ -56,7 +56,7 @@
 
 
 #define DEFINE_UNDERSAMPLE_FUNC(size) \
-static guint64 undersample_ ## size(const gint ## size *src, guint64 src_size, gint ## size *dst, guint64 dst_size, gint cadence) \
+static guint64 undersample_ ## size(const gint ## size *src, gint ## size *dst, guint64 dst_size, gint cadence) \
 { \
 	const gint ## size *dst_end; \
  \
@@ -72,7 +72,7 @@ DEFINE_UNDERSAMPLE_FUNC(32)
 DEFINE_UNDERSAMPLE_FUNC(64)
 
 
-static guint64 undersample_other(const gint8 *src, guint64 src_size, gint8 *dst, guint64 dst_size, gint unit_size, gint cadence)
+static guint64 undersample_other(const gint8 *src, gint8 *dst, guint64 dst_size, gint unit_size, gint cadence)
 {
 	const gint8 *dst_end;
 
@@ -101,21 +101,23 @@ static guint64 undersample(const void *src, guint64 src_size, void *dst, guint64
 	src_size -= *remainder;
 	*remainder = src_size % cadence ? cadence - src_size % cadence : 0;
 
+	g_assert(dst_size * cadence <= src_size);
+
 	switch(unit_size) {
 	case 1:
-		return undersample_8(src, src_size, dst, dst_size, cadence);
+		return undersample_8(src, dst, dst_size, cadence);
 
 	case 2:
-		return undersample_16(src, src_size, dst, dst_size, cadence);
+		return undersample_16(src, dst, dst_size, cadence);
 
 	case 4:
-		return undersample_32(src, src_size, dst, dst_size, cadence);
+		return undersample_32(src, dst, dst_size, cadence);
 
 	case 8:
-		return undersample_64(src, src_size, dst, dst_size, cadence);
+		return undersample_64(src, dst, dst_size, cadence);
 
 	default:
-		return undersample_other(src, src_size, dst, dst_size, unit_size, cadence);
+		return undersample_other(src, dst, dst_size, unit_size, cadence);
 	}
 }
 
