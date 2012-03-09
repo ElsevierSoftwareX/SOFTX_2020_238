@@ -86,8 +86,8 @@ static guint64 undersample_other(const gint8 *src, gint8 *dst, guint64 dst_size,
 
 static guint64 undersample(const void *src, guint64 src_size, void *dst, guint64 dst_size, gint unit_size, gint cadence, guint64 *remainder)
 {
-	g_assert(src_size % unit_size == 0);
-	g_assert(dst_size % unit_size == 0);
+	g_assert_cmpuint(src_size % unit_size, ==, 0);
+	g_assert_cmpuint(dst_size % unit_size, ==, 0);
 
 	src_size /= unit_size;
 	dst_size /= unit_size;
@@ -101,7 +101,7 @@ static guint64 undersample(const void *src, guint64 src_size, void *dst, guint64
 	src_size -= *remainder;
 	*remainder = src_size % cadence ? cadence - src_size % cadence : 0;
 
-	g_assert(dst_size * cadence <= src_size);
+	g_assert_cmpuint(dst_size * cadence, <=, src_size);
 
 	switch(unit_size) {
 	case 1:
