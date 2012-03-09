@@ -184,7 +184,7 @@ static GstFlowReturn print_samples(GstBuffer *out, const double *samples, int ch
 		 * Saftey check.
 		 */
 
-		g_assert(((guint8 *) location - GST_BUFFER_DATA(out)) + MAX_CHARS_PER_TIMESTAMP + channels * MAX_CHARS_PER_COLUMN + MAX_EXTRA_BYTES_PER_LINE <= GST_BUFFER_SIZE(out));
+		g_assert_cmpuint(((guint8 *) location - GST_BUFFER_DATA(out)) + MAX_CHARS_PER_TIMESTAMP + channels * MAX_CHARS_PER_COLUMN + MAX_EXTRA_BYTES_PER_LINE, <=, GST_BUFFER_SIZE(out));
 
 		/*
 		 * Print the time.

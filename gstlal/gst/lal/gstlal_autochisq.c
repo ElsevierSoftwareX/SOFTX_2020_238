@@ -196,11 +196,11 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	 * safety checks
 	 */
 
-	g_assert(element->autocorrelation_matrix->tda == autocorrelation_length(element));
+	g_assert_cmpuint(element->autocorrelation_matrix->tda, ==, autocorrelation_length(element));
 	if(element->autocorrelation_mask_matrix) {
-		g_assert(autocorrelation_channels(element) == element->autocorrelation_mask_matrix->size1);
-		g_assert(autocorrelation_length(element) == element->autocorrelation_mask_matrix->size2);
-		g_assert(element->autocorrelation_mask_matrix->tda == autocorrelation_length(element));
+		g_assert_cmpuint(autocorrelation_channels(element), ==, element->autocorrelation_mask_matrix->size1);
+		g_assert_cmpuint(autocorrelation_length(element), ==, element->autocorrelation_mask_matrix->size2);
+		g_assert_cmpuint(element->autocorrelation_mask_matrix->tda, ==, autocorrelation_length(element));
 	}
 
 	/*
@@ -222,7 +222,7 @@ static unsigned filter(GSTLALAutoChiSq *element, GstBuffer *outbuf)
 	 * safety checks
 	 */
 
-	g_assert(output_length == GST_BUFFER_SIZE(outbuf) / (channels * sizeof(double)));
+	g_assert_cmpuint(output_length, ==, GST_BUFFER_SIZE(outbuf) / (channels * sizeof(double)));
 
 	/*
 	 * flush the data from the adapter
@@ -642,7 +642,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		element->need_discont = TRUE;
 	} else
-		g_assert(GST_BUFFER_TIMESTAMP(inbuf) == gst_audioadapter_expected_timestamp(element->adapter));
+		g_assert_cmpuint(GST_BUFFER_TIMESTAMP(inbuf), ==, gst_audioadapter_expected_timestamp(element->adapter));
 	element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
 
 	/*
@@ -674,7 +674,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		guint samples = filter(element, outbuf);
-		g_assert(output_length == samples);
+		g_assert_cmpuint(output_length, ==, samples);
 		GST_DEBUG_OBJECT(element, "output is %u samples", output_length);
 	} else if(history_is_gap) {
 		/*
@@ -700,7 +700,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		guint samples = filter(element, outbuf);
-		g_assert(output_length == samples);
+		g_assert_cmpuint(output_length, ==, samples);
 		GST_DEBUG_OBJECT(element, "output is %u samples", output_length);
 	} else {
 		/*
@@ -715,7 +715,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		guint gap_length = zeros_in_adapter - autocorrelation_length(element) + 1;
 		guint samples;
 		GstBuffer *buf;
-		g_assert(gap_length < output_length);
+		g_assert_cmpuint(gap_length, <, output_length);
 
 		GST_DEBUG_OBJECT(element, "output is %u samples followed by %u sample gap", output_length - gap_length, gap_length);
 
@@ -726,7 +726,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			goto done;
 		g_mutex_lock(element->autocorrelation_lock);
 		samples = filter(element, buf);
-		g_assert(output_length - gap_length == samples);
+		g_assert_cmpuint(output_length - gap_length, ==, samples);
 
 		GST_DEBUG_OBJECT(element, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buf));
 		g_mutex_unlock(element->autocorrelation_lock);
