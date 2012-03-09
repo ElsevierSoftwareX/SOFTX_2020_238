@@ -106,7 +106,7 @@ head = pipeparts.mktaginject(pipeline, head, "units=strain")
 initial_offset = block_stride
 final_offset = (int(options.gps_end_time) - int(options.gps_start_time)) * options.sample_rate - block_stride
 
-head = pipeparts.mktrim(pipeline,head,initial_offset = initial_offset,final_offset = final_offset,inverse=False)
+#head = pipeparts.mktrim(pipeline,head,initial_offset = initial_offset,final_offset = final_offset,inverse=False)
 
 try:
 	outpath = options.instrument+"-"+options.channel_name
