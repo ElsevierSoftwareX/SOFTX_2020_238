@@ -101,7 +101,7 @@ static guint64 undersample(const void *src, guint64 src_size, void *dst, guint64
 	src_size -= *remainder;
 	*remainder = src_size % cadence ? cadence - src_size % cadence : 0;
 
-	g_assert_cmpuint(dst_size * cadence, ==, src_size + *remainder - cadence);
+	g_assert_cmpuint(dst_size * cadence, ==, src_size + *remainder);
 
 	switch(unit_size) {
 	case 1:
