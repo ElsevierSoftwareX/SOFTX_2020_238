@@ -5,6 +5,7 @@ dist_bin_SCRIPTS = \
 	gstlal_plot_psd \
 	gstlal_psd_xml_from_asd_txt \
 	gstlal_recolor_frames \
+	gstlal_color_frames \
 	gstlal_reference_psd \
 	gstlal_spectrum_movie \
 	gstlal_launch
