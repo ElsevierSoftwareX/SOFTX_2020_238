@@ -1,14 +1,20 @@
-START = 871147452
-STOP =  871149452
+START = 871850000
+STOP =  871860000
+IFO = V1
+DESIGNPSD = AdV_slide11_solid.txt
+CHANNEL = STRAIN:16384
+SAMPLE_RATE = 16384
+DELTAF = 0.015625
+FRAMELENGTH = 4096
 
 all : color
 
+$(IFO)recolor_psd.xml.gz : 
+	gstlal_psd_xml_from_asd_txt --instrument ${IFO} --output $(IFO)recolor_psd.xml.gz --invert ${DESIGNPSD} --df ${DELTAF}
 
-H1recolorpsd.xml.gz : 
-	gstlal_psd_xml_from_asd_txt --instrument H1 --output H1recolorpsd.xml.gz --invert ZERO_DET_high_P.txt
-
-color : H1recolorpsd.xml.gz
-	gstlal_color_frames --gps-start-time $(START) --gps-end-time $(STOP) --instrument H1 --color-psd H1recolorpsd.xml.gz --verbose
+color : $(IFO)recolor_psd.xml.gz
+	gstlal_color_frames --gps-start-time $(START) --gps-end-time $(STOP) --instrument V1 --color-psd $(IFO)recolor_psd.xml.gz --verbose --sample-rate $(SAMPLE_RATE) --channel-name ${CHANNEL} --duration $(FRAMELENGTH)
 
 realclean :
-	rm -r *.gz 
+	rm -fr $(IFO)recolor_psd.xml.gz $(CHANNEL)
+
