@@ -609,8 +609,14 @@ def mklhocoherentnull(pipeline, H1src, H2src, H1_impulse, H1_latency, H2_impulse
 	coherent_null_bin.set_property("H1-latency", H1_latency)
 	coherent_null_bin.set_property("H2-latency", H2_latency)
 	pipeline.add(coherent_null_bin)
-	H1src.link_pads("src", coherent_null_bin, "H1sink")
-	H2src.link_pads("src", coherent_null_bin, "H2sink")
+	if isinstance(H1src, gst.Pad):
+		H1src.get_parent_element().link_pads(H1src, coherent_null_bin, "H1sink")
+	elif H1src is not None:
+		coherent_null_bin.link_pads("H1sink", H1src, None)
+	if isinstance(H2src, gst.Pad):
+		H2src.get_parent_element().link_pads(H2src, coherent_null_bin, "H2sink")
+	elif H2src is not None:
+		coherent_null_bin.link_pads("H2sink", H2src, None)
 	return coherent_null_bin
 
 
