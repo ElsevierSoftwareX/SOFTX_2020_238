@@ -758,7 +758,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 		 * buffer.
 		 */
 
-		g_assert_cmpuint((gint64) element->output_history_offset, <=, (gint64) (element->next_offset_out + *outsamples));
+		g_assert_cmpint((gint64) element->output_history_offset, <=, (gint64) (element->next_offset_out + *outsamples));
 		if(element->output_history_offset == element->next_offset_out + *outsamples) {
 			memcpy(&dst[*outsamples], &element->output_history->data[0], hann_length / 2 * sizeof(*element->output_history->data));
 			*outsamples += hann_length / 2;
