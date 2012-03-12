@@ -186,9 +186,9 @@ static int make_workspace(GSTLALWhiten *element)
 	 * safety checks
 	 */
 
-	g_assert_cmpuint(element->sample_rate, >, 0);
-	g_assert_cmpuint(element->zero_pad_seconds, >=, 0);
-	g_assert_cmpuint(element->fft_length_seconds, >, 0);
+	g_assert_cmpint(element->sample_rate, >, 0);
+	g_assert_cmpfloat(element->zero_pad_seconds, >=, 0);
+	g_assert_cmpfloat(element->fft_length_seconds, >, 0);
 	g_assert_cmpuint(fft_length(element), >, 2 * zero_pad_length(element));
 
 	/*
