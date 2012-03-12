@@ -56,7 +56,7 @@
 
 
 #define DEFINE_UNDERSAMPLE_FUNC(size) \
-static guint64 undersample_ ## size(const gint ## size *src, gint ## size *dst, guint64 dst_size, gint cadence) \
+static guint64 undersample_ ## size(const gint ## size *src, gint ## size *dst, guint64 dst_size, guint cadence) \
 { \
 	const gint ## size *dst_end; \
  \
@@ -72,7 +72,7 @@ DEFINE_UNDERSAMPLE_FUNC(32)
 DEFINE_UNDERSAMPLE_FUNC(64)
 
 
-static guint64 undersample_other(const gint8 *src, gint8 *dst, guint64 dst_size, gint unit_size, gint cadence)
+static guint64 undersample_other(const gint8 *src, gint8 *dst, guint64 dst_size, gint unit_size, guint cadence)
 {
 	const gint8 *dst_end;
 
@@ -84,7 +84,7 @@ static guint64 undersample_other(const gint8 *src, gint8 *dst, guint64 dst_size,
 }
 
 
-static guint64 undersample(const void *src, guint64 src_size, void *dst, guint64 dst_size, gint unit_size, gint cadence, guint64 *remainder)
+static guint64 undersample(const void *src, guint64 src_size, void *dst, guint64 dst_size, gint unit_size, guint cadence, guint64 *remainder)
 {
 	g_assert_cmpuint(src_size % unit_size, ==, 0);
 	g_assert_cmpuint(dst_size % unit_size, ==, 0);
