@@ -59,10 +59,10 @@ __date__ = "FIXME"
 
 
 #
-# Applications should use the element-specific wrappings below.  The
-# generic constructors are only intended to simplify the writing of those
-# wrappings, they are not meant to be how applications create elements in
-# pipelines.
+# Applications should use the element-specific wrappings that follow below.
+# The generic constructors are only intended to simplify the writing of
+# those wrappings, they are not meant to be how applications create
+# elements in pipelines.
 #
 
 
@@ -242,7 +242,7 @@ def mkshift(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "lal_shift", **properties)
 
 
-def mkfakeLIGOsrc(pipeline, location=None, instrument=None, channel_name=None, blocksize=16384 * 8 * 1):
+def mkfakeLIGOsrc(pipeline, location = None, instrument = None, channel_name = None, blocksize = 16384 * 8 * 1):
 	head = gst.element_factory_make("lal_fakeligosrc")
 	if instrument is not None:
 		head.set_property("instrument", instrument)
@@ -253,7 +253,7 @@ def mkfakeLIGOsrc(pipeline, location=None, instrument=None, channel_name=None, b
 	return head
 
 
-def mkfakeadvLIGOsrc(pipeline, location=None, instrument=None, channel_name=None, blocksize=16384 * 8 * 1):
+def mkfakeadvLIGOsrc(pipeline, location = None, instrument = None, channel_name = None, blocksize = 16384 * 8 * 1):
 	head = gst.element_factory_make("lal_fakeadvligosrc")
 	if instrument is not None:
 		head.set_property("instrument", instrument)
