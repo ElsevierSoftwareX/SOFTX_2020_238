@@ -34,13 +34,15 @@ from gstlal.reference_psd import read_psd
 from glue.ligolw import utils, lsctables
 
 # read bank file
-bank = utils.load_filename(options.template_bank, gz=options.template_bank.endswith('.gz'))
-sngl_inspiral_table = lsctables.table.get_table(bank, lsctables.SnglInspiralTable.tableName)
+bank_xmldoc = utils.load_filename(options.template_bank, gz=options.template_bank.endswith('.gz'))
+sngl_inspiral_table = lsctables.table.get_table(bank_xmldoc, lsctables.SnglInspiralTable.tableName)
 fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
 
 # read psd file
 if options.reference_psd:
-	psd = read_psd(options.reference_psd)[options.instrument]
+	ALLpsd = read_psd(options.reference_psd, verbose=options.verbose)
+	bank_sngl_table = lsctables.table.get_table( bank_xmldoc,lsctables.SnglInspiralTable.tableName )
+	psd = ALLpsd[bank_sngl_table[0].ifo]
 	# smooth and create an interp object
 	psd = cbc_template_iir.smooth_and_interp(psd)
 else:
@@ -48,9 +50,9 @@ else:
 
 
 # get the iir coefficients
-A, B, D, snrs = cbc_template_iir.makeiirbank(bank, sampleRate = 4096, psd_interp = psd, verbose=options.verbose, padding=options.padding, flower=options.flow, downsample = options.downsample, output_to_xml = True, epsilon = options.epsilon)
+A, B, D, snrs = cbc_template_iir.makeiirbank(bank_xmldoc, sampleRate = 4096, psd_interp = psd, verbose=options.verbose, padding=options.padding, flower=options.flow, downsample = options.downsample, output_to_xml = True, epsilon = options.epsilon)
 
-utils.write_filename(bank, options.output, gz=options.output.endswith('.gz'))
+utils.write_filename(bank_xmldoc, options.output, gz=options.output.endswith('.gz'))
 
 #import pylab
 #pylab.hist(snrs)
