@@ -206,7 +206,10 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 		if verbose: print>>sys.stderr, "norm2 = %e, %e" % (norm2, row.sigmasq)
 
                 # compute the SNR
-                corr = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec2)))/2.0
+		#corr = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec2)))/2.0
+		corrreal = scipy.ifft(scipy.fft(vec2.real) * numpy.conj(scipy.fft(vec1.real)))
+		corrimag = scipy.ifft(scipy.fft(vec2.real) * numpy.conj(scipy.fft(vec1.imag)))
+		corr = corrreal + 1j*corrimag
 		if verbose: print>>sys.stderr, "correlation %f, length %d" % ((time.time() - start), length)
 
                 #FIXME this is actually the cross correlation between the original waveform and this approximation
