@@ -269,6 +269,9 @@ get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
  * sent. For example, if sending the middle half, f0=0.25, f1=0.75.
  *
  * If gap==TRUE, send subbuffer as a gap.
+ *
+ * As with gst_pad_push(), in all cases, success or failure, the caller
+ * loses its reference to "template" after calling this function.
  */
 static GstFlowReturn push_subbuf(GstPad *pad, GstBuffer *template,
                                  gdouble f0, gdouble f1, gboolean gap)
@@ -299,6 +302,7 @@ static GstFlowReturn push_subbuf(GstPad *pad, GstBuffer *template,
 
     if (result != GST_FLOW_OK) {
         GST_ERROR("gst_pad_alloc_buffer() failed allocating buffer");
+        gst_buffer_unref(template);
         return result;
     }
 
@@ -321,6 +325,7 @@ static GstFlowReturn push_subbuf(GstPad *pad, GstBuffer *template,
     result = gst_pad_push(pad, buf);
     if (result != GST_FLOW_OK) {
         GST_ERROR("gst_pad_push() failed pushing gap buffer");
+        gst_buffer_unref(template);
         return result;
     }
 
@@ -395,12 +400,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *buf)
      */
     gdouble f0 = (c0 - b0) / (gdouble) (b1 - b0);
     gdouble f1 = (c1 - b0) / (gdouble) (b1 - b0);
-    gst_buffer_ref(buf);
+
     gst_buffer_ref(buf);
     /* because we will unref() it *3 times* by calling push_subbuf() */
 
     if (push_subbuf(elem->srcpad, buf, 0.0, f0, TRUE ^ inv) != GST_FLOW_OK)
         return GST_FLOW_ERROR;
+
+    gst_buffer_ref(buf);  /* still one to go */
 
     if (push_subbuf(elem->srcpad, buf, f0, f1, FALSE ^ inv) != GST_FLOW_OK)
         return GST_FLOW_ERROR;
