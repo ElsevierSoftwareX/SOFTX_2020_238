@@ -136,37 +136,28 @@ static GstCaps *series_to_caps(gint rate, LALTYPECODE type)
 	GstCaps *caps;
 
 	switch(type) {
+	case LAL_I2_TYPE_CODE:
 	case LAL_I4_TYPE_CODE:
 		caps = gst_caps_new_simple(
 			"audio/x-raw-int",
 			"rate", G_TYPE_INT, rate,
 			"channels", G_TYPE_INT, 1,
 			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, 32,
-			"depth", G_TYPE_INT, 32,
+			"width", G_TYPE_INT, type == LAL_I2_TYPE_CODE ? 16 : 32,
+			"depth", G_TYPE_INT, type == LAL_I2_TYPE_CODE ? 16 : 32,
 			"signed", G_TYPE_BOOLEAN, TRUE,
 			NULL
 		);
 		break;
 
 	case LAL_S_TYPE_CODE:
-		caps = gst_caps_new_simple(
-			"audio/x-raw-float",
-			"rate", G_TYPE_INT, rate,
-			"channels", G_TYPE_INT, 1,
-			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, 32,
-			NULL
-		);
-		break;
-
 	case LAL_D_TYPE_CODE:
 		caps = gst_caps_new_simple(
 			"audio/x-raw-float",
 			"rate", G_TYPE_INT, rate,
 			"channels", G_TYPE_INT, 1,
 			"endianness", G_TYPE_INT, G_BYTE_ORDER,
-			"width", G_TYPE_INT, 64,
+			"width", G_TYPE_INT, type == LAL_S_TYPE_CODE ? 32 : 64,
 			NULL
 		);
 		break;
@@ -326,6 +317,22 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 
 	GST_LOG_OBJECT(element, "reading %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" starting at %d.%09u s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds);
 	switch(element->series_type) {
+	case LAL_I2_TYPE_CODE: {
+		INT2TimeSeries *series = XLALFrReadINT2TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
+		if(!series) {
+			GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("XLALFrReadINT2TimeSeries() %" G_GUINT64_FORMAT " samples (%g seconds) of channel \"%s\" at %d.%09u s failed: %s", length, (double) length / element->rate, element->full_channel_name, start_time.gpsSeconds, start_time.gpsNanoSeconds, XLALErrorString(XLALGetBaseErrno())));
+			XLALClearErrno();
+			return GST_FLOW_ERROR;
+		}
+		g_assert_cmpuint(llabs((gint64) offset_to_time(element, offset) - (gint64) XLALGPSToINT8NS(&series->epoch)), <=, 1);
+		g_assert_cmpuint(round(1.0 / series->deltaT), ==, element->rate);
+		g_assert_cmpuint(series->data->length, ==, length);
+		g_assert_cmpuint(unit_size(element), ==, sizeof(*series->data->data));
+		memcpy(dst, series->data->data, length * unit_size(element));
+		XLALDestroyINT2TimeSeries(series);
+	}
+		break;
+
 	case LAL_I4_TYPE_CODE: {
 		INT4TimeSeries *series = XLALFrReadINT4TimeSeries(element->stream, element->full_channel_name, &start_time, (double) length / element->rate, 0);
 		if(!series) {
@@ -517,6 +524,37 @@ static gboolean start(GstBaseSrc *object)
 	 */
 
 	switch(element->series_type) {
+	case LAL_I2_TYPE_CODE: {
+		INT2TimeSeries *series = XLALCreateINT2TimeSeries(element->full_channel_name, &stream_start, 0.0, 0.0, &lalDimensionlessUnit, 0);
+		if(!series) {
+			GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALCreateINT2TimeSeries() failed: %s", XLALErrorString(XLALGetBaseErrno())));
+			XLALFrClose(element->stream);
+			element->stream = NULL;
+			XLALClearErrno();
+			return FALSE;
+		}
+		if(XLALFrGetINT2TimeSeriesMetadata(series, element->stream)) {
+			GST_ELEMENT_ERROR(element, RESOURCE, OPEN_READ, (NULL), ("XLALFrGetINT2TimeSeriesMetadata() failed: %s", XLALErrorString(XLALGetBaseErrno())));
+			XLALDestroyINT2TimeSeries(series);
+			XLALFrClose(element->stream);
+			element->stream = NULL;
+			XLALClearErrno();
+			return FALSE;
+		}
+		rate = round(1.0 / series->deltaT);
+		if(fabs(1.0 / series->deltaT - rate) / rate > 1e-16) {
+			GST_ERROR_OBJECT(element, "non-integer sample rate in frame file:  1 / %g s != %d Hz", series->deltaT, element->rate);
+			XLALDestroyINT2TimeSeries(series);
+			XLALFrClose(element->stream);
+			element->stream = NULL;
+			return FALSE;
+		}
+		width = 16;
+		caps = series_to_caps(rate, element->series_type);
+		XLALDestroyINT2TimeSeries(series);
+		break;
+	}
+
 	case LAL_I4_TYPE_CODE: {
 		INT4TimeSeries *series = XLALCreateINT4TimeSeries(element->full_channel_name, &stream_start, 0.0, 0.0, &lalDimensionlessUnit, 0);
 		if(!series) {
@@ -1158,6 +1196,13 @@ static void base_init(gpointer class)
 				"endianness = (int) BYTE_ORDER, " \
 				"width = (int) 32, " \
 				"depth = (int) 32, " \
+				"signed = (boolean) true; " \
+				"audio/x-raw-int, " \
+				"rate = (int) [1, MAX], " \
+				"channels = (int) 1, " \
+				"endianness = (int) BYTE_ORDER, " \
+				"width = (int) 16, " \
+				"depth = (int) 16, " \
 				"signed = (boolean) true"
 			)
 		)
