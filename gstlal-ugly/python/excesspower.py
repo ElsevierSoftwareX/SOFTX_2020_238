@@ -32,6 +32,10 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 	# Filter length needs to be long enough to get the pertinent features in
 	# the time domain
 	filter_len = 2*int(2*b_wind/psd.deltaF)
+
+	if filter_len <= 0:
+		print >>sys.stderr, "Invalid filter length (%d). Is your filter bandwidth too small?" % filter_len
+		exit(-1)
 	
 	# define number of band window
 	bands = int( (fhigh - flow) / b_wind / overlap ) - 1
