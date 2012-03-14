@@ -8,68 +8,141 @@ matplotlib.use('Agg')
 import pylab
 import sys
 import numpy
+from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
+
+def plotSNROverlap(snrlist, out_filename="SNROverlap.png", labeltag="unknown"):
+	"""
+	Function to plot a histogram of the IIR to template overlap. Very useful to see if bank is satisfactorily defined
+	"""
+
+	# Set up limits of histogram
+	xlmax = -1
+	xlmin = 1e9
+	x = snrlist
+	xmin = numpy.min(x)
+	xmax = numpy.max(x)
+	xlmin = numpy.min([xmin,xlmin])
+	xlmax = numpy.max([xmax,xlmax])
+	xbins = numpy.linspace(xmin, xmax, 1500)
+
+	pylab.figure()
+	ax1 = pylab.axes()
+	ax1.hist( x, xbins, histtype = 'step', cumulative = True, normed=True, label = '%s, N=%d' % (labeltag, len(x)), align = 'mid')
+	#ax1.set_xlim( ((xmin), (xmax)) )
+	#ax1.set_ylim( (0.01, 1.0) )
+	ax1.set_yscale('log')
+	ax1.grid(which='both')
+	ax1.set_xlim( (xlmin, xlmax))
+	#ax1.set_xlim( ((0.9900), (0.9925)) )
+	ax1.set_ylim( (0.0001, 1.0) )
+	ax1.xaxis.set_major_formatter(FormatStrFormatter('%6.5f'))
+	for tl in ax1.xaxis.get_ticklabels():
+		tl.set_rotation(15)
+	pylab.legend(loc=2)
+	pylab.ylabel('Percent of Templates')
+	pylab.xlabel('SNR Overlap')
+	pylab.savefig('SNROverlap.png', dpi=300)
+	pylab.close()
+
+def plotSNRhistograms(snrlist, mchirplist, niirlist, out_filename="SNRhistograms.png"):
+	"""
+	Plot three histograms to show the distribution of the SNR overlap as a function of chirp mass and size of IIR bank
+	"""
+
+	def plotScatter(rec, x, y, xlabel = None, ylabel = None):
+		axes = pylab.axes(rec)
+		if xlabel is not None:
+			axes.set_xlabel(xlabel)
+		if ylabel is not None:
+			axes.set_ylabel(ylabel)
+		pylab.grid()
+		axes.scatter(x, y, s=1, edgecolor='none')
+		return axes
+
+	def plotHistogram(rec, x, xlabel = None, ylabel = None, orientation = "vertical"):
+		axes = pylab.axes(rec)
+                if xlabel is not None:
+                        axes.set_xlabel(xlabel)
+                if ylabel is not None:
+                        axes.set_ylabel(ylabel)
+                pylab.grid()
+
+		axes.hist(x, 50, histtype='step', orientation=orientation)
+		return axes
+
+	# definitions for the axes
+	#scatterboxwidth = scatterboxheight = 0.35
+	#histogramwidth = histogramheight = 0.17
+	#separationwidth = separatioinheight = 0.01
+	#marginwidth = marginheight = 0.03
+	w1 = h1 = 0.35
+	w2 = h2 = 0.17
+	wo = ho = 0.01
+	wm2 = hm2 = 0.03
+	wm = 1 - 2*w1 -w2 - wo - wm2
+	hm = 1 - 2*h1 -h2 - ho - hm2
+
+	rect_scatter1 = [wm, hm+ho+h1, w1, h1]
+	rect_scatter2 = [wm+w1+wo, hm+ho+h1, w1, h1]
+	rect_scatter3 = [wm+w1+wo, hm, w1, h1]
+	rect_histx1 = [wm, hm+2*h1+2*ho, w1, h2]
+	rect_histx2 = [wm+w1+wo, hm+2*h1+2*ho, w1, h2]
+	rect_histy1 = [wm+2*w1+2*wo, hm+h1+ho, w2, h1]
+
+	fig = pylab.figure(1, figsize=(8,8))
+	axScatter1 = plotScatter(rect_scatter1, niirlist, snrlist)
+	axScatter2 = plotScatter(rect_scatter2, mchirplist, snrlist)
+	axScatter3 = plotScatter(rect_scatter3, mchirplist, niirlist)
+	axHistogramx1 = plotHistogram(rect_histx1, niirlist)
+	axHistogramx2 = plotHistogram(rect_histx2, mchirplist)
+	axHistogramy1 = plotHistogram(rect_histy1, snrlist, orientation="horizontal")
+	pylab.savefig(out_filename, dpi = 300)
+	pylab.close()
+
+
 
 file = open('snrlist.csv','wb')
 
 m1 = []
 m2 = []
+mchirp = []
 snrs = []
-N = []
+Niir = []
 
-print basename
+
 for f in sys.argv[1:]:
 	print f
 	xmldoc = utils.load_filename(f)#, gz=f.endswith('gz'))
 
-	Ndict = {}
 	sample_rates = [int(r) for r in param.get_pyvalue(xmldoc, 'sample_rate').split(',')]
 	n = 0
+	N = None
 	for sr in sample_rates:
 		n += array.get_array(xmldoc, 'd_%d' % (sr,)).get_shape()[1]
 		#n = array.get_array(xmldoc, 'a_%d' % (sr,)).get_shape()[0] * array.get_array(xmldoc, 'a_%d' % (sr,)).get_shape()[1]/2 * sr
 		#M.setdefault(sr, []).append(n)
+		aarray = repack_real_array_to_complex(array.get_array(xmldoc, 'a_%d' % (sr,)).array)
+		if N is None:
+			N = numpy.zeros(len(aarray))
 
+		for tmp, arow in enumerate(aarray):
+			nonzero = 0
+			for aseries in arow:
+				if numpy.abs(aseries) !=0:
+					nonzero += 1
+			N[tmp] += nonzero
 
 	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 	for tmp, row in enumerate(sngl_inspiral_table):
 		snrs.append(row.snr)
 		m1.append(row.mass1)
 		m2.append(row.mass2)
-		N.append(n)
-
-		#print >>sys.stderr, '%13.8f, %13.8f, %13.8f, %10d' % (m1[tmp], m2[tmp], snrs[tmp], N[tmp])
+		mchirp.append(row.mchirp)
+		Niir.append(N[tmp])
+		#print >>sys.stderr, '%13.8f, %13.8f, %13.8f, %10d' % (m1[tmp], m2[tmp], snrs[tmp], Niir[tmp])
 		#print >>file, '%13.8f, %13.8f, %13.8f' % (m1[tmp], m2[tmp], snrs[tmp])
+
 file.close()
 
-xlmax = -1
-xlmin = 1e9
-x = snrs
-xmin = numpy.min(x)
-xmax = numpy.max(x)
-xlmin = numpy.min([xmin,xlmin])
-xlmax = numpy.max([xmax,xlmax])
-xbins = numpy.linspace(xmin, xmax, 1500)
+plotSNRhistograms(snrs, mchirp, Niir)
 
-if labeltag not None:
-	labeltage = "unknown"
-
-pylab.figure()
-ax1 = pylab.axes()
-ax1.hist( x, xbins, histtype = 'step', cumulative = True, normed=True, label = '%s, N=%d' % (labeltag, len(x)), align = 'mid')
-#ax1.set_xlim( ((xmin), (xmax)) )
-#ax1.set_ylim( (0.01, 1.0) )
-ax1.set_yscale('log')
-ax1.grid(which='both')
-#ax1.set_yscale('log')
-#ax1.set_xscale('log')
-ax1.set_xlim( (xlmin, xlmax))
-#ax1.set_xlim( ((0.9900), (0.9925)) )
-ax1.set_ylim( (0.0001, 1.0) )
-ax1.xaxis.set_major_formatter(FormatStrFormatter('%6.5f'))
-for tl in ax1.xaxis.get_ticklabels():
-    tl.set_rotation(15)
-pylab.legend(loc=2)
-pylab.ylabel('Percent of Templates')
-pylab.xlabel('SNR Overlap')
-pylab.savefig('SNROverlap.png', dpi=300)
-pylab.close()
