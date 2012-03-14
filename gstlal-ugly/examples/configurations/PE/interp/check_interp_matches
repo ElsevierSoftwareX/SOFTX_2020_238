@@ -1,0 +1,67 @@
+#!/usr/bin/python
+import sys
+import copy
+
+from gstlal.svd_bank import read_bank
+import numpy
+import matplotlib
+matplotlib.use('Agg')
+import pylab
+from scipy import interpolate
+import interp_utils	
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from gstlal import cbc_template_fir
+from gstlal import reference_psd
+from pylal import datatypes as laltypes
+from pylal import lalfft
+from pylal import spawaveform
+from gstlal.reference_psd import interpolate_psd
+import math
+from gstlal import templates
+
+bank = read_bank(sys.argv[1])
+testbankxmldoc = utils.load_filename(sys.argv[2])
+test_sngl_inspiral_table = lsctables.table.get_table(testbankxmldoc ,lsctables.SnglInspiralTable.tableName)
+
+# just one fragment
+frag = bank.bank_fragments[0]
+u = frag.orthogonal_template_bank
+mchirps, etas = interp_utils.get_mc_eta_arrays_from_sngl_inspiral_table(bank.sngl_inspiral_table)
+new_mchirps, new_etas = interp_utils.get_mc_eta_arrays_from_sngl_inspiral_table(test_sngl_inspiral_table)
+
+# Assume bank was constructed by a loop over chirp masses then etas
+# FIXME have I got this packing the right way around, could I be swapping mchirp  and eta?
+m = interp_utils.pack_mixing_matrix_on_mchirp_and_eta_grid(mchirps, etas, frag.mix_matrix)
+
+r_interps = []
+i_interps = []
+for i, a in enumerate(m):
+	r_interps.append(interp_utils.interp_mc_eta(mchirps, etas, numpy.real(a)))
+	i_interps.append(interp_utils.interp_mc_eta(mchirps, etas, numpy.imag(a)))
+		
+
+length = len(u[0])
+rate = frag.rate
+working_length = int(round(2**math.ceil(math.log(length + round(32.0 * rate), 2))))
+working_duration = float(working_length) / rate
+
+revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1)
+tseries = laltypes.COMPLEX16TimeSeries(data = numpy.zeros((working_length,), dtype = "cdouble"))
+
+#FIXME don't hardcode H1
+psd =  reference_psd.read_psd(sys.argv[3])['H1']
+psd = cbc_template_fir.interpolate_psd(psd, 1.0 / working_duration)
+
+
+for template in test_sngl_inspiral_table:
+	mc = template.mchirp
+	eta = template.eta
+	test_waveform = interp_utils.waveform(mc, eta, r_interps, u) + 1.j * interp_utils.waveform(mc, eta, i_interps, u)
+	#FIXME don't hardcode 40 Hz and 3.5 PN
+	fseries = cbc_template_fir.generate_template(template, "FindChirpSP", rate, working_duration, 40.0, rate / 2., order = 7)
+	lalfft.XLALWhitenCOMPLEX16FrequencySeries(fseries, psd)
+	fseries = templates.add_quadrature_phase(fseries, working_length)
+	lalfft.XLALCOMPLEX16FreqTimeFFT(tseries, fseries, revplan)
+	data = tseries.data[-length:]
+	print mc, eta, numpy.abs(numpy.sum(test_waveform * numpy.conj(data)))  / numpy.abs(numpy.sum(test_waveform * numpy.conj(test_waveform)))**.5 / numpy.abs(numpy.sum(data * numpy.conj(data)))**.5
