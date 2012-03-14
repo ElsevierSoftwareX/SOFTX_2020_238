@@ -1,0 +1,55 @@
+#!/usr/bin/python
+
+import os
+import sys
+import numpy
+import copy
+from optparse import OptionParser
+from pylal import spawaveform
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw.utils import process as ligolw_process
+from pylal.datatypes import LIGOTimeGPS
+from math import sqrt, pow
+
+def m1_m2_from_mchirp_eta(mc, eta):
+	root = sqrt(0.25-eta);
+	fraction = (0.5+root) / (0.5-root);
+	m2 = mc * (pow(1+fraction,0.2) / pow(fraction,0.6));
+	m1 = mc * (pow(1+1.0/fraction,0.2) / pow(1.0/fraction,0.6));
+	return m1, m2
+
+
+filename = sys.argv[1]
+xmldoc=utils.load_filename(filename, verbose = True)
+
+sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+
+sngl_inspiral_table_cut = lsctables.table.new_from_template(sngl_inspiral_table)
+sngl_inspiral_table.parentNode.replaceChild(sngl_inspiral_table_cut, sngl_inspiral_table)
+
+mchirpstart = float(sys.argv[2])
+mchirpstop = float(sys.argv[3])
+mchirppoints = int(sys.argv[4])
+
+etastart = float(sys.argv[5])
+etastop = float(sys.argv[6])
+etapoints = int(sys.argv[7])
+
+outfile = sys.argv[8]
+
+template = sngl_inspiral_table[0]
+
+for mchirp in numpy.linspace(mchirpstart, mchirpstop, mchirppoints):
+	for eta in numpy.linspace(etastart, etastop, etapoints):
+		m1, m2 = m1_m2_from_mchirp_eta(mchirp, eta)
+		thisrow = copy.deepcopy(template)
+		thisrow.mass1 = m1
+		thisrow.mass2 = m2
+		thisrow.mchirp = mchirp
+		thisrow.eta = eta
+		sngl_inspiral_table_cut.append(thisrow)
+
+print >> sys.stderr, "produced %d templates" % (len(sngl_inspiral_table_cut))
+utils.write_filename(xmldoc, outfile, gz = outfile.endswith('.gz'), verbose = True)

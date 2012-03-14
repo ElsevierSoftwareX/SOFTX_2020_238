@@ -1,0 +1,30 @@
+#!/usr/bin/python
+
+import os
+import sys
+import numpy
+import copy
+from optparse import OptionParser
+from pylal import spawaveform
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw.utils import process as ligolw_process
+from pylal.datatypes import LIGOTimeGPS
+
+filename = sys.argv[1]
+xmldoc=utils.load_filename(filename, verbose = True)
+
+sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+
+sngl_inspiral_table_cut = lsctables.table.new_from_template(sngl_inspiral_table)
+sngl_inspiral_table.parentNode.replaceChild(sngl_inspiral_table_cut, sngl_inspiral_table)
+
+chirpstart = float(sys.argv[2])
+chirpstop = float(sys.argv[3])
+for template in sngl_inspiral_table:
+	if (chirpstart <= template.mchirp) and (template.mchirp <= chirpstop):
+		print template.mchirp
+		sngl_inspiral_table_cut.append(template)
+print >> sys.stderr, "Kept %d of %d templates" % (len(sngl_inspiral_table_cut), len(sngl_inspiral_table))
+utils.write_filename(xmldoc, filename, gz = filename.endswith('gz'), verbose = True)
