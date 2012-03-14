@@ -281,10 +281,10 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	blocks = (GST_BUFFER_DURATION(sinkbuf) + element->block_duration - 1) / element->block_duration;	/* ciel */
-	g_assert(blocks > 0);	/* guaranteed by check for short-buffers above */
+	g_assert_cmpuint(blocks, >, 0);	/* guaranteed by check for short-buffers above */
 	length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
 	block_length = (length + blocks - 1) / blocks;	/* ciel */
-	g_assert(block_length > 0);	/* barf to avoid infinite loop */
+	g_assert_cmpuint(block_length, >, 0);	/* barf to avoid infinite loop */
 
 	/*
 	 * loop over the contents of the input buffer

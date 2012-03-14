@@ -186,10 +186,10 @@ static int make_workspace(GSTLALWhiten *element)
 	 * safety checks
 	 */
 
-	g_assert(element->sample_rate > 0);
-	g_assert(element->zero_pad_seconds >= 0);
-	g_assert(element->fft_length_seconds > 0);
-	g_assert(fft_length(element) > 2 * zero_pad_length(element));
+	g_assert_cmpint(element->sample_rate, >, 0);
+	g_assert_cmpfloat(element->zero_pad_seconds, >=, 0);
+	g_assert_cmpfloat(element->fft_length_seconds, >, 0);
+	g_assert_cmpuint(fft_length(element), >, 2 * zero_pad_length(element));
 
 	/*
 	 * construct FFT plans and build a Hann window with zero-padding.
@@ -405,7 +405,7 @@ static REAL8FrequencySeries *make_psd_from_fseries(const COMPLEX16FrequencySerie
 	if(!psd)
 		return NULL;
 	for(i = 0; i < psd->data->length; i++)
-		psd->data->data[i] = XLALCOMPLEX16Abs2(fseries->data->data[i]) * (2 * psd->deltaF);
+		psd->data->data[i] = pow(cabs(fseries->data->data[i]), 2) * (2 * psd->deltaF);
 
 	/*
 	 * zero the DC and Nyquist components
@@ -565,10 +565,10 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 	 */
 
 	g_assert(element->tdworkspace != NULL);
-	g_assert(element->tdworkspace->data->length == fft_length(element));
-	g_assert(element->hann_window->data->length == element->tdworkspace->data->length);
-	g_assert(element->output_history->length == element->tdworkspace->data->length);
-	g_assert(sizeof(*element->output_history->data) == sizeof(*element->tdworkspace->data->data));
+	g_assert_cmpuint(element->tdworkspace->data->length, ==, fft_length(element));
+	g_assert_cmpuint(element->hann_window->data->length, ==, element->tdworkspace->data->length);
+	g_assert_cmpuint(element->output_history->length, ==, element->tdworkspace->data->length);
+	g_assert_cmpuint(sizeof(*element->output_history->data), ==, sizeof(*element->tdworkspace->data->data));
 
 	/*
 	 * Iterate over the available data
@@ -585,7 +585,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 		 * safety checks
 		 */
 
-		g_assert((*outsamples + hann_length / 2) * sizeof(*element->tdworkspace->data->data) <= GST_BUFFER_SIZE(outbuf));
+		g_assert_cmpuint((*outsamples + hann_length / 2) * sizeof(*element->tdworkspace->data->data), <=, GST_BUFFER_SIZE(outbuf));
 
 		/*
 		 * Reset the workspace's metadata that gets modified
@@ -635,7 +635,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 				XLALClearErrno();
 				return GST_FLOW_ERROR;
 			}
-			/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->fdworkspace->data->length; kk++) s += LAL_CABS2(element->fdworkspace->data->data[kk]); fprintf(stderr, "mean square after FFT = %.16g\n", s / kk); }*/
+			/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->fdworkspace->data->length; kk++) s += pow(cabs(element->fdworkspace->data->data[kk]), 2); fprintf(stderr, "mean square after FFT = %.16g\n", s / kk); }*/
 
 			/*
 			 * Retrieve the PSD.
@@ -690,7 +690,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 				XLALClearErrno();
 				return GST_FLOW_ERROR;
 			}
-			/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->fdworkspace->data->length; kk++) s += LAL_CABS2(element->fdworkspace->data->data[kk]); fprintf(stderr, "mean square after whiten = %.16g\n", s / kk); }*/
+			/*{ unsigned kk; double s = 0; for(kk = 0; kk < element->fdworkspace->data->length; kk++) s += pow(cabs(element->fdworkspace->data->data[kk]), 2); fprintf(stderr, "mean square after whiten = %.16g\n", s / kk); }*/
 
 			/*
 			 * Transform to time domain.
@@ -758,7 +758,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 		 * buffer.
 		 */
 
-		g_assert((gint64) element->output_history_offset <= (gint64) (element->next_offset_out + *outsamples));
+		g_assert_cmpint((gint64) element->output_history_offset, <=, (gint64) (element->next_offset_out + *outsamples));
 		if(element->output_history_offset == element->next_offset_out + *outsamples) {
 			memcpy(&dst[*outsamples], &element->output_history->data[0], hann_length / 2 * sizeof(*element->output_history->data));
 			*outsamples += hann_length / 2;
@@ -1275,7 +1275,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		zero_output_history(element);
 	} else
-		g_assert(GST_BUFFER_TIMESTAMP(inbuf) == gst_audioadapter_expected_timestamp(element->input_queue));
+		g_assert_cmpuint(GST_BUFFER_TIMESTAMP(inbuf), ==, gst_audioadapter_expected_timestamp(element->input_queue));
 	element->next_offset_in = GST_BUFFER_OFFSET_END(inbuf);
 
 	/*

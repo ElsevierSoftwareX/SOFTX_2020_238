@@ -59,10 +59,10 @@ __date__ = "FIXME"
 
 
 #
-# Applications should use the element-specific wrappings below.  The
-# generic constructors are only intended to simplify the writing of those
-# wrappings, they are not meant to be how applications create elements in
-# pipelines.
+# Applications should use the element-specific wrappings that follow below.
+# The generic constructors are only intended to simplify the writing of
+# those wrappings, they are not meant to be how applications create
+# elements in pipelines.
 #
 
 
@@ -215,7 +215,7 @@ def mkfakesrc(pipeline, instrument, channel_name, blocksize = 16384 * 8 * 1, vol
 	return mktaginject(pipeline, mkcapsfilter(pipeline, mkaudiotestsrc(pipeline, samplesperbuffer = blocksize / 8, wave = wave, volume = volume, is_live = is_live), "audio/x-raw-float, width=64, rate=16384"), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
 
 
-def mkfakesrcseeked(pipeline, instrument, channel_name, seekevent, blocksize = 16384 * 8 * 1, volume = 1e-20, is_live = False, wave = 9):
+def mkfakesrcseeked(pipeline, instrument, channel_name, seekevent, blocksize = 16384 * 8 * 1, volume = 1e-20, is_live = False, wave = 9, rate = 16384):
 	# default blocksize is 1 second of double precision floats at
 	# 16384 Hz, e.g., h(t)
 	src = mkaudiotestsrc(pipeline, samplesperbuffer = blocksize / 8, wave = wave, volume = volume, is_live = is_live)
@@ -224,7 +224,7 @@ def mkfakesrcseeked(pipeline, instrument, channel_name, seekevent, blocksize = 1
 		raise RuntimeError, "Element %s did not want to enter ready state" % src.get_name()
 	if not src.send_event(seekevent):
 		raise RuntimeError, "Element %s did not handle seek event" % src.get_name()
-	return mktaginject(pipeline, mkcapsfilter(pipeline, src, "audio/x-raw-float, width=64, rate=16384"), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
+	return mktaginject(pipeline, mkcapsfilter(pipeline, src, "audio/x-raw-float, width=64, rate=%d" % (rate,)), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
 
 
 def mkfirfilter(pipeline, src, kernel, latency, **properties):
@@ -242,7 +242,7 @@ def mkshift(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "lal_shift", **properties)
 
 
-def mkfakeLIGOsrc(pipeline, location=None, instrument=None, channel_name=None, blocksize=16384 * 8 * 1):
+def mkfakeLIGOsrc(pipeline, location = None, instrument = None, channel_name = None, blocksize = 16384 * 8 * 1):
 	head = gst.element_factory_make("lal_fakeligosrc")
 	if instrument is not None:
 		head.set_property("instrument", instrument)
@@ -253,7 +253,7 @@ def mkfakeLIGOsrc(pipeline, location=None, instrument=None, channel_name=None, b
 	return head
 
 
-def mkfakeadvLIGOsrc(pipeline, location=None, instrument=None, channel_name=None, blocksize=16384 * 8 * 1):
+def mkfakeadvLIGOsrc(pipeline, location = None, instrument = None, channel_name = None, blocksize = 16384 * 8 * 1):
 	head = gst.element_factory_make("lal_fakeadvligosrc")
 	if instrument is not None:
 		head.set_property("instrument", instrument)
@@ -609,8 +609,14 @@ def mklhocoherentnull(pipeline, H1src, H2src, H1_impulse, H1_latency, H2_impulse
 	coherent_null_bin.set_property("H1-latency", H1_latency)
 	coherent_null_bin.set_property("H2-latency", H2_latency)
 	pipeline.add(coherent_null_bin)
-	H1src.link_pads("src", coherent_null_bin, "H1sink")
-	H2src.link_pads("src", coherent_null_bin, "H2sink")
+	if isinstance(H1src, gst.Pad):
+		H1src.get_parent_element().link_pads(H1src, coherent_null_bin, "H1sink")
+	elif H1src is not None:
+		H1src.link_pads(None, coherent_null_bin, "H1sink")
+	if isinstance(H2src, gst.Pad):
+		H2src.get_parent_element().link_pads(H2src, coherent_null_bin, "H2sink")
+	elif H2src is not None:
+		H2src.link_pads(None, coherent_null_bin, "H2sink")
 	return coherent_null_bin
 
 

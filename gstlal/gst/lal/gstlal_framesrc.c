@@ -333,10 +333,10 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 			XLALClearErrno();
 			return GST_FLOW_ERROR;
 		}
-		g_assert(llabs((gint64) offset_to_time(element, offset) - (gint64) XLALGPSToINT8NS(&series->epoch)) <= 1);
-		g_assert(round(1.0 / series->deltaT) == element->rate);
-		g_assert(series->data->length == length);
-		g_assert(unit_size(element) == sizeof(*series->data->data));
+		g_assert_cmpuint(llabs((gint64) offset_to_time(element, offset) - (gint64) XLALGPSToINT8NS(&series->epoch)), <=, 1);
+		g_assert_cmpuint(round(1.0 / series->deltaT), ==, element->rate);
+		g_assert_cmpuint(series->data->length, ==, length);
+		g_assert_cmpuint(unit_size(element), ==, sizeof(*series->data->data));
 		memcpy(dst, series->data->data, length * unit_size(element));
 		XLALDestroyINT4TimeSeries(series);
 	}
@@ -349,10 +349,10 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 			XLALClearErrno();
 			return GST_FLOW_ERROR;
 		}
-		g_assert(llabs((gint64) offset_to_time(element, offset) - (gint64) XLALGPSToINT8NS(&series->epoch)) <= 1);
-		g_assert(round(1.0 / series->deltaT) == element->rate);
-		g_assert(series->data->length == length);
-		g_assert(unit_size(element) == sizeof(*series->data->data));
+		g_assert_cmpuint(llabs((gint64) offset_to_time(element, offset) - (gint64) XLALGPSToINT8NS(&series->epoch)), <=, 1);
+		g_assert_cmpuint(round(1.0 / series->deltaT), ==, element->rate);
+		g_assert_cmpuint(series->data->length, ==, length);
+		g_assert_cmpuint(unit_size(element), ==, sizeof(*series->data->data));
 		memcpy(dst, series->data->data, length * unit_size(element));
 		XLALDestroyREAL4TimeSeries(series);
 	}
@@ -365,10 +365,10 @@ static GstFlowReturn read_series(GSTLALFrameSrc *element, guint64 offset, guint6
 			XLALClearErrno();
 			return GST_FLOW_ERROR;
 		}
-		g_assert(llabs((gint64) offset_to_time(element, offset) - (gint64) XLALGPSToINT8NS(&series->epoch)) <= 1);
-		g_assert(round(1.0 / series->deltaT) == element->rate);
-		g_assert(series->data->length == length);
-		g_assert(unit_size(element) == sizeof(*series->data->data));
+		g_assert_cmpuint(llabs((gint64) offset_to_time(element, offset) - (gint64) XLALGPSToINT8NS(&series->epoch)), <=, 1);
+		g_assert_cmpuint(round(1.0 / series->deltaT), ==, element->rate);
+		g_assert_cmpuint(series->data->length, ==, length);
+		g_assert_cmpuint(unit_size(element), ==, sizeof(*series->data->data));
 		memcpy(dst, series->data->data, length * unit_size(element));
 		XLALDestroyREAL8TimeSeries(series);
 	}
@@ -797,7 +797,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET(*buffer) + buffer_length;
 	GST_BUFFER_TIMESTAMP(*buffer) = offset_to_time(element, GST_BUFFER_OFFSET(*buffer));
 	GST_BUFFER_DURATION(*buffer) = offset_to_time(element, GST_BUFFER_OFFSET_END(*buffer)) - GST_BUFFER_TIMESTAMP(*buffer);
-	g_assert(llabs((gint64) GST_BUFFER_DURATION(*buffer) - (gint64) gst_util_uint64_scale_int_round(GST_BUFFER_SIZE(*buffer) / unit_size(element), GST_SECOND, element->rate)) <= 1);
+	g_assert_cmpuint(llabs((gint64) GST_BUFFER_DURATION(*buffer) - (gint64) gst_util_uint64_scale_int_round(GST_BUFFER_SIZE(*buffer) / unit_size(element), GST_SECOND, element->rate)), <=, 1);
 	if(basesrc->offset == 0)
 		GST_BUFFER_FLAG_SET(*buffer, GST_BUFFER_FLAG_DISCONT);
 	if(next_is_gap)

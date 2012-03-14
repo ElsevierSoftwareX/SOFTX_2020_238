@@ -31,6 +31,7 @@ import numpy
 import signal
 
 from optparse import OptionParser
+import ConfigParser
 from ConfigParser import SafeConfigParser
 
 from gstlal.pipeutil import gst, mkelem
@@ -481,11 +482,10 @@ def get_triggers(elem, handler, ndof):
 	if( handler.stop - handler.time_since_dump > handler.dump_frequency or
 			len(handler.triggers) >= handler.max_events ):
 		dur = int( handler.stop - handler.time_since_dump + 1 )
-		#print handler.time_since_dump, dur
 		handler.write_triggers( filename = "%s_%s_triggers_%d_%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur), flush = True )
 		handler.time_since_dump = handler.stop 
 
-# TODO: Update the file every couple of seconds.
+# TODO: Update a single file every couple of seconds.
 """
 	dur = 0
 	if( len(handler.triggers) > 0 ):
@@ -514,6 +514,7 @@ parser.add_option("-D", "--data-source", dest="data_source", action="store", hel
 parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Encode the time frequency map to video as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. If the option is instead a filename, the video will be sent to that name. Prepending \"keyframe=\" to the filename will start a new video every time a keyframe is hit.")
 parser.add_option("-u", "--unicorns", dest="unicorns", action="store", help="Reveal hidden unicorns in data. The argument to this option determines how strong said unicorns are.", default=None)
 parser.add_option("-s", "--gps-start", dest="gps_start", action="store", type="float", help="Seek to gps time before beginning analysis.", default=None)
+parser.add_option("-e", "--gps-end", dest="gps_end", action="store", type="float", help="End the analysis at this gps time.", default=None)
 parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_false", help="Don't record triggers.", default=False)
 
 (options, args) = parser.parse_args()
@@ -600,13 +601,17 @@ else:
 	# Instruments and channels
 	handler.inst = cfg.get( "instrument", "detector" )
 	handler.channel = cfg.get( "instrument", "channel" )
+	try:
+		site = cfg.get( "instrument", "site" )
+	except ConfigParser.NoOptionError:
+		print >>sys.stderr, "No site requested, using detector as default cache sieve."
+		site = None
 	gwflocation = cfg.get( "instrument", "location" )
 
 	inj_loc = cfg.get( "injections", "xml-location" )
 	if( not os.path.isfile( inj_loc ) ):
 		print >>sys.stderr, "Injection file not found, disabling option."
 		inj_loc = None
-
 
 base_band = handler.base_band
 
@@ -623,6 +628,8 @@ max_dur = handler.max_duration
 
 if options.verbose:
 	print >>sys.stderr, "Assembling pipeline...\n",
+
+duration = -1
 
 # Data source
 if( data_source == "fakeLIGO" ):
@@ -659,28 +666,69 @@ elif( data_source == "gwffile" ):
 		handler.channel
 	)
 	start, duration = ep.duration_from_cache( gwflocation )
-	handler.start = start
+	options.gps_start = handler.start = start
+	options.gps_start = float(options.gps_start)
+	options.gps_end = start + duration
+	options.gps_end = float(options.gps_end)
 	handler.time_since_dump = start
 	# TODO: Must unhardcode this -- but requires knowledge of native rate
 	if( options.nbyte == 64 ):
 		bsize=16384*8 # 64 bit stream
 	elif( options.nbyte == 32 ):
 		bsize=16384*4 # 32 bit stream
-	duration = int(duration*handler.rate/16384.0)
+	if( verbose ):
+		print "Blocksize %d" % bsize
+	#duration = int(duration*handler.rate/16384.0)
 	head.set_property( "blocksize", bsize )
-	print >>sys.stderr, "Warning, inferring total buffer length from cache."
-	print >>sys.stderr, "Buffers %d" % int(duration)
-	head.set_property( "num-buffers", int(duration) )
+	print >>sys.stderr, "Warning, inferring analysis duration from cache."
+	#print >>sys.stderr, "Buffers %d" % int(duration)
+	#head.set_property( "num-buffers", int(duration) )
 
 	# FIXME: Make this an option
 	if( handler.inst == "V1" ): 
-		sieve = "V"
+		sieve = "V*"
 		head.set_property( "cache-dsc-regex", sieve )
-	else: sieve = handler.inst
-	#head.set_property( "cache-dsc-regex", sieve )
+	if( site ):
+		sieve = site[0] + "*"
+	else: sieve = handler.inst + "*"
+	head.set_property( "cache-dsc-regex", sieve )
+	
 else:
 	print >>sys.stderr, "Data source %s not recognized. Check the valid options in the help message."
 	sys.exit(-1)
+
+# Seeking
+seekevent = None
+if( options.gps_start is not None and options.gps_end is not None ):
+
+	# TODO: Use LIGOTimeGPS
+	print "Duration: " + str(duration)
+	seek, dur = long(start*1e9), long(duration*1e9)
+	print >>sys.stderr, "Seeking to GPS %d (ns), segment duration %d (ns)" % (seek, dur)
+	print >>sys.stderr, "Will stop at GPS %d (ns)" % (seek + dur)
+	seekevent = gst.event_new_seek( 1.0, 
+		gst.Format(gst.FORMAT_TIME),
+		gst.SEEK_FLAG_KEY_UNIT | gst.SEEK_FLAG_FLUSH,
+		gst.SEEK_TYPE_SET, seek,
+		gst.SEEK_TYPE_SET, seek + dur
+	)
+
+elif( options.gps_start is not None ):
+
+	print >>sys.stderr, "Seeking to GPS %d (ns)" % seek
+	seek = long(options.gps_start*1e9)
+	seekevent = gst.event_new_seek( 1.0, 
+		gst.Format(gst.FORMAT_TIME),
+		gst.SEEK_FLAG_KEY_UNIT | gst.SEEK_FLAG_FLUSH,
+		gst.SEEK_TYPE_SET, seek,
+		gst.SEEK_TYPE_NONE, 0
+	)
+
+if( seekevent is not None ):
+	if( head.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS ):
+		exit("Unable to ready pipeline to accept seek.")
+	if( not head.send_event( seekevent ) ):
+		exit("Unable to send seek event to " + str(head))
 
 # Diagnostic plot
 if( diagnostics ):
@@ -733,7 +781,7 @@ if( verbose ):
 
 # excess power channel firbank
 # NOTE: This is where the inspiral pipeline will feed in?
-head = mkfirbank( pipeline, head, time_domain=False )
+head = mkfirbank( pipeline, head, time_domain=False, block_stride=handler.rate )
 
 # TODO: Make this less hardcodish
 # This needs to be done since what is returned by mkfirbank is actually a link to the nofakedisconts element, so the fir bank is hidden
@@ -898,22 +946,6 @@ signal.signal( signal.SIGUSR1, handler.cmd_line )
 # Handle shutdowns
 signal.signal( signal.SIGINT, handler.shutdown )
 signal.signal( signal.SIGTERM, handler.shutdown )
-
-# Seeking
-if( options.gps_start != None ):
-	handler.start = options.gps_start
-	handler.time_since_dump = options.gps_start
-	seek = long(options.gps_start*1e9)
-	print >>sys.stderr, "Seeking to GPS %d (ns)" % seek
-	for src in pipeline.iterate_sources():
-		src.seek_simple(
-			# seek type (i.e in time)
-			gst.FORMAT_TIME,
-			# seek position fix behavior
-			gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT,
-			# seek time
-			seek 
-		)
 
 print >>sys.stderr, "Startin' up."
 pipeline.set_state( gst.STATE_PLAYING )

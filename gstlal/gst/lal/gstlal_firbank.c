@@ -639,7 +639,7 @@ static GstFlowReturn filter_and_push(GSTLALFIRBank *element, GstCaps *caps, guin
 	if(result != GST_FLOW_OK)
 		return result;
 	filter_output_length = filter(element, buf);
-	g_assert(filter_output_length == output_length);
+	g_assert_cmpuint(filter_output_length, ==, output_length);
 	result = gst_pad_push(srcpad, buf);
 	return result;
 }
@@ -689,9 +689,9 @@ static GstFlowReturn flush_history(GSTLALFIRBank *element)
 	final_gap_length = zeros_in_adapter >= fir_length(element) ? zeros_in_adapter - fir_length(element) + 1 : 0;
 
 	/* sanity checks */
-	g_assert(available_length <= fft_block_length(element));
-	g_assert(output_length <= fft_block_stride(element));
-	g_assert(final_gap_length <= output_length);
+	g_assert_cmpuint(available_length, <=, fft_block_length(element));
+	g_assert_cmpuint(output_length, <=, fft_block_stride(element));
+	g_assert_cmpuint(final_gap_length, <=, output_length);
 
 	padding = fft_block_length(element) - available_length;
 
@@ -1206,7 +1206,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		element->need_discont = TRUE;
 	} else
-		g_assert(GST_BUFFER_TIMESTAMP(inbuf) == gst_audioadapter_expected_timestamp(element->adapter));
+		g_assert_cmpuint(GST_BUFFER_TIMESTAMP(inbuf), ==, gst_audioadapter_expected_timestamp(element->adapter));
 	element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
 
 	/*
@@ -1239,7 +1239,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		guint samples = filter(element, outbuf);
-		g_assert(output_length == samples);
+		g_assert_cmpuint(output_length, ==, samples);
 		GST_LOG_OBJECT(element, "output is %u samples", output_length);
 	} else if(history_is_gap) {
 		/*
@@ -1263,7 +1263,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		guint samples = filter(element, outbuf);
-		g_assert(output_length == samples);
+		g_assert_cmpuint(output_length, ==, samples);
 		GST_LOG_OBJECT(element, "output is %u samples", output_length);
 	} else {
 		/*
