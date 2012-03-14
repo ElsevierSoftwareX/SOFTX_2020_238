@@ -1,0 +1,44 @@
+#!/usr/bin/python
+import sys
+import copy
+
+from gstlal.svd_bank import read_bank
+import numpy
+import matplotlib
+matplotlib.use('Agg')
+import pylab
+from scipy import interpolate
+import interp_utils	
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+
+bank = read_bank(sys.argv[1])
+testbankxmldoc = utils.load_filename(sys.argv[2])
+test_sngl_inspiral_table = lsctables.table.get_table(testbankxmldoc ,lsctables.SnglInspiralTable.tableName)
+
+# just one fragment
+frag = bank.bank_fragments[0]
+u = frag.orthogonal_template_bank
+mchirps, etas = interp_utils.get_mc_eta_arrays_from_sngl_inspiral_table(bank.sngl_inspiral_table)
+new_mchirps, new_etas = interp_utils.get_mc_eta_arrays_from_sngl_inspiral_table(test_sngl_inspiral_table)
+
+# Assume bank was constructed by a loop over chirp masses then etas
+# FIXME have I got this packing the right way around, could I be swapping mchirp  and eta?
+m = interp_utils.pack_mixing_matrix_on_mchirp_and_eta_grid(mchirps, etas, frag.mix_matrix)
+
+# some plots for verification
+for i, a in enumerate(m):
+	print >> sys.stderr, "producing plot %d / %d\r" % (i+1, len(m)),
+	pylab.figure(i+1)
+	pylab.subplot(221)
+	pylab.pcolor(mchirps, etas, numpy.real(a))
+	pylab.subplot(222)
+	r_interp = interp_utils.interp_mc_eta(mchirps, etas, numpy.real(a))
+	pylab.pcolor(new_mchirps, new_etas, r_interp(new_mchirps, new_etas))
+	pylab.subplot(223)
+	pylab.pcolor(mchirps, etas, numpy.imag(a))
+	pylab.subplot(224)
+	i_interp = interp_utils.interp_mc_eta(mchirps, etas, numpy.imag(a))
+	pylab.pcolor(new_mchirps, new_etas, i_interp(new_mchirps, new_etas))
+	pylab.savefig('interp%04d.png' % (i+1,))
+
