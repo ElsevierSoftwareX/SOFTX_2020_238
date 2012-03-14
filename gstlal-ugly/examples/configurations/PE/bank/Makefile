@@ -22,7 +22,7 @@ NUM_SPLIT_TEMPLATES = 73
 OVERLAP = 0
 MM = 0.99
 
-all : dag
+all : svd
 
 frame.H.cache :
 	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --instrument H1 --verbose --fake-data LIGO
@@ -80,10 +80,9 @@ bank.xml.gz : H1-TMPLTBANK-871154847-2048.xml.gz
 
 test_bank.xml.gz : H1-TMPLTBANK-871154847-2048.xml.gz
 	./template_grid H1-TMPLTBANK-871154847-2048.xml.gz $(MIN_CHIRP) $(MAX_CHIRP) $(NUM_TEST_GRID) $(MIN_ETA) $(MAX_ETA) $(NUM_TEST_GRID) test_bank.xml.gz
-	
-dag : H1-TMPLTBANK-871154847-2048.xml.gz bank.xml.gz test_bank.xml.gz
-	ls H1-TMPLTBANK-871154847-2048.xml.gz | ./lalapps_path2cache > H1_split_bank.cache
-	gstlal_inspiral_svd_bank_pipe --samples-min 4096 --samples-max-256 4096 --instrument H1 --reference-psd reference_psd.xml.gz --bank-cache H1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H1_bank
+
+svd : H1-TMPLTBANK-871154847-2048.xml.gz bank.xml.gz test_bank.xml.gz
+	gstlal_svd_bank --reference-psd reference_psd.xml.gz --samples-min 4096 --snr-threshold 4.0 --ortho-gate-fap 0.5 --flow $(LOW_FREQUENCY_CUTOFF) --template-bank bank.xml.gz --svd-tolerance 0.999999 --write-svd-bank svd_bank.xml.gz --samples-max-64 4096 --clipleft 0 --samples-max-256 4096 --clipright 0 --samples-max 4096 --verbose 
 
 #plots : reference_psd.xml.gz
 #	gstlal_plot_psd reference_psd.xml.gz psd_plot
