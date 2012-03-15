@@ -206,7 +206,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 		if verbose: print>>sys.stderr, "norm2 = %e, %e" % (norm2, row.sigmasq)
 
                 # compute the SNR
-		#corr = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec2)))/2.0
+		corrold = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec2)))/2.0
 		corrreal = scipy.ifft(scipy.fft(vec2.real) * numpy.conj(scipy.fft(vec1.real)))
 		corrimag = scipy.ifft(scipy.fft(vec2.real) * numpy.conj(scipy.fft(vec1.imag)))
 		corr = corrreal + 1j*corrimag
@@ -216,6 +216,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
                 autocorrelation_bank[tmp,:] = numpy.concatenate((corr[-(autocorrelation_length // 2):],corr[:(autocorrelation_length // 2 + 1)]))
 
                 snr = numpy.abs(corr).max()
+		snrold = numpy.abs(corrold.max())
 		autocorrelation_bank[tmp,:] /= snr
                 snrvec.append(snr)
 		if verbose: print>>sys.stderr, "row %4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %10.8f match" % (tmp+1, m1,m2,len(a1), snr)
@@ -223,6 +224,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 
                 # store the match for later
                 if output_to_xml: row.snr = snr
+		if output_to_xml: row.chisq = snrold
 
                 # get the filter frequencies
                 fs = -1. * numpy.angle(a1) / 2 / numpy.pi # Normalised freqeuncy
