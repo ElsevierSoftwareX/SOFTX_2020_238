@@ -1,0 +1,47 @@
+###############################################################################
+# Introduction
+###############################################################################
+
+These are work-in-progress instructions for running the low latency analysis
+dag in ER1.  The analysis has two parts.
+
+1) generate template banks
+2) generate analysis dags
+3) launching and killing the online dag
+
+It is assumed that you are at CIT and that the condor configuration is set up
+for low latency analysis. Note that this is not true yet.  You can still make
+and run the template bank dag.  But you can't really launch the analysis dag.
+However, for the time being a fake live source is hooked up to the job so that
+you can do some benchmarking on the head node.
+
+###############################################################################
+# Step 1 preparing the banks
+###############################################################################
+
+1) make a directory somewhere, call it ER1.  Mine is /home/channa/ER1
+2) copy the directory from gstlal-ugly/configurations/ER1/bank into your new
+directory.
+3) cd into your new directory
+4) adjust the makefile to your liking
+5) type 'make -j' and wait
+6) launch the resulting condor dag by doing
+	$ condor_submit_dag bank.dag
+7) Wait until it is done
+
+###############################################################################
+# Step 2 preparing analysis dags
+###############################################################################
+
+1) copy the directory from gstlal-ugly/configurations/ER1/triggers into your
+new directory
+2) cd into your new directory
+3) modify the makefile to your liking
+4) run 'make -j'
+
+###############################################################################
+# Step 3 launching the analysis
+###############################################################################
+
+You can launch the triggers dag with condor_submit_dag.  To kill the dag do
+condor_rm.
