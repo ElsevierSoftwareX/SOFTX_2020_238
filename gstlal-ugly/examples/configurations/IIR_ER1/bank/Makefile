@@ -27,7 +27,7 @@ frame.cache : lalapps_path2cache
 	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --instrument H1 --verbose
 	ls H1-FAKE-STRAIN/*.gwf | ./lalapps_path2cache > frame.cache
 
-H1-TMPLTBANK-871147516-2048.xml: frame.H.cache
+H1-TMPLTBANK-871147516-2048.xml: frame.cache
 	lalapps_tmpltbank \
 		--disable-compute-moments \
 		--grid-spacing Hexagonal \
