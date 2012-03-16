@@ -3,7 +3,7 @@
 from gstlal import cbc_template_iir
 from glue.ligolw import utils, array, param, lsctables
 import matplotlib
-from matplotlib.ticker import NullFormatter, MultipleLocator, FormatStrFormatter, FixedLocator, NullLocator, LogFormatterMathtext, LinearLocator, ScalarFormatter
+from matplotlib.ticker import NullFormatter, MultipleLocator, FormatStrFormatter, FixedLocator, NullLocator, LogFormatterMathtext, LinearLocator, ScalarFormatter, MaxNLocator
 matplotlib.use('Agg')
 import pylab
 import sys
@@ -49,36 +49,46 @@ def plotSNRhistograms(snrlist, mchirplist, niirlist, out_filename="SNRhistograms
 	Plot three histograms to show the distribution of the SNR overlap as a function of chirp mass and size of IIR bank
 	"""
 
-	def plotScatter(rec, x, y, xlabel = None, ylabel = None):
+	def plotScatter(rec, x, y, xlabel = None, ylabel = None, ylabelposition = "left"):
 		axes = pylab.axes(rec)
 		axes.xaxis.set_major_formatter( NullFormatter())
 		axes.yaxis.set_major_formatter( NullFormatter())
+		#axes.xaxis.set_major_locator( MultipleLocator(5) )
+		axes.xaxis.set_major_locator( MaxNLocator(6) )
+		axes.yaxis.set_major_locator( MaxNLocator(6) )
+		#axes.yaxis.set_major_locator( LinearLocator(7) )
+		#axes.xaxis.set_major_formatter(ScalarFormatter(useOffset=False))
+		#axes.yaxis.set_major_formatter(ScalarFormatter(useOffset=False))
 		if xlabel is not None:
 			axes.set_xlabel(xlabel)
-			axes.xaxis.set_label_position('top')
-			axes.xaxis.set_ticks_position('top')
 			axes.xaxis.set_major_formatter(ScalarFormatter(useOffset=False))
 		if ylabel is not None:
 			axes.set_ylabel(ylabel)
-			axes.yaxis.set_label_position('right')
-			axes.yaxis.set_ticks_position('right')
+			axes.yaxis.set_label_position(ylabelposition)
+			axes.yaxis.set_ticks_position(ylabelposition)
 			axes.yaxis.set_major_formatter(ScalarFormatter(useOffset=False))
 		pylab.grid()
 		axes.scatter(x, y, s=1, edgecolor='none')
 		return axes
 
-	def plotHistogram(rec, x, xlabel = None, ylabel = None, orientation = "vertical"):
+	def plotHistogram(rec, x, Xa, xlabel = None, ylabel = None, orientation = "vertical"):
 		axes = pylab.axes(rec)
+		axes.hist(x, 50, histtype='step', orientation=orientation)
 		axes.xaxis.set_major_formatter( NullFormatter())
-		axes.yaxis.set_major_formatter( ScalarFormatter(useOffset=False) )
-		#axes.yaxis.set_major_locator( LinearLocator(4) )
+		axes.yaxis.set_major_formatter( NullFormatter())
+		if orientation == "vertical":
+			axes.xaxis.set_ticks(Xa.get_xticks())
+			axes.set_xlim(Xa.get_xlim())
+		else:
+			axes.yaxis.set_ticks(Xa.get_yticks())
+			axes.set_ylim(Xa.get_ylim())
                 if xlabel is not None:
                         axes.set_xlabel(xlabel)
                 if ylabel is not None:
                         axes.set_ylabel(ylabel)
                 pylab.grid()
 
-		axes.hist(x, 50, histtype='step', orientation=orientation)
+
 		return axes
 
 	# definitions for the axes
@@ -86,28 +96,28 @@ def plotSNRhistograms(snrlist, mchirplist, niirlist, out_filename="SNRhistograms
 	#histogramwidth = histogramheight = 0.17
 	#separationwidth = separatioinheight = 0.01
 	#marginwidth = marginheight = 0.03
-	w1 = h1 = 0.3
-	w2 = h2 = 0.12
+	w1 = h1 = 0.34
+	w2 = h2 = 0.15
 	wo = ho = 0.01
-	wm2 = hm2 = 0.06
-	wm2 = 0.12
+	wm2 = hm2 = 0.03
 	wm = 1 - 2*w1 -w2 - wo - wm2
 	hm = 1 - 2*h1 -h2 - ho - hm2
 
-	rect_scatter1 = [wm+w2+wo, hm+h2+ho+h1+ho, w1, h1]
-	rect_scatter2 = [wm+w2+wo+w1+wo, hm+h2+ho+h1+ho, w1, h1]
-	rect_scatter3 = [wm+w2+wo+w1+wo, hm+h2+ho, w1, h1]
-	rect_histx1 = [wm+w2+wo, hm+ho+h1, w1, h2]
-	rect_histx2 = [wm+w2+wo+w1+wo, hm, w1, h2]
-	rect_histy1 = [wm, hm+h2+ho+h1+ho, w2, h1]
+	rect_scatter1 = [wm, hm+ho+h1, w1, h1]
+	rect_scatter2 = [wm+w1+wo, hm+ho+h1, w1, h1]
+	rect_scatter3 = [wm+w1+wo, hm, w1, h1]
+	rect_histx1 = [wm, hm+2*h1+2*ho, w1, h2]
+	rect_histx2 = [wm+w1+wo, hm+2*h1+2*ho, w1, h2]
+	rect_histy1 = [wm+2*w1+2*wo, hm+h1+ho, w2, h1]
 
 	fig = pylab.figure(1, figsize=(8,8))
-	axScatter1 = plotScatter(rect_scatter1, niirlist, snrlist, "Number of IIR filters")
-	axScatter2 = plotScatter(rect_scatter2, mchirplist, snrlist, "Chirp Mass", "SNR OVerlap")
-	axScatter3 = plotScatter(rect_scatter3, mchirplist, niirlist, ylabel="Number of IIR filters")
-	axHistogramx1 = plotHistogram(rect_histx1, niirlist, "Number of IIR filters")
-	axHistogramx2 = plotHistogram(rect_histx2, mchirplist, "Chirp Mass")
-	axHistogramy1 = plotHistogram(rect_histy1, snrlist, ylabel="SNR Overlap", orientation="horizontal")
+	axScatter1 = plotScatter(rect_scatter1, niirlist, snrlist, "Number of IIR filters", "SNR OVerlap")
+	axScatter2 = plotScatter(rect_scatter2, mchirplist, snrlist)
+	axScatter3 = plotScatter(rect_scatter3, mchirplist, niirlist, "Chirp Mass", "Number of IIR filters", "right")
+	print axScatter2.get_xticks(), axScatter2.get_xlim()
+	axHistogramx1 = plotHistogram(rect_histx1, niirlist, Xa = axScatter1)
+	axHistogramx2 = plotHistogram(rect_histx2, mchirplist, Xa = axScatter2)
+	axHistogramy1 = plotHistogram(rect_histy1, snrlist, Xa = axScatter1, orientation="horizontal")
 	pylab.savefig(out_filename, dpi = 300)
 	pylab.close()
 
@@ -137,6 +147,7 @@ for f in sys.argv[1:]:
 		if N is None:
 			N = numpy.zeros(len(aarray))
 
+		print len(aarray)
 		for tmp, arow in enumerate(aarray):
 			nonzero = 0
 			for aseries in arow:
@@ -151,10 +162,10 @@ for f in sys.argv[1:]:
 		m2.append(row.mass2)
 		mchirp.append(row.mchirp)
 		Niir.append(N[tmp])
-		print >>sys.stderr, '%13.8f, %13.8f, %13.8f, %10d' % (m1[tmp], m2[tmp], snrs[tmp], Niir[tmp])
+		#print >>sys.stderr, '%13.8f, %13.8f, %13.8f, %10d' % (m1[tmp], m2[tmp], snrs[tmp], Niir[tmp])
 		#print >>file, '%13.8f, %13.8f, %13.8f' % (m1[tmp], m2[tmp], snrs[tmp])
 
 file.close()
 
-plotSNRhistograms(snrs, mchirp, Niir)
+plotSNRhistograms(snrs, mchirp, Niir, out_filename="allvsall.png")
 
