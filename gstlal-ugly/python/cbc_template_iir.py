@@ -290,6 +290,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 		root = xmldoc.childNodes[0]
 		root.appendChild(param.new_param('sample_rate', types.FromPyType[str], sample_rates_array_to_str(sample_rates)))
 		root.appendChild(param.new_param('flower', types.FromPyType[float], flower))
+		root.appendChild(param.new_param('epsilon', types.FromPyType[float], epsilon))
 		root.appendChild(array.from_array('autocorrelation_bank_real', autocorrelation_bank.real))
 		root.appendChild(array.from_array('autocorrelation_bank_imag', autocorrelation_bank.imag))
 
