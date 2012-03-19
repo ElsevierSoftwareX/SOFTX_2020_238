@@ -1,13 +1,25 @@
 #!/usr/bin/env python
 
+import sys
+import matplotlib
+matplotlib.use('Agg')
+matplotlib.rcParams.update({
+		"font.size": 16.0,
+		"axes.titlesize": 14.0,
+		"axes.labelsize": 14.0,
+		"xtick.labelsize": 13.0,
+		"ytick.labelsize": 13.0,
+		"legend.fontsize": 13.0,
+		"figure.dpi": 300,
+		"savefig.dpi": 300,
+		"text.usetex": True,
+		"path.simplify": True
+})
+import pylab
+import numpy
 from gstlal import cbc_template_iir
 from glue.ligolw import utils, array, param, lsctables
-import matplotlib
 from matplotlib.ticker import NullFormatter, MultipleLocator, FormatStrFormatter, FixedLocator, NullLocator, LogFormatterMathtext, LinearLocator, ScalarFormatter, MaxNLocator
-matplotlib.use('Agg')
-import pylab
-import sys
-import numpy
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 
 def plotSNROverlap(snrlist, out_filename="SNROverlap.png", labeltag="unknown"):
@@ -111,10 +123,14 @@ def plotSNRhistograms(snrlist, mchirplist, niirlist, out_filename="SNRhistograms
 	rect_histy1 = [wm+2*w1+2*wo, hm+h1+ho, w2, h1]
 
 	fig = pylab.figure(1, figsize=(8,8))
-	axScatter1 = plotScatter(rect_scatter1, niirlist, snrlist, "Number of IIR filters", "SNR OVerlap")
+
+	axScatter1 = plotScatter(rect_scatter1, niirlist, snrlist, "Number of IIR filters", "SNR Overlap")
 	axScatter2 = plotScatter(rect_scatter2, mchirplist, snrlist)
 	axScatter3 = plotScatter(rect_scatter3, mchirplist, niirlist, "Chirp Mass", "Number of IIR filters", "right")
-	print axScatter2.get_xticks(), axScatter2.get_xlim()
+	mchirps = numpy.linspace(min(mchirplist),max(mchirplist),50)
+	axplot = axScatter3.plot(mchirps, 1136.1*mchirps**(-5./6.), color='red')
+	pylab.legend([axplot],[r'$N \propto \mathcal{M}_c^{-5/6}$'])
+	#print axScatter2.get_xticks(), axScatter2.get_xlim()
 	axHistogramx1 = plotHistogram(rect_histx1, niirlist, Xa = axScatter1)
 	axHistogramx2 = plotHistogram(rect_histx2, mchirplist, Xa = axScatter2)
 	axHistogramy1 = plotHistogram(rect_histy1, snrlist, Xa = axScatter1, orientation="horizontal")
@@ -147,13 +163,14 @@ for f in sys.argv[1:]:
 		if N is None:
 			N = numpy.zeros(len(aarray))
 
-		print len(aarray)
+		#print len(aarray)
 		for tmp, arow in enumerate(aarray):
 			nonzero = 0
 			for aseries in arow:
 				if numpy.abs(aseries) !=0:
 					nonzero += 1
 			N[tmp] += nonzero
+		#print sr, nonzero
 
 	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 	for tmp, row in enumerate(sngl_inspiral_table):
