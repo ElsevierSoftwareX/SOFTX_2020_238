@@ -136,9 +136,11 @@ class EPHandler( LLOIDHandler ):
 		self.trigger_segment = None
 
 		self.spec_corr = self.build_default_correlation( self.rate )
+		"""
 		self.psd = self.build_default_psd( self.rate, self.filter_len )
 		self.rebuild_filter()
 		self.rebuild_chan_mix_matrix()
+		"""
 
 		self.bus = pipeline.get_bus()
 		self.bus.add_signal_watch()
@@ -220,6 +222,7 @@ class EPHandler( LLOIDHandler ):
 		psd.deltaF = float(rate)/filter_len
 		psd.data = numpy.ones( filter_len/2 + 1 ) #/ 2 / psd.deltaF
 		psd.f0 = 0
+		self.psd = psd
 		return psd
 
 	def build_default_correlation( self, rate ):
@@ -250,14 +253,14 @@ class EPHandler( LLOIDHandler ):
 		"""
 		Calling this function rebuilds the filter FIR banks and assigns them to their proper element. This is normally called when the PSD or spectrum correlation changes.
 		"""
-		self.filter_bank = ep.build_filter( fhigh = self.fhigh, psd = self.psd, corr = self.spec_corr, b_wind = self.base_band )
+		self.filter_bank = ep.build_filter( fhigh = self.fhigh, flow=self.flow, psd = self.psd, corr = self.spec_corr, b_wind = self.base_band )
 		return self.filter_bank
 
 	def build_filter_xml( self, res_level, loc="" ):
 		"""
 		Calls the EP library to create a XML of sngl_burst tables representing the filter banks. At the moment, this dumps them to the current directory, but this can be changed by supplying the 'loc' argument. The written filename is returned for easy use by the trigger generator.
 		"""
-		xmldoc = ep.create_bank_xml(
+		self.filter_xml = ep.create_bank_xml(
 			self.flow,
 			self.fhigh,
 			self.base_band,
@@ -266,7 +269,7 @@ class EPHandler( LLOIDHandler ):
 			self.inst
 		)
 		output = "%sgstlal_excesspower_bank_%s_level_%d.xml" % (loc, self.inst, res_level)
-		utils.write_filename( xmldoc, output, verbose = True,
+		utils.write_filename( self.filter_xml, output, verbose = True,
 		       gz = (output or "stdout").endswith(".gz") )
 		return output
 
@@ -337,7 +340,10 @@ class EPHandler( LLOIDHandler ):
 		#pdb.set_trace()
 		process = ligolw_process.register_to_xmldoc( output, "gstlal_excesspower", vars(options) )#, ifos = self.inst )
 		add_cbc_metadata( output, process, requested_segment, analysis_segment )
-		# TODO replace cbc filter table with our own
+		# TODO: replace cbc filter table with our own
+		#cbc_filter_table = lsctables.getTablesByType( output, lsctables.FilterTable )[0]
+		#ep_filter_table = lsctables.getTablesByType( self.filter_xml, lsctables.FilterTable )[0]
+		#output.replaceChild( ep_filter_table, cbc_filter_table )
 		print >>sys.stderr, "Outputting triggers for %s\n" % str(analysis_segment)
 
 		# FIXME:  the signal.signal() function is
@@ -376,7 +382,9 @@ class EPHandler( LLOIDHandler ):
 		self.mainloop.quit()
 
 		print >>sys.stderr, "Please wait (don't ctrl+c) while I dump triggers to disk."
-		self.write_triggers( False )
+		dur = int( handler.stop - handler.time_since_dump + 0.5 )
+		outfile = self.outfile or "%s_%s_triggers_%d_%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur)
+		self.write_triggers( False, filename = outfile )
 		self.destroy_filter_xml()
 
 	def cmd_line( self, signum, frame ):
@@ -481,7 +489,7 @@ def get_triggers(elem, handler, ndof):
 	handler.stop = (buffer.timestamp + buffer.duration)*1e-9
 	if( handler.stop - handler.time_since_dump > handler.dump_frequency or
 			len(handler.triggers) >= handler.max_events ):
-		dur = int( handler.stop - handler.time_since_dump + 1 )
+		dur = int( handler.stop - handler.time_since_dump + 0.5 )
 		handler.write_triggers( filename = "%s_%s_triggers_%d_%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur), flush = True )
 		handler.time_since_dump = handler.stop 
 
@@ -507,6 +515,7 @@ parser = OptionParser()
 parser.add_option("-f", "--initialization-file", dest="infile", help="Options to be pased to the pipeline handler. Strongly recommended.", default=None)
 parser.add_option("-d", "--diagnostics", dest="diagnostics", action="store_true", help="Turn on multiple diagnostic dumps. Use with caution, as it will dump gigabytes of data (potentially) in a matter of minutes. Useful in nongraphical environemnts to monitor data throughput.", default=False)
 parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="Be verbose.", default=False)
+parser.add_option("-n", "--channel-name", dest="channame", action="store", help="Specify the channel name. Note that this will override the specification in the ini file (if any). This is useful if you want to run the same analysis on channels with the same characterisitics.")
 parser.add_option("-w", "--channel-width", dest="nbyte", action="store", type=int, help="Specify the channel width in bits (default = 64)", default=64)
 parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data.")
 parser.add_option("-R", "--frequency-units", dest="frequency_units", action="store", default="Hz", help="Units in which frequency (and correspondingly, time) will be expressed in. Use this when the sampling rate is near 1 Hz to avoid gstreamer's inability to handle rates < 1. Valid choices are %s" % ", ".join( GSTLAL_VALID_FREQ_UNITS.keys() ) )
@@ -579,7 +588,7 @@ else:
 	# Handler options
 	handler.flow = cfg.getint( "tf_parameters", "min-frequency" )
 	handler.fhigh = cfg.getint( "tf_parameters", "max-frequency" )
-	handler.base_band = cfg.getint( "tf_parameters", "base-resolution" )
+	handler.base_band = cfg.getfloat( "tf_parameters", "base-resolution" )
 	handler.max_level = cfg.getint( "tf_parameters", "max-resolution-level" )
 	handler.max_duration = cfg.getfloat( "tf_parameters", "max-time-resolution" )
 	handler.cache_spec_corr = cfg.getboolean( "cache", "cache-spectral-correlation" )
@@ -600,7 +609,17 @@ else:
 
 	# Instruments and channels
 	handler.inst = cfg.get( "instrument", "detector" )
-	handler.channel = cfg.get( "instrument", "channel" )
+	try:
+		handler.channel = cfg.get( "instrument", "channel" )
+	except ConfigParser.NoOptionError:
+		handler.channel = None
+
+	if( options.channame is not None ):
+		handler.channel = options.channame
+	if( handler.channel is None ):
+		exit("No channel specified in the configuration file or on the command line.")
+	print "Channel name: " + handler.channel
+
 	try:
 		site = cfg.get( "instrument", "site" )
 	except ConfigParser.NoOptionError:
@@ -615,8 +634,13 @@ else:
 
 base_band = handler.base_band
 
+# This is invoked here, or else the default rate is used, which will cause funny behavior for the defaults with some cases
+handler.build_default_psd( handler.rate, handler.filter_len )
+handler.rebuild_filter()
+handler.rebuild_chan_mix_matrix()
+
 # Max trigger duration (s)
-max_dur = handler.max_duration
+handler.max_duration
 
 #
 # =============================================================================
@@ -666,10 +690,16 @@ elif( data_source == "gwffile" ):
 		handler.channel
 	)
 	start, duration = ep.duration_from_cache( gwflocation )
-	options.gps_start = handler.start = start
-	options.gps_start = float(options.gps_start)
-	options.gps_end = start + duration
-	options.gps_end = float(options.gps_end)
+	if( options.gps_start ):
+		handler.start = start = options.gps_start 
+	else:
+		options.gps_start = handler.start = start
+		options.gps_start = float(options.gps_start)
+	if( options.gps_end ):
+		duration = options.gps_end - start
+	else:
+		options.gps_end = start + duration
+		options.gps_end = float(options.gps_end)
 	handler.time_since_dump = start
 	# TODO: Must unhardcode this -- but requires knowledge of native rate
 	if( options.nbyte == 64 ):
@@ -821,8 +851,6 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		head = postmmtee = mktee( pipeline, mkqueue( pipeline, head ) )
 		mknxydumpsink( pipeline, postmmtee, "postmatmix_res_%d.txt" % res_level )
 
-	# TODO: Add this in when it becomes available
-	#head = mkaudioundersample( pipeline, head )
 	head = mkgeneric( pipeline, head, "lal_audioundersample" )
 
 	band = base_band * 2**res_level
@@ -833,7 +861,8 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	# TODO: Check this
 	undersamp_rate = 2 * band
 	# TODO: remove width and channels
-	head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d,width=64,channels=%d" % (undersamp_rate, chan) )
+	#head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d,width=64,channels=%d" % (undersamp_rate, chan) )
+	head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate )
 
 	if( diagnostics ):
 		head = postustee = mktee( pipeline, mkqueue( pipeline, head ) )
@@ -858,7 +887,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 
 	ndof = 2 # samples -- min number
 	# Second branch -- duration
-	# max_samp = int(max_dur*rate)
+	# max_samp = int(handler.max_duration*rate)
 	#while duration <= max_samp:
 		#duration = duration << 1
 
