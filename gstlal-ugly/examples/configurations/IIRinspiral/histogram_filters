@@ -56,6 +56,27 @@ def plotSNROverlap(snrlist, out_filename="SNROverlap.png", labeltag="unknown"):
 	pylab.savefig('SNROverlap.png', dpi=300)
 	pylab.close()
 
+def plotNumFiltersHistogram(ratedict, out_filename="numfilters.png"):
+	"""
+	Plot a histogram of filters per rate bin
+	"""
+
+	Nsr = len(ratedict)
+	ind = numpy.arange(Nsr)
+	width = 1
+
+	ratelist = []
+	numlist =[]
+	for rate in sorted(ratedict.keys()):
+		ratelist.append(str(rate))
+		numlist.append(ratedict[rate])
+
+	axes = pylab.axes()
+	pylab.bar(ind, numlist, width)
+	pylab.xticks(ind+0.5*width, ratelist)
+        pylab.savefig(out_filename, dpi = 300)
+	pylab.close()
+
 def plotSNRhistograms(snrlist, mchirplist, niirlist, out_filename="SNRhistograms.png"):
 	"""
 	Plot three histograms to show the distribution of the SNR overlap as a function of chirp mass and size of IIR bank
@@ -139,13 +160,14 @@ def plotSNRhistograms(snrlist, mchirplist, niirlist, out_filename="SNRhistograms
 
 
 
-file = open('snrlist.csv','wb')
+#file = open('snrlist.csv','wb')
 
 m1 = []
 m2 = []
 mchirp = []
 snrs = []
 Niir = []
+M = {}
 
 
 for f in sys.argv[1:]:
@@ -157,8 +179,8 @@ for f in sys.argv[1:]:
 	N = None
 	for sr in sample_rates:
 		n += array.get_array(xmldoc, 'd_%d' % (sr,)).get_shape()[1]
+		if sr not in M: M[sr] = 0
 		#n = array.get_array(xmldoc, 'a_%d' % (sr,)).get_shape()[0] * array.get_array(xmldoc, 'a_%d' % (sr,)).get_shape()[1]/2 * sr
-		#M.setdefault(sr, []).append(n)
 		aarray = repack_real_array_to_complex(array.get_array(xmldoc, 'a_%d' % (sr,)).array)
 		if N is None:
 			N = numpy.zeros(len(aarray))
@@ -170,7 +192,7 @@ for f in sys.argv[1:]:
 				if numpy.abs(aseries) !=0:
 					nonzero += 1
 			N[tmp] += nonzero
-		#print sr, nonzero
+			M[sr] += nonzero
 
 	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 	for tmp, row in enumerate(sngl_inspiral_table):
@@ -182,7 +204,8 @@ for f in sys.argv[1:]:
 		#print >>sys.stderr, '%13.8f, %13.8f, %13.8f, %10d' % (m1[tmp], m2[tmp], snrs[tmp], Niir[tmp])
 		#print >>file, '%13.8f, %13.8f, %13.8f' % (m1[tmp], m2[tmp], snrs[tmp])
 
-file.close()
+#file.close()
 
 plotSNRhistograms(snrs, mchirp, Niir, out_filename="allvsall.png")
+plotNumFiltersHistogram(M)
 
