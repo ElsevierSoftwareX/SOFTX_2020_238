@@ -216,10 +216,10 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
                 autocorrelation_bank[tmp,:] = numpy.concatenate((corr[-(autocorrelation_length // 2):],corr[:(autocorrelation_length // 2 + 1)]))
 
                 snr = numpy.abs(corr).max()
-		snrold = numpy.abs(corrold.max())
+		snrold = numpy.abs(corrold).max()
 		autocorrelation_bank[tmp,:] /= snr
                 snrvec.append(snr)
-		if verbose: print>>sys.stderr, "row %4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %10.8f match" % (tmp+1, m1,m2,len(a1), snr)
+		if verbose: print>>sys.stderr, "row %4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %10.8f match, %10.8f match" % (tmp+1, m1,m2,len(a1), snr, snrold)
 
 
                 # store the match for later
