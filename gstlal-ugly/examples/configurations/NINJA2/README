@@ -1,0 +1,41 @@
+Instructions to run the gstlal NINJA2 IMRPhenomB pipeline
+
+1) copy the directories and their contents to your working directory
+
+2) cd into the frame directory
+
+3) run make 
+
+4) cd into psd directory
+
+5) run make
+
+6) cd into banks
+
+7) edit the Makefile to point to your directories
+
+8) run make sbank 
+
+9) submit the svd dags
+
+10) cd into triggers 
+
+11) create a directory for each weeks worth of data you want to analyze
+
+12) copy the files from triggers to each week's file
+
+13) edit the makefiles so that the directory locations are correct and the gps times are correct
+
+14) run make
+
+15) submit the trigger dag for each week
+
+16) cd into the post directory
+
+17) make sure that the ls command in copyCombineTrigs.sh points to the directories where the results of your trigger dags are located
+
+18) run bash copyCombineTrigs.sh 
+
+19) run bash plot.sh
+
+20) run python followup.py ${location of injection snr file and name} ${location of sire missed xml file and names} > wiki_tables.txt
