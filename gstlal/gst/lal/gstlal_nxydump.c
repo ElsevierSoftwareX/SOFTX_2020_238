@@ -90,7 +90,6 @@
  * a newline is sometimes two characters.
  */
 
-
 #define MAX_EXTRA_BYTES_PER_LINE 2
 
 
