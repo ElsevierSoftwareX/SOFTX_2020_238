@@ -24,6 +24,7 @@
 
 
 #include <gst/gst.h>
+#include <gst/base/gstbasetransform.h>
 
 
 G_BEGIN_DECLS
@@ -42,14 +43,12 @@ G_BEGIN_DECLS
 
 
 typedef struct {
-	GstElementClass parent_class;
+	GstBaseTransformClass parent_class;
 } GSTLALNXYDumpClass;
 
 
 typedef struct {
-	GstElement element;
-
-	GstPad *srcpad;
+	GstBaseTransform element;
 
 	gint rate;
 	gint channels;

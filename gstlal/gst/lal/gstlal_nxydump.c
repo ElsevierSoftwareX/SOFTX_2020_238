@@ -45,6 +45,7 @@
 
 #include <glib.h>
 #include <gst/gst.h>
+#include <gst/base/gstbasetransform.h>
 
 
 /*
@@ -83,7 +84,7 @@
  * columns
  */
 
-#define MAX_CHARS_PER_COLUMN 23 + 1
+#define MAX_CHARS_PER_COLUMN (23 + 1)
 
 /*
  * a newline is sometimes two characters.
@@ -103,8 +104,19 @@
 
 
 /**
- * Convert a time stamp and a sample rate into a sample offset relative to
- * the time stamp of the start of a buffer.
+ * compute the number of output bytes to allocate per sample
+ */
+
+
+static size_t src_bytes_per_sample(gint channels)
+{
+	return MAX_CHARS_PER_TIMESTAMP + channels * MAX_CHARS_PER_COLUMN + MAX_EXTRA_BYTES_PER_LINE;
+}
+
+
+/**
+ * Convert a timestamp and a sample rate into a sample offset relative to
+ * the timestamp of the start of a buffer.
  */
 
 
@@ -121,70 +133,29 @@ static guint64 timestamp_to_sample_clipped(GstClockTime start, guint64 length, g
 
 
 /**
- * Construct an empty buffer flagged as a gap and push it on the pad.  The
- * buffer's time stamp, etc., will be derived from the template, and will
- * be constructed so as to span the interval in the stream corresponding to
- * the samples [start, stop) relative to the template's time stamp given
- * the sample rate.
- */
-
-
-static GstFlowReturn push_gap(GstPad *pad, const GstBuffer *template, gint rate, guint64 start, guint64 stop)
-{
-	GstFlowReturn result = GST_FLOW_OK;
-	GstBuffer *buf;
-
-	result = gst_pad_alloc_buffer(pad, GST_BUFFER_OFFSET_NONE, 0, GST_PAD_CAPS(pad), &buf);
-	if(result != GST_FLOW_OK) {
-		GST_ERROR("gst_pad_alloc_buffer() failed allocating gap buffer");
-		return result;
-	}
-
-	gst_buffer_copy_metadata(buf, template, GST_BUFFER_COPY_FLAGS);
-	GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
-	GST_BUFFER_OFFSET_END(buf) = GST_BUFFER_OFFSET_NONE;
-	if(GST_BUFFER_TIMESTAMP_IS_VALID(template)) {
-		GST_BUFFER_TIMESTAMP(buf) = GST_BUFFER_TIMESTAMP(template) + gst_util_uint64_scale_int_round(start, GST_SECOND, rate);
-		GST_BUFFER_DURATION(buf) = GST_BUFFER_TIMESTAMP(template) + gst_util_uint64_scale_int_round(stop, GST_SECOND, rate) - GST_BUFFER_TIMESTAMP(buf);
-	} else
-		GST_BUFFER_TIMESTAMP(buf) = GST_BUFFER_DURATION(buf) = GST_CLOCK_TIME_NONE;
-
-	result = gst_pad_push(pad, buf);
-	if(result != GST_FLOW_OK) {
-		GST_ERROR("gst_pad_push() failed pushing gap buffer");
-		return result;
-	}
-
-	return result;
-}
-
-
-/**
  * Print the samples from a buffer of double precision floats into a buffer
  * of text.
  */
 
 
-static GstFlowReturn print_samples(GstBuffer *out, const double *samples, int channels, int rate, guint64 start, guint64 stop)
+static GstFlowReturn print_samples(GstBuffer *out, GstClockTime timestamp, const double *samples, int channels, int rate, guint64 length)
 {
 	char *location = (char *) GST_BUFFER_DATA(out);
 	guint64 i;
 	int j;
 
-	samples += channels * start;
-
-	for(i = start; i < stop; i++) {
+	for(i = 0; i < length; i++) {
 		/*
 		 * The current timestamp
 		 */
 
-		GstClockTime t = GST_BUFFER_TIMESTAMP(out) + gst_util_uint64_scale_int_round(i - start, GST_SECOND, rate);
+		GstClockTime t = timestamp + gst_util_uint64_scale_int_round(i, GST_SECOND, rate);
 
 		/*
 		 * Saftey check.
 		 */
 
-		g_assert_cmpuint(((guint8 *) location - GST_BUFFER_DATA(out)) + MAX_CHARS_PER_TIMESTAMP + channels * MAX_CHARS_PER_COLUMN + MAX_EXTRA_BYTES_PER_LINE, <=, GST_BUFFER_SIZE(out));
+		g_assert_cmpuint(((guint8 *) location - GST_BUFFER_DATA(out)) + src_bytes_per_sample(channels), <=, GST_BUFFER_SIZE(out));
 
 		/*
 		 * Print the time.
@@ -226,15 +197,42 @@ static GstFlowReturn print_samples(GstBuffer *out, const double *samples, int ch
 /*
  * ============================================================================
  *
- *                             GStreamer Element
+ *                           GStreamer Boiler Plate
  *
  * ============================================================================
  */
 
 
-/*
- * Properties
- */
+static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
+	GST_BASE_TRANSFORM_SINK_NAME,
+	GST_PAD_SINK,
+	GST_PAD_ALWAYS,
+	GST_STATIC_CAPS(
+		"audio/x-raw-float, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) [1, MAX], " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) 64"
+	)
+);
+
+
+static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
+	GST_BASE_TRANSFORM_SRC_NAME,
+	GST_PAD_SRC,
+	GST_PAD_ALWAYS,
+	GST_STATIC_CAPS(
+		"text/plain"
+	)
+);
+
+
+GST_BOILERPLATE(
+	GSTLALNXYDump,
+	gstlal_nxydump,
+	GstBaseTransform,
+	GST_TYPE_BASE_TRANSFORM
+);
 
 
 enum property {
@@ -243,9 +241,230 @@ enum property {
 };
 
 
+/*
+ * ============================================================================
+ *
+ *                     GstBaseTransform Method Overrides
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * get_unit_size()
+ */
+
+
+static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
+{
+	GstStructure *str;
+	gint channels, width;
+
+	str = gst_caps_get_structure(caps, 0);
+	if(gst_structure_has_name(str, "text/plain")) {
+		*size = 1;
+	} else {
+		if(!gst_structure_get_int(str, "channels", &channels)) {
+			GST_ERROR_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
+			return FALSE;
+		}
+		if(!gst_structure_get_int(str, "width", &width)) {
+			GST_ERROR_OBJECT(trans, "unable to parse width from %" GST_PTR_FORMAT, caps);
+			return FALSE;
+		}
+
+		*size = width / 8 * channels;
+	}
+
+	return TRUE;
+}
+
+
+/*
+ * transform_caps()
+ */
+
+
+static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps)
+{
+	/*
+	 * always return the template caps of the other pad
+	 */
+
+	switch(direction) {
+	case GST_PAD_SRC:
+		caps = gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SINK_PAD(trans)));
+		break;
+
+	case GST_PAD_SINK:
+		caps = gst_caps_copy(gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SRC_PAD(trans)));
+		break;
+
+	case GST_PAD_UNKNOWN:
+		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
+		caps = GST_CAPS_NONE;
+		break;
+	}
+
+	return caps;
+}
+
+
+/*
+ * transform_size()
+ */
+
+
+static gboolean transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, guint size, GstCaps *othercaps, guint *othersize)
+{
+	guint unit_size;
+	guint other_unit_size;
+	gboolean success = TRUE;
+
+	if(gst_structure_has_name(gst_caps_get_structure(caps, 0), "text/plain")) {
+		gint channels;
+		if(!gst_structure_get_int(gst_caps_get_structure(othercaps, 0), "channels", &channels)) {
+			GST_ERROR_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, othercaps);
+			return FALSE;
+		}
+		unit_size = src_bytes_per_sample(channels);
+		if(!get_unit_size(trans, othercaps, &other_unit_size))
+			return FALSE;
+	} else {
+		gint channels;
+		if(!get_unit_size(trans, caps, &unit_size))
+			return FALSE;
+		if(!gst_structure_get_int(gst_caps_get_structure(caps, 0), "channels", &channels)) {
+			GST_ERROR_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
+			return FALSE;
+		}
+		other_unit_size = src_bytes_per_sample(channels);
+	}
+
+	/* do in two steps to prevent optimizer-induced arithmetic bugs */
+	*othersize = size / unit_size;
+	*othersize *= other_unit_size;
+
+	return success;
+}
+
+
+/*
+ * set_caps()
+ */
+
+
+static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps)
+{
+	GSTLALNXYDump *element = GSTLAL_NXYDUMP(trans);
+	GstStructure *str = gst_caps_get_structure(incaps, 0);
+	gint rate, channels;
+	gboolean success = TRUE;
+
+	success &= gst_structure_get_int(str, "rate", &rate);
+	success &= gst_structure_get_int(str, "channels", &channels);
+
+	if(success) {
+		element->rate = rate;
+		element->channels = channels;
+	} else
+		GST_DEBUG_OBJECT(element, "unable to extract rate and/or channels from caps %" GST_PTR_FORMAT, incaps);
+
+	return success;
+}
+
+
+/*
+ * transform()
+ */
+
+
+static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
+{
+	GSTLALNXYDump *element = GSTLAL_NXYDUMP(trans);
+	guint64 length;
+	guint64 start, stop;
+	GstFlowReturn result = GST_FLOW_OK;
+
+	/*
+	 * Measure the number of samples.
+	 */
+
+	if(!(GST_BUFFER_OFFSET_IS_VALID(inbuf) && GST_BUFFER_OFFSET_END_IS_VALID(inbuf))) {
+		GST_ERROR_OBJECT(element, "cannot compute number of input samples:  invalid offset and/or end offset");
+		result = GST_FLOW_ERROR;
+		goto done;
+	}
+	length = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
+
+	/*
+	 * Compute the desired start and stop samples relative to the start
+	 * of this buffer, clipped to the buffer edges.
+	 */
+
+	if(GST_BUFFER_TIMESTAMP_IS_VALID(inbuf)) {
+		start = timestamp_to_sample_clipped(GST_BUFFER_TIMESTAMP(inbuf), length, element->rate, element->start_time);
+		stop = timestamp_to_sample_clipped(GST_BUFFER_TIMESTAMP(inbuf), length, element->rate, element->stop_time);
+	} else {
+		/* don't know the buffer's start time, go ahead and process
+		 * the whole thing */
+		start = 0;
+		stop = length;
+	}
+
+	/*
+	 * Set metadata.
+	 */
+
+	GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET_NONE;
+
+	/*
+	 * Construct output buffer.
+	 */
+
+	if(GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) || (stop == start)) {
+		/*
+		 * The input is a gap or we're not going to print any of
+		 * the samples --> the output is a gap.
+		 */
+
+		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
+	} else {
+		/*
+		 * Print samples into output buffer.
+		 */
+
+		result = print_samples(outbuf, GST_BUFFER_TIMESTAMP(inbuf) + gst_util_uint64_scale_int_round(start, GST_SECOND, element->rate), (const double *) GST_BUFFER_DATA(inbuf) + start * element->channels, element->channels, element->rate, stop - start);
+	}
+
+	/*
+	 * Done
+	 */
+
+done:
+	return result;
+}
+
+
+/*
+ * ============================================================================
+ *
+ *                          GObject Method Overrides
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * set_property()
+ */
+
+
 static void set_property(GObject *object, enum property id, const GValue *value, GParamSpec *pspec)
 {
 	GSTLALNXYDump *element = GSTLAL_NXYDUMP(object);
+
+	GST_OBJECT_LOCK(element);
 
 	switch(id) {
 	case ARG_START_TIME:
@@ -260,12 +479,21 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
+
+	GST_OBJECT_UNLOCK(element);
 }
+
+
+/*
+ * get_property()
+ */
 
 
 static void get_property(GObject *object, enum property id, GValue *value, GParamSpec *pspec)
 {
 	GSTLALNXYDump *element = GSTLAL_NXYDUMP(object);
+
+	GST_OBJECT_LOCK(element);
 
 	switch(id) {
 	case ARG_START_TIME:
@@ -280,188 +508,20 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
 	}
+
+	GST_OBJECT_LOCK(element);
 }
 
 
 /*
- * setcaps()
+ * base_init()
  */
 
 
-static gboolean setcaps(GstPad *pad, GstCaps *caps)
+static void gstlal_nxydump_base_init(gpointer klass)
 {
-	GSTLALNXYDump *element = GSTLAL_NXYDUMP(gst_pad_get_parent(pad));
-	GstStructure *structure = gst_caps_get_structure(caps, 0);
-	gint rate, channels;
-	gboolean success = TRUE;
-
-	success &= gst_structure_get_int(structure, "rate", &rate);
-	success &= gst_structure_get_int(structure, "channels", &channels);
-
-	if(success) {
-		element->rate = rate;
-		element->channels = channels;
-	} else
-		GST_DEBUG_OBJECT(element, "unable to extract rate and/or channels from caps %" GST_PTR_FORMAT, caps);
-
-	gst_object_unref(element);
-	return success;
-}
-
-
-/*
- * chain()
- */
-
-
-static GstFlowReturn chain(GstPad *pad, GstBuffer *sinkbuf)
-{
-	GSTLALNXYDump *element = GSTLAL_NXYDUMP(gst_pad_get_parent(pad));
-	GstCaps *caps = gst_buffer_get_caps(sinkbuf);
-	GstBuffer *srcbuf;
-	GstFlowReturn result = GST_FLOW_OK;
-	guint64 length;
-	guint64 start, stop;
-
-	/*
-	 * Measure the number of samples.
-	 */
-
-	if(!(GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))) {
-		GST_ERROR_OBJECT(element, "cannot compute number of input samples:  invalid offset and/or end offset");
-		result = GST_FLOW_ERROR;
-		goto done;
-	}
-	length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
-
-	/*
-	 * Compute the desired start and stop samples relative to the start
-	 * of this buffer, clipped to the buffer edges.
-	 */
-
-	if(GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf)) {
-		start = timestamp_to_sample_clipped(GST_BUFFER_TIMESTAMP(sinkbuf), length, element->rate, element->start_time);
-		stop = timestamp_to_sample_clipped(GST_BUFFER_TIMESTAMP(sinkbuf), length, element->rate, element->stop_time);
-	} else {
-		/* don't know the buffer's start time, go ahead and process
-		 * the whole thing */
-		start = 0;
-		stop = length;
-	}
-
-	/*
-	 * If we don't need any of the samples from this buffer or it's a
-	 * gap then we're done --> push gap buffer downstream.
-	 */
-
-	if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP) || (stop == start)) {
-		result = push_gap(element->srcpad, sinkbuf, element->rate, 0, length);
-		goto done;
-	}
-
-	/*
-	 * If start != 0, push a gap buffer to precede the data.
-	 */
-
-	if(start) {
-		result = push_gap(element->srcpad, sinkbuf, element->rate, 0,  start);
-		if(result != GST_FLOW_OK)
-			goto done;
-	}
-
-	/*
-	 * Allocate an output buffer.
-	 */
-
-	result = gst_pad_alloc_buffer(element->srcpad, GST_BUFFER_OFFSET_NONE, (stop - start) * (MAX_CHARS_PER_TIMESTAMP + element->channels * MAX_CHARS_PER_COLUMN + MAX_EXTRA_BYTES_PER_LINE), GST_PAD_CAPS(element->srcpad), &srcbuf);
-	if(result != GST_FLOW_OK) {
-		GST_ERROR_OBJECT(element, "failure allocating output buffer");
-		goto done;
-	}
-
-	/*
-	 * Set metadata.
-	 */
-
-	gst_buffer_copy_metadata(srcbuf, sinkbuf, GST_BUFFER_COPY_FLAGS);
-	GST_BUFFER_OFFSET_END(srcbuf) = GST_BUFFER_OFFSET_NONE;
-	GST_BUFFER_TIMESTAMP(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(start, GST_SECOND, element->rate);
-	GST_BUFFER_DURATION(srcbuf) = GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(stop, GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(srcbuf);
-
-	/*
-	 * Print samples into output buffer.
-	 */
-
-	result = print_samples(srcbuf, (const double *) GST_BUFFER_DATA(sinkbuf), element->channels, element->rate, start, stop);
-	if(result != GST_FLOW_OK) {
-		gst_buffer_unref(srcbuf);
-		goto done;
-	}
-
-	/*
-	 * Push the buffer downstream.
-	 */
-
-	result = gst_pad_push(element->srcpad, srcbuf);
-	if(result != GST_FLOW_OK)
-		goto done;
-
-	/*
-	 * If stop != samples, push a gap buffer to pad the output stream
-	 * up to the end of the input buffer.
-	 */
-
-	if(stop < length) {
-		result = push_gap(element->srcpad, sinkbuf, element->rate, stop,  length);
-		if(result != GST_FLOW_OK)
-			goto done;
-	}
-
-	/*
-	 * Done
-	 */
-
-done:
-	gst_caps_unref(caps);
-	gst_buffer_unref(sinkbuf);
-	gst_object_unref(element);
-	return result;
-}
-
-
-/*
- * Parent class.
- */
-
-
-static GstElementClass *parent_class = NULL;
-
-
-/*
- * Instance finalize function.  See ???
- */
-
-
-static void finalize(GObject *object)
-{
-	GSTLALNXYDump *element = GSTLAL_NXYDUMP(object);
-
-	gst_object_unref(element->srcpad);
-
-	G_OBJECT_CLASS(parent_class)->finalize(object);
-}
-
-
-/*
- * Base init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GBaseInitFunc
- */
-
-
-static void base_init(gpointer class)
-{
-	GstElementClass *element_class = GST_ELEMENT_CLASS(class);
+	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
+	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -471,53 +531,28 @@ static void base_init(gpointer class)
 		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
 	);
 
-	gst_element_class_add_pad_template(
-		element_class,
-		gst_pad_template_new(
-			"sink",
-			GST_PAD_SINK,
-			GST_PAD_ALWAYS,
-			gst_caps_new_simple(
-				"audio/x-raw-float",
-				"rate", GST_TYPE_INT_RANGE, 1, G_MAXINT,
-				"channels", GST_TYPE_INT_RANGE, 1, G_MAXINT,
-				"endianness", G_TYPE_INT, G_BYTE_ORDER,
-				"width", G_TYPE_INT, 64,
-				NULL
-			)
-		)
-	);
-	gst_element_class_add_pad_template(
-		element_class,
-		gst_pad_template_new(
-			"src",
-			GST_PAD_SRC,
-			GST_PAD_ALWAYS,
-			gst_caps_new_simple(
-				"text/plain",
-				NULL
-			)
-		)
-	);
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
+	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
+
+	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
+	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
+	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
+	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
+	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
 }
 
 
 /*
- * Class init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
+ * class_init()
  */
 
 
-static void class_init(gpointer class, gpointer class_data)
+static void gstlal_nxydump_class_init(GSTLALNXYDumpClass *klass)
 {
-	GObjectClass *gobject_class = G_OBJECT_CLASS(class);
-
-	parent_class = g_type_class_ref(GST_TYPE_ELEMENT);
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	g_object_class_install_property(
 		gobject_class,
@@ -545,55 +580,16 @@ static void class_init(gpointer class, gpointer class_data)
 
 
 /*
- * Instance init function.  See
- *
- * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GInstanceInitFunc
+ * init()
  */
 
 
-static void instance_init(GTypeInstance *object, gpointer class)
+static void gstlal_nxydump_init(GSTLALNXYDump *element, GSTLALNXYDumpClass *klass)
 {
-	GSTLALNXYDump *element = GSTLAL_NXYDUMP(object);
-	GstPad *pad;
+	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 
-	gst_element_create_all_pads(GST_ELEMENT(element));
-
-	/* configure sink pad */
-	pad = gst_element_get_static_pad(GST_ELEMENT(element), "sink");
-	gst_pad_set_setcaps_function(pad, GST_DEBUG_FUNCPTR(setcaps));
-	gst_pad_set_chain_function(pad, GST_DEBUG_FUNCPTR(chain));
-	gst_object_unref(pad);
-
-	/* retrieve (and ref) src pad */
-	element->srcpad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
-
-	/* internal data */
 	element->rate = 0;
 	element->channels = 0;
 	element->start_time = DEFAULT_START_TIME;
 	element->stop_time = DEFAULT_STOP_TIME;
-}
-
-
-/*
- * gstlal_nxydump_get_type().
- */
-
-
-GType gstlal_nxydump_get_type(void)
-{
-	static GType type = 0;
-
-	if(!type) {
-		static const GTypeInfo info = {
-			.class_size = sizeof(GSTLALNXYDumpClass),
-			.class_init = class_init,
-			.base_init = base_init,
-			.instance_size = sizeof(GSTLALNXYDump),
-			.instance_init = instance_init,
-		};
-		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_nxydump", &info, 0);
-	}
-
-	return type;
 }
