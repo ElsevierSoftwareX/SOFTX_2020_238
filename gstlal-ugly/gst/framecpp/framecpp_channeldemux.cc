@@ -517,7 +517,8 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		break;
 
 	case GST_EVENT_EOS:
-		gst_event_unref(element->last_new_segment);
+		if(element->last_new_segment)
+			gst_event_unref(element->last_new_segment);
 		element->last_new_segment = NULL;
 		break;
 
