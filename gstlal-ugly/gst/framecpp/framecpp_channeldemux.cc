@@ -220,7 +220,7 @@ static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
 	if(element->last_new_segment) {
 		gst_event_ref(element->last_new_segment);
 		if(!gst_pad_push_event(pad, element->last_new_segment))
-			GST_ERROR_OBJECT(element, "failed to push newsegment");
+			GST_ERROR_OBJECT(pad, "failed to push newsegment");
 	}
 
 	/*
@@ -228,7 +228,7 @@ static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
 	 */
 
 	if(!send_tags(pad))
-		GST_ERROR_OBJECT(element, "failed to push tags");
+		GST_ERROR_OBJECT(pad, "failed to push tags");
 
 	/*
 	 * done
