@@ -106,8 +106,8 @@ static const char *get_frame_library_name(FrameCPP::Common::FrHeader::frame_libr
 		"FrameL",
 		"framecpp",
 	};
-	g_assert(frame_library_type >= 0);
-	g_assert(frame_library_type <= 2);
+	g_assert_cmpint(frame_library_type, >=, 0);
+	g_assert_cmpint(frame_library_type, <=, 2);
 	return frame_library_names[frame_library_type];
 }
 
@@ -389,7 +389,7 @@ static GstBuffer *FrVect_to_GstBuffer(General::SharedPtr < FrameCPP::FrVect > ve
 	 * machinery
 	 */
 
-	g_assert(vect->GetNDim() == 1);
+	g_assert_cmpuint(vect->GetNDim(), ==, 1);
 	memcpy(GST_BUFFER_DATA(buffer), vect->GetData().get(), GST_BUFFER_SIZE(buffer));
 
 	/*
