@@ -319,10 +319,10 @@ static gboolean control_get_state(GSTLALGate *element, GstClockTime tmin, GstClo
 
 	for(i = 0; i < element->control_segments->len; i++) {
 		struct control_segment segment = g_array_index(element->control_segments, struct control_segment, i);
-		if(segment.start >= tmax)
-			break;
 		if(segment.stop <= tmin)
 			continue;
+		if(tmax <= segment.start)
+			break;
 		/* if we get here, segment intersects the requested
 		 * interval */
 		if(segment.state)
@@ -711,7 +711,7 @@ static gboolean control_event(GstPad *pad, GstEvent *event)
  */
 
 
-static GstCaps *getcaps(GstPad * pad)
+static GstCaps *getcaps(GstPad *pad)
 {
 	GSTLALGate *element = GSTLAL_GATE(gst_pad_get_parent(pad));
 	GstPad *otherpad = pad == element->srcpad ? element->sinkpad : element->srcpad;
@@ -1280,7 +1280,7 @@ static void class_init(gpointer klass, gpointer class_data)
 		g_param_spec_double(
 			"threshold",
 			"Threshold",
-			"Output will be flagged as non-gap when magnitude of control input is >= this value.",
+			"Output will be flagged as non-gap when magnitude of control input is >= this value.  See also invert-control.",
 			0, G_MAXDOUBLE, DEFAULT_THRESHOLD,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
@@ -1324,7 +1324,7 @@ static void class_init(gpointer klass, gpointer class_data)
 		g_param_spec_boolean(
 			"invert-control",
 			"Invert",
-			"Logically invert the control input.  If false (default) then the output is a gap if and only if the control is <= threshold;  if true then the output is a gap if and only if the control is >= threshold.",
+			"Logically invert the control input.  If false (default) then the output is a gap if and only if the control is < threshold;  if true then the output is a gap if and only if the control is >= threshold.",
 			DEFAULT_INVERT,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
