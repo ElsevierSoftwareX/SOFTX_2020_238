@@ -90,14 +90,13 @@ if options.shift is not None:
 head = lloidparts.mkLLOIDsrc(pipeline, head, [sr], options.instrument, psd = wpsd, seekevent = seekevent, block_duration = gst.SECOND, track_psd = options.track_psd)[sr]
 
 # Recolor kernel
-block_stride = int(round(1.0 / rpsd.deltaF * sr))
 max_sample = int(round(1.0 / rpsd.deltaF * sr / 2.0)) + 1 
 # truncate to requested output sample rate, if it is higher than the psd provides an assert will fail later
 rpsd.data = 1. / rpsd.data[:max_sample]
 fir_matrix, latency, measured_sample_rate = reference_psd.psd_to_fir_kernel(rpsd)
 # add latency to fix the time stamps
 latency -= 1
-head = pipeparts.mkfirbank(pipeline, head, latency = latency, fir_matrix = [fir_matrix], block_stride = block_stride)
+head = pipeparts.mkfirbank(pipeline, head, latency = latency, fir_matrix = [fir_matrix], block_stride = 32 * sr)
 
 # put the units back to strain before writing to frames
 head = pipeparts.mktaginject(pipeline, head, "units=strain")
