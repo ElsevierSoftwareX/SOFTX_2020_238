@@ -1,0 +1,222 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2010  Kipp Cannon, Chad Hanna, Leo Singer
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""Estimate power spectra from LIGO frames or simulated h(t)."""
+
+
+#
+# parse command line
+#
+
+# FIXME: Move some common options to a module.
+from optparse import OptionParser
+from glue import segments
+from pylal.datatypes import LIGOTimeGPS
+from gstlal.pipeutil import gst
+from gstlal import reference_psd
+from gstlal import lloidparts
+
+def smooth_psd(psd,smooth_psd = False, rescale_factor= 1):
+# This routine is designed to smooth a PSD for use in recolouring for NINJA2
+
+  psdData = psd.data
+
+  lowerBowlF = 20
+  upperBowlF = 1900
+  length = len(psdData)
+  deltaF = psd.deltaF
+
+  for i in xrange(length):
+    psdData[i] = psdData[i] / rescale_factor
+
+  if not smooth_psd:
+    psd.data = psdData
+    return psd
+
+  # First scan for the relevant points
+  bowlMin = 1E20
+  bowlF = 0
+  for i in xrange(length):
+    f = deltaF * i
+    if (f > lowerBowlF) and (f < upperBowlF):
+      if psdData[i] < bowlMin:
+        bowlMin = psdData[i]
+        bowlF = f
+
+  localMax = 0
+  localMin = 0
+  localPos = 0
+
+  # Start by smoothing down into the bowl from low F
+  for i in xrange(length):
+    f = deltaF * i
+    if (f > lowerBowlF) and (f < bowlF):
+      if (localMin == 0):
+        localMin = psdData[i]
+        localPos = i
+      elif (psdData[i] < localMin):
+        upperVal = localMin
+        lowerVal = psdData[i]
+        for j in range(localPos,i+1):
+          psdData[j] = upperVal - (upperVal-lowerVal)*(j - localPos)/(i-localPos)
+        localMin = psdData[i]
+        localPos = i
+
+  localMin = 0
+
+  # And smooth down into the bowl from high F
+  for i in xrange(length-1,-1,-1):
+    f = deltaF * i
+    if (f < upperBowlF) and (f > bowlF):
+      if (localMin == 0):
+        localMin = psdData[i]
+        localPos = i
+      elif (psdData[i] < localMin):
+        upperVal = localMin
+        lowerVal = psdData[i]
+        for j in range(localPos,i-1,-1):
+          psdData[j] = upperVal - (upperVal-lowerVal)*(j - localPos)/(i-localPos)
+        localMin = psdData[i]
+        localPos = i
+
+  # And then do the rest
+  joinPointsLower = []
+  joinPointsUpper = []
+  for i in xrange(length):
+    f = deltaF * i
+    if (f < lowerBowlF):
+      if (f==0):
+        joinPointsLower.append(i)
+      else:
+        addPoint=True
+        for j in range(max(0,i-3),min(int(lowerBowlF/deltaF),i+4)):
+          if psdData[j]<psdData[i]:
+            addPoint=False
+        if addPoint:
+          joinPointsLower.append(i)
+    if (f > upperBowlF):
+      if (i == length - 1):
+        joinPointsUpper.append(i)
+      else:
+        addPoint=True
+        for j in range(max(int(upperBowlF/deltaF),i-3),min(length,i+4)):
+          if psdData[j]<psdData[i]:
+            addPoint=False
+        if addPoint:
+          joinPointsUpper.append(i)
+
+  localMin = 0
+  for i in joinPointsLower:
+    if localMin == 0:
+      localMin = psdData[i]
+      localPos = i
+    else:
+      upperVal = localMin
+      lowerVal = psdData[i]
+      for j in range(localPos,i+1):
+        newVal = upperVal - (upperVal-lowerVal)*(j - localPos)/(i-localPos)
+        if newVal < psdData[j]:
+          psdData[j] = newVal
+      localMin = psdData[i]
+      localPos = i
+
+  localMin = 0
+  for i in joinPointsUpper:
+    if localMin == 0:
+      localMin = psdData[i]
+      localPos = i
+    else:
+      upperVal = localMin
+      lowerVal = psdData[i]
+      for j in range(localPos,i+1):
+        psdData[j] = upperVal - (upperVal-lowerVal)*(j - localPos)/(i-localPos)
+      localMin = psdData[i]
+      localPos = i
+
+  psd.data = psdData
+  return psd
+
+
+
+parser = OptionParser(description = __doc__)
+parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
+parser.add_option("--online-data", action = "store_true", help = "Use online DMT-STRAIN instead of a frame file (optional).")
+parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise according to a certain spectrum.")
+parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
+parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
+parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
+parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
+parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
+parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (required).")
+parser.add_option("--smooth-psd", action= "store_true", help = "Smooth real data PSD to remove lines")
+parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the PSD, default 4096 Hz")
+parser.add_option("--psd-fft-length", metavar = "s", default = 8, type = "int", help = "FFT length, default 8s")
+parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+options, filenames = parser.parse_args()
+
+if sum(1 for option in ('frame_cache', 'fake_data', 'online_data') if getattr(options, option) is not None) != 1:
+	raise ValueError, "must provide exactly one of --frame-cache, --fake-data, --online-data"
+	
+if options.fake_data not in (None, "LIGO", "AdvLIGO"):
+	raise ValueError("unrecognized value for --fake-data %s" % options.fake_data)
+
+required_options = ["instrument", "write_psd"]
+
+if options.frame_cache or options.fake_data:
+	options.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
+	seekevent = gst.event_new_seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, options.seg[0].ns(), gst.SEEK_TYPE_SET, options.seg[1].ns())
+	required_options += ["channel_name", "gps_start_time", "gps_end_time"]
+else:
+	options.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)) # FIXME Future infinity :)
+	seekevent = None
+
+missing_options = [option for option in required_options if getattr(options, option) is None]
+if missing_options:
+	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+
+psd = reference_psd.measure_psd(
+	options.instrument,
+	seekevent,
+	lloidparts.DetectorData(options.frame_cache, options.channel_name),
+	options.seg,
+	options.sample_rate,# Hz;  must not be less than highest bank fragment sample rate (see below)
+	psd_fft_length = options.psd_fft_length,
+	fake_data = options.fake_data,
+	online_data = options.online_data,
+	injection_filename = options.injections,
+	verbose = options.verbose)
+
+psd = reference_psd.smooth_psd(psd,smooth_psd = options.smooth_psd, rescale_factor= 1)
+
+reference_psd.write_psd(
+	options.write_psd,
+        { options.instrument: psd }
+	verbose = options.verbose
+)
