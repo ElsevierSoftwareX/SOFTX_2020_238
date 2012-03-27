@@ -27,6 +27,9 @@ from optparse import OptionParser
 from glue import segments
 from pylal.datatypes import LIGOTimeGPS
 from gstlal.pipeutil import gst
+from gstlal import reference_psd
+from gstlal import lloidparts
+
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
@@ -38,6 +41,7 @@ parser.add_option("--injections", metavar = "filename", help = "Set the name of 
 parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
 parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
 parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (required).")
+parser.add_option("--smooth-psd", action= "store_true", help = "Smooth real data PSD to remove lines")
 parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the PSD, default 4096 Hz")
 parser.add_option("--psd-fft-length", metavar = "s", default = 8, type = "int", help = "FFT length, default 8s")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
@@ -76,23 +80,22 @@ if missing_options:
 
 
 
-from gstlal import reference_psd
-from gstlal import lloidparts
+psd = reference_psd.measure_psd(
+	options.instrument,
+	seekevent,
+	lloidparts.DetectorData(options.frame_cache, options.channel_name),
+	options.seg,
+	options.sample_rate,# Hz;  must not be less than highest bank fragment sample rate (see below)
+	psd_fft_length = options.psd_fft_length,
+	fake_data = options.fake_data,
+	online_data = options.online_data,
+	injection_filename = options.injections,
+	verbose = options.verbose)
 
+psd = reference_psd.smooth_psd(psd,smooth_psd = options.smooth_psd, rescale_factor= 1)
 
 reference_psd.write_psd(
 	options.write_psd,
-	{ options.instrument: reference_psd.measure_psd(
-		options.instrument,
-		seekevent,
-		lloidparts.DetectorData(options.frame_cache, options.channel_name),
-		options.seg,
-		options.sample_rate,	# Hz;  must not be less than highest bank fragment sample rate (see below)
-		psd_fft_length = options.psd_fft_length,
-		fake_data = options.fake_data,
-		online_data = options.online_data,
-		injection_filename = options.injections,
-		verbose = options.verbose
-	) },
+        { options.instrument: psd }
 	verbose = options.verbose
 )
