@@ -25,6 +25,7 @@ parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start
 parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
 parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
+parser.add_option("--duration", metavar = "s", default = 64, type = "int", help = "Set the duration of the output frame files")
 parser.add_option("--color-psd", metavar = "name", help = "Set the name of psd xml file to recolor the data with")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided, default = 4096 Hz")
@@ -92,7 +93,7 @@ try:
 	os.mkdir(outpath)
 except:
 	pass
-pipeparts.mkframesink(pipeline, head, path=outpath, sync=False, async=True, frame_type=options.instrument)
+pipeparts.mkframesink(pipeline, head, path=outpath, sync=False, async=True, frame_type=options.instrument, duration = options.duration)
 
 #
 # Run it
