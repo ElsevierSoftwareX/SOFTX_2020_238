@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import sys
+import time
 import matplotlib
 matplotlib.use('Agg')
 matplotlib.rcParams.update({
@@ -64,17 +65,40 @@ def plotNumFiltersHistogram(ratedict, out_filename="numfilters.png"):
 
 	Nsr = len(ratedict)
 	ind = numpy.arange(Nsr)
-	width = 1
+	width = 0.85
 
 	ratelist = []
-	numlist =[]
+	numlist = []
+	ccostlist = []
 	for rate in sorted(ratedict.keys()):
 		ratelist.append(str(rate))
 		numlist.append(ratedict[rate])
+		ccostlist.append(rate * ratedict[rate] * 8.0)
 
-	axes = pylab.axes()
-	pylab.bar(ind, numlist, width)
-	pylab.xticks(ind+0.5*width, ratelist)
+	w1 = 0.7
+	h1 = 0.3
+	wm = 0.2
+	ho = 0.1
+	hm2 = 0.1
+	hm = 1 - 2*h1 -ho -hm2
+
+	rect_hist1 = [wm, hm+1*h1+1*ho, w1, h1]
+	rect_hist2 = [wm, hm+0*h1+0*ho, w1, h1]
+
+	fig = pylab.figure(1, figsize=(8,8))
+
+	axhist1 = pylab.axes(rect_hist1)
+	axhist1.bar(ind, numlist, width)
+	axhist1.set_ylabel('Number of IIR filters')
+	axhist1.xaxis.set_ticks(ind+0.5*width)
+	axhist1.xaxis.set_ticklabels(ratelist)
+
+	axhist2 = pylab.axes(rect_hist2)
+	axhist2.bar(ind, ccostlist, width)
+	axhist2.set_ylabel('Computational Cost (FLOPS)')
+	axhist2.xaxis.set_ticks(ind+0.5*width)
+	axhist2.xaxis.set_ticklabels(ratelist)
+
         pylab.savefig(out_filename)
 	pylab.close()
 
@@ -172,23 +196,28 @@ mchirp = []
 snrs = []
 Niir = []
 M = {}
-
+Mr = {}
+verbose = False
 
 for f in sys.argv[1:]:
 	print f
+	if verbose:
+		start = time.time()
 	xmldoc = utils.load_filename(f)#, gz=f.endswith('gz'))
-
+	if verbose:
+		print >> sys.stderr, "load doc %f" % ((time.time() - start))
+		start = time.time()
 	sample_rates = [int(r) for r in param.get_pyvalue(xmldoc, 'sample_rate').split(',')]
 	n = 0
 	N = None
 	for sr in sample_rates:
-		n += array.get_array(xmldoc, 'd_%d' % (sr,)).get_shape()[1]
 		if sr not in M: M[sr] = 0
+		if sr not in Mr: Mr[sr] = 0
 		#n = array.get_array(xmldoc, 'a_%d' % (sr,)).get_shape()[0] * array.get_array(xmldoc, 'a_%d' % (sr,)).get_shape()[1]/2 * sr
 		aarray = repack_real_array_to_complex(array.get_array(xmldoc, 'a_%d' % (sr,)).array)
+		Mr[sr] += aarray.shape[0]*aarray.shape[1]
 		if N is None:
 			N = numpy.zeros(len(aarray))
-
 		#print len(aarray)
 		for tmp, arow in enumerate(aarray):
 			nonzero = 0
@@ -197,6 +226,9 @@ for f in sys.argv[1:]:
 					nonzero += 1
 			N[tmp] += nonzero
 			M[sr] += nonzero
+	if verbose:
+		print >> sys.stderr, "sr arrays %f" % ((time.time() - start))
+		start = time.time()
 
 	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 	for tmp, row in enumerate(sngl_inspiral_table):
@@ -208,7 +240,21 @@ for f in sys.argv[1:]:
 		#print >>sys.stderr, '%13.8f, %13.8f, %13.8f, %10d' % (m1[tmp], m2[tmp], snrs[tmp], Niir[tmp])
 		#print >>file, '%13.8f, %13.8f, %13.8f' % (m1[tmp], m2[tmp], snrs[tmp]
 
+	if verbose:
+		print >> sys.stderr, "sngl_inspral table %f" % ((time.time() - start))
+		start = time.time()
+
 #file.close()
+
+sumtotal = 0
+Nsum = 0
+for sr in sorted(M.keys()):
+	sumtotal += sr * Mr[sr] * 8.0
+	Nsum += Mr[sr]
+	print >>sys.stderr, '%5d, %10d, %10d, %11.0f' % (sr, M[sr], Mr[sr], sr * Mr[sr] * 8.0)
+
+print >>sys.stderr, 'Total Computational Cost (FLOPS) %e' % sumtotal
+print >>sys.stderr, 'Total Number of IIR filters %d' % Nsum
 
 MM = ligolw_process.get_process_params(xmldoc, "tmpltbank", "--minimal-match")
 spectype = ligolw_process.get_process_params(xmldoc, "tmpltbank", "--spectrum-type")
@@ -218,6 +264,6 @@ epsilon = param.get_pyvalue(xmldoc, 'epsilon')
 scl = 3.0*(flow[0]**(-5.0/6.0)-(1.0*fhigh[0])**(-5.0/6.0))/(4*numpy.pi**(4.0/3.0)*numpy.sqrt(15.0*epsilon)*(4.925491e-6)**(5.0/6.0))
 
 plotSNRhistograms(snrs, mchirp, Niir, scl = scl)
-plotNumFiltersHistogram(M)
+plotNumFiltersHistogram(Mr)
 plotSNROverlap(snrs)
 
