@@ -84,9 +84,11 @@ def plotsnrchisq(url, type = "background", name = "gstlal_inspiral_likelihood"):
 	from glue.ligolw import utils
 	from pylal import ligolw_burca_tailor
 	from pylal import rate
-
-	filt = rate.gaussian_window2d(5, 5, sigma = 8)	
-	coincparamsdistributions, likelihood_seglists = ligolw_burca_tailor.load_likelihood_data([url], u"gstlal_inspiral_likelihood", verbose = False)
+	from gstlal import inspiral
+	coincparamsdistributions, likelihood_seglists = inspiral.DistributionsStats.from_filenames([url], verbose = True)
+	coincparamsdistributions.finish()
+	#filt = rate.gaussian_window2d(5, 5, sigma = 8)	
+	#coincparamsdistributions, likelihood_seglists = ligolw_burca_tailor.load_likelihood_data([url], u"gstlal_inspiral_likelihood", verbose = False)
 
 	fig = plt.figure(figsize = (10.5,7))
 	#plt.gray()
@@ -94,27 +96,29 @@ def plotsnrchisq(url, type = "background", name = "gstlal_inspiral_likelihood"):
 	for i, ifo in enumerate(['H1','H2','L1', 'V1']):
 		ax = fig.add_subplot(2,2,i+1)
 		if type == "likelihood":
-			inj = coincparamsdistributions.injection_rates[ifo+"_snr_chi"].array
+			inj = coincparamsdistributions.smoothed_distributions.injection_rates[ifo+"_snr_chi"].array
 			inj /= inj.sum()
-			back = coincparamsdistributions.background_rates[ifo+"_snr_chi"].array
+			back = coincparamsdistributions.smoothed_distributions.background_rates[ifo+"_snr_chi"].array
 			back /= back.sum()
-			H1 = rate.filter_array(inj, filt) / rate.filter_array(back, filt)
+			H1 = inj / back
+			H1[numpy.isinf(H1)] = 0.0
+			H1[numpy.isnan(H1)] = 0.0
 		if type == "background":
-			H1 = rate.filter_array(coincparamsdistributions.background_rates[ifo+"_snr_chi"].array, filt)
-		snr = coincparamsdistributions.background_rates[ifo+"_snr_chi"].bins[0].centres()[1:-1]
-		chi = coincparamsdistributions.background_rates[ifo+"_snr_chi"].bins[1].centres()[1:-1]
+			H1 = coincparamsdistributions.smoothed_distributions.background_rates[ifo+"_snr_chi"].array
+		snr = coincparamsdistributions.smoothed_distributions.background_rates[ifo+"_snr_chi"].bins[0].centres()[1:-1]
+		chi = coincparamsdistributions.smoothed_distributions.background_rates[ifo+"_snr_chi"].bins[1].centres()[1:-1]
 		chi[0] = 0 # not inf
 		plt.pcolormesh(snr, chi, numpy.log10(H1.T+1)[1:-1,1:-1])
 		ax.set_yscale('log')
-		ax.set_xscale('log')
+		#ax.set_xscale('log')
 		plt.colorbar()
 		if i in (2,3):
 			plt.xlabel('SNR')
 		if i in (0,2):
 			plt.ylabel('reduced chisq / SNR^2')
 		plt.title( "%s %s" % (ifo, type))
-		plt.xlim([4., 100.])
-		plt.ylim([.005, .5])
+		plt.xlim([4, 26])
+		plt.ylim([.001, 0.5])
 		plt.grid()
 	# one figure, four subplots
 	import StringIO,base64
