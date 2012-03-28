@@ -9,19 +9,16 @@ from optparse import OptionParser
 parser = OptionParser(description = __doc__)
 parser.add_option("--instrument", help = "The instrument name (required).")
 parser.add_option("--output-name", metavar = "filename", help = "The output xml file (required)")
-parser.add_option("--file-glob",metavar = "filename", help = "Glob of files to search for (required)")
 parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
 options, filenames = parser.parse_args()
 
 
 # Identify the various files
-print options.file_glob
-file_list = glob.glob(options.file_glob)
 
-psd = reference_psd.read_psd(file_list[0], verbose =options.verbose)[options.instrument]
+psd = reference_psd.read_psd(filenames[0], verbose =options.verbose)[options.instrument]
 
 # FIXME assumes all psds have the same frequency vectors !!!
-psd.data = numpy.median(numpy.array([reference_psd.read_psd(f, verbose = options.verbose)[options.instrument].data for f in file_list]), axis= 0)
+psd.data = numpy.median(numpy.array([reference_psd.read_psd(f, verbose = options.verbose)[options.instrument].data for f in filenames]), axis= 0)
 
 # Write it to disk
 reference_psd.write_psd(options.output_name,psd,instrument = options.instrument, verbose = options.verbose)
