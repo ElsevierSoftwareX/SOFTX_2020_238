@@ -118,6 +118,7 @@ def parse_command_line():
 	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
 	parser.add_option("--channel", metavar = "name", default=[], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
 	parser.add_option("--ht-gate-threshold", metavar = "float", help = "Set the h(t) gate threshold to reject glitches", type="float")
+	parser.add_option("--do-iir-pipeline", action = "store_true", help = "run the iir pipeline instead of lloid")
 	parser.add_option("--num-banks", metavar = "str", help = "the number of banks per job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
 	parser.add_option("--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs")
 	parser.add_option("--likelihood-file", help = "set the likelihood file, required if --copy-likelihoods is used")	
@@ -165,7 +166,10 @@ dag = inspiral_pipe.DAG("trigger_pipe")
 # setup the job classes
 #
 
-gstlalInspiralJob = gstlal_inspiral_job()
+if options.do_iir_pipeline is not None:
+	gstlalInspiralJob = gstlal_inspiral_job(executable = inspiral_pipe.which('gstlal_iir_ll_inspiral'))
+else:
+	gstlalInspiralJob = gstlal_inspiral_job()
 
 ###############################################################################
 # loop over banks to run gstlal inspiral pre clustering and far computation
