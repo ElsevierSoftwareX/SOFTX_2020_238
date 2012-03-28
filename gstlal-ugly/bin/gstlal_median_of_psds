@@ -21,4 +21,9 @@ psd = reference_psd.read_psd(filenames[0], verbose =options.verbose)[options.ins
 psd.data = numpy.median(numpy.array([reference_psd.read_psd(f, verbose = options.verbose)[options.instrument].data for f in filenames]), axis= 0)
 
 # Write it to disk
-reference_psd.write_psd(options.output_name,psd,instrument = options.instrument, verbose = options.verbose)
+reference_psd.write_psd(
+        options.output_name,
+        { options.instrument: psd },
+        verbose = options.verbose
+)
+
