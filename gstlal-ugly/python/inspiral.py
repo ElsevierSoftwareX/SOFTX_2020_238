@@ -313,17 +313,22 @@ class DistributionsStats(object):
 	"""
 
 	binnings = {
-		"H1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"H2_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"L1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"V1_snr_chi": rate.NDBins((rate.LogarithmicPlusOverflowBins(4., 100., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200)))
+		"H1_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
+		"H2_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
+		"L1_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
+		"V1_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200)))
 	}
 
+	# FIXME the characteristic width (which is relevant for smoothing)
+	# should be roughly 1.0 in SNR (from Gaussian noise expectations).  So
+	# it is tied to how many bins there are per SNR range.  With 200 bins
+	# between 4 and 26 each bin is .11 wide in SNR. So a width of 9 bins
+	# corresponds to .99 which is close to 1.0
 	filters = {
-		"H1_snr_chi": rate.gaussian_window2d(11, 11, sigma = 16),
-		"H2_snr_chi": rate.gaussian_window2d(11, 11, sigma = 16),
-		"L1_snr_chi": rate.gaussian_window2d(11, 11, sigma = 16),
-		"V1_snr_chi": rate.gaussian_window2d(11, 11, sigma = 16)
+		"H1_snr_chi": rate.gaussian_window2d(9, 9, sigma = 10),
+		"H2_snr_chi": rate.gaussian_window2d(9, 9, sigma = 10),
+		"L1_snr_chi": rate.gaussian_window2d(9, 9, sigma = 10),
+		"V1_snr_chi": rate.gaussian_window2d(9, 9, sigma = 10)
 	}
 
 	def __init__(self):
@@ -360,6 +365,9 @@ class DistributionsStats(object):
 			binarr.array *= n
 
 	def add_foreground_prior(self, n = 1., prefactors_range = (0.01, 0.5), df = 16, verbose = False):
+		# FIXME:  for maintainability, this should be modified to
+		# use the .add_injection() method of the .raw_distributions
+		# attribute, but that will slow this down
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
 		for param, binarr in self.raw_distributions.injection_rates.items():
 			if verbose:
@@ -386,28 +394,6 @@ class DistributionsStats(object):
 			# normalize to the requested count
 			binarr.array /= binarr.array.sum()
 			binarr.array *= n
-
-	def synthesize_injections(self, prefactor = .3, df = 16, N = 10000000, verbose = False):
-		# FIXME:  for maintainability, this should be modified to
-		# use the .add_injection() method of the .raw_distributions
-		# attribute, but that will slow this down
-		random.seed(0) # FIXME changes as appropriate
-		chunk_size = 1000000	# do this many at once
-		for param, binarr in self.raw_distributions.injection_rates.items():
-			if verbose:
-				print >> sys.stderr, "synthesizing injections for %s" % param
-			minsnr = binarr.bins[0].upper().min()
-			remaining = N
-			while remaining:
-				size = min(chunk_size, remaining)
-
-				snrs = snr_distribution(size, minsnr)
-				chisqs = chisq_distribution(df, noncentrality(snrs, prefactor), 1) / df
-				for snr, chisq in itertools.izip(snrs, chisqs):
-					#FIXME keep synced with the likelihood_params_func!!
-					binarr[snr, chisq / snr**2] += 1
-
-				remaining -= size
 
 	def finish(self, verbose = False):
 		self.smoothed_distributions = self.raw_distributions.copy(self.raw_distributions)
