@@ -309,8 +309,8 @@ class EPHandler( LLOIDHandler ):
 
 	def make_output_table( self ):
 		self.triggers = lsctables.New(lsctables.SnglBurstTable,
-			["ifo", "peak_time", "peak_time_ns", "start_time", 
-			"duration",  "search",
+			["ifo", "peak_time", "peak_time_ns", "start_time", "start_time_ns",
+			"duration",  "search", "event_id",
 			"central_freq", "channel", "amplitude", "snr", "confidence",
 			"chisq", "chisq_dof", "bandwidth"])
 			#"peak_frequency",

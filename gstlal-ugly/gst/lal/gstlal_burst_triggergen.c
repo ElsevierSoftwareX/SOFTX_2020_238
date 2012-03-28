@@ -398,10 +398,10 @@ static GstFlowReturn push_gap(GSTLALBurst_Triggergen *element, guint samps)
 	/* create the output buffer */
 	switch(element->data_type){
 		case GSTLAL_BURSTTRIGGEN_COMPLEX_DOUBLE:
-			srcbuf = gstlal_snglburst_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate);
+			srcbuf = gstlal_snglburst_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate, &(element->count));
 			break;
 		case GSTLAL_BURSTTRIGGEN_DOUBLE:
-			srcbuf = gstlal_snglburst_new_double_buffer_from_peak(element->maxdatad, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate);
+			srcbuf = gstlal_snglburst_new_double_buffer_from_peak(element->maxdatad, element->bankarray, element->srcpad, element->next_output_offset, samps, element->next_output_timestamp, element->rate, &(element->count));
 			break;
 		default:
 			g_assert_not_reached();
@@ -431,7 +431,7 @@ static GstFlowReturn push_nongap(GSTLALBurst_Triggergen *element, guint copysamp
 			/* Find the peak */
 			gstlal_double_complex_peak_over_window(element->maxdata, (const double complex*) dataptr, outsamps);
 			/* create the output buffer */
-			srcbuf = gstlal_snglburst_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
+			srcbuf = gstlal_snglburst_new_buffer_from_peak(element->maxdata, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, &(element->count));
 			break;
 		case GSTLAL_BURSTTRIGGEN_DOUBLE:
 			/* call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP */
@@ -441,7 +441,7 @@ static GstFlowReturn push_nongap(GSTLALBurst_Triggergen *element, guint copysamp
 			/* Find the peak */
 			gstlal_double_peak_over_window(element->maxdatad, (const double*) dataptrd, outsamps);
 			/* create the output buffer */
-			srcbuf = gstlal_snglburst_new_double_buffer_from_peak(element->maxdatad, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate);
+			srcbuf = gstlal_snglburst_new_double_buffer_from_peak(element->maxdatad, element->bankarray, element->srcpad, element->next_output_offset, outsamps, element->next_output_timestamp, element->rate, &(element->count));
 			break;
 	}
 	/* set the time stamp and offset state */
@@ -789,6 +789,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 
 	/* internal data */
 	element->rate = 0;
+	element->count = 0;
 	reset_time_and_offset(element);
 	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
 	element->instrument = NULL;

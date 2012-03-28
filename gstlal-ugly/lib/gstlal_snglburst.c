@@ -69,7 +69,7 @@ int gstlal_set_instrument_in_snglburst_array(SnglBurst *bankarray, int length, c
 	return 0;
 }
 
-GstBuffer *gstlal_snglburst_new_double_buffer_from_peak(struct gstlal_double_peak_samples_and_values *input, SnglBurst *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate)
+GstBuffer *gstlal_snglburst_new_double_buffer_from_peak(struct gstlal_double_peak_samples_and_values *input, SnglBurst *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, guint64 *count)
 {
 	/* FIXME check errors */
 
@@ -110,6 +110,9 @@ GstBuffer *gstlal_snglburst_new_double_buffer_from_peak(struct gstlal_double_pea
 				output->snr = fabs(maxdata[channel]);
 				output->start_time = start_time;
 				output->peak_time = peak_time;
+				//FIXME: Process ID
+				XLALSnglBurstAssignIDs( output, 0, *count );
+				(*count)++;
 				output++;
 			}
 		}
@@ -118,7 +121,7 @@ GstBuffer *gstlal_snglburst_new_double_buffer_from_peak(struct gstlal_double_pea
 	return srcbuf;
 }
 
-GstBuffer *gstlal_snglburst_new_buffer_from_peak(struct gstlal_double_complex_peak_samples_and_values *input, SnglBurst *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate)
+GstBuffer *gstlal_snglburst_new_buffer_from_peak(struct gstlal_double_complex_peak_samples_and_values *input, SnglBurst *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, guint64 *count)
 {
 	/* FIXME check errors */
 
@@ -159,6 +162,9 @@ GstBuffer *gstlal_snglburst_new_buffer_from_peak(struct gstlal_double_complex_pe
 				output->snr = cabs(maxdata[channel]);
 				output->start_time = start_time;
 				output->peak_time = peak_time;
+				//FIXME: Process ID
+				XLALSnglBurstAssignIDs( output, 0, *count );
+				(*count)++;
 				output++;
 			}
 		}

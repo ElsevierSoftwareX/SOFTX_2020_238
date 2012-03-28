@@ -69,6 +69,7 @@ typedef struct {
 	gint rate;
 	guint n;
 	guint channels;
+	guint64 count;
 	gdouble snr_thresh;
 	/* TODO: Right now we're just copying all the data structures */
 	struct gstlal_double_complex_peak_samples_and_values *maxdata;
