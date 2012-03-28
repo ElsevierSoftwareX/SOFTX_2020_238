@@ -176,7 +176,7 @@ if missing_options:
 
 psd = reference_psd.read_psd(options.input_psd, verbose =options.verbose)[options.instrument]
 
-psd = reference_psd.smooth_psd(psd,smooth_psd = True, rescale_factor= 1)
+psd = smooth_psd(psd,smooth_psd = True, rescale_factor= 1)
 
 reference_psd.write_psd(
 	options.output_psd,
