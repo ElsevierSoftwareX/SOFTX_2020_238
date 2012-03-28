@@ -103,7 +103,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		td_filter = t_series.data
 		td_filter = numpy.roll( td_filter, filter_len/2 )[:filter_len]
 		## normalize the filters
-		td_filter /= numpy.sqrt( sum( [ x**2 for x in td_filter ] ) )
+		td_filter /= numpy.sqrt( numpy.dot(td_filter, td_filter) )
 		######################
 		filters = numpy.concatenate( (filters, td_filter) )
 		
@@ -329,9 +329,9 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 	head = chtee = mktee( pipeline, head )
 	head = mkgeneric( pipeline, head, "cairovis_waterfall",
 			title = "TF map %s:%s, (SNR:0,%f), fmax=%d Hz" % (handler.inst, handler.channel, snr_max, handler.fhigh),
-			z_autoscale = False,
-			z_min = 0,
-			z_max = snr_max,
+			z_autoscale = True,
+			#z_min = 0,
+			#z_max = snr_max,
 			z_label = "SNR",
 			# TODO: Restore this when it becomes available again
 			#y_autoscale = False,
@@ -340,6 +340,7 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 			y_label = "channel number",
 			x_label = "time (s)",
 			colormap = "jet",
+			colorbar = True,
 			history = gst.SECOND*4
 	)
 
