@@ -153,43 +153,18 @@ def smooth_psd(psd,smooth_psd = False, rescale_factor= 1):
 
 
 parser = OptionParser(description = __doc__)
-parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
-parser.add_option("--online-data", action = "store_true", help = "Use online DMT-STRAIN instead of a frame file (optional).")
-parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise according to a certain spectrum.")
-parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
-parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
-parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
-parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
-parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
-parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (required).")
-parser.add_option("--smooth-psd", action= "store_true", help = "Smooth real data PSD to remove lines")
-parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the PSD, default 4096 Hz")
-parser.add_option("--psd-fft-length", metavar = "s", default = 8, type = "int", help = "FFT length, default 8s")
+parser.add_option("--input-psd", metavar = "filename", help = "Input PSD to be smoothed, should be a LIGO light-weight XML file (required).")
+parser.add_option("--output-psd", metavar = "filename", help = "Write smoothed noise spectrum to this LIGO light-weight XML file (required).")
+parser.add_option("--instrument", metavar = "filename", help = "Which ifo's PSD are we looking at (required).")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 options, filenames = parser.parse_args()
 
-if sum(1 for option in ('frame_cache', 'fake_data', 'online_data') if getattr(options, option) is not None) != 1:
-	raise ValueError, "must provide exactly one of --frame-cache, --fake-data, --online-data"
-	
-if options.fake_data not in (None, "LIGO", "AdvLIGO"):
-	raise ValueError("unrecognized value for --fake-data %s" % options.fake_data)
-
-required_options = ["instrument", "write_psd"]
-
-if options.frame_cache or options.fake_data:
-	options.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
-	seekevent = gst.event_new_seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, options.seg[0].ns(), gst.SEEK_TYPE_SET, options.seg[1].ns())
-	required_options += ["channel_name", "gps_start_time", "gps_end_time"]
-else:
-	options.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000)) # FIXME Future infinity :)
-	seekevent = None
+required_options = ["input_psd", "output_psd","instrument"]
 
 missing_options = [option for option in required_options if getattr(options, option) is None]
 if missing_options:
 	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
-
-
 
 #
 # =============================================================================
@@ -199,24 +174,12 @@ if missing_options:
 # =============================================================================
 #
 
+psd = reference_psd.read_psd(options.input_psd, verbose =options.verbose)[options.instrument]
 
-
-psd = reference_psd.measure_psd(
-	options.instrument,
-	seekevent,
-	lloidparts.DetectorData(options.frame_cache, options.channel_name),
-	options.seg,
-	options.sample_rate,# Hz;  must not be less than highest bank fragment sample rate (see below)
-	psd_fft_length = options.psd_fft_length,
-	fake_data = options.fake_data,
-	online_data = options.online_data,
-	injection_filename = options.injections,
-	verbose = options.verbose)
-
-psd = reference_psd.smooth_psd(psd,smooth_psd = options.smooth_psd, rescale_factor= 1)
+psd = reference_psd.smooth_psd(psd,smooth_psd = True, rescale_factor= 1)
 
 reference_psd.write_psd(
-	options.write_psd,
-        { options.instrument: psd }
+	options.output_psd,
+        { options.instrument: psd },
 	verbose = options.verbose
 )
