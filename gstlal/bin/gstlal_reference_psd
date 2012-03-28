@@ -27,9 +27,6 @@ from optparse import OptionParser
 from glue import segments
 from pylal.datatypes import LIGOTimeGPS
 from gstlal.pipeutil import gst
-from gstlal import reference_psd
-from gstlal import lloidparts
-
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
@@ -79,20 +76,23 @@ if missing_options:
 
 
 
-psd = reference_psd.measure_psd(
-	options.instrument,
-	seekevent,
-	lloidparts.DetectorData(options.frame_cache, options.channel_name),
-	options.seg,
-	options.sample_rate,# Hz;  must not be less than highest bank fragment sample rate (see below)
-	psd_fft_length = options.psd_fft_length,
-	fake_data = options.fake_data,
-	online_data = options.online_data,
-	injection_filename = options.injections,
-	verbose = options.verbose)
+from gstlal import reference_psd
+from gstlal import lloidparts
+
 
 reference_psd.write_psd(
 	options.write_psd,
-        { options.instrument: psd }
+	{ options.instrument: reference_psd.measure_psd(
+		options.instrument,
+		seekevent,
+		lloidparts.DetectorData(options.frame_cache, options.channel_name),
+		options.seg,
+		options.sample_rate,	# Hz;  must not be less than highest bank fragment sample rate (see below)
+		psd_fft_length = options.psd_fft_length,
+		fake_data = options.fake_data,
+		online_data = options.online_data,
+		injection_filename = options.injections,
+		verbose = options.verbose
+	) },
 	verbose = options.verbose
 )
