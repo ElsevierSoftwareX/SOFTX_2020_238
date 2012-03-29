@@ -8,7 +8,7 @@ dist_bin_SCRIPTS = \
 	gstlal_mock_data_server \
 	gstlal_svd_bank \
 	gstlal_iir_bank \
-	gstlal_iir_bank_pipe \
+	gstlal_inspiral_iir_bank_pipe \
 	gstlal_iir_ll_inspiral \
 	gstlal_compute_far_from_snr_chisq_histograms \
 	gstlal_s5_pbh_segments_trim \
