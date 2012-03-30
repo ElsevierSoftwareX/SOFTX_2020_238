@@ -212,17 +212,18 @@ def psd_to_fir_kernel(psd):
 
 	data[0] = data[-1] = 0.0
 	try:
-		kernel = scipy.fftpack.idct(numpy.sqrt(data), type = 1) * math.sqrt(sample_rate) / (2 * (len(data) - 1))
+		kernel = scipy.fftpack.idct(numpy.sqrt(data), type = 1) * math.sqrt(sample_rate) / (2 * len(data) - 1)
 		kernel = numpy.hstack((kernel[::-1], kernel[1:]))
 	except AttributeError:
 		# this computer's scipy.fftpack is missing idct()
 		# repack data:  data[0], data[1], 0, data[2], 0, ....
-		tmp = numpy.zeros((2 * (len(data) - 1),), dtype = data.dtype)
-		tmp[0:len(data)] = data
-		tmp[len(data):] = data[-2:0:-1]
-		kernel = numpy.roll(numpy.real( scipy.ifft((tmp)**0.5)),(len(data) - 1)) * sample_rate**.5
-		kernel = numpy.hstack((kernel,[0]))
-
+		tmp = numpy.zeros((2 * len(data) - 1,), dtype = data.dtype)
+		tmp[0] = data[0]
+		tmp[1::2] = data[1:]
+		data = tmp
+		del tmp
+		kernel = scipy.fftpack.irfft(numpy.sqrt(data)) * math.sqrt(sample_rate)
+		kernel = numpy.roll(kernel, (len(kernel) - 1) / 2)
 
 	#
 	# apply a Tukey window whose flat bit is 50% of the kernel.
@@ -310,4 +311,3 @@ def interpolate_psd(psd, deltaF):
 		sampleUnits = psd.sampleUnits,
 		data = psd_data
 	)
-
