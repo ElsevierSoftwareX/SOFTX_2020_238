@@ -335,7 +335,7 @@ def mkiirbank(pipeline, src, a1, b0, delay, name=None):
 	elem = mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed
 	return elem
 
-def mktrim(pipeline, src, initial_offset = 0, final_offset = 0, inverse = False):
+def mktrim(pipeline, src, initial_offset = None, final_offset = None, inverse = None):
 	properties = dict((name, value) for name, value in zip(("initial-offset", "final-offset", "inverse"), (initial_offset,final_offset,inverse)) if value is not None)
 	return mkgeneric(pipeline, src, "lal_trim", **properties)
 
