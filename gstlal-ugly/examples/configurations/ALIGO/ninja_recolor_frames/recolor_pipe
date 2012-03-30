@@ -106,8 +106,8 @@ class gstlal_reference_psd_node(pipeline.CondorDAGNode):
 		path = os.getcwd()
 		output_name = self.output_name = '%s/%s-%d-%d-reference_psd.xml.gz' % (path, instrument, gps_start_time, gps_end_time)
 		self.add_var_opt("write-psd",output_name)
-                self.add_var_opt("sample-rate",sample_rate)
-                self.add_var_opt("psd-fft-length",psd_fft_length)
+		self.add_var_opt("sample-rate",sample_rate)
+		self.add_var_opt("psd-fft-length",psd_fft_length)
 		dag.output_cache.append(lal.CacheEntry(instrument, "-", segments.segment(gps_start_time, gps_end_time), "file://localhost/%s" % (output_name,)))
 		for p in p_node:
 			self.add_parent(p)
@@ -159,10 +159,10 @@ class gstlal_combine_psd_job(pipeline.CondorDAGJob):
         """
         A gstlal_reference_psd job
         """
-        def __init__(self, executable=which('gstlal_median_of_psds'), tag_base='gstlal_median_of_psds'):
+        def __init__(self, executable=which('gstlal_ninja_median_of_psds'), tag_base='gstlal_ninja_median_of_psds'):
                 """
                 """
-                self.__prog__ = 'gstlal_median_of_psds'
+                self.__prog__ = 'gstlal_ninja_median_of_psds'
                 self.__executable = executable
                 self.__universe = 'vanilla'
                 pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
@@ -175,19 +175,19 @@ class gstlal_combine_psd_job(pipeline.CondorDAGJob):
                 self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(process).err')
 
 class gstlal_combine_psd_node(pipeline.CondorDAGNode):
-        """
-        A gstlal_reference_psd node
-        """
-        def __init__(self, job, dag, output,instrument,file_list, p_node=[]):
+	"""
+	A gstlal_reference_psd node
+	"""
+	def __init__(self, job, dag, output,instrument,file_list, p_node=[]):
 
-                pipeline.CondorDAGNode.__init__(self,job)
-                self.add_var_opt("instrument", instrument)
-                self.add_var_opt("output-name",output)
+		pipeline.CondorDAGNode.__init__(self,job)
+		self.add_var_opt("instrument", instrument)
+		self.add_var_opt("output-name",output)
 		self.add_var_arg(' '.join(file_list))
-                self.output_name = output
-                for p in p_node:
-                        self.add_parent(p)
-                dag.add_node(self)
+		self.output_name = output
+		for p in p_node:
+			self.add_parent(p)
+		dag.add_node(self)
 
 
 #
@@ -232,8 +232,8 @@ class gstlal_recolor_frames_node(pipeline.CondorDAGNode):
 		self.add_var_opt("reference-psd",reference_psd)
 		self.add_var_opt("sample-rate",sample_rate)
 		self.add_var_opt("duration",frame_length)
-                if shift:
-                  self.add_var_opt("shift",shift * 1000000000)
+		if shift:
+			self.add_var_opt("shift",shift * 1000000000)
 		for p in p_node:
 			self.add_parent(p)
 		dag.add_node(self)
