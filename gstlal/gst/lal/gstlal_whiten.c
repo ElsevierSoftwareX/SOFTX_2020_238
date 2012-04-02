@@ -559,6 +559,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 	guint zero_pad = zero_pad_length(element);
 	guint hann_length = fft_length(element) - 2 * zero_pad;
 	double *dst = (double *) GST_BUFFER_DATA(outbuf);
+	guint dst_size = GST_BUFFER_SIZE(outbuf) / sizeof(*dst);
 
 	/*
 	 * safety checks
@@ -569,6 +570,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 	g_assert_cmpuint(element->hann_window->data->length, ==, element->tdworkspace->data->length);
 	g_assert_cmpuint(element->output_history->length, ==, element->tdworkspace->data->length);
 	g_assert_cmpuint(sizeof(*element->output_history->data), ==, sizeof(*element->tdworkspace->data->data));
+	g_assert_cmpuint(sizeof(*element->output_history->data), ==, sizeof(*dst));
 
 	/*
 	 * Iterate over the available data
@@ -760,6 +762,7 @@ static GstFlowReturn whiten(GSTLALWhiten *element, GstBuffer *outbuf, guint *out
 
 		g_assert_cmpint((gint64) element->output_history_offset, <=, (gint64) (element->next_offset_out + *outsamples));
 		if(element->output_history_offset == element->next_offset_out + *outsamples) {
+			g_assert_cmpuint(*outsamples + hann_length / 2, <=, dst_size);
 			memcpy(&dst[*outsamples], &element->output_history->data[0], hann_length / 2 * sizeof(*element->output_history->data));
 			*outsamples += hann_length / 2;
 			if(element->nonzero_output_history_length != 0)
