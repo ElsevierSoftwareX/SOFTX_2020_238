@@ -63,6 +63,12 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 	filters = numpy.array([])
 	for band in range( bands ):
 
+		# avoid nans -- we don't use DC anyway
+		if( psd.data[0] < 1e-100 ): 
+			tmpdat = psd.data
+			tmpdat[0] = 1.0
+			psd.data = tmpdat
+
 		# Create the EP filter in the FD
 		h_wind = lalburst.XLALCreateExcessPowerFilter( 
 			#channel_flow =
@@ -334,9 +340,9 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 			#z_max = snr_max,
 			z_label = "SNR",
 			# TODO: Restore this when it becomes available again
-			#y_autoscale = False,
-			#y_min = handler.flow,
-			#y_max = handler.fhigh,
+			y_autoscale = True,
+			y_min = handler.flow,
+			y_max = handler.fhigh,
 			y_label = "channel number",
 			x_label = "time (s)",
 			colormap = "jet",
