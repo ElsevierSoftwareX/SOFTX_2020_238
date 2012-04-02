@@ -64,7 +64,8 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 	for band in range( bands ):
 
 		# avoid nans -- we don't use DC anyway
-		if( psd.data[0] < 1e-100 ): 
+		if( psd.data[0] == 0.0 ): 
+			print >>sys.stderr, "Warning, DC component of PSD found to be zero. Setting it to unity to avoid NaNs. You can ignore this warning if DC is not part of your analysis."
 			tmpdat = psd.data
 			tmpdat[0] = 1.0
 			psd.data = tmpdat
