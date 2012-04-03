@@ -177,6 +177,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 			start = time.time()
                 # get the chirptime
                 length = int(2**numpy.ceil(numpy.log2(amp.shape[0]+autocorrelation_length)))
+		if verbose: print >> sys.stderr, "length = %d, amp length = %d, autocorrelation length = %d" % (length, amp.shape[0], autocorrelation_length)
 
                 # get the IIR response
                 out = spawaveform.iirresponse(length, a1, b0, delay)
@@ -184,47 +185,46 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 			print >> sys.stderr, "create IIR response %f" % (time.time() - start)
 			start = time.time()
                 out = out[::-1]
-                vec1 = numpy.zeros(length * 1, dtype=numpy.cdouble)
-                vec1[-len(out):] = out
-                norm1 = 1.0/numpy.sqrt(2.0)*((vec1 * numpy.conj(vec1)).sum()**0.5)
-                vec1 /= norm1
+                u = numpy.zeros(length * 1, dtype=numpy.cdouble)
+                u[-len(out):] = out
+                norm1 = 1.0/numpy.sqrt(2.0)*((u * numpy.conj(u)).sum()**0.5)
+                u /= norm1
 
                 # normalize the iir coefficients
                 b0 /= norm1
 
                 # get the original waveform
                 out2 = amp * numpy.exp(1j * phase)
-                vec2 = numpy.zeros(length * 1, dtype=numpy.cdouble)
-                vec2[-len(out2):] = out2
-		#norm2 = 1.0/numpy.sqrt(2.0)*((vec2 * numpy.conj(vec2)).sum()**0.5)
-                #vec2 /= norm2
+                h = numpy.zeros(length * 1, dtype=numpy.cdouble)
+                h[-len(out2):] = out2
+		#norm2 = 1.0/numpy.sqrt(2.0)*((h * numpy.conj(h)).sum()**0.5)
+                #h /= norm2
 		#if output_to_xml: row.sigmasq = norm2**2*2.0*1e46/sampleRate/9.5214e+48
 
-		norm2 = abs(numpy.dot(vec2, numpy.conj(vec2)))
-                vec2 *= numpy.sqrt(2 / norm2)
+		norm2 = abs(numpy.dot(h, numpy.conj(h)))
+                h *= numpy.sqrt(2 / norm2)
 		if output_to_xml: row.sigmasq = 1.0 * norm2 / sampleRate
-		if verbose: print>>sys.stderr, "norm2 = %e, %e" % (norm2, row.sigmasq)
-
-                # compute the SNR
-		corrold = scipy.ifft(scipy.fft(vec1) * numpy.conj(scipy.fft(vec2)))/2.0
-		corrreal = scipy.ifft(scipy.fft(vec2.real) * numpy.conj(scipy.fft(vec1.real)))
-		corrimag = scipy.ifft(scipy.fft(vec2.real) * numpy.conj(scipy.fft(vec1.imag)))
-		corr = corrreal + 1j*corrimag
-		if verbose: print>>sys.stderr, "correlation %f, length %d" % ((time.time() - start), length)
+		if verbose:
+			print>>sys.stderr, "norm2 = %e, %e" % (norm2, row.sigmasq)
+			start = time.time()
 
                 #FIXME this is actually the cross correlation between the original waveform and this approximation
-                autocorrelation_bank[tmp,:] = numpy.concatenate((corr[-(autocorrelation_length // 2):],corr[:(autocorrelation_length // 2 + 1)]))
+		autocorrelation_bank[tmp,:] = crosscorr(h, h, autocorrelation_length)/2.0
+		if verbose:
+			print>>sys.stderr, "auto correlation %f" % ((time.time() - start))
+			start = time.time()
 
-                snr = numpy.abs(corr).max()
-		snrold = numpy.abs(corrold).max()
-		autocorrelation_bank[tmp,:] /= snr
-                snrvec.append(snr)
-		if verbose: print>>sys.stderr, "row %4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %10.8f match, %10.8f match" % (tmp+1, m1,m2,len(a1), snr, snrold)
+		# compute the SNR
+		snr = abs(numpy.dot(u, numpy.conj(h)))/2.0
+		if verbose:
+			print>>sys.stderr, "dot product %f" % ((time.time() - start))
+			start = time.time()
+		snrvec.append(snr)
+		if verbose: print>>sys.stderr, "row %4.0d, m1 = %10.6f m2 = %10.6f, %4.0d filters, %10.8f match" % (tmp+1, m1,m2,len(a1), snr)
 
 
                 # store the match for later
                 if output_to_xml: row.snr = snr
-		if output_to_xml: row.chisq = snrold
 
                 # get the filter frequencies
                 fs = -1. * numpy.angle(a1) / 2 / numpy.pi # Normalised freqeuncy
@@ -292,10 +292,15 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 		root.appendChild(param.new_param('flower', types.FromPyType[float], flower))
 		root.appendChild(param.new_param('epsilon', types.FromPyType[float], epsilon))
 		root.appendChild(array.from_array('autocorrelation_bank_real', autocorrelation_bank.real))
-		root.appendChild(array.from_array('autocorrelation_bank_imag', autocorrelation_bank.imag))
+		root.appendChild(array.from_array('autocorrelation_bank_imag', -autocorrelation_bank.imag))
 
         return A, B, D, snrvec
 
+def crosscorr(a, b, autocorrelation_length = 201):
+	af = scipy.fft(a)
+	bf = scipy.fft(b)
+	corr = scipy.ifft( af * numpy.conj( bf ))
+	return numpy.concatenate((corr[-(autocorrelation_length // 2):],corr[:(autocorrelation_length // 2 + 1)]))
 
 def innerproduct(a,b):
 
