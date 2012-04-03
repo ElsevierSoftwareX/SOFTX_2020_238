@@ -36,5 +36,5 @@ dist_bin_SCRIPTS = \
 	gstlal_vetoes_from_burst_inj \
 	gstlal_inspiral_plot_likelihoods \
 	gstlal_inspiral_plotsummary \
-	gstlal_median_of_psds \
+	gstlal_ninja_median_of_psds \
 	gstlal_ninja_smooth_reference_psd
