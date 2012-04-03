@@ -374,7 +374,7 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 	# it sees a gap buffer large enough to drain its internal history,
 	# it doesn't know enough to produce a short non-gap buffer to drain
 	# its history followed by a gap buffer, it just produces one huge
-	# non-gap buffer).
+	# non-gap buffer that's mostly zeros).
 	#
 
 	head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
