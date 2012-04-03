@@ -277,7 +277,7 @@ else:
 # Get IIR banks
 #
 # FIXME: snr_threshold
-snr_threshold = 5.5
+snr_threshold = 4.0
 banks = {}
 
 for instrument, files in iir_banks.items():
