@@ -1,5 +1,6 @@
 dist_bin_SCRIPTS = \
 	gstlal_prune_duplicate_mass_pairs \
+	gstlal_harmonic_sum_psd \
 	gstlal_inspiral \
 	gstlal_inspiral_calc_likelihood \
 	gstlal_inspiral_create_prior_diststats \

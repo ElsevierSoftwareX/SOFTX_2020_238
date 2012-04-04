@@ -1,7 +1,6 @@
 dist_bin_SCRIPTS = \
 	gstlal_color_frames \
 	gstlal_fake_aligo_frames \
-	gstlal_harmonic_sum_psd \
 	gstlal_launch \
 	gstlal_play_frames \
 	gstlal_play_injections \
