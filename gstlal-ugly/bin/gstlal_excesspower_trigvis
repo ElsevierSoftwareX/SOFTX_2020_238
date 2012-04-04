@@ -31,7 +31,7 @@ parser.add_option("-F", "--high-frequency", action="store", type=float, default=
 parser.add_option("-I", "--infer-parameters", action="store_true", help="Infer the TF map dimensions from the search details in the input files.")
 parser.add_option("-S", "--snr-thresh", action="store", type=float, default=0.0, help="Plot trigggers with snr greater than that indicated.")
 parser.add_option("-m", "--mark-time", action="store", type=float, help="Mark a particular time on the map. Useful for identifying triggers in a file spanning a large time.")
-parser.add_option("-r", "--enable-event-rate", action="store_true", help="Enable the subplot with event rate versus strength for the channel.")
+parser.add_option("-r", "--enable-event-hist", action="store_true", help="Enable the subplot with event rate versus strength for the channel.")
 
 opts, args = parser.parse_args()
 
@@ -156,10 +156,8 @@ for i, chan in enumerate(channels):
 	cbl = matplotlib.colorbar.ColorbarBase( cax, cmap=matplotlib.cm.jet, norm=snr_norm, orientation="vertical" )
 	cbl.set_label( "SNR" )
 
-	if( opts.enable_event_rate ):
-	#if( opts.enable_event_hist ):
+	if( opts.enable_event_hist ):
 		sax = divider.append_axes( "right", size="50%", pad=0.7 )
-		#pyplot.plot( selected_events[::-1], range(len(selected_events)), 'r-' )
 		#pyplot.hist( selected_events**2, log=True )
 		pyplot.hist( selected_events, log=True )
 		dof = events[0].chisq_dof
