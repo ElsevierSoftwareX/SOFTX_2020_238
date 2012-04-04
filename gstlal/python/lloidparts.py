@@ -246,6 +246,8 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 				src = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
 			elif fake_data == 'AdvLIGO':
 				src = pipeparts.mkfakeadvLIGOsrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
+			elif fake_data == 'AdvVirgo':
+				src = pipeparts.mkfakeadvvirgosrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
 			else:
 				raise ValueError("fake data cannot be %s" % fake_data)
 		else:

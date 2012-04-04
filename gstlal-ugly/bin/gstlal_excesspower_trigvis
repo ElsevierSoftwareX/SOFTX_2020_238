@@ -6,6 +6,11 @@ import matplotlib.gridspec
 matplotlib.use("Agg")
 from matplotlib import pyplot
 
+from mpl_toolkits.axes_grid.inset_locator import inset_axes
+from mpl_toolkits.axes_grid import make_axes_locatable
+
+from scipy.stats import chi2, chi
+
 import numpy
 import math
 
@@ -26,6 +31,7 @@ parser.add_option("-F", "--high-frequency", action="store", type=float, default=
 parser.add_option("-I", "--infer-parameters", action="store_true", help="Infer the TF map dimensions from the search details in the input files.")
 parser.add_option("-S", "--snr-thresh", action="store", type=float, default=0.0, help="Plot trigggers with snr greater than that indicated.")
 parser.add_option("-m", "--mark-time", action="store", type=float, help="Mark a particular time on the map. Useful for identifying triggers in a file spanning a large time.")
+parser.add_option("-r", "--enable-event-rate", action="store_true", help="Enable the subplot with event rate versus strength for the channel.")
 
 opts, args = parser.parse_args()
 
@@ -85,26 +91,29 @@ else:
 
 # construct tf map extent
 fig = pyplot.figure(figsize=(10,len(channels)*5))
-gs = matplotlib.gridspec.GridSpec( nrows = len(channels), ncols = 2, width_ratios=[30,1])#, hspace=0.3 )
+#gs = matplotlib.gridspec.GridSpec( nrows = len(channels), ncols = 2, width_ratios=[30,1])#, hspace=0.3 )
+gs = matplotlib.gridspec.GridSpec( nrows = len(channels), ncols = 1 )
 
 for i, chan in enumerate(channels):
 	inst, channel = chan
-	ax = pyplot.subplot(gs[2*i])
+	ax = pyplot.subplot(gs[i])
 
 	# Extent in time
 	ax.set_xlim(viewseg[0], viewseg[1])
 	# Extent in frequency
-	# FIXME: Different Channels won't have the same ifrequencysettings
+	# FIXME: Different Channels won't have the same frequency settings
 	ax.set_ylim(opts.low_frequency, opts.high_frequency)
 
 	sys.stdout.write( "Filtering %d events... " % len(events) )
 	selected_events = [ event.snr for event in events if event.channel == channel and event.ifo == inst and event.central_freq < opts.high_frequency and event.central_freq > opts.low_frequency and event.peak_time in viewseg ]
 	print "%d events remain." % len(selected_events)
+	selected_events.sort()
+	selected_events = numpy.array( selected_events )
 
 	# what's our snr scale
 	# FIXME: look only at selected events
 	snr_norm = matplotlib.colors.Normalize( 
-		min(selected_events), max(selected_events) 
+		selected_events[0], selected_events[-1] 
 	)
 	colormap = matplotlib.cm.ScalarMappable( norm = snr_norm, cmap = matplotlib.cm.jet )
 
@@ -136,16 +145,40 @@ for i, chan in enumerate(channels):
 			# FIXME: Presumes tile energy is uniform in frequency
 			(event.central_freq - event.bandwidth/2.0) ),
 			# tile extent
-			event.duration/2.0,
+			event.duration,
 			event.bandwidth,
 			color = colormap.to_rgba( event.snr )
 		)
 		ax.add_patch( tile )
-		
 
-	ax = pyplot.subplot( gs[2*i+1] )
-	cbl = matplotlib.colorbar.ColorbarBase( ax, cmap=matplotlib.cm.jet, norm=snr_norm, orientation="vertical" )
+	divider = make_axes_locatable(ax)
+	cax = divider.append_axes( "right", size="5%", pad=0.1 )
+	cbl = matplotlib.colorbar.ColorbarBase( cax, cmap=matplotlib.cm.jet, norm=snr_norm, orientation="vertical" )
 	cbl.set_label( "SNR" )
+
+	if( opts.enable_event_rate ):
+	#if( opts.enable_event_hist ):
+		sax = divider.append_axes( "right", size="50%", pad=0.7 )
+		#pyplot.plot( selected_events[::-1], range(len(selected_events)), 'r-' )
+		#pyplot.hist( selected_events**2, log=True )
+		pyplot.hist( selected_events, log=True )
+		dof = events[0].chisq_dof
+		#dof /= 0.68 # magic number to get the actual DOF
+		tfmap_area = abs(viewseg)*(opts.high_frequency-opts.low_frequency)
+		#dist = chi2(dof).pdf( selected_events**2 )*tfmap_area/dof
+		dist = chi(dof).pdf( selected_events )*tfmap_area/dof
+		pyplot.semilogy()
+		pyplot.plot( selected_events, dist, "r-", label="$\chi_{%d}$" % dof )
+		sax.yaxis.set_ticks_position( "right" )
+		pyplot.locator_params(nbins=3, axis="x")
+		pyplot.xlabel( "Tile Amplitudes" )
+		pyplot.legend()
+
+	#inset_ax = inset_axes( ax, width="20%", height="33%", loc=4 )
+	#pyplot.locator_params(nbins=3, axis="x")
+
+	# Event rate plot
+
 
 filename = opts.output_file or "trigmap"
 if( opts.mark_time ): filename += "_%d" % int(opts.mark_time)
