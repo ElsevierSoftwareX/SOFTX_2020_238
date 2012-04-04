@@ -817,6 +817,7 @@ head = mkfirbank( pipeline, head, time_domain=False, block_stride=handler.rate )
 # This needs to be done since what is returned by mkfirbank is actually a link to the nofakedisconts element, so the fir bank is hidden
 handler.add_firbank( pipeline.get_by_name( "gstlalfirbank0" ) )
 nchannels = handler.filter_bank.shape[0]
+print "FIR bank constructed with %d %f Hz channels" % (nchannels, base_band)
 
 # TODO: We could limit the number of resolutions available and add an
 # audioundersampler here to reduce our workload, for each factor of
@@ -918,7 +919,6 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 
 	# TODO: Audio
 	if( options.stream_tfmap ):
-		print options.stream_tfmap
 		if len(options.stream_tfmap.split("=")) == 2:
 			split_opt, filename = options.stream_tfmap.split("=")
 		else:

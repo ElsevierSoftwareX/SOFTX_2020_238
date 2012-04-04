@@ -90,12 +90,12 @@ GstBuffer *gstlal_snglburst_new_double_buffer_from_peak(struct gstlal_double_pea
 		GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 
 	/* set the offset */
-        GST_BUFFER_OFFSET(srcbuf) = offset;
-        GST_BUFFER_OFFSET_END(srcbuf) = offset + length;
+  GST_BUFFER_OFFSET(srcbuf) = offset;
+  GST_BUFFER_OFFSET_END(srcbuf) = offset + length;
 
-        /* set the time stamps */
-        GST_BUFFER_TIMESTAMP(srcbuf) = time;
-        GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
+  /* set the time stamps */
+  GST_BUFFER_TIMESTAMP(srcbuf) = time;
+  GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
 
 	/* FIXME do error checking */
 	if (srcbuf && size) {

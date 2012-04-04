@@ -19,8 +19,8 @@ from glue.ligolw import lsctables
 from gstlal.pipeutil import gst, mkelem
 from gstlal.pipeparts import *
 
-def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0, overlap=0.5, corr=None):
-	"""Build a set of individual channel Hann window frequency filters (with bandwidth 'band') and then transfer them into the time domain as a matrix. The nth row of the matrix contains the time-domain filter for the flow+n*band*overlap frequency channel. The overlap is the fraction of the channel which overlaps with the previous channel. If filter_len is not set, then it defaults to nominal minimum width needed for the bandwidth requested."""
+def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0, corr=None):
+	"""Build a set of individual channel Hann window frequency filters (with bandwidth 'band') and then transfer them into the time domain as a matrix. The nth row of the matrix contains the time-domain filter for the flow+n*band frequency channel. The overlap is the fraction of the channel which overlaps with the previous channel. If filter_len is not set, then it defaults to nominal minimum width needed for the bandwidth requested."""
 
 	if fhigh > rate/2:
 		print >> sys.stderr, "WARNING: high frequency requested is higher than sampling rate / 2, adjusting to match."
@@ -38,7 +38,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		exit(-1)
 	
 	# define number of band window
-	bands = int( (fhigh - flow) / b_wind / overlap ) - 1
+	bands = int( (fhigh - flow) / b_wind ) - 1
 
 	# Build spectral correlation function
 	# NOTE: The default behavior is relative to the Hann window used in the
@@ -73,7 +73,8 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		# Create the EP filter in the FD
 		h_wind = lalburst.XLALCreateExcessPowerFilter( 
 			#channel_flow =
-			flow + band*b_wind*overlap,
+		# The XLAL function's flow corresponds to the left side FWHM, not the near zero point. Thus, the filter *actually* begins at f_cent - band and ends at f_cent + band, and flow = f_cent - band/2 and fhigh = f_cent + band/2
+			(flow + band/2.0) + band*b_wind,
 			#channel_width =
 			b_wind, 
 			#psd =
@@ -261,17 +262,20 @@ def create_bank_xml(flow, fhigh, band, duration, detector=None):
 	"flow", "fhigh", "bandwidth", "tfvolume", "hrss", "event_id"])
 	bank.sync_next_id()
 
-	cfreq = flow
-	while cfreq < fhigh:
+	# The first frequency band actually begins at flow, so we offset the central frequency accordingly
+	cfreq = flow + band
+	while cfreq + band <= fhigh:
 		row = bank.RowType()
 		row.search = u"gstlal_excesspower"
 		row.duration = duration
-		row.bandwidth = 2*band
+		#row.bandwidth = 2*band
+		row.bandwidth = band
 		row.peak_frequency = cfreq
 		row.central_freq = cfreq
-		row.flow = cfreq - band
-		row.fhigh = cfreq + band
+		row.flow = cfreq - band / 2
+		row.fhigh = cfreq + band / 2
 		row.ifo = detector
+		row.chisq_dof = 2*band*duration
 
 		# Stuff that doesn't matter
 		row.peak_time_ns = 0
@@ -286,7 +290,6 @@ def create_bank_xml(flow, fhigh, band, duration, detector=None):
 		row.hrss = 0
 		row.snr = 0
 		row.chisq = 0
-		row.chisq_dof = 0
 		row.confidence = 0
 		row.event_id = bank.get_next_id()
 		row.channel = "awesome full of GW channel"
@@ -294,7 +297,7 @@ def create_bank_xml(flow, fhigh, band, duration, detector=None):
 		row.process_id = ilwd.get_ilwdchar( u"process:process_id:0" )
 
 		bank.append( row )
-		cfreq += band * 0.5 # overlap
+		cfreq += band #band is half the full width of the window, so this is 50% overlap
 
 	xmldoc.childNodes[0].appendChild(bank)
 	return xmldoc
