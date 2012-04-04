@@ -56,15 +56,18 @@ if( opts.gps_end is None ):
 	viewseg = segments.segment( viewseg[0], max([e.peak_time for e in events]) )
 else: viewseg = segments.segment( viewseg[0], opts.gps_end )
 
-if( instruments is None ):
+if( instruments is None and channels is None ):
 	instruments = {}
 	for event in events:
 		instruments[event.ifo] = None
 	instruments = instruments.keys()
+if( instruments is None ):
+	instruments = {}
+	for channel in channels:
+		instruments[channel.split(":")[0]] = None
+	instruments = instruments.keys()
 
 print "Examining instruments: %s" % str(instruments)
-sys.stdout.write( "Filtering %d events... " % len(events) )
-print "%d events remain." % len(events)
 
 if( channels is None ):
 	channels = {}
@@ -72,9 +75,13 @@ if( channels is None ):
 		if( event.ifo in instruments ):
 			channels[(event.ifo, event.channel)] = None
 	channels = channels.keys()
-
-channels.sort()
-print "Looking at channel list:\n", "\n".join( map(lambda cl: ":".join(cl), channels) )
+	channels.sort()
+	print "Looking at channel list:\n", "\n".join( map(lambda cl: ":".join(cl), channels) )
+else:
+	# TODO: Fix this -- it's stupid
+	channels.sort()
+	print "Looking at channel list:\n", "\n".join( channels )
+	channels = [ c.split(":") for c in channels ]
 
 # construct tf map extent
 fig = pyplot.figure(figsize=(10,len(channels)*5))
@@ -90,7 +97,9 @@ for i, chan in enumerate(channels):
 	# FIXME: Different Channels won't have the same ifrequencysettings
 	ax.set_ylim(opts.low_frequency, opts.high_frequency)
 
+	sys.stdout.write( "Filtering %d events... " % len(events) )
 	selected_events = [ event.snr for event in events if event.channel == channel and event.ifo == inst and event.central_freq < opts.high_frequency and event.central_freq > opts.low_frequency and event.peak_time in viewseg ]
+	print "%d events remain." % len(selected_events)
 
 	# what's our snr scale
 	# FIXME: look only at selected events
@@ -127,8 +136,8 @@ for i, chan in enumerate(channels):
 			# FIXME: Presumes tile energy is uniform in frequency
 			(event.central_freq - event.bandwidth/2.0) ),
 			# tile extent
-			event.duration,
-			event.bandwidth/2.0,
+			event.duration/2.0,
+			event.bandwidth,
 			color = colormap.to_rgba( event.snr )
 		)
 		ax.add_patch( tile )
