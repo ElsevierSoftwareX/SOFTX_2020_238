@@ -21,7 +21,9 @@ parser.add_option("--injections", metavar = "filename", help = "Set the name of 
 parser.add_option("--instrument", metavar = "name", help = "Set the name of the instrument to analyze, e.g. \"H1\" (required).")
 parser.add_option("--channel-name", metavar = "name", default = "FAKE-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"FAKE-STRAIN\".")
 parser.add_option("--frame-cache", metavar = "filename", help = "If an additional set of frames should be added to the data stream, specify the path to the frame cache.")
+parser.add_option("--frame-type", metavar = "name", help = "Specify the non-instrumental part of the frame type. The full frame type will be constructed by prepending the instrument.")
 parser.add_option("--output-channel-name", metavar = "name", help = "If an additional frame cache is requested, indicate the channel name to extract.")
+parser.add_option("--output-path", metavar = "name", help = "Path to output frame files.")
 parser.add_option("--fake-data", metavar = "(white|silence|LIGO|AdvLIGO)", help = "Set the type of noise.")
 parser.add_option("--duration", metavar = "s", default = 64, type = "int", help = "Set the duration of the output frame files")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
@@ -30,6 +32,9 @@ options, filenames = parser.parse_args()
 
 if( options.fake_data and options.frame_cache ):
 	exit( "Can't have both fake data and frame cache" )
+
+if( options.frame_type is None ):
+	exit( "Frame type argument is required." )
 
 seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
 
@@ -43,16 +48,22 @@ head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, options.instrument, lloid
 if options.output_channel_name is not None:
 	# Correct the channel name
 	head = pipeparts.mktaginject(pipeline, head, "instrument=%s,channel-name=%s,units=strain" % (options.instrument,options.output_channel_name))
-	outpath = options.instrument+"-"+options.output_channel_name
+
+if options.output_path is not None:
+	outpath = options.output_path + "/" + options.instrument
 else:
-	outpath = options.instrument+"-"+options.channel_name
+	outpath = options.instrument
 
 head = pipeparts.mkprogressreport(pipeline, head, "frames")
+
 try:
-	os.mkdir(outpath)
+	os.makedirs(outpath)
 except:
 	pass
-pipeparts.mkframesink(pipeline, head, path=outpath, sync=False, async=True, frame_type=options.instrument, duration = options.duration)
+
+frametype = "%s_%s" % (options.instrument, options.frame_type)
+
+pipeparts.mkframesink(pipeline, head, path=outpath, sync=False, async=True, duration = options.duration, frame_type=frametype, dir_digits=5)
 
 pipeline.set_state(gst.STATE_PAUSED)
 pipeline.set_state(gst.STATE_PLAYING)
