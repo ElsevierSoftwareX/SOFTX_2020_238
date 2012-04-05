@@ -382,8 +382,7 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 	head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
 
 	#
-	# construct whitener.  this element must be followed by a
-	# nofakedisconts element.
+	# construct whitener.
 	#
 
 	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True)
@@ -422,7 +421,6 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 
 		head.connect_after("notify::f-nyquist", psd_resolution_changed, psd)
 		head.connect_after("notify::delta-f", psd_resolution_changed, psd)
-	head = pipeparts.mknofakedisconts(pipeline, head)
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max(rates)))
 
 	#

@@ -1298,15 +1298,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		goto done;
 
 	/*
-	 * check for no-op
-	 */
-
-	if(!outsamples) {
-		result = GST_BASE_TRANSFORM_FLOW_DROPPED;
-		goto done;
-	}
-
-	/*
 	 * set output metadata
 	 */
 
