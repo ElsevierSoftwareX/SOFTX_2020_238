@@ -364,7 +364,7 @@ class DistributionsStats(object):
 			binarr.array /= binarr.array.sum()
 			binarr.array *= n
 
-	def add_foreground_prior(self, n = 1., prefactors_range = (0.01, 0.5), df = 16, verbose = False):
+	def add_foreground_prior(self, n = 1., prefactors_range = (0.02, 0.5), df = 40, verbose = False):
 		# FIXME:  for maintainability, this should be modified to
 		# use the .add_injection() method of the .raw_distributions
 		# attribute, but that will slow this down
