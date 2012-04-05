@@ -1,3 +1,0 @@
-Please modify the paths in the gstlal_inspiral.ini file [condor] section to point to your installation.
-
-Then you should be able to copy the contents of this directory somewhere and run "make"
