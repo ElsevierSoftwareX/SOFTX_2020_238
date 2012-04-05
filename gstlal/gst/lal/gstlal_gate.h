@@ -2,7 +2,7 @@
  * An element to flag buffers in a stream as silence or not based on the
  * value of a control input.
  *
- * Copyright (C) 2008--2012  Kipp Cannon, Chad Hanna
+ * Copyright (C) 2008  Kipp Cannon, Chad Hanna
  *
  *  This program is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License as published by the
@@ -63,7 +63,7 @@ typedef struct _GSTLALGate {
 	gboolean control_eos;
 	gboolean sink_eos;
 	GstClockTime t_sink_head;
-	GArray *control_segments;
+	GQueue *control_queue;
 	GCond *control_queue_head_changed;
 	gdouble (*control_sample_func)(const gpointer, guint64);
 
