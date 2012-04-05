@@ -26,10 +26,10 @@ tisi.xml :
 	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:3.14159:3.14159 tisi.xml
 
 dag : vetoes.xml segments.xml frame.cache tisi.xml
-	gstlal_s5_pbh_trigger_pipe --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml  --frame-segments-name RESULT --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE) --vetoes vetoes.xml --time-slide-file tisi.xml
+	gstlal_s5_pbh_trigger_pipe --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml  --frame-segments-name datasegments --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE) --vetoes vetoes.xml --time-slide-file tisi.xml
 
 injections : vetoes.xml segments.xml frame.cache injections.xml
-	gstlal_s5_pbh_trigger_pipe --injections injections.xml --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name RESULT --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE) --vetoes vetoes.xml
+	gstlal_s5_pbh_trigger_pipe --injections injections.xml --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE) --vetoes vetoes.xml
 
 H1vetoes.xml:
 	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=H1:Injection --result-name=vetoes > H1vetoes.xml
@@ -43,23 +43,24 @@ L1vetoes.xml:
 	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=L1:Injection --result-name=vetoes > L1vetoes.xml
 	ligolw_segments_compat L1vetoes.xml
 
-H1segmentspadded.xml:
-	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=H1:Science  > H1segments.xml
-	ligolw_segments_compat H1segments.xml
-	gstlal_s5_pbh_segments_trim H1segments.xml $(TRIM) H1segmentspadded.xml
-
-H2segmentspadded.xml:
-	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=H2:Science > H2segments.xml
-	ligolw_segments_compat H2segments.xml
-	gstlal_s5_pbh_segments_trim H2segments.xml $(TRIM) H2segmentspadded.xml
-
-L1segmentspadded.xml:
-	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=L1:Science > L1segments.xml
-	ligolw_segments_compat L1segments.xml
-	gstlal_s5_pbh_segments_trim L1segments.xml $(TRIM) L1segmentspadded.xml
 
 vetoes.xml: H1vetoes.xml H2vetoes.xml L1vetoes.xml
 	ligolw_add H1vetoes.xml H2vetoes.xml L1vetoes.xml > vetoes.xml
+
+H1segmentspadded.xml:
+	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=H1:Science --result-name=datasegments > H1segments.xml
+	ligolw_segments_compat H1segments.xml
+	gstlal_segments_trim H1segments.xml --trim $(TRIM) --output H1segmentspadded.xml
+
+H2segmentspadded.xml:
+	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=H2:Science --result-name=datasegments > H2segments.xml
+	ligolw_segments_compat H2segments.xml
+	gstlal_segments_trim H2segments.xml --trim $(TRIM) --output H2segmentspadded.xml
+
+L1segmentspadded.xml:
+	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=L1:Science --result-name=datasegments > L1segments.xml
+	ligolw_segments_compat L1segments.xml
+	gstlal_segments_trim L1segments.xml --trim $(TRIM) --output L1segmentspadded.xml
 
 frame.H1.cache:
 	ligo_data_find -o H -t H1_RDS_C03_L2 -l  -s $(START) -e $(STOP) --url-type file > frame.H1.cache
