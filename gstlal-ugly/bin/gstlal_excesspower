@@ -129,6 +129,7 @@ class EPHandler( LLOIDHandler ):
 		self.outfile = "test.xml"
 		self.make_output_table()
 		self.snr_thresh = 5.5
+		self.fap = None
 		self.dump_frequency = 600 # s
 		self.max_events = 1e3
 		self.time_since_dump = self.start
@@ -796,7 +797,7 @@ if( inj_loc and verbose ):
 	head = mkprogressreport( pipeline, head, "injection stream" )
 
 head = whitener = mkwhiten( pipeline, head )
-head = mknofakedisconts( pipeline, head )
+head = mkqueue( pipeline, head )
 
 # Diagnostic plot
 if( diagnostics ):
@@ -827,7 +828,7 @@ if( verbose ):
 	head = mkprogressreport( pipeline, head, "FIR bank stream" )
 
 # TODO: Uncomment here
-#head = postfirtee = mktee( pipeline, mkqueue( pipeline, head ) )
+#head = postfirtee = mkqueue( pipeline, mktee( pipeline, head ) )
 #####
 
 if( diagnostics ):
@@ -843,15 +844,6 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	#head = postfirtee
 	#######
 
-	head = matmixer = mkmatrixmixer( pipeline, head )
-	handler.add_matmixer( matmixer, res_level )
-
-	head = mkprogressreport( pipeline, head, "post matrix mixer %d" % res_level )
-
-	if( diagnostics ):
-		head = postmmtee = mktee( pipeline, mkqueue( pipeline, head ) )
-		mknxydumpsink( pipeline, postmmtee, "postmatmix_res_%d.txt" % res_level )
-
 	head = mkgeneric( pipeline, head, "lal_audioundersample" )
 
 	band = base_band * 2**res_level
@@ -859,10 +851,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	chan = numpy.ceil( nchannels / 2.0**res_level )
 
 	# The undersample_rate for band = R/2 is => sample_rate (passthrough)
-	# TODO: Check this
 	undersamp_rate = 2 * band
-	# TODO: remove width and channels
-	#head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d,width=64,channels=%d" % (undersamp_rate, chan) )
 	head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate )
 
 	if( diagnostics ):
@@ -874,6 +863,15 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 			"Undersampled stream level %d" % res_level
 		)
 
+	head = matmixer = mkmatrixmixer( pipeline, head )
+	handler.add_matmixer( matmixer, res_level )
+
+	head = mkprogressreport( pipeline, head, "post matrix mixer %d" % res_level )
+
+	if( diagnostics ):
+		head = postmmtee = mktee( pipeline, mkqueue( pipeline, head ) )
+		mknxydumpsink( pipeline, postmmtee, "postmatmix_res_%d.txt" % res_level )
+
 	head = mkgeneric( pipeline, head, "pow" )
 	head.set_property( "exponent", 2 )
 
@@ -883,7 +881,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		)
 
 	# TODO: Uncomment here
-	#head = mktee( pipeline, head )
+	#head = mkqueue( pipeline, head )
 	#####
 
 	ndof = 2 # samples -- min number
@@ -891,8 +889,6 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	# max_samp = int(handler.max_duration*rate)
 	#while duration <= max_samp:
 		#duration = duration << 1
-
-	#head = mkqueue( pipeline, head )
 
 	# Multi channel FIR filter -- used to add together frequency bands into tiles
 	# TODO: Restore this when buffer dropping is fixed
@@ -903,7 +899,6 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	)
 	"""
 
-	# factor of 0.65 goes here - 2 dof -- not chisquared
 	if( diagnostics ):
 		head = postdurtee = mktee( pipeline, mkqueue( pipeline, head ) )
 		mknxydumpsink( pipeline, postdurtee, "postdur_res_%d_%d.txt" % (res_level, ndof) )
@@ -914,8 +909,9 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 				(res_level, ndof) 
 		)
 
-	head = mkgeneric( pipeline, head, "pow" )
-	head.set_property( "exponent", 0.5 )
+	# Reenable for SNR stream
+	#head = mkgeneric( pipeline, head, "pow" )
+	#head.set_property( "exponent", 0.5 )
 
 	# TODO: Audio
 	if( options.stream_tfmap ):
@@ -938,12 +934,12 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		bank = handler.build_filter_xml( res_level )
 	)
 
-	"""
-	fap = options.fap
-	snr_thresh = ep_utils.determine_thresh_from_fap(fap, ndof)
-	"""
-	# TODO: Determine this from desired FAP
-	head.set_property( "snr-thresh", handler.snr_thresh )
+	if( handler.fap is not None ):
+		# Still needs magic number... or use the EP version
+		snr_thresh = ep_utils.determine_thresh_from_fap(fap, ndof)
+	else:
+		snr_thresh = handler.snr_thresh**2
+	head.set_property( "snr-thresh", snr_thresh )
 
 	if( verbose ):
 		head = mkprogressreport( pipeline, head, 
