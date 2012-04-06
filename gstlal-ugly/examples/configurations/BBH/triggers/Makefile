@@ -1,11 +1,12 @@
 # controls triggers
-START = 871147452
-STOP =  871247452
+START = 869622409
+STOP =  869635354
 PSD_FILE = ../bank/reference_psd.xml.gz
 H1_BANK_CACHE = ../bank/H1_bank.cache
 H2_BANK_CACHE = ../bank/H2_bank.cache
 L1_BANK_CACHE = ../bank/L1_bank.cache
-
+CLUSTER_SQL = ../bank/simplify_and_cluster.sql
+INJ_CLUSTER_SQL = ../bank/inj_simplify_and_cluster.sql
 
 # controls segments and injections
 # Change seed each week
@@ -29,10 +30,10 @@ tisi.xml :
 	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:3.14159:3.14159 tisi.xml
 
 dag : vetoes.xml segments.xml frame.cache tisi.xml
-	gstlal_s5_pbh_trigger_pipe --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml  --frame-segments-name datasegments --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE) --vetoes vetoes.xml --time-slide-file tisi.xml --control-peak-time 4 --num-banks $(NUMBANKS) --fir-stride 4
+	gstlal_s5_pbh_trigger_pipe --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml  --frame-segments-name datasegments --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE) --vetoes vetoes.xml --time-slide-file tisi.xml --control-peak-time 4 --num-banks $(NUMBANKS) --fir-stride 4 --cluster-sql-file $(CLUSTER_SQL)
 
 injections : vetoes.xml segments.xml frame.cache injections.xml
-	gstlal_s5_pbh_trigger_pipe --injections injections.xml --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE) --vetoes vetoes.xml --control-peak-time 4 --num-banks $(NUMBANKS) --fir-stride 4
+	gstlal_s5_pbh_trigger_pipe --injections injections.xml --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments --bank-cache H1=$(H1_BANK_CACHE),H2=$(H2_BANK_CACHE),L1=$(L1_BANK_CACHE) --vetoes vetoes.xml --control-peak-time 4 --num-banks $(NUMBANKS) --fir-stride 4 --cluster-sql-file $(CLUSTER_SQL) --injection-sql-file $(INJ_CLUSTER_SQL)
 
 H1vetoes.xml:
 	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=H1:Injection --result-name=vetoes > H1vetoes.xml
@@ -78,6 +79,7 @@ frame.cache: frame.H1.cache frame.H2.cache frame.L1.cache
 
 segments.xml: H1segmentspadded.xml H2segmentspadded.xml L1segmentspadded.xml
 	ligolw_add --output segments.xml H1segmentspadded.xml H2segmentspadded.xml L1segmentspadded.xml
+	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segments.xml
 
 injections.xml:
 	lalapps_inspinj \
@@ -106,4 +108,4 @@ injections.xml:
 		--disable-spin
 
 realclean :
-	rm -r *.sub *.dag* *.cache *.sh logs *.xml
+	rm -r *.sub *.dag* *.cache *.sh logs *.xml *.gz *.sqlite
