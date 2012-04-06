@@ -98,7 +98,6 @@ class EPHandler( LLOIDHandler ):
 		self.rate = 2048
 		#self.rate = 4096
 		self.max_level = 1
-		self.frequency_units = "Hz"
 
 		# Defaults -- filtering
 		self.filter_len = 2*int(2*self.rate/self.base_band)
@@ -148,18 +147,6 @@ class EPHandler( LLOIDHandler ):
 		self.bus.connect( "message", self.process_message )
 
 		super(type(self), self).__init__(mainloop, pipeline)
-
-	def set_frequency_units( self, units = "Hz" ):
-		"""
-		Since gstreamer can't handle rates < 1 Hz, this sets the handler to reinterpret the units of frequency (and thus time) when doing calculations in involving either. The valid unit choices are enumerated in GSTLAL_VALID_FREQ_UNITS.
-		"""
-
-		try: 
-			val = GSTLAL_VALID_FREQ_UNITS[units]
-			self.frequency_units = units
-		except KeyError:
-			exit( "Invalid frequency unit selection: %s" % units )
-		return val
 
 	def set_trigger_time_and_action( self, trig_seg, action=["psd"] ):
 		"""
@@ -462,20 +449,6 @@ def on_spec_corr_change( elem, pspec, hand ):
 	if( hand.psd != None ):
 		hand.rebuild_everything()
 
-def on_rate_changed( pad, pspec, hand ):
-	srccaps = pad.get_caps()
-	oldrate = srccaps[0]["rate"]
-	# or
-	# oldrate = srccaps.structure["rate"]
-	newrate = int(oldrate / GSTLAL_VALID_FREQ_UNITS[hand.frequency_units] + 0.5)
-	print >>sys.stderr, "Non-standard units (%s) requested. Converting %d Hz to %d %s" % (hand.frequency_units, oldrate, newrate, hand.frequency_units )
-	newcaps = gst.element_factory_make( "capsfilter", "audio/x-raw-float,rate=%d" % newrate )
-	handler.pipeline.add( newcaps )
-	othrpad = pad.get_peer()
-	pad.unlink( othrpad )
-	pad.get_parent_element().link( newcaps )
-	newcaps.link( othrpad.get_parent_element() )
-
 def get_triggers(elem, handler, ndof):
 
 	buffer = elem.emit("pull-buffer")
@@ -485,6 +458,8 @@ def get_triggers(elem, handler, ndof):
 
 	for row in sngl_bursts_from_buffer(buffer):
 		row.duration *= ndof
+		if( options.compat ):
+			row.snr = row.snr / ndof - 1
 		handler.triggers.append( row )
 	
 	handler.stop = (buffer.timestamp + buffer.duration)*1e-9
@@ -519,13 +494,13 @@ parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="
 parser.add_option("-n", "--channel-name", dest="channame", action="store", help="Specify the channel name. Note that this will override the specification in the ini file (if any). This is useful if you want to run the same analysis on channels with the same characterisitics.")
 parser.add_option("-w", "--channel-width", dest="nbyte", action="store", type=int, help="Specify the channel width in bits (default = 64)", default=64)
 parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data.")
-parser.add_option("-R", "--frequency-units", dest="frequency_units", action="store", default="Hz", help="Units in which frequency (and correspondingly, time) will be expressed in. Use this when the sampling rate is near 1 Hz to avoid gstreamer's inability to handle rates < 1. Valid choices are %s" % ", ".join( GSTLAL_VALID_FREQ_UNITS.keys() ) )
 parser.add_option("-D", "--data-source", dest="data_source", action="store", help="Data source to read from. Valid options are gwffile,lldata,whitedata,fakeLIGO,fakeadvLIGO. One is required. If gwffile is selected, then a cache file should also be provided. If whitedata, fakeLIGO, or fakeadvLIGO is selected, then a sample rate must also be provided.")
 parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Encode the time frequency map to video as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. If the option is instead a filename, the video will be sent to that name. Prepending \"keyframe=\" to the filename will start a new video every time a keyframe is hit.")
 parser.add_option("-u", "--unicorns", dest="unicorns", action="store", help="Reveal hidden unicorns in data. The argument to this option determines how strong said unicorns are.", default=None)
 parser.add_option("-s", "--gps-start", dest="gps_start", action="store", type="float", help="Seek to gps time before beginning analysis.", default=None)
 parser.add_option("-e", "--gps-end", dest="gps_end", action="store", type="float", help="End the analysis at this gps time.", default=None)
 parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_false", help="Don't record triggers.", default=False)
+parser.add_option("-c", "--lalapps-power-compatibility", dest="compat", action="store_true", default=False, help="Output trigger information which conforms to the lalapps_power conventions.")
 
 (options, args) = parser.parse_args()
 
@@ -573,7 +548,6 @@ pipeline = gst.Pipeline( "gstlal_excesspower" )
 mainloop = gobject.MainLoop()
 handler = EPHandler(mainloop, pipeline)
 
-handler.set_frequency_units( options.frequency_units )
 handler.output = not options.disable_triggers
 handler.rate = options.sample_rate
 
@@ -772,7 +746,7 @@ if( diagnostics ):
 # Convert to 64 bit
 head = mkcapsfilter( pipeline, mkaudioconvert( pipeline, head), "audio/x-raw-float,width=64" )
 # Data conditioning
-head = mkcapsfilter( pipeline, mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % (handler.rate / GSTLAL_VALID_FREQ_UNITS[handler.frequency_units]) )
+head = mkcapsfilter( pipeline, mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % handler.rate )
 
 if( unicorns ):
 	# TODO: Link to lalsim to get the unicorn
@@ -909,7 +883,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 				(res_level, ndof) 
 		)
 
-	# Reenable for SNR stream
+	# Reenable for amplitude SNR stream
 	#head = mkgeneric( pipeline, head, "pow" )
 	#head.set_property( "exponent", 0.5 )
 
@@ -960,11 +934,6 @@ whitener.connect_after( "notify::mean-psd", on_psd_change, handler )
 # Handle spectral correlation changes
 # TODO: Make sure this doesn't have to be in the mm loop
 whitener.connect_after( "notify::spectral-correlation", on_spec_corr_change, handler )
-try:
-	if( handler.frequency_units != "Hz" and framesrc ):
-		framesrc.get_pad("src").connect_after( "notify::caps", on_rate_changed, handler )
-except NameError:
-	exit("Rate units change requested, but this is not yet implemented for live sources, only frames.")
 
 # Experimental real time command line handling
 signal.signal( signal.SIGUSR1, handler.cmd_line )
