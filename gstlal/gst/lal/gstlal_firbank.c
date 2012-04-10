@@ -1364,6 +1364,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		} else
 			channels = 0;
 		element->fir_matrix = gstlal_gsl_matrix_from_g_value_array(g_value_get_boxed(value));
+		g_assert(element->fir_matrix != NULL);
 
 		/*
 		 * if the number of channels has changed, force a caps
