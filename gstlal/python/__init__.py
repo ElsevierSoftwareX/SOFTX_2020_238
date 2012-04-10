@@ -29,4 +29,4 @@ __version__ = "FIXME"
 __date__ = "FIXME"
 
 
-__all__ = []
+__all__ = ["fftw"]
