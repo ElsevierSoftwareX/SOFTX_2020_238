@@ -3,8 +3,8 @@
 #
 
 
-AC_INIT([gstlal],[0.2.0],[gstlal-discuss@gravity.phys.uwm.edu],[gstlal])
-AC_COPYRIGHT([Copyright (C) 2008--2011 Kipp Cannon])
+AC_INIT([gstlal],[0.3.0],[gstlal-discuss@gravity.phys.uwm.edu],[gstlal])
+AC_COPYRIGHT([Copyright (C) 2008--2012 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
@@ -205,7 +205,7 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-PKG_CHECK_MODULES([LAL], [lal >= 6.6.0 lalframe >= 1.0.3 lalmetaio >= 1.0.2 lalsupport lalsimulation >= 0.1.0 lalburst >= 1.1.0 lalinspiral >= 1.2.0])
+PKG_CHECK_MODULES([LAL], [lal >= 6.7.0 lalframe >= 1.0.5 lalmetaio >= 1.0.4 lalsupport lalsimulation >= 0.2.0 lalburst >= 1.1.2 lalinspiral >= 1.3.0])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
 

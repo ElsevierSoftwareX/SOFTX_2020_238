@@ -6,8 +6,8 @@ Release: 1.lscsoft
 Summary: GSTLAL Experimental Supplements
 License: GPL
 Group: LSC Software/Data Analysis
-Requires: gstlal >= 0.2.0 python >= 2.6 python-pylal fftw >= 3 %{gstreamername} >= 0.10.32 %{gstreamername}-plugins-base >= 0.10.32 %{gstreamername}-plugins-good >= 0.10.27 gstreamer_lscsoft-python >= 0.10.21 pygobject2 numpy lal >= 6.6.0 lalframe >= 1.0.3 lalmetaio >= 1.0.2 lalsimulation >= 0.1.0 lalburst >= 1.1.0 lalinspiral >= 1.2.0 gsl ldas-tools-framecpp >= 1.19.16 gds-core >= 2.15.6 gds-crtools >= 2.15.6 cyrus-sasl-lib
-BuildRequires: gstlal-devel >= 0.2.0 python-devel >= 2.6 fftw-devel >= 3 %{gstreamername}-devel >= 0.10.32 %{gstreamername}-plugins-base-devel >= 0.10.32 pygobject2-devel lal-devel >= 6.6.0 lalframe-devel >= 1.0.3 lalmetaio-devel >= 1.0.2 lalsimulation-devel >= 0.1.0 lalburst-devel >= 1.1.0 lalinspiral-devel >= 1.2.0 gsl-devel ldas-tools-framecpp-devel >= 1.19.16 gds-devel >= 2.15.6 cyrus-sasl-devel
+Requires: gstlal >= 0.3.0 python >= 2.6 python-pylal fftw >= 3 %{gstreamername} >= 0.10.32 %{gstreamername}-plugins-base >= 0.10.32 %{gstreamername}-plugins-good >= 0.10.27 gstreamer_lscsoft-python >= 0.10.21 pygobject2 numpy lal >= 6.7.0 lalframe >= 1.0.5 lalmetaio >= 1.0.4 lalsimulation >= 0.2.0 lalburst >= 1.1.2 lalinspiral >= 1.3.0 gsl ldas-tools-framecpp >= 1.19.16 gds-core >= 2.15.6 gds-crtools >= 2.15.6 cyrus-sasl-lib
+BuildRequires: gstlal-devel >= 0.3.0 python-devel >= 2.6 fftw-devel >= 3 %{gstreamername}-devel >= 0.10.32 %{gstreamername}-plugins-base-devel >= 0.10.32 pygobject2-devel lal-devel >= 6.7.0 lalframe-devel >= 1.0.5 lalmetaio-devel >= 1.0.4 lalsimulation-devel >= 0.2.0 lalburst-devel >= 1.1.2 lalinspiral-devel >= 1.3.0 gsl-devel ldas-tools-framecpp-devel >= 1.19.16 gds-devel >= 2.15.6 cyrus-sasl-devel
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
 Packager: Xavier Amador <xavier.amador@gravity.phys.uwm.edu>
@@ -26,7 +26,7 @@ gstlal-based applications.
 %package devel
 Summary: Files and documentation needed for compiling gstlal-based plugins and programs.
 Group: LSC Software/Data Analysis
-Requires: %{name} = %{version} gstlal-devel >= 0.2.0 python-devel >= 2.6 fftw-devel >= 3 %{gstreamername}-devel >= 0.10.32 %{gstreamername}-plugins-base-devel >= 0.10.32 pygobject2-devel lal-devel >= 6.6.0 lalframe-devel >= 1.0.3 lalmetaio-devel >= 1.0.2 lalsimulation-devel >= 0.1.0 lalburst-devel >= 1.1.0 lalinspiral-devel >= 1.2.0 gsl-devel
+Requires: %{name} = %{version} gstlal-devel >= 0.3.0 python-devel >= 2.6 fftw-devel >= 3 %{gstreamername}-devel >= 0.10.32 %{gstreamername}-plugins-base-devel >= 0.10.32 pygobject2-devel lal-devel >= 6.7.0 lalframe-devel >= 1.0.5 lalmetaio-devel >= 1.0.4 lalsimulation-devel >= 0.2.0 lalburst-devel >= 1.1.2 lalinspiral-devel >= 1.3.0 gsl-devel
 %description devel
 This package contains the files needed for building gstlal-ugly based
 plugins and programs.
