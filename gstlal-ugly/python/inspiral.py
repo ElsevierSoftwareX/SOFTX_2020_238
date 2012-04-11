@@ -584,11 +584,6 @@ class Data(object):
 
 			# update likelihood snapshot if needed
 			if self.assign_likelihoods and (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
-				#First time through, pick up a time stamp, finish the distributions, set the function
-				if self.likelihood_snapshot_timestamp is None:
-					self.likelihood_snapshot_timestamp = timestamp
-					self.distribution_stats.finish(verbose = self.verbose)
-					self.stream_thinca.set_likelihood_data(self.distribution_stats.smoothed_distributions, self.distribution_stats.likelihood_params_func)
 				# generate smoothed snapshot of raw counts
 				self.distribution_stats.finish(verbose = self.verbose)
 				self.likelihood_snapshot_timestamp = timestamp
