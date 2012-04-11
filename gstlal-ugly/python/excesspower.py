@@ -42,6 +42,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 	
 	# define number of band window
 	bands = int( (fhigh - flow) / b_wind ) - 1
+	print bands
 
 	# FFTW requires a thread lock for plans
 	gstlal.fftw.lock()
@@ -78,7 +79,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		h_wind = lalburst.XLALCreateExcessPowerFilter( 
 			#channel_flow =
 		# The XLAL function's flow corresponds to the left side FWHM, not the near zero point. Thus, the filter *actually* begins at f_cent - band and ends at f_cent + band, and flow = f_cent - band/2 and fhigh = f_cent + band/2
-			(flow + band/2.0) + band*b_wind,
+			(flow + b_wind/2.0) + band*b_wind,
 			#channel_width =
 			b_wind, 
 			#psd =
