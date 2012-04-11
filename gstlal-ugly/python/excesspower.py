@@ -19,6 +19,8 @@ from glue.ligolw import lsctables
 from gstlal.pipeutil import gst, mkelem
 from gstlal.pipeparts import *
 
+import gstlal.fftw
+
 def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0, corr=None):
 	"""Build a set of individual channel Hann window frequency filters (with bandwidth 'band') and then transfer them into the time domain as a matrix. The nth row of the matrix contains the time-domain filter for the flow+n*band frequency channel. The overlap is the fraction of the channel which overlaps with the previous channel. If filter_len is not set, then it defaults to nominal minimum width needed for the bandwidth requested."""
 
@@ -40,35 +42,36 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 	# define number of band window
 	bands = int( (fhigh - flow) / b_wind ) - 1
 
-	# Build spectral correlation function
-	# NOTE: The default behavior is relative to the Hann window used in the
-	# filter bank and NOT the whitener. It's just not right. Fair warning.
-	# TODO: Is this default even needed anymore?
-	if( corr == None ):
-		wfftplan = XLALCreateForwardREAL8FFTPlan( filter_len, 1 )
-		spec_corr = lalburst.XLALREAL8WindowTwoPointSpectralCorrelation(
-			XLALCreateHannREAL8Window( filter_len ),
-			wfftplan 
-		)
-	else:
-		spec_corr = numpy.array( corr )
+	# FFTW requires a thread lock for plans
+	gstlal.fftw.lock()
+	try:
 
-	# If no PSD is provided, set it equal to unity for all bins
-	#if psd == None:
-		#ifftplan = XLALCreateReverseREAL8FFTPlan( filter_len, 1 )
-	#else:
-	ifftplan = XLALCreateReverseREAL8FFTPlan( (len(psd.data)-1)*2, 1 )
-	d_len = (len(psd.data)-1)*2
+		# Build spectral correlation function
+		# NOTE: The default behavior is relative to the Hann window used in the
+		# filter bank and NOT the whitener. It's just not right. Fair warning.
+		# TODO: Is this default even needed anymore?
+		if( corr == None ):
+			wfftplan = XLALCreateForwardREAL8FFTPlan( filter_len, 1 )
+			spec_corr = lalburst.XLALREAL8WindowTwoPointSpectralCorrelation(
+				XLALCreateHannREAL8Window( filter_len ),
+				wfftplan 
+			)
+		else:
+			spec_corr = numpy.array( corr )
+
+		# If no PSD is provided, set it equal to unity for all bins
+		#if psd == None:
+			#ifftplan = XLALCreateReverseREAL8FFTPlan( filter_len, 1 )
+		#else:
+		ifftplan = XLALCreateReverseREAL8FFTPlan( (len(psd.data)-1)*2, 1 )
+		d_len = (len(psd.data)-1)*2
+
+	finally:
+		# Give the lock back
+		gstlal.fftw.unlock()
 
 	filters = numpy.array([])
 	for band in range( bands ):
-
-		# avoid nans -- we don't use DC anyway
-		if( psd.data[0] == 0.0 ): 
-			print >>sys.stderr, "Warning, DC component of PSD found to be zero. Setting it to unity to avoid NaNs. You can ignore this warning if DC is not part of your analysis."
-			tmpdat = psd.data
-			tmpdat[0] = 1.0
-			psd.data = tmpdat
 
 		# Create the EP filter in the FD
 		h_wind = lalburst.XLALCreateExcessPowerFilter( 
@@ -120,6 +123,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		#for t, s in enumerate( td_filter ):
 			#f.write( "%d %f\n" % (t,s) )
 		#f.close()
+
 
 	# Shape it into a "matrix-like" object
 	filters.shape = ( bands, filter_len )
