@@ -385,7 +385,6 @@ output = inspiral.Data(
 	distribution_stats = distribution_stats,
 	assign_likelihoods = True,
 	likelihood_snapshot_interval = likelihood_snapshot_interval,	# seconds
-	likelihood_retention_factor = 1.0,	# disabled effectively until we understand how to use it.
 	comment = options.comment,
 	tmp_path = options.tmp_space,
 	trials_factor = options.trials_factor,
