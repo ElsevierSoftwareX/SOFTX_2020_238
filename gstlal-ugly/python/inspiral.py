@@ -583,16 +583,15 @@ class Data(object):
 
 			# update likelihood snapshot if needed
 			if self.assign_likelihoods and (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
-				# generate smoothed snapshot of raw counts
-				self.distribution_stats.finish(verbose = self.verbose)
 				self.likelihood_snapshot_timestamp = timestamp
-				# update stream thinca's likelihood data
-				self.stream_thinca.set_likelihood_data(self.distribution_stats.smoothed_distributions, self.distribution_stats.likelihood_params_func)
 
-				# create a FAR class 
+				# create a FAR class, init() method smooths the distribution_stats 
 				# livetime is set to None because it gets updated when coincidences are recorded
 				# trials factor through from the command line
 				self.far = far.FAR(None, self.trials_factor, self.distribution_stats, self.trials_table)
+				# update stream thinca's likelihood data
+				# Has to be done after the FAR class is created since the init() method creates the smoothed distributions (i.e. calls .finish())
+				self.stream_thinca.set_likelihood_data(self.distribution_stats.smoothed_distributions, self.distribution_stats.likelihood_params_func)
 				# FIXME don't hard code
 				remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}
 
