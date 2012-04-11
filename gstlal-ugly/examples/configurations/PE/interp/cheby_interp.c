@@ -4,6 +4,7 @@
 #include <gsl/gsl_blas.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_vector.h>
+#include <complex.h>
 
 /*
  * Data structure methods
@@ -29,10 +30,11 @@ struct waveform_interpolants * new_waveform_interpolants(int size) {
  * Formula (3) in http://arxiv.org/pdf/1108.5618v1.pdf
  */ 
 
-double  projection_coefficient(gsl_vector *svd_basis, gsl_vector *spa_waveform){
+gsl_complex projection_coefficient(gsl_vector_complex *svd_basis, gsl_vector_complex *spa_waveform){
 	/*project svd basis onto SPA's to get coefficients*/
-	double M;
-	gsl_blas_ddot(svd_basis, spa_waveform, &M);
+	gsl_complex M; //Should equal double complex and can be safely cast
+	/* Note that svd_basis should have 0 imaginary part */
+	gsl_blas_zdotu(svd_basis, spa_waveform, &M);
 	return M
 }
 
@@ -70,22 +72,22 @@ double 2dCheby(double x, int K, int K_max, double y, int L, int L_max) {
 
 
 /* you do this for every mu */
-gsl_matrix * compute_C_KL(gsl_vector *x_k, gsl_vector *y_l, gsl_matrix *M) {
+gsl_matrix_complex * compute_C_KL(gsl_vector *x_k, gsl_vector *y_l, gsl_matrix_complex *M) {
 	int K, L, k, l;
-	double out = 0.0;
+	double complex out = 0.0;
 	k_max = x_k->size;
 	l_max = y_l->size;
-	gsl_matrix *C_KL = gsl_matrix_calloc(k_max, l_max);
+	gsl_matrix_complex *C_KL = gsl_matrix_complex_calloc(k_max, l_max);
 
 	for (K = 0; K < k_max; K++) {
 		for (L = 0; L < l_max; L++) {
 			out = 0.;
 			for (k = 0; k < k_max; k++) {
 				for (l = 0; l < l_max; l++) {
-					out += 2dCheby(gsl_vector_get(x_k, k), K, k_max, gsl_vector_get(y_l, l), L, l_max) * gsl_matrix_get(M, k, l);
+					out += (double complex) (2dCheby(gsl_vector_get(x_k, k), K, k_max, gsl_vector_get(y_l, l), L, l_max) + 0.*I) * (double complex) gsl_matrix_complex_get(M, k, l);
 				}
 			}
-		gsl_matrix_set(C_KL, K, L, out);
+		gsl_matrix_set(C_KL, K, L, (gsl_complex) out);
 		}
 	}
 
@@ -97,18 +99,19 @@ gsl_matrix * compute_C_KL(gsl_vector *x_k, gsl_vector *y_l, gsl_matrix *M) {
  * Formula (8) in http://arxiv.org/pdf/1108.5618v1.pdf
  */
 
-const gsl_complex compute_M_xy(gsl_matrix *C_KL, double x, double y) {
+gsl_complex compute_M_xy(gsl_matrix_complex *C_KL, double x, double y) {
 	int K, L;
 	K_max = C_KL->size1;
 	L_max = C_KL->size2;
-	const gsl_complex M = 0.;
+	double complex M = 0. + 0.I;
 	for (K = 0; K < K_max; K++) {
 		for (L = 0; L < L_max; L++) {
-			M += gsl_matrix_get(C_KL, K, L) * 2dCheby(x, K, K_max, y, L, L_max);
+			//FIXME, is this correct??
+			M += (double complex) gsl_matrix_complex_get(C_KL, K, L) * (double complex) (2dCheby(x, K, K_max, y, L, L_max) + 0.I);
 		}
 	}	
 
-	return M;
+	return (gsl_complex) M;
 }
 
 /*
