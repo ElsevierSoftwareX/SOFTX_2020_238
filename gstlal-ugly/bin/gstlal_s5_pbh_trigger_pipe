@@ -424,7 +424,7 @@ toSqliteJob = ligolw_sqlite_from_xml_job()
 toXMLJob = ligolw_sqlite_to_xml_job()
 lalappsRunSqliteJob = lalapps_run_sqlite_job()
 plotJob = gstlal_inspiral_plotsummary_job()
-openpageJob = gstlal_s5_pbh_summary_page_job()
+openpageJob = gstlal_s5_pbh_summary_page_job(tag_base = 'gstlal_s5_pbh_summary_page_open')
 pageJob = gstlal_s5_pbh_summary_page_job()
 
 noninj_nodes = []
