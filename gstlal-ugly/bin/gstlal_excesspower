@@ -256,7 +256,7 @@ class EPHandler( LLOIDHandler ):
 			1.0 / (2*self.base_band*(res_level+1)), # resolution level starts from 0
 			self.inst
 		)
-		output = "%sgstlal_excesspower_bank_%s_level_%d.xml" % (loc, self.inst, res_level)
+		output = "%sgstlal_excesspower_bank_%s_%s_level_%d.xml" % (loc, self.inst, self.channel, res_level)
 		utils.write_filename( self.filter_xml, output, verbose = True,
 		       gz = (output or "stdout").endswith(".gz") )
 		return output
