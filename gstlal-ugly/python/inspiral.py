@@ -606,16 +606,13 @@ class Data(object):
 				# create a FAR class 
 				# livetime is set to None because it gets updated when coincidences are recorded
 				# trials factor through from the command line
-				self.far = far.FAR(None, self.trials_factor, self.distribution_stats)
+				self.far = far.FAR(None, self.trials_factor, self.distribution_stats, self.trials_table)
 				# FIXME don't hard code
 				remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}
 
 				# generate the background likelihood distributions
 				for ifo_set in self.ifo_combos:
 					self.far.updateFAPmap(ifo_set, remap, verbose = self.verbose)
-
-				# hook up a reference to the Data class instance level trials_table
-				self.far.trials_table = self.trials_table
 
 				# FIXME:  the signal.signal() function is
 				# disabled for the duration of the
