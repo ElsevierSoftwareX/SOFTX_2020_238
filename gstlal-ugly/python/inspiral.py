@@ -435,7 +435,7 @@ class DistributionsStats(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", verbose = False):
 		#
 		# initialize
 		#
@@ -457,7 +457,6 @@ class Data(object):
 		# Set to None to disable period snapshots, otherwise set to seconds
 		self.likelihood_snapshot_interval = likelihood_snapshot_interval
 		# Set to 1.0 to disable background data decay
-		self.likelihood_retention_factor = likelihood_retention_factor
 		# FIXME:  should this live in the DistributionsStats object?
 		self.likelihood_snapshot_timestamp = None
 		# gracedb far threshold
@@ -589,14 +588,6 @@ class Data(object):
 				self.likelihood_snapshot_timestamp = timestamp
 				# update stream thinca's likelihood data
 				self.stream_thinca.set_likelihood_data(self.distribution_stats.smoothed_distributions, self.distribution_stats.likelihood_params_func)
-				# decay the raw background counts to affect
-				# a moving history
-				# FIXME:  this will do bad things if the
-				# instruments stop produce events;  the
-				# decay should be tied to live time not
-				# wall clock time
-				for binnedarray in self.distribution_stats.raw_distributions.background_rates.values():
-					binnedarray.array *= self.likelihood_retention_factor
 
 				# create a FAR class 
 				# livetime is set to None because it gets updated when coincidences are recorded
