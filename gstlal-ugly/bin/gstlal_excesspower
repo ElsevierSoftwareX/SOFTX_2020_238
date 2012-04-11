@@ -241,7 +241,7 @@ class EPHandler( LLOIDHandler ):
 		"""
 		Calling this function rebuilds the filter FIR banks and assigns them to their proper element. This is normally called when the PSD or spectrum correlation changes.
 		"""
-		self.filter_bank = ep.build_filter( fhigh = self.fhigh, flow=self.flow, psd = self.psd, corr = self.spec_corr, b_wind = self.base_band )
+		self.filter_bank = ep.build_filter( fhigh = self.fhigh, flow=self.flow, rate=self.rate, psd = self.psd, corr = self.spec_corr, b_wind = self.base_band )
 		return self.filter_bank
 
 	def build_filter_xml( self, res_level, loc="" ):
@@ -610,6 +610,8 @@ else:
 base_band = handler.base_band
 
 # This is invoked here, or else the default rate is used, which will cause funny behavior for the defaults with some cases
+# TODO: Less hardcodish -- update this when the rate or base_band is updated
+handler.filter_len = 2*int(2*handler.rate/handler.base_band)
 handler.build_default_psd( handler.rate, handler.filter_len )
 handler.rebuild_filter()
 handler.rebuild_chan_mix_matrix()
