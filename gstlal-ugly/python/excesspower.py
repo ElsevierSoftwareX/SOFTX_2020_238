@@ -33,6 +33,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 
 	# Filter length needs to be long enough to get the pertinent features in
 	# the time domain
+	print len(psd.data), psd.deltaF, b_wind
 	filter_len = 2*int(2*b_wind/psd.deltaF)
 
 	if filter_len <= 0:
