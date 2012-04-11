@@ -97,11 +97,11 @@ gsl_matrix * compute_C_KL(gsl_vector *x_k, gsl_vector *y_l, gsl_matrix *M) {
  * Formula (8) in http://arxiv.org/pdf/1108.5618v1.pdf
  */
 
-double compute_M_xy(gsl_matrix *C_KL, double x, double y) {
+const gsl_complex compute_M_xy(gsl_matrix *C_KL, double x, double y) {
 	int K, L;
 	K_max = C_KL->size1;
 	L_max = C_KL->size2;
-	double M = 0.;
+	const gsl_complex M = 0.;
 	for (K = 0; K < K_max; K++) {
 		for (L = 0; L < L_max; L++) {
 			M += gsl_matrix_get(C_KL, K, L) * 2dCheby(x, K, K_max, y, L, L_max);
@@ -139,7 +139,7 @@ gsl_vector *interpolate_waveform_from_mchirp_and_eta(struct 2d_waveform_interpol
 		// don't do this, we need an add and scale function so as to not destroy svd_basis
 		//gsl_vector_scale(interp->svd_basis, M);
 		gsl_vector_add(h_f, interp->svd_basis);		
-		 
+		gsl_blas_zaxpy (M, h_f, interp->svd_basis) // requires M be a const gsl_complex
 		}
 	free_waveform_interp_objects(* interps);
 
