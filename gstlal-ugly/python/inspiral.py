@@ -421,8 +421,11 @@ class DistributionsStats(object):
 		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**binnings)
 		return self, seglists
 
+	def to_xml(self, seglists):
+		return ligolw_burca_tailor.gen_likelihood_control(self.raw_distributions, seglists, u"gstlal_inspiral_likelihood")
+
 	def to_filename(self, filename, seglists, verbose = False):
-		ligolw_burca_tailor.write_likelihood_data(filename, self.raw_distributions, seglists, u"gstlal_inspiral_likelihood", verbose = verbose)
+		utils.write_filename(self.to_xml(seglists), filename, verbose = verbose, gz = (filename or "stdout").endswith(".gz"))
 
 
 #
