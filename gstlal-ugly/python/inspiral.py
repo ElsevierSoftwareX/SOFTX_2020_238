@@ -670,8 +670,7 @@ class Data(object):
 		output = StringIO.StringIO()
 		orig_signal = utils.signal.signal
 		utils.signal.signal = lambda *args: None
-		xmldoc = ligolw_burca_tailor.gen_likelihood_control(self.distribution_stats.raw_distributions ,segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), u"gstlal_inspiral_likelihood")
-		utils.write_fileobj(xmldoc, output)
+		utils.write_fileobj(self.distribution_stats.to_xml(segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), output)
 		utils.signal.signal = orig_signal
 		outstr = output.getvalue()
 		output.close()
