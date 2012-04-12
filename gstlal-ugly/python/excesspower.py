@@ -25,15 +25,14 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 	"""Build a set of individual channel Hann window frequency filters (with bandwidth 'band') and then transfer them into the time domain as a matrix. The nth row of the matrix contains the time-domain filter for the flow+n*band frequency channel. The overlap is the fraction of the channel which overlaps with the previous channel. If filter_len is not set, then it defaults to nominal minimum width needed for the bandwidth requested."""
 
 	if fhigh > rate/2:
-		print >> sys.stderr, "WARNING: high frequency requested is higher than sampling rate / 2, adjusting to match."
+		print >> sys.stderr, "WARNING: high frequency (%f) requested is higher than sampling rate / 2, adjusting to match." % fhigh
 		fhigh = rate/2
 
 	if fhigh >= rate/2:
-		print >> sys.stderr, "WARNING: high frequency is equal to Nyquist. Filters will probably be bad. Reduce the high frequency."
+		print >> sys.stderr, "WARNING: high frequency (%f) is equal to Nyquist. Filters will probably be bad. Reduce the high frequency." % fhigh
 
 	# Filter length needs to be long enough to get the pertinent features in
 	# the time domain
-	print len(psd.data), psd.deltaF, b_wind
 	filter_len = 2*int(2*b_wind/psd.deltaF)
 
 	if filter_len <= 0:
