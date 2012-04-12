@@ -556,7 +556,8 @@ class Data(object):
 			self.xmldoc,
 			self.process.process_id,
 			coincidence_threshold = coincidence_threshold,
-			thinca_interval = thinca_interval	# seconds
+			thinca_interval = thinca_interval,	# seconds
+			trials_table = self.trials_table
 		)
 
 		#
