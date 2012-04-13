@@ -21,6 +21,8 @@ import numpy
 from scipy import interpolate, random
 from scipy.stats import poisson
 from glue import iterutils
+from glue.ligolw import ligolw
+from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
@@ -78,6 +80,20 @@ class TrialsTable(dict):
 	def increment(self, n):
 		for k in self:
 			self[k] += n
+
+	@classmethod
+	def from_xml(cls, xml, name):
+		xml, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:gstlal_inspiral_trialstable" % name]
+		self = cls()
+		for param in xml.getElementsByTagName(ligolw.Param.tagName):
+			self[param.getAttribute(u"Name")] = param.pcdata
+		return self
+
+	def to_xml(self, name):
+		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_trialstable" % name})
+		for key, value in self.items():
+			xml.appendChild(ligolw_param.from_pyvalue(key, value))
+		return xml
 
 #
 # Function to compute the far in a given file
