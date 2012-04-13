@@ -422,7 +422,12 @@ class DistributionsStats(object):
 		return self, seglists
 
 	def to_xml(self, seglists):
-		return ligolw_burca_tailor.gen_likelihood_control(self.raw_distributions, seglists, u"gstlal_inspiral_likelihood")
+		self.lock.acquire()
+		try:
+			xml = ligolw_burca_tailor.gen_likelihood_control(self.raw_distributions, seglists, u"gstlal_inspiral_likelihood")
+		finally:
+			self.lock.release()
+		return xml
 
 	def to_filename(self, filename, seglists, verbose = False):
 		# FIXME:  there might be times when we want to trap signals
@@ -622,9 +627,7 @@ class Data(object):
 				self.far.trials_table = self.trials_table
 
 				# write the new distribution stats to disk
-				self.distribution_stats.lock.acquire()
 				self.distribution_stats.to_filename(self.likelihood_file, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = False)
-				self.distribution_stats.lock.release()
 
 			# run stream thinca
 			noncoinc_sngls = self.stream_thinca.add_events(events, timestamp, FAP = self.far)
@@ -648,12 +651,10 @@ class Data(object):
 
 	def write_likelihood_file(self):
 		# write the new distribution stats to disk
-		self.distribution_stats.lock.acquire()
 		output = StringIO.StringIO()
 		utils.write_fileobj(self.distribution_stats.to_xml(segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), output, trap_signals = None)
 		outstr = output.getvalue()
 		output.close()
-		self.distribution_stats.lock.release()
 		return outstr
 
 	def flush(self):
