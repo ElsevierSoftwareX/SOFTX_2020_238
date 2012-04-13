@@ -71,8 +71,7 @@ options, filenames = parse_command_line()
 if options.compute_fap:
 	livetime = None # Not needed for fap calculation
 	distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_filenames(options.background_bins_file, verbose = options.verbose)
-	Far = far.FAR(livetime, options.additional_trials_factor, distribution_stats)
-	Far.trials_table = far.TrialsTable()
+	Far = far.FAR(livetime, options.additional_trials_factor, distribution_stats, far.TrialsTable())
 
 # late import for DB manipulations
 from glue.ligolw import dbtables

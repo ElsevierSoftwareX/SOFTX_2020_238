@@ -144,8 +144,9 @@ def set_far(options, Far, f):
 #
 
 class FAR(object):
-	def __init__(self, livetime, trials_factor, distribution_stats = None):
+	def __init__(self, livetime, trials_factor, distribution_stats = None, trials_table = None):
 		self.distribution_stats = distribution_stats
+		self.trials_table = trials_table
 		if self.distribution_stats is not None:
 			# FIXME:  this results in the
 			# .smoothed_distributions object containing

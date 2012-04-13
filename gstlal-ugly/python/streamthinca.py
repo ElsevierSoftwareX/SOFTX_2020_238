@@ -164,12 +164,13 @@ ligolw_thinca.InspiralEventList = InspiralEventList
 
 
 class StreamThinca(object):
-	def __init__(self, xmldoc, process_id, coincidence_threshold, thinca_interval = 50.0, coinc_params_distributions = None, likelihood_params_func = None):
+	def __init__(self, xmldoc, process_id, coincidence_threshold, thinca_interval = 50.0, coinc_params_distributions = None, likelihood_params_func = None, trials_table = None):
 		self.xmldoc = xmldoc
 		self.process_id = process_id
 		self.thinca_interval = thinca_interval
 		self.set_likelihood_data(coinc_params_distributions, likelihood_params_func)
 		self.last_coincs = None
+		self.trials_table = trials_table
 
 		# when using the normal coincidence function from
 		# ligolw_thinca this is the e-thinca parameter.  when using
@@ -287,21 +288,23 @@ class StreamThinca(object):
 		# restore .get_effective_snr() method on trigger class
 		ligolw_thinca.SnglInspiral.get_effective_snr = orig_get_effective_snr
 
-		# Assign FAPs if requested
+		# increment the trials table and possibly assign FAPs
+		# set the live time
 		if FAP is not None:
-			# set the live time
 			FAP.livetime = time.time() - self.start_time
-			coinc_event_index = dict((row.coinc_event_id, row) for row in self.coinc_event_table)
-			ref_time = XLALUTCToGPS(time.gmtime())
-			for coinc_inspiral_row in self.coinc_inspiral_table:
-				coinc_event_row = coinc_event_index[coinc_inspiral_row.coinc_event_id]
-				# Assign the FAP
+		coinc_event_index = dict((row.coinc_event_id, row) for row in self.coinc_event_table)
+		ref_time = XLALUTCToGPS(time.gmtime())
+		for coinc_inspiral_row in self.coinc_inspiral_table:
+			coinc_event_row = coinc_event_index[coinc_inspiral_row.coinc_event_id]
+			# increment the trials table
+			try:
+				self.trials_table[(coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)] += 1
+			except KeyError:
+				self.trials_table[(coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)] = 1
+			# Assign the FAP if requested
+			if FAP is not None:
+				# note FAP should have a reference to the same trials table as this object does.  This is handled in the Data class in inspiral.py
 				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)
-				# increment the trials table
-				try:
-					FAP.trials_table[(coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)] += 1
-				except KeyError:
-					FAP.trials_table[(coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)] = 1
 				# assume each event is "loudest" so n = 1 by default, not the same as required for an IFAR plot
 				coinc_inspiral_row.combined_far = FAP.compute_far(coinc_inspiral_row.false_alarm_rate)
 				# populate a column with latency

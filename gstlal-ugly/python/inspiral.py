@@ -444,7 +444,7 @@ class DistributionsStats(object):
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, likelihood_retention_factor = 1.0, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", verbose = False):
 		#
 		# initialize
 		#
@@ -466,7 +466,6 @@ class Data(object):
 		# Set to None to disable period snapshots, otherwise set to seconds
 		self.likelihood_snapshot_interval = likelihood_snapshot_interval
 		# Set to 1.0 to disable background data decay
-		self.likelihood_retention_factor = likelihood_retention_factor
 		# FIXME:  should this live in the DistributionsStats object?
 		self.likelihood_snapshot_timestamp = None
 		# gracedb far threshold
@@ -566,7 +565,8 @@ class Data(object):
 			self.xmldoc,
 			self.process.process_id,
 			coincidence_threshold = coincidence_threshold,
-			thinca_interval = thinca_interval	# seconds
+			thinca_interval = thinca_interval,	# seconds
+			trials_table = self.trials_table
 		)
 
 		#
@@ -593,38 +593,21 @@ class Data(object):
 
 			# update likelihood snapshot if needed
 			if self.assign_likelihoods and (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
-				#First time through, pick up a time stamp, finish the distributions, set the function
-				if self.likelihood_snapshot_timestamp is None:
-					self.likelihood_snapshot_timestamp = timestamp
-					self.distribution_stats.finish(verbose = self.verbose)
-					self.stream_thinca.set_likelihood_data(self.distribution_stats.smoothed_distributions, self.distribution_stats.likelihood_params_func)
-				# generate smoothed snapshot of raw counts
-				self.distribution_stats.finish(verbose = self.verbose)
 				self.likelihood_snapshot_timestamp = timestamp
-				# update stream thinca's likelihood data
-				self.stream_thinca.set_likelihood_data(self.distribution_stats.smoothed_distributions, self.distribution_stats.likelihood_params_func)
-				# decay the raw background counts to affect
-				# a moving history
-				# FIXME:  this will do bad things if the
-				# instruments stop produce events;  the
-				# decay should be tied to live time not
-				# wall clock time
-				for binnedarray in self.distribution_stats.raw_distributions.background_rates.values():
-					binnedarray.array *= self.likelihood_retention_factor
 
-				# create a FAR class 
+				# create a FAR class, init() method smooths the distribution_stats 
 				# livetime is set to None because it gets updated when coincidences are recorded
 				# trials factor through from the command line
-				self.far = far.FAR(None, self.trials_factor, self.distribution_stats)
+				self.far = far.FAR(None, self.trials_factor, self.distribution_stats, self.trials_table)
+				# update stream thinca's likelihood data
+				# Has to be done after the FAR class is created since the init() method creates the smoothed distributions (i.e. calls .finish())
+				self.stream_thinca.set_likelihood_data(self.distribution_stats.smoothed_distributions, self.distribution_stats.likelihood_params_func)
 				# FIXME don't hard code
 				remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}
 
 				# generate the background likelihood distributions
 				for ifo_set in self.ifo_combos:
 					self.far.updateFAPmap(ifo_set, remap, verbose = self.verbose)
-
-				# hook up a reference to the Data class instance level trials_table
-				self.far.trials_table = self.trials_table
 
 				# write the new distribution stats to disk
 				self.distribution_stats.to_filename(self.likelihood_file, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = False)

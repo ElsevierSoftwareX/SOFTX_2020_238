@@ -173,7 +173,8 @@ class ligolw_sqlite_node(InspiralNode):
 		for f in input:
 			if f is not None:
 				self.add_file_arg(f)
-		self.output_name = database
+		self.output_db_name = database
+		self.output_xml_name = extract
 
 
 #
@@ -225,11 +226,15 @@ class gstlal_inspiral_inj_job(InspiralJob):
 		self.add_condor_cmd('+RequiresMultipleCores', 'True')
 
 
+def sim_tag_from_inj_file(injections):
+	return injections.replace('.xml', '').replace('.gz', '')
+
+
 class gstlal_inspiral_node(InspiralNode):
 	"""
 	A gstlal_inspiral node
 	"""
-	#FIXME add frame segments, name and veto segments name
+	#FIXME add veto segments name
 	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=20.0, injections=None, control_peak_time = 8, vetoes=None, time_slide_file=None, fir_stride = 8, instruments = "H1H2L1", p_node=[]):
 		InspiralNode.__init__(self, job, dag, p_node)
 
@@ -255,7 +260,8 @@ class gstlal_inspiral_node(InspiralNode):
 		path = os.getcwd()
 		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
 		if self.injections is not None:
-			self.output_name = '%s/%s-%04d-%d-%d-LLOID-simulations.sqlite' % (path, instruments, job.number, gps_start_time, gps_end_time)
+			sim_name = sim_tag_from_inj_file(self.injections)
+			self.output_name = '%s/%s-%04d-%d-%d-LLOID-%s.sqlite' % (path, instruments, job.number, gps_start_time, gps_end_time, sim_name)
 		else:
 			self.output_name = '%s/%s-%04d-%d-%d-LLOID.sqlite' % (path, instruments, job.number, gps_start_time, gps_end_time)
 			self.background_name = '%s/%s-%04d-%d-%d-LLOID_snr_chi.xml.gz' % (path, instruments, job.number, gps_start_time, gps_end_time)
@@ -293,6 +299,8 @@ class gstlal_inspiral_calc_likelihood_node(InspiralNode):
 		self.add_var_opt("background-prior", background_prior)
 		self.add_var_opt("synthesize-injections", synthesize_injections)
 		self.output_names = input
+		if len(input) == 1:
+			self.output_name = input[0]
 
 
 #
@@ -357,9 +365,15 @@ def pipeline_dot_py_append_opts_hack(opt, vals):
 		out += " --%s %s" % (opt, v)
 	return out
 
+def extract_all_nodes_by_inj(nodes, inj):
+	out = []
+	for v in nodes.values():
+		out.extend([n[1] for n in v if n[0] == inj])
+	return out
+
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
-	parser.add_option("--injections", metavar = "filename", help = "Set the name of the xml file for injections")
+	parser.add_option("--injections", metavar = "filename", action = "append", help = "Set the name of the xml file for injections, can be called multiple times")
 	parser.add_option("--frame-cache", metavar = "filename", help = "Set the frame cache file")
 	parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the frame segments file")
 	parser.add_option("--frame-segments-name", metavar = "name", help = "Set the frame segments name")
@@ -368,7 +382,6 @@ def parse_command_line():
 	parser.add_option("--vetoes", metavar = "filename", help = "Set the veto xml file.")
 	parser.add_option("--gps-start-time", metavar = "GPS", help = "Set the gps start time in seconds", type="int")
 	parser.add_option("--gps-stop-time", metavar = "GPS", help = "Set the gps stop time in seconds", type="int")
-	#FIXME get this from the cache?
 	parser.add_option("--channel", metavar = "name", default = [], action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\" for all detectors. Override with IFO=CHANNEL-NAME can be given multiple times")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
 	parser.add_option("--cluster-sql-file", metavar = "filename", help = "Set the sql file to apply to noninjection databases")
@@ -424,16 +437,15 @@ toSqliteJob = ligolw_sqlite_from_xml_job()
 toXMLJob = ligolw_sqlite_to_xml_job()
 lalappsRunSqliteJob = lalapps_run_sqlite_job()
 plotJob = gstlal_inspiral_plotsummary_job()
-openpageJob = gstlal_s5_pbh_summary_page_job()
+openpageJob = gstlal_s5_pbh_summary_page_job(tag_base = 'gstlal_s5_pbh_summary_page_open')
 pageJob = gstlal_s5_pbh_summary_page_job()
 
-noninj_nodes = []
-inj_nodes = []
-cluster_nodes = []
+inspiral_nodes = {}
+clusternodes = {}
 
-###############################################################################
+#
 # loop over banks to run gstlal inspiral pre clustering and far computation
-###############################################################################
+#
 
 for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, [options.num_banks]):
 
@@ -441,117 +453,107 @@ for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, [options.num
 	# non injections
 	#
 
-
-	#
-	# FIXME this is approximately correct, can we do better?
-	#
-	# Trials factors:
-	#
-	# The false alarm probability depends on how many coincidences are
-	# formed.  The more you form the more chance you have to see an
-	# excursion.  But the coincidences formed in any one gstlal_inspiral
-	# job are correlated. We use the SVD to estimate the independent
-	# degrees of freedom.  This is expressed as a fraction of the total
-	# number of templates to get the degree of independence.  We then make
-	# the simplifying assumption that each gstlal_inspiral job produces
-	# roughly the same number of events.  Then the trials factor is
-	#
-	# trials factor = # of events in job \times # of jobs \times independence fraction.
-	#
-	# The far code already uses the number of events in the job to rank the
-	# events.  Thus we just need to provide the factor # of jobs \times
-	# independence fraction as an additional argument
-	#
-
-	far_input_nodes = []
+	inspiral_nodes[s] = []
+	clusternodes[s] = []
 
 	noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride)
 	
 	noninjnode_likelihood = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, noninjnode.background_name, input = [noninjnode.output_name], p_node=[noninjnode])
 
-	# book keeping
-	far_input_nodes.append(noninjnode)
-	noninj_nodes.append(noninjnode)
+	# each inspiral node gets a tuple of injection file, in this case None, and then the actual node object
+	inspiral_nodes[s].append((None, noninjnode_likelihood))
 	
 	#
-	# injections, if you want them
+	# injections
 	#
 
-	if options.injections is not None:
-		injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=options.injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride)
+	for injections in options.injections:
+		
+		injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, int(options.gps_start_time), int(options.gps_stop_time), channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride)
 	
 		# FIXME the previous compute likelihood function already populates the injections, we should just use those
 		injnode_likelihood = gstlal_inspiral_calc_likelihood_node(calcLikelihoodJob, dag, noninjnode_likelihood.background_name, input = [injnode.output_name], likelihood_output_name = "post_calc_likelihood_simulation", p_node=[noninjnode_likelihood, injnode])
-		
-		# book keeping
-		far_input_nodes.append(injnode)
-		inj_nodes.append(injnode)
-		#
-		# FAR nodes
-		#
 	
-		farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode_likelihood.background_name, trials_factor, FAP = True, noninj_input = [noninjnode.output_name], inj_input = [injnode.output_name], p_node = [noninjnode_likelihood, injnode_likelihood])
+		inspiral_nodes[s].append((injections, injnode_likelihood))
 	
-	else:
-		farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode_likelihood.background_name, trials_factor, FAP = True, noninj_input = [noninjnode.output_name], inj_input = [], p_node = [noninjnode_likelihood])
+	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAP, dag, noninjnode_likelihood.background_name, trials_factor, FAP = True, noninj_input = [v[1].output_name for v in inspiral_nodes[s] if v[0] is None], inj_input = [v[1].output_name for v in inspiral_nodes[s] if v[0] is not None], p_node = [v[1] for v in inspiral_nodes[s]])
 
-#
+	#
 	# Pre clustering
 	#
 
-	for f in far_input_nodes:
-		if f.injections:
+	for (inj, node) in inspiral_nodes[s]:
+		if inj is not None:
 			# cluster injections and drop the sim inspiral table
-			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.injection_sql_file, input=[f.output_name], p_node=[farnode])
+			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.injection_sql_file, input=[node.output_name], p_node=[farnode])
 		else:
 			# cluster non injection files
-			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.cluster_sql_file, input=[f.output_name], p_node=[farnode])
-		clusternode = ligolw_sqlite_node(toXMLJob, dag, f.output_name, replace=False, extract=f.output_name.replace('.sqlite','.xml.gz'), p_node=[clusternode])
-		cluster_nodes.append(clusternode)
+			clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.cluster_sql_file, input=[node.output_name], p_node=[farnode])
+		clusternode = ligolw_sqlite_node(toXMLJob, dag, node.output_name, replace=False, extract=node.output_name.replace('.sqlite','.xml.gz'), p_node=[clusternode])
+		clusternodes[s].append((inj, clusternode))
 
-###############################################################################
-# after all of the FAR ranking is finished put everything into a database
-###############################################################################
+#
+# after all of the FAR ranking is finished put everything into single databases based on the injection file (or lack thereof)
+#
 
 #
 # non injection DB
 #
 
+# extract the non injectio nodes
+noninj_nodes = extract_all_nodes_by_inj(clusternodes, None) # not an injection
+
+# setup the final output names
 noninjdb = "%s-ALL-%d-%d-LLOID.sqlite" % (instruments, options.gps_start_time, options.gps_stop_time)
+
 # merge
-sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_name)[1].replace('.sqlite','.xml.gz') for f in noninj_nodes] + [options.vetoes, options.frame_segments_file], p_node=cluster_nodes)
+sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, noninjdb, input=[os.path.split(f.output_xml_name)[1] for f in noninj_nodes] + [options.vetoes, options.frame_segments_file], p_node=noninj_nodes)
+
 # cluster
 noninjsqlitenode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.cluster_sql_file, input=[noninjdb], p_node=[sqlitenode])
 
 #
-# injection DB
-# FIXME someday support more than one injection run I guess
+# injection DBs
 #
 
-if inj_nodes:
-	injdb = "%s-ALL-%d-%d-LLOID-simulations.sqlite" % (instruments, options.gps_start_time, options.gps_stop_time)
+injdbs = []
+p_nodes = [noninjsqlitenode]
+for injections in options.injections:
+
+	# Setup the final output names, etc.
+	injdb = "%s-ALL-%d-%d-LLOID-%s.sqlite" % (instruments, options.gps_start_time, options.gps_stop_time, sim_tag_from_inj_file(injections))
+	injdbs.append(injdb)
 	injxml = injdb+".xml.gz"
+	
+	# extract only the ndoes that were used for injections
+	inj_nodes = extract_all_nodes_by_inj(clusternodes, injections)
+
 	# merge
-	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[os.path.split(f.output_name)[1].replace('.sqlite','.xml.gz') for f in inj_nodes] + [options.vetoes, options.frame_segments_file, options.injections], p_node=cluster_nodes)
+	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[os.path.split(f.output_xml_name)[1] for f in inj_nodes] + [options.vetoes, options.frame_segments_file, injections], p_node=inj_nodes)
+
 	# cluster
 	clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.cluster_sql_file, input=[injdb], p_node=[sqlitenode])
+
 	# convert to XML
 	clusternode = ligolw_sqlite_node(toXMLJob, dag, injdb, replace=False, extract=injxml, p_node=[clusternode])
+
 	# find injections
 	inspinjnode = ligolw_inspinjfind_node(ligolwInspinjFindJob, dag, injxml, p_node=[clusternode])
+
 	# convert back to sqlite
 	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[injxml], p_node=[inspinjnode])
-	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, 1, FAR = True, noninj_input = [noninjdb], inj_input = [injdb], p_node = [sqlitenode, noninjsqlitenode])
-	# compute FARs
-	name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
-	# make plots
-	plotnode = gstlal_inspiral_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb, injdb], p_node=[farnode])
-	# make a web page
-	gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-closed-box" % (options.gps_start_time, options.gps_stop_time), open_box = False, p_node=[plotnode])
-	gstlal_s5_pbh_summary_page_node(openpageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-open-box" % (options.gps_start_time, options.gps_stop_time), p_node=[plotnode])
-else:
-	# compute FARs without injections
-	farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, 1, FAR = True, noninj_input = [noninjdb], inj_input = [], p_node = [noninjsqlitenode])
+	p_nodes.append(sqlitenode)
+
+# compute FARs
+farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJobFAR, dag, None, 1, FAR = True, noninj_input = [noninjdb], inj_input = injdbs, p_node = p_nodes)
+
+# make plots
+name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
+plotnode = gstlal_inspiral_plotsummary_node(plotJob, dag, name_tag, input=[noninjdb] + injdbs, p_node=[farnode])
+
+# make a web page
+gstlal_s5_pbh_summary_page_node(pageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-closed-box" % (options.gps_start_time, options.gps_stop_time), open_box = False, p_node=[plotnode])
+gstlal_s5_pbh_summary_page_node(openpageJob, dag, name_tag, options.web_dir, title="Sub-solar-mass-%d-%d-open-box" % (options.gps_start_time, options.gps_stop_time), p_node=[plotnode])
 
 #
 # all done
