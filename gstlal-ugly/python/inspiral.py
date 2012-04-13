@@ -425,7 +425,8 @@ class DistributionsStats(object):
 		return ligolw_burca_tailor.gen_likelihood_control(self.raw_distributions, seglists, u"gstlal_inspiral_likelihood")
 
 	def to_filename(self, filename, seglists, verbose = False):
-		utils.write_filename(self.to_xml(seglists), filename, verbose = verbose, gz = (filename or "stdout").endswith(".gz"))
+		# FIXME:  there might be times when we want to trap signals
+		utils.write_filename(self.to_xml(seglists), filename, verbose = verbose, gz = (filename or "stdout").endswith(".gz"), trap_signals = None)
 
 
 #
@@ -620,20 +621,9 @@ class Data(object):
 				# hook up a reference to the Data class instance level trials_table
 				self.far.trials_table = self.trials_table
 
-				# FIXME:  the signal.signal() function is
-				# disabled for the duration of the
-				# .write_fileobj() call to work around some
-				# threading problems.  Glue should be
-				# modified to make signal trapping optional
-				# so that this isn't needed.  Remove when
-				# that's taken care of.
-				#
 				# write the new distribution stats to disk
 				self.distribution_stats.lock.acquire()
-				orig_signal = utils.signal.signal
-				utils.signal.signal = lambda *args: None
 				self.distribution_stats.to_filename(self.likelihood_file, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = False)
-				utils.signal.signal = orig_signal
 				self.distribution_stats.lock.release()
 
 			# run stream thinca
@@ -657,21 +647,10 @@ class Data(object):
 
 
 	def write_likelihood_file(self):
-		# FIXME:  the signal.signal() function is
-		# disabled for the duration of the
-		# .write_fileobj() call to work around some
-		# threading problems.  Glue should be
-		# modified to make signal trapping optional
-		# so that this isn't needed.  Remove when
-		# that's taken care of.
-				
 		# write the new distribution stats to disk
 		self.distribution_stats.lock.acquire()
 		output = StringIO.StringIO()
-		orig_signal = utils.signal.signal
-		utils.signal.signal = lambda *args: None
-		utils.write_fileobj(self.distribution_stats.to_xml(segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), output)
-		utils.signal.signal = orig_signal
+		utils.write_fileobj(self.distribution_stats.to_xml(segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), output, trap_signals = None)
 		outstr = output.getvalue()
 		output.close()
 		self.distribution_stats.lock.release()
@@ -730,22 +709,11 @@ class Data(object):
 				# into gracedb's input pipe and crashing
 				# part way through.
 				#
-				# FIXME:  the signal.signal() function is
-				# disabled for the duration of the
-				# .write_fileobj() call to work around some
-				# threading problems.  Glue should be
-				# modified to make signal trapping optional
-				# so that this isn't needed.  Remove when
-				# that's taken care of.
-				#
 
 				if self.verbose:
 					print >>sys.stderr, "sending %s to gracedb ..." % filename
 				message = StringIO.StringIO()
-				orig_signal = utils.signal.signal
-				utils.signal.signal = lambda *args: None
-				utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = False)
-				utils.signal.signal = orig_signal
+				utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = False, trap_signals = None)
 				# FIXME: make this optional from command line?
 				if True:
 					resp = gracedb.Client().create(self.gracedb_group, self.gracedb_type, filename, message.getvalue())

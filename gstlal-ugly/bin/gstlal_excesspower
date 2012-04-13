@@ -334,26 +334,13 @@ class EPHandler( LLOIDHandler ):
 		#output.replaceChild( ep_filter_table, cbc_filter_table )
 		print >>sys.stderr, "Outputting triggers for %s\n" % str(analysis_segment)
 
-		# FIXME:  the signal.signal() function is
-		# disabled for the duration of the
-		# .write_fileobj() call to work around some
-		# threading problems.  Glue should be
-		# modified to make signal trapping optional
-		# so that this isn't needed.  Remove when
-		# that's taken care of.
-		#
 		# write the new distribution stats to disk
 		lock = threading.Lock()
 		lock.acquire()
-		orig_signal = utils.signal.signal
-		utils.signal.signal = lambda *args: None
 		# Enable to debug LIGOLW stream
 		#utils.write_fileobj(output, sys.stdout)
-		utils.write_filename(output, filename, verbose = options.verbose)
-         #gz = (output or "stdout").endswith(".gz"))
-		utils.signal.signal = orig_signal
+		utils.write_filename(output, filename, verbose = options.verbose, gz = (filename or "stdout").endswith(".gz"), trap_signals = None)
 		lock.release()
-		# End FIXME
 
 		if( flush ): self.make_output_table()
 
