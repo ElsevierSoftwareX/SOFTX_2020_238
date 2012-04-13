@@ -153,41 +153,6 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 	return banks
 
 
-def connect_appsink_dump_dot(pipeline, appsinks, basename, verbose = False):
-
-	"""
-	add a signal handler to write a pipeline graph upon receipt of the
-	first trigger buffer.  the caps in the pipeline graph are not fully
-	negotiated until data comes out the end, so this version of the graph
-	shows the final formats on all links
-	"""
-
-	class AppsinkDumpDot(object):
-		# data shared by all instances
-		# number of times execute method has been invoked, and a mutex
-		n_lock = threading.Lock()
-		n = 0
-
-		def __init__(self, pipeline, write_after, basename, verbose = False):
-			self.pipeline = pipeline
-			self.handler_id = None
-			self.write_after = write_after
-			self.filestem = "%s.%s" % (basename, "TRIGGERS")
-			self.verbose = verbose
-
-		def execute(self, elem):
-			self.n_lock.acquire()
-			type(self).n += 1
-			if self.n >= self.write_after:
-				pipeparts.write_dump_dot(self.pipeline, self.filestem, verbose = self.verbose)
-			self.n_lock.release()
-			elem.disconnect(self.handler_id)
-
-	for sink in appsinks:
-		appsink_dump_dot = AppsinkDumpDot(pipeline, len(appsinks), basename = basename, verbose = verbose)
-		appsink_dump_dot.handler_id = sink.connect_after("new-buffer", appsink_dump_dot.execute)
-
-
 #
 # add metadata to an xml document in the style of lalapps_inspiral
 #
