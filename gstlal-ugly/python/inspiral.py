@@ -129,6 +129,7 @@ def parse_banks(bank_string):
 		out.setdefault(ifo, []).append(bank)
 	return out
 
+
 def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 	"""
 	given a dictionary of lists of svd template bank file names parse them
@@ -153,7 +154,7 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 
 
 def connect_appsink_dump_dot(pipeline, appsinks, basename, verbose = False):
-	
+
 	"""
 	add a signal handler to write a pipeline graph upon receipt of the
 	first trigger buffer.  the caps in the pipeline graph are not fully
@@ -274,9 +275,11 @@ def add_cbc_metadata(xmldoc, process, seg_in, seg_out):
 # =============================================================================
 #
 
+
 #
 # Functions to synthesize injections
 #
+
 
 def snr_distribution(size, startsnr):
 	"""
@@ -284,12 +287,14 @@ def snr_distribution(size, startsnr):
 	"""
 	return startsnr * random.power(3, size)**-1 # 3 here actually means 2 :) according to scipy docs
 
+
 def noncentrality(snrs, prefactor):
 	"""
 	This produces a set of noncentrality parameters that scale with snr^2 according to the prefactor
 	"""
 	return prefactor * random.rand(len(snrs)) * snrs**2 # FIXME power depends on dimensionality of the bank and the expectation for the mismatch for real signals
 	#return prefactor * random.power(1, len(snrs)) * snrs**2 # FIXME power depends on dimensionality of the bank and the expectation for the mismatch for real signals
+
 
 def chisq_distribution(df, non_centralities, size):
 	"""
@@ -421,17 +426,13 @@ class DistributionsStats(object):
 		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**binnings)
 		return self, seglists
 
-	def to_xml(self, seglists):
+	def to_xml(self, process, name):
 		self.lock.acquire()
 		try:
-			xml = ligolw_burca_tailor.gen_likelihood_control(self.raw_distributions, seglists, u"gstlal_inspiral_likelihood")
+			xml = self.raw_distributions.to_xml(process, name)
 		finally:
 			self.lock.release()
 		return xml
-
-	def to_filename(self, filename, seglists, verbose = False):
-		# FIXME:  there might be times when we want to trap signals
-		utils.write_filename(self.to_xml(seglists), filename, verbose = verbose, gz = (filename or "stdout").endswith(".gz"), trap_signals = None)
 
 
 #
@@ -441,6 +442,22 @@ class DistributionsStats(object):
 #
 # =============================================================================
 #
+
+
+def gen_likelihood_control_doc(distributions_stats, seglists, name = u"gstlal_inspiral_likelihood", comment = u""):
+	xmldoc = ligolw.Document()
+	node = xmldoc.appendChild(ligolw.LIGO_LW())
+
+	node.appendChild(lsctables.New(lsctables.ProcessTable))
+	node.appendChild(lsctables.New(lsctables.ProcessParamsTable))
+	node.appendChild(lsctables.New(lsctables.SearchSummaryTable))
+	process = append_process(xmldoc, comment = comment)
+	llwapp.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
+
+	node.appendChild(distributions_stats.to_xml(process, name))
+
+	llwapp.set_process_end_time(process)
+	return xmldoc
 
 
 class Data(object):
@@ -610,7 +627,7 @@ class Data(object):
 					self.far.updateFAPmap(ifo_set, remap, verbose = self.verbose)
 
 				# write the new distribution stats to disk
-				self.distribution_stats.to_filename(self.likelihood_file, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = False)
+				utils.write_filename(gen_likelihood_control_doc(self.distribution_stats, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswidth(".gz"), verbose = False, trap_signals = None)
 
 			# run stream thinca
 			noncoinc_sngls = self.stream_thinca.add_events(events, timestamp, FAP = self.far)
@@ -635,7 +652,7 @@ class Data(object):
 	def write_likelihood_file(self):
 		# write the new distribution stats to disk
 		output = StringIO.StringIO()
-		utils.write_fileobj(self.distribution_stats.to_xml(segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), output, trap_signals = None)
+		utils.write_fileobj(gen_likelihood_control_doc(self.distribution_stats, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), output, trap_signals = None)
 		outstr = output.getvalue()
 		output.close()
 		return outstr
@@ -768,6 +785,8 @@ class Data(object):
 
 
 	def write_output_file(self, likelihood_file = None, verbose = False):
+		# FIXME:  should signal trapping be disabled in this code
+		# path?  I think not
 		if self.connection is not None:
 			from glue.ligolw import dbtables
 			self.connection.cursor().execute('UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)')
@@ -779,7 +798,7 @@ class Data(object):
 			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
 			self.search_summary.nevents = len(self.sngl_inspiral_table)
 			ligolw_process.set_process_end_time(self.process)
-			utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose)
+			utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
 		# write out the snr / chisq histograms
 		if likelihood_file is None:
@@ -787,4 +806,4 @@ class Data(object):
 			fname = os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
 		else:
 			fname = likelihood_file
-		self.distribution_stats.to_filename(fname, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()])), verbose = verbose)
+		utils.write_filename(gen_likelihood_control_doc(self.distribution_stats, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), fname, gz = (fname or "stdout").endswidth(".gz"), verbose = verbose, trap_signals = None)
