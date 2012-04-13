@@ -383,6 +383,15 @@ class DistributionsStats(object):
 			print >>sys.stderr, "done"
 
 	@classmethod
+	def from_xml(cls, xml, name):
+		self = cls()
+		self.raw_distributions, process_id = ligolw_burca_tailor.CoincParamsDistributions.from_xml(xml, name)
+		# FIXME:  produce error if binnings don't match this class's binnings attribute?
+		binnings = dict((param, self.raw_distributions.zero_lag_rates[param].bins) for param in self.raw_distributions.zero_lag_rates)
+		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**binnings)
+		return self, process_id
+
+	@classmethod
 	def from_filenames(cls, filenames, verbose = False):
 		self = cls()
 		self.raw_distributions, seglists = ligolw_burca_tailor.load_likelihood_data(filenames, u"gstlal_inspiral_likelihood", verbose = verbose)
