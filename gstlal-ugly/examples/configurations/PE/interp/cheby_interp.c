@@ -351,13 +351,13 @@ static gsl_vector_complex *generate_template(double m1, double m1, double sample
 static COMPLEX16TimeSeries freq_to_time_fft(gsl_vector_complex *fseries, float working_length, double deltaT, double f_min){
 
 	COMPLEX16Vector* T = NULL;
-	COMPLEX16Sequence* f_data;
+	COMPLEX16FrequencySeries* fdom_wave;
 	
-	fdata = fseries; /* FIXME: How do you cast gsl types into lal types? */
+	COMPLEX16Sequence* fdom_wave->data = fseries; /* FIXME: How do you cast gsl types into lal types? */
 	
-	revplan = XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1);
+	COMPLEX16FFTPlan *revplan = XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1);
 
-        tseries = COMPLEX16TimeSeries(name ,epoch ,f_min, sampleunits, deltaT, T)/* FIXME: how are name, epoch and sampleunits set? */i
+        tseries = COMPLEX16TimeSeries(name ,epoch ,f_min, sampleunits, deltaT, T)/* FIXME: how are name, epoch and sampleunits set? */
 
 	XLALWhitenCOMPLEX16FrequencySeries(fdata, psd);
 
@@ -455,6 +455,26 @@ static gsl_matrix_complex *create_templates_from_mc_and_eta(double mc_min, doubl
 	return A
 }
 
+static gsl_matrix_complex *create_svd_basis_from_template_bank(gsl_matrix_complex* template_bank, ){
+	
+	gsl_matrix_complex *U;
+	gsl_matrix_complex *V;
+	gsl_vector_complex *S;
+
+        gsl_matrix_view gU, gV;
+        gsl_vector_view gS;
+	
+        double *cA = NULL;
+        double *cU = NULL;
+        double *cV = NULL;
+        double *cS = NULL;
+
+        /* workspace data */
+        gsl_vector *gW;
+        gsl_matrix *gX;
+
+
+}
 
 /* FIXME use a better name */
 static gsl_vector_complex *interpolate_waveform_from_mchirp_and_eta(struct twod_waveform_interpolant_array *interps, double mchirp, double eta) { 
