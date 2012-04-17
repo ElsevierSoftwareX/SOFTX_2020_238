@@ -1,0 +1,73 @@
+#!/usr/bin/python
+from gstlal import pipeparts
+from gstlal import lloidparts
+from gstlal import reference_psd
+import pygtk
+pygtk.require("2.0")
+import gobject
+gobject.threads_init()
+import pygst
+pygst.require("0.10")
+import gst
+import sys, os, signal
+from gstlal import cbc_template_iir
+from glue import segmentsUtils
+from pylal.datatypes import LIGOTimeGPS
+
+_DEBUG = False
+
+pipeline = gst.Pipeline(sys.argv[0])
+mainloop = gobject.MainLoop()
+handler = lloidparts.LLOIDHandler(mainloop, pipeline)
+
+fbank = "H1bank.xml"
+fref = "reference_psd.xml"
+fframe = "frame.H1.cache"
+test_rate = 4096
+NXY_START = 1018341258
+NXY_STOP = NXY_START + 2
+START = 1018341140
+STOP = START + 20
+
+if _DEBUG == True:
+	import pdb
+	pdb.set_trace()
+
+nxydump_segment = "%d:%d" % (NXY_START, NXY_STOP)
+nxydump_segment, = segmentsUtils.from_range_strings([nxydump_segment], boundtype = LIGOTimeGPS)
+print >> sys.stderr, "nxydump %d" % nxydump_segment[0].ns()
+psd = reference_psd.read_psd(fref, verbose = True)
+
+seekevent = lloidparts.seek_event_for_gps(START, STOP)
+
+for ifo, channel in (("H1", "FAKE-STRAIN"), ):
+	bank = cbc_template_iir.load_iirbank(fbank, 4.0)
+	bank.logname = "%sbank%d" % (ifo,0)
+	head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, ifo, lloidparts.DetectorData(fframe, channel), fake_data = None, online_data = False, injection_filename = None, frame_segments = None, verbose = True)
+	head = lloidparts.mkLLOIDsrc(pipeline, head, [test_rate], ifo, psd = None, psd_fft_length = 1, ht_gate_threshold = None, veto_segments = None, seekevent = seekevent, nxydump_segment = nxydump_segment, track_psd = True, block_duration = gst.SECOND, zero_pad = 0)
+	snr = pipeparts.mkiirbank(pipeline, head[test_rate], a1 = bank.A[test_rate], b0 = bank.B[test_rate], delay = bank.D[test_rate], name = "gstlaliirbank_%s_%d" % (ifo, test_rate))
+#	snr = pipeparts.mktogglecomplex(pipeline, snr)
+	snr = pipeparts.mkqueue(pipeline, snr)
+	pipeparts.mknxydumpsink(pipeline, snr, "snr_%s.dump" % "test", segment = nxydump_segment)
+#	pipeparts.mkfakesink(pipeline, snr)
+
+# ADD your IIR element here before the fakesink don't forget
+#that you need head[test_rate]
+#pipeparts.mkfakesink(pipeline, head[4096])
+
+pipeline.set_state(gst.STATE_PAUSED)
+pipeline.set_state(gst.STATE_PLAYING)
+os.environ['GST_DEBUG_DUMP_DOT_DIR'] = '.'
+pipeparts.write_dump_dot(pipeline, "testplaying", verbose = True)
+
+def signal_handler(signal, frame, pipeline = pipeline):
+#os.environ['GST_DEBUG_DUMP_DOT_DIR'] = '.'
+	pipeparts.write_dump_dot(pipeline, "test", verbose = True)
+	print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" % (signal,)
+	bus = pipeline.get_bus()
+	bus.post(gst.message_new_eos(pipeline))
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+mainloop.run()
