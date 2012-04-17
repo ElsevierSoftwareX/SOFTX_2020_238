@@ -272,12 +272,12 @@ class FAR(object):
 			Lp.append(ranks[-1])
 			# save maximum likelihood value
 			Lj.append(max(ranks))
-		Lp = scipy.array(Lp)
-		Lj = scipy.array(Lj)
+		Lp = numpy.array(Lp)
+		Lj = numpy.array(Lj)
 		# create product of all maximum likelihood values
-		L = scipy.exp(sum(scipy.log(Lj)))
+		L = numpy.exp(sum(numpy.log(Lj)))
 		# compute minimum bin value we care about
-		Lmin = scipy.exp(sum(scipy.log(Lp))) * min(Lj) / L
+		Lmin = numpy.exp(sum(numpy.log(Lp))) * min(Lj) / L
 		# divide by a million for safety
 		Lmin *= 1e-6
 
