@@ -9,7 +9,8 @@
 
 /* LAL includes */
 #include <lal/Units.h>
-
+#include <lal/TimeFreqFFT.h>
+#include <lal/LALConstants.h>
 /*#include <spa.c>*/
 /*
  * Data structure methods
@@ -235,9 +236,7 @@ static int SPAWaveformReduceSpin (double mass1, double mass2, double chi,
 
     shft = 2.*LAL_PI *startTime;
 
-    /* zero outout */    
-    memset (hOfF, 0, numPoints * sizeof (complex double));
-
+    /* zero output */    
 	kmin = fLower / deltaF > 1 ? fLower / deltaF : 1;
 	kmax = fFinal / deltaF < numPoints  ? fFinal / deltaF : numPoints ;
 
@@ -271,7 +270,7 @@ static int SPAWaveformReduceSpin (double mass1, double mass2, double chi,
 
         }
 
-	GSL_SET_COMPLEX(&H, amp * (cos(Psi+shft*f+phi0+piBy4)), -amp*sin(Psi+shft*f+phi0+piBy4))
+	GSL_SET_COMPLEX(&H, amp * (cos(Psi+shft*f+phi0+piBy4)), -amp*sin(Psi+shft*f+phi0+piBy4));
         /* generate the waveform */
        	gsl_vector_complex_set(hOfF, k, H); 
 
@@ -306,10 +305,10 @@ static double chirp_time (double m1, double m2, double fLower, int order, double
 			c6T = LAL_GAMMA * 6848.0 / 105.0 - 10052469856691.0 / 23471078400.0 + LAL_PI * LAL_PI * 128.0 / 3.0 + eta * (3147553127.0 / 3048192.0 - LAL_PI * LAL_PI * 451.0 / 12.0) - eta * eta * 15211.0 / 1728.0 + eta * eta * eta * 25565.0 / 1296.0 + log (4.0) * 6848.0 / 105.0;
      			c6LogT = 6848.0 / 105.0;
 		case 5:
-			c5T = 13.0 * LAL_PI * eta / 3.0 - 7729.0 / 252.0 - (0.4*565.*(-146597. + 135856.*eta + 17136.*eta*eta)*chi/(2268.*(-113. + 76.*eta))); // last term is 0 if chi is 0;
+			c5T = 13.0 * LAL_PI * eta / 3.0 - 7729.0 / 252.0 - (0.4*565.*(-146597. + 135856.*eta + 17136.*eta*eta)*chi/(2268.*(-113. + 76.*eta))); /* last term is 0 if chi is 0*/
 		case 4:
-			c4T = 3058673.0 / 508032.0 + eta * (5429.0 / 504.0 + eta * 617.0 / 72.0) + (0.4*63845.*(-81. + 4.*eta)*chi*chi/(8.*pow(-113. + 76.*eta, 2.))); // last term is 0 if chi is 0;
-			c3T = -32.0 * LAL_PI / 5.0 + (0.4*113.*chi/3.); // last term is 0 if chi is 0;
+			c4T = 3058673.0 / 508032.0 + eta * (5429.0 / 504.0 + eta * 617.0 / 72.0) + (0.4*63845.*(-81. + 4.*eta)*chi*chi/(8.*pow(-113. + 76.*eta, 2.))); /* last term is 0 if chi is 0*/
+			c3T = -32.0 * LAL_PI / 5.0 + (0.4*113.*chi/3.); /* last term is 0 if chi is 0*/
 			c2T = 743.0 / 252.0 + eta * 11.0 / 3.0;
 			c0T = 5.0 * m * LAL_MTSUN_SI / (256.0 * eta);	
 			break;
@@ -339,30 +338,29 @@ static double chirp_time (double m1, double m2, double fLower, int order, double
 }
 
 
-static gsl_vector_complex *generate_template(double m1, double m1, double sample_rate, double duration, double f_low, double f_high, double order){
+static gsl_vector_complex *generate_template(double m1, double m2, double sample_rate, double duration, double f_low, double f_high, double order){
 
-	gsl_comlex_vector *hOfF = gsl_vector_complex_calloc(duration*sample_rate); 
+	gsl_vector_complex *hOfF = gsl_vector_complex_calloc(duration*sample_rate); 
 	int z = duration*sample_rate;
 	SPAWaveformReduceSpin(m1, m2, 0, order, 0, 0, 1.0 / duration, f_low, f_high, z, hOfF);
-	return hOfF	
+	return hOfF;
 
 }
 
-static COMPLEX16TimeSeries freq_to_time_fft(gsl_vector_complex *fseries, float working_length, double deltaT, double f_min){
+static gsl_vector_complex freq_to_time_fft(gsl_vector_complex *fseries, float working_length, double deltaT, double f_min){
 
 	COMPLEX16Vector* T = NULL;
-	COMPLEX16FrequencySeries* fdom_wave;
+	COMPLEX16FrequencySeries* fdom_wave = NULL;
 	
-	COMPLEX16Sequence* fdom_wave->data = fseries; /* FIXME: How do you cast gsl types into lal types? */
+	fdom_wave->data = fseries; /* FIXME: How do you cast gsl types into lal types? */
 	
 	COMPLEX16FFTPlan *revplan = XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1);
 
-        tseries = COMPLEX16TimeSeries(name ,epoch ,f_min, sampleunits, deltaT, T)/* FIXME: how are name, epoch and sampleunits set? */
+        COMPLEX16TimeSeries* tseries = COMPLEX16TimeSeries(name ,epoch ,f_min, sampleunits, deltaT, T)/* FIXME: how are name, epoch and sampleunits set? */
 
 	XLALWhitenCOMPLEX16FrequencySeries(fdata, psd);
 
-	
-
+	/* FIXME: Function needs finishing */
 }
 
 /*
@@ -370,27 +368,29 @@ static COMPLEX16TimeSeries freq_to_time_fft(gsl_vector_complex *fseries, float w
  */
 
 
-static gsl_matrix_complex *create_templates_from_mc_and_eta(double mc_min, double mc_max, double N_mc, double eta_min, double eta_max, double M_eta){
+static gsl_matrix_complex *create_templates_from_mc_and_eta(double mc_min, double mc_max, double N_mc, double eta_min, double eta_max, double M_eta, double f_min){
        /*
  	* N_mc is number of points on M_c grid
  	* viceversa for M_eta	
  	*/ 
-	int k=0;
+	int i,j,k=0;
 	double sample_rate;
-	double duration;
+	double durationi, length_max, working_length, working_duration;
         double deltaT;
-
+	double eta, mc, m1, m2;
+	
         gsl_complex time;
         gsl_complex ratesquared;
         gsl_complex working_length_log_arg;
 
-	gsl_vector* F_finals = gsl_vector_complex_calloc(N_mc*M_eta);
-	gsl_vector* chirp_times = gsl_vector_complex_calloc(N_mc*M_eta);
-	gsl_vector_compex *fseries;
+	gsl_vector* F_finals = gsl_vector_calloc(N_mc*M_eta);
+	gsl_vector* chirp_times = gsl_vector_calloc(N_mc*M_eta);
+	gsl_vector_complex *fseries;
+	gsl_vector_complex tseries;
 
-	for (unsigned int i = 0; i < N_mc ; i++){ /* find set of chrip times and max frequencies */
+	for (i = 0; i < N_mc ; i++){ /* find set of chrip times and max frequencies */
 		k+=i;
-                for (unsigned int j = 0; j < M_eta ; j++){
+                for ( j = 0; j < M_eta ; j++){
 			k+=j;	
 			eta = eta_min + (j/(M_eta-1))*(eta_max - eta_min);
                         mc = mc_min + (i/(N_mc-1))*(mc_max - mc_min);
@@ -409,25 +409,24 @@ static gsl_matrix_complex *create_templates_from_mc_and_eta(double mc_min, doubl
 	GSL_SET_COMPLEX (&ratesquared, gsl_vector_max(F_finals)**(2.), 0); /* ditto ratesquared */ 
 
 	duration = 2.**(ceil(gsl_complex_log_b(time,2))); /* see SPADocstring in _spawaveform.c */
-	f_max = gsl_vector_max(F_finals);	
 	sample_rate = 2.**(ceil(gsl_complex_log_b(ratesquared,2)));		
 	deltaT = 1./sample_rate;
-	double length_max = sample_rate * duration;
+	length_max = sample_rate * duration;
 	
 
 	GSL_SET_COMPLEX(&working_length_log_arg,length_max + round(32.0 * sample_rate),0 );
 
-	working_length = 2**ceil(gsl_complex_log_b(working_length_log_arg, 2));
-        working_duration = float(working_length) / sample_rate;	
+	working_length = 2**ceil(gsl_complex_log_b(working_length_log_arg, 2)); /* this doesn't work: need to find gsl fn which does log2 */
+        working_duration = (working_length) / sample_rate;	
 
 	/* gsl_matrix_complex *A will contain template bank */
 
 	gsl_matrix_complex *A = gsl_matrix_complex_calloc(2*N_mc*M_eta, working_length); 
 
 
-	for (unsigned int i = 0; i < N_mc ; i++){
+	for ( i = 0; i < N_mc ; i++){
 		k+=i;
-		for (unsigned int j = 0; j < M_eta ; j++){
+		for ( j = 0; j < M_eta ; j++){
 			k+=j;
 
 			eta = eta_min + (j/(M_eta-1))*(eta_max - eta_min);
@@ -436,26 +435,26 @@ static gsl_matrix_complex *create_templates_from_mc_and_eta(double mc_min, doubl
                         m1 = mc2mass1(mc,eta);
                         m2 = mc2mass2(mc,eta);
 
-			fseries = generate_template(m1, m2, sample_rate, working_duration, f_min, sample_rate_max / (2*1.05), 7 ); 
-			tseries = freq_to_time_fft(fseries); /* return whitened complex time series */	
+			fseries = generate_template(m1, m2, sample_rate, working_duration, f_min, sample_rate / (2*1.05), 7 ); 
+			tseries = freq_to_time_fft(fseries, working_length, deltaT, f_min); /* return whitened complex time series */	
 
 			/* pack templates in A         */
 			/* real waveforms in 2k'th row */
 			/* imag in (2k+1)'th row       */	
 
-			gsl_vector_view tmp_re = gsl_matrix_column (A,  2*k);
-			gsl_vector_view tmp_imag = gsl_matrix_column (A,  2*k+1);		
+			gsl_vector_complex_view tmp_re = gsl_matrix_complex_column (A,  2*k);
+			gsl_vector_complex_view tmp_imag = gsl_matrix_complex_column (A,  2*k+1);		
 
-			gsl_vector_memcpy(tmp_re, tseries->data.real);		
-			gsl_vector_memcpy(tmp_imag, tseries->data.imag);
+			gsl_vector_memcpy(tmp_re, tseries.real);/*FIXME: Can matrix columns be set to vectors and how?*/	
+			gsl_vector_memcpy(tmp_imag, tseries.imag);/* FIXME: ditto */
 		}
 	
 	}	
 	
-	return A
+	return A;
 }
 
-static gsl_matrix_complex *create_svd_basis_from_template_bank(gsl_matrix_complex* template_bank, ){
+static gsl_matrix_complex *create_svd_basis_from_template_bank(gsl_matrix_complex* template_bank ){
 	
 	gsl_matrix_complex *U;
 	gsl_matrix_complex *V;
