@@ -385,7 +385,7 @@ static gsl_vector_complex *freq_to_time_fft(gsl_vector_complex *fseries, int wor
  */
 
 
-static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max, double N_mc, double eta_min, double eta_max, double M_eta, double f_min){
+static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max, double N_mc, double eta_min, double eta_max, double M_eta, double f_min, REAL8FrequencySeries* psd){
        /*
  	* N_mc is number of points on M_c grid
  	* viceversa for M_eta	
@@ -523,4 +523,25 @@ static gsl_vector_complex *interpolate_waveform_from_mchirp_and_eta(struct twod_
 	return h_f;
 }
 
+/* example usage */
+/*int main{
 
+	double mc_min, eta_min, mc_max, eta_max, N_mc, M_eta;
+	create_templates_from_mc_and_eta();
+
+	double New_N_mc, New_M_eta; 
+
+	for (unsigned int i =0; i <  New_N_mc; i++){
+		for (unsigned int j =0; j <  New_N_mc; j++){
+			eta = eta_min + (j/(New_M_eta-1))*(eta_max - eta_min);
+			mc = mc_min + (i/(New_N_mc-1))*(mc_max - mc_min);
+			
+			interpolate_waveform_from_mchirp_and_eta()
+		}
+	}	
+
+	interpolate_waveform_from_mchirp_and_eta();
+
+
+}
+*/
