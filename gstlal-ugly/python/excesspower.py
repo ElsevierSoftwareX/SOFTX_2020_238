@@ -342,15 +342,15 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 	# Tee off the amplitude stream
 	head = chtee = mktee( pipeline, head )
 	head = mkgeneric( pipeline, head, "cairovis_waterfall",
-			title = "TF map %s:%s, (SNR:0,%f), fmax=%d Hz" % (handler.inst, handler.channel, snr_max, handler.fhigh),
+			title = "TF map %s:%s, fmax=%d Hz" % (handler.inst, handler.channel, handler.fhigh),
 			z_autoscale = True,
 			#z_min = 0,
 			#z_max = snr_max,
 			z_label = "SNR",
 			# TODO: Restore this when it becomes available again
-			y_autoscale = True,
-			y_min = handler.flow,
-			y_max = handler.fhigh,
+			#y_autoscale = True,
+			#y_min = handler.flow,
+			#y_max = handler.fhigh,
 			y_label = "channel number",
 			x_label = "time (s)",
 			colormap = "jet",

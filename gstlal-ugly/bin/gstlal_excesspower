@@ -142,6 +142,9 @@ class EPHandler( LLOIDHandler ):
 		self.rebuild_chan_mix_matrix()
 		"""
 
+		# required for file locking
+		self.lock = threading.Lock()
+
 		self.bus = pipeline.get_bus()
 		self.bus.add_signal_watch()
 		self.bus.connect( "message", self.process_message )
@@ -335,12 +338,11 @@ class EPHandler( LLOIDHandler ):
 		print >>sys.stderr, "Outputting triggers for %s\n" % str(analysis_segment)
 
 		# write the new distribution stats to disk
-		lock = threading.Lock()
-		lock.acquire()
+		self.lock.acquire()
 		# Enable to debug LIGOLW stream
 		#utils.write_fileobj(output, sys.stdout)
 		utils.write_filename(output, filename, verbose = options.verbose, gz = (filename or "stdout").endswith(".gz"), trap_signals = None)
-		lock.release()
+		self.lock.release()
 
 		if( flush ): self.make_output_table()
 
