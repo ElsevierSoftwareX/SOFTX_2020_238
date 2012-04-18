@@ -127,7 +127,7 @@ if options.compute_fap is not None:
 
 if options.compute_fap is not None:
 	for bkdb in options.non_injection_db:
-		far.set_fap(Far, bkdb, tmp_space = options.tmp_space, verbose = options.verbose)
+		far.set_fap(Far, bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
 
 	#
 	# increment the trials factor by 1 before assigning faps for
@@ -136,10 +136,10 @@ if options.compute_fap is not None:
 
 	Far.trials_table.increment(1)
 	for injdb in options.injection_dbs:
-		far.set_fap(Far, injdb, tmp_space = options.tmp_space, verbose = options.verbose)
+		far.set_fap(Far, injdb, tmp_path = options.tmp_space, verbose = options.verbose)
 
 if options.compute_far is not None:
 	for bkdb in options.non_injection_db:
-		far.set_far(options, Far, bkdb)
+		far.set_far(Far, bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
 	for injdb in options.injection_dbs:
-		far.set_far(options, Far, injdb)
+		far.set_far(Far, injdb, tmp_path = options.tmp_space, verbose = options.verbose)
