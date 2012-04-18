@@ -46,6 +46,17 @@ sqlite3.enable_callback_tracebacks(True)
 #
 
 def set_fap(Far, f, tmp_path = None, verbose = False):
+	"""
+	Function to set the false alarm probability for a single database
+	containing the usual inspiral tables.
+
+	Far = inspiral.FAR class instance
+	f = filename of the databse (e.g.something.sqlite) 
+	tmp_path = the local disk path to copy the database to in
+		order to avoid sqlite commands over nfs 
+	verbose = be verbose
+	"""
+	# FIXME this code should be moved into a method of the FAR class once other cleaning is done
 	from glue.ligolw import dbtables
 
 	# set up working file names
@@ -55,7 +66,7 @@ def set_fap(Far, f, tmp_path = None, verbose = False):
 	# define fap function
 	connection.create_function("fap", 3, Far.fap_from_rank)
 
-	# FIXME abusing FAR column
+	# FIXME abusing false_alarm_rate column, move for a false_alarm_probability column??
 	connection.cursor().execute("UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(coinc_event.likelihood, coinc_inspiral.ifos, coinc_event.time_slide_id) FROM coinc_event WHERE coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id)")
 	connection.commit()
 
@@ -69,7 +80,17 @@ def set_fap(Far, f, tmp_path = None, verbose = False):
 #
 
 class TrialsTable(dict):
+	"""
+	A class to store the trials table from a coincident inspiral search
+	with the intention of computing the false alarm probabiliy of an event after N
+	trials.  This is a subclass of dict.  The trials table is keyed by the
+	detectors that partcipated in the coincidence and the time slide id.
+	"""
 	def from_db(self, connection):
+		"""
+		Increment the trials table from values stored in the database
+		found in "connection"
+		"""		
 		for ifos, tsid, count in connection.cursor().execute('SELECT ifos, coinc_event.time_slide_id AS tsid, count(*) / nevents FROM sngl_inspiral JOIN coinc_event_map ON coinc_event_map.event_id == sngl_inspiral.event_id JOIN coinc_inspiral ON coinc_inspiral.coinc_event_id == coinc_event_map.coinc_event_id JOIN coinc_event ON coinc_event.coinc_event_id == coinc_event_map.coinc_event_id  WHERE coinc_event_map.table_name = "sngl_inspiral" GROUP BY tsid, ifos;'):
 			try:
 				self[ifos, tsid] += count
@@ -78,11 +99,18 @@ class TrialsTable(dict):
 		connection.commit()
 
 	def increment(self, n):
+		"""
+		Increment all keys by n
+		"""
 		for k in self:
 			self[k] += n
 
 	@classmethod
 	def from_xml(cls, xml, name):
+		"""
+		A class method to create a new instance of a TrialsTable from
+		an xml representation of it.
+		"""
 		xml, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:gstlal_inspiral_trialstable" % name]
 		self = cls()
 		for param in xml.getElementsByTagName(ligolw.Param.tagName):
@@ -90,6 +118,10 @@ class TrialsTable(dict):
 		return self
 
 	def to_xml(self, name):
+		"""
+		A method to write this instance of a trials table to an xml
+		representation.
+		"""
 		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_trialstable" % name})
 		for key, value in self.items():
 			xml.appendChild(ligolw_param.from_pyvalue(key, value))
@@ -99,10 +131,10 @@ class TrialsTable(dict):
 # Function to compute the far in a given file
 #
 
-def set_far(options, Far, f):
+def set_far(Far, f, tmp_path = None, verbose = False):
 	from glue.ligolw import dbtables
 
-	working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
+	working_filename = dbtables.get_connection_filename(f, tmp_path = tmp_path, verbose = verbose)
 	connection = sqlite3.connect(working_filename)
 
 	connection.create_function("far", 1, Far.compute_far)
@@ -137,7 +169,7 @@ def set_far(options, Far, f):
 
 	connection.commit()
 	connection.close()
-	dbtables.put_connection_filename(f, working_filename, verbose = options.verbose)
+	dbtables.put_connection_filename(f, working_filename, verbose = verbose)
 
 #
 # Class to handle the computation of FAPs/FARs
