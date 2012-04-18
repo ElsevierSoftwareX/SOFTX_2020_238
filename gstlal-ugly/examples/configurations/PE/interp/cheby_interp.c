@@ -23,18 +23,33 @@
 
 
 int free_waveform_interp_objects(struct twod_waveform_interpolant_array * interps) {
+	int i;
+	struct twod_waveform_interpolant *interp = interps->interp
+	/* if they exist free the C_KL matrices */
+	for (i = 0; i < interps->size; i++, interp++) {
+		if (interp->C_KL) gsl_matrix_complex_free(interp->C_KL);
+	}
 	free(interps->interp);
 	free(interps);
 	return 0;
 	}
 
 
-struct twod_waveform_interpolant_array * new_waveform_interpolant_array(int size) {
+struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd_bank(gsl_matrix *svd_bank, param1_min, param2_min, param1_max, param2_max)
+{
+	int i;
 	struct twod_waveform_interpolant_array * output = (struct twod_waveform_interpolant_array *) calloc(1, sizeof(struct twod_waveform_interpolant_array));
-	output-> size = size;
-	output->interp = (struct twod_waveform_interpolant *) calloc(size, sizeof(struct twod_waveform_interpolant));
-	return output;
+	output->size = svd_bank->size1; //FIXME make sure this is right
+	output->interp = (struct twod_waveform_interpolant *) calloc(output->size, sizeof(struct twod_waveform_interpolant));
+	output->param1_min = param1_min;
+	output->param2_min = param2_min;
+	output->param1_max = param1_max;
+	output->param2_max = param2_max;
+	for (i = 0; i < output->size; i++) {
+		output->interp[i].svd_basis = gsl_matrix_row(svd_bank, i);
 	}
+	return output;
+}
 
 
 /*
@@ -44,7 +59,7 @@ struct twod_waveform_interpolant_array * new_waveform_interpolant_array(int size
 static gsl_complex projection_coefficient(gsl_vector_complex *svd_basis, gsl_vector_complex *spa_waveform){
 	/*project svd basis onto SPA's to get coefficients*/
 	gsl_complex M;
-	/* Note that svd_basis should have 0 imaginary part */
+	/* FIXME svd_basis is real, split spawaveform into real and imaginary parts */
 	gsl_blas_zdotu(svd_basis, spa_waveform, &M);
 	return M;
 }
@@ -362,17 +377,25 @@ static gsl_vector_complex *generate_template(double m1, double m2, double sample
 
 }
 
-static gsl_vector_complex *freq_to_time_fft(gsl_vector_complex *fseries, int working_length, double deltaT, double f_min, REAL8FrequencySeries* psd){
+static gsl_vector_complex *freq_to_time_fft(gsl_vector_complex *fseries, double deltaT, REAL8FrequencySeries* psd){
 
-	const LIGOTimeGPS* LIGOTIMEGPSZERO;
-	COMPLEX16Vector* T = NULL;
+	LIGOTimeGPS zero = LIGOTIMEGPSZERO;
+	double deltaF = fseries->size * deltaT;
 	COMPLEX16FrequencySeries fdom_wave;
-	COMPLEX16Sequence *seq = XLALCreateCOMPLEX16Sequence(fseries->size);
+	COMPLEX16Sequence seq;
+	
+	//COMPLEX16Sequence *seq = XLALCreateCOMPLEX16Sequence(fseries->size);
+	
 	COMPLEX16FFTPlan *revplan = XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1);
-	COMPLEX16TimeSeries *tseries = XLALCreateCOMPLEX16TimeSeries("waveform",  LIGOTIMEGPSZERO, REAL8 f_min, REAL8 deltaT, sampleunits, fseries->size);/* FIXME: how are name, epoch and sampleunits set? */
+	COMPLEX16TimeSeries *tseries = XLALCreateCOMPLEX16TimeSeries(NULL, &zero, (REAL8) 0., (REAL8) deltaT, &lalStrainUnit, fseries->size);/* FIXME: how are name, epoch and sampleunits set? */
 
-	seq->data = (COMPLEX16*) fseries->data; /* FIXME: How do you cast gsl types into lal types? */
-	fdom_wave->data = seq;
+	seq.length = fseries->size;
+	seq.data = (COMPLEX16*) fseries->data;
+	
+	fdom_wave.name = NULL;
+	fdom_wave.data = &seq;
+	/*FIXME fill in the rest of the structure see https://www.lsc-group.phys.uwm.edu/daswg/projects/lal/nightly/docs/html/structCOMPLEX16FrequencySeries.html*/
+	
 	XLALWhitenCOMPLEX16FrequencySeries(&fdom_wave, psd);
 
 	/* FIXME: Function needs finishing */
@@ -471,7 +494,7 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
 	return A;
 }
 
-static int create_svd_basis_from_template_bank(gsl_matrix* template_bank, gsl_matrix* V, gsl_vector* S ){
+static int create_svd_basis_from_template_bank(gsl_matrix** template_bank_ptr, gsl_matrix* M ){
 	
 	/*gsl_matrix *V;
 	gsl_vector *S; */
@@ -480,24 +503,20 @@ static int create_svd_basis_from_template_bank(gsl_matrix* template_bank, gsl_ma
 	gsl_matrix *transpose_temp;
 	gsl_matrix *gX;
 	gsl_vector *gW;
+	gsl_matrix template_bank = *template_bank_ptr;
 	
-	gX = gsl_matrix_calloc( sizeof( template_bank->size2), sizeof( template_bank->size2) );
- 	gW = gsl_vector_calloc( sizeof( template_bank->size2 )  );	
+	gX = gsl_matrix_calloc(template_bank->size2, template_bank->size2);
+ 	gW = gsl_vector_calloc(template_bank->size2);	
 
-	/* gsl doesn't have a transpose function for non-square matrices so we create a temporary matrix to do a memcpy */
-	transpose_temp = gsl_matrix_calloc( sizeof( template_bank->size2), sizeof( template_bank->size1) );
-	gsl_matrix_transpose_memcpy (transpose_temp, template_bank);
-
-	/* free the original template bank */
-	gsl_matrix_free(template_bank);
-	
-	/* copy the temporary transpose to template bank */
-	template_bank = gsl_matrix_calloc(transpose_temp->size1, transpose_temp->size2);
-	gsl_matrix_memcpy(template_bank, transpose_temp);
-	
-	/* V = gsl_matrix_callox( sizeof( template_bank->size2), sizeof( template_bank->size2) ); */
+	V = gsl_matrix_calloc( template_bank->size2, template_bank->size2);
+	S = gsl_vector_calloc(template_bank->size2);
 
 	gsl_linalg_SV_decomp_mod (template_bank ,gX, V, S, gW);
+
+	/* FIXME, add the svd truncation, replace template_bank_ptr with the
+ 	 * new truncated matrix and free the template_bank matrix, populate the M
+	 * matrix and free V S gX and gW when you are done
+	 */
 
 	return 0;
 }
@@ -509,25 +528,41 @@ static gsl_vector_complex *interpolate_waveform_from_mchirp_and_eta(struct twod_
 	double deltaF, x, y;
 	struct twod_waveform_interpolant *interp = interps->interp;
 	gsl_vector_complex *h_f = gsl_vector_complex_calloc(interp->svd_basis->size);
+	x = map_coordinate_to_cheby(interps->param1_min, interps->param1_max, mchirp);
+	y = map_coordinate_to_cheby(interps->param2_min, interps->param2_max, eta);
 	
+	/* this is the loop over mu */
 	for (i = 0; i < interps->size; i++, interp++) {
-		x = map_coordinate_to_cheby(interp->p1_min, interp->p1_max, mchirp);
-		y = map_coordinate_to_cheby(interp->p2_min, interp->p2_max, eta);
 		M = compute_M_xy(interp->C_KL, x, y);
-		/* don't do this, we need an add and scale function so as to not destroy svd_basis */
-		/* gsl_vector_scale(interp->svd_basis, M); */
-		gsl_blas_zaxpy(M, h_f, interp->svd_basis); 
+		/* FIXME svd_basis is real, we can't use this function */
+		gsl_blas_zaxpy(M, interp->svd_basis, h_f);
 		}
-	free_waveform_interp_objects(interps);
-
 	return h_f;
 }
 
 /* example usage */
-/*int main{
 
+#if 0
+int main{
+
+	/* FIXME set these */
 	double mc_min, eta_min, mc_max, eta_max, N_mc, M_eta;
-	create_templates_from_mc_and_eta();
+	double f_min = 40.0;
+	gsl_matrix *templates;
+	gsl_matrix *svd_basis;
+	gsl_matrix *M;
+	struct twod_waveform_interpolant_array *interps;
+	REAL8FrequencySeries *psd = XLALCreateREAL8FrequencySeries(FIXME);
+	
+	read_psd_from_file_and_interpolate_to_frequency_series("reference_psd.txt", psd); 
+
+	/* templates is allocated by this function make sure to free it */
+	templates = create_templates_from_mc_and_eta(mc_min, mc_max, N_mc, eta_min, eta_max, M_eta, f_min, psd);
+	
+	/* M is allocated by this function make sure to free it */
+	create_svd_basis_from_template_bank(&templates, M);
+
+	interps = new_waveform_interpolant_array_from_svd_bank(gsl_matrix *svd_bank, param1_min, param2_min, param1_max, param2_max)	
 
 	double New_N_mc, New_M_eta; 
 
@@ -542,6 +577,7 @@ static gsl_vector_complex *interpolate_waveform_from_mchirp_and_eta(struct twod_
 
 	interpolate_waveform_from_mchirp_and_eta();
 
-
+	gsl_matrix_free(M);
+	gsl_matrix_complex_free(templates);
 }
-*/
+#endif
