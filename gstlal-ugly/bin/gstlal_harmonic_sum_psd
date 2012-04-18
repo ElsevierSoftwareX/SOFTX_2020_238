@@ -91,8 +91,10 @@ for ifo,psd_freqseries in psds.items():
 	psdinterp = reference_psd.interpolate_psd(psd_freqseries, deltaF)
 	sampleunits = psdinterp.sampleUnits
 	windowed_invpsd_freqseries = psdinterp.data**-1.
-	windowed_invpsd_freqseries[f < flowers[ifo]] = 0.
-	invpsd_data[psdinterp.f0/deltaF:fmaxs[ifo]/deltaF+1] += windowed_invpsd_freqseries
+	start = int(psdinterp.f0/deltaF)
+	end = start + len(windowed_invpsd_freqseries)
+	windowed_invpsd_freqseries[f[start:end] < flowers[ifo]] = scipy.zeros(sum(f[start:end] < flowers[ifo]))
+	invpsd_data[start:end] += windowed_invpsd_freqseries
 
 # create harmonic sum psd frequency series
 harmonic_sum_psd = laltypes.REAL8FrequencySeries(
