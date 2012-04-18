@@ -362,7 +362,7 @@ static gsl_vector_complex *generate_template(double m1, double m2, double sample
 
 }
 
-static gsl_vector_complex *freq_to_time_fft(gsl_vector_complex *fseries, int working_length, double deltaT, double f_min){
+static gsl_vector_complex *freq_to_time_fft(gsl_vector_complex *fseries, int working_length, double deltaT, double f_min, REAL8FrequencySeries* psd){
 
 	const LIGOTimeGPS* LIGOTIMEGPSZERO;
 	COMPLEX16Vector* T = NULL;
@@ -452,7 +452,7 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
                         m2 = mc2mass2(mc,eta);
 
 			fseries = generate_template(m1, m2, sample_rate, working_duration, f_min, sample_rate / (2*1.05), 7 ); 
-			tseries = freq_to_time_fft(fseries, working_length, deltaT, f_min); /* return whitened complex time series */	
+			tseries = freq_to_time_fft(fseries, working_length, deltaT, f_min, psd); /* return whitened complex time series */	
 
 			/* pack templates in A         */
 			/* real waveforms in 2k'th row */
@@ -522,4 +522,5 @@ static gsl_vector_complex *interpolate_waveform_from_mchirp_and_eta(struct twod_
 
 	return h_f;
 }
+
 
