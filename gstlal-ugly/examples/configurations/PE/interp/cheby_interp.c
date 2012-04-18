@@ -6,10 +6,14 @@
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_complex.h>
 #include <gsl/gsl_complex_math.h>
+#include <gsl/gsl_linalg.h>
 
 /* LAL includes */
+#include <lal/LALDatatypes.h>
 #include <lal/Units.h>
 #include <lal/TimeFreqFFT.h>
+#include <lal/ComplexFFT.h>
+#include <lal/TimeSeries.h>
 #include <lal/LALConstants.h>
 #include <lal/Sequence.h>
 /*#include <spa.c>*/
@@ -338,6 +342,16 @@ static double chirp_time (double m1, double m2, double fLower, int order, double
 	return c0T * (1 + c2T * x2T + c3T * x3T + c4T * x4T + c5T * x5T + (c6T + c6LogT * log (xT)) * x6T + c7T * x7T) / x8T;
 }
 
+static double ffinal(double m1, double m2){
+	
+	/* Compute frequency at Schwarzschild ISCO */
+
+	double f_isco;
+	
+	pow(2., ceil( log( (1./LAL_PI)*( pow(6.,-3./2.) )*( pow(m1+m2,-1.) ) ) ) / log(2) ); /* Next highest power of 2 of f_isco */
+	
+	return f_isco;
+}
 
 static gsl_vector_complex *generate_template(double m1, double m2, double sample_rate, double duration, double f_low, double f_high, double order){
 
@@ -348,19 +362,22 @@ static gsl_vector_complex *generate_template(double m1, double m2, double sample
 
 }
 
-static gsl_vector_complex freq_to_time_fft(gsl_vector_complex *fseries, float working_length, double deltaT, double f_min){
+static gsl_vector_complex *freq_to_time_fft(gsl_vector_complex *fseries, int working_length, double deltaT, double f_min){
 
+	const LIGOTimeGPS* LIGOTIMEGPSZERO;
 	COMPLEX16Vector* T = NULL;
 	COMPLEX16FrequencySeries fdom_wave;
 	COMPLEX16Sequence *seq = XLALCreateCOMPLEX16Sequence(fseries->size);
 	COMPLEX16FFTPlan *revplan = XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1);
-	COMPLEX16TimeSeries* tseries = COMPLEX16TimeSeries("waveform",  LIGOTIMEGPSZERO, f_min, sampleunits, deltaT, T);/* FIXME: how are name, epoch and sampleunits set? */
+	COMPLEX16TimeSeries *tseries = XLALCreateCOMPLEX16TimeSeries("waveform",  LIGOTIMEGPSZERO, REAL8 f_min, REAL8 deltaT, sampleunits, fseries->size);/* FIXME: how are name, epoch and sampleunits set? */
 
 	seq->data = (COMPLEX16*) fseries->data; /* FIXME: How do you cast gsl types into lal types? */
 	fdom_wave->data = seq;
-	XLALWhitenCOMPLEX16FrequencySeries(fdata, psd);
+	XLALWhitenCOMPLEX16FrequencySeries(&fdom_wave, psd);
 
 	/* FIXME: Function needs finishing */
+
+
 }
 
 /*
@@ -368,7 +385,7 @@ static gsl_vector_complex freq_to_time_fft(gsl_vector_complex *fseries, float wo
  */
 
 
-static gsl_matrix_complex *create_templates_from_mc_and_eta(double mc_min, double mc_max, double N_mc, double eta_min, double eta_max, double M_eta, double f_min){
+static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max, double N_mc, double eta_min, double eta_max, double M_eta, double f_min){
        /*
  	* N_mc is number of points on M_c grid
  	* viceversa for M_eta	
@@ -384,7 +401,7 @@ static gsl_matrix_complex *create_templates_from_mc_and_eta(double mc_min, doubl
 	gsl_vector* F_finals = gsl_vector_calloc(N_mc*M_eta);
 	gsl_vector* chirp_times = gsl_vector_calloc(N_mc*M_eta);
 	gsl_vector_complex *fseries;
-	gsl_vector_complex tseries;
+	gsl_vector_complex* tseries;
 
 	for (i = 0; i < N_mc ; i++){ /* find set of chrip times and max frequencies */
 		k+=i;
@@ -396,7 +413,7 @@ static gsl_matrix_complex *create_templates_from_mc_and_eta(double mc_min, doubl
 			m1 = mc2mass1(mc,eta);
 			m2 = mc2mass2(mc,eta);
 
-			gsl_vector_set(F_finals, k,ffinal(m1,m2)); /* FIXME: light-ring or schwarzschild isco?? */
+			gsl_vector_set(F_finals, k, ffinal(m1,m2)); /* FIXME: light-ring or schwarzschild isco?? */
 			gsl_vector_set(chirp_times, k, chirp_time(m1,m2,f_min, 7, 0));
 		}
 	}
@@ -439,14 +456,14 @@ static gsl_matrix_complex *create_templates_from_mc_and_eta(double mc_min, doubl
 
 			/* pack templates in A         */
 			/* real waveforms in 2k'th row */
-			/* imag in (2k+1)'th row       */	
-			gsl_matrix_set_row(A, 2*k, tseries)
+			/* imag in (2k+1)'th row       */
+	
+			gsl_vector tseries_real =  gsl_vector_complex_real(tseries).vector;
+			gsl_vector tseries_imag =  gsl_vector_complex_imag(tseries).vector;
 
-			gsl_vector_complex_view tmp_re = gsl_matrix_complex_column (A,  2*k);
-			gsl_vector_complex_view tmp_imag = gsl_matrix_complex_column (A,  2*k+1);		
+			gsl_matrix_set_row(A, 2*k, &tseries_real);
+			gsl_matrix_set_row(A, 2*k+1, &tseries_imag);	
 
-			gsl_vector_memcpy(tmp_re, tseries.real);/*FIXME: Can matrix columns be set to vectors and how?*/	
-			gsl_vector_memcpy(tmp_imag, tseries.imag);/* FIXME: ditto */
 		}
 	
 	}	
@@ -454,25 +471,35 @@ static gsl_matrix_complex *create_templates_from_mc_and_eta(double mc_min, doubl
 	return A;
 }
 
-static gsl_matrix_complex *create_svd_basis_from_template_bank(gsl_matrix_complex* template_bank ){
+static int create_svd_basis_from_template_bank(gsl_matrix* template_bank, gsl_matrix* V, gsl_vector* S ){
 	
-	gsl_matrix_complex *U;
-	gsl_matrix_complex *V;
-	gsl_vector_complex *S;
-
-        gsl_matrix_view gU, gV;
-        gsl_vector_view gS;
+	/*gsl_matrix *V;
+	gsl_vector *S; */
 	
-        double *cA = NULL;
-        double *cU = NULL;
-        double *cV = NULL;
-        double *cS = NULL;
+	/* Work space matrices */
+	gsl_matrix *transpose_temp;
+	gsl_matrix *gX;
+	gsl_vector *gW;
+	
+	gX = gsl_matrix_calloc( sizeof( template_bank->size2), sizeof( template_bank->size2) );
+ 	gW = gsl_vector_calloc( sizeof( template_bank->size2 )  );	
 
-        /* workspace data */
-        gsl_vector *gW;
-        gsl_matrix *gX;
+	/* gsl doesn't have a transpose function for non-square matrices so we create a temporary matrix to do a memcpy */
+	transpose_temp = gsl_matrix_calloc( sizeof( template_bank->size2), sizeof( template_bank->size1) );
+	gsl_matrix_transpose_memcpy (transpose_temp, template_bank);
 
+	/* free the original template bank */
+	gsl_matrix_free(template_bank);
+	
+	/* copy the temporary transpose to template bank */
+	template_bank = gsl_matrix_calloc(transpose_temp->size1, transpose_temp->size2);
+	gsl_matrix_memcpy(template_bank, transpose_temp);
+	
+	/* V = gsl_matrix_callox( sizeof( template_bank->size2), sizeof( template_bank->size2) ); */
 
+	gsl_linalg_SV_decomp_mod (template_bank ,gX, V, S, gW);
+
+	return 0;
 }
 
 /* FIXME use a better name */
