@@ -45,11 +45,11 @@ sqlite3.enable_callback_tracebacks(True)
 # Function to compute the fap in a given file
 #
 
-def set_fap(options, Far, f):
+def set_fap(Far, f, tmp_path = None, verbose = False):
 	from glue.ligolw import dbtables
 
 	# set up working file names
-	working_filename = dbtables.get_connection_filename(f, tmp_path = options.tmp_space, verbose = options.verbose)
+	working_filename = dbtables.get_connection_filename(f, tmp_path = tmp_path, verbose = verbose)
 	connection = sqlite3.connect(working_filename)
 
 	# define fap function
@@ -62,7 +62,7 @@ def set_fap(options, Far, f):
 	# all finished
 	connection.commit()
 	connection.close()
-	dbtables.put_connection_filename(f, working_filename, verbose = options.verbose)
+	dbtables.put_connection_filename(f, working_filename, verbose = verbose)
 
 #
 # Trials table
