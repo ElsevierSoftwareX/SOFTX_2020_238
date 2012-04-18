@@ -560,6 +560,7 @@ int main{
 	templates = create_templates_from_mc_and_eta(mc_min, mc_max, N_mc, eta_min, eta_max, M_eta, f_min, psd);
 	
 	/* M is allocated by this function make sure to free it */
+	/* FIXME change the prototype of this to return the truncated svd basis */
 	create_svd_basis_from_template_bank(&templates, M);
 
 	interps = new_waveform_interpolant_array_from_svd_bank(gsl_matrix *svd_bank, param1_min, param2_min, param1_max, param2_max)	
