@@ -595,10 +595,10 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	gboolean should_push_newsegment = FALSE;
 	if (element->needs_seek)
 	{
-		gulong blocksize = gst_base_src_get_blocksize(basesrc);
+		guint blocksize = gst_base_src_get_blocksize(basesrc);
 		int stride_seconds;
 
-		if (blocksize == G_MAXULONG)
+		if (blocksize == G_MAXUINT)
 			stride_seconds = 1;
 		else
 		{
@@ -923,7 +923,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->countAvailableChannels = 0;
 	element->daq = NULL;
 	element->needs_seek = TRUE;
-	basesrc->blocksize = G_MAXULONG;
+	gst_base_src_set_blocksize(basesrc, G_MAXUINT);
 
 	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
 }
