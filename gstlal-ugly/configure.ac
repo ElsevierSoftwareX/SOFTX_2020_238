@@ -157,7 +157,7 @@ AS_IF(
 	[test "x$with_nds" != "xno"],
 	[PKG_CHECK_MODULES(
 		[NDS],
-		[nds2-client],
+		[nds2-client >= 0.9.0c],
 		[AC_DEFINE([HAVE_NDS], [1], [Define if you have nds2-client])
 		HAVE_NDS="yes"],
 		[HAVE_NDS="no"
