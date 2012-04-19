@@ -1,4 +1,5 @@
 dist_bin_SCRIPTS = \
+	gstlal_cbc_sensitivity_vs_flow_at_fixed_computational_cost \
 	gstlal_prune_duplicate_mass_pairs \
 	gstlal_harmonic_sum_psd \
 	gstlal_inspiral \
