@@ -54,7 +54,6 @@
 
 #include <gstlal/gstlal_tags.h>
 #include <ndssrc.h>
-#include <daqc_internal.h>
 #include <daqc_response.h>
 
 
@@ -648,7 +647,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	int data_length = element->daq->chan_req_list->status;
 	guint64 nsamples = data_length / bytes_per_sample;
-	GST_INFO_OBJECT(element, "received segment [%u, %" G_GUINT64_FORMAT ")", element->daq->tb->gps, element->daq->tb->gps + nsamples / rate);
+	GST_INFO_OBJECT(element, "received segment [%u, %" G_GUINT64_FORMAT ")", daq_get_block_gps(element->daq), daq_get_block_gps(element->daq) + nsamples / rate);
 
 	if (data_length % bytes_per_sample != 0)
 	{
@@ -662,13 +661,13 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			return result;
 	}
 
-	memcpy((char*)GST_BUFFER_DATA(*buffer), element->daq->tb->data + element->daq->chan_req_list->offset, data_length);
+	memcpy((char*)GST_BUFFER_DATA(*buffer), daq_get_block_data(element->daq) + element->daq->chan_req_list->offset, data_length);
 
 	// TODO: Ask John Zweizig how to get timestamp and duration of block; this
 	// struct is part of an obsolete interface according to Doxygen documentation
 	basesrc->offset += nsamples;
 	GST_BUFFER_OFFSET_END(*buffer) = basesrc->offset;
-	GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * element->daq->tb->gps + element->daq->tb->gpsn;
+	GST_BUFFER_TIMESTAMP(*buffer) = GST_SECOND * daq_get_block_gps(element->daq) + daq_get_block_gpsn(element->daq);
 	GST_BUFFER_DURATION(*buffer) = GST_SECOND * nsamples / rate;
 
 	if (should_push_newsegment)
