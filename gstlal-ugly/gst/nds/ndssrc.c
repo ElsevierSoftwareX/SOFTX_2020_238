@@ -925,7 +925,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->needs_seek = TRUE;
 	gst_base_src_set_blocksize(basesrc, G_MAXUINT);
 
-	gst_base_src_set_format(GST_BASE_SRC(object), GST_FORMAT_TIME);
+	gst_base_src_set_format(basesrc, GST_FORMAT_TIME);
 }
 
 
