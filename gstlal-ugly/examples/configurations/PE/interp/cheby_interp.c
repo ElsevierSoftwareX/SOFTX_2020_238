@@ -24,7 +24,7 @@
 
 int free_waveform_interp_objects(struct twod_waveform_interpolant_array * interps) {
 	int i;
-	struct twod_waveform_interpolant *interp = interps->interp
+	struct twod_waveform_interpolant *interp = interps->interp;
 	/* if they exist free the C_KL matrices */
 	for (i = 0; i < interps->size; i++, interp++) {
 		if (interp->C_KL) gsl_matrix_complex_free(interp->C_KL);
@@ -35,7 +35,7 @@ int free_waveform_interp_objects(struct twod_waveform_interpolant_array * interp
 	}
 
 
-struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd_bank(gsl_matrix *svd_bank, param1_min, param2_min, param1_max, param2_max)
+struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd_bank(gsl_matrix *svd_bank, double param1_min, double param2_min, double param1_max, double param2_max)
 {
 	int i;
 	struct twod_waveform_interpolant_array * output = (struct twod_waveform_interpolant_array *) calloc(1, sizeof(struct twod_waveform_interpolant_array));
@@ -56,11 +56,17 @@ struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd
  * Formula (3) in http://arxiv.org/pdf/1108.5618v1.pdf
  */ 
 
-static gsl_complex projection_coefficient(gsl_vector_complex *svd_basis, gsl_vector_complex *spa_waveform){
+static gsl_complex projection_coefficient(gsl_vector *svd_basis, gsl_vector_complex *spa_waveform){
 	/*project svd basis onto SPA's to get coefficients*/
 	gsl_complex M;
+	double M_real, M_imag;
 	/* FIXME svd_basis is real, split spawaveform into real and imaginary parts */
-	gsl_blas_zdotu(svd_basis, spa_waveform, &M);
+	gsl_vector_view spa_waveform_real = gsl_vector_complex_real(spa_waveform);
+	gsl_vector_view spa_waveform_imag = gsl_vector_complex_imag(spa_waveform);
+	
+	gsl_blas_ddot(&spa_waveform_real.vector, svd_basis, &M_real);
+	gsl_blas_ddot(&spa_waveform_imag.vector, svd_basis, &M_imag);
+	GSL_SET_COMPLEX(&M, M_real, M_imag);
 	return M;
 }
 
@@ -377,13 +383,26 @@ static gsl_vector_complex *generate_template(double m1, double m2, double sample
 
 }
 
-static gsl_vector_complex *freq_to_time_fft(gsl_vector_complex *fseries, double deltaT, REAL8FrequencySeries* psd){
+static REAL8FrequencySeries* get_psd_from_file(){
+	
+	FILE *fp;
+	char buf[80];
+	int n1, n2;
+	fp = fopen("nameoffile", "r");
+	
 
+		
+
+
+}
+
+static gsl_vector_complex *freq_to_time_fft(gsl_vector_complex *fseries, int working_length, double deltaT, REAL8FrequencySeries* psd){
+
+	gsl_vector_complex tdom_wave;
 	LIGOTimeGPS zero = LIGOTIMEGPSZERO;
 	double deltaF = fseries->size * deltaT;
 	COMPLEX16FrequencySeries fdom_wave;
 	COMPLEX16Sequence seq;
-	
 	//COMPLEX16Sequence *seq = XLALCreateCOMPLEX16Sequence(fseries->size);
 	
 	COMPLEX16FFTPlan *revplan = XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1);
@@ -392,11 +411,23 @@ static gsl_vector_complex *freq_to_time_fft(gsl_vector_complex *fseries, double 
 	seq.length = fseries->size;
 	seq.data = (COMPLEX16*) fseries->data;
 	
-	fdom_wave.name = NULL;
+	/* fdom_wave.name = NULL; FIXME: This doesn't work */
 	fdom_wave.data = &seq;
 	/*FIXME fill in the rest of the structure see https://www.lsc-group.phys.uwm.edu/daswg/projects/lal/nightly/docs/html/structCOMPLEX16FrequencySeries.html*/
-	
+	fdom_wave.f0=0.;
+	fdom_wave.epoch = zero;
+	fdom_wave.deltaF = deltaF;
+	fdom_wave.sampleUnits = lalStrainUnit;
+
 	XLALWhitenCOMPLEX16FrequencySeries(&fdom_wave, psd);
+
+	XLALCOMPLEX16FreqTimeFFT(tseries, &fdom_wave, revplan);
+	
+	
+
+	tdom_wave.data = (gsl_vector_complex)* tseries->data;
+	
+	return &tdom_wave;
 
 	/* FIXME: Function needs finishing */
 
@@ -475,7 +506,7 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
                         m2 = mc2mass2(mc,eta);
 
 			fseries = generate_template(m1, m2, sample_rate, working_duration, f_min, sample_rate / (2*1.05), 7 ); 
-			tseries = freq_to_time_fft(fseries, working_length, deltaT, f_min, psd); /* return whitened complex time series */	
+			tseries = freq_to_time_fft(fseries, working_length, deltaT, psd); /* return whitened complex time series */	
 
 			/* pack templates in A         */
 			/* real waveforms in 2k'th row */
@@ -496,14 +527,19 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
 
 static int create_svd_basis_from_template_bank(gsl_matrix** template_bank_ptr, gsl_matrix* M ){
 	
-	/*gsl_matrix *V;
-	gsl_vector *S; */
+	double tolerance;
+
+	gsl_matrix *V;
+	gsl_vector *S; 
 	
 	/* Work space matrices */
 	gsl_matrix *transpose_temp;
 	gsl_matrix *gX;
 	gsl_vector *gW;
-	gsl_matrix template_bank = *template_bank_ptr;
+	gsl_matrix *template_bank;
+	template_bank = *template_bank_ptr;
+	
+
 	
 	gX = gsl_matrix_calloc(template_bank->size2, template_bank->size2);
  	gW = gsl_vector_calloc(template_bank->size2);	
@@ -517,6 +553,10 @@ static int create_svd_basis_from_template_bank(gsl_matrix** template_bank_ptr, g
  	 * new truncated matrix and free the template_bank matrix, populate the M
 	 * matrix and free V S gX and gW when you are done
 	 */
+	
+	/*Note: We don't actually need the coefficients that come from the calculation of the basis template */
+
+	tolerance = pow(10., -6.);
 
 	return 0;
 }
@@ -527,15 +567,26 @@ static gsl_vector_complex *interpolate_waveform_from_mchirp_and_eta(struct twod_
 	gsl_complex M;
 	double deltaF, x, y;
 	struct twod_waveform_interpolant *interp = interps->interp;
-	gsl_vector_complex *h_f = gsl_vector_complex_calloc(interp->svd_basis->size);
+	gsl_vector_complex *h_f = gsl_vector_complex_calloc(interp->svd_basis.vector.size);
+	gsl_vector_view h_f_real = gsl_vector_complex_real(h_f); 
+	gsl_vector_view h_f_imag = gsl_vector_complex_imag(h_f);
+
 	x = map_coordinate_to_cheby(interps->param1_min, interps->param1_max, mchirp);
 	y = map_coordinate_to_cheby(interps->param2_min, interps->param2_max, eta);
-	
+	gsl_complex z_tmp;	
 	/* this is the loop over mu */
 	for (i = 0; i < interps->size; i++, interp++) {
-		M = compute_M_xy(interp->C_KL, x, y);
-		/* FIXME svd_basis is real, we can't use this function */
-		gsl_blas_zaxpy(M, interp->svd_basis, h_f);
+			M = compute_M_xy(interp->C_KL, x, y);
+			gsl_blas_daxpy (GSL_REAL(M), &interp->svd_basis.vector, &h_f_real.vector);
+			gsl_blas_daxpy (GSL_REAL(M), &interp->svd_basis.vector, &h_f_imag.vector);
+
+			/* I think that this part can be omitted; do operation of vector_view.vector change the original vector????	
+			for (unsigned int l =0; l <interp->svd_basis->size; l++){
+				GSL_COMPLEX_SET(&z_tmp,h_f_real[l],h_f_imag[l])
+				gsl_vector_complex_set(h_f, l, z );
+
+			}*/
+		
 		}
 	return h_f;
 }
