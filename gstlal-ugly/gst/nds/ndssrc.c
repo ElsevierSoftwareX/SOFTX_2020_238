@@ -623,7 +623,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 				start_time = 600000000;
 			if (stop_time > 9999999999)
 				stop_time = 9999999999;
-			GST_INFO_OBJECT(element, "daq_request_data(daq_t*, %lld, %lld, %d)", start_time, stop_time, stride_seconds);
+			GST_INFO_OBJECT(element, "daq_request_data(daq_t*, %" G_GINT64_FORMAT ", %" G_GINT64_FORMAT ", %d)", start_time, stop_time, stride_seconds);
 			retval = daq_request_data(element->daq, start_time, stop_time, stride_seconds);
 		}
 
@@ -647,7 +647,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	int data_length = element->daq->chan_req_list->status;
 	guint64 nsamples = data_length / bytes_per_sample;
-	GST_INFO_OBJECT(element, "received segment [%u, %" G_GUINT64_FORMAT ")", daq_get_block_gps(element->daq), daq_get_block_gps(element->daq) + nsamples / rate);
+	GST_INFO_OBJECT(element, "received segment [%" G_GUINT32_FORMAT ", %" G_GUINT64_FORMAT ")", daq_get_block_gps(element->daq), daq_get_block_gps(element->daq) + nsamples / rate);
 
 	if (data_length % bytes_per_sample != 0)
 	{
