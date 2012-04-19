@@ -3,7 +3,7 @@
 
 struct twod_waveform_interpolant {
 
-	gsl_vector_complex *svd_basis; /* Imaginary part must be zero */
+	gsl_vector_view svd_basis; /* Imaginary part must be zero */
 
 	/* See http://arxiv.org/pdf/1108.5618v1.pdf  This represents the C
  	 * matrix of formula (8) without mu.  Note that you specify a separate waveform
@@ -12,21 +12,19 @@ struct twod_waveform_interpolant {
 
 	gsl_matrix_complex *C_KL;
 
-	double p1_min;
-	double p1_max;
-	double p2_min;
-	double p2_max;
 		
 };
 	
 struct twod_waveform_interpolant_array {
 	struct twod_waveform_interpolant *interp;
 	int size;
+	double param1_min;
+	double param1_max;
+	double param2_min;
+	double param2_max;
 	
 };
 
 int free_waveform_interp_objects(struct twod_waveform_interpolant_array *);
 
-struct twod_waveform_interpolant_array * new_twod_waveform_interpolant_array(int size);
-
-
+struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd_bank(gsl_matrix *svd_bank, double param1_min, double param2_min, double param1_max, double param2_max);

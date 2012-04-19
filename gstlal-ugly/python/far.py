@@ -177,13 +177,12 @@ class FAR(object):
 		remap_set = remap.setdefault(ifo_set, ifo_set)
 		
 		#
-		# the target FAP resolution is 1 part in 10^6.  So depending on
-		# how many instruments we have we have to take the nth root of
-		# that number to set the scale in each detector. This is purely
-		# for memory/CPU requirements
+		# the target FAP resolution is 1 part in 10^3. This is purely
+		# for memory/CPU requirements as we rebin every time we combine
+		# likelihood pdfs resulting in 1e6 values to work with
 		#
 
-		targetlen = int(1e6**(1. / len(remap_set)))
+		targetlen = int(1e3)
 
 		# reduce typing
 		background = self.distribution_stats.smoothed_distributions.background_rates
@@ -255,6 +254,33 @@ class FAR(object):
 		return 1.0 - (1.0 - fap)**trials_factor
 
 	def possible_ranks_array(self, likelihood_pdfs, ifo_set, targetlen):
+		# find the minimum value for the binning that we care about.
+		# this is product of all the peak values of likelihood,
+		# times the smallest maximum likelihood value, divided by the
+		# product of all maximum likelihood values
+		Lp = []
+		Lj = []
+		# loop over all ifos
+		for ifo in ifo_set:
+			likelihood_pdf = likelihood_pdfs[(ifo,targetlen)]
+			# FIXME lower instead of centres() to avoid inf in the last bin
+			ranks = likelihood_pdf.bins.lower()[0]
+			vals = likelihood_pdf.array
+			# sort likelihood values from lowest probability to highest
+			ranks = ranks[vals.argsort()]
+			# save peak likelihood
+			Lp.append(ranks[-1])
+			# save maximum likelihood value
+			Lj.append(max(ranks))
+		Lp = scipy.array(Lp)
+		Lj = scipy.array(Lj)
+		# create product of all maximum likelihood values
+		L = scipy.exp(sum(scipy.log(Lj)))
+		# compute minimum bin value we care about
+		Lmin = scipy.exp(sum(scipy.log(Lp))) * min(Lj) / L
+		# divide by a million for safety
+		Lmin *= 1e-6
+
 		# start with an identity array to seed the outerproduct chain
 		ranks = numpy.array([1.0])
 		vals = numpy.array([1.0])
@@ -268,6 +294,15 @@ class FAR(object):
 			# FIXME nans arise from inf * 0.  Do we want these to be 0?
 			#ranks[numpy.isnan(ranks)] = 0.0
 			vals = vals.reshape((vals.shape[0] * vals.shape[1],))
+			# rebin the outer-product
+			minlikelihood = max(min(ranks[ranks != 0]), Lmin)
+			maxlikelihood = max(ranks)
+			new_likelihood_pdf = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, targetlen),)))
+			for rank,val in zip(ranks,vals):
+				new_likelihood_pdf[rank,] += val
+			ranks = new_likelihood_pdf.bins.lower()[0]
+			vals = new_likelihood_pdf.array
+
 		vals = vals[ranks.argsort()]
 		ranks.sort()
 		return ranks, vals

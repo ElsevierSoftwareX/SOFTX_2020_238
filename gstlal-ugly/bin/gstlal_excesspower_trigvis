@@ -14,6 +14,8 @@ from scipy.stats import chi2, chi
 import numpy
 import math
 
+import itertools
+
 from glue.ligolw import utils
 from glue.ligolw import lsctables
 from glue import segments
@@ -32,6 +34,10 @@ parser.add_option("-I", "--infer-parameters", action="store_true", help="Infer t
 parser.add_option("-S", "--snr-thresh", action="store", type=float, default=0.0, help="Plot trigggers with snr greater than that indicated.")
 parser.add_option("-m", "--mark-time", action="store", type=float, help="Mark a particular time on the map. Useful for identifying triggers in a file spanning a large time.")
 parser.add_option("-r", "--enable-event-hist", action="store_true", help="Enable the subplot with event rate versus strength for the channel.")
+<<<<<<< Updated upstream
+=======
+parser.add_option("-w", "--ignore-whitener", action="store", type=float, default=20.0, help="Ignore the first N seconds of data (from whitening effects), default is 20.")
+>>>>>>> Stashed changes
 
 opts, args = parser.parse_args()
 
@@ -40,7 +46,7 @@ if( opts.channels is not None ):
 else: channels = None
 
 if( opts.instruments is not None ):
-	instruments = opts.instruments.split(",")
+	print instruments
 else: instruments = None
 
 # TODO: group by IFO
@@ -61,6 +67,7 @@ else: viewseg = segments.segment( opts.gps_start, viewseg[1] )
 if( opts.gps_end is None ):
 	viewseg = segments.segment( viewseg[0], max([e.peak_time for e in events]) )
 else: viewseg = segments.segment( viewseg[0], opts.gps_end )
+viewseg = segments.segment( viewseg[0]+opts.ignore_whitener, viewseg[1] )
 
 if( instruments is None and channels is None ):
 	instruments = {}
@@ -81,12 +88,19 @@ if( channels is None ):
 		if( event.ifo in instruments ):
 			channels[(event.ifo, event.channel)] = None
 	channels = channels.keys()
+<<<<<<< Updated upstream
 	channels.sort()
 	print "Looking at channel list:\n", "\n".join( map(lambda cl: ":".join(cl), channels) )
+=======
+	channels = map( lambda cl: ":".join(cl), channels )
+	channels.sort()
+	print "Looking at channel list:\n", "\n".join( channels )
+>>>>>>> Stashed changes
 else:
 	# TODO: Fix this -- it's stupid
 	channels.sort()
 	print "Looking at channel list:\n", "\n".join( channels )
+<<<<<<< Updated upstream
 	channels = [ c.split(":") for c in channels ]
 
 # construct tf map extent
@@ -115,6 +129,48 @@ for i, chan in enumerate(channels):
 	snr_norm = matplotlib.colors.Normalize( 
 		selected_events[0], selected_events[-1] 
 	)
+=======
+	#channels = [ c.split(":") for c in channels ]
+
+# construct tf map extent
+fig = pyplot.figure(figsize=(15,len(channels)*7), dpi=160)
+#gs = matplotlib.gridspec.GridSpec( nrows = len(channels), ncols = 2, width_ratios=[30,1])#, hspace=0.3 )
+gs = matplotlib.gridspec.GridSpec( nrows = len(channels), ncols = 1 )
+
+i=0
+events.sort(key=lambda e: e.ifo + ":" + e.channel) # Required for groupby
+for channel, selected_events in itertools.groupby( events, lambda e: e.ifo + ":" + e.channel ):
+	if( channel not in channels ): continue
+
+	sys.stdout.write( "Filtering %d events... " % len(events) )
+	selected_events = filter( lambda event: event.central_freq < opts.high_frequency and event.central_freq > opts.low_frequency and event.snr > opts.snr_thresh and event.peak_time in viewseg, selected_events )
+	#selected_events = [ event.snr for event in events if event.channel == channel and event.ifo == inst and event.central_freq < opts.high_frequency and event.central_freq > opts.low_frequency and event.snr > opts.snr_thresh and event.peak_time in viewseg ]
+	print "%d events remain." % len(selected_events)
+	if( len(selected_events) == 0 ):
+		print "No events remain, skipping."
+		continue
+
+	inst, channel = channel.split(":")
+
+	ax = pyplot.subplot(gs[i])
+	# Extent in time
+	ax.set_xlim(viewseg[0], viewseg[1])
+	# Extent in frequency
+	# FIXME: Different channels won't have the same frequency settings
+	ax.set_ylim(opts.low_frequency, opts.high_frequency)
+
+	selected_events.sort(key=lambda e: e.snr)
+	selected_events = numpy.array( selected_events )
+
+	# what's our snr scale
+	if( len(selected_events) > 0 ):
+		snr_norm = matplotlib.colors.Normalize( 
+			selected_events[0].snr, selected_events[-1].snr
+		)
+	else:
+		snr_norm = matplotlib.colors.Normalize( 0, 1 )
+
+>>>>>>> Stashed changes
 	colormap = matplotlib.cm.ScalarMappable( norm = snr_norm, cmap = matplotlib.cm.jet )
 
 	# Make me purty
@@ -127,16 +183,12 @@ for i, chan in enumerate(channels):
 	pyplot.ylabel( "Frequency (Hz)" )
 	title = "channel: %s, inst %s" % (channel, inst)
 	if( i == 0 ):
-		title = "SNR time frequency map\n%s" % title
+		title = "Tile energy time frequency map\n%s" % title
 	pyplot.title( title )
 
 	# construct tiles
 	# FIXME: Partition events first
-	for event in sorted(events, key=lambda tbl: tbl.snr ):
-		if( event.channel != channel ): continue
-		if( event.ifo != inst ): continue
-		if( not (event.peak_time in viewseg) ): continue
-
+	for event in selected_events:
 		# 1. plot tile 
 		start = event.get_peak()# + event.start_time_ns*1e-9
 		tile = matplotlib.patches.Rectangle(
@@ -154,7 +206,34 @@ for i, chan in enumerate(channels):
 	divider = make_axes_locatable(ax)
 	cax = divider.append_axes( "right", size="5%", pad=0.1 )
 	cbl = matplotlib.colorbar.ColorbarBase( cax, cmap=matplotlib.cm.jet, norm=snr_norm, orientation="vertical" )
+<<<<<<< Updated upstream
 	cbl.set_label( "SNR" )
+=======
+	cbl.set_label( "Tile Energy" )
+
+	snrs = numpy.array([e.snr for e in selected_events])
+	if( opts.enable_event_hist ):
+		sax = divider.append_axes( "right", size="50%", pad=0.7 )
+		#pyplot.hist( selected_events**2, log=True )
+		pyplot.hist( snrs*0.62, log=True )
+		dof = events[0].chisq_dof
+		tfmap_area = abs(viewseg)*(opts.high_frequency-opts.low_frequency)
+		#dist = chi2(dof).pdf( selected_events**2 )*tfmap_area/dof
+		# magic number to get the effective DOF = 0.62
+		dist = chi2(dof*0.62).pdf( snrs*0.62 )*tfmap_area/dof
+		pyplot.semilogy()
+		pyplot.plot( snrs, dist, "r-", label="$\chi_{%d}^2$" % dof )
+		sax.yaxis.set_ticks_position( "right" )
+		pyplot.locator_params(nbins=3, axis="x")
+		pyplot.xlabel( "Tile Energies" )
+		pyplot.legend()
+
+	#inset_ax = inset_axes( ax, width="20%", height="33%", loc=4 )
+	#pyplot.locator_params(nbins=3, axis="x")
+
+	i += 1
+
+>>>>>>> Stashed changes
 
 	if( opts.enable_event_hist ):
 		sax = divider.append_axes( "right", size="50%", pad=0.7 )
