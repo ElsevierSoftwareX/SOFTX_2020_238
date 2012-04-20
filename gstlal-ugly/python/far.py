@@ -16,23 +16,27 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
 import sys
 import numpy
-from scipy import interpolate, random
-from scipy.stats import poisson
+from scipy import interpolate
 from glue import iterutils
 from glue.ligolw import ligolw
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
-from glue.ligolw import utils
-from glue.ligolw.utils import process as ligolw_process
-from glue.ligolw.utils import segments as ligolw_segments
 from glue.segmentsUtils import vote
 from pylal import ligolw_burca2
-from pylal import inject
 from pylal import llwapp
 from pylal import rate
-from gstlal.svd_bank import read_bank
 try:
 	import sqlite3
 except ImportError:
@@ -41,43 +45,20 @@ except ImportError:
 
 sqlite3.enable_callback_tracebacks(True)
 
+
 #
-# Function to compute the fap in a given file
+# =============================================================================
+#
+#                             Trials Table Object
+#
+# =============================================================================
 #
 
-def set_fap(Far, f, tmp_path = None, verbose = False):
-	"""
-	Function to set the false alarm probability for a single database
-	containing the usual inspiral tables.
-
-	Far = inspiral.FAR class instance
-	f = filename of the databse (e.g.something.sqlite) 
-	tmp_path = the local disk path to copy the database to in
-		order to avoid sqlite commands over nfs 
-	verbose = be verbose
-	"""
-	# FIXME this code should be moved into a method of the FAR class once other cleaning is done
-	from glue.ligolw import dbtables
-
-	# set up working file names
-	working_filename = dbtables.get_connection_filename(f, tmp_path = tmp_path, verbose = verbose)
-	connection = sqlite3.connect(working_filename)
-
-	# define fap function
-	connection.create_function("fap", 3, Far.fap_from_rank)
-
-	# FIXME abusing false_alarm_rate column, move for a false_alarm_probability column??
-	connection.cursor().execute("UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(coinc_event.likelihood, coinc_inspiral.ifos, coinc_event.time_slide_id) FROM coinc_event WHERE coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id)")
-	connection.commit()
-
-	# all finished
-	connection.commit()
-	connection.close()
-	dbtables.put_connection_filename(f, working_filename, verbose = verbose)
 
 #
 # Trials table
 #
+
 
 class TrialsTable(dict):
 	"""
@@ -127,53 +108,20 @@ class TrialsTable(dict):
 			xml.appendChild(ligolw_param.from_pyvalue(key, value))
 		return xml
 
+
 #
-# Function to compute the far in a given file
+# =============================================================================
+#
+#                       False Alarm Book-Keeping Object
+#
+# =============================================================================
 #
 
-def set_far(Far, f, tmp_path = None, verbose = False):
-	from glue.ligolw import dbtables
-
-	working_filename = dbtables.get_connection_filename(f, tmp_path = tmp_path, verbose = verbose)
-	connection = sqlite3.connect(working_filename)
-
-	connection.create_function("far", 1, Far.compute_far)
-	ids = [id for id, in connection.cursor().execute("SELECT DISTINCT(time_slide_id) FROM time_slide")]
-	for id in ids:
-		print >>sys.stderr, "computing rates for ", id
-		# FIXME abusing FAR column
-		connection.cursor().execute('DROP TABLE IF EXISTS ranktable')
-		connection.commit()
-		# FIXME any indicies on ranktable??  FIXME adding the +
-		# 1e-20 / snr to the false alarm rate forces the
-		# ranking to be in snr order for degenerate ranks.
-		# This is okay for non degenerate things since we don't
-		# have 1e-20 dynamic range, still this should be done
-		# smarter.  Note it doesn't change the false alarm rate
-		# in the database. It just changes how the CDF is
-		# produced here which will modify the order of events
-		# that get assigned a combined far
-		connection.cursor().execute('CREATE TEMPORARY TABLE ranktable AS SELECT * FROM coinc_inspiral JOIN coinc_event ON coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id WHERE coinc_event.time_slide_id == ? ORDER BY false_alarm_rate+1e-20 / snr', (id,))
-		connection.commit()
-		# FIXME someday we might want to consider the rate of multiple events.
-		# having this sorted list will make that easier.  Then you can pass in the rowid like this
-		#
-		# far(ranktable.false_alarm_rate, ranktable.rowid)
-		#
-		# in order to have the number of events below a given FAP
-		if connection.cursor().execute("SELECT name FROM sqlite_master WHERE name='sim_inspiral'").fetchall():
-			connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.coinc_event_id IN (SELECT coinc_event_id FROM ranktable)')
-		# For everything else we get a cumulative number
-		else:
-			connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.coinc_event_id IN (SELECT coinc_event_id FROM ranktable)')
-
-	connection.commit()
-	connection.close()
-	dbtables.put_connection_filename(f, working_filename, verbose = verbose)
 
 #
 # Class to handle the computation of FAPs/FARs
 #
+
 
 class FAR(object):
 	def __init__(self, livetime, trials_factor, distribution_stats, trials_table = None):
@@ -364,11 +312,104 @@ class FAR(object):
 		livetime = float(abs(self.livetime))
 		return 0. - numpy.log(1. - fap) / livetime
 
+
+#
+# =============================================================================
+#
+#                                    Other
+#
+# =============================================================================
+#
+
+
+#
+# Function to compute the fap in a given file
+#
+
+
+def set_fap(Far, f, tmp_path = None, verbose = False):
+	"""
+	Function to set the false alarm probability for a single database
+	containing the usual inspiral tables.
+
+	Far = inspiral.FAR class instance
+	f = filename of the databse (e.g.something.sqlite) 
+	tmp_path = the local disk path to copy the database to in
+		order to avoid sqlite commands over nfs 
+	verbose = be verbose
+	"""
+	# FIXME this code should be moved into a method of the FAR class once other cleaning is done
+	from glue.ligolw import dbtables
+
+	# set up working file names
+	working_filename = dbtables.get_connection_filename(f, tmp_path = tmp_path, verbose = verbose)
+	connection = sqlite3.connect(working_filename)
+
+	# define fap function
+	connection.create_function("fap", 3, Far.fap_from_rank)
+
+	# FIXME abusing false_alarm_rate column, move for a false_alarm_probability column??
+	connection.cursor().execute("UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(coinc_event.likelihood, coinc_inspiral.ifos, coinc_event.time_slide_id) FROM coinc_event WHERE coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id)")
+	connection.commit()
+
+	# all finished
+	connection.commit()
+	connection.close()
+	dbtables.put_connection_filename(f, working_filename, verbose = verbose)
+
+
+#
+# Function to compute the far in a given file
+#
+
+
+def set_far(Far, f, tmp_path = None, verbose = False):
+	from glue.ligolw import dbtables
+
+	working_filename = dbtables.get_connection_filename(f, tmp_path = tmp_path, verbose = verbose)
+	connection = sqlite3.connect(working_filename)
+
+	connection.create_function("far", 1, Far.compute_far)
+	ids = [id for id, in connection.cursor().execute("SELECT DISTINCT(time_slide_id) FROM time_slide")]
+	for id in ids:
+		print >>sys.stderr, "computing rates for ", id
+		# FIXME abusing FAR column
+		connection.cursor().execute('DROP TABLE IF EXISTS ranktable')
+		connection.commit()
+		# FIXME any indicies on ranktable??  FIXME adding the +
+		# 1e-20 / snr to the false alarm rate forces the
+		# ranking to be in snr order for degenerate ranks.
+		# This is okay for non degenerate things since we don't
+		# have 1e-20 dynamic range, still this should be done
+		# smarter.  Note it doesn't change the false alarm rate
+		# in the database. It just changes how the CDF is
+		# produced here which will modify the order of events
+		# that get assigned a combined far
+		connection.cursor().execute('CREATE TEMPORARY TABLE ranktable AS SELECT * FROM coinc_inspiral JOIN coinc_event ON coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id WHERE coinc_event.time_slide_id == ? ORDER BY false_alarm_rate+1e-20 / snr', (id,))
+		connection.commit()
+		# FIXME someday we might want to consider the rate of multiple events.
+		# having this sorted list will make that easier.  Then you can pass in the rowid like this
+		#
+		# far(ranktable.false_alarm_rate, ranktable.rowid)
+		#
+		# in order to have the number of events below a given FAP
+		if connection.cursor().execute("SELECT name FROM sqlite_master WHERE name='sim_inspiral'").fetchall():
+			connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.coinc_event_id IN (SELECT coinc_event_id FROM ranktable)')
+		# For everything else we get a cumulative number
+		else:
+			connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.coinc_event_id IN (SELECT coinc_event_id FROM ranktable)')
+
+	connection.commit()
+	connection.close()
+	dbtables.put_connection_filename(f, working_filename, verbose = verbose)
+
+
 def get_live_time(segments, verbose = True):
 	livetime = float(abs(vote((segs for instrument, segs in segments.items() if instrument != "H2"), 2)))
 	if verbose:
 		print >> sys.stderr, "Livetime: ", livetime
 	return livetime
+
 
 def get_live_time_segs_from_search_summary_table(connection, program_name = "gstlal_inspiral"):
 	from glue.ligolw import dbtables
