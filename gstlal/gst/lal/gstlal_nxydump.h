@@ -58,6 +58,7 @@ typedef struct {
 } GSTLALNXYDump;
 
 
+GST_DEBUG_CATEGORY_EXTERN(gstlal_nxydump_debug);
 GType gstlal_nxydump_get_type(void);
 
 
