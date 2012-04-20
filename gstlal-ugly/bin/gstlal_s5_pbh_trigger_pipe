@@ -428,6 +428,8 @@ segs = ligolw_segments.segmenttable_get_by_name(segsdoc, options.frame_segments_
 boundary_seg = segments.segmentlist([segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_stop_time))])
 # intersect so we only analyze segments in the requested time 
 segs &= boundary_seg
+# only keep segments longer than 1024 seconds
+segs = segments.segmentlist([seg for seg in segs if abs(seg) > 1024])
 
 try: os.mkdir("logs")
 except: pass
