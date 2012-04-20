@@ -5,8 +5,8 @@ comma:= ,
 
 # controls triggers
 IFOS = H1 H2 L1
-START = 869400000
-STOP =  869500000
+START = 869500000
+STOP =  869510000
 PSD_FILE = ../bank/reference_psd.xml.gz
 BANK_CACHE_PREFIX = ../bank/
 BANK_CACHE_SUFFIX = _bank.cache
@@ -59,7 +59,7 @@ plots :
 	mkdir $(WEBDIR)
 
 tisi.xml :
-	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:3.14159:3.14159 --instrument=V1=0:5.14159:5.14159 tisi.xml
+	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:3.14159:3.14159 tisi.xml
 
 dag : vetoes.xml segments.xml frame.cache tisi.xml plots $(INJECTIONS)
 	gstlal_s5_pbh_trigger_pipe --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments  --vetoes vetoes.xml --control-peak-time 4 --num-banks $(NUMBANKS) --fir-stride 4 --cluster-sql-file $(CLUSTER_SQL) --injection-sql-file $(INJ_CLUSTER_SQL) --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING)
