@@ -176,9 +176,12 @@ def set_far(Far, f, tmp_path = None, verbose = False):
 #
 
 class FAR(object):
-	def __init__(self, livetime, trials_factor, distribution_stats = None, trials_table = None):
+	def __init__(self, livetime, trials_factor, distribution_stats, trials_table = None):
 		self.distribution_stats = distribution_stats
-		self.trials_table = trials_table
+		if trials_table is None:
+			self.trials_table = TrialsTable()
+		else:
+			self.trials_table = trials_table
 		if self.distribution_stats is not None:
 			# FIXME:  this results in the
 			# .smoothed_distributions object containing
@@ -191,6 +194,22 @@ class FAR(object):
 		self.livetime = livetime
 		self.trials_factor = trials_factor
 		self.reset()
+
+	@classmethod
+	def from_xml(cls, xml, name):
+		name = u"%s:gstlal_inspiral_FAR" % name
+		xml, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == name]
+		distribution_stats, process_id = DistributionStats.from_xml(xml, name)
+		livetime = abs(lsctables.table.get_table(xml, lsctables.SearchSummaryTable.tableName).get_out_segmentlistdict(set([process_id])).coalesce())
+		self = cls(livetime = livetime, trials_factor = None, distribution_stats = distribution_stats, trials_table = TrialsTable.from_xml(xml, name))
+		return self, process_id
+
+	def to_xml(self, process, name):
+		name = u"%s:gstlal_inspiral_FAR" % name
+		xml = ligolw.LIGO_LW({u"Name": name})
+		xml.appendChild(self.trials_table.to_xml(name))
+		xml.appendChild(self.distribution_stats.to_xml(process, name))
+		return xml
 
 	def reset(self):
 		self.ccdf_interpolator = {}
