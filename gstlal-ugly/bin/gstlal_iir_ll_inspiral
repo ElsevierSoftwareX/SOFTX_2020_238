@@ -58,6 +58,7 @@ from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import reference_psd
 from gstlal import cbc_template_iir
+from gstlal import far
 from gstlal import inspiral
 from gstlal import httpinterface
 from gstlal import bottle
@@ -366,7 +367,7 @@ if options.verbose:
 #
 
 
-distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
+distribution_stats, distribution_seglists = far.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
 
 
 #

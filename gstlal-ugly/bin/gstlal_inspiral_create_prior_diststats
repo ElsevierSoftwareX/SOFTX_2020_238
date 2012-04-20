@@ -41,7 +41,7 @@ from glue.ligolw.utils import segments as ligolwsegments
 from pylal.datatypes import LIGOTimeGPS as GPS
 from pylal import ligolw_burca2
 from pylal import ligolw_thinca
-from gstlal import inspiral
+from gstlal import far
 
 
 __author__ = "Chad Hanna <chad.hanna@ligo.org>"
@@ -93,7 +93,7 @@ options, filenames = parse_command_line()
 # Create likelihood data
 #
 
-coincparamsdistributions = inspiral.DistributionsStats()
+coincparamsdistributions = far.DistributionsStats()
 if options.background_prior != 0:
 	coincparamsdistributions.add_background_prior(options.background_prior)
 coincparamsdistributions.add_foreground_prior(verbose = options.verbose, n = options.synthesize_injection_count)

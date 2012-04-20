@@ -11,9 +11,9 @@ from glue.ligolw import utils
 from pylal import ligolw_burca_tailor
 import copy
 import itertools
-from gstlal import inspiral
+from gstlal import far
 
-coincparamsdistributions, likelihood_seglists = inspiral.DistributionsStats.from_filenames([sys.argv[1]], verbose = True)
+coincparamsdistributions, likelihood_seglists = far.DistributionsStats.from_filenames([sys.argv[1]], verbose = True)
 coincparamsdistributions.finish()
 
 counts = coincparamsdistributions.smoothed_distributions.background_rates

@@ -26,11 +26,9 @@
 #
 
 
-import itertools
 import numpy
 import os
 from scipy import random
-from scipy import stats
 import StringIO
 import subprocess
 try:
@@ -59,7 +57,6 @@ from glue.ligolw.utils import process as ligolw_process
 from pylal.datatypes import LIGOTimeGPS
 from pylal.date import XLALUTCToGPS
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
-from pylal import ligolw_burca_tailor
 from pylal import ligolw_tisi
 from pylal import rate
 from gstlal import bottle
@@ -270,144 +267,6 @@ def chisq_distribution(df, non_centralities, size):
 	for i, nc in enumerate(non_centralities):
 		out[i*size:(i+1)*size] = random.noncentral_chisquare(df, nc, size)
 	return out
-
-
-#
-# Book-keeping class
-#
-
-
-class DistributionsStats(object):
-	"""
-	A class used to populate a CoincParamsDistribution instance using
-	event parameter data.
-	"""
-
-	binnings = {
-		"H1_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"H2_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"L1_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200))),
-		"V1_snr_chi": rate.NDBins((rate.LinearPlusOverflowBins(4., 26., 200), rate.LogarithmicPlusOverflowBins(.001, 0.5, 200)))
-	}
-
-	# FIXME the characteristic width (which is relevant for smoothing)
-	# should be roughly 1.0 in SNR (from Gaussian noise expectations).  So
-	# it is tied to how many bins there are per SNR range.  With 200 bins
-	# between 4 and 26 each bin is .11 wide in SNR. So a width of 9 bins
-	# corresponds to .99 which is close to 1.0
-	filters = {
-		"H1_snr_chi": rate.gaussian_window2d(9, 9, sigma = 10),
-		"H2_snr_chi": rate.gaussian_window2d(9, 9, sigma = 10),
-		"L1_snr_chi": rate.gaussian_window2d(9, 9, sigma = 10),
-		"V1_snr_chi": rate.gaussian_window2d(9, 9, sigma = 10)
-	}
-
-	def __init__(self):
-		self.lock = threading.Lock()
-		self.raw_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
-		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
-
-	@staticmethod
-	def likelihood_params_func(events, offsetvector):
-		instruments = set(event.ifo for event in events)
-		if "H1" in instruments:
-			instruments.discard("H2")
-		return dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2)) for event in events if event.ifo in instruments)
-
-	def add_single(self, event):
-		self.raw_distributions.add_background(self.likelihood_params_func((event,), None))
-
-	def add_background_prior(self, n = 1., transition = 10.):
-		for param, binarr in self.raw_distributions.background_rates.items():
-			# Custom handle the first and last over flow bins
-			snrs = binarr.bins[0].centres()
-			snrs[0] = snrs[1] * .9
-			snrs[-1] = snrs[-2] * 1.1
-			chi2_over_snr2s = binarr.bins[1].centres()
-			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
-			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
-			for snr in snrs:
-				p = numpy.exp(-snr**2 / 2. + snrs[0]**2 / 2. + numpy.log(n))
-				p += (transition / snr)**6 * numpy.exp( -transition**2 / 2. + snrs[0]**2 / 2. + numpy.log(n)) # Softer fall off above some transition SNR for numerical reasons
-				for chi2_over_snr2 in chi2_over_snr2s:
-					binarr[snr, chi2_over_snr2] += p
-			# normalize to the requested count
-			binarr.array /= binarr.array.sum()
-			binarr.array *= n
-
-	def add_foreground_prior(self, n = 1., prefactors_range = (0.02, 0.5), df = 40, verbose = False):
-		# FIXME:  for maintainability, this should be modified to
-		# use the .add_injection() method of the .raw_distributions
-		# attribute, but that will slow this down
-		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
-		for param, binarr in self.raw_distributions.injection_rates.items():
-			if verbose:
-				print >> sys.stderr, "synthesizing injections for %s" % param
-			# Custom handle the first and last over flow bins
-			snrs = binarr.bins[0].centres()
-			snrs[0] = snrs[1] * .9
-			snrs[-1] = snrs[-2] * 1.1
-			chi2_over_snr2s = binarr.bins[1].centres()
-			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
-			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
-			for i, snr in enumerate(snrs):
-				for j, chi2_over_snr2 in enumerate(chi2_over_snr2s):
-					chisq = chi2_over_snr2 * snr**2 * df # We record the reduced chi2
-					dist = 0
-					for pf in pfs:
-						nc = pf * snr**2
-						v = stats.ncx2.pdf(chisq, df, nc)
-						if numpy.isfinite(v):
-							dist += v
-					dist *= (snr / snrs[0])**-2
-					if numpy.isfinite(dist):
-						binarr[snr, chi2_over_snr2] += dist
-			# normalize to the requested count
-			binarr.array /= binarr.array.sum()
-			binarr.array *= n
-
-	def finish(self, verbose = False):
-		self.smoothed_distributions = self.raw_distributions.copy(self.raw_distributions)
-		#self.smoothed_distributions.finish(filters = self.filters, verbose = verbose)
-		# FIXME:  should be the line above, we'll temporarily do
-		# the following.  the difference is that the above produces
-		# PDFs while what follows produces probabilities in each
-		# bin
-		if verbose:
-			print >>sys.stderr, "smoothing parameter distributions ...",
-		for name, binnedarray in itertools.chain(self.smoothed_distributions.background_rates.items(), self.smoothed_distributions.injection_rates.items()):
-			if verbose:
-				print >>sys.stderr, "%s," % name,
-			rate.filter_array(binnedarray.array, self.filters[name])
-			binnedarray.array /= numpy.sum(binnedarray.array)
-		if verbose:
-			print >>sys.stderr, "done"
-
-	@classmethod
-	def from_xml(cls, xml, name):
-		self = cls()
-		self.raw_distributions, process_id = ligolw_burca_tailor.CoincParamsDistributions.from_xml(xml, name)
-		# FIXME:  produce error if binnings don't match this class's binnings attribute?
-		binnings = dict((param, self.raw_distributions.zero_lag_rates[param].bins) for param in self.raw_distributions.zero_lag_rates)
-		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**binnings)
-		return self, process_id
-
-	@classmethod
-	def from_filenames(cls, filenames, verbose = False):
-		self = cls()
-		self.raw_distributions, seglists = ligolw_burca_tailor.load_likelihood_data(filenames, u"gstlal_inspiral_likelihood", verbose = verbose)
-		# FIXME:  produce error if binnings don't match this class's binnings attribute?
-		binnings = dict((param, self.raw_distributions.zero_lag_rates[param].bins) for param in self.raw_distributions.zero_lag_rates)
-		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**binnings)
-		return self, seglists
-
-	def to_xml(self, process, name):
-		self.lock.acquire()
-		try:
-			xml = self.raw_distributions.to_xml(process, name)
-		finally:
-			self.lock.release()
-		return xml
 
 
 #

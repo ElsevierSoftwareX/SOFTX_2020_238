@@ -53,6 +53,7 @@ from gstlal import svd_bank
 from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import reference_psd
+from gstlal import far
 from gstlal import inspiral
 from gstlal import httpinterface
 
@@ -308,10 +309,10 @@ if options.verbose:
 
 
 if options.likelihood_file is not None:
-	distribution_stats, distribution_seglists = inspiral.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
+	distribution_stats, distribution_seglists = far.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
 	distribution_stats.add_foreground_prior(verbose = options.verbose)
 else:
-	distribution_stats = inspiral.DistributionsStats()
+	distribution_stats = far.DistributionsStats()
 
 
 #

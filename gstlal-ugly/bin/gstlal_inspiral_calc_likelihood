@@ -39,7 +39,7 @@ from glue.lal import CacheEntry
 from glue.ligolw.utils import segments as ligolwsegments
 from pylal import ligolw_burca2
 from pylal import ligolw_thinca
-from gstlal import inspiral
+from gstlal import far
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -136,7 +136,7 @@ options, filenames = parse_command_line()
 #
 
 
-coincparamsdistributions, likelihood_seglists = inspiral.DistributionsStats.from_filenames(options.likelihood_filenames, verbose = options.verbose)
+coincparamsdistributions, likelihood_seglists = far.DistributionsStats.from_filenames(options.likelihood_filenames, verbose = options.verbose)
 
 # calculate injections before writing to disk
 if options.synthesize_injections != 0:

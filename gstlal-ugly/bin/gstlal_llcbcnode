@@ -84,8 +84,8 @@ def plotsnrchisq(url, type = "background", name = "gstlal_inspiral_likelihood"):
 	from glue.ligolw import utils
 	from pylal import ligolw_burca_tailor
 	from pylal import rate
-	from gstlal import inspiral
-	coincparamsdistributions, likelihood_seglists = inspiral.DistributionsStats.from_filenames([url], verbose = True)
+	from gstlal import far
+	coincparamsdistributions, likelihood_seglists = far.DistributionsStats.from_filenames([url], verbose = True)
 	coincparamsdistributions.finish()
 	#filt = rate.gaussian_window2d(5, 5, sigma = 8)	
 	#coincparamsdistributions, likelihood_seglists = ligolw_burca_tailor.load_likelihood_data([url], u"gstlal_inspiral_likelihood", verbose = False)
