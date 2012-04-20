@@ -66,6 +66,7 @@ from gstlal import bottle
 from gstlal import streamthinca
 from gstlal import svd_bank
 from gstlal import far
+from pylal import llwapp
 
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
@@ -425,7 +426,7 @@ def gen_likelihood_control_doc(distributions_stats, seglists, name = u"gstlal_in
 	node.appendChild(lsctables.New(lsctables.ProcessTable))
 	node.appendChild(lsctables.New(lsctables.ProcessParamsTable))
 	node.appendChild(lsctables.New(lsctables.SearchSummaryTable))
-	process = append_process(xmldoc, comment = comment)
+	process = ligolw_process.append_process(xmldoc, comment = comment)
 	llwapp.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
 
 	node.appendChild(distributions_stats.to_xml(process, name))
@@ -601,7 +602,7 @@ class Data(object):
 					self.far.updateFAPmap(ifo_set, remap, verbose = self.verbose)
 
 				# write the new distribution stats to disk
-				utils.write_filename(gen_likelihood_control_doc(self.distribution_stats, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswidth(".gz"), verbose = False, trap_signals = None)
+				utils.write_filename(gen_likelihood_control_doc(self.distribution_stats, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
 
 			# run stream thinca
 			noncoinc_sngls = self.stream_thinca.add_events(events, timestamp, FAP = self.far)
@@ -780,4 +781,4 @@ class Data(object):
 			fname = os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
 		else:
 			fname = likelihood_file
-		utils.write_filename(gen_likelihood_control_doc(self.distribution_stats, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), fname, gz = (fname or "stdout").endswidth(".gz"), verbose = verbose, trap_signals = None)
+		utils.write_filename(gen_likelihood_control_doc(self.distribution_stats, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), fname, gz = (fname or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
