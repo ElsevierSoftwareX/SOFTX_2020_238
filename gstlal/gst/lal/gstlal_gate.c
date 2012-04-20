@@ -213,6 +213,7 @@ static void control_add_segment(GSTLALGate *element, GstClockTime start, GstCloc
 	if(element->control_segments->len) {
 		struct control_segment *final_segment = &((struct control_segment *) element->control_segments->data)[element->control_segments->len - 1];
 		if(final_segment->state == control_segment.state && final_segment->stop >= start) {
+			g_assert_cmpuint(final_segment->stop, <=, stop);
 			final_segment->stop = stop;
 			return;
 		}
@@ -229,6 +230,7 @@ static void control_add_segment(GSTLALGate *element, GstClockTime start, GstCloc
 
 static struct control_segment control_get_final_segment(GSTLALGate *element)
 {
+	g_assert(element->control_segments->len > 0);	/* redundant? */
 	return g_array_index(element->control_segments, struct control_segment, element->control_segments->len - 1);
 }
 
@@ -298,8 +300,8 @@ static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstCloc
  * the return value is FALSE if control data is available for (at least
  * part of) the times requested and is less than the threshold everywhere
  * therein, or TRUE if control data is available for (at least part of) the
- * times requested and is greather than or equal to the threshold for at
- * least 1 sample therein.  if no control data is available for the
+ * times requested and is greather than or equal to the threshold for any
+ * interval of time therein.  if no control data is available for the
  * requested interval the return value is the element's default state (TRUE
  * or FALSE).
  */
@@ -627,7 +629,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP)) {
-		control_add_segment(element, GST_BUFFER_TIMESTAMP(sinkbuf), GST_BUFFER_TIMESTAMP(sinkbuf) + GST_BUFFER_DURATION(sinkbuf), 0);
+		control_add_segment(element, GST_BUFFER_TIMESTAMP(sinkbuf), GST_BUFFER_TIMESTAMP(sinkbuf) + GST_BUFFER_DURATION(sinkbuf), FALSE);
 	} else {
 		guint buffer_length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
 		guint segment_start;
