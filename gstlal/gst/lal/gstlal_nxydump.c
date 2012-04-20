@@ -56,6 +56,9 @@
 #include <gstlal_nxydump.h>
 
 
+GST_DEBUG_CATEGORY(gstlal_nxydump_debug);
+
+
 /*
  * ========================================================================
  *
@@ -65,6 +68,7 @@
  */
 
 
+#define GST_CAT_DEFAULT gstlal_nxydump_debug
 #define DEFAULT_START_TIME 0
 #define DEFAULT_STOP_TIME G_MAXUINT64
 
@@ -114,20 +118,14 @@ static size_t src_bytes_per_sample(gint channels)
 
 
 /**
- * Convert a timestamp and a sample rate into a sample offset relative to
- * the timestamp of the start of a buffer.
+ * Convert a timestamp to a sample offset relative to the timestamp of the
+ * start of a buffer, clipped to the buffer boundaries.
  */
 
 
 static guint64 timestamp_to_sample_clipped(GstClockTime start, guint64 length, gint rate, GstClockTime t)
 {
-	guint64 offset;
-
-	if(t < start)
-		return 0;
-
-	offset = gst_util_uint64_scale_int_round(t - start, rate, GST_SECOND);
-	return MIN(offset, length);
+	return t <= start ? 0 : MIN(gst_util_uint64_scale_int_round(t - start, rate, GST_SECOND), length);
 }
 
 
@@ -257,12 +255,12 @@ enum property {
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, guint *size)
 {
 	GstStructure *str;
-	gint channels, width;
 
 	str = gst_caps_get_structure(caps, 0);
 	if(gst_structure_has_name(str, "text/plain")) {
 		*size = 1;
 	} else {
+		gint channels, width;
 		if(!gst_structure_get_int(str, "channels", &channels)) {
 			GST_ERROR_OBJECT(trans, "unable to parse channels from %" GST_PTR_FORMAT, caps);
 			return FALSE;
@@ -428,6 +426,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
+		GST_BUFFER_SIZE(outbuf) = 0;
 	} else {
 		/*
 		 * Print samples into output buffer.
@@ -508,7 +507,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		break;
 	}
 
-	GST_OBJECT_LOCK(element);
+	GST_OBJECT_UNLOCK(element);
 }
 
 
@@ -561,7 +560,7 @@ static void gstlal_nxydump_class_init(GSTLALNXYDumpClass *klass)
 			"Start time",
 			"Start time in nanoseconds.",
 			0, G_MAXUINT64, DEFAULT_START_TIME,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
@@ -572,7 +571,7 @@ static void gstlal_nxydump_class_init(GSTLALNXYDumpClass *klass)
 			"Stop time",
 			"Stop time in nanoseconds.",
 			0, G_MAXUINT64, DEFAULT_STOP_TIME,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 }
@@ -586,9 +585,4 @@ static void gstlal_nxydump_class_init(GSTLALNXYDumpClass *klass)
 static void gstlal_nxydump_init(GSTLALNXYDump *element, GSTLALNXYDumpClass *klass)
 {
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
-
-	element->rate = 0;
-	element->channels = 0;
-	element->start_time = DEFAULT_START_TIME;
-	element->stop_time = DEFAULT_STOP_TIME;
 }
