@@ -25,15 +25,14 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 	"""Build a set of individual channel Hann window frequency filters (with bandwidth 'band') and then transfer them into the time domain as a matrix. The nth row of the matrix contains the time-domain filter for the flow+n*band frequency channel. The overlap is the fraction of the channel which overlaps with the previous channel. If filter_len is not set, then it defaults to nominal minimum width needed for the bandwidth requested."""
 
 	if fhigh > rate/2:
-		print >> sys.stderr, "WARNING: high frequency requested is higher than sampling rate / 2, adjusting to match."
+		print >> sys.stderr, "WARNING: high frequency (%f) requested is higher than sampling rate / 2, adjusting to match." % fhigh
 		fhigh = rate/2
 
 	if fhigh >= rate/2:
-		print >> sys.stderr, "WARNING: high frequency is equal to Nyquist. Filters will probably be bad. Reduce the high frequency."
+		print >> sys.stderr, "WARNING: high frequency (%f) is equal to Nyquist. Filters will probably be bad. Reduce the high frequency." % fhigh
 
 	# Filter length needs to be long enough to get the pertinent features in
 	# the time domain
-	print len(psd.data), psd.deltaF, b_wind
 	filter_len = 2*int(2*b_wind/psd.deltaF)
 
 	if filter_len <= 0:
@@ -78,7 +77,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		h_wind = lalburst.XLALCreateExcessPowerFilter( 
 			#channel_flow =
 		# The XLAL function's flow corresponds to the left side FWHM, not the near zero point. Thus, the filter *actually* begins at f_cent - band and ends at f_cent + band, and flow = f_cent - band/2 and fhigh = f_cent + band/2
-			(flow + band/2.0) + band*b_wind,
+			(flow + b_wind/2.0) + band*b_wind,
 			#channel_width =
 			b_wind, 
 			#psd =
@@ -343,15 +342,15 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 	# Tee off the amplitude stream
 	head = chtee = mktee( pipeline, head )
 	head = mkgeneric( pipeline, head, "cairovis_waterfall",
-			title = "TF map %s:%s, (SNR:0,%f), fmax=%d Hz" % (handler.inst, handler.channel, snr_max, handler.fhigh),
+			title = "TF map %s:%s, fmax=%d Hz" % (handler.inst, handler.channel, handler.fhigh),
 			z_autoscale = True,
 			#z_min = 0,
 			#z_max = snr_max,
 			z_label = "SNR",
 			# TODO: Restore this when it becomes available again
-			y_autoscale = True,
-			y_min = handler.flow,
-			y_max = handler.fhigh,
+			#y_autoscale = True,
+			#y_min = handler.flow,
+			#y_max = handler.fhigh,
 			y_label = "channel number",
 			x_label = "time (s)",
 			colormap = "jet",
