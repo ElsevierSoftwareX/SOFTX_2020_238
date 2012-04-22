@@ -1059,11 +1059,14 @@ def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	return triggersrcs
 
 
-def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxydump_segment = None, quality = 4):
-	sample_rates = sorted(bank.get_rates())
-
+def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxydump_segment = None, quality = 4, sample_rates = None, max_rate = None):
+	if sample_rates is None:
+		sample_rates = sorted(bank.get_rates())
+	else:
+		sample_rates = sorted(sample_rates)
 	#FIXME don't upsample everything to a common rate
-	max_rate = max(sample_rates)
+	if max_rate is None:
+		max_rate = max(sample_rates)
 	prehead = None
 
 	for sr in sample_rates:
