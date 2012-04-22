@@ -268,10 +268,11 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 		sample_rates.append(rate)
 		# get ready to store the coefficients
 		max_len = max([len(i) for i in Amat[rate]])
-		print rate, max_rows, max_len
+		if verbose: print>>sys.stderr, "rate %d, dmax %d, dmin %d, max_row %d, max_len %d" % (rate, min(min(Dmat[rate])), max(max(Dmat[rate])), max_rows, max_len)
 		A[rate] = numpy.zeros((max_rows, max_len), dtype=numpy.complex128)
 		B[rate] = numpy.zeros((max_rows, max_len), dtype=numpy.complex128)
 		D[rate] = numpy.zeros((max_rows, max_len), dtype=numpy.int)
+		D[rate].fill(min(min(Dmat[rate])))
 
 		for i, Am in enumerate(Amat[rate]): A[rate][i,:len(Am)] = Am
 		for i, Bm in enumerate(Bmat[rate]): B[rate][i,:len(Bm)] = Bm
