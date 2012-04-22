@@ -60,7 +60,7 @@ struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd
  */ 
 
 static gsl_matrix_complex *projection_coefficient(gsl_vector *svd_basis, gsl_matrix *template_bank, int N_mc, int M_eta){
-	int i;
+	int i,j;
 	/*project svd basis onto SPA's to get coefficients*/
 	gsl_complex M;
 	double M_real, M_imag;
@@ -79,7 +79,7 @@ static gsl_matrix_complex *projection_coefficient(gsl_vector *svd_basis, gsl_mat
 	        gsl_blas_ddot(&spa_waveform_imag.vector, svd_basis, &M_imag);
 	
 		GSL_SET_COMPLEX(&M, M_real, M_imag);
-		gsl_matrix_complex_set(M_xy, i, j);	
+		gsl_matrix_complex_set(M_xy, i, j, M);	
 	}
 
 
@@ -403,7 +403,7 @@ static int get_psd_from_file(REAL8FrequencySeries *series, char *fname){
 	double f0 = series->f0;
 	double f;
 	const gsl_interp_type *t = gsl_interp_linear;
-	gsl_interp *interp = gsl_interp_alloc (t, 16385);
+	gsl_interp *g_interp = gsl_interp_alloc (t, 16385);
 	gsl_interp_accel *acc = gsl_interp_accel_alloc();
 	double freq[16385];
 	double psd[16385];
@@ -415,14 +415,14 @@ static int get_psd_from_file(REAL8FrequencySeries *series, char *fname){
 		i++;
 	}
 
-	gsl_interp_init(interp, freq, psd, 16385);
+	gsl_interp_init(g_interp, freq, psd, 16385);
 
 	for (i = 0; i < series->data->length; i++) {
 		f = f0 + i * deltaF;
-		series->data->data[i] = gsl_interp_eval(interp, freq, psd, f, acc);
+		series->data->data[i] = gsl_interp_eval(g_interp, freq, psd, f, acc);
 	}
 
-	gsl_interp_free(interp);
+	gsl_interp_free(g_interp);
 	gsl_interp_accel_free (acc);
 	fclose(fp);
 	return 0;
@@ -463,7 +463,7 @@ static int compute_working_length_and_sample_rate(double chirp_time, double f_ma
 	
 	*sample_rate = pow(2., ceil(log(2.* f_max) / log(2.)));
 	unsigned int length_max =  round(*sample_rate * duration);
-	working_length = (unsigned int) round(pow(2., ceil(log(length_max + round(32.0 * *(sample_rate))) / log(2.))));
+	*working_length = (unsigned int) round(pow(2., ceil(log(length_max + round(32.0 * *(sample_rate))) / log(2.))));
 
 	return 0;
 }
@@ -517,8 +517,8 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
 			generate_template(m1, m2, 1.0 / psd->deltaF, f_min, working_length / working_duration / (2*1.05), 7, fseries);
 			freq_to_time_fft(fseries, psd, tseries, revplan); /* return whitened complex time series */	
 			for (i = 0; i < tseries->data->length; i++) {
-				gsl_matrix_set_col(A, 2*k, tseries->data->data[i].re);
-				gsl_matrix_set_col(A, 2*k+1, tseries->data->data[i].im);
+				gsl_matrix_set(A, 2*k, i, tseries->data->data[i].re);
+				gsl_matrix_set(A, 2*k+1, i, tseries->data->data[i].im);
 			}
 		}
 	}
@@ -546,8 +546,8 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
                         generate_template(m1, m2, 1.0 / psd->deltaF, f_min, working_length / working_duration / (2*1.05), 7, fseries);
                         freq_to_time_fft(fseries, psd, tseries, revplan); /* return whitened complex time series */
                         for (i = 0; i < tseries->data->length; i++) {
-                                gsl_matrix_set_col(A, 2*k, tseries->data->data[i].re);
-                                gsl_matrix_set_col(A, 2*k+1, tseries->data->data[i].im);
+                                gsl_matrix_set(A, 2*k, i, tseries->data->data[i].re);
+                                gsl_matrix_set(A, 2*k+1, i, tseries->data->data[i].im);
                         }
                 }
         }
@@ -606,7 +606,7 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 }
 
 /* FIXME use a better name */
-static gsl_vector_complex *interpolate_waveform_from_mchirp_and_eta(struct *twod_waveform_interpolant_array interps, double mchirp, double eta) { 
+static gsl_vector_complex *interpolate_waveform_from_mchirp_and_eta(struct twod_waveform_interpolant_array *interps, double mchirp, double eta) { 
 	int i;
 	gsl_complex M;
 	double deltaF, x, y;
@@ -699,15 +699,17 @@ int main() {
  	 * to get matrix of coefficients for C_KL computation */
 
 	for (unsigned int i=0; i < N_mc; i++){
-		gsl_vector_set(x_nodes, i, chebyshev_node(i,N_mc) ); }
-	for (unsigned int j=0; j < M_eta ; j++){
-		gsl_vector_set(x_nodes, j, chebyshev_node(j,M_eta) ); }
+		gsl_vector_set(x_nodes, i, chebyshev_node(i,N_mc) ); 
+	}
 
+	for (unsigned int j=0; j < M_eta ; j++){
+		gsl_vector_set(x_nodes, j, chebyshev_node(j,M_eta) ); 
+	}
 
 	templates_at_nodes = create_templates_from_mc_and_eta(mc_min, mc_max, N_mc, eta_min, eta_max, M_eta, f_min, psd, tseries, fseries, revplan, 1);	
 
-	for (unsigned int i = 0; i < interps->size; i++, interp++) {	
-		M_xy = projection_coefficient(interps->interp->svd_basis.vector, templates_at_nodes, N_mc, M_eta);
+	for (unsigned int i = 0; i < interps->size; i++, interps->interp++) {	
+		M_xy = projection_coefficient(&interps->interp->svd_basis.vector, templates_at_nodes, N_mc, M_eta);
 		interps->interp->C_KL = compute_C_KL(x_nodes, y_nodes, M_xy);		
 		
 	}
@@ -720,7 +722,7 @@ int main() {
 			eta = eta_min + (j/(New_M_eta-1))*(eta_max - eta_min);
 			mc = mc_min + (i/(New_N_mc-1))*(mc_max - mc_min);
 			
-			h_t = interpolate_waveform_from_mchirp_and_eta(&interps, mc, eta);
+			h_t = interpolate_waveform_from_mchirp_and_eta(interps, mc, eta);
 			
                         m1 = mc2mass1(mc, eta);
                         m2 = mc2mass2(mc, eta);
@@ -746,13 +748,14 @@ int main() {
 		}		
 	}
 
-	gsl_matrix_complex_free(templates);
+	gsl_matrix_free(templates);
 	gsl_vector_complex_free(h_t);
 	gsl_vector_complex_free(Tseries);
 
 	XLALDestroyCOMPLEX16TimeSeries(tseries);
         XLALDestroyCOMPLEX16FrequencySeries(fseries);
         XLALDestroyCOMPLEX16FFTPlan(revplan);
+	XLALDestroyREAL8FrequencySeries(psd);
 	
 	return 0;
 }
