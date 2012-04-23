@@ -41,6 +41,7 @@ from glue.ligolw import utils
 from pylal import ligolw_burca2
 from pylal import ligolw_thinca
 from gstlal import far
+from gstlal import inspiral
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
