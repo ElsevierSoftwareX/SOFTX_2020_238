@@ -56,7 +56,9 @@
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_blas.h>
 
-#include <time.h>
+#include <sys/time.h>
+#include <math.h>
+struct timeval tv0, tv1, tv2, tv3, tv4;
 
 /*
  * ============================================================================
@@ -139,6 +141,7 @@ static guint64 get_available_samples(GSTLALIIRBank *element)
 
 static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 {
+	g_static_mutex_lock(gstlal_fftw_lock);
 	unsigned available_length;
 	unsigned output_length;
 	double * restrict input;
@@ -149,8 +152,9 @@ static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 	int dmax, dmin;
 	complex double * restrict y, * restrict a1, * restrict b0;
 	int * restrict d;
-	uint size1, size2;
+	uint size1, size2, counter;
 
+	gettimeofday( &tv0, NULL);
 	y = (complex double *) gsl_matrix_complex_ptr(element->y, 0, 0);
 	a1 = (complex double *) gsl_matrix_complex_ptr(element->a1, 0, 0);
 	b0 = (complex double *) gsl_matrix_complex_ptr(element->b0, 0, 0);
@@ -165,44 +169,83 @@ static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 	available_length = get_available_samples(element);
 	output_length = available_length - (dmax - dmin);
 
-	if(!output_length)
+	if(!output_length) {
+		g_static_mutex_unlock(gstlal_fftw_lock);
 		return GST_BASE_TRANSFORM_FLOW_DROPPED;
+	}
 
 	/*
 	 * wrap the adapter's contents in a GSL vector view.
 	 */
 
+	gettimeofday( &tv1, NULL);
+	fprintf(stdout,"IIR elem %29s : setting up sizes  %9.8f (s)\n", GST_ELEMENT_NAME(element), (double) (tv1.tv_sec - tv0.tv_sec) + (double) (tv1.tv_usec - tv0.tv_usec) / (double) 1e6);
+	//input = malloc( available_length * sizeof(double));
+	//memset(input, 0, available_length * sizeof(double));
 	input = (double *) gst_adapter_peek(element->adapter, available_length * sizeof(double));
+	//gst_adapter_copy(element->adapter, input, 0, available_length * sizeof(double));
 
+	gettimeofday( &tv0, NULL);
+	fprintf(stdout,"IIR elem %29s : adapter peek      %9.8f (s)\n", GST_ELEMENT_NAME(element),(double) (tv0.tv_sec - tv1.tv_sec) + (double) (tv0.tv_usec - tv1.tv_usec) / (double) 1e6);
 	/*
 	 * wrap output buffer in a complex double array.
 	 */
 
 	output = (complex double *) GST_BUFFER_DATA(outbuf);
+	gettimeofday( &tv1, NULL);
+	fprintf(stdout,"IIR elem %29s : output cast       %9.8f (s)\n", GST_ELEMENT_NAME(element),(double) (tv1.tv_sec - tv0.tv_sec) + (double) (tv1.tv_usec - tv0.tv_usec) / (double) 1e6);
+
 	g_assert(output_length * iir_channels(element) / 2 * sizeof(complex double) <= GST_BUFFER_SIZE(outbuf));
+	gettimeofday( &tv0, NULL);
+	fprintf(stdout,"IIR elem %29s : g assert          %9.8f (s)\n", GST_ELEMENT_NAME(element),(double) (tv0.tv_sec - tv1.tv_sec) + (double) (tv0.tv_usec - tv1.tv_usec) / (double) 1e6);
 
 	memset(output, 0, output_length * iir_channels(element) / 2 * sizeof(*output));
 
 	size1 = element->a1->size1;
 	size2 = element->a1->size2;
+	counter = 0;
+
+	struct timeval tv5={0}, tv6={0};
+	//int template = 0, totaltemplate = 0;
+
+	gettimeofday( &tv1, NULL);
+	fprintf(stdout,"IIR elem %29s : memset output     %9.8f (s)\n", GST_ELEMENT_NAME(element),(double) (tv1.tv_sec - tv0.tv_sec) + (double) (tv1.tv_usec - tv0.tv_usec) / (double) 1e6);
 
 	for (last_output = output + size1; output < last_output; output++) {
 		for (last_filter = y + size2; y < last_filter; y++) {
 			ytemp = *y;
 			complex double *out = output;
 			double *in_last, *in = &input[dmax -*d];
-
 			for(in_last = in + output_length; in < in_last; in++, out += size1) { /* sample # */
+				gettimeofday(&tv5, NULL);
+				timersub(&tv6, &tv5, &tv6);
 				ytemp = *a1 * ytemp + *b0 * *in;
+				//if(template == 0) fprintf(stderr, "a1 = %g %+gi, b0 = %g %+gi, d = %d, ytemp = %g %+gi, x = %g %+gi\n", creal(*a1), cimag(*a1), creal(*b0), cimag(*b0), *d, creal(ytemp), cimag(ytemp), creal(*in), cimag(*in)); 
+				/*if(fpclassify(creal(ytemp)) == 3 || fpclassify(cimag(ytemp)) ==3) {
+					ytemp = 0;
+					break;
+					}*/
 				*out += ytemp;
+				//counter++;
+				gettimeofday(&tv5, NULL);
+				timeradd(&tv6, &tv5, &tv6);
 			}
 			*y = ytemp;
 			a1++;
 			b0++;
 			d++;
 		}
-	}
+		//totaltemplate += isnormal(creal(ytemp));
 
+		//fprintf(stderr, "Template %2d: %10.10g %+10.10gi is normal? %d, %10.10g +%10.10gi\n", template, creal(*b0), cimag(*b0), fpclassify(creal(ytemp)), creal(ytemp), cimag(ytemp));
+		//template++;
+	}
+	//fprintf(stderr, "total is normal : %2d\n", totaltemplate);
+	fprintf(stdout,"IIR elem %29s : FILTER in   LOOPS %9.8f (s)\n", GST_ELEMENT_NAME(element),(double) (tv6.tv_sec) + (double) (tv6.tv_usec) / (double) 1e6);
+
+	gettimeofday( &tv0, NULL);
+	fprintf(stdout,"IIR elem %29s : FILTER FOR LOOPS  %9.8f (s)\n", GST_ELEMENT_NAME(element),(double) (tv0.tv_sec - tv1.tv_sec) + (double) (tv0.tv_usec - tv1.tv_usec) / (double) 1e6);
+	fprintf(stdout,"available length %d, output length %d, dmax %d, size1, %d, size2 %d\n", available_length, output_length, dmax, size1, size2);
 	/*
 	 * flush the data from the adapter
 	 */
@@ -215,16 +258,21 @@ static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 
 		element->zeros_in_adapter = available_length - output_length;
 
+	gettimeofday( &tv1, NULL);
+	fprintf(stdout,"IIR elem %29s : adapter flush     %9.8f (s)\n", GST_ELEMENT_NAME(element),(double) (tv1.tv_sec - tv0.tv_sec) + (double) (tv1.tv_usec - tv0.tv_usec) / (double) 1e6);
 	/*
 	 * set buffer metadata
 	 */
 
 	set_metadata(element, outbuf, output_length, FALSE);
 
+	gettimeofday( &tv0, NULL);
+	fprintf(stdout,"IIR elem %29s : set metadata      %9.8f (s)\n", GST_ELEMENT_NAME(element),(double) (tv0.tv_sec - tv1.tv_sec) + (double) (tv0.tv_usec - tv1.tv_usec) / (double) 1e6);
 	/*
 	 * done
 	 */
 
+	g_static_mutex_unlock(gstlal_fftw_lock);
 	return GST_FLOW_OK;
 }
 
@@ -570,6 +618,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
 		element->next_out_offset = element->offset0 + dmin;
 
+
 		/*
 		 * be sure to flag the next output buffer as a discontinuity, because it is the first output buffer.
 		 */
@@ -585,6 +634,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 */
 
 	length = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
+	fprintf(stderr,"\nIIR elem %27s: offset %llu, length %llu, buffersize, %u\n", GST_ELEMENT_NAME(element), GST_BUFFER_OFFSET(inbuf), length, GST_BUFFER_SIZE(inbuf));
 	if(!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
 		/*
 		 * input is not 0s
@@ -593,21 +643,30 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		gst_buffer_ref(inbuf);	/* don't let the adapter free it */
 		gst_adapter_push(element->adapter, inbuf);
 		element->zeros_in_adapter = 0;
+		gettimeofday( &tv2, NULL);
 		result = filter(element, outbuf);
+		gettimeofday( &tv3, NULL);
+		fprintf(stdout,"IIR Elem %27s: offset %llu, Time to filter non gap %9.8f (s)\n", GST_ELEMENT_NAME(element), GST_BUFFER_OFFSET(inbuf), (double) (tv3.tv_sec - tv2.tv_sec) + (double) (tv3.tv_usec - tv2.tv_usec) / (double) 1e6);
 	} else if(TRUE) {
 		/*
 		 * input is 0s, FIXME here. Make dependent on decay rate.
 		 */
 
-		push_zeros(element, length);
+		gst_buffer_ref(inbuf);  /* don't let the adapter free it */
+		memset(GST_BUFFER_DATA(inbuf), 0, GST_BUFFER_SIZE(inbuf));
+		gst_adapter_push(element->adapter, inbuf);
+		element->zeros_in_adapter = 0;
+		//push_zeros(element, length);
+		gettimeofday( &tv2, NULL);
 		result = filter(element, outbuf);
+		gettimeofday( &tv3, NULL);
+		fprintf(stdout,"GAP ALERT! IIR Elem %27s: offset %llu, Time to filter GAP %9.8f (s)\n", GST_ELEMENT_NAME(element), GST_BUFFER_OFFSET(inbuf), (double) (tv3.tv_sec - tv2.tv_sec) + (double) (tv3.tv_usec - tv2.tv_usec) / (double) 1e6);
 	}
 	//fprintf(stderr, "TIMESTAMP %f, BUFFERSIZE %d\n", (double) 1e-9 * GST_BUFFER_TIMESTAMP(inbuf), GST_BUFFER_SIZE(inbuf) / sizeof(double));
 
 	int dmin, dmax;
 	gsl_matrix_int_minmax(element->delay, &dmin, &dmax);
-	dmin = 0;
-	/*fprintf(stderr, "IIR elem %17s : input timestamp %llu, output timestamp %llu, input offset %llu, output offset %llu, %d, %d\n",
+	/*fprintf(stderr, "IIR elem %29s : input timestamp %llu, output timestamp %llu, input offset %llu, output offset %llu, %d, %d\n",
 		GST_ELEMENT_NAME(element),
 		GST_BUFFER_TIMESTAMP(inbuf),
 		GST_BUFFER_TIMESTAMP(outbuf),
@@ -615,7 +674,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		GST_BUFFER_OFFSET(outbuf),
 		dmin,
 		dmax);*/
-	//fprintf(stderr, "IIR elem %17s : input offset %llu, output offset %llu, %d, %d\n", GST_ELEMENT_NAME(element), GST_BUFFER_OFFSET(inbuf), GST_BUFFER_OFFSET(outbuf), dmin, dmax);
 	/*
 	 * done
 	 */
@@ -839,7 +897,7 @@ static void gstlal_iirbank_class_init(GSTLALIIRBankClass *klass)
 		g_param_spec_value_array(
 			"a1-matrix",
 			"Matric of IIR feedback coefficients",
-			"A Matrix of first order IIR filter feedback coefficients. Each row represents a different IIR bank.",
+			"A ma-ma-ma-Matrix of first order IIR filter feedback coefficients. Each row represents a different IIR bank.",
 			g_param_spec_value_array(
 				"a1",
 				"IIR bank feedback coefficients",
