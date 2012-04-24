@@ -392,7 +392,7 @@ static double ffinal(double m1, double m2){
 
 	double f_isco;
 	
-	pow(2., ceil( log( (1./LAL_PI)*( pow(6.,-3./2.) )*( pow(m1+m2,-1.) ) ) ) / log(2) ); /* Next highest power of 2 of f_isco */
+	f_isco = pow(2., ceil( log( (1./LAL_PI)*( pow(6.,-3./2.) )*( pow((m1+m2)*LAL_MTSUN_SI,-1.) ) ) ) / log(2) ); /* Next highest power of 2 of f_isco */
 	
 	return f_isco;
 }
@@ -455,8 +455,7 @@ static int compute_max_chirp_time_and_max_frequency(double mc_min, double mc_max
 	/* FIXME longest chirp time comes from the smallest chirp mass and eta corrections which we say comes from the smallest eta but have not verified... */
 	double m1min = mc2mass1(mc_min, eta_min);
 	double m2min = mc2mass2(mc_min, eta_min);
-	
-	*f_max = ffinal(m1max, m2max);
+	*f_max = ffinal(m1min, m2min);
 	*t_max = chirp_time(m1min, m2min, f_min, 7, 0);
 	
 	return 0;
@@ -474,12 +473,13 @@ static int compute_working_length_and_sample_rate(double chirp_time, double f_ma
 	return 0;
 }
 
-static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max, double N_mc, double eta_min, double eta_max, double M_eta, double f_min, REAL8FrequencySeries* psd, COMPLEX16TimeSeries* tseries, COMPLEX16FrequencySeries* fseries, COMPLEX16FFTPlan* revplan, int node_flag){
+static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max, int N_mc, double eta_min, double eta_max, int M_eta, double f_min, REAL8FrequencySeries* psd, COMPLEX16TimeSeries* tseries, COMPLEX16FrequencySeries* fseries, COMPLEX16FFTPlan* revplan, int node_flag){
        /*
  	* N_mc is number of points on M_c grid
  	* viceversa for M_eta	
  	*/ 
-	int i,j,k=0;
+	int i,j;
+	int k =0;
 	double sample_rate, deltaT;
 	double working_duration;
         unsigned int working_length;
@@ -510,10 +510,8 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
 	if (node_flag == 0) {
 
 	for ( i = 0; i < N_mc ; i++){
-		k+=i;
 		for ( j = 0; j < M_eta ; j++){
-			k+=j;
-
+			
 			eta = eta_min + (j/(M_eta-1))*(eta_max - eta_min);
 			mc = mc_min + (i/(N_mc-1))*(mc_max - mc_min);
 
@@ -522,10 +520,11 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
 
 			generate_template(m1, m2, 1.0 / psd->deltaF, f_min, working_length / working_duration / (2*1.05), 7, fseries);
 			freq_to_time_fft(fseries, psd, tseries, revplan); /* return whitened complex time series */	
-			for (i = 0; i < tseries->data->length; i++) {
-				gsl_matrix_set(A, 2*k, i, tseries->data->data[i].re);
-				gsl_matrix_set(A, 2*k+1, i, tseries->data->data[i].im);
+			for (unsigned int m = 0; m < tseries->data->length; m++) {
+				gsl_matrix_set(A, 2*k, m, tseries->data->data[m].re);
+				gsl_matrix_set(A, 2*k+1, m, tseries->data->data[m].im);
 			}
+			k+=1;
 		}
 	}
 	
@@ -551,9 +550,9 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
 
                         generate_template(m1, m2, 1.0 / psd->deltaF, f_min, working_length / working_duration / (2*1.05), 7, fseries);
                         freq_to_time_fft(fseries, psd, tseries, revplan); /* return whitened complex time series */
-                        for (i = 0; i < tseries->data->length; i++) {
-                                gsl_matrix_set(A, 2*k, i, tseries->data->data[i].re);
-                                gsl_matrix_set(A, 2*k+1, i, tseries->data->data[i].im);
+                        for (unsigned int m = 0; m < tseries->data->length; m++) {
+                                gsl_matrix_set(A, 2*k, m, tseries->data->data[m].re);
+                                gsl_matrix_set(A, 2*k+1, m, tseries->data->data[m].im);
                         }
                 }
         }
@@ -643,14 +642,15 @@ int main() {
 	double eta_min = 0.1;
 	double mc_max = 7.6;
 	double eta_max = 0.25;
-	double N_mc = 40;
-	double M_eta = 40;
+	int N_mc = 40;
+	int M_eta = 40;
 	double f_min = 40.0;
 	double t_max = 0;
 	double f_max = 0;
 	double eta, mc, m1, m2;
-	unsigned int working_length;
-	double sample_rate, working_duration;
+	unsigned int working_length=0;
+	double sample_rate=0;
+	double working_duration=0;
 	double New_N_mc, New_M_eta;
 	double deltaT;
 	double Overlap;
@@ -679,14 +679,14 @@ int main() {
 
 	deltaT = 1. / sample_rate;
         working_duration = 1. / (working_length * sample_rate);
-
+	
 	psd = XLALCreateREAL8FrequencySeries(NULL, &epoch, 0, 1. / (working_duration), &lalDimensionlessUnit, working_length);
 	get_psd_from_file(psd, "reference_psd.txt");
 
 	/* templates and psd is allocated by this function make sure to free them */
 	/* allocate tseries, fseries and revplan here for use throughout main */
 
-	tseries = XLALCreateCOMPLEX16TimeSeries(NULL, &epoch, 0., deltaT, &lalStrainUnit, working_length);
+	tseries = XLALCreateCOMPLEX16TimeSeries(NULL, &epoch, 0., deltaT, &lalDimensionlessUnit, working_length);
         fseries = XLALCreateCOMPLEX16FrequencySeries(NULL, &epoch, 0, 1. / working_duration, &lalDimensionlessUnit, working_length);
         revplan = XLALCreateReverseCOMPLEX16FFTPlan(fseries->data->length, 1);
 
