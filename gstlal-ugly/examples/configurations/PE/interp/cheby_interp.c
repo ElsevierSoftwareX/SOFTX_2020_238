@@ -1,3 +1,6 @@
+/* Use old lal complex structures for now */
+#define LAL_USE_OLD_COMPLEX_STRUCTS
+
 #include <cheby_interp.h>
 #include <math.h>
 #include <gsl/gsl_math.h>
@@ -17,6 +20,7 @@
 #include <lal/FrequencySeries.h>
 #include <lal/LALConstants.h>
 #include <lal/Sequence.h>
+#include <assert.h>
 /*#include <spa.c>*/
 /*
  * Data structure methods
@@ -66,8 +70,10 @@ static gsl_matrix_complex *projection_coefficient(gsl_vector *svd_basis, gsl_mat
 	double M_real, M_imag;
 	/* compute M_ky at fixed mu */
 	gsl_matrix_complex *M_xy = gsl_matrix_complex_calloc(N_mc, M_eta);
-	
-	for (unsigned int k =0; k < (template_bank->size1*template_bank->size2)/2; k++){
+
+	assert(N_mc * M_eta == template_bank->size1 / 2);
+
+	for (unsigned int k =0; k < template_bank->size1 / 2; k++){
 	
 		i = floor(k/N_mc);
 		j = k - floor(k/N_mc)*N_mc; /* indices for M_xy */
@@ -79,7 +85,7 @@ static gsl_matrix_complex *projection_coefficient(gsl_vector *svd_basis, gsl_mat
 	        gsl_blas_ddot(&spa_waveform_imag.vector, svd_basis, &M_imag);
 	
 		GSL_SET_COMPLEX(&M, M_real, M_imag);
-		gsl_matrix_complex_set(M_xy, i, j, M);	
+		gsl_matrix_complex_set(M_xy, i, j, M);
 	}
 
 
@@ -403,19 +409,19 @@ static int get_psd_from_file(REAL8FrequencySeries *series, char *fname){
 	double f0 = series->f0;
 	double f;
 	const gsl_interp_type *t = gsl_interp_linear;
-	gsl_interp *g_interp = gsl_interp_alloc (t, 16385);
+	gsl_interp *g_interp = gsl_interp_alloc (t, 16384);
 	gsl_interp_accel *acc = gsl_interp_accel_alloc();
-	double freq[16385];
-	double psd[16385];
+	double freq[16384];
+	double psd[16384];
 	
-	int i;
-	fp = fopen("nameoffile", "r");
+	int i = 0;
 	while (!feof(fp)) {
-		fscanf(fp, "%f %e", &freq[i], &psd[i]);
+		if (i >= 16384) break;
+		fscanf(fp, "%lf %le\n", &freq[i], &psd[i]);
 		i++;
 	}
 
-	gsl_interp_init(g_interp, freq, psd, 16385);
+	gsl_interp_init(g_interp, freq, psd, 16384);
 
 	for (i = 0; i < series->data->length; i++) {
 		f = f0 + i * deltaF;
@@ -601,6 +607,7 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 
 	template_view = gsl_matrix_submatrix(template_bank, 0, 0, n, template_bank->size2);
 	output = gsl_matrix_calloc(n, template_bank->size2);
+	fprintf(stderr, "output size %d %d\n", output->size1, output->size2);
 	gsl_matrix_memcpy(output, &template_view.matrix);
 	return output;
 }
