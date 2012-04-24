@@ -42,6 +42,8 @@ from pylal.datatypes import LIGOTimeGPS as GPS
 from pylal import ligolw_burca2
 from pylal import ligolw_thinca
 from gstlal import far
+from gstlal import inspiral
+from glue.ligolw import utils
 
 
 __author__ = "Chad Hanna <chad.hanna@ligo.org>"
@@ -100,4 +102,6 @@ coincparamsdistributions.add_foreground_prior(verbose = options.verbose, n = opt
 
 #FIXME there is no real segment here, should there be?
 segs = segments.segmentlistdict.fromkeys(("H1","H2","L1","V1"), segments.segmentlist([segments.segment([GPS(0), GPS(2000000000)])]))
-coincparamsdistributions.to_filename(options.write_likelihood, segs, verbose = options.verbose)
+
+xmldoc = inspiral.gen_likelihood_control_doc(coincparamsdistributions, segs)
+utils.write_filename(xmldoc, options.write_likelihood, gz = options.write_likelihood.endswith('.gz'), verbose = options.verbose)
