@@ -73,6 +73,33 @@ class TrialsTable(dict):
 	trials.  This is a subclass of dict.  The trials table is keyed by the
 	detectors that partcipated in the coincidence and the time slide id.
 	"""
+	class TrialsTableTable(lsctables.table.Table):
+		tableName = "gstlal_trials:table"
+		validcolumns = {
+			"ifos": "lstring",
+			"time_slide_id": "ilwd:char",
+			"count": "int_8s"
+		}
+		class RowType(object):
+			__slots__ = ("ifos", "time_slide_id", "count")
+
+			def get_ifos(self):
+				return lsctables.instrument_set_from_ifos(self.ifos)
+
+			def set_ifos(self, ifos):
+				self.ifos = lsctables.ifos_from_instrument_set(ifos)
+
+			def key(self):
+				return frozenset(self.get_ifos()), self.time_slide_id
+
+			@classmethod
+			def from_item(cls, ((ifos, time_slide_id), value)):
+				self = cls()
+				self.set_ifos(ifos)
+				self.time_slide_id = time_slide_id
+				self.count = value
+				return self
+
 	def from_db(self, connection):
 		"""
 		Increment the trials table from values stored in the database
@@ -100,22 +127,19 @@ class TrialsTable(dict):
 		A class method to create a new instance of a TrialsTable from
 		an xml representation of it.
 		"""
-		xml, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:gstlal_inspiral_trialstable" % name]
 		self = cls()
-		for param in xml.getElementsByTagName(ligolw.Param.tagName):
-			key = param.getAttribute(u"Name").split("+")
-			self[(lsctables.instrument_set_from_ifos(key[0]), ilwd.get_ilwdchar(key[1]))] = param.pcdata
+		for row in lsctables.table.get_table(xml, self.TrialsTableTable.tableName):
+			self[row.key()] = row.count
 		return self
 
-	def to_xml(self, name):
+	def to_xml(self):
 		"""
 		A method to write this instance of a trials table to an xml
 		representation.
 		"""
-		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_trialstable" % name})
-		for key, value in self.items():
-			key = "%s+%s" % (lsctables.ifos_from_instrument_set(key[0]), str(key[1]))
-			xml.appendChild(ligolw_param.from_pyvalue(key, value))
+		xml = lsctables.New(self.TrialsTableTable)
+		for item in self.items():
+			xml.append(xml.RowType.from_item(item))
 		return xml
 
 
@@ -293,8 +317,8 @@ class FAR(object):
 
 	@classmethod
 	def from_xml(cls, xml, name):
-		xml, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:gstlal_inspiral_FAR" % name]
-		distribution_stats, process_id = DistributionsStats.from_xml(xml, name)
+		llw_elem, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:gstlal_inspiral_FAR" % name]
+		distribution_stats, process_id = DistributionsStats.from_xml(llw_elem, name)
 		# the code that writes these things has put the
 		# livetime_seg into the out segment in the search_summary
 		# table.  uninitialized segments get recorded as
@@ -307,7 +331,7 @@ class FAR(object):
 			livetime_seg = search_summary_row.get_out()
 		except TypeError:
 			livetime_seg = None
-		self = cls(livetime_seg, trials_factor = None, distribution_stats = distribution_stats, trials_table = TrialsTable.from_xml(xml, name))
+		self = cls(livetime_seg, trials_factor = None, distribution_stats = distribution_stats, trials_table = TrialsTable.from_xml(llw_elem, name))
 		return self, process_id
 
 	def to_xml(self, process, name):
