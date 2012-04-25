@@ -366,7 +366,7 @@ static REAL8FrequencySeries *make_empty_psd(double f0, double deltaF, int length
  * variance in the time domain, therefore PSD = 1 / (n \Delta f).
  */
 
-
+#if 0	/* not used, commented out to silence build warning */
 static REAL8FrequencySeries *make_unit_psd(double f0, double deltaF, int length, LALUnit sample_units)
 {
 	REAL8FrequencySeries *psd = make_empty_psd(f0, deltaF, length, sample_units);
@@ -382,6 +382,7 @@ static REAL8FrequencySeries *make_unit_psd(double f0, double deltaF, int length,
 
 	return psd;
 }
+#endif
 
 
 static REAL8FrequencySeries *make_psd_from_fseries(const COMPLEX16FrequencySeries *fseries)
