@@ -462,7 +462,7 @@ class Data(object):
 			# what gets recorded in the likelihood data
 			# document.
 			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
-			buf_end_time = buf_timestamp + buf.duration
+			buf_end_time = buf_timestamp + LIGOTimeGPS(0, buf.duration)
 			try:
 				out_segs = segments.segmentlist([self.search_summary.get_out()])
 			except TypeError:
