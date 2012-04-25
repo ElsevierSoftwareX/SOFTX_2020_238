@@ -276,7 +276,7 @@ class DistributionsStats(object):
 
 
 class FAR(object):
-	def __init__(self, livetime, trials_factor, distribution_stats = None, trials_table = None):
+	def __init__(self, livetime, trials_factor, distribution_stats, trials_table = None):
 		self.distribution_stats = distribution_stats
 		if trials_table is None:
 			self.trials_table = TrialsTable()
