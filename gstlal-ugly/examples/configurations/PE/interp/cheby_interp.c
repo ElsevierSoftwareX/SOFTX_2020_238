@@ -44,7 +44,7 @@ struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd
 {
 	int i;
 	struct twod_waveform_interpolant_array * output = (struct twod_waveform_interpolant_array *) calloc(1, sizeof(struct twod_waveform_interpolant_array));
-	output->size = svd_bank->size1; 
+	output->size = svd_bank->size2; 
 	output->interp = (struct twod_waveform_interpolant *) calloc(output->size, sizeof(struct twod_waveform_interpolant));
 	/* FIXME: how should CKL be allocated? */
 	output->param1_min = param1_min;
@@ -52,7 +52,7 @@ struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd
 	output->param1_max = param1_max;
 	output->param2_max = param2_max;
 	for (i = 0; i < output->size; i++) {
-		output->interp[i].svd_basis = gsl_matrix_row(svd_bank, i);
+		output->interp[i].svd_basis = gsl_matrix_column(svd_bank, i);
 		output->interp[i].C_KL = NULL;
 	}
 	return output;
@@ -495,7 +495,7 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
 	working_length = psd->data->length;
 
 	/* gsl_matrix *A will contain template bank */
-	A = gsl_matrix_calloc(2*N_mc*M_eta, working_length); 
+	A = gsl_matrix_calloc(working_length,2*N_mc*M_eta); 
 
         /*working_duration = 1.0 / psd->deltaF;
 	sample_rate = working_length / working_duration;
@@ -521,8 +521,8 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
 			generate_template(m1, m2, 1.0 / psd->deltaF, f_min, working_length / working_duration / (2*1.05), 7, fseries);
 			freq_to_time_fft(fseries, psd, tseries, revplan); /* return whitened complex time series */	
 			for (unsigned int m = 0; m < tseries->data->length; m++) {
-				gsl_matrix_set(A, 2*k, m, tseries->data->data[m].re);
-				gsl_matrix_set(A, 2*k+1, m, tseries->data->data[m].im);
+				gsl_matrix_set(A, m, 2*k, tseries->data->data[m].re);
+				gsl_matrix_set(A, m, 2*k+1, tseries->data->data[m].im);
 			}
 			k+=1;
 		}
@@ -551,8 +551,8 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
                         generate_template(m1, m2, 1.0 / psd->deltaF, f_min, working_length / working_duration / (2*1.05), 7, fseries);
                         freq_to_time_fft(fseries, psd, tseries, revplan); /* return whitened complex time series */
                         for (unsigned int m = 0; m < tseries->data->length; m++) {
-                                gsl_matrix_set(A, 2*k, m, tseries->data->data[m].re);
-                                gsl_matrix_set(A, 2*k+1, m, tseries->data->data[m].im);
+                                gsl_matrix_set(A, m, 2*k, tseries->data->data[m].re);
+                                gsl_matrix_set(A, m, 2*k+1, tseries->data->data[m].im);
                         }
                 }
         }
@@ -585,29 +585,35 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 
 	V = gsl_matrix_calloc(template_bank->size2, template_bank->size2);
 	S = gsl_vector_calloc(template_bank->size2);
+	
+	fprintf(stderr, "Beginning SVD, may take some time.\n");
 
 	gsl_linalg_SV_decomp_mod(template_bank, gX, V, S, gW);
 
-	/* FIXME, add the svd truncation, replace template_bank_ptr with the
- 	 * new truncated matrix and free the template_bank matrix, populate the M
-	 * matrix and free V S gX and gW when you are done
-	 */
-	
-	/*Note: We don't actually need the coefficients that come from the calculation of the basis template */
+	fprintf(stderr, "SVD completed.\n");
 
 	tolerance = 1e-6;
 	norm_s = gsl_blas_dnrm2(S);
-	
+
+	gsl_matrix_free(gX);
+        gsl_vector_free(gW);
+        gsl_matrix_free(V);	
+
 	/*FIXME make this more sophisticated if you care */
 	for (n = 0; n < S->size; n++) {
 		sum_s += gsl_vector_get(S, n) * gsl_vector_get(S, n);
 		if (sqrt(sum_s / norm_s) >= tolerance) break;
 		}
 
-	template_view = gsl_matrix_submatrix(template_bank, 0, 0, n, template_bank->size2);
-	output = gsl_matrix_calloc(n, template_bank->size2);
+	fprintf(stderr,"SVD: using %d basis templates\n:", n);
+	
+	template_view = gsl_matrix_submatrix(template_bank, 0, 0, template_bank->size1, n);
+	output = gsl_matrix_calloc(template_bank->size1, n);
 	fprintf(stderr, "output size %d %d\n", output->size1, output->size2);
 	gsl_matrix_memcpy(output, &template_view.matrix);
+	
+	gsl_vector_free(S);
+
 	return output;
 }
 
@@ -678,9 +684,9 @@ int main() {
 	compute_working_length_and_sample_rate(t_max, f_max, &working_length, &sample_rate);
 
 	deltaT = 1. / sample_rate;
-        working_duration = 1. / (working_length * sample_rate);
-	
-	psd = XLALCreateREAL8FrequencySeries(NULL, &epoch, 0, 1. / (working_duration), &lalDimensionlessUnit, working_length);
+        working_duration = (working_length / sample_rate);
+
+	psd = XLALCreateREAL8FrequencySeries(NULL, &epoch, 0, 1./working_duration, &lalDimensionlessUnit, working_length);
 	get_psd_from_file(psd, "reference_psd.txt");
 
 	/* templates and psd is allocated by this function make sure to free them */
@@ -698,10 +704,8 @@ int main() {
 	svd_basis = create_svd_basis_from_template_bank(templates);
 
 	
-	/* FIXME: CKL needs to be set in new_waveform_interpolant_array_from_svd_bank */
 	interps = new_waveform_interpolant_array_from_svd_bank(svd_basis, mc_min, eta_min, mc_max, eta_max );	
 
-	/*FIXME: Calculation of waveforms at the coolcation points:*/
 	/* Compute new template bank at colocation points-> project onto basis vectors
  	 * to get matrix of coefficients for C_KL computation */
 
