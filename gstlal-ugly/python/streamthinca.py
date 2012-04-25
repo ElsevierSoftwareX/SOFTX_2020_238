@@ -203,9 +203,6 @@ class StreamThinca(object):
 		# have already been used in coincidences
 		self.ids = set()
 
-		# the start time
-		self.start_time = time.time()
-
 
 	def set_likelihood_data(self, coinc_params_distributions, likelihood_params_func):
 		if coinc_params_distributions is not None:
@@ -290,10 +287,8 @@ class StreamThinca(object):
 
 		# increment the trials table and possibly assign FAPs
 		# set the live time
-		if FAP is not None:
-			FAP.livetime = time.time() - self.start_time
 		coinc_event_index = dict((row.coinc_event_id, row) for row in self.coinc_event_table)
-		ref_time = XLALUTCToGPS(time.gmtime())
+		gps_time_now = XLALUTCToGPS(time.gmtime())
 		for coinc_inspiral_row in self.coinc_inspiral_table:
 			coinc_event_row = coinc_event_index[coinc_inspiral_row.coinc_event_id]
 			# increment the trials table
@@ -308,7 +303,7 @@ class StreamThinca(object):
 				# assume each event is "loudest" so n = 1 by default, not the same as required for an IFAR plot
 				coinc_inspiral_row.combined_far = FAP.compute_far(coinc_inspiral_row.false_alarm_rate)
 				# populate a column with latency
-				coinc_inspiral_row.minimum_duration = float(ref_time - coinc_inspiral_row.get_end())
+				coinc_inspiral_row.minimum_duration = float(gps_time_now - coinc_inspiral_row.get_end())
 
 		# construct a coinc extractor from the XML document while
 		# the tree still contains our internal table objects
