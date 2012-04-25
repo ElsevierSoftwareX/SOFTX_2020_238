@@ -19,15 +19,22 @@
 """Build time-sliced, SVD'd filter banks for use with gstlal_inspiral"""
 
 
+from optparse import OptionParser
+import uuid
+
+
+from gstlal import svd_bank
+from gstlal import reference_psd
+
+
 #
 # parse command line
 #
 
-from optparse import OptionParser
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
-parser.add_option("--identity", action = "store_true", default = False, help = "Do not perform an SVD; instead, use the original templates as the analyzing templates and the identity matrix as the reconstruction matrix.")
+parser.add_option("--identity-transform", action = "store_true", default = False, help = "Do not perform an SVD; instead, use the original templates as the analyzing templates and the identity matrix as the reconstruction matrix.")
 parser.add_option("--padding", metavar = "pad", type = "float", default = 1.1, help = "Fractional amount to pad time slices.")
 parser.add_option("--svd-tolerance", metavar = "match", type = "float", default = 0.9995, help = "Set the SVD reconstruction tolerance (default = 0.9995).")
 parser.add_option("--reference-psd", metavar = "filename", help = "Instead of measuring the noise spectrum, load the spectrum from this LIGO light-weight XML file (required).")
@@ -42,6 +49,7 @@ parser.add_option("--samples-min", type = "int", default = 1024, help = "The min
 parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024")
 parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies above 64Hz, default 2048")
 parser.add_option("--samples-max", type = "int", default = 4096, help = "The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096")
+parser.add_option("--bank-id", metavar = "id", help = "Set a string to be used as the globally unique ID for this bank (default = generate a UUID).")
 
 options, filenames = parser.parse_args()
 
@@ -50,6 +58,9 @@ required_options = ("reference_psd", "template_bank", "write_svd_bank")
 missing_options = [option for option in required_options if getattr(options, option) is None]
 if missing_options:
 	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+
+if options.bank_id is None:
+	options.bank_id = uuid.uuid4()
 
 
 #
@@ -62,14 +73,11 @@ if missing_options:
 #
 
 
-from gstlal.svd_bank import build_bank, write_bank
-from gstlal.reference_psd import read_psd
-
-write_bank(
+svd_bank.write_bank(
 	options.write_svd_bank,
-	build_bank(
+	svd_bank.build_bank(
 		options.template_bank,
-		read_psd(
+		reference_psd.read_psd(
 			options.reference_psd,
 			verbose=options.verbose
 		),
@@ -77,13 +85,14 @@ write_bank(
 		options.ortho_gate_fap,
 		options.snr_threshold,
 		options.svd_tolerance,
-		options.padding,
-		options.identity,
-		options.verbose,
+		padding = options.padding,
+		identity_transform = options.identity_transform,
+		verbose = options.verbose,
 		samples_min = options.samples_min,
 		samples_max_256 = options.samples_max_256,
 		samples_max_64 = options.samples_max_64, 
-		samples_max = options.samples_max
+		samples_max = options.samples_max,
+		bank_id = options.bank_id
 	),
 	options.clipleft,
 	options.clipright

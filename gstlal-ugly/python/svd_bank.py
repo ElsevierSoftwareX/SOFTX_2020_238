@@ -104,11 +104,11 @@ class BankFragment(object):
 		self.start = start
 		self.end = end
 
-	def set_template_bank(self, template_bank, tolerance, snr_thresh, identity = False, verbose = False):
+	def set_template_bank(self, template_bank, tolerance, snr_thresh, identity_transform = False, verbose = False):
 		if verbose:
 			print >>sys.stderr, "\t%d templates of %d samples" % template_bank.shape
 
-		self.orthogonal_template_bank, self.singular_values, self.mix_matrix, self.chifacs = cbc_template_fir.decompose_templates(template_bank, tolerance, identity = identity)
+		self.orthogonal_template_bank, self.singular_values, self.mix_matrix, self.chifacs = cbc_template_fir.decompose_templates(template_bank, tolerance, identity = identity_transform)
 
 		self.sum_of_squares_weights = numpy.sqrt(self.chifacs.mean() * gstlalmisc.ss_coeffs(self.singular_values,snr_thresh))
 
@@ -118,14 +118,14 @@ class BankFragment(object):
 
 
 class Bank(object):
-	def __init__(self, bank_xmldoc, psd, time_slices, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, identity = False, verbose = False):
+	def __init__(self, bank_xmldoc, psd, time_slices, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, identity_transform = False, verbose = False, bank_id = None):
 		# FIXME: remove template_bank_filename when no longer needed
 		# by trigger generator element
 		self.template_bank_filename = None
 		self.filter_length = max(time_slices['end'])
 		self.snr_threshold = snr_threshold
 		self.logname = logname
-		self.number = None
+		self.bank_id = bank_id
 
 		# Generate downsampled templates
 		template_bank, self.autocorrelation_bank, self.sigmasq = cbc_template_fir.generate_templates(
@@ -145,7 +145,7 @@ class Bank(object):
 		for i, bank_fragment in enumerate(self.bank_fragments):
 			if verbose:
 				print >>sys.stderr, "constructing template decomposition %d of %d:  %g s ... %g s" % (i + 1, len(self.bank_fragments), -bank_fragment.end, -bank_fragment.start)
-			bank_fragment.set_template_bank(template_bank[i], tolerance, self.snr_threshold, identity = identity, verbose = verbose)
+			bank_fragment.set_template_bank(template_bank[i], tolerance, self.snr_threshold, identity_transform = identity_transform, verbose = verbose)
 
 		self.gate_threshold = sum_of_squares_threshold_from_fap(gate_fap, numpy.array([weight**2 for bank_fragment in self.bank_fragments for weight in bank_fragment.sum_of_squares_weights], dtype = "double"))
 		if verbose:
@@ -161,7 +161,7 @@ class Bank(object):
 
 
 
-def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.1, identity = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096):
+def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.1, identity_transform = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096, bank_id = None):
 	# Open template bank file
 	bank_xmldoc = utils.load_filename(template_bank_filename, verbose = verbose)
 
@@ -191,8 +191,9 @@ def build_bank(template_bank_filename, psd, flow, ortho_gate_fap, snr_threshold,
 		tolerance = svd_tolerance,
 		flow = flow,
 		autocorrelation_length = autocorrelation_length,	# samples
-		identity = identity,
-		verbose = verbose
+		identity_transform = identity_transform,
+		verbose = verbose,
+		bank_id = bank_id
 	)
 
 	# FIXME: remove this when no longer needed
@@ -234,6 +235,7 @@ def write_bank(filename, bank, clipleft = 0, clipright = 0, verbose = False):
 	root.appendChild(param.new_param('logname', ligolw_types.FromPyType[str], bank.logname))
 	root.appendChild(param.new_param('snr_threshold', ligolw_types.FromPyType[float], bank.snr_threshold))
 	root.appendChild(param.new_param('template_bank_filename', ligolw_types.FromPyType[str], bank.template_bank_filename))
+	root.appendChild(param.new_param('bank_id', ligolw_types.FromPyType[str], bank.bank_id))
 
 	# apply clipping to autocorrelations and sigmasq
 	bank.autocorrelation_bank = bank.autocorrelation_bank[clipleft:clipright,:]
@@ -294,6 +296,7 @@ def read_bank(filename, verbose = False):
 	bank.logname = param.get_pyvalue(root, 'logname')
 	bank.snr_threshold = param.get_pyvalue(root, 'snr_threshold')
 	bank.template_bank_filename = param.get_pyvalue(root, 'template_bank_filename')
+	bank.bank_id = param.get_pyvalue(root, 'bank_id')
 
 	# Read root-level arrays
 	autocorrelation_bank_real = array.get_array(root, 'autocorrelation_bank_real').array

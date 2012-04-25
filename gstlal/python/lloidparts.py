@@ -870,8 +870,8 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 		if instrument != "H2":
-			control_branch[(instrument, bank.number)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()))
-			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_branch[(instrument, bank.number)][1]), "control_%s.dump" % suffix, segment = nxydump_segment)
+			control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, inj_seg_list= inj_seg_list, seekevent = seekevent, control_peak_samples = control_peak_time * max(bank.get_rates()))
+			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_branch[(instrument, bank.bank_id)][1]), "control_%s.dump" % suffix, segment = nxydump_segment)
 
 	#
 	# construct trigger generators
@@ -881,9 +881,9 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 		if instrument != "H2":
-			control_snksrc = control_branch[(instrument, bank.number)]
+			control_snksrc = control_branch[(instrument, bank.bank_id)]
 		else:
-			control_snksrc = (None, control_branch[("H1", bank.number)][1])
+			control_snksrc = (None, control_branch[("H1", bank.bank_id)][1])
 		if chisq_type == 'timeslicechisq':
 			snrslices = {}
 		else:

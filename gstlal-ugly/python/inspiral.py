@@ -147,7 +147,6 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 			bank = svd_bank.read_bank(filename, verbose = verbose)
 			bank.template_bank_filename = filename
 			bank.logname = "%sbank%d" % (instrument,n)
-			bank.number = n
 			banks.setdefault(instrument,[]).append(bank)
 			if snr_threshold is not None:
 				bank.snr_threshold = snr_threshold
