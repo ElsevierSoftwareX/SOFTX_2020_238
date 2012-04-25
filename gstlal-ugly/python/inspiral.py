@@ -436,7 +436,7 @@ class Data(object):
 			# retrieve triggers from appsink element
 			buffer = elem.emit("pull-buffer")
 			timestamp = LIGOTimeGPS(0, buffer.timestamp)
-			events = tuple(event for event in sngl_inspirals_from_buffer(buffer) if LIGOTimeGPS(event.end_time, event.end_time_ns) in self.search_summary.get_out())
+			events = sngl_inspirals_from_buffer(buffer)
 
 			# set metadata on triggers
 			for event in events:
