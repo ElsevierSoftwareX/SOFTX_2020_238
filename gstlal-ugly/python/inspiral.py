@@ -519,24 +519,32 @@ class Data(object):
 
 
 	def write_likelihood_file(self):
-		# write the new distribution stats to disk
-		output = StringIO.StringIO()
-		utils.write_fileobj(gen_likelihood_control_doc(self.far, self.instruments), output, trap_signals = None)
-		outstr = output.getvalue()
-		output.close()
+		self.lock.acquire()
+		try:
+			# write the new distribution stats to disk
+			output = StringIO.StringIO()
+			utils.write_fileobj(gen_likelihood_control_doc(self.far, self.instruments), output, trap_signals = None)
+			outstr = output.getvalue()
+			output.close()
+		finally:
+			self.lock.release()
 		return outstr
 
 	def flush(self):
-		# run StreamThinca's .flush().  returns the last remaining
-		# non-coincident sngls.  add them to the distribution
-		if self.assign_likelihoods:
-			FAP = self.far
-		else:
-			FAP = None
-		for event in self.stream_thinca.flush(FAP = FAP):
-			self.far.distribution_stats.add_single(event)
-		if self.connection is not None:
-			self.connection.commit()
+		self.lock.acquire()
+		try:
+			# run StreamThinca's .flush().  returns the last remaining
+			# non-coincident sngls.  add them to the distribution
+			if self.assign_likelihoods:
+				FAP = self.far
+			else:
+				FAP = None
+			for event in self.stream_thinca.flush(FAP = FAP):
+				self.far.distribution_stats.add_single(event)
+			if self.connection is not None:
+				self.connection.commit()
+		finally:
+			self.lock.release()
 
 		# do GraceDB alerts
 		if self.gracedb_far_threshold is not None:
@@ -549,133 +557,161 @@ class Data(object):
 		except NameError:
 			# gracedb import failed, disable event uploads
 			return
-		if self.stream_thinca.last_coincs:
-			# FIXME:  this should maybe not be retrieved this
-			# way.  and the .column_index() method is probably
-			# useless
-			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
-			for coinc_event_id, false_alarm_rate in sorted(self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far").items(), key = lambda (a, b): b):
-				#
-				# do we keep this event?
-				#
+		self.lock.acquire()
+		try:
+			if self.stream_thinca.last_coincs:
+				# FIXME:  this should maybe not be retrieved this
+				# way.  and the .column_index() method is probably
+				# useless
+				coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
+				for coinc_event_id, false_alarm_rate in sorted(self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far").items(), key = lambda (a, b): b):
+					#
+					# do we keep this event?
+					#
 
-				if false_alarm_rate > self.gracedb_far_threshold:
-					continue
+					if false_alarm_rate > self.gracedb_far_threshold:
+						continue
 
-				#
-				# fake a filename for end-user convenience
-				#
+					#
+					# fake a filename for end-user convenience
+					#
 
-				observatories = "".join(sorted(set(instrument[0] for instrument in self.instruments)))
-				instruments = "".join(sorted(self.instruments))
-				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_type)
-				end_time = int(coinc_inspiral_index[coinc_event_id].get_end())
-				filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
+					observatories = "".join(sorted(set(instrument[0] for instrument in self.instruments)))
+					instruments = "".join(sorted(self.instruments))
+					description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_type)
+					end_time = int(coinc_inspiral_index[coinc_event_id].get_end())
+					filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
 
-				#
-				# construct message and send to gracedb.
-				# we go through the intermediate step of
-				# first writing the document into a string
-				# buffer incase there is some safety in
-				# doing so in the event of a malformed
-				# document;  instead of writing directly
-				# into gracedb's input pipe and crashing
-				# part way through.
-				#
+					#
+					# construct message and send to gracedb.
+					# we go through the intermediate step of
+					# first writing the document into a string
+					# buffer incase there is some safety in
+					# doing so in the event of a malformed
+					# document;  instead of writing directly
+					# into gracedb's input pipe and crashing
+					# part way through.
+					#
 
-				if self.verbose:
-					print >>sys.stderr, "sending %s to gracedb ..." % filename
-				message = StringIO.StringIO()
-				utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = False, trap_signals = None)
-				# FIXME: make this optional from command line?
-				if True:
-					resp = gracedb.Client().create(self.gracedb_group, self.gracedb_type, filename, message.getvalue())
-					if "error" in resp:
-						print >>sys.stderr, "gracedb upload of %s failed: %s" % (filename, resp["error"])
-					elif self.verbose:
-						if "warning" in resp:
-							print >>sys.stderr, "gracedb issued warning: %s" % resp["warning"]
-						print >>sys.stderr, "event assigned grace ID %s" % resp["output"]
-				else:
-					proc = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
-					proc.stdin.write(message.getvalue())
-					proc.stdin.flush()
-					proc.stdin.close()
-				message.close()
+					if self.verbose:
+						print >>sys.stderr, "sending %s to gracedb ..." % filename
+					message = StringIO.StringIO()
+					utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = False, trap_signals = None)
+					# FIXME: make this optional from command line?
+					if True:
+						resp = gracedb.Client().create(self.gracedb_group, self.gracedb_type, filename, message.getvalue())
+						if "error" in resp:
+							print >>sys.stderr, "gracedb upload of %s failed: %s" % (filename, resp["error"])
+						elif self.verbose:
+							if "warning" in resp:
+								print >>sys.stderr, "gracedb issued warning: %s" % resp["warning"]
+							print >>sys.stderr, "event assigned grace ID %s" % resp["output"]
+					else:
+						proc = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
+						proc.stdin.write(message.getvalue())
+						proc.stdin.flush()
+						proc.stdin.close()
+					message.close()
 
-				# FIXME hack to keep from sending too many alerts.
-				# Only send the best one in this set.  May not make
-				# sense depending on what is in last_coincs.  FIX
-				# PROPERLY.  This is probably mostly okay because we
-				# should be doing coincidences every 10s which is a
-				# reasonable time to cluster over
-				break
+					# FIXME hack to keep from sending too many alerts.
+					# Only send the best one in this set.  May not make
+					# sense depending on what is in last_coincs.  FIX
+					# PROPERLY.  This is probably mostly okay because we
+					# should be doing coincidences every 10s which is a
+					# reasonable time to cluster over
+					break
+		finally:
+			self.lock.release()
 
 
 	def update_eye_candy(self):
-		if self.stream_thinca.last_coincs:
-			self.ram_history.append((time.time(), (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss + resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss) / 1048576.)) # GB
-			latency_val = None
-			snr_val = (0,0)
-			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
-			for coinc_event_id, latency in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "minimum_duration").items():
-				self.latency_histogram[latency,] += 1
-				if latency_val is None:
-					t = float(coinc_inspiral_index[coinc_event_id].get_end())
-					latency_val = (t, latency)
-				snr = coinc_inspiral_index[coinc_event_id].snr
-				if snr >= snr_val[0]:
-					t = float(coinc_inspiral_index[coinc_event_id].get_end())
-					snr_val = (t, snr)
-			if latency_val is not None:
-				self.latency_history.append(latency_val)
-			if snr_val != (0,0):
-				self.snr_history.append(snr_val)
+		self.lock.acquire()
+		try:
+			if self.stream_thinca.last_coincs:
+				self.ram_history.append((time.time(), (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss + resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss) / 1048576.)) # GB
+				latency_val = None
+				snr_val = (0,0)
+				coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
+				for coinc_event_id, latency in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "minimum_duration").items():
+					self.latency_histogram[latency,] += 1
+					if latency_val is None:
+						t = float(coinc_inspiral_index[coinc_event_id].get_end())
+						latency_val = (t, latency)
+					snr = coinc_inspiral_index[coinc_event_id].snr
+					if snr >= snr_val[0]:
+						t = float(coinc_inspiral_index[coinc_event_id].get_end())
+						snr_val = (t, snr)
+				if latency_val is not None:
+					self.latency_history.append(latency_val)
+				if snr_val != (0,0):
+					self.snr_history.append(snr_val)
+		finally:
+			self.lock.release()
 
 
 	def write_latency_histogram(self):
-		for latency, number in zip(self.latency_histogram.centres()[0][1:-1], self.latency_histogram.array[1:-1]):
-			yield "%e %e\n" % (latency, number)
+		self.lock.acquire()
+		try:
+			for latency, number in zip(self.latency_histogram.centres()[0][1:-1], self.latency_histogram.array[1:-1]):
+				yield "%e %e\n" % (latency, number)
+		finally:
+			self.lock.release()
 
 
 	def write_latency_history(self):
-		# first one in the list is sacrificed for a time stamp
-		for time, latency in self.latency_history:
-			yield "%f %e\n" % (time, latency)
+		self.lock.acquire()
+		try:
+			# first one in the list is sacrificed for a time stamp
+			for time, latency in self.latency_history:
+				yield "%f %e\n" % (time, latency)
+		finally:
+			self.lock.release()
 
 
 	def write_snr_history(self):
-		# first one in the list is sacrificed for a time stamp
-		for time, snr in self.snr_history:
-			yield "%f %e\n" % (time, snr)
+		self.lock.acquire()
+		try:
+			# first one in the list is sacrificed for a time stamp
+			for time, snr in self.snr_history:
+				yield "%f %e\n" % (time, snr)
+		finally:
+			self.lock.release()
 
 
 	def write_ram_history(self):
-		# first one in the list is sacrificed for a time stamp
-		for time, ram in self.ram_history:
-			yield "%f %e\n" % (time, ram)
+		self.lock.acquire()
+		try:
+			# first one in the list is sacrificed for a time stamp
+			for time, ram in self.ram_history:
+				yield "%f %e\n" % (time, ram)
+		finally:
+			self.lock.release()
 
 
 	def write_output_file(self, likelihood_file = None, verbose = False):
-		# FIXME:  should signal trapping be disabled in this code
-		# path?  I think not
-		if self.connection is not None:
-			from glue.ligolw import dbtables
-			self.connection.cursor().execute('UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)')
-			self.connection.cursor().execute('UPDATE process SET end_time = ?', (XLALUTCToGPS(time.gmtime()).seconds,))
-			self.connection.commit()
-			dbtables.build_indexes(self.connection, verbose = verbose)
-			dbtables.put_connection_filename(self.filename, self.working_filename, verbose = verbose)
-		else:
-			self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
-			self.search_summary.nevents = len(self.sngl_inspiral_table)
-			ligolw_process.set_process_end_time(self.process)
-			utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+		self.lock.acquire()
+		try:
+			# FIXME:  should signal trapping be disabled in this code
+			# path?  I think not
+			if self.connection is not None:
+				from glue.ligolw import dbtables
+				self.connection.cursor().execute('UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)')
+				self.connection.cursor().execute('UPDATE process SET end_time = ?', (XLALUTCToGPS(time.gmtime()).seconds,))
+				self.connection.commit()
+				dbtables.build_indexes(self.connection, verbose = verbose)
+				dbtables.put_connection_filename(self.filename, self.working_filename, verbose = verbose)
+			else:
+				self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
+				self.search_summary.nevents = len(self.sngl_inspiral_table)
+				ligolw_process.set_process_end_time(self.process)
+				utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
-		# write out the snr / chisq histograms
-		if likelihood_file is None:
-			fname = os.path.split(self.filename)
-			fname = os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
-		else:
-			fname = likelihood_file
-		utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), fname, gz = (fname or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+			# write out the snr / chisq histograms
+			if likelihood_file is None:
+				fname = os.path.split(self.filename)
+				fname = os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
+			else:
+				fname = likelihood_file
+			utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), fname, gz = (fname or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+		finally:
+			self.lock.release()
