@@ -278,7 +278,7 @@ def chisq_distribution(df, non_centralities, size):
 #
 
 
-def gen_likelihood_control_doc(distributions_stats, seglists, name = u"gstlal_inspiral_likelihood", comment = u""):
+def gen_likelihood_control_doc(far, seglists, name = u"gstlal_inspiral_likelihood", comment = u""):
 	xmldoc = ligolw.Document()
 	node = xmldoc.appendChild(ligolw.LIGO_LW())
 
@@ -288,7 +288,7 @@ def gen_likelihood_control_doc(distributions_stats, seglists, name = u"gstlal_in
 	process = ligolw_process.append_process(xmldoc, comment = comment)
 	llwapp.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
 
-	node.appendChild(distributions_stats.to_xml(process, name))
+	node.appendChild(far.to_xml(process, name))
 
 	llwapp.set_process_end_time(process)
 	return xmldoc
@@ -311,7 +311,6 @@ class Data(object):
 		self.filename = filename
 		self.instruments = instruments
 		self.verbose = verbose
-		self.distribution_stats = distribution_stats
 		# True to enable likelihood assignment
 		self.assign_likelihoods = assign_likelihoods
 		# Set to None to disable period snapshots, otherwise set to seconds
@@ -328,10 +327,10 @@ class Data(object):
 		# frozenset(ifos) for n in range(2, len(instruments)+1) for ifos in choices(instruments, n
 		self.ifo_combos = [frozenset(ifos) for n in range(2, len(instruments)+1) for ifos in iterutils.choices(list(self.instruments), n)]
 
-		# setup the first trials table instance (empty dict)
-		self.trials_table = far.TrialsTable()
-		self.trials_factor = trials_factor
-		self.far = None
+		# setup the FAR/FAP book-keeping object.  livetime is set
+		# to None because it gets updated when coincidences are
+		# recorded trials factor through from the command line
+		self.far = far.FAR(None, trials_factor, distribution_stats)
 		self.likelihood_file = likelihood_file
 
 		#
@@ -417,7 +416,7 @@ class Data(object):
 			self.process.process_id,
 			coincidence_threshold = coincidence_threshold,
 			thinca_interval = thinca_interval,	# seconds
-			trials_table = self.trials_table
+			trials_table = self.far.trials_table
 		)
 
 		#
@@ -446,13 +445,10 @@ class Data(object):
 			if self.assign_likelihoods and (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
 				self.likelihood_snapshot_timestamp = timestamp
 
-				# create a FAR class, init() method smooths the distribution_stats 
-				# livetime is set to None because it gets updated when coincidences are recorded
-				# trials factor through from the command line
-				self.far = far.FAR(None, self.trials_factor, self.distribution_stats, self.trials_table)
+				# smooth the distribution_stats
+				self.far.smooth_distribution_stats()
 				# update stream thinca's likelihood data
-				# Has to be done after the FAR class is created since the init() method creates the smoothed distributions (i.e. calls .finish())
-				self.stream_thinca.set_likelihood_data(self.distribution_stats.smoothed_distributions, self.distribution_stats.likelihood_params_func)
+				self.stream_thinca.set_likelihood_data(self.far.distribution_stats.smoothed_distributions, self.far.distribution_stats.likelihood_params_func)
 				# FIXME don't hard code
 				remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}
 
@@ -461,7 +457,7 @@ class Data(object):
 					self.far.updateFAPmap(ifo_set, remap, verbose = self.verbose)
 
 				# write the new distribution stats to disk
-				utils.write_filename(gen_likelihood_control_doc(self.distribution_stats, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
+				utils.write_filename(gen_likelihood_control_doc(self.far, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
 
 			# run stream thinca
 			noncoinc_sngls = self.stream_thinca.add_events(events, timestamp, FAP = self.far)
@@ -469,7 +465,7 @@ class Data(object):
 			# update the parameter distribution data.  only
 			# update from sngls that weren't used in coincs
 			for event in noncoinc_sngls:
-				self.distribution_stats.add_single(event)
+				self.far.distribution_stats.add_single(event)
 
 			# update output document
 			if self.connection is not None:
@@ -486,7 +482,7 @@ class Data(object):
 	def write_likelihood_file(self):
 		# write the new distribution stats to disk
 		output = StringIO.StringIO()
-		utils.write_fileobj(gen_likelihood_control_doc(self.distribution_stats, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), output, trap_signals = None)
+		utils.write_fileobj(gen_likelihood_control_doc(self.far, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), output, trap_signals = None)
 		outstr = output.getvalue()
 		output.close()
 		return outstr
@@ -495,7 +491,7 @@ class Data(object):
 		# run StreamThinca's .flush().  returns the last remaining
 		# non-coincident sngls.  add them to the distribution
 		for event in self.stream_thinca.flush(FAP = self.far):
-			self.distribution_stats.add_single(event)
+			self.far.distribution_stats.add_single(event)
 		if self.connection is not None:
 			self.connection.commit()
 
@@ -640,4 +636,4 @@ class Data(object):
 			fname = os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
 		else:
 			fname = likelihood_file
-		utils.write_filename(gen_likelihood_control_doc(self.distribution_stats, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), fname, gz = (fname or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+		utils.write_filename(gen_likelihood_control_doc(self.far, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), fname, gz = (fname or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)

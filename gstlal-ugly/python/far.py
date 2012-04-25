@@ -282,34 +282,32 @@ class FAR(object):
 			self.trials_table = TrialsTable()
 		else:
 			self.trials_table = trials_table
-		if self.distribution_stats is not None:
-			# FIXME:  this results in the
-			# .smoothed_distributions object containing
-			# *probabilities* not probability densities. this
-			# might be changed in the future.
-			self.distribution_stats.finish()
-			self.likelihood_ratio = ligolw_burca2.LikelihoodRatio(self.distribution_stats.smoothed_distributions)
-		else:
-			self.likelihood_ratio = None
 		self.livetime = livetime
 		self.trials_factor = trials_factor
+		self.init_likelihood_data()
 		self.reset()
 
 	@classmethod
 	def from_xml(cls, xml, name):
-		name = u"%s:gstlal_inspiral_FAR" % name
-		xml, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == name]
+		xml, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:gstlal_inspiral_FAR" % name]
 		distribution_stats, process_id = DistributionsStats.from_xml(xml, name)
 		livetime = abs(lsctables.table.get_table(xml, lsctables.SearchSummaryTable.tableName).get_out_segmentlistdict(set([process_id])).coalesce())
 		self = cls(livetime = livetime, trials_factor = None, distribution_stats = distribution_stats, trials_table = TrialsTable.from_xml(xml, name))
 		return self, process_id
 
 	def to_xml(self, process, name):
-		name = u"%s:gstlal_inspiral_FAR" % name
-		xml = ligolw.LIGO_LW({u"Name": name})
+		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_FAR" % name})
 		xml.appendChild(self.trials_table.to_xml(name))
 		xml.appendChild(self.distribution_stats.to_xml(process, name))
 		return xml
+
+	def smooth_distribution_stats(self):
+		if self.distribution_stats is not None:
+			# FIXME:  this results in the
+			# .smoothed_distributions object containing
+			# *probabilities* not probability densities. this
+			# might be changed in the future.
+			self.distribution_stats.finish()
 
 	def reset(self):
 		self.ccdf_interpolator = {}
@@ -320,6 +318,9 @@ class FAR(object):
 	def updateFAPmap(self, ifo_set, remap = {}, verbose = False):
 		if self.distribution_stats is None:
 			raise InputError, "must provide background bins file"
+
+		# initialize a likelihood ratio evaluator
+		likelihood_ratio_evaluator = ligolw_burca2.LikelihoodRatio(self.distribution_stats.smoothed_distributions)
 
 		# we might choose to statically map certain likelihood
 		# distributions to others.  This is useful for ignoring H2 when
@@ -371,7 +372,7 @@ class FAR(object):
 			# densities, as well, when this is done
 			self.likelihood_pdfs[(instrument, targetlen)] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, targetlen),)))
 			for coords in iterutils.MultiIter(*background[param].bins.centres()):
-				likelihood = self.likelihood_ratio({param: coords})
+				likelihood = likelihood_ratio_evaluator({param: coords})
 				if numpy.isfinite(likelihood):
 					self.likelihood_pdfs[(instrument, targetlen)][likelihood,] += background[param][coords]
 
