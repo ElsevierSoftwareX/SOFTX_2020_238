@@ -42,6 +42,7 @@ sqlite3.enable_callback_tracebacks(True)
 
 from glue import iterutils
 from glue.ligolw import ligolw
+from glue.ligolw import ilwd
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.segmentsUtils import vote
@@ -78,6 +79,8 @@ class TrialsTable(dict):
 		found in "connection"
 		"""		
 		for ifos, tsid, count in connection.cursor().execute('SELECT ifos, coinc_event.time_slide_id AS tsid, count(*) / nevents FROM sngl_inspiral JOIN coinc_event_map ON coinc_event_map.event_id == sngl_inspiral.event_id JOIN coinc_inspiral ON coinc_inspiral.coinc_event_id == coinc_event_map.coinc_event_id JOIN coinc_event ON coinc_event.coinc_event_id == coinc_event_map.coinc_event_id  WHERE coinc_event_map.table_name = "sngl_inspiral" GROUP BY tsid, ifos;'):
+			ifos = frozenset(lsctables.instrument_set_from_ifos(ifos))
+			tsid = ilwd.get_ilwdchar(tsid)
 			try:
 				self[ifos, tsid] += count
 			except KeyError:
@@ -100,7 +103,8 @@ class TrialsTable(dict):
 		xml, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:gstlal_inspiral_trialstable" % name]
 		self = cls()
 		for param in xml.getElementsByTagName(ligolw.Param.tagName):
-			self[param.getAttribute(u"Name")] = param.pcdata
+			key = param.getAttribute(u"Name").split("+")
+			self[(lsctables.instrument_set_from_ifos(key[0]), ilwd.get_ilwdchar(key[1]))] = param.pcdata
 		return self
 
 	def to_xml(self, name):
@@ -110,6 +114,7 @@ class TrialsTable(dict):
 		"""
 		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_trialstable" % name})
 		for key, value in self.items():
+			key = "%s+%s" % (lsctables.ifos_from_instrument_set(key[0]), str(key[1]))
 			xml.appendChild(ligolw_param.from_pyvalue(key, value))
 		return xml
 
@@ -386,33 +391,31 @@ class FAR(object):
 				if numpy.isfinite(likelihood):
 					self.likelihood_pdfs[(instrument, targetlen)][likelihood,] += background[param][coords]
 
-		# switch to str representation because we will be using these in DB queries
-		ifostr = lsctables.ifos_from_instrument_set(ifo_set)
-
 		# only recompute if necessary
-		if ifostr not in self.ccdf_interpolator:
+		if ifo_set not in self.ccdf_interpolator:
 			if verbose:
-				print >>sys.stderr, "computing joint likelihood background for ", ifostr
+				print >>sys.stderr, "computing joint likelihood background for %s" % lsctables.ifos_from_instrument_set(ifo_set)
 			ranks, weights = self.possible_ranks_array(self.likelihood_pdfs, remap_set, targetlen)
 			# complementary cumulative distribution function
 			ccdf = weights[::-1].cumsum()[::-1]
 			ccdf /= ccdf[0]
-			self.ccdf_interpolator[ifostr] = interpolate.interp1d(ranks, ccdf)
+			self.ccdf_interpolator[ifo_set] = interpolate.interp1d(ranks, ccdf)
 			# record min and max ranks so we know which end of the ccdf to use when we're out of bounds
-			self.minrank[ifostr] = (min(ranks), ccdf[0])
-			self.maxrank[ifostr] = (max(ranks), ccdf[-1])
+			self.minrank[ifo_set] = (min(ranks), ccdf[0])
+			self.maxrank[ifo_set] = (max(ranks), ccdf[-1])
 		else:
 			if verbose:
-				print>>sys.stderr, "already computed faps for ", ifostr, " continuing"
+				print>>sys.stderr, "already computed faps for %s, continuing" % lsctables.ifos_from_instrument_set(ifo_set)
 
-	def fap_from_rank(self, rank, ifostr, tsid):
+	def fap_from_rank(self, rank, ifos, tsid):
+		ifos = frozenset(ifos)
 		# FIXME:  doesn't check that rank is a scalar
-		if rank >= self.maxrank[ifostr][0]:
-			return self.maxrank[ifostr][1]
-		if rank <= self.minrank[ifostr][0]:
-			return self.minrank[ifostr][1]
-		fap = float(self.ccdf_interpolator[ifostr](rank))
-		trials_factor = int(self.trials_table.setdefault((ifostr, tsid),1) * self.trials_factor) or 1
+		if rank >= self.maxrank[ifos][0]:
+			return self.maxrank[ifos][1]
+		if rank <= self.minrank[ifos][0]:
+			return self.minrank[ifos][1]
+		fap = float(self.ccdf_interpolator[ifos](rank))
+		trials_factor = int(self.trials_table.setdefault((ifos, tsid),1) * self.trials_factor) or 1
 		return 1.0 - (1.0 - fap)**trials_factor
 
 	def possible_ranks_array(self, likelihood_pdfs, ifo_set, targetlen):
@@ -509,7 +512,7 @@ def set_fap(Far, f, tmp_path = None, verbose = False):
 	connection = sqlite3.connect(working_filename)
 
 	# define fap function
-	connection.create_function("fap", 3, Far.fap_from_rank)
+	connection.create_function("fap", 3, lambda rank, ifostr, tsid: Far.fap_from_rank(rank, lsctables.instrument_set_from_ifos(ifostr), ilwd.get_ilwdchar(tsid)))
 
 	# FIXME abusing false_alarm_rate column, move for a false_alarm_probability column??
 	connection.cursor().execute("UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(coinc_event.likelihood, coinc_inspiral.ifos, coinc_event.time_slide_id) FROM coinc_event WHERE coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id)")

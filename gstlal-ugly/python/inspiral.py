@@ -465,7 +465,7 @@ class Data(object):
 			buf_end_time = buf_timestamp + buf.duration
 			try:
 				out_segs = segments.segmentlist([self.search_summary.get_out()])
-			except AttributeError:
+			except TypeError:
 				# out segment not yet initialized
 				out_segs = segments.segmentlist()
 			out_segs |= segments.segmentlist([segments.segment(buf_timestamp, buf_end_time)])

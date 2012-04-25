@@ -292,14 +292,15 @@ class StreamThinca(object):
 		for coinc_inspiral_row in self.coinc_inspiral_table:
 			coinc_event_row = coinc_event_index[coinc_inspiral_row.coinc_event_id]
 			# increment the trials table
+			ifo_set = frozenset(coinc_inspiral_row.get_ifos())
 			try:
-				self.trials_table[(coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)] += 1
+				self.trials_table[(ifo_set, coinc_event_row.time_slide_id)] += 1
 			except KeyError:
-				self.trials_table[(coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)] = 1
+				self.trials_table[(ifo_set, coinc_event_row.time_slide_id)] = 1
 			# Assign the FAP if requested
 			if FAP is not None:
 				# note FAP should have a reference to the same trials table as this object does.  This is handled in the Data class in inspiral.py
-				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, coinc_inspiral_row.ifos, coinc_event_row.time_slide_id)
+				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, ifo_set, coinc_event_row.time_slide_id)
 				# assume each event is "loudest" so n = 1 by default, not the same as required for an IFAR plot
 				coinc_inspiral_row.combined_far = FAP.compute_far(coinc_inspiral_row.false_alarm_rate)
 				# populate a column with latency
