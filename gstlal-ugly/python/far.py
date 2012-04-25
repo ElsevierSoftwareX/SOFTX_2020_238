@@ -31,7 +31,6 @@ import numpy
 from scipy import interpolate
 from scipy import stats
 import sys
-import threading
 try:
 	import sqlite3
 except ImportError:
@@ -184,7 +183,6 @@ class DistributionsStats(object):
 	}
 
 	def __init__(self):
-		self.lock = threading.Lock()
 		self.raw_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
 		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
 
@@ -283,12 +281,7 @@ class DistributionsStats(object):
 		return self, seglists
 
 	def to_xml(self, process, name):
-		self.lock.acquire()
-		try:
-			xml = self.raw_distributions.to_xml(process, name)
-		finally:
-			self.lock.release()
-		return xml
+		return self.raw_distributions.to_xml(process, name)
 
 
 #
