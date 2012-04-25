@@ -143,6 +143,9 @@ class TrialsTable(dict):
 		return xml
 
 
+lsctables.TableByName[lsctables.table.StripTableName(TrialsTable.TrialsTableTable.tableName)] = TrialsTable.TrialsTableTable
+
+
 #
 # =============================================================================
 #
