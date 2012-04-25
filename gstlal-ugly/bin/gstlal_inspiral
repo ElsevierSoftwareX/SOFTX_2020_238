@@ -327,7 +327,6 @@ output = inspiral.Data(
 	process_params = process_params,
 	instruments = set(detectors),
 	seg = options.seg,
-	out_seg = options.seg, #FIXME make better outseg def?  Maybe pointless now that gstlal inspiral can analyze over frame gaps
 	injection_filename = options.injections,
 	time_slide_file = options.time_slide_file,
 	coincidence_threshold = options.coincidence_threshold,

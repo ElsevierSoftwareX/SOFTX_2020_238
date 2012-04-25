@@ -276,13 +276,13 @@ class DistributionsStats(object):
 
 
 class FAR(object):
-	def __init__(self, livetime, trials_factor, distribution_stats, trials_table = None):
+	def __init__(self, livetime_seg, trials_factor, distribution_stats, trials_table = None):
 		self.distribution_stats = distribution_stats
 		if trials_table is None:
 			self.trials_table = TrialsTable()
 		else:
 			self.trials_table = trials_table
-		self.livetime = livetime
+		self.livetime_seg = livetime_seg
 		self.trials_factor = trials_factor
 		self.reset()
 
@@ -290,8 +290,19 @@ class FAR(object):
 	def from_xml(cls, xml, name):
 		xml, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:gstlal_inspiral_FAR" % name]
 		distribution_stats, process_id = DistributionsStats.from_xml(xml, name)
-		livetime = abs(lsctables.table.get_table(xml, lsctables.SearchSummaryTable.tableName).get_out_segmentlistdict(set([process_id])).coalesce())
-		self = cls(livetime = livetime, trials_factor = None, distribution_stats = distribution_stats, trials_table = TrialsTable.from_xml(xml, name))
+		# the code that writes these things has put the
+		# livetime_seg into the out segment in the search_summary
+		# table.  uninitialized segments get recorded as
+		# [None,None), which breaks the .get_out() method of the
+		# row class, so we need to reconstruct the segment
+		# ourselves to trap that error without worrying that we're
+		# masking other bugs with the try/except
+		search_summary_row, = (row for row in lsctables.table.get_table(xml, lsctables.SearchSummaryTable.tableName) if row.process_id == process_id)
+		try:
+			livetime_seg = search_summary_row.get_out()
+		except TypeError:
+			livetime_seg = None
+		self = cls(livetime_seg, trials_factor = None, distribution_stats = distribution_stats, trials_table = TrialsTable.from_xml(xml, name))
 		return self, process_id
 
 	def to_xml(self, process, name):
@@ -461,7 +472,7 @@ class FAR(object):
 	def compute_far(self, fap):
 		if fap == 0.:
 			return 0.
-		livetime = float(abs(self.livetime))
+		livetime = float(abs(self.livetime_seg))
 		return 0. - numpy.log(1. - fap) / livetime
 
 

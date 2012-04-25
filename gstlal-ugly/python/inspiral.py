@@ -156,7 +156,7 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 #
 
 
-def add_cbc_metadata(xmldoc, process, seg_in, seg_out):
+def add_cbc_metadata(xmldoc, process, seg_in):
 	"""
 	A convenience function to add metadata to a cbc output document
 	"""
@@ -177,7 +177,6 @@ def add_cbc_metadata(xmldoc, process, seg_in, seg_out):
 	search_summary.comment = process.comment
 	search_summary.set_ifos(process.get_ifos())
 	search_summary.set_in(seg_in)
-	search_summary.set_out(seg_out)
 	search_summary.nevents = None # FIXME
 	search_summary.nnodes = 1
 	tbl.append(search_summary)
@@ -278,7 +277,17 @@ def chisq_distribution(df, non_centralities, size):
 #
 
 
-def gen_likelihood_control_doc(far, seglists, name = u"gstlal_inspiral_likelihood", comment = u""):
+def gen_likelihood_control_doc(far, instruments, name = u"gstlal_inspiral_likelihood", comment = u""):
+	if far.livetime_seg is not None:
+		seg = far.livetime_seg
+	else:
+		# provide null values for row in search_summary table
+		class PLEASESHOOTME(object):
+			pass
+		t = PLEASESHOOTME()
+		t.seconds = t.nanoseconds = None
+		seg = (t, t)
+
 	xmldoc = ligolw.Document()
 	node = xmldoc.appendChild(ligolw.LIGO_LW())
 
@@ -286,7 +295,7 @@ def gen_likelihood_control_doc(far, seglists, name = u"gstlal_inspiral_likelihoo
 	node.appendChild(lsctables.New(lsctables.ProcessParamsTable))
 	node.appendChild(lsctables.New(lsctables.SearchSummaryTable))
 	process = ligolw_process.append_process(xmldoc, comment = comment)
-	llwapp.append_search_summary(xmldoc, process, ifos = seglists.keys(), inseg = seglists.extent_all(), outseg = seglists.extent_all())
+	llwapp.append_search_summary(xmldoc, process, ifos = instruments, inseg = seg, outseg = seg)
 
 	node.appendChild(far.to_xml(process, name))
 
@@ -295,7 +304,7 @@ def gen_likelihood_control_doc(far, seglists, name = u"gstlal_inspiral_likelihoo
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, out_seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", verbose = False):
 		#
 		# initialize
 		#
@@ -324,16 +333,7 @@ class Data(object):
 		self.gracedb_type = gracedb_type
 
 		# All possible instrument combinations
-		# frozenset(ifos) for n in range(2, len(instruments)+1) for ifos in choices(instruments, n
 		self.ifo_combos = [frozenset(ifos) for n in range(2, len(instruments)+1) for ifos in iterutils.choices(list(self.instruments), n)]
-
-		# setup the FAR/FAP book-keeping object.  livetime is set
-		# to None because it gets updated when coincidences are
-		# recorded trials factor through from the command line
-		self.far = far.FAR(None, trials_factor, distribution_stats)
-		if self.assign_likelihoods:
-			self.far.smooth_distribution_stats()
-		self.likelihood_file = likelihood_file
 
 		#
 		# build the XML document
@@ -342,7 +342,7 @@ class Data(object):
 		self.xmldoc = ligolw.Document()
 		self.xmldoc.appendChild(ligolw.LIGO_LW())
 		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, "gstlal_inspiral", process_params, comment = comment, ifos = instruments)
-		self.search_summary = add_cbc_metadata(self.xmldoc, self.process, seg, out_seg)
+		self.search_summary = add_cbc_metadata(self.xmldoc, self.process, seg)
 		# FIXME:  argh, ugly
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "event_id")))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincDefTable))
@@ -410,6 +410,17 @@ class Data(object):
 		self.sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))
 
 		#
+		# setup the FAR/FAP book-keeping object.  the livetime
+		# segment is set to None, it will be initialized when data
+		# arrives
+		#
+
+		self.far = far.FAR(None, trials_factor, distribution_stats)
+		if self.assign_likelihoods:
+			self.far.smooth_distribution_stats()
+		self.likelihood_file = likelihood_file
+
+		#
 		# attach a StreamThinca instance to ourselves
 		#
 
@@ -434,9 +445,27 @@ class Data(object):
 		self.lock.acquire()
 		try:
 			# retrieve triggers from appsink element
-			buffer = elem.emit("pull-buffer")
-			timestamp = LIGOTimeGPS(0, buffer.timestamp)
-			events = sngl_inspirals_from_buffer(buffer)
+			buf = elem.emit("pull-buffer")
+			events = sngl_inspirals_from_buffer(buf)
+
+			# update search_summary out segment.  note that
+			# both the trigger document and the FAR object get
+			# their own copies of the segment.  the segment in
+			# self.search_summary is what gets recorded in the
+			# trigger document, the segment in the FAR object
+			# gets used for online FAR/FAP assignment and is
+			# what gets recorded in the likelihood data
+			# document.
+			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
+			buf_end_time = buf_timestamp + buf.duration
+			try:
+				out_segs = segments.segmentlist([self.search_summary.get_out()])
+			except AttributeError:
+				# out segment not yet initialized
+				out_segs = segments.segmentlist()
+			out_segs |= segments.segmentlist([segments.segment(buf_timestamp, buf_end_time)])
+			self.far.livetime_seg = out_segs.extent()
+			self.search_summary.set_out(self.far.livetime_seg)
 
 			# set metadata on triggers
 			for event in events:
@@ -444,8 +473,8 @@ class Data(object):
 				event.event_id = self.sngl_inspiral_table.get_next_id()
 
 			# update likelihood snapshot if needed
-			if self.assign_likelihoods and (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
-				self.likelihood_snapshot_timestamp = timestamp
+			if self.assign_likelihoods and (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
+				self.likelihood_snapshot_timestamp = buf_timestamp
 
 				# smooth the distribution_stats
 				self.far.smooth_distribution_stats()
@@ -459,10 +488,10 @@ class Data(object):
 					self.far.updateFAPmap(ifo_set, remap, verbose = self.verbose)
 
 				# write the new distribution stats to disk
-				utils.write_filename(gen_likelihood_control_doc(self.far, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
+				utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
 
 			# run stream thinca
-			noncoinc_sngls = self.stream_thinca.add_events(events, timestamp, FAP = self.far)
+			noncoinc_sngls = self.stream_thinca.add_events(events, buf_timestamp, FAP = self.far)
 
 			# update the parameter distribution data.  only
 			# update from sngls that weren't used in coincs
@@ -484,7 +513,7 @@ class Data(object):
 	def write_likelihood_file(self):
 		# write the new distribution stats to disk
 		output = StringIO.StringIO()
-		utils.write_fileobj(gen_likelihood_control_doc(self.far, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), output, trap_signals = None)
+		utils.write_fileobj(gen_likelihood_control_doc(self.far, self.instruments), output, trap_signals = None)
 		outstr = output.getvalue()
 		output.close()
 		return outstr
@@ -525,9 +554,8 @@ class Data(object):
 				# fake a filename for end-user convenience
 				#
 
-				instruments = coinc_inspiral_index[coinc_event_id].get_ifos()
-				observatories = "".join(sorted(set(instrument[0] for instrument in instruments)))
-				instruments = "".join(sorted(instruments))
+				observatories = "".join(sorted(set(instrument[0] for instrument in self.instruments)))
+				instruments = "".join(sorted(self.instruments))
 				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_type)
 				end_time = int(coinc_inspiral_index[coinc_event_id].get_end())
 				filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
@@ -638,4 +666,4 @@ class Data(object):
 			fname = os.path.join(fname[0], '%s_snr_chi.xml.gz' % ('.'.join(fname[1].split('.')[:-1]),))
 		else:
 			fname = likelihood_file
-		utils.write_filename(gen_likelihood_control_doc(self.far, segments.segmentlistdict.fromkeys(self.instruments, segments.segmentlist([self.search_summary.get_out()]))), fname, gz = (fname or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
+		utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), fname, gz = (fname or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
