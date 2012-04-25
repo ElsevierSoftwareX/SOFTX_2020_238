@@ -90,7 +90,7 @@ if options.compute_far:
 		dbtables.discard_connection_filename(bkdb, working_filename, verbose = options.verbose)
 	ltsegs = ltsegs.union(ltsegs.keys()).coalesce()
 	livetime = float(abs(ltsegs))
-	Far = far.FAR(livetime, options.additional_trials_factor)
+	Far = far.FAR(livetime, options.additional_trials_factor, distribution_stats = None)
 
 #
 # generate trials table by iterating over all of the non injection files
