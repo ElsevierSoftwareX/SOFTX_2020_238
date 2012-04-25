@@ -89,6 +89,7 @@ class TrialsTable(dict):
 			def set_ifos(self, ifos):
 				self.ifos = lsctables.ifos_from_instrument_set(ifos)
 
+			@property
 			def key(self):
 				return frozenset(self.get_ifos()), self.time_slide_id
 
@@ -122,14 +123,14 @@ class TrialsTable(dict):
 			self[k] += n
 
 	@classmethod
-	def from_xml(cls, xml, name):
+	def from_xml(cls, xml):
 		"""
 		A class method to create a new instance of a TrialsTable from
 		an xml representation of it.
 		"""
 		self = cls()
 		for row in lsctables.table.get_table(xml, self.TrialsTableTable.tableName):
-			self[row.key()] = row.count
+			self[row.key] = row.count
 		return self
 
 	def to_xml(self):
@@ -331,12 +332,12 @@ class FAR(object):
 			livetime_seg = search_summary_row.get_out()
 		except TypeError:
 			livetime_seg = None
-		self = cls(livetime_seg, trials_factor = None, distribution_stats = distribution_stats, trials_table = TrialsTable.from_xml(llw_elem, name))
+		self = cls(livetime_seg, trials_factor = None, distribution_stats = distribution_stats, trials_table = TrialsTable.from_xml(llw_elem))
 		return self, process_id
 
 	def to_xml(self, process, name):
 		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_FAR" % name})
-		xml.appendChild(self.trials_table.to_xml(name))
+		xml.appendChild(self.trials_table.to_xml())
 		xml.appendChild(self.distribution_stats.to_xml(process, name))
 		return xml
 
