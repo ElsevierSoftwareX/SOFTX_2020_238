@@ -491,7 +491,10 @@ class Data(object):
 				utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
 
 			# run stream thinca
-			noncoinc_sngls = self.stream_thinca.add_events(events, buf_timestamp, FAP = self.far)
+			if self.assign_likelihoods:
+				noncoinc_sngls = self.stream_thinca.add_events(events, buf_timestamp, FAP = self.far)
+			else:
+				noncoinc_sngls = self.stream_thinca.add_events(events, buf_timestamp)
 
 			# update the parameter distribution data.  only
 			# update from sngls that weren't used in coincs
