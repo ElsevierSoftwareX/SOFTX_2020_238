@@ -284,7 +284,6 @@ class FAR(object):
 			self.trials_table = trials_table
 		self.livetime = livetime
 		self.trials_factor = trials_factor
-		self.init_likelihood_data()
 		self.reset()
 
 	@classmethod

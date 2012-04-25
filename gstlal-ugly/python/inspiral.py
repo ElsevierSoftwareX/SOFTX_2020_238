@@ -331,6 +331,8 @@ class Data(object):
 		# to None because it gets updated when coincidences are
 		# recorded trials factor through from the command line
 		self.far = far.FAR(None, trials_factor, distribution_stats)
+		if self.assign_likelihoods:
+			self.far.smooth_distribution_stats()
 		self.likelihood_file = likelihood_file
 
 		#
