@@ -524,7 +524,11 @@ class Data(object):
 	def flush(self):
 		# run StreamThinca's .flush().  returns the last remaining
 		# non-coincident sngls.  add them to the distribution
-		for event in self.stream_thinca.flush(FAP = self.far):
+		if self.assign_likelihoods:
+			FAP = self.far
+		else:
+			FAP = None
+		for event in self.stream_thinca.flush(FAP = FAP):
 			self.far.distribution_stats.add_single(event)
 		if self.connection is not None:
 			self.connection.commit()
