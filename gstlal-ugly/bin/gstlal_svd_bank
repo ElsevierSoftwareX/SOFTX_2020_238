@@ -60,7 +60,7 @@ if missing_options:
 	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
 
 if options.bank_id is None:
-	options.bank_id = uuid.uuid4()
+	options.bank_id = str(uuid.uuid4())
 
 
 #
