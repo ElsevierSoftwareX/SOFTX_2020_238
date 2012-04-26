@@ -77,10 +77,6 @@ lsctables.LIGOTimeGPS = LIGOTimeGPS
 #
 
 
-class PLEASESHOOTME(object):
-	pass
-
-
 def channel_dict_from_channel_list(channel_list):
 	"""
 	given a list of channels like this ["H1=LSC-STRAIN",
@@ -180,9 +176,7 @@ def add_cbc_metadata(xmldoc, process, seg_in):
 	search_summary.comment = process.comment
 	search_summary.set_ifos(process.get_ifos())
 	search_summary.set_in(seg_in)
-	t = PLEASESHOOTME()
-	t.seconds = t.nanoseconds = None
-	search_summary.set_out((t, t))
+	search_summary.set_out(None)
 	search_summary.nevents = None # FIXME
 	search_summary.nnodes = 1
 	tbl.append(search_summary)
@@ -284,14 +278,6 @@ def chisq_distribution(df, non_centralities, size):
 
 
 def gen_likelihood_control_doc(far, instruments, name = u"gstlal_inspiral_likelihood", comment = u""):
-	if far.livetime_seg is not None:
-		seg = far.livetime_seg
-	else:
-		# provide null values for row in search_summary table
-		t = PLEASESHOOTME()
-		t.seconds = t.nanoseconds = None
-		seg = (t, t)
-
 	xmldoc = ligolw.Document()
 	node = xmldoc.appendChild(ligolw.LIGO_LW())
 
