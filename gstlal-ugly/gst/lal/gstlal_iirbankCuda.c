@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Shaun Hooper <hoopes01@student.uwa.edu.au>
+ * Copyright (C) 2010 Qi Chu <chicsheep@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -803,7 +803,7 @@ static void gstlal_iirbankcuda_base_init(gpointer gclass)
 	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
 	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(gclass);
 
-	gst_element_class_set_details_simple(element_class, "IIR Filter Bank", "Filter/Audio", "Projects a single audio channel onto a bank of IIR filters to produce a multi-channel output", "Shaun Hooper <hoopes01@student.uwa.edu.au>");
+	gst_element_class_set_details_simple(element_class, "Cuda Mode IIR Filter Bank", "Filter/Audio", "Projects a single audio channel onto a bank of IIR filters to produce a multi-channel output", "Qi Chu <chicsheep@gmail.com>");
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&sink_factory));
