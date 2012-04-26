@@ -13,6 +13,7 @@ def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("--segment-name", metavar = "name", default = "datasegments", help = "Set the name of segments default datasegments")
 	parser.add_option("--trim", metavar = "int", type = "int", default = 16, help = "Set the trim factor default 16")
+	parser.add_option("--min-duration", metavar = "int", type = "int", default = 1, help = "Set the minumum duration of segments to keep after trimming default = 1 second")
 	parser.add_option("--output", metavar = "file", default = ".", help = "Set the name of the output file")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
@@ -26,7 +27,7 @@ trim = options.trim
 
 xmldoc = utils.load_filename(fname, verbose = True)
 
-segs = ligolw_segments.segmenttable_get_by_name(xmldoc, options.segment_name).contract(trim)
+segs = ligolw_segments.segmenttable_get_by_name(xmldoc, options.segment_name).coalesce().contract(trim)
 
 
 xmldoc = ligolw.Document()
@@ -54,15 +55,15 @@ for ifo in segs.keys():
 
 for ifo, segl in segs.items():
 	for seg in segl:
-		print seg
-		row = segtab.RowType()
-		row.segment_def_id = ifo_ids[ifo]
-		row.segment_id = segtab.get_next_id()
-		row.creator_db = None
-		row.process_id = None
-		row.segment_def_cdb = None
-		row.set(seg)
-		segtab.append(row)
+		if abs(seg) > options.min_duration:
+			row = segtab.RowType()
+			row.segment_def_id = ifo_ids[ifo]
+			row.segment_id = segtab.get_next_id()
+			row.creator_db = None
+			row.process_id = None
+			row.segment_def_cdb = None
+			row.set(seg)
+			segtab.append(row)
 
 utils.write_filename(xmldoc, options.output, verbose = True)
 
