@@ -87,7 +87,7 @@ class gstlal_svd_bank_job(pipeline.CondorDAGJob):
 class gstlal_svd_bank_node(pipeline.CondorDAGNode):
 	"""
 	"""
-	def __init__(self, job, dag, template_bank, ifo, flow = 40, reference_psd = "psd.xml", tolerance = 0.9995, FAP = 0.5, snr = 4.0, clipleft = 0, clipright = 0, samples_min = 1024, samples_max_256 = 1024, samples_max_64 =  2048, samples_max = 4096, p_node=[]):
+	def __init__(self, job, dag, template_bank, ifo, flow = 40, reference_psd = "psd.xml", tolerance = 0.9995, FAP = 0.5, snr = 4.0, clipleft = 0, clipright = 0, samples_min = 1024, samples_max_256 = 1024, samples_max_64 =  2048, samples_max = 4096, p_node=[], bank_id = None):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("flow", flow)
@@ -102,6 +102,8 @@ class gstlal_svd_bank_node(pipeline.CondorDAGNode):
 		self.add_var_opt("samples-max-256", samples_max_256)
 		self.add_var_opt("clipleft", clipleft)
 		self.add_var_opt("clipright", clipright)
+		if bank_id is not None:
+			self.add_var_opt("bank-id", bank_id)
 		svd_bank_name_path = os.path.split(template_bank)
 		svd_bank_name = svd_bank_name_path[0] + "/svd_" + svd_bank_name_path[1]
 		self.add_var_opt("write-svd-bank", svd_bank_name)
@@ -161,9 +163,9 @@ for i, f in enumerate(files):
 		clipright = 0
 	if options.stagger:
 		samps = stagger[int(float(i) / len(files) * len(stagger))]
-		svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, reference_psd = ref_psd, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = samps[0], samples_max_256 = samps[1], samples_max_64 = samps[2], samples_max = samps[3])
+		svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, reference_psd = ref_psd, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = samps[0], samples_max_256 = samps[1], samples_max_64 = samps[2], samples_max = samps[3], bank_id = i)
 	else:
-		svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, reference_psd = ref_psd, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = options.samples_min, samples_max_256 = options.samples_max_256, samples_max_64 = options.samples_max, samples_max = options.samples_max)
+		svdNode[f] = gstlal_svd_bank_node(svdJob, dag, f, ifo, reference_psd = ref_psd, flow = options.flow, clipleft = clipleft, clipright = clipright, samples_min = options.samples_min, samples_max_256 = options.samples_max_256, samples_max_64 = options.samples_max, samples_max = options.samples_max, bank_id = i)
 
 dag.write_sub_files()
 dag.write_dag()
