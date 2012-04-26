@@ -3,6 +3,7 @@
 
 #include <cheby_interp.h>
 #include <math.h>
+#include <complex.h>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_blas.h>
 #include <gsl/gsl_matrix.h>
@@ -473,7 +474,41 @@ static int compute_working_length_and_sample_rate(double chirp_time, double f_ma
 	return 0;
 }
 
-static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max, int N_mc, double eta_min, double eta_max, int M_eta, double f_min, REAL8FrequencySeries* psd, COMPLEX16TimeSeries* tseries, COMPLEX16FrequencySeries* fseries, COMPLEX16FFTPlan* revplan, int node_flag){
+static int add_quadrature_phase(COMPLEX16FrequencySeries* fseries, gsl_vector_complex *positive_frequencies){
+	int n;
+	int have_nyquist;
+	gsl_complex z;
+	//have_nyquist = ! (n % 2);
+	
+	n = fseries->data->length;
+
+	fseries->data->data[0].re=0;
+	fseries->data->data[0].im=0;
+
+	if( ! (n % 2) ){
+		fseries->data->data[n-1].re=0;
+		fseries->data->data[n-1].im=0;
+	}
+/*	if ( ! (n % 2) ){
+*		free(fseries->data->data[n-1]);	
+*	
+	}*/
+
+	positive_frequencies = gsl_vector_complex_calloc(n+fseries->data->length);
+
+	for (unsigned int i=0; i < fseries->data->length; i++){
+			
+		fseries->data->data[i].re*=2;
+		fseries->data->data[i].im*=2;	
+		GSL_SET_COMPLEX(&z, fseries->data->data[i].re, fseries->data->data[i].im);
+		gsl_vector_complex_set(positive_frequencies, n + i, z);
+	}
+
+	return 0;
+}
+
+
+static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max, int N_mc, double eta_min, double eta_max, int M_eta, double f_min, int length_max, REAL8FrequencySeries* psd, COMPLEX16TimeSeries* tseries, COMPLEX16FrequencySeries* fseries, COMPLEX16FFTPlan* revplan, int node_flag){
        /*
  	* N_mc is number of points on M_c grid
  	* viceversa for M_eta	
@@ -484,8 +519,9 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
 	double working_duration;
         unsigned int working_length;
 	double eta, mc, m1, m2;
+	gsl_vector_complex *positive_frequencies;
 	gsl_matrix *A = NULL;
-
+	
         gsl_complex cnorm;
 	double norm;
         gsl_vector_complex *tmp_for_norm = gsl_vector_complex_calloc(fseries->data->length);	
@@ -501,16 +537,6 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
 	/* gsl_matrix *A will contain template bank */
 	A = gsl_matrix_calloc(working_length,2*N_mc*M_eta); 
 
-        /*working_duration = 1.0 / psd->deltaF;
-	sample_rate = working_length / working_duration;
-	deltaT = 1. / sample_rate;
-	*/
-
-	/* allocate the frequency and time series once and for all */
-	/*tseries = XLALCreateCOMPLEX16TimeSeries(NULL, &epoch, 0., deltaT, &lalStrainUnit, working_length);
-	fseries = XLALCreateCOMPLEX16FrequencySeries(NULL, &epoch, 0, 1. / working_duration, &lalDimensionlessUnit, working_length);
-	revplan = XLALCreateReverseCOMPLEX16FFTPlan(fseries->data->length, 1);
-	*/
 	if (node_flag == 0) {
 
 	for ( i = 0; i < N_mc ; i++){
@@ -525,12 +551,13 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
 			generate_template(m1, m2, 1.0 / psd->deltaF, f_min, working_length / working_duration / (2*1.05), 7, fseries);
 			freq_to_time_fft(fseries, psd, tseries, revplan); /* return whitened complex time series */	
 			
-			for( unsigned int i = 0 ; i < fseries->data->length; i++){
+	
+			for( unsigned int i = 0 ; i < tseries->data->length; i++){
 				GSL_SET_COMPLEX(&cnorm, tseries->data->data[i].re, tseries->data->data[i].im);	
                	 		gsl_vector_complex_set(tmp_for_norm, i, cnorm);
 
         		}
-       	 	/*	gsl_blas_zdotu (tmp_for_norm, tmp_for_norm, &cnorm);
+       	 		gsl_blas_zdotu (tmp_for_norm, tmp_for_norm, &cnorm);
 			norm = gsl_complex_abs(cnorm);			
 
 			for( unsigned int i = 0 ; i < tseries->data->length; i++){
@@ -539,10 +566,10 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
 				tseries->data->data[i].im *= sqrt(2./norm);
                         }
 
-		*/
-			for (unsigned int m = 0; m < tseries->data->length; m++) {
-				gsl_matrix_set(A, m, 2*k, tseries->data->data[m].re);
-				gsl_matrix_set(A, m, 2*k+1, tseries->data->data[m].im);
+		
+			for (unsigned int m = 0; m < length_max; m++) {
+				gsl_matrix_set(A, m, 2*k, tseries->data->data[i].re);
+				gsl_matrix_set(A, m, 2*k+1, tseries->data->data[i].im);
 			}
 			k+=1;
 		}
@@ -638,6 +665,7 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 	for (n = 0; n < S->size; n++) {
 		sum_s += gsl_vector_get(S, n) * gsl_vector_get(S, n);
 		if (sqrt(sum_s / norm_s) >= tolerance) break;
+		fprintf(stderr, "S[%i] = %f\n", n, gsl_vector_get(S, n));
 		}
 
 	fprintf(stderr,"SVD: using %d basis templates\n:", n);
@@ -688,6 +716,7 @@ int main() {
 	double eta_max = 0.25;
 	int N_mc = 10;//40;
 	int M_eta = 10;//40;
+	int length_max;
 	double f_min = 40.0;
 	double t_max = 0;
 	double f_max = 0;
@@ -735,10 +764,9 @@ int main() {
         fseries = XLALCreateCOMPLEX16FrequencySeries(NULL, &epoch, 0, deltaF, &lalDimensionlessUnit, working_length);
         revplan = XLALCreateReverseCOMPLEX16FFTPlan(fseries->data->length, 1);
 
+	length_max = round(sample_rate*t_max);
 
-	templates = create_templates_from_mc_and_eta(mc_min, mc_max, N_mc, eta_min, eta_max, M_eta, f_min, psd, tseries, fseries, revplan, 0);
-	
-	/* FIXME HERE DOWN: still need to compute node points */
+	templates = create_templates_from_mc_and_eta(mc_min, mc_max, N_mc, eta_min, eta_max, M_eta, f_min, length_max, psd, tseries, fseries, revplan, 0);
 	
 	svd_basis = create_svd_basis_from_template_bank(templates);
 
@@ -756,7 +784,7 @@ int main() {
 		gsl_vector_set(x_nodes, j, chebyshev_node(j,M_eta) ); 
 	}
 
-	templates_at_nodes = create_templates_from_mc_and_eta(mc_min, mc_max, N_mc, eta_min, eta_max, M_eta, f_min, psd, tseries, fseries, revplan, 1);	
+	templates_at_nodes = create_templates_from_mc_and_eta(mc_min, mc_max, N_mc, eta_min, eta_max, M_eta, f_min, f_max, psd, tseries, fseries, revplan, 1);	
 
 /*	for ( i = 0; i < interps->size; i++, interps->interp++) {	
 		M_xy = projection_coefficient(&interps->interp->svd_basis.vector, templates_at_nodes, N_mc, M_eta);
