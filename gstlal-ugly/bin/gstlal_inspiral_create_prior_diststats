@@ -100,8 +100,10 @@ if options.background_prior != 0:
 	coincparamsdistributions.add_background_prior(options.background_prior)
 coincparamsdistributions.add_foreground_prior(verbose = options.verbose, n = options.synthesize_injection_count)
 
-#FIXME there is no real segment here, should there be?
-segs = segments.segmentlistdict.fromkeys(("H1","H2","L1","V1"), segments.segmentlist([segments.segment([GPS(0), GPS(2000000000)])]))
+ifos = ("H1","H2","L1","V1")
 
-xmldoc = inspiral.gen_likelihood_control_doc(coincparamsdistributions, segs)
+# no segments, this file is independent of time
+FAR = far.FAR(None, None, coincparamsdistributions)
+
+xmldoc = inspiral.gen_likelihood_control_doc(FAR, ifos)
 utils.write_filename(xmldoc, options.write_likelihood, gz = options.write_likelihood.endswith('.gz'), verbose = options.verbose)
