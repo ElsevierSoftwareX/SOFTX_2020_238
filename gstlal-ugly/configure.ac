@@ -215,7 +215,7 @@ PKG_CHECK_MODULES([gstreamer], [gstreamer-${GSTREAMER_RELEASE} >= ${MIN_GSTREAME
 AC_SUBST([gstreamer_CFLAGS])
 AC_SUBST([gstreamer_LIBS])
 AC_SUBST([plugindir], [${libdir}/gstreamer-${GSTREAMER_RELEASE}])
-AC_MSG_NOTICE([If you have chosen to install the software in a location not included in your gstreamer's default search path, you might need to add the directory
+AC_MSG_NOTICE([If you have chosen to install the software in a location not included in your gstreamer\'s default search path, you might need to add the directory
 
 	$plugindir
 	
@@ -345,6 +345,32 @@ AC_SUBST([gds_LIBS])
 
 
 #
+# Check for CUDA
+#
+
+AC_ARG_WITH(
+	[cuda],
+	[AS_HELP_STRING([--with-cuda], [specify location of CUDA [/usr/local/cuda]])],
+	[],
+	[with_cuda=no]
+)
+AS_IF(
+	[test "x$with_cuda" != "xno"],
+	[AS_IF([test "x$build_cpu" = "xx86_64"], [CLIBS="lib64"], [CLIBS="lib"])
+	 AC_SUBST([NVCC], ["nvcc"])
+	 AC_SUBST([NVCC_CFLAGS], ["-I${with_cuda}/include"])
+	 AC_SUBST([NVCC_LIBS], ["-L${with_cuda}/$CLIBS -lcudart"])
+	 HAVE_CUDA="yes"
+	],
+	[AC_MSG_WARN([check for cuda disabled])
+	HAVE_CUDA="no"
+	]
+)
+AC_DEFINE([HAVE_CUDA], [test "x${HAVE_CUDA}" == "xyes"], [Defined if you have cuda])
+AM_CONDITIONAL([COND_CUDA], [test "x${HAVE_CUDA}" == "xyes"])
+
+
+#
 # Check for LAL
 #
 
@@ -385,7 +411,6 @@ PKG_CHECK_MODULES([ORC], [orc-0.4], , [
 ])
 AC_SUBST([ORC_CFLAGS])
 AC_SUBST([ORC_LIBS])
-
 
 #
 # Output configure information
