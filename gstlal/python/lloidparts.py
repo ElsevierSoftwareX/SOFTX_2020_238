@@ -39,6 +39,7 @@ pygst.require('0.10')
 import gst
 
 
+from glue import iterutils
 from gstlal import bottle
 from gstlal import pipeparts
 from gstlal import reference_psd
@@ -830,11 +831,14 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 
 def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 16, block_duration = gst.SECOND):
 	#
-	# check for recognized value of chisq_type
+	# check for unrecognized chisq_types, non-unique bank IDs
 	#
 
 	if chisq_type not in ['autochisq', 'timeslicechisq']:
 		raise ValueError, "chisq_type must be either 'autochisq' or 'timeslicechisq', given %s" % (chisq_type)
+	# FIXME:  uncomment when glue.iterutils.nonuniq is available
+	#if tuple(iterutils.nonuniq(bank.bank_id for bank in banks)):
+	#	raise ValueError("bank IDs %s are not unique" % ", ".join(iterutils.nonuniq(bank.bank_id for bank in banks)))
 
 	#
 	# extract segments from the injection file for selected reconstruction
