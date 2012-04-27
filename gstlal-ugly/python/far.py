@@ -346,7 +346,8 @@ class FAR(object):
 		# None is always less than everything else, so this is okay
 		maxend = max(self.livetime_seg[1], other.livetime_seg[1])
 		out.livetime_seg = segments.segment(minstart, maxend)
-		# FIXME what do I do with trials_factor ?
+		# FIXME what do I do with trials_factor currently it is set to self's trials factor so that a += makes sense sort of?
+		out.trials_factor = self.trials_factor
 		return out
 
 	@classmethod
