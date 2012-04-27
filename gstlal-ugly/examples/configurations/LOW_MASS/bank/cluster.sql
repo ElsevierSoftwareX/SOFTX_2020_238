@@ -1,5 +1,3 @@
--- PRAGMA temp_store_directory = '/tmp';
-
 SELECT
 	"Number of coincs before clustering: " || count(*)
 FROM
