@@ -294,7 +294,7 @@ def gen_likelihood_control_doc(far, instruments, name = u"gstlal_inspiral_likeli
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, coincidence_threshold, distribution_stats, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, trials_factor = 1, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, coincidence_threshold, FAR, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", verbose = False):
 		#
 		# initialize
 		#
@@ -399,13 +399,7 @@ class Data(object):
 		# FIXME:  remove when lsctables.py has an ID generator attached to sngl_inspiral table
 		self.sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))
 
-		#
-		# setup the FAR/FAP book-keeping object.  the livetime
-		# segment is set to None, it will be initialized when data
-		# arrives
-		#
-
-		self.far = far.FAR((None, None), trials_factor, distribution_stats)
+		self.far = FAR
 		if self.assign_likelihoods:
 			self.far.smooth_distribution_stats()
 		self.likelihood_file = likelihood_file
@@ -689,6 +683,9 @@ class Data(object):
 			# path?  I think not
 			if self.connection is not None:
 				from glue.ligolw import dbtables
+				seg = self.search_summary.get_out()
+				#FIXME Kipp, why aren't the changes to the search summary reflected in the database?
+				self.connection.cursor().execute('UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ?', (seg[0].seconds, seg[0].nanoseconds, seg[1].seconds, seg[1].nanoseconds))
 				self.connection.cursor().execute('UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)')
 				self.connection.cursor().execute('UPDATE process SET end_time = ?', (XLALUTCToGPS(time.gmtime()).seconds,))
 				self.connection.commit()
