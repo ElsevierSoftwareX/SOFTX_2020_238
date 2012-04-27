@@ -358,9 +358,8 @@ if options.verbose:
 # Note: It assumes injections are present
 #
 
-
-distribution_stats, distribution_seglists = far.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
-
+FAR, proc_id = far.FAR.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose))
+FAR.trials_factor = options.trials_factor
 
 #
 # build output document
@@ -382,12 +381,11 @@ output = inspiral.Data(
 	injection_filename = None,
 	time_slide_file = options.time_slide_file,
 	coincidence_threshold = options.coincidence_threshold,
-	distribution_stats = distribution_stats,
+	FAR = FAR,
 	assign_likelihoods = True,
 	likelihood_snapshot_interval = likelihood_snapshot_interval,	# seconds
 	comment = options.comment,
 	tmp_path = options.tmp_space,
-	trials_factor = options.trials_factor,
 	thinca_interval = options.thinca_interval,
 	gracedb_far_threshold = options.gracedb_far_threshold,
 	gracedb_type = options.gracedb_type,
