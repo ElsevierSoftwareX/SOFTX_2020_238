@@ -484,17 +484,14 @@ static int add_quadrature_phase(COMPLEX16FrequencySeries* fseries, COMPLEX16Freq
 	
 	int n = fseries_for_ifft->data->length;	
 
-	//fseries->data->data[0].re=0;
-	//fseries->data->data[0].im=0;
 	fseries->data->data[0].re = 0;
 	fseries->data->data[0].im = 0;
 
 	if( ! (n % 2) ){
-
 		for (unsigned int i=0; i < (n/2 + 1) - 2; i++){		
 	
-			fseries_for_ifft->data->data[fseries_for_ifft->data->length - 1 - (n/2 + 1) - 2 + i].re = fseries->data->data[1 + i].re*2;
-			fseries_for_ifft->data->data[fseries_for_ifft->data->length - 1 - (n/2 + 1) - 2 + i].im = fseries->data->data[1 + i].im*2;
+			fseries_for_ifft->data->data[fseries_for_ifft->data->length - 1 - ( (n/2 + 1) - 3 ) + i].re = fseries->data->data[1 + i].re*2;
+			fseries_for_ifft->data->data[fseries_for_ifft->data->length - 1 - ( (n/2 + 1) - 3 ) + i].im = fseries->data->data[1 + i].im*2;
 		}
 	}
 	return 0;
@@ -542,7 +539,7 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
 			add_quadrature_phase(fseries, fseries_for_ifft);
 			freq_to_time_fft(fseries_for_ifft, tseries, revplan); /* return whitened complex time series */											for(unsigned int l = 0 ; l < length_max; l++){
 
-				GSL_SET_COMPLEX(&cnorm, tseries->data->data[tseries->data->length - 1 - length_max  + l].re, tseries->data->data[tseries->data->length - 1 - length_max  + l].im);	
+				GSL_SET_COMPLEX(&cnorm, tseries->data->data[tseries->data->length - 1 - (length_max - 1)  + l].re, tseries->data->data[tseries->data->length - 1 - length_max - 1 + l].im);	
                	 		gsl_vector_complex_set(tmp_for_norm, l, cnorm);
 							
         		}
@@ -551,14 +548,14 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
 			norm = gsl_complex_abs(cnorm);
              		for(unsigned int l = 0 ; l < length_max; l++){
 
-                                tseries->data->data[tseries->data->length - 1 - length_max  + l].re *= sqrt(2./norm);
-				tseries->data->data[tseries->data->length - 1 - length_max  + l].im *= sqrt(2./norm);
+                                tseries->data->data[tseries->data->length - 1 - (length_max - 1) + l].re *= sqrt(2./norm);
+				tseries->data->data[tseries->data->length - 1 - (length_max - 1) + l].im *= sqrt(2./norm);
 	                } 
 
 		
 			for (unsigned int m = 0; m < length_max; m++) {
-				gsl_matrix_set(A, m, 2*k, tseries->data->data[tseries->data->length - 1 - length_max  + i].re);
-				gsl_matrix_set(A, m, 2*k+1, tseries->data->data[tseries->data->length - 1 - length_max  + i].im);
+				gsl_matrix_set(A, m, 2*k, tseries->data->data[tseries->data->length - 1 - (length_max - 1) + i].re);
+				gsl_matrix_set(A, m, 2*k+1, tseries->data->data[tseries->data->length - 1 - (length_max - 1) + i].im);
 			}
 			k+=1;
 		}
@@ -587,7 +584,7 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
 
                         for( unsigned int i = 0 ; i < length_max; i++){
 
-                                GSL_SET_COMPLEX(&cnorm, tseries->data->data[tseries->data->length - 1 - length_max  + i].re, tseries->data->data[tseries->data->length - 1 - length_max  + i].im);
+                                GSL_SET_COMPLEX(&cnorm, tseries->data->data[tseries->data->length - 1 - (length_max - 1) + i].re, tseries->data->data[tseries->data->length - 1 - length_max  - 1 + i].im);
                                 gsl_vector_complex_set(tmp_for_norm, i, cnorm);
 
                         }
@@ -596,14 +593,14 @@ static gsl_matrix *create_templates_from_mc_and_eta(double mc_min, double mc_max
 			norm = gsl_complex_abs(cnorm);			
                         for( unsigned int i = 0 ; i < length_max; i++){
 
-                                tseries->data->data[tseries->data->length - 1 - length_max  + i].re *= sqrt(2./norm);
-                                tseries->data->data[tseries->data->length - 1 - length_max  + i].im *= sqrt(2./norm);
+                                tseries->data->data[tseries->data->length - 1 - (length_max - 1) + i].re *= sqrt(2./norm);
+                                tseries->data->data[tseries->data->length - 1 - (length_max - 1) + i].im *= sqrt(2./norm);
                         }
 
 
                         for (unsigned int m = 0; m < length_max; m++) {
-                                gsl_matrix_set(A, m, 2*k, tseries->data->data[tseries->data->length - 1 - length_max  + i].re);
-                                gsl_matrix_set(A, m, 2*k+1, tseries->data->data[tseries->data->length - 1 - length_max  + i].im);
+                                gsl_matrix_set(A, m, 2*k, tseries->data->data[tseries->data->length - 1 - (length_max - 1) + i].re);
+                                gsl_matrix_set(A, m, 2*k+1, tseries->data->data[tseries->data->length - 1 - (length_max - 1) + i].im);
                         }
                         k+=1;
 	        		
