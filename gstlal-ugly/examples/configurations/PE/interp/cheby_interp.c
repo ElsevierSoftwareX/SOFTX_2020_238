@@ -488,10 +488,10 @@ static int add_quadrature_phase(COMPLEX16FrequencySeries* fseries, COMPLEX16Freq
 	fseries->data->data[0].im = 0;
 
 	if( ! (n % 2) ){
-		for (unsigned int i=0; i < (n/2 + 1) - 2; i++){		
+		for (unsigned int i=0; i < (n/2 - 1); i++){		
 	
-			fseries_for_ifft->data->data[fseries_for_ifft->data->length - 1 - ( (n/2 + 1) - 3 ) + i].re = fseries->data->data[1 + i].re*2;
-			fseries_for_ifft->data->data[fseries_for_ifft->data->length - 1 - ( (n/2 + 1) - 3 ) + i].im = fseries->data->data[1 + i].im*2;
+			fseries_for_ifft->data->data[fseries_for_ifft->data->length - 1 - ( (n/2 - 1) - 1  ) + i].re = fseries->data->data[1 + i].re*2;
+			fseries_for_ifft->data->data[fseries_for_ifft->data->length - 1 - ( (n/2 - 1) - 1 ) + i].im = fseries->data->data[1 + i].im*2;
 		}
 	}
 	return 0;
