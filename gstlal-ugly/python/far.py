@@ -44,6 +44,8 @@ from glue.ligolw import ligolw
 from glue.ligolw import ilwd
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue import segments
 from glue.segmentsUtils import vote
 from pylal import ligolw_burca_tailor
 from pylal import ligolw_burca2
@@ -99,6 +101,17 @@ class TrialsTable(dict):
 				self.time_slide_id = time_slide_id
 				self.count = value
 				return self
+
+	def __add__(self, other):
+		out = TrialsTable()
+		for k in self:
+			out[k] = self[k]
+		for k in other:
+			try:
+				out[k] += other[k]
+			except KeyError:
+				out[k] = other[k]
+		return out
 
 	def from_db(self, connection):
 		"""
@@ -184,6 +197,13 @@ class DistributionsStats(object):
 		"L1_snr_chi": rate.gaussian_window2d(9, 9, sigma = 10),
 		"V1_snr_chi": rate.gaussian_window2d(9, 9, sigma = 10)
 	}
+
+	def __add__(self, other):
+		out = DistributionsStats()
+		out.raw_distributions += self.raw_distributions
+		out.raw_distributions += other.raw_distributions
+		#FIXME do we also add the smoothed distributions??
+		return out
 
 	def __init__(self):
 		self.raw_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
@@ -312,8 +332,18 @@ class FAR(object):
 		self.trials_factor = trials_factor
 		self.reset()
 
+	def __add__(self, other):
+		out = FAR(self.livetime_seg, self.trials_factor, self.distribution_stats, self.trials_table)
+		out.distribution_stats += other.distribution_stats
+		out.trials_table += other.trials_table
+		minstart = min(self.livetime_seg[0], other.livetime_seg[0])
+		maxend = max(self.livetime_seg[1], other.livetime_seg[1])
+		out.livetime_seg = segments.segment(minstart, maxend)
+		# FIXME what do I do with trials_factor ?
+		return out
+
 	@classmethod
-	def from_xml(cls, xml, name):
+	def from_xml(cls, xml, name = "gstlal_inspiral_likelihood"):
 		llw_elem, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:gstlal_inspiral_FAR" % name]
 		distribution_stats, process_id = DistributionsStats.from_xml(llw_elem, name)
 		# the code that writes these things has put the
@@ -331,7 +361,15 @@ class FAR(object):
 		self = cls(livetime_seg, trials_factor = None, distribution_stats = distribution_stats, trials_table = TrialsTable.from_xml(llw_elem))
 		return self, process_id
 
-	def to_xml(self, process, name):
+	@classmethod
+	def from_filenames(cls, filenames, name = "gstlal_inspiral_likelihood", verbose = False):
+		self, process_id = FAR.from_xml(utils.load_filename(filenames[0], verbose = verbose), name = name)
+		for f in filenames[1:]:
+			s, p = FAR.from_xml(utils.load_filename(f, verbose = verbose), name = name)
+			self += s
+		return self
+		
+	def to_xml(self, process, name = "gstlal_inspiral_likelihood"):
 		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_FAR" % name})
 		xml.appendChild(self.trials_table.to_xml())
 		xml.appendChild(self.distribution_stats.to_xml(process, name))
