@@ -336,7 +336,14 @@ class FAR(object):
 		out = FAR(self.livetime_seg, self.trials_factor, self.distribution_stats, self.trials_table)
 		out.distribution_stats += other.distribution_stats
 		out.trials_table += other.trials_table
-		minstart = min(self.livetime_seg[0], other.livetime_seg[0])
+		if self.livetime_seg[0] is None and other.livetime_seg[0] is not None:
+			minstart = other.livetime_seg[0]
+		elif self.livetime_seg[0] is not None and other.livetime_seg[0] is None:
+			minstart = self.livetime_seg[0]
+		# correctly handles case where both or neither are None
+		else:
+			minstart = min(self.livetime_seg[0], other.livetime_seg[0])
+		# None is always less than everything else, so this is okay
 		maxend = max(self.livetime_seg[1], other.livetime_seg[1])
 		out.livetime_seg = segments.segment(minstart, maxend)
 		# FIXME what do I do with trials_factor ?
