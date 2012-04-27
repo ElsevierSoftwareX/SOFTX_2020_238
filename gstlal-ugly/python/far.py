@@ -382,13 +382,13 @@ class FAR(object):
 		xml.appendChild(self.distribution_stats.to_xml(process, name))
 		return xml
 
-	def smooth_distribution_stats(self):
+	def smooth_distribution_stats(self, verbose = False):
 		if self.distribution_stats is not None:
 			# FIXME:  this results in the
 			# .smoothed_distributions object containing
 			# *probabilities* not probability densities. this
 			# might be changed in the future.
-			self.distribution_stats.finish()
+			self.distribution_stats.finish(verbose = verbose)
 
 	def reset(self):
 		self.ccdf_interpolator = {}
