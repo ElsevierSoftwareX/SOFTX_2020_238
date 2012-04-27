@@ -286,10 +286,11 @@ if options.verbose:
 
 
 if options.likelihood_file is not None:
-	distribution_stats, distribution_seglists = far.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
-	distribution_stats.add_foreground_prior(verbose = options.verbose)
+	FAR, proc_id = far.FAR.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose))
+	FAR.trials_factor = 1 #FIXME
 else:
 	distribution_stats = far.DistributionsStats()
+	FAR = far.FAR(None, 1, distribution_stats) #FIXME
 
 
 #
@@ -307,7 +308,7 @@ output = inspiral.Data(
 	injection_filename = options.injections,
 	time_slide_file = options.time_slide_file,
 	coincidence_threshold = options.coincidence_threshold,
-	distribution_stats = distribution_stats,
+	FAR = FAR,
 	assign_likelihoods = options.likelihood_file is not None,
 	comment = options.comment,
 	tmp_path = options.tmp_space,
