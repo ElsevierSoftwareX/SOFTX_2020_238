@@ -50,6 +50,9 @@ struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd
 	struct twod_waveform_interpolant_array * output = (struct twod_waveform_interpolant_array *) calloc(1, sizeof(struct twod_waveform_interpolant_array));
 	output->size = svd_bank->size2; 
 	output->interp = (struct twod_waveform_interpolant *) calloc(output->size, sizeof(struct twod_waveform_interpolant));
+
+	//output->interp[i].svd_basis.vector = *gsl_vector_calloc(svd_bank->size1);
+
 	/* FIXME: how should CKL be allocated? */
 	output->param1_min = param1_min;
 	output->param2_min = param2_min;
@@ -57,7 +60,6 @@ struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd
 	output->param2_max = param2_max;
 	for (i = 0; i < output->size; i++) {
 		output->interp[i].svd_basis = gsl_matrix_column(svd_bank, i);
-		//output->interp[i].C_KL = NULL;
 	}
 	return output;
 }
@@ -81,7 +83,6 @@ static gsl_matrix_complex *projection_coefficient(gsl_vector *svd_basis, gsl_mat
 	
 		i = floor(k/N_mc);
 		j = k - floor(k/N_mc)*N_mc; /* indices for M_xy */
-
 		gsl_vector_view spa_waveform_real = gsl_matrix_column(template_bank, 2*k);
 		gsl_vector_view spa_waveform_imag = gsl_matrix_column(template_bank, 2*k+1);
 		gsl_blas_ddot(&spa_waveform_real.vector, svd_basis, &M_real);
@@ -101,7 +102,7 @@ static gsl_matrix_complex *projection_coefficient(gsl_vector *svd_basis, gsl_mat
  */
 
 static double chebyshev_node(int j, int J_max) {
-	return cos(M_PI * (2.*j + 1.) / J_max / 2.);
+	return cos( M_PI * (j + 0.5) / (J_max + 1.) );
 }
 
 /* 
@@ -109,17 +110,24 @@ static double chebyshev_node(int j, int J_max) {
  */
 
 static double onedCheby(double x, int J, int J_max) {
-	double w;
+	double w=0;
 	double T=0;
-	if (J == 0)
-		w = sqrt(2.*(J_max + 1.)/2.);
-	else
-		w = sqrt(1.*(J_max + 1.)/2.);
+	int count;
+	int i;
+	count = (int) J/2 + 1;
 
-	for(unsigned int i=0; i < J/2+1. < i++;){
-
-		T += pow( ( pow(x,2.) - 1.), i )*pow( x,(J-2*i) )*gsl_sf_fact( (unsigned int) J )/gsl_sf_fact( (unsigned int) 2*i )/gsl_sf_fact( (unsigned int) J-2*i );
+	for(i=0; i <  count; i++){
+		T+=pow( ( pow(x,2.) - 1.), i )*pow( x,(J-2*i) )*gsl_sf_choose(J, 2*i);
 	}
+
+        if (J == 1){
+                w = 1. / sqrt(J_max/2.);
+        }
+        else{
+                w = 1. / sqrt(J_max);
+        }
+
+	T*=w;
 
 	return T;
 
@@ -195,7 +203,7 @@ static gsl_complex compute_M_xy(gsl_matrix_complex *C_KL, double x, double y) {
  */
 
 static double map_coordinate_to_cheby(double c_min, double c_max, double c) {
-	return 2. * ( c - c_min) / (c_max - c_min) - 1.;
+	return  2. * ( c - c_min) / (c_max - c_min) - 1.;
 }
 
 
@@ -482,7 +490,6 @@ static int compute_working_length_and_sample_rate(double chirp_time, double f_ma
 }
 
 static int add_quadrature_phase(COMPLEX16FrequencySeries* fseries, COMPLEX16FrequencySeries* fseries_for_ifft){
-	gsl_complex z;
 	
 	int n = fseries_for_ifft->data->length;	
 
@@ -490,10 +497,10 @@ static int add_quadrature_phase(COMPLEX16FrequencySeries* fseries, COMPLEX16Freq
 	fseries->data->data[0].im = 0;
 
 	if( ! (n % 2) ){
-		for (unsigned int i=0; i < (n/2 - 1); i++){		
+		for (unsigned int i=1; i < (n/2); i++){		
 	
-			fseries_for_ifft->data->data[fseries_for_ifft->data->length - 1 - ( (n/2 - 1) - 1  ) + i].re = fseries->data->data[1 + i].re*2;
-			fseries_for_ifft->data->data[fseries_for_ifft->data->length - 1 - ( (n/2 - 1) - 1 ) + i].im = fseries->data->data[1 + i].im*2;
+			fseries_for_ifft->data->data[fseries_for_ifft->data->length - 1 - ( (n/2 - 1)  ) + i].re = fseries->data->data[i].re*2.;
+			fseries_for_ifft->data->data[fseries_for_ifft->data->length - 1 - ( (n/2 - 1)  ) + i].im = fseries->data->data[i].im*2.;
 		}
 	}
 	return 0;
@@ -512,7 +519,6 @@ static gsl_vector *cheby_node_param_spacing(double min, double max, int count) {
 	gsl_vector *out = gsl_vector_calloc(count);
 	int i;
 	for (i = 0; i < count; i++) {
-		//FIXME check this
 		gsl_vector_set(out, i, min + (( chebyshev_node(i, count) + 1.) /2.) * (max - min));
 	}
 	return out;
@@ -536,16 +542,6 @@ static int generate_whitened_template(	double m1, double m2, double duration, do
 	XLALWhitenCOMPLEX16FrequencySeries(fseries, psd);
 	add_quadrature_phase(fseries, fseries_for_ifft);
 	freq_to_time_fft(fseries_for_ifft, tseries, revplan);
-	REAL8 norm = 0;
-
-	for(unsigned int l = 0 ; l < length_max; l++){
-		norm += XLALCOMPLEX16Abs2(tseries->data->data[tseries->data->length - 1 - (length_max - 1)  + l]);
-	}
-
-	for(unsigned int l = 0 ; l < length_max; l++){
-		tseries->data->data[tseries->data->length - 1 - (length_max - 1) + l].re *= sqrt(2./norm);
-		tseries->data->data[tseries->data->length - 1 - (length_max - 1) + l].im *= sqrt(2./norm);
-	}
 
 	return 0;
 } 
@@ -562,10 +558,9 @@ static gsl_matrix *create_templates_from_mc_and_eta(gsl_vector *mcvec, gsl_vecto
         int working_length;
 	double eta, mc, m1, m2;
 	gsl_matrix *A = NULL;
-        gsl_complex cnorm;	
-	double norm;
-        gsl_vector_complex *tmp_for_norm = gsl_vector_complex_calloc(length_max);	
-
+	gsl_vector_complex* T=gsl_vector_complex_calloc(fseries_for_ifft->data->length);
+	REAL8 norm = 0;
+	gsl_complex Z;
 	working_length = fseries_for_ifft->data->length;
 	working_duration = working_length*tseries->deltaT;
 	sample_rate = round(working_length / working_duration);
@@ -584,6 +579,19 @@ static gsl_matrix *create_templates_from_mc_and_eta(gsl_vector *mcvec, gsl_vecto
 
 			generate_whitened_template(m1, m2, 1. / fseries->deltaF, f_min, length_max, sample_rate / (2.*1.05), 7, psd, tseries, fseries, fseries_for_ifft, revplan);
 
+		        for(unsigned int l = 0 ; l < length_max; l++){
+        		        norm += XLALCOMPLEX16Abs2(tseries->data->data[tseries->data->length - 1 - (length_max - 1)  + l]);
+        		}
+
+        		for(unsigned int l = 0 ; l < length_max; l++){
+      
+	  		        tseries->data->data[tseries->data->length - 1 - (length_max - 1) + l].re *= sqrt(2./norm);
+                		tseries->data->data[tseries->data->length - 1 - (length_max - 1) + l].im *= sqrt(2./norm);
+
+    			}
+
+			norm=0;	/* reset the norm and fill template bank */
+	
 			for (unsigned int m = 0; m < length_max; m++) {
 				gsl_matrix_set(A, m, 2*k, tseries->data->data[tseries->data->length - 1 - (length_max - 1) + m].re);
 				gsl_matrix_set(A, m, 2*k+1, tseries->data->data[tseries->data->length - 1 - (length_max - 1) + m].im);
@@ -592,7 +600,6 @@ static gsl_matrix *create_templates_from_mc_and_eta(gsl_vector *mcvec, gsl_vecto
 		}
 	}
 	
-	gsl_vector_complex_free(tmp_for_norm);	
 
 	return A;
 }
@@ -627,10 +634,8 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 	
 	fprintf(stderr, "template_bank contains %f %% NaNs\n", 100.*k/(template_bank->size1*template_bank->size2));
 	
-	fprintf(stderr, "Beginning SVD, may take some time. template_bank %d %d gX %d %d V %d %d S %d gW %d\n", template_bank->size1, template_bank->size2, gX->size1, gX->size2, V->size1, V->size2, S->size, gW->size);
 
 	for (int i = 0; i < template_bank->size1; i++) {
-		fprintf(stdout, "%e\n", gsl_matrix_get(template_bank, i, 0));
 	}
 	
 	gsl_linalg_SV_decomp_mod(template_bank, gX, V, S, gW);
@@ -649,6 +654,7 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 	k=0;
 
 	tolerance = 0.99999;
+	//norm_s = pow(gsl_blas_dnrm2(S), 2.);
 	norm_s = gsl_blas_dasum(S);
 	fprintf(stderr, "norm = %e\n", norm_s);
 
@@ -660,7 +666,7 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 	sum_s = 0;
 	for (n = 0; n < S->size; n++) {
 		sum_s += gsl_vector_get(S, n) * gsl_vector_get(S, n);
-		fprintf(stderr, "sum_s %e\n", sum_s);
+		//fprintf(stderr, "sum_s %e\n", sum_s);
 		if (sqrt(sum_s / norm_s) >= tolerance) break;
 		k+=gsl_isnan(gsl_vector_get(S, n)); 
 		}
@@ -691,13 +697,15 @@ static gsl_vector_complex *interpolate_waveform_from_mchirp_and_eta(struct twod_
 
 	x = map_coordinate_to_cheby(interps->param1_min, interps->param1_max, mchirp);
 	y = map_coordinate_to_cheby(interps->param2_min, interps->param2_max, eta);
-	gsl_complex z_tmp;	
+
 	/* this is the loop over mu */
+
 	for (i = 0; i < interps->size; i++) {
-			M = compute_M_xy(interp->C_KL, x, y);
-			gsl_blas_daxpy (GSL_REAL(M), &interp[i].svd_basis.vector, &h_t_real.vector);
-			gsl_blas_daxpy (GSL_IMAG(M), &interp[i].svd_basis.vector, &h_t_imag.vector);
-		}
+		M = compute_M_xy(interp->C_KL, x, y);
+		gsl_blas_daxpy (GSL_REAL(M), &interp[i].svd_basis.vector, &h_t_real.vector);
+		gsl_blas_daxpy (GSL_IMAG(M), &interp[i].svd_basis.vector, &h_t_imag.vector);
+	}
+
 	return h_t;
 }
 
@@ -712,8 +720,8 @@ int main() {
 	double eta_min = 0.1;
 	double mc_max = 7.6;
 	double eta_max = 0.25;
-	int N_mc = 10;//40;
-	int M_eta = 10;//40;
+	int N_mc = 10;
+	int M_eta = 10;
 	int length_max;
 	double f_min = 40.0;
 	double t_max = 0;
@@ -725,8 +733,8 @@ int main() {
 	double New_N_mc, New_M_eta;
 	double deltaT, deltaF;
 	double Overlap;
-
-	gsl_complex dotc1,dotc2,dotc3; /* used for products in overlap function */
+	
+	gsl_complex dotc1,dotc2,dotc3;
 	gsl_complex z_tmp;
 	gsl_vector_complex *Tseries=NULL;
 	gsl_vector_complex* h_t = NULL;
@@ -755,12 +763,13 @@ int main() {
 	compute_working_length_and_sample_rate(t_max, f_max, &working_length, &sample_rate);
 	fprintf(stderr, "working_length %d sample_rate %e\n", working_length, sample_rate);
 
+	t_max*=2;
+
 	deltaT = 1. / sample_rate;
         working_duration = (working_length / sample_rate);
 	deltaF = 1. / working_duration;
-
 	length_max = round(sample_rate * pow(2., ceil(log(t_max) / log(2.))));
-	fprintf(stderr, "deltaT %e working_duration %e deltaF %e length_max %d\n", deltaT, working_duration, deltaF, length_max);
+	//fprintf(stderr, "deltaT %e working_duration %e deltaF %e length_max %d\n", deltaT, working_duration, deltaF, length_max);
 	
 	tseries = XLALCreateCOMPLEX16TimeSeries(NULL, &epoch, 0., deltaT, &lalDimensionlessUnit, working_length);
 	memset (tseries->data->data, 0, tseries->data->length * sizeof (COMPLEX16));
@@ -769,7 +778,7 @@ int main() {
 	fseries = XLALCreateCOMPLEX16FrequencySeries(NULL, &epoch, 0, deltaF, &lalDimensionlessUnit, working_length / 2 + 1);
 	memset (fseries->data->data, 0, fseries->data->length * sizeof (COMPLEX16));	
 	psd = XLALCreateREAL8FrequencySeries(NULL, &epoch, 0, deltaF, &lalDimensionlessUnit, working_length / 2 + 1);
-	memset (psd->data->data, 0, psd->data->length * sizeof (COMPLEX16));
+	memset (psd->data->data, 0, psd->data->length * sizeof (REAL8));
 	get_psd_from_file(psd, "reference_psd.txt");
 
 	// full frequency series	
@@ -793,8 +802,8 @@ int main() {
 	mchirps_nodes = cheby_node_param_spacing(mc_min, mc_max, N_mc);
 	etas_nodes = cheby_node_param_spacing(eta_min, eta_max, M_eta);
 	templates_at_nodes = create_templates_from_mc_and_eta(mchirps_nodes, etas_nodes, f_min, length_max, psd, tseries, fseries, fseries_for_ifft, revplan);
-	gsl_vector_free(etas_nodes);
-	gsl_vector_free(mchirps_nodes);
+	//gsl_vector_free(etas_nodes);
+	//gsl_vector_free(mchirps_nodes);
 	
 	x_nodes = cheby_node_spacing(N_mc);
 	y_nodes = cheby_node_spacing(M_eta);
@@ -809,28 +818,39 @@ int main() {
         New_N_mc = 100;
         New_M_eta = 100;
 
-	Tseries = gsl_vector_complex_calloc(length_max);	
-#if 0
-	for ( i =0; i <  New_N_mc; i++){
-		for ( j =0; j <  New_N_mc; j++){
-			eta = eta_min + ( ( chebyshev_node(j,New_M_eta)+1)/2)*(eta_max - eta_min);
-			mc = mc_min + ( ( chebyshev_node(i,New_N_mc)+1)/2)*(mc_max - mc_min);	
+	GSL_SET_COMPLEX(&dotc1, 0, 0);
+	GSL_SET_COMPLEX(&dotc2, 0 ,0);
+	GSL_SET_COMPLEX(&dotc3, 0 ,0);
+
+	for ( i =0; i <  mchirps_nodes->size; i++){
+		for ( j =0; j <  etas_nodes->size; j++){
+
+                        eta = gsl_vector_get(etas_nodes, j);
+                        mc = gsl_vector_get(mchirps_nodes, i);						
 
 			h_t = interpolate_waveform_from_mchirp_and_eta(interps, mc, eta);
                  
 		        m1 = mc2mass1(mc, eta);
                         m2 = mc2mass2(mc, eta);
 
-			generate_whitened_template(m1, m2, 1. / fseries->deltaF, f_min, sample_rate / (2.*1.05) , 7, tseries, fseries, fseries_for_ifft, revplan);
-			gsl_blas_zdotc(Tseries, h_t, &dotc1);
-			gsl_blas_zdotc(h_t, h_t, &dotc2);	
-			gsl_blas_zdotc(Tseries, Tseries, &dotc3);
+			generate_whitened_template(m1, m2, 1. / fseries->deltaF, f_min, length_max, sample_rate / (2.*1.05) , 7, psd, tseries, fseries, fseries_for_ifft, revplan);
 
-		 	Overlap = ( gsl_complex_abs(dotc1) / gsl_complex_abs( gsl_complex_sqrt(dotc2) ) / gsl_complex_abs( gsl_complex_sqrt(dotc3) ) );
-			fprintf(stderr,"mc = %f, eta=%f, overlap=%f\n",mc,eta,Overlap);
+			for(unsigned int l = 0; l < length_max; l++){
+
+				GSL_SET_COMPLEX(&z_tmp, tseries->data->data[tseries->data->length - 1 - (length_max - 1) + l].re, tseries->data->data[tseries->data->length - 1 - (length_max - 1) + l].im);
+				dotc1 =	gsl_complex_add( dotc1, gsl_complex_mul( gsl_complex_conjugate( z_tmp ), gsl_vector_complex_get(h_t, l)  ) );
+				dotc2 = gsl_complex_add( dotc2, gsl_complex_mul( gsl_vector_complex_get(h_t, l), gsl_complex_conjugate( gsl_vector_complex_get(h_t, l) ) ) );
+				dotc3 = gsl_complex_add( dotc3, gsl_complex_mul( z_tmp, gsl_complex_conjugate( z_tmp ) ) );
+
+			}
+
+
+		 	Overlap = ( gsl_complex_abs( dotc1 ) / sqrt( gsl_complex_abs( dotc2 ) ) / sqrt( gsl_complex_abs( dotc3 ) ) );
+
+			fprintf(stderr,"mc = %f, eta=%f, overlap=%e\n",mc,eta,Overlap);
+
 			}
 		}		
-#endif	
 
 	gsl_matrix_free(templates);
 	gsl_vector_complex_free(h_t);
