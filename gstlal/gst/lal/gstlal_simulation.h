@@ -49,8 +49,6 @@ typedef struct {
 } GSTLALSimulationClass;
 
 
-struct GSTLALInjectionCache;
-
 typedef struct {
 	GstElement element;
 
@@ -63,23 +61,16 @@ typedef struct {
 		SimBurst *sim_burst_table_head;
 		int has_sim_inspiral_table;
 		SimInspiralTable *sim_inspiral_table_head;
+		int has_time_slide_table;
+		TimeSlide *time_slide_table_head;
 	} *injection_document;
 
 	char *instrument;
 	char *channel_name;
 	char *units;
 
-	struct GSTLALInjectionCache {
-		LIGOTimeGPS startTime;
-		LIGOTimeGPS endTime;
-		REAL4TimeSeries *series;
-		double underflow_protection;
-		SimInspiralTable *sim_inspiral;
-		SimInspiralTable *sim_inspiral_pointer;
-		SimBurst *sim_burst;
-		SimBurst *sim_burst_pointer;
-		struct GSTLALInjectionCache *next;
-	} *injection_cache;
+	REAL8TimeSeries *simulation_series;
+
 } GSTLALSimulation;
 
 
