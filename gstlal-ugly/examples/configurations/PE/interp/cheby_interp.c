@@ -670,7 +670,6 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 		if (sqrt(sum_s / norm_s) >= tolerance) break;
 		k+=gsl_isnan(gsl_vector_get(S, n)); 
 		}
-
 	fprintf(stderr, "Singular values matrix contains %f %% NaNs\n",100.*k/(S->size));	
 
 	fprintf(stderr,"SVD: using %d basis templates\n:", n);
@@ -720,8 +719,8 @@ int main() {
 	double eta_min = 0.1;
 	double mc_max = 7.6;
 	double eta_max = 0.25;
-	int N_mc = 10;
-	int M_eta = 10;
+	int N_mc = 40;
+	int M_eta = 40;
 	int length_max;
 	double f_min = 40.0;
 	double t_max = 0;
@@ -846,6 +845,10 @@ int main() {
 
 
 		 	Overlap = ( gsl_complex_abs( dotc1 ) / sqrt( gsl_complex_abs( dotc2 ) ) / sqrt( gsl_complex_abs( dotc3 ) ) );
+			
+			GSL_SET_COMPLEX(&dotc1, 0, 0);
+		        GSL_SET_COMPLEX(&dotc2, 0 ,0);
+		        GSL_SET_COMPLEX(&dotc3, 0 ,0);
 
 			fprintf(stderr,"mc = %f, eta=%f, overlap=%e\n",mc,eta,Overlap);
 
