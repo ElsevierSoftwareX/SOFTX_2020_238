@@ -80,9 +80,14 @@ static gsl_matrix_complex *projection_coefficient(gsl_vector *svd_basis, gsl_mat
 	assert(N_mc * M_eta == template_bank->size2 / 2);
 
 	for (unsigned int k =0; k < template_bank->size2 / 2; k++){
-	
-		i = floor(k/N_mc);
-		j = k - floor(k/N_mc)*N_mc; /* indices for M_xy */
+
+		j = k % N_mc;	
+
+		if ( !(k % N_mc) ){
+
+			i = k/N_mc;
+		}
+
 		gsl_vector_view spa_waveform_real = gsl_matrix_column(template_bank, 2*k);
 		gsl_vector_view spa_waveform_imag = gsl_matrix_column(template_bank, 2*k+1);
 		gsl_blas_ddot(&spa_waveform_real.vector, svd_basis, &M_real);
@@ -96,13 +101,39 @@ static gsl_matrix_complex *projection_coefficient(gsl_vector *svd_basis, gsl_mat
 	return M_xy;
 }
 
+static gsl_matrix_complex *measure_m0_phase(gsl_matrix_complex* M_xy, gsl_matrix_complex* phase_M0_xy){
+
+	double phi_tmp;
+	gsl_complex z_tmp;
+
+	for(unsigned int i=0; i < M_xy->size1; i++){
+		for(unsigned int j=0; j < M_xy->size2; j++){
+
+			phi_tmp = atan2( GSL_IMAG(gsl_matrix_complex_get(M_xy, i, j) ), GSL_REAL(gsl_matrix_complex_get(M_xy, i, j)) ) ;	
+			GSL_SET_COMPLEX(&z_tmp, cos(phi_tmp), -sin(phi_tmp));
+			gsl_matrix_complex_set(phase_M0_xy, i, j, z_tmp);
+
+		}
+	}
+
+	return phase_M0_xy;
+}
+
+static gsl_matrix_complex *rotate_M_xy(gsl_matrix_complex* M_xy, gsl_matrix_complex* phase_M0_xy){
+
+			
+	gsl_matrix_complex_mul_elements(M_xy, phase_M0_xy);	
+
+	
+	return M_xy;
+}
 
 /*
  * Formula (4) in http://arxiv.org/pdf/1108.5618v1.pdf
  */
 
 static double chebyshev_node(int j, int J_max) {
-	return cos( M_PI * (j + 0.5) / (J_max + 1.) );
+	return cos( M_PI * (j + 0.5) / ( J_max + 1. )  );
 }
 
 /* 
@@ -671,7 +702,6 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 		k+=gsl_isnan(gsl_vector_get(S, n)); 
 		}
 	fprintf(stderr, "Singular values matrix contains %f %% NaNs\n",100.*k/(S->size));	
-
 	fprintf(stderr,"SVD: using %d basis templates\n:", n);
 	
 	template_view = gsl_matrix_submatrix(template_bank, 0, 0, template_bank->size1, n);
@@ -696,7 +726,6 @@ static gsl_vector_complex *interpolate_waveform_from_mchirp_and_eta(struct twod_
 
 	x = map_coordinate_to_cheby(interps->param1_min, interps->param1_max, mchirp);
 	y = map_coordinate_to_cheby(interps->param2_min, interps->param2_max, eta);
-
 	/* this is the loop over mu */
 
 	for (i = 0; i < interps->size; i++) {
@@ -719,8 +748,8 @@ int main() {
 	double eta_min = 0.1;
 	double mc_max = 7.6;
 	double eta_max = 0.25;
-	int N_mc = 40;
-	int M_eta = 40;
+	int N_mc = 10;//40;
+	int M_eta = 10;//40;
 	int length_max;
 	double f_min = 40.0;
 	double t_max = 0;
@@ -747,7 +776,7 @@ int main() {
 	gsl_vector *etas_even = NULL;
 	gsl_vector *mchirps_nodes = NULL;
 	gsl_vector *etas_nodes = NULL;
-
+	gsl_matrix_complex *phase_M0_xy = NULL;
 	struct twod_waveform_interpolant_array *interps = NULL;
 
 	REAL8FrequencySeries *psd = NULL;
@@ -758,11 +787,11 @@ int main() {
 	COMPLEX16FFTPlan *revplan;
 
 	compute_max_chirp_time_and_max_frequency(mc_min, mc_max, eta_min, eta_max, f_min, &f_max, &t_max);
+	t_max*=2;
 	fprintf(stderr, "f_max %e t_max %e\n", f_max, t_max);
 	compute_working_length_and_sample_rate(t_max, f_max, &working_length, &sample_rate);
 	fprintf(stderr, "working_length %d sample_rate %e\n", working_length, sample_rate);
 
-	t_max*=2;
 
 	deltaT = 1. / sample_rate;
         working_duration = (working_length / sample_rate);
@@ -807,8 +836,20 @@ int main() {
 	x_nodes = cheby_node_spacing(N_mc);
 	y_nodes = cheby_node_spacing(M_eta);
 
+	phase_M0_xy = gsl_matrix_complex_calloc(mchirps_nodes->size, etas_nodes->size);
+	
 	for ( i = 0; i < interps->size; i++) {       
+
 		M_xy = projection_coefficient(&interps->interp[i].svd_basis.vector, templates_at_nodes, N_mc, M_eta);
+
+		if(i==0){
+
+			measure_m0_phase(M_xy, phase_M0_xy);
+		}
+
+		rotate_M_xy(M_xy, phase_M0_xy);
+	
+
 		interps->interp[i].C_KL = compute_C_KL(x_nodes, y_nodes, M_xy);           
 	}
 
