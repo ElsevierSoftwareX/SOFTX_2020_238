@@ -23,12 +23,10 @@ handler = lloidparts.LLOIDHandler(mainloop, pipeline)
 fbank = "H1bank.xml"
 fref = "reference_psd.xml"
 fframe = "frame.cache"
-#"standalone.cache" #
 test_rate = 4096
-NXY_START = 0
-NXY_STOP = 20000000
+NXY_START = 1018341258 
+NXY_STOP = NXY_START + 2
 START = 1018341240
-#816327625
 STOP = START + 500
 snr_threshold = 4.0
 
@@ -38,8 +36,6 @@ if _DEBUG == True:
 
 nxydump_segment = "%d:%d" % (NXY_START, NXY_STOP)
 nxydump_segment, = segmentsUtils.from_range_strings([nxydump_segment], boundtype = LIGOTimeGPS)
-print >> sys.stderr, "nxydump %d" % nxydump_segment[0].ns()
-print >> sys.stderr, "nxydump %d" % nxydump_segment[1].ns()
 psd = reference_psd.read_psd(fref, verbose = True)
 
 seekevent = lloidparts.seek_event_for_gps(START, STOP)
@@ -59,9 +55,8 @@ head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, ifo, detector, fake_data 
 head = lloidparts.mkLLOIDsrc(pipeline, head, [test_rate], ifo, psd = None, psd_fft_length = 1, ht_gate_threshold = None, veto_segments = None, seekevent = seekevent, nxydump_segment = nxydump_segment, track_psd = True, block_duration = gst.SECOND, zero_pad = 0)
 
 snr = pipeparts.mkiirbank(pipeline, head[test_rate], a1 = bank.A[test_rate], b0 = bank.B[test_rate], delay = bank.D[test_rate], name = "gstlaliirbank_%s_%d" % (ifo, test_rate))
-#snr = pipeparts.mktogglecomplex(pipeline, snr)
 
-pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline,snr), "snr_%s.dump" % "test", segment = None) #nxydump_segment)
+pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline,snr), "snr_%s.dump" % "test", segment = nxydump_segment)
 # ADD your IIR element here before the fakesink don't forget
 #that you need head[test_rate]
 #pipeparts.mkfakesink(pipeline, head)
