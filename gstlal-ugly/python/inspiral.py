@@ -496,139 +496,149 @@ class Data(object):
 
 			# do GraceDB alerts
 			if self.gracedb_far_threshold is not None:
-				self.do_gracedb_alerts()
-				self.update_eye_candy()
+				self.__do_gracedb_alerts()
+				self.__update_eye_candy()
 		finally:
 			self.lock.release()
 
+	def __write_likelihood_file(self):
+		# write the new distribution stats to disk
+		output = StringIO.StringIO()
+		utils.write_fileobj(gen_likelihood_control_doc(self.far, self.instruments), output, trap_signals = None)
+		outstr = output.getvalue()
+		output.close()
+		return outstr
 
 	def write_likelihood_file(self):
 		self.lock.acquire()
 		try:
-			# write the new distribution stats to disk
-			output = StringIO.StringIO()
-			utils.write_fileobj(gen_likelihood_control_doc(self.far, self.instruments), output, trap_signals = None)
-			outstr = output.getvalue()
-			output.close()
+			outstr = self.__write_likelihood_file()
 		finally:
 			self.lock.release()
 		return outstr
 
-	def flush(self):
-		self.lock.acquire()
-		try:
-			# run StreamThinca's .flush().  returns the last remaining
-			# non-coincident sngls.  add them to the distribution
-			if self.assign_likelihoods:
-				FAP = self.far
-			else:
-				FAP = None
-			for event in self.stream_thinca.flush(FAP = FAP):
-				self.far.distribution_stats.add_single(event)
-			if self.connection is not None:
-				self.connection.commit()
-		finally:
-			self.lock.release()
+	def __flush(self):
+		# run StreamThinca's .flush().  returns the last remaining
+		# non-coincident sngls.  add them to the distribution
+		if self.assign_likelihoods:
+			FAP = self.far
+		else:
+			FAP = None
+		for event in self.stream_thinca.flush(FAP = FAP):
+			self.far.distribution_stats.add_single(event)
+		if self.connection is not None:
+			self.connection.commit()
 
 		# do GraceDB alerts
 		if self.gracedb_far_threshold is not None:
-			self.do_gracedb_alerts()
+			self.__do_gracedb_alerts()
 
+	def flush(self):
+		self.lock.acquire()
+		try:
+			self.__flush()
+		finally:
+			self.lock.release()
 
-	def do_gracedb_alerts(self):
+	def __do_gracedb_alerts(self):
 		try:
 			gracedb
 		except NameError:
 			# gracedb import failed, disable event uploads
 			return
+		if self.stream_thinca.last_coincs:
+			# FIXME:  this should maybe not be retrieved this
+			# way.  and the .column_index() method is probably
+			# useless
+			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
+			for coinc_event_id, false_alarm_rate in sorted(self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far").items(), key = lambda (a, b): b):
+				#
+				# do we keep this event?
+				#
+
+				if false_alarm_rate > self.gracedb_far_threshold:
+					continue
+
+				#
+				# fake a filename for end-user convenience
+				#
+
+				observatories = "".join(sorted(set(instrument[0] for instrument in self.instruments)))
+				instruments = "".join(sorted(self.instruments))
+				description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_type)
+				end_time = int(coinc_inspiral_index[coinc_event_id].get_end())
+				filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
+
+				#
+				# construct message and send to gracedb.
+				# we go through the intermediate step of
+				# first writing the document into a string
+				# buffer incase there is some safety in
+				# doing so in the event of a malformed
+				# document;  instead of writing directly
+				# into gracedb's input pipe and crashing
+				# part way through.
+				#
+
+				if self.verbose:
+					print >>sys.stderr, "sending %s to gracedb ..." % filename
+				message = StringIO.StringIO()
+				utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = False, trap_signals = None)
+				# FIXME: make this optional from command line?
+				if True:
+					resp = gracedb.Client().create(self.gracedb_group, self.gracedb_type, filename, message.getvalue())
+					if "error" in resp:
+						print >>sys.stderr, "gracedb upload of %s failed: %s" % (filename, resp["error"])
+					elif self.verbose:
+						if "warning" in resp:
+							print >>sys.stderr, "gracedb issued warning: %s" % resp["warning"]
+						print >>sys.stderr, "event assigned grace ID %s" % resp["output"]
+				else:
+					proc = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
+					proc.stdin.write(message.getvalue())
+					proc.stdin.flush()
+					proc.stdin.close()
+				message.close()
+
+				# FIXME hack to keep from sending too many alerts.
+				# Only send the best one in this set.  May not make
+				# sense depending on what is in last_coincs.  FIX
+				# PROPERLY.  This is probably mostly okay because we
+				# should be doing coincidences every 10s which is a
+				# reasonable time to cluster over
+				break
+
+	def do_gracedb_alerts(self):
 		self.lock.acquire()
 		try:
-			if self.stream_thinca.last_coincs:
-				# FIXME:  this should maybe not be retrieved this
-				# way.  and the .column_index() method is probably
-				# useless
-				coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
-				for coinc_event_id, false_alarm_rate in sorted(self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far").items(), key = lambda (a, b): b):
-					#
-					# do we keep this event?
-					#
-
-					if false_alarm_rate > self.gracedb_far_threshold:
-						continue
-
-					#
-					# fake a filename for end-user convenience
-					#
-
-					observatories = "".join(sorted(set(instrument[0] for instrument in self.instruments)))
-					instruments = "".join(sorted(self.instruments))
-					description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.gracedb_group, self.gracedb_type)
-					end_time = int(coinc_inspiral_index[coinc_event_id].get_end())
-					filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
-
-					#
-					# construct message and send to gracedb.
-					# we go through the intermediate step of
-					# first writing the document into a string
-					# buffer incase there is some safety in
-					# doing so in the event of a malformed
-					# document;  instead of writing directly
-					# into gracedb's input pipe and crashing
-					# part way through.
-					#
-
-					if self.verbose:
-						print >>sys.stderr, "sending %s to gracedb ..." % filename
-					message = StringIO.StringIO()
-					utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = False, trap_signals = None)
-					# FIXME: make this optional from command line?
-					if True:
-						resp = gracedb.Client().create(self.gracedb_group, self.gracedb_type, filename, message.getvalue())
-						if "error" in resp:
-							print >>sys.stderr, "gracedb upload of %s failed: %s" % (filename, resp["error"])
-						elif self.verbose:
-							if "warning" in resp:
-								print >>sys.stderr, "gracedb issued warning: %s" % resp["warning"]
-							print >>sys.stderr, "event assigned grace ID %s" % resp["output"]
-					else:
-						proc = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
-						proc.stdin.write(message.getvalue())
-						proc.stdin.flush()
-						proc.stdin.close()
-					message.close()
-
-					# FIXME hack to keep from sending too many alerts.
-					# Only send the best one in this set.  May not make
-					# sense depending on what is in last_coincs.  FIX
-					# PROPERLY.  This is probably mostly okay because we
-					# should be doing coincidences every 10s which is a
-					# reasonable time to cluster over
-					break
+			self.__do_gracedb_alerts()
 		finally:
 			self.lock.release()
 
+	def __update_eye_candy(self):
+		if self.stream_thinca.last_coincs:
+			self.ram_history.append((time.time(), (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss + resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss) / 1048576.)) # GB
+			latency_val = None
+			snr_val = (0,0)
+			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
+			for coinc_event_id, latency in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "minimum_duration").items():
+				self.latency_histogram[latency,] += 1
+				if latency_val is None:
+					t = float(coinc_inspiral_index[coinc_event_id].get_end())
+					latency_val = (t, latency)
+				snr = coinc_inspiral_index[coinc_event_id].snr
+				if snr >= snr_val[0]:
+					t = float(coinc_inspiral_index[coinc_event_id].get_end())
+					snr_val = (t, snr)
+			if latency_val is not None:
+				self.latency_history.append(latency_val)
+			if snr_val != (0,0):
+				self.snr_history.append(snr_val)
 
 	def update_eye_candy(self):
 		self.lock.acquire()
 		try:
-			if self.stream_thinca.last_coincs:
-				self.ram_history.append((time.time(), (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss + resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss) / 1048576.)) # GB
-				latency_val = None
-				snr_val = (0,0)
-				coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
-				for coinc_event_id, latency in self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "minimum_duration").items():
-					self.latency_histogram[latency,] += 1
-					if latency_val is None:
-						t = float(coinc_inspiral_index[coinc_event_id].get_end())
-						latency_val = (t, latency)
-					snr = coinc_inspiral_index[coinc_event_id].snr
-					if snr >= snr_val[0]:
-						t = float(coinc_inspiral_index[coinc_event_id].get_end())
-						snr_val = (t, snr)
-				if latency_val is not None:
-					self.latency_history.append(latency_val)
-				if snr_val != (0,0):
-					self.snr_history.append(snr_val)
+			self.__update_eye_candy()
 		finally:
 			self.lock.release()
 
