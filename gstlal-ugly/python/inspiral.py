@@ -176,7 +176,7 @@ def add_cbc_metadata(xmldoc, process, seg_in):
 	search_summary.comment = process.comment
 	search_summary.set_ifos(process.get_ifos())
 	search_summary.set_in(seg_in)
-	search_summary.set_out(None)
+	search_summary.set_out((None, None))
 	search_summary.nevents = None # FIXME
 	search_summary.nnodes = 1
 	tbl.append(search_summary)
@@ -285,7 +285,7 @@ def gen_likelihood_control_doc(far, instruments, name = u"gstlal_inspiral_likeli
 	node.appendChild(lsctables.New(lsctables.ProcessParamsTable))
 	node.appendChild(lsctables.New(lsctables.SearchSummaryTable))
 	process = ligolw_process.append_process(xmldoc, comment = comment)
-	llwapp.append_search_summary(xmldoc, process, ifos = instruments, inseg = seg, outseg = seg)
+	llwapp.append_search_summary(xmldoc, process, ifos = instruments, inseg = far.livetime_seg, outseg = far.livetime_seg)
 
 	node.appendChild(far.to_xml(process, name))
 
@@ -405,7 +405,7 @@ class Data(object):
 		# arrives
 		#
 
-		self.far = far.FAR(None, trials_factor, distribution_stats)
+		self.far = far.FAR((None, None), trials_factor, distribution_stats)
 		if self.assign_likelihoods:
 			self.far.smooth_distribution_stats()
 		self.likelihood_file = likelihood_file
@@ -448,11 +448,10 @@ class Data(object):
 			# document.
 			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
 			buf_end_time = buf_timestamp + LIGOTimeGPS(0, buf.duration)
-			try:
-				out_segs = segments.segmentlist([self.search_summary.get_out()])
-			except TypeError:
+			out_segs = segments.segmentlist([self.search_summary.get_out()])
+			if out_segs == [(None, None)]:
 				# out segment not yet initialized
-				out_segs = segments.segmentlist()
+				del out_segs[:]
 			out_segs |= segments.segmentlist([segments.segment(buf_timestamp, buf_end_time)])
 			self.far.livetime_seg = out_segs.extent()
 			self.search_summary.set_out(self.far.livetime_seg)
