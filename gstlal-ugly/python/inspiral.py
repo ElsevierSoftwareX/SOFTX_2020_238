@@ -401,7 +401,7 @@ class Data(object):
 
 		self.far = FAR
 		if self.assign_likelihoods:
-			self.far.smooth_distribution_stats()
+			self.far.smooth_distribution_stats(verbose = verbose)
 		self.likelihood_file = likelihood_file
 
 		#
