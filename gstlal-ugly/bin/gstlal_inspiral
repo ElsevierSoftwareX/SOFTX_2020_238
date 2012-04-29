@@ -308,6 +308,12 @@ if options.verbose:
 #
 
 
+if options.likelihood_file is not None:
+	FAR, proc_id = far.FAR.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose))
+	FAR.trials_factor = 1 #FIXME what should this be, it is not currently a command line?
+else:
+	FAR = far.FAR(None, 1, far.DistributionsStats())
+
 
 #
 # build output document
