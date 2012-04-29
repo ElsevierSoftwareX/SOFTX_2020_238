@@ -103,7 +103,7 @@ class TrialsTable(dict):
 				return self
 
 	def __add__(self, other):
-		out = TrialsTable()
+		out = type(self)()
 		for k in self:
 			out[k] = self[k]
 		for k in other:
@@ -199,7 +199,7 @@ class DistributionsStats(object):
 	}
 
 	def __add__(self, other):
-		out = DistributionsStats()
+		out = type(self)()
 		out.raw_distributions += self.raw_distributions
 		out.raw_distributions += other.raw_distributions
 		#FIXME do we also add the smoothed distributions??
@@ -333,7 +333,7 @@ class FAR(object):
 		self.reset()
 
 	def __add__(self, other):
-		out = FAR(self.livetime_seg, self.trials_factor, self.distribution_stats, self.trials_table)
+		out = type(self)(self.livetime_seg, self.trials_factor, self.distribution_stats, self.trials_table)
 		out.distribution_stats += other.distribution_stats
 		out.trials_table += other.trials_table
 		if self.livetime_seg[0] is None and other.livetime_seg[0] is not None:
@@ -351,7 +351,7 @@ class FAR(object):
 		return out
 
 	@classmethod
-	def from_xml(cls, xml, name = "gstlal_inspiral_likelihood"):
+	def from_xml(cls, xml, name = u"gstlal_inspiral_likelihood"):
 		llw_elem, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:gstlal_inspiral_FAR" % name]
 		distribution_stats, process_id = DistributionsStats.from_xml(llw_elem, name)
 		# the code that writes these things has put the
@@ -370,14 +370,14 @@ class FAR(object):
 		return self, process_id
 
 	@classmethod
-	def from_filenames(cls, filenames, name = "gstlal_inspiral_likelihood", verbose = False):
+	def from_filenames(cls, filenames, name = u"gstlal_inspiral_likelihood", verbose = False):
 		self, process_id = FAR.from_xml(utils.load_filename(filenames[0], verbose = verbose), name = name)
 		for f in filenames[1:]:
 			s, p = FAR.from_xml(utils.load_filename(f, verbose = verbose), name = name)
 			self += s
 		return self
 		
-	def to_xml(self, process, name = "gstlal_inspiral_likelihood"):
+	def to_xml(self, process, name = u"gstlal_inspiral_likelihood"):
 		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_FAR" % name})
 		xml.appendChild(self.trials_table.to_xml())
 		xml.appendChild(self.distribution_stats.to_xml(process, name))
