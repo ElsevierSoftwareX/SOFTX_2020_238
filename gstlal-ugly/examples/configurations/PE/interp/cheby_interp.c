@@ -74,10 +74,12 @@ static gsl_matrix_complex *projection_coefficient(gsl_vector *svd_basis, gsl_mat
 	/*project svd basis onto SPA's to get coefficients*/
 	gsl_complex M;
 	double M_real, M_imag;
-	/* compute M_ky at fixed mu */
+	/* compute M_xy at fixed mu */
 	gsl_matrix_complex *M_xy = gsl_matrix_complex_calloc(N_mc, M_eta);
 
 	assert(N_mc * M_eta == template_bank->size2 / 2);
+
+	GSL_SET_COMPLEX(&M, 0, 0);
 
 	for (unsigned int k =0; k < template_bank->size2 / 2; k++){
 
@@ -133,7 +135,7 @@ static gsl_matrix_complex *rotate_M_xy(gsl_matrix_complex* M_xy, gsl_matrix_comp
  */
 
 static double chebyshev_node(int j, int J_max) {
-	return cos( M_PI * (j + 0.5) / ( J_max + 1. )  );
+	return cos( M_PI * (j + 0.5) / ( J_max  )  );
 }
 
 /* 
@@ -142,13 +144,13 @@ static double chebyshev_node(int j, int J_max) {
 
 static double onedCheby(double x, int J, int J_max) {
 	double w=0;
-	double T=0;
+	double T_J=0;
 	int count;
 	int i;
 	count = (int) J/2 + 1;
 
 	for(i=0; i <  count; i++){
-		T+=pow( ( pow(x,2.) - 1.), i )*pow( x,(J-2*i) )*gsl_sf_choose(J, 2*i);
+		T_J+=pow( ( pow(x,2.) - 1.), i )*pow( x,(J-2*i) )*gsl_sf_choose(J, 2*i);
 	}
 
         if (J == 1){
@@ -158,9 +160,9 @@ static double onedCheby(double x, int J, int J_max) {
                 w = 1. / sqrt(J_max);
         }
 
-	T*=w;
+	T_J*=w;
 
-	return T;
+	return T_J;
 
 }
 
@@ -565,14 +567,26 @@ static gsl_vector *cheby_node_spacing(int count) {
 }
 
 static int generate_whitened_template(	double m1, double m2, double duration, double fmin, int length_max,
-					double fmax, int order, REAL8FrequencySeries* psd,
-					COMPLEX16TimeSeries* tseries, COMPLEX16FrequencySeries* fseries,
+					double fmax, int order, REAL8FrequencySeries* psd, gsl_vector* template_real,
+					gsl_vector* template_imag, COMPLEX16TimeSeries* tseries, COMPLEX16FrequencySeries* fseries,
 					COMPLEX16FrequencySeries* fseries_for_ifft, COMPLEX16FFTPlan* revplan) {
+	REAL8 norm = 0;
 	
 	generate_template(m1, m2, duration, fmin, fmax, order, fseries);
 	XLALWhitenCOMPLEX16FrequencySeries(fseries, psd);
 	add_quadrature_phase(fseries, fseries_for_ifft);
 	freq_to_time_fft(fseries_for_ifft, tseries, revplan);
+ 
+        for(unsigned int l = 0 ; l < length_max; l++){
+		
+		gsl_vector_set(template_real, l, tseries->data->data[tseries->data->length - 1 - (length_max - 1) + l].re);
+		gsl_vector_set(template_imag, l, tseries->data->data[tseries->data->length - 1 - (length_max - 1) + l].im);
+	
+		norm += XLALCOMPLEX16Abs2(tseries->data->data[tseries->data->length - 1 - (length_max - 1)  + l]);
+	}
+
+	gsl_vector_scale (template_real, sqrt(2./norm));
+	gsl_vector_scale (template_imag, sqrt(2./norm));
 
 	return 0;
 } 
@@ -590,11 +604,13 @@ static gsl_matrix *create_templates_from_mc_and_eta(gsl_vector *mcvec, gsl_vecto
 	double eta, mc, m1, m2;
 	gsl_matrix *A = NULL;
 	gsl_vector_complex* T=gsl_vector_complex_calloc(fseries_for_ifft->data->length);
-	REAL8 norm = 0;
 	gsl_complex Z;
 	working_length = fseries_for_ifft->data->length;
 	working_duration = working_length*tseries->deltaT;
 	sample_rate = round(working_length / working_duration);
+
+	gsl_vector *template_real = gsl_vector_calloc(length_max);
+	gsl_vector *template_imag = gsl_vector_calloc(length_max);
 
 	/* gsl_matrix *A will contain template bank */
 	A = gsl_matrix_calloc(length_max, 2 * mcvec->size * etavec->size);
@@ -608,29 +624,17 @@ static gsl_matrix *create_templates_from_mc_and_eta(gsl_vector *mcvec, gsl_vecto
                         m1 = mc2mass1(mc, eta);
                         m2 = mc2mass2(mc, eta);
 
-			generate_whitened_template(m1, m2, 1. / fseries->deltaF, f_min, length_max, sample_rate / (2.*1.05), 7, psd, tseries, fseries, fseries_for_ifft, revplan);
-
-		        for(unsigned int l = 0 ; l < length_max; l++){
-        		        norm += XLALCOMPLEX16Abs2(tseries->data->data[tseries->data->length - 1 - (length_max - 1)  + l]);
-        		}
-
-        		for(unsigned int l = 0 ; l < length_max; l++){
-      
-	  		        tseries->data->data[tseries->data->length - 1 - (length_max - 1) + l].re *= sqrt(2./norm);
-                		tseries->data->data[tseries->data->length - 1 - (length_max - 1) + l].im *= sqrt(2./norm);
-
-    			}
-
-			norm=0;	/* reset the norm and fill template bank */
+			generate_whitened_template(m1, m2, 1. / fseries->deltaF, f_min, length_max, sample_rate / (2.*1.05), 7, psd, template_real, template_imag, tseries, fseries, fseries_for_ifft, revplan);
 	
-			for (unsigned int m = 0; m < length_max; m++) {
-				gsl_matrix_set(A, m, 2*k, tseries->data->data[tseries->data->length - 1 - (length_max - 1) + m].re);
-				gsl_matrix_set(A, m, 2*k+1, tseries->data->data[tseries->data->length - 1 - (length_max - 1) + m].im);
-			}
+			gsl_matrix_set_col(A, 2*k,  template_real);
+			gsl_matrix_set_col(A, 2*k+1, template_imag);
+
 			k+=1;
 		}
 	}
 	
+	gsl_vector_free(template_real);
+	gsl_vector_free(template_imag);
 
 	return A;
 }
@@ -762,21 +766,24 @@ int main() {
 	double deltaT, deltaF;
 	double Overlap;
 	
-	gsl_complex dotc1,dotc2,dotc3;
-	gsl_complex z_tmp;
-	gsl_vector_complex *Tseries=NULL;
-	gsl_vector_complex* h_t = NULL;
-	gsl_vector *x_nodes = NULL;
-	gsl_vector *y_nodes = NULL;
+	gsl_complex dotc1,dotc2,dotc3,z_tmp_element;
 	gsl_matrix_complex *M_xy=NULL;
 	gsl_matrix *templates = NULL;
 	gsl_matrix *svd_basis = NULL;
 	gsl_matrix *templates_at_nodes=NULL;
+	gsl_matrix_complex *phase_M0_xy = NULL;
+	gsl_vector_complex *Tseries=NULL;
+	gsl_vector_complex* h_t = NULL;
+	gsl_vector_complex* z_tmp;
+	gsl_vector *x_nodes = NULL;
+	gsl_vector *y_nodes = NULL;
 	gsl_vector *mchirps_even = NULL;
 	gsl_vector *etas_even = NULL;
 	gsl_vector *mchirps_nodes = NULL;
 	gsl_vector *etas_nodes = NULL;
-	gsl_matrix_complex *phase_M0_xy = NULL;
+	gsl_vector *template_real;
+	gsl_vector *template_imag;
+
 	struct twod_waveform_interpolant_array *interps = NULL;
 
 	REAL8FrequencySeries *psd = NULL;
@@ -848,7 +855,7 @@ int main() {
 		}
 
 		rotate_M_xy(M_xy, phase_M0_xy);
-	
+		
 
 		interps->interp[i].C_KL = compute_C_KL(x_nodes, y_nodes, M_xy);           
 	}
@@ -862,6 +869,10 @@ int main() {
 	GSL_SET_COMPLEX(&dotc2, 0 ,0);
 	GSL_SET_COMPLEX(&dotc3, 0 ,0);
 
+	template_real = gsl_vector_calloc(length_max);
+	template_imag = gsl_vector_calloc(length_max);	
+	z_tmp = gsl_vector_complex_calloc(length_max);
+
 	for ( i =0; i <  mchirps_nodes->size; i++){
 		for ( j =0; j <  etas_nodes->size; j++){
 
@@ -873,17 +884,22 @@ int main() {
 		        m1 = mc2mass1(mc, eta);
                         m2 = mc2mass2(mc, eta);
 
-			generate_whitened_template(m1, m2, 1. / fseries->deltaF, f_min, length_max, sample_rate / (2.*1.05) , 7, psd, tseries, fseries, fseries_for_ifft, revplan);
+			generate_whitened_template(m1, m2, 1. / fseries->deltaF, f_min, length_max, sample_rate / (2.*1.05) , 7, psd, template_real, template_imag, tseries, fseries, fseries_for_ifft, revplan);
+
+			/* create single complex vector from real and imaginary parts of template */
 
 			for(unsigned int l = 0; l < length_max; l++){
-
-				GSL_SET_COMPLEX(&z_tmp, tseries->data->data[tseries->data->length - 1 - (length_max - 1) + l].re, tseries->data->data[tseries->data->length - 1 - (length_max - 1) + l].im);
-				dotc1 =	gsl_complex_add( dotc1, gsl_complex_mul( gsl_complex_conjugate( z_tmp ), gsl_vector_complex_get(h_t, l)  ) );
-				dotc2 = gsl_complex_add( dotc2, gsl_complex_mul( gsl_vector_complex_get(h_t, l), gsl_complex_conjugate( gsl_vector_complex_get(h_t, l) ) ) );
-				dotc3 = gsl_complex_add( dotc3, gsl_complex_mul( z_tmp, gsl_complex_conjugate( z_tmp ) ) );
+			
+				GSL_SET_COMPLEX(&z_tmp_element, gsl_vector_get(template_real, l), gsl_vector_get(template_imag, l) );
+				gsl_vector_complex_set(z_tmp, l, z_tmp_element);
 
 			}
+		
+			gsl_blas_zdotc(z_tmp, h_t, &dotc1);
+			gsl_blas_zdotc(h_t, h_t, &dotc2);
+			gsl_blas_zdotc(z_tmp, z_tmp, &dotc3);
 
+			//fprintf(stderr, "%e\n", gsl_complex_abs(dotc2));
 
 		 	Overlap = ( gsl_complex_abs( dotc1 ) / sqrt( gsl_complex_abs( dotc2 ) ) / sqrt( gsl_complex_abs( dotc3 ) ) );
 			
@@ -899,6 +915,9 @@ int main() {
 	gsl_matrix_free(templates);
 	gsl_vector_complex_free(h_t);
 	gsl_vector_complex_free(Tseries);
+	gsl_vector_free(template_real);
+	gsl_vector_free(template_imag);
+	gsl_vector_complex_free(z_tmp);
 	gsl_vector_free(x_nodes);
 	gsl_vector_free(y_nodes);
 
