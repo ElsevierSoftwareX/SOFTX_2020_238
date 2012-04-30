@@ -431,9 +431,9 @@ class FAR(object):
 
 			# don't repeat the calculation if we have already done
 			# it for the requested instrument and resolution
-			if (instrument, targetlen) in self.likelihood_pdfs:
+			if instrument in self.likelihood_pdfs:
 				if verbose:
-					print >>sys.stderr, "already computed likelihood for ", instrument, " at resolution ", targetlen, " continuing..."
+					print >>sys.stderr, "already computed likelihood for ", instrument, "... continuing."
 				continue
 			else:
 				if verbose:
@@ -452,11 +452,11 @@ class FAR(object):
 			# probabilities and not probability densities, the
 			# likelihood_pdfs contain probabilities and not
 			# densities, as well, when this is done
-			self.likelihood_pdfs[(instrument, targetlen)] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, targetlen),)))
+			self.likelihood_pdfs[instrument] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, targetlen),)))
 			for coords in iterutils.MultiIter(*background[param].bins.centres()):
 				likelihood = likelihood_ratio_evaluator({param: coords})
 				if numpy.isfinite(likelihood):
-					self.likelihood_pdfs[(instrument, targetlen)][likelihood,] += background[param][coords]
+					self.likelihood_pdfs[instrument][likelihood,] += background[param][coords]
 
 		# only recompute if necessary
 		if ifo_set not in self.ccdf_interpolator:
@@ -494,7 +494,7 @@ class FAR(object):
 		Lj = []
 		# loop over all ifos
 		for ifo in ifo_set:
-			likelihood_pdf = likelihood_pdfs[(ifo,targetlen)]
+			likelihood_pdf = likelihood_pdfs[ifo]
 			# FIXME lower instead of centres() to avoid inf in the last bin
 			ranks = likelihood_pdf.bins.lower()[0]
 			vals = likelihood_pdf.array
@@ -518,7 +518,7 @@ class FAR(object):
 		vals = numpy.array([1.0])
 		# FIXME:  probably only works because the pdfs aren't pdfs but probabilities
 		for ifo in ifo_set:
-			likelihood_pdf = likelihood_pdfs[(ifo,targetlen)]
+			likelihood_pdf = likelihood_pdfs[ifo]
 			# FIXME lower instead of centres() to avoid inf in the last bin
 			ranks = numpy.outer(ranks, likelihood_pdf.bins.lower()[0])
 			vals = numpy.outer(vals, likelihood_pdf.array)
