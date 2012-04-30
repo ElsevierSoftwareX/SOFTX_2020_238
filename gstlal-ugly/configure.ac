@@ -357,7 +357,7 @@ AC_ARG_WITH(
 AS_IF(
 	[test "x$with_cuda" != "xno"],
 	[AS_IF([test "x$build_cpu" = "xx86_64"], [CLIBS="lib64"], [CLIBS="lib"])
-	 AC_SUBST([NVCC], ["nvcc"])
+	 AC_SUBST([NVCC], ["${with_cuda}/bin/nvcc"])
 	 AC_SUBST([NVCC_CFLAGS], ["-I${with_cuda}/include"])
 	 AC_SUBST([NVCC_LIBS], ["-L${with_cuda}/$CLIBS -lcudart"])
 	 HAVE_CUDA="yes"
