@@ -322,7 +322,7 @@ class DistributionsStats(object):
 
 
 class FAR(object):
-	def __init__(self, livetime_seg, trials_factor, distribution_stats, trials_table = None):
+	def __init__(self, livetime_seg, trials_factor, distribution_stats, trials_table = None, target_length = 1000):
 		self.distribution_stats = distribution_stats
 		if trials_table is None:
 			self.trials_table = TrialsTable()
@@ -330,6 +330,13 @@ class FAR(object):
 			self.trials_table = trials_table
 		self.livetime_seg = livetime_seg
 		self.trials_factor = trials_factor
+		
+		#
+		# the target FAP resolution is 1000 bins by default. This is purely
+		# for memory/CPU requirements
+		#
+		
+		self.target_length = target_length
 		self.reset()
 
 	def __add__(self, other):
@@ -410,13 +417,7 @@ class FAR(object):
 		
 		remap_set = remap.setdefault(ifo_set, ifo_set)
 		
-		#
-		# the target FAP resolution is 1 part in 10^3. This is purely
-		# for memory/CPU requirements as we rebin every time we combine
-		# likelihood pdfs resulting in 1e6 values to work with
-		#
 
-		targetlen = int(1e3)
 
 		# reduce typing
 		background = self.distribution_stats.smoothed_distributions.background_rates
@@ -452,7 +453,7 @@ class FAR(object):
 			# probabilities and not probability densities, the
 			# likelihood_pdfs contain probabilities and not
 			# densities, as well, when this is done
-			self.likelihood_pdfs[instrument] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, targetlen),)))
+			self.likelihood_pdfs[instrument] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, self.target_length),)))
 			for coords in iterutils.MultiIter(*background[param].bins.centres()):
 				likelihood = likelihood_ratio_evaluator({param: coords})
 				if numpy.isfinite(likelihood):
@@ -462,7 +463,7 @@ class FAR(object):
 		if ifo_set not in self.ccdf_interpolator:
 			if verbose:
 				print >>sys.stderr, "computing joint likelihood background for %s" % lsctables.ifos_from_instrument_set(ifo_set)
-			ranks, weights = self.possible_ranks_array(self.likelihood_pdfs, remap_set, targetlen)
+			ranks, weights = self.possible_ranks_array(self.likelihood_pdfs, remap_set, self.target_length)
 			# complementary cumulative distribution function
 			ccdf = weights[::-1].cumsum()[::-1]
 			ccdf /= ccdf[0]
@@ -535,6 +536,10 @@ class FAR(object):
 			ranks = new_likelihood_pdf.bins.lower()[0]
 			vals = new_likelihood_pdf.array
 
+		# FIXME the size of these is targetlen which has to be small
+		# since it is squared in the outer product.  We can afford to
+		# store a 1e6 array.  Maybe we should try to make the resulting
+		# pdf bigger somehow?
 		vals = vals[ranks.argsort()]
 		ranks.sort()
 		return ranks, vals
