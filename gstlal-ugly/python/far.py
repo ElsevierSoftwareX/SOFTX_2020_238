@@ -355,6 +355,16 @@ class FAR(object):
 		out.livetime_seg = segments.segment(minstart, maxend)
 		# FIXME what do I do with trials_factor currently it is set to self's trials factor so that a += makes sense sort of?
 		out.trials_factor = self.trials_factor
+		
+		# FIXME I don't know what to do with these. This should depend
+		# on the "theta" of a far object.  Things with different thetas
+		# should be marginalized.  Perhaps this doesn't belong in the
+		# add method at all. Maybe separate code should be written.
+
+		# FIXME check that the keys are the same first??
+		for k in self.joint_likelihood_pdfs:
+			out.joint_likelihood_pdfs[k] = self.joint_likelihood_pdfs[k] + other.joint_likelihood_pdfs[k]
+
 		return out
 
 	@classmethod
@@ -374,6 +384,12 @@ class FAR(object):
 		except TypeError:
 			livetime_seg = None
 		self = cls(livetime_seg, trials_factor = None, distribution_stats = distribution_stats, trials_table = TrialsTable.from_xml(llw_elem))
+		
+		# pull out the joint likelihood arrays if they are present
+		for ba_elem in [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and "_joint_likelihood" in elem.getAttribute(u"Name")]:
+			ifo_set = frozenset(lsctables.instrument_set_from_ifos(ba_elem.getAttribute(u"Name").split("_")[0]))
+			self.joint_likelihood_pdfs[ifo_set] = rate.binned_array_from_xml(ba_elem, ba_elem.getAttribute(u"Name").split(":")[0])
+		
 		return self, process_id
 
 	@classmethod
@@ -388,6 +404,9 @@ class FAR(object):
 		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_FAR" % name})
 		xml.appendChild(self.trials_table.to_xml())
 		xml.appendChild(self.distribution_stats.to_xml(process, name))
+		for key in self.joint_likelihood_pdfs:
+			ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
+			xml.appendChild(rate.binned_array_to_xml(self.joint_likelihood_pdfs[key], "%s_joint_likelihood" % (ifostr,)))
 		return xml
 
 	def smooth_distribution_stats(self, verbose = False):
@@ -403,32 +422,23 @@ class FAR(object):
 		self.minrank = {}
 		self.maxrank = {}
 		self.likelihood_pdfs = {}
+		self.joint_likelihood_pdfs = {}
 
-	def updateFAPmap(self, ifo_set, remap = {}, verbose = False):
-		if self.distribution_stats is None:
-			raise InputError, "must provide background bins file"
-
+	def compute_single_instrument_background(self, verbose = False):
 		# initialize a likelihood ratio evaluator
 		likelihood_ratio_evaluator = ligolw_burca2.LikelihoodRatio(self.distribution_stats.smoothed_distributions)
-
-		# we might choose to statically map certain likelihood
-		# distributions to others.  This is useful for ignoring H2 when
-		# H1 is present. By default we don't
 		
-		remap_set = remap.setdefault(ifo_set, ifo_set)
-		
-
-
 		# reduce typing
 		background = self.distribution_stats.smoothed_distributions.background_rates
 		injections = self.distribution_stats.smoothed_distributions.injection_rates
 
-
+		#
+		instruments = []
+	
 		for param in background:
 			# FIXME only works if there is a 1-1 relationship between params and instruments
 			instrument = param.split("_")[0]
-			if instrument not in remap_set:
-				continue
+			instruments.append(instrument)
 
 			# don't repeat the calculation if we have already done
 			# it for the requested instrument and resolution
@@ -438,7 +448,7 @@ class FAR(object):
 				continue
 			else:
 				if verbose:
-					print >>sys.stderr, "updating likelihood background for ", instrument, " in ", ifo_set
+					print >>sys.stderr, "updating likelihood background for ", instrument
 	
 			likelihoods = injections[param].array / background[param].array
 			# ignore infs and nans because background is never
@@ -459,21 +469,62 @@ class FAR(object):
 				if numpy.isfinite(likelihood):
 					self.likelihood_pdfs[instrument][likelihood,] += background[param][coords]
 
-		# only recompute if necessary
-		if ifo_set not in self.ccdf_interpolator:
-			if verbose:
-				print >>sys.stderr, "computing joint likelihood background for %s" % lsctables.ifos_from_instrument_set(ifo_set)
-			ranks, weights = self.possible_ranks_array(self.likelihood_pdfs, remap_set, self.target_length)
+		return instruments
+
+	def compute_joint_instrument_background(self, instruments, remap, verbose = False):
+		
+		# calculate all of the possible ifo combinations with at least 2 detectors
+		# in order to get the joint likelihood pdfs
+		for n in range(2, len(instruments) + 1):
+			for ifos in iterutils.choices(instruments, n):
+				ifo_set = frozenset(ifos)
+				remap_set = remap.setdefault(ifo_set, ifo_set)
+				
+				if verbose:
+					print >>sys.stderr, "computing joint likelihood background for %s remapped to %s" % (lsctables.ifos_from_instrument_set(ifo_set), lsctables.ifos_from_instrument_set(remap_set))
+
+				# only recompute if necessary, some choices may not be if a certain remap set is provided
+				if remap_set not in self.joint_likelihood_pdfs:
+					self.joint_likelihood_pdfs[remap_set] = self.possible_ranks_array(self.likelihood_pdfs, remap_set, self.target_length)
+
+				self.joint_likelihood_pdfs[ifo_set] = self.joint_likelihood_pdfs[remap_set]
+
+
+	def compute_joint_cdfs(self):
+		# compute the cdfs
+		for key in self.joint_likelihood_pdfs:
+			lpdf = self.joint_likelihood_pdfs[key]
+			ranks = lpdf.bins.lower()[0]
+			weights = lpdf.array
 			# complementary cumulative distribution function
 			ccdf = weights[::-1].cumsum()[::-1]
 			ccdf /= ccdf[0]
-			self.ccdf_interpolator[ifo_set] = interpolate.interp1d(ranks, ccdf)
+			self.ccdf_interpolator[key] = interpolate.interp1d(ranks, ccdf)
 			# record min and max ranks so we know which end of the ccdf to use when we're out of bounds
-			self.minrank[ifo_set] = (min(ranks), ccdf[0])
-			self.maxrank[ifo_set] = (max(ranks), ccdf[-1])
-		else:
-			if verbose:
-				print>>sys.stderr, "already computed faps for %s, continuing" % lsctables.ifos_from_instrument_set(ifo_set)
+			self.minrank[key] = (min(ranks), ccdf[0])
+			self.maxrank[key] = (max(ranks), ccdf[-1])
+
+
+	def updateFAPmap(self, remap = {}, verbose = False):
+		if self.distribution_stats is None:
+			raise InputError, "must provide background bins file"
+
+		# clear everything
+		self.reset()
+
+		# we might choose to statically map certain likelihood
+		# distributions to others.  This is useful for ignoring H2 when
+		# H1 is present. By default we don't and it is simply the ifo_set
+		
+		# first get the single detector distributions
+		instruments = self.compute_single_instrument_background(verbose = verbose)
+
+		# then get the joint distributions
+		self.compute_joint_instrument_background(instruments, remap, verbose = verbose)
+
+		# then get the cdf interpolators
+		self.compute_joint_cdfs()
+
 
 	def fap_from_rank(self, rank, ifos, tsid):
 		ifos = frozenset(ifos)
@@ -540,9 +591,7 @@ class FAR(object):
 		# since it is squared in the outer product.  We can afford to
 		# store a 1e6 array.  Maybe we should try to make the resulting
 		# pdf bigger somehow?
-		vals = vals[ranks.argsort()]
-		ranks.sort()
-		return ranks, vals
+		return new_likelihood_pdf
 
 	def compute_far(self, fap):
 		if fap == 0.:
