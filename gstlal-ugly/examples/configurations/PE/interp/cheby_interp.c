@@ -246,7 +246,7 @@ static double map_coordinate_to_cheby(double c_min, double c_max, double c) {
 	return  2. * ( c - c_min ) / (c_max - c_min) - 1.;
 }
 
-static double map_cheby_to_coordinate(double c_min, double c_max, double x_node) {
+static double map_node_to_coordinate(double c_min, double c_max, double x_node) {
 
 
 	return  c_min + ( ( x_node + 1.) / 2. ) * (c_max - c_min);
@@ -561,20 +561,20 @@ static gsl_vector *even_param_spacing(double min, double max, int count) {
 	return out;
 }
 
-static gsl_vector *cheby_node_param_spacing(double min, double max, gsl_vector* x_nodes) {
+static gsl_vector *node_param_spacing(double min, double max, gsl_vector* x_nodes) {
 
 	gsl_vector *out = gsl_vector_calloc(x_nodes->size);
 	int i;
 
 	for (i = 0; i < out->size; i++) {
 
-		gsl_vector_set( out, i, map_cheby_to_coordinate( min, max, gsl_vector_get(x_nodes, i) ) );
+		gsl_vector_set( out, i, map_node_to_coordinate( min, max, gsl_vector_get(x_nodes, i) ) );
 
 	}
 	return out;
 }
 
-static gsl_vector *cheby_node_spacing(int count) {
+static gsl_vector *raw_nodes(int count) {
 	int i;
 	gsl_vector *out = gsl_vector_calloc(count);
 	for (i = 0; i < count; i++){
@@ -582,6 +582,21 @@ static gsl_vector *cheby_node_spacing(int count) {
 	}
 	return out;
 }
+
+static gsl_vector *linear_space_for_interpolation(double min, double max, int count){
+
+        gsl_vector *out = gsl_vector_calloc(count);
+        double x;
+        for(unsigned int i=0; i < count; i++){
+
+                x = -1 + (i/(count-1.))*( 1 - (-1) );
+                gsl_vector_set( out, i, map_node_to_coordinate( min, max, x) );
+
+        }
+
+        return out;
+}
+
 
 static int generate_whitened_template(	double m1, double m2, double duration, double fmin, int length_max,
 					double fmax, int order, REAL8FrequencySeries* psd, gsl_vector* template_real,
@@ -705,7 +720,7 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 
 	k=0;
 
-	tolerance = 0.99999;
+	tolerance = 0.999999;
 	norm_s = pow(gsl_blas_dnrm2(S), 2.);
 	//norm_s = gsl_blas_dasum(S);
 	fprintf(stderr, "norm = %e\n", norm_s);
@@ -773,8 +788,8 @@ int main() {
 	double eta_min = 0.1;
 	double mc_max = 7.6;
 	double eta_max = 0.25;
-	int N_mc = 10;//40;
-	int M_eta = 10;//40;
+	int N_mc = 40;
+	int M_eta = 40;
 	int length_max;
 	double f_min = 40.0;
 	double t_max = 0;
@@ -804,7 +819,8 @@ int main() {
 	gsl_vector *etas_nodes = NULL;
 	gsl_vector *template_real;
 	gsl_vector *template_imag;
-
+	gsl_vector *mchirps_interps;
+	gsl_vector *etas_interps;
 	struct twod_waveform_interpolant_array *interps = NULL;
 
 	REAL8FrequencySeries *psd = NULL;
@@ -855,21 +871,17 @@ int main() {
 	/* Compute new template bank at colocation points-> project onto basis vectors
  	 * to get matrix of coefficients for C_KL computation */
 
-        x_nodes = cheby_node_spacing(N_mc);
-        y_nodes = cheby_node_spacing(M_eta);
+        x_nodes = raw_nodes(N_mc);
+        y_nodes = raw_nodes(M_eta);
 
-	mchirps_nodes = cheby_node_param_spacing(mc_min, mc_max, x_nodes);
-	etas_nodes = cheby_node_param_spacing(eta_min, eta_max, y_nodes);
+	mchirps_nodes = node_param_spacing(mc_min, mc_max, x_nodes);
+	etas_nodes = node_param_spacing(eta_min, eta_max, y_nodes);
 
 	templates_at_nodes = create_templates_from_mc_and_eta(mchirps_nodes, etas_nodes, f_min, length_max, psd, tseries, fseries, fseries_for_ifft, revplan);
-	//gsl_vector_free(etas_nodes);
-	//gsl_vector_free(mchirps_nodes);
 	
 
 	phase_M0_xy = gsl_matrix_complex_calloc(mchirps_nodes->size, etas_nodes->size);
 
-	double Mzero;
-	double Mone;
 	gsl_complex Mtmp;
 		
 	for ( i = 0; i < interps->size; i++) {       
@@ -886,19 +898,18 @@ int main() {
 		interps->interp[i].C_KL = compute_C_KL(x_nodes, y_nodes, M_xy);           
 
 		
-		Mtmp = gsl_matrix_complex_get(M_xy, 0, 0);
-		Mzero += pow( gsl_complex_abs(Mtmp), 2.);
-		
-		Mtmp = gsl_matrix_complex_get(M_xy, 1, 1);
-		Mone += pow( gsl_complex_abs(Mtmp), 2.);
-		
-		fprintf(stderr, "M0: %e, M1: %e\n", Mzero, Mone);
 	}
 
 	gsl_matrix_free(templates_at_nodes);
+	gsl_matrix_complex_free(phase_M0_xy);
+        gsl_vector_free(etas_nodes);
+        gsl_vector_free(mchirps_nodes);
 
         New_N_mc = 100;
         New_M_eta = 100;
+
+	mchirps_interps = linear_space_for_interpolation(mc_min, mc_max, New_N_mc);
+        etas_interps = linear_space_for_interpolation(eta_min, eta_max, New_M_eta);
 
 	GSL_SET_COMPLEX(&dotc1, 0, 0);
 	GSL_SET_COMPLEX(&dotc2, 0 ,0);
@@ -908,11 +919,11 @@ int main() {
 	template_imag = gsl_vector_calloc(length_max);	
 	z_tmp = gsl_vector_complex_calloc(length_max);
 
-	for ( i =0; i <  mchirps_nodes->size; i++){
-		for ( j =0; j <  etas_nodes->size; j++){
+	for ( i =0; i <  mchirps_interps->size; i++){
+		for ( j =0; j <  etas_interps->size; j++){
 
-                        eta = gsl_vector_get(etas_nodes, j);
-                        mc = gsl_vector_get(mchirps_nodes, i);						
+                        eta = gsl_vector_get(etas_interps, j);
+                        mc = gsl_vector_get(mchirps_interps, i);						
 
 			h_t = interpolate_waveform_from_mchirp_and_eta(interps, mc, eta);
                  
@@ -955,7 +966,8 @@ int main() {
 	gsl_vector_complex_free(z_tmp);
 	gsl_vector_free(x_nodes);
 	gsl_vector_free(y_nodes);
-
+	gsl_vector_free(mchirps_interps);
+	gsl_vector_free(etas_interps);
 	XLALDestroyCOMPLEX16TimeSeries(tseries);
         XLALDestroyCOMPLEX16FrequencySeries(fseries_for_ifft);
 	XLALDestroyCOMPLEX16FrequencySeries(fseries);
