@@ -55,8 +55,6 @@ def parse_command_line():
 	parser.add_option("--injection-dbs", action = "append", default=[], help = "append to the list of possible injection files, may be empty if no injections were done. Databases are assumed to be over the same time period as the non injection databases using the same templates.  If not the results will be nonsense.")
 	
 	options, filenames = parser.parse_args()
-	if options.compute_far and options.compute_fap:
-		raise ValueError("Must only choose compute-fap or compute-far")
 	return options, filenames
 
 #
@@ -75,15 +73,9 @@ Far.trials_factor = options.additional_trials_factor
 # late import for DB manipulations
 from glue.ligolw import dbtables
 
-#FIXME don't hard code, but where should we get it, the DBs?  Seems like a lot to iterate over all the files just for this :/
-single_ifos = ["H1", "H2", "L1", "V1"]
-coinc_inspiral_ifos = [c for c in iterutils.choices(single_ifos, 4)] + [c for c in iterutils.choices(single_ifos, 3)] + [c for c in iterutils.choices(single_ifos, 2)]
-
 if options.compute_fap is not None:
-	Far.smooth_distribution_stats(verbose = options.verbose)
-	for ifos in coinc_inspiral_ifos:
-		ifoset = frozenset(ifos) # needed for dictionary keys
-		Far.updateFAPmap(ifoset, remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}, verbose = options.verbose)
+	# FIXME this only works of the Far object contains the marginalized joint likelihoods
+	Far.compute_joint_cdfs()
 
 #
 # iterate over files to rank
