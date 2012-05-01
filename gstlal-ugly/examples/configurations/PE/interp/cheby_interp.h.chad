@@ -1,0 +1,57 @@
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_matrix.h>
+
+struct twod_waveform_interpolant {
+
+	gsl_vector_view svd_basis; /* Imaginary part must be zero */
+
+	/* See http://arxiv.org/pdf/1108.5618v1.pdf  This represents the C
+ 	 * matrix of formula (8) without mu.  Note that you specify a separate waveform
+	 * interpolant object for each mu 
+	 */
+
+	gsl_matrix_complex *C_KL;
+
+		
+};
+	
+struct twod_waveform_interpolant_array {
+	struct twod_waveform_interpolant *interp;
+	int size;
+	double inner_param1_min;
+	double inner_param1_max;
+	double inner_param2_min;
+	double inner_param2_max;
+	double outer_param1_min;
+	double outer_param1_max;
+	double outer_param2_min;
+	double outer_param2_max;
+};
+
+struct twod_waveform_interpolant_patches {
+	REAL8FrequencySeries *psd;
+	int number_of_patches;
+	struct twod_waveform_interpolant_array *interp_arrays;
+	double inner_param1_min;
+	double inner_param1_max;
+	double inner_param2_min;
+	double inner_param2_max;
+	double outer_param1_min;
+	double outer_param1_max;
+	double outer_param2_min;
+	double outer_param2_max;
+}
+
+twod_waveform_interpolant_array* index_into_patch(struct twod_waveform_interpolant_patches *patches, double p1, double p2) {
+	int i;
+	struct twod_waveform_interpolant_array *out = interp_arrays;
+	for (i = 0; i < patches->number_of_patches; i++, out++)
+		if ((p1 >= out->inner_param1_min) && (p2 >= out->inner_param2_min) && (p1 < out->inner_param1_max) && (p2 < out->inner_param2_max)) break;
+	return out;
+}
+		
+//return a pointer to the correct twod_waveform_interpolant_array for a given patch using the inner boundary.
+
+int free_waveform_interp_objects(struct twod_waveform_interpolant_array *);
+
+struct twod_waveform_interpolant_array* new_waveform_interpolant_array_from_svd_bank(gsl_matrix *svd_bank, double param1_min, double param2_min, double param1_max, double param2_max);
