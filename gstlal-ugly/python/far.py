@@ -363,7 +363,12 @@ class FAR(object):
 
 		# FIXME check that the keys are the same first??
 		for k in self.joint_likelihood_pdfs:
-			out.joint_likelihood_pdfs[k] = self.joint_likelihood_pdfs[k] + other.joint_likelihood_pdfs[k]
+			minself, maxself, nself = self.joint_likelihood_pdfs[k].bins[0].min, self.joint_likelihood_pdfs[k].bins[0].max, self.joint_likelihood_pdfs[k].bins[0].n
+			minother, maxother, nother = other.joint_likelihood_pdfs[k].bins[0].min, other.joint_likelihood_pdfs[k].bins[0].max, other.joint_likelihood_pdfs[k].bins[0].n
+			out.joint_likelihood_pdfs[k] =  rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(min(minself, minother), max(maxself, maxother), max(nself, nother)),)))
+			
+			for bin in out.joint_likelihood_pdfs[k].centres()[0]:
+				out.joint_likelihood_pdfs[k][bin,] = self.joint_likelihood_pdfs[k][bin,] + other.joint_likelihood_pdfs[k][bin,]
 
 		return out
 
