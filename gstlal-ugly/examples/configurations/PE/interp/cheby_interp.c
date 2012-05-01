@@ -135,7 +135,7 @@ static gsl_matrix_complex *rotate_M_xy(gsl_matrix_complex* M_xy, gsl_matrix_comp
  */
 
 static double chebyshev_node(int j, int J_max) {
-	return cos( M_PI * (j + 0.5) / ( J_max  )  );
+	return cos( M_PI * (j + 0.5) / ( J_max )  );
 }
 
 /* 
@@ -147,14 +147,17 @@ static double onedCheby(double x, int J, int J_max) {
 	double T_J=0;
 	int count;
 	int i;
-	count = (int) J/2 + 1;
+	count =  J/2 + 1;
 
-	for(i=0; i <  count; i++){
-		T_J+=pow( ( pow(x,2.) - 1.), i )*pow( x,(J-2*i) )*gsl_sf_choose(J, 2*i);
+	for(i=0; i < count; i++){
+	
+		T_J+=pow( (x*x - 1.), i )*pow( x,(J-2*i) ) * (double) gsl_sf_choose(J, 2*i);
+	
+		
 	}
 
-        if (J == 1){
-                w = 1. / sqrt(J_max/2.);
+	if (J == 1){
+                w = 1. / sqrt((J_max)/2.);
         }
         else{
                 w = 1. / sqrt(J_max);
@@ -180,22 +183,23 @@ static double twodCheby(double x, int K, int K_max, double y, int L, int L_max) 
 static gsl_matrix_complex  *compute_C_KL(gsl_vector *x_k, gsl_vector *y_l, gsl_matrix_complex *M) {
 	int K, L, k, l;
 	gsl_complex out;
-
 	int k_max = x_k->size;
 	int l_max = y_l->size;
 	gsl_matrix_complex *C_KL = gsl_matrix_complex_calloc(k_max, l_max);
 	gsl_complex tmp;
 
+	GSL_SET_COMPLEX(&out, 0, 0);
+
 	for (K = 0; K < k_max; K++) {
 		for (L = 0; L < l_max; L++) {
-			GSL_SET_COMPLEX(&out, 0, 0);
 			for (k = 0; k < k_max; k++) {
 				for (l = 0; l < l_max; l++) {
 					tmp = gsl_complex_mul_real(gsl_matrix_complex_get(M, k, l), twodCheby(gsl_vector_get(x_k, k), K, k_max, gsl_vector_get(y_l, l), L, l_max));
 					out = gsl_complex_add(out, tmp);
 				}
 			}
-		gsl_matrix_complex_set(C_KL, K, L, out);
+			gsl_matrix_complex_set(C_KL, K, L, out);
+			GSL_SET_COMPLEX(&out, 0, 0);
 		}
 	}
 
@@ -216,14 +220,15 @@ static gsl_complex compute_M_xy(gsl_matrix_complex *C_KL, double x, double y) {
 	K_max = C_KL->size1;
 	L_max = C_KL->size2;
 
+
 	GSL_SET_COMPLEX(&M, 0, 0);
+	GSL_SET_COMPLEX(&tmp, 0, 0);
 
 	for (K = 0; K < K_max; K++) {
 		for (L = 0; L < L_max; L++) {
 			/* FIXME, is this correct?? */
 			tmp =gsl_complex_mul_real(gsl_matrix_complex_get(C_KL, K, L),twodCheby(x, K, K_max, y, L, L_max));
 			M = gsl_complex_add(M, tmp);
-			
 		}
 
 	}	
@@ -236,9 +241,16 @@ static gsl_complex compute_M_xy(gsl_matrix_complex *C_KL, double x, double y) {
  */
 
 static double map_coordinate_to_cheby(double c_min, double c_max, double c) {
-	return  2. * ( c - c_min) / (c_max - c_min) - 1.;
+
+	return  2. * ( c - c_min ) / (c_max - c_min) - 1.;
 }
 
+static double map_cheby_to_coordinate(double c_min, double c_max, double x_node) {
+
+
+	return  c_min + ( ( x_node + 1.) / 2. ) * (c_max - c_min);
+
+}
 
 /* waveform template stuff */
 
@@ -548,11 +560,15 @@ static gsl_vector *even_param_spacing(double min, double max, int count) {
 	return out;
 }
 
-static gsl_vector *cheby_node_param_spacing(double min, double max, int count) {
-	gsl_vector *out = gsl_vector_calloc(count);
+static gsl_vector *cheby_node_param_spacing(double min, double max, gsl_vector* x_nodes) {
+
+	gsl_vector *out = gsl_vector_calloc(x_nodes->size);
 	int i;
-	for (i = 0; i < count; i++) {
-		gsl_vector_set(out, i, min + (( chebyshev_node(i, count) + 1.) /2.) * (max - min));
+
+	for (i = 0; i < out->size; i++) {
+
+		gsl_vector_set( out, i, map_cheby_to_coordinate( min, max, gsl_vector_get(x_nodes, i) ) );
+
 	}
 	return out;
 }
@@ -689,8 +705,8 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 	k=0;
 
 	tolerance = 0.99999;
-	//norm_s = pow(gsl_blas_dnrm2(S), 2.);
-	norm_s = gsl_blas_dasum(S);
+	norm_s = pow(gsl_blas_dnrm2(S), 2.);
+	//norm_s = gsl_blas_dasum(S);
 	fprintf(stderr, "norm = %e\n", norm_s);
 
 	gsl_matrix_free(gX);
@@ -698,6 +714,7 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
         gsl_matrix_free(V);	
 
 	/*FIXME make this more sophisticated if you care */
+
 	sum_s = 0;
 	for (n = 0; n < S->size; n++) {
 		sum_s += gsl_vector_get(S, n) * gsl_vector_get(S, n);
@@ -723,7 +740,7 @@ static gsl_vector_complex *interpolate_waveform_from_mchirp_and_eta(struct twod_
 	gsl_complex M;
 	double deltaF, x, y;
 	struct twod_waveform_interpolant *interp = interps->interp;
-
+	double cumsum;
 	gsl_vector_complex *h_t = gsl_vector_complex_calloc(interp[0].svd_basis.vector.size);
 	gsl_vector_view h_t_real = gsl_vector_complex_real(h_t); 
 	gsl_vector_view h_t_imag = gsl_vector_complex_imag(h_t);
@@ -731,14 +748,17 @@ static gsl_vector_complex *interpolate_waveform_from_mchirp_and_eta(struct twod_
 	x = map_coordinate_to_cheby(interps->param1_min, interps->param1_max, mchirp);
 	y = map_coordinate_to_cheby(interps->param2_min, interps->param2_max, eta);
 	/* this is the loop over mu */
-
-	for (i = 0; i < interps->size; i++) {
-		M = compute_M_xy(interp->C_KL, x, y);
+	cumsum = 0;
+	for (i = 0; i < interps->size; i++){//, interp++) {
+		M = compute_M_xy(interp[i].C_KL, x, y);
 		gsl_blas_daxpy (GSL_REAL(M), &interp[i].svd_basis.vector, &h_t_real.vector);
 		gsl_blas_daxpy (GSL_IMAG(M), &interp[i].svd_basis.vector, &h_t_imag.vector);
+		//cumsum+=pow( gsl_complex_abs(M), 2);
+		//fprintf(stderr, "%e\n", pow(gsl_complex_abs(M), 2));
+		//fprintf(stderr, "%e %i\n", cumsum, i);
 	}
-
 	return h_t;
+	
 }
 
 /* example usage */
@@ -834,17 +854,23 @@ int main() {
 	/* Compute new template bank at colocation points-> project onto basis vectors
  	 * to get matrix of coefficients for C_KL computation */
 
-	mchirps_nodes = cheby_node_param_spacing(mc_min, mc_max, N_mc);
-	etas_nodes = cheby_node_param_spacing(eta_min, eta_max, M_eta);
+        x_nodes = cheby_node_spacing(N_mc);
+        y_nodes = cheby_node_spacing(M_eta);
+
+	mchirps_nodes = cheby_node_param_spacing(mc_min, mc_max, x_nodes);
+	etas_nodes = cheby_node_param_spacing(eta_min, eta_max, y_nodes);
+
 	templates_at_nodes = create_templates_from_mc_and_eta(mchirps_nodes, etas_nodes, f_min, length_max, psd, tseries, fseries, fseries_for_ifft, revplan);
 	//gsl_vector_free(etas_nodes);
 	//gsl_vector_free(mchirps_nodes);
 	
-	x_nodes = cheby_node_spacing(N_mc);
-	y_nodes = cheby_node_spacing(M_eta);
 
 	phase_M0_xy = gsl_matrix_complex_calloc(mchirps_nodes->size, etas_nodes->size);
-	
+
+	double Mzero;
+	double Mone;
+	gsl_complex Mtmp;
+		
 	for ( i = 0; i < interps->size; i++) {       
 
 		M_xy = projection_coefficient(&interps->interp[i].svd_basis.vector, templates_at_nodes, N_mc, M_eta);
@@ -855,9 +881,17 @@ int main() {
 		}
 
 		rotate_M_xy(M_xy, phase_M0_xy);
-		
 
 		interps->interp[i].C_KL = compute_C_KL(x_nodes, y_nodes, M_xy);           
+
+		
+		Mtmp = gsl_matrix_complex_get(M_xy, 0, 0);
+		Mzero += pow( gsl_complex_abs(Mtmp), 2.);
+		
+		Mtmp = gsl_matrix_complex_get(M_xy, 1, 1);
+		Mone += pow( gsl_complex_abs(Mtmp), 2.);
+		
+		fprintf(stderr, "M0: %e, M1: %e\n", Mzero, Mone);
 	}
 
 	gsl_matrix_free(templates_at_nodes);
@@ -899,7 +933,7 @@ int main() {
 			gsl_blas_zdotc(h_t, h_t, &dotc2);
 			gsl_blas_zdotc(z_tmp, z_tmp, &dotc3);
 
-			//fprintf(stderr, "%e\n", gsl_complex_abs(dotc2));
+			fprintf(stderr, "%e\n", gsl_complex_abs(dotc2));
 
 		 	Overlap = ( gsl_complex_abs( dotc1 ) / sqrt( gsl_complex_abs( dotc2 ) ) / sqrt( gsl_complex_abs( dotc3 ) ) );
 			
@@ -907,7 +941,7 @@ int main() {
 		        GSL_SET_COMPLEX(&dotc2, 0 ,0);
 		        GSL_SET_COMPLEX(&dotc3, 0 ,0);
 
-			fprintf(stderr,"mc = %f, eta=%f, overlap=%e\n",mc,eta,Overlap);
+			//fprintf(stderr,"mc = %f, eta=%f, overlap=%e\n",mc,eta,Overlap);
 
 			}
 		}		
