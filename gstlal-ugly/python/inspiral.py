@@ -467,8 +467,7 @@ class Data(object):
 				remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}
 
 				# generate the background likelihood distributions
-				for ifo_set in self.ifo_combos:
-					self.far.updateFAPmap(ifo_set, remap, verbose = self.verbose)
+				self.far.updateFAPmap(remap, verbose = self.verbose)
 
 				# write the new distribution stats to disk
 				utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
