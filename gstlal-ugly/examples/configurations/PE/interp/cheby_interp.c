@@ -156,7 +156,7 @@ static double onedCheby(double x, int J, int J_max) {
 		
 	}
 
-	if (J == 1){
+	if (J !=0 ){
                 w = 1. / sqrt((J_max)/2.);
         }
         else{
@@ -198,6 +198,7 @@ static gsl_matrix_complex  *compute_C_KL(gsl_vector *x_k, gsl_vector *y_l, gsl_m
 					out = gsl_complex_add(out, tmp);
 				}
 			}
+
 			gsl_matrix_complex_set(C_KL, K, L, out);
 			GSL_SET_COMPLEX(&out, 0, 0);
 		}
@@ -933,7 +934,7 @@ int main() {
 			gsl_blas_zdotc(h_t, h_t, &dotc2);
 			gsl_blas_zdotc(z_tmp, z_tmp, &dotc3);
 
-			fprintf(stderr, "%e\n", gsl_complex_abs(dotc2));
+			//fprintf(stderr, "%e\n", gsl_complex_abs(dotc2));
 
 		 	Overlap = ( gsl_complex_abs( dotc1 ) / sqrt( gsl_complex_abs( dotc2 ) ) / sqrt( gsl_complex_abs( dotc3 ) ) );
 			
@@ -941,7 +942,7 @@ int main() {
 		        GSL_SET_COMPLEX(&dotc2, 0 ,0);
 		        GSL_SET_COMPLEX(&dotc3, 0 ,0);
 
-			//fprintf(stderr,"mc = %f, eta=%f, overlap=%e\n",mc,eta,Overlap);
+			fprintf(stderr,"mc = %f, eta=%f, overlap=%e\n",mc,eta,Overlap);
 
 			}
 		}		
