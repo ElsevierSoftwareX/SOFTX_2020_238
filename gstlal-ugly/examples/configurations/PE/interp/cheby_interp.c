@@ -31,18 +31,17 @@
  */
 
 
-/*int free_waveform_interp_objects(struct twod_waveform_interpolant_array * interps) {
+int free_waveform_interp_objects(struct twod_waveform_interpolant_array * interps) {
 	int i;
 	struct twod_waveform_interpolant *interp = interps->interp;
-	 if they exist free the C_KL matrices */
-/*	for (i = 0; i < interps->size; i++, interp++) {
+	for (i = 0; i < interps->size; i++, interp++) {
 		if (interp->C_KL) gsl_matrix_complex_free(interp->C_KL);
 	}
 	free(interps->interp);
 	free(interps);
 	return 0;
 	}
-*/
+
 
 struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd_bank(gsl_matrix *svd_bank,  double param1_min, double param2_min, double param1_max, double param2_max)
 {
@@ -83,13 +82,12 @@ static int projection_coefficient(gsl_vector *svd_basis, gsl_matrix *template_ba
 
 	for (unsigned int k =0; k < template_bank->size2 / 2; k++){
 
-		j = k % N_mc;	
+		j = k % M_eta;	
 
-		if ( !(k % N_mc) ){
+		if ( !(k % M_eta) ){
 
-			i = k/N_mc;
+			i = k/M_eta;
 		}
-
 		gsl_vector_view spa_waveform_real = gsl_matrix_column(template_bank, 2*k);
 		gsl_vector_view spa_waveform_imag = gsl_matrix_column(template_bank, 2*k+1);
 		gsl_blas_ddot(&spa_waveform_real.vector, svd_basis, &M_real);
@@ -757,11 +755,11 @@ int main() {
 	int i=0;
 	int j=0;
 	double mc_min = 7.0;
-	double eta_min = 0.175;
+	double eta_min = 0.1;
 	double mc_max = 7.6;
-	double eta_max = 0.25;
-	int N_mc = 40;
-	int M_eta = 40;
+	double eta_max = 0.175;
+	int N_mc = 25;
+	int M_eta = 25;
 	int length_max=0;
 	double f_min = 40.0;
 	double t_max = 0;
@@ -962,7 +960,7 @@ int main() {
 	XLALDestroyCOMPLEX16FrequencySeries(fseries);
         XLALDestroyCOMPLEX16FFTPlan(revplan);
 	XLALDestroyREAL8FrequencySeries(psd);
-	free(interps);
+	free_waveform_interp_objects(interps);
 	
 	return 0;
 }
