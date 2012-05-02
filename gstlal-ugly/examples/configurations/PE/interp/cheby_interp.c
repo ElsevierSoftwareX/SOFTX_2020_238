@@ -60,6 +60,7 @@ struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd
 	output->param2_max = param2_max;
 	for (i = 0; i < output->size; i++) {
 		output->interp[i].svd_basis = gsl_matrix_column(svd_bank, i);
+		output->interp[i].C_KL = NULL;
 	}
 	return output;
 }
@@ -69,13 +70,12 @@ struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd
  * Formula (3) in http://arxiv.org/pdf/1108.5618v1.pdf
  */ 
 
-static gsl_matrix_complex *projection_coefficient(gsl_vector *svd_basis, gsl_matrix *template_bank, int N_mc, int M_eta){
+static int projection_coefficient(gsl_vector *svd_basis, gsl_matrix *template_bank, gsl_matrix_complex *M_xy, int N_mc, int M_eta){
 	int i,j;
 	/*project svd basis onto SPA's to get coefficients*/
 	gsl_complex M;
 	double M_real, M_imag;
 	/* compute M_xy at fixed mu */
-	gsl_matrix_complex *M_xy = gsl_matrix_complex_calloc(N_mc, M_eta);
 
 	assert(N_mc * M_eta == template_bank->size2 / 2);
 
@@ -100,7 +100,7 @@ static gsl_matrix_complex *projection_coefficient(gsl_vector *svd_basis, gsl_mat
 	}
 
 
-	return M_xy;
+	return 0;
 }
 
 static gsl_matrix_complex *measure_m0_phase(gsl_matrix_complex* M_xy, gsl_matrix_complex* phase_M0_xy){
@@ -635,7 +635,6 @@ static gsl_matrix *create_templates_from_mc_and_eta(gsl_vector *mcvec, gsl_vecto
         int working_length;
 	double eta, mc, m1, m2;
 	gsl_matrix *A = NULL;
-	gsl_vector_complex* T=gsl_vector_complex_calloc(fseries_for_ifft->data->length);
 	gsl_complex Z;
 	working_length = fseries_for_ifft->data->length;
 	working_duration = working_length*tseries->deltaT;
@@ -662,7 +661,6 @@ static gsl_matrix *create_templates_from_mc_and_eta(gsl_vector *mcvec, gsl_vecto
 			gsl_matrix_set_col(A, 2*k+1, template_imag);
 
 			k+=1;
-			fprintf(stderr, "template number: %i\n", k);
 		}
 	}
 	
@@ -678,7 +676,7 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 	double norm_s;
 	double sum_s = 0.;
 	int n;
-	int k=0;
+
 	gsl_matrix *output;
 	gsl_matrix_view template_view;
 	gsl_matrix *V;
@@ -694,32 +692,13 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 	V = gsl_matrix_calloc(template_bank->size2, template_bank->size2);
 	S = gsl_vector_calloc(template_bank->size2);
 
-	for(unsigned int i =0; i < template_bank->size1; i++){
-		for(unsigned int j=0; j < template_bank->size2; j++){
-			k+=gsl_isnan(template_bank->data[i*template_bank->tda + j]);	
-		}
-	}
-	
-	fprintf(stderr, "template_bank contains %f %% NaNs\n", 100.*k/(template_bank->size1*template_bank->size2));
-	
-
-	for (int i = 0; i < template_bank->size1; i++) {
-	}
 	
 	gsl_linalg_SV_decomp_mod(template_bank, gX, V, S, gW);
 
-        for(unsigned int i =0; i < template_bank->size1; i++){
-                for(unsigned int j=0; j < template_bank->size2; j++){
-                        k+=gsl_isnan(template_bank->data[i*template_bank->tda + j]);
-                }
-        }
 
-
-	fprintf(stderr, "SVD of template_bank contains %f %% NaNs\n", 100.*k/(template_bank->size1*template_bank->size2));
 
 	fprintf(stderr, "SVD completed.\n");
 
-	k=0;
 
 	tolerance = 0.999999;
 	norm_s = pow(gsl_blas_dnrm2(S), 2.);
@@ -735,11 +714,9 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 	sum_s = 0;
 	for (n = 0; n < S->size; n++) {
 		sum_s += gsl_vector_get(S, n) * gsl_vector_get(S, n);
-		//fprintf(stderr, "sum_s %e\n", sum_s);
 		if (sqrt(sum_s / norm_s) >= tolerance) break;
-		k+=gsl_isnan(gsl_vector_get(S, n)); 
 		}
-	fprintf(stderr, "Singular values matrix contains %f %% NaNs\n",100.*k/(S->size));	
+
 	fprintf(stderr,"SVD: using %d basis templates\n:", n);
 	
 	template_view = gsl_matrix_submatrix(template_bank, 0, 0, template_bank->size1, n);
@@ -755,23 +732,18 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 static int interpolate_waveform_from_mchirp_and_eta(struct twod_waveform_interpolant_array *interps, gsl_vector_complex *h_t, double mchirp, double eta) { 
 	int i;
 	gsl_complex M;
-	double deltaF, x, y;
+	double x, y;
 	struct twod_waveform_interpolant *interp = interps->interp;
-	double cumsum;
 	gsl_vector_view h_t_real = gsl_vector_complex_real(h_t); 
 	gsl_vector_view h_t_imag = gsl_vector_complex_imag(h_t);
 
 	x = map_coordinate_to_cheby(interps->param1_min, interps->param1_max, mchirp);
 	y = map_coordinate_to_cheby(interps->param2_min, interps->param2_max, eta);
 	/* this is the loop over mu */
-	cumsum = 0;
-	for (i = 0; i < interps->size; i++){//, interp++) {
-		M = compute_M_xy(interp[i].C_KL, x, y);
-		gsl_blas_daxpy (GSL_REAL(M), &interp[i].svd_basis.vector, &h_t_real.vector);
-		gsl_blas_daxpy (GSL_IMAG(M), &interp[i].svd_basis.vector, &h_t_imag.vector);
-		//cumsum+=pow( gsl_complex_abs(M), 2);
-		//fprintf(stderr, "%e\n", pow(gsl_complex_abs(M), 2));
-		//fprintf(stderr, "%e %i\n", cumsum, i);
+	for (i = 0; i < interps->size; i++, interp++) {
+		M = compute_M_xy(interp->C_KL, x, y);
+		gsl_blas_daxpy (GSL_REAL(M), &interp->svd_basis.vector, &h_t_real.vector);
+		gsl_blas_daxpy (GSL_IMAG(M), &interp->svd_basis.vector, &h_t_imag.vector);
 	}
 	return 0;
 	
@@ -785,22 +757,23 @@ int main() {
 	int i=0;
 	int j=0;
 	double mc_min = 7.0;
-	double eta_min = 0.1;
+	double eta_min = 0.175;
 	double mc_max = 7.6;
 	double eta_max = 0.25;
-	int N_mc = 40;
-	int M_eta = 40;
-	int length_max;
+	int N_mc = 10;
+	int M_eta = 10;
+	int length_max=0;
 	double f_min = 40.0;
 	double t_max = 0;
 	double f_max = 0;
-	double eta, mc, m1, m2;
+	double eta=0, mc=0, m1=0, m2=0;
 	unsigned int working_length=0;
 	double sample_rate=0;
 	double working_duration=0;
-	double New_N_mc, New_M_eta;
-	double deltaT, deltaF;
-	double Overlap;
+	double New_N_mc=0, New_M_eta=0;
+	double deltaT=0, deltaF=0;
+	double Overlap=0;
+	FILE *list_of_overlaps;
 	
 	gsl_complex dotc1,dotc2,dotc3,z_tmp_element;
 	gsl_matrix_complex *M_xy=NULL;
@@ -810,25 +783,25 @@ int main() {
 	gsl_matrix_complex *phase_M0_xy = NULL;
 	gsl_vector_complex *Tseries=NULL;
 	gsl_vector_complex* h_t = NULL;
-	gsl_vector_complex* z_tmp;
+	gsl_vector_complex* z_tmp=NULL;
 	gsl_vector *x_nodes = NULL;
 	gsl_vector *y_nodes = NULL;
 	gsl_vector *mchirps_even = NULL;
 	gsl_vector *etas_even = NULL;
 	gsl_vector *mchirps_nodes = NULL;
 	gsl_vector *etas_nodes = NULL;
-	gsl_vector *template_real;
-	gsl_vector *template_imag;
-	gsl_vector *mchirps_interps;
-	gsl_vector *etas_interps;
+	gsl_vector *template_real=NULL;
+	gsl_vector *template_imag=NULL;
+	gsl_vector *mchirps_interps=NULL;
+	gsl_vector *etas_interps=NULL;
 	struct twod_waveform_interpolant_array *interps = NULL;
 
 	REAL8FrequencySeries *psd = NULL;
 	LIGOTimeGPS epoch = LIGOTIMEGPSZERO;
-        COMPLEX16FrequencySeries *fseries;
-	COMPLEX16FrequencySeries *fseries_for_ifft;
-        COMPLEX16TimeSeries *tseries;
-	COMPLEX16FFTPlan *revplan;
+        COMPLEX16FrequencySeries *fseries=NULL;
+	COMPLEX16FrequencySeries *fseries_for_ifft=NULL;
+        COMPLEX16TimeSeries *tseries=NULL;
+	COMPLEX16FFTPlan *revplan=NULL;
 
 	compute_max_chirp_time_and_max_frequency(mc_min, mc_max, eta_min, eta_max, f_min, &f_max, &t_max);
 	t_max*=2;
@@ -881,14 +854,12 @@ int main() {
 
 	templates_at_nodes = create_templates_from_mc_and_eta(mchirps_nodes, etas_nodes, f_min, length_max, psd, tseries, fseries, fseries_for_ifft, revplan);
 	
-
 	phase_M0_xy = gsl_matrix_complex_calloc(mchirps_nodes->size, etas_nodes->size);
+	M_xy = gsl_matrix_complex_calloc(mchirps_nodes->size, etas_nodes->size);
 
-	gsl_complex Mtmp;
-		
 	for ( i = 0; i < interps->size; i++) {       
 
-		M_xy = projection_coefficient(&interps->interp[i].svd_basis.vector, templates_at_nodes, N_mc, M_eta);
+		projection_coefficient(&interps->interp[i].svd_basis.vector, templates_at_nodes, M_xy, N_mc, M_eta);
 
 		if(i==0){
 
@@ -925,6 +896,9 @@ int main() {
 	template_imag = gsl_vector_calloc(length_max);	
 	z_tmp = gsl_vector_complex_calloc(length_max);
 	h_t = gsl_vector_complex_calloc(length_max);
+	
+	list_of_overlaps = fopen("overlaps_patch_2_eta_point175_to_point25.txt","w");		
+
 
 	for ( i =0; i <  mchirps_interps->size; i++){
 		for ( j =0; j <  etas_interps->size; j++){
@@ -952,10 +926,13 @@ int main() {
 			gsl_blas_zdotc(h_t, h_t, &dotc2);
 			gsl_blas_zdotc(z_tmp, z_tmp, &dotc3);
 
-			//fprintf(stderr, "%e\n", gsl_complex_abs(dotc2));
 
 		 	Overlap = ( gsl_complex_abs( dotc1 ) / sqrt( gsl_complex_abs( dotc2 ) ) / sqrt( gsl_complex_abs( dotc3 ) ) );
-			
+		
+			fprintf(list_of_overlaps,"%e\n",Overlap);
+
+			h_t = gsl_vector_complex_calloc(length_max);
+	
 			GSL_SET_COMPLEX(&dotc1, 0, 0);
 		        GSL_SET_COMPLEX(&dotc2, 0 ,0);
 		        GSL_SET_COMPLEX(&dotc3, 0 ,0);
@@ -964,6 +941,8 @@ int main() {
 
 			}
 		}		
+
+	fclose(list_of_overlaps);
 
 	gsl_vector_complex_free(h_t);
 	gsl_vector_complex_free(Tseries);
@@ -979,6 +958,7 @@ int main() {
 	XLALDestroyCOMPLEX16FrequencySeries(fseries);
         XLALDestroyCOMPLEX16FFTPlan(revplan);
 	XLALDestroyREAL8FrequencySeries(psd);
+	free(interps);
 	
 	return 0;
 }
