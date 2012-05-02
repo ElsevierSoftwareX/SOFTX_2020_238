@@ -760,8 +760,8 @@ int main() {
 	double eta_min = 0.175;
 	double mc_max = 7.6;
 	double eta_max = 0.25;
-	int N_mc = 10;
-	int M_eta = 10;
+	int N_mc = 40;
+	int M_eta = 40;
 	int length_max=0;
 	double f_min = 40.0;
 	double t_max = 0;
@@ -931,11 +931,15 @@ int main() {
 		
 			fprintf(list_of_overlaps,"%e\n",Overlap);
 
-			h_t = gsl_vector_complex_calloc(length_max);
 	
 			GSL_SET_COMPLEX(&dotc1, 0, 0);
 		        GSL_SET_COMPLEX(&dotc2, 0 ,0);
 		        GSL_SET_COMPLEX(&dotc3, 0 ,0);
+
+			for(unsigned int i=0; i < h_t->size; i++){
+
+                                gsl_vector_complex_set(h_t, i, dotc1);
+			}
 
 			fprintf(stderr,"mc = %f, eta=%f, overlap=%e\n",mc,eta,Overlap);
 
