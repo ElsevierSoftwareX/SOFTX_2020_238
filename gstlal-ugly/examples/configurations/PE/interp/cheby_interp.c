@@ -752,13 +752,12 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 }
 
 /* FIXME use a better name */
-static gsl_vector_complex *interpolate_waveform_from_mchirp_and_eta(struct twod_waveform_interpolant_array *interps, double mchirp, double eta) { 
+static int interpolate_waveform_from_mchirp_and_eta(struct twod_waveform_interpolant_array *interps, gsl_vector_complex *h_t, double mchirp, double eta) { 
 	int i;
 	gsl_complex M;
 	double deltaF, x, y;
 	struct twod_waveform_interpolant *interp = interps->interp;
 	double cumsum;
-	gsl_vector_complex *h_t = gsl_vector_complex_calloc(interp[0].svd_basis.vector.size);
 	gsl_vector_view h_t_real = gsl_vector_complex_real(h_t); 
 	gsl_vector_view h_t_imag = gsl_vector_complex_imag(h_t);
 
@@ -774,7 +773,7 @@ static gsl_vector_complex *interpolate_waveform_from_mchirp_and_eta(struct twod_
 		//fprintf(stderr, "%e\n", pow(gsl_complex_abs(M), 2));
 		//fprintf(stderr, "%e %i\n", cumsum, i);
 	}
-	return h_t;
+	return 0;
 	
 }
 
@@ -925,6 +924,7 @@ int main() {
 	template_real = gsl_vector_calloc(length_max);
 	template_imag = gsl_vector_calloc(length_max);	
 	z_tmp = gsl_vector_complex_calloc(length_max);
+	h_t = gsl_vector_complex_calloc(length_max);
 
 	for ( i =0; i <  mchirps_interps->size; i++){
 		for ( j =0; j <  etas_interps->size; j++){
@@ -932,7 +932,7 @@ int main() {
                         eta = gsl_vector_get(etas_interps, j);
                         mc = gsl_vector_get(mchirps_interps, i);						
 
-			h_t = interpolate_waveform_from_mchirp_and_eta(interps, mc, eta);
+			interpolate_waveform_from_mchirp_and_eta(interps, h_t, mc, eta);
                  
 		        m1 = mc2mass1(mc, eta);
                         m2 = mc2mass2(mc, eta);
