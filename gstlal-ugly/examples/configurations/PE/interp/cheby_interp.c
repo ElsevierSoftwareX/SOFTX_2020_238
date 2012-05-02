@@ -662,6 +662,7 @@ static gsl_matrix *create_templates_from_mc_and_eta(gsl_vector *mcvec, gsl_vecto
 			gsl_matrix_set_col(A, 2*k+1, template_imag);
 
 			k+=1;
+			fprintf(stderr, "template number: %i\n", k);
 		}
 	}
 	
@@ -865,6 +866,8 @@ int main() {
 	gsl_vector_free(mchirps_even);
 
 	svd_basis = create_svd_basis_from_template_bank(templates);
+
+	gsl_matrix_free(templates);
 	
 	interps = new_waveform_interpolant_array_from_svd_bank(svd_basis, mc_min, eta_min, mc_max, eta_max );	
 
@@ -904,6 +907,10 @@ int main() {
 	gsl_matrix_complex_free(phase_M0_xy);
         gsl_vector_free(etas_nodes);
         gsl_vector_free(mchirps_nodes);
+
+	gsl_matrix_complex_free(M_xy);
+		
+
 
         New_N_mc = 100;
         New_M_eta = 100;
@@ -958,7 +965,6 @@ int main() {
 			}
 		}		
 
-	gsl_matrix_free(templates);
 	gsl_vector_complex_free(h_t);
 	gsl_vector_complex_free(Tseries);
 	gsl_vector_free(template_real);
