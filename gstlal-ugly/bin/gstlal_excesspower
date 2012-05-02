@@ -130,7 +130,7 @@ class EPHandler( LLOIDHandler ):
 		self.snr_thresh = 5.5
 		self.fap = None
 		self.dump_frequency = 600 # s
-		self.max_events = 1e3
+		self.max_events = 1e5
 		self.time_since_dump = self.start
 
 		self.trigger_segment = None
@@ -254,8 +254,8 @@ class EPHandler( LLOIDHandler ):
 		self.filter_xml = ep.create_bank_xml(
 			self.flow,
 			self.fhigh,
-			self.base_band,
-			# FIXME: Is there a factor of two here?
+			self.base_band*(res_level+1),
+			# FIXME: Is there a factor of two here? -- No, remove the factor of two...
 			1.0 / (2*self.base_band*(res_level+1)), # resolution level starts from 0
 			self.inst
 		)
@@ -310,6 +310,7 @@ class EPHandler( LLOIDHandler ):
 		return self.triggers
 
 	def write_triggers( self, flush=True, overwrite=False, filename=None ):
+		if( not handler.output ): return
 
 		if( filename == None ):
 			filename = self.outfile
@@ -329,7 +330,8 @@ class EPHandler( LLOIDHandler ):
 		process_params = vars( options )
 		#import pdb
 		#pdb.set_trace()
-		process = ligolw_process.register_to_xmldoc( output, "gstlal_excesspower", vars(options) )#, ifos = self.inst )
+		process = ligolw_process.register_to_xmldoc( output, "gstlal_excesspower", vars(options) )
+		process.set_ifos( self.inst )
 		add_cbc_metadata( output, process, requested_segment, analysis_segment )
 		# TODO: replace cbc filter table with our own
 		#cbc_filter_table = lsctables.getTablesByType( output, lsctables.FilterTable )[0]
@@ -455,7 +457,12 @@ def get_triggers(elem, handler, ndof):
 	if( handler.stop - handler.time_since_dump > handler.dump_frequency or
 			len(handler.triggers) >= handler.max_events ):
 		dur = int( handler.stop - handler.time_since_dump + 0.5 )
-		handler.write_triggers( filename = "%s_%s_triggers_%d_%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur), flush = True )
+		fname = "%s_%s_triggers_%d_%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur)
+		uniq = 1
+		while( os.path.exists( fname ) ):
+			fname = "%s_%s_triggers_%d_%d.%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur, uniq)
+			uniq += 1
+		handler.write_triggers( filename = fname, flush = True )
 		handler.time_since_dump = handler.stop 
 
 # TODO: Update a single file every couple of seconds.
@@ -781,14 +788,10 @@ head = mkfirbank( pipeline, head, time_domain=False, block_stride=handler.rate )
 
 # TODO: Make this less hardcodish
 # This needs to be done since what is returned by mkfirbank is actually a link to the nofakedisconts element, so the fir bank is hidden
-handler.add_firbank( pipeline.get_by_name( "gstlalfirbank0" ) )
+handler.add_firbank( head )
 nchannels = handler.filter_bank.shape[0]
 print "FIR bank constructed with %d %f Hz channels" % (nchannels, base_band)
 
-# TODO: We could limit the number of resolutions available and add an
-# audioundersampler here to reduce our workload, for each factor of
-# undersampling, we reduce our largest available frequency tile by a factor of 
-# 2.
 if( verbose ):
 	head = mkprogressreport( pipeline, head, "FIR bank stream" )
 
@@ -858,10 +861,12 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	# Multi channel FIR filter -- used to add together frequency bands into tiles
 	# TODO: Restore this when buffer dropping is fixed
 	"""
+	head = mkchecktimestamps( pipeline, head, "before audiofir" )
 	head = mkgeneric( pipeline, head, "audiofirfilter" )
 	head.set_property( "kernel", 
 		ep.build_fir_sq_adder( ndof )
 	)
+	head = mkchecktimestamps( pipeline, head, "after audiofir" )
 	"""
 
 	if( diagnostics ):
