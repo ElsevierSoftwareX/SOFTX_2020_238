@@ -1,1 +1,1 @@
-DROP table sim_inspiral;
+DROP table IF EXISTS sim_inspiral;
