@@ -43,7 +43,7 @@ int free_waveform_interp_objects(struct twod_waveform_interpolant_array * interp
 	}
 
 
-struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd_bank(gsl_matrix *svd_bank,  double param1_min, double param2_min, double param1_max, double param2_max)
+struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd_bank(gsl_matrix *svd_bank,  double param1_min, double param2_min, double param1_max, double param2_max, double pad)
 {
 	int i;
 	output->size = svd_bank->size2; 
@@ -56,6 +56,12 @@ struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd
 	output->param2_min = param2_min;
 	output->param1_max = param1_max;
 	output->param2_max = param2_max;
+
+	output->inner_param1_min = param1_min - pad;
+	output->inner_param2_min = param2_min - pad;
+	output->inner_param1_max = param1_max + pad;
+	output->inner_param2_max = param2_max + pad;
+
 	for (i = 0; i < output->size; i++) {
 		output->interp[i].svd_basis = gsl_matrix_column(svd_bank, i);
 		output->interp[i].C_KL = NULL;
@@ -63,12 +69,22 @@ struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd
 	return output;
 }
 
-struct twod_waveform_interpolant_patches* interpolants_over_patches(REAL8FrequencySeries *psd, int N_patches){
+struct twod_waveform_interpolant_manifold* interpolants_manifold_init(REAL8FrequencySeries *psd, int N_patches, int grid_size, double mc_min, double mc_max, double eta_min, double eta_max, double outer_mc_min, double outer_mc_max, double outer_eta_min, double outer_eta_max){
 
-	struct twod_waveform_interpolant_patches * output = (struct twod_waveform_interpolant_array *) calloc( 1, sizeof(struct twod_waveform_interpolant_patches));
+	struct twod_waveform_interpolant_manifold * output = (struct twod_waveform_interpolant_array *) calloc( 1, sizeof(struct twod_waveform_interpolant_manifold));
 	output->interp_arrays = (struct twod_waveform_interpolant_array *) calloc(N_patches, sizeof(struct twod_waveform_interpolant_array));
 	output->psd = psd;
-
+	output->size = grid_size; /* root grid size */
+	output->number_of_patches = N_patches;
+	inner_param1_min = mc_min;
+	inner_param1_max = mc_max;
+	inner_param2_min = eta_min;
+	inner_param2_max = eta_max;
+	outer_param1_min = outer_mc_min;
+	outer_param1_max = outer_mc_max;
+	outer_param2_min = outer_eta_min;
+	outer_param2_max = outer_eta_max;
+	
 	return output;
 }
 
@@ -477,10 +493,12 @@ static int initialize_time_and_freq_series(REAL8FrequencySeries *psd, COMPLEX16F
 	double deltaF=0;
 	double working_duration=0;
 	int working_length=0;
-		
+	LIGOTimeGPS epoch = LIGOTIMEGPSZERO;
+	
 	compute_max_chirp_time_and_max_frequency(mc_min, mc_max, eta_min, eta_max, f_min, &f_max, &t_max);
 	t_max*=2;
 	fprintf(stderr, "f_max %e t_max %e\n", f_max, t_max);
+
 	compute_working_length_and_sample_rate(t_max, f_max, &working_length, &sample_rate);
 	fprintf(stderr, "working_length %d sample_rate %e\n", working_length, sample_rate);
 
@@ -489,8 +507,8 @@ static int initialize_time_and_freq_series(REAL8FrequencySeries *psd, COMPLEX16F
         working_duration = (working_length / sample_rate);
 	deltaF = 1. / working_duration;
 	length_max = round(sample_rate * pow(2., ceil(log(t_max) / log(2.))));
-	//fprintf(stderr, "deltaT %e working_duration %e deltaF %e length_max %d\n", deltaT, working_duration, deltaF, length_max);
-	
+
+	/* set up time series */	
 	tseries = XLALCreateCOMPLEX16TimeSeries(NULL, &epoch, 0., deltaT, &lalDimensionlessUnit, working_length);
 	memset (tseries->data->data, 0, tseries->data->length * sizeof (COMPLEX16));
 	
@@ -795,8 +813,55 @@ static int interpolate_waveform_from_mchirp_and_eta(struct twod_waveform_interpo
 	
 }
 
+static int pad_parameter_bounds(double mc_min, double mc_max, double eta_min, double eta_max, double *outer_eta_min, double *outer_eta_max, double *outer_mc_min, double *outer_mc_max){
 
-static int populate_interpolants_on_patches(twod_waveform_interpolant_patches *set_of_patches){
+	if(eta_min > 0.1){
+		
+		*outer_eta_min = eta_min - 0.01;
+	}
+
+	if (eta_max < 0.249){
+
+		*outer_eta_max = eta_max + 0.01;
+	}
+	
+	*outer_mc_min = mc_min - 0.1;
+	*outer_mc_max = mc_max + 0.1;
+
+	return 0;
+
+}
+
+static int make_patch_from_manifold(twod_waveform_interpolant_manifold *manifold, int i, &mc_min, &mc_max, &eta_min, &eta_max){
+
+	int N;
+	int j,k;
+	double pad;
+
+	N = sqrt(manifold->number_of_patches);
+
+	/* find index (j,k) from i */
+	
+	k = i % N;
+
+	if ( !(i % N) ){
+
+		j= i/N;
+	}	
+
+	
+	pad = manifold->outer_param1_max - manifold->inner_param1_max;
+
+	mc_min = manifold->inner_param1_min + j*( inner_param1_max - inner_param1_min)/N + pad;	
+	mc_max = manifold->inner_param1_max + j*( inner_param1_max - inner_param1_min)/N + pad;
+
+	eta_min = manifold->inner_param2_min + k*( inner_param2_max - inner_param2_min)/N + pad;
+	eta_max = manifold->inner_param2_max + k*( inner_param2_max - inner_param2_min)/N + pad;
+
+	return 0;
+}
+
+static int populate_interpolants_on_patches(twod_waveform_interpolant_manifold *manifold){
 	
 	int i;
 	gsl_vector *y_nodes = NULL;
@@ -809,14 +874,19 @@ static int populate_interpolants_on_patches(twod_waveform_interpolant_patches *s
 	gsl_matrix *svd_basis = NULL;
 	gsl_matrix *templates_at_nodes=NULL;
 	gsl_matrix_complex *phase_M0_xy = NULL;
+	int N_mc, M_eta;
+
+	double mc_min, mc_max, eta_min, eta_max, pad;
 
 	/* loop over each patch */
 
-	for(i = 0; i < set_of_patches->interp_arrays->size; i++){
+	for(i = 0; i < manifold->interp_arrays->size; i++){
 
-		/* parameter_max/min should correspond to the outermost boundry of each patch: add function which takes global boundarys from set_of_patches and does correct partitioning
-		 * of the space for each patch 
-		*/
+
+		make_patch_from_manifold(manifold, &mc_min, &mc_max, &eta_min, &eta_max);
+
+		N_mc = manifold->size/sqrt(manifold->number_of_patches);
+		M_eta = manifold->size/sqrt(manifold->number_of_patches);
 
 		mchirps_even = even_param_spacing(mc_min, mc_max, N_mc);
 		etas_even = even_param_spacing(eta_min, eta_max, M_eta);
@@ -824,11 +894,11 @@ static int populate_interpolants_on_patches(twod_waveform_interpolant_patches *s
 		gsl_vector_free(etas_even);
 		gsl_vector_free(mchirps_even);
 	
-		svd_basis = create_svd_basis_from_template_bank(templates);
+		svd_basis = create_svd_basis_from_template_bank(templates);	
 	
-		gsl_matrix_free(templates);
-		
-		set_of_patches->interp_arrays[i] = new_waveform_interpolant_array_from_svd_bank(svd_basis, mc_min, eta_min, mc_max, eta_max );	
+		pad = manifold->outer_param1_max - manifold->inner_param1_max;
+	
+		manifold->interp_arrays[i] = new_waveform_interpolant_array_from_svd_bank(svd_basis, mc_min, eta_min, mc_max, eta_max, pad);	
 	
 		/* Compute new template bank at colocation points-> project onto basis vectors
  		 * to get matrix of coefficients for C_KL computation */
@@ -844,9 +914,9 @@ static int populate_interpolants_on_patches(twod_waveform_interpolant_patches *s
 		phase_M0_xy = gsl_matrix_complex_calloc(mchirps_nodes->size, etas_nodes->size);
 		M_xy = gsl_matrix_complex_calloc(mchirps_nodes->size, etas_nodes->size);
 	
-		for ( i = 0; i < interps->size; i++) {       
+		for (unsigned int j = 0; j < interps->size; j++) {       
 	
-			projection_coefficient(&interps->interp[i].svd_basis.vector, templates_at_nodes, M_xy, N_mc, M_eta);
+			projection_coefficient(&manifold->interp_arrays[i]->interp[j].svd_basis.vector, templates_at_nodes, M_xy, N_mc, M_eta);
 	
 			if(i==0){
 	
@@ -855,29 +925,26 @@ static int populate_interpolants_on_patches(twod_waveform_interpolant_patches *s
 	
 			rotate_M_xy(M_xy, phase_M0_xy);
 	
-			interps->interp[i].C_KL = compute_C_KL(x_nodes, y_nodes, M_xy);           
+			manifold->interp_arrays[i]->interp[j].C_KL = compute_C_KL(x_nodes, y_nodes, M_xy);           
 	
 			
 		}
-
+				
+	
+	} 
+	
 		gsl_matrix_complex_free(M_xy);	
 		gsl_matrix_free(templates_at_nodes);
 		gsl_matrix_complex_free(phase_M0_xy);
 	        gsl_vector_free(etas_nodes);
 	        gsl_vector_free(mchirps_nodes);
-	
-		
-		
-	
-	} 
-	
+		gsl_matrix_free(templates);
 }
 
 int main(){
 
 
-	int i=0;
-	int j=0;
+
 	double mc_min = 7.0;
 	double eta_min = 0.1;
 	double mc_max = 7.6;
@@ -885,57 +952,35 @@ int main(){
 	int N_mc = 25;
 	int M_eta = 25;
 	int length_max = 0;
-	int N_patches;
+	int N_patches = 1;
+	int root_grid_size = 40;
 	double f_min = 40.0;
 	double t_max = 0;
 	double f_max = 0;
-	double eta=0, mc=0, m1=0, m2=0;
-	unsigned int working_length=0;
-	double sample_rate=0;
-	double working_duration=0;
-	double New_N_mc=0, New_M_eta=0;
-	double deltaT=0, deltaF=0;
-	double Overlap=0;
+	double eta=0, mc=0, m1=0, m2=0;	
+	double outer_eta_min, outer_eta_max, inner_mc_min, inner_mc_max;
 	FILE *list_of_overlaps;
-	
-	gsl_complex dotc1,dotc2,dotc3,z_tmp_element;
-	gsl_matrix_complex *M_xy=NULL;
-	gsl_matrix *templates = NULL;
-	gsl_matrix *svd_basis = NULL;
-	gsl_matrix *templates_at_nodes=NULL;
-	gsl_matrix_complex *phase_M0_xy = NULL;
-	gsl_vector_complex *Tseries=NULL;
-	gsl_vector_complex* h_t = NULL;
-	gsl_vector_complex* z_tmp=NULL;
-	gsl_vector *x_nodes = NULL;
-	gsl_vector *y_nodes = NULL;
-	gsl_vector *mchirps_even = NULL;
-	gsl_vector *etas_even = NULL;
-	gsl_vector *mchirps_nodes = NULL;
-	gsl_vector *etas_nodes = NULL;
-	gsl_vector *template_real=NULL;
-	gsl_vector *template_imag=NULL;
-	gsl_vector *mchirps_interps=NULL;
-	gsl_vector *etas_interps=NULL;
 
-	struct twod_waveform_interpolant_patches *set_of_patches = NULL;
+
+	struct twod_waveform_interpolant_manifold *manifold = NULL;
 
 	REAL8FrequencySeries *psd = NULL;
-	LIGOTimeGPS epoch = LIGOTIMEGPSZERO;
         COMPLEX16FrequencySeries *fseries=NULL;
 	COMPLEX16FrequencySeries *fseries_for_ifft=NULL;
         COMPLEX16TimeSeries *tseries=NULL;
 	COMPLEX16FFTPlan *revplan=NULL;
 
+	/* take in grid of interest and pad the boundry */
+	pad_parameter_bounds(mc_min, mc_max, eta_min, eta_max, &outer_eta_min, &outer_eta_max, &outer_mc_min, &outer_mc_max);
 
 	/* initialize LAL time and freq series */
-	initialize_time_and_freq_series(psd, fseries, fseries_for_ifft, tseries, revplan, mc_min, mc_max, eta_min, eta_max, &length_max);
+	initialize_time_and_freq_series(psd, fseries, fseries_for_ifft, tseries, revplan, outer_mc_min, outer_mc_max, outer_eta_min, outer_eta_max, &length_max);
 
-	/* initialize global interpolant structure */
-	set_of_patches = interpolants_over_patches(REAL8FrequencySeries *psd, int N_patches)
+	/* initialize global interpolant structure: FIXME need to pass param space ranges */
+	manifold = interpolants_manifold_init(psd, N_patches, root_grid_size, mc_min, mc_max, eta_min, eta_max, outer_eta_min, outer_eta_max, outer_mc_min, outer_mc_max)
 
-	/* populate interpolants on each patch: also use this function to do partition the full space correctly*/
-	populate_interpolants_on_patches(set_of_patches, fseries, fseries_for_ifft, tseries, revplan, length_max);
+	/* populate interpolants on each patch: FIXME also use this function to do partition the full space correctly */
+	populate_interpolants_on_patches(manifold, fseries, fseries_for_ifft, tseries, revplan, length_max);
 
 
 
