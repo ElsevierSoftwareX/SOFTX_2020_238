@@ -22,12 +22,17 @@ struct twod_waveform_interpolant_array {
 	double param1_max;
 	double param2_min;
 	double param2_max;
+	double inner_param1_min;
+	double inner_param2_min;
+	double inner_param1_max;
+	double inner_param2_max;
 	
 };
 
-struct twod_waveform_interpolant_patches {
+struct twod_waveform_interpolant_manifold {
 	REAL8FrequencySeries *psd;
 	int number_of_patches;
+	int grid_size;
 	struct twod_waveform_interpolant_array *interp_arrays;
 	double inner_param1_min;
 	double inner_param1_max;
@@ -41,6 +46,6 @@ struct twod_waveform_interpolant_patches {
 
 int free_waveform_interp_objects(struct twod_waveform_interpolant_array *);
 
-struct twod_waveform_interpolant_array* new_waveform_interpolant_array_from_svd_bank(gsl_matrix *svd_bank, double param1_min, double param2_min, double param1_max, double param2_max);i
+struct twod_waveform_interpolant_array* new_waveform_interpolant_array_from_svd_bank(gsl_matrix *svd_bank, double param1_min, double param2_min, double param1_max, double param2_max, int pad);
 
 struct twod_waveform_interpolant_patches* interpolants_over_patches(REAL8FrequencySeries *psd, int N_patches);
