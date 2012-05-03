@@ -755,11 +755,11 @@ int main() {
 	int i=0;
 	int j=0;
 	double mc_min = 7.0;
-	double eta_min = 0.1;
+	double eta_min = 0.175;
 	double mc_max = 7.6;
-	double eta_max = 0.175;
-	int N_mc = 25;
-	int M_eta = 25;
+	double eta_max = 0.25;
+	int N_mc = 30;
+	int M_eta = 30;
 	int length_max=0;
 	double f_min = 40.0;
 	double t_max = 0;
