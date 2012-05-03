@@ -1,5 +1,6 @@
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
+#include <lal/FrequencySeries.h>
 
 struct twod_waveform_interpolant {
 
@@ -26,7 +27,7 @@ struct twod_waveform_interpolant_array {
 	double inner_param2_min;
 	double inner_param1_max;
 	double inner_param2_max;
-	
+	int pad;	
 };
 
 struct twod_waveform_interpolant_manifold {
@@ -42,10 +43,10 @@ struct twod_waveform_interpolant_manifold {
 	double outer_param1_max;
 	double outer_param2_min;
 	double outer_param2_max;
-}
+};
 
 int free_waveform_interp_objects(struct twod_waveform_interpolant_array *);
 
-struct twod_waveform_interpolant_array* new_waveform_interpolant_array_from_svd_bank(gsl_matrix *svd_bank, double param1_min, double param2_min, double param1_max, double param2_max, int pad);
+//struct twod_waveform_interpolant_array* new_waveform_interpolant_array_from_svd_bank(gsl_matrix *svd_bank, double param1_min, double param2_min, double param1_max, double param2_max, int pad);
 
-struct twod_waveform_interpolant_patches* interpolants_over_patches(REAL8FrequencySeries *psd, int N_patches);
+//struct twod_waveform_interpolant_patches* interpolants_over_patches(REAL8FrequencySeries *psd, int N_patches);
