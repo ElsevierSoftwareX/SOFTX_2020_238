@@ -176,8 +176,8 @@ GstFlowReturn filter(GSTLALIIRBankCuda *element, GstBuffer *outbuf)
 	 * initialize bank
 	 */
 	static iirBank * bank;
-	static bool first_call = true;
-	static bool last_call = false;
+	static gboolean first_call = TRUE;
+	static gboolean last_call = FALSE;
 
 	/*
 	 *	TODO : Cuda variables definition, some are static
@@ -194,7 +194,7 @@ GstFlowReturn filter(GSTLALIIRBankCuda *element, GstBuffer *outbuf)
 	 *
 	 *
 	 */
-		first_call = false;
+		first_call = FALSE;
 	}
 
 	output_length = available_length - (bank->dmax - bank->dmin);
