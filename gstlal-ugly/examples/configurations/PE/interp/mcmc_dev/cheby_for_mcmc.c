@@ -45,7 +45,7 @@ int free_waveform_interp_objects(struct twod_waveform_interpolant_array * interp
 
 struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd_bank(gsl_matrix *svd_bank){
 	int i;
-	struct twod_waveform_interpolant_array * output; //= (struct twod_waveform_interpolant_array *) calloc(1, sizeof(struct twod_waveform_interpolant_array));
+	struct twod_waveform_interpolant_array * output = (struct twod_waveform_interpolant_array *) calloc(1, sizeof(struct twod_waveform_interpolant_array));
 	output->size = svd_bank->size2; 
 	output->interp = (struct twod_waveform_interpolant *) calloc(output->size, sizeof(struct twod_waveform_interpolant));
 
@@ -56,13 +56,13 @@ struct twod_waveform_interpolant_array * new_waveform_interpolant_array_from_svd
 	return output;
 }
 
-struct twod_waveform_interpolant_manifold* interpolants_manifold_init(REAL8FrequencySeries *psd, int N_patches, int grid_size, double mc_min, double mc_max, double eta_min, double eta_max, double outer_mc_min, double outer_mc_max, double outer_eta_min, double outer_eta_max){
+struct twod_waveform_interpolant_manifold* interpolants_manifold_init(REAL8FrequencySeries *psd, int N_patches, int N_waveforms, double mc_min, double mc_max, double eta_min, double eta_max, double outer_mc_min, double outer_mc_max, double outer_eta_min, double outer_eta_max){
 
 	struct twod_waveform_interpolant_manifold * output = (struct twod_waveform_interpolant_manifold *) calloc( 1, sizeof(struct twod_waveform_interpolant_manifold));
 
 	output->interp_arrays = (struct twod_waveform_interpolant_array *) calloc(N_patches, sizeof(struct twod_waveform_interpolant_array));
 	output->psd = psd;
-	output->grid_size = grid_size; /* root grid size */
+	output->N_waveforms = N_waveforms; /* root grid size */
 	output->number_of_patches = N_patches;
 	output->inner_param1_min = mc_min;
 	output->inner_param1_max = mc_max;
@@ -815,14 +815,14 @@ static int interpolate_waveform_from_mchirp_and_eta(struct twod_waveform_interpo
 
 static int pad_parameter_bounds(double mc_min, double mc_max, double eta_min, double eta_max, double *outer_eta_min, double *outer_eta_max, double *outer_mc_min, double *outer_mc_max){
 
-	if(eta_min > 0.1){
+	if(eta_min >= 0.1){
 		
 		*outer_eta_min = eta_min - 0.01;
 	}
 	
 	else *outer_eta_min = eta_min;
 
-	if (eta_max < 0.249){
+	if (eta_max <= 0.249){
 
 		*outer_eta_max = eta_max + 0.01;
 	}
@@ -840,10 +840,10 @@ static int make_patch_from_manifold(struct twod_waveform_interpolant_manifold *m
 
 	int N;
 	int i,j,k;
-	double pad;
+	double pad_mc, pad_eta;
 	double mc_min, mc_max, eta_min, eta_max;
 
-	N = sqrt(manifold->number_of_patches);
+	N = manifold->number_of_patches;
 
 	/* find index (j,k) of the required patch on the manifold from i */
 	
@@ -858,22 +858,23 @@ static int make_patch_from_manifold(struct twod_waveform_interpolant_manifold *m
 		}	
 	
 		
-		pad = manifold->outer_param1_max - manifold->inner_param1_max;
+		pad_mc = manifold->outer_param1_max - manifold->inner_param1_max;
+		pad_eta = manifold->outer_param2_max - manifold->inner_param2_max;
+
+		mc_min = manifold->inner_param1_min + j*( manifold->inner_param1_max - manifold->inner_param1_min)/N + pad_mc;	
+		mc_max = manifold->inner_param1_min + (manifold->inner_param1_max - manifold->inner_param1_min)/N + j*( manifold->inner_param1_max - manifold->inner_param1_min)/N + pad_mc;
 	
-		mc_min = manifold->inner_param1_min + j*( manifold->inner_param1_max - manifold->inner_param1_min)/N + pad;	
-		mc_max = manifold->inner_param1_max + j*( manifold->inner_param1_max - manifold->inner_param1_min)/N + pad;
-	
-		eta_min = manifold->inner_param2_min + k*( manifold->inner_param2_max - manifold->inner_param2_min)/N + pad;
-		eta_max = manifold->inner_param2_max + k*( manifold->inner_param2_max - manifold->inner_param2_min)/N + pad;
+		eta_min = manifold->inner_param2_min + k*( manifold->inner_param2_max - manifold->inner_param2_min)/N + pad_eta;
+		eta_max = manifold->inner_param2_min + ( manifold->inner_param2_max - manifold->inner_param2_min)/N + k*( manifold->inner_param2_max - manifold->inner_param2_min)/N + pad_eta;
 	
 		manifold->interp_arrays[i].param1_min = mc_min;
 		manifold->interp_arrays[i].param1_max = mc_max;
 		manifold->interp_arrays[i].param2_min = eta_min;
 		manifold->interp_arrays[i].param2_max = eta_max;
-		manifold->interp_arrays[i].inner_param1_min = mc_min + pad;
-		manifold->interp_arrays[i].inner_param1_max = mc_max - pad;
-		manifold->interp_arrays[i].inner_param2_min = eta_min + pad;
-		manifold->interp_arrays[i].inner_param2_max = eta_max - pad;	
+		manifold->interp_arrays[i].inner_param1_min = mc_min + pad_mc;
+		manifold->interp_arrays[i].inner_param1_max = mc_max - pad_mc;
+		manifold->interp_arrays[i].inner_param2_min = eta_min + pad_eta;
+		manifold->interp_arrays[i].inner_param2_max = eta_max - pad_eta;	
 	
 	
 	}
@@ -908,8 +909,8 @@ static int populate_interpolants_on_patches(struct twod_waveform_interpolant_man
 	for(i = 0; i < manifold->number_of_patches; i++, manifold->interp_arrays++){
 
 
-		N_mc = manifold->grid_size;///sqrt(manifold->number_of_patches);
-		M_eta = manifold->grid_size;///sqrt(manifold->number_of_patches);
+		N_mc = sqrt(manifold->N_waveforms);///sqrt(manifold->number_of_patches);
+		M_eta = sqrt(manifold->N_waveforms);///sqrt(manifold->number_of_patches);
 
 		mc_min = manifold->interp_arrays->param1_min;
 		mc_max = manifold->interp_arrays->param1_max;
@@ -980,7 +981,7 @@ int main(){
 	//int M_eta = 25;
 	int length_max = 0;
 	int N_patches = 2;
-	int root_grid_size = 10;
+	int N_waveforms = 100;
 	double f_min = 40.0;
 	double t_max = 0;
 	double f_max = 0;
@@ -1004,7 +1005,7 @@ int main(){
 	initialize_time_and_freq_series(&psd, &fseries, &fseries_for_ifft, &tseries, &revplan, outer_mc_min, outer_mc_max, outer_eta_min, outer_eta_max, f_min, &length_max);
 	fprintf(stderr, "%p\n", fseries);
 	/* initialize global interpolant structure: FIXME need to pass param space ranges */
-	manifold = interpolants_manifold_init(psd, N_patches, root_grid_size, mc_min, mc_max, eta_min, eta_max, outer_mc_min, outer_mc_max, outer_eta_min, outer_eta_max);
+	manifold = interpolants_manifold_init(psd, N_patches, N_waveforms, mc_min, mc_max, eta_min, eta_max, outer_mc_min, outer_mc_max, outer_eta_min, outer_eta_max);
 
 	for(unsigned int i=0; i < manifold->number_of_patches; i++){
 		
