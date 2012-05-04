@@ -17,14 +17,14 @@ no_inj:
 		--sample-rate 4096  
 
 unicorns: H_BTLWNB_unicorn_100.xml 
-	gstlal_excesspower  \
+	./gstlal_excesspower  \
 		--verbose  \
 		--data-source fakeadvLIGO  \
 		--initialization-file gstlal_excesspower_h1_generic.ini  \
 		--sample-rate 4096  
 
 unicorn_movie: H_BTLWNB_unicorn_100.xml
-	gstlal_excesspower  \
+	./gstlal_excesspower  \
 		--verbose  \
 		--data-source fakeadvLIGO  \
 		--stream-tfmap unicorn  \
