@@ -27,6 +27,43 @@
 
 
 #include <gstlal_iirbankCuda.h>
+#include <stdbool.h>
+#define BANK_INIT_SUCCESS 1
+#define BANK_FREE_SUCCESS 1
+
+typedef struct _Complex8_F
+{
+	float re;
+	float im;
+} COMPLEX8_F;
+
+typedef struct _Complex8_D
+{
+	double re;
+	double im;
+} COMPLEX8_D;
+
+// all input/ output are in float fasion
+
+typedef struct _iirBank
+{
+	COMPLEX8_F *a1_f;
+	COMPLEX8_F *b0_f;
+	COMPLEX8_F *y_f;
+
+	int *d_i;
+	float *input_f;
+	COMPLEX8_F *output_f;
+
+	unsigned int num_templates;
+	unsigned int num_filters;
+	int dmax, dmin;
+	unsigned int rate;
+	unsigned int pre_input_length;
+	unsigned int pre_output_length;
+
+} iirBank;
+
 /*
  * ============================================================================
  *
@@ -34,6 +71,9 @@
  *
  * ============================================================================
  */
+
+int bank_init(iirBank **pbank, GSTLALIIRBankCuda *element);
+int bank_free(iirBank **pbank, GSTLALIIRBankCuda *element);
 
 unsigned iir_channels(const GSTLALIIRBankCuda *element);
 
