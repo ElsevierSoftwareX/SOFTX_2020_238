@@ -14,7 +14,7 @@ from gstlal import cbc_template_iir
 from glue import segmentsUtils
 from pylal.datatypes import LIGOTimeGPS
 
-_DEBUG = False
+_DEBUG = True
 
 pipeline = gst.Pipeline(sys.argv[0])
 mainloop = gobject.MainLoop()
@@ -54,7 +54,8 @@ head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, ifo, detector, fake_data 
 
 head = lloidparts.mkLLOIDsrc(pipeline, head, [test_rate], ifo, psd = None, psd_fft_length = 1, ht_gate_threshold = None, veto_segments = None, seekevent = seekevent, nxydump_segment = nxydump_segment, track_psd = True, block_duration = gst.SECOND, zero_pad = 0)
 
-snr = pipeparts.mkiirbank(pipeline, head[test_rate], a1 = bank.A[test_rate], b0 = bank.B[test_rate], delay = bank.D[test_rate], name = "gstlaliirbank_%s_%d" % (ifo, test_rate))
+head = pipeparts.mkreblock(pipeline, head[test_rate], block_duration = gst.SECOND)
+snr = pipeparts.mkiirbankCuda(pipeline, head, a1 = bank.A[test_rate], b0 = bank.B[test_rate], delay = bank.D[test_rate], name = "gstlaliirbank_%s_%d" % (ifo, test_rate))
 
 pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline,snr), "snr_%s.dump" % "test", segment = nxydump_segment)
 # ADD your IIR element here before the fakesink don't forget
