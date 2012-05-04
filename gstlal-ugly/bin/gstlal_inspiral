@@ -358,8 +358,8 @@ if options.write_pipeline is not None:
 # start http interface
 #
 
-# FIXME: don't hard-code port
-httpinterface.start_servers(16953, verbose = options.verbose)
+# FIXME: don't hard-code port, don't use in this program right now since more than one job runs per machine
+# httpinterface.start_servers(16953, verbose = options.verbose)
 
 #
 # Run pipeline
