@@ -20,6 +20,7 @@ optp.add_option("-l", "--segment-len", action="store", type=int, help="Create jo
 optp.add_option("-b", "--begin-gps-time", action="store", type=int, help="Restrict to segments after this time. If both this and the end time are specified without specifying a segment_list, then use this as the segment.")
 optp.add_option("-e", "--end-gps-time", action="store", type=int, help="Restrict to segments before this time. If both this and the start time are specified without specifying a segment_list, then use this as the segment.")
 optp.add_option("-n", "--no-segments", action="store_true", help="No gps time restrictions. Just use the cache times, or run forever.")
+optp.add_option("-o", "--output", action="store", help="Name of the file to save the DAG to.")
 
 opts, args = optp.parse_args()
 
@@ -51,7 +52,10 @@ bit_width=32
 sample_rate=4096
 """
 inireg = re.compile( "\.ini" )
-dagfile = re.sub( inireg, ".dag", inifile )
+if( opts.output) :
+	dagfile = opts.output
+else:
+	dagfile = re.sub( inireg, ".dag", inifile )
 dagfile = open( dagfile, "w" )
 
 from glue.ligolw import lsctables
@@ -140,6 +144,5 @@ for seg in slist:
 			sec['gps_start'] = seg[0]
 			sec['gps_end'] = seg[1]
 		print >>dagfile, dagentry % sec
-		print dagentry % sec
 		
 dagfile.close()
