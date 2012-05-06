@@ -56,13 +56,16 @@ int free_waveform_interp_objects(struct twod_waveform_interpolant_array * interp
 
 
 struct twod_waveform_interpolant * new_waveform_interpolant_from_svd_bank(gsl_matrix *svd_bank){
-	int i;
+	int i,j;
 
 	struct twod_waveform_interpolant *interp = (struct twod_waveform_interpolant *) calloc(svd_bank->size2, sizeof(struct twod_waveform_interpolant));
 
 	for (i = 0; i < svd_bank->size2; i++) {
-		interp[i].svd_basis = gsl_matrix_column(svd_bank, i);
+		interp[i].svd_basis = gsl_vector_calloc(svd_bank->size1);
+		for (j = 0; j < svd_bank->size1; j++){
+			gsl_vector_set(interp[i].svd_basis, j, gsl_matrix_get(svd_bank, j, i));
 
+		}
 	}
 	return interp;
 }
@@ -820,8 +823,8 @@ static int interpolate_waveform_from_mchirp_and_eta(struct twod_waveform_interpo
 	/* this is the loop over mu */
 	for (i = 0; i < interps->size; i++) {
 		M = compute_M_xy(interps->interp[i].C_KL, x, y);
-		gsl_blas_daxpy (GSL_REAL(M), &interps->interp[i].svd_basis.vector, &h_t_real.vector);
-		gsl_blas_daxpy (GSL_IMAG(M), &interps->interp[i].svd_basis.vector, &h_t_imag.vector);
+		gsl_blas_daxpy (GSL_REAL(M), interps->interp[i].svd_basis, &h_t_real.vector);
+		gsl_blas_daxpy (GSL_IMAG(M), interps->interp[i].svd_basis, &h_t_imag.vector);
 	}
 
 	
@@ -986,7 +989,7 @@ static int populate_interpolants_on_patches(struct twod_waveform_interpolant_man
 	
 		for (unsigned int j = 0; j < manifold->interp_arrays[i].size; j++) {       
 	
-			projection_coefficient(&manifold->interp_arrays[i].interp[j].svd_basis.vector, templates_at_nodes, M_xy, N_mc, M_eta);
+			projection_coefficient(manifold->interp_arrays[i].interp[j].svd_basis, templates_at_nodes, M_xy, N_mc, M_eta);
 	
 			if(j==0){
 	
@@ -1009,7 +1012,6 @@ static int populate_interpolants_on_patches(struct twod_waveform_interpolant_man
                 gsl_matrix_complex_free(phase_M0_xy);
                 gsl_matrix_free(templates);	
 		gsl_matrix_free(svd_basis);
-	
 	
 	} 
 	return 0;
@@ -1185,7 +1187,7 @@ int main(){
         XLALDestroyCOMPLEX16FFTPlan(revplan);
         XLALDestroyREAL8FrequencySeries(psd);
 	
-	free_manifold(manifold);	
+//	free_manifold(manifold);	
 
 	return 0;
 

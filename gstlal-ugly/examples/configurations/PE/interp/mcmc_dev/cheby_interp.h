@@ -4,8 +4,8 @@
 
 struct twod_waveform_interpolant {
 
-	gsl_vector_view svd_basis; /* Imaginary part must be zero */
-
+	gsl_vector *svd_basis;
+ 
 	/* See http://arxiv.org/pdf/1108.5618v1.pdf  This represents the C
  	 * matrix of formula (8) without mu.  Note that you specify a separate waveform
 	 * interpolant object for each mu 
