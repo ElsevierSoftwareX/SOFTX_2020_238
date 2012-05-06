@@ -38,7 +38,6 @@ int free_manifold(struct twod_waveform_interpolant_manifold *manifold){
 	
 	}	
 	
-	free(manifold->interp_arrays);
 	free(manifold);
 
 	return 0;
@@ -1001,10 +1000,8 @@ static int populate_interpolants_on_patches(struct twod_waveform_interpolant_man
 	
 			
 		}
-		
-	
-	} 
-                gsl_vector_free(etas_nodes);
+
+		gsl_vector_free(etas_nodes);
                 gsl_vector_free(mchirps_nodes);
                 gsl_vector_free(x_nodes);
                 gsl_vector_free(y_nodes);
@@ -1013,6 +1010,9 @@ static int populate_interpolants_on_patches(struct twod_waveform_interpolant_man
                 gsl_matrix_complex_free(phase_M0_xy);
                 gsl_matrix_free(templates);	
 
+	
+	
+	} 
 	return 0;
 
 }
@@ -1120,6 +1120,11 @@ static int compute_overlap(struct twod_waveform_interpolant_manifold *manifold, 
 	fclose(list_of_overlaps);
 
 	gsl_vector_complex_free(h_t);
+	gsl_vector_complex_free(z_tmp);
+	gsl_vector_free(template_imag);
+	gsl_vector_free(template_real);
+	gsl_vector_free(mchirps_interps);
+	gsl_vector_free(etas_interps);
 
 	return 0;
 }
@@ -1132,7 +1137,7 @@ int main(){
 	int patches_in_mc = 1;
 	int waveforms_in_patch = 100;
 	int number_of_patches;
-	int New_N_mc = 100, New_M_eta = 100;
+	int New_N_mc = 5, New_M_eta = 5;
 	double mc_min = 7.0;
 	double eta_min = 0.1;
 	double mc_max = 7.6;
@@ -1181,7 +1186,7 @@ int main(){
         XLALDestroyCOMPLEX16FFTPlan(revplan);
         XLALDestroyREAL8FrequencySeries(psd);
 	
-	free(manifold);	
+	free_manifold(manifold);	
 
 	return 0;
 
