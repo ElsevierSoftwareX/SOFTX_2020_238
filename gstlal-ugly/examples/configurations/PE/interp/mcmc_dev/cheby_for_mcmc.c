@@ -57,13 +57,12 @@ int free_waveform_interp_objects(struct twod_waveform_interpolant_array * interp
 
 struct twod_waveform_interpolant * new_waveform_interpolant_from_svd_bank(gsl_matrix *svd_bank){
 	int i;
-	//struct twod_waveform_interpolant_array * output; //= (struct twod_waveform_interpolant_array *) calloc(1, sizeof(struct twod_waveform_interpolant_array));
-//	output->size = svd_bank->size2; 
+
 	struct twod_waveform_interpolant *interp = (struct twod_waveform_interpolant *) calloc(svd_bank->size2, sizeof(struct twod_waveform_interpolant));
 
 	for (i = 0; i < svd_bank->size2; i++) {
 		interp[i].svd_basis = gsl_matrix_column(svd_bank, i);
-		//output->interp[i].C_KL = NULL;
+
 	}
 	return interp;
 }
