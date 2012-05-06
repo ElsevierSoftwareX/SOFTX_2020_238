@@ -807,6 +807,7 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 
 /* FIXME use a better name */
 static int interpolate_waveform_from_mchirp_and_eta(struct twod_waveform_interpolant_array *interps, gsl_vector_complex *h_t, double mchirp, double eta) { 
+
 	int i;
 	gsl_complex M;
 	double x, y;
@@ -877,8 +878,8 @@ static int make_patch_from_manifold(struct twod_waveform_interpolant_manifold *m
 		}	
 	
 		
-		pad_mc = manifold->inner_param1_min - manifold->inner_param1_min;
-		pad_eta = manifold->inner_param2_min - manifold->inner_param2_min;
+		pad_mc = manifold->inner_param1_min - manifold->outer_param1_min;
+		pad_eta = manifold->inner_param2_min - manifold->outer_param2_min;
 
 		mc_width = manifold->inner_param1_min + (manifold->inner_param1_max - manifold->inner_param1_min)/patches_in_mc;
 		eta_width = manifold->inner_param2_min + ( manifold->inner_param2_max - manifold->inner_param2_min)/patches_in_eta;
@@ -888,12 +889,19 @@ static int make_patch_from_manifold(struct twod_waveform_interpolant_manifold *m
 		mc_max = mc_width + j*( manifold->inner_param1_max - manifold->inner_param1_min)/patches_in_mc + pad_mc;
 	
 		eta_min = manifold->inner_param2_min + k*( manifold->inner_param2_max - manifold->inner_param2_min)/patches_in_eta - pad_eta;
-		if(eta_max < 0.249){
+
+		if(eta_width + k*( manifold->inner_param2_max - manifold->inner_param2_min)/patches_in_eta + pad_eta < 0.249){
+
 			eta_max = eta_width + k*( manifold->inner_param2_max - manifold->inner_param2_min)/patches_in_eta + pad_eta;
+
 		}
+
 		else{
+
 			eta_max = eta_width + k*( manifold->inner_param2_max - manifold->inner_param2_min)/patches_in_eta;
+
 		}
+
 		manifold->interp_arrays[i].param1_min = mc_min;
 		manifold->interp_arrays[i].param1_max = mc_max;
 		manifold->interp_arrays[i].param2_min = eta_min;
@@ -901,8 +909,13 @@ static int make_patch_from_manifold(struct twod_waveform_interpolant_manifold *m
 		manifold->interp_arrays[i].inner_param1_min = mc_min + pad_mc;
 		manifold->interp_arrays[i].inner_param1_max = mc_max - pad_mc;
 		manifold->interp_arrays[i].inner_param2_min = eta_min + pad_eta;
-		manifold->interp_arrays[i].inner_param2_max = eta_max - pad_eta;	
-	
+		if (eta_max < 0.25){
+			manifold->interp_arrays[i].inner_param2_max = eta_max - pad_eta;	
+		}
+		else{
+			manifold->interp_arrays[i].inner_param2_max = eta_max;
+		}
+
 	
 	}
 
@@ -998,7 +1011,7 @@ static int populate_interpolants_on_patches(struct twod_waveform_interpolant_man
         	gsl_matrix_free(templates_at_nodes);
         	gsl_matrix_complex_free(phase_M0_xy);
         	gsl_matrix_free(templates);
-		gsl_matrix_free(svd_basis);
+		//gsl_matrix_free(svd_basis);
 	
 	} 
 	
@@ -1070,7 +1083,6 @@ static int compute_overlap(struct twod_waveform_interpolant_manifold *manifold, 
                         mc = gsl_vector_get(mchirps_interps, i);						
 
 			index = index_into_patch(manifold, mc, eta);
-	
 			interpolate_waveform_from_mchirp_and_eta(&manifold->interp_arrays[index], h_t, mc, eta);
                  
 		        m1 = mc2mass1(mc, eta);
