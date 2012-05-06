@@ -824,7 +824,6 @@ static int interpolate_waveform_from_mchirp_and_eta(struct twod_waveform_interpo
 		M = compute_M_xy(interps->interp[i].C_KL, x, y);
 		gsl_blas_daxpy (GSL_REAL(M), &interps->interp[i].svd_basis.vector, &h_t_real.vector);
 		gsl_blas_daxpy (GSL_IMAG(M), &interps->interp[i].svd_basis.vector, &h_t_imag.vector);
-		fprintf(stderr, "%e\n", M);
 	}
 
 	
@@ -949,8 +948,7 @@ static int populate_interpolants_on_patches(struct twod_waveform_interpolant_man
 	
 	
 
-	for(i = 0; i < number_of_patches; i++){//, manifold->interp_arrays++){
-
+	for(i = 0; i < number_of_patches; i++){
 
 		N_mc = sqrt(manifold->waveforms_in_patch);///sqrt(manifold->number_of_patches);
 		M_eta = sqrt(manifold->waveforms_in_patch);///sqrt(manifold->number_of_patches);
@@ -970,7 +968,7 @@ static int populate_interpolants_on_patches(struct twod_waveform_interpolant_man
 	
 		svd_basis = create_svd_basis_from_template_bank(templates);	
 	
-		manifold->interp_arrays->size = svd_basis->size2;	
+		manifold->interp_arrays[i].size = svd_basis->size2;	
 		manifold->interp_arrays[i].interp = new_waveform_interpolant_from_svd_bank(svd_basis);	
 
 
@@ -1004,18 +1002,16 @@ static int populate_interpolants_on_patches(struct twod_waveform_interpolant_man
 			
 		}
 		
-		gsl_vector_free(etas_nodes);
-                gsl_vector_free(mchirps_nodes);
-		gsl_vector_free(x_nodes);
-		gsl_vector_free(y_nodes);
-        	gsl_matrix_complex_free(M_xy);
-        	gsl_matrix_free(templates_at_nodes);
-        	gsl_matrix_complex_free(phase_M0_xy);
-        	gsl_matrix_free(templates);
-		//gsl_matrix_free(svd_basis);
 	
 	} 
-	
+                gsl_vector_free(etas_nodes);
+                gsl_vector_free(mchirps_nodes);
+                gsl_vector_free(x_nodes);
+                gsl_vector_free(y_nodes);
+                gsl_matrix_complex_free(M_xy);
+                gsl_matrix_free(templates_at_nodes);
+                gsl_matrix_complex_free(phase_M0_xy);
+                gsl_matrix_free(templates);	
 
 	return 0;
 
@@ -1116,7 +1112,7 @@ static int compute_overlap(struct twod_waveform_interpolant_manifold *manifold, 
                                 gsl_vector_complex_set(h_t, i, dotc1);
 			}
 
-			//fprintf(stderr,"mc = %f, eta=%f, overlap=%e\n", mc, eta, Overlap);
+			fprintf(stderr,"mc = %f, eta=%f, overlap=%e\n", mc, eta, Overlap);
 
 			}
 		}		
