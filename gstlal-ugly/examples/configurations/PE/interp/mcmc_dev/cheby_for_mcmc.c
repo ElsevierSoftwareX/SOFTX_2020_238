@@ -824,6 +824,7 @@ static int interpolate_waveform_from_mchirp_and_eta(struct twod_waveform_interpo
 		M = compute_M_xy(interps->interp[i].C_KL, x, y);
 		gsl_blas_daxpy (GSL_REAL(M), &interps->interp[i].svd_basis.vector, &h_t_real.vector);
 		gsl_blas_daxpy (GSL_IMAG(M), &interps->interp[i].svd_basis.vector, &h_t_imag.vector);
+		fprintf(stderr, "%e\n", M);
 	}
 
 	
@@ -1115,7 +1116,7 @@ static int compute_overlap(struct twod_waveform_interpolant_manifold *manifold, 
                                 gsl_vector_complex_set(h_t, i, dotc1);
 			}
 
-			fprintf(stderr,"mc = %f, eta=%f, overlap=%e\n", mc, eta, Overlap);
+			//fprintf(stderr,"mc = %f, eta=%f, overlap=%e\n", mc, eta, Overlap);
 
 			}
 		}		
