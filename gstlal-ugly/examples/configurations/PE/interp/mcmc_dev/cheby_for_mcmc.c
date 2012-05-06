@@ -1009,7 +1009,7 @@ static int populate_interpolants_on_patches(struct twod_waveform_interpolant_man
                 gsl_matrix_free(templates_at_nodes);
                 gsl_matrix_complex_free(phase_M0_xy);
                 gsl_matrix_free(templates);	
-
+		gsl_matrix_free(svd_basis);
 	
 	
 	} 
