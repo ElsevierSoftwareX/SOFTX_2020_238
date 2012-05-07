@@ -195,31 +195,41 @@ struct control_segment {
 
 static void control_add_segment(GSTLALGate *element, GstClockTime start, GstClockTime stop, gboolean state)
 {
-	struct control_segment control_segment = {
+	struct control_segment new_segment = {
 		.start = start,
 		.stop = stop,
 		.state = element->invert_control ? !state : state
 	};
 
-	g_assert_cmpuint(start, <, stop);
+	g_assert_cmpuint(start, <=, stop);
 
-	/* if new segment continues the last segment in the array, just
-	 * update that segment's stop time --- keeps segment list coalesced
-	 * if segments are added in order */
+	/* try coalescing the new segment with the most recent one */
 	/* FIXME:  it might be more efficient to apply the attack and hold
 	 * properties here, adjusting the segment list as we construct it,
 	 * than scanning for intersections with a segment later.  would
 	 * require smarter coalescing logic */
 	if(element->control_segments->len) {
 		struct control_segment *final_segment = &((struct control_segment *) element->control_segments->data)[element->control_segments->len - 1];
-		if(final_segment->state == control_segment.state && final_segment->stop >= start) {
-			g_assert_cmpuint(final_segment->stop, <=, stop);
-			final_segment->stop = stop;
+		/* if the most recent segment and the new segment have the
+		 * same state and they touch, merge them */
+		if(final_segment->state == new_segment.state && final_segment->stop >= new_segment.start) {
+			g_assert_cmpuint(new_segment.stop, >=, final_segment->stop);
+			final_segment->stop = new_segment.stop;
+			return;
+		}
+		/* otherwise, if the most recent segment had 0 length,
+		 * replace it entirely with the new one.  note that the
+		 * state carried by a zero-length segment is meaningless,
+		 * zero-length segments are merely interpreted as a
+		 * heart-beat indicating how far the control stream has
+		 * advanced */
+		if(final_segment->stop == final_segment->start) {
+			*final_segment = new_segment;
 			return;
 		}
 	}
 	/* otherwise append a new segment */
-	g_array_append_val(element->control_segments, control_segment);
+	g_array_append_val(element->control_segments, new_segment);
 }
 
 
@@ -325,6 +335,10 @@ static gboolean control_get_state(GSTLALGate *element, GstClockTime tmin, GstClo
 			continue;
 		if(tmax <= segment.start)
 			break;
+		/* zero-length segments are heart beats, they do not
+		 * indicate true control state */
+		if(segment.start == segment.stop)
+			continue;
 		/* if we get here, segment intersects the requested
 		 * interval */
 		if(segment.state)
