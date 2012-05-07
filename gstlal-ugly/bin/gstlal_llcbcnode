@@ -23,6 +23,9 @@ def plot(dataurl, plottype, xlabel = "", ylabel = "", title = ""):
 	except IOError:
 		print "<h2>Data could not be loaded</h2>"
 		return
+	except ValueError:
+		print "<h2>Data is mis formatted, perhaps the webserver returned an error</h2>"
+		return
 
 	if plottype == "history":
 		h.semilogy(data[:,0] - data[-1,0], data[:,1], 'w', alpha=0.75, linewidth=2)
@@ -174,7 +177,7 @@ print"</table>"
 
 # Pie table
 print "<table face='Arial'><tr>"
-for ifo in ("H1", "H2", "L1", "V1"):
+for ifo in ("H1", "L1", "V1"):
 	print "<td><div id='canvas%spie'>" % (ifo,)
 	try:
 		livetime_plot(baseurl+'_%sstrain_add_drop.txt' % ifo, baseurl+'_%sstate_vector_on_off_gap.txt' % ifo, title = ifo)
@@ -185,7 +188,7 @@ print"</tr></table>"
 
 # Psd table
 print "<table face='Arial'><tr>"
-for ifo in ("H1", "H2", "L1", "V1"):
+for ifo in ("H1", "L1", "V1"):
 	print "<td><div id='canvas%spsd'>" % (ifo,)
 	plot(baseurl+'_%spsd.txt' % ifo, "loglog", ylabel = "Power (strain^2/Hz)", xlabel = "Frequency (Hz)", title = ifo)
 	print "</div></td>"
