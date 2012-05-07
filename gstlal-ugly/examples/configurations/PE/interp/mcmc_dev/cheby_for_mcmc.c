@@ -477,13 +477,13 @@ static double chirp_time (double m1, double m2, double fLower, int order, double
 	return c0T * (1 + c2T * x2T + c3T * x3T + c4T * x4T + c5T * x5T + (c6T + c6LogT * log (xT)) * x6T + c7T * x7T) / x8T;
 }
 
-static double ffinal(double m1, double m2){
+static double ffinal(double m_total){
 	
 	/* Compute frequency at Schwarzschild ISCO */
 
 	double f_isco;
 	
-	f_isco = pow(2., ceil( log( (1./LAL_PI)*( pow(6.,-3./2.) )*( pow((m1+m2)*LAL_MTSUN_SI,-1.) ) ) ) / log(2) ); /* Next highest power of 2 of f_isco */
+	f_isco = pow(2., ceil( log( (1./LAL_PI)*( pow(6.,-3./2.) )*( pow((m_total)*LAL_MTSUN_SI,-1.) ) ) ) / log(2.) ); /* Next highest power of 2 of f_isco */
 	
 	return f_isco;
 }
@@ -535,14 +535,13 @@ static int freq_to_time_fft(COMPLEX16FrequencySeries *fseries, COMPLEX16TimeSeri
 
 static int compute_max_chirp_time_and_max_frequency(double mc_min, double mc_max, double eta_min, double eta_max, double f_min, double *f_max, double *t_max) {
 	
-	/* largest frequency is the largest total mass which is the largest mchirp and eta */
-	double m1max = mc2mass1(mc_max, eta_max);
-	double m2max = mc2mass2(mc_max, eta_max);
 
 	/* FIXME longest chirp time comes from the smallest chirp mass and eta corrections which we say comes from the smallest eta but have not verified... */
 	double m1min = mc2mass1(mc_min, eta_min);
 	double m2min = mc2mass2(mc_min, eta_min);
-	*f_max = ffinal(m1min, m2min);
+	double mt_min = mc_min/(pow(eta_max, 3./5.));
+
+	*f_max = ffinal(mt_min);
 	*t_max = chirp_time(m1min, m2min, f_min, 7, 0);
 	
 	return 0;
@@ -848,8 +847,8 @@ static int pad_parameter_bounds(double mc_min, double mc_max, double eta_min, do
 
 	else *outer_eta_max = eta_max;
 	
-	*outer_mc_min = mc_min - 0.1;
-	*outer_mc_max = mc_max + 0.1;
+	*outer_mc_min = mc_min - 0.01;
+	*outer_mc_max = mc_max + 0.01;
 
 	return 0;
 
@@ -1103,7 +1102,9 @@ static int compute_overlap(struct twod_waveform_interpolant_manifold *manifold, 
 
 
 		 	Overlap = ( gsl_complex_abs( dotc1 ) / sqrt( gsl_complex_abs( dotc2 ) ) / sqrt( gsl_complex_abs( dotc3 ) ) );
-		
+	
+			fprintf(list_of_overlaps,"%e\n",Overlap);
+	
 			GSL_SET_COMPLEX(&dotc1, 0, 0);
 		        GSL_SET_COMPLEX(&dotc2, 0 ,0);
 		        GSL_SET_COMPLEX(&dotc3, 0 ,0);
@@ -1134,11 +1135,11 @@ int main(){
 
 
 	int length_max = 0;
-	int patches_in_eta = 2;
-	int patches_in_mc = 1;
-	int waveforms_in_patch = 100;
+	int patches_in_eta = 4;
+	int patches_in_mc = 4;
+	int waveforms_in_patch = 14*14;
 	int number_of_patches;
-	int New_N_mc = 5, New_M_eta = 5;
+	int New_N_mc = 100, New_M_eta = 100;
 	double mc_min = 7.0;
 	double eta_min = 0.1;
 	double mc_max = 7.6;
@@ -1164,7 +1165,6 @@ int main(){
 
 	/* initialize LAL time and freq series */
 	initialize_time_and_freq_series(&psd, &fseries, &fseries_for_ifft, &tseries, &revplan, outer_mc_min, outer_mc_max, outer_eta_min, outer_eta_max, f_min, &length_max);
-
 	/* initialize global interpolant structure: FIXME need to pass param space ranges */
 	manifold = interpolants_manifold_init(psd, patches_in_eta, patches_in_mc, waveforms_in_patch, mc_min, mc_max, eta_min, eta_max, outer_mc_min, outer_mc_max, outer_eta_min, outer_eta_max);
 
