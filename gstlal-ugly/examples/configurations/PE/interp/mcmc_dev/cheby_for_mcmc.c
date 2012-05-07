@@ -483,7 +483,7 @@ static double ffinal(double m_total){
 
 	double f_isco;
 	
-	f_isco = pow(2., ceil( log( (1./LAL_PI)*( pow(6.,-3./2.) )*( pow((m_total)*LAL_MTSUN_SI,-1.) ) ) ) / log(2.) ); /* Next highest power of 2 of f_isco */
+	f_isco = pow(2., ceil( log( (1./LAL_PI)*( pow(6.,-3./2.) )*( pow((m_total)*LAL_MTSUN_SI,-1.) ) )  / log(2.) ) ); /* Next highest power of 2 of f_isco */
 	
 	return f_isco;
 }
