@@ -70,13 +70,14 @@ struct twod_waveform_interpolant * new_waveform_interpolant_from_svd_bank(gsl_ma
 	return interp;
 }
 
-struct twod_waveform_interpolant_manifold* interpolants_manifold_init(REAL8FrequencySeries *psd, int patches_in_eta, int patches_in_mc, int templates_in_patch, double mc_min, double mc_max, double eta_min, double eta_max, double outer_mc_min, double outer_mc_max, double outer_eta_min, double outer_eta_max){
+struct twod_waveform_interpolant_manifold* interpolants_manifold_init(REAL8FrequencySeries *psd, int patches_in_eta, int patches_in_mc, int number_templates_along_mc, int number_templates_along_eta, double mc_min, double mc_max, double eta_min, double eta_max, double outer_mc_min, double outer_mc_max, double outer_eta_min, double outer_eta_max){
 
 	struct twod_waveform_interpolant_manifold * output = (struct twod_waveform_interpolant_manifold *) calloc( 1, sizeof(struct twod_waveform_interpolant_manifold));
 
 	output->interp_arrays = (struct twod_waveform_interpolant_array *) calloc(patches_in_eta*patches_in_mc, sizeof(struct twod_waveform_interpolant_array));
 	output->psd = psd;
-	output->templates_in_patch = templates_in_patch; 
+	output->number_templates_along_eta = number_templates_along_eta; 
+	output->number_templates_along_mc = number_templates_along_mc;
 	output->patches_in_eta = patches_in_eta;
 	output->patches_in_mc = patches_in_mc;
 	output->inner_param1_min = mc_min;
@@ -831,14 +832,16 @@ static int interpolate_waveform_from_mchirp_and_eta(struct twod_waveform_interpo
 	
 }
 
-static int pad_parameter_bounds(double mc_min, double mc_max, double eta_min, double eta_max, double *outer_eta_min, double *outer_eta_max, double *outer_mc_min, double *outer_mc_max, int number_of_templates_in_patch, int number_of_templates_to_pad){
+static int pad_parameter_bounds(double mc_min, double mc_max, double eta_min, double eta_max, double *outer_eta_min, double *outer_eta_max, double *outer_mc_min, double *outer_mc_max, int number_templates_along_eta, int number_templates_along_mc, int number_of_templates_to_pad){
+
+	/* FIXME: UNIT TEST REQUIRED */
 
 	double eta_padding;
 	double mc_padding;
 
 	/* pad parameter by number_of_templates_to_pad templates */
-	eta_padding = number_of_templates_to_pad*(eta_max-eta_min)/sqrt(number_of_templates_in_patch);
-	mc_padding = number_of_templates_to_pad*(mc_max-mc_min)/sqrt(number_of_templates_in_patch); 
+	eta_padding = number_of_templates_to_pad*(eta_max-eta_min)/number_templates_along_eta;
+	mc_padding = number_of_templates_to_pad*(mc_max-mc_min)/number_templates_along_mc; 
 	/* check that padded eta_min and eta_max are physical */
 	if(0. <= eta_min - eta_padding){
 		
@@ -965,9 +968,8 @@ static int populate_interpolants_on_patches(struct twod_waveform_interpolant_man
 
 	for(i = 0; i < number_of_patches; i++){
 
-		N_mc = sqrt(manifold->templates_in_patch);///sqrt(manifold->number_of_patches);
-		M_eta = sqrt(manifold->templates_in_patch);///sqrt(manifold->number_of_patches);
-
+		N_mc = manifold->number_templates_along_mc;
+		M_eta = manifold->number_templates_along_eta;
 		mc_min = manifold->interp_arrays[i].param1_min;
 		mc_max = manifold->interp_arrays[i].param1_max;
 		eta_min = manifold->interp_arrays[i].param2_min;
@@ -1152,7 +1154,9 @@ int main(){
 	int length_max = 0;
 	int patches_in_eta = 2;
 	int patches_in_mc = 4;
-	int templates_in_patch = 18*18;
+	//int templates_in_patch = 18*18;
+	int number_templates_along_eta = 15;
+	int number_templates_along_mc = 30;
 	int number_of_patches;
 	int New_N_mc = 100, New_M_eta = 100;
 	double mc_min = 7.0;
@@ -1177,12 +1181,12 @@ int main(){
 	COMPLEX16FFTPlan *revplan = NULL;
 
 	/* take in grid of interest and pad the boundry */
-	pad_parameter_bounds(mc_min, mc_max, eta_min, eta_max, &outer_eta_min, &outer_eta_max, &outer_mc_min, &outer_mc_max, templates_in_patch, number_of_templates_to_pad);
+	pad_parameter_bounds(mc_min, mc_max, eta_min, eta_max, &outer_eta_min, &outer_eta_max, &outer_mc_min, &outer_mc_max, number_templates_along_mc, number_templates_along_eta, number_of_templates_to_pad);
 
 	/* initialize LAL time and freq series */
 	initialize_time_and_freq_series(&psd, &fseries, &fseries_for_ifft, &tseries, &revplan, outer_mc_min, outer_mc_max, outer_eta_min, outer_eta_max, f_min, &length_max);
 	/* initialize global interpolant structure: FIXME need to pass param space ranges */
-	manifold = interpolants_manifold_init(psd, patches_in_eta, patches_in_mc, templates_in_patch, mc_min, mc_max, eta_min, eta_max, outer_mc_min, outer_mc_max, outer_eta_min, outer_eta_max);
+	manifold = interpolants_manifold_init(psd, patches_in_eta, patches_in_mc, number_templates_along_mc, number_templates_along_eta, mc_min, mc_max, eta_min, eta_max, outer_mc_min, outer_mc_max, outer_eta_min, outer_eta_max);
 
 	number_of_patches = patches_in_eta*patches_in_mc;
 
