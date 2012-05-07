@@ -55,8 +55,9 @@ head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, ifo, detector, fake_data 
 head = lloidparts.mkLLOIDsrc(pipeline, head, [test_rate], ifo, psd = None, psd_fft_length = 1, ht_gate_threshold = None, veto_segments = None, seekevent = seekevent, nxydump_segment = nxydump_segment, track_psd = True, block_duration = gst.SECOND, zero_pad = 0)
 
 head = pipeparts.mkreblock(pipeline, head[test_rate], block_duration = gst.SECOND)
+
 # if use the c element mkiirbank
-# snr = pipeparts.mkiirbankCuda(pipeline, head, a1 = bank.A[test_rate], b0 = bank.B[test_rate], delay = bank.D[test_rate], name = "gstlaliirbank_%s_%d" % (ifo, test_rate))
+# snr = pipeparts.mkiirbank(pipeline, head, a1 = bank.A[test_rate], b0 = bank.B[test_rate], delay = bank.D[test_rate], name = "gstlaliirbank_%s_%d" % (ifo, test_rate))
 
 # if use the cuda element mkiirbankCuda
 snr = pipeparts.mkiirbankCuda(pipeline, head, a1 = bank.A[test_rate], b0 = bank.B[test_rate], delay = bank.D[test_rate], name = "gstlaliirbank_%s_%d" % (ifo, test_rate))
