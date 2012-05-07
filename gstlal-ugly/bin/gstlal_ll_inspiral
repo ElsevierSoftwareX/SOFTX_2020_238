@@ -212,7 +212,7 @@ def parse_command_line():
 	@bottle.route("/registry.txt")
 	def register(fname = None):
 		
-		yield "# %s %s\n" % (options.job_tag, host)
+		yield "# %s %s %s\n" % (options.job_tag, host, " ".join(set(svd_banks.keys())))
 
 		# First do urls that do not depend on instruments
 		for request in ("registry.txt", "latency_histogram.txt", "latency_history.txt", "snr_history.txt", "ram_history.txt", "likelihood.xml", "bank.txt"):
