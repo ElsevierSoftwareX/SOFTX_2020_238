@@ -1,0 +1,23 @@
+Source: gstlal
+Maintainer: Carsten Aulbert <carsten.aulbert@aei.mpg.de>
+Section: lscsoft
+Priority: optional
+Standards-Version: 3.9.2
+Build-Depends: debhelper (>= 8), python-dev, liborc-0.4-dev,
+               libfftw3-dev, gstlal-dep, python-gobject-dev, lal-dev,
+               lalframe-dev, lalmetaio-dev, lalburst-dev,
+               lalinspiral-dev, fakeroot, autoconf, pkg-config,
+               libxml2-dev
+
+Package: gstlal
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, python, libfftw3-3,
+	 liborc-0.4-0, gstlal-dep, python-gobject, lscsoft-lalapps, libxml2
+Description: GStreamer version of LAL
+ gstlal provides a suite of GStreamer elements that expose
+ gravitational-wave data analysis tools from the LAL library for use
+ in GStreamer signal-processing pipelines. Examples include an element
+ to add simulated gravitational waves to an h(t) stream, and a source
+ element to provide the contents of .gwf frame files to a GStreamer
+ pipeline.
+
