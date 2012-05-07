@@ -33,7 +33,7 @@ struct twod_waveform_interpolant_manifold {
 	REAL8FrequencySeries *psd;
 	int patches_in_eta;
 	int patches_in_mc;
-	int waveforms_in_patch;
+	int templates_in_patch;
 	struct twod_waveform_interpolant_array *interp_arrays;
 	double inner_param1_min;
 	double inner_param1_max;
