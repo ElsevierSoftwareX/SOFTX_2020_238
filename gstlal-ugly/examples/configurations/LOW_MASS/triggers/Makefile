@@ -5,8 +5,8 @@ comma:= ,
 
 # controls triggers
 IFOS = H1 L1
-START = 869622409
-STOP =  869632409
+START = 869400000
+STOP =  870600000
 PSD_FILE = ../bank/reference_psd.xml.gz
 BANK_CACHE_PREFIX = ../bank/
 BANK_CACHE_SUFFIX = _bank.cache
@@ -20,7 +20,7 @@ BANK_CACHE_STRING:= $(subst $(space),$(comma),$(BANK_CACHE_STRING))
 
 CLUSTER_SQL = ../bank/simplify_and_cluster.sql
 INJ_CLUSTER_SQL = ../bank/inj_simplify_and_cluster.sql
-WEBDIR = /home/channa/public_html/BNStest
+WEBDIR = /home/channa/public_html/BNStest2week
 NUMBANKS = 4
 
 # Segments file names
