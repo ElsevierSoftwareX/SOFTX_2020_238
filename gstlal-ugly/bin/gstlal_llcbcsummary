@@ -73,7 +73,10 @@ def plot_latency(found, missed, ids, registry):
 	found_x = found.keys()
 	latency_y = numpy.log10(numpy.array([found[k][-1,1] for k in found_x]))
 	time_y = numpy.log10(now() - numpy.array([found[k][-1,0] for k in found_x]))
-	max_y = max(time_y.max(), latency_y.max())
+	try:
+		max_y = max(time_y.max(), latency_y.max())
+	except ValueError:
+		max_y = 1
 	missed_x = missed.keys()
 	missed_y = numpy.ones(len(missed_x)) * max_y
 	
@@ -88,9 +91,11 @@ def plot_snr(found, missed, ids, registry):
 	found_x = found.keys()
 	maxsnr_y = numpy.log10(numpy.array([found[k][:,1].max() for k in found_x]))
 	mediansnr_y = numpy.log10(numpy.array([numpy.median(found[k][:,1]) for k in found_x]))
-	
-	max_y = max(maxsnr_y)
 
+	try:	
+		max_y = max(maxsnr_y)
+	except ValueError:
+		max_y = 1
 	missed_x = missed.keys()
 	missed_y = numpy.ones(len(missed_x)) * max_y
 	
@@ -128,9 +133,11 @@ def plot_ram(found, missed, ids, registry):
 	
 	found_x = found.keys()
 	found_y = numpy.log10(numpy.array([found[k][0,1] for k in found_x]))
-	
-	max_y, min_y = max(found_y), min(found_y)
 
+	try:	
+		max_y, min_y = max(found_y), min(found_y)
+	except ValueError:
+		max_y, min_y = (1,0)
 	missed_x = missed.keys()
 	missed_y = numpy.ones(len(missed_x)) * max_y
 	
@@ -143,9 +150,11 @@ def plot_single_col(found, missed, ids, registry, col = 0, title = ''):
 	
 	found_x = found.keys()
 	found_y = numpy.log10(numpy.array([found[k][col] for k in found_x]))
-	
-	max_y, min_y = max(found_y), min(found_y)
 
+	try:	
+		max_y, min_y = max(found_y), min(found_y)
+	except ValueError:
+		max_y, min_y = (1,0)
 	missed_x = missed.keys()
 	missed_y = numpy.ones(len(missed_x)) * max_y
 	
@@ -186,7 +195,7 @@ print """
 """
 
 # title
-print "<center><h1>Low-latency Compact Binary Online (LCBO) summary: %d - %s </h1></center><br>" % (int(now()), time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime()))
+print "<center><h1>Low-latency Compact Binary Online (LCBO) summary %s: %d - %s </h1></center><br>" % ("".join(ifos), int(now()), time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime()))
 
 # start a table
 print "<table>"
