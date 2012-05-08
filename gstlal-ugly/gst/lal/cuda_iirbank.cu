@@ -6,7 +6,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
+#include <stdio.h>
 #include <cuda_iirbank.h>
 
 #ifdef __cplusplus
@@ -219,7 +219,7 @@ GstFlowReturn filter(GSTLALIIRBankCuda *element, GstBuffer *outbuf)
 		memset(bank->output_f, 0, output_length * iir_channels(element) / 2 * sizeof(COMPLEX8_F));
 	}
 
-	int i;
+	uint i;
 	for(i=0; i<available_length; i++)
 		(bank->input_f)[i] = float(input[i]);
 
@@ -238,6 +238,29 @@ GstFlowReturn filter(GSTLALIIRBankCuda *element, GstBuffer *outbuf)
 	 *
 	 *
 	 */
+   uint j, k;
+   COMPLEX8_F a1, b0, y_pre, y_cur;
+   int d;
+
+   for (i = 0; i < bank->num_templates; ++i)
+   {
+     for (j = 0; j < bank->num_filters; ++j)
+     {
+       a1 = bank->a1_f[i*bank->num_filters+j];
+       b0 = bank->b0_f[i*bank->num_filters+j];
+       y_pre = bank->y_f[i*bank->num_filters+j];
+       d = bank->d_i[i*bank->num_filters+j];
+       for (k = 0; k < output_length; ++k)
+       {
+         y_cur.re = a1.re * y_pre.re - a1.im * y_pre.im + b0.re * bank->input_f[bank->dmax - d + k];
+         y_cur.im = a1.re * y_pre.im + a1.im * y_pre.re + b0.im * bank->input_f[bank->dmax - d + k]; 
+         y_pre = y_cur;
+         bank->output_f[k*bank->num_templates+i].re += y_cur.re;
+         bank->output_f[k*bank->num_templates+i].im += y_cur.im;
+       }
+       bank->y_f[i*bank->num_filters+j] = y_pre;
+     }
+   }
 
 	/*
 	 *
