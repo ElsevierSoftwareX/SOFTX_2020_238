@@ -276,8 +276,10 @@ static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstCloc
 		 */
 
 		for(i = 0; i < element->control_segments->len && g_array_index(element->control_segments, struct control_segment, i).stop <= tmin; i++);
-		if(i)
+		if(i) {
+			GST_DEBUG_OBJECT(element, "flushing %u obsolete control segments", i);
 			g_array_remove_range(element->control_segments, 0, i);
+		}
 
 		/*
 		 * has head advanced far enough, or are we at EOS?
@@ -642,7 +644,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * above threshold, FALSE = below threshold.
 	 */
 
-	if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP)) {
+	if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP) || !GST_BUFFER_DURATION(sinkbuf)) {
 		control_add_segment(element, GST_BUFFER_TIMESTAMP(sinkbuf), GST_BUFFER_TIMESTAMP(sinkbuf) + GST_BUFFER_DURATION(sinkbuf), FALSE);
 	} else {
 		guint buffer_length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
@@ -685,7 +687,7 @@ static gboolean control_event(GstPad *pad, GstEvent *event)
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT:
-		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag and flushing queue");
+		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag and flushing control queue");
 		g_mutex_lock(element->control_lock);
 		element->control_eos = FALSE;
 		control_flush(element);
@@ -1058,7 +1060,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT:
-		GST_DEBUG_OBJECT(pad, "new segment;  clearing internal end-of-stream flag");
+		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag");
 		g_mutex_lock(element->control_lock);
 		element->t_sink_head = GST_CLOCK_TIME_NONE;
 		element->sink_eos = FALSE;
@@ -1068,7 +1070,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		break;
 
 	case GST_EVENT_EOS:
-		GST_DEBUG_OBJECT(pad, "end-of-stream;  setting internal end-of-stream flag and flushing control buffer");
+		GST_DEBUG_OBJECT(pad, "end-of-stream;  setting end-of-stream flag and flushing control queue");
 		g_mutex_lock(element->control_lock);
 		element->sink_eos = TRUE;
 		control_flush(element);
