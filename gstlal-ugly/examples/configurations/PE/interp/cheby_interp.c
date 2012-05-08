@@ -714,7 +714,7 @@ static gsl_matrix *create_svd_basis_from_template_bank(gsl_matrix* template_bank
 		sum_s += gsl_vector_get(S, n) * gsl_vector_get(S, n);
 		if (sqrt(sum_s / norm_s) >= tolerance) break;
 		}
-
+	n = 54;
 	fprintf(stderr,"SVD: using %d basis templates\n:", n);
 	
 	template_view = gsl_matrix_submatrix(template_bank, 0, 0, template_bank->size1, n);
@@ -755,11 +755,11 @@ int main() {
 	int i=0;
 	int j=0;
 	double mc_min = 7.0;
-	double eta_min = 0.175;
+	double eta_min = 0.1;
 	double mc_max = 7.6;
-	double eta_max = 0.25;
-	int N_mc = 30;
-	int M_eta = 30;
+	double eta_max = 0.175;
+	int N_mc = 15;
+	int M_eta = 15;
 	int length_max=0;
 	double f_min = 40.0;
 	double t_max = 0;
@@ -895,7 +895,7 @@ int main() {
 	z_tmp = gsl_vector_complex_calloc(length_max);
 	h_t = gsl_vector_complex_calloc(length_max);
 	
-	list_of_overlaps = fopen("overlaps_patch_2_eta_point175_to_point25.txt","w");		
+	list_of_overlaps = fopen("overlaps_patch_2_eta_point1_to_point175.txt","w");		
 
 
 	for ( i =0; i <  mchirps_interps->size; i++){
@@ -909,7 +909,7 @@ int main() {
 		        m1 = mc2mass1(mc, eta);
                         m2 = mc2mass2(mc, eta);
 
-			generate_whitened_template(m1, m2, 1. / fseries->deltaF, f_min, length_max, sample_rate / (2.*1.05) , 7, psd, template_real, template_imag, tseries, fseries, fseries_for_ifft, revplan);
+			generate_whitened_template(m1, m2, 1. / fseries->deltaF, f_min, length_max, sample_rate / (2.) , 7, psd, template_real, template_imag, tseries, fseries, fseries_for_ifft, revplan);
 
 			/* create single complex vector from real and imaginary parts of template */
 
