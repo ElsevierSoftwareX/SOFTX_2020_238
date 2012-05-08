@@ -98,8 +98,8 @@ int bank_init(iirBank **pbank, GSTLALIIRBankCuda *element)
 	
 	(*pbank) = (iirBank *)malloc( sizeof(iirBank) );
 	(*pbank)->a1_f = (COMPLEX8_F *)malloc( size1 * size2 * sizeof( COMPLEX8_F) );
-	(*pbank)->b0_f = (COMPLEX8_F *)malloc( size1 * size2 * sizeof( COMPLEX8_F) * size1 * size2 );
-	(*pbank)->y_f = (COMPLEX8_F *)malloc( size1 * size2 * sizeof( COMPLEX8_F) * size1 * size2 );
+	(*pbank)->b0_f = (COMPLEX8_F *)malloc( size1 * size2 * sizeof( COMPLEX8_F) );
+	(*pbank)->y_f = (COMPLEX8_F *)malloc( size1 * size2 * sizeof( COMPLEX8_F) );
 	(*pbank)->d_i = d;
 	(*pbank)->input_f = NULL;
 	(*pbank)->output_f = NULL;
@@ -126,6 +126,7 @@ int bank_init(iirBank **pbank, GSTLALIIRBankCuda *element)
 		((*pbank)->y_f)[i].re = float(creal(y[i]));
 		((*pbank)->y_f)[i].im = float(cimag(y[i]));
 	}
+
 	return BANK_INIT_SUCCESS;
 
 
@@ -222,6 +223,8 @@ GstFlowReturn filter(GSTLALIIRBankCuda *element, GstBuffer *outbuf)
 	uint i;
 	for(i=0; i<available_length; i++)
 		(bank->input_f)[i] = float(input[i]);
+
+	memset(bank->output_f, 0, output_length * iir_channels(element) / 2 * sizeof(COMPLEX8_F));
 
 	/*
 	 *
