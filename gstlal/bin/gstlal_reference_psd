@@ -86,7 +86,6 @@ from gstlal import lloidparts
 
 if options.frame_segments_file is not None:
 	frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, verbose = options.verbose), options.frame_segments_name).coalesce()[options.instrument]
-	print frame_segments
 else:
 	frame_segments = None
 
