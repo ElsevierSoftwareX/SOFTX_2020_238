@@ -1,3 +1,29 @@
+# Misc useful definitions
+empty:=
+space:= $(empty) $(empty)
+comma:= ,
+
+# controls psd segments, should set it to the analysis time intended
+IFOS = H1 L1
+PSDSTART = 869400000
+PSDSTOP =  869410000
+
+# Segments file names
+segments_suffix := _segmentspadded.xml
+SEGMENTS_FILES  := $(addsuffix $(segments_suffix),$(IFOS))
+
+
+# reference psd file names
+psd_suffix := _psd.xml.gz
+PSD_FILES  := $(addsuffix $(psd_suffix),$(IFOS))
+
+TRIM = 16
+
+# Frame cache file names
+frame_suffix      := _frame.cache
+FRAME_CACHE_FILES := $(addsuffix $(frame_suffix),$(IFOS))
+
+# data for lalapps_tmpltbank, note this is just to be able to run the program, the psd is replaced withe the design psd
 START = 871147452
 STOP =  871247452
 IFOS = H
@@ -70,17 +96,31 @@ H1-TMPLTBANK-871154847-2048.xml.gz: frame.H.cache
 		&& gstlal_bank_splitter --overlap $(OVERLAP) --instrument H2 --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml.gz \
 		&& gstlal_bank_splitter --overlap $(OVERLAP) --instrument L1 --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) H1-TMPLTBANK-871154847-2048.xml.gz
 
-mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz : 
-	gstlal_psd_xml_from_asd_txt --instrument H1 --output mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.txt
+reference_psd.xml.gz : $(PSD_FILES)
+	ligolw_add $(PSD_FILES) --output reference_psd.xml.gz
 
-mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz : 
-	gstlal_psd_xml_from_asd_txt --instrument H2 --output mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.txt
+%_psd.xml.gz : frame.cache segments.xml
+	gstlal_reference_psd --frame-cache frame.cache --frame-segments-file segments.xml --gps-start-time $(PSDSTART) --gps-end-time $(PSDSTOP) --instrument $* --write-psd $@ --verbose
+	
 
-mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz : 
-	gstlal_psd_xml_from_asd_txt --instrument L1 --output mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.txt
+%_segmentspadded.xml:
+	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${PSDSTART} --gps-end-time ${PSDSTOP} --include-segments=$*:Science --result-name=datasegments > $*segments.xml
+	ligolw_segments_compat $*segments.xml
+	gstlal_segments_trim $*segments.xml --trim $(TRIM) --output $@
 
-reference_psd.xml.gz: mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz
-	ligolw_add mode_H1-TMPLTBANK-869040003-2048.strainspec_asd_v4.xml.gz mode_H2-TMPLTBANK-875211248-2048.strainspec_asd_v4.xml.gz mode_L1-TMPLTBANK-858087370-2048.strainspec_asd_v4.xml.gz | gzip > reference_psd.xml.gz
+%_frame.cache:
+	#FIXME horrible hack to get the observatory, not guaranteed to work
+	$(eval OBS:=$*)
+	$(eval OBS:=$(subst 1,$(empty),$(OBS)))
+	$(eval OBS:=$(subst 2,$(empty),$(OBS)))
+	ligo_data_find -o $(OBS) -t $*_RDS_C03_L2 -l  -s $(PSDSTART) -e $(PSDSTOP) --url-type file > $@
+
+frame.cache: $(FRAME_CACHE_FILES)
+	cat $(FRAME_CACHE_FILES) > frame.cache
+
+segments.xml: $(SEGMENTS_FILES)
+	ligolw_add --output segments.xml $(SEGMENTS_FILES)
+	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segments.xml
 
 sql :
 	cat uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql
@@ -101,4 +141,4 @@ plots : reference_psd.xml.gz
 	gstlal_plot_psd reference_psd.xml.gz psd_plot
 
 realclean :
-	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml.gz *split_bank-H1-TMPLTBANK-871154847-2048.xml.gz mode_*.xml.gz logs *.png reference_psd.xml.gz simplify.sql  simplify_and_cluster.sql simplify_and_delete_by_far.sql inj_simplify_and_cluster.sql lalapps_path2cache
+	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml.gz *split_bank-H1-TMPLTBANK-871154847-2048.xml.gz mode_*.xml.gz logs *.png reference_psd.xml.gz simplify.sql  simplify_and_cluster.sql simplify_and_delete_by_far.sql inj_simplify_and_cluster.sql lalapps_path2cache *_psd.xml.gz *segments.xml *_segmentspadded.xml
