@@ -361,12 +361,12 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 		if(endMinusStart < -injection_window) /* injection ends before h */ {
 			if(prevSimInspiral)
 				prevSimInspiral->next = thisSimInspiral->next;
-			{
-				SimInspiralTable *tmpSimInspiral = thisSimInspiral;
-				thisSimInspiral = thisSimInspiral->next;
-				XLALFree(tmpSimInspiral);
-			}
+			if(thisSimInspiral == element->injection_document->sim_inspiral_table_head)
+				element->injection_document->sim_inspiral_table_head = thisSimInspiral->next;
+			SimInspiralTable *tmpSimInspiral = thisSimInspiral;
 			thisSimInspiral = thisSimInspiral->next;
+			XLALFree(tmpSimInspiral);
+			continue;
 		}
 
 		if(startMinusEnd > injection_window) /* injection starts after h */ {
@@ -798,8 +798,8 @@ static void base_init(gpointer class)
 		element_class,
 		"Simulation",
 		"Filter",
-		"An injection routine",
-		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>"
+		"An injection routine calling lalsimulation waveform generators",
+		"Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <channa@ligo.caltech.edu>, Drew Keppel <drew.keppel@ligo.org>"
 	);
 
 	gst_element_class_add_pad_template(
