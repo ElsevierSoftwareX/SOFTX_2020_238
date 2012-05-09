@@ -130,7 +130,7 @@ class EPHandler( LLOIDHandler ):
 		self.snr_thresh = 5.5
 		self.fap = None
 		self.dump_frequency = 600 # s
-		self.max_events = 1e5
+		self.max_events = 1e4
 		self.time_since_dump = self.start
 
 		self.trigger_segment = None
@@ -290,10 +290,10 @@ class EPHandler( LLOIDHandler ):
 		Top-level function to handle the asynchronous updating of FIR banks and matrix mixer elements.
 		"""
 		# Rebuild filter bank and hand it off to the FIR element
-		print >> sys.stderr, "Rebuilding FIR bank"
+		#print >> sys.stderr, "Rebuilding FIR bank"
 		self.firbank.set_property( "fir_matrix", self.rebuild_filter() )
 
-		print >> sys.stderr, "Rebuilding matrix mixer"
+		#print >> sys.stderr, "Rebuilding matrix mixer"
 		self.rebuild_chan_mix_matrix()
 		# Rebuild the matrix mixer with new normalization coefficients
 		self.rebuild_matrix_mixers()
@@ -311,6 +311,10 @@ class EPHandler( LLOIDHandler ):
 
 	def write_triggers( self, flush=True, overwrite=False, filename=None ):
 		if( not handler.output ): return
+		if( len(self.triggers) == 0 ): return
+
+		#import pdb
+		#pdb.set_trace()
 
 		if( filename == None ):
 			filename = self.outfile
@@ -321,18 +325,17 @@ class EPHandler( LLOIDHandler ):
 
 		# TODO: Before or after Paused?
 		analysis_segment = segment(
-			LIGOTimeGPS( self.start ), 
+			LIGOTimeGPS( self.time_since_dump ), 
 			LIGOTimeGPS( self.stop )
 		)
 		# TODO: Define a difference between what was requested and what was analyzed
 		requested_segment = analysis_segment
 
 		process_params = vars( options )
-		#import pdb
-		#pdb.set_trace()
 		process = ligolw_process.register_to_xmldoc( output, "gstlal_excesspower", vars(options) )
 		process.set_ifos( self.inst )
-		add_cbc_metadata( output, process, requested_segment, analysis_segment )
+
+		add_cbc_metadata( output, process, analysis_segment )
 		# TODO: replace cbc filter table with our own
 		#cbc_filter_table = lsctables.getTablesByType( output, lsctables.FilterTable )[0]
 		#ep_filter_table = lsctables.getTablesByType( self.filter_xml, lsctables.FilterTable )[0]
@@ -402,7 +405,8 @@ def on_psd_change( elem, pspec, hand ):
 	"""
 	Get the PSD object and signal the handler to rebuild everything.
 	"""
-	print >> sys.stderr, "Intercepted spectrum signal."
+	if( options.verbose ):
+		print >> sys.stderr, "Intercepted spectrum signal."
 
 	hand.psd = REAL8FrequencySeries(
 		name = "PSD",
@@ -419,7 +423,8 @@ def on_psd_change( elem, pspec, hand ):
 	psd_power = sum(hand.psd.data)
 	change = abs((hand.psd_power - psd_power) / psd_power )
 	if( change > 0.5 ):
-		print >> sys.stderr, "Processed signal. PSD change %d per, regenerating filters" % int(change*100)
+		if( options.verbose ):
+			print >> sys.stderr, "Processed signal. PSD change %d per, regenerating filters" % int(change*100)
 		hand.psd_power = psd_power
 		hand.rebuild_everything()
 
@@ -427,7 +432,8 @@ def on_spec_corr_change( elem, pspec, hand ):
 	"""
 	Get the 2-point spectral correlation object and signal the handler to rebuild everything.
 	"""
-	print >> sys.stderr, "Intercepted correlation signal."
+	if( options.verbose ):
+		print >> sys.stderr, "Intercepted correlation signal."
 	hand.spec_corr = elem.get_property( "spectral-correlation" )
 
 	if( hand.cache_spec_corr ):
@@ -567,6 +573,9 @@ else:
 
 	handler.outfile = cfg.get( "triggering", "output-file" )
 	handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
+
+	if( cfg.has_option( "triggering", "events_per_file" ) ):
+		handler.max_events = cfg.get_int( "triggering", "events_per_file" )
 
 	# If a specific (trigger) time is of interest, specify its GPS here
 	# TODO: Read from sngl_inspirals and sngl_bursts
@@ -834,7 +843,10 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	head = matmixer = mkmatrixmixer( pipeline, head )
 	handler.add_matmixer( matmixer, res_level )
 
-	head = mkprogressreport( pipeline, head, "post matrix mixer %d" % res_level )
+	if( verbose ):
+		head = mkprogressreport( pipeline, head,
+			"post matrix mixer %d" % res_level 
+		)
 
 	if( diagnostics ):
 		head = postmmtee = mktee( pipeline, mkqueue( pipeline, head ) )
