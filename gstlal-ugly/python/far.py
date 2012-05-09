@@ -198,16 +198,17 @@ class DistributionsStats(object):
 		"V1_snr_chi": rate.gaussian_window2d(9, 9, sigma = 10)
 	}
 
+	def __init__(self):
+		self.raw_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
+		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
+		self.likelihood_pdfs = {}
+
 	def __add__(self, other):
 		out = type(self)()
 		out.raw_distributions += self.raw_distributions
 		out.raw_distributions += other.raw_distributions
 		#FIXME do we also add the smoothed distributions??
 		return out
-
-	def __init__(self):
-		self.raw_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
-		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
 
 	@staticmethod
 	def likelihood_params_func(events, offsetvector):
@@ -285,6 +286,50 @@ class DistributionsStats(object):
 		if verbose:
 			print >>sys.stderr, "done"
 
+	def compute_single_instrument_background(self, verbose = False):
+		# initialize a likelihood ratio evaluator
+		likelihood_ratio_evaluator = ligolw_burca2.LikelihoodRatio(self.smoothed_distributions)
+
+		# reduce typing
+		background = self.smoothed_distributions.background_rates
+		injections = self.smoothed_distributions.injection_rates
+
+		self.likelihood_pdfs.clear()
+		for param in background:
+			# FIXME only works if there is a 1-1 relationship between params and instruments
+			instrument = param.split("_")[0]
+
+			if verbose:
+				print >>sys.stderr, "updating likelihood background for %s" % instrument
+
+			likelihoods = injections[param].array / background[param].array
+			# ignore infs and nans because background is never
+			# found in those bins.  the boolean array indexing
+			# flattens the array
+			finite_likelihoods = numpy.isfinite(likelihoods)
+			likelihoods = likelihoods[finite_likelihoods]
+			background_likelihoods = background[param].array[finite_likelihoods]
+			sortindex = likelihoods.argsort()
+			likelihoods = likelihoods[sortindex]
+			background_likelihoods = background_likelihoods[sortindex]
+
+			s = background_likelihoods.cumsum() / background_likelihoods.sum()
+			# restrict range to the 1-1e10 confidence interval to make the best use of our bin resolution
+			minlikelihood = likelihoods[s.searchsorted(1e-10)]
+			maxlikelihood = likelihoods[s.searchsorted(1 - 1e-10)]
+			if minlikelihood == 0:
+				minlikelihood = likelihoods[likelihoods != 0].min()
+			# construct PDF
+			# FIXME:  because the background array contains
+			# probabilities and not probability densities, the
+			# likelihood_pdfs contain probabilities and not
+			# densities, as well, when this is done
+			self.likelihood_pdfs[instrument] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, self.target_length),)))
+			for coords in iterutils.MultiIter(*background[param].bins.centres()):
+				likelihood = likelihood_ratio_evaluator({param: coords})
+				if numpy.isfinite(likelihood):
+					self.likelihood_pdfs[instrument][likelihood,] += background[param][coords]
+
 	@classmethod
 	def from_xml(cls, xml, name):
 		self = cls()
@@ -316,6 +361,63 @@ class DistributionsStats(object):
 #
 
 
+def possible_ranks_array(likelihood_pdfs, ifo_set, targetlen):
+	# find the minimum value for the binning that we care about.
+	# this is product of all the peak values of likelihood,
+	# times the smallest maximum likelihood value, divided by the
+	# product of all maximum likelihood values
+	Lp = []
+	Lj = []
+	# loop over all ifos
+	for ifo in ifo_set:
+		likelihood_pdf = likelihood_pdfs[ifo]
+		# FIXME lower instead of centres() to avoid inf in the last bin
+		ranks = likelihood_pdf.bins.lower()[0]
+		vals = likelihood_pdf.array
+		# sort likelihood values from lowest probability to highest
+		ranks = ranks[vals.argsort()]
+		# save peak likelihood
+		Lp.append(ranks[-1])
+		# save maximum likelihood value
+		Lj.append(max(ranks))
+	Lp = numpy.array(Lp)
+	Lj = numpy.array(Lj)
+	# create product of all maximum likelihood values
+	L = numpy.exp(sum(numpy.log(Lj)))
+	# compute minimum bin value we care about
+	Lmin = numpy.exp(sum(numpy.log(Lp))) * min(Lj) / L
+	# divide by a million for safety
+	Lmin *= 1e-6
+
+	# start with an identity array to seed the outerproduct chain
+	ranks = numpy.array([1.0])
+	vals = numpy.array([1.0])
+	# FIXME:  probably only works because the pdfs aren't pdfs but probabilities
+	for ifo in ifo_set:
+		likelihood_pdf = likelihood_pdfs[ifo]
+		# FIXME lower instead of centres() to avoid inf in the last bin
+		ranks = numpy.outer(ranks, likelihood_pdf.bins.lower()[0])
+		vals = numpy.outer(vals, likelihood_pdf.array)
+		ranks = ranks.reshape((ranks.shape[0] * ranks.shape[1],))
+		# FIXME nans arise from inf * 0.  Do we want these to be 0?
+		#ranks[numpy.isnan(ranks)] = 0.0
+		vals = vals.reshape((vals.shape[0] * vals.shape[1],))
+		# rebin the outer-product
+		minlikelihood = max(min(ranks[ranks != 0]), Lmin)
+		maxlikelihood = max(ranks)
+		new_likelihood_pdf = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, targetlen),)))
+		for rank,val in zip(ranks,vals):
+			new_likelihood_pdf[rank,] += val
+		ranks = new_likelihood_pdf.bins.lower()[0]
+		vals = new_likelihood_pdf.array
+
+	# FIXME the size of these is targetlen which has to be small
+	# since it is squared in the outer product.  We can afford to
+	# store a 1e6 array.  Maybe we should try to make the resulting
+	# pdf bigger somehow?
+	return new_likelihood_pdf
+
+
 #
 # Class to handle the computation of FAPs/FARs
 #
@@ -330,12 +432,12 @@ class FAR(object):
 			self.trials_table = trials_table
 		self.livetime_seg = livetime_seg
 		self.trials_factor = trials_factor
-		
+
 		#
 		# the target FAP resolution is 1000 bins by default. This is purely
 		# for memory/CPU requirements
 		#
-		
+
 		self.target_length = target_length
 		self.reset()
 
@@ -355,7 +457,7 @@ class FAR(object):
 		out.livetime_seg = segments.segment(minstart, maxend)
 		# FIXME what do I do with trials_factor currently it is set to self's trials factor so that a += makes sense sort of?
 		out.trials_factor = self.trials_factor
-		
+
 		# FIXME I don't know what to do with these. This should depend
 		# on the "theta" of a far object.  Things with different thetas
 		# should be marginalized.  Perhaps this doesn't belong in the
@@ -366,7 +468,11 @@ class FAR(object):
 			minself, maxself, nself = self.joint_likelihood_pdfs[k].bins[0].min, self.joint_likelihood_pdfs[k].bins[0].max, self.joint_likelihood_pdfs[k].bins[0].n
 			minother, maxother, nother = other.joint_likelihood_pdfs[k].bins[0].min, other.joint_likelihood_pdfs[k].bins[0].max, other.joint_likelihood_pdfs[k].bins[0].n
 			out.joint_likelihood_pdfs[k] =  rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(min(minself, minother), max(maxself, maxother), max(nself, nother)),)))
-			
+
+			# FIXME:  the loop should be the other way:  loop
+			# over source bins and add each of their counts to
+			# the output bins.  the current implementation
+			# might skip some input bins
 			for bin in out.joint_likelihood_pdfs[k].centres()[0]:
 				out.joint_likelihood_pdfs[k][bin,] = self.joint_likelihood_pdfs[k][bin,] + other.joint_likelihood_pdfs[k][bin,]
 
@@ -426,80 +532,27 @@ class FAR(object):
 		self.ccdf_interpolator = {}
 		self.minrank = {}
 		self.maxrank = {}
-		self.likelihood_pdfs = {}
 		self.joint_likelihood_pdfs = {}
 
-	def compute_single_instrument_background(self, verbose = False):
-		# initialize a likelihood ratio evaluator
-		likelihood_ratio_evaluator = ligolw_burca2.LikelihoodRatio(self.distribution_stats.smoothed_distributions)
-		
-		# reduce typing
-		background = self.distribution_stats.smoothed_distributions.background_rates
-		injections = self.distribution_stats.smoothed_distributions.injection_rates
-
-		#
-		instruments = []
-	
-		for param in background:
-			# FIXME only works if there is a 1-1 relationship between params and instruments
-			instrument = param.split("_")[0]
-			instruments.append(instrument)
-
-			# don't repeat the calculation if we have already done
-			# it for the requested instrument and resolution
-			if instrument in self.likelihood_pdfs:
-				if verbose:
-					print >>sys.stderr, "already computed likelihood for ", instrument, "... continuing."
-				continue
-			else:
-				if verbose:
-					print >>sys.stderr, "updating likelihood background for ", instrument
-	
-			likelihoods = injections[param].array / background[param].array
-			# ignore infs and nans because background is never
-			# found in those bins.  the boolean array indexing
-			# flattens the array
-			finite_likelihoods = numpy.isfinite(likelihoods)
-			likelihoods = likelihoods[finite_likelihoods]
-			background_likelihoods = background[param].array[finite_likelihoods]
-			sortindex = likelihoods.argsort()
-			likelihoods = likelihoods[sortindex]
-			background_likelihoods = background_likelihoods[sortindex]
-			
-			s = background_likelihoods.cumsum() / background_likelihoods.sum()
-			# restrict range to the 1-1e10 confidence interval to make the best use of our bin resolution
-			minlikelihood = likelihoods[s.searchsorted(1e-10)]
-			maxlikelihood = likelihoods[s.searchsorted(1-1e-10)]
-			if minlikelihood == 0:
-				minlikelihood = likelihoods[likelihoods != 0].min()
-			# construct PDF
-			# FIXME:  because the background array contains
-			# probabilities and not probability densities, the
-			# likelihood_pdfs contain probabilities and not
-			# densities, as well, when this is done
-			self.likelihood_pdfs[instrument] = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, self.target_length),)))
-			for coords in iterutils.MultiIter(*background[param].bins.centres()):
-				likelihood = likelihood_ratio_evaluator({param: coords})
-				if numpy.isfinite(likelihood):
-					self.likelihood_pdfs[instrument][likelihood,] += background[param][coords]
-
-		return instruments
-
-	def compute_joint_instrument_background(self, instruments, remap, verbose = False):
-		
-		# calculate all of the possible ifo combinations with at least 2 detectors
-		# in order to get the joint likelihood pdfs
+	def compute_joint_instrument_background(self, remap, instruments = None, verbose = False):
+		# calculate all of the possible ifo combinations with at least
+		# 2 detectors in order to get the joint likelihood pdfs
+		likelihood_pdfs = self.distribution_stats.likelihood_pdfs
+		if instruments is None:
+			instruments = likelihood_pdfs.keys()
 		for n in range(2, len(instruments) + 1):
 			for ifos in iterutils.choices(instruments, n):
 				ifo_set = frozenset(ifos)
 				remap_set = remap.setdefault(ifo_set, ifo_set)
-				
+
 				if verbose:
 					print >>sys.stderr, "computing joint likelihood background for %s remapped to %s" % (lsctables.ifos_from_instrument_set(ifo_set), lsctables.ifos_from_instrument_set(remap_set))
 
-				# only recompute if necessary, some choices may not be if a certain remap set is provided
+				# only recompute if necessary, some choices
+				# may not be if a certain remap set is
+				# provided
 				if remap_set not in self.joint_likelihood_pdfs:
-					self.joint_likelihood_pdfs[remap_set] = self.possible_ranks_array(self.likelihood_pdfs, remap_set, self.target_length)
+					self.joint_likelihood_pdfs[remap_set] = possible_ranks_array(likelihood_pdfs, remap_set, self.target_length)
 
 				self.joint_likelihood_pdfs[ifo_set] = self.joint_likelihood_pdfs[remap_set]
 
@@ -529,12 +582,14 @@ class FAR(object):
 		# we might choose to statically map certain likelihood
 		# distributions to others.  This is useful for ignoring H2 when
 		# H1 is present. By default we don't and it is simply the ifo_set
-		
+
 		# first get the single detector distributions
-		instruments = self.compute_single_instrument_background(verbose = verbose)
+		self.distribution_stats.compute_single_instrument_background(verbose = verbose)
 
 		# then get the joint distributions
-		self.compute_joint_instrument_background(instruments, remap, verbose = verbose)
+		self.compute_joint_instrument_background(remap, verbose = verbose)
+
+		# FIXME: marginalize over theta here
 
 		# then get the cdf interpolators
 		self.compute_joint_cdfs()
@@ -553,62 +608,6 @@ class FAR(object):
 		one_day_trials_factor = int(trials_factor / float(abs(self.livetime_seg)) * 3600)
 		return 1.0 - (1.0 - fap)**one_day_trials_factor
 		#return 1.0 - (1.0 - fap)**trials_factor
-
-	def possible_ranks_array(self, likelihood_pdfs, ifo_set, targetlen):
-		# find the minimum value for the binning that we care about.
-		# this is product of all the peak values of likelihood,
-		# times the smallest maximum likelihood value, divided by the
-		# product of all maximum likelihood values
-		Lp = []
-		Lj = []
-		# loop over all ifos
-		for ifo in ifo_set:
-			likelihood_pdf = likelihood_pdfs[ifo]
-			# FIXME lower instead of centres() to avoid inf in the last bin
-			ranks = likelihood_pdf.bins.lower()[0]
-			vals = likelihood_pdf.array
-			# sort likelihood values from lowest probability to highest
-			ranks = ranks[vals.argsort()]
-			# save peak likelihood
-			Lp.append(ranks[-1])
-			# save maximum likelihood value
-			Lj.append(max(ranks))
-		Lp = numpy.array(Lp)
-		Lj = numpy.array(Lj)
-		# create product of all maximum likelihood values
-		L = numpy.exp(sum(numpy.log(Lj)))
-		# compute minimum bin value we care about
-		Lmin = numpy.exp(sum(numpy.log(Lp))) * min(Lj) / L
-		# divide by a million for safety
-		Lmin *= 1e-6
-
-		# start with an identity array to seed the outerproduct chain
-		ranks = numpy.array([1.0])
-		vals = numpy.array([1.0])
-		# FIXME:  probably only works because the pdfs aren't pdfs but probabilities
-		for ifo in ifo_set:
-			likelihood_pdf = likelihood_pdfs[ifo]
-			# FIXME lower instead of centres() to avoid inf in the last bin
-			ranks = numpy.outer(ranks, likelihood_pdf.bins.lower()[0])
-			vals = numpy.outer(vals, likelihood_pdf.array)
-			ranks = ranks.reshape((ranks.shape[0] * ranks.shape[1],))
-			# FIXME nans arise from inf * 0.  Do we want these to be 0?
-			#ranks[numpy.isnan(ranks)] = 0.0
-			vals = vals.reshape((vals.shape[0] * vals.shape[1],))
-			# rebin the outer-product
-			minlikelihood = max(min(ranks[ranks != 0]), Lmin)
-			maxlikelihood = max(ranks)
-			new_likelihood_pdf = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, targetlen),)))
-			for rank,val in zip(ranks,vals):
-				new_likelihood_pdf[rank,] += val
-			ranks = new_likelihood_pdf.bins.lower()[0]
-			vals = new_likelihood_pdf.array
-
-		# FIXME the size of these is targetlen which has to be small
-		# since it is squared in the outer product.  We can afford to
-		# store a 1e6 array.  Maybe we should try to make the resulting
-		# pdf bigger somehow?
-		return new_likelihood_pdf
 
 	def compute_far(self, fap):
 		if fap == 0.:
