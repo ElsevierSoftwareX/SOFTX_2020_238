@@ -423,7 +423,7 @@ def possible_ranks_array(likelihood_pdfs, ifo_set, targetlen):
 #
 
 
-class FAR(object):
+class LocalRankingData(object):
 	def __init__(self, livetime_seg, trials_factor, distribution_stats, trials_table = None, target_length = 1000):
 		self.distribution_stats = distribution_stats
 		if trials_table is None:
@@ -505,9 +505,9 @@ class FAR(object):
 
 	@classmethod
 	def from_filenames(cls, filenames, name = u"gstlal_inspiral_likelihood", verbose = False):
-		self, process_id = FAR.from_xml(utils.load_filename(filenames[0], verbose = verbose), name = name)
+		self, process_id = LocalRankingData.from_xml(utils.load_filename(filenames[0], verbose = verbose), name = name)
 		for f in filenames[1:]:
-			s, p = FAR.from_xml(utils.load_filename(f, verbose = verbose), name = name)
+			s, p = LocalRankingData.from_xml(utils.load_filename(f, verbose = verbose), name = name)
 			self += s
 		return self
 		
@@ -637,13 +637,13 @@ def set_fap(Far, f, tmp_path = None, verbose = False):
 	Function to set the false alarm probability for a single database
 	containing the usual inspiral tables.
 
-	Far = inspiral.FAR class instance
+	Far = LocalRankingData class instance
 	f = filename of the databse (e.g.something.sqlite) 
 	tmp_path = the local disk path to copy the database to in
 		order to avoid sqlite commands over nfs 
 	verbose = be verbose
 	"""
-	# FIXME this code should be moved into a method of the FAR class once other cleaning is done
+	# FIXME this code should be moved into a method of the LocalRankingData class once other cleaning is done
 	from glue.ligolw import dbtables
 
 	# set up working file names

@@ -138,7 +138,7 @@ options, filenames = parse_command_line()
 #
 
 
-Far = far.FAR.from_filenames(options.likelihood_filenames, verbose = options.verbose)
+Far = far.LocalRankingData.from_filenames(options.likelihood_filenames, verbose = options.verbose)
 coincparamsdistributions, likelihood_seglists = Far.distribution_stats, Far.livetime_seg
 
 # calculate injections before writing to disk

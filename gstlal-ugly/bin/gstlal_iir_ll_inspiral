@@ -367,7 +367,7 @@ if options.verbose:
 #
 
 
-FAR, proc_id = far.FAR.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose))
+FAR, proc_id = far.LocalRankingData.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose))
 FAR.trials_factor = options.trials_factor
 
 

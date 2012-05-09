@@ -67,7 +67,7 @@ options, filenames = parse_command_line()
 # Pull out background and injections distribution and set up the FAR class
 #
 
-Far = far.FAR.from_filenames(options.background_bins_file, verbose = options.verbose)
+Far = far.LocalRankingData.from_filenames(options.background_bins_file, verbose = options.verbose)
 Far.trials_factor = options.additional_trials_factor
 
 # late import for DB manipulations
