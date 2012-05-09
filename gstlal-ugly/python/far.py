@@ -459,10 +459,19 @@ class FAR(object):
 			# ignore infs and nans because background is never
 			# found in those bins.  the boolean array indexing
 			# flattens the array
-			likelihoods = likelihoods[numpy.isfinite(likelihoods)]
-			minlikelihood = likelihoods[likelihoods != 0].min()
-			maxlikelihood = likelihoods.max()
-
+			finite_likelihoods = numpy.isfinite(likelihoods)
+			likelihoods = likelihoods[finite_likelihoods]
+			background_likelihoods = background[param].array[finite_likelihoods]
+			sortindex = likelihoods.argsort()
+			likelihoods = likelihoods[sortindex]
+			background_likelihoods = background_likelihoods[sortindex]
+			
+			s = background_likelihoods.cumsum() / background_likelihoods.sum()
+			# restrict range to the 1-1e10 confidence interval to make the best use of our bin resolution
+			minlikelihood = likelihoods[s.searchsorted(1e-10)]
+			maxlikelihood = likelihoods[s.searchsorted(1-1e-10)]
+			if minlikelihood == 0:
+				minlikelihood = likelihoods[likelihoods != 0].min()
 			# construct PDF
 			# FIXME:  because the background array contains
 			# probabilities and not probability densities, the
@@ -540,7 +549,10 @@ class FAR(object):
 			return self.minrank[ifos][1]
 		fap = float(self.ccdf_interpolator[ifos](rank))
 		trials_factor = int(self.trials_table.setdefault((ifos, tsid),1) * self.trials_factor) or 1
-		return 1.0 - (1.0 - fap)**trials_factor
+		# normalize to 1 hour
+		one_day_trials_factor = int(trials_factor / float(abs(self.livetime_seg)) * 3600)
+		return 1.0 - (1.0 - fap)**one_day_trials_factor
+		#return 1.0 - (1.0 - fap)**trials_factor
 
 	def possible_ranks_array(self, likelihood_pdfs, ifo_set, targetlen):
 		# find the minimum value for the binning that we care about.
@@ -601,7 +613,9 @@ class FAR(object):
 	def compute_far(self, fap):
 		if fap == 0.:
 			return 0.
-		livetime = float(abs(self.livetime_seg))
+		# assume one hour livetime, since trials factor was normalized to one hour
+		livetime = 3600.0
+		# livetime = float(abs(self.livetime_seg))
 		return 0. - numpy.log(1. - fap) / livetime
 
 
