@@ -19,6 +19,7 @@ matplotlib.rcParams.update({
 import pylab
 import numpy
 from gstlal import cbc_template_iir
+from gstlal import lloidplots
 from glue.ligolw import utils, array, param, lsctables
 from glue.ligolw.utils import process as ligolw_process
 from matplotlib.ticker import NullFormatter, MultipleLocator, FormatStrFormatter, FixedLocator, NullLocator, LogFormatterMathtext, LinearLocator, ScalarFormatter, MaxNLocator
@@ -233,7 +234,7 @@ for f in sys.argv[1:]:
 
 	sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 	for tmp, row in enumerate(sngl_inspiral_table):
-		snrs.append(row.chisq)
+		snrs.append(row.snr)
 		m1.append(row.mass1)
 		m2.append(row.mass2)
 		mchirp.append(row.mchirp)
@@ -272,4 +273,5 @@ scl = 3.0*(flow[0]**(-5.0/6.0)-(1.0*fhigh[0])**(-5.0/6.0))/(4*numpy.pi**(4.0/3.0
 plotSNRhistograms(snrs, mchirp, Niir, scl = scl)
 plotNumFiltersHistogram(Mr)
 plotSNROverlap(snrs)
+lloidplots.plotbank(f, "m1vm2.png", 'mchirp', 'mtotal')
 
