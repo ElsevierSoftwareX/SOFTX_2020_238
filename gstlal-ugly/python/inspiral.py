@@ -687,7 +687,8 @@ class Data(object):
 				from glue.ligolw import dbtables
 				seg = self.search_summary.get_out()
 				#FIXME Kipp, why aren't the changes to the search summary reflected in the database?
-				self.connection.cursor().execute('UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ?', (seg[0].seconds, seg[0].nanoseconds, seg[1].seconds, seg[1].nanoseconds))
+				if seg != (None, None):
+					self.connection.cursor().execute('UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ?', (seg[0].seconds, seg[0].nanoseconds, seg[1].seconds, seg[1].nanoseconds))
 				self.connection.cursor().execute('UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)')
 				self.connection.cursor().execute('UPDATE process SET end_time = ?', (XLALUTCToGPS(time.gmtime()).seconds,))
 				self.connection.commit()
