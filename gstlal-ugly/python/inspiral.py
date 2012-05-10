@@ -176,7 +176,7 @@ def add_cbc_metadata(xmldoc, process, seg_in):
 	search_summary.comment = process.comment
 	search_summary.set_ifos(process.get_ifos())
 	search_summary.set_in(seg_in)
-	search_summary.set_out((None, None))
+	search_summary.set_out(segments.segment(None, None))
 	search_summary.nevents = None # FIXME
 	search_summary.nnodes = 1
 	tbl.append(search_summary)
@@ -444,7 +444,7 @@ class Data(object):
 			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
 			buf_end_time = buf_timestamp + LIGOTimeGPS(0, buf.duration)
 			out_segs = segments.segmentlist([self.search_summary.get_out()])
-			if out_segs == [(None, None)]:
+			if out_segs == [segments.segment(None, None)]:
 				# out segment not yet initialized
 				del out_segs[:]
 			out_segs |= segments.segmentlist([segments.segment(buf_timestamp, buf_end_time)])
@@ -687,7 +687,8 @@ class Data(object):
 				from glue.ligolw import dbtables
 				seg = self.search_summary.get_out()
 				#FIXME Kipp, why aren't the changes to the search summary reflected in the database?
-				if seg != (None, None):
+				print >>sys.stderr, seg
+				if seg != segments.segment(None, None):
 					self.connection.cursor().execute('UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ?', (seg[0].seconds, seg[0].nanoseconds, seg[1].seconds, seg[1].nanoseconds))
 				self.connection.cursor().execute('UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)')
 				self.connection.cursor().execute('UPDATE process SET end_time = ?', (XLALUTCToGPS(time.gmtime()).seconds,))
