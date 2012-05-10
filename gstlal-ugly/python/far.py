@@ -439,6 +439,7 @@ class LocalRankingData(object):
 			self.trials_table = TrialsTable()
 		else:
 			self.trials_table = trials_table
+		self.joint_likelihood_pdfs = {}
 		self.livetime_seg = livetime_seg
 
 		#
