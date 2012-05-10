@@ -87,6 +87,10 @@ class EPHandler( LLOIDHandler ):
 		# Book keeping
 		self.start = 0
 		self.stop = -1
+		# How long of a time to ignore output from the whitener stabilizing
+		# FIXME: This should be ~number of PSDs stored in history * fft_length
+		# Right now that's probably something like 80 s.
+		self.whitener_offset = 20
 
 		# Defaults -- Time-frequency map settings
 		self.base_band = 16
@@ -301,7 +305,7 @@ class EPHandler( LLOIDHandler ):
 	def make_output_table( self ):
 		self.triggers = lsctables.New(lsctables.SnglBurstTable,
 			["ifo", "peak_time", "peak_time_ns", "start_time", "start_time_ns",
-			"duration",  "search", "event_id",
+			"duration",  "search", "event_id", "process_id",
 			"central_freq", "channel", "amplitude", "snr", "confidence",
 			"chisq", "chisq_dof", "bandwidth"])
 			#"peak_frequency",
@@ -321,26 +325,50 @@ class EPHandler( LLOIDHandler ):
 
 		output = ligolw.Document()
 		output.appendChild(ligolw.LIGO_LW())
-		output.childNodes[0].appendChild( self.triggers )
 
 		# TODO: Before or after Paused?
-		analysis_segment = segment(
+		requested_segment = segment(
 			LIGOTimeGPS( self.time_since_dump ), 
 			LIGOTimeGPS( self.stop )
 		)
-		# TODO: Define a difference between what was requested and what was analyzed
-		requested_segment = analysis_segment
+
+		analysis_segment = requested_segment
+		# If we include start up time, indicate it in the search summary
+		whiten_seg = segment( 
+			LIGOTimeGPS(self.start), 
+			LIGOTimeGPS(self.start + self.whitener_offset)
+		)
+		if( whiten_seg.intersects( analysis_segment) ):
+			if( analysis_segment in whiten_seg ):
+				# All the analyzed time is within the settling time
+				# We make this explicit because the segment constructor will just reverse the arguments if arg2 < arg1 and create an incorrect segment
+				analysis_segment = segment( 
+					analysis_segment[1], analysis_segment[1]
+				)
+			else:
+				analysis_segment -= whiten_seg
 
 		process_params = vars( options )
 		process = ligolw_process.register_to_xmldoc( output, "gstlal_excesspower", vars(options) )
-		process.set_ifos( self.inst )
+		process.set_ifos( [self.inst] )
 
-		add_cbc_metadata( output, process, analysis_segment )
+		# Assign process ids to events
+		for trig in self.triggers:
+			trig.process_id = process.process_id
+
+		output.childNodes[0].appendChild( self.triggers )
+
+		add_cbc_metadata( output, process, requested_segment )
+		search_sum = lsctables.table.get_table( output, lsctables.SearchSummaryTable.tableName )
+		for row in search_sum:
+			# TODO: This shouldn't set every one of them in case we reuse XML documents later
+			row.set_out( analysis_segment )
+
 		# TODO: replace cbc filter table with our own
 		#cbc_filter_table = lsctables.getTablesByType( output, lsctables.FilterTable )[0]
 		#ep_filter_table = lsctables.getTablesByType( self.filter_xml, lsctables.FilterTable )[0]
 		#output.replaceChild( ep_filter_table, cbc_filter_table )
-		print >>sys.stderr, "Outputting triggers for %s\n" % str(analysis_segment)
+		print >>sys.stderr, "Outputting triggers for %s\n" % str(requested_segment)
 
 		# write the new distribution stats to disk
 		self.lock.acquire()
@@ -918,15 +946,16 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 
 	if( handler.fap is not None ):
 		# Still needs magic number... or use the EP version
+		# ndof_eff = ndof * 0.62
 		snr_thresh = ep_utils.determine_thresh_from_fap(fap, ndof)
 	else:
+		# TODO: Make clear in the ini file that the thresh is power SNR, not amplitude and then remove the square here
 		snr_thresh = handler.snr_thresh**2
 	head.set_property( "snr-thresh", snr_thresh )
 
 	if( verbose ):
 		head = mkprogressreport( pipeline, head, 
-			"Trigger generator resolution level %d, %d DOF" % 
-				(res_level, ndof) 
+			"Trigger generator resolution level %d, %d DOF" % (res_level, ndof) 
 		)
 
 	# TODO: combine trigger streams from various levels
