@@ -89,6 +89,7 @@ resource.setrlimit(resource.RLIMIT_AS, (maxas, maxas))
 maxstack = resource.getrlimit(resource.RLIMIT_STACK)[1]
 resource.setrlimit(resource.RLIMIT_STACK, (1 * 1024**2, maxstack)) # 1MB per thread, not 10
 
+
 #
 # =============================================================================
 #
