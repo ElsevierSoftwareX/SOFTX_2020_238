@@ -321,11 +321,10 @@ class gstlal_compute_far_from_snr_chisq_histograms_node(InspiralNode):
 	"""
 	A gstlal_compute_far_from_snr_chisq_histograms_job node
 	"""
-	def __init__(self, job, dag, background_bins_files = [], additional_trials_factor = 1, FAR = False, FAP = False, noninj_input = [], inj_input = [], p_node=[]):
+	def __init__(self, job, dag, background_bins_files = [], FAR = False, FAP = False, noninj_input = [], inj_input = [], p_node=[]):
 		InspiralNode.__init__(self, job, dag, p_node)
 		if background_bins_files is not None:
 			self.add_var_opt("background-bins-file", pipeline_dot_py_append_opts_hack("background-bins-file", background_bins_files))
-		self.add_var_opt("additional-trials-factor", additional_trials_factor)
 		self.add_var_opt("tmp-space", inspiral_pipe.log_path())
 		if FAP:
 			self.add_var_opt("compute-fap", "")
@@ -557,7 +556,7 @@ for injections in options.injections:
 
 
 # compute FAPs and FARs
-farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, background_bins_files = [node.background_name for node in likelihood_nodes.values()], additional_trials_factor = 1, FAP = True, FAR = True, noninj_input = [noninjdb], inj_input = injdbs, p_node = p_nodes)
+farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, background_bins_files = [node.background_name for node in likelihood_nodes.values()], FAP = True, FAR = True, noninj_input = [noninjdb], inj_input = injdbs, p_node = p_nodes)
 
 # make plots
 name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
