@@ -400,6 +400,7 @@ class Data(object):
 		self.sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))
 
 		self.far = FAR
+		self.ranking_data = None
 		if self.assign_likelihoods:
 			self.far.smooth_distribution_stats(verbose = verbose)
 		self.likelihood_file = likelihood_file
@@ -467,14 +468,16 @@ class Data(object):
 				remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}
 
 				# generate the background likelihood distributions
-				self.far.updateFAPmap(remap, verbose = self.verbose)
+				self.far.compute_joint_instrument_background(remap, verbose = self.verbose)
+				self.ranking_data = far.RankingData(self.far)
+				self.ranking_data.compute_joint_cdfs()
 
 				# write the new distribution stats to disk
 				utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
 
 			# run stream thinca
 			if self.assign_likelihoods:
-				noncoinc_sngls = self.stream_thinca.add_events(events, buf_timestamp, FAP = self.far)
+				noncoinc_sngls = self.stream_thinca.add_events(events, buf_timestamp, FAP = self.ranking_data)
 			else:
 				noncoinc_sngls = self.stream_thinca.add_events(events, buf_timestamp)
 
@@ -514,7 +517,7 @@ class Data(object):
 		# run StreamThinca's .flush().  returns the last remaining
 		# non-coincident sngls.  add them to the distribution
 		if self.assign_likelihoods:
-			FAP = self.far
+			FAP = self.ranking_data
 		else:
 			FAP = None
 		for event in self.stream_thinca.flush(FAP = FAP):

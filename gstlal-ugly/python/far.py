@@ -113,6 +113,15 @@ class TrialsTable(dict):
 				out[k] = other[k]
 		return out
 
+	def sum_over_time_slides(self):
+		out = {}
+		for (ifos, time_slide_id), count in self.items():
+			try:
+				out[ifos] += count
+			except:
+				out[ifos] = count
+		return out
+
 	def from_db(self, connection):
 		"""
 		Increment the trials table from values stored in the database
@@ -424,14 +433,13 @@ def possible_ranks_array(likelihood_pdfs, ifo_set, targetlen):
 
 
 class LocalRankingData(object):
-	def __init__(self, livetime_seg, trials_factor, distribution_stats, trials_table = None, target_length = 1000):
+	def __init__(self, livetime_seg, distribution_stats, trials_table = None, target_length = 1000):
 		self.distribution_stats = distribution_stats
 		if trials_table is None:
 			self.trials_table = TrialsTable()
 		else:
 			self.trials_table = trials_table
 		self.livetime_seg = livetime_seg
-		self.trials_factor = trials_factor
 
 		#
 		# the target FAP resolution is 1000 bins by default. This is purely
@@ -439,12 +447,10 @@ class LocalRankingData(object):
 		#
 
 		self.target_length = target_length
-		self.reset()
 
-	def __add__(self, other):
-		out = type(self)(self.livetime_seg, self.trials_factor, self.distribution_stats, self.trials_table)
-		out.distribution_stats += other.distribution_stats
-		out.trials_table += other.trials_table
+	def __iadd__(self, other):
+		self.distribution_stats += other.distribution_stats
+		self.trials_table += other.trials_table
 		if self.livetime_seg[0] is None and other.livetime_seg[0] is not None:
 			minstart = other.livetime_seg[0]
 		elif self.livetime_seg[0] is not None and other.livetime_seg[0] is None:
@@ -454,29 +460,9 @@ class LocalRankingData(object):
 			minstart = min(self.livetime_seg[0], other.livetime_seg[0])
 		# None is always less than everything else, so this is okay
 		maxend = max(self.livetime_seg[1], other.livetime_seg[1])
-		out.livetime_seg = segments.segment(minstart, maxend)
-		# FIXME what do I do with trials_factor currently it is set to self's trials factor so that a += makes sense sort of?
-		out.trials_factor = self.trials_factor
+		self.livetime_seg = segments.segment(minstart, maxend)
 
-		# FIXME I don't know what to do with these. This should depend
-		# on the "theta" of a far object.  Things with different thetas
-		# should be marginalized.  Perhaps this doesn't belong in the
-		# add method at all. Maybe separate code should be written.
-
-		# FIXME check that the keys are the same first??
-		for k in self.joint_likelihood_pdfs:
-			minself, maxself, nself = self.joint_likelihood_pdfs[k].bins[0].min, self.joint_likelihood_pdfs[k].bins[0].max, self.joint_likelihood_pdfs[k].bins[0].n
-			minother, maxother, nother = other.joint_likelihood_pdfs[k].bins[0].min, other.joint_likelihood_pdfs[k].bins[0].max, other.joint_likelihood_pdfs[k].bins[0].n
-			out.joint_likelihood_pdfs[k] =  rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(min(minself, minother), max(maxself, maxother), max(nself, nother)),)))
-
-			# FIXME:  the loop should be the other way:  loop
-			# over source bins and add each of their counts to
-			# the output bins.  the current implementation
-			# might skip some input bins
-			for bin in out.joint_likelihood_pdfs[k].centres()[0]:
-				out.joint_likelihood_pdfs[k][bin,] = self.joint_likelihood_pdfs[k][bin,] + other.joint_likelihood_pdfs[k][bin,]
-
-		return out
+		return self
 
 	@classmethod
 	def from_xml(cls, xml, name = u"gstlal_inspiral_likelihood"):
@@ -491,10 +477,11 @@ class LocalRankingData(object):
 		# masking other bugs with the try/except
 		search_summary_row, = (row for row in lsctables.table.get_table(xml, lsctables.SearchSummaryTable.tableName) if row.process_id == process_id)
 		try:
+			# FIXME:  the latest glue can handle (None,None) itself
 			livetime_seg = search_summary_row.get_out()
 		except TypeError:
-			livetime_seg = None
-		self = cls(livetime_seg, trials_factor = None, distribution_stats = distribution_stats, trials_table = TrialsTable.from_xml(llw_elem))
+			livetime_seg = segments.segment(None, None)
+		self = cls(livetime_seg, distribution_stats = distribution_stats, trials_table = TrialsTable.from_xml(llw_elem))
 		
 		# pull out the joint likelihood arrays if they are present
 		for ba_elem in [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and "_joint_likelihood" in elem.getAttribute(u"Name")]:
@@ -528,13 +515,12 @@ class LocalRankingData(object):
 			# might be changed in the future.
 			self.distribution_stats.finish(verbose = verbose)
 
-	def reset(self):
-		self.ccdf_interpolator = {}
-		self.minrank = {}
-		self.maxrank = {}
-		self.joint_likelihood_pdfs = {}
-
 	def compute_joint_instrument_background(self, remap, instruments = None, verbose = False):
+		# first get the single detector distributions
+		self.distribution_stats.compute_single_instrument_background(verbose = verbose)
+
+		self.joint_likelihood_pdfs.clear()
+
 		# calculate all of the possible ifo combinations with at least
 		# 2 detectors in order to get the joint likelihood pdfs
 		likelihood_pdfs = self.distribution_stats.likelihood_pdfs
@@ -557,10 +543,109 @@ class LocalRankingData(object):
 				self.joint_likelihood_pdfs[ifo_set] = self.joint_likelihood_pdfs[remap_set]
 
 
-	def compute_joint_cdfs(self):
-		# compute the cdfs
+class RankingData(object):
+	def __init__(self, local_ranking_data):
+		self.far_interval = 3600.0	# seconds
+
+		# ensure the trials tables' keys match the likelihood
+		# histograms' keys
+		assert set(local_ranking_data.joint_likelihood_pdfs) == set(local_ranking_data.trials_table.sum_over_time_slides())
+
+		# copy likelihood ratio PDFs
+		self.joint_likelihood_pdfs = dict((key, copy.deepcopy(value)) for key, value in local_ranking_data.joint_likelihood_pdfs.items())
+
+		# copy trials table counts
+		self.trials_table = TrialsTable()
+		self.trials_table += local_ranking_data.trials_table
+
+		# copy livetime segment
+		self.livetime_seg = local_ranking_data.livetime_seg
+
+		self.ccdf_interpolator = {}
+		self.minrank = {}
+		self.maxrank = {}
+
+
+	@classmethod
+	def from_xml(cls, xml, name = u"gstlal_inspiral"):
+		llw_elem, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"%s:gstlal_inspiral_ranking_data" % name]
+
+		class fake_local_ranking_data(object):
+			pass
+		fake_local_ranking_data = fake_local_ranking_data()
+		fake_local_ranking_data.trials_table = TrialsTable.from_xml(llw_elem)
+		fake_local_ranking_data.joint_likelihood_pdfs = {}
+		for key in fake_local_ranking_data.trials_table:
+			ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
+			fake_local_ranking_data.joint_likelihood_pdfs[key] = rate.binned_array_from_xml(llw_elem, ifostr)
+
+		# the code that writes these things has put the
+		# livetime_seg into the out segment in the search_summary
+		# table.  uninitialized segments get recorded as
+		# [None,None), which breaks the .get_out() method of the
+		# row class, so we need to reconstruct the segment
+		# ourselves to trap that error without worrying that we're
+		# masking other bugs with the try/except
+		process_id = ligolw_param.get_pyvalue(llw_elem, u"process_id")
+		search_summary_row, = (row for row in lsctables.table.get_table(xml, lsctables.SearchSummaryTable.tableName) if row.process_id == process_id)
+		fake_local_ranking_data.livetime_seg = search_summary_row.get_out()
+
+		self = cls(fake_local_ranking_data)
+
+		return self, process_id
+
+
+	def to_xml(self, process, search_summary, name = u"gstlal_inspiral"):
+		xml = ligolw.LIGO_LW({u"Name": u"%s:gstlal_inspiral_ranking_data" % name})
+		xml.appendChild(ligolw_param.new_param(u"process_id", u"ilwd:char", process.process_id))
+		xml.appendChild(self.trials_table.to_xml())
 		for key in self.joint_likelihood_pdfs:
-			lpdf = self.joint_likelihood_pdfs[key]
+			ifostr = lsctables.ifos_from_instrument_set(key).replace(",","")
+			xml.appendChild(rate.binned_array_to_xml(self.joint_likelihood_pdfs[key], ifostr))
+		assert search_summary.process_id == process.process_id
+		search_summary.set_out(self.livetime_seg)
+		return xml
+
+
+	def __iadd__(self, other):
+		our_trials = self.trials_table.sum_over_time_slides()
+		other_trials = other.trials_table.sum_over_time_slides()
+
+		our_keys = set(self.joint_likelihood_pdfs)
+		other_keys  = set(other.joint_likelihood_pdfs)
+
+		# PDFs that only we have are unmodified
+		pass
+
+		# PDFs that only the new data has get copied verbatim
+		for k in other_keys - our_keys:
+			self.joint_likelihood_pdfs[k] = copy.deepcopy(other.joint_likelihood_pdfs[k])
+
+		# PDFs that we have and are in the new data get replaced
+		# with the weighted sum, re-binned
+		for k in our_keys & other_keys:
+			minself, maxself, nself = self.joint_likelihood_pdfs[k].bins[0].min, self.joint_likelihood_pdfs[k].bins[0].max, self.joint_likelihood_pdfs[k].bins[0].n
+			minother, maxother, nother = other.joint_likelihood_pdfs[k].bins[0].min, other.joint_likelihood_pdfs[k].bins[0].max, other.joint_likelihood_pdfs[k].bins[0].n
+			new_joint_likelihood_pdf =  rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(min(minself, minother), max(maxself, maxother), max(nself, nother)),)))
+
+			for x in self.joint_likelihood_pdfs[k].centres()[0]:
+				new_joint_likelihood_pdf[x,] += self.joint_likelihood_pdfs[k][x,] * float(our_trials[k]) / (our_trials[k] + other_trials[k])
+			for x in other.joint_likelihood_pdfs[k].centres()[0]:
+				new_joint_likelihood_pdf[x,] += local_ranking_data.joint_likelihood_pdfs[k][x,] * float(other_trials[k]) / (our_trials[k] + other_trials[k])
+
+			self.joint_likelihood_pdf[k] = new_joint_likelihood_pdf
+
+		# combined trials counts
+		self.trials_table += other.trials_table
+
+		# merge livetime segments.  let the code crash if they're disjoint
+		self.livetime_seg |= other.livetime_seg
+
+	def compute_joint_cdfs(self):
+		self.minrank.clear()
+		self.maxrank.clear()
+		self.ccdf_interpolator.clear()
+		for key, lpdf in self.joint_likelihood_pdfs.items():
 			ranks = lpdf.bins.lower()[0]
 			weights = lpdf.array
 			# complementary cumulative distribution function
@@ -571,30 +656,6 @@ class LocalRankingData(object):
 			self.minrank[key] = (min(ranks), ccdf[0])
 			self.maxrank[key] = (max(ranks), ccdf[-1])
 
-
-	def updateFAPmap(self, remap = {}, verbose = False):
-		if self.distribution_stats is None:
-			raise InputError, "must provide background bins file"
-
-		# clear everything
-		self.reset()
-
-		# we might choose to statically map certain likelihood
-		# distributions to others.  This is useful for ignoring H2 when
-		# H1 is present. By default we don't and it is simply the ifo_set
-
-		# first get the single detector distributions
-		self.distribution_stats.compute_single_instrument_background(verbose = verbose)
-
-		# then get the joint distributions
-		self.compute_joint_instrument_background(remap, verbose = verbose)
-
-		# FIXME: marginalize over theta here
-
-		# then get the cdf interpolators
-		self.compute_joint_cdfs()
-
-
 	def fap_from_rank(self, rank, ifos, tsid):
 		ifos = frozenset(ifos)
 		# FIXME:  doesn't check that rank is a scalar
@@ -603,18 +664,23 @@ class LocalRankingData(object):
 		if rank <= self.minrank[ifos][0]:
 			return self.minrank[ifos][1]
 		fap = float(self.ccdf_interpolator[ifos](rank))
-		trials_factor = int(self.trials_table.setdefault((ifos, tsid),1) * self.trials_factor) or 1
-		# normalize to 1 hour
-		one_day_trials_factor = int(trials_factor / float(abs(self.livetime_seg)) * 3600)
-		return 1.0 - (1.0 - fap)**one_day_trials_factor
-		#return 1.0 - (1.0 - fap)**trials_factor
+		try:
+			trials = max(int(self.trials_table[ifos]), 1)
+		except KeyError:
+			trials = 1
+		# normalize to the far interval
+		if self.far_interval is not None:
+			trials *= self.far_interval / float(abs(self.livetime_seg))
+		return 1.0 - (1.0 - fap)**trials
 
 	def compute_far(self, fap):
 		if fap == 0.:
 			return 0.
-		# assume one hour livetime, since trials factor was normalized to one hour
-		livetime = 3600.0
-		# livetime = float(abs(self.livetime_seg))
+		if self.far_interval is not None:
+			# use far interval for livetime
+			livetime = self.far_interval
+		else:
+			livetime = float(abs(self.livetime_seg))
 		return 0. - numpy.log(1. - fap) / livetime
 
 

@@ -310,9 +310,8 @@ if options.verbose:
 
 if options.likelihood_file is not None:
 	FAR, proc_id = far.LocalRankingData.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose))
-	FAR.trials_factor = 1 #FIXME what should this be, it is not currently a command line?
 else:
-	FAR = far.LocalRankingData(None, 1, far.DistributionsStats())
+	FAR = far.LocalRankingData(segments.segment(None, None), far.DistributionsStats())
 
 
 #
