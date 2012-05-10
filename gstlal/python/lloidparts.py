@@ -208,10 +208,14 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 class get_state_vector(object):
 	# monitor state vector transitions, export via web
 	# interface
-	def __init__(self, elem, verbose = False):
+	def __init__(self, elem, msg = None, verbose = False):
 		self.verbose = verbose
 		self.current_segment = "unknown"
 		self.segment_start = "unknown"
+		if msg is not None:
+			self.msg = "%s: " % msg
+		else:
+			self.msg = ""
 		elem.connect("start", self.sighandler, "science")
 		elem.connect("stop", self.sighandler, "lock loss")
 
@@ -219,7 +223,7 @@ class get_state_vector(object):
 		self.current_segment = segment_type
 		self.segment_start = "%.9f" % (timestamp / 1e9)
 		if self.verbose:
-			print >>sys.stderr, "state transition: %s" % self.text()
+			print >>sys.stderr, "%s: %sstate transition: %s" % (elem.get_name(), self.msg, self.text().strip())
 
 	def text(self):
 		return "%s @ %s\n" % (self.current_segment, self.segment_start)
@@ -325,7 +329,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		src.set_property("emit-signals", True)
 		# FIXME:  let the state vector messages going to stderr be
 		# controled somehow
-		bottle.route("/%s/current_segment.txt" % instrument)(get_state_vector(src, verbose = True).text)
+		bottle.route("/%s/current_segment.txt" % instrument)(get_state_vector(src, msg = instrument, verbose = True).text)
 	else:
 		src = pipeparts.mkaudioconvert(pipeline, src)
 
