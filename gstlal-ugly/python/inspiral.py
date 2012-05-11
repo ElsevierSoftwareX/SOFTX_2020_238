@@ -624,7 +624,7 @@ class Data(object):
 					t = float(coinc_inspiral_index[coinc_event_id].get_end())
 					latency_val = (t, latency)
 				snr = coinc_inspiral_index[coinc_event_id].snr
-				if snr >= snr_val[0]:
+				if snr >= snr_val[1]:
 					t = float(coinc_inspiral_index[coinc_event_id].get_end())
 					snr_val = (t, snr)
 			if latency_val is not None:
