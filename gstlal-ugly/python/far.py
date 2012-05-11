@@ -211,6 +211,7 @@ class DistributionsStats(object):
 		self.raw_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
 		self.smoothed_distributions = ligolw_burca_tailor.CoincParamsDistributions(**self.binnings)
 		self.likelihood_pdfs = {}
+		self.target_length = 1000
 
 	def __add__(self, other):
 		out = type(self)()
