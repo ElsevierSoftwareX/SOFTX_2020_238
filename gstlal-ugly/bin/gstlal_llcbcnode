@@ -75,7 +75,7 @@ def livetime_plot(disconturl, livetimeurl, xlabel = "", ylabel = "", title = "")
 	explode = [0.0, 0, 0.15]
 	labels = ["Dead : %g (s)" % dt, "Live : %g (s)" % lt, "Drop : %g (s)" % discont]
 
-	h.pie(data, shadow=True, explode = explode, labels = labels, autopct='%1.1f%%', colors = ('0.5', '1.0', 'r')) #dropped is bad so we make it red
+	h.pie(data, shadow=True, explode = explode, labels = labels, autopct='%1.1f%%', colors = ('0.5', '1.0', (0.7, 0.7, 1.)))
 
 	plt.xlabel(xlabel)
 	plt.ylabel(ylabel)
@@ -152,6 +152,7 @@ print """
 <meta http-equiv="refresh" content="300">
 </head>
 <body bgcolor=#E0E0E0>
+<img src="../lcbo.jpg"> <font size=10>Low-latency Compact Binary Online</font><hr><br>
 """
 
 print "<table face='Arial'>"

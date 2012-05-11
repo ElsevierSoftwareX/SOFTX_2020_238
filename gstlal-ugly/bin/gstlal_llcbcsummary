@@ -195,7 +195,9 @@ print """
 """
 
 # title
-print "<center><h1>Low-latency Compact Binary Online (LCBO) summary %s: %d - %s </h1></center><br>" % ("".join(ifos), int(now()), time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime()))
+print """
+<font size=10><img src="../lcbo.jpg"> Low-latency Compact Binary Online </font><font size=6 color=#707070><b><right>%s: %d - %s </right></b><br></font><hr><br>
+""" % ("".join(sorted(ifos)), int(now()), time.strftime("%a, %d %b %Y %H:%M:%S %Z", time.localtime()))
 
 # start a table
 print "<table>"
