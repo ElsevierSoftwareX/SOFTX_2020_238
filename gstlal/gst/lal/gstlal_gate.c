@@ -202,6 +202,7 @@ static void control_add_segment(GSTLALGate *element, GstClockTime start, GstCloc
 	};
 
 	g_assert_cmpuint(start, <=, stop);
+	GST_DEBUG_OBJECT(element, "found control segment [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ") in state %d", GST_TIME_SECONDS_ARGS(new_segment.start), GST_TIME_SECONDS_ARGS(new_segment.stop), new_segment.state);
 
 	/* try coalescing the new segment with the most recent one */
 	/* FIXME:  it might be more efficient to apply the attack and hold
@@ -325,6 +326,29 @@ static gboolean control_get_state(GSTLALGate *element, GstClockTime tmin, GstClo
 	guint i;
 
 	g_assert_cmpuint(tmin, <=, tmax);
+
+	/*
+	 * handle 0-length scan intervals.  this only works because segment
+	 * boundaries and tmin and tmax are all restricted to being
+	 * integers
+	 *
+	 * -+--+--+--+--+--+--+--+-
+	 *  [        ) A
+	 *           [           ) B
+	 *        ^  ^
+	 *        1  2
+	 *
+	 * if tmin=tmax=1, then incrementing tmax by 1 results in the state
+	 * from segment A being the result, which is correct.  if
+	 * tmin=tmax=2, then incrementing tmax by 1 results in the state
+	 * from segment B being the result, which is correct.  if a segment
+	 * has 0 length it is ignored so incrementing tmax will not cause
+	 * segments to be skipped that wouldn't have been anyway.  if
+	 * tmax!=tmin then neither is adjusted.
+	 */
+
+	if(tmax == tmin)
+		tmax++;
 
 	/*
 	 * loop assumes control segments are in order and do not overlap.
