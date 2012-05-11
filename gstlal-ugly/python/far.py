@@ -38,7 +38,7 @@ except ImportError:
 	from pysqlite2 import dbapi2 as sqlite3
 sqlite3.enable_callback_tracebacks(True)
 
-
+import copy
 from glue import iterutils
 from glue.ligolw import ligolw
 from glue.ligolw import ilwd
@@ -72,17 +72,16 @@ class TrialsTable(dict):
 	A class to store the trials table from a coincident inspiral search
 	with the intention of computing the false alarm probabiliy of an event after N
 	trials.  This is a subclass of dict.  The trials table is keyed by the
-	detectors that partcipated in the coincidence and the time slide id.
+	detectors that partcipated in the coincidence.
 	"""
 	class TrialsTableTable(lsctables.table.Table):
 		tableName = "gstlal_trials:table"
 		validcolumns = {
 			"ifos": "lstring",
-			"time_slide_id": "ilwd:char",
 			"count": "int_8s"
 		}
 		class RowType(object):
-			__slots__ = ("ifos", "time_slide_id", "count")
+			__slots__ = ("ifos", "count")
 
 			def get_ifos(self):
 				return lsctables.instrument_set_from_ifos(self.ifos)
@@ -92,15 +91,22 @@ class TrialsTable(dict):
 
 			@property
 			def key(self):
-				return frozenset(self.get_ifos()), self.time_slide_id
+				return frozenset(self.get_ifos())
 
 			@classmethod
-			def from_item(cls, ((ifos, time_slide_id), value)):
+			def from_item(cls, (ifos, value)):
 				self = cls()
 				self.set_ifos(ifos)
-				self.time_slide_id = time_slide_id
 				self.count = value
 				return self
+
+	def initialize_from_sngl_ifos(self, ifos, val = 0):
+		"""
+		for all possible combinations of 2 or more from ifos initialize ourself to val (default = 0)
+		"""
+		for n in range(2, len(ifos) +	1):
+			for ifo in iterutils.choices(ifos, n):
+				self[frozenset(ifo)] = val
 
 	def __add__(self, other):
 		out = type(self)()
@@ -113,27 +119,18 @@ class TrialsTable(dict):
 				out[k] = other[k]
 		return out
 
-	def sum_over_time_slides(self):
-		out = {}
-		for (ifos, time_slide_id), count in self.items():
-			try:
-				out[ifos] += count
-			except:
-				out[ifos] = count
-		return out
-
 	def from_db(self, connection):
 		"""
 		Increment the trials table from values stored in the database
 		found in "connection"
-		"""		
+		"""
+		# FIXME tsid is pulled out here but not used, it should probably be removed
 		for ifos, tsid, count in connection.cursor().execute('SELECT ifos, coinc_event.time_slide_id AS tsid, count(*) / nevents FROM sngl_inspiral JOIN coinc_event_map ON coinc_event_map.event_id == sngl_inspiral.event_id JOIN coinc_inspiral ON coinc_inspiral.coinc_event_id == coinc_event_map.coinc_event_id JOIN coinc_event ON coinc_event.coinc_event_id == coinc_event_map.coinc_event_id  WHERE coinc_event_map.table_name = "sngl_inspiral" GROUP BY tsid, ifos;'):
 			ifos = frozenset(lsctables.instrument_set_from_ifos(ifos))
-			tsid = ilwd.get_ilwdchar(tsid)
 			try:
-				self[ifos, tsid] += count
+				self[ifos] += count
 			except KeyError:
-				self[ifos, tsid] = count
+				self[ifos] = count
 		connection.commit()
 
 	def increment(self, n):
@@ -551,7 +548,7 @@ class RankingData(object):
 
 		# ensure the trials tables' keys match the likelihood
 		# histograms' keys
-		assert set(local_ranking_data.joint_likelihood_pdfs) == set(local_ranking_data.trials_table.sum_over_time_slides())
+		assert set(local_ranking_data.joint_likelihood_pdfs) == set(local_ranking_data.trials_table)
 
 		# copy likelihood ratio PDFs
 		self.joint_likelihood_pdfs = dict((key, copy.deepcopy(value)) for key, value in local_ranking_data.joint_likelihood_pdfs.items())
@@ -610,8 +607,8 @@ class RankingData(object):
 
 
 	def __iadd__(self, other):
-		our_trials = self.trials_table.sum_over_time_slides()
-		other_trials = other.trials_table.sum_over_time_slides()
+		our_trials = self.trials_table
+		other_trials = other.trials_table
 
 		our_keys = set(self.joint_likelihood_pdfs)
 		other_keys  = set(other.joint_likelihood_pdfs)
@@ -658,7 +655,7 @@ class RankingData(object):
 			self.minrank[key] = (min(ranks), ccdf[0])
 			self.maxrank[key] = (max(ranks), ccdf[-1])
 
-	def fap_from_rank(self, rank, ifos, tsid):
+	def fap_from_rank(self, rank, ifos):
 		ifos = frozenset(ifos)
 		# FIXME:  doesn't check that rank is a scalar
 		if rank >= self.maxrank[ifos][0]:
@@ -719,10 +716,10 @@ def set_fap(Far, f, tmp_path = None, verbose = False):
 	connection = sqlite3.connect(working_filename)
 
 	# define fap function
-	connection.create_function("fap", 3, lambda rank, ifostr, tsid: Far.fap_from_rank(rank, lsctables.instrument_set_from_ifos(ifostr), ilwd.get_ilwdchar(tsid)))
+	connection.create_function("fap", 2, lambda rank, ifostr: Far.fap_from_rank(rank, lsctables.instrument_set_from_ifos(ifostr)))
 
 	# FIXME abusing false_alarm_rate column, move for a false_alarm_probability column??
-	connection.cursor().execute("UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(coinc_event.likelihood, coinc_inspiral.ifos, coinc_event.time_slide_id) FROM coinc_event WHERE coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id)")
+	connection.cursor().execute("UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(coinc_event.likelihood, coinc_inspiral.ifos) FROM coinc_event WHERE coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id)")
 	connection.commit()
 
 	# all finished
