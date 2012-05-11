@@ -100,10 +100,14 @@ if options.background_prior != 0:
 	coincparamsdistributions.add_background_prior(options.background_prior)
 coincparamsdistributions.add_foreground_prior(verbose = options.verbose, n = options.synthesize_injection_count)
 
+# FIXME don't hard code. DistributionsStats should know about instruments some how??
 ifos = ("H1","H2","L1","V1")
 
 # no segments, this file is independent of time
 FAR = far.LocalRankingData(segments.segment(None, None), coincparamsdistributions)
+
+# initialize the trials table to 1
+FAR.trials_table.initialize_from_sngl_ifos(ifos, val = 1)
 
 xmldoc = inspiral.gen_likelihood_control_doc(FAR, ifos)
 utils.write_filename(xmldoc, options.write_likelihood, gz = options.write_likelihood.endswith('.gz'), verbose = options.verbose)
