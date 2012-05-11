@@ -54,6 +54,7 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
+from glue.ligolw.utils import search_summary as ligolw_search_summary
 from pylal.datatypes import LIGOTimeGPS
 from pylal.date import XLALUTCToGPS
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
@@ -285,7 +286,7 @@ def gen_likelihood_control_doc(far, instruments, name = u"gstlal_inspiral_likeli
 	node.appendChild(lsctables.New(lsctables.ProcessParamsTable))
 	node.appendChild(lsctables.New(lsctables.SearchSummaryTable))
 	process = ligolw_process.append_process(xmldoc, comment = comment)
-	llwapp.append_search_summary(xmldoc, process, ifos = instruments, inseg = far.livetime_seg, outseg = far.livetime_seg)
+	ligolw_search_summary.append_search_summary(xmldoc, process, ifos = instruments, inseg = far.livetime_seg, outseg = far.livetime_seg)
 
 	node.appendChild(far.to_xml(process, name))
 
