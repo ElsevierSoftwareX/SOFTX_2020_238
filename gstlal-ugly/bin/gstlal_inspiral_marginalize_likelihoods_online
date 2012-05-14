@@ -1,0 +1,12 @@
+#!/bin/bash
+
+REGPATH=$1
+OUTPUT=$2
+
+
+while true ; do
+	# FIXME the correct thing to do!
+	gstlal_inspiral_marginalize_likelihood --verbose --ignore-missing --output ${OUTPUT}.next.gz $(grep -h likelihood.xml ${REGPATH}/*registry*.txt) || break
+	mv -f ${OUTPUT}.next.gz ${OUTPUT} || break
+	sleep 300 # five minutes
+done
