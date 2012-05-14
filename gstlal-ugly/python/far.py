@@ -603,9 +603,9 @@ class RankingData(object):
 			for x in self.joint_likelihood_pdfs[k].centres()[0]:
 				new_joint_likelihood_pdf[x,] += self.joint_likelihood_pdfs[k][x,] * float(our_trials[k]) / (our_trials[k] + other_trials[k])
 			for x in other.joint_likelihood_pdfs[k].centres()[0]:
-				new_joint_likelihood_pdf[x,] += local_ranking_data.joint_likelihood_pdfs[k][x,] * float(other_trials[k]) / (our_trials[k] + other_trials[k])
+				new_joint_likelihood_pdf[x,] += other.joint_likelihood_pdfs[k][x,] * float(other_trials[k]) / (our_trials[k] + other_trials[k])
 
-			self.joint_likelihood_pdf[k] = new_joint_likelihood_pdf
+			self.joint_likelihood_pdfs[k] = new_joint_likelihood_pdf
 
 		# combined trials counts
 		self.trials_table += other.trials_table
