@@ -58,7 +58,7 @@ def parse_command_line():
 
 	options, urls = parser.parse_args()
 
-	if not urls:
+	if not urls and not options.ignore_missing:
 		raise ValueError, "no input documents"
 
 	return options, urls
@@ -87,6 +87,10 @@ options, urls = parse_command_line()
 
 
 xmldoc = ligolw.Document()
+node = xmldoc.appendChild(ligolw.LIGO_LW())
+node.appendChild(lsctables.New(lsctables.ProcessTable))
+node.appendChild(lsctables.New(lsctables.ProcessParamsTable))
+node.appendChild(lsctables.New(lsctables.SearchSummaryTable))
 process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_marginalize_likelihood", options.__dict__)
 search_summary = llwapp.append_search_summary(xmldoc, process)
 
@@ -110,10 +114,19 @@ for url in urls:
 		# but this is subclassed from IOError so IOError will catch
 		# those, too.
 		if options.ignore_missing:
+			print >>sys.stderr, "Could not load ", url, " ...skipping as requested"
 			continue
 		raise
 	likelihood_data, process_id = far.LocalRankingData.from_xml(in_xmldoc)
 	in_xmldoc.unlink()
+
+	#
+	# Compute the joint likelihood backgrounds from the ranking data regardless of what is there
+	#
+
+	# FIXME This assumes that a trials table was initialized for all jobs with the same set of instruments.  It will only compute the likelihood background for those instruments to save time.
+	likelihood_data.smooth_distribution_stats(verbose = options.verbose)
+	likelihood_data.compute_joint_instrument_background(remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}, instruments = likelihood_data.trials_table.get_sngl_ifos(), verbose = options.verbose)
 
 	#
 	# merge into marginalized data
@@ -126,10 +139,12 @@ for url in urls:
 
 
 #
-# write output document
+# write output document only if we have something to write, so that a mishap
+# doesn't clobber an otherwise valid file
 #
 
 
-xmldoc.childNodes[-1].appendChild(ranking_data.to_xml(process, search_summary))
-ligolw_process.set_process_end_time(process)
-utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)
+if ranking_data is not None:
+	xmldoc.childNodes[-1].appendChild(ranking_data.to_xml(process, search_summary))
+	ligolw_process.set_process_end_time(process)
+	utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)
