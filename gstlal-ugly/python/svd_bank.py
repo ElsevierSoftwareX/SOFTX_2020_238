@@ -60,10 +60,22 @@ from gstlal import templates
 #
 
 def read_approximant(xmldoc):
-	approximant=ligolw_process.get_process_params(xmldoc, "tmpltbank", "--approximant")
-	approximant=approximant[0]
+	approximant = set()
+	try:
+		approximant.add(ligolw_process.get_process_params(xmldoc, "tmpltbank", "--approximant")[0])
+	except:
+		pass
+	try:
+		approximant.add(ligolw_process.get_process_params(xmldoc, "makeBank", "--approximant")[0])
+	except:
+		pass
 
 	supported_approximants=[u'FindChirpSP', u'TaylorF2', u'IMRPhenomB']
+	if not approximant:
+		raise ValueError, "file must contain a process params entry for approximant in either tmpltbank or makeBank"
+	if len(approximant)>1:
+		raise ValueError, "file must contain only one approximant"
+	approximant=approximant.pop()
 	if approximant not in supported_approximants:
 		raise ValueError, "unsupported approximant %s"% approximant
 	return approximant
