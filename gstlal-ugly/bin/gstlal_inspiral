@@ -89,6 +89,7 @@ resource.setrlimit(resource.RLIMIT_AS, (maxas, maxas))
 maxstack = resource.getrlimit(resource.RLIMIT_STACK)[1]
 resource.setrlimit(resource.RLIMIT_STACK, (1 * 1024**2, maxstack)) # 1MB per thread, not 10
 
+
 #
 # =============================================================================
 #
@@ -309,10 +310,9 @@ if options.verbose:
 
 
 if options.likelihood_file is not None:
-	FAR, proc_id = far.FAR.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose))
-	FAR.trials_factor = 1 #FIXME what should this be, it is not currently a command line?
+	FAR, proc_id = far.LocalRankingData.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose))
 else:
-	FAR = far.FAR(None, 1, far.DistributionsStats())
+	FAR = far.LocalRankingData(segments.segment(None, None), far.DistributionsStats())
 
 
 #
@@ -358,8 +358,8 @@ if options.write_pipeline is not None:
 # start http interface
 #
 
-# FIXME: don't hard-code port
-httpinterface.start_servers(16953, verbose = options.verbose)
+# FIXME: don't hard-code port, don't use in this program right now since more than one job runs per machine
+# httpinterface.start_servers(16953, verbose = options.verbose)
 
 #
 # Run pipeline

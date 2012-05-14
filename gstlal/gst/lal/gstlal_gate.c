@@ -195,31 +195,42 @@ struct control_segment {
 
 static void control_add_segment(GSTLALGate *element, GstClockTime start, GstClockTime stop, gboolean state)
 {
-	struct control_segment control_segment = {
+	struct control_segment new_segment = {
 		.start = start,
 		.stop = stop,
 		.state = element->invert_control ? !state : state
 	};
 
-	g_assert_cmpuint(start, <, stop);
+	g_assert_cmpuint(start, <=, stop);
+	GST_DEBUG_OBJECT(element, "found control segment [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ") in state %d", GST_TIME_SECONDS_ARGS(new_segment.start), GST_TIME_SECONDS_ARGS(new_segment.stop), new_segment.state);
 
-	/* if new segment continues the last segment in the array, just
-	 * update that segment's stop time --- keeps segment list coalesced
-	 * if segments are added in order */
+	/* try coalescing the new segment with the most recent one */
 	/* FIXME:  it might be more efficient to apply the attack and hold
 	 * properties here, adjusting the segment list as we construct it,
 	 * than scanning for intersections with a segment later.  would
 	 * require smarter coalescing logic */
 	if(element->control_segments->len) {
 		struct control_segment *final_segment = &((struct control_segment *) element->control_segments->data)[element->control_segments->len - 1];
-		if(final_segment->state == control_segment.state && final_segment->stop >= start) {
-			g_assert_cmpuint(final_segment->stop, <=, stop);
-			final_segment->stop = stop;
+		/* if the most recent segment and the new segment have the
+		 * same state and they touch, merge them */
+		if(final_segment->state == new_segment.state && final_segment->stop >= new_segment.start) {
+			g_assert_cmpuint(new_segment.stop, >=, final_segment->stop);
+			final_segment->stop = new_segment.stop;
+			return;
+		}
+		/* otherwise, if the most recent segment had 0 length,
+		 * replace it entirely with the new one.  note that the
+		 * state carried by a zero-length segment is meaningless,
+		 * zero-length segments are merely interpreted as a
+		 * heart-beat indicating how far the control stream has
+		 * advanced */
+		if(final_segment->stop == final_segment->start) {
+			*final_segment = new_segment;
 			return;
 		}
 	}
 	/* otherwise append a new segment */
-	g_array_append_val(element->control_segments, control_segment);
+	g_array_append_val(element->control_segments, new_segment);
 }
 
 
@@ -266,8 +277,10 @@ static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstCloc
 		 */
 
 		for(i = 0; i < element->control_segments->len && g_array_index(element->control_segments, struct control_segment, i).stop <= tmin; i++);
-		if(i)
+		if(i) {
+			GST_DEBUG_OBJECT(element, "flushing %u obsolete control segments", i);
 			g_array_remove_range(element->control_segments, 0, i);
+		}
 
 		/*
 		 * has head advanced far enough, or are we at EOS?
@@ -315,6 +328,29 @@ static gboolean control_get_state(GSTLALGate *element, GstClockTime tmin, GstClo
 	g_assert_cmpuint(tmin, <=, tmax);
 
 	/*
+	 * handle 0-length scan intervals.  this only works because segment
+	 * boundaries and tmin and tmax are all restricted to being
+	 * integers
+	 *
+	 * -+--+--+--+--+--+--+--+-
+	 *  [        ) A
+	 *           [           ) B
+	 *        ^  ^
+	 *        1  2
+	 *
+	 * if tmin=tmax=1, then incrementing tmax by 1 results in the state
+	 * from segment A being the result, which is correct.  if
+	 * tmin=tmax=2, then incrementing tmax by 1 results in the state
+	 * from segment B being the result, which is correct.  if a segment
+	 * has 0 length it is ignored so incrementing tmax will not cause
+	 * segments to be skipped that wouldn't have been anyway.  if
+	 * tmax!=tmin then neither is adjusted.
+	 */
+
+	if(tmax == tmin)
+		tmax++;
+
+	/*
 	 * loop assumes control segments are in order and do not overlap.
 	 * won't crash if this isn't true, but the result is undefined.
 	 */
@@ -325,6 +361,10 @@ static gboolean control_get_state(GSTLALGate *element, GstClockTime tmin, GstClo
 			continue;
 		if(tmax <= segment.start)
 			break;
+		/* zero-length segments are heart beats, they do not
+		 * indicate true control state */
+		if(segment.start == segment.stop)
+			continue;
 		/* if we get here, segment intersects the requested
 		 * interval */
 		if(segment.state)
@@ -628,7 +668,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * above threshold, FALSE = below threshold.
 	 */
 
-	if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP)) {
+	if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP) || !GST_BUFFER_DURATION(sinkbuf)) {
 		control_add_segment(element, GST_BUFFER_TIMESTAMP(sinkbuf), GST_BUFFER_TIMESTAMP(sinkbuf) + GST_BUFFER_DURATION(sinkbuf), FALSE);
 	} else {
 		guint buffer_length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
@@ -671,7 +711,7 @@ static gboolean control_event(GstPad *pad, GstEvent *event)
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT:
-		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag and flushing queue");
+		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag and flushing control queue");
 		g_mutex_lock(element->control_lock);
 		element->control_eos = FALSE;
 		control_flush(element);
@@ -1044,7 +1084,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 
 	switch(GST_EVENT_TYPE(event)) {
 	case GST_EVENT_NEWSEGMENT:
-		GST_DEBUG_OBJECT(pad, "new segment;  clearing internal end-of-stream flag");
+		GST_DEBUG_OBJECT(pad, "new segment;  clearing end-of-stream flag");
 		g_mutex_lock(element->control_lock);
 		element->t_sink_head = GST_CLOCK_TIME_NONE;
 		element->sink_eos = FALSE;
@@ -1054,7 +1094,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		break;
 
 	case GST_EVENT_EOS:
-		GST_DEBUG_OBJECT(pad, "end-of-stream;  setting internal end-of-stream flag and flushing control buffer");
+		GST_DEBUG_OBJECT(pad, "end-of-stream;  setting end-of-stream flag and flushing control queue");
 		g_mutex_lock(element->control_lock);
 		element->sink_eos = TRUE;
 		control_flush(element);

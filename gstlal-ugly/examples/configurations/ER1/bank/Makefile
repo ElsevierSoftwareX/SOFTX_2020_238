@@ -25,7 +25,7 @@ lalapps_path2cache :
 
 frame.cache : lalapps_path2cache
 	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --instrument H1 --verbose --fake-data AdvLIGO --frame-type test
-	ls H1-FAKE-STRAIN/*.gwf | ./lalapps_path2cache > frame.cache
+	ls H1/H-H1_test-8711/*.gwf | ./lalapps_path2cache > frame.cache
 
 H1-TMPLTBANK-871147516-2048.xml : frame.cache
 	lalapps_tmpltbank \

@@ -70,15 +70,18 @@ struct twod_waveform_interpolant * new_waveform_interpolant_from_svd_bank(gsl_ma
 	return interp;
 }
 
-struct twod_waveform_interpolant_manifold* interpolants_manifold_init(REAL8FrequencySeries *psd, int patches_in_eta, int patches_in_mc, int waveforms_in_patch, double mc_min, double mc_max, double eta_min, double eta_max, double outer_mc_min, double outer_mc_max, double outer_eta_min, double outer_eta_max){
+struct twod_waveform_interpolant_manifold* interpolants_manifold_init(REAL8FrequencySeries *psd, int patches_in_eta, int patches_in_mc, int number_templates_along_mc, int number_templates_along_eta, double mc_min, double mc_max, double eta_min, double eta_max, double outer_mc_min, double outer_mc_max, double outer_eta_min, double outer_eta_max, double mc_padding, double eta_padding){
 
 	struct twod_waveform_interpolant_manifold * output = (struct twod_waveform_interpolant_manifold *) calloc( 1, sizeof(struct twod_waveform_interpolant_manifold));
 
 	output->interp_arrays = (struct twod_waveform_interpolant_array *) calloc(patches_in_eta*patches_in_mc, sizeof(struct twod_waveform_interpolant_array));
 	output->psd = psd;
-	output->waveforms_in_patch = waveforms_in_patch; 
+	output->number_templates_along_eta = number_templates_along_eta; 
+	output->number_templates_along_mc = number_templates_along_mc;
 	output->patches_in_eta = patches_in_eta;
 	output->patches_in_mc = patches_in_mc;
+	output->mc_padding = mc_padding;
+	output->eta_padding = eta_padding;
 	output->inner_param1_min = mc_min;
 	output->inner_param1_max = mc_max;
 	output->inner_param2_min = eta_min;
@@ -483,7 +486,7 @@ static double ffinal(double m_total){
 
 	double f_isco;
 	
-	f_isco = pow(2., ceil( log( (1./LAL_PI)*( pow(6.,-3./2.) )*( pow((m_total)*LAL_MTSUN_SI,-1.) ) ) ) / log(2.) ); /* Next highest power of 2 of f_isco */
+	f_isco = pow(2., ceil( log( (1./LAL_PI)*( pow(6.,-3./2.) )*( pow((m_total)*LAL_MTSUN_SI,-1.) ) )  / log(2.) ) ); /* Next highest power of 2 of f_isco */
 	
 	return f_isco;
 }
@@ -831,24 +834,38 @@ static int interpolate_waveform_from_mchirp_and_eta(struct twod_waveform_interpo
 	
 }
 
-static int pad_parameter_bounds(double mc_min, double mc_max, double eta_min, double eta_max, double *outer_eta_min, double *outer_eta_max, double *outer_mc_min, double *outer_mc_max){
+static int pad_parameter_bounds(double mc_min, double mc_max, double eta_min, double eta_max, double *outer_eta_min, double *outer_eta_max, double *outer_mc_min, double *outer_mc_max, int number_templates_along_eta, int number_templates_along_mc, int number_of_templates_to_pad, double *mc_padding, double *eta_padding){
 
-	if(eta_min >= 0.1){
+
+	/* pad parameter by number_of_templates_to_pad templates */
+	*eta_padding = number_of_templates_to_pad*(eta_max-eta_min)/number_templates_along_eta;
+	*mc_padding = number_of_templates_to_pad*(mc_max-mc_min)/number_templates_along_mc; 
+
+	/* check that padded eta_min and eta_max are physical */
+	if(0. <= eta_min - *eta_padding){
 		
-		*outer_eta_min = eta_min - 0.01;
+		*outer_eta_min = eta_min - *eta_padding;
 	}
 	
 	else *outer_eta_min = eta_min;
 
-	if (eta_max <= 0.249){
+	if (0.25 >= eta_max + *eta_padding){
 
-		*outer_eta_max = eta_max + 0.01;
+		*outer_eta_max = eta_max + *eta_padding;
 	}
 
 	else *outer_eta_max = eta_max;
 	
-	*outer_mc_min = mc_min - 0.01;
-	*outer_mc_max = mc_max + 0.01;
+	/* check that padded mc_min is physical */
+	if (0. <= mc_min - *mc_padding){	
+
+		*outer_mc_min = mc_min - *mc_padding;
+
+	}
+
+	else *outer_mc_min = mc_min;
+
+	*outer_mc_max = mc_max + *mc_padding;
 
 	return 0;
 
@@ -878,45 +895,58 @@ static int make_patch_from_manifold(struct twod_waveform_interpolant_manifold *m
 		}	
 	
 		
-		pad_mc = manifold->inner_param1_min - manifold->outer_param1_min;
-		pad_eta = manifold->inner_param2_min - manifold->outer_param2_min;
+		pad_mc = manifold->mc_padding;
+		pad_eta = manifold->eta_padding;
 
-		mc_width = manifold->inner_param1_min + (manifold->inner_param1_max - manifold->inner_param1_min)/patches_in_mc;
-		eta_width = manifold->inner_param2_min + ( manifold->inner_param2_max - manifold->inner_param2_min)/patches_in_eta;
+		mc_width =  (manifold->inner_param1_max - manifold->inner_param1_min)/patches_in_mc;
+		eta_width =  (manifold->inner_param2_max - manifold->inner_param2_min)/patches_in_eta;
 
+		if ( 0. <= manifold->inner_param1_min + j*mc_width - pad_mc){
 
-		mc_min = manifold->inner_param1_min + j*( manifold->inner_param1_max - manifold->inner_param1_min)/patches_in_mc - pad_mc;	
-		mc_max = mc_width + j*( manifold->inner_param1_max - manifold->inner_param1_min)/patches_in_mc + pad_mc;
-	
-		eta_min = manifold->inner_param2_min + k*( manifold->inner_param2_max - manifold->inner_param2_min)/patches_in_eta - pad_eta;
-
-		if(eta_width + k*( manifold->inner_param2_max - manifold->inner_param2_min)/patches_in_eta + pad_eta < 0.249){
-
-			eta_max = eta_width + k*( manifold->inner_param2_max - manifold->inner_param2_min)/patches_in_eta + pad_eta;
-
+			mc_min = manifold->inner_param1_min + j*mc_width - pad_mc;	
+			manifold->interp_arrays[i].param1_min = mc_min;		
+			manifold->interp_arrays[i].inner_param1_min = mc_min + pad_mc;
 		}
 
 		else{
-
-			eta_max = eta_width + k*( manifold->inner_param2_max - manifold->inner_param2_min)/patches_in_eta;
-
+			mc_min = manifold->inner_param1_min + j*mc_width;
+			manifold->interp_arrays[i].param1_min = mc_min;
+			manifold->interp_arrays[i].inner_param1_min = mc_min; 
 		}
 
-		manifold->interp_arrays[i].param1_min = mc_min;
+
+		mc_max = manifold->inner_param1_min + mc_width + j*mc_width + pad_mc;		
 		manifold->interp_arrays[i].param1_max = mc_max;
-		manifold->interp_arrays[i].param2_min = eta_min;
-		manifold->interp_arrays[i].param2_max = eta_max;
-		manifold->interp_arrays[i].inner_param1_min = mc_min + pad_mc;
 		manifold->interp_arrays[i].inner_param1_max = mc_max - pad_mc;
-		manifold->interp_arrays[i].inner_param2_min = eta_min + pad_eta;
-		if (eta_max < 0.25){
-			manifold->interp_arrays[i].inner_param2_max = eta_max - pad_eta;	
-		}
+
+		if (0. <= manifold->inner_param2_min + j*eta_width - pad_eta){
+
+			eta_min = manifold->inner_param2_min + k*eta_width - pad_eta;
+			manifold->interp_arrays[i].param2_min = eta_min;
+			manifold->interp_arrays[i].inner_param2_min = eta_min + pad_eta;
+		}	
+
 		else{
+		
+			eta_min = manifold->inner_param2_min + k*eta_width;
+			manifold->interp_arrays[i].param2_min = eta_min;
+			manifold->interp_arrays[i].inner_param2_min = eta_min;	
+	
+		}
+		if (0.25 >=  manifold->inner_param2_min + eta_width + k*eta_width + pad_eta){
+
+			eta_max = manifold->inner_param2_min + eta_width + k*eta_width + pad_eta;	
+			manifold->interp_arrays[i].param2_max = eta_max;
+			manifold->interp_arrays[i].inner_param2_max = eta_max - pad_eta;
+		}		
+		else{
+
+			eta_max = manifold->inner_param2_min + eta_width + k*eta_width;
+			manifold->interp_arrays[i].param2_max = eta_max;
 			manifold->interp_arrays[i].inner_param2_max = eta_max;
+
 		}
 
-	
 	}
 
 
@@ -950,9 +980,8 @@ static int populate_interpolants_on_patches(struct twod_waveform_interpolant_man
 
 	for(i = 0; i < number_of_patches; i++){
 
-		N_mc = sqrt(manifold->waveforms_in_patch);///sqrt(manifold->number_of_patches);
-		M_eta = sqrt(manifold->waveforms_in_patch);///sqrt(manifold->number_of_patches);
-
+		N_mc = manifold->number_templates_along_mc;
+		M_eta = manifold->number_templates_along_eta;
 		mc_min = manifold->interp_arrays[i].param1_min;
 		mc_max = manifold->interp_arrays[i].param1_max;
 		eta_min = manifold->interp_arrays[i].param2_min;
@@ -1137,7 +1166,9 @@ int main(){
 	int length_max = 0;
 	int patches_in_eta = 4;
 	int patches_in_mc = 4;
-	int waveforms_in_patch = 14*14;
+	//int templates_in_patch = 18*18;
+	int number_templates_along_eta = 18;
+	int number_templates_along_mc = 18;
 	int number_of_patches;
 	int New_N_mc = 100, New_M_eta = 100;
 	double mc_min = 7.0;
@@ -1148,7 +1179,8 @@ int main(){
 	double t_max = 0;
 	double f_max = 0;
 	double eta=0, mc=0, m1=0, m2=0;	
-	double outer_eta_min, outer_eta_max, outer_mc_min, outer_mc_max;
+	double outer_eta_min, outer_eta_max, outer_mc_min, outer_mc_max, mc_padding, eta_padding;
+	int number_of_templates_to_pad = 4;
 	FILE *list_of_overlaps;
 
 
@@ -1161,12 +1193,15 @@ int main(){
 	COMPLEX16FFTPlan *revplan = NULL;
 
 	/* take in grid of interest and pad the boundry */
-	pad_parameter_bounds(mc_min, mc_max, eta_min, eta_max, &outer_eta_min, &outer_eta_max, &outer_mc_min, &outer_mc_max);
+	pad_parameter_bounds(mc_min, mc_max, eta_min, eta_max, &outer_eta_min, &outer_eta_max, &outer_mc_min, &outer_mc_max, number_templates_along_mc, number_templates_along_eta, number_of_templates_to_pad, &mc_padding, &eta_padding);
 
 	/* initialize LAL time and freq series */
+
 	initialize_time_and_freq_series(&psd, &fseries, &fseries_for_ifft, &tseries, &revplan, outer_mc_min, outer_mc_max, outer_eta_min, outer_eta_max, f_min, &length_max);
+
 	/* initialize global interpolant structure: FIXME need to pass param space ranges */
-	manifold = interpolants_manifold_init(psd, patches_in_eta, patches_in_mc, waveforms_in_patch, mc_min, mc_max, eta_min, eta_max, outer_mc_min, outer_mc_max, outer_eta_min, outer_eta_max);
+
+	manifold = interpolants_manifold_init(psd, patches_in_eta, patches_in_mc, number_templates_along_mc, number_templates_along_eta, mc_min, mc_max, eta_min, eta_max, outer_mc_min, outer_mc_max, outer_eta_min, outer_eta_max, mc_padding, eta_padding);
 
 	number_of_patches = patches_in_eta*patches_in_mc;
 

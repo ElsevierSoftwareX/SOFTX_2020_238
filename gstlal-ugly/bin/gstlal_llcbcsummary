@@ -18,136 +18,164 @@ def now():
 	#FIXME use pylal when available
 	return time.time() - 315964785
 
-def read_registry(dir, dataurl, idrange):
+def read_registry(dir, dataurl, ids):
 	nodedict = {}
-	# FIXME relies on 4 digit id
-	ids = ['%04d' % (job,) for job in range(idrange[0], idrange[1]+1)]
+	ifos = set()
 	for id in ids:
 		url = '%s/%s%s' % (dir, id, dataurl)
 		try:
 			tmp = open(url,"r")
-			tag, node = tmp.readline().replace("#","").split()
+			firstline = tmp.readline().replace("#","").split()
+			tag, node = firstline[0], firstline[1]
+			for ifo in firstline[2:]:
+				ifos.add(ifo)
 			nodedict[id] = node
 			tmp.close()
 		except IOError:
 			nodedict[id] = ""
-	return nodedict
-	
+	return nodedict, ifos
 
-def plot(dir, dataurl, idrange, registry, cols = [1], plottype = "value", datatype = "last", scale = "linear", xlabel = "", ylabel = "", title = ""):
-	fig = plt.figure(figsize=(25,6.5),)
+	
+def load_data(directory, idrange, type):
+	found = {}
+	missed = {}
+	for i, id in enumerate(idrange):
+		fname = "%s/%s_%s.txt" % (directory, id, type)
+		try:
+			found[i] = numpy.loadtxt(fname)
+		except IOError:
+			missed[i] = numpy.array([])
+		except ValueError:
+			missed[i] = numpy.array([])
+	return found, missed
+			
+def setup_plot():
+	fig = plt.figure(figsize=(20,5),)
 	fig.patch.set_alpha(0.0)
 	h = fig.add_subplot(111, axisbg = 'k')
-	plt.subplots_adjust(left = .05, right = 0.98, bottom = 0.3)
+	plt.subplots_adjust(left = .062, right = 0.98, bottom = 0.3)
+	return fig, h
 
+def finish_plot(ids, registry, ylim, title=''):
+	ticks = ["%s : %s " % (id, registry[id]) for id in ids]
+	plt.xticks(numpy.arange(len(ids))+.3, ticks, rotation=90, fontsize = 10)
+	plt.xlim([0, len(ids)])
+	plt.ylim(ylim)
+	tickpoints = numpy.linspace(ylim[0], ylim[1], 8)
+	ticks = ["%.1e" % (10.**t,) for t in tickpoints]
+	plt.yticks(tickpoints, ticks, fontsize = 20)
+	plt.title(title, fontsize = 30)
+	plt.savefig(sys.stdout, format = "svg")
+
+def plot_latency(found, missed, ids, registry):
+	fig, h = setup_plot()
+	
+	found_x = found.keys()
+	latency_y = numpy.log10(numpy.array([found[k][-1,1] for k in found_x]))
+	time_y = numpy.log10(now() - numpy.array([found[k][-1,0] for k in found_x]))
+	try:
+		max_y = max(time_y.max(), latency_y.max())
+	except ValueError:
+		max_y = 1
+	missed_x = missed.keys()
+	missed_y = numpy.ones(len(missed_x)) * max_y
+	
+	h.bar(missed_x, missed_y, color='r', alpha=0.9, linewidth=2)
+	h.bar(found_x, latency_y, color='w', alpha=0.9, linewidth=2)
+	h.bar(found_x, time_y, color='w', alpha=0.7, linewidth=2)
+	finish_plot(ids, registry, [0, max_y], 'Time (s) since last event (gray) and latency (white)')
+
+def plot_snr(found, missed, ids, registry):
+	fig, h = setup_plot()
+	
+	found_x = found.keys()
+	maxsnr_y = numpy.log10(numpy.array([found[k][:,1].max() for k in found_x]))
+	mediansnr_y = numpy.log10(numpy.array([numpy.median(found[k][:,1]) for k in found_x]))
+
+	try:	
+		max_y = max(maxsnr_y)
+	except ValueError:
+		max_y = 1
+	missed_x = missed.keys()
+	missed_y = numpy.ones(len(missed_x)) * max_y
+	
+	h.bar(missed_x, missed_y, color='r', alpha=0.9, linewidth=2)
+	h.bar(found_x, mediansnr_y, color='w', alpha=0.9, linewidth=2)
+	h.bar(found_x, maxsnr_y, color='w', alpha=0.7, linewidth=2)
+	finish_plot(ids, registry, [numpy.log10(5.5), max_y], 'SNR of last 1000 events: max (gray) and median (white)')
+
+def plot_livetime(found, missed, ids, registry, ifo):
+	fig, h = setup_plot()
+	
+	found_x = found.keys()
+	on_y = numpy.log10(numpy.array([found[k][1] for k in found_x]))
+	off_y = numpy.log10(numpy.array([found[k][2] for k in found_x]))
+	gap_y = numpy.log10(numpy.array([found[k][3] for k in found_x]))
+	
+	if len(found_x) > 0:
+		max_y = max(on_y.max(), off_y.max(), gap_y.max())
+		min_y = min(on_y.min(), off_y.min(), gap_y.min())
+	else:
+		max_y = 1
+		min_y = 0
+
+	missed_x = missed.keys()
+	missed_y = numpy.ones(len(missed_x)) * max_y
+	
+	h.bar(missed_x, missed_y, color='r', alpha=0.9, linewidth=2)
+	h.bar(found_x, off_y, color='w', alpha=0.7, linewidth=2)
+	h.bar(found_x, gap_y, color='b', alpha=0.5, linewidth=2)
+	h.bar(found_x, on_y, color='w', alpha=0.5, linewidth=2)
+	finish_plot(ids, registry, [min_y*.9, max_y], '%s Up time (gray) Down time (white) Dropped time (blue)' % (ifo,))
+
+def plot_ram(found, missed, ids, registry):
+	fig, h = setup_plot()
+	
+	found_x = found.keys()
+	found_y = numpy.log10(numpy.array([found[k][0,1] for k in found_x]))
+
+	try:	
+		max_y, min_y = max(found_y), min(found_y)
+	except ValueError:
+		max_y, min_y = (1,0)
+	missed_x = missed.keys()
+	missed_y = numpy.ones(len(missed_x)) * max_y
+	
+	h.bar(missed_x, missed_y, color='r', alpha=0.9, linewidth=2)
+	h.bar(found_x, found_y, color='w', alpha=0.9, linewidth=2)
+	finish_plot(ids, registry, [0.9 * min_y, max_y], 'RAM usage GB')
+
+def plot_single_col(found, missed, ids, registry, col = 0, title = ''):
+	fig, h = setup_plot()
+	
+	found_x = found.keys()
+	found_y = numpy.log10(numpy.array([found[k][col] for k in found_x]))
+
+	try:	
+		max_y, min_y = max(found_y), min(found_y)
+	except ValueError:
+		max_y, min_y = (1,0)
+	missed_x = missed.keys()
+	missed_y = numpy.ones(len(missed_x)) * max_y
+	
+	h.bar(missed_x, missed_y, color='r', alpha=0.9, linewidth=2)
+	h.bar(found_x, found_y, color='w', alpha=0.9, linewidth=2)
+	finish_plot(ids, registry, [0.9 * min_y, max_y], title)
+
+def get_ids(form):
+	idrange = [int(n) for n in form.getvalue("id").split(",")]
+	#FIXME relies on 4 digit ids
 	ids = ['%04d' % (job,) for job in range(idrange[0], idrange[1]+1)]
-
-	
-	def get_data(dir, id, dataurl, col, datatype):
-	
-		data = []
-		timestamp = []
-
-		for id in ids:
-			nan = float("nan")
-			url = '%s/%s%s' % (dir, id, dataurl)
-			# FIXME relies on 4 digit id
-			try:
-				tmp = numpy.loadtxt(url)
-				# FIXME ARGH THIS FUNCTION SUCKS!
-				if len(tmp.shape) == 1:
-					tmp = tmp.reshape((1, tmp.shape[0]))
-				if datatype == "last":
-					data.append(tmp[-1,col])
-				if datatype == "max":
-					data.append(tmp[:,col].max())
-				if datatype == "median":
-					data.append(numpy.median(tmp[:,col]))
-				timestamp.append(now() - tmp[-1,0] )
-			except IOError:
-				data.append(nan)
-				timestamp.append(nan)
-			except ValueError:
-				data.append(nan)
-				timestamp.append(nan)
-		return data, timestamp
-
-
-	def process(plotdata, color="w"):
-		# first get the found and missing data
-		data = numpy.array(plotdata)
-		foundindices = [i for i,d in enumerate(data) if numpy.isfinite(d)]
-		founddata = data[numpy.isfinite(data)]
-		missingindices = [i for i,d in enumerate(data) if numpy.isnan(d)]
-		missingdata = data[numpy.isnan(data)]
-
-		# figure out the maximum
-		if len(founddata):
-			maxdata = founddata.max() or 1 #(so that log10 of it is 0)
-		else:
-			maxdata = 1
-		
-		if scale == "log":
-			if maxdata <= 1:
-				missingvalue = -0.05
-			else:
-				missingvalue = -0.05 * numpy.log10(maxdata)
-		else:
-			missingvalue = -0.05 * maxdata
-
-		# give all the missing data the value badvalue
-		h.bar(missingindices, [missingvalue for d in missingindices], color='r', alpha=0.9, linewidth=2)
-
-		# then the regular data
-		if scale == "log":
-			if len(founddata):
-				founddata[founddata == 0] = 1
-				founddata = numpy.log10(founddata) # ones become zero again
-				maxdata = founddata.max() or 1
-			else:
-				maxdata = 0
-		h.bar(foundindices, founddata, color=color, alpha=0.8, linewidth=2)
-
-		
-		# The ticks
-		if scale == "log":
-			yticks = ["%.2g" % num for num in 10**numpy.linspace(0, maxdata,6)]
-			plt.yticks(numpy.linspace(0, maxdata,6), yticks)
-		x = numpy.arange(len(data))
-		ticks = ["%s : %s " % (id, registry[id]) for id in ids]
-		plt.xticks(x+.3, ticks, rotation=90)
-
-		# the y label
-		plt.ylabel(ylabel, fontsize = 18)
-
-		# the limits
-		plt.ylim([missingvalue, maxdata])
-		plt.xlim([x[0], x[-1]+1])
-		
-		# the title
-		plt.title(title, fontsize=18)
-
-		# save it
-	
-	#FIXME shouldn't parse files so many times
-	for i, col in enumerate(cols):
-		data, timestamp = get_data(dir, id, dataurl, col, datatype)
-	
-		if plottype == "value":
-			process(data)
-		if plottype == "timestamp":
-			process(timestamp)
-	
-	plt.savefig(sys.stdout, format="svg")
-
+	return ids
 
 if "dir" not in form:
 	raise ValueError("must specify dir")
 if "id" not in form:
 	raise ValueError("must specify id")
 
-idrange = [int(n) for n in form.getvalue("id").split(",")]
-reg = read_registry(form.getvalue("dir"), "_registry.txt", idrange)
+ids = get_ids(form)
+directory = form.getvalue("dir")
+reg, ifos = read_registry(form.getvalue("dir"), "_registry.txt", ids)
 
 # Header
 print >>sys.stdout, 'Cache-Control: no-cache, must-revalidate'
@@ -167,67 +195,75 @@ print """
 """
 
 # title
-print "<center><h1>Low-latency Compact Binary Online (LCBO) summary: %d - %s </h1></center><br>" % (int(now()), time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime()))
+print "<center><h1>Low-latency Compact Binary Online (LCBO) summary %s: %d - %s </h1></center><br>" % ("".join(ifos), int(now()), time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime()))
 
 # start a table
 print "<table>"
 
+
+#
 # latency history
+#
+
 print "<tr><td><div id='canvaslatency'>"
-plot(form.getvalue("dir"), '_latency_history.txt', idrange, reg, ylabel = "Latency (s)", title = "Latency summary of all jobs, red means no report")
+found, missed = load_data(directory, ids, "latency_history")
+plot_latency(found, missed, ids, reg)
 print "</div></td></tr>"
 
-# RAM history
-print "<tr><td><div id='canvasram'>"
-plot(form.getvalue("dir"), '_ram_history.txt', idrange, reg, ylabel = "RAM (GB)", title = "RAM summary of all jobs, red means no report")
-print "</div></td></tr>"
+#
+# snr history
+#
 
-# median SNR
 print "<tr><td><div id='canvassnr'>"
-plot(form.getvalue("dir"), '_snr_history.txt', idrange, reg, datatype = "median", ylabel = "SNR", title = "median(SNR) of recent triggers summary of all jobs, red means no report")
+found, missed = load_data(directory, ids, "snr_history")
+plot_snr(found, missed, ids, reg)
 print "</div></td></tr>"
-
-# max SNR
-print "<tr><td><div id='canvassnrmax'>"
-plot(form.getvalue("dir"), '_snr_history.txt', idrange, reg, datatype = "max", ylabel = "SNR", title = "max(SNR) of recent triggers summary of all jobs, red means no report")
-print "</div></td></tr>"
-
-# last update
-print "<tr><td><div id='canvasupdate'>"
-plot(form.getvalue("dir"), '_snr_history.txt', idrange, reg, plottype = "timestamp", ylabel = "Time (s)", scale = "log", xlabel = "Time before now (s)", title = "Time since last event (s), red means no report")
-print "</div></td></tr>"
-
-# chirp mass
-print "<tr><td><div id='canvaschirp'>"
-plot(form.getvalue("dir"), '_bank.txt', idrange, reg, cols = [2], plottype = "value", ylabel = "mchirp (Msun)", title = "Chirp mass, red means no report")
-print "</div></td></tr>"
-
-# Duration
-print "<tr><td><div id='canvasduration'>"
-plot(form.getvalue("dir"), '_bank.txt', idrange, reg, cols = [1], plottype = "value", ylabel = "duration (s)", title = "Template duration, red means no report")
-print "</div></td></tr>"
-
-for ifo in ["H1", "H2", "L1", "V1"]:
-	# fault samples
-	print "<tr><td><div id='canvas%s%s'>" % (ifo, "discont")
-	plot(form.getvalue("dir"), '_%sstrain_add_drop.txt' % ifo, idrange, reg, datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Data dropped, red means no report" % ifo)
-	print "</div></td></tr>"
-
-	# deadtime
-	#print "<tr><td><div id='canvas%s%s'>" % (ifo, "deadtime")
-	#plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, cols = [2], datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Dead time, red means no report" % ifo)
-	#print "</div></td></tr>"
 	
-	# livetime
-	print "<tr><td><div id='canvas%s%s'>" % (ifo, "livetime")
-	plot(form.getvalue("dir"), '_%sstate_vector_on_off_gap.txt' % ifo, idrange, reg, cols = [2,1], datatype = "max", ylabel = "Time (s)", scale = "log", title = " %s : Up time, red means no report" % ifo)
+#
+# live time by ifo
+#
+
+for ifo in ifos:
+	print "<tr><td><div id='%scanvastime'>" % (ifo,)
+	found, missed = load_data(directory, ids, "%sstate_vector_on_off_gap" % (ifo,))
+	plot_livetime(found, missed, ids, reg, ifo)
 	print "</div></td></tr>"
 
+#
+# Template Duration
+#
+
+print "<tr><td><div id='canvasdur'>"
+found, missed = load_data(directory, ids, "bank")
+plot_single_col(found, missed, ids, reg, 1, "Template Duration (s)")
+print "</div></td></tr>"
+
+#
+# Chirp Mass
+#
+
+print "<tr><td><div id='canvasmchirp'>"
+found, missed = load_data(directory, ids, "bank")
+plot_single_col(found, missed, ids, reg, 2, "Chirp Mass")
+print "</div></td></tr>"
+
+#
+# RAM
+#
+
+print "<tr><td><div id='canvasram'>"
+found, missed = load_data(directory, ids, "ram_history")
+plot_ram(found, missed, ids, reg)
+print "</div></td></tr>"
+
+#
 # end a table
+#
+
 print "</table>"
 
 # links at bottom
-for k in range(idrange[0], idrange[1]+1):
-	print '<a href="gstlal_llcbcnode?dir=%s&id=%04d">%04d</a>' % (form.getvalue("dir"), k, k)
+for id in ids:
+	print '<font size=5><a href="gstlal_llcbcnode?dir=%s&id=%s"> %s </a></font>' % (form.getvalue("dir"), id, id)
 print "</body>"
 

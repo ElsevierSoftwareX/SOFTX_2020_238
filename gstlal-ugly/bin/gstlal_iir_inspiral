@@ -286,11 +286,10 @@ if options.verbose:
 
 
 if options.likelihood_file is not None:
-	FAR, proc_id = far.FAR.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose))
-	FAR.trials_factor = 1 #FIXME
+	FAR, proc_id = far.LocalRankingData.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose))
 else:
 	distribution_stats = far.DistributionsStats()
-	FAR = far.FAR(None, 1, distribution_stats) #FIXME
+	FAR = far.LocalRankingData(segments.segment(None, None), distribution_stats) #FIXME
 
 
 #

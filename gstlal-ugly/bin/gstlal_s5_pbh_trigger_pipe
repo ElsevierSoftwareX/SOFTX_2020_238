@@ -235,7 +235,7 @@ class gstlal_inspiral_node(InspiralNode):
 	A gstlal_inspiral node
 	"""
 	#FIXME add veto segments name
-	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=20.0, injections=None, control_peak_time = 8, vetoes=None, time_slide_file=None, fir_stride = 8, instruments = "H1H2L1", p_node=[]):
+	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=20.0, injections=None, control_peak_time = 8, vetoes=None, time_slide_file=None, fir_stride = 8, instruments = "H1H2L1", number = 1, p_node=[]):
 		InspiralNode.__init__(self, job, dag, p_node)
 
 		if time_slide_file is not None:
@@ -261,10 +261,10 @@ class gstlal_inspiral_node(InspiralNode):
 		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
 		if self.injections is not None:
 			sim_name = sim_tag_from_inj_file(self.injections)
-			self.output_name = '%s/%s-%04d-%d-%d-LLOID-%s.sqlite' % (path, instruments, job.number, gps_start_time, gps_end_time, sim_name)
+			self.output_name = '%s/%s-%04d-%d-%d-LLOID-%s.sqlite' % (path, instruments, number, gps_start_time, gps_end_time, sim_name)
 		else:
-			self.output_name = '%s/%s-%04d-%d-%d-LLOID.sqlite' % (path, instruments, job.number, gps_start_time, gps_end_time)
-			self.background_name = '%s/%s-%04d-%d-%d-LLOID_snr_chi.xml.gz' % (path, instruments, job.number, gps_start_time, gps_end_time)
+			self.output_name = '%s/%s-%04d-%d-%d-LLOID.sqlite' % (path, instruments, number, gps_start_time, gps_end_time)
+			self.background_name = '%s/%s-%04d-%d-%d-LLOID_snr_chi.xml.gz' % (path, instruments, number, gps_start_time, gps_end_time)
 		job.number += 1
 		self.add_var_opt("output",self.output_name)
 		dag.output_cache.append(lal.CacheEntry(instruments, "-", segments.segment(gps_start_time, gps_end_time), "file://localhost/%s" % (self.output_name,)))
@@ -465,7 +465,7 @@ for i, (s, trials_factor) in enumerate(inspiral_pipe.build_bank_string(bank_cach
 
 	# inspiral jobs by segment
 	for seg in segs:
-		noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride)
+		noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, number = i)
 		inspiral_nodes.append((None, noninjnode))
 
 	
@@ -476,7 +476,7 @@ for i, (s, trials_factor) in enumerate(inspiral_pipe.build_bank_string(bank_cach
 	for injections in options.injections:
 		# inspiral jobs by segment
 		for seg in segs:
-			injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride)
+			injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, number = i)
 			inspiral_nodes.append((injections, injnode))	
 
 	

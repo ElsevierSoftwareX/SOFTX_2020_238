@@ -87,6 +87,10 @@ class EPHandler( LLOIDHandler ):
 		# Book keeping
 		self.start = 0
 		self.stop = -1
+		# How long of a time to ignore output from the whitener stabilizing
+		# FIXME: This should be ~number of PSDs stored in history * fft_length
+		# Right now that's probably something like 80 s.
+		self.whitener_offset = 20
 
 		# Defaults -- Time-frequency map settings
 		self.base_band = 16
@@ -130,7 +134,7 @@ class EPHandler( LLOIDHandler ):
 		self.snr_thresh = 5.5
 		self.fap = None
 		self.dump_frequency = 600 # s
-		self.max_events = 1e5
+		self.max_events = 1e4
 		self.time_since_dump = self.start
 
 		self.trigger_segment = None
@@ -290,10 +294,10 @@ class EPHandler( LLOIDHandler ):
 		Top-level function to handle the asynchronous updating of FIR banks and matrix mixer elements.
 		"""
 		# Rebuild filter bank and hand it off to the FIR element
-		print >> sys.stderr, "Rebuilding FIR bank"
+		#print >> sys.stderr, "Rebuilding FIR bank"
 		self.firbank.set_property( "fir_matrix", self.rebuild_filter() )
 
-		print >> sys.stderr, "Rebuilding matrix mixer"
+		#print >> sys.stderr, "Rebuilding matrix mixer"
 		self.rebuild_chan_mix_matrix()
 		# Rebuild the matrix mixer with new normalization coefficients
 		self.rebuild_matrix_mixers()
@@ -301,7 +305,7 @@ class EPHandler( LLOIDHandler ):
 	def make_output_table( self ):
 		self.triggers = lsctables.New(lsctables.SnglBurstTable,
 			["ifo", "peak_time", "peak_time_ns", "start_time", "start_time_ns",
-			"duration",  "search", "event_id",
+			"duration",  "search", "event_id", "process_id",
 			"central_freq", "channel", "amplitude", "snr", "confidence",
 			"chisq", "chisq_dof", "bandwidth"])
 			#"peak_frequency",
@@ -311,33 +315,60 @@ class EPHandler( LLOIDHandler ):
 
 	def write_triggers( self, flush=True, overwrite=False, filename=None ):
 		if( not handler.output ): return
+		if( len(self.triggers) == 0 ): return
+
+		#import pdb
+		#pdb.set_trace()
 
 		if( filename == None ):
 			filename = self.outfile
 
 		output = ligolw.Document()
 		output.appendChild(ligolw.LIGO_LW())
-		output.childNodes[0].appendChild( self.triggers )
 
 		# TODO: Before or after Paused?
-		analysis_segment = segment(
-			LIGOTimeGPS( self.start ), 
+		requested_segment = segment(
+			LIGOTimeGPS( self.time_since_dump ), 
 			LIGOTimeGPS( self.stop )
 		)
-		# TODO: Define a difference between what was requested and what was analyzed
-		requested_segment = analysis_segment
+
+		analysis_segment = requested_segment
+		# If we include start up time, indicate it in the search summary
+		whiten_seg = segment( 
+			LIGOTimeGPS(self.start), 
+			LIGOTimeGPS(self.start + self.whitener_offset)
+		)
+		if( whiten_seg.intersects( analysis_segment) ):
+			if( analysis_segment in whiten_seg ):
+				# All the analyzed time is within the settling time
+				# We make this explicit because the segment constructor will just reverse the arguments if arg2 < arg1 and create an incorrect segment
+				analysis_segment = segment( 
+					analysis_segment[1], analysis_segment[1]
+				)
+			else:
+				analysis_segment -= whiten_seg
 
 		process_params = vars( options )
-		#import pdb
-		#pdb.set_trace()
 		process = ligolw_process.register_to_xmldoc( output, "gstlal_excesspower", vars(options) )
-		process.set_ifos( self.inst )
-		add_cbc_metadata( output, process, requested_segment, analysis_segment )
+		process.set_ifos( [self.inst] )
+
+		# Assign process ids to events
+		for trig in self.triggers:
+			trig.process_id = process.process_id
+
+		output.childNodes[0].appendChild( self.triggers )
+
+		add_cbc_metadata( output, process, requested_segment )
+		search_sum = lsctables.table.get_table( output, lsctables.SearchSummaryTable.tableName )
+		for row in search_sum:
+			# TODO: This shouldn't set every one of them in case we reuse XML documents later
+			row.set_out( analysis_segment )
+
 		# TODO: replace cbc filter table with our own
 		#cbc_filter_table = lsctables.getTablesByType( output, lsctables.FilterTable )[0]
 		#ep_filter_table = lsctables.getTablesByType( self.filter_xml, lsctables.FilterTable )[0]
 		#output.replaceChild( ep_filter_table, cbc_filter_table )
-		print >>sys.stderr, "Outputting triggers for %s\n" % str(analysis_segment)
+		print >>sys.stderr, "Outputting triggers for %s\n" % str(requested_segment)
 
 		# write the new distribution stats to disk
 		self.lock.acquire()
@@ -402,7 +433,8 @@ def on_psd_change( elem, pspec, hand ):
 	"""
 	Get the PSD object and signal the handler to rebuild everything.
 	"""
-	print >> sys.stderr, "Intercepted spectrum signal."
+	if( options.verbose ):
+		print >> sys.stderr, "Intercepted spectrum signal."
 
 	hand.psd = REAL8FrequencySeries(
 		name = "PSD",
@@ -419,7 +451,8 @@ def on_psd_change( elem, pspec, hand ):
 	psd_power = sum(hand.psd.data)
 	change = abs((hand.psd_power - psd_power) / psd_power )
 	if( change > 0.5 ):
-		print >> sys.stderr, "Processed signal. PSD change %d per, regenerating filters" % int(change*100)
+		if( options.verbose ):
+			print >> sys.stderr, "Processed signal. PSD change %d per, regenerating filters" % int(change*100)
 		hand.psd_power = psd_power
 		hand.rebuild_everything()
 
@@ -427,7 +460,8 @@ def on_spec_corr_change( elem, pspec, hand ):
 	"""
 	Get the 2-point spectral correlation object and signal the handler to rebuild everything.
 	"""
-	print >> sys.stderr, "Intercepted correlation signal."
+	if( options.verbose ):
+		print >> sys.stderr, "Intercepted correlation signal."
 	hand.spec_corr = elem.get_property( "spectral-correlation" )
 
 	if( hand.cache_spec_corr ):
@@ -567,6 +601,9 @@ else:
 
 	handler.outfile = cfg.get( "triggering", "output-file" )
 	handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
+
+	if( cfg.has_option( "triggering", "events_per_file" ) ):
+		handler.max_events = cfg.get_int( "triggering", "events_per_file" )
 
 	# If a specific (trigger) time is of interest, specify its GPS here
 	# TODO: Read from sngl_inspirals and sngl_bursts
@@ -834,7 +871,10 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	head = matmixer = mkmatrixmixer( pipeline, head )
 	handler.add_matmixer( matmixer, res_level )
 
-	head = mkprogressreport( pipeline, head, "post matrix mixer %d" % res_level )
+	if( verbose ):
+		head = mkprogressreport( pipeline, head,
+			"post matrix mixer %d" % res_level 
+		)
 
 	if( diagnostics ):
 		head = postmmtee = mktee( pipeline, mkqueue( pipeline, head ) )
@@ -906,15 +946,16 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 
 	if( handler.fap is not None ):
 		# Still needs magic number... or use the EP version
+		# ndof_eff = ndof * 0.62
 		snr_thresh = ep_utils.determine_thresh_from_fap(fap, ndof)
 	else:
+		# TODO: Make clear in the ini file that the thresh is power SNR, not amplitude and then remove the square here
 		snr_thresh = handler.snr_thresh**2
 	head.set_property( "snr-thresh", snr_thresh )
 
 	if( verbose ):
 		head = mkprogressreport( pipeline, head, 
-			"Trigger generator resolution level %d, %d DOF" % 
-				(res_level, ndof) 
+			"Trigger generator resolution level %d, %d DOF" % (res_level, ndof) 
 		)
 
 	# TODO: combine trigger streams from various levels

@@ -103,11 +103,7 @@ coincparamsdistributions.add_foreground_prior(verbose = options.verbose, n = opt
 ifos = ("H1","H2","L1","V1")
 
 # no segments, this file is independent of time
-class NoneSeg(object):
-	def __init__(self):
-		self.seconds = None
-		self.nanoseconds = None
-FAR = far.FAR(segments.segment(NoneSeg(), NoneSeg()), None, coincparamsdistributions)
+FAR = far.LocalRankingData(segments.segment(None, None), coincparamsdistributions)
 
 xmldoc = inspiral.gen_likelihood_control_doc(FAR, ifos)
 utils.write_filename(xmldoc, options.write_likelihood, gz = options.write_likelihood.endswith('.gz'), verbose = options.verbose)

@@ -134,9 +134,11 @@ gboolean gst_audioadapter_is_gap(GstAudioAdapter *adapter)
 {
 	GList *head;
 
-	for(head = g_queue_peek_head_link(adapter->queue); head; head = g_list_next(head))
-		if(!GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP))
+	for(head = g_queue_peek_head_link(adapter->queue); head; head = g_list_next(head)) {
+		GstBuffer *buf = GST_BUFFER(head->data);
+		if(!GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP) && (GST_BUFFER_OFFSET_END(buf) - GST_BUFFER_OFFSET(buf)))
 			return FALSE;
+	}
 
 	return TRUE;
 }

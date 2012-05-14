@@ -54,6 +54,7 @@ from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
+from glue.ligolw.utils import search_summary as ligolw_search_summary
 from pylal.datatypes import LIGOTimeGPS
 from pylal.date import XLALUTCToGPS
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
@@ -176,7 +177,7 @@ def add_cbc_metadata(xmldoc, process, seg_in):
 	search_summary.comment = process.comment
 	search_summary.set_ifos(process.get_ifos())
 	search_summary.set_in(seg_in)
-	search_summary.set_out((None, None))
+	search_summary.set_out(segments.segment(None, None))
 	search_summary.nevents = None # FIXME
 	search_summary.nnodes = 1
 	tbl.append(search_summary)
@@ -285,7 +286,7 @@ def gen_likelihood_control_doc(far, instruments, name = u"gstlal_inspiral_likeli
 	node.appendChild(lsctables.New(lsctables.ProcessParamsTable))
 	node.appendChild(lsctables.New(lsctables.SearchSummaryTable))
 	process = ligolw_process.append_process(xmldoc, comment = comment)
-	llwapp.append_search_summary(xmldoc, process, ifos = instruments, inseg = far.livetime_seg, outseg = far.livetime_seg)
+	ligolw_search_summary.append_search_summary(xmldoc, process, ifos = instruments, inseg = far.livetime_seg, outseg = far.livetime_seg)
 
 	node.appendChild(far.to_xml(process, name))
 
@@ -400,6 +401,7 @@ class Data(object):
 		self.sngl_inspiral_table.set_next_id(lsctables.SnglInspiralID(0))
 
 		self.far = FAR
+		self.ranking_data = None
 		if self.assign_likelihoods:
 			self.far.smooth_distribution_stats(verbose = verbose)
 		self.likelihood_file = likelihood_file
@@ -443,7 +445,7 @@ class Data(object):
 			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
 			buf_end_time = buf_timestamp + LIGOTimeGPS(0, buf.duration)
 			out_segs = segments.segmentlist([self.search_summary.get_out()])
-			if out_segs == [(None, None)]:
+			if out_segs == [segments.segment(None, None)]:
 				# out segment not yet initialized
 				del out_segs[:]
 			out_segs |= segments.segmentlist([segments.segment(buf_timestamp, buf_end_time)])
@@ -467,14 +469,16 @@ class Data(object):
 				remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}
 
 				# generate the background likelihood distributions
-				self.far.updateFAPmap(remap, verbose = self.verbose)
+				self.far.compute_joint_instrument_background(remap, verbose = self.verbose)
+				self.ranking_data = far.RankingData(self.far)
+				self.ranking_data.compute_joint_cdfs()
 
 				# write the new distribution stats to disk
 				utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
 
 			# run stream thinca
 			if self.assign_likelihoods:
-				noncoinc_sngls = self.stream_thinca.add_events(events, buf_timestamp, FAP = self.far)
+				noncoinc_sngls = self.stream_thinca.add_events(events, buf_timestamp, FAP = self.ranking_data)
 			else:
 				noncoinc_sngls = self.stream_thinca.add_events(events, buf_timestamp)
 
@@ -514,7 +518,7 @@ class Data(object):
 		# run StreamThinca's .flush().  returns the last remaining
 		# non-coincident sngls.  add them to the distribution
 		if self.assign_likelihoods:
-			FAP = self.far
+			FAP = self.ranking_data
 		else:
 			FAP = None
 		for event in self.stream_thinca.flush(FAP = FAP):
@@ -684,7 +688,9 @@ class Data(object):
 				from glue.ligolw import dbtables
 				seg = self.search_summary.get_out()
 				#FIXME Kipp, why aren't the changes to the search summary reflected in the database?
-				self.connection.cursor().execute('UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ?', (seg[0].seconds, seg[0].nanoseconds, seg[1].seconds, seg[1].nanoseconds))
+				print >>sys.stderr, seg
+				if seg != segments.segment(None, None):
+					self.connection.cursor().execute('UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ?', (seg[0].seconds, seg[0].nanoseconds, seg[1].seconds, seg[1].nanoseconds))
 				self.connection.cursor().execute('UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)')
 				self.connection.cursor().execute('UPDATE process SET end_time = ?', (XLALUTCToGPS(time.gmtime()).seconds,))
 				self.connection.commit()
