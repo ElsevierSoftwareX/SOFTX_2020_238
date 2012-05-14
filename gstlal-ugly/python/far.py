@@ -369,33 +369,6 @@ class DistributionsStats(object):
 
 
 def possible_ranks_array(likelihood_pdfs, ifo_set, targetlen):
-	# find the minimum value for the binning that we care about.
-	# this is product of all the peak values of likelihood,
-	# times the smallest maximum likelihood value, divided by the
-	# product of all maximum likelihood values
-	Lp = []
-	Lj = []
-	# loop over all ifos
-	for ifo in ifo_set:
-		likelihood_pdf = likelihood_pdfs[ifo]
-		# FIXME lower instead of centres() to avoid inf in the last bin
-		ranks = likelihood_pdf.bins.lower()[0]
-		vals = likelihood_pdf.array
-		# sort likelihood values from lowest probability to highest
-		ranks = ranks[vals.argsort()]
-		# save peak likelihood
-		Lp.append(ranks[-1])
-		# save maximum likelihood value
-		Lj.append(max(ranks))
-	Lp = numpy.array(Lp)
-	Lj = numpy.array(Lj)
-	# create product of all maximum likelihood values
-	L = numpy.exp(sum(numpy.log(Lj)))
-	# compute minimum bin value we care about
-	Lmin = numpy.exp(sum(numpy.log(Lp))) * min(Lj) / L
-	# divide by a million for safety
-	Lmin *= 1e-6
-
 	# start with an identity array to seed the outerproduct chain
 	ranks = numpy.array([1.0])
 	vals = numpy.array([1.0])
@@ -410,7 +383,7 @@ def possible_ranks_array(likelihood_pdfs, ifo_set, targetlen):
 		#ranks[numpy.isnan(ranks)] = 0.0
 		vals = vals.reshape((vals.shape[0] * vals.shape[1],))
 		# rebin the outer-product
-		minlikelihood = max(min(ranks[ranks != 0]), Lmin)
+		minlikelihood = min(ranks[ranks != 0])
 		maxlikelihood = max(ranks)
 		new_likelihood_pdf = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, targetlen),)))
 		for rank,val in zip(ranks,vals):
