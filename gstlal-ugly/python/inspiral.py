@@ -295,7 +295,7 @@ def gen_likelihood_control_doc(far, instruments, name = u"gstlal_inspiral_likeli
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, coincidence_threshold, FAR, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, coincidence_threshold, FAR, marginalized_likelihood_file = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", verbose = False):
 		#
 		# initialize
 		#
@@ -313,6 +313,7 @@ class Data(object):
 		self.verbose = verbose
 		# True to enable likelihood assignment
 		self.assign_likelihoods = assign_likelihoods
+		self.marginalized_likelihood_file = marginalized_likelihood_file
 		# Set to None to disable period snapshots, otherwise set to seconds
 		self.likelihood_snapshot_interval = likelihood_snapshot_interval
 		# Set to 1.0 to disable background data decay
@@ -458,29 +459,30 @@ class Data(object):
 				event.event_id = self.sngl_inspiral_table.get_next_id()
 
 			# update likelihood snapshot if needed
-			if self.assign_likelihoods and (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
+			if (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
 				self.likelihood_snapshot_timestamp = buf_timestamp
+				if self.assign_likelihoods:
+					# smooth the distribution_stats
+					self.far.smooth_distribution_stats(verbose = self.verbose)
+					# update stream thinca's likelihood data
+					self.stream_thinca.set_likelihood_data(self.far.distribution_stats.smoothed_distributions, self.far.distribution_stats.likelihood_params_func)
 
-				# smooth the distribution_stats
-				self.far.smooth_distribution_stats()
-				# update stream thinca's likelihood data
-				self.stream_thinca.set_likelihood_data(self.far.distribution_stats.smoothed_distributions, self.far.distribution_stats.likelihood_params_func)
-				# FIXME don't hard code
-				remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}
-
-				# generate the background likelihood distributions
-				self.far.compute_joint_instrument_background(remap, verbose = self.verbose)
-				self.ranking_data = far.RankingData(self.far)
-				self.ranking_data.compute_joint_cdfs()
+					# Read in the the background likelihood distributions that should have been updated asynchronously
+					# FIXME don't screw with startTable methods this way
+					# Hack to read XML after dbtables import
+					orig_start_table = ligolw.LIGOLWContentHandler.startTable
+					ligolw.LIGOLWContentHandler.startTable = lsctables.startTable
+					self.ranking_data, procid = far.RankingData.from_xml(utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose))
+					ligolw.LIGOLWContentHandler.startTable = orig_start_table
+					self.ranking_data.compute_joint_cdfs()
+				else:
+					self.ranking_data = None
 
 				# write the new distribution stats to disk
 				utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
 
 			# run stream thinca
-			if self.assign_likelihoods:
-				noncoinc_sngls = self.stream_thinca.add_events(events, buf_timestamp, FAP = self.ranking_data)
-			else:
-				noncoinc_sngls = self.stream_thinca.add_events(events, buf_timestamp)
+			noncoinc_sngls = self.stream_thinca.add_events(events, buf_timestamp, FAP = self.ranking_data)
 
 			# update the parameter distribution data.  only
 			# update from sngls that weren't used in coincs
@@ -553,7 +555,7 @@ class Data(object):
 				# do we keep this event?
 				#
 
-				if false_alarm_rate > self.gracedb_far_threshold:
+				if false_alarm_rate > self.gracedb_far_threshold or numpy.isnan(false_alarm_rate):
 					continue
 
 				#
