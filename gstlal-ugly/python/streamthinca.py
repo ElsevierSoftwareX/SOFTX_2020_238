@@ -299,7 +299,13 @@ class StreamThinca(object):
 				self.trials_table[ifo_set] = 1
 			# Assign the FAP if requested
 			if FAP is not None:
-				# note FAP should have a reference to the same trials table as this object does.  This is handled in the Data class in inspiral.py
+				# note FAP should have a reference to the
+				# global trials table read in by in the
+				# marginalized_likelihood file.  This is not
+				# the same as the one updated on the previous
+				# lines!  This trials table is static until the
+				# marginalized likelihood file is read in
+				# again.
 				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, ifo_set)
 				# assume each event is "loudest" so n = 1 by default, not the same as required for an IFAR plot
 				coinc_inspiral_row.combined_far = FAP.compute_far(coinc_inspiral_row.false_alarm_rate)
