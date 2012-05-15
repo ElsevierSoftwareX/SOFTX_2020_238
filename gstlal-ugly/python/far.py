@@ -108,6 +108,13 @@ class TrialsTable(dict):
 			for ifo in iterutils.choices(ifos, n):
 				self[frozenset(ifo)] = val
 
+	def get_sngl_ifos(self):
+		out = set()
+		for ifos in self:
+			for ifo in ifos:
+				out.add(ifo)
+		return tuple(out)
+
 	def __add__(self, other):
 		out = type(self)()
 		for k in self:
@@ -227,8 +234,12 @@ class DistributionsStats(object):
 	def add_single(self, event):
 		self.raw_distributions.add_background(self.likelihood_params_func((event,), None))
 
-	def add_background_prior(self, n = 1., transition = 10.):
+	def add_background_prior(self, n = 1., transition = 10., instruments = None):
 		for param, binarr in self.raw_distributions.background_rates.items():
+			instrument = param.split("_")[0]
+			# save some computation if we only requested certain instruments
+			if instruments is not None and instrument not in instruments:
+				continue
 			# Custom handle the first and last over flow bins
 			snrs = binarr.bins[0].centres()
 			snrs[0] = snrs[1] * .9
@@ -245,12 +256,16 @@ class DistributionsStats(object):
 			binarr.array /= binarr.array.sum()
 			binarr.array *= n
 
-	def add_foreground_prior(self, n = 1., prefactors_range = (0.02, 0.5), df = 40, verbose = False):
+	def add_foreground_prior(self, n = 1., prefactors_range = (0.02, 0.5), df = 40, instruments = None, verbose = False):
 		# FIXME:  for maintainability, this should be modified to
 		# use the .add_injection() method of the .raw_distributions
 		# attribute, but that will slow this down
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 10)
 		for param, binarr in self.raw_distributions.injection_rates.items():
+			instrument = param.split("_")[0]
+			# save some computation if we only requested certain instruments
+			if instruments is not None and instrument not in instruments:
+				continue
 			if verbose:
 				print >> sys.stderr, "synthesizing injections for %s" % param
 			# Custom handle the first and last over flow bins
@@ -293,7 +308,7 @@ class DistributionsStats(object):
 		if verbose:
 			print >>sys.stderr, "done"
 
-	def compute_single_instrument_background(self, verbose = False):
+	def compute_single_instrument_background(self, instruments = None, verbose = False):
 		# initialize a likelihood ratio evaluator
 		likelihood_ratio_evaluator = ligolw_burca2.LikelihoodRatio(self.smoothed_distributions)
 
@@ -305,6 +320,10 @@ class DistributionsStats(object):
 		for param in background:
 			# FIXME only works if there is a 1-1 relationship between params and instruments
 			instrument = param.split("_")[0]
+			
+			# save some computation if we only requested certain instruments
+			if instruments is not None and instrument not in instruments:
+				continue
 
 			if verbose:
 				print >>sys.stderr, "updating likelihood background for %s" % instrument
@@ -489,7 +508,7 @@ class LocalRankingData(object):
 
 	def compute_joint_instrument_background(self, remap, instruments = None, verbose = False):
 		# first get the single detector distributions
-		self.distribution_stats.compute_single_instrument_background(verbose = verbose)
+		self.distribution_stats.compute_single_instrument_background(instruments = instruments, verbose = verbose)
 
 		self.joint_likelihood_pdfs.clear()
 
@@ -613,6 +632,8 @@ class RankingData(object):
 		# merge livetime segments.  let the code crash if they're disjoint
 		self.livetime_seg |= other.livetime_seg
 
+		return self
+
 	def compute_joint_cdfs(self):
 		self.minrank.clear()
 		self.maxrank.clear()
@@ -641,11 +662,22 @@ class RankingData(object):
 		except KeyError:
 			trials = 1
 		# normalize to the far interval
-		if self.far_interval is not None:
-			trials *= self.far_interval / float(abs(self.livetime_seg))
-		return 1.0 - (1.0 - fap)**trials
+		try:
+			if self.far_interval is not None:
+				trials *= self.far_interval / float(abs(self.livetime_seg))
+			return 1.0 - (1.0 - fap)**trials
+		# if we don't have livetime segments then we cannot yet safely
+		# compute a value for this, so we set it to Nan.  This can
+		# happen when an online analyis starts from scratch and the
+		# live time segments are 0
+		except TypeError:
+			return float('nan')
 
 	def compute_far(self, fap):
+		# catch a nan value, when FAP could not be estimated.  This is
+		# caused by not having a valid livetime segment
+		if numpy.isnan(fap):
+			return float('nan')
 		if fap == 0.:
 			return 0.
 		if self.far_interval is not None:
