@@ -345,22 +345,6 @@ def mkiirbank(pipeline, src, a1, b0, delay, name=None):
 	elem = mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed
 	return elem
 
-# IIR Bank Cuda mode
-def mkiirbankCuda(pipeline, src, a1, b0, delay, name=None):
-	properties = {}
-	if name is not None:
-		properties["name"] = name
-	if a1 is not None:
-		properties["a1_matrix"] = pipeio.repack_complex_array_to_real(a1)
-	if b0 is not None:
-		properties["b0_matrix"] = pipeio.repack_complex_array_to_real(b0)
-	if delay is not None:
-		properties["delay_matrix"] = delay
-	elem = mkgeneric(pipeline, src, "lal_iirbankCuda", **properties)
-	elem = mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed
-	return elem
-
-
 def mktrim(pipeline, src, initial_offset = None, final_offset = None, inverse = None):
 	properties = dict((name, value) for name, value in zip(("initial-offset", "final-offset", "inverse"), (initial_offset,final_offset,inverse)) if value is not None)
 	return mkgeneric(pipeline, src, "lal_trim", **properties)

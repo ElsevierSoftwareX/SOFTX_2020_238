@@ -55,7 +55,6 @@
 #include <gstlal_skymap.h>
 #include <gstlal_triggergen.h>
 #include <gstlal_iirbank.h>
-#include <gstlal_iirbankCuda.h>
 #include <gstlal_mean.h>
 #include <gstlal_timeslicechisq.h>
 #include <gstlal_specgram.h>
@@ -86,9 +85,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_skymap", GSTLAL_SKYMAP_TYPE},
 		{"lal_triggergen", GSTLAL_TRIGGERGEN_TYPE},
 		{"lal_iirbank", GSTLAL_IIRBANK_TYPE},
-#ifdef HAVE_CUDA
-		{"lal_iirbankCuda", GSTLAL_IIRBANKCUDA_TYPE},
-#endif
 		{"lal_mean", GSTLAL_MEAN_TYPE},
 		{"lal_timeslicechisq", GSTLAL_TIMESLICECHISQUARE_TYPE},
 		{"lal_specgram", GSTLAL_SPECGRAM_TYPE},

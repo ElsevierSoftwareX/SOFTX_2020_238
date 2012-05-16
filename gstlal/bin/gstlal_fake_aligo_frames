@@ -1,5 +1,4 @@
 #!/usr/bin/python
-
 from gstlal import pipeparts
 from gstlal import lloidparts
 from optparse import OptionParser, Option
