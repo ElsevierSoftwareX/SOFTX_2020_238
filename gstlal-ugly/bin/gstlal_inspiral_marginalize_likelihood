@@ -145,6 +145,7 @@ for url in urls:
 
 
 if ranking_data is not None:
+	search_summary.set_out(ranking_data.livetime_seg)
 	xmldoc.childNodes[-1].appendChild(ranking_data.to_xml(process, search_summary))
 	ligolw_process.set_process_end_time(process)
 	utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)
