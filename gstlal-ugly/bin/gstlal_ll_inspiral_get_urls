@@ -33,7 +33,7 @@ def read_registry(dir, dataurl, idrange):
 		# FIXME relies on 4 digit id
 		try:
 			tmp = open(url,"r")
-			tag, node = tmp.readline().replace("#","").split()
+			tag, node = tmp.readline().replace("#","").split()[0:2]
 			nodedict[(id, node)] = tmp.readlines()
 			tmp.close()
 		except IOError:

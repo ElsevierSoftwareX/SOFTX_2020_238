@@ -26,6 +26,7 @@ from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.segmentsUtils import vote
+from glue import iterutils
 from pylal import inject
 from pylal import rate
 from optparse import OptionParser
@@ -45,7 +46,6 @@ sqlite3.enable_callback_tracebacks(True)
 def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("--background-bins-file", metavar = "filename", action = "append", help = "Set the name of the xml file containing the snr / chisq background distributions")
-	parser.add_option("--additional-trials-factor", metavar = "int", type="int", default=1, help = "set an additional trials factor to apply to the FAP.  Default = 1 (no trials factor)")
 	parser.add_option("--tmp-space", metavar = "dir", help = "Set the name of the tmp space if working with sqlite")
 	parser.add_option("--compute-fap", action = "store_true", help = "compute fap, otherwise compute far assuming fap has been calculated")
 	parser.add_option("--compute-far", action = "store_true", help = "compute far, only works if fap is being computed or has been computed.")
@@ -54,8 +54,6 @@ def parse_command_line():
 	parser.add_option("--injection-dbs", action = "append", default=[], help = "append to the list of possible injection files, may be empty if no injections were done. Databases are assumed to be over the same time period as the non injection databases using the same templates.  If not the results will be nonsense.")
 	
 	options, filenames = parser.parse_args()
-	if options.compute_far and options.compute_fap:
-		raise ValueError("Must only choose compute-fap or compute-far")
 	return options, filenames
 
 #
@@ -68,58 +66,14 @@ options, filenames = parse_command_line()
 # Pull out background and injections distribution and set up the FAR class
 #
 
-if options.compute_fap:
-	livetime = None # Not needed for fap calculation
-	distribution_stats, distribution_seglists = far.DistributionsStats.from_filenames(options.background_bins_file, verbose = options.verbose)
-	Far = far.FAR(livetime, options.additional_trials_factor, distribution_stats, far.TrialsTable())
+Far = far.LocalRankingData.from_filenames(options.background_bins_file, verbose = options.verbose)
 
 # late import for DB manipulations
 from glue.ligolw import dbtables
 
-#
-# Live time only needs to be computed if assigning fars
-#
-
-if options.compute_far:
-	ltsegs = segments.segmentlistdict()
-	for bkdb in options.non_injection_db:
-		working_filename = dbtables.get_connection_filename(bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
-		connection = sqlite3.connect(working_filename)
-		ltsegs |= far.get_live_time_segs_from_search_summary_table(connection)
-		connection.close()
-		dbtables.discard_connection_filename(bkdb, working_filename, verbose = options.verbose)
-	ltsegs = ltsegs.union(ltsegs.keys()).coalesce()
-	livetime = float(abs(ltsegs))
-	Far = far.FAR(livetime, options.additional_trials_factor, distribution_stats = None)
-
-#
-# generate trials table by iterating over all of the non injection files
-#
-
 if options.compute_fap is not None:
-	coinc_inspiral_ifos = []
-	for bkdb in options.non_injection_db:
-		working_filename = dbtables.get_connection_filename(bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
-		connection = sqlite3.connect(working_filename)
-		Far.trials_table.from_db(connection)
-		coinc_inspiral_ifos.extend([ifos for ifos, in connection.cursor().execute('SELECT DISTINCT(ifos) FROM coinc_inspiral').fetchall()])
-		connection.close()
-		dbtables.discard_connection_filename(bkdb, working_filename, verbose = options.verbose)
-	for injdb in options.injection_dbs:
-		working_filename = dbtables.get_connection_filename(injdb, tmp_path = options.tmp_space, verbose = options.verbose)
-		connection = sqlite3.connect(working_filename)
-		coinc_inspiral_ifos.extend([ifos for ifos, in connection.cursor().execute('SELECT DISTINCT(ifos) FROM coinc_inspiral').fetchall()])
-		connection.close()
-		dbtables.discard_connection_filename(injdb, working_filename, verbose = options.verbose)
-
-	#
-	# Update the fap mapping
-	# FIXME avoid H1H2 correlations, ranking must be done in the same way or this is wrong!
-	#
-
-	for ifos in set(coinc_inspiral_ifos):
-		ifoset = frozenset(lsctables.instrument_set_from_ifos(ifos))
-		Far.updateFAPmap(ifoset, remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])})
+	# FIXME this only works of the Far object contains the marginalized joint likelihoods
+	Far.compute_joint_cdfs()
 
 #
 # iterate over files to rank

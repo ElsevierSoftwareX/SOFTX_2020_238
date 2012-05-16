@@ -193,7 +193,7 @@ static GstFlowReturn filter(GSTLALIIRBank *element, GstBuffer *outbuf)
 			double *in_last, *in = &input[dmax -*d];
 
 			for(in_last = in + output_length; in < in_last; in++, out += size1) { /* sample # */
-				ytemp = *a1 * ytemp + *b0 * *in;
+				ytemp = *a1 * ytemp + *b0 * *in + 1e-20;
 				*out += ytemp;
 			}
 			*y = ytemp;
@@ -607,7 +607,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	int dmin, dmax;
 	gsl_matrix_int_minmax(element->delay, &dmin, &dmax);
 	dmin = 0;
-	/*fprintf(stderr, "IIR elem %17s : input timestamp %llu, output timestamp %llu, input offset %llu, output offset %llu, %d, %d\n",
+	/*fprintf(stderr, "IIR elem %29s : input timestamp %llu, output timestamp %llu, input offset %llu, output offset %llu, %d, %d\n",
 		GST_ELEMENT_NAME(element),
 		GST_BUFFER_TIMESTAMP(inbuf),
 		GST_BUFFER_TIMESTAMP(outbuf),

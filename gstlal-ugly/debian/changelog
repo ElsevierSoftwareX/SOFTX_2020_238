@@ -1,0 +1,11 @@
+gstlal-ugly (0.2.1-1) unstable; urgency=low
+
+  * New upstream release, fixes nds2 dependency problem
+
+ -- Carsten Aulbert <carsten.aulbert@aei.mpg.de>  Fri, 20 Apr 2012 13:57:36 +0200
+
+gstlal-ugly (0.2.0-1) squeeze; urgency=low
+
+  * Initial release.
+
+ -- Carsten Aulbert <carsten.aulbert@aei.mpg.de>  Mon, 16 Apr 2012 13:50:55 +0200

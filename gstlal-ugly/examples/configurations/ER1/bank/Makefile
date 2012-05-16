@@ -5,17 +5,17 @@ STOP =  871149564
 IFOS = H
 
 # Template bank parameters
-MIN_MASS = 1.0
-MAX_MASS = 20.0
-MIN_TOTAL_MASS = 2.0
-MAX_TOTAL_MASS = 22.0
-LOW_FREQUENCY_CUTOFF = 10.0
+MIN_MASS = 1.2
+MAX_MASS = 1.6
+MIN_TOTAL_MASS = 2.4
+MAX_TOTAL_MASS = 3.2
+LOW_FREQUENCY_CUTOFF = 14.0
 HIGH_PASS_FREQ = 9
 HIGH_FREQUENCY_CUTOFF = 2047.0
 SAMPLE_RATE = 4096
 NUM_SPLIT_TEMPLATES = 250
 OVERLAP = 50
-MM = 0.97
+MM = 0.99
 
 all : dag
 
@@ -24,8 +24,8 @@ lalapps_path2cache :
 	chmod +x lalapps_path2cache
 
 frame.cache : lalapps_path2cache
-	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --instrument H1 --verbose
-	ls H1-FAKE-STRAIN/*.gwf | ./lalapps_path2cache > frame.cache
+	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --instrument H1 --verbose --fake-data AdvLIGO --frame-type test
+	ls H1/H-H1_test-8711/*.gwf | ./lalapps_path2cache > frame.cache
 
 H1-TMPLTBANK-871147516-2048.xml : frame.cache
 	lalapps_tmpltbank \

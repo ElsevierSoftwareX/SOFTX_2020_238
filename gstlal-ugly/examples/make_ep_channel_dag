@@ -1,0 +1,148 @@
+#!/usr/bin/env python
+
+import sys
+import copy
+import re
+
+import ConfigParser
+from ConfigParser import SafeConfigParser
+
+from optparse import OptionParser
+
+optp = OptionParser()
+
+# TODO: Make this into the arguments to process, make one dag per ini
+optp.add_option("-i", "--initialization-file", action="store", help="gstlal_excesspower ini file to use. Required.")
+optp.add_option("-s", "--submit-file", action="store", help="Submit file to link against.")
+optp.add_option("-S", "--segment-list", action="store", help="Segment XML to use. Indicate segment definer with a comma. Eg: segment.xml,L1:DMT-SCIENCE:1. With no defined indicated, the program will search for all Segment tables and use that.")
+optp.add_option("-m", "--minimum-segment-len", action="store", type=int, default=0, help="Discard segments with length less than this. Default is 0.")
+optp.add_option("-l", "--segment-len", action="store", type=int, help="Create jobs with this segment length. If not specified, no job subdivision will be done.")
+optp.add_option("-b", "--begin-gps-time", action="store", type=int, help="Restrict to segments after this time. If both this and the end time are specified without specifying a segment_list, then use this as the segment.")
+optp.add_option("-e", "--end-gps-time", action="store", type=int, help="Restrict to segments before this time. If both this and the start time are specified without specifying a segment_list, then use this as the segment.")
+optp.add_option("-n", "--no-segments", action="store_true", help="No gps time restrictions. Just use the cache times, or run forever.")
+optp.add_option("-o", "--output", action="store", help="Name of the file to save the DAG to.")
+
+opts, args = optp.parse_args()
+
+defaults = {
+	'sample_rate': 4096,
+	'bit_width': 32
+	#'ini_file': 'gstlal_excesspower_generic.ini'
+}
+
+dagentry = """JOB %(channel)s_%(gps_start)d %(subfile)s
+VARS %(channel)s_%(gps_start)d channel="%(channel)s" sample_rate="%(sample_rate)s" ini_file="%(ini_file)s" bit_width="%(bit_width)s" gps_start="%(gps_start)d" gps_end="%(gps_end)d" """
+
+inifile = opts.initialization_file
+cfg = SafeConfigParser()
+cfg.read( inifile )
+
+#exe = cfg.get( "gstlal_excesspower", "executable" )
+
+channel_ini = cfg.get( "gstlal_excesspower", "channels" )
+cfg = SafeConfigParser()
+cfg.read( channel_ini )
+
+subfile = opts.submit_file
+
+"""
+Example entry in channels.ini
+[L1:PSL-ISS_PDA_OUT_DQ]
+bit_width=32
+sample_rate=4096
+"""
+inireg = re.compile( "\.ini" )
+if( opts.output) :
+	dagfile = opts.output
+else:
+	dagfile = re.sub( inireg, ".dag", inifile )
+dagfile = open( dagfile, "w" )
+
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue import segments
+from glue.lal import LIGOTimeGPS
+
+runseg = segments.segment( opts.begin_gps_time or 0, opts.end_gps_time or segments.PosInfinity )
+xmldoc, segdef = None, None
+if( opts.segment_list ):
+	xmlfile = opts.segment_list.split( "," )
+
+	if( len(xmlfile) > 1 ):
+		xmlfile, segdef = xmlfile[0], xmlfile[1:]
+		# FIXME: Allow multiple segment categories
+		segdef = segdef[0]
+	else:
+		xmlfile, segdef = xmlfile[0], None
+
+	xmldoc = utils.load_filename( xmlfile )
+
+slist = segments.segmentlist()
+if( segdef is not None ):
+
+	segtables = lsctables.SegmentDefTable()
+	for tbl in lsctables.getTablesByType( xmldoc, lsctables.SegmentDefTable ):
+		segtables += tbl
+
+	if( len(segtables) == 0 ):
+		sys.exit( "No segment definer tables present." )
+
+	defid = None
+	for sdef in segtables:
+		if( sdef.name == segdef ):
+			defid = sdef.segment_def_id
+			break
+	if( defid == None ):
+		sys.exit( "Could not find segment def id for " + segdef )
+
+	segtables = lsctables.SegmentTable()
+	for tbl in lsctables.getTablesByType( xmldoc, lsctables.SegmentTable ):
+		segtables += tbl
+	slist = [ seg.segment() for seg in segtables if seg.segment_def_id == defid ]
+
+elif( xmldoc is not None ):
+
+	segtables = lsctables.SegmentTable()
+	for tbl in lsctables.getTablesByType( xmldoc, lsctables.SegmentTable ):
+		segtables += tbl
+	slist = [ seg.segment() for seg in segtables ]
+
+if( len(slist) == 0 ):
+	slist.append( runseg )
+else:
+	slist = slist.intersect( runseg ).coalesce()
+
+slist = filter( lambda s: abs(s) > opts.minimum_segment_len, slist )
+if( opts.segment_len ):
+	subd = []
+	for seg in slist:
+		while True:
+			if( seg[0] + opts.segment_len >= seg[1] ): 
+				subd.append( seg )
+				break
+			subd.append( segments.segment( seg[0], seg[0] + opts.segment_len ) ) 
+			seg = segments.segment( (seg[0] + opts.segment_len), seg[1] )
+
+		if( abs(subd[-1]) < opts.minimum_segment_len ):
+			seg[-2] = seg[-2] & seg[-1]
+			del seg[-1]
+	slist = subd
+
+print "Found %d segments to run on" % len(slist)
+if( len(slist) == 0 ):
+	sys.exit( "No segments to run." )
+
+for seg in slist:
+
+	for channel in cfg.sections():
+		sec = copy.copy( defaults )
+		sec.update( dict( cfg.items( channel ) ) )
+		sec['channel'] = channel
+		sec['subfile'] = subfile
+		sec['ini_file'] = inifile
+		if( not opts.no_segments ):
+			sec['gps_start'] = seg[0]
+			sec['gps_end'] = seg[1]
+		print >>dagfile, dagentry % sec
+		
+dagfile.close()

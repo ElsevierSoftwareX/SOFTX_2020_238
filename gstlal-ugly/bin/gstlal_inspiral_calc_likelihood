@@ -138,7 +138,8 @@ options, filenames = parse_command_line()
 #
 
 
-coincparamsdistributions, likelihood_seglists = far.DistributionsStats.from_filenames(options.likelihood_filenames, verbose = options.verbose)
+Far = far.LocalRankingData.from_filenames(options.likelihood_filenames, verbose = options.verbose)
+coincparamsdistributions, likelihood_seglists = Far.distribution_stats, Far.livetime_seg
 
 # calculate injections before writing to disk
 if options.synthesize_injections != 0:
@@ -148,14 +149,16 @@ if options.synthesize_injections != 0:
 if options.background_prior != 0:
 	coincparamsdistributions.add_background_prior(n = options.background_prior)
 
-if options.write_likelihood is not None:
-	xmldoc = inspiral.gen_likelihood_control_doc(coincparamsdistributions, likelihood_seglists)
-	utils.write_filename(xmldoc, options.write_likelihood, gz = (options.write_likelihood or "stdout").endswith(".gz"), verbose = options.verbose)
-
 if options.verbose:
 	print >>sys.stderr, "computing event densities ..."
 coincparamsdistributions.finish(verbose = options.verbose)
 
+if options.write_likelihood is not None:
+	Far.compute_joint_instrument_background(remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}, verbose = options.verbose)	
+	xmldoc = inspiral.gen_likelihood_control_doc(Far, ("H1", "H2", "L1", "V1"))
+	utils.write_filename(xmldoc, options.write_likelihood, gz = (options.write_likelihood or "stdout").endswith(".gz"), verbose = options.verbose)
+
+#FIXME should this come from somewhere else now?
 likelihood_ratio_func = ligolw_burca2.LikelihoodRatio(coincparamsdistributions.smoothed_distributions)
 
 

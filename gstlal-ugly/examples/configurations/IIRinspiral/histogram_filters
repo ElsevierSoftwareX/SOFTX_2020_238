@@ -197,6 +197,7 @@ snrs = []
 Niir = []
 M = {}
 Mr = {}
+ntemplates = 0
 verbose = False
 
 for f in sys.argv[1:]:
@@ -240,6 +241,7 @@ for f in sys.argv[1:]:
 		#print >>sys.stderr, '%13.8f, %13.8f, %13.8f, %10d' % (m1[tmp], m2[tmp], snrs[tmp], Niir[tmp])
 		#print >>file, '%13.8f, %13.8f, %13.8f' % (m1[tmp], m2[tmp], snrs[tmp]
 
+	ntemplates += tmp + 1
 	if verbose:
 		print >> sys.stderr, "sngl_inspral table %f" % ((time.time() - start))
 		start = time.time()
@@ -247,13 +249,17 @@ for f in sys.argv[1:]:
 #file.close()
 
 sumtotal = 0
+intcost = 0
 Nsum = 0
+print >> sys.stderr, 'Sample rate, N templates, Number of IIR filters, Actual number of IIR filters, IIR FLOPS, Upsampler FLOPS'
 for sr in sorted(M.keys()):
-	sumtotal += sr * Mr[sr] * 8.0
+	sumtotal += sr * Mr[sr]
+	intcost += sr * 16.0 * 2.0 * ntemplates
 	Nsum += Mr[sr]
-	print >>sys.stderr, '%5d, %10d, %10d, %11.0f' % (sr, M[sr], Mr[sr], sr * Mr[sr] * 8.0)
+	print >>sys.stderr, '%5d, %3d, %10d, %10d, %11.0f, %11.0f' % (sr, ntemplates, M[sr], Mr[sr], sr * Mr[sr], sr * 16.0 * 2.0 * ntemplates)
 
-print >>sys.stderr, 'Total Computational Cost (FLOPS) %e' % sumtotal
+print >>sys.stderr, 'Total cost of filtering  (FLOPS) %e' % sumtotal
+print >>sys.stderr, 'Total cost of upsampling (FLOPS) %e' % intcost
 print >>sys.stderr, 'Total Number of IIR filters %d' % Nsum
 
 MM = ligolw_process.get_process_params(xmldoc, "tmpltbank", "--minimal-match")

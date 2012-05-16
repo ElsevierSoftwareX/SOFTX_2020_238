@@ -89,6 +89,7 @@ resource.setrlimit(resource.RLIMIT_AS, (maxas, maxas))
 maxstack = resource.getrlimit(resource.RLIMIT_STACK)[1]
 resource.setrlimit(resource.RLIMIT_STACK, (1 * 1024**2, maxstack)) # 1MB per thread, not 10
 
+
 #
 # =============================================================================
 #
@@ -304,15 +305,14 @@ if options.verbose:
 
 
 #
-# Load likelihood ratio data
+# Load likelihood ratio data, assume injections are present!
 #
 
 
 if options.likelihood_file is not None:
-	distribution_stats, distribution_seglists = far.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
-	distribution_stats.add_foreground_prior(verbose = options.verbose)
+	FAR, proc_id = far.LocalRankingData.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose))
 else:
-	distribution_stats = far.DistributionsStats()
+	FAR = far.LocalRankingData(segments.segment(None, None), far.DistributionsStats())
 
 
 #
@@ -330,7 +330,7 @@ output = inspiral.Data(
 	injection_filename = options.injections,
 	time_slide_file = options.time_slide_file,
 	coincidence_threshold = options.coincidence_threshold,
-	distribution_stats = distribution_stats,
+	FAR = FAR,
 	assign_likelihoods = options.likelihood_file is not None,
 	comment = options.comment,
 	tmp_path = options.tmp_space,
@@ -358,8 +358,8 @@ if options.write_pipeline is not None:
 # start http interface
 #
 
-# FIXME: don't hard-code port
-httpinterface.start_servers(16953, verbose = options.verbose)
+# FIXME: don't hard-code port, don't use in this program right now since more than one job runs per machine
+# httpinterface.start_servers(16953, verbose = options.verbose)
 
 #
 # Run pipeline

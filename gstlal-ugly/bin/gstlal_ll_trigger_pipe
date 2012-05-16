@@ -53,18 +53,47 @@ class gstlal_inspiral_job(pipeline.CondorDAGJob):
 		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
 		self.number = 1
 
+class gstlal_inspiral_marginalize_likelihoods_online_job(pipeline.CondorDAGJob):
+	"""
+	A gstlal_inspiral_marginalize_likelihoods_online job
+	"""
+	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral_marginalize_likelihoods_online'), tag_base='gstlal_inspiral_marginalize_likelihoods_online'):
+		"""
+		"""
+		self.__prog__ = 'gstlal_inspiral_marginalize_likelihoods_online'
+		self.__executable = executable
+		self.__universe = 'local'
+		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
+		self.add_condor_cmd('getenv','True')
+		# these jobs gracefully shutdown with SIGINT
+		self.add_condor_cmd("remove_kill_sig", "15")
+		self.add_condor_cmd("kill_sig", "15")
+		self.tag_base = tag_base
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
+
+class gstlal_inspiral_marginalize_likelihoods_online_node(pipeline.CondorDAGNode):
+	"""
+	gstlal_inspiral_marginalize_likelihoods_onlinenode
+	"""
+	def __init__(self, job, dag, output):
+		pipeline.CondorDAGNode.__init__(self,job)
+		self.add_var_arg("%s %s" % (os.getcwd(), output))
+		dag.add_node(self)
+
+
 class gstlal_inspiral_node(pipeline.CondorDAGNode):
 	"""
 	A gstlal_inspiral node
 	"""
 	#FIXME add frame segments, name and veto segments name
-	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=10.0, control_peak_time = 5, fir_stride = 5, thinca_interval = 10, likelihood_file = None, trials_factor = 1, gracedb_far_threshold = None, gracedb_group = None, gracedb_type = None, injections = None, fake_data = None, copy_likelihoods = False, veto_segments_file = None, veto_segments_name = None, p_node=[]):
+	def __init__(self, job, dag, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=10.0, control_peak_time = 5, fir_stride = 5, thinca_interval = 10, likelihood_file = None, marginalized_likelihood_file = None, gracedb_far_threshold = None, gracedb_group = None, gracedb_type = None, injections = None, fake_data = None, copy_likelihoods = False, veto_segments_file = None, veto_segments_name = None, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("channel-name", inspiral.pipeline_channel_list_from_channel_dict(channel_dict))
 		if reference_psd is not None:
 			self.add_var_opt("reference-psd", reference_psd)
-		self.add_var_opt("trials-factor", trials_factor)
 		self.add_var_opt("svd-bank", svd_bank)
 		self.add_var_opt("tmp-space", tmp_space)
 		self.add_var_opt("track-psd", "")
@@ -96,6 +125,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		if copy_likelihoods:
 			shutil.copyfile(likelihood_file, likefile)
 		self.add_var_opt("likelihood-file", likefile)
+		self.add_var_opt("marginalized-likelihood-file", marginalized_likelihood_file)
 		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
 		self.output_name = '%s/%s-%04d-LLOID.sqlite' % (path, "H1H2L1V1", job.number)
 		self.background_name = '%s/%s-%04d-LLOID_snr_chi.xml.gz' % (path, "H1H2L1V1", job.number)
@@ -122,6 +152,7 @@ def parse_command_line():
 	parser.add_option("--num-banks", metavar = "str", help = "the number of banks per job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
 	parser.add_option("--max-jobs", metavar = "num", type = "int", help = "stop parsing the cache after reaching a certain number of jobs")
 	parser.add_option("--likelihood-file", help = "set the likelihood file, required if --copy-likelihoods is used")	
+	parser.add_option("--marginalized-likelihood-file", help = "set the marginalized likelihood file, required")	
 	parser.add_option("--control-peak-time", default = 5, metavar = "secs", help = "set the control peak time, default 5")
 	parser.add_option("--fir-stride", default = 5, metavar = "secs", help = "set the fir bank stride, default 5")
 	parser.add_option("--thinca-interval", default = 10, metavar = "secs", help = "set the thinca interval, default 10")
@@ -171,12 +202,16 @@ if options.do_iir_pipeline is not None:
 else:
 	gstlalInspiralJob = gstlal_inspiral_job()
 
+# A local universe job that will run in a loop marginalizing all of the likelihoods
+margJob = gstlal_inspiral_marginalize_likelihoods_online_job()
+margNode = gstlal_inspiral_marginalize_likelihoods_online_node(margJob, dag, options.marginalized_likelihood_file) 
+
 ###############################################################################
 # loop over banks to run gstlal inspiral pre clustering and far computation
 ###############################################################################
 
 for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, options.num_banks, options.max_jobs):
-	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold, fir_stride = options.fir_stride, thinca_interval = options.thinca_interval, likelihood_file = options.likelihood_file, control_peak_time = options.control_peak_time, trials_factor = trials_factor, gracedb_far_threshold = options.gracedb_far_threshold, gracedb_group = options.gracedb_group, gracedb_type = options.gracedb_type, injections = options.injections, fake_data = options.fake_data, copy_likelihoods = options.copy_likelihoods, veto_segments_file = options.veto_segments_file, veto_segments_name = options.veto_segments_name)
+	gstlal_inspiral_node(gstlalInspiralJob, dag, channel_dict, reference_psd=options.reference_psd, svd_bank=s, ht_gate_thresh = options.ht_gate_threshold, fir_stride = options.fir_stride, thinca_interval = options.thinca_interval, likelihood_file = options.likelihood_file, marginalized_likelihood_file = options.marginalized_likelihood_file, control_peak_time = options.control_peak_time, gracedb_far_threshold = options.gracedb_far_threshold, gracedb_group = options.gracedb_group, gracedb_type = options.gracedb_type, injections = options.injections, fake_data = options.fake_data, copy_likelihoods = options.copy_likelihoods, veto_segments_file = options.veto_segments_file, veto_segments_name = options.veto_segments_name)
 
 
 dag.write_sub_files()

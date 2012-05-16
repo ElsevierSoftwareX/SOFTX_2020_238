@@ -208,15 +208,22 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 class get_state_vector(object):
 	# monitor state vector transitions, export via web
 	# interface
-	def __init__(self, elem):
+	def __init__(self, elem, msg = None, verbose = False):
+		self.verbose = verbose
 		self.current_segment = "unknown"
 		self.segment_start = "unknown"
+		if msg is not None:
+			self.msg = "%s: " % msg
+		else:
+			self.msg = ""
 		elem.connect("start", self.sighandler, "science")
 		elem.connect("stop", self.sighandler, "lock loss")
 
 	def sighandler(self, elem, timestamp, segment_type):
 		self.current_segment = segment_type
 		self.segment_start = "%.9f" % (timestamp / 1e9)
+		if self.verbose:
+			print >>sys.stderr, "%s: %sstate transition: %s" % (elem.get_name(), self.msg, self.text().strip())
 
 	def text(self):
 		return "%s @ %s\n" % (self.current_segment, self.segment_start)
@@ -320,7 +327,9 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		src = pipeparts.mkgate(pipeline, strain, threshold = 1, control = statevector)
 		# export state vector state
 		src.set_property("emit-signals", True)
-		bottle.route("/%s/current_segment.txt" % instrument)(get_state_vector(src).text)
+		# FIXME:  let the state vector messages going to stderr be
+		# controled somehow
+		bottle.route("/%s/current_segment.txt" % instrument)(get_state_vector(src, msg = instrument, verbose = True).text)
 	else:
 		src = pipeparts.mkaudioconvert(pipeline, src)
 
@@ -1075,6 +1084,7 @@ def mkSPIIRhoftToSnrSlices(pipeline, src, bank, instrument, verbose = None, nxyd
 
 	for sr in sample_rates:
 		head = pipeparts.mkqueue(pipeline, src[sr], max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
+		head = pipeparts.mkreblock(pipeline, head)
 		head = pipeparts.mkiirbank(pipeline, head, a1 = bank.A[sr], b0 = bank.B[sr], delay = bank.D[sr], name = "gstlaliirbank_%d_%s_%s" % (sr, instrument, bank.logname))
 		head = pipeparts.mkqueue(pipeline, head, max_size_time=gst.SECOND * 10, max_size_buffers=0, max_size_bytes=0)
 		if prehead is not None:

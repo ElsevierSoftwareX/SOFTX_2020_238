@@ -1,0 +1,150 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2009-2011  Kipp Cannon, Chad Hanna, Drew Keppel
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import sys
+from optparse import OptionParser
+
+
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw.utils import process as ligolw_process
+from pylal import llwapp
+
+
+from gstlal import far
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+	)
+	parser.add_option("--ignore-missing", action = "store_true", help = "Ignore and skip missing input documents.")
+	parser.add_option("-o", "--output", metavar = "filename", help = "Set the output file name (default = write to stdout).")
+	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
+
+	options, urls = parser.parse_args()
+
+	if not urls and not options.ignore_missing:
+		raise ValueError, "no input documents"
+
+	return options, urls
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# parse command line
+#
+
+
+options, urls = parse_command_line()
+
+
+#
+# initialize output document
+#
+
+
+xmldoc = ligolw.Document()
+node = xmldoc.appendChild(ligolw.LIGO_LW())
+node.appendChild(lsctables.New(lsctables.ProcessTable))
+node.appendChild(lsctables.New(lsctables.ProcessParamsTable))
+node.appendChild(lsctables.New(lsctables.SearchSummaryTable))
+process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_marginalize_likelihood", options.__dict__)
+search_summary = llwapp.append_search_summary(xmldoc, process)
+
+
+#
+# loop over input documents
+#
+
+
+ranking_data = None
+for url in urls:
+	#
+	# load input document
+	#
+
+	try:
+		in_xmldoc = utils.load_url(url, verbose = options.verbose)
+	except IOError:
+		# IOError is raised when an on-disk file is missing.
+		# urllib2.URLError is raised when a URL cannot be loaded,
+		# but this is subclassed from IOError so IOError will catch
+		# those, too.
+		if options.ignore_missing:
+			print >>sys.stderr, "Could not load ", url, " ...skipping as requested"
+			continue
+		raise
+	likelihood_data, process_id = far.LocalRankingData.from_xml(in_xmldoc)
+	in_xmldoc.unlink()
+
+	#
+	# Compute the joint likelihood backgrounds from the ranking data regardless of what is there
+	#
+
+	# FIXME This assumes that a trials table was initialized for all jobs with the same set of instruments.  It will only compute the likelihood background for those instruments to save time.
+	likelihood_data.smooth_distribution_stats(verbose = options.verbose)
+	likelihood_data.compute_joint_instrument_background(remap = {frozenset(["H1", "H2", "L1"]) : frozenset(["H1", "L1"]), frozenset(["H1", "H2", "V1"]) : frozenset(["H1", "V1"]), frozenset(["H1", "H2", "L1", "V1"]) : frozenset(["H1", "L1", "V1"])}, instruments = likelihood_data.trials_table.get_sngl_ifos(), verbose = options.verbose)
+
+	#
+	# merge into marginalized data
+	#
+
+	if ranking_data is None:
+		ranking_data = far.RankingData(likelihood_data)
+	else:
+		ranking_data += far.RankingData(likelihood_data)
+
+
+#
+# write output document only if we have something to write, so that a mishap
+# doesn't clobber an otherwise valid file
+#
+
+
+if ranking_data is not None:
+	xmldoc.childNodes[-1].appendChild(ranking_data.to_xml(process, search_summary))
+	ligolw_process.set_process_end_time(process)
+	utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)

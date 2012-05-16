@@ -67,6 +67,7 @@ def parse_command_line():
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("-s", "--synthesize-injection-count", metavar = "N", default = 10000000, type = "int", help = "Synthesize an injection distribution with N injections. default 1000000")
 	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
+	parser.add_option("--instrument", action = "append", help = "append to a list of instruments to create dist stats for.  Must be whatever instruments you intend to analyze")
 	parser.add_option("-p", "--background-prior", metavar = "N", default = 1, type = "float", help = "include an exponential background prior with the maximum bin count = N, default 1")
 	options, filenames = parser.parse_args()
 
@@ -96,12 +97,17 @@ options, filenames = parse_command_line()
 #
 
 coincparamsdistributions = far.DistributionsStats()
+
 if options.background_prior != 0:
-	coincparamsdistributions.add_background_prior(options.background_prior)
-coincparamsdistributions.add_foreground_prior(verbose = options.verbose, n = options.synthesize_injection_count)
+	coincparamsdistributions.add_background_prior(options.background_prior, instruments = options.instrument)
 
-#FIXME there is no real segment here, should there be?
-segs = segments.segmentlistdict.fromkeys(("H1","H2","L1","V1"), segments.segmentlist([segments.segment([GPS(0), GPS(2000000000)])]))
+coincparamsdistributions.add_foreground_prior(verbose = options.verbose, n = options.synthesize_injection_count, instruments = options.instrument)
 
-xmldoc = inspiral.gen_likelihood_control_doc(coincparamsdistributions, segs)
+# no segments, this file is independent of time
+FAR = far.LocalRankingData(segments.segment(None, None), coincparamsdistributions)
+
+# initialize the trials table to 1
+FAR.trials_table.initialize_from_sngl_ifos(options.instrument, val = 1)
+
+xmldoc = inspiral.gen_likelihood_control_doc(FAR, options.instrument)
 utils.write_filename(xmldoc, options.write_likelihood, gz = options.write_likelihood.endswith('.gz'), verbose = options.verbose)

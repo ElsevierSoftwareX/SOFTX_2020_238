@@ -128,11 +128,11 @@ def parse_command_line():
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets")
 	parser.add_option("--control-peak-time", metavar = "time", type = "int", help = "Set a time window in seconds to find peaks in the control signal")
 	parser.add_option("--fir-stride", metavar = "time", type = "int", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
-	parser.add_option("--trials-factor", metavar = "num", type = "int", default = 1, help = "Set the multiplicative trials factor, default 1")
 	parser.add_option("--thinca-interval", metavar = "secs", type = "float", default = 30.0, help = "Set the thinca interval, default = 30s")
 	parser.add_option("--ht-gate-threshold", metavar = "threshold", type = "float", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal)")
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.020, help = "Set the coincidence window in seconds (default = 0.020).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	parser.add_option("--likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial likelihood ratio data (required).")
+	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the name of the file from which to load initial marginalized likelihood ratio data (required).")
 	parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 	parser.add_option("--comment", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
 	parser.add_option("--job-tag", help = "Set the string to identify this job and register the resources it provides on a node. Should 4 digits of the form 0001, 0002, etc.  required")
@@ -212,7 +212,7 @@ def parse_command_line():
 	@bottle.route("/registry.txt")
 	def register(fname = None):
 		
-		yield "# %s %s\n" % (options.job_tag, host)
+		yield "# %s %s %s\n" % (options.job_tag, host, " ".join(set(svd_banks.keys())))
 
 		# First do urls that do not depend on instruments
 		for request in ("registry.txt", "latency_histogram.txt", "latency_history.txt", "snr_history.txt", "ram_history.txt", "likelihood.xml", "bank.txt"):
@@ -358,9 +358,7 @@ if options.verbose:
 # Note: It assumes injections are present
 #
 
-
-distribution_stats, distribution_seglists = far.DistributionsStats.from_filenames([options.likelihood_file], verbose = options.verbose)
-
+FAR, proc_id = far.LocalRankingData.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose))
 
 #
 # build output document
@@ -382,12 +380,12 @@ output = inspiral.Data(
 	injection_filename = None,
 	time_slide_file = options.time_slide_file,
 	coincidence_threshold = options.coincidence_threshold,
-	distribution_stats = distribution_stats,
+	FAR = FAR,
+	marginalized_likelihood_file = options.marginalized_likelihood_file,
 	assign_likelihoods = True,
 	likelihood_snapshot_interval = likelihood_snapshot_interval,	# seconds
 	comment = options.comment,
 	tmp_path = options.tmp_space,
-	trials_factor = options.trials_factor,
 	thinca_interval = options.thinca_interval,
 	gracedb_far_threshold = options.gracedb_far_threshold,
 	gracedb_type = options.gracedb_type,

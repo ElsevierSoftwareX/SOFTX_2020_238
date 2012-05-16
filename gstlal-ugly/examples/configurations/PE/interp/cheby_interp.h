@@ -25,6 +25,8 @@ struct twod_waveform_interpolant_array {
 	
 };
 
+
 int free_waveform_interp_objects(struct twod_waveform_interpolant_array *);
 
 struct twod_waveform_interpolant_array* new_waveform_interpolant_array_from_svd_bank(gsl_matrix *svd_bank, double param1_min, double param2_min, double param1_max, double param2_max);
+

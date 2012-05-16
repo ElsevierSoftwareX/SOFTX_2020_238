@@ -1,0 +1,17 @@
+gstlal (0.3.0-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Carsten Aulbert <carsten.aulbert@aei.mpg.de>  Fri, 13 Apr 2012 08:51:42 +0200
+
+gstlal (0.2.0-2) squeeze; urgency=low
+
+  * Second try with manual Depends line
+
+ -- Carsten Aulbert <carsten.aulbert@aei.mpg.de>  Thu, 12 Apr 2012 11:39:15 +0200
+
+gstlal (0.2.0-1) UNRELEASED; urgency=low
+
+  * Initial release.
+
+ -- Carsten Aulbert <carsten.aulbert@aei.mpg.de>  Wed, 11 Apr 2012 13:50:09 +0200
