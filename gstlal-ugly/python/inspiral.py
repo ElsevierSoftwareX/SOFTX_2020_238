@@ -450,8 +450,8 @@ class Data(object):
 				# out segment not yet initialized
 				del out_segs[:]
 			out_segs |= segments.segmentlist([segments.segment(buf_timestamp, buf_end_time)])
-			self.far.livetime_seg = out_segs.extent()
-			self.search_summary.set_out(self.far.livetime_seg)
+			self.search_summary.set_out(out_segs.extent())
+			self.far.livetime_seg = segments.segmentlist([out_segs.extent(), self.far.livetime_seg]).extent()
 
 			# set metadata on triggers
 			for event in events:
