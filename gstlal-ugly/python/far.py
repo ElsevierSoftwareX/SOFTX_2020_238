@@ -536,7 +536,7 @@ class LocalRankingData(object):
 
 class RankingData(object):
 	def __init__(self, local_ranking_data):
-		self.far_interval = 3600.0	# seconds
+		self.far_interval = 100.0	# seconds
 
 		# ensure the trials tables' keys match the likelihood
 		# histograms' keys
