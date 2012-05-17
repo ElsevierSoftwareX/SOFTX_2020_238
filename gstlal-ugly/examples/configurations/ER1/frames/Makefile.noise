@@ -1,6 +1,8 @@
 START = $(shell lalapps_tconvert now)
 STOP = $(shell lalapps_tconvert now + 128 seconds)
-
+IFOS = H1 L1 V1
+CACHE_SUFFIX = -frame.cache
+CACHES := $(addsuffix $(CACHE_SUFFIX),$(IFOS))
 LIGO_FRAME_DURATION = 64 # s
 
 all : frames.cache
@@ -9,20 +11,12 @@ lalapps_path2cache :
 	wget 'http://www.lsc-group.phys.uwm.edu/cgit/lalsuite/plain/pylal/bin/lalapps_path2cache'
 	chmod +x lalapps_path2cache
 
-H1-FAKE-STRAIN : lalapps_path2cache
-	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --instrument H1 --verbose --duration $(LIGO_FRAME_DURATION)
-	ls H1-FAKE-STRAIN/*.gwf | ./lalapps_path2cache > frame.H1.cache
+%-frame.cache : lalapps_path2cache
+	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --instrument $* --verbose --duration $(LIGO_FRAME_DURATION) --frame-type TEST --fake-data AdvLIGO
+	find $*/ -name "*.gwf" | ./lalapps_path2cache > $@
 
-H2-FAKE-STRAIN : lalapps_path2cache
-	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --instrument H2  --verbose --duration $(LIGO_FRAME_DURATION)
-	ls H2-FAKE-STRAIN/*.gwf | ./lalapps_path2cache > frame.H2.cache
+frames.cache : $(CACHES)
+	cat $(CACHES) > frames.cache
 
-L1-FAKE-STRAIN : lalapps_path2cache
-	gstlal_fake_aligo_frames --gps-start-time $(START) --gps-end-time $(STOP) --instrument L1 --verbose --duration $(LIGO_FRAME_DURATION)
-	ls L1-FAKE-STRAIN/*.gwf | ./lalapps_path2cache > frame.L1.cache
-
-frames.cache : H1-FAKE-STRAIN H2-FAKE-STRAIN L1-FAKE-STRAIN
-	cat frame.H1.cache frame.H2.cache frame.L1.cache > frames.cache
-
-realclean: 
-	rm -rf injections.xml H1-FAKE-STRAIN H2-FAKE-STRAIN L1-FAKE-STRAIN *.cache
+realclean:
+	rm -rf $(IFOS) *.cache
