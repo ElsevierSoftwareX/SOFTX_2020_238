@@ -451,7 +451,10 @@ class Data(object):
 				del out_segs[:]
 			out_segs |= segments.segmentlist([segments.segment(buf_timestamp, buf_end_time)])
 			self.search_summary.set_out(out_segs.extent())
-			self.far.livetime_seg = segments.segmentlist([out_segs.extent(), self.far.livetime_seg]).extent()
+			if self.far.livetime_seg == segments.segment(None, None):
+				self.far.livetime_seg = out_segs.extent()
+			else:
+				self.far.livetime_seg = segments.segmentlist([out_segs.extent(), self.far.livetime_seg]).extent()
 
 			# set metadata on triggers
 			for event in events:
