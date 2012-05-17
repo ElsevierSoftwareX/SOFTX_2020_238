@@ -6,6 +6,9 @@ import matplotlib.gridspec
 matplotlib.use("Agg")
 from matplotlib import pyplot
 
+# FIXME: This doesn't seem to work with python-2.7 on macs
+#matplotlib.rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+
 from mpl_toolkits.axes_grid.inset_locator import inset_axes
 from mpl_toolkits.axes_grid import make_axes_locatable
 
@@ -19,6 +22,7 @@ import itertools
 from glue.ligolw import utils
 from glue.ligolw import lsctables
 from glue import segments
+from glue.lal import LIGOTimeGPS
 
 from optparse import OptionParser
 
@@ -30,44 +34,65 @@ parser.add_option("-s", "--gps-start", action="store", type=float, help="Plot tr
 parser.add_option("-e", "--gps-end", action="store", type=float, help="Plot triggers only before indicated gps time. Default is to infer from triggers.")
 parser.add_option("-f", "--low-frequency", action="store", type=float, default=32.0, help="Plot trigggers with central frequency above this frequency. Default is 32.")
 parser.add_option("-F", "--high-frequency", action="store", type=float, default=2000.0, help="Plot trigggers with central frequency below this frequency. Default is 2000.")
-parser.add_option("-I", "--infer-parameters", action="store_true", help="Infer the TF map dimensions from the search details in the input files.")
 parser.add_option("-S", "--snr-thresh", action="store", type=float, default=0.0, help="Plot trigggers with snr greater than that indicated.")
 parser.add_option("-m", "--mark-time", action="store", type=float, help="Mark a particular time on the map. Useful for identifying triggers in a file spanning a large time.")
 parser.add_option("-r", "--enable-event-hist", action="store_true", help="Enable the subplot with event rate versus strength for the channel.")
-<<<<<<< Updated upstream
-=======
-parser.add_option("-w", "--ignore-whitener", action="store", type=float, default=20.0, help="Ignore the first N seconds of data (from whitening effects), default is 20.")
->>>>>>> Stashed changes
+#parser.add_option("-w", "--ignore-whitener", action="store", type=float, default=20.0, help="Ignore the first N seconds of data (from whitening effects), default is 20.")
+parser.add_option("-x", "--overlay-segments", action="store", help="The entries for this argument are parsed and if segments with those definitions exist in the viewsegment, they will be overlayed on the plot.")
 
 opts, args = parser.parse_args()
+
+plot_sim = False
 
 if( opts.channels is not None ):
 	channels = opts.channels.split(",")
 else: channels = None
 
+if( plot_sim ):
+	channels = [ "Simulation" ]
+	instruments = [ "Z" ]
+
 if( opts.instruments is not None ):
 	print instruments
 else: instruments = None
 
-# TODO: group by IFO
+if( opts.overlay_segments is not None ): 
+	segment_defs = opts.overlay_segments.split(",")
+else:
+	segment_defs = None
+
+######## HACK ALERT ###########
+# This is only done so that sim events can be treated more like SnglBurst entries
+# TODO: Doesn't work.
+#lsctables.SimBurst = lsctables.table.RowType
+###############################
 
 events = lsctables.SnglBurstTable()
 for arg in args:
 	xmldoc = utils.load_filename( arg )
-	for tbl in lsctables.getTablesByType( xmldoc, lsctables.SnglBurstTable ):
-		events += tbl 
-
-	# search data
-	#metad = lsctables.getTablesByType( xmldoc, lsctables.SearchSummaryTable )[0]
-
-viewseg = segments.segment( segments.NegInfinity, segments.PosInfinity )
-if( opts.gps_start is None ):
-	viewseg = segments.segment( min([e.peak_time for e in events]), viewseg[1] )
-else: viewseg = segments.segment( opts.gps_start, viewseg[1] )
-if( opts.gps_end is None ):
-	viewseg = segments.segment( viewseg[0], max([e.peak_time for e in events]) )
-else: viewseg = segments.segment( viewseg[0], opts.gps_end )
-viewseg = segments.segment( viewseg[0]+opts.ignore_whitener, viewseg[1] )
+	if( not plot_sim ):
+		for tbl in lsctables.getTablesByType( xmldoc, lsctables.SnglBurstTable ):
+			events += tbl 
+	else:
+		# TODO: Fix this -- see hack alert above
+		for tbl in lsctables.getTablesByType( xmldoc, lsctables.SimBurstTable ):
+			tbl.validcolumns['snr'] = 'real_8'
+			tbl.appendColumn( "amplitude" )
+			events += tbl 
+		events.validcolumns['snr'] = 'real_8'
+		events.appendColumn( "snr" )
+		for e in events:
+			e.snr = 0
+			try:
+				if( e.amplitude is not None ): continue
+			except AttributeError: pass # This is annoying!
+			try:
+				e.amplitude = e.hrss
+			except AttributeError: pass
+			try: 
+				e.amplitude = e.egw_over_rsquared
+			except AttributeError: 
+				sys.exit( "Can't find a valid energy/amplitude for injection.")
 
 if( instruments is None and channels is None ):
 	instruments = {}
@@ -82,55 +107,78 @@ if( instruments is None ):
 
 print "Examining instruments: %s" % str(instruments)
 
+# Segment information
+segs = segments.segmentlistdict()
+analyzed_segments = segments.segmentlistdict()
+for arg in args:
+	xmldoc = utils.load_filename( arg )
+	def_id_pair = []
+	if( segment_defs is not None ):
+		segtables = lsctables.SegmentDefTable()
+		for tbl in lsctables.getTablesByType( xmldoc, lsctables.SegmentDefTable ):
+			segtables += tbl 
+
+		# TODO: Reject if ifo isn't in acceptable list
+		def_id_pair = [ (r.segment_def_id, r.name, unicode(r.ifos)) for r in segtables ]
+		def_id_pair = filter( lambda (i,n,j): n in segment_defs and j in instruments, def_id_pair )
+		def_id_pair = dict(map( lambda (i,n,j): (i,(n,j)), def_id_pair ))
+
+	if( len(def_id_pair) > 0 ):
+		for i, ids in def_id_pair.iteritems(): 
+			segs[ids] = segments.segmentlist()
+
+		segtables = lsctables.SegmentSumTable()
+		for tbl in lsctables.getTablesByType( xmldoc, lsctables.SegmentSumTable ):
+			segtables += tbl 
+
+		for seg in segtables:
+			# FIXME: Doesn't work because Segment table doesn't have ns
+			#segm = seg.get()
+			segm = segments.segment(LIGOTimeGPS(seg.start_time), LIGOTimeGPS(seg.end_time)) 
+			if seg.segment_def_id in def_id_pair.keys() and viewseg.intersects(segm):
+				segs[def_id_pair[seg.segment_def_id]].append( segm )
+
+	# search segment data and event filtering
+	try:
+		searches = lsctables.getTablesByType( xmldoc, lsctables.SearchSummaryTable )[0]
+		# FIXME: This is gonna be slow for lots of runs need to partition on pid and reconstitute the event list after filtering
+		for search in searches:
+			pid, oseg = search.process_id, search.get_out()
+			for i in range(len(events))[::-1]:
+				if( events[i].process_id == pid and not events[i].peak_time in oseg ):
+				# TODO: Check we don't mess up the internal list structure doing this
+					del events[i]
+
+		analyzed_segments = searches.get_out_segmentlistdict()
+
+	except IndexError: 
+		pass
+
+viewseg = segments.segment( segments.NegInfinity, segments.PosInfinity )
+if( opts.gps_start is None ):
+	viewseg = segments.segment( min([e.peak_time for e in events]), viewseg[1] )
+else: viewseg = segments.segment( opts.gps_start, viewseg[1] )
+if( opts.gps_end is None ):
+	viewseg = segments.segment( viewseg[0], max([e.peak_time for e in events]) )
+else: viewseg = segments.segment( viewseg[0], opts.gps_end )
+viewseg = segments.segment( viewseg[0], viewseg[1] )
+
+# FIXME: Return to this when the ifos situation is sorted out
+analyzed_segments.coalesce()
+# Invert to get non-analyzed periods
+analyzed_segments = analyzed_segments.__invert__()
+
+# Channel information
 if( channels is None ):
 	channels = {}
 	for event in events:
 		if( event.ifo in instruments ):
 			channels[(event.ifo, event.channel)] = None
 	channels = channels.keys()
-<<<<<<< Updated upstream
-	channels.sort()
-	print "Looking at channel list:\n", "\n".join( map(lambda cl: ":".join(cl), channels) )
-=======
 	channels = map( lambda cl: ":".join(cl), channels )
-	channels.sort()
-	print "Looking at channel list:\n", "\n".join( channels )
->>>>>>> Stashed changes
-else:
-	# TODO: Fix this -- it's stupid
-	channels.sort()
-	print "Looking at channel list:\n", "\n".join( channels )
-<<<<<<< Updated upstream
-	channels = [ c.split(":") for c in channels ]
 
-# construct tf map extent
-fig = pyplot.figure(figsize=(10,len(channels)*5))
-#gs = matplotlib.gridspec.GridSpec( nrows = len(channels), ncols = 2, width_ratios=[30,1])#, hspace=0.3 )
-gs = matplotlib.gridspec.GridSpec( nrows = len(channels), ncols = 1 )
-
-for i, chan in enumerate(channels):
-	inst, channel = chan
-	ax = pyplot.subplot(gs[i])
-
-	# Extent in time
-	ax.set_xlim(viewseg[0], viewseg[1])
-	# Extent in frequency
-	# FIXME: Different Channels won't have the same frequency settings
-	ax.set_ylim(opts.low_frequency, opts.high_frequency)
-
-	sys.stdout.write( "Filtering %d events... " % len(events) )
-	selected_events = [ event.snr for event in events if event.channel == channel and event.ifo == inst and event.central_freq < opts.high_frequency and event.central_freq > opts.low_frequency and event.peak_time in viewseg ]
-	print "%d events remain." % len(selected_events)
-	selected_events.sort()
-	selected_events = numpy.array( selected_events )
-
-	# what's our snr scale
-	# FIXME: look only at selected events
-	snr_norm = matplotlib.colors.Normalize( 
-		selected_events[0], selected_events[-1] 
-	)
-=======
-	#channels = [ c.split(":") for c in channels ]
+channels.sort()
+print "Looking at channel list:\n", "\n".join( channels )
 
 # construct tf map extent
 fig = pyplot.figure(figsize=(15,len(channels)*7), dpi=160)
@@ -138,19 +186,30 @@ fig = pyplot.figure(figsize=(15,len(channels)*7), dpi=160)
 gs = matplotlib.gridspec.GridSpec( nrows = len(channels), ncols = 1 )
 
 i=0
-events.sort(key=lambda e: e.ifo + ":" + e.channel) # Required for groupby
-for channel, selected_events in itertools.groupby( events, lambda e: e.ifo + ":" + e.channel ):
+if( not plot_sim ):
+	events.sort(key=lambda e: e.ifo + ":" + e.channel) # Required for groupby
+	event_iter = itertools.groupby( events, lambda e: e.ifo + ":" + e.channel )
+else:
+	event_iter = [["Simulation", events]]
+
+for channel, selected_events in event_iter:
 	if( channel not in channels ): continue
 
 	sys.stdout.write( "Filtering %d events... " % len(events) )
-	selected_events = filter( lambda event: event.central_freq < opts.high_frequency and event.central_freq > opts.low_frequency and event.snr > opts.snr_thresh and event.peak_time in viewseg, selected_events )
+	if( plot_sim ):
+		selected_events = filter( lambda event: event.frequency <= opts.high_frequency and event.frequency >= opts.low_frequency and event.amplitude >= opts.snr_thresh and event.time_geocent_gps in viewseg, selected_events )
+	else:
+		selected_events = filter( lambda event: event.central_freq <= opts.high_frequency and event.central_freq >= opts.low_frequency and event.snr >= opts.snr_thresh and event.peak_time in viewseg, selected_events )
 	#selected_events = [ event.snr for event in events if event.channel == channel and event.ifo == inst and event.central_freq < opts.high_frequency and event.central_freq > opts.low_frequency and event.snr > opts.snr_thresh and event.peak_time in viewseg ]
 	print "%d events remain." % len(selected_events)
 	if( len(selected_events) == 0 ):
 		print "No events remain, skipping."
 		continue
 
-	inst, channel = channel.split(":")
+	if( plot_sim ):
+		inst, channel = "Sim", "Simulation"
+	else:
+		inst, channel = channel.split(":")
 
 	ax = pyplot.subplot(gs[i])
 	# Extent in time
@@ -159,18 +218,21 @@ for channel, selected_events in itertools.groupby( events, lambda e: e.ifo + ":"
 	# FIXME: Different channels won't have the same frequency settings
 	ax.set_ylim(opts.low_frequency, opts.high_frequency)
 
-	selected_events.sort(key=lambda e: e.snr)
+	if( plot_sim ):
+		selected_events.sort(key=lambda e: e.amplitude)
+	else:
+		selected_events.sort(key=lambda e: e.snr)
 	selected_events = numpy.array( selected_events )
 
 	# what's our snr scale
 	if( len(selected_events) > 0 ):
 		snr_norm = matplotlib.colors.Normalize( 
 			selected_events[0].snr, selected_events[-1].snr
+			#numpy.log10(selected_events[0].snr), numpy.log10(selected_events[-1].snr)
 		)
 	else:
 		snr_norm = matplotlib.colors.Normalize( 0, 1 )
 
->>>>>>> Stashed changes
 	colormap = matplotlib.cm.ScalarMappable( norm = snr_norm, cmap = matplotlib.cm.jet )
 
 	# Make me purty
@@ -187,8 +249,18 @@ for channel, selected_events in itertools.groupby( events, lambda e: e.ifo + ":"
 	pyplot.title( title )
 
 	# construct tiles
-	# FIXME: Partition events first
-	for event in selected_events:
+	statstr = "0% complete"
+	sys.stdout.write( statstr )
+	statlen = len(statstr)
+
+	# create reg poly or path collection
+	# attach to axes
+
+	for i, event in enumerate(selected_events):
+		sys.stdout.write( "\b"*statlen )
+		statstr = "%d%% complete" % numpy.round(float(i)/len(selected_events)*100)
+		sys.stdout.write( statstr )
+		statlen = len(statstr)
 		# 1. plot tile 
 		start = event.get_peak()# + event.start_time_ns*1e-9
 		tile = matplotlib.patches.Rectangle(
@@ -199,18 +271,99 @@ for channel, selected_events in itertools.groupby( events, lambda e: e.ifo + ":"
 			# tile extent
 			event.duration,
 			event.bandwidth,
+			#color = colormap.to_rgba( numpy.log10(event.snr) )
 			color = colormap.to_rgba( event.snr )
 		)
+		# remove color above
+		# add patch collection
 		ax.add_patch( tile )
 
+	lastwrite = viewseg[0]
+	# FIXME: This is empircal at best.
+	tsize = 0.02*abs(viewseg)
+	t = 0
+	for (segdef, ifo), slist in segs.iteritems():
+		if( ifo != inst ): continue
+		for seg in slist:
+			# Indicate the name and if the segment extent continues to left or right
+			name = str(ifo+":"+segdef)
+			if( seg[0] < viewseg[0] ):
+				name = unichr(0x2191) + name 
+			if( seg[1] > viewseg[1] ):
+				name = name + unichr(0x2192) 
+
+			seg = viewseg & seg 
+			# Shouldn't happen, but just in case
+			if( seg is None ): continue
+			start, end = seg[0], seg[1]
+			tile = matplotlib.patches.Rectangle(
+				# lower left point
+				( start, 0 ),
+				# tile extent
+				(end-start),
+				opts.high_frequency,
+				color = 'k',
+				alpha = 0.1, hatch = "/"
+			)
+
+			# If multiple segment names would be written to the same area
+			# move the text over. FIXME: This is not the definitive way to do 
+			# this it's a hack at best
+			if( lastwrite == start ):
+				lastwrite += tsize*t
+				t+=1
+			else:
+				lastwrite = start
+				t = 0
+			ax.text( lastwrite, 0.95*opts.high_frequency, name, rotation = "vertical" )
+			ax.add_patch( tile )
+
+	for (ifo, aseg) in analyzed_segments.iteritems():
+		# TODO: what to do with this?
+		continue
+		if( ifo != inst ): continue
+		for seg in aseg:
+			# Indicate the name and if the segment extent continues to left or right
+			name = str(ifo+"_analyzed")
+			if( seg[0] < viewseg[0] ):
+				name = unichr(0x2191) + name 
+			if( seg[1] > viewseg[1] ):
+				name = name + unichr(0x2192) 
+
+			seg = viewseg & seg 
+			# Shouldn't happen, but just in case
+			if( seg is None ): continue
+			start, end = seg[0], seg[1]
+			tile = matplotlib.patches.Rectangle(
+				# lower left point
+				( start, 0 ),
+				# tile extent
+				(end-start),
+				opts.high_frequency,
+				color = 'k',
+				alpha = 0.1, hatch = "/"
+			)
+
+			# If multiple segment names would be written to the same area
+			# move the text over. FIXME: This is not the definitive way to do 
+			# this it's a hack at best
+			if( lastwrite == start ):
+				lastwrite += tsize*t
+				t+=1
+			else:
+				lastwrite = start
+				t = 0
+			ax.text( lastwrite, 0.95*opts.high_frequency, name, rotation = "vertical" )
+			ax.add_patch( tile )
+
+	# Add colorbar
 	divider = make_axes_locatable(ax)
 	cax = divider.append_axes( "right", size="5%", pad=0.1 )
 	cbl = matplotlib.colorbar.ColorbarBase( cax, cmap=matplotlib.cm.jet, norm=snr_norm, orientation="vertical" )
-<<<<<<< Updated upstream
-	cbl.set_label( "SNR" )
-=======
 	cbl.set_label( "Tile Energy" )
 
+	# If requested, make a histogram of the tile energies and compare to
+	# expectation
 	snrs = numpy.array([e.snr for e in selected_events])
 	if( opts.enable_event_hist ):
 		sax = divider.append_axes( "right", size="50%", pad=0.7 )
@@ -233,30 +386,7 @@ for channel, selected_events in itertools.groupby( events, lambda e: e.ifo + ":"
 
 	i += 1
 
->>>>>>> Stashed changes
-
-	if( opts.enable_event_hist ):
-		sax = divider.append_axes( "right", size="50%", pad=0.7 )
-		#pyplot.hist( selected_events**2, log=True )
-		pyplot.hist( selected_events, log=True )
-		dof = events[0].chisq_dof
-		#dof /= 0.68 # magic number to get the actual DOF
-		tfmap_area = abs(viewseg)*(opts.high_frequency-opts.low_frequency)
-		#dist = chi2(dof).pdf( selected_events**2 )*tfmap_area/dof
-		dist = chi(dof).pdf( selected_events )*tfmap_area/dof
-		pyplot.semilogy()
-		pyplot.plot( selected_events, dist, "r-", label="$\chi_{%d}$" % dof )
-		sax.yaxis.set_ticks_position( "right" )
-		pyplot.locator_params(nbins=3, axis="x")
-		pyplot.xlabel( "Tile Amplitudes" )
-		pyplot.legend()
-
-	#inset_ax = inset_axes( ax, width="20%", height="33%", loc=4 )
-	#pyplot.locator_params(nbins=3, axis="x")
-
-	# Event rate plot
-
-
+# Drop the file
 filename = opts.output_file or "trigmap"
 if( opts.mark_time ): filename += "_%d" % int(opts.mark_time)
 fig.savefig( "%s.png" % filename )
