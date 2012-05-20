@@ -147,7 +147,7 @@ guint gst_audioadapter_head_gap_length(GstAudioAdapter *adapter)
 	guint length = 0;
 	GList *head;
 
-	for(head = g_queue_peek_head_link(adapter->queue); head && GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP); head = g_list_next(head))
+	for(head = g_queue_peek_head_link(adapter->queue); head && (GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP) || !(GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data))); head = g_list_next(head))
 		length += GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data);
 	if(length) {
 		g_assert_cmpuint(length, >=, adapter->skip);
@@ -164,7 +164,7 @@ guint gst_audioadapter_tail_gap_length(GstAudioAdapter *adapter)
 	guint length = 0;
 	GList *tail;
 
-	for(tail = g_queue_peek_tail_link(adapter->queue); tail && GST_BUFFER_FLAG_IS_SET(GST_BUFFER(tail->data), GST_BUFFER_FLAG_GAP); tail = g_list_previous(tail))
+	for(tail = g_queue_peek_tail_link(adapter->queue); tail && (GST_BUFFER_FLAG_IS_SET(GST_BUFFER(tail->data), GST_BUFFER_FLAG_GAP) || !(GST_BUFFER_OFFSET_END(tail->data) - GST_BUFFER_OFFSET(tail->data))); tail = g_list_previous(tail))
 		length += GST_BUFFER_OFFSET_END(tail->data) - GST_BUFFER_OFFSET(tail->data);
 
 	return MIN(length, adapter->size);
@@ -176,7 +176,7 @@ guint gst_audioadapter_head_nongap_length(GstAudioAdapter *adapter)
 	guint length = 0;
 	GList *head;
 
-	for(head = g_queue_peek_head_link(adapter->queue); head && !GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP); head = g_list_next(head))
+	for(head = g_queue_peek_head_link(adapter->queue); head && (!GST_BUFFER_FLAG_IS_SET(GST_BUFFER(head->data), GST_BUFFER_FLAG_GAP) || !(GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data))); head = g_list_next(head))
 		length += GST_BUFFER_OFFSET_END(head->data) - GST_BUFFER_OFFSET(head->data);
 	if(length) {
 		g_assert_cmpuint(length, >=, adapter->skip);
@@ -193,7 +193,7 @@ guint gst_audioadapter_tail_nongap_length(GstAudioAdapter *adapter)
 	guint length = 0;
 	GList *tail;
 
-	for(tail = g_queue_peek_tail_link(adapter->queue); tail && !GST_BUFFER_FLAG_IS_SET(GST_BUFFER(tail->data), GST_BUFFER_FLAG_GAP); tail = g_list_previous(tail))
+	for(tail = g_queue_peek_tail_link(adapter->queue); tail && (!GST_BUFFER_FLAG_IS_SET(GST_BUFFER(tail->data), GST_BUFFER_FLAG_GAP) || !(GST_BUFFER_OFFSET_END(tail->data) - GST_BUFFER_OFFSET(tail->data))); tail = g_list_previous(tail))
 		length += GST_BUFFER_OFFSET_END(tail->data) - GST_BUFFER_OFFSET(tail->data);
 
 	return MIN(length, adapter->size);
