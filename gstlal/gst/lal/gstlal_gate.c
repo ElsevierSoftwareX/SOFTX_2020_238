@@ -684,7 +684,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 				if(state != (element->control_sample_func(GST_BUFFER_DATA(sinkbuf), segment_start + segment_length) >= element->threshold))
 					/* state has changed */
 					break;
-			control_add_segment(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), segment_start, element->control_rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), segment_start + segment_length, element->control_rate), state);
+			control_add_segment(element, GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), segment_start, buffer_length), GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), segment_start + segment_length, buffer_length), state);
 		}
 	}
 	gst_buffer_unref(sinkbuf);
