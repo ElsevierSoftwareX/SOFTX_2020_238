@@ -794,7 +794,7 @@ def make_single_instrument_stage(dag, datafinds, seglistdict, tag, inspinjnodes 
 	return nodes
 
 
-def breakupsegs(seg, maxextent, overlap):
+def breakupseg(seg, maxextent, overlap):
 	if maxextent <= 0:
 		raise ValueError, "maxextent must be positive, not %s" % repr(maxextent)
 
@@ -809,9 +809,16 @@ def breakupsegs(seg, maxextent, overlap):
 	return seglist
 
 
+def breakupsegs(seglist, maxextent, overlap):
+	newseglist = segments.segmentlist()
+	for bigseg in seglist:
+		newseglist.extend(breakupseg(bigseg, maxextent, overlap))
+	return newseglist
+	
+
 def breakupseglists(seglists, maxextent, overlap):
 	for instrument, seglist in seglists.iteritems():
 		newseglist = segments.segmentlist()
 	        for bigseg in seglist:
-			newseglist.extend(breakupsegs(bigseg, maxextent, overlap))
+			newseglist.extend(breakupseg(bigseg, maxextent, overlap))
 	        seglists[instrument] = newseglist
