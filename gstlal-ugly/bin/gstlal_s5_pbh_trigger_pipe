@@ -24,6 +24,7 @@ import glue.ligolw.utils.segments as ligolw_segments
 from optparse import OptionParser
 from gstlal.svd_bank import read_bank
 from gstlal import inspiral, inspiral_pipe
+from gstlal import dagparts as gstlaldagparts
 import numpy
 from pylal.datatypes import LIGOTimeGPS
 
@@ -423,6 +424,8 @@ boundary_seg = segments.segmentlist([segments.segment(LIGOTimeGPS(options.gps_st
 segs &= boundary_seg
 # only keep segments longer than 1024 seconds
 segs = segments.segmentlist([seg for seg in segs if abs(seg) > 1024])
+# break up segs longer than 100000
+segs = gstlaldagparts.breakupsegs(segs, 100000, 1024)
 
 try: os.mkdir("logs")
 except: pass
