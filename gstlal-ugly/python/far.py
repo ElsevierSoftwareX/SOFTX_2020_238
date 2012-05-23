@@ -332,19 +332,7 @@ class DistributionsStats(object):
 			# ignore infs and nans because background is never
 			# found in those bins.  the boolean array indexing
 			# flattens the array
-			finite_likelihoods = numpy.isfinite(likelihoods)
-			likelihoods = likelihoods[finite_likelihoods]
-			background_likelihoods = background[param].array[finite_likelihoods]
-			sortindex = likelihoods.argsort()
-			likelihoods = likelihoods[sortindex]
-			background_likelihoods = background_likelihoods[sortindex]
-
-			s = background_likelihoods.cumsum() / background_likelihoods.sum()
-			# restrict range to the 1-1e10 confidence interval to make the best use of our bin resolution
-			minlikelihood = likelihoods[s.searchsorted(1e-10)]
-			maxlikelihood = likelihoods[s.searchsorted(1 - 1e-10)]
-			if minlikelihood == 0:
-				minlikelihood = likelihoods[likelihoods != 0].min()
+			minlikelihood, maxlikelihood = likelihood_bin_boundaries(likelihoods, background[param].array)
 			# construct PDF
 			# FIXME:  because the background array contains
 			# probabilities and not probability densities, the
@@ -386,6 +374,29 @@ class DistributionsStats(object):
 # =============================================================================
 #
 
+def likelihood_bin_boundaries(likelihoods, probabilities, minint = 1e-2, maxint = (1 - 1e-10)):
+	"""
+	A function to choose the likelihood bin boundaries based on a certain
+	interval in the likelihood pdfs set by minint and maxint. This should typically
+	be combined with Overflow binning to catch the edges
+	"""
+	finite_likelihoods = numpy.isfinite(likelihoods)
+	likelihoods = likelihoods[finite_likelihoods]
+	background_pdf = probabilities[finite_likelihoods]
+	
+	sortindex = likelihoods.argsort()
+	likelihoods = likelihoods[sortindex]
+	background_pdf = background_pdf[sortindex]
+
+	s = background_pdf.cumsum() / background_pdf.sum()
+	# restrict range to a reasonable confidence interval to make the best use of our bin resolution
+	minlikelihood = likelihoods[s.searchsorted(minint, side = 'right')]
+	maxlikelihood = likelihoods[s.searchsorted(maxint)]
+	if minlikelihood == 0:
+		minlikelihood = likelihoods[likelihoods != 0].min()
+	return minlikelihood, maxlikelihood
+
+
 
 def possible_ranks_array(likelihood_pdfs, ifo_set, targetlen):
 	# start with an identity array to seed the outerproduct chain
@@ -398,12 +409,9 @@ def possible_ranks_array(likelihood_pdfs, ifo_set, targetlen):
 		ranks = numpy.outer(ranks, likelihood_pdf.bins.lower()[0])
 		vals = numpy.outer(vals, likelihood_pdf.array)
 		ranks = ranks.reshape((ranks.shape[0] * ranks.shape[1],))
-		# FIXME nans arise from inf * 0.  Do we want these to be 0?
-		#ranks[numpy.isnan(ranks)] = 0.0
 		vals = vals.reshape((vals.shape[0] * vals.shape[1],))
 		# rebin the outer-product
-		minlikelihood = min(ranks[ranks != 0])
-		maxlikelihood = max(ranks)
+		minlikelihood, maxlikelihood = likelihood_bin_boundaries(ranks, vals)
 		new_likelihood_pdf = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(minlikelihood, maxlikelihood, targetlen),)))
 		for rank,val in zip(ranks,vals):
 			new_likelihood_pdf[rank,] += val
