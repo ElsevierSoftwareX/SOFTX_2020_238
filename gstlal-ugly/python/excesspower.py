@@ -360,15 +360,16 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 
 	# Do some format conversion
 	head = mkcapsfilter( pipeline, head, "video/x-raw-rgb,framerate=5/1" )
-	head = mkcolorspace( pipeline, head )
-	head = mkcapsfilter( pipeline, head, "video/x-raw-yuv,framerate=5/1" )
 	head = mkprogressreport( pipeline, head, "video sink" )
-
-	# Muxer
-	head = mkoggmux( pipeline, mktheoraenc( pipeline, head ) )
 
 	# TODO: Explore using different "next file" mechanisms
 	if( split_on == "keyframe" ):
+
+		# Muxer
+		head = mkcolorspace( pipeline, head )
+		head = mkcapsfilter( pipeline, head, "video/x-raw-yuv,framerate=5/1" )
+		head = mkoggmux( pipeline, mktheoraenc( pipeline, head ) )
+
 		if( filename is None ): filename = handler.inst + "_tfmap_%d.ogg"
 		else: filename = filename + "_%d.ogg"
 
@@ -377,16 +378,21 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 			next_file = 2, location = filename, sync = False, async = False )
 
 	elif( filename is not None ):
+		# Muxer
+		head = mkcolorspace( pipeline, head )
+		head = mkcapsfilter( pipeline, head, "video/x-raw-yuv,framerate=5/1" )
+		head = mkoggmux( pipeline, mktheoraenc( pipeline, head ) )
 		filename = filename + ".ogg"
 		mkfilesink( pipeline, head, filename )
 
 	else: # No filename and no splitting options means stream to desktop
 		if( sys.platform == "darwin" ):
-			try: # OSX video streaming options are quite limited, unfortunately
-				mkgeneric( pipeline, head, "glimagesink", sync = False, async = False )
-			except ElementNotFoundError:
-				print >>sys.stderr, "Couldn't get glimagesink element for OS X based video output. Please install this element first."
-				exit()
+			#try: # OSX video streaming options are quite limited, unfortunately
+			mkgeneric( pipeline, head, "glimagesink", sync = False, async = False )
+
+			#except:
+				#print >>sys.stderr, "Couldn't get glimagesink element for OS X based video output. Please install this element first."
+				#exit()
 		else:
 			mkgeneric( pipeline, head, "autovideosink" )
 
