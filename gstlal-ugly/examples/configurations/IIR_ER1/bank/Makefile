@@ -5,8 +5,8 @@ STOP =  871149564
 IFOS = H
 
 # Template bank parameters
-MIN_MASS = 1.0
-MAX_MASS = 5.0
+MIN_MASS = 1.2
+MAX_MASS = 1.6
 MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
 LOW_FREQUENCY_CUTOFF = 10.0
@@ -14,7 +14,7 @@ HIGH_PASS_FREQ = 9.0
 HIGH_FREQUENCY_CUTOFF = 2048.0
 SAMPLE_RATE = 4096
 NUM_SPLIT_TEMPLATES = 250
-EPSILON = 0.02
+EPSILON = 0.03
 MM = 0.97
 
 all : dag
@@ -24,8 +24,8 @@ lalapps_path2cache :
 	chmod +x lalapps_path2cache
 
 frame.cache : lalapps_path2cache
-	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --instrument H1 --fake-data AdvLIGO --verbose
-	ls H1-FAKE-STRAIN/*.gwf | ./lalapps_path2cache > frame.cache
+	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --instrument H1 --fake-data AdvLIGO  --frame-type FAKE-STRAIN --verbose
+	ls H1/H-H1_FAKE-STRAIN-8711/*.gwf | ./lalapps_path2cache > frame.cache
 
 H1-TMPLTBANK-871147516-2048.xml: frame.cache
 	lalapps_tmpltbank \
@@ -100,10 +100,10 @@ dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml lalapps_path2cache
 	ls *H2_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > H2_split_bank.cache
 	ls *L1_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > L1_split_bank.cache
 	ls *V1_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > V1_split_bank.cache
-	gstlal_inspiral_iir_bank_pipe --instrument H1 --reference-psd reference_psd.xml --bank-cache H1_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --output-name H1_bank
-	gstlal_inspiral_iir_bank_pipe --instrument H2 --reference-psd reference_psd.xml --bank-cache H2_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --output-name H2_bank
-	gstlal_inspiral_iir_bank_pipe --instrument L1 --reference-psd reference_psd.xml --bank-cache L1_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --output-name L1_bank
-	gstlal_inspiral_iir_bank_pipe --instrument V1 --reference-psd reference_psd.xml --bank-cache V1_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --output-name V1_bank
+	gstlal_inspiral_iir_bank_pipe --instrument H1 --reference-psd reference_psd.xml --bank-cache H1_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --downsample --output-name H1_bank
+	gstlal_inspiral_iir_bank_pipe --instrument H2 --reference-psd reference_psd.xml --bank-cache H2_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --downsample --output-name H2_bank
+	gstlal_inspiral_iir_bank_pipe --instrument L1 --reference-psd reference_psd.xml --bank-cache L1_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --downsample --output-name L1_bank
+	gstlal_inspiral_iir_bank_pipe --instrument V1 --reference-psd reference_psd.xml --bank-cache V1_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --downsample --output-name V1_bank
 	cat H1_bank.dag H2_bank.dag L1_bank.dag V1_bank.dag > bank.dag
 
 realclean :
