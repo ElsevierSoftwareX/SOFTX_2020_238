@@ -87,7 +87,7 @@ class gstlal_iir_bank_job(pipeline.CondorDAGJob):
 class gstlal_iir_bank_node(pipeline.CondorDAGNode):
 	"""
 	"""
-	def __init__(self, job, dag, template_bank, ifo, flow, reference_psd, sampleRate, padding, downsample=True, epsilon=0.02, p_node=[]):
+	def __init__(self, job, dag, template_bank, ifo, flow, reference_psd, sampleRate, padding, downsample, epsilon=0.02, p_node=[]):
 
 		pipeline.CondorDAGNode.__init__(self,job)
 		self.add_var_opt("template-bank", template_bank)
@@ -96,7 +96,7 @@ class gstlal_iir_bank_node(pipeline.CondorDAGNode):
 		self.add_var_opt("reference-psd", reference_psd)
 		self.add_var_opt("sampleRate",sampleRate)
 		self.add_var_opt("padding",padding)
-		self.add_var_opt("downsample","")
+		if downsample: self.add_var_opt("downsample","")
 		self.add_var_opt("epsilon", epsilon)
 		iir_bank_name_path = os.path.split(template_bank)
 		iir_bank_name = iir_bank_name_path[0] + "/iir_" + iir_bank_name_path[1]
