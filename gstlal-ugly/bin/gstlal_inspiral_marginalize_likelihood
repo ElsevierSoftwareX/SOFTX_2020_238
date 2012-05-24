@@ -34,7 +34,7 @@ from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
-from pylal import llwapp
+from glue.ligolw.utils import process as ligolw_search_summary
 
 
 from gstlal import far
@@ -92,7 +92,7 @@ node.appendChild(lsctables.New(lsctables.ProcessTable))
 node.appendChild(lsctables.New(lsctables.ProcessParamsTable))
 node.appendChild(lsctables.New(lsctables.SearchSummaryTable))
 process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_marginalize_likelihood", options.__dict__)
-search_summary = llwapp.append_search_summary(xmldoc, process)
+search_summary = ligolw_search_summary.append_search_summary(xmldoc, process)
 
 
 #
