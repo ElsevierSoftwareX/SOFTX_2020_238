@@ -107,6 +107,15 @@ if( instruments is None ):
 
 print "Examining instruments: %s" % str(instruments)
 
+viewseg = segments.segment( segments.NegInfinity, segments.PosInfinity )
+if( opts.gps_start is None ):
+	viewseg = segments.segment( min([e.peak_time for e in events]), viewseg[1] )
+else: viewseg = segments.segment( opts.gps_start, viewseg[1] )
+if( opts.gps_end is None ):
+	viewseg = segments.segment( viewseg[0], max([e.peak_time for e in events]) )
+else: viewseg = segments.segment( viewseg[0], opts.gps_end )
+viewseg = segments.segment( viewseg[0], viewseg[1] )
+
 # Segment information
 segs = segments.segmentlistdict()
 analyzed_segments = segments.segmentlistdict()
@@ -153,15 +162,6 @@ for arg in args:
 
 	except IndexError: 
 		pass
-
-viewseg = segments.segment( segments.NegInfinity, segments.PosInfinity )
-if( opts.gps_start is None ):
-	viewseg = segments.segment( min([e.peak_time for e in events]), viewseg[1] )
-else: viewseg = segments.segment( opts.gps_start, viewseg[1] )
-if( opts.gps_end is None ):
-	viewseg = segments.segment( viewseg[0], max([e.peak_time for e in events]) )
-else: viewseg = segments.segment( viewseg[0], opts.gps_end )
-viewseg = segments.segment( viewseg[0], viewseg[1] )
 
 # FIXME: Return to this when the ifos situation is sorted out
 analyzed_segments.coalesce()
@@ -256,9 +256,9 @@ for channel, selected_events in event_iter:
 	# create reg poly or path collection
 	# attach to axes
 
-	for i, event in enumerate(selected_events):
+	for j, event in enumerate(selected_events):
 		sys.stdout.write( "\b"*statlen )
-		statstr = "%d%% complete" % numpy.round(float(i)/len(selected_events)*100)
+		statstr = "%d%% complete" % numpy.round(float(j)/len(selected_events)*100)
 		sys.stdout.write( statstr )
 		statlen = len(statstr)
 		# 1. plot tile 
