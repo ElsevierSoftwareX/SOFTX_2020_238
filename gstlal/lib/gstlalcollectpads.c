@@ -416,7 +416,7 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 	buf_t_start = compute_t_start(data, buf, rate);
 	buf_t_end = compute_t_end(data, buf, rate);
 	is_gap = GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP);
-	is_malloced = GST_BUFFER_SIZE(buf) != 0;
+	is_malloced = GST_BUFFER_DATA(buf) != NULL;
 	gst_buffer_unref(buf);
 
 	/*
@@ -433,7 +433,7 @@ GstBuffer *gstlal_collect_pads_take_buffer_sync(GstCollectPads *pads, GstLALColl
 
 	/* FIXME:  could use GST_CLOCK_TIME_TO_FRAMES() but that macro is
 	 * defined in gst-plugins-base */
-	units = t_end < buf_t_start ? 0 : gst_util_uint64_scale_int_round(t_end - buf_t_start, rate, GST_SECOND);
+	units = t_end <= buf_t_start ? 0 : gst_util_uint64_scale_int_round(t_end - buf_t_start, rate, GST_SECOND);
 	GST_DEBUG_OBJECT(GST_PAD_PARENT(((GstCollectData *) data)->pad), "(%s): requesting %" G_GUINT64_FORMAT " units\n", GST_PAD_NAME(((GstCollectData *) data)->pad), units);
 
 	/*
