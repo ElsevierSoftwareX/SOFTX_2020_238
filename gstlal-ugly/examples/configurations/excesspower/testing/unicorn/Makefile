@@ -16,6 +16,15 @@ no_inj:
 		--initialization-file gstlal_excesspower_h1_generic_noinj.ini  \
 		--sample-rate 4096  
 
+no_inj_movie:
+	gstlal_excesspower  \
+		--verbose  \
+		--data-source fakeadvLIGO  \
+		--disable-triggers \
+		--stream-tfmap video \
+		--initialization-file gstlal_excesspower_h1_generic_noinj.ini  \
+		--sample-rate 4096  
+
 unicorns: H_BTLWNB_unicorn_100.xml 
 	gstlal_excesspower  \
 		--verbose  \
