@@ -38,6 +38,7 @@ from gstlal.pipeutil import gst, mkelem
 from gstlal.pipeparts import *
 from gstlal.pipeio import parse_spectrum_message
 from gstlal.lloidparts import LLOIDHandler, DetectorData, mkLLOIDbasicsrc
+from gstlal.reference_psd import write_psd
 
 import gstlal.excesspower as ep
 from gstlal.excesspower import *
@@ -153,6 +154,8 @@ class EPHandler( LLOIDHandler ):
 		self.bus.add_signal_watch()
 		self.bus.connect( "message", self.process_message )
 
+		self.pipeline = pipeline
+
 		super(type(self), self).__init__(mainloop, pipeline)
 
 	def set_trigger_time_and_action( self, trig_seg, action=["psd"] ):
@@ -166,37 +169,32 @@ class EPHandler( LLOIDHandler ):
 
 	def process_message( self, bus, message ):
 		"""
-		Process a message from the bus. Depending on what it is, we may drop various data products on to disk.
+		Process a message from the bus. Depending on what it is, we may drop various data products on to disk, or perform various other actions.
 		"""
 		if( message.type == gst.MESSAGE_EOS ):
 			self.shutdown(None, None)
 			return
-		else:
-			pass
-			# TODO: How to send messages to the gst debug stream
 
-		if( message.structure is None and message.type == gst.MESSAGE_EOS ):
-			print >>sys.stderr, "WARNING: Received invalid message."
+		if( message.structure is None ): 
+			print >>sys.stderr, "Got message with type: %s ...but no handling logic, so ignored."
 			return
 
+		# TODO: Move this to PSD difference checker
 		if( message.structure.get_name() == "spectrum" ):
 			ts = message.structure[ "timestamp" ]*1e-9
 			if( self.trigger_segment is not None 
 				and ts in self.trigger_segment ):
-				self.dump_psd("spectrum_data.dat")
-			elif( self.cache_psd ):
-				self.dump_psd("spectrum_data.dat")
+				self.dump_psd( timestamp = ts )
+			elif( self.cache_psd ): 
+				self.dump_psd( timestamp = ts )
 
-	def dump_psd( self, filename, asd=False ):
+	def dump_psd( self, filename=None, timestamp=None ):
 		"""
-		Dump the currently cached PSD to a text file.
+		Dump the currently cached PSD to a LIGOLW XML file. If the filename isn't specified, it will be constructed from metadata.
 		"""
-		# TODO: Better format for this?
-		print >>sys.stderr, "Outputting PSD to psd.dat"
-		f = open("psd.dat", "w")
-		for freq, p in enumerate( self.psd.data ):
-			f.write("%f %g\n" % (freq*self.psd.deltaF, p) )
-		f.close()
+		if( filename is None ):
+			filename = "%s-%s_PSD_%d.xml" % ( handler.inst, handler.channel, round(timestamp) )
+		write_psd( filename, { self.inst: self.psd } )
 
 	def add_firbank( self, firbank ):
 		"""
@@ -450,10 +448,10 @@ def on_psd_change( elem, pspec, hand ):
 	# bank.
 	psd_power = sum(hand.psd.data)
 	change = abs((hand.psd_power - psd_power) / psd_power )
-	if( change > 0.5 ):
+	hand.psd_power = psd_power
+	if( change > handler.psd_change_thresh ):
 		if( options.verbose ):
 			print >> sys.stderr, "Processed signal. PSD change %d per, regenerating filters" % int(change*100)
-		hand.psd_power = psd_power
 		hand.rebuild_everything()
 
 def on_spec_corr_change( elem, pspec, hand ):
