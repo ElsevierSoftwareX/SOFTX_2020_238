@@ -911,7 +911,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * is input zero size or already a gap?  then push it as is
 	 */
 
-	if(!GST_BUFFER_SIZE(sinkbuf)) {
+	if(!sinkbuf_length) {
 		/*
 		 * is a discontinuity pending?
 		 */
