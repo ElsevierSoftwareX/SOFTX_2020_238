@@ -908,10 +908,29 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	control_get_interval(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), -element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) sinkbuf_length + element->attack_length, element->rate));
 
 	/*
-	 * is input already a gap?  then push it as is
+	 * is input zero size or already a gap?  then push it as is
 	 */
 
-	if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP)) {
+	if(!GST_BUFFER_SIZE(sinkbuf)) {
+		/*
+		 * is a discontinuity pending?
+		 */
+
+		if(element->need_discont && !GST_BUFFER_IS_DISCONT(sinkbuf)) {
+			sinkbuf = gst_buffer_make_metadata_writable(sinkbuf);
+			GST_BUFFER_FLAG_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT);
+		}
+		element->need_discont = FALSE;
+
+		/*
+		 * push buffer
+		 */
+
+		GST_DEBUG_OBJECT(element->srcpad, "pushing reused zero-length buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
+		result = gst_pad_push(element->srcpad, sinkbuf);
+		sinkbuf = NULL;
+		goto done;
+	} else if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_GAP)) {
 		/*
 		 * tell the world about state changes
 		 */
