@@ -154,21 +154,20 @@ AC_ARG_WITH(
 	[],
 	[with_nds=check]
 )
-AS_IF(
-	[test "x$with_nds" != "xno"],
-	[PKG_CHECK_MODULES(
+AS_IF([test "x$with_nds" != "xno"], [
+	PKG_CHECK_MODULES(
 		[NDS],
 		[nds2-client >= 0.9.0c],
 		[AC_DEFINE([HAVE_NDS], [1], [Define if you have nds2-client])
 		HAVE_NDS="yes"],
 		[HAVE_NDS="no"
-		AS_IF(
-			[test "x$with_nds" != "xcheck"],
-			[AC_MSG_ERROR([Not found!])],
-			[AC_MSG_WARN([Not found!])]
-		)]
-	)]
-)
+		AS_IF([test "x$with_nds" != "xcheck"], [
+			AC_MSG_ERROR([Not found!])
+		], [
+			AC_MSG_WARN([Not found!])
+		])]
+	)
+])
 AM_CONDITIONAL([COND_NDS], [test "x${HAVE_NDS}" == "xyes"])
 AC_SUBST([NDS_CFLAGS])
 AC_SUBST([NDS_LIBS])
@@ -291,28 +290,34 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_ARG_WITH(
-	[framecpp],
+AC_ARG_WITH([framecpp],
 	[AS_HELP_STRING([--with-framecpp], [include framecpp plugin @<:@default=check@:>@])],
 	[],
 	[with_framecpp=check]
 )
-AS_IF(
-	[test "x$with_framecpp" != "xno"],
-	[PKG_CHECK_MODULES(
+AS_IF([test "x$with_framecpp" != "xno"], [
+	PKG_CHECK_MODULES(
 		[framecpp],
 		[framecpp >= 1.19.16],
 		[HAVE_FRAMECPP="yes"],
 		[AC_MSG_WARN([Not found: $framecpp_PKG_ERRORS])
 		HAVE_FRAMECPP="no"]
-	)],
-	[AC_MSG_WARN([check for framecpp disabled])
-	HAVE_FRAMECPP="no"]
-)
-AC_DEFINE([HAVE_FRAMECPP], [test "x${HAVE_FRAMECPP}" == "xyes"], [Defined if you have framecpp])
+)], [
+	AC_MSG_WARN([check for framecpp disabled])
+	HAVE_FRAMECPP="no"
+])
 AM_CONDITIONAL([COND_FRAMECPP], [test "x${HAVE_FRAMECPP}" == "xyes"])
+AS_IF([test "x${HAVE_FRAMECPP}" == "xyes"], [
+	AC_DEFINE([HAVE_FRAMECPP], [1], [Defined if you have framecpp])
+	framecpp_VERSION=`$PKG_CONFIG --modversion framecpp`
+	AC_MSG_NOTICE([framecpp version: $framecpp_VERSION])
+	AX_COMPARE_VERSION([$framecpp_VERSION], [ge], [1.19.24], [
+		AC_DEFINE([HAVE_FRAMECPP_FrameLibraryName], [1], [Defined if framecpp supplies FrameLibraryName() function])
+	])
+])
 AC_SUBST([framecpp_CFLAGS])
 AC_SUBST([framecpp_LIBS])
+AC_SUBST([framecpp_VERSION])
 
 
 #
@@ -332,6 +337,7 @@ AS_IF(
 		[gds],
 		[gds >= 2.15.6],
 		[HAVE_GDS="yes"
+		AC_DEFINE([HAVE_GDS], [1], [Defined if you have gds])
 		gds_LIBS="$gds_LIBS -llsmp"],	# hack to work around broken .pc file
 		[AC_MSG_WARN([Not found: $gds_PKG_ERRORS])
 		HAVE_GDS="no"]
@@ -339,7 +345,6 @@ AS_IF(
 	[AC_MSG_WARN([check for gds disabled])
 	HAVE_GDS="no"]
 )
-AC_DEFINE([HAVE_GDS], [test "x${HAVE_GDS}" == "xyes"], [Defined if you have gds])
 AM_CONDITIONAL([COND_GDS], [test "x${HAVE_GDS}" == "xyes"])
 AC_SUBST([gds_CFLAGS])
 AC_SUBST([gds_LIBS])
