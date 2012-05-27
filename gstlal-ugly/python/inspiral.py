@@ -465,6 +465,7 @@ class Data(object):
 			if (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
 				self.likelihood_snapshot_timestamp = buf_timestamp
 				if self.assign_likelihoods:
+					assert self.marginalized_likelihood_file is not None
 					# smooth the distribution_stats
 					self.far.smooth_distribution_stats(verbose = self.verbose)
 					# update stream thinca's likelihood data
