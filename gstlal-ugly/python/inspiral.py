@@ -243,6 +243,8 @@ class XMLContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
 try:
+	rate.array.use_in(XMLContentHandler)
+	rate.param.use_in(XMLContentHandler)
 	lsctables.use_in(XMLContentHandler)
 except AttributeError:
 	# FIXME:  hack for compatibility with older versions of glue.
