@@ -233,6 +233,26 @@ def add_cbc_metadata(xmldoc, process, seg_in):
 #
 # =============================================================================
 #
+#                         glue.ligolw Content Handlers
+#
+# =============================================================================
+#
+
+
+class XMLContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+
+try:
+	lsctables.use_in(XMLContentHandler)
+except AttributeError:
+	# FIXME:  hack for compatibility with older versions of glue.
+	# remove when we can rely on a recent glue
+	XMLContentHandler.startTable = lsctables.startTable
+
+
+#
+# =============================================================================
+#
 #                           Parameter Distributions
 #
 # =============================================================================
@@ -472,12 +492,7 @@ class Data(object):
 					self.stream_thinca.set_likelihood_data(self.far.distribution_stats.smoothed_distributions, self.far.distribution_stats.likelihood_params_func)
 
 					# Read in the the background likelihood distributions that should have been updated asynchronously
-					# FIXME don't screw with startTable methods this way
-					# Hack to read XML after dbtables import
-					orig_start_table = ligolw.LIGOLWContentHandler.startTable
-					ligolw.LIGOLWContentHandler.startTable = lsctables.startTable
-					self.ranking_data, procid = far.RankingData.from_xml(utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose))
-					ligolw.LIGOLWContentHandler.startTable = orig_start_table
+					self.ranking_data, procid = far.RankingData.from_xml(utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = XMLContentHandler))
 					self.ranking_data.compute_joint_cdfs()
 				else:
 					self.ranking_data = None
