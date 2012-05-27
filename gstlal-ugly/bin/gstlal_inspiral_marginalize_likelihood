@@ -34,7 +34,7 @@ from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
-from glue.ligolw.utils import process as ligolw_search_summary
+from glue.ligolw.utils import search_summary as ligolw_search_summary
 
 
 from gstlal import far
