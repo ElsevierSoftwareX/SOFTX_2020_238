@@ -391,6 +391,7 @@ output = inspiral.Data(
 	gracedb_type = options.gracedb_type,
 	gracedb_group = options.gracedb_group,
 	likelihood_file = options.likelihood_file,
+	replace_file = False,	# in general append to output files that exist in online mode
 	verbose = options.verbose
 )
 
@@ -493,7 +494,7 @@ mainloop.run()
 #
 
 
-output.filename = "%s-%d-%d.sqlite" % (options.output.split(".sqlite")[0], start, now())
+output.filename = options.output
 output.flush()
 output.write_output_file(likelihood_file = options.likelihood_file, verbose = options.verbose)
 # repair the shared memory just in case before exiting
