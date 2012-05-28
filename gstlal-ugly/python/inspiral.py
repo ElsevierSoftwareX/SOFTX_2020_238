@@ -522,11 +522,11 @@ class Data(object):
 					# Read in the the background likelihood distributions that should have been updated asynchronously
 					self.ranking_data, procid = far.RankingData.from_xml(utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = XMLContentHandler))
 					self.ranking_data.compute_joint_cdfs()
+					# write the new distribution stats to disk
+					utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
 				else:
 					self.ranking_data = None
 
-				# write the new distribution stats to disk
-				utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
 
 			# run stream thinca
 			noncoinc_sngls = self.stream_thinca.add_events(events, buf_timestamp, FAP = self.ranking_data)
