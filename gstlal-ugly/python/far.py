@@ -284,7 +284,7 @@ class DistributionsStats(object):
 						v = stats.ncx2.pdf(chisq, df, nc)
 						if numpy.isfinite(v):
 							dist += v
-					dist *= (snr / snrs[0])**-2
+					dist *= (snr / snrs[0])**-4
 					if numpy.isfinite(dist):
 						binarr[snr, chi2_over_snr2] += dist
 			# normalize to the requested count
