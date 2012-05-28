@@ -410,7 +410,7 @@ class Data(object):
 			# to find exactly the one correct entry in the
 			# database
 
-			self.process.process_id, = self.search_summary.process_id, = self.connection.cursor().execute("SELECT process_id FROM process WHERE program == ? AND node == ? AND username == ? AND unix_procid == ? AND start_time == ?", (self.process.program, self.process.node, self.process.username, self.process.unix_procid, self.process.start_time))
+			(self.process.process_id,), = (self.search_summary.process_id,), = self.connection.cursor().execute("SELECT process_id FROM process WHERE program == ? AND node == ? AND username == ? AND unix_procid == ? AND start_time == ?", (self.process.program, self.process.node, self.process.username, self.process.unix_procid, self.process.start_time)).fetchall()
 		else:
 			self.connection = self.working_filename = None
 
@@ -725,7 +725,7 @@ class Data(object):
 				# database
 				if seg != segments.segment(None, None):
 					self.connection.cursor().execute("UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ? WHERE process_id == ?", (seg[0].seconds, seg[0].nanoseconds, seg[1].seconds, seg[1].nanoseconds, self.search_summary.process_id))
-				self.connection.cursor().execute("UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)")
+				self.connection.cursor().execute("UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral) WHERE process_id == ?", (self.search_summary.process_id,))
 				self.connection.cursor().execute("UPDATE process SET end_time = ? WHERE process_id == ?", (self.process.end_time, self.process.process_id))
 				self.connection.commit()
 				dbtables.build_indexes(self.connection, verbose = verbose)
