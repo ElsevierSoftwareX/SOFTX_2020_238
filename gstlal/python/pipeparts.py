@@ -367,7 +367,10 @@ def mksumsquares(pipeline, src, weights = None):
 
 
 def mkgate(pipeline, src, threshold = None, control = None, **properties):
-	elem = gst.element_factory_make("lal_gate")
+	if "name" in properties:
+		elem = gst.element_factory_make("lal_gate", properties.pop("name"))
+	else:
+		elem = gst.element_factory_make("lal_gate")
 	if threshold is not None:
 		elem.set_property("threshold", threshold)
 	pipeline.add(elem)
