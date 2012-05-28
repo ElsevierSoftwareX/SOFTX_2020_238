@@ -23,6 +23,7 @@
 #define __FRAMECPP_CHANNELDEMUX_H__
 
 
+#include <glib.h>
 #include <gst/gst.h>
 
 
@@ -58,6 +59,7 @@ typedef struct {
 
 	gboolean do_file_checksum;
 	gboolean skip_bad_files;
+	GHashTable *channel_list;
 } GSTFrameCPPChannelDemux;
 
 

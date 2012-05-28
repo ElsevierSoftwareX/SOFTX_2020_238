@@ -39,10 +39,11 @@
 
 
 /*
- * stuff from gstreamer
+ * stuff from glib/gobject/gstreamer
  */
 
 
+#include <glib.h>
 #include <gst/gst.h>
 
 
@@ -249,54 +250,103 @@ static void src_pad_linked(GstPad *pad, GstPad *peer, gpointer data)
 
 
 /*
+ * create a new source pad and add to element.  does not check if name is
+ * already in use
+ */
+
+
+static GstPad *add_pad(GSTFrameCPPChannelDemux *element, const char *name)
+{
+	GstPad *srcpad;
+	struct pad_state *pad_state;
+
+	/*
+	 * construct the pad
+	 */
+
+	srcpad = gst_pad_new_from_template(gst_element_class_get_pad_template(GST_ELEMENT_CLASS(G_OBJECT_GET_CLASS(element)), "src"), name);
+	g_assert(srcpad != NULL);
+	g_signal_connect(srcpad, "linked", (GCallback) src_pad_linked, NULL);
+
+	/*
+	 * create & initialize pad state.  FIXME:  this memory is
+	 * leaked.  something could be attached to the pad's
+	 * destroy notify signal to free the memory, but I  believe
+	 * in the long run we're going to end up defining a custom
+	 * subclass of GstPad for this element, and then these
+	 * things can be moved into the instance structure.  it's
+	 * not worth worrying about it for now.
+	 */
+
+	pad_state = g_new(struct pad_state, 1);
+	g_assert(pad_state != NULL);
+	pad_state->need_discont = TRUE;
+	pad_state->next_timestamp = GST_CLOCK_TIME_NONE;
+	pad_state->next_out_offset = 0;
+	gst_pad_set_element_private(srcpad, pad_state);
+
+	/*
+	 * add pad to element.  must ref it because _add_pad()
+	 * consumes a reference
+	 */
+
+	gst_pad_set_active(srcpad, TRUE);
+	gst_object_ref(srcpad);
+	gst_element_add_pad(GST_ELEMENT(element), srcpad);
+
+	/*
+	 * done
+	 */
+
+	return srcpad;
+}
+
+
+/*
+ * remove a source pad from element
+ *
+ * FIXME:  what about EOS, state changes, etc.?  do we have to do that?
+ */
+
+/* NOT USED
+static gboolean remove_pad(GSTFrameCPPChannelDemux *element, const char *name)
+{
+	GstPad *srcpad = gst_element_get_static_pad(GST_ELEMENT(element), name);
+	g_assert(srcpad != NULL);
+	gst_pad_set_active(srcpad, FALSE);
+	return gst_element_remove_pad(GST_ELEMENT(element), srcpad);
+}
+*/
+
+
+/*
+ * check if a channel name is in the requested channel list
+ */
+
+
+static gboolean is_requested_channel(GSTFrameCPPChannelDemux *element, const char *name)
+{
+	return !g_hash_table_size(element->channel_list) || g_hash_table_lookup(element->channel_list, name);
+}
+
+
+/*
  * get pad by name, creating it if it doesn't exist
  */
 
 
 static GstPad *get_src_pad(GSTFrameCPPChannelDemux *element, const char *name, gboolean *pad_added)
 {
-	GstPad *srcpad = gst_element_get_static_pad(GST_ELEMENT(element), name);
+	GstPad *srcpad;
 
 	/*
-	 * if element does not already have a pad by this name, create it
+	 * retrieve the pad.  if element does not already have a pad by
+	 * this name, create it
 	 */
 
+	srcpad = gst_element_get_static_pad(GST_ELEMENT(element), name);
 	if(!srcpad) {
-		struct pad_state *pad_state;
-
-		/*
-		 * construct the pad
-		 */
-
-		srcpad = gst_pad_new_from_template(gst_element_class_get_pad_template(GST_ELEMENT_CLASS(G_OBJECT_GET_CLASS(element)), "src"), name);
-		g_assert(srcpad != NULL);
-		g_signal_connect(srcpad, "linked", (GCallback) src_pad_linked, NULL);
-
-		/*
-		 * create & initialize pad state.  FIXME:  this memory is
-		 * leaked.  something could be attached to the pad's
-		 * destroy notify signal to free the memory, but I  believe
-		 * in the long run we're going to end up defining a custom
-		 * subclass of GstPad for this element, and then these
-		 * things can be moved into the instance structure.  it's
-		 * not worth worrying about it for now.
-		 */
-
-		pad_state = g_new(struct pad_state, 1);
-		g_assert(pad_state != NULL);
-		pad_state->need_discont = TRUE;
-		pad_state->next_timestamp = GST_CLOCK_TIME_NONE;
-		pad_state->next_out_offset = 0;
-		gst_pad_set_element_private(srcpad, pad_state);
-
-		/*
-		 * add pad to element.  must ref it because _add_pad()
-		 * consumes a reference
-		 */
-
-		gst_pad_set_active(srcpad, TRUE);
-		gst_object_ref(srcpad);
-		gst_element_add_pad(GST_ELEMENT(element), srcpad);
+		srcpad = add_pad(element, name);
 		*pad_added = TRUE;
 	}
 
@@ -625,11 +675,17 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 					GST_LOG_OBJECT(element, "found FrAdcData %s at %" GST_TIME_SECONDS_FORMAT, name, GST_TIME_SECONDS_ARGS(timestamp));
 
 					/*
-					 * retrieve the source pad.  create it if
-					 * it doesn't exist.  if the pad has no
-					 * peer, skip this channel.
+					 * retrieve the source pad.  create
+					 * it if it doesn't exist.  if the
+					 * pad has no peer or it not in the
+					 * requested channel list, skip
+					 * this channel.
 					 */
 
+					if(!is_requested_channel(element, name)) {
+						GST_LOG_OBJECT(element, "skipping: channel not requested");
+						continue;
+					}
 					srcpad = get_src_pad(element, name, &pads_added);
 					if(!gst_pad_is_linked(srcpad)) {
 						GST_LOG_OBJECT(element, "skipping: not linked");
@@ -669,9 +725,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				/*
 				 * retrieve the source pad.  create it if
 				 * it doesn't exist.  if the pad has no
-				 * peer, skip this channel.
+				 * peer or it not in the requested channel
+				 * list, skip this channel.
 				 */
 
+				if(!is_requested_channel(element, name)) {
+					GST_LOG_OBJECT(element, "skipping: channel not requested");
+					continue;
+				}
 				srcpad = get_src_pad(element, name, &pads_added);
 				if(!gst_pad_is_linked(srcpad)) {
 					GST_LOG_OBJECT(element, "skipping: not linked");
@@ -709,9 +770,14 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 				/*
 				 * retrieve the source pad.  create it if
 				 * it doesn't exist.  if the pad has no
-				 * peer, skip this channel.
+				 * peer or it not in the requested channel
+				 * list, skip this channel.
 				 */
 
+				if(!is_requested_channel(element, name)) {
+					GST_LOG_OBJECT(element, "skipping: channel not requested");
+					continue;
+				}
 				srcpad = get_src_pad(element, name, &pads_added);
 				if(!gst_pad_is_linked(srcpad)) {
 					GST_LOG_OBJECT(element, "skipping: not linked");
@@ -781,7 +847,8 @@ done:
 
 enum property {
 	ARG_DO_FILE_CHECKSUM = 1,
-	ARG_SKIP_BAD_FILES
+	ARG_SKIP_BAD_FILES,
+	ARG_CHANNEL_LIST
 };
 
 
@@ -799,6 +866,24 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 	case ARG_SKIP_BAD_FILES:
 		element->skip_bad_files = g_value_get_boolean(value);
 		break;
+
+	case ARG_CHANNEL_LIST: {
+		GValueArray *channel_list = (GValueArray *) g_value_get_boxed(value);
+		guint i;
+
+		/* FIXME:  if the new list is missing the names of pads the
+		 * element already has, should the pads be removed?  how?
+		 * */
+		g_hash_table_remove_all(element->channel_list);
+
+		for(i = 0; i < channel_list->n_values; i++) {
+			gchar *channel_name = g_value_dup_string(g_value_array_get_nth(channel_list, i));
+			g_strstrip(channel_name);
+			g_hash_table_replace(element->channel_list, channel_name, channel_name);
+		}
+
+		break;
+	}
 
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
@@ -823,6 +908,25 @@ static void get_property(GObject *object, guint id, GValue *value, GParamSpec *p
 	case ARG_SKIP_BAD_FILES:
 		g_value_set_boolean(value, element->skip_bad_files);
 		break;
+
+	case ARG_CHANNEL_LIST: {
+		GValueArray *channel_list = g_value_array_new(0);
+		GValue channel_name = {0};
+		GHashTableIter iter;
+		gchar *key, *ignored;
+
+		g_value_init(&channel_name, G_TYPE_STRING);
+		g_hash_table_iter_init(&iter, element->channel_list);
+
+		while(g_hash_table_iter_next(&iter, (void **) &key, (void **) &ignored)) {
+			g_value_set_string(&channel_name, key);
+			g_value_array_append(channel_list, &channel_name);
+			g_value_reset(&channel_name);
+		}
+
+		g_value_take_boxed(value, channel_list);
+		break;
+	}
 
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
@@ -862,6 +966,8 @@ static void finalize(GObject * object)
 	if(element->last_new_segment)
 		gst_event_unref(element->last_new_segment);
 	element->last_new_segment = NULL;
+	g_hash_table_unref(element->channel_list);
+	element->channel_list = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -989,6 +1095,23 @@ static void class_init(gpointer klass, gpointer klass_data)
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_CHANNEL_LIST,
+		g_param_spec_value_array(
+			"channel-list",
+			"Channel list",
+			"Names of channels to demultiplex.  Channels not in this list are ignored.  An empty list (default) means demultiplex all available channels.",
+			g_param_spec_string(
+				"channel",
+				"Channel name",
+				"Name of channel to demultiplex.",
+				NULL,
+				(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)
+			),
+			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)
+		)
+	);
 }
 
 
@@ -1012,6 +1135,7 @@ static void instance_init(GTypeInstance *object, gpointer klass)
 
 	/* internal data */
 	element->last_new_segment = NULL;
+	element->channel_list = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 }
 
 
