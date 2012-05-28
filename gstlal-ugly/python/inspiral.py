@@ -317,7 +317,7 @@ def gen_likelihood_control_doc(far, instruments, name = u"gstlal_inspiral_likeli
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, coincidence_threshold, FAR, marginalized_likelihood_file = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", verbose = False):
+	def __init__(self, filename, process_params, instruments, seg, coincidence_threshold, FAR, marginalized_likelihood_file = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", replace_file = True, verbose = False):
 		#
 		# initialize
 		#
@@ -398,7 +398,7 @@ class Data(object):
 		if filename is not None and filename.endswith('.sqlite'):
 			from glue.ligolw.utils import ligolw_sqlite
 			from glue.ligolw import dbtables
-			self.working_filename = dbtables.get_connection_filename(filename, tmp_path = tmp_path, replace_file = True, verbose = verbose)
+			self.working_filename = dbtables.get_connection_filename(filename, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
 			self.connection = sqlite3.connect(self.working_filename, check_same_thread=False)
 			ligolw_sqlite.insert_from_xmldoc(self.connection, self.xmldoc, preserve_ids = True, verbose = verbose)
 			self.xmldoc.removeChild(self.xmldoc.childNodes[-1]).unlink()
