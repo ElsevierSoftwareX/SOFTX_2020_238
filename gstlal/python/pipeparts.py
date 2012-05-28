@@ -404,7 +404,7 @@ def mkautochisq(pipeline, src, autocorrelation_matrix = None, mask_matrix = None
 
 
 def mkfakesink(pipeline, src):
-	mkgeneric(pipeline, src, "fakesink", sync = False, async = False)
+	return mkgeneric(pipeline, src, "fakesink", sync = False, async = False)
 
 
 def mkfilesink(pipeline, src, filename):
