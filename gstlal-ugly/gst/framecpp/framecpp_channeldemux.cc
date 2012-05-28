@@ -878,7 +878,6 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 
 		for(i = 0; i < channel_list->n_values; i++) {
 			gchar *channel_name = g_value_dup_string(g_value_array_get_nth(channel_list, i));
-			g_strstrip(channel_name);
 			g_hash_table_replace(element->channel_list, channel_name, channel_name);
 		}
 
@@ -1090,7 +1089,7 @@ static void class_init(gpointer klass, gpointer klass_data)
 		g_param_spec_boolean(
 			"skip-bad-files",
 			"Ignore bad files",
-			"Treat files that fail validation checks as missing data instead of raising an error.",
+			"Treat files that fail validation checks as though they are missing instead of raising an error.  The next buffers to be demultiplexed will be marked as discontinuities.",
 			DEFAULT_SKIP_BAD_FILES,
 			(GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT)
 		)
@@ -1101,7 +1100,7 @@ static void class_init(gpointer klass, gpointer klass_data)
 		g_param_spec_value_array(
 			"channel-list",
 			"Channel list",
-			"Names of channels to demultiplex.  Channels not in this list are ignored.  An empty list (default) means demultiplex all available channels.",
+			"Restrict demultiplexed channels to those in this list.  An empty list (default) causes all channels to be demultiplexed.  This is provided as a performance aid when demultiplexing files with large numbers of channels, like level 0 frame files.",
 			g_param_spec_string(
 				"channel",
 				"Channel name",
