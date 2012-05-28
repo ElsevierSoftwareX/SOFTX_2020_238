@@ -400,9 +400,17 @@ class Data(object):
 			from glue.ligolw import dbtables
 			self.working_filename = dbtables.get_connection_filename(filename, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
 			self.connection = sqlite3.connect(self.working_filename, check_same_thread=False)
-			ligolw_sqlite.insert_from_xmldoc(self.connection, self.xmldoc, preserve_ids = True, verbose = verbose)
+			ligolw_sqlite.insert_from_xmldoc(self.connection, self.xmldoc, preserve_ids = False, verbose = verbose)
 			self.xmldoc.removeChild(self.xmldoc.childNodes[-1]).unlink()
 			self.xmldoc.appendChild(dbtables.get_xml(self.connection))
+
+			# recover the process_id following the ID remapping
+			# that might have happened when the document was
+			# inserted.  hopefully this query is unique enough
+			# to find exactly the one correct entry in the
+			# database
+
+			self.process.process_id, = self.search_summary.process_id, = self.connection.cursor().execute("SELECT process_id FROM process WHERE program == ? AND node == ? AND username == ? AND unix_procid == ? AND start_time == ?", (self.process.program, self.process.node, self.process.username, self.process.unix_procid, self.process.start_time))
 		else:
 			self.connection = self.working_filename = None
 
@@ -705,24 +713,26 @@ class Data(object):
 	def write_output_file(self, likelihood_file = None, verbose = False):
 		self.lock.acquire()
 		try:
+			ligolw_process.set_process_end_time(self.process)
+
 			# FIXME:  should signal trapping be disabled in this code
 			# path?  I think not
 			if self.connection is not None:
 				from glue.ligolw import dbtables
 				seg = self.search_summary.get_out()
-				#FIXME Kipp, why aren't the changes to the search summary reflected in the database?
-				print >>sys.stderr, seg
+				# record the final state of the
+				# search_summary and process rows in the
+				# database
 				if seg != segments.segment(None, None):
-					self.connection.cursor().execute('UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ?', (seg[0].seconds, seg[0].nanoseconds, seg[1].seconds, seg[1].nanoseconds))
-				self.connection.cursor().execute('UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)')
-				self.connection.cursor().execute('UPDATE process SET end_time = ?', (XLALUTCToGPS(time.gmtime()).seconds,))
+					self.connection.cursor().execute("UPDATE search_summary SET out_start_time = ?, out_start_time_ns = ?, out_end_time = ?, out_end_time_ns = ? WHERE process_id == ?", (seg[0].seconds, seg[0].nanoseconds, seg[1].seconds, seg[1].nanoseconds, self.search_summary.process_id))
+				self.connection.cursor().execute("UPDATE search_summary SET nevents = (SELECT count(*) FROM sngl_inspiral)")
+				self.connection.cursor().execute("UPDATE process SET end_time = ? WHERE process_id == ?", (self.process.end_time, self.process.process_id))
 				self.connection.commit()
 				dbtables.build_indexes(self.connection, verbose = verbose)
 				dbtables.put_connection_filename(self.filename, self.working_filename, verbose = verbose)
 			else:
 				self.sngl_inspiral_table.sort(lambda a, b: cmp(a.end_time, b.end_time) or cmp(a.end_time_ns, b.end_time_ns) or cmp(a.ifo, b.ifo))
 				self.search_summary.nevents = len(self.sngl_inspiral_table)
-				ligolw_process.set_process_end_time(self.process)
 				utils.write_filename(self.xmldoc, self.filename, gz = (self.filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = None)
 
 			# write out the snr / chisq histograms
