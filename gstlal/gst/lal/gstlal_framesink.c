@@ -81,6 +81,7 @@ static const char gst_lalframe_sink_doc[] =
 #include <lal/Units.h>         // lalDimensionlessUnit
 
 #include <gstlal.h>
+#include <gstlal_debug.h>
 #include <gstlal_tags.h>
 
 #include <gst/gst.h>
@@ -713,9 +714,8 @@ static GstFlowReturn render(GstBaseSink *basesink, GstBuffer *buffer)
     guint nbytes = sink->duration * byterate;
 
     GST_DEBUG_OBJECT(
-        sink, "Got timestamp=%llu, duration=%llu, offset=%llu, offset_end=%llu",
-        GST_BUFFER_TIMESTAMP(buffer), GST_BUFFER_DURATION(buffer),
-        GST_BUFFER_OFFSET(buffer), GST_BUFFER_OFFSET_END(buffer));
+        sink, "Got %" GST_BUFFER_BOUNDARIES_FORMAT,
+        GST_BUFFER_BOUNDARIES_ARGS(buffer));
 
     /* Check for gaps */
     if (GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_GAP)) {

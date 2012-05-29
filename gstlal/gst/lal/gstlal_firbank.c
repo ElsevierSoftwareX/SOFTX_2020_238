@@ -1216,7 +1216,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	input_is_gap = GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP);
 	history_is_gap = gst_audioadapter_is_gap(element->adapter);
 
-	GST_INFO_OBJECT(element, "%u+%u history+input samples in hand", get_available_samples(element), (guint) (GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf)));
+	GST_INFO_OBJECT(element, "%u+%u history+input samples in hand", (guint) get_available_samples(element), (guint) (GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf)));
 	gst_buffer_ref(inbuf);	/* don't let calling code free buffer */
 	gst_audioadapter_push(element->adapter, inbuf);
 
