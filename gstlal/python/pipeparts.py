@@ -355,6 +355,14 @@ def mkmean(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "lal_mean", **properties)
 
 
+def mkabs(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "abs", **properties)
+
+
+def mkpow(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "pow", **properties)
+
+
 def mkreblock(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "lal_reblock", **properties)
 
