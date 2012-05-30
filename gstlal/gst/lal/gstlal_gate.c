@@ -266,6 +266,20 @@ static void control_flush(GSTLALGate *element)
 
 static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstClockTime tmax)
 {
+	/*
+	 * make sure tmin and tmax are the right way around
+	 */
+
+	if(tmin > tmax) {
+		GstClockTime t = tmin;
+		tmin = tmax;
+		tmax = t;
+	}
+
+	/*
+	 * wait loop
+	 */
+
 	g_mutex_lock(element->control_lock);
 	element->t_sink_head = tmax;
 	g_cond_broadcast(element->control_queue_head_changed);
@@ -312,22 +326,43 @@ static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstCloc
  * return the state of the control input over a range of timestamps.  must
  * be called with the control lock held.
  *
+ * if no control data is available for the requested interval the return
+ * value is the element's default state (TRUE or FALSE).  otherwise,
+ *
+ * when tmin <= tmax:
+ *
+ * the return value is TRUE if control data is available for (at least part
+ * of) the times requested and is above threshold for any interval of time
+ * therein, and FALSE otherwise
+ *
+ * when tmax < tmin:
+ *
  * the return value is FALSE if control data is available for (at least
- * part of) the times requested and is less than the threshold everywhere
- * therein, or TRUE if control data is available for (at least part of) the
- * times requested and is greather than or equal to the threshold for any
- * interval of time therein.  if no control data is available for the
- * requested interval the return value is the element's default state (TRUE
- * or FALSE).
+ * part of) the times requested and is below threshold for any interval of
+ * time therein, and TRUE otherwise
+ *
+ * the case of tmax and tmin being out of order occurs when at least one of
+ * attack and hold is negative and the other is not sufficiently positive
+ * for their sum to be non-negative.  you'd have to draw a bunch of
+ * pictures to see why that condition should be handled the way it is here
  */
 
 
 static gboolean control_get_state(GSTLALGate *element, GstClockTime tmin, GstClockTime tmax)
 {
 	gboolean state = element->default_state;
+	gboolean inverted_interval = tmax < tmin;
 	guint i;
 
-	g_assert_cmpuint(tmin, <=, tmax);
+	/*
+	 * get tmin and tmax the right way around
+	 */
+
+	if(inverted_interval) {
+		GstClockTime t = tmin;
+		tmin = tmax;
+		tmax = t;
+	}
 
 	/*
 	 * handle 0-length scan intervals.  this only works because segment
@@ -369,9 +404,15 @@ static gboolean control_get_state(GSTLALGate *element, GstClockTime tmin, GstClo
 			continue;
 		/* if we get here, segment intersects the requested
 		 * interval */
-		if(segment.state)
-			return TRUE;
-		state = FALSE;
+		if(inverted_interval) {
+			if(!segment.state)
+				return FALSE;
+			state = TRUE;
+		} else {
+			if(segment.state)
+				return TRUE;
+			state = FALSE;
+		}
 	}
 
 	return state;
@@ -886,11 +927,6 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 	if(!(GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))) {
 		GST_ELEMENT_ERROR(pad, STREAM, FAILED, ("invalid timestamp and/or offset"), ("%" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf)));
-		result = GST_FLOW_ERROR;
-		goto done;
-	}
-	if(element->attack_length + element->hold_length < 0) {
-		GST_ERROR_OBJECT(element, "attack-length + hold-length < 0");
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
