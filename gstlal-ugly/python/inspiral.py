@@ -50,6 +50,7 @@ except ImportError:
 from glue import iterutils
 from glue import segments
 from glue.ligolw import ligolw
+from glue.ligolw import ilwd
 from glue.ligolw import lsctables
 from glue.ligolw import utils
 from glue.ligolw.utils import ligolw_add
@@ -400,7 +401,10 @@ class Data(object):
 			from glue.ligolw import dbtables
 			self.working_filename = dbtables.get_connection_filename(filename, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
 			self.connection = sqlite3.connect(self.working_filename, check_same_thread=False)
+			dbtables.idmap_create(self.connection)
+			dbtables.idmap_sync(self.connection)
 			ligolw_sqlite.insert_from_xmldoc(self.connection, self.xmldoc, preserve_ids = False, verbose = verbose)
+			dbtables.idmap_reset(self.connection)
 			self.xmldoc.removeChild(self.xmldoc.childNodes[-1]).unlink()
 			self.xmldoc.appendChild(dbtables.get_xml(self.connection))
 
@@ -411,6 +415,7 @@ class Data(object):
 			# database
 
 			(self.process.process_id,), = (self.search_summary.process_id,), = self.connection.cursor().execute("SELECT process_id FROM process WHERE program == ? AND node == ? AND username == ? AND unix_procid == ? AND start_time == ?", (self.process.program, self.process.node, self.process.username, self.process.unix_procid, self.process.start_time)).fetchall()
+			self.process.process_id = self.search_summary.process_id = ilwd.get_ilwdchar(self.process.process_id)
 		else:
 			self.connection = self.working_filename = None
 
