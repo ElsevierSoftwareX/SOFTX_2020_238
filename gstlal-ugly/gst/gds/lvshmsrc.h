@@ -22,7 +22,17 @@
 #ifndef __GDS_LVSHMSRC_H__
 #define __GDS_LVSHMSRC_H__
 
+/*
+ * the GDS lvshmapi library is only availale on Unix-like systems where
+ * pthread.h will be available, and therefore on systems where glib's
+ * threading library will be wrapping pthreads.  so we don't bother
+ * conditionally-compiling the pthread-related code.  the entire gds plugin
+ * will be disabled on systems where this won't work.
+ */
 
+#include <pthread.h>
+
+#include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstpushsrc.h>
 
@@ -64,6 +74,8 @@ typedef struct {
 	 * state
 	 */
 
+	GMutex *create_thread_lock;
+	pthread_t create_thread;
 	lvshm_handle handle;
 	gboolean need_new_segment;
 } GDSLVSHMSrc;

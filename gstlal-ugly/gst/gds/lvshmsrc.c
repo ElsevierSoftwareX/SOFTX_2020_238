@@ -33,14 +33,16 @@
  */
 
 
+#include <pthread.h>
 #include <string.h>
 
 
 /*
- * stuff from gstreamer
+ * stuff from glib/gobject/gstreamer
  */
 
 
+#include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstpushsrc.h>
 
@@ -151,6 +153,25 @@ static gboolean stop(GstBaseSrc *object)
 
 
 /*
+ * unlock()
+ */
+
+
+static gboolean unlock(GstBaseSrc *basesrc)
+{
+	GDSLVSHMSrc *element = GDS_LVSHMSRC(basesrc);
+	gboolean success = TRUE;
+
+	if(!g_mutex_trylock(element->create_thread_lock))
+		pthread_kill(element->create_thread, SIGALRM);
+	else
+		g_mutex_unlock(element->create_thread_lock);
+
+	return success;
+}
+
+
+/*
  * create()
  */
 
@@ -180,7 +201,10 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	 * will never return).
 	 */
 
+	element->create_thread = pthread_self();
+	g_mutex_lock(element->create_thread_lock);
 	data = lvshm_getNextBuffer(element->handle, flags);
+	g_mutex_unlock(element->create_thread_lock);
 	if(!data) {
 		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("unknown failure retrieving buffer from GDS shared memory.  possible causes include:  timeout, interupted by signal, no data available."));
 		/* indicate end-of-stream */
@@ -308,14 +332,16 @@ static void finalize(GObject *object)
 {
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(object);
 
+	g_free(element->name);
+	element->name = NULL;
+	g_mutex_free(element->create_thread_lock);
+	element->create_thread_lock = NULL;
 	if(element->handle) {
 		GST_WARNING_OBJECT(element, "parent class failed to invoke stop() method.  doing lvshm_deaccess() in finalize() instead.");
 		GST_LOG_OBJECT(element, "lvshm_deaccess()");
 		lvshm_deaccess(element->handle);
 		element->handle = NULL;
 	}
-	g_free(element->name);
-	element->name = NULL;
 
 	G_OBJECT_CLASS(parent_class)->finalize(object);
 }
@@ -413,6 +439,7 @@ static void class_init(gpointer class, gpointer class_data)
 
 	gstbasesrc_class->start = GST_DEBUG_FUNCPTR(start);
 	gstbasesrc_class->stop = GST_DEBUG_FUNCPTR(stop);
+	gstbasesrc_class->unlock = GST_DEBUG_FUNCPTR(unlock);
 	gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
 }
 
@@ -432,6 +459,12 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	gst_base_src_set_live(basesrc, TRUE);
 	gst_base_src_set_format(basesrc, GST_FORMAT_TIME);
 
+	/*
+	 * internal data
+	 */
+
+	element->name = NULL;
+	element->create_thread_lock = g_mutex_new();
 	element->handle = NULL;
 }
 
