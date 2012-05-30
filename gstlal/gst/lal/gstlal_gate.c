@@ -373,9 +373,6 @@ static gboolean control_get_state(GSTLALGate *element, GstClockTime tmin, GstClo
 			return TRUE;
 		state = FALSE;
 	}
-	/* loop cannot run to completion unless the control stream is at
-	 * EOS */
-	g_assert(i < element->control_segments->len || element->control_eos);
 
 	return state;
 }
