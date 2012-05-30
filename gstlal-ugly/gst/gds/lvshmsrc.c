@@ -163,7 +163,7 @@ static gboolean unlock(GstBaseSrc *basesrc)
 	gboolean success = TRUE;
 
 	if(!g_mutex_trylock(element->create_thread_lock))
-		pthread_kill(element->create_thread, SIGALRM);
+		success = !pthread_kill(element->create_thread, SIGALRM);
 	else
 		g_mutex_unlock(element->create_thread_lock);
 
