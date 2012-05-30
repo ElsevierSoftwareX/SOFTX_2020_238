@@ -38,7 +38,7 @@ from gstlal.pipeutil import gst, mkelem
 from gstlal.pipeparts import *
 from gstlal.pipeio import parse_spectrum_message
 from gstlal.lloidparts import LLOIDHandler, DetectorData, mkLLOIDbasicsrc
-from gstlal.reference_psd import write_psd
+from gstlal.reference_psd import write_psd, read_psd
 
 import gstlal.excesspower as ep
 from gstlal.excesspower import *
@@ -579,6 +579,8 @@ handler = EPHandler(mainloop, pipeline)
 handler.output = not options.disable_triggers
 handler.rate = options.sample_rate
 
+# Used to keep track if we need to lock the PSD into the whitener
+psdfile = None
 if( not options.infile ):
 	print >>sys.stderr, "No initialization file specified. Default values will be used."
 elif( not os.path.exists( options.infile ) ):
@@ -587,31 +589,6 @@ elif( not os.path.exists( options.infile ) ):
 else:
 	cfg = SafeConfigParser()
 	cfg.read( options.infile )
-
-	# Handler options
-	handler.flow = cfg.getint( "tf_parameters", "min-frequency" )
-	handler.fhigh = cfg.getint( "tf_parameters", "max-frequency" )
-	handler.base_band = cfg.getfloat( "tf_parameters", "base-resolution" )
-	handler.max_level = cfg.getint( "tf_parameters", "max-resolution-level" )
-	handler.max_duration = cfg.getfloat( "tf_parameters", "max-time-resolution" )
-	handler.cache_spec_corr = cfg.getboolean( "cache", "cache-spectral-correlation" )
-	handler.cache_psd = cfg.getboolean( "cache", "cache-psd" )
-
-	handler.outfile = cfg.get( "triggering", "output-file" )
-	handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
-
-	if( cfg.has_option( "triggering", "events_per_file" ) ):
-		handler.max_events = cfg.get_int( "triggering", "events_per_file" )
-
-	# If a specific (trigger) time is of interest, specify its GPS here
-	# TODO: Read from sngl_inspirals and sngl_bursts
-	trigger_begin, trigger_end = None, None
-	if( cfg.has_option( "triggering", "trig_time_start" ) ):
-		trigger_begin = cfg.getfloat( "triggering", "trig_time_start" )
-	if( cfg.has_option( "triggering", "trig_time_end" ) ):
-		trigger_end = cfg.getfloat( "triggering", "trig_time_end" )
-	if( trigger_begin and trigger_end ):
-		handler.set_trigger_time_and_action( segment( trigger_begin, trigger_end ) )
 
 	# Instruments and channels
 	handler.inst = cfg.get( "instrument", "detector" )
@@ -631,6 +608,46 @@ else:
 	except ConfigParser.NoOptionError:
 		print >>sys.stderr, "No site requested, using detector as default cache sieve."
 		site = None
+
+	# Handler options
+	handler.flow = cfg.getint( "tf_parameters", "min-frequency" )
+	handler.fhigh = cfg.getint( "tf_parameters", "max-frequency" )
+	handler.base_band = cfg.getfloat( "tf_parameters", "base-resolution" )
+	handler.max_level = cfg.getint( "tf_parameters", "max-resolution-level" )
+	handler.max_duration = cfg.getfloat( "tf_parameters", "max-time-resolution" )
+	if( cfg.has_option( "cache", "reference-psd" ) ):
+		psdfile = cfg.get( "cache", "reference-psd" )
+		try:
+			handler.psd = read_psd( psdfile )[ handler.inst ]
+			print "Reference PSD for instrument %s from file %s loaded" % ( handler.inst, psdfile )
+			# Reference PSD disables caching (since we already have it
+			handler.cache_psd = False
+			# TODO: Make a --track-psd option
+		except KeyError: # Make sure we have a PSD for this instrument
+			sys.exit( "PSD for instrument %s requested, but not found in file %s. Available instruments are %s" % (handler.inst, psdfile, str(handler.psd.keys())) )
+		
+	else:
+		handler.cache_psd = cfg.getboolean( "cache", "cache-psd" )
+		print "PSD caching enabled."
+
+	handler.cache_spec_corr = cfg.getboolean( "cache", "cache-spectral-correlation" )
+
+	handler.outfile = cfg.get( "triggering", "output-file" )
+	handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
+
+	if( cfg.has_option( "triggering", "events_per_file" ) ):
+		handler.max_events = cfg.get_int( "triggering", "events_per_file" )
+
+	# If a specific (trigger) time is of interest, specify its GPS here
+	# TODO: Read from sngl_inspirals and sngl_bursts
+	trigger_begin, trigger_end = None, None
+	if( cfg.has_option( "triggering", "trig_time_start" ) ):
+		trigger_begin = cfg.getfloat( "triggering", "trig_time_start" )
+	if( cfg.has_option( "triggering", "trig_time_end" ) ):
+		trigger_end = cfg.getfloat( "triggering", "trig_time_end" )
+	if( trigger_begin and trigger_end ):
+		handler.set_trigger_time_and_action( segment( trigger_begin, trigger_end ) )
+
 	gwflocation = cfg.get( "instrument", "location" )
 
 	inj_loc = cfg.get( "injections", "xml-location" )
@@ -804,6 +821,10 @@ if( inj_loc and verbose ):
 	head = mkprogressreport( pipeline, head, "injection stream" )
 
 head = whitener = mkwhiten( pipeline, head )
+if( psdfile is not None ): # In other words, we have a reference PSD
+	whitener.set_property( "mean-psd", handler.psd.data )
+	whitener.set_property( "psd-mode", 1 ) # GSTLAL_PSDMODE_FIXED
+
 head = mkqueue( pipeline, head )
 
 # Diagnostic plot
