@@ -334,32 +334,35 @@ def stream_tfmap_image():
 	# Only difference here is oggmux -> pngenc
 	pass
 
-def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, snr_max=10 ):
+def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, snr_max=None, history=4, framerate=5 ):
 	"""
-	Stream the time frequency channel map to a video source. If filename is None and split_on is None (the default), then the pipeline will attempt to stream to a desktop based (xvimagesink or equivalent) video sink. If filename is not None, but no splitting behavior is specified, video will be encoded and saved to the filename plus ".ogg" in Ogg Vorbis format. If split_on is specified to be 'keyframe', then the encoded video will be split between multiple files based on the keyframes being emitted by the ogg muxer. If no file name is specifed a default will be used, otherwise, an index and ".ogg" will be appended to the file name. Specifying amp_max will set the top of the colorscale for the amplitude SNR, the default is 10.
+	Stream the time frequency channel map to a video source. If filename is None and split_on is None (the default), then the pipeline will attempt to stream to a desktop based (xvimagesink or equivalent) video sink. If filename is not None, but no splitting behavior is specified, video will be encoded and saved to the filename plus ".ogg" in Ogg Vorbis format. If split_on is specified to be 'keyframe', then the encoded video will be split between multiple files based on the keyframes being emitted by the ogg muxer. If no file name is specifed a default will be used, otherwise, an index and ".ogg" will be appended to the file name. Specifying amp_max will set the top of the colorscale for the amplitude SNR, the default is 10. History is the amount of time to retain in the video buffer (in seconds), the default is 4. The frame rate is the number of frames per second to output in the video stream.
 	"""
 
+	z_autoscale = snr_max is None
 	# Tee off the amplitude stream
 	head = chtee = mktee( pipeline, head )
 	head = mkgeneric( pipeline, head, "cairovis_waterfall",
-			title = "TF map %s:%s, fmax=%d Hz" % (handler.inst, handler.channel, handler.fhigh),
-			z_autoscale = True,
-			#z_min = 0,
-			#z_max = snr_max,
+			title = "TF map %s:%s" % (handler.inst, handler.channel),
+			z_autoscale = z_autoscale,
+			z_min = 0,
+			z_max = snr_max,
 			z_label = "SNR",
-			# TODO: Restore this when it becomes available again
 			#y_autoscale = True,
 			#y_min = handler.flow,
 			#y_max = handler.fhigh,
-			y_label = "channel number",
+			y_data_autoscale = False,
+			y_data_min = handler.flow,
+			y_data_max = handler.fhigh,
+			y_label = "frequency (Hz)",
 			x_label = "time (s)",
 			colormap = "jet",
 			colorbar = True,
-			history = gst.SECOND*4
+			history = gst.SECOND*history
 	)
 
 	# Do some format conversion
-	head = mkcapsfilter( pipeline, head, "video/x-raw-rgb,framerate=5/1" )
+	head = mkcapsfilter( pipeline, head, "video/x-raw-rgb,framerate=%d/1" % framerate )
 	head = mkprogressreport( pipeline, head, "video sink" )
 
 	# TODO: Explore using different "next file" mechanisms
