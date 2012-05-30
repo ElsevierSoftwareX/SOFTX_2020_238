@@ -91,7 +91,7 @@ def mksegmentsrcgate(pipeline, src, segment_list, threshold, seekevent = None, i
 #
 
 
-def mkhtgate(pipeline, src, threshold = 8.0, attack_length = 128, hold_length = 128):
+def mkhtgate(pipeline, src, threshold = 8.0, attack_length = -128, hold_length = -128):
 	src = pipeparts.mkqueue(pipeline, src, max_size_time = gst.SECOND, max_size_bytes = 0, max_size_buffers = 0)
 	t = pipeparts.mktee(pipeline, src)
 	control = pipeparts.mkqueue(pipeline, t, max_size_time = gst.SECOND, max_size_bytes = 0, max_size_buffers = 0)
