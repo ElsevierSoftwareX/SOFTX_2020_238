@@ -373,6 +373,9 @@ static gboolean control_get_state(GSTLALGate *element, GstClockTime tmin, GstClo
 			return TRUE;
 		state = FALSE;
 	}
+	/* loop cannot run to completion unless the control stream is at
+	 * EOS */
+	g_assert(i < element->control_segments->len || element->control_eos);
 
 	return state;
 }
@@ -942,16 +945,12 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 		if(element->leaky) {
 			/*
-			 * discard buffer
+			 * discard buffer.  skipping an interval of
+			 * non-zero length so  next buffer must be a
+			 * discont
 			 */
 
-			if(sinkbuf_length)
-				/*
-				 * skipping an interval of non-zero length,
-				 * next buffer must be a discont
-				 */
-
-				element->need_discont = TRUE;
+			element->need_discont = TRUE;
 			GST_DEBUG_OBJECT(element->srcpad, "discarding gap buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 			goto done;
 		}
