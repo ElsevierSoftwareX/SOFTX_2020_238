@@ -91,13 +91,14 @@ def mksegmentsrcgate(pipeline, src, segment_list, threshold, seekevent = None, i
 #
 
 
-def mkhtgate(pipeline, src, threshold = 1.0, attack_length = 1024, hold_length = 1024, invert_control = True, low_frequency=40, high_frequency=1000):
-	src = pipeparts.mkqueue(pipeline, src)
+def mkhtgate(pipeline, src, threshold = 8.0, attack_length = 128, hold_length = 128):
+	src = pipeparts.mkqueue(pipeline, src, max_size_time = gst.SECOND, max_size_bytes = 0, max_size_buffers = 0)
 	t = pipeparts.mktee(pipeline, src)
-	q1 = pipeparts.mkqueue(pipeline, t)
-	ss = pipeparts.mkaudiochebband(pipeline, q1, low_frequency, high_frequency)
-	q2 = pipeparts.mkqueue(pipeline, t)
-	return pipeparts.mkgate(pipeline, q2, threshold = threshold, control = ss, attack_length = attack_length, hold_length = hold_length, invert_control = invert_control)
+	control = pipeparts.mkqueue(pipeline, t, max_size_time = gst.SECOND, max_size_bytes = 0, max_size_buffers = 0)
+	# FIXME someday explore a good bandpass filter
+	# ss = pipeparts.mkaudiochebband(pipeline, q1, low_frequency, high_frequency)
+	input = pipeparts.mkqueue(pipeline, t, max_size_time = gst.SECOND, max_size_bytes = 0, max_size_buffers = 0)
+	return pipeparts.mkgate(pipeline, input, threshold = threshold, control = control, attack_length = attack_length, hold_length = hold_length, invert_control = True)
 
 
 #
@@ -205,7 +206,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, inj_seg_list
 #
 
 
-class get_state_vector(object):
+class get_gate_state(object):
 	# monitor state vector transitions, export via web
 	# interface
 	def __init__(self, elem, msg = None, verbose = False):
@@ -216,8 +217,8 @@ class get_state_vector(object):
 			self.msg = "%s: " % msg
 		else:
 			self.msg = ""
-		elem.connect("start", self.sighandler, "science")
-		elem.connect("stop", self.sighandler, "lock loss")
+		elem.connect("start", self.sighandler, "on")
+		elem.connect("stop", self.sighandler, "off")
 
 	def sighandler(self, elem, timestamp, segment_type):
 		self.current_segment = segment_type
@@ -329,7 +330,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		src.set_property("emit-signals", True)
 		# FIXME:  let the state vector messages going to stderr be
 		# controled somehow
-		bottle.route("/%s/current_segment.txt" % instrument)(get_state_vector(src, msg = instrument, verbose = True).text)
+		bottle.route("/%s/current_segment.txt" % instrument)(get_gate_state(src, msg = instrument, verbose = True).text)
 	else:
 		src = pipeparts.mkaudioconvert(pipeline, src)
 
@@ -434,11 +435,16 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max(rates)))
 
 	#
-	# optional gate on h(t) amplitude
+	# optional gate on whitened h(t) amplitude
 	#
 
 	if ht_gate_threshold is not None:
-		head = mkhtgate(pipeline, head, ht_gate_threshold, high_frequency = max(rates) * 0.45)
+		head = mkhtgate(pipeline, head, ht_gate_threshold)
+		# export ht gate state
+		head.set_property("emit-signals", True)
+		# FIXME:  let the state messages going to stderr be
+		# controled somehow
+		bottle.route("/%s/current_ht_gate_segment.txt" % instrument)(get_gate_state(head, msg = "%s_ht_gate" % instrument, verbose = True).text)
 
 	#
 	# optionally add vetoes
