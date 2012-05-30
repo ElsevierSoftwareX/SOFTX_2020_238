@@ -538,6 +538,7 @@ data_source = options.data_source
 
 # TODO: Stop reinventing the wheel and replace this with mkLLOIDsrc
 valid_data_sources = [ "gwffile", 
+	  "nds",
 	  "lldata", 
 	  "whitedata", 
 	  "fakeLIGO", 
@@ -628,7 +629,7 @@ else:
 		
 	else:
 		handler.cache_psd = cfg.getboolean( "cache", "cache-psd" )
-		print "PSD caching enabled."
+		if( handler.cache_psd ): print "PSD caching enabled."
 
 	handler.cache_spec_corr = cfg.getboolean( "cache", "cache-spectral-correlation" )
 
@@ -681,7 +682,15 @@ if options.verbose:
 duration = -1
 
 # Data source
-if( data_source == "fakeLIGO" ):
+if( data_source == "nds" ):
+	head = mkndssrc( pipeline,
+		host = cfg.get( "instrument", "ndshost" ),
+		instrument = handler.inst,
+		channel_name = handler.channel
+	)
+	# FIXME: Don't assume real-time
+	head.set_property( "channel-type", "online" )
+elif( data_source == "fakeLIGO" ):
 	head = mkfakeLIGOsrc( pipeline, 
 		instrument = handler.inst,
 		channel_name = handler.channel
