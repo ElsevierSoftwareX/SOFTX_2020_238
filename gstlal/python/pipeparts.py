@@ -375,18 +375,18 @@ def mksumsquares(pipeline, src, weights = None):
 
 
 def mkgate(pipeline, src, threshold = None, control = None, **properties):
-	if "name" in properties:
-		elem = gst.element_factory_make("lal_gate", properties.pop("name"))
-	else:
-		elem = gst.element_factory_make("lal_gate")
 	if threshold is not None:
-		elem.set_property("threshold", threshold)
-	pipeline.add(elem)
-	src.link_pads("src", elem, "sink")
-	if control is not None:
-		control.link_pads("src", elem, "control")
-	for name, value in properties.items():
-		elem.set_property(name.replace("_", "-"), value)
+		elem = mkgeneric(pipeline, None, "lal_gate", threshold = threshold, **properties)
+	else:
+		elem = mkgeneric(pipeline, None, "lal_gate", **properties)
+	if isinstance(src, gst.Pad):
+		src.get_parent_element().link_pads(src, elem, "sink")
+	elif src is not None:
+		src.link_pads(None, elem, "sink")
+	if isinstance(control, gst.Pad):
+		control.get_parent_element().link_pads(control, elem, "control")
+	elif control is not None:
+		control.link_pads(None, elem, "control")
 	return elem
 
 
