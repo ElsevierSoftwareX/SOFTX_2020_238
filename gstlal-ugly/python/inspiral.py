@@ -403,8 +403,12 @@ class Data(object):
 			self.connection = sqlite3.connect(self.working_filename, check_same_thread=False)
 			dbtables.idmap_create(self.connection)
 			dbtables.idmap_sync(self.connection)
+			__orig_append, dbtables.DBTable.append = dbtables.DBTable.append, dbtables.DBTable._remapping_append
 			ligolw_sqlite.insert_from_xmldoc(self.connection, self.xmldoc, preserve_ids = False, verbose = verbose)
+			dbtables.DBTable.append = __orig_append
+			del __orig_append
 			dbtables.idmap_reset(self.connection)
+			dbtables.idmap_sync(self.connection)
 			self.xmldoc.removeChild(self.xmldoc.childNodes[-1]).unlink()
 			self.xmldoc.appendChild(dbtables.get_xml(self.connection))
 
