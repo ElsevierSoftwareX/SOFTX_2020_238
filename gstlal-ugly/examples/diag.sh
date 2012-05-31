@@ -11,15 +11,15 @@ function test_adder() {
 
 function test_gate_1() {
 	gst-launch \
-		lal_gate name=gate threshold=0.7 \
+		lal_gate name=gate threshold=0.5 attack-length=-10 hold-length=-10 invert-control=false \
 		! audio/x-raw-float, channels=1, width=64, rate=16384 \
 		! lal_nxydump start-time=0 stop-time=10000000000 \
 		! queue ! filesink location="dump_out.txt" \
-		audiotestsrc freq=13 samplesperbuffer=1024 num-buffers=1 \
+		audiotestsrc volume=1 wave=3 freq=13 samplesperbuffer=1024 num-buffers=1 \
 		! audio/x-raw-float, rate=1024 \
 		! tee name=control \
 		! gate.control \
-		audiotestsrc freq=256 samplesperbuffer=1024 num-buffers=8 \
+		audiotestsrc volume=1 wave=0 freq=256 samplesperbuffer=1024 num-buffers=8 \
 		! tee name=orig \
 		! gate.sink \
 		orig. \
