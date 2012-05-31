@@ -44,6 +44,18 @@ function test_gate_2() {
 		! gate.sink
 }
 
+function test_gate_3() {
+	gst-launch \
+		lal_gate name=gate threshold=3 attack-length=-10 hold-length=-10 invert-control=true \
+		! audio/x-raw-float, rate=1000 \
+		! lal_nxydump ! filesink location="dump_out.txt" sync=false async=false \
+		audiotestsrc volume=1 wave=9 samplesperbuffer=1024 num-buffers=5 \
+		! tee name=tee \
+		tee. ! queue ! gate.sink \
+		tee. ! queue ! gate.control \
+		tee. ! lal_nxydump ! filesink location="dump_in.txt" sync=false async=false
+}
+
 function test_resampler() {
 	gst-launch \
 		audiotestsrc wave=0 freq=1024 samplesperbuffer=10 num-buffers=1000000 \
