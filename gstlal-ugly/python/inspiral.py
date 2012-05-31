@@ -397,6 +397,10 @@ class Data(object):
 		#
 
 		if filename is not None and filename.endswith('.sqlite'):
+			# FIXME:  this is a MESS.  the idmap crap should
+			# live in insert_from_xml() so that it Just Works,
+			# the code should be moved away from the old global
+			# content handler, I don't know what all else!
 			from glue.ligolw.utils import ligolw_sqlite
 			from glue.ligolw import dbtables
 			self.working_filename = dbtables.get_connection_filename(filename, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
