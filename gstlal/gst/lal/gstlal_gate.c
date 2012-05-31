@@ -301,8 +301,9 @@ static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstCloc
 		 */
 
 		if(element->control_segments->len) {
-			GST_DEBUG_OBJECT(element, "have %u control segments upto %" GST_TIME_SECONDS_FORMAT, element->control_segments->len, GST_TIME_SECONDS_ARGS(control_get_final_segment(element).stop));
-			if(control_get_final_segment(element).stop >= tmax)
+			GstClockTime control_tmax = control_get_final_segment(element).stop;
+			GST_DEBUG_OBJECT(element, "have %u control segments upto %" GST_TIME_SECONDS_FORMAT, element->control_segments->len, GST_TIME_SECONDS_ARGS(control_tmax));
+			if(control_tmax >= tmax)
 				break;
 		} else
 			GST_DEBUG_OBJECT(element, "have 0 control segments");
