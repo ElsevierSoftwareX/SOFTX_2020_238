@@ -1119,11 +1119,14 @@ gst_adder_collected (GstCollectPads * pads, gpointer user_data)
     GstSegment *segment;
     GstEvent *event;
 
-    /* FIXME:  are other formats OK? */
     segment = gstlal_collect_pads_get_segment (adder->collect);
-    g_assert (segment->format == GST_FORMAT_TIME);
-    adder->segment = *segment;
-    gst_segment_free (segment);
+    if (segment) {
+      /* FIXME:  are other formats OK? */
+      g_assert (segment->format == GST_FORMAT_TIME);
+      adder->segment = *segment;
+      gst_segment_free (segment);
+    } else
+      GST_ELEMENT_ERROR (adder, STREAM, FORMAT, (NULL), ("failed to deduce output segment, falling back to undefined default"));
 
     /* FIXME, use rate/applied_rate as set on all sinkpads.
      * - currently we just set rate as received from last seek-event
