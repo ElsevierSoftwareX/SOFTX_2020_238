@@ -205,9 +205,9 @@ GstSegment *gstlal_collect_pads_get_segment(GstCollectPads *pads)
 		if(segment->stop == -1 || segment->stop < data->segment.stop)
 			segment->stop = data->segment.stop;
 	}
+	GST_INFO_OBJECT(pads, "returning segment [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", segment->start, segment->stop);
 
 done:
-	GST_INFO_OBJECT(pads, "returning segment [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", segment->start, segment->stop);
 	return segment;
 }
 
