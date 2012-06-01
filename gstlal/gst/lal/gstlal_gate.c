@@ -205,10 +205,6 @@ static void control_add_segment(GSTLALGate *element, GstClockTime start, GstCloc
 	GST_DEBUG_OBJECT(element, "found control segment [%" GST_TIME_SECONDS_FORMAT ", %" GST_TIME_SECONDS_FORMAT ") in state %d", GST_TIME_SECONDS_ARGS(new_segment.start), GST_TIME_SECONDS_ARGS(new_segment.stop), new_segment.state);
 
 	/* try coalescing the new segment with the most recent one */
-	/* FIXME:  it might be more efficient to apply the attack and hold
-	 * properties here, adjusting the segment list as we construct it,
-	 * than scanning for intersections with a segment later.  would
-	 * require smarter coalescing logic */
 	if(element->control_segments->len) {
 		struct control_segment *final_segment = &((struct control_segment *) element->control_segments->data)[element->control_segments->len - 1];
 		/* if the most recent segment and the new segment have the
@@ -235,14 +231,13 @@ static void control_add_segment(GSTLALGate *element, GstClockTime start, GstCloc
 
 
 /*
- * return the most recently recorded control segment
+ * return the stop time of the i-th segment in the control queue
  */
 
 
-static struct control_segment control_get_final_segment(GSTLALGate *element)
+static GstClockTime control_get_tstop(GSTLALGate *element, guint i)
 {
-	g_assert(element->control_segments->len > 0);	/* redundant? */
-	return g_array_index(element->control_segments, struct control_segment, element->control_segments->len - 1);
+	return g_array_index(element->control_segments, struct control_segment, i).stop;
 }
 
 
@@ -259,17 +254,22 @@ static void control_flush(GSTLALGate *element)
 
 
 /*
- * wait for the control segments to span the requested interval.  must be
- * called with the control lock released
+ * wait for the control segments to span the interval needed to decide the
+ * state of [timestamp,timestamp+duration).  must be called with the
+ * control lock released
  */
 
 
-static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstClockTime tmax)
+static void control_get_interval(GSTLALGate *element, GstClockTime timestamp, GstClockTime duration)
 {
+	GstClockTime tmin, tmax;
+
 	/*
-	 * make sure tmin and tmax are the right way around
+	 * compute the interval the control data must span
 	 */
 
+	tmin = timestamp_add_offset(timestamp, MIN(-element->hold_length, +element->attack_length), element->rate);
+	tmax = timestamp_add_offset(timestamp + duration, MAX(-element->hold_length, +element->attack_length), element->rate);
 	if(tmin > tmax) {
 		GstClockTime t = tmin;
 		tmin = tmax;
@@ -290,7 +290,7 @@ static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstCloc
 		 * flush old segments.
 		 */
 
-		for(i = 0; i < element->control_segments->len && g_array_index(element->control_segments, struct control_segment, i).stop <= tmin; i++);
+		for(i = 0; i < element->control_segments->len && control_get_tstop(element, i) <= tmin; i++);
 		if(i) {
 			GST_DEBUG_OBJECT(element, "flushing %u obsolete control segments", i);
 			g_array_remove_range(element->control_segments, 0, i);
@@ -301,7 +301,7 @@ static void control_get_interval(GSTLALGate *element, GstClockTime tmin, GstCloc
 		 */
 
 		if(element->control_segments->len) {
-			GstClockTime control_tmax = control_get_final_segment(element).stop;
+			GstClockTime control_tmax = control_get_tstop(element, element->control_segments->len - 1);
 			GST_DEBUG_OBJECT(element, "have %u control segments upto %" GST_TIME_SECONDS_FORMAT, element->control_segments->len, GST_TIME_SECONDS_ARGS(control_tmax));
 			if(control_tmax >= tmax)
 				break;
@@ -942,7 +942,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 	GST_DEBUG_OBJECT(element->sinkpad, "got buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
-	control_get_interval(element, timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), -element->hold_length, element->rate), timestamp_add_offset(GST_BUFFER_TIMESTAMP(sinkbuf), (gint64) sinkbuf_length + element->attack_length, element->rate));
+	control_get_interval(element, GST_BUFFER_TIMESTAMP(sinkbuf), GST_BUFFER_DURATION(sinkbuf));
 
 	/*
 	 * is input zero size or already a gap?  then push it as is
