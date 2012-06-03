@@ -826,6 +826,12 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 	}
 
 	/*
+	 * FIXME:  should src pads whose names weren't found in this frame
+	 * file be removed?  this can also handle the case of the requested
+	 * channel list having names removed from it
+	 */
+
+	/*
 	 * Done
 	 */
 
@@ -873,9 +879,6 @@ static void set_property(GObject *object, guint id, const GValue *value, GParamS
 		GValueArray *channel_list = (GValueArray *) g_value_get_boxed(value);
 		guint i;
 
-		/* FIXME:  if the new list is missing the names of pads the
-		 * element already has, should the pads be removed?  how?
-		 * */
 		g_hash_table_remove_all(element->channel_list);
 
 		for(i = 0; i < channel_list->n_values; i++) {
