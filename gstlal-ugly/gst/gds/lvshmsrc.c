@@ -162,10 +162,28 @@ static gboolean unlock(GstBaseSrc *basesrc)
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(basesrc);
 	gboolean success = TRUE;
 
+	element->unblocked = TRUE;
+
 	if(!g_mutex_trylock(element->create_thread_lock))
 		success = !pthread_kill(element->create_thread, SIGALRM);
 	else
 		g_mutex_unlock(element->create_thread_lock);
+
+	return success;
+}
+
+
+/*
+ * unlock_stop()
+ */
+
+
+static gboolean unlock_stop(GstBaseSrc *basesrc)
+{
+	GDSLVSHMSrc *element = GDS_LVSHMSRC(basesrc);
+	gboolean success = TRUE;
+
+	element->unblocked = FALSE;
 
 	return success;
 }
@@ -191,23 +209,30 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	*buffer = NULL;
 
 	/*
-	 * retrieve next frame file from the lvshm library.  all error
-	 * paths after this succeeds must include a call to
-	 * lvshm_releaseDataBuffer().  FIXME:  this element needs to
-	 * provide the unlock() and unlock_stop() overrides and they need
-	 * to be used to induce lvshm_getNextBuffer() to abort, otherwise
-	 * pipelines using this element cannot be shutdown if the gds data
-	 * source ever stops providing data (because lvshm_getNextBuffer()
-	 * will never return).
+	 * retrieve next frame file from the lvshm interface.  disabled if
+	 * element is "unlocked".
 	 */
 
-	element->create_thread = pthread_self();
-	g_mutex_lock(element->create_thread_lock);
-	data = lvshm_getNextBuffer(element->handle, flags);
-	g_mutex_unlock(element->create_thread_lock);
-	if(!data) {
-		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("unknown failure retrieving buffer from GDS shared memory.  possible causes include:  timeout, interupted by signal, no data available."));
-		/* indicate end-of-stream */
+	if(!element->unblocked) {
+		element->create_thread = pthread_self();
+		g_mutex_lock(element->create_thread_lock);
+		data = lvshm_getNextBuffer(element->handle, flags);
+		g_mutex_unlock(element->create_thread_lock);
+		if(!data) {
+			if(!element->unblocked)
+				GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("unknown failure retrieving buffer from GDS shared memory.  possible causes include:  timeout, interupted by signal, no data available."));
+			else
+				GST_DEBUG_OBJECT(element, "unlock() called, no buffer created");
+			/* indicate end-of-stream */
+			return GST_FLOW_UNEXPECTED;
+		}
+		/*
+		 * we have successfully retrieved data.  all code paths
+		 * from this point must include a call to
+		 * lvshm_releaseDataBuffer()
+		 */
+	} else {
+		GST_DEBUG_OBJECT(element, "unlock() called, no buffer created");
 		return GST_FLOW_UNEXPECTED;
 	}
 	length = lvshm_dataLength(element->handle);
@@ -440,6 +465,7 @@ static void class_init(gpointer class, gpointer class_data)
 	gstbasesrc_class->start = GST_DEBUG_FUNCPTR(start);
 	gstbasesrc_class->stop = GST_DEBUG_FUNCPTR(stop);
 	gstbasesrc_class->unlock = GST_DEBUG_FUNCPTR(unlock);
+	gstbasesrc_class->unlock_stop = GST_DEBUG_FUNCPTR(unlock_stop);
 	gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
 }
 
@@ -464,6 +490,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	 */
 
 	element->name = NULL;
+	element->unblocked = FALSE;
 	element->create_thread_lock = g_mutex_new();
 	element->handle = NULL;
 }

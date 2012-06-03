@@ -74,10 +74,16 @@ typedef struct {
 	 * state
 	 */
 
-	GMutex *create_thread_lock;
+	gboolean unblocked;
 	pthread_t create_thread;
-	lvshm_handle handle;
+	GMutex *create_thread_lock;
 	gboolean need_new_segment;
+
+	/*
+	 * LVSHM interface
+	 */
+
+	lvshm_handle handle;
 } GDSLVSHMSrc;
 
 
