@@ -345,10 +345,10 @@ def mkiirbank(pipeline, src, a1, b0, delay, name=None):
 	elem = mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed
 	return elem
 
+
 def mktrim(pipeline, src, initial_offset = None, final_offset = None, inverse = None):
 	properties = dict((name, value) for name, value in zip(("initial-offset", "final-offset", "inverse"), (initial_offset,final_offset,inverse)) if value is not None)
 	return mkgeneric(pipeline, src, "lal_trim", **properties)
-
 
 
 def mkmean(pipeline, src, **properties):
@@ -379,14 +379,11 @@ def mkgate(pipeline, src, threshold = None, control = None, **properties):
 		elem = mkgeneric(pipeline, None, "lal_gate", threshold = threshold, **properties)
 	else:
 		elem = mkgeneric(pipeline, None, "lal_gate", **properties)
-	if isinstance(src, gst.Pad):
-		src.get_parent_element().link_pads(src, elem, "sink")
-	elif src is not None:
-		src.link_pads(None, elem, "sink")
-	if isinstance(control, gst.Pad):
-		control.get_parent_element().link_pads(control, elem, "control")
-	elif control is not None:
-		control.link_pads(None, elem, "control")
+	for peer, padname in ((src, "sink"), (control, "control")):
+		if isinstance(peer, gst.Pad):
+			peer.get_parent_element().link_pads(peer, elem, padname)
+		elif peer is not None:
+			peer.link_pads(None, elem, padname)
 	return elem
 
 
@@ -560,6 +557,7 @@ class AppSync(object):
 
 	def add_sink(self, pipeline, src, drop = False, **properties):
 		# NOTE that max buffers must be 1 for this to work
+		assert "max_buffers" not in properties
 		elem = mkappsink(pipeline, src, max_buffers = 1, drop = drop, **properties)
 		elem.connect("new-buffer", self.appsink_handler, False)
 		elem.connect("eos", self.appsink_handler, True)
@@ -663,42 +661,17 @@ def mkitac(pipeline, src, n, bank, autocorrelation_matrix = None, snr_thresh = 0
 
 
 def mklhocoherentnull(pipeline, H1src, H2src, H1_impulse, H1_latency, H2_impulse, H2_latency, srate):
-	coherent_null_bin = gst.element_factory_make("lal_lho_coherent_null")
-	coherent_null_bin.set_property("block-stride", srate)
-	coherent_null_bin.set_property("H1-impulse", H1_impulse)
-	coherent_null_bin.set_property("H2-impulse", H2_impulse)
-	coherent_null_bin.set_property("H1-latency", H1_latency)
-	coherent_null_bin.set_property("H2-latency", H2_latency)
-	pipeline.add(coherent_null_bin)
-	if isinstance(H1src, gst.Pad):
-		H1src.get_parent_element().link_pads(H1src, coherent_null_bin, "H1sink")
-	elif H1src is not None:
-		H1src.link_pads(None, coherent_null_bin, "H1sink")
-	if isinstance(H2src, gst.Pad):
-		H2src.get_parent_element().link_pads(H2src, coherent_null_bin, "H2sink")
-	elif H2src is not None:
-		H2src.link_pads(None, coherent_null_bin, "H2sink")
-	return coherent_null_bin
+	elem = mkgeneric(pipeline, None, "lal_lho_coherent_null", block_stride = srate, H1_impulse = H1_impulse, H2_impulse = H2_impulse, H1_latency = H1_latency, H2_latency = H2_latency)
+	for peer, padname in ((H1src, "H1sink"), (H2src, "H2sink")):
+		if isinstance(peer, gst.Pad):
+			peer.get_parent_element().link_pads(peer, elem, padname)
+		elif peer is not None:
+			peer.link_pads(None, elem, padname)
+	return elem
 
 
 def mkbursttriggergen(pipeline, src, n, bank):
 	return mkgeneric(pipeline, src, "lal_bursttriggergen", n = n, bank_filename = bank)
-
-
-def mksyncsink(pipeline, srcs):
-	"""
-	add streams together and dump to a fake sink.  this can be used to
-	synchronize streams. It returns tee'd off versions of srcs
-	"""
-	adder = gst.element_factory_make("lal_adder")
-	adder.set_property("sync", True)
-	pipeline.add(adder)
-	outsrcs = []
-	for src in srcs:
-		outsrcs.append(mktee(pipeline,src))
-		mkqueue(pipeline,outsrcs[-1],max_size_time=0, max_size_buffers=1, max_size_bytes=0).link(adder)
-	mkfakesink(pipeline, adder)
-	return outsrcs
 
 
 def mktcpserversink(pipeline, src, **properties):
