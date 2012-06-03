@@ -320,7 +320,8 @@ static gboolean remove_pad(GSTFrameCPPChannelDemux *element, const char *name)
 
 
 /*
- * check if a channel name is in the requested channel list
+ * check if a channel name is in the requested channel list.  returns TRUE
+ * if the channel list is empty (demultiplex all channels)
  */
 
 
@@ -586,6 +587,7 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 		break;
 	}
 
+	/* FIXME:  what does gst_pad_event_default(pad, event) do?  can I just use that? */
 	iter = gst_element_iterate_src_pads(GST_ELEMENT(element));
 	gst_iterator_foreach(iter, forward_sink_event, event);
 	gst_iterator_free(iter);
