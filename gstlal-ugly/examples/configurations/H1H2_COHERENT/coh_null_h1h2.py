@@ -58,7 +58,7 @@ class COHhandler(lloidparts.LLOIDHandler):
 		# set various properties for psd and fir filter		
 		self.psd_fft_length = 8
 		self.zero_pad_length = 2		
-		self.srate = 2*2048
+		self.srate = 4096
 		self.filter_length = int(self.srate*self.psd_fft_length)
 
 		# set default psds for H1 and H2
@@ -66,14 +66,18 @@ class COHhandler(lloidparts.LLOIDHandler):
 		self.psd2 = self.build_default_psd(self.srate, self.filter_length)
 
 		# set default impulse response and latency for H1 and H2
-		self.H1_impulse = numpy.ones(2*self.srate*self.psd_fft_length + 1)
-		self.H1_latency = 0
-		self.H2_impulse = numpy.ones(2*self.srate*self.psd_fft_length + 1)
-		self.H2_latency = 0
+		self.H1_impulse, self.H1_latency, self.H2_impulse, self.H2_latency, self.srate = coherent_null.psd_to_impulse_response(self.psd1, self.psd2)
+		self.H1_impulse = numpy.zeros(len(self.H1_impulse))
+		self.H2_impulse = numpy.zeros(len(self.H2_impulse))
 		
 		# psd1_change and psd2_change store when the psds have been updated
 		self.psd1_change = 0
 		self.psd2_change = 0
+
+		#self.write_fir = 0
+
+		# coherent null bin default
+		self.cohnullbin = None
 
 		# regular handler pipeline and message processing
 		self.mainloop = mainloop
@@ -96,12 +100,53 @@ class COHhandler(lloidparts.LLOIDHandler):
 		psd = REAL8FrequencySeries()
 		psd.deltaF = float(srate)/filter_length
 		psd.data = numpy.ones(filter_length/2 + 1)
-		psd.f0 = 0
+		psd.f0 = 0.0
 		return psd
+
+	def add_cohnull_bin(self, elem):
+		self.cohnullbin = elem
 	
-	def update_fir_filter(self, psd1, psd2):
-		self.H1_impulse, self.H1_latency, self.H2_impulse, self.H2_latency, self.srate = coherent_null.psd_to_impulse_response(psd1, psd2)
+	def update_fir_filter(self):
+
+		self.write_fir = self.write_fir + 1
+
+		self.psd1_change = 0
+		self.psd2_change = 0
+		self.H1_impulse, self.H1_latency, self.H2_impulse, self.H2_latency, self.srate = coherent_null.psd_to_impulse_response(self.psd1, self.psd2)
+		self.cohnullbin.set_property("block-stride", self.srate)
+		self.cohnullbin.set_property("H1-impulse", self.H1_impulse)
+		self.cohnullbin.set_property("H2-impulse", self.H2_impulse)
+		self.cohnullbin.set_property("H1-latency", self.H1_latency)
+		self.cohnullbin.set_property("H2-latency", self.H2_latency)		
 		
+		#f = open('H1_impulse_%d.txt' % self.write_fir,'w')
+		#for line in self.H1_impulse:
+		#	print >> f, '%f' % line
+		#f.close
+
+		#g = open('H2_impulse_%d.txt' % self.write_fir,'w')
+		#for line in self.H2_impulse:
+		#	print >> g, '%f' % line
+		#g.close
+
+	def update_psd1(self, elem):
+		self.psd1 = REAL8FrequencySeries(
+			name = "PSD1",
+			f0 = 0.0,
+			deltaF = elem.get_property("delta-f"),
+			data = numpy.array(elem.get_property("mean-psd"))
+		)
+		self.psd1_change = 1
+
+	def update_psd2(self, elem):
+		self.psd2 = REAL8FrequencySeries(
+			name = "PSD2",
+			f0 = 0.0,
+			deltaF = elem.get_property("delta-f"),
+			data = numpy.array(elem.get_property("mean-psd"))
+		)
+		self.psd2_change = 1
+
 #
 # =============================================================================
 #
@@ -142,25 +187,11 @@ detectorH2 = {
 def update_psd(elem, pspec, hand):
 	name = elem.get_property("name")
 	if name == "H1_whitener":
-		hand.psd1 = REAL8FrequencySeries(
-			name = "PSD1",
-			f0 = 0.0,
-			deltaF = elem.get_property("delta-f"),
-			data = numpy.array(elem.get_property("mean-psd"))
-		)
-		hand.psd1_change = 1	
+		hand.update_psd1(elem)
 	if name == "H2_whitener":
-		hand.psd2 = REAL8FrequencySeries(
-			name = "PSD2",
-			f0 = 0.0,
-			deltaF = elem.get_property("delta-f"),
-			data = numpy.array(elem.get_property("mean-psd"))
-		)
-		hand.psd2_change = 1
+		hand.update_psd2(elem)
 	if (hand.psd1_change == 1 and hand.psd2_change == 1):
-		hand.update_fir_filter(hand.psd1, hand.psd2)
-		hand.psd1_change = 0
-		hand.psd2_change = 0
+		hand.update_fir_filter()
 
 #
 # begin pipline
@@ -184,15 +215,23 @@ H1head = lloidparts.mkLLOIDbasicsrc(
 	verbose = options.verbose
 )
 
+# debugging by splitting H1 and feeding into both branches
+#H1srctee = pipeparts.mktee(pipeline, H1head)
+#H1head = pipeparts.mkqueue(pipeline, H1srctee)
+
+H1head = pipeparts.mkreblock(pipeline, H1head)
 H1head = pipeparts.mkcapsfilter(pipeline, H1head, "audio/x-raw-float, width=64, rate=[%d,MAX]" % handler.srate)
 H1head = pipeparts.mkresample(pipeline, H1head, quality = quality)
 H1head = pipeparts.mkcapsfilter(pipeline, H1head, "audio/x-raw-float, width=64, rate=%d" % handler.srate)
 
 # track psd
 H1psdtee = pipeparts.mktee(pipeline, H1head)
-H1psd = pipeparts.mkwhiten(pipeline, pipeparts.mkqueue(pipeline, H1psdtee), zero_pad = handler.zero_pad_length, fft_length = handler.psd_fft_length, name = "H1_whitener") 
+H1psd = pipeparts.mkchecktimestamps(pipeline, H1psdtee)
+H1psd = pipeparts.mkwhiten(pipeline, H1psd, zero_pad = handler.zero_pad_length, fft_length = handler.psd_fft_length, name = "H1_whitener") 
 H1psd.connect_after("notify::mean-psd", update_psd, handler)
-H1psd = pipeparts.mkfakesink(pipeline, H1psd)
+H1psd = pipeparts.mkchecktimestamps(pipeline, H1psd)
+pipeparts.mkfakesink(pipeline, H1psd)
+
 
 #
 # H2 branch
@@ -208,21 +247,28 @@ H2head = lloidparts.mkLLOIDbasicsrc(
 	verbose = options.verbose
 )
 
+# debugging: feed H1 into this branch
+#H2head = pipeparts.mkqueue(pipeline, H1srctee)
+
+H2head = pipeparts.mkreblock(pipeline, H2head)
 H2head = pipeparts.mkcapsfilter(pipeline, H2head, "audio/x-raw-float, rate=[%d,MAX]" % handler.srate)
 H2head = pipeparts.mkresample(pipeline, H2head, quality = quality)
 H2head = pipeparts.mkcapsfilter(pipeline, H2head, "audio/x-raw-float, rate=%d" % handler.srate)
 
 # track psd
 H2psdtee = pipeparts.mktee(pipeline, H2head)
-H2psd = pipeparts.mkwhiten(pipeline, pipeparts.mkqueue(pipeline, H2psdtee), zero_pad = handler.zero_pad_length, fft_length = handler.psd_fft_length, name = "H2_whitener")
+H2psd = pipeparts.mkchecktimestamps(pipeline, H2psdtee)
+H2psd = pipeparts.mkwhiten(pipeline, H2psd, zero_pad = handler.zero_pad_length, fft_length = handler.psd_fft_length, name = "H2_whitener")
 H2psd.connect_after("notify::mean-psd", update_psd, handler)
+H2psd = pipeparts.mkchecktimestamps(pipeline, H2psd)
 H2psd = pipeparts.mkfakesink(pipeline, H2psd)
 
 #
 # Create coherent and null streams
 #
 
-coherent_null_bin = pipeparts.mklhocoherentnull(pipeline, pipeparts.mkqueue(pipeline, H1psdtee), pipeparts.mkqueue(pipeline, H2psdtee), handler.H1_impulse, handler.H1_latency, handler.H2_impulse, handler.H2_latency, handler.srate)
+coherent_null_bin = pipeparts.mklhocoherentnull(pipeline, H1psdtee, H2psdtee, handler.H1_impulse, handler.H1_latency, handler.H2_impulse, handler.H2_latency, handler.srate)
+handler.add_cohnull_bin(coherent_null_bin)
 COHhead = coherent_null_bin.get_pad("COHsrc")
 NULLhead = coherent_null_bin.get_pad("NULLsrc")
 
@@ -231,10 +277,10 @@ NULLhead = coherent_null_bin.get_pad("NULLsrc")
 #
 
 COHhead = pipeparts.mkprogressreport(pipeline, COHhead, "progress_coherent")
-pipeparts.mkframesink(pipeline, COHhead, clean_timestamps = False, dir_digits = 0, frame_type = "LHO_COHERENT")
+pipeparts.mkframesink(pipeline, COHhead, clean_timestamps = False, dir_digits = 0, frame_type = "H1_LHO_COHERENT")
 
 NULLhead = pipeparts.mkprogressreport(pipeline, NULLhead, "progress_null")
-pipeparts.mkframesink(pipeline, NULLhead, clean_timestamps = False, dir_digits = 0, frame_type = "LHO_NULL")
+pipeparts.mkframesink(pipeline, NULLhead, clean_timestamps = False, dir_digits = 0, frame_type = "H1_LHO_NULL")
 
 #
 # Running the pipeline messages and pipeline graph
