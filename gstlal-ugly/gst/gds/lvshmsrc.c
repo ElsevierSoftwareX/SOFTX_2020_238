@@ -53,6 +53,7 @@
 
 
 #include <gds/lvshmapi.h>
+#include <gds/tconv.h>
 
 
 /*
@@ -97,6 +98,22 @@ enum property {
 #define DEFAULT_NAME NULL
 #define DEFAULT_MASK -1	/* FIXME:  what does this mean? */
 #define DEFAULT_WAIT_TIME -1.0	/* wait indefinitely */
+
+
+/*
+ * ============================================================================
+ *
+ *                                 Utilities
+ *
+ * ============================================================================
+ */
+
+
+static GstClockTime GPSNow(void)
+{
+	/* FIXME:  why does TAInow() return the GPS time? */
+	return gst_util_uint64_scale_int(TAInow(), GST_SECOND, _ONESEC);
+}
 
 
 /*
@@ -147,6 +164,8 @@ static gboolean stop(GstBaseSrc *object)
 	GST_LOG_OBJECT(element, "lvshm_deaccess()");
 	lvshm_deaccess(element->handle);
 	element->handle = NULL;
+
+	element->max_latency = element->min_latency = GST_CLOCK_TIME_NONE;
 
 	return TRUE;
 }
@@ -260,6 +279,9 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	GST_BUFFER_OFFSET(*buffer) = offset;
 	GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
 
+	element->max_latency = GPSNow() - GST_BUFFER_TIMESTAMP(*buffer);
+	element->min_latency = element->max_latency - GST_BUFFER_DURATION(*buffer);
+
 	/*
 	 * adjust segment
 	 */
@@ -277,6 +299,30 @@ done:
 	lvshm_releaseDataBuffer(element->handle);
 	GST_LOG_OBJECT(element, "released frame file");
 	return result;
+}
+
+
+/*
+ * query()
+ */
+
+
+static gboolean query(GstBaseSrc *basesrc, GstQuery *query)
+{
+	GDSLVSHMSrc *element = GDS_LVSHMSRC(basesrc);
+	gboolean success = TRUE;
+
+	switch(GST_QUERY_TYPE(query)) {
+	case GST_QUERY_LATENCY:
+		gst_query_set_latency(query, gst_base_src_is_live(basesrc), element->min_latency, element->max_latency);
+		break;
+
+	default:
+		success = GST_BASE_SRC_CLASS(parent_class)->query(basesrc, query);
+		break;
+	}
+
+	return success;
 }
 
 
@@ -467,6 +513,7 @@ static void class_init(gpointer class, gpointer class_data)
 	gstbasesrc_class->unlock = GST_DEBUG_FUNCPTR(unlock);
 	gstbasesrc_class->unlock_stop = GST_DEBUG_FUNCPTR(unlock_stop);
 	gstbasesrc_class->create = GST_DEBUG_FUNCPTR(create);
+	gstbasesrc_class->query = GST_DEBUG_FUNCPTR(query);
 }
 
 
@@ -493,6 +540,7 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	element->unblocked = FALSE;
 	element->create_thread_lock = g_mutex_new();
 	element->handle = NULL;
+	element->max_latency = element->min_latency = GST_CLOCK_TIME_NONE;
 }
 
 
