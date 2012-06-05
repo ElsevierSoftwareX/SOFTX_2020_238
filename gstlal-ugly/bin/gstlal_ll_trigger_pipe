@@ -118,6 +118,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		if veto_segments_name is not None:
 			self.add_var_opt("veto-segments-name", veto_segments_name)
 		# self.add_var_opt("verbose", "") #Put this in for debugging
+		# FIXME, the way the likelihood file is handled here is a mess.
 		likefile = os.path.split(likelihood_file)[1]
 		path = os.getcwd()
 		# make a new likelihood file
@@ -127,11 +128,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		self.add_var_opt("likelihood-file", likefile)
 		self.add_var_opt("marginalized-likelihood-file", marginalized_likelihood_file)
 		svd_bank = os.path.split(svd_bank)[1].replace('.xml','')
-		self.output_name = '%s/%s-%04d-LLOID.sqlite' % (path, "H1H2L1V1", job.number)
-		self.background_name = '%s/%s-%04d-LLOID_snr_chi.xml.gz' % (path, "H1H2L1V1", job.number)
 		job.number += 1
-		self.add_var_opt("output",self.output_name)
-		dag.output_cache.append(lal.CacheEntry("H1H2L1V1", "-", segments.segment(0, 2000000000), "file://localhost/%s" % (self.output_name,)))
 		for p in p_node:
 			self.add_parent(p)
 		dag.add_node(self)
