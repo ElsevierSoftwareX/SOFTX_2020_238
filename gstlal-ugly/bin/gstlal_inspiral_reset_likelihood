@@ -39,7 +39,7 @@ from glue.ligolw.utils import search_summary as ligolw_search_summary
 
 
 from gstlal import far
-
+from gstlal.inspiral import gen_likelihood_control_doc
 
 #
 # =============================================================================
@@ -87,23 +87,13 @@ for url in urls:
 	in_xmldoc = utils.load_url(url, verbose = options.verbose)
 	likelihood_data, process_id = far.LocalRankingData.from_xml(in_xmldoc)
 	search_summary_row, = (row for row in lsctables.table.get_table(in_xmldoc, lsctables.SearchSummaryTable.tableName) if row.process_id == process_id)
-	in_xmldoc.unlink()
-
-	xmldoc = ligolw.Document()
-	node = xmldoc.appendChild(ligolw.LIGO_LW())
-	node.appendChild(lsctables.New(lsctables.ProcessTable))
-	node.appendChild(lsctables.New(lsctables.ProcessParamsTable))
-	node.appendChild(lsctables.New(lsctables.SearchSummaryTable))
-	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_reset_likelihood", options.__dict__)
-	search_summary = ligolw_search_summary.append_search_summary(xmldoc, process)
+	ifos = search_summary_row.get_ifos()
 	# reset the clock to None
-	search_summary.set_out(segments.segment(None, None))
-	ligolw_process.set_process_end_time(process)
-
+	likelihood_data.livetime_seg = segments.segment(None,None)
 	# reset the trials table to unity
 	for k in likelihood_data.trials_table:
 		likelihood_data.trials_table[k] = 1
 
-	# Write out the result
-	node.appendChild(likelihood_data.to_xml(process, search_summary))
+	xmldoc = gen_likelihood_control_doc(likelihood_data, ifos)
+
 	utils.write_filename(xmldoc, url, gz = url.endswith(".gz"), verbose = options.verbose)
