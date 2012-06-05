@@ -71,6 +71,13 @@ typedef struct {
 	double wait_time;
 
 	/*
+	 * latency
+	 */
+
+	GstClockTimeDiff max_latency;
+	GstClockTimeDiff min_latency;
+
+	/*
 	 * state
 	 */
 
