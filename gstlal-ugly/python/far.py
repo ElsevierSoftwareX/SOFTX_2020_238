@@ -148,6 +148,13 @@ class TrialsTable(dict):
 		for k in self:
 			self[k] += n
 
+	def scale(self, f):
+		"""
+		Scale all rows in the trials table by f (a float).  ceil() will be used to convert to an integer
+		"""
+		for k,v in self.items():
+			self[k] = int(numpy.ceil(float(v) * f))
+
 	@classmethod
 	def from_xml(cls, xml):
 		"""
