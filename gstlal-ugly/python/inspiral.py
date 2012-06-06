@@ -499,7 +499,12 @@ class Data(object):
 			else:
 				self.far.livetime_seg = segments.segmentlist([out_segs.extent(), self.far.livetime_seg]).extent()
 
-			# set metadata on triggers
+			# set metadata on triggers.  because this uses the
+			# ID generator attached to the database-backed
+			# sngl_inspiral table, and that generator has been
+			# synced to the database' contents, the IDs
+			# assigned here will not collide with any already
+			# in the database
 			for event in events:
 				event.process_id = self.process.process_id
 				event.event_id = self.sngl_inspiral_table.get_next_id()
