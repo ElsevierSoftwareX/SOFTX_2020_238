@@ -98,6 +98,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	working_duration = float(working_length) / sample_rate_max
 
 	# Give the PSD the same frequency spacing as the waveforms we are about to generate
+	psd_initial_deltaF = psd.deltaF # store for normalization later
 	if psd is not None:
 		psd = interpolate_psd(psd, 1.0 / working_duration)
 
@@ -170,12 +171,14 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		data *= cmath.sqrt(2 / norm)
 
 		#
-		# definition of sigmasq is:
-		# sigmasq = \int h(t) h^*(t) dt
-		# the norm we have computed so far is missing 2*dt
+		# definition of sigmasq is: sigmasq = \int h(f) h^*(f) df the
+		# norm we have computed so far is missing df, with a factor of
+		# 2 from the psd definition NOTE!!! We have to use the original
+		# psd spacing, the interpolation does *not* preserve the
+		# integral properly
 		#
 
-		sigmasq.append(2. * norm / sample_rate_max)
+		sigmasq.append(norm * psd_initial_deltaF / 2.)
 
 		#
 		# copy real and imaginary parts into adjacent (real-valued)
