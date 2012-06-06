@@ -263,7 +263,7 @@ class StreamThinca(object):
 
 		# synchronize our coinc_event table's ID generator with the
 		# ID generator attached to the database' table object
-		self.coinc_event_table.set_next_id(orig_sngl_inspiral_table.next_id)
+		self.coinc_event_table.set_next_id(orig_coinc_event_table.next_id)
 
 		# define once-off ntuple_comparefunc() so we can pass the
 		# coincidence segment in as a default value for the seg
@@ -332,7 +332,7 @@ class StreamThinca(object):
 
 		# synchronize the database' coinc_event table's ID
 		# generator with ours
-		orig_sngl_inspiral_table.set_next_id(self.coinc_event_table.next_id)
+		orig_coinc_event_table.set_next_id(self.coinc_event_table.next_id)
 
 		# put the original table objects back
 		self.xmldoc.childNodes[-1].replaceChild(orig_sngl_inspiral_table, self.sngl_inspiral_table)
