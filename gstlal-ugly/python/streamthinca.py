@@ -293,14 +293,17 @@ class StreamThinca(object):
 		# set the live time
 		coinc_event_index = dict((row.coinc_event_id, row) for row in self.coinc_event_table)
 		gps_time_now = XLALUTCToGPS(time.gmtime())
+		trials_dict = {}
 		for coinc_inspiral_row in self.coinc_inspiral_table:
 			coinc_event_row = coinc_event_index[coinc_inspiral_row.coinc_event_id]
-			# increment the trials table
 			ifo_set = frozenset(coinc_inspiral_row.get_ifos())
-			try:
-				self.trials_table[ifo_set] += 1
-			except KeyError:
-				self.trials_table[ifo_set] = 1
+			# FIXME, don't hard code this.  Think about the mass dimension too.
+			# Add the integer truncation of the trigger time * 25
+			# to a set.  This is effectively like binning the
+			# events by end time in 40 ms bins. This is a way of
+			# extracting the effective number of independent trials
+			# for later
+			trials_dict.setdefault(ifo_set, set()).add(int(float(coinc_inspiral_row.get_end()) * 25))
 			# Assign the FAP if requested
 			if FAP is not None:
 				# note FAP should have a reference to the
@@ -315,6 +318,13 @@ class StreamThinca(object):
 				coinc_inspiral_row.combined_far = FAP.compute_far(coinc_inspiral_row.false_alarm_rate)
 				# populate a column with latency
 				coinc_inspiral_row.minimum_duration = float(gps_time_now - coinc_inspiral_row.get_end())
+
+		# Update the trials table from the independent trials calculated above
+		for ifo_set, trigger_times in trials_dict.items():
+			try:
+				self.trials_table[ifo_set] += len(trigger_times)
+			except KeyError:
+				self.trials_table[ifo_set] = len(trigger_times)
 
 		# construct a coinc extractor from the XML document while
 		# the tree still contains our internal table objects
