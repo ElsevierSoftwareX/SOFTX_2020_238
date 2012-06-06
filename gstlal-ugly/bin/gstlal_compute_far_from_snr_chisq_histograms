@@ -76,6 +76,19 @@ from glue.ligolw import dbtables
 global_ranking.compute_joint_cdfs()
 
 #
+# extract time slide information and adjust the trials table
+# FIXME assume that the first file contains the correct time slide table
+# 
+
+working_filename = dbtables.get_connection_filename(options.non_injection_db[0], tmp_path = options.tmp_space, verbose = options.verbose)
+connection = sqlite3.connect(working_filename)
+num_slides, = connection.cursor().execute("SELECT COUNT(DISTINCT(time_slide_id)) FROM time_slide").fetchone()
+# adjust the trials table to account for the number of slides in this data base
+global_ranking.trials_table.scale(1. / num_slides)
+connection.close()
+dbtables.discard_connection_filename(options.non_injection_db[0], working_filename, verbose = options.verbose)
+
+#
 # iterate over files to rank
 #
 
