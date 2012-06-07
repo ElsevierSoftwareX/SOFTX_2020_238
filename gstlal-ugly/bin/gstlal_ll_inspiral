@@ -374,7 +374,7 @@ options.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
 if options.verbose:
 	print >>sys.stderr, "initializing output document ..."
 output = inspiral.Data(
-	filename = options.output,
+	filename = options.output or "%s-%s_LLOID-%d-%d.sqlite" % (lsctables.ifos_from_instrument_set(detectors.keys()).replace(",", ""), options.job_tag, int(start), int(now() - start)),
 	process_params = process_params,
 	instruments = set(detectors),
 	seg = options.seg,
