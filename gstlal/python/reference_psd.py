@@ -157,7 +157,7 @@ def read_psd(filename, verbose = False):
 	return dict((param.get_pyvalue(elem, u"instrument"), lalseries.parse_REAL8FrequencySeries(elem)) for elem in utils.load_filename(filename, verbose = verbose).getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"REAL8FrequencySeries")
 
 
-def make_psd_xmldoc(psddict)
+def make_psd_xmldoc(psddict):
 	xmldoc = ligolw.Document()
 	lw = xmldoc.appendChild(ligolw.LIGO_LW())
 	for instrument, psd in psddict.items():
