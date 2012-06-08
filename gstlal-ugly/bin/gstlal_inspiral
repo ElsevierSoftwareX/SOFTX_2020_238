@@ -325,6 +325,7 @@ if options.verbose:
 output = inspiral.Data(
 	filename = options.output,
 	process_params = process_params,
+	pipeline = pipeline,
 	instruments = set(detectors),
 	seg = options.seg,
 	injection_filename = options.injections,
