@@ -57,11 +57,13 @@ from glue.ligolw.utils import ligolw_add
 from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import search_summary as ligolw_search_summary
 from pylal.datatypes import LIGOTimeGPS
+from pylal.datatypes import REAL8FrequencySeries
 from pylal.date import XLALUTCToGPS
 from pylal.xlal.datatypes.snglinspiraltable import from_buffer as sngl_inspirals_from_buffer
 from pylal import ligolw_tisi
 from pylal import rate
 from gstlal import bottle
+from gstlal import reference_psd
 from gstlal import streamthinca
 from gstlal import svd_bank
 from gstlal import far
@@ -318,7 +320,7 @@ def gen_likelihood_control_doc(far, instruments, name = u"gstlal_inspiral_likeli
 
 
 class Data(object):
-	def __init__(self, filename, process_params, instruments, seg, coincidence_threshold, FAR, marginalized_likelihood_file = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", replace_file = True, verbose = False):
+	def __init__(self, filename, process_params, pipeline, instruments, seg, coincidence_threshold, FAR, marginalized_likelihood_file = None, injection_filename = None, time_slide_file = None, comment = None, tmp_path = None, assign_likelihoods = False, likelihood_snapshot_interval = None, thinca_interval = 50.0, gracedb_far_threshold = None, likelihood_file = None, gracedb_group = "Test", gracedb_type = "LowMass", replace_file = True, verbose = False):
 		#
 		# initialize
 		#
@@ -332,6 +334,7 @@ class Data(object):
 
 		self.lock = threading.Lock()
 		self.filename = filename
+		self.pipeline = pipeline
 		self.instruments = instruments
 		self.verbose = verbose
 		# True to enable likelihood assignment
@@ -499,7 +502,12 @@ class Data(object):
 			else:
 				self.far.livetime_seg = segments.segmentlist([out_segs.extent(), self.far.livetime_seg]).extent()
 
-			# set metadata on triggers
+			# set metadata on triggers.  because this uses the
+			# ID generator attached to the database-backed
+			# sngl_inspiral table, and that generator has been
+			# synced to the database' contents, the IDs
+			# assigned here will not collide with any already
+			# in the database
 			for event in events:
 				event.process_id = self.process.process_id
 				event.event_id = self.sngl_inspiral_table.get_next_id()
@@ -517,11 +525,11 @@ class Data(object):
 					# Read in the the background likelihood distributions that should have been updated asynchronously
 					self.ranking_data, procid = far.RankingData.from_xml(utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = XMLContentHandler))
 					self.ranking_data.compute_joint_cdfs()
+					# write the new distribution stats to disk
+					utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
 				else:
 					self.ranking_data = None
 
-				# write the new distribution stats to disk
-				utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
 
 			# run stream thinca
 			noncoinc_sngls = self.stream_thinca.add_events(events, buf_timestamp, FAP = self.ranking_data)
@@ -587,6 +595,7 @@ class Data(object):
 		except NameError:
 			# gracedb import failed, disable event uploads
 			return
+		psdmessage = None
 		if self.stream_thinca.last_coincs:
 			# FIXME:  this should maybe not be retrieved this
 			# way.  and the .column_index() method is probably
@@ -599,6 +608,27 @@ class Data(object):
 
 				if false_alarm_rate > self.gracedb_far_threshold or numpy.isnan(false_alarm_rate):
 					continue
+
+				#
+				# retrieve PSDs
+				#
+
+				if psdmessage is None:
+					if self.verbose:
+						print >>sys.stderr, "retrieving PSDs from whiteners and generating psd.xml.gz ..."
+					psddict = {}
+					for instrument in self.instruments:
+						elem = pipeline.get_by_name("lal_whiten_%s" % instrument)
+						psddict[instrument] = REAL8FrequencySeries(
+							name = "PSD",
+							epoch = LIGOTimeGPS(0, 0),	# FIXME
+							f0 = 0.0,
+							deltaF = elem.get_property("delta-f"),
+							sampleUnits = laltypes.LALUnit(""),	# FIXME
+							data = elem.get_property("mean-psd")
+						)
+					psdmessage = StringIO.StringIO()
+					reference_psd.write_psd_fileobj(psdmessage, psddict, gz = True, trap_signals = None)
 
 				#
 				# fake a filename for end-user convenience

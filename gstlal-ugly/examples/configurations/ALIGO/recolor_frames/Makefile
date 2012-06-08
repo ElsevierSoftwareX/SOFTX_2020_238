@@ -1,9 +1,9 @@
 MIN_SEG_LENGTH = 1800 # seconds, i.e. a half hour
 START = 871147452
-STOP =  871247452
+STOP =  871747452
 SEED = 1
 LOCAL_RATE = 12.0 # mergers per Mpc^3 per Myr, corresponds to "optimistic rate"
-MAX_DIST = 1000 # Mpc
+MAX_DIST = 500 # Mpc
 FLOW = 14
 TRIM = 16
 

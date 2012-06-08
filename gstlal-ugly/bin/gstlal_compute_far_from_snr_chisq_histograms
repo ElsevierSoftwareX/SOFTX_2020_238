@@ -47,8 +47,6 @@ def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("--background-bins-file", metavar = "filename", action = "append", help = "Set the name of the xml file containing the snr / chisq background distributions")
 	parser.add_option("--tmp-space", metavar = "dir", help = "Set the name of the tmp space if working with sqlite")
-	parser.add_option("--compute-fap", action = "store_true", help = "compute fap, otherwise compute far assuming fap has been calculated")
-	parser.add_option("--compute-far", action = "store_true", help = "compute far, only works if fap is being computed or has been computed.")
 	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
 	parser.add_option("--non-injection-db", metavar = "filename", action = "append", help = "single file for non injections run")
 	parser.add_option("--injection-dbs", action = "append", default=[], help = "append to the list of possible injection files, may be empty if no injections were done. Databases are assumed to be over the same time period as the non injection databases using the same templates.  If not the results will be nonsense.")
@@ -66,34 +64,51 @@ options, filenames = parse_command_line()
 # Pull out background and injections distribution and set up the FAR class
 #
 
-Far = far.LocalRankingData.from_filenames(options.background_bins_file, verbose = options.verbose)
+local_ranking = far.LocalRankingData.from_filenames(options.background_bins_file, verbose = options.verbose)
+newtrials = far.TrialsTable()
+newtrials.initialize_from_sngl_ifos(("H1", "H2", "L1", "V1"))
+local_ranking.trials_table += newtrials
+global_ranking = far.RankingData(local_ranking)
 
 # late import for DB manipulations
 from glue.ligolw import dbtables
 
-if options.compute_fap is not None:
-	# FIXME this only works of the Far object contains the marginalized joint likelihoods
-	Far.compute_joint_cdfs()
+global_ranking.compute_joint_cdfs()
+
+#
+# extract time slide information and adjust the trials table
+# FIXME assume that the first file contains the correct time slide table
+# 
+
+working_filename = dbtables.get_connection_filename(options.non_injection_db[0], tmp_path = options.tmp_space, verbose = options.verbose)
+connection = sqlite3.connect(working_filename)
+num_slides, = connection.cursor().execute("SELECT COUNT(DISTINCT(time_slide_id)) FROM time_slide").fetchone()
+# adjust the trials table to account for the number of slides in this data base
+global_ranking.trials_table.scale(1. / num_slides)
+connection.close()
+dbtables.discard_connection_filename(options.non_injection_db[0], working_filename, verbose = options.verbose)
 
 #
 # iterate over files to rank
 #
 
-if options.compute_fap is not None:
-	for bkdb in options.non_injection_db:
-		far.set_fap(Far, bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
+for bkdb in options.non_injection_db:
+	far.set_fap(global_ranking, bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
 
-	#
-	# increment the trials factor by 1 before assigning faps for
-	# injections.  Injections imply that there is always one more event
-	#
+#
+# increment the trials factor by 1 before assigning faps for
+# injections.  Injections imply that there is always one more event
+#
 
-	Far.trials_table.increment(1)
-	for injdb in options.injection_dbs:
-		far.set_fap(Far, injdb, tmp_path = options.tmp_space, verbose = options.verbose)
+global_ranking.trials_table.increment(1)
+for injdb in options.injection_dbs:
+	far.set_fap(global_ranking, injdb, tmp_path = options.tmp_space, verbose = options.verbose)
 
-if options.compute_far is not None:
-	for bkdb in options.non_injection_db:
-		far.set_far(Far, bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
-	for injdb in options.injection_dbs:
-		far.set_far(Far, injdb, tmp_path = options.tmp_space, verbose = options.verbose)
+#
+# Set the FAR
+#
+
+for bkdb in options.non_injection_db:
+	far.set_far(global_ranking, bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
+for injdb in options.injection_dbs:
+	far.set_far(global_ranking, injdb, tmp_path = options.tmp_space, verbose = options.verbose)

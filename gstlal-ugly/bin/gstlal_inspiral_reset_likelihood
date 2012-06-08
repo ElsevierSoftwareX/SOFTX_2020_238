@@ -1,0 +1,99 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2009-2011  Kipp Cannon, Chad Hanna, Drew Keppel
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import sys
+from optparse import OptionParser
+
+
+from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw.utils import process as ligolw_process
+from glue.ligolw.utils import search_summary as ligolw_search_summary
+
+
+from gstlal import far
+from gstlal.inspiral import gen_likelihood_control_doc
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
+	options, urls = parser.parse_args()
+	return options, urls
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# parse command line
+#
+
+
+options, urls = parse_command_line()
+
+
+#
+# loop over input documents
+#
+
+
+for url in urls:
+	#
+	# load input document
+	#
+
+	in_xmldoc = utils.load_url(url, verbose = options.verbose)
+	likelihood_data, process_id = far.LocalRankingData.from_xml(in_xmldoc)
+	search_summary_row, = (row for row in lsctables.table.get_table(in_xmldoc, lsctables.SearchSummaryTable.tableName) if row.process_id == process_id)
+	ifos = search_summary_row.get_ifos()
+	# reset the clock to None
+	likelihood_data.livetime_seg = segments.segment(None,None)
+	# reset the trials table to unity
+	for k in likelihood_data.trials_table:
+		likelihood_data.trials_table[k] = 1
+
+	xmldoc = gen_likelihood_control_doc(likelihood_data, ifos)
+
+	utils.write_filename(xmldoc, url, gz = url.endswith(".gz"), verbose = options.verbose)

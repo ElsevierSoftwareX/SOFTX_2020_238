@@ -45,6 +45,7 @@ from glue.ligolw import ilwd
 from glue.ligolw import param as ligolw_param
 from glue.ligolw import lsctables
 from glue.ligolw import utils
+from glue.ligolw.utils import search_summary as ligolw_search_summary
 from glue import segments
 from glue.segmentsUtils import vote
 from pylal import ligolw_burca_tailor
@@ -146,6 +147,16 @@ class TrialsTable(dict):
 		"""
 		for k in self:
 			self[k] += n
+
+	def scale(self, f):
+		"""
+		Scale all rows in the trials table by f (a float).  ceil() will be used to convert to an integer
+		"""
+		for k,v in self.items():
+			self[k] = int(numpy.ceil(float(v) * f))
+
+	def num_nonzero(self):
+		return len([k for k in self if self[k] != 0])
 
 	@classmethod
 	def from_xml(cls, xml):
@@ -374,7 +385,7 @@ class DistributionsStats(object):
 # =============================================================================
 #
 
-def likelihood_bin_boundaries(likelihoods, probabilities, minint = 1e-2, maxint = (1 - 1e-10)):
+def likelihood_bin_boundaries(likelihoods, probabilities, minint = 1e-2, maxint = (1 - 1e-12)):
 	"""
 	A function to choose the likelihood bin boundaries based on a certain
 	interval in the likelihood pdfs set by minint and maxint. This should typically
@@ -666,7 +677,8 @@ class RankingData(object):
 			return self.minrank[ifos][1]
 		fap = float(self.ccdf_interpolator[ifos](rank))
 		try:
-			trials = max(int(self.trials_table[ifos]), 1)
+			# trials are the number of trials per ifo combination times the number of ifo combinations
+			trials = max(int(self.trials_table[ifos] * self.trials_table.num_nonzero()), 1)
 		except KeyError:
 			trials = 1
 		# normalize to the far interval
@@ -797,6 +809,6 @@ def get_live_time(segments, verbose = True):
 def get_live_time_segs_from_search_summary_table(connection, program_name = "gstlal_inspiral"):
 	from glue.ligolw import dbtables
 	xmldoc = dbtables.get_xml(connection)
-	farsegs = llwapp.segmentlistdict_fromsearchsummary(xmldoc, program_name).coalesce()
+	farsegs = ligolw_search_summary.segmentlistdict_fromsearchsummary(xmldoc, program_name).coalesce()
 	xmldoc.unlink()
 	return farsegs

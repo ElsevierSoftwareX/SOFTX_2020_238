@@ -157,14 +157,22 @@ def read_psd(filename, verbose = False):
 	return dict((param.get_pyvalue(elem, u"instrument"), lalseries.parse_REAL8FrequencySeries(elem)) for elem in utils.load_filename(filename, verbose = verbose).getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"REAL8FrequencySeries")
 
 
-def write_psd(filename, psddict, verbose = False, trap_signals = None):
+def make_psd_xmldoc(psddict):
 	xmldoc = ligolw.Document()
 	lw = xmldoc.appendChild(ligolw.LIGO_LW())
 	for instrument, psd in psddict.items():
 		fs = lw.appendChild(lalseries.build_REAL8FrequencySeries(psd))
 		if instrument is not None:
 			fs.appendChild(param.from_pyvalue(u"instrument", instrument))
-	utils.write_filename(xmldoc, filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = trap_signals)
+	return xmldoc
+
+
+def write_psd_fileobj(fileobj, psddict, gz = False, verbose = False, trap_signals = None):
+	utils.write_fileobj(make_psd_xmldoc(psddict), fileobj, gz = gz, verbose = verbose, trap_signals = trap_signals)
+
+
+def write_psd(filename, psddict, verbose = False, trap_signals = None):
+	utils.write_filename(make_psd_xmldoc(psddict), filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = trap_signals)
 
 
 #

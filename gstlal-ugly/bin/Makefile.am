@@ -41,4 +41,5 @@ dist_bin_SCRIPTS = \
 	gstlal_ninja_median_of_psds \
 	gstlal_ninja_smooth_reference_psd \
 	gstlal_inspiral_marginalize_likelihood \
-	gstlal_inspiral_marginalize_likelihoods_online
+	gstlal_inspiral_marginalize_likelihoods_online \
+	gstlal_inspiral_reset_likelihood
