@@ -485,8 +485,8 @@ static void class_init(gpointer class, gpointer class_data)
 		ARG_SHIFT,
 		g_param_spec_int64(
 			"shift",
-			"Shift seconds",
-			"number of seconds to shift from the beginning of a stream",
+			"Shift nanoseconds",
+			"number of nanoseconds to shift from the beginning of a stream",
 			G_MININT64, G_MAXINT64, 0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
