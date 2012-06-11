@@ -5,6 +5,7 @@ import matplotlib
 import matplotlib.gridspec
 matplotlib.use("Agg")
 from matplotlib import pyplot
+from matplotlib.collections import PatchCollection
 
 # FIXME: This doesn't seem to work with python-2.7 on macs
 #matplotlib.rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
@@ -107,15 +108,6 @@ if( instruments is None ):
 
 print "Examining instruments: %s" % str(instruments)
 
-viewseg = segments.segment( segments.NegInfinity, segments.PosInfinity )
-if( opts.gps_start is None ):
-	viewseg = segments.segment( min([e.peak_time for e in events]), viewseg[1] )
-else: viewseg = segments.segment( opts.gps_start, viewseg[1] )
-if( opts.gps_end is None ):
-	viewseg = segments.segment( viewseg[0], max([e.peak_time for e in events]) )
-else: viewseg = segments.segment( viewseg[0], opts.gps_end )
-viewseg = segments.segment( viewseg[0], viewseg[1] )
-
 # Segment information
 segs = segments.segmentlistdict()
 analyzed_segments = segments.segmentlistdict()
@@ -163,6 +155,15 @@ for arg in args:
 	except IndexError: 
 		pass
 
+viewseg = segments.segment( segments.NegInfinity, segments.PosInfinity )
+if( opts.gps_start is None ):
+	viewseg = segments.segment( min([e.peak_time for e in events]), viewseg[1] )
+else: viewseg = segments.segment( opts.gps_start, viewseg[1] )
+if( opts.gps_end is None ):
+	viewseg = segments.segment( viewseg[0], max([e.peak_time for e in events]) )
+else: viewseg = segments.segment( viewseg[0], opts.gps_end )
+viewseg = segments.segment( viewseg[0], viewseg[1] )
+
 # FIXME: Return to this when the ifos situation is sorted out
 analyzed_segments.coalesce()
 # Invert to get non-analyzed periods
@@ -185,7 +186,7 @@ fig = pyplot.figure(figsize=(15,len(channels)*7), dpi=160)
 #gs = matplotlib.gridspec.GridSpec( nrows = len(channels), ncols = 2, width_ratios=[30,1])#, hspace=0.3 )
 gs = matplotlib.gridspec.GridSpec( nrows = len(channels), ncols = 1 )
 
-i=0
+pn=0
 if( not plot_sim ):
 	events.sort(key=lambda e: e.ifo + ":" + e.channel) # Required for groupby
 	event_iter = itertools.groupby( events, lambda e: e.ifo + ":" + e.channel )
@@ -211,7 +212,7 @@ for channel, selected_events in event_iter:
 	else:
 		inst, channel = channel.split(":")
 
-	ax = pyplot.subplot(gs[i])
+	ax = pyplot.subplot(gs[pn])
 	# Extent in time
 	ax.set_xlim(viewseg[0], viewseg[1])
 	# Extent in frequency
@@ -253,12 +254,10 @@ for channel, selected_events in event_iter:
 	sys.stdout.write( statstr )
 	statlen = len(statstr)
 
-	# create reg poly or path collection
-	# attach to axes
-
-	for j, event in enumerate(selected_events):
+	tiles, snrs = [], []
+	for i, event in enumerate(selected_events):
 		sys.stdout.write( "\b"*statlen )
-		statstr = "%d%% complete" % numpy.round(float(j)/len(selected_events)*100)
+		statstr = "%d%% complete" % numpy.round(float(i)/len(selected_events)*100)
 		sys.stdout.write( statstr )
 		statlen = len(statstr)
 		# 1. plot tile 
@@ -270,13 +269,20 @@ for channel, selected_events in event_iter:
 			(event.central_freq - event.bandwidth/2.0) ),
 			# tile extent
 			event.duration,
-			event.bandwidth,
+			event.bandwidth
 			#color = colormap.to_rgba( numpy.log10(event.snr) )
-			color = colormap.to_rgba( event.snr )
+			#color = colormap.to_rgba( event.snr )
 		)
-		# remove color above
-		# add patch collection
-		ax.add_patch( tile )
+		#ax.add_patch( tile )
+		tiles.append( tile )
+		snrs.append( event.snr )
+
+	print ""
+
+	# TODO: See if replacing data speeds up the process
+	patches = PatchCollection( tiles, match_original = False, cmap = matplotlib.cm.jet, edgecolor='none', antialiased = False )
+	patches.set_array( numpy.array(snrs) )
+	ax.add_collection( patches )
 
 	lastwrite = viewseg[0]
 	# FIXME: This is empircal at best.
@@ -384,7 +390,7 @@ for channel, selected_events in event_iter:
 	#inset_ax = inset_axes( ax, width="20%", height="33%", loc=4 )
 	#pyplot.locator_params(nbins=3, axis="x")
 
-	i += 1
+	pn += 1
 
 # Drop the file
 filename = opts.output_file or "trigmap"
