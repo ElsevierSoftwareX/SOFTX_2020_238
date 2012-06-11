@@ -68,6 +68,7 @@ from gstlal import streamthinca
 from gstlal import svd_bank
 from gstlal import far
 from pylal import llwapp
+from pylal import datatypes as laltypes
 
 lsctables.LIGOTimeGPS = LIGOTimeGPS
 
@@ -600,14 +601,16 @@ class Data(object):
 			# FIXME:  this should maybe not be retrieved this
 			# way.  and the .column_index() method is probably
 			# useless
+			likelihood_dict = self.stream_thinca.last_coincs.column_index(lsctables.CoincTable.tableName, "likelihood")
+			# FIXME, in principle there could be more than one event with the maximum likelihood value
+			coinc_event_id = sorted((likelihood, coinc_event_id) for (coinc_event_id, likelihood) in likelihood_dict.items())[-1][1]
 			coinc_inspiral_index = self.stream_thinca.last_coincs.coinc_inspiral_index
-			for coinc_event_id, false_alarm_rate in sorted(self.stream_thinca.last_coincs.column_index(lsctables.CoincInspiralTable.tableName, "combined_far").items(), key = lambda (a, b): b):
-				#
-				# do we keep this event?
-				#
+			false_alarm_rate = coinc_inspiral_index[coinc_event_id].combined_far
 
-				if false_alarm_rate > self.gracedb_far_threshold or numpy.isnan(false_alarm_rate):
-					continue
+			# get out of this method if the false alarm rate is not low enough, or is nan
+			if false_alarm_rate > self.gracedb_far_threshold or numpy.isnan(false_alarm_rate):
+				return
+			else:
 
 				#
 				# retrieve PSDs
@@ -618,14 +621,14 @@ class Data(object):
 						print >>sys.stderr, "retrieving PSDs from whiteners and generating psd.xml.gz ..."
 					psddict = {}
 					for instrument in self.instruments:
-						elem = pipeline.get_by_name("lal_whiten_%s" % instrument)
+						elem = self.pipeline.get_by_name("lal_whiten_%s" % instrument)
 						psddict[instrument] = REAL8FrequencySeries(
 							name = "PSD",
 							epoch = LIGOTimeGPS(0, 0),	# FIXME
 							f0 = 0.0,
 							deltaF = elem.get_property("delta-f"),
 							sampleUnits = laltypes.LALUnit(""),	# FIXME
-							data = elem.get_property("mean-psd")
+							data = numpy.array(elem.get_property("mean-psd"))
 						)
 					psdmessage = StringIO.StringIO()
 					reference_psd.write_psd_fileobj(psdmessage, psddict, gz = True, trap_signals = None)
@@ -677,7 +680,6 @@ class Data(object):
 				# PROPERLY.  This is probably mostly okay because we
 				# should be doing coincidences every 10s which is a
 				# reasonable time to cluster over
-				break
 
 	def do_gracedb_alerts(self):
 		self.lock.acquire()
