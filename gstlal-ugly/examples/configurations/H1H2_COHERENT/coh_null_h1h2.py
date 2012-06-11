@@ -29,15 +29,35 @@ from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 parser = OptionParser()
 parser.add_option("--frame-cache-H1", metavar = "fileanme", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
 parser.add_option("--frame-cache-H2", metavar = "fileanme", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
-parser.add_option("--online-data", action = "store_true", help = "Use online DMT-STRAIN instead of a frame file (optional).")
-parser.add_option("--fake-data", action = "store_true", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
+parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
 parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
 parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
+parser.add_option("--track-psd", action = "store_true", help = "Track the H1 and H2 psds.  The filters that create the coherent stream will be updated throughout the run as well.")
+parser.add_option("--reference-psd-H1", metavar = "filename", help = ".xml file containing the H1 psd. Use this psd as first guess psd or fixed psd.")
+parser.add_option("--reference-psd-H2", metavar = "filename", help = ".xml file containing the H2 psd. Use this psd as first guess psd or fixed psd.")
+
 options, filenames = parser.parse_args()
+
+options, filenames = parser.parse_args()
+if len([option for option in ("frame_cache_H1", "fake_data") if getattr(options, option) is not None]) != 1:
+	raise ValueError("must provide either --frame-cache-H1 and --frame-cache-H2 or --fake-data")
+if len([option for option in ("frame_cache_H2", "fake_data") if getattr(options, option) is not None]) != 1:
+	raise ValueError("must provide either --frame-cache-H1 and --frame-cache-H2 or --fake-data")
+if options.fake_data not in (None, "LIGO", "AdvLIGO"):
+	raise ValueError("unrecognized value for --fake-data %s" % options.fake_data)
+if options.reference_psd_H1 is None or options.reference_psd_H2 is None and options.track_psd is None:
+	raise ValueError("must use --track-psd if --reference-psd-H1 and --reference-psd-H2 are not given, you can use both simultaneously")
+
+required_options = ["gps_start_time", "gps_end_time", "channel_name"]
+
+missing_options = []
+missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
+if missing_options:
+	raise ValueError("missing required option(s) %s" % ", ".join(sorted(missing_options)))
 
 options.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
 quality = 9
@@ -74,8 +94,6 @@ class COHhandler(lloidparts.LLOIDHandler):
 		self.psd1_change = 0
 		self.psd2_change = 0
 
-		#self.write_fir = 0
-
 		# coherent null bin default
 		self.cohnullbin = None
 
@@ -107,9 +125,6 @@ class COHhandler(lloidparts.LLOIDHandler):
 		self.cohnullbin = elem
 	
 	def update_fir_filter(self):
-
-		self.write_fir = self.write_fir + 1
-
 		self.psd1_change = 0
 		self.psd2_change = 0
 		self.H1_impulse, self.H1_latency, self.H2_impulse, self.H2_latency, self.srate = coherent_null.psd_to_impulse_response(self.psd1, self.psd2)
@@ -119,16 +134,6 @@ class COHhandler(lloidparts.LLOIDHandler):
 		self.cohnullbin.set_property("H1-latency", self.H1_latency)
 		self.cohnullbin.set_property("H2-latency", self.H2_latency)		
 		
-		#f = open('H1_impulse_%d.txt' % self.write_fir,'w')
-		#for line in self.H1_impulse:
-		#	print >> f, '%f' % line
-		#f.close
-
-		#g = open('H2_impulse_%d.txt' % self.write_fir,'w')
-		#for line in self.H2_impulse:
-		#	print >> g, '%f' % line
-		#g.close
-
 	def update_psd1(self, elem):
 		self.psd1 = REAL8FrequencySeries(
 			name = "PSD1",
@@ -146,6 +151,20 @@ class COHhandler(lloidparts.LLOIDHandler):
 			data = numpy.array(elem.get_property("mean-psd"))
 		)
 		self.psd2_change = 1
+	
+	def fixed_filters(self, psd1, psd2):
+		self.psd1 = REAL8FrequencySeries(
+			name = "PSD1",
+			f0 = 0.0,
+			deltaF = psd1.deltaF,
+			data = psd1.data)
+		self.psd2 = REAL8FrequencySeries(
+			name = "PSD2",
+			f0 = 0.0,
+			deltaF = psd2.deltaF,
+			data = psd2.data)
+		self.H1_impulse, self.H1_latency, self.H2_impulse, self.H2_latency, self.srate = coherent_null.psd_to_impulse_response(self.psd1, self.psd2)
+
 
 #
 # =============================================================================
@@ -184,6 +203,13 @@ detectorH2 = {
 	"H2": lloidparts.DetectorData(options.frame_cache_H2, options.channel_name)
 }
 
+if options.reference_psd_H1 is not None:
+	psd1 = reference_psd.read_psd(options.reference_psd_H1, verbose = options.verbose)
+	psd1, = psd1.values()
+if options.reference_psd_H2 is not None:
+	psd2 = reference_psd.read_psd(options.reference_psd_H2, verbose = options.verbose)
+	psd2, = psd2.values()
+
 def update_psd(elem, pspec, hand):
 	name = elem.get_property("name")
 	if name == "H1_whitener":
@@ -200,6 +226,9 @@ def update_psd(elem, pspec, hand):
 pipeline = gst.Pipeline("coh_null_h1h2")
 mainloop = gobject.MainLoop()
 handler = COHhandler(mainloop, pipeline)
+
+if options.reference_psd_H1 is not None and options.reference_psd_H2 is not None:
+	handler.fixed_filters(psd1, psd2)
 
 #
 # H1 branch
@@ -224,14 +253,17 @@ H1head = pipeparts.mkcapsfilter(pipeline, H1head, "audio/x-raw-float, width=64, 
 H1head = pipeparts.mkresample(pipeline, H1head, quality = quality)
 H1head = pipeparts.mkcapsfilter(pipeline, H1head, "audio/x-raw-float, width=64, rate=%d" % handler.srate)
 
-# track psd
-H1psdtee = pipeparts.mktee(pipeline, H1head)
-H1psd = pipeparts.mkchecktimestamps(pipeline, H1psdtee)
-H1psd = pipeparts.mkwhiten(pipeline, H1psd, zero_pad = handler.zero_pad_length, fft_length = handler.psd_fft_length, name = "H1_whitener") 
-H1psd.connect_after("notify::mean-psd", update_psd, handler)
-H1psd = pipeparts.mkchecktimestamps(pipeline, H1psd)
-pipeparts.mkfakesink(pipeline, H1psd)
 
+# track psd
+if options.track_psd is not None:
+	H1psdtee = pipeparts.mktee(pipeline, H1head)
+	H1psd = pipeparts.mkchecktimestamps(pipeline, H1psdtee)
+	H1psd = pipeparts.mkwhiten(pipeline, H1psd, zero_pad = handler.zero_pad_length, fft_length = handler.psd_fft_length, name = "H1_whitener") 
+	H1psd.connect_after("notify::mean-psd", update_psd, handler)
+	H1psd = pipeparts.mkchecktimestamps(pipeline, H1psd)
+	pipeparts.mkfakesink(pipeline, H1psd)
+
+	H1head = H1psdtee
 
 #
 # H2 branch
@@ -256,19 +288,23 @@ H2head = pipeparts.mkresample(pipeline, H2head, quality = quality)
 H2head = pipeparts.mkcapsfilter(pipeline, H2head, "audio/x-raw-float, rate=%d" % handler.srate)
 
 # track psd
-H2psdtee = pipeparts.mktee(pipeline, H2head)
-H2psd = pipeparts.mkchecktimestamps(pipeline, H2psdtee)
-H2psd = pipeparts.mkwhiten(pipeline, H2psd, zero_pad = handler.zero_pad_length, fft_length = handler.psd_fft_length, name = "H2_whitener")
-H2psd.connect_after("notify::mean-psd", update_psd, handler)
-H2psd = pipeparts.mkchecktimestamps(pipeline, H2psd)
-H2psd = pipeparts.mkfakesink(pipeline, H2psd)
+if options.track_psd is not None:
+	H2psdtee = pipeparts.mktee(pipeline, H2head)
+	H2psd = pipeparts.mkchecktimestamps(pipeline, H2psdtee)
+	H2psd = pipeparts.mkwhiten(pipeline, H2psd, zero_pad = handler.zero_pad_length, fft_length = handler.psd_fft_length, name = "H2_whitener")
+	H2psd.connect_after("notify::mean-psd", update_psd, handler)
+	H2psd = pipeparts.mkchecktimestamps(pipeline, H2psd)
+	H2psd = pipeparts.mkfakesink(pipeline, H2psd)
+	
+	H2head = H2psdtee
 
 #
 # Create coherent and null streams
 #
 
-coherent_null_bin = pipeparts.mklhocoherentnull(pipeline, H1psdtee, H2psdtee, handler.H1_impulse, handler.H1_latency, handler.H2_impulse, handler.H2_latency, handler.srate)
-handler.add_cohnull_bin(coherent_null_bin)
+coherent_null_bin = pipeparts.mklhocoherentnull(pipeline, H1head, H2head, handler.H1_impulse, handler.H1_latency, handler.H2_impulse, handler.H2_latency, handler.srate)
+if options.track_psd is not None:
+	handler.add_cohnull_bin(coherent_null_bin)
 COHhead = coherent_null_bin.get_pad("COHsrc")
 NULLhead = coherent_null_bin.get_pad("NULLsrc")
 
