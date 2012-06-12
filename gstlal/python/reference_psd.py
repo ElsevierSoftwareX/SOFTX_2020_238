@@ -167,8 +167,8 @@ def make_psd_xmldoc(psddict):
 	return xmldoc
 
 
-def write_psd_fileobj(fileobj, psddict, gz = False, verbose = False, trap_signals = None):
-	utils.write_fileobj(make_psd_xmldoc(psddict), fileobj, gz = gz, verbose = verbose, trap_signals = trap_signals)
+def write_psd_fileobj(fileobj, psddict, gz = False, trap_signals = None):
+	utils.write_fileobj(make_psd_xmldoc(psddict), fileobj, gz = gz, trap_signals = trap_signals)
 
 
 def write_psd(filename, psddict, verbose = False, trap_signals = None):
