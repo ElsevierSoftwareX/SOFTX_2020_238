@@ -596,8 +596,10 @@ class Data(object):
 		except NameError:
 			# gracedb import failed, disable event uploads
 			return
-		psdmessage = None
 		if self.stream_thinca.last_coincs:
+			gracedb_client = gracedb.Client()
+			gracedb_ids = []
+			psdmessage = None
 			# FIXME:  this should maybe not be retrieved this
 			# way.  and the .column_index() method is probably
 			# useless
@@ -627,7 +629,7 @@ class Data(object):
 							epoch = LIGOTimeGPS(0, 0),	# FIXME
 							f0 = 0.0,
 							deltaF = elem.get_property("delta-f"),
-							sampleUnits = laltypes.LALUnit(""),	# FIXME
+							sampleUnits = laltypes.LALUnit("s strain^2"),	# FIXME:  don't hard-code this
 							data = numpy.array(elem.get_property("mean-psd"))
 						)
 					psdmessage = StringIO.StringIO()
@@ -660,13 +662,15 @@ class Data(object):
 				utils.write_fileobj(self.stream_thinca.last_coincs[coinc_event_id], message, gz = False, trap_signals = None)
 				# FIXME: make this optional from command line?
 				if True:
-					resp = gracedb.Client().create(self.gracedb_group, self.gracedb_type, filename, message.getvalue())
+					resp = gracedb_client.create(self.gracedb_group, self.gracedb_type, filename, message.getvalue())
 					if "error" in resp:
 						print >>sys.stderr, "gracedb upload of %s failed: %s" % (filename, resp["error"])
-					elif self.verbose:
-						if "warning" in resp:
-							print >>sys.stderr, "gracedb issued warning: %s" % resp["warning"]
-						print >>sys.stderr, "event assigned grace ID %s" % resp["output"]
+					else:
+						if self.verbose:
+							if "warning" in resp:
+								print >>sys.stderr, "gracedb issued warning: %s" % resp["warning"]
+							print >>sys.stderr, "event assigned grace ID %s" % resp["graceid"]
+						gracedb_ids.append(resp["graceid"])
 				else:
 					proc = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
 					proc.stdin.write(message.getvalue())
@@ -680,6 +684,17 @@ class Data(object):
 				# PROPERLY.  This is probably mostly okay because we
 				# should be doing coincidences every 10s which is a
 				# reasonable time to cluster over
+
+			#
+			# do PSD file uploads
+			#
+
+			if psdmessage is not None:
+				filename = "psd.xml.gz"
+				for gracedb_id in gracedb_ids:
+					resp = gracedb_client.upload(gracedb_id, filename, psdmessage.getvalue(), comment = "strain spectral densities")
+					if "error" in resp:
+						print >>sys.stderr, "gracedb upload of %s for ID %s failed: %s" % (filename, gracedb_id, resp["error"])
 
 	def do_gracedb_alerts(self):
 		self.lock.acquire()
