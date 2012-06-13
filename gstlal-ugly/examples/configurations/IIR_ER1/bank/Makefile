@@ -6,28 +6,24 @@ IFOS = H
 
 # Template bank parameters
 MIN_MASS = 1.2
-MAX_MASS = 1.6
+MAX_MASS = 1.475
 MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
 LOW_FREQUENCY_CUTOFF = 10.0
 HIGH_PASS_FREQ = 9.0
 HIGH_FREQUENCY_CUTOFF = 2048.0
 SAMPLE_RATE = 4096
-NUM_SPLIT_TEMPLATES = 250
+NUM_SPLIT_TEMPLATES = 100
 EPSILON = 0.03
 MM = 0.97
 
 all : dag
 
-lalapps_path2cache :
-	wget 'http://www.lsc-group.phys.uwm.edu/cgit/lalsuite/plain/pylal/bin/lalapps_path2cache'
-	chmod +x lalapps_path2cache
+frame.cache :
+	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --instrument H1 --fake-data AdvLIGO --verbose --frame-type FAKE-STRAIN
+	ls H1/H-H1_FAKE-STRAIN-8711/*.gwf | lalapps_path2cache > frame.cache
 
-frame.cache : lalapps_path2cache
-	gstlal_fake_aligo_frames --gps-start-time $(FSTART) --gps-end-time $(FSTOP) --instrument H1 --fake-data AdvLIGO  --frame-type FAKE-STRAIN --verbose
-	ls H1/H-H1_FAKE-STRAIN-8711/*.gwf | ./lalapps_path2cache > frame.cache
-
-H1-TMPLTBANK-871147516-2048.xml: frame.cache
+H1-TMPLTBANK-871147516-2048.xml: #frame.cache
 	lalapps_tmpltbank \
 		--disable-compute-moments \
 		--grid-spacing Hexagonal \
@@ -62,7 +58,7 @@ H1-TMPLTBANK-871147516-2048.xml: frame.cache
 		--resample-filter ldas \
 		--strain-high-pass-atten 0.1 \
 		--strain-high-pass-freq $(HIGH_PASS_FREQ) \
-		--frame-cache frame.cache \
+		--frame-cache ../subbank/frame.cache \
 		--max-high-freq-cutoff SchwarzISCO \
 		--approximant TaylorF2 \
 		--order twoPN \
@@ -89,17 +85,11 @@ V1psd.xml.gz :
 reference_psd.xml: H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
 	ligolw_add --output reference_psd.xml H1psd.xml.gz H2psd.xml.gz L1psd.xml.gz V1psd.xml.gz
 
-sql :
-	cat fix_coinc_instruments.sql uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql
-	cat simplify.sql cluster.sql > simplify_and_cluster.sql
-	cat simplify.sql delete_by_far.sql > simplify_and_delete_by_far.sql
-	cat fix_coinc_instruments.sql drop_sim.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
-
-dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml lalapps_path2cache
-	ls *H1_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > H1_split_bank.cache
-	ls *H2_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > H2_split_bank.cache
-	ls *L1_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > L1_split_bank.cache
-	ls *V1_split_bank-H1-TMPLTBANK-871147516-2048.xml | ./lalapps_path2cache > V1_split_bank.cache
+dag : H1-TMPLTBANK-871147516-2048.xml reference_psd.xml
+	ls *H1_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > H1_split_bank.cache
+	ls *H2_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > H2_split_bank.cache
+	ls *L1_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > L1_split_bank.cache
+	ls *V1_split_bank-H1-TMPLTBANK-871147516-2048.xml | lalapps_path2cache > V1_split_bank.cache
 	gstlal_inspiral_iir_bank_pipe --instrument H1 --reference-psd reference_psd.xml --bank-cache H1_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --downsample --output-name H1_bank
 	gstlal_inspiral_iir_bank_pipe --instrument H2 --reference-psd reference_psd.xml --bank-cache H2_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --downsample --output-name H2_bank
 	gstlal_inspiral_iir_bank_pipe --instrument L1 --reference-psd reference_psd.xml --bank-cache L1_split_bank.cache --flow $(LOW_FREQUENCY_CUTOFF) --sampleRate $(SAMPLE_RATE) --epsilon $(EPSILON) --downsample --output-name L1_bank
