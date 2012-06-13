@@ -427,7 +427,7 @@ class DistributionsStats(object):
 # =============================================================================
 #
 
-def likelihood_bin_boundaries(likelihoods, probabilities, minint = 1e-2, maxint = (1 - 1e-12)):
+def likelihood_bin_boundaries(likelihoods, probabilities, minint = 1e-2, maxint = (1 - 1e-14)):
 	"""
 	A function to choose the likelihood bin boundaries based on a certain
 	interval in the likelihood pdfs set by minint and maxint. This should typically
