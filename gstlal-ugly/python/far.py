@@ -719,8 +719,7 @@ class RankingData(object):
 			return self.minrank[ifos][1]
 		fap = float(self.ccdf_interpolator[ifos](rank))
 		try:
-			# trials are the number of trials per ifo combination times the number of ifo combinations
-			trials = max(int(self.trials_table[ifos] * self.trials_table.num_nonzero()), 1)
+			trials = max(int(self.trials_table[ifos]), 1)
 		except KeyError:
 			trials = 1
 		# normalize to the far interval
