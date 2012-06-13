@@ -49,8 +49,8 @@ class gstlal_inspiral_job(pipeline.CondorDAGJob):
 		self.add_condor_cmd('+Online_CBC_GSTLAL', 'True')
 		self.tag_base = tag_base
 		self.set_sub_file(tag_base+'.sub')
-		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
-		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
+		self.set_stdout_file('logs/'+tag_base+'-$(macrojobtag)-$(macronodename)-$(cluster)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macrojobtag)-$(macronodename)-$(cluster)-$(process).err')
 		self.number = 1
 
 class gstlal_inspiral_marginalize_likelihoods_online_job(pipeline.CondorDAGJob):
@@ -101,6 +101,7 @@ class gstlal_inspiral_node(pipeline.CondorDAGNode):
 		self.add_var_opt("fir-stride", fir_stride)
 		self.add_var_opt("thinca-interval", thinca_interval)
 		self.add_var_opt("job-tag", "%04d" % (job.number,))
+		self.add_macro("macrojobtag", "%04d" % (job.number,))
 		if ht_gate_thresh is not None:
 			self.add_var_opt("ht-gate-threshold", ht_gate_thresh)
 		if gracedb_far_threshold is not None:
