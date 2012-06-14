@@ -97,7 +97,7 @@ for bkdb in options.non_injection_db:
 #
 
 ctrials = far.CalibrateTrialsTable()
-far_interval = global_ranking.far_interval
+far_interval = global_ranking.far_interval * 3
 
 for bkdb in options.non_injection_db:
 	working_filename = dbtables.get_connection_filename(bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
