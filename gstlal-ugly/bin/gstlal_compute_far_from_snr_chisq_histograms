@@ -69,6 +69,8 @@ newtrials = far.TrialsTable()
 newtrials.initialize_from_sngl_ifos(("H1", "H2", "L1", "V1"))
 local_ranking.trials_table += newtrials
 global_ranking = far.RankingData(local_ranking)
+# pull this out before messing with the table
+num_nonzero = global_ranking.trials_table.num_nonzero()
 
 # late import for DB manipulations
 from glue.ligolw import dbtables
@@ -95,7 +97,7 @@ for bkdb in options.non_injection_db:
 #
 
 ctrials = far.CalibrateTrialsTable()
-far_interval = global_ranking.far_interval * 10
+far_interval = global_ranking.far_interval
 
 for bkdb in options.non_injection_db:
 	working_filename = dbtables.get_connection_filename(bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
@@ -103,6 +105,7 @@ for bkdb in options.non_injection_db:
 	ctrials.from_db(connection, 1. / far_interval)
 	connection.close()
 	dbtables.discard_connection_filename(bkdb, working_filename, verbose = options.verbose)
+
 
 #
 # extract time slide information
@@ -116,23 +119,25 @@ connection.close()
 dbtables.discard_connection_filename(options.non_injection_db[0], working_filename, verbose = options.verbose)
 
 #
-# Adjust the trials table and rerank
+# Adjust the fap to the high event limit to include the dependence of trials
 #
-# The trials must be adjusted by the high event limit calibration, the number
+# The fap must be adjusted by the high event limit calibration, the number
 # of time slides, and the numer of ifo combinations (since we make a single
 # IFAR plot)
 #
 
-expected_number = float(abs(global_ranking.livetime_seg)) / far_interval
+scale = {}
 for ifos in ctrials:
-	global_ranking.trials_table[ifos] *= float(ctrials[ifos]) / expected_number / num_slides * global_ranking.trials_table.num_nonzero()
+	scale[ifos] = ctrials[ifos] * far_interval / float(abs(global_ranking.livetime_seg)) * num_nonzero / num_slides
+
 
 #
-# Now rank the events again with the calibrated trials factor
+# Scale the rate Set the FAP and FAR
 #
+
 
 for bkdb in options.non_injection_db:
-	far.set_fap(global_ranking, bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
+	far.set_fap(global_ranking, bkdb, tmp_path = options.tmp_space, scale = scale, verbose = options.verbose)
 
 #
 # increment the trials factor by 1 before assigning faps for
@@ -141,14 +146,11 @@ for bkdb in options.non_injection_db:
 
 global_ranking.trials_table.increment(1)
 for injdb in options.injection_dbs:
-	far.set_fap(global_ranking, injdb, tmp_path = options.tmp_space, verbose = options.verbose)
-
-#
-# Set the FAR
-#
+	far.set_fap(global_ranking, injdb, tmp_path = options.tmp_space, scale = scale, verbose = options.verbose)
 
 for bkdb in options.non_injection_db:
 	far.set_far(global_ranking, bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
+
 for injdb in options.injection_dbs:
 	far.set_far(global_ranking, injdb, tmp_path = options.tmp_space, verbose = options.verbose)
 
