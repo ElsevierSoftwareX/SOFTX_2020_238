@@ -212,6 +212,7 @@ class CalibrateTrialsTable(TrialsTable):
 	
 	def from_db(self, connection, far_thresh):
 		"""
+		far_thresh must be the far interval used in RankingData for this to work!
 		"""
 		for ifos, count in connection.cursor().execute('SELECT ifos, count(*) FROM coinc_inspiral WHERE combined_far < ? GROUP BY ifos', (far_thresh,)):
 			ifos = frozenset(lsctables.instrument_set_from_ifos(ifos))
@@ -710,7 +711,7 @@ class RankingData(object):
 			self.minrank[key] = (min(ranks), ccdf[0])
 			self.maxrank[key] = (max(ranks), ccdf[-1])
 
-	def fap_from_rank(self, rank, ifos):
+	def fap_from_rank(self, rank, ifos, scale = None):
 		ifos = frozenset(ifos)
 		# FIXME:  doesn't check that rank is a scalar
 		if rank >= self.maxrank[ifos][0]:
@@ -722,6 +723,13 @@ class RankingData(object):
 			trials = max(int(self.trials_table[ifos]), 1)
 		except KeyError:
 			trials = 1
+		# multiply by a scale factor if provided
+		if scale is not None:
+			try:
+				trials *= scale[ifos]
+			except KeyError:
+				# assume scale is 1
+				pass
 		# normalize to the far interval
 		try:
 			if self.far_interval is not None:
@@ -763,7 +771,7 @@ class RankingData(object):
 #
 
 
-def set_fap(Far, f, tmp_path = None, verbose = False):
+def set_fap(Far, f, tmp_path = None, scale = None, verbose = False):
 	"""
 	Function to set the false alarm probability for a single database
 	containing the usual inspiral tables.
@@ -782,7 +790,7 @@ def set_fap(Far, f, tmp_path = None, verbose = False):
 	connection = sqlite3.connect(working_filename)
 
 	# define fap function
-	connection.create_function("fap", 2, lambda rank, ifostr: Far.fap_from_rank(rank, lsctables.instrument_set_from_ifos(ifostr)))
+	connection.create_function("fap", 2, lambda rank, ifostr: Far.fap_from_rank(rank, lsctables.instrument_set_from_ifos(ifostr), scale = scale))
 
 	# FIXME abusing false_alarm_rate column, move for a false_alarm_probability column??
 	connection.cursor().execute("UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(coinc_event.likelihood, coinc_inspiral.ifos) FROM coinc_event WHERE coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id)")
