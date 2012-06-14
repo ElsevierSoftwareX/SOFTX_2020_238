@@ -76,20 +76,59 @@ from glue.ligolw import dbtables
 global_ranking.compute_joint_cdfs()
 
 #
-# extract time slide information and adjust the trials table
+# iterate over non injection files to rank as a first pass at computing fars
+#
+
+for bkdb in options.non_injection_db:
+	far.set_fap(global_ranking, bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
+
+#
+# Set the FAR
+#
+
+for bkdb in options.non_injection_db:
+	far.set_far(global_ranking, bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
+
+
+#
+# Calibrate to the high event limit to get the number of independent trials
+#
+
+ctrials = far.CalibrateTrialsTable()
+far_interval = global_ranking.far_interval * 10
+
+for bkdb in options.non_injection_db:
+	working_filename = dbtables.get_connection_filename(bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
+	connection = sqlite3.connect(working_filename)
+	ctrials.from_db(connection, 1. / far_interval)
+	connection.close()
+	dbtables.discard_connection_filename(bkdb, working_filename, verbose = options.verbose)
+
+#
+# extract time slide information
 # FIXME assume that the first file contains the correct time slide table
 # 
 
 working_filename = dbtables.get_connection_filename(options.non_injection_db[0], tmp_path = options.tmp_space, verbose = options.verbose)
 connection = sqlite3.connect(working_filename)
 num_slides, = connection.cursor().execute("SELECT COUNT(DISTINCT(time_slide_id)) FROM time_slide").fetchone()
-# adjust the trials table to account for the number of slides in this data base
-global_ranking.trials_table.scale(1. / num_slides)
 connection.close()
 dbtables.discard_connection_filename(options.non_injection_db[0], working_filename, verbose = options.verbose)
 
 #
-# iterate over files to rank
+# Adjust the trials table and rerank
+#
+# The trials must be adjusted by the high event limit calibration, the number
+# of time slides, and the numer of ifo combinations (since we make a single
+# IFAR plot)
+#
+
+expected_number = float(abs(global_ranking.livetime_seg)) / far_interval
+for ifos in ctrials:
+	global_ranking.trials_table[ifos] *= float(ctrials[ifos]) / expected_number / num_slides * global_ranking.trials_table.num_nonzero()
+
+#
+# Now rank the events again with the calibrated trials factor
 #
 
 for bkdb in options.non_injection_db:
@@ -112,3 +151,4 @@ for bkdb in options.non_injection_db:
 	far.set_far(global_ranking, bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
 for injdb in options.injection_dbs:
 	far.set_far(global_ranking, injdb, tmp_path = options.tmp_space, verbose = options.verbose)
+

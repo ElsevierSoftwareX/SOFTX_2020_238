@@ -17,6 +17,9 @@ from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import process as ligolw_process
 
+from xml.sax import SAXParseException
+
+LIGOTimeGPS = lsctables.LIGOTimeGPS
 
 #
 # command line
@@ -46,16 +49,26 @@ options, filenames = parse_command_line()
 
 vetoes = segments.segmentlist([])
 for filename in filenames:
-	for sim in lsctables.table.get_table(utils.load_filename(filename, verbose = options.verbose), lsctables.SimBurstTable.tableName):
-		t = sim.get_time_geocent()
-		if sim.duration is None or math.isnan(sim.duration):
+	#if filename.endswith(".xml") or filename.endswith(".xml.gz"):
+	try:
+		for sim in lsctables.table.get_table(utils.load_filename(filename, verbose = options.verbose), lsctables.SimBurstTable.tableName):
+			t = sim.get_time_geocent()
+			if sim.duration is None or math.isnan(sim.duration):
+				duration = options.default_duration
+			else:
+				duration = sim.duration
+			vetoes.append(segments.segment(t - duration / 2.0, t + duration / 2.0))
+	#elif filename.endswith(".txt") or filename.endswith(".log"):
+	except SAXParseException:
+		# Try parsing as a GravEn log
+		for line in open( filename ).readlines():
+			line = line.strip()
+			if line[0] == "#": continue 
+			t = LIGOTimeGPS(line.split()[10])  # GravEn log index of GPS geocentral time
 			duration = options.default_duration
-		else:
-			duration = sim.duration
-		vetoes.append(segments.segment((t - duration / 2.0, t + duration / 2.0)))
+			vetoes.append(segments.segment(LIGOTimeGPS(t - duration / 2.0), LIGOTimeGPS(t + duration / 2.0)))
 vetoes.protract(options.padding).coalesce()
 vetoes = segments.segmentlistdict.fromkeys(options.instruments.split(","), vetoes)
-
 
 #
 # build and write output document
@@ -66,7 +79,8 @@ xmldoc = ligolw.Document()
 xmldoc.childNodes.append(ligolw.LIGO_LW())
 process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_vetoes_from_burst_inj", options.__dict__)
 llwsegments = ligolw_segments.LigolwSegments(xmldoc)
-ligolw_segments.insert_from_segmentlistdict(llwsegments, vetoes, options.vetoes_name, "Burst injections")
+#ligolw_segments.insert_from_segmentlistdict(llwsegments, vetoes, options.vetoes_name, "Burst injections")
+llwsegments.insert_from_segmentlistdict(vetoes, options.vetoes_name, "Burst injections")
 llwsegments.finalize(process)
 
 

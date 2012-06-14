@@ -1,0 +1,109 @@
+#!/usr/bin/python
+
+import sys
+import os
+os.environ["MPLCONFIGDIR"] = "/tmp"
+import matplotlib
+matplotlib.use('Agg')
+import pylab
+import numpy
+import cgi
+import cgitb
+cgitb.enable()
+form = cgi.FieldStorage()
+import StringIO
+import base64
+import glob
+import bisect
+
+def to_png_image():
+        f = StringIO.StringIO()
+        pylab.savefig(f, format="png")
+        print '<img src="data:image/png;base64,',base64.b64encode(f.getvalue()),'"></img>'
+        f.close()
+
+
+def parse_log(logfiles):
+	time = {}
+	state = {}
+	for logfile in logfiles:
+		f = open(logfile)
+		# looking for lines like lal_gate2: L1: state transition: off @ 1023465196.000000000
+		for line in f:
+			for gate_line in line.split("lal_gate")[1:]:
+				lsplit = gate_line.split()
+				ifo = lsplit[1].replace(':','')
+				gps = float(lsplit[6])
+				try:
+					state[ifo].append(state[ifo][-1])
+					# update a virtual point right before this one with the previous state
+					# assumes time ordered log files
+					time[ifo].append(gps - 0.1)
+				except KeyError:
+					pass
+				time.setdefault(ifo, []).append(gps)
+				if lsplit[4] == "on":
+					state.setdefault(ifo, []).append(1)
+				else:
+					state.setdefault(ifo, []).append(0)
+				
+	return time, state
+
+path = form.getvalue("dir")
+eventtime = float(form.getvalue("gps"))
+mchirp = float(form.getvalue("mchirp"))
+data = []
+for fname in glob.glob(os.path.join(path, '*_bank.txt')):
+	try:
+		idstr = os.path.split(fname)[1][0:4]
+		f = open(fname)
+		duration, mc = f.readline().split()[1:]
+		data.append((float(mc), float(duration), idstr))
+		f.close()
+	except OSError:
+		pass
+
+data.sort()
+index = bisect.bisect_left([d[0] for d in data], mchirp) - 1 #because of how bisect works
+idstr = data[index][2]
+duration = data[index][1]
+
+ 
+logfiles = glob.glob(os.path.join(path, 'logs/gstlal_inspiral-%s*.err' % (idstr,)))
+
+time, state = parse_log(logfiles)
+
+print >>sys.stdout, 'Cache-Control: no-cache, must-revalidate'
+print >>sys.stdout, 'Expires: Mon, 26 Jul 1997 05:00:00 GMT'
+print >>sys.stdout, 'Content-type: text/html\r\n'
+
+# HTML preamble
+print """
+<html>
+<head>
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="-1">
+<meta http-equiv="CACHE-CONTROL" content="NO-CACHE">
+<meta http-equiv="refresh" content="300">
+</head>
+<body bgcolor=#E0E0E0 face="Arial">
+<br>
+"""
+
+
+
+
+for ifo in time:
+	pylab.figure(figsize=(12,2))
+	pylab.subplots_adjust(bottom = 0.1, top = 0.85)
+	pylab.fill_between(numpy.array(time[ifo]) - eventtime, state[ifo], alpha=0.5)#, ls = "steps-post")
+	pylab.xlim([-duration, 0])
+	pylab.title("%s state before event at %.0f with mchirp %.3f and duration %.0f (s)" % (ifo, eventtime, mchirp, duration))
+	pylab.yticks([])
+	to_png_image()
+
+print """
+</body>
+</html>
+"""
+		

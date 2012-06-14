@@ -148,12 +148,13 @@ class TrialsTable(dict):
 		for k in self:
 			self[k] += n
 
-	def scale(self, f):
+	def scale(self, f, keys = None):
 		"""
-		Scale all rows in the trials table by f (a float).  ceil() will be used to convert to an integer
+		Scale all rows in the trials table by f (a float), make an integer.
 		"""
-		for k,v in self.items():
-			self[k] = int(numpy.ceil(float(v) * f))
+		# This works because of the order that python evaluates this boolean expression
+		for k in keys or self:
+			self[k] = int(numpy.ceil(float(self[k]) * f))
 
 	def num_nonzero(self):
 		return len([k for k in self if self[k] != 0])
@@ -178,6 +179,47 @@ class TrialsTable(dict):
 		for item in self.items():
 			xml.append(xml.RowType.from_item(item))
 		return xml
+
+
+class CalibrateTrialsTable(TrialsTable):
+	"""
+	"""
+	class TrialsTableTable(lsctables.table.Table):
+		tableName = "gstlal_calibrate_trials:table"
+		validcolumns = {
+			"ifos": "lstring",
+			"count": "real_8"
+		}
+		class RowType(object):
+			__slots__ = ("ifos", "count")
+
+			def get_ifos(self):
+				return lsctables.instrument_set_from_ifos(self.ifos)
+
+			def set_ifos(self, ifos):
+				self.ifos = lsctables.ifos_from_instrument_set(ifos)
+
+			@property
+			def key(self):
+				return frozenset(self.get_ifos())
+
+			@classmethod
+			def from_item(cls, (ifos, value)):
+				self = cls()
+				self.set_ifos(ifos)
+				self.count = value
+				return self
+	
+	def from_db(self, connection, far_thresh):
+		"""
+		"""
+		for ifos, count in connection.cursor().execute('SELECT ifos, count(*) FROM coinc_inspiral WHERE combined_far < ? GROUP BY ifos', (far_thresh,)):
+			ifos = frozenset(lsctables.instrument_set_from_ifos(ifos))
+			try:
+				self[ifos] += count
+			except KeyError:
+				self[ifos] = count
+		connection.commit()
 
 
 lsctables.TableByName[lsctables.table.StripTableName(TrialsTable.TrialsTableTable.tableName)] = TrialsTable.TrialsTableTable
@@ -385,7 +427,7 @@ class DistributionsStats(object):
 # =============================================================================
 #
 
-def likelihood_bin_boundaries(likelihoods, probabilities, minint = 1e-2, maxint = (1 - 1e-12)):
+def likelihood_bin_boundaries(likelihoods, probabilities, minint = 1e-2, maxint = (1 - 1e-14)):
 	"""
 	A function to choose the likelihood bin boundaries based on a certain
 	interval in the likelihood pdfs set by minint and maxint. This should typically
@@ -677,8 +719,7 @@ class RankingData(object):
 			return self.minrank[ifos][1]
 		fap = float(self.ccdf_interpolator[ifos](rank))
 		try:
-			# trials are the number of trials per ifo combination times the number of ifo combinations
-			trials = max(int(self.trials_table[ifos] * self.trials_table.num_nonzero()), 1)
+			trials = max(int(self.trials_table[ifos]), 1)
 		except KeyError:
 			trials = 1
 		# normalize to the far interval
