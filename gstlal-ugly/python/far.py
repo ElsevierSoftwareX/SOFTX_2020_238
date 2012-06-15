@@ -67,6 +67,19 @@ from pylal import rate
 # Trials table
 #
 
+class Trials(object):
+	def __init__(self, count = 0, count_below_thresh = 0, thresh = None):
+		self.count = count
+		self.count_below_thresh = count_below_thresh
+		self.thresh = thresh
+
+	def __add__(self, other):
+		out = type(self)(self.count, self.count_below_thresh, self.thresh)
+		out.count +=  other.count
+		out.count_below_thresh += other.count_below_thresh
+		assert(out.thresh == other.thresh)
+		return out
+
 
 class TrialsTable(dict):
 	"""
@@ -79,10 +92,12 @@ class TrialsTable(dict):
 		tableName = "gstlal_trials:table"
 		validcolumns = {
 			"ifos": "lstring",
-			"count": "int_8s"
+			"count": "int_8s",
+			"count_below_thresh": "int_8s",
+			"thresh": "real_8s"
 		}
 		class RowType(object):
-			__slots__ = ("ifos", "count")
+			__slots__ = ("ifos", "count", "count_below_thresh", "thresh")
 
 			def get_ifos(self):
 				return lsctables.instrument_set_from_ifos(self.ifos)
@@ -95,19 +110,21 @@ class TrialsTable(dict):
 				return frozenset(self.get_ifos())
 
 			@classmethod
-			def from_item(cls, (ifos, value)):
+			def from_item(cls, (ifos, trials)):
 				self = cls()
 				self.set_ifos(ifos)
-				self.count = value
+				self.count = trials.count
+				self.count_below_thresh = trials.count_below_thresh
+				self.thresh = trials.thresh
 				return self
 
-	def initialize_from_sngl_ifos(self, ifos, val = 0):
+	def initialize_from_sngl_ifos(self, ifos, count = 0, count_below_thresh = 0, thresh = None):
 		"""
-		for all possible combinations of 2 or more from ifos initialize ourself to val (default = 0)
+		for all possible combinations of 2 or more from ifos initialize ourself to provided values
 		"""
 		for n in range(2, len(ifos) +	1):
 			for ifo in iterutils.choices(ifos, n):
-				self[frozenset(ifo)] = val
+				self[frozenset(ifo)] = Trials(count, count_below_thresh, thresh)
 
 	def get_sngl_ifos(self):
 		out = set()
@@ -119,45 +136,49 @@ class TrialsTable(dict):
 	def __add__(self, other):
 		out = type(self)()
 		for k in self:
-			out[k] = self[k]
+			out[k] = type(self[k])(self[k].count, self[k].count_below_thresh, self[k].thresh)
 		for k in other:
 			try:
 				out[k] += other[k]
 			except KeyError:
-				out[k] = other[k]
+				out[k] = type(other[k])(other[k].count, other[k].count_below_thresh, other[k].thresh)
 		return out
 
-	def from_db(self, connection):
+	def count_from_db(self, connection):
 		"""
-		Increment the trials table from values stored in the database
+		Increment the trials table count from values stored in the database
 		found in "connection"
 		"""
 		# FIXME tsid is pulled out here but not used, it should probably be removed
 		for ifos, tsid, count in connection.cursor().execute('SELECT ifos, coinc_event.time_slide_id AS tsid, count(*) / nevents FROM sngl_inspiral JOIN coinc_event_map ON coinc_event_map.event_id == sngl_inspiral.event_id JOIN coinc_inspiral ON coinc_inspiral.coinc_event_id == coinc_event_map.coinc_event_id JOIN coinc_event ON coinc_event.coinc_event_id == coinc_event_map.coinc_event_id  WHERE coinc_event_map.table_name = "sngl_inspiral" GROUP BY tsid, ifos;'):
 			ifos = frozenset(lsctables.instrument_set_from_ifos(ifos))
 			try:
-				self[ifos] += count
+				self[ifos].count += count
 			except KeyError:
-				self[ifos] = count
+				self[ifos] = Trials(count)
 		connection.commit()
+	
+	def count_below_thresh_from_db(self, connection):
+		"""
+		"""
+		for ifos in self:
+			count, = connection.cursor().execute('SELECT count(*) FROM coinc_inspiral WHERE combined_far < ? AND ifos == ?', (self[ifos].thresh, lsctables.ifos_from_instrument_set(ifos))).fetchone()
+			self[ifos].count_below_thresh += count
+			connection.commit()
 
-	def increment(self, n):
+	def increment_count(self, n):
 		"""
 		Increment all keys by n
 		"""
 		for k in self:
-			self[k] += n
+			self[k].count += n
 
-	def scale(self, f, keys = None):
-		"""
-		Scale all rows in the trials table by f (a float), make an integer.
-		"""
-		# This works because of the order that python evaluates this boolean expression
-		for k in keys or self:
-			self[k] = int(numpy.ceil(float(self[k]) * f))
+	def num_nonzero_count(self):
+		return len([k for k in self if self[k].count != 0])
 
-	def num_nonzero(self):
-		return len([k for k in self if self[k] != 0])
+	def set_thresh(self, thresh = None):
+		for k in self:
+			self[k].thresh = thresh
 
 	@classmethod
 	def from_xml(cls, xml):
@@ -167,7 +188,7 @@ class TrialsTable(dict):
 		"""
 		self = cls()
 		for row in lsctables.table.get_table(xml, self.TrialsTableTable.tableName):
-			self[row.key] = row.count
+			self[row.key] = Trials(row.count, row.count_below_thresh, row.thresh)
 		return self
 
 	def to_xml(self):
@@ -179,48 +200,6 @@ class TrialsTable(dict):
 		for item in self.items():
 			xml.append(xml.RowType.from_item(item))
 		return xml
-
-
-class CalibrateTrialsTable(TrialsTable):
-	"""
-	"""
-	class TrialsTableTable(lsctables.table.Table):
-		tableName = "gstlal_calibrate_trials:table"
-		validcolumns = {
-			"ifos": "lstring",
-			"count": "real_8"
-		}
-		class RowType(object):
-			__slots__ = ("ifos", "count")
-
-			def get_ifos(self):
-				return lsctables.instrument_set_from_ifos(self.ifos)
-
-			def set_ifos(self, ifos):
-				self.ifos = lsctables.ifos_from_instrument_set(ifos)
-
-			@property
-			def key(self):
-				return frozenset(self.get_ifos())
-
-			@classmethod
-			def from_item(cls, (ifos, value)):
-				self = cls()
-				self.set_ifos(ifos)
-				self.count = value
-				return self
-	
-	def from_db(self, connection, far_thresh):
-		"""
-		far_thresh must be the far interval used in RankingData for this to work!
-		"""
-		for ifos, count in connection.cursor().execute('SELECT ifos, count(*) FROM coinc_inspiral WHERE combined_far < ? GROUP BY ifos', (far_thresh,)):
-			ifos = frozenset(lsctables.instrument_set_from_ifos(ifos))
-			try:
-				self[ifos] += count
-			except KeyError:
-				self[ifos] = count
-		connection.commit()
 
 
 lsctables.TableByName[lsctables.table.StripTableName(TrialsTable.TrialsTableTable.tableName)] = TrialsTable.TrialsTableTable
@@ -610,7 +589,8 @@ class RankingData(object):
 		# copy trials table counts
 		self.trials_table = TrialsTable()
 		self.trials_table += local_ranking_data.trials_table
-
+		self.scale = dict([(k, 1.) for k in self.trials_table])
+		
 		# copy livetime segment
 		self.livetime_seg = local_ranking_data.livetime_seg
 
@@ -711,7 +691,7 @@ class RankingData(object):
 			self.minrank[key] = (min(ranks), ccdf[0])
 			self.maxrank[key] = (max(ranks), ccdf[-1])
 
-	def fap_from_rank(self, rank, ifos, scale = None):
+	def fap_from_rank(self, rank, ifos, scale = False):
 		ifos = frozenset(ifos)
 		# FIXME:  doesn't check that rank is a scalar
 		if rank >= self.maxrank[ifos][0]:
@@ -720,13 +700,13 @@ class RankingData(object):
 			return self.minrank[ifos][1]
 		fap = float(self.ccdf_interpolator[ifos](rank))
 		try:
-			trials = max(int(self.trials_table[ifos]), 1)
+			trials = max(int(self.trials_table[ifos].count), 1)
 		except KeyError:
 			trials = 1
 		# multiply by a scale factor if provided
-		if scale is not None:
+		if scale:
 			try:
-				trials *= scale[ifos]
+				trials *= self.scale[ifos]
 			except KeyError:
 				# assume scale is 1
 				pass
