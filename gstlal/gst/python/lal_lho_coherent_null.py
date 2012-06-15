@@ -1,4 +1,4 @@
-# Copyright (C) 20012 Madeline Wade
+# Copyright (C) 2012 Madeline Wade
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
