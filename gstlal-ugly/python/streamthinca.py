@@ -34,6 +34,7 @@ from pylal import ligolw_burca2
 from pylal import ligolw_thinca
 from pylal.date import XLALUTCToGPS
 import time
+from gstlal import far
 
 
 #
@@ -293,14 +294,15 @@ class StreamThinca(object):
 		# set the live time
 		coinc_event_index = dict((row.coinc_event_id, row) for row in self.coinc_event_table)
 		gps_time_now = XLALUTCToGPS(time.gmtime())
+		have_incremented_count_below_thresh = False
 		for coinc_inspiral_row in self.coinc_inspiral_table:
 			coinc_event_row = coinc_event_index[coinc_inspiral_row.coinc_event_id]
 			# increment the trials table
 			ifo_set = frozenset(coinc_inspiral_row.get_ifos())
 			try:
-				self.trials_table[ifo_set] += 1
+				self.trials_table[ifo_set].count += 1
 			except KeyError:
-				self.trials_table[ifo_set] = 1
+				self.trials_table[ifo_set] = far.Trials(count = 1)
 			# Assign the FAP if requested
 			if FAP is not None:
 				# note FAP should have a reference to the
@@ -313,6 +315,19 @@ class StreamThinca(object):
 				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, ifo_set)
 				# assume each event is "loudest" so n = 1 by default, not the same as required for an IFAR plot
 				coinc_inspiral_row.combined_far = FAP.compute_far(coinc_inspiral_row.false_alarm_rate)
+				# FIXME bad!! We only increment the count below
+				# thresh once in this loop as a way to
+				# "cluster" events similar to the gracedb loop
+				# later.  This needs to be tied together
+				# somehow
+				if not have_incremented_count_below_thresh and coinc_inspiral_row.combined_far < self.trials_table[ifo_set].thresh:
+					self.trials_table[ifo_set].count_below_thresh += 1
+					have_incremented_count_below_thresh = True
+				# Rank again with the scale set!!!
+				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, ifo_set, scale = True)
+				# assume each event is "loudest" so n = 1 by default, not the same as required for an IFAR plot
+				coinc_inspiral_row.combined_far = FAP.compute_far(coinc_inspiral_row.false_alarm_rate)
+				
 				# populate a column with latency
 				coinc_inspiral_row.minimum_duration = float(gps_time_now - coinc_inspiral_row.get_end())
 
