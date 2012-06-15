@@ -68,6 +68,7 @@ def parse_command_line():
 	parser.add_option("-s", "--synthesize-injection-count", metavar = "N", default = 10000000, type = "int", help = "Synthesize an injection distribution with N injections. default 1000000")
 	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
 	parser.add_option("--instrument", action = "append", help = "append to a list of instruments to create dist stats for.  Must be whatever instruments you intend to analyze")
+	parser.add_option("--trials-far-thresh", type = "float", help = "set the far threshold for the thresh parameter in the trials table")
 	parser.add_option("-p", "--background-prior", metavar = "N", default = 1, type = "float", help = "include an exponential background prior with the maximum bin count = N, default 1")
 	options, filenames = parser.parse_args()
 
@@ -107,7 +108,7 @@ coincparamsdistributions.add_foreground_prior(verbose = options.verbose, n = opt
 FAR = far.LocalRankingData(segments.segment(None, None), coincparamsdistributions)
 
 # initialize the trials table to 1
-FAR.trials_table.initialize_from_sngl_ifos(options.instrument, val = 1)
+FAR.trials_table.initialize_from_sngl_ifos(options.instrument, count = 1, thresh = options.trials_far_thresh)
 
 xmldoc = inspiral.gen_likelihood_control_doc(FAR, options.instrument)
 utils.write_filename(xmldoc, options.write_likelihood, gz = options.write_likelihood.endswith('.gz'), verbose = options.verbose)
