@@ -69,8 +69,6 @@ newtrials = far.TrialsTable()
 newtrials.initialize_from_sngl_ifos(("H1", "H2", "L1", "V1"))
 local_ranking.trials_table += newtrials
 global_ranking = far.RankingData(local_ranking)
-# pull this out before messing with the table
-num_nonzero = global_ranking.trials_table.num_nonzero()
 
 # late import for DB manipulations
 from glue.ligolw import dbtables
@@ -96,16 +94,14 @@ for bkdb in options.non_injection_db:
 # Calibrate to the high event limit to get the number of independent trials
 #
 
-ctrials = far.CalibrateTrialsTable()
-far_interval = global_ranking.far_interval * 3
+global_ranking.trials_table.set_thresh(1. / global_ranking.far_interval)
 
 for bkdb in options.non_injection_db:
 	working_filename = dbtables.get_connection_filename(bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
-	ctrials.from_db(connection, 1. / far_interval)
+	global_ranking.trials_table.count_below_thresh_from_db(connection)
 	connection.close()
 	dbtables.discard_connection_filename(bkdb, working_filename, verbose = options.verbose)
-
 
 #
 # extract time slide information
@@ -126,9 +122,8 @@ dbtables.discard_connection_filename(options.non_injection_db[0], working_filena
 # IFAR plot)
 #
 
-scale = {}
-for ifos in ctrials:
-	scale[ifos] = ctrials[ifos] * far_interval / float(abs(global_ranking.livetime_seg)) * num_nonzero / num_slides
+for ifos in global_ranking.trials_table:
+	global_ranking.scale[ifos] = global_ranking.trials_table[ifos].count_below_thresh / global_ranking.trials_table[ifos].thresh / float(abs(global_ranking.livetime_seg)) * global_ranking.trials_table.num_nonzero_count() / num_slides
 
 
 #
@@ -137,16 +132,16 @@ for ifos in ctrials:
 
 
 for bkdb in options.non_injection_db:
-	far.set_fap(global_ranking, bkdb, tmp_path = options.tmp_space, scale = scale, verbose = options.verbose)
+	far.set_fap(global_ranking, bkdb, tmp_path = options.tmp_space, scale = True, verbose = options.verbose)
 
 #
 # increment the trials factor by 1 before assigning faps for
 # injections.  Injections imply that there is always one more event
 #
 
-global_ranking.trials_table.increment(1)
+global_ranking.trials_table.increment_count(1)
 for injdb in options.injection_dbs:
-	far.set_fap(global_ranking, injdb, tmp_path = options.tmp_space, scale = scale, verbose = options.verbose)
+	far.set_fap(global_ranking, injdb, tmp_path = options.tmp_space, scale = True, verbose = options.verbose)
 
 for bkdb in options.non_injection_db:
 	far.set_far(global_ranking, bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
