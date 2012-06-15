@@ -44,8 +44,6 @@ import gstlal.excesspower as ep
 from gstlal.excesspower import *
 from gstlal.inspiral import add_cbc_metadata
 
-#from ep_utils import duration_from_cache
-
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils
@@ -65,15 +63,6 @@ from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 #
 # =============================================================================
 #
-
-GSTLAL_VALID_FREQ_UNITS = {
-	"Mhz": 1e6,
-	"kHz": 1e3,
-	"Hz": 1.0,
-	"mHz": 1e-3,
-	"uHz": 1e-6
-}
-
 
 class EPHandler( LLOIDHandler ):
 	"""
@@ -122,10 +111,6 @@ class EPHandler( LLOIDHandler ):
 		# Defaults -- mixer matrices
 		self.chan_matrix = None
 		self.mmixers = {}
-
-		# Defaults -- injections
-		# TODO: Scheduled for deletion
-		#self.unicorns = False
 
 		# Defaults -- data products
 		self.output = True
@@ -382,7 +367,7 @@ class EPHandler( LLOIDHandler ):
 		Method called to flush buffers and shutdown the pipeline.
 		"""
 		print >>sys.stderr, "Caught signal: dying a terrible, terrible death."
-		print "Signal received, if any: " + str(signum)
+		print >>sys.stderr, "Signal received, if any: " + str(signum)
 		self.pipeline.set_state( gst.STATE_PAUSED )
 		bus = self.pipeline.get_bus()
 		bus.post(gst.message_new_eos(pipeline))
@@ -394,27 +379,6 @@ class EPHandler( LLOIDHandler ):
 		outfile = self.outfile or "%s_%s_triggers_%d_%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur)
 		self.write_triggers( False, filename = outfile )
 		self.destroy_filter_xml()
-
-	def cmd_line( self, signum, frame ):
-		"""
-		Basic attempt to control the pipline while in operation. However, the pipeline seems unable to change state, so for the time being, this does nothing.
-		"""
-		print >>sys.stderr, "Attempting to pause pipeline..."
-		self.pipeline.set_state( gst.STATE_PAUSED )
-		if( self.pipeline.get_state() != gst.STATE_PAUSED ): 
-			print >>sys.stderr, "failed."
-			return
-		else:
-			print >>sys.stderr, "success!"
-
-		while( True ):
-			inp = raw_input("gst_ep, proc=() $ ")
-			print inp
-			if( inp.strip() == "continue" ): 
-				self.pipeline.set_state( gst.STATE_PLAYING )
-				break
-			elif( inp.strip() == "quit" ): 
-				gst.message_new_eos( self )
 
 
 #
@@ -524,7 +488,6 @@ parser.add_option("-w", "--channel-width", dest="nbyte", action="store", type=in
 parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data.")
 parser.add_option("-D", "--data-source", dest="data_source", action="store", help="Data source to read from. Valid options are gwffile,lldata,whitedata,fakeLIGO,fakeadvLIGO. One is required. If gwffile is selected, then a cache file should also be provided. If whitedata, fakeLIGO, or fakeadvLIGO is selected, then a sample rate must also be provided.")
 parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Encode the time frequency map to video as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. If the option is instead a filename, the video will be sent to that name. Prepending \"keyframe=\" to the filename will start a new video every time a keyframe is hit.")
-parser.add_option("-u", "--unicorns", dest="unicorns", action="store", help="Reveal hidden unicorns in data. The argument to this option determines how strong said unicorns are.", default=None)
 parser.add_option("-s", "--gps-start", dest="gps_start", action="store", type="float", help="Seek to gps time before beginning analysis.", default=None)
 parser.add_option("-e", "--gps-end", dest="gps_end", action="store", type="float", help="End the analysis at this gps time.", default=None)
 parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_false", help="Don't record triggers.", default=False)
@@ -557,12 +520,6 @@ else:
 # Verbosity and diagnostics
 verbose = options.verbose
 diagnostics = options.diagnostics
-
-# UNICORNS!!!!!!!!!!11!
-unicorns, unicorn_volume = False, 0
-if( options.unicorns ):
-	unicorns = True
-	unicorn_volume = options.unicorns 
 
 #
 # =============================================================================
@@ -745,8 +702,6 @@ elif( data_source == "gwffile" ):
 	#duration = int(duration*handler.rate/16384.0)
 	head.set_property( "blocksize", bsize )
 	print >>sys.stderr, "Warning, inferring analysis duration from cache."
-	#print >>sys.stderr, "Buffers %d" % int(duration)
-	#head.set_property( "num-buffers", int(duration) )
 
 	# FIXME: Make this an option
 	if( handler.inst == "V1" ): 
@@ -806,22 +761,6 @@ if( diagnostics ):
 head = mkcapsfilter( pipeline, mkaudioconvert( pipeline, head), "audio/x-raw-float,width=64" )
 # Data conditioning
 head = mkcapsfilter( pipeline, mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % handler.rate )
-
-if( unicorns ):
-	# TODO: Link to lalsim to get the unicorn
-	inj_head = gst.element_factory_make( "filesrc" )
-	pipeline.add( inj_head )
-	inj_head.set_property( "location" , "/Users/chrispankow/work/codedev/excesspower/pipeline/jolien/unicorn1_delay.mp3" )
-	inj_head = mkgeneric( pipeline, inj_head, "mad" )
-	inj_head = mkaudioconvert( pipeline, inj_head )
-	inj_head = mkresample( pipeline, inj_head ) 
-	inj_head = mkcapsfilter( pipeline, inj_head, "audio/x-raw-float,channels=1,width=64,rate=%d" % sample_rate )
-	inj_head = mkgeneric( pipeline, inj_head, "audioamplify" )
-	inj_head.set_property( "amplification", unicorn_volume )
-	adder = mkgeneric( pipeline, inj_head, "lal_adder" )
-	adder.set_property( "sync", True )
-	head.link( adder )
-	head = adder
 
 if( inj_loc ):
 	head = mkinjections( pipeline, head, inj_loc )
@@ -1000,8 +939,6 @@ whitener.connect_after( "notify::mean-psd", on_psd_change, handler )
 # TODO: Make sure this doesn't have to be in the mm loop
 whitener.connect_after( "notify::spectral-correlation", on_spec_corr_change, handler )
 
-# Experimental real time command line handling
-signal.signal( signal.SIGUSR1, handler.cmd_line )
 # Handle shutdowns
 signal.signal( signal.SIGINT, handler.shutdown )
 signal.signal( signal.SIGTERM, handler.shutdown )
