@@ -732,7 +732,7 @@ class DNSOutgoing(object):
         if now == 0:
             self.writeInt(record.ttl)
         else:
-            self.writeInt(record.getRemainingTTL(now))
+            self.writeInt(int(record.getRemainingTTL(now)))
         index = len(self.data)
         # Adjust size for the short we will write before this record
         #
