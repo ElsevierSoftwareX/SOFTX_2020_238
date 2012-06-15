@@ -1115,7 +1115,7 @@ def create_farplot(zerolag_stats, farlivetime, is_open_box, max_events = 1000):
 		axes.legend((line5, line1, line4, line3, line2), (r"$\pi$ shift", r"$\langle N \rangle$", r"$\pm\sqrt{N}$", r"$\pm 2\sqrt{N}$", r"$\pm 3\sqrt{N}$"), loc="upper right")
 	
 	axes.set_xlim(float(farlivetime / maxN), maxX)
-	axes.set_ylim(0.9 * min(N), maxN)
+	axes.set_ylim(0.9 * min(N), min(maxN, 100))
 
 	return fig, axes
 
