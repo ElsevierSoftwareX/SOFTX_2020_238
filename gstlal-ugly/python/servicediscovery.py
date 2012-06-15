@@ -133,10 +133,10 @@ except ImportError:
 
 
 class Listener(object):
-	def addService(self, stype, name, address, port):
+	def addService(self, stype, name, address, port, properties):
 		pass
 
-	def removeService(self, stype, name, address, port):
+	def removeService(self, stype, name, address, port, properties):
 		pass
 
 
@@ -154,7 +154,7 @@ if _zc is None:
 			if flags & avahi.LOOKUP_RESULT_LOCAL:
 				# local service
 				pass
-			self.listener.addService(stype, name, interface, None)
+			self.listener.addService(stype, name, interface, None, None)
 
 else:
 
@@ -166,16 +166,16 @@ else:
 		def addService(self, zc, stype, name):
 			info = zc.getServiceInfo(stype, name)
 			if info is not None:
-				self._listener.addService(stype, name, info.getAddress(), info.getPort())
+				self._listener.addService(stype, name, info.getAddress(), info.getPort(), info.getProperties())
 			else:
-				self._listener.addService(stype, name, None, None)
+				self._listener.addService(stype, name, None, None, None)
 
 		def removeService(self, zc, stype, name):
 			info = zc.getServiceInfo(stype, name)
 			if info is not None:
-				self._listener.removeService(stype, name, info.getAddress(), info.getPort())
+				self._listener.removeService(stype, name, info.getAddress(), info.getPort(), info.getProperties())
 			else:
-				self._listener.removeService(stype, name, None, None)
+				self._listener.removeService(stype, name, None, None, None)
 
 
 if __name__ == "__main__":
@@ -216,11 +216,12 @@ if __name__ == "__main__":
 		#
 
 		class MyListener(Listener):
-			def addService(self, stype, name, address, port):
+			def addService(self, stype, name, address, port, properties):
 				print >>sys.stderr, "Service \"%s\" added" % name
 				print >>sys.stderr, "\tType is \"%s\"" % stype
 				print >>sys.stderr, "\tAddress is %s" % (address and socket.inet_ntoa(address))
 				print >>sys.stderr, "\tPort is %s" % port
+				print >>sys.stderr, "\tProperties are %s" % properties
 				print >>sys.stderr, "Browsing for services.  Press return quit."
 		browser = ServiceBrowser(MyListener())
 		raw_input("Browsing for services.  Press return quit.\n")
