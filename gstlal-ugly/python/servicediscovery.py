@@ -160,30 +160,67 @@ else:
 
 	class ServiceBrowser(Zeroconf.ServiceBrowser):
 		def __init__(self, listener, stype = DEFAULT_STYPE):
-			self.listener = listener
+			self._listener = listener
 			super(type(self), self).__init__(_zc, stype, self)
 
 		def addService(self, zc, stype, name):
 			info = zc.getServiceInfo(stype, name)
-			self.listener.addService(stype, name, info.getAddress(), info.getPort())
+			if info is not None:
+				self._listener.addService(stype, name, info.getAddress(), info.getPort())
+			else:
+				self._listener.addService(stype, name, None, None)
 
 		def removeService(self, zc, stype, name):
 			info = zc.getServiceInfo(stype, name)
-			self.listener.removeService(stype, name, info.getAddress(), info.getPort())
+			if info is not None:
+				self._listener.removeService(stype, name, info.getAddress(), info.getPort())
+			else:
+				self._listener.removeService(stype, name, None, None)
 
 
 if __name__ == "__main__":
-	publisher = Publisher()
-	publisher.addservice(ServiceInfo(
-		DEFAULT_STYPE,
-		"%s.%s" % ("My Test Service", DEFAULT_STYPE),
-		address = socket.inet_aton("127.0.0.1"),
-		port = 3000,
-		properties = {
-			"version": "0.10",
-			"a": "test value",
-			"b": "another value"
-		}
-	))
-	raw_input("Press any key to unpublish the service ")
-	publisher.unpublish()
+	#
+	# usage:
+	#
+	# python /path/to/servicediscovery.py [publish]
+	#
+	# if publish is given on the command line then a service is
+	# published, otherwise a browser is started and discovered services
+	# are printed
+	#
+
+	import sys
+
+	if sys.argv[-1] == "publish":
+		#
+		# publish a service
+		#
+
+		publisher = Publisher()
+		publisher.addservice(ServiceInfo(
+			DEFAULT_STYPE,
+			"%s.%s" % ("My Test Service", DEFAULT_STYPE),
+			address = socket.inet_aton("127.0.0.1"),
+			port = 3000,
+			properties = {
+				"version": "0.10",
+				"a": "test value",
+				"b": "another value"
+			}
+		))
+		raw_input("Service published.  Press return to unpublish and quit.\n")
+		publisher.unpublish()
+	else:
+		#
+		# browse for services
+		#
+
+		class MyListener(Listener):
+			def addService(self, stype, name, address, port):
+				print >>sys.stderr, "Service \"%s\" added" % name
+				print >>sys.stderr, "\tType is \"%s\"" % stype
+				print >>sys.stderr, "\tAddress is %s" % (address and socket.inet_ntoa(address))
+				print >>sys.stderr, "\tPort is %s" % port
+				print >>sys.stderr, "Browsing for services.  Press return quit."
+		browser = ServiceBrowser(MyListener())
+		raw_input("Browsing for services.  Press return quit.\n")
