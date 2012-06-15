@@ -526,6 +526,10 @@ class Data(object):
 					# Read in the the background likelihood distributions that should have been updated asynchronously
 					self.ranking_data, procid = far.RankingData.from_xml(utils.load_filename(self.marginalized_likelihood_file, verbose = self.verbose, contenthandler = XMLContentHandler))
 					self.ranking_data.compute_joint_cdfs()
+
+					# set up the scale factor for the trials table to normalize the rate
+					for ifos in self.ranking_data.scale:
+						self.ranking_data.scale[ifos] = self.ranking_data.trials_table[ifos].count_below_thresh / self.ranking_data.trials_table[ifos].thresh / float(abs(self.ranking_data.livetime_seg)) * self.ranking_data.trials_table.num_nonzero_count() # FIXME should be / num_slides, but we assume only 1 zero lag slide table entry for online data.
 					# write the new distribution stats to disk
 					utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
 				else:
