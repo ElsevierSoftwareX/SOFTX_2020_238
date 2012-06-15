@@ -94,7 +94,7 @@ class TrialsTable(dict):
 			"ifos": "lstring",
 			"count": "int_8s",
 			"count_below_thresh": "int_8s",
-			"thresh": "real_8s"
+			"thresh": "real_8"
 		}
 		class RowType(object):
 			__slots__ = ("ifos", "count", "count_below_thresh", "thresh")
