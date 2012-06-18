@@ -1,7 +1,8 @@
 #!/usr/bin/python
 
-import sys
+import sys, os
 from pylal import rate
+os.environ["MPLCONFIGDIR"] = "/tmp"
 import matplotlib
 matplotlib.use('Agg')
 import pylab
@@ -12,17 +13,56 @@ from pylal import ligolw_burca_tailor
 import copy
 import itertools
 from gstlal import far
+import StringIO,base64
+import cgi
+import cgitb
+cgitb.enable()
+form = cgi.FieldStorage()
+import time
+from pylal.date import XLALUTCToGPS
 
-coincparamsdistributions, likelihood_seglists = far.DistributionsStats.from_filenames([sys.argv[1]], verbose = True)
-coincparamsdistributions.finish()
+def now():
+	return float(XLALUTCToGPS(time.gmtime()))
 
-counts = coincparamsdistributions.smoothed_distributions.background_rates
-inj = coincparamsdistributions.smoothed_distributions.injection_rates
+def to_png_image():
+	f = StringIO.StringIO()
+	pylab.savefig(f, format="png")
+	print '<img src="data:image/png;base64,',base64.b64encode(f.getvalue()),'"></img>'
+	f.close()
+
+print >>sys.stdout, 'Cache-Control: no-cache, must-revalidate'
+print >>sys.stdout, 'Expires: Mon, 26 Jul 1997 05:00:00 GMT'
+print >>sys.stdout, 'Content-type: text/html\r\n'
+
+print """
+<html>
+<head>
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="-1">
+<meta http-equiv="CACHE-CONTROL" content="NO-CACHE">
+</head>
+<body bgcolor=#E0E0E0>
+"""
+
+# title
+print """
+<font size=10>Likelihood</font><font size=6 color=#707070><b><right> GPS:%d Local Time: %s </right></b><br></font><hr><br>
+""" % (int(now()), time.strftime("%a, %d %b %Y %H:%M:%S %Z", time.localtime()))
+
+print "<div id='canvasa'>"
+path = form.getlist("url")[0]
+
+
+likelihood_data, process_id = far.LocalRankingData.from_xml(utils.load_url(path))
+
+counts = likelihood_data.distribution_stats.raw_distributions.background_rates
+inj = likelihood_data.distribution_stats.raw_distributions.injection_rates
 
 likely = copy.deepcopy(inj)
 for i, ifo in enumerate(['H1','H2','L1', 'V1']):
 	likely[ifo+"_snr_chi"].array /= counts[ifo+"_snr_chi"].array
 	for name, obj in (("background", counts), ("injections", inj), ("likelihood", likely)):
+		pylab.figure()
 		pylab.clf()
 		pylab.figure()
 		H1 = obj[ifo+"_snr_chi"].array
@@ -32,12 +72,15 @@ for i, ifo in enumerate(['H1','H2','L1', 'V1']):
 		ax = pylab.subplot(111)
 		pylab.pcolormesh(snr, chi, numpy.log10(H1.T +1)[1:-1,1:-1])
 		ax.set_yscale('log')
-		ax.set_xscale('log')
 		pylab.colorbar()
 		pylab.xlabel('SNR')
 		pylab.ylabel('reduced chi^2 / SNR^2')
-		pylab.ylim([.005, .5])
-		pylab.xlim([4,100])
-		pylab.title('log base 10 (number + 1)')
+		pylab.ylim([.001, .5])
+		pylab.xlim([4,26])
+		pylab.title('%s: %s log base 10 (number + 1)' % (ifo, name))
 		pylab.grid()
-		pylab.savefig('%s_%s_snrchi.png' % (ifo, name),dpi=300)
+		to_png_image()
+
+print "</div>"
+print "</body>"
+print "</html>"		
