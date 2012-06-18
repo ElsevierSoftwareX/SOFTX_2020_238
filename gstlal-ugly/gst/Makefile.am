@@ -1,9 +1,3 @@
-if COND_CAIRO
-CAIRO_SUBDIRS = cairovis
-else
-CAIRO_SUBDIRS = 
-endif
-
 if COND_FRAMECPP
 FRAMECPP_SUBDIRS = framecpp
 else
@@ -22,4 +16,4 @@ else
 NDS_SUBDIRS =
 endif
 
-SUBDIRS = lal python multirate $(CAIRO_SUBDIRS) $(FRAMECPP_SUBDIRS) $(GDS_SUBDIRS) $(NDS_SUBDIRS)
+SUBDIRS = lal python multirate $(FRAMECPP_SUBDIRS) $(GDS_SUBDIRS) $(NDS_SUBDIRS)
