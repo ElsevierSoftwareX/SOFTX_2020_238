@@ -591,7 +591,7 @@ else:
 			sys.exit( "PSD for instrument %s requested, but not found in file %s. Available instruments are %s" % (handler.inst, psdfile, str(handler.psd.keys())) )
 		
 	else:
-		handler.cache_psd = cfg.getboolean( "cache", "cache-psd" )
+		handler.cache_psd = cfg.get( "cache", "cache-psd" )
 		if( handler.cache_psd ): print "PSD caching enabled."
 
 	handler.cache_spec_corr = cfg.getboolean( "cache", "cache-spectral-correlation" )
