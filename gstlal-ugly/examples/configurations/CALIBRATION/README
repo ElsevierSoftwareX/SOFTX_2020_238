@@ -1,0 +1,9 @@
+gstlal_compute_strain is a pipeline (originally written by Jordi) that produces calibrated h(t) without the gamma factors.  A frame cache file and filters.npz file are provided in this directory for running the pipeline. To run this pipeline from this directory:
+
+python gstlal_compute_strain --gps-start-time=943009024 --gps-end-time=$((943009024+64)) --filters-file=filters.npz --frame-cache=data.cache --ifo=H1 --frame-type=H1_GSTLAL_C02
+
+gstlal_computer_strain_with_gamma is a pipeline (modified from gstlal_compute_strain by Maddie) that also produces h(t), and will eventually include the gamma factors.  Rigth now, this pipeline only differs from gstlal_compute_strain in that it is moved over to build the pipeline through pipeparts.  In addition, the audiofirfilter elements have been replaced by fir_bank elements.  To run this pipeline from this directory:
+
+python gstlal_compute_strain_with_gamma --gps-start-time=943009024 --gps-end-time=$((943009024+64)) --filters-file=filters.npz --frame-cache=data.cache --ifo=H1 --frame-type=H1_GSTLAL_C02
+
+Both of these pipelines have issues where buffers are dropped in the audiofirfilter or firbank elements.  Through trial and error, Maddie has found that when the filters require a latency, the firbank element works and the audiofirfilter element does not work.  However, when the filters do not require a latency the audiofirfilter element works and the firbank element does not work. Is this true for anyone else? (Maddie has not checked the output to see if the calibrated data is correct in these different situations - by "works" it means the pipeline runs without dropping buffers, or at least without resulting in an assert error.)

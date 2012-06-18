@@ -23,3 +23,5 @@ python coh_null_h1h2.py --frame-cache=data.cache --gps-start-time=870008619 --gp
 To run the pipeline and write the pipeline graph to this directory:
 
 GST_DEBUG_DUMP_DOT_DIR=. python coh_null_h1h2.py --frame-cache=data.cache --gps-start-time=870008619 --gps-end-time=870018619 --reference-psd=psd.xml --write-pipeline="LHO_COH_NULL" --verbose
+
+I (Maddie) can't get the null veto feature to work in this pipeline.  It is currently commented out and the null stream is sent to a fakesink.  Can you check if I'm incorporating the gate element correctly?  When I uncomment the gate element as it's written, the pipeline freezes up.
