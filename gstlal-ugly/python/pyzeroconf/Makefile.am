@@ -6,4 +6,4 @@ pkgpythondir = $(pkgpyexecdir)/pyzeroconf
 
 pkgpython_PYTHON = __init__.py Zeroconf.py
 
-EXTRA_DIST = Browser.py lgpl.txt README ZeroconfTest.py ZeroconfTest2.py
+EXTRA_DIST = lgpl.txt README ZeroconfTest.py ZeroconfTest2.py
