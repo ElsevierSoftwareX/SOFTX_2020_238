@@ -19,7 +19,6 @@ AC_CONFIG_FILES([ \
 	lib/skymap/Makefile \
 	python/Makefile \
 	gst/Makefile \
-	gst/cairovis/Makefile \
 	gst/nds/Makefile \
 	gst/lal/Makefile \
 	gst/python/Makefile \
@@ -171,37 +170,6 @@ AS_IF(
 AM_CONDITIONAL([COND_NDS], [test "x${HAVE_NDS}" == "xyes"])
 AC_SUBST([NDS_CFLAGS])
 AC_SUBST([NDS_LIBS])
-
-
-#
-# Check for cairo
-#
-
-
-AC_ARG_WITH(
-	[cairo],
-	[AS_HELP_STRING([--with-cairo], [include cairo visualization elements @<:@default=check@:>@])],
-	[],
-	[with_cairo=check]
-)
-AS_IF(
-	[test "x$with_cairo" != "xno"],
-	[PKG_CHECK_MODULES(
-		[cairo],
-		[cairo],
-		[AC_DEFINE([HAVE_CAIRO], [1], [Define if you have cairo])
-		HAVE_CAIRO="yes"],
-		[HAVE_CAIRO="no"
-		AS_IF(
-			[test "x$with_cairo" != "xcheck"],
-			[AC_MSG_ERROR([Not found!])],
-			[AC_MSG_WARN([Not found!])]
-		)]
-	)]
-)
-AM_CONDITIONAL([COND_CAIRO], [test "x${HAVE_CAIRO}" == "xyes"])
-AC_SUBST([cairo_CFLAGS])
-AC_SUBST([cairo_LIBS])
 
 
 #
