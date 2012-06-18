@@ -50,7 +50,7 @@ def parse_command_line():
 	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
 	parser.add_option("--non-injection-db", metavar = "filename", action = "append", help = "single file for non injections run")
 	parser.add_option("--injection-dbs", action = "append", default=[], help = "append to the list of possible injection files, may be empty if no injections were done. Databases are assumed to be over the same time period as the non injection databases using the same templates.  If not the results will be nonsense.")
-	
+	parser.add_option("--far-interval", default = 100, type = "float", help = "interval over which to estimate the trials / unit time for FAP, default = 100s")	
 	options, filenames = parser.parse_args()
 	return options, filenames
 
@@ -68,7 +68,7 @@ local_ranking = far.LocalRankingData.from_filenames(options.background_bins_file
 newtrials = far.TrialsTable()
 newtrials.initialize_from_sngl_ifos(("H1", "H2", "L1", "V1"))
 local_ranking.trials_table += newtrials
-global_ranking = far.RankingData(local_ranking)
+global_ranking = far.RankingData(local_ranking, far_interval = options.far_interval)
 
 # late import for DB manipulations
 from glue.ligolw import dbtables
