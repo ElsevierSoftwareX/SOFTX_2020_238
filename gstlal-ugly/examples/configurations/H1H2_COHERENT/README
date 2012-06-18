@@ -1,25 +1,25 @@
 This is a pipeline that produces frame files for the LHO coherent and null streams.  
 
-H1 and H2 frame cache files have been included in this directory, because these cache files contain long segments during which both H1 and H2 were on.
+A single frame cache file for H1 and H2 has been included in this directory, because this cache file contain long segments during which both H1 and H2 were on.
 
 This pipeline can run in an online mode where the psd and filters are measured/constructed on the fly.  This mode does not successfully produce the coherent stream yet (due to lack of feathering each section filtered with a different filter togehter).
 
-The pipeline can also run in a mode where the psds are provided at the command line (or measured before the pipeline begins) and the filters are constructed at the beginning of the pipeline and remain fixed. This mode does successfully produce the coherent and null streams.  PSD .xml files for H1 and H2 are provided in this directory.
+The pipeline can also run in a mode where the psds are provided at the command line (or measured before the pipeline begins) and the filters are constructed at the beginning of the pipeline and remain fixed. This mode does successfully produce the coherent and null streams.  A psd.xml file containing both the H1 and H2 psds is provided in this directory.
 
 To run the pipeline from this directory in the "online" mode (not yet producing correct coherent stream, but still runs):
 
-python coh_null_h1h2.py --frame-cache-H1=H1.cache --frame-cache-H2=H2.cache --gps-start-time=870008619 --gps-end-time=870018619 --track-psd --verbose
+python coh_null_h1h2.py --frame-cache=data.cache --gps-start-time=870008619 --gps-end-time=870018619 --track-psd --verbose
 
 To run the pipeline from this directory using a reference psd provided at the command line:
 
-python coh_null_h1h2.py --frame-cache-H1=H1.cache --frame-cache-H2=H2.cache --gps-start-time=870008619 --gps-end-time=870018619 --reference-psd-H1=H1_psd.xml --reference-psd-H2=H2_psd.xml --verbose
+python coh_null_h1h2.py --frame-cache=data.cache --gps-start-time=870008619 --gps-end-time=870018619 --reference-psd=psd.xml --verbose
 
 To run the pipeline from this directory where the psd is measured before the pipeline begins and then written to an .xml file:
 
-python coh_null_h1h2.py --frame-cache-H1=H1.cache --frame-cache-H2=H2.cache --gps-start-time=870008619 --gps-end-time=870018619 --write-psd-H1=H1_psd.xml --write-psd-H2=H2_psd.xml --verbose
+python coh_null_h1h2.py --frame-cache=data.cache --gps-start-time=870008619 --gps-end-time=870018619 --write-psd=psd.xml --verbose
 
-The pipeline can be run with a combination of --write-psd-* and --reference-psd-* options.  --track-psd can also be set in coincidence with the --write-psd-* or --reference-psd-* options.
+--track-psd can be set in coincidence with the --write-psd or --reference-psd option.
 
 To run the pipeline and write the pipeline graph to this directory:
 
-GST_DEBUG_DUMP_DOT_DIR=. python coh_null_h1h2.py --frame-cache-H1=H1.cache --frame-cache-H2=H2.cache --gps-start-time=870008619 --gps-end-time=870018619 --reference-psd-H1=H1_psd.xml --reference-psd-H2=H2_psd.xml --write-pipeline="LHO_COH_NULL" --verbose
+GST_DEBUG_DUMP_DOT_DIR=. python coh_null_h1h2.py --frame-cache=data.cache --gps-start-time=870008619 --gps-end-time=870018619 --reference-psd=psd.xml --write-pipeline="LHO_COH_NULL" --verbose

@@ -1,26 +1,4 @@
-# Copyright (C) 2012 Madeline Wade
-#
-# This program is free software; you can redistribute it and/or modify it
-# under the terms of the GNU General Public License as published by the
-# Free Software Foundation; either version 2 of the License, or (at your
-# option) any later version.
-#
-# This program is distributed in the hope that it will be useful, but
-# WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
-# Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along
-# with this program; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-
-#
-# ========================================================================
-#
-#                             Preamble
-#
-# ========================================================================
-#
+#!/usr/bin/evn python
 
 import os
 import sys
@@ -39,6 +17,7 @@ from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import reference_psd
 from gstlal import coherent_null
+from gstlal import inspiral
 
 from glue import segments
 from pylal.datatypes import LIGOTimeGPS
@@ -49,40 +28,31 @@ from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 #
 
 parser = OptionParser()
-parser.add_option("--frame-cache-H1", metavar = "fileanme", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
-parser.add_option("--frame-cache-H2", metavar = "fileanme", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
+parser.add_option("--frame-cache", metavar = "fileanme", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
 parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
 parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
-parser.add_option("--channel-name", metavar = "name", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
+parser.add_option("--channel-name", metavar = "name", action = "append", default = "LSC-STRAIN", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 parser.add_option("--track-psd", action = "store_true", help = "Track the H1 and H2 psds.  The filters that create the coherent stream will be updated throughout the run.")
-parser.add_option("--reference-psd-H1", metavar = "filename", help = ".xml file containing the H1 psd. Use this psd as first guess psd or fixed psd.")
-parser.add_option("--reference-psd-H2", metavar = "filename", help = ".xml file containing the H2 psd. Use this psd as first guess psd or fixed psd.")
-parser.add_option("--write-psd-H1", metavar = "filename", help = "Measure psd and write to .xml file.  Use this psd as a first guess psd or fixed psd.")
-parser.add_option("--write-psd-H2", metavar = "filename", help = "Measure psd and write to .xml file.  Use this psd as a first guess psd or fixed psd.")
+parser.add_option("--reference-psd", metavar = "filename", help = ".xml file containing the H1 and H2 psds. Use this psd as first guess psd or fixed psd.")
+parser.add_option("--write-psd", metavar = "filename", help = "Measure psds and write to .xml file.  Use these psds as a first guess psd or fixed psd.")
 
 options, filenames = parser.parse_args()
 
-if len([option for option in ("frame_cache_H1", "fake_data") if getattr(options, option) is not None]) != 1:
-	raise ValueError("must provide either --frame-cache-H1 and --frame-cache-H2 or --fake-data")
-if len([option for option in ("frame_cache_H2", "fake_data") if getattr(options, option) is not None]) != 1:
-	raise ValueError("must provide either --frame-cache-H1 and --frame-cache-H2 or --fake-data")
+if len([option for option in ("frame_cache", "fake_data") if getattr(options, option) is not None]) != 1:
+	raise ValueError("must provide either --frame-cache or --fake-data")
+
 if options.fake_data not in (None, "LIGO", "AdvLIGO"):
 	raise ValueError("unrecognized value for --fake-data %s" % options.fake_data)
 
-if options.reference_psd_H1 is None and options.write_psd_H1 is None and options.track_psd is None:
-	raise ValueError("must use --track-psd if (--reference-psd-H1 or --write-psd-H1) and (--reference-psd-H2 or --write-psd-H2) are not given; you can use both simultaneously")
-if options.reference_psd_H2 is None and options.write_psd_H2 is None and options.track_psd is None:
-	raise ValueError("must use --track-psd if (--reference-psd-H1 or --write-psd-H1) and (--reference-psd-H2 or --write-psd-H2) are not given; you can use both simultaneoulsy")
-if len([option for option in ("reference_psd_H1", "write_psd_H1") if getattr(options, option) is not None]) != 1 and len([option for option in ("reference_psd_H1", "write_psd_H1") if getattr(options, option) is not None]) != 0:
-	raise ValueError("must provide only one of --reference-psd-H1 or --write-psd-H1")
-if len([option for option in ("reference_psd_H2", "write_psd_H2") if getattr(options, option) is not None]) != 1 and len([option for option in ("reference_psd_H2", "write_psd_H2") if getattr(options, option) is not None]) != 0:
-	raise ValueError("must provide only one of --reference-psd-H2 or --write-psd-H2")
-if len([option for option in ("reference_psd_H1", "reference_psd_H2", "write_psd_H1", "write_psd_H2") if getattr(options, option) is not None]) != 2 and len([option for option in ("reference_psd_H1", "reference_psd_H2", "write_psd_H1", "write_psd_H2") if getattr(options, option) is not None]) != 0:
-	raise ValueError("must provide either (--reference-psd-H1 or --write-psd-H1) and (--reference-psd-H2 or --write-psd-H2) or none")
+if options.reference_psd is None and options.write_psd is None and options.track_psd is None:
+	raise ValueError("must use --track-psd if --reference-psd or --write-psd are not given; you can use both simultaneously")
+
+if len([option for option in ("reference_psd", "write_psd") if getattr(options, option) is not None]) != 1 and len([option for option in ("reference_psd", "write_psd") if getattr(options, option) is not None]) != 0:
+	raise ValueError("must provide only one of --reference-psd or --write-psd")
 
 required_options = ["gps_start_time", "gps_end_time", "channel_name"]
 
@@ -97,6 +67,7 @@ options.zero_pad_length = 2
 options.srate = 4096
 quality = 9
 
+channel_dict = inspiral.channel_dict_from_channel_list(options.channel_name)
 
 #
 # =============================================================================
@@ -204,7 +175,7 @@ class COHhandler(lloidparts.LLOIDHandler):
 #
 # =============================================================================
 #
-#                                     Main
+#                                             Main
 #
 # =============================================================================
 #
@@ -229,26 +200,20 @@ else:
 
 seekevent = gst.event_new_seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, seek_start_type, seek_start_time, seek_stop_type, seek_stop_time)
 
+detectors = {}
 
-detectorH1 = {
-	"H1": lloidparts.DetectorData(options.frame_cache_H1, options.channel_name)
-}
+detectors["H1"] = lloidparts.DetectorData(options.frame_cache, channel_dict["H1"])
+detectors["H2"] = lloidparts.DetectorData(options.frame_cache, channel_dict["H2"])
 
-detectorH2 = {
-	"H2": lloidparts.DetectorData(options.frame_cache_H2, options.channel_name)
-}
-
-if options.reference_psd_H1 is not None:
-	psd1 = reference_psd.read_psd(options.reference_psd_H1, verbose = options.verbose)
-	psd1, = psd1.values()
-if options.reference_psd_H2 is not None:
-	psd2 = reference_psd.read_psd(options.reference_psd_H2, verbose = options.verbose)
-	psd2, = psd2.values()
-if options.write_psd_H1 is not None:
+if options.reference_psd is not None:
+	psd = reference_psd.read_psd(options.reference_psd, verbose = options.verbose)
+	psd1 = psd["H1"]
+	psd2 = psd["H2"]
+if options.write_psd is not None:
 	psd1 = reference_psd.measure_psd(
 		"H1",
 		seekevent,
-		lloidparts.DetectorData(options.frame_cache_H1, options.channel_name),
+		detectors["H1"],
 		options.seg,
 		options.srate,
 		psd_fft_length = options.psd_fft_length,
@@ -256,12 +221,10 @@ if options.write_psd_H1 is not None:
 		injection_filename = options.injections,
 		verbose = options.verbose
 		)
-	reference_psd.write_psd(options.write_psd_H1, { "H1" : psd1 }, verbose = options.verbose)
-if options.write_psd_H2 is not None:
 	psd2 = reference_psd.measure_psd(
 		"H2",
 		seekevent,
-		lloidparts.DetectorData(options.frame_cache_H2, options.channel_name),
+		detectors["H2"],
 		options.seg,
 		options.srate,
 		psd_fft_length = options.psd_fft_length,
@@ -269,12 +232,13 @@ if options.write_psd_H2 is not None:
 		injection_filename = options.injections,
 		verbose = options.verbose
 		)
-	reference_psd.write_psd(options.write_psd_H2, { "H2" : psd2 }, verbose = options.verbose)
+	reference_psd.write_psd(options.write_psd, { "H1" : psd1, "H2" : psd2 }, verbose = options.verbose)
 
 #
 # this function updates the psds and recalucates the fir filters used in the coherent stream
 #	
 
+#FIXME: Probably only want to update psds (and filters) when they have changed "significantly enough"
 def update_psd(elem, pspec, hand):
 	name = elem.get_property("name")
 	if name == "H1_whitener":
@@ -292,7 +256,7 @@ pipeline = gst.Pipeline("coh_null_h1h2")
 mainloop = gobject.MainLoop()
 handler = COHhandler(mainloop, pipeline)
 
-if options.reference_psd_H1 is not None or options.reference_psd_H2 is not None or options.write_psd_H1 is not None or options.write_psd_H2 is not None:
+if options.reference_psd is not None or options.write_psd is not None:
 	handler.fixed_filters(psd1, psd2)
 
 #
@@ -303,21 +267,20 @@ H1src = lloidparts.mkLLOIDbasicsrc(
 	pipeline,
 	seekevent,
 	"H1",
-	detectorH1["H1"],
+	detectors["H1"],
 	fake_data = options.fake_data,
 	injection_filename = options.injections,
 	verbose = options.verbose
 )
-
-# debugging by splitting H1 and feeding into both branches
-#H1srctee = pipeparts.mktee(pipeline, H1src)
-#H1src = pipeparts.mkqueue(pipeline, H1srctee)
 
 H1head = pipeparts.mkreblock(pipeline, H1src)
 H1head = pipeparts.mkcapsfilter(pipeline, H1head, "audio/x-raw-float, width=64, rate=[%d,MAX]" % handler.srate)
 H1head = pipeparts.mkresample(pipeline, H1head, quality = quality)
 H1head = pipeparts.mkcapsfilter(pipeline, H1head, "audio/x-raw-float, width=64, rate=%d" % handler.srate)
 
+# tee off for null veto later on
+H1vetotee = pipeparts.mktee(pipeline, H1head)
+H1head = pipeparts.mkqueue(pipeline, H1vetotee)
 
 # track psd
 if options.track_psd is not None:
@@ -338,19 +301,20 @@ H2src = lloidparts.mkLLOIDbasicsrc(
 	pipeline,
 	seekevent,
 	"H2",
-	detectorH2["H2"],
+	detectors["H2"],
 	fake_data = options.fake_data,
 	injection_filename = options.injections,
 	verbose = options.verbose
 )
 
-# debugging: feed H1 into this branch (also comment out the H2src from mkLLOIDbasicsr for this test)
-#H2src = pipeparts.mkqueue(pipeline, H1srctee)
-
 H2head = pipeparts.mkreblock(pipeline, H2src)
 H2head = pipeparts.mkcapsfilter(pipeline, H2head, "audio/x-raw-float, rate=[%d,MAX]" % handler.srate)
 H2head = pipeparts.mkresample(pipeline, H2head, quality = quality)
 H2head = pipeparts.mkcapsfilter(pipeline, H2head, "audio/x-raw-float, rate=%d" % handler.srate)
+
+# tee off for null veto later on
+H2vetotee = pipeparts.mktee(pipeline, H2head)
+H2head = pipeparts.mkqueue(pipeline, H2vetotee)
 
 # track psd
 if options.track_psd is not None:
@@ -370,18 +334,27 @@ if options.track_psd is not None:
 coherent_null_bin = pipeparts.mklhocoherentnull(pipeline, H1head, H2head, handler.H1_impulse, handler.H1_latency, handler.H2_impulse, handler.H2_latency, handler.srate)
 if options.track_psd is not None:
 	handler.add_cohnull_bin(coherent_null_bin)
-COHhead = coherent_null_bin.get_pad("COHsrc")
-NULLhead = coherent_null_bin.get_pad("NULLsrc")
+cohhead = coherent_null_bin.get_pad("COHsrc")
+nullhead = coherent_null_bin.get_pad("NULLsrc")
 
 #
 # Create coherent and null frames
 #
 
-COHhead = pipeparts.mkprogressreport(pipeline, COHhead, "progress_coherent")
-pipeparts.mkframesink(pipeline, COHhead, clean_timestamps = False, dir_digits = 0, frame_type = "H1_LHO_COHERENT")
+cohhead = pipeparts.mkprogressreport(pipeline, cohhead, "progress_coherent")
+pipeparts.mkframesink(pipeline, cohhead, clean_timestamps = False, dir_digits = 0, frame_type = "H1_LHO_COHERENT")
 
-NULLhead = pipeparts.mkprogressreport(pipeline, NULLhead, "progress_null")
-pipeparts.mkframesink(pipeline, NULLhead, clean_timestamps = False, dir_digits = 0, frame_type = "H1_LHO_NULL")
+# null veto
+nullhead = pipeparts.mkprogressreport(pipeline, nullhead, "progress_null")
+nullhead = pipeparts.mkwhiten(pipeline, nullhead, zero_pad = handler.zero_pad_length, fft_length = handler.psd_fft_length)
+pipeparts.mkfakesink(pipeline, nullhead)
+#nulltee = pipeparts.mktee(pipeline, nullhead)
+
+#H1vetohead = pipeparts.mkgate(pipeline, H1vetotee, threshold = 100, control = nulltee, invert_control = True)
+#pipeparts.mkfakesink(pipeline, H1vetohead)
+
+#H2vetohead = pipeparts.mkgate(pipeline, H2vetotee, threshold = 8, control = nulltee, invert_control = True)
+#pipeparts.mkfakesink(pipeline, H2vetohead)
 
 #
 # Running the pipeline messages and pipeline graph
