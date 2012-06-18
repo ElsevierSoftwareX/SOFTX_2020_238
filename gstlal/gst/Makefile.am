@@ -1,1 +1,1 @@
-SUBDIRS = lal python unary
+SUBDIRS = lal python

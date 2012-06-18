@@ -20,7 +20,6 @@ AC_CONFIG_FILES([ \
 	gst/Makefile \
 	gst/lal/Makefile \
 	gst/python/Makefile \
-	gst/unary/Makefile \
 	bin/Makefile \
 	tests/Makefile
 ])
