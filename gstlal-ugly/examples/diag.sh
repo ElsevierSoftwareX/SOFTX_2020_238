@@ -32,12 +32,12 @@ function test_gate_1() {
 
 function test_gate_2() {
 	gst-launch \
-		lal_gate name=gate threshold=0.7 leaky=true attack-length=100 hold-length=100 \
-		! progressreport do-query=true ! fakesink sync=false async=false \
+		lal_gate name=gate threshold=0.7 leaky=false attack-length=100 hold-length=100 \
+		! lal_checktimestamps ! progressreport do-query=false ! fakesink sync=false async=false \
 		audiotestsrc wave=9 samplesperbuffer=16 \
 		! audio/x-raw-float, channels=1, width=64, rate=6 \
 		! audioresample \
-		! audio/x-raw-float, rate=16384 \
+		! audio/x-raw-float, rate=16000 \
 		! gate.control \
 		audiotestsrc wave=9 samplesperbuffer=1024 \
 		! audio/x-raw-float, channels=1, width=64, rate=16384 \
