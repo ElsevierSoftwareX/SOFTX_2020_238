@@ -810,6 +810,7 @@ def set_far(Far, f, tmp_path = None, verbose = False):
 		# produced here which will modify the order of events
 		# that get assigned a combined far
 		connection.cursor().execute('CREATE TEMPORARY TABLE ranktable AS SELECT * FROM coinc_inspiral JOIN coinc_event ON coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id WHERE coinc_event.time_slide_id == ? ORDER BY false_alarm_rate+1e-20 / snr', (id,))
+		connection.cursor().execute('CREATE INDEX rtix ON ranktable(coinc_event_id)')
 		connection.commit()
 		# FIXME someday we might want to consider the rate of multiple events.
 		# having this sorted list will make that easier.  Then you can pass in the rowid like this
@@ -822,6 +823,8 @@ def set_far(Far, f, tmp_path = None, verbose = False):
 		# For everything else we get a cumulative number
 		else:
 			connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.coinc_event_id IN (SELECT coinc_event_id FROM ranktable)')
+		connection.cursor().execute('DROP INDEX rtix')
+		connection.commit()
 
 	connection.commit()
 	connection.close()
