@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal],[0.3.1],[gstlal-discuss@gravity.phys.uwm.edu],[gstlal])
+AC_INIT([gstlal],[0.3.2],[gstlal-discuss@gravity.phys.uwm.edu],[gstlal])
 AC_COPYRIGHT([Copyright (C) 2008--2012 Kipp Cannon])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
