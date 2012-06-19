@@ -1,13 +1,40 @@
-#!/usr/bin/python
+#!/usr/bin/env python
+#
+# Copyright (C) 2012  Kipp Cannon, Chris Pankow
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
 #
-# preamble
+# =============================================================================
 #
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+"""
+Generate a LIGO Light-Weight XML veto segment file from burst injection lists.  The input files can be LIGO Light-Weight XML files containing sim_burst tables describing lists of burst injections, or GravEn log files describing lists of burst injections.  If a file is encountered that cannot be parsed in one of these formats, or is identified as a LIGO Light-Weight XML file but does not contain a sim_burst table, the program fails.  If no input filenames are provided input is read from stdin.
+"""
 
 
 import math
 from optparse import OptionParser
+import sys
+from xml.sax import SAXParseException
 
 
 from glue import segments
@@ -17,28 +44,53 @@ from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import process as ligolw_process
 
-from xml.sax import SAXParseException
 
-LIGOTimeGPS = lsctables.LIGOTimeGPS
+__author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chris Pankow <chris.pankow@ligo.org>"
+__version = "FIXME" # "git id %s" % git_version.id
+__date__ = "FIXME" # git_version.date
+
 
 #
-# command line
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
 #
 
 
 def parse_command_line():
 	parser = OptionParser(
+		version = "Name: %%prog\n%s" % "FIXME", # git_version.verbose_msg
+		usage = "%prog [options] [filename ...]",
+		description = __doc__
 	)
-	parser.add_option("--default-duration", metavar = "seconds", type = "float", default = 3.0, help = "Set the default burst event duration for injections without explicit durations.")
-	parser.add_option("--instruments", metavar = "name1,name2,...", default = "H1,H2,L1,V1", help = "Set the instruments to veto (default = \"H1,H2,L1,V1\").")
-	parser.add_option("--output", metavar = "filename", help = "Set the output filename.")
-	parser.add_option("--padding", metavar = "seconds", type = "float", default = 8.0, help = "Set the amount of padding to veto before and after each injection.")
-	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the vetoes segment lists (default = \"vetoes\").")
+	parser.add_option("--default-duration", metavar = "seconds", type = "float", default = 3.0, help = "Set the default burst event duration in seconds for injections without explicit durations (default = 3).")
+	parser.add_option("--instruments", metavar = "name[,name,...]", default = "H1,H2,L1,V1", help = "Set the instruments to veto (default = \"H1,H2,L1,V1\").")
+	parser.add_option("--output", metavar = "filename", help = "Set the output filename (default = write to stdout).  If the filename ends in \".gz\" it will be gzip-compressed.")
+	parser.add_option("--padding", metavar = "seconds", type = "float", default = 8.0, help = "Set the additional padding in seconds to veto before and after each injection (default = 8).")
+	parser.add_option("--vetoes-name", metavar = "name", default = "vetoes", help = "Set the name of the vetoes segment lists in the output document (default = \"vetoes\").")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
 	options, filenames = parser.parse_args()
 
-	return options, filenames
+	return options, filenames or [None]
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# comand line
+#
+
+
 options, filenames = parse_command_line()
 
 
@@ -47,10 +99,13 @@ options, filenames = parse_command_line()
 #
 
 
-vetoes = segments.segmentlist([])
+vetoes = segments.segmentlist()
 for filename in filenames:
-	#if filename.endswith(".xml") or filename.endswith(".xml.gz"):
 	try:
+		#
+		# try parsing injection list as an XML document
+		#
+
 		for sim in lsctables.table.get_table(utils.load_filename(filename, verbose = options.verbose), lsctables.SimBurstTable.tableName):
 			t = sim.get_time_geocent()
 			if sim.duration is None or math.isnan(sim.duration):
@@ -58,17 +113,24 @@ for filename in filenames:
 			else:
 				duration = sim.duration
 			vetoes.append(segments.segment(t - duration / 2.0, t + duration / 2.0))
-	#elif filename.endswith(".txt") or filename.endswith(".log"):
+
 	except SAXParseException:
-		# Try parsing as a GravEn log
-		for line in open( filename ).readlines():
+		#
+		# that didn't work, try parsing as a GravEn log
+		#
+
+		for line in filename is None and sys.stdin or open(filename):
 			line = line.strip()
-			if line[0] == "#": continue 
-			t = LIGOTimeGPS(line.split()[10])  # GravEn log index of GPS geocentral time
+			if line.startswith("#") or not line:
+				continue
+			# 10 = GravEn log index of GPS geocentral time
+			t = lsctables.LIGOTimeGPS(line.split()[10])
 			duration = options.default_duration
-			vetoes.append(segments.segment(LIGOTimeGPS(t - duration / 2.0), LIGOTimeGPS(t + duration / 2.0)))
+			vetoes.append(segments.segment(t - duration / 2.0, t + duration / 2.0))
+
 vetoes.protract(options.padding).coalesce()
 vetoes = segments.segmentlistdict.fromkeys(options.instruments.split(","), vetoes)
+
 
 #
 # build and write output document
@@ -79,9 +141,7 @@ xmldoc = ligolw.Document()
 xmldoc.childNodes.append(ligolw.LIGO_LW())
 process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_vetoes_from_burst_inj", options.__dict__)
 llwsegments = ligolw_segments.LigolwSegments(xmldoc)
-#ligolw_segments.insert_from_segmentlistdict(llwsegments, vetoes, options.vetoes_name, "Burst injections")
 llwsegments.insert_from_segmentlistdict(vetoes, options.vetoes_name, "Burst injections")
 llwsegments.finalize(process)
-
 
 utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)
