@@ -1,3 +1,12 @@
+#
+# These two codes were used for burst injections in ER1 and are no longer
+# used, but are retained in the source tree for now to provide a record of
+# the injection program for that run
+#
+#	gstlal_burst_injections_by_rate
+#	gstlal_burst_injections_by_rate_plot
+#
+
 dist_bin_SCRIPTS = \
 	gstlal_cbc_sensitivity_vs_flow_at_fixed_computational_cost \
 	gstlal_prune_duplicate_mass_pairs \
@@ -22,8 +31,6 @@ dist_bin_SCRIPTS = \
 	gstlal_iir_s5_pbh_trigger_setup \
 	gstlal_injections_by_local_rate \
 	gstlal_injections_by_local_rate_plot \
-	gstlal_burst_injections_by_rate \
-	gstlal_burst_injections_by_rate_plot \
 	gstlal_add_spins_to_bank \
 	gstlal_bank_splitter \
 	gstlal_segments_trim \
