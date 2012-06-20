@@ -27,8 +27,10 @@
 
 
 import itertools
+import math
 import numpy
 from scipy import interpolate
+from scipy import optimize
 from scipy import stats
 import sys
 try:
@@ -57,6 +59,163 @@ from pylal import rate
 #
 # =============================================================================
 #
+#                                Binomial Stuff
+#
+# =============================================================================
+#
+
+
+def fap_after_trials(p, m):
+	"""
+	Given the probability, p, that an event occurs, compute the
+	probability of at least one such event occuring after m independent
+	trials.
+
+	The return value is 1 - (1 - p)^m computed avoiding round-off
+	errors and underflows.  m cannot be negative but need not be an
+	integer.
+	"""
+	# 1 - (1 - p)^m = m p - (m^2 - m) p^2 / 2 +
+	#	(m^3 - 3 m^2 + 2 m) p^3 / 6 -
+	#	(m^4 - 6 m^3 + 11 m^2 - 6 m) p^4 / 24 + ...
+	#
+	# starting at 0, the nth term in the series is
+	#
+	# -1^n * (m - 0) * (m - 1) * ... * (m - n) * p^(n + 1) / (n + 1)!
+	#
+	# if the (n-1)th term is X, the nth term in the series is
+	#
+	# X * (n - m) * p / (n + 1)
+	#
+	# which allows us to avoid explicit evaluation of each term's
+	# numerator and denominator separately (each of which quickly
+	# overflow).
+	#
+	# for sufficiently large n the denominator dominates and the terms
+	# in the series become small and the sum eventually converges to a
+	# stable value.  however, if m*p >> 1 it can take many terms before
+	# the series sum stabilizes, terms in the series initially grow
+	# large and an accurate result can only be obtained through careful
+	# cancellation of the large values.
+	#
+	# for large m*p we take a different approach to evaluating the
+	# result.  in this regime the result will be close to 1 so (1 -
+	# p)^m will be small
+	#
+	# (1 - p)^m = exp(m ln(1 - p))
+	#
+	# if p is small, ln(1 - p) suffers from loss of precision but the
+	# Taylor expansion of ln(1 - p) converges quickly
+	#
+	# m ln(1 - p) = -m p - m p^2 / 2 - m p^3 / 3 - ...
+	#             = -m p * (1 + p / 2 + p^2 / 3 + ...)
+	#
+	# if p is close to 1, ln(1 - p) suffers a domain error
+	#
+
+	assert m >= 0	# m cannot be negative
+	assert 0 <= p <= 1	# p must be a valid probability
+
+	if m * p < 1.0:
+		#
+		# use direct Taylor expansion of 1 - (1 - p)^m
+		#
+
+		def terms(p, m):
+			n = 0
+			term = -1.0
+			while 1:
+				term *= (n - m) * p / (n + 1.0)
+				n += 1
+				yield term
+
+		s = 0.0
+		for term in terms(p, m):
+			s += term
+			if abs(term) <= abs(1e-17 * s):
+				return s
+
+	if p < .1:
+		#
+		# compute result from Taylor expansion of ln(1 - p)
+		#
+
+		def terms(p, m):
+			n = 2
+			term = 1.0
+			while 1:
+				term *= p * (n - 1.0) / n
+				n += 1
+				yield term
+
+		s = 1.0
+		for term in terms(p, m):
+			s += term
+			if term <= 1e-17 * s:
+				return 1.0 - math.exp(-m * p * s)
+
+	try:
+		#
+		# try direct evaluation of 1 - exp(m ln(1 - p))
+		#
+
+		return 1.0 - math.exp(m * math.log(1.0 - p))
+
+	except ValueError:
+		#
+		# math.log has suffered a domain error, therefore p is very
+		# close to 1.  we know p <= 1 because it's a probability,
+		# and we know that m*p >= 1 otherwise we wouldn't have
+		# followed this code path, therefore m >= 1, and so because
+		# p is close to 1 and m is not small we can safely assume
+		# the anwer is 1.
+		#
+
+		return 1.0
+
+
+def trials_from_faps(p0, p1):
+	"""
+	Given the probabiity, p0, of an event occuring, and the
+	probability, p1, of at least one such event being observed after
+	some number of independent trials, solve the number of trials, m,
+	that relates the two probabilities.  The three quantities are
+	related by p1 = 1 - (1 - p0)^m.
+
+	See also fap_after_trials().  Note that if p0 is 0 or 1 then p1
+	must be 0 or 1 respectively, and in both cases m is undefined.
+	Otherwise if p1 is 1 then inf is returned.
+	"""
+	assert 0 <= p0 <= 1	# p0 must be a valid probability
+	assert 0 <= p1 <= 1	# p1 must be a valid probability
+
+	if p0 == 0 or p0 == 1:
+		assert p0 == p1	# require valid relationship
+		# but we still can't solve for m
+		raise ValueError("m undefined")
+	if p1 == 1:
+		return float("inf")
+
+	#
+	# find range of m that contains solution.  the false alarm
+	# probability increases monotonically with the number of trials
+	#
+
+	lo, hi = 0, 100
+	while fap_after_trials(p0, hi) < p1:
+		hi *= 100
+
+	#
+	# use fap_after_trials() and scipy's Brent root finder to solve for
+	# m
+	#
+
+	return optimize.brentq((lambda m: fap_after_trials(p0, m) - p1), lo, hi)
+
+
+#
+# =============================================================================
+#
 #                             Trials Table Object
 #
 # =============================================================================
@@ -66,6 +225,7 @@ from pylal import rate
 #
 # Trials table
 #
+
 
 class Trials(object):
 	def __init__(self, count = 0, count_below_thresh = 0, thresh = None):
@@ -406,6 +566,7 @@ class DistributionsStats(object):
 #
 # =============================================================================
 #
+
 
 def likelihood_bin_boundaries(likelihoods, probabilities, minint = 1e-2, maxint = (1 - 1e-14)):
 	"""
