@@ -253,11 +253,13 @@ class gstlal_inspiral_node(InspiralNode):
 	A gstlal_inspiral node
 	"""
 	#FIXME add veto segments name
-	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=20.0, injections=None, control_peak_time = 8, coincidence_threshold = 0.020, vetoes=None, time_slide_file=None, fir_stride = 8, instruments = "H1H2L1", number = 1, p_node=[]):
+	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=None, injections=None, control_peak_time = 8, coincidence_threshold = 0.020, vetoes=None, time_slide_file=None, fir_stride = 8, instruments = "H1H2L1", number = 1, p_node=[]):
 		InspiralNode.__init__(self, job, dag, p_node)
 
 		if time_slide_file is not None:
 			self.add_var_opt("time-slide-file", time_slide_file)
+		if ht_gate_thresh is not None:
+			self.add_var_opt("ht-gate-threshold", ht_gate_thresh)
 		self.add_var_opt("frame-cache", frame_cache)
 		self.add_var_opt("frame-segments-file", frame_segments_file)
 		self.add_var_opt("frame-segments-name", frame_segments_name)
@@ -399,6 +401,7 @@ def parse_command_line():
 	parser.add_option("--do-iir-pipeline", action="store_true", help = "run the iir pipeline instead of lloid")
 	parser.add_option("--max-segment-length", type="int", metavar = "dur", default = 30000, help = "Break up segments longer than dur seconds into shorter (contiguous, non-overlapping) segments. Default 30000 seconds.")
 	parser.add_option("--num-banks", type="int", metavar = "banks", default = 1, help = "Set the number of template banks per job, default 1")
+	parser.add_option("--ht-gate-threshold", type="float", help="set a threshold on whitened h(t) to veto glitches")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
 
 	options, filenames = parser.parse_args()
@@ -483,7 +486,7 @@ for i, (s, trials_factor) in enumerate(inspiral_pipe.build_bank_string(bank_cach
 
 	# inspiral jobs by segment
 	for seg in segs:
-		noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments)
+		noninjnode = gstlal_inspiral_node(gstlalInspiralJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=None, vetoes=options.vetoes, time_slide_file=options.time_slide_file, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments, ht_gate_thresh = options.ht_gate_threshold)
 		inspiral_nodes.append((None, noninjnode))
 
 	
@@ -494,7 +497,7 @@ for i, (s, trials_factor) in enumerate(inspiral_pipe.build_bank_string(bank_cach
 	for injections in options.injections:
 		# inspiral jobs by segment
 		for seg in segs:
-			injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments)
+			injnode = gstlal_inspiral_node(gstlalInspiralInjJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict, reference_psd=options.reference_psd, svd_bank=s, injections=injections, vetoes=options.vetoes, control_peak_time = options.control_peak_time, fir_stride = options.fir_stride, coincidence_threshold=options.coincidence_threshold, number = i, instruments = instruments, ht_gate_thresh = options.ht_gate_threshold)
 			inspiral_nodes.append((injections, injnode))	
 
 	
@@ -553,10 +556,10 @@ for injections in options.injections:
 	injxml = injdb+".xml.gz"
 	
 	# extract only the ndoes that were used for injections
-	inj_nodes = inj_nodes[injections]
+	thisinjnodes = inj_nodes[injections]
 
 	# merge
-	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[f.output_name for f in inj_nodes] + [options.vetoes, options.frame_segments_file, injections], p_node = inj_nodes)
+	sqlitenode = ligolw_sqlite_node(toSqliteJob, dag, injdb, input=[f.output_name for f in thisinjnodes] + [options.vetoes, options.frame_segments_file, injections], p_node = thisinjnodes)
 
 	# cluster
 	clusternode = lalapps_run_sqlite_node(lalappsRunSqliteJob, dag, options.cluster_sql_file, input=[injdb], p_node=[sqlitenode])
