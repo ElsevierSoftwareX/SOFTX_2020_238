@@ -48,6 +48,10 @@ search = base_name.replace('_',' ')
 # INITIALIZE THE PAGE OBJECT
 page = cbcwebpage.cbcpage(title=opts.title)
 
+# add external frames
+for f in files:
+	page.add_external_frame(f, f)
+
 # WELCOME MESSAGE PAGE
 page.front = "<big>Welcome</big>"
 
@@ -259,6 +263,8 @@ else: page.write(file_base+"closed_box")
 
 # copy the output
 if opts.webserver_dir:
+	for f in page.external_frames:
+		shutil.copy(f[0], opts.webserver_dir)
 	for f in page.fnames: 
 		shutil.copy(f,opts.webserver_dir)
 	#FIXME not the best way to do this, I should explicitely save file names
