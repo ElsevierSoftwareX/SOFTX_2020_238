@@ -529,7 +529,11 @@ class Data(object):
 
 					# set up the scale factor for the trials table to normalize the rate
 					for ifos in self.ranking_data.scale:
-						self.ranking_data.scale[ifos] = self.ranking_data.trials_table[ifos].count_below_thresh / self.ranking_data.trials_table[ifos].thresh / float(abs(self.ranking_data.livetime_seg)) * self.ranking_data.trials_table.num_nonzero_count() # FIXME should be / num_slides, but we assume only 1 zero lag slide table entry for online data.
+						try:
+							self.ranking_data.scale[ifos] = self.ranking_data.trials_table[ifos].count_below_thresh / self.ranking_data.trials_table[ifos].thresh / float(abs(self.ranking_data.livetime_seg)) * self.ranking_data.trials_table.num_nonzero_count() # FIXME should be / num_slides, but we assume only 1 zero lag slide table entry for online data.
+						except TypeError:
+							print >> sys.stderr, "could not set scale factor, probably because we do not have live time info yet.  Seg is: ", self.ranking_data.livetime_seg
+							
 					# write the new distribution stats to disk
 					utils.write_filename(gen_likelihood_control_doc(self.far, self.instruments), self.likelihood_file, gz = (self.likelihood_file or "stdout").endswith(".gz"), verbose = False, trap_signals = None)
 				else:
