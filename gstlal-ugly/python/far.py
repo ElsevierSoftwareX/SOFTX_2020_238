@@ -823,9 +823,9 @@ class RankingData(object):
 			new_joint_likelihood_pdf =  rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(min(minself, minother), max(maxself, maxother), max(nself, nother)),)))
 
 			for x in self.joint_likelihood_pdfs[k].centres()[0]:
-				new_joint_likelihood_pdf[x,] += self.joint_likelihood_pdfs[k][x,] * float(our_trials[k]) / (our_trials[k] + other_trials[k])
+				new_joint_likelihood_pdf[x,] += self.joint_likelihood_pdfs[k][x,] * float(our_trials[k].count) / (our_trials[k].count + other_trials[k].count)
 			for x in other.joint_likelihood_pdfs[k].centres()[0]:
-				new_joint_likelihood_pdf[x,] += other.joint_likelihood_pdfs[k][x,] * float(other_trials[k]) / (our_trials[k] + other_trials[k])
+				new_joint_likelihood_pdf[x,] += other.joint_likelihood_pdfs[k][x,] * float(other_trials[k].count) / (our_trials[k].count + other_trials[k].count)
 
 			self.joint_likelihood_pdfs[k] = new_joint_likelihood_pdf
 
