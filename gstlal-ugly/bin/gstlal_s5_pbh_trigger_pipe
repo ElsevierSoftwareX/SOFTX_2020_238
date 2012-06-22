@@ -129,6 +129,31 @@ class gstlal_inspiral_plotsummary_node(InspiralNode):
 
 
 #
+# gstlal_inspiral_plot_likelihoods
+#
+
+
+class gstlal_inspiral_plot_likelihoods_job(InspiralJob):
+	"""
+	A gstlal_inspiral_plot_likelihoods job
+	"""
+	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral_plot_likelihoods'), tag_base='gstlal_inspiral_plot_likelihoods'):
+		InspiralJob.__init__(self, executable, tag_base)
+
+
+class gstlal_inspiral_plotsummary_node(InspiralNode):
+	"""
+	A gstlal_inspiral_plot_likelihoods node
+	"""
+	def __init__(self, job, dag, base, url, output = None, p_node=[]):
+		InspiralNode.__init__(self, job, dag, p_node)
+		if output is None:
+			output = url+".html"
+		self.add_var_arg("url=%s > %s" % (url, output))
+		
+
+
+#
 # lalapps_run_sqlite
 #
 
@@ -353,6 +378,31 @@ class gstlal_compute_far_from_snr_chisq_histograms_node(InspiralNode):
 
 
 #
+# gstlal_inspiral_marginalize_likelihood
+#
+
+
+class gstlal_inspiral_marginalize_likelihood_job(InspiralJob):
+	"""
+	A gstlal_inspiral_marginalize_likelihood job
+	"""
+	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral_marginalize_likelihood'), tag_base='gstlal_inspiral_marginalize_likelihood'):
+		InspiralJob.__init__(self, executable, tag_base)
+
+
+class gstlal_inspiral_marginalize_likelihood_node(InspiralNode):
+	"""
+	A gstlal_inspiral_marginalize_likelihood node
+	"""
+	def __init__(self, job, dag, output, background_bins_files, p_node=[]):
+		InspiralNode.__init__(self, job, dag, p_node)
+		for f in background_bins_files:
+			self.add_var_arg(f)
+		self.add_var_opt("output", output)
+		self.output_name = output
+
+
+#
 # Utility functions
 #
 
@@ -467,6 +517,7 @@ lalappsRunSqliteJob = lalapps_run_sqlite_job()
 plotJob = gstlal_inspiral_plotsummary_job()
 openpageJob = gstlal_s5_pbh_summary_page_job(tag_base = 'gstlal_s5_pbh_summary_page_open')
 pageJob = gstlal_s5_pbh_summary_page_job()
+marginalizeJob = gstlal_inspiral_marginalize_likelihood_job()
 
 likelihood_nodes = {}
 noninj_nodes = []
@@ -576,7 +627,8 @@ for injections in options.injections:
 
 
 # compute FAPs and FARs
-farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, background_bins_files = [node.background_name for node in likelihood_nodes.values()], noninj_input = [noninjdb], inj_input = injdbs, p_node = p_nodes)
+margnode = gstlal_inspiral_marginalize_likelihood_node(marginalizeJob, dag, "marginalized_likelihood.xml.gz", [node.background_name for node in likelihood_nodes.values()], p_node = p_nodes)
+farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, background_bins_files = ["marginalized_likelihood.xml.gz"], noninj_input = [noninjdb], inj_input = injdbs, p_node = [margnode])
 
 # make plots
 name_tag = "plots/sub-solar-mass-%d-%d_" % (options.gps_start_time, options.gps_stop_time)
