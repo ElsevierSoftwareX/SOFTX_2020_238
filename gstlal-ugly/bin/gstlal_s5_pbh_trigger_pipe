@@ -141,7 +141,7 @@ class gstlal_inspiral_plot_likelihoods_job(InspiralJob):
 		InspiralJob.__init__(self, executable, tag_base)
 
 
-class gstlal_inspiral_plotsummary_node(InspiralNode):
+class gstlal_inspiral_plot_likelihoods_node(InspiralNode):
 	"""
 	A gstlal_inspiral_plot_likelihoods node
 	"""
