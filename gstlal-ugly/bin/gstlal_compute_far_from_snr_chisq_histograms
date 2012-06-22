@@ -64,11 +64,11 @@ options, filenames = parse_command_line()
 # Pull out background and injections distribution and set up the FAR class
 #
 
-local_ranking = far.LocalRankingData.from_filenames(options.background_bins_file, verbose = options.verbose)
 newtrials = far.TrialsTable()
 newtrials.initialize_from_sngl_ifos(("H1", "H2", "L1", "V1"))
-local_ranking.trials_table += newtrials
-global_ranking = far.RankingData(local_ranking, far_interval = options.far_interval)
+global_ranking = far.RankingData.from_xml(utils.load_filename(options.background_bins_file[0], verbose = options.verbose))
+global_ranking.trials_table += newtrials
+global_ranking.far_interval = options.far_interval
 
 # late import for DB manipulations
 from glue.ligolw import dbtables
