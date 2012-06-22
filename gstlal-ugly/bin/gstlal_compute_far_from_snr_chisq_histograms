@@ -50,7 +50,6 @@ def parse_command_line():
 	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
 	parser.add_option("--non-injection-db", metavar = "filename", action = "append", help = "single file for non injections run")
 	parser.add_option("--injection-dbs", action = "append", default=[], help = "append to the list of possible injection files, may be empty if no injections were done. Databases are assumed to be over the same time period as the non injection databases using the same templates.  If not the results will be nonsense.")
-	parser.add_option("--far-interval", default = 100, type = "float", help = "interval over which to estimate the trials / unit time for FAP, default = 100s")	
 	options, filenames = parser.parse_args()
 	return options, filenames
 
@@ -66,9 +65,10 @@ options, filenames = parse_command_line()
 
 newtrials = far.TrialsTable()
 newtrials.initialize_from_sngl_ifos(("H1", "H2", "L1", "V1"))
-global_ranking = far.RankingData.from_xml(utils.load_filename(options.background_bins_file[0], verbose = options.verbose))
+global_ranking, procid = far.RankingData.from_xml(utils.load_filename(options.background_bins_file[0], verbose = options.verbose))
 global_ranking.trials_table += newtrials
-global_ranking.far_interval = options.far_interval
+global_ranking.far_interval = abs(global_ranking.livetime_seg) / min([t.count for t in global_ranking.trials_table.values() if t.count != 0])
+print >> sys.stderr, global_ranking.far_interval
 
 # late import for DB manipulations
 from glue.ligolw import dbtables
@@ -91,10 +91,12 @@ for bkdb in options.non_injection_db:
 
 
 #
-# Calibrate to the high event limit to get the number of independent trials
+# Calibrate to the high event limit (100 events) to get the number of independent trials
 #
+thresh = 100. / float(abs(global_ranking.livetime_seg))
+print >> sys.stderr, thresh
 
-global_ranking.trials_table.set_thresh(1. / global_ranking.far_interval)
+global_ranking.trials_table.set_thresh(thresh)
 
 for bkdb in options.non_injection_db:
 	working_filename = dbtables.get_connection_filename(bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
@@ -110,8 +112,16 @@ for bkdb in options.non_injection_db:
 # the numer of ifo combinations (since we make a single IFAR plot)
 #
 
+# get number of slides
+working_filename = dbtables.get_connection_filename(options.non_injection_db[0], tmp_path = options.tmp_space, verbose = options.verbose)
+connection = sqlite3.connect(working_filename)
+num_slides, = connection.cursor().execute("SELECT COUNT(DISTINCT(time_slide_id)) FROM time_slide").fetchone()
+connection.close()
+dbtables.discard_connection_filename(options.non_injection_db[0], working_filename, verbose = options.verbose)
+
+
 for ifos in global_ranking.trials_table:
-	global_ranking.scale[ifos] = global_ranking.trials_table[ifos].count_below_thresh / global_ranking.trials_table[ifos].thresh / float(abs(global_ranking.livetime_seg)) * global_ranking.trials_table.num_nonzero_count()
+	global_ranking.scale[ifos] = global_ranking.trials_table[ifos].count_below_thresh / global_ranking.trials_table[ifos].thresh / float(abs(global_ranking.livetime_seg)) * global_ranking.trials_table.num_nonzero_count() / num_slides
 
 
 #
