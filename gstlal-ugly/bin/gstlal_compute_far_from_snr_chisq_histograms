@@ -67,8 +67,7 @@ newtrials = far.TrialsTable()
 newtrials.initialize_from_sngl_ifos(("H1", "H2", "L1", "V1"))
 global_ranking, procid = far.RankingData.from_xml(utils.load_filename(options.background_bins_file[0], verbose = options.verbose))
 global_ranking.trials_table += newtrials
-global_ranking.far_interval = abs(global_ranking.livetime_seg) / min([t.count for t in global_ranking.trials_table.values() if t.count != 0])
-print >> sys.stderr, global_ranking.far_interval
+global_ranking.far_interval = float(abs(global_ranking.livetime_seg) / min([t.count for t in global_ranking.trials_table.values() if t.count != 0]))
 
 # late import for DB manipulations
 from glue.ligolw import dbtables
@@ -94,7 +93,6 @@ for bkdb in options.non_injection_db:
 # Calibrate to the high event limit (100 events) to get the number of independent trials
 #
 thresh = 100. / float(abs(global_ranking.livetime_seg))
-print >> sys.stderr, thresh
 
 global_ranking.trials_table.set_thresh(thresh)
 
