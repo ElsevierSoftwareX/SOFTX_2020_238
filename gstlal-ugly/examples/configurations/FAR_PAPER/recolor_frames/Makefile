@@ -1,10 +1,22 @@
 MIN_SEG_LENGTH = 1800 # seconds, i.e. a half hour
 START = 871147452
 STOP =  871747452
+
 SEED = 1
-LOCAL_RATE = 12.0 # mergers per Mpc^3 per Myr, corresponds to "optimistic rate"
-MAX_DIST = 500 # Mpc
-FLOW = 14
+BNS_WAVEFORM = TaylorT4threePointFivePN
+NSBH_WAVEFORM = TaylorT4threePointFivePN
+BNS_LOCAL_RATE = 120 # mergers per Mpc^3 per Myr, corresponds to "realistic rate"
+NSBH_LOCAL_RATE = 0.005 # mergers per Mpc^3 per Myr, corresponds to "realistic rate"
+BNS_MAX_DIST = 200 # Mpc
+NSBH_MAX_DIST = 5000 # Mpc
+NS_MIN_MASS = 1.0
+NS_MAX_MASS = 2.0
+BH_MIN_MASS = 5.0
+BH_MAX_MASS = 20.0
+BH_MIN_SPIN = 0.0
+BH_MAX_SPIN = 1.0
+FLOW = 10
+
 TRIM = 16
 
 all : dag
@@ -49,9 +61,19 @@ injections.xml:
 	--flower $(FLOW) \
 	--gps-start-time $(START) \
 	--gps-end-time $(STOP) \
-	--bns-local-rate $(LOCAL_RATE) \
-	--output injections.xml \
-	--bns-max-distance $(MAX_DIST)
+	--bns-waveform $(BNS_WAVEFORM) \
+	--nsbh-waveform $(NSBH_WAVEFORM) \
+	--bns-local-rate $(BNS_LOCAL_RATE) \
+	--nsbh-local-rate $(NSBH_LOCAL_RATE) \
+	--bns-max-distance $(BNS_MAX_DIST) \
+	--nsbh-max-distance $(NSBH_MAX_DIST) \
+	--ns-min-mass $(NS_MIN_MASS) \
+	--ns-max-mass $(NS_MAX_MASS) \
+	--bh-min-mass $(BH_MIN_MASS) \
+	--bh-max-mass $(BH_MAX_MASS) \
+	--bh-min-spin $(BH_MIN_SPIN) \
+	--bh-max-spin $(BH_MAX_SPIN) \
+	--output $@ && gstlal_injections_by_local_rate_plot $@
 
 # make a virgo psd even though we don't have virgo frames
 H1recolorpsd.xml.gz : 
@@ -67,4 +89,4 @@ dag : vetoes.xml segments.xml frame.cache injections.xml recolor_psd.xml.gz
 	./recolor_pipe --recolor-psd recolor_psd.xml.gz --segment-file segments.xml --min-segment-length $(MIN_SEG_LENGTH) --frame-cache H1=frame.H1.cache,L1=frame.L1.cache
 	
 realclean :
-	rm -r *.sub *.dag* *.cache *.sh *reference_psd.xml.gz *segments.xml.gz logs *.xml *.xml.gz 
+	rm -rf *.sub *.dag* *.cache *.sh *reference_psd.xml.gz *segments.xml.gz logs *.xml *.xml.gz  H1-LSC-STRAIN L1-LSC-STRAIN
