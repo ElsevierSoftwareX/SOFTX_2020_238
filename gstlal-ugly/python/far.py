@@ -853,23 +853,21 @@ class RankingData(object):
 		except KeyError:
 			trials = 1
 		# multiply by a scale factor if provided
-		if scale:
-			try:
-				trials *= self.scale[ifos]
-			except KeyError:
-				# assume scale is 1
-				pass
+		# (assume scale is 1 if disabled or not available)
+		if scale and ifos in self.scale:
+			trials *= self.scale[ifos]
 		# normalize to the far interval
-		try:
-			if self.far_interval is not None:
+		if self.far_interval is not None:
+			# if we don't have livetime segments then we cannot
+			# yet safely compute a value for this, so we set it
+			# to Nan.  This can happen when an online analyis
+			# starts from scratch and the live time segments
+			# are 0
+			try:
 				trials *= self.far_interval / float(abs(self.livetime_seg))
-			return 1.0 - (1.0 - fap)**trials
-		# if we don't have livetime segments then we cannot yet safely
-		# compute a value for this, so we set it to Nan.  This can
-		# happen when an online analyis starts from scratch and the
-		# live time segments are 0
-		except TypeError:
-			return float('nan')
+			except TypeError:
+				return float('nan')
+		return fap_after_trials(fap, trials)
 
 	def compute_far(self, fap):
 		# catch a nan value, when FAP could not be estimated.  This is
