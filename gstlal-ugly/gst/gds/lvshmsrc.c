@@ -273,8 +273,8 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 			*buffer = gst_buffer_new();
 			gst_buffer_set_caps(*buffer, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)));
-			GST_BUFFER_TIMETSAMP(*buffer) = t_before;
-			if(GST_CLOCK_TIME_VALID(element->max_latency))
+			GST_BUFFER_TIMESTAMP(*buffer) = t_before;
+			if(GST_CLOCK_TIME_IS_VALID(element->max_latency))
 				GST_BUFFER_TIMESTAMP(*buffer) -= element->max_latency;
 			GST_DEBUG_OBJECT(element, "heartbeat timestamp = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(*buffer)));
 			GST_BUFFER_DURATION(*buffer) = GST_CLOCK_TIME_NONE;
