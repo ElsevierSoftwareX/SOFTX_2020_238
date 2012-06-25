@@ -556,6 +556,10 @@ static void forward_sink_event(gpointer object, gpointer data)
 	GstPad *pad = GST_PAD(object);
 	GstEvent *event = GST_EVENT(data);
 	if(gst_pad_is_linked(pad)) {
+		/*
+		 * forward event out this pad.  ignore failures
+		 * FIXME:  should failures be ignored?
+		 */
 		gst_event_ref(event);
 		gst_pad_push_event(pad, event);
 	}
@@ -599,6 +603,69 @@ static gboolean sink_event(GstPad *pad, GstEvent *event)
 
 
 /*
+ * forward_heart_beat()
+ */
+
+
+static void do_heart_beat(gpointer object, gpointer data)
+{
+	GstPad *pad = GST_PAD(object);
+	GstClockTime t = *(GstClockTime *) data;
+
+	if(gst_pad_is_linked(pad)) {
+		struct pad_state *pad_state = (struct pad_state *) gst_pad_get_element_private(pad);
+		GstBuffer *buffer;
+
+		/*
+		 * create heartbeat buffer for this pad
+		 */
+
+		buffer = gst_buffer_new();
+		GST_BUFFER_TIMESTAMP(buffer) = t;
+		GST_BUFFER_DURATION(buffer) = 0;
+		GST_BUFFER_OFFSET(buffer) = GST_BUFFER_OFFSET_END(buffer) = pad_state->next_out_offset;
+		gst_buffer_set_caps(buffer, GST_PAD_CAPS(pad));
+
+		/*
+		 * check for disconts
+		 */
+
+		if(pad_state->need_discont || (GST_CLOCK_TIME_IS_VALID(pad_state->next_timestamp) && llabs(GST_BUFFER_TIMESTAMP(buffer) - pad_state->next_timestamp) > 1)) {
+			GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
+			pad_state->need_discont = FALSE;
+		}
+
+		/*
+		 * record state for next time
+		 */
+
+		pad_state->next_timestamp = GST_BUFFER_TIMESTAMP(buffer) + GST_BUFFER_DURATION(buffer);
+		pad_state->next_out_offset = GST_BUFFER_OFFSET_END(buffer);
+
+		/*
+		 * push buffer.  ignore failures
+		 * FIXME:  should failures be ignored?
+		 */
+
+		gst_pad_push(pad, buffer);
+	}
+	gst_object_unref(pad);
+}
+
+
+static GstFlowReturn forward_heart_beat(GSTFrameCPPChannelDemux *element, GstClockTime t)
+{
+	GstIterator *iter = gst_element_iterate_src_pads(GST_ELEMENT(element));
+	GstFlowReturn result = GST_FLOW_OK;
+
+	gst_iterator_foreach(iter, do_heart_beat, &t);
+	gst_iterator_free(iter);
+
+	return result;
+}
+
+
+/*
  * chain()
  */
 
@@ -611,6 +678,20 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 	gboolean pads_added = FALSE;
 	GstPad *srcpad = NULL;
 	GstFlowReturn result = GST_FLOW_OK;
+
+	/*
+	 * special case:  0-length input buffers are treated as heart
+	 * beats, we forward a heardbeat out each source pad
+	 */
+
+	if(!GST_BUFFER_SIZE(inbuf)) {
+		result = forward_heart_beat(element, GST_BUFFER_TIMESTAMP(inbuf));
+		goto done;
+	}
+
+	/*
+	 * decode frame file
+	 */
 
 	try {
 		if(element->do_file_checksum) {
