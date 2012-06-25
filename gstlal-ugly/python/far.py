@@ -429,8 +429,8 @@ class DistributionsStats(object):
 			chi2_over_snr2s[0] = chi2_over_snr2s[1] * .9
 			chi2_over_snr2s[-1] = chi2_over_snr2s[-2] * 1.1
 			for snr in snrs:
-				p = numpy.exp(-snr**2 / 2. + snrs[0]**2 / 2. + numpy.log(n))
-				p += (transition / snr)**6 * numpy.exp( -transition**2 / 2. + snrs[0]**2 / 2. + numpy.log(n)) # Softer fall off above some transition SNR for numerical reasons
+				p = math.exp(-snr**2 / 2. + snrs[0]**2 / 2. + math.log(n))
+				p += (transition / snr)**6 * math.exp(-transition**2 / 2. + snrs[0]**2 / 2. + math.log(n)) # Softer fall off above some transition SNR for numerical reasons
 				for chi2_over_snr2 in chi2_over_snr2s:
 					binarr[snr, chi2_over_snr2] += p
 			# normalize to the requested count
@@ -485,7 +485,7 @@ class DistributionsStats(object):
 			if verbose:
 				print >>sys.stderr, "%s," % name,
 			rate.filter_array(binnedarray.array, self.filters[name])
-			binnedarray.array /= numpy.sum(binnedarray.array)
+			binnedarray.array /= binnedarray.array.sum()
 		if verbose:
 			print >>sys.stderr, "done"
 
@@ -883,7 +883,7 @@ class RankingData(object):
 			livetime = self.far_interval
 		else:
 			livetime = float(abs(self.livetime_seg))
-		return 0. - numpy.log(1. - fap) / livetime
+		return -math.log(1. - fap) / livetime
 
 
 #
