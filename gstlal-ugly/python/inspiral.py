@@ -327,11 +327,11 @@ class Data(object):
 		#
 		
 		# setup bottle routes
-		bottle.route("/latency_histogram.txt")(self.write_latency_histogram)
-		bottle.route("/latency_history.txt")(self.write_latency_history)
-		bottle.route("/snr_history.txt")(self.write_snr_history)
-		bottle.route("/ram_history.txt")(self.write_ram_history)
-		bottle.route("/likelihood.xml")(self.write_likelihood_file)
+		bottle.route("/latency_histogram.txt")(self.web_get_latency_histogram)
+		bottle.route("/latency_history.txt")(self.web_get_latency_history)
+		bottle.route("/snr_history.txt")(self.web_get_snr_history)
+		bottle.route("/ram_history.txt")(self.web_get_ram_history)
+		bottle.route("/likelihood.xml")(self.web_get_likelihood_file)
 
 		self.lock = threading.Lock()
 		self.filename = filename
@@ -567,7 +567,7 @@ class Data(object):
 		output.close()
 		return outstr
 
-	def write_likelihood_file(self):
+	def web_get_likelihood_file(self):
 		self.lock.acquire()
 		try:
 			outstr = self.__write_likelihood_file()
@@ -739,7 +739,7 @@ class Data(object):
 			self.lock.release()
 
 
-	def write_latency_histogram(self):
+	def web_get_latency_histogram(self):
 		self.lock.acquire()
 		try:
 			for latency, number in zip(self.latency_histogram.centres()[0][1:-1], self.latency_histogram.array[1:-1]):
@@ -748,7 +748,7 @@ class Data(object):
 			self.lock.release()
 
 
-	def write_latency_history(self):
+	def web_get_latency_history(self):
 		self.lock.acquire()
 		try:
 			# first one in the list is sacrificed for a time stamp
@@ -758,7 +758,7 @@ class Data(object):
 			self.lock.release()
 
 
-	def write_snr_history(self):
+	def web_get_snr_history(self):
 		self.lock.acquire()
 		try:
 			# first one in the list is sacrificed for a time stamp
@@ -768,7 +768,7 @@ class Data(object):
 			self.lock.release()
 
 
-	def write_ram_history(self):
+	def web_get_ram_history(self):
 		self.lock.acquire()
 		try:
 			# first one in the list is sacrificed for a time stamp
