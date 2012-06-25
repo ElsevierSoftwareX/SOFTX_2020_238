@@ -121,35 +121,23 @@ def fap_after_trials(p, m):
 		# use direct Taylor expansion of 1 - (1 - p)^m
 		#
 
-		def terms(p, m):
-			n = 0
-			term = -1.0
-			while 1:
-				term *= (n - m) * p / (n + 1.0)
-				n += 1
-				yield term
-
 		s = 0.0
-		for term in terms(p, m):
+		term = -1.0
+		for n in itertools.count():
+			term *= (n - m) * p / (n + 1.0)
 			s += term
 			if abs(term) <= abs(1e-17 * s):
 				return s
 
-	if p < .1:
+	if p < .125:
 		#
 		# compute result from Taylor expansion of ln(1 - p)
 		#
 
-		def terms(p, m):
-			n = 2
-			term = 1.0
-			while 1:
-				term *= p * (n - 1.0) / n
-				n += 1
-				yield term
-
-		s = 1.0
-		for term in terms(p, m):
+		s = p_powers = 1.0
+		for n in itertools.count(2):
+			p_powers *= p
+			term = p_powers / n
 			s += term
 			if term <= 1e-17 * s:
 				return 1.0 - math.exp(-m * p * s)
