@@ -112,7 +112,7 @@ enum property {
 static GstClockTime GPSNow(void)
 {
 	/* FIXME:  why does TAInow() return the GPS time? */
-	return gst_util_uint64_scale_int(TAInow(), GST_SECOND, _ONESEC);
+	return gst_util_uint64_scale_int_round(TAInow(), GST_SECOND, _ONESEC);
 }
 
 
@@ -232,28 +232,27 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	 * element is "unlocked".
 	 */
 
-	if(!element->unblocked) {
-		element->create_thread = pthread_self();
-		g_mutex_lock(element->create_thread_lock);
-		data = lvshm_getNextBuffer(element->handle, flags);
-		g_mutex_unlock(element->create_thread_lock);
-		if(!data) {
-			if(!element->unblocked)
-				GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("unknown failure retrieving buffer from GDS shared memory.  possible causes include:  timeout, interupted by signal, no data available."));
-			else
-				GST_DEBUG_OBJECT(element, "unlock() called, no buffer created");
-			/* indicate end-of-stream */
-			return GST_FLOW_UNEXPECTED;
-		}
-		/*
-		 * we have successfully retrieved data.  all code paths
-		 * from this point must include a call to
-		 * lvshm_releaseDataBuffer()
-		 */
-	} else {
+	if(element->unblocked) {
 		GST_DEBUG_OBJECT(element, "unlock() called, no buffer created");
 		return GST_FLOW_UNEXPECTED;
 	}
+
+	element->create_thread = pthread_self();
+	g_mutex_lock(element->create_thread_lock);
+	data = lvshm_getNextBuffer(element->handle, flags);
+	g_mutex_unlock(element->create_thread_lock);
+	if(!data) {
+		if(element->unblocked)
+			GST_DEBUG_OBJECT(element, "unlock() called, no buffer created");
+		else
+			GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("unknown failure retrieving buffer from GDS shared memory.  possible causes include:  timeout, interupted by signal, no data available."));
+		/* indicate end-of-stream */
+		return GST_FLOW_UNEXPECTED;
+	}
+	/*
+	 * we have successfully retrieved data.  all code paths from this
+	 * point must include a call to lvshm_releaseDataBuffer()
+	 */
 	length = lvshm_dataLength(element->handle);
 	GST_LOG_OBJECT(element, "retrieved %u byte frame file labeled %lu", length, (unsigned long) lvshm_bufferGPS(element->handle));
 
