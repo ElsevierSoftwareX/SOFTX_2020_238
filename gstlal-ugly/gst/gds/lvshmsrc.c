@@ -216,6 +216,7 @@ static gboolean unlock_stop(GstBaseSrc *basesrc)
 static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, GstBuffer **buffer)
 {
 	GDSLVSHMSrc *element = GDS_LVSHMSRC(basesrc);
+	GstClockTime t_before, t_after;
 	int flags = 0;	/* LVSHM_NOWAIT is not set = respect wait time */
 	const char *data;
 	unsigned length;
@@ -239,15 +240,56 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 
 	element->create_thread = pthread_self();
 	g_mutex_lock(element->create_thread_lock);
+	t_before = GPSNow();
 	data = lvshm_getNextBuffer(element->handle, flags);
+	t_after = GPSNow();
 	g_mutex_unlock(element->create_thread_lock);
 	if(!data) {
-		if(element->unblocked)
+		/*
+		 * data retrieval failed.  guess cause.
+		 * FIXME:  we need an API that can tell us the cause
+		 */
+
+		if(element->unblocked) {
+			/*
+			 * assume reason for failure was we were killed by
+			 * a signal, and assume that is because we were
+			 * unblocked.  indicate end-of-stream
+			 */
+
 			GST_DEBUG_OBJECT(element, "unlock() called, no buffer created");
-		else
+			return GST_FLOW_UNEXPECTED;
+		} else if(element->wait_time > 0. && (GstClockTimeDiff) (t_after - t_before) >= (GstClockTimeDiff) (element->wait_time * GST_SECOND)) {
+			/*
+			 * assume reason for failure was a timeout.  create
+			 * a 0-length buffer with a guess as to the
+			 * timestamp of the missing data.
+			 *
+			 * FIXME:  we need an API that can tell us the
+			 * timestamp of the missing data
+			 */
+
+			GST_DEBUG_OBJECT(element, "timeout occured, creating 0-length heartbeat buffer");
+
+			*buffer = gst_buffer_new();
+			gst_buffer_set_caps(*buffer, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)));
+			GST_BUFFER_TIMETSAMP(*buffer) = t_before;
+			if(GST_CLOCK_TIME_VALID(element->max_latency))
+				GST_BUFFER_TIMESTAMP(*buffer) -= element->max_latency;
+			GST_DEBUG_OBJECT(element, "heartbeat timestamp = %" GST_TIME_SECONDS_FORMAT, GST_TIME_SECONDS_ARGS(GST_BUFFER_TIMESTAMP(*buffer)));
+			GST_BUFFER_DURATION(*buffer) = GST_CLOCK_TIME_NONE;
+			GST_BUFFER_OFFSET(*buffer) = offset;
+			GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
+			return result;
+		} else {
+			/*
+			 * reason for failure is not known.  indicate
+			 * end-of-stream
+			 */
+
 			GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("unknown failure retrieving buffer from GDS shared memory.  possible causes include:  timeout, interupted by signal, no data available."));
-		/* indicate end-of-stream */
-		return GST_FLOW_UNEXPECTED;
+			return GST_FLOW_UNEXPECTED;
+		}
 	}
 	/*
 	 * we have successfully retrieved data.  all code paths from this
@@ -536,10 +578,10 @@ static void instance_init(GTypeInstance *object, gpointer class)
 	 */
 
 	element->name = NULL;
+	element->max_latency = element->min_latency = GST_CLOCK_TIME_NONE;
 	element->unblocked = FALSE;
 	element->create_thread_lock = g_mutex_new();
 	element->handle = NULL;
-	element->max_latency = element->min_latency = GST_CLOCK_TIME_NONE;
 }
 
 
