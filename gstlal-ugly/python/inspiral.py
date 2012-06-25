@@ -332,6 +332,8 @@ class Data(object):
 		bottle.route("/snr_history.txt")(self.web_get_snr_history)
 		bottle.route("/ram_history.txt")(self.web_get_ram_history)
 		bottle.route("/likelihood.xml")(self.web_get_likelihood_file)
+		bottle.route("/gracedb_far_threshold.txt", method = "GET")(self.web_get_gracedb_far_threshold)
+		bottle.route("/gracedb_far_threshold.txt", method = "POST")(self.web_set_gracedb_far_threshold)
 
 		self.lock = threading.Lock()
 		self.filename = filename
@@ -774,6 +776,33 @@ class Data(object):
 			# first one in the list is sacrificed for a time stamp
 			for time, ram in self.ram_history:
 				yield "%f %e\n" % (time, ram)
+		finally:
+			self.lock.release()
+
+
+	def web_get_gracedb_far_threshold(self):
+		self.lock.acquire()
+		try:
+			if self.gracedb_far_threshold is not None:
+				yield "rate=%.17g\n" % self.gracedb_far_threshold
+			else:
+				yield "rate=\n"
+		finally:
+			self.lock.release()
+
+
+	def web_set_gracedb_far_threshold(self):
+		self.lock.acquire()
+		try:
+			rate = bottle.request.forms["rate"]
+			if rate:
+				self.gracedb_far_threshold = float(rate)
+				yield "OK: rate=%.17g\n" % self.gracedb_far_threshold
+			else:
+				self.gracedb_far_threshold = None
+				yield "OK: rate=\n"
+		except:
+			yield "error\n"
 		finally:
 			self.lock.release()
 
