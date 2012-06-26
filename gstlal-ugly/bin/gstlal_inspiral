@@ -313,7 +313,9 @@ if options.likelihood_file is not None:
 	FAR, proc_id = far.LocalRankingData.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose))
 else:
 	FAR = far.LocalRankingData(segments.segment(None, None), far.DistributionsStats())
-
+	# initialize an empty trials table with the combinations of detectors
+	# that this job will analyze
+	FAR.trials_table.initialize_from_sngl_ifos(detectors.keys())
 
 #
 # build output document
