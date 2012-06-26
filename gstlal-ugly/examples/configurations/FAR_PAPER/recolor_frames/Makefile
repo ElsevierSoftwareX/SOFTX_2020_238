@@ -2,10 +2,10 @@ MIN_SEG_LENGTH = 1800 # seconds, i.e. a half hour
 START = 871147452
 STOP =  871747452
 
-SEED = 1
+SEED = 2
 BNS_WAVEFORM = TaylorT4threePointFivePN
 NSBH_WAVEFORM = TaylorT4threePointFivePN
-BNS_LOCAL_RATE = 120 # mergers per Mpc^3 per Myr, corresponds to "realistic rate"
+BNS_LOCAL_RATE = 12 # mergers per Mpc^3 per Myr, corresponds to "optimistic rate"
 NSBH_LOCAL_RATE = 0.005 # mergers per Mpc^3 per Myr, corresponds to "realistic rate"
 BNS_MAX_DIST = 200 # Mpc
 NSBH_MAX_DIST = 5000 # Mpc
