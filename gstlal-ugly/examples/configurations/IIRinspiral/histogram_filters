@@ -184,9 +184,8 @@ def plotSNRhistograms(snrlist, mchirplist, niirlist, out_filename="allvsall.png"
 	axHistogramx1 = plotHistogram(rect_histx1, niirlist, Xa = axScatter1)
 	axHistogramx2 = plotHistogram(rect_histx2, mchirplist, Xa = axScatter2)
 	axHistogramy1 = plotHistogram(rect_histy1, snrlist, Xa = axScatter1, orientation="horizontal")
-	pylab.savefig(out_filename)
-	pylab.close()
 
+	return fig
 
 
 #file = open('snrlist.csv','wb')
@@ -270,7 +269,19 @@ fhigh = ligolw_process.get_process_params(xmldoc, "tmpltbank", "--sample-rate")
 epsilon = param.get_pyvalue(xmldoc, 'epsilon')
 scl = 3.0*(flow[0]**(-5.0/6.0)-(1.0*fhigh[0])**(-5.0/6.0))/(4*numpy.pi**(4.0/3.0)*numpy.sqrt(15.0*epsilon)*(4.925491e-6)**(5.0/6.0))
 
-plotSNRhistograms(snrs, mchirp, Niir, scl = scl)
+
+fig = plotSNRhistograms(snrs, mchirp, Niir, scl = scl)
+mmin = min(min(m1),min(m2))
+mmax = max(max(m1),max(m2))
+Cmin = min(mchirp)
+Cmax = max(mchirp)
+
+s = "N = %d\nComponent mass = (%3.2f, %3.2f)\nTotal mass = (%3.2f, %3.2f)\nChirp mass = (%3.2f, %3.2f)\n$\epsilon$ = %5.4f\nMinimal match = %3.2f\nMin Freq = %2.0f" % (ntemplates, mmin, mmax, 2.0*mmin, 2.0*mmax, Cmin, Cmax, epsilon, MM[0], 1.0*flow[0])
+pylab.figtext(0.13, 0.18, s, fontsize=14)
+
+pylab.savefig("allvsall.png")
+pylab.close()
+
 plotNumFiltersHistogram(Mr)
 plotSNROverlap(snrs)
 
