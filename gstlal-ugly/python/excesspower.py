@@ -44,7 +44,7 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 		print >> sys.stderr, "WARNING: high frequency (%f) requested is higher than sampling rate / 2, adjusting to match." % fhigh
 		fhigh = rate/2
 
-	if fhigh >= rate/2:
+	if fhigh == rate/2:
 		print >> sys.stderr, "WARNING: high frequency (%f) is equal to Nyquist. Filters will probably be bad. Reduce the high frequency." % fhigh
 
 	# Filter length needs to be long enough to get the pertinent features in
@@ -89,18 +89,24 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 	filters = numpy.array([])
 	for band in range( bands ):
 
-		# Create the EP filter in the FD
-		h_wind = lalburst.XLALCreateExcessPowerFilter( 
-			#channel_flow =
-		# The XLAL function's flow corresponds to the left side FWHM, not the near zero point. Thus, the filter *actually* begins at f_cent - band and ends at f_cent + band, and flow = f_cent - band/2 and fhigh = f_cent + band/2
-			(flow + b_wind/2.0) + band*b_wind,
-			#channel_width =
-			b_wind, 
-			#psd =
-			psd, 
-			#correlation =
-			spec_corr 
-		)
+		try:
+			# Create the EP filter in the FD
+			h_wind = lalburst.XLALCreateExcessPowerFilter(
+				#channel_flow =
+				# The XLAL function's flow corresponds to the left side FWHM, not the near zero point. Thus, the filter *actually* begins at f_cent - band and ends at f_cent + band, and flow = f_cent - band/2 and fhigh = f_cent + band/2
+				(flow + b_wind/2.0) + band*b_wind,
+				#channel_width =
+				b_wind,
+				#psd =
+				psd,
+				#correlation =
+				spec_corr
+			)
+		except: # The XLAL wrapped function didn't work
+			statuserr = "Filter generation failed for band %f with %d samples.\nPossible relevant bits and pieces that went into the function call:\n" % (band*b_wind, filter_len)
+			statuserr += "PSD - deltaF: %f, f0 %f, npoints %d\n" % (psd.deltaF, psd.f0, len(psd.data))
+			statuserr += "spectrum correlation - npoints %d" % len(spec_corr)
+			sys.exit( statuserr )
 
 		# Zero pad up to lowest frequency
 		h_wind.data = numpy.hstack((numpy.zeros((int(h_wind.f0 / h_wind.deltaF), ), dtype = "complex"), h_wind.data))
@@ -115,17 +121,21 @@ def build_filter(psd, rate=4096, flow=64, fhigh=2000, filter_len=0, b_wind=16.0,
 			#f.write( "%f %f\n" % (freq*h_wind.deltaF,s) )
 		#f.close()
 
+
 		# IFFT the window into a time series for use as a TD filter
-		t_series = REAL8TimeSeries()
-		t_series.data = numpy.zeros( (d_len,), dtype="double" ) 
-		XLALREAL8FreqTimeFFT( 
-			# t_series =
-			t_series, 
-			# window_freq_series =
-			h_wind, 
-			# ifft plan =
-			ifftplan
-		)
+		try:
+			t_series = REAL8TimeSeries()
+			t_series.data = numpy.zeros( (d_len,), dtype="double" ) 
+			XLALREAL8FreqTimeFFT( 
+				# t_series =
+				t_series, 
+				# window_freq_series =
+				h_wind, 
+				# ifft plan =
+				ifftplan
+			)
+		except:
+			sys.exit( "Failed to get time domain filters. The usual cause of this is a filter length which is only a few PSD bins wide. Try increaseing the fft-length property of the whitener." )
 
 		td_filter = t_series.data
 		td_filter = numpy.roll( td_filter, filter_len/2 )[:filter_len]

@@ -82,11 +82,15 @@ class EPHandler( LLOIDHandler ):
 		# Right now that's probably something like 80 s.
 		self.whitener_offset = 20
 
+		# Keep track of units -- enable us to go below rates of 1 Hz
+		# FIXME: Use LAL units
+		self.units = 1
+
 		# Defaults -- Time-frequency map settings
 		self.base_band = 16
 		self.flow = 64 
 		self.fhigh = 1000
-		#self.fhigh = 2000
+		self.fft_length = 8 # s
 
 		# Defaults -- Resolution settings
 		self.rate = 2048
@@ -341,6 +345,11 @@ class EPHandler( LLOIDHandler ):
 		# Assign process ids to events
 		for trig in self.triggers:
 			trig.process_id = process.process_id
+			# If we're using a different units system, indicate it
+			trig.duration /= handler.units
+			#trig.peak_time /= handler.units
+			#trig.start_time /= handler.units
+			trig.central_freq *= handler.units
 
 		output.childNodes[0].appendChild( self.triggers )
 
@@ -369,8 +378,7 @@ class EPHandler( LLOIDHandler ):
 		"""
 		Method called to flush buffers and shutdown the pipeline.
 		"""
-		print >>sys.stderr, "Caught signal: dying a terrible, terrible death."
-		print >>sys.stderr, "Signal received, if any: " + str(signum)
+		print >>sys.stderr, "Caught signal, signal received, if any: " + str(signum)
 		self.pipeline.set_state( gst.STATE_PAUSED )
 		bus = self.pipeline.get_bus()
 		bus.post(gst.message_new_eos(pipeline))
@@ -379,8 +387,11 @@ class EPHandler( LLOIDHandler ):
 
 		print >>sys.stderr, "Please wait (don't ctrl+c) while I dump triggers to disk."
 		dur = int( handler.stop - handler.time_since_dump + 0.5 )
+		# FIXME: Handle this better
 		if( os.path.isdir( self.outfile ) ):
 			outfile = "%s/%s_%s_triggers_%d_%d.xml" % (self.outfile, self.inst, self.channel, self.time_since_dump, dur)
+		elif( self.outfile is None or len(self.outfile) == 0 ):
+			outfile = "%s_%s_triggers_%d_%d.xml" % (self.inst, self.channel, self.time_since_dump, dur)
 		else:
 			outfile = self.outfile
 		self.write_triggers( False, filename = outfile )
@@ -574,8 +585,13 @@ else:
 		site = None
 
 	# Handler options
-	handler.flow = cfg.getint( "tf_parameters", "min-frequency" )
-	handler.fhigh = cfg.getint( "tf_parameters", "max-frequency" )
+	try:
+		handler.fft_length = cfg.getfloat( "tf_parameters", "fft-length" )
+	except ConfigParser.NoOptionError:
+		pass
+
+	handler.flow = cfg.getfloat( "tf_parameters", "min-frequency" )
+	handler.fhigh = cfg.getfloat( "tf_parameters", "max-frequency" )
 	handler.base_band = cfg.getfloat( "tf_parameters", "base-resolution" )
 	handler.max_level = cfg.getint( "tf_parameters", "max-resolution-level" )
 	handler.max_duration = cfg.getfloat( "tf_parameters", "max-time-resolution" )
@@ -774,6 +790,7 @@ if( inj_loc and verbose ):
 	head = mkprogressreport( pipeline, head, "injection stream" )
 
 head = whitener = mkwhiten( pipeline, head )
+whitener.set_property( "fft-length", handler.fft_length ) # GSTLAL_PSDMODE_FIXED
 if( psdfile is not None ): # In other words, we have a reference PSD
 	whitener.set_property( "mean-psd", handler.psd.data )
 	whitener.set_property( "psd-mode", 1 ) # GSTLAL_PSDMODE_FIXED
@@ -821,15 +838,37 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	#head = postfirtee
 	#######
 
-	head = mkgeneric( pipeline, head, "lal_audioundersample" )
-
 	band = base_band * 2**res_level
 	# TODO: Check this
 	chan = numpy.ceil( nchannels / 2.0**res_level )
 
 	# The undersample_rate for band = R/2 is => sample_rate (passthrough)
 	undersamp_rate = 2 * band
-	head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate )
+
+	#head = mkgeneric( pipeline, head, "lal_audioundersample" )
+
+	# If the rate which would be set by the undersampler falls below one, we have
+	# to take steps to prevent this, as gstreamer can't handle this. The 
+	# solution is to change the "units" of the rate. Ideally, this should be done
+	# much earlier in the pipeline (e.g. as the data comes out of the source),
+	# however, to avoid things like figuring out what that means for the FIR bank
+	# we change units here, and readjust appropriately in the trigger output.
+	if( undersamp_rate < 1 ):
+		print "Automatically adjusting units to compensate for undersample rate falling below unity."
+		# No, it's not mHz (which would be 1000), but rates which aren't factors
+		# of two are often tricky, thus if the rate is a factor of two, the units
+		# conversion won't change that.
+		handler.units = 10240
+		undersamp_rate *= handler.units
+		print "Undersampling rate for level %d: %f mHz" % (res_level, undersamp_rate)
+		head = mkcapssetter( pipeline, head, "audio/x-raw-float,rate=%d" % (handler.rate*handler.units), replace=False )
+		head = mkgeneric( pipeline, head, "lal_audioundersample" )
+		head = mkcapssetter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate, replace=False )
+	else:
+		handler.units = 1
+		print "Undersampling rate for level %d: %f Hz" % (res_level, undersamp_rate)
+		head = mkgeneric( pipeline, head, "lal_audioundersample" )
+		head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate )
 
 	if( diagnostics ):
 		head = postustee = mktee( pipeline, mkqueue( pipeline, head ) )
