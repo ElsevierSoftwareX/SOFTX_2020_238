@@ -59,6 +59,24 @@ from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 #
 # =============================================================================
 #
+#                                Unit Handling
+#
+# =============================================================================
+#
+
+EXCESSPOWER_UNIT_SCALE = {
+	'Hz':  1024**0,
+	'kHz': 1024**1,
+	'MHz': 1024**2,
+	'GHz': 1024**3,
+	'mHz': 1024**-1,
+	'uHz': 1024**-2,
+	'nHz': 1024**-3,
+}
+
+#
+# =============================================================================
+#
 #                                Handler Class
 #
 # =============================================================================
@@ -83,8 +101,7 @@ class EPHandler( LLOIDHandler ):
 		self.whitener_offset = 20
 
 		# Keep track of units -- enable us to go below rates of 1 Hz
-		# FIXME: Use LAL units
-		self.units = 1
+		self.units = EXCESSPOWER_UNIT_SCALE['Hz']
 
 		# Defaults -- Time-frequency map settings
 		self.base_band = 16
@@ -346,10 +363,10 @@ class EPHandler( LLOIDHandler ):
 		for trig in self.triggers:
 			trig.process_id = process.process_id
 			# If we're using a different units system, indicate it
-			trig.duration /= handler.units
+			trig.duration *= handler.units
 			#trig.peak_time /= handler.units
 			#trig.start_time /= handler.units
-			trig.central_freq *= handler.units
+			trig.central_freq /= handler.units
 
 		output.childNodes[0].appendChild( self.triggers )
 
@@ -608,7 +625,8 @@ else:
 		
 	else:
 		handler.cache_psd = cfg.get( "cache", "cache-psd" )
-		if( handler.cache_psd ): print "PSD caching enabled."
+		if( handler.cache_psd == "" ): handler.cache_psd = False
+		else: print "PSD caching enabled."
 
 	handler.cache_spec_corr = cfg.getboolean( "cache", "cache-spectral-correlation" )
 
@@ -855,17 +873,26 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 	# we change units here, and readjust appropriately in the trigger output.
 	if( undersamp_rate < 1 ):
 		print "Automatically adjusting units to compensate for undersample rate falling below unity."
-		# No, it's not mHz (which would be 1000), but rates which aren't factors
+		# No, it's not factors of ten, but rates which aren't factors
 		# of two are often tricky, thus if the rate is a factor of two, the units
 		# conversion won't change that.
-		handler.units = 10240
-		undersamp_rate *= handler.units
-		print "Undersampling rate for level %d: %f mHz" % (res_level, undersamp_rate)
-		head = mkcapssetter( pipeline, head, "audio/x-raw-float,rate=%d" % (handler.rate*handler.units), replace=False )
+		if( undersamp_rate > EXCESSPOWER_UNIT_SCALE['mHz'] ):
+			unit = 'mHz'
+		if( undersamp_rate > EXCESSPOWER_UNIT_SCALE['uHz'] ):
+			unit = 'uHz'
+		elif( undersamp_rate > EXCESSPOWER_UNIT_SCALE['nHz'] ):
+			unit = 'nHz'
+		else:
+			sys.exit( "Requested undersampling rate would fall below 1 nHz." )
+		# FIXME: No love for positive power of 10 units?
+
+		handler.units = EXCESSPOWER_UNIT_SCALE[unit]
+		undersamp_rate /= handler.units
+		print "Undersampling rate for level %d: %f %s" % (res_level, undersamp_rate, unit)
+		head = mkcapssetter( pipeline, head, "audio/x-raw-float,rate=%d" % (handler.rate/handler.units), replace=False )
 		head = mkgeneric( pipeline, head, "lal_audioundersample" )
 		head = mkcapssetter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate, replace=False )
 	else:
-		handler.units = 1
 		print "Undersampling rate for level %d: %f Hz" % (res_level, undersamp_rate)
 		head = mkgeneric( pipeline, head, "lal_audioundersample" )
 		head = mkcapsfilter( pipeline, head, "audio/x-raw-float,rate=%d" % undersamp_rate )
