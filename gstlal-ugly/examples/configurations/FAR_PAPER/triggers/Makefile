@@ -26,14 +26,14 @@ WEBDIR = /home/channa/public_html/FAR_PAPER
 NUMBANKS = 2
 
 # Segments file names
-SEGMENTS = ../recolor_frames/recolored_segments.xml.gz
+SEGMENTS = ../recolor_frames/recolor_segments.xml.gz
 
 # Vetoes file names
 vetoes_suffix := _vetoes.xml
 VETOES_FILES  := $(addsuffix $(vetoes_suffix),$(IFOS))
 
 # Frame cache file names
-FRAME_CACHE := ../recolor_frames/recolored_frames.cache
+FRAME_CACHE := ../recolor_frames/recolor_frame.cache
 
 # Injections
 # The seed is the string before the suffix _injections.xml
@@ -63,7 +63,7 @@ plots :
 	mkdir $(WEBDIR)
 
 tisi.xml :
-	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:3.14159:3.14159  tisi.xml
+	ligolw_tisi --instrument=H1=0:0:0 --instrument=L1=0:3.14159:3.14159  tisi.xml
 
 dag :  tisi.xml plots $(INJECTIONS)
 	gstlal_s5_pbh_trigger_pipe --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache $(FRAME_CACHE) --frame-segments-file $(SEGMENTS) --frame-segments-name datasegments   --control-peak-time 4 --num-banks $(NUMBANKS) --fir-stride 4 --cluster-sql-file $(CLUSTER_SQL) --injection-sql-file $(INJ_CLUSTER_SQL) --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING) --channel=V1=h_16384Hz --channel=H1=LSC-STRAIN --channel=L1=LSC-STRAIN
