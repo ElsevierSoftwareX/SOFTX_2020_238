@@ -193,6 +193,10 @@ def mkcapsfilter(pipeline, src, caps):
 	return mkgeneric(pipeline, src, "capsfilter", caps = gst.Caps(caps))
 
 
+def mkcapssetter(pipeline, src, caps, **properties):
+	return mkgeneric(pipeline, src, "capssetter", caps = gst.Caps(caps), **properties)
+
+
 def mkstatevector(pipeline, src, **properties):
 	return mkgeneric(pipeline, src, "lal_statevector", **properties)
 
