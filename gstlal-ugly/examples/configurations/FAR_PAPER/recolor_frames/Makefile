@@ -75,7 +75,15 @@ injections.xml:
 	--bh-max-spin $(BH_MAX_SPIN) \
 	--output $@ && gstlal_injections_by_local_rate_plot $@
 
-# make a virgo psd even though we don't have virgo frames
+H1psd.xml.gz : 
+	gstlal_psd_xml_from_asd_txt --instrument H1 --output $@ ZERO_DET_high_P.txt
+
+L1psd.xml.gz : 
+	gstlal_psd_xml_from_asd_txt --instrument L1 --output $@ ZERO_DET_high_P.txt
+
+psd.xml.gz: H1psd.xml.gz L1psd.xml.gz
+	ligolw_add H1psd.xml.gz L1psd.xml.gz | gzip > recolor_psd.xml.gz
+
 H1recolorpsd.xml.gz : 
 	gstlal_psd_xml_from_asd_txt --instrument H1 --output H1recolorpsd.xml.gz --invert ZERO_DET_high_P.txt
 
@@ -88,5 +96,9 @@ recolor_psd.xml.gz: H1recolorpsd.xml.gz L1recolorpsd.xml.gz
 dag : vetoes.xml segments.xml frame.cache injections.xml recolor_psd.xml.gz
 	./recolor_pipe --recolor-psd recolor_psd.xml.gz --segment-file segments.xml --min-segment-length $(MIN_SEG_LENGTH) --frame-cache H1=frame.H1.cache,L1=frame.L1.cache
 	
+finish : psd.xml.gz
+	ls H1-LSC-STRAIN/*.gwf | lalapps_path2cache > recolor_frame.cache
+	ls L1-LSC-STRAIN/*.gwf | lalapps_path2cache >> recolor_frame.cache
+	./cache_to_segments recolor_frame.cache recolor_segments.xml.gz
 realclean :
 	rm -rf *.sub *.dag* *.cache *.sh *reference_psd.xml.gz *segments.xml.gz logs *.xml *.xml.gz  H1-LSC-STRAIN L1-LSC-STRAIN
