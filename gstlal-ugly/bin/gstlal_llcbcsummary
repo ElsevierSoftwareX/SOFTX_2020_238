@@ -60,6 +60,8 @@ def load_data(directory, idrange, type):
 		fname = "%s/%s_%s.txt" % (directory, id, type)
 		try:
 			found[i] = numpy.loadtxt(fname)
+			if len(found[i].shape) == 1:
+				found[i] = numpy.array([found[i],])
 		except IOError:
 			missed[i] = numpy.array([])
 		except ValueError:
@@ -125,9 +127,9 @@ def plot_livetime(found, missed, ids, registry, ifo):
 	fig, h = setup_plot()
 	
 	found_x = found.keys()
-	on_y = numpy.log10(numpy.array([found[k][1] for k in found_x]))
-	off_y = numpy.log10(numpy.array([found[k][2] for k in found_x]))
-	gap_y = numpy.log10(numpy.array([found[k][3] for k in found_x]))
+	on_y = numpy.log10(numpy.array([found[k][0][1] for k in found_x]))
+	off_y = numpy.log10(numpy.array([found[k][0][2] for k in found_x]))
+	gap_y = numpy.log10(numpy.array([found[k][0][3] for k in found_x]))
 	
 	if len(found_x) > 0:
 		max_y = max(on_y.max(), off_y.max(), gap_y.max())
@@ -166,7 +168,7 @@ def plot_single_col(found, missed, ids, registry, col = 0, title = ''):
 	fig, h = setup_plot()
 	
 	found_x = found.keys()
-	found_y = numpy.log10(numpy.array([found[k][col] for k in found_x]))
+	found_y = numpy.log10(numpy.array([found[k][0][col] for k in found_x]))
 
 	try:	
 		max_y, min_y = max(found_y), min(found_y)
