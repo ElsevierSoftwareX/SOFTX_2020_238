@@ -52,6 +52,7 @@ typedef struct {
 
 	gint rate;
 	gint channels;
+	int (*printsample)(char *, const void **);
 
 	GstClockTime start_time;
 	GstClockTime stop_time;

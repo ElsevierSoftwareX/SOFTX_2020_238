@@ -135,11 +135,61 @@ static guint64 timestamp_to_sample_clipped(GstClockTime start, guint64 length, g
  */
 
 
-static GstFlowReturn print_samples(GstBuffer *out, GstClockTime timestamp, const double *samples, int channels, int rate, guint64 length)
+static int printsample_double(char *location, const void **sample)
+{
+	return sprintf(location, " %.16g", *(*(const double **) sample)++);
+}
+
+
+static int printsample_float(char *location, const void **sample)
+{
+	return sprintf(location, " %.16g", (double) *(*(const float **) sample)++);
+}
+
+
+static int printsample_int32(char *location, const void **sample)
+{
+	return sprintf(location, " %d", *(*(const gint32 **) sample)++);
+}
+
+
+static int printsample_uint32(char *location, const void **sample)
+{
+	return sprintf(location, " %u", *(*(const guint32 **) sample)++);
+}
+
+
+static int printsample_int16(char *location, const void **sample)
+{
+	return sprintf(location, " %d", *(*(const gint16 **) sample)++);
+}
+
+
+static int printsample_uint16(char *location, const void **sample)
+{
+	return sprintf(location, " %u", *(*(const guint16 **) sample)++);
+}
+
+
+static int printsample_int8(char *location, const void **sample)
+{
+	return sprintf(location, " %d", *(*(const gint8 **) sample)++);
+}
+
+
+static int printsample_uint8(char *location, const void **sample)
+{
+	return sprintf(location, " %u", *(*(const guint8 **) sample)++);
+}
+
+
+static GstFlowReturn print_samples(GstBuffer *out, GstClockTime timestamp, const void *samples, int (*printsample)(char *, const void **), int channels, int rate, guint64 length)
 {
 	char *location = (char *) GST_BUFFER_DATA(out);
 	guint64 i;
 	int j;
+
+	g_assert(printsample != NULL);
 
 	for(i = 0; i < length; i++) {
 		/*
@@ -165,7 +215,7 @@ static GstFlowReturn print_samples(GstBuffer *out, GstClockTime timestamp, const
 		 */
 
 		for(j = 0; j < channels; j++)
-			location += sprintf(location, " %.16g", *samples++);
+			location += printsample(location, &samples);
 
 		/*
 		 * Finish with a new line
@@ -205,11 +255,17 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
+		"audio/x-raw-int, " \
+		"rate = (int) [1, MAX], " \
+		"channels = (int) [1, MAX], " \
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) {8, 16, 32}, " \
+		"signed = (boolean) {true, false}; " \
 		"audio/x-raw-float, " \
 		"rate = (int) [1, MAX], " \
 		"channels = (int) [1, MAX], " \
 		"endianness = (int) BYTE_ORDER, " \
-		"width = (int) 64"
+		"width = (int) {32, 64}"
 	)
 );
 
@@ -355,17 +411,61 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 {
 	GSTLALNXYDump *element = GSTLAL_NXYDUMP(trans);
 	GstStructure *str = gst_caps_get_structure(incaps, 0);
-	gint rate, channels;
+	const gchar *media_type;
+	gint rate, channels, width;
+	int (*printsample)(char *, const void **);
 	gboolean success = TRUE;
 
+	element->printsample = NULL;	/* incase it doesn't get set */
+
+	media_type = gst_structure_get_name(str);
 	success &= gst_structure_get_int(str, "rate", &rate);
 	success &= gst_structure_get_int(str, "channels", &channels);
+	success &= gst_structure_get_int(str, "width", &width);
+
+	if(!strcmp(media_type, "audio/x-raw-float")) {
+		switch(width) {
+		case 32:
+			printsample = printsample_float;
+			break;
+
+		case 64:
+			printsample = printsample_double;
+			break;
+
+		default:
+			success = FALSE;
+			break;
+		}
+	} else if(!strcmp(media_type, "audio/x-raw-int")) {
+		gboolean is_signed;
+		success &= gst_structure_get_boolean(str, "signed", &is_signed);
+		switch(width) {
+		case 8:
+			printsample = is_signed ? printsample_int8 : printsample_uint8;
+			break;
+
+		case 16:
+			printsample = is_signed ? printsample_int16 : printsample_uint16;
+			break;
+
+		case 32:
+			printsample = is_signed ? printsample_int32 : printsample_uint32;
+			break;
+
+		default:
+			success = FALSE;
+			break;
+		}
+	} else
+		success = FALSE;
 
 	if(success) {
 		element->rate = rate;
 		element->channels = channels;
+		element->printsample = printsample;
 	} else
-		GST_DEBUG_OBJECT(element, "unable to extract rate and/or channels from caps %" GST_PTR_FORMAT, incaps);
+		GST_DEBUG_OBJECT(element, "unsupported or unable to parse caps %" GST_PTR_FORMAT, incaps);
 
 	return success;
 }
@@ -432,7 +532,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * Print samples into output buffer.
 		 */
 
-		result = print_samples(outbuf, GST_BUFFER_TIMESTAMP(inbuf) + gst_util_uint64_scale_int_round(start, GST_SECOND, element->rate), (const double *) GST_BUFFER_DATA(inbuf) + start * element->channels, element->channels, element->rate, stop - start);
+		result = print_samples(outbuf, GST_BUFFER_TIMESTAMP(inbuf) + gst_util_uint64_scale_int_round(start, GST_SECOND, element->rate), (const double *) GST_BUFFER_DATA(inbuf) + start * element->channels, element->printsample, element->channels, element->rate, stop - start);
 	}
 
 	/*
@@ -585,4 +685,6 @@ static void gstlal_nxydump_class_init(GSTLALNXYDumpClass *klass)
 static void gstlal_nxydump_init(GSTLALNXYDump *element, GSTLALNXYDumpClass *klass)
 {
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
+
+	element->printsample = NULL;
 }
