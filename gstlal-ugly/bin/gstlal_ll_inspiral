@@ -142,7 +142,7 @@ def parse_command_line():
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
 	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default is LowMass")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default is Test")
-	parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise.")
+	parser.add_option("--fake-data", metavar = "[white|silence|AdvVirgo|LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise.")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
 	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
 	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
@@ -335,8 +335,7 @@ triggersrc = lloidparts.mkLLOIDmulti(
 	banks = banks,
 	psd = psd,
 	psd_fft_length = options.psd_fft_length,
-	fake_data = options.fake_data,
-	online_data = (not options.fake_data), # two mutually exclusive options, fake data or online data
+	data_source = options.fake_data or "online",
 	injection_filename = options.injections,
 	ht_gate_threshold = options.ht_gate_threshold,
 	veto_segments = veto_segments,
