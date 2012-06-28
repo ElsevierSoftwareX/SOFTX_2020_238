@@ -56,9 +56,8 @@ def parse_command_line():
 	parser = OptionParser(
 		description = "%prog generates an animated view of the PSD measured from h(t).  The video can be shown on the screen or saved to a OGG Theora movie file.  Example:\n\n%prog \\\n\t--frame-cache \"/home/kipp/scratch_local/874100000-20000/cache/874100000-20000.cache\" \\\n\t--instrument \"H1\" \\\n\t--channel-name \"LSC-STRAIN\" \\\n\t--gps-start-time 874100000.0 \\\n\t--gps-end-time 874120000.0 \\\n\t--psd-fft-length 8.0 \\\n\t--psd-zero-pad-length 0.0 \\\n\t--average-length 64.0 \\\n\t--median-samples 3 \\\n\t--frame-rate 10/1 \\\n\t--output spectrum_movie.ogm \\\n\t--verbose"
 	)
-	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
+	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --online-data is used in which case it must not be set.")
 	parser.add_option("--online-data", action = "store_true", help = "Use online DMT-STRAIN instead of a frame file (optional).")
-	parser.add_option("--fake-data", action = "store_true", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
 	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 	parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
@@ -76,8 +75,8 @@ def parse_command_line():
 
 	options, filenames = parser.parse_args()
 
-	if sum(1 for option in ("frame_cache", "fake_data", "online_data") if getattr(options, option) is not None) != 1:
-		raise ValueError, "must provide exactly one of --frame-cache, --fake-data, --online-data"
+	if sum(1 for option in ("frame_cache", "online_data") if getattr(options, option) is not None) != 1:
+		raise ValueError, "must provide exactly one of --frame-cache, --online-data"
 
 	required_options = ["instrument", "channel_name"]
 	if not options.online_data:
@@ -156,8 +155,7 @@ head = lloidparts.mkLLOIDbasicsrc(
 	seek,
 	options.instrument,
 	lloidparts.DetectorData(options.frame_cache, options.channel_name),
-	fake_data = options.fake_data,
-	online_data = options.online_data,
+	data_source = options.fake_data or "frames",
 	injection_filename = options.injections,
 	verbose = options.verbose
 )
