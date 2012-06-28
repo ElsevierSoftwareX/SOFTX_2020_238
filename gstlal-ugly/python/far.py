@@ -725,9 +725,7 @@ class LocalRankingData(object):
 
 
 class RankingData(object):
-	def __init__(self, local_ranking_data, far_interval = 100.0):
-		self.far_interval = far_interval # seconds
-
+	def __init__(self, local_ranking_data):
 		# ensure the trials tables' keys match the likelihood
 		# histograms' keys
 		assert set(local_ranking_data.joint_likelihood_pdfs) == set(local_ranking_data.trials_table)
@@ -855,16 +853,15 @@ class RankingData(object):
 			self.cdf_interpolator[key] = interpolate.interp1d(ranks, cdf)
 			self.ccdf_interpolator[key] = interpolate.interp1d(ranks, ccdf)
 			# record min and max ranks so we know which end of the ccdf to use when we're out of bounds
-			self.minrank[key] = (min(ranks), ccdf[0])
-			self.maxrank[key] = (max(ranks), ccdf[-1])
+			self.minrank[key] = min(ranks)
+			self.maxrank[key] = max(ranks)
 
 	def fap_from_rank(self, rank, ifos, scale = False):
 		ifos = frozenset(ifos)
-		# FIXME:  doesn't check that rank is a scalar
-		if rank >= self.maxrank[ifos][0]:
-			return self.maxrank[ifos][1]
-		if rank <= self.minrank[ifos][0]:
-			return self.minrank[ifos][1]
+		if rank >= self.maxrank[ifos]:
+			rank = self.maxrank[ifos]
+		elif rank <= self.minrank[ifos]:
+			rank = self.minrank[ifos]
 		fap = float(self.ccdf_interpolator[ifos](rank))
 		try:
 			trials = max(int(self.trials_table[ifos].count), 1)
@@ -874,37 +871,34 @@ class RankingData(object):
 		# (assume scale is 1 if disabled or not available)
 		if scale and ifos in self.scale:
 			trials *= self.scale[ifos]
-		# normalize to the far interval
-		if self.far_interval is not None:
-			# if we don't have livetime segments then we cannot
-			# yet safely compute a value for this, so we set it
-			# to Nan.  This can happen when an online analyis
-			# starts from scratch and the live time segments
-			# are 0
-			try:
-				trials *= self.far_interval / float(abs(self.livetime_seg))
-			except TypeError:
-				return float('nan')
 		return fap_after_trials(fap, trials)
 
 	def far_from_rank(self, rank, ifos, scale = False):
-		# first compute the fap.  catch a nan value, when FAP could
-		# not be estimated.  This is caused by not having a valid
-		# livetime segment
-		fap = self.fap_from_rank(rank, ifos, scale = scale)
-		if numpy.isnan(fap):
-			return float('nan')
-		if fap == 0.:
-			return 0.
-		if self.far_interval is not None:
-			# use far interval for livetime
-			livetime = self.far_interval
-		else:
-			livetime = float(abs(self.livetime_seg))
-		try:
-			return -math.log(1. - fap) / livetime
-		except ValueError:
+		ifos = frozenset(ifos)
+		# true-dismissal probability = 1 - false-alarm probability
+		if rank >= self.maxrank[ifos]:
+			rank = self.maxrank[ifos]
+		elif rank <= self.minrank[ifos]:
+			rank = self.minrank[ifos]
+		tdp = float(self.cdf_interpolator[ifos](rank))
+		if tdp == 0.:
 			return float('inf')
+		try:
+			trials = max(int(self.trials_table[ifos].count), 1)
+		except KeyError:
+			trials = 1
+		# multiply by a scale factor if provided
+		# (assume scale is 1 if disabled or not available)
+		if scale and ifos in self.scale:
+			trials *= self.scale[ifos]
+		try:
+			livetime = float(abs(self.livetime_seg))
+		except TypeError:
+			# we don't have a livetime segment yet.  this can
+			# happen during the early start-up of an online
+			# low-latency analysis
+			return float('nan')
+		return trials * -math.log(tdp) / livetime
 
 
 #
