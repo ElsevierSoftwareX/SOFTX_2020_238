@@ -116,7 +116,7 @@ handler = lloidparts.LLOIDHandler(mainloop, pipeline)
 seekevent = gst.event_new_seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, gst.SEEK_TYPE_SET, seg[0].ns(), gst.SEEK_TYPE_SET, seg[1].ns())
 
 # pipeline construction
-head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, options.instrument, lloidparts.DetectorData(options.frame_cache, options.channel_name), fake_data = None, online_data = False, injection_filename = options.injections, frame_segments = None, verbose = options.verbose)
+head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, options.instrument, lloidparts.DetectorData(options.frame_cache, options.channel_name), data_source = "frames", injection_filename = options.injections, frame_segments = None, verbose = options.verbose)
 head = lloidparts.mkLLOIDsrc(pipeline, head, [options.sample_rate], options.instrument, seekevent = seekevent, block_duration = gst.SECOND, track_psd = True)
 head = pipeparts.mkprogressreport(pipeline, head[options.sample_rate], "src")
 # FIXME don't hard code these values
