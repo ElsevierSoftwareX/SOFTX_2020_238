@@ -311,7 +311,7 @@ class StreamThinca(object):
 				# again.
 				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, ifo_set)
 				# assume each event is "loudest" so n = 1 by default, not the same as required for an IFAR plot
-				coinc_inspiral_row.combined_far = FAP.compute_far(coinc_inspiral_row.false_alarm_rate)
+				coinc_inspiral_row.combined_far = FAP.far_from_rank(coinc_event_row.likelihood, ifo_set)
 				# FIXME bad!! We only increment the count below
 				# thresh once in this loop as a way to
 				# "cluster" events similar to the gracedb loop
@@ -323,7 +323,7 @@ class StreamThinca(object):
 				# Rank again with the scale set!!!
 				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, ifo_set, scale = True)
 				# assume each event is "loudest" so n = 1 by default, not the same as required for an IFAR plot
-				coinc_inspiral_row.combined_far = FAP.compute_far(coinc_inspiral_row.false_alarm_rate)
+				coinc_inspiral_row.combined_far = FAP.far_from_rank(coinc_event_row.likelihood, ifo_set, scale = True)
 				
 				# populate a column with latency
 				coinc_inspiral_row.minimum_duration = float(gps_time_now - coinc_inspiral_row.get_end())
