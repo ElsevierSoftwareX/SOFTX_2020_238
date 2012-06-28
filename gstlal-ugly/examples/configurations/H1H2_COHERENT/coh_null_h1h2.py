@@ -268,7 +268,7 @@ H1src = lloidparts.mkLLOIDbasicsrc(
 	seekevent,
 	"H1",
 	detectors["H1"],
-	fake_data = options.fake_data,
+	data_source = options.fake_data or "frames",
 	injection_filename = options.injections,
 	verbose = options.verbose
 )
@@ -302,7 +302,7 @@ H2src = lloidparts.mkLLOIDbasicsrc(
 	seekevent,
 	"H2",
 	detectors["H2"],
-	fake_data = options.fake_data,
+	data_source = options.fake_data or "frames",
 	injection_filename = options.injections,
 	verbose = options.verbose
 )
