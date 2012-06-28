@@ -672,8 +672,7 @@ elif( data_source == "lldata" ):
 		None, 
 		handler.inst, 
 		DetectorData(None, handler.channel), 
-		fake_data = None, 
-		online_data = True, 
+		data_source = "online", 
 		injection_filename = inj_loc, 
 		frame_segments = None, 
 		verbose = True
