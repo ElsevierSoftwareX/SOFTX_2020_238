@@ -85,7 +85,7 @@ def parse_command_line():
 	parser.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
 	parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments (optional).  If this is not provided then all data between --gps-start-time and --gps-end-time will be analyzed.  If this is provided then --frame-segments-name must also be set.")
 	parser.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables in --frame-segments-file (optional, required if --frame-segments-file is given).")
-	parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise.")
+	parser.add_option("--fake-data", metavar = "[white|silence|AdvVirgo|LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise.")
 	parser.add_option("--gps-start-time", help="GPS start time (required)", type="float")
 	parser.add_option("--gps-end-time", help="GPS end time (required)", type="float")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
@@ -115,9 +115,6 @@ def parse_command_line():
 
 	if sum(1 for option in ('frame_cache', 'fake_data', ) if getattr(options, option) is not None) != 1: # FIXME: what about oline_data?
 		raise ValueError, "must provide exactly one of --frame-cache, --fake-data"
-
-	if options.fake_data not in (None, "LIGO", "AdvLIGO"):
-		raise ValueError("unrecognized value for --fake-data %s" % options.fake_data)
 
 	required_options = ["output"]
 	if options.frame_cache:
@@ -263,8 +260,7 @@ triggersrc = lloidparts.mkSPIIRmulti(
 	banks = banks,
 	psd = psd,
 	psd_fft_length = options.psd_fft_length,
-	fake_data = options.fake_data,
-	online_data = None, # FIXME so that this can use options.online_data,
+	data_source = options.fake_data or "frames",
 	injection_filename = options.injections,
 	ht_gate_threshold = options.ht_gate_threshold,
 	veto_segments = veto_segments,
