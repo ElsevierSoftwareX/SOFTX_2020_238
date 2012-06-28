@@ -104,7 +104,7 @@ pipeline = gst.Pipeline("test")
 
 rates = [2048]
 
-head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, options.instrument, detector, fake_data = None, online_data = False, injection_filename = options.injections, verbose = options.verbose)
+head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, options.instrument, detector, data_source = "frames", injection_filename = options.injections, verbose = options.verbose)
 
 head = lloidparts.mkLLOIDsrc(pipeline, head, rates, options.instrument, psd = psd, ht_gate_threshold = options.ht_gate_threshold, veto_segments = veto_segments, seekevent = seekevent, block_duration = 10 * gst.SECOND)
 
