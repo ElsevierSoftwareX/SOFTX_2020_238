@@ -869,9 +869,11 @@ class RankingData(object):
 				return float('nan')
 		return fap_after_trials(fap, trials)
 
-	def compute_far(self, fap):
-		# catch a nan value, when FAP could not be estimated.  This is
-		# caused by not having a valid livetime segment
+	def far_from_rank(self, rank, ifos, scale = False):
+		# first compute the fap.  catch a nan value, when FAP could
+		# not be estimated.  This is caused by not having a valid
+		# livetime segment
+		fap = self.fap_from_rank(rank, ifos, scale = scale)
 		if numpy.isnan(fap):
 			return float('nan')
 		if fap == 0.:
@@ -924,7 +926,6 @@ def set_fap(Far, f, tmp_path = None, scale = None, verbose = False):
 
 	# FIXME abusing false_alarm_rate column, move for a false_alarm_probability column??
 	connection.cursor().execute("UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(coinc_event.likelihood, coinc_inspiral.ifos) FROM coinc_event WHERE coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id)")
-	connection.commit()
 
 	# all finished
 	connection.commit()
@@ -937,47 +938,17 @@ def set_fap(Far, f, tmp_path = None, scale = None, verbose = False):
 #
 
 
-def set_far(Far, f, tmp_path = None, verbose = False):
+def set_far(Far, f, tmp_path = None, scale = None, verbose = False):
 	from glue.ligolw import dbtables
 
 	working_filename = dbtables.get_connection_filename(f, tmp_path = tmp_path, verbose = verbose)
 	connection = sqlite3.connect(working_filename)
 
-	connection.create_function("far", 1, Far.compute_far)
-	ids = [id for id, in connection.cursor().execute("SELECT DISTINCT(time_slide_id) FROM time_slide")]
-	for id in ids:
-		print >>sys.stderr, "computing rates for ", id
-		# FIXME abusing FAR column
-		connection.cursor().execute('DROP TABLE IF EXISTS ranktable')
-		connection.commit()
-		# FIXME any indicies on ranktable??  FIXME adding the +
-		# 1e-20 / snr to the false alarm rate forces the
-		# ranking to be in snr order for degenerate ranks.
-		# This is okay for non degenerate things since we don't
-		# have 1e-20 dynamic range, still this should be done
-		# smarter.  Note it doesn't change the false alarm rate
-		# in the database. It just changes how the CDF is
-		# produced here which will modify the order of events
-		# that get assigned a combined far
-		connection.cursor().execute('CREATE TEMPORARY TABLE ranktable AS SELECT * FROM coinc_inspiral JOIN coinc_event ON coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id WHERE coinc_event.time_slide_id == ? ORDER BY false_alarm_rate+1e-20 / snr', (id,))
-		connection.cursor().execute('CREATE INDEX rtix ON ranktable(coinc_event_id)')
-		connection.commit()
-		# FIXME someday we might want to consider the rate of multiple events.
-		# having this sorted list will make that easier.  Then you can pass in the rowid like this
-		#
-		# far(ranktable.false_alarm_rate, ranktable.rowid)
-		#
-		# in order to have the number of events below a given FAP
-		if connection.cursor().execute("SELECT name FROM sqlite_master WHERE name='sim_inspiral'").fetchall():
-			connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.coinc_event_id IN (SELECT coinc_event_id FROM ranktable)')
-		# For everything else we get a cumulative number
-		else:
-			connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(ranktable.false_alarm_rate) FROM ranktable WHERE ranktable.coinc_event_id == coinc_inspiral.coinc_event_id) WHERE coinc_inspiral.coinc_event_id IN (SELECT coinc_event_id FROM ranktable)')
-		connection.cursor().execute('DROP INDEX rtix')
-		connection.commit()
-
+	connection.create_function("far", 2, lambda rank, ifostr: Far.far_from_rank(rank, lsctables.instrument_set_from_ifos(ifostr), scale = scale))
+	connection.cursor().execute('UPDATE coinc_inspiral SET combined_far = (SELECT far(coinc_event.likelihood, coinc_inspiral.ifos) FROM coinc_event WHERE coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id)')
 	connection.commit()
 	connection.close()
+
 	dbtables.put_connection_filename(f, working_filename, verbose = verbose)
 
 

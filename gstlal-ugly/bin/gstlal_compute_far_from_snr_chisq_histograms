@@ -140,7 +140,7 @@ for injdb in options.injection_dbs:
 	far.set_fap(global_ranking, injdb, tmp_path = options.tmp_space, scale = True, verbose = options.verbose)
 
 for bkdb in options.non_injection_db:
-	far.set_far(global_ranking, bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
+	far.set_far(global_ranking, bkdb, tmp_path = options.tmp_space, scale = True, verbose = options.verbose)
 
 for injdb in options.injection_dbs:
 	far.set_far(global_ranking, injdb, tmp_path = options.tmp_space, verbose = options.verbose)
