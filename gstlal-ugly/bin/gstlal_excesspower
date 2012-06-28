@@ -187,6 +187,7 @@ class EPHandler( LLOIDHandler ):
 
 		# TODO: Move this to PSD difference checker
 		if( message.structure.get_name() == "spectrum" ):
+			# FIXME: Units
 			ts = message.structure[ "timestamp" ]*1e-9
 			if( self.trigger_segment is not None 
 				and ts in self.trigger_segment ):
@@ -324,9 +325,6 @@ class EPHandler( LLOIDHandler ):
 		if( not handler.output ): return
 		if( len(self.triggers) == 0 ): return
 
-		#import pdb
-		#pdb.set_trace()
-
 		if( filename == None ):
 			filename = self.outfile
 
@@ -365,7 +363,10 @@ class EPHandler( LLOIDHandler ):
 			# If we're using a different units system, indicate it
 			trig.duration *= handler.units
 			#trig.peak_time /= handler.units
-			#trig.start_time /= handler.units
+			# Readjust start time for units
+			trig.start_time -= handler.start
+			trig.start_time /= handler.units
+			trig.start_time += handler.start
 			trig.central_freq /= handler.units
 
 		output.childNodes[0].appendChild( self.triggers )
@@ -403,6 +404,7 @@ class EPHandler( LLOIDHandler ):
 		self.mainloop.quit()
 
 		print >>sys.stderr, "Please wait (don't ctrl+c) while I dump triggers to disk."
+		# FIXME: Check units
 		dur = int( handler.stop - handler.time_since_dump + 0.5 )
 		# FIXME: Handle this better
 		if( os.path.isdir( self.outfile ) ):
@@ -477,15 +479,22 @@ def get_triggers(elem, handler, ndof):
 	if( not handler.output ):
 		return # We don't want event information
 
+	# TODO: Can I set units here on the buffer fields, avoid changing the triggers themslves and *not* screw up the underlying framework?
+
 	for row in sngl_bursts_from_buffer(buffer):
 		row.duration *= ndof
 		if( options.compat ):
 			row.snr = row.snr / ndof - 1
 		handler.triggers.append( row )
 	
-	handler.stop = (buffer.timestamp + buffer.duration)*1e-9
+	#buf_ts = (buffer.timestamp*1e-9 - handler.start) / handler.units + handler.start
+	# TODO: Why does the buf_dur need unit conversion, but not the timestamp
+	buf_ts = buffer.timestamp*1e-9 
+	buf_dur = buffer.duration*1e-9 / handler.units
+	handler.stop = (buf_ts + buf_dur)
 	if( handler.stop - handler.time_since_dump > handler.dump_frequency or
 			len(handler.triggers) >= handler.max_events ):
+		# FIXME: Handle units better
 		dur = int( handler.stop - handler.time_since_dump + 0.5 )
 		fname = "%s_%s_triggers_%d_%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur)
 		uniq = 1
@@ -878,7 +887,7 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		# conversion won't change that.
 		if( undersamp_rate > EXCESSPOWER_UNIT_SCALE['mHz'] ):
 			unit = 'mHz'
-		if( undersamp_rate > EXCESSPOWER_UNIT_SCALE['uHz'] ):
+		elif( undersamp_rate > EXCESSPOWER_UNIT_SCALE['uHz'] ):
 			unit = 'uHz'
 		elif( undersamp_rate > EXCESSPOWER_UNIT_SCALE['nHz'] ):
 			unit = 'nHz'
