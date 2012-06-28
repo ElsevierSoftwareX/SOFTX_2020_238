@@ -229,57 +229,34 @@ class get_gate_state(object):
 		return "%s @ %s\n" % (self.current_segment, self.segment_start)
 
 
-def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None, online_data = False, injection_filename = None, frame_segments = None, verbose = False):
+def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "frames", injection_filename = None, frame_segments = None, verbose = False):
 	#
 	# data source
 	#
 
-
-	# Live source, no seek
-	if online_data:
-		assert not fake_data
+	# First process fake data or frame data
+	if data_source == "white":
+		src = pipeparts.mkfakesrc(pipeline, instrument, detector.channel, blocksize = detector.block_size)
+	elif data_source == "silence":
+		src = pipeparts.mkfakesrc(pipeline, instrument, detector.channel, blocksize = detector.block_size, wave = 4)
+	elif data_source == 'LIGO':
+		src = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
+	elif data_source == 'AdvLIGO':
+		src = pipeparts.mkfakeadvLIGOsrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
+	elif data_source == 'AdvVirgo':
+		src = pipeparts.mkfakeadvvirgosrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
+	elif data_source == "frames":
+		if instrument == "V1":
+			#FIXME Hack because virgo often just uses "V" in the file names rather than "V1".  We need to sieve on "V"
+			src = pipeparts.mkframesrc(pipeline, location = detector.frame_cache, instrument = instrument, cache_src_regex = "V", channel_name = detector.channel, blocksize = detector.block_size, segment_list = frame_segments)
+		else:
+			src = pipeparts.mkframesrc(pipeline, location = detector.frame_cache, instrument = instrument, cache_dsc_regex = instrument, channel_name = detector.channel, blocksize = detector.block_size, segment_list = frame_segments)
+	# Next process online data, fake data must be None for this to have gotten this far
+	elif data_source == "online":
 		# FIXME:  be careful hard-coding shared-memory partition
 		src = pipeparts.mklvshmsrc(pipeline, shm_name = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}[instrument])
 		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True)
 
-	# Unlive source, needs a seek
-	elif fake_data == "white":
-		src = pipeparts.mkfakesrcseeked(pipeline, instrument, detector.channel, seekevent, blocksize = detector.block_size)
-	elif fake_data == "silence":
-		src = pipeparts.mkfakesrcseeked(pipeline, instrument, detector.channel, seekevent, blocksize = detector.block_size, wave = 4)
-	else:
-		if fake_data is not None:
-			assert not online_data
-			if fake_data == 'LIGO':
-				src = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
-			elif fake_data == 'AdvLIGO':
-				src = pipeparts.mkfakeadvLIGOsrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
-			elif fake_data == 'AdvVirgo':
-				src = pipeparts.mkfakeadvvirgosrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
-			else:
-				raise ValueError("fake data cannot be %s" % fake_data)
-		else:
-			if instrument == "V1":
-				#FIXME Hack because virgo often just uses "V" in the file names rather than "V1".  We need to sieve on "V"
-				src = pipeparts.mkframesrc(pipeline, location = detector.frame_cache, instrument = instrument, cache_src_regex = "V", channel_name = detector.channel, blocksize = detector.block_size, segment_list = frame_segments)
-			else:
-				src = pipeparts.mkframesrc(pipeline, location = detector.frame_cache, instrument = instrument, cache_dsc_regex = instrument, channel_name = detector.channel, blocksize = detector.block_size, segment_list = frame_segments)
-
-		#
-		# seek the data source if not live
-		#
-
-		if src.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
-			raise RuntimeError, "Element %s did not want to enter ready state" % src.get_name()
-		if not src.send_event(seekevent):
-			raise RuntimeError, "Element %s did not handle seek event" % src.get_name()
-
-	#
-	# provide an audioconvert element to allow Virgo data (which is
-	# single-precision) to be adapted into the pipeline
-	#
-
-	if online_data:
 		# strain
 		strain = pipeparts.mkaudioconvert(pipeline, None)
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, detector.channel), strain.get_pad("sink"))
@@ -330,7 +307,28 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = None,
 		# FIXME:  let the state vector messages going to stderr be
 		# controled somehow
 		bottle.route("/%s/current_segment.txt" % instrument)(get_gate_state(src, msg = instrument, verbose = True).text)
+	
 	else:
+		raise ValueError("invalid data_source: %s" % data_source)
+
+	# seek all non-live sources FIXME someday this should go away and seeks
+	# should only be done on the pipeline that is why this is separated
+	# here
+	if data_source != "online":      
+		#
+		# seek the data source if not live
+		#
+
+		if src.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
+			raise RuntimeError, "Element %s did not want to enter ready state" % src.get_name()
+		if not src.send_event(seekevent):
+			raise RuntimeError, "Element %s did not handle seek event" % src.get_name()
+
+		#
+		# provide an audioconvert element to allow Virgo data (which is
+		# single-precision) to be adapted into the pipeline
+		#
+
 		src = pipeparts.mkaudioconvert(pipeline, src)
 
 	#
@@ -843,7 +841,7 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 #
 
 
-def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 16, block_duration = gst.SECOND):
+def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, data_source = None, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 16, block_duration = gst.SECOND):
 	#
 	# check for unrecognized chisq_types, non-unique bank IDs
 	#
@@ -871,7 +869,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	hoftdicts = {}
 	for instrument in detectors:
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
-		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data = fake_data, online_data = online_data, injection_filename = injection_filename, frame_segments = frame_segments[instrument], verbose = verbose)
+		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], data_source = data_source, injection_filename = injection_filename, frame_segments = frame_segments[instrument], verbose = verbose)
 		# let the frame reader and injection code run in a
 		# different thread than the whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration)
@@ -962,7 +960,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 #
 
 
-def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, fake_data = False, online_data = False, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND):
+def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, data_source = None, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND):
 	#
 	# check for recognized value of chisq_type
 	#
@@ -988,7 +986,7 @@ def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	for instrument in detectors:
 		print instrument
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
-		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], fake_data = fake_data, online_data = online_data, injection_filename = injection_filename, frame_segments = frame_segments[instrument], verbose = verbose)
+		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], data_source = data_source, injection_filename = injection_filename, frame_segments = frame_segments[instrument], verbose = verbose)
 		# let the frame reader and injection code run in a
 		# different thread than the whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration)
