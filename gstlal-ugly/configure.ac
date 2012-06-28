@@ -137,8 +137,11 @@ AC_CHECK_LIB([m], [main], , [AC_MSG_ERROR([Not found!])])
 
 
 PKG_CHECK_MODULES([FFTW], [fftw3])
+PKG_CHECK_MODULES([FFTWF], [fftw3f])
 AC_SUBST([FFTW_CFLAGS])
 AC_SUBST([FFTW_LIBS])
+AC_SUBST([FFTWF_CFLAGS])
+AC_SUBST([FFTWF_LIBS])
 AC_DEFINE([GSTLAL_FFTW_WISDOM_ENV], ["GSTLAL_FFTW_WISDOM"], [Set to the name of the environment variable to use for overriding the system-wide FFTW wisdom file])
 
 
