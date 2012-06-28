@@ -743,6 +743,7 @@ class RankingData(object):
 		# copy livetime segment
 		self.livetime_seg = local_ranking_data.livetime_seg
 
+		self.cdf_interpolator = {}
 		self.ccdf_interpolator = {}
 		self.minrank = {}
 		self.maxrank = {}
@@ -828,13 +829,30 @@ class RankingData(object):
 	def compute_joint_cdfs(self):
 		self.minrank.clear()
 		self.maxrank.clear()
+		self.cdf_interpolator.clear()
 		self.ccdf_interpolator.clear()
 		for key, lpdf in self.joint_likelihood_pdfs.items():
 			ranks = lpdf.bins.lower()[0]
 			weights = lpdf.array
-			# complementary cumulative distribution function
+			# cumulative distribution function and its
+			# complement.  it's numerically better to recompute
+			# the ccdf by reversing the array of weights than
+			# trying to subtract the cdf from 1.
+			cdf = weights.cumsum()
+			cdf /= cdf[-1]
 			ccdf = weights[::-1].cumsum()[::-1]
 			ccdf /= ccdf[0]
+			# try making ccdf + cdf == 1.  nothing really cares
+			# if this identity doesn't exactly hold, but we
+			# might as well avoid weirdness where we can.  the
+			# one whose tail is biggest gets adjusted to avoid
+			# getting negative probabilities.
+			if cdf[0] <= ccdf[-1]:
+				ccdf -= cdf[0]
+			else:
+				cdf -= ccdf[-1]
+			# build interpolators
+			self.cdf_interpolator[key] = interpolate.interp1d(ranks, cdf)
 			self.ccdf_interpolator[key] = interpolate.interp1d(ranks, ccdf)
 			# record min and max ranks so we know which end of the ccdf to use when we're out of bounds
 			self.minrank[key] = (min(ranks), ccdf[0])
