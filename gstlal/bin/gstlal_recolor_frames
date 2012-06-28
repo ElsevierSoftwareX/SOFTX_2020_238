@@ -111,7 +111,7 @@ handler = lloidparts.LLOIDHandler(mainloop, pipeline)
 # construct the pipeline framesrc -> injection element -> whiten -> shift -> firbank (recolor) -> frame sink
 #
 
-head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, options.instrument, lloidparts.DetectorData(options.frame_cache, options.channel_name), fake_data = None, online_data = options.online_data, injection_filename = options.injections, frame_segments = None, verbose = options.verbose)
+head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, options.instrument, lloidparts.DetectorData(options.frame_cache, options.channel_name), data_source = options.online_data or "frames", injection_filename = options.injections, frame_segments = None, verbose = options.verbose)
 
 head = pipeparts.mkprogressreport(pipeline, head, "frames")
 
