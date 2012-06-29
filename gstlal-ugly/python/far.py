@@ -304,15 +304,15 @@ class TrialsTable(dict):
 				self[ifos].count += count
 			except KeyError:
 				self[ifos] = Trials(count)
-		connection.commit()
-	
+
 	def count_below_thresh_from_db(self, connection):
 		"""
 		"""
+		cursor = connection.cursor()
 		for ifos in self:
-			count, = connection.cursor().execute('SELECT count(*) FROM coinc_inspiral WHERE combined_far < ? AND ifos == ?', (self[ifos].thresh, lsctables.ifos_from_instrument_set(ifos))).fetchone()
+			count, = cursor.execute('SELECT count(*) FROM coinc_inspiral WHERE combined_far < ? AND ifos == ?', (self[ifos].thresh, lsctables.ifos_from_instrument_set(ifos))).fetchone()
 			self[ifos].count_below_thresh += count
-			connection.commit()
+		cursor.close()
 
 	def increment_count(self, n):
 		"""
@@ -856,7 +856,7 @@ class RankingData(object):
 			self.minrank[key] = min(ranks)
 			self.maxrank[key] = max(ranks)
 
-	def fap_from_rank(self, rank, ifos, scale = False):
+	def fap_from_rank(self, rank, ifos):
 		ifos = frozenset(ifos)
 		if rank >= self.maxrank[ifos]:
 			rank = self.maxrank[ifos]
@@ -867,9 +867,9 @@ class RankingData(object):
 			trials = max(int(self.trials_table[ifos].count), 1)
 		except KeyError:
 			trials = 1
-		# multiply by a scale factor if provided
-		# (assume scale is 1 if disabled or not available)
-		if scale and ifos in self.scale:
+		# multiply by a scale factor if available, assume scale is
+		# 1 if not available.
+		if ifos in self.scale:
 			trials *= self.scale[ifos]
 		return fap_after_trials(fap, trials)
 
@@ -915,7 +915,7 @@ class RankingData(object):
 #
 
 
-def set_fap(Far, f, tmp_path = None, scale = None, verbose = False):
+def set_fap(Far, f, tmp_path = None, verbose = False):
 	"""
 	Function to set the false alarm probability for a single database
 	containing the usual inspiral tables.
@@ -934,7 +934,7 @@ def set_fap(Far, f, tmp_path = None, scale = None, verbose = False):
 	connection = sqlite3.connect(working_filename)
 
 	# define fap function
-	connection.create_function("fap", 2, lambda rank, ifostr: Far.fap_from_rank(rank, lsctables.instrument_set_from_ifos(ifostr), scale = scale))
+	connection.create_function("fap", 2, lambda rank, ifostr: Far.fap_from_rank(rank, lsctables.instrument_set_from_ifos(ifostr)))
 
 	# FIXME abusing false_alarm_rate column, move for a false_alarm_probability column??
 	connection.cursor().execute("UPDATE coinc_inspiral SET false_alarm_rate = (SELECT fap(coinc_event.likelihood, coinc_inspiral.ifos) FROM coinc_event WHERE coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id)")

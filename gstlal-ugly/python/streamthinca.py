@@ -309,9 +309,14 @@ class StreamThinca(object):
 				# lines!  This trials table is static until the
 				# marginalized likelihood file is read in
 				# again.
-				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, ifo_set)
-				# assume each event is "loudest" so n = 1 by default, not the same as required for an IFAR plot
+
+				# compute the false-alarm rate without
+				# using the trials-factor rescaling
 				coinc_inspiral_row.combined_far = FAP.far_from_rank(coinc_event_row.likelihood, ifo_set)
+
+				# now that we know this event's un-adjusted
+				# false-alarm rate, adjust the
+				# trials-factor rescaling
 				# FIXME bad!! We only increment the count below
 				# thresh once in this loop as a way to
 				# "cluster" events similar to the gracedb loop
@@ -320,12 +325,18 @@ class StreamThinca(object):
 				if not have_incremented_count_below_thresh and coinc_inspiral_row.combined_far < self.trials_table[ifo_set].thresh:
 					self.trials_table[ifo_set].count_below_thresh += 1
 					have_incremented_count_below_thresh = True
-				# Rank again with the scale set!!!
-				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, ifo_set, scale = True)
-				# assume each event is "loudest" so n = 1 by default, not the same as required for an IFAR plot
+
+				# now re-compute the false-alarm rate, this
+				# time using the trials-factor rescaling
 				coinc_inspiral_row.combined_far = FAP.far_from_rank(coinc_event_row.likelihood, ifo_set, scale = True)
-				
-				# populate a column with latency
+
+				# compute the false-alarm probability, too,
+				# now that we know the latest the
+				# trials-factor scaling
+				coinc_inspiral_row.false_alarm_rate = FAP.fap_from_rank(coinc_event_row.likelihood, ifo_set)
+
+				# abuse minimum_duration column to store
+				# the latency
 				coinc_inspiral_row.minimum_duration = float(gps_time_now - coinc_inspiral_row.get_end())
 
 		# construct a coinc extractor from the XML document while
