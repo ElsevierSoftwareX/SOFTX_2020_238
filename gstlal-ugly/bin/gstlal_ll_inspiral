@@ -179,6 +179,8 @@ def parse_command_line():
 	detectors = {}
 	for instrument in set(svd_banks.keys()):
 		detectors[instrument] = lloidparts.DetectorData(None, channel_dict[instrument])
+	if len(detectors) < 2:
+		raise ValueError("only coincident searches are supported:  must process data from at least two antennae")
 
 	# FIXME: should also check for read permissions
 	required_files = []

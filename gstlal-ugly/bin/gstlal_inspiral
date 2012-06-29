@@ -152,7 +152,7 @@ def parse_command_line():
 		missing_options += ["--svd-bank"]
 	missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
 	if missing_options:
-		raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
+		raise ValueError("missing required option(s) %s" % ", ".join(sorted(missing_options)))
 
 	# Get the banks and make the detectors
 	# FIXME add error checking on length of banks per detector, etc
@@ -162,6 +162,8 @@ def parse_command_line():
 	detectors = {}
 	for instrument in set(svd_banks.keys()):
 		detectors[instrument] = lloidparts.DetectorData(options.frame_cache, channel_dict[instrument])
+	if len(detectors) < 2:
+		raise ValueError("only coincident searches are supported:  must process data from at least two antennae")
 
 	# FIXME: should also check for read permissions
 	required_files = []
