@@ -711,15 +711,15 @@ elif( data_source == "whitedata" ):
 	pipeline.add( head )
 	head.set_property( "wave", 9 ) # unity variance zero mean gaussian noise
 elif( data_source == "lldata" ):
-	head = mkLLOIDbasicsrc( pipeline, 
-		None, 
-		handler.inst, 
-		DetectorData(None, handler.channel), 
-		data_source = "online", 
-		injection_filename = inj_loc, 
-		frame_segments = None, 
-		verbose = True
-	)
+	shmmap = { "L1": "LLO_Data",
+	           "H1": "LHO_Data",
+	           "V1": "VIRGO_Data"}
+	head = mklvshmsrc( pipeline, shm_name = shmmap[handler.inst] )
+	src = head = mkframecppchanneldemux( pipeline, head )
+	sink = mkaudiorate( pipeline, None, skip_to_first = True, silent = False )
+	src_deferred_link( src, "%s:%s" % (handler.inst, handler.channel), sink.get_pad("sink") )
+	head = sink
+
 	# FIXME: This is a guess. Not a terrible one, but still inaccurate
 	handler.time_since_dump = gpstime.GpsSecondsFromPyUTC( time.time() )
 elif( data_source == "gwffile" ):
@@ -806,7 +806,7 @@ if( diagnostics ):
 	)
 
 # Convert to 64 bit
-head = mkcapsfilter( pipeline, mkaudioconvert( pipeline, head), "audio/x-raw-float,width=64" )
+head = mkcapsfilter( pipeline, mkaudioconvert( pipeline, head ), "audio/x-raw-float,width=64" )
 # Data conditioning
 head = mkcapsfilter( pipeline, mkresample( pipeline, head ), "audio/x-raw-float,rate=%d" % handler.rate )
 
@@ -946,15 +946,13 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		#duration = duration << 1
 
 	# Multi channel FIR filter -- used to add together frequency bands into tiles
-	# TODO: Restore this when buffer dropping is fixed
-	"""
-	head = mkchecktimestamps( pipeline, head, "before audiofir" )
+	#head = mkchecktimestamps( pipeline, head, "before audiofir" )
 	head = mkgeneric( pipeline, head, "audiofirfilter" )
 	head.set_property( "kernel", 
 		ep.build_fir_sq_adder( ndof )
 	)
-	head = mkchecktimestamps( pipeline, head, "after audiofir" )
-	"""
+	head = mknofakedisconts( pipeline, head )
+	#head = mkchecktimestamps( pipeline, head, "after audiofir" )
 
 	if( diagnostics ):
 		head = postdurtee = mktee( pipeline, mkqueue( pipeline, head ) )
