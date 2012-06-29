@@ -67,7 +67,7 @@ from gstlal import pipeio
 #
 
 
-def measure_psd(instrument, seekevent, detector, seg, rate, fake_data = None, online_data = False, injection_filename = None, psd_fft_length = 8, frame_segments = None, verbose = False):
+def measure_psd(instrument, seekevent, detector, seg, rate, data_source = "frames", injection_filename = None, psd_fft_length = 8, frame_segments = None, verbose = False):
 	# FIXME:  why can't this be done at the top with the other imports?
 	# yes it creates a cyclic dependency, but there's no reason why it
 	# shouldn't work that I can see.
@@ -104,7 +104,7 @@ def measure_psd(instrument, seekevent, detector, seg, rate, fake_data = None, on
 	pipeline = gst.Pipeline("psd")
 	handler = PSDHandler(mainloop, pipeline)
 
-	head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, fake_data = fake_data, online_data = online_data, injection_filename = injection_filename, frame_segments = frame_segments, verbose = verbose)
+	head = lloidparts.mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = data_source, injection_filename = injection_filename, frame_segments = frame_segments, verbose = verbose)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=[%d,MAX]" % rate)	# disallow upsampling
 	head = pipeparts.mkresample(pipeline, head, quality = 9)
 	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw-float, rate=%d" % rate)
