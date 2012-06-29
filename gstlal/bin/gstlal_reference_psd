@@ -99,7 +99,7 @@ reference_psd.write_psd(
 		options.seg,
 		options.sample_rate,	# Hz;  must not be less than highest bank fragment sample rate (see below)
 		psd_fft_length = options.psd_fft_length,
-		u,
+		data_source = options.fake_data or (options.online_data and "online") or "frames",
 		injection_filename = options.injections,
 		frame_segments = frame_segments,
 		verbose = options.verbose
