@@ -496,8 +496,15 @@ def get_triggers(elem, handler, ndof):
 			len(handler.triggers) >= handler.max_events ):
 		# FIXME: Handle units better
 		dur = int( handler.stop - handler.time_since_dump + 0.5 )
-		fname = "%s_%s_triggers_%d_%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur)
+		if( os.path.isdir( handler.outfile ) ):
+			fname = "%s/%s_%s_triggers_%d_%d.xml" % (handler.outfile, handler.inst, handler.channel, handler.time_since_dump, dur)
+		elif( handler.outfile is None or len(handler.outfile) == 0 ):
+			fname = "%s_%s_triggers_%d_%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur)
+		else:
+			fname = handler.outfile
+
 		uniq = 1
+		# FIXME: Needs to address the directory structure above
 		while( os.path.exists( fname ) ):
 			fname = "%s_%s_triggers_%d_%d.%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur, uniq)
 			uniq += 1
