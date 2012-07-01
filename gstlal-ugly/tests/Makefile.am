@@ -1,9 +1,6 @@
-EXTRA_DIST = \
-	fixtures.py \
-	plots_test_01.py \
-	test_coinc.py
+EXTRA_DIST = fixtures.py iir_pipeline_test.py itac_test_01.py plots_test_01.py plot_test test_bank.xml test_coinc.py test_skymap.py
 
-TESTS = test_coinc.py plots_test_01.py
+TESTS =
 
 clean-local :
 	rm -f *.dump
