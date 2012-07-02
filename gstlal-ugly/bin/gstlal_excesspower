@@ -405,12 +405,12 @@ class EPHandler( LLOIDHandler ):
 
 		print >>sys.stderr, "Please wait (don't ctrl+c) while I dump triggers to disk."
 		# FIXME: Check units
-		dur = int( handler.stop - handler.time_since_dump + 0.5 )
+		dur = numpy.ceil(handler.stop) - numpy.floor(handler.time_since_dump)
 		# FIXME: Handle this better
 		if( os.path.isdir( self.outfile ) ):
-			outfile = "%s/%s_%s_triggers_%d_%d.xml" % (self.outfile, self.inst, self.channel, self.time_since_dump, dur)
+			outfile = "%s/%s-%s_excesspower-%d-%d.xml" % (self.outfile, self.inst, self.channel, self.time_since_dump, dur)
 		elif( self.outfile is None or len(self.outfile) == 0 ):
-			outfile = "%s_%s_triggers_%d_%d.xml" % (self.inst, self.channel, self.time_since_dump, dur)
+			outfile = "%s-%s_excesspower-%d-%d.xml" % (self.inst, self.channel, self.time_since_dump, dur)
 		else:
 			outfile = self.outfile
 		self.write_triggers( False, filename = outfile )
@@ -495,18 +495,18 @@ def get_triggers(elem, handler, ndof):
 	if( handler.stop - handler.time_since_dump > handler.dump_frequency or
 			len(handler.triggers) >= handler.max_events ):
 		# FIXME: Handle units better
-		dur = int( handler.stop - handler.time_since_dump + 0.5 )
+		dur = numpy.ceil(handler.stop) - numpy.floor(handler.time_since_dump)
 		if( os.path.isdir( handler.outfile ) ):
-			fname = "%s/%s_%s_triggers_%d_%d.xml" % (handler.outfile, handler.inst, handler.channel, handler.time_since_dump, dur)
+			fname = "%s/%s-%s_excesspower-%d-%d.xml" % (handler.outfile, handler.inst, handler.channel, handler.time_since_dump, dur)
 		elif( handler.outfile is None or len(handler.outfile) == 0 ):
-			fname = "%s_%s_triggers_%d_%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur)
+			fname = "%s-%s_excesspower-%d-%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur)
 		else:
 			fname = handler.outfile
 
 		uniq = 1
 		# FIXME: Needs to address the directory structure above
 		while( os.path.exists( fname ) ):
-			fname = "%s_%s_triggers_%d_%d.%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur, uniq)
+			fname = "%s-%s_excesspower-%d-%d.%d.xml" % (handler.inst, handler.channel, handler.time_since_dump, dur, uniq)
 			uniq += 1
 		handler.write_triggers( filename = fname, flush = True )
 		handler.time_since_dump = handler.stop 
