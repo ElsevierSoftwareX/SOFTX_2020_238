@@ -38,6 +38,7 @@ def parse_command_line():
 	parser.add_option("-F", "--add-f-final", action = "store_true", help = "Select whether to add f_final to the bank.")
 	parser.add_option("-M", "--max-f-final", metavar = "float", type="float", help = "Max f_final to populate table with; if f_final over mx, use max.")
 	parser.add_option("-i", "--instrument", metavar = "ifo", type="string", help = "override the instrument, required")
+	parser.add_option("--bank-program", metavar = "name", default = "tmpltbank", type="string", help = "Select name of the program used to generate the template bank (default: tmpltbank).")
         parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
         options, filenames = parser.parse_args()
 
@@ -65,7 +66,7 @@ options_params=[("--filename","string",filename),("--output_path","string", opti
 xmldoc=utils.load_filename(filename, verbose = options.verbose)
 sngl_inspiral_table=lsctables.table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 process_params_table = lsctables.table.get_table(xmldoc, lsctables.ProcessParamsTable.tableName)
-tmpltbank_process_ids = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName).get_ids_by_program("tmpltbank")
+tmpltbank_process_ids = lsctables.table.get_table(xmldoc, lsctables.ProcessTable.tableName).get_ids_by_program(options.bank_program)
 
 if options.add_f_final:
 	for row in process_params_table:
