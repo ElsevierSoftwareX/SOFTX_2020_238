@@ -272,9 +272,9 @@ def build_inner_product_norm( corr, band, del_f, nfilts, flow, psd=None, level=N
 		
 	return inner
 
-def build_fir_sq_adder( nsamp ):
-	"""Just a square window of nsamp long. Used to sum samples in time."""
-	return numpy.ones(nsamp)
+def build_fir_sq_adder( nsamp, padding=0 ):
+	"""Just a square window of nsamp long. Used to sum samples in time. Setting the padding will pad the end with that many 0s."""
+	return numpy.hstack( (numpy.ones(nsamp), numpy.zeros(padding)) )
 
 def create_bank_xml(flow, fhigh, band, duration, detector=None):
 	"""
