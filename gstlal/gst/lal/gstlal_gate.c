@@ -1052,9 +1052,9 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		}
 
 		/*
-		 * output is a non-gap buffer of non-zero length.  if it's
-		 * the entire input buffer then re-use it otherwise create
-		 * a subbuffer from it
+		 * output is a buffer of non-zero length.  if it's the
+		 * entire input buffer then re-use it otherwise create a
+		 * subbuffer from it
 		 */
 
 		if(length == sinkbuf_length) {
