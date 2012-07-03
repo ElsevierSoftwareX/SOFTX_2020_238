@@ -51,6 +51,7 @@ import gst
 from glue import segments
 from glue import segmentsUtils
 from glue.ligolw import utils
+from glue.ligolw import lsctables
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import svd_bank
