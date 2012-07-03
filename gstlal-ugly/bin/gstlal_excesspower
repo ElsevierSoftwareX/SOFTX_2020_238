@@ -953,10 +953,19 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 		#duration = duration << 1
 
 	# Multi channel FIR filter -- used to add together frequency bands into tiles
+	# FIXME: This is a workaround around until the audiofirfilter is fixed.
+	# Basically, if the firfilter gets a small enough kernel, it invokes 
+	# time-domain convolution. Something about the way it fills the buffers is
+	# wrong in regards to the way it keeps history and thus the output buffers
+	# partially desynched from the input -- even with an identity transform.
+
+	# Workaround: Zero pad the kernel past the length (32 samples) in which the 
+	# element switches to FFT convolution which doesn't exhibit bad behavior.
+
 	#head = mkchecktimestamps( pipeline, head, "before audiofir" )
 	head = mkgeneric( pipeline, head, "audiofirfilter" )
 	head.set_property( "kernel", 
-		ep.build_fir_sq_adder( ndof )
+		ep.build_fir_sq_adder( ndof, padding=max(0, 33-ndof) )
 	)
 	head = mknofakedisconts( pipeline, head )
 	#head = mkchecktimestamps( pipeline, head, "after audiofir" )
