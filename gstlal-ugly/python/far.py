@@ -575,7 +575,7 @@ def likelihood_bin_boundaries(likelihoods, probabilities, minint = 1e-2, maxint 
 	minlikelihood = likelihoods[s.searchsorted(minint, side = 'right')]
 	maxlikelihood = likelihoods[s.searchsorted(maxint)]
 	if minlikelihood == 0:
-		minlikelihood = likelihoods[likelihoods != 0].min()
+		minlikelihood = max(likelihoods[likelihoods != 0].min(), 1e-100) # to prevent numerical issues
 	return minlikelihood, maxlikelihood
 
 
@@ -883,7 +883,10 @@ class RankingData(object):
 			livetime = self.far_interval
 		else:
 			livetime = float(abs(self.livetime_seg))
-		return -math.log(1. - fap) / livetime
+		try:
+			return -math.log(1. - fap) / livetime
+		except ValueError:
+			return float('inf')
 
 
 #
