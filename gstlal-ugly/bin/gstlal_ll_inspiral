@@ -477,9 +477,6 @@ def crash_handler(signal, frame, pipeline = pipeline, instruments = detectors.ke
 # this is how the program stops gracefully, it is the only way to stop it.
 # Otherwise it runs forever man.
 
-signal.signal(signal.SIGBUS, crash_handler)
-signal.signal(signal.SIGSEGV, crash_handler)
-signal.signal(signal.SIGABRT, crash_handler)
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
