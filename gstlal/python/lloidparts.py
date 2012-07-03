@@ -279,17 +279,12 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "fr
 		statevector.set_property("max_size_time", gst.SECOND * 60 * 10) # 10 minutes of buffering
 		pipeline.add(statevector)
 		# FIXME:  don't hard-code channel name
-		if instrument == "V1":
-			pipeparts.src_deferred_link(src, "%s:%s" % (instrument, "FAKE_Hrec_Flag_Quality"), statevector.get_pad("sink"))
-		else:
-			pipeparts.src_deferred_link(src, "%s:%s" % (instrument, "FAKE-STATE_VECTOR"), statevector.get_pad("sink"))
+		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, "LLD-DQ_VECTOR"), statevector.get_pad("sink"))
 		# FIXME we don't add a signal handler to the statevector audiorate, I assume it should report the same missing samples?
 		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True)
 		# FIXME:  what bits do we need on and off?  and don't hard code them
-		if instrument == "V1":
-			statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 12, required_off = ~12 & 0xffffffff)
-		else:
-			statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 45)
+		# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
+		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 0x7, required_off = 0x160)
 		@bottle.route("/%s/state_vector_on_off_gap.txt" % instrument)
 		def state_vector_state(elem = statevector):
 			import time
