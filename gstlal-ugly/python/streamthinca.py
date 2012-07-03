@@ -299,10 +299,7 @@ class StreamThinca(object):
 			coinc_event_row = coinc_event_index[coinc_inspiral_row.coinc_event_id]
 			# increment the trials table
 			ifo_set = frozenset(coinc_inspiral_row.get_ifos())
-			try:
-				self.trials_table[ifo_set].count += 1
-			except KeyError:
-				self.trials_table[ifo_set] = far.Trials(count = 1)
+			self.trials_table[ifo_set].count += 1
 			# Assign the FAP if requested
 			if FAP is not None:
 				# note FAP should have a reference to the
