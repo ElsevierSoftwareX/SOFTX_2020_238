@@ -96,6 +96,13 @@ class source(object):
 		phi2 = uniform_phi(self.expnum)
 		return spin(r1, theta1, phi1), spin(r2, theta2, phi2)
 
+	def aligned_spins(self):
+		# FIXME uniform in r not in the sphere, what is desired?
+		r1 = uniform_interval(self.s1range, self.expnum)
+		# FIXME, lal actually expects standard spherical coordinates in radians?
+		r2 = uniform_interval(self.s2range, self.expnum)
+		return spin(r1, 0, 0), spin(r2, 0, 0)
+
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--gps-start-time", metavar = "seconds", type = "int", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
@@ -116,6 +123,7 @@ parser.add_option("--bh-min-mass", metavar = "Msun", type = "float", default = 5
 parser.add_option("--bh-max-mass", metavar = "Msun", type = "float", default = 20.0, help = "set the maximum mass of the black hole, default = 20.0")
 parser.add_option("--bh-min-spin", metavar = "dimensionless", type = "float", default = 0., help = "set the min black hole spin, default = 0")
 parser.add_option("--bh-max-spin", metavar = "dimensionless", type = "float", default = 1., help = "set the max black hole spin, default = 1")
+parser.add_option("--aligned-spin", action="store_true", default = False, help = "Align the bh spin direction with the z-direction.")
 parser.add_option("--flower", metavar = "float", type = "float", help = "set the minumum frequency")
 parser.add_option("--seed", metavar = "int", type = "int", default = 1, help = "set the random seed default = 1")
 
@@ -154,7 +162,10 @@ for src in srcs:
 	time = src.uniform_time()
 	mass1, mass2 = src.uniform_masses()
 	dist = src.volume_distributed_distances()
-	spin1, spin2 = src.uniform_spins()
+	if options.aligned_spin:
+		spin1, spin2 = src.aligned_spins()
+	else:
+		spin1, spin2 = src.uniform_spins()
 	ra, dec, pol, inc, phase = src.uniform_sky()
 
 	#FIXME only set the "needed" columns. Hopefully these are the needed ones
