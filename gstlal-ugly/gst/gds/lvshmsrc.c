@@ -220,6 +220,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	int flags = 0;	/* LVSHM_NOWAIT is not set = respect wait time */
 	const char *data;
 	unsigned length;
+	GstClockTime timestamp;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	/*
@@ -263,7 +264,10 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 			/*
 			 * assume reason for failure was a timeout.  create
 			 * a 0-length buffer with a guess as to the
-			 * timestamp of the missing data.
+			 * timestamp of the missing data.  guess:  the time
+			 * when we started waiting for the data adjusted by
+			 * the most recently measured latency
+			 *
 			 *
 			 * FIXME:  we need an API that can tell us the
 			 * timestamp of the missing data
@@ -296,12 +300,18 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 	 * point must include a call to lvshm_releaseDataBuffer()
 	 */
 	length = lvshm_dataLength(element->handle);
-	GST_LOG_OBJECT(element, "retrieved %u byte frame file labeled %lu", length, (unsigned long) lvshm_bufferGPS(element->handle));
+	timestamp = lvshm_bufferGPS(element->handle) * GST_SECOND;
+	GST_LOG_OBJECT(element, "retrieved %u byte frame file for GPS %" GST_TIME_SECONDS_FORMAT, length, GST_TIME_SECONDS_ARGS(timestamp));
 
 	/*
 	 * copy into a GstBuffer
 	 */
 
+	if(!length) {
+		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("received 0-byte frame file"));
+		result = GST_FLOW_UNEXPECTED;
+		goto done;
+	}
 	result = gst_pad_alloc_buffer(GST_BASE_SRC_PAD(basesrc), offset, length, GST_PAD_CAPS(GST_BASE_SRC_PAD(basesrc)), buffer);
 	if(result != GST_FLOW_OK) {
 		GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("gst_pad_alloc_buffer() returned %d (%s)", result, gst_flow_get_name(result)));
@@ -315,7 +325,7 @@ static GstFlowReturn create(GstBaseSrc *basesrc, guint64 offset, guint size, Gst
 		goto done;
 	}
 	memcpy(GST_BUFFER_DATA(*buffer), data, length);
-	GST_BUFFER_TIMESTAMP(*buffer) = lvshm_bufferGPS(element->handle) * GST_SECOND;
+	GST_BUFFER_TIMESTAMP(*buffer) = timestamp;
 	GST_BUFFER_DURATION(*buffer) = GST_CLOCK_TIME_NONE;
 	GST_BUFFER_OFFSET(*buffer) = offset;
 	GST_BUFFER_OFFSET_END(*buffer) = GST_BUFFER_OFFSET_NONE;
