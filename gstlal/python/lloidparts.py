@@ -234,6 +234,13 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "fr
 	# data source
 	#
 
+	# FIXME:  what bits do we need on and off?  and don't hard code them
+	# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
+	if instrument == "V1":
+		state_vector_on_bits, state_vector_off_bits = (0x67, 0x100)
+	else:
+		state_vector_on_bits, state_vector_off_bits = (0x7, 0x160)
+
 	# First process fake data or frame data
 	if data_source == "white":
 		src = pipeparts.mkfakesrc(pipeline, instrument, detector.channel, blocksize = detector.block_size)
@@ -258,9 +265,8 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "fr
 		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True)
 
 		# strain
-		strain = pipeparts.mkaudioconvert(pipeline, None)
+		strain = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, detector.channel), strain.get_pad("sink"))
-		strain = pipeparts.mkqueue(pipeline, strain, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10) # 10 minutes of buffering
 		strain = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
 		@bottle.route("/%s/strain_add_drop.txt" % instrument)
 		def strain_add(elem = strain):
@@ -282,9 +288,7 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "fr
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, "LLD-DQ_VECTOR"), statevector.get_pad("sink"))
 		# FIXME we don't add a signal handler to the statevector audiorate, I assume it should report the same missing samples?
 		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True)
-		# FIXME:  what bits do we need on and off?  and don't hard code them
-		# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
-		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = 0x7, required_off = 0x160)
+		statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = state_vector_on_bits, required_off = state_vector_off_bits)
 		@bottle.route("/%s/state_vector_on_off_gap.txt" % instrument)
 		def state_vector_state(elem = statevector):
 			import time
@@ -319,12 +323,13 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "fr
 		if not src.send_event(seekevent):
 			raise RuntimeError, "Element %s did not handle seek event" % src.get_name()
 
-		#
-		# provide an audioconvert element to allow Virgo data (which is
-		# single-precision) to be adapted into the pipeline
-		#
+	#
+	# provide an audioconvert element to allow Virgo data (which is
+	# single-precision) to be adapted into the pipeline
+	#
 
-		src = pipeparts.mkaudioconvert(pipeline, src)
+	src = pipeparts.mkaudioconvert(pipeline, src)
+
 
 	#
 	# progress report
