@@ -3,79 +3,6 @@ Hacking on gstlal
 =================
 
 
-This file is meant as a starting point for gstlal development.
-
-
-Handling errors in element plugins
-==================================
-
-If you are developing a GStreamer element, you should know of at least three
-different ways to handle error conditions, and when to use each of them.
-
-* Logging subsystem: ``GST_ERROR_OBJECT``, ``GST_WARNING_OBJECT``, ``GST_INFO_OBJECT``
-  
-  Use these macros to produce informative text of varying levels of urgency.
-  These should be used when you want to inform the user or other developers of
-  unusual, but not irrecoverable or dangerous, conditions.
-
-  For example, if you are writing a chain() routine, the following idiom is
-  customary::
-  
-    res = gst_pad_push (GST_BASE_TRANSFORM_SRC_PAD (resample), outbuf);
-    
-	if (G_UNLIKELY (res != GST_FLOW_OK))
-      GST_WARNING_OBJECT (resample, "Failed to push drain: %s", gst_flow_get_name (res));
-	return res;
-
-  See <http://library.gnome.org/devel/gstreamer/unstable/gstreamer-GstInfo.html>.
-
-* GError error reporting: ``GST_ELEMENT_ERROR``
-  
-  Use this macro to report a fatal error.  Calling GST_ELEMENT_ERROR will bring
-  the pipeline to a screeching halt, and a GstMessage of type GST_MESSAGE_ERROR
-  will be sent to the application via the bus.
-
-  An example invocation::
-    
-	GST_ELEMENT_ERROR(element, RESOURCE, SEEK, ("XLALFrSeek() to %d.%09u s failed", epoch.gpsSeconds, epoch.gpsNanoSeconds), ("%s", XLALErrorString(XLALGetBaseErrno())));
-
-  See <http://www.gstreamer.net/data/doc/gstreamer/head/gstreamer/html/gstreamer-GstGError.html>.
-
-* Glib assertions: ``g_assert``, etc.
-  
-  Use these macros to check for programming errors only.  Assertions are useful
-  for checking preconditions, but should not be used for everyday error reporting.
-  An assertion ulimately results in a call to ``abort()``.
-
-  See <http://library.gnome.org/devel/glib/stable/glib-Testing.html>.
-
-
-Queues
-======
-
-One of the trickiest parts of constructing complicated GStreamer pipelines is
-placement of queues.  Queues are useful for temporarily storing buffers when
-hooking together pipeline sections that have different latencies.
-
-There are three different queue elements that come with GStreamer: ``queue``,
-``queue2``, and ``multiqueue``.
-
-* ``queue`` is the simplest: it has an adjustable minimum and maximum size.
-
-* ``queue2`` is similar to ``queue``, but can spool data to a temporary file.
-
-* ``multiqueue`` is the most sophisticated.  It can be used for queuing multiple
-   streams simultaneously.
-
-It is sometimes difficult to decide when queues are necessary.  Here are a few
-different situations in which queues can be helpful:
-
-* On the source pads of a ``tee``: the ``tee`` element pushes buffers on each
-  source pad in sequence, so if it is important that the processing downstream
-  of the tee occurs in parallel, you have to insert queues so that the tee can
-  send its buffer to all pads immediately.
-
-
 Writing elements in Python
 ==========================
 
@@ -130,18 +57,3 @@ Caveats
 -------
 
 * All Pythonic elements are currently lumped under a single plugin, "python".
-
-
-Tips and tricks
----------------
-
-Notice that in the source release the Python elements are in the directory
-"src/plugins/python".  Rest assured that they will be installed into your 
-prefix in the normal place "lib/gstreamer-0.10/python".  However, if you are
-hacking on one of these elements, you can set the ``GST_PLUGIN_PATH``
-environment variable to "src/plugins" in order to avoid having to
-``make install`` every time you want to test a change.  Here's how::
-  
-  $ cd src/plugins
-  $ export GST_PLUGIN_PATH=$PWD
- 
