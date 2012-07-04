@@ -261,7 +261,8 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "fr
 	# Next process online data, fake data must be None for this to have gotten this far
 	elif data_source == "online":
 		# FIXME:  be careful hard-coding shared-memory partition
-		src = pipeparts.mklvshmsrc(pipeline, shm_name = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}[instrument])
+		# FIXME make wait_time adjustable through web interface or command line or both
+		src = pipeparts.mklvshmsrc(pipeline, shm_name = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}[instrument], wait_time = 120)
 		src = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = True, skip_bad_files = True)
 
 		# strain
