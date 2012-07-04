@@ -90,9 +90,9 @@ else:
 
 OK = True
 
-for filename in filenames:
-	url, = [url.strip() for url in open(filename) if "gracedb_far_threshold.txt" in url]
+urls = set(url.strip() for filename in filenames for url in open(filename) if "gracedb_far_threshold.txt" in url)
 
+for url in sorted(urls):
 	print "%s:" % url
 	for line in urllib.urlopen(url, data = post_data):
 		OK &= "error" not in line
