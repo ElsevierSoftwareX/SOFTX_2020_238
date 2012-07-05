@@ -108,7 +108,7 @@ coincparamsdistributions.add_foreground_prior(verbose = options.verbose, n = opt
 FAR = far.LocalRankingData(segments.segment(None, None), coincparamsdistributions)
 
 # initialize the trials table to 1
-FAR.trials_table.initialize_from_sngl_ifos(options.instrument, count = 1, thresh = options.trials_far_thresh)
+FAR.trials_table.initialize_from_sngl_ifos(options.instrument, count = 1, count_below_thresh = 1, thresh = options.trials_far_thresh)
 
 xmldoc = inspiral.gen_likelihood_control_doc(FAR, options.instrument)
 utils.write_filename(xmldoc, options.write_likelihood, gz = options.write_likelihood.endswith('.gz'), verbose = options.verbose)
