@@ -243,9 +243,11 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "fr
 
 	# First process fake data or frame data
 	if data_source == "white":
-		src = pipeparts.mkfakesrc(pipeline, instrument, detector.channel, blocksize = detector.block_size)
+		# seek events have to be given to these since the element returned is a tag inject
+		src = pipeparts.mkfakesrcseeked(pipeline, instrument, detector.channel, seekevent, blocksize = detector.block_size)
 	elif data_source == "silence":
-		src = pipeparts.mkfakesrc(pipeline, instrument, detector.channel, blocksize = detector.block_size, wave = 4)
+		# seek events have to be given to these since the element returned is a tag inject
+		src = pipeparts.mkfakesrcseeked(pipeline, instrument, detector.channel, seekevent, blocksize = detector.block_size, wave = 4)
 	elif data_source == 'LIGO':
 		src = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, channel_name = detector.channel, blocksize = detector.block_size)
 	elif data_source == 'AdvLIGO':
@@ -311,10 +313,10 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "fr
 	else:
 		raise ValueError("invalid data_source: %s" % data_source)
 
-	# seek all non-live sources FIXME someday this should go away and seeks
+	# seek some non-live sources FIXME someday this should go away and seeks
 	# should only be done on the pipeline that is why this is separated
 	# here
-	if data_source != "online":      
+	if data_source in ("LIGO", "AdvLIGO", "AdvVirgo", "frames"):
 		#
 		# seek the data source if not live
 		#
