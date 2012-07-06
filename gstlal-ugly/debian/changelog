@@ -1,3 +1,9 @@
+gstlal-ugly (0.3.0-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Adam Mercer <adam.mercer@ligo.org>  Fri, 06 Jul 2012 17:29:34 -0500
+
 gstlal-ugly (0.2.1-1) unstable; urgency=low
 
   * New upstream release, fixes nds2 dependency problem

@@ -4,8 +4,8 @@ Section: lscsoft
 Priority: optional
 Standards-Version: 3.9.2
 Build-Depends: debhelper (>= 8), python-dev, liborc-0.4-dev,
-               libfftw3-dev, gstlal-dep, python-gobject-dev, lal-dev,
-               lalframe-dev, lalmetaio-dev, lalburst-dev,
+               libfftw3-dev, libexpat1-dev, gstlal-dep, python-gobject-dev,
+               lal-dev, lalframe-dev, lalmetaio-dev, lalburst-dev,
                lalinspiral-dev, fakeroot, autoconf, pkg-config,
                libxml2-dev, gstlal (>=0.3.0)
 
