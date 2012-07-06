@@ -100,55 +100,6 @@ def livetime_plot(disconturl, livetimeurl, xlabel = "", ylabel = "", title = "")
 	plt.savefig(sys.stdout, format="svg")
 
 
-def plotsnrchisq(url, type = "background", name = "gstlal_inspiral_likelihood"):
-	from glue.ligolw import utils
-	from pylal import ligolw_burca_tailor
-	from pylal import rate
-	from gstlal import far
-	coincparamsdistributions, likelihood_seglists = far.DistributionsStats.from_filenames([url], verbose = True)
-	coincparamsdistributions.finish()
-	#filt = rate.gaussian_window2d(5, 5, sigma = 8)	
-	#coincparamsdistributions, likelihood_seglists = ligolw_burca_tailor.load_likelihood_data([url], u"gstlal_inspiral_likelihood", verbose = False)
-
-	fig = plt.figure(figsize = (10.5,7))
-	#plt.gray()
-	fig.patch.set_alpha(0.0)
-	for i, ifo in enumerate(['H1','H2','L1', 'V1']):
-		ax = fig.add_subplot(2,2,i+1)
-		if type == "likelihood":
-			inj = coincparamsdistributions.smoothed_distributions.injection_rates[ifo+"_snr_chi"].array
-			inj /= inj.sum()
-			back = coincparamsdistributions.smoothed_distributions.background_rates[ifo+"_snr_chi"].array
-			back /= back.sum()
-			H1 = inj / back
-			H1[numpy.isinf(H1)] = 0.0
-			H1[numpy.isnan(H1)] = 0.0
-		if type == "background":
-			H1 = coincparamsdistributions.smoothed_distributions.background_rates[ifo+"_snr_chi"].array
-		snr = coincparamsdistributions.smoothed_distributions.background_rates[ifo+"_snr_chi"].bins[0].centres()[1:-1]
-		chi = coincparamsdistributions.smoothed_distributions.background_rates[ifo+"_snr_chi"].bins[1].centres()[1:-1]
-		chi[0] = 0 # not inf
-		plt.pcolormesh(snr, chi, numpy.log10(H1.T+1)[1:-1,1:-1])
-		ax.set_yscale('log')
-		#ax.set_xscale('log')
-		plt.colorbar()
-		if i in (2,3):
-			plt.xlabel('SNR')
-		if i in (0,2):
-			plt.ylabel('reduced chisq / SNR^2')
-		plt.title( "%s %s" % (ifo, type))
-		plt.xlim([4, 26])
-		plt.ylim([.001, 0.5])
-		plt.grid()
-	# one figure, four subplots
-	import StringIO,base64
-	f = StringIO.StringIO()
-	plt.savefig(f, format="png")
-	print '<img src="data:image/png;base64,',base64.b64encode(f.getvalue()),'"></img>'
-	f.close()
-
-
-
 if "dir" not in form:
 	raise ValueError("must specify dir")
 if "id" not in form:
@@ -211,18 +162,6 @@ for ifo in ("H1", "L1", "V1"):
 	plot(baseurl+'_%spsd.txt' % ifo, "loglog", ylabel = "Power (strain^2/Hz)", xlabel = "Frequency (Hz)", title = ifo)
 	print "</div></td>"
 print"</tr></table>"
-
-
-try:
-	print "<table face='Arial'><tr>"
-	print "<td>"
-	plotsnrchisq(baseurl+'_likelihood.xml')
-	print "</td><td>"
-	plotsnrchisq(baseurl+'_likelihood.xml', type = "likelihood")
-	print "</td></tr></table>"
-except ImportError:
-	print "<h2>requires pylal to produce snr / chisq plots</h2></td></tr></table>"
-
 
 print "</body>"
 
