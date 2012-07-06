@@ -172,8 +172,8 @@ def parse_command_line():
 	parser.add_option("--fir-stride", default = 5, metavar = "secs", help = "set the fir bank stride, default 5")
 	parser.add_option("--thinca-interval", default = 10, metavar = "secs", help = "set the thinca interval, default 10")
 	parser.add_option("--gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
-	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default Test")
-	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default LowMass")
+	parser.add_option("--gracedb-type", default = "LowMass", help = "gracedb type, default LowMass")
+	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default Test")
 	parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise.")
 	parser.add_option("--copy-likelihoods", action = "store_true", help = "Copy the likelihood files from a seed, must give --likelihood-file")
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
@@ -230,6 +230,11 @@ for s, trials_factor in inspiral_pipe.build_bank_string(bank_cache, options.num_
 
 
 dag.write_sub_files()
+# we probably want these jobs to retry indefinitely on dedicated nodes. A user
+# can intervene and fix a problem without having to bring the dag down and up.
+# There are few enough total jobs that this really shouldn't bog down the
+# scheduler. For now 1000 will be considered indefinite
+[node.set_retry(1000) for node in dag.get_nodes()]
 dag.write_dag()
 dag.write_script()
 dag.write_cache()
