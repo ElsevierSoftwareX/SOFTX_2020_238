@@ -64,7 +64,7 @@ options, filenames = parse_command_line()
 #
 
 newtrials = far.TrialsTable()
-newtrials.initialize_from_sngl_ifos(("H1", "H2", "L1", "V1"))
+newtrials.initialize_from_sngl_ifos(("H1", "H2", "L1", "V1"), count = 1, count_below_thresh = 1)
 global_ranking, procid = far.RankingData.from_xml(utils.load_filename(options.background_bins_file[0], verbose = options.verbose))
 global_ranking.trials_table += newtrials
 
