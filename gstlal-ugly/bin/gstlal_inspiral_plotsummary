@@ -685,7 +685,7 @@ FROM
 				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: dbtables.lsctables.ifos_from_instrument_set(x[0]))):
 					if not cnt: f.write("||%s||%s||FOUND: %d||\n" % ("".join(sorted(self.on_instruments)), "".join(sorted(participating_instruments)), len(sims)))
 					legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
-					axes.semilogy([x_func(sim) for sim in sims], [y_func(sim, self.on_instruments) for sim in sims], ".")
+					axes.semilogy([x_func(sim) for sim in sims], [y_func(sim, participating_instruments) for sim in sims], ".")
 				if missed:
 					if not cnt: f.write("||%s||%s||MISSED: %d||\n" % ("".join(sorted(self.on_instruments)), "---", len(missed)))
 					legend.append("Missed")
