@@ -532,7 +532,7 @@ class Data(object):
 					# set up the scale factor for the trials table to normalize the rate
 					for ifos in self.ranking_data.scale:
 						try:
-							self.ranking_data.scale[ifos] = self.ranking_data.trials_table[ifos].count_below_thresh / self.ranking_data.trials_table[ifos].thresh / float(abs(self.ranking_data.livetime_seg)) * self.ranking_data.trials_table.num_nonzero_count() # FIXME should be / num_slides, but we assume only 1 zero lag slide table entry for online data.
+							self.ranking_data.scale[ifos] = (self.ranking_data.trials_table[ifos].count_below_thresh or 1) / self.ranking_data.trials_table[ifos].thresh / float(abs(self.ranking_data.livetime_seg)) * (self.ranking_data.trials_table.num_nonzero_count() or 1)
 						except TypeError:
 							self.ranking_data.scale[ifos] = 1
 							print >> sys.stderr, "could not set scale factor, probably because we do not have live time info yet.  Seg is: ", self.ranking_data.livetime_seg
