@@ -90,9 +90,9 @@ for url in urls:
 	ifos = search_summary_row.get_ifos()
 	# reset the clock to None
 	likelihood_data.livetime_seg = segments.segment(None,None)
-	# reset the trials table to unity
+	# reset the trials table to 0
 	for k in likelihood_data.trials_table:
-		likelihood_data.trials_table[k].count = 1
+		likelihood_data.trials_table[k].count = 0
 		likelihood_data.trials_table[k].count_below_thresh = 0
 
 	xmldoc = gen_likelihood_control_doc(likelihood_data, ifos)
