@@ -127,10 +127,11 @@ def plot_livetime(found, missed, ids, registry, ifo):
 	fig, h = setup_plot()
 	
 	found_x = found.keys()
-	on_y = numpy.log10(numpy.array([found[k][0][1] for k in found_x]))
-	off_y = numpy.log10(numpy.array([found[k][0][2] for k in found_x]))
-	gap_y = numpy.log10(numpy.array([found[k][0][3] for k in found_x]))
-	
+	# Handle log of 0 by setting it to max of (actual value, 1)
+	on_y = numpy.log10(numpy.array([max(found[k][0][1],1) for k in found_x]))
+	off_y = numpy.log10(numpy.array([max(found[k][0][2],1) for k in found_x]))
+	gap_y = numpy.log10(numpy.array([max(found[k][0][3],1) for k in found_x]))
+
 	if len(found_x) > 0:
 		max_y = max(on_y.max(), off_y.max(), gap_y.max())
 		min_y = min(on_y.min(), off_y.min(), gap_y.min())
@@ -284,7 +285,14 @@ print "</div></td></tr>"
 print "</table>"
 
 # links at bottom
+print "<h3>Node summary info:</h3><hr>"
 for id in ids:
 	print '<font size=5><a href="gstlal_llcbcnode?dir=%s&id=%s"> %s </a></font>' % (form.getvalue("dir"), id, id)
+
+# likelihood links at bottom
+print "<h3>Node likelihood info:</h3><hr>"
+for id in ids:
+	url = os.path.join(form.getvalue("dir"), "%s_likelihood.xml" % (id,))
+	print '<font size=5><a href="gstlal_inspiral_plot_likelihoods?url=%s"> %s </a></font>' % (url, id)
 print "</body>"
 
