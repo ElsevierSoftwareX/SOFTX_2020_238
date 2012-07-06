@@ -68,13 +68,17 @@ print """
 print "<div id='canvasa'>"
 path = form.getlist("url")[0]
 
-
 likelihood_data, process_id = far.LocalRankingData.from_xml(utils.load_url(path))
-likelihood_data.distribution_stats.finish()
-#counts = likelihood_data.distribution_stats.smoothed_distributions.background_rates
-#inj = likelihood_data.distribution_stats.smoothed_distributions.injection_rates
-counts = likelihood_data.distribution_stats.raw_distributions.background_rates
-inj = likelihood_data.distribution_stats.raw_distributions.injection_rates
+
+print >> sys.stderr, "smooth" in form
+
+if "smooth" in form:
+	likelihood_data.distribution_stats.finish()
+	counts = likelihood_data.distribution_stats.smoothed_distributions.background_rates
+	inj = likelihood_data.distribution_stats.smoothed_distributions.injection_rates
+else:
+	counts = likelihood_data.distribution_stats.raw_distributions.background_rates
+	inj = likelihood_data.distribution_stats.raw_distributions.injection_rates
 
 likely = copy.deepcopy(inj)
 for i, ifo in enumerate(['H1','H2','L1', 'V1']):
