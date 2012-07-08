@@ -680,7 +680,6 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 	if(!(GST_BUFFER_TIMESTAMP_IS_VALID(sinkbuf) && GST_BUFFER_DURATION_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_IS_VALID(sinkbuf) && GST_BUFFER_OFFSET_END_IS_VALID(sinkbuf))) {
 		GST_ELEMENT_ERROR(pad, STREAM, FAILED, ("invalid timestamp and/or offset"), ("%" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf)));
-		gst_buffer_unref(sinkbuf);
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
@@ -702,7 +701,6 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 
 	if(element->sink_eos) {
 		GST_DEBUG_OBJECT(pad, "sink is at end-of-stream, discarding buffer");
-		gst_buffer_unref(sinkbuf);
 		g_mutex_unlock(element->control_lock);
 		goto done;
 	}
@@ -729,7 +727,6 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 			control_add_segment(element, GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), segment_start, buffer_length), GST_BUFFER_TIMESTAMP(sinkbuf) + gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), segment_start + segment_length, buffer_length), state);
 		}
 	}
-	gst_buffer_unref(sinkbuf);
 	GST_DEBUG_OBJECT(pad, "buffer %" GST_BUFFER_BOUNDARIES_FORMAT " digested", GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 	g_cond_broadcast(element->control_queue_head_changed);
 	g_mutex_unlock(element->control_lock);
@@ -739,6 +736,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 */
 
 done:
+	gst_buffer_unref(sinkbuf);
 	gst_object_unref(element);
 	return result;
 }
@@ -980,7 +978,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		if(element->leaky) {
 			/*
 			 * discard buffer.  skipping an interval of
-			 * non-zero length so  next buffer must be a
+			 * non-zero length so next buffer must be a
 			 * discont
 			 */
 
