@@ -1,0 +1,60 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2012  Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import sys, os, urllib
+
+__doc__ = """
+USAGE: condor_q -long <user name> | gstlal_ll_inspiral_regen_reg_from_condor_q 0001 <job tag> > myregfile.txt
+EXAMPLE: condor_q -long channa | gstlal_ll_inspiral_regen_reg_from_condor_q 0001 > 0001_registry.txt
+
+it only print the registry for jobs running in the current working directory!
+"""
+
+jobs = {}
+lastnode = None
+jobs[lastnode] = {}
+
+jobids = sys.argv[1:]
+
+for l in sys.stdin:
+	try:
+		k, v = l.split("=")
+	except:
+		tmp = l.split("=")
+		k = tmp[0]
+		v = "=".join(tmp[1:])
+	k = k.strip()
+	v = v.strip()
+	if "DAGNodeName" in l:
+		jobs[v] = {}
+		lastnode = v
+	else:
+		jobs[lastnode][k] = v
+
+for k in jobs:
+	if os.path.realpath(jobs[k]['Iwd'].replace('"','')) != os.path.realpath(os.getcwd()):
+		continue
+	l = jobs[k]['Err'].split("-")
+	if "logs/gstlal_inspiral" in l[0]:
+		if l[1] in jobids:
+
+			try:
+				url = "http://%s:16953/registry.txt" % jobs[k]['RemoteHost'].replace('"','')
+				urllib.urlretrieve(url, '/dev/stdout')
+			except IOError as (errno, strerror):
+				print >> sys.stderr, "I/O error({0}): {1} on request {2}".format(errno, strerror, url)
