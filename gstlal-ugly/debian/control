@@ -16,6 +16,7 @@ Build-Depends:
  lalmetaio-dev,
  lalburst-dev,
  lalinspiral-dev,
+ nds2-client-dev,
  fakeroot,
  autoconf,
  pkg-config,
@@ -29,6 +30,6 @@ Description: GStreamer version of LAL (ugly part)
  gstlal provides a suite of GStreamer elements that expose
  gravitational-wave data analysis tools from the LAL library for use
  in GStreamer signal-processing pipelines. Examples include an element
- to add simulated gravitational waves to an h(t) stream, and a source
- element to provide the contents of .gwf frame files to a GStreamer
- pipeline.
+ to add simulated gravitational waves to an h(t) stream, and source
+ elements that can provide data from .gwf frame files or NDS
+ servers to a GStreamer pipeline.
