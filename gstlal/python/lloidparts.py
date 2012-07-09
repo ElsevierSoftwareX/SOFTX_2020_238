@@ -229,17 +229,13 @@ class get_gate_state(object):
 		return "%s @ %s\n" % (self.current_segment, self.segment_start)
 
 
-def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "frames", injection_filename = None, frame_segments = None, verbose = False):
+def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "frames", injection_filename = None, frame_segments = None, state_vector_on_off_dict = {"H1" : (0x7, 0x160), "L1" : (0x7, 0x160), "V1" : (0x67, 0x100)}, verbose = False):
 	#
 	# data source
 	#
 
-	# FIXME:  what bits do we need on and off?  and don't hard code them
 	# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
-	if instrument == "V1":
-		state_vector_on_bits, state_vector_off_bits = (0x67, 0x100)
-	else:
-		state_vector_on_bits, state_vector_off_bits = (0x7, 0x160)
+	state_vector_on_bits, state_vector_off_bits = state_vector_on_off_dict[instrument]
 
 	# First process fake data or frame data
 	if data_source == "white":
@@ -435,18 +431,6 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max(rates)))
 
 	#
-	# optional gate on whitened h(t) amplitude
-	#
-
-	if ht_gate_threshold is not None:
-		head = mkhtgate(pipeline, head, threshold = ht_gate_threshold)
-		# export ht gate state
-		head.set_property("emit-signals", True)
-		# FIXME:  let the state messages going to stderr be
-		# controled somehow
-		bottle.route("/%s/current_ht_gate_segment.txt" % instrument)(get_gate_state(head, msg = "%s_ht_gate" % instrument, verbose = True).text)
-
-	#
 	# optionally add vetoes
 	#
 
@@ -489,6 +473,19 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkresample(pipeline, head[rate], quality = quality), caps = "audio/x-raw-float, rate=%d" % rate)
 		head[rate] = pipeparts.mknofakedisconts(pipeline, head[rate])	# FIXME:  remove when resampler is patched
 		head[rate] = pipeparts.mkchecktimestamps(pipeline, head[rate], "%s_timestamps_%d_whitehoft" % (instrument, rate))
+	
+		#
+		# optional gate on whitened h(t) amplitude
+		#
+
+		if ht_gate_threshold is not None:
+			head[rate] = mkhtgate(pipeline, head[rate], threshold = ht_gate_threshold, hold_length = -rate // 4, attack_length = -rate //4)
+			# export ht gate state
+			head[rate].set_property("emit-signals", True)
+			# FIXME:  let the state messages going to stderr be
+			# controled somehow
+			bottle.route("/%s/%d/current_ht_gate_segment.txt" % (instrument, rate))(get_gate_state(head[rate], msg = "%s_%d_ht_gate" % (instrument, rate), verbose = True).text)
+
 		head[rate] = pipeparts.mktee(pipeline, head[rate])
 
 	#
@@ -844,7 +841,7 @@ def mkLLOIDSnrChisqToTriggers(pipeline, snr, chisq, bank, verbose = False, nxydu
 #
 
 
-def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, data_source = None, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 16, block_duration = gst.SECOND):
+def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, data_source = None, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq', track_psd = False, fir_stride = 16, control_peak_time = 16, block_duration = gst.SECOND, state_vector_on_off_dict = {"H1" : (0x7, 0x160), "L1" : (0x7, 0x160), "V1" : (0x67, 0x100)}):
 	#
 	# check for unrecognized chisq_types, non-unique bank IDs
 	#
@@ -872,7 +869,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	hoftdicts = {}
 	for instrument in detectors:
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
-		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], data_source = data_source, injection_filename = injection_filename, frame_segments = frame_segments[instrument], verbose = verbose)
+		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], data_source = data_source, injection_filename = injection_filename, frame_segments = frame_segments[instrument], state_vector_on_off_dict = state_vector_on_off_dict, verbose = verbose)
 		# let the frame reader and injection code run in a
 		# different thread than the whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration)
@@ -963,7 +960,7 @@ def mkLLOIDmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 #
 
 
-def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, data_source = None, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND):
+def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8, data_source = None, injection_filename = None, ht_gate_threshold = None, veto_segments = None, verbose = False, nxydump_segment = None, frame_segments = None, chisq_type = 'autochisq', track_psd = False, block_duration = gst.SECOND, state_vector_on_off_dict = {"H1" : (0x7, 0x160), "L1" : (0x7, 0x160), "V1" : (0x67, 0x100)}):
 	#
 	# check for recognized value of chisq_type
 	#
@@ -989,7 +986,7 @@ def mkSPIIRmulti(pipeline, seekevent, detectors, banks, psd, psd_fft_length = 8,
 	for instrument in detectors:
 		print instrument
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
-		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], data_source = data_source, injection_filename = injection_filename, frame_segments = frame_segments[instrument], verbose = verbose)
+		src = mkLLOIDbasicsrc(pipeline, seekevent, instrument, detectors[instrument], data_source = data_source, injection_filename = injection_filename, frame_segments = frame_segments[instrument], state_vector_on_off_dict = state_vector_on_off_dict, verbose = verbose)
 		# let the frame reader and injection code run in a
 		# different thread than the whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = block_duration)
