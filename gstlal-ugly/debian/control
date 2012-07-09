@@ -3,12 +3,24 @@ Maintainer: Carsten Aulbert <carsten.aulbert@aei.mpg.de>
 Section: lscsoft
 Priority: optional
 Standards-Version: 3.9.2
-Build-Depends: debhelper (>= 8), python-dev, liborc-0.4-dev,
-               libfftw3-dev, libexpat1-dev, gstlal-dep, python-gobject-dev,
-               lal-dev, lalframe-dev, lalmetaio-dev, lalburst-dev,
-               lalinspiral-dev, fakeroot, autoconf, pkg-config,
-               libxml2-dev, gstlal (>=0.3.0)
-
+Build-Depends:
+ debhelper (>= 8),
+ python-dev,
+ liborc-0.4-dev,
+ libfftw3-dev,
+ libexpat1-dev,
+ gstlal-dep,
+ python-gobject-dev,
+ lal-dev,
+ lalframe-dev,
+ lalmetaio-dev,
+ lalburst-dev,
+ lalinspiral-dev,
+ fakeroot,
+ autoconf,
+ pkg-config,
+ libxml2-dev,
+ gstlal (>=0.3.0)
 
 Package: gstlal-ugly
 Architecture: any
@@ -20,4 +32,3 @@ Description: GStreamer version of LAL (ugly part)
  to add simulated gravitational waves to an h(t) stream, and a source
  element to provide the contents of .gwf frame files to a GStreamer
  pipeline.
-
