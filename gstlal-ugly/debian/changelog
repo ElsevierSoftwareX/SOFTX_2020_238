@@ -1,12 +1,9 @@
-gstlal-ugly (0.3.0-1) unstable; urgency=low
+gstlal-ugly (0.3.1-1) unstable; urgency=low
 
-  [ Adam Mercer ]
   * New upstream release
-
-  [ Jameson Rollins ]
   * Add nds2-client-dev as build dependency.
 
- -- Jameson Rollins <jameson.rollins@ligo.org>  Sun, 08 Jul 2012 20:37:37 -0700
+ -- Adam Mercer <adam.mercer@ligo.org>  Mon, 09 Jul 2012 12:23:49 -0500
 
 gstlal-ugly (0.2.1-1) unstable; urgency=low
 
