@@ -1,8 +1,8 @@
-gstlal (0.4.0-1) unstable; urgency=low
+gstlal (0.4.1-1) unstable; urgency=low
 
   * New upstream release
 
- -- Adam Mercer <adam.mercer@ligo.org>  Fri, 06 Jul 2012 17:03:18 -0500
+ -- Adam Mercer <adam.mercer@ligo.org>  Mon, 09 Jul 2012 12:22:42 -0500
 
 gstlal (0.3.0-1) unstable; urgency=low
 
