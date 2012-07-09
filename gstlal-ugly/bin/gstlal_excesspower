@@ -538,7 +538,7 @@ parser.add_option("-v", "--verbose", dest="verbose", action="store_true", help="
 parser.add_option("-n", "--channel-name", dest="channame", action="store", help="Specify the channel name. Note that this will override the specification in the ini file (if any). This is useful if you want to run the same analysis on channels with the same characterisitics.")
 parser.add_option("-w", "--channel-width", dest="nbyte", action="store", type=int, help="Specify the channel width in bits (default = 64)", default=64)
 parser.add_option("-r", "--sample-rate", dest="sample_rate", action="store", type="int", help="Sample rate of the incoming data.")
-parser.add_option("-D", "--data-source", dest="data_source", action="store", help="Data source to read from. Valid options are gwffile,lldata,whitedata,fakeLIGO,fakeadvLIGO. One is required. If gwffile is selected, then a cache file should also be provided. If whitedata, fakeLIGO, or fakeadvLIGO is selected, then a sample rate must also be provided.")
+parser.add_option("-D", "--data-source", dest="data_source", action="store", help="Data source to read from. Valid options are gwffile,lldata,lldata_sv,whitedata,fakeLIGO,fakeadvLIGO. One is required. If gwffile is selected, then a cache file should also be provided. If whitedata, fakeLIGO, or fakeadvLIGO is selected, then a sample rate must also be provided.")
 parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Encode the time frequency map to video as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. If the option is instead a filename, the video will be sent to that name. Prepending \"keyframe=\" to the filename will start a new video every time a keyframe is hit.")
 parser.add_option("-s", "--gps-start", dest="gps_start", action="store", type="float", help="Seek to gps time before beginning analysis.", default=None)
 parser.add_option("-e", "--gps-end", dest="gps_end", action="store", type="float", help="End the analysis at this gps time.", default=None)
@@ -555,6 +555,7 @@ data_source = options.data_source
 valid_data_sources = [ "gwffile", 
 	  "nds",
 	  "lldata", 
+	  "lldata_sv", 
 	  "whitedata", 
 	  "fakeLIGO", 
 	  "fakeadvLIGO" ]
@@ -725,6 +726,7 @@ elif( data_source == "whitedata" ):
 	pipeline.add( head )
 	head.set_property( "wave", 9 ) # unity variance zero mean gaussian noise
 elif( data_source == "lldata" ):
+	# FIXME: Unhardcode this.
 	shmmap = { "L1": "LLO_Data",
 	           "H1": "LHO_Data",
 	           "V1": "VIRGO_Data"}
@@ -733,6 +735,17 @@ elif( data_source == "lldata" ):
 	sink = mkaudiorate( pipeline, None, skip_to_first = True, silent = False )
 	src_deferred_link( src, "%s:%s" % (handler.inst, handler.channel), sink.get_pad("sink") )
 	head = sink
+
+	# FIXME: This is a guess. Not a terrible one, but still inaccurate
+	handler.time_since_dump = gpstime.GpsSecondsFromPyUTC( time.time() )
+elif( data_source == "lldata_sv" ):
+	# This is really only for the strain channels where one might anticipate needing a state vector.
+	head = mkLLOIDbasicsrc( pipeline,
+		seekevent = None,
+		instrument = handler.inst,
+		detector = DetectorData(None, handler.channel),
+		data_source = "online"
+	)
 
 	# FIXME: This is a guess. Not a terrible one, but still inaccurate
 	handler.time_since_dump = gpstime.GpsSecondsFromPyUTC( time.time() )
