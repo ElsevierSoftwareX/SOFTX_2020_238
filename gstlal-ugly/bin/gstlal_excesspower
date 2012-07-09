@@ -703,6 +703,11 @@ if( data_source == "nds" ):
 		instrument = handler.inst,
 		channel_name = handler.channel
 	)
+	try:
+		head.set_property( "port", cfg.getint( "instrument", "ndsport" ) )
+	except ConfigParser.NoOptionError:
+		print >>sys.stderr, "Warning, no NDS host port specified. Using default."
+
 	# FIXME: Don't assume real-time
 	head.set_property( "channel-type", "online" )
 elif( data_source == "fakeLIGO" ):
