@@ -683,7 +683,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 		result = GST_FLOW_ERROR;
 		goto done;
 	}
-	GST_DEBUG_OBJECT(pad, "have buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
+	GST_DEBUG_OBJECT(pad, "have buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 
 	/*
 	 * wait until this buffer is needed
@@ -716,6 +716,7 @@ static GstFlowReturn control_chain(GstPad *pad, GstBuffer *sinkbuf)
 		guint buffer_length = GST_BUFFER_OFFSET_END(sinkbuf) - GST_BUFFER_OFFSET(sinkbuf);
 		guint segment_start;
 		guint segment_length;
+		g_assert_cmpuint(GST_BUFFER_OFFSET_END(sinkbuf), >, GST_BUFFER_OFFSET(sinkbuf));
 
 		for(segment_start = 0; segment_start < buffer_length; segment_start += segment_length) {
 			/* state for this segment */
@@ -939,7 +940,8 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 	 * wait for control queue to span the necessary interval
 	 */
 
-	GST_DEBUG_OBJECT(element->sinkpad, "got buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
+	GST_DEBUG_OBJECT(element->sinkpad, "got buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
+	g_assert_cmpuint(sinkbuf_length, ==, gst_util_uint64_scale_int_round(GST_BUFFER_DURATION(sinkbuf), element->rate, GST_SECOND));
 	control_get_interval(element, GST_BUFFER_TIMESTAMP(sinkbuf), GST_BUFFER_DURATION(sinkbuf));
 
 	/*
@@ -961,7 +963,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * push buffer
 		 */
 
-		GST_DEBUG_OBJECT(element->srcpad, "pushing reused zero-length buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
+		GST_DEBUG_OBJECT(element->srcpad, "pushing reused zero-length buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 		result = gst_pad_push(element->srcpad, sinkbuf);
 		sinkbuf = NULL;
 		goto done;
@@ -983,7 +985,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 			 */
 
 			element->need_discont = TRUE;
-			GST_DEBUG_OBJECT(element->srcpad, "discarding gap buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
+			GST_DEBUG_OBJECT(element->srcpad, "discarding gap buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 			goto done;
 		}
 
@@ -1001,7 +1003,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * push buffer
 		 */
 
-		GST_DEBUG_OBJECT(element->srcpad, "pushing reused gap buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
+		GST_DEBUG_OBJECT(element->srcpad, "pushing reused gap buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, sinkbuf, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 		result = gst_pad_push(element->srcpad, sinkbuf);
 		sinkbuf = NULL;
 		goto done;
@@ -1056,9 +1058,11 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		 */
 
 		if(length == sinkbuf_length) {
+			GST_DEBUG_OBJECT(element, "reusing input buffer %p", sinkbuf);
 			srcbuf = sinkbuf;
 			sinkbuf = NULL;
 		} else {
+			GST_DEBUG_OBJECT(element, "creating sub-buffer from samples [%" G_GUINT64_FORMAT ", %" G_GUINT64_FORMAT ")", start, start + length);
 			srcbuf = gst_buffer_create_sub(sinkbuf, start * element->unit_size, length * element->unit_size);
 			if(!srcbuf) {
 				GST_ERROR_OBJECT(element, "failure creating sub-buffer");
@@ -1104,7 +1108,7 @@ static GstFlowReturn sink_chain(GstPad *pad, GstBuffer *sinkbuf)
 		 * push buffer down stream
 		 */
 
-		GST_DEBUG_OBJECT(element->srcpad, "pushing buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
+		GST_DEBUG_OBJECT(element->srcpad, "pushing buffer %p %" GST_BUFFER_BOUNDARIES_FORMAT, srcbuf, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
 		result = gst_pad_push(element->srcpad, srcbuf);
 		if(G_UNLIKELY(result != GST_FLOW_OK)) {
 			GST_WARNING_OBJECT(element->srcpad, "gst_pad_push() failed (%s)", gst_flow_get_name(result));
