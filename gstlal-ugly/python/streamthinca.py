@@ -301,12 +301,12 @@ class StreamThinca(object):
 			# increment the trials table
 			ifo_set = frozenset(coinc_inspiral_row.get_ifos())
 			# FIXME, don't hard code this.  Think about the mass dimension too.
-			# Add the integer truncation of the trigger time * 20
+			# Add the integer truncation of the trigger time * 2
 			# to a set.  This is effectively like binning the
-			# events by end time in 50 ms bins. This is a way of
+			# events by end time in 500 ms bins. This is a way of
 			# extracting the effective number of independent trials
 			# for later
-			trials_dict.setdefault(ifo_set, set()).add(int(float(coinc_inspiral_row.get_end()) * 20))
+			trials_dict.setdefault(ifo_set, set()).add(int(float(coinc_inspiral_row.get_end()) * 200))
 
 			# Assign the FAP if requested
 			if FAP is not None:
