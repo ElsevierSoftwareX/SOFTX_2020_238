@@ -171,7 +171,7 @@ static void parse_table_6(GSTFrameCPPIGWDParse *element, const guint8 *data, gui
 }
 
 
-static void parse_table_7(GSTFrameCPPIGWDParse *element, const guint8 *data, guint64 length, guint16 *eof_klass, guint16 *frameh_klass)
+static void parse_table_7(GSTFrameCPPIGWDParse *element, const guint8 *data, guint length, guint16 *eof_klass, guint16 *frameh_klass)
 {
 	GstByteReader reader = GST_BYTE_READER_INIT(data + element->sizeof_table_6, length - element->sizeof_table_6);
 	const gchar *name = fr_get_string(element, &reader);
@@ -186,7 +186,7 @@ static void parse_table_7(GSTFrameCPPIGWDParse *element, const guint8 *data, gui
 }
 
 
-static void parse_table_9(GSTFrameCPPIGWDParse *element, const guint8 *data, guint64 length, GstClockTime *start, GstClockTime *stop)
+static void parse_table_9(GSTFrameCPPIGWDParse *element, const guint8 *data, guint length, GstClockTime *start, GstClockTime *stop)
 {
 	GstByteReader reader = GST_BYTE_READER_INIT(data + element->sizeof_table_6, length - element->sizeof_table_6);
 	const gchar *name = fr_get_string(element, &reader);
