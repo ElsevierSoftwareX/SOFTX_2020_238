@@ -21,7 +21,7 @@ Build-Depends:
  autoconf,
  pkg-config,
  libxml2-dev,
- gstlal (>=0.3.0)
+ gstlal (>=0.4.0)
 
 Package: gstlal-ugly
 Architecture: any
