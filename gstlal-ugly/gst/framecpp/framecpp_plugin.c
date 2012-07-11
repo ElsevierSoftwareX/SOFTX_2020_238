@@ -155,6 +155,15 @@ static gboolean plugin_init(GstPlugin *plugin)
 	};
 
 	/*
+	 * Tell GStreamer about the debug categories.
+	 */
+
+	GST_DEBUG_CATEGORY_INIT(framecpp_channeldemux_debug, "framecpp_channeldemux", 0, "framecpp_channeldemux element");
+#if HAVE_GST_BASEPARSE
+	GST_DEBUG_CATEGORY_INIT(framecpp_igwdparse_debug, "framecpp_igwdparse", 0, "framecpp_igwdparse element");
+#endif
+
+	/*
 	 * Register tags.
 	 */
 
@@ -174,15 +183,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 
 	if(!register_typefind(plugin))
 		return FALSE;
-
-	/*
-	 * Tell GStreamer about the debug categories.
-	 */
-
-	GST_DEBUG_CATEGORY_INIT(framecpp_channeldemux_debug, "framecpp_channeldemux", 0, "framecpp_channeldemux element");
-#if HAVE_GST_BASEPARSE
-	GST_DEBUG_CATEGORY_INIT(framecpp_igwdparse_debug, "framecpp_igwdparse", 0, "framecpp_igwdparse element");
-#endif
 
 	/*
 	 * Done.

@@ -116,14 +116,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 	XLALSetSilentErrorHandler();
 
 	/*
-	 * Tell GStreamer about the elements.
-	 */
-
-	for(element = elements; element->name; element++)
-		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->type))
-			return FALSE;
-
-	/*
 	 * Tell GStreamer about the debug categories.
 	 */
 
@@ -134,6 +126,14 @@ static gboolean plugin_init(GstPlugin *plugin)
 	GST_DEBUG_CATEGORY_INIT(gstlal_nxydump_debug, "lal_nxydump", 0, "lal_nxydump element");
 	GST_DEBUG_CATEGORY_INIT(gstlal_sumsquares_debug, "lal_sumsquares", 0, "lal_sumsquares element");
 	GST_DEBUG_CATEGORY_INIT(gstlal_statevector_debug, "lal_statevector", 0, "lal_statevector element");
+
+	/*
+	 * Tell GStreamer about the elements.
+	 */
+
+	for(element = elements; element->name; element++)
+		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->type))
+			return FALSE;
 
 	/*
 	 * Tell GStreamer about the custom tags.
