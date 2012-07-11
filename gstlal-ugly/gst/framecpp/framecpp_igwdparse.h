@@ -56,10 +56,10 @@ typedef struct {
 	GstBaseParse element;
 
 	gint endianness;
-	gint sizeof_int_2;
-	gint sizeof_int_4;
-	gint sizeof_int_8;
-	gint sizeof_table_6;
+	guint sizeof_int_2;
+	guint sizeof_int_4;
+	guint sizeof_int_8;
+	guint sizeof_table_6;
 	guint16 frameh_klass;
 	guint16 eof_klass;
 
