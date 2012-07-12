@@ -468,6 +468,9 @@ def mkLLOIDsrc(pipeline, src, rates, instrument, psd = None, psd_fft_length = 8,
 	# adjust for the reduction in variance due to the downsampler.
 	#
 
+	# FIXME this for loop was reworked to allow the h(t) gate to go after
+	# audioresamplers.  There is apparently a cornercase in the
+	# audioresample element that is causing a problem
 	for rate in sorted(set(rates))[:-1]:
 		if rate < max(rates): # downsample
 			head[rate] = pipeparts.mkaudioamplify(pipeline, head[max(rates)], 1/math.sqrt(pipeparts.audioresample_variance_gain(quality, max(rates), rate)))
