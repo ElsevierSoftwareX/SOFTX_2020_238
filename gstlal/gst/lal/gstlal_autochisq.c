@@ -71,7 +71,8 @@
 #include <gstlal_autocorrelation_chi2.h>
 
 
-GST_DEBUG_CATEGORY(gstlal_autochisq_debug);
+#define GST_CAT_DEFAULT gstlal_autochisq_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 #undef GSTLAL_MALLOC_GAPS
@@ -86,7 +87,6 @@ GST_DEBUG_CATEGORY(gstlal_autochisq_debug);
  */
 
 
-#define GST_CAT_DEFAULT gstlal_autochisq_debug
 #define DEFAULT_SNR_THRESH 0
 
 
@@ -307,11 +307,18 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 );
 
 
-GST_BOILERPLATE(
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_autochisq", 0, "lal_autochisq element");
+}
+
+
+GST_BOILERPLATE_FULL(
 	GSTLALAutoChiSq,
 	gstlal_autochisq,
 	GstBaseTransform,
-	GST_TYPE_BASE_TRANSFORM
+	GST_TYPE_BASE_TRANSFORM,
+	additional_initializations
 );
 
 

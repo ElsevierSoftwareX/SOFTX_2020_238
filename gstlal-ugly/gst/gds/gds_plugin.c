@@ -64,12 +64,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 	};
 
 	/*
-	 * Tell GStreamer about the debug categories.
-	 */
-
-	GST_DEBUG_CATEGORY_INIT(gds_lvshmsrc_debug, "gds_lvshmsrc", 0, "gds_lvshmsrc element");
-
-	/*
 	 * Tell GStreamer about the elements.
 	 */
 

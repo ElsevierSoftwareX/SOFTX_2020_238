@@ -108,7 +108,6 @@ typedef struct {
 } GSTLALFIRBank;
 
 
-GST_DEBUG_CATEGORY_EXTERN(gstlal_firbank_debug);
 GType gstlal_firbank_get_type(void);
 
 

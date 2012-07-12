@@ -104,10 +104,10 @@ static gboolean plugin_init(GstPlugin *plugin)
 	XLALSetSilentErrorHandler();
 
 	/*
-	 * Tell GStreamer about the debug categories.
+	 * Tell GStreamer about the custom tags.
 	 */
 
-	GST_DEBUG_CATEGORY_INIT(gstlal_triggergen_debug, "lal_triggergen", 0, "lal_triggergen element");
+	gstlal_register_tags();
 
 	/*
 	 * Tell GStreamer about the elements.
@@ -116,12 +116,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 	for(element = elements; element->name; element++)
 		if(!gst_element_register(plugin, element->name, GST_RANK_NONE, element->type))
 			return FALSE;
-
-	/*
-	 * Tell GStreamer about the custom tags.
-	 */
-
-	gstlal_register_tags();
 
 	/*
 	 * Done.

@@ -67,7 +67,6 @@ typedef struct GSTLALStateVector {
 } GSTLALStateVector;
 
 
-GST_DEBUG_CATEGORY_EXTERN(gstlal_statevector_debug);
 GType gstlal_statevector_get_type(void);
 
 

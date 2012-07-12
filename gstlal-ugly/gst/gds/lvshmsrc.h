@@ -94,7 +94,6 @@ typedef struct {
 } GDSLVSHMSrc;
 
 
-GST_DEBUG_CATEGORY_EXTERN(gds_lvshmsrc_debug);
 GType gsd_lvshmsrc_get_type(void);
 
 

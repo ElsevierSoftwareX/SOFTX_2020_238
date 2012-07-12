@@ -117,7 +117,6 @@ typedef struct {
 } GSTLALAutoChiSq;
 
 
-GST_DEBUG_CATEGORY_EXTERN(gstlal_autochisq_debug);
 GType gstlal_autochisq_get_type(void);
 
 

@@ -104,7 +104,6 @@ typedef struct {
 GType gstlal_matrixmixer_get_type(void);
 
 
-GST_DEBUG_CATEGORY_EXTERN(gstlal_matrixmixer_debug);
 G_END_DECLS
 
 

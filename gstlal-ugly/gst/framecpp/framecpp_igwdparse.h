@@ -69,7 +69,6 @@ typedef struct {
 } GSTFrameCPPIGWDParse;
 
 
-GST_DEBUG_CATEGORY_EXTERN(framecpp_igwdparse_debug);
 GType framecpp_igwdparse_get_type(void);
 
 

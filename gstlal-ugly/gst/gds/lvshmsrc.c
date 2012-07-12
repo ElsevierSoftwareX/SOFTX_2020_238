@@ -65,7 +65,8 @@
 #include <lvshmsrc.h>
 
 
-GST_DEBUG_CATEGORY(gds_lvshmsrc_debug);
+#define GST_CAT_DEFAULT gds_lvshmsrc_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 /*
@@ -83,9 +84,6 @@ static GstPushSrcClass *parent_class = NULL;
  *
  * ========================================================================
  */
-
-
-#define GST_CAT_DEFAULT gds_lvshmsrc_debug
 
 
 enum property {
@@ -612,6 +610,7 @@ GType gsd_lvshmsrc_get_type(void)
 			.instance_size = sizeof(GDSLVSHMSrc),
 			.instance_init = instance_init,
 		};
+		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "gds_lvshmsrc", 0, "gds_lvshmsrc element");
 		type = g_type_register_static(GST_TYPE_PUSH_SRC, "gds_lvshmsrc", &info, 0);
 	}
 

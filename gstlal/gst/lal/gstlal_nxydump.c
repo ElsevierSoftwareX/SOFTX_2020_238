@@ -56,7 +56,8 @@
 #include <gstlal_nxydump.h>
 
 
-GST_DEBUG_CATEGORY(gstlal_nxydump_debug);
+#define GST_CAT_DEFAULT gstlal_nxydump_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 /*
@@ -68,7 +69,6 @@ GST_DEBUG_CATEGORY(gstlal_nxydump_debug);
  */
 
 
-#define GST_CAT_DEFAULT gstlal_nxydump_debug
 #define DEFAULT_START_TIME 0
 #define DEFAULT_STOP_TIME G_MAXUINT64
 
@@ -280,11 +280,18 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 );
 
 
-GST_BOILERPLATE(
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_nxydump", 0, "lal_nxydump element");
+}
+
+
+GST_BOILERPLATE_FULL(
 	GSTLALNXYDump,
 	gstlal_nxydump,
 	GstBaseTransform,
-	GST_TYPE_BASE_TRANSFORM
+	GST_TYPE_BASE_TRANSFORM,
+	additional_initializations
 );
 
 

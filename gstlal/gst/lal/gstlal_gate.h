@@ -83,7 +83,6 @@ typedef struct _GSTLALGate {
 } GSTLALGate;
 
 
-GST_DEBUG_CATEGORY_EXTERN(gstlal_gate_debug);
 GType gstlal_gate_get_type(void);
 
 

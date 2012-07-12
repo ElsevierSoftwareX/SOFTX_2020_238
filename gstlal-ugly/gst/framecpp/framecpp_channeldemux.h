@@ -63,7 +63,6 @@ typedef struct {
 } GSTFrameCPPChannelDemux;
 
 
-GST_DEBUG_CATEGORY_EXTERN(framecpp_channeldemux_debug);
 GType framecpp_channeldemux_get_type(void);
 
 

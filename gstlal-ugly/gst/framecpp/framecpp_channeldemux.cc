@@ -74,7 +74,8 @@
 #include <framecpp_channeldemux.h>
 
 
-GST_DEBUG_CATEGORY(framecpp_channeldemux_debug);
+#define GST_CAT_DEFAULT framecpp_channeldemux_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 /*
@@ -86,7 +87,6 @@ GST_DEBUG_CATEGORY(framecpp_channeldemux_debug);
  */
 
 
-#define GST_CAT_DEFAULT framecpp_channeldemux_debug
 #define DEFAULT_DO_FILE_CHECKSUM FALSE
 #define DEFAULT_SKIP_BAD_FILES FALSE
 
@@ -1247,6 +1247,7 @@ GType framecpp_channeldemux_get_type(void)
 			instance_init, /* instance_init */
 			NULL /* value_table */
 		};
+		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framecpp_channeldemux", 0, "framecpp_channeldemux element");
 		type = g_type_register_static(GST_TYPE_ELEMENT, "framecpp_channeldemux", &info, (GTypeFlags) 0);
 	}
 

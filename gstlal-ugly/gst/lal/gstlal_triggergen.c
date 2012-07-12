@@ -42,7 +42,8 @@
 #include <lal/LALStdlib.h>
 
 
-GST_DEBUG_CATEGORY(gstlal_triggergen_debug);
+#define GST_CAT_DEFAULT gstlal_triggergen_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 /*
@@ -54,7 +55,6 @@ GST_DEBUG_CATEGORY(gstlal_triggergen_debug);
  */
 
 
-#define GST_CAT_DEFAULT gstlal_triggergen_debug
 #define DEFAULT_SNR_THRESH 5.5
 #define DEFAULT_MAX_GAP 0.01
 
@@ -1080,6 +1080,7 @@ GType gstlal_triggergen_get_type(void)
 			.instance_size = sizeof(GSTLALTriggerGen),
 			.instance_init = instance_init,
 		};
+		GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_triggergen", 0, "lal_triggergen element");
 		type = g_type_register_static(GST_TYPE_ELEMENT, "lal_triggergen", &info, 0);
 	}
 

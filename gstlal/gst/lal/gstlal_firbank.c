@@ -69,7 +69,8 @@
 #include <gstlal_debug.h>
 
 
-GST_DEBUG_CATEGORY(gstlal_firbank_debug);
+#define GST_CAT_DEFAULT gstlal_firbank_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 /*
@@ -79,9 +80,6 @@ GST_DEBUG_CATEGORY(gstlal_firbank_debug);
  *
  * ============================================================================
  */
-
-
-#define GST_CAT_DEFAULT gstlal_firbank_debug
 
 
 /*
@@ -852,11 +850,18 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 );
 
 
-GST_BOILERPLATE(
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_firbank", 0, "lal_firbank element");
+}
+
+
+GST_BOILERPLATE_FULL(
 	GSTLALFIRBank,
 	gstlal_firbank,
 	GstBaseTransform,
-	GST_TYPE_BASE_TRANSFORM
+	GST_TYPE_BASE_TRANSFORM,
+	additional_initializations
 );
 
 

@@ -56,7 +56,8 @@
 #include <framecpp_igwdparse.h>
 
 
-GST_DEBUG_CATEGORY(framecpp_igwdparse_debug);
+#define GST_CAT_DEFAULT framecpp_igwdparse_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 /*
@@ -67,8 +68,6 @@ GST_DEBUG_CATEGORY(framecpp_igwdparse_debug);
  * ============================================================================
  */
 
-
-#define GST_CAT_DEFAULT framecpp_igwdparse_debug
 
 /* FIXME:  get from framecpp */
 /* number of bytes in table 5 in LIGO-T970130 */
@@ -520,9 +519,16 @@ static void framecpp_igwdparse_init(GSTFrameCPPIGWDParse *object, GSTFrameCPPIGW
  */
 
 
-GST_BOILERPLATE(
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "framecpp_igwdparse", 0, "framecpp_igwdparse element");
+}
+
+
+GST_BOILERPLATE_FULL(
 	GSTFrameCPPIGWDParse,
 	framecpp_igwdparse,
 	GstBaseParse,
-	GST_TYPE_BASE_PARSE
+	GST_TYPE_BASE_PARSE,
+	additional_initializations
 );

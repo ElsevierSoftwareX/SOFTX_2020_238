@@ -46,7 +46,8 @@
 #include <gstlal_debug.h>
 
 
-GST_DEBUG_CATEGORY(gstlal_statevector_debug);
+#define GST_CAT_DEFAULT gstlal_statevector_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 /*
@@ -58,7 +59,6 @@ GST_DEBUG_CATEGORY(gstlal_statevector_debug);
  */
 
 
-#define GST_CAT_DEFAULT gstlal_statevector_debug
 #define DEFAULT_REQUIRED_ON 0
 #define DEFAULT_REQUIRED_OFF 0
 
@@ -157,11 +157,18 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 );
 
 
-GST_BOILERPLATE(
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_statevector", 0, "lal_statevector element");
+}
+
+
+GST_BOILERPLATE_FULL(
 	GSTLALStateVector,
 	gstlal_statevector,
 	GstBaseTransform,
-	GST_TYPE_BASE_TRANSFORM
+	GST_TYPE_BASE_TRANSFORM,
+	additional_initializations
 );
 
 

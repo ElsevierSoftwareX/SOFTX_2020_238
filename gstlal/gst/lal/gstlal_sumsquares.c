@@ -55,7 +55,8 @@
 #include <gstlal_debug.h>
 
 
-GST_DEBUG_CATEGORY(gstlal_sumsquares_debug);
+#define GST_CAT_DEFAULT gstlal_sumsquares_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 /*
@@ -65,9 +66,6 @@ GST_DEBUG_CATEGORY(gstlal_sumsquares_debug);
  *
  * ============================================================================
  */
-
-
-#define GST_CAT_DEFAULT gstlal_sumsquares_debug
 
 
 /*
@@ -162,11 +160,18 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 );
 
 
-GST_BOILERPLATE(
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_sumsquares", 0, "lal_sumsquares element");
+}
+
+
+GST_BOILERPLATE_FULL(
 	GSTLALSumSquares,
 	gstlal_sumsquares,
 	GstBaseTransform,
-	GST_TYPE_BASE_TRANSFORM
+	GST_TYPE_BASE_TRANSFORM,
+	additional_initializations
 );
 
 

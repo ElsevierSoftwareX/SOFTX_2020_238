@@ -69,7 +69,8 @@
 #include <gstlal_matrixmixer.h>
 
 
-GST_DEBUG_CATEGORY(gstlal_matrixmixer_debug);
+#define GST_CAT_DEFAULT gstlal_matrixmixer_debug
+GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 
 /*
@@ -79,9 +80,6 @@ GST_DEBUG_CATEGORY(gstlal_matrixmixer_debug);
  *
  * ============================================================================
  */
-
-
-#define GST_CAT_DEFAULT gstlal_matrixmixer_debug
 
 
 /*
@@ -303,11 +301,18 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 );
 
 
-GST_BOILERPLATE(
+static void additional_initializations(GType type)
+{
+	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_matrixmixer", 0, "lal_matrixmixer element");
+}
+
+
+GST_BOILERPLATE_FULL(
 	GSTLALMatrixMixer,
 	gstlal_matrixmixer,
 	GstBaseTransform,
-	GST_TYPE_BASE_TRANSFORM
+	GST_TYPE_BASE_TRANSFORM,
+	additional_initializations
 );
 
 
