@@ -740,11 +740,50 @@ elif( data_source == "lldata" ):
 	handler.time_since_dump = gpstime.GpsSecondsFromPyUTC( time.time() )
 elif( data_source == "lldata_sv" ):
 	# This is really only for the strain channels where one might anticipate needing a state vector.
+	dqv = {
+		# 1  Science mode on 
+		"SCIENCE_MODE" : 0b1,
+		# 2  ITF fully locked 
+		"ITF_LOCK" : 0b10,
+		# 3  h(t) reconstruction ok 
+		"HREC_OK": 0b100,
+		# 4  Reserved for future use
+		"RESERVED" : 0b1000,
+		# 5  CBC Injection 
+		"CBC_INJECTION" : 0b10000,
+		# 6  CBC_CAT1 
+		"CBC_CAT1" : 0b100000,
+		# 7  CBC_CAT2 [not used]
+		"CBC_CAT2" : 0b1000000,
+		# 8  CBC_CAT3 [not used]
+		"CBC_CAT3" : 0b10000000,
+		# 9  Burst injection 
+		"BURST_INJECTION" : 0b100000000,
+		# 10 Burst_CAT1 
+		"BURST_CAT1" : 0b1000000000,
+		# 11 Burst_CAT2 
+		"BURST_CAT2" : 0b10000000000,
+		# 12 Burst_CAT3 
+		"BURST_CAT3" : 0b100000000000,
+		# 13 CW injection 
+		"CW_INJECTION" : 0b1000000000000,
+		# 14 Reserved for future use, possibly by CW 
+		# 15 Reserved for future use, possibly by CW 
+		# 16 Reserved for future use, possibly by CW 
+		# 17 Stochastic injection 
+		"STOCHASTIC_INJECTION" : 0b10000000000000000
+		# 18 Reserved for future use, possibly by stochastic 
+		# 19 Reserved for future use, possibly by stochastic [not used]
+		# 20 Reserved for future use, possibly by stochastic [not used]
+	}
+	DEFAULT_DQ_VECTOR_ON = dqv["SCIENCE_MODE"] | dqv["ITF_LOCK"] | dqv["HREC_OK"] # | dqv["BURST_CAT1"]
+	DEFAULT_DQ_VECTOR_OFF = dqv["RESERVED"]
 	head = mkLLOIDbasicsrc( pipeline,
 		seekevent = None,
 		instrument = handler.inst,
 		detector = DetectorData(None, handler.channel),
-		data_source = "online"
+		data_source = "online",
+		state_vector_on_off_dict = { handler.inst: (DEFAULT_DQ_VECTOR_ON, DEFAULT_DQ_VECTOR_OFF) }
 	)
 
 	# FIXME: This is a guess. Not a terrible one, but still inaccurate
