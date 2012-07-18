@@ -234,9 +234,6 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "fr
 	# data source
 	#
 
-	# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
-	state_vector_on_bits, state_vector_off_bits = state_vector_on_off_dict[instrument]
-
 	# First process fake data or frame data
 	if data_source == "white":
 		# seek events have to be given to these since the element returned is a tag inject
@@ -258,6 +255,9 @@ def mkLLOIDbasicsrc(pipeline, seekevent, instrument, detector, data_source = "fr
 			src = pipeparts.mkframesrc(pipeline, location = detector.frame_cache, instrument = instrument, cache_dsc_regex = instrument, channel_name = detector.channel, blocksize = detector.block_size, segment_list = frame_segments)
 	# Next process online data, fake data must be None for this to have gotten this far
 	elif data_source == "online":
+		# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
+		state_vector_on_bits, state_vector_off_bits = state_vector_on_off_dict[instrument]
+
 		# FIXME:  be careful hard-coding shared-memory partition
 		# FIXME make wait_time adjustable through web interface or command line or both
 		src = pipeparts.mklvshmsrc(pipeline, shm_name = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}[instrument], wait_time = 120)
