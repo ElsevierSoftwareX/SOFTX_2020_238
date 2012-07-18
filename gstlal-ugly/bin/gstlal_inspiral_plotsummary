@@ -459,7 +459,7 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 		for i, values in enumerate(l):
 			values=list(values)
 			dets =  frozenset(dbtables.lsctables.instrument_set_from_ifos(values[7]))
-			f.write('|| ' + str(i) + ' || %.2e || %.3f || %.2f || %.4f || %.2f || %.2f || %s || %s ||\n' % tuple(values[:8]))
+			f.write('|| ' + str(i) + ' || %.2e || %.2e || %.2f || %.4f || %.2f || %.2f || %s || %s ||\n' % tuple(values[:8]))
 			for ifo in values[8].split():
 				ifo = list(ifo.split(":"))
 				for i in range(1,len(ifo)): ifo[i] = float(ifo[i])
@@ -1158,7 +1158,6 @@ FROM
 	)
 WHERE
 	coinc_inspiral.combined_far is not NULL
-	AND coinc_inspiral.false_alarm_rate != 1.0
 		"""):
 			on_instruments = frozenset(dbtables.lsctables.instrument_set_from_ifos(on_instruments))
 			# to convert the string "inf" to float infinity
