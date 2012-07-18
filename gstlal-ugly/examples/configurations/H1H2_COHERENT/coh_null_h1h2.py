@@ -1,4 +1,32 @@
 #!/usr/bin/evn python
+#
+# Copyright (C) 2012  Madeline Wade
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+
+"""
+Generate frame files for LHO coherent data.  Generate a LIGO Light-Weight XML veto segment file from the LHO null stream.  If the null stream exceeds a threshold, this is marked as a veto segment.
+"""
 
 import os
 import sys
@@ -20,16 +48,28 @@ from gstlal import coherent_null
 from gstlal import inspiral
 
 from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw.utils import segments as ligolw_segments
+from glue.ligolw.utils import process as ligolw_process
+
 from pylal.datatypes import LIGOTimeGPS
 from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
 
+__author__ = "Madeline Wade <madeline.wade@ligo.org>"
+
 #
-# parse command line
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
 #
 
 parser = OptionParser()
 parser.add_option("--frame-cache", metavar = "fileanme", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required unless --fake-data or --online-data is used in which case it must not be set.")
-parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Initial LIGO design spectrum (optional).")
+parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of reading data from .gwf files, generate and process coloured Gaussian noise modelling the Inital LIGO or Advanced LIGO design spectrum (optional).")
 parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
@@ -39,6 +79,9 @@ parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT 
 parser.add_option("--track-psd", action = "store_true", help = "Track the H1 and H2 psds.  The filters that create the coherent stream will be updated throughout the run.")
 parser.add_option("--reference-psd", metavar = "filename", help = ".xml file containing the H1 and H2 psds. Use this psd as first guess psd or fixed psd.")
 parser.add_option("--write-psd", metavar = "filename", help = "Measure psds and write to .xml file.  Use these psds as a first guess psd or fixed psd.")
+parser.add_option("--null-output", metavar="filename", help = "Set the output filename for the null vetoes (default = write to stdout).  If the filename ends with \".gz\" it will be gzip-compressed.")
+parser.add_option("--vetoes-name", metavar = "name", default = "vetoes_from_LHO_null", help = "Set the name of the vetoes segment lists in the output document (default = \"vetoes_from_LHO_null\").")
+
 
 options, filenames = parser.parse_args()
 
@@ -61,7 +104,7 @@ missing_options += ["--%s" % option.replace("_", "-") for option in required_opt
 if missing_options:
 	raise ValueError("missing required option(s) %s" % ", ".join(sorted(missing_options)))
 
-options.seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
+seg = segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))
 options.psd_fft_length = 8
 options.zero_pad_length = 2
 options.srate = 4096
@@ -103,15 +146,22 @@ class COHhandler(lloidparts.LLOIDHandler):
 		# coherent null bin default
 		self.cohnullbin = None
 
+		self.segment_start = None
+		self.segment_stop = None
+
 		# regular handler pipeline and message processing
 		self.mainloop = mainloop
 		self.pipeline = pipeline
 		bus = pipeline.get_bus()
 		bus.add_signal_watch()
 		bus.connect("message", self.on_message)
+		
+		# veto segment list
+		self.vetoes = segments.segmentlist()
 
 	def on_message(self, bus, message):
 		if message.type == gst.MESSAGE_EOS:
+			self.segment_EOS()
 			self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
 		elif message.type == gst.MESSAGE_ERROR:
@@ -171,6 +221,34 @@ class COHhandler(lloidparts.LLOIDHandler):
 			data = psd2.data)
 		self.H1_impulse, self.H1_latency, self.H2_impulse, self.H2_latency, self.srate = coherent_null.psd_to_impulse_response(self.psd1, self.psd2)
 
+	def segment_sighandler(self, elem, timestamp, segment_type):
+		if (segment_type == "on"):
+			self.segment_start = timestamp
+		elif (segment_type == "off"):
+			self.segment_stop = timestamp
+		else:
+			raise ValueError("unrecognized message from mkhtgate signal handler")
+		if (self.segment_start is not None and segment_type == "off"):
+			self.vetoes.append(segments.segment(lsctables.LIGOTimeGPS(0, self.segment_start), lsctables.LIGOTimeGPS(0, self.segment_stop)))
+
+	def segment_EOS(self):
+		if self.segment_start >= self.segment_stop or self.segment_stop is None:
+			self.segment_stop = numpy.float(options.gps_end_time) * 1e9
+			self.vetoes.append(segments.segment(lsctables.LIGOTimeGPS(0, self.segment_start), lsctables.LIGOTimeGPS(0, self.segment_stop)))
+
+		vetoes = self.vetoes
+		vetoes.coalesce()
+		vetoes = segments.segmentlistdict.fromkeys(("H1H2",), vetoes)
+
+		xmldoc = ligolw.Document()
+		xmldoc.childNodes.append(ligolw.LIGO_LW())
+		process = ligolw_process.register_to_xmldoc(xmldoc, "vetoes_from_LHO_null", options.__dict__)
+		llwsegments = ligolw_segments.LigolwSegments(xmldoc)
+		llwsegments.insert_from_segmentlistdict(vetoes, options.vetoes_name, "Null vetoes")
+		llwsegments.finalize(process)
+		
+		utils.write_filename(xmldoc, options.null_output, gz = (options.null_output or "stdout").endswith(".gz"), verbose = options.verbose)
+
 
 #
 # =============================================================================
@@ -189,14 +267,14 @@ if options.gps_start_time is None:
 	seek_start_time = -1 # gst.CLOCK_TIME_NONE is exported as unsigned, should have been signed
 else:
 	seek_start_type = gst.SEEK_TYPE_SET
-	seek_start_time = options.seg[0].ns()
+	seek_start_time = seg[0].ns()
 
 if options.gps_end_time is None:
 	seek_stop_type = gst.SEEK_TYPE_NONE
 	seek_stop_time = -1 # gst.CLOCK_TIME_NONE is exported as unsigned, should have been signed
 else:
 	seek_stop_type = gst.SEEK_TYPE_SET
-	seek_stop_time = options.seg[1].ns()
+	seek_stop_time = seg[1].ns()
 
 seekevent = gst.event_new_seek(1.0, gst.Format(gst.FORMAT_TIME), gst.SEEK_FLAG_FLUSH | gst.SEEK_FLAG_KEY_UNIT, seek_start_type, seek_start_time, seek_stop_type, seek_stop_time)
 
@@ -214,10 +292,10 @@ if options.write_psd is not None:
 		"H1",
 		seekevent,
 		detectors["H1"],
-		options.seg,
+		seg,
 		options.srate,
 		psd_fft_length = options.psd_fft_length,
-		fake_data = options.fake_data,
+		data_source = options.fake_data or "frames",
 		injection_filename = options.injections,
 		verbose = options.verbose
 		)
@@ -225,17 +303,17 @@ if options.write_psd is not None:
 		"H2",
 		seekevent,
 		detectors["H2"],
-		options.seg,
+		seg,
 		options.srate,
 		psd_fft_length = options.psd_fft_length,
-		fake_data = options.fake_data,
+		data_source = options.fake_data or "frames",
 		injection_filename = options.injections,
 		verbose = options.verbose
 		)
 	reference_psd.write_psd(options.write_psd, { "H1" : psd1, "H2" : psd2 }, verbose = options.verbose)
 
 #
-# this function updates the psds and recalucates the fir filters used in the coherent stream
+# Functions called by signal handler
 #	
 
 #FIXME: Probably only want to update psds (and filters) when they have changed "significantly enough"
@@ -270,6 +348,7 @@ H1src = lloidparts.mkLLOIDbasicsrc(
 	detectors["H1"],
 	data_source = options.fake_data or "frames",
 	injection_filename = options.injections,
+	state_vector_on_off_dict = {"H1" : (0x7, 0x160), "H2" : (0x7, 0x160)},
 	verbose = options.verbose
 )
 
@@ -277,10 +356,6 @@ H1head = pipeparts.mkreblock(pipeline, H1src)
 H1head = pipeparts.mkcapsfilter(pipeline, H1head, "audio/x-raw-float, width=64, rate=[%d,MAX]" % handler.srate)
 H1head = pipeparts.mkresample(pipeline, H1head, quality = quality)
 H1head = pipeparts.mkcapsfilter(pipeline, H1head, "audio/x-raw-float, width=64, rate=%d" % handler.srate)
-
-# tee off for null veto later on
-H1vetotee = pipeparts.mktee(pipeline, H1head)
-H1head = pipeparts.mkqueue(pipeline, H1vetotee)
 
 # track psd
 if options.track_psd is not None:
@@ -304,6 +379,7 @@ H2src = lloidparts.mkLLOIDbasicsrc(
 	detectors["H2"],
 	data_source = options.fake_data or "frames",
 	injection_filename = options.injections,
+	state_vector_on_off_dict = {"H1" : (0x7, 0x160), "H2" : (0x7, 0x160)},
 	verbose = options.verbose
 )
 
@@ -311,10 +387,6 @@ H2head = pipeparts.mkreblock(pipeline, H2src)
 H2head = pipeparts.mkcapsfilter(pipeline, H2head, "audio/x-raw-float, rate=[%d,MAX]" % handler.srate)
 H2head = pipeparts.mkresample(pipeline, H2head, quality = quality)
 H2head = pipeparts.mkcapsfilter(pipeline, H2head, "audio/x-raw-float, rate=%d" % handler.srate)
-
-# tee off for null veto later on
-H2vetotee = pipeparts.mktee(pipeline, H2head)
-H2head = pipeparts.mkqueue(pipeline, H2vetotee)
 
 # track psd
 if options.track_psd is not None:
@@ -347,14 +419,11 @@ pipeparts.mkframesink(pipeline, cohhead, clean_timestamps = False, dir_digits = 
 # null veto
 nullhead = pipeparts.mkprogressreport(pipeline, nullhead, "progress_null")
 nullhead = pipeparts.mkwhiten(pipeline, nullhead, zero_pad = handler.zero_pad_length, fft_length = handler.psd_fft_length)
+nullhead = lloidparts.mkhtgate(pipeline, nullhead, threshold = 8.0)
+nullhead.set_property("emit-signals", True)
+nullhead.connect("start", handler.segment_sighandler, "off") # start means the start of non-gap output
+nullhead.connect("stop", handler.segment_sighandler, "on") # stop means the end of non-gap output
 pipeparts.mkfakesink(pipeline, nullhead)
-#nulltee = pipeparts.mktee(pipeline, nullhead)
-
-#H1vetohead = pipeparts.mkgate(pipeline, H1vetotee, threshold = 100, control = nulltee, invert_control = True)
-#pipeparts.mkfakesink(pipeline, H1vetohead)
-
-#H2vetohead = pipeparts.mkgate(pipeline, H2vetotee, threshold = 8, control = nulltee, invert_control = True)
-#pipeparts.mkfakesink(pipeline, H2vetohead)
 
 #
 # Running the pipeline messages and pipeline graph

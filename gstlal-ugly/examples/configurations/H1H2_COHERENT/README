@@ -1,27 +1,26 @@
-This is a pipeline that produces frame files for the LHO coherent and null streams.  
+This is a pipeline that produces frame files for the LHO coherent stream and a LIGO-LightWeight XML document of veto segments obtained by determining when the null stream is above a threshold (8.0).  
 
 A single frame cache file for H1 and H2 has been included in this directory, because this cache file contain long segments during which both H1 and H2 were on.
 
-This pipeline can run in an online mode where the psd and filters are measured/constructed on the fly.  This mode does not successfully produce the coherent stream yet (due to lack of feathering each section filtered with a different filter togehter).
+This pipeline can run in an online mode where the psd and filters are measured/constructed on the fly.  This mode does not successfully produce the coherent stream yet (I think due to lack of feathering each section filtered with a different filter togehter).
 
 The pipeline can also run in a mode where the psds are provided at the command line (or measured before the pipeline begins) and the filters are constructed at the beginning of the pipeline and remain fixed. This mode does successfully produce the coherent and null streams.  A psd.xml file containing both the H1 and H2 psds is provided in this directory.
 
 To run the pipeline from this directory in the "online" mode (not yet producing correct coherent stream, but still runs):
 
-python coh_null_h1h2.py --frame-cache=data.cache --gps-start-time=870008619 --gps-end-time=870018619 --track-psd --verbose
+python coh_null_h1h2.py --frame-cache=data.cache --gps-start-time=870008619 --gps-end-time=870018619 --track-psd --null-output="vetoes_from_LHO_null.xml" --verbose
 
 To run the pipeline from this directory using a reference psd provided at the command line:
 
-python coh_null_h1h2.py --frame-cache=data.cache --gps-start-time=870008619 --gps-end-time=870018619 --reference-psd=psd.xml --verbose
+python coh_null_h1h2.py --frame-cache=data.cache --gps-start-time=870008619 --gps-end-time=870018619 --reference-psd=psd.xml --null-output="vetoes_from_LHO_null.xml" --verbose
 
 To run the pipeline from this directory where the psd is measured before the pipeline begins and then written to an .xml file:
 
-python coh_null_h1h2.py --frame-cache=data.cache --gps-start-time=870008619 --gps-end-time=870018619 --write-psd=psd.xml --verbose
+python coh_null_h1h2.py --frame-cache=data.cache --gps-start-time=870008619 --gps-end-time=870018619 --write-psd=psd.xml --null-output="vetoes_from_LHO_null.xml" --verbose
 
 --track-psd can be set in coincidence with the --write-psd or --reference-psd option.
 
 To run the pipeline and write the pipeline graph to this directory:
 
-GST_DEBUG_DUMP_DOT_DIR=. python coh_null_h1h2.py --frame-cache=data.cache --gps-start-time=870008619 --gps-end-time=870018619 --reference-psd=psd.xml --write-pipeline="LHO_COH_NULL" --verbose
+GST_DEBUG_DUMP_DOT_DIR=. python coh_null_h1h2.py --frame-cache=data.cache --gps-start-time=870008619 --gps-end-time=870018619 --reference-psd=psd.xml --null-output="vetoes_from_LHO_null.xml" --write-pipeline="LHO_COH_NULL" --verbose
 
-I (Maddie) can't get the null veto feature to work in this pipeline.  It is currently commented out and the null stream is sent to a fakesink.  Can you check if I'm incorporating the gate element correctly?  When I uncomment the gate element as it's written, the pipeline freezes up.
