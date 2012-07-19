@@ -50,7 +50,7 @@ __date__ = "FIXME"
 
 
 def printable_timestamp(timestamp):
-	return "%d.%09d" % (timestamp // gst.SECOND, timestamp % gst.SECOND)
+	return "%d.%09d s" % (timestamp // gst.SECOND, timestamp % gst.SECOND)
 
 
 class lal_checktimestamps(gst.BaseTransform):
