@@ -81,8 +81,7 @@ function test_up_resampler_gaps() {
 		lal_gate name=gate threshold=0.7 \
 		! tee name=orig \
 		! lal_nxydump ! filesink sync=false async=false buffer-mode=2 location="dump_in.txt" \
-		orig. \
-		! audioresample \
+		orig. ! audioresample \
 		! audio/x-raw-float, width=64, rate=16383 \
 		! lal_checktimestamps \
 		! lal_nxydump ! filesink sync=false async=false buffer-mode=2 location="dump_out.txt" \
@@ -112,8 +111,7 @@ function test_down_resampler_gaps() {
 		lal_gate name=gate threshold=0.7 \
 		! tee name=orig \
 		! lal_nxydump ! filesink sync=false async=false buffer-mode=2 location="dump_in.txt" \
-		orig. \
-		! audioresample \
+		orig. ! audioresample \
 		! audio/x-raw-float, rate=1023 \
 		! lal_checktimestamps \
 		! lal_nxydump ! filesink sync=false async=false buffer-mode=2 location="dump_out.txt" \
