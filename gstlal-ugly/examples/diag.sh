@@ -111,16 +111,16 @@ function test_down_resampler_gaps() {
 	gst-launch \
 		lal_gate name=gate threshold=0.7 \
 		! tee name=orig \
-		! lal_nxydump ! queue ! filesink buffer-mode=2 location="dump_in.txt" \
+		! lal_nxydump ! filesink sync=false async=false buffer-mode=2 location="dump_in.txt" \
 		orig. \
 		! audioresample \
 		! audio/x-raw-float, rate=1023 \
 		! lal_checktimestamps \
-		! lal_nxydump ! queue ! filesink buffer-mode=2 location="dump_out.txt" \
+		! lal_nxydump ! filesink sync=false async=false buffer-mode=2 location="dump_out.txt" \
 		audiotestsrc freq=4.8 samplesperbuffer=1024 num-buffers=16 \
 		! audio/x-raw-float, width=64, rate=1023 \
 		! tee name=control \
-		! lal_nxydump ! queue ! filesink buffer-mode=2 location="dump_control.txt" \
+		! lal_nxydump ! filesink sync=false async=false buffer-mode=2 location="dump_control.txt" \
 		control. ! gate.control \
 		audiotestsrc freq=256 wave=sine samplesperbuffer=8 num-buffers=32768 \
 		! audio/x-raw-float, channels=1, width=64, rate=16383 \
