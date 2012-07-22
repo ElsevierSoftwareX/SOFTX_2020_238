@@ -58,6 +58,40 @@ class DAG(pipeline.CondorDAG):
 		f.close()
 
 
+#
+# Generic job classes
+#
+
+
+class InspiralJob(pipeline.CondorDAGJob):
+	"""
+	A generic job class for gstlal inspiral stuff
+	"""
+	def __init__(self, executable, tag_base):
+		self.__prog__ = tag_base
+		self.__executable = executable
+		self.__universe = 'vanilla'
+		pipeline.CondorDAGJob.__init__(self, self.__universe, self.__executable)
+		self.add_condor_cmd('getenv','True')
+		self.tag_base = tag_base
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
+		self.number = 1
+
+
+class InspiralNode(pipeline.CondorDAGNode):
+	"""
+	A generic node class for gstlal inspiral stuff
+	"""
+	def __init__(self, job, dag, p_node=[]):
+		pipeline.CondorDAGNode.__init__(self, job)
+		for p in p_node:
+			self.add_parent(p)
+		dag.add_node(self)
+
+
+
 ###############################################################################
 # Utility functions
 ###############################################################################
