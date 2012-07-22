@@ -1,0 +1,208 @@
+#!/usr/bin/python
+"""
+This program makes a dag to generate svd banks
+"""
+
+__author__ = 'Chad Hanna <channa@caltech.edu>'
+
+##############################################################################
+# import standard modules and append the lalapps prefix to the python path
+import sys, os, copy, math
+import subprocess, socket, tempfile
+
+##############################################################################
+# import the modules we need to build the pipeline
+from glue import iterutils
+from glue import pipeline
+from glue import lal
+from glue.ligolw import lsctables
+from glue import segments
+import glue.ligolw.utils as utils
+import glue.ligolw.utils.segments as ligolw_segments
+from optparse import OptionParser
+from gstlal import inspiral_pipe, inspiral
+
+def which(prog):
+	which = subprocess.Popen(['which',prog], stdout=subprocess.PIPE)
+	out = which.stdout.read().strip()
+	if not out: 
+		print >>sys.stderr, "ERROR: could not find %s in your path, have you built the proper software and source the proper env. scripts?" % (prog,prog)
+		raise ValueError 
+	return out
+
+def log_path():
+	host = socket.getfqdn()
+	#FIXME add more hosts as you need them
+	if 'caltech.edu' in host: return '/usr1/' + os.environ['USER']
+	if 'phys.uwm.edu' in host: return '/localscratch/' + os.environ['USER']
+	if 'aei.uni-hannover.de' in host: return '/local/user/' + os.environ['USER']
+	if 'phy.syr.edu' in host: return '/usr1/' + os.environ['USER']
+
+
+class bank_DAG(pipeline.CondorDAG):
+
+	def __init__(self, name, logpath = log_path()):
+		self.basename = name
+		tempfile.tempdir = logpath
+		tempfile.template = self.basename + '.dag.log.'
+		logfile = tempfile.mktemp()
+		fh = open( logfile, "w" )
+		fh.close()
+		pipeline.CondorDAG.__init__(self,logfile)
+		self.set_dag_file(self.basename)
+		self.jobsDict = {}
+		self.node_id = 0
+		self.output_cache = []
+
+	def add_node(self, node):
+		node.set_retry(3)
+		self.node_id += 1
+		node.add_macro("macroid", self.node_id)
+		pipeline.CondorDAG.add_node(self, node)
+
+	def write_cache(self):
+		out = self.basename + ".cache"
+		f = open(out,"w")
+		for c in self.output_cache:
+			f.write(str(c)+"\n")
+		f.close()
+
+#
+# Classes for generating reference psds
+#
+
+class gstlal_reference_psd_job(pipeline.CondorDAGJob):
+	"""
+	A gstlal_reference_psd job
+	"""
+	def __init__(self, executable=which('gstlal_reference_psd'), tag_base='gstlal_reference_psd'):
+		"""
+		"""
+		self.__prog__ = 'gstlal_reference_psd'
+		self.__executable = executable
+		self.__universe = 'vanilla'
+		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
+		self.add_condor_cmd('getenv','True')
+		self.add_condor_cmd('requirements', 'Memory > 1999') #FIXME is this enough?
+		self.tag_base = tag_base
+		self.add_condor_cmd('environment',"KMP_LIBRARY=serial;MKL_SERIAL=yes")
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(process).err')
+
+
+class gstlal_reference_psd_node(pipeline.CondorDAGNode):
+	"""
+	A gstlal_reference_psd node
+	"""
+	def __init__(self, job, dag, frame_cache, gps_start_time, gps_end_time, instrument, channel, output, p_node=[]):
+
+		pipeline.CondorDAGNode.__init__(self,job)
+		self.add_var_opt("frame-cache", frame_cache)
+		self.add_var_opt("gps-start-time",gps_start_time)
+		self.add_var_opt("gps-end-time",gps_end_time)
+		self.add_var_opt("instrument", instrument)
+		self.add_var_opt("channel", channel)
+		self.add_var_opt("write-psd",output)
+		for p in p_node:
+			self.add_parent(p)
+		dag.add_node(self)
+
+
+#
+# ligolw_add classes
+#
+
+class ligolw_add_job(inspiral_pipe.InspiralJob):
+	"""
+	A ligolw_add job
+	"""
+	def __init__(self, executable=which('ligolw_add'), tag_base='ligolw_add_job'):
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
+
+
+class ligolw_add_node(inspiral_pipe.InspiralNode):
+	"""
+	A ligolw_add node
+	"""
+	def __init__(self, job, dag, input_list, output, p_node=[]):
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
+		self.add_var_opt("output", output)
+		for f in input_list:
+			self.add_file_arg(f)
+
+#
+# classes for generating H1H2 coherent frames
+#
+
+class gstlal_h1h2_coh_frames_job(inspiral_pipe.InspiralJob):
+	"""
+	A gstlal_h1h2_coh_frames job
+	"""
+	def __init__(self, executable=which('gstlal_h1h2_coh_frames'), tag_base='gstlal_h1h2_coh_frames_job'):
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
+
+
+class gstlal_h1h2_coh_frames_node(inspiral_pipe.InspiralNode):
+	"""
+	A gstlal_h1h2_coh_frames node
+	"""
+	def __init__(self, job, dag, frame_cache, gps_start_time, gps_end_time, channel, reference_psd, p_node=[]):
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
+		self.add_var_opt("frame-cache", frame_cache)
+		self.add_var_opt("gps-start-time", gps_start_time)
+		self.add_var_opt("gps-end-time", gps_end_time)
+		self.add_var_opt("reference-psd", reference_psd)
+		self.add_var_opt("channel-name", inspiral.pipeline_channel_list_from_channel_dict({'H1': channel, 'H2': channel}))
+		self.add_var_opt("null-output", "H1H2-NULL_VETOES-%d-%d.xml.gz" % (gps_start_time, gps_end_time - gps_start_time))
+		self.add_var_opt("vetoes-name", "vetoes")
+
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+	parser.add_option("--segment-file", metavar = "filename", help = "Set the name of the xml file to get segments (required).")
+	parser.add_option("--min-segment-length", metavar = "seconds", help = "Set the minimum segment length (required)", type="float")
+	parser.add_option("--frame-cache", metavar = "filenames", help = "Set the frame cache file")
+	#FIXME get this from the cache?
+	parser.add_option("--channel", metavar = "name", help = "Set the channel name (default=LSC-STRAIN)", default="LSC-STRAIN")
+	
+	options, filenames = parser.parse_args()
+
+	fail = ""
+	for option in ("segment_file","min_segment_length", "frame_cache"):
+		if getattr(options, option) is None:
+			fail += "must provide option %s\n" % (option)
+	if fail: raise ValueError, fail
+
+	return options, filenames
+
+
+options, filenames = parse_command_line()
+
+try: os.mkdir("logs")
+except: pass
+dag = bank_DAG("H1H2_coh_pipe")
+
+seglists = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.segment_file), "datasegments")
+segs = seglists.intersection(["H1", "H2"])
+psdJob = gstlal_reference_psd_job()
+cohJob = gstlal_h1h2_coh_frames_job()
+addJob = ligolw_add_job()
+
+for seg in segs:
+		#FIXME if there are segments without frame caches this will barf
+		H1psd = "H1-PSD-%d-%d.xml.gz" % (int(seg[0]), int(seg[1]) - int(seg[0]))
+		H2psd = "H2-PSD-%d-%d.xml.gz" % (int(seg[0]), int(seg[1]) - int(seg[0]))
+		H1H2psd = "H1H2-PSD-%d-%d.xml.gz" % (int(seg[0]), int(seg[1]) - int(seg[0]))
+		H1psdnode = gstlal_reference_psd_node(psdJob, dag, options.frame_cache, int(seg[0]), int(seg[1]), 'H1', options.channel, H1psd, p_node=[])
+		H2psdnode = gstlal_reference_psd_node(psdJob, dag, options.frame_cache, int(seg[0]), int(seg[1]), 'H2', options.channel, H2psd, p_node=[])
+		psdnode = ligolw_add_node(addJob, dag, [H1psd, H2psd], H1H2psd, p_node = [H1psdnode, H2psdnode])
+		gstlal_h1h2_coh_frames_node(cohJob, dag, options.frame_cache, int(seg[0]), int(seg[1]), options.channel, H1H2psd, p_node=[psdnode])
+		
+dag.write_sub_files()
+dag.write_dag()
+dag.write_script()
+dag.write_cache()
+
+
+
