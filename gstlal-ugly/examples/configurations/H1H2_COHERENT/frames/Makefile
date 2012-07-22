@@ -1,7 +1,7 @@
 MIN_SEG_LENGTH = 600 # seconds, i.e. 10 minutes
 START = 871147452
-STOP =  871157452
-TRIM = 0
+STOP =  871247452
+TRIM = 16
 
 all : dag
 
