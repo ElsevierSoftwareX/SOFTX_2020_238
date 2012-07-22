@@ -86,16 +86,26 @@ for bkdb in options.non_injection_db:
 #
 # Calibrate to the high event limit (100 events) to get the number of independent trials
 #
-thresh = 100. / float(abs(global_ranking.livetime_seg))
 
-global_ranking.trials_table.set_thresh(thresh)
+top100 = {}
 
 for bkdb in options.non_injection_db:
 	working_filename = dbtables.get_connection_filename(bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
-	global_ranking.trials_table.count_below_thresh_from_db(connection)
+	for ifos in [ifos for ifos in global_ranking.trials_table if global_ranking.trials_table[ifos].count > 0]:
+		top100.setdefault(ifos, []).extend(connection.cursor().execute('SELECT combined_far FROM coinc_inspiral WHERE ifos == ? ORDER BY combined_FAR LIMIT 100', (lsctables.ifos_from_instrument_set(ifos),)).fetchall())
 	connection.close()
 	dbtables.discard_connection_filename(bkdb, working_filename, verbose = options.verbose)
+
+for ifos in top100:
+	top100[ifos].sort()
+	if len(top100[ifos]) < 100:
+		global_ranking.trials_table[ifos].count_below_thresh = len(top100[ifos])
+		global_ranking.trials_table[ifos].thresh = top100[ifos][-1][0]
+	else:
+		global_ranking.trials_table[ifos].count_below_thresh = 100
+		global_ranking.trials_table[ifos].thresh = top100[ifos][99][0]
+
 
 #
 # Adjust the fap to the high event limit to include the dependence of trials
@@ -113,7 +123,10 @@ dbtables.discard_connection_filename(options.non_injection_db[0], working_filena
 
 
 for ifos in global_ranking.trials_table:
-	global_ranking.scale[ifos] = global_ranking.trials_table[ifos].count_below_thresh / global_ranking.trials_table[ifos].thresh / float(abs(global_ranking.livetime_seg)) * global_ranking.trials_table.num_nonzero_count() / num_slides
+	try:
+		global_ranking.scale[ifos] = global_ranking.trials_table[ifos].count_below_thresh / global_ranking.trials_table[ifos].thresh / float(abs(global_ranking.livetime_seg)) * global_ranking.trials_table.num_nonzero_count() / num_slides
+	except TypeError:
+		global_ranking.scale[ifos] = 1
 
 
 #
