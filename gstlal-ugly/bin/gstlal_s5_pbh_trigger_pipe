@@ -46,57 +46,24 @@ import numpy
 from pylal.datatypes import LIGOTimeGPS
 
 #
-# Generic job classes
-#
-
-
-class InspiralJob(pipeline.CondorDAGJob):
-	"""
-	A generic job class for gstlal inspiral stuff
-	"""
-	def __init__(self, executable, tag_base):
-		self.__prog__ = tag_base
-		self.__executable = executable
-		self.__universe = 'vanilla'
-		pipeline.CondorDAGJob.__init__(self, self.__universe, self.__executable)
-		self.add_condor_cmd('getenv','True')
-		self.tag_base = tag_base
-		self.set_sub_file(tag_base+'.sub')
-		self.set_stdout_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).out')
-		self.set_stderr_file('logs/'+tag_base+'-$(macroid)-$(macronodename)-$(cluster)-$(process).err')
-		self.number = 1
-
-
-class InspiralNode(pipeline.CondorDAGNode):
-	"""
-	A generic node class for gstlal inspiral stuff
-	"""
-	def __init__(self, job, dag, p_node=[]):
-		pipeline.CondorDAGNode.__init__(self, job)
-		for p in p_node:
-			self.add_parent(p)
-		dag.add_node(self)
-
-
-#
 # gstlal_s5_pbh_summary_page
 #
 
 
-class gstlal_s5_pbh_summary_page_job(InspiralJob):
+class gstlal_s5_pbh_summary_page_job(inspiral_pipe.InspiralJob):
 	"""
 	A gstlal_s5_pbh_summary_page job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_s5_pbh_summary_page'), tag_base='gstlal_s5_pbh_summary_page'):
-		InspiralJob.__init__(self, executable, tag_base)
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
 
 
-class gstlal_s5_pbh_summary_page_node(InspiralNode):
+class gstlal_s5_pbh_summary_page_node(inspiral_pipe.InspiralNode):
 	"""
 	A gstlal_s5_pbh_summary_page_node
 	"""
 	def __init__(self, job, dag, name_tag, web_dir, title, open_box=True, p_node=[]):
-		InspiralNode.__init__(self, job, dag, p_node)
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
 		self.add_var_opt("output-name-tag", name_tag)
 		self.add_var_opt("webserver-dir", web_dir)
 		self.add_var_opt("title", title)
@@ -108,20 +75,20 @@ class gstlal_s5_pbh_summary_page_node(InspiralNode):
 #
 
 
-class gstlal_inspiral_plotsummary_job(InspiralJob):
+class gstlal_inspiral_plotsummary_job(inspiral_pipe.InspiralJob):
 	"""
 	A gstlal_inspiral_plotsummary_job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral_plotsummary'), tag_base='gstlal_inspiral_plotsummary'):
-		InspiralJob.__init__(self, executable, tag_base)
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
 
 
-class gstlal_inspiral_plotsummary_node(InspiralNode):
+class gstlal_inspiral_plotsummary_node(inspiral_pipe.InspiralNode):
 	"""
 	A gstlal_inspiral_plotsummary_node
 	"""
 	def __init__(self, job, dag, base, input=[], tmp_space=inspiral_pipe.log_path(), p_node=[]):
-		InspiralNode.__init__(self, job, dag, p_node)
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
 		self.add_var_opt("base", base)
 		self.add_var_opt("tmp-space", tmp_space)
 		for f in input:
@@ -133,20 +100,20 @@ class gstlal_inspiral_plotsummary_node(InspiralNode):
 #
 
 
-class gstlal_inspiral_plot_likelihoods_job(InspiralJob):
+class gstlal_inspiral_plot_likelihoods_job(inspiral_pipe.InspiralJob):
 	"""
 	A gstlal_inspiral_plot_likelihoods job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral_plot_likelihoods'), tag_base='gstlal_inspiral_plot_likelihoods'):
-		InspiralJob.__init__(self, executable, tag_base)
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
 
 
-class gstlal_inspiral_plot_likelihoods_node(InspiralNode):
+class gstlal_inspiral_plot_likelihoods_node(inspiral_pipe.InspiralNode):
 	"""
 	A gstlal_inspiral_plot_likelihoods node
 	"""
 	def __init__(self, job, dag, base, url, output = None, p_node=[]):
-		InspiralNode.__init__(self, job, dag, p_node)
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
 		if output is None:
 			output = url+".html"
 		self.add_var_arg("url=%s > %s" % (url, output))
@@ -158,20 +125,20 @@ class gstlal_inspiral_plot_likelihoods_node(InspiralNode):
 #
 
 
-class lalapps_run_sqlite_job(InspiralJob):
+class lalapps_run_sqlite_job(inspiral_pipe.InspiralJob):
 	"""
 	A lalapps_run_sqlite
 	"""
 	def __init__(self, executable=inspiral_pipe.which('lalapps_run_sqlite'), tag_base='lalapps_run_sqlite'):
-		InspiralJob.__init__(self, executable, tag_base)
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
 
 
-class lalapps_run_sqlite_node(InspiralNode):
+class lalapps_run_sqlite_node(inspiral_pipe.InspiralNode):
 	"""
 	A lalapps_run_sqlite node
 	"""
 	def __init__(self, job, dag, sql_file, input=[], tmp_space=inspiral_pipe.log_path(), p_node=[]):
-		InspiralNode.__init__(self, job, dag, p_node)
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
 		self.add_var_opt("sql-file", sql_file)
 		self.add_var_opt("tmp-space", tmp_space)
 		if len(input) == 1:
@@ -185,28 +152,28 @@ class lalapps_run_sqlite_node(InspiralNode):
 #
 
 
-class ligolw_sqlite_from_xml_job(InspiralJob):
+class ligolw_sqlite_from_xml_job(inspiral_pipe.InspiralJob):
 	"""
 	A ligolw_sqlite_job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('ligolw_sqlite'), tag_base='ligolw_sqlite_from_xml'):
-		InspiralJob.__init__(self, executable, tag_base)
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
 
 
-class ligolw_sqlite_to_xml_job(InspiralJob):
+class ligolw_sqlite_to_xml_job(inspiral_pipe.InspiralJob):
 	"""
 	A ligolw_sqlite_job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('ligolw_sqlite'), tag_base='ligolw_sqlite_to_xml'):
-		InspiralJob.__init__(self, executable, tag_base)
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
 
 
-class ligolw_sqlite_node(InspiralNode):
+class ligolw_sqlite_node(inspiral_pipe.InspiralNode):
 	"""
 	A ligolw_sqlite node
 	"""
 	def __init__(self, job, dag, database, input=[], replace=True, tmp_space=inspiral_pipe.log_path(), extract=None, p_node=[]):
-		InspiralNode.__init__(self, job, dag, p_node)
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
 		if extract is not None:
 			self.add_var_opt("extract", extract)
 		self.add_var_opt("database", database)
@@ -225,20 +192,20 @@ class ligolw_sqlite_node(InspiralNode):
 #
 
 
-class ligolw_inspinjfind_job(InspiralJob):
+class ligolw_inspinjfind_job(inspiral_pipe.InspiralJob):
 	"""
 	A ligolw_inspinjfind_job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('ligolw_inspinjfind'), tag_base='ligolw_inspinjfind'):
-		InspiralJob.__init__(self, executable, tag_base)
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
 
 
-class ligolw_inspinjfind_node(InspiralNode):
+class ligolw_inspinjfind_node(inspiral_pipe.InspiralNode):
 	"""
 	A ligolw_inspinjfind node
 	"""
 	def __init__(self, job, dag, xml, p_node=[]):
-		InspiralNode.__init__(self, job, dag, p_node)
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
 		self.add_var_arg(xml)
 		self.output_name = xml
 
@@ -248,22 +215,22 @@ class ligolw_inspinjfind_node(InspiralNode):
 #
 
 
-class gstlal_inspiral_job(InspiralJob):
+class gstlal_inspiral_job(inspiral_pipe.InspiralJob):
 	"""
 	A gstlal_inspiral job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral'), tag_base='gstlal_inspiral'):
-		InspiralJob.__init__(self, executable, tag_base)
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
 		self.add_condor_cmd('requirements', '( CAN_RUN_MULTICORE )')
 		self.add_condor_cmd('request_cpus', '6')
 		self.add_condor_cmd('+RequiresMultipleCores', 'True')
 
-class gstlal_inspiral_inj_job(InspiralJob):
+class gstlal_inspiral_inj_job(inspiral_pipe.InspiralJob):
 	"""
 	A gstlal_inspiral job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral'), tag_base='gstlal_inspiral_inj'):
-		InspiralJob.__init__(self, executable, tag_base)
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
 		self.add_condor_cmd('requirements', '( CAN_RUN_MULTICORE )')
 		self.add_condor_cmd('request_cpus', '6')
 		self.add_condor_cmd('+RequiresMultipleCores', 'True')
@@ -273,13 +240,13 @@ def sim_tag_from_inj_file(injections):
 	return injections.replace('.xml', '').replace('.gz', '')
 
 
-class gstlal_inspiral_node(InspiralNode):
+class gstlal_inspiral_node(inspiral_pipe.InspiralNode):
 	"""
 	A gstlal_inspiral node
 	"""
 	#FIXME add veto segments name
 	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, channel_dict, reference_psd, svd_bank, tmp_space=inspiral_pipe.log_path(), ht_gate_thresh=None, injections=None, control_peak_time = 8, coincidence_threshold = 0.020, vetoes=None, time_slide_file=None, fir_stride = 8, instruments = "H1H2L1", number = 1, p_node=[]):
-		InspiralNode.__init__(self, job, dag, p_node)
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
 
 		if time_slide_file is not None:
 			self.add_var_opt("time-slide-file", time_slide_file)
@@ -321,20 +288,20 @@ class gstlal_inspiral_node(InspiralNode):
 #
 
 
-class gstlal_inspiral_calc_likelihood_job(InspiralJob):
+class gstlal_inspiral_calc_likelihood_job(inspiral_pipe.InspiralJob):
 	"""
 	A gstlal_inspiral_calc_likelihood job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral_calc_likelihood'), tag_base='gstlal_inspiral_calc_likelihood'):
-		InspiralJob.__init__(self, executable, tag_base)
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
 
 
-class gstlal_inspiral_calc_likelihood_node(InspiralNode):
+class gstlal_inspiral_calc_likelihood_node(inspiral_pipe.InspiralNode):
 	"""
 	A gstlal_inspiral_calc_likelihood node
 	"""
 	def __init__(self, job, dag, likelihood_files = [], synthesize_injections = 1000000, input = [], likelihood_output_name = "post_calc_likelihood_", background_prior = 1.0, p_node=[]):
-		InspiralNode.__init__(self, job, dag, p_node)
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
 		self.add_var_opt("likelihood-file", pipeline_dot_py_append_opts_hack("likelihood-file", likelihood_files))
 		self.add_var_opt("tmp-space", inspiral_pipe.log_path())
 		for f in input:
@@ -354,20 +321,20 @@ class gstlal_inspiral_calc_likelihood_node(InspiralNode):
 #
 
 
-class gstlal_compute_far_from_snr_chisq_histograms_job(InspiralJob):
+class gstlal_compute_far_from_snr_chisq_histograms_job(inspiral_pipe.InspiralJob):
 	"""
 	A gstlal_compute_far_from_snr_chisq_histograms job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_compute_far_from_snr_chisq_histograms'), tag_base='gstlal_compute_far_from_snr_chisq_histograms'):
-		InspiralJob.__init__(self, executable, tag_base)
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
 
 
-class gstlal_compute_far_from_snr_chisq_histograms_node(InspiralNode):
+class gstlal_compute_far_from_snr_chisq_histograms_node(inspiral_pipe.InspiralNode):
 	"""
 	A gstlal_compute_far_from_snr_chisq_histograms_job node
 	"""
 	def __init__(self, job, dag, background_bins_files = [], noninj_input = [], inj_input = [], p_node=[]):
-		InspiralNode.__init__(self, job, dag, p_node)
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
 		if background_bins_files is not None:
 			self.add_var_opt("background-bins-file", pipeline_dot_py_append_opts_hack("background-bins-file", background_bins_files))
 		self.add_var_opt("tmp-space", inspiral_pipe.log_path())
@@ -382,20 +349,20 @@ class gstlal_compute_far_from_snr_chisq_histograms_node(InspiralNode):
 #
 
 
-class gstlal_inspiral_marginalize_likelihood_job(InspiralJob):
+class gstlal_inspiral_marginalize_likelihood_job(inspiral_pipe.InspiralJob):
 	"""
 	A gstlal_inspiral_marginalize_likelihood job
 	"""
 	def __init__(self, executable=inspiral_pipe.which('gstlal_inspiral_marginalize_likelihood'), tag_base='gstlal_inspiral_marginalize_likelihood'):
-		InspiralJob.__init__(self, executable, tag_base)
+		inspiral_pipe.InspiralJob.__init__(self, executable, tag_base)
 
 
-class gstlal_inspiral_marginalize_likelihood_node(InspiralNode):
+class gstlal_inspiral_marginalize_likelihood_node(inspiral_pipe.InspiralNode):
 	"""
 	A gstlal_inspiral_marginalize_likelihood node
 	"""
 	def __init__(self, job, dag, output, background_bins_files, p_node=[]):
-		InspiralNode.__init__(self, job, dag, p_node)
+		inspiral_pipe.InspiralNode.__init__(self, job, dag, p_node)
 		for f in background_bins_files:
 			self.add_var_arg(f)
 		self.add_var_opt("output", output)
