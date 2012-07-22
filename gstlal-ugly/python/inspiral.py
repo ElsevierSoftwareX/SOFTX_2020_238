@@ -552,8 +552,6 @@ class Data(object):
 			for event in events:
 				event.process_id = self.process.process_id
 				event.event_id = self.sngl_inspiral_table.get_next_id()
-				# FIXME, this is normally done with only non coinc singles
-				self.far.distribution_stats.add_single(event)
 
 			# update likelihood snapshot if needed
 			if (self.likelihood_snapshot_timestamp is None or (self.likelihood_snapshot_interval is not None and buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval)):
@@ -588,8 +586,8 @@ class Data(object):
 
 			# update the parameter distribution data.  only
 			# update from sngls that weren't used in coincs
-			#for event in noncoinc_sngls:
-			#	self.far.distribution_stats.add_single(event)
+			for event in noncoinc_sngls:
+				self.far.distribution_stats.add_single(event)
 
 			# update output document
 			if self.connection is not None:
