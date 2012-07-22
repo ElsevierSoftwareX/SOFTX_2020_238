@@ -50,4 +50,5 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_marginalize_likelihoods_online \
 	gstlal_inspiral_reset_likelihood \
 	gstlal_inspiral_plot_log_state_at_gps_time \
-	gstlal_ll_inspiral_regen_reg_from_condor_q
+	gstlal_ll_inspiral_regen_reg_from_condor_q \
+	gstlal_h1h2_coh_frames
