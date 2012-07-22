@@ -455,7 +455,7 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 		f.write('''
 || %s || %s || %s || %s || %s || %s || %s || %s || %s ||
 || %s || %s || %s || %s || %s || %s || %s || %s || %s ||
-''' % ("Rank", "combined FAR (Hz)","FAP", "combined SNR", "end_time","total mass","chirp mass", "detectors", "detector time", "", "", "", "", "detector", "snr", "chisq", "mass1", "mass2"))
+''' % ("Rank", "combined FAR (Hz)","FAP", "combined SNR", "GPS end time","total mass","chirp mass", "detectors", "detector time", "", "", "", "", "detector", "snr", "&chi;<sup>2</sup>/DOF", "mass 1", "mass 2"))
 		for i, values in enumerate(l):
 			values=list(values)
 			dets =  frozenset(dbtables.lsctables.instrument_set_from_ifos(values[7]))
@@ -752,6 +752,7 @@ FROM
 		coinc_event_map.table_name == 'sngl_inspiral'
 		AND coinc_event_map.event_id == sngl_inspiral.event_id
 	)
+	WHERE sngl_inspiral.snr > 8.0
 		"""):
 			sim = contents.sim_inspiral_table.row_from_cols(values)
 			sngl = contents.sngl_inspiral_table.row_from_cols(values[n_simcolumns:])
@@ -1118,7 +1119,11 @@ def create_farplot(zerolag_stats, farlivetime, is_open_box, max_events = 1000):
 	minX = float(farlivetime / maxN)
 	axes.set_xlim(minX, maxX)
 	axes.set_ylim(0.9 * min(N), maxN)
-
+	
+	lo, hi = axes.get_xlim()
+	hi = 10**math.ceil(math.log10(hi))
+	axes.set_xlim(lo, hi)
+	
 	return fig, axes
 
 
