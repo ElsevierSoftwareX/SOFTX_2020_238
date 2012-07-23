@@ -148,6 +148,8 @@ def parse_command_line():
 	parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
 	parser.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
 	parser.add_option("--veto-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables and use as the veto list.", default = "vetoes")
+	parser.add_option("--state-vector-on-bits", metavar = "name", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times")
+	parser.add_option("--state-vector-off-bits", metavar = "name", default = [], action = "append", help = "Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times")
 
 	options, filenames = parser.parse_args()
 
@@ -196,6 +198,8 @@ def parse_command_line():
 	# do this before converting option types
 	process_params = options.__dict__.copy()
 
+	options.state_vector_on_off_dict = inspiral.state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits)
+	print options.state_vector_on_off_dict
 
 	# hard-coded.  this number is needed in a few places, and storing
 	# it in with the options is a convenient home
@@ -354,6 +358,7 @@ triggersrc = lloidparts.mkSPIIRmulti(
 	frame_segments = frame_segments,
 	chisq_type = options.chisq_type,
 	track_psd = options.track_psd,
+	state_vector_on_off_dict = options.state_vector_on_off_dict
 )
 
 
