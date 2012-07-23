@@ -70,6 +70,33 @@ class gstlal_inspiral_job(pipeline.CondorDAGJob):
 		self.set_stderr_file('logs/'+tag_base+'-$(macrojobtag)-$(macronodename)-$(cluster)-$(process).err')
 		self.number = 1
 
+#
+# gstlal_iir_inspiral
+#
+
+
+class gstlal_iir_inspiral_job(pipeline.CondorDAGJob):
+	"""
+	A gstlal_iir_inspiral job
+	"""
+	def __init__(self, executable=inspiral_pipe.which('gstlal_iir_ll_inspiral'), tag_base='gstlal_iir_inspiral'):
+		"""
+		"""
+		self.__prog__ = 'gstlal_iir_inspiral'
+		self.__executable = executable
+		self.__universe = 'vanilla'
+		pipeline.CondorDAGJob.__init__(self,self.__universe,self.__executable)
+		self.add_condor_cmd('getenv','True')
+		# these jobs gracefully shutdown with SIGINT
+		self.add_condor_cmd("want_graceful_removal", "True")
+		self.add_condor_cmd("kill_sig", "15")
+		self.add_condor_cmd('+Online_CBC_IIR', 'True')
+		self.tag_base = tag_base
+		self.set_sub_file(tag_base+'.sub')
+		self.set_stdout_file('logs/'+tag_base+'-$(macrojobtag)-$(macronodename)-$(cluster)-$(process).out')
+		self.set_stderr_file('logs/'+tag_base+'-$(macrojobtag)-$(macronodename)-$(cluster)-$(process).err')
+		self.number = 1
+
 class gstlal_inspiral_marginalize_likelihoods_online_job(pipeline.CondorDAGJob):
 	"""
 	A gstlal_inspiral_marginalize_likelihoods_online job
@@ -222,7 +249,7 @@ dag = inspiral_pipe.DAG("trigger_pipe")
 #
 
 if options.do_iir_pipeline is not None:
-	gstlalInspiralJob = gstlal_inspiral_job(executable = inspiral_pipe.which('gstlal_iir_ll_inspiral'))
+	gstlalInspiralJob = gstlal_iir_inspiral_job()
 else:
 	gstlalInspiralJob = gstlal_inspiral_job()
 
