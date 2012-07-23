@@ -1,0 +1,83 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2011, 2012 Kipp Cannon, Chad Hanna, Drew Keppel
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import sys
+import numpy
+from scipy import interpolate, random
+from scipy.stats import poisson
+from glue import segments
+from glue.ligolw import lsctables
+from glue.ligolw import utils
+from glue.ligolw.utils import process as ligolw_process
+from glue.ligolw.utils import segments as ligolw_segments
+from glue.segmentsUtils import vote
+from glue import iterutils
+from pylal import inject
+from pylal import rate
+from optparse import OptionParser
+from gstlal import far
+from gstlal.svd_bank import read_bank
+from gstlal import far
+
+try:
+	import sqlite3
+except ImportError:
+	# pre 2.5.x
+	from pysqlite2 import dbapi2 as sqlite3
+
+sqlite3.enable_callback_tracebacks(True)
+
+
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("--background-bins-file", metavar = "filename", action = "append", help = "Set the name of the xml file containing the snr / chisq background distributions")
+	parser.add_option("--tmp-space", metavar = "dir", help = "Set the name of the tmp space if working with sqlite")
+	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
+	parser.add_option("--non-injection-db", metavar = "filename", action = "append", help = "single file for non injections run")
+	options, filenames = parser.parse_args()
+	return options, filenames
+
+#
+# Parse command line
+#
+
+options, filenames = parse_command_line()
+
+#
+# Pull out background and injections distribution and set up the FAR class
+#
+
+global_ranking, procid = far.RankingData.from_xml(utils.load_filename(options.background_bins_file[0], verbose = options.verbose))
+
+# late import for DB manipulations
+from glue.ligolw import dbtables
+
+global_ranking.compute_joint_cdfs()
+
+for ifos in global_ranking.trials_table:
+	global_ranking.scale[ifos] = (global_ranking.trials_table[ifos].count_below_thresh or 1) / global_ranking.trials_table[ifos].thresh / float(abs(global_ranking.livetime_seg)) * global_ranking.trials_table.num_nonzero_count()
+
+
+#
+# Scale the rate Set the FAP and FAR
+#
+
+
+for bkdb in options.non_injection_db:
+	far.set_fap(global_ranking, bkdb, tmp_path = options.tmp_space, verbose = options.verbose)
+	far.set_far(global_ranking, bkdb, tmp_path = options.tmp_space, scale = True, verbose = options.verbose)
