@@ -73,7 +73,7 @@ parser.add_option("--fake-data", metavar = "[LIGO|AdvLIGO]", help = "Instead of 
 parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds (required).  Can be specified to nanosecond precision.")
 parser.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
-parser.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channel to process (optional).  The default is \"LSC-STRAIN\".")
+parser.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channel to process.")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 parser.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 parser.add_option("--track-psd", action = "store_true", help = "Track the H1 and H2 psds.  The filters that create the coherent stream will be updated throughout the run.")
