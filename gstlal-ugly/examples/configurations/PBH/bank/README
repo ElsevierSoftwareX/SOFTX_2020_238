@@ -1,9 +1,0 @@
-This file makes 3 dags for the S5 PBH search, run make (you need lalsuite and gstlal installed and in your path)
-
-$ make
-
-You will get three dags that you can condor submit 
-
-mode_H1-TMPLTBANK-869040003-2048_svd_bank.dag
-mode_H2-TMPLTBANK-875211248-2048_svd_bank.dag
-mode_L1-TMPLTBANK-858087370-2048_svd_bank.dag
