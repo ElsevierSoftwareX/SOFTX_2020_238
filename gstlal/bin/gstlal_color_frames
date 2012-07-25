@@ -21,6 +21,10 @@ from gstlal import reference_psd
 from gstlal import lloidparts
 from optparse import OptionParser, Option
 from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import array
+array.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import utils
 from pylal.datatypes import LIGOTimeGPS
 import pygtk
 pygtk.require("2.0")
@@ -54,7 +58,7 @@ sr = options.sample_rate
 # read psd file
 #
 
-rpsd = reference_psd.read_psd(options.color_psd, verbose = options.verbose)[options.instrument]
+rpsd = reference_psd.read_psd_xmldoc(utils.load_filename(options.color_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[options.instrument]
 
 #
 # create input segment for the seek

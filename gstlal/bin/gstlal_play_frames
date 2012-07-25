@@ -30,8 +30,13 @@ from gstlal import pipeparts
 from gstlal import lloidparts
 from gstlal import reference_psd
 from optparse import OptionParser
-from glue.ligolw.utils import segments as ligolw_segments
+from glue.ligolw import ligolw
+from glue.ligolw import array
+from glue.ligolw import lsctables
+array.use_in(ligolw.LIGOLWContentHandler)
+lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
+from glue.ligolw.utils import segments as ligolw_segments
 
 class Handler(object):
 	def __init__(self, mainloop, pipeline):
@@ -84,14 +89,14 @@ detector = lloidparts.DetectorData(options.frame_cache, options.channel_name)
 seekevent = lloidparts.seek_event_for_gps(options.gps_start_time, options.gps_end_time)
 
 if options.vetoes:
-	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes, verbose = options.verbose), options.veto_segments_name).coalesce()[options.instrument]
+	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.vetoes, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler), options.veto_segments_name).coalesce()[options.instrument]
 else:
 	veto_segments = None
 
 print veto_segments
 
 if options.reference_psd is not None:
-	psd = reference_psd.read_psd(options.reference_psd, verbose = options.verbose)
+	psd = reference_psd.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
 else:
 	psd = None
 

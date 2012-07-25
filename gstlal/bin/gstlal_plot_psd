@@ -21,7 +21,11 @@ import matplotlib
 matplotlib.use('Agg')
 import pylab
 import numpy
-from gstlal.reference_psd import read_psd
+from glue.ligolw import ligolw
+from glue.ligolw import array
+array.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import utils
+from gstlal import reference_psd
 
 if len(sys.argv) != 3:
 	print "USAGE gstlal_plot_psd psd_name output_name"
@@ -30,8 +34,8 @@ if len(sys.argv) != 3:
 fname = sys.argv[1]
 outname = sys.argv[2]
 
-psd = read_psd(fname, True)
-for k,v in psd.items():
+psds = reference_psd.read_psd_xmldoc(utils.load_filename(fname, verbose = True, contenthandler = ligolw.LIGOLWContentHandler))
+for k,v in psds.items():
 	pylab.loglog(v.deltaF * numpy.arange(len(v.data)), v.data)
 	pylab.xlabel('Frequency (Hz)')
 	pylab.ylabel('Strain/Hz')
