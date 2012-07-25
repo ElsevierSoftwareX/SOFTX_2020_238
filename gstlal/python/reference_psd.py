@@ -153,12 +153,41 @@ def measure_psd(instrument, seekevent, detector, seg, rate, data_source = "frame
 	return handler.psd
 
 
+def read_psd_xmldoc(xmldoc):
+	"""
+	Parse a dictionary of PSD frequency series objects from an XML
+	document.  See also make_psd_xmldoc() for the construction of XML
+	documents from a dictionary of PSDs.
+	"""
+	return dict((param.get_pyvalue(elem, u"instrument"), lalseries.parse_REAL8FrequencySeries(elem)) for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"REAL8FrequencySeries")
+
+
 def read_psd(filename, verbose = False):
-	return dict((param.get_pyvalue(elem, u"instrument"), lalseries.parse_REAL8FrequencySeries(elem)) for elem in utils.load_filename(filename, verbose = verbose).getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.getAttribute(u"Name") == u"REAL8FrequencySeries")
+	"""
+	Wrapper around read_psd_xmldoc() to parse PSDs directly from a
+	named file.
+
+	This function is deprecated, use read_psd_xmldoc() instead.
+	"""
+	import warnings
+	warnings.warn("gstlal.reference_psd.read_psd() is deprecated, use gstlal.reference_psd.read_psd_xmldoc(utils.load_filename())instead.", DeprecationWarning)
+	return read_psd_xmldoc(utils.load_filename(filename, verbose = verbose))
 
 
-def make_psd_xmldoc(psddict):
-	xmldoc = ligolw.Document()
+def make_psd_xmldoc(psddict, xmldoc = None):
+	"""
+	Construct an XML document tree representation of a dictionary of
+	frequency series objects containing PSDs.  See also
+	read_psd_xmldoc() for a function to parse the resulting XML
+	documents.
+
+	If xmldoc is None (the default), then a new XML document is created
+	and the PSD dictionary added to it.  If xmldoc is not None then the
+	PSD dictionary is appended to the children of that element inside a
+	new LIGO_LW element.
+	"""
+	if xmldoc is None:
+		xmldoc = ligolw.Document()
 	lw = xmldoc.appendChild(ligolw.LIGO_LW())
 	for instrument, psd in psddict.items():
 		fs = lw.appendChild(lalseries.build_REAL8FrequencySeries(psd))
@@ -168,10 +197,18 @@ def make_psd_xmldoc(psddict):
 
 
 def write_psd_fileobj(fileobj, psddict, gz = False, trap_signals = None):
+	"""
+	Wrapper around make_psd_xmldoc() to write the XML document directly
+	to a Python file object.
+	"""
 	utils.write_fileobj(make_psd_xmldoc(psddict), fileobj, gz = gz, trap_signals = trap_signals)
 
 
 def write_psd(filename, psddict, verbose = False, trap_signals = None):
+	"""
+	Wrapper around make_psd_xmldoc() to write the XML document directly
+	to a named file.
+	"""
 	utils.write_filename(make_psd_xmldoc(psddict), filename, gz = (filename or "stdout").endswith(".gz"), verbose = verbose, trap_signals = trap_signals)
 
 
