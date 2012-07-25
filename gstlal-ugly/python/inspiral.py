@@ -284,14 +284,9 @@ def add_cbc_metadata(xmldoc, process, seg_in):
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
-try:
-	rate.array.use_in(XMLContentHandler)
-	rate.param.use_in(XMLContentHandler)
-	lsctables.use_in(XMLContentHandler)
-except AttributeError:
-	# FIXME:  hack for compatibility with older versions of glue.
-	# remove when we can rely on a recent glue
-	XMLContentHandler.startTable = lsctables.startTable
+rate.array.use_in(XMLContentHandler)
+rate.param.use_in(XMLContentHandler)
+lsctables.use_in(XMLContentHandler)
 
 
 #
