@@ -32,8 +32,10 @@ from gstlal import reference_psd
 from optparse import OptionParser
 from glue.ligolw import ligolw
 from glue.ligolw import array
+from glue.ligolw import param
 from glue.ligolw import lsctables
 array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
 lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments

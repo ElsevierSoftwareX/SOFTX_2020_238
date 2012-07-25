@@ -23,7 +23,9 @@ from optparse import OptionParser, Option
 from glue import segments
 from glue.ligolw import ligolw
 from glue.ligolw import array
+from glue.ligolw import param
 array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from pylal.datatypes import LIGOTimeGPS
 import pygtk

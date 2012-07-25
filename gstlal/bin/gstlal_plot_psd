@@ -23,7 +23,9 @@ import pylab
 import numpy
 from glue.ligolw import ligolw
 from glue.ligolw import array
+from glue.ligolw import param
 array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from gstlal import reference_psd
 
