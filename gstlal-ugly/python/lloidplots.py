@@ -97,26 +97,6 @@ def plotsvd(in_filename, out_filename=None):
 	pylab.close()
 
 
-def plotpsd(in_filename, out_filename=None):
-	"""Plot power spectrum for a detector."""
-	from gstlal.gstlal_reference_psd import read_psd
-	psd = read_psd(in_filename)
-	pylab.loglog(
-		pylab.arange(len(psd.data))*psd.deltaF + psd.f0,
-		pylab.sqrt(psd.data)
-	)
-	pylab.xlim(10, 2048);
-	pylab.ylim(1e-23, 1e-18);
-	pylab.xlabel("Frequency (Hz)")
-	pylab.ylabel(r"Amplitude spectral density ($1/\sqrt{\mathrm{Hz}}$)")
-	pylab.title(r"$h(t)$ spectrum used for singular value decomposition")
-	if out_filename is None:
-		pylab.show()
-	else:
-		pylab.savefig(out_filename)
-	pylab.close()
-
-
 def plotskymap(fig, theta, phi, logp, gpstime, arrival_times=None, inj_lon_lat=None):
 	"""Draw a skymap as produced by the lal_skymap element.
 	arrival_times should be a dictionary with keys being IFO names
