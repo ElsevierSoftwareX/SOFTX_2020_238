@@ -28,13 +28,39 @@ import matplotlib.pyplot as plt
 cgitb.enable()
 form = cgi.FieldStorage()
 
-def plot(dataurl, plottype, xlabel = "", ylabel = "", title = ""):
+def D(m1, m2, fname):
+	"""
+	takes m1, m2 in solar masses, returns horizon distance in Mpc
+	from (6) of http://arxiv.org/pdf/1003.2481v3.pdf with a factor of
+	2 difference in the spectrum definition.
+	"""
+	try:
+		A = numpy.loadtxt(fname)
+	except IOError:
+		return -1
+	f = A[:,0]
+	Sn = A[:,1]
+
+	pi = numpy.pi
+	c = 3.0e8
+	Mpc = 3.08e22
+	G = 6.67e-11
+	Ms = 1.99e30
+	m1, m2 = m1*Ms, m2*Ms
+	Mc = (m1 * m2 / (m1 + m2))**0.6 * (m1 + m2)**0.4
+
+	df = f[1] - f[0]
+	klow = int(10. / df)
+	khigh = int(0.99 * A.shape[0])
+	integral = (4. * f[klow:khigh]**(-7./3.) / Sn[klow:khigh] * df).sum()
+	return 1./8. * (5. * pi / 24. / c**3)**.5 * (G*Mc)**(5./6.) * pi**(-7./6.) * integral**.5 / Mpc
+
+def plot(dataurl, plottype, xlabel = "", ylabel = "", title = "", textbox = None):
 	fig = plt.figure(figsize=(5,3.5),)
 	fig.patch.set_alpha(0.0)
 	h = fig.add_subplot(111, axisbg = 'k')
 	plt.subplots_adjust(bottom = 0.2, left = .16)
-	plt.grid(color="w")
-
+	plt.grid(color=(0.1,0.4,0.5), linewidth=2)
 	try:
 		data = numpy.loadtxt(dataurl)
 	except IOError:
@@ -65,6 +91,9 @@ def plot(dataurl, plottype, xlabel = "", ylabel = "", title = ""):
 		y[y<0] = 0.
 		h.fill_between(x, y,  alpha=0.75, linewidth=2, facecolor="w", color="w")
 
+	if textbox is not None:
+		plt.figtext(0.5, 0.2, textbox, color="w")
+
 	plt.xlabel(xlabel)
 	plt.ylabel(ylabel)
 	plt.title(title)
@@ -90,7 +119,7 @@ def livetime_plot(disconturl, livetimeurl, xlabel = "", ylabel = "", title = "")
 	discont = discontdata[1]
 	data = [dt, lt, discont]
 	explode = [0.0, 0, 0.15]
-	labels = ["Dead : %g (s)" % dt, "Live : %g (s)" % lt, "Drop : %g (s)" % discont]
+	labels = ["OFF : %g (s)" % dt, "ON : %g (s)" % lt, "MIA : %g (s)" % discont]
 
 	h.pie(data, shadow=True, explode = explode, labels = labels, autopct='%1.1f%%', colors = ('0.5', '1.0', (0.7, 0.7, 1.)))
 
@@ -159,7 +188,8 @@ print"</tr></table>"
 print "<table face='Arial'><tr>"
 for ifo in ("H1", "L1", "V1"):
 	print "<td><div id='canvas%spsd'>" % (ifo,)
-	plot(baseurl+'_%spsd.txt' % ifo, "loglog", ylabel = "Power (strain^2/Hz)", xlabel = "Frequency (Hz)", title = ifo)
+	dist = D(1.4, 1.4, baseurl+'_%spsd.txt' % ifo)
+	plot(baseurl+'_%spsd.txt' % ifo, "loglog", ylabel = "Power (strain^2/Hz)", xlabel = "Frequency (Hz)", title = ifo, textbox = "Horizon %.0f Mpc" % dist)
 	print "</div></td>"
 print"</tr></table>"
 
