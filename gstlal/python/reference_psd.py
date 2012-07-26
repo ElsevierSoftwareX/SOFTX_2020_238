@@ -46,12 +46,12 @@ import gst
 
 
 from glue.ligolw import ligolw
-from glue.ligolw import utils
 from glue.ligolw import param
-from glue.ligolw import types as ligolw_types
+from glue.ligolw import utils
 from pylal import datatypes as laltypes
 from pylal import series as lalseries
 from pylal import window
+from pylal import lalconstants
 
 
 from gstlal import pipeparts
@@ -219,6 +219,60 @@ def write_psd(filename, psddict, verbose = False, trap_signals = None):
 #
 # =============================================================================
 #
+
+
+def horizon_distance(psd, m1, m2, snr, f_min, f_max = None):
+	"""
+	Compute horizon distance.  m1 and m2 are in solar mass units.
+	f_min and f_max are in Hz.  psd is a REAL8FrequencySeries object
+	containing the strain spectral density function in the LAL
+	normalization convention.  The return value is in Mpc.
+
+	See (6) http://arxiv.org/pdf/1003.2481v3.pdf, but note the factor 2
+	difference between the PSD normalization used there, and what is
+	used here.
+
+	If f_max is not supplied, it defaults to the highest frequency
+	available in the PSD.  In both cases, f_max is supplied or a
+	default value is assumed, f_max is clipped to the ISCO frequency.
+	"""
+	#
+	# obtain PSD data, set default f_max if not supplied
+	#
+
+	Sn = psd.data
+
+	if f_max is None:
+		f_max = psd.f0 + len(Sn) + psd.deltaF
+
+	#
+	# clip to ISCO.  see (4) in http://arxiv.org/pdf/1003.2481v3.pdf
+	#
+
+	f_isco = lalconstants.LAL_C_SI**3 / (6**(3./2.) * math.pi * lalconstants.LAL_G_SI * (m1 + m2) * lalconstants.LAL_MSUN_SI)
+	f_max = min(f_max, max(f_min, f_isco))
+
+	#
+	# convert f_min and f_max to indexes, clipped to available data,
+	# and extract data vectors for integral
+	#
+
+	k_min = max(0, int(round((f_min - psd.f0) / psd.deltaF)))
+	k_max = min(len(Sn) - 1, int(round((f_max - psd.f0) / psd.deltaF)))
+
+	f = psd.f0 + numpy.arange(k_min, k_max + 1) * psd.deltaF
+	Sn = Sn[k_min : k_max + 1]
+
+	#
+	# compute and return horizon distance in megaparsecs
+	#
+
+	mu = (m1 * m2) / (m1 + m2)
+	norm = 2. * lalconstants.LAL_MRSUN_SI * math.sqrt(5. * mu / 96.) * ((m1 + m2) / math.pi**2)**(1. / 3.) / lalconstants.LAL_MTSUN_SI**(1. / 6)
+
+	integral = 4 * (f**(-7. / 3.) / Sn).sum() * psd.deltaF
+
+	return norm * math.sqrt(integral) / snr / (1e6 * lalconstants.LAL_PC_SI)
 
 
 def psd_to_fir_kernel(psd):
