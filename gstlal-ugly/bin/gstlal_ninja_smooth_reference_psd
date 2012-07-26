@@ -25,6 +25,12 @@
 # FIXME: Move some common options to a module.
 from optparse import OptionParser
 from glue import segments
+from glue.ligolw import ligolw
+from glue.ligolw import array
+from glue.ligolw import param
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import utils
 from pylal.datatypes import LIGOTimeGPS
 from gstlal.pipeutil import gst
 from gstlal import reference_psd
@@ -174,7 +180,7 @@ if missing_options:
 # =============================================================================
 #
 
-psd = reference_psd.read_psd(options.input_psd, verbose =options.verbose)[options.instrument]
+psd = reference_psd.read_psd_xmldoc(utils.load_filename(options.input_psd, verbose =options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[options.instrument]
 
 psd = smooth_psd(psd,smooth_psd = True, rescale_factor= 1)
 

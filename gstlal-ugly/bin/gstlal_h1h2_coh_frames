@@ -49,7 +49,12 @@ from gstlal import inspiral
 
 from glue import segments
 from glue.ligolw import ligolw
+from glue.ligolw import array
+from glue.ligolw import param
 from glue.ligolw import lsctables
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import process as ligolw_process
@@ -284,7 +289,7 @@ detectors["H1"] = lloidparts.DetectorData(options.frame_cache, channel_dict["H1"
 detectors["H2"] = lloidparts.DetectorData(options.frame_cache, channel_dict["H2"])
 
 if options.reference_psd is not None:
-	psd = reference_psd.read_psd(options.reference_psd, verbose = options.verbose)
+	psd = reference_psd.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
 	psd1 = psd["H1"]
 	psd2 = psd["H2"]
 if options.write_psd is not None:

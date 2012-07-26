@@ -50,8 +50,14 @@ import gst
 
 from glue import segments
 from glue import segmentsUtils
-from glue.ligolw import utils
+from glue.ligolw import ligolw
+from glue.ligolw import array
+from glue.ligolw import param
 from glue.ligolw import lsctables
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+lsctables.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
 from gstlal import svd_bank
@@ -258,7 +264,7 @@ def parse_command_line():
 options, filenames, process_params, iir_banks, detectors = parse_command_line()
 frame_segments = dict([(instrument, None) for instrument in detectors])
 if options.veto_segments_file is not None:
-	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.veto_segments_file, verbose = options.verbose), options.veto_segments_name).coalesce()
+	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.veto_segments_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler), options.veto_segments_name).coalesce()
 else:
 	veto_segments = None
 
@@ -274,7 +280,7 @@ else:
 
 
 if options.reference_psd is not None:
-	psd = reference_psd.read_psd(options.reference_psd, verbose = options.verbose)
+	psd = reference_psd.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
 else:
 	psd = dict([(instrument, None) for instrument in detectors])
 
@@ -372,7 +378,7 @@ if options.verbose:
 #
 
 
-FAR, proc_id = far.LocalRankingData.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose))
+FAR, proc_id = far.LocalRankingData.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
 
 
 #

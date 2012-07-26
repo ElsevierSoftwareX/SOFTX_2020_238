@@ -46,6 +46,13 @@ import gst
 
 from glue import segments
 from glue import segmentsUtils
+from glue.ligolw import ligolw
+from glue.ligolw import array
+from glue.ligolw import param
+from glue.ligolw import lsctables
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from glue.ligolw.utils import segments as ligolw_segments
 from pylal.datatypes import LIGOTimeGPS
@@ -187,7 +194,7 @@ options, filenames, process_params, iir_banks, detectors = parse_command_line()
 
 
 if options.frame_segments_file is not None:
-	frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, verbose = options.verbose), options.frame_segments_name).coalesce()
+	frame_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.frame_segments_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler), options.frame_segments_name).coalesce()
 else:
 	frame_segments = dict([(instrument, None) for instrument in detectors])
 
@@ -196,7 +203,7 @@ else:
 #
 
 if options.veto_segments_file is not None:
-	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.veto_segments_file, verbose = options.verbose), options.veto_segments_name).coalesce()
+	veto_segments = ligolw_segments.segmenttable_get_by_name(utils.load_filename(options.veto_segments_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler), options.veto_segments_name).coalesce()
 else:
 	veto_segments = None
 
@@ -220,7 +227,7 @@ seekevent = lloidparts.seek_event_for_gps(options.gps_start_time, options.gps_en
 
 
 if options.reference_psd is not None:
-	psd = reference_psd.read_psd(options.reference_psd, verbose = options.verbose)
+	psd = reference_psd.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
 else:
 	        psd = dict([(instrument, None) for instrument in detectors])
 
@@ -282,7 +289,7 @@ if options.verbose:
 
 
 if options.likelihood_file is not None:
-	FAR, proc_id = far.LocalRankingData.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose))
+	FAR, proc_id = far.LocalRankingData.from_xml(utils.load_filename(options.likelihood_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))
 else:
 	distribution_stats = far.DistributionsStats()
 	FAR = far.LocalRankingData(segments.segment(None, None), distribution_stats) #FIXME

@@ -3,6 +3,12 @@
 import numpy
 import sys
 import glob
+from glue.ligolw import ligolw
+from glue.ligolw import array
+from glue.ligolw import param
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+from glue.ligolw import utils
 from gstlal import reference_psd
 from optparse import OptionParser
 
@@ -15,10 +21,10 @@ options, filenames = parser.parse_args()
 
 # Identify the various files
 
-psd = reference_psd.read_psd(filenames[0], verbose =options.verbose)[options.instrument]
+psd = reference_psd.read_psd_xmldoc(utils.load_filename(filenames[0], verbose =options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[options.instrument]
 
 # FIXME assumes all psds have the same frequency vectors !!!
-psd.data = numpy.median(numpy.array([reference_psd.read_psd(f, verbose = options.verbose)[options.instrument].data for f in filenames]), axis= 0)
+psd.data = numpy.median(numpy.array([reference_psd.read_psd_xmldoc(utils.load_filename(f, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[options.instrument].data for f in filenames]), axis= 0)
 
 # Write it to disk
 reference_psd.write_psd(

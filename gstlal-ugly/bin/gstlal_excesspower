@@ -38,14 +38,19 @@ from gstlal.pipeutil import gst, mkelem
 from gstlal.pipeparts import *
 from gstlal.pipeio import parse_spectrum_message
 from gstlal.lloidparts import LLOIDHandler, DetectorData, mkLLOIDbasicsrc
-from gstlal.reference_psd import write_psd, read_psd
+from gstlal.reference_psd import write_psd, read_psd_xmldoc
 
 import gstlal.excesspower as ep
 from gstlal.excesspower import *
 from gstlal.inspiral import add_cbc_metadata
 
 from glue.ligolw import ligolw
+from glue.ligolw import array
+from glue.ligolw import param
 from glue.ligolw import lsctables
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
 
@@ -634,7 +639,7 @@ else:
 	if( cfg.has_option( "cache", "reference-psd" ) ):
 		psdfile = cfg.get( "cache", "reference-psd" )
 		try:
-			handler.psd = read_psd( psdfile )[ handler.inst ]
+			handler.psd = read_psd_xlmdoc( utils.load_filename( psdfile, contenthandler = LIGOLWContentHandler ) )[ handler.inst ]
 			print "Reference PSD for instrument %s from file %s loaded" % ( handler.inst, psdfile )
 			# Reference PSD disables caching (since we already have it
 			handler.cache_psd = False

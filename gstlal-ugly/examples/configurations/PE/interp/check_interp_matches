@@ -8,8 +8,14 @@ import matplotlib
 matplotlib.use('Agg')
 import pylab
 from scipy import interpolate
-import interp_utils	
+import interp_utils
+from glue.ligolw import ligolw
+from glue.ligolw import array
+from glue.ligolw import param
 from glue.ligolw import lsctables
+array.use_in(ligolw.LIGOLWContentHandler)
+param.use_in(ligolw.LIGOLWContentHandler)
+lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from gstlal import cbc_template_fir
 from gstlal import reference_psd
@@ -50,7 +56,7 @@ revplan = lalfft.XLALCreateReverseCOMPLEX16FFTPlan(working_length, 1)
 tseries = laltypes.COMPLEX16TimeSeries(data = numpy.zeros((working_length,), dtype = "cdouble"))
 
 #FIXME don't hardcode H1
-psd =  reference_psd.read_psd(sys.argv[3])['H1']
+psd =  reference_psd.read_psd_xmldoc(utils.load_filename(sys.argv[3], contenthandler = ligolw.LIGOLWContentHandler))['H1']
 psd = cbc_template_fir.interpolate_psd(psd, 1.0 / working_duration)
 
 
