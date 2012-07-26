@@ -134,7 +134,7 @@ head = pipeparts.mkfirbank(pipeline, head, latency = latency, fir_matrix = [fir_
 
 # put the units back to strain before writing to frames
 # Additionally, override the output channel name if provided from the command line
-tagstr = "units=strain,channel-name=%s" % options.output_channel_name
+tagstr = "units=strain,channel-name=%s,instrument=%s" % (options.output_channel_name, options.instrument)
 head = pipeparts.mktaginject(pipeline, head, tagstr)
 
 if options.injections is not None:
