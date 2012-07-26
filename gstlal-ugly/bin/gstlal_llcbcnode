@@ -25,6 +25,8 @@ import matplotlib
 matplotlib.use('Agg')
 import numpy
 import matplotlib.pyplot as plt
+from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
+from gstlal import reference_psd
 cgitb.enable()
 form = cgi.FieldStorage()
 
@@ -41,19 +43,13 @@ def D(m1, m2, fname):
 	f = A[:,0]
 	Sn = A[:,1]
 
-	pi = numpy.pi
-	c = 3.0e8
-	Mpc = 3.08e22
-	G = 6.67e-11
-	Ms = 1.99e30
-	m1, m2 = m1*Ms, m2*Ms
-	Mc = (m1 * m2 / (m1 + m2))**0.6 * (m1 + m2)**0.4
+	psd = REAL8FrequencySeries(
+		f0 = f[0],
+		deltaF = f[1] - f[0],
+		data = Sn
+	)
 
-	df = f[1] - f[0]
-	klow = int(10. / df)
-	khigh = int(0.99 * A.shape[0])
-	integral = (4. * f[klow:khigh]**(-7./3.) / Sn[klow:khigh] * df).sum()
-	return 1./8. * (5. * pi / 24. / c**3)**.5 * (G*Mc)**(5./6.) * pi**(-7./6.) * integral**.5 / Mpc
+	return reference_psd.horizon_distance(psd, m1, m2, 8., 10.)
 
 def plot(dataurl, plottype, xlabel = "", ylabel = "", title = "", textbox = None):
 	fig = plt.figure(figsize=(5,3.5),)
