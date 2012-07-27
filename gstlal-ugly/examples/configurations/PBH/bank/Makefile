@@ -136,7 +136,8 @@ sql :
 	cat drop_sim.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
 
 dag : H1-TMPLTBANK-871154847-2048.xml.gz reference_psd.xml.gz sql
-	for i in $(IFOS) do; ls *${i}_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > ${i}_split_bank.cache && gstlal_inspiral_svd_bank_pipe --instrument ${i} --reference-psd reference_psd.xml.gz --bank-cache ${i}_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name ${i}$(bank_dag_suffix); done
+	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > H1_split_bank.cache && gstlal_inspiral_svd_bank_pipe --instrument H1 --reference-psd reference_psd.xml.gz --bank-cache H1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H1_bank
+	ls *L1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > L1_split_bank.cache && gstlal_inspiral_svd_bank_pipe --instrument L1 --reference-psd reference_psd.xml.gz --bank-cache L1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name L1_bank
 	cat $(BANK_DAGS) > bank.dag
 
 plots : reference_psd.xml.gz
