@@ -117,6 +117,20 @@ for url in urls:
 			print >>sys.stderr, "Could not load ", url, " ...skipping as requested"
 			continue
 		raise
+
+	# first see if this file is an already marginalized file
+	try:
+		rank_data, process_id = far.RankingData.from_xml(in_xmldoc)
+		in_xmldoc.unlink()
+		if ranking_data is None:
+			ranking_data = rank_data
+		else:
+			ranking_data += rank_data
+		print >> sys.stderr, "Already marginalized data"
+		continue
+	except ValueError:
+		pass
+
 	likelihood_data, process_id = far.LocalRankingData.from_xml(in_xmldoc)
 	in_xmldoc.unlink()
 
