@@ -5,8 +5,8 @@ comma:= ,
 
 # controls triggers
 IFOS = H1 L1
-START = 869622409
-STOP =  869645354
+START = 871147452
+STOP =  871247452
 PSD_FILE = ../bank/reference_psd.xml.gz
 BANK_CACHE_PREFIX = ../bank/
 BANK_CACHE_SUFFIX = _bank.cache
@@ -21,19 +21,14 @@ BANK_CACHE_STRING:= $(subst $(space),$(comma),$(BANK_CACHE_STRING))
 CLUSTER_SQL = ../bank/simplify_and_cluster.sql
 INJ_CLUSTER_SQL = ../bank/inj_simplify_and_cluster.sql
 WEBDIR = /home/channa/public_html/PBH
-NUMBANKS = 2
+FRAME_CACHE = ../bank/frame.cache
+SEGMENTS = ../bank/segments.xml
 
-# Segments file names
-segments_suffix := _segmentspadded.xml
-SEGMENTS_FILES  := $(addsuffix $(segments_suffix),$(IFOS))
+NUMBANKS = 2
 
 # Vetoes file names
 vetoes_suffix := _vetoes.xml
 VETOES_FILES  := $(addsuffix $(vetoes_suffix),$(IFOS))
-
-# Frame cache file names
-frame_suffix      := _frame.cache
-FRAME_CACHE_FILES := $(addsuffix $(frame_suffix),$(IFOS))
 
 # Injections
 # The seed is the string before the suffix _injections.xml
@@ -43,12 +38,12 @@ injections:=--injections $(space)
 INJECTION_LIST := $(subst $(space), $(injections), $(INJECTIONS))
 MIN_DIST = 100
 MAX_DIST = 10000
-MIN_MASS1 = 0.2
-MAX_MASS1 = 1.8
-MIN_MASS2 = 0.2
-MAX_MASS2 = 1.0
-MIN_TOTAL_MASS = 0.4
-MAX_TOTAL_MASS = 2.0
+MIN_MASS1 = 0.25
+MAX_MASS1 = 2.0
+MIN_MASS2 = 0.25
+MAX_MASS2 = 2.0
+MIN_TOTAL_MASS = 0.5
+MAX_TOTAL_MASS = 4.0
 FLOW = 39
 TRIM = 16
 
@@ -59,36 +54,17 @@ plots :
 	mkdir $(WEBDIR)
 
 tisi.xml :
-	ligolw_tisi --instrument=H1=0:0:0 --instrument=H2=0:0:0 --instrument=L1=0:3.14159:3.14159 --instrument=V1=0:5.14159:5.14159 tisi.xml
+	ligolw_tisi --instrument=H1=0:0:0 --instrument=L1=0:3.14159:3.14159 tisi.xml
 
-dag : vetoes.xml segments.xml frame.cache tisi.xml plots $(INJECTIONS)
-	gstlal_s5_pbh_trigger_pipe --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache frame.cache --frame-segments-file segments.xml --frame-segments-name datasegments  --vetoes vetoes.xml --control-peak-time 4 --num-banks $(NUMBANKS) --fir-stride 4 --cluster-sql-file $(CLUSTER_SQL) --injection-sql-file $(INJ_CLUSTER_SQL) --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING)
+dag : vetoes.xml tisi.xml plots $(INJECTIONS)
+	gstlal_s5_pbh_trigger_pipe --gps-start-time $(START) --gps-stop-time $(STOP) --reference-psd $(PSD_FILE) --frame-cache $(FRAME_CACHE) --frame-segments-file $(SEGMENTS) --frame-segments-name datasegments  --vetoes vetoes.xml --control-peak-time 4 --num-banks $(NUMBANKS) --fir-stride 4 --cluster-sql-file $(CLUSTER_SQL) --injection-sql-file $(INJ_CLUSTER_SQL) --web-dir $(WEBDIR) --time-slide-file tisi.xml $(INJECTION_LIST) --bank-cache $(BANK_CACHE_STRING)
 
 %_vetoes.xml:
 	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$*:Injection --result-name=vetoes > $@
 	ligolw_segments_compat $@
 
-%_segmentspadded.xml:
-	ligolw_segment_query --segment-url=https://metaserver.phy.syr.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$*:Science --result-name=datasegments > $*segments.xml
-	ligolw_segments_compat $*segments.xml
-	gstlal_segments_trim $*segments.xml --trim $(TRIM) --output $@
-
 vetoes.xml: $(VETOES_FILES)
 	ligolw_add $(VETOES_FILES) > vetoes.xml
-
-%_frame.cache:
-	#FIXME horrible hack to get the observatory, not guaranteed to work
-	$(eval OBS:=$*)
-	$(eval OBS:=$(subst 1,$(empty),$(OBS)))
-	$(eval OBS:=$(subst 2,$(empty),$(OBS)))
-	ligo_data_find -o $(OBS) -t $*_RDS_C03_L2 -l  -s $(START) -e $(STOP) --url-type file > $@
-
-frame.cache: $(FRAME_CACHE_FILES)
-	cat $(FRAME_CACHE_FILES) > frame.cache
-
-segments.xml: $(SEGMENTS_FILES)
-	ligolw_add --output segments.xml $(SEGMENTS_FILES)
-	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segments.xml
 
 %_injections.xml: 
 	lalapps_inspinj \
@@ -112,7 +88,7 @@ segments.xml: $(SEGMENTS_FILES)
 		--max-mass2 $(MAX_MASS2) \
 		--min-mtotal $(MIN_TOTAL_MASS) \
 		--max-mtotal $(MAX_TOTAL_MASS) \
-		--waveform  GeneratePPNthreePointFivePN \
+		--waveform  TaylorT4threePointFivePN \
 		--taper-injection start \
 		--disable-spin
 
