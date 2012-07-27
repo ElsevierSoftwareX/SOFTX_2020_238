@@ -33,6 +33,7 @@ import scipy.fftpack
 from scipy import interpolate
 import sys
 import signal
+import warnings
 
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -228,37 +229,43 @@ def horizon_distance(psd, m1, m2, snr, f_min, f_max = None):
 	containing the strain spectral density function in the LAL
 	normalization convention.  The return value is in Mpc.
 
-	See (6) http://arxiv.org/pdf/1003.2481v3.pdf, but note the factor 2
-	difference between the PSD normalization used there, and what is
-	used here.
+	See (6) in arXiv:1003.2481, but note the factor 2 difference
+	between the PSD normalization used there, and what is used here.
 
 	If f_max is not supplied, it defaults to the highest frequency
-	available in the PSD.  In both cases, f_max is supplied or a
-	default value is assumed, f_max is clipped to the ISCO frequency.
+	available in the PSD.  In both cases, whether f_max is supplied or
+	a default value is assumed, f_max is clipped to the ISCO frequency.
 	"""
 	#
 	# obtain PSD data, set default f_max if not supplied
 	#
 
 	Sn = psd.data
+	assert len(Sn) > 0
 
 	if f_max is None:
-		f_max = psd.f0 + len(Sn) + psd.deltaF
+		f_max = psd.f0 + (len(Sn) - 1) + psd.deltaF
+	elif f_max > psd.f0 + (len(Sn) - 1) + psd.deltaF:
+		warnings.warn("f_max clipped to Nyquist frequency", UserWarning)
+		f_max = psd.f0 + (len(Sn) - 1) + psd.deltaF
 
 	#
-	# clip to ISCO.  see (4) in http://arxiv.org/pdf/1003.2481v3.pdf
+	# clip to ISCO.  see (4) in arXiv:1003.2481
 	#
 
 	f_isco = lalconstants.LAL_C_SI**3 / (6**(3./2.) * math.pi * lalconstants.LAL_G_SI * (m1 + m2) * lalconstants.LAL_MSUN_SI)
-	f_max = min(f_max, max(f_min, f_isco))
+	f_max = min(f_max, f_isco)
+	assert psd.f0 <= f_isco
+	assert psd.f0 <= f_min <= f_isco
+	assert f_min <= f_max
 
 	#
-	# convert f_min and f_max to indexes, clipped to available data,
-	# and extract data vectors for integral
+	# convert f_min and f_max to indexes and extract data vectors for
+	# integral
 	#
 
-	k_min = max(0, int(round((f_min - psd.f0) / psd.deltaF)))
-	k_max = min(len(Sn) - 1, int(round((f_max - psd.f0) / psd.deltaF)))
+	k_min = int(round((f_min - psd.f0) / psd.deltaF))
+	k_max = int(round((f_max - psd.f0) / psd.deltaF))
 
 	f = psd.f0 + numpy.arange(k_min, k_max + 1) * psd.deltaF
 	Sn = Sn[k_min : k_max + 1]
