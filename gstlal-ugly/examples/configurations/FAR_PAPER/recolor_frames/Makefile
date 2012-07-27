@@ -9,7 +9,7 @@ BNS_LOCAL_RATE = 12 # mergers per Mpc^3 per Myr, corresponds to "optimistic rate
 NSBH_LOCAL_RATE = 0.005 # mergers per Mpc^3 per Myr, corresponds to "realistic rate"
 BNS_MAX_DIST = 200 # Mpc
 NSBH_MAX_DIST = 5000 # Mpc
-NS_MIN_MASS = 1.0
+NS_MIN_MASS = 1.2
 NS_MAX_MASS = 2.0
 BH_MIN_MASS = 5.0
 BH_MAX_MASS = 20.0
@@ -94,11 +94,11 @@ recolor_psd.xml.gz: H1recolorpsd.xml.gz L1recolorpsd.xml.gz
 	ligolw_add H1recolorpsd.xml.gz L1recolorpsd.xml.gz | gzip > recolor_psd.xml.gz
 
 dag : vetoes.xml segments.xml frame.cache injections.xml recolor_psd.xml.gz
-	./recolor_pipe --recolor-psd recolor_psd.xml.gz --segment-file segments.xml --min-segment-length $(MIN_SEG_LENGTH) --frame-cache H1=frame.H1.cache,L1=frame.L1.cache
+	./recolor_pipe --recolor-psd recolor_psd.xml.gz --segment-file segments.xml --min-segment-length $(MIN_SEG_LENGTH) --frame-cache H1=frame.H1.cache,L1=frame.L1.cache --injections injections.xml
 	
 finish : psd.xml.gz
 	ls H1-LSC-STRAIN/*.gwf | lalapps_path2cache > recolor_frame.cache
 	ls L1-LSC-STRAIN/*.gwf | lalapps_path2cache >> recolor_frame.cache
 	./cache_to_segments recolor_frame.cache recolor_segments.xml.gz
 realclean :
-	rm -rf *.sub *.dag* *.cache *.sh *reference_psd.xml.gz *segments.xml.gz logs *.xml *.xml.gz  H1-LSC-STRAIN L1-LSC-STRAIN
+	rm -rf *.sub *.dag* *.cache *.sh *reference_psd.xml.gz *segments.xml.gz logs *.xml *.xml.gz  H1-LSC-STRAIN L1-LSC-STRAIN recolor_frame.cache recolor_frame.cache recolor_segments.xml.gz
