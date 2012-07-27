@@ -594,7 +594,15 @@ for injections in options.injections:
 
 
 # compute FAPs and FARs
-margnode = gstlal_inspiral_marginalize_likelihood_node(marginalizeJob, dag, "marginalized_likelihood.xml.gz", [node.background_name for node in likelihood_nodes.values()], p_node = p_nodes)
+# split up the marginilization into groups of 10
+margin = [node.background_name for node in likelihood_nodes.values()]
+margout = []
+margnodes = []
+margnum = 16
+for i,n in enumerate(range(0, len(margin), margnum)):
+	margout.append("%d_marginalized_likelihood.xml.gz" % (i,))
+	margnodes.append(gstlal_inspiral_marginalize_likelihood_node(marginalizeJob, dag, margout[-1], margin[n:n+margnum], p_node = p_nodes))
+margnode = gstlal_inspiral_marginalize_likelihood_node(marginalizeJob, dag, "marginalized_likelihood.xml.gz", margout, p_node = margnodes)
 farnode = gstlal_compute_far_from_snr_chisq_histograms_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, background_bins_files = ["marginalized_likelihood.xml.gz"], noninj_input = [noninjdb], inj_input = injdbs, p_node = [margnode])
 
 # make plots
