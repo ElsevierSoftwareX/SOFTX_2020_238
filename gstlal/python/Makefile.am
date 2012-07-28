@@ -22,7 +22,8 @@ pkgpython_PYTHON = \
 	pipeparts.py \
 	pipeutil.py \
 	reference_psd.py \
-	simulation.py
+	simulation.py \
+	multiratefirparts.py
 
 pkgpyexec_LTLIBRARIES = fftw.la _misc.la
 
