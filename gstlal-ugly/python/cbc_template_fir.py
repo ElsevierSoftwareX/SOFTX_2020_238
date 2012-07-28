@@ -223,7 +223,7 @@ def decompose_templates(template_bank, tolerance, identity = False):
 	#
 
 	if identity:
-		return template_bank, numpy.ones(template_bank.shape[0], dtype = "double"), numpy.identity(template_bank.shape[0], dtype = "double"), chifacs
+		return template_bank, numpy.ones(template_bank.shape[0], dtype = "double"), numpy.identity(1, dtype = "double"), chifacs
 
 	#
 	# adjust tolerance according to local norm
