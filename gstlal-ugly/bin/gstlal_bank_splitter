@@ -38,9 +38,11 @@ def group_templates(templates, n, overlap = 0):
 	overlap.  n must be less than the number of templates and overlap must be less
 	than n
 	"""
+	if n >= len(templates):
+		yield templates
+
 	end = 0
 	start = 0
-	assert n < len(templates)
 	assert overlap < n
 	while end < len(templates) + overlap:
 		end = start + n + overlap
