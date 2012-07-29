@@ -1,92 +1,96 @@
-START = 871147552
-STOP = 871752352 
-#STOP = 876357464 
+# Misc useful definitions
+empty:=
+space:= $(empty) $(empty)
+comma:= ,
 
-# File locations
-PSD_FILE = /home/mafrei/runDirectory/IMRSA/NINJA2/TwoMonthCan/PBH_format//psd/reference_psd.xml.gz
-PSD_FILE_H1 = ../psd/H1_reference_psd.xml.gz
-PSD_FILE_L1 = ../psd/L1_reference_psd.xml.gz
-PSD_FILE_V1 = ../psd/V1_reference_psd.xml.gz
-DELETE_SQL_FILE = /home/mafrei/runDirectory/IMRSA/NINJA2/TwoMonthCan/PBH_format//banks_smaller/simplify_and_delete_by_far.sql
-CLUSTER_SQL_FILE = /home/mafrei/runDirectory/IMRSA/NINJA2/TwoMonthCan/PBH_format//banks_smaller/simplify_and_cluster.sql
-INJ_SQL_FILE = /home/mafrei/runDirectory/IMRSA/NINJA2/TwoMonthCan/PBH_format//banks_smaller/inj_simplify_and_cluster.sql
-H1_BANK_CACHE = ../H1_svd_bank.cache
-L1_BANK_CACHE = ../L1_svd_bank.cache
-V1_BANK_CACHE = ../V1_svd_bank.cache
-FRAMES = /home/mafrei/runDirectory/IMRSA/NINJA2/TwoMonthCan/PBH_format//frames/frames.cache
-WEBDIR = /home/mafrei/public_html/NINJA2/TwoMonthSet/sbank
-SEGMENTS_FILE = /home/mafrei/runDirectory/IMRSA/NINJA2/TwoMonthCan/PBH_format/psd/segments.xml.gz
+# controls psd segments, should set it to the analysis time intended
+IFOS = H1 L1 V1
+PSDSTART = 968540000
+PSDSTOP =  968640000
 
-# Adjusting these will change the number of injections OR change the time-step value smaller makes more injections (currently overlap.py will assume these gps times)
-# START = 871147452
-# STOP = 875753660
-DUR=$(shell echo $(STOP) - $(START) | bc -l)
+# bank "files"
+bank_suffix = _bank
+BANK_FILES := $(addsuffix $(bank_suffix),$(IFOS))
+
+# Segments file names
+segments_suffix := _segmentspadded.xml
+SEGMENTS_FILES  := $(addsuffix $(segments_suffix),$(IFOS))
+
+# reference psd file names
+psd_suffix := _psd.xml.gz
+PSD_FILES  := $(addsuffix $(psd_suffix),$(IFOS))
+
+TRIM = 16
+
+# Frame cache file names
+frame_suffix      := _frame.cache
+FRAME_CACHE_FILES := $(addsuffix $(frame_suffix),$(IFOS))
 
 # Template bank parameters
-TMPLT_APPROX = IMRPhenomB
-TMPLT_NOISE_MODEL = iLIGOSRD
-MIN_MASS_TMP = 1.0
-MAX_MASS_TMP = 349.0
-MIN_TOTAL_MASS_TMP = 20.0
-MAX_TOTAL_MASS_TMP = 350.0
-LOW_FREQUENCY_CUTOFF_TMP = 40.0
-HIGH_PASS_FREQ_TMP = 30.0
-HIGH_FREQUENCY_CUTOFF_TMP = 1023.0
-SAMPLE_RATE_TMP = 2048
-MM_TMP = 0.97
-MAX_MRATIO_TMP = 8.0
+TEMPLATE_BANK_FILE = H1-SBANK-871154847-2048.xml.gz
+OVERLAP = 2
+NUM_SPLIT_TEMPLATES = 17
+LOW_FREQUENCY_CUTOFF = 40
+HIGH_FREQUENCY_CUTOFF = 2048
 
-#Banksim Injection parameters
-INJ_APPROX = IMRPhenomB
-INJ_PSD = LIGOIPsd
-MIN_MASS_1 = 1.0
-MAX_MASS_1 = 349.0
-MIN_MASS_2 = 1.0
-MAX_MASS_2 = 349.0
-MIN_TOTAL_MASS = 20.0
-MAX_TOTAL_MASS = 350.0
-LOW_FREQUENCY_CUTOFF = 40.0
-MIN_SPIN = 0.0
-MAX_SPIN = 0.5
-MIN_MRATIO = 1.0
-MAX_MRATIO = 10.0
-TIME_STEP = 40
+all : dag plots
 
-#Other Parameters
-CLIPPING = 0
-NUM_SPLIT_TEMPLATES = 250
+%_bank: $(TEMPLATE_BANK_FILE)
+	gstlal_bank_splitter --overlap $(OVERLAP) --instrument $* --n $(NUM_SPLIT_TEMPLATES) --sort-by mchirp --add-f-final --max-f-final $(HIGH_FREQUENCY_CUTOFF) $^ --bank-program ligolw_cbc_sbank
 
-sbank: ninja
+V1_frame.cache:
+	ligo_data_find -o V -t HrecV2 -l  -s $(PSDSTART) -e $(PSDSTOP) --url-type file > V1_frame.cache
 
-bankSim : match_hist
+%_frame.cache:
+	#FIXME horrible hack to get the observatory, not guaranteed to work
+	$(eval OBS:=$*)
+	$(eval OBS:=$(subst 1,$(empty),$(OBS)))
+	$(eval OBS:=$(subst 2,$(empty),$(OBS)))
+	ligo_data_find -o $(OBS) -t $*_LDAS_C02_L2 -l  -s $(PSDSTART) -e $(PSDSTOP) --url-type file > $@
 
-#BankSim Injection file creation
-HL-INJECTIONS_2345_BANKSIM-$(START)-$(DUR).xml:
-	lalapps_inspinj --i-distr uniform --m-distr componentMass --enable-spin   --gps-start-time $(START) --user-tag BANKSIM --f-lower $(LOW_FREQUENCY_CUTOFF) --seed 2345 --l-distr random --d-distr log10 --min-distance 1000 --waveform IMRPhenomBpseudoFourPN --gps-end-time $(STOP) --max-distance 1000000 --time-step $(TIME_STEP) --max-mtotal $(MAX_TOTAL_MASS) --min-mtotal $(MIN_TOTAL_MASS) --min-mass1 $(MIN_MASS_1) --min-mass2 $(MIN_MASS_2) --max-mass1 $(MAX_MASS_1) --max-mass2 $(MAX_MASS_2) --aligned --min-spin1 $(MIN_SPIN) --min-spin2 $(MIN_SPIN) --max-spin1 $(MAX_SPIN) --max-spin2 $(MAX_SPIN) --min-mratio $(MIN_MRATIO) --max-mratio $(MAX_MRATIO) --verbose
+frame.cache: $(FRAME_CACHE_FILES)
+	cat $(FRAME_CACHE_FILES) > frame.cache
 
-Culled_2_HL-INJECTIONS_2345_BANKSIM-$(START)-$(DUR).xml: HL-INJECTIONS_2345_BANKSIM-$(START)-$(DUR).xml
-	python cullInjections HL-INJECTIONS_2345_BANKSIM-$(START)-$(DUR).xml
+V1_psd.xml.gz : frame.cache segments.xml
+	gstlal_reference_psd --channel h_16384Hz --frame-cache frame.cache --frame-segments-file segments.xml --gps-start-time $(PSDSTART) --gps-end-time $(PSDSTOP) --instrument V1 --write-psd $@ --verbose
 
-# Do bankSim
-IMRPBvIMRPB.npz: Culled_2_HL-INJECTIONS_2345_BANKSIM-$(START)-$(DUR).xml V1-SBANK-871154847-2048.xml
-	bankSim $(basename $@) $^ $(INJ_APPROX) $(TMPLT_APPROX) $(INJ_PSD) $(LOW_FREQUENCY_CUTOFF) --verbose
+%_psd.xml.gz : frame.cache segments.xml
+	gstlal_reference_psd --channel LDAS-STRAIN --frame-cache frame.cache --frame-segments-file segments.xml --gps-start-time $(PSDSTART) --gps-end-time $(PSDSTOP) --instrument $* --write-psd $@ --verbose
 
-match_hist: IMRPBvIMRPB.npz
-	plot_bankSim $<
+reference_psd.xml.gz : $(PSD_FILES)
+	ligolw_add $(PSD_FILES) --output reference_psd.xml.gz
 
-# Make template bank
-V1-SBANK-871154847-2048.xml:
-	makeBank --mass1-min $(MIN_MASS_TMP) --mass1-max $(MAX_MASS_TMP) --mtotal-min $(MIN_TOTAL_MASS_TMP) --mtotal-max $(MAX_TOTAL_MASS_TMP) --max-mass-ratio $(MAX_MRATIO_TMP) --match-min $(MM_TMP) --flow $(LOW_FREQUENCY_CUTOFF_TMP) --approximant $(TMPLT_APPROX) --noise-model $(TMPLT_NOISE_MODEL)  --user-tag $(basename $@) --aligned-spin --instrument V1 --verbose
+V1_segmentspadded.xml:
+	ligolw_segment_query --segment-url=https://segdb.ligo.caltech.edu -q --gps-start-time ${PSDSTART} --gps-end-time ${PSDSTOP} --include-segments=V1:ITF_SCIENCEMODE --result-name=datasegments > V1segments.xml
+	ligolw_segments_compat V1segments.xml
+	gstlal_segments_trim V1segments.xml --trim $(TRIM) --output $@
 
-split_banks: V1-SBANK-871154847-2048.xml
-	./gstlal_bank_splitter -i H1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -M $(HIGH_FREQUENCY_CUTOFF_TMP) -O 0  $^ 
-	./gstlal_bank_splitter -i V1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -M $(HIGH_FREQUENCY_CUTOFF_TMP) -O 0  $^
-	./gstlal_bank_splitter -i L1 -n $(NUM_SPLIT_TEMPLATES) -s mchirp -M $(HIGH_FREQUENCY_CUTOFF_TMP) -O 0  $^
+%_segmentspadded.xml:
+	ligolw_segment_query --segment-url=https://segdb.ligo.caltech.edu -q --gps-start-time ${PSDSTART} --gps-end-time ${PSDSTOP} --include-segments=$*:DMT-SCIENCE:4 --result-name=datasegments > $*segments.xml
+	ligolw_segments_compat $*segments.xml
+	gstlal_segments_trim $*segments.xml --trim $(TRIM) --output $@
 
-ninja : split_banks
-	ls *H1_split_bank-*V1-SBANK-871154847-2048.xml | lalapps_path2cache > H1_split_bank.cache
-	ls *L1_split_bank-*V1-SBANK-871154847-2048.xml | lalapps_path2cache > L1_split_bank.cache
-	ls *V1_split_bank-*V1-SBANK-871154847-2048.xml | lalapps_path2cache > V1_split_bank.cache
-	gstlal_inspiral_svd_bank_pipe --instrument H1 --reference-psd $(PSD_FILE_H1) --output-name H1_svd_bank --bank-cache H1_split_bank.cache --stagger
-	gstlal_inspiral_svd_bank_pipe --instrument L1 --reference-psd $(PSD_FILE_L1) --output-name L1_svd_bank --bank-cache L1_split_bank.cache --stagger
-	gstlal_inspiral_svd_bank_pipe --instrument V1 --reference-psd $(PSD_FILE_V1) --output-name V1_svd_bank --bank-cache V1_split_bank.cache --stagger
+segments.xml: $(SEGMENTS_FILES)
+	ligolw_add --output segments.xml $(SEGMENTS_FILES)
+	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time segments.xml
+
+sql :
+	cat uniqueify_coinc_definer.sql uniqueify_time_slide.sql > simplify.sql
+	cat simplify.sql cluster.sql > simplify_and_cluster.sql
+	cat simplify.sql delete_by_far.sql > simplify_and_delete_by_far.sql
+	cat drop_sim.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
+
+dag : $(BANK_FILES) reference_psd.xml.gz sql
+	ls *H1_split_bank-H1-SBANK-871154847-2048.xml.gz | lalapps_path2cache > H1_split_bank.cache
+	ls *V1_split_bank-H1-SBANK-871154847-2048.xml.gz | lalapps_path2cache > V1_split_bank.cache
+	ls *L1_split_bank-H1-SBANK-871154847-2048.xml.gz | lalapps_path2cache > L1_split_bank.cache
+	gstlal_inspiral_svd_bank_pipe --instrument H1 --reference-psd reference_psd.xml.gz --bank-cache H1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H1_bank
+	gstlal_inspiral_svd_bank_pipe --instrument V1 --reference-psd reference_psd.xml.gz --bank-cache V1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name V1_bank
+	gstlal_inspiral_svd_bank_pipe --instrument L1 --reference-psd reference_psd.xml.gz --bank-cache L1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name L1_bank
+	cat V1_bank.dag H1_bank.dag L1_bank.dag > bank.dag
+
+plots : reference_psd.xml.gz
+	gstlal_plot_psd reference_psd.xml.gz psd_plot
+
+realclean :
+	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml.gz *split_bank-H1-TMPLTBANK-871154847-2048.xml.gz mode_*.xml.gz logs *.png reference_psd.xml.gz simplify.sql  simplify_and_cluster.sql simplify_and_delete_by_far.sql inj_simplify_and_cluster.sql lalapps_path2cache *_psd.xml.gz *segments.xml *_segmentspadded.xml
