@@ -66,7 +66,7 @@ def read_approximant(xmldoc):
 	except:
 		pass
 	try:
-		approximant.add(ligolw_process.get_process_params(xmldoc, "makeBank", "--approximant")[0])
+		approximant.add(ligolw_process.get_process_params(xmldoc, "ligolw_cbc_sbank", "--approximant")[0])
 	except:
 		pass
 
