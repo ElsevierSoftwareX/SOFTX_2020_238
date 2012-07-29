@@ -225,9 +225,9 @@ def mkfakesrcseeked(pipeline, instrument, channel_name, seekevent, blocksize = 1
 	src = mkaudiotestsrc(pipeline, samplesperbuffer = blocksize / 8, wave = wave, volume = volume, is_live = is_live)
 	# attempt to seek the element
 	if src.set_state(gst.STATE_READY) != gst.STATE_CHANGE_SUCCESS:
-		raise RuntimeError, "Element %s did not want to enter ready state" % src.get_name()
+		raise RuntimeError("Element %s did not want to enter ready state" % src.get_name())
 	if not src.send_event(seekevent):
-		raise RuntimeError, "Element %s did not handle seek event" % src.get_name()
+		raise RuntimeError("Element %s did not handle seek event" % src.get_name())
 	return mktaginject(pipeline, mkcapsfilter(pipeline, src, "audio/x-raw-float, width=64, rate=%d" % (rate,)), "instrument=%s,channel-name=%s,units=strain" % (instrument, channel_name))
 
 
@@ -554,7 +554,7 @@ class AppSync(object):
 		self.at_eos = set()
 		for elem in appsinks:
 			if elem in self.appsinks:
-				raise ValueError, "duplicate appsinks"
+				raise ValueError("duplicate appsinks")
 			elem.connect("new-buffer", self.appsink_handler, False)
 			elem.connect("eos", self.appsink_handler, True)
 			self.appsinks[elem] = None
@@ -812,7 +812,7 @@ def write_dump_dot(pipeline, filestem, verbose = False):
 	If verbose is True, a message will be written to stderr.
 	"""
 	if "GST_DEBUG_DUMP_DOT_DIR" not in os.environ:
-		raise ValueError, "cannot write pipeline, environment variable GST_DEBUG_DUMP_DOT_DIR is not set"
+		raise ValueError("cannot write pipeline, environment variable GST_DEBUG_DUMP_DOT_DIR is not set")
 	gst.DEBUG_BIN_TO_DOT_FILE(pipeline, gst.DEBUG_GRAPH_SHOW_ALL, filestem)
 	if verbose:
 		print >>sys.stderr, "Wrote pipeline to %s" % os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], "%s.dot" % filestem)

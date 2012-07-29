@@ -55,7 +55,7 @@ def repack_complex_array_to_real(input):
 	# FIXME:  this function shouldn't exist, we should add complex
 	# types to gobject
 	if input.dtype.kind != "c":
-		raise TypeError, input
+		raise TypeError(input)
 	return input.view(dtype = numpy.dtype("f%d" % (input.dtype.itemsize / 2)))
 
 
@@ -70,7 +70,7 @@ def repack_real_array_to_complex(input):
 	# FIXME:  this function shouldn't exist, we should add complex
 	# types to gobject
 	if input.dtype.kind != "f":
-		raise TypeError, input
+		raise TypeError(input)
 	return input.view(dtype = numpy.dtype("c%d" % (input.dtype.itemsize * 2)))
 
 
@@ -90,7 +90,7 @@ def get_unit_size(caps):
 		return struct["channels"] * struct["width"] / 8
 	elif name == "video/x-raw-rgb":
 		return struct["width"] * struct["height"] * struct["bpp"] / 8
-	raise ValueError, caps
+	raise ValueError(caps)
 
 
 def numpy_dtype_from_caps(caps):
@@ -105,7 +105,7 @@ def numpy_dtype_from_caps(caps):
 			return "s%d" % (struct["width"] / 8)
 	elif name == "audio/x-raw-complex":
 		return "c%d" % (struct["width"] / 8)
-	raise ValueError, name
+	raise ValueError(name)
 
 
 def array_from_audio_buffer(buf):

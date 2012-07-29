@@ -115,13 +115,12 @@ class BaseMatplotlibTransform(gst.BaseTransform):
 			return self.get_pad("sink").get_fixed_caps_func()
 		elif direction == gst.PAD_SINK:
 			return self.get_pad("src").get_fixed_caps_func()
-		raise ValueError
+		raise ValueError(direction)
 
 	def do_transform_size(self, direction, caps, size, othercaps):
 		"""GstBaseTransform->transform_size virtual method."""
 		if direction == gst.PAD_SINK:
 			return pipeio.get_unit_size(self.get_pad("src").get_caps())
-		else:
-			raise ValueError, direction
+		raise ValueError(direction)
 
 gobject.type_register(BaseMatplotlibTransform)

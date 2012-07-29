@@ -92,7 +92,7 @@ def measure_psd(instrument, seekevent, detector, seg, rate, data_source = "frame
 	#
 
 	if float(abs(seg)) < 8 * psd_fft_length:
-		raise ValueError, "segment %s too short" % str(seg)
+		raise ValueError("segment %s too short" % str(seg))
 
 	#
 	# build pipeline

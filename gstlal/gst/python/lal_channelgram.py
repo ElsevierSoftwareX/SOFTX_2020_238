@@ -400,7 +400,7 @@ class lal_channelgram(gst.BaseTransform):
 
 			return self.get_pad("src").get_fixed_caps_func()
 
-		raise ValueError
+		raise ValueError(direction)
 
 
 	def do_transform_size(self, direction, caps, size, othercaps):
@@ -443,7 +443,7 @@ class lal_channelgram(gst.BaseTransform):
 			return self.out_width * self.out_height * 4
 			return othercaps[0]["width"] * othercaps[0]["height"] * othercaps[0]["bpp"] / 8
 
-		raise ValueError, direction
+		raise ValueError(direction)
 
 
 #

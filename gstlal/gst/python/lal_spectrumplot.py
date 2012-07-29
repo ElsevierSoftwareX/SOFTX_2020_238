@@ -141,7 +141,7 @@ class lal_spectrumplot(gst.BaseTransform):
 		elif prop.name == "f-max":
 			self.f_max = val
 		else:
-			raise AssertError
+			raise AssertError("no property %s" % prop.name)
 
 
 	def do_get_property(self, prop):
@@ -150,7 +150,7 @@ class lal_spectrumplot(gst.BaseTransform):
 		elif prop.name == "f-max":
 			return self.f_max
 		else:
-			raise AssertError
+			raise AssertError("no property %s" % prop.name)
 
 
 	def do_set_caps(self, incaps, outcaps):
@@ -256,7 +256,7 @@ class lal_spectrumplot(gst.BaseTransform):
 				result.append_structure(struct)
 			return result
 
-		raise ValueError, direction
+		raise ValueError(direction)
 
 
 	def do_transform_size(self, direction, caps, size, othercaps):
@@ -289,7 +289,7 @@ class lal_spectrumplot(gst.BaseTransform):
 			othercaps = self.get_pad("src").get_allowed_caps()
 			return othercaps[0]["width"] * othercaps[0]["height"] * othercaps[0]["bpp"] // 8
 
-		raise ValueError, direction
+		raise ValueError(direction)
 
 
 #
