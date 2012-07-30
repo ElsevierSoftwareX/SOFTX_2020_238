@@ -432,26 +432,23 @@ def stream_tfmap_video( pipeline, head, handler, filename=None, split_on=None, s
 
 	return chtee
 
-def upload_to_glitchdb( sb_event_table, search = "EP", type = "GlitchTrigger" ):
+def upload_to_db( sb_event_table, search = "EP", type = "GlitchTrigger", db = "glitchdb" ):
 	"""
 	Upload a sngl_burst event to glitchdb. The 'search' and 'type' variables will be supplied to glitchdb for its search and type respectively. If no type is specified, the function will attempt to determine it from the channel. If it can't, it will default to GlitchTirgger.
 	"""
-	# FIXME: Expand when glitchdb is ready
-	search = "CBC"
-
 	try: 
 		type = sb_event_table[0].channel.split("-")[0]
 	# FIXME: Default to glitchtrigger if the subsystem isn't in the channel name
 	except AttributeError:
 		pass
 
-	cmd = "glitchdb %s %s -" % (search, type)
+	cmd = "%s %s %s -" % (db, search, type)
 
 	xmldoc = ligolw.Document()
 	xmldoc.appendChild( ligolw.LIGO_LW() )
 	xmldoc.childNodes[0].appendChild( sb_event_table  )
 	strbuf = StringIO.StringIO()
-	table_str = utils.write_fileobj( xmldoc, strbuf )
+	table_str = utils.write_fileobj( xmldoc, strbuf, trap_signals=None )
 
 	# Open a pipe to the process and pipe in the XML as stdin
 	proc = subprocess.Popen( shlex.split(cmd), stdin=subprocess.PIPE )
