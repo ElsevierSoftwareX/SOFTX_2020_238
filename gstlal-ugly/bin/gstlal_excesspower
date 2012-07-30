@@ -37,7 +37,7 @@ from ConfigParser import SafeConfigParser
 from gstlal.pipeutil import gst, mkelem
 from gstlal.pipeparts import *
 from gstlal.pipeio import parse_spectrum_message
-from gstlal.lloidparts import LLOIDHandler, DetectorData, mkLLOIDbasicsrc
+from gstlal.lloidparts import LLOIDHandler, DetectorData, mkLLOIDbasicsrc, get_gate_state
 from gstlal.reference_psd import write_psd, read_psd_xmldoc
 
 import gstlal.excesspower as ep
@@ -53,8 +53,10 @@ param.use_in(ligolw.LIGOLWContentHandler)
 lsctables.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
 from glue.ligolw.utils import process as ligolw_process
+from glue.ligolw.utils import segments as ligolw_segments
 
-from glue.segments import segment
+from glue.segments import segment, segmentlist, PosInfinity
+from glue import segmentsUtils
 from glue import gpstime
 from glue.lal import LIGOTimeGPS
 
@@ -100,6 +102,9 @@ class EPHandler( LLOIDHandler ):
 		# Book keeping
 		self.start = 0
 		self.stop = -1
+		self.seglist = segments.segmentlistdict()
+		self.seglist["state"] = segments.segmentlist([])
+		self.current_segment = None
 		# How long of a time to ignore output from the whitener stabilizing
 		# FIXME: This should be ~number of PSDs stored in history * fft_length
 		# Right now that's probably something like 80 s.
@@ -177,6 +182,27 @@ class EPHandler( LLOIDHandler ):
 		self.trigger_segment = trig_seg
 
 		# TODO: Handle only specific action requests
+
+	def handle_segment( self, elem, timestamp, segment_type ):
+		"""
+		Process state changes from the state vector mechanism.
+		"""
+		if( segment_type == "on" ):
+			self.current_segment = segment( LIGOTimeGPS(timestamp) / 1e9, PosInfinity )
+			#segmentsUtils.tosegwizard( sys.stdout, self.seglist["state"] )
+			if( options.verbose ):
+				print >>sys.stderr, "Starting segment #%d: %.9f" % (len(self.seglist["state"]), self.current_segment[0])
+		elif( segment_type == "off" ):
+			if( self.current_segment is None ): 
+				print >>sys.stderr, "Got a message to end a segment, but no current segment exists. Ignoring."
+				return
+			self.seglist["state"].append(
+				segment( self.current_segment[0], LIGOTimeGPS(timestamp / 1e9) )
+			)
+			if( options.verbose ):
+				print >>sys.stderr, "Ending segment #%d: %s" % (len(self.seglist["state"]), str(self.seglist["state"][-1]))
+		else:
+			print >>sys.stderr, "Unrecognized state change, ignoring."
 
 	def process_message( self, bus, message ):
 		"""
@@ -309,10 +335,12 @@ class EPHandler( LLOIDHandler ):
 		Top-level function to handle the asynchronous updating of FIR banks and matrix mixer elements.
 		"""
 		# Rebuild filter bank and hand it off to the FIR element
-		#print >> sys.stderr, "Rebuilding FIR bank"
+		if( options.verbose ):
+			print >>sys.stderr, "Rebuilding FIR bank"
 		self.firbank.set_property( "fir_matrix", self.rebuild_filter() )
 
-		#print >> sys.stderr, "Rebuilding matrix mixer"
+		if( options.verbose ):
+			print >>sys.stderr, "Rebuilding matrix mixer"
 		self.rebuild_chan_mix_matrix()
 		# Rebuild the matrix mixer with new normalization coefficients
 		self.rebuild_matrix_mixers()
@@ -346,19 +374,19 @@ class EPHandler( LLOIDHandler ):
 
 		analysis_segment = requested_segment
 		# If we include start up time, indicate it in the search summary
-		whiten_seg = segment( 
+		self.whiten_seg = segment( 
 			LIGOTimeGPS(self.start), 
 			LIGOTimeGPS(self.start + self.whitener_offset)
 		)
-		if( whiten_seg.intersects( analysis_segment) ):
-			if( analysis_segment in whiten_seg ):
+		if( self.whiten_seg.intersects( analysis_segment ) ):
+			if( analysis_segment in self.whiten_seg ):
 				# All the analyzed time is within the settling time
 				# We make this explicit because the segment constructor will just reverse the arguments if arg2 < arg1 and create an incorrect segment
 				analysis_segment = segment( 
 					analysis_segment[1], analysis_segment[1]
 				)
 			else:
-				analysis_segment -= whiten_seg
+				analysis_segment -= self.whiten_seg
 
 		process_params = vars( options )
 		process = ligolw_process.register_to_xmldoc( output, "gstlal_excesspower", vars(options) )
@@ -374,15 +402,37 @@ class EPHandler( LLOIDHandler ):
 			trig.start_time -= handler.start
 			trig.start_time /= handler.units
 			trig.start_time += handler.start
-			trig.central_freq /= handler.units
 
 		output.childNodes[0].appendChild( self.triggers )
 
 		add_cbc_metadata( output, process, requested_segment )
 		search_sum = lsctables.table.get_table( output, lsctables.SearchSummaryTable.tableName )
+		# TODO: This shouldn't set every one of them in case we reuse XML documents later
 		for row in search_sum:
-			# TODO: This shouldn't set every one of them in case we reuse XML documents later
 			row.set_out( analysis_segment )
+
+		if( self.current_segment is not None ):
+			# add the current segment
+			cur_seg = segment( self.current_segment[0], LIGOTimeGPS(analysis_segment[1]) )
+			self.seglist["state"].append( cur_seg )
+
+		# Write segments
+		llwseg = ligolw_segments.LigolwSegments( output )
+		# FIXME: Better names and comments?
+		llwseg.insert_from_segmentlistdict( self.seglist, "gstlal_excesspower segments", "gstlal_excesspower segments" )
+
+		llwseg.finalize(process)
+
+		# FIXME: We should be careful to not fragment segments across output too 
+		# much
+		self.seglist.clear()
+
+		# FIXME: We actually will end up writing the same segment more than once 
+		# across adjacent files. This is probably okay but, fair warning.
+		# What maybe should be done is to intersect the final segment with the
+		# analysis_segment's end and then make the current segment have the same 
+		# start time as the last written segment's end.
+		self.seglist["state"] = segments.segmentlist([])
 
 		# TODO: replace cbc filter table with our own
 		#cbc_filter_table = lsctables.getTablesByType( output, lsctables.FilterTable )[0]
@@ -790,6 +840,10 @@ elif( data_source == "lldata_sv" ):
 		data_source = "online",
 		state_vector_on_off_dict = { handler.inst: (DEFAULT_DQ_VECTOR_ON, DEFAULT_DQ_VECTOR_OFF) }
 	)
+	# FIXME: Need to get the gate by something other than name
+	gate = pipeline.get_by_name( "lal_gate0" )
+	gate.connect("start", handler.handle_segment, "on" )
+	gate.connect("stop", handler.handle_segment, "off" )
 
 	# FIXME: This is a guess. Not a terrible one, but still inaccurate
 	handler.time_since_dump = gpstime.GpsSecondsFromPyUTC( time.time() )
