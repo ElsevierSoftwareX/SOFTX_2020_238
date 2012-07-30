@@ -108,7 +108,7 @@ class EPHandler( LLOIDHandler ):
 		# How long of a time to ignore output from the whitener stabilizing
 		# FIXME: This should be ~number of PSDs stored in history * fft_length
 		# Right now that's probably something like 80 s.
-		self.whitener_offset = 20
+		self.whitener_offset = 40
 
 		# Keep track of units -- enable us to go below rates of 1 Hz
 		self.units = EXCESSPOWER_UNIT_SCALE['Hz']
@@ -447,6 +447,20 @@ class EPHandler( LLOIDHandler ):
 		utils.write_filename(output, filename, verbose = options.verbose, gz = (filename or "stdout").endswith(".gz"), trap_signals = None)
 		self.lock.release()
 
+		self.discard_segment = segment( 
+			LIGOTimeGPS(self.start), 
+			LIGOTimeGPS(self.start + 300)
+		)
+
+		# TODO: Implement clustering here
+
+		for sb in filter( lambda sb : sb.snr > db_thresh**2, self.triggers ):
+			print >>sys.stderr, sb.snr, sb.peak_time, self.discard_segment
+			if( sb.peak_time in self.discard_segment ): continue
+			upload_tbl = lsctables.SnglBurstTable()
+			upload_tbl.append( sb )
+			upload_to_db( upload_tbl, search = "EP", db = "./glitchdb" )
+		
 		if( flush ): self.make_output_table()
 
 	def shutdown( self, signum, frame ):
@@ -706,6 +720,7 @@ else:
 
 	handler.outfile = cfg.get( "triggering", "output-file" )
 	handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
+	handler.db_thresh = cfg.getfloat( "triggering", "db-thresh" )
 
 	if( cfg.has_option( "triggering", "events_per_file" ) ):
 		handler.max_events = cfg.get_int( "triggering", "events_per_file" )
@@ -792,6 +807,7 @@ elif( data_source == "lldata" ):
 	head = sink
 
 	# FIXME: This is a guess. Not a terrible one, but still inaccurate
+	handler.start = gpstime.GpsSecondsFromPyUTC( time.time() )
 	handler.time_since_dump = gpstime.GpsSecondsFromPyUTC( time.time() )
 elif( data_source == "lldata_sv" ):
 	# This is really only for the strain channels where one might anticipate needing a state vector.
