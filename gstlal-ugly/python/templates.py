@@ -164,7 +164,7 @@ def normalized_autocorrelation(fseries, revplan):
 
 
 def time_slices(
-	m1m2pairs,
+	m1m2chis,
 	flow = 40,
 	fhigh = 900,
 	padding = 1.1,
@@ -216,7 +216,7 @@ def time_slices(
 	# has its time dimension at least as large as its template dimension.
 	# The max size is chosen based on experience, which shows that
 	# SVDs of matrices bigger than m x 8192 are very slow.
-	segment_samples_min = max(ceil_pow_2( 2*len(m1m2pairs) ),samples_min)
+	segment_samples_min = max(ceil_pow_2( 2*len(m1m2chis) ),samples_min)
 
 	# For each allowed sampling rate with associated Nyquist frequency fN,
 	# determine the greatest amount of time any template in the bank spends
@@ -235,10 +235,10 @@ def time_slices(
 			segment_samples_max = samples_max
 	
 		if segment_samples_min > segment_samples_max:
-			raise ValueError("The input template bank must have fewer than %d templates, but had %d." % (segment_samples_max, 2 * len(m1m2pairs)))
+			raise ValueError("The input template bank must have fewer than %d templates, but had %d." % (segment_samples_max, 2 * len(m1m2chis)))
 
 		this_flow = max( float(rate)/(4*padding), flow )
-		longest_chirp = max(spawaveform.chirptime(m1,m2,7,this_flow,fhigh) for m1,m2 in m1m2pairs )
+		longest_chirp = max(spawaveform.chirptime(m1,m2,7,this_flow,fhigh,chi) for m1,m2,chi in m1m2chis )
 
 		# Do any of the templates go beyond the accumulated time?
 		# If so, we need to add some blocks at this sampling rate.
