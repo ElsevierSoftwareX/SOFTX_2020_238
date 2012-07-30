@@ -504,11 +504,11 @@ def on_psd_change( elem, pspec, hand ):
 	# Determine if the PSD has changed enough to warrant rebuilding the filter
 	# bank.
 	psd_power = sum(hand.psd.data)
-	change = abs((hand.psd_power - psd_power) / psd_power )
-	hand.psd_power = psd_power
+	change = abs((hand.psd_power - psd_power) / (hand.psd_power + psd_power) )
 	if( change > handler.psd_change_thresh ):
 		if( options.verbose ):
-			print >> sys.stderr, "Processed signal. PSD change %d per, regenerating filters" % int(change*100)
+			print >> sys.stderr, "Processed signal. PSD change %d, regenerating filters" % int(change*100)
+		hand.psd_power = psd_power
 		hand.rebuild_everything()
 
 def on_spec_corr_change( elem, pspec, hand ):
