@@ -651,19 +651,11 @@ class LocalRankingData(object):
 		distribution_stats, process_id = DistributionsStats.from_xml(llw_elem, name)
 		# the code that writes these things has put the
 		# livetime_seg into the out segment in the search_summary
-		# table.  uninitialized segments get recorded as
-		# [None,None), which breaks the .get_out() method of the
-		# row class, so we need to reconstruct the segment
-		# ourselves to trap that error without worrying that we're
-		# masking other bugs with the try/except
-		search_summary_row, = (row for row in lsctables.table.get_table(xml, lsctables.SearchSummaryTable.tableName) if row.process_id == process_id)
-		try:
-			# FIXME:  the latest glue can handle (None,None) itself
-			livetime_seg = search_summary_row.get_out()
-		except TypeError:
-			livetime_seg = segments.segment(None, None)
+		# table.  uninitialized segments got recorded as
+		# [None,None)
+		livetime_seg, = (row.get_out() for row in lsctables.table.get_table(xml, lsctables.SearchSummaryTable.tableName) if row.process_id == process_id)
 		self = cls(livetime_seg, distribution_stats = distribution_stats, trials_table = TrialsTable.from_xml(llw_elem))
-		
+
 		# pull out the joint likelihood arrays if they are present
 		for ba_elem in [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and "_joint_likelihood" in elem.getAttribute(u"Name")]:
 			ifo_set = frozenset(lsctables.instrument_set_from_ifos(ba_elem.getAttribute(u"Name").split("_")[0]))
@@ -762,14 +754,10 @@ class RankingData(object):
 
 		# the code that writes these things has put the
 		# livetime_seg into the out segment in the search_summary
-		# table.  uninitialized segments get recorded as
-		# [None,None), which breaks the .get_out() method of the
-		# row class, so we need to reconstruct the segment
-		# ourselves to trap that error without worrying that we're
-		# masking other bugs with the try/except
+		# table.  uninitialized segments got recorded as
+		# [None,None).
 		process_id = ligolw_param.get_pyvalue(llw_elem, u"process_id")
-		search_summary_row, = (row for row in lsctables.table.get_table(xml, lsctables.SearchSummaryTable.tableName) if row.process_id == process_id)
-		fake_local_ranking_data.livetime_seg = search_summary_row.get_out()
+		fake_local_ranking_data.livetime_seg, = (row.get_out() for row in lsctables.table.get_table(xml, lsctables.SearchSummaryTable.tableName) if row.process_id == process_id)
 
 		self = cls(fake_local_ranking_data)
 
