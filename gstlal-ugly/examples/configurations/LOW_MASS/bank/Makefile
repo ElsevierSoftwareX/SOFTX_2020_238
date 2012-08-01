@@ -4,9 +4,9 @@ space:= $(empty) $(empty)
 comma:= ,
 
 # controls psd segments, should set it to the analysis time intended
-IFOS = H1 L1
-PSDSTART = 869400000
-PSDSTOP =  869410000
+IFOS = H1 H2 L1
+PSDSTART = 869622409
+PSDSTOP =  870227209
 
 # Segments file names
 segments_suffix := _segmentspadded.xml
@@ -29,8 +29,8 @@ STOP =  871247452
 IFOS = H
 
 # Template bank parameters
-MIN_MASS = 1.0
-MAX_MASS = 3.0
+MIN_MASS = 1.2
+MAX_MASS = 1.6
 MIN_TOTAL_MASS = $(shell echo 2 \* $(MIN_MASS) | bc)
 MAX_TOTAL_MASS = $(shell echo 2 \* $(MAX_MASS) | bc)
 LOW_FREQUENCY_CUTOFF = 40.0
@@ -39,16 +39,12 @@ HIGH_FREQUENCY_CUTOFF = 2047.0
 SAMPLE_RATE = 4096
 NUM_SPLIT_TEMPLATES = 250
 OVERLAP = 50
-MM = 0.97
+MM = 0.98
 
 all : dag plots
 
 frame.H.cache:
 	ligo_data_find -o H -t H1_RDS_C03_L2 -l  -s $(START) -e $(STOP) --url-type file > frame.H.cache
-
-lalapps_path2cache :
-	wget 'http://www.lsc-group.phys.uwm.edu/cgit/lalsuite/plain/pylal/bin/lalapps_path2cache'
-	chmod +x lalapps_path2cache
 
 H1-TMPLTBANK-871154847-2048.xml.gz: frame.H.cache 
 	lalapps_tmpltbank \
@@ -128,10 +124,10 @@ sql :
 	cat simplify.sql delete_by_far.sql > simplify_and_delete_by_far.sql
 	cat drop_sim.sql simplify_and_cluster.sql > inj_simplify_and_cluster.sql
 
-dag : H1-TMPLTBANK-871154847-2048.xml.gz reference_psd.xml.gz sql lalapps_path2cache
-	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | ./lalapps_path2cache > H1_split_bank.cache
-	ls *H2_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | ./lalapps_path2cache > H2_split_bank.cache
-	ls *L1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | ./lalapps_path2cache > L1_split_bank.cache
+dag : H1-TMPLTBANK-871154847-2048.xml.gz reference_psd.xml.gz sql
+	ls *H1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > H1_split_bank.cache
+	ls *H2_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > H2_split_bank.cache
+	ls *L1_split_bank-H1-TMPLTBANK-871154847-2048.xml.gz | lalapps_path2cache > L1_split_bank.cache
 	gstlal_inspiral_svd_bank_pipe --instrument H1 --reference-psd reference_psd.xml.gz --bank-cache H1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H1_bank
 	gstlal_inspiral_svd_bank_pipe --instrument H2 --reference-psd reference_psd.xml.gz --bank-cache H2_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name H2_bank
 	gstlal_inspiral_svd_bank_pipe --instrument L1 --reference-psd reference_psd.xml.gz --bank-cache L1_split_bank.cache --overlap $(OVERLAP) --flow $(LOW_FREQUENCY_CUTOFF) --output-name L1_bank
@@ -141,4 +137,4 @@ plots : reference_psd.xml.gz
 	gstlal_plot_psd reference_psd.xml.gz psd_plot
 
 realclean :
-	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml.gz *split_bank-H1-TMPLTBANK-871154847-2048.xml.gz mode_*.xml.gz logs *.png reference_psd.xml.gz simplify.sql  simplify_and_cluster.sql simplify_and_delete_by_far.sql inj_simplify_and_cluster.sql lalapps_path2cache *_psd.xml.gz *segments.xml *_segmentspadded.xml
+	rm -r *.sub *.dag* *.cache *.sh H1-TMPLTBANK-871154847-2048.xml.gz *split_bank-H1-TMPLTBANK-871154847-2048.xml.gz mode_*.xml.gz logs *.png reference_psd.xml.gz simplify.sql  simplify_and_cluster.sql simplify_and_delete_by_far.sql inj_simplify_and_cluster.sql *_psd.xml.gz *segments.xml *_segmentspadded.xml
