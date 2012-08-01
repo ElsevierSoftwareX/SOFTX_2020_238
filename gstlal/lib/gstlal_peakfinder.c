@@ -181,11 +181,12 @@ int gstlal_double_complex_series_around_peak(struct gstlal_double_complex_peak_s
 	guint channel, sample;
 	gint index;
 	guint *maxsample = input->samples;
+	double complex *maxdata = input->values;
 	double complex *peakdata = NULL;
-	memset(outputmat, 0, input->channels * (2 * n + 1));
+	memset(outputmat, 0, sizeof(double) * input->channels * (2 * n + 1));
 
 	for (channel = 0; channel < input->channels; channel++) {
-		if (maxsample[channel]) {
+		if (maxdata[channel]) {
 			index = (maxsample[channel] - n) * input->channels + channel;
 			for (sample = 0, peakdata = data+index; sample < (2*n + 1); sample++, peakdata += input->channels)
 				outputmat[sample * input->channels + channel] = *peakdata;
