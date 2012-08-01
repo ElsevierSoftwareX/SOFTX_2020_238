@@ -63,7 +63,6 @@ from gstlal import reference_psd
 from gstlal import far
 from gstlal import inspiral
 from gstlal import httpinterface
-from gstlal import multiratefirparts
 
 def excepthook(*args):
 	# system exception hook that forces hard exit.  without this,
@@ -286,52 +285,25 @@ mainloop = gobject.MainLoop()
 handler = lloidparts.LLOIDHandler(mainloop, pipeline)
 
 
-# FIXME a better way to detect if there is an identity transform?
-# if an identity transform was requested for the banks then the mix_matrix will
-# be set to  [[1.]]
-# FIXME doesn't check that all banks requested identity, only the first one.
-# This assumes that the banks are either all identity or none are
-if banks.values()[0][0].bank_fragments[0].mix_matrix.shape[0] == 1:
-	if options.verbose:
-		print >> sys.stderr, "not using LLOID aglorithm since an identity transform was requested for the filters"
-	triggersrc = multiratefirparts.mkFIRmulti(
-		pipeline,
-		seekevent,
-		detectors = detectors,
-		banks = banks,
-		psd = psd,
-		psd_fft_length = options.psd_fft_length,
-		data_source = options.fake_data or "frames",
-		injection_filename = options.injections,
-		ht_gate_threshold = options.ht_gate_threshold,
-		veto_segments = veto_segments,
-		verbose = options.verbose,
-		nxydump_segment = options.nxydump_segment,
-		frame_segments = frame_segments,
-		chisq_type = options.chisq_type,
-		track_psd = options.track_psd,
-		fir_stride = options.fir_stride
-	)
-else:
-	triggersrc = lloidparts.mkLLOIDmulti(
-		pipeline,
-		seekevent,
-		detectors = detectors,
-		banks = banks,
-		psd = psd,
-		psd_fft_length = options.psd_fft_length,
-		data_source = options.fake_data or "frames",
-		injection_filename = options.injections,
-		ht_gate_threshold = options.ht_gate_threshold,
-		veto_segments = veto_segments,
-		verbose = options.verbose,
-		nxydump_segment = options.nxydump_segment,
-		frame_segments = frame_segments,
-		chisq_type = options.chisq_type,
-		track_psd = options.track_psd,
-		control_peak_time = options.control_peak_time,
-		fir_stride = options.fir_stride
-	)
+triggersrc = lloidparts.mkLLOIDmulti(
+	pipeline,
+	seekevent,
+	detectors = detectors,
+	banks = banks,
+	psd = psd,
+	psd_fft_length = options.psd_fft_length,
+	data_source = options.fake_data or "frames",
+	injection_filename = options.injections,
+	ht_gate_threshold = options.ht_gate_threshold,
+	veto_segments = veto_segments,
+	verbose = options.verbose,
+	nxydump_segment = options.nxydump_segment,
+	frame_segments = frame_segments,
+	chisq_type = options.chisq_type,
+	track_psd = options.track_psd,
+	control_peak_time = options.control_peak_time,
+	fir_stride = options.fir_stride
+)
 
 
 if options.verbose:
