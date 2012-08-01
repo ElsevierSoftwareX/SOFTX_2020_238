@@ -83,7 +83,7 @@ sr = options.sample_rate
 #
 
 if options.reference_psd is not None:
-	wpsd = reference_psd.read_psd_xlmdoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[options.instrument]
+	wpsd = reference_psd.read_psd_xmldoc(utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler))[options.instrument]
 else:
 	wpsd = None
 	if options.verbose:
