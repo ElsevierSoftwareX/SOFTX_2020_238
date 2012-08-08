@@ -60,8 +60,10 @@ from glue import segmentsUtils
 from glue import gpstime
 from glue.lal import LIGOTimeGPS
 
+from pylal import ligolw_bucluster
 from pylal.xlal.datatypes.snglburst import from_buffer as sngl_bursts_from_buffer
 from pylal.xlal.datatypes.real8frequencyseries import REAL8FrequencySeries
+from pylal.xlal.lalburst import XLALlnOneMinusChisqCdf
 
 #
 # =============================================================================
@@ -434,6 +436,10 @@ class EPHandler( LLOIDHandler ):
 		# start time as the last written segment's end.
 		self.seglist["state"] = segments.segmentlist([])
 
+		# Do a temporary write to make the SnglBurst objects into XML rows -- this 
+		# should probably be done only if clustering is requested, since it's the 
+		# only thing that thinks the triggers should be XML rows
+
 		# TODO: replace cbc filter table with our own
 		#cbc_filter_table = lsctables.getTablesByType( output, lsctables.FilterTable )[0]
 		#ep_filter_table = lsctables.getTablesByType( self.filter_xml, lsctables.FilterTable )[0]
@@ -447,16 +453,50 @@ class EPHandler( LLOIDHandler ):
 		utils.write_filename(output, filename, verbose = options.verbose, gz = (filename or "stdout").endswith(".gz"), trap_signals = None)
 		self.lock.release()
 
+		# Reload the document to convert the SnglBurst type to rows
+		output = utils.load_filename(filename, verbose = options.verbose)
+		process = lsctables.table.get_table( output, lsctables.ProcessTable.tableName )[0]
+
+		# FIXME: Should this be moved to the trigger import function?
+		changed = True
+
+		# We need this because we might have just set it to be an infinitesimally 
+		# small segment. Clustering will choke on this, and we want to know what 
+		# we can send to dbs anyway.
+		while changed and options.clustering and abs(analysis_segment) != 0:
+			ligolw_bucluster.add_ms_columns( output )
+			output, changed = ligolw_bucluster.ligolw_bucluster( 
+				xmldoc = output,
+				program = "gstlal_excesspower",
+				process = process,
+				prefunc = ligolw_bucluster.ExcessPowerPreFunc,
+				postfunc = ligolw_bucluster.ExcessPowerPostFunc,
+				testfunc = ligolw_bucluster.ExcessPowerTestFunc,
+				clusterfunc = ligolw_bucluster.ExcessPowerClusterFunc,
+				sortfunc = ligolw_bucluster.ExcessPowerSortFunc,
+				bailoutfunc = ligolw_bucluster.ExcessPowerBailoutFunc,
+				verbose = options.verbose
+			)
+
+		# TODO: Respect max events by removing output XML file and returning
+		# if clustering reduces trigger number below required.
+		if( options.clustering ):
+			# write the new distribution stats to disk
+			self.lock.acquire()
+			# Enable to debug LIGOLW stream
+			#utils.write_fileobj(output, sys.stdout)
+			utils.write_filename(output, filename, verbose = options.verbose, gz = (filename or "stdout").endswith(".gz"), trap_signals = None)
+			self.lock.release()
+
 		self.discard_segment = segment( 
 			LIGOTimeGPS(self.start), 
 			LIGOTimeGPS(self.start + 300)
 		)
 
-		# TODO: Implement clustering here
-
-		for sb in filter( lambda sb : sb.snr > db_thresh**2, self.triggers ):
-			print >>sys.stderr, sb.snr, sb.peak_time, self.discard_segment
+		for sb in filter( lambda sb : sb.snr > self.db_thresh**2, self.triggers ):
+			# TODO: Merge these two
 			if( sb.peak_time in self.discard_segment ): continue
+			if( sb.peak_time not in analysis_segment ): continue
 			upload_tbl = lsctables.SnglBurstTable()
 			upload_tbl.append( sb )
 			upload_to_db( upload_tbl, search = "EP", db = "./glitchdb" )
@@ -554,6 +594,9 @@ def get_triggers(elem, handler, ndof):
 
 	for row in sngl_bursts_from_buffer(buffer):
 		row.duration *= ndof
+		# TODO Move this into the trigger generator
+		# FIXME: Determine "magic number" or remove it
+		row.confidence = -XLALlnOneMinusChisqCdf(row.snr * 0.62, ndof * 0.62)
 		if( options.compat ):
 			row.snr = row.snr / ndof - 1
 		handler.triggers.append( row )
@@ -613,6 +656,7 @@ parser.add_option("-s", "--gps-start", dest="gps_start", action="store", type="f
 parser.add_option("-e", "--gps-end", dest="gps_end", action="store", type="float", help="End the analysis at this gps time.", default=None)
 parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_false", help="Don't record triggers.", default=False)
 parser.add_option("-c", "--lalapps-power-compatibility", dest="compat", action="store_true", default=False, help="Output trigger information which conforms to the lalapps_power conventions.")
+parser.add_option("-C", "--clustering", dest="clustering", action="store_true", default=False, help="Employ trigger tile clustering before output stage. Default or if not specificed is off." )
 
 (options, args) = parser.parse_args()
 
