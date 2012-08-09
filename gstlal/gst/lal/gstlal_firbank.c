@@ -1439,7 +1439,6 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		g_mutex_lock(element->fir_matrix_lock);
 		if(element->fir_matrix)
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix(element->fir_matrix));
-		/* FIXME:  else?  maybe return an empty array, or unset the gvalue? */
 		g_mutex_unlock(element->fir_matrix_lock);
 		break;
 
