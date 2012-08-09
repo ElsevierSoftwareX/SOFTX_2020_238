@@ -167,7 +167,7 @@ def time_slices(
 	m1m2chis,
 	flow = 40,
 	fhigh = 900,
-	padding = 1.1,
+	padding = 1.5,
 	samples_min = 1024,
 	samples_max_256 = 1024,
 	samples_max_64 = 2048,
