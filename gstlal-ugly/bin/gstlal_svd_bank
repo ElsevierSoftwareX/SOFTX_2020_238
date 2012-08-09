@@ -41,7 +41,7 @@ from gstlal import reference_psd
 parser = OptionParser(description = __doc__)
 parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
 parser.add_option("--identity-transform", action = "store_true", default = False, help = "Do not perform an SVD; instead, use the original templates as the analyzing templates and the identity matrix as the reconstruction matrix.")
-parser.add_option("--padding", metavar = "pad", type = "float", default = 1.1, help = "Fractional amount to pad time slices.")
+parser.add_option("--padding", metavar = "pad", type = "float", default = 1.5, help = "Fractional amount to pad time slices.")
 parser.add_option("--svd-tolerance", metavar = "match", type = "float", default = 0.9995, help = "Set the SVD reconstruction tolerance (default = 0.9995).")
 parser.add_option("--reference-psd", metavar = "filename", help = "Instead of measuring the noise spectrum, load the spectrum from this LIGO light-weight XML file (required).")
 parser.add_option("--template-bank", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load the template bank (required).")
@@ -51,6 +51,7 @@ parser.add_option("--write-svd-bank", metavar = "filename", help = "Set the file
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 parser.add_option("--clipleft", type = "int", default = 0, help = "Remove poorly reconstructable templates from the left edge of each sub-bank.")
 parser.add_option("--clipright", type = "int", default = 0, help = "Remove poorly reconstructable templates from the right edge of each sub-bank.")
+parser.add_option("--autocorrelation-length", type = "int", default = 201, help = "The minimum number of samples to use for auto-chisquared, default 201 should be odd")
 parser.add_option("--samples-min", type = "int", default = 1024, help = "The minimum number of samples to use for time slices default 1024")
 parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024")
 parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies above 64Hz, default 2048")
@@ -64,6 +65,9 @@ required_options = ("reference_psd", "template_bank", "write_svd_bank")
 missing_options = [option for option in required_options if getattr(options, option) is None]
 if missing_options:
 	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+
+if not options.autocorrelation_length % 2:
+	raise ValueError("--autocorrelation-length must be odd")
 
 if options.bank_id is None:
 	options.bank_id = str(uuid.uuid4())
@@ -95,6 +99,7 @@ svd_bank.write_bank(
 		padding = options.padding,
 		identity_transform = options.identity_transform,
 		verbose = options.verbose,
+		autocorrelation_length = options.autocorrelation_length,
 		samples_min = options.samples_min,
 		samples_max_256 = options.samples_max_256,
 		samples_max_64 = options.samples_max_64, 
