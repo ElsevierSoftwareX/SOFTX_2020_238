@@ -132,7 +132,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 		# generate "cosine" component of frequency-domain template
 		#
 
-		fseries = generate_template(row, approximant, sample_rate_max, working_duration, f_low, sample_rate_max / (2*1.05)) # pad the nyquist rate by 5%
+		fseries = generate_template(row, approximant, sample_rate_max, working_duration, f_low, sample_rate_max / (2*1.1)) # pad the nyquist rate by 10% for quality 10 resampler
 
 		#
 		# whiten and add quadrature phase ("sine" component)
