@@ -381,15 +381,15 @@ class DistributionsStats(object):
 	}
 
 	# FIXME the characteristic width (which is relevant for smoothing)
-	# should be roughly 1.0 in SNR (from Gaussian noise expectations).  So
+	# should be roughly 1.41 in SNR (from Gaussian noise expectations).  So
 	# it is tied to how many bins there are per SNR range.  With 200 bins
-	# between 4 and 26 each bin is .11 wide in SNR. So a width of 9 bins
-	# corresponds to .99 which is close to 1.0
+	# between 4 and 26 each bin is .11 wide in SNR. So a width of 13 bins
+	# corresponds to 1.43 which is close to 1.41
 	filters = {
-		"H1_snr_chi": rate.gaussian_window2d(9, 9, sigma = 10),
-		"H2_snr_chi": rate.gaussian_window2d(9, 9, sigma = 10),
-		"L1_snr_chi": rate.gaussian_window2d(9, 9, sigma = 10),
-		"V1_snr_chi": rate.gaussian_window2d(9, 9, sigma = 10)
+		"H1_snr_chi": rate.gaussian_window2d(13, 13, sigma = 10),
+		"H2_snr_chi": rate.gaussian_window2d(13, 13, sigma = 10),
+		"L1_snr_chi": rate.gaussian_window2d(13, 13, sigma = 10),
+		"V1_snr_chi": rate.gaussian_window2d(13, 13, sigma = 10)
 	}
 
 	def __init__(self):
@@ -437,7 +437,7 @@ class DistributionsStats(object):
 			binarr.array /= binarr.array.sum()
 			binarr.array *= n
 
-	def add_foreground_prior(self, n = 1., prefactors_range = (0.02, 0.5), df = 40, instruments = None, verbose = False):
+	def add_foreground_prior(self, n = 1., prefactors_range = (0.02, 0.4), df = 40, instruments = None, verbose = False):
 		# FIXME:  for maintainability, this should be modified to
 		# use the .add_injection() method of the .raw_distributions
 		# attribute, but that will slow this down
