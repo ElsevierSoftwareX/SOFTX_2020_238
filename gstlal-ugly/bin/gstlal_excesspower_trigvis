@@ -55,6 +55,7 @@ parser.add_option("-f", "--low-frequency", action="store", type=float, default=3
 parser.add_option("-F", "--high-frequency", action="store", type=float, default=2000.0, help="Plot trigggers with central frequency below this frequency. Default is 2000.")
 parser.add_option("-S", "--snr-thresh", action="store", type=float, default=0.0, help="Plot trigggers with snr greater than that indicated.")
 parser.add_option("-m", "--mark-time", action="store", type=float, help="Mark a particular time on the map. Useful for identifying triggers in a file spanning a large time.")
+parser.add_option("-M", "--mark-loudest", action="store", default=None, help="Mark a specific event in the title. Two choices are available 'snr' and 'conf'. 'snr' will mark the loudest event by SNR, and 'conf' will mark the most confident event.")
 parser.add_option("-r", "--enable-event-hist", action="store_true", help="Enable the subplot with event rate versus strength for the channel.")
 #parser.add_option("-w", "--ignore-whitener", action="store", type=float, default=20.0, help="Ignore the first N seconds of data (from whitening effects), default is 20.")
 parser.add_option("-x", "--overlay-segments", action="store", help="The entries for this argument are parsed and if segments with those definitions exist in the viewsegment, they will be overlayed on the plot.")
@@ -62,6 +63,9 @@ parser.add_option("-x", "--overlay-segments", action="store", help="The entries 
 opts, args = parser.parse_args()
 
 plot_sim = False
+
+if( opts.mark_loudest not in [None, 'snr', 'conf'] ):
+	exit( "Invalid argument to '--mark-loudest', please choose one of 'snr' or 'conf'" )
 
 if( opts.channels is not None ):
 	channels = opts.channels.split(",")
@@ -262,10 +266,6 @@ for channel, selected_events in event_iter:
 	if( i == len(channels)-1 ):
 		pyplot.xlabel( "Time (s)" )
 	pyplot.ylabel( "Frequency (Hz)" )
-	title = "channel: %s, inst %s" % (channel, inst)
-	if( i == 0 ):
-		title = "Tile energy time frequency map\n%s" % title
-	pyplot.title( title )
 
 	# construct tiles
 	statstr = "0% complete"
@@ -273,6 +273,7 @@ for channel, selected_events in event_iter:
 	statlen = len(statstr)
 
 	tiles, snrs = [], []
+	loudest = [0,-1]
 	for i, event in enumerate(selected_events):
 		sys.stdout.write( "\b"*statlen )
 		statstr = "%d%% complete" % numpy.round(float(i)/len(selected_events)*100)
@@ -294,8 +295,22 @@ for channel, selected_events in event_iter:
 		#ax.add_patch( tile )
 		tiles.append( tile )
 		snrs.append( event.snr )
+		if( loudest[0] < event.snr and opts.mark_loudest == 'snr' ):
+			loudest = [event.snr, float(event.get_peak()), event.central_freq]
+		elif( loudest[0] < event.confidence and opts.mark_loudest == 'conf' ):
+			loudest = [event.confidence, event.get_peak(), event.central_freq]
 
 	print ""
+
+	title = "channel: %s, inst %s" % (channel, inst)
+	if( pn == 0 ):
+		title = "Tile energy time frequency map\n%s" % title
+	if( opts.mark_loudest is not None ):
+		print "Loudest event at (%s)" % ", ".join(map(lambda a: str(a), loudest[1:]))
+		pyplot.plot( [loudest[1]], [loudest[2]], marker='o', markerfacecolor='none', markersize=10, markeredgewidth=1.2)
+		title += " loudest event (%s=%.3g): %10.1f" % (opts.mark_loudest, math.sqrt(loudest[0]), loudest[1])
+	pyplot.title( title )
+
 
 	# TODO: See if replacing data speeds up the process
 	patches = PatchCollection( tiles, match_original = False, cmap = matplotlib.cm.jet, edgecolor='none', antialiased = False )
