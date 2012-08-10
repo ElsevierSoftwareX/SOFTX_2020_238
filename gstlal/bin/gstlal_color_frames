@@ -95,7 +95,7 @@ rpsd.data = 1. / rpsd.data[:max_sample]
 fir_matrix, latency, measured_sample_rate = reference_psd.psd_to_fir_kernel(rpsd)
 
 # add latency to fix the time stamps
-latency -= 1
+latency -= 1	# FIXME:  remove this if reference_psd.psd_to_fir_kernel() is adjusted
 head = pipeparts.mkfirbank(pipeline, head, latency = latency, fir_matrix = [fir_matrix], block_stride = sr * 32)
 
 
