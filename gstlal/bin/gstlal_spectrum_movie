@@ -155,7 +155,7 @@ head = lloidparts.mkLLOIDbasicsrc(
 	seek,
 	options.instrument,
 	lloidparts.DetectorData(options.frame_cache, options.channel_name),
-	data_source = options.fake_data or "frames",
+	data_source = options.online_data and "online" or "frames",
 	injection_filename = options.injections,
 	verbose = options.verbose
 )
