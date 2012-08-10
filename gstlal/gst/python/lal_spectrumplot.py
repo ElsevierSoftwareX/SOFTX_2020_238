@@ -124,8 +124,6 @@ class lal_spectrumplot(gst.BaseTransform):
 
 	def __init__(self):
 		gst.BaseTransform.__init__(self)
-		self.get_pad("sink").use_fixed_caps()
-		self.get_pad("src").use_fixed_caps()
 		self.channels = None
 		self.delta_f = None
 		self.out_width = 320	# default
