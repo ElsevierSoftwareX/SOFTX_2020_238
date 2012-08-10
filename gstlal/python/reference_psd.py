@@ -253,7 +253,7 @@ def horizon_distance(psd, m1, m2, snr, f_min, f_max = None):
 	# clip to ISCO.  see (4) in arXiv:1003.2481
 	#
 
-	f_isco = lalconstants.LAL_C_SI**3 / (6**(3./2.) * math.pi * lalconstants.LAL_G_SI * (m1 + m2) * lalconstants.LAL_MSUN_SI)
+	f_isco = lalconstants.LAL_C_SI**3 / (6**(3. / 2.) * math.pi * lalconstants.LAL_G_SI * (m1 + m2) * lalconstants.LAL_MSUN_SI)
 	f_max = min(f_max, f_isco)
 	assert psd.f0 <= f_isco
 	assert psd.f0 <= f_min <= f_isco
