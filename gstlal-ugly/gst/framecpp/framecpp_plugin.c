@@ -104,8 +104,7 @@ static void typefind(GstTypeFind *find, gpointer data)
 		else
 			GST_DEBUG("unable to determine endianness");
 
-		gst_type_find_suggest(find, 100, caps);
-		gst_caps_unref(caps);
+		gst_type_find_suggest(find, GST_TYPE_FIND_MAXIMUM, caps);
 	}
 }
 
