@@ -280,125 +280,127 @@ static gboolean check_valid_frame(GstBaseParse *parse, GstBaseParseFrame *frame,
 
 	*skipsize = 0;
 
-	if(element->offset == 0) {
-		/*
-		 * parse header.  see table 5 of LIGO-T970130.  note:  we
-		 * know the endianness from the caps (which the typefinder
-		 * takes care of figuring out for us), so the only other
-		 * things we need to figure out are the word sizes.
-		 * FIXME:  get from framecpp?
-		 */
-
-		GST_DEBUG_OBJECT(element, "parsing file header");
-		g_assert_cmpuint(GST_BUFFER_SIZE(frame->buffer), >=, SIZEOF_FRHEADER);
-
-		/*
-		 * word sizes
-		 */
-
-		element->sizeof_int_2 = *(data + 7);
-		element->sizeof_int_4 = *(data + 8);
-		element->sizeof_int_8 = *(data + 9);
-		g_assert_cmpuint(*(data + 11), ==, 8);	/* sizeof(REAL_8) */
-		GST_DEBUG_OBJECT(element, "endianness = %d, size of INT_2 = %d, size of INT_4 = %d, size of INT_8 = %d", element->endianness, element->sizeof_int_2, element->sizeof_int_4, element->sizeof_int_8);
-
-		/*
-		 * set the size of the structure in table 6 of LIGO-T970130
-		 */
-
-		element->sizeof_table_6 = element->sizeof_int_8 + element->sizeof_int_2 + element->sizeof_int_4;
-
-		/*
-		 * reset the class numbers
-		 */
-
-		element->eof_klass = 0;
-		element->frameh_klass = 0;
-
-		/*
-		 * reset the start and stop times
-		 */
-
-		element->file_start_time = -1;	/* max GstClockTime */
-		element->file_stop_time = 0;	/* min GstClockTime */
-
-		/*
-		 * request the first table 6 structure
-		 */
-
-		element->offset = SIZEOF_FRHEADER;
-		*framesize = element->offset + element->sizeof_table_6;
-	} else {
-		guint64 length;
-		guint16 klass;
-
-		/*
-		 * parse table 6, update file size
-		 */
-
-		parse_table_6(element, data + element->offset, &length, &klass);
-		*framesize = element->offset + length;
-
-		/*
-		 * what to do?
-		 */
-
-		if(klass == FRSH_KLASS && (element->eof_klass == 0 || element->frameh_klass == 0)) {
+	do {
+		if(element->offset == 0) {
 			/*
-			 * found frsh structure and do we not yet know the
-			 * class numbers we want.  if it's complete, see if
-			 * it tells us the class numbers then advance to
-			 * next structure
+			 * parse header.  see table 5 of LIGO-T970130.  note:  we
+			 * know the endianness from the caps (which the typefinder
+			 * takes care of figuring out for us), so the only other
+			 * things we need to figure out are the word sizes.
+			 * FIXME:  get from framecpp?
 			 */
 
-			if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
-				GST_DEBUG_OBJECT(element, "found complete %u byte FrSH structure at offset %zu", (guint) length, element->offset);
-				parse_table_7(element, data + element->offset, length, &element->eof_klass, &element->frameh_klass);
-				element->offset += length;
-				*framesize += element->sizeof_table_6;
-			} else
-				GST_DEBUG_OBJECT(element, "found incomplete %u byte FrSH structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
-		} else if(klass == element->frameh_klass) {
+			GST_DEBUG_OBJECT(element, "parsing file header");
+			g_assert_cmpuint(GST_BUFFER_SIZE(frame->buffer), >=, SIZEOF_FRHEADER);
+
 			/*
-			 * found frame header structure.  if it's complete,
-			 * extract start time and duration then advance to
-			 * next structure
+			 * word sizes
 			 */
 
-			if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
-				GstClockTime start_time, stop_time;
-				GST_DEBUG_OBJECT(element, "found complete %u byte " FRAMEH_NAME " structure at offset %zu", (guint) length, element->offset);
-				parse_table_9(element, data + element->offset, length, &start_time, &stop_time);
+			element->sizeof_int_2 = *(data + 7);
+			element->sizeof_int_4 = *(data + 8);
+			element->sizeof_int_8 = *(data + 9);
+			g_assert_cmpuint(*(data + 11), ==, 8);	/* sizeof(REAL_8) */
+			GST_DEBUG_OBJECT(element, "endianness = %d, size of INT_2 = %d, size of INT_4 = %d, size of INT_8 = %d", element->endianness, element->sizeof_int_2, element->sizeof_int_4, element->sizeof_int_8);
 
-				element->file_start_time = MIN(element->file_start_time, start_time);
-				element->file_stop_time = MAX(element->file_stop_time, stop_time);
-
-				element->offset += length;
-				*framesize += element->sizeof_table_6;
-			} else
-				GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRAMEH_NAME " structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
-		} else if(klass == element->eof_klass) {
 			/*
-			 * found end-of-file structure.  if it's complete
-			 * then the file is complete
+			 * set the size of the structure in table 6 of LIGO-T970130
 			 */
 
-			if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
-				GST_DEBUG_OBJECT(element, "found complete %u byte " FRENDOFFILE_NAME " structure at offset %zu, have complete %u byte frame file", (guint) length, element->offset, *framesize);
-				element->offset = 0;
-				file_is_complete = TRUE;
-			} else
-				GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRENDOFFILE_NAME " structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
+			element->sizeof_table_6 = element->sizeof_int_8 + element->sizeof_int_2 + element->sizeof_int_4;
+
+			/*
+			 * reset the class numbers
+			 */
+
+			element->eof_klass = 0;
+			element->frameh_klass = 0;
+
+			/*
+			 * reset the start and stop times
+			 */
+
+			element->file_start_time = -1;	/* max GstClockTime */
+			element->file_stop_time = 0;	/* min GstClockTime */
+
+			/*
+			 * request the first table 6 structure
+			 */
+
+			element->offset = SIZEOF_FRHEADER;
+			*framesize = element->offset + element->sizeof_table_6;
 		} else {
+			guint64 length;
+			guint16 klass;
+
 			/*
-			 * found something else.  skip to next structure
+			 * parse table 6, update file size
 			 */
 
-			GST_DEBUG_OBJECT(element, "found %u byte structure at offset %zu", (guint) length, element->offset);
-			element->offset += length;
-			*framesize += element->sizeof_table_6;
+			parse_table_6(element, data + element->offset, &length, &klass);
+			*framesize = element->offset + length;
+
+			/*
+			 * what to do?
+			 */
+
+			if(klass == FRSH_KLASS && (element->eof_klass == 0 || element->frameh_klass == 0)) {
+				/*
+				 * found frsh structure and we do not yet know the
+				 * class numbers we want.  if it's complete, see if
+				 * it tells us the class numbers then advance to
+				 * next structure
+				 */
+
+				if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
+					GST_DEBUG_OBJECT(element, "found complete %u byte FrSH structure at offset %zu", (guint) length, element->offset);
+					parse_table_7(element, data + element->offset, length, &element->eof_klass, &element->frameh_klass);
+					element->offset += length;
+					*framesize += element->sizeof_table_6;
+				} else
+					GST_DEBUG_OBJECT(element, "found incomplete %u byte FrSH structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
+			} else if(klass == element->frameh_klass) {
+				/*
+				 * found frame header structure.  if it's complete,
+				 * extract start time and duration then advance to
+				 * next structure
+				 */
+
+				if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
+					GstClockTime start_time, stop_time;
+					GST_DEBUG_OBJECT(element, "found complete %u byte " FRAMEH_NAME " structure at offset %zu", (guint) length, element->offset);
+					parse_table_9(element, data + element->offset, length, &start_time, &stop_time);
+
+					element->file_start_time = MIN(element->file_start_time, start_time);
+					element->file_stop_time = MAX(element->file_stop_time, stop_time);
+
+					element->offset += length;
+					*framesize += element->sizeof_table_6;
+				} else
+					GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRAMEH_NAME " structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
+			} else if(klass == element->eof_klass) {
+				/*
+				 * found end-of-file structure.  if it's complete
+				 * then the file is complete
+				 */
+
+				if(*framesize <= GST_BUFFER_SIZE(frame->buffer)) {
+					GST_DEBUG_OBJECT(element, "found complete %u byte " FRENDOFFILE_NAME " structure at offset %zu, have complete %u byte frame file", (guint) length, element->offset, *framesize);
+					element->offset = 0;
+					file_is_complete = TRUE;
+				} else
+					GST_DEBUG_OBJECT(element, "found incomplete %u byte " FRENDOFFILE_NAME " structure at offset %zu, need %d more bytes", (guint) length, element->offset, *framesize - GST_BUFFER_SIZE(frame->buffer));
+			} else {
+				/*
+				 * found something else.  skip to next structure
+				 */
+
+				GST_DEBUG_OBJECT(element, "found %u byte structure at offset %zu", (guint) length, element->offset);
+				element->offset += length;
+				*framesize += element->sizeof_table_6;
+			}
 		}
-	}
+	} while(!file_is_complete && *framesize <= GST_BUFFER_SIZE(frame->buffer));
 
 	return file_is_complete;
 }
