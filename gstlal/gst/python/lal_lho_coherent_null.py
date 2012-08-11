@@ -106,7 +106,7 @@ class lal_lho_coherent_null(gst.Bin):
 		elif prop.name == "H2-latency":
 			self.H2firfilter.set_property("latency", val)
 		else:
-			raise AssertError
+			raise AssertionError
 
 	def do_get_property(self, prop):
 		if prop.name == "block-stride":
@@ -120,7 +120,7 @@ class lal_lho_coherent_null(gst.Bin):
 		elif prop.name == "H2-latency":
 			return self.H2firfilter.get_property("latency")
 		else:
-			raise AssertError
+			raise AssertionError
 
 	def __init__(self):
 		super(lal_lho_coherent_null, self).__init__()

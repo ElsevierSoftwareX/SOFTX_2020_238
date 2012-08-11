@@ -139,7 +139,7 @@ class lal_spectrumplot(gst.BaseTransform):
 		elif prop.name == "f-max":
 			self.f_max = val
 		else:
-			raise AssertError("no property %s" % prop.name)
+			raise AssertionError("no property %s" % prop.name)
 
 
 	def do_get_property(self, prop):
@@ -148,7 +148,7 @@ class lal_spectrumplot(gst.BaseTransform):
 		elif prop.name == "f-max":
 			return self.f_max
 		else:
-			raise AssertError("no property %s" % prop.name)
+			raise AssertionError("no property %s" % prop.name)
 
 
 	def do_set_caps(self, incaps, outcaps):
