@@ -770,7 +770,7 @@ else:
 
 	handler.outfile = cfg.get( "triggering", "output-file" )
 	handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
-	if( options.db_upload ):
+	if( options.db_uploads ):
 		handler.db_thresh = cfg.getfloat( "triggering", "db-thresh" )
 		if( handler.db_thresh is None ):
 			print >>sys.stderr, "Warning, DB upload requested, but no threshold provided. Disabling."
