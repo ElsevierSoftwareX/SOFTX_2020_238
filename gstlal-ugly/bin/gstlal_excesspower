@@ -155,6 +155,7 @@ class EPHandler( LLOIDHandler ):
 		self.dump_frequency = 600 # s
 		self.max_events = 1e4
 		self.time_since_dump = self.start
+		self.db_thresh = None  # off
 
 		self.trigger_segment = None
 
@@ -493,7 +494,12 @@ class EPHandler( LLOIDHandler ):
 			LIGOTimeGPS(self.start + 300)
 		)
 
-		for sb in filter( lambda sb : sb.snr > self.db_thresh**2, self.triggers ):
+		if( flush ): self.make_output_table()
+		if( self.db_thresh is None ): return
+
+		clus_triggers = utils.get_table( output, lsctables.SnglBurstTable.tableName )
+
+		for sb in filter( lambda sb : sb.snr > self.db_thresh**2, clus_triggers ):
 			# TODO: Merge these two
 			if( sb.peak_time in self.discard_segment ): continue
 			if( sb.peak_time not in analysis_segment ): continue
@@ -501,7 +507,6 @@ class EPHandler( LLOIDHandler ):
 			upload_tbl.append( sb )
 			upload_to_db( upload_tbl, search = "EP", db = "./glitchdb" )
 		
-		if( flush ): self.make_output_table()
 
 	def shutdown( self, signum, frame ):
 		"""
@@ -657,6 +662,7 @@ parser.add_option("-e", "--gps-end", dest="gps_end", action="store", type="float
 parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_false", help="Don't record triggers.", default=False)
 parser.add_option("-c", "--lalapps-power-compatibility", dest="compat", action="store_true", default=False, help="Output trigger information which conforms to the lalapps_power conventions.")
 parser.add_option("-C", "--clustering", dest="clustering", action="store_true", default=False, help="Employ trigger tile clustering before output stage. Default or if not specificed is off." )
+parser.add_option("-u", "--enable-db-uploads", dest="db_uploads", action="store_true", default=False, help="Upload uploads to trigger archiving services (e.g. gracedb). The threshold for upload should be in the initialization file. Default or if not specificed is off." )
 
 (options, args) = parser.parse_args()
 
@@ -764,7 +770,10 @@ else:
 
 	handler.outfile = cfg.get( "triggering", "output-file" )
 	handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
-	handler.db_thresh = cfg.getfloat( "triggering", "db-thresh" )
+	if( options.db_upload ):
+		handler.db_thresh = cfg.getfloat( "triggering", "db-thresh" )
+		if( handler.db_thresh is None ):
+			print >>sys.stderr, "Warning, DB upload requested, but no threshold provided. Disabling."
 
 	if( cfg.has_option( "triggering", "events_per_file" ) ):
 		handler.max_events = cfg.get_int( "triggering", "events_per_file" )
