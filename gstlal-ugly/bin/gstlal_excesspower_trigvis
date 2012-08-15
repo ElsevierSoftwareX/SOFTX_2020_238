@@ -59,8 +59,14 @@ parser.add_option("-M", "--mark-loudest", action="store", default=None, help="Ma
 parser.add_option("-r", "--enable-event-hist", action="store_true", help="Enable the subplot with event rate versus strength for the channel.")
 #parser.add_option("-w", "--ignore-whitener", action="store", type=float, default=20.0, help="Ignore the first N seconds of data (from whitening effects), default is 20.")
 parser.add_option("-x", "--overlay-segments", action="store", help="The entries for this argument are parsed and if segments with those definitions exist in the viewsegment, they will be overlayed on the plot.")
+parser.add_option("-t", "--plotting-type", action="store", default="tile", help="Plot tiles, or markers for time-frequency events. Valid choices are 'tile', 'marker', or 'both'. Default is 'tile'.")
 
 opts, args = parser.parse_args()
+
+plotting_types = ["tiles", "marker", "both"]
+if( opts.plotting_type not in plotting_types ):
+	print >>sys.stderr, "Invalid plot type choice %s, valid choices are %s" % (opts.plotting_type, ", ".join(plotting_types)) )
+	exit()
 
 plot_sim = False
 
@@ -272,7 +278,7 @@ for channel, selected_events in event_iter:
 	sys.stdout.write( statstr )
 	statlen = len(statstr)
 
-	tiles, snrs = [], []
+	tiles, snrs, markers = [], [], []
 	loudest = [0,-1]
 	for i, event in enumerate(selected_events):
 		sys.stdout.write( "\b"*statlen )
@@ -293,7 +299,10 @@ for channel, selected_events in event_iter:
 			#color = colormap.to_rgba( event.snr )
 		)
 		#ax.add_patch( tile )
-		tiles.append( tile )
+		if( options.plotting_type in ["tile", "both"] ):
+			tiles.append( tile )
+		if( options.plotting_type in ["marker", "both"] ):
+			tiles.append( (start, event.central_freq, event.snr) )
 		snrs.append( event.snr )
 		if( loudest[0] < event.snr and opts.mark_loudest == 'snr' ):
 			loudest = [event.snr, float(event.get_peak()), event.central_freq]
@@ -313,9 +322,14 @@ for channel, selected_events in event_iter:
 
 
 	# TODO: See if replacing data speeds up the process
-	patches = PatchCollection( tiles, match_original = False, cmap = matplotlib.cm.jet, edgecolor='none', antialiased = False )
-	patches.set_array( numpy.array(snrs) )
-	ax.add_collection( patches )
+	if( plotting_type in ["tile", "both"] ):
+		patches = PatchCollection( tiles, match_original = False, cmap = matplotlib.cm.jet, edgecolor='none', antialiased = False )
+		patches.set_array( numpy.array(snrs) )
+		ax.add_collection( patches )
+	if( plotting_type == "marker" ):
+		ax.cplot( markers ) # with circles
+	elif( plotting_type == "both" ):
+		ax.plot( markers ) # with crosses
 
 	lastwrite = viewseg[0]
 	# FIXME: This is empircal at best.
