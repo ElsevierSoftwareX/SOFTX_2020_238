@@ -1187,6 +1187,9 @@ for res_level in range(0, min(handler.max_level, nlevels)):
 			split_opt
 		)
 
+	if( options.disable_triggers ):
+		head = mkfakesink( pipeline, head )
+
 	# Trigger generator
 	head = mkbursttriggergen( pipeline, head, ndof, 
 		bank = handler.build_filter_xml( res_level )
