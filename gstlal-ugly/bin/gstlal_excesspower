@@ -543,7 +543,7 @@ class EPHandler( LLOIDHandler ):
 		else:
 			outfile = self.outfile
 		self.write_triggers( False, filename = outfile )
-		if( self.output_cache is not None ):
+		if( self.output_cache is not None and len(self.output_cache) != 0 ):
 			dur = numpy.ceil(float(self.stop)) - numpy.floor(float(self.start))
 			outfile = "%s-%s_excesspower-%d-%d.xml" % (self.inst, self.channel.replace("-","_"), self.start, dur)
 			self.output_cache.tofile( file(outfile.replace( "xml", "cache" ), "w") )
