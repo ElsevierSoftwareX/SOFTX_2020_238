@@ -59,6 +59,8 @@ from glue.segments import segment, segmentlist, PosInfinity
 from glue import segmentsUtils
 from glue import gpstime
 from glue.lal import LIGOTimeGPS
+from glue.lal import Cache
+from glue.lal import CacheEntry
 
 from pylal import ligolw_bucluster
 from pylal.xlal.datatypes.snglburst import from_buffer as sngl_bursts_from_buffer
@@ -150,6 +152,7 @@ class EPHandler( LLOIDHandler ):
 		self.triggers = None
 		self.outfile = "test.xml"
 		self.make_output_table()
+		self.output_cache = Cache()
 		self.snr_thresh = 5.5
 		self.fap = None
 		self.dump_frequency = 600 # s
@@ -494,6 +497,16 @@ class EPHandler( LLOIDHandler ):
 			LIGOTimeGPS(self.start + 300)
 		)
 
+		# Keep track of the output files we make for later convience
+		if( self.output_cache is not None ):
+			self.output_cache.append(
+				CacheEntry(
+					self.inst, self.channel + "_excesspower",
+					analysis_segment,
+					("file://localhost" + os.path.abspath(filename))
+				)
+			)
+
 		if( flush ): self.make_output_table()
 		if( self.db_thresh is None ): return
 
@@ -521,7 +534,7 @@ class EPHandler( LLOIDHandler ):
 
 		print >>sys.stderr, "Please wait (don't ctrl+c) while I dump triggers to disk."
 		# FIXME: Check units
-		dur = numpy.ceil(float(handler.stop)) - numpy.floor(float(handler.time_since_dump))
+		dur = numpy.ceil(float(self.stop)) - numpy.floor(float(self.time_since_dump))
 		# FIXME: Handle this better
 		if( os.path.isdir( self.outfile ) ):
 			outfile = "%s/%s-%s_excesspower-%d-%d.xml" % (self.outfile, self.inst, self.channel.replace("-","_"), self.time_since_dump, dur)
@@ -530,6 +543,10 @@ class EPHandler( LLOIDHandler ):
 		else:
 			outfile = self.outfile
 		self.write_triggers( False, filename = outfile )
+		if( self.output_cache is not None ):
+			dur = numpy.ceil(float(self.stop)) - numpy.floor(float(self.start))
+			outfile = "%s-%s_excesspower-%d-%d.xml" % (self.inst, self.channel.replace("-","_"), self.start, dur)
+			self.output_cache.tofile( file(outfile.replace( "xml", "cache" ), "w") )
 		self.destroy_filter_xml()
 
 
@@ -659,7 +676,8 @@ parser.add_option("-D", "--data-source", dest="data_source", action="store", hel
 parser.add_option("-S", "--stream-tfmap", dest="stream_tfmap", action="store", help="Encode the time frequency map to video as it is analyzed. If the argument to this option is \"video\" then the pipeline will attempt to stream to a video source. If the option is instead a filename, the video will be sent to that name. Prepending \"keyframe=\" to the filename will start a new video every time a keyframe is hit.")
 parser.add_option("-s", "--gps-start", dest="gps_start", action="store", type="float", help="Seek to gps time before beginning analysis.", default=None)
 parser.add_option("-e", "--gps-end", dest="gps_end", action="store", type="float", help="End the analysis at this gps time.", default=None)
-parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_false", help="Don't record triggers.", default=False)
+parser.add_option("-t", "--disable-triggers", dest="disable_triggers", action="store_true", help="Don't record triggers.", default=False)
+parser.add_option("-T", "--disable-file-cache", dest="disable_file_cache", action="store_true", help="Don't create file caches of output files. Default is to create file caches.", default=False)
 parser.add_option("-c", "--lalapps-power-compatibility", dest="compat", action="store_true", default=False, help="Output trigger information which conforms to the lalapps_power conventions.")
 parser.add_option("-C", "--clustering", dest="clustering", action="store_true", default=False, help="Employ trigger tile clustering before output stage. Default or if not specificed is off." )
 parser.add_option("-u", "--enable-db-uploads", dest="db_uploads", action="store_true", default=False, help="Upload uploads to trigger archiving services (e.g. gracedb). The threshold for upload should be in the initialization file. Default or if not specificed is off." )
@@ -706,94 +724,96 @@ pipeline = gst.Pipeline( "gstlal_excesspower" )
 mainloop = gobject.MainLoop()
 handler = EPHandler(mainloop, pipeline)
 
-handler.output = not options.disable_triggers
+if( options.disable_triggers ): handler.output = None
+if( options.disable_file_cache ): handler.output_cache = None
+
 handler.rate = options.sample_rate
 
 # Used to keep track if we need to lock the PSD into the whitener
 psdfile = None
 if( not options.infile ):
-	print >>sys.stderr, "No initialization file specified. Default values will be used."
+	print >>sys.stderr, "Initialization file required."
 elif( not os.path.exists( options.infile ) ):
 	print >>sys.stderr, "Initialization file path is invalid."
 	sys.exit(-1)
+
+cfg = SafeConfigParser()
+cfg.read( options.infile )
+
+# Instruments and channels
+handler.inst = cfg.get( "instrument", "detector" )
+try:
+	handler.channel = cfg.get( "instrument", "channel" )
+except ConfigParser.NoOptionError:
+	handler.channel = None
+
+if( options.channame is not None ):
+	handler.channel = options.channame
+if( handler.channel is None ):
+	exit("No channel specified in the configuration file or on the command line.")
+print "Channel name: " + handler.channel
+
+try:
+	site = cfg.get( "instrument", "site" )
+except ConfigParser.NoOptionError:
+	print >>sys.stderr, "No site requested, using detector as default cache sieve."
+	site = None
+
+# Handler options
+try:
+	handler.fft_length = cfg.getfloat( "tf_parameters", "fft-length" )
+except ConfigParser.NoOptionError:
+	pass
+
+handler.flow = cfg.getfloat( "tf_parameters", "min-frequency" )
+handler.fhigh = cfg.getfloat( "tf_parameters", "max-frequency" )
+handler.base_band = cfg.getfloat( "tf_parameters", "base-resolution" )
+handler.max_level = cfg.getint( "tf_parameters", "max-resolution-level" )
+handler.max_duration = cfg.getfloat( "tf_parameters", "max-time-resolution" )
+if( cfg.has_option( "cache", "reference-psd" ) ):
+	psdfile = cfg.get( "cache", "reference-psd" )
+	try:
+		handler.psd = read_psd_xmldoc( utils.load_filename( psdfile, contenthandler = ligolw.LIGOLWContentHandler ) )[ handler.inst ]
+		print "Reference PSD for instrument %s from file %s loaded" % ( handler.inst, psdfile )
+		# Reference PSD disables caching (since we already have it
+		handler.cache_psd = False
+		# TODO: Make a --track-psd option
+	except KeyError: # Make sure we have a PSD for this instrument
+		sys.exit( "PSD for instrument %s requested, but not found in file %s. Available instruments are %s" % (handler.inst, psdfile, str(handler.psd.keys())) )
+
 else:
-	cfg = SafeConfigParser()
-	cfg.read( options.infile )
+	handler.cache_psd = cfg.get( "cache", "cache-psd" )
+if( handler.cache_psd == "" ): handler.cache_psd = False
+else: print "PSD caching enabled."
 
-	# Instruments and channels
-	handler.inst = cfg.get( "instrument", "detector" )
-	try:
-		handler.channel = cfg.get( "instrument", "channel" )
-	except ConfigParser.NoOptionError:
-		handler.channel = None
+handler.cache_spec_corr = cfg.getboolean( "cache", "cache-spectral-correlation" )
 
-	if( options.channame is not None ):
-		handler.channel = options.channame
-	if( handler.channel is None ):
-		exit("No channel specified in the configuration file or on the command line.")
-	print "Channel name: " + handler.channel
+handler.outfile = cfg.get( "triggering", "output-file" )
+handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
+if( options.db_uploads ):
+	handler.db_thresh = cfg.getfloat( "triggering", "db-thresh" )
+if( handler.db_thresh is None ):
+	print >>sys.stderr, "Warning, DB upload requested, but no threshold provided. Disabling."
 
-	try:
-		site = cfg.get( "instrument", "site" )
-	except ConfigParser.NoOptionError:
-		print >>sys.stderr, "No site requested, using detector as default cache sieve."
-		site = None
+if( cfg.has_option( "triggering", "events_per_file" ) ):
+	handler.max_events = cfg.get_int( "triggering", "events_per_file" )
 
-	# Handler options
-	try:
-		handler.fft_length = cfg.getfloat( "tf_parameters", "fft-length" )
-	except ConfigParser.NoOptionError:
-		pass
+# If a specific (trigger) time is of interest, specify its GPS here
+# TODO: Read from sngl_inspirals and sngl_bursts
+trigger_begin, trigger_end = None, None
+if( cfg.has_option( "triggering", "trig_time_start" ) ):
+	trigger_begin = cfg.getfloat( "triggering", "trig_time_start" )
+if( cfg.has_option( "triggering", "trig_time_end" ) ):
+	trigger_end = cfg.getfloat( "triggering", "trig_time_end" )
+if( trigger_begin and trigger_end ):
+	handler.set_trigger_time_and_action( segment( trigger_begin, trigger_end ) )
 
-	handler.flow = cfg.getfloat( "tf_parameters", "min-frequency" )
-	handler.fhigh = cfg.getfloat( "tf_parameters", "max-frequency" )
-	handler.base_band = cfg.getfloat( "tf_parameters", "base-resolution" )
-	handler.max_level = cfg.getint( "tf_parameters", "max-resolution-level" )
-	handler.max_duration = cfg.getfloat( "tf_parameters", "max-time-resolution" )
-	if( cfg.has_option( "cache", "reference-psd" ) ):
-		psdfile = cfg.get( "cache", "reference-psd" )
-		try:
-			handler.psd = read_psd_xmldoc( utils.load_filename( psdfile, contenthandler = ligolw.LIGOLWContentHandler ) )[ handler.inst ]
-			print "Reference PSD for instrument %s from file %s loaded" % ( handler.inst, psdfile )
-			# Reference PSD disables caching (since we already have it
-			handler.cache_psd = False
-			# TODO: Make a --track-psd option
-		except KeyError: # Make sure we have a PSD for this instrument
-			sys.exit( "PSD for instrument %s requested, but not found in file %s. Available instruments are %s" % (handler.inst, psdfile, str(handler.psd.keys())) )
-		
-	else:
-		handler.cache_psd = cfg.get( "cache", "cache-psd" )
-		if( handler.cache_psd == "" ): handler.cache_psd = False
-		else: print "PSD caching enabled."
+gwflocation = cfg.get( "instrument", "location" )
 
-	handler.cache_spec_corr = cfg.getboolean( "cache", "cache-spectral-correlation" )
-
-	handler.outfile = cfg.get( "triggering", "output-file" )
-	handler.snr_thresh = cfg.getfloat( "triggering", "snr-thresh" )
-	if( options.db_uploads ):
-		handler.db_thresh = cfg.getfloat( "triggering", "db-thresh" )
-		if( handler.db_thresh is None ):
-			print >>sys.stderr, "Warning, DB upload requested, but no threshold provided. Disabling."
-
-	if( cfg.has_option( "triggering", "events_per_file" ) ):
-		handler.max_events = cfg.get_int( "triggering", "events_per_file" )
-
-	# If a specific (trigger) time is of interest, specify its GPS here
-	# TODO: Read from sngl_inspirals and sngl_bursts
-	trigger_begin, trigger_end = None, None
-	if( cfg.has_option( "triggering", "trig_time_start" ) ):
-		trigger_begin = cfg.getfloat( "triggering", "trig_time_start" )
-	if( cfg.has_option( "triggering", "trig_time_end" ) ):
-		trigger_end = cfg.getfloat( "triggering", "trig_time_end" )
-	if( trigger_begin and trigger_end ):
-		handler.set_trigger_time_and_action( segment( trigger_begin, trigger_end ) )
-
-	gwflocation = cfg.get( "instrument", "location" )
-
-	inj_loc = cfg.get( "injections", "xml-location" )
-	if( not os.path.isfile( inj_loc ) ):
-		print >>sys.stderr, "Injection file not found, disabling option."
-		inj_loc = None
+inj_loc = cfg.get( "injections", "xml-location" )
+if( not os.path.isfile( inj_loc ) ):
+	print >>sys.stderr, "Injection file not found, disabling option."
+	inj_loc = None
 
 base_band = handler.base_band
 
