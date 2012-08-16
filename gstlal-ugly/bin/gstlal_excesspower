@@ -753,7 +753,7 @@ else:
 	if( cfg.has_option( "cache", "reference-psd" ) ):
 		psdfile = cfg.get( "cache", "reference-psd" )
 		try:
-			handler.psd = read_psd_xmldoc( utils.load_filename( psdfile, contenthandler = LIGOLWContentHandler ) )[ handler.inst ]
+			handler.psd = read_psd_xmldoc( utils.load_filename( psdfile, contenthandler = ligolw.LIGOLWContentHandler ) )[ handler.inst ]
 			print "Reference PSD for instrument %s from file %s loaded" % ( handler.inst, psdfile )
 			# Reference PSD disables caching (since we already have it
 			handler.cache_psd = False
