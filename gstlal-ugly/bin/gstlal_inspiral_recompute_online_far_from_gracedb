@@ -1,13 +1,16 @@
 #!/bin/bash
 GID=$1
 mkdir ${GID}
+echo "Recomputing far with data from GPS " $(lalapps_tconvert)
 gracedb --ligolw search ${GID} > ${GID}/${GID}.xml
 LIKE=$(ligolw_print -t process_params -c value ${GID}/${GID}.xml | grep -e '0.*likelihood.xml.gz')
 ligolw_sqlite -d ${GID}/${GID}.sqlite -r ${GID}/${GID}.xml
 echo 'FAR before:'
 sqlite3 ${GID}/${GID}.sqlite 'SELECT combined_far FROM coinc_inspiral;'
+echo 'likelihood before:'
 sqlite3 ${GID}/${GID}.sqlite 'SELECT likelihood FROM coinc_event;'
 gstlal_inspiral_calc_likelihood --likelihood-file ${LIKE} ${GID}/${GID}.sqlite
+echo 'likelihood after:'
 sqlite3 ${GID}/${GID}.sqlite 'SELECT likelihood FROM coinc_event;'
 MARG=$(echo $LIKE | sed 's|\(.*\)/.*|\1|')/marginalized_likelihood.xml.gz
 gstlal_inspiral_recompute_online_far --background-bins-file $MARG --verbose --non-injection-db ${GID}/${GID}.sqlite
