@@ -127,7 +127,7 @@ def plotSNRhistograms(snrlist, mchirplist, niirlist, out_filename="allvsall.png"
 			axes.yaxis.set_ticks_position(ylabelposition)
 			axes.yaxis.set_major_formatter(ScalarFormatter(useOffset=False))
 		pylab.grid()
-		axes.scatter(x, y, s=1, edgecolor='none')
+		axes.scatter(x, y, s=1, marker='x')
 		return axes
 
 	def plotHistogram(rec, x, Xa, xlabel = None, ylabel = None, orientation = "vertical"):
@@ -280,6 +280,7 @@ s = "N = %d\nComponent mass = (%3.2f, %3.2f)\nTotal mass = (%3.2f, %3.2f)\nChirp
 pylab.figtext(0.13, 0.18, s, fontsize=14)
 
 pylab.savefig("allvsall.png")
+pylab.savefig("allvsall.pdf")
 pylab.close()
 
 plotNumFiltersHistogram(Mr)
