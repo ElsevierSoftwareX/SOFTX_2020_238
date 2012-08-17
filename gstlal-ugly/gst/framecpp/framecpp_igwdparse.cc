@@ -259,7 +259,7 @@ static gboolean set_sink_caps(GstBaseParse *parse, GstCaps *caps)
 
 		caps = gst_caps_copy(caps);
 		gst_caps_set_simple(caps, "framed", G_TYPE_BOOLEAN, TRUE, NULL);
-		gst_pad_set_caps(GST_BASE_PARSE_SRC_PAD(parse), caps);
+		success = gst_pad_set_caps(GST_BASE_PARSE_SRC_PAD(parse), caps);
 		gst_caps_unref(caps);
 	}
 
